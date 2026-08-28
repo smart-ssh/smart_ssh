@@ -48,8 +48,12 @@ impl CredentialStore for InMemoryCredentialStore {
 
 #[derive(Default)]
 struct InMemoryProfileStore {
-    groups: HashMap<GroupId, Group>,
-    servers: HashMap<ServerId, Server>,
+    // Mutex statt einfachem HashMap, weil die schreibenden `ProfileStore`-
+    // Methoden `&self` nehmen (nicht `&mut self`) — analog zu
+    // `InMemoryCredentialStore` oben und zur echten `SqliteProfileStore`
+    // (Connection-Pool ist auch nur über `&self` erreichbar).
+    groups: Mutex<HashMap<GroupId, Group>>,
+    servers: Mutex<HashMap<ServerId, Server>>,
 }
 
 impl InMemoryProfileStore {
@@ -57,13 +61,13 @@ impl InMemoryProfileStore {
         Self::default()
     }
 
-    fn with_group(mut self, group: Group) -> Self {
-        self.groups.insert(group.id, group);
+    fn with_group(self, group: Group) -> Self {
+        self.groups.lock().unwrap().insert(group.id, group);
         self
     }
 
-    fn with_server(mut self, server: Server) -> Self {
-        self.servers.insert(server.id, server);
+    fn with_server(self, server: Server) -> Self {
+        self.servers.lock().unwrap().insert(server.id, server);
         self
     }
 }
@@ -72,6 +76,8 @@ impl InMemoryProfileStore {
 impl ProfileStore for InMemoryProfileStore {
     async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
         self.servers
+            .lock()
+            .unwrap()
             .get(id)
             .cloned()
             .ok_or(ProfileError::ServerNotFound(*id))
@@ -79,9 +85,87 @@ impl ProfileStore for InMemoryProfileStore {
 
     async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
         self.groups
+            .lock()
+            .unwrap()
             .get(id)
             .cloned()
             .ok_or(ProfileError::GroupNotFound(*id))
+    }
+
+    // Bewusst ohne Nachbildung von ON DELETE CASCADE/SET NULL: die
+    // Referenzielle-Integritäts-Semantik aus der SQLite-Migration (Spec
+    // 0004) wird gegen `SqliteProfileStore` getestet
+    // (`persistence-sqlite`-Crate), nicht hier — diese Implementierung dient
+    // nur den reinen `profiles`-Unit-Tests (effective_notes, group_chain,
+    // record_revision), die keine Kaskaden brauchen.
+
+    async fn create_group(&self, group: &Group) -> ProfileResult<()> {
+        self.groups.lock().unwrap().insert(group.id, group.clone());
+        Ok(())
+    }
+
+    async fn update_group(&self, group: &Group) -> ProfileResult<()> {
+        let mut groups = self.groups.lock().unwrap();
+        if !groups.contains_key(&group.id) {
+            return Err(ProfileError::GroupNotFound(group.id));
+        }
+        groups.insert(group.id, group.clone());
+        Ok(())
+    }
+
+    async fn delete_group(&self, id: &GroupId) -> ProfileResult<()> {
+        self.groups
+            .lock()
+            .unwrap()
+            .remove(id)
+            .map(|_| ())
+            .ok_or(ProfileError::GroupNotFound(*id))
+    }
+
+    async fn create_server(&self, server: &Server) -> ProfileResult<()> {
+        self.servers
+            .lock()
+            .unwrap()
+            .insert(server.id, server.clone());
+        Ok(())
+    }
+
+    async fn update_server(&self, server: &Server) -> ProfileResult<()> {
+        let mut servers = self.servers.lock().unwrap();
+        if !servers.contains_key(&server.id) {
+            return Err(ProfileError::ServerNotFound(server.id));
+        }
+        servers.insert(server.id, server.clone());
+        Ok(())
+    }
+
+    async fn delete_server(&self, id: &ServerId) -> ProfileResult<()> {
+        self.servers
+            .lock()
+            .unwrap()
+            .remove(id)
+            .map(|_| ())
+            .ok_or(ProfileError::ServerNotFound(*id))
+    }
+
+    async fn record_note_revision(&self, revision: &NoteRevision) -> ProfileResult<()> {
+        match revision.target {
+            NoteTarget::Server(id) => {
+                let mut servers = self.servers.lock().unwrap();
+                let server = servers
+                    .get_mut(&id)
+                    .ok_or(ProfileError::ServerNotFound(id))?;
+                server.notes = revision.content.clone();
+                server.updated_at = revision.created_at;
+            }
+            NoteTarget::Group(id) => {
+                let mut groups = self.groups.lock().unwrap();
+                let group = groups.get_mut(&id).ok_or(ProfileError::GroupNotFound(id))?;
+                group.notes = revision.content.clone();
+                group.updated_at = revision.created_at;
+            }
+        }
+        Ok(())
     }
 }
 

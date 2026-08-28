@@ -5,7 +5,7 @@ use async_trait::async_trait;
 
 use crate::shared::ServerId;
 
-use super::types::{Group, GroupId, Server};
+use super::types::{Group, GroupId, NoteRevision, Server};
 
 /// Fehler eines [`ProfileStore`]-Zugriffs bzw. einer darauf aufbauenden
 /// Operation wie `group_chain`/`effective_notes`.
@@ -17,6 +17,15 @@ pub enum ProfileError {
     /// (Store-Fehler/korrupte Daten) — kein Panic, sondern ein regulärer
     /// Fehler, s. `group_chain`.
     CycleDetected,
+    /// Backend-spezifischer Fehler (z. B. eine echte DB-Anbindung wie
+    /// `persistence-sqlite`, Spec 0004), der sich keiner der obigen
+    /// fachlichen Varianten zuordnen lässt — nur die Fehlermeldung, kein
+    /// strukturierter Zugriff auf den Original-Fehlertyp. `core` selbst darf
+    /// keine I/O-/DB-Abhängigkeit bekommen (Spec 0004 Abschnitt 1), daher
+    /// kann hier kein `From<sqlx::Error>` o. ä. implementiert werden — jede
+    /// konkrete Store-Implementierung wandelt ihre eigenen Fehler über
+    /// `.to_string()` in diese Variante um.
+    Backend(String),
 }
 
 impl fmt::Display for ProfileError {
@@ -27,6 +36,7 @@ impl fmt::Display for ProfileError {
             ProfileError::CycleDetected => {
                 write!(f, "zyklische Gruppen-Elternkette erkannt")
             }
+            ProfileError::Backend(msg) => write!(f, "Profile-Store-Backend-Fehler: {msg}"),
         }
     }
 }
@@ -77,4 +87,34 @@ pub trait ProfileStore: Send + Sync {
         chain.reverse();
         Ok(chain)
     }
+
+    // --- Schreibende Operationen ------------------------------------------
+    //
+    // Ursprünglich (Spec 0003, Abschnitt 5) hatte `ProfileStore` nur
+    // Lese-Methoden (`get_server`/`get_group`/`group_chain`) — die
+    // SQLite-Anbindung (Spec 0004) braucht aber zwingend auch schreibende
+    // Operationen, um Server/Gruppen anzulegen und Notiz-Änderungen zu
+    // persistieren. Bewusst hier am Trait ergänzt statt nur als Inherent-
+    // Methoden auf `SqliteProfileStore`: sonst könnte `InMemoryProfileStore`
+    // in Tests nicht auf demselben Weg befüllt werden wie eine echte
+    // DB-Implementierung, und ein künftiger zweiter Store (z. B. für Sync)
+    // müsste dieselben Methoden separat neu erfinden statt sie über den
+    // Trait erzwungen zu bekommen.
+
+    async fn create_group(&self, group: &Group) -> ProfileResult<()>;
+    async fn update_group(&self, group: &Group) -> ProfileResult<()>;
+    async fn delete_group(&self, id: &GroupId) -> ProfileResult<()>;
+
+    async fn create_server(&self, server: &Server) -> ProfileResult<()>;
+    async fn update_server(&self, server: &Server) -> ProfileResult<()>;
+    async fn delete_server(&self, id: &ServerId) -> ProfileResult<()>;
+
+    /// Schreibt eine neue [`NoteRevision`] in die Änderungs-Historie
+    /// (Spec 0003 Abschnitt 5.3) **und** aktualisiert atomar das aktuelle
+    /// `notes`-Feld des in `revision.target` referenzierten Servers/Gruppe
+    /// auf `revision.content` — beides muss zusammen gelingen oder
+    /// zusammen fehlschlagen (konkret umgesetzt als DB-Transaktion in
+    /// `persistence-sqlite`), damit `notes`-Feld und Historie nie
+    /// auseinanderlaufen.
+    async fn record_note_revision(&self, revision: &NoteRevision) -> ProfileResult<()>;
 }

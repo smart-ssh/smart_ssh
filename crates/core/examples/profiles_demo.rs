@@ -21,33 +21,37 @@
 //! Führe aus mit: `cargo run -p ssh-manager-core --example profiles_demo`
 
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 use async_trait::async_trait;
 use chrono::Utc;
 use ssh_manager_core::profiles::{
-    effective_notes, AuthMethod, Group, GroupId, ProfileError, ProfileResult, ProfileStore, Server,
+    effective_notes, AuthMethod, Group, GroupId, NoteRevision, NoteTarget, ProfileError,
+    ProfileResult, ProfileStore, Server,
 };
 use ssh_manager_core::shared::ServerId;
 
+/// Minimale, funktionierende `ProfileStore`-Implementierung fürs Demo (kein
+/// Mock/Stub) — Mutex-gekapselt, weil der Trait schreibende Methoden über
+/// `&self` verlangt (analog zu `SqliteProfileStore`, dessen Connection-Pool
+/// intern ebenfalls nur über `&self` genutzt wird).
+#[derive(Default)]
 struct DemoProfileStore {
-    groups: HashMap<GroupId, Group>,
-    servers: HashMap<ServerId, Server>,
+    groups: Mutex<HashMap<GroupId, Group>>,
+    servers: Mutex<HashMap<ServerId, Server>>,
 }
 
 impl DemoProfileStore {
     fn new() -> Self {
-        Self {
-            groups: HashMap::new(),
-            servers: HashMap::new(),
-        }
+        Self::default()
     }
 
-    fn insert_group(&mut self, group: Group) {
-        self.groups.insert(group.id, group);
+    fn insert_group(&self, group: Group) {
+        self.groups.lock().unwrap().insert(group.id, group);
     }
 
-    fn insert_server(&mut self, server: Server) {
-        self.servers.insert(server.id, server);
+    fn insert_server(&self, server: Server) {
+        self.servers.lock().unwrap().insert(server.id, server);
     }
 }
 
@@ -55,6 +59,8 @@ impl DemoProfileStore {
 impl ProfileStore for DemoProfileStore {
     async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
         self.servers
+            .lock()
+            .unwrap()
             .get(id)
             .cloned()
             .ok_or(ProfileError::ServerNotFound(*id))
@@ -62,9 +68,80 @@ impl ProfileStore for DemoProfileStore {
 
     async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
         self.groups
+            .lock()
+            .unwrap()
             .get(id)
             .cloned()
             .ok_or(ProfileError::GroupNotFound(*id))
+    }
+
+    async fn create_group(&self, group: &Group) -> ProfileResult<()> {
+        self.groups.lock().unwrap().insert(group.id, group.clone());
+        Ok(())
+    }
+
+    async fn update_group(&self, group: &Group) -> ProfileResult<()> {
+        let mut groups = self.groups.lock().unwrap();
+        if !groups.contains_key(&group.id) {
+            return Err(ProfileError::GroupNotFound(group.id));
+        }
+        groups.insert(group.id, group.clone());
+        Ok(())
+    }
+
+    async fn delete_group(&self, id: &GroupId) -> ProfileResult<()> {
+        self.groups
+            .lock()
+            .unwrap()
+            .remove(id)
+            .map(|_| ())
+            .ok_or(ProfileError::GroupNotFound(*id))
+    }
+
+    async fn create_server(&self, server: &Server) -> ProfileResult<()> {
+        self.servers
+            .lock()
+            .unwrap()
+            .insert(server.id, server.clone());
+        Ok(())
+    }
+
+    async fn update_server(&self, server: &Server) -> ProfileResult<()> {
+        let mut servers = self.servers.lock().unwrap();
+        if !servers.contains_key(&server.id) {
+            return Err(ProfileError::ServerNotFound(server.id));
+        }
+        servers.insert(server.id, server.clone());
+        Ok(())
+    }
+
+    async fn delete_server(&self, id: &ServerId) -> ProfileResult<()> {
+        self.servers
+            .lock()
+            .unwrap()
+            .remove(id)
+            .map(|_| ())
+            .ok_or(ProfileError::ServerNotFound(*id))
+    }
+
+    async fn record_note_revision(&self, revision: &NoteRevision) -> ProfileResult<()> {
+        match revision.target {
+            NoteTarget::Server(id) => {
+                let mut servers = self.servers.lock().unwrap();
+                let server = servers
+                    .get_mut(&id)
+                    .ok_or(ProfileError::ServerNotFound(id))?;
+                server.notes = revision.content.clone();
+                server.updated_at = revision.created_at;
+            }
+            NoteTarget::Group(id) => {
+                let mut groups = self.groups.lock().unwrap();
+                let group = groups.get_mut(&id).ok_or(ProfileError::GroupNotFound(id))?;
+                group.notes = revision.content.clone();
+                group.updated_at = revision.created_at;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -82,7 +159,7 @@ fn new_group(name: &str, parent_id: Option<GroupId>, notes: &str) -> Group {
 
 #[tokio::main]
 async fn main() {
-    let mut store = DemoProfileStore::new();
+    let store = DemoProfileStore::new();
 
     let kunde_a = new_group(
         "Kunde A",
