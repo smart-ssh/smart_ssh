@@ -1,0 +1,191 @@
+use std::fmt;
+
+use crate::profiles::AiAction;
+use crate::ssh::CommandOutput;
+
+/// Ereignis, das ein [`super::AiProvider`] während einer Konversation streamt
+/// (Spec 0006, Abschnitt 3).
+#[derive(Debug, Clone, PartialEq)]
+pub enum AiEvent {
+    /// Chat-Text zum sofortigen Anzeigen (Streaming, wortweise).
+    TextDelta(String),
+    /// Strukturierter Vorschlag, s. Spec 0003 Abschnitt 5.2. Führt **nichts**
+    /// aus — läuft für `SuggestCommand` unverändert durch die Filter-Engine
+    /// (Spec 0002), für `ProposeNoteUpdate` immer über einen manuellen
+    /// Bestätigungsdialog (Spec 0003 Abschnitt 5.2).
+    ActionProposed(AiAction),
+    Done,
+    Error(AiError),
+}
+
+/// Kontext, den die App für eine Anfrage an den Provider zusammenstellt
+/// (Spec 0006, Abschnitt 3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionContext {
+    /// `effective_notes()` aus Spec 0003 + OS/Distro-Info.
+    pub system_context: String,
+    pub history: Vec<ChatMessage>,
+    pub available_actions: Vec<ActionSchema>,
+}
+
+/// Eine Nachricht in der Konversationshistorie (Spec 0006, Abschnitt 3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChatMessage {
+    pub role: Role,
+    pub content: MessageContent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    User,
+    Assistant,
+    ActionResult,
+}
+
+/// Inhalt einer [`ChatMessage`] (Spec 0006, Abschnitt 3).
+#[derive(Debug, Clone, PartialEq)]
+pub enum MessageContent {
+    Text(String),
+    /// Ergebnis eines über die Filter-Engine ausgeführten Kommandos, bereits
+    /// durch einen [`super::OutputRedactor`] gelaufen (Spec 0006, Abschnitt
+    /// 5) — dieses Modul selbst führt nichts aus, `output` kommt von
+    /// außerhalb (SSH-Modul, Spec 0005).
+    CommandResult {
+        command: String,
+        output: CommandOutput,
+    },
+}
+
+/// Beschreibung einer Aktion, die ein Provider per Tool-/Function-Calling
+/// vorschlagen kann (Spec 0006, Abschnitt 3/4) — providerunabhängige,
+/// minimale Zwischenform. Jede konkrete `AiProvider`-Implementierung
+/// übersetzt sie in das jeweilige Tool-Definitionsformat der Provider-API
+/// (Abschnitt 4).
+///
+/// Nicht Teil der in der Spec explizit vorgegebenen Typen (die Spec
+/// verlangt nur "eine sinnvolle minimale Form ... Name, Beschreibung,
+/// Parameter-Schema"), aber deckt genau die beiden `AiAction`-Varianten aus
+/// Spec 0003 ab — s. [`ActionSchema::suggest_command`]/
+/// [`ActionSchema::propose_note_update`] und [`default_action_schemas`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActionSchema {
+    pub name: String,
+    pub description: String,
+    pub parameters: Vec<ActionParameter>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActionParameter {
+    pub name: String,
+    pub description: String,
+    pub kind: ActionParameterKind,
+    pub required: bool,
+}
+
+/// Bewusst minimal (kein volles JSON-Schema): reicht aus, um beide
+/// `AiAction`-Varianten aus Spec 0003 zu beschreiben, ohne die
+/// Provider-Implementierungen mit unbenutzter Komplexität zu belasten.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ActionParameterKind {
+    String,
+    /// Feste Werteliste, z. B. für `NoteTarget`s `target_type`
+    /// (`"server"`/`"group"`).
+    Enum(Vec<String>),
+}
+
+impl ActionSchema {
+    /// Entspricht `AiAction::SuggestCommand` (Spec 0003, Abschnitt 5.2).
+    pub fn suggest_command() -> Self {
+        Self {
+            name: "suggest_command".to_string(),
+            description: "Schlägt ein einzelnes Shell-Kommando zur Ausführung vor. \
+                Läuft vor jeder Ausführung durch die Filter-Engine; nichts wird \
+                automatisch ausgeführt."
+                .to_string(),
+            parameters: vec![ActionParameter {
+                name: "command".to_string(),
+                description: "Das vorzuschlagende Shell-Kommando.".to_string(),
+                kind: ActionParameterKind::String,
+                required: true,
+            }],
+        }
+    }
+
+    /// Entspricht `AiAction::ProposeNoteUpdate` (Spec 0003, Abschnitt 5.2).
+    /// `target_type`/`target_id` bilden zusammen ein `NoteTarget`
+    /// (`Server(ServerId)`/`Group(GroupId)`) — als zwei einfache
+    /// LLM-freundliche Parameter statt des internen Rust-Enums.
+    pub fn propose_note_update() -> Self {
+        Self {
+            name: "propose_note_update".to_string(),
+            description: "Schlägt eine Aktualisierung der Kontextnotiz eines Servers oder \
+                einer Gruppe vor. Wird immer als Diff zur manuellen Bestätigung angezeigt, \
+                nie automatisch übernommen."
+                .to_string(),
+            parameters: vec![
+                ActionParameter {
+                    name: "target_type".to_string(),
+                    description: "Ob sich der Vorschlag auf einen Server oder eine Gruppe bezieht."
+                        .to_string(),
+                    kind: ActionParameterKind::Enum(vec![
+                        "server".to_string(),
+                        "group".to_string(),
+                    ]),
+                    required: true,
+                },
+                ActionParameter {
+                    name: "target_id".to_string(),
+                    description: "Id des Servers bzw. der Gruppe.".to_string(),
+                    kind: ActionParameterKind::String,
+                    required: true,
+                },
+                ActionParameter {
+                    name: "new_content".to_string(),
+                    description: "Vollständiger neuer Notiztext, nicht nur ein Diff.".to_string(),
+                    kind: ActionParameterKind::String,
+                    required: true,
+                },
+            ],
+        }
+    }
+}
+
+/// Beide in Spec 0003 definierten `AiAction`-Varianten als Standard-Set für
+/// `SessionContext::available_actions`.
+pub fn default_action_schemas() -> Vec<ActionSchema> {
+    vec![
+        ActionSchema::suggest_command(),
+        ActionSchema::propose_note_update(),
+    ]
+}
+
+/// Fehler rund um Aufbau und Nutzung einer KI-Provider-Anfrage (Spec 0006,
+/// Abschnitt 6).
+#[derive(Debug, Clone, PartialEq)]
+pub enum AiError {
+    AuthenticationFailed,
+    RateLimited,
+    NetworkError(String),
+    InvalidResponse(String),
+    ContextTooLarge,
+    ProviderUnavailable(String),
+}
+
+impl fmt::Display for AiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AiError::AuthenticationFailed => {
+                write!(f, "Authentifizierung beim KI-Provider fehlgeschlagen")
+            }
+            AiError::RateLimited => write!(f, "Rate-Limit des KI-Providers erreicht"),
+            AiError::NetworkError(msg) => write!(f, "Netzwerkfehler: {msg}"),
+            AiError::InvalidResponse(msg) => {
+                write!(f, "Unerwartete Antwort des KI-Providers: {msg}")
+            }
+            AiError::ContextTooLarge => write!(f, "Kontext zu groß für den KI-Provider"),
+            AiError::ProviderUnavailable(msg) => write!(f, "KI-Provider nicht erreichbar: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for AiError {}
