@@ -2,10 +2,17 @@
 /target/
 **/target/
 
-# Alle Workspace-Member sind aktuell Libraries (kein Binary-Deliverable) –
-# Cargo.lock daher nicht committen. Sobald ein Binary-Crate (z. B. eine
-# Tauri-App) hinzukommt, sollte Cargo.lock für dieses Crate versioniert werden.
-Cargo.lock
+# `crates/app-tauri` ist seit Spec 0007 ein Binary-Crate (die Tauri-App) –
+# Cargo.lock wird deshalb ab jetzt versioniert (s. History dieser Zeile).
+
+# Tauri-generierte Capability-/Permission-Schemas – automatisch bei jedem
+# Build neu erzeugt (`cargo tauri`/`tauri-build`), kein Quelltext.
+/crates/app-tauri/gen/
+
+# Node/Frontend (crates/app-tauri/frontend/ hat zusätzlich ein eigenes
+# .gitignore für node_modules/dist – hier nur der Vollständigkeit halber,
+# falls künftig weitere Frontend-Verzeichnisse hinzukommen).
+node_modules/
 
 # IDE / Editor
 .idea/

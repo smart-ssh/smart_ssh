@@ -6,6 +6,7 @@
 //! `ssh-manager-core` — siehe Spec 0004 Abschnitt 1: `core` bleibt frei von
 //! I/O-Abhängigkeiten, austauschbare Storage-Details gehören hierher.
 
+mod ai_provider_store;
 mod error;
 mod mapping;
 mod paths;
@@ -14,6 +15,9 @@ mod store;
 #[cfg(test)]
 mod tests;
 
+pub use ai_provider_store::{
+    AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
+};
 pub use error::{PersistenceError, PersistenceResult};
 pub use paths::default_db_path;
 pub use store::SqliteProfileStore;

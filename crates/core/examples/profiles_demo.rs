@@ -75,6 +75,10 @@ impl ProfileStore for DemoProfileStore {
             .ok_or(ProfileError::GroupNotFound(*id))
     }
 
+    async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
+        Ok(self.servers.lock().unwrap().values().cloned().collect())
+    }
+
     async fn create_group(&self, group: &Group) -> ProfileResult<()> {
         self.groups.lock().unwrap().insert(group.id, group.clone());
         Ok(())

@@ -8,7 +8,21 @@ license.workspace = true
 name = "ssh_manager_app_tauri"
 path = "src/lib.rs"
 
-[dependencies]
-ssh-manager-core = { path = "../core" }
+[[bin]]
+name = "ssh-manager-app-tauri"
+path = "src/main.rs"
 
-# Tauri wird hinzugefügt, sobald das echte App-Setup ansteht.
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+chrono = { version = "0.4.45", features = ["serde"] }
+credentials-keyring = { version = "0.1.0", path = "../credentials-keyring" }
+persistence-sqlite = { version = "0.1.0", path = "../persistence-sqlite" }
+secrecy = "0.10.3"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+ssh-manager-core = { version = "0.1.0", path = "../core" }
+tauri = { version = "2", features = [] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros"] }
+uuid = { version = "1.26.0", features = ["v4", "serde"] }

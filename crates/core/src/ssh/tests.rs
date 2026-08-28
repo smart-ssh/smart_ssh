@@ -47,6 +47,10 @@ impl ProfileStore for MockProfileStore {
             .ok_or(ProfileError::ServerNotFound(*id))
     }
 
+    async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
+        Ok(self.servers.lock().unwrap().values().cloned().collect())
+    }
+
     // Gruppen werden von den ssh-Tests nicht gebraucht — ehrliche, aber
     // triviale Implementierungen statt `unimplemented!()`.
     async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {

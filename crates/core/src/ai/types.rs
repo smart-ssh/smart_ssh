@@ -1,7 +1,75 @@
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
 use crate::profiles::AiAction;
 use crate::ssh::CommandOutput;
+
+/// Eindeutige Kennung einer gespeicherten AI-Provider-Konfiguration (Spec
+/// 0007, Abschnitt 8). Bleibt (wie [`crate::profiles::GroupId`]) lokal in
+/// `ai`, statt nach `crate::shared` zu wandern: kein anderes `core`-Modul
+/// kennt das Konzept "AI-Provider-Konfiguration", es gibt also keinen
+/// zweiten Ort, der denselben Typ bräuchte (s. `crate::shared`-Modul-
+/// Kommentar für die generelle Regel).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ProviderId(pub Uuid);
+
+impl ProviderId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+impl Default for ProviderId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Welche konkrete `AiProvider`-Implementierung (`crates/ai-providers`) eine
+/// gespeicherte Konfiguration anspricht (Spec 0007, Abschnitt 8.1). Die
+/// `#[serde(rename = ...)]`-Werte entsprechen exakt sowohl dem
+/// `CHECK`-Constraint der `ai_provider_configs`-Tabelle als auch dem
+/// JSON-Wert, den das Frontend über die Tauri-IPC-Grenze sieht — ein
+/// Konstrukt, zwei Randbedingungen, die sich sonst leise auseinander
+/// entwickeln könnten.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProviderType {
+    #[serde(rename = "openai")]
+    OpenAi,
+    #[serde(rename = "anthropic")]
+    Anthropic,
+    #[serde(rename = "generic_openai_compatible")]
+    GenericOpenAiCompatible,
+    #[serde(rename = "ollama")]
+    Ollama,
+}
+
+impl ProviderType {
+    /// Textform exakt wie im `CHECK`-Constraint der Migration — genutzt von
+    /// `persistence-sqlite`, um den Wert als reines `TEXT` zu binden/lesen
+    /// (nicht über `serde_json`, das würde umschließende Anführungszeichen
+    /// mitliefern).
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            ProviderType::OpenAi => "openai",
+            ProviderType::Anthropic => "anthropic",
+            ProviderType::GenericOpenAiCompatible => "generic_openai_compatible",
+            ProviderType::Ollama => "ollama",
+        }
+    }
+
+    pub fn from_db_str(s: &str) -> Option<Self> {
+        match s {
+            "openai" => Some(ProviderType::OpenAi),
+            "anthropic" => Some(ProviderType::Anthropic),
+            "generic_openai_compatible" => Some(ProviderType::GenericOpenAiCompatible),
+            "ollama" => Some(ProviderType::Ollama),
+            _ => None,
+        }
+    }
+}
 
 /// Ereignis, das ein [`super::AiProvider`] während einer Konversation streamt
 /// (Spec 0006, Abschnitt 3).

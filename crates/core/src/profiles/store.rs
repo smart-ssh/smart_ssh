@@ -61,6 +61,15 @@ pub trait ProfileStore: Send + Sync {
     async fn get_server(&self, id: &ServerId) -> ProfileResult<Server>;
     async fn get_group(&self, id: &GroupId) -> ProfileResult<Group>;
 
+    /// Alle gespeicherten Server, für die einfache Serverliste (Spec 0007,
+    /// Abschnitt 7 — "keine Anlege-/Bearbeiten-UI", nur Anzeige). War in
+    /// Spec 0003/0004 nicht vorgesehen (dort nur gezielte
+    /// `get_server(id)`-Lookups), wird aber von Spec 0007s
+    /// `list_servers`-Tauri-Befehl vorausgesetzt — daher hier als
+    /// zusätzliche Trait-Methode ergänzt statt in `app-tauri` mit
+    /// Store-internen Interna zu umgehen.
+    async fn list_servers(&self) -> ProfileResult<Vec<Server>>;
+
     /// Gruppenkette von der Wurzel bis **einschließlich** `id`, root-first
     /// geordnet (passend für `effective_notes`, Spec Abschnitt 5.1).
     ///

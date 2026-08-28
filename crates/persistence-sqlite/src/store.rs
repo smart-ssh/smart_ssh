@@ -81,6 +81,16 @@ impl SqliteProfileStore {
         Ok(Self { pool })
     }
 
+    /// Baut einen [`crate::SqliteAiProviderStore`], der sich denselben
+    /// Connection-Pool (und damit dieselbe bereits migrierte Datenbank)
+    /// teilt, statt eine zweite, unabhängige Verbindung zu öffnen — s.
+    /// Modul-Kommentar von `crate::ai_provider_store` zur Begründung, warum
+    /// das ein eigener Store statt einer Erweiterung von
+    /// `SqliteProfileStore` ist.
+    pub fn ai_provider_store(&self) -> crate::SqliteAiProviderStore {
+        crate::SqliteAiProviderStore::new(self.pool.clone())
+    }
+
     async fn fetch_tags(&self, server_id: &str) -> ProfileResult<Vec<String>> {
         let rows = sqlx::query("SELECT tag FROM server_tags WHERE server_id = ? ORDER BY tag")
             .bind(server_id)
@@ -178,6 +188,24 @@ impl ProfileStore for SqliteProfileStore {
 
         let tags = self.fetch_tags(&id_str).await?;
         row_to_server(&row, tags)
+    }
+
+    async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
+        let rows = sqlx::query(
+            "SELECT id, name, host, port, username, group_id, auth_method, notes, \
+             jump_host_id, created_at, updated_at FROM servers ORDER BY name",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(backend_err)?;
+
+        let mut servers = Vec::with_capacity(rows.len());
+        for row in &rows {
+            let id: String = row.get("id");
+            let tags = self.fetch_tags(&id).await?;
+            servers.push(row_to_server(row, tags)?);
+        }
+        Ok(servers)
     }
 
     // `group_chain` bewusst **nicht** überschrieben: die Default-

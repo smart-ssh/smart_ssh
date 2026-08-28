@@ -92,6 +92,10 @@ impl ProfileStore for InMemoryProfileStore {
             .ok_or(ProfileError::GroupNotFound(*id))
     }
 
+    async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
+        Ok(self.servers.lock().unwrap().values().cloned().collect())
+    }
+
     // Bewusst ohne Nachbildung von ON DELETE CASCADE/SET NULL: die
     // Referenzielle-Integritäts-Semantik aus der SQLite-Migration (Spec
     // 0004) wird gegen `SqliteProfileStore` getestet
