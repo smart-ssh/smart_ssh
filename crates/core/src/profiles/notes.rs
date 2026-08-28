@@ -25,7 +25,7 @@ use super::types::{NoteEditor, NoteRevision, NoteTarget, Server};
 /// existierenden KI-Provider-Spec, die den Aufrufer dieser Funktion bilden
 /// wird. Würde hier vorab künstlich gekürzt, müsste die Provider-Spec diese
 /// Kürzung ggf. wieder umgehen oder doppelt Buchhaltung führen. Siehe
-/// ADR-Vorschlag in der Abschluss-Nachricht.
+/// `docs/adr/0004-effective-notes-kein-truncation-mvp.md`.
 pub fn effective_notes(server: &Server, store: &dyn ProfileStore) -> ProfileResult<String> {
     let mut sections = Vec::new();
 

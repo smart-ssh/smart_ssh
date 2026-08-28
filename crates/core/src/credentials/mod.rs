@@ -13,5 +13,5 @@
 //! gestützte `CredentialStore`-Implementierung entsteht (`keyring`-Crate,
 //! s. Spec 0001 Abschnitt 2), gehört sie hierher; ob die Trait-/Typ-
 //! Definitionen dann mitwandern oder in `profiles` bleiben und nur
-//! re-exportiert werden, ist noch offen. Siehe ADR-Vorschlag zur letzten
-//! `profiles`-Implementierung.
+//! re-exportiert werden, ist noch offen. Siehe
+//! `docs/adr/0005-credential-store-in-profiles.md`.
