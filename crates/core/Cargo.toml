@@ -1,0 +1,11 @@
+[package]
+name = "ssh-manager-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "ssh_manager_core"
+path = "src/lib.rs"
+
+[dependencies]

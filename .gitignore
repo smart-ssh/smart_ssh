@@ -1,0 +1,20 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# Alle Workspace-Member sind aktuell Libraries (kein Binary-Deliverable) –
+# Cargo.lock daher nicht committen. Sobald ein Binary-Crate (z. B. eine
+# Tauri-App) hinzukommt, sollte Cargo.lock für dieses Crate versioniert werden.
+Cargo.lock
+
+# IDE / Editor
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Sonstiges
+*.log

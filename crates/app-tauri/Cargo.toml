@@ -1,0 +1,14 @@
+[package]
+name = "ssh-manager-app-tauri"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "ssh_manager_app_tauri"
+path = "src/lib.rs"
+
+[dependencies]
+ssh-manager-core = { path = "../core" }
+
+# Tauri wird hinzugefügt, sobald das echte App-Setup ansteht.
