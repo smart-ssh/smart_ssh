@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use async_trait::async_trait;
 use chrono::Utc;
 use secrecy::{ExposeSecret, SecretString};
 
@@ -67,15 +68,16 @@ impl InMemoryProfileStore {
     }
 }
 
+#[async_trait]
 impl ProfileStore for InMemoryProfileStore {
-    fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
+    async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
         self.servers
             .get(id)
             .cloned()
             .ok_or(ProfileError::ServerNotFound(*id))
     }
 
-    fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
+    async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
         self.groups
             .get(id)
             .cloned()
@@ -117,8 +119,8 @@ fn server(name: &str, group_id: Option<GroupId>, notes: &str) -> Server {
 
 // --- effective_notes() ----------------------------------------------------
 
-#[test]
-fn test_effective_notes_orders_root_first_server_last() {
+#[tokio::test]
+async fn test_effective_notes_orders_root_first_server_last() {
     let root = group("Kunde A", None, "Kunde A: Ansprechpartner ist Team X.");
     let mid = group(
         "Produktion",
@@ -142,7 +144,9 @@ fn test_effective_notes_orders_root_first_server_last() {
         .with_group(leaf.clone())
         .with_server(srv.clone());
 
-    let notes = effective_notes(&srv, &store).expect("keine zyklische Kette in diesem Test");
+    let notes = effective_notes(&srv, &store)
+        .await
+        .expect("keine zyklische Kette in diesem Test");
 
     let idx_root = notes
         .find("## Kontext: Kunde A")
@@ -174,8 +178,8 @@ fn test_effective_notes_orders_root_first_server_last() {
     assert!(notes.contains("PHP 8.2"));
 }
 
-#[test]
-fn test_effective_notes_skips_empty_notes() {
+#[tokio::test]
+async fn test_effective_notes_skips_empty_notes() {
     let root = group("Kunde A", None, "");
     let mid = group("Produktion", Some(root.id), "   ");
     let srv = server("web-01", Some(mid.id), "web-01: relevant.");
@@ -185,7 +189,9 @@ fn test_effective_notes_skips_empty_notes() {
         .with_group(mid.clone())
         .with_server(srv.clone());
 
-    let notes = effective_notes(&srv, &store).expect("keine zyklische Kette in diesem Test");
+    let notes = effective_notes(&srv, &store)
+        .await
+        .expect("keine zyklische Kette in diesem Test");
 
     assert!(
         !notes.contains("Kunde A"),
@@ -199,8 +205,8 @@ fn test_effective_notes_skips_empty_notes() {
     assert!(notes.contains("relevant"));
 }
 
-#[test]
-fn test_effective_notes_server_without_group_yields_only_server_context() {
+#[tokio::test]
+async fn test_effective_notes_server_without_group_yields_only_server_context() {
     let srv = server(
         "standalone",
         None,
@@ -208,7 +214,9 @@ fn test_effective_notes_server_without_group_yields_only_server_context() {
     );
     let store = InMemoryProfileStore::new().with_server(srv.clone());
 
-    let notes = effective_notes(&srv, &store).expect("keine zyklische Kette in diesem Test");
+    let notes = effective_notes(&srv, &store)
+        .await
+        .expect("keine zyklische Kette in diesem Test");
 
     assert_eq!(
         notes,
@@ -216,8 +224,8 @@ fn test_effective_notes_server_without_group_yields_only_server_context() {
     );
 }
 
-#[test]
-fn test_group_chain_detects_cycle_without_infinite_loop() {
+#[tokio::test]
+async fn test_group_chain_detects_cycle_without_infinite_loop() {
     let mut a = group("A", None, "a-notes");
     let mut b = group("B", None, "b-notes");
     // Simuliert einen Store-Fehler: A -> B -> A.
@@ -228,12 +236,12 @@ fn test_group_chain_detects_cycle_without_infinite_loop() {
         .with_group(a.clone())
         .with_group(b.clone());
 
-    let result = store.group_chain(&a.id);
+    let result = store.group_chain(&a.id).await;
     assert_eq!(result, Err(ProfileError::CycleDetected));
 }
 
-#[test]
-fn test_effective_notes_propagates_cycle_error_instead_of_hanging() {
+#[tokio::test]
+async fn test_effective_notes_propagates_cycle_error_instead_of_hanging() {
     let mut a = group("A", None, "a-notes");
     let mut b = group("B", None, "b-notes");
     a.parent_id = Some(b.id);
@@ -245,7 +253,7 @@ fn test_effective_notes_propagates_cycle_error_instead_of_hanging() {
         .with_group(b)
         .with_server(srv.clone());
 
-    let result = effective_notes(&srv, &store);
+    let result = effective_notes(&srv, &store).await;
     assert_eq!(result, Err(ProfileError::CycleDetected));
 }
 
@@ -282,6 +290,9 @@ fn test_record_revision_creates_ai_variant_with_provider_and_model() {
 }
 
 // --- CredentialStore --------------------------------------------------------
+// (CredentialStore bleibt in Teil 1 bewusst synchron — nur ProfileStore wird
+// umgestellt, s. Aufgabenstellung. Test bleibt daher #[test], nicht
+// #[tokio::test].)
 
 #[test]
 fn test_in_memory_credential_store_roundtrip_and_not_found() {

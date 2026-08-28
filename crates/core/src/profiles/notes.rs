@@ -26,11 +26,16 @@ use super::types::{NoteEditor, NoteRevision, NoteTarget, Server};
 /// wird. Würde hier vorab künstlich gekürzt, müsste die Provider-Spec diese
 /// Kürzung ggf. wieder umgehen oder doppelt Buchhaltung führen. Siehe
 /// `docs/adr/0004-effective-notes-kein-truncation-mvp.md`.
-pub fn effective_notes(server: &Server, store: &dyn ProfileStore) -> ProfileResult<String> {
+///
+/// `async`, weil [`ProfileStore::group_chain`] seit der Umstellung auf
+/// `async-trait` (Teil 1 der SQLite-Persistenz-Anbindung, Spec 0004)
+/// selbst `async` ist — diese Funktion ruft es auf und muss das Ergebnis
+/// awaiten, kann also nicht mehr synchron bleiben.
+pub async fn effective_notes(server: &Server, store: &dyn ProfileStore) -> ProfileResult<String> {
     let mut sections = Vec::new();
 
     if let Some(group_id) = server.group_id {
-        for group in store.group_chain(&group_id)? {
+        for group in store.group_chain(&group_id).await? {
             push_section(&mut sections, &group.name, &group.notes);
         }
     }

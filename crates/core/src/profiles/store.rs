@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::fmt;
 
+use async_trait::async_trait;
+
 use crate::shared::ServerId;
 
 use super::types::{Group, GroupId, Server};
@@ -37,9 +39,17 @@ pub type ProfileResult<T> = Result<T, ProfileError>;
 /// zum `PolicyStore`-Muster aus Spec 0002: als Trait modelliert, damit Tests
 /// (und die reine `effective_notes`-Logik) eine In-Memory-Implementierung
 /// nutzen können, ohne von der späteren DB-Anbindung abzuhängen.
-pub trait ProfileStore {
-    fn get_server(&self, id: &ServerId) -> ProfileResult<Server>;
-    fn get_group(&self, id: &GroupId) -> ProfileResult<Group>;
+///
+/// `async fn` über die `async-trait`-Crate, damit eine echte DB-Anbindung
+/// (SQLite über `sqlx`, siehe Spec 0004) Netz-/Datei-I/O nicht blockierend
+/// ausführen kann. `async-trait` boxt die zurückgegebenen Futures, damit der
+/// Trait weiterhin als `dyn ProfileStore` nutzbar bleibt — native `async fn`
+/// in Traits ist (Stand der in diesem Workspace verwendeten Rust-Version)
+/// nicht dyn-kompatibel.
+#[async_trait]
+pub trait ProfileStore: Send + Sync {
+    async fn get_server(&self, id: &ServerId) -> ProfileResult<Server>;
+    async fn get_group(&self, id: &GroupId) -> ProfileResult<Group>;
 
     /// Gruppenkette von der Wurzel bis **einschließlich** `id`, root-first
     /// geordnet (passend für `effective_notes`, Spec Abschnitt 5.1).
@@ -50,7 +60,7 @@ pub trait ProfileStore {
     /// sie selbst (fehleranfällig) nachbauen zu müssen. Bricht mit
     /// [`ProfileError::CycleDetected`] ab, statt endlos zu laufen, falls die
     /// `parent_id`-Kette (durch einen Store-Fehler) zyklisch würde.
-    fn group_chain(&self, id: &GroupId) -> ProfileResult<Vec<Group>> {
+    async fn group_chain(&self, id: &GroupId) -> ProfileResult<Vec<Group>> {
         let mut chain = Vec::new();
         let mut visited = HashSet::new();
         let mut current = Some(*id);
@@ -59,7 +69,7 @@ pub trait ProfileStore {
             if !visited.insert(group_id) {
                 return Err(ProfileError::CycleDetected);
             }
-            let group = self.get_group(&group_id)?;
+            let group = self.get_group(&group_id).await?;
             current = group.parent_id;
             chain.push(group);
         }

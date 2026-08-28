@@ -13,10 +13,16 @@
 //! dass der Trait wie vorgesehen auch außerhalb der Testsuite einfach zu
 //! implementieren ist.
 //!
+//! `#[tokio::main]`, weil `ProfileStore` seit der Umstellung auf
+//! `async-trait` (Teil 1 der SQLite-Persistenz-Anbindung, Spec 0004) async
+//! ist und `tokio` als Dev-Dependency ohnehin für die Testsuite gebraucht
+//! wird (auch Examples dürfen Dev-Dependencies nutzen).
+//!
 //! Führe aus mit: `cargo run -p ssh-manager-core --example profiles_demo`
 
 use std::collections::HashMap;
 
+use async_trait::async_trait;
 use chrono::Utc;
 use ssh_manager_core::profiles::{
     effective_notes, AuthMethod, Group, GroupId, ProfileError, ProfileResult, ProfileStore, Server,
@@ -45,15 +51,16 @@ impl DemoProfileStore {
     }
 }
 
+#[async_trait]
 impl ProfileStore for DemoProfileStore {
-    fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
+    async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
         self.servers
             .get(id)
             .cloned()
             .ok_or(ProfileError::ServerNotFound(*id))
     }
 
-    fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
+    async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
         self.groups
             .get(id)
             .cloned()
@@ -73,7 +80,8 @@ fn new_group(name: &str, parent_id: Option<GroupId>, notes: &str) -> Group {
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut store = DemoProfileStore::new();
 
     let kunde_a = new_group(
@@ -109,7 +117,7 @@ fn main() {
     store.insert_group(produktion);
     store.insert_server(web01.clone());
 
-    match effective_notes(&web01, &store) {
+    match effective_notes(&web01, &store).await {
         Ok(context) => {
             println!(
                 "--- Effektiver LLM-Kontext für Session zu \"{}\" ---\n",
