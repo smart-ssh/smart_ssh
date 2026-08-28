@@ -8,4 +8,6 @@ pub mod ai;
 pub mod audit;
 pub mod credentials;
 pub mod filter;
+pub mod profiles;
+pub mod shared;
 pub mod ssh;

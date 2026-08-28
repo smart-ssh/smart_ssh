@@ -16,6 +16,7 @@ mod types;
 mod tests;
 
 pub use engine::{FilterEngine, PolicyStore, DEFAULT_MAX_COMMAND_LENGTH};
-pub use types::{
-    Decision, EffectiveScope, EvalContext, Pattern, Rule, RuleAction, Scope, ServerId,
-};
+pub use types::{Decision, EffectiveScope, EvalContext, Pattern, Rule, RuleAction, Scope};
+// `ServerId` ist seit Spec 0003 ein von `filter` und `profiles` gemeinsam
+// genutzter Typ, siehe `crate::shared`-Modul-Kommentar.
+pub use crate::shared::ServerId;

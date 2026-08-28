@@ -1,13 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-/// Platzhalter-Identifier für einen Server.
-///
-/// Das `ssh`-Modul (siehe `crates/core/src/ssh/mod.rs`) ist aktuell nur ein
-/// leeres Skelett und stellt noch keinen kanonischen Server-Typ bereit. Sobald
-/// das der Fall ist, sollte dieser Typ durch einen Re-Export von dort ersetzt
-/// werden, statt ihn hier zu duplizieren.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ServerId(pub String);
+// `ServerId` lebt seit Spec 0003 in `crate::shared` (gemeinsam mit
+// `profiles`), s. dortiger Modul-Kommentar für die Begründung. Der frühere
+// String-basierte Platzhalter hier wurde entfernt.
+use crate::shared::ServerId;
 
 /// Ergebnis einer Filter-Auswertung (Spec 0002, Abschnitt 2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -84,7 +80,7 @@ pub struct EffectiveScope {
 impl From<&EvalContext> for EffectiveScope {
     fn from(ctx: &EvalContext) -> Self {
         Self {
-            server_id: ctx.server_id.clone(),
+            server_id: ctx.server_id,
             tags: ctx.tags.clone(),
         }
     }

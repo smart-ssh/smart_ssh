@@ -42,9 +42,12 @@ fn glob_rule(id: &str, glob: &str, action: RuleAction, scope: Scope, priority: i
     }
 }
 
-fn ctx(server: &str, tags: &[&str]) -> EvalContext {
+/// `_server_label` dient nur der Lesbarkeit an den Call-Sites; kein Test
+/// prüft `Scope::Server(...)`-Regeln gegen einen konkreten Wert, daher reicht
+/// eine frische `ServerId` (seit Spec 0003 Uuid-basiert, s. `crate::shared`).
+fn ctx(_server_label: &str, tags: &[&str]) -> EvalContext {
     EvalContext {
-        server_id: ServerId(server.to_string()),
+        server_id: ServerId::new(),
         tags: tags.iter().map(|t| t.to_string()).collect(),
     }
 }
