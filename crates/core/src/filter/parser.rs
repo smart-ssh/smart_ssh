@@ -132,9 +132,9 @@ pub(super) fn strip_substitutions(text: &str) -> (String, Vec<String>) {
     (result, inner_contents)
 }
 
-/// Empfehlung aus Spec Abschnitt 7 für mehrzeilige Skripte: Here-Docs und
-/// `bash -c "..."`-artige Aufrufe komplett als einen Block behandeln statt zu
-/// versuchen sie zu parsen.
+/// Here-Docs und `bash -c "..."`-artige Aufrufe komplett als einen Block
+/// behandeln statt zu versuchen sie zu parsen, siehe
+/// `docs/adr/0001-mehrzeilige-skripte-als-block.md`.
 fn looks_like_heredoc_or_complex_shell_c(cmd: &str) -> bool {
     if cmd.contains("<<") {
         return true;

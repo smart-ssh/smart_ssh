@@ -145,8 +145,7 @@ impl<S: PolicyStore> FilterEngine<S> {
 /// Rule-/Pattern-Typen aus Abschnitt 2 gibt es dafür kein eigenes
 /// Matching-Feld (kein `elevated`-Flag am Pattern). Dual-Matching gegen
 /// beide Text-Varianten löst den Widerspruch, ohne die in Abschnitt 2 fest
-/// vorgegebenen Typen zu erweitern. Siehe ADR-Vorschlag in der
-/// Abschluss-Nachricht.
+/// vorgegebenen Typen zu erweitern. Siehe `docs/adr/0002-sudo-dual-text-matching.md`.
 fn evaluate_rules(rules: &[Rule], original: &str, stripped: &str) -> Decision {
     for action in [RuleAction::Deny, RuleAction::Confirm, RuleAction::Allow] {
         let mut bucket: Vec<&Rule> = rules.iter().filter(|r| r.action == action).collect();
