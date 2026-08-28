@@ -15,6 +15,14 @@ use crate::mapping::{auth_method_from_json, auth_method_to_json, parse_timestamp
 
 /// SQLite-gestützte Implementierung von [`ProfileStore`] (Spec 0004,
 /// Abschnitt 5).
+///
+/// Nutzt durchgehend die Runtime-API von `sqlx` (`sqlx::query`/
+/// `sqlx::query_scalar`, manuelles Zeilen-Mapping), nicht die
+/// compile-time-geprüften `query!`/`query_as!`-Makros — Letztere würden
+/// beim Bauen entweder eine laufende DB unter `DATABASE_URL` oder einen
+/// eingecheckten Offline-Cache (`cargo sqlx prepare`) voraussetzen, was
+/// hier bewusst vermieden wurde. Siehe
+/// `docs/adr/0006-sqlx-runtime-checked-queries.md`.
 pub struct SqliteProfileStore {
     // `pub(crate)` statt privat: die Testsuite (`crate::tests`, ein
     // Geschwister-, kein Kind-Modul von `store`) muss gelegentlich Zustand
