@@ -59,8 +59,11 @@ function describeAction(action: AiAction): { label: string; command?: string } {
   if ("GenerateDocument" in action) {
     return { label: `Dokument generieren: ${action.GenerateDocument.title}` };
   }
-  const target = action.ProposeNoteUpdate.target;
-  const targetLabel = "Server" in target ? `Server ${target.Server}` : `Gruppe ${target.Group}`;
+  // Spec 0016, Abschnitt 6: die KI liefert nur noch relativ zur aktuellen
+  // Session ("dieser Server"/"dessen Gruppe"), nie eine konkrete ID mehr —
+  // das Backend löst `target` selbst auf `session.server_id` auf.
+  const targetLabel =
+    action.ProposeNoteUpdate.target === "CurrentServer" ? "dieser Server" : "dessen Gruppe";
   return { label: `Notiz aktualisieren (${targetLabel})` };
 }
 

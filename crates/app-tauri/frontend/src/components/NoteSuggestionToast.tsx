@@ -6,7 +6,10 @@ import type { NoteUpdateSuggestedEvent } from "../types";
 interface PendingSuggestion {
   sessionId: string;
   actionId: string;
-  target: { kind: "server" | "group"; id: string };
+  /** Spec 0016, Abschnitt 6: nur noch relativ zur Session ("dieser
+   * Server"/"dessen Gruppe"), nie eine konkrete ID — die KI kennt/liefert
+   * keine, das Backend löst sie selbst auf `session.server_id` auf. */
+  targetKind: "server" | "group";
   newContent: string;
   /** Kompakte Ansicht per Default (Spec 0010, Abschnitt 2, Punkt 6: "dezente
    * Benachrichtigung statt eines blockierenden Modals") — erst nach Klick
@@ -16,11 +19,8 @@ interface PendingSuggestion {
   error: string | null;
 }
 
-function targetFromEvent(event: NoteUpdateSuggestedEvent): { kind: "server" | "group"; id: string } {
-  const target = event.action.ProposeNoteUpdate.target;
-  return "Server" in target
-    ? { kind: "server", id: target.Server }
-    : { kind: "group", id: target.Group };
+function targetKindFromEvent(event: NoteUpdateSuggestedEvent): "server" | "group" {
+  return event.action.ProposeNoteUpdate.target === "CurrentServer" ? "server" : "group";
 }
 
 /**
@@ -46,7 +46,7 @@ export function NoteSuggestionToast() {
         {
           sessionId: event.sessionId,
           actionId: event.actionId,
-          target: targetFromEvent(event),
+          targetKind: targetKindFromEvent(event),
           newContent: event.action.ProposeNoteUpdate.new_content,
           expanded: false,
           deciding: false,
@@ -93,7 +93,7 @@ export function NoteSuggestionToast() {
             <div className="flex items-center justify-between gap-2">
               <span className="text-slate-200">
                 KI schlägt eine Notiz-Aktualisierung vor (
-                {suggestion.target.kind === "server" ? "Server" : "Gruppe"})
+                {suggestion.targetKind === "server" ? "dieser Server" : "dessen Gruppe"})
               </span>
               <div className="flex shrink-0 gap-1">
                 <button
@@ -116,8 +116,7 @@ export function NoteSuggestionToast() {
           ) : (
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-wide text-slate-400">
-                Notiz-Vorschlag ({suggestion.target.kind === "server" ? "Server" : "Gruppe"}{" "}
-                {suggestion.target.id})
+                Notiz-Vorschlag ({suggestion.targetKind === "server" ? "dieser Server" : "dessen Gruppe"})
               </p>
               <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded bg-slate-950 p-2 text-xs text-slate-300">
                 {suggestion.newContent}

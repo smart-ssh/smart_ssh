@@ -6,9 +6,7 @@
 
 use serde_json::{Map, Value};
 use ssh_manager_core::ai::{ActionParameterKind, ActionSchema, AiError};
-use ssh_manager_core::profiles::{AiAction, GroupId, NoteTarget};
-use ssh_manager_core::shared::ServerId;
-use uuid::Uuid;
+use ssh_manager_core::profiles::{AiAction, NoteTargetSelector};
 
 /// Erzeugt das `{"type":"object","properties":{...},"required":[...]}`-
 /// JSON-Schema-Objekt für eine [`ActionSchema`]. Von OpenAI (`function.parameters`)
@@ -51,9 +49,9 @@ pub(crate) fn parameters_json_schema(schema: &ActionSchema) -> Value {
 /// kommen) in eine konkrete [`AiAction`] (Spec 0003, Abschnitt 5.2).
 ///
 /// Gibt `Err` bei unbekanntem Aktionsnamen, fehlenden Pflichtfeldern oder
-/// einer ungültigen `target_id` (keine gültige UUID) zurück — die
-/// Aufrufer entscheiden je nach Modus (nativ vs. Fallback), wie damit
-/// umzugehen ist (s. `openai_compatible.rs`/`anthropic.rs`).
+/// einem unbekannten `target`-Wert zurück — die Aufrufer entscheiden je
+/// nach Modus (nativ vs. Fallback), wie damit umzugehen ist (s.
+/// `openai_compatible.rs`/`anthropic.rs`).
 pub(crate) fn action_from_tool_arguments(
     name: &str,
     arguments: &Value,
@@ -80,18 +78,17 @@ pub(crate) fn action_from_tool_arguments(
             command: get_str_aliases(&["command", "cmd", "script", "code"])?,
         }),
         "propose_note_update" => {
-            let target_type = get_str_aliases(&["target_type", "type", "target"])?;
-            let target_id = get_str_aliases(&["target_id", "id"])?;
             let new_content = get_str_aliases(&["new_content", "content", "notes", "note", "text"])?;
-            let uuid = Uuid::parse_str(&target_id).map_err(|err| {
-                AiError::InvalidResponse(format!("target_id ist keine gültige UUID: {err}"))
-            })?;
-            let target = match target_type.as_str() {
-                "server" => NoteTarget::Server(ServerId(uuid)),
-                "group" => NoteTarget::Group(GroupId(uuid)),
-                other => {
+            // Spec 0016, Abschnitt 6: kein Freitext-`target_id`-Feld mehr —
+            // die KI wählt nur noch zwischen zwei relativen Optionen, nie
+            // eine ID. Fehlt `target`, gilt `current_server` als Default
+            // (Spec-Vorgabe), nicht als Fehler.
+            let target = match arguments.get("target").and_then(Value::as_str) {
+                None | Some("current_server") => NoteTargetSelector::CurrentServer,
+                Some("current_server_group") => NoteTargetSelector::CurrentServerGroup,
+                Some(other) => {
                     return Err(AiError::InvalidResponse(format!(
-                        "unbekannter target_type '{other}'"
+                        "unbekannter target-Wert '{other}'"
                     )))
                 }
             };
@@ -146,9 +143,10 @@ mod tests {
         let json = parameters_json_schema(&schema);
 
         assert_eq!(
-            json["properties"]["target_type"]["enum"],
-            json!(["server", "group"])
+            json["properties"]["target"]["enum"],
+            json!(["current_server", "current_server_group"])
         );
+        assert_eq!(json["required"], json!(["new_content"]));
     }
 
     #[test]
@@ -165,18 +163,54 @@ mod tests {
     }
 
     #[test]
-    fn test_action_from_tool_arguments_parses_propose_note_update_for_server() {
-        let id = Uuid::new_v4();
+    fn test_action_from_tool_arguments_parses_propose_note_update_for_current_server() {
         let action = action_from_tool_arguments(
             "propose_note_update",
-            &json!({"target_type": "server", "target_id": id.to_string(), "new_content": "neu"}),
+            &json!({"target": "current_server", "new_content": "neu"}),
         )
         .unwrap();
 
         assert_eq!(
             action,
             AiAction::ProposeNoteUpdate {
-                target: NoteTarget::Server(ServerId(id)),
+                target: NoteTargetSelector::CurrentServer,
+                new_content: "neu".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_action_from_tool_arguments_parses_propose_note_update_for_current_server_group() {
+        let action = action_from_tool_arguments(
+            "propose_note_update",
+            &json!({"target": "current_server_group", "new_content": "neu"}),
+        )
+        .unwrap();
+
+        assert_eq!(
+            action,
+            AiAction::ProposeNoteUpdate {
+                target: NoteTargetSelector::CurrentServerGroup,
+                new_content: "neu".to_string(),
+            }
+        );
+    }
+
+    /// Spec 0016, Abschnitt 6: fehlt `target` ganz, gilt `current_server`
+    /// als Default — kein Fehler, und die KI muss das Feld nicht einmal
+    /// kennen, um den häufigsten Fall (aktueller Server) auszulösen.
+    #[test]
+    fn test_action_from_tool_arguments_defaults_missing_target_to_current_server() {
+        let action = action_from_tool_arguments(
+            "propose_note_update",
+            &json!({"new_content": "neu"}),
+        )
+        .unwrap();
+
+        assert_eq!(
+            action,
+            AiAction::ProposeNoteUpdate {
+                target: NoteTargetSelector::CurrentServer,
                 new_content: "neu".to_string(),
             }
         );
@@ -207,10 +241,20 @@ mod tests {
     }
 
     #[test]
-    fn test_action_from_tool_arguments_rejects_invalid_target_id() {
+    fn test_action_from_tool_arguments_rejects_unknown_target_value() {
         let result = action_from_tool_arguments(
             "propose_note_update",
-            &json!({"target_type": "server", "target_id": "not-a-uuid", "new_content": "x"}),
+            &json!({"target": "some_other_server", "new_content": "x"}),
+        );
+
+        assert!(matches!(result, Err(AiError::InvalidResponse(_))));
+    }
+
+    #[test]
+    fn test_action_from_tool_arguments_rejects_missing_new_content() {
+        let result = action_from_tool_arguments(
+            "propose_note_update",
+            &json!({"target": "current_server"}),
         );
 
         assert!(matches!(result, Err(AiError::InvalidResponse(_))));

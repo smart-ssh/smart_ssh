@@ -112,21 +112,37 @@ pub enum NoteTarget {
     Group(GroupId),
 }
 
+/// Wohin sich ein `ProposeNoteUpdate`-Vorschlag bezieht (Spec 0016,
+/// Abschnitt 6) — bewusst **kein** Freitext-/ID-Feld mehr: die KI wählte
+/// vorher `target_type`/`target_id` selbst (Spec 0003/0006-Skizze), musste
+/// dafür aber eine `ServerId`/`GroupId` als Text korrekt kennen/formatieren
+/// — genau das führte zum beobachteten `target_id ist keine gültige
+/// UUID`-Bugfall. Stattdessen wählt die KI nur noch zwischen zwei relativen
+/// Optionen; das Backend löst daraus die tatsächliche `ServerId`/`GroupId`
+/// **selbst** aus dem Session-Kontext auf (nie eine von der KI gelieferte
+/// ID, s. `app-tauri::orchestration::resolve_note_target`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NoteTargetSelector {
+    CurrentServer,
+    CurrentServerGroup,
+}
+
 /// Von der KI vorgeschlagene Aktion (Spec 0003, Abschnitt 5.2; erweitert um
-/// `GenerateDocument` in Spec 0012, Abschnitt 2). Nur `SuggestCommand`
-/// läuft durch die Filter-Engine (Spec 0002) — die betrifft ausschließlich
-/// Shell-Kommandos. `ProposeNoteUpdate` ist immer manuell zu bestätigen
-/// (Diff-Ansicht), nie automatisch übernehmbar. `GenerateDocument` läuft
-/// weder durch die Filter-Engine noch durch einen Bestätigungsdialog — es
-/// erzeugt reinen lokalen Inhalt, nichts wird ungefragt auf die Festplatte
-/// geschrieben (Spec 0012, Abschnitt 2).
+/// `GenerateDocument` in Spec 0012, Abschnitt 2; `ProposeNoteUpdate.target`
+/// auf [`NoteTargetSelector`] umgestellt in Spec 0016, Abschnitt 6). Nur
+/// `SuggestCommand` läuft durch die Filter-Engine (Spec 0002) — die betrifft
+/// ausschließlich Shell-Kommandos. `ProposeNoteUpdate` ist immer manuell zu
+/// bestätigen (Diff-Ansicht), nie automatisch übernehmbar. `GenerateDocument`
+/// läuft weder durch die Filter-Engine noch durch einen Bestätigungsdialog —
+/// es erzeugt reinen lokalen Inhalt, nichts wird ungefragt auf die
+/// Festplatte geschrieben (Spec 0012, Abschnitt 2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AiAction {
     SuggestCommand {
         command: String,
     },
     ProposeNoteUpdate {
-        target: NoteTarget,
+        target: NoteTargetSelector,
         /// Vollständiger neuer Text, nicht nur ein Diff.
         new_content: String,
     },

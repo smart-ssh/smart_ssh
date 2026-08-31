@@ -156,8 +156,8 @@ pub struct ActionParameter {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActionParameterKind {
     String,
-    /// Feste Werteliste, z. B. für `NoteTarget`s `target_type`
-    /// (`"server"`/`"group"`).
+    /// Feste Werteliste, z. B. für `ProposeNoteUpdate`s `target`
+    /// (`"current_server"`/`"current_server_group"`).
     Enum(Vec<String>),
 }
 
@@ -180,32 +180,30 @@ impl ActionSchema {
     }
 
     /// Entspricht `AiAction::ProposeNoteUpdate` (Spec 0003, Abschnitt 5.2).
-    /// `target_type`/`target_id` bilden zusammen ein `NoteTarget`
-    /// (`Server(ServerId)`/`Group(GroupId)`) — als zwei einfache
-    /// LLM-freundliche Parameter statt des internen Rust-Enums.
+    /// Spec 0016, Abschnitt 6: **kein** Freitext-`target_id`-Feld mehr — die
+    /// KI muss nie eine `ServerId`/`GroupId` kennen oder korrekt formatieren
+    /// (Ursache des `target_id ist keine gültige UUID`-Bugfalls). `target`
+    /// ist optional (Default bei Fehlen: `current_server`, s.
+    /// `ai_providers::action::action_from_tool_arguments`); das Backend
+    /// löst daraus die tatsächliche ID selbst aus dem Session-Kontext auf.
     pub fn propose_note_update() -> Self {
         Self {
             name: "propose_note_update".to_string(),
-            description: "Schlägt eine Aktualisierung der Kontextnotiz eines Servers oder \
-                einer Gruppe vor. Wird immer als Diff zur manuellen Bestätigung angezeigt, \
-                nie automatisch übernommen."
+            description: "Schlägt eine Aktualisierung der Kontextnotiz des aktuell verbundenen \
+                Servers oder dessen Gruppe vor. Wird immer als Diff zur manuellen Bestätigung \
+                angezeigt, nie automatisch übernommen."
                 .to_string(),
             parameters: vec![
                 ActionParameter {
-                    name: "target_type".to_string(),
-                    description: "Ob sich der Vorschlag auf einen Server oder eine Gruppe bezieht."
+                    name: "target".to_string(),
+                    description: "Ob sich der Vorschlag auf den aktuell verbundenen Server oder \
+                        dessen Gruppe bezieht. Optional, Default: current_server."
                         .to_string(),
                     kind: ActionParameterKind::Enum(vec![
-                        "server".to_string(),
-                        "group".to_string(),
+                        "current_server".to_string(),
+                        "current_server_group".to_string(),
                     ]),
-                    required: true,
-                },
-                ActionParameter {
-                    name: "target_id".to_string(),
-                    description: "Id des Servers bzw. der Gruppe.".to_string(),
-                    kind: ActionParameterKind::String,
-                    required: true,
+                    required: false,
                 },
                 ActionParameter {
                     name: "new_content".to_string(),

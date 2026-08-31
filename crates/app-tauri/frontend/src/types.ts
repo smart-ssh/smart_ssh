@@ -70,9 +70,17 @@ export function needsBaseUrl(type: ProviderType): boolean {
 
 export type NoteTarget = { Server: string } | { Group: string };
 
+/** Spec 0016, Abschnitt 6 — löst das frühere `{ target_type, target_id }`
+ * ab: die KI wählt nur noch relativ zur aktuellen Session, nie eine
+ * konkrete `ServerId`/`GroupId` (die löst das Backend selbst auf). Als
+ * reiner Unit-Varianten-Enum serialisiert Rusts Serde-Default-Tagging das
+ * als bloßen String (`"CurrentServer"`/`"CurrentServerGroup"`), nicht als
+ * Objekt wie `NoteTarget`. */
+export type NoteTargetSelector = "CurrentServer" | "CurrentServerGroup";
+
 export type AiAction =
   | { SuggestCommand: { command: string } }
-  | { ProposeNoteUpdate: { target: NoteTarget; new_content: string } }
+  | { ProposeNoteUpdate: { target: NoteTargetSelector; new_content: string } }
   | { GenerateDocument: { title: string; content_markdown: string } };
 
 export type Decision =
@@ -135,7 +143,7 @@ export interface ChatActionProposedEvent {
 export interface NoteUpdateSuggestedEvent {
   sessionId: string;
   actionId: string;
-  action: { ProposeNoteUpdate: { target: NoteTarget; new_content: string } };
+  action: { ProposeNoteUpdate: { target: NoteTargetSelector; new_content: string } };
 }
 
 export type ActionResultPayload =

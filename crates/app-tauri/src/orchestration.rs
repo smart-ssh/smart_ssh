@@ -33,7 +33,9 @@ use uuid::Uuid;
 
 use ssh_manager_core::ai::{ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, Role};
 use ssh_manager_core::filter::{Decision, EvalContext};
-use ssh_manager_core::profiles::{AiAction, NoteEditor, NoteTarget, ProfileError, ProfileStore};
+use ssh_manager_core::profiles::{
+    AiAction, NoteEditor, NoteTarget, NoteTargetSelector, ProfileError, ProfileStore,
+};
 use ssh_manager_core::ssh::{CommandOutput, SshError};
 
 use crate::confirmation::ConfirmationRegistry;
@@ -530,15 +532,57 @@ fn log_command_execution_failed(session_id: SessionId, command: &str, err: &SshE
     );
 }
 
+/// Spec 0016, Abschnitt 6: löst den von der KI gewählten
+/// [`NoteTargetSelector`] in die tatsächliche `ServerId`/`GroupId` **der
+/// laufenden Session** auf — nie eine von der KI selbst gelieferte ID (das
+/// war die Ursache des `target_id ist keine gültige UUID`-Bugfalls). Für
+/// `CurrentServerGroup` ohne zugeordnete Gruppe gibt es keine sinnvolle
+/// Ziel-ID; das ist ein Fehler (an den Nutzer über `chat-error`
+/// zurückgemeldet), kein stiller Fallback auf den Server.
+async fn resolve_note_target(
+    selector: NoteTargetSelector,
+    session: &Session,
+    profile_store: &dyn ProfileStore,
+) -> Result<NoteTarget, String> {
+    match selector {
+        NoteTargetSelector::CurrentServer => Ok(NoteTarget::Server(session.server_id)),
+        NoteTargetSelector::CurrentServerGroup => {
+            let server = profile_store
+                .get_server(&session.server_id)
+                .await
+                .map_err(|err| format!("Server nicht gefunden: {err}"))?;
+            let group_id = server.group_id.ok_or_else(|| {
+                "Server ist keiner Gruppe zugeordnet — Notiz kann nicht für die Gruppe \
+                 aktualisiert werden"
+                    .to_string()
+            })?;
+            Ok(NoteTarget::Group(group_id))
+        }
+    }
+}
+
 async fn execute_note_update(
     session: &Session,
     session_id: SessionId,
     action_id: ActionId,
-    target: NoteTarget,
+    target_selector: NoteTargetSelector,
     new_content: String,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
 ) -> bool {
+    let target = match resolve_note_target(target_selector, session, profile_store).await {
+        Ok(target) => target,
+        Err(reason) => {
+            tracing::warn!(session_id = %session_id, reason, "note target resolution failed");
+            emit_chat_error(
+                emitter,
+                session_id,
+                format!("Notiz konnte nicht aktualisiert werden: {reason}"),
+            );
+            return false;
+        }
+    };
+
     let revision = ssh_manager_core::profiles::record_revision(
         target,
         new_content,
@@ -1256,17 +1300,19 @@ mod tests {
     /// gefragt wird.
     #[tokio::test]
     async fn test_propose_note_update_always_waits_for_confirmation_and_persists() {
-        let target = ssh_manager_core::profiles::NoteTarget::Server(ServerId::new());
         let mut session = test_session(
             vec![
                 AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
-                    target,
+                    target: NoteTargetSelector::CurrentServer,
                     new_content: "neuer Kontext".to_string(),
                 }),
                 AiEvent::Done,
             ],
             MockSshTransport::default(),
         );
+        // Spec 0016, Abschnitt 6: die KI liefert keine ID mehr — das Backend
+        // löst `CurrentServer` selbst auf `session.server_id` auf.
+        let expected_server_id = session.server_id;
         session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
         let emitter = TestEmitter::default();
         let profile_store = InMemoryProfileStore::default();
@@ -1314,7 +1360,14 @@ mod tests {
             "ProposeNoteUpdate muss immer Confirm sein, nie AutoExec"
         );
 
-        assert_eq!(profile_store.note_revisions.lock().unwrap().len(), 1);
+        let revisions = profile_store.note_revisions.lock().unwrap().clone();
+        assert_eq!(revisions.len(), 1);
+        assert_eq!(
+            revisions[0].target,
+            ssh_manager_core::profiles::NoteTarget::Server(expected_server_id),
+            "CurrentServer muss auf session.server_id auflösen, nie auf eine von der KI \
+             gelieferte ID (die KI kennt hier gar keine)"
+        );
         assert!(session
             .context
             .lock()
@@ -1669,17 +1722,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_disconnect_suggestion_emits_event_and_accept_persists_revision() {
-        let target = NoteTarget::Server(ServerId::new());
         let session = session_with_ai_provider(
             MockAiProvider::new(vec![
                 AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
-                    target,
+                    target: NoteTargetSelector::CurrentServer,
                     new_content: "Neuer Kontext nach der Sitzung".to_string(),
                 }),
                 AiEvent::Done,
             ]),
             MockSshTransport::default(),
         );
+        let expected_server_id = session.server_id;
         session
             .context
             .lock()
@@ -1733,6 +1786,11 @@ mod tests {
         let revisions = profile_store.note_revisions.lock().unwrap();
         assert_eq!(revisions.len(), 1);
         assert_eq!(revisions[0].content, "Neuer Kontext nach der Sitzung");
+        assert_eq!(
+            revisions[0].target,
+            NoteTarget::Server(expected_server_id),
+            "CurrentServer muss auf session.server_id auflösen"
+        );
         assert_eq!(
             revisions[0].edited_by,
             NoteEditor::Ai {
@@ -1896,18 +1954,134 @@ mod tests {
         );
     }
 
+    // --- Spec 0016, Abschnitt 6: Ziel-Auflösung & Fehler-Containment -------
+
+    /// Spec 0016, Abschnitt 6, letzter Absatz — Regressionstest für den
+    /// gemeldeten Bug: ein fehlerhafter Tool-Call darf **ausschließlich**
+    /// als Chat-Fehlermeldung erscheinen, nie die Session/Verbindung
+    /// beenden. Simuliert über einen `MockAiProvider`, der direkt
+    /// `AiEvent::Error` liefert — exakt das Ereignis, das `ai-providers`
+    /// bei einem Tool-Call-Parse-/Validierungsfehler produziert (s.
+    /// `ai_providers::anthropic::finalize_tool_use`/
+    /// `ai_providers::openai_compatible::finalize_tool_call`, beide geben
+    /// bei Fehlern `AiEvent::Error` zurück statt zu paniken). Der Beweis,
+    /// dass die Session danach weiter nutzbar bleibt: ein zweites,
+    /// unabhängiges Kommando läuft direkt im Anschluss über dieselbe
+    /// `Session` erfolgreich durch.
+    #[tokio::test]
+    async fn test_malformed_tool_call_yields_chat_error_without_ending_session() {
+        let session = test_session(
+            vec![
+                AiEvent::Error(AiError::InvalidResponse(
+                    "target_id ist keine gültige UUID: invalid character".to_string(),
+                )),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default().with_response("echo still-alive", output("still-alive")),
+        );
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(
+            event_names,
+            vec!["chat-error"],
+            "ein fehlerhafter Tool-Call darf nur als Chat-Fehlermeldung erscheinen"
+        );
+
+        let result = session.transport.lock().await.execute("echo still-alive").await;
+        assert!(
+            result.is_ok(),
+            "die Session/Verbindung darf durch den fehlerhaften Tool-Call nicht beendet \
+             werden — sie muss danach unverändert nutzbar bleiben"
+        );
+    }
+
+    /// Spec 0016, Abschnitt 6: `target: "current_server"` löst auf
+    /// `session.server_id` auf — die KI nennt nie eine ID.
+    #[tokio::test]
+    async fn test_propose_note_update_current_server_resolves_to_session_server_id() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
+                    target: NoteTargetSelector::CurrentServer,
+                    new_content: "Notiz".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let expected_server_id = session.server_id;
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = async {
+            loop {
+                let action_id = {
+                    let events = emitter.events.lock().unwrap();
+                    events.iter().find_map(|(name, payload)| {
+                        (name == "chat-action-proposed")
+                            .then(|| payload["actionId"].as_str().unwrap().to_string())
+                    })
+                };
+                if let Some(action_id) = action_id {
+                    let action_id: ActionId = action_id.parse().unwrap();
+                    confirmations
+                        .resolve(&action_id, ActionUserDecision::Approve)
+                        .unwrap();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::join!(turn, responder);
+
+        let revisions = profile_store.note_revisions.lock().unwrap().clone();
+        assert_eq!(revisions.len(), 1);
+        assert_eq!(
+            revisions[0].target,
+            NoteTarget::Server(expected_server_id)
+        );
+    }
+
     // --- Spec 0016: Strukturiertes Logging & Diagnose ----------------------
 
-    /// Schreibt in einen geteilten `Vec<u8>`-Puffer statt auf Stdout/Datei —
-    /// so lässt sich per `tracing::subscriber::with_default` (thread-lokal,
-    /// daher parallelsicher zwischen Tests) genau prüfen, was eine
-    /// Log-Zeile tatsächlich enthält, ohne echte Dateien anzufassen.
-    #[derive(Clone)]
-    struct SharedBufferWriter(Arc<StdMutex<Vec<u8>>>);
+    thread_local! {
+        /// Je Thread ein eigener Puffer — sicher unter paralleler
+        /// Testausführung, da jeder `#[test]`-Thread nur seine eigenen
+        /// Log-Zeilen sieht (andere Tests/Threads schreiben in ihren
+        /// eigenen Thread-lokalen Puffer, keine Vermischung).
+        static TEST_LOG_BUFFER: std::cell::RefCell<Vec<u8>> =
+            const { std::cell::RefCell::new(Vec::new()) };
+    }
 
-    impl std::io::Write for SharedBufferWriter {
+    #[derive(Clone, Default)]
+    struct ThreadLocalTestWriter;
+
+    impl std::io::Write for ThreadLocalTestWriter {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
+            TEST_LOG_BUFFER.with(|b| b.borrow_mut().extend_from_slice(buf));
             Ok(buf.len())
         }
         fn flush(&mut self) -> std::io::Result<()> {
@@ -1915,11 +2089,45 @@ mod tests {
         }
     }
 
-    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for SharedBufferWriter {
-        type Writer = SharedBufferWriter;
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for ThreadLocalTestWriter {
+        type Writer = ThreadLocalTestWriter;
         fn make_writer(&'a self) -> Self::Writer {
             self.clone()
         }
+    }
+
+    /// Installiert genau einmal pro Testprozess einen echten, globalen
+    /// `tracing`-Subscriber (`set_global_default`, nicht `with_default`).
+    ///
+    /// **Warum nicht `tracing::subscriber::with_default`** (der
+    /// naheliegendere, thread-lokal scopende Ansatz): `tracing-core`s
+    /// Callsite-Interesse ("hört überhaupt irgendjemand auf dieses
+    /// `tracing::info!` zu?") wird **prozessweit gecacht**, nicht pro
+    /// Thread. Andere Tests in diesem Modul rufen dieselbe
+    /// `log_command_execution`-Stelle über den ganz normalen
+    /// Ausführungspfad auf (z. B. `test_autoexec_path_runs_command_and_
+    /// records_result`), parallel auf anderen Threads, **ohne** je einen
+    /// Subscriber zu installieren. Trifft ein solcher Thread die Callsite
+    /// zuerst, cacht `tracing-core` sie ggf. als "niemand interessiert" —
+    /// und ein anschließendes `with_default` auf einem *anderen* Thread
+    /// gewinnt dieses Wettrennen nicht zuverlässig zurück (beobachtet:
+    /// ca. 1 von 3 Testläufen verlor den Log-Eintrag komplett, s. Commit-
+    /// Historie). Ein einmalig installierter **globaler** Default behebt
+    /// das strukturell: es gibt nach der Installation nie wieder einen
+    /// Zustand "kein Subscriber", gegen den ein Callsite als uninteressant
+    /// gecacht werden könnte.
+    fn install_test_subscriber_once() {
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| {
+            let subscriber = tracing_subscriber::fmt()
+                .json()
+                .with_writer(ThreadLocalTestWriter)
+                .finish();
+            // `let _ =`: schlägt nur fehl, wenn bereits ein globaler
+            // Default gesetzt ist (z. B. durch eine andere Testdatei) —
+            // dann ist ohnehin schon einer aktiv, kein Grund zum Abbruch.
+            let _ = tracing::subscriber::set_global_default(subscriber);
+        });
     }
 
     /// Spec 0016, Abschnitt 4, Punkt 1 / Abschnitt 1: "Logs sind kein
@@ -1931,23 +2139,21 @@ mod tests {
     /// mit dem Ergebnis) und prüft die tatsächliche JSON-Log-Zeile.
     #[test]
     fn test_log_command_execution_never_logs_unredacted_secret() {
-        let buffer = Arc::new(StdMutex::new(Vec::new()));
-        let writer = SharedBufferWriter(buffer.clone());
-        let subscriber = tracing_subscriber::fmt().json().with_writer(writer).finish();
+        install_test_subscriber_once();
+        TEST_LOG_BUFFER.with(|b| b.borrow_mut().clear());
 
-        tracing::subscriber::with_default(subscriber, || {
-            let redactor = DefaultOutputRedactor::new();
-            let raw_output = CommandOutput {
-                stdout: b"Verbindung ok, password=hunter2geheim".to_vec(),
-                stderr: Vec::new(),
-                exit_code: Some(0),
-            };
-            let redacted = redactor.redact(&raw_output);
+        let redactor = DefaultOutputRedactor::new();
+        let raw_output = CommandOutput {
+            stdout: b"Verbindung ok, password=hunter2geheim".to_vec(),
+            stderr: Vec::new(),
+            exit_code: Some(0),
+        };
+        let redacted = redactor.redact(&raw_output);
 
-            log_command_execution(Uuid::new_v4(), "connect-check", &redacted);
-        });
+        log_command_execution(Uuid::new_v4(), "connect-check", &redacted);
 
-        let log_text = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        let log_text =
+            TEST_LOG_BUFFER.with(|b| String::from_utf8(b.borrow().clone()).unwrap());
         assert!(
             !log_text.contains("hunter2geheim"),
             "das Secret darf unter keinen Umständen im Log-Output auftauchen: {log_text}"
