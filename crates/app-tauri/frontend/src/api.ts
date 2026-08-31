@@ -176,3 +176,8 @@ export const exportDocument = (contentMarkdown: string, title: string, format: D
 /** Chronologisch aufsteigend (älteste zuerst), s. `crate::commands::list_prompt_history`. */
 export const listPromptHistory = (serverId: string) =>
   invoke<string[]>("list_prompt_history", { serverId });
+
+// --- Spec 0016: Strukturiertes Logging & Diagnose -----------------------
+
+/** Öffnet den Log-Ordner im System-Dateimanager (Finder/Explorer). */
+export const openLogDirectory = () => invoke<void>("open_log_directory");

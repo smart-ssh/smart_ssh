@@ -21,6 +21,8 @@ use std::pin::Pin;
 use futures::future::FutureExt;
 use futures::{Stream, StreamExt};
 use serde_json::{json, Value};
+use uuid::Uuid;
+
 use ssh_manager_core::ai::{
     ActionSchema, AiError, AiEvent, AiProvider, MessageContent, Role, SessionContext,
 };
@@ -29,6 +31,10 @@ use ssh_manager_core::ssh::CommandOutput;
 use crate::action::{action_from_tool_arguments, parameters_json_schema};
 use crate::error::{error_stream, map_http_status, map_transport_error};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
+use crate::request_logging::{
+    log_outgoing_context, log_text_delta_summary, log_tool_call_fragment,
+    log_tool_call_parse_error, log_tool_call_parsed,
+};
 use crate::sse::{sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -146,6 +152,20 @@ fn anthropic_tool_definition(action: &ActionSchema) -> Value {
 
 impl AiProvider for AnthropicProvider {
     fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+        // Spec 0016, Abschnitt 4: eine frische `request_id` pro
+        // `send()`-Aufruf, geteilt über alle Log-Zeilen dieses einen
+        // KI-Anfrage-Zyklus (Kontext → Streaming-Chunks → Tool-Call-Parsing)
+        // — bewusst hier lokal erzeugt statt als `SessionContext`-Feld: das
+        // hätte alle neun bestehenden `SessionContext`-Konstruktionsstellen
+        // (Produktivcode + Tests) angefasst, nur damit `app-tauri` eine ID
+        // vorgibt, die für die Korrelation innerhalb *eines* Provider-Calls
+        // ohnehin genauso gut hier entstehen kann. `session_id` (per
+        // `#[tracing::instrument]` in `app-tauri::orchestration` bereits als
+        // Span-Feld aktiv, s. dortiger Kommentar) bleibt die übergreifende
+        // Korrelation über mehrere Runden/Provider-Aufrufe hinweg.
+        let request_id = Uuid::new_v4();
+        log_outgoing_context(request_id, &context);
+
         let client = self.client.clone();
         let url = format!("{}/v1/messages", self.base_url.trim_end_matches('/'));
         let api_key = self.api_key.clone();
@@ -180,7 +200,7 @@ impl AiProvider for AnthropicProvider {
                 return error_stream(map_http_status(status, &text));
             }
 
-            event_stream_from_response(response, native_tool_calling)
+            event_stream_from_response(response, native_tool_calling, request_id)
         };
 
         Box::pin(request.flatten_stream())
@@ -196,9 +216,14 @@ struct AnthropicStreamState {
     frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     blocks: BTreeMap<u64, BlockKind>,
     fallback_text: String,
+    /// Spec 0016, Abschnitt 4, Punkt 2: Gesamtlänge aller bisher erhaltenen
+    /// Text-Deltas, für eine zusammengefasste Log-Zeile statt einer pro
+    /// Delta (s. `crate::request_logging::log_text_delta_summary`).
+    text_delta_total_len: usize,
     native_tool_calling: bool,
     pending: VecDeque<AiEvent>,
     finished: bool,
+    request_id: Uuid,
 }
 
 impl AnthropicStreamState {
@@ -236,6 +261,7 @@ impl AnthropicStreamState {
                 match delta.get("type").and_then(Value::as_str) {
                     Some("text_delta") => {
                         if let Some(text) = delta.get("text").and_then(Value::as_str) {
+                            self.text_delta_total_len += text.len();
                             if self.native_tool_calling {
                                 self.pending.push_back(AiEvent::TextDelta(text.to_string()));
                             } else {
@@ -261,7 +287,9 @@ impl AnthropicStreamState {
                     return;
                 };
                 if let Some(BlockKind::ToolUse { name, json_acc }) = self.blocks.remove(&index) {
-                    self.pending.push_back(finalize_tool_use(&name, &json_acc));
+                    log_tool_call_fragment(self.request_id, &name, &json_acc);
+                    self.pending
+                        .push_back(finalize_tool_use(self.request_id, &name, &json_acc));
                 }
             }
             "message_stop" => {
@@ -285,6 +313,7 @@ impl AnthropicStreamState {
     }
 
     fn finalize(&mut self) -> Vec<AiEvent> {
+        log_text_delta_summary(self.request_id, self.text_delta_total_len);
         let mut events = Vec::new();
         if !self.native_tool_calling {
             let result = parse_fallback_response(&self.fallback_text);
@@ -300,23 +329,37 @@ impl AnthropicStreamState {
     }
 }
 
-fn finalize_tool_use(name: &str, json_acc: &str) -> AiEvent {
+fn finalize_tool_use(request_id: Uuid, name: &str, json_acc: &str) -> AiEvent {
     match serde_json::from_str::<Value>(json_acc) {
         Ok(args_json) => match action_from_tool_arguments(name, &args_json) {
-            Ok(action) => AiEvent::ActionProposed(action),
-            Err(err) => AiEvent::Error(err),
+            Ok(action) => {
+                log_tool_call_parsed(request_id, &action);
+                AiEvent::ActionProposed(action)
+            }
+            Err(err) => {
+                log_tool_call_parse_error(request_id, name, json_acc, &err);
+                AiEvent::Error(err)
+            }
         },
-        Err(err) => AiEvent::Error(AiError::InvalidResponse(format!(
-            "Tool-Use-Input ist kein gültiges JSON: {err}"
-        ))),
+        Err(err) => {
+            log_tool_call_parse_error(request_id, name, json_acc, &err);
+            AiEvent::Error(AiError::InvalidResponse(format!(
+                "Tool-Use-Input ist kein gültiges JSON: {err}"
+            )))
+        }
     }
 }
 
 fn event_stream_from_response(
     response: reqwest::Response,
     native_tool_calling: bool,
+    request_id: Uuid,
 ) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
-    process_frame_stream(Box::pin(sse_frame_stream(response)), native_tool_calling)
+    process_frame_stream(
+        Box::pin(sse_frame_stream(response)),
+        native_tool_calling,
+        request_id,
+    )
 }
 
 /// Von `event_stream_from_response` losgelöst, damit sich das
@@ -326,14 +369,17 @@ fn event_stream_from_response(
 fn process_frame_stream(
     frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     native_tool_calling: bool,
+    request_id: Uuid,
 ) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
     let state = AnthropicStreamState {
         frames,
         blocks: BTreeMap::new(),
         fallback_text: String::new(),
+        text_delta_total_len: 0,
         native_tool_calling,
         pending: VecDeque::new(),
         finished: false,
+        request_id,
     };
 
     Box::pin(futures::stream::unfold(state, |mut state| async move {
@@ -406,7 +452,7 @@ mod tests {
         let never_yields: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
             Box::pin(futures::stream::pending());
 
-        let mut events = process_frame_stream(never_yields, true);
+        let mut events = process_frame_stream(never_yields, true, Uuid::new_v4());
         let event = events.next().await;
 
         assert!(

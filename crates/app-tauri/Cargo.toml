@@ -21,6 +21,7 @@ async-trait = "0.1.92"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 credentials-keyring = { version = "0.1.0", path = "../credentials-keyring" }
+directories = "6.0.0"
 docx-rs = { version = "0.4.22", default-features = false }
 futures = "0.3.34"
 persistence-sqlite = { version = "0.1.0", path = "../persistence-sqlite" }
@@ -35,7 +36,11 @@ tauri = { version = "2", features = [] }
 tauri-plugin-decoration = "3.0"
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-fs = "2.5.1"
+tauri-plugin-opener = "2.5.5"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync"] }
+tracing = "0.1.44"
+tracing-appender = "0.2.5"
+tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
 uuid = { version = "1.26.0", features = ["v4", "serde"] }
 
 [dev-dependencies]

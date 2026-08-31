@@ -246,6 +246,14 @@ pub async fn connect(
                     }
                 };
 
+                tracing::info!(
+                    session_id = %session_id,
+                    host = %host,
+                    port,
+                    kind = ?kind,
+                    "host key verification needed",
+                );
+
                 let rx = state.pending_host_key_confirmations.register(session_id);
                 emit_host_key_verification_needed(
                     &app,
@@ -262,11 +270,18 @@ pub async fn connect(
                 };
                 match user_decision {
                     HostKeyUserDecision::Trust => {
+                        tracing::info!(session_id = %session_id, host = %host, port, "host key trusted");
                         state.host_key_store.trust(&host, port, &raw_key)?;
                         // Erneuter Versuch mit demselben `target` — s.
                         // Doc-Kommentar oben.
                     }
                     HostKeyUserDecision::Reject => {
+                        tracing::warn!(
+                            session_id = %session_id,
+                            host = %host,
+                            port,
+                            "host key rejected, connection aborted",
+                        );
                         return Err(format!(
                             "Verbindung zu {host}:{port} abgelehnt (Host-Key nicht vertraut)"
                         )
@@ -312,6 +327,7 @@ pub async fn connect(
     });
     state.sessions.insert(session_id, session);
 
+    tracing::info!(session_id = %session_id, server_id = %server_id.0, "session connected");
     emit_connection_status_changed(&app, session_id, ConnectionStatus::Connected, None);
     Ok(session_id)
 }
@@ -571,6 +587,7 @@ pub async fn disconnect(
     // ohne hier ein zweites `connection-status-changed`-Event auszulösen.
     *session.terminal.lock().unwrap() = None;
 
+    tracing::info!(session_id = %session_id, "session disconnected");
     emit_connection_status_changed(&app, session_id, ConnectionStatus::Disconnected, None);
 
     // Spec 0010: läuft als eigener Hintergrund-Task, **nicht** vom
@@ -1031,6 +1048,22 @@ pub async fn list_prompt_history(
     server_id: ServerId,
 ) -> CommandResult<Vec<String>> {
     Ok(state.prompt_history_store.list(&server_id).await?)
+}
+
+// --- Spec 0016: Strukturiertes Logging & Diagnose --------------------------
+
+/// Spec 0016, Abschnitt 5: öffnet den Log-Ordner im System-Dateimanager
+/// (Finder/Explorer) — ein Klick statt manuell zum plattformspezifischen
+/// Pfad navigieren zu müssen.
+#[tauri::command]
+pub async fn open_log_directory(app: AppHandle) -> CommandResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+
+    let dir = crate::logging::default_log_dir();
+    std::fs::create_dir_all(&dir)?;
+    app.opener()
+        .open_path(dir.to_string_lossy().into_owned(), None::<&str>)?;
+    Ok(())
 }
 
 /// Validiert und bereinigt `uname -a` Output (Spec 0013, SEC-02) vor der

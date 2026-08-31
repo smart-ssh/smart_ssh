@@ -18,6 +18,8 @@ use std::pin::Pin;
 use futures::future::FutureExt;
 use futures::{Stream, StreamExt};
 use serde_json::{json, Value};
+use uuid::Uuid;
+
 use ssh_manager_core::ai::{
     ActionSchema, AiError, AiEvent, AiProvider, MessageContent, Role, SessionContext,
 };
@@ -26,6 +28,10 @@ use ssh_manager_core::ssh::CommandOutput;
 use crate::action::{action_from_tool_arguments, parameters_json_schema};
 use crate::error::{error_stream, map_http_status, map_transport_error};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
+use crate::request_logging::{
+    log_outgoing_context, log_text_delta_summary, log_tool_call_fragment,
+    log_tool_call_parse_error, log_tool_call_parsed,
+};
 use crate::sse::{sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
 pub struct OpenAiCompatibleProvider {
@@ -138,6 +144,11 @@ fn openai_tool_definition(action: &ActionSchema) -> Value {
 
 impl AiProvider for OpenAiCompatibleProvider {
     fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+        // s. `crate::anthropic::AnthropicProvider::send`-Kommentar zur
+        // Design-Entscheidung (Spec 0016, Abschnitt 4).
+        let request_id = Uuid::new_v4();
+        log_outgoing_context(request_id, &context);
+
         let client = self.client.clone();
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
         let api_key = self.api_key.clone();
@@ -171,7 +182,7 @@ impl AiProvider for OpenAiCompatibleProvider {
                 return error_stream(map_http_status(status, &text));
             }
 
-            event_stream_from_response(response, native_tool_calling)
+            event_stream_from_response(response, native_tool_calling, request_id)
         };
 
         Box::pin(request.flatten_stream())
@@ -191,9 +202,13 @@ struct OpenAiStreamState {
     frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     tool_calls: BTreeMap<u64, ToolCallAccumulator>,
     fallback_text: String,
+    /// s. `AnthropicStreamState::text_delta_total_len` (Spec 0016,
+    /// Abschnitt 4, Punkt 2).
+    text_delta_total_len: usize,
     native_tool_calling: bool,
     pending: VecDeque<AiEvent>,
     finished: bool,
+    request_id: Uuid,
 }
 
 impl OpenAiStreamState {
@@ -208,6 +223,7 @@ impl OpenAiStreamState {
 
         if let Some(content) = delta.get("content").and_then(Value::as_str) {
             if !content.is_empty() {
+                self.text_delta_total_len += content.len();
                 if self.native_tool_calling {
                     self.pending
                         .push_back(AiEvent::TextDelta(content.to_string()));
@@ -244,10 +260,12 @@ impl OpenAiStreamState {
     }
 
     fn finalize(&mut self) -> Vec<AiEvent> {
+        log_text_delta_summary(self.request_id, self.text_delta_total_len);
         let mut events = Vec::new();
         if self.native_tool_calling {
             for (_, call) in std::mem::take(&mut self.tool_calls) {
-                events.push(finalize_tool_call(&call.name, &call.arguments));
+                log_tool_call_fragment(self.request_id, &call.name, &call.arguments);
+                events.push(finalize_tool_call(self.request_id, &call.name, &call.arguments));
             }
         } else {
             let result = parse_fallback_response(&self.fallback_text);
@@ -263,28 +281,42 @@ impl OpenAiStreamState {
     }
 }
 
-fn finalize_tool_call(name: &str, arguments: &str) -> AiEvent {
+fn finalize_tool_call(request_id: Uuid, name: &str, arguments: &str) -> AiEvent {
     match serde_json::from_str::<Value>(arguments) {
         Ok(args_json) => match action_from_tool_arguments(name, &args_json) {
-            Ok(action) => AiEvent::ActionProposed(action),
-            Err(err) => AiEvent::Error(err),
+            Ok(action) => {
+                log_tool_call_parsed(request_id, &action);
+                AiEvent::ActionProposed(action)
+            }
+            Err(err) => {
+                log_tool_call_parse_error(request_id, name, arguments, &err);
+                AiEvent::Error(err)
+            }
         },
         // Ein nativer Tool-Call mit kaputtem JSON ist ein Protokollfehler
         // des Providers, kein "Modell hat halt Prosa statt eines Blocks
         // geliefert" wie im Fallback-Modus — deshalb hier bewusst ein
         // `AiError` statt stillschweigendem Text-Fallback (anders als
         // `parse_fallback_response`, s. `fallback.rs`).
-        Err(err) => AiEvent::Error(AiError::InvalidResponse(format!(
-            "Tool-Call-Argumente sind kein gültiges JSON: {err}"
-        ))),
+        Err(err) => {
+            log_tool_call_parse_error(request_id, name, arguments, &err);
+            AiEvent::Error(AiError::InvalidResponse(format!(
+                "Tool-Call-Argumente sind kein gültiges JSON: {err}"
+            )))
+        }
     }
 }
 
 fn event_stream_from_response(
     response: reqwest::Response,
     native_tool_calling: bool,
+    request_id: Uuid,
 ) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
-    process_frame_stream(Box::pin(sse_frame_stream(response)), native_tool_calling)
+    process_frame_stream(
+        Box::pin(sse_frame_stream(response)),
+        native_tool_calling,
+        request_id,
+    )
 }
 
 /// Von `event_stream_from_response` losgelöst, damit sich das
@@ -294,14 +326,17 @@ fn event_stream_from_response(
 fn process_frame_stream(
     frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     native_tool_calling: bool,
+    request_id: Uuid,
 ) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
     let state = OpenAiStreamState {
         frames,
         tool_calls: BTreeMap::new(),
         fallback_text: String::new(),
+        text_delta_total_len: 0,
         native_tool_calling,
         pending: VecDeque::new(),
         finished: false,
+        request_id,
     };
 
     Box::pin(futures::stream::unfold(state, |mut state| async move {
@@ -368,7 +403,7 @@ mod tests {
         let never_yields: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
             Box::pin(futures::stream::pending());
 
-        let mut events = process_frame_stream(never_yields, true);
+        let mut events = process_frame_stream(never_yields, true, Uuid::new_v4());
         let event = events.next().await;
 
         assert!(

@@ -34,7 +34,7 @@ use uuid::Uuid;
 use ssh_manager_core::ai::{ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, Role};
 use ssh_manager_core::filter::{Decision, EvalContext};
 use ssh_manager_core::profiles::{AiAction, NoteEditor, NoteTarget, ProfileError, ProfileStore};
-use ssh_manager_core::ssh::SshError;
+use ssh_manager_core::ssh::{CommandOutput, SshError};
 
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::ActionUserDecision;
@@ -66,6 +66,15 @@ const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 25;
 /// weiter, wie die jeweils letzte Runde mindestens eine Aktion tatsächlich
 /// ausgeführt hat (s. Moduldoc), höchstens aber [`MAX_AUTO_FOLLOWUP_ROUNDS`]
 /// Runden.
+///
+/// `#[tracing::instrument]` (Spec 0016, Abschnitt 2/4): trägt `session_id`
+/// als Span-Feld auf jede innerhalb dieses Aufrufs geloggte Zeile ein —
+/// auch auf die von `ai-providers` beim Pollen des zurückgegebenen Streams
+/// (derselbe Thread-lokale Span-Stack gilt über Crate-Grenzen hinweg), ohne
+/// dass `ai-providers` selbst je `session_id` kennen müsste. `skip_all`:
+/// `session`/`emitter`/`profile_store`/`action_confirmations` implementieren
+/// kein sinnvolles `Debug` für ein Log-Feld.
+#[tracing::instrument(skip_all, fields(session_id = %session_id))]
 pub async fn run_chat_turn(
     session: &Session,
     session_id: SessionId,
@@ -433,6 +442,7 @@ async fn execute_suggested_command(
     match raw_output {
         Ok(output) => {
             let redacted = session.redactor.redact(&output);
+            log_command_execution(session_id, &command, &redacted);
             emit_chat_action_result(
                 emitter,
                 session_id,
@@ -454,6 +464,7 @@ async fn execute_suggested_command(
             true
         }
         Err(err) => {
+            log_command_execution_failed(session_id, &command, &err);
             emit_command_execution_failed(emitter, session_id, &command, &err);
             false
         }
@@ -470,6 +481,52 @@ fn emit_command_execution_failed(
         emitter,
         session_id,
         format!("Kommando '{command}' konnte nicht ausgeführt werden: {err}"),
+    );
+}
+
+/// Spec 0016, Abschnitt 4, Punkt 5: ab dieser Zeichenlänge wird geloggter
+/// Kommando-Output gekürzt (mit Hinweis), statt den vollen — ggf. sehr
+/// langen — Output in die Log-Datei zu schreiben. Der konfigurierbare
+/// Knopf im Sinne der Spec ist diese Konstante selbst (analog zu
+/// `core::filter::engine::DEFAULT_MAX_COMMAND_LENGTH`) — kein zur Laufzeit
+/// änderbarer Wert, da dafür aktuell keine Einstellungs-UI existiert und
+/// die Spec keine verlangt.
+const MAX_LOGGED_OUTPUT_LEN: usize = 4096;
+
+fn truncate_for_log(text: &str) -> String {
+    if text.chars().count() <= MAX_LOGGED_OUTPUT_LEN {
+        return text.to_string();
+    }
+    let truncated: String = text.chars().take(MAX_LOGGED_OUTPUT_LEN).collect();
+    format!("{truncated}\n… (gekürzt, voller Output nicht geloggt)")
+}
+
+/// Spec 0016, Abschnitt 4, Punkt 5: Kommando, Exit-Code, Output-Länge.
+/// Nimmt bewusst den bereits **redigierten** Output entgegen, nie den
+/// rohen — Logs sind kein Schlupfloch für Secrets, die die Redaction sonst
+/// unterdrückt (Spec 0016, Abschnitt 4, Punkt 1 — "dieselbe Redaction-Regel
+/// gilt für Logs wie für den tatsächlichen API-Request").
+fn log_command_execution(session_id: SessionId, command: &str, redacted_output: &CommandOutput) {
+    let stdout = String::from_utf8_lossy(&redacted_output.stdout);
+    let stderr = String::from_utf8_lossy(&redacted_output.stderr);
+    tracing::info!(
+        session_id = %session_id,
+        command,
+        exit_code = ?redacted_output.exit_code,
+        stdout_len = stdout.len(),
+        stderr_len = stderr.len(),
+        stdout = %truncate_for_log(&stdout),
+        stderr = %truncate_for_log(&stderr),
+        "ssh command executed",
+    );
+}
+
+fn log_command_execution_failed(session_id: SessionId, command: &str, err: &SshError) {
+    tracing::warn!(
+        session_id = %session_id,
+        command,
+        error = %err,
+        "ssh command execution failed",
     );
 }
 
@@ -582,6 +639,7 @@ const DISCONNECT_COMPLETION_INSTRUCTION: &str = "Die Sitzung wird jetzt beendet.
 /// entfernt, aber über den `Arc`, den `disconnect()` vor dem Entfernen
 /// geklont hat, weiterhin gültig — `SshTransport`/Terminal werden hier
 /// nicht mehr angefasst, nur `session.context`/`session.ai_provider`.
+#[tracing::instrument(skip_all, fields(session_id = %session_id))]
 pub async fn suggest_note_update_on_disconnect(
     session: &Session,
     session_id: SessionId,
@@ -707,7 +765,8 @@ mod tests {
     use tokio::sync::Mutex as AsyncMutex;
 
     use ssh_manager_core::ai::{
-        default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, SessionContext,
+        default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, OutputRedactor,
+        SessionContext,
     };
     use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
     use ssh_manager_core::profiles::{Group, GroupId, NoteRevision, ProfileResult, Server};
@@ -1834,6 +1893,68 @@ mod tests {
         assert_eq!(
             rules[0].priority, 0,
             "keine Priorität angegeben -> Default 0"
+        );
+    }
+
+    // --- Spec 0016: Strukturiertes Logging & Diagnose ----------------------
+
+    /// Schreibt in einen geteilten `Vec<u8>`-Puffer statt auf Stdout/Datei —
+    /// so lässt sich per `tracing::subscriber::with_default` (thread-lokal,
+    /// daher parallelsicher zwischen Tests) genau prüfen, was eine
+    /// Log-Zeile tatsächlich enthält, ohne echte Dateien anzufassen.
+    #[derive(Clone)]
+    struct SharedBufferWriter(Arc<StdMutex<Vec<u8>>>);
+
+    impl std::io::Write for SharedBufferWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for SharedBufferWriter {
+        type Writer = SharedBufferWriter;
+        fn make_writer(&'a self) -> Self::Writer {
+            self.clone()
+        }
+    }
+
+    /// Spec 0016, Abschnitt 4, Punkt 1 / Abschnitt 1: "Logs sind kein
+    /// Schlupfloch für Secrets, die die Redaction eigentlich unterdrücken
+    /// soll — dieselbe Redaction-Regel gilt für Logs wie für den
+    /// tatsächlichen API-Request." Schickt einen redaction-pflichtigen
+    /// String exakt über den Pfad, den `execute_suggested_command` auch
+    /// nimmt (erst `OutputRedactor::redact`, dann `log_command_execution`
+    /// mit dem Ergebnis) und prüft die tatsächliche JSON-Log-Zeile.
+    #[test]
+    fn test_log_command_execution_never_logs_unredacted_secret() {
+        let buffer = Arc::new(StdMutex::new(Vec::new()));
+        let writer = SharedBufferWriter(buffer.clone());
+        let subscriber = tracing_subscriber::fmt().json().with_writer(writer).finish();
+
+        tracing::subscriber::with_default(subscriber, || {
+            let redactor = DefaultOutputRedactor::new();
+            let raw_output = CommandOutput {
+                stdout: b"Verbindung ok, password=hunter2geheim".to_vec(),
+                stderr: Vec::new(),
+                exit_code: Some(0),
+            };
+            let redacted = redactor.redact(&raw_output);
+
+            log_command_execution(Uuid::new_v4(), "connect-check", &redacted);
+        });
+
+        let log_text = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        assert!(
+            !log_text.contains("hunter2geheim"),
+            "das Secret darf unter keinen Umständen im Log-Output auftauchen: {log_text}"
+        );
+        assert!(
+            log_text.contains("REDACTED"),
+            "der Redaction-Platzhalter muss stattdessen im Log stehen: {log_text}"
         );
     }
 }

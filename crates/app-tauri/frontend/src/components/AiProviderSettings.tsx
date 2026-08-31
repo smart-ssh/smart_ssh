@@ -4,6 +4,7 @@ import {
   commandErrorMessage,
   deleteAiProvider,
   listAiProviders,
+  openLogDirectory,
   setActiveAiProvider,
 } from "../api";
 import {
@@ -93,6 +94,17 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
     }
   };
 
+  /** Spec 0016, Abschnitt 5: ein Klick statt manuell zum
+   * plattformspezifischen Log-Ordner navigieren zu müssen. */
+  const handleOpenLogDirectory = async () => {
+    setError(null);
+    try {
+      await openLogDirectory();
+    } catch (err) {
+      setError(commandErrorMessage(err));
+    }
+  };
+
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-slate-800 p-6 shadow-xl">
@@ -111,6 +123,14 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
         {error && (
           <p className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>
         )}
+
+        <button
+          type="button"
+          onClick={handleOpenLogDirectory}
+          className="mb-6 w-full rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
+        >
+          Diagnose-Logs im Dateimanager öffnen
+        </button>
 
         <ul className="mb-6 divide-y divide-slate-700 rounded-md border border-slate-700">
           {providers.length === 0 && (

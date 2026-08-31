@@ -63,10 +63,26 @@ impl<S: PolicyStore> FilterEngine<S> {
     }
 
     /// Wie [`Self::evaluate`], liefert aber zusätzlich eine nachvollziehbare
-    /// [`EvaluationTrace`] (Spec 0009, Abschnitt 4) — ausschließlich für die
-    /// Testen-Funktion im UI gedacht (s. dortiger Doc-Kommentar), nicht für
-    /// die Kernschleife selbst.
+    /// [`EvaluationTrace`] (Spec 0009, Abschnitt 4). Ursprünglich
+    /// ausschließlich für die Testen-Funktion im UI gedacht — wird seit Spec
+    /// 0016 Abschnitt 4 Punkt 4 auch von [`Self::evaluate`] selbst über den
+    /// gemeinsamen Rückgabewert genutzt, um jede Filter-Entscheidung der
+    /// Kernschleife strukturiert zu loggen (Kommando, `Decision`, gegriffene
+    /// Regel/Hard-Blacklist-Eintrag), nicht nur der expliziten
+    /// "Testen"-Ansicht.
     pub async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace {
+        let trace = self.evaluate_explained_inner(command, ctx).await;
+        tracing::info!(
+            command,
+            decision = ?trace.decision,
+            matched_rule = ?trace.matched_rule,
+            matched_hard_blacklist_entry = ?trace.matched_hard_blacklist_entry,
+            "filter engine decision",
+        );
+        trace
+    }
+
+    async fn evaluate_explained_inner(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace {
         if command.trim().is_empty() {
             // Testfall 10: leerer/reiner Whitespace-String -> Deny, nicht nur
             // Confirm, da es schlicht kein Kommando gibt, das ausgeführt

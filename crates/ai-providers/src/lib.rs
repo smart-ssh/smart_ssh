@@ -9,6 +9,7 @@ mod anthropic;
 mod error;
 mod fallback;
 mod openai_compatible;
+mod request_logging;
 mod sse;
 
 pub use anthropic::AnthropicProvider;

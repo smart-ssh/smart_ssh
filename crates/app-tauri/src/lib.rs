@@ -13,6 +13,7 @@ mod events;
 mod filter_rules;
 mod groups;
 mod host_key_store;
+mod logging;
 mod orchestration;
 #[cfg(test)]
 mod policy;
@@ -72,6 +73,15 @@ fn build_app_state() -> AppState {
 }
 
 pub fn run() {
+    // Spec 0016, Abschnitt 2/3: so früh wie möglich, damit auch Fehler beim
+    // App-Setup selbst (z. B. `build_app_state()`s DB-Verbindungsaufbau)
+    // bereits strukturiert geloggt würden. `_log_guard` muss über die
+    // gesamte App-Laufzeit am Leben bleiben (s. `crate::logging::
+    // init_logging`-Doc-Kommentar) — `run()` unten blockiert bis zum
+    // Beenden der App, danach ist ein finaler Flush ohnehin irrelevant.
+    let _log_guard = crate::logging::init_logging();
+    tracing::info!("Smart SSH startet");
+
     tauri::Builder::default()
         // Für die Key-/Zertifikat-Datei-Auswahl im Server-Formular (Spec
         // 0008, Abschnitt 6) — Dateiinhalt wird clientseitig gelesen
@@ -79,6 +89,7 @@ pub fn run() {
         // der Pfad selbst wird nie gespeichert (Spec Abschnitt 8).
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
         // Entscheidung für tauri-plugin-decoration statt tauri-plugin-decorum:
         // tauri-plugin-decorum (v0.1.6) wird nicht mehr aktiv gepflegt und wirft Build-Fehler
         // bei modernen Rust-Toolchains/macOS-SDKs. tauri-plugin-decoration (v3.0.5) ist aktiv
@@ -146,6 +157,7 @@ pub fn run() {
             commands::get_platform,
             commands::create_overlay_titlebar,
             commands::list_prompt_history,
+            commands::open_log_directory,
         ])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Tauri-App");
