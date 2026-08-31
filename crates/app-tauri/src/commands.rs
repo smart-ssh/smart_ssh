@@ -6,35 +6,53 @@ use secrecy::SecretString;
 use tauri::{AppHandle, State};
 use tokio::sync::mpsc;
 
+use chrono::Utc;
+use uuid::Uuid;
+
 use persistence_sqlite::AiProviderConfig;
 use ssh_manager_core::ai::{
     default_action_schemas, ChatMessage, DefaultOutputRedactor, MessageContent, ProviderId, Role,
     SessionContext,
 };
 use ssh_manager_core::filter::FilterEngine;
-use ssh_manager_core::profiles::effective_notes;
+use ssh_manager_core::profiles::{
+    effective_notes, record_revision, Group, GroupId, NoteEditor, NoteTarget, Server,
+};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, PtySize};
 
 use crate::ai_provider_factory::build_ai_provider;
 use crate::dto::{
     credential_ref_for, ActionUserDecision, AiProviderConfigDto, AiProviderConfigInput,
-    HostKeyUserDecision, ServerDto,
+    DeleteGroupResult, GroupDto, HostKeyUserDecision, NoteRevisionDto, ServerDto, ServerInput,
+    TestConnectionResult,
 };
 use crate::error::CommandResult;
 use crate::events::{
     emit_connection_status_changed, emit_host_key_verification_needed, ConnectionStatus,
     EventEmitter, HostKeyKind,
 };
+use crate::groups::{compute_delete_group_result, validate_no_cycle};
 use crate::orchestration::run_chat_turn;
 use crate::policy::NoRulesPolicyStore;
+use crate::server_credentials::{delete_auth_method_secrets, resolve_auth_method};
 use crate::session::{spawn_terminal_actor, Session, TerminalCommand};
 use crate::state::{ActionId, AppState, SessionId};
 
+/// `group_id` erweitert die Spec-0007-Signatur um den in Spec 0008
+/// Abschnitt 4 vorgesehenen Filter (`None` = alle Server, wie bisher für
+/// die einfache Liste aus Spec 0007 Teil 1 gebraucht).
 #[tauri::command]
-pub async fn list_servers(state: State<'_, AppState>) -> CommandResult<Vec<ServerDto>> {
+pub async fn list_servers(
+    state: State<'_, AppState>,
+    group_id: Option<GroupId>,
+) -> CommandResult<Vec<ServerDto>> {
     let servers = state.profile_store.list_servers().await?;
-    Ok(servers.iter().map(ServerDto::from).collect())
+    Ok(servers
+        .iter()
+        .filter(|s| group_id.is_none() || s.group_id == group_id)
+        .map(ServerDto::from)
+        .collect())
 }
 
 #[tauri::command]
@@ -441,4 +459,256 @@ pub async fn disconnect(
 
     emit_connection_status_changed(&app, session_id, ConnectionStatus::Disconnected, None);
     Ok(())
+}
+
+// --- Spec 0008: Gruppen --------------------------------------------------
+
+#[tauri::command]
+pub async fn list_groups(state: State<'_, AppState>) -> CommandResult<Vec<GroupDto>> {
+    let groups = state.profile_store.list_groups().await?;
+    Ok(groups.iter().map(GroupDto::from).collect())
+}
+
+#[tauri::command]
+pub async fn create_group(
+    state: State<'_, AppState>,
+    name: String,
+    parent_id: Option<GroupId>,
+) -> CommandResult<GroupId> {
+    validate_no_cycle(state.profile_store.as_ref(), None, parent_id).await?;
+
+    let now = Utc::now();
+    let group = Group {
+        id: GroupId::new(),
+        name,
+        parent_id,
+        notes: String::new(),
+        created_at: now,
+        updated_at: now,
+    };
+    state.profile_store.create_group(&group).await?;
+    Ok(group.id)
+}
+
+#[tauri::command]
+pub async fn update_group(
+    state: State<'_, AppState>,
+    id: GroupId,
+    name: String,
+    parent_id: Option<GroupId>,
+) -> CommandResult<()> {
+    validate_no_cycle(state.profile_store.as_ref(), Some(id), parent_id).await?;
+
+    let mut group = state.profile_store.get_group(&id).await?;
+    group.name = name;
+    group.parent_id = parent_id;
+    group.updated_at = Utc::now();
+    state.profile_store.update_group(&group).await?;
+    Ok(())
+}
+
+/// Spec 0008, Abschnitt 3: `confirm_cascade: false` liefert nur die
+/// Vorschau (nichts wird gelöscht), `confirm_cascade: true` löscht
+/// tatsächlich — ein zweiter, expliziter Aufruf, kein Query-Parameter, der
+/// versehentlich beim ersten Aufruf schon `true` sein könnte.
+#[tauri::command]
+pub async fn delete_group(
+    state: State<'_, AppState>,
+    id: GroupId,
+    confirm_cascade: bool,
+) -> CommandResult<DeleteGroupResult> {
+    let result =
+        compute_delete_group_result(state.profile_store.as_ref(), id, confirm_cascade).await?;
+    if confirm_cascade {
+        state.profile_store.delete_group(&id).await?;
+    }
+    Ok(result)
+}
+
+// --- Spec 0008: Server -----------------------------------------------------
+
+#[tauri::command]
+pub async fn get_server(state: State<'_, AppState>, id: ServerId) -> CommandResult<ServerDto> {
+    let server = state.profile_store.get_server(&id).await?;
+    Ok(ServerDto::from(&server))
+}
+
+/// Spec 0008, Abschnitt 4: `CredentialStore` zuerst, dann die DB-Zeile —
+/// dieselbe Reihenfolge/Begründung wie `add_ai_provider` (Spec 0007,
+/// Abschnitt 8.2).
+#[tauri::command]
+pub async fn create_server(
+    state: State<'_, AppState>,
+    input: ServerInput,
+) -> CommandResult<ServerId> {
+    let id = ServerId::new();
+    let auth = resolve_auth_method(state.credential_store.as_ref(), id, input.auth, None)?;
+
+    let now = Utc::now();
+    let server = Server {
+        id,
+        name: input.name,
+        host: input.host,
+        port: input.port,
+        username: input.username,
+        group_id: input.group_id,
+        tags: input.tags,
+        auth,
+        notes: String::new(),
+        jump_host: input.jump_host,
+        created_at: now,
+        updated_at: now,
+    };
+
+    if let Err(err) = state.profile_store.create_server(&server).await {
+        // Best-effort-Aufräumen, analog zu `add_ai_provider`: ohne diesen
+        // Rückbau blieben bei einem DB-Fehler verwaiste Credential-
+        // Einträge im Keychain zurück.
+        delete_auth_method_secrets(state.credential_store.as_ref(), &server.auth);
+        return Err(err.into());
+    }
+    Ok(id)
+}
+
+#[tauri::command]
+pub async fn update_server(
+    state: State<'_, AppState>,
+    id: ServerId,
+    input: ServerInput,
+) -> CommandResult<()> {
+    let existing = state.profile_store.get_server(&id).await?;
+    let auth = resolve_auth_method(
+        state.credential_store.as_ref(),
+        id,
+        input.auth,
+        Some(&existing.auth),
+    )?;
+
+    let server = Server {
+        id,
+        name: input.name,
+        host: input.host,
+        port: input.port,
+        username: input.username,
+        group_id: input.group_id,
+        tags: input.tags,
+        auth,
+        notes: existing.notes,
+        jump_host: input.jump_host,
+        created_at: existing.created_at,
+        updated_at: Utc::now(),
+    };
+    state.profile_store.update_server(&server).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_server(state: State<'_, AppState>, id: ServerId) -> CommandResult<()> {
+    let server = state.profile_store.get_server(&id).await?;
+    delete_auth_method_secrets(state.credential_store.as_ref(), &server.auth);
+    state.profile_store.delete_server(&id).await?;
+    Ok(())
+}
+
+/// Spec 0008, Abschnitt 7. `existing_server_id` ist eine gegenüber der
+/// Spec-Skizze notwendige Ergänzung — s. Doc-Kommentar an
+/// `crate::test_connection::test_connection`.
+#[tauri::command]
+pub async fn test_connection(
+    state: State<'_, AppState>,
+    input: ServerInput,
+    existing_server_id: Option<ServerId>,
+) -> CommandResult<TestConnectionResult> {
+    crate::test_connection::test_connection(
+        state.profile_store.as_ref(),
+        state.credential_store.as_ref(),
+        state.host_key_store.clone(),
+        &crate::test_connection::RealConnector,
+        input,
+        existing_server_id,
+    )
+    .await
+}
+
+/// Kein Teil der Spec-0008-Signaturliste — aber zwingend nötig, damit das
+/// Frontend nach einer in `test_connection` bestätigten
+/// `HostKeyUnknown`/`HostKeyMismatch`-Warnung tatsächlich `trust()`
+/// aufrufen kann (Spec Abschnitt 7: "kann ... bei Zustimmung `trust()`
+/// aufrufen"). Anders als der reguläre `connect()`-Host-Key-Fluss (Spec
+/// 0007) braucht `test_connection` dafür keine wartende Session/
+/// `oneshot`-Bestätigung — es ist ein einzelner, synchroner
+/// Vertrauens-Eintrag, danach ist der Aufruf fertig.
+#[tauri::command]
+pub async fn trust_host_key(
+    state: State<'_, AppState>,
+    host: String,
+    port: u16,
+    raw_key: Vec<u8>,
+) -> CommandResult<()> {
+    state.host_key_store.trust(&host, port, &raw_key)?;
+    Ok(())
+}
+
+// --- Spec 0008: Notizen ----------------------------------------------------
+
+#[tauri::command]
+pub async fn update_group_notes(
+    state: State<'_, AppState>,
+    id: GroupId,
+    content: String,
+) -> CommandResult<()> {
+    let revision = record_revision(NoteTarget::Group(id), content, NoteEditor::User);
+    state.profile_store.record_note_revision(&revision).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_server_notes(
+    state: State<'_, AppState>,
+    id: ServerId,
+    content: String,
+) -> CommandResult<()> {
+    let revision = record_revision(NoteTarget::Server(id), content, NoteEditor::User);
+    state.profile_store.record_note_revision(&revision).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn list_note_revisions(
+    state: State<'_, AppState>,
+    target: NoteTarget,
+) -> CommandResult<Vec<NoteRevisionDto>> {
+    let revisions = state.profile_store.list_note_revisions(target).await?;
+    Ok(revisions.iter().map(NoteRevisionDto::from).collect())
+}
+
+/// Spec 0008, Abschnitt 5: überschreibt die vorherige Revision **nicht**
+/// still, sondern erzeugt selbst eine neue Revision mit dem alten Inhalt
+/// (append-only) — so bleibt nachvollziehbar, dass ein Rollback
+/// stattgefunden hat.
+#[tauri::command]
+pub async fn rollback_note(
+    state: State<'_, AppState>,
+    target: NoteTarget,
+    revision_id: Uuid,
+) -> CommandResult<()> {
+    let revisions = state.profile_store.list_note_revisions(target).await?;
+    let old = revisions
+        .iter()
+        .find(|r| r.id == revision_id)
+        .ok_or("Revision nicht gefunden")?;
+    let revision = record_revision(target, old.content.clone(), NoteEditor::User);
+    state.profile_store.record_note_revision(&revision).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn preview_effective_notes(
+    state: State<'_, AppState>,
+    server_id: ServerId,
+) -> CommandResult<String> {
+    let server = state.profile_store.get_server(&server_id).await?;
+    effective_notes(&server, state.profile_store.as_ref())
+        .await
+        .map_err(Into::into)
 }

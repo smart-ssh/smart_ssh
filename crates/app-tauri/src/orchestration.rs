@@ -472,6 +472,9 @@ mod tests {
         async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
             Ok(Vec::new())
         }
+        async fn list_groups(&self) -> ProfileResult<Vec<Group>> {
+            Ok(Vec::new())
+        }
         async fn create_group(&self, _group: &Group) -> ProfileResult<()> {
             Ok(())
         }
@@ -493,6 +496,19 @@ mod tests {
         async fn record_note_revision(&self, revision: &NoteRevision) -> ProfileResult<()> {
             self.note_revisions.lock().unwrap().push(revision.clone());
             Ok(())
+        }
+        async fn list_note_revisions(
+            &self,
+            target: ssh_manager_core::profiles::NoteTarget,
+        ) -> ProfileResult<Vec<NoteRevision>> {
+            Ok(self
+                .note_revisions
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|r| r.target == target)
+                .cloned()
+                .collect())
         }
     }
 

@@ -6,13 +6,19 @@ mod ai_provider_factory;
 mod commands;
 mod confirmation;
 mod dto;
+mod ephemeral_credentials;
 mod error;
 mod events;
+mod groups;
 mod host_key_store;
 mod orchestration;
 mod policy;
+mod server_credentials;
 mod session;
 mod state;
+mod test_connection;
+#[cfg(test)]
+mod test_support;
 
 use std::sync::Arc;
 
@@ -75,6 +81,21 @@ pub fn run() {
             commands::send_chat_message,
             commands::respond_to_action,
             commands::disconnect,
+            commands::list_groups,
+            commands::create_group,
+            commands::update_group,
+            commands::delete_group,
+            commands::get_server,
+            commands::create_server,
+            commands::update_server,
+            commands::delete_server,
+            commands::test_connection,
+            commands::trust_host_key,
+            commands::update_group_notes,
+            commands::update_server_notes,
+            commands::list_note_revisions,
+            commands::rollback_note,
+            commands::preview_effective_notes,
         ])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Tauri-App");

@@ -5,7 +5,7 @@ use async_trait::async_trait;
 
 use crate::shared::ServerId;
 
-use super::types::{Group, GroupId, NoteRevision, Server};
+use super::types::{Group, GroupId, NoteRevision, NoteTarget, Server};
 
 /// Fehler eines [`ProfileStore`]-Zugriffs bzw. einer darauf aufbauenden
 /// Operation wie `group_chain`/`effective_notes`.
@@ -70,6 +70,12 @@ pub trait ProfileStore: Send + Sync {
     /// Store-internen Interna zu umgehen.
     async fn list_servers(&self) -> ProfileResult<Vec<Server>>;
 
+    /// Alle gespeicherten Gruppen, flach (Spec 0008, Abschnitt 3 —
+    /// "parent_id im DTO, Baum wird im Frontend gebaut"). Analog zu
+    /// [`ProfileStore::list_servers`] nicht in Spec 0003/0004 vorgesehen,
+    /// aber von der Server-/Gruppen-Verwaltungs-UI vorausgesetzt.
+    async fn list_groups(&self) -> ProfileResult<Vec<Group>>;
+
     /// Gruppenkette von der Wurzel bis **einschließlich** `id`, root-first
     /// geordnet (passend für `effective_notes`, Spec Abschnitt 5.1).
     ///
@@ -126,4 +132,12 @@ pub trait ProfileStore: Send + Sync {
     /// `persistence-sqlite`), damit `notes`-Feld und Historie nie
     /// auseinanderlaufen.
     async fn record_note_revision(&self, revision: &NoteRevision) -> ProfileResult<()>;
+
+    /// Chronologische Änderungshistorie eines Ziels (Spec 0008, Abschnitt
+    /// 5: `list_note_revisions`) — älteste zuerst, passend für eine
+    /// Zeitleisten-Darstellung im UI. War in Spec 0003/0004 (die nur das
+    /// *Schreiben* einer Revision beschreiben) nicht vorgesehen, analog zu
+    /// [`ProfileStore::list_servers`]/[`ProfileStore::list_groups`] hier
+    /// ergänzt.
+    async fn list_note_revisions(&self, target: NoteTarget) -> ProfileResult<Vec<NoteRevision>>;
 }

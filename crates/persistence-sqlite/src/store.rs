@@ -4,6 +4,8 @@ use async_trait::async_trait;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use sqlx::Row;
 
+use uuid::Uuid;
+
 use ssh_manager_core::profiles::{
     Group, GroupId, NoteEditor, NoteRevision, NoteTarget, ProfileError, ProfileResult,
     ProfileStore, Server,
@@ -206,6 +208,17 @@ impl ProfileStore for SqliteProfileStore {
             servers.push(row_to_server(row, tags)?);
         }
         Ok(servers)
+    }
+
+    async fn list_groups(&self) -> ProfileResult<Vec<Group>> {
+        let rows = sqlx::query(
+            "SELECT id, name, parent_id, notes, created_at, updated_at FROM groups ORDER BY name",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(backend_err)?;
+
+        rows.iter().map(row_to_group).collect()
     }
 
     // `group_chain` bewusst **nicht** überschrieben: die Default-
@@ -431,4 +444,67 @@ impl ProfileStore for SqliteProfileStore {
         tx.commit().await.map_err(backend_err)?;
         Ok(())
     }
+
+    async fn list_note_revisions(&self, target: NoteTarget) -> ProfileResult<Vec<NoteRevision>> {
+        let (target_type, target_id): (&str, String) = match target {
+            NoteTarget::Server(id) => ("server", id.0.to_string()),
+            NoteTarget::Group(id) => ("group", id.0.to_string()),
+        };
+
+        let rows = sqlx::query(
+            "SELECT id, content, editor_type, ai_provider, ai_model, created_at \
+             FROM note_revisions WHERE target_type = ? AND target_id = ? ORDER BY created_at",
+        )
+        .bind(target_type)
+        .bind(&target_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(backend_err)?;
+
+        rows.iter()
+            .map(|row| row_to_note_revision(row, target))
+            .collect()
+    }
+}
+
+fn row_to_note_revision(
+    row: &sqlx::sqlite::SqliteRow,
+    target: NoteTarget,
+) -> ProfileResult<NoteRevision> {
+    let id: String = row.get("id");
+    let editor_type: String = row.get("editor_type");
+    let ai_provider: Option<String> = row.get("ai_provider");
+    let ai_model: Option<String> = row.get("ai_model");
+    let created_at: String = row.get("created_at");
+
+    let edited_by = match editor_type.as_str() {
+        "user" => NoteEditor::User,
+        "ai" => NoteEditor::Ai {
+            provider: ai_provider.ok_or_else(|| {
+                ProfileError::Backend(
+                    "note_revisions.ai_provider fehlt bei editor_type = 'ai'".to_string(),
+                )
+            })?,
+            model: ai_model.ok_or_else(|| {
+                ProfileError::Backend(
+                    "note_revisions.ai_model fehlt bei editor_type = 'ai'".to_string(),
+                )
+            })?,
+        },
+        other => {
+            return Err(ProfileError::Backend(format!(
+                "unbekannter editor_type '{other}' in note_revisions"
+            )))
+        }
+    };
+
+    Ok(NoteRevision {
+        id: Uuid::parse_str(&id).map_err(|e| {
+            ProfileError::Backend(format!("ungültige UUID in note_revisions.id: {e}"))
+        })?,
+        target,
+        content: row.get("content"),
+        edited_by,
+        created_at: parse_timestamp(&created_at, "note_revisions.created_at")?,
+    })
 }

@@ -9,14 +9,18 @@ use serde::{Deserialize, Serialize};
 
 use persistence_sqlite::{AiProviderConfig, AiProviderConfigUpdate};
 use ssh_manager_core::ai::{ProviderId, ProviderType};
-use ssh_manager_core::profiles::{CredentialRef, Server};
+use ssh_manager_core::profiles::{
+    AuthMethod, CredentialRef, Group, GroupId, NoteEditor, NoteRevision, Server,
+};
+use ssh_manager_core::shared::ServerId;
 
-/// Read-only-Sicht auf einen [`Server`] für die einfache Serverliste (Spec
-/// 0007, Abschnitt 7 — "keine Anlege-/Bearbeiten-UI"). Bewusst ohne
-/// `auth`/`notes`/`jump_host`: Für eine reine Anzeigeliste ohne
-/// Klick-Funktion (die kommt erst mit dem Verbindungs-Teil) sind das
-/// weder nötige noch unbedenkliche Felder, `auth` enthält zudem
-/// `CredentialRef`s, die im MVP-UI-Umfang von Teil 1 nichts verloren haben.
+/// Sicht auf einen [`Server`] für Liste und Bearbeiten-Formular (Spec
+/// 0007 Abschnitt 7 zunächst nur für die Liste eingeführt, Spec 0008
+/// Abschnitt 4 erweitert sie um die für das Formular nötigen Felder).
+/// Bewusst **kein** `notes`-Feld (eigene Notiz-Commands, Abschnitt 5) und
+/// **kein** Secret-Inhalt — nur [`AuthMethodKind`], welche Methode aktiv
+/// ist, nie ein `CredentialRef` oder gar das Secret selbst (Spec 0008
+/// Abschnitt 4: "ServerDto ... enthält keine Secret-Felder").
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerDto {
@@ -25,7 +29,10 @@ pub struct ServerDto {
     pub host: String,
     pub port: u16,
     pub username: String,
+    pub group_id: Option<String>,
     pub tags: Vec<String>,
+    pub auth_kind: AuthMethodKind,
+    pub jump_host: Option<String>,
 }
 
 impl From<&Server> for ServerDto {
@@ -36,7 +43,32 @@ impl From<&Server> for ServerDto {
             host: server.host.clone(),
             port: server.port,
             username: server.username.clone(),
+            group_id: server.group_id.map(|g| g.0.to_string()),
             tags: server.tags.clone(),
+            auth_kind: AuthMethodKind::from(&server.auth),
+            jump_host: server.jump_host.map(|j| j.0.to_string()),
+        }
+    }
+}
+
+/// Welche [`AuthMethod`]-Variante aktiv ist, ohne deren Inhalt (Spec 0008
+/// Abschnitt 4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthMethodKind {
+    Password,
+    PrivateKey,
+    Agent,
+    Certificate,
+}
+
+impl From<&AuthMethod> for AuthMethodKind {
+    fn from(auth: &AuthMethod) -> Self {
+        match auth {
+            AuthMethod::Password { .. } => AuthMethodKind::Password,
+            AuthMethod::PrivateKey { .. } => AuthMethodKind::PrivateKey,
+            AuthMethod::Agent => AuthMethodKind::Agent,
+            AuthMethod::Certificate { .. } => AuthMethodKind::Certificate,
         }
     }
 }
@@ -149,4 +181,155 @@ pub enum ActionUserDecision {
     Approve,
     Deny,
     EditThenApprove { command: String },
+}
+
+// --- Spec 0008: Server-/Gruppen-Verwaltung ------------------------------
+
+/// Flache Sicht auf eine [`Group`] (Spec 0008, Abschnitt 3 — "Baum wird im
+/// Frontend gebaut").
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupDto {
+    pub id: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+}
+
+impl From<&Group> for GroupDto {
+    fn from(group: &Group) -> Self {
+        Self {
+            id: group.id.0.to_string(),
+            name: group.name.clone(),
+            parent_id: group.parent_id.map(|p| p.0.to_string()),
+        }
+    }
+}
+
+/// Vorschau bzw. Ergebnis von `delete_group` (Spec 0008, Abschnitt 3).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteGroupResult {
+    pub child_groups_to_delete: Vec<GroupDto>,
+    pub servers_to_unassign: Vec<ServerDto>,
+    pub executed: bool,
+}
+
+/// Eingabe für `create_server`/`update_server`/`test_connection` (Spec
+/// 0008, Abschnitt 4). `group_id`/`jump_host` direkt als `GroupId`/
+/// `ServerId` statt `String` — beide sind `Uuid`-Newtypes und
+/// (de-)serialisieren bereits als reiner UUID-String, ein manuelles
+/// Parsen im Command-Handler wäre nur Boilerplate.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerInput {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub group_id: Option<GroupId>,
+    pub tags: Vec<String>,
+    pub auth: AuthMethodInput,
+    pub jump_host: Option<ServerId>,
+}
+
+/// Spec 0008, Abschnitt 4. `#[serde(tag = "kind", rename_all =
+/// "camelCase")]` (wie bei [`ActionUserDecision`]/[`HostKeyUserDecision`])
+/// statt Serdes Standard-Außen-Tagging — ergibt z. B. `{"kind":
+/// "privateKey", "keyContent": "...", "passphrase": null}`, die
+/// natürliche Form für das TypeScript-Frontend, dieses Objekt selbst zu
+/// bauen.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AuthMethodInput {
+    Password {
+        value: Option<String>,
+    },
+    PrivateKey {
+        key_content: Option<String>,
+        passphrase: Option<String>,
+    },
+    Agent,
+    Certificate {
+        cert_content: Option<String>,
+        key_content: Option<String>,
+    },
+}
+
+/// Wer eine [`NoteRevision`] erzeugt hat, für die Anzeige in der
+/// Notiz-Historie (Spec 0008, Abschnitt 6: "Editor (Nutzer, oder KI inkl.
+/// Provider/Modell-Name)").
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum NoteEditorDto {
+    User,
+    Ai { provider: String, model: String },
+}
+
+impl From<&NoteEditor> for NoteEditorDto {
+    fn from(editor: &NoteEditor) -> Self {
+        match editor {
+            NoteEditor::User => NoteEditorDto::User,
+            NoteEditor::Ai { provider, model } => NoteEditorDto::Ai {
+                provider: provider.clone(),
+                model: model.clone(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteRevisionDto {
+    pub id: String,
+    pub content: String,
+    pub edited_by: NoteEditorDto,
+    pub created_at: String,
+}
+
+impl From<&NoteRevision> for NoteRevisionDto {
+    fn from(revision: &NoteRevision) -> Self {
+        Self {
+            id: revision.id.to_string(),
+            content: revision.content.clone(),
+            edited_by: NoteEditorDto::from(&revision.edited_by),
+            created_at: revision.created_at.to_rfc3339(),
+        }
+    }
+}
+
+/// Spec 0008, Abschnitt 7. Weicht in zwei Punkten von der Spec-Skizze ab:
+///
+/// 1. `NetworkError(String)` wurde zu `NetworkError { message: String }`
+///    — ein Tupel-Variant lässt sich unter internem Tagging
+///    (`#[serde(tag = "kind")]`, s. o.) nicht darstellen (serde verlangt
+///    dafür Struct-artige Varianten).
+/// 2. `HostKeyUnknown`/`HostKeyMismatch` tragen zusätzlich `host`/`port`/
+///    `raw_key` — die Spec-Skizze nennt dort nur die Fingerprints. Ohne
+///    die Rohdaten hätte das Frontend keine Möglichkeit, nach einer
+///    Nutzerbestätigung `trust_host_key` (neuer, in der Spec nicht
+///    vorgesehener Befehl, s. Doc-Kommentar dort) aufzurufen — die Spec
+///    selbst verlangt aber ausdrücklich, dass "bei Zustimmung `trust()`
+///    aufgerufen" werden kann (Abschnitt 7).
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TestConnectionResult {
+    Success,
+    AuthenticationFailed,
+    HostKeyUnknown {
+        host: String,
+        port: u16,
+        raw_key: Vec<u8>,
+        fingerprint: String,
+    },
+    HostKeyMismatch {
+        host: String,
+        port: u16,
+        raw_key: Vec<u8>,
+        expected_fingerprint: String,
+        actual_fingerprint: String,
+    },
+    NetworkError {
+        message: String,
+    },
+    Timeout,
 }

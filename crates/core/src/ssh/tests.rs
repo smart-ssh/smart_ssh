@@ -65,6 +65,9 @@ impl ProfileStore for MockProfileStore {
     async fn delete_group(&self, _id: &GroupId) -> ProfileResult<()> {
         Ok(())
     }
+    async fn list_groups(&self) -> ProfileResult<Vec<Group>> {
+        Ok(Vec::new())
+    }
 
     async fn create_server(&self, server: &Server) -> ProfileResult<()> {
         self.servers
@@ -86,6 +89,12 @@ impl ProfileStore for MockProfileStore {
     }
     async fn record_note_revision(&self, _revision: &NoteRevision) -> ProfileResult<()> {
         Ok(())
+    }
+    async fn list_note_revisions(
+        &self,
+        _target: crate::profiles::NoteTarget,
+    ) -> ProfileResult<Vec<NoteRevision>> {
+        Ok(Vec::new())
     }
 }
 

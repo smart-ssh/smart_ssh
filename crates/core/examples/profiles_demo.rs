@@ -39,6 +39,7 @@ use ssh_manager_core::shared::ServerId;
 struct DemoProfileStore {
     groups: Mutex<HashMap<GroupId, Group>>,
     servers: Mutex<HashMap<ServerId, Server>>,
+    note_revisions: Mutex<Vec<NoteRevision>>,
 }
 
 impl DemoProfileStore {
@@ -77,6 +78,10 @@ impl ProfileStore for DemoProfileStore {
 
     async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
         Ok(self.servers.lock().unwrap().values().cloned().collect())
+    }
+
+    async fn list_groups(&self) -> ProfileResult<Vec<Group>> {
+        Ok(self.groups.lock().unwrap().values().cloned().collect())
     }
 
     async fn create_group(&self, group: &Group) -> ProfileResult<()> {
@@ -145,7 +150,19 @@ impl ProfileStore for DemoProfileStore {
                 group.updated_at = revision.created_at;
             }
         }
+        self.note_revisions.lock().unwrap().push(revision.clone());
         Ok(())
+    }
+
+    async fn list_note_revisions(&self, target: NoteTarget) -> ProfileResult<Vec<NoteRevision>> {
+        Ok(self
+            .note_revisions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|r| r.target == target)
+            .cloned()
+            .collect())
     }
 }
 
