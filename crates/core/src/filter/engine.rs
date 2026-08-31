@@ -215,10 +215,20 @@ fn combine(a: Decision, b: Decision) -> Decision {
     }
 }
 
+/// Fügt zwei (ggf. bereits selbst gemergte) Reason-Strings zusammen, ohne
+/// einzelne Bestandteile doppelt aufzuführen. Ein Kommando mit mehreren
+/// `&&`-Teilkommandos und/oder einer `$(...)`-Substitution erzeugt sonst
+/// schnell einen langen, redundanten String wie "keine Regel gefunden;
+/// keine Regel gefunden; Command-Substitution ... erkannt; keine Regel
+/// gefunden" — ein reiner `a == b`-Vergleich der GESAMTEN Strings dedupliziert
+/// nur den Fall, dass beide Seiten identisch sind, nicht wiederkehrende
+/// Einzelteile innerhalb eines bereits zusammengesetzten Strings.
 fn merge_reasons(a: String, b: String) -> String {
-    if a == b {
-        a
-    } else {
-        format!("{a}; {b}")
+    let mut parts: Vec<&str> = a.split("; ").collect();
+    for part in b.split("; ") {
+        if !parts.contains(&part) {
+            parts.push(part);
+        }
     }
+    parts.join("; ")
 }

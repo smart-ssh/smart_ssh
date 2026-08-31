@@ -336,3 +336,33 @@ fn test_hard_blacklist_cannot_be_overridden_by_allow_rule() {
     let decision = eng.evaluate("rm -rf /", &ctx("srv1", &[]));
     assert_confirm(&decision);
 }
+
+/// Ein Kommando mit mehreren `&&`-Teilkommandos und einer `$(...)`-
+/// Substitution kombiniert mehrere Teil-Decisions zu einer einzigen
+/// `Confirm`-Reason (`merge_reasons`) — ohne Deduplizierung wiederholt sich
+/// "keine Regel gefunden" für jedes Teilkommando ohne passende Regel und
+/// macht die im Frontend angezeigte Begründung unleserlich lang. Jeder
+/// inhaltlich eigenständige Grund darf nur einmal vorkommen, egal wie oft
+/// er beim Zusammenführen der Teilergebnisse erneut auftritt.
+#[test]
+fn test_merged_reason_does_not_repeat_identical_parts_across_segments() {
+    let eng = engine(vec![]);
+    let decision = eng.evaluate(
+        "cp /etc/fstab /etc/fstab.bak-$(date +%Y%m%d) && sed -i 's/a/b/' /etc/fstab && grep -n extern1 /etc/fstab",
+        &ctx("srv1", &[]),
+    );
+    let Decision::Confirm { reason } = decision else {
+        panic!("expected Confirm, got {decision:?}");
+    };
+    let parts: Vec<&str> = reason.split("; ").collect();
+    let mut deduped = parts.clone();
+    deduped.sort();
+    deduped.dedup();
+    assert_eq!(
+        parts.len(),
+        deduped.len(),
+        "reason enthält doppelte Teile: {reason}"
+    );
+    assert!(reason.contains("keine Regel gefunden"));
+    assert!(reason.contains("Command-Substitution"));
+}

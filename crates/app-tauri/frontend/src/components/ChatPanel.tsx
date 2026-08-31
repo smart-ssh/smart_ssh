@@ -36,6 +36,18 @@ function describeAction(action: AiAction): { label: string; command?: string } {
   return { label: `Notiz aktualisieren (${targetLabel})` };
 }
 
+/// `Decision::Confirm`/`Deny`-Reasons aus der Filter-Engine sind
+/// `"; "`-getrennte Einzelgründe (`crate::filter::engine::merge_reasons`).
+/// Als ein durchgehender Satz mit Semikola wirkt das bei mehreren Gründen
+/// unübersichtlich — hier stattdessen als kompakte, durch " · " getrennte
+/// Liste dargestellt.
+function formatReason(reason: string): string {
+  return reason
+    .split("; ")
+    .filter((part, index, all) => all.indexOf(part) === index)
+    .join(" · ");
+}
+
 function decisionBadge(decision: Decision): { text: string; className: string } {
   if (decision === "AutoExec") {
     return { text: "automatisch ausgeführt", className: "bg-emerald-900 text-emerald-300" };
@@ -249,10 +261,10 @@ function ChatItemView({
       </div>
       {command && <code className="block rounded bg-slate-950 px-2 py-1 text-xs text-slate-300">{command}</code>}
       {typeof item.decision === "object" && "Confirm" in item.decision && (
-        <p className="mt-1 text-xs text-slate-400">{item.decision.Confirm.reason}</p>
+        <p className="mt-1 text-xs text-slate-400">{formatReason(item.decision.Confirm.reason)}</p>
       )}
       {typeof item.decision === "object" && "Deny" in item.decision && (
-        <p className="mt-1 text-xs text-red-300">{item.decision.Deny.reason}</p>
+        <p className="mt-1 text-xs text-red-300">{formatReason(item.decision.Deny.reason)}</p>
       )}
 
       {needsConfirmation && (
