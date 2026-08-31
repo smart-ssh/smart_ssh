@@ -10,13 +10,19 @@ export type ProviderType =
   | "generic_openai_compatible"
   | "ollama";
 
+export type AuthMethodKind = "password" | "private_key" | "agent" | "certificate";
+
 export interface ServerDto {
   id: string;
   name: string;
   host: string;
   port: number;
   username: string;
+  groupId: string | null;
   tags: string[];
+  authKind: AuthMethodKind;
+  jumpHost: string | null;
+  notes: string;
 }
 
 export interface AiProviderConfigDto {
@@ -83,14 +89,24 @@ export interface ConnectionStatusChangedEvent {
 
 export type HostKeyKind = "unknown" | "mismatch";
 
-export interface HostKeyVerificationNeededEvent {
-  sessionId: string;
+/** Gemeinsame Form für `HostKeyDialog` — sowohl
+ * `HostKeyVerificationNeededEvent` (Spec 0007, regulärer `connect()`) als
+ * auch `TestConnectionResult`s `hostKeyUnknown`/`hostKeyMismatch` (Spec
+ * 0008, `test_connection`) erfüllen diese Form strukturell, sodass sich
+ * derselbe Dialog für beide Flüsse wiederverwenden lässt (Spec 0008,
+ * Abschnitt 7: "denselben Bestätigungs-/Warnungs-Dialog wiederverwenden").
+ */
+export interface HostKeyInfo {
   host: string;
   port: number;
   kind: HostKeyKind;
   fingerprint: string;
   /** Nur bei `kind === "mismatch"` gesetzt. */
   expectedFingerprint: string | null;
+}
+
+export interface HostKeyVerificationNeededEvent extends HostKeyInfo {
+  sessionId: string;
 }
 
 export interface TerminalOutputEvent {
@@ -134,3 +150,66 @@ export type ActionUserDecision =
   | { decision: "approve" }
   | { decision: "deny" }
   | { decision: "editThenApprove"; command: string };
+
+// --- Spec 0008: Server-/Gruppen-Verwaltung ------------------------------
+
+export interface GroupDto {
+  id: string;
+  name: string;
+  parentId: string | null;
+  notes: string;
+}
+
+export interface DeleteGroupResult {
+  childGroupsToDelete: GroupDto[];
+  serversToUnassign: ServerDto[];
+  executed: boolean;
+}
+
+/** Eingabe für `create_server`/`update_server`/`test_connection`. */
+export interface ServerInput {
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  groupId: string | null;
+  tags: string[];
+  auth: AuthMethodInput;
+  jumpHost: string | null;
+}
+
+export type AuthMethodInput =
+  | { kind: "password"; value: string | null }
+  | { kind: "privateKey"; keyContent: string | null; passphrase: string | null }
+  | { kind: "agent" }
+  | { kind: "certificate"; certContent: string | null; keyContent: string | null };
+
+export type NoteEditorDto =
+  | { kind: "user" }
+  | { kind: "ai"; provider: string; model: string };
+
+export interface NoteRevisionDto {
+  id: string;
+  content: string;
+  editedBy: NoteEditorDto;
+  createdAt: string;
+}
+
+/** Spec 0008, Abschnitt 7 — s. `crate::dto::TestConnectionResult`-Doc-
+ * Kommentar für die beiden Abweichungen von der Spec-Skizze
+ * (`NetworkError` als Objekt, `host`/`port`/`rawKey` bei den
+ * Host-Key-Varianten). */
+export type TestConnectionResult =
+  | { kind: "success" }
+  | { kind: "authenticationFailed" }
+  | { kind: "hostKeyUnknown"; host: string; port: number; rawKey: number[]; fingerprint: string }
+  | {
+      kind: "hostKeyMismatch";
+      host: string;
+      port: number;
+      rawKey: number[];
+      expectedFingerprint: string;
+      actualFingerprint: string;
+    }
+  | { kind: "networkError"; message: string }
+  | { kind: "timeout" };

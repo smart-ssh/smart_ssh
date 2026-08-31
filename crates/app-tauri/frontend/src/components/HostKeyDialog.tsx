@@ -1,7 +1,7 @@
-import type { HostKeyUserDecision, HostKeyVerificationNeededEvent } from "../types";
+import type { HostKeyInfo, HostKeyUserDecision } from "../types";
 
 interface HostKeyDialogProps {
-  event: HostKeyVerificationNeededEvent;
+  event: HostKeyInfo;
   onDecision: (decision: HostKeyUserDecision) => void;
 }
 

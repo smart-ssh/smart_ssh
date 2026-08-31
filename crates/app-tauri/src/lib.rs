@@ -65,6 +65,12 @@ fn build_app_state() -> AppState {
 
 pub fn run() {
     tauri::Builder::default()
+        // Für die Key-/Zertifikat-Datei-Auswahl im Server-Formular (Spec
+        // 0008, Abschnitt 6) — Dateiinhalt wird clientseitig gelesen
+        // (`plugin-fs`) und geht direkt an `create_server`/`update_server`,
+        // der Pfad selbst wird nie gespeichert (Spec Abschnitt 8).
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(build_app_state())
         .invoke_handler(tauri::generate_handler![
             commands::list_servers,

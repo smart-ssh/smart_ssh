@@ -30,6 +30,8 @@ sha2 = "0.11.0"
 ssh-manager-core = { version = "0.1.0", path = "../core" }
 ssh-transport = { version = "0.1.0", path = "../ssh-transport" }
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2.7.2"
+tauri-plugin-fs = "2.5.1"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync"] }
 uuid = { version = "1.26.0", features = ["v4", "serde"] }
 

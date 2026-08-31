@@ -16,11 +16,14 @@ use ssh_manager_core::shared::ServerId;
 
 /// Sicht auf einen [`Server`] für Liste und Bearbeiten-Formular (Spec
 /// 0007 Abschnitt 7 zunächst nur für die Liste eingeführt, Spec 0008
-/// Abschnitt 4 erweitert sie um die für das Formular nötigen Felder).
-/// Bewusst **kein** `notes`-Feld (eigene Notiz-Commands, Abschnitt 5) und
-/// **kein** Secret-Inhalt — nur [`AuthMethodKind`], welche Methode aktiv
-/// ist, nie ein `CredentialRef` oder gar das Secret selbst (Spec 0008
-/// Abschnitt 4: "ServerDto ... enthält keine Secret-Felder").
+/// Abschnitt 4 erweitert sie um die für das Formular nötigen Felder,
+/// inkl. `notes` — analog zu [`GroupDto`]s `notes`-Feld: ohne dieses
+/// Feld bräuchte das Server-Formular einen eigenen Befehl nur für die
+/// Notiz-Vorbefüllung, obwohl `get_server`/`list_servers` ohnehin schon
+/// die volle `Server`-Struktur lesen. **Kein** Secret-Inhalt — nur
+/// [`AuthMethodKind`], welche Methode aktiv ist, nie ein `CredentialRef`
+/// oder gar das Secret selbst (Spec 0008 Abschnitt 4: "ServerDto ...
+/// enthält keine Secret-Felder").
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerDto {
@@ -33,6 +36,7 @@ pub struct ServerDto {
     pub tags: Vec<String>,
     pub auth_kind: AuthMethodKind,
     pub jump_host: Option<String>,
+    pub notes: String,
 }
 
 impl From<&Server> for ServerDto {
@@ -47,6 +51,7 @@ impl From<&Server> for ServerDto {
             tags: server.tags.clone(),
             auth_kind: AuthMethodKind::from(&server.auth),
             jump_host: server.jump_host.map(|j| j.0.to_string()),
+            notes: server.notes.clone(),
         }
     }
 }
@@ -186,13 +191,19 @@ pub enum ActionUserDecision {
 // --- Spec 0008: Server-/Gruppen-Verwaltung ------------------------------
 
 /// Flache Sicht auf eine [`Group`] (Spec 0008, Abschnitt 3 — "Baum wird im
-/// Frontend gebaut").
+/// Frontend gebaut"). `notes` ist dort nicht ausdrücklich erwähnt, aber
+/// auch nicht ausgeschlossen — ohne dieses Feld bräuchte das
+/// Gruppen-Formular einen eigenen `get_group`-Befehl nur für die
+/// Notiz-Vorbefüllung, obwohl `list_groups()` die Daten ohnehin schon aus
+/// derselben `Group`-Struktur liest. Kein zusätzlicher DB-Zugriff, nur ein
+/// zusätzliches Feld auf einem bereits geladenen Wert.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GroupDto {
     pub id: String,
     pub name: String,
     pub parent_id: Option<String>,
+    pub notes: String,
 }
 
 impl From<&Group> for GroupDto {
@@ -201,6 +212,7 @@ impl From<&Group> for GroupDto {
             id: group.id.0.to_string(),
             name: group.name.clone(),
             parent_id: group.parent_id.map(|p| p.0.to_string()),
+            notes: group.notes.clone(),
         }
     }
 }
