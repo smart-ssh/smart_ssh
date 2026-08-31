@@ -41,7 +41,17 @@ use ssh_manager_core::profiles::{
 /// Konstante statt konfigurierbar: es gibt in diesem MVP nur eine einzige
 /// App-Installation pro Nutzer, kein Bedarf für mehrere unterscheidbare
 /// Services.
-const SERVICE_NAME: &str = "ssh-manager";
+///
+/// **Nutzer-sichtbar** (nicht nur internes Implementierungsdetail): dieser
+/// exakte String erscheint z. B. in macOS Keychain Access als "Wo"-Spalte
+/// eines Eintrags — nach der Umbenennung zu "Smart SSH" (Teil 1 dieser
+/// Aufgabenstellung) entsprechend angepasst. Bereits unter dem alten Namen
+/// "ssh-manager" im Keychain gespeicherte Einträge werden dadurch nicht
+/// automatisch migriert (kein Mechanismus dafür in diesem MVP) — bei
+/// diesem noch unveröffentlichten, lokal genutzten Projekt kein
+/// nennenswertes Risiko, betrifft aber denselben, in Teil 1 bereits für
+/// den Datenbankpfad akzeptierten Trade-off.
+const SERVICE_NAME: &str = "Smart SSH";
 
 pub struct KeyringCredentialStore;
 

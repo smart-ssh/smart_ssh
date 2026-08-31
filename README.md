@@ -1,4 +1,4 @@
-# ssh-manager
+# Smart SSH
 
 Cross-platform SSH-Client mit Server-Manager und KI-gestützter
 Kommandoausführung. Verwaltet mehrere SSH-Server/Zugänge, erlaubt gefiltertes
@@ -13,7 +13,7 @@ LLM in ausführbare Shell-Befehle – inklusive Audit-Trail.
 Das Projekt ist als Cargo-Workspace mit zwei Crates organisiert:
 
 ```
-ssh-manager/
+smart_ssh/
 ├── crates/
 │   ├── core/         # ssh-manager-core – reine Geschäftslogik, UI-unabhängig
 │   └── app-tauri/     # ssh-manager-app-tauri – App-/UI-Schicht (Tauri)

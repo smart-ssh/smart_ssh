@@ -86,7 +86,7 @@ function MainScreen({
     <div className="flex h-screen flex-col bg-slate-900 text-slate-100">
       <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
         <div className="flex items-center gap-6">
-          <h1 className="text-xl font-semibold">ssh-manager</h1>
+          <h1 className="text-xl font-semibold">Smart SSH</h1>
           <nav className="flex gap-1">
             <button
               type="button"
