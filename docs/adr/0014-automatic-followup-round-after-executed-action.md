@@ -30,7 +30,8 @@ eigenen Vorschlags eingeht, ohne dass er von sich aus nachfragen muss.
 ## Entscheidung
 
 `run_chat_turn` (`crates/app-tauri/src/orchestration.rs`) läuft jetzt in
-bis zu `MAX_AUTO_FOLLOWUP_ROUNDS` (8) Runden. Jede Runde
+bis zu `MAX_AUTO_FOLLOWUP_ROUNDS` (ursprünglich 8, siehe Revision unten:
+25) Runden. Jede Runde
 (`run_one_round`) entspricht weiterhin genau einem `AiProvider::send()`-
 Aufruf und gibt zurück, ob dabei **mindestens eine Aktion tatsächlich
 ausgeführt** wurde (AutoExec, oder vom Nutzer per `respond_to_action` mit
@@ -68,16 +69,31 @@ Event ab, statt weiter zu warten oder endlos Aktionen vorzuschlagen.
   wartet) — dort bricht die Schleife weiterhin nach der ersten Runde ab.
 
 **Negativ / Trade-off:**
-- Ein Chat-Turn kann jetzt spürbar länger laufen (bis zu 8 aufeinander
-  folgende KI-Aufrufe plus Ausführungen) als der Klick auf "Senden" —
-  gemildert durch die in derselben Sitzung ergänzte Ladeanzeige
-  (`docs/specs/0007-tauri-app-mvp.md`, Abschnitt 7).
-- Die feste Grenze von 8 Runden ist eine Schätzung, keine aus der Spec
-  abgeleitete Zahl — falls sich in der Praxis legitime Aufgaben mit mehr
-  aufeinanderfolgenden Kommandos zeigen, muss der Wert ggf. angepasst oder
-  konfigurierbar gemacht werden.
+- Ein Chat-Turn kann jetzt spürbar länger laufen (bis zu
+  `MAX_AUTO_FOLLOWUP_ROUNDS` aufeinanderfolgende KI-Aufrufe plus
+  Ausführungen) als der Klick auf "Senden" — gemildert durch die in
+  derselben Sitzung ergänzte Ladeanzeige (`docs/specs/0007-tauri-app-mvp.md`,
+  Abschnitt 7).
 - `MockAiProvider` in den Orchestrierungs-Tests musste von einer einzelnen,
   bei jedem `send()`-Aufruf wiederholten Event-Sequenz auf eine
   Runden-Warteschlange (mit `[Done]` als Fallback nach Erschöpfung)
   umgestellt werden, um Folgerunden gezielt testen zu können, ohne
   bestehende Single-Round-Tests anzupassen.
+
+## Revision (nach erstem Praxiseinsatz)
+
+Die ursprüngliche Grenze von 8 Runden erwies sich als zu niedrig: eine
+völlig legitime, mehrstufige Admin-Aufgabe (mehrere aufeinanderfolgende
+Diagnose-/Fix-Kommandos) lief dagegen und wurde mit der alarmierend
+wirkenden Fehlermeldung "Abgebrochen nach 8 aufeinanderfolgenden Aktionen"
+abgebrochen, obwohl nichts fehlgelaufen war. Die einzelnen Kommandos waren
+dabei jeweils bereits durch die Filter-Engine/Bestätigungslogik abgesichert
+(s. oben) — die Rundenzahl selbst ist kein primärer Sicherheitsmechanismus,
+sondern nur ein zusätzliches Netz gegen eine KI, die (fehlerhaft)
+unbegrenzt weiter automatisch ausführbare Aktionen vorschlägt. Die Grenze
+wurde deshalb auf **25** angehoben — großzügig genug, um mehrstufige
+Admin-Aufgaben nicht zu stören, aber weiterhin endlich, falls eine KI
+tatsächlich in eine Wiederholungsschleife gerät. Bleibt der Wert weiterhin
+zu niedrig, ist der nächste Schritt eine erkennungsbasierte Grenze (z. B.
+Abbruch nach N identischen/sehr ähnlichen aufeinanderfolgenden Kommandos
+statt einer festen Rundenzahl) statt eines erneuten reinen Zahlen-Bumps.

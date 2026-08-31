@@ -47,10 +47,17 @@ use crate::state::{ActionId, SessionId};
 
 /// Sicherheitsgrenze gegen eine KI, die in jeder Folgerunde erneut eine
 /// (automatisch ausgeführte) Aktion vorschlägt — ohne diese Grenze könnte
-/// `run_chat_turn` sonst unbegrenzt weiterlaufen. Ein einzelner
-/// Nutzer-Turn, der tatsächlich so viele aufeinanderfolgende Kommandos
-/// braucht, ist in der Praxis nicht zu erwarten.
-const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 8;
+/// `run_chat_turn` sonst unbegrenzt weiterlaufen. Ursprünglich auf 8
+/// gesetzt, in der Praxis aber zu niedrig: mehrstufige, aber völlig
+/// legitime Admin-Aufgaben (mehrere Diagnose-/Fix-Kommandos nacheinander)
+/// liefen dagegen und wurden mit einer alarmierend wirkenden Fehlermeldung
+/// abgebrochen, obwohl nichts falsch lief. Jede einzelne Runde bleibt
+/// weiterhin durch die Filter-Engine/Bestätigungslogik abgesichert (s.
+/// Moduldoc) — dieser Zähler ist nur ein zusätzliches Netz gegen eine KI,
+/// die (fehlerhaft) unbegrenzt weiter automatisch ausführbare Aktionen
+/// vorschlägt, kein primärer Sicherheitsmechanismus. Siehe
+/// `docs/adr/0014-automatic-followup-round-after-executed-action.md`.
+const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 25;
 
 /// Die Nutzer-Nachricht muss bereits vom Aufrufer in
 /// `session.context.history` eingetragen worden sein (s.
