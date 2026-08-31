@@ -93,6 +93,10 @@ pub(crate) fn action_from_tool_arguments(
                 new_content,
             })
         }
+        "generate_document" => Ok(AiAction::GenerateDocument {
+            title: get_str("title")?,
+            content_markdown: get_str("content_markdown")?,
+        }),
         other => Err(AiError::InvalidResponse(format!(
             "unbekannte Aktion '{other}'"
         ))),
@@ -154,6 +158,23 @@ mod tests {
             AiAction::ProposeNoteUpdate {
                 target: NoteTarget::Server(ServerId(id)),
                 new_content: "neu".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_action_from_tool_arguments_parses_generate_document() {
+        let action = action_from_tool_arguments(
+            "generate_document",
+            &json!({"title": "Analyse", "content_markdown": "# Analyse\n\nInhalt."}),
+        )
+        .unwrap();
+
+        assert_eq!(
+            action,
+            AiAction::GenerateDocument {
+                title: "Analyse".to_string(),
+                content_markdown: "# Analyse\n\nInhalt.".to_string(),
             }
         );
     }

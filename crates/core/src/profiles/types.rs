@@ -112,10 +112,14 @@ pub enum NoteTarget {
     Group(GroupId),
 }
 
-/// Von der KI vorgeschlagene Aktion (Spec 0003, Abschnitt 5.2). Läuft
-/// **nicht** durch die Filter-Engine (Spec 0002) — die gilt nur für
+/// Von der KI vorgeschlagene Aktion (Spec 0003, Abschnitt 5.2; erweitert um
+/// `GenerateDocument` in Spec 0012, Abschnitt 2). Nur `SuggestCommand`
+/// läuft durch die Filter-Engine (Spec 0002) — die betrifft ausschließlich
 /// Shell-Kommandos. `ProposeNoteUpdate` ist immer manuell zu bestätigen
-/// (Diff-Ansicht), nie automatisch übernehmbar.
+/// (Diff-Ansicht), nie automatisch übernehmbar. `GenerateDocument` läuft
+/// weder durch die Filter-Engine noch durch einen Bestätigungsdialog — es
+/// erzeugt reinen lokalen Inhalt, nichts wird ungefragt auf die Festplatte
+/// geschrieben (Spec 0012, Abschnitt 2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AiAction {
     SuggestCommand {
@@ -125,6 +129,10 @@ pub enum AiAction {
         target: NoteTarget,
         /// Vollständiger neuer Text, nicht nur ein Diff.
         new_content: String,
+    },
+    GenerateDocument {
+        title: String,
+        content_markdown: String,
     },
 }
 

@@ -5,6 +5,7 @@
 mod ai_provider_factory;
 mod commands;
 mod confirmation;
+mod document_export;
 mod dto;
 mod ephemeral_credentials;
 mod error;
@@ -116,6 +117,7 @@ pub fn run() {
             commands::evaluate_explained,
             commands::suggest_rule_patterns,
             commands::accept_and_create_rule,
+            commands::export_document,
         ])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Tauri-App");

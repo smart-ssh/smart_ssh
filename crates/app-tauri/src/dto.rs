@@ -555,6 +555,16 @@ pub struct PatternSuggestionDto {
     pub pattern_value: String,
 }
 
+// --- Spec 0012: KI-generierte Dokumente ---------------------------------
+
+/// Exportformat für `export_document` (Spec 0012, Abschnitt 3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentFormat {
+    Markdown,
+    Word,
+}
+
 #[cfg(test)]
 mod tests {
     //! Regressionstest für einen tatsächlich aufgetretenen Bug: serdes

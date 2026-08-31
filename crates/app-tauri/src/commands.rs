@@ -24,9 +24,9 @@ use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, PtySize}
 use crate::ai_provider_factory::build_ai_provider;
 use crate::dto::{
     credential_ref_for, ActionUserDecision, AiProviderConfigDto, AiProviderConfigInput,
-    DeleteGroupResult, EvalContextInput, EvaluationTraceDto, GroupDto, HostKeyUserDecision,
-    NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType, RuleDto, RuleInput, ServerDto,
-    ServerInput, TestConnectionResult,
+    DeleteGroupResult, DocumentFormat, EvalContextInput, EvaluationTraceDto, GroupDto,
+    HostKeyUserDecision, NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType, RuleDto,
+    RuleInput, ServerDto, ServerInput, TestConnectionResult,
 };
 use crate::error::CommandResult;
 use crate::events::{
@@ -863,4 +863,63 @@ pub async fn accept_and_create_rule(
         .pending_action_confirmations
         .resolve(&action_id, ActionUserDecision::Approve)?;
     Ok(rule_id)
+}
+
+// --- Spec 0012: KI-generierte Dokumente -------------------------------
+
+/// Spec 0012, Abschnitt 3: öffnet einen nativen Speichern-unter-Dialog
+/// (vorbelegt mit einem aus `title` abgeleiteten Dateinamen, s.
+/// [`crate::document_export::default_export_file_name`]) und schreibt
+/// **erst nach dessen Bestätigung** — bricht der Nutzer den Dialog ab,
+/// liefert der Callback `None`, der Command kehrt dann ohne jeden
+/// Seiteneffekt zurück (kein Fehler: Abbrechen ist kein Fehlerfall).
+///
+/// Der Dialog-Callback selbst ist nicht `async` (Tauri-Dialog-Plugin-API,
+/// Abschnitt 3 der Spec nennt nur "nativer Speichern-unter-Dialog", nicht
+/// welche der beiden Varianten) — er wird deshalb über einen `oneshot`-Kanal
+/// an diesen `async fn`-Command zurücküberführt, statt die blockierende
+/// `blocking_save_file()`-Variante zu nutzen, die den Async-Runtime-Thread
+/// blockieren würde.
+#[tauri::command]
+pub async fn export_document(
+    app: AppHandle,
+    content_markdown: String,
+    title: String,
+    format: DocumentFormat,
+) -> CommandResult<()> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let file_name = crate::document_export::default_export_file_name(&title, format);
+    let (filter_name, extension): (&str, &str) = match format {
+        DocumentFormat::Markdown => ("Markdown", "md"),
+        DocumentFormat::Word => ("Word-Dokument", "docx"),
+    };
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_file_name(&file_name)
+        .add_filter(filter_name, &[extension])
+        .save_file(move |path| {
+            let _ = tx.send(path);
+        });
+
+    let Some(path) = rx.await.ok().flatten() else {
+        return Ok(());
+    };
+    let path = path.into_path()?;
+
+    // `std::fs::write` statt `tokio::fs`: Letzteres bräuchte das
+    // ungenutzte `fs`-Feature nur für diesen einen, durch eine explizite
+    // Nutzeraktion ausgelösten Einzelschreibvorgang — für eine
+    // Analyse-Dokumentgröße unkritisch blockierend.
+    match format {
+        DocumentFormat::Markdown => std::fs::write(path, content_markdown)?,
+        DocumentFormat::Word => std::fs::write(
+            path,
+            crate::document_export::markdown_to_docx_bytes(&content_markdown),
+        )?,
+    }
+
+    Ok(())
 }

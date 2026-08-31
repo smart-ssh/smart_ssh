@@ -72,7 +72,8 @@ export type NoteTarget = { Server: string } | { Group: string };
 
 export type AiAction =
   | { SuggestCommand: { command: string } }
-  | { ProposeNoteUpdate: { target: NoteTarget; new_content: string } };
+  | { ProposeNoteUpdate: { target: NoteTarget; new_content: string } }
+  | { GenerateDocument: { title: string; content_markdown: string } };
 
 export type Decision =
   | "AutoExec"
@@ -282,3 +283,16 @@ export interface PatternSuggestionDto {
   patternType: PatternType;
   patternValue: string;
 }
+
+// --- Spec 0012: KI-generierte Dokumente ---------------------------------
+
+/** Spec 0012, Abschnitt 3 — kein `decision`-Feld: `GenerateDocument`
+ * durchläuft nie einen Bestätigungsdialog (s. `crate::events`-Payload). */
+export interface ChatDocumentGeneratedEvent {
+  sessionId: string;
+  actionId: string;
+  title: string;
+  contentMarkdown: string;
+}
+
+export type DocumentFormat = "markdown" | "word";

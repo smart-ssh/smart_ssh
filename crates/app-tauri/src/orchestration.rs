@@ -39,8 +39,9 @@ use ssh_manager_core::ssh::SshError;
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::ActionUserDecision;
 use crate::events::{
-    emit_chat_action_proposed, emit_chat_action_result, emit_chat_error, emit_chat_text_delta,
-    emit_note_update_suggested, ActionResultPayload, EventEmitter,
+    emit_chat_action_proposed, emit_chat_action_result, emit_chat_document_generated,
+    emit_chat_error, emit_chat_text_delta, emit_note_update_suggested, ActionResultPayload,
+    EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -117,6 +118,18 @@ async fn run_one_round(
             AiEvent::TextDelta(delta) => {
                 emit_chat_text_delta(emitter, session_id, delta.clone());
                 text_buffer.push_str(&delta);
+            }
+            AiEvent::ActionProposed(AiAction::GenerateDocument {
+                title,
+                content_markdown,
+            }) => {
+                // Spec 0012, Abschnitt 2/3: läuft weder durch die
+                // Filter-Engine noch durch `handle_action_proposed`s
+                // Confirm-Pfad — reiner lokaler Inhalt, direkt ans Frontend
+                // weitergereicht.
+                flush_text_buffer(session, &mut text_buffer).await;
+                handle_document_generated(session, session_id, title, content_markdown, emitter)
+                    .await;
             }
             AiEvent::ActionProposed(action) => {
                 flush_text_buffer(session, &mut text_buffer).await;
@@ -239,6 +252,11 @@ async fn evaluate_action(session: &Session, action: &AiAction) -> Decision {
         AiAction::ProposeNoteUpdate { .. } => Decision::Confirm {
             reason: "Notiz-Aktualisierungen erfordern immer eine manuelle Bestätigung".to_string(),
         },
+        AiAction::GenerateDocument { .. } => unreachable!(
+            "GenerateDocument wird bereits in run_one_round abgefangen \
+             (Spec 0012: kein Filter-Engine-/Bestätigungspfad) und erreicht \
+             evaluate_action nie"
+        ),
     }
 }
 
@@ -309,6 +327,9 @@ async fn handle_user_decision(
                 // Aktion unverändert ausgeführt statt den (hier
                 // bedeutungslosen) `command`-Text zu verwenden.
                 AiAction::ProposeNoteUpdate { .. } => action,
+                AiAction::GenerateDocument { .. } => unreachable!(
+                    "GenerateDocument braucht nie eine Bestätigung, s. evaluate_action"
+                ),
             };
             execute_action(
                 session,
@@ -354,6 +375,9 @@ async fn execute_action(
                 profile_store,
             )
             .await
+        }
+        AiAction::GenerateDocument { .. } => {
+            unreachable!("GenerateDocument braucht nie eine Bestätigung, s. evaluate_action")
         }
     }
 }
@@ -468,6 +492,39 @@ fn emit_note_update_failed(emitter: &dyn EventEmitter, session_id: SessionId, er
         session_id,
         format!("Notiz konnte nicht aktualisiert werden: {err}"),
     );
+}
+
+/// Spec 0012, Abschnitt 2/3: `GenerateDocument` erzeugt reinen lokalen
+/// Inhalt — kein Filter-Engine-Aufruf, kein Bestätigungsdialog, nichts wird
+/// automatisch geschrieben. Zählt deshalb auch **nicht** als "ausgeführte
+/// Aktion" für die automatische Folgerunde (ADR 0014, `run_chat_turn`s
+/// Moduldoc): anders als ein Kommando-Ergebnis gibt es hier kein Ergebnis,
+/// über das die KI in einer weiteren Runde noch nachdenken müsste — das
+/// Dokument selbst *ist* bereits die vollständige Antwort auf die
+/// Nutzeranfrage.
+async fn handle_document_generated(
+    session: &Session,
+    session_id: SessionId,
+    title: String,
+    content_markdown: String,
+    emitter: &dyn EventEmitter,
+) {
+    let action_id: ActionId = Uuid::new_v4();
+    emit_chat_document_generated(
+        emitter,
+        session_id,
+        action_id,
+        title,
+        content_markdown.clone(),
+    );
+    // Spec 0012, Abschnitt 5: "wird als Teil der Assistant-Nachricht in
+    // context.history übernommen (wie ein normaler Chat-Text)" — kein
+    // Sonderfall gegenüber `flush_text_buffer` oben, derselbe
+    // `Role::Assistant`/`MessageContent::Text`.
+    session.context.lock().await.history.push(ChatMessage {
+        role: Role::Assistant,
+        content: MessageContent::Text(content_markdown),
+    });
 }
 
 /// Spec 0010, Abschnitt 2, Punkt 2 — nahezu wörtlich aus der Spec-Skizze
@@ -1464,6 +1521,56 @@ mod tests {
                 model: "test-model".to_string(),
             }
         );
+    }
+
+    // --- Spec 0012: KI-generierte Dokumente -------------------------------
+
+    /// Spec 0012, Abschnitt 2/3: `GenerateDocument` läuft weder durch die
+    /// Filter-Engine noch durch einen Bestätigungsdialog. `test_session`s
+    /// Standard-`NoRulesPolicyStore` würde ein `SuggestCommand` auf
+    /// `Confirm` landen lassen und ohne Responder-Task ewig hängen bleiben
+    /// — dass dieser Test ohne einen solchen Responder sauber durchläuft,
+    /// beweist bereits, dass `GenerateDocument` diesen Pfad nie erreicht.
+    #[tokio::test]
+    async fn test_generate_document_emits_event_without_filter_engine_or_confirmation() {
+        let session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::GenerateDocument {
+                    title: "Analyse".to_string(),
+                    content_markdown: "# Analyse\n\nInhalt.".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(event_names, vec!["chat-document-generated"]);
+
+        let (_, payload) = &events[0];
+        assert_eq!(payload["title"], "Analyse");
+        assert_eq!(payload["contentMarkdown"], "# Analyse\n\nInhalt.");
+
+        // Spec 0012, Abschnitt 5: landet als Assistant-Text in der Historie.
+        let history = session.context.lock().await.history.clone();
+        assert!(history.iter().any(|m| matches!(
+            &m.content,
+            MessageContent::Text(t) if t.contains("Inhalt.")
+        )));
     }
 
     // --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog ---------

@@ -232,6 +232,39 @@ pub fn emit_note_update_suggested(
     );
 }
 
+/// Spec 0012, Abschnitt 3 — direkt aus `AiEvent::ActionProposed(GenerateDocument
+/// { .. })` weitergereicht, ohne Umweg über `chat-action-proposed`: es gibt
+/// hier keine `Decision` (kein Filter-Engine-/Bestätigungspfad, s.
+/// `crate::orchestration::handle_document_generated`), das Feld wäre also
+/// nur totes Gewicht.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatDocumentGeneratedPayload {
+    session_id: SessionId,
+    action_id: ActionId,
+    title: String,
+    content_markdown: String,
+}
+
+pub fn emit_chat_document_generated(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    action_id: ActionId,
+    title: String,
+    content_markdown: String,
+) {
+    emit(
+        emitter,
+        "chat-document-generated",
+        &ChatDocumentGeneratedPayload {
+            session_id,
+            action_id,
+            title,
+            content_markdown,
+        },
+    );
+}
+
 /// Ergebnis einer ausgeführten Aktion. Erweitert die Spec-Skizze aus
 /// Abschnitt 5 (dort nur `{ session_id, action_id, output: CommandOutput }`)
 /// um eine zweite Variante: `AiAction::ProposeNoteUpdate` (Abschnitt 6,

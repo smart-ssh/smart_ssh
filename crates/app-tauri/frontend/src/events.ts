@@ -2,6 +2,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ChatActionProposedEvent,
   ChatActionResultEvent,
+  ChatDocumentGeneratedEvent,
   ChatErrorEvent,
   ChatTextDeltaEvent,
   ConnectionStatusChangedEvent,
@@ -55,6 +56,13 @@ export const onNoteUpdateSuggested = (
   handler: (event: NoteUpdateSuggestedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<NoteUpdateSuggestedEvent>("note-update-suggested", (e) => handler(e.payload));
+
+/** Spec 0012 — läuft, anders als `onChatActionProposed`, nie durch einen
+ * Bestätigungsdialog (s. `ChatDocumentGeneratedEvent`-Doc-Kommentar). */
+export const onChatDocumentGenerated = (
+  handler: (event: ChatDocumentGeneratedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatDocumentGeneratedEvent>("chat-document-generated", (e) => handler(e.payload));
 
 /** Base64 → `Uint8Array`, für `TerminalOutputEvent.data` (s. `crate::events`). */
 export function base64ToBytes(base64: string): Uint8Array {

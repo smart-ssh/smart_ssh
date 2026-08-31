@@ -4,17 +4,25 @@ import remarkGfm from "remark-gfm";
 import {
   acceptAndCreateRule,
   commandErrorMessage,
+  exportDocument,
   listAiProviders,
   respondToAction,
   sendChatMessage,
   suggestRulePatterns,
 } from "../api";
-import { onChatActionProposed, onChatActionResult, onChatError, onChatTextDelta } from "../events";
+import {
+  onChatActionProposed,
+  onChatActionResult,
+  onChatDocumentGenerated,
+  onChatError,
+  onChatTextDelta,
+} from "../events";
 import type {
   ActionResultPayload,
   ActionUserDecision,
   AiAction,
   Decision,
+  DocumentFormat,
   PatternSuggestionDto,
   PatternType,
   Scope,
@@ -35,7 +43,8 @@ type ChatItem =
       responded: boolean;
       result?: ActionResultPayload;
     }
-  | { type: "error"; id: string; message: string };
+  | { type: "error"; id: string; message: string }
+  | { type: "document"; id: string; title: string; contentMarkdown: string };
 
 function describeAction(action: AiAction): { label: string; command?: string } {
   if ("SuggestCommand" in action) {
@@ -131,6 +140,18 @@ export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
         if (event.sessionId !== sessionId) return;
         setItems((prev) => [...prev, { type: "error", id: freshId(), message: event.message }]);
       }),
+      onChatDocumentGenerated((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) => [
+          ...prev,
+          {
+            type: "document",
+            id: freshId(),
+            title: event.title,
+            contentMarkdown: event.contentMarkdown,
+          },
+        ]);
+      }),
     ];
 
     return () => {
@@ -190,6 +211,19 @@ export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
     );
   };
 
+  /** Spec 0012, Abschnitt 3: der native Speichern-Dialog selbst lebt im
+   * Backend (`export_document`) — bricht der Nutzer ihn ab, kehrt der
+   * Command einfach ohne Fehler zurück (s. dortiger Doc-Kommentar), hier
+   * ist dann schlicht nichts zu tun. */
+  const handleExport = (contentMarkdown: string, title: string, format: DocumentFormat) => {
+    exportDocument(contentMarkdown, title, format).catch((err) =>
+      setItems((prev) => [
+        ...prev,
+        { type: "error", id: freshId(), message: commandErrorMessage(err) },
+      ]),
+    );
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const text = draft.trim();
@@ -218,6 +252,7 @@ export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
             item={item}
             onRespond={respond}
             onAcceptWithRule={acceptWithRule}
+            onExport={handleExport}
             serverId={serverId}
           />
         ))}
@@ -269,6 +304,7 @@ function ChatItemView({
   item,
   onRespond,
   onAcceptWithRule,
+  onExport,
   serverId,
 }: {
   item: ChatItem;
@@ -279,8 +315,14 @@ function ChatItemView({
     patternValue: string,
     scope: Scope,
   ) => void;
+  onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => void;
   serverId: string;
 }) {
+  if (item.type === "document") {
+    return (
+      <DocumentCard title={item.title} contentMarkdown={item.contentMarkdown} onExport={onExport} />
+    );
+  }
   if (item.type === "user") {
     return (
       <div className="ml-auto max-w-[80%] rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">
@@ -543,6 +585,49 @@ function ActionResultView({ result }: { result: ActionResultPayload }) {
         <pre className="whitespace-pre-wrap text-red-300">{truncate(result.stderr)}</pre>
       )}
       <p className="text-slate-500">exit code: {result.exitCode ?? "—"}</p>
+    </div>
+  );
+}
+
+/** Spec 0012, Abschnitt 3: eigene Karte für `chat-document-generated`,
+ * gerendertes Markdown statt Rohtext, mit den beiden Export-Buttons. Kein
+ * Bestätigungsdialog/keine Approve-Deny-Buttons wie bei `type: "action"` —
+ * es ist bereits nichts Persistentes passiert, das rückgängig zu machen
+ * wäre. */
+function DocumentCard({
+  title,
+  contentMarkdown,
+  onExport,
+}: {
+  title: string;
+  contentMarkdown: string;
+  onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3 text-sm">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-slate-400">📄</span>
+        <span className="font-medium text-slate-100">{title}</span>
+      </div>
+      <div className="prose prose-sm prose-invert max-w-none rounded bg-slate-950 p-3 prose-pre:bg-slate-900 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{contentMarkdown}</ReactMarkdown>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => onExport(contentMarkdown, title, "markdown")}
+          className="rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
+        >
+          Als Markdown speichern
+        </button>
+        <button
+          type="button"
+          onClick={() => onExport(contentMarkdown, title, "word")}
+          className="rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
+        >
+          Als Word speichern
+        </button>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import type {
   AiProviderConfigDto,
   AiProviderConfigInput,
   DeleteGroupResult,
+  DocumentFormat,
   EvalContextInput,
   EvaluationTraceDto,
   GroupDto,
@@ -164,3 +165,8 @@ export const acceptAndCreateRule = (
     scope,
     priority: priority ?? null,
   });
+
+// --- Spec 0012: KI-generierte Dokumente ---------------------------------
+
+export const exportDocument = (contentMarkdown: string, title: string, format: DocumentFormat) =>
+  invoke<void>("export_document", { contentMarkdown, title, format });

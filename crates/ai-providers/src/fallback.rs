@@ -107,6 +107,29 @@ mod tests {
         assert!(result.text.contains("Fertig."));
     }
 
+    /// `generate_document` läuft im Fallback-Modus über denselben
+    /// `action::action_from_tool_arguments`-Pfad wie jede andere Aktion
+    /// (`fallback_system_prompt_addition` iteriert bereits generisch über
+    /// alle übergebenen `ActionSchema`s) — dieser Test deckt konkret ab,
+    /// dass mehrzeiliger Markdown-Inhalt im `content_markdown`-Feld den
+    /// Marker-Block selbst nicht durcheinanderbringt.
+    #[test]
+    fn test_parse_fallback_response_extracts_generate_document_action() {
+        let full_text = "Hier ist die Analyse:\n<!--ACTION-->{\"action\": \"generate_document\", \
+             \"parameters\": {\"title\": \"Analyse\", \"content_markdown\": \"# Analyse\\n\\nText.\"}}<!--/ACTION-->";
+
+        let result = parse_fallback_response(full_text);
+
+        assert_eq!(
+            result.action,
+            Some(AiAction::GenerateDocument {
+                title: "Analyse".to_string(),
+                content_markdown: "# Analyse\n\nText.".to_string(),
+            })
+        );
+        assert!(!result.text.contains(ACTION_START));
+    }
+
     #[test]
     fn test_parse_fallback_response_returns_full_text_on_malformed_json() {
         let full_text = "Text davor <!--ACTION-->{invalid json<!--/ACTION--> Text danach";

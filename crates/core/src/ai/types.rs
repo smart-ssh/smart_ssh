@@ -216,14 +216,45 @@ impl ActionSchema {
             ],
         }
     }
+
+    /// Entspricht `AiAction::GenerateDocument` (Spec 0012, Abschnitt 2).
+    pub fn generate_document() -> Self {
+        Self {
+            name: "generate_document".to_string(),
+            description: "Liefert eine Analyse/Zusammenfassung als formatiertes Dokument statt \
+                als normalen Chat-Text. Der Nutzer kann es anschließend als Markdown- oder \
+                Word-Datei speichern; es wird nichts automatisch auf die Festplatte \
+                geschrieben."
+                .to_string(),
+            parameters: vec![
+                ActionParameter {
+                    name: "title".to_string(),
+                    description: "Kurzer Titel des Dokuments, dient auch als Basis für den \
+                        vorgeschlagenen Dateinamen."
+                        .to_string(),
+                    kind: ActionParameterKind::String,
+                    required: true,
+                },
+                ActionParameter {
+                    name: "content_markdown".to_string(),
+                    description: "Vollständiger Dokumentinhalt als Markdown (Überschriften, \
+                        Absätze, Fett/Kursiv, Listen)."
+                        .to_string(),
+                    kind: ActionParameterKind::String,
+                    required: true,
+                },
+            ],
+        }
+    }
 }
 
-/// Beide in Spec 0003 definierten `AiAction`-Varianten als Standard-Set für
-/// `SessionContext::available_actions`.
+/// Alle in Spec 0003/0012 definierten `AiAction`-Varianten als Standard-Set
+/// für `SessionContext::available_actions`.
 pub fn default_action_schemas() -> Vec<ActionSchema> {
     vec![
         ActionSchema::suggest_command(),
         ActionSchema::propose_note_update(),
+        ActionSchema::generate_document(),
     ]
 }
 
