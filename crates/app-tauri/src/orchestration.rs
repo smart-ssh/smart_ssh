@@ -5,17 +5,28 @@
 //! `MockAiProvider`/`MockSshTransport` testbar ist (Aufgabenstellung Teil
 //! 2, Punkt 5).
 //!
-//! Ein Aufruf von `run_chat_turn` deckt **genau eine** KI-Antwortrunde ab
-//! (0..n `TextDelta`s, 0..n `ActionProposed`s, dann `Done`/`Error`) und
-//! kehrt danach zurück — es gibt **keine** automatische Folgerunde, selbst
-//! wenn eine Aktion ausgeführt und ihr Ergebnis in `context.history`
-//! übernommen wurde ("für die nächste KI-Runde", Spec Abschnitt 6, Punkt 5
-//! meint damit den nächsten `send_chat_message`-Aufruf, nicht einen
-//! impliziten Auto-Weiterlauf). Ein automatischer Agenten-Loop ohne erneute
-//! Nutzeraktion würde der im ganzen Projekt sonst durchgehaltenen
+//! `run_chat_turn` besteht aus 1..n Runden gegen `AiProvider::send()`
+//! (`run_one_round`, je genau eine KI-Antwort: 0..n `TextDelta`s, 0..n
+//! `ActionProposed`s, dann `Done`/`Error`). **Wurde in einer Runde
+//! mindestens eine Aktion tatsächlich ausgeführt** (AutoExec oder vom
+//! Nutzer per `respond_to_action` bestätigt — nicht bei `Deny` oder einem
+//! per Bearbeiten erneut auf `Deny` laufenden `EditThenApprove`), folgt
+//! automatisch eine weitere Runde mit dem inzwischen um das
+//! `CommandResult`/die Notiz-Zusammenfassung erweiterten Kontext (Spec
+//! Abschnitt 6, Punkt 5: "... in den `SessionContext` für die nächste
+//! KI-Runde übernommen"). Ohne diesen Automatismus bekäme der Nutzer nach
+//! einem ausgeführten Kommando nie eine Antwort der KI, die dessen
+//! Ergebnis tatsächlich interpretiert — nur den rohen Output. Siehe
+//! ADR-Vorschlag am Ende der Aufgabe.
+//!
+//! Das widerspricht nicht der im Projekt durchgehaltenen
 //! Transparenz-/Bestätigungs-Philosophie (Spec 0002, Spec 0007 Abschnitt 5:
-//! selbst `AutoExec`/`Deny` werden dem Nutzer nur *angezeigt*, nie
-//! verborgen weitergesponnen) widersprechen.
+//! selbst `AutoExec`/`Deny` werden dem Nutzer nur *angezeigt*, nie verborgen
+//! weitergesponnen): jede in einer Folgerunde neu vorgeschlagene Aktion
+//! durchläuft erneut dieselbe Filter-Engine/Bestätigungslogik wie jede
+//! andere auch. Begrenzt auf [`MAX_AUTO_FOLLOWUP_ROUNDS`] Runden, damit eine
+//! KI, die immer wieder neue Aktionen vorschlägt, nicht unbegrenzt
+//! weiterläuft.
 
 use futures::StreamExt;
 use uuid::Uuid;
@@ -34,9 +45,19 @@ use crate::events::{
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
-/// Läuft genau eine KI-Antwortrunde durch — die Nutzer-Nachricht muss
-/// bereits vom Aufrufer in `session.context.history` eingetragen worden
-/// sein (s. `crate::commands::send_chat_message`).
+/// Sicherheitsgrenze gegen eine KI, die in jeder Folgerunde erneut eine
+/// (automatisch ausgeführte) Aktion vorschlägt — ohne diese Grenze könnte
+/// `run_chat_turn` sonst unbegrenzt weiterlaufen. Ein einzelner
+/// Nutzer-Turn, der tatsächlich so viele aufeinanderfolgende Kommandos
+/// braucht, ist in der Praxis nicht zu erwarten.
+const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 8;
+
+/// Die Nutzer-Nachricht muss bereits vom Aufrufer in
+/// `session.context.history` eingetragen worden sein (s.
+/// `crate::commands::send_chat_message`). Läuft so lange in Folgerunden
+/// weiter, wie die jeweils letzte Runde mindestens eine Aktion tatsächlich
+/// ausgeführt hat (s. Moduldoc), höchstens aber [`MAX_AUTO_FOLLOWUP_ROUNDS`]
+/// Runden.
 pub async fn run_chat_turn(
     session: &Session,
     session_id: SessionId,
@@ -44,10 +65,45 @@ pub async fn run_chat_turn(
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) {
+    for _ in 0..MAX_AUTO_FOLLOWUP_ROUNDS {
+        let executed_action = run_one_round(
+            session,
+            session_id,
+            emitter,
+            profile_store,
+            action_confirmations,
+        )
+        .await;
+        if !executed_action {
+            return;
+        }
+    }
+
+    emit_chat_error(
+        emitter,
+        session_id,
+        format!(
+            "Abgebrochen nach {MAX_AUTO_FOLLOWUP_ROUNDS} aufeinanderfolgenden Aktionen in einer \
+             Antwort. Bitte in einer neuen Nachricht nachfragen."
+        ),
+    );
+}
+
+/// Genau eine KI-Antwortrunde. Gibt zurück, ob dabei mindestens eine
+/// Aktion tatsächlich ausgeführt wurde (und damit eine weitere Runde
+/// folgen sollte).
+async fn run_one_round(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+    profile_store: &dyn ProfileStore,
+    action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+) -> bool {
     let request_context = session.context.lock().await.clone();
     let mut stream = session.ai_provider.send(request_context);
 
     let mut text_buffer = String::new();
+    let mut executed_action = false;
 
     while let Some(event) = stream.next().await {
         match event {
@@ -57,7 +113,7 @@ pub async fn run_chat_turn(
             }
             ssh_manager_core::ai::AiEvent::ActionProposed(action) => {
                 flush_text_buffer(session, &mut text_buffer).await;
-                handle_action_proposed(
+                if handle_action_proposed(
                     session,
                     session_id,
                     action,
@@ -65,7 +121,10 @@ pub async fn run_chat_turn(
                     profile_store,
                     action_confirmations,
                 )
-                .await;
+                .await
+                {
+                    executed_action = true;
+                }
             }
             ssh_manager_core::ai::AiEvent::Done => {
                 flush_text_buffer(session, &mut text_buffer).await;
@@ -78,6 +137,8 @@ pub async fn run_chat_turn(
             }
         }
     }
+
+    executed_action
 }
 
 fn describe_ai_error(err: &AiError) -> String {
@@ -95,6 +156,7 @@ async fn flush_text_buffer(session: &Session, buffer: &mut String) {
     });
 }
 
+/// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde.
 async fn handle_action_proposed(
     session: &Session,
     session_id: SessionId,
@@ -102,7 +164,7 @@ async fn handle_action_proposed(
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
-) {
+) -> bool {
     let action_id: ActionId = Uuid::new_v4();
     let decision = evaluate_action(session, &action);
 
@@ -124,12 +186,13 @@ async fn handle_action_proposed(
                 emitter,
                 profile_store,
             )
-            .await;
+            .await
         }
         Decision::Deny { .. } => {
             // Spec 0007 Abschnitt 5: informiert nur, keine Ausführung, kein
             // Warten auf `respond_to_action` — das Event oben ist bereits
             // die vollständige Reaktion.
+            false
         }
         Decision::Confirm { .. } => {
             let rx = action_confirmations.register(action_id);
@@ -137,7 +200,7 @@ async fn handle_action_proposed(
                 // Sender wurde gedroppt (z. B. App beendet, bevor der
                 // Nutzer reagiert hat) — kein Absturz, einfach nichts
                 // ausführen.
-                return;
+                return false;
             };
             handle_user_decision(
                 session,
@@ -148,7 +211,7 @@ async fn handle_action_proposed(
                 emitter,
                 profile_store,
             )
-            .await;
+            .await
         }
     }
 }
@@ -172,6 +235,7 @@ fn evaluate_action(session: &Session, action: &AiAction) -> Decision {
     }
 }
 
+/// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde.
 async fn handle_user_decision(
     session: &Session,
     session_id: SessionId,
@@ -180,11 +244,12 @@ async fn handle_user_decision(
     user_decision: ActionUserDecision,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
-) {
+) -> bool {
     match user_decision {
         ActionUserDecision::Deny => {
             // Nutzer hat selbst abgelehnt — nichts weiter zu tun, das
             // Frontend weiß es bereits (es hat den Aufruf selbst gemacht).
+            false
         }
         ActionUserDecision::Approve => {
             execute_action(
@@ -195,7 +260,7 @@ async fn handle_user_decision(
                 emitter,
                 profile_store,
             )
-            .await;
+            .await
         }
         ActionUserDecision::EditThenApprove { command: edited } => {
             let effective_action = match &action {
@@ -225,7 +290,7 @@ async fn handle_user_decision(
                             blocked,
                             Decision::Deny { reason },
                         );
-                        return;
+                        return false;
                     }
                     AiAction::SuggestCommand { command: edited }
                 }
@@ -246,11 +311,16 @@ async fn handle_user_decision(
                 emitter,
                 profile_store,
             )
-            .await;
+            .await
         }
     }
 }
 
+/// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde (d.h. ob ihr
+/// Ergebnis in `context.history` gelandet ist) — bei einem Fehlschlag
+/// (`SshError`/`ProfileError`) ist der Kontext unverändert, eine
+/// automatische Folgerunde (s. Moduldoc) würde dann nur denselben
+/// Vorschlag erneut auslösen, statt der KI etwas Neues mitzuteilen.
 async fn execute_action(
     session: &Session,
     session_id: SessionId,
@@ -258,10 +328,10 @@ async fn execute_action(
     action: AiAction,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
-) {
+) -> bool {
     match action {
         AiAction::SuggestCommand { command } => {
-            execute_suggested_command(session, session_id, action_id, command, emitter).await;
+            execute_suggested_command(session, session_id, action_id, command, emitter).await
         }
         AiAction::ProposeNoteUpdate {
             target,
@@ -276,7 +346,7 @@ async fn execute_action(
                 emitter,
                 profile_store,
             )
-            .await;
+            .await
         }
     }
 }
@@ -287,7 +357,7 @@ async fn execute_suggested_command(
     action_id: ActionId,
     command: String,
     emitter: &dyn EventEmitter,
-) {
+) -> bool {
     let raw_output = {
         let mut transport = session.transport.lock().await;
         transport.execute(&command).await
@@ -314,8 +384,12 @@ async fn execute_suggested_command(
                     output: redacted,
                 },
             });
+            true
         }
-        Err(err) => emit_command_execution_failed(emitter, session_id, &command, &err),
+        Err(err) => {
+            emit_command_execution_failed(emitter, session_id, &command, &err);
+            false
+        }
     }
 }
 
@@ -340,7 +414,7 @@ async fn execute_note_update(
     new_content: String,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
-) {
+) -> bool {
     let revision = ssh_manager_core::profiles::record_revision(
         target,
         new_content,
@@ -365,8 +439,12 @@ async fn execute_note_update(
                 role: Role::ActionResult,
                 content: MessageContent::Text(summary),
             });
+            true
         }
-        Err(err) => emit_note_update_failed(emitter, session_id, &err),
+        Err(err) => {
+            emit_note_update_failed(emitter, session_id, &err);
+            false
+        }
     }
 }
 
@@ -405,8 +483,29 @@ mod tests {
     use crate::events::TestEmitter;
     use crate::session::Session;
 
+    /// Konfigurierbar mit einer Sequenz von Runden (je ein `Vec<AiEvent>`
+    /// pro `send()`-Aufruf) — nötig, um die automatische Folgerunde aus
+    /// dem Moduldoc zu testen: Runde 1 schlägt z. B. ein Kommando vor,
+    /// Runde 2 (nach dessen Ausführung) liefert die eigentliche
+    /// Antwort-Text. Ruft `send()` öfter auf als Runden konfiguriert sind
+    /// (weil eine Runde nichts ausgeführt hat und die Schleife eigentlich
+    /// hätte stoppen sollen), liefert jeder weitere Aufruf nur `[Done]` —
+    /// bequemer Default für Tests, die nur den ersten Round-Trip prüfen
+    /// wollen, ohne dafür jede Folgerunde einzeln angeben zu müssen.
     struct MockAiProvider {
-        events: Vec<AiEvent>,
+        rounds: StdMutex<std::collections::VecDeque<Vec<AiEvent>>>,
+    }
+
+    impl MockAiProvider {
+        fn new(events: Vec<AiEvent>) -> Self {
+            Self::with_rounds(vec![events])
+        }
+
+        fn with_rounds(rounds: Vec<Vec<AiEvent>>) -> Self {
+            Self {
+                rounds: StdMutex::new(rounds.into()),
+            }
+        }
     }
 
     impl AiProvider for MockAiProvider {
@@ -414,7 +513,13 @@ mod tests {
             &self,
             _context: SessionContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
-            Box::pin(futures::stream::iter(self.events.clone()))
+            let events = self
+                .rounds
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap_or_else(|| vec![AiEvent::Done]);
+            Box::pin(futures::stream::iter(events))
         }
     }
 
@@ -513,9 +618,16 @@ mod tests {
     }
 
     fn test_session(ai_events: Vec<AiEvent>, transport: MockSshTransport) -> Session {
+        session_with_ai_provider(MockAiProvider::new(ai_events), transport)
+    }
+
+    fn session_with_ai_provider(
+        ai_provider: MockAiProvider,
+        transport: MockSshTransport,
+    ) -> Session {
         Session {
             transport: AsyncMutex::new(Box::new(transport)),
-            ai_provider: Box::new(MockAiProvider { events: ai_events }),
+            ai_provider: Box::new(ai_provider),
             context: AsyncMutex::new(SessionContext {
                 system_context: "Testkontext".to_string(),
                 history: Vec::new(),
@@ -897,5 +1009,110 @@ mod tests {
             .history
             .iter()
             .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("aktualisiert"))));
+    }
+
+    /// Kern des ADR-Vorschlags in diesem Modul-Doc: nach einem
+    /// tatsächlich ausgeführten Kommando bekommt die KI automatisch eine
+    /// Folgerunde, um dessen Ergebnis in eine Antwort zu fassen — vorher
+    /// endete `run_chat_turn` stattdessen wortlos nach dem
+    /// `chat-action-result`.
+    #[tokio::test]
+    async fn test_executed_action_triggers_automatic_followup_round_with_final_answer() {
+        let mut session = session_with_ai_provider(
+            MockAiProvider::with_rounds(vec![
+                vec![
+                    AiEvent::ActionProposed(AiAction::SuggestCommand {
+                        command: "uptime".to_string(),
+                    }),
+                    AiEvent::Done,
+                ],
+                vec![
+                    AiEvent::TextDelta("Der Server läuft seit 3 Tagen.".to_string()),
+                    AiEvent::Done,
+                ],
+            ]),
+            MockSshTransport::default().with_response("uptime", output("up 3 days")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(
+            event_names,
+            vec![
+                "chat-action-proposed",
+                "chat-action-result",
+                "chat-text-delta"
+            ]
+        );
+
+        let history = session.context.lock().await.history.clone();
+        assert!(history
+            .iter()
+            .any(|m| matches!(&m.content, MessageContent::CommandResult { .. })));
+        assert!(history
+            .iter()
+            .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("3 Tagen"))));
+    }
+
+    /// Sicherheitsgrenze: eine KI, die in jeder Runde erneut ein Kommando
+    /// vorschlägt, läuft nicht unbegrenzt weiter, sondern bricht nach
+    /// [`MAX_AUTO_FOLLOWUP_ROUNDS`] Runden mit einer `chat-error`-Meldung
+    /// ab.
+    #[tokio::test]
+    async fn test_runaway_followup_rounds_are_bounded() {
+        struct RepeatingAiProvider;
+        impl AiProvider for RepeatingAiProvider {
+            fn send(
+                &self,
+                _context: SessionContext,
+            ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+                Box::pin(futures::stream::iter(vec![
+                    AiEvent::ActionProposed(AiAction::SuggestCommand {
+                        command: "echo again".to_string(),
+                    }),
+                    AiEvent::Done,
+                ]))
+            }
+        }
+
+        let mut session = session_with_ai_provider(
+            MockAiProvider::new(Vec::new()),
+            MockSshTransport::default().with_response("echo again", output("again")),
+        );
+        session.ai_provider = Box::new(RepeatingAiProvider);
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let proposed_count = events
+            .iter()
+            .filter(|(name, _)| name == "chat-action-proposed")
+            .count();
+        assert_eq!(proposed_count, MAX_AUTO_FOLLOWUP_ROUNDS);
+        assert_eq!(events.last().unwrap().0, "chat-error");
     }
 }

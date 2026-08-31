@@ -1,4 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   commandErrorMessage,
   listAiProviders,
@@ -115,6 +117,14 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [items]);
 
+  // Spec 0007, Abschnitt 7: solange die send_chat_message-Anfrage noch
+  // aussteht und der letzte Eintrag keine bereits laufende
+  // Assistenten-Antwort ist (z. B. direkt nach dem Senden, oder während
+  // einer Confirm-Bestätigung/nach deren Ausführung), warten wir sichtbar
+  // auf die nächste KI-Reaktion.
+  const lastItem = items[items.length - 1];
+  const showTypingIndicator = sending && lastItem?.type !== "assistant";
+
   const respond = (actionId: string, decision: ActionUserDecision) => {
     setItems((prev) =>
       prev.map((item) =>
@@ -156,6 +166,7 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
         {items.map((item) => (
           <ChatItemView key={item.id} item={item} onRespond={respond} />
         ))}
+        {showTypingIndicator && <TypingIndicator />}
       </div>
 
       {hasActiveProvider === false ? (
@@ -185,6 +196,20 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
   );
 }
 
+function TypingIndicator() {
+  return (
+    <div className="flex max-w-[80%] items-center gap-1 rounded-lg bg-slate-800 px-3 py-2.5">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"
+          style={{ animationDelay: `${i * 0.15}s` }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function ChatItemView({
   item,
   onRespond,
@@ -201,8 +226,8 @@ function ChatItemView({
   }
   if (item.type === "assistant") {
     return (
-      <div className="max-w-[80%] whitespace-pre-wrap rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-100">
-        {item.text}
+      <div className="prose prose-sm prose-invert max-w-[80%] rounded-lg bg-slate-800 px-3 py-2 prose-pre:bg-slate-950 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.text}</ReactMarkdown>
       </div>
     );
   }

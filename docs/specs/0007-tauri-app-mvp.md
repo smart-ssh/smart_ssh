@@ -119,6 +119,22 @@ sofort an.
 6. Bei `AiAction::ProposeNoteUpdate` (Spec 0003, Abschnitt 5.2): analoges
    Event, aber **immer** wartend auf Bestätigung, nie `AutoExec` — das gilt
    unabhängig von der Filter-Engine, wie in Spec 0003 festgelegt
+7. **Automatische Folgerunde:** wurde in der aktuellen Runde tatsächlich
+   eine Aktion ausgeführt (`AutoExec` oder vom Nutzer bestätigt — nicht bei
+   `Deny`), ruft das Backend `AiProvider::send()` unmittelbar erneut auf,
+   mit dem inzwischen um das `CommandResult`/die Notiz-Zusammenfassung
+   erweiterten `SessionContext` (Punkt 5), statt auf eine neue
+   `send_chat_message`-Nachricht vom Nutzer zu warten. Ohne diesen
+   Automatismus bekäme der Nutzer nach einem ausgeführten Kommando nur den
+   rohen Output zu sehen, nie eine tatsächliche Antwort der KI dazu. Jede in
+   einer Folgerunde neu vorgeschlagene Aktion durchläuft erneut dieselbe
+   Filter-Engine/Bestätigungslogik wie jede andere (Punkt 4/5) — dieser
+   Automatismus betrifft nur den Rückruf an die KI, nicht die
+   Bestätigungspflicht einzelner Aktionen. Begrenzt auf eine feste maximale
+   Rundenzahl pro Nutzer-Nachricht, damit eine KI, die immer wieder neue
+   Aktionen vorschlägt, nicht unbegrenzt weiterläuft — wird die Grenze
+   erreicht, bricht das Backend mit einer Fehlermeldung ab, statt weiter zu
+   warten.
 
 ## 7. MVP-Slice-1-Screen (UI-Umfang)
 
@@ -139,6 +155,16 @@ Bewusst minimal, um schnell zum ersten echten End-to-End-Test zu kommen:
   (Abschnitt 8) — im Gegensatz zu Server-/Gruppen-Verwaltung **ist** das
   bereits Teil von Slice 1, da ohne funktionierenden Provider kein
   End-to-End-Test möglich ist
+- Ladeanzeige im Chat-Panel: solange auf eine Reaktion der KI gewartet wird
+  (zwischen `send_chat_message`-Aufruf und dem ersten `chat-text-delta`
+  dieser Runde, ebenso in jeder Wartepause danach — z. B. während der
+  Nutzer eine `Confirm`-Aktion noch nicht bestätigt hat oder nach deren
+  Ausführung auf die nächste KI-Antwort gewartet wird), zeigt das Chat-Panel
+  einen Lade-Indikator anstelle einer stummen, nicht unterscheidbaren
+  Wartezeit. Kein separates Event nötig: der Zustand ergibt sich rein
+  clientseitig daraus, ob die `send_chat_message`-Anfrage noch aussteht
+  *und* der zuletzt angezeigte Chat-Eintrag keine bereits laufende
+  Assistenten-Antwort ist.
 
 ## 8. AI-Provider-Verwaltung
 
