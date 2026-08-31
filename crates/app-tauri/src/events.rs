@@ -199,7 +199,11 @@ pub fn emit_chat_action_proposed(
 /// allem den `SuggestCommand`-Pfad beschreibt. Siehe ADR-Vorschlag am Ende
 /// der Aufgabe.
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase", tag = "kind")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
 pub enum ActionResultPayload {
     Command {
         command: String,
@@ -285,5 +289,30 @@ impl EventEmitter for TestEmitter {
             .lock()
             .unwrap()
             .push((event.to_string(), payload));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Regressionstest, s. ausführliche Begründung in
+    //! `crate::dto::tests` — `rename_all` auf einem `#[serde(tag = ...)]`-
+    //! Enum färbt nur die Tag-Werte camelCase, nicht die Feldnamen
+    //! innerhalb der Varianten; `exit_code` blieb dadurch snake_case und
+    //! kam im Frontend als `undefined` an (`result.exitCode`).
+
+    use super::*;
+
+    #[test]
+    fn test_action_result_payload_command_uses_camel_case_exit_code() {
+        let value = ActionResultPayload::Command {
+            command: "ls".to_string(),
+            stdout: "out".to_string(),
+            stderr: String::new(),
+            exit_code: Some(0),
+        };
+        let json = serde_json::to_value(&value).unwrap();
+
+        assert_eq!(json["exitCode"], 0);
+        assert!(json.get("exit_code").is_none());
     }
 }

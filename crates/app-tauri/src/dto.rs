@@ -171,7 +171,11 @@ pub fn credential_ref_for(id: ProviderId) -> CredentialRef {
 /// `"Trust"`/`{"Trust": null}` — für das TypeScript-Frontend die
 /// natürlichere Form, um diesen Wert selbst zu konstruieren.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "decision", rename_all = "camelCase")]
+#[serde(
+    tag = "decision",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum HostKeyUserDecision {
     Trust,
     Reject,
@@ -181,7 +185,11 @@ pub enum HostKeyUserDecision {
 /// Abschnitt 4/6: `respond_to_action(session_id, action_id, decision:
 /// Approve | Deny | EditThenApprove { command: String })`).
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "decision", rename_all = "camelCase")]
+#[serde(
+    tag = "decision",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ActionUserDecision {
     Approve,
     Deny,
@@ -251,7 +259,11 @@ pub struct ServerInput {
 /// natürliche Form für das TypeScript-Frontend, dieses Objekt selbst zu
 /// bauen.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum AuthMethodInput {
     Password {
         value: Option<String>,
@@ -271,7 +283,11 @@ pub enum AuthMethodInput {
 /// Notiz-Historie (Spec 0008, Abschnitt 6: "Editor (Nutzer, oder KI inkl.
 /// Provider/Modell-Name)").
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum NoteEditorDto {
     User,
     Ai { provider: String, model: String },
@@ -323,7 +339,11 @@ impl From<&NoteRevision> for NoteRevisionDto {
 ///    selbst verlangt aber ausdrücklich, dass "bei Zustimmung `trust()`
 ///    aufgerufen" werden kann (Abschnitt 7).
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum TestConnectionResult {
     Success,
     AuthenticationFailed,
@@ -344,4 +364,89 @@ pub enum TestConnectionResult {
         message: String,
     },
     Timeout,
+}
+
+#[cfg(test)]
+mod tests {
+    //! Regressionstest für einen tatsächlich aufgetretenen Bug: serdes
+    //! `#[serde(tag = "...", rename_all = "camelCase")]` auf einem Enum
+    //! wandelt nur die Varianten-/Tag-Namen in camelCase um, **nicht** die
+    //! Feldnamen innerhalb der Struct-artigen Varianten (empirisch
+    //! verifiziert — `rename_all` ohne `rename_all_fields` lässt
+    //! `raw_key`/`key_content`/`exit_code` etc. unverändert). Das führte im
+    //! echten Betrieb dazu, dass `trust_host_key` nach einem
+    //! `test_connection`-Host-Key-Ereignis mit "missing required key
+    //! rawKey" fehlschlug, weil das Frontend `rawKey` erwartete, die
+    //! Payload aber `raw_key` enthielt. Jeder betroffene Typ braucht
+    //! zusätzlich `rename_all_fields = "camelCase"` — diese Tests fixieren
+    //! die tatsächliche JSON-Form, damit eine künftige Änderung so einen
+    //! Typ nicht wieder lautlos in diesen Zustand zurückfallen lässt.
+
+    use super::*;
+
+    #[test]
+    fn test_test_connection_result_host_key_unknown_uses_camel_case_fields() {
+        let value = TestConnectionResult::HostKeyUnknown {
+            host: "example.invalid".to_string(),
+            port: 22,
+            raw_key: vec![1, 2, 3],
+            fingerprint: "SHA256:abc".to_string(),
+        };
+        let json = serde_json::to_value(&value).unwrap();
+
+        assert_eq!(json["kind"], "hostKeyUnknown");
+        assert_eq!(json["rawKey"], serde_json::json!([1, 2, 3]));
+        assert!(
+            json.get("raw_key").is_none(),
+            "raw_key darf nicht mehr im snake_case vorkommen"
+        );
+    }
+
+    #[test]
+    fn test_test_connection_result_host_key_mismatch_uses_camel_case_fields() {
+        let value = TestConnectionResult::HostKeyMismatch {
+            host: "example.invalid".to_string(),
+            port: 22,
+            raw_key: vec![9],
+            expected_fingerprint: "SHA256:old".to_string(),
+            actual_fingerprint: "SHA256:new".to_string(),
+        };
+        let json = serde_json::to_value(&value).unwrap();
+
+        assert_eq!(json["expectedFingerprint"], "SHA256:old");
+        assert_eq!(json["actualFingerprint"], "SHA256:new");
+    }
+
+    #[test]
+    fn test_auth_method_input_private_key_deserializes_from_camel_case() {
+        let json = serde_json::json!({
+            "kind": "privateKey",
+            "keyContent": "key-data",
+            "passphrase": null,
+        });
+
+        let input: AuthMethodInput = serde_json::from_value(json).unwrap();
+
+        assert!(matches!(
+            input,
+            AuthMethodInput::PrivateKey { key_content: Some(k), passphrase: None } if k == "key-data"
+        ));
+    }
+
+    #[test]
+    fn test_auth_method_input_certificate_deserializes_from_camel_case() {
+        let json = serde_json::json!({
+            "kind": "certificate",
+            "certContent": "cert-data",
+            "keyContent": "key-data",
+        });
+
+        let input: AuthMethodInput = serde_json::from_value(json).unwrap();
+
+        assert!(matches!(
+            input,
+            AuthMethodInput::Certificate { cert_content: Some(c), key_content: Some(k) }
+                if c == "cert-data" && k == "key-data"
+        ));
+    }
 }
