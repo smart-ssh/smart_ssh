@@ -134,7 +134,7 @@ export interface ChatActionProposedEvent {
 export interface NoteUpdateSuggestedEvent {
   sessionId: string;
   actionId: string;
-  action: AiAction;
+  action: { ProposeNoteUpdate: { target: NoteTarget; new_content: string } };
 }
 
 export type ActionResultPayload =
