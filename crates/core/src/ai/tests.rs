@@ -174,3 +174,54 @@ fn test_redactor_extra_patterns_do_not_disable_built_in_patterns() {
     assert!(!redacted.contains("hunter2"));
     assert!(!redacted.contains("internal-secret-42"));
 }
+
+// --- Spec 0013: Redactor Hardening Tests (T7) -------------------------
+
+#[test]
+fn test_t7_redactor_handles_quoted_password_with_spaces() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("config: password=\"top secret 123\" and secret: 'my passphrase'");
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("top secret 123"));
+    assert!(!redacted.contains("my passphrase"));
+    assert!(redacted.contains("[REDACTED]"));
+}
+
+#[test]
+fn test_redactor_detects_bearer_token() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.t-IDcZMW64A1Rh6mOF9Aq5bE099MV8");
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.t-IDcZMW64A1Rh6mOF9Aq5bE099MV8"));
+    assert!(redacted.contains("[REDACTED]"));
+}
+
+#[test]
+fn test_redactor_detects_github_and_aws_session_tokens() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("GITHUB_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyzAB\nAWS_SESSION_TOKEN=ASIABBBBBBBBBBBBBBBB");
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"));
+    assert!(!redacted.contains("ASIABBBBBBBBBBBBBBBB"));
+    assert!(redacted.contains("[REDACTED]"));
+}
+
+#[test]
+fn test_redactor_detects_pgp_and_pkcs8_private_keys() {
+    let redactor = DefaultOutputRedactor::new();
+    let input_pgp = output("-----BEGIN PGP PRIVATE KEY BLOCK-----\nVersion: BCPG C# v1.6.1.0\nlQPGBF...\n-----END PGP PRIVATE KEY BLOCK-----");
+    let redacted_pgp = stdout_text(&redactor.redact(&input_pgp));
+    assert!(!redacted_pgp.contains("BCPG"));
+    assert!(redacted_pgp.contains("[REDACTED]"));
+
+    let input_pkcs8 = output("-----BEGIN ENCRYPTED PRIVATE KEY-----\nMIIFDjBABgkqhkiG9w0BBQ0wMzAbBgkqhkiG9w0BBQwwDgQI...\n-----END ENCRYPTED PRIVATE KEY-----");
+    let redacted_pkcs8 = stdout_text(&redactor.redact(&input_pkcs8));
+    assert!(!redacted_pkcs8.contains("MIIFDjBABgkqhkiG9w0BBQ0wMzAbBgkqhkiG9w0BBQwwDgQI"));
+    assert!(redacted_pkcs8.contains("[REDACTED]"));
+}

@@ -26,24 +26,40 @@ pub(super) fn hard_blacklist() -> &'static [Pattern] {
     static BLACKLIST: OnceLock<Vec<Pattern>> = OnceLock::new();
     BLACKLIST.get_or_init(|| {
         vec![
-            // rm -rf/-fr (in beliebiger Flag-Reihenfolge/-Kombination) gegen
-            // einen absoluten Pfad — nicht nur das wörtliche "rm -rf /".
+            // rm -rf/-fr (in beliebiger Flag-Reihenfolge, getrennt oder kombiniert, vor oder nach Pfad,
+            // mit beliebigem absolutem / normalisiertem Pfad wie /bin/rm, \rm etc.).
             Regex(
-                r"(?i)^rm\s+-[a-z]*r[a-z]*f[a-z]*\s+/\S*|^rm\s+-[a-z]*f[a-z]*r[a-z]*\s+/\S*"
+                r"(?i)^(?:(?:/[a-z0-9_.-]+)+/|\\)?rm\s+.*-[a-z0-9]*r[a-z0-9]*f[a-z0-9]*.*"
                     .to_string(),
             ),
-            Glob("dd if=* of=/dev/*".to_string()),
-            Glob("mkfs*".to_string()),
-            // Fork-Bombe (kanonische Schreibweise laut Spec)
+            Regex(
+                r"(?i)^(?:(?:/[a-z0-9_.-]+)+/|\\)?rm\s+.*-[a-z0-9]*f[a-z0-9]*r[a-z0-9]*.*"
+                    .to_string(),
+            ),
+            Regex(
+                r"(?i)^(?:(?:/[a-z0-9_.-]+)+/|\\)?rm\s+.*(?:-[a-z0-9]*r[a-z0-9]*|--recursive\b).*(?:-[a-z0-9]*f[a-z0-9]*|--force\b).*"
+                    .to_string(),
+            ),
+            Regex(
+                r"(?i)^(?:(?:/[a-z0-9_.-]+)+/|\\)?rm\s+.*(?:-[a-z0-9]*f[a-z0-9]*|--force\b).*(?:-[a-z0-9]*r[a-z0-9]*|--recursive\b).*"
+                    .to_string(),
+            ),
+            // dd mit of=/dev/... unabhängig von if=-Position oder Pfad-Präfix
+            Regex(r"(?i)^(?:(?:/[a-z0-9_.-]+)+/|\\)?dd\b.*(?:\bof=/dev/\S+).*".to_string()),
+            Glob("*mkfs*".to_string()),
+            // Fork-Bombe (kanonische Schreibweise und Regex-Variante)
             Exact(":(){ :|:& };:".to_string()),
-            // Direkte Manipulation von /etc/shadow: Redirection hinein oder
-            // Rechte-/Eigentümer-Änderung.
+            Regex(r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:".to_string()),
+            // Direkte Manipulation von /etc/shadow: Redirection hinein, Rechte-/Eigentümer-Änderung
+            // oder Schreib-Tools (tee, cp, mv, truncate, sed -i).
             Regex(
-                r"(?i)(>{1,2}\s*/etc/shadow|chmod\s+\S+\s+/etc/shadow|chown\s+\S+\s+/etc/shadow)"
+                r"(?i)(?:>{1,2}\s*/etc/shadow|chmod\s+\S+\s+/etc/shadow|chown\s+\S+\s+/etc/shadow|(?:^|(?:/[a-z0-9_.-]+)+/|\\)?(?:tee|cp|mv|truncate|sed\s+-i)\b.*/etc/shadow)"
                     .to_string(),
             ),
-            Glob("shutdown*".to_string()),
-            Glob("reboot*".to_string()),
+            // Shutdown / Reboot / Poweroff / Systemctl / Init
+            Regex(r"(?i)^(?:(?:/[a-z0-9_.-]+)+/|\\)?(?:shutdown|reboot|poweroff|halt)\b.*".to_string()),
+            Regex(r"(?i)^(?:(?:/[a-z0-9_.-]+)+/|\\)?systemctl\s+(?:reboot|poweroff|halt|isolate)\b.*".to_string()),
+            Regex(r"(?i)^(?:(?:/[a-z0-9_.-]+)+/|\\)?(?:telinit|init)\s+[06]\b.*".to_string()),
         ]
     })
 }

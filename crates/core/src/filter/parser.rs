@@ -27,6 +27,17 @@ pub(super) fn split_command(cmd: &str) -> ParseResult {
         return ParseResult::Empty;
     }
 
+    if cmd.chars().any(|c| {
+        matches!(
+            c,
+            '\0' | '\x1b' | '\x00'..='\x08' | '\x0b'..='\x0c' | '\x0e'..='\x1f' | '\x7f'
+        )
+    }) {
+        return ParseResult::Ambiguous {
+            reason: "Kommando enthält nicht-druckbare Steuerzeichen".to_string(),
+        };
+    }
+
     if looks_like_heredoc_or_complex_shell_c(trimmed) {
         return ParseResult::Ambiguous {
             reason: "mehrzeiliges Skript (Here-Doc oder `... -c \"...\"`) wird als \
@@ -78,11 +89,11 @@ pub(super) fn detect_elevation(normalized: &str) -> (bool, String) {
     }
 }
 
-/// Ersetzt jede `$(...)`- oder Backtick-Command-Substitution in `text` durch
+/// Ersetzt jede `$(...)`-, `<(...)`-, `>(...)`- oder Backtick-Command-Substitution in `text` durch
 /// ein einzelnes Leerzeichen und gibt zusätzlich die extrahierten inneren
-/// Kommandos zurück (zur rekursiven Auswertung, Spec Abschnitt 4.5).
-/// Verschachtelte `$(...)` werden über eine einfache Klammer-Tiefenzählung
-/// korrekt erkannt (die innere `$(...)` wird unverändert als Teil des
+/// Kommandos zurück (zur rekursiven Auswertung, Spec Abschnitt 4.5, Spec 0013 Abschnitt 2.3).
+/// Verschachtelte Klammern werden über eine einfache Klammer-Tiefenzählung
+/// korrekt erkannt (die innere Substitution wird unverändert als Teil des
 /// extrahierten inneren Kommandos zurückgegeben und beim rekursiven Aufruf
 /// erneut aufgelöst).
 ///
@@ -97,7 +108,9 @@ pub(super) fn strip_substitutions(text: &str) -> (String, Vec<String>) {
     let mut i = 0usize;
 
     while i < chars.len() {
-        if chars[i] == '$' && chars.get(i + 1) == Some(&'(') {
+        if (chars[i] == '$' || chars[i] == '<' || chars[i] == '>')
+            && chars.get(i + 1) == Some(&'(')
+        {
             let start = i + 2;
             let mut depth = 1i32;
             let mut j = start;
@@ -149,8 +162,9 @@ fn looks_like_heredoc_or_complex_shell_c(cmd: &str) -> bool {
     false
 }
 
-/// Zerlegt `cmd` an den Top-Level-Operatoren `&&`, `||`, `;`, `|`, ohne dabei
-/// in einfache/doppelte Anführungszeichen, Backticks oder `$(...)`
+/// Zerlegt `cmd` an den Top-Level-Operatoren `&&`, `||`, `;`, `|`, `&` sowie
+/// Zeilenumbrüchen (`\n`, `\r`, `\r\n`), ohne dabei in einfache/doppelte
+/// Anführungszeichen, Backticks, `$(...)`, `<(...)` oder `>(...)`
 /// hineinzuspalten. Gibt `None` zurück, wenn am Ende Quotes/Klammern nicht
 /// ausgeglichen sind.
 fn scan_top_level_segments(cmd: &str) -> Option<Vec<String>> {
@@ -211,7 +225,7 @@ fn scan_top_level_segments(cmd: &str) -> Option<Vec<String>> {
             _ => {}
         }
 
-        if c == '$' && chars.get(i + 1) == Some(&'(') {
+        if (c == '$' || c == '<' || c == '>') && chars.get(i + 1) == Some(&'(') {
             paren_depth += 1;
             i += 2;
             continue;
@@ -223,23 +237,41 @@ fn scan_top_level_segments(cmd: &str) -> Option<Vec<String>> {
         }
 
         if paren_depth == 0 {
-            if c == '&' && chars.get(i + 1) == Some(&'&') {
-                push_segment(&chars, current_start, i, &mut segments);
-                i += 2;
-                current_start = i;
-                continue;
-            }
-            if c == '|' && chars.get(i + 1) == Some(&'|') {
-                push_segment(&chars, current_start, i, &mut segments);
-                i += 2;
-                current_start = i;
-                continue;
-            }
-            if c == '|' || c == ';' {
-                push_segment(&chars, current_start, i, &mut segments);
-                i += 1;
-                current_start = i;
-                continue;
+            match c {
+                '\n' | '\r' => {
+                    push_segment(&chars, current_start, i, &mut segments);
+                    if c == '\r' && chars.get(i + 1) == Some(&'\n') {
+                        i += 1;
+                    }
+                    i += 1;
+                    current_start = i;
+                    continue;
+                }
+                '&' if chars.get(i + 1) == Some(&'&') => {
+                    push_segment(&chars, current_start, i, &mut segments);
+                    i += 2;
+                    current_start = i;
+                    continue;
+                }
+                '&' => {
+                    push_segment(&chars, current_start, i, &mut segments);
+                    i += 1;
+                    current_start = i;
+                    continue;
+                }
+                '|' if chars.get(i + 1) == Some(&'|') => {
+                    push_segment(&chars, current_start, i, &mut segments);
+                    i += 2;
+                    current_start = i;
+                    continue;
+                }
+                '|' | ';' => {
+                    push_segment(&chars, current_start, i, &mut segments);
+                    i += 1;
+                    current_start = i;
+                    continue;
+                }
+                _ => {}
             }
         }
 

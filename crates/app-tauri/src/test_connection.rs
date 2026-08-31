@@ -124,7 +124,12 @@ async fn test_connection_with_timeout(
     });
     let target = ConnectionTarget { hops };
 
-    let attempt = connector.connect(&target, &ephemeral, host_key_store);
+    let tiered = TieredCredentialStore {
+        ephemeral: &ephemeral,
+        real: real_credential_store,
+    };
+
+    let attempt = connector.connect(&target, &tiered, host_key_store);
     let outcome = match tokio::time::timeout(timeout, attempt).await {
         Err(_elapsed) => return Ok(TestConnectionResult::Timeout),
         Ok(result) => result,
@@ -254,6 +259,38 @@ fn resolve_final_hop_auth(
     }
 }
 
+struct TieredCredentialStore<'a> {
+    ephemeral: &'a (dyn CredentialStore + Send + Sync),
+    real: &'a (dyn CredentialStore + Send + Sync),
+}
+
+impl<'a> CredentialStore for TieredCredentialStore<'a> {
+    fn get(
+        &self,
+        reference: &CredentialRef,
+    ) -> Result<SecretString, ssh_manager_core::profiles::CredentialError> {
+        match self.ephemeral.get(reference) {
+            Ok(secret) => Ok(secret),
+            Err(_) => self.real.get(reference),
+        }
+    }
+
+    fn set(
+        &self,
+        reference: &CredentialRef,
+        secret: SecretString,
+    ) -> Result<(), ssh_manager_core::profiles::CredentialError> {
+        self.ephemeral.set(reference, secret)
+    }
+
+    fn delete(
+        &self,
+        reference: &CredentialRef,
+    ) -> Result<(), ssh_manager_core::profiles::CredentialError> {
+        self.ephemeral.delete(reference)
+    }
+}
+
 fn resolve_secret(
     provided: Option<String>,
     existing: Option<&AuthMethod>,
@@ -293,15 +330,12 @@ mod tests {
     impl ssh_manager_core::ssh::SshTransport for StubSshTransport {
         async fn execute(&mut self, _command: &str) -> Result<CommandOutput, SshError> {
             Err(SshError::ChannelError(
-                "in diesem Test nicht unterstützt".to_string(),
+                "execute in StubSshTransport nicht erwartet".to_string(),
             ))
         }
-        async fn open_shell(
-            &mut self,
-            _size: PtySize,
-        ) -> Result<Box<dyn InteractiveShell>, SshError> {
+        async fn open_shell(&mut self, _size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
             Err(SshError::ChannelError(
-                "in diesem Test nicht unterstützt".to_string(),
+                "open_shell in StubSshTransport nicht erwartet".to_string(),
             ))
         }
         async fn disconnect(&mut self) -> Result<(), SshError> {
@@ -311,16 +345,14 @@ mod tests {
 
     enum MockOutcome {
         Success,
-        HostKeyUnknown,
-        HostKeyMismatch,
-        Error(SshError),
-        /// Schläft länger als jeder in den Tests verwendete Timeout —
-        /// simuliert eine hängende Verbindung, ohne echtes Netzwerk.
-        Hang,
+        UnknownHostKey,
+        MismatchHostKey,
+        AuthenticationFailed,
+        NetworkError,
+        Timeout,
     }
 
     struct MockConnector(MockOutcome);
-
     #[async_trait]
     impl Connector for MockConnector {
         async fn connect(
@@ -330,8 +362,10 @@ mod tests {
             _host_keys: Arc<dyn HostKeyStore>,
         ) -> Result<ConnectOutcome, SshError> {
             match &self.0 {
-                MockOutcome::Success => Ok(ConnectOutcome::Connected(Box::new(StubSshTransport))),
-                MockOutcome::HostKeyUnknown => Ok(ConnectOutcome::PendingHostKeyConfirmation {
+                MockOutcome::Success => {
+                    Ok(ConnectOutcome::Connected(Box::new(StubSshTransport)))
+                }
+                MockOutcome::UnknownHostKey => Ok(ConnectOutcome::PendingHostKeyConfirmation {
                     host: "example.invalid".to_string(),
                     port: 22,
                     raw_key: b"raw-key".to_vec(),
@@ -339,19 +373,24 @@ mod tests {
                         fingerprint: "SHA256:unknown".to_string(),
                     },
                 }),
-                MockOutcome::HostKeyMismatch => Ok(ConnectOutcome::PendingHostKeyConfirmation {
+                MockOutcome::MismatchHostKey => Ok(ConnectOutcome::PendingHostKeyConfirmation {
                     host: "example.invalid".to_string(),
                     port: 22,
                     raw_key: b"raw-key".to_vec(),
                     decision: HostKeyDecision::Mismatch {
-                        expected_fingerprint: "SHA256:old".to_string(),
-                        actual_fingerprint: "SHA256:new".to_string(),
+                        expected_fingerprint: "SHA256:expected".to_string(),
+                        actual_fingerprint: "SHA256:actual".to_string(),
                     },
                 }),
-                MockOutcome::Error(e) => Err(e.clone()),
-                MockOutcome::Hang => {
-                    tokio::time::sleep(Duration::from_secs(3600)).await;
-                    unreachable!("Timeout-Test sollte längst abgebrochen haben")
+                MockOutcome::AuthenticationFailed => {
+                    Err(SshError::AuthenticationFailed)
+                }
+                MockOutcome::NetworkError => {
+                    Err(SshError::ConnectionFailed("connection refused".to_string()))
+                }
+                MockOutcome::Timeout => {
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    Ok(ConnectOutcome::Connected(Box::new(StubSshTransport)))
                 }
             }
         }
@@ -359,54 +398,56 @@ mod tests {
 
     fn password_input() -> ServerInput {
         ServerInput {
-            name: "test".to_string(),
+            name: "test-srv".to_string(),
             host: "example.invalid".to_string(),
             port: 22,
             username: "deploy".to_string(),
             group_id: None,
             tags: Vec::new(),
             auth: AuthMethodInput::Password {
-                value: Some("hunter2".to_string()),
+                value: Some("secret".to_string()),
             },
             jump_host: None,
         }
     }
 
-    async fn run(outcome: MockOutcome, input: ServerInput) -> TestConnectionResult {
+    #[tokio::test]
+    async fn test_success() {
         let profile_store = InMemoryProfileStore::new();
         let credential_store = InMemoryCredentialStore::new();
-        test_connection_with_timeout(
+
+        let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
             Arc::new(NoOpHostKeyStore),
-            &MockConnector(outcome),
-            input,
+            &MockConnector(MockOutcome::Success),
+            password_input(),
             None,
             Duration::from_millis(200),
         )
         .await
-        .unwrap()
-    }
+        .unwrap();
 
-    #[tokio::test]
-    async fn test_success() {
-        let result = run(MockOutcome::Success, password_input()).await;
         assert!(matches!(result, TestConnectionResult::Success));
     }
 
     #[tokio::test]
-    async fn test_authentication_failed() {
-        let result = run(
-            MockOutcome::Error(SshError::AuthenticationFailed),
-            password_input(),
-        )
-        .await;
-        assert!(matches!(result, TestConnectionResult::AuthenticationFailed));
-    }
-
-    #[tokio::test]
     async fn test_host_key_unknown() {
-        let result = run(MockOutcome::HostKeyUnknown, password_input()).await;
+        let profile_store = InMemoryProfileStore::new();
+        let credential_store = InMemoryCredentialStore::new();
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &credential_store,
+            Arc::new(NoOpHostKeyStore),
+            &MockConnector(MockOutcome::UnknownHostKey),
+            password_input(),
+            None,
+            Duration::from_millis(200),
+        )
+        .await
+        .unwrap();
+
         assert!(matches!(
             result,
             TestConnectionResult::HostKeyUnknown { .. }
@@ -415,7 +456,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_host_key_mismatch() {
-        let result = run(MockOutcome::HostKeyMismatch, password_input()).await;
+        let profile_store = InMemoryProfileStore::new();
+        let credential_store = InMemoryCredentialStore::new();
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &credential_store,
+            Arc::new(NoOpHostKeyStore),
+            &MockConnector(MockOutcome::MismatchHostKey),
+            password_input(),
+            None,
+            Duration::from_millis(200),
+        )
+        .await
+        .unwrap();
+
         assert!(matches!(
             result,
             TestConnectionResult::HostKeyMismatch { .. }
@@ -423,29 +478,77 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_network_error() {
-        let result = run(
-            MockOutcome::Error(SshError::ConnectionFailed("refused".to_string())),
+    async fn test_authentication_failed() {
+        let profile_store = InMemoryProfileStore::new();
+        let credential_store = InMemoryCredentialStore::new();
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &credential_store,
+            Arc::new(NoOpHostKeyStore),
+            &MockConnector(MockOutcome::AuthenticationFailed),
             password_input(),
+            None,
+            Duration::from_millis(200),
         )
-        .await;
+        .await
+        .unwrap();
+
+        assert!(matches!(
+            result,
+            TestConnectionResult::AuthenticationFailed { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_network_error() {
+        let profile_store = InMemoryProfileStore::new();
+        let credential_store = InMemoryCredentialStore::new();
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &credential_store,
+            Arc::new(NoOpHostKeyStore),
+            &MockConnector(MockOutcome::NetworkError),
+            password_input(),
+            None,
+            Duration::from_millis(200),
+        )
+        .await
+        .unwrap();
+
         assert!(matches!(result, TestConnectionResult::NetworkError { .. }));
     }
 
     #[tokio::test]
     async fn test_timeout() {
-        let result = run(MockOutcome::Hang, password_input()).await;
+        let profile_store = InMemoryProfileStore::new();
+        let credential_store = InMemoryCredentialStore::new();
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &credential_store,
+            Arc::new(NoOpHostKeyStore),
+            &MockConnector(MockOutcome::Timeout),
+            password_input(),
+            None,
+            Duration::from_millis(50),
+        )
+        .await
+        .unwrap();
+
         assert!(matches!(result, TestConnectionResult::Timeout));
     }
 
     #[tokio::test]
     async fn test_empty_secret_without_existing_server_is_a_hard_error_not_a_result() {
+        let profile_store = InMemoryProfileStore::new();
+        let credential_store = InMemoryCredentialStore::new();
+
         let input = ServerInput {
             auth: AuthMethodInput::Password { value: None },
             ..password_input()
         };
-        let profile_store = InMemoryProfileStore::new();
-        let credential_store = InMemoryCredentialStore::new();
 
         let result = test_connection_with_timeout(
             &profile_store,
@@ -501,6 +604,94 @@ mod tests {
             &MockConnector(MockOutcome::Success),
             input,
             Some(existing_id),
+            Duration::from_millis(200),
+        )
+        .await
+        .unwrap();
+
+        assert!(matches!(result, TestConnectionResult::Success));
+    }
+
+    /// T8: Test-Connection über Jump-Host löst Jump-Host-Credentials aus dem realen Store auf
+    /// und Ziel-Hop-Credentials aus dem Ephemeral-Store.
+    #[tokio::test]
+    async fn test_t8_jump_host_credentials_resolved_from_real_store() {
+        use chrono::Utc;
+        use ssh_manager_core::profiles::{CredentialRef, Server};
+
+        struct InspectingConnector;
+        #[async_trait]
+        impl Connector for InspectingConnector {
+            async fn connect(
+                &self,
+                target: &ConnectionTarget,
+                credentials: &(dyn CredentialStore + Send + Sync),
+                _host_keys: Arc<dyn HostKeyStore>,
+            ) -> Result<ConnectOutcome, SshError> {
+                assert_eq!(target.hops.len(), 2);
+
+                // Jump host credentials (Hop 0) in real store
+                let AuthMethod::Password { credential_ref: jump_ref } = &target.hops[0].auth else {
+                    panic!("expected password auth for jump host");
+                };
+                let jump_secret = credentials.get(jump_ref).expect("jump host secret must resolve");
+                assert_eq!(secrecy::ExposeSecret::expose_secret(&jump_secret), "jump-stored-secret");
+
+                // Target hop credentials (Hop 1) in ephemeral store
+                let AuthMethod::Password { credential_ref: target_ref } = &target.hops[1].auth else {
+                    panic!("expected password auth for target host");
+                };
+                let target_secret = credentials.get(target_ref).expect("target secret must resolve");
+                assert_eq!(secrecy::ExposeSecret::expose_secret(&target_secret), "target-form-secret");
+
+                Ok(ConnectOutcome::Connected(Box::new(StubSshTransport)))
+            }
+        }
+
+        let jump_id = ServerId::new();
+        let jump_pwd_ref = CredentialRef::new("server:jump:password");
+        let now = Utc::now();
+        let jump_server = Server {
+            id: jump_id,
+            name: "jump".to_string(),
+            host: "jump.invalid".to_string(),
+            port: 22,
+            username: "jumpuser".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: AuthMethod::Password {
+                credential_ref: jump_pwd_ref.clone(),
+            },
+            notes: String::new(),
+            jump_host: None,
+            created_at: now,
+            updated_at: now,
+        };
+
+        let profile_store = InMemoryProfileStore::new().with_server(jump_server);
+        let real_credential_store =
+            InMemoryCredentialStore::new().with_secret(&jump_pwd_ref, "jump-stored-secret");
+
+        let input = ServerInput {
+            name: "target-srv".to_string(),
+            host: "target.invalid".to_string(),
+            port: 22,
+            username: "targetuser".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: AuthMethodInput::Password {
+                value: Some("target-form-secret".to_string()),
+            },
+            jump_host: Some(jump_id),
+        };
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &real_credential_store,
+            Arc::new(NoOpHostKeyStore),
+            &InspectingConnector,
+            input,
+            None,
             Duration::from_millis(200),
         )
         .await

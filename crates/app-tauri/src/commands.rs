@@ -277,13 +277,14 @@ pub async fn connect(
     // Bestmöglicher, nicht-fataler Versuch, den `system_context` um
     // Remote-OS-Info zu ergänzen (Spec 0006, `SessionContext.system_context`-
     // Doc: "effective_notes() + OS/Distro-Info"). Schlägt `uname` fehl (z. B.
-    // ein Windows-Zielsystem ohne POSIX-Tools), bleibt der Kontext einfach
-    // ohne diesen Abschnitt — kein Grund, `connect()` deswegen abzubrechen.
+    // ein Windows-Zielsystem ohne POSIX-Tools) oder enthält die Ausgabe
+    // ungültige/verdächtige Zeichen (Spec 0013, SEC-02), bleibt der Kontext
+    // einfach ohne diesen Abschnitt.
     let mut system_context = effective_notes(&server, state.profile_store.as_ref()).await?;
     if let Ok(uname_output) = transport.execute("uname -a").await {
         let uname_text = String::from_utf8_lossy(&uname_output.stdout);
-        if !uname_text.trim().is_empty() {
-            system_context.push_str(&format!("\n\n## Remote-System\n{}", uname_text.trim()));
+        if let Some(sanitized) = sanitize_uname_output(&uname_text) {
+            system_context.push_str(&format!("\n\n## Remote-System\n{}", sanitized));
         }
     }
 
@@ -922,4 +923,38 @@ pub async fn export_document(
     }
 
     Ok(())
+}
+
+/// Validiert und bereinigt `uname -a` Output (Spec 0013, SEC-02) vor der
+/// Aufnahme in den privilegierten System-Prompt: max 256 Zeichen, nur
+/// erlaubte Zeichen (alphanumerisch, . _ - # : space tab), keine Steuerzeichen
+/// oder Zeilenumbrüche.
+pub(crate) fn sanitize_uname_output(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > 256 {
+        return None;
+    }
+    if trimmed.chars().all(|c| {
+        c.is_ascii_alphanumeric()
+            || c == '.'
+            || c == '_'
+            || c == '-'
+            || c == ' '
+            || c == '\t'
+            || c == '#'
+            || c == ':'
+    }) {
+        Some(trimmed.to_string())
+    } else {
+        None
+    }
+}
+
+/// Liest den Textinhalt einer vom Nutzer im nativen Dateidialog ausgewählten
+/// Schlüssel-/Zertifikatsdatei (Spec 0013, SEC-06). Ersetzt globale Dateilese-
+/// Berechtigungen im Frontend.
+#[tauri::command]
+pub async fn read_credential_file(path: String) -> CommandResult<String> {
+    let content = std::fs::read_to_string(&path)?;
+    Ok(content)
 }

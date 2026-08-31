@@ -379,3 +379,95 @@ async fn test_merged_reason_does_not_repeat_identical_parts_across_segments() {
     assert!(reason.contains("keine Regel gefunden"));
     assert!(reason.contains("Command-Substitution"));
 }
+
+// --- Spec 0013: Security Hardening Tests (T1 - T4) --------------------
+
+/// T1: Zeilenumbruch-Splitting verhindert Umgehung von Allow-Regeln.
+#[tokio::test]
+async fn test_t1_newline_splitting_cannot_bypass_allow_rule() {
+    let eng = engine(vec![glob_rule(
+        "allow-echo",
+        "echo *",
+        RuleAction::Allow,
+        Scope::Global,
+        10,
+    )]);
+    let decision = eng.evaluate("echo safe\nrm -rf /", &ctx("srv1", &[])).await;
+    assert_deny_or_confirm(&decision);
+}
+
+/// T2: Hintergrund-Operator `&` wird als Segment-Trenner behandelt.
+#[tokio::test]
+async fn test_t2_ampersand_splitting() {
+    let eng = engine(vec![glob_rule(
+        "allow-cmd1",
+        "cmd1",
+        RuleAction::Allow,
+        Scope::Global,
+        10,
+    )]);
+    let decision = eng.evaluate("cmd1 & cmd2", &ctx("srv1", &[])).await;
+    // cmd2 hat keine Regel -> Confirm
+    assert_confirm(&decision);
+}
+
+/// T3: Bash-Prozess-Substitution `<(...)` und `>(...)` wird erkannt und rekursiv evaluiert.
+#[tokio::test]
+async fn test_t3_process_substitution_forces_confirm() {
+    let eng = engine(vec![glob_rule(
+        "allow-cat",
+        "cat *",
+        RuleAction::Allow,
+        Scope::Global,
+        10,
+    )]);
+    let decision_in = eng.evaluate("cat <(malicious)", &ctx("srv1", &[])).await;
+    assert_confirm(&decision_in);
+
+    let decision_out = eng.evaluate("cat >(malicious)", &ctx("srv1", &[])).await;
+    assert_confirm(&decision_out);
+}
+
+/// T4: Nicht-druckbare Steuerzeichen / Escape-Sequenzen erzwingen Ambiguous/Confirm.
+#[tokio::test]
+async fn test_t4_control_characters_rejected() {
+    let eng = engine(vec![glob_rule(
+        "allow-all",
+        "*",
+        RuleAction::Allow,
+        Scope::Global,
+        100,
+    )]);
+    let decision_null = eng.evaluate("cmd\0extra", &ctx("srv1", &[])).await;
+    assert_confirm(&decision_null);
+
+    let decision_esc = eng.evaluate("cmd\x1b[31m", &ctx("srv1", &[])).await;
+    assert_confirm(&decision_esc);
+}
+
+/// Blacklist-Evasion-Tests: Pfad-Varianten, Flag-Permutationen, dd, power commands, shadow.
+#[tokio::test]
+async fn test_blacklist_evasion_variants() {
+    let eng = engine(vec![]);
+    for cmd in [
+        "/bin/rm -rf /",
+        "/usr/bin/rm -r -f /",
+        "rm -f -r /",
+        "rm --recursive --force /",
+        "rm / -rf",
+        "\\rm -rf /",
+        "rm -rf /*",
+        "dd of=/dev/sda if=/dev/zero",
+        "dd of=/dev/nvme0n1",
+        "/sbin/shutdown -h now",
+        "systemctl reboot",
+        "systemctl poweroff",
+        "init 0",
+        "tee /etc/shadow",
+        "sed -i 's/root/toor/' /etc/shadow",
+        "chmod 777 /etc/shadow",
+    ] {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert_confirm(&decision);
+    }
+}

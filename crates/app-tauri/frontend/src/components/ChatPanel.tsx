@@ -50,6 +50,9 @@ function describeAction(action: AiAction): { label: string; command?: string } {
   if ("SuggestCommand" in action) {
     return { label: "Kommando vorschlagen", command: action.SuggestCommand.command };
   }
+  if ("GenerateDocument" in action) {
+    return { label: `Dokument generieren: ${action.GenerateDocument.title}` };
+  }
   const target = action.ProposeNoteUpdate.target;
   const targetLabel = "Server" in target ? `Server ${target.Server}` : `Gruppe ${target.Group}`;
   return { label: `Notiz aktualisieren (${targetLabel})` };

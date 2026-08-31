@@ -67,6 +67,31 @@ fn test_accumulate_exec_output_without_exit_status_yields_none() {
     assert_eq!(output.exit_code, None);
 }
 
+#[test]
+fn test_t9_accumulate_exec_output_caps_at_2mb() {
+    use crate::exec::{MAX_STREAM_OUTPUT_BYTES, TRUNCATION_NOTICE};
+
+    let chunk = vec![b'A'; 1024 * 1024]; // 1 MB chunk
+    let messages = vec![
+        ChannelMsg::Data {
+            data: Bytes::from(chunk.clone()),
+        },
+        ChannelMsg::Data {
+            data: Bytes::from(chunk.clone()),
+        },
+        ChannelMsg::Data {
+            data: Bytes::from(chunk.clone()),
+        },
+        ChannelMsg::ExitStatus { exit_status: 0 },
+    ];
+
+    let output = accumulate_exec_output(messages);
+
+    assert_eq!(output.stdout.len(), MAX_STREAM_OUTPUT_BYTES + TRUNCATION_NOTICE.len());
+    assert!(output.stdout.ends_with(TRUNCATION_NOTICE));
+    assert_eq!(output.exit_code, Some(0));
+}
+
 // --- Host-Key-Auswertung ------------------------------------------------
 
 #[derive(Default)]

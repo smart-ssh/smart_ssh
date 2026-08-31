@@ -63,7 +63,7 @@ mod hex_bytes {
 
 pub struct FileHostKeyStore {
     path: PathBuf,
-    known: Mutex<HashMap<(String, u16), Vec<u8>>>,
+    known: Mutex<HashMap<(String, u16), Vec<Vec<u8>>>>,
 }
 
 impl FileHostKeyStore {
@@ -76,10 +76,11 @@ impl FileHostKeyStore {
                 .map_err(|e| format!("Host-Key-Datei {path:?} konnte nicht gelesen werden: {e}"))?;
             let entries: Vec<StoredEntry> = serde_json::from_str(&raw)
                 .map_err(|e| format!("Host-Key-Datei {path:?} ist kein gültiges JSON: {e}"))?;
-            entries
-                .into_iter()
-                .map(|e| ((e.host, e.port), e.raw_key))
-                .collect()
+            let mut map: HashMap<(String, u16), Vec<Vec<u8>>> = HashMap::new();
+            for e in entries {
+                map.entry((e.host, e.port)).or_default().push(e.raw_key);
+            }
+            map
         } else {
             HashMap::new()
         };
@@ -90,15 +91,17 @@ impl FileHostKeyStore {
         })
     }
 
-    fn persist(&self, known: &HashMap<(String, u16), Vec<u8>>) -> Result<(), SshError> {
-        let entries: Vec<StoredEntry> = known
-            .iter()
-            .map(|((host, port), raw_key)| StoredEntry {
-                host: host.clone(),
-                port: *port,
-                raw_key: raw_key.clone(),
-            })
-            .collect();
+    fn persist(&self, known: &HashMap<(String, u16), Vec<Vec<u8>>>) -> Result<(), SshError> {
+        let mut entries = Vec::new();
+        for ((host, port), keys) in known {
+            for raw_key in keys {
+                entries.push(StoredEntry {
+                    host: host.clone(),
+                    port: *port,
+                    raw_key: raw_key.clone(),
+                });
+            }
+        }
         let json = serde_json::to_string_pretty(&entries)
             .map_err(|e| SshError::ChannelError(format!("Host-Keys nicht serialisierbar: {e}")))?;
         write_atomically(&self.path, &json)
@@ -112,9 +115,30 @@ impl FileHostKeyStore {
 /// relevant, ein kaputtes File darf nicht stillschweigend als "kein
 /// bekannter Host" interpretiert werden).
 fn write_atomically(path: &Path, contents: &str) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+            }
+        }
+    }
     let tmp_path = path.with_extension("json.tmp");
     std::fs::write(&tmp_path, contents)?;
-    std::fs::rename(&tmp_path, path)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o600));
+    }
+    std::fs::rename(&tmp_path, path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
 }
 
 fn fingerprint(raw_key: &[u8]) -> String {
@@ -132,9 +156,14 @@ impl HostKeyStore for FileHostKeyStore {
             None => HostKeyDecision::Unknown {
                 fingerprint: fingerprint(key),
             },
-            Some(stored) if stored.as_slice() == key => HostKeyDecision::Trusted,
-            Some(stored) => HostKeyDecision::Mismatch {
-                expected_fingerprint: fingerprint(stored),
+            Some(stored_keys) if stored_keys.iter().any(|k| k.as_slice() == key) => {
+                HostKeyDecision::Trusted
+            }
+            Some(stored_keys) if stored_keys.is_empty() => HostKeyDecision::Unknown {
+                fingerprint: fingerprint(key),
+            },
+            Some(stored_keys) => HostKeyDecision::Mismatch {
+                expected_fingerprint: fingerprint(&stored_keys[0]),
                 actual_fingerprint: fingerprint(key),
             },
         }
@@ -142,7 +171,10 @@ impl HostKeyStore for FileHostKeyStore {
 
     fn trust(&self, host: &str, port: u16, key: &[u8]) -> Result<(), SshError> {
         let mut known = self.known.lock().unwrap();
-        known.insert((host.to_string(), port), key.to_vec());
+        let keys = known.entry((host.to_string(), port)).or_default();
+        if !keys.iter().any(|k| k.as_slice() == key) {
+            keys.push(key.to_vec());
+        }
         self.persist(&known)
     }
 }
@@ -175,6 +207,28 @@ mod tests {
     }
 
     #[test]
+    fn test_multiple_keys_per_host_are_supported() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileHostKeyStore::load(dir.path().join("host_keys.json")).unwrap();
+
+        store.trust("example.invalid", 22, b"ed25519-key").unwrap();
+        store.trust("example.invalid", 22, b"rsa-key").unwrap();
+
+        assert_eq!(
+            store.check("example.invalid", 22, b"ed25519-key"),
+            HostKeyDecision::Trusted
+        );
+        assert_eq!(
+            store.check("example.invalid", 22, b"rsa-key"),
+            HostKeyDecision::Trusted
+        );
+        assert!(matches!(
+            store.check("example.invalid", 22, b"unknown-key"),
+            HostKeyDecision::Mismatch { .. }
+        ));
+    }
+
+    #[test]
     fn test_changed_key_yields_mismatch_decision() {
         let dir = tempfile::tempdir().unwrap();
         let store = FileHostKeyStore::load(dir.path().join("host_keys.json")).unwrap();
@@ -200,5 +254,22 @@ mod tests {
         let decision = reloaded.check("example.invalid", 22, b"raw-key-bytes");
 
         assert_eq!(decision, HostKeyDecision::Trusted);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_t10_posix_permissions_enforced() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sub").join("host_keys.json");
+        let store = FileHostKeyStore::load(path.clone()).unwrap();
+        store.trust("example.invalid", 22, b"key1").unwrap();
+
+        let file_meta = std::fs::metadata(&path).unwrap();
+        assert_eq!(file_meta.permissions().mode() & 0o777, 0o600);
+
+        let parent_meta = std::fs::metadata(path.parent().unwrap()).unwrap();
+        assert_eq!(parent_meta.permissions().mode() & 0o777, 0o700);
     }
 }

@@ -118,6 +118,7 @@ pub fn run() {
             commands::suggest_rule_patterns,
             commands::accept_and_create_rule,
             commands::export_document,
+            commands::read_credential_file,
         ])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Tauri-App");

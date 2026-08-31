@@ -45,13 +45,26 @@ impl SqliteProfileStore {
         if let Some(parent) = db_path.parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent).map_err(sqlx::Error::Io)?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+                }
             }
         }
 
         let options = SqliteConnectOptions::new()
             .filename(db_path)
             .create_if_missing(true);
-        Self::connect_with(options).await
+        let store = Self::connect_with(options).await?;
+        #[cfg(unix)]
+        {
+            if db_path.exists() {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(db_path, std::fs::Permissions::from_mode(0o600));
+            }
+        }
+        Ok(store)
     }
 
     /// Interner Einstiegspunkt für Tests: baut einen Store direkt aus

@@ -50,19 +50,26 @@ fn built_in_patterns() -> Vec<Regex> {
     vec![
         // Private-Key-Blöcke (RSA/EC/OPENSSH/PKCS8 ...), über mehrere
         // Zeilen hinweg — `(?s)`, damit `.` auch Zeilenumbrüche matcht.
-        // `.*?` non-greedy, damit bei mehreren Key-Blöcken im selben Output
-        // nicht versehentlich alles zwischen dem ersten BEGIN und dem
-        // letzten END auf einmal verschluckt wird.
-        Regex::new(r"(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----")
-            .expect("eingebautes Private-Key-Muster ist gültig"),
-        // password=/token=/api_key=-artige Zeilen, Groß-/Kleinschreibung
-        // ignoriert (`(?i)`). Ersetzt den kompletten Treffer inkl.
-        // Schlüsselname, nicht nur den Wert (spec: "Ersetze Treffer durch
-        // [REDACTED]").
-        Regex::new(r"(?i)(password|token|api_key)\s*=\s*\S+")
-            .expect("eingebautes Credential-Zeilen-Muster ist gültig"),
-        // AWS-Access-Key-Muster.
-        Regex::new(r"AKIA[0-9A-Z]{16}").expect("eingebautes AWS-Key-Muster ist gültig"),
+        Regex::new(
+            r"(?s)-----BEGIN [A-Z0-9_\- ]+PRIVATE KEY[A-Z0-9_\- ]*-----.*?-----END [A-Z0-9_\- ]+PRIVATE KEY[A-Z0-9_\- ]*-----",
+        )
+        .expect("eingebautes Private-Key-Muster ist gültig"),
+        // PGP Private Keys
+        Regex::new(r"(?s)-----BEGIN PGP PRIVATE KEY BLOCK-----.*?-----END PGP PRIVATE KEY BLOCK-----")
+            .expect("eingebautes PGP-Private-Key-Muster ist gültig"),
+        // password=/token=/api_key=/secret=/passphrase=-artige Zeilen, auch mit : und Quotes
+        Regex::new(
+            r#"(?i)(password|token|api_key|secret|passphrase)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|\S+)"#,
+        )
+        .expect("eingebautes Credential-Zeilen-Muster ist gültig"),
+        // Bearer Tokens
+        Regex::new(r"(?i)Bearer\s+[A-Za-z0-9_\-\.]{16,}")
+            .expect("eingebautes Bearer-Token-Muster ist gültig"),
+        // AWS-Access-Key- & Session-Token-Muster (AKIA, ASIA)
+        Regex::new(r"(AKIA|ASIA)[0-9A-Z]{16}").expect("eingebautes AWS-Key-Muster ist gültig"),
+        // GitHub Personal Access Tokens (ghp_, gho_, ghu_, ghs_, ghr_)
+        Regex::new(r"(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}")
+            .expect("eingebautes GitHub-Token-Muster ist gültig"),
     ]
 }
 
