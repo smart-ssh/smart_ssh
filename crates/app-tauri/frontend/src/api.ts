@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AiProviderConfigDto, AiProviderConfigInput, ServerDto } from "./types";
+import type {
+  ActionUserDecision,
+  AiProviderConfigDto,
+  AiProviderConfigInput,
+  HostKeyUserDecision,
+  ServerDto,
+} from "./types";
 
 /** Von `crate::error::CommandError` (`crates/app-tauri/src/error.rs`). */
 export interface CommandErrorPayload {
@@ -29,3 +35,29 @@ export const deleteAiProvider = (id: string) => invoke<void>("delete_ai_provider
 
 export const setActiveAiProvider = (id: string) =>
   invoke<void>("set_active_ai_provider", { id });
+
+// --- Teil 2: Session/Terminal/Chat --------------------------------------
+
+export const connect = (serverId: string) => invoke<string>("connect", { serverId });
+
+export const confirmHostKey = (sessionId: string, decision: HostKeyUserDecision) =>
+  invoke<void>("confirm_host_key", { sessionId, decision });
+
+export const openTerminal = (sessionId: string) => invoke<void>("open_terminal", { sessionId });
+
+export const terminalInput = (sessionId: string, data: Uint8Array) =>
+  invoke<void>("terminal_input", { sessionId, data: Array.from(data) });
+
+export const terminalResize = (sessionId: string, cols: number, rows: number) =>
+  invoke<void>("terminal_resize", { sessionId, cols, rows });
+
+export const sendChatMessage = (sessionId: string, text: string) =>
+  invoke<void>("send_chat_message", { sessionId, text });
+
+export const respondToAction = (
+  sessionId: string,
+  actionId: string,
+  decision: ActionUserDecision,
+) => invoke<void>("respond_to_action", { sessionId, actionId, decision });
+
+export const disconnect = (sessionId: string) => invoke<void>("disconnect", { sessionId });

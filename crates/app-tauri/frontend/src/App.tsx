@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
 import { AiProviderSettings } from "./components/AiProviderSettings";
 import { ServerList } from "./components/ServerList";
+import { SessionView } from "./components/SessionView";
 import { commandErrorMessage, listAiProviders } from "./api";
+
+interface ActiveSession {
+  sessionId: string;
+  serverName: string;
+}
 
 function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hasActiveProvider, setHasActiveProvider] = useState<boolean | null>(null);
+  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
 
   const refreshProviderStatus = () => {
     listAiProviders()
@@ -19,6 +26,16 @@ function App() {
   };
 
   useEffect(refreshProviderStatus, []);
+
+  if (activeSession) {
+    return (
+      <SessionView
+        sessionId={activeSession.sessionId}
+        serverName={activeSession.serverName}
+        onDisconnected={() => setActiveSession(null)}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
@@ -52,7 +69,9 @@ function App() {
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
             Server
           </h2>
-          <ServerList />
+          <ServerList
+            onConnected={(sessionId, serverName) => setActiveSession({ sessionId, serverName })}
+          />
         </section>
       </main>
 
