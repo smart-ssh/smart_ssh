@@ -11,8 +11,9 @@ interface SessionViewProps {
 }
 
 /**
- * Spec 0007 Abschnitt 7: Terminal links, Chat-Panel rechts, sobald eine
- * Session steht.
+ * Spec 0007 Abschnitt 7: Chat-Panel groß links (primärer Interaktionskanal),
+ * Terminal kompakt rechts (Beobachtung/manuelle Zwischen-Eingriffe), sobald
+ * eine Session steht.
  */
 export function SessionView({ sessionId, serverName, onDisconnected }: SessionViewProps) {
   const [statusNote, setStatusNote] = useState<string | null>(null);
@@ -55,11 +56,11 @@ export function SessionView({ sessionId, serverName, onDisconnected }: SessionVi
         </button>
       </header>
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 border-r border-slate-800 p-2">
-          <TerminalView sessionId={sessionId} />
-        </div>
-        <div className="w-[420px] shrink-0">
+        <div className="min-w-0 flex-1 border-r border-slate-800">
           <ChatPanel sessionId={sessionId} />
+        </div>
+        <div className="w-[420px] shrink-0 p-2">
+          <TerminalView sessionId={sessionId} />
         </div>
       </div>
     </div>
