@@ -9,9 +9,11 @@ mod dto;
 mod ephemeral_credentials;
 mod error;
 mod events;
+mod filter_rules;
 mod groups;
 mod host_key_store;
 mod orchestration;
+#[cfg(test)]
 mod policy;
 mod server_credentials;
 mod session;
@@ -41,6 +43,7 @@ fn build_app_state() -> AppState {
     let profile_store = tauri::async_runtime::block_on(SqliteProfileStore::connect(&db_path))
         .expect("SQLite-Datenbank konnte nicht geöffnet/migriert werden");
     let ai_provider_store = profile_store.ai_provider_store();
+    let policy_store = profile_store.policy_store();
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
     // `crate::host_key_store`-Modul-Kommentar zur Begründung (der
@@ -58,6 +61,7 @@ fn build_app_state() -> AppState {
         credential_store: Arc::new(KeyringCredentialStore::new()),
         ai_provider_store: Arc::new(ai_provider_store),
         host_key_store: Arc::new(host_key_store),
+        policy_store,
         pending_host_key_confirmations: ConfirmationRegistry::new(),
         pending_action_confirmations: ConfirmationRegistry::new(),
     }
@@ -102,6 +106,13 @@ pub fn run() {
             commands::list_note_revisions,
             commands::rollback_note,
             commands::preview_effective_notes,
+            commands::list_rules,
+            commands::create_rule,
+            commands::update_rule,
+            commands::delete_rule,
+            commands::list_hard_blacklist,
+            commands::list_known_tags,
+            commands::evaluate_explained,
         ])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Tauri-App");

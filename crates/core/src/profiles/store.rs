@@ -70,6 +70,25 @@ pub trait ProfileStore: Send + Sync {
     /// Store-internen Interna zu umgehen.
     async fn list_servers(&self) -> ProfileResult<Vec<Server>>;
 
+    /// Alle im Moment tatsächlich verwendeten Tags über sämtliche Server
+    /// hinweg, dedupliziert und sortiert — für die Scope-Auswahl im
+    /// Filter-Regel-Formular (Spec 0009, Abschnitt 3: `list_known_tags`).
+    ///
+    /// Default-Implementierung auf Basis von [`ProfileStore::list_servers`],
+    /// analog zu [`ProfileStore::group_chain`] weiter unten: kein
+    /// Implementierer braucht dafür eine eigene Query/Logik. Lädt zwar alle
+    /// Server statt nur die `tag`-Spalte gezielt abzufragen — bei der zu
+    /// erwartenden Serverzahl (lokale Desktop-App, typischerweise wenige bis
+    /// niedrige Hunderte) unproblematisch, und die Einfachheit/Konsistenz
+    /// mit dem Rest des Traits wiegt schwerer als diese Mikro-Optimierung.
+    async fn list_known_tags(&self) -> ProfileResult<Vec<String>> {
+        let servers = self.list_servers().await?;
+        let mut tags: Vec<String> = servers.into_iter().flat_map(|s| s.tags).collect();
+        tags.sort();
+        tags.dedup();
+        Ok(tags)
+    }
+
     /// Alle gespeicherten Gruppen, flach (Spec 0008, Abschnitt 3 —
     /// "parent_id im DTO, Baum wird im Frontend gebaut"). Analog zu
     /// [`ProfileStore::list_servers`] nicht in Spec 0003/0004 vorgesehen,

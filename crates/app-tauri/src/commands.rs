@@ -14,7 +14,7 @@ use ssh_manager_core::ai::{
     default_action_schemas, ChatMessage, DefaultOutputRedactor, MessageContent, ProviderId, Role,
     SessionContext,
 };
-use ssh_manager_core::filter::FilterEngine;
+use ssh_manager_core::filter::{hard_blacklist_patterns, FilterEngine, RuleId, Scope};
 use ssh_manager_core::profiles::{
     effective_notes, record_revision, Group, GroupId, NoteEditor, NoteTarget, Server,
 };
@@ -24,8 +24,8 @@ use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, PtySize}
 use crate::ai_provider_factory::build_ai_provider;
 use crate::dto::{
     credential_ref_for, ActionUserDecision, AiProviderConfigDto, AiProviderConfigInput,
-    DeleteGroupResult, GroupDto, HostKeyUserDecision, NoteRevisionDto, ServerDto, ServerInput,
-    TestConnectionResult,
+    DeleteGroupResult, EvalContextInput, EvaluationTraceDto, GroupDto, HostKeyUserDecision,
+    NoteRevisionDto, PatternDto, RuleDto, RuleInput, ServerDto, ServerInput, TestConnectionResult,
 };
 use crate::error::CommandResult;
 use crate::events::{
@@ -34,7 +34,6 @@ use crate::events::{
 };
 use crate::groups::{compute_delete_group_result, validate_no_cycle};
 use crate::orchestration::run_chat_turn;
-use crate::policy::NoRulesPolicyStore;
 use crate::server_credentials::{delete_auth_method_secrets, resolve_auth_method};
 use crate::session::{spawn_terminal_actor, Session, TerminalCommand};
 use crate::state::{ActionId, AppState, SessionId};
@@ -295,7 +294,7 @@ pub async fn connect(
             history: Vec::new(),
             available_actions: default_action_schemas(),
         }),
-        filter_engine: Box::new(FilterEngine::new(NoRulesPolicyStore)),
+        filter_engine: Box::new(FilterEngine::new(state.policy_store.clone())),
         server_id,
         tags: server.tags,
         terminal: std::sync::Mutex::new(None),
@@ -711,4 +710,69 @@ pub async fn preview_effective_notes(
     effective_notes(&server, state.profile_store.as_ref())
         .await
         .map_err(Into::into)
+}
+
+// --- Spec 0009: Filter-Regel-Verwaltung ------------------------------------
+
+/// `scope_filter: None` liefert alle Regeln (s. `crate::filter_rules::list_rules`-
+/// Doc-Kommentar zur `ScopeFilter::All`-Vereinfachung).
+#[tauri::command]
+pub async fn list_rules(
+    state: State<'_, AppState>,
+    scope_filter: Option<Scope>,
+) -> CommandResult<Vec<RuleDto>> {
+    crate::filter_rules::list_rules(&state.policy_store, scope_filter)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn create_rule(state: State<'_, AppState>, input: RuleInput) -> CommandResult<RuleId> {
+    crate::filter_rules::create_rule(&state.policy_store, input)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn update_rule(
+    state: State<'_, AppState>,
+    id: RuleId,
+    input: RuleInput,
+) -> CommandResult<()> {
+    crate::filter_rules::update_rule(&state.policy_store, id, input)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn delete_rule(state: State<'_, AppState>, id: RuleId) -> CommandResult<()> {
+    state.policy_store.delete(&id).await.map_err(Into::into)
+}
+
+/// Rein lesend, kein `AppState` nötig — die Hard-Blacklist ist fest im Core
+/// codiert (Spec 0002, Abschnitt 3.1), nicht in der Datenbank.
+#[tauri::command]
+pub async fn list_hard_blacklist() -> CommandResult<Vec<PatternDto>> {
+    Ok(hard_blacklist_patterns()
+        .iter()
+        .map(PatternDto::from)
+        .collect())
+}
+
+#[tauri::command]
+pub async fn list_known_tags(state: State<'_, AppState>) -> CommandResult<Vec<String>> {
+    state
+        .profile_store
+        .list_known_tags()
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn evaluate_explained(
+    state: State<'_, AppState>,
+    command: String,
+    ctx: EvalContextInput,
+) -> CommandResult<EvaluationTraceDto> {
+    Ok(crate::filter_rules::evaluate_explained(state.policy_store.clone(), command, ctx).await)
 }

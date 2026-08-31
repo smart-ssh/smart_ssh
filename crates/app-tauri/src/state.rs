@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use persistence_sqlite::SqliteAiProviderStore;
+use persistence_sqlite::{SqliteAiProviderStore, SqlitePolicyStore};
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore};
 use ssh_manager_core::ssh::HostKeyStore;
 
@@ -31,6 +31,15 @@ pub struct AppState {
     pub credential_store: Arc<dyn CredentialStore + Send + Sync>,
     pub ai_provider_store: Arc<SqliteAiProviderStore>,
     pub host_key_store: Arc<dyn HostKeyStore>,
+    /// Spec 0009: echte, persistente Filter-Regeln statt des bisherigen
+    /// `NoRulesPolicyStore`-Platzhalters (s. `crate::policy`-Moduldoc). Kein
+    /// `Arc<dyn PolicyStore>` wie bei `profile_store`: `SqlitePolicyStore`
+    /// ist `Clone` (s. dortiger Doc-Kommentar) und wird an mehreren Stellen
+    /// per Wert in eine neue `FilterEngine` verschoben (`connect`,
+    /// `evaluate_explained`) — ein zusätzlicher `Arc` bräuchte es dafür
+    /// nicht, ein `.clone()` reicht (klont nur den intern bereits
+    /// referenzgezählten `SqlitePool`).
+    pub policy_store: SqlitePolicyStore,
 
     /// Wartende `connect()`-Aufrufe, die auf `confirm_host_key` warten (s.
     /// `crate::commands::connect`). Schlüssel ist die `SessionId`, die

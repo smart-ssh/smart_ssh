@@ -173,7 +173,7 @@ async fn handle_action_proposed(
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> bool {
     let action_id: ActionId = Uuid::new_v4();
-    let decision = evaluate_action(session, &action);
+    let decision = evaluate_action(session, &action).await;
 
     emit_chat_action_proposed(
         emitter,
@@ -227,14 +227,14 @@ async fn handle_action_proposed(
 /// `AiAction::ProposeNoteUpdate` verlangt **immer** eine Bestätigung,
 /// unabhängig von der Filter-Engine (Spec 0003, Abschnitt 5.2 — explizit
 /// wiederholt in Spec 0007, Abschnitt 6, letzter Punkt).
-fn evaluate_action(session: &Session, action: &AiAction) -> Decision {
+async fn evaluate_action(session: &Session, action: &AiAction) -> Decision {
     match action {
         AiAction::SuggestCommand { command } => {
             let ctx = EvalContext {
                 server_id: session.server_id,
                 tags: session.tags.clone(),
             };
-            session.filter_engine.evaluate(command, &ctx)
+            session.filter_engine.evaluate(command, &ctx).await
         }
         AiAction::ProposeNoteUpdate { .. } => Decision::Confirm {
             reason: "Notiz-Aktualisierungen erfordern immer eine manuelle Bestätigung".to_string(),
@@ -285,7 +285,7 @@ async fn handle_user_decision(
                         server_id: session.server_id,
                         tags: session.tags.clone(),
                     };
-                    let re_decision = session.filter_engine.evaluate(&edited, &ctx);
+                    let re_decision = session.filter_engine.evaluate(&edited, &ctx).await;
                     if let Decision::Deny { reason } = re_decision {
                         let blocked = AiAction::SuggestCommand {
                             command: edited.clone(),
@@ -667,10 +667,11 @@ mod tests {
     /// nehmen (und ohne Responder-Task ewig auf eine nie eintreffende
     /// Bestätigung hängen bleiben).
     struct AllowEverythingPolicyStore;
+    #[async_trait]
     impl PolicyStore for AllowEverythingPolicyStore {
-        fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
             vec![Rule {
-                id: "allow-all".to_string(),
+                id: ssh_manager_core::filter::RuleId("allow-all".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Allow,
                 scope: ssh_manager_core::filter::Scope::Global,
@@ -800,10 +801,11 @@ mod tests {
         // Confirm-Wartepfad (den dieser Test eigentlich prüfen soll) nie
         // erreicht.
         struct DenyEditedPolicyStore;
+        #[async_trait]
         impl PolicyStore for DenyEditedPolicyStore {
-            fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
                 vec![Rule {
-                    id: "deny-edited".to_string(),
+                    id: ssh_manager_core::filter::RuleId("deny-edited".to_string()),
                     pattern: ssh_manager_core::filter::Pattern::Glob("*-edited".to_string()),
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,
@@ -895,10 +897,11 @@ mod tests {
         // Confirm, s. core::filter), daher hier eine explizite
         // Deny-Regel, um den reinen Deny-Pfad ohne Warten zu testen.
         struct DenyCurlPolicyStore;
+        #[async_trait]
         impl PolicyStore for DenyCurlPolicyStore {
-            fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
                 vec![Rule {
-                    id: "deny-curl".to_string(),
+                    id: ssh_manager_core::filter::RuleId("deny-curl".to_string()),
                     pattern: ssh_manager_core::filter::Pattern::Glob("curl*".to_string()),
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,

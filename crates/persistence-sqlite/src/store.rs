@@ -93,6 +93,11 @@ impl SqliteProfileStore {
         crate::SqliteAiProviderStore::new(self.pool.clone())
     }
 
+    /// Wie [`Self::ai_provider_store`], für Filter-Regeln (Spec 0009).
+    pub fn policy_store(&self) -> crate::SqlitePolicyStore {
+        crate::SqlitePolicyStore::new(self.pool.clone())
+    }
+
     async fn fetch_tags(&self, server_id: &str) -> ProfileResult<Vec<String>> {
         let rows = sqlx::query("SELECT tag FROM server_tags WHERE server_id = ? ORDER BY tag")
             .bind(server_id)

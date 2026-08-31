@@ -1,20 +1,28 @@
-//! [`PolicyStore`]-Implementierung für Teil 2 dieser Spec.
+//! [`PolicyStore`]-Implementierung für "es sind (in diesem Kontext) keine
+//! Nutzerregeln zu berücksichtigen".
 //!
-//! Es existiert noch keine Regel-Verwaltungs-UI (weder in Spec 0007 Teil 1
-//! noch Teil 2 vorgesehen — das ist laut Spec 0007 Abschnitt 1 Teil der
-//! separaten "Ausbaustufe 2"-Folge-Spec). `NoRulesPolicyStore` ist deshalb
-//! keine Attrappe, sondern die schlicht korrekte Implementierung für "es
-//! sind noch keine Nutzerregeln konfiguriert": [`FilterEngine::evaluate`]
+//! Ursprünglich (Spec 0007) die einzige verfügbare `PolicyStore`-
+//! Implementierung überhaupt, mangels einer Regel-Verwaltungs-UI — seit
+//! Spec 0009 (`persistence_sqlite::SqlitePolicyStore`, s.
+//! `crate::state::AppState::policy_store`) übernimmt die echte
+//! Verbindungen (`crate::commands::connect`). Deshalb jetzt `#[cfg(test)]`
+//! (s. `crate::lib`): `NoRulesPolicyStore` lebt nur noch als expliziter,
+//! klar benannter Testdouble überall dort (v. a. `crate::orchestration`-
+//! Tests), wo ein `PolicyStore` gebraucht wird, dessen konkretes Verhalten
+//! für den jeweiligen Test irrelevant ist — [`FilterEngine::evaluate`]
 //! fällt dann auf ihre eingebauten Defaults zurück (Hard-Blacklist bleibt
 //! aktiv, alles andere landet auf `Confirm` statt `AutoExec`, s. Spec 0002
-//! Abschnitt 3) — sicheres Verhalten ganz ohne Regel-Pflege.
+//! Abschnitt 3).
+
+use async_trait::async_trait;
 
 use ssh_manager_core::filter::{EffectiveScope, PolicyStore, Rule};
 
 pub struct NoRulesPolicyStore;
 
+#[async_trait]
 impl PolicyStore for NoRulesPolicyStore {
-    fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
         Vec::new()
     }
 }

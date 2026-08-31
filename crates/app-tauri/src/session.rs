@@ -31,6 +31,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
 
+use async_trait::async_trait;
 use tokio::sync::{mpsc, Mutex as AsyncMutex};
 
 use ssh_manager_core::ai::{AiProvider, OutputRedactor, SessionContext};
@@ -47,13 +48,18 @@ use crate::state::SessionId;
 /// (Tests wollen unterschiedliche `PolicyStore`-Implementierungen
 /// einsetzen können, ohne `Session` selbst generisch machen zu müssen) —
 /// ein kleines, dyn-kompatibles Trait löst das, analog zu `EventEmitter`.
+///
+/// `async fn` seit Spec 0009 (`PolicyStore::rules_for` liest jetzt aus der
+/// SQLite-Datenbank).
+#[async_trait]
 pub trait CommandEvaluator: Send + Sync {
-    fn evaluate(&self, command: &str, ctx: &EvalContext) -> Decision;
+    async fn evaluate(&self, command: &str, ctx: &EvalContext) -> Decision;
 }
 
+#[async_trait]
 impl<S: PolicyStore + Send + Sync> CommandEvaluator for FilterEngine<S> {
-    fn evaluate(&self, command: &str, ctx: &EvalContext) -> Decision {
-        FilterEngine::evaluate(self, command, ctx)
+    async fn evaluate(&self, command: &str, ctx: &EvalContext) -> Decision {
+        FilterEngine::evaluate(self, command, ctx).await
     }
 }
 
