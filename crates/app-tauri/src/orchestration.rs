@@ -190,7 +190,7 @@ async fn handle_action_proposed(
     round: usize,
 ) -> bool {
     let action_id: ActionId = Uuid::new_v4();
-    let mut decision = evaluate_action(session, &action).await;
+    let mut decision = evaluate_action(session, &action, profile_store).await;
 
     // Spec 0013, SEC-03: In automatischen Folgerunden (round >= 2) wird jede
     // SuggestCommand-Aktion, die AutoExec wäre, auf Confirm hochgestuft,
@@ -262,12 +262,21 @@ async fn handle_action_proposed(
 /// `AiAction::ProposeNoteUpdate` verlangt **immer** eine Bestätigung,
 /// unabhängig von der Filter-Engine (Spec 0003, Abschnitt 5.2 — explizit
 /// wiederholt in Spec 0007, Abschnitt 6, letzter Punkt).
-async fn evaluate_action(session: &Session, action: &AiAction) -> Decision {
+async fn evaluate_action(
+    session: &Session,
+    action: &AiAction,
+    profile_store: &dyn ProfileStore,
+) -> Decision {
     match action {
         AiAction::SuggestCommand { command } => {
+            let tags = profile_store
+                .get_server(&session.server_id)
+                .await
+                .map(|s| s.tags)
+                .unwrap_or_else(|_| session.tags.clone());
             let ctx = EvalContext {
                 server_id: session.server_id,
-                tags: session.tags.clone(),
+                tags,
             };
             session.filter_engine.evaluate(command, &ctx).await
         }
@@ -321,9 +330,14 @@ async fn handle_user_decision(
                 // Bearbeiten-Dialog *ist* bereits die verlangte
                 // Bestätigung.
                 AiAction::SuggestCommand { .. } => {
+                    let tags = profile_store
+                        .get_server(&session.server_id)
+                        .await
+                        .map(|s| s.tags)
+                        .unwrap_or_else(|_| session.tags.clone());
                     let ctx = EvalContext {
                         server_id: session.server_id,
-                        tags: session.tags.clone(),
+                        tags,
                     };
                     let re_decision = session.filter_engine.evaluate(&edited, &ctx).await;
                     if let Decision::Deny { reason } = re_decision {

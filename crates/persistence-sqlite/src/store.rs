@@ -111,6 +111,12 @@ impl SqliteProfileStore {
         crate::SqlitePolicyStore::new(self.pool.clone())
     }
 
+    /// Wie [`Self::ai_provider_store`], für die Chat-Prompt-Historie (Spec
+    /// 0015).
+    pub fn prompt_history_store(&self) -> crate::SqlitePromptHistoryStore {
+        crate::SqlitePromptHistoryStore::new(self.pool.clone())
+    }
+
     async fn fetch_tags(&self, server_id: &str) -> ProfileResult<Vec<String>> {
         let rows = sqlx::query("SELECT tag FROM server_tags WHERE server_id = ? ORDER BY tag")
             .bind(server_id)

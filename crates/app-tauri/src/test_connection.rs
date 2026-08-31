@@ -494,10 +494,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(matches!(
-            result,
-            TestConnectionResult::AuthenticationFailed { .. }
-        ));
+        assert!(matches!(result, TestConnectionResult::AuthenticationFailed));
     }
 
     #[tokio::test]

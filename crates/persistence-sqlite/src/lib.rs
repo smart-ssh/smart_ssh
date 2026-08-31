@@ -11,6 +11,7 @@ mod error;
 mod mapping;
 mod paths;
 mod policy_store;
+mod prompt_history_store;
 mod store;
 
 #[cfg(test)]
@@ -22,4 +23,5 @@ pub use ai_provider_store::{
 pub use error::{PersistenceError, PersistenceResult};
 pub use paths::default_db_path;
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};
+pub use prompt_history_store::{PromptHistoryStoreError, SqlitePromptHistoryStore};
 pub use store::SqliteProfileStore;

@@ -46,6 +46,7 @@ fn build_app_state() -> AppState {
         .expect("SQLite-Datenbank konnte nicht geöffnet/migriert werden");
     let ai_provider_store = profile_store.ai_provider_store();
     let policy_store = profile_store.policy_store();
+    let prompt_history_store = profile_store.prompt_history_store();
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
     // `crate::host_key_store`-Modul-Kommentar zur Begründung (der
@@ -64,6 +65,7 @@ fn build_app_state() -> AppState {
         ai_provider_store: Arc::new(ai_provider_store),
         host_key_store: Arc::new(host_key_store),
         policy_store,
+        prompt_history_store,
         pending_host_key_confirmations: ConfirmationRegistry::new(),
         pending_action_confirmations: ConfirmationRegistry::new(),
     }
@@ -143,6 +145,7 @@ pub fn run() {
             commands::read_credential_file,
             commands::get_platform,
             commands::create_overlay_titlebar,
+            commands::list_prompt_history,
         ])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Tauri-App");

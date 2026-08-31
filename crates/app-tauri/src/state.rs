@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use persistence_sqlite::{SqliteAiProviderStore, SqlitePolicyStore};
+use persistence_sqlite::{SqliteAiProviderStore, SqlitePolicyStore, SqlitePromptHistoryStore};
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore};
 use ssh_manager_core::ssh::HostKeyStore;
 
@@ -40,6 +40,10 @@ pub struct AppState {
     /// nicht, ein `.clone()` reicht (klont nur den intern bereits
     /// referenzgezählten `SqlitePool`).
     pub policy_store: SqlitePolicyStore,
+    /// Spec 0015: pro-Server-Prompt-Historie für die Pfeiltasten-Navigation
+    /// im Chat-Eingabefeld — wie `policy_store` `Clone` statt `Arc<dyn ...>`
+    /// (kein eigener Trait, teilt sich nur den `SqlitePool`).
+    pub prompt_history_store: SqlitePromptHistoryStore,
 
     /// Wartende `connect()`-Aufrufe, die auf `confirm_host_key` warten (s.
     /// `crate::commands::connect`). Schlüssel ist die `SessionId`, die

@@ -14,9 +14,12 @@ use ssh_manager_core::ai::{
     default_action_schemas, ChatMessage, DefaultOutputRedactor, MessageContent, ProviderId, Role,
     SessionContext,
 };
-use ssh_manager_core::filter::{hard_blacklist_patterns, FilterEngine, RuleId, Scope};
+use ssh_manager_core::filter::{
+    hard_blacklist_patterns, EffectiveScope, EvalContext, FilterEngine, PolicyStore, RuleAction,
+    RuleId, Scope,
+};
 use ssh_manager_core::profiles::{
-    effective_notes, record_revision, Group, GroupId, NoteEditor, NoteTarget, Server,
+    effective_notes, record_revision, Group, GroupId, NoteEditor, NoteTarget, ProfileStore, Server,
 };
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, PtySize};
@@ -274,31 +277,22 @@ pub async fn connect(
         }
     };
 
-    // Bestmöglicher, nicht-fataler Versuch, den `system_context` um
-    // Remote-OS-Info zu ergänzen (Spec 0006, `SessionContext.system_context`-
-    // Doc: "effective_notes() + OS/Distro-Info"). Schlägt `uname` fehl (z. B.
-    // ein Windows-Zielsystem ohne POSIX-Tools) oder enthält die Ausgabe
-    // ungültige/verdächtige Zeichen (Spec 0013, SEC-02), bleibt der Kontext
-    // einfach ohne diesen Abschnitt.
-    let notes = effective_notes(&server, state.profile_store.as_ref()).await?;
-    let mut system_context = format!(
-        "Du bist ein intelligenter SSH- und System-Administrations-Assistent für den Server '{}'.\n\
-         Du unterstützt den Administrator bei der Analyse, Wartung und Verwaltung des Systems.\n\n\
-         Wichtige Handlungsanweisungen für Werkzeuge:\n\
-         - Wenn du Befehle auf dem Remote-Server ausführen möchtest, schlage sie mit dem Werkzeug `suggest_command` vor.\n\
-         - Wenn der Nutzer nach einem Dokument, Bericht, einer Zusammenfassung als Datei, einer Analyse oder einem Word-/Markdown-Export fragt, erstelle den vollständigen Inhalt und rufe IMMER das Werkzeug `generate_document` auf. Antworte in diesem Fall nicht nur mit einfachem Chat-Text und behaupte nicht, das Dokument erstellt zu haben, ohne die Funktion aufzurufen.\n\
-         - Wenn wichtige permanente Erkenntnisse über den Server oder die Gruppe festgehalten werden sollen, schlage eine Notiz-Aktualisierung mit `propose_note_update` vor.",
-        server.name
-    );
-    if !notes.is_empty() {
-        system_context.push_str(&format!("\n\n## Notizen / Kontext\n{}", notes));
-    }
-    if let Ok(uname_output) = transport.execute("uname -a").await {
+    let sanitized_os = if let Ok(uname_output) = transport.execute("uname -a").await {
         let uname_text = String::from_utf8_lossy(&uname_output.stdout);
-        if let Some(sanitized) = sanitize_uname_output(&uname_text) {
-            system_context.push_str(&format!("\n\n## Remote-System\n{}", sanitized));
-        }
-    }
+        sanitize_uname_output(&uname_text)
+    } else {
+        None
+    };
+
+    let system_context = build_session_system_context(
+        &server.name,
+        &server_id,
+        &server.tags,
+        sanitized_os.as_deref(),
+        state.profile_store.as_ref(),
+        &state.policy_store,
+    )
+    .await;
 
     let session = Arc::new(Session {
         transport: tokio::sync::Mutex::new(transport),
@@ -320,6 +314,57 @@ pub async fn connect(
 
     emit_connection_status_changed(&app, session_id, ConnectionStatus::Connected, None);
     Ok(session_id)
+}
+
+async fn build_session_system_context(
+    server_name: &str,
+    server_id: &ServerId,
+    tags: &[String],
+    remote_os_info: Option<&str>,
+    profile_store: &dyn ProfileStore,
+    policy_store: &persistence_sqlite::SqlitePolicyStore,
+) -> String {
+    let notes = if let Ok(s) = profile_store.get_server(server_id).await {
+        effective_notes(&s, profile_store).await.unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let mut context = format!(
+        "Du bist ein intelligenter SSH- und System-Administrations-Assistent für den Server '{server_name}'.\n\
+         Du unterstützt den Administrator bei der Analyse, Wartung und Verwaltung des Systems.\n\n\
+         Wichtige Handlungsanweisungen für Werkzeuge:\n\
+         - Wenn du Befehle auf dem Remote-Server ausführen möchtest, schlage sie mit dem Werkzeug `suggest_command` vor.\n\
+         - Wenn der Nutzer nach einem Dokument, Bericht, einer Zusammenfassung als Datei, einer Analyse oder einem Word-/Markdown-Export fragt, erstelle den vollständigen Inhalt und rufe IMMER das Werkzeug `generate_document` auf. Antworte in diesem Fall nicht nur mit einfachem Chat-Text und behaupte nicht, das Dokument erstellt zu haben, ohne die Funktion aufzurufen.\n\
+         - Wenn wichtige permanente Erkenntnisse über den Server oder die Gruppe festgehalten werden sollen, schlage eine Notiz-Aktualisierung mit `propose_note_update` vor."
+    );
+
+    let eval_ctx = EvalContext {
+        server_id: *server_id,
+        tags: tags.to_vec(),
+    };
+    let scope = EffectiveScope::from(&eval_ctx);
+    let rules = policy_store.rules_for(&scope).await;
+    let allow_rules: Vec<String> = rules
+        .iter()
+        .filter(|r| r.action == RuleAction::Allow)
+        .map(|r| format!("- `{}` ({})", r.pattern.display_text(), r.pattern.kind_str()))
+        .collect();
+
+    if !allow_rules.is_empty() {
+        context.push_str("\n\n## Freigegebene Befehle (Whitelist / AutoExec)\nDie folgenden Befehle sind für diesen Server freigegeben und können ohne Rückfrage direkt ausgeführt werden:\n");
+        context.push_str(&allow_rules.join("\n"));
+    }
+
+    if !notes.is_empty() {
+        context.push_str(&format!("\n\n## Notizen / Kontext\n{notes}"));
+    }
+
+    if let Some(os) = remote_os_info {
+        context.push_str(&format!("\n\n## Remote-System\n{os}"));
+    }
+
+    context
 }
 
 #[tauri::command]
@@ -418,27 +463,43 @@ pub async fn send_chat_message(
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
 
+    // Spec 0015, Abschnitt 3: Prompt-Historie ist eine Zusatzfunktion für
+    // die Pfeiltasten-Navigation im Eingabefeld — ein Fehlschlag beim
+    // Persistieren (z. B. kurzzeitig gesperrte DB) soll den eigentlichen
+    // Chat-Versand nicht verhindern, deshalb best-effort statt `?`.
+    if let Err(err) = state
+        .prompt_history_store
+        .record(&session.server_id, &text)
+        .await
+    {
+        eprintln!("Prompt konnte nicht in der Historie gespeichert werden: {err}");
+    }
+
+    let (server_name, current_tags) = match state.profile_store.get_server(&session.server_id).await {
+        Ok(s) => (s.name, s.tags),
+        Err(_) => ("Server".to_string(), session.tags.clone()),
+    };
+
+    let remote_os = {
+        let ctx = session.context.lock().await;
+        ctx.system_context
+            .find("## Remote-System\n")
+            .map(|pos| ctx.system_context[pos + "## Remote-System\n".len()..].to_string())
+    };
+
+    let updated_system_context = build_session_system_context(
+        &server_name,
+        &session.server_id,
+        &current_tags,
+        remote_os.as_deref(),
+        state.profile_store.as_ref(),
+        &state.policy_store,
+    )
+    .await;
+
     {
         let mut ctx = session.context.lock().await;
-        if !ctx.system_context.contains("Wichtige Handlungsanweisungen für Werkzeuge") {
-            let server_name = state
-                .profile_store
-                .get_server(&session.server_id)
-                .await
-                .ok()
-                .map(|s| s.name)
-                .unwrap_or_else(|| "Server".to_string());
-            let existing_context = std::mem::take(&mut ctx.system_context);
-            ctx.system_context = format!(
-                "Du bist ein intelligenter SSH- und System-Administrations-Assistent für den Server '{server_name}'.\n\
-                 Du unterstützt den Administrator bei der Analyse, Wartung und Verwaltung des Systems.\n\n\
-                 Wichtige Handlungsanweisungen für Werkzeuge:\n\
-                 - Wenn du Befehle auf dem Remote-Server ausführen möchtest, schlage sie mit dem Werkzeug `suggest_command` vor.\n\
-                 - Wenn der Nutzer nach einem Dokument, Bericht, einer Zusammenfassung als Datei, einer Analyse oder einem Word-/Markdown-Export fragt, erstelle den vollständigen Inhalt und rufe IMMER das Werkzeug `generate_document` auf. Antworte in diesem Fall nicht nur mit einfachem Chat-Text und behaupte nicht, das Dokument erstellt zu haben, ohne die Funktion aufzurufen.\n\
-                 - Wenn wichtige permanente Erkenntnisse über den Server oder die Gruppe festgehalten werden sollen, schlage eine Notiz-Aktualisierung mit `propose_note_update` vor.\n\n\
-                 {existing_context}"
-            );
-        }
+        ctx.system_context = updated_system_context;
         ctx.history.push(ChatMessage {
             role: Role::User,
             content: MessageContent::Text(text),
@@ -957,6 +1018,19 @@ pub async fn export_document(
     }
 
     Ok(())
+}
+
+// --- Spec 0015: Chat-Prompt-Historie ---------------------------------------
+
+/// Spec 0015, Abschnitt 4: liefert die gespeicherten Prompts eines Servers
+/// chronologisch aufsteigend (älteste zuerst) — das Frontend kehrt für die
+/// Pfeiltasten-Navigation selbst um bzw. greift von hinten zu.
+#[tauri::command]
+pub async fn list_prompt_history(
+    state: State<'_, AppState>,
+    server_id: ServerId,
+) -> CommandResult<Vec<String>> {
+    Ok(state.prompt_history_store.list(&server_id).await?)
 }
 
 /// Validiert und bereinigt `uname -a` Output (Spec 0013, SEC-02) vor der
