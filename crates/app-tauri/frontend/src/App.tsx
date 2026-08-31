@@ -42,7 +42,14 @@ function App() {
     // Ebene statt dupliziert an einen der beiden Zweige unten gebunden
     // (das würde bei jedem Wechsel zwischen Session-/Tab-Ansicht einen
     // unnötigen Remount auslösen).
-    <div className="flex h-screen flex-col bg-slate-900 text-slate-100 overflow-hidden select-none">
+    // Bewusst KEIN `select-none` auf dieser Ebene (s. Spec 0016, Abschnitt
+    // 3, Untersuchung Textmarkierung): `user-select: none` vererbt sich auf
+    // alle Kindelemente ohne expliziten Gegen-`select-text` — ein
+    // `select-none` hier hätte Text im gesamten Chat-/Terminal-/
+    // Notizbereich unmarkierbar gemacht. `AppHeader` trägt bereits sein
+    // eigenes, korrekt auf die Titelleisten-Drag-Region begrenztes
+    // `select-none` (Spec 0014).
+    <div className="flex h-screen flex-col bg-slate-900 text-slate-100 overflow-hidden">
       <AppHeader />
       <NoteSuggestionToast />
       {activeSession ? (
