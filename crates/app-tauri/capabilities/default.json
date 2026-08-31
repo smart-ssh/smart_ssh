@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability für das Hauptfenster — erlaubt der Webview alle eigenen `#[tauri::command]`s (implizit, da keine Plugin-Commands im Spiel sind) sowie die Core-Events (`core:event:default`), die `crate::events`/das Frontend für `listen()` braucht.",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:event:default"]
+}
