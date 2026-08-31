@@ -5,9 +5,14 @@ use super::types::Pattern;
 /// Fest codierte, über die öffentliche API nicht entfernbare Menge
 /// gefährlicher Kommando-Muster (Spec 0002, Abschnitt 3.1).
 ///
-/// Bewusst ohne `pub`: kein Aufrufer außerhalb dieses Moduls bekommt eine
-/// Referenz auf die Liste selbst, die einzige Zugriffsstelle ist
-/// [`matches_any`].
+/// `pub(super)` statt privat: Spec 0009 Abschnitt 6 verlangt eine
+/// **read-only** Anzeige dieser Liste im UI ("damit der Nutzer weiß, dass
+/// diese existieren, auch wenn er sie nicht ändern kann") — die
+/// ursprüngliche Kapselung war gegen *Veränderung/Umgehung* der Liste
+/// gedacht, nicht gegen reinen Lesezugriff für Anzeigezwecke. Bleibt aber
+/// weiterhin auf `filter` beschränkt (kein `pub` bis zur Crate-Wurzel);
+/// [`crate::filter::hard_blacklist_patterns`] ist der öffentliche
+/// Read-Only-Zugriffspunkt für Aufrufer außerhalb von `core`.
 ///
 /// MVP-Heuristiken, kein Anspruch auf Vollständigkeit — jedes Muster deckt
 /// bewusst eine ganze *Familie* gefährlicher Kommandos ab (nicht nur das
@@ -16,7 +21,7 @@ use super::types::Pattern;
 /// als zusätzliche Sicherheitsmarge (Verteidigung in der Tiefe) — anders als
 /// bei Nutzerregeln, wo Groß-/Kleinschreibung bewusst relevant bleibt (siehe
 /// `pattern.rs`).
-fn hard_blacklist() -> &'static [Pattern] {
+pub(super) fn hard_blacklist() -> &'static [Pattern] {
     use Pattern::{Exact, Glob, Regex};
     static BLACKLIST: OnceLock<Vec<Pattern>> = OnceLock::new();
     BLACKLIST.get_or_init(|| {
@@ -43,12 +48,17 @@ fn hard_blacklist() -> &'static [Pattern] {
     })
 }
 
-pub(super) fn matches_any(cmd: &str) -> bool {
+/// Liefert einen Anzeigetext des **ersten** gegriffenen Musters, falls eines
+/// gegriffen hat — für `EvaluationTrace::matched_hard_blacklist_entry` (Spec
+/// 0009, Abschnitt 4) ebenso wie für die reine Ja/Nein-Prüfung in
+/// `evaluate_segment_explained` (dort per `.is_some()`).
+pub(super) fn matching_entry(cmd: &str) -> Option<String> {
     // Alle Blacklist-Muster sind bereits in Kleinschreibung formuliert, daher
     // reicht es, `cmd` einmal hier zu lowercasen, um case-insensitives
     // Matching für Glob/Exact/Regex einheitlich zu erreichen.
     let lower = cmd.to_lowercase();
     hard_blacklist()
         .iter()
-        .any(|pattern| pattern.matches(&lower))
+        .find(|pattern| pattern.matches(&lower))
+        .map(|pattern| pattern.display_text().to_string())
 }

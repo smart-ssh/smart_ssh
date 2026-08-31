@@ -1,8 +1,12 @@
 use std::cmp::Ordering;
 
+use async_trait::async_trait;
+
 use super::blacklist;
 use super::parser::{self, ParseResult};
-use super::types::{Decision, EffectiveScope, EvalContext, Rule, RuleAction, Scope};
+use super::types::{
+    Decision, EffectiveScope, EvalContext, EvaluationTrace, Rule, RuleAction, RuleId, Scope,
+};
 
 /// Ab dieser Zeichenlänge wird ein Kommando ungeprüft auf `Confirm` gesetzt,
 /// statt es vollständig zu parsen (Spec 0002, Abschnitt 6, Testfall 11).
@@ -14,8 +18,14 @@ pub const DEFAULT_MAX_COMMAND_LENGTH: usize = 4096;
 ///
 /// Als Trait modelliert, damit Tests eine In-Memory-Implementierung nutzen
 /// können, ohne von der späteren Datenbank-Anbindung abzuhängen.
+///
+/// `async fn` (Spec 0009, Abschnitt 2): `SqlitePolicyStore` liest die
+/// Regeln aus der SQLite-Datenbank, was I/O ist — dasselbe Vorgehen wie
+/// beim `ProfileStore`-Umbau in Spec 0004 (`async-trait`, Trait-Objekt bleibt
+/// über `Box`/`Arc<dyn ...>` nutzbar).
+#[async_trait]
 pub trait PolicyStore {
-    fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule>;
+    async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule>;
 }
 
 /// Wertet Kommandos gegen die Hard-Blacklist und die vom [`PolicyStore`]
@@ -43,51 +53,113 @@ impl<S: PolicyStore> FilterEngine<S> {
     /// Voller Präzedenz-Ablauf aus Spec Abschnitt 3: Hard-Blacklist → Deny →
     /// Confirm → Allow → Default Confirm, angewandt auf jedes Teilkommando
     /// (Abschnitt 4), strengstes Ergebnis gewinnt.
-    pub fn evaluate(&self, command: &str, ctx: &EvalContext) -> Decision {
+    ///
+    /// Ruft intern [`Self::evaluate_explained`] auf und behält nur die
+    /// `Decision` — Spec 0009, Abschnitt 4: "Diese Methode [`evaluate_explained`]
+    /// wird nicht im eigentlichen KI-Kommando-Loop verwendet". Die eigentliche
+    /// Auswertungslogik existiert dadurch nur einmal statt zweimal.
+    pub async fn evaluate(&self, command: &str, ctx: &EvalContext) -> Decision {
+        self.evaluate_explained(command, ctx).await.decision
+    }
+
+    /// Wie [`Self::evaluate`], liefert aber zusätzlich eine nachvollziehbare
+    /// [`EvaluationTrace`] (Spec 0009, Abschnitt 4) — ausschließlich für die
+    /// Testen-Funktion im UI gedacht (s. dortiger Doc-Kommentar), nicht für
+    /// die Kernschleife selbst.
+    pub async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace {
         if command.trim().is_empty() {
             // Testfall 10: leerer/reiner Whitespace-String -> Deny, nicht nur
             // Confirm, da es schlicht kein Kommando gibt, das ausgeführt
             // werden könnte.
-            return Decision::Deny {
-                reason: "kein sinnvolles Kommando (leere Eingabe)".to_string(),
+            return EvaluationTrace {
+                decision: Decision::Deny {
+                    reason: "kein sinnvolles Kommando (leere Eingabe)".to_string(),
+                },
+                matched_rule: None,
+                matched_hard_blacklist_entry: None,
+                sub_command_traces: Vec::new(),
             };
         }
         if command.chars().count() > self.max_command_length {
             // Testfall 11: bewusst VOR jedem Parsing/Blacklist-Scan geprüft,
             // damit extrem lange Payloads gar nicht erst vollständig
             // analysiert werden müssen.
-            return Decision::Confirm {
-                reason: format!(
-                    "Kommando überschreitet Längenlimit von {} Zeichen",
-                    self.max_command_length
-                ),
+            return EvaluationTrace {
+                decision: Decision::Confirm {
+                    reason: format!(
+                        "Kommando überschreitet Längenlimit von {} Zeichen",
+                        self.max_command_length
+                    ),
+                },
+                matched_rule: None,
+                matched_hard_blacklist_entry: None,
+                sub_command_traces: Vec::new(),
             };
         }
 
         let scope = EffectiveScope::from(ctx);
-        let rules = self.store.rules_for(&scope);
-        self.evaluate_parsed(command, &rules)
+        let rules = self.store.rules_for(&scope).await;
+        self.evaluate_parsed_explained(command, &rules)
     }
 
-    fn evaluate_parsed(&self, command: &str, rules: &[Rule]) -> Decision {
+    /// Zerlegt `command` in Teilkommandos und wertet sie aus. Bei genau
+    /// einem Teilkommando (der Normalfall, kein Chaining) wird dessen Trace
+    /// direkt zurückgegeben statt in einen redundanten Wrapper-Trace
+    /// eingepackt — `matched_rule`/`matched_hard_blacklist_entry` bleiben so
+    /// auch für einzelne Kommandos aussagekräftig. Erst bei **mehreren**
+    /// Teilkommandos (echtes Chaining, Spec 0002 Abschnitt 4) entsteht ein
+    /// Wrapper-Trace ohne eigenes `matched_rule` (das wäre über mehrere,
+    /// potenziell unterschiedliche Teilkommandos hinweg nicht mehr
+    /// eindeutig), aber mit einem `sub_command_traces`-Eintrag pro
+    /// Teilkommando — genau das macht Spec 0009 Abschnitt 6 für die
+    /// Testen-Anzeige ("jeder Teil einzeln ... plus die Gesamt-Entscheidung").
+    fn evaluate_parsed_explained(&self, command: &str, rules: &[Rule]) -> EvaluationTrace {
         match parser::split_command(command) {
-            ParseResult::Empty => Decision::Deny {
-                reason: "kein sinnvolles Kommando (leere Eingabe)".to_string(),
+            ParseResult::Empty => EvaluationTrace {
+                decision: Decision::Deny {
+                    reason: "kein sinnvolles Kommando (leere Eingabe)".to_string(),
+                },
+                matched_rule: None,
+                matched_hard_blacklist_entry: None,
+                sub_command_traces: Vec::new(),
             },
-            ParseResult::Ambiguous { reason } => Decision::Confirm { reason },
-            ParseResult::Segments(segments) => segments
-                .into_iter()
-                .map(|segment| self.evaluate_segment(&segment, rules))
-                .fold(Decision::AutoExec, combine),
+            ParseResult::Ambiguous { reason } => EvaluationTrace {
+                decision: Decision::Confirm { reason },
+                matched_rule: None,
+                matched_hard_blacklist_entry: None,
+                sub_command_traces: Vec::new(),
+            },
+            ParseResult::Segments(segments) if segments.len() == 1 => {
+                self.evaluate_segment_explained(&segments[0], rules)
+            }
+            ParseResult::Segments(segments) => {
+                let sub_command_traces: Vec<EvaluationTrace> = segments
+                    .iter()
+                    .map(|segment| self.evaluate_segment_explained(segment, rules))
+                    .collect();
+                let decision = sub_command_traces
+                    .iter()
+                    .map(|trace| trace.decision.clone())
+                    .fold(Decision::AutoExec, combine);
+                EvaluationTrace {
+                    decision,
+                    matched_rule: None,
+                    matched_hard_blacklist_entry: None,
+                    sub_command_traces,
+                }
+            }
         }
     }
 
-    fn evaluate_segment(&self, raw_segment: &str, rules: &[Rule]) -> Decision {
+    /// Wertet genau ein Teilkommando aus — Hard-Blacklist, Nutzerregeln und
+    /// rekursiv jede darin gefundene Command-Substitution (als
+    /// `sub_command_traces`, s. `EvaluationTrace`-Doc-Kommentar).
+    fn evaluate_segment_explained(&self, raw_segment: &str, rules: &[Rule]) -> EvaluationTrace {
         let normalized = parser::normalize_whitespace(raw_segment);
         // `elevated` wird bewusst nicht in die öffentliche `Decision`
         // geschrieben (die laut Spec Abschnitt 5 exakt AutoExec/Confirm/Deny
-        // ist) — siehe Kommentar bei `text_matches` dazu, wie das Elevated-
-        // Wissen stattdessen ins Matching einfließt.
+        // ist) — siehe Kommentar bei `evaluate_rules_explained` dazu, wie das
+        // Elevated-Wissen stattdessen ins Matching einfließt.
         let (_elevated, stripped) = parser::detect_elevation(&normalized);
 
         let (original_literal, _) = parser::strip_substitutions(&normalized);
@@ -95,9 +167,9 @@ impl<S: PolicyStore> FilterEngine<S> {
         let original_literal = parser::normalize_whitespace(&original_literal);
         let stripped_literal = parser::normalize_whitespace(&stripped_literal);
 
-        let blacklist_decision = if blacklist::matches_any(&original_literal)
-            || blacklist::matches_any(&stripped_literal)
-        {
+        let matched_hard_blacklist_entry = blacklist::matching_entry(&original_literal)
+            .or_else(|| blacklist::matching_entry(&stripped_literal));
+        let blacklist_decision = if matched_hard_blacklist_entry.is_some() {
             Decision::Confirm {
                 reason: "Hard-Blacklist: potenziell gefährliches Kommando".to_string(),
             }
@@ -105,14 +177,19 @@ impl<S: PolicyStore> FilterEngine<S> {
             Decision::AutoExec
         };
 
-        let rule_decision = evaluate_rules(rules, &original_literal, &stripped_literal);
+        let (rule_decision, matched_rule) =
+            evaluate_rules_explained(rules, &original_literal, &stripped_literal);
 
-        let substitution_decision = if inner_contents.is_empty() {
+        let sub_command_traces: Vec<EvaluationTrace> = inner_contents
+            .into_iter()
+            .map(|inner| self.evaluate_parsed_explained(&inner, rules))
+            .collect();
+        let substitution_decision = if sub_command_traces.is_empty() {
             Decision::AutoExec
         } else {
-            let inner_decision = inner_contents
-                .into_iter()
-                .map(|inner| self.evaluate_parsed(&inner, rules))
+            let inner_decision = sub_command_traces
+                .iter()
+                .map(|trace| trace.decision.clone())
                 .fold(Decision::AutoExec, combine);
             combine(
                 inner_decision,
@@ -122,10 +199,17 @@ impl<S: PolicyStore> FilterEngine<S> {
             )
         };
 
-        combine(
+        let decision = combine(
             combine(rule_decision, substitution_decision),
             blacklist_decision,
-        )
+        );
+
+        EvaluationTrace {
+            decision,
+            matched_rule,
+            matched_hard_blacklist_entry,
+            sub_command_traces,
+        }
     }
 }
 
@@ -146,7 +230,13 @@ impl<S: PolicyStore> FilterEngine<S> {
 /// Matching-Feld (kein `elevated`-Flag am Pattern). Dual-Matching gegen
 /// beide Text-Varianten löst den Widerspruch, ohne die in Abschnitt 2 fest
 /// vorgegebenen Typen zu erweitern. Siehe `docs/adr/0002-sudo-dual-text-matching.md`.
-fn evaluate_rules(rules: &[Rule], original: &str, stripped: &str) -> Decision {
+/// Wie zuvor `evaluate_rules`, liefert zusätzlich die `RuleId` der
+/// gegriffenen Regel (falls eine gegriffen hat) für `EvaluationTrace`.
+fn evaluate_rules_explained(
+    rules: &[Rule],
+    original: &str,
+    stripped: &str,
+) -> (Decision, Option<RuleId>) {
     for action in [RuleAction::Deny, RuleAction::Confirm, RuleAction::Allow] {
         let mut bucket: Vec<&Rule> = rules.iter().filter(|r| r.action == action).collect();
         bucket.sort_by(|a, b| {
@@ -159,7 +249,7 @@ fn evaluate_rules(rules: &[Rule], original: &str, stripped: &str) -> Decision {
             let is_match = rule.pattern.matches(original)
                 || (original != stripped && rule.pattern.matches(stripped));
             if is_match {
-                return match action {
+                let decision = match action {
                     RuleAction::Deny => Decision::Deny {
                         reason: format!("Regel '{}' (Deny)", rule.id),
                     },
@@ -168,11 +258,29 @@ fn evaluate_rules(rules: &[Rule], original: &str, stripped: &str) -> Decision {
                     },
                     RuleAction::Allow => Decision::AutoExec,
                 };
+                return (decision, Some(rule.id.clone()));
             }
         }
     }
-    Decision::Confirm {
-        reason: "keine Regel gefunden".to_string(),
+    (
+        Decision::Confirm {
+            reason: "keine Regel gefunden".to_string(),
+        },
+        None,
+    )
+}
+
+/// Ob `scope` für eine Auswertung im gegebenen `effective` Scope gilt (Spec
+/// 0002, Abschnitt 2/5): `Global` gilt immer, `Server`/`Tag` nur bei exakter
+/// Übereinstimmung. Öffentlich, damit `PolicyStore`-Implementierungen (z. B.
+/// `SqlitePolicyStore` in `persistence-sqlite`) dieselbe Logik verwenden wie
+/// die In-Memory-Testimplementierungen in diesem Crate, statt sie an jeder
+/// Implementierungsstelle erneut nachzubauen.
+pub fn scope_applies(scope: &Scope, effective: &EffectiveScope) -> bool {
+    match scope {
+        Scope::Global => true,
+        Scope::Tag(tag) => effective.tags.contains(tag),
+        Scope::Server(id) => *id == effective.server_id,
     }
 }
 

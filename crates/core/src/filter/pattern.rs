@@ -27,4 +27,27 @@ impl Pattern {
                 .unwrap_or(false),
         }
     }
+
+    /// Rohes Musterliteral, unabhängig von der Variante — für Anzeigezwecke
+    /// (Hard-Blacklist-Liste, `EvaluationTrace::matched_hard_blacklist_entry`,
+    /// Spec 0009 Abschnitt 4/6). Anders als [`Pattern::matches`] absichtlich
+    /// `pub`: reiner Lesezugriff auf den Musterinhalt, kein Teil der
+    /// Matching-Semantik, die Aufrufer außerhalb von `filter` nicht kennen
+    /// sollen.
+    pub fn display_text(&self) -> &str {
+        match self {
+            Pattern::Exact(s) | Pattern::Glob(s) | Pattern::Regex(s) => s,
+        }
+    }
+
+    /// Kurzbezeichner der Variante (`"glob"`/`"regex"`/`"exact"`) — für DTOs
+    /// außerhalb von `core`, die Typ und Wert getrennt darstellen wollen
+    /// (Spec 0009, `RuleInput.pattern_type`).
+    pub fn kind_str(&self) -> &'static str {
+        match self {
+            Pattern::Glob(_) => "glob",
+            Pattern::Regex(_) => "regex",
+            Pattern::Exact(_) => "exact",
+        }
+    }
 }
