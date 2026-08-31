@@ -7,6 +7,7 @@ import { TerminalView } from "./TerminalView";
 interface SessionViewProps {
   sessionId: string;
   serverName: string;
+  serverId: string;
   onDisconnected: () => void;
 }
 
@@ -15,7 +16,7 @@ interface SessionViewProps {
  * Terminal kompakt rechts (Beobachtung/manuelle Zwischen-Eingriffe), sobald
  * eine Session steht.
  */
-export function SessionView({ sessionId, serverName, onDisconnected }: SessionViewProps) {
+export function SessionView({ sessionId, serverName, serverId, onDisconnected }: SessionViewProps) {
   const [statusNote, setStatusNote] = useState<string | null>(null);
 
   useEffect(() => {
@@ -57,7 +58,7 @@ export function SessionView({ sessionId, serverName, onDisconnected }: SessionVi
       </header>
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 border-r border-slate-800">
-          <ChatPanel sessionId={sessionId} />
+          <ChatPanel sessionId={sessionId} serverId={serverId} />
         </div>
         <div className="w-[420px] shrink-0 p-2">
           <TerminalView sessionId={sessionId} />

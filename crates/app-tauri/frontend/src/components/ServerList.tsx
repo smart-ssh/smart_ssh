@@ -5,7 +5,7 @@ import type { HostKeyVerificationNeededEvent, ServerDto } from "../types";
 import { HostKeyDialog } from "./HostKeyDialog";
 
 interface ServerListProps {
-  onConnected: (sessionId: string, serverName: string) => void;
+  onConnected: (sessionId: string, serverName: string, serverId: string) => void;
 }
 
 /**
@@ -44,7 +44,7 @@ export function ServerList({ onConnected }: ServerListProps) {
     setConnectingId(server.id);
     try {
       const sessionId = await connect(server.id);
-      onConnected(sessionId, server.name);
+      onConnected(sessionId, server.name, server.id);
     } catch (err) {
       setError(commandErrorMessage(err));
     } finally {

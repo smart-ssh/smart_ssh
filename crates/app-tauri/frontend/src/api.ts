@@ -11,6 +11,8 @@ import type {
   NoteRevisionDto,
   NoteTarget,
   PatternDto,
+  PatternSuggestionDto,
+  PatternType,
   RuleDto,
   RuleInput,
   Scope,
@@ -140,3 +142,25 @@ export const listKnownTags = () => invoke<string[]>("list_known_tags");
 
 export const evaluateExplained = (command: string, ctx: EvalContextInput) =>
   invoke<EvaluationTraceDto>("evaluate_explained", { command, ctx });
+
+// --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog ------------
+
+export const suggestRulePatterns = (command: string) =>
+  invoke<PatternSuggestionDto[]>("suggest_rule_patterns", { command });
+
+export const acceptAndCreateRule = (
+  sessionId: string,
+  actionId: string,
+  patternType: PatternType,
+  patternValue: string,
+  scope: Scope,
+  priority?: number,
+) =>
+  invoke<string>("accept_and_create_rule", {
+    sessionId,
+    actionId,
+    patternType,
+    patternValue,
+    scope,
+    priority: priority ?? null,
+  });

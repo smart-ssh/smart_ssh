@@ -15,6 +15,7 @@ mod host_key_store;
 mod orchestration;
 #[cfg(test)]
 mod policy;
+mod rule_suggestions;
 mod server_credentials;
 mod session;
 mod state;
@@ -113,6 +114,8 @@ pub fn run() {
             commands::list_hard_blacklist,
             commands::list_known_tags,
             commands::evaluate_explained,
+            commands::suggest_rule_patterns,
+            commands::accept_and_create_rule,
         ])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Tauri-App");

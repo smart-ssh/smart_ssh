@@ -274,3 +274,11 @@ export interface EvaluationTraceDto {
   matchedHardBlacklistEntry: string | null;
   subCommandTraces: EvaluationTraceDto[];
 }
+
+// --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog -----------
+
+export interface PatternSuggestionDto {
+  label: string;
+  patternType: PatternType;
+  patternValue: string;
+}

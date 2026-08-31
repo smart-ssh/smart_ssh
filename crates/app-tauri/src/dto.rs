@@ -542,6 +542,19 @@ impl From<EvaluationTrace> for EvaluationTraceDto {
     }
 }
 
+// --- Spec 0011: Regel-Schnellvorschlag ----------------------------------
+
+/// Ein Muster-Vorschlag für den Schnellvorschlag-Dropdown im
+/// Bestätigungsdialog (Spec 0011, Abschnitt 2).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PatternSuggestionDto {
+    /// Menschenlesbar, für die Dropdown-Anzeige.
+    pub label: String,
+    pub pattern_type: PatternType,
+    pub pattern_value: String,
+}
+
 #[cfg(test)]
 mod tests {
     //! Regressionstest für einen tatsächlich aufgetretenen Bug: serdes

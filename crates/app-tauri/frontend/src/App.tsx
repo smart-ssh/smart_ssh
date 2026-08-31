@@ -10,6 +10,7 @@ import { commandErrorMessage, listAiProviders } from "./api";
 interface ActiveSession {
   sessionId: string;
   serverName: string;
+  serverId: string;
 }
 
 type Tab = "connect" | "manage" | "rules";
@@ -46,6 +47,7 @@ function App() {
         <SessionView
           sessionId={activeSession.sessionId}
           serverName={activeSession.serverName}
+          serverId={activeSession.serverId}
           onDisconnected={() => setActiveSession(null)}
         />
       ) : (
@@ -56,7 +58,9 @@ function App() {
           setSettingsOpen={setSettingsOpen}
           hasActiveProvider={hasActiveProvider}
           refreshProviderStatus={refreshProviderStatus}
-          onConnected={(sessionId, serverName) => setActiveSession({ sessionId, serverName })}
+          onConnected={(sessionId, serverName, serverId) =>
+            setActiveSession({ sessionId, serverName, serverId })
+          }
         />
       )}
     </>
@@ -70,7 +74,7 @@ interface MainScreenProps {
   setSettingsOpen: (open: boolean) => void;
   hasActiveProvider: boolean | null;
   refreshProviderStatus: () => void;
-  onConnected: (sessionId: string, serverName: string) => void;
+  onConnected: (sessionId: string, serverName: string, serverId: string) => void;
 }
 
 function MainScreen({

@@ -25,7 +25,8 @@ use crate::ai_provider_factory::build_ai_provider;
 use crate::dto::{
     credential_ref_for, ActionUserDecision, AiProviderConfigDto, AiProviderConfigInput,
     DeleteGroupResult, EvalContextInput, EvaluationTraceDto, GroupDto, HostKeyUserDecision,
-    NoteRevisionDto, PatternDto, RuleDto, RuleInput, ServerDto, ServerInput, TestConnectionResult,
+    NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType, RuleDto, RuleInput, ServerDto,
+    ServerInput, TestConnectionResult,
 };
 use crate::error::CommandResult;
 use crate::events::{
@@ -815,4 +816,51 @@ pub async fn evaluate_explained(
     ctx: EvalContextInput,
 ) -> CommandResult<EvaluationTraceDto> {
     Ok(crate::filter_rules::evaluate_explained(state.policy_store.clone(), command, ctx).await)
+}
+
+// --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog ---------------
+
+/// Rein lesend, kein `AppState` nötig — reine Textheuristik ohne
+/// Datenbankzugriff (Spec 0011, Abschnitt 2).
+#[tauri::command]
+pub async fn suggest_rule_patterns(command: String) -> CommandResult<Vec<PatternSuggestionDto>> {
+    Ok(crate::rule_suggestions::suggest_rule_patterns(&command))
+}
+
+/// Spec 0011, Abschnitt 3: legt zuerst die Regel an (Schritt 1, delegiert
+/// an [`crate::filter_rules::create_rule`] über
+/// [`crate::rule_suggestions::create_quick_rule`]), löst **danach** die
+/// wartende `Confirm`-Entscheidung für `action_id` auf (Schritt 2) — exakt
+/// wie ein `respond_to_action`-Aufruf mit `Approve`. Schlägt Schritt 1 fehl,
+/// wird Schritt 2 nicht erreicht (kein `?` vor dem `resolve`-Aufruf nötig,
+/// `?` auf `create_quick_rule` selbst genügt) — kein halb abgeschlossener
+/// Zustand (Regel angelegt, aber Dialog bleibt hängen, oder umgekehrt).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn accept_and_create_rule(
+    state: State<'_, AppState>,
+    // Wie bei `respond_to_action` (Spec 0010) Teil der Signatur, aber nicht
+    // die Grundlage für eine Gültigkeitsprüfung — `pending_action_confirmations
+    // .resolve()` prüft `action_id` bereits selbst ausreichend (s. dortiger
+    // Kommentar).
+    session_id: SessionId,
+    action_id: ActionId,
+    pattern_type: PatternType,
+    pattern_value: String,
+    scope: Scope,
+    priority: Option<i32>,
+) -> CommandResult<RuleId> {
+    let _ = session_id;
+    let rule_id = crate::rule_suggestions::create_quick_rule(
+        &state.policy_store,
+        pattern_type,
+        pattern_value,
+        scope,
+        priority,
+    )
+    .await?;
+    state
+        .pending_action_confirmations
+        .resolve(&action_id, ActionUserDecision::Approve)?;
+    Ok(rule_id)
 }

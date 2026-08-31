@@ -2,13 +2,23 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
+  acceptAndCreateRule,
   commandErrorMessage,
   listAiProviders,
   respondToAction,
   sendChatMessage,
+  suggestRulePatterns,
 } from "../api";
 import { onChatActionProposed, onChatActionResult, onChatError, onChatTextDelta } from "../events";
-import type { ActionResultPayload, ActionUserDecision, AiAction, Decision } from "../types";
+import type {
+  ActionResultPayload,
+  ActionUserDecision,
+  AiAction,
+  Decision,
+  PatternSuggestionDto,
+  PatternType,
+  Scope,
+} from "../types";
 
 type ChatItem =
   | { type: "user"; id: string; text: string }
@@ -63,9 +73,12 @@ const freshId = () => `item-${nextId++}`;
 
 interface ChatPanelProps {
   sessionId: string;
+  /** Spec 0011, Abschnitt 4: Default-Scope für den Regel-Schnellvorschlag
+   * ist der aktuell verbundene Server. */
+  serverId: string;
 }
 
-export function ChatPanel({ sessionId }: ChatPanelProps) {
+export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -153,6 +166,30 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
     );
   };
 
+  /** Spec 0011, Abschnitt 3: `accept_and_create_rule` legt die Regel an
+   * **und** löst die Confirm-Entscheidung selbst auf (Backend) — anders als
+   * `respond()` oben ruft dies also `respondToAction` nicht zusätzlich auf. */
+  const acceptWithRule = (
+    actionId: string,
+    patternType: PatternType,
+    patternValue: string,
+    scope: Scope,
+  ) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.type === "action" && item.actionId === actionId
+          ? { ...item, responded: true }
+          : item,
+      ),
+    );
+    acceptAndCreateRule(sessionId, actionId, patternType, patternValue, scope).catch((err) =>
+      setItems((prev) => [
+        ...prev,
+        { type: "error", id: freshId(), message: commandErrorMessage(err) },
+      ]),
+    );
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const text = draft.trim();
@@ -176,7 +213,13 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
     <div className="flex h-full flex-col">
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
         {items.map((item) => (
-          <ChatItemView key={item.id} item={item} onRespond={respond} />
+          <ChatItemView
+            key={item.id}
+            item={item}
+            onRespond={respond}
+            onAcceptWithRule={acceptWithRule}
+            serverId={serverId}
+          />
         ))}
         {showTypingIndicator && <TypingIndicator />}
       </div>
@@ -225,9 +268,18 @@ function TypingIndicator() {
 function ChatItemView({
   item,
   onRespond,
+  onAcceptWithRule,
+  serverId,
 }: {
   item: ChatItem;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
+  onAcceptWithRule: (
+    actionId: string,
+    patternType: PatternType,
+    patternValue: string,
+    scope: Scope,
+  ) => void;
+  serverId: string;
 }) {
   if (item.type === "user") {
     return (
@@ -272,6 +324,8 @@ function ChatItemView({
           actionId={item.actionId}
           initialCommand={command}
           onRespond={onRespond}
+          onAcceptWithRule={onAcceptWithRule}
+          serverId={serverId}
         />
       )}
 
@@ -284,10 +338,19 @@ function ConfirmActionForm({
   actionId,
   initialCommand,
   onRespond,
+  onAcceptWithRule,
+  serverId,
 }: {
   actionId: string;
   initialCommand?: string;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
+  onAcceptWithRule: (
+    actionId: string,
+    patternType: PatternType,
+    patternValue: string,
+    scope: Scope,
+  ) => void;
+  serverId: string;
 }) {
   const [edited, setEdited] = useState(initialCommand ?? "");
 
@@ -309,7 +372,7 @@ function ConfirmActionForm({
           className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 font-mono text-xs text-slate-100"
         />
       )}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => onRespond(actionId, { decision: "deny" })}
@@ -324,7 +387,144 @@ function ConfirmActionForm({
         >
           Ausführen
         </button>
+        {/* Spec 0011: nur für Kommando-Vorschläge sinnvoll, nicht für
+         * Notiz-Aktualisierungen (kein `initialCommand` dort). */}
+        {initialCommand !== undefined && (
+          <QuickRuleButton
+            actionId={actionId}
+            command={edited}
+            serverId={serverId}
+            onAccept={onAcceptWithRule}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+/** Spec 0011, Abschnitt 4: zusätzlicher Button neben Ausführen/Ablehnen,
+ * öffnet ein kompaktes Dropdown mit Muster-Vorschlägen + Scope-Auswahl
+ * (Default: aktueller Server). Klick auf einen Vorschlag ruft
+ * `accept_and_create_rule` auf und schließt das Dropdown — der
+ * Bestätigungsdialog selbst verschwindet dann über `onAccept`s
+ * optimistisches `responded: true` (s. `ChatPanel.acceptWithRule`), genau
+ * wie bei Ausführen/Ablehnen. */
+function QuickRuleButton({
+  actionId,
+  command,
+  serverId,
+  onAccept,
+}: {
+  actionId: string;
+  command: string;
+  serverId: string;
+  onAccept: (
+    actionId: string,
+    patternType: PatternType,
+    patternValue: string,
+    scope: Scope,
+  ) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<PatternSuggestionDto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [scopeKind, setScopeKind] = useState<"server" | "global" | "tag">("server");
+  const [tag, setTag] = useState("");
+
+  const toggleOpen = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && suggestions.length === 0 && !loading) {
+      setLoading(true);
+      setError(null);
+      suggestRulePatterns(command)
+        .then(setSuggestions)
+        .catch((err) => setError(commandErrorMessage(err)))
+        .finally(() => setLoading(false));
+    }
+  };
+
+  const buildScope = (): Scope | null => {
+    if (scopeKind === "global") return "Global";
+    if (scopeKind === "server") return { Server: serverId };
+    const trimmed = tag.trim();
+    return trimmed ? { Tag: trimmed } : null;
+  };
+
+  const handlePick = (suggestion: PatternSuggestionDto) => {
+    const scope = buildScope();
+    if (!scope) return;
+    onAccept(actionId, suggestion.patternType, suggestion.patternValue, scope);
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        onClick={toggleOpen}
+        className="rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
+      >
+        Akzeptieren und Regel erstellen ▾
+      </button>
+      {open && (
+        <div className="absolute z-10 mt-1 w-72 space-y-2 rounded border border-slate-600 bg-slate-800 p-2 shadow-lg">
+          <div className="flex gap-3 text-xs text-slate-300">
+            <label className="flex items-center gap-1">
+              <input
+                type="radio"
+                checked={scopeKind === "server"}
+                onChange={() => setScopeKind("server")}
+              />
+              Dieser Server
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="radio"
+                checked={scopeKind === "global"}
+                onChange={() => setScopeKind("global")}
+              />
+              Global
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="radio"
+                checked={scopeKind === "tag"}
+                onChange={() => setScopeKind("tag")}
+              />
+              Tag
+            </label>
+          </div>
+          {scopeKind === "tag" && (
+            <input
+              type="text"
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              placeholder="Tag-Name"
+              className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+            />
+          )}
+          {loading && <p className="text-xs text-slate-400">Lädt Vorschläge…</p>}
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          {!loading && !error && suggestions.length === 0 && (
+            <p className="text-xs text-slate-400">Keine Vorschläge.</p>
+          )}
+          <ul className="space-y-1">
+            {suggestions.map((suggestion) => (
+              <li key={suggestion.patternValue}>
+                <button
+                  type="button"
+                  onClick={() => handlePick(suggestion)}
+                  className="w-full rounded px-2 py-1 text-left text-xs text-slate-200 hover:bg-slate-700"
+                >
+                  {suggestion.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
