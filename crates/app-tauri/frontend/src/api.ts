@@ -170,3 +170,9 @@ export const acceptAndCreateRule = (
 
 export const exportDocument = (contentMarkdown: string, title: string, format: DocumentFormat) =>
   invoke<void>("export_document", { contentMarkdown, title, format });
+
+// --- Spec 0015: Chat-Prompt-Historie -------------------------------------
+
+/** Chronologisch aufsteigend (älteste zuerst), s. `crate::commands::list_prompt_history`. */
+export const listPromptHistory = (serverId: string) =>
+  invoke<string[]>("list_prompt_history", { serverId });

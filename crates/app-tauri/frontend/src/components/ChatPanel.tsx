@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -6,6 +6,7 @@ import {
   commandErrorMessage,
   exportDocument,
   listAiProviders,
+  listPromptHistory,
   respondToAction,
   sendChatMessage,
   suggestRulePatterns,
@@ -17,6 +18,11 @@ import {
   onChatError,
   onChatTextDelta,
 } from "../events";
+import {
+  initialHistoryNavState,
+  navigateHistory,
+  type HistoryNavState,
+} from "../promptHistoryNav";
 import type {
   ActionResultPayload,
   ActionUserDecision,
@@ -96,6 +102,22 @@ export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
   const [sending, setSending] = useState(false);
   const [hasActiveProvider, setHasActiveProvider] = useState<boolean | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Spec 0015, Abschnitt 5: einmalig pro Server geladen, kein
+  // wiederholtes Nachladen bei jeder Pfeiltaste. `historyNav` verfolgt den
+  // laufenden Navigations-Modus (s. `promptHistoryNav.ts`) — beim
+  // Serverwechsel zurückgesetzt, damit kein Navigations-Zustand auf die
+  // History eines anderen Servers zeigt.
+  const [promptHistory, setPromptHistory] = useState<string[]>([]);
+  const [historyNav, setHistoryNav] = useState<HistoryNavState>(initialHistoryNavState);
+
+  useEffect(() => {
+    listPromptHistory(serverId)
+      .then(setPromptHistory)
+      .catch(() => setPromptHistory([]));
+    setHistoryNav(initialHistoryNavState);
+  }, [serverId]);
 
   useEffect(() => {
     listAiProviders()
@@ -228,6 +250,7 @@ export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
     if (!text || sending) return;
     setItems((prev) => [...prev, { type: "user", id: freshId(), text }]);
     setDraft("");
+    setHistoryNav(initialHistoryNavState);
     setSending(true);
     try {
       await sendChatMessage(sessionId, text);
@@ -238,6 +261,63 @@ export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
       ]);
     } finally {
       setSending(false);
+    }
+  };
+
+  // Spec 0015, Abschnitt 5: Pfeil-oben/-unten lösen Historien-Navigation nur
+  // an den jeweiligen Feldrändern aus (Cursor-Position-Gate hier, reine
+  // Index-Logik in `navigateHistory`) — sonst läuft die normale
+  // Cursor-Bewegung des Browsers unverändert durch (kein `preventDefault`).
+  const pendingCaretToEndRef = useRef(false);
+
+  const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    const input = e.currentTarget;
+    const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+    const atEnd =
+      input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+    if (e.key === "ArrowUp" && !atStart) return;
+    if (e.key === "ArrowDown" && !atEnd) return;
+
+    const result = navigateHistory(
+      e.key === "ArrowUp" ? "up" : "down",
+      promptHistory,
+      historyNav,
+      draft,
+    );
+    if (!result) return;
+
+    e.preventDefault();
+    setHistoryNav(result.nextState);
+    setDraft(result.value);
+    pendingCaretToEndRef.current = true;
+  };
+
+  // Setzt den Cursor nach dem Einsetzen eines Historieneintrags ans Ende
+  // (Abschnitt 5: von der Spec nicht explizit vorgegeben, üblicher/
+  // sinnvoller Default). Läuft absichtlich erst *nach* dem Commit des neuen
+  // `draft`-Werts (statt synchron im Keydown-Handler) — nur dann steht der
+  // tatsächliche DOM-Wert schon fest, gegen den `setSelectionRange`
+  // rechnen muss. Der Ref-Flag verhindert, dass normales Tippen (das
+  // `draft` ebenfalls ändert) den Cursor fälschlich ans Ende zwingt.
+  useEffect(() => {
+    if (pendingCaretToEndRef.current && inputRef.current) {
+      const pos = inputRef.current.value.length;
+      inputRef.current.setSelectionRange(pos, pos);
+      pendingCaretToEndRef.current = false;
+    }
+  }, [draft]);
+
+  const handleDraftChange = (value: string) => {
+    setDraft(value);
+    // Spec 0015, Abschnitt 5, bewusste MVP-Vereinfachung: jede normale
+    // Texteingabe beendet den Navigations-Modus (kein volles
+    // Readline-Verhalten). Feuert nie für die programmatischen
+    // `setDraft`-Aufrufe aus `handleInputKeyDown` selbst — React-`onChange`
+    // löst nur bei echten Browser-Eingabe-Events aus, nicht bei
+    // State-Updates.
+    if (historyNav.historyIndex !== null) {
+      setHistoryNav(initialHistoryNavState);
     }
   };
 
@@ -269,9 +349,11 @@ export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
       ) : (
         <form onSubmit={handleSubmit} className="flex gap-2 border-t border-slate-700 p-3">
           <input
+            ref={inputRef}
             type="text"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => handleDraftChange(e.target.value)}
+            onKeyDown={handleInputKeyDown}
             placeholder="Nachricht an die KI…"
             disabled={sending}
             className="flex-1 rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
