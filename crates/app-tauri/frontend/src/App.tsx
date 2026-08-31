@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AiProviderSettings } from "./components/AiProviderSettings";
+import { FilterRulesView } from "./components/FilterRulesView";
 import { ManagementView } from "./components/ManagementView";
 import { ServerList } from "./components/ServerList";
 import { SessionView } from "./components/SessionView";
@@ -10,7 +11,7 @@ interface ActiveSession {
   serverName: string;
 }
 
-type Tab = "connect" | "manage";
+type Tab = "connect" | "manage" | "rules";
 
 function App() {
   const [tab, setTab] = useState<Tab>("connect");
@@ -65,6 +66,15 @@ function App() {
             >
               Verwalten
             </button>
+            <button
+              type="button"
+              onClick={() => setTab("rules")}
+              className={`rounded px-3 py-1.5 text-sm ${
+                tab === "rules" ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800"
+              }`}
+            >
+              Filter-Regeln
+            </button>
           </nav>
         </div>
         <button
@@ -101,8 +111,10 @@ function App() {
             />
           </section>
         </main>
-      ) : (
+      ) : tab === "manage" ? (
         <ManagementView />
+      ) : (
+        <FilterRulesView />
       )}
 
       {settingsOpen && (

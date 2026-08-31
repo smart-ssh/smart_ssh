@@ -4,10 +4,16 @@ import type {
   AiProviderConfigDto,
   AiProviderConfigInput,
   DeleteGroupResult,
+  EvalContextInput,
+  EvaluationTraceDto,
   GroupDto,
   HostKeyUserDecision,
   NoteRevisionDto,
   NoteTarget,
+  PatternDto,
+  RuleDto,
+  RuleInput,
+  Scope,
   ServerDto,
   ServerInput,
   TestConnectionResult,
@@ -115,3 +121,22 @@ export const rollbackNote = (target: NoteTarget, revisionId: string) =>
 
 export const previewEffectiveNotes = (serverId: string) =>
   invoke<string>("preview_effective_notes", { serverId });
+
+// --- Spec 0009: Filter-Regel-Verwaltung ---------------------------------
+
+export const listRules = (scopeFilter?: Scope) =>
+  invoke<RuleDto[]>("list_rules", { scopeFilter: scopeFilter ?? null });
+
+export const createRule = (input: RuleInput) => invoke<string>("create_rule", { input });
+
+export const updateRule = (id: string, input: RuleInput) =>
+  invoke<void>("update_rule", { id, input });
+
+export const deleteRule = (id: string) => invoke<void>("delete_rule", { id });
+
+export const listHardBlacklist = () => invoke<PatternDto[]>("list_hard_blacklist");
+
+export const listKnownTags = () => invoke<string[]>("list_known_tags");
+
+export const evaluateExplained = (command: string, ctx: EvalContextInput) =>
+  invoke<EvaluationTraceDto>("evaluate_explained", { command, ctx });

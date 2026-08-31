@@ -213,3 +213,54 @@ export type TestConnectionResult =
     }
   | { kind: "networkError"; message: string }
   | { kind: "timeout" };
+
+// --- Spec 0009: Filter-Regel-Verwaltung ---------------------------------
+//
+// `Scope`/`RuleAction` (core::filter) tragen wie `Decision` oben kein
+// `serde(rename_all)` — Standard-Außen-Tagging, s. Modul-Kommentar am
+// Dateianfang. `PatternType` (app-tauri-DTO) hat dagegen
+// `#[serde(rename_all = "snake_case")]`, also lowercase-Strings.
+
+export type Scope = "Global" | { Server: string } | { Tag: string };
+
+export type RuleAction = "Allow" | "Confirm" | "Deny";
+
+export type PatternType = "glob" | "regex" | "exact";
+
+export interface RuleDto {
+  id: string;
+  patternType: PatternType;
+  patternValue: string;
+  action: RuleAction;
+  scope: Scope;
+  priority: number;
+}
+
+/** Eingabe für `create_rule`/`update_rule`. */
+export interface RuleInput {
+  patternType: PatternType;
+  patternValue: string;
+  action: RuleAction;
+  scope: Scope;
+  priority: number;
+}
+
+/** Read-only-Anzeige eines Hard-Blacklist-Musters (`list_hard_blacklist`). */
+export interface PatternDto {
+  kind: PatternType;
+  value: string;
+}
+
+/** Eingabe für `evaluate_explained` — `serverId: null` simuliert "kein
+ * Server ausgewählt" (s. `crate::dto::EvalContextInput`-Doc-Kommentar). */
+export interface EvalContextInput {
+  serverId: string | null;
+  tags: string[];
+}
+
+export interface EvaluationTraceDto {
+  decision: Decision;
+  matchedRule: string | null;
+  matchedHardBlacklistEntry: string | null;
+  subCommandTraces: EvaluationTraceDto[];
+}
