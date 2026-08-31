@@ -39,8 +39,20 @@ export function ManagementView() {
       <div className="flex-1 overflow-y-auto">
         {error && <p className="p-4 text-sm text-red-400">{error}</p>}
 
+        {/* `key` erzwingt einen vollständigen Remount (statt Wiederverwendung
+         * derselben Komponenten-Instanz mit nur geänderten Props), sobald
+         * eine andere Gruppe/ein anderer Server ausgewählt wird — sonst
+         * bleibt z. B. `ServerForm`s eigener `loaded`-State (aus `getServer`)
+         * bis zum Abschluss des nächsten Fetches auf dem vorherigen Server
+         * stehen, und `NotesPanel`s `showHistory`/`revisions`-State bleibt
+         * über den Wechsel hinweg fälschlich erhalten. Klassischer
+         * React-Fallstrick bei direktem A→B-Wechsel ohne Zwischenzustand
+         * (kein zwischenzeitliches Unmounten), s. Commit
+         * "fix(app-tauri): load notes and revision history correctly in
+         * server form". */}
         {selection?.kind === "group" && (
           <GroupForm
+            key={selection.id}
             groupId={selection.id}
             defaultParentId={null}
             allGroups={groups}
@@ -50,6 +62,7 @@ export function ManagementView() {
         )}
         {selection?.kind === "newGroup" && (
           <GroupForm
+            key={`new-${selection.parentId ?? "root"}`}
             groupId={null}
             defaultParentId={selection.parentId}
             allGroups={groups}
@@ -59,6 +72,7 @@ export function ManagementView() {
         )}
         {selection?.kind === "server" && (
           <ServerForm
+            key={selection.id}
             serverId={selection.id}
             defaultGroupId={null}
             allGroups={groups}
@@ -69,6 +83,7 @@ export function ManagementView() {
         )}
         {selection?.kind === "newServer" && (
           <ServerForm
+            key={`new-${selection.groupId ?? "root"}`}
             serverId={null}
             defaultGroupId={selection.groupId}
             allGroups={groups}

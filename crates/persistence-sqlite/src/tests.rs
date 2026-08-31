@@ -203,6 +203,130 @@ async fn test_record_note_revision_persists_history_and_updates_notes_field() {
     assert_eq!(history_count, 2);
 }
 
+/// Regressionstest für `ProfileStore::list_note_revisions` selbst — bislang
+/// nur indirekt über eine rohe `SELECT COUNT(*)`-Abfrage gegen `store.pool`
+/// abgedeckt (s. Test oben), nie über die tatsächliche Trait-Methode, die
+/// `list_note_revisions` (der Tauri-Command und damit die Notiz-Historie im
+/// Server-/Gruppen-Formular) wirklich aufruft. Deckt außerdem ab, dass zwei
+/// verschiedene Ziele (zwei Server) einander nicht ins Gehege kommen — ein
+/// falsch gebundener `target_id`-Parameter würde hier entweder leere oder
+/// vermischte Ergebnisse liefern.
+#[tokio::test]
+async fn test_list_note_revisions_returns_persisted_revisions_for_correct_target() {
+    let store = in_memory_store().await;
+
+    let server_a = make_server("server-a", None, vec![]);
+    let server_b = make_server("server-b", None, vec![]);
+    store.create_server(&server_a).await.unwrap();
+    store.create_server(&server_b).await.unwrap();
+
+    let revision_a1 = NoteRevision {
+        id: Uuid::new_v4(),
+        target: NoteTarget::Server(server_a.id),
+        content: "A: erste Notiz".to_string(),
+        edited_by: NoteEditor::User,
+        created_at: Utc::now(),
+    };
+    let revision_a2 = NoteRevision {
+        id: Uuid::new_v4(),
+        target: NoteTarget::Server(server_a.id),
+        content: "A: zweite Notiz".to_string(),
+        edited_by: NoteEditor::Ai {
+            provider: "anthropic".to_string(),
+            model: "claude-sonnet-5".to_string(),
+        },
+        created_at: Utc::now(),
+    };
+    let revision_b1 = NoteRevision {
+        id: Uuid::new_v4(),
+        target: NoteTarget::Server(server_b.id),
+        content: "B: einzige Notiz".to_string(),
+        edited_by: NoteEditor::User,
+        created_at: Utc::now(),
+    };
+    store.record_note_revision(&revision_a1).await.unwrap();
+    store.record_note_revision(&revision_a2).await.unwrap();
+    store.record_note_revision(&revision_b1).await.unwrap();
+
+    let history_a = store
+        .list_note_revisions(NoteTarget::Server(server_a.id))
+        .await
+        .unwrap();
+    assert_eq!(
+        history_a.len(),
+        2,
+        "server-a sollte genau seine 2 Revisionen sehen"
+    );
+    assert_eq!(history_a[0].content, "A: erste Notiz");
+    assert_eq!(history_a[1].content, "A: zweite Notiz");
+    assert_eq!(history_a[1].edited_by, revision_a2.edited_by);
+
+    let history_b = store
+        .list_note_revisions(NoteTarget::Server(server_b.id))
+        .await
+        .unwrap();
+    assert_eq!(
+        history_b.len(),
+        1,
+        "server-b darf server-as Revisionen nicht sehen"
+    );
+    assert_eq!(history_b[0].content, "B: einzige Notiz");
+
+    let history_unrelated = store
+        .list_note_revisions(NoteTarget::Server(ServerId::new()))
+        .await
+        .unwrap();
+    assert!(
+        history_unrelated.is_empty(),
+        "ein Server ganz ohne Revisionen liefert eine leere Liste, keinen Fehler"
+    );
+}
+
+/// Klärt eine plausible Verwechslung, die genau wie der gemeldete Bug
+/// aussehen kann, aber keiner ist: `preview_effective_notes`
+/// (`effective_notes()`) fasst Gruppen- **und** Server-Notizen zusammen,
+/// während das Notiz-Textfeld/die Historie im Server-Formular bewusst nur
+/// auf den Server selbst scopen (`NoteTarget::Server`). Hat nur die
+/// **Gruppe** je eine Notiz-Revision bekommen, zeigt die Kontext-Vorschau
+/// trotzdem Inhalt (den der Gruppe), während das Server-Notizfeld und
+/// dessen Historie korrekterweise leer bleiben — kein Bug, sondern
+/// beabsichtigte Scope-Trennung (Spec 0003, Abschnitt 5.1/5.3).
+#[tokio::test]
+async fn test_group_only_notes_leave_server_scoped_notes_and_history_empty() {
+    let store = in_memory_store().await;
+
+    let group = make_group("Team A", None);
+    store.create_group(&group).await.unwrap();
+    let server = make_server("web-01", Some(group.id), vec![]);
+    store.create_server(&server).await.unwrap();
+
+    let group_revision = NoteRevision {
+        id: Uuid::new_v4(),
+        target: NoteTarget::Group(group.id),
+        content: "Gruppen-weiter Kontext".to_string(),
+        edited_by: NoteEditor::User,
+        created_at: Utc::now(),
+    };
+    store.record_note_revision(&group_revision).await.unwrap();
+
+    // Server selbst hat nie eine eigene Notiz-Revision bekommen.
+    let server_history = store
+        .list_note_revisions(NoteTarget::Server(server.id))
+        .await
+        .unwrap();
+    assert!(server_history.is_empty());
+
+    let fetched_server = store.get_server(&server.id).await.unwrap();
+    assert_eq!(fetched_server.notes, "");
+
+    // Trotzdem liefert effective_notes() (Kontext-Vorschau) sichtbaren
+    // Inhalt — geerbt von der Gruppe, nicht vom Server.
+    let effective = ssh_manager_core::profiles::effective_notes(&fetched_server, &store)
+        .await
+        .unwrap();
+    assert!(effective.contains("Gruppen-weiter Kontext"));
+}
+
 /// Spec Abschnitt 6, Testfall 6: "Migrationen sind idempotent: zweimaliges
 /// Ausführen von connect() auf derselben DB-Datei bricht nicht". Braucht
 /// (anders als die übrigen Tests) eine echte Datei statt `:memory:` — zwei
