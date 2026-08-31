@@ -191,6 +191,47 @@ pub fn emit_chat_action_proposed(
     );
 }
 
+/// Spec 0010, Abschnitt 2, Punkt 5: derselbe Vorschlags-Anlass wie
+/// `chat-action-proposed` (`action` ist hier immer
+/// `AiAction::ProposeNoteUpdate`, nie `SuggestCommand` — s.
+/// `crate::orchestration::suggest_note_update_on_disconnect`), aber
+/// **bewusst ein eigenes Event statt einer Wiederverwendung von
+/// `chat-action-proposed`**: Letzteres wird im Frontend ausschließlich vom
+/// `ChatPanel` einer *offenen* Session-Ansicht konsumiert (`if
+/// (event.sessionId !== sessionId) return;`, an die konkrete Chat-Screen-
+/// Instanz gebunden). Der Disconnect-Vorschlag muss laut Spec aber
+/// **auch dann noch ankommen, wenn der Nutzer den Screen bereits verlassen
+/// hat** — dafür braucht es einen App-weiten Listener statt eines an eine
+/// bestimmte Screen-Instanz gebundenen. Kein `decision`-Feld (anders als
+/// `chat-action-proposed`): `ProposeNoteUpdate` verlangt ohnehin immer
+/// `Confirm` (Spec 0003, Abschnitt 5.2) — hier gäbe es nie einen anderen
+/// Wert, das Feld wäre nur totes Gewicht. Siehe ADR-Vorschlag am Ende der
+/// Aufgabe.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NoteUpdateSuggestedPayload {
+    session_id: SessionId,
+    action_id: ActionId,
+    action: AiAction,
+}
+
+pub fn emit_note_update_suggested(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    action_id: ActionId,
+    action: AiAction,
+) {
+    emit(
+        emitter,
+        "note-update-suggested",
+        &NoteUpdateSuggestedPayload {
+            session_id,
+            action_id,
+            action,
+        },
+    );
+}
+
 /// Ergebnis einer ausgeführten Aktion. Erweitert die Spec-Skizze aus
 /// Abschnitt 5 (dort nur `{ session_id, action_id, output: CommandOutput }`)
 /// um eine zweite Variante: `AiAction::ProposeNoteUpdate` (Abschnitt 6,

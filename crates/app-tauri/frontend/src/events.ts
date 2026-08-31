@@ -6,6 +6,7 @@ import type {
   ChatTextDeltaEvent,
   ConnectionStatusChangedEvent,
   HostKeyVerificationNeededEvent,
+  NoteUpdateSuggestedEvent,
   TerminalOutputEvent,
 } from "./types";
 
@@ -46,6 +47,14 @@ export const onChatActionResult = (
 
 export const onChatError = (handler: (event: ChatErrorEvent) => void): Promise<UnlistenFn> =>
   listen<ChatErrorEvent>("chat-error", (e) => handler(e.payload));
+
+/** Spec 0010 — bewusst app-weit abonniert (z. B. in `App.tsx`), nicht nur
+ * innerhalb einer offenen `ChatPanel`-Instanz: der Vorschlag kann eintreffen,
+ * nachdem der Nutzer den Session-Screen bereits verlassen hat. */
+export const onNoteUpdateSuggested = (
+  handler: (event: NoteUpdateSuggestedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<NoteUpdateSuggestedEvent>("note-update-suggested", (e) => handler(e.payload));
 
 /** Base64 → `Uint8Array`, für `TerminalOutputEvent.data` (s. `crate::events`). */
 export function base64ToBytes(base64: string): Uint8Array {

@@ -127,6 +127,16 @@ export interface ChatActionProposedEvent {
   decision: Decision;
 }
 
+/** Spec 0010 — `action` ist hier immer `{ ProposeNoteUpdate: {...} }`, nie
+ * `SuggestCommand` (s. `crate::events::NoteUpdateSuggestedPayload`). Kein
+ * `decision`-Feld (anders als `ChatActionProposedEvent`): wäre für
+ * `ProposeNoteUpdate` ohnehin immer "Confirm". */
+export interface NoteUpdateSuggestedEvent {
+  sessionId: string;
+  actionId: string;
+  action: AiAction;
+}
+
 export type ActionResultPayload =
   | { kind: "command"; command: string; stdout: string; stderr: string; exitCode: number | null }
   | { kind: "noteUpdate"; summary: string };

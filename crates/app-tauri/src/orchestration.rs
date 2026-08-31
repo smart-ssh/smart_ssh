@@ -31,7 +31,7 @@
 use futures::StreamExt;
 use uuid::Uuid;
 
-use ssh_manager_core::ai::{AiError, ChatMessage, MessageContent, Role};
+use ssh_manager_core::ai::{ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, Role};
 use ssh_manager_core::filter::{Decision, EvalContext};
 use ssh_manager_core::profiles::{AiAction, NoteEditor, NoteTarget, ProfileError, ProfileStore};
 use ssh_manager_core::ssh::SshError;
@@ -40,7 +40,7 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::dto::ActionUserDecision;
 use crate::events::{
     emit_chat_action_proposed, emit_chat_action_result, emit_chat_error, emit_chat_text_delta,
-    ActionResultPayload, EventEmitter,
+    emit_note_update_suggested, ActionResultPayload, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -114,11 +114,11 @@ async fn run_one_round(
 
     while let Some(event) = stream.next().await {
         match event {
-            ssh_manager_core::ai::AiEvent::TextDelta(delta) => {
+            AiEvent::TextDelta(delta) => {
                 emit_chat_text_delta(emitter, session_id, delta.clone());
                 text_buffer.push_str(&delta);
             }
-            ssh_manager_core::ai::AiEvent::ActionProposed(action) => {
+            AiEvent::ActionProposed(action) => {
                 flush_text_buffer(session, &mut text_buffer).await;
                 if handle_action_proposed(
                     session,
@@ -133,11 +133,11 @@ async fn run_one_round(
                     executed_action = true;
                 }
             }
-            ssh_manager_core::ai::AiEvent::Done => {
+            AiEvent::Done => {
                 flush_text_buffer(session, &mut text_buffer).await;
                 break;
             }
-            ssh_manager_core::ai::AiEvent::Error(err) => {
+            AiEvent::Error(err) => {
                 flush_text_buffer(session, &mut text_buffer).await;
                 emit_chat_error(emitter, session_id, describe_ai_error(&err));
                 break;
@@ -470,10 +470,145 @@ fn emit_note_update_failed(emitter: &dyn EventEmitter, session_id: SessionId, er
     );
 }
 
+/// Spec 0010, Abschnitt 2, Punkt 2 — nahezu wörtlich aus der Spec-Skizze
+/// übernommen (dort bereits als "sinngemäß"-Formulierung vorgegeben), daher
+/// keine eigene Design-Entscheidung/ADR nötig für den genauen Wortlaut.
+/// Wird nur dem für diesen einen Aufruf **geklonten** `SessionContext`
+/// hinzugefügt, nie der echten `session.context` — Spec: "kein sichtbarer
+/// Chat-Eintrag".
+const DISCONNECT_COMPLETION_INSTRUCTION: &str = "Die Sitzung wird jetzt beendet. Gibt es aus \
+     dieser Sitzung Informationen, die für künftige Sitzungen an diesem Server als Notiz \
+     festgehalten werden sollten (z. B. neue Pfade, installierte Versionen, getroffene \
+     Entscheidungen)? Schlage eine Notiz-Aktualisierung nur bei echtem Mehrwert vor — keine \
+     Wiederholung bereits bestehender Notizinhalte.";
+
+/// Spec 0010: nach `disconnect()` aufgerufen (`crate::commands::disconnect`,
+/// als eigener `tokio::spawn`-Task — läuft nicht blockierend für den
+/// eigentlichen Trennvorgang, der zu diesem Zeitpunkt bereits abgeschlossen
+/// ist). `session` ist zu diesem Zeitpunkt bereits aus `AppState.sessions`
+/// entfernt, aber über den `Arc`, den `disconnect()` vor dem Entfernen
+/// geklont hat, weiterhin gültig — `SshTransport`/Terminal werden hier
+/// nicht mehr angefasst, nur `session.context`/`session.ai_provider`.
+pub async fn suggest_note_update_on_disconnect(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+    profile_store: &dyn ProfileStore,
+    action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+) {
+    // Spec 0010, Abschnitt 3: "mindestens ein erfolgreich ausgeführtes
+    // Kommando in der Session, sonst wird der KI-Aufruf gar nicht erst
+    // gemacht". Als "erfolgreich ausgeführt" zählt hier jedes Kommando, für
+    // das `SshTransport::execute()` tatsächlich ein Ergebnis geliefert hat
+    // (unabhängig vom Exit-Code des Kommandos selbst) — genau die
+    // Kommandos, die als `MessageContent::CommandResult` in der Historie
+    // stehen (s. `execute_suggested_command`). Auch ein *fehlgeschlagenes*
+    // Kommando (Exit-Code ≠ 0) ist potenziell notizwürdig ("Pfad X
+    // existiert nicht, Y verwenden"); nur eine Sitzung ganz ohne
+    // Ausführungsversuch hat garantiert nichts beizutragen — das deckt sich
+    // mit der in der Spec genannten Begründung ("ein Vorschlag, der ohnehin
+    // nichts liefern würde").
+    let has_executed_command = session
+        .context
+        .lock()
+        .await
+        .history
+        .iter()
+        .any(|m| matches!(m.content, MessageContent::CommandResult { .. }));
+    if !has_executed_command {
+        return;
+    }
+
+    let mut request_context = session.context.lock().await.clone();
+    request_context.history.push(ChatMessage {
+        role: Role::User,
+        content: MessageContent::Text(DISCONNECT_COMPLETION_INSTRUCTION.to_string()),
+    });
+    // Spec 0010, Abschnitt 2, Punkt 3: keine `SuggestCommand`-Schemas
+    // anbieten — die KI kann in diesem Aufruf gar nicht erst ein Kommando
+    // vorschlagen.
+    request_context.available_actions = vec![ActionSchema::propose_note_update()];
+
+    let mut stream = session.ai_provider.send(request_context);
+    let mut proposed: Option<AiAction> = None;
+    while let Some(event) = stream.next().await {
+        match event {
+            AiEvent::ActionProposed(action) => {
+                // Defensiv: `available_actions` lässt der KI gar keine
+                // andere Wahl, aber ein Mock/fehlerhafter Provider könnte
+                // trotzdem etwas anderes liefern — dann zählt das wie "kein
+                // Vorschlag" (Spec Abschnitt 2, Punkt 4), statt eine
+                // `AiAction`, die wir gar nicht ausführen könnten,
+                // weiterzureichen.
+                if matches!(action, AiAction::ProposeNoteUpdate { .. }) {
+                    proposed = Some(action);
+                }
+                break;
+            }
+            // Spec Abschnitt 2, Punkt 4: kein `ActionProposed` oder ein
+            // Fehler -> kommentarlos beenden, kein `chat-error`. Der
+            // Nutzer hat den Screen evtl. längst verlassen — eine
+            // Fehlermeldung für ein rein optionales Extra wäre hier
+            // aufdringlicher als hilfreich.
+            AiEvent::Done | AiEvent::Error(_) => break,
+            AiEvent::TextDelta(_) => {}
+        }
+    }
+
+    let Some(AiAction::ProposeNoteUpdate {
+        target,
+        new_content,
+    }) = proposed
+    else {
+        return;
+    };
+
+    let action_id: ActionId = Uuid::new_v4();
+    emit_note_update_suggested(
+        emitter,
+        session_id,
+        action_id,
+        AiAction::ProposeNoteUpdate {
+            target,
+            new_content: new_content.clone(),
+        },
+    );
+
+    let rx = action_confirmations.register(action_id);
+    let Ok(user_decision) = rx.await else {
+        // Sender gedroppt (z. B. App wurde beendet, bevor der Nutzer
+        // reagiert hat) — kein Absturz, einfach nichts weiter tun.
+        return;
+    };
+
+    // Spec 0010, Abschnitt 2, Punkt 5: "identischer Ablauf wie bei einem
+    // regulären Notiz-Vorschlag" — ruft dieselbe Funktion wie der reguläre
+    // In-Chat-Pfad auf, keine Sonderbehandlung. `EditThenApprove` macht für
+    // `ProposeNoteUpdate` schon im regulären Pfad keinen Sinn (kein
+    // Editierfeld im Frontend dafür, s. `handle_user_decision`); trifft es
+    // trotzdem ein, wird der Vorschlag unverändert übernommen — exakt wie
+    // dort.
+    match user_decision {
+        ActionUserDecision::Deny => {}
+        ActionUserDecision::Approve | ActionUserDecision::EditThenApprove { .. } => {
+            execute_note_update(
+                session,
+                session_id,
+                action_id,
+                target,
+                new_content,
+                emitter,
+                profile_store,
+            )
+            .await;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::sync::Mutex as StdMutex;
+    use std::sync::{Arc, Mutex as StdMutex};
 
     use async_trait::async_trait;
     use tokio::sync::Mutex as AsyncMutex;
@@ -501,6 +636,16 @@ mod tests {
     /// wollen, ohne dafür jede Folgerunde einzeln angeben zu müssen.
     struct MockAiProvider {
         rounds: StdMutex<std::collections::VecDeque<Vec<AiEvent>>>,
+        /// Jeder empfangene `SessionContext`, in Aufrufreihenfolge — geteilt
+        /// über einen `Arc`, den ein Test sich per
+        /// [`MockAiProvider::received_contexts_handle`] VOR dem Verschieben
+        /// des Providers in eine `Session` (`Box<dyn AiProvider>`, danach
+        /// nicht mehr direkt inspizierbar) sichern kann. Nötig für Spec
+        /// 0010: prüft, dass `suggest_note_update_on_disconnect` einerseits
+        /// gar keinen Aufruf macht, wenn die Schwelle nicht erreicht ist,
+        /// und andererseits `available_actions` korrekt auf
+        /// `propose_note_update` beschränkt, wenn doch.
+        received_contexts: Arc<StdMutex<Vec<SessionContext>>>,
     }
 
     impl MockAiProvider {
@@ -511,15 +656,21 @@ mod tests {
         fn with_rounds(rounds: Vec<Vec<AiEvent>>) -> Self {
             Self {
                 rounds: StdMutex::new(rounds.into()),
+                received_contexts: Arc::new(StdMutex::new(Vec::new())),
             }
+        }
+
+        fn received_contexts_handle(&self) -> Arc<StdMutex<Vec<SessionContext>>> {
+            self.received_contexts.clone()
         }
     }
 
     impl AiProvider for MockAiProvider {
         fn send(
             &self,
-            _context: SessionContext,
+            context: SessionContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+            self.received_contexts.lock().unwrap().push(context);
             let events = self
                 .rounds
                 .lock()
@@ -1124,5 +1275,194 @@ mod tests {
             .count();
         assert_eq!(proposed_count, MAX_AUTO_FOLLOWUP_ROUNDS);
         assert_eq!(events.last().unwrap().0, "chat-error");
+    }
+
+    // --- Spec 0010: automatischer Notiz-Vorschlag beim Beenden -----------
+
+    fn command_result_message() -> ChatMessage {
+        ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::CommandResult {
+                command: "uptime".to_string(),
+                output: output("up 3 days"),
+            },
+        }
+    }
+
+    #[tokio::test]
+    async fn test_disconnect_suggestion_skipped_without_executed_command() {
+        let provider = MockAiProvider::new(vec![AiEvent::Done]);
+        let contexts = provider.received_contexts_handle();
+        let session = session_with_ai_provider(provider, MockSshTransport::default());
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        suggest_note_update_on_disconnect(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        assert!(
+            contexts.lock().unwrap().is_empty(),
+            "ohne ausgeführtes Kommando darf gar kein KI-Aufruf stattfinden (spart API-Kosten)"
+        );
+        assert!(emitter.events.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_disconnect_suggestion_calls_ai_with_restricted_actions_when_command_was_executed()
+    {
+        let provider = MockAiProvider::new(vec![AiEvent::Done]);
+        let contexts = provider.received_contexts_handle();
+        let session = session_with_ai_provider(provider, MockSshTransport::default());
+        session
+            .context
+            .lock()
+            .await
+            .history
+            .push(command_result_message());
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        suggest_note_update_on_disconnect(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let recorded = contexts.lock().unwrap();
+        assert_eq!(
+            recorded.len(),
+            1,
+            "genau ein KI-Aufruf, wenn die Schwelle erreicht ist"
+        );
+        assert_eq!(
+            recorded[0].available_actions.len(),
+            1,
+            "keine SuggestCommand-Schemas anbieten (Spec Abschnitt 2, Punkt 3)"
+        );
+        assert_eq!(recorded[0].available_actions[0].name, "propose_note_update");
+        assert!(
+            recorded[0]
+                .history
+                .iter()
+                .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("Notiz"))),
+            "die Abschluss-Instruktion muss im an die KI gesendeten Kontext stehen"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_disconnect_suggestion_no_event_when_ai_proposes_nothing() {
+        let session = session_with_ai_provider(
+            MockAiProvider::new(vec![AiEvent::Done]),
+            MockSshTransport::default(),
+        );
+        session
+            .context
+            .lock()
+            .await
+            .history
+            .push(command_result_message());
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        suggest_note_update_on_disconnect(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        assert!(
+            emitter.events.lock().unwrap().is_empty(),
+            "kein ActionProposed -> kein Event, kein Fehler (erwarteter Regelfall)"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_disconnect_suggestion_emits_event_and_accept_persists_revision() {
+        let target = NoteTarget::Server(ServerId::new());
+        let session = session_with_ai_provider(
+            MockAiProvider::new(vec![
+                AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
+                    target,
+                    new_content: "Neuer Kontext nach der Sitzung".to_string(),
+                }),
+                AiEvent::Done,
+            ]),
+            MockSshTransport::default(),
+        );
+        session
+            .context
+            .lock()
+            .await
+            .history
+            .push(command_result_message());
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let flow = suggest_note_update_on_disconnect(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = async {
+            loop {
+                let action_id = {
+                    let events = emitter.events.lock().unwrap();
+                    events.iter().find_map(|(name, payload)| {
+                        (name == "note-update-suggested")
+                            .then(|| payload["actionId"].as_str().unwrap().to_string())
+                    })
+                };
+                if let Some(action_id) = action_id {
+                    let action_id: ActionId = action_id.parse().unwrap();
+                    confirmations
+                        .resolve(&action_id, ActionUserDecision::Approve)
+                        .unwrap();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+
+        tokio::join!(flow, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(
+            event_names,
+            vec!["note-update-suggested", "chat-action-result"]
+        );
+
+        let (_, suggested_payload) = &events[0];
+        assert_eq!(suggested_payload["sessionId"], session_id.to_string());
+
+        let revisions = profile_store.note_revisions.lock().unwrap();
+        assert_eq!(revisions.len(), 1);
+        assert_eq!(revisions[0].content, "Neuer Kontext nach der Sitzung");
+        assert_eq!(
+            revisions[0].edited_by,
+            NoteEditor::Ai {
+                provider: "test-provider".to_string(),
+                model: "test-model".to_string(),
+            }
+        );
     }
 }

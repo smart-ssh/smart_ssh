@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AiProviderSettings } from "./components/AiProviderSettings";
 import { FilterRulesView } from "./components/FilterRulesView";
 import { ManagementView } from "./components/ManagementView";
+import { NoteSuggestionToast } from "./components/NoteSuggestionToast";
 import { ServerList } from "./components/ServerList";
 import { SessionView } from "./components/SessionView";
 import { commandErrorMessage, listAiProviders } from "./api";
@@ -32,16 +33,55 @@ function App() {
 
   useEffect(refreshProviderStatus, []);
 
-  if (activeSession) {
-    return (
-      <SessionView
-        sessionId={activeSession.sessionId}
-        serverName={activeSession.serverName}
-        onDisconnected={() => setActiveSession(null)}
-      />
-    );
-  }
+  return (
+    // Spec 0010, Abschnitt 2, Punkt 6: die Benachrichtigung muss auch dann
+    // noch ankommen, wenn der Nutzer den Session-Screen bereits verlassen
+    // hat — als einziger, stets gemounteter Listener auf dieser äußersten
+    // Ebene statt dupliziert an einen der beiden Zweige unten gebunden
+    // (das würde bei jedem Wechsel zwischen Session-/Tab-Ansicht einen
+    // unnötigen Remount auslösen).
+    <>
+      <NoteSuggestionToast />
+      {activeSession ? (
+        <SessionView
+          sessionId={activeSession.sessionId}
+          serverName={activeSession.serverName}
+          onDisconnected={() => setActiveSession(null)}
+        />
+      ) : (
+        <MainScreen
+          tab={tab}
+          setTab={setTab}
+          settingsOpen={settingsOpen}
+          setSettingsOpen={setSettingsOpen}
+          hasActiveProvider={hasActiveProvider}
+          refreshProviderStatus={refreshProviderStatus}
+          onConnected={(sessionId, serverName) => setActiveSession({ sessionId, serverName })}
+        />
+      )}
+    </>
+  );
+}
 
+interface MainScreenProps {
+  tab: Tab;
+  setTab: (tab: Tab) => void;
+  settingsOpen: boolean;
+  setSettingsOpen: (open: boolean) => void;
+  hasActiveProvider: boolean | null;
+  refreshProviderStatus: () => void;
+  onConnected: (sessionId: string, serverName: string) => void;
+}
+
+function MainScreen({
+  tab,
+  setTab,
+  settingsOpen,
+  setSettingsOpen,
+  hasActiveProvider,
+  refreshProviderStatus,
+  onConnected,
+}: MainScreenProps) {
   return (
     <div className="flex h-screen flex-col bg-slate-900 text-slate-100">
       <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
@@ -106,9 +146,7 @@ function App() {
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
               Server
             </h2>
-            <ServerList
-              onConnected={(sessionId, serverName) => setActiveSession({ sessionId, serverName })}
-            />
+            <ServerList onConnected={onConnected} />
           </section>
         </main>
       ) : tab === "manage" ? (

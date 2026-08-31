@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use secrecy::SecretString;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tokio::sync::mpsc;
 
 use chrono::Utc;
@@ -423,13 +423,31 @@ pub async fn send_chat_message(
 #[tauri::command]
 pub async fn respond_to_action(
     state: State<'_, AppState>,
+    // Bewusst weiterhin Teil der Signatur (Spec 0007 Abschnitt 4) und
+    // *ohne* führenden Unterstrich — ein `_session_id` würde Tauris
+    // camelCase-Ableitung für den vom Frontend erwarteten JSON-Schlüssel
+    // verändern und den bestehenden `invoke("respond_to_action", {
+    // sessionId, ... })`-Aufruf brechen. Nicht mehr geprüft (s.
+    // Funktionskörper), das Frontend übergibt es aber ohnehin an jeder
+    // Aufrufstelle, und ein künftiger Bedarf (Logging, gezielte Events)
+    // ließe sich ohne Signaturänderung nachrüsten.
     session_id: SessionId,
     action_id: ActionId,
     decision: ActionUserDecision,
 ) -> CommandResult<()> {
-    if state.sessions.get(session_id).is_none() {
-        return Err("Session nicht gefunden".into());
-    }
+    let _ = session_id;
+
+    // Spec 0010: dieser Command wird jetzt auch für die Bestätigung eines
+    // Notiz-Vorschlags nach `disconnect()` verwendet (s.
+    // `crate::orchestration::suggest_note_update_on_disconnect`) — zu
+    // diesem Zeitpunkt ist die Session per Design bereits aus
+    // `state.sessions` entfernt. Der frühere `state.sessions.get(session_id)`-
+    // Check hätte diesen (gültigen) Aufruf fälschlich mit "Session nicht
+    // gefunden" abgelehnt. `pending_action_confirmations.resolve()` prüft
+    // die Gültigkeit von `action_id` bereits selbst (liefert einen eigenen
+    // Fehler für eine unbekannte/bereits aufgelöste ID) — der zusätzliche
+    // Session-Check war ohnehin redundant dazu, nicht die einzige
+    // Absicherung.
     state
         .pending_action_confirmations
         .resolve(&action_id, decision)?;
@@ -457,6 +475,28 @@ pub async fn disconnect(
     *session.terminal.lock().unwrap() = None;
 
     emit_connection_status_changed(&app, session_id, ConnectionStatus::Disconnected, None);
+
+    // Spec 0010: läuft als eigener Hintergrund-Task, **nicht** vom
+    // `disconnect()`-Command selbst awaitet — der Trennvorgang oben ist
+    // bereits vollständig abgeschlossen und das Event bereits gesendet,
+    // bevor dieser Task überhaupt startet. `app.state::<AppState>()` statt
+    // des ursprünglichen `state`-Parameters: Letzterer ist an die Lebenszeit
+    // dieses einen Command-Aufrufs gebunden, der spawnte Task läuft aber
+    // potenziell noch, nachdem `disconnect()` selbst längst zurückgekehrt
+    // ist (wartet auf eine KI-Antwort plus ggf. auf die Nutzerbestätigung).
+    let app_for_suggestion = app.clone();
+    tokio::spawn(async move {
+        let state = app_for_suggestion.state::<AppState>();
+        crate::orchestration::suggest_note_update_on_disconnect(
+            &session,
+            session_id,
+            &app_for_suggestion,
+            state.profile_store.as_ref(),
+            &state.pending_action_confirmations,
+        )
+        .await;
+    });
+
     Ok(())
 }
 
