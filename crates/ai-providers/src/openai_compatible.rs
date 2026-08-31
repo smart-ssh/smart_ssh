@@ -26,7 +26,7 @@ use ssh_manager_core::ssh::CommandOutput;
 use crate::action::{action_from_tool_arguments, parameters_json_schema};
 use crate::error::{error_stream, map_http_status, map_transport_error};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
-use crate::sse::{sse_frame_stream, SseFrame};
+use crate::sse::{sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
 pub struct OpenAiCompatibleProvider {
     client: reqwest::Client,
@@ -139,16 +139,24 @@ impl AiProvider for OpenAiCompatibleProvider {
         let body = self.build_request_body(&context);
 
         let request = async move {
-            let response = match client
+            let send = client
                 .post(&url)
                 .bearer_auth(&api_key)
                 .header("accept", "text/event-stream")
                 .json(&body)
-                .send()
-                .await
-            {
-                Ok(response) => response,
-                Err(err) => return error_stream(map_transport_error(&err)),
+                .send();
+            let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
+                Ok(Ok(response)) => response,
+                Ok(Err(err)) => return error_stream(map_transport_error(&err)),
+                // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) —
+                // ohne dieses Limit würde ein hängender Verbindungsaufbau
+                // den Chat-Turn für immer ohne jede Fehlermeldung blockieren.
+                Err(_elapsed) => {
+                    return error_stream(AiError::NetworkError(format!(
+                        "Keine Antwort vom KI-Provider seit über {} Sekunden",
+                        SSE_INACTIVITY_TIMEOUT.as_secs()
+                    )))
+                }
             };
 
             if !response.status().is_success() {
@@ -270,8 +278,19 @@ fn event_stream_from_response(
     response: reqwest::Response,
     native_tool_calling: bool,
 ) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+    process_frame_stream(Box::pin(sse_frame_stream(response)), native_tool_calling)
+}
+
+/// Von `event_stream_from_response` losgelöst, damit sich das
+/// Inaktivitäts-Timeout-Verhalten (`SSE_INACTIVITY_TIMEOUT`) direkt mit
+/// einem synthetischen, nie liefernden `frames`-Stream testen lässt — ganz
+/// ohne echten HTTP-Request/Mock-Server.
+fn process_frame_stream(
+    frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
+    native_tool_calling: bool,
+) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
     let state = OpenAiStreamState {
-        frames: Box::pin(sse_frame_stream(response)),
+        frames,
         tool_calls: BTreeMap::new(),
         fallback_text: String::new(),
         native_tool_calling,
@@ -287,8 +306,8 @@ fn event_stream_from_response(
             if state.finished {
                 return None;
             }
-            match state.frames.next().await {
-                Some(Ok(frame)) => {
+            match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, state.frames.next()).await {
+                Ok(Some(Ok(frame))) => {
                     if frame.data.trim() == "[DONE]" {
                         state.finished = true;
                         let events = state.finalize();
@@ -303,18 +322,52 @@ fn event_stream_from_response(
                     // einzelnes kaputtes Chunk soll nicht die ganze
                     // Antwort unbrauchbar machen.
                 }
-                Some(Err(err)) => {
+                Ok(Some(Err(err))) => {
                     state
                         .pending
                         .push_back(AiEvent::Error(map_transport_error(&err)));
                     state.finished = true;
                 }
-                None => {
+                Ok(None) => {
                     state.finished = true;
                     let events = state.finalize();
                     state.pending.extend(events);
                 }
+                Err(_elapsed) => {
+                    // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse)
+                    // — ohne dieses Limit würde ein hängender Request den
+                    // Chat-Turn für immer ohne jede Fehlermeldung blockieren.
+                    state
+                        .pending
+                        .push_back(AiEvent::Error(AiError::NetworkError(format!(
+                            "Keine Antwort vom KI-Provider seit über {} Sekunden",
+                            SSE_INACTIVITY_TIMEOUT.as_secs()
+                        ))));
+                    state.finished = true;
+                }
             }
         }
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    //! s. `crate::anthropic::tests` — identisches Timeout-Verhalten, hier
+    //! für den OpenAI-kompatiblen Provider gespiegelt.
+
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn test_inactivity_timeout_yields_network_error_instead_of_hanging_forever() {
+        let never_yields: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::pending());
+
+        let mut events = process_frame_stream(never_yields, true);
+        let event = events.next().await;
+
+        assert!(
+            matches!(event, Some(AiEvent::Error(AiError::NetworkError(_)))),
+            "expected NetworkError after inactivity timeout, got {event:?}"
+        );
+    }
 }

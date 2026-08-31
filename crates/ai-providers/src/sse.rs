@@ -10,8 +10,25 @@
 //! deshalb in den jeweiligen Provider-Modulen.
 
 use std::collections::VecDeque;
+use std::time::Duration;
 
 use futures::{Stream, StreamExt};
+
+/// Maximale Wartezeit auf den *nächsten* SSE-Frame, bevor ein Stream als
+/// hängengeblieben gilt und mit einem Fehler statt endlos weiterzuwarten
+/// abgebrochen wird. `reqwest::Client::new()` (beide Provider) setzt
+/// standardmäßig **keinen** Timeout für einen laufenden Request — bricht
+/// die zugrunde liegende TCP-Verbindung nicht sauber ab (z. B. Netzwerk-
+/// Aussetzer, Server hält die Verbindung offen ohne weitere Daten zu
+/// senden), würde `AiProvider::send()` sonst nie ein `Done`/`Error`
+/// liefern und `run_chat_turn` (`crates/app-tauri/src/orchestration.rs`)
+/// bliebe für immer auf `stream.next().await` hängen — für den Nutzer
+/// sichtbar als Chat, der ohne jede Fehlermeldung einfach nicht mehr
+/// antwortet. Bewusst als Inaktivitäts- statt Gesamt-Timeout (pro
+/// empfangenem Frame neu gestartet), damit eine legitime, aber lange
+/// laufende Antwort (viele Tool-Calls, große Ausgabe) nicht fälschlich
+/// abgebrochen wird, solange der Provider weiterhin Daten schickt.
+pub(crate) const SSE_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// Ein einzelner geparster SSE-Frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
