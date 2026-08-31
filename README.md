@@ -65,5 +65,6 @@ Linux, Windows und macOS aus.
 
 ## Dokumentation
 
+- [`README_DEV.md`](README_DEV.md) – Entwickler- & Release-Guide (Versionierung, Builds, GitHub Actions)
 - [`docs/adr/`](docs/adr/README.md) – Architekturentscheidungen
 - [`docs/specs/`](docs/specs/README.md) – Feature-Spezifikationen

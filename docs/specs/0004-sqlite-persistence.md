@@ -34,9 +34,9 @@ compile-time-Query-Checks.
 
 Plattformspezifischer App-Datenordner über die `directories`-Crate:
 
-- macOS: `~/Library/Application Support/ssh-manager/ssh-manager.db`
-- Windows: `%APPDATA%\ssh-manager\ssh-manager.db`
-- Linux: `~/.local/share/ssh-manager/ssh-manager.db`
+- macOS: `~/Library/Application Support/Smart SSH/smart-ssh.db`
+- Windows: `%APPDATA%\Smart SSH\smart-ssh.db`
+- Linux: `~/.local/share/smart-ssh/smart-ssh.db`
 
 Der Pfad wird nicht hartcodiert, sondern über
 `directories::ProjectDirs::from(...)` ermittelt.
@@ -158,13 +158,29 @@ Testfälle (Auszug):
 - Migrationen sind idempotent: zweimaliges Ausführen von `connect()` auf
   derselben DB-Datei bricht nicht
 
-## 7. Offene Punkte
+## 7. Entscheidung: keine Datei-Verschlüsselung im MVP
+
+Die SQLite-Datei wird **nicht** zusätzlich verschlüsselt (kein SQLCipher).
+Begründung: Sie enthält keine Secrets (die liegen im Keychain, siehe Spec
+0003 Abschnitt 4), sondern Hostnames, Usernames, Ports, Gruppen-/Server-Namen
+und Freitext-Notizen, die operative Details verraten können, aber keine
+Zugangsdaten sind. Für dieses Risiko wird die OS-Festplattenverschlüsselung
+(FileVault/BitLocker/LUKS) als ausreichend vorausgesetzt.
+
+Diese Annahme muss dem Nutzer sichtbar gemacht werden — z. B. ein Hinweis
+beim ersten App-Start oder in den Einstellungen, dass die lokale Datenbank
+unverschlüsselt auf der Festplatte liegt und volle Festplattenverschlüsselung
+empfohlen wird, falls diese nicht bereits aktiv ist.
+
+Ein optionales SQLCipher-Feature mit Key aus dem OS-Keychain (transparent,
+ohne Passwort-Eingabe) bleibt als spätere Ausbaustufe denkbar, etwa für
+Nutzer, die zusätzlichen Schutz gegen gezieltes Kopieren der `.db`-Datei bei
+entsperrtem Nutzerkonto wollen (z. B. durch Malware oder versehentliches
+Cloud-Backup). Kein Bestandteil dieser Spec, keine offene Frage mehr, sondern
+bewusst zurückgestellt.
+
+## 8. Weitere offene Punkte
 
 - Soll es einen Export/Import-Mechanismus geben (z. B. verschlüsseltes JSON),
   um Profile zwischen Rechnern zu übertragen, ohne Cloud-Sync zu bauen?
   Nicht Teil dieser Spec, aber relevant für die Roadmap.
-- Verschlüsselung der SQLite-Datei selbst (z. B. via `SQLCipher`) — aktuell
-  nicht vorgesehen, da keine Secrets in der DB liegen (die liegen im
-  Keychain). Notizen könnten aber sensible Betriebsinfos enthalten; zu
-  diskutieren, ob das ausreicht oder ob File-Level-Encryption trotzdem
-  sinnvoll ist.
