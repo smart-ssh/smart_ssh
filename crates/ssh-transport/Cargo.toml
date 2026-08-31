@@ -1,0 +1,20 @@
+[package]
+name = "ssh-transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "ssh_transport"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait = "0.1.92"
+bytes = "1.12.1"
+russh = "0.63.1"
+secrecy = "0.10.3"
+ssh-manager-core = { version = "0.1.0", path = "../core" }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync"] }
+
+[dev-dependencies]
+rand = "0.10.2"

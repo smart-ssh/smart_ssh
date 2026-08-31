@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Smart SSH",
+  "version": "0.1.0",
+  "identifier": "com.smartssh.desktop",
+  "build": {
+    "beforeDevCommand": "npm --prefix app-tauri/frontend run dev",
+    "beforeBuildCommand": "npm --prefix app-tauri/frontend run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "app-tauri/frontend/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Smart SSH",
+        "width": 1200,
+        "height": 800,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' tauri-plugin-decoration: http://tauri-plugin-decoration.localhost https://tauri-plugin-decoration.localhost; img-src 'self' data:; connect-src 'self' ipc:;"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# `crates/app-tauri` ist seit Spec 0007 ein Binary-Crate (die Tauri-App) –
+# Cargo.lock wird deshalb ab jetzt versioniert (s. History dieser Zeile).
+
+# Tauri-generierte Capability-/Permission-Schemas – automatisch bei jedem
+# Build neu erzeugt (`cargo tauri`/`tauri-build`), kein Quelltext.
+/crates/app-tauri/gen/
+
+# Node/Frontend (crates/app-tauri/frontend/ hat zusätzlich ein eigenes
+# .gitignore für node_modules/dist – hier nur der Vollständigkeit halber,
+# falls künftig weitere Frontend-Verzeichnisse hinzukommen).
+node_modules/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Sonstiges
+*.log
