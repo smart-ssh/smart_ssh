@@ -16,7 +16,7 @@ use crate::handler::ClientHandler;
 pub(crate) async fn authenticate(
     handle: &mut client::Handle<ClientHandler>,
     hop: &Hop,
-    credentials: &dyn CredentialStore,
+    credentials: &(dyn CredentialStore + Send + Sync),
 ) -> Result<(), SshError> {
     let resolved = resolve_auth(&hop.auth, credentials)?;
 

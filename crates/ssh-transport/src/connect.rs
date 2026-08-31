@@ -46,6 +46,17 @@ pub enum ConnectOutcome {
 /// `russh`-Callback, das den `'static`-Zwang hätte. Siehe
 /// `docs/adr/0007-connect-outcome-and-arc-host-keys.md`.
 ///
+/// `&(dyn CredentialStore + Send + Sync)` statt `&dyn CredentialStore`
+/// (Spec-Signatur): der Trait selbst verlangt keinen `Send + Sync`-Bound
+/// (s. `core::profiles::credentials`), diese Funktion ist aber `async` und
+/// hält die Referenz über `.await`-Punkte hinweg — ohne den Bound ist die
+/// von `connect()` zurückgegebene Future nicht `Send`, was jeden Aufrufer
+/// bricht, der (wie ein Tauri-`#[tauri::command]`) selbst eine `Send`-Future
+/// braucht. Nachträglich beim Verdrahten in `crates/app-tauri` (Spec 0007,
+/// Teil 2) aufgefallen, nicht beim ursprünglichen Schreiben dieser Funktion
+/// (die Integrationstests riefen `connect()` bislang nur direkt in
+/// `#[tokio::test]`s auf, wo eine `Send`-Future nicht verlangt wird).
+///
 /// **Bekannte Einschränkung (Jump-Hosts, `remaining_hops`-Zweig):** die
 /// Verkettung über `channel_open_direct_tcpip` + `Channel::into_stream()` +
 /// `client::connect_stream()` folgt exakt dem in Spec 0005 Abschnitt 5
@@ -69,7 +80,7 @@ pub enum ConnectOutcome {
 /// `docs/adr/0008-russh-nested-tunnel-limitation.md`.
 pub async fn connect(
     target: &ConnectionTarget,
-    credentials: &dyn CredentialStore,
+    credentials: &(dyn CredentialStore + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
 ) -> Result<ConnectOutcome, SshError> {
     let Some((first_hop, remaining_hops)) = target.hops.split_first() else {

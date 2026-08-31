@@ -1,33 +1,26 @@
 //! Von Tauri verwalteter Shared State (Spec 0007, Abschnitt 3).
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use uuid::Uuid;
 
 use persistence_sqlite::SqliteAiProviderStore;
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore};
-use uuid::Uuid;
+use ssh_manager_core::ssh::HostKeyStore;
 
-/// Platzhalter für eine laufende Terminal-/Chat-Session (`transport`/
-/// `ai_provider`/`context`/`filter_engine`, Spec 0007 Abschnitt 3). Kommt
-/// erst mit dem Terminal-/Chat-Teil — für Teil 1 reicht ein leerer Marker,
-/// damit `AppState.sessions` schon den richtigen Grundriss
-/// (`HashMap<SessionId, Session>`) hat, ohne den `SshTransport`/
-/// `AiProvider`/`FilterEngine`-Zoo vorzeitig zu verdrahten.
-pub struct PlaceholderSession;
+use crate::confirmation::ConfirmationRegistry;
+use crate::dto::{ActionUserDecision, HostKeyUserDecision};
+use crate::session::SessionManager;
 
-/// Eigener Typalias statt direkt `Uuid`: macht Signaturen lesbarer und ist
-/// der Ort, an dem eine spätere echte `SessionId`-Newtype (falls gewünscht)
-/// eingesetzt würde, ohne Aufrufer-Code anzufassen.
 pub type SessionId = Uuid;
+/// Kennung eines einzelnen `chat-action-proposed`-Vorschlags innerhalb
+/// einer Session — global eindeutig (nicht nur pro Session), damit
+/// `AppState.pending_action_confirmations` eine flache Map bleiben kann statt
+/// verschachtelt nach `SessionId` sortieren zu müssen.
+pub type ActionId = Uuid;
 
 pub struct AppState {
-    // Wird von keinem Teil-1-Befehl gelesen (kein `connect`/`open_terminal`
-    // in diesem Schritt) — deshalb `#[allow(dead_code)]` statt das Feld
-    // wegzulassen: der Platz im Grundriss ist bewusst schon da (s.
-    // Modul-Kommentar), nur die lesenden Befehle kommen erst mit dem
-    // Terminal-/Chat-Teil.
-    #[allow(dead_code)]
-    pub sessions: Mutex<HashMap<SessionId, PlaceholderSession>>,
+    pub sessions: SessionManager,
     pub profile_store: Arc<dyn ProfileStore>,
     // `CredentialStore` deklariert (anders als `ProfileStore`) keinen
     // `Send + Sync`-Bound im Trait selbst (s. `core::profiles::credentials`)
@@ -37,4 +30,16 @@ pub struct AppState {
     // bleiben soll) anzufassen.
     pub credential_store: Arc<dyn CredentialStore + Send + Sync>,
     pub ai_provider_store: Arc<SqliteAiProviderStore>,
+    pub host_key_store: Arc<dyn HostKeyStore>,
+
+    /// Wartende `connect()`-Aufrufe, die auf `confirm_host_key` warten (s.
+    /// `crate::commands::connect`). Schlüssel ist die `SessionId`, die
+    /// `connect()` bereits vor dem eigentlichen Verbindungsaufbau vergibt
+    /// (s. dortiger Kommentar) — pro `SessionId` kann zu jedem Zeitpunkt
+    /// höchstens ein `connect()`-Versuch aktiv sein, ein flacher Schlüssel
+    /// reicht daher.
+    pub pending_host_key_confirmations: ConfirmationRegistry<SessionId, HostKeyUserDecision>,
+    /// Wartende `respond_to_action`-Aufrufe (Confirm-Pfad der Kernschleife,
+    /// Spec 0007 Abschnitt 6).
+    pub pending_action_confirmations: ConfirmationRegistry<ActionId, ActionUserDecision>,
 }

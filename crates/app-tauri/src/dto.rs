@@ -125,3 +125,28 @@ impl AiProviderConfigInput {
 pub fn credential_ref_for(id: ProviderId) -> CredentialRef {
     CredentialRef::new(format!("ai-provider:{}", id.0))
 }
+
+/// Antwort auf `host-key-verification-needed` (Spec 0007, Abschnitt 4:
+/// `confirm_host_key(session_id, decision: Trust | Reject)`).
+///
+/// `#[serde(tag = "decision", rename_all = "camelCase")]` statt Serdes
+/// Standard-Außen-Tagging: ergibt `{"decision": "trust"}` statt
+/// `"Trust"`/`{"Trust": null}` — für das TypeScript-Frontend die
+/// natürlichere Form, um diesen Wert selbst zu konstruieren.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "decision", rename_all = "camelCase")]
+pub enum HostKeyUserDecision {
+    Trust,
+    Reject,
+}
+
+/// Antwort auf `chat-action-proposed` mit `decision: Confirm` (Spec 0007,
+/// Abschnitt 4/6: `respond_to_action(session_id, action_id, decision:
+/// Approve | Deny | EditThenApprove { command: String })`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "decision", rename_all = "camelCase")]
+pub enum ActionUserDecision {
+    Approve,
+    Deny,
+    EditThenApprove { command: String },
+}

@@ -16,13 +16,22 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+ai-providers = { version = "0.1.0", path = "../ai-providers" }
+base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 credentials-keyring = { version = "0.1.0", path = "../credentials-keyring" }
+futures = "0.3.34"
 persistence-sqlite = { version = "0.1.0", path = "../persistence-sqlite" }
 secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+sha2 = "0.11.0"
 ssh-manager-core = { version = "0.1.0", path = "../core" }
+ssh-transport = { version = "0.1.0", path = "../ssh-transport" }
 tauri = { version = "2", features = [] }
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync"] }
 uuid = { version = "1.26.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+async-trait = "0.1.92"
+tempfile = "3.27.0"

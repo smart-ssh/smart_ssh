@@ -2,17 +2,26 @@
 //! Tauri-Commands, die Core-APIs aufrufen und DTOs zurückgeben, sowie der
 //! `AppState`-Aufbau — keine fachliche Logik hier (Spec 0007, Abschnitt 3).
 
+mod ai_provider_factory;
 mod commands;
+mod confirmation;
 mod dto;
 mod error;
+mod events;
+mod host_key_store;
+mod orchestration;
+mod policy;
+mod session;
 mod state;
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use credentials_keyring::KeyringCredentialStore;
 use persistence_sqlite::{default_db_path, SqliteProfileStore};
 
+use crate::confirmation::ConfirmationRegistry;
+use crate::host_key_store::FileHostKeyStore;
+use crate::session::SessionManager;
 use crate::state::AppState;
 
 /// Baut den `AppState` einmalig beim App-Start auf. Synchron nach außen
@@ -27,11 +36,24 @@ fn build_app_state() -> AppState {
         .expect("SQLite-Datenbank konnte nicht geöffnet/migriert werden");
     let ai_provider_store = profile_store.ai_provider_store();
 
+    // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
+    // `crate::host_key_store`-Modul-Kommentar zur Begründung (der
+    // `HostKeyStore`-Trait ist absichtlich synchron, `sqlx` ist es nicht).
+    let host_key_path = db_path
+        .parent()
+        .expect("db_path hat immer ein Elternverzeichnis (s. default_db_path)")
+        .join("host_keys.json");
+    let host_key_store = FileHostKeyStore::load(host_key_path)
+        .expect("Host-Key-Speicher konnte nicht geladen werden");
+
     AppState {
-        sessions: Mutex::new(HashMap::new()),
+        sessions: SessionManager::new(),
         profile_store: Arc::new(profile_store),
         credential_store: Arc::new(KeyringCredentialStore::new()),
         ai_provider_store: Arc::new(ai_provider_store),
+        host_key_store: Arc::new(host_key_store),
+        pending_host_key_confirmations: ConfirmationRegistry::new(),
+        pending_action_confirmations: ConfirmationRegistry::new(),
     }
 }
 
@@ -45,6 +67,14 @@ pub fn run() {
             commands::update_ai_provider,
             commands::delete_ai_provider,
             commands::set_active_ai_provider,
+            commands::connect,
+            commands::confirm_host_key,
+            commands::open_terminal,
+            commands::terminal_input,
+            commands::terminal_resize,
+            commands::send_chat_message,
+            commands::respond_to_action,
+            commands::disconnect,
         ])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Tauri-App");
