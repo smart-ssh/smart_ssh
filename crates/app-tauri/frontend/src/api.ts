@@ -14,6 +14,7 @@ import type {
   PatternDto,
   PatternSuggestionDto,
   PatternType,
+  RemoteEntryDto,
   RuleDto,
   RuleInput,
   Scope,
@@ -194,3 +195,27 @@ export const listPromptHistory = (serverId: string) =>
 
 /** Öffnet den Log-Ordner im System-Dateimanager (Finder/Explorer). */
 export const openLogDirectory = () => invoke<void>("open_log_directory");
+
+// --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
+
+export const sftpList = (sessionId: string, path: string) =>
+  invoke<RemoteEntryDto[]>("sftp_list", { sessionId, path });
+
+/** Öffnet den nativen Speichern-Dialog im Backend — kehrt ohne Fehler
+ * zurück, wenn der Nutzer abbricht (s. `crate::commands::sftp_download`). */
+export const sftpDownload = (sessionId: string, remotePath: string) =>
+  invoke<void>("sftp_download", { sessionId, remotePath });
+
+/** `localPath` muss bereits aufgelöst sein (nativer Öffnen-Dialog oder
+ * OS-Drag-and-Drop, s. `crate::commands::sftp_upload`-Doc-Kommentar). */
+export const sftpUpload = (sessionId: string, localPath: string, remotePath: string) =>
+  invoke<void>("sftp_upload", { sessionId, localPath, remotePath });
+
+export const sftpDelete = (sessionId: string, path: string) =>
+  invoke<void>("sftp_delete", { sessionId, path });
+
+export const sftpRename = (sessionId: string, from: string, to: string) =>
+  invoke<void>("sftp_rename", { sessionId, from, to });
+
+export const sftpMkdir = (sessionId: string, path: string) =>
+  invoke<void>("sftp_mkdir", { sessionId, path });

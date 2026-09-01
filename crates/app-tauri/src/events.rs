@@ -14,6 +14,7 @@
 //! generisch `impl Serialize`), damit der Trait dyn-kompatibel bleibt.
 
 use serde::Serialize;
+use uuid::Uuid;
 
 use ssh_manager_core::filter::Decision;
 use ssh_manager_core::profiles::AiAction;
@@ -398,6 +399,83 @@ pub fn emit_chat_error(emitter: &dyn EventEmitter, session_id: SessionId, messag
         &ChatErrorPayload {
             session_id,
             message,
+        },
+    );
+}
+
+// --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ------------------------
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SftpTransferKind {
+    Upload,
+    Download,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpTransferStartedPayload {
+    session_id: SessionId,
+    transfer_id: Uuid,
+    kind: SftpTransferKind,
+    file_name: String,
+    total_bytes: Option<u64>,
+}
+
+/// Spec 0020, Abschnitt 5, letzter Punkt: Fortschrittsanzeige für Transfers.
+/// **Design-Entscheidung**: `SftpSession::read_file`/`write_file` (Spec
+/// 0020, Abschnitt 3, bereits exakt wie spezifiziert in Teil 1 umgesetzt)
+/// arbeiten auf einem einzelnen In-Memory-Puffer, nicht gestreamt — echte
+/// Byte-für-Byte-Fortschrittswerte ließen sich damit nicht ermitteln, ohne
+/// den bereits committeten Trait rückwirkend um eine Chunk-Schnittstelle zu
+/// erweitern. Statt eine Prozentanzeige vorzutäuschen, die die Schnittstelle
+/// gar nicht hergibt, zeigt das Frontend zwischen "started" und "finished"
+/// einen unbestimmten (pulsierenden) Fortschritt, beschriftet mit Dateiname
+/// und — falls bekannt — Gesamtgröße. Siehe ADR-Vorschlag am Ende der
+/// Aufgabe.
+pub fn emit_sftp_transfer_started(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    transfer_id: Uuid,
+    kind: SftpTransferKind,
+    file_name: String,
+    total_bytes: Option<u64>,
+) {
+    emit(
+        emitter,
+        "sftp-transfer-started",
+        &SftpTransferStartedPayload {
+            session_id,
+            transfer_id,
+            kind,
+            file_name,
+            total_bytes,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpTransferFinishedPayload {
+    session_id: SessionId,
+    transfer_id: Uuid,
+    /// `None` bei Erfolg, sonst die Fehlermeldung.
+    error: Option<String>,
+}
+
+pub fn emit_sftp_transfer_finished(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    transfer_id: Uuid,
+    error: Option<String>,
+) {
+    emit(
+        emitter,
+        "sftp-transfer-finished",
+        &SftpTransferFinishedPayload {
+            session_id,
+            transfer_id,
+            error,
         },
     );
 }

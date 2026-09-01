@@ -352,3 +352,37 @@ export interface SessionSummaryDto {
   status: ConnectionStatus;
   hasPendingAction: boolean;
 }
+
+// --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
+
+export interface RemoteEntryDto {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  /** Bereits formatiert, z. B. "rwxr-xr-x" (s. `crate::dto::RemoteEntryDto`). */
+  permissions: string;
+  /** RFC3339, `null` wenn der Server keine Änderungszeit meldet. */
+  modified: string | null;
+}
+
+export type SftpTransferKind = "upload" | "download";
+
+export interface SftpTransferStartedEvent {
+  sessionId: string;
+  transferId: string;
+  kind: SftpTransferKind;
+  fileName: string;
+  /** `null`, wenn die Größe vorab nicht ermittelbar war (s.
+   * `crate::events`-Moduldoc zur Fortschritts-Design-Entscheidung: kein
+   * echter Byte-Fortschritt, nur Start/Ende plus — falls bekannt —
+   * Gesamtgröße). */
+  totalBytes: number | null;
+}
+
+export interface SftpTransferFinishedEvent {
+  sessionId: string;
+  transferId: string;
+  /** `null` bei Erfolg, sonst die Fehlermeldung. */
+  error: string | null;
+}

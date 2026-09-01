@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { onConnectionStatusChanged } from "../events";
 import { ChatPanel } from "./ChatPanel";
+import { FileBrowserPanel } from "./FileBrowserPanel";
 import { TerminalView } from "./TerminalView";
 
 interface SessionViewProps {
@@ -17,6 +18,12 @@ interface SessionViewProps {
   /** Spec 0017, Abschnitt 5 — an `ChatPanel` durchgereicht, s. dortiger
    * Doc-Kommentar. */
   onActionSettled: (sessionId: string) => void;
+  /** Spec 0020, Abschnitt 5.4: nur der aktive Tab darf auf einen
+   * OS-Drag-and-Drop-Upload reagieren, s. `FileBrowserPanel.isVisible`-Doc-
+   * Kommentar — jede offene Session bleibt beim Tab-Wechsel gemountet (Spec
+   * 0017, Abschnitt 4), ohne dieses Flag würde ein Drop sonst gleichzeitig
+   * mehrere Hintergrund-Tabs als Ziel treffen. */
+  isActiveTab: boolean;
 }
 
 /**
@@ -30,8 +37,15 @@ export function SessionView({
   serverId,
   onRequestClose,
   onActionSettled,
+  isActiveTab,
 }: SessionViewProps) {
   const [statusNote, setStatusNote] = useState<string | null>(null);
+  // Spec 0020, Abschnitt 5.1: "Terminal | Dateien"-Umschalter im rechten
+  // Panel. Beide Ansichten bleiben gemountet (analog zum
+  // Immer-gemountet-Muster der Session-Tabs selbst, Spec 0017 Abschnitt 4) —
+  // nur per CSS ausgeblendet, damit weder xterm-Scrollback noch die aktuelle
+  // Verzeichnisnavigation des Dateibrowsers beim Umschalten verloren gehen.
+  const [rightPanelView, setRightPanelView] = useState<"terminal" | "files">("terminal");
 
   useEffect(() => {
     const unlisten = onConnectionStatusChanged((event) => {
@@ -65,11 +79,34 @@ export function SessionView({
           <ChatPanel sessionId={sessionId} serverId={serverId} onActionSettled={onActionSettled} />
         </div>
         <div className="flex w-[420px] shrink-0 flex-col bg-slate-950">
-          <div className="font-heading flex h-8 shrink-0 items-center border-b border-slate-800 px-3 text-xs font-semibold tracking-[0.13em] text-slate-400 uppercase">
-            Terminal
+          <div className="flex h-8 shrink-0 items-center gap-3 border-b border-slate-800 px-3">
+            <button
+              type="button"
+              onClick={() => setRightPanelView("terminal")}
+              className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase ${
+                rightPanelView === "terminal" ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              Terminal
+            </button>
+            <button
+              type="button"
+              onClick={() => setRightPanelView("files")}
+              className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase ${
+                rightPanelView === "files" ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              Dateien
+            </button>
           </div>
-          <div className="min-h-0 flex-1 p-2">
+          <div className={rightPanelView === "terminal" ? "min-h-0 flex-1 p-2" : "hidden"}>
             <TerminalView sessionId={sessionId} />
+          </div>
+          <div className={rightPanelView === "files" ? "min-h-0 flex-1" : "hidden"}>
+            <FileBrowserPanel
+              sessionId={sessionId}
+              isVisible={isActiveTab && rightPanelView === "files"}
+            />
           </div>
         </div>
       </div>

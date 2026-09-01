@@ -119,6 +119,7 @@ function App() {
             serverId={sessionTab.serverId}
             onRequestClose={() => requestCloseTab(sessionTab.sessionId)}
             onActionSettled={markActionSettled}
+            isActiveTab={sessionTab.sessionId === activeSessionId}
           />
         </div>
       ))}

@@ -8,6 +8,8 @@ import type {
   ConnectionStatusChangedEvent,
   HostKeyVerificationNeededEvent,
   NoteUpdateSuggestedEvent,
+  SftpTransferFinishedEvent,
+  SftpTransferStartedEvent,
   TerminalOutputEvent,
 } from "./types";
 
@@ -63,6 +65,18 @@ export const onChatDocumentGenerated = (
   handler: (event: ChatDocumentGeneratedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatDocumentGeneratedEvent>("chat-document-generated", (e) => handler(e.payload));
+
+// --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
+
+export const onSftpTransferStarted = (
+  handler: (event: SftpTransferStartedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<SftpTransferStartedEvent>("sftp-transfer-started", (e) => handler(e.payload));
+
+export const onSftpTransferFinished = (
+  handler: (event: SftpTransferFinishedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<SftpTransferFinishedEvent>("sftp-transfer-finished", (e) => handler(e.payload));
 
 /** Base64 → `Uint8Array`, für `TerminalOutputEvent.data` (s. `crate::events`). */
 export function base64ToBytes(base64: string): Uint8Array {

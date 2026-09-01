@@ -160,6 +160,12 @@ pub fn run() {
             commands::create_overlay_titlebar,
             commands::list_prompt_history,
             commands::open_log_directory,
+            commands::sftp_list,
+            commands::sftp_download,
+            commands::sftp_upload,
+            commands::sftp_delete,
+            commands::sftp_rename,
+            commands::sftp_mkdir,
         ])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Tauri-App");

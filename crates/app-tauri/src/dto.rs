@@ -16,6 +16,7 @@ use ssh_manager_core::profiles::{
     AuthMethod, CredentialRef, CredentialStore, Group, GroupId, NoteEditor, NoteRevision, Server,
 };
 use ssh_manager_core::shared::ServerId;
+use ssh_manager_core::ssh::RemoteEntry;
 
 use crate::events::ConnectionStatus;
 use crate::server_credentials::sudo_password_credential_ref;
@@ -603,6 +604,60 @@ pub struct SessionSummaryDto {
     pub has_pending_action: bool,
 }
 
+// --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
+
+/// Sicht auf einen [`RemoteEntry`] für die Dateiliste im Dateibrowser (Spec
+/// 0020, Abschnitt 5.1: "Name, Größe, Rechte, Änderungsdatum"). `permissions`
+/// kommt bereits hier als lesbarer `rwxr-xr-x`-String statt als rohe Bits —
+/// das Frontend braucht dafür keine eigene Unix-Rechte-Formatierungslogik.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteEntryDto {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub size: u64,
+    pub permissions: String,
+    pub modified: Option<String>,
+}
+
+impl From<&RemoteEntry> for RemoteEntryDto {
+    fn from(entry: &RemoteEntry) -> Self {
+        Self {
+            name: entry.name.clone(),
+            path: entry.path.clone(),
+            is_dir: entry.is_dir,
+            size: entry.size,
+            permissions: format_unix_permissions(entry.permissions),
+            modified: entry.modified.map(|dt| dt.to_rfc3339()),
+        }
+    }
+}
+
+/// Formatiert reine Unix-Rechte-Bits (keine Typ-Bits, s.
+/// `RemoteEntry::permissions`-Doc-Kommentar in `core`) als klassischen
+/// `rwxr-xr-x`-String.
+fn format_unix_permissions(bits: u32) -> String {
+    let triplet = |shift: u32| -> String {
+        let r = if bits & (0o4 << shift) != 0 { 'r' } else { '-' };
+        let w = if bits & (0o2 << shift) != 0 { 'w' } else { '-' };
+        let x = if bits & (0o1 << shift) != 0 { 'x' } else { '-' };
+        [r, w, x].iter().collect()
+    };
+    format!("{}{}{}", triplet(6), triplet(3), triplet(0))
+}
+
+/// Sortiert Verzeichniseinträge für die Anzeige: Verzeichnisse zuerst, dann
+/// alphabetisch nach Name (case-insensitiv) — Spec 0020 macht dazu keine
+/// Vorgabe, das ist die in Dateibrowsern übliche Konvention.
+pub fn sort_remote_entries(entries: &mut [RemoteEntryDto]) {
+    entries.sort_by(|a, b| {
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+}
+
 #[cfg(test)]
 mod tests {
     //! Regressionstest für einen tatsächlich aufgetretenen Bug: serdes
@@ -685,5 +740,39 @@ mod tests {
             AuthMethodInput::Certificate { cert_content: Some(c), key_content: Some(k) }
                 if c == "cert-data" && k == "key-data"
         ));
+    }
+
+    #[test]
+    fn test_format_unix_permissions_formats_rwx_triplets() {
+        assert_eq!(format_unix_permissions(0o755), "rwxr-xr-x");
+        assert_eq!(format_unix_permissions(0o644), "rw-r--r--");
+        assert_eq!(format_unix_permissions(0o600), "rw-------");
+        assert_eq!(format_unix_permissions(0), "---------");
+    }
+
+    fn dummy_entry(name: &str, is_dir: bool) -> RemoteEntryDto {
+        RemoteEntryDto {
+            name: name.to_string(),
+            path: format!("/{name}"),
+            is_dir,
+            size: 0,
+            permissions: String::new(),
+            modified: None,
+        }
+    }
+
+    #[test]
+    fn test_sort_remote_entries_lists_directories_first_then_alphabetically() {
+        let mut entries = vec![
+            dummy_entry("zebra.txt", false),
+            dummy_entry("Apps", true),
+            dummy_entry("alpha.txt", false),
+            dummy_entry("bin", true),
+        ];
+
+        sort_remote_entries(&mut entries);
+
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["Apps", "bin", "alpha.txt", "zebra.txt"]);
     }
 }

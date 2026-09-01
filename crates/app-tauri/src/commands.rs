@@ -26,15 +26,17 @@ use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, PtySize}
 
 use crate::ai_provider_factory::build_ai_provider;
 use crate::dto::{
-    credential_ref_for, ActionUserDecision, AiProviderConfigDto, AiProviderConfigInput,
-    DeleteGroupResult, DocumentFormat, EvalContextInput, EvaluationTraceDto, GroupDto,
-    HostKeyUserDecision, NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType, RuleDto,
-    RuleInput, ServerDto, ServerInput, SessionSummaryDto, TestConnectionResult,
+    credential_ref_for, sort_remote_entries, ActionUserDecision, AiProviderConfigDto,
+    AiProviderConfigInput, DeleteGroupResult, DocumentFormat, EvalContextInput,
+    EvaluationTraceDto, GroupDto, HostKeyUserDecision, NoteRevisionDto, PatternDto,
+    PatternSuggestionDto, PatternType, RemoteEntryDto, RuleDto, RuleInput, ServerDto, ServerInput,
+    SessionSummaryDto, TestConnectionResult,
 };
 use crate::error::CommandResult;
 use crate::events::{
-    emit_connection_status_changed, emit_host_key_verification_needed, ConnectionStatus,
-    EventEmitter, HostKeyKind,
+    emit_connection_status_changed, emit_host_key_verification_needed,
+    emit_sftp_transfer_finished, emit_sftp_transfer_started, ConnectionStatus, EventEmitter,
+    HostKeyKind, SftpTransferKind,
 };
 use crate::groups::{compute_delete_group_result, validate_no_cycle};
 use crate::orchestration::run_chat_turn;
@@ -1212,5 +1214,254 @@ pub async fn create_overlay_titlebar(window: tauri::WebviewWindow) -> CommandRes
         // Spec 0014 Abschnitt 3 & 6: Startwert für Ampel-Positionierung
         let _ = window.set_traffic_lights_inset(12.0, 16.0).await;
     }
+    Ok(())
+}
+
+// --- Spec 0020, Abschnitt 5: Manueller Dateibrowser -------------------------
+//
+// Bewusst OHNE Filter-Engine-Prüfung — anders als `ReadRemoteFile`/
+// `WriteRemoteFile` (Spec 0020, Abschnitt 4, `crate::orchestration`) laufen
+// diese Befehle nie über den KI-Chat, sondern sind direkte Nutzeraktionen im
+// Dateibrowser-Panel, analog zum interaktiven Terminal (Spec 0005, Abschnitt
+// 1: auch dort läuft rohe Tastatureingabe ungefiltert durch).
+//
+// **Design-Entscheidung, Löschen/Herunterladen auf Dateien beschränkt**: Der
+// `SftpSession`-Trait (Spec 0020, Abschnitt 3, bereits exakt so in Teil 1
+// committet) bietet nur `remove()` (SFTP `REMOVE`, wirkt ausschließlich auf
+// Dateien) und kein rekursives Verzeichnis-Löschen oder einen
+// Mehrdatei-Download. Ein Versuch, `remove()` auf ein Verzeichnis
+// anzuwenden, schlägt serverseitig mit einem Protokollfehler fehl. Statt
+// das im Frontend erst nach einem verwirrenden Fehler sichtbar zu machen,
+// bietet das Kontextmenü "Herunterladen"/"Löschen" dort von vornherein nur
+// für Dateien an — Verzeichnisse lassen sich weiterhin öffnen (Navigation)
+// und umbenennen (SFTP `RENAME` funktioniert für beide Eintragstypen).
+// Siehe ADR-Vorschlag am Ende der Aufgabe.
+
+/// Liefert die Session und öffnet ihre SFTP-Verbindung bei Bedarf (Spec
+/// 0020, Abschnitt 3, `crate::orchestration::ensure_sftp_open`) — gemeinsame
+/// Vorbedingung aller `sftp_*`-Befehle unten.
+async fn session_sftp(state: &AppState, session_id: SessionId) -> CommandResult<Arc<Session>> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    crate::orchestration::ensure_sftp_open(&session).await?;
+    Ok(session)
+}
+
+fn file_name_of(path: &str) -> String {
+    path.rsplit('/')
+        .next()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(path)
+        .to_string()
+}
+
+#[tauri::command]
+pub async fn sftp_list(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    path: String,
+) -> CommandResult<Vec<RemoteEntryDto>> {
+    let session = session_sftp(&state, session_id).await?;
+    let entries = {
+        let mut guard = session.sftp.lock().await;
+        let sftp = guard
+            .as_mut()
+            .expect("ensure_sftp_open lief erfolgreich durch");
+        sftp.list_dir(&path).await?
+    };
+    let mut dtos: Vec<RemoteEntryDto> = entries.iter().map(RemoteEntryDto::from).collect();
+    sort_remote_entries(&mut dtos);
+    Ok(dtos)
+}
+
+/// Spec 0020, Abschnitt 5: "nativer Speichern-Dialog" — derselbe
+/// oneshot-Kanal-Umweg wie `export_document` (dortiger Doc-Kommentar erklärt
+/// das Warum), gefolgt von einem `sftp-transfer-started`/`-finished`-
+/// Ereignispaar (s. `crate::events`-Moduldoc zur Fortschritts-Design-
+/// Entscheidung) und dem eigentlichen Lesen+lokalem Schreiben.
+#[tauri::command]
+pub async fn sftp_download(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    remote_path: String,
+) -> CommandResult<()> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let session = session_sftp(&state, session_id).await?;
+    let file_name = file_name_of(&remote_path);
+
+    // Größe vorab für die Fortschrittsanzeige — ein fehlgeschlagenes
+    // `stat()` (z. B. eingeschränkte Leserechte aufs Elternverzeichnis)
+    // blockiert den eigentlichen Download nicht, die Anzeige zeigt dann
+    // schlicht keine Gesamtgröße.
+    let total_bytes = {
+        let mut guard = session.sftp.lock().await;
+        let sftp = guard
+            .as_mut()
+            .expect("ensure_sftp_open lief erfolgreich durch");
+        sftp.stat(&remote_path).await.ok().map(|entry| entry.size)
+    };
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_file_name(&file_name)
+        .save_file(move |path| {
+            let _ = tx.send(path);
+        });
+    let Some(local_path) = rx.await.ok().flatten() else {
+        return Ok(()); // Abbrechen ist kein Fehler, s. `export_document`.
+    };
+    let local_path = local_path.into_path()?;
+
+    let transfer_id = Uuid::new_v4();
+    emit_sftp_transfer_started(
+        &app,
+        session_id,
+        transfer_id,
+        SftpTransferKind::Download,
+        file_name,
+        total_bytes,
+    );
+
+    let result: CommandResult<()> = async {
+        let bytes = {
+            let mut guard = session.sftp.lock().await;
+            let sftp = guard
+                .as_mut()
+                .expect("ensure_sftp_open lief erfolgreich durch");
+            sftp.read_file(&remote_path).await?
+        };
+        // `spawn_blocking` statt eines direkten `std::fs::write` (anders als
+        // z. B. `read_credential_file`s kleine Zertifikatsdateien): Downloads
+        // hier können beliebig groß sein, Spec 0020 Abschnitt 5 verlangt
+        // ausdrücklich, dass Transfers die Session nicht blockieren.
+        tokio::task::spawn_blocking(move || std::fs::write(&local_path, bytes))
+            .await
+            .map_err(|e| format!("Hintergrund-Task für Download fehlgeschlagen: {e}"))??;
+        Ok(())
+    }
+    .await;
+
+    emit_sftp_transfer_finished(
+        &app,
+        session_id,
+        transfer_id,
+        result.as_ref().err().map(|e| e.message.clone()),
+    );
+    result
+}
+
+/// `local_path` ist bereits vom Frontend aufgelöst — entweder über den
+/// nativen Öffnen-Dialog (Upload-Button, `@tauri-apps/plugin-dialog`, s.
+/// `frontend/src/fileDialog.ts` für das bereits etablierte Muster) oder über
+/// einen Drag-and-Drop-Vorgang aus dem Betriebssystem (der Pfad kommt dort
+/// direkt vom OS-Drop-Ereignis) — beides sind explizite Nutzeraktionen im
+/// Sinne von Spec 0020, Abschnitt 5 ("nie ohne expliziten Dialog"), auch
+/// wenn der Dialog beim Drag-and-Drop kein Fenster ist, sondern die
+/// Drag-Geste selbst.
+#[tauri::command]
+pub async fn sftp_upload(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    local_path: String,
+    remote_path: String,
+) -> CommandResult<()> {
+    let session = session_sftp(&state, session_id).await?;
+    let file_name = file_name_of(&remote_path);
+
+    let local_path_for_stat = local_path.clone();
+    let total_bytes = tokio::task::spawn_blocking(move || {
+        std::fs::metadata(&local_path_for_stat)
+            .map(|m| m.len())
+            .ok()
+    })
+    .await
+    .unwrap_or(None);
+
+    let transfer_id = Uuid::new_v4();
+    emit_sftp_transfer_started(
+        &app,
+        session_id,
+        transfer_id,
+        SftpTransferKind::Upload,
+        file_name,
+        total_bytes,
+    );
+
+    let local_path_for_read = local_path.clone();
+    let result: CommandResult<()> = async {
+        let bytes = tokio::task::spawn_blocking(move || std::fs::read(local_path_for_read))
+            .await
+            .map_err(|e| format!("Hintergrund-Task für Upload fehlgeschlagen: {e}"))??;
+        let mut guard = session.sftp.lock().await;
+        let sftp = guard
+            .as_mut()
+            .expect("ensure_sftp_open lief erfolgreich durch");
+        sftp.write_file(&remote_path, &bytes).await?;
+        Ok(())
+    }
+    .await;
+
+    emit_sftp_transfer_finished(
+        &app,
+        session_id,
+        transfer_id,
+        result.as_ref().err().map(|e| e.message.clone()),
+    );
+    result
+}
+
+/// Löschen einer Datei — die Bestätigungsrückfrage selbst läuft im Frontend
+/// (Spec 0020, Abschnitt 5: "Löschen erfordert eine Bestätigungsrückfrage im
+/// UI"), dieser Befehl führt sie nur noch aus. Nur für Dateien angeboten,
+/// s. Moduldoc-Kommentar oben ("Design-Entscheidung").
+#[tauri::command]
+pub async fn sftp_delete(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    path: String,
+) -> CommandResult<()> {
+    let session = session_sftp(&state, session_id).await?;
+    let mut guard = session.sftp.lock().await;
+    let sftp = guard
+        .as_mut()
+        .expect("ensure_sftp_open lief erfolgreich durch");
+    sftp.remove(&path).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn sftp_rename(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    from: String,
+    to: String,
+) -> CommandResult<()> {
+    let session = session_sftp(&state, session_id).await?;
+    let mut guard = session.sftp.lock().await;
+    let sftp = guard
+        .as_mut()
+        .expect("ensure_sftp_open lief erfolgreich durch");
+    sftp.rename(&from, &to).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn sftp_mkdir(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    path: String,
+) -> CommandResult<()> {
+    let session = session_sftp(&state, session_id).await?;
+    let mut guard = session.sftp.lock().await;
+    let sftp = guard
+        .as_mut()
+        .expect("ensure_sftp_open lief erfolgreich durch");
+    sftp.create_dir(&path).await?;
     Ok(())
 }
