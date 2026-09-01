@@ -24,7 +24,8 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{
-    ActionSchema, AiError, AiEvent, AiProvider, MessageContent, Role, SessionContext,
+    ActionSchema, AiError, AiEvent, AiProvider, MessageContent, RejectionReason, Role,
+    SessionContext,
 };
 use ssh_manager_core::ssh::CommandOutput;
 
@@ -124,7 +125,25 @@ fn message_content_text(content: &MessageContent) -> String {
     match content {
         MessageContent::Text(text) => text.clone(),
         MessageContent::CommandResult { command, output } => format_command_result(command, output),
+        MessageContent::ActionRejected { command, reason } => {
+            format_action_rejected(command, reason)
+        }
     }
+}
+
+/// s. `crate::openai_compatible::format_action_rejected` — identisches
+/// Format, kein `security_notice` nötig (weder Kommando noch Grund stammen
+/// von einem potenziell manipulierten Remote-Server).
+fn format_action_rejected(command: &str, reason: &RejectionReason) -> String {
+    let reason_text = match reason {
+        RejectionReason::User => "Der Nutzer hat diesen Vorschlag im Bestätigungsdialog abgelehnt.".to_string(),
+        RejectionReason::Blocked(reason) => {
+            format!("Automatisch durch eine Filter-Regel blockiert, ohne Bestätigungsdialog: {reason}")
+        }
+    };
+    format!(
+        "<action_rejected>\n<command>{command}</command>\n<reason>{reason_text}</reason>\n</action_rejected>"
+    )
 }
 
 fn format_command_result(command: &str, output: &CommandOutput) -> String {

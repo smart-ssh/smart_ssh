@@ -9,11 +9,13 @@ import {
   listPromptHistory,
   respondToAction,
   sendChatMessage,
+  stopAutoContinuation,
   suggestRulePatterns,
 } from "../api";
 import {
   onChatActionProposed,
   onChatActionResult,
+  onChatAutoContinuationStarted,
   onChatDocumentGenerated,
   onChatError,
   onChatTextDelta,
@@ -49,6 +51,13 @@ type ChatItem =
        * (anders als Approve/EditThenApprove) kein `chat-action-result` aus,
        * die Buttons müssen also unabhängig davon verschwinden. */
       responded: boolean;
+      /** Spec 0021, Abschnitt 6: welche Entscheidung der Nutzer im Dialog
+       * getroffen hat (nur gesetzt, sobald `responded`) — unabhängig vom
+       * ursprünglichen `decision`-Feld (das bleibt `Confirm{reason}`, auch
+       * nachdem der Nutzer abgelehnt hat). Bestimmt, ob die Karte als
+       * "abgelehnt" markiert wird, statt weiter "Bestätigung nötig" zu
+       * zeigen. */
+      userDecision?: "approve" | "deny" | "editThenApprove";
       result?: ActionResultPayload;
       /** Spec 0019, Abschnitt 3/4 — nur bei `ProposeNoteUpdate` gesetzt. */
       previousNoteContent: string | null;
@@ -136,6 +145,15 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
   const [items, setItems] = useState<ChatItem[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  /** Spec 0021, Abschnitt 5: `true`, sobald eine *automatische* Folgerunde
+   * läuft (KI reagiert auf ein Aktionsergebnis, ohne dass der Nutzer
+   * getippt hat) — steuert den "Automatik läuft"-Indikator samt
+   * "Automatik stoppen"-Button. Wird zusammen mit `sending` zurückgesetzt
+   * (`handleSubmit`s `finally`): `send_chat_message` läuft synchron über
+   * die komplette Runden-Kette, dessen Promise-Auflösung ist also das
+   * zuverlässige "die ganze Kette ist zu Ende"-Signal, unabhängig davon, ob
+   * sie regulär endete, am Sicherheits-Cap oder durch "Automatik stoppen". */
+  const [autoContinuing, setAutoContinuing] = useState(false);
   const [hasActiveProvider, setHasActiveProvider] = useState<boolean | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -205,6 +223,10 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
         if (event.sessionId !== sessionId) return;
         setItems((prev) => [...prev, { type: "error", id: freshId(), message: event.message }]);
       }),
+      onChatAutoContinuationStarted((event) => {
+        if (event.sessionId !== sessionId) return;
+        setAutoContinuing(true);
+      }),
       onChatDocumentGenerated((event) => {
         if (event.sessionId !== sessionId) return;
         setItems((prev) => [
@@ -232,12 +254,26 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
     setItems((prev) =>
       prev.map((item) =>
         item.type === "action" && item.actionId === actionId
-          ? { ...item, responded: true }
+          ? { ...item, responded: true, userDecision: decision.decision }
           : item,
       ),
     );
     onActionSettled(sessionId);
     respondToAction(sessionId, actionId, decision).catch((err) =>
+      setItems((prev) => [
+        ...prev,
+        { type: "error", id: freshId(), message: commandErrorMessage(err) },
+      ]),
+    );
+  };
+
+  /** Spec 0021, Abschnitt 5: optimistisch sofort ausgeblendet — der
+   * eigentliche Effekt (kein weiterer automatischer `send()`-Aufruf mehr)
+   * greift erst beim nächsten Rundenübergang im Backend, aber der Indikator
+   * soll nicht so lange weiter "läuft" suggerieren. */
+  const handleStopAutoContinuation = () => {
+    setAutoContinuing(false);
+    stopAutoContinuation(sessionId).catch((err) =>
       setItems((prev) => [
         ...prev,
         { type: "error", id: freshId(), message: commandErrorMessage(err) },
@@ -302,7 +338,14 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
         { type: "error", id: freshId(), message: commandErrorMessage(err) },
       ]);
     } finally {
+      // Spec 0021, Abschnitt 7: Fail-Safe — läuft in JEDEM Fall (Erfolg,
+      // Fehler, gleich welcher der vier Ausgänge zuletzt griff), damit die
+      // Eingabe nie dauerhaft gesperrt bleiben kann, selbst wenn die
+      // automatische Fortsetzung selbst fehlschlägt (z. B. Netzwerkfehler
+      // beim Folge-Request an den KI-Provider — landet als `chat-error`,
+      // aber `sendChatMessage()` löst trotzdem auf, s. `run_chat_turn`).
       setSending(false);
+      setAutoContinuing(false);
     }
   };
 
@@ -376,11 +419,31 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
             serverId={serverId}
           />
         ))}
-        {sending && (
-          <div className="flex items-center gap-2 rounded-lg bg-slate-800/80 px-3 py-2 text-xs text-indigo-300">
+        {/* Spec 0021, Abschnitt 5: "Automatik läuft"-Indikator mit
+         * Stopp-Möglichkeit hat Vorrang vor dem generischen
+         * "generiert Antwort"-Hinweis — sobald eine automatische Folgerunde
+         * läuft, ist das die genauere, handlungsfähigere Information. */}
+        {autoContinuing ? (
+          <div className="flex items-center gap-2 rounded-lg border border-indigo-700/50 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300">
             <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
-            <span>KI generiert Antwort / Dokument…</span>
+            <span className="flex-1">
+              🤖 Automatik läuft — KI reagiert automatisch auf das letzte Ergebnis…
+            </span>
+            <button
+              type="button"
+              onClick={handleStopAutoContinuation}
+              className="font-heading border border-indigo-500/60 px-2 py-1 text-xs font-semibold tracking-wide text-indigo-200 hover:bg-indigo-600/20"
+            >
+              Automatik stoppen
+            </button>
           </div>
+        ) : (
+          sending && (
+            <div className="flex items-center gap-2 rounded-lg bg-slate-800/80 px-3 py-2 text-xs text-indigo-300">
+              <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
+              <span>KI generiert Antwort / Dokument…</span>
+            </div>
+          )
         )}
       </div>
 
@@ -456,11 +519,24 @@ function ChatItemView({
   }
 
   const { label, command } = describeAction(item.action);
-  const badge = decisionBadge(item.decision);
+  // Spec 0021, Abschnitt 6: eine vom Nutzer abgelehnte Aktion bleibt
+  // sichtbar, statt zu verschwinden — `item.decision` selbst bleibt aber
+  // weiterhin `Confirm{reason}` (das war die ursprüngliche Filter-Engine-
+  // Entscheidung, nicht die Nutzerwahl), deshalb hier zusätzlich anhand von
+  // `userDecision` erkannt und mit einem eigenen "abgelehnt"-Label/-Ton
+  // überlagert, statt weiter fälschlich "Bestätigung nötig" zu zeigen.
+  const rejectedByUser = item.responded && item.userDecision === "deny";
+  const blockedByFilter = typeof item.decision === "object" && "Deny" in item.decision;
+  const badge = rejectedByUser
+    ? { text: "abgelehnt", className: "bg-red-900 text-red-300" }
+    : decisionBadge(item.decision);
+  const cardTone = rejectedByUser
+    ? "border-red-700/45 bg-red-950/15"
+    : decisionCardTone(item.decision);
   const needsConfirmation = !item.responded && typeof item.decision === "object" && "Confirm" in item.decision;
 
   return (
-    <div className={`border p-3 text-sm ${decisionCardTone(item.decision)}`}>
+    <div className={`border p-3 text-sm ${cardTone}`}>
       <div className="mb-1 flex items-center gap-2">
         <span className="font-heading font-semibold tracking-wide text-slate-100">{label}</span>
         <span
@@ -470,7 +546,13 @@ function ChatItemView({
         </span>
       </div>
       {command && (
-        <code className="block border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs text-slate-200">
+        <code
+          className={`block border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs ${
+            rejectedByUser || blockedByFilter
+              ? "text-slate-500 line-through decoration-red-500/60"
+              : "text-slate-200"
+          }`}
+        >
           {command}
         </code>
       )}
@@ -506,11 +588,19 @@ function ChatItemView({
           )}
         </div>
       )}
-      {typeof item.decision === "object" && "Confirm" in item.decision && (
-        <p className="mt-1 text-xs text-slate-400">{formatReason(item.decision.Confirm.reason)}</p>
-      )}
-      {typeof item.decision === "object" && "Deny" in item.decision && (
-        <p className="mt-1 text-xs text-red-300">{formatReason(item.decision.Deny.reason)}</p>
+      {rejectedByUser ? (
+        <p className="mt-1 text-xs text-red-300">Vom Nutzer abgelehnt.</p>
+      ) : (
+        <>
+          {typeof item.decision === "object" && "Confirm" in item.decision && (
+            <p className="mt-1 text-xs text-slate-400">
+              {formatReason(item.decision.Confirm.reason)}
+            </p>
+          )}
+          {typeof item.decision === "object" && "Deny" in item.decision && (
+            <p className="mt-1 text-xs text-red-300">{formatReason(item.decision.Deny.reason)}</p>
+          )}
+        </>
       )}
 
       {needsConfirmation && (

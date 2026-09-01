@@ -172,6 +172,16 @@ export interface NoteUpdateSuggestedEvent {
   previousNoteContent: string | null;
 }
 
+/** Spec 0021, Abschnitt 5: signalisiert eine *automatische* Folgerunde (die
+ * KI antwortet auf ein Aktionsergebnis, ohne dass der Nutzer getippt hat) —
+ * Grundlage für den "Automatik läuft"-Indikator. `round` ist nur zur
+ * Diagnose/Anzeige gedacht (z. B. "Runde 3"), keine Ablauflogik hängt im
+ * Frontend daran. */
+export interface ChatAutoContinuationStartedEvent {
+  sessionId: string;
+  round: number;
+}
+
 export type ActionResultPayload =
   | { kind: "command"; command: string; stdout: string; stderr: string; exitCode: number | null }
   | { kind: "noteUpdate"; summary: string }

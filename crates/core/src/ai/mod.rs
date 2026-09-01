@@ -23,5 +23,5 @@ pub use provider::AiProvider;
 pub use redactor::{DefaultOutputRedactor, OutputRedactor};
 pub use types::{
     default_action_schemas, ActionParameter, ActionParameterKind, ActionSchema, AiError, AiEvent,
-    ChatMessage, MessageContent, ProviderId, ProviderType, Role, SessionContext,
+    ChatMessage, MessageContent, ProviderId, ProviderType, RejectionReason, Role, SessionContext,
 };

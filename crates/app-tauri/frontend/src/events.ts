@@ -2,6 +2,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ChatActionProposedEvent,
   ChatActionResultEvent,
+  ChatAutoContinuationStartedEvent,
   ChatDocumentGeneratedEvent,
   ChatErrorEvent,
   ChatTextDeltaEvent,
@@ -50,6 +51,15 @@ export const onChatActionResult = (
 
 export const onChatError = (handler: (event: ChatErrorEvent) => void): Promise<UnlistenFn> =>
   listen<ChatErrorEvent>("chat-error", (e) => handler(e.payload));
+
+/** Spec 0021, Abschnitt 5 — s. `ChatAutoContinuationStartedEvent`-Doc-
+ * Kommentar. */
+export const onChatAutoContinuationStarted = (
+  handler: (event: ChatAutoContinuationStartedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatAutoContinuationStartedEvent>("chat-auto-continuation-started", (e) =>
+    handler(e.payload),
+  );
 
 /** Spec 0010 — bewusst app-weit abonniert (z. B. in `App.tsx`), nicht nur
  * innerhalb einer offenen `ChatPanel`-Instanz: der Vorschlag kann eintreffen,

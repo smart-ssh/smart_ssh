@@ -122,6 +122,30 @@ pub enum MessageContent {
         command: String,
         output: CommandOutput,
     },
+    /// Spec 0021, Abschnitt 3, Fälle 3/4: eine vorgeschlagene Aktion wurde
+    /// **nicht** ausgeführt — entweder hat der Nutzer sie im
+    /// Bestätigungsdialog abgelehnt ([`RejectionReason::User`]) oder die
+    /// Filter-Engine hat sie automatisch blockiert
+    /// ([`RejectionReason::Blocked`], mit dem `Decision::Deny`-Grund). Wie
+    /// bei `CommandResult` löst auch dieser Eintrag automatisch eine neue
+    /// Folgerunde aus (Spec 0021, Abschnitt 3) — die KI erfährt explizit,
+    /// *dass* und *warum* nichts ausgeführt wurde, statt in einem
+    /// Warte-Zustand zu verharren, der nie aufgelöst wird.
+    ActionRejected {
+        command: String,
+        reason: RejectionReason,
+    },
+}
+
+/// Warum eine Aktion nicht ausgeführt wurde (Spec 0021, Abschnitt 3).
+#[derive(Debug, Clone, PartialEq)]
+pub enum RejectionReason {
+    /// Der Nutzer hat im Bestätigungsdialog auf "Ablehnen" geklickt.
+    User,
+    /// Die Filter-Engine hat die Aktion automatisch blockiert, ohne dass
+    /// überhaupt ein Bestätigungsdialog gezeigt wurde — der `String` ist
+    /// der `Decision::Deny { reason }`-Grund (Spec 0002).
+    Blocked(String),
 }
 
 /// Beschreibung einer Aktion, die ein Provider per Tool-/Function-Calling

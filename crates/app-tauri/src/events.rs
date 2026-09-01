@@ -176,6 +176,31 @@ pub fn emit_chat_text_delta(emitter: &dyn EventEmitter, session_id: SessionId, d
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ChatAutoContinuationStartedPayload {
+    session_id: SessionId,
+    round: usize,
+}
+
+/// Spec 0021, Abschnitt 5: signalisiert dem Frontend, dass eine
+/// *automatische* Folgerunde beginnt (die KI antwortet auf ein
+/// Aktionsergebnis, ohne dass der Nutzer getippt hat) — Grundlage für den
+/// "Automatik läuft"-Indikator samt "Automatik stoppen"-Button. Wird nur
+/// für `round > 1` gesendet, nie für die erste, vom Nutzer selbst
+/// ausgelöste Runde (s. `crate::orchestration::run_chat_turn`).
+pub fn emit_chat_auto_continuation_started(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    round: usize,
+) {
+    emit(
+        emitter,
+        "chat-auto-continuation-started",
+        &ChatAutoContinuationStartedPayload { session_id, round },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ChatActionProposedPayload {
     session_id: SessionId,
     action_id: ActionId,

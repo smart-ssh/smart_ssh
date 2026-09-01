@@ -351,6 +351,7 @@ pub async fn connect(
         status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
         sftp: tokio::sync::Mutex::new(None),
+        auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
     });
     state.sessions.insert(session_id, session);
 
@@ -592,6 +593,27 @@ pub async fn respond_to_action(
     state
         .pending_action_confirmations
         .resolve(&action_id, decision)?;
+    Ok(())
+}
+
+/// Spec 0021, Abschnitt 5: "Automatik stoppen" — bricht die automatische
+/// Fortsetzungskette für die aktuelle Nutzer-Nachricht sofort ab (keine
+/// weiteren automatischen `AiProvider::send()`-Aufrufe mehr), unabhängig
+/// vom Runden-Zähler. Ein bereits offener Bestätigungsdialog ist davon
+/// nicht betroffen — `run_chat_turn` prüft dieses Flag nur *zwischen*
+/// Runden (s. dortiger Kommentar), nie während eine Runde noch läuft.
+#[tauri::command]
+pub async fn stop_auto_continuation(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<()> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    session
+        .auto_continue_stop
+        .store(true, std::sync::atomic::Ordering::SeqCst);
     Ok(())
 }
 

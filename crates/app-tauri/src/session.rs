@@ -127,6 +127,17 @@ pub struct Session {
     /// Session offengehalten statt pro Zugriff neu aufgebaut. `AsyncMutex`
     /// wie `transport`/`context` (über `.await`-Punkte hinweg gehalten).
     pub sftp: AsyncMutex<Option<Box<dyn SftpSession>>>,
+    /// Spec 0021, Abschnitt 5: gesetzt durch `crate::commands::
+    /// stop_auto_continuation`, geprüft in `crate::orchestration::
+    /// run_chat_turn` nur *zwischen* automatischen Folgerunden — bricht die
+    /// Fortsetzungskette für die aktuelle Nutzer-Nachricht ab, lässt einen
+    /// bereits offenen Bestätigungsdialog aber unangetastet (die Prüfung
+    /// liegt außerhalb von `run_one_round`). Wird zu Beginn jeder neuen
+    /// `run_chat_turn`-Ausführung (= jede neue Nutzer-Nachricht)
+    /// zurückgesetzt. `AtomicBool` statt `StdMutex<bool>`: einfacher
+    /// Flag-Zustand ohne zusammengesetzte Operationen, für den ein Mutex nur
+    /// unnötigen Overhead bedeuten würde.
+    pub auto_continue_stop: std::sync::atomic::AtomicBool,
 }
 
 /// Startet den Terminal-Aktor (Modul-Kommentar, Punkt 3) als eigenen Task.
@@ -355,6 +366,7 @@ mod tests {
             status: StdMutex::new(ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
             sftp: AsyncMutex::new(None),
+            auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         }
     }
 

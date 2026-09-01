@@ -80,6 +80,13 @@ export const respondToAction = (
 
 export const disconnect = (sessionId: string) => invoke<void>("disconnect", { sessionId });
 
+/** Spec 0021, Abschnitt 5: bricht die automatische Fortsetzungskette für die
+ * aktuelle Nutzer-Nachricht sofort ab — lässt einen bereits offenen
+ * Bestätigungsdialog unangetastet (s. `crate::commands::
+ * stop_auto_continuation`-Doc-Kommentar). */
+export const stopAutoContinuation = (sessionId: string) =>
+  invoke<void>("stop_auto_continuation", { sessionId });
+
 // --- Spec 0017: Multi-Tab-Sessions --------------------------------------
 
 /** Maßgebliche Quelle dafür, welche Sessions tatsächlich offen sind — dient

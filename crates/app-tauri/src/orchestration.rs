@@ -8,30 +8,43 @@
 //! `run_chat_turn` besteht aus 1..n Runden gegen `AiProvider::send()`
 //! (`run_one_round`, je genau eine KI-Antwort: 0..n `TextDelta`s, 0..n
 //! `ActionProposed`s, dann `Done`/`Error`). **Wurde in einer Runde
-//! mindestens eine Aktion tatsächlich ausgeführt** (AutoExec oder vom
-//! Nutzer per `respond_to_action` bestätigt — nicht bei `Deny` oder einem
-//! per Bearbeiten erneut auf `Deny` laufenden `EditThenApprove`), folgt
-//! automatisch eine weitere Runde mit dem inzwischen um das
-//! `CommandResult`/die Notiz-Zusammenfassung erweiterten Kontext (Spec
-//! Abschnitt 6, Punkt 5: "... in den `SessionContext` für die nächste
-//! KI-Runde übernommen"). Ohne diesen Automatismus bekäme der Nutzer nach
-//! einem ausgeführten Kommando nie eine Antwort der KI, die dessen
-//! Ergebnis tatsächlich interpretiert — nur den rohen Output. Siehe
-//! ADR-Vorschlag am Ende der Aufgabe.
+//! mindestens eine vorgeschlagene Aktion zu einem der vier Ausgänge aus
+//! Spec 0021, Abschnitt 3 geführt** — tatsächlich ausgeführt (`AutoExec`
+//! oder vom Nutzer bestätigt, inkl. `EditThenApprove`), vom Nutzer im
+//! Bestätigungsdialog abgelehnt, oder automatisch durch die Filter-Engine
+//! blockiert —, folgt automatisch eine weitere Runde mit dem inzwischen um
+//! einen entsprechenden `MessageContent`-Eintrag (`CommandResult`/
+//! Notiz-Zusammenfassung/`ActionRejected`) erweiterten Kontext. Ohne diesen
+//! Automatismus bekäme die KI nach einer Ablehnung nie mit, dass (und
+//! warum) nichts passiert ist, und der Nutzer bekäme nie eine Reaktion
+//! darauf (Spec 0021, Abschnitt 1 — das war der gemeldete Bug: "nach
+//! Ablehnen passiert nichts mehr"). Ursprünglich (vor Spec 0021) galt das
+//! nur für tatsächlich ausgeführte Aktionen — s.
+//! `docs/adr/0014-automatic-followup-round-after-executed-action.md` für die
+//! Historie dieses Mechanismus, den Spec 0021 auf alle vier Ausgänge
+//! erweitert, aber nicht grundlegend verändert.
 //!
 //! Das widerspricht nicht der im Projekt durchgehaltenen
 //! Transparenz-/Bestätigungs-Philosophie (Spec 0002, Spec 0007 Abschnitt 5:
 //! selbst `AutoExec`/`Deny` werden dem Nutzer nur *angezeigt*, nie verborgen
 //! weitergesponnen): jede in einer Folgerunde neu vorgeschlagene Aktion
 //! durchläuft erneut dieselbe Filter-Engine/Bestätigungslogik wie jede
-//! andere auch. Begrenzt auf [`MAX_AUTO_FOLLOWUP_ROUNDS`] Runden, damit eine
-//! KI, die immer wieder neue Aktionen vorschlägt, nicht unbegrenzt
-//! weiterläuft.
+//! andere auch — "automatisch weiterdenken" heißt nur, dass die KI
+//! Ergebnisse automatisch sieht, nie, dass künftige Kommandos automatisch
+//! ausgeführt werden (Spec 0021, Abschnitt 2). Begrenzt auf
+//! [`MAX_AUTO_FOLLOWUP_ROUNDS`] Runden (Spec 0021, Abschnitt 4) sowie
+//! jederzeit manuell abbrechbar über `Session::auto_continue_stop` (Spec
+//! 0021, Abschnitt 5, `crate::commands::stop_auto_continuation`) — Letzteres
+//! lässt einen bereits offenen Bestätigungsdialog unangetastet, da die
+//! Prüfung nur zwischen abgeschlossenen Runden greift, nie innerhalb einer
+//! laufenden `run_one_round`.
 
 use futures::StreamExt;
 use uuid::Uuid;
 
-use ssh_manager_core::ai::{ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, Role};
+use ssh_manager_core::ai::{
+    ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, RejectionReason, Role,
+};
 use ssh_manager_core::filter::{Decision, EvalContext};
 use ssh_manager_core::profiles::{
     AiAction, NoteEditor, NoteTarget, NoteTargetSelector, ProfileError, ProfileStore,
@@ -41,33 +54,46 @@ use ssh_manager_core::ssh::{CommandOutput, SshError};
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::ActionUserDecision;
 use crate::events::{
-    emit_chat_action_proposed, emit_chat_action_result, emit_chat_document_generated,
-    emit_chat_error, emit_chat_text_delta, emit_note_update_suggested, ActionResultPayload,
-    EventEmitter,
+    emit_chat_action_proposed, emit_chat_action_result, emit_chat_auto_continuation_started,
+    emit_chat_document_generated, emit_chat_error, emit_chat_text_delta,
+    emit_note_update_suggested, ActionResultPayload, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
 /// Sicherheitsgrenze gegen eine KI, die in jeder Folgerunde erneut eine
-/// (automatisch ausgeführte) Aktion vorschlägt — ohne diese Grenze könnte
-/// `run_chat_turn` sonst unbegrenzt weiterlaufen. Ursprünglich auf 8
-/// gesetzt, in der Praxis aber zu niedrig: mehrstufige, aber völlig
-/// legitime Admin-Aufgaben (mehrere Diagnose-/Fix-Kommandos nacheinander)
-/// liefen dagegen und wurden mit einer alarmierend wirkenden Fehlermeldung
-/// abgebrochen, obwohl nichts falsch lief. Jede einzelne Runde bleibt
-/// weiterhin durch die Filter-Engine/Bestätigungslogik abgesichert (s.
-/// Moduldoc) — dieser Zähler ist nur ein zusätzliches Netz gegen eine KI,
-/// die (fehlerhaft) unbegrenzt weiter automatisch ausführbare Aktionen
-/// vorschlägt, kein primärer Sicherheitsmechanismus. Siehe
-/// `docs/adr/0014-automatic-followup-round-after-executed-action.md`.
-const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 25;
+/// Aktion vorschlägt, die wieder ausgeführt/abgelehnt/blockiert wird — ohne
+/// diese Grenze könnte `run_chat_turn` sonst unbegrenzt weiterlaufen (Spec
+/// 0021, Abschnitt 4: "Default-Limit 10"). Pro ursprünglicher
+/// Nutzer-Nachricht: da diese Konstante nur die lokale `for`-Schleife in
+/// [`run_chat_turn`] begrenzt und jeder Aufruf von `send_chat_message` (=
+/// jede neue Nutzer-Nachricht) `run_chat_turn` frisch aufruft, ist kein
+/// zusätzlicher, persistenter Zähler nötig — "Zähler wird bei neuer
+/// Nachricht zurückgesetzt" (Spec 0021, Abschnitt 4) ergibt sich bereits
+/// aus dieser Struktur von selbst.
+///
+/// War vor Spec 0021 auf 25 gesetzt (ursprünglich 8, dann erhöht — s.
+/// `docs/adr/0014-automatic-followup-round-after-executed-action.md`), weil
+/// mehrstufige, aber legitime Admin-Aufgaben mit vielen tatsächlich
+/// ausgeführten Schritten sonst zu früh abbrachen. Spec 0021 zählt jetzt
+/// aber **jeden** der vier Ausgänge als Runde, nicht nur ausgeführte
+/// Aktionen (s. Moduldoc) — eine abgelehnte/blockierte Runde beendet sich
+/// selbst quasi sofort (kein Warten auf einen entfernten Prozess), sodass
+/// dieselbe 25er-Großzügigkeit hier nicht mehr nötig ist, um legitime
+/// mehrstufige Aufgaben nicht vorzeitig abzuwürgen. Zusätzlich lässt sich
+/// eine Kette jetzt jederzeit manuell stoppen (Abschnitt 5) statt nur auf
+/// diesen Zähler angewiesen zu sein — das Erreichen des Caps ist ohnehin
+/// kein Fehler, nur ein weicher Stopp mit Fortsetzungsmöglichkeit per neuer
+/// Nachricht.
+const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 10;
 
 /// Die Nutzer-Nachricht muss bereits vom Aufrufer in
 /// `session.context.history` eingetragen worden sein (s.
 /// `crate::commands::send_chat_message`). Läuft so lange in Folgerunden
-/// weiter, wie die jeweils letzte Runde mindestens eine Aktion tatsächlich
-/// ausgeführt hat (s. Moduldoc), höchstens aber [`MAX_AUTO_FOLLOWUP_ROUNDS`]
-/// Runden.
+/// weiter, wie die jeweils letzte Runde zu einem der vier Ausgänge aus Spec
+/// 0021, Abschnitt 3 geführt hat (s. Moduldoc), höchstens aber
+/// [`MAX_AUTO_FOLLOWUP_ROUNDS`] Runden, und bricht sofort ab, sobald
+/// `Session::auto_continue_stop` gesetzt ist (Spec 0021, Abschnitt 5).
 ///
 /// `#[tracing::instrument]` (Spec 0016, Abschnitt 2/4): trägt `session_id`
 /// als Span-Feld auf jede innerhalb dieses Aufrufs geloggte Zeile ein —
@@ -84,8 +110,29 @@ pub async fn run_chat_turn(
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) {
+    // Spec 0021, Abschnitt 4/5: sowohl der Runden-Zähler (s. o.) als auch
+    // das Stop-Flag gelten pro ursprünglicher Nutzer-Nachricht — hier
+    // zurückgesetzt, weil `run_chat_turn` genau einmal pro neuer
+    // Nutzer-Nachricht aufgerufen wird (s. `crate::commands::
+    // send_chat_message`). Ein vorheriger Klick auf "Automatik stoppen"
+    // darf eine ganz neue Nachricht nicht dauerhaft blockieren.
+    session
+        .auto_continue_stop
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+
     for round in 1..=MAX_AUTO_FOLLOWUP_ROUNDS {
-        let executed_action = run_one_round(
+        if round > 1 {
+            // Spec 0021, Abschnitt 5: nur *zwischen* Runden geprüft — ein
+            // bereits laufendes `run_one_round` (inkl. eines darin gerade
+            // offenen Bestätigungsdialogs) wird dadurch nie unterbrochen,
+            // nur der *nächste* automatische `send()`-Aufruf verhindert.
+            if session.auto_continue_stop.load(std::sync::atomic::Ordering::SeqCst) {
+                return;
+            }
+            emit_chat_auto_continuation_started(emitter, session_id, round);
+        }
+
+        let should_continue = run_one_round(
             session,
             session_id,
             emitter,
@@ -94,7 +141,7 @@ pub async fn run_chat_turn(
             round,
         )
         .await;
-        if !executed_action {
+        if !should_continue {
             return;
         }
     }
@@ -103,8 +150,8 @@ pub async fn run_chat_turn(
         emitter,
         session_id,
         format!(
-            "Abgebrochen nach {MAX_AUTO_FOLLOWUP_ROUNDS} aufeinanderfolgenden Aktionen in einer \
-             Antwort. Bitte in einer neuen Nachricht nachfragen."
+            "Automatische Fortsetzung nach {MAX_AUTO_FOLLOWUP_ROUNDS} Schritten angehalten — \
+             schreib weiter, um fortzufahren."
         ),
     );
 }
@@ -257,11 +304,21 @@ async fn handle_action_proposed(
             )
             .await
         }
-        Decision::Deny { .. } => {
+        Decision::Deny { reason } => {
             // Spec 0007 Abschnitt 5: informiert nur, keine Ausführung, kein
             // Warten auf `respond_to_action` — das Event oben ist bereits
-            // die vollständige Reaktion.
-            false
+            // die vollständige Reaktion an den Nutzer. Spec 0021, Abschnitt
+            // 3, Fall 4: die KI bekommt zusätzlich einen Kontext-Eintrag mit
+            // dem Blockier-Grund und automatisch eine Folgerunde, statt
+            // stillschweigend übergangen zu werden.
+            session.context.lock().await.history.push(ChatMessage {
+                role: Role::ActionResult,
+                content: MessageContent::ActionRejected {
+                    command: describe_rejected_action(&action),
+                    reason: RejectionReason::Blocked(reason),
+                },
+            });
+            true
         }
         Decision::Confirm { .. } => {
             // Spec 0017, Abschnitt 5: Grundlage für den Hintergrund-Tab-
@@ -315,6 +372,34 @@ fn sftp_read_pseudo_command(path: &str) -> String {
 
 fn sftp_write_pseudo_command(path: &str) -> String {
     format!("sftp-write {path}")
+}
+
+/// Menschen-/KI-lesbare Kurzbeschreibung einer Aktion für
+/// `MessageContent::ActionRejected.command` (Spec 0021, Abschnitt 3) — für
+/// `SuggestCommand` das Kommando selbst, für `ReadRemoteFile`/
+/// `WriteRemoteFile` dieselbe Pseudokommando-Form wie in der
+/// Filter-Engine-Auswertung (Spec 0020). `ProposeNoteUpdate` folgt "demselben
+/// Muster ... aber ohne eigene Sonderbehandlung" (Spec 0021, Abschnitt 3,
+/// letzter Absatz) — bekommt trotzdem eine sinnvolle Kurzbezeichnung statt
+/// eines rohen Debug-Werts. `GenerateDocument` erreicht diese Funktion nie
+/// (durchläuft weder `evaluate_action` noch einen Bestätigungsdialog, s.
+/// dort) — der `unreachable!()`-Arm hält dieselbe Invariante fest.
+fn describe_rejected_action(action: &AiAction) -> String {
+    match action {
+        AiAction::SuggestCommand { command } => command.clone(),
+        AiAction::ReadRemoteFile { path } => sftp_read_pseudo_command(path),
+        AiAction::WriteRemoteFile { path, .. } => sftp_write_pseudo_command(path),
+        AiAction::ProposeNoteUpdate { target, .. } => {
+            let target_label = match target {
+                NoteTargetSelector::CurrentServer => "aktueller Server",
+                NoteTargetSelector::CurrentServerGroup => "aktuelle Servergruppe",
+            };
+            format!("update-note ({target_label})")
+        }
+        AiAction::GenerateDocument { .. } => unreachable!(
+            "GenerateDocument durchläuft nie evaluate_action/einen Bestätigungsdialog, s. dort"
+        ),
+    }
 }
 
 /// `AiAction::SuggestCommand` läuft durch die Filter-Engine;
@@ -392,9 +477,23 @@ async fn handle_user_decision(
 ) -> bool {
     match user_decision {
         ActionUserDecision::Deny => {
-            // Nutzer hat selbst abgelehnt — nichts weiter zu tun, das
-            // Frontend weiß es bereits (es hat den Aufruf selbst gemacht).
-            false
+            // Spec 0021, Abschnitt 3, Fall 3: der Nutzer hat abgelehnt — das
+            // Frontend weiß es bereits (es hat den Aufruf selbst gemacht),
+            // aber die KI bisher nicht. `RejectionReason::User` (nicht
+            // `Blocked`), damit die KI unterscheiden kann "die Filter-Engine
+            // hat blockiert" von "der Mensch wollte das nicht" und
+            // entsprechend reagieren kann (Alternative vorschlagen,
+            // nachfragen, akzeptieren). Das war der Kern des gemeldeten
+            // Bugs: ohne diesen Eintrag + die automatische Folgerunde blieb
+            // der Chat nach "Ablehnen" stumm (s. Moduldoc).
+            session.context.lock().await.history.push(ChatMessage {
+                role: Role::ActionResult,
+                content: MessageContent::ActionRejected {
+                    command: describe_rejected_action(&action),
+                    reason: RejectionReason::User,
+                },
+            });
+            true
         }
         ActionUserDecision::Approve => {
             execute_action(
@@ -438,13 +537,29 @@ async fn handle_user_decision(
                             session_id,
                             Uuid::new_v4(),
                             blocked,
-                            Decision::Deny { reason },
+                            Decision::Deny {
+                                reason: reason.clone(),
+                            },
                             None,
                             false,
                             None,
                             None,
                         );
-                        return false;
+                        // Spec 0021, Abschnitt 3, Fall 4: das bearbeitete
+                        // Kommando ist am Ende genau ein durch die
+                        // Filter-Engine blockierter Vorschlag, nur über den
+                        // Bearbeiten-Dialog statt des ursprünglichen Wegs
+                        // erreicht — dieselbe Kontext-Eintrag +
+                        // automatische-Folgerunde-Behandlung gilt
+                        // einheitlich.
+                        session.context.lock().await.history.push(ChatMessage {
+                            role: Role::ActionResult,
+                            content: MessageContent::ActionRejected {
+                                command: edited,
+                                reason: RejectionReason::Blocked(reason),
+                            },
+                        });
+                        return true;
                     }
                     AiAction::SuggestCommand { command: edited }
                 }
@@ -1613,6 +1728,7 @@ mod tests {
             status: StdMutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
             sftp: AsyncMutex::new(None),
+            auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -1622,6 +1738,25 @@ mod tests {
             stderr: Vec::new(),
             exit_code: Some(0),
         }
+    }
+
+    /// Blendet `chat-auto-continuation-started` aus einer Event-Liste aus —
+    /// für ältere Tests, die etwas anderes prüfen und durch das seit Spec
+    /// 0021 in *jeder* automatischen Folgerunde zusätzlich gesendete
+    /// Ereignis (Abschnitt 5) nicht gestört werden sollen. Mit `test_session`
+    /// (ein konfiguriertes `MockAiProvider`-Round) triggert nach Spec 0021
+    /// praktisch jeder abgeschlossene erste Round-Trip automatisch eine
+    /// zweite (leere) Runde — dediziert getestet in den `test_auto_*`-Tests
+    /// unten, hier bewusst ausgeblendet, um die eigentliche Testaussage nicht
+    /// zu verwässern.
+    fn event_names_excluding_auto_continuation(
+        events: &[(String, serde_json::Value)],
+    ) -> Vec<&str> {
+        events
+            .iter()
+            .filter(|(name, _)| name != "chat-auto-continuation-started")
+            .map(|(name, _)| name.as_str())
+            .collect()
     }
 
     /// `NoRulesPolicyStore` (der `test_session`-Standard) landet für jedes
@@ -1672,7 +1807,7 @@ mod tests {
         .await;
 
         let events = emitter.events.lock().unwrap().clone();
-        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        let event_names = event_names_excluding_auto_continuation(&events);
         assert_eq!(
             event_names,
             vec!["chat-action-proposed", "chat-action-result"]
@@ -1773,7 +1908,7 @@ mod tests {
         .await;
 
         let events = emitter.events.lock().unwrap().clone();
-        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        let event_names = event_names_excluding_auto_continuation(&events);
         assert_eq!(
             event_names,
             vec!["chat-action-proposed", "chat-action-result"]
@@ -1956,7 +2091,7 @@ mod tests {
         tokio::join!(turn, responder);
 
         let events = emitter.events.lock().unwrap();
-        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        let event_names = event_names_excluding_auto_continuation(&events);
         assert_eq!(
             event_names,
             vec!["chat-action-proposed", "chat-action-result"]
@@ -2042,13 +2177,25 @@ mod tests {
         // Zwei `chat-action-proposed` (Original + editierte, geblockte
         // Fassung), aber **kein** `chat-action-result` — nichts wurde
         // ausgeführt.
-        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        let event_names = event_names_excluding_auto_continuation(&events);
         assert_eq!(
             event_names,
             vec!["chat-action-proposed", "chat-action-proposed"]
         );
         assert!(events[1].1["decision"]["Deny"].is_object());
-        assert!(session.context.lock().await.history.is_empty());
+        // Spec 0021, Abschnitt 3, Fall 4: die per Bearbeiten-Dialog erneut
+        // geblockte Fassung ist inhaltlich derselbe Fall wie ein regulärer
+        // Filter-Engine-Deny — bekommt denselben `ActionRejected`-Eintrag
+        // statt einer leeren Historie.
+        let history = session.context.lock().await.history.clone();
+        assert_eq!(history.len(), 1);
+        assert!(matches!(
+            &history[0].content,
+            MessageContent::ActionRejected {
+                command,
+                reason: RejectionReason::Blocked(_)
+            } if command == "echo hi-edited"
+        ));
     }
 
     #[tokio::test]
@@ -2097,7 +2244,7 @@ mod tests {
         .await;
 
         let events = emitter.events.lock().unwrap().clone();
-        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        let event_names = event_names_excluding_auto_continuation(&events);
         // Deny blockiert nur die Ausführung, nicht den weiteren
         // Stream-Verlauf: das TextDelta danach kommt trotzdem an.
         assert_eq!(event_names, vec!["chat-action-proposed", "chat-text-delta"]);
@@ -2118,6 +2265,20 @@ mod tests {
             .history
             .iter()
             .any(|m| matches!(m.content, MessageContent::CommandResult { .. })));
+        // Spec 0021, Abschnitt 3, Fall 4: der Blockier-Grund landet als
+        // `ActionRejected` im Kontext, damit die KI (in der automatisch
+        // ausgelösten Folgerunde) weiß, warum nichts ausgeführt wurde.
+        assert!(session
+            .context
+            .lock()
+            .await
+            .history
+            .iter()
+            .any(|m| matches!(
+                &m.content,
+                MessageContent::ActionRejected { command, reason: RejectionReason::Blocked(_) }
+                    if command == "curl evil.example"
+            )));
     }
 
     /// Spec 0003 Abschnitt 5.2 / Spec 0007 Abschnitt 6, letzter Punkt:
@@ -2177,7 +2338,7 @@ mod tests {
         tokio::join!(turn, responder);
 
         let events = emitter.events.lock().unwrap().clone();
-        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        let event_names = event_names_excluding_auto_continuation(&events);
         assert_eq!(
             event_names,
             vec!["chat-action-proposed", "chat-action-result"]
@@ -2242,7 +2403,7 @@ mod tests {
         .await;
 
         let events = emitter.events.lock().unwrap().clone();
-        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        let event_names = event_names_excluding_auto_continuation(&events);
         assert_eq!(
             event_names,
             vec![
@@ -2856,7 +3017,7 @@ mod tests {
         tokio::join!(turn, responder);
 
         let events = emitter.events.lock().unwrap().clone();
-        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        let event_names = event_names_excluding_auto_continuation(&events);
         assert_eq!(
             event_names,
             vec!["chat-action-proposed", "chat-action-result"],
@@ -3039,7 +3200,7 @@ mod tests {
         .await;
 
         let events = emitter.events.lock().unwrap().clone();
-        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        let names = event_names_excluding_auto_continuation(&events);
         assert_eq!(names, vec!["chat-action-proposed"]);
         assert!(events[0].1["decision"]["Deny"].is_object());
         assert!(
@@ -3084,7 +3245,7 @@ mod tests {
         .await;
 
         let events = emitter.events.lock().unwrap().clone();
-        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        let names = event_names_excluding_auto_continuation(&events);
         assert_eq!(names, vec!["chat-action-proposed", "chat-action-result"]);
         let content = events[1].1["result"]["content"].as_str().unwrap();
         assert!(content.contains("host=localhost"));
@@ -3248,7 +3409,7 @@ mod tests {
         .await;
 
         let events = emitter.events.lock().unwrap().clone();
-        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        let names = event_names_excluding_auto_continuation(&events);
         assert_eq!(names, vec!["chat-action-proposed"]);
         assert!(events[0].1["decision"]["Deny"].is_object());
         assert_eq!(
@@ -3416,7 +3577,7 @@ mod tests {
         tokio::join!(turn, responder);
 
         let events = emitter.events.lock().unwrap().clone();
-        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        let names = event_names_excluding_auto_continuation(&events);
         assert_eq!(names, vec!["chat-action-proposed", "chat-action-result"]);
         let backup_path = events[1].1["result"]["backupPath"]
             .as_str()
@@ -3516,7 +3677,7 @@ mod tests {
         tokio::join!(turn, responder);
 
         let events = emitter.events.lock().unwrap().clone();
-        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        let names = event_names_excluding_auto_continuation(&events);
         assert_eq!(names, vec!["chat-action-proposed", "chat-action-result"]);
         assert_eq!(events[1].1["result"]["usedSudoPassword"], serde_json::json!(true));
 
@@ -3831,6 +3992,538 @@ mod tests {
         assert!(
             log_text.contains("REDACTED"),
             "der Redaction-Platzhalter muss stattdessen im Log stehen: {log_text}"
+        );
+    }
+
+    // --- Spec 0021: Turn-Fortsetzung nach Aktionsergebnis -------------------
+
+    /// Fall 1 (Spec 0021, Abschnitt 3): nach `AutoExec` folgt automatisch
+    /// ein zweiter `send()`-Aufruf, dessen Kontext das `CommandResult`
+    /// enthält.
+    #[tokio::test]
+    async fn test_auto_continuation_after_autoexec_triggers_second_send_call() {
+        let provider = MockAiProvider::with_rounds(vec![
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "uptime".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            vec![AiEvent::Done],
+        ]);
+        let contexts = provider.received_contexts_handle();
+        let mut session = session_with_ai_provider(
+            provider,
+            MockSshTransport::default().with_response("uptime", output("up 3 days")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let contexts = contexts.lock().unwrap().clone();
+        assert_eq!(
+            contexts.len(),
+            2,
+            "AutoExec muss automatisch einen zweiten send()-Aufruf auslösen"
+        );
+        assert!(contexts[1].history.iter().any(|m| matches!(
+            &m.content,
+            MessageContent::CommandResult { command, .. } if command == "uptime"
+        )));
+    }
+
+    /// Fall 2 (Spec 0021, Abschnitt 3): "Ausführen" im Bestätigungsdialog
+    /// verhält sich fortsetzungstechnisch identisch zu `AutoExec`.
+    #[tokio::test]
+    async fn test_auto_continuation_after_confirm_approve_triggers_second_send_call() {
+        let provider = MockAiProvider::with_rounds(vec![
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "systemctl restart nginx".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            vec![AiEvent::Done],
+        ]);
+        let contexts = provider.received_contexts_handle();
+        let session = session_with_ai_provider(
+            provider,
+            MockSshTransport::default()
+                .with_response("systemctl restart nginx", output("")),
+        );
+        // `test_session`/`session_with_ai_provider`s Default
+        // (`NoRulesPolicyStore`) landet auf `Confirm` — genau der hier
+        // gewollte Pfad, keine explizite Policy nötig.
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let turn = run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
+
+        let contexts = contexts.lock().unwrap().clone();
+        assert_eq!(
+            contexts.len(),
+            2,
+            "Confirm+Approve muss automatisch einen zweiten send()-Aufruf auslösen"
+        );
+        assert!(contexts[1].history.iter().any(|m| matches!(
+            &m.content,
+            MessageContent::CommandResult { command, .. } if command == "systemctl restart nginx"
+        )));
+    }
+
+    /// Fall 3 (Spec 0021, Abschnitt 3) — der Kern des gemeldeten Bugs: nach
+    /// einer Ablehnung durch den Nutzer folgt automatisch ein zweiter
+    /// `send()`-Aufruf, dessen Kontext einen `ActionRejected`-Eintrag mit
+    /// `RejectionReason::User` enthält (nicht `Blocked` — das ist Fall 4).
+    #[tokio::test]
+    async fn test_auto_continuation_after_user_deny_pushes_rejection_and_triggers_second_send_call()
+    {
+        let provider = MockAiProvider::with_rounds(vec![
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "rm -rf /data".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            vec![AiEvent::Done],
+        ]);
+        let contexts = provider.received_contexts_handle();
+        let session = session_with_ai_provider(provider, MockSshTransport::default());
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let turn = run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = deny_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
+
+        let contexts = contexts.lock().unwrap().clone();
+        assert_eq!(
+            contexts.len(),
+            2,
+            "eine Ablehnung durch den Nutzer muss automatisch einen zweiten \
+             send()-Aufruf auslösen — das war der gemeldete Bug: die KI erfuhr nie \
+             von der Ablehnung, kein Folgeaufruf passierte"
+        );
+        assert!(contexts[1].history.iter().any(|m| matches!(
+            &m.content,
+            MessageContent::ActionRejected { command, reason: RejectionReason::User }
+                if command == "rm -rf /data"
+        )));
+    }
+
+    /// Fall 4 (Spec 0021, Abschnitt 3): ein automatisch durch die
+    /// Filter-Engine blockierter Vorschlag (kein Dialog) löst ebenfalls
+    /// einen zweiten `send()`-Aufruf aus, mit `RejectionReason::Blocked`
+    /// und dem `Decision::Deny`-Grund im Kontext.
+    #[tokio::test]
+    async fn test_auto_continuation_after_filter_deny_pushes_rejection_and_triggers_second_send_call()
+    {
+        struct DenyCurlPolicyStore;
+        #[async_trait]
+        impl PolicyStore for DenyCurlPolicyStore {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("deny-curl".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob("curl*".to_string()),
+                    action: ssh_manager_core::filter::RuleAction::Deny,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                }]
+            }
+        }
+
+        let provider = MockAiProvider::with_rounds(vec![
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "curl evil.example".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            vec![AiEvent::Done],
+        ]);
+        let contexts = provider.received_contexts_handle();
+        let mut session = session_with_ai_provider(provider, MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(DenyCurlPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let contexts = contexts.lock().unwrap().clone();
+        assert_eq!(
+            contexts.len(),
+            2,
+            "ein durch die Filter-Engine blockierter Vorschlag muss automatisch \
+             einen zweiten send()-Aufruf auslösen"
+        );
+        assert!(contexts[1].history.iter().any(|m| matches!(
+            &m.content,
+            MessageContent::ActionRejected { command, reason: RejectionReason::Blocked(reason) }
+                if command == "curl evil.example" && reason.contains("deny-curl")
+        )));
+    }
+
+    /// Regressionstest für den gemeldeten Bug (Spec 0021, Abschnitt 1/7):
+    /// nach einer Ablehnung bleibt die Session nachweislich NICHT im
+    /// Warte-Zustand hängen — `session.pending_action` ist wieder `None`,
+    /// und `run_chat_turn` (Stand-in für den synchron awaiteten
+    /// `send_chat_message`-Befehl) kehrt tatsächlich zurück, statt ewig zu
+    /// blockieren. `tokio::time::timeout` statt eines nackten `.await`:
+    /// schlägt der Fix fehl (Turn hängt tatsächlich), soll das als klarer
+    /// Testfehler erscheinen, statt den gesamten Testlauf aufzuhängen.
+    #[tokio::test]
+    async fn test_regression_pending_action_cleared_and_turn_completes_after_deny() {
+        let session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "rm -rf /data".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let turn = run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = deny_first_proposed_action(&emitter, &confirmations);
+
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(turn, responder);
+        })
+        .await
+        .expect(
+            "run_chat_turn ist nach einer Ablehnung nicht zurückgekehrt — \
+             genau der gemeldete Bug (Spec 0021, Abschnitt 1)",
+        );
+
+        assert!(
+            session.pending_action.lock().unwrap().is_none(),
+            "pending_action muss nach der Ablehnung wieder None sein, sonst bleibt \
+             die UI (Tab-Indikator/Eingabe) im Warte-Zustand hängen"
+        );
+    }
+
+    /// Spec 0021, Abschnitt 4: eine KI, die in jeder automatischen
+    /// Folgerunde erneut ein (durch die Filter-Engine blockiertes)
+    /// Kommando vorschlägt, läuft nicht endlos weiter, sondern hält nach
+    /// [`MAX_AUTO_FOLLOWUP_ROUNDS`] Runden mit einer sichtbaren
+    /// Chat-Systemnachricht an — anders als
+    /// `test_runaway_followup_rounds_are_bounded` (die dieselbe Grenze für
+    /// tatsächlich *ausgeführte* Aktionen prüft) zeigt dieser Test, dass
+    /// auch dauerhaft *blockierte* Vorschläge denselben Zähler verbrauchen.
+    #[tokio::test]
+    async fn test_auto_continuation_cap_stops_after_configured_rounds_with_visible_message() {
+        struct AlwaysSuggestEchoProvider;
+        impl AiProvider for AlwaysSuggestEchoProvider {
+            fn send(
+                &self,
+                _context: SessionContext,
+            ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+                Box::pin(futures::stream::iter(vec![
+                    AiEvent::ActionProposed(AiAction::SuggestCommand {
+                        command: "echo again".to_string(),
+                    }),
+                    AiEvent::Done,
+                ]))
+            }
+        }
+        struct DenyEchoPolicyStore;
+        #[async_trait]
+        impl PolicyStore for DenyEchoPolicyStore {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("deny-echo".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob("echo*".to_string()),
+                    action: ssh_manager_core::filter::RuleAction::Deny,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                }]
+            }
+        }
+
+        let mut session =
+            session_with_ai_provider(AlwaysSuggestEchoProvider, MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(DenyEchoPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let proposed_count = events
+            .iter()
+            .filter(|(name, _)| name == "chat-action-proposed")
+            .count();
+        assert_eq!(proposed_count, MAX_AUTO_FOLLOWUP_ROUNDS);
+        let (last_name, last_payload) = events.last().unwrap();
+        assert_eq!(last_name, "chat-error");
+        assert!(
+            last_payload["message"]
+                .as_str()
+                .unwrap()
+                .contains(&MAX_AUTO_FOLLOWUP_ROUNDS.to_string()),
+            "die Meldung soll die Rundenzahl nennen: {last_payload}"
+        );
+
+        let history = session.context.lock().await.history.clone();
+        let rejected_count = history
+            .iter()
+            .filter(|m| matches!(m.content, MessageContent::ActionRejected { .. }))
+            .count();
+        assert_eq!(
+            rejected_count, MAX_AUTO_FOLLOWUP_ROUNDS,
+            "jede der {MAX_AUTO_FOLLOWUP_ROUNDS} Runden muss einen ActionRejected-Eintrag hinterlassen haben"
+        );
+    }
+
+    /// Spec 0021, Abschnitt 4, letzter Satz: der Rundenzähler wird bei
+    /// jeder neuen Nutzer-Nachricht zurückgesetzt — hier simuliert durch
+    /// zwei aufeinanderfolgende `run_chat_turn`-Aufrufe auf derselben
+    /// Session (wie zwei aufeinanderfolgende `send_chat_message`-Befehle).
+    /// Beide Male muss die Automatik bis zum vollen Limit laufen dürfen,
+    /// nicht nur beim ersten Mal.
+    #[tokio::test]
+    async fn test_auto_continuation_cap_resets_for_each_new_user_message() {
+        struct AlwaysSuggestEchoProvider;
+        impl AiProvider for AlwaysSuggestEchoProvider {
+            fn send(
+                &self,
+                _context: SessionContext,
+            ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+                Box::pin(futures::stream::iter(vec![
+                    AiEvent::ActionProposed(AiAction::SuggestCommand {
+                        command: "echo again".to_string(),
+                    }),
+                    AiEvent::Done,
+                ]))
+            }
+        }
+        struct DenyEchoPolicyStore;
+        #[async_trait]
+        impl PolicyStore for DenyEchoPolicyStore {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("deny-echo".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob("echo*".to_string()),
+                    action: ssh_manager_core::filter::RuleAction::Deny,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                }]
+            }
+        }
+
+        let mut session =
+            session_with_ai_provider(AlwaysSuggestEchoProvider, MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(DenyEchoPolicyStore));
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let emitter1 = TestEmitter::default();
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter1,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+        let first_proposed = emitter1
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(name, _)| name == "chat-action-proposed")
+            .count();
+        assert_eq!(first_proposed, MAX_AUTO_FOLLOWUP_ROUNDS);
+
+        // Zweiter Aufruf = neue Nutzer-Nachricht.
+        let emitter2 = TestEmitter::default();
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter2,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+        let second_proposed = emitter2
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(name, _)| name == "chat-action-proposed")
+            .count();
+        assert_eq!(
+            second_proposed, MAX_AUTO_FOLLOWUP_ROUNDS,
+            "der Rundenzähler darf nicht über die erste Nachricht hinaus fortbestehen"
+        );
+    }
+
+    /// Spec 0021, Abschnitt 5: "Automatik stoppen" verhindert zuverlässig
+    /// weitere automatische Runden, lässt aber einen bereits offenen
+    /// Bestätigungsdialog unangetastet — hier simuliert durch direktes
+    /// Setzen von `session.auto_continue_stop`, während der Dialog der
+    /// zweiten (automatischen) Runde noch offen ist, genau der in
+    /// `crate::commands::stop_auto_continuation` gesetzte Zustand.
+    #[tokio::test]
+    async fn test_stop_auto_continuation_prevents_further_rounds_but_leaves_open_dialog_intact() {
+        let provider = MockAiProvider::with_rounds(vec![
+            // Runde 1: AutoExec (löst automatisch Runde 2 aus).
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "echo one".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            // Runde 2 (automatisch): SEC-03 stuft dieses SuggestCommand in
+            // Runde >= 2 immer auf Confirm hoch, unabhängig von der
+            // Filter-Engine — genau der hier gewollte offene Dialog.
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "echo two".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            // Runde 3 darf durch den Stop NIE erreicht werden.
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "echo three".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+        ]);
+        let contexts = provider.received_contexts_handle();
+        let mut session = session_with_ai_provider(
+            provider,
+            MockSshTransport::default()
+                .with_response("echo one", output("one"))
+                .with_response("echo two", output("two")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let turn = run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = async {
+            loop {
+                let confirm_action_id = {
+                    let events = emitter.events.lock().unwrap();
+                    events.iter().find_map(|(name, payload)| {
+                        (name == "chat-action-proposed"
+                            && payload.get("decision").and_then(|d| d.get("Confirm")).is_some())
+                        .then(|| payload["actionId"].as_str().unwrap().to_string())
+                    })
+                };
+                if let Some(action_id_str) = confirm_action_id {
+                    // "Automatik stoppen" WÄHREND der Dialog von Runde 2
+                    // noch offen ist — muss den Dialog selbst unangetastet
+                    // lassen (Spec 0021, Abschnitt 5, letzter Satz).
+                    session
+                        .auto_continue_stop
+                        .store(true, std::sync::atomic::Ordering::SeqCst);
+                    let action_id: ActionId = action_id_str.parse().unwrap();
+                    confirmations
+                        .resolve(&action_id, ActionUserDecision::Approve)
+                        .unwrap();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::join!(turn, responder);
+
+        let contexts = contexts.lock().unwrap().clone();
+        assert_eq!(
+            contexts.len(),
+            2,
+            "Runde 2 (mit dem bereits offenen Dialog) muss noch laufen — nur \
+             Runde 3 darf durch den Stop verhindert werden"
+        );
+
+        let history = session.context.lock().await.history.clone();
+        assert!(
+            history.iter().any(|m| matches!(
+                &m.content,
+                MessageContent::CommandResult { command, .. } if command == "echo two"
+            )),
+            "der bereits offene Dialog aus Runde 2 muss normal zu Ende laufen"
+        );
+        assert!(
+            !history.iter().any(|m| matches!(
+                &m.content,
+                MessageContent::CommandResult { command, .. } if command == "echo three"
+            )),
+            "Runde 3 darf durch den Stop nie erreicht werden"
+        );
+        assert!(
+            !emitter
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(name, _)| name == "chat-error"),
+            "ein manueller Stop ist kein Fehlerfall, keine chat-error-Meldung erwartet"
         );
     }
 }

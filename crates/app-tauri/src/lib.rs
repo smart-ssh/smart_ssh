@@ -127,6 +127,7 @@ pub fn run() {
             commands::terminal_resize,
             commands::send_chat_message,
             commands::respond_to_action,
+            commands::stop_auto_continuation,
             commands::disconnect,
             commands::list_sessions,
             commands::list_groups,

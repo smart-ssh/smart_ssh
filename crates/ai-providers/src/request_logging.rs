@@ -8,7 +8,7 @@
 //! Design-Entscheidung, warum diese ID lokal pro Aufruf erzeugt wird statt
 //! ein `SessionContext`-Feld zu sein).
 
-use ssh_manager_core::ai::{MessageContent, SessionContext};
+use ssh_manager_core::ai::{MessageContent, RejectionReason, SessionContext};
 use ssh_manager_core::profiles::AiAction;
 use uuid::Uuid;
 
@@ -35,6 +35,13 @@ pub(crate) fn log_outgoing_context(request_id: Uuid, context: &SessionContext) {
                 output.exit_code,
                 output.stdout.len(),
                 output.stderr.len()
+            ),
+            MessageContent::ActionRejected { command, reason } => format!(
+                "[action_rejected] {command} ({})",
+                match reason {
+                    RejectionReason::User => "user".to_string(),
+                    RejectionReason::Blocked(reason) => format!("blocked: {reason}"),
+                }
             ),
         })
         .collect();
