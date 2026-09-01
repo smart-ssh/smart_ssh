@@ -89,6 +89,16 @@ function decisionBadge(decision: Decision): { text: string; className: string } 
   return { text: "blockiert", className: "bg-red-900 text-red-300" };
 }
 
+/** Ampel-Kartenrahmen passend zur `Decision` (Spec 0009: Allow/Confirm/Deny
+ * grün/gelb/rot) — Design-Import, Abschnitt "FARBSYSTEM · STATUS IST
+ * ÜBERALL GLEICH CODIERT": derselbe Statuscode gilt für Kartenrahmen,
+ * Badge und Dot durchgängig, nicht nur für die Badge wie zuvor. */
+function decisionCardTone(decision: Decision): string {
+  if (decision === "AutoExec") return "border-emerald-700/40 bg-emerald-950/20";
+  if ("Confirm" in decision) return "border-amber-700/45 bg-amber-950/15";
+  return "border-red-700/45 bg-red-950/15";
+}
+
 let nextId = 0;
 const freshId = () => `item-${nextId++}`;
 
@@ -350,21 +360,22 @@ export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
           Kein aktiver AI-Provider konfiguriert. Bitte zuerst in den Einstellungen einrichten.
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="flex gap-2 border-t border-slate-700 p-3">
+        <form onSubmit={handleSubmit} className="flex items-center gap-2 border-t border-slate-700 bg-slate-800 p-3">
+          <span className="font-mono text-sm text-indigo-500">&gt;</span>
           <input
             ref={inputRef}
             type="text"
             value={draft}
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
-            placeholder="Nachricht an die KI…"
+            placeholder="Frage stellen oder Kommando beschreiben …"
             disabled={sending}
-            className="flex-1 rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            className="flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
           />
           <button
             type="submit"
             disabled={sending || draft.trim().length === 0}
-            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="font-heading bg-indigo-600 px-4 py-1.5 text-sm font-semibold tracking-wide text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
           >
             Senden
           </button>
@@ -399,7 +410,7 @@ function ChatItemView({
   }
   if (item.type === "user") {
     return (
-      <div className="ml-auto max-w-[80%] rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">
+      <div className="ml-auto max-w-[80%] border border-indigo-500/60 bg-indigo-700 px-3 py-2 text-sm text-indigo-50">
         {item.text}
       </div>
     );
@@ -409,7 +420,9 @@ function ChatItemView({
   }
   if (item.type === "error") {
     return (
-      <div className="rounded-lg bg-red-950 px-3 py-2 text-sm text-red-300">⚠ {item.message}</div>
+      <div className="border border-red-700/50 bg-red-950 px-3 py-2 text-sm text-red-300">
+        ⚠ {item.message}
+      </div>
     );
   }
 
@@ -418,12 +431,20 @@ function ChatItemView({
   const needsConfirmation = !item.responded && typeof item.decision === "object" && "Confirm" in item.decision;
 
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3 text-sm">
+    <div className={`border p-3 text-sm ${decisionCardTone(item.decision)}`}>
       <div className="mb-1 flex items-center gap-2">
-        <span className="font-medium text-slate-100">{label}</span>
-        <span className={`rounded px-2 py-0.5 text-xs ${badge.className}`}>{badge.text}</span>
+        <span className="font-heading font-semibold tracking-wide text-slate-100">{label}</span>
+        <span
+          className={`font-heading px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${badge.className}`}
+        >
+          {badge.text}
+        </span>
       </div>
-      {command && <code className="block rounded bg-slate-950 px-2 py-1 text-xs text-slate-300">{command}</code>}
+      {command && (
+        <code className="block border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs text-slate-200">
+          {command}
+        </code>
+      )}
       {typeof item.decision === "object" && "Confirm" in item.decision && (
         <p className="mt-1 text-xs text-slate-400">{formatReason(item.decision.Confirm.reason)}</p>
       )}
@@ -475,29 +496,38 @@ function ConfirmActionForm({
   };
 
   return (
-    <div className="mt-2 space-y-2">
+    <div className="mt-3 space-y-3">
       {initialCommand !== undefined && (
-        <textarea
-          value={edited}
-          onChange={(e) => setEdited(e.target.value)}
-          rows={2}
-          className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 font-mono text-xs text-slate-100"
-        />
+        <div className="flex flex-col gap-1">
+          <span className="font-heading text-xs font-semibold tracking-wide text-slate-400 uppercase">
+            Kommando — editierbar
+          </span>
+          <textarea
+            value={edited}
+            onChange={(e) => setEdited(e.target.value)}
+            rows={2}
+            className="w-full border border-amber-700/50 bg-slate-950 px-3 py-2 font-mono text-sm text-slate-100"
+          />
+        </div>
       )}
+      {/* Reihenfolge/Gruppierung aus dem Design-Import (Abschnitt 1b,
+       * Bestätigungsdialog): primäre Aktion (Ausführen) links, Ablehnen
+       * daneben, der Regel-Schnellvorschlag als eigene, deutlich
+       * abgesetzte Aktionsgruppe rechts. */}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => onRespond(actionId, { decision: "deny" })}
-          className="rounded bg-red-900 px-3 py-1 text-xs text-red-200 hover:bg-red-800"
+          onClick={handleApprove}
+          className="font-heading bg-emerald-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-emerald-950 hover:bg-emerald-500"
         >
-          Ablehnen
+          Ausführen
         </button>
         <button
           type="button"
-          onClick={handleApprove}
-          className="rounded bg-emerald-700 px-3 py-1 text-xs text-white hover:bg-emerald-600"
+          onClick={() => onRespond(actionId, { decision: "deny" })}
+          className="font-heading border border-red-600/50 px-4 py-1.5 text-xs font-semibold tracking-wide text-red-400 hover:bg-red-600/12"
         >
-          Ausführen
+          Ablehnen
         </button>
         {/* Spec 0011: nur für Kommando-Vorschläge sinnvoll, nicht für
          * Notiz-Aktualisierungen (kein `initialCommand` dort). */}
@@ -572,16 +602,27 @@ function QuickRuleButton({
   };
 
   return (
-    <div className="relative inline-block">
+    <div className="relative ml-auto inline-flex border border-indigo-600/50">
       <button
         type="button"
         onClick={toggleOpen}
-        className="rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
+        className="font-heading px-3 py-1.5 text-xs font-semibold tracking-wide text-indigo-400 hover:bg-indigo-600/14"
       >
-        Akzeptieren und Regel erstellen ▾
+        Akzeptieren + Regel
+      </button>
+      <button
+        type="button"
+        onClick={toggleOpen}
+        aria-label="Regel-Vorschläge anzeigen"
+        className="border-l border-indigo-600/40 px-2 font-mono text-xs text-indigo-400 hover:bg-indigo-600/14"
+      >
+        ▾
       </button>
       {open && (
-        <div className="absolute z-10 mt-1 w-72 space-y-2 rounded border border-slate-600 bg-slate-800 p-2 shadow-lg">
+        <div className="absolute right-0 top-full z-10 mt-1 w-72 space-y-2 border border-indigo-600/35 bg-slate-900 p-2 shadow-lg">
+          <div className="font-heading border-b border-slate-800 pb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
+            Muster für die neue Allow-Regel
+          </div>
           <div className="flex gap-3 text-xs text-slate-300">
             <label className="flex items-center gap-1">
               <input
@@ -614,7 +655,7 @@ function QuickRuleButton({
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               placeholder="Tag-Name"
-              className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+              className="w-full border border-slate-600 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-100"
             />
           )}
           {loading && <p className="text-xs text-slate-400">Lädt Vorschläge…</p>}
@@ -628,7 +669,7 @@ function QuickRuleButton({
                 <button
                   type="button"
                   onClick={() => handlePick(suggestion)}
-                  className="w-full rounded px-2 py-1 text-left text-xs text-slate-200 hover:bg-slate-700"
+                  className="w-full px-2 py-1 text-left font-mono text-xs text-slate-200 hover:bg-indigo-600/14"
                 >
                   {suggestion.label}
                 </button>

@@ -109,7 +109,7 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-slate-800 p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-100">AI-Provider</h2>
+          <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">AI-Provider</h2>
           <button
             type="button"
             onClick={onClose}
@@ -174,7 +174,7 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
         </ul>
 
         <form onSubmit={handleSubmit} className="space-y-3">
-          <h3 className="text-sm font-semibold text-slate-200">Provider hinzufügen</h3>
+          <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-200">Provider hinzufügen</h3>
 
           <label className="block text-sm text-slate-300">
             Typ

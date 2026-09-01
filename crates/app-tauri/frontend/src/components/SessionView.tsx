@@ -44,14 +44,14 @@ export function SessionView({ sessionId, serverName, serverId, onDisconnected }:
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
       <header className="flex items-center justify-between border-b border-slate-800 px-4 py-2">
-        <div>
-          <span className="font-medium">{serverName}</span>
-          {statusNote && <span className="ml-3 text-xs text-amber-300">{statusNote}</span>}
+        <div className="flex items-center gap-3">
+          <span className="font-heading font-semibold tracking-wide">{serverName}</span>
+          {statusNote && <span className="font-mono text-xs text-amber-300">{statusNote}</span>}
         </div>
         <button
           type="button"
           onClick={handleDisconnect}
-          className="rounded bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700"
+          className="font-heading border border-slate-700 px-3 py-1.5 text-sm font-semibold tracking-wide text-slate-200 hover:bg-slate-800"
         >
           Trennen
         </button>
@@ -60,8 +60,13 @@ export function SessionView({ sessionId, serverName, serverId, onDisconnected }:
         <div className="min-w-0 flex-1 border-r border-slate-800">
           <ChatPanel sessionId={sessionId} serverId={serverId} />
         </div>
-        <div className="w-[420px] shrink-0 p-2">
-          <TerminalView sessionId={sessionId} />
+        <div className="flex w-[420px] shrink-0 flex-col bg-slate-950">
+          <div className="font-heading flex h-8 shrink-0 items-center border-b border-slate-800 px-3 text-xs font-semibold tracking-[0.13em] text-slate-400 uppercase">
+            Terminal
+          </div>
+          <div className="min-h-0 flex-1 p-2">
+            <TerminalView sessionId={sessionId} />
+          </div>
         </div>
       </div>
     </div>

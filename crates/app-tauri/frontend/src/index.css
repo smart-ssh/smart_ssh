@@ -1,2 +1,175 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+
+/* Design-Import (Claude Design, "Smart SSH — visueller Neuentwurf",
+   fc0ced02-936d-40c7-a332-94159466621f/Smart SSH.dc.html): lokal gehostete
+   Web-Fonts statt eines Google-Fonts-`<link>` — die CSP in `tauri.conf.json`
+   (`style-src`/`connect-src`: nur 'self') würde einen externen
+   Font-Stylesheet-/Ladeaufruf ohnehin blockieren, und ein Offline-fähiger
+   Desktop-Client sollte für seine UI-Schriften nicht von Internetzugriff
+   abhängen. Nur die "latin"-Subsets (U+0000–00FF, deckt äöüß vollständig
+   ab) — die weiteren Google-Subsets (latin-ext, cyrillic, griechisch, …)
+   braucht dieses rein deutsch-/englischsprachige UI nicht.
+   JetBrains Mono ist bei Google ein Variable Font: dieselbe Datei bedient
+   alle drei `font-weight`-Werte, der Browser wählt die Instanz selbst über
+   die `wght`-Achse passend zur jeweiligen `@font-face`-Deklaration. */
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/barlow-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./assets/fonts/barlow-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./assets/fonts/barlow-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./assets/fonts/barlow-condensed-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./assets/fonts/barlow-condensed-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/barlow-condensed-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/jetbrains-mono-variable.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./assets/fonts/jetbrains-mono-variable.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/jetbrains-mono-variable.woff2") format("woff2");
+}
+
+/* Design-Tokens aus dem Claude-Design-Entwurf, als Tailwind-v4-Theme-
+   Erweiterung (CSS-`@theme`, nicht `tailwind.config.*` — dieses Projekt
+   nutzt Tailwind v4 über `@tailwindcss/vite`). Bewusst als *Überschreibung*
+   der bereits durchgängig verwendeten Tailwind-Paletten (`slate`, `indigo`,
+   `emerald`, `amber`, `red`) statt als Parallel-Vokabular: die bestehenden
+   Komponenten nutzen diese vier Paletten schon konsistent semantisch
+   (`slate` = Grundfläche/Text, `indigo` = KI-Akzent, `emerald`/`amber`/
+   `red` = Allow/Confirm/Deny, Spec 0009) — eine Überschreibung wendet den
+   Entwurf auf jede bestehende Komponente an, ohne eine einzige Klassen-
+   zeichenkette anfassen zu müssen, und ohne das Risiko, beim manuellen
+   Durchgehen aller ~15 Komponenten-Dateien eine Stelle zu übersehen. */
+@theme {
+  --font-sans: "Barlow", system-ui, sans-serif;
+  --font-heading: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  /* slate: dunkles Navy-Grundflächen-/Textsystem (Entwurf: #090c14 Fenster-
+     grund, #0f1420 Oberflächen, #e6e9f2 hellster Text). */
+  --color-slate-950: #090c14;
+  --color-slate-900: #0f1420;
+  --color-slate-800: #131a29;
+  --color-slate-700: #232a3d;
+  --color-slate-600: #3a4257;
+  --color-slate-500: #4f596e;
+  --color-slate-400: #6b7590;
+  --color-slate-300: #8b93a8;
+  --color-slate-200: #c4cadb;
+  --color-slate-100: #dfe3ee;
+  --color-slate-50: #e6e9f2;
+
+  /* indigo: KI-/Interaktions-Akzent (Entwurf: `C.accent` #6c7cf5 — deckt
+     sich bereits mit dem hier durchgängig für Primäraktionen genutzten
+     `indigo-600`). */
+  --color-indigo-950: #171b3f;
+  --color-indigo-900: #202759;
+  --color-indigo-800: #2b3277;
+  --color-indigo-700: #3b45a8;
+  --color-indigo-600: #6c7cf5;
+  --color-indigo-500: #7f8ef7;
+  --color-indigo-400: #a5b0ff;
+  --color-indigo-300: #b6bfff;
+  --color-indigo-200: #c9d0ff;
+  --color-indigo-100: #dde2ff;
+  --color-indigo-50: #eef0ff;
+
+  /* emerald: ALLOW (Spec 0009). */
+  --color-emerald-950: #06130a;
+  --color-emerald-900: #132015;
+  --color-emerald-800: #1a2e1f;
+  --color-emerald-700: #256b37;
+  --color-emerald-600: #3fb950;
+  --color-emerald-500: #57cf68;
+  --color-emerald-400: #7ddb8a;
+  --color-emerald-300: #8fd79a;
+  --color-emerald-200: #b8ecc0;
+  --color-emerald-100: #ddf5e1;
+
+  /* amber: CONFIRM (Spec 0009). */
+  --color-amber-950: #1f1608;
+  --color-amber-900: #2a2013;
+  --color-amber-800: #4a3818;
+  --color-amber-700: #8a651f;
+  --color-amber-600: #e0a12c;
+  --color-amber-500: #ecb653;
+  --color-amber-400: #f0c46b;
+  --color-amber-300: #f3d187;
+  --color-amber-200: #f8e2b3;
+  --color-amber-100: #fbf0d8;
+
+  /* red: DENY (Spec 0009). */
+  --color-red-950: #170a0b;
+  --color-red-900: #2a1315;
+  --color-red-800: #481d20;
+  --color-red-700: #8a2c2f;
+  --color-red-600: #e5484d;
+  --color-red-500: #f2605f;
+  --color-red-400: #f0918f;
+  --color-red-300: #ff9d9b;
+  --color-red-200: #ffc2c0;
+  --color-red-100: #ffe1e0;
+
+  /* Zweitakzent aus dem Entwurf (Provider-Version-Badge u. ä.), bislang
+     kein eigenes Tailwind-Paletten-Äquivalent im Bestand. */
+  --color-steel-600: #5980a6;
+  --color-steel-400: #9fc0dd;
+
+  /* Der Entwurf ist fast durchgehend eckig — "Cards, figures and buttons
+     framed as blueprint objects: square-cornered" (s. Industry-
+     Referenzsystem, aus dem der Entwurf seine Grammatik übernimmt). `full`
+     bleibt bewusst unverändert (Status-Punkte, Ampel-Dots, Avatare). */
+  --radius-sm: 1px;
+  --radius-DEFAULT: 1px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 3px;
+}

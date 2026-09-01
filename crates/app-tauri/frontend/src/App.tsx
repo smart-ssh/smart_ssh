@@ -99,13 +99,15 @@ function MainScreen({
     <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
       <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
         <div className="flex items-center gap-6">
-          <h1 className="text-xl font-semibold">Smart SSH</h1>
+          <h1 className="font-heading text-xl font-semibold tracking-wide">Smart SSH</h1>
           <nav className="flex gap-1">
             <button
               type="button"
               onClick={() => setTab("connect")}
-              className={`rounded px-3 py-1.5 text-sm ${
-                tab === "connect" ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800"
+              className={`font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
+                tab === "connect"
+                  ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
+                  : "border-transparent text-slate-400 hover:bg-slate-800"
               }`}
             >
               Verbinden
@@ -113,8 +115,10 @@ function MainScreen({
             <button
               type="button"
               onClick={() => setTab("manage")}
-              className={`rounded px-3 py-1.5 text-sm ${
-                tab === "manage" ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800"
+              className={`font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
+                tab === "manage"
+                  ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
+                  : "border-transparent text-slate-400 hover:bg-slate-800"
               }`}
             >
               Verwalten
@@ -122,8 +126,10 @@ function MainScreen({
             <button
               type="button"
               onClick={() => setTab("rules")}
-              className={`rounded px-3 py-1.5 text-sm ${
-                tab === "rules" ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800"
+              className={`font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
+                tab === "rules"
+                  ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
+                  : "border-transparent text-slate-400 hover:bg-slate-800"
               }`}
             >
               Filter-Regeln
@@ -133,7 +139,7 @@ function MainScreen({
         <button
           type="button"
           onClick={() => setSettingsOpen(true)}
-          className="rounded bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700"
+          className="font-heading border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-semibold tracking-wide hover:bg-slate-700"
         >
           Einstellungen
         </button>

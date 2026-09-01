@@ -64,25 +64,29 @@ export function AppHeader({ children }: AppHeaderProps) {
       style={paddingStyle}
       className="flex h-9 select-none items-center justify-between border-b border-slate-800/80 bg-slate-950/90 text-slate-300 text-xs backdrop-blur-sm transition-all"
     >
-      {/* Linker Bereich: App-Icon + Schriftzug */}
+      {/* Linker Bereich: App-Icon + Schriftzug — Marke aus dem Claude-
+          Design-Entwurf (Abschnitt 1a, "Terminal-Cursor mit Spark"):
+          eckiger Cursor-Chevron + Balken in Akzentfarbe, optionaler
+          Spark oben rechts (ab ~32px Icon-Größe entfernt, s. Entwurf —
+          hier bei 16px Titelleisten-Höhe bereits ohne Spark). */}
       <div data-tauri-drag-region className="flex items-center gap-2">
         <svg
           data-tauri-drag-region
-          className="h-4 w-4 text-emerald-400"
-          viewBox="0 0 24 24"
+          className="h-4 w-4"
+          viewBox="0 0 64 64"
           fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
         >
-          <rect width="20" height="16" x="2" y="4" rx="3" />
-          <path d="m7 10 3 2-3 2" />
-          <path d="M13 14h4" />
+          <path
+            d="M20 20 L31 32 L20 44"
+            stroke="var(--color-indigo-600)"
+            strokeWidth="7"
+            strokeLinecap="square"
+          />
+          <rect x="34" y="38" width="16" height="7" fill="var(--color-indigo-600)" />
         </svg>
         <span
           data-tauri-drag-region
-          className="font-semibold tracking-wider text-slate-200"
+          className="font-heading font-semibold tracking-wide text-slate-100"
         >
           Smart SSH
         </span>

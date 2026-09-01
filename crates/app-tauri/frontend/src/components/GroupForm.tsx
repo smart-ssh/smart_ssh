@@ -98,7 +98,7 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
 
   return (
     <div className="max-w-xl space-y-6 p-4">
-      <h2 className="text-lg font-semibold text-slate-100">
+      <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">
         {isCreate ? "Neue Gruppe" : `Gruppe: ${existing?.name ?? ""}`}
       </h2>
 

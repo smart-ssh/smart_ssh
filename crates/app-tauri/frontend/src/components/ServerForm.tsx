@@ -259,7 +259,7 @@ export function ServerForm({
 
   return (
     <div className="max-w-2xl space-y-6 p-4">
-      <h2 className="text-lg font-semibold text-slate-100">
+      <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">
         {isCreate ? "Neuer Server" : `Server: ${loaded?.name ?? ""}`}
       </h2>
 

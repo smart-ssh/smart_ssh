@@ -60,6 +60,14 @@ const ACTION_COLORS: Record<RuleAction, string> = {
   Deny: "bg-red-900 text-red-300",
 };
 
+/** Ampel-Randfarbe je Regel-Aktion (Spec 0009) — Design-Import, Regeln-
+ * Bildschirm: farbig markierter linker Kartenrand statt nur der Text-Badge. */
+const ACTION_BORDER: Record<RuleAction, string> = {
+  Allow: "border-l-emerald-600",
+  Confirm: "border-l-amber-600",
+  Deny: "border-l-red-600",
+};
+
 /** Spec 0009, Abschnitt 6: Regel-Liste (gruppiert nach Scope, Auf/Ab statt
  * Drag-and-Drop), Hard-Blacklist-Sektion, Regel-Formular, Testen-Panel — in
  * einer Datei wie schon `ServerForm.tsx` (Spec 0008), um das Zusammenspiel
@@ -150,11 +158,13 @@ export function FilterRulesView() {
     <div className="min-h-0 flex-1 overflow-y-auto p-4">
       <div className="max-w-3xl space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-100">Filter-Regeln</h2>
+          <h2 className="font-heading text-2xl font-bold tracking-wide text-slate-100">
+            Regeln
+          </h2>
           <button
             type="button"
             onClick={() => setSelection({ kind: "new" })}
-            className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+            className="font-heading bg-indigo-600 px-3 py-1.5 text-sm font-semibold tracking-wide text-slate-950 hover:bg-indigo-500"
           >
             + Regel
           </button>
@@ -168,27 +178,29 @@ export function FilterRulesView() {
           )}
           {groups.map((group) => (
             <div key={group.label}>
-              <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-400">
+              <h3 className="font-heading mb-1 text-sm font-semibold tracking-[0.14em] text-slate-400 uppercase">
                 {group.label}
               </h3>
               <ul className="space-y-1">
                 {group.rules.map((rule, index) => (
                   <li
                     key={rule.id}
-                    className="flex items-center gap-2 rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm"
+                    className={`flex items-center gap-2 border border-l-4 border-slate-700 bg-slate-800/60 px-3 py-2 text-sm ${ACTION_BORDER[rule.action]}`}
                   >
-                    <span className={`rounded px-2 py-0.5 text-xs ${ACTION_COLORS[rule.action]}`}>
+                    <span
+                      className={`font-heading w-[70px] shrink-0 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${ACTION_COLORS[rule.action]}`}
+                    >
                       {rule.action}
                     </span>
-                    <code className="flex-1 truncate text-slate-200">
+                    <code className="flex-1 truncate font-mono text-slate-200">
                       {rule.patternType}: {rule.patternValue}
                     </code>
-                    <span className="text-xs text-slate-500">Prio {rule.priority}</span>
+                    <span className="font-mono text-xs text-slate-500">Prio {rule.priority}</span>
                     <button
                       type="button"
                       onClick={() => movePriority(group.rules, index, -1)}
                       disabled={index === 0}
-                      className="rounded bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
+                      className="bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
                       aria-label="Priorität erhöhen"
                     >
                       ↑
@@ -197,7 +209,7 @@ export function FilterRulesView() {
                       type="button"
                       onClick={() => movePriority(group.rules, index, 1)}
                       disabled={index === group.rules.length - 1}
-                      className="rounded bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
+                      className="bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
                       aria-label="Priorität senken"
                     >
                       ↓
@@ -205,14 +217,14 @@ export function FilterRulesView() {
                     <button
                       type="button"
                       onClick={() => setSelection({ kind: "rule", id: rule.id })}
-                      className="rounded bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600"
+                      className="bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600"
                     >
                       Bearbeiten
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDelete(rule.id)}
-                      className="rounded bg-red-900 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
+                      className="bg-red-900 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
                     >
                       Löschen
                     </button>
@@ -310,7 +322,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
       onSubmit={handleSubmit}
       className="space-y-3 rounded border border-slate-700 bg-slate-800/40 p-4"
     >
-      <h3 className="text-sm font-semibold text-slate-100">
+      <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-100">
         {isCreate ? "Neue Regel" : "Regel bearbeiten"}
       </h3>
 
@@ -444,7 +456,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
 function HardBlacklistSection({ patterns }: { patterns: PatternDto[] }) {
   return (
     <div className="space-y-2 border-t border-slate-700 pt-4">
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-100">
+      <h3 className="font-heading flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-100">
         Hard-Blacklist
         <span className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
           fest codiert, nicht bearbeitbar
@@ -487,7 +499,7 @@ function DecisionBadge({ decision, big }: { decision: Decision; big?: boolean })
   const { text, className } = decisionInfo(decision);
   return (
     <span
-      className={`inline-block rounded px-2 py-0.5 ${big ? "text-sm font-semibold" : "text-xs"} ${className}`}
+      className={`font-heading inline-block px-2 py-0.5 tracking-wide uppercase ${big ? "text-sm font-semibold" : "text-xs font-medium"} ${className}`}
     >
       {text}
     </span>
@@ -565,7 +577,7 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
 
   return (
     <div className="space-y-3 border-t border-slate-700 pt-4">
-      <h3 className="text-sm font-semibold text-slate-100">Regeln testen</h3>
+      <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-100">Regeln testen</h3>
 
       <label className="block text-sm text-slate-300">
         Beispielkommando
