@@ -5,14 +5,10 @@ import { FilterRulesView } from "./components/FilterRulesView";
 import { ManagementView } from "./components/ManagementView";
 import { NoteSuggestionToast } from "./components/NoteSuggestionToast";
 import { ServerList } from "./components/ServerList";
+import { SessionTabBar } from "./components/SessionTabBar";
 import { SessionView } from "./components/SessionView";
 import { commandErrorMessage, listAiProviders } from "./api";
-
-interface ActiveSession {
-  sessionId: string;
-  serverName: string;
-  serverId: string;
-}
+import { useSessionTabs } from "./useSessionTabs";
 
 type Tab = "connect" | "manage" | "rules";
 
@@ -20,7 +16,15 @@ function App() {
   const [tab, setTab] = useState<Tab>("connect");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hasActiveProvider, setHasActiveProvider] = useState<boolean | null>(null);
-  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
+  const {
+    tabs: sessionTabs,
+    activeSessionId,
+    openTab,
+    findExistingSessionId,
+    switchTo,
+    markActionSettled,
+    requestCloseTab,
+  } = useSessionTabs();
 
   const refreshProviderStatus = () => {
     listAiProviders()
@@ -34,6 +38,41 @@ function App() {
   };
 
   useEffect(refreshProviderStatus, []);
+
+  // Spec 0017, Abschnitt 3: `Cmd`/`Ctrl+W` schließt den aktiven Tab,
+  // `Cmd`/`Ctrl+Tab` wechselt zum nächsten, `Cmd`/`Ctrl+1..9` springt direkt
+  // zum n-ten Tab. `Cmd+Tab` wird auf macOS vom Betriebssystem selbst als
+  // App-Wechsler abgefangen und erreicht den Webview nie — auf
+  // Windows/Linux (`Ctrl+Tab`, kein OS-reserviertes Kürzel dort) funktioniert
+  // der Handler wie vorgesehen; auf macOS bleiben `Cmd+W`/`Cmd+1..9` als
+  // Alternative.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!e.metaKey && !e.ctrlKey) return;
+      if (e.key === "w" || e.key === "W") {
+        if (!activeSessionId) return;
+        e.preventDefault();
+        requestCloseTab(activeSessionId);
+        return;
+      }
+      if (e.key === "Tab") {
+        if (sessionTabs.length === 0) return;
+        e.preventDefault();
+        const currentIndex = sessionTabs.findIndex((t) => t.sessionId === activeSessionId);
+        const nextIndex = (currentIndex + 1) % sessionTabs.length;
+        switchTo(sessionTabs[nextIndex].sessionId);
+        return;
+      }
+      if (/^[1-9]$/.test(e.key)) {
+        const target = sessionTabs[Number(e.key) - 1];
+        if (!target) return;
+        e.preventDefault();
+        switchTo(target.sessionId);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [sessionTabs, activeSessionId, requestCloseTab, switchTo]);
 
   return (
     // Spec 0010, Abschnitt 2, Punkt 6: die Benachrichtigung muss auch dann
@@ -50,16 +89,41 @@ function App() {
     // eigenes, korrekt auf die Titelleisten-Drag-Region begrenztes
     // `select-none` (Spec 0014).
     <div className="flex h-screen flex-col bg-slate-900 text-slate-100 overflow-hidden">
-      <AppHeader />
-      <NoteSuggestionToast />
-      {activeSession ? (
-        <SessionView
-          sessionId={activeSession.sessionId}
-          serverName={activeSession.serverName}
-          serverId={activeSession.serverId}
-          onDisconnected={() => setActiveSession(null)}
+      <AppHeader>
+        <SessionTabBar
+          tabs={sessionTabs}
+          activeSessionId={activeSessionId}
+          onSwitch={switchTo}
+          onRequestClose={requestCloseTab}
         />
-      ) : (
+      </AppHeader>
+      <NoteSuggestionToast />
+
+      {/* Spec 0017, Abschnitt 4: jede offene Session bleibt gemountet
+       * (eigener Chat-Verlauf, eigene xterm.js-Instanz samt Scrollback,
+       * eigener Bestätigungsdialog-/Prompt-Historie-Zustand lebt bereits
+       * lokal in `ChatPanel`/`TerminalView`) — nur per CSS ausgeblendet,
+       * statt beim Tab-Wechsel neu gemountet zu werden. Ein Unmount würde
+       * die xterm-Instanz samt Scrollback und den gesamten Chat-Verlauf
+       * verwerfen, sobald der Nutzer zu einem anderen Tab wechselt. */}
+      {sessionTabs.map((sessionTab) => (
+        <div
+          key={sessionTab.sessionId}
+          className={
+            sessionTab.sessionId === activeSessionId ? "flex flex-1 min-h-0 flex-col" : "hidden"
+          }
+        >
+          <SessionView
+            sessionId={sessionTab.sessionId}
+            serverName={sessionTab.serverName}
+            serverId={sessionTab.serverId}
+            onRequestClose={() => requestCloseTab(sessionTab.sessionId)}
+            onActionSettled={markActionSettled}
+          />
+        </div>
+      ))}
+
+      <div className={activeSessionId === null ? "flex flex-1 min-h-0 flex-col" : "hidden"}>
         <MainScreen
           tab={tab}
           setTab={setTab}
@@ -67,11 +131,11 @@ function App() {
           setSettingsOpen={setSettingsOpen}
           hasActiveProvider={hasActiveProvider}
           refreshProviderStatus={refreshProviderStatus}
-          onConnected={(sessionId, serverName, serverId) =>
-            setActiveSession({ sessionId, serverName, serverId })
-          }
+          findExistingSessionId={findExistingSessionId}
+          onSwitchToExistingTab={switchTo}
+          onConnected={(sessionId, serverName, serverId) => openTab(sessionId, serverId, serverName)}
         />
-      )}
+      </div>
     </div>
   );
 }
@@ -84,6 +148,8 @@ interface MainScreenProps {
   hasActiveProvider: boolean | null;
   refreshProviderStatus: () => void;
   onConnected: (sessionId: string, serverName: string, serverId: string) => void;
+  findExistingSessionId: (serverId: string) => string | undefined;
+  onSwitchToExistingTab: (sessionId: string) => void;
 }
 
 function MainScreen({
@@ -94,6 +160,8 @@ function MainScreen({
   hasActiveProvider,
   refreshProviderStatus,
   onConnected,
+  findExistingSessionId,
+  onSwitchToExistingTab,
 }: MainScreenProps) {
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
@@ -165,7 +233,11 @@ function MainScreen({
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
               Server
             </h2>
-            <ServerList onConnected={onConnected} />
+            <ServerList
+              onConnected={onConnected}
+              findExistingSessionId={findExistingSessionId}
+              onSwitchToExistingTab={onSwitchToExistingTab}
+            />
           </section>
         </main>
       ) : tab === "manage" ? (

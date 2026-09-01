@@ -107,9 +107,15 @@ interface ChatPanelProps {
   /** Spec 0011, Abschnitt 4: Default-Scope für den Regel-Schnellvorschlag
    * ist der aktuell verbundene Server. */
   serverId: string;
+  /** Spec 0017, Abschnitt 5: informiert die Tab-Leiste (`useSessionTabs`),
+   * sobald der Nutzer eine wartende Bestätigung auflöst — auch bei
+   * Ablehnung, die (anders als Approve/EditThenApprove) kein
+   * `chat-action-result`-Event auslöst und sonst den Hinweis-Indikator auf
+   * dem Tab hängen ließe. */
+  onActionSettled: (sessionId: string) => void;
 }
 
-export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
+export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelProps) {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -209,6 +215,7 @@ export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
           : item,
       ),
     );
+    onActionSettled(sessionId);
     respondToAction(sessionId, actionId, decision).catch((err) =>
       setItems((prev) => [
         ...prev,
@@ -233,6 +240,7 @@ export function ChatPanel({ sessionId, serverId }: ChatPanelProps) {
           : item,
       ),
     );
+    onActionSettled(sessionId);
     acceptAndCreateRule(sessionId, actionId, patternType, patternValue, scope).catch((err) =>
       setItems((prev) => [
         ...prev,

@@ -88,7 +88,10 @@ export type Decision =
   | { Confirm: { reason: string } }
   | { Deny: { reason: string } };
 
-export type ConnectionStatus = "connected" | "disconnected";
+/** Spec 0017, Abschnitt 2: `awaiting_host_key` kommt nie über
+ * `connection-status-changed` (das Event kennt nur den Übergang
+ * connected/disconnected), nur als `SessionSummaryDto.status`. */
+export type ConnectionStatus = "connected" | "disconnected" | "awaiting_host_key";
 
 export interface ConnectionStatusChangedEvent {
   sessionId: string;
@@ -304,3 +307,16 @@ export interface ChatDocumentGeneratedEvent {
 }
 
 export type DocumentFormat = "markdown" | "word";
+
+// --- Spec 0017: Multi-Tab-Sessions --------------------------------------
+
+/** Sicht auf eine laufende (oder auf Host-Key-Bestätigung wartende) Session
+ * für die Tab-Leiste — Grundlage für `list_sessions()`, dient dem
+ * Wiederherstellen offener Tabs bei einem Frontend-Neuladen. */
+export interface SessionSummaryDto {
+  sessionId: string;
+  serverId: string;
+  serverName: string;
+  status: ConnectionStatus;
+  hasPendingAction: boolean;
+}

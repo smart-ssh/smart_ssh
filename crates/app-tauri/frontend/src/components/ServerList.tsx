@@ -6,6 +6,13 @@ import { HostKeyDialog } from "./HostKeyDialog";
 
 interface ServerListProps {
   onConnected: (sessionId: string, serverName: string, serverId: string) => void;
+  /** Spec 0017, Abschnitt 3: "existiert bereits ein Tab für diesen Server,
+   * wird stattdessen zu diesem gewechselt (kein zweiter Tab zum selben
+   * Server)" — die Prüfung muss **vor** `connect()` passieren, sonst würde
+   * für einen bereits offenen Server unnötig eine zweite SSH-Verbindung
+   * aufgebaut und sofort wieder verworfen. */
+  findExistingSessionId: (serverId: string) => string | undefined;
+  onSwitchToExistingTab: (sessionId: string) => void;
 }
 
 /**
@@ -16,7 +23,11 @@ interface ServerListProps {
  * den laufenden `connect()`-Aufruf entsteht (s. Backend-Kommentar zu
  * `commands::connect`).
  */
-export function ServerList({ onConnected }: ServerListProps) {
+export function ServerList({
+  onConnected,
+  findExistingSessionId,
+  onSwitchToExistingTab,
+}: ServerListProps) {
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,6 +51,11 @@ export function ServerList({ onConnected }: ServerListProps) {
   }, []);
 
   const handleConnect = async (server: ServerDto) => {
+    const existingSessionId = findExistingSessionId(server.id);
+    if (existingSessionId) {
+      onSwitchToExistingTab(existingSessionId);
+      return;
+    }
     setError(null);
     setConnectingId(server.id);
     try {

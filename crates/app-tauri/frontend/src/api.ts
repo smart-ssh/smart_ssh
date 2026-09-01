@@ -19,6 +19,7 @@ import type {
   Scope,
   ServerDto,
   ServerInput,
+  SessionSummaryDto,
   TestConnectionResult,
 } from "./types";
 
@@ -77,6 +78,13 @@ export const respondToAction = (
 ) => invoke<void>("respond_to_action", { sessionId, actionId, decision });
 
 export const disconnect = (sessionId: string) => invoke<void>("disconnect", { sessionId });
+
+// --- Spec 0017: Multi-Tab-Sessions --------------------------------------
+
+/** Maßgebliche Quelle dafür, welche Sessions tatsächlich offen sind — dient
+ * dem Wiederherstellen der Tab-Leiste bei einem Frontend-Neuladen (s.
+ * `crate::commands::list_sessions`). */
+export const listSessions = () => invoke<SessionSummaryDto[]>("list_sessions");
 
 // --- Spec 0008: Server-/Gruppen-Verwaltung ------------------------------
 
