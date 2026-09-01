@@ -15,6 +15,20 @@ use super::types::{CommandOutput, PtySize};
 #[async_trait]
 pub trait SshTransport: Send + Sync {
     async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError>;
+    /// Wie [`execute`](Self::execute), schreibt aber `stdin` in den
+    /// Exec-Channel, bevor auf die Antwort gewartet wird (Spec 0018:
+    /// `sudo -S`-Passworteingabe ohne TTY). Default-Implementierung
+    /// ignoriert `stdin` und delegiert unverändert an `execute` — bestehende
+    /// Implementierungen/Mocks (Tests) bleiben dadurch ohne Anpassung
+    /// lauffähig; nur `RusshTransport` überschreibt sie echt.
+    async fn execute_with_stdin(
+        &mut self,
+        command: &str,
+        stdin: &[u8],
+    ) -> Result<CommandOutput, SshError> {
+        let _ = stdin;
+        self.execute(command).await
+    }
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError>;
     async fn disconnect(&mut self) -> Result<(), SshError>;
 }

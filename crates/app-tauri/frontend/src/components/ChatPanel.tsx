@@ -33,6 +33,7 @@ import type {
   PatternType,
   Scope,
 } from "../types";
+import { NoteDiffPreview } from "./NoteDiffPreview";
 
 type ChatItem =
   | { type: "user"; id: string; text: string }
@@ -48,6 +49,10 @@ type ChatItem =
        * die Buttons müssen also unabhängig davon verschwinden. */
       responded: boolean;
       result?: ActionResultPayload;
+      /** Spec 0019, Abschnitt 3/4 — nur bei `ProposeNoteUpdate` gesetzt. */
+      previousNoteContent: string | null;
+      /** Spec 0018, Abschnitt 7 — nur bei `SuggestCommand` relevant. */
+      usesStoredSudoPassword: boolean;
     }
   | { type: "error"; id: string; message: string }
   | { type: "document"; id: string; title: string; contentMarkdown: string };
@@ -167,6 +172,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
             action: event.action,
             decision: event.decision,
             responded: false,
+            previousNoteContent: event.previousNoteContent,
+            usesStoredSudoPassword: event.usesStoredSudoPassword,
           },
         ]);
       }),
@@ -452,6 +459,19 @@ function ChatItemView({
         <code className="block border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs text-slate-200">
           {command}
         </code>
+      )}
+      {item.usesStoredSudoPassword && (
+        <p className="mt-1 text-xs text-amber-300">
+          🔑 Wird mit hinterlegtem Sudo-Passwort ausgeführt.
+        </p>
+      )}
+      {"ProposeNoteUpdate" in item.action && (
+        <div className="mt-2">
+          <NoteDiffPreview
+            previousContent={item.previousNoteContent}
+            newContent={item.action.ProposeNoteUpdate.new_content}
+          />
+        </div>
       )}
       {typeof item.decision === "object" && "Confirm" in item.decision && (
         <p className="mt-1 text-xs text-slate-400">{formatReason(item.decision.Confirm.reason)}</p>

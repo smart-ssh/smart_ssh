@@ -13,11 +13,12 @@ use ssh_manager_core::filter::{
     Decision, EvalContext, EvaluationTrace, Pattern, RuleAction, RuleId, Scope,
 };
 use ssh_manager_core::profiles::{
-    AuthMethod, CredentialRef, Group, GroupId, NoteEditor, NoteRevision, Server,
+    AuthMethod, CredentialRef, CredentialStore, Group, GroupId, NoteEditor, NoteRevision, Server,
 };
 use ssh_manager_core::shared::ServerId;
 
 use crate::events::ConnectionStatus;
+use crate::server_credentials::sudo_password_credential_ref;
 use crate::state::SessionId;
 
 /// Sicht auf einen [`Server`] für Liste und Bearbeiten-Formular (Spec
@@ -43,10 +44,16 @@ pub struct ServerDto {
     pub auth_kind: AuthMethodKind,
     pub jump_host: Option<String>,
     pub notes: String,
+    /// Spec 0018, Abschnitt 4: ob für diesen Server ein Sudo-Passwort im
+    /// `CredentialStore` hinterlegt ist — **nicht** aus `Server` selbst
+    /// ableitbar (kein DB-Feld, s. `crate::server_credentials`-Doc-
+    /// Kommentar), deshalb kein `From<&Server>`, sondern
+    /// [`ServerDto::from_server`] mit explizitem `CredentialStore`-Zugriff.
+    pub has_sudo_password: bool,
 }
 
-impl From<&Server> for ServerDto {
-    fn from(server: &Server) -> Self {
+impl ServerDto {
+    pub fn from_server(server: &Server, credential_store: &dyn CredentialStore) -> Self {
         Self {
             id: server.id.0.to_string(),
             name: server.name.clone(),
@@ -58,6 +65,9 @@ impl From<&Server> for ServerDto {
             auth_kind: AuthMethodKind::from(&server.auth),
             jump_host: server.jump_host.map(|j| j.0.to_string()),
             notes: server.notes.clone(),
+            has_sudo_password: credential_store
+                .get(&sudo_password_credential_ref(server.id))
+                .is_ok(),
         }
     }
 }
@@ -256,6 +266,12 @@ pub struct ServerInput {
     pub tags: Vec<String>,
     pub auth: AuthMethodInput,
     pub jump_host: Option<ServerId>,
+    /// Spec 0018, Abschnitt 4: "leer/fehlend = unverändert" bei
+    /// `update_server` (s. `crate::server_credentials::resolve_sudo_password`),
+    /// "nicht gesetzt" bei `create_server`. Explizites Entfernen eines
+    /// bereits gesetzten Werts läuft über den eigenen
+    /// `clear_server_sudo_password`-Befehl, nicht über dieses Feld.
+    pub sudo_password: Option<String>,
 }
 
 /// Spec 0008, Abschnitt 4. `#[serde(tag = "kind", rename_all =

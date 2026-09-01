@@ -137,6 +137,7 @@ pub fn run() {
             commands::create_server,
             commands::update_server,
             commands::delete_server,
+            commands::clear_server_sudo_password,
             commands::test_connection,
             commands::trust_host_key,
             commands::update_group_notes,

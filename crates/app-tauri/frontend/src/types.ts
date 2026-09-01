@@ -23,6 +23,9 @@ export interface ServerDto {
   authKind: AuthMethodKind;
   jumpHost: string | null;
   notes: string;
+  /** Spec 0018, Abschnitt 4: ob ein Sudo-Passwort im Schlüsselbund
+   * hinterlegt ist — nie der Wert selbst. */
+  hasSudoPassword: boolean;
 }
 
 export interface AiProviderConfigDto {
@@ -137,6 +140,12 @@ export interface ChatActionProposedEvent {
   actionId: string;
   action: AiAction;
   decision: Decision;
+  /** Spec 0019, Abschnitt 3: nur bei `ProposeNoteUpdate` gesetzt — aktueller
+   * Inhalt des Ziels, für die Diff-Vorschau. */
+  previousNoteContent: string | null;
+  /** Spec 0018, Abschnitt 7: ob beim Ausführen automatisch ein hinterlegtes
+   * Sudo-Passwort eingespeist würde. */
+  usesStoredSudoPassword: boolean;
 }
 
 /** Spec 0010 — `action` ist hier immer `{ ProposeNoteUpdate: {...} }`, nie
@@ -147,6 +156,8 @@ export interface NoteUpdateSuggestedEvent {
   sessionId: string;
   actionId: string;
   action: { ProposeNoteUpdate: { target: NoteTargetSelector; new_content: string } };
+  /** Spec 0019, Abschnitt 3 — s. `ChatActionProposedEvent`-Doc-Kommentar. */
+  previousNoteContent: string | null;
 }
 
 export type ActionResultPayload =
@@ -198,6 +209,10 @@ export interface ServerInput {
   tags: string[];
   auth: AuthMethodInput;
   jumpHost: string | null;
+  /** Spec 0018, Abschnitt 4: leer/`null` = unverändert (bei `update`) bzw.
+   * "kein Sudo-Passwort" (bei `create`). Entfernen eines bereits gesetzten
+   * Werts läuft über `clearServerSudoPassword`, nicht über dieses Feld. */
+  sudoPassword: string | null;
 }
 
 export type AuthMethodInput =

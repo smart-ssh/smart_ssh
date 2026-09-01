@@ -408,6 +408,7 @@ mod tests {
                 value: Some("secret".to_string()),
             },
             jump_host: None,
+            sudo_password: None,
         }
     }
 
@@ -680,6 +681,7 @@ mod tests {
                 value: Some("target-form-secret".to_string()),
             },
             jump_host: Some(jump_id),
+            sudo_password: None,
         };
 
         let result = test_connection_with_timeout(

@@ -93,6 +93,13 @@ pub struct Session {
     /// Vorschlag gemacht hat.
     pub ai_provider_label: String,
     pub ai_model: String,
+    /// Spec 0018, Abschnitt 6: optionales Sudo-Passwort, einmalig bei
+    /// `connect()` aus dem `CredentialStore` gelesen — `None`, wenn für den
+    /// Server keines hinterlegt ist (kein Fehler, s. dortiger Kommentar).
+    /// Wird ausschließlich über Stdin an genau einen `sudo -S`-Aufruf
+    /// weitergereicht (`crate::orchestration::execute_suggested_command`),
+    /// nie auf dem Zielserver abgelegt.
+    pub sudo_password: Option<secrecy::SecretString>,
     /// Spec 0017, Abschnitt 2: `list_sessions()`-Statusfeld. Startet bei
     /// `Connected` (`Session` wird erst nach erfolgreichem Verbindungsaufbau
     /// konstruiert, s. `crate::commands::connect`) und wird von
@@ -338,6 +345,7 @@ mod tests {
             redactor: Box::new(DefaultOutputRedactor::new()),
             ai_provider_label: "test-provider".to_string(),
             ai_model: "test-model".to_string(),
+            sudo_password: None,
             status: StdMutex::new(ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
         }

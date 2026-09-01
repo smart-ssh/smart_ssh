@@ -109,6 +109,11 @@ export const updateServer = (id: string, input: ServerInput) =>
 
 export const deleteServer = (id: string) => invoke<void>("delete_server", { id });
 
+/** Spec 0018, Abschnitt 4: expliziter Entfernen-Weg — ein leeres
+ * `sudoPassword`-Feld in `updateServer` bedeutet bereits "unverändert". */
+export const clearServerSudoPassword = (id: string) =>
+  invoke<void>("clear_server_sudo_password", { id });
+
 export const testConnection = (input: ServerInput, existingServerId?: string) =>
   invoke<TestConnectionResult>("test_connection", {
     input,

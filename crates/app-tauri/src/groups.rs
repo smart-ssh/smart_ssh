@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use ssh_manager_core::profiles::{GroupId, ProfileStore};
+use ssh_manager_core::profiles::{CredentialStore, GroupId, ProfileStore};
 
 use crate::dto::{DeleteGroupResult, GroupDto, ServerDto};
 use crate::error::CommandResult;
@@ -50,6 +50,12 @@ pub async fn validate_no_cycle(
 /// nichts.
 pub async fn compute_delete_group_result(
     store: &dyn ProfileStore,
+    // `+ Send + Sync` explizit ergänzt (der Trait selbst deklariert es
+    // nicht, s. `crate::state::AppState`-Doc-Kommentar zu `credential_store`)
+    // — ohne diesen Zusatz hält die zurückgegebene Future eine nicht-`Sync`-
+    // Referenz über die vorangehenden `.await`-Punkte hinweg und ist selbst
+    // nicht mehr `Send`, was `#[tauri::command]` verlangt.
+    credential_store: &(dyn CredentialStore + Send + Sync),
     id: GroupId,
     executed: bool,
 ) -> CommandResult<DeleteGroupResult> {
@@ -72,7 +78,7 @@ pub async fn compute_delete_group_result(
     let servers_to_unassign: Vec<ServerDto> = all_servers
         .iter()
         .filter(|s| s.group_id.is_some_and(|gid| affected.contains(&gid)))
-        .map(ServerDto::from)
+        .map(|s| ServerDto::from_server(s, credential_store))
         .collect();
 
     Ok(DeleteGroupResult {
@@ -90,7 +96,7 @@ mod tests {
     use ssh_manager_core::shared::ServerId;
 
     use super::*;
-    use crate::test_support::InMemoryProfileStore;
+    use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
 
     fn group(name: &str, parent: Option<GroupId>) -> Group {
         let now = Utc::now();
@@ -183,7 +189,7 @@ mod tests {
             .with_group(child.clone())
             .with_server(server.clone());
 
-        let result = compute_delete_group_result(&store, root.id, false)
+        let result = compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, false)
             .await
             .unwrap();
 
@@ -208,7 +214,7 @@ mod tests {
             .with_group(child.clone())
             .with_group(grandchild.clone());
 
-        let result = compute_delete_group_result(&store, root.id, false)
+        let result = compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, false)
             .await
             .unwrap();
 
@@ -235,7 +241,7 @@ mod tests {
             .with_group(child.clone())
             .with_server(server.clone());
 
-        let preview = compute_delete_group_result(&store, root.id, false)
+        let preview = compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, false)
             .await
             .unwrap();
         assert!(!preview.executed);
@@ -244,7 +250,7 @@ mod tests {
             "Vorschau löscht nicht"
         );
 
-        let confirmed = compute_delete_group_result(&store, root.id, true)
+        let confirmed = compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, true)
             .await
             .unwrap();
         assert!(confirmed.executed);

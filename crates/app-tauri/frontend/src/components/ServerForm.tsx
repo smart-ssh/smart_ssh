@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  clearServerSudoPassword,
   commandErrorMessage,
   createServer,
   deleteServer,
@@ -111,6 +112,11 @@ export function ServerForm({
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
   const [auth, setAuth] = useState<AuthFormState>({ kind: "password", value: "" });
+  // Spec 0018, Abschnitt 4: leer = unverändert (bei Update), separater
+  // "Entfernen"-Weg für einen bereits gesetzten Wert (s. `handleClearSudoPassword`).
+  const [sudoPassword, setSudoPassword] = useState("");
+  const [hasSudoPassword, setHasSudoPassword] = useState(false);
+  const [clearingSudoPassword, setClearingSudoPassword] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +144,8 @@ export function ServerForm({
       setJumpHost(null);
       setTags([]);
       setAuth({ kind: "password", value: "" });
+      setSudoPassword("");
+      setHasSudoPassword(false);
       return;
     }
     getServer(serverId)
@@ -151,6 +159,8 @@ export function ServerForm({
         setJumpHost(server.jumpHost);
         setTags(server.tags);
         setAuth(authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind));
+        setSudoPassword("");
+        setHasSudoPassword(server.hasSudoPassword);
       })
       .catch((err) => setError(commandErrorMessage(err)));
   }, [serverId, defaultGroupId]);
@@ -169,6 +179,7 @@ export function ServerForm({
     tags,
     auth: toAuthMethodInput(auth, isCreate),
     jumpHost,
+    sudoPassword: sudoPassword === "" ? null : sudoPassword,
   });
 
   const handleSubmit = async (e: FormEvent) => {
@@ -186,6 +197,20 @@ export function ServerForm({
       setError(commandErrorMessage(err));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleClearSudoPassword = async () => {
+    if (!serverId) return;
+    setClearingSudoPassword(true);
+    setError(null);
+    try {
+      await clearServerSudoPassword(serverId);
+      setHasSudoPassword(false);
+    } catch (err) {
+      setError(commandErrorMessage(err));
+    } finally {
+      setClearingSudoPassword(false);
     }
   };
 
@@ -498,6 +523,36 @@ export function ServerForm({
                 />
               </div>
             </div>
+          )}
+        </fieldset>
+
+        <fieldset className="rounded border border-slate-700 p-3">
+          <legend className="px-1 text-sm text-slate-300">Sudo-Passwort (optional)</legend>
+          <p className="mb-2 text-xs text-slate-500">
+            Wird bei einem von der KI vorgeschlagenen <code>sudo</code>-Kommando automatisch
+            über Stdin eingespeist (Spec 0018) — nie auf dem Zielserver abgelegt.
+          </p>
+          <label className="block text-sm text-slate-300">
+            Sudo-Passwort{" "}
+            <span className="text-slate-500">
+              (leer = unverändert{hasSudoPassword ? ", aktuell hinterlegt" : ""})
+            </span>
+            <input
+              type="password"
+              value={sudoPassword}
+              onChange={(e) => setSudoPassword(e.target.value)}
+              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+            />
+          </label>
+          {hasSudoPassword && (
+            <button
+              type="button"
+              onClick={handleClearSudoPassword}
+              disabled={clearingSudoPassword}
+              className="mt-2 rounded bg-slate-800 px-2 py-1 text-xs text-red-300 hover:bg-slate-700 disabled:opacity-50"
+            >
+              {clearingSudoPassword ? "Entfernt…" : "Hinterlegtes Sudo-Passwort entfernen"}
+            </button>
           )}
         </fieldset>
 

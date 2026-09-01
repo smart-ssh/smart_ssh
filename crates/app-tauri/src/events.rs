@@ -180,14 +180,27 @@ struct ChatActionProposedPayload {
     action_id: ActionId,
     action: AiAction,
     decision: Decision,
+    /// Spec 0019, Abschnitt 3: nur bei `action: ProposeNoteUpdate` gesetzt —
+    /// der aktuelle Notizinhalt des aufgelösten Ziels, damit das Frontend
+    /// eine kurze Diff-Vorschau (alt/neu) zeigen kann statt nur des vollen
+    /// neuen Texts. `None` für alle anderen Aktionstypen sowie wenn die
+    /// Zielauflösung fehlschlägt.
+    previous_note_content: Option<String>,
+    /// Spec 0018, Abschnitt 7: ob beim Ausführen automatisch ein
+    /// hinterlegtes Sudo-Passwort eingespeist würde — Grundlage für den
+    /// Transparenz-Hinweis im Bestätigungsdialog.
+    uses_stored_sudo_password: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn emit_chat_action_proposed(
     emitter: &dyn EventEmitter,
     session_id: SessionId,
     action_id: ActionId,
     action: AiAction,
     decision: Decision,
+    previous_note_content: Option<String>,
+    uses_stored_sudo_password: bool,
 ) {
     emit(
         emitter,
@@ -197,6 +210,8 @@ pub fn emit_chat_action_proposed(
             action_id,
             action,
             decision,
+            previous_note_content,
+            uses_stored_sudo_password,
         },
     );
 }
@@ -223,6 +238,9 @@ struct NoteUpdateSuggestedPayload {
     session_id: SessionId,
     action_id: ActionId,
     action: AiAction,
+    /// Spec 0019, Abschnitt 3 — s. `ChatActionProposedPayload`-Doc-
+    /// Kommentar, dieselbe Grundlage.
+    previous_note_content: Option<String>,
 }
 
 pub fn emit_note_update_suggested(
@@ -230,6 +248,7 @@ pub fn emit_note_update_suggested(
     session_id: SessionId,
     action_id: ActionId,
     action: AiAction,
+    previous_note_content: Option<String>,
 ) {
     emit(
         emitter,
@@ -238,6 +257,7 @@ pub fn emit_note_update_suggested(
             session_id,
             action_id,
             action,
+            previous_note_content,
         },
     );
 }

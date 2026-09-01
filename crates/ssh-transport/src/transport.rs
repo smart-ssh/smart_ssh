@@ -51,6 +51,32 @@ impl SshTransport for RusshTransport {
         drain_channel(channel).await
     }
 
+    /// Spec 0018, Abschnitt 5: identisch zu `execute`, schreibt `stdin`
+    /// aber in den Channel und signalisiert danach EOF, bevor auf die
+    /// Antwort gewartet wird — nötig, damit z. B. `sudo -S` das über Stdin
+    /// gelieferte Passwort tatsächlich liest, statt (mangels TTY) auf einen
+    /// nie eintreffenden Prompt zu warten.
+    async fn execute_with_stdin(
+        &mut self,
+        command: &str,
+        stdin: &[u8],
+    ) -> Result<CommandOutput, SshError> {
+        let channel = self
+            .handle
+            .channel_open_session()
+            .await
+            .map_err(map_russh_error)?;
+        channel.exec(true, command).await.map_err(map_russh_error)?;
+        if !stdin.is_empty() {
+            channel
+                .data_bytes(stdin.to_vec())
+                .await
+                .map_err(map_russh_error)?;
+        }
+        channel.eof().await.map_err(map_russh_error)?;
+        drain_channel(channel).await
+    }
+
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
         let channel = self
             .handle

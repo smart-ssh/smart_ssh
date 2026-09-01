@@ -38,7 +38,10 @@ use crate::events::{
 };
 use crate::groups::{compute_delete_group_result, validate_no_cycle};
 use crate::orchestration::run_chat_turn;
-use crate::server_credentials::{delete_auth_method_secrets, resolve_auth_method};
+use crate::server_credentials::{
+    clear_sudo_password, delete_auth_method_secrets, resolve_auth_method, resolve_sudo_password,
+    sudo_password_credential_ref,
+};
 use crate::session::{spawn_terminal_actor, Session, TerminalCommand};
 use crate::state::{ActionId, AppState, SessionId};
 
@@ -54,7 +57,7 @@ pub async fn list_servers(
     Ok(servers
         .iter()
         .filter(|s| group_id.is_none() || s.group_id == group_id)
-        .map(ServerDto::from)
+        .map(|s| ServerDto::from_server(s, state.credential_store.as_ref()))
         .collect())
 }
 
@@ -319,6 +322,14 @@ pub async fn connect(
     )
     .await;
 
+    // Spec 0018, Abschnitt 6: einmalig bei `connect()` gelesen, wie
+    // `ai_provider_label`/`ai_model` — ein fehlender Eintrag (kein Sudo-
+    // Passwort hinterlegt) wird zu `None`, kein harter Verbindungsfehler.
+    let sudo_password = state
+        .credential_store
+        .get(&sudo_password_credential_ref(server_id))
+        .ok();
+
     let session = Arc::new(Session {
         transport: tokio::sync::Mutex::new(transport),
         ai_provider,
@@ -334,6 +345,7 @@ pub async fn connect(
         redactor: Box::new(DefaultOutputRedactor::new()),
         ai_provider_label: active_config.display_name,
         ai_model: active_config.model,
+        sudo_password,
         status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
     });
@@ -364,7 +376,7 @@ async fn build_session_system_context(
          Wichtige Handlungsanweisungen für Werkzeuge:\n\
          - Wenn du Befehle auf dem Remote-Server ausführen möchtest, schlage sie mit dem Werkzeug `suggest_command` vor.\n\
          - Wenn der Nutzer nach einem Dokument, Bericht, einer Zusammenfassung als Datei, einer Analyse oder einem Word-/Markdown-Export fragt, erstelle den vollständigen Inhalt und rufe IMMER das Werkzeug `generate_document` auf. Antworte in diesem Fall nicht nur mit einfachem Chat-Text und behaupte nicht, das Dokument erstellt zu haben, ohne die Funktion aufzurufen.\n\
-         - Wenn wichtige permanente Erkenntnisse über den Server oder die Gruppe festgehalten werden sollen, schlage eine Notiz-Aktualisierung mit `propose_note_update` vor."
+         - Halte während der gesamten Sitzung aktiv Ausschau nach für künftige Sitzungen nützlichen Erkenntnissen (installierte Software/Versionen, Konfigurationspfade, getroffene Entscheidungen, behobene Probleme, Systembesonderheiten) und schlage dafür proaktiv — bei Bedarf auch mehrfach pro Sitzung, sobald sich jeweils etwas Neues ergibt, nicht erst am Ende abwartend — eine Notiz-Aktualisierung mit `propose_note_update` vor. Wiederhole dabei keine bereits in den Notizen stehenden Informationen."
     );
 
     let eval_ctx = EvalContext {
@@ -717,7 +729,13 @@ pub async fn delete_group(
     confirm_cascade: bool,
 ) -> CommandResult<DeleteGroupResult> {
     let result =
-        compute_delete_group_result(state.profile_store.as_ref(), id, confirm_cascade).await?;
+        compute_delete_group_result(
+            state.profile_store.as_ref(),
+            state.credential_store.as_ref(),
+            id,
+            confirm_cascade,
+        )
+        .await?;
     if confirm_cascade {
         state.profile_store.delete_group(&id).await?;
     }
@@ -729,7 +747,7 @@ pub async fn delete_group(
 #[tauri::command]
 pub async fn get_server(state: State<'_, AppState>, id: ServerId) -> CommandResult<ServerDto> {
     let server = state.profile_store.get_server(&id).await?;
-    Ok(ServerDto::from(&server))
+    Ok(ServerDto::from_server(&server, state.credential_store.as_ref()))
 }
 
 /// Spec 0008, Abschnitt 4: `CredentialStore` zuerst, dann die DB-Zeile —
@@ -742,6 +760,7 @@ pub async fn create_server(
 ) -> CommandResult<ServerId> {
     let id = ServerId::new();
     let auth = resolve_auth_method(state.credential_store.as_ref(), id, input.auth, None)?;
+    resolve_sudo_password(state.credential_store.as_ref(), id, input.sudo_password)?;
 
     let now = Utc::now();
     let server = Server {
@@ -782,6 +801,7 @@ pub async fn update_server(
         input.auth,
         Some(&existing.auth),
     )?;
+    resolve_sudo_password(state.credential_store.as_ref(), id, input.sudo_password)?;
 
     let server = Server {
         id,
@@ -805,7 +825,20 @@ pub async fn update_server(
 pub async fn delete_server(state: State<'_, AppState>, id: ServerId) -> CommandResult<()> {
     let server = state.profile_store.get_server(&id).await?;
     delete_auth_method_secrets(state.credential_store.as_ref(), &server.auth);
+    clear_sudo_password(state.credential_store.as_ref(), id);
     state.profile_store.delete_server(&id).await?;
+    Ok(())
+}
+
+/// Spec 0018, Abschnitt 4: expliziter "Entfernen"-Weg — ein leeres
+/// `sudo_password`-Feld in `update_server` bedeutet bereits "unverändert",
+/// s. `crate::server_credentials::resolve_sudo_password`.
+#[tauri::command]
+pub async fn clear_server_sudo_password(
+    state: State<'_, AppState>,
+    id: ServerId,
+) -> CommandResult<()> {
+    clear_sudo_password(state.credential_store.as_ref(), id);
     Ok(())
 }
 

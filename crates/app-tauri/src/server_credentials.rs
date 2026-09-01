@@ -22,6 +22,46 @@ fn credential_ref(server_id: ServerId, slot: &str) -> CredentialRef {
     CredentialRef::new(format!("server:{}:{slot}", server_id.0))
 }
 
+/// Spec 0018, Abschnitt 4: eigener, vom Login-Auth-Secret unabhängiger Slot
+/// — ein Server hat unabhängig von seiner `AuthMethod` (Passwort/Key/Agent/
+/// Zertifikat) höchstens **ein** optionales Sudo-Passwort. Deterministisch
+/// wie die übrigen Slots: kein eigenes DB-Feld nötig, "ist eines
+/// hinterlegt" wird per `CredentialStore::get(...).is_ok()` ermittelt (s.
+/// `crate::dto::ServerDto::has_sudo_password`).
+pub fn sudo_password_credential_ref(server_id: ServerId) -> CredentialRef {
+    credential_ref(server_id, "sudo_password")
+}
+
+/// Spec 0018, Abschnitt 4: "leer = unverändert" wie bei den Login-Auth-
+/// Secrets (Abschnitt 3 dieses Moduls) — anders als dort ist ein fehlender
+/// Wert aber ein **gültiger** Endzustand (kein Sudo-Passwort hinterlegt),
+/// kein Fehler wie bei `write_or_reuse_secret` (die verlangt zwingend
+/// *irgendeinen* Wert für ein Pflichtfeld). `provided: Some("")` wird wie
+/// `None` behandelt (Formularfelder liefern bei "nichts eingegeben" einen
+/// leeren String, keinen fehlenden Wert).
+pub fn resolve_sudo_password(
+    credential_store: &dyn CredentialStore,
+    server_id: ServerId,
+    provided: Option<String>,
+) -> Result<(), CommandError> {
+    match provided {
+        Some(value) if !value.is_empty() => {
+            credential_store.set(&sudo_password_credential_ref(server_id), SecretString::from(value))?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Explizites Entfernen (Spec 0018, Abschnitt 4) — "Feld leer lassen"
+/// bedeutet bereits "unverändert" (s. [`resolve_sudo_password`]), ein
+/// einmal gesetztes Sudo-Passwort braucht daher einen eigenen Weg, um es
+/// wieder zu löschen. Best-effort: ein bereits fehlender Eintrag ist kein
+/// Fehler.
+pub fn clear_sudo_password(credential_store: &dyn CredentialStore, server_id: ServerId) {
+    let _ = credential_store.delete(&sudo_password_credential_ref(server_id));
+}
+
 /// Schreibt `provided` unter `ref_`, falls gesetzt; ist `provided` leer
 /// und der Slot existierte bereits (Update, unverändert), passiert nichts
 /// — der alte Wert bleibt unter demselben `ref_` stehen. Existierte der
@@ -361,5 +401,66 @@ mod tests {
 
         assert!(secret_value(&store, &key_ref).is_none());
         assert!(secret_value(&store, &passphrase_ref).is_none());
+    }
+
+    // --- Spec 0018: Sudo-Passwort ------------------------------------------
+
+    #[test]
+    fn test_resolve_sudo_password_stores_provided_value() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        resolve_sudo_password(&store, id, Some("hunter2".to_string())).unwrap();
+
+        assert_eq!(
+            secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
+            Some("hunter2")
+        );
+    }
+
+    #[test]
+    fn test_resolve_sudo_password_none_or_empty_leaves_nothing_stored() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        resolve_sudo_password(&store, id, None).unwrap();
+        resolve_sudo_password(&store, id, Some(String::new())).unwrap();
+
+        assert!(secret_value(&store, &sudo_password_credential_ref(id)).is_none());
+    }
+
+    #[test]
+    fn test_resolve_sudo_password_empty_value_on_update_leaves_existing_unchanged() {
+        let id = ServerId::new();
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(id), "old-password");
+
+        // Leeres Feld bei "update" bedeutet unverändert (Spec 0018,
+        // Abschnitt 4) — kein Löschen, kein Überschreiben.
+        resolve_sudo_password(&store, id, Some(String::new())).unwrap();
+
+        assert_eq!(
+            secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
+            Some("old-password")
+        );
+    }
+
+    #[test]
+    fn test_clear_sudo_password_removes_stored_value() {
+        let id = ServerId::new();
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(id), "hunter2");
+
+        clear_sudo_password(&store, id);
+
+        assert!(secret_value(&store, &sudo_password_credential_ref(id)).is_none());
+    }
+
+    #[test]
+    fn test_clear_sudo_password_on_already_missing_entry_does_not_panic() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        clear_sudo_password(&store, id);
     }
 }

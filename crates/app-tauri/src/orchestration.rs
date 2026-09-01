@@ -221,12 +221,17 @@ async fn handle_action_proposed(
         None
     };
 
+    let previous_note_content = previous_note_content_for_action(&action, session, profile_store).await;
+    let uses_password = uses_stored_sudo_password(session, &action);
+
     emit_chat_action_proposed(
         emitter,
         session_id,
         action_id,
         action.clone(),
         decision.clone(),
+        previous_note_content,
+        uses_password,
     );
 
     match decision {
@@ -368,6 +373,8 @@ async fn handle_user_decision(
                             Uuid::new_v4(),
                             blocked,
                             Decision::Deny { reason },
+                            None,
+                            false,
                         );
                         return false;
                     }
@@ -436,6 +443,42 @@ async fn execute_action(
     }
 }
 
+/// Spec 0018, Abschnitt 3: erkennt einen `sudo`/`doas`-Aufruf, der das
+/// **gesamte** Kommando bildet (kein Treffer mitten in einer Kommandokette,
+/// s. Spec-Dokument für die bewusste Einschränkung). Liefert bei Treffer
+/// das Präfix (`"sudo"`/`"doas"`) zurück.
+fn detect_elevation_prefix(command: &str) -> Option<&'static str> {
+    let trimmed = command.trim_start();
+    ["sudo", "doas"].into_iter().find(|&prefix| {
+        trimmed
+            .strip_prefix(prefix)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
+    })
+}
+
+/// Spec 0018, Abschnitt 5: liefert das für `-S`+Stdin-Passworteingabe
+/// vorbereitete Kommando, falls `command` elevation-fähig ist und noch kein
+/// eigenes `-S`/`-A`-Flag enthält (dann haben KI/Nutzer die
+/// Passworteingabe bereits selbst vorgesehen, nicht gegensteuern).
+fn command_with_stdin_password_flag(command: &str) -> Option<String> {
+    let prefix = detect_elevation_prefix(command)?;
+    if command.contains("-S") || command.contains("-A") {
+        return None;
+    }
+    let trimmed = command.trim_start();
+    let rest = &trimmed[prefix.len()..];
+    Some(format!("{prefix} -S{rest}"))
+}
+
+/// Spec 0018, Abschnitt 7: ob beim Ausführen dieser Aktion automatisch ein
+/// hinterlegtes Sudo-Passwort eingespeist würde — für den Transparenz-
+/// Hinweis im Bestätigungsdialog (nur relevant für `SuggestCommand`, nie
+/// für `ProposeNoteUpdate`/`GenerateDocument`).
+fn uses_stored_sudo_password(session: &Session, action: &AiAction) -> bool {
+    session.sudo_password.is_some()
+        && matches!(action, AiAction::SuggestCommand { command } if detect_elevation_prefix(command).is_some())
+}
+
 async fn execute_suggested_command(
     session: &Session,
     session_id: SessionId,
@@ -443,10 +486,30 @@ async fn execute_suggested_command(
     command: String,
     emitter: &dyn EventEmitter,
 ) -> bool {
+    // Spec 0018, Abschnitt 5: nur umschreiben/Stdin füttern, wenn tatsächlich
+    // ein Passwort hinterlegt ist — sonst unverändertes Verhalten
+    // (`execute()` wie bisher, scheitert wie gewohnt ohne TTY).
+    let effective_command = session
+        .sudo_password
+        .as_ref()
+        .and_then(|_| command_with_stdin_password_flag(&command));
+
     let raw_output = {
         let mut transport = session.transport.lock().await;
-        transport.execute(&command).await
+        match (&effective_command, &session.sudo_password) {
+            (Some(rewritten), Some(password)) => {
+                use secrecy::ExposeSecret;
+                let mut stdin = password.expose_secret().as_bytes().to_vec();
+                stdin.push(b'\n');
+                transport.execute_with_stdin(rewritten, &stdin).await
+            }
+            _ => transport.execute(&command).await,
+        }
     };
+    // Spec 0018, Abschnitt 5: das tatsächlich ausgeführte Kommando (mit
+    // `-S`, ohne Passwort) landet in Ergebnis-Event/Log/Kontext — voll
+    // transparent, da nie das Passwort selbst enthalten.
+    let command = effective_command.unwrap_or(command);
 
     match raw_output {
         Ok(output) => {
@@ -565,6 +628,29 @@ async fn resolve_note_target(
             })?;
             Ok(NoteTarget::Group(group_id))
         }
+    }
+}
+
+/// Spec 0019, Abschnitt 3: aktueller Inhalt des aufgelösten Ziels, damit das
+/// Frontend eine Diff-Vorschau (alt/neu) statt nur des vollen neuen Texts
+/// zeigen kann (Spec 0003, Abschnitt 5.2 verlangt das bereits, war aber nie
+/// vollständig umgesetzt). `None` für alle anderen Aktionstypen sowie wenn
+/// die Zielauflösung fehlschlägt (z. B. Server inzwischen gelöscht) — dann
+/// zeigt das Frontend den neuen Inhalt ohne Diff-Hervorhebung, kein Fehler.
+async fn previous_note_content_for_action(
+    action: &AiAction,
+    session: &Session,
+    profile_store: &dyn ProfileStore,
+) -> Option<String> {
+    let AiAction::ProposeNoteUpdate { target, .. } = action else {
+        return None;
+    };
+    let resolved = resolve_note_target(*target, session, profile_store)
+        .await
+        .ok()?;
+    match resolved {
+        NoteTarget::Server(id) => profile_store.get_server(&id).await.ok().map(|s| s.notes),
+        NoteTarget::Group(id) => profile_store.get_group(&id).await.ok().map(|g| g.notes),
     }
 }
 
@@ -766,14 +852,20 @@ pub async fn suggest_note_update_on_disconnect(
     };
 
     let action_id: ActionId = Uuid::new_v4();
+    let proposed_action = AiAction::ProposeNoteUpdate {
+        target,
+        new_content: new_content.clone(),
+    };
+    // Spec 0019, Abschnitt 3: dieselbe Diff-Grundlage wie beim regulären
+    // In-Chat-Vorschlag (`handle_action_proposed`).
+    let previous_note_content =
+        previous_note_content_for_action(&proposed_action, session, profile_store).await;
     emit_note_update_suggested(
         emitter,
         session_id,
         action_id,
-        AiAction::ProposeNoteUpdate {
-            target,
-            new_content: new_content.clone(),
-        },
+        proposed_action,
+        previous_note_content,
     );
 
     let rx = action_confirmations.register(action_id);
@@ -887,12 +979,24 @@ mod tests {
     #[derive(Default)]
     struct MockSshTransport {
         responses: HashMap<String, CommandOutput>,
+        /// Spec 0018: geteilter Handle (analog zu
+        /// `MockAiProvider::received_contexts`), damit ein Test nach dem
+        /// Lauf prüfen kann, mit welchem (ggf. umgeschriebenen) Kommando und
+        /// welchem Stdin-Inhalt `execute_with_stdin` tatsächlich aufgerufen
+        /// wurde.
+        stdin_calls: StdinCalls,
     }
+
+    type StdinCalls = Arc<StdMutex<Vec<(String, Vec<u8>)>>>;
 
     impl MockSshTransport {
         fn with_response(mut self, command: impl Into<String>, output: CommandOutput) -> Self {
             self.responses.insert(command.into(), output);
             self
+        }
+
+        fn stdin_calls_handle(&self) -> StdinCalls {
+            self.stdin_calls.clone()
         }
     }
 
@@ -902,6 +1006,18 @@ mod tests {
             self.responses.get(command).cloned().ok_or_else(|| {
                 SshError::ChannelError(format!("kein Mock-Response für '{command}'"))
             })
+        }
+
+        async fn execute_with_stdin(
+            &mut self,
+            command: &str,
+            stdin: &[u8],
+        ) -> Result<CommandOutput, SshError> {
+            self.stdin_calls
+                .lock()
+                .unwrap()
+                .push((command.to_string(), stdin.to_vec()));
+            self.execute(command).await
         }
 
         async fn open_shell(
@@ -1001,6 +1117,7 @@ mod tests {
             redactor: Box::new(DefaultOutputRedactor::new()),
             ai_provider_label: "test-provider".to_string(),
             ai_model: "test-model".to_string(),
+            sudo_password: None,
             status: StdMutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
         }
@@ -1076,6 +1193,215 @@ mod tests {
             history[0].content,
             MessageContent::CommandResult { .. }
         ));
+    }
+
+    // --- Spec 0018: Sudo-Passwort -----------------------------------------
+
+    #[test]
+    fn test_detect_elevation_prefix_matches_leading_sudo_and_doas() {
+        assert_eq!(detect_elevation_prefix("sudo apt update"), Some("sudo"));
+        assert_eq!(detect_elevation_prefix("  sudo apt update"), Some("sudo"));
+        assert_eq!(detect_elevation_prefix("doas apt update"), Some("doas"));
+        assert_eq!(detect_elevation_prefix("sudo"), Some("sudo"));
+    }
+
+    #[test]
+    fn test_detect_elevation_prefix_rejects_partial_word_match() {
+        // "sudoku" darf nicht als "sudo"-Präfix erkannt werden.
+        assert_eq!(detect_elevation_prefix("sudoku --help"), None);
+    }
+
+    #[test]
+    fn test_detect_elevation_prefix_ignores_sudo_mid_chain() {
+        // Spec 0018, Abschnitt 3: bewusst keine Erkennung mitten in einer
+        // Kommandokette.
+        assert_eq!(detect_elevation_prefix("cd /var/log && sudo tail -f x"), None);
+    }
+
+    #[test]
+    fn test_command_with_stdin_password_flag_inserts_dash_s() {
+        assert_eq!(
+            command_with_stdin_password_flag("sudo systemctl restart nginx"),
+            Some("sudo -S systemctl restart nginx".to_string())
+        );
+    }
+
+    #[test]
+    fn test_command_with_stdin_password_flag_none_for_non_elevated_command() {
+        assert_eq!(command_with_stdin_password_flag("ls -la"), None);
+    }
+
+    #[test]
+    fn test_command_with_stdin_password_flag_leaves_existing_dash_s_untouched() {
+        // KI/Nutzer hat die Passworteingabe bereits selbst vorgesehen —
+        // nicht gegensteuern (s. Doc-Kommentar).
+        assert_eq!(
+            command_with_stdin_password_flag("sudo -S apt update"),
+            None
+        );
+    }
+
+    /// Kern von Spec 0018, Abschnitt 5: ein hinterlegtes Sudo-Passwort wird
+    /// über `execute_with_stdin` eingespeist, das Kommando dabei um `-S`
+    /// ergänzt — sowohl im tatsächlichen Transport-Aufruf als auch im
+    /// `chat-action-result`/Kontext-Eintrag (volle Transparenz, s.
+    /// Spec-Dokument Abschnitt 5, letzter Absatz).
+    #[tokio::test]
+    async fn test_sudo_command_with_stored_password_uses_stdin_and_rewritten_command() {
+        let transport = MockSshTransport::default()
+            .with_response("sudo -S systemctl restart nginx", output("done"));
+        // Handle vor dem Verschieben von `transport` in die Session ziehen
+        // (analog zu `MockAiProvider::received_contexts_handle`).
+        let stdin_calls = transport.stdin_calls_handle();
+
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "sudo systemctl restart nginx".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            transport,
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(
+            event_names,
+            vec!["chat-action-proposed", "chat-action-result"]
+        );
+        let (_, result_payload) = &events[1];
+        assert_eq!(
+            result_payload["result"]["command"],
+            "sudo -S systemctl restart nginx",
+            "das tatsächlich ausgeführte Kommando (mit -S) muss im Ergebnis-Event stehen"
+        );
+
+        let history = session.context.lock().await.history.clone();
+        assert!(matches!(
+            &history[0].content,
+            MessageContent::CommandResult { command, .. } if command == "sudo -S systemctl restart nginx"
+        ));
+
+        let calls = stdin_calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "execute_with_stdin muss genau einmal aufgerufen werden");
+        assert_eq!(calls[0].0, "sudo -S systemctl restart nginx");
+        assert_eq!(
+            calls[0].1,
+            b"hunter2\n".to_vec(),
+            "das Passwort muss gefolgt von einem Zeilenumbruch als Stdin ankommen"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sudo_command_without_stored_password_runs_unchanged_via_plain_execute() {
+        // Kein `session.sudo_password` gesetzt (Default) — Regression: das
+        // bekannte, unveränderte Fehlverhalten von `sudo` ohne TTY bleibt
+        // erhalten (kein automatisches Umschreiben ohne hinterlegtes
+        // Passwort), s. Spec 0018, Abschnitt 5, Punkt 2.
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "sudo systemctl restart nginx".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default()
+                .with_response("sudo systemctl restart nginx", output("done")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, result_payload) = &events[1];
+        assert_eq!(result_payload["result"]["command"], "sudo systemctl restart nginx");
+    }
+
+    #[tokio::test]
+    async fn test_chat_action_proposed_flags_uses_stored_sudo_password() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "sudo apt update".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default().with_response("sudo -S apt update", output("")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, proposed_payload) = &events[0];
+        assert_eq!(proposed_payload["usesStoredSudoPassword"], true);
+    }
+
+    #[tokio::test]
+    async fn test_chat_action_proposed_does_not_flag_sudo_usage_without_stored_password() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "sudo apt update".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default().with_response("sudo apt update", output("")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, proposed_payload) = &events[0];
+        assert_eq!(proposed_payload["usesStoredSudoPassword"], false);
     }
 
     #[tokio::test]
@@ -2168,6 +2494,114 @@ mod tests {
             revisions[0].target,
             NoteTarget::Server(expected_server_id)
         );
+    }
+
+    // --- Spec 0019: Notiz-Vorschau -----------------------------------------
+
+    /// Spec 0019, Abschnitt 3: `chat-action-proposed` trägt bei
+    /// `ProposeNoteUpdate` den *aktuellen* Notizinhalt des aufgelösten
+    /// Ziels mit — hier über den (im Gegensatz zum lokalen Test-Stub oben)
+    /// echten `test_support::InMemoryProfileStore` verifiziert, der
+    /// `get_server` tatsächlich beantwortet.
+    #[tokio::test]
+    async fn test_chat_action_proposed_includes_previous_note_content_for_note_update() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
+                    target: NoteTargetSelector::CurrentServer,
+                    new_content: "Neuer Inhalt".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let server_id = session.server_id;
+
+        let now = chrono::Utc::now();
+        let existing_server = Server {
+            id: server_id,
+            name: "srv".to_string(),
+            host: "example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: ssh_manager_core::profiles::AuthMethod::Agent,
+            notes: "Bisheriger Inhalt".to_string(),
+            jump_host: None,
+            created_at: now,
+            updated_at: now,
+        };
+        let profile_store =
+            crate::test_support::InMemoryProfileStore::new().with_server(existing_server);
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = async {
+            loop {
+                let action_id = {
+                    let events = emitter.events.lock().unwrap();
+                    events.iter().find_map(|(name, payload)| {
+                        (name == "chat-action-proposed")
+                            .then(|| payload["actionId"].as_str().unwrap().to_string())
+                    })
+                };
+                if let Some(action_id) = action_id {
+                    let action_id: ActionId = action_id.parse().unwrap();
+                    confirmations
+                        .resolve(&action_id, ActionUserDecision::Deny)
+                        .unwrap();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, proposed_payload) = &events[0];
+        assert_eq!(
+            proposed_payload["previousNoteContent"],
+            serde_json::json!("Bisheriger Inhalt")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_chat_action_proposed_omits_previous_note_content_for_suggest_command() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default().with_response("ls -la", output("")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, proposed_payload) = &events[0];
+        assert_eq!(proposed_payload["previousNoteContent"], serde_json::json!(null));
     }
 
     // --- Spec 0016: Strukturiertes Logging & Diagnose ----------------------

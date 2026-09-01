@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { commandErrorMessage, respondToAction } from "../api";
 import { onNoteUpdateSuggested } from "../events";
 import type { NoteUpdateSuggestedEvent } from "../types";
+import { NoteDiffPreview } from "./NoteDiffPreview";
 
 interface PendingSuggestion {
   sessionId: string;
@@ -11,6 +12,9 @@ interface PendingSuggestion {
    * keine, das Backend löst sie selbst auf `session.server_id` auf. */
   targetKind: "server" | "group";
   newContent: string;
+  /** Spec 0019, Abschnitt 3/4: aktueller Inhalt des Ziels, für die
+   * Diff-Vorschau statt des vollen neuen Texts. */
+  previousNoteContent: string | null;
   /** Kompakte Ansicht per Default (Spec 0010, Abschnitt 2, Punkt 6: "dezente
    * Benachrichtigung statt eines blockierenden Modals") — erst nach Klick
    * auf "Anzeigen" wird der Inhalt (das "Dialog"-Äquivalent) eingeblendet. */
@@ -48,6 +52,7 @@ export function NoteSuggestionToast() {
           actionId: event.actionId,
           targetKind: targetKindFromEvent(event),
           newContent: event.action.ProposeNoteUpdate.new_content,
+          previousNoteContent: event.previousNoteContent,
           expanded: false,
           deciding: false,
           error: null,
@@ -118,9 +123,12 @@ export function NoteSuggestionToast() {
               <p className="text-xs uppercase tracking-wide text-slate-400">
                 Notiz-Vorschlag ({suggestion.targetKind === "server" ? "dieser Server" : "dessen Gruppe"})
               </p>
-              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded bg-slate-950 p-2 text-xs text-slate-300">
-                {suggestion.newContent}
-              </pre>
+              <div className="max-h-40 overflow-y-auto">
+                <NoteDiffPreview
+                  previousContent={suggestion.previousNoteContent}
+                  newContent={suggestion.newContent}
+                />
+              </div>
               {suggestion.error && <p className="text-xs text-red-400">{suggestion.error}</p>}
               <div className="flex gap-2">
                 <button
