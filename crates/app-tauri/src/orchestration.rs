@@ -248,8 +248,15 @@ async fn handle_action_proposed(
             false
         }
         Decision::Confirm { .. } => {
+            // Spec 0017, Abschnitt 5: Grundlage für den Hintergrund-Tab-
+            // Indikator (`SessionSummaryDto.has_pending_action`) — gesetzt,
+            // solange auf `rx` gewartet wird, in jedem Fall (Erfolg wie
+            // Abbruch) direkt danach wieder gelöscht.
+            *session.pending_action.lock().unwrap() = Some(action_id);
             let rx = confirm_rx.expect("confirm_rx muss registriert sein");
-            let Ok(user_decision) = rx.await else {
+            let recv_result = rx.await;
+            *session.pending_action.lock().unwrap() = None;
+            let Ok(user_decision) = recv_result else {
                 // Sender wurde gedroppt (z. B. App beendet, bevor der
                 // Nutzer reagiert hat) — kein Absturz, einfach nichts
                 // ausführen.
@@ -819,7 +826,7 @@ mod tests {
 
     use super::*;
     use crate::events::TestEmitter;
-    use crate::session::Session;
+    use crate::session::{Session, SessionManager};
 
     /// Konfigurierbar mit einer Sequenz von Runden (je ein `Vec<AiEvent>`
     /// pro `send()`-Aufruf) — nötig, um die automatische Folgerunde aus
@@ -976,7 +983,7 @@ mod tests {
     }
 
     fn session_with_ai_provider(
-        ai_provider: MockAiProvider,
+        ai_provider: impl AiProvider + 'static,
         transport: MockSshTransport,
     ) -> Session {
         Session {
@@ -994,6 +1001,8 @@ mod tests {
             redactor: Box::new(DefaultOutputRedactor::new()),
             ai_provider_label: "test-provider".to_string(),
             ai_model: "test-model".to_string(),
+            status: StdMutex::new(crate::events::ConnectionStatus::Connected),
+            pending_action: StdMutex::new(None),
         }
     }
 
@@ -1431,6 +1440,102 @@ mod tests {
         assert!(history
             .iter()
             .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("3 Tagen"))));
+    }
+
+    /// Aufgabenstellung Teil 1, Punkt 2/5 (Spec 0017, Abschnitt 2, letzter
+    /// Absatz): eine langsame KI-Antwort in einer Session darf einen
+    /// zeitnahen Befehl in einer anderen Session nicht ausbremsen. Session A
+    /// bekommt einen `AiProvider`, dessen `send()`-Stream erst nach 300ms
+    /// überhaupt das erste Element liefert (simuliert einen langsamen/
+    /// hängenden KI-Stream) — währenddessen muss `run_chat_turn` für Session
+    /// B (über denselben `SessionManager`, wie es zwei parallele
+    /// `send_chat_message`-Aufrufe für zwei offene Tabs täten) deutlich unter
+    /// dieser Zeit fertig werden. Schlägt fehl, falls `SessionManager` doch
+    /// einen Lock über die gesamte Map hinweg über einen Await-Punkt hält
+    /// (die Regression, vor der Spec 0017 warnt) oder falls `Session`s
+    /// `context`/`transport`-Mutexe session-übergreifend geteilt würden statt
+    /// pro Session zu existieren.
+    struct SlowAiProvider {
+        delay: std::time::Duration,
+    }
+
+    impl AiProvider for SlowAiProvider {
+        fn send(
+            &self,
+            _context: SessionContext,
+        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+            let delay = self.delay;
+            Box::pin(futures::stream::once(async move {
+                tokio::time::sleep(delay).await;
+                AiEvent::Done
+            }))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_slow_session_does_not_block_concurrent_session_via_shared_manager() {
+        let manager = SessionManager::new();
+        let id_slow = Uuid::new_v4();
+        let id_fast = Uuid::new_v4();
+
+        manager.insert(
+            id_slow,
+            Arc::new(session_with_ai_provider(
+                SlowAiProvider {
+                    delay: std::time::Duration::from_millis(300),
+                },
+                MockSshTransport::default(),
+            )),
+        );
+        manager.insert(
+            id_fast,
+            Arc::new(test_session(vec![AiEvent::Done], MockSshTransport::default())),
+        );
+
+        let session_slow = manager.get(id_slow).unwrap();
+        let session_fast = manager.get(id_fast).unwrap();
+        let emitter_slow = TestEmitter::default();
+        let emitter_fast = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let slow_turn = run_chat_turn(
+            &session_slow,
+            id_slow,
+            &emitter_slow,
+            &profile_store,
+            &confirmations,
+        );
+
+        // `SessionManager::get` für Session B während Session A noch mitten
+        // in ihrem (langsamen) Turn steckt — genau das, was ein zweiter,
+        // gleichzeitiger `send_chat_message`-Aufruf für einen anderen Tab
+        // täte.
+        let fast_turn = async {
+            tokio::time::timeout(
+                std::time::Duration::from_millis(100),
+                run_chat_turn(
+                    &session_fast,
+                    id_fast,
+                    &emitter_fast,
+                    &profile_store,
+                    &confirmations,
+                ),
+            )
+            .await
+            .expect(
+                "Session B wurde durch die langsame Session A blockiert — \
+                 SessionManager/Session-Locks sperren offenbar über Sessions hinweg",
+            )
+        };
+
+        tokio::join!(slow_turn, fast_turn);
+
+        assert_eq!(
+            emitter_fast.events.lock().unwrap().len(),
+            0,
+            "Session B hat nur `Done` erhalten, keine sichtbaren Events erwartet"
+        );
     }
 
     /// Sicherheitsgrenze: eine KI, die in jeder Runde erneut ein Kommando

@@ -29,7 +29,7 @@ use crate::dto::{
     credential_ref_for, ActionUserDecision, AiProviderConfigDto, AiProviderConfigInput,
     DeleteGroupResult, DocumentFormat, EvalContextInput, EvaluationTraceDto, GroupDto,
     HostKeyUserDecision, NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType, RuleDto,
-    RuleInput, ServerDto, ServerInput, TestConnectionResult,
+    RuleInput, ServerDto, ServerInput, SessionSummaryDto, TestConnectionResult,
 };
 use crate::error::CommandResult;
 use crate::events::{
@@ -255,6 +255,14 @@ pub async fn connect(
                 );
 
                 let rx = state.pending_host_key_confirmations.register(session_id);
+                // Spec 0017, Abschnitt 2: solange `connect()` hier auf die
+                // Nutzerentscheidung wartet, existiert `session_id` noch in
+                // keiner `Session` (die wird erst unten nach erfolgreichem
+                // Aufbau eingefügt) — ohne diesen Eintrag würde ein
+                // Frontend-Reload während eines offenen Host-Key-Dialogs den
+                // zugehörigen Tab in der wiederhergestellten Tab-Leiste
+                // verlieren.
+                state.sessions.register_pending_connection(session_id, server_id);
                 emit_host_key_verification_needed(
                     &app,
                     session_id,
@@ -265,7 +273,9 @@ pub async fn connect(
                     expected_fingerprint,
                 );
 
-                let Ok(user_decision) = rx.await else {
+                let user_decision_result = rx.await;
+                state.sessions.clear_pending_connection(session_id);
+                let Ok(user_decision) = user_decision_result else {
                     return Err("Verbindungsaufbau abgebrochen".into());
                 };
                 match user_decision {
@@ -324,6 +334,8 @@ pub async fn connect(
         redactor: Box::new(DefaultOutputRedactor::new()),
         ai_provider_label: active_config.display_name,
         ai_model: active_config.model,
+        status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
+        pending_action: std::sync::Mutex::new(None),
     });
     state.sessions.insert(session_id, session);
 
@@ -418,6 +430,7 @@ pub async fn open_terminal(
     *session.terminal.lock().unwrap() = Some(tx);
     spawn_terminal_actor(
         session_id,
+        Arc::clone(&session),
         shell,
         rx,
         Arc::new(app) as Arc<dyn EventEmitter>,
@@ -612,6 +625,39 @@ pub async fn disconnect(
     });
 
     Ok(())
+}
+
+// --- Spec 0017: Multi-Tab-Sessions -----------------------------------------
+
+/// Spec 0017, Abschnitt 2: maßgebliche Quelle dafür, welche Sessions
+/// tatsächlich offen sind — dient dem Wiederherstellen der Tab-Leiste beim
+/// Frontend-Neuladen (Dev-Modus/Hot-Reload), statt von einem leeren
+/// Frontend-State auszugehen. `server_name` wird hier (nicht in
+/// `SessionManager::snapshot`) aufgelöst, da `SessionManager` bewusst keinen
+/// `ProfileStore`-Zugriff hat (reines Session-Bookkeeping). Schlägt die
+/// Auflösung fehl (Server inzwischen gelöscht, während die Session noch
+/// offen ist), wird ein Platzhaltername verwendet statt den ganzen Aufruf
+/// mit `?` scheitern zu lassen — eine einzelne verwaiste Session soll nicht
+/// die gesamte Tab-Leisten-Wiederherstellung blockieren.
+#[tauri::command]
+pub async fn list_sessions(state: State<'_, AppState>) -> CommandResult<Vec<SessionSummaryDto>> {
+    let mut result = Vec::new();
+    for entry in state.sessions.snapshot() {
+        let server_name = state
+            .profile_store
+            .get_server(&entry.server_id)
+            .await
+            .map(|s| s.name)
+            .unwrap_or_else(|_| "Unbekannter Server".to_string());
+        result.push(SessionSummaryDto {
+            session_id: entry.session_id,
+            server_id: entry.server_id,
+            server_name,
+            status: entry.status,
+            has_pending_action: entry.has_pending_action,
+        });
+    }
+    Ok(result)
 }
 
 // --- Spec 0008: Gruppen --------------------------------------------------

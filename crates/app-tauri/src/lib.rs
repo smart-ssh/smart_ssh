@@ -128,6 +128,7 @@ pub fn run() {
             commands::send_chat_message,
             commands::respond_to_action,
             commands::disconnect,
+            commands::list_sessions,
             commands::list_groups,
             commands::create_group,
             commands::update_group,

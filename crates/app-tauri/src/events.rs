@@ -44,11 +44,21 @@ fn emit<T: Serialize>(emitter: &dyn EventEmitter, event: &str, payload: &T) {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectionStatus {
     Connected,
     Disconnected,
+    /// Spec 0017, Abschnitt 2: `list_sessions()`-Status für einen laufenden
+    /// `connect()`-Aufruf, der gerade auf `confirm_host_key` wartet — diese
+    /// Session existiert noch nicht in `SessionManager.sessions` (sie wird
+    /// erst nach erfolgreichem Verbindungsaufbau eingefügt, s.
+    /// `crate::commands::connect`), taucht aber über
+    /// `SessionManager.pending_connections` trotzdem in der Momentaufnahme
+    /// auf. Wird **nie** über `connection-status-changed` gesendet (dieses
+    /// Event kennt nur den Übergang Connected/Disconnected) — nur als
+    /// `SessionSummaryDto`-Feld relevant.
+    AwaitingHostKey,
 }
 
 #[derive(Debug, Clone, Serialize)]

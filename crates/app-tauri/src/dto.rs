@@ -17,6 +17,9 @@ use ssh_manager_core::profiles::{
 };
 use ssh_manager_core::shared::ServerId;
 
+use crate::events::ConnectionStatus;
+use crate::state::SessionId;
+
 /// Sicht auf einen [`Server`] für Liste und Bearbeiten-Formular (Spec
 /// 0007 Abschnitt 7 zunächst nur für die Liste eingeführt, Spec 0008
 /// Abschnitt 4 erweitert sie um die für das Formular nötigen Felder,
@@ -563,6 +566,25 @@ pub struct PatternSuggestionDto {
 pub enum DocumentFormat {
     Markdown,
     Word,
+}
+
+// --- Spec 0017: Multi-Tab-Sessions ---------------------------------------
+
+/// Sicht auf eine laufende (oder auf Host-Key-Bestätigung wartende) Session
+/// für die Tab-Leiste (Spec 0017, Abschnitt 2). `has_pending_action`
+/// steuert den Hinweis-Indikator auf Hintergrund-Tabs (Abschnitt 5) —
+/// bewusst nur ein `bool`, nicht die `ActionId` selbst: das Frontend
+/// erfährt Letztere ohnehin bereits aus dem zugehörigen
+/// `chat-action-proposed`-Event, sobald es zu diesem Tab wechselt und den
+/// Dialog tatsächlich zeigt.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionSummaryDto {
+    pub session_id: SessionId,
+    pub server_id: ServerId,
+    pub server_name: String,
+    pub status: ConnectionStatus,
+    pub has_pending_action: bool,
 }
 
 #[cfg(test)]
