@@ -11,6 +11,12 @@ pub enum SshError {
     Timeout,
     JumpHostCycle,
     CredentialResolutionFailed(String),
+    /// Spec 0020, Abschnitt 4.3: fehlende Rechte bei einem SFTP-Datei-
+    /// zugriff — eigene Variante statt in `ChannelError` verpackt, damit die
+    /// App-Ebene zuverlässig danach unterscheiden kann (Sudo-Rechte-
+    /// Fallback für `WriteRemoteFile`), ohne den Fehlertext parsen zu
+    /// müssen.
+    SftpPermissionDenied(String),
 }
 
 impl fmt::Display for SshError {
@@ -25,6 +31,7 @@ impl fmt::Display for SshError {
             SshError::CredentialResolutionFailed(msg) => {
                 write!(f, "Credential-Auflösung fehlgeschlagen: {msg}")
             }
+            SshError::SftpPermissionDenied(msg) => write!(f, "Zugriff verweigert: {msg}"),
         }
     }
 }

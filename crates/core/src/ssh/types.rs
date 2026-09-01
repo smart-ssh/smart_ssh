@@ -34,6 +34,21 @@ pub struct ConnectionTarget {
     pub hops: Vec<Hop>,
 }
 
+/// Ein Eintrag in einem Remote-Verzeichnis (Spec 0020, Abschnitt 3).
+/// `permissions` sind die reinen Unix-Rechte-Bits (`0o755`-Stil, ohne die
+/// Dateityp-Bits aus `st_mode`) — für die Dateibrowser-Anzeige (Spec 0020,
+/// Abschnitt 5.1: "Rechte"-Spalte) reicht das, `is_dir` trägt die
+/// Typinformation bereits separat.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub size: u64,
+    pub permissions: u32,
+    pub modified: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 /// Ergebnis einer Host-Key-Prüfung, Trust-on-First-Use (Spec 0005,
 /// Abschnitt 6).
 #[derive(Debug, Clone, PartialEq, Eq)]

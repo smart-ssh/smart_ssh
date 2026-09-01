@@ -11,10 +11,19 @@ path = "src/lib.rs"
 [dependencies]
 async-trait = "0.1.92"
 bytes = "1.12.1"
+chrono = "0.4.45"
 russh = "0.63.1"
+russh-sftp = "2.4.0"
 secrecy = "0.10.3"
 ssh-manager-core = { version = "0.1.0", path = "../core" }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync"] }
 
 [dev-dependencies]
 rand = "0.10.2"
+tempfile = "3.27.0"
+# `fs`: nur für die Test-Fixture (`tests/fixtures/test_server.rs`) nötig,
+# die das SFTP-Subsystem gegen echte lokale Dateien bedient (Spec 0020,
+# Abschnitt 6) — die eigentliche `ssh-transport`-Bibliothek selbst braucht
+# kein lokales Dateisystem, deshalb hier statt im normalen `[dependencies]`-
+# Block.
+tokio = { version = "1.53.1", features = ["fs"] }

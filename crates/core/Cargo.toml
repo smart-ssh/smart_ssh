@@ -8,6 +8,13 @@ license.workspace = true
 name = "ssh_manager_core"
 path = "src/lib.rs"
 
+[features]
+# Spec 0020, Abschnitt 6: macht `ssh::mock::MockSftpSession` auch außerhalb
+# dieser Crate nutzbar (ein reines `#[cfg(test)]`-Modul wäre nur innerhalb
+# von `core`s eigenen Tests sichtbar) — abhängige Crates aktivieren es unter
+# `[dev-dependencies]`, sodass es nie in einen Release-Build gerät.
+test-support = []
+
 [dependencies]
 async-trait = "0.1.92"
 chrono = { version = "0.4.45", features = ["serde"] }

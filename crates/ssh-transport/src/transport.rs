@@ -1,11 +1,14 @@
 use async_trait::async_trait;
 use russh::client::{Handle, Msg};
 use russh::{Channel, ChannelMsg};
-use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize, SshError, SshTransport};
+use ssh_manager_core::ssh::{
+    CommandOutput, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
+};
 
 use crate::error::map_russh_error;
 use crate::exec::accumulate_exec_output;
 use crate::handler::ClientHandler;
+use crate::sftp::RusshSftpSession;
 use crate::shell::RusshShell;
 
 /// `russh`-gestützte Implementierung von `SshTransport` (Spec 0005,
@@ -97,6 +100,25 @@ impl SshTransport for RusshTransport {
             .map_err(map_russh_error)?;
         channel.request_shell(true).await.map_err(map_russh_error)?;
         Ok(Box::new(RusshShell { channel }))
+    }
+
+    /// Spec 0020, Abschnitt 3: `sftp`-Subsystem-Channel derselben
+    /// Verbindung — kein zweiter Verbindungsaufbau, keine erneute Auth/
+    /// Host-Key-Prüfung.
+    async fn open_sftp(&mut self) -> Result<Box<dyn SftpSession>, SshError> {
+        let channel = self
+            .handle
+            .channel_open_session()
+            .await
+            .map_err(map_russh_error)?;
+        channel
+            .request_subsystem(true, "sftp")
+            .await
+            .map_err(map_russh_error)?;
+        let client = russh_sftp::client::SftpSession::new(channel.into_stream())
+            .await
+            .map_err(|e| SshError::ChannelError(format!("SFTP-Init fehlgeschlagen: {e}")))?;
+        Ok(Box::new(RusshSftpSession::new(client)))
     }
 
     async fn disconnect(&mut self) -> Result<(), SshError> {

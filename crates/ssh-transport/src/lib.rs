@@ -8,6 +8,7 @@ mod error;
 mod exec;
 mod handler;
 mod host_key;
+mod sftp;
 mod shell;
 mod transport;
 

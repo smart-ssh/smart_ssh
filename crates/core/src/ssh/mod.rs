@@ -11,6 +11,8 @@ mod auth;
 mod error;
 mod host_key;
 mod jump_host;
+#[cfg(any(test, feature = "test-support"))]
+pub mod mock;
 mod transport;
 mod types;
 
@@ -21,5 +23,5 @@ pub use auth::{resolve_auth, ResolvedAuth};
 pub use error::SshError;
 pub use host_key::HostKeyStore;
 pub use jump_host::resolve_connection_target;
-pub use transport::{InteractiveShell, SshTransport};
-pub use types::{CommandOutput, ConnectionTarget, Hop, HostKeyDecision, PtySize};
+pub use transport::{InteractiveShell, SftpSession, SshTransport};
+pub use types::{CommandOutput, ConnectionTarget, Hop, HostKeyDecision, PtySize, RemoteEntry};

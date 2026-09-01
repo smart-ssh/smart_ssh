@@ -21,7 +21,7 @@ use ssh_manager_core::ssh::{
 };
 use ssh_transport::ConnectOutcome;
 
-use fixtures::test_server::{RunningTestServer, TEST_PASSWORD, TEST_USERNAME};
+use fixtures::test_server::{sftp_local_path, RunningTestServer, TEST_PASSWORD, TEST_USERNAME};
 
 const PASSWORD_CREDENTIAL: &str = "test-password-credential";
 
@@ -299,4 +299,116 @@ async fn test_unknown_host_key_pauses_then_trust_continues() {
             panic!("nach trust() hätte die Verbindung gelingen müssen")
         }
     }
+}
+
+// --- Spec 0020, Abschnitt 6: SFTP-Integrationstests ------------------------
+
+/// Upload (write_file) und Download (read_file) im selben Test: schreibt
+/// über SFTP, verifiziert den Inhalt direkt auf der lokalen Festplatte
+/// (echter Server-Effekt, nicht nur der Rückgabewert des Aufrufs), liest
+/// danach über SFTP zurück und vergleicht.
+#[tokio::test]
+async fn test_sftp_upload_download_roundtrip() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    let mut sftp = transport.open_sftp().await.expect("open_sftp() sollte gelingen");
+
+    sftp.write_file("/roundtrip.txt", b"hallo sftp")
+        .await
+        .expect("write_file() sollte gelingen");
+
+    let on_disk = std::fs::read(sftp_local_path(&server, "/roundtrip.txt"))
+        .expect("Datei sollte auf der lokalen Festplatte des Testservers liegen");
+    assert_eq!(on_disk, b"hallo sftp");
+
+    let read_back = sftp
+        .read_file("/roundtrip.txt")
+        .await
+        .expect("read_file() sollte gelingen");
+    assert_eq!(read_back, b"hallo sftp");
+}
+
+/// Verzeichnisauflistung: mehrere Dateien lokal vorab anlegen, per SFTP
+/// auflisten, Namen und Größen prüfen.
+#[tokio::test]
+async fn test_sftp_list_dir() {
+    let server = RunningTestServer::start().await;
+    std::fs::write(sftp_local_path(&server, "/a.txt"), b"eins").unwrap();
+    std::fs::write(sftp_local_path(&server, "/b.txt"), b"zwei-zwei").unwrap();
+    std::fs::create_dir(sftp_local_path(&server, "/subdir")).unwrap();
+
+    let mut transport = connect_trusted(&server).await;
+    let mut sftp = transport.open_sftp().await.expect("open_sftp() sollte gelingen");
+
+    let mut entries = sftp.list_dir("/").await.expect("list_dir() sollte gelingen");
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+
+    assert_eq!(entries.len(), 3);
+    assert_eq!(entries[0].name, "a.txt");
+    assert_eq!(entries[0].size, 4);
+    assert!(!entries[0].is_dir);
+    assert_eq!(entries[1].name, "b.txt");
+    assert_eq!(entries[1].size, 9);
+    assert_eq!(entries[2].name, "subdir");
+    assert!(entries[2].is_dir);
+}
+
+/// Rename: Datei über SFTP umbenennen, alten/neuen Pfad lokal verifizieren.
+#[tokio::test]
+async fn test_sftp_rename() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    let mut sftp = transport.open_sftp().await.expect("open_sftp() sollte gelingen");
+
+    sftp.write_file("/old-name.txt", b"inhalt")
+        .await
+        .expect("write_file() sollte gelingen");
+    sftp.rename("/old-name.txt", "/new-name.txt")
+        .await
+        .expect("rename() sollte gelingen");
+
+    assert!(!sftp_local_path(&server, "/old-name.txt").exists());
+    assert_eq!(
+        std::fs::read(sftp_local_path(&server, "/new-name.txt")).unwrap(),
+        b"inhalt"
+    );
+}
+
+/// Delete (remove): Datei über SFTP löschen, lokal verifizieren, dass sie
+/// weg ist.
+#[tokio::test]
+async fn test_sftp_delete() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    let mut sftp = transport.open_sftp().await.expect("open_sftp() sollte gelingen");
+
+    sftp.write_file("/to-delete.txt", b"weg damit")
+        .await
+        .expect("write_file() sollte gelingen");
+    assert!(sftp_local_path(&server, "/to-delete.txt").exists());
+
+    sftp.remove("/to-delete.txt")
+        .await
+        .expect("remove() sollte gelingen");
+
+    assert!(!sftp_local_path(&server, "/to-delete.txt").exists());
+}
+
+/// Stat: Größe und Verzeichnis-Flag einer existierenden Datei korrekt
+/// gemeldet; ein nicht existierender Pfad liefert einen Fehler statt eines
+/// Platzhalter-Ergebnisses.
+#[tokio::test]
+async fn test_sftp_stat() {
+    let server = RunningTestServer::start().await;
+    std::fs::write(sftp_local_path(&server, "/stat-me.txt"), b"thirteen char").unwrap();
+
+    let mut transport = connect_trusted(&server).await;
+    let mut sftp = transport.open_sftp().await.expect("open_sftp() sollte gelingen");
+
+    let entry = sftp.stat("/stat-me.txt").await.expect("stat() sollte gelingen");
+    assert_eq!(entry.size, 13);
+    assert!(!entry.is_dir);
+
+    let missing = sftp.stat("/does-not-exist.txt").await;
+    assert!(missing.is_err());
 }
