@@ -129,13 +129,22 @@ pub enum NoteTargetSelector {
 
 /// Von der KI vorgeschlagene Aktion (Spec 0003, Abschnitt 5.2; erweitert um
 /// `GenerateDocument` in Spec 0012, Abschnitt 2; `ProposeNoteUpdate.target`
-/// auf [`NoteTargetSelector`] umgestellt in Spec 0016, Abschnitt 6). Nur
+/// auf [`NoteTargetSelector`] umgestellt in Spec 0016, Abschnitt 6; erweitert
+/// um `ReadRemoteFile`/`WriteRemoteFile` in Spec 0020, Abschnitt 4). Nur
 /// `SuggestCommand` läuft durch die Filter-Engine (Spec 0002) — die betrifft
 /// ausschließlich Shell-Kommandos. `ProposeNoteUpdate` ist immer manuell zu
 /// bestätigen (Diff-Ansicht), nie automatisch übernehmbar. `GenerateDocument`
 /// läuft weder durch die Filter-Engine noch durch einen Bestätigungsdialog —
 /// es erzeugt reinen lokalen Inhalt, nichts wird ungefragt auf die
-/// Festplatte geschrieben (Spec 0012, Abschnitt 2).
+/// Festplatte geschrieben (Spec 0012, Abschnitt 2). `ReadRemoteFile`/
+/// `WriteRemoteFile` laufen — wie `SuggestCommand` — durch die Filter-Engine
+/// (über die Pseudokommandos `sftp-read`/`sftp-write`, s.
+/// `app_tauri::orchestration::evaluate_action`), `WriteRemoteFile` bekommt
+/// dabei aber nie `AutoExec` (Spec 0020, Abschnitt 4.2, Punkt 2). Bewusst
+/// **keine** `RemoveRemoteFile`/`RenameRemoteFile`/`CreateRemoteDir`-
+/// Varianten (Spec 0020, Abschnitt 4.4) — dafür bleibt `SuggestCommand`
+/// (reguläres Shell-Kommando durch dieselbe Filter-Engine samt
+/// Hard-Blacklist) der einzige Weg.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AiAction {
     SuggestCommand {
@@ -149,6 +158,17 @@ pub enum AiAction {
     GenerateDocument {
         title: String,
         content_markdown: String,
+    },
+    ReadRemoteFile {
+        path: String,
+    },
+    WriteRemoteFile {
+        path: String,
+        /// Vollständiger neuer Inhalt, nicht nur ein Diff (analog zu
+        /// `ProposeNoteUpdate::new_content`) — der Diff wird aus
+        /// `previousFileContent` + diesem Feld im Frontend berechnet (Spec
+        /// 0020, Abschnitt 4.2, Punkt 3).
+        content: String,
     },
 }
 

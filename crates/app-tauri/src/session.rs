@@ -37,7 +37,7 @@ use tokio::sync::{mpsc, Mutex as AsyncMutex};
 use ssh_manager_core::ai::{AiProvider, OutputRedactor, SessionContext};
 use ssh_manager_core::filter::{Decision, EvalContext, FilterEngine, PolicyStore};
 use ssh_manager_core::shared::ServerId;
-use ssh_manager_core::ssh::{PtySize, SshTransport};
+use ssh_manager_core::ssh::{PtySize, SftpSession, SshTransport};
 
 use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
 use crate::state::{ActionId, SessionId};
@@ -121,6 +121,12 @@ pub struct Session {
     /// `SessionManager` entfernt wurde, und ist als App-weite Benachrichtigung
     /// (`note-update-suggested`) ohnehin nie an einen Tab gebunden.
     pub pending_action: StdMutex<Option<ActionId>>,
+    /// Spec 0020, Abschnitt 3: lazy geöffnet (erst beim ersten
+    /// `ReadRemoteFile`/`WriteRemoteFile`/Dateibrowser-Zugriff, s.
+    /// `crate::orchestration::ensure_sftp_open`), danach für die Dauer der
+    /// Session offengehalten statt pro Zugriff neu aufgebaut. `AsyncMutex`
+    /// wie `transport`/`context` (über `.await`-Punkte hinweg gehalten).
+    pub sftp: AsyncMutex<Option<Box<dyn SftpSession>>>,
 }
 
 /// Startet den Terminal-Aktor (Modul-Kommentar, Punkt 3) als eigenen Task.
@@ -348,6 +354,7 @@ mod tests {
             sudo_password: None,
             status: StdMutex::new(ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
+            sftp: AsyncMutex::new(None),
         }
     }
 

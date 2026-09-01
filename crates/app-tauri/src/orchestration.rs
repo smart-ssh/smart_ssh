@@ -205,9 +205,17 @@ async fn handle_action_proposed(
 
     // Spec 0013, SEC-03: In automatischen Folgerunden (round >= 2) wird jede
     // SuggestCommand-Aktion, die AutoExec wäre, auf Confirm hochgestuft,
-    // um autonome RCE-Schleifen durch manipulierte Server-Outputs zu verhindern.
+    // um autonome RCE-Schleifen durch manipulierte Server-Outputs zu
+    // verhindern. `ReadRemoteFile` bekommt dieselbe Behandlung — dieselbe
+    // Gefahr gilt hier analog (ein manipulierter Server-Output könnte sonst
+    // versuchen, die KI zum automatischen Auslesen einer sensiblen Datei zu
+    // bewegen). `WriteRemoteFile` braucht keine explizite Nennung: bekommt
+    // laut `evaluate_action` ohnehin nie `AutoExec`.
     if round >= 2
-        && matches!(action, AiAction::SuggestCommand { .. })
+        && matches!(
+            action,
+            AiAction::SuggestCommand { .. } | AiAction::ReadRemoteFile { .. }
+        )
         && matches!(decision, Decision::AutoExec)
     {
         decision = Decision::Confirm {
@@ -223,6 +231,7 @@ async fn handle_action_proposed(
 
     let previous_note_content = previous_note_content_for_action(&action, session, profile_store).await;
     let uses_password = uses_stored_sudo_password(session, &action);
+    let (previous_file_content, previous_file_size) = previous_file_content_for_action(&action, session).await;
 
     emit_chat_action_proposed(
         emitter,
@@ -232,6 +241,8 @@ async fn handle_action_proposed(
         decision.clone(),
         previous_note_content,
         uses_password,
+        previous_file_content,
+        previous_file_size,
     );
 
     match decision {
@@ -281,10 +292,39 @@ async fn handle_action_proposed(
     }
 }
 
+/// Aktuelle Tags des Servers dieser Session, für die Filter-Engine-Auswertung
+/// (`EvalContext::tags`) — bevorzugt frisch aus dem `ProfileStore` gelesen
+/// (Tags können sich seit Sitzungsbeginn geändert haben), fällt auf die bei
+/// `connect()` eingefrorene Kopie zurück, falls der Server inzwischen nicht
+/// mehr auflösbar ist.
+async fn tags_for_session(session: &Session, profile_store: &dyn ProfileStore) -> Vec<String> {
+    profile_store
+        .get_server(&session.server_id)
+        .await
+        .map(|s| s.tags)
+        .unwrap_or_else(|_| session.tags.clone())
+}
+
+/// Spec 0020, Abschnitt 4.1/4.2: `ReadRemoteFile`/`WriteRemoteFile` werden
+/// für die Filter-Engine-Auswertung auf Pseudokommandos abgebildet
+/// (`sftp-read <pfad>`/`sftp-write <pfad>`) — dieselbe Präzedenz-Kette wie
+/// für Shell-Kommandos, kein zweites paralleles Regelkonzept.
+fn sftp_read_pseudo_command(path: &str) -> String {
+    format!("sftp-read {path}")
+}
+
+fn sftp_write_pseudo_command(path: &str) -> String {
+    format!("sftp-write {path}")
+}
+
 /// `AiAction::SuggestCommand` läuft durch die Filter-Engine;
 /// `AiAction::ProposeNoteUpdate` verlangt **immer** eine Bestätigung,
 /// unabhängig von der Filter-Engine (Spec 0003, Abschnitt 5.2 — explizit
-/// wiederholt in Spec 0007, Abschnitt 6, letzter Punkt).
+/// wiederholt in Spec 0007, Abschnitt 6, letzter Punkt). `ReadRemoteFile`/
+/// `WriteRemoteFile` laufen ebenfalls durch die Filter-Engine (Spec 0020,
+/// Abschnitt 4.1/4.2, Punkt 1) — `WriteRemoteFile` bekommt dabei aber nie
+/// `AutoExec` (Abschnitt 4.2, Punkt 2: "Auch bei einer Allow-Regel wird nie
+/// ohne Anzeige geschrieben").
 async fn evaluate_action(
     session: &Session,
     action: &AiAction,
@@ -292,11 +332,7 @@ async fn evaluate_action(
 ) -> Decision {
     match action {
         AiAction::SuggestCommand { command } => {
-            let tags = profile_store
-                .get_server(&session.server_id)
-                .await
-                .map(|s| s.tags)
-                .unwrap_or_else(|_| session.tags.clone());
+            let tags = tags_for_session(session, profile_store).await;
             let ctx = EvalContext {
                 server_id: session.server_id,
                 tags,
@@ -311,6 +347,36 @@ async fn evaluate_action(
              (Spec 0012: kein Filter-Engine-/Bestätigungspfad) und erreicht \
              evaluate_action nie"
         ),
+        AiAction::ReadRemoteFile { path } => {
+            let tags = tags_for_session(session, profile_store).await;
+            let ctx = EvalContext {
+                server_id: session.server_id,
+                tags,
+            };
+            session
+                .filter_engine
+                .evaluate(&sftp_read_pseudo_command(path), &ctx)
+                .await
+        }
+        AiAction::WriteRemoteFile { path, .. } => {
+            let tags = tags_for_session(session, profile_store).await;
+            let ctx = EvalContext {
+                server_id: session.server_id,
+                tags,
+            };
+            let decision = session
+                .filter_engine
+                .evaluate(&sftp_write_pseudo_command(path), &ctx)
+                .await;
+            match decision {
+                Decision::AutoExec => Decision::Confirm {
+                    reason: "Dateischreibvorgänge werden immer zur Bestätigung angezeigt \
+                             (Spec 0020, Abschnitt 4.2)"
+                        .to_string(),
+                },
+                other => other,
+            }
+        }
     }
 }
 
@@ -375,19 +441,23 @@ async fn handle_user_decision(
                             Decision::Deny { reason },
                             None,
                             false,
+                            None,
+                            None,
                         );
                         return false;
                     }
                     AiAction::SuggestCommand { command: edited }
                 }
-                // `ProposeNoteUpdate` hat kein editierbares "Kommando" —
-                // das Frontend bietet für diesen Aktionstyp gar kein
-                // Editierfeld an (s. `crate::orchestration`-Moduldoc und
-                // Frontend-Bestätigungsdialog). Träfe `EditThenApprove`
-                // trotzdem ein, wird die ursprünglich vorgeschlagene
-                // Aktion unverändert ausgeführt statt den (hier
-                // bedeutungslosen) `command`-Text zu verwenden.
-                AiAction::ProposeNoteUpdate { .. } => action,
+                // Weder `ProposeNoteUpdate` noch `ReadRemoteFile`/
+                // `WriteRemoteFile` bieten im Frontend ein Editierfeld an
+                // (Spec 0020, Abschnitt 4.2 sieht nur Bestätigen/Ablehnen
+                // vor, kein Editieren des Inhalts vor dem Schreiben) — träfe
+                // `EditThenApprove` trotzdem ein, wird die ursprünglich
+                // vorgeschlagene Aktion unverändert ausgeführt, analog zu
+                // `ProposeNoteUpdate`.
+                AiAction::ProposeNoteUpdate { .. }
+                | AiAction::ReadRemoteFile { .. }
+                | AiAction::WriteRemoteFile { .. } => action,
                 AiAction::GenerateDocument { .. } => unreachable!(
                     "GenerateDocument braucht nie eine Bestätigung, s. evaluate_action"
                 ),
@@ -439,6 +509,12 @@ async fn execute_action(
         }
         AiAction::GenerateDocument { .. } => {
             unreachable!("GenerateDocument braucht nie eine Bestätigung, s. evaluate_action")
+        }
+        AiAction::ReadRemoteFile { path } => {
+            execute_read_remote_file(session, session_id, action_id, path, emitter).await
+        }
+        AiAction::WriteRemoteFile { path, content } => {
+            execute_write_remote_file(session, session_id, action_id, path, content, emitter).await
         }
     }
 }
@@ -724,6 +800,395 @@ fn emit_note_update_failed(emitter: &dyn EventEmitter, session_id: SessionId, er
     );
 }
 
+// --- Spec 0020: SFTP-Dateizugriff (ReadRemoteFile/WriteRemoteFile) --------
+
+/// Spec 0020, Abschnitt 4.1: Default-Obergrenze für `ReadRemoteFile` —
+/// größere Dateien werden mit klarer Meldung abgelehnt statt vollständig in
+/// den KI-Kontext geladen. Aktuell nicht nutzerkonfigurierbar (keine
+/// entsprechende Einstellungs-UI vorgesehen).
+const MAX_READ_FILE_BYTES: u64 = 256 * 1024;
+
+/// Spec 0020, Abschnitt 3: öffnet die SFTP-Session der Session lazy (erst
+/// beim ersten Aufruf) und hält sie danach für die Dauer der Session offen
+/// (`session.sftp` bleibt `Some`, bis die Session selbst endet). Ein
+/// erneuter Aufruf, während bereits eine offene Session vorliegt, ist ein
+/// No-op.
+async fn ensure_sftp_open(session: &Session) -> Result<(), SshError> {
+    let mut guard = session.sftp.lock().await;
+    if guard.is_none() {
+        let mut transport = session.transport.lock().await;
+        let sftp = transport.open_sftp().await?;
+        *guard = Some(sftp);
+    }
+    Ok(())
+}
+
+/// Spec 0020, Abschnitt 4.2, Punkt 3: liest die aktuelle Zieldatei einer
+/// `WriteRemoteFile`-Aktion (falls vorhanden) für die Diff-Vorschau im
+/// Bestätigungsdialog. `(None, None)` für alle anderen Aktionstypen sowie
+/// wenn die Datei nicht existiert oder SFTP aus einem anderen Grund gerade
+/// nicht verfügbar ist (kein harter Fehler an dieser Stelle — die Vorschau
+/// ist eine Zusatzinformation, kein Blocker für den Vorschlag selbst).
+/// `(Some(text), None)` bei einer als UTF-8 dekodierbaren bestehenden
+/// Datei; `(None, Some(size))` bei einer bestehenden Binärdatei (Abschnitt
+/// 4.2, Punkt 3, letzter Satz).
+async fn previous_file_content_for_action(
+    action: &AiAction,
+    session: &Session,
+) -> (Option<String>, Option<u64>) {
+    let AiAction::WriteRemoteFile { path, .. } = action else {
+        return (None, None);
+    };
+    if ensure_sftp_open(session).await.is_err() {
+        return (None, None);
+    }
+    let mut guard = session.sftp.lock().await;
+    let Some(sftp) = guard.as_mut() else {
+        return (None, None);
+    };
+    match sftp.read_file(path).await {
+        Ok(bytes) => match String::from_utf8(bytes) {
+            Ok(text) => (Some(text), None),
+            Err(err) => (None, Some(err.into_bytes().len() as u64)),
+        },
+        Err(_) => (None, None),
+    }
+}
+
+/// Spec 0020, Abschnitt 4.1: liest die Datei per SFTP, lehnt sie über
+/// `MAX_READ_FILE_BYTES` mit klarer Meldung ab statt sie zu laden, läuft
+/// sonst durch denselben `OutputRedactor` wie Kommando-Output (Spec 0006,
+/// Abschnitt 5) — als `CommandOutput` mit leerem `stderr` "verpackt", um die
+/// bestehende Redactor-Schnittstelle wiederzuverwenden, statt eine zweite,
+/// nur für Dateiinhalte zuständige Methode einzuführen.
+async fn execute_read_remote_file(
+    session: &Session,
+    session_id: SessionId,
+    action_id: ActionId,
+    path: String,
+    emitter: &dyn EventEmitter,
+) -> bool {
+    if let Err(err) = ensure_sftp_open(session).await {
+        emit_chat_error(
+            emitter,
+            session_id,
+            format!("SFTP konnte nicht geöffnet werden: {err}"),
+        );
+        return false;
+    }
+
+    // Größenprüfung vor dem eigentlichen Lesen — ein fehlgeschlagenes
+    // `stat()` blockiert `read_file` selbst nicht (manche Server/Pfade
+    // könnten `stat` anders behandeln als `read`), die Prüfung wird dann
+    // schlicht übersprungen statt den ganzen Aufruf scheitern zu lassen.
+    let size = {
+        let mut guard = session.sftp.lock().await;
+        let sftp = guard
+            .as_mut()
+            .expect("ensure_sftp_open lief erfolgreich durch");
+        sftp.stat(&path).await.map(|entry| entry.size).ok()
+    };
+    if let Some(size) = size {
+        if size > MAX_READ_FILE_BYTES {
+            emit_chat_error(
+                emitter,
+                session_id,
+                format!(
+                    "Datei '{path}' ist zu groß ({size} Bytes, Obergrenze \
+                     {MAX_READ_FILE_BYTES} Bytes) — wird nicht gelesen."
+                ),
+            );
+            return false;
+        }
+    }
+
+    let raw = {
+        let mut guard = session.sftp.lock().await;
+        let sftp = guard
+            .as_mut()
+            .expect("ensure_sftp_open lief erfolgreich durch");
+        sftp.read_file(&path).await
+    };
+
+    match raw {
+        Ok(bytes) => {
+            let redacted = session.redactor.redact(&CommandOutput {
+                stdout: bytes,
+                stderr: Vec::new(),
+                exit_code: Some(0),
+            });
+            let content = String::from_utf8_lossy(&redacted.stdout).into_owned();
+            emit_chat_action_result(
+                emitter,
+                session_id,
+                action_id,
+                ActionResultPayload::FileRead {
+                    path: path.clone(),
+                    content: content.clone(),
+                },
+            );
+            session.context.lock().await.history.push(ChatMessage {
+                role: Role::ActionResult,
+                content: MessageContent::Text(format!("Inhalt von '{path}':\n\n{content}")),
+            });
+            true
+        }
+        Err(err) => {
+            emit_chat_error(
+                emitter,
+                session_id,
+                format!("Lesen von '{path}' fehlgeschlagen: {err}"),
+            );
+            false
+        }
+    }
+}
+
+fn backup_path_for(path: &str) -> String {
+    format!(
+        "{path}.smartssh-backup-{}",
+        chrono::Utc::now().format("%Y%m%d%H%M%S")
+    )
+}
+
+/// Einfaches POSIX-Single-Quote-Escaping für Pfade, die als Argument in ein
+/// per `execute_with_stdin` ausgeführtes Shell-Kommando eingebettet werden
+/// (Spec 0020, Abschnitt 4.3).
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\''"))
+}
+
+/// Regulärer (nicht-privilegierter) Schreibversuch per SFTP: Backup (falls
+/// die Datei existiert) + eigentliches Schreiben, in dieser Reihenfolge
+/// (Spec 0020, Abschnitt 4.2, Punkt 4: "vor jedem Überschreiben"). Gibt den
+/// Backup-Pfad zurück, falls einer angelegt wurde. Ein
+/// `SshError::SftpPermissionDenied` an beliebiger Stelle signalisiert dem
+/// Aufrufer, dass Abschnitt 4.3 (Sudo-Rechte-Fallback) greifen sollte.
+async fn write_via_sftp_with_backup(
+    session: &Session,
+    path: &str,
+    content: &str,
+    existed: bool,
+) -> Result<Option<String>, SshError> {
+    let backup_path = if existed {
+        Some(backup_path_for(path))
+    } else {
+        None
+    };
+
+    if let Some(backup) = &backup_path {
+        let mut guard = session.sftp.lock().await;
+        let sftp = guard
+            .as_mut()
+            .expect("ensure_sftp_open lief erfolgreich durch");
+        let old_content = sftp.read_file(path).await?;
+        sftp.write_file(backup, &old_content).await?;
+    }
+
+    let mut guard = session.sftp.lock().await;
+    let sftp = guard
+        .as_mut()
+        .expect("ensure_sftp_open lief erfolgreich durch");
+    sftp.write_file(path, content.as_bytes()).await?;
+
+    Ok(backup_path)
+}
+
+/// Führt `command` mit dem hinterlegten Sudo-Passwort über Stdin aus (Spec
+/// 0018, Abschnitt 5) und wertet den Exit-Code aus — anders als
+/// `execute_suggested_command` (das den rohen Output unabhängig vom
+/// Exit-Code als Kommando-Ergebnis zurückgibt) braucht dieser interne
+/// Aufbauschritt ein hartes Erfolg/Fehlschlag-Signal.
+async fn execute_privileged(
+    session: &Session,
+    command: &str,
+    password: &secrecy::SecretString,
+) -> Result<(), SshError> {
+    use secrecy::ExposeSecret;
+    let mut stdin = password.expose_secret().as_bytes().to_vec();
+    stdin.push(b'\n');
+    let output = {
+        let mut transport = session.transport.lock().await;
+        transport.execute_with_stdin(command, &stdin).await?
+    };
+    if output.exit_code == Some(0) {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(SshError::ChannelError(format!(
+            "Kommando fehlgeschlagen (exit {:?}): {stderr}",
+            output.exit_code
+        )))
+    }
+}
+
+/// Spec 0020, Abschnitt 4.3: Sudo-Rechte-Fallback, nachdem der reguläre
+/// SFTP-Schreibversuch mit `SftpPermissionDenied` gescheitert ist. Das
+/// Backup (falls die Datei existiert) läuft hier ebenfalls privilegiert
+/// (`sudo -S cp -p`, Punkt 4) statt per SFTP-Lesen+Schreiben — ein erneuter
+/// SFTP-Lesevesuch würde mit derselben Rechte-Einschränkung scheitern wie
+/// der ursprüngliche Schreibversuch, SFTP kennt zudem kein eigenes
+/// "Kopieren".
+async fn write_via_sudo_fallback(
+    session: &Session,
+    path: &str,
+    content: &str,
+    existed: bool,
+    old_mode: Option<u32>,
+    password: &secrecy::SecretString,
+) -> Result<Option<String>, SshError> {
+    let backup_path = if existed {
+        Some(backup_path_for(path))
+    } else {
+        None
+    };
+
+    if let Some(backup) = &backup_path {
+        let cmd = format!(
+            "sudo -S cp -p {} {}",
+            shell_quote(path),
+            shell_quote(backup)
+        );
+        execute_privileged(session, &cmd, password).await?;
+    }
+
+    // `install -m` statt `mv`, um Rechte/Eigentümer des Ziels in einem
+    // Schritt korrekt zu setzen, statt sie vom Temp-File zu erben (Spec
+    // 0020, Abschnitt 4.3, Punkt 3) — Default 0o644 für eine neue Datei
+    // ohne bekannten alten Modus.
+    let mode = old_mode.unwrap_or(0o644) & 0o7777;
+
+    // Temp-Datei im Home-Verzeichnis des Login-Users über SFTP schreiben —
+    // relativer Pfad (kein führender `/`), SFTP-Server lösen relative
+    // Pfade konventionell relativ zum Home-Verzeichnis auf.
+    let temp_name = format!(".smartssh-tmp-{}", Uuid::new_v4());
+    {
+        let mut guard = session.sftp.lock().await;
+        let sftp = guard
+            .as_mut()
+            .expect("ensure_sftp_open lief erfolgreich durch");
+        sftp.write_file(&temp_name, content.as_bytes())
+            .await
+            .map_err(|e| {
+                SshError::ChannelError(format!("Temp-Datei konnte nicht angelegt werden: {e}"))
+            })?;
+    }
+
+    let install_cmd = format!(
+        "sudo -S install -m {mode:o} {} {}",
+        shell_quote(&temp_name),
+        shell_quote(path)
+    );
+    let install_result = execute_privileged(session, &install_cmd, password).await;
+
+    // Temp-Datei aufräumen, unabhängig vom Ergebnis des `install`-Aufrufs.
+    {
+        let mut guard = session.sftp.lock().await;
+        if let Some(sftp) = guard.as_mut() {
+            let _ = sftp.remove(&temp_name).await;
+        }
+    }
+
+    install_result?;
+    Ok(backup_path)
+}
+
+/// Spec 0020, Abschnitt 4.2/4.3: kompletter Schreib-Ablauf — regulärer
+/// SFTP-Versuch zuerst, bei fehlenden Rechten (und **nur** dann) Sudo-
+/// Fallback, sofern für den Server ein Passwort hinterlegt ist. Ohne
+/// Passwort wird der ursprüngliche Fehler unverändert gemeldet (Abschnitt
+/// 4.3, Punkt 5: "kein stiller Fallback").
+async fn execute_write_remote_file(
+    session: &Session,
+    session_id: SessionId,
+    action_id: ActionId,
+    path: String,
+    content: String,
+    emitter: &dyn EventEmitter,
+) -> bool {
+    if let Err(err) = ensure_sftp_open(session).await {
+        emit_chat_error(
+            emitter,
+            session_id,
+            format!("SFTP konnte nicht geöffnet werden: {err}"),
+        );
+        return false;
+    }
+
+    let (existed, old_mode) = {
+        let mut guard = session.sftp.lock().await;
+        let sftp = guard
+            .as_mut()
+            .expect("ensure_sftp_open lief erfolgreich durch");
+        match sftp.stat(&path).await {
+            Ok(entry) => (true, Some(entry.permissions)),
+            Err(_) => (false, None),
+        }
+    };
+
+    let regular = write_via_sftp_with_backup(session, &path, &content, existed).await;
+
+    let (backup_path, used_sudo_password) = match regular {
+        Ok(backup_path) => (backup_path, false),
+        Err(SshError::SftpPermissionDenied(_)) => {
+            let Some(password) = session.sudo_password.clone() else {
+                emit_chat_error(
+                    emitter,
+                    session_id,
+                    format!(
+                        "Zugriff verweigert beim Schreiben von '{path}' — erhöhte Rechte nötig, \
+                         aber kein Sudo-Passwort für diesen Server hinterlegt."
+                    ),
+                );
+                return false;
+            };
+            match write_via_sudo_fallback(session, &path, &content, existed, old_mode, &password)
+                .await
+            {
+                Ok(backup_path) => (backup_path, true),
+                Err(err) => {
+                    emit_chat_error(
+                        emitter,
+                        session_id,
+                        format!(
+                            "Schreiben von '{path}' fehlgeschlagen (auch mit Sudo-Rechten): {err}"
+                        ),
+                    );
+                    return false;
+                }
+            }
+        }
+        Err(err) => {
+            emit_chat_error(
+                emitter,
+                session_id,
+                format!("Schreiben von '{path}' fehlgeschlagen: {err}"),
+            );
+            return false;
+        }
+    };
+
+    let summary = match &backup_path {
+        Some(backup) => format!("Datei '{path}' geschrieben (Backup: '{backup}')."),
+        None => format!("Datei '{path}' neu angelegt."),
+    };
+    emit_chat_action_result(
+        emitter,
+        session_id,
+        action_id,
+        ActionResultPayload::FileWrite {
+            path: path.clone(),
+            backup_path,
+            used_sudo_password,
+        },
+    );
+    session.context.lock().await.history.push(ChatMessage {
+        role: Role::ActionResult,
+        content: MessageContent::Text(summary),
+    });
+    true
+}
+
 /// Spec 0012, Abschnitt 2/3: `GenerateDocument` erzeugt reinen lokalen
 /// Inhalt — kein Filter-Engine-Aufruf, kein Bestätigungsdialog, nichts wird
 /// automatisch geschrieben. Zählt deshalb auch **nicht** als "ausgeführte
@@ -914,6 +1379,7 @@ mod tests {
     use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
     use ssh_manager_core::profiles::{Group, GroupId, NoteRevision, ProfileResult, Server};
     use ssh_manager_core::shared::ServerId;
+    use ssh_manager_core::ssh::mock::MockSftpSession;
     use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize};
 
     use super::*;
@@ -979,6 +1445,11 @@ mod tests {
     #[derive(Default)]
     struct MockSshTransport {
         responses: HashMap<String, CommandOutput>,
+        /// Für Kommandos mit dynamischen Bestandteilen (z. B. Sudo-Befehle
+        /// mit generiertem Backup-/Temp-Dateinamen, Spec 0020, Abschnitt
+        /// 4.3), bei denen der Test den exakten Wortlaut nicht vorhersagen
+        /// kann — matcht auf Kommando-Präfix statt Exaktheit.
+        prefix_responses: Vec<(String, CommandOutput)>,
         /// Spec 0018: geteilter Handle (analog zu
         /// `MockAiProvider::received_contexts`), damit ein Test nach dem
         /// Lauf prüfen kann, mit welchem (ggf. umgeschriebenen) Kommando und
@@ -995,6 +1466,15 @@ mod tests {
             self
         }
 
+        fn with_prefix_response(
+            mut self,
+            command_prefix: impl Into<String>,
+            output: CommandOutput,
+        ) -> Self {
+            self.prefix_responses.push((command_prefix.into(), output));
+            self
+        }
+
         fn stdin_calls_handle(&self) -> StdinCalls {
             self.stdin_calls.clone()
         }
@@ -1003,9 +1483,19 @@ mod tests {
     #[async_trait]
     impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
         async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
-            self.responses.get(command).cloned().ok_or_else(|| {
-                SshError::ChannelError(format!("kein Mock-Response für '{command}'"))
-            })
+            if let Some(output) = self.responses.get(command).cloned() {
+                return Ok(output);
+            }
+            if let Some((_, output)) = self
+                .prefix_responses
+                .iter()
+                .find(|(prefix, _)| command.starts_with(prefix.as_str()))
+            {
+                return Ok(output.clone());
+            }
+            Err(SshError::ChannelError(format!(
+                "kein Mock-Response für '{command}'"
+            )))
         }
 
         async fn execute_with_stdin(
@@ -1120,6 +1610,7 @@ mod tests {
             sudo_password: None,
             status: StdMutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
+            sftp: AsyncMutex::new(None),
         }
     }
 
@@ -2494,6 +2985,644 @@ mod tests {
             revisions[0].target,
             NoteTarget::Server(expected_server_id)
         );
+    }
+
+    // --- Spec 0020: SFTP-Dateizugriff (ReadRemoteFile/WriteRemoteFile) -----
+
+    /// Spec 0020, Abschnitt 4.1: `ReadRemoteFile` wird auf `sftp-read
+    /// <pfad>` abgebildet und respektiert eine Deny-Regel — kein
+    /// `read_file`-Aufruf, wenn blockiert.
+    #[tokio::test]
+    async fn test_read_remote_file_deny_rule_blocks_without_reading() {
+        struct DenyEtcRead;
+        #[async_trait]
+        impl PolicyStore for DenyEtcRead {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("deny-etc-read".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob(
+                        "sftp-read /etc/*".to_string(),
+                    ),
+                    action: ssh_manager_core::filter::RuleAction::Deny,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                }]
+            }
+        }
+
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::ReadRemoteFile {
+                    path: "/etc/shadow".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(DenyEtcRead));
+        let mock_sftp = MockSftpSession::new().with_file("/etc/shadow", b"root:x:0:0".to_vec());
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp.clone())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["chat-action-proposed"]);
+        assert!(events[0].1["decision"]["Deny"].is_object());
+        assert!(
+            mock_sftp.calls().is_empty(),
+            "Deny darf read_file nie erreichen, tatsächliche Aufrufe: {:?}",
+            mock_sftp.calls()
+        );
+    }
+
+    /// Spec 0020, Abschnitt 4.1: eine Allow-Regel lässt `ReadRemoteFile`
+    /// automatisch laufen (`AutoExec`, wie bei Shell-Kommandos) — der Inhalt
+    /// kommt redigiert im Ergebnis-Event an (Spec 0006, Abschnitt 5).
+    #[tokio::test]
+    async fn test_read_remote_file_allow_rule_autoexecs_and_redacts_content() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::ReadRemoteFile {
+                    path: "/home/deploy/app.conf".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let mock_sftp = MockSftpSession::new().with_file(
+            "/home/deploy/app.conf",
+            b"host=localhost\npassword=hunter2\n".to_vec(),
+        );
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp.clone())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["chat-action-proposed", "chat-action-result"]);
+        let content = events[1].1["result"]["content"].as_str().unwrap();
+        assert!(content.contains("host=localhost"));
+        assert!(
+            !content.contains("hunter2"),
+            "Passwort-Zeile muss redigiert sein, tatsächlicher Inhalt: {content}"
+        );
+        assert_eq!(mock_sftp.calls(), vec!["stat /home/deploy/app.conf", "read_file /home/deploy/app.conf"]);
+    }
+
+    /// Spec 0020, Abschnitt 4.1: Dateien über der Größengrenze werden
+    /// abgelehnt, ohne je gelesen zu werden.
+    #[tokio::test]
+    async fn test_read_remote_file_rejects_oversized_file() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::ReadRemoteFile {
+                    path: "/var/log/huge.log".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let oversized = vec![b'x'; (MAX_READ_FILE_BYTES + 1) as usize];
+        let mock_sftp = MockSftpSession::new().with_file("/var/log/huge.log", oversized);
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp.clone())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["chat-action-proposed", "chat-error"]);
+        assert!(
+            !mock_sftp.calls().contains(&"read_file /var/log/huge.log".to_string()),
+            "zu große Datei darf nie tatsächlich gelesen werden"
+        );
+    }
+
+    /// Spec 0020, Abschnitt 4.2, Punkt 2: **auch** bei einer Allow-Regel
+    /// bekommt `WriteRemoteFile` nie `AutoExec` — es wird immer erst
+    /// bestätigt, und vor der Bestätigung darf nichts geschrieben werden.
+    #[tokio::test]
+    async fn test_write_remote_file_allow_rule_still_requires_confirmation() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::WriteRemoteFile {
+                    path: "/home/deploy/app.conf".to_string(),
+                    content: "neuer inhalt".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let mock_sftp = MockSftpSession::new();
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp.clone())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = async {
+            loop {
+                let action_id = {
+                    let events = emitter.events.lock().unwrap();
+                    events.iter().find_map(|(name, payload)| {
+                        (name == "chat-action-proposed")
+                            .then(|| payload["actionId"].as_str().unwrap().to_string())
+                    })
+                };
+                if let Some(action_id) = action_id {
+                    // Bewusst noch nicht auflösen — erst prüfen, dass bis
+                    // hierhin nichts geschrieben wurde, dann ablehnen.
+                    assert!(
+                        !mock_sftp.calls().iter().any(|c| c.starts_with("write_file")),
+                        "vor der Bestätigung darf nichts geschrieben worden sein"
+                    );
+                    let action_id: ActionId = action_id.parse().unwrap();
+                    confirmations
+                        .resolve(&action_id, ActionUserDecision::Deny)
+                        .unwrap();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, proposed_payload) = &events[0];
+        assert!(
+            proposed_payload["decision"]["Confirm"].is_object(),
+            "WriteRemoteFile muss auch bei Allow-Regel Confirm sein, nie AutoExec"
+        );
+    }
+
+    /// Spec 0020, Abschnitt 4.2, Punkt 1: eine Deny-Regel blockiert
+    /// `WriteRemoteFile` wie gewohnt.
+    #[tokio::test]
+    async fn test_write_remote_file_deny_rule_blocks() {
+        struct DenyEtcWrite;
+        #[async_trait]
+        impl PolicyStore for DenyEtcWrite {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("deny-etc-write".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob(
+                        "sftp-write /etc/*".to_string(),
+                    ),
+                    action: ssh_manager_core::filter::RuleAction::Deny,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                }]
+            }
+        }
+
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::WriteRemoteFile {
+                    path: "/etc/nginx/nginx.conf".to_string(),
+                    content: "böser inhalt".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(DenyEtcWrite));
+        let mock_sftp = MockSftpSession::new().with_file("/etc/nginx/nginx.conf", b"alt".to_vec());
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp.clone())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["chat-action-proposed"]);
+        assert!(events[0].1["decision"]["Deny"].is_object());
+        assert_eq!(
+            mock_sftp.file_content("/etc/nginx/nginx.conf"),
+            Some(b"alt".to_vec()),
+            "Deny darf die Datei nicht verändern"
+        );
+    }
+
+    /// Spec 0020, Abschnitt 4.2, Punkt 3: `previousFileContent` enthält den
+    /// aktuellen Inhalt einer bestehenden Textdatei.
+    #[tokio::test]
+    async fn test_chat_action_proposed_includes_previous_file_content_for_existing_file() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::WriteRemoteFile {
+                    path: "/home/deploy/app.conf".to_string(),
+                    content: "neu".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let mock_sftp =
+            MockSftpSession::new().with_file("/home/deploy/app.conf", b"alter inhalt".to_vec());
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp)));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = deny_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        assert_eq!(
+            events[0].1["previousFileContent"],
+            serde_json::json!("alter inhalt")
+        );
+        assert_eq!(events[0].1["previousFileSize"], serde_json::json!(null));
+    }
+
+    /// `previousFileContent` ist `null` (keine Diff-Hervorhebung), wenn die
+    /// Zieldatei noch nicht existiert.
+    #[tokio::test]
+    async fn test_chat_action_proposed_previous_file_content_null_for_new_file() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::WriteRemoteFile {
+                    path: "/home/deploy/new.conf".to_string(),
+                    content: "neu".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.sftp = AsyncMutex::new(Some(Box::new(MockSftpSession::new())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = deny_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        assert_eq!(events[0].1["previousFileContent"], serde_json::json!(null));
+        assert_eq!(events[0].1["previousFileSize"], serde_json::json!(null));
+    }
+
+    /// Spec 0020, Abschnitt 4.2, Punkt 3, letzter Satz: eine bestehende,
+    /// nicht als Text dekodierbare Datei liefert `previousFileContent:
+    /// null`, aber `previousFileSize` mit der alten Größe.
+    #[tokio::test]
+    async fn test_chat_action_proposed_binary_file_reports_size_not_content() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::WriteRemoteFile {
+                    path: "/home/deploy/logo.png".to_string(),
+                    content: "neu".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        // Ungültige UTF-8-Bytes — eine echte Binärdatei würde ebenso
+        // scheitern, sich als Text zu dekodieren.
+        let binary_content: Vec<u8> = vec![0xff, 0xfe, 0x00, 0x01, 0x02];
+        let binary_len = binary_content.len() as u64;
+        let mock_sftp = MockSftpSession::new().with_file("/home/deploy/logo.png", binary_content);
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp)));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = deny_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        assert_eq!(events[0].1["previousFileContent"], serde_json::json!(null));
+        assert_eq!(
+            events[0].1["previousFileSize"],
+            serde_json::json!(binary_len)
+        );
+    }
+
+    /// Spec 0020, Abschnitt 4.2, Punkt 4: vor dem Überschreiben einer
+    /// bestehenden Datei legt die App ein Backup unter
+    /// `<pfad>.smartssh-backup-<zeitstempel>` mit dem *alten* Inhalt an —
+    /// und meldet den Backup-Pfad im Ergebnis.
+    #[tokio::test]
+    async fn test_write_remote_file_creates_backup_before_overwriting() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::WriteRemoteFile {
+                    path: "/home/deploy/app.conf".to_string(),
+                    content: "neuer inhalt".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let mock_sftp =
+            MockSftpSession::new().with_file("/home/deploy/app.conf", b"alter inhalt".to_vec());
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp.clone())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["chat-action-proposed", "chat-action-result"]);
+        let backup_path = events[1].1["result"]["backupPath"]
+            .as_str()
+            .expect("backupPath muss gesetzt sein")
+            .to_string();
+        assert!(backup_path.starts_with("/home/deploy/app.conf.smartssh-backup-"));
+        assert_eq!(
+            mock_sftp.file_content(&backup_path),
+            Some(b"alter inhalt".to_vec()),
+            "Backup muss den ALTEN Inhalt tragen"
+        );
+        assert_eq!(
+            mock_sftp.file_content("/home/deploy/app.conf"),
+            Some(b"neuer inhalt".to_vec())
+        );
+        assert_eq!(events[1].1["result"]["usedSudoPassword"], serde_json::json!(false));
+    }
+
+    /// Neue Datei (kein Backup nötig): `backupPath` bleibt `null`.
+    #[tokio::test]
+    async fn test_write_remote_file_new_file_has_no_backup() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::WriteRemoteFile {
+                    path: "/home/deploy/new.conf".to_string(),
+                    content: "inhalt".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.sftp = AsyncMutex::new(Some(Box::new(MockSftpSession::new())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        assert_eq!(events[1].1["result"]["backupPath"], serde_json::json!(null));
+    }
+
+    /// Spec 0020, Abschnitt 4.3: scheitert der reguläre Schreibversuch an
+    /// fehlenden Rechten und ist ein Sudo-Passwort hinterlegt, greift der
+    /// privilegierte Fallback (Backup + Schreiben laufen dann über
+    /// `execute_with_stdin`, nicht mehr über SFTP direkt — der Mock-
+    /// SshTransport hat dafür passende `sudo -S ...`-Antworten hinterlegt).
+    #[tokio::test]
+    async fn test_write_remote_file_sudo_fallback_used_when_password_configured() {
+        // Backup-/Temp-Dateinamen enthalten einen Zeitstempel/UUID, den der
+        // Test nicht vorhersagen kann — daher Präfix-Matching statt eines
+        // exakten Kommandos (s. `with_prefix_response`).
+        let transport = MockSshTransport::default()
+            .with_prefix_response("sudo -S cp -p '/etc/nginx/nginx.conf' ", output(""))
+            .with_prefix_response("sudo -S install -m 644 ", output(""));
+        let stdin_calls = transport.stdin_calls_handle();
+
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::WriteRemoteFile {
+                    path: "/etc/nginx/nginx.conf".to_string(),
+                    content: "neue config".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            transport,
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
+        let mock_sftp = MockSftpSession::new()
+            .with_file("/etc/nginx/nginx.conf", b"alte config".to_vec())
+            .with_permission_denied("/etc/nginx/nginx.conf");
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp.clone())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["chat-action-proposed", "chat-action-result"]);
+        assert_eq!(events[1].1["result"]["usedSudoPassword"], serde_json::json!(true));
+
+        let calls = stdin_calls.lock().unwrap();
+        assert!(
+            calls.iter().any(|(cmd, _)| cmd.starts_with("sudo -S cp -p")),
+            "Backup muss über sudo -S cp -p laufen, tatsächliche Aufrufe: {calls:?}"
+        );
+        assert!(
+            calls.iter().any(|(cmd, _)| cmd.starts_with("sudo -S install -m")),
+            "Schreiben muss über sudo -S install laufen, tatsächliche Aufrufe: {calls:?}"
+        );
+        assert!(
+            calls.iter().all(|(_, stdin)| stdin == b"hunter2\n"),
+            "jeder privilegierte Aufruf muss das Passwort über Stdin bekommen"
+        );
+        // Die eigentliche Zieldatei wurde nie direkt per SFTP überschrieben
+        // (nur über den privilegierten `install`-Umweg) — der SFTP-Mock
+        // selbst hat also weiterhin den ALTEN Inhalt.
+        assert_eq!(
+            mock_sftp.file_content("/etc/nginx/nginx.conf"),
+            Some(b"alte config".to_vec())
+        );
+    }
+
+    /// Spec 0020, Abschnitt 4.3, Punkt 5: ohne hinterlegtes Sudo-Passwort
+    /// gibt es **keinen** stillen Fallback — der ursprüngliche
+    /// Permission-Denied-Fehler wird unverändert gemeldet.
+    #[tokio::test]
+    async fn test_write_remote_file_permission_denied_without_password_reports_error() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::WriteRemoteFile {
+                    path: "/etc/nginx/nginx.conf".to_string(),
+                    content: "neue config".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        // Kein `session.sudo_password` gesetzt (Default: `None`).
+        let mock_sftp = MockSftpSession::new()
+            .with_file("/etc/nginx/nginx.conf", b"alte config".to_vec())
+            .with_permission_denied("/etc/nginx/nginx.conf");
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp.clone())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["chat-action-proposed", "chat-error"]);
+        assert_eq!(
+            mock_sftp.file_content("/etc/nginx/nginx.conf"),
+            Some(b"alte config".to_vec()),
+            "ohne Passwort darf die Datei unverändert bleiben"
+        );
+    }
+
+    /// Hilfsfunktion für Tests, die eine `Confirm`-Aktion ablehnen wollen,
+    /// sobald sie im Event-Log auftaucht.
+    fn deny_first_proposed_action<'a>(
+        emitter: &'a TestEmitter,
+        confirmations: &'a ConfirmationRegistry<ActionId, ActionUserDecision>,
+    ) -> impl std::future::Future<Output = ()> + 'a {
+        respond_to_first_proposed_action(emitter, confirmations, ActionUserDecision::Deny)
+    }
+
+    /// Wie [`deny_first_proposed_action`], aber genehmigend.
+    fn approve_first_proposed_action<'a>(
+        emitter: &'a TestEmitter,
+        confirmations: &'a ConfirmationRegistry<ActionId, ActionUserDecision>,
+    ) -> impl std::future::Future<Output = ()> + 'a {
+        respond_to_first_proposed_action(emitter, confirmations, ActionUserDecision::Approve)
+    }
+
+    async fn respond_to_first_proposed_action(
+        emitter: &TestEmitter,
+        confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+        decision: ActionUserDecision,
+    ) {
+        loop {
+            let action_id = {
+                let events = emitter.events.lock().unwrap();
+                events.iter().find_map(|(name, payload)| {
+                    (name == "chat-action-proposed")
+                        .then(|| payload["actionId"].as_str().unwrap().to_string())
+                })
+            };
+            if let Some(action_id) = action_id {
+                let action_id: ActionId = action_id.parse().unwrap();
+                confirmations.resolve(&action_id, decision).unwrap();
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
     }
 
     // --- Spec 0019: Notiz-Vorschau -----------------------------------------

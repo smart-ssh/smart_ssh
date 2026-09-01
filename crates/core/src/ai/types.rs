@@ -244,16 +244,100 @@ impl ActionSchema {
             ],
         }
     }
+
+    /// Entspricht `AiAction::ReadRemoteFile` (Spec 0020, Abschnitt 4.1).
+    pub fn read_remote_file() -> Self {
+        Self {
+            name: "read_remote_file".to_string(),
+            description: "Liest den Inhalt einer Datei auf dem verbundenen Server über SFTP. \
+                Läuft wie ein Kommando durch die Filter-Engine und kann durch Nutzerregeln \
+                blockiert oder bestätigungspflichtig sein. Für größere Textdateien besser \
+                geeignet als ein `cat`-Kommando (kein Escaping-Risiko, klare Größenbegrenzung \
+                statt eines abgeschnittenen Kommando-Outputs)."
+                .to_string(),
+            parameters: vec![ActionParameter {
+                name: "path".to_string(),
+                description: "Absoluter Pfad der zu lesenden Datei auf dem Server.".to_string(),
+                kind: ActionParameterKind::String,
+                required: true,
+            }],
+        }
+    }
+
+    /// Entspricht `AiAction::WriteRemoteFile` (Spec 0020, Abschnitt 4.2).
+    pub fn write_remote_file() -> Self {
+        Self {
+            name: "write_remote_file".to_string(),
+            description: "Schreibt eine Datei auf dem verbundenen Server über SFTP (erstellt sie \
+                neu oder überschreibt eine bestehende). Läuft wie ein Kommando durch die \
+                Filter-Engine, wird dem Nutzer aber IMMER zur Bestätigung mit einer \
+                Änderungs-Vorschau angezeigt, nie automatisch ausgeführt. Bei bestehenden \
+                Dateien wird vor dem Schreiben automatisch eine Sicherungskopie angelegt. \
+                Besser geeignet für Config-Dateien als ein `cat <<EOF`-Kommando: kein \
+                Shell-Quoting-Risiko bei Sonderzeichen/Anführungszeichen/`$`-Variablen, und der \
+                Nutzer sieht einen echten Diff statt nur des rohen Kommandotexts."
+                .to_string(),
+            parameters: vec![
+                ActionParameter {
+                    name: "path".to_string(),
+                    description: "Absoluter Pfad der zu schreibenden Datei auf dem Server."
+                        .to_string(),
+                    kind: ActionParameterKind::String,
+                    required: true,
+                },
+                ActionParameter {
+                    name: "content".to_string(),
+                    description: "Vollständiger neuer Dateiinhalt, nicht nur ein Diff.".to_string(),
+                    kind: ActionParameterKind::String,
+                    required: true,
+                },
+            ],
+        }
+    }
 }
 
-/// Alle in Spec 0003/0012 definierten `AiAction`-Varianten als Standard-Set
-/// für `SessionContext::available_actions`.
+/// Alle in Spec 0003/0012/0020 definierten `AiAction`-Varianten als
+/// Standard-Set für `SessionContext::available_actions`. Bewusst **ohne**
+/// Löschen/Umbenennen/Verzeichnis-Anlegen (Spec 0020, Abschnitt 4.4) — dafür
+/// bleibt `suggest_command()` der einzige, durch dieselbe Filter-Engine
+/// samt Hard-Blacklist laufende Weg.
 pub fn default_action_schemas() -> Vec<ActionSchema> {
     vec![
         ActionSchema::suggest_command(),
         ActionSchema::propose_note_update(),
         ActionSchema::generate_document(),
+        ActionSchema::read_remote_file(),
+        ActionSchema::write_remote_file(),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Spec 0020, Abschnitt 4.4: der KI dürfen niemals Schemas für
+    /// Löschen/Umbenennen/Verzeichnis-Anlegen angeboten werden — diese
+    /// Operationen bleiben ausschließlich über `suggest_command()` (also
+    /// mit voller Filter-Engine- und Hard-Blacklist-Prüfung) erreichbar.
+    #[test]
+    fn test_default_action_schemas_excludes_delete_rename_mkdir() {
+        let schemas = default_action_schemas();
+        let names: Vec<&str> = schemas.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"read_remote_file"));
+        assert!(names.contains(&"write_remote_file"));
+        for forbidden in [
+            "delete_remote_file",
+            "remove_remote_file",
+            "rename_remote_file",
+            "create_remote_dir",
+            "mkdir",
+        ] {
+            assert!(
+                !names.contains(&forbidden),
+                "Schema '{forbidden}' darf der KI nicht angeboten werden (Spec 0020, Abschnitt 4.4)"
+            );
+        }
+    }
 }
 
 /// Fehler rund um Aufbau und Nutzung einer KI-Provider-Anfrage (Spec 0006,

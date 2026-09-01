@@ -7,8 +7,18 @@
 //! `test-support`-Feature dieser Crate macht `MockSftpSession` für dessen
 //! `[dev-dependencies]` nutzbar (dasselbe Muster wie andere Crates es für
 //! geteilte Test-Doubles verwenden).
+//!
+//! Zustand liegt hinter `Arc<StdMutex<..>>` statt als einfaches Feld:
+//! `MockSftpSession` wird typischerweise als `Box<dyn SftpSession>` in eine
+//! `Session` verschoben (s. `app_tauri::session::Session::sftp`), ein Test
+//! kann danach also nicht mehr direkt auf das ursprüngliche Objekt
+//! zugreifen. Ein vor dem Verschieben gezogener `.clone()` (billig — teilt
+//! sich denselben `Arc`) bleibt als Prüf-Handle nutzbar, um z. B. zu
+//! verifizieren, *ob* (und mit welchem Inhalt) eine Methode aufgerufen
+//! wurde, nachdem der eigentliche Aufruf längst gelaufen ist.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex as StdMutex};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -24,22 +34,24 @@ pub struct MockFile {
     pub modified: Option<DateTime<Utc>>,
 }
 
-/// In-Memory-Dateisystem-Fake. Pfade sind flache String-Schlüssel (keine
-/// echte Verzeichnisstruktur) — `list_dir` leitet die Kind-Einträge eines
-/// Pfads rein aus den vorhandenen Schlüsseln ab (s. dortiger Kommentar).
 #[derive(Default)]
-pub struct MockSftpSession {
-    pub files: HashMap<String, MockFile>,
+struct Inner {
+    files: HashMap<String, MockFile>,
     /// Jeder Aufruf in Reihenfolge (`"write_file /etc/foo"` etc.) — für
     /// Tests, die prüfen wollen, *ob* (und in welcher Reihenfolge) eine
     /// Methode überhaupt erreicht wurde, z. B. "wurde vor der Bestätigung
     /// nichts geschrieben" (Spec 0020, Abschnitt 4.2, Punkt 2).
-    pub calls: Vec<String>,
+    calls: Vec<String>,
     /// Pfade, bei denen `write_file` mit
     /// [`SshError::SftpPermissionDenied`] scheitern soll — simuliert Spec
     /// 0020, Abschnitt 4.3, ohne einen echten privilegierten Zielpfad zu
     /// brauchen.
-    pub permission_denied_paths: HashSet<String>,
+    permission_denied_paths: HashSet<String>,
+}
+
+#[derive(Default, Clone)]
+pub struct MockSftpSession {
+    inner: Arc<StdMutex<Inner>>,
 }
 
 impl MockSftpSession {
@@ -47,8 +59,8 @@ impl MockSftpSession {
         Self::default()
     }
 
-    pub fn with_file(mut self, path: impl Into<String>, content: impl Into<Vec<u8>>) -> Self {
-        self.files.insert(
+    pub fn with_file(self, path: impl Into<String>, content: impl Into<Vec<u8>>) -> Self {
+        self.inner.lock().unwrap().files.insert(
             path.into(),
             MockFile {
                 content: content.into(),
@@ -59,9 +71,31 @@ impl MockSftpSession {
         self
     }
 
-    pub fn with_permission_denied(mut self, path: impl Into<String>) -> Self {
-        self.permission_denied_paths.insert(path.into());
+    pub fn with_permission_denied(self, path: impl Into<String>) -> Self {
+        self.inner
+            .lock()
+            .unwrap()
+            .permission_denied_paths
+            .insert(path.into());
         self
+    }
+
+    /// Aufrufe in Reihenfolge, seit Erzeugung dieses (ggf. geklonten)
+    /// Handles — s. Modul-Doc-Kommentar zum `Arc`-Zustand.
+    pub fn calls(&self) -> Vec<String> {
+        self.inner.lock().unwrap().calls.clone()
+    }
+
+    /// Aktueller Inhalt eines Pfads, falls (noch) vorhanden — für Tests, die
+    /// nach einem `write_file`/`remove`/`rename` den resultierenden Zustand
+    /// direkt prüfen wollen, ohne selbst wieder über den Trait zu lesen.
+    pub fn file_content(&self, path: &str) -> Option<Vec<u8>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .files
+            .get(path)
+            .map(|f| f.content.clone())
     }
 
     fn not_found(path: &str) -> SshError {
@@ -72,13 +106,14 @@ impl MockSftpSession {
 #[async_trait]
 impl SftpSession for MockSftpSession {
     async fn list_dir(&mut self, path: &str) -> Result<Vec<RemoteEntry>, SshError> {
-        self.calls.push(format!("list_dir {path}"));
+        let mut inner = self.inner.lock().unwrap();
+        inner.calls.push(format!("list_dir {path}"));
         let prefix = if path.ends_with('/') {
             path.to_string()
         } else {
             format!("{path}/")
         };
-        Ok(self
+        Ok(inner
             .files
             .iter()
             .filter_map(|(p, f)| {
@@ -99,21 +134,24 @@ impl SftpSession for MockSftpSession {
     }
 
     async fn read_file(&mut self, path: &str) -> Result<Vec<u8>, SshError> {
-        self.calls.push(format!("read_file {path}"));
-        self.files
+        let mut inner = self.inner.lock().unwrap();
+        inner.calls.push(format!("read_file {path}"));
+        inner
+            .files
             .get(path)
             .map(|f| f.content.clone())
             .ok_or_else(|| Self::not_found(path))
     }
 
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError> {
-        self.calls.push(format!("write_file {path}"));
-        if self.permission_denied_paths.contains(path) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.calls.push(format!("write_file {path}"));
+        if inner.permission_denied_paths.contains(path) {
             return Err(SshError::SftpPermissionDenied(format!(
                 "keine Schreibrechte für {path}"
             )));
         }
-        self.files.insert(
+        inner.files.insert(
             path.to_string(),
             MockFile {
                 content: content.to_vec(),
@@ -125,8 +163,10 @@ impl SftpSession for MockSftpSession {
     }
 
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
-        self.calls.push(format!("stat {path}"));
-        self.files
+        let mut inner = self.inner.lock().unwrap();
+        inner.calls.push(format!("stat {path}"));
+        inner
+            .files
             .get(path)
             .map(|f| RemoteEntry {
                 name: path.rsplit('/').next().unwrap_or(path).to_string(),
@@ -140,22 +180,29 @@ impl SftpSession for MockSftpSession {
     }
 
     async fn remove(&mut self, path: &str) -> Result<(), SshError> {
-        self.calls.push(format!("remove {path}"));
-        self.files
+        let mut inner = self.inner.lock().unwrap();
+        inner.calls.push(format!("remove {path}"));
+        inner
+            .files
             .remove(path)
             .map(|_| ())
             .ok_or_else(|| Self::not_found(path))
     }
 
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError> {
-        self.calls.push(format!("rename {from} -> {to}"));
-        let file = self.files.remove(from).ok_or_else(|| Self::not_found(from))?;
-        self.files.insert(to.to_string(), file);
+        let mut inner = self.inner.lock().unwrap();
+        inner.calls.push(format!("rename {from} -> {to}"));
+        let file = inner.files.remove(from).ok_or_else(|| Self::not_found(from))?;
+        inner.files.insert(to.to_string(), file);
         Ok(())
     }
 
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {
-        self.calls.push(format!("create_dir {path}"));
+        self.inner
+            .lock()
+            .unwrap()
+            .calls
+            .push(format!("create_dir {path}"));
         Ok(())
     }
 }

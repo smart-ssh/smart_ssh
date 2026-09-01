@@ -53,6 +53,11 @@ type ChatItem =
       previousNoteContent: string | null;
       /** Spec 0018, Abschnitt 7 — nur bei `SuggestCommand` relevant. */
       usesStoredSudoPassword: boolean;
+      /** Spec 0020, Abschnitt 4.2, Punkt 3 — nur bei `WriteRemoteFile`
+       * gesetzt (`null` bei neuer oder bei binärer Datei — dann
+       * unterscheidet `previousFileSize`). */
+      previousFileContent: string | null;
+      previousFileSize: number | null;
     }
   | { type: "error"; id: string; message: string }
   | { type: "document"; id: string; title: string; contentMarkdown: string };
@@ -63,6 +68,12 @@ function describeAction(action: AiAction): { label: string; command?: string } {
   }
   if ("GenerateDocument" in action) {
     return { label: `Dokument generieren: ${action.GenerateDocument.title}` };
+  }
+  if ("ReadRemoteFile" in action) {
+    return { label: `Datei lesen: ${action.ReadRemoteFile.path}` };
+  }
+  if ("WriteRemoteFile" in action) {
+    return { label: `Datei schreiben: ${action.WriteRemoteFile.path}` };
   }
   // Spec 0016, Abschnitt 6: die KI liefert nur noch relativ zur aktuellen
   // Session ("dieser Server"/"dessen Gruppe"), nie eine konkrete ID mehr —
@@ -174,6 +185,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
             responded: false,
             previousNoteContent: event.previousNoteContent,
             usesStoredSudoPassword: event.usesStoredSudoPassword,
+            previousFileContent: event.previousFileContent,
+            previousFileSize: event.previousFileSize,
           },
         ]);
       }),
@@ -473,6 +486,25 @@ function ChatItemView({
           />
         </div>
       )}
+      {/* Spec 0020, Abschnitt 4.2, Punkt 5: dieselbe Diff-Komponente wie bei
+       * `ProposeNoteUpdate` — außer bei einer Binärdatei (erkennbar an
+       * `previousFileContent: null` UND `previousFileSize` gesetzt), dort
+       * ein Größenvergleich-Hinweis statt eines (sinnlosen) Text-Diffs. */}
+      {"WriteRemoteFile" in item.action && (
+        <div className="mt-2">
+          {item.previousFileContent === null && item.previousFileSize !== null ? (
+            <BinaryFileChangeHint
+              oldSize={item.previousFileSize}
+              newContent={item.action.WriteRemoteFile.content}
+            />
+          ) : (
+            <NoteDiffPreview
+              previousContent={item.previousFileContent}
+              newContent={item.action.WriteRemoteFile.content}
+            />
+          )}
+        </div>
+      )}
       {typeof item.decision === "object" && "Confirm" in item.decision && (
         <p className="mt-1 text-xs text-slate-400">{formatReason(item.decision.Confirm.reason)}</p>
       )}
@@ -710,11 +742,49 @@ function QuickRuleButton({
   );
 }
 
+/** Größenvergleich statt eines Text-Diffs für eine binäre Zieldatei (Spec
+ * 0020, Abschnitt 4.2, Punkt 5, letzter Satz) — Byte-Länge in UTF-8, analog
+ * zur serverseitigen Größenermittlung (dort ebenfalls Byte-, nicht
+ * Zeichenlänge). */
+function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number; newContent: string }) {
+  const newSize = new TextEncoder().encode(newContent).length;
+  return (
+    <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
+      ⚠ Binärdatei — kein Textvergleich möglich. Bisherige Größe: {formatBytes(oldSize)}, neue
+      Größe: {formatBytes(newSize)}.
+    </p>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function ActionResultView({ result }: { result: ActionResultPayload }) {
   if (result.kind === "noteUpdate") {
     return <p className="mt-2 text-xs text-emerald-300">{result.summary}</p>;
   }
   const truncate = (s: string, max = 2000) => (s.length > max ? `${s.slice(0, max)}\n… (gekürzt)` : s);
+  if (result.kind === "fileRead") {
+    return (
+      <div className="mt-2 space-y-1 rounded bg-slate-950 p-2 font-mono text-xs">
+        <pre className="whitespace-pre-wrap text-slate-300">{truncate(result.content)}</pre>
+      </div>
+    );
+  }
+  if (result.kind === "fileWrite") {
+    return (
+      <div className="mt-2 space-y-1 text-xs text-emerald-300">
+        <p>✓ Datei '{result.path}' geschrieben.</p>
+        {result.backupPath && <p className="text-slate-400">Backup: {result.backupPath}</p>}
+        {result.usedSudoPassword && (
+          <p className="text-amber-300">🔑 Über hinterlegtes Sudo-Passwort geschrieben.</p>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="mt-2 space-y-1 rounded bg-slate-950 p-2 font-mono text-xs">
       {result.stdout && (

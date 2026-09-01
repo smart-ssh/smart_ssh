@@ -114,6 +114,13 @@ pub(crate) fn action_from_tool_arguments(
                 content_markdown,
             })
         }
+        "read_remote_file" => Ok(AiAction::ReadRemoteFile {
+            path: get_str_aliases(&["path", "file", "filename", "remote_path"])?,
+        }),
+        "write_remote_file" => Ok(AiAction::WriteRemoteFile {
+            path: get_str_aliases(&["path", "file", "filename", "remote_path"])?,
+            content: get_str_aliases(&["content", "new_content", "text", "body"])?,
+        }),
         other => Err(AiError::InvalidResponse(format!(
             "unbekannte Aktion '{other}'"
         ))),

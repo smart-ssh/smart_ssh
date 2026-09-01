@@ -84,7 +84,9 @@ export type NoteTargetSelector = "CurrentServer" | "CurrentServerGroup";
 export type AiAction =
   | { SuggestCommand: { command: string } }
   | { ProposeNoteUpdate: { target: NoteTargetSelector; new_content: string } }
-  | { GenerateDocument: { title: string; content_markdown: string } };
+  | { GenerateDocument: { title: string; content_markdown: string } }
+  | { ReadRemoteFile: { path: string } }
+  | { WriteRemoteFile: { path: string; content: string } };
 
 export type Decision =
   | "AutoExec"
@@ -146,6 +148,16 @@ export interface ChatActionProposedEvent {
   /** Spec 0018, Abschnitt 7: ob beim Ausführen automatisch ein hinterlegtes
    * Sudo-Passwort eingespeist würde. */
   usesStoredSudoPassword: boolean;
+  /** Spec 0020, Abschnitt 4.2, Punkt 3: nur bei `WriteRemoteFile` gesetzt —
+   * aktueller Inhalt der Zieldatei für die Diff-Vorschau (dieselbe
+   * `NoteDiffPreview`-Komponente wie bei `ProposeNoteUpdate`). `null`, wenn
+   * die Datei noch nicht existiert ODER sich nicht als Text dekodieren
+   * lässt (dann ist stattdessen `previousFileSize` gesetzt). */
+  previousFileContent: string | null;
+  /** Nur gesetzt, wenn `previousFileContent` wegen einer Binärdatei `null`
+   * ist — Größe der ALTEN Datei in Bytes, für einen Größenvergleich-Hinweis
+   * statt einer Diff-Ansicht. */
+  previousFileSize: number | null;
 }
 
 /** Spec 0010 — `action` ist hier immer `{ ProposeNoteUpdate: {...} }`, nie
@@ -162,7 +174,12 @@ export interface NoteUpdateSuggestedEvent {
 
 export type ActionResultPayload =
   | { kind: "command"; command: string; stdout: string; stderr: string; exitCode: number | null }
-  | { kind: "noteUpdate"; summary: string };
+  | { kind: "noteUpdate"; summary: string }
+  /** Spec 0020, Abschnitt 4.1 — `content` ist bereits redigiert (Spec 0006). */
+  | { kind: "fileRead"; path: string; content: string }
+  /** Spec 0020, Abschnitt 4.2/4.3 — `backupPath` ist `null` nur, wenn die
+   * Datei vor dem Schreiben nicht existierte. */
+  | { kind: "fileWrite"; path: string; backupPath: string | null; usedSudoPassword: boolean };
 
 export interface ChatActionResultEvent {
   sessionId: string;

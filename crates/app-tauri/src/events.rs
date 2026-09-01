@@ -190,6 +190,19 @@ struct ChatActionProposedPayload {
     /// hinterlegtes Sudo-Passwort eingespeist würde — Grundlage für den
     /// Transparenz-Hinweis im Bestätigungsdialog.
     uses_stored_sudo_password: bool,
+    /// Spec 0020, Abschnitt 4.2, Punkt 3: nur bei `action: WriteRemoteFile`
+    /// gesetzt — aktueller (Text-)Inhalt der Zieldatei, für dieselbe
+    /// Diff-Vorschau-Komponente wie bei `previous_note_content`. `None`,
+    /// wenn die Datei noch nicht existiert **oder** nicht als Text
+    /// dekodierbar ist (Binärdatei) — dann unterscheidet
+    /// `previous_file_size` zwischen beiden Fällen.
+    previous_file_content: Option<String>,
+    /// Nur gesetzt, wenn die Zieldatei existiert, aber nicht als Text
+    /// dekodierbar war (Binärdatei) — Größe der *alten* Datei für den in
+    /// diesem Fall angezeigten Hinweis (Spec 0020, Abschnitt 4.2, Punkt 3,
+    /// letzter Satz). `None` sowohl bei einer neuen Datei als auch bei
+    /// jeder Nicht-`WriteRemoteFile`-Aktion.
+    previous_file_size: Option<u64>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -201,6 +214,8 @@ pub fn emit_chat_action_proposed(
     decision: Decision,
     previous_note_content: Option<String>,
     uses_stored_sudo_password: bool,
+    previous_file_content: Option<String>,
+    previous_file_size: Option<u64>,
 ) {
     emit(
         emitter,
@@ -212,6 +227,8 @@ pub fn emit_chat_action_proposed(
             decision,
             previous_note_content,
             uses_stored_sudo_password,
+            previous_file_content,
+            previous_file_size,
         },
     );
 }
@@ -317,6 +334,19 @@ pub enum ActionResultPayload {
     },
     NoteUpdate {
         summary: String,
+    },
+    /// Spec 0020, Abschnitt 4.1 — `content` ist bereits durch den
+    /// `OutputRedactor` gelaufen (identisch zu Kommando-Ausgaben).
+    FileRead {
+        path: String,
+        content: String,
+    },
+    /// Spec 0020, Abschnitt 4.2/4.3 — `backup_path` ist `None` nur, wenn die
+    /// Datei vor dem Schreiben nicht existierte (kein Backup nötig).
+    FileWrite {
+        path: String,
+        backup_path: Option<String>,
+        used_sudo_password: bool,
     },
 }
 

@@ -348,6 +348,7 @@ pub async fn connect(
         sudo_password,
         status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
+        sftp: tokio::sync::Mutex::new(None),
     });
     state.sessions.insert(session_id, session);
 
