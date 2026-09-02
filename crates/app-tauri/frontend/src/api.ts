@@ -68,6 +68,24 @@ export const deleteAiProvider = (id: string) => invoke<void>("delete_ai_provider
 export const setActiveAiProvider = (id: string) =>
   invoke<void>("set_active_ai_provider", { id });
 
+/** Spec 0025, Abschnitt 2: läuft mit den aktuellen (ggf. noch nicht
+ * gespeicherten) Formulardaten — `existingProviderId` liefert bei leerem
+ * `apiKey`-Feld (Bearbeiten, "leer = unverändert") das bereits hinterlegte
+ * Credential. Wirft bei Fehlschlag (nicht jeder Anbieter unterstützt den
+ * Endpunkt zuverlässig) — Aufrufer fällt dann auf ein Freitextfeld zurück,
+ * statt den Fehler als blockierenden Zustand zu behandeln. */
+export const discoverModels = (config: AiProviderConfigInput, existingProviderId?: string) =>
+  invoke<string[]>("discover_models", {
+    config,
+    existingProviderId: existingProviderId ?? null,
+  });
+
+/** Spec 0025, Abschnitt 4: liefert die rohe Antwort des konfigurierten
+ * Attestierungs-Endpunkts unverändert — nur für bereits gespeicherte
+ * Provider aufrufbar (`providerId`). */
+export const fetchAttestationInfo = (providerId: string) =>
+  invoke<string>("fetch_attestation_info", { providerId });
+
 // --- Teil 2: Session/Terminal/Chat --------------------------------------
 
 export const connect = (serverId: string) => invoke<string>("connect", { serverId });

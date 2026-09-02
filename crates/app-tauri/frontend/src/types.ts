@@ -36,6 +36,10 @@ export interface AiProviderConfigDto {
   model: string;
   supportsNativeToolCalling: boolean;
   isActive: boolean;
+  /** Spec 0025, Abschnitt 3. */
+  extraHeaders: [string, string][];
+  /** Spec 0025, Abschnitt 4. */
+  attestationUrl: string | null;
 }
 
 export interface AiProviderConfigInput {
@@ -45,6 +49,10 @@ export interface AiProviderConfigInput {
   model: string;
   supportsNativeToolCalling: boolean;
   apiKey: string;
+  /** Spec 0025, Abschnitt 3. */
+  extraHeaders: [string, string][];
+  /** Spec 0025, Abschnitt 4. */
+  attestationUrl: string | null;
 }
 
 export const PROVIDER_TYPE_LABELS: Record<ProviderType, string> = {
@@ -58,6 +66,13 @@ export const PROVIDER_TYPE_LABELS: Record<ProviderType, string> = {
 // 8.3: "Base-URL-Feld nur bei generic_openai_compatible/ollama sichtbar").
 export function needsBaseUrl(type: ProviderType): boolean {
   return type === "generic_openai_compatible" || type === "ollama";
+}
+
+// Spec 0025, Abschnitt 2: `discover_models` funktioniert nur gegen die
+// OpenAI-kompatible Familie (`GET {base_url}/models`) — `anthropic` hat
+// kein äquivalentes Endpoint-Verhalten.
+export function supportsModelDiscovery(type: ProviderType): boolean {
+  return type === "openai" || type === "generic_openai_compatible" || type === "ollama";
 }
 
 // --- Teil 2: Session/Terminal/Chat ------------------------------------

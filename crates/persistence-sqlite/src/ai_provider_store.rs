@@ -41,6 +41,11 @@ pub struct AiProviderConfig {
     pub supports_native_tool_calling: bool,
     pub credential_ref: CredentialRef,
     pub is_active: bool,
+    /// Spec 0025, Abschnitt 3 — als JSON-Array in der `extra_headers`-Spalte
+    /// gespeichert (s. Migration `0005_...sql`), hier bereits geparst.
+    pub extra_headers: Vec<(String, String)>,
+    /// Spec 0025, Abschnitt 4.
+    pub attestation_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -62,6 +67,8 @@ pub struct AiProviderConfigUpdate {
     pub base_url: Option<String>,
     pub model: String,
     pub supports_native_tool_calling: bool,
+    pub extra_headers: Vec<(String, String)>,
+    pub attestation_url: Option<String>,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -109,6 +116,18 @@ fn parse_timestamp(raw: &str) -> Result<DateTime<Utc>, AiProviderStoreError> {
         .map_err(|e| AiProviderStoreError::Backend(format!("ungültiger Zeitstempel '{raw}': {e}")))
 }
 
+/// (De-)Serialisierung von `extra_headers` als JSON-Array-Spalte — s.
+/// Doc-Kommentar der Migration `0005_...sql` zur Begründung, warum kein
+/// eigener Tabellen-Join.
+fn encode_extra_headers(headers: &[(String, String)]) -> String {
+    serde_json::to_string(headers).expect("Vec<(String, String)> ist immer serialisierbar")
+}
+
+fn parse_extra_headers(raw: &str) -> Result<Vec<(String, String)>, AiProviderStoreError> {
+    serde_json::from_str(raw)
+        .map_err(|e| AiProviderStoreError::Backend(format!("ungültige extra_headers '{raw}': {e}")))
+}
+
 fn row_to_config(row: &sqlx::sqlite::SqliteRow) -> Result<AiProviderConfig, AiProviderStoreError> {
     let id: String = row.get("id");
     let provider_type_raw: String = row.get("provider_type");
@@ -121,6 +140,8 @@ fn row_to_config(row: &sqlx::sqlite::SqliteRow) -> Result<AiProviderConfig, AiPr
         ))
     })?;
 
+    let extra_headers_raw: String = row.get("extra_headers");
+
     Ok(AiProviderConfig {
         id: ProviderId(parse_uuid(&id)?),
         provider_type,
@@ -130,6 +151,8 @@ fn row_to_config(row: &sqlx::sqlite::SqliteRow) -> Result<AiProviderConfig, AiPr
         supports_native_tool_calling: row.get("supports_native_tool_calling"),
         credential_ref: CredentialRef::new(row.get::<String, _>("credential_ref")),
         is_active: row.get("is_active"),
+        extra_headers: parse_extra_headers(&extra_headers_raw)?,
+        attestation_url: row.get("attestation_url"),
         created_at: parse_timestamp(&created_at)?,
         updated_at: parse_timestamp(&updated_at)?,
     })
@@ -153,7 +176,8 @@ impl SqliteAiProviderStore {
     pub async fn list(&self) -> Result<Vec<AiProviderConfig>, AiProviderStoreError> {
         let rows = sqlx::query(
             "SELECT id, provider_type, display_name, base_url, model, \
-             supports_native_tool_calling, credential_ref, is_active, created_at, updated_at \
+             supports_native_tool_calling, credential_ref, is_active, extra_headers, \
+             attestation_url, created_at, updated_at \
              FROM ai_provider_configs ORDER BY created_at",
         )
         .fetch_all(&self.pool)
@@ -170,7 +194,8 @@ impl SqliteAiProviderStore {
     pub async fn get(&self, id: &ProviderId) -> Result<AiProviderConfig, AiProviderStoreError> {
         let row = sqlx::query(
             "SELECT id, provider_type, display_name, base_url, model, \
-             supports_native_tool_calling, credential_ref, is_active, created_at, updated_at \
+             supports_native_tool_calling, credential_ref, is_active, extra_headers, \
+             attestation_url, created_at, updated_at \
              FROM ai_provider_configs WHERE id = ?",
         )
         .bind(id.0.to_string())
@@ -194,8 +219,8 @@ impl SqliteAiProviderStore {
         sqlx::query(
             "INSERT INTO ai_provider_configs \
              (id, provider_type, display_name, base_url, model, supports_native_tool_calling, \
-              credential_ref, is_active, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?)",
+              credential_ref, is_active, extra_headers, attestation_url, created_at, updated_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?, ?, ?)",
         )
         .bind(config.id.0.to_string())
         .bind(config.provider_type.as_db_str())
@@ -204,6 +229,8 @@ impl SqliteAiProviderStore {
         .bind(&config.model)
         .bind(config.supports_native_tool_calling)
         .bind(config.credential_ref.as_str())
+        .bind(encode_extra_headers(&config.extra_headers))
+        .bind(&config.attestation_url)
         .bind(config.created_at.to_rfc3339())
         .bind(config.updated_at.to_rfc3339())
         .execute(&self.pool)
@@ -221,13 +248,16 @@ impl SqliteAiProviderStore {
     ) -> Result<(), AiProviderStoreError> {
         let result = sqlx::query(
             "UPDATE ai_provider_configs SET provider_type = ?, display_name = ?, base_url = ?, \
-             model = ?, supports_native_tool_calling = ?, updated_at = ? WHERE id = ?",
+             model = ?, supports_native_tool_calling = ?, extra_headers = ?, \
+             attestation_url = ?, updated_at = ? WHERE id = ?",
         )
         .bind(update.provider_type.as_db_str())
         .bind(&update.display_name)
         .bind(&update.base_url)
         .bind(&update.model)
         .bind(update.supports_native_tool_calling)
+        .bind(encode_extra_headers(&update.extra_headers))
+        .bind(&update.attestation_url)
         .bind(update.updated_at.to_rfc3339())
         .bind(update.id.0.to_string())
         .execute(&self.pool)
@@ -344,6 +374,8 @@ mod tests {
             supports_native_tool_calling: true,
             credential_ref: CredentialRef::new(format!("ai-provider:{display_name}")),
             is_active: false,
+            extra_headers: Vec::new(),
+            attestation_url: None,
             created_at: now,
             updated_at: now,
         }
@@ -377,6 +409,8 @@ mod tests {
             base_url: Some("https://api.openai.com/v1".to_string()),
             model: "gpt-test".to_string(),
             supports_native_tool_calling: false,
+            extra_headers: vec![("X-Title".to_string(), "Smart SSH".to_string())],
+            attestation_url: Some("https://attest.example/report".to_string()),
             updated_at: Utc::now(),
         };
         store.update_fields(&update).await.unwrap();
@@ -389,6 +423,14 @@ mod tests {
             Some("https://api.openai.com/v1")
         );
         assert!(!listed[0].supports_native_tool_calling);
+        assert_eq!(
+            listed[0].extra_headers,
+            vec![("X-Title".to_string(), "Smart SSH".to_string())]
+        );
+        assert_eq!(
+            listed[0].attestation_url.as_deref(),
+            Some("https://attest.example/report")
+        );
         assert_eq!(
             listed[0].credential_ref, config.credential_ref,
             "update_fields darf credential_ref nicht ändern"
@@ -405,6 +447,8 @@ mod tests {
             base_url: None,
             model: "x".to_string(),
             supports_native_tool_calling: true,
+            extra_headers: Vec::new(),
+            attestation_url: None,
             updated_at: Utc::now(),
         };
 

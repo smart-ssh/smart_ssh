@@ -128,6 +128,8 @@ pub fn run() {
             commands::update_ai_provider,
             commands::delete_ai_provider,
             commands::set_active_ai_provider,
+            commands::discover_models,
+            commands::fetch_attestation_info,
             commands::connect,
             commands::confirm_host_key,
             commands::open_terminal,

@@ -6,6 +6,7 @@
 
 mod action;
 mod anthropic;
+mod discovery;
 mod error;
 mod fallback;
 mod openai_compatible;
@@ -13,4 +14,5 @@ mod request_logging;
 mod sse;
 
 pub use anthropic::AnthropicProvider;
+pub use discovery::{discover_models, fetch_attestation_info};
 pub use openai_compatible::OpenAiCompatibleProvider;

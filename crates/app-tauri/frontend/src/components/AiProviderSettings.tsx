@@ -4,6 +4,8 @@ import {
   addAiProvider,
   commandErrorMessage,
   deleteAiProvider,
+  discoverModels,
+  fetchAttestationInfo,
   listAiProviders,
   openLogDirectory,
   setActiveAiProvider,
@@ -15,6 +17,7 @@ import {
   type ProviderType,
   PROVIDER_TYPE_LABELS,
   needsBaseUrl,
+  supportsModelDiscovery,
 } from "../types";
 
 const PROVIDER_TYPES: ProviderType[] = [
@@ -32,8 +35,12 @@ function emptyForm(): AiProviderConfigInput {
     model: "",
     supportsNativeToolCalling: true,
     apiKey: "",
+    extraHeaders: [],
+    attestationUrl: null,
   };
 }
+
+const MODEL_DATALIST_ID = "ai-provider-model-options";
 
 interface AiProviderSettingsProps {
   onClose: () => void;
@@ -50,6 +57,13 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<AiProviderConfigInput>(emptyForm());
   const [submitting, setSubmitting] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [models, setModels] = useState<string[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsFailed, setModelsFailed] = useState(false);
+  const [attestationResults, setAttestationResults] = useState<Record<string, string>>({});
+  const [attestationLoading, setAttestationLoading] = useState<Record<string, boolean>>({});
+  const [attestationErrors, setAttestationErrors] = useState<Record<string, string>>({});
 
   /** Spec 0024, Abschnitt 4: Wirkung sofort ohne Neustart —
    * `setLanguage` ruft `i18next.changeLanguage` auf, das automatisch alle
@@ -71,8 +85,15 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
     setSubmitting(true);
     setError(null);
     try {
-      await addAiProvider(form);
+      const newId = await addAiProvider(form);
+      // Spec 0025, Abschnitt 4: "beim Speichern ... abrufen" — automatisch,
+      // wenn eine Attestierungs-URL hinterlegt wurde.
+      if (form.attestationUrl) {
+        void handleFetchAttestation(newId);
+      }
       setForm(emptyForm());
+      setModels([]);
+      setModelsFailed(false);
       reload();
       onProvidersChanged();
     } catch (err) {
@@ -81,6 +102,52 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
       setSubmitting(false);
     }
   };
+
+  /** Spec 0025, Abschnitt 2: läuft mit den aktuellen Formulardaten, auch
+   * bevor der Provider gespeichert ist — schlägt der Aufruf fehl (nicht
+   * jeder Anbieter unterstützt den Endpunkt zuverlässig), bleibt das
+   * Modellfeld einfach ein normales Freitextfeld (kein `setError`, kein
+   * blockierender Zustand). */
+  const handleDiscoverModels = async () => {
+    setModelsLoading(true);
+    setModelsFailed(false);
+    try {
+      const discovered = await discoverModels(form);
+      setModels(discovered);
+    } catch {
+      setModelsFailed(true);
+      setModels([]);
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
+  /** Spec 0025, Abschnitt 4: "auf Wunsch erneut" abrufbar — pro
+   * Provider-Zeile in der Liste nutzbar, nicht nur direkt nach dem
+   * Speichern. */
+  const handleFetchAttestation = async (providerId: string) => {
+    setAttestationLoading((prev) => ({ ...prev, [providerId]: true }));
+    setAttestationErrors((prev) => ({ ...prev, [providerId]: "" }));
+    try {
+      const info = await fetchAttestationInfo(providerId);
+      setAttestationResults((prev) => ({ ...prev, [providerId]: info }));
+    } catch (err) {
+      setAttestationErrors((prev) => ({ ...prev, [providerId]: commandErrorMessage(err) }));
+    } finally {
+      setAttestationLoading((prev) => ({ ...prev, [providerId]: false }));
+    }
+  };
+
+  const updateExtraHeader = (index: number, key: string, value: string) => {
+    const next = [...form.extraHeaders];
+    next[index] = [key, value];
+    setForm({ ...form, extraHeaders: next });
+  };
+
+  const addExtraHeader = () => setForm({ ...form, extraHeaders: [...form.extraHeaders, ["", ""]] });
+
+  const removeExtraHeader = (index: number) =>
+    setForm({ ...form, extraHeaders: form.extraHeaders.filter((_, i) => i !== index) });
 
   const handleDelete = async (id: string) => {
     setError(null);
@@ -172,38 +239,73 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
             <li className="px-4 py-3 text-sm text-slate-400">{t("aiProvider.noProviders")}</li>
           )}
           {providers.map((provider) => (
-            <li key={provider.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <div>
-                <p className="font-medium text-slate-100">
-                  {provider.displayName}
-                  {provider.isActive && (
-                    <span className="ml-2 rounded bg-emerald-900 px-2 py-0.5 text-xs text-emerald-300">
-                      {t("aiProvider.active")}
-                    </span>
+            <li key={provider.id} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium text-slate-100">
+                    {provider.displayName}
+                    {provider.isActive && (
+                      <span className="ml-2 rounded bg-emerald-900 px-2 py-0.5 text-xs text-emerald-300">
+                        {t("aiProvider.active")}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-sm text-slate-400">
+                    {PROVIDER_TYPE_LABELS[provider.providerType]} · {provider.model}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  {!provider.isActive && (
+                    <button
+                      type="button"
+                      onClick={() => handleSetActive(provider.id)}
+                      className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+                    >
+                      {t("aiProvider.setActive")}
+                    </button>
                   )}
-                </p>
-                <p className="text-sm text-slate-400">
-                  {PROVIDER_TYPE_LABELS[provider.providerType]} · {provider.model}
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                {!provider.isActive && (
                   <button
                     type="button"
-                    onClick={() => handleSetActive(provider.id)}
-                    className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+                    onClick={() => handleDelete(provider.id)}
+                    className="rounded bg-red-900 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
                   >
-                    {t("aiProvider.setActive")}
+                    {t("common.delete")}
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleDelete(provider.id)}
-                  className="rounded bg-red-900 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
-                >
-                  {t("common.delete")}
-                </button>
+                </div>
               </div>
+
+              {provider.attestationUrl && (
+                <div className="mt-2 space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleFetchAttestation(provider.id)}
+                    disabled={attestationLoading[provider.id]}
+                    className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+                  >
+                    {attestationLoading[provider.id]
+                      ? t("aiProvider.attestationFetching")
+                      : t("aiProvider.attestationFetch")}
+                  </button>
+                  {attestationErrors[provider.id] && (
+                    <p className="text-xs text-red-400">{attestationErrors[provider.id]}</p>
+                  )}
+                  {attestationResults[provider.id] && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-amber-300">
+                        {t("aiProvider.attestationDisclaimerBeforeNot")}
+                        <strong>{t("aiProvider.attestationDisclaimerNot")}</strong>
+                        {t("aiProvider.attestationDisclaimerAfterNot")}
+                      </p>
+                      <p className="text-xs font-semibold text-slate-400">
+                        {t("aiProvider.attestationResultLabel")}
+                      </p>
+                      <pre className="max-h-40 overflow-auto rounded border border-slate-700 bg-slate-950 p-2 text-xs whitespace-pre-wrap text-slate-300">
+                        {attestationResults[provider.id]}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -243,14 +345,40 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
 
           <label className="block text-sm text-slate-300">
             {t("aiProvider.model")}
-            <input
-              type="text"
-              required
-              placeholder={t("aiProvider.modelPlaceholder")}
-              value={form.model}
-              onChange={(e) => setForm({ ...form, model: e.target.value })}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-            />
+            <div className="mt-1 flex gap-2">
+              <input
+                type="text"
+                required
+                list={supportsModelDiscovery(form.providerType) ? MODEL_DATALIST_ID : undefined}
+                placeholder={t("aiProvider.modelPlaceholder")}
+                value={form.model}
+                onChange={(e) => setForm({ ...form, model: e.target.value })}
+                className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+              />
+              {supportsModelDiscovery(form.providerType) && (
+                <button
+                  type="button"
+                  onClick={handleDiscoverModels}
+                  disabled={modelsLoading}
+                  className="shrink-0 rounded border border-slate-600 px-2 py-1.5 text-xs whitespace-nowrap text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+                >
+                  {modelsLoading ? t("aiProvider.discoveringModels") : t("aiProvider.discoverModels")}
+                </button>
+              )}
+            </div>
+            {/* Spec 0025, Abschnitt 2: `<datalist>` macht das Feld
+             * durchsuchbar (Browser-Autocomplete über die entdeckten
+             * Modelle), bleibt aber immer ein normales Freitextfeld — genau
+             * der geforderte Fallback, falls die Discovery fehlschlägt oder
+             * gar nicht erst versucht wird. */}
+            <datalist id={MODEL_DATALIST_ID}>
+              {models.map((model) => (
+                <option key={model} value={model} />
+              ))}
+            </datalist>
+            {modelsFailed && (
+              <p className="mt-1 text-xs text-slate-500">{t("aiProvider.modelDiscoveryFailedHint")}</p>
+            )}
           </label>
 
           {needsBaseUrl(form.providerType) && (
@@ -288,6 +416,77 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
             />
             {t("aiProvider.nativeToolCalling")}
           </label>
+
+          {/* Spec 0025, Abschnitt 3/4: Zusatz-Header und Attestierungs-URL
+           * hinter einem "Erweitert"-Bereich, damit das Formular für den
+           * Normalfall übersichtlich bleibt. */}
+          <div className="border-t border-slate-700 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced((prev) => !prev)}
+              className="font-heading text-xs font-semibold tracking-wide text-slate-400 uppercase hover:text-slate-200"
+            >
+              {showAdvanced ? "▾ " : "▸ "}
+              {t("aiProvider.advanced")}
+            </button>
+
+            {showAdvanced && (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <p className="text-sm text-slate-300">{t("aiProvider.extraHeadersLabel")}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{t("aiProvider.extraHeadersHint")}</p>
+                  <div className="mt-2 space-y-2">
+                    {form.extraHeaders.map(([key, value], index) => (
+                      <div key={index} className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder={t("aiProvider.extraHeaderKeyPlaceholder")}
+                          value={key}
+                          onChange={(e) => updateExtraHeader(index, e.target.value, value)}
+                          className="w-1/2 rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
+                        />
+                        <input
+                          type="text"
+                          placeholder={t("aiProvider.extraHeaderValuePlaceholder")}
+                          value={value}
+                          onChange={(e) => updateExtraHeader(index, key, e.target.value)}
+                          className="w-1/2 rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeExtraHeader(index)}
+                          aria-label={t("aiProvider.extraHeaderRemoveAria")}
+                          className="shrink-0 px-1 text-slate-500 hover:text-slate-200"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addExtraHeader}
+                    className="mt-2 rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700"
+                  >
+                    {t("aiProvider.extraHeaderAdd")}
+                  </button>
+                </div>
+
+                <label className="block text-sm text-slate-300">
+                  {t("aiProvider.attestationUrlLabel")}
+                  <input
+                    type="text"
+                    placeholder={t("aiProvider.attestationUrlPlaceholder")}
+                    value={form.attestationUrl ?? ""}
+                    onChange={(e) =>
+                      setForm({ ...form, attestationUrl: e.target.value || null })
+                    }
+                    className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
 
           <button
             type="submit"

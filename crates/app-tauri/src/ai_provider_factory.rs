@@ -5,7 +5,7 @@ use ai_providers::{AnthropicProvider, OpenAiCompatibleProvider};
 use secrecy::{ExposeSecret, SecretString};
 use ssh_manager_core::ai::{AiProvider, ProviderType};
 
-const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
+pub const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 const DEFAULT_ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
 
 /// `base_url` ist in der Persistenz nur für `generic_openai_compatible`/
@@ -20,6 +20,11 @@ pub fn build_ai_provider(
     model: &str,
     api_key: SecretString,
     supports_native_tool_calling: bool,
+    // Spec 0025, Abschnitt 3 — nur für die OpenAI-kompatible Familie
+    // (`OpenAiCompatibleProvider`); `AnthropicProvider` braucht wegen des
+    // abweichenden Request-Formats eine eigene Erweiterung, falls das
+    // später gewünscht wird (nicht Teil dieser Spec).
+    extra_headers: Vec<(String, String)>,
 ) -> Box<dyn AiProvider> {
     let api_key = api_key.expose_secret().to_string();
     match provider_type {
@@ -30,6 +35,7 @@ pub fn build_ai_provider(
                 model,
                 api_key,
                 supports_native_tool_calling,
+                extra_headers,
             ))
         }
         ProviderType::Anthropic => {
@@ -80,7 +86,8 @@ mod tests {
         let api_key = store.get(&credential_ref).expect("Key muss auflösbar sein");
         assert_eq!(store.get_calls(), 1);
 
-        let provider = build_ai_provider(ProviderType::OpenAi, None, "gpt-4o", api_key, true);
+        let provider =
+            build_ai_provider(ProviderType::OpenAi, None, "gpt-4o", api_key, true, Vec::new());
 
         // Fünf "Chat-Runden" — `send()` liefert nur einen (nicht gepollten)
         // Stream zurück, es geschieht keine echte Netzwerk-I/O, aber jeder

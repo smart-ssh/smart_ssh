@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::mpsc;
 
@@ -159,6 +159,74 @@ pub async fn set_active_ai_provider(
     Ok(())
 }
 
+/// Spec 0025, Abschnitt 2: `GET {base_url}/models` — läuft mit den gerade
+/// im Formular eingegebenen, noch nicht gespeicherten Werten (analog zu
+/// `test_connection`, Spec 0008 Abschnitt 7), nicht mit einer bereits
+/// persistierten Config. `existing_provider_id` deckt denselben Fall wie
+/// dort ab: ist das `api_key`-Feld leer (Bearbeiten eines gespeicherten
+/// Providers, "leer = unverändert"), wird stattdessen dessen bereits
+/// hinterlegtes Credential herangezogen.
+///
+/// Nur für die OpenAI-kompatible Familie unterstützt (Spec 0025, Abschnitt
+/// 2) — `anthropic` hat kein äquivalentes `/models`-Endpoint-Verhalten in
+/// dieser Spec und wird mit einem klaren Fehler abgelehnt, statt einen
+/// wahrscheinlich falsch geformten Request zu versuchen.
+#[tauri::command]
+pub async fn discover_models(
+    state: State<'_, AppState>,
+    config: AiProviderConfigInput,
+    existing_provider_id: Option<ProviderId>,
+) -> CommandResult<Vec<String>> {
+    if !matches!(
+        config.provider_type,
+        ssh_manager_core::ai::ProviderType::OpenAi
+            | ssh_manager_core::ai::ProviderType::GenericOpenAiCompatible
+            | ssh_manager_core::ai::ProviderType::Ollama
+    ) {
+        return Err("Modell-Discovery wird für diesen Provider-Typ nicht unterstützt".into());
+    }
+
+    let api_key = if !config.api_key.is_empty() {
+        config.api_key.clone()
+    } else if let Some(id) = existing_provider_id {
+        let existing = state.ai_provider_store.get(&id).await?;
+        state
+            .credential_store
+            .get(&existing.credential_ref)?
+            .expose_secret()
+            .to_string()
+    } else {
+        return Err("API-Key erforderlich".into());
+    };
+
+    let base_url = config
+        .base_url
+        .as_deref()
+        .unwrap_or(crate::ai_provider_factory::DEFAULT_OPENAI_BASE_URL);
+
+    let models = ai_providers::discover_models(base_url, &api_key, &config.extra_headers).await?;
+    Ok(models)
+}
+
+/// Spec 0025, Abschnitt 4: ruft den beim Provider hinterlegten
+/// Attestierungs-Endpunkt ab und liefert die **rohe** Antwort unverändert
+/// — anders als `discover_models` erst nach dem Speichern nutzbar
+/// (`provider_id` statt Formulardaten), da der Endpunkt laut Spec "beim
+/// Speichern und auf Wunsch erneut" abgerufen wird, nicht während der
+/// Eingabe.
+#[tauri::command]
+pub async fn fetch_attestation_info(
+    state: State<'_, AppState>,
+    provider_id: ProviderId,
+) -> CommandResult<String> {
+    let existing = state.ai_provider_store.get(&provider_id).await?;
+    let url = existing
+        .attestation_url
+        .ok_or("Kein Attestierungs-Endpunkt für diesen Provider konfiguriert")?;
+    let info = ai_providers::fetch_attestation_info(&url).await?;
+    Ok(info)
+}
+
 /// Kein eigener `get_active`-Query in `SqliteAiProviderStore` (s. dortige
 /// API) — bei der zu erwartenden geringen Providerzahl reicht ein Filter
 /// über `list()`, ein zusätzlicher SQL-Pfad nur für diesen einen Aufrufer
@@ -214,6 +282,7 @@ pub async fn connect(
         &active_config.model,
         api_key,
         active_config.supports_native_tool_calling,
+        active_config.extra_headers.clone(),
     );
 
     let mut transport = loop {

@@ -45,6 +45,12 @@ pub struct OpenAiCompatibleProvider {
     api_key: String,
     /// Fallback-Modus (Spec 0006, Abschnitt 4) wenn `false`.
     supports_native_tool_calling: bool,
+    /// Spec 0025, Abschnitt 3: anbieterspezifische Zusatz-Header (z. B.
+    /// OpenRouters optionale `HTTP-Referer`/`X-Title`) — an jeden Request
+    /// angehängt, nach `bearer_auth`/`accept` gesetzt, kann diese bei
+    /// Namensgleichheit also überschreiben (bewusst: ein Nutzer, der z. B.
+    /// selbst einen `accept`-Header einträgt, meint das ernst).
+    extra_headers: Vec<(String, String)>,
 }
 
 impl OpenAiCompatibleProvider {
@@ -53,6 +59,7 @@ impl OpenAiCompatibleProvider {
         model: impl Into<String>,
         api_key: impl Into<String>,
         supports_native_tool_calling: bool,
+        extra_headers: Vec<(String, String)>,
     ) -> Self {
         Self {
             client: reqwest::Client::new(),
@@ -60,6 +67,7 @@ impl OpenAiCompatibleProvider {
             model: model.into(),
             api_key: api_key.into(),
             supports_native_tool_calling,
+            extra_headers,
         }
     }
 
@@ -174,15 +182,18 @@ impl AiProvider for OpenAiCompatibleProvider {
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
         let api_key = self.api_key.clone();
         let native_tool_calling = self.supports_native_tool_calling;
+        let extra_headers = self.extra_headers.clone();
         let body = self.build_request_body(&context);
 
         let request = async move {
-            let send = client
+            let mut req = client
                 .post(&url)
                 .bearer_auth(&api_key)
-                .header("accept", "text/event-stream")
-                .json(&body)
-                .send();
+                .header("accept", "text/event-stream");
+            for (name, value) in &extra_headers {
+                req = req.header(name, value);
+            }
+            let send = req.json(&body).send();
             let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
                 Ok(Ok(response)) => response,
                 Ok(Err(err)) => return error_stream(map_transport_error(&err)),

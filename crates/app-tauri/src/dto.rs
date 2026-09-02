@@ -109,6 +109,10 @@ pub struct AiProviderConfigDto {
     pub model: String,
     pub supports_native_tool_calling: bool,
     pub is_active: bool,
+    /// Spec 0025, Abschnitt 3.
+    pub extra_headers: Vec<(String, String)>,
+    /// Spec 0025, Abschnitt 4.
+    pub attestation_url: Option<String>,
 }
 
 impl From<&AiProviderConfig> for AiProviderConfigDto {
@@ -121,6 +125,8 @@ impl From<&AiProviderConfig> for AiProviderConfigDto {
             model: config.model.clone(),
             supports_native_tool_calling: config.supports_native_tool_calling,
             is_active: config.is_active,
+            extra_headers: config.extra_headers.clone(),
+            attestation_url: config.attestation_url.clone(),
         }
     }
 }
@@ -138,6 +144,10 @@ pub struct AiProviderConfigInput {
     pub model: String,
     pub supports_native_tool_calling: bool,
     pub api_key: String,
+    /// Spec 0025, Abschnitt 3.
+    pub extra_headers: Vec<(String, String)>,
+    /// Spec 0025, Abschnitt 4.
+    pub attestation_url: Option<String>,
 }
 
 impl AiProviderConfigInput {
@@ -156,6 +166,8 @@ impl AiProviderConfigInput {
             supports_native_tool_calling: self.supports_native_tool_calling,
             credential_ref: credential_ref_for(id),
             is_active: false,
+            extra_headers: self.extra_headers,
+            attestation_url: self.attestation_url,
             created_at: now,
             updated_at: now,
         }
@@ -169,6 +181,8 @@ impl AiProviderConfigInput {
             base_url: self.base_url,
             model: self.model,
             supports_native_tool_calling: self.supports_native_tool_calling,
+            extra_headers: self.extra_headers,
+            attestation_url: self.attestation_url,
             updated_at: Utc::now(),
         }
     }
