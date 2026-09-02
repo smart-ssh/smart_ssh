@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AiProviderSettings } from "./components/AiProviderSettings";
 import { AppHeader } from "./components/AppHeader";
 import { FilterRulesView } from "./components/FilterRulesView";
@@ -164,6 +165,7 @@ function MainScreen({
   findExistingSessionId,
   onSwitchToExistingTab,
 }: MainScreenProps) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
       <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
@@ -179,7 +181,7 @@ function MainScreen({
                   : "border-transparent text-slate-400 hover:bg-slate-800"
               }`}
             >
-              Verbinden
+              {t("nav.connect")}
             </button>
             <button
               type="button"
@@ -190,7 +192,7 @@ function MainScreen({
                   : "border-transparent text-slate-400 hover:bg-slate-800"
               }`}
             >
-              Verwalten
+              {t("nav.manage")}
             </button>
             <button
               type="button"
@@ -201,7 +203,7 @@ function MainScreen({
                   : "border-transparent text-slate-400 hover:bg-slate-800"
               }`}
             >
-              Filter-Regeln
+              {t("nav.rules")}
             </button>
           </nav>
         </div>
@@ -210,7 +212,7 @@ function MainScreen({
           onClick={() => setSettingsOpen(true)}
           className="font-heading border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-semibold tracking-wide hover:bg-slate-700"
         >
-          Einstellungen
+          {t("settings.title")}
         </button>
       </header>
 
@@ -218,13 +220,13 @@ function MainScreen({
         <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-6 py-8">
           {hasActiveProvider === false && (
             <p className="rounded border border-amber-800 bg-amber-950 px-4 py-3 text-sm text-amber-200">
-              Noch kein aktiver AI-Provider konfiguriert.{" "}
+              {t("mainScreen.noActiveProvider")}{" "}
               <button
                 type="button"
                 onClick={() => setSettingsOpen(true)}
                 className="underline hover:no-underline"
               >
-                Jetzt in den Einstellungen einrichten
+                {t("mainScreen.setupProviderNow")}
               </button>
               .
             </p>
@@ -232,7 +234,7 @@ function MainScreen({
 
           <section>
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
-              Server
+              {t("mainScreen.serversHeading")}
             </h2>
             <ServerList
               onConnected={onConnected}

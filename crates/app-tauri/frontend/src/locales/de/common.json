@@ -13,6 +13,16 @@
     "testing": "Testet…",
     "removing": "Entfernt…"
   },
+  "nav": {
+    "connect": "Verbinden",
+    "manage": "Verwalten",
+    "rules": "Filter-Regeln"
+  },
+  "mainScreen": {
+    "noActiveProvider": "Noch kein aktiver AI-Provider konfiguriert.",
+    "setupProviderNow": "Jetzt in den Einstellungen einrichten",
+    "serversHeading": "Server"
+  },
   "settings": {
     "title": "Einstellungen",
     "language": {
@@ -157,7 +167,8 @@
     "tagNamePlaceholder": "Tag-Name",
     "loadingSuggestions": "Lädt Vorschläge…",
     "noSuggestions": "Keine Vorschläge.",
-    "binaryFileHint": "⚠ Binärdatei — kein Textvergleich möglich. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}."
+    "binaryFileHint": "⚠ Binärdatei — kein Textvergleich möglich. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
+    "noContentChange": "(keine inhaltliche Änderung)"
   },
   "hostKeyDialog": {
     "mismatchLabel": "Sicherheitswarnung · Host-Schlüssel geändert",

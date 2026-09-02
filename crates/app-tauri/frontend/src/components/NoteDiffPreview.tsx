@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { shortNoteDiff } from "../textDiff";
 
 /**
@@ -15,10 +16,11 @@ export function NoteDiffPreview({
   previousContent: string | null;
   newContent: string;
 }) {
+  const { t } = useTranslation();
   const lines = shortNoteDiff(previousContent, newContent);
 
   if (lines.length === 0) {
-    return <p className="text-xs text-slate-500">(keine inhaltliche Änderung)</p>;
+    return <p className="text-xs text-slate-500">{t("confirmDialog.noContentChange")}</p>;
   }
 
   return (

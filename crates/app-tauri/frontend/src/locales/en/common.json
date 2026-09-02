@@ -13,6 +13,16 @@
     "testing": "Testing…",
     "removing": "Removing…"
   },
+  "nav": {
+    "connect": "Connect",
+    "manage": "Manage",
+    "rules": "Filter Rules"
+  },
+  "mainScreen": {
+    "noActiveProvider": "No active AI provider configured yet.",
+    "setupProviderNow": "Set it up now in Settings",
+    "serversHeading": "Servers"
+  },
   "settings": {
     "title": "Settings",
     "language": {
@@ -157,7 +167,8 @@
     "tagNamePlaceholder": "Tag name",
     "loadingSuggestions": "Loading suggestions…",
     "noSuggestions": "No suggestions.",
-    "binaryFileHint": "⚠ Binary file — text comparison not possible. Previous size: {{oldSize}}, new size: {{newSize}}."
+    "binaryFileHint": "⚠ Binary file — text comparison not possible. Previous size: {{oldSize}}, new size: {{newSize}}.",
+    "noContentChange": "(no content change)"
   },
   "hostKeyDialog": {
     "mismatchLabel": "Security Warning · Host Key Changed",
