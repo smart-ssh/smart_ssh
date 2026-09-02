@@ -229,6 +229,14 @@ struct ChatActionProposedPayload {
     /// letzter Satz). `None` sowohl bei einer neuen Datei als auch bei
     /// jeder Nicht-`WriteRemoteFile`-Aktion.
     previous_file_size: Option<u64>,
+    /// Spec 0023, Abschnitt 3: nur bei `action: ProposeNoteUpdate` gesetzt —
+    /// Server- oder Gruppenname des bereits serverseitig aufgelösten Ziels.
+    /// Der Nutzer muss immer eindeutig erkennen können, worauf sich der
+    /// Vorschlag bezieht, unabhängig davon, welcher Server/Tab im Frontend
+    /// gerade "aktuell" ist. `None`, wenn die Zielauflösung fehlschlägt
+    /// (z. B. Server inzwischen gelöscht) — dann zeigt das Frontend keinen
+    /// Namen statt eines falschen.
+    target_name: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -242,6 +250,7 @@ pub fn emit_chat_action_proposed(
     uses_stored_sudo_password: bool,
     previous_file_content: Option<String>,
     previous_file_size: Option<u64>,
+    target_name: Option<String>,
 ) {
     emit(
         emitter,
@@ -255,6 +264,7 @@ pub fn emit_chat_action_proposed(
             uses_stored_sudo_password,
             previous_file_content,
             previous_file_size,
+            target_name,
         },
     );
 }
@@ -284,6 +294,12 @@ struct NoteUpdateSuggestedPayload {
     /// Spec 0019, Abschnitt 3 — s. `ChatActionProposedPayload`-Doc-
     /// Kommentar, dieselbe Grundlage.
     previous_note_content: Option<String>,
+    /// Spec 0023, Abschnitt 3 — s. `ChatActionProposedPayload.target_name`-
+    /// Doc-Kommentar. Besonders wichtig für dieses Event: es ist bewusst
+    /// app-weit statt tab-gebunden (Spec 0010, Abschnitt 2, Punkt 6), der
+    /// Nutzer hat beim Empfang also potenziell einen ganz anderen Server
+    /// offen als den, auf den sich der Vorschlag bezieht.
+    target_name: Option<String>,
 }
 
 pub fn emit_note_update_suggested(
@@ -292,6 +308,7 @@ pub fn emit_note_update_suggested(
     action_id: ActionId,
     action: AiAction,
     previous_note_content: Option<String>,
+    target_name: Option<String>,
 ) {
     emit(
         emitter,
@@ -301,6 +318,7 @@ pub fn emit_note_update_suggested(
             action_id,
             action,
             previous_note_content,
+            target_name,
         },
     );
 }

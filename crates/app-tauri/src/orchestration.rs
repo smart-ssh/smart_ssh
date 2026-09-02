@@ -276,7 +276,8 @@ async fn handle_action_proposed(
         None
     };
 
-    let previous_note_content = previous_note_content_for_action(&action, session, profile_store).await;
+    let (previous_note_content, target_name) =
+        note_target_preview_for_action(&action, session, profile_store).await;
     let uses_password = uses_stored_sudo_password(session, &action);
     let (previous_file_content, previous_file_size) = previous_file_content_for_action(&action, session).await;
 
@@ -290,6 +291,7 @@ async fn handle_action_proposed(
         uses_password,
         previous_file_content,
         previous_file_size,
+        target_name,
     );
 
     match decision {
@@ -542,6 +544,7 @@ async fn handle_user_decision(
                             },
                             None,
                             false,
+                            None,
                             None,
                             None,
                         );
@@ -822,26 +825,39 @@ async fn resolve_note_target(
     }
 }
 
-/// Spec 0019, Abschnitt 3: aktueller Inhalt des aufgelösten Ziels, damit das
-/// Frontend eine Diff-Vorschau (alt/neu) statt nur des vollen neuen Texts
-/// zeigen kann (Spec 0003, Abschnitt 5.2 verlangt das bereits, war aber nie
-/// vollständig umgesetzt). `None` für alle anderen Aktionstypen sowie wenn
-/// die Zielauflösung fehlschlägt (z. B. Server inzwischen gelöscht) — dann
-/// zeigt das Frontend den neuen Inhalt ohne Diff-Hervorhebung, kein Fehler.
-async fn previous_note_content_for_action(
+/// Spec 0019, Abschnitt 3 / Spec 0023, Abschnitt 3: aktueller Inhalt des
+/// aufgelösten Ziels (für die Diff-Vorschau, Spec 0003 Abschnitt 5.2) sowie
+/// dessen Name (Server- oder Gruppenname, für die im Frontend immer
+/// sichtbare Ziel-Kennzeichnung — Spec 0023: "Der Nutzer muss immer
+/// eindeutig erkennen können, worauf sich eine Bestätigung bezieht",
+/// unabhängig davon, welcher Server/Tab gerade im Frontend als "aktuell"
+/// gilt). `(None, None)` für alle anderen Aktionstypen sowie wenn die
+/// Zielauflösung fehlschlägt (z. B. Server inzwischen gelöscht) — dann
+/// zeigt das Frontend den neuen Inhalt ohne Diff-Hervorhebung bzw. ohne
+/// Zielnamen, kein Fehler (bewusst `Option<String>` statt eines nicht
+/// nullbaren Strings — dieselbe Best-Effort-Behandlung wie beim bisherigen
+/// `previous_note_content` an derselben Stelle, nicht "targetName: string"
+/// aus der Spec-Skizze wörtlich übernommen).
+async fn note_target_preview_for_action(
     action: &AiAction,
     session: &Session,
     profile_store: &dyn ProfileStore,
-) -> Option<String> {
+) -> (Option<String>, Option<String>) {
     let AiAction::ProposeNoteUpdate { target, .. } = action else {
-        return None;
+        return (None, None);
     };
-    let resolved = resolve_note_target(*target, session, profile_store)
-        .await
-        .ok()?;
+    let Ok(resolved) = resolve_note_target(*target, session, profile_store).await else {
+        return (None, None);
+    };
     match resolved {
-        NoteTarget::Server(id) => profile_store.get_server(&id).await.ok().map(|s| s.notes),
-        NoteTarget::Group(id) => profile_store.get_group(&id).await.ok().map(|g| g.notes),
+        NoteTarget::Server(id) => match profile_store.get_server(&id).await {
+            Ok(server) => (Some(server.notes), Some(server.name)),
+            Err(_) => (None, None),
+        },
+        NoteTarget::Group(id) => match profile_store.get_group(&id).await {
+            Ok(group) => (Some(group.notes), Some(group.name)),
+            Err(_) => (None, None),
+        },
     }
 }
 
@@ -1438,16 +1454,21 @@ pub async fn suggest_note_update_on_disconnect(
         target,
         new_content: new_content.clone(),
     };
-    // Spec 0019, Abschnitt 3: dieselbe Diff-Grundlage wie beim regulären
-    // In-Chat-Vorschlag (`handle_action_proposed`).
-    let previous_note_content =
-        previous_note_content_for_action(&proposed_action, session, profile_store).await;
+    // Spec 0019, Abschnitt 3 / Spec 0023, Abschnitt 3: dieselbe Diff-/
+    // Ziel-Grundlage wie beim regulären In-Chat-Vorschlag
+    // (`handle_action_proposed`) — hier besonders wichtig, da diese
+    // Benachrichtigung bewusst app-weit statt tab-gebunden ist (Spec 0010,
+    // Abschnitt 2, Punkt 6) und der Nutzer beim Empfang ggf. einen ganz
+    // anderen Server/Tab offen hat.
+    let (previous_note_content, target_name) =
+        note_target_preview_for_action(&proposed_action, session, profile_store).await;
     emit_note_update_suggested(
         emitter,
         session_id,
         action_id,
         proposed_action,
         previous_note_content,
+        target_name,
     );
 
     let rx = action_confirmations.register(action_id);
@@ -2887,6 +2908,88 @@ mod tests {
         );
     }
 
+    /// Spec 0023, Abschnitt 3, letzter Satz vor Punkt 4: `note-update-
+    /// suggested` (die app-weite, tab-unabhängige Disconnect-Benachrichtigung,
+    /// Spec 0010 Abschnitt 2, Punkt 6) braucht `targetName` besonders
+    /// dringend — der Nutzer hat beim Empfang womöglich einen ganz anderen
+    /// Server offen als den, für den der Vorschlag gilt.
+    #[tokio::test]
+    async fn test_disconnect_suggestion_note_update_suggested_includes_target_name() {
+        let session = session_with_ai_provider(
+            MockAiProvider::new(vec![
+                AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
+                    target: NoteTargetSelector::CurrentServer,
+                    new_content: "Neuer Kontext".to_string(),
+                }),
+                AiEvent::Done,
+            ]),
+            MockSshTransport::default(),
+        );
+        session
+            .context
+            .lock()
+            .await
+            .history
+            .push(command_result_message());
+        let server_id = session.server_id;
+
+        let now = chrono::Utc::now();
+        let server = Server {
+            id: server_id,
+            name: "Produktions-Proxy".to_string(),
+            host: "proxy.example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: ssh_manager_core::profiles::AuthMethod::Agent,
+            notes: String::new(),
+            jump_host: None,
+            created_at: now,
+            updated_at: now,
+        };
+        let profile_store = crate::test_support::InMemoryProfileStore::new().with_server(server);
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let flow = suggest_note_update_on_disconnect(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = async {
+            loop {
+                let action_id = {
+                    let events = emitter.events.lock().unwrap();
+                    events.iter().find_map(|(name, payload)| {
+                        (name == "note-update-suggested")
+                            .then(|| payload["actionId"].as_str().unwrap().to_string())
+                    })
+                };
+                if let Some(action_id) = action_id {
+                    let action_id: ActionId = action_id.parse().unwrap();
+                    confirmations
+                        .resolve(&action_id, ActionUserDecision::Deny)
+                        .unwrap();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::join!(flow, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (name, suggested_payload) = &events[0];
+        assert_eq!(name, "note-update-suggested");
+        assert_eq!(
+            suggested_payload["targetName"],
+            serde_json::json!("Produktions-Proxy")
+        );
+    }
+
     // --- Spec 0012: KI-generierte Dokumente -------------------------------
 
     /// Spec 0012, Abschnitt 2/3: `GenerateDocument` läuft weder durch die
@@ -3865,6 +3968,91 @@ mod tests {
         assert_eq!(
             proposed_payload["previousNoteContent"],
             serde_json::json!("Bisheriger Inhalt")
+        );
+        // Spec 0023, Abschnitt 3: der Servername muss immer mitgeschickt
+        // werden, auch für den ganz gewöhnlichen In-Chat-Vorschlag auf dem
+        // aktuell offenen Server — Konsistenz statt Redundanzvermeidung.
+        assert_eq!(proposed_payload["targetName"], serde_json::json!("srv"));
+    }
+
+    /// Regressionstest für Spec 0023, Abschnitt 4 (der ursprünglich
+    /// gemeldete Bug): ein `ProposeNoteUpdate` bezieht sich auf Server A
+    /// (dessen Session), während in der Datenbank auch ein völlig anderer
+    /// Server B existiert (Stand-in für "im Frontend-State als aktuell
+    /// betrachtet" — welcher Tab im Frontend gerade offen ist, weiß das
+    /// Backend nicht und darf für die Zielauflösung auch keine Rolle
+    /// spielen, s. Spec 0016, Abschnitt 6). Das gerenderte Event muss
+    /// nachweislich den Namen von Server A tragen — nicht B, nicht gar
+    /// keinen.
+    #[tokio::test]
+    async fn test_note_target_name_matches_actual_target_not_a_different_open_server() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
+                    target: NoteTargetSelector::CurrentServer,
+                    new_content: "Neuer Inhalt für A".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        // Diese Session gehört zu Server A — `CurrentServer` muss darauf
+        // auflösen, unabhängig davon, was sonst noch existiert.
+        let server_a_id = session.server_id;
+
+        let now = chrono::Utc::now();
+        let server_a = Server {
+            id: server_a_id,
+            name: "Server A".to_string(),
+            host: "a.example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: ssh_manager_core::profiles::AuthMethod::Agent,
+            notes: String::new(),
+            jump_host: None,
+            created_at: now,
+            updated_at: now,
+        };
+        let server_b = Server {
+            id: ServerId::new(),
+            name: "Server B".to_string(),
+            host: "b.example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: ssh_manager_core::profiles::AuthMethod::Agent,
+            notes: String::new(),
+            jump_host: None,
+            created_at: now,
+            updated_at: now,
+        };
+        let profile_store = crate::test_support::InMemoryProfileStore::new()
+            .with_server(server_a)
+            .with_server(server_b);
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = deny_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, proposed_payload) = &events[0];
+        assert_eq!(
+            proposed_payload["targetName"],
+            serde_json::json!("Server A"),
+            "muss den Namen des tatsächlichen Ziels (Server A) zeigen, nicht \
+             Server B und nicht gar keinen Namen"
         );
     }
 

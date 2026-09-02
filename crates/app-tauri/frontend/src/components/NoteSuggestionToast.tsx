@@ -11,6 +11,10 @@ interface PendingSuggestion {
    * Server"/"dessen Gruppe"), nie eine konkrete ID — die KI kennt/liefert
    * keine, das Backend löst sie selbst auf `session.server_id` auf. */
   targetKind: "server" | "group";
+  /** Spec 0023, Abschnitt 3: Server- oder Gruppenname des Ziels, immer
+   * prominent anzuzeigen — `null` nur, wenn die Zielauflösung serverseitig
+   * fehlschlug (z. B. Server inzwischen gelöscht). */
+  targetName: string | null;
   newContent: string;
   /** Spec 0019, Abschnitt 3/4: aktueller Inhalt des Ziels, für die
    * Diff-Vorschau statt des vollen neuen Texts. */
@@ -25,6 +29,20 @@ interface PendingSuggestion {
 
 function targetKindFromEvent(event: NoteUpdateSuggestedEvent): "server" | "group" {
   return event.action.ProposeNoteUpdate.target === "CurrentServer" ? "server" : "group";
+}
+
+/** Spec 0023, Abschnitt 3/4: prominenter Titel statt der früheren
+ * "dieser Server"/"dessen Gruppe"-Formulierung, die stillschweigend
+ * annahm, der Nutzer habe gerade den betroffenen Server offen — genau die
+ * Annahme, die den gemeldeten Bug verursacht hat. Gruppen-Vorschläge
+ * bekommen bewusst das eigene Wort "Gruppen-Notiz-Vorschlag" (nicht
+ * "Server-Notiz-Vorschlag für 'X'"), um die Verwechslungsgefahr auf der
+ * Server-vs-Gruppe-Achse zu vermeiden. */
+function suggestionTitle(kind: "server" | "group", targetName: string | null): string {
+  const name = targetName ?? "unbekanntes Ziel";
+  return kind === "group"
+    ? `Gruppen-Notiz-Vorschlag für „${name}“`
+    : `Notiz-Vorschlag für Server „${name}“`;
 }
 
 /**
@@ -51,6 +69,7 @@ export function NoteSuggestionToast() {
           sessionId: event.sessionId,
           actionId: event.actionId,
           targetKind: targetKindFromEvent(event),
+          targetName: event.targetName,
           newContent: event.action.ProposeNoteUpdate.new_content,
           previousNoteContent: event.previousNoteContent,
           expanded: false,
@@ -96,9 +115,8 @@ export function NoteSuggestionToast() {
         >
           {!suggestion.expanded ? (
             <div className="flex items-center justify-between gap-2">
-              <span className="text-slate-200">
-                KI schlägt eine Notiz-Aktualisierung vor (
-                {suggestion.targetKind === "server" ? "dieser Server" : "dessen Gruppe"})
+              <span className="font-semibold text-slate-100">
+                {suggestionTitle(suggestion.targetKind, suggestion.targetName)}
               </span>
               <div className="flex shrink-0 gap-1">
                 <button
@@ -120,8 +138,8 @@ export function NoteSuggestionToast() {
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-xs uppercase tracking-wide text-slate-400">
-                Notiz-Vorschlag ({suggestion.targetKind === "server" ? "dieser Server" : "dessen Gruppe"})
+              <p className="font-semibold text-slate-100">
+                {suggestionTitle(suggestion.targetKind, suggestion.targetName)}
               </p>
               <div className="max-h-40 overflow-y-auto">
                 <NoteDiffPreview

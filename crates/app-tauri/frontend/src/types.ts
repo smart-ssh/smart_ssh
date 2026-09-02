@@ -158,6 +158,14 @@ export interface ChatActionProposedEvent {
    * ist — Größe der ALTEN Datei in Bytes, für einen Größenvergleich-Hinweis
    * statt einer Diff-Ansicht. */
   previousFileSize: number | null;
+  /** Spec 0023, Abschnitt 3: nur bei `action: ProposeNoteUpdate` gesetzt —
+   * Server- oder Gruppenname des bereits serverseitig aufgelösten Ziels.
+   * Immer anzeigen, auch wenn es der aktuell offene Server der Session ist
+   * (Konsistenz statt Redundanzvermeidung) — genau das fehlende Stück, das
+   * den in Spec 0023 gemeldeten Bug verursacht hat. `null` nur, wenn die
+   * Zielauflösung serverseitig fehlschlägt (z. B. Server inzwischen
+   * gelöscht). */
+  targetName: string | null;
 }
 
 /** Spec 0010 — `action` ist hier immer `{ ProposeNoteUpdate: {...} }`, nie
@@ -170,6 +178,11 @@ export interface NoteUpdateSuggestedEvent {
   action: { ProposeNoteUpdate: { target: NoteTargetSelector; new_content: string } };
   /** Spec 0019, Abschnitt 3 — s. `ChatActionProposedEvent`-Doc-Kommentar. */
   previousNoteContent: string | null;
+  /** Spec 0023, Abschnitt 3 — s. `ChatActionProposedEvent.targetName`-Doc-
+   * Kommentar. Besonders wichtig für dieses Event: es ist bewusst app-weit
+   * statt tab-gebunden (Spec 0010, Abschnitt 2, Punkt 6), der Nutzer hat
+   * beim Empfang womöglich einen ganz anderen Server offen. */
+  targetName: string | null;
 }
 
 /** Spec 0021, Abschnitt 5: signalisiert eine *automatische* Folgerunde (die

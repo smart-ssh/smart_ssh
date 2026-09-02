@@ -68,11 +68,28 @@ type ChatItem =
        * unterscheidet `previousFileSize`). */
       previousFileContent: string | null;
       previousFileSize: number | null;
+      /** Spec 0023, Abschnitt 3 — nur bei `ProposeNoteUpdate` gesetzt,
+       * *immer* angezeigt (auch wenn es der aktuell offene Server der
+       * Session ist — Konsistenz statt Redundanzvermeidung). */
+      targetName: string | null;
     }
   | { type: "error"; id: string; message: string }
   | { type: "document"; id: string; title: string; contentMarkdown: string };
 
-function describeAction(action: AiAction): { label: string; command?: string } {
+/** Spec 0023, Abschnitt 3/4: `targetName` wird für `ProposeNoteUpdate`
+ * *immer* im Label gezeigt — auch wenn es der aktuell offene Server der
+ * Session ist (Konsistenz statt Redundanzvermeidung, verhindert genau die
+ * gemeldete Bug-Klasse, falls sich der Anzeigekontext künftig ändert,
+ * z. B. durch Multi-Tab). Gruppen-Ziele bekommen das eigene Wort
+ * "Gruppen-Notiz" (nicht "Notiz (Server X)"), um die Verwechslungsgefahr
+ * auf der Server-vs-Gruppe-Achse zu vermeiden. `targetName` kommt nur bei
+ * `ProposeNoteUpdate` befüllt an (s. `ChatItem`-Doc-Kommentar) — für alle
+ * anderen Aktionstypen bleibt der Parameter ungenutzt.
+ */
+function describeAction(
+  action: AiAction,
+  targetName: string | null,
+): { label: string; command?: string } {
   if ("SuggestCommand" in action) {
     return { label: "Kommando vorschlagen", command: action.SuggestCommand.command };
   }
@@ -85,12 +102,13 @@ function describeAction(action: AiAction): { label: string; command?: string } {
   if ("WriteRemoteFile" in action) {
     return { label: `Datei schreiben: ${action.WriteRemoteFile.path}` };
   }
-  // Spec 0016, Abschnitt 6: die KI liefert nur noch relativ zur aktuellen
-  // Session ("dieser Server"/"dessen Gruppe"), nie eine konkrete ID mehr —
-  // das Backend löst `target` selbst auf `session.server_id` auf.
-  const targetLabel =
-    action.ProposeNoteUpdate.target === "CurrentServer" ? "dieser Server" : "dessen Gruppe";
-  return { label: `Notiz aktualisieren (${targetLabel})` };
+  const name = targetName ?? "unbekanntes Ziel";
+  const isGroup = action.ProposeNoteUpdate.target === "CurrentServerGroup";
+  return {
+    label: isGroup
+      ? `Gruppen-Notiz aktualisieren: „${name}“`
+      : `Notiz aktualisieren: Server „${name}“`,
+  };
 }
 
 /// `Decision::Confirm`/`Deny`-Reasons aus der Filter-Engine sind
@@ -206,6 +224,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
             usesStoredSudoPassword: event.usesStoredSudoPassword,
             previousFileContent: event.previousFileContent,
             previousFileSize: event.previousFileSize,
+            targetName: event.targetName,
           },
         ]);
       }),
@@ -518,7 +537,7 @@ function ChatItemView({
     );
   }
 
-  const { label, command } = describeAction(item.action);
+  const { label, command } = describeAction(item.action, item.targetName);
   // Spec 0021, Abschnitt 6: eine vom Nutzer abgelehnte Aktion bleibt
   // sichtbar, statt zu verschwinden — `item.decision` selbst bleibt aber
   // weiterhin `Confirm{reason}` (das war die ursprüngliche Filter-Engine-
