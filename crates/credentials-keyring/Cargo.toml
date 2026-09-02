@@ -11,4 +11,4 @@ path = "src/lib.rs"
 [dependencies]
 keyring = "4.1.6"
 secrecy = "0.10.3"
-ssh-manager-core = { version = "0.2.0", path = "../core" }
+ssh-manager-core = { version = "0.3.0", path = "../core" }
