@@ -55,4 +55,15 @@ pub struct AppState {
     /// Wartende `respond_to_action`-Aufrufe (Confirm-Pfad der Kernschleife,
     /// Spec 0007 Abschnitt 6).
     pub pending_action_confirmations: ConfirmationRegistry<ActionId, ActionUserDecision>,
+    /// Spec 0027: ein Eintrag pro aktuell laufendem, abbrechbarem
+    /// `SuggestCommand`-Aufruf (`execute_suggested_command` registriert vor
+    /// `execute_cancellable`, `commands::cancel_running_command` löst auf).
+    /// Denselben generischen Typ wiederverwendet wie die beiden Registries
+    /// oben — hier trägt der Wert keine Nutzdaten (`()`), nur "jetzt
+    /// abbrechen". `Arc`, weil `Session` (die `execute_suggested_command`
+    /// tatsächlich aufruft) sich bei `connect()` einen eigenen, billigen
+    /// Klon hält, statt dass jede Aufrufkette bis dorthin extra
+    /// `AppState` durchreichen müsste (dieselbe Begründung wie bei
+    /// `Session::risk_second_opinion_provider`, Spec 0026).
+    pub running_command_cancellations: Arc<ConfirmationRegistry<ActionId, ()>>,
 }

@@ -244,7 +244,17 @@ export interface ChatAutoContinuationStartedEvent {
 }
 
 export type ActionResultPayload =
-  | { kind: "command"; command: string; stdout: string; stderr: string; exitCode: number | null }
+  | {
+      kind: "command";
+      command: string;
+      stdout: string;
+      stderr: string;
+      exitCode: number | null;
+      /** Spec 0027: `true`, wenn der Nutzer dieses Kommando manuell
+       * abgebrochen hat, bevor es von selbst beendet war — dann ist
+       * `exitCode` immer `null`, keine Störung. */
+      cancelled: boolean;
+    }
   | { kind: "noteUpdate"; summary: string }
   /** Spec 0020, Abschnitt 4.1 — `content` ist bereits redigiert (Spec 0006). */
   | { kind: "fileRead"; path: string; content: string }

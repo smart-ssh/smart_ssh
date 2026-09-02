@@ -152,7 +152,11 @@
     "riskServerLabel": "Server",
     "riskDataLabel": "Daten",
     "riskSecondOpinionPending": "KI-Zweitmeinung wird eingeholt…",
-    "riskHint": "Einschätzung basierend auf bekannten Mustern — keine Garantie."
+    "riskHint": "Einschätzung basierend auf bekannten Mustern — keine Garantie.",
+    "runningSince": "läuft seit {{seconds}}s…",
+    "cancelCommand": "Verbindung zu diesem Kommando trennen",
+    "cancellingCommand": "Wird getrennt…",
+    "commandCancelledNotice": "⚠ Manuell abgebrochen — Ausgabe möglicherweise unvollständig, kein regulärer Exit-Code."
   },
   "confirmDialog": {
     "editableCommand": "Kommando — editierbar",

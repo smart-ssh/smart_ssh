@@ -70,6 +70,7 @@ fn build_app_state() -> AppState {
         prompt_history_store,
         pending_host_key_confirmations: ConfirmationRegistry::new(),
         pending_action_confirmations: ConfirmationRegistry::new(),
+        running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
     }
 }
 
@@ -138,6 +139,7 @@ pub fn run() {
             commands::terminal_resize,
             commands::send_chat_message,
             commands::respond_to_action,
+            commands::cancel_running_command,
             commands::stop_auto_continuation,
             commands::disconnect,
             commands::list_sessions,

@@ -1,7 +1,8 @@
 use async_trait::async_trait;
+use tokio::sync::oneshot;
 
 use super::error::SshError;
-use super::types::{CommandOutput, PtySize, RemoteEntry};
+use super::types::{CommandOutput, ExecOutcome, PtySize, RemoteEntry};
 
 /// Offene Verbindung zu einem SSH-Server (Spec 0005, Abschnitt 1/4). Exec-
 /// und interaktiver Modus laufen über **denselben** Transport (SSH-
@@ -28,6 +29,38 @@ pub trait SshTransport: Send + Sync {
     ) -> Result<CommandOutput, SshError> {
         let _ = stdin;
         self.execute(command).await
+    }
+    /// Wie [`execute`](Self::execute), aber abbrechbar (Spec 0027): löst
+    /// `cancel`, während das Kommando noch läuft (z. B. `journalctl -f`,
+    /// das nie von selbst endet), schließt die Implementierung den
+    /// Exec-Kanal aktiv und liefert die bis dahin gesammelte Ausgabe mit
+    /// `cancelled: true` zurück, statt weiter zu warten. Default-
+    /// Implementierung ignoriert `cancel` und delegiert unverändert an
+    /// `execute` — bestehende Implementierungen/Mocks (Tests) bleiben ohne
+    /// Anpassung lauffähig; nur `RusshTransport` überschreibt sie echt.
+    async fn execute_cancellable(
+        &mut self,
+        command: &str,
+        _cancel: oneshot::Receiver<()>,
+    ) -> Result<ExecOutcome, SshError> {
+        Ok(ExecOutcome {
+            output: self.execute(command).await?,
+            cancelled: false,
+        })
+    }
+    /// Wie [`execute_with_stdin`](Self::execute_with_stdin), aber abbrechbar
+    /// — s. [`execute_cancellable`](Self::execute_cancellable)-Doc-
+    /// Kommentar, hier für den `sudo -S`-Stdin-Pfad (Spec 0018).
+    async fn execute_with_stdin_cancellable(
+        &mut self,
+        command: &str,
+        stdin: &[u8],
+        _cancel: oneshot::Receiver<()>,
+    ) -> Result<ExecOutcome, SshError> {
+        Ok(ExecOutcome {
+            output: self.execute_with_stdin(command, stdin).await?,
+            cancelled: false,
+        })
     }
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError>;
     /// Öffnet eine SFTP-Session als weiteren Subsystem-Channel derselben

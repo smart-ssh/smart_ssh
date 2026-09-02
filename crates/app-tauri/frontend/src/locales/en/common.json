@@ -152,7 +152,11 @@
     "riskServerLabel": "Server",
     "riskDataLabel": "Data",
     "riskSecondOpinionPending": "Fetching AI second opinion…",
-    "riskHint": "Assessment based on known patterns — no guarantee."
+    "riskHint": "Assessment based on known patterns — no guarantee.",
+    "runningSince": "running for {{seconds}}s…",
+    "cancelCommand": "Disconnect this command",
+    "cancellingCommand": "Disconnecting…",
+    "commandCancelledNotice": "⚠ Manually cancelled — output may be incomplete, no regular exit code."
   },
   "confirmDialog": {
     "editableCommand": "Command — editable",

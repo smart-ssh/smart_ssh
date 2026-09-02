@@ -427,6 +427,7 @@ pub async fn connect(
         sftp: tokio::sync::Mutex::new(None),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         risk_second_opinion_provider,
+        running_command_cancellations: state.running_command_cancellations.clone(),
     });
     state.sessions.insert(session_id, session);
 
@@ -668,6 +669,23 @@ pub async fn respond_to_action(
     state
         .pending_action_confirmations
         .resolve(&action_id, decision)?;
+    Ok(())
+}
+
+/// Spec 0027, Abschnitt 3: bricht ein aktuell laufendes, abbrechbares
+/// `SuggestCommand` ab (schließt nur dessen Exec-Kanal, nicht die
+/// SSH-Verbindung/Session — s. `orchestration::execute_suggested_command`).
+/// Kein Fehler, falls für `action_id` gerade nichts (mehr) wartet: das
+/// Kommando ist dann entweder bereits regulär beendet (Race zwischen Klick
+/// und Fertigstellung) oder war nie als abbrechbar registriert — in beiden
+/// Fällen wäre ein Fehler an den Nutzer für einen harmlosen zeitlichen
+/// Zufall nicht angemessen.
+#[tauri::command]
+pub async fn cancel_running_command(
+    state: State<'_, AppState>,
+    action_id: ActionId,
+) -> CommandResult<()> {
+    let _ = state.running_command_cancellations.resolve(&action_id, ());
     Ok(())
 }
 

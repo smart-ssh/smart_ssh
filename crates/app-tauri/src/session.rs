@@ -39,6 +39,7 @@ use ssh_manager_core::filter::{Decision, EvalContext, FilterEngine, PolicyStore}
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{PtySize, SftpSession, SshTransport};
 
+use crate::confirmation::ConfirmationRegistry;
 use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
 use crate::state::{ActionId, SessionId};
 
@@ -149,6 +150,14 @@ pub struct Session {
     /// Session hätte deutlich mehr Zustands-Plumbing gebraucht, für eine
     /// reine Komfort-Einstellung unverhältnismäßig.
     pub risk_second_opinion_provider: Option<Box<dyn AiProvider>>,
+    /// Spec 0027: derselbe `Arc` wie `AppState.running_command_
+    /// cancellations` — ein billiger Klon bei `connect()`, damit
+    /// `orchestration::execute_suggested_command` (die nur `&Session`
+    /// bekommt, kein `AppState`) einen laufenden Abbruch registrieren kann,
+    /// ohne die Signaturen von `run_chat_turn`/`run_one_round`/
+    /// `handle_action_proposed` anfassen zu müssen (s. Doc-Kommentar auf
+    /// `AppState.running_command_cancellations`).
+    pub running_command_cancellations: Arc<ConfirmationRegistry<ActionId, ()>>,
 }
 
 /// Startet den Terminal-Aktor (Modul-Kommentar, Punkt 3) als eigenen Task.
@@ -379,6 +388,7 @@ mod tests {
             sftp: AsyncMutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             risk_second_opinion_provider: None,
+            running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         }
     }
 

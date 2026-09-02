@@ -24,4 +24,6 @@ pub use error::SshError;
 pub use host_key::HostKeyStore;
 pub use jump_host::resolve_connection_target;
 pub use transport::{InteractiveShell, SftpSession, SshTransport};
-pub use types::{CommandOutput, ConnectionTarget, Hop, HostKeyDecision, PtySize, RemoteEntry};
+pub use types::{
+    CommandOutput, ConnectionTarget, ExecOutcome, Hop, HostKeyDecision, PtySize, RemoteEntry,
+};

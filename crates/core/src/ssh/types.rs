@@ -9,6 +9,20 @@ pub struct CommandOutput {
     pub exit_code: Option<i32>,
 }
 
+/// Ergebnis von [`SshTransport::execute_cancellable`](super::SshTransport::execute_cancellable)
+/// (Spec 0027) — trägt zusätzlich zum eigentlichen [`CommandOutput`] mit,
+/// ob ein Abbruch tatsächlich gegriffen hat, bevor das Kommando von selbst
+/// beendet war. Bewusst kein Feld auf `CommandOutput` selbst: der Typ wird
+/// an vielen Stellen (Terminal, Tests) unverändert für regulär beendete
+/// Kommandos verwendet, ein zusätzliches, dort immer `false`/irrelevantes
+/// Feld wäre unnötiger Ballast — `ExecOutcome` bleibt auf den einen
+/// Aufrufer beschränkt, der Abbruch überhaupt kennt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecOutcome {
+    pub output: CommandOutput,
+    pub cancelled: bool,
+}
+
 /// Terminalgröße für eine PTY-Shell (Spec 0005, Abschnitt 4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PtySize {

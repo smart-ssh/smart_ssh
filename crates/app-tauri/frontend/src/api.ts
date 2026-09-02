@@ -119,6 +119,14 @@ export const disconnect = (sessionId: string) => invoke<void>("disconnect", { se
 export const stopAutoContinuation = (sessionId: string) =>
   invoke<void>("stop_auto_continuation", { sessionId });
 
+/** Spec 0027, Abschnitt 3: schließt nur den Exec-Kanal dieses einen
+ * Kommandos (nicht die SSH-Verbindung/Session) und liefert die bis dahin
+ * gesammelte Ausgabe als reguläres `chat-action-result` zurück. Kein
+ * Fehler, falls `actionId` bereits fertig ist (Race zwischen Klick und
+ * Fertigstellung). */
+export const cancelRunningCommand = (actionId: string) =>
+  invoke<void>("cancel_running_command", { actionId });
+
 // --- Spec 0017: Multi-Tab-Sessions --------------------------------------
 
 /** Maßgebliche Quelle dafür, welche Sessions tatsächlich offen sind — dient

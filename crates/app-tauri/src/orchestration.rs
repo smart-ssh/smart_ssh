@@ -50,7 +50,7 @@ use ssh_manager_core::profiles::{
     AiAction, NoteEditor, NoteTarget, NoteTargetSelector, ProfileError, ProfileStore,
 };
 use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
-use ssh_manager_core::ssh::{CommandOutput, SshError};
+use ssh_manager_core::ssh::{CommandOutput, ExecOutcome, SshError};
 
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::ActionUserDecision;
@@ -758,25 +758,41 @@ async fn execute_suggested_command(
         .as_ref()
         .and_then(|_| command_with_stdin_password_flag(&command));
 
-    let raw_output = {
+    // Spec 0027, Abschnitt 3: vor dem eigentlichen Aufruf registriert, damit
+    // `commands::cancel_running_command` diese `action_id` jederzeit
+    // während der Ausführung treffen kann. Der Aufruf unten (egal welcher
+    // Zweig) konsumiert `cancel_rx` vollständig — der abschließende
+    // `resolve()`-Aufruf danach räumt den Registry-Eintrag in **jedem**
+    // Fall auf (regulär beendet: Empfänger bereits gedroppt, `send()`
+    // schlägt harmlos fehl; abgebrochen: Eintrag existiert dann schon
+    // nicht mehr, weil genau dieser `resolve()`-Aufruf — aus
+    // `cancel_running_command` — die Ausführung erst beendet hat) — ohne
+    // dieses Aufräumen bliebe für jedes regulär beendete Kommando ein
+    // nie entfernter Eintrag in der Registry zurück.
+    let cancel_rx = session.running_command_cancellations.register(action_id);
+
+    let raw_outcome = {
         let mut transport = session.transport.lock().await;
         match (&effective_command, &session.sudo_password) {
             (Some(rewritten), Some(password)) => {
                 use secrecy::ExposeSecret;
                 let mut stdin = password.expose_secret().as_bytes().to_vec();
                 stdin.push(b'\n');
-                transport.execute_with_stdin(rewritten, &stdin).await
+                transport
+                    .execute_with_stdin_cancellable(rewritten, &stdin, cancel_rx)
+                    .await
             }
-            _ => transport.execute(&command).await,
+            _ => transport.execute_cancellable(&command, cancel_rx).await,
         }
     };
+    let _ = session.running_command_cancellations.resolve(&action_id, ());
     // Spec 0018, Abschnitt 5: das tatsächlich ausgeführte Kommando (mit
     // `-S`, ohne Passwort) landet in Ergebnis-Event/Log/Kontext — voll
     // transparent, da nie das Passwort selbst enthalten.
     let command = effective_command.unwrap_or(command);
 
-    match raw_output {
-        Ok(output) => {
+    match raw_outcome {
+        Ok(ExecOutcome { output, cancelled }) => {
             let redacted = session.redactor.redact(&output);
             log_command_execution(session_id, &command, &redacted);
             emit_chat_action_result(
@@ -788,6 +804,7 @@ async fn execute_suggested_command(
                     stdout: String::from_utf8_lossy(&redacted.stdout).into_owned(),
                     stderr: String::from_utf8_lossy(&redacted.stderr).into_owned(),
                     exit_code: redacted.exit_code,
+                    cancelled,
                 },
             );
             session.context.lock().await.history.push(ChatMessage {
@@ -795,6 +812,7 @@ async fn execute_suggested_command(
                 content: MessageContent::CommandResult {
                     command,
                     output: redacted,
+                    cancelled,
                 },
             });
             true
@@ -1666,6 +1684,11 @@ mod tests {
         /// welchem Stdin-Inhalt `execute_with_stdin` tatsächlich aufgerufen
         /// wurde.
         stdin_calls: StdinCalls,
+        /// Spec 0027: Kommandos in dieser Liste simulieren ein nie von
+        /// selbst endendes Kommando (`journalctl -f`) — `execute_cancellable`
+        /// wartet für sie ausschließlich auf `cancel`, statt sofort
+        /// zurückzukehren.
+        never_completing: std::collections::HashSet<String>,
     }
 
     type StdinCalls = Arc<StdMutex<Vec<(String, Vec<u8>)>>>;
@@ -1687,6 +1710,11 @@ mod tests {
 
         fn stdin_calls_handle(&self) -> StdinCalls {
             self.stdin_calls.clone()
+        }
+
+        fn with_never_completing(mut self, command: impl Into<String>) -> Self {
+            self.never_completing.insert(command.into());
+            self
         }
     }
 
@@ -1718,6 +1746,31 @@ mod tests {
                 .unwrap()
                 .push((command.to_string(), stdin.to_vec()));
             self.execute(command).await
+        }
+
+        async fn execute_cancellable(
+            &mut self,
+            command: &str,
+            cancel: tokio::sync::oneshot::Receiver<()>,
+        ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
+            if self.never_completing.contains(command) {
+                // Spec 0027: simuliert `journalctl -f` — wartet
+                // ausschließlich auf `cancel`, liefert dann eine feste
+                // "bereits eingetroffene" Teil-Ausgabe zurück.
+                let _ = cancel.await;
+                return Ok(ssh_manager_core::ssh::ExecOutcome {
+                    output: CommandOutput {
+                        stdout: b"partial output before cancel".to_vec(),
+                        stderr: Vec::new(),
+                        exit_code: None,
+                    },
+                    cancelled: true,
+                });
+            }
+            Ok(ssh_manager_core::ssh::ExecOutcome {
+                output: self.execute(command).await?,
+                cancelled: false,
+            })
         }
 
         async fn open_shell(
@@ -1823,6 +1876,7 @@ mod tests {
             sftp: AsyncMutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             risk_second_opinion_provider: None,
+            running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         }
     }
 
@@ -1929,6 +1983,108 @@ mod tests {
             history[0].content,
             MessageContent::CommandResult { .. }
         ));
+    }
+
+    // --- Spec 0027: Abbruch lang laufender Kommandos ------------------------
+
+    /// Kernszenario: ein nie von selbst endendes Kommando (`journalctl -f`)
+    /// wird über die Registry abgebrochen — `execute_suggested_command`
+    /// muss zurückkehren (statt für immer zu hängen) und dabei die bereits
+    /// eingetroffene Teil-Ausgabe mit `cancelled: true` sowohl im
+    /// `chat-action-result`-Event als auch im Chat-Kontext-Eintrag tragen.
+    #[tokio::test]
+    async fn test_execute_suggested_command_cancellation_returns_partial_output() {
+        let session = session_with_ai_provider(
+            MockAiProvider::new(vec![AiEvent::Done]),
+            MockSshTransport::default().with_never_completing("journalctl -f"),
+        );
+        let emitter = TestEmitter::default();
+        let action_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+
+        let exec_future = execute_suggested_command(
+            &session,
+            session_id,
+            action_id,
+            "journalctl -f".to_string(),
+            &emitter,
+        );
+        let cancel_future = async {
+            // Kleine Verzögerung, damit `exec_future` sicher schon
+            // registriert hat und im `cancel.await` des Mocks steckt,
+            // bevor hier aufgelöst wird — analog zu
+            // `test_slow_session_does_not_block_concurrent_session_via_shared_manager`s
+            // festen Verzögerungen oben.
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            session
+                .running_command_cancellations
+                .resolve(&action_id, ())
+                .expect("sollte eine wartende Abbruch-Registrierung finden");
+        };
+
+        let (executed, ()) = tokio::join!(exec_future, cancel_future);
+        assert!(executed, "ein abgebrochenes Kommando zählt als \"ausgeführt\" (Ergebnis liegt vor)");
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, result_payload) = events
+            .iter()
+            .find(|(name, _)| name == "chat-action-result")
+            .expect("chat-action-result sollte gesendet worden sein");
+        assert_eq!(result_payload["result"]["cancelled"], serde_json::json!(true));
+        assert_eq!(
+            result_payload["result"]["stdout"],
+            serde_json::json!("partial output before cancel")
+        );
+        assert_eq!(result_payload["result"]["exitCode"], serde_json::Value::Null);
+
+        let history = session.context.lock().await.history.clone();
+        assert_eq!(history.len(), 1);
+        let MessageContent::CommandResult { cancelled, .. } = &history[0].content else {
+            panic!("erwartete MessageContent::CommandResult, bekam {:?}", history[0].content);
+        };
+        assert!(cancelled, "der Kontext-Eintrag für die KI muss den Abbruch tragen");
+    }
+
+    /// Ohne Abbruch darf in der Registry kein Eintrag zurückbleiben — sonst
+    /// würde jedes regulär beendete Kommando die Registry unbegrenzt
+    /// wachsen lassen.
+    #[tokio::test]
+    async fn test_execute_suggested_command_without_cancellation_leaves_no_registry_entry() {
+        let session = session_with_ai_provider(
+            MockAiProvider::new(vec![AiEvent::Done]),
+            MockSshTransport::default().with_response("ls -la", output("total 0")),
+        );
+        let emitter = TestEmitter::default();
+        let action_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+
+        let executed = execute_suggested_command(
+            &session,
+            session_id,
+            action_id,
+            "ls -la".to_string(),
+            &emitter,
+        )
+        .await;
+        assert!(executed);
+
+        let result = session.running_command_cancellations.resolve(&action_id, ());
+        assert!(
+            result.is_err(),
+            "nach regulärer Beendigung darf kein Registry-Eintrag mehr existieren, sonst ein Leck pro Kommando"
+        );
+    }
+
+    /// `cancel_running_command` (Tauri-Command) delegiert nur an
+    /// `resolve()` und ignoriert dessen Fehler — hier direkt gegen die
+    /// Registry geprüft (kein `AppState` nötig, um denselben Effekt zu
+    /// testen): ein Abbruchversuch für eine unbekannte/bereits beendete
+    /// `action_id` darf nicht fehlschlagen/abstürzen.
+    #[test]
+    fn test_cancel_unknown_action_id_is_silently_ignored() {
+        let registry: ConfirmationRegistry<ActionId, ()> = ConfirmationRegistry::new();
+        let result = registry.resolve(&Uuid::new_v4(), ());
+        assert!(result.is_err());
     }
 
     // --- Spec 0026: Risiko-Indikatoren --------------------------------------
@@ -2994,6 +3150,7 @@ mod tests {
             content: MessageContent::CommandResult {
                 command: "uptime".to_string(),
                 output: output("up 3 days"),
+                cancelled: false,
             },
         }
     }

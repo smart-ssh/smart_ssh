@@ -121,6 +121,13 @@ pub enum MessageContent {
     CommandResult {
         command: String,
         output: CommandOutput,
+        /// Spec 0027: `true`, wenn der Nutzer dieses Kommando manuell
+        /// abgebrochen hat, bevor es von selbst beendet war — `output` ist
+        /// dann unvollständig und `output.exit_code` immer `None`. Provider-
+        /// Implementierungen (`ai-providers`) hängen bei `true` einen
+        /// expliziten Hinweis an den Kontext-Block an, damit die KI den
+        /// fehlenden Exit-Code nicht fälschlich als Kommandofehler liest.
+        cancelled: bool,
     },
     /// Spec 0021, Abschnitt 3, Fälle 3/4: eine vorgeschlagene Aktion wurde
     /// **nicht** ausgeführt — entweder hat der Nutzer sie im

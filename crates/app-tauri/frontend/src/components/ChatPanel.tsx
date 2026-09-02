@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   acceptAndCreateRule,
+  cancelRunningCommand,
   commandErrorMessage,
   exportDocument,
   listAiProviders,
@@ -89,6 +90,13 @@ type ChatItem =
        * updated` für diese `actionId` ankommt. Bleibt `false`, wenn die
        * Zweitmeinung deaktiviert ist (dann kommt gar kein Update-Event). */
       riskSecondOpinionPending: boolean;
+      /** Spec 0027, Abschnitt 2 — Zeitpunkt (`Date.now()`), an dem die
+       * tatsächliche Ausführung begann: sofort bei `AutoExec`, sonst erst
+       * nach Klick auf "Ausführen"/"editierten Vorschlag ausführen" im
+       * Bestätigungsdialog. `null`, solange noch nicht ausgeführt wird
+       * (wartet auf Bestätigung) — rein clientseitig, kein Backend-Event
+       * nötig (s. Spec). Nur für `SuggestCommand` überhaupt relevant. */
+      startedAt: number | null;
     }
   | { type: "error"; id: string; message: string }
   | { type: "document"; id: string; title: string; contentMarkdown: string };
@@ -273,6 +281,10 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
             targetName: event.targetName,
             riskAssessment: event.riskAssessment,
             riskSecondOpinionPending,
+            // Spec 0027: bei AutoExec beginnt die Ausführung sofort (keine
+            // Bestätigung nötig) — bei Confirm/Deny erst später, s.
+            // `respond()` unten.
+            startedAt: event.decision === "AutoExec" ? Date.now() : null,
           },
         ]);
       }),
@@ -337,10 +349,17 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
   }, [items]);
 
   const respond = (actionId: string, decision: ActionUserDecision) => {
+    // Spec 0027: die tatsächliche Ausführung beginnt jetzt (nicht bei
+    // "deny", das führt nie etwas aus) — Startzeitpunkt für den
+    // Lauf-Indikator.
+    const startedAt =
+      decision.decision === "approve" || decision.decision === "editThenApprove"
+        ? Date.now()
+        : null;
     setItems((prev) =>
       prev.map((item) =>
         item.type === "action" && item.actionId === actionId
-          ? { ...item, responded: true, userDecision: decision.decision }
+          ? { ...item, responded: true, userDecision: decision.decision, startedAt: startedAt ?? item.startedAt }
           : item,
       ),
     );
@@ -756,7 +775,55 @@ function ChatItemView({
         />
       )}
 
+      {/* Spec 0027, Abschnitt 2: nur für SuggestCommand relevant —
+       * ReadRemoteFile/WriteRemoteFile laufen über SFTP, nicht über den
+       * abbrechbaren Exec-Kanal (s. Spec, Abschnitt 5). */}
+      {!item.result && "SuggestCommand" in item.action && item.startedAt !== null && (
+        <RunningCommandIndicator actionId={item.actionId} startedAt={item.startedAt} />
+      )}
+
       {item.result && <ActionResultView result={item.result} />}
+    </div>
+  );
+}
+
+/** Spec 0027, Abschnitt 2: erscheint erst 5 Sekunden nach `startedAt`, ohne
+ * dass bis dahin ein Ergebnis eingetroffen ist — rein clientseitiger
+ * Timer, kein Backend-Event nötig. Der Button trennt bewusst nur die
+ * Verbindung zu *diesem* Kommando (s. `cancelRunningCommand`), nicht die
+ * SSH-Verbindung/Session — deshalb absichtlich nicht "Kommando stoppen"
+ * (suggeriert einen garantierten Kill, den es nicht gibt, s. Spec
+ * Abschnitt 3, letzter Absatz). */
+function RunningCommandIndicator({ actionId, startedAt }: { actionId: string; startedAt: number }) {
+  const { t } = useTranslation();
+  const [now, setNow] = useState(() => Date.now());
+  const [cancelling, setCancelling] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const elapsedSeconds = Math.floor((now - startedAt) / 1000);
+  if (elapsedSeconds < 5) return null;
+
+  const handleCancel = () => {
+    setCancelling(true);
+    cancelRunningCommand(actionId).catch(() => setCancelling(false));
+  };
+
+  return (
+    <div className="mt-2 flex items-center gap-2 border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
+      <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400" />
+      <span className="flex-1">{t("actionCard.runningSince", { seconds: elapsedSeconds })}</span>
+      <button
+        type="button"
+        onClick={handleCancel}
+        disabled={cancelling}
+        className="shrink-0 border border-slate-600 px-2 py-0.5 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+      >
+        {cancelling ? t("actionCard.cancellingCommand") : t("actionCard.cancelCommand")}
+      </button>
     </div>
   );
 }
@@ -996,6 +1063,7 @@ function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number; newCon
 }
 
 function ActionResultView({ result }: { result: ActionResultPayload }) {
+  const { t } = useTranslation();
   if (result.kind === "noteUpdate") {
     return <p className="mt-2 text-xs text-emerald-300">{result.summary}</p>;
   }
@@ -1020,13 +1088,19 @@ function ActionResultView({ result }: { result: ActionResultPayload }) {
   }
   return (
     <div className="mt-2 space-y-1 rounded bg-slate-950 p-2 font-mono text-xs">
+      {/* Spec 0027, Abschnitt 4: bei Abbruch statt "exit code: —" ein
+       * expliziter Hinweis — ein fehlender Exit-Code allein sähe sonst wie
+       * eine Störung statt eines bewussten Nutzer-Abbruchs aus. */}
+      {result.cancelled ? (
+        <p className="font-sans text-amber-300">{t("actionCard.commandCancelledNotice")}</p>
+      ) : null}
       {result.stdout && (
         <pre className="whitespace-pre-wrap text-slate-300">{truncate(result.stdout)}</pre>
       )}
       {result.stderr && (
         <pre className="whitespace-pre-wrap text-red-300">{truncate(result.stderr)}</pre>
       )}
-      <p className="text-slate-500">exit code: {result.exitCode ?? "—"}</p>
+      {!result.cancelled && <p className="text-slate-500">exit code: {result.exitCode ?? "—"}</p>}
     </div>
   );
 }

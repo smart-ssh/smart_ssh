@@ -30,8 +30,8 @@ pub(crate) fn log_outgoing_context(request_id: Uuid, context: &SessionContext) {
         .iter()
         .map(|m| match &m.content {
             MessageContent::Text(t) => t.clone(),
-            MessageContent::CommandResult { command, output } => format!(
-                "[command_result] {command} (exit={:?}, stdout_len={}, stderr_len={})",
+            MessageContent::CommandResult { command, output, cancelled } => format!(
+                "[command_result] {command} (exit={:?}, stdout_len={}, stderr_len={}, cancelled={cancelled})",
                 output.exit_code,
                 output.stdout.len(),
                 output.stderr.len()

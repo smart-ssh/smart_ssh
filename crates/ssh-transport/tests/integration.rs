@@ -478,3 +478,50 @@ async fn test_sftp_stat() {
     let missing = sftp.stat("/does-not-exist.txt").await;
     assert!(missing.is_err());
 }
+
+/// Spec 0027: `execute_cancellable` gegen ein nie von selbst endendes
+/// Kommando (`"never-ending"`, s. `fixtures::test_server::exec_request`) —
+/// muss zurückkehren, sobald `cancel` auflöst, statt für immer auf das
+/// reguläre Kanal-Ende zu warten, und dabei die bereits eingetroffene
+/// erste Ausgabezeile mitliefern.
+#[tokio::test]
+async fn test_execute_cancellable_returns_partial_output_on_cancel() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        let _ = cancel_tx.send(());
+    });
+
+    let outcome = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        transport.execute_cancellable("never-ending", cancel_rx),
+    )
+    .await
+    .expect("execute_cancellable() darf nicht hängen bleiben, wenn cancel auflöst")
+    .expect("execute_cancellable() sollte trotz Abbruch Ok liefern");
+
+    assert!(outcome.cancelled);
+    assert_eq!(outcome.output.stdout, b"first line\n");
+    assert_eq!(outcome.output.exit_code, None);
+}
+
+/// Ohne Abbruch verhält sich `execute_cancellable` wie `execute` — normaler
+/// Exit-Code, `cancelled: false`.
+#[tokio::test]
+async fn test_execute_cancellable_behaves_like_execute_without_cancel() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    let (_cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+
+    let outcome = transport
+        .execute_cancellable("hello world", cancel_rx)
+        .await
+        .expect("execute_cancellable() sollte gelingen");
+
+    assert!(!outcome.cancelled);
+    assert_eq!(outcome.output.stdout, b"echo:hello world\n");
+    assert_eq!(outcome.output.exit_code, Some(0));
+}

@@ -421,6 +421,9 @@ pub enum ActionResultPayload {
         stdout: String,
         stderr: String,
         exit_code: Option<i32>,
+        /// Spec 0027 — s. `ssh_manager_core::ai::MessageContent::
+        /// CommandResult.cancelled`-Doc-Kommentar.
+        cancelled: bool,
     },
     NoteUpdate {
         summary: String,
@@ -610,6 +613,7 @@ mod tests {
             stdout: "out".to_string(),
             stderr: String::new(),
             exit_code: Some(0),
+            cancelled: false,
         };
         let json = serde_json::to_value(&value).unwrap();
 

@@ -186,6 +186,15 @@ impl Handler for TestHandler {
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         let command = String::from_utf8_lossy(data);
+        // Spec 0027: simuliert ein nie von selbst endendes Kommando
+        // (`journalctl -f`/`tail -f`) — sendet eine erste Zeile, danach
+        // absichtlich weder `exit_status_request` noch `eof`/`close`. Der
+        // Kanal bleibt offen, bis der *Client* ihn schließt (genau das
+        // Verhalten, das `drain_channel_cancellable` testet).
+        if command == "never-ending" {
+            session.data(channel, b"first line\n".to_vec())?;
+            return Ok(());
+        }
         session.data(channel, format!("echo:{command}\n").into_bytes())?;
         session.exit_status_request(channel, 0)?;
         session.eof(channel)?;
