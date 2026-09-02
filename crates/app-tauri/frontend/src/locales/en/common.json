@@ -1,0 +1,10 @@
+{
+  "settings": {
+    "title": "Settings",
+    "language": {
+      "label": "Language",
+      "de": "German",
+      "en": "English"
+    }
+  }
+}

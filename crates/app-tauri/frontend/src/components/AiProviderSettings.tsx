@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   addAiProvider,
   commandErrorMessage,
@@ -7,6 +8,7 @@ import {
   openLogDirectory,
   setActiveAiProvider,
 } from "../api";
+import { setLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from "../i18n";
 import {
   type AiProviderConfigDto,
   type AiProviderConfigInput,
@@ -43,10 +45,18 @@ interface AiProviderSettingsProps {
 }
 
 export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSettingsProps) {
+  const { t, i18n } = useTranslation();
   const [providers, setProviders] = useState<AiProviderConfigDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<AiProviderConfigInput>(emptyForm());
   const [submitting, setSubmitting] = useState(false);
+
+  /** Spec 0024, Abschnitt 4: Wirkung sofort ohne Neustart —
+   * `setLanguage` ruft `i18next.changeLanguage` auf, das automatisch alle
+   * `useTranslation`-Verbraucher (inkl. dieser Komponente) neu rendert. */
+  const handleLanguageChange = (language: SupportedLanguage) => {
+    setLanguage(language).catch((err) => setError(commandErrorMessage(err)));
+  };
 
   const reload = () => {
     listAiProviders()
@@ -123,6 +133,29 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
         {error && (
           <p className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>
         )}
+
+        <div className="mb-6">
+          <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
+            {t("settings.language.label")}
+          </h3>
+          <div className="flex gap-2">
+            {SUPPORTED_LANGUAGES.map((language) => (
+              <button
+                key={language}
+                type="button"
+                onClick={() => handleLanguageChange(language)}
+                aria-pressed={i18n.language === language}
+                className={`rounded px-3 py-1.5 text-sm ${
+                  i18n.language === language
+                    ? "bg-indigo-600 text-white"
+                    : "bg-slate-700 text-slate-200 hover:bg-slate-600"
+                }`}
+              >
+                {t(`settings.language.${language}`)}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <button
           type="button"

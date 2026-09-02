@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability für das Hauptfenster — erlaubt der Webview alle eigenen `#[tauri::command]`s (implizit, da keine Plugin-Commands im Spiel sind), die Core-Events (`core:event:default`, s. `crate::events`), den Datei-Auswahl-Dialog und das Lesen der dabei ausgewählten Datei (Spec 0008 Abschnitt 6: Key-/Zertifikat-Datei-Auswahl im Server-Formular — nur der Inhalt geht an das Backend, nie der Pfad).",
+  "description": "Capability für das Hauptfenster — erlaubt der Webview alle eigenen `#[tauri::command]`s (implizit, da keine Plugin-Commands im Spiel sind), die Core-Events (`core:event:default`, s. `crate::events`), den Datei-Auswahl-Dialog und das Lesen der dabei ausgewählten Datei (Spec 0008 Abschnitt 6: Key-/Zertifikat-Datei-Auswahl im Server-Formular — nur der Inhalt geht an das Backend, nie der Pfad), sowie den lokalen Key-Value-Store und die System-Locale-Abfrage für die Sprachauswahl (Spec 0024, Abschnitt 4).",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -10,6 +10,8 @@
     "opener:default",
     "decoration:default",
     "core:window:allow-start-dragging",
-    "core:window:allow-internal-toggle-maximize"
+    "core:window:allow-internal-toggle-maximize",
+    "store:default",
+    "os:default"
   ]
 }

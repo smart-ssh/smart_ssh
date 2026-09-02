@@ -90,6 +90,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
+        // Spec 0024, Abschnitt 4: Speicherort für die gewählte UI-Sprache
+        // (und künftige reine UI-Einstellungen wie ein Theme) — bewusst kein
+        // sekundärer SQLite-Migrationspfad für eine einzelne, nicht
+        // sicherheitsrelevante Einstellung.
+        .plugin(tauri_plugin_store::Builder::new().build())
+        // Spec 0024, Abschnitt 4: liefert die System-Locale für die
+        // Sprachermittlung beim ersten Start (`frontend/src/i18n.ts`).
+        .plugin(tauri_plugin_os::init())
         // Entscheidung für tauri-plugin-decoration statt tauri-plugin-decorum:
         // tauri-plugin-decorum (v0.1.6) wird nicht mehr aktiv gepflegt und wirft Build-Fehler
         // bei modernen Rust-Toolchains/macOS-SDKs. tauri-plugin-decoration (v3.0.5) ist aktiv
