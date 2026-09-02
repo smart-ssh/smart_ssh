@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   commandErrorMessage,
   createRule,
@@ -73,6 +74,7 @@ const ACTION_BORDER: Record<RuleAction, string> = {
  * einer Datei wie schon `ServerForm.tsx` (Spec 0008), um das Zusammenspiel
  * von Liste/Formular/Test nicht über mehrere Dateien zu verteilen. */
 export function FilterRulesView() {
+  const { t } = useTranslation();
   const [rules, setRules] = useState<RuleDto[]>([]);
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [knownTags, setKnownTags] = useState<string[]>([]);
@@ -107,10 +109,10 @@ export function FilterRulesView() {
         const kind = scopeKind(rule.scope);
         const label =
           kind === "global"
-            ? "Global"
+            ? t("filterRules.scopeGlobal")
             : kind === "server"
-              ? `Server: ${serverName(scopeServerId(rule.scope)!)}`
-              : `Tag: ${scopeTag(rule.scope)}`;
+              ? t("filterRules.scopeServerPrefix", { name: serverName(scopeServerId(rule.scope)!) })
+              : t("filterRules.scopeTagPrefix", { tag: scopeTag(rule.scope) });
         const order = kind === "global" ? 0 : kind === "server" ? 1 : 2;
         byKey.set(key, { label, order, rules: [] });
       }
@@ -121,7 +123,7 @@ export function FilterRulesView() {
     }
     return [...byKey.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rules, servers]);
+  }, [rules, servers, t]);
 
   const movePriority = async (groupRules: RuleDto[], index: number, direction: -1 | 1) => {
     const otherIndex = index + direction;
@@ -159,14 +161,14 @@ export function FilterRulesView() {
       <div className="max-w-3xl space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="font-heading text-2xl font-bold tracking-wide text-slate-100">
-            Regeln
+            {t("filterRules.title")}
           </h2>
           <button
             type="button"
             onClick={() => setSelection({ kind: "new" })}
             className="font-heading bg-indigo-600 px-3 py-1.5 text-sm font-semibold tracking-wide text-slate-950 hover:bg-indigo-500"
           >
-            + Regel
+            {t("filterRules.addRule")}
           </button>
         </div>
 
@@ -174,7 +176,7 @@ export function FilterRulesView() {
 
         <div className="space-y-4">
           {groups.length === 0 && (
-            <p className="text-sm text-slate-400">Noch keine Regeln angelegt.</p>
+            <p className="text-sm text-slate-400">{t("filterRules.noRules")}</p>
           )}
           {groups.map((group) => (
             <div key={group.label}>
@@ -195,13 +197,15 @@ export function FilterRulesView() {
                     <code className="flex-1 truncate font-mono text-slate-200">
                       {rule.patternType}: {rule.patternValue}
                     </code>
-                    <span className="font-mono text-xs text-slate-500">Prio {rule.priority}</span>
+                    <span className="font-mono text-xs text-slate-500">
+                      {t("filterRules.priority", { value: rule.priority })}
+                    </span>
                     <button
                       type="button"
                       onClick={() => movePriority(group.rules, index, -1)}
                       disabled={index === 0}
                       className="bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
-                      aria-label="Priorität erhöhen"
+                      aria-label={t("filterRules.increasePriority")}
                     >
                       ↑
                     </button>
@@ -210,7 +214,7 @@ export function FilterRulesView() {
                       onClick={() => movePriority(group.rules, index, 1)}
                       disabled={index === group.rules.length - 1}
                       className="bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
-                      aria-label="Priorität senken"
+                      aria-label={t("filterRules.decreasePriority")}
                     >
                       ↓
                     </button>
@@ -219,14 +223,14 @@ export function FilterRulesView() {
                       onClick={() => setSelection({ kind: "rule", id: rule.id })}
                       className="bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600"
                     >
-                      Bearbeiten
+                      {t("common.edit")}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDelete(rule.id)}
                       className="bg-red-900 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
                     >
-                      Löschen
+                      {t("common.delete")}
                     </button>
                   </li>
                 ))}
@@ -270,6 +274,7 @@ interface RuleFormProps {
  * Scope-Auswahl (Global/Server/Tag — Tag als freie Eingabe mit
  * Vorschlägen aus `list_known_tags`), Priorität. */
 function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps) {
+  const { t } = useTranslation();
   const isCreate = rule === null;
   const [patternType, setPatternType] = useState<PatternType>(rule?.patternType ?? "glob");
   const [patternValue, setPatternValue] = useState(rule?.patternValue ?? "");
@@ -292,9 +297,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
     e.preventDefault();
     const scope = buildScope();
     if (!scope) {
-      setError(
-        kind === "server" ? "Bitte einen Server auswählen." : "Bitte ein Tag angeben.",
-      );
+      setError(kind === "server" ? t("filterRules.serverRequired") : t("filterRules.tagRequired"));
       return;
     }
     const input: RuleInput = { patternType, patternValue, action, scope, priority };
@@ -323,12 +326,12 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
       className="space-y-3 rounded border border-slate-700 bg-slate-800/40 p-4"
     >
       <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-100">
-        {isCreate ? "Neue Regel" : "Regel bearbeiten"}
+        {isCreate ? t("filterRules.newRule") : t("filterRules.editRule")}
       </h3>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-sm text-slate-300">
-          Pattern-Typ
+          {t("filterRules.patternType")}
           <select
             value={patternType}
             onChange={(e) => setPatternType(e.target.value as PatternType)}
@@ -340,7 +343,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
           </select>
         </label>
         <label className="block text-sm text-slate-300">
-          Muster
+          {t("filterRules.pattern")}
           <input
             type="text"
             required
@@ -354,7 +357,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-sm text-slate-300">
-          Aktion
+          {t("filterRules.action")}
           <select
             value={action}
             onChange={(e) => setAction(e.target.value as RuleAction)}
@@ -366,7 +369,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
           </select>
         </label>
         <label className="block text-sm text-slate-300">
-          Priorität
+          {t("filterRules.priorityLabel")}
           <input
             type="number"
             value={priority}
@@ -377,7 +380,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
       </div>
 
       <div className="space-y-2">
-        <span className="block text-sm text-slate-300">Scope</span>
+        <span className="block text-sm text-slate-300">{t("filterRules.scope")}</span>
         <div className="flex gap-4 text-sm text-slate-300">
           <label className="flex items-center gap-1">
             <input
@@ -385,15 +388,15 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
               checked={kind === "global"}
               onChange={() => setKind("global")}
             />
-            Global
+            {t("filterRules.scopeGlobal")}
           </label>
           <label className="flex items-center gap-1">
             <input type="radio" checked={kind === "server"} onChange={() => setKind("server")} />
-            Server
+            {t("filterRules.scopeServerOption")}
           </label>
           <label className="flex items-center gap-1">
             <input type="radio" checked={kind === "tag"} onChange={() => setKind("tag")} />
-            Tag
+            {t("filterRules.scopeTagOption")}
           </label>
         </div>
         {kind === "server" && (
@@ -402,7 +405,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
             onChange={(e) => setServerId(e.target.value)}
             className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
           >
-            <option value="">(Server auswählen)</option>
+            <option value="">{t("filterRules.selectServer")}</option>
             {servers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -417,7 +420,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
               type="text"
               value={tag}
               onChange={(e) => setTag(e.target.value)}
-              placeholder="z. B. production"
+              placeholder={t("filterRules.tagInputPlaceholder")}
               className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
             />
             <datalist id="known-tags">
@@ -437,14 +440,14 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
           onClick={onCancel}
           className="rounded bg-slate-700 px-3 py-1.5 text-sm hover:bg-slate-600"
         >
-          Abbrechen
+          {t("common.cancel")}
         </button>
         <button
           type="submit"
           disabled={saving}
           className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
         >
-          {saving ? "Speichert…" : isCreate ? "Anlegen" : "Speichern"}
+          {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
         </button>
       </div>
     </form>
@@ -454,17 +457,16 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
 /** Spec 0009, Abschnitt 6: read-only, deutlich als nicht bearbeitbar
  * gekennzeichnet — kein Bearbeiten-/Löschen-Button an diesen Einträgen. */
 function HardBlacklistSection({ patterns }: { patterns: PatternDto[] }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-2 border-t border-slate-700 pt-4">
       <h3 className="font-heading flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-100">
-        Hard-Blacklist
+        {t("filterRules.hardBlacklist")}
         <span className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
-          fest codiert, nicht bearbeitbar
+          {t("filterRules.hardBlacklistBadge")}
         </span>
       </h3>
-      <p className="text-xs text-slate-400">
-        Greift immer, unabhängig von Nutzerregeln (Spec 0002, Abschnitt 3.1).
-      </p>
+      <p className="text-xs text-slate-400">{t("filterRules.hardBlacklistHint")}</p>
       <ul className="space-y-1">
         {patterns.map((p, i) => (
           <li
@@ -507,6 +509,7 @@ function DecisionBadge({ decision, big }: { decision: Decision; big?: boolean })
 }
 
 function TraceDetails({ trace, rules }: { trace: EvaluationTraceDto; rules: RuleDto[] }) {
+  const { t } = useTranslation();
   const { reason } = decisionInfo(trace.decision);
   const matchedRule = trace.matchedRule ? rules.find((r) => r.id === trace.matchedRule) : null;
   return (
@@ -514,12 +517,13 @@ function TraceDetails({ trace, rules }: { trace: EvaluationTraceDto; rules: Rule
       {reason && <p>{reason}</p>}
       {matchedRule && (
         <p>
-          Regel: <code>{matchedRule.patternValue}</code> ({matchedRule.action})
+          {t("filterRules.matchedRuleLabel")} <code>{matchedRule.patternValue}</code> (
+          {matchedRule.action})
         </p>
       )}
       {trace.matchedHardBlacklistEntry && (
         <p>
-          Hard-Blacklist: <code>{trace.matchedHardBlacklistEntry}</code>
+          {t("filterRules.hardBlacklistLabel")} <code>{trace.matchedHardBlacklistEntry}</code>
         </p>
       )}
     </div>
@@ -548,6 +552,7 @@ function TraceView({ trace, rules }: { trace: EvaluationTraceDto; rules: RuleDto
  * `evaluate_explained` — bei Chaining jedes Teilkommando einzeln plus
  * hervorgehobene Gesamt-Entscheidung. */
 function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] }) {
+  const { t } = useTranslation();
   const [command, setCommand] = useState("");
   const [serverId, setServerId] = useState("");
   const [tags, setTags] = useState<string[]>([]);
@@ -577,10 +582,12 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
 
   return (
     <div className="space-y-3 border-t border-slate-700 pt-4">
-      <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-100">Regeln testen</h3>
+      <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-100">
+        {t("filterRules.testRules")}
+      </h3>
 
       <label className="block text-sm text-slate-300">
-        Beispielkommando
+        {t("filterRules.exampleCommand")}
         <textarea
           value={command}
           onChange={(e) => setCommand(e.target.value)}
@@ -592,13 +599,13 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-sm text-slate-300">
-          Server simulieren (optional)
+          {t("filterRules.simulateServer")}
           <select
             value={serverId}
             onChange={(e) => setServerId(e.target.value)}
             className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
           >
-            <option value="">(keiner)</option>
+            <option value="">{t("filterRules.noServerOption")}</option>
             {servers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -607,7 +614,7 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
           </select>
         </label>
         <div className="block text-sm text-slate-300">
-          Tags simulieren
+          {t("filterRules.simulateTags")}
           <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-slate-600 bg-slate-900 p-1.5">
             {tags.map((tag) => (
               <span
@@ -617,9 +624,9 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
                 {tag}
                 <button
                   type="button"
-                  onClick={() => setTags(tags.filter((t) => t !== tag))}
+                  onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
                   className="text-slate-400 hover:text-white"
-                  aria-label={`Tag ${tag} entfernen`}
+                  aria-label={t("serverForm.removeTagAria", { tag })}
                 >
                   ✕
                 </button>
@@ -636,7 +643,7 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
                 }
               }}
               onBlur={handleAddTag}
-              placeholder="Tag + Enter"
+              placeholder={t("serverForm.tagPlaceholder")}
               className="min-w-[6rem] flex-1 bg-transparent text-sm text-slate-100 outline-none"
             />
           </div>
@@ -649,7 +656,7 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
         disabled={testing || !command.trim()}
         className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
       >
-        {testing ? "Testet…" : "Testen"}
+        {testing ? t("common.testing") : t("filterRules.test")}
       </button>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
@@ -658,7 +665,7 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
         <div className="space-y-3 rounded border border-slate-700 bg-slate-800/60 p-3">
           <div>
             <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">
-              Gesamt-Entscheidung
+              {t("filterRules.overallDecision")}
             </p>
             <DecisionBadge decision={result.decision} big />
             {result.subCommandTraces.length === 0 && (
@@ -667,7 +674,9 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
           </div>
           {result.subCommandTraces.length > 0 && (
             <div className="space-y-1">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Teilkommandos</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                {t("filterRules.subCommands")}
+              </p>
               {result.subCommandTraces.map((sub, i) => (
                 <TraceView key={i} trace={sub} rules={rules} />
               ))}

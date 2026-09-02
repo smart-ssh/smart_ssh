@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { HostKeyInfo, HostKeyUserDecision } from "../types";
 
 interface HostKeyDialogProps {
@@ -13,6 +14,7 @@ interface HostKeyDialogProps {
  * Host-Key ist ein deutlich ernsteres Signal als ein neuer, unbekannter.
  */
 export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
+  const { t } = useTranslation();
   const isMismatch = event.kind === "mismatch";
 
   return (
@@ -36,21 +38,20 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
             />
             <div className="p-6">
               <div className="font-mono text-[11px] tracking-[0.18em] text-red-400 uppercase">
-                Sicherheitswarnung · Host-Schlüssel geändert
+                {t("hostKeyDialog.mismatchLabel")}
               </div>
               <h2 className="font-heading mt-1 mb-2 text-2xl leading-tight font-bold text-red-100">
-                Der Schlüssel dieses Servers ist nicht mehr derselbe.
+                {t("hostKeyDialog.mismatchHeading")}
               </h2>
               <p className="mb-4 text-sm text-red-200/90">
-                Der Server <strong>{event.host}:{event.port}</strong> präsentiert einen anderen
-                Schlüssel als beim letzten Mal gespeichert. Das kann auf einen
-                Man-in-the-Middle-Angriff hindeuten. Nur fortfahren, wenn du sicher bist, dass sich
-                der Server-Schlüssel legitim geändert hat (z. B. Neuinstallation des Servers).
+                {t("hostKeyDialog.mismatchBodyBeforeHost")}
+                <strong>{event.host}:{event.port}</strong>
+                {t("hostKeyDialog.mismatchBodyAfterHost")}
               </p>
               <div className="mb-4 grid grid-cols-2 gap-px border border-red-700/40 bg-red-700/25">
                 <div className="flex flex-col gap-1 bg-red-950 p-3">
                   <span className="font-heading text-[11px] font-semibold tracking-wide text-red-400/80 uppercase">
-                    Bekannt
+                    {t("hostKeyDialog.known")}
                   </span>
                   <span className="font-mono text-xs break-all text-emerald-300">
                     {event.expectedFingerprint}
@@ -58,7 +59,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
                 </div>
                 <div className="flex flex-col gap-1 bg-red-950 p-3">
                   <span className="font-heading text-[11px] font-semibold tracking-wide text-red-300 uppercase">
-                    Jetzt angeboten
+                    {t("hostKeyDialog.offeredNow")}
                   </span>
                   <span className="font-mono text-xs break-all text-red-300">
                     {event.fingerprint}
@@ -72,14 +73,14 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
                   onClick={() => onDecision({ decision: "reject" })}
                   className="font-heading flex-1 bg-red-600 px-3 py-2 text-sm font-bold tracking-wide text-red-50 hover:bg-red-500"
                 >
-                  Verbindung abbrechen
+                  {t("hostKeyDialog.cancelConnection")}
                 </button>
                 <button
                   type="button"
                   onClick={() => onDecision({ decision: "trust" })}
                   className="font-heading flex-1 border border-white/15 px-3 py-2 text-sm font-semibold tracking-wide text-red-200 hover:bg-white/6"
                 >
-                  Trotzdem vertrauen
+                  {t("hostKeyDialog.trustAnyway")}
                 </button>
               </div>
             </div>
@@ -87,11 +88,12 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
         ) : (
           <div className="p-6">
             <h2 className="font-heading mb-2 text-lg font-semibold text-slate-100">
-              Unbekannter Host
+              {t("hostKeyDialog.unknownHeading")}
             </h2>
             <p className="mb-4 text-sm text-slate-300">
-              Du verbindest dich zum ersten Mal mit <strong>{event.host}:{event.port}</strong>.
-              Bitte den Fingerprint prüfen, bevor du vertraust.
+              {t("hostKeyDialog.unknownBodyBeforeHost")}
+              <strong>{event.host}:{event.port}</strong>
+              {t("hostKeyDialog.unknownBodyAfterHost")}
             </p>
             <div className="mb-4 border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-300">
               {event.fingerprint}
@@ -103,14 +105,14 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
                 onClick={() => onDecision({ decision: "reject" })}
                 className="font-heading flex-1 border border-slate-600 px-3 py-2 text-sm font-semibold tracking-wide text-slate-100 hover:bg-slate-700"
               >
-                Ablehnen
+                {t("hostKeyDialog.reject")}
               </button>
               <button
                 type="button"
                 onClick={() => onDecision({ decision: "trust" })}
                 className="font-heading flex-1 bg-indigo-600 px-3 py-2 text-sm font-semibold tracking-wide text-slate-950 hover:bg-indigo-500"
               >
-                Vertrauen
+                {t("hostKeyDialog.trust")}
               </button>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -87,27 +88,28 @@ type ChatItem =
  * anderen Aktionstypen bleibt der Parameter ungenutzt.
  */
 function describeAction(
+  t: (key: string, options?: Record<string, unknown>) => string,
   action: AiAction,
   targetName: string | null,
 ): { label: string; command?: string } {
   if ("SuggestCommand" in action) {
-    return { label: "Kommando vorschlagen", command: action.SuggestCommand.command };
+    return { label: t("actionCard.suggestCommand"), command: action.SuggestCommand.command };
   }
   if ("GenerateDocument" in action) {
-    return { label: `Dokument generieren: ${action.GenerateDocument.title}` };
+    return { label: t("actionCard.generateDocument", { title: action.GenerateDocument.title }) };
   }
   if ("ReadRemoteFile" in action) {
-    return { label: `Datei lesen: ${action.ReadRemoteFile.path}` };
+    return { label: t("actionCard.readFile", { path: action.ReadRemoteFile.path }) };
   }
   if ("WriteRemoteFile" in action) {
-    return { label: `Datei schreiben: ${action.WriteRemoteFile.path}` };
+    return { label: t("actionCard.writeFile", { path: action.WriteRemoteFile.path }) };
   }
-  const name = targetName ?? "unbekanntes Ziel";
+  const name = targetName ?? t("actionCard.unknownTarget");
   const isGroup = action.ProposeNoteUpdate.target === "CurrentServerGroup";
   return {
     label: isGroup
-      ? `Gruppen-Notiz aktualisieren: „${name}“`
-      : `Notiz aktualisieren: Server „${name}“`,
+      ? t("actionCard.updateNoteGroup", { name })
+      : t("actionCard.updateNoteServer", { name }),
   };
 }
 
@@ -123,14 +125,17 @@ function formatReason(reason: string): string {
     .join(" · ");
 }
 
-function decisionBadge(decision: Decision): { text: string; className: string } {
+function decisionBadge(
+  t: (key: string) => string,
+  decision: Decision,
+): { text: string; className: string } {
   if (decision === "AutoExec") {
-    return { text: "automatisch ausgeführt", className: "bg-emerald-900 text-emerald-300" };
+    return { text: t("actionCard.autoExecuted"), className: "bg-emerald-900 text-emerald-300" };
   }
   if ("Confirm" in decision) {
-    return { text: "Bestätigung nötig", className: "bg-amber-900 text-amber-300" };
+    return { text: t("actionCard.confirmationNeeded"), className: "bg-amber-900 text-amber-300" };
   }
-  return { text: "blockiert", className: "bg-red-900 text-red-300" };
+  return { text: t("actionCard.blocked"), className: "bg-red-900 text-red-300" };
 }
 
 /** Ampel-Kartenrahmen passend zur `Decision` (Spec 0009: Allow/Confirm/Deny
@@ -514,6 +519,7 @@ function ChatItemView({
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
   serverId: string;
 }) {
+  const { t } = useTranslation();
   if (item.type === "document") {
     return (
       <DocumentCard title={item.title} contentMarkdown={item.contentMarkdown} onExport={onExport} />
@@ -537,7 +543,7 @@ function ChatItemView({
     );
   }
 
-  const { label, command } = describeAction(item.action, item.targetName);
+  const { label, command } = describeAction(t, item.action, item.targetName);
   // Spec 0021, Abschnitt 6: eine vom Nutzer abgelehnte Aktion bleibt
   // sichtbar, statt zu verschwinden — `item.decision` selbst bleibt aber
   // weiterhin `Confirm{reason}` (das war die ursprüngliche Filter-Engine-
@@ -547,8 +553,8 @@ function ChatItemView({
   const rejectedByUser = item.responded && item.userDecision === "deny";
   const blockedByFilter = typeof item.decision === "object" && "Deny" in item.decision;
   const badge = rejectedByUser
-    ? { text: "abgelehnt", className: "bg-red-900 text-red-300" }
-    : decisionBadge(item.decision);
+    ? { text: t("actionCard.rejected"), className: "bg-red-900 text-red-300" }
+    : decisionBadge(t, item.decision);
   const cardTone = rejectedByUser
     ? "border-red-700/45 bg-red-950/15"
     : decisionCardTone(item.decision);
@@ -576,9 +582,7 @@ function ChatItemView({
         </code>
       )}
       {item.usesStoredSudoPassword && (
-        <p className="mt-1 text-xs text-amber-300">
-          🔑 Wird mit hinterlegtem Sudo-Passwort ausgeführt.
-        </p>
+        <p className="mt-1 text-xs text-amber-300">{t("actionCard.usesStoredSudoPassword")}</p>
       )}
       {"ProposeNoteUpdate" in item.action && (
         <div className="mt-2">
@@ -608,7 +612,7 @@ function ChatItemView({
         </div>
       )}
       {rejectedByUser ? (
-        <p className="mt-1 text-xs text-red-300">Vom Nutzer abgelehnt.</p>
+        <p className="mt-1 text-xs text-red-300">{t("actionCard.rejectedByUser")}</p>
       ) : (
         <>
           {typeof item.decision === "object" && "Confirm" in item.decision && (
@@ -655,6 +659,7 @@ function ConfirmActionForm({
   ) => void;
   serverId: string;
 }) {
+  const { t } = useTranslation();
   const [edited, setEdited] = useState(initialCommand ?? "");
 
   const handleApprove = () => {
@@ -670,7 +675,7 @@ function ConfirmActionForm({
       {initialCommand !== undefined && (
         <div className="flex flex-col gap-1">
           <span className="font-heading text-xs font-semibold tracking-wide text-slate-400 uppercase">
-            Kommando — editierbar
+            {t("confirmDialog.editableCommand")}
           </span>
           <textarea
             value={edited}
@@ -690,14 +695,14 @@ function ConfirmActionForm({
           onClick={handleApprove}
           className="font-heading bg-emerald-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-emerald-950 hover:bg-emerald-500"
         >
-          Ausführen
+          {t("confirmDialog.execute")}
         </button>
         <button
           type="button"
           onClick={() => onRespond(actionId, { decision: "deny" })}
           className="font-heading border border-red-600/50 px-4 py-1.5 text-xs font-semibold tracking-wide text-red-400 hover:bg-red-600/12"
         >
-          Ablehnen
+          {t("confirmDialog.deny")}
         </button>
         {/* Spec 0011: nur für Kommando-Vorschläge sinnvoll, nicht für
          * Notiz-Aktualisierungen (kein `initialCommand` dort). */}
@@ -737,6 +742,7 @@ function QuickRuleButton({
     scope: Scope,
   ) => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<PatternSuggestionDto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -778,12 +784,12 @@ function QuickRuleButton({
         onClick={toggleOpen}
         className="font-heading px-3 py-1.5 text-xs font-semibold tracking-wide text-indigo-400 hover:bg-indigo-600/14"
       >
-        Akzeptieren + Regel
+        {t("confirmDialog.quickRule")}
       </button>
       <button
         type="button"
         onClick={toggleOpen}
-        aria-label="Regel-Vorschläge anzeigen"
+        aria-label={t("confirmDialog.quickRuleDropdownAria")}
         className="border-l border-indigo-600/40 px-2 font-mono text-xs text-indigo-400 hover:bg-indigo-600/14"
       >
         ▾
@@ -791,7 +797,7 @@ function QuickRuleButton({
       {open && (
         <div className="absolute right-0 top-full z-10 mt-1 w-72 space-y-2 border border-indigo-600/35 bg-slate-900 p-2 shadow-lg">
           <div className="font-heading border-b border-slate-800 pb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
-            Muster für die neue Allow-Regel
+            {t("confirmDialog.newRulePatternHeading")}
           </div>
           <div className="flex gap-3 text-xs text-slate-300">
             <label className="flex items-center gap-1">
@@ -800,7 +806,7 @@ function QuickRuleButton({
                 checked={scopeKind === "server"}
                 onChange={() => setScopeKind("server")}
               />
-              Dieser Server
+              {t("confirmDialog.scopeThisServer")}
             </label>
             <label className="flex items-center gap-1">
               <input
@@ -808,7 +814,7 @@ function QuickRuleButton({
                 checked={scopeKind === "global"}
                 onChange={() => setScopeKind("global")}
               />
-              Global
+              {t("confirmDialog.scopeGlobal")}
             </label>
             <label className="flex items-center gap-1">
               <input
@@ -816,7 +822,7 @@ function QuickRuleButton({
                 checked={scopeKind === "tag"}
                 onChange={() => setScopeKind("tag")}
               />
-              Tag
+              {t("confirmDialog.scopeTag")}
             </label>
           </div>
           {scopeKind === "tag" && (
@@ -824,14 +830,14 @@ function QuickRuleButton({
               type="text"
               value={tag}
               onChange={(e) => setTag(e.target.value)}
-              placeholder="Tag-Name"
+              placeholder={t("confirmDialog.tagNamePlaceholder")}
               className="w-full border border-slate-600 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-100"
             />
           )}
-          {loading && <p className="text-xs text-slate-400">Lädt Vorschläge…</p>}
+          {loading && <p className="text-xs text-slate-400">{t("confirmDialog.loadingSuggestions")}</p>}
           {error && <p className="text-xs text-red-400">{error}</p>}
           {!loading && !error && suggestions.length === 0 && (
-            <p className="text-xs text-slate-400">Keine Vorschläge.</p>
+            <p className="text-xs text-slate-400">{t("confirmDialog.noSuggestions")}</p>
           )}
           <ul className="space-y-1">
             {suggestions.map((suggestion) => (
@@ -857,11 +863,14 @@ function QuickRuleButton({
  * zur serverseitigen Größenermittlung (dort ebenfalls Byte-, nicht
  * Zeichenlänge). */
 function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number; newContent: string }) {
+  const { t } = useTranslation();
   const newSize = new TextEncoder().encode(newContent).length;
   return (
     <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
-      ⚠ Binärdatei — kein Textvergleich möglich. Bisherige Größe: {formatBytes(oldSize)}, neue
-      Größe: {formatBytes(newSize)}.
+      {t("confirmDialog.binaryFileHint", {
+        oldSize: formatBytes(oldSize),
+        newSize: formatBytes(newSize),
+      })}
     </p>
   );
 }

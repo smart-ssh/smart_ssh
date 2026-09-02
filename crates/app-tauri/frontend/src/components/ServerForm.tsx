@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   clearServerSudoPassword,
   commandErrorMessage,
@@ -33,13 +34,18 @@ interface ServerFormProps {
   onDeleted: () => void;
 }
 
-const AUTH_KIND_LABELS: Record<AuthMethodKind | "privateKey", string> = {
-  password: "Passwort",
-  private_key: "Private Key",
-  privateKey: "Private Key",
-  agent: "SSH-Agent verwenden",
-  certificate: "Zertifikat",
-};
+/** `t` wird als Parameter durchgereicht statt selbst `useTranslation()`
+ * aufzurufen — diese Funktion läuft außerhalb einer Komponente, Hooks sind
+ * hier nicht erlaubt. */
+function authKindLabels(t: (key: string) => string): Record<AuthMethodKind | "privateKey", string> {
+  return {
+    password: t("serverForm.authKind.password"),
+    private_key: t("serverForm.authKind.privateKey"),
+    privateKey: t("serverForm.authKind.privateKey"),
+    agent: t("serverForm.authKind.agent"),
+    certificate: t("serverForm.authKind.certificate"),
+  };
+}
 
 /** Formular-lokaler Zustand — getrennt von [`AuthMethodInput`], weil
  * Textfelder immer einen String brauchen (nie `null`), auch wenn die
@@ -100,6 +106,8 @@ export function ServerForm({
   onSaved,
   onDeleted,
 }: ServerFormProps) {
+  const { t } = useTranslation();
+  const AUTH_KIND_LABELS = authKindLabels(t);
   const isCreate = serverId === null;
 
   const [loaded, setLoaded] = useState<ServerDto | null>(null);
@@ -285,13 +293,13 @@ export function ServerForm({
   return (
     <div className="max-w-2xl space-y-6 p-4">
       <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">
-        {isCreate ? "Neuer Server" : `Server: ${loaded?.name ?? ""}`}
+        {isCreate ? t("serverForm.titleNew") : t("serverForm.titleExisting", { name: loaded?.name ?? "" })}
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm text-slate-300">
-            Name
+            {t("common.name")}
             <input
               type="text"
               required
@@ -301,7 +309,7 @@ export function ServerForm({
             />
           </label>
           <label className="block text-sm text-slate-300">
-            Host
+            {t("serverForm.host")}
             <input
               type="text"
               required
@@ -311,7 +319,7 @@ export function ServerForm({
             />
           </label>
           <label className="block text-sm text-slate-300">
-            Port
+            {t("serverForm.port")}
             <input
               type="number"
               required
@@ -323,7 +331,7 @@ export function ServerForm({
             />
           </label>
           <label className="block text-sm text-slate-300">
-            Benutzername
+            {t("serverForm.username")}
             <input
               type="text"
               required
@@ -335,13 +343,13 @@ export function ServerForm({
         </div>
 
         <label className="block text-sm text-slate-300">
-          Gruppe
+          {t("serverForm.group")}
           <select
             value={groupId ?? ""}
             onChange={(e) => setGroupId(e.target.value || null)}
             className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
           >
-            <option value="">(keine)</option>
+            <option value="">{t("serverForm.noGroup")}</option>
             {allGroups.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}
@@ -351,13 +359,13 @@ export function ServerForm({
         </label>
 
         <label className="block text-sm text-slate-300">
-          Jump-Host
+          {t("serverForm.jumpHost")}
           <select
             value={jumpHost ?? ""}
             onChange={(e) => setJumpHost(e.target.value || null)}
             className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
           >
-            <option value="">(kein Jump-Host)</option>
+            <option value="">{t("serverForm.noJumpHost")}</option>
             {possibleJumpHosts.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -367,7 +375,7 @@ export function ServerForm({
         </label>
 
         <div className="block text-sm text-slate-300">
-          Tags
+          {t("serverForm.tags")}
           <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-slate-600 bg-slate-900 p-1.5">
             {tags.map((tag) => (
               <span
@@ -377,9 +385,9 @@ export function ServerForm({
                 {tag}
                 <button
                   type="button"
-                  onClick={() => setTags(tags.filter((t) => t !== tag))}
+                  onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
                   className="text-slate-400 hover:text-white"
-                  aria-label={`Tag ${tag} entfernen`}
+                  aria-label={t("serverForm.removeTagAria", { tag })}
                 >
                   ✕
                 </button>
@@ -396,14 +404,14 @@ export function ServerForm({
                 }
               }}
               onBlur={handleAddTag}
-              placeholder="Tag + Enter"
+              placeholder={t("serverForm.tagPlaceholder")}
               className="flex-1 bg-transparent px-1 py-0.5 text-sm text-slate-100 outline-none"
             />
           </div>
         </div>
 
         <fieldset className="rounded border border-slate-700 p-3">
-          <legend className="px-1 text-sm text-slate-300">Authentifizierung</legend>
+          <legend className="px-1 text-sm text-slate-300">{t("serverForm.authFieldset")}</legend>
           <select
             value={auth.kind}
             onChange={(e) => setAuth(authStateFromKind(e.target.value as AuthFormState["kind"]))}
@@ -417,7 +425,8 @@ export function ServerForm({
 
           {auth.kind === "password" && (
             <label className="block text-sm text-slate-300">
-              Passwort {!isCreate && <span className="text-slate-500">(leer = unverändert)</span>}
+              {t("serverForm.password")}{" "}
+              {!isCreate && <span className="text-slate-500">{t("serverForm.unchangedHint")}</span>}
               <input
                 type="password"
                 required={isCreate}
@@ -433,17 +442,20 @@ export function ServerForm({
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-300">
-                    Private Key {!isCreate && <span className="text-slate-500">(leer = unverändert)</span>}
+                    {t("serverForm.privateKeyLabel")}{" "}
+                    {!isCreate && <span className="text-slate-500">{t("serverForm.unchangedHint")}</span>}
                   </span>
                   <button
                     type="button"
                     onClick={async () => {
-                      const content = await pickAndReadTextFile("Private Key auswählen");
+                      const content = await pickAndReadTextFile(
+                        t("serverForm.choosePrivateKeyDialogTitle"),
+                      );
                       if (content !== null) setAuth({ ...auth, keyContent: content });
                     }}
                     className="rounded bg-slate-700 px-2 py-0.5 text-xs hover:bg-slate-600"
                   >
-                    Datei wählen…
+                    {t("serverForm.chooseFile")}
                   </button>
                 </div>
                 <textarea
@@ -455,7 +467,7 @@ export function ServerForm({
                 />
               </div>
               <label className="block text-sm text-slate-300">
-                Passphrase (optional)
+                {t("serverForm.passphraseOptional")}
                 <input
                   type="password"
                   value={auth.passphrase}
@@ -467,9 +479,7 @@ export function ServerForm({
           )}
 
           {auth.kind === "agent" && (
-            <p className="text-sm text-slate-400">
-              Nutzt den lokal laufenden SSH-Agent, keine weiteren Angaben nötig.
-            </p>
+            <p className="text-sm text-slate-400">{t("serverForm.agentHint")}</p>
           )}
 
           {auth.kind === "certificate" && (
@@ -477,17 +487,20 @@ export function ServerForm({
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-300">
-                    Zertifikat {!isCreate && <span className="text-slate-500">(leer = unverändert)</span>}
+                    {t("serverForm.certificateLabel")}{" "}
+                    {!isCreate && <span className="text-slate-500">{t("serverForm.unchangedHint")}</span>}
                   </span>
                   <button
                     type="button"
                     onClick={async () => {
-                      const content = await pickAndReadTextFile("Zertifikat auswählen");
+                      const content = await pickAndReadTextFile(
+                        t("serverForm.chooseCertificateDialogTitle"),
+                      );
                       if (content !== null) setAuth({ ...auth, certContent: content });
                     }}
                     className="rounded bg-slate-700 px-2 py-0.5 text-xs hover:bg-slate-600"
                   >
-                    Datei wählen…
+                    {t("serverForm.chooseFile")}
                   </button>
                 </div>
                 <textarea
@@ -501,17 +514,18 @@ export function ServerForm({
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-300">
-                    Zugehöriger Key {!isCreate && <span className="text-slate-500">(leer = unverändert)</span>}
+                    {t("serverForm.associatedKey")}{" "}
+                    {!isCreate && <span className="text-slate-500">{t("serverForm.unchangedHint")}</span>}
                   </span>
                   <button
                     type="button"
                     onClick={async () => {
-                      const content = await pickAndReadTextFile("Key auswählen");
+                      const content = await pickAndReadTextFile(t("serverForm.chooseKeyDialogTitle"));
                       if (content !== null) setAuth({ ...auth, keyContent: content });
                     }}
                     className="rounded bg-slate-700 px-2 py-0.5 text-xs hover:bg-slate-600"
                   >
-                    Datei wählen…
+                    {t("serverForm.chooseFile")}
                   </button>
                 </div>
                 <textarea
@@ -527,15 +541,12 @@ export function ServerForm({
         </fieldset>
 
         <fieldset className="rounded border border-slate-700 p-3">
-          <legend className="px-1 text-sm text-slate-300">Sudo-Passwort (optional)</legend>
-          <p className="mb-2 text-xs text-slate-500">
-            Wird bei einem von der KI vorgeschlagenen <code>sudo</code>-Kommando automatisch
-            über Stdin eingespeist (Spec 0018) — nie auf dem Zielserver abgelegt.
-          </p>
+          <legend className="px-1 text-sm text-slate-300">{t("serverForm.sudoFieldset")}</legend>
+          <p className="mb-2 text-xs text-slate-500">{t("serverForm.sudoHint")}</p>
           <label className="block text-sm text-slate-300">
-            Sudo-Passwort{" "}
+            {t("serverForm.sudoLabel")}{" "}
             <span className="text-slate-500">
-              (leer = unverändert{hasSudoPassword ? ", aktuell hinterlegt" : ""})
+              {hasSudoPassword ? t("serverForm.sudoUnchangedStored") : t("serverForm.sudoUnchanged")}
             </span>
             <input
               type="password"
@@ -551,7 +562,7 @@ export function ServerForm({
               disabled={clearingSudoPassword}
               className="mt-2 rounded bg-slate-800 px-2 py-1 text-xs text-red-300 hover:bg-slate-700 disabled:opacity-50"
             >
-              {clearingSudoPassword ? "Entfernt…" : "Hinterlegtes Sudo-Passwort entfernen"}
+              {clearingSudoPassword ? t("common.removing") : t("serverForm.removeSudoPassword")}
             </button>
           )}
         </fieldset>
@@ -564,7 +575,7 @@ export function ServerForm({
             disabled={saving}
             className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
           >
-            {saving ? "Speichert…" : isCreate ? "Anlegen" : "Speichern"}
+            {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
           </button>
           <button
             type="button"
@@ -572,7 +583,7 @@ export function ServerForm({
             disabled={testing}
             className="rounded bg-slate-800 px-4 py-2 text-sm hover:bg-slate-700 disabled:opacity-50"
           >
-            {testing ? "Testet…" : "Verbindung testen"}
+            {testing ? t("common.testing") : t("serverForm.testConnection")}
           </button>
           {testResult && <TestResultBadge result={testResult} />}
         </div>
@@ -589,11 +600,11 @@ export function ServerForm({
               disabled={previewLoading}
               className="rounded bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700 disabled:opacity-50"
             >
-              {previewLoading ? "Lädt…" : "Kontext-Vorschau"}
+              {previewLoading ? t("common.loading") : t("serverForm.contextPreview")}
             </button>
             {preview !== null && (
               <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
-                {preview || "(kein Kontext)"}
+                {preview || t("serverForm.noContext")}
               </pre>
             )}
           </div>
@@ -605,7 +616,7 @@ export function ServerForm({
               disabled={deleting}
               className="rounded bg-red-900 px-3 py-1.5 text-sm text-red-200 hover:bg-red-800 disabled:opacity-50"
             >
-              {deleting ? "Löscht…" : "Server löschen"}
+              {deleting ? t("common.deleting") : t("serverForm.deleteServer")}
             </button>
           </div>
         </>
@@ -628,18 +639,25 @@ export function ServerForm({
 }
 
 function TestResultBadge({ result }: { result: TestConnectionResult }) {
+  const { t } = useTranslation();
   switch (result.kind) {
     case "success":
-      return <span className="text-sm text-emerald-400">✓ Verbindung erfolgreich</span>;
+      return <span className="text-sm text-emerald-400">{t("serverForm.testResult.success")}</span>;
     case "authenticationFailed":
-      return <span className="text-sm text-red-400">✗ Authentifizierung fehlgeschlagen</span>;
+      return <span className="text-sm text-red-400">{t("serverForm.testResult.authFailed")}</span>;
     case "hostKeyUnknown":
-      return <span className="text-sm text-amber-400">Host-Key unbekannt — Bestätigung nötig</span>;
+      return (
+        <span className="text-sm text-amber-400">{t("serverForm.testResult.hostKeyUnknown")}</span>
+      );
     case "hostKeyMismatch":
-      return <span className="text-sm text-red-400">⚠ Host-Key hat sich geändert</span>;
+      return <span className="text-sm text-red-400">{t("serverForm.testResult.hostKeyMismatch")}</span>;
     case "networkError":
-      return <span className="text-sm text-red-400">✗ Netzwerkfehler: {result.message}</span>;
+      return (
+        <span className="text-sm text-red-400">
+          {t("serverForm.testResult.networkError", { message: result.message })}
+        </span>
+      );
     case "timeout":
-      return <span className="text-sm text-red-400">✗ Zeitüberschreitung</span>;
+      return <span className="text-sm text-red-400">{t("serverForm.testResult.timeout")}</span>;
   }
 }

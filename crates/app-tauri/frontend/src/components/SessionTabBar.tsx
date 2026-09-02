@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { SessionTab } from "../useSessionTabs";
 
 const STATUS_DOT: Record<SessionTab["status"], string> = {
@@ -28,6 +29,7 @@ interface SessionTabBarProps {
  * fälschlich als Fenster-Ziehen interpretieren lassen.
  */
 export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose }: SessionTabBarProps) {
+  const { t } = useTranslation();
   if (tabs.length === 0) return null;
 
   return (
@@ -35,14 +37,14 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
       <button
         type="button"
         onClick={() => onSwitch(null)}
-        title="Übersicht"
+        title={t("sessionTabs.overview")}
         className={`font-heading shrink-0 border px-2.5 py-1 text-xs font-semibold tracking-wide ${
           activeSessionId === null
             ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
             : "border-transparent text-slate-400 hover:bg-slate-800"
         }`}
       >
-        Übersicht
+        {t("sessionTabs.overview")}
       </button>
 
       {tabs.map((tab) => {
@@ -67,14 +69,14 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
               {tab.hasPendingAction && (
                 <span
                   className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400"
-                  title="Wartet auf Bestätigung"
+                  title={t("sessionTabs.pendingAction")}
                 />
               )}
             </button>
             <button
               type="button"
               onClick={() => onRequestClose(tab.sessionId)}
-              aria-label={`Tab "${tab.serverName}" schließen`}
+              aria-label={t("sessionTabs.closeTab", { name: tab.serverName })}
               className="shrink-0 px-0.5 text-slate-500 hover:text-slate-200"
             >
               ✕

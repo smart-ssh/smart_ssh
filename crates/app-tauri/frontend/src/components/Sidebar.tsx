@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { GroupDto, ServerDto } from "../types";
 
 export type Selection =
@@ -16,6 +17,7 @@ interface SidebarProps {
 /** Spec 0008, Abschnitt 6: rekursiv aus `list_groups()`/`list_servers()`
  * clientseitig aufgebauter Baum. */
 export function Sidebar({ groups, servers, selection, onSelect }: SidebarProps) {
+  const { t } = useTranslation();
   const childGroupsOf = (parentId: string | null) =>
     groups.filter((g) => g.parentId === parentId);
   const serversOf = (groupId: string | null) => servers.filter((s) => s.groupId === groupId);
@@ -64,21 +66,21 @@ export function Sidebar({ groups, servers, selection, onSelect }: SidebarProps) 
           onClick={() => onSelect({ kind: "newGroup", parentId: null })}
           className="flex-1 rounded bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700"
         >
-          + Gruppe
+          {t("sidebar.addGroup")}
         </button>
         <button
           type="button"
           onClick={() => onSelect({ kind: "newServer", groupId: null })}
           className="flex-1 rounded bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700"
         >
-          + Server
+          {t("sidebar.addServer")}
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-2">
         {childGroupsOf(null).map((g) => renderGroup(g, 0))}
         {serversOf(null).map((s) => renderServer(s, 0))}
         {groups.length === 0 && servers.length === 0 && (
-          <p className="px-2 py-1 text-sm text-slate-500">Noch nichts angelegt.</p>
+          <p className="px-2 py-1 text-sm text-slate-500">{t("sidebar.empty")}</p>
         )}
       </div>
     </div>

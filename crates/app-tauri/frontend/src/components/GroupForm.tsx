@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { commandErrorMessage, createGroup, deleteGroup, updateGroup } from "../api";
 import type { DeleteGroupResult, GroupDto } from "../types";
 import { NotesPanel } from "./NotesPanel";
@@ -17,6 +18,7 @@ interface GroupFormProps {
  * eigene Nachfahren clientseitig aus), Notiz-Editor, Löschen mit
  * Cascade-Vorschau. */
 export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDeleted }: GroupFormProps) {
+  const { t } = useTranslation();
   const isCreate = groupId === null;
   const existing = useMemo(() => allGroups.find((g) => g.id === groupId) ?? null, [allGroups, groupId]);
 
@@ -99,12 +101,12 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
   return (
     <div className="max-w-xl space-y-6 p-4">
       <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">
-        {isCreate ? "Neue Gruppe" : `Gruppe: ${existing?.name ?? ""}`}
+        {isCreate ? t("groupForm.titleNew") : t("groupForm.titleExisting", { name: existing?.name ?? "" })}
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <label className="block text-sm text-slate-300">
-          Name
+          {t("common.name")}
           <input
             type="text"
             required
@@ -115,13 +117,13 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
         </label>
 
         <label className="block text-sm text-slate-300">
-          Übergeordnete Gruppe
+          {t("groupForm.parent")}
           <select
             value={parentId ?? ""}
             onChange={(e) => setParentId(e.target.value || null)}
             className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
           >
-            <option value="">(keine)</option>
+            <option value="">{t("groupForm.noParent")}</option>
             {availableParents.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}
@@ -137,7 +139,7 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
           disabled={saving}
           className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
         >
-          {saving ? "Speichert…" : isCreate ? "Anlegen" : "Speichern"}
+          {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
         </button>
       </form>
 
@@ -151,22 +153,22 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
               onClick={handleDeleteClick}
               className="rounded bg-red-900 px-3 py-1.5 text-sm text-red-200 hover:bg-red-800"
             >
-              Gruppe löschen
+              {t("groupForm.delete")}
             </button>
 
             {deletePreview && (
               <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
-                <p className="mb-2 font-medium text-red-200">Auswirkungen des Löschens:</p>
+                <p className="mb-2 font-medium text-red-200">{t("groupForm.deleteImpactTitle")}</p>
                 {deletePreview.childGroupsToDelete.length === 0 &&
                 deletePreview.serversToUnassign.length === 0 ? (
-                  <p className="text-red-200">Keine weiteren Objekte betroffen.</p>
+                  <p className="text-red-200">{t("groupForm.deleteNoImpact")}</p>
                 ) : (
                   <ul className="mb-2 space-y-1 text-red-200">
                     {deletePreview.childGroupsToDelete.map((g) => (
-                      <li key={g.id}>Untergruppe wird mitgelöscht: {g.name}</li>
+                      <li key={g.id}>{t("groupForm.childGroupWillBeDeleted", { name: g.name })}</li>
                     ))}
                     {deletePreview.serversToUnassign.map((s) => (
-                      <li key={s.id}>Server wird nur entkoppelt (bleibt erhalten): {s.name}</li>
+                      <li key={s.id}>{t("groupForm.serverWillBeUnassigned", { name: s.name })}</li>
                     ))}
                   </ul>
                 )}
@@ -176,7 +178,7 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
                     onClick={() => setDeletePreview(null)}
                     className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
                   >
-                    Abbrechen
+                    {t("common.cancel")}
                   </button>
                   <button
                     type="button"
@@ -184,7 +186,7 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
                     disabled={deleting}
                     className="rounded bg-red-700 px-3 py-1 text-xs text-white hover:bg-red-600 disabled:opacity-50"
                   >
-                    {deleting ? "Löscht…" : "Endgültig löschen"}
+                    {deleting ? t("common.deleting") : t("groupForm.confirmDelete")}
                   </button>
                 </div>
               </div>

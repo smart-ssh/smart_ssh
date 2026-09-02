@@ -119,12 +119,14 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-slate-800 p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">AI-Provider</h2>
+          <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">
+            {t("aiProvider.title")}
+          </h2>
           <button
             type="button"
             onClick={onClose}
             className="text-slate-400 hover:text-slate-100"
-            aria-label="Schließen"
+            aria-label={t("common.close")}
           >
             ✕
           </button>
@@ -162,12 +164,12 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
           onClick={handleOpenLogDirectory}
           className="mb-6 w-full rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
         >
-          Diagnose-Logs im Dateimanager öffnen
+          {t("aiProvider.openLogs")}
         </button>
 
         <ul className="mb-6 divide-y divide-slate-700 rounded-md border border-slate-700">
           {providers.length === 0 && (
-            <li className="px-4 py-3 text-sm text-slate-400">Noch kein Provider konfiguriert.</li>
+            <li className="px-4 py-3 text-sm text-slate-400">{t("aiProvider.noProviders")}</li>
           )}
           {providers.map((provider) => (
             <li key={provider.id} className="flex items-center justify-between gap-3 px-4 py-3">
@@ -176,7 +178,7 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
                   {provider.displayName}
                   {provider.isActive && (
                     <span className="ml-2 rounded bg-emerald-900 px-2 py-0.5 text-xs text-emerald-300">
-                      aktiv
+                      {t("aiProvider.active")}
                     </span>
                   )}
                 </p>
@@ -191,7 +193,7 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
                     onClick={() => handleSetActive(provider.id)}
                     className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
                   >
-                    Aktiv setzen
+                    {t("aiProvider.setActive")}
                   </button>
                 )}
                 <button
@@ -199,7 +201,7 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
                   onClick={() => handleDelete(provider.id)}
                   className="rounded bg-red-900 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
                 >
-                  Löschen
+                  {t("common.delete")}
                 </button>
               </div>
             </li>
@@ -207,10 +209,12 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
         </ul>
 
         <form onSubmit={handleSubmit} className="space-y-3">
-          <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-200">Provider hinzufügen</h3>
+          <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-200">
+            {t("aiProvider.addProvider")}
+          </h3>
 
           <label className="block text-sm text-slate-300">
-            Typ
+            {t("aiProvider.type")}
             <select
               value={form.providerType}
               onChange={(e) =>
@@ -227,7 +231,7 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
           </label>
 
           <label className="block text-sm text-slate-300">
-            Name
+            {t("aiProvider.providerName")}
             <input
               type="text"
               required
@@ -238,11 +242,11 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
           </label>
 
           <label className="block text-sm text-slate-300">
-            Modell
+            {t("aiProvider.model")}
             <input
               type="text"
               required
-              placeholder="z. B. claude-sonnet-5, gpt-5, llama3"
+              placeholder={t("aiProvider.modelPlaceholder")}
               value={form.model}
               onChange={(e) => setForm({ ...form, model: e.target.value })}
               className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
@@ -251,11 +255,11 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
 
           {needsBaseUrl(form.providerType) && (
             <label className="block text-sm text-slate-300">
-              Base-URL
+              {t("aiProvider.baseUrl")}
               <input
                 type="text"
                 required
-                placeholder="https://…"
+                placeholder={t("aiProvider.baseUrlPlaceholder")}
                 value={form.baseUrl ?? ""}
                 onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
                 className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
@@ -264,7 +268,7 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
           )}
 
           <label className="block text-sm text-slate-300">
-            API-Key
+            {t("aiProvider.apiKey")}
             <input
               type="password"
               required
@@ -282,7 +286,7 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
                 setForm({ ...form, supportsNativeToolCalling: e.target.checked })
               }
             />
-            Natives Tool-Calling unterstützt
+            {t("aiProvider.nativeToolCalling")}
           </label>
 
           <button
@@ -290,7 +294,7 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
             disabled={submitting}
             className="w-full rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
           >
-            {submitting ? "Wird hinzugefügt…" : "Hinzufügen"}
+            {submitting ? t("aiProvider.adding") : t("aiProvider.add")}
           </button>
         </form>
       </div>
