@@ -9,5 +9,6 @@ pub mod audit;
 pub mod credentials;
 pub mod filter;
 pub mod profiles;
+pub mod risk;
 pub mod shared;
 pub mod ssh;

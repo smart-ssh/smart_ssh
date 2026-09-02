@@ -74,6 +74,41 @@ pub(super) fn normalize_whitespace(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// Zerlegt `command` vollständig in einzeln klassifizierbare Teilstücke —
+/// Top-Level-Verkettungen (`split_command`) UND, pro Teilkommando,
+/// rekursiv jede darin enthaltene Command-Substitution (`strip_substitutions`,
+/// gleiche Rekursionstiefe wie `engine::evaluate_segment_explained`).
+///
+/// `pub(crate)` statt `pub(super)` wie die übrigen Parser-Bausteine (Spec
+/// 0026, Abschnitt 2: "Wiederverwende die bestehende Kommando-
+/// Segmentierungsfunktion ... falls sie aktuell nicht öffentlich/
+/// wiederverwendbar ist, mache sie das") — `crate::risk` braucht exakt
+/// dieselbe Zerlegung wie die Filter-Engine, nur ohne deren
+/// Decision-Aggregation (Hard-Blacklist/Regeln/Confirm-Eskalation bleiben
+/// reine `filter`-Interna). Bei `Empty`/`Ambiguous` wird das (normalisierte)
+/// Gesamtkommando als einzelnes Element zurückgegeben, statt nichts zu
+/// liefern — ein Risiko-Klassifizierer soll auch bei nicht sicher
+/// zerlegbaren Eingaben noch gegen die Muster prüfen können, nur eben ohne
+/// Teilkommando-Auflösung.
+pub(crate) fn segment_command(command: &str) -> Vec<String> {
+    match split_command(command) {
+        ParseResult::Empty => Vec::new(),
+        ParseResult::Ambiguous { .. } => vec![normalize_whitespace(command)],
+        ParseResult::Segments(segments) => {
+            let mut result = Vec::new();
+            for segment in segments {
+                let normalized = normalize_whitespace(&segment);
+                let (literal, inner_contents) = strip_substitutions(&normalized);
+                result.push(normalize_whitespace(&literal));
+                for inner in inner_contents {
+                    result.extend(segment_command(&inner));
+                }
+            }
+            result
+        }
+    }
+}
+
 fn elevation_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"^(?:sudo|doas)\s+(.+)$").expect("elevation regex ist valide"))

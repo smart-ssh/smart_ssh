@@ -7,16 +7,16 @@ impl Pattern {
     /// Prüft, ob `cmd` (bereits whitespace-normalisiert) auf dieses Muster
     /// passt.
     ///
-    /// Bewusst `pub(super)` statt `pub`: Matching-Semantik ist ein internes
-    /// Detail der Engine (Abschnitt 2/5 der Spec beschreiben `Pattern` nur
-    /// als Datentyp, nicht als Aufrufer-API), keine Garantie für Code
-    /// außerhalb von `filter`.
+    /// `pub(crate)` statt `pub(super)` (Spec 0026, Abschnitt 2): `crate::risk`
+    /// nutzt denselben `Pattern`-Typ für seine eigenen, containerinternen
+    /// Musterlisten und braucht dieselbe Matching-Semantik — weiterhin keine
+    /// Garantie für Code außerhalb dieser Crate.
     ///
     /// Ein syntaktisch ungültiges Glob-/Regex-Muster matcht nie (statt zu
     /// panicken) — eine kaputt konfigurierte Allow-Regel darf niemals
     /// versehentlich zu AutoExec führen, sondern soll folgenlos durchfallen
     /// (fail-safe defaults, Spec Abschnitt 1).
-    pub(super) fn matches(&self, cmd: &str) -> bool {
+    pub(crate) fn matches(&self, cmd: &str) -> bool {
         match self {
             Pattern::Exact(expected) => expected == cmd,
             Pattern::Glob(pattern) => Glob::new(pattern)

@@ -20,6 +20,11 @@ pub use types::{
     Decision, EffectiveScope, EvalContext, EvaluationTrace, Pattern, Rule, RuleAction, RuleId,
     Scope,
 };
+// Spec 0026, Abschnitt 2: von `crate::risk` wiederverwendet, s.
+// `parser::segment_command`-Doc-Kommentar. `pub(crate)` statt `pub` — bleibt
+// ein internes Detail zwischen den beiden Modulen dieser Crate, keine
+// Garantie für Aufrufer außerhalb.
+pub(crate) use parser::segment_command;
 // `ServerId` ist seit Spec 0003 ein von `filter` und `profiles` gemeinsam
 // genutzter Typ, siehe `crate::shared`-Modul-Kommentar.
 pub use crate::shared::ServerId;

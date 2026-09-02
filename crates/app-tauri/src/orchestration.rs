@@ -49,6 +49,7 @@ use ssh_manager_core::filter::{Decision, EvalContext};
 use ssh_manager_core::profiles::{
     AiAction, NoteEditor, NoteTarget, NoteTargetSelector, ProfileError, ProfileStore,
 };
+use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RuleBasedRiskClassifier};
 use ssh_manager_core::ssh::{CommandOutput, SshError};
 
 use crate::confirmation::ConfirmationRegistry;
@@ -281,6 +282,7 @@ async fn handle_action_proposed(
         note_target_preview_for_action(&action, session, profile_store).await;
     let uses_password = uses_stored_sudo_password(session, &action);
     let (previous_file_content, previous_file_size) = previous_file_content_for_action(&action, session).await;
+    let risk_assessment = risk_assessment_for_action(&action);
 
     emit_chat_action_proposed(
         emitter,
@@ -293,6 +295,7 @@ async fn handle_action_proposed(
         previous_file_content,
         previous_file_size,
         target_name,
+        risk_assessment,
     );
 
     match decision {
@@ -375,6 +378,23 @@ fn sftp_read_pseudo_command(path: &str) -> String {
 
 fn sftp_write_pseudo_command(path: &str) -> String {
     format!("sftp-write {path}")
+}
+
+/// Spec 0026, Abschnitt 2, Punkt 5: synchron beim Erzeugen des
+/// `chat-action-proposed`-Events berechnet, für exakt dieselben drei
+/// Aktionstypen, die die Filter-Engine kennt (`evaluate_action`) —
+/// `ReadRemoteFile`/`WriteRemoteFile` nutzen dieselbe Pseudokommando-
+/// Abbildung wie dort (Spec 0020, Abschnitt 4.1), keine zweite
+/// Mapping-Logik. `None` für `ProposeNoteUpdate`/`GenerateDocument`, die
+/// Spec 0026 nicht abdeckt (kein ausführbares Kommando/kein Dateipfad).
+fn risk_assessment_for_action(action: &AiAction) -> Option<RiskAssessment> {
+    let pseudo_command = match action {
+        AiAction::SuggestCommand { command } => command.clone(),
+        AiAction::ReadRemoteFile { path } => sftp_read_pseudo_command(path),
+        AiAction::WriteRemoteFile { path, .. } => sftp_write_pseudo_command(path),
+        AiAction::ProposeNoteUpdate { .. } | AiAction::GenerateDocument { .. } => return None,
+    };
+    Some(RuleBasedRiskClassifier.classify(&pseudo_command))
 }
 
 /// Menschen-/KI-lesbare Kurzbeschreibung einer Aktion für
@@ -537,6 +557,7 @@ async fn handle_user_decision(
                         let blocked = AiAction::SuggestCommand {
                             command: edited.clone(),
                         };
+                        let risk_assessment = risk_assessment_for_action(&blocked);
                         emit_chat_action_proposed(
                             emitter,
                             session_id,
@@ -551,6 +572,7 @@ async fn handle_user_decision(
                             None,
                             None,
                             None,
+                            risk_assessment,
                         );
                         // Spec 0021, Abschnitt 3, Fall 4: das bearbeitete
                         // Kommando ist am Ende genau ein durch die

@@ -18,6 +18,7 @@ use uuid::Uuid;
 
 use ssh_manager_core::filter::Decision;
 use ssh_manager_core::profiles::AiAction;
+use ssh_manager_core::risk::RiskAssessment;
 
 use crate::state::{ActionId, SessionId};
 
@@ -237,6 +238,12 @@ struct ChatActionProposedPayload {
     /// (z. B. Server inzwischen gelöscht) — dann zeigt das Frontend keinen
     /// Namen statt eines falschen.
     target_name: Option<String>,
+    /// Spec 0026, Abschnitt 2, Punkt 5: synchron mit `classify()` berechnet,
+    /// bevor dieses Event überhaupt gesendet wird — kein zweiter Roundtrip.
+    /// `None` für Aktionstypen, die Spec 0026 nicht abdeckt
+    /// (`ProposeNoteUpdate`/`GenerateDocument`), s. Aufrufer in
+    /// `crate::orchestration`.
+    risk_assessment: Option<RiskAssessment>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -251,6 +258,7 @@ pub fn emit_chat_action_proposed(
     previous_file_content: Option<String>,
     previous_file_size: Option<u64>,
     target_name: Option<String>,
+    risk_assessment: Option<RiskAssessment>,
 ) {
     emit(
         emitter,
@@ -265,6 +273,7 @@ pub fn emit_chat_action_proposed(
             previous_file_content,
             previous_file_size,
             target_name,
+            risk_assessment,
         },
     );
 }
