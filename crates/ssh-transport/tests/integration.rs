@@ -26,10 +26,22 @@ use fixtures::test_server::{sftp_local_path, RunningTestServer, TEST_PASSWORD, T
 const PASSWORD_CREDENTIAL: &str = "test-password-credential";
 
 #[derive(Default)]
-struct TestCredentialStore;
+struct TestCredentialStore {
+    /// Spec 0022, Abschnitt 3: zählt `get()`-Aufrufe, damit Tests
+    /// nachweisen können, dass das SSH-Login-Credential nur einmalig beim
+    /// Verbindungsaufbau gelesen wird, nicht erneut pro `execute()`-Aufruf.
+    get_calls: Mutex<usize>,
+}
+
+impl TestCredentialStore {
+    fn get_calls(&self) -> usize {
+        *self.get_calls.lock().unwrap()
+    }
+}
 
 impl CredentialStore for TestCredentialStore {
     fn get(&self, r: &CredentialRef) -> CredentialResult<SecretString> {
+        *self.get_calls.lock().unwrap() += 1;
         if r.as_str() == PASSWORD_CREDENTIAL {
             Ok(SecretString::from(TEST_PASSWORD.to_string()))
         } else {
@@ -103,7 +115,7 @@ async fn connect_trusted(
     let target = ConnectionTarget {
         hops: vec![password_hop("127.0.0.1", server.addr.port())],
     };
-    let credentials = TestCredentialStore;
+    let credentials = TestCredentialStore::default();
 
     match ssh_transport::connect(&target, &credentials, host_keys)
         .await
@@ -130,6 +142,60 @@ async fn test_exec_roundtrip() {
 
     assert_eq!(output.stdout, b"echo:hello world\n");
     assert_eq!(output.exit_code, Some(0));
+
+    transport
+        .disconnect()
+        .await
+        .expect("disconnect() sollte gelingen");
+}
+
+/// Spec 0022, Abschnitt 3, zweiter Punkt: das SSH-Login-Credential wird nur
+/// einmal während des Verbindungsaufbaus (Passwort-Authentifizierung) aus
+/// dem `CredentialStore` gelesen — mehrere nachfolgende `execute()`-Aufrufe
+/// auf derselben Verbindung dürfen keine weiteren Abrufe auslösen, da
+/// `SshTransport::execute()` auf dem bereits authentifizierten Kanal
+/// arbeitet und den `CredentialStore` gar nicht mehr referenziert (s.
+/// `crates/ssh-transport/src/transport.rs`).
+#[tokio::test]
+async fn test_ssh_login_credential_read_once_regardless_of_execute_calls() {
+    let server = RunningTestServer::start().await;
+    let host_keys = TestHostKeyStore::default();
+    host_keys
+        .trust("127.0.0.1", server.addr.port(), &server.host_public_key)
+        .unwrap();
+    let host_keys: std::sync::Arc<dyn HostKeyStore> = std::sync::Arc::new(host_keys);
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", server.addr.port())],
+    };
+    let credentials = TestCredentialStore::default();
+
+    let mut transport = match ssh_transport::connect(&target, &credentials, host_keys)
+        .await
+        .expect("connect() sollte gelingen")
+    {
+        ConnectOutcome::Connected(transport) => transport,
+        ConnectOutcome::PendingHostKeyConfirmation { .. } => {
+            panic!("Host-Key war vorab als vertraut hinterlegt")
+        }
+    };
+    assert_eq!(
+        credentials.get_calls(),
+        1,
+        "Passwort-Authentifizierung liest das Credential genau einmal während des Handshakes"
+    );
+
+    for _ in 0..5 {
+        transport
+            .execute("hello world")
+            .await
+            .expect("execute() sollte gelingen");
+    }
+
+    assert_eq!(
+        credentials.get_calls(),
+        1,
+        "execute()-Aufrufe dürfen das SSH-Login-Credential nicht erneut aus dem CredentialStore lesen"
+    );
 
     transport
         .disconnect()
@@ -218,7 +284,7 @@ async fn test_two_hop_jump_connection() {
             password_hop("127.0.0.1", target_server.addr.port()),
         ],
     };
-    let credentials = TestCredentialStore;
+    let credentials = TestCredentialStore::default();
 
     let outcome = ssh_transport::connect(&target, &credentials, host_keys)
         .await
@@ -253,7 +319,7 @@ async fn test_unknown_host_key_pauses_then_trust_continues() {
     let target = ConnectionTarget {
         hops: vec![password_hop("127.0.0.1", server.addr.port())],
     };
-    let credentials = TestCredentialStore;
+    let credentials = TestCredentialStore::default();
 
     let first_attempt = ssh_transport::connect(&target, &credentials, host_keys.clone())
         .await

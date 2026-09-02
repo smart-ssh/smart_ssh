@@ -1494,7 +1494,9 @@ mod tests {
         SessionContext,
     };
     use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
-    use ssh_manager_core::profiles::{Group, GroupId, NoteRevision, ProfileResult, Server};
+    use ssh_manager_core::profiles::{
+        CredentialStore, Group, GroupId, NoteRevision, ProfileResult, Server,
+    };
     use ssh_manager_core::shared::ServerId;
     use ssh_manager_core::ssh::mock::MockSftpSession;
     use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize};
@@ -4524,6 +4526,114 @@ mod tests {
                 .iter()
                 .any(|(name, _)| name == "chat-error"),
             "ein manueller Stop ist kein Fehlerfall, keine chat-error-Meldung erwartet"
+        );
+    }
+
+    // --- Spec 0022: Credential-Caching (Sudo-Passwort) ----------------------
+
+    /// Spec 0022, Abschnitt 3, zweiter Punkt: das Sudo-Passwort wird laut
+    /// Spec 0018 einmalig bei `connect()` gelesen und in `Session.
+    /// sudo_password` gecacht — dieser Test verifiziert das über mehrere
+    /// tatsächlich ausgeführte `sudo`-Kommandos in derselben Session hinweg
+    /// (über die automatische Fortsetzung aus Spec 0021 erreicht, ohne dass
+    /// der Nutzer zwischendurch etwas eingeben muss), statt es nur an einer
+    /// einzelnen Ausführung zu prüfen.
+    #[tokio::test]
+    async fn test_sudo_password_credential_store_not_read_again_across_multiple_commands() {
+        let credential_ref = crate::server_credentials::sudo_password_credential_ref(ServerId::new());
+        let store = crate::test_support::InMemoryCredentialStore::new()
+            .with_secret(&credential_ref, "hunter2");
+
+        // Exakt der Ablauf aus `crate::commands::connect` (Spec 0018,
+        // Abschnitt 6): einmal lesen, danach in `Session.sudo_password`
+        // cachen — kein Store-Zugriff mehr für den Rest der Session-Laufzeit.
+        let resolved_password = store.get(&credential_ref).ok();
+        assert_eq!(store.get_calls(), 1);
+
+        let mut session = session_with_ai_provider(
+            MockAiProvider::with_rounds(vec![
+                // Runde 1: AutoExec (erstes sudo-Kommando).
+                vec![
+                    AiEvent::ActionProposed(AiAction::SuggestCommand {
+                        command: "sudo systemctl restart nginx".to_string(),
+                    }),
+                    AiEvent::Done,
+                ],
+                // Runde 2 (automatisch, Spec 0021): SEC-03 stuft dieses
+                // SuggestCommand in Runde >= 2 auf Confirm hoch — zweites
+                // sudo-Kommando, über den Responder unten bestätigt.
+                vec![
+                    AiEvent::ActionProposed(AiAction::SuggestCommand {
+                        command: "sudo systemctl status nginx".to_string(),
+                    }),
+                    AiEvent::Done,
+                ],
+                vec![AiEvent::Done],
+            ]),
+            MockSshTransport::default()
+                .with_response("sudo -S systemctl restart nginx", output(""))
+                .with_response("sudo -S systemctl status nginx", output("active")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.sudo_password = resolved_password;
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let turn = run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = async {
+            loop {
+                let confirm_action_id = {
+                    let events = emitter.events.lock().unwrap();
+                    events.iter().find_map(|(name, payload)| {
+                        (name == "chat-action-proposed"
+                            && payload.get("decision").and_then(|d| d.get("Confirm")).is_some())
+                        .then(|| payload["actionId"].as_str().unwrap().to_string())
+                    })
+                };
+                if let Some(action_id_str) = confirm_action_id {
+                    let action_id: ActionId = action_id_str.parse().unwrap();
+                    confirmations
+                        .resolve(&action_id, ActionUserDecision::Approve)
+                        .unwrap();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::join!(turn, responder);
+
+        assert_eq!(
+            store.get_calls(),
+            1,
+            "Sudo-Passwort darf nach dem Verbindungsaufbau nicht erneut aus dem \
+             CredentialStore gelesen werden, auch nicht bei mehreren ausgeführten \
+             sudo-Kommandos in derselben Session"
+        );
+
+        let history = session.context.lock().await.history.clone();
+        let executed: Vec<&str> = history
+            .iter()
+            .filter_map(|m| match &m.content {
+                MessageContent::CommandResult { command, .. } => Some(command.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            executed,
+            vec![
+                "sudo -S systemctl restart nginx",
+                "sudo -S systemctl status nginx"
+            ],
+            "beide Kommandos müssen tatsächlich mit dem gecachten Passwort gelaufen sein"
         );
     }
 }

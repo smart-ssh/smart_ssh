@@ -43,3 +43,57 @@ pub fn build_ai_provider(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ssh_manager_core::ai::SessionContext;
+    use ssh_manager_core::profiles::{CredentialRef, CredentialStore};
+
+    use super::*;
+    use crate::test_support::InMemoryCredentialStore;
+
+    fn empty_context() -> SessionContext {
+        SessionContext {
+            system_context: String::new(),
+            history: Vec::new(),
+            available_actions: Vec::new(),
+        }
+    }
+
+    /// Spec 0022, Abschnitt 3, erster Punkt: der Provider-API-Key wird beim
+    /// Aufbau der `AiProvider`-Instanz **einmalig** aus dem `CredentialStore`
+    /// gelesen (hier über `store.get(...)` simuliert — exakt der Ablauf aus
+    /// `crate::commands::connect`, Zeile "let api_key = state.credential_
+    /// store.get(&active_config.credential_ref)?") und danach als reines
+    /// `String`-Feld in die Provider-Instanz eingebettet (s.
+    /// `OpenAiCompatibleProvider`/`AnthropicProvider`). Mehrere `send()`-
+    /// Aufrufe (mehrere Chat-Runden über dieselbe Session) dürfen den Store
+    /// nicht erneut ansprechen — `send()` selbst nimmt strukturell gar
+    /// keinen `CredentialStore`-Parameter entgegen, kann ihn also gar nicht
+    /// erreichen; dieser Test macht diese Garantie trotzdem explizit und
+    /// ausführbar, statt sie nur implizit im Typsystem zu verstecken.
+    #[test]
+    fn test_provider_api_key_read_once_regardless_of_send_call_count() {
+        let credential_ref = CredentialRef::new("ai-provider:test");
+        let store = InMemoryCredentialStore::new().with_secret(&credential_ref, "sk-test-key");
+
+        let api_key = store.get(&credential_ref).expect("Key muss auflösbar sein");
+        assert_eq!(store.get_calls(), 1);
+
+        let provider = build_ai_provider(ProviderType::OpenAi, None, "gpt-4o", api_key, true);
+
+        // Fünf "Chat-Runden" — `send()` liefert nur einen (nicht gepollten)
+        // Stream zurück, es geschieht keine echte Netzwerk-I/O, aber jeder
+        // Aufruf würde einen erneuten Store-Zugriff sofort sichtbar machen,
+        // falls der Key doch nicht gecacht wäre.
+        for _ in 0..5 {
+            let _ = provider.send(empty_context());
+        }
+
+        assert_eq!(
+            store.get_calls(),
+            1,
+            "der Provider-API-Key darf über mehrere send()-Aufrufe hinweg nicht erneut aus dem CredentialStore gelesen werden"
+        );
+    }
+}

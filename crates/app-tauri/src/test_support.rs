@@ -187,6 +187,13 @@ impl ProfileStore for InMemoryProfileStore {
 #[derive(Default)]
 pub struct InMemoryCredentialStore {
     pub secrets: Mutex<HashMap<String, SecretString>>,
+    /// Spec 0022, Abschnitt 3: Anzahl der `get()`-Aufrufe, für Tests, die
+    /// nachweisen sollen, dass ein Credential über mehrere Operationen
+    /// hinweg (mehrere `send_chat_message`-/`execute()`-Aufrufe) nur
+    /// einmalig abgerufen und danach aus dem In-Memory-Cache (`Session`-
+    /// Feld/`AiProvider`-Instanz) bedient wird, statt erneut den Store zu
+    /// befragen.
+    get_calls: Mutex<usize>,
 }
 
 impl InMemoryCredentialStore {
@@ -201,10 +208,15 @@ impl InMemoryCredentialStore {
         );
         self
     }
+
+    pub fn get_calls(&self) -> usize {
+        *self.get_calls.lock().unwrap()
+    }
 }
 
 impl CredentialStore for InMemoryCredentialStore {
     fn get(&self, r: &CredentialRef) -> CredentialResult<SecretString> {
+        *self.get_calls.lock().unwrap() += 1;
         self.secrets
             .lock()
             .unwrap()
