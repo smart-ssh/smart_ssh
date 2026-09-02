@@ -138,7 +138,11 @@
     "blocked": "blockiert",
     "rejected": "abgelehnt",
     "rejectedByUser": "Vom Nutzer abgelehnt.",
-    "usesStoredSudoPassword": "🔑 Wird mit hinterlegtem Sudo-Passwort ausgeführt."
+    "usesStoredSudoPassword": "🔑 Wird mit hinterlegtem Sudo-Passwort ausgeführt.",
+    "riskServerLabel": "Server",
+    "riskDataLabel": "Daten",
+    "riskSecondOpinionPending": "KI-Zweitmeinung wird eingeholt…",
+    "riskHint": "Einschätzung basierend auf bekannten Mustern — keine Garantie."
   },
   "confirmDialog": {
     "editableCommand": "Kommando — editierbar",
@@ -209,7 +213,12 @@
     "attestationDisclaimerNot": "nicht",
     "attestationDisclaimerAfterNot": " von Smart SSH kryptografisch geprüft. Zur eigenständigen Verifikation nutze das vom Hardware-/Anbieter bereitgestellte Prüfwerkzeug.",
     "add": "Hinzufügen",
-    "adding": "Wird hinzugefügt…"
+    "adding": "Wird hinzugefügt…",
+    "riskClassifierTitle": "Risiko-Indikatoren — KI-Zweitmeinung",
+    "riskClassifierHint": "Optional: ein zweiter KI-Provider schätzt zusätzlich zur regelbasierten Prüfung ein, ob ein Kommando sensible Daten enthalten könnte. Empfohlen wird ein lokal laufendes Modell (z. B. über Ollama), damit auch diese Zweitmeinung nicht zwingend an einen externen Anbieter geht.",
+    "riskClassifierEnable": "KI-Zweitmeinung aktivieren",
+    "riskClassifierProvider": "Provider für die Zweitmeinung",
+    "riskClassifierNoProvider": "(keiner ausgewählt)"
   },
   "errors": {
     "SSH_CONNECTION_FAILED": "Verbindung fehlgeschlagen",

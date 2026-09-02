@@ -401,6 +401,11 @@ pub async fn connect(
         .get(&sudo_password_credential_ref(server_id))
         .ok();
 
+    // Spec 0026, Abschnitt 3: einmalig bei `connect()` aufgelöst, s.
+    // `Session::risk_second_opinion_provider`-Doc-Kommentar.
+    let risk_second_opinion_provider =
+        crate::risk_second_opinion::resolve_second_opinion_provider(&app, &state).await;
+
     let session = Arc::new(Session {
         transport: tokio::sync::Mutex::new(transport),
         ai_provider,
@@ -421,6 +426,7 @@ pub async fn connect(
         pending_action: std::sync::Mutex::new(None),
         sftp: tokio::sync::Mutex::new(None),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+        risk_second_opinion_provider,
     });
     state.sessions.insert(session_id, session);
 

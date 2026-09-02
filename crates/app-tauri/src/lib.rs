@@ -17,6 +17,7 @@ mod logging;
 mod orchestration;
 #[cfg(test)]
 mod policy;
+mod risk_second_opinion;
 mod rule_suggestions;
 mod server_credentials;
 mod session;

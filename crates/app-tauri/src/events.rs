@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use ssh_manager_core::filter::Decision;
 use ssh_manager_core::profiles::AiAction;
-use ssh_manager_core::risk::RiskAssessment;
+use ssh_manager_core::risk::{RiskAssessment, RiskLevel};
 
 use crate::state::{ActionId, SessionId};
 
@@ -274,6 +274,43 @@ pub fn emit_chat_action_proposed(
             previous_file_size,
             target_name,
             risk_assessment,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RiskAssessmentUpdatedPayload {
+    session_id: SessionId,
+    action_id: ActionId,
+    data_risk: RiskLevel,
+    reason: Option<String>,
+}
+
+/// Spec 0026, Abschnitt 3, Punkt 4: eigenes Event, sobald die optionale
+/// KI-Zweitmeinung zur Daten-Risiko-Achse vorliegt (Erfolg **oder**
+/// Fehlschlag — muss in jedem Fall feuern, sonst bliebe der Lade-Indikator
+/// im Frontend hängen, s. Aufrufer in `crate::orchestration`). Nur die
+/// Daten-Risiko-Achse (Abschnitt 3: Server-Risiko bleibt rein regelbasiert).
+/// `session_id` (nicht Teil von Spec 0026s knapper Skizze `{ actionId,
+/// dataRisk, reason }`) konsistent mit jedem anderen Event in diesem Modul
+/// ergänzt — das Frontend filtert Events grundsätzlich nach der offenen
+/// Session (s. `ChatPanel`s `chat-action-proposed`-Handler).
+pub fn emit_risk_assessment_updated(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    action_id: ActionId,
+    data_risk: RiskLevel,
+    reason: Option<String>,
+) {
+    emit(
+        emitter,
+        "risk-assessment-updated",
+        &RiskAssessmentUpdatedPayload {
+            session_id,
+            action_id,
+            data_risk,
+            reason,
         },
     );
 }

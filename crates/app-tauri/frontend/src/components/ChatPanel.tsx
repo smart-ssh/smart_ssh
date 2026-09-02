@@ -20,6 +20,7 @@ import {
   onChatDocumentGenerated,
   onChatError,
   onChatTextDelta,
+  onRiskAssessmentUpdated,
 } from "../events";
 import { formatBytes } from "../format";
 import {
@@ -27,6 +28,7 @@ import {
   navigateHistory,
   type HistoryNavState,
 } from "../promptHistoryNav";
+import { loadRiskClassifierSettings } from "../riskSettings";
 import type {
   ActionResultPayload,
   ActionUserDecision,
@@ -35,6 +37,7 @@ import type {
   DocumentFormat,
   PatternSuggestionDto,
   PatternType,
+  RiskAssessment,
   Scope,
 } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
@@ -73,6 +76,19 @@ type ChatItem =
        * *immer* angezeigt (auch wenn es der aktuell offene Server der
        * Session ist — Konsistenz statt Redundanzvermeidung). */
       targetName: string | null;
+      /** Spec 0026, Abschnitt 2 — `null` für `ProposeNoteUpdate` (deckt
+       * Spec 0026 nicht ab). Das `dataRisk`/`dataRiskReason`-Paar wird ggf.
+       * später über `risk-assessment-updated` angehoben (s.
+       * `riskSecondOpinionPending`). */
+      riskAssessment: RiskAssessment | null;
+      /** Spec 0026, Abschnitt 4: Lade-Indikator neben dem Daten-Badge,
+       * solange eine aktivierte KI-Zweitmeinung noch aussteht — `true` ab
+       * dem ersten Event, sobald `riskAssessment` gesetzt UND `!aiReviewed`
+       * ist (heißt: eine Zweitmeinung ist grundsätzlich möglich, ihr
+       * Ergebnis aber noch nicht da), `false` sobald `risk-assessment-
+       * updated` für diese `actionId` ankommt. Bleibt `false`, wenn die
+       * Zweitmeinung deaktiviert ist (dann kommt gar kein Update-Event). */
+      riskSecondOpinionPending: boolean;
     }
   | { type: "error"; id: string; message: string }
   | { type: "document"; id: string; title: string; contentMarkdown: string };
@@ -178,6 +194,15 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
    * sie regulär endete, am Sicherheits-Cap oder durch "Automatik stoppen". */
   const [autoContinuing, setAutoContinuing] = useState(false);
   const [hasActiveProvider, setHasActiveProvider] = useState<boolean | null>(null);
+  /** Spec 0026, Abschnitt 4: nur bei aktivierter Zweitmeinung überhaupt
+   * einen Lade-Indikator zeigen — sonst käme (bis ein `risk-assessment-
+   * updated`-Event ausbliebe) fälschlich ein Spinner, der nie verschwindet.
+   * Kann vom tatsächlichen Session-Verhalten abweichen, falls die
+   * Einstellung erst NACH dem `connect()` dieser Session geändert wurde
+   * (der Backend-Provider wird einmalig bei `connect()` aufgelöst, s.
+   * `Session::risk_second_opinion_provider`-Doc-Kommentar) — ein bewusst
+   * akzeptierter kleiner Randfall, kein Korrektheitsproblem. */
+  const [riskSecondOpinionEnabled, setRiskSecondOpinionEnabled] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -203,6 +228,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
   }, []);
 
   useEffect(() => {
+    loadRiskClassifierSettings()
+      .then((settings) => setRiskSecondOpinionEnabled(settings.enabled))
+      .catch(() => setRiskSecondOpinionEnabled(false));
+  }, []);
+
+  useEffect(() => {
     const unlisten = [
       onChatTextDelta((event) => {
         if (event.sessionId !== sessionId) return;
@@ -216,6 +247,16 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
       }),
       onChatActionProposed((event) => {
         if (event.sessionId !== sessionId) return;
+        // Spec 0026, Abschnitt 3/4: eine Zweitmeinung ist nur zu erwarten,
+        // wenn sie aktiviert ist UND die Regel-Einschätzung überhaupt noch
+        // Raum nach oben hat (ein bereits regelbasiertes "red" kann nicht
+        // weiter eskalieren, s. `escalate_data_risk` im Backend) — in
+        // beiden Fällen bliebe der Spinner sonst ohne je eintreffendes
+        // Update-Event hängen.
+        const riskSecondOpinionPending =
+          riskSecondOpinionEnabled &&
+          event.riskAssessment !== null &&
+          event.riskAssessment.dataRisk !== "red";
         setItems((prev) => [
           ...prev,
           {
@@ -230,8 +271,29 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
             previousFileContent: event.previousFileContent,
             previousFileSize: event.previousFileSize,
             targetName: event.targetName,
+            riskAssessment: event.riskAssessment,
+            riskSecondOpinionPending,
           },
         ]);
+      }),
+      onRiskAssessmentUpdated((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) =>
+          prev.map((item) =>
+            item.type === "action" && item.actionId === event.actionId && item.riskAssessment
+              ? {
+                  ...item,
+                  riskAssessment: {
+                    ...item.riskAssessment,
+                    dataRisk: event.dataRisk,
+                    dataRiskReason: event.reason,
+                    aiReviewed: true,
+                  },
+                  riskSecondOpinionPending: false,
+                }
+              : item,
+          ),
+        );
       }),
       onChatActionResult((event) => {
         if (event.sessionId !== sessionId) return;
@@ -268,7 +330,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
     return () => {
       unlisten.forEach((p) => p.then((unlistenFn) => unlistenFn()));
     };
-  }, [sessionId]);
+  }, [sessionId, riskSecondOpinionEnabled]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -501,6 +563,63 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
   );
 }
 
+const RISK_LEVEL_BADGE_CLASS: Record<Exclude<RiskAssessment["serverRisk"], "none">, string> = {
+  yellow: "bg-amber-900 text-amber-300",
+  red: "bg-red-900 text-red-300",
+};
+
+/** Spec 0026, Abschnitt 4: zwei getrennte Badges ("Server"/"Daten"), nur
+ * sichtbar bei Level ≠ `none`, Tooltip mit der Begründung. Bewusst KEIN
+ * drittes "grün"-Badge (s. Spec Abschnitt 1) — Abwesenheit heißt "laut
+ * bekannten Mustern unauffällig", kein Sicherheitsversprechen, deshalb auch
+ * der zurückhaltende Fußnotentext unten statt eines Häkchens/"geprüft". */
+function RiskBadges({
+  assessment,
+  pending,
+}: {
+  assessment: RiskAssessment | null;
+  pending: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!assessment) return null;
+
+  const hasServerBadge = assessment.serverRisk !== "none";
+  const hasDataBadge = assessment.dataRisk !== "none";
+  if (!hasServerBadge && !hasDataBadge && !pending) return null;
+
+  return (
+    <div className="mb-1 flex flex-wrap items-center gap-1.5">
+      {hasServerBadge && (
+        <span
+          title={assessment.serverRiskReason ?? undefined}
+          className={`font-heading px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${RISK_LEVEL_BADGE_CLASS[assessment.serverRisk as "yellow" | "red"]}`}
+        >
+          {t("actionCard.riskServerLabel")}
+        </span>
+      )}
+      {hasDataBadge && (
+        <span
+          title={assessment.dataRiskReason ?? undefined}
+          className={`font-heading px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${RISK_LEVEL_BADGE_CLASS[assessment.dataRisk as "yellow" | "red"]}`}
+        >
+          {t("actionCard.riskDataLabel")}
+        </span>
+      )}
+      {pending && (
+        <span
+          title={t("actionCard.riskSecondOpinionPending")}
+          className="inline-flex items-center gap-1 text-[10px] text-slate-500"
+        >
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-500" />
+        </span>
+      )}
+      {(hasServerBadge || hasDataBadge) && (
+        <span className="text-[10px] text-slate-500">{t("actionCard.riskHint")}</span>
+      )}
+    </div>
+  );
+}
+
 function ChatItemView({
   item,
   onRespond,
@@ -570,6 +689,7 @@ function ChatItemView({
           {badge.text}
         </span>
       </div>
+      <RiskBadges assessment={item.riskAssessment} pending={item.riskSecondOpinionPending} />
       {command && (
         <code
           className={`block border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs ${

@@ -49,7 +49,7 @@ use ssh_manager_core::filter::{Decision, EvalContext};
 use ssh_manager_core::profiles::{
     AiAction, NoteEditor, NoteTarget, NoteTargetSelector, ProfileError, ProfileStore,
 };
-use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RuleBasedRiskClassifier};
+use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
 use ssh_manager_core::ssh::{CommandOutput, SshError};
 
 use crate::confirmation::ConfirmationRegistry;
@@ -57,7 +57,7 @@ use crate::dto::ActionUserDecision;
 use crate::events::{
     emit_chat_action_proposed, emit_chat_action_result, emit_chat_auto_continuation_started,
     emit_chat_document_generated, emit_chat_error, emit_chat_text_delta,
-    emit_note_update_suggested, ActionResultPayload, EventEmitter,
+    emit_note_update_suggested, emit_risk_assessment_updated, ActionResultPayload, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -295,8 +295,32 @@ async fn handle_action_proposed(
         previous_file_content,
         previous_file_size,
         target_name,
-        risk_assessment,
+        risk_assessment.clone(),
     );
+
+    // Spec 0026, Abschnitt 3: läuft NACH der bereits gesendeten
+    // regelbasierten Einschätzung (das Event oben ist schon raus, das Badge
+    // also bereits sichtbar) — "asynchron" hier bewusst als "verzögert die
+    // erste Anzeige nicht" gelesen statt als losgelöster `tokio::spawn`-
+    // Task: Letzteres hätte `Arc<Session>`/`Arc<dyn EventEmitter>` bis
+    // tief in diese Aufrufkette gebraucht (`run_chat_turn`/`run_one_round`
+    // nehmen bewusst `&Session`, s. deren Doc-Kommentare zur
+    // Testbarkeit gegen `MockAiProvider`), für einen einzelnen zusätzlichen
+    // `.await` unverhältnismäßiger Umbau. Der einzige reale Unterschied:
+    // ein bereits registrierter `confirm_rx` (unten) wird trotzdem nicht
+    // "verpasst", falls der Nutzer währenddessen schon klickt — der Wert
+    // liegt im Kanal bereit, sobald `rx.await` weiter unten drankommt.
+    if let (Some(provider), Some(assessment)) =
+        (session.risk_second_opinion_provider.as_deref(), risk_assessment)
+    {
+        if let Some(pseudo_command) = pseudo_command_for_risk_classification(&action) {
+            let second_opinion =
+                crate::risk_second_opinion::fetch_second_opinion(provider, &pseudo_command).await;
+            let (data_risk, reason) =
+                escalate_data_risk(assessment.data_risk, assessment.data_risk_reason, second_opinion);
+            emit_risk_assessment_updated(emitter, session_id, action_id, data_risk, reason);
+        }
+    }
 
     match decision {
         Decision::AutoExec => {
@@ -387,14 +411,34 @@ fn sftp_write_pseudo_command(path: &str) -> String {
 /// Abbildung wie dort (Spec 0020, Abschnitt 4.1), keine zweite
 /// Mapping-Logik. `None` für `ProposeNoteUpdate`/`GenerateDocument`, die
 /// Spec 0026 nicht abdeckt (kein ausführbares Kommando/kein Dateipfad).
+fn pseudo_command_for_risk_classification(action: &AiAction) -> Option<String> {
+    match action {
+        AiAction::SuggestCommand { command } => Some(command.clone()),
+        AiAction::ReadRemoteFile { path } => Some(sftp_read_pseudo_command(path)),
+        AiAction::WriteRemoteFile { path, .. } => Some(sftp_write_pseudo_command(path)),
+        AiAction::ProposeNoteUpdate { .. } | AiAction::GenerateDocument { .. } => None,
+    }
+}
+
 fn risk_assessment_for_action(action: &AiAction) -> Option<RiskAssessment> {
-    let pseudo_command = match action {
-        AiAction::SuggestCommand { command } => command.clone(),
-        AiAction::ReadRemoteFile { path } => sftp_read_pseudo_command(path),
-        AiAction::WriteRemoteFile { path, .. } => sftp_write_pseudo_command(path),
-        AiAction::ProposeNoteUpdate { .. } | AiAction::GenerateDocument { .. } => return None,
-    };
+    let pseudo_command = pseudo_command_for_risk_classification(action)?;
     Some(RuleBasedRiskClassifier.classify(&pseudo_command))
+}
+
+/// Spec 0026, Abschnitt 3: "Nur Eskalation, nie Abschwächung" — als reine
+/// Funktion getrennt von der Event-/Async-Maschinerie um
+/// `fetch_second_opinion`, damit genau dieser Fall (ein regelbasiertes
+/// `Red` bleibt `Red`, egal was die KI zurückgibt) direkt und ohne
+/// Event-Mitschnitt testbar ist.
+fn escalate_data_risk(
+    rule_based_level: RiskLevel,
+    rule_based_reason: Option<String>,
+    second_opinion: Option<(RiskLevel, String)>,
+) -> (RiskLevel, Option<String>) {
+    match second_opinion {
+        Some((ai_level, ai_reason)) if ai_level > rule_based_level => (ai_level, Some(ai_reason)),
+        _ => (rule_based_level, rule_based_reason),
+    }
 }
 
 /// Menschen-/KI-lesbare Kurzbeschreibung einer Aktion für
@@ -1778,6 +1822,21 @@ mod tests {
             pending_action: StdMutex::new(None),
             sftp: AsyncMutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+            risk_second_opinion_provider: None,
+        }
+    }
+
+    /// Wie [`session_with_ai_provider`], aber mit einem konfigurierten
+    /// Zweitmeinungs-Provider (Spec 0026, Abschnitt 3) — für Tests, die die
+    /// Eskalationslogik prüfen.
+    fn session_with_second_opinion(
+        ai_events: Vec<AiEvent>,
+        transport: MockSshTransport,
+        second_opinion_provider: impl AiProvider + 'static,
+    ) -> Session {
+        Session {
+            risk_second_opinion_provider: Some(Box::new(second_opinion_provider)),
+            ..session_with_ai_provider(MockAiProvider::new(ai_events), transport)
         }
     }
 
@@ -1870,6 +1929,193 @@ mod tests {
             history[0].content,
             MessageContent::CommandResult { .. }
         ));
+    }
+
+    // --- Spec 0026: Risiko-Indikatoren --------------------------------------
+
+    #[test]
+    fn test_escalate_data_risk_none_to_yellow_via_ai() {
+        let (level, reason) = escalate_data_risk(
+            RiskLevel::None,
+            None,
+            Some((RiskLevel::Yellow, "könnte interne Hostnamen enthalten".to_string())),
+        );
+        assert_eq!(level, RiskLevel::Yellow);
+        assert_eq!(reason.as_deref(), Some("könnte interne Hostnamen enthalten"));
+    }
+
+    #[test]
+    fn test_escalate_data_risk_yellow_to_red_via_ai() {
+        let (level, reason) = escalate_data_risk(
+            RiskLevel::Yellow,
+            Some("listet .ssh auf".to_string()),
+            Some((RiskLevel::Red, "enthält vermutlich einen privaten Schlüssel".to_string())),
+        );
+        assert_eq!(level, RiskLevel::Red);
+        assert_eq!(reason.as_deref(), Some("enthält vermutlich einen privaten Schlüssel"));
+    }
+
+    /// Spec 0026, Abschnitt 3: "Nur Eskalation, nie Abschwächung" — der
+    /// zentrale, explizit verlangte Test: ein regelbasiertes `Red` darf
+    /// durch KEIN KI-Ergebnis mehr abgeschwächt werden, auch nicht durch
+    /// ein KI-Ergebnis von `none`.
+    #[test]
+    fn test_escalate_data_risk_rule_based_red_survives_ai_none() {
+        let (level, reason) = escalate_data_risk(
+            RiskLevel::Red,
+            Some("Zugriff auf eine SSH-Private-Key-Datei (id_rsa)".to_string()),
+            Some((RiskLevel::None, "looks harmless to me".to_string())),
+        );
+        assert_eq!(level, RiskLevel::Red);
+        assert_eq!(
+            reason.as_deref(),
+            Some("Zugriff auf eine SSH-Private-Key-Datei (id_rsa)"),
+            "die ursprüngliche regelbasierte Begründung darf nicht durch die KI-Begründung ersetzt werden"
+        );
+    }
+
+    #[test]
+    fn test_escalate_data_risk_rule_based_red_survives_ai_yellow() {
+        let (level, _) = escalate_data_risk(
+            RiskLevel::Red,
+            Some("...".to_string()),
+            Some((RiskLevel::Yellow, "...".to_string())),
+        );
+        assert_eq!(level, RiskLevel::Red);
+    }
+
+    #[test]
+    fn test_escalate_data_risk_no_second_opinion_keeps_rule_based_result() {
+        let (level, reason) = escalate_data_risk(RiskLevel::Yellow, Some("x".to_string()), None);
+        assert_eq!(level, RiskLevel::Yellow);
+        assert_eq!(reason.as_deref(), Some("x"));
+    }
+
+    fn risk_assessment_updated_payload(
+        events: &[(String, serde_json::Value)],
+    ) -> Option<&serde_json::Value> {
+        events
+            .iter()
+            .find(|(name, _)| name == "risk-assessment-updated")
+            .map(|(_, payload)| payload)
+    }
+
+    /// End-to-end (nicht nur die reine Funktion): eine aktivierte
+    /// Zweitmeinung hebt ein regelbasiertes `None` auf `Yellow` an und das
+    /// Ergebnis kommt tatsächlich als `risk-assessment-updated`-Event beim
+    /// `TestEmitter` an.
+    #[tokio::test]
+    async fn test_second_opinion_escalates_none_to_yellow_end_to_end() {
+        let mut session = session_with_second_opinion(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    // Unauffällig laut Regel-Klassifizierer (kein Muster
+                    // trifft) — die KI-Zweitmeinung ist hier die einzige
+                    // Quelle für ein Risiko ungleich `None`.
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default().with_response("ls -la", output("total 0")),
+            MockAiProvider::new(vec![
+                AiEvent::TextDelta("yellow: könnte interne Pfade offenlegen".to_string()),
+                AiEvent::Done,
+            ]),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(&session, Uuid::new_v4(), &emitter, &profile_store, &confirmations).await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let payload = risk_assessment_updated_payload(&events)
+            .expect("erwartet: risk-assessment-updated wurde gesendet");
+        assert_eq!(payload["dataRisk"], serde_json::json!("yellow"));
+        assert_eq!(
+            payload["reason"],
+            serde_json::json!("könnte interne Pfade offenlegen")
+        );
+    }
+
+    /// Spec 0026, Abschnitt 3: das zentrale Sicherheitsversprechen auch
+    /// end-to-end geprüft — ein bereits regelbasiert als `Red`
+    /// eingestuftes Kommando bleibt `Red`, selbst wenn die aktivierte
+    /// KI-Zweitmeinung `none` zurückmeldet.
+    #[tokio::test]
+    async fn test_second_opinion_cannot_downgrade_rule_based_red_end_to_end() {
+        let mut session = session_with_second_opinion(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "cat ~/.ssh/id_rsa".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default().with_response("cat ~/.ssh/id_rsa", output("")),
+            MockAiProvider::new(vec![
+                AiEvent::TextDelta("none, this looks like a routine read".to_string()),
+                AiEvent::Done,
+            ]),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(&session, Uuid::new_v4(), &emitter, &profile_store, &confirmations).await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let payload = risk_assessment_updated_payload(&events)
+            .expect("erwartet: risk-assessment-updated wurde gesendet");
+        assert_eq!(
+            payload["dataRisk"],
+            serde_json::json!("red"),
+            "ein regelbasiertes Red darf durch keine KI-Zweitmeinung abgeschwächt werden"
+        );
+    }
+
+    /// Deaktivierte Zweitmeinung (Default: `risk_second_opinion_provider:
+    /// None`, s. `test_session`) darf keinen zusätzlichen API-Call auslösen
+    /// — strukturell garantiert, da `handle_action_proposed` den
+    /// Zweitmeinungs-Zweig nur betritt, wenn `Session::
+    /// risk_second_opinion_provider` `Some` ist. Dieser Test macht die
+    /// beobachtbare Konsequenz explizit: kein `risk-assessment-updated`-
+    /// Event, also auch kein Lade-Indikator, der je aufgelöst werden müsste.
+    #[tokio::test]
+    async fn test_disabled_second_opinion_yields_no_update_event() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "cat ~/.ssh/id_rsa".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default().with_response("cat ~/.ssh/id_rsa", output("")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        assert!(session.risk_second_opinion_provider.is_none());
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(&session, Uuid::new_v4(), &emitter, &profile_store, &confirmations).await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        assert!(
+            risk_assessment_updated_payload(&events).is_none(),
+            "bei deaktivierter Zweitmeinung darf kein risk-assessment-updated-Event gesendet werden"
+        );
+        // Die regelbasierte Ersteinschätzung (Red, da id_rsa) bleibt davon
+        // unberührt im `chat-action-proposed`-Event sichtbar.
+        let (_, proposed_payload) = events
+            .iter()
+            .find(|(name, _)| name == "chat-action-proposed")
+            .expect("erwartet: chat-action-proposed wurde gesendet");
+        assert_eq!(
+            proposed_payload["riskAssessment"]["dataRisk"],
+            serde_json::json!("red")
+        );
     }
 
     // --- Spec 0018: Sudo-Passwort -----------------------------------------

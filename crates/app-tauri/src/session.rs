@@ -138,6 +138,17 @@ pub struct Session {
     /// Flag-Zustand ohne zusammengesetzte Operationen, für den ein Mutex nur
     /// unnötigen Overhead bedeuten würde.
     pub auto_continue_stop: std::sync::atomic::AtomicBool,
+    /// Spec 0026, Abschnitt 3: `Some`, wenn die optionale KI-Zweitmeinung
+    /// zur Daten-Risiko-Achse aktiviert ist UND ein gültiger, separater
+    /// Provider dafür konfiguriert ist — einmalig bei `connect()` aus den
+    /// `tauri-plugin-store`-Einstellungen aufgelöst (analog zu
+    /// `ai_provider_label`/`ai_model` oben), nicht bei jedem Aktionsvorschlag
+    /// neu gelesen. Ein während einer laufenden Session geänderter Wert
+    /// greift dadurch erst bei der nächsten `connect()` — ein bewusster,
+    /// kleiner Scope-Kompromiss: eine Live-Aktualisierung mitten in einer
+    /// Session hätte deutlich mehr Zustands-Plumbing gebraucht, für eine
+    /// reine Komfort-Einstellung unverhältnismäßig.
+    pub risk_second_opinion_provider: Option<Box<dyn AiProvider>>,
 }
 
 /// Startet den Terminal-Aktor (Modul-Kommentar, Punkt 3) als eigenen Task.
@@ -367,6 +378,7 @@ mod tests {
             pending_action: StdMutex::new(None),
             sftp: AsyncMutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+            risk_second_opinion_provider: None,
         }
     }
 

@@ -11,6 +11,7 @@ import {
   setActiveAiProvider,
 } from "../api";
 import { setLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from "../i18n";
+import { loadRiskClassifierSettings, saveRiskClassifierSettings } from "../riskSettings";
 import {
   type AiProviderConfigDto,
   type AiProviderConfigInput,
@@ -64,6 +65,34 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
   const [attestationResults, setAttestationResults] = useState<Record<string, string>>({});
   const [attestationLoading, setAttestationLoading] = useState<Record<string, boolean>>({});
   const [attestationErrors, setAttestationErrors] = useState<Record<string, string>>({});
+  const [riskClassifierEnabled, setRiskClassifierEnabled] = useState(false);
+  const [riskClassifierProviderId, setRiskClassifierProviderId] = useState<string | null>(null);
+  const [riskSettingsSaving, setRiskSettingsSaving] = useState(false);
+
+  useEffect(() => {
+    loadRiskClassifierSettings()
+      .then((settings) => {
+        setRiskClassifierEnabled(settings.enabled);
+        setRiskClassifierProviderId(settings.providerId);
+      })
+      .catch((err) => setError(commandErrorMessage(err)));
+  }, []);
+
+  /** Spec 0026, Abschnitt 3, Punkt 1: erst bei der nächsten `connect()`
+   * wirksam (s. `riskSettings.ts`-Doc-Kommentar) — trotzdem sofort
+   * gespeichert, damit die Einstellung nicht verloren geht. */
+  const handleRiskClassifierChange = async (enabled: boolean, providerId: string | null) => {
+    setRiskClassifierEnabled(enabled);
+    setRiskClassifierProviderId(providerId);
+    setRiskSettingsSaving(true);
+    try {
+      await saveRiskClassifierSettings({ enabled, providerId });
+    } catch (err) {
+      setError(commandErrorMessage(err));
+    } finally {
+      setRiskSettingsSaving(false);
+    }
+  };
 
   /** Spec 0024, Abschnitt 4: Wirkung sofort ohne Neustart —
    * `setLanguage` ruft `i18next.changeLanguage` auf, das automatisch alle
@@ -309,6 +338,45 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
             </li>
           ))}
         </ul>
+
+        {/* Spec 0026, Abschnitt 3, Punkt 1: eigener Abschnitt für die
+         * optionale KI-Zweitmeinung zur Daten-Risiko-Achse — standardmäßig
+         * deaktiviert (Opt-in), separat wählbarer Provider, Hinweis auf ein
+         * empfohlenes lokales Modell. */}
+        <div className="mb-6 border-t border-slate-700 pt-4">
+          <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
+            {t("aiProvider.riskClassifierTitle")}
+          </h3>
+          <p className="mb-2 text-xs text-slate-500">{t("aiProvider.riskClassifierHint")}</p>
+          <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={riskClassifierEnabled}
+              onChange={(e) =>
+                handleRiskClassifierChange(e.target.checked, riskClassifierProviderId)
+              }
+            />
+            {t("aiProvider.riskClassifierEnable")}
+          </label>
+          {riskClassifierEnabled && (
+            <label className="block text-sm text-slate-300">
+              {t("aiProvider.riskClassifierProvider")}
+              <select
+                value={riskClassifierProviderId ?? ""}
+                onChange={(e) => handleRiskClassifierChange(true, e.target.value || null)}
+                disabled={riskSettingsSaving}
+                className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+              >
+                <option value="">{t("aiProvider.riskClassifierNoProvider")}</option>
+                {providers.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-200">

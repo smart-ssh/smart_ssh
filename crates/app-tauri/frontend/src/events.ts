@@ -9,6 +9,7 @@ import type {
   ConnectionStatusChangedEvent,
   HostKeyVerificationNeededEvent,
   NoteUpdateSuggestedEvent,
+  RiskAssessmentUpdatedEvent,
   SftpTransferFinishedEvent,
   SftpTransferStartedEvent,
   TerminalOutputEvent,
@@ -43,6 +44,13 @@ export const onChatActionProposed = (
   handler: (event: ChatActionProposedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatActionProposedEvent>("chat-action-proposed", (e) => handler(e.payload));
+
+/** Spec 0026, Abschnitt 3, Punkt 4 — kommt (falls die KI-Zweitmeinung
+ * aktiviert ist) nach `onChatActionProposed` für dieselbe `actionId`. */
+export const onRiskAssessmentUpdated = (
+  handler: (event: RiskAssessmentUpdatedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<RiskAssessmentUpdatedEvent>("risk-assessment-updated", (e) => handler(e.payload));
 
 export const onChatActionResult = (
   handler: (event: ChatActionResultEvent) => void,

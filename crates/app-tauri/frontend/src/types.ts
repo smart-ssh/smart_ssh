@@ -112,6 +112,21 @@ export type Decision =
   | { Confirm: { reason: string; code: string } }
   | { Deny: { reason: string; code: string } };
 
+/** Spec 0026, Abschnitt 2 — kein "grün": Abwesenheit eines Badges im UI
+ * bedeutet bereits "laut bekannten Mustern unauffällig", kein
+ * Sicherheitsversprechen. */
+export type RiskLevel = "none" | "yellow" | "red";
+
+export interface RiskAssessment {
+  serverRisk: RiskLevel;
+  serverRiskReason: string | null;
+  dataRisk: RiskLevel;
+  dataRiskReason: string | null;
+  /** Spec 0026, Abschnitt 3: `true`, sobald die optionale KI-Zweitmeinung
+   * tatsächlich eingeflossen ist. */
+  aiReviewed: boolean;
+}
+
 /** Spec 0017, Abschnitt 2: `awaiting_host_key` kommt nie über
  * `connection-status-changed` (das Event kennt nur den Übergang
  * connected/disconnected), nur als `SessionSummaryDto.status`. */
@@ -185,6 +200,20 @@ export interface ChatActionProposedEvent {
    * Zielauflösung serverseitig fehlschlägt (z. B. Server inzwischen
    * gelöscht). */
   targetName: string | null;
+  /** Spec 0026, Abschnitt 2: nur für `SuggestCommand`/`ReadRemoteFile`/
+   * `WriteRemoteFile` gesetzt (`null` für `ProposeNoteUpdate`) — bereits
+   * die regelbasierte Einschätzung, `aiReviewed: false` beim ersten Event.
+   * Kann später über `risk-assessment-updated` (s. `events.ts`) auf der
+   * Daten-Risiko-Achse angehoben werden. */
+  riskAssessment: RiskAssessment | null;
+}
+
+/** Spec 0026, Abschnitt 3, Punkt 4. */
+export interface RiskAssessmentUpdatedEvent {
+  sessionId: string;
+  actionId: string;
+  dataRisk: RiskLevel;
+  reason: string | null;
 }
 
 /** Spec 0010 — `action` ist hier immer `{ ProposeNoteUpdate: {...} }`, nie

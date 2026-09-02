@@ -138,7 +138,11 @@
     "blocked": "blocked",
     "rejected": "rejected",
     "rejectedByUser": "Rejected by user.",
-    "usesStoredSudoPassword": "🔑 Runs using the stored sudo password."
+    "usesStoredSudoPassword": "🔑 Runs using the stored sudo password.",
+    "riskServerLabel": "Server",
+    "riskDataLabel": "Data",
+    "riskSecondOpinionPending": "Fetching AI second opinion…",
+    "riskHint": "Assessment based on known patterns — no guarantee."
   },
   "confirmDialog": {
     "editableCommand": "Command — editable",
@@ -209,7 +213,12 @@
     "attestationDisclaimerNot": "not",
     "attestationDisclaimerAfterNot": " cryptographically verified by Smart SSH. To verify independently, use the verification tool provided by the hardware/provider.",
     "add": "Add",
-    "adding": "Adding…"
+    "adding": "Adding…",
+    "riskClassifierTitle": "Risk Indicators — AI Second Opinion",
+    "riskClassifierHint": "Optional: a second AI provider assesses, in addition to the rule-based check, whether a command might contain sensitive data. A locally running model (e.g. via Ollama) is recommended, so this second opinion doesn't necessarily go to an external provider either.",
+    "riskClassifierEnable": "Enable AI second opinion",
+    "riskClassifierProvider": "Provider for the second opinion",
+    "riskClassifierNoProvider": "(none selected)"
   },
   "errors": {
     "SSH_CONNECTION_FAILED": "Connection failed",

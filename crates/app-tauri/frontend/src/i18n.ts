@@ -29,7 +29,11 @@ const STORE_FILE = "settings.json";
 const LANGUAGE_KEY = "language";
 
 let storePromise: Promise<Store> | null = null;
-function settingsStore(): Promise<Store> {
+/** Exportiert (Spec 0026, Abschnitt 4, Punkt 1: `risk_classifier_enabled`/
+ * `risk_classifier_provider_id` gehören in denselben Store wie die
+ * Sprache — s. `riskSettings.ts`), damit nicht zwei unabhängige
+ * `load(STORE_FILE, ...)`-Aufrufe an verschiedenen Stellen entstehen. */
+export function settingsStore(): Promise<Store> {
   if (!storePromise) {
     storePromise = load(STORE_FILE, { autoSave: false });
   }
