@@ -364,7 +364,7 @@ async fn test_merged_reason_does_not_repeat_identical_parts_across_segments() {
         "cp /etc/fstab /etc/fstab.bak-$(date +%Y%m%d) && sed -i 's/a/b/' /etc/fstab && grep -n extern1 /etc/fstab",
         &ctx("srv1", &[]),
     ).await;
-    let Decision::Confirm { reason } = decision else {
+    let Decision::Confirm { reason, .. } = decision else {
         panic!("expected Confirm, got {decision:?}");
     };
     let parts: Vec<&str> = reason.split("; ").collect();

@@ -267,6 +267,7 @@ async fn handle_action_proposed(
     {
         decision = Decision::Confirm {
             reason: "Automatische Folgeaktion nach Server-Antwort erfordert Bestätigung".to_string(),
+            code: "FILTER_AUTO_CONTINUATION_REQUIRES_CONFIRM".to_string(),
         };
     }
 
@@ -306,7 +307,7 @@ async fn handle_action_proposed(
             )
             .await
         }
-        Decision::Deny { reason } => {
+        Decision::Deny { reason, .. } => {
             // Spec 0007 Abschnitt 5: informiert nur, keine Ausführung, kein
             // Warten auf `respond_to_action` — das Event oben ist bereits
             // die vollständige Reaktion an den Nutzer. Spec 0021, Abschnitt
@@ -428,6 +429,7 @@ async fn evaluate_action(
         }
         AiAction::ProposeNoteUpdate { .. } => Decision::Confirm {
             reason: "Notiz-Aktualisierungen erfordern immer eine manuelle Bestätigung".to_string(),
+            code: "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM".to_string(),
         },
         AiAction::GenerateDocument { .. } => unreachable!(
             "GenerateDocument wird bereits in run_one_round abgefangen \
@@ -460,6 +462,7 @@ async fn evaluate_action(
                     reason: "Dateischreibvorgänge werden immer zur Bestätigung angezeigt \
                              (Spec 0020, Abschnitt 4.2)"
                         .to_string(),
+                    code: "FILTER_FILE_WRITE_REQUIRES_CONFIRM".to_string(),
                 },
                 other => other,
             }
@@ -530,7 +533,7 @@ async fn handle_user_decision(
                         tags,
                     };
                     let re_decision = session.filter_engine.evaluate(&edited, &ctx).await;
-                    if let Decision::Deny { reason } = re_decision {
+                    if let Decision::Deny { reason, code } = re_decision {
                         let blocked = AiAction::SuggestCommand {
                             command: edited.clone(),
                         };
@@ -541,6 +544,7 @@ async fn handle_user_decision(
                             blocked,
                             Decision::Deny {
                                 reason: reason.clone(),
+                                code,
                             },
                             None,
                             false,

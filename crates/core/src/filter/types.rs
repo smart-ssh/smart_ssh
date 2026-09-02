@@ -6,11 +6,26 @@ use serde::{Deserialize, Serialize};
 use crate::shared::ServerId;
 
 /// Ergebnis einer Filter-Auswertung (Spec 0002, Abschnitt 2).
+///
+/// `code` (Spec 0024, Abschnitt 5): stabiler, sprachunabhängiger Bezeichner
+/// der Grund-Art, fürs Frontend-Mapping auf Übersetzungs-Keys — `reason`
+/// bleibt der bestehende (deutsche) Anzeigetext, unverändert als Fallback,
+/// falls das Frontend einen `code` nicht kennt. Bei mehreren gleichzeitig
+/// zutreffenden Gründen (z. B. Hard-Blacklist UND eine passende Regel, s.
+/// `engine::combine`) trägt `reason` weiterhin alle zusammengeführten Texte,
+/// `code` dagegen nur den nach Präzedenz wichtigsten einzelnen Grund (s.
+/// `engine::merge_codes`) — für die Anzeige repräsentativ genug, ohne den
+/// Typ auf eine Liste umstellen zu müssen. `String` statt `&'static str`:
+/// `Decision` leitet `Deserialize` ab (Rundtrip über Tauri-Events/Tests),
+/// ein geliehenes `&'static str`-Feld ist damit nicht kombinierbar (serde
+/// kann `'static` nicht aus der Deserializer-Lifetime `'de` herleiten) —
+/// die Werte selbst bleiben trotzdem aus einer festen Konstanten-Menge
+/// (s. `engine`-Modul), nur die Repräsentation ist `String`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Decision {
     AutoExec,
-    Confirm { reason: String },
-    Deny { reason: String },
+    Confirm { reason: String, code: String },
+    Deny { reason: String, code: String },
 }
 
 /// Wirkung einer Nutzerregel (Spec 0002, Abschnitt 2).

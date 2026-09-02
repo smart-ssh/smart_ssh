@@ -393,4 +393,54 @@ impl fmt::Display for AiError {
     }
 }
 
+impl AiError {
+    /// Stabiler, sprachunabhängiger Bezeichner je Fehlerart (Spec 0024,
+    /// Abschnitt 5) — fürs Frontend-Mapping auf Übersetzungs-Keys. Bleibt
+    /// über Code-Änderungen hinweg stabil, anders als der `Display`-Text
+    /// oben (der unverändert bleibt und weiterhin als Fallback dient, falls
+    /// das Frontend einen Code nicht kennt).
+    pub fn code(&self) -> &'static str {
+        match self {
+            AiError::AuthenticationFailed => "AI_AUTH_FAILED",
+            AiError::RateLimited => "AI_RATE_LIMITED",
+            AiError::NetworkError(_) => "AI_NETWORK_ERROR",
+            AiError::InvalidResponse(_) => "AI_INVALID_RESPONSE",
+            AiError::ContextTooLarge => "AI_CONTEXT_TOO_LARGE",
+            AiError::ProviderUnavailable(_) => "AI_PROVIDER_UNAVAILABLE",
+        }
+    }
+}
+
 impl std::error::Error for AiError {}
+
+#[cfg(test)]
+mod ai_error_code_tests {
+    use super::*;
+
+    /// Spec 0024, Abschnitt 5: Codes müssen stabil und eindeutig sein — kein
+    /// Code darf für zwei unterschiedliche Fehlerarten doppelt vergeben sein.
+    #[test]
+    fn test_ai_error_codes_are_unique() {
+        let samples = [
+            AiError::AuthenticationFailed,
+            AiError::RateLimited,
+            AiError::NetworkError("x".to_string()),
+            AiError::InvalidResponse("x".to_string()),
+            AiError::ContextTooLarge,
+            AiError::ProviderUnavailable("x".to_string()),
+        ];
+        let codes: Vec<&'static str> = samples.iter().map(AiError::code).collect();
+        let mut unique = codes.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(codes.len(), unique.len(), "doppelt vergebener AiError-Code: {codes:?}");
+    }
+
+    #[test]
+    fn test_ai_error_code_stable_across_payload_variation() {
+        assert_eq!(
+            AiError::NetworkError("a".to_string()).code(),
+            AiError::NetworkError("b".to_string()).code(),
+        );
+    }
+}

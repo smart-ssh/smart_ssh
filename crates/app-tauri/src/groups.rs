@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use ssh_manager_core::profiles::{CredentialStore, GroupId, ProfileStore};
 
 use crate::dto::{DeleteGroupResult, GroupDto, ServerDto};
-use crate::error::CommandResult;
+use crate::error::{CommandError, CommandResult};
 
 /// Aufgabenstellung Teil 1, Punkt 5: eine Gruppe darf nicht sich selbst
 /// oder einen ihrer eigenen Nachfahren als `parent_id` bekommen.
@@ -30,13 +30,17 @@ pub async fn validate_no_cycle(
         return Ok(());
     };
     if group_id == new_parent {
-        return Err("Eine Gruppe kann nicht ihre eigene übergeordnete Gruppe sein".into());
+        return Err(CommandError::with_code(
+            "Eine Gruppe kann nicht ihre eigene übergeordnete Gruppe sein",
+            "GROUP_SELF_PARENT",
+        ));
     }
     let chain = store.group_chain(&new_parent).await?;
     if chain.iter().any(|g| g.id == group_id) {
-        return Err(
-            "Zyklus: die gewählte übergeordnete Gruppe ist eine Untergruppe dieser Gruppe".into(),
-        );
+        return Err(CommandError::with_code(
+            "Zyklus: die gewählte übergeordnete Gruppe ist eine Untergruppe dieser Gruppe",
+            "GROUP_CYCLE_DETECTED",
+        ));
     }
     Ok(())
 }
@@ -148,7 +152,9 @@ mod tests {
 
         let result = validate_no_cycle(&store, Some(g.id), Some(g.id)).await;
 
-        assert!(result.is_err());
+        let err = result.expect_err("erwartet: Fehler bei Selbst-Referenz");
+        // Spec 0024, Abschnitt 5: stabiler Code fürs Frontend-Mapping.
+        assert_eq!(err.code, Some("GROUP_SELF_PARENT"));
     }
 
     #[tokio::test]
@@ -165,7 +171,8 @@ mod tests {
         // Nachfahre von root).
         let result = validate_no_cycle(&store, Some(root.id), Some(grandchild.id)).await;
 
-        assert!(result.is_err());
+        let err = result.expect_err("erwartet: Fehler bei zyklischer Elternkette");
+        assert_eq!(err.code, Some("GROUP_CYCLE_DETECTED"));
     }
 
     #[tokio::test]

@@ -74,6 +74,7 @@ fn write_or_reuse_secret(
     provided: Option<String>,
     previously_existed: bool,
     label: &str,
+    code: &'static str,
 ) -> Result<(), CommandError> {
     match provided {
         Some(value) => {
@@ -81,7 +82,7 @@ fn write_or_reuse_secret(
             Ok(())
         }
         None if previously_existed => Ok(()),
-        None => Err(CommandError::from(format!("{label} ist erforderlich"))),
+        None => Err(CommandError::with_code(format!("{label} ist erforderlich"), code)),
     }
 }
 
@@ -150,7 +151,14 @@ pub fn resolve_auth_method(
         AuthMethodInput::Password { value } => {
             let ref_ = credential_ref(server_id, "password");
             let existed = matches!(existing, Some(AuthMethod::Password { .. }));
-            write_or_reuse_secret(credential_store, &ref_, value, existed, "Passwort")?;
+            write_or_reuse_secret(
+                credential_store,
+                &ref_,
+                value,
+                existed,
+                "Passwort",
+                "SERVER_PASSWORD_REQUIRED",
+            )?;
             Ok(AuthMethod::Password {
                 credential_ref: ref_,
             })
@@ -167,6 +175,7 @@ pub fn resolve_auth_method(
                 key_content,
                 existed_key,
                 "Private Key",
+                "SERVER_PRIVATE_KEY_REQUIRED",
             )?;
 
             let existing_passphrase_ref = match existing {
@@ -203,6 +212,7 @@ pub fn resolve_auth_method(
                 cert_content,
                 existed,
                 "Zertifikat",
+                "SERVER_CERTIFICATE_REQUIRED",
             )?;
             write_or_reuse_secret(
                 credential_store,
@@ -210,6 +220,7 @@ pub fn resolve_auth_method(
                 key_content,
                 existed,
                 "Zertifikats-Key",
+                "SERVER_CERTIFICATE_KEY_REQUIRED",
             )?;
             Ok(AuthMethod::Certificate { cert_ref, key_ref })
         }
@@ -261,7 +272,47 @@ mod tests {
         let result =
             resolve_auth_method(&store, id, AuthMethodInput::Password { value: None }, None);
 
-        assert!(result.is_err());
+        let err = result.expect_err("erwartet: Fehler bei fehlendem Passwort");
+        // Spec 0024, Abschnitt 5: stabiler Code fürs Frontend-Mapping.
+        assert_eq!(err.code, Some("SERVER_PASSWORD_REQUIRED"));
+    }
+
+    #[test]
+    fn test_create_private_key_requires_key_content() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        let result = resolve_auth_method(
+            &store,
+            id,
+            AuthMethodInput::PrivateKey {
+                key_content: None,
+                passphrase: None,
+            },
+            None,
+        );
+
+        let err = result.expect_err("erwartet: Fehler bei fehlendem Private Key");
+        assert_eq!(err.code, Some("SERVER_PRIVATE_KEY_REQUIRED"));
+    }
+
+    #[test]
+    fn test_create_certificate_requires_cert_content() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        let result = resolve_auth_method(
+            &store,
+            id,
+            AuthMethodInput::Certificate {
+                cert_content: None,
+                key_content: Some("key".to_string()),
+            },
+            None,
+        );
+
+        let err = result.expect_err("erwartet: Fehler bei fehlendem Zertifikat");
+        assert_eq!(err.code, Some("SERVER_CERTIFICATE_REQUIRED"));
     }
 
     #[test]
@@ -325,7 +376,8 @@ mod tests {
             None,
         );
 
-        assert!(result.is_err());
+        let err = result.expect_err("erwartet: Fehler bei fehlendem Zertifikats-Key");
+        assert_eq!(err.code, Some("SERVER_CERTIFICATE_KEY_REQUIRED"));
     }
 
     #[test]

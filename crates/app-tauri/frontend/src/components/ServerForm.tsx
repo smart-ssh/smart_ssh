@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   clearServerSudoPassword,
+  commandErrorCode,
   commandErrorMessage,
   createServer,
   deleteServer,
@@ -11,6 +12,7 @@ import {
   trustHostKey,
   updateServer,
 } from "../api";
+import { translateErrorCode } from "../errorCodes";
 import { pickAndReadTextFile } from "../fileDialog";
 import type {
   AuthMethodInput,
@@ -202,7 +204,7 @@ export function ServerForm({
       }
       onSaved();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setSaving(false);
     }
@@ -216,7 +218,7 @@ export function ServerForm({
       await clearServerSudoPassword(serverId);
       setHasSudoPassword(false);
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setClearingSudoPassword(false);
     }
@@ -230,7 +232,7 @@ export function ServerForm({
       await deleteServer(serverId);
       onDeleted();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setDeleting(false);
     }
@@ -253,7 +255,7 @@ export function ServerForm({
         });
       }
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setTesting(false);
     }
@@ -267,7 +269,7 @@ export function ServerForm({
       await trustHostKey(h, p, rawKey);
       await runTest();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     }
   };
 
@@ -284,7 +286,7 @@ export function ServerForm({
     try {
       setPreview(await previewEffectiveNotes(serverId));
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setPreviewLoading(false);
     }

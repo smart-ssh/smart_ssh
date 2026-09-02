@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, createGroup, deleteGroup, updateGroup } from "../api";
+import { commandErrorCode, commandErrorMessage, createGroup, deleteGroup, updateGroup } from "../api";
+import { translateErrorCode } from "../errorCodes";
 import type { DeleteGroupResult, GroupDto } from "../types";
 import { NotesPanel } from "./NotesPanel";
 
@@ -68,7 +69,7 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
       }
       onSaved();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setSaving(false);
     }
@@ -80,7 +81,7 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
     try {
       setDeletePreview(await deleteGroup(groupId, false));
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     }
   };
 
@@ -92,7 +93,7 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
       await deleteGroup(groupId, true);
       onDeleted();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setDeleting(false);
     }

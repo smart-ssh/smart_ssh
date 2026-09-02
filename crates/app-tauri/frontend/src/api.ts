@@ -27,6 +27,10 @@ import type {
 /** Von `crate::error::CommandError` (`crates/app-tauri/src/error.rs`). */
 export interface CommandErrorPayload {
   message: string;
+  /** Spec 0024, Abschnitt 5: stabiler Code fürs Frontend-Mapping (s.
+   * `errorCodes.ts`) — `null`/fehlend bei den meisten Fehlern, gesetzt nur
+   * für die Validierungsfehler aus den Server-/Gruppen-Formularen. */
+  code?: string | null;
 }
 
 /** Extrahiert eine anzeigbare Meldung aus einem abgelehnten `invoke()`. */
@@ -36,6 +40,16 @@ export function commandErrorMessage(err: unknown): string {
     if (typeof message === "string") return message;
   }
   return String(err);
+}
+
+/** Extrahiert den stabilen `code` aus einem abgelehnten `invoke()`, falls
+ * vorhanden (s. `commandErrorMessage`-Gegenstück). */
+export function commandErrorCode(err: unknown): string | null {
+  if (typeof err === "object" && err !== null && "code" in err) {
+    const code = (err as CommandErrorPayload).code;
+    if (typeof code === "string") return code;
+  }
+  return null;
 }
 
 export const listServers = (groupId?: string) =>

@@ -90,6 +90,7 @@ impl<S: PolicyStore> FilterEngine<S> {
             return EvaluationTrace {
                 decision: Decision::Deny {
                     reason: "kein sinnvolles Kommando (leere Eingabe)".to_string(),
+                    code: FILTER_EMPTY_COMMAND.to_string(),
                 },
                 matched_rule: None,
                 matched_hard_blacklist_entry: None,
@@ -106,6 +107,7 @@ impl<S: PolicyStore> FilterEngine<S> {
                         "Kommando überschreitet Längenlimit von {} Zeichen",
                         self.max_command_length
                     ),
+                    code: FILTER_COMMAND_TOO_LONG.to_string(),
                 },
                 matched_rule: None,
                 matched_hard_blacklist_entry: None,
@@ -134,13 +136,17 @@ impl<S: PolicyStore> FilterEngine<S> {
             ParseResult::Empty => EvaluationTrace {
                 decision: Decision::Deny {
                     reason: "kein sinnvolles Kommando (leere Eingabe)".to_string(),
+                    code: FILTER_EMPTY_COMMAND.to_string(),
                 },
                 matched_rule: None,
                 matched_hard_blacklist_entry: None,
                 sub_command_traces: Vec::new(),
             },
             ParseResult::Ambiguous { reason } => EvaluationTrace {
-                decision: Decision::Confirm { reason },
+                decision: Decision::Confirm {
+                    reason,
+                    code: FILTER_PARSE_AMBIGUOUS.to_string(),
+                },
                 matched_rule: None,
                 matched_hard_blacklist_entry: None,
                 sub_command_traces: Vec::new(),
@@ -188,6 +194,7 @@ impl<S: PolicyStore> FilterEngine<S> {
         let blacklist_decision = if matched_hard_blacklist_entry.is_some() {
             Decision::Confirm {
                 reason: "Hard-Blacklist: potenziell gefährliches Kommando".to_string(),
+                code: FILTER_HARD_BLACKLIST.to_string(),
             }
         } else {
             Decision::AutoExec
@@ -211,6 +218,7 @@ impl<S: PolicyStore> FilterEngine<S> {
                 inner_decision,
                 Decision::Confirm {
                     reason: "Command-Substitution ($(...) / `...`) erkannt".to_string(),
+                    code: FILTER_COMMAND_SUBSTITUTION.to_string(),
                 },
             )
         };
@@ -268,9 +276,11 @@ fn evaluate_rules_explained(
                 let decision = match action {
                     RuleAction::Deny => Decision::Deny {
                         reason: format!("Regel '{}' (Deny)", rule.id),
+                        code: FILTER_RULE_DENY.to_string(),
                     },
                     RuleAction::Confirm => Decision::Confirm {
                         reason: format!("Regel '{}' (Confirm)", rule.id),
+                        code: FILTER_RULE_CONFIRM.to_string(),
                     },
                     RuleAction::Allow => Decision::AutoExec,
                 };
@@ -281,6 +291,7 @@ fn evaluate_rules_explained(
     (
         Decision::Confirm {
             reason: "keine Regel gefunden".to_string(),
+            code: FILTER_NO_RULE_MATCHED.to_string(),
         },
         None,
     )
@@ -326,17 +337,72 @@ fn combine(a: Decision, b: Decision) -> Decision {
         Ordering::Less => b,
         Ordering::Equal => match (a, b) {
             (Decision::AutoExec, Decision::AutoExec) => Decision::AutoExec,
-            (Decision::Confirm { reason: r1 }, Decision::Confirm { reason: r2 }) => {
+            (
                 Decision::Confirm {
-                    reason: merge_reasons(r1, r2),
-                }
-            }
-            (Decision::Deny { reason: r1 }, Decision::Deny { reason: r2 }) => Decision::Deny {
+                    reason: r1,
+                    code: c1,
+                },
+                Decision::Confirm {
+                    reason: r2,
+                    code: c2,
+                },
+            ) => Decision::Confirm {
                 reason: merge_reasons(r1, r2),
+                code: merge_codes(c1, c2),
+            },
+            (
+                Decision::Deny {
+                    reason: r1,
+                    code: c1,
+                },
+                Decision::Deny {
+                    reason: r2,
+                    code: c2,
+                },
+            ) => Decision::Deny {
+                reason: merge_reasons(r1, r2),
+                code: merge_codes(c1, c2),
             },
             _ => unreachable!("gleiche severity impliziert gleiche Decision-Variante"),
         },
     }
+}
+
+// Spec 0024, Abschnitt 5: stabile Codes je Grund-Art, fürs Frontend-Mapping
+// auf Übersetzungs-Keys (s. `Decision`-Doc-Kommentar in `types.rs`).
+const FILTER_EMPTY_COMMAND: &str = "FILTER_EMPTY_COMMAND";
+const FILTER_COMMAND_TOO_LONG: &str = "FILTER_COMMAND_TOO_LONG";
+const FILTER_PARSE_AMBIGUOUS: &str = "FILTER_PARSE_AMBIGUOUS";
+const FILTER_HARD_BLACKLIST: &str = "FILTER_HARD_BLACKLIST";
+const FILTER_COMMAND_SUBSTITUTION: &str = "FILTER_COMMAND_SUBSTITUTION";
+const FILTER_RULE_DENY: &str = "FILTER_RULE_DENY";
+const FILTER_RULE_CONFIRM: &str = "FILTER_RULE_CONFIRM";
+const FILTER_NO_RULE_MATCHED: &str = "FILTER_NO_RULE_MATCHED";
+
+/// Rangfolge für `merge_codes` — je kleiner, desto vorrangiger. Orientiert
+/// sich an derselben Bucket-Präzedenz wie die Entscheidungsfindung selbst
+/// (Hard-Blacklist vor Nutzerregeln vor struktureller Analyse vor Default),
+/// s. `evaluate_rules_explained`-Doc-Kommentar.
+fn code_priority(code: &str) -> u8 {
+    match code {
+        FILTER_HARD_BLACKLIST => 0,
+        FILTER_RULE_DENY => 1,
+        FILTER_RULE_CONFIRM => 2,
+        FILTER_COMMAND_SUBSTITUTION => 3,
+        FILTER_COMMAND_TOO_LONG => 4,
+        FILTER_PARSE_AMBIGUOUS => 5,
+        FILTER_NO_RULE_MATCHED => 6,
+        FILTER_EMPTY_COMMAND => 7,
+        _ => u8::MAX,
+    }
+}
+
+/// Wählt bei zusammengeführten Reasons (`merge_reasons`) den nach obiger
+/// Präzedenz wichtigsten Einzel-Code aus — `reason` selbst verliert dabei
+/// nichts (enthält weiterhin beide Texte), nur `code` kann pro Decision
+/// jeweils nur einen Wert tragen.
+fn merge_codes(a: String, b: String) -> String {
+    if code_priority(&a) <= code_priority(&b) { a } else { b }
 }
 
 /// Fügt zwei (ggf. bereits selbst gemergte) Reason-Strings zusammen, ohne
@@ -355,4 +421,45 @@ fn merge_reasons(a: String, b: String) -> String {
         }
     }
     parts.join("; ")
+}
+
+#[cfg(test)]
+mod code_tests {
+    use super::*;
+
+    /// Spec 0024, Abschnitt 5: Codes müssen stabil und eindeutig sein — kein
+    /// Code darf für zwei unterschiedliche Grund-Arten doppelt vergeben sein.
+    #[test]
+    fn test_filter_decision_codes_are_unique() {
+        let codes = [
+            FILTER_EMPTY_COMMAND,
+            FILTER_COMMAND_TOO_LONG,
+            FILTER_PARSE_AMBIGUOUS,
+            FILTER_HARD_BLACKLIST,
+            FILTER_COMMAND_SUBSTITUTION,
+            FILTER_RULE_DENY,
+            FILTER_RULE_CONFIRM,
+            FILTER_NO_RULE_MATCHED,
+        ];
+        let mut unique = codes.to_vec();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(codes.len(), unique.len(), "doppelt vergebener Filter-Code: {codes:?}");
+    }
+
+    #[test]
+    fn test_merge_codes_prefers_higher_priority_code() {
+        assert_eq!(
+            merge_codes(FILTER_NO_RULE_MATCHED.to_string(), FILTER_HARD_BLACKLIST.to_string()),
+            FILTER_HARD_BLACKLIST,
+        );
+        assert_eq!(
+            merge_codes(FILTER_HARD_BLACKLIST.to_string(), FILTER_NO_RULE_MATCHED.to_string()),
+            FILTER_HARD_BLACKLIST,
+        );
+        assert_eq!(
+            merge_codes(FILTER_RULE_CONFIRM.to_string(), FILTER_RULE_CONFIRM.to_string()),
+            FILTER_RULE_CONFIRM,
+        );
+    }
 }

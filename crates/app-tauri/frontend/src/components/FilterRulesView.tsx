@@ -11,6 +11,7 @@ import {
   listServers,
   updateRule,
 } from "../api";
+import { translateErrorCode } from "../errorCodes";
 import type {
   EvaluationTraceDto,
   PatternDto,
@@ -483,7 +484,9 @@ function HardBlacklistSection({ patterns }: { patterns: PatternDto[] }) {
 
 type Decision = EvaluationTraceDto["decision"];
 
-function decisionInfo(decision: Decision): { text: string; className: string; reason?: string } {
+function decisionInfo(
+  decision: Decision,
+): { text: string; className: string; reason?: string; code?: string } {
   if (decision === "AutoExec") {
     return { text: "AutoExec", className: "bg-emerald-900 text-emerald-300" };
   }
@@ -492,9 +495,15 @@ function decisionInfo(decision: Decision): { text: string; className: string; re
       text: "Confirm",
       className: "bg-amber-900 text-amber-300",
       reason: decision.Confirm.reason,
+      code: decision.Confirm.code,
     };
   }
-  return { text: "Deny", className: "bg-red-900 text-red-300", reason: decision.Deny.reason };
+  return {
+    text: "Deny",
+    className: "bg-red-900 text-red-300",
+    reason: decision.Deny.reason,
+    code: decision.Deny.code,
+  };
 }
 
 function DecisionBadge({ decision, big }: { decision: Decision; big?: boolean }) {
@@ -510,11 +519,11 @@ function DecisionBadge({ decision, big }: { decision: Decision; big?: boolean })
 
 function TraceDetails({ trace, rules }: { trace: EvaluationTraceDto; rules: RuleDto[] }) {
   const { t } = useTranslation();
-  const { reason } = decisionInfo(trace.decision);
+  const { reason, code } = decisionInfo(trace.decision);
   const matchedRule = trace.matchedRule ? rules.find((r) => r.id === trace.matchedRule) : null;
   return (
     <div className="mt-1 space-y-0.5 text-xs text-slate-400">
-      {reason && <p>{reason}</p>}
+      {reason && <p>{translateErrorCode(t, code, reason)}</p>}
       {matchedRule && (
         <p>
           {t("filterRules.matchedRuleLabel")} <code>{matchedRule.patternValue}</code> (

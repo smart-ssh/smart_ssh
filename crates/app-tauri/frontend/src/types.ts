@@ -88,10 +88,14 @@ export type AiAction =
   | { ReadRemoteFile: { path: string } }
   | { WriteRemoteFile: { path: string; content: string } };
 
+/** `code` (Spec 0024, Abschnitt 5): stabiler, sprachunabhängiger Bezeichner
+ * der Grund-Art, fürs Mapping auf einen Übersetzungs-Key (s.
+ * `errorCodes.ts`) — `reason` bleibt der bestehende (deutsche) Anzeigetext,
+ * unverändert als Fallback, falls ein `code` nicht gemappt ist. */
 export type Decision =
   | "AutoExec"
-  | { Confirm: { reason: string } }
-  | { Deny: { reason: string } };
+  | { Confirm: { reason: string; code: string } }
+  | { Deny: { reason: string; code: string } };
 
 /** Spec 0017, Abschnitt 2: `awaiting_host_key` kommt nie über
  * `connection-status-changed` (das Event kennt nur den Übergang
