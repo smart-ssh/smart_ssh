@@ -46,9 +46,7 @@ use ssh_manager_core::ai::{
     ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, RejectionReason, Role,
 };
 use ssh_manager_core::filter::{Decision, EvalContext};
-use ssh_manager_core::profiles::{
-    AiAction, NoteEditor, NoteTarget, NoteTargetSelector, ProfileError, ProfileStore,
-};
+use ssh_manager_core::profiles::{AiAction, NoteEditor, NoteTarget, NoteTargetSelector, ProfileStore};
 use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
 use ssh_manager_core::ssh::{CommandOutput, ExecOutcome, SshError};
 
@@ -743,6 +741,29 @@ fn uses_stored_sudo_password(session: &Session, action: &AiAction) -> bool {
         && matches!(action, AiAction::SuggestCommand { command } if detect_elevation_prefix(command).is_some())
 }
 
+/// Meldet einen bei der Ausführung einer Aktion aufgetretenen Fehler sowohl
+/// als `chat-error`-Event (sofort sichtbare Meldung im UI) als auch als
+/// `ActionResult`-Eintrag im Kontext (Spec 0021, Abschnitt 3, analog zum
+/// `Decision::Deny`-Fall) — ohne Letzteres bekäme die KI den Fehlschlag nie
+/// zu sehen und der Turn bräche ohne Folgerunde ab, obwohl aus ihrer Sicht
+/// offen bliebe, was aus der Aktion geworden ist (das war der aus einem
+/// Nutzer-Bugreport bekannte "Chat hängt nach SFTP-Fehler"-Fall). Gibt immer
+/// `true` zurück, zur direkten Verwendung als `return`-Ausdruck an den
+/// bisherigen `false`-Rückgabestellen.
+async fn emit_action_error(
+    session: &Session,
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    message: String,
+) -> bool {
+    emit_chat_error(emitter, session_id, message.clone());
+    session.context.lock().await.history.push(ChatMessage {
+        role: Role::ActionResult,
+        content: MessageContent::Text(message),
+    });
+    true
+}
+
 async fn execute_suggested_command(
     session: &Session,
     session_id: SessionId,
@@ -819,23 +840,15 @@ async fn execute_suggested_command(
         }
         Err(err) => {
             log_command_execution_failed(session_id, &command, &err);
-            emit_command_execution_failed(emitter, session_id, &command, &err);
-            false
+            emit_action_error(
+                session,
+                emitter,
+                session_id,
+                format!("Kommando '{command}' konnte nicht ausgeführt werden: {err}"),
+            )
+            .await
         }
     }
-}
-
-fn emit_command_execution_failed(
-    emitter: &dyn EventEmitter,
-    session_id: SessionId,
-    command: &str,
-    err: &SshError,
-) {
-    emit_chat_error(
-        emitter,
-        session_id,
-        format!("Kommando '{command}' konnte nicht ausgeführt werden: {err}"),
-    );
 }
 
 /// Spec 0016, Abschnitt 4, Punkt 5: ab dieser Zeichenlänge wird geloggter
@@ -962,12 +975,13 @@ async fn execute_note_update(
         Ok(target) => target,
         Err(reason) => {
             tracing::warn!(session_id = %session_id, reason, "note target resolution failed");
-            emit_chat_error(
+            return emit_action_error(
+                session,
                 emitter,
                 session_id,
                 format!("Notiz konnte nicht aktualisiert werden: {reason}"),
-            );
-            return false;
+            )
+            .await;
         }
     };
 
@@ -998,8 +1012,13 @@ async fn execute_note_update(
             true
         }
         Err(err) => {
-            emit_note_update_failed(emitter, session_id, &err);
-            false
+            emit_action_error(
+                session,
+                emitter,
+                session_id,
+                format!("Notiz konnte nicht aktualisiert werden: {err}"),
+            )
+            .await
         }
     }
 }
@@ -1009,14 +1028,6 @@ fn note_update_summary(target: NoteTarget) -> String {
         NoteTarget::Server(id) => format!("Notiz für Server {} aktualisiert.", id.0),
         NoteTarget::Group(id) => format!("Notiz für Gruppe {} aktualisiert.", id.0),
     }
-}
-
-fn emit_note_update_failed(emitter: &dyn EventEmitter, session_id: SessionId, err: &ProfileError) {
-    emit_chat_error(
-        emitter,
-        session_id,
-        format!("Notiz konnte nicht aktualisiert werden: {err}"),
-    );
 }
 
 // --- Spec 0020: SFTP-Dateizugriff (ReadRemoteFile/WriteRemoteFile) --------
@@ -1090,12 +1101,13 @@ async fn execute_read_remote_file(
     emitter: &dyn EventEmitter,
 ) -> bool {
     if let Err(err) = ensure_sftp_open(session).await {
-        emit_chat_error(
+        return emit_action_error(
+            session,
             emitter,
             session_id,
             format!("SFTP konnte nicht geöffnet werden: {err}"),
-        );
-        return false;
+        )
+        .await;
     }
 
     // Größenprüfung vor dem eigentlichen Lesen — ein fehlgeschlagenes
@@ -1111,15 +1123,16 @@ async fn execute_read_remote_file(
     };
     if let Some(size) = size {
         if size > MAX_READ_FILE_BYTES {
-            emit_chat_error(
+            return emit_action_error(
+                session,
                 emitter,
                 session_id,
                 format!(
                     "Datei '{path}' ist zu groß ({size} Bytes, Obergrenze \
                      {MAX_READ_FILE_BYTES} Bytes) — wird nicht gelesen."
                 ),
-            );
-            return false;
+            )
+            .await;
         }
     }
 
@@ -1155,12 +1168,13 @@ async fn execute_read_remote_file(
             true
         }
         Err(err) => {
-            emit_chat_error(
+            emit_action_error(
+                session,
                 emitter,
                 session_id,
                 format!("Lesen von '{path}' fehlgeschlagen: {err}"),
-            );
-            false
+            )
+            .await
         }
     }
 }
@@ -1328,12 +1342,13 @@ async fn execute_write_remote_file(
     emitter: &dyn EventEmitter,
 ) -> bool {
     if let Err(err) = ensure_sftp_open(session).await {
-        emit_chat_error(
+        return emit_action_error(
+            session,
             emitter,
             session_id,
             format!("SFTP konnte nicht geöffnet werden: {err}"),
-        );
-        return false;
+        )
+        .await;
     }
 
     let (existed, old_mode) = {
@@ -1353,39 +1368,42 @@ async fn execute_write_remote_file(
         Ok(backup_path) => (backup_path, false),
         Err(SshError::SftpPermissionDenied(_)) => {
             let Some(password) = session.sudo_password.clone() else {
-                emit_chat_error(
+                return emit_action_error(
+                    session,
                     emitter,
                     session_id,
                     format!(
                         "Zugriff verweigert beim Schreiben von '{path}' — erhöhte Rechte nötig, \
                          aber kein Sudo-Passwort für diesen Server hinterlegt."
                     ),
-                );
-                return false;
+                )
+                .await;
             };
             match write_via_sudo_fallback(session, &path, &content, existed, old_mode, &password)
                 .await
             {
                 Ok(backup_path) => (backup_path, true),
                 Err(err) => {
-                    emit_chat_error(
+                    return emit_action_error(
+                        session,
                         emitter,
                         session_id,
                         format!(
                             "Schreiben von '{path}' fehlgeschlagen (auch mit Sudo-Rechten): {err}"
                         ),
-                    );
-                    return false;
+                    )
+                    .await;
                 }
             }
         }
         Err(err) => {
-            emit_chat_error(
+            return emit_action_error(
+                session,
                 emitter,
                 session_id,
                 format!("Schreiben von '{path}' fehlgeschlagen: {err}"),
-            );
-            return false;
+            )
+            .await;
         }
     };
 
@@ -3822,12 +3840,71 @@ mod tests {
         .await;
 
         let events = emitter.events.lock().unwrap().clone();
-        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        let names = event_names_excluding_auto_continuation(&events);
         assert_eq!(names, vec!["chat-action-proposed", "chat-error"]);
         assert!(
             !mock_sftp.calls().contains(&"read_file /var/log/huge.log".to_string()),
             "zu große Datei darf nie tatsächlich gelesen werden"
         );
+    }
+
+    /// Gemeldeter Bug: ein SFTP-Lesefehler (z. B. "No such file", weil die
+    /// KI einen falschen Pfad geraten hat) ließ den Chat wirkungslos
+    /// hängen — die Fehlermeldung erschien zwar, aber die KI bekam sie nie
+    /// zu sehen und es gab keine Folgerunde. Analog zu
+    /// `test_auto_continuation_after_user_deny_pushes_rejection_and_triggers_second_send_call`:
+    /// ein Lesefehler muss ebenfalls automatisch einen zweiten
+    /// `send()`-Aufruf mit dem Fehler im Kontext auslösen, statt den Turn
+    /// stillschweigend zu beenden.
+    #[tokio::test]
+    async fn test_read_remote_file_not_found_reports_error_and_continues_turn() {
+        let provider = MockAiProvider::with_rounds(vec![
+            vec![
+                AiEvent::ActionProposed(AiAction::ReadRemoteFile {
+                    path: "/data/nginx/proxy_host/5.conf".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            vec![AiEvent::Done],
+        ]);
+        let contexts = provider.received_contexts_handle();
+        let mut session = session_with_ai_provider(provider, MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        // Kein `with_file(...)` für diesen Pfad — `read_file` scheitert wie
+        // im gemeldeten Fall mit "Datei nicht gefunden".
+        let mock_sftp = MockSftpSession::new();
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp)));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let names = event_names_excluding_auto_continuation(&events);
+        assert_eq!(names, vec!["chat-action-proposed", "chat-error"]);
+
+        let contexts = contexts.lock().unwrap().clone();
+        assert_eq!(
+            contexts.len(),
+            2,
+            "ein SFTP-Lesefehler muss automatisch einen zweiten send()-Aufruf \
+             auslösen, sonst erfährt die KI nie davon und der Turn hängt"
+        );
+        assert!(contexts[1].history.iter().any(|m| matches!(
+            &m.content,
+            MessageContent::Text(text)
+                if text.contains("/data/nginx/proxy_host/5.conf")
+                    && text.to_lowercase().contains("fehlgeschlagen")
+        )));
     }
 
     /// Spec 0020, Abschnitt 4.2, Punkt 2: **auch** bei einer Allow-Regel
@@ -4274,7 +4351,7 @@ mod tests {
         tokio::join!(turn, responder);
 
         let events = emitter.events.lock().unwrap().clone();
-        let names: Vec<&str> = events.iter().map(|(n, _)| n.as_str()).collect();
+        let names = event_names_excluding_auto_continuation(&events);
         assert_eq!(names, vec!["chat-action-proposed", "chat-error"]);
         assert_eq!(
             mock_sftp.file_content("/etc/nginx/nginx.conf"),
