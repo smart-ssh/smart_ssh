@@ -89,3 +89,47 @@ Once built, packages will be located in the root `target/release/` folder:
 | **Windows** | `.msi` / `.exe` | `target/release/bundle/msi/` & `target/release/bundle/nsis/` |
 | **Linux** | `.deb` / `.AppImage` | `target/release/bundle/deb/` & `target/release/bundle/appimage/` |
 | **Raw Binary** | Executable binary | `target/release/ssh-manager-app-tauri` |
+
+---
+
+## 5. Local Development (`cargo tauri dev`) — Stable macOS Code Signature
+
+**Use `./scripts/tauri-dev.sh` instead of `cargo tauri dev` directly on
+macOS.** This app stores secrets (SSH credentials, sudo password, AI
+provider API keys) in the OS keychain (Spec 0003). On macOS, a "Always
+Allow" grant for a keychain item is bound to the accessing app's code
+signature. Plain `cargo tauri dev` runs the raw binary with only the
+Rust linker's automatic ad-hoc signature, which is content-hash-based and
+therefore **changes on every rebuild** — macOS treats each rebuild as a
+new, untrusted app and discards previously granted keychain permissions,
+causing a fresh permission prompt after almost every code change.
+
+`./scripts/tauri-dev.sh`:
+1. Runs `scripts/setup-macos-dev-signing.sh` once (idempotent) to create
+   and trust a self-signed, project-specific code-signing certificate
+   ("Smart SSH Dev Signing") in your login keychain — no manual Keychain
+   Access steps needed.
+2. Runs `cargo tauri dev` with a custom `--runner`
+   (`scripts/tauri-dev-stable-signing-runner.sh`) that re-signs the built
+   binary with that stable certificate before launching it, on every
+   rebuild the file-watcher triggers.
+
+This is **deliberate, load-bearing configuration** — do not remove it as
+"unnecessary complexity". It exists specifically because
+`bundle.macOS.signingIdentity` / `APPLE_SIGNING_IDENTITY` (the commonly
+documented Tauri fix) only affects `tauri build`'s bundler signing step,
+not `tauri dev`, which never invokes the bundler on macOS at all — see
+[`docs/adr/0022-stable-dev-code-signature.md`](docs/adr/0022-stable-dev-code-signature.md)
+for the full investigation and empirical verification. On Windows/Linux,
+`tauri-dev.sh` just runs plain `cargo tauri dev` (this problem is
+macOS-specific).
+
+**How to verify it's working**: run `./scripts/tauri-dev.sh`, make a
+source change (triggering a rebuild), and compare
+`codesign -dv --verbose=4 target/debug/ssh-manager-app-tauri` before and
+after — `CDHash` will differ (expected, content changed), but
+`codesign -d -r- target/debug/ssh-manager-app-tauri` should show the same
+designated requirement (`identifier "ssh-manager-app-tauri" and
+certificate leaf = H"..."`) both times. A keychain permission you granted
+before the change should then still be honored after it, without a new
+prompt.
