@@ -354,3 +354,27 @@ async fn test_migrations_are_idempotent_for_same_db_file() {
     let fetched = store2.get_group(&group.id).await.unwrap();
     assert_eq!(fetched, group);
 }
+
+/// Regressionstest für den unabhängigen Review-Pass (Spec 0004): `foreign_
+/// keys` ist eine PRO-VERBINDUNG-Pragma, kein Pool-weiter Zustand — dieser
+/// Test verankert das explizit, statt sich nur auf die indirekte
+/// Beobachtung über `ON DELETE CASCADE`/`SET NULL`-Verhalten in den
+/// anderen Tests zu verlassen (die würden bei deaktivierten Foreign Keys
+/// zwar ebenfalls fehlschlagen, aber ohne den eigentlichen Grund zu
+/// benennen).
+#[tokio::test]
+async fn test_foreign_keys_pragma_is_enabled_on_the_connection() {
+    let store = in_memory_store().await;
+
+    let enabled: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+        .fetch_one(&store.pool)
+        .await
+        .expect("PRAGMA foreign_keys sollte lesbar sein");
+
+    assert_eq!(
+        enabled, 1,
+        "foreign_keys muss auf jeder Verbindung aktiv sein — sonst wirken \
+         ON DELETE CASCADE/SET NULL aus dem Schema (Spec 0004 Abschnitt 4) \
+         still nicht mehr"
+    );
+}

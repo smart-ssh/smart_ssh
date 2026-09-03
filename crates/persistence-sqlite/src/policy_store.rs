@@ -304,12 +304,18 @@ impl SqlitePolicyStore {
 impl PolicyStore for SqlitePolicyStore {
     /// `PolicyStore::rules_for` (Spec 0002 Abschnitt 5) kennt kein
     /// `Result` — ein Datenbankfehler wird deshalb geloggt und als leere
-    /// Regelliste behandelt statt propagiert. Das ist konsistent mit den
-    /// "Fail-safe defaults" aus Spec 0002 Abschnitt 1: ohne ladbare Regeln
-    /// greift `FilterEngine` einfach auf ihre eingebauten Defaults zurück
-    /// (Hard-Blacklist bleibt aktiv, alles andere landet auf `Confirm` statt
-    /// `AutoExec`) — der worst case eines DB-Fehlers ist also "mehr Confirm
-    /// als eigentlich nötig", nie "mehr AutoExec als beabsichtigt".
+    /// Regelliste behandelt statt propagiert. Das ist NICHT rundum
+    /// fail-safe, auch wenn es das auf den ersten Blick scheint: die
+    /// Hard-Blacklist bleibt zwar unverändert aktiv, und eine fehlende
+    /// Allow-Regel landet korrekt auf `Confirm` statt `AutoExec` — aber eine
+    /// vom Nutzer explizit gesetzte **Deny**-Regel für ein Kommando, das die
+    /// Hard-Blacklist selbst nicht abdeckt, geht in diesem Fall ebenso
+    /// verloren und degradiert zu einem anklickbaren `Confirm` (unabhängiger
+    /// Review-Pass, Spec 0002). `tracing::error!` statt `eprintln!`, damit
+    /// dieser sicherheitsrelevante Fall zumindest im strukturierten Log
+    /// (Spec 0016) sichtbar ist, statt nur auf stderr zu verschwinden — eine
+    /// sichtbare UI-Meldung wäre der nächste Schritt, ist aber (Stand jetzt)
+    /// noch nicht verdrahtet.
     async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
         match self.list_all().await {
             Ok(stored) => stored
@@ -318,7 +324,11 @@ impl PolicyStore for SqlitePolicyStore {
                 .map(StoredRule::into_rule)
                 .collect(),
             Err(err) => {
-                eprintln!("Filter-Regeln konnten nicht geladen werden, werte ohne Nutzerregeln aus: {err}");
+                tracing::error!(
+                    error = %err,
+                    "Filter-Regeln konnten nicht geladen werden — werte ohne \
+                     Nutzerregeln aus (auch Deny-Regeln greifen währenddessen nicht)",
+                );
                 Vec::new()
             }
         }

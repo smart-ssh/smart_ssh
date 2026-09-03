@@ -3937,6 +3937,7 @@ dependencies = [
  "ssh-manager-core",
  "tempfile",
  "tokio",
+ "tracing",
  "uuid",
 ]
 

@@ -84,14 +84,25 @@ impl SqliteProfileStore {
     /// Verbindung Schreib-/Lesezugriffe zwischen verschiedenen Connections
     /// unsichtbar zueinander machen würde.
     pub(crate) async fn connect_with(options: SqliteConnectOptions) -> PersistenceResult<Self> {
+        // `foreign_keys` ist eine PRO-VERBINDUNG-Pragma, kein Pool-weiter
+        // Zustand — ein `PRAGMA foreign_keys = ON` einmalig gegen den Pool
+        // ausgeführt (die vorherige Fassung) wirkt nur auf die eine
+        // Verbindung, die diese Query zufällig bearbeitet, funktioniert
+        // hier aktuell nur, weil `max_connections(1)` das faktisch dieselbe
+        // Verbindung ist UND sqlx 0.9 `foreign_keys=ON` selbst standardmäßig
+        // pro Verbindung setzt. Beides sind Zufälle des aktuellen
+        // Zustands, kein erzwungenes Verhalten — `.foreign_keys(true)` auf
+        // den `SqliteConnectOptions` verankert die Pragma stattdessen direkt
+        // beim Verbindungsaufbau, unabhängig von der Pool-Größe oder einem
+        // künftigen sqlx-Default-Wechsel (unabhängiger Review-Pass, Spec
+        // 0004 — sonst würden alle `ON DELETE CASCADE`/`SET NULL`-Regeln aus
+        // dem Schema still wirkungslos, ohne dass ein Test das auffinge).
+        let options = options.foreign_keys(true);
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
             .connect_with(options)
             .await?;
 
-        sqlx::query("PRAGMA foreign_keys = ON")
-            .execute(&pool)
-            .await?;
         sqlx::migrate!().run(&pool).await?;
 
         Ok(Self { pool })
