@@ -166,6 +166,22 @@ function MainScreen({
   onSwitchToExistingTab,
 }: MainScreenProps) {
   const { t } = useTranslation();
+  // Spec 0033, Abschnitt 4: hier statt in `ServerList` selbst gehalten,
+  // damit der Auf-/Zuklapp-Zustand einen Tab-Wechsel weg von "Verbinden"
+  // übersteht (`ServerList` wird beim Wechsel zu "Verwalten"/"Filter-Regeln"
+  // unten unmounted) — `MainScreen` bleibt für die gesamte Sitzung gemountet.
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
+  const toggleGroup = (groupId: string) => {
+    setCollapsedGroupIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
       <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
@@ -240,6 +256,8 @@ function MainScreen({
               onConnected={onConnected}
               findExistingSessionId={findExistingSessionId}
               onSwitchToExistingTab={onSwitchToExistingTab}
+              collapsedGroupIds={collapsedGroupIds}
+              onToggleGroup={toggleGroup}
             />
           </section>
         </main>

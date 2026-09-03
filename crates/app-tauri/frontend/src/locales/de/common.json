@@ -22,7 +22,8 @@
   "mainScreen": {
     "noActiveProvider": "Noch kein aktiver AI-Provider konfiguriert.",
     "setupProviderNow": "Jetzt in den Einstellungen einrichten",
-    "serversHeading": "Server"
+    "serversHeading": "Server",
+    "ungrouped": "Ohne Gruppe"
   },
   "settings": {
     "title": "Einstellungen",

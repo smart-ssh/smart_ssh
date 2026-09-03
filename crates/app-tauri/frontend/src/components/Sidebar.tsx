@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { buildGroupTree, type GroupTreeNode } from "../groupTree";
 import type { GroupDto, ServerDto } from "../types";
 
 export type Selection =
@@ -15,31 +16,38 @@ interface SidebarProps {
 }
 
 /** Spec 0008, Abschnitt 6: rekursiv aus `list_groups()`/`list_servers()`
- * clientseitig aufgebauter Baum. */
+ * clientseitig aufgebauter Baum — Baum-Aufbau selbst über
+ * `../groupTree`s `buildGroupTree` (Spec 0033, Abschnitt 5: dieselbe
+ * Implementierung wie die gruppierte Hauptübersicht, kein zweiter
+ * Nachbau). Der lokale Pseudo-Server (Spec 0032) ist Teil von `servers`,
+ * aber NICHT Teil von `tree` (`buildGroupTree` klammert ihn bewusst aus
+ * der Gruppen-/"Ohne Gruppe"-Struktur aus) — er wird hier separat, fix
+ * oberhalb des Baums angeheftet dargestellt, sonst gäbe es in der
+ * Verwalten-Ansicht keine Möglichkeit, seine Notizen/Tags zu bearbeiten
+ * (Spec 0032, Abschnitt 3). */
 export function Sidebar({ groups, servers, selection, onSelect }: SidebarProps) {
   const { t } = useTranslation();
-  const childGroupsOf = (parentId: string | null) =>
-    groups.filter((g) => g.parentId === parentId);
-  const serversOf = (groupId: string | null) => servers.filter((s) => s.groupId === groupId);
+  const tree = buildGroupTree(groups, servers);
+  const localServer = servers.find((s) => s.isLocal);
 
   const isSelected = (kind: "group" | "server", id: string) =>
     selection?.kind === kind && selection.id === id;
 
-  const renderGroup = (group: GroupDto, depth: number) => (
-    <div key={group.id}>
+  const renderNode = (node: GroupTreeNode, depth: number) => (
+    <div key={node.group.id}>
       <div
         role="button"
         tabIndex={0}
-        onClick={() => onSelect({ kind: "group", id: group.id })}
+        onClick={() => onSelect({ kind: "group", id: node.group.id })}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
         className={`cursor-pointer truncate rounded px-2 py-1 text-sm hover:bg-slate-800 ${
-          isSelected("group", group.id) ? "bg-slate-800 text-white" : "text-slate-300"
+          isSelected("group", node.group.id) ? "bg-slate-800 text-white" : "text-slate-300"
         }`}
       >
-        📁 {group.name}
+        📁 {node.group.name}
       </div>
-      {childGroupsOf(group.id).map((g) => renderGroup(g, depth + 1))}
-      {serversOf(group.id).map((s) => renderServer(s, depth + 1))}
+      {node.children.map((child) => renderNode(child, depth + 1))}
+      {node.servers.map((s) => renderServer(s, depth + 1))}
     </div>
   );
 
@@ -77,9 +85,12 @@ export function Sidebar({ groups, servers, selection, onSelect }: SidebarProps) 
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-2">
-        {childGroupsOf(null).map((g) => renderGroup(g, 0))}
-        {serversOf(null).map((s) => renderServer(s, 0))}
-        {groups.length === 0 && servers.length === 0 && (
+        {localServer && (
+          <div className="mb-2 border-b border-slate-800 pb-2">{renderServer(localServer, 0)}</div>
+        )}
+        {tree.roots.map((node) => renderNode(node, 0))}
+        {tree.ungroupedServers.map((s) => renderServer(s, 0))}
+        {groups.length === 0 && tree.ungroupedServers.length === 0 && (
           <p className="px-2 py-1 text-sm text-slate-500">{t("sidebar.empty")}</p>
         )}
       </div>
