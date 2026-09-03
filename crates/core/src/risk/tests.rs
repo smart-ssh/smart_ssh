@@ -253,3 +253,47 @@ fn test_sftp_pseudo_command_on_unremarkable_path_yields_no_data_risk() {
     let a = classify("sftp-read /var/www/index.html");
     assert_eq!(a.data_risk, RiskLevel::None);
 }
+
+// --- Unabhängiger Review-Pass, Spec 0026 --------------------------------
+
+/// Ohne Längenschranke rekursiert `segment_command` unbegrenzt tief pro
+/// `$(...)`-Verschachtelung und stürzt den Prozess per Stack-Overflow ab
+/// (empirisch verifiziert). Ein Kommando über der Filter-Engine-eigenen
+/// Längenschranke darf den Klassifizierer nicht zum Absturz bringen — ein
+/// unklassifiziertes Ergebnis ist der akzeptable Fail-safe.
+#[test]
+fn test_classify_does_not_crash_on_oversized_deeply_nested_command() {
+    let deeply_nested = "$(".repeat(20_000);
+    let a = classify(&deeply_nested);
+    assert_eq!(a.server_risk, RiskLevel::None);
+    assert_eq!(a.data_risk, RiskLevel::None);
+}
+
+#[test]
+fn test_classify_yields_no_risk_for_command_just_over_the_length_cap() {
+    let over_cap = "rm -rf / ".repeat(1000);
+    assert!(over_cap.len() > crate::filter::DEFAULT_MAX_COMMAND_LENGTH);
+    let a = classify(&over_cap);
+    assert_eq!(a.server_risk, RiskLevel::None);
+}
+
+/// Ein vorangestelltes `sudo` darf die Daten-Risiko-Erkennung nicht
+/// aushebeln — `sudo cat /etc/shadow` ist die praktisch häufigere Form von
+/// `cat /etc/shadow` und mindestens genauso riskant.
+#[test]
+fn test_data_risk_red_sudo_cat_shadow_is_not_defeated_by_sudo_prefix() {
+    let a = classify("sudo cat /etc/shadow");
+    assert_eq!(a.data_risk, RiskLevel::Red);
+}
+
+#[test]
+fn test_server_risk_red_sudo_shutdown_is_not_defeated_by_sudo_prefix() {
+    let a = classify("sudo shutdown -h now");
+    assert_eq!(a.server_risk, RiskLevel::Red);
+}
+
+#[test]
+fn test_server_risk_red_sudo_chmod_recursive_777_root_not_defeated_by_sudo_prefix() {
+    let a = classify("sudo chmod -R 777 /");
+    assert_eq!(a.server_risk, RiskLevel::Red);
+}

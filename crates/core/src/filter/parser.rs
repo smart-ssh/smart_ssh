@@ -254,7 +254,7 @@ const WRAPPERS_WITH_ONE_POSITIONAL_ARG: &[&str] = &["timeout", "chroot", "flock"
 /// `detect_elevation` (das für das Dual-Text-Regel-Matching aus ADR 0002
 /// unverändert bleibt — hier geht es ausschließlich um die Hard-Blacklist-
 /// Prüfung, s. `engine::evaluate_segment_explained`).
-pub(super) fn resolve_effective_command(normalized: &str) -> String {
+pub(crate) fn resolve_effective_command(normalized: &str) -> String {
     let mut current = normalized.to_string();
     loop {
         let stripped = strip_one_elevation_wrapper_or_assignment(&current);

@@ -1,4 +1,6 @@
-use crate::filter::{segment_command, Pattern};
+use crate::filter::{
+    resolve_effective_command, segment_command, Pattern, DEFAULT_MAX_COMMAND_LENGTH,
+};
 
 use super::patterns::{data_risk_patterns, server_risk_patterns};
 use super::types::{RiskAssessment, RiskClassifier, RiskLevel};
@@ -16,6 +18,30 @@ impl RiskClassifier for RuleBasedRiskClassifier {
     /// Teilkommando einzeln gegen beide Musterlisten und behält je Achse
     /// das höchste gefundene Level.
     fn classify(&self, command: &str) -> RiskAssessment {
+        // Unabhängiger Review-Pass (Spec 0026): `segment_command` rekursiert
+        // pro `$(...)`-Verschachtelungsebene ohne jede Tiefen-/Längenschranke
+        // (anders als die Filter-Engine, die `DEFAULT_MAX_COMMAND_LENGTH`
+        // bereits VOR jedem Parsing prüft, `filter::engine`) — ein
+        // KI-vorgeschlagenes Kommando mit tausenden verschachtelten `$(`
+        // bringt sonst den GESAMTEN Prozess per Stack-Overflow zum Absturz
+        // (empirisch verifiziert), nicht nur die Session, noch bevor
+        // überhaupt ein Bestätigungsdialog erscheint — erreichbar über einen
+        // kompromittierten/prompt-injizierten KI-Provider oder MCP. Dieselbe
+        // Schranke wie die Filter-Engine reicht laut Messung sicher aus; die
+        // eigentliche Policy-Entscheidung für zu lange Kommandos trifft
+        // ohnehin bereits die Filter-Engine (`FILTER_COMMAND_TOO_LONG`) —
+        // hier zählt nur "nicht abstürzen", ein unklassifiziertes Ergebnis
+        // ist ein akzeptabler Fail-safe.
+        if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+            return RiskAssessment {
+                server_risk: RiskLevel::None,
+                server_risk_reason: None,
+                data_risk: RiskLevel::None,
+                data_risk_reason: None,
+                ai_reviewed: false,
+            };
+        }
+
         let mut segments = segment_command(command);
         // Zusätzlich das unzerlegte Gesamtkommando prüfen: `scan_top_level_
         // segments` (`filter::parser`) verfolgt nur `(`/`)`, keine `{`/`}` —
@@ -28,6 +54,24 @@ impl RiskClassifier for RuleBasedRiskClassifier {
         // ohne eine (hier nicht gewollte) Änderung an `filter::parser`
         // selbst auf.
         segments.push(command.to_lowercase());
+        // Unabhängiger Review-Pass (Spec 0026): ohne dieselbe Normalisierung,
+        // die die Filter-Engine für ihre eigene Hard-Blacklist anwendet
+        // (`resolve_effective_command` — wiederholtes Entfernen von
+        // `sudo`/`doas`/Wrapper-Präfixen und Variablen-Zuweisungen), sind
+        // fast alle Risiko-Muster durch ein vorangestelltes `sudo`/`env`/
+        // `bash -c` wirkungslos, weil sie am Anfang verankert sind (z. B.
+        // die Daten-Risiko-Regexes `^(?:cat|less|head|tail|...)`,
+        // Server-Risiko-Muster wie `shutdown*`/`kill *`) — empirisch
+        // verifiziert: `sudo cat /etc/shadow` klassifizierte zuvor als "kein
+        // Risiko" statt "Daten Rot", obwohl genau das die praktisch
+        // häufigere UND gefährlichere Form ist. Zusätzlich zum rohen Segment
+        // auch die aufgelöste Form prüfen — dasselbe Dual-Text-Muster wie
+        // ADR 0002, hier für die Risiko-Einschätzung statt für Regeln.
+        let resolved: Vec<String> = segments
+            .iter()
+            .map(|segment| resolve_effective_command(segment))
+            .collect();
+        segments.extend(resolved);
 
         let mut server_risk = RiskLevel::None;
         let mut server_risk_reason: Option<&'static str> = None;

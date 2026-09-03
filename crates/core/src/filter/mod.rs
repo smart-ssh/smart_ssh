@@ -25,6 +25,13 @@ pub use types::{
 // ein internes Detail zwischen den beiden Modulen dieser Crate, keine
 // Garantie für Aufrufer außerhalb.
 pub(crate) use parser::segment_command;
+// Unabhängiger Review-Pass, Spec 0026: ebenfalls von `crate::risk` wieder-
+// verwendet — ohne diese Normalisierung sind die Risiko-Muster durch ein
+// vorangestelltes `sudo`/`env`/`bash -c` wirkungslos, weil fast alle Muster
+// am Anfang verankert sind (`^(?:cat|less|...)`, `shutdown*`, `kill *`
+// usw.), s. `risk::classifier`-Doc-Kommentar. Wie `segment_command`
+// bewusst `pub(crate)` — internes Detail zwischen den beiden Modulen.
+pub(crate) use parser::resolve_effective_command;
 // Unabhängiger Review-Pass, Spec 0011: von `app-tauri::rule_suggestions`
 // wiederverwendet, damit die Regel-Schnellvorschlag-Heuristik dieselbe
 // Elevation-/Wrapper-Erkennung nutzt wie die Hard-Blacklist-Prüfung, statt
