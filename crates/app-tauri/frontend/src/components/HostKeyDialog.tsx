@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { HostKeyInfo, HostKeyUserDecision } from "../types";
 
@@ -17,7 +18,17 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   const { t } = useTranslation();
   const isMismatch = event.kind === "mismatch";
 
-  return (
+  // Unabhängiger Review-Pass (Spec 0014/0017): dieser Dialog kann von
+  // `ServerList` ausgelöst werden, während gerade ein Session-Tab aktiv ist
+  // (z. B. ein MCP-initiierter `connect()` auf einen neuen Server) — der
+  // gesamte `MainScreen`-Zweig, in dem `ServerList` hängt, steht dann unter
+  // `App.tsx`s `className="hidden"` (`display:none`). `display:none` auf
+  // einem Vorfahren blendet auch `fixed`-positionierte Nachfahren aus, ein
+  // sicherheitskritischer Host-Key-Mismatch-Dialog wäre also unsichtbar,
+  // der Verbindungsaufbau bliebe unbestätigt hängen. Ein Portal nach
+  // `document.body` umgeht das, ohne `ServerList`s Zustand/Logik verschieben
+  // zu müssen.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div
         className={`w-full max-w-md border p-0 shadow-xl ${
@@ -118,6 +129,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
