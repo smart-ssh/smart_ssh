@@ -455,6 +455,7 @@ pub(crate) async fn connect_session(
     };
 
     let system_context = build_session_system_context(
+        app,
         &server.name,
         &server_id,
         &server.tags,
@@ -600,7 +601,8 @@ mod connect_session_gate_tests {
     }
 }
 
-async fn build_session_system_context(
+async fn build_session_system_context<R: tauri::Runtime>(
+    app: &AppHandle<R>,
     server_name: &str,
     server_id: &ServerId,
     tags: &[String],
@@ -608,7 +610,14 @@ async fn build_session_system_context(
     profile_store: &dyn ProfileStore,
     policy_store: &persistence_sqlite::SqlitePolicyStore,
 ) -> String {
-    let notes = if let Ok(s) = profile_store.get_server(server_id).await {
+    // Spec 0032: der lokale Pseudo-Server hat keine `servers`-Zeile —
+    // `profile_store.get_server` schlägt für ihn immer fehl, wodurch diese
+    // Funktion sonst dauerhaft mit leeren Notizen liefe, obwohl über
+    // `local_server::synthetic_server` tatsächlich welche hinterlegt sein
+    // können (unabhängiger Review-Pass, s. docs/adr/0026).
+    let notes = if crate::local_server::is_local(*server_id) {
+        crate::local_server::synthetic_server(app).notes
+    } else if let Ok(s) = profile_store.get_server(server_id).await {
         effective_notes(&s, profile_store).await.unwrap_or_default()
     } else {
         String::new()
@@ -766,10 +775,18 @@ pub async fn send_chat_message(
         eprintln!("Prompt konnte nicht in der Historie gespeichert werden: {err}");
     }
 
-    let (server_name, current_tags) = match state.profile_store.get_server(&session.server_id).await
-    {
-        Ok(s) => (s.name, s.tags),
-        Err(_) => ("Server".to_string(), session.tags.clone()),
+    // Spec 0032: `profile_store.get_server` findet den lokalen
+    // Pseudo-Server nie (keine `servers`-Zeile) — ohne diesen Zweig würde
+    // der Servername in JEDER Chat-Nachricht auf das generische "Server"
+    // degradieren (unabhängiger Review-Pass, s. docs/adr/0026).
+    let (server_name, current_tags) = if crate::local_server::is_local(session.server_id) {
+        let local = crate::local_server::synthetic_server(&app);
+        (local.name, local.tags)
+    } else {
+        match state.profile_store.get_server(&session.server_id).await {
+            Ok(s) => (s.name, s.tags),
+            Err(_) => ("Server".to_string(), session.tags.clone()),
+        }
     };
 
     let remote_os = {
@@ -780,6 +797,7 @@ pub async fn send_chat_message(
     };
 
     let updated_system_context = build_session_system_context(
+        &app,
         &server_name,
         &session.server_id,
         &current_tags,
@@ -1051,6 +1069,20 @@ pub async fn get_server(
     ))
 }
 
+/// Spec 0032, Abschnitt 6: der lokale Pseudo-Server ist explizit als
+/// Jump-Host ausgeschlossen — vor dieser Prüfung fiel das erst implizit,
+/// tief in `resolve_connection_target`, mit einer generischen "nicht
+/// auflösbar"-Meldung auf (unabhängiger Review-Pass, s. docs/adr/0026).
+fn reject_local_jump_host(jump_host: Option<ServerId>) -> CommandResult<()> {
+    if jump_host.is_some_and(crate::local_server::is_local) {
+        return Err(CommandError::with_code(
+            "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
+            "SERVER_JUMP_HOST_LOCAL",
+        ));
+    }
+    Ok(())
+}
+
 /// Spec 0008, Abschnitt 4: `CredentialStore` zuerst, dann die DB-Zeile —
 /// dieselbe Reihenfolge/Begründung wie `add_ai_provider` (Spec 0007,
 /// Abschnitt 8.2).
@@ -1059,6 +1091,7 @@ pub async fn create_server(
     state: State<'_, AppState>,
     input: ServerInput,
 ) -> CommandResult<ServerId> {
+    reject_local_jump_host(input.jump_host)?;
     let id = ServerId::new();
     let auth = resolve_auth_method(state.credential_store.as_ref(), id, input.auth, None)?;
     resolve_sudo_password(state.credential_store.as_ref(), id, input.sudo_password)?;
@@ -1101,6 +1134,7 @@ pub async fn update_server(
         // `update_local_server_notes`/`update_local_server_tags`-Befehle.
         return Err("Der lokale Pseudo-Server kann nicht auf diesem Weg bearbeitet werden".into());
     }
+    reject_local_jump_host(input.jump_host)?;
     let existing = state.profile_store.get_server(&id).await?;
     let auth = resolve_auth_method(
         state.credential_store.as_ref(),
@@ -1797,7 +1831,7 @@ pub async fn sftp_mkdir(
 
 #[cfg(test)]
 mod local_server_tests {
-    //! Spec 0032, Abschnitt 8: `list_servers()` enthält den lokalen
+    //! Spec 0032, Abschnitt 3: `list_servers()` enthält den lokalen
     //! Pseudo-Server immer als erstes Element, unabhängig vom
     //! `group_id`-Filter — s. `list_servers_impl`.
 
@@ -1860,5 +1894,53 @@ mod local_server_tests {
         assert_eq!(filtered[0].id, LOCAL_SERVER_ID.0.to_string());
         assert!(filtered[0].is_local);
         assert_eq!(filtered[1].name, "beta");
+    }
+
+    /// Regressionstest für den unabhängigen Review-Pass (docs/adr/0026):
+    /// `build_session_system_context` fiel für den lokalen Pseudo-Server
+    /// bislang immer in den "Server nicht gefunden"-Fallback, weil
+    /// `profile_store.get_server(LOCAL_SERVER_ID)` per Definition nie eine
+    /// Zeile findet — Notizen blieben dadurch dauerhaft leer, obwohl über
+    /// `local_server::save_notes` welche hinterlegt waren.
+    #[tokio::test]
+    async fn test_build_session_system_context_includes_local_server_notes() {
+        let _guard = lock_async().await;
+        let app = test_app();
+        let handle = app.handle().clone();
+        crate::local_server::save_notes(&handle, "Docker Compose unter ~/services").unwrap();
+
+        let profile_store = InMemoryProfileStore::new();
+        let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
+        let policy_store = persistence_sqlite::SqliteProfileStore::connect(
+            &dir.path().join("test.db"),
+        )
+        .await
+        .expect("frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein")
+        .policy_store();
+
+        let context = build_session_system_context(
+            &handle,
+            "Localhost",
+            &LOCAL_SERVER_ID,
+            &[],
+            None,
+            &profile_store,
+            &policy_store,
+        )
+        .await;
+
+        assert!(
+            context.contains("Docker Compose unter ~/services"),
+            "Notizen des lokalen Pseudo-Servers müssen im System-Kontext landen, war: {context}"
+        );
+
+        crate::local_server::save_notes(&handle, "").unwrap();
+    }
+
+    #[test]
+    fn test_reject_local_jump_host_rejects_local_id_but_allows_others_and_none() {
+        assert!(reject_local_jump_host(Some(LOCAL_SERVER_ID)).is_err());
+        assert!(reject_local_jump_host(Some(ServerId::new())).is_ok());
+        assert!(reject_local_jump_host(None).is_ok());
     }
 }

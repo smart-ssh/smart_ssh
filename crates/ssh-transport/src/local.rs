@@ -225,8 +225,8 @@ impl InteractiveShell for LocalShell {
 mod tests {
     use super::*;
 
-    /// Spec 0032, Abschnitt 8: `LocalTransport::execute()` liefert
-    /// korrekten stdout/stderr/exit-code für ein einfaches Testkommando.
+    /// Spec 0032: `LocalTransport::execute()` liefert korrekten
+    /// stdout/stderr/exit-code für ein einfaches Testkommando.
     #[tokio::test]
     async fn test_execute_returns_stdout_stderr_and_exit_code() {
         let mut transport = LocalTransport::new();

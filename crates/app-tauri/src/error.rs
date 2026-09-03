@@ -65,6 +65,7 @@ mod code_tests {
             "SERVER_CERTIFICATE_REQUIRED",
             "SERVER_CERTIFICATE_KEY_REQUIRED",
             "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED",
+            "SERVER_JUMP_HOST_LOCAL",
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();
