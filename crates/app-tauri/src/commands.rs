@@ -1586,10 +1586,38 @@ pub(crate) fn sanitize_uname_output(raw: &str) -> Option<String> {
 /// Liest den Textinhalt einer vom Nutzer im nativen Dateidialog ausgewählten
 /// Schlüssel-/Zertifikatsdatei (Spec 0013, SEC-06). Ersetzt globale Dateilese-
 /// Berechtigungen im Frontend.
+///
+/// Unabhängiger Review-Pass (Spec 0013): nahm bislang einen beliebigen,
+/// vom Frontend übergebenen `path: String` entgegen und las ihn ohne jede
+/// Prüfung — funktional gleichbedeutend mit der pauschalen
+/// Dateilese-Berechtigung, die SEC-06 gerade abschaffen sollte, da JEDER
+/// Code im Webview (nicht nur der eigentliche "Datei wählen"-Button)
+/// `invoke("read_credential_file", { path: "~/.ssh/id_rsa" })` aufrufen
+/// konnte. Der Dialog läuft jetzt — wie bei `export_document`/
+/// `sftp_download` bereits etabliert — im Backend selbst
+/// (`app.dialog().file().pick_file(...)` + `oneshot`-Rückkanal, da der
+/// Callback selbst nicht `async` ist): das Frontend übergibt nur noch
+/// einen Anzeige-`title`, nie einen Pfad, und kann dadurch keinen
+/// beliebigen Pfad mehr erzwingen — nur eine tatsächliche
+/// Nutzerinteraktion mit dem nativen Dialog liefert einen Pfad.
 #[tauri::command]
-pub async fn read_credential_file(path: String) -> CommandResult<String> {
-    let content = std::fs::read_to_string(&path)?;
-    Ok(content)
+pub async fn read_credential_file(app: AppHandle, title: String) -> CommandResult<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_title(&title)
+        .pick_file(move |path| {
+            let _ = tx.send(path);
+        });
+
+    let Some(path) = rx.await.ok().flatten() else {
+        return Ok(None);
+    };
+    let path = path.into_path()?;
+    let content = std::fs::read_to_string(path)?;
+    Ok(Some(content))
 }
 
 /// Liefert das aktuelle Betriebssystem ("macos", "windows", "linux", "unknown")

@@ -36,7 +36,6 @@ ssh-transport = { version = "0.3.0", path = "../ssh-transport" }
 tauri = { version = "2", features = [] }
 tauri-plugin-decoration = "3.0"
 tauri-plugin-dialog = "2.7.2"
-tauri-plugin-fs = "2.5.1"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2.5.5"
 tauri-plugin-os = "2"

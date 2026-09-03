@@ -91,11 +91,15 @@ pub fn run() {
 
     tauri::Builder::default()
         // Für die Key-/Zertifikat-Datei-Auswahl im Server-Formular (Spec
-        // 0008, Abschnitt 6) — Dateiinhalt wird clientseitig gelesen
-        // (`plugin-fs`) und geht direkt an `create_server`/`update_server`,
-        // der Pfad selbst wird nie gespeichert (Spec Abschnitt 8).
+        // 0008, Abschnitt 6): der native Dialog läuft im Backend
+        // (`commands::read_credential_file`, Spec 0013 SEC-06 — unabhängiger
+        // Review-Pass ersetzte hier den vorherigen `plugin-fs`-basierten
+        // Ansatz, bei dem das Webview die Datei clientseitig gelesen hätte),
+        // der Pfad selbst wird nie gespeichert (Spec 0008 Abschnitt 8). Kein
+        // `tauri_plugin_fs` mehr registriert — nichts nutzt es noch, und die
+        // `capabilities/default.json` gewährt ohnehin keine `fs:*`-Rechte;
+        // ein ungenutztes, geladenes Plugin ist unnötige Angriffsfläche.
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         // Spec 0024, Abschnitt 4: Speicherort für die gewählte UI-Sprache
         // (und künftige reine UI-Einstellungen wie ein Theme) — bewusst kein

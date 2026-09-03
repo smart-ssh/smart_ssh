@@ -5831,7 +5831,6 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-decoration",
  "tauri-plugin-dialog",
- "tauri-plugin-fs",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tauri-plugin-os",
