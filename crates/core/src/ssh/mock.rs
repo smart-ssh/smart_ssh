@@ -192,7 +192,10 @@ impl SftpSession for MockSftpSession {
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError> {
         let mut inner = self.inner.lock().unwrap();
         inner.calls.push(format!("rename {from} -> {to}"));
-        let file = inner.files.remove(from).ok_or_else(|| Self::not_found(from))?;
+        let file = inner
+            .files
+            .remove(from)
+            .ok_or_else(|| Self::not_found(from))?;
         inner.files.insert(to.to_string(), file);
         Ok(())
     }

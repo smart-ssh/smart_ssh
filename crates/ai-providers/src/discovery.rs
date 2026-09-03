@@ -106,9 +106,14 @@ mod tests {
             .mount(&server)
             .await;
 
-        let models = discover_models(&server.uri(), "test-key", &[]).await.unwrap();
+        let models = discover_models(&server.uri(), "test-key", &[])
+            .await
+            .unwrap();
 
-        assert_eq!(models, vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()]);
+        assert_eq!(
+            models,
+            vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()]
+        );
     }
 
     #[tokio::test]
@@ -149,7 +154,10 @@ mod tests {
         // Der wiremock-`Mock` matcht nur bei korrekt gesetzten Headern (s.
         // `.and(header(...))` oben) — ein `Err` hier bedeutete, dass kein
         // registrierter Mock traf (404 von wiremocks eigenem Fallback).
-        assert!(result.is_ok(), "erwartet: Header korrekt gesetzt, bekam {result:?}");
+        assert!(
+            result.is_ok(),
+            "erwartet: Header korrekt gesetzt, bekam {result:?}"
+        );
     }
 
     #[tokio::test]

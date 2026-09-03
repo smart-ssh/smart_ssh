@@ -121,9 +121,11 @@ fn role_str(role: Role) -> &'static str {
 fn message_content_text(content: &MessageContent) -> String {
     match content {
         MessageContent::Text(text) => text.clone(),
-        MessageContent::CommandResult { command, output, cancelled } => {
-            format_command_result(command, output, *cancelled)
-        }
+        MessageContent::CommandResult {
+            command,
+            output,
+            cancelled,
+        } => format_command_result(command, output, *cancelled),
         MessageContent::ActionRejected { command, reason } => {
             format_action_rejected(command, reason)
         }
@@ -137,9 +139,13 @@ fn message_content_text(content: &MessageContent) -> String {
 /// Filter-Engine-Regel) von einem potenziell manipulierten Remote-Server.
 fn format_action_rejected(command: &str, reason: &RejectionReason) -> String {
     let reason_text = match reason {
-        RejectionReason::User => "Der Nutzer hat diesen Vorschlag im Bestätigungsdialog abgelehnt.".to_string(),
+        RejectionReason::User => {
+            "Der Nutzer hat diesen Vorschlag im Bestätigungsdialog abgelehnt.".to_string()
+        }
         RejectionReason::Blocked(reason) => {
-            format!("Automatisch durch eine Filter-Regel blockiert, ohne Bestätigungsdialog: {reason}")
+            format!(
+                "Automatisch durch eine Filter-Regel blockiert, ohne Bestätigungsdialog: {reason}"
+            )
         }
     };
     format!(
@@ -308,7 +314,11 @@ impl OpenAiStreamState {
         if self.native_tool_calling {
             for (_, call) in std::mem::take(&mut self.tool_calls) {
                 log_tool_call_fragment(self.request_id, &call.name, &call.arguments);
-                events.push(finalize_tool_call(self.request_id, &call.name, &call.arguments));
+                events.push(finalize_tool_call(
+                    self.request_id,
+                    &call.name,
+                    &call.arguments,
+                ));
             }
         } else {
             let result = parse_fallback_response(&self.fallback_text);

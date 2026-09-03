@@ -377,7 +377,10 @@ async fn test_unknown_host_key_pauses_then_trust_continues() {
 async fn test_sftp_upload_download_roundtrip() {
     let server = RunningTestServer::start().await;
     let mut transport = connect_trusted(&server).await;
-    let mut sftp = transport.open_sftp().await.expect("open_sftp() sollte gelingen");
+    let mut sftp = transport
+        .open_sftp()
+        .await
+        .expect("open_sftp() sollte gelingen");
 
     sftp.write_file("/roundtrip.txt", b"hallo sftp")
         .await
@@ -404,9 +407,15 @@ async fn test_sftp_list_dir() {
     std::fs::create_dir(sftp_local_path(&server, "/subdir")).unwrap();
 
     let mut transport = connect_trusted(&server).await;
-    let mut sftp = transport.open_sftp().await.expect("open_sftp() sollte gelingen");
+    let mut sftp = transport
+        .open_sftp()
+        .await
+        .expect("open_sftp() sollte gelingen");
 
-    let mut entries = sftp.list_dir("/").await.expect("list_dir() sollte gelingen");
+    let mut entries = sftp
+        .list_dir("/")
+        .await
+        .expect("list_dir() sollte gelingen");
     entries.sort_by(|a, b| a.name.cmp(&b.name));
 
     assert_eq!(entries.len(), 3);
@@ -424,7 +433,10 @@ async fn test_sftp_list_dir() {
 async fn test_sftp_rename() {
     let server = RunningTestServer::start().await;
     let mut transport = connect_trusted(&server).await;
-    let mut sftp = transport.open_sftp().await.expect("open_sftp() sollte gelingen");
+    let mut sftp = transport
+        .open_sftp()
+        .await
+        .expect("open_sftp() sollte gelingen");
 
     sftp.write_file("/old-name.txt", b"inhalt")
         .await
@@ -446,7 +458,10 @@ async fn test_sftp_rename() {
 async fn test_sftp_delete() {
     let server = RunningTestServer::start().await;
     let mut transport = connect_trusted(&server).await;
-    let mut sftp = transport.open_sftp().await.expect("open_sftp() sollte gelingen");
+    let mut sftp = transport
+        .open_sftp()
+        .await
+        .expect("open_sftp() sollte gelingen");
 
     sftp.write_file("/to-delete.txt", b"weg damit")
         .await
@@ -469,9 +484,15 @@ async fn test_sftp_stat() {
     std::fs::write(sftp_local_path(&server, "/stat-me.txt"), b"thirteen char").unwrap();
 
     let mut transport = connect_trusted(&server).await;
-    let mut sftp = transport.open_sftp().await.expect("open_sftp() sollte gelingen");
+    let mut sftp = transport
+        .open_sftp()
+        .await
+        .expect("open_sftp() sollte gelingen");
 
-    let entry = sftp.stat("/stat-me.txt").await.expect("stat() sollte gelingen");
+    let entry = sftp
+        .stat("/stat-me.txt")
+        .await
+        .expect("stat() sollte gelingen");
     assert_eq!(entry.size, 13);
     assert!(!entry.is_dir);
 

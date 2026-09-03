@@ -46,7 +46,9 @@ use ssh_manager_core::ai::{
     ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, RejectionReason, Role,
 };
 use ssh_manager_core::filter::{Decision, EvalContext};
-use ssh_manager_core::profiles::{AiAction, NoteEditor, NoteTarget, NoteTargetSelector, ProfileStore};
+use ssh_manager_core::profiles::{
+    AiAction, NoteEditor, NoteTarget, NoteTargetSelector, ProfileStore,
+};
 use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
 use ssh_manager_core::ssh::{CommandOutput, ExecOutcome, SshError};
 
@@ -125,7 +127,10 @@ pub async fn run_chat_turn(
             // bereits laufendes `run_one_round` (inkl. eines darin gerade
             // offenen Bestätigungsdialogs) wird dadurch nie unterbrochen,
             // nur der *nächste* automatische `send()`-Aufruf verhindert.
-            if session.auto_continue_stop.load(std::sync::atomic::Ordering::SeqCst) {
+            if session
+                .auto_continue_stop
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
                 return;
             }
             emit_chat_auto_continuation_started(emitter, session_id, round);
@@ -268,7 +273,8 @@ async fn handle_action_proposed(
         && matches!(decision, Decision::AutoExec)
     {
         decision = Decision::Confirm {
-            reason: "Automatische Folgeaktion nach Server-Antwort erfordert Bestätigung".to_string(),
+            reason: "Automatische Folgeaktion nach Server-Antwort erfordert Bestätigung"
+                .to_string(),
             code: "FILTER_AUTO_CONTINUATION_REQUIRES_CONFIRM".to_string(),
         };
     }
@@ -297,7 +303,8 @@ async fn handle_action_proposed(
     let (previous_note_content, target_name) =
         note_target_preview_for_action(&action, session, profile_store).await;
     let uses_password = uses_stored_sudo_password(session, &action);
-    let (previous_file_content, previous_file_size) = previous_file_content_for_action(&action, session).await;
+    let (previous_file_content, previous_file_size) =
+        previous_file_content_for_action(&action, session).await;
     let risk_assessment = risk_assessment_for_action(&action);
 
     emit_chat_action_proposed(
@@ -327,14 +334,18 @@ async fn handle_action_proposed(
     // ein bereits registrierter `confirm_rx` (unten) wird trotzdem nicht
     // "verpasst", falls der Nutzer währenddessen schon klickt — der Wert
     // liegt im Kanal bereit, sobald `rx.await` weiter unten drankommt.
-    if let (Some(provider), Some(assessment)) =
-        (session.risk_second_opinion_provider.as_deref(), risk_assessment)
-    {
+    if let (Some(provider), Some(assessment)) = (
+        session.risk_second_opinion_provider.as_deref(),
+        risk_assessment,
+    ) {
         if let Some(pseudo_command) = pseudo_command_for_risk_classification(&action) {
             let second_opinion =
                 crate::risk_second_opinion::fetch_second_opinion(provider, &pseudo_command).await;
-            let (data_risk, reason) =
-                escalate_data_risk(assessment.data_risk, assessment.data_risk_reason, second_opinion);
+            let (data_risk, reason) = escalate_data_risk(
+                assessment.data_risk,
+                assessment.data_risk_reason,
+                second_opinion,
+            );
             emit_risk_assessment_updated(emitter, session_id, action_id, data_risk, reason);
         }
     }
@@ -861,7 +872,9 @@ async fn execute_suggested_command(
             _ => transport.execute_cancellable(&command, cancel_rx).await,
         }
     };
-    let _ = session.running_command_cancellations.resolve(&action_id, ());
+    let _ = session
+        .running_command_cancellations
+        .resolve(&action_id, ());
     // Spec 0018, Abschnitt 5: das tatsächlich ausgeführte Kommando (mit
     // `-S`, ohne Passwort) landet in Ergebnis-Event/Log/Kontext — voll
     // transparent, da nie das Passwort selbst enthalten.
@@ -2161,26 +2174,41 @@ mod tests {
         };
 
         let (executed, ()) = tokio::join!(exec_future, cancel_future);
-        assert!(executed, "ein abgebrochenes Kommando zählt als \"ausgeführt\" (Ergebnis liegt vor)");
+        assert!(
+            executed,
+            "ein abgebrochenes Kommando zählt als \"ausgeführt\" (Ergebnis liegt vor)"
+        );
 
         let events = emitter.events.lock().unwrap().clone();
         let (_, result_payload) = events
             .iter()
             .find(|(name, _)| name == "chat-action-result")
             .expect("chat-action-result sollte gesendet worden sein");
-        assert_eq!(result_payload["result"]["cancelled"], serde_json::json!(true));
+        assert_eq!(
+            result_payload["result"]["cancelled"],
+            serde_json::json!(true)
+        );
         assert_eq!(
             result_payload["result"]["stdout"],
             serde_json::json!("partial output before cancel")
         );
-        assert_eq!(result_payload["result"]["exitCode"], serde_json::Value::Null);
+        assert_eq!(
+            result_payload["result"]["exitCode"],
+            serde_json::Value::Null
+        );
 
         let history = session.context.lock().await.history.clone();
         assert_eq!(history.len(), 1);
         let MessageContent::CommandResult { cancelled, .. } = &history[0].content else {
-            panic!("erwartete MessageContent::CommandResult, bekam {:?}", history[0].content);
+            panic!(
+                "erwartete MessageContent::CommandResult, bekam {:?}",
+                history[0].content
+            );
         };
-        assert!(cancelled, "der Kontext-Eintrag für die KI muss den Abbruch tragen");
+        assert!(
+            cancelled,
+            "der Kontext-Eintrag für die KI muss den Abbruch tragen"
+        );
     }
 
     /// Ohne Abbruch darf in der Registry kein Eintrag zurückbleiben — sonst
@@ -2206,7 +2234,9 @@ mod tests {
         .await;
         assert!(executed);
 
-        let result = session.running_command_cancellations.resolve(&action_id, ());
+        let result = session
+            .running_command_cancellations
+            .resolve(&action_id, ());
         assert!(
             result.is_err(),
             "nach regulärer Beendigung darf kein Registry-Eintrag mehr existieren, sonst ein Leck pro Kommando"
@@ -2232,10 +2262,16 @@ mod tests {
         let (level, reason) = escalate_data_risk(
             RiskLevel::None,
             None,
-            Some((RiskLevel::Yellow, "könnte interne Hostnamen enthalten".to_string())),
+            Some((
+                RiskLevel::Yellow,
+                "könnte interne Hostnamen enthalten".to_string(),
+            )),
         );
         assert_eq!(level, RiskLevel::Yellow);
-        assert_eq!(reason.as_deref(), Some("könnte interne Hostnamen enthalten"));
+        assert_eq!(
+            reason.as_deref(),
+            Some("könnte interne Hostnamen enthalten")
+        );
     }
 
     #[test]
@@ -2243,10 +2279,16 @@ mod tests {
         let (level, reason) = escalate_data_risk(
             RiskLevel::Yellow,
             Some("listet .ssh auf".to_string()),
-            Some((RiskLevel::Red, "enthält vermutlich einen privaten Schlüssel".to_string())),
+            Some((
+                RiskLevel::Red,
+                "enthält vermutlich einen privaten Schlüssel".to_string(),
+            )),
         );
         assert_eq!(level, RiskLevel::Red);
-        assert_eq!(reason.as_deref(), Some("enthält vermutlich einen privaten Schlüssel"));
+        assert_eq!(
+            reason.as_deref(),
+            Some("enthält vermutlich einen privaten Schlüssel")
+        );
     }
 
     /// Spec 0026, Abschnitt 3: "Nur Eskalation, nie Abschwächung" — der
@@ -2321,7 +2363,14 @@ mod tests {
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
 
-        run_chat_turn(&session, Uuid::new_v4(), &emitter, &profile_store, &confirmations).await;
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
 
         let events = emitter.events.lock().unwrap().clone();
         let payload = risk_assessment_updated_payload(&events)
@@ -2357,7 +2406,14 @@ mod tests {
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
 
-        run_chat_turn(&session, Uuid::new_v4(), &emitter, &profile_store, &confirmations).await;
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
 
         let events = emitter.events.lock().unwrap().clone();
         let payload = risk_assessment_updated_payload(&events)
@@ -2393,7 +2449,14 @@ mod tests {
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
 
-        run_chat_turn(&session, Uuid::new_v4(), &emitter, &profile_store, &confirmations).await;
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
 
         let events = emitter.events.lock().unwrap().clone();
         assert!(
@@ -2432,7 +2495,10 @@ mod tests {
     fn test_detect_elevation_prefix_ignores_sudo_mid_chain() {
         // Spec 0018, Abschnitt 3: bewusst keine Erkennung mitten in einer
         // Kommandokette.
-        assert_eq!(detect_elevation_prefix("cd /var/log && sudo tail -f x"), None);
+        assert_eq!(
+            detect_elevation_prefix("cd /var/log && sudo tail -f x"),
+            None
+        );
     }
 
     #[test]
@@ -2452,10 +2518,7 @@ mod tests {
     fn test_command_with_stdin_password_flag_leaves_existing_dash_s_untouched() {
         // KI/Nutzer hat die Passworteingabe bereits selbst vorgesehen —
         // nicht gegensteuern (s. Doc-Kommentar).
-        assert_eq!(
-            command_with_stdin_password_flag("sudo -S apt update"),
-            None
-        );
+        assert_eq!(command_with_stdin_password_flag("sudo -S apt update"), None);
     }
 
     /// Kern von Spec 0018, Abschnitt 5: ein hinterlegtes Sudo-Passwort wird
@@ -2504,8 +2567,7 @@ mod tests {
         );
         let (_, result_payload) = &events[1];
         assert_eq!(
-            result_payload["result"]["command"],
-            "sudo -S systemctl restart nginx",
+            result_payload["result"]["command"], "sudo -S systemctl restart nginx",
             "das tatsächlich ausgeführte Kommando (mit -S) muss im Ergebnis-Event stehen"
         );
 
@@ -2516,7 +2578,11 @@ mod tests {
         ));
 
         let calls = stdin_calls.lock().unwrap();
-        assert_eq!(calls.len(), 1, "execute_with_stdin muss genau einmal aufgerufen werden");
+        assert_eq!(
+            calls.len(),
+            1,
+            "execute_with_stdin muss genau einmal aufgerufen werden"
+        );
         assert_eq!(calls[0].0, "sudo -S systemctl restart nginx");
         assert_eq!(
             calls[0].1,
@@ -2557,7 +2623,10 @@ mod tests {
 
         let events = emitter.events.lock().unwrap().clone();
         let (_, result_payload) = &events[1];
-        assert_eq!(result_payload["result"]["command"], "sudo systemctl restart nginx");
+        assert_eq!(
+            result_payload["result"]["command"],
+            "sudo systemctl restart nginx"
+        );
     }
 
     #[tokio::test]
@@ -3058,7 +3127,10 @@ mod tests {
         );
         manager.insert(
             id_fast,
-            Arc::new(test_session(vec![AiEvent::Done], MockSshTransport::default())),
+            Arc::new(test_session(
+                vec![AiEvent::Done],
+                MockSshTransport::default(),
+            )),
         );
 
         let session_slow = manager.get(id_slow).unwrap();
@@ -3137,7 +3209,9 @@ mod tests {
                 if event == "chat-action-proposed" {
                     if let Some(action_id_str) = payload.get("actionId").and_then(|v| v.as_str()) {
                         if let Ok(action_id) = action_id_str.parse::<Uuid>() {
-                            let _ = self.confirmations.resolve(&action_id, ActionUserDecision::Approve);
+                            let _ = self
+                                .confirmations
+                                .resolve(&action_id, ActionUserDecision::Approve);
                         }
                     }
                 }
@@ -3193,10 +3267,7 @@ mod tests {
         );
 
         // Escape-Sequenzen -> None
-        assert_eq!(
-            sanitize_uname_output("Linux\x1b[31mhacked\x07"),
-            None
-        );
+        assert_eq!(sanitize_uname_output("Linux\x1b[31mhacked\x07"), None);
 
         // Zu lang (> 256 Zeichen) -> None
         let too_long = "a".repeat(300);
@@ -3243,7 +3314,10 @@ mod tests {
                 let events = emitter.events.lock().unwrap().clone();
                 let confirm_event = events.iter().find(|(name, payload)| {
                     name == "chat-action-proposed"
-                        && payload.get("decision").and_then(|d| d.get("Confirm")).is_some()
+                        && payload
+                            .get("decision")
+                            .and_then(|d| d.get("Confirm"))
+                            .is_some()
                 });
                 if let Some((_, payload)) = confirm_event {
                     let action_id_str = payload["actionId"].as_str().unwrap();
@@ -3277,7 +3351,9 @@ mod tests {
             round2_decision
         );
         let reason = round2_decision["Confirm"]["reason"].as_str().unwrap();
-        assert!(reason.contains("Automatische Folgeaktion nach Server-Antwort erfordert Bestätigung"));
+        assert!(
+            reason.contains("Automatische Folgeaktion nach Server-Antwort erfordert Bestätigung")
+        );
     }
 
     // --- Spec 0010: automatischer Notiz-Vorschlag beim Beenden -----------
@@ -3758,7 +3834,12 @@ mod tests {
             "ein fehlerhafter Tool-Call darf nur als Chat-Fehlermeldung erscheinen"
         );
 
-        let result = session.transport.lock().await.execute("echo still-alive").await;
+        let result = session
+            .transport
+            .lock()
+            .await
+            .execute("echo still-alive")
+            .await;
         assert!(
             result.is_ok(),
             "die Session/Verbindung darf durch den fehlerhaften Tool-Call nicht beendet \
@@ -3816,10 +3897,7 @@ mod tests {
 
         let revisions = profile_store.note_revisions.lock().unwrap().clone();
         assert_eq!(revisions.len(), 1);
-        assert_eq!(
-            revisions[0].target,
-            NoteTarget::Server(expected_server_id)
-        );
+        assert_eq!(revisions[0].target, NoteTarget::Server(expected_server_id));
     }
 
     // --- Spec 0020: SFTP-Dateizugriff (ReadRemoteFile/WriteRemoteFile) -----
@@ -3925,7 +4003,13 @@ mod tests {
             !content.contains("hunter2"),
             "Passwort-Zeile muss redigiert sein, tatsächlicher Inhalt: {content}"
         );
-        assert_eq!(mock_sftp.calls(), vec!["stat /home/deploy/app.conf", "read_file /home/deploy/app.conf"]);
+        assert_eq!(
+            mock_sftp.calls(),
+            vec![
+                "stat /home/deploy/app.conf",
+                "read_file /home/deploy/app.conf"
+            ]
+        );
     }
 
     /// Spec 0020, Abschnitt 4.1: Dateien über der Größengrenze werden
@@ -3963,7 +4047,9 @@ mod tests {
         let names = event_names_excluding_auto_continuation(&events);
         assert_eq!(names, vec!["chat-action-proposed", "chat-error"]);
         assert!(
-            !mock_sftp.calls().contains(&"read_file /var/log/huge.log".to_string()),
+            !mock_sftp
+                .calls()
+                .contains(&"read_file /var/log/huge.log".to_string()),
             "zu große Datei darf nie tatsächlich gelesen werden"
         );
     }
@@ -4070,7 +4156,10 @@ mod tests {
                     // Bewusst noch nicht auflösen — erst prüfen, dass bis
                     // hierhin nichts geschrieben wurde, dann ablehnen.
                     assert!(
-                        !mock_sftp.calls().iter().any(|c| c.starts_with("write_file")),
+                        !mock_sftp
+                            .calls()
+                            .iter()
+                            .any(|c| c.starts_with("write_file")),
                         "vor der Bestätigung darf nichts geschrieben worden sein"
                     );
                     let action_id: ActionId = action_id.parse().unwrap();
@@ -4324,7 +4413,10 @@ mod tests {
             mock_sftp.file_content("/home/deploy/app.conf"),
             Some(b"neuer inhalt".to_vec())
         );
-        assert_eq!(events[1].1["result"]["usedSudoPassword"], serde_json::json!(false));
+        assert_eq!(
+            events[1].1["result"]["usedSudoPassword"],
+            serde_json::json!(false)
+        );
     }
 
     /// Neue Datei (kein Backup nötig): `backupPath` bleibt `null`.
@@ -4410,15 +4502,22 @@ mod tests {
         let events = emitter.events.lock().unwrap().clone();
         let names = event_names_excluding_auto_continuation(&events);
         assert_eq!(names, vec!["chat-action-proposed", "chat-action-result"]);
-        assert_eq!(events[1].1["result"]["usedSudoPassword"], serde_json::json!(true));
+        assert_eq!(
+            events[1].1["result"]["usedSudoPassword"],
+            serde_json::json!(true)
+        );
 
         let calls = stdin_calls.lock().unwrap();
         assert!(
-            calls.iter().any(|(cmd, _)| cmd.starts_with("sudo -S cp -p")),
+            calls
+                .iter()
+                .any(|(cmd, _)| cmd.starts_with("sudo -S cp -p")),
             "Backup muss über sudo -S cp -p laufen, tatsächliche Aufrufe: {calls:?}"
         );
         assert!(
-            calls.iter().any(|(cmd, _)| cmd.starts_with("sudo -S install -m")),
+            calls
+                .iter()
+                .any(|(cmd, _)| cmd.starts_with("sudo -S install -m")),
             "Schreiben muss über sudo -S install laufen, tatsächliche Aufrufe: {calls:?}"
         );
         assert!(
@@ -4709,7 +4808,10 @@ mod tests {
 
         let events = emitter.events.lock().unwrap().clone();
         let (_, proposed_payload) = &events[0];
-        assert_eq!(proposed_payload["previousNoteContent"], serde_json::json!(null));
+        assert_eq!(
+            proposed_payload["previousNoteContent"],
+            serde_json::json!(null)
+        );
     }
 
     // --- Spec 0016: Strukturiertes Logging & Diagnose ----------------------
@@ -4799,8 +4901,7 @@ mod tests {
 
         log_command_execution(Uuid::new_v4(), "connect-check", &redacted);
 
-        let log_text =
-            TEST_LOG_BUFFER.with(|b| String::from_utf8(b.borrow().clone()).unwrap());
+        let log_text = TEST_LOG_BUFFER.with(|b| String::from_utf8(b.borrow().clone()).unwrap());
         assert!(
             !log_text.contains("hunter2geheim"),
             "das Secret darf unter keinen Umständen im Log-Output auftauchen: {log_text}"
@@ -4874,8 +4975,7 @@ mod tests {
         let contexts = provider.received_contexts_handle();
         let session = session_with_ai_provider(
             provider,
-            MockSshTransport::default()
-                .with_response("systemctl restart nginx", output("")),
+            MockSshTransport::default().with_response("systemctl restart nginx", output("")),
         );
         // `test_session`/`session_with_ai_provider`s Default
         // (`NoRulesPolicyStore`) landet auf `Confirm` — genau der hier
@@ -4960,8 +5060,8 @@ mod tests {
     /// einen zweiten `send()`-Aufruf aus, mit `RejectionReason::Blocked`
     /// und dem `Decision::Deny`-Grund im Kontext.
     #[tokio::test]
-    async fn test_auto_continuation_after_filter_deny_pushes_rejection_and_triggers_second_send_call()
-    {
+    async fn test_auto_continuation_after_filter_deny_pushes_rejection_and_triggers_second_send_call(
+    ) {
         struct DenyCurlPolicyStore;
         #[async_trait]
         impl PolicyStore for DenyCurlPolicyStore {
@@ -5287,7 +5387,10 @@ mod tests {
                     let events = emitter.events.lock().unwrap();
                     events.iter().find_map(|(name, payload)| {
                         (name == "chat-action-proposed"
-                            && payload.get("decision").and_then(|d| d.get("Confirm")).is_some())
+                            && payload
+                                .get("decision")
+                                .and_then(|d| d.get("Confirm"))
+                                .is_some())
                         .then(|| payload["actionId"].as_str().unwrap().to_string())
                     })
                 };
@@ -5354,7 +5457,8 @@ mod tests {
     /// einzelnen Ausführung zu prüfen.
     #[tokio::test]
     async fn test_sudo_password_credential_store_not_read_again_across_multiple_commands() {
-        let credential_ref = crate::server_credentials::sudo_password_credential_ref(ServerId::new());
+        let credential_ref =
+            crate::server_credentials::sudo_password_credential_ref(ServerId::new());
         let store = crate::test_support::InMemoryCredentialStore::new()
             .with_secret(&credential_ref, "hunter2");
 
@@ -5409,7 +5513,10 @@ mod tests {
                     let events = emitter.events.lock().unwrap();
                     events.iter().find_map(|(name, payload)| {
                         (name == "chat-action-proposed"
-                            && payload.get("decision").and_then(|d| d.get("Confirm")).is_some())
+                            && payload
+                                .get("decision")
+                                .and_then(|d| d.get("Confirm"))
+                                .is_some())
                         .then(|| payload["actionId"].as_str().unwrap().to_string())
                     })
                 };

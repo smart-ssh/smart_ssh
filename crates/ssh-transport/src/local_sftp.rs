@@ -66,7 +66,9 @@ impl Default for LocalFileSession {
 #[async_trait]
 impl SftpSession for LocalFileSession {
     async fn list_dir(&mut self, path: &str) -> Result<Vec<RemoteEntry>, SshError> {
-        let mut read_dir = tokio::fs::read_dir(path).await.map_err(|e| io_err(path, e))?;
+        let mut read_dir = tokio::fs::read_dir(path)
+            .await
+            .map_err(|e| io_err(path, e))?;
         let mut entries = Vec::new();
         while let Some(entry) = read_dir.next_entry().await.map_err(|e| io_err(path, e))? {
             let metadata = entry.metadata().await.map_err(|e| io_err(path, e))?;
@@ -87,11 +89,15 @@ impl SftpSession for LocalFileSession {
     }
 
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError> {
-        tokio::fs::write(path, content).await.map_err(|e| io_err(path, e))
+        tokio::fs::write(path, content)
+            .await
+            .map_err(|e| io_err(path, e))
     }
 
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
-        let metadata = tokio::fs::metadata(path).await.map_err(|e| io_err(path, e))?;
+        let metadata = tokio::fs::metadata(path)
+            .await
+            .map_err(|e| io_err(path, e))?;
         let name = std::path::Path::new(path)
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -107,7 +113,9 @@ impl SftpSession for LocalFileSession {
     }
 
     async fn remove(&mut self, path: &str) -> Result<(), SshError> {
-        let metadata = tokio::fs::metadata(path).await.map_err(|e| io_err(path, e))?;
+        let metadata = tokio::fs::metadata(path)
+            .await
+            .map_err(|e| io_err(path, e))?;
         if metadata.is_dir() {
             tokio::fs::remove_dir(path).await
         } else {
@@ -117,11 +125,15 @@ impl SftpSession for LocalFileSession {
     }
 
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError> {
-        tokio::fs::rename(from, to).await.map_err(|e| io_err(from, e))
+        tokio::fs::rename(from, to)
+            .await
+            .map_err(|e| io_err(from, e))
     }
 
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {
-        tokio::fs::create_dir(path).await.map_err(|e| io_err(path, e))
+        tokio::fs::create_dir(path)
+            .await
+            .map_err(|e| io_err(path, e))
     }
 }
 
@@ -149,7 +161,10 @@ mod tests {
         tokio::fs::write(&file_path, b"x").await.unwrap();
         let mut session = LocalFileSession::new();
 
-        let entries = session.list_dir(dir.path().to_str().unwrap()).await.unwrap();
+        let entries = session
+            .list_dir(dir.path().to_str().unwrap())
+            .await
+            .unwrap();
 
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].name, "a.txt");
@@ -181,7 +196,9 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_missing_yields_channel_error_not_panic() {
         let mut session = LocalFileSession::new();
-        let result = session.read_file("/this/path/does/not/exist-smart-ssh-test").await;
+        let result = session
+            .read_file("/this/path/does/not/exist-smart-ssh-test")
+            .await;
         assert!(result.is_err());
     }
 }

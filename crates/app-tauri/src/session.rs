@@ -280,7 +280,10 @@ impl SessionManager {
     }
 
     pub fn register_pending_connection(&self, id: SessionId, server_id: ServerId) {
-        self.pending_connections.lock().unwrap().insert(id, server_id);
+        self.pending_connections
+            .lock()
+            .unwrap()
+            .insert(id, server_id);
     }
 
     pub fn clear_pending_connection(&self, id: SessionId) {
@@ -309,14 +312,18 @@ impl SessionManager {
             })
             .collect();
 
-        result.extend(self.pending_connections.lock().unwrap().iter().map(
-            |(id, server_id)| SessionSnapshotEntry {
-                session_id: *id,
-                server_id: *server_id,
-                status: ConnectionStatus::AwaitingHostKey,
-                has_pending_action: false,
-            },
-        ));
+        result.extend(
+            self.pending_connections
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|(id, server_id)| SessionSnapshotEntry {
+                    session_id: *id,
+                    server_id: *server_id,
+                    status: ConnectionStatus::AwaitingHostKey,
+                    has_pending_action: false,
+                }),
+        );
 
         result
     }
@@ -470,8 +477,9 @@ mod tests {
 
         let snapshot = manager.snapshot();
         assert_eq!(snapshot.len(), 2);
-        assert!(snapshot.iter().any(|e| e.session_id == connected_id
-            && e.status == ConnectionStatus::Connected));
+        assert!(snapshot
+            .iter()
+            .any(|e| e.session_id == connected_id && e.status == ConnectionStatus::Connected));
         assert!(snapshot
             .iter()
             .any(|e| e.session_id == pending_id && e.status == ConnectionStatus::AwaitingHostKey));

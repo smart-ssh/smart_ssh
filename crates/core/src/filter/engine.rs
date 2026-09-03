@@ -402,7 +402,11 @@ fn code_priority(code: &str) -> u8 {
 /// nichts (enthält weiterhin beide Texte), nur `code` kann pro Decision
 /// jeweils nur einen Wert tragen.
 fn merge_codes(a: String, b: String) -> String {
-    if code_priority(&a) <= code_priority(&b) { a } else { b }
+    if code_priority(&a) <= code_priority(&b) {
+        a
+    } else {
+        b
+    }
 }
 
 /// Fügt zwei (ggf. bereits selbst gemergte) Reason-Strings zusammen, ohne
@@ -444,21 +448,34 @@ mod code_tests {
         let mut unique = codes.to_vec();
         unique.sort_unstable();
         unique.dedup();
-        assert_eq!(codes.len(), unique.len(), "doppelt vergebener Filter-Code: {codes:?}");
+        assert_eq!(
+            codes.len(),
+            unique.len(),
+            "doppelt vergebener Filter-Code: {codes:?}"
+        );
     }
 
     #[test]
     fn test_merge_codes_prefers_higher_priority_code() {
         assert_eq!(
-            merge_codes(FILTER_NO_RULE_MATCHED.to_string(), FILTER_HARD_BLACKLIST.to_string()),
+            merge_codes(
+                FILTER_NO_RULE_MATCHED.to_string(),
+                FILTER_HARD_BLACKLIST.to_string()
+            ),
             FILTER_HARD_BLACKLIST,
         );
         assert_eq!(
-            merge_codes(FILTER_HARD_BLACKLIST.to_string(), FILTER_NO_RULE_MATCHED.to_string()),
+            merge_codes(
+                FILTER_HARD_BLACKLIST.to_string(),
+                FILTER_NO_RULE_MATCHED.to_string()
+            ),
             FILTER_HARD_BLACKLIST,
         );
         assert_eq!(
-            merge_codes(FILTER_RULE_CONFIRM.to_string(), FILTER_RULE_CONFIRM.to_string()),
+            merge_codes(
+                FILTER_RULE_CONFIRM.to_string(),
+                FILTER_RULE_CONFIRM.to_string()
+            ),
             FILTER_RULE_CONFIRM,
         );
     }

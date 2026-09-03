@@ -48,16 +48,36 @@ pub(super) fn server_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static 
                 RiskLevel::Red,
                 "Direktes Schreiben auf ein Blockgerät (dd ... of=/dev/...)",
             ),
-            (Glob("*mkfs*".to_string()), RiskLevel::Red, "Dateisystem neu erstellen (mkfs)"),
+            (
+                Glob("*mkfs*".to_string()),
+                RiskLevel::Red,
+                "Dateisystem neu erstellen (mkfs)",
+            ),
             (
                 Exact(":(){ :|:& };:".to_string()),
                 RiskLevel::Red,
                 "Fork-Bombe",
             ),
-            (Glob("shutdown*".to_string()), RiskLevel::Red, "Server wird heruntergefahren"),
-            (Glob("reboot*".to_string()), RiskLevel::Red, "Server wird neu gestartet"),
-            (Glob("poweroff*".to_string()), RiskLevel::Red, "Server wird ausgeschaltet"),
-            (Glob("halt*".to_string()), RiskLevel::Red, "Server wird angehalten"),
+            (
+                Glob("shutdown*".to_string()),
+                RiskLevel::Red,
+                "Server wird heruntergefahren",
+            ),
+            (
+                Glob("reboot*".to_string()),
+                RiskLevel::Red,
+                "Server wird neu gestartet",
+            ),
+            (
+                Glob("poweroff*".to_string()),
+                RiskLevel::Red,
+                "Server wird ausgeschaltet",
+            ),
+            (
+                Glob("halt*".to_string()),
+                RiskLevel::Red,
+                "Server wird angehalten",
+            ),
             (
                 Glob("iptables*-f*".to_string()),
                 RiskLevel::Red,
@@ -69,7 +89,11 @@ pub(super) fn server_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static 
                 "Rechte werden rekursiv auf 777 gesetzt",
             ),
             // --- Gelb: potenziell destruktiv, aber üblicherweise gezielt --
-            (Glob("rm *".to_string()), RiskLevel::Yellow, "Löscht Dateien (rm)"),
+            (
+                Glob("rm *".to_string()),
+                RiskLevel::Yellow,
+                "Löscht Dateien (rm)",
+            ),
             (
                 Glob("systemctl*stop*".to_string()),
                 RiskLevel::Yellow,
@@ -95,7 +119,11 @@ pub(super) fn server_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static 
                 RiskLevel::Yellow,
                 "Lokale Änderungen werden verworfen (git reset --hard)",
             ),
-            (Glob("kill *".to_string()), RiskLevel::Yellow, "Prozess wird beendet (kill)"),
+            (
+                Glob("kill *".to_string()),
+                RiskLevel::Yellow,
+                "Prozess wird beendet (kill)",
+            ),
             (
                 Glob("kill*-9*".to_string()),
                 RiskLevel::Yellow,
@@ -151,8 +179,16 @@ pub(super) fn data_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static st
                 RiskLevel::Red,
                 "Zugriff auf AWS-Zugangsdaten",
             ),
-            (Exact("env".to_string()), RiskLevel::Red, "Gibt alle Umgebungsvariablen aus (env)"),
-            (Glob("env *".to_string()), RiskLevel::Red, "Gibt alle Umgebungsvariablen aus (env)"),
+            (
+                Exact("env".to_string()),
+                RiskLevel::Red,
+                "Gibt alle Umgebungsvariablen aus (env)",
+            ),
+            (
+                Glob("env *".to_string()),
+                RiskLevel::Red,
+                "Gibt alle Umgebungsvariablen aus (env)",
+            ),
             (
                 Exact("printenv".to_string()),
                 RiskLevel::Red,
@@ -194,7 +230,11 @@ pub(super) fn data_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static st
                 RiskLevel::Yellow,
                 "Listet den .ssh-Ordner auf",
             ),
-            (Glob("ls*/etc*".to_string()), RiskLevel::Yellow, "Listet /etc auf"),
+            (
+                Glob("ls*/etc*".to_string()),
+                RiskLevel::Yellow,
+                "Listet /etc auf",
+            ),
             (
                 Glob("grep*password*".to_string()),
                 RiskLevel::Yellow,

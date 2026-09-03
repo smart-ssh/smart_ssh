@@ -27,16 +27,15 @@ use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, PtySize}
 use crate::ai_provider_factory::build_ai_provider;
 use crate::dto::{
     credential_ref_for, sort_remote_entries, ActionUserDecision, AiProviderConfigDto,
-    AiProviderConfigInput, DeleteGroupResult, DocumentFormat, EvalContextInput,
-    EvaluationTraceDto, GroupDto, HostKeyUserDecision, NoteRevisionDto, PatternDto,
-    PatternSuggestionDto, PatternType, RemoteEntryDto, RuleDto, RuleInput, ServerDto, ServerInput,
-    SessionSummaryDto, TestConnectionResult,
+    AiProviderConfigInput, DeleteGroupResult, DocumentFormat, EvalContextInput, EvaluationTraceDto,
+    GroupDto, HostKeyUserDecision, NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType,
+    RemoteEntryDto, RuleDto, RuleInput, ServerDto, ServerInput, SessionSummaryDto,
+    TestConnectionResult,
 };
 use crate::error::{CommandError, CommandResult};
 use crate::events::{
-    emit_connection_status_changed, emit_host_key_verification_needed,
-    emit_sftp_transfer_finished, emit_sftp_transfer_started, ConnectionStatus, EventEmitter,
-    HostKeyKind, SftpTransferKind,
+    emit_connection_status_changed, emit_host_key_verification_needed, emit_sftp_transfer_finished,
+    emit_sftp_transfer_started, ConnectionStatus, EventEmitter, HostKeyKind, SftpTransferKind,
 };
 use crate::groups::{compute_delete_group_result, validate_no_cycle};
 use crate::orchestration::run_chat_turn;
@@ -80,7 +79,10 @@ async fn list_servers_impl<R: tauri::Runtime>(
     // Spec 0032, Abschnitt 3: der lokale Pseudo-Server ist immer das erste
     // Element, unabhängig von `group_id` — er gehört nie einer Gruppe an,
     // ein Gruppenfilter kann ihn also nie sinnvoll ausschließen.
-    let local = ServerDto::from_server(&crate::local_server::synthetic_server(app), credential_store);
+    let local = ServerDto::from_server(
+        &crate::local_server::synthetic_server(app),
+        credential_store,
+    );
     let rest = servers
         .iter()
         .filter(|s| group_id.is_none() || s.group_id == group_id)
@@ -402,7 +404,9 @@ pub(crate) async fn connect_session(
                     // Frontend-Reload während eines offenen Host-Key-Dialogs den
                     // zugehörigen Tab in der wiederhergestellten Tab-Leiste
                     // verlieren.
-                    state.sessions.register_pending_connection(session_id, server_id);
+                    state
+                        .sessions
+                        .register_pending_connection(session_id, server_id);
                     emit_host_key_verification_needed(
                         app,
                         session_id,
@@ -628,7 +632,13 @@ async fn build_session_system_context(
     let allow_rules: Vec<String> = rules
         .iter()
         .filter(|r| r.action == RuleAction::Allow)
-        .map(|r| format!("- `{}` ({})", r.pattern.display_text(), r.pattern.kind_str()))
+        .map(|r| {
+            format!(
+                "- `{}` ({})",
+                r.pattern.display_text(),
+                r.pattern.kind_str()
+            )
+        })
         .collect();
 
     if !allow_rules.is_empty() {
@@ -756,7 +766,8 @@ pub async fn send_chat_message(
         eprintln!("Prompt konnte nicht in der Historie gespeichert werden: {err}");
     }
 
-    let (server_name, current_tags) = match state.profile_store.get_server(&session.server_id).await {
+    let (server_name, current_tags) = match state.profile_store.get_server(&session.server_id).await
+    {
         Ok(s) => (s.name, s.tags),
         Err(_) => ("Server".to_string(), session.tags.clone()),
     };
@@ -1006,14 +1017,13 @@ pub async fn delete_group(
     id: GroupId,
     confirm_cascade: bool,
 ) -> CommandResult<DeleteGroupResult> {
-    let result =
-        compute_delete_group_result(
-            state.profile_store.as_ref(),
-            state.credential_store.as_ref(),
-            id,
-            confirm_cascade,
-        )
-        .await?;
+    let result = compute_delete_group_result(
+        state.profile_store.as_ref(),
+        state.credential_store.as_ref(),
+        id,
+        confirm_cascade,
+    )
+    .await?;
     if confirm_cascade {
         state.profile_store.delete_group(&id).await?;
     }
@@ -1035,7 +1045,10 @@ pub async fn get_server(
         ));
     }
     let server = state.profile_store.get_server(&id).await?;
-    Ok(ServerDto::from_server(&server, state.credential_store.as_ref()))
+    Ok(ServerDto::from_server(
+        &server,
+        state.credential_store.as_ref(),
+    ))
 }
 
 /// Spec 0008, Abschnitt 4: `CredentialStore` zuerst, dann die DB-Zeile —
@@ -1839,9 +1852,10 @@ mod local_server_tests {
         // Mit einem Gruppenfilter, der den lokalen Server nicht treffen
         // könnte (er hat keine Gruppe) — er muss trotzdem als erstes
         // Element vorhanden bleiben.
-        let filtered = list_servers_impl(&handle, &profile_store, &credential_store, Some(group_id))
-            .await
-            .unwrap();
+        let filtered =
+            list_servers_impl(&handle, &profile_store, &credential_store, Some(group_id))
+                .await
+                .unwrap();
         assert_eq!(filtered.len(), 2);
         assert_eq!(filtered[0].id, LOCAL_SERVER_ID.0.to_string());
         assert!(filtered[0].is_local);

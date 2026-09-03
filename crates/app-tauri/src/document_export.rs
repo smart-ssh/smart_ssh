@@ -204,8 +204,7 @@ fn parse_markdown_to_paragraphs(content_markdown: &str) -> Vec<Paragraph> {
             Event::Start(Tag::Paragraph) => {
                 if current.is_none() {
                     current = Some(
-                        Paragraph::new()
-                            .line_spacing(LineSpacing::new().after(120).line(276)),
+                        Paragraph::new().line_spacing(LineSpacing::new().after(120).line(276)),
                     );
                 }
             }

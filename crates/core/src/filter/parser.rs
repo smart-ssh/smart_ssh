@@ -143,8 +143,7 @@ pub(super) fn strip_substitutions(text: &str) -> (String, Vec<String>) {
     let mut i = 0usize;
 
     while i < chars.len() {
-        if (chars[i] == '$' || chars[i] == '<' || chars[i] == '>')
-            && chars.get(i + 1) == Some(&'(')
+        if (chars[i] == '$' || chars[i] == '<' || chars[i] == '>') && chars.get(i + 1) == Some(&'(')
         {
             let start = i + 2;
             let mut depth = 1i32;

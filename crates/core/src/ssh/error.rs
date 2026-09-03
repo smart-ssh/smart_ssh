@@ -80,7 +80,11 @@ mod code_tests {
         let mut unique = codes.clone();
         unique.sort_unstable();
         unique.dedup();
-        assert_eq!(codes.len(), unique.len(), "doppelt vergebener SshError-Code: {codes:?}");
+        assert_eq!(
+            codes.len(),
+            unique.len(),
+            "doppelt vergebener SshError-Code: {codes:?}"
+        );
     }
 
     #[test]

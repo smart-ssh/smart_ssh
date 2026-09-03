@@ -64,8 +64,14 @@ fn test_server_risk_yellow_rm_without_rf() {
 
 #[test]
 fn test_server_risk_yellow_systemctl_stop_restart() {
-    assert_eq!(classify("systemctl stop nginx").server_risk, RiskLevel::Yellow);
-    assert_eq!(classify("systemctl restart nginx").server_risk, RiskLevel::Yellow);
+    assert_eq!(
+        classify("systemctl stop nginx").server_risk,
+        RiskLevel::Yellow
+    );
+    assert_eq!(
+        classify("systemctl restart nginx").server_risk,
+        RiskLevel::Yellow
+    );
 }
 
 #[test]
@@ -116,8 +122,14 @@ fn test_data_risk_red_env_printenv() {
 
 #[test]
 fn test_data_risk_red_mysqldump_pg_dump() {
-    assert_eq!(classify("mysqldump mydb > dump.sql").data_risk, RiskLevel::Red);
-    assert_eq!(classify("pg_dump mydb > dump.sql").data_risk, RiskLevel::Red);
+    assert_eq!(
+        classify("mysqldump mydb > dump.sql").data_risk,
+        RiskLevel::Red
+    );
+    assert_eq!(
+        classify("pg_dump mydb > dump.sql").data_risk,
+        RiskLevel::Red
+    );
 }
 
 #[test]
@@ -148,7 +160,10 @@ fn test_data_risk_yellow_ls_ssh_or_etc() {
 
 #[test]
 fn test_data_risk_yellow_grep_password_secret_token() {
-    assert_eq!(classify("grep -r password /app").data_risk, RiskLevel::Yellow);
+    assert_eq!(
+        classify("grep -r password /app").data_risk,
+        RiskLevel::Yellow
+    );
     assert_eq!(classify("grep -r secret /app").data_risk, RiskLevel::Yellow);
     assert_eq!(classify("grep -r token /app").data_risk, RiskLevel::Yellow);
 }

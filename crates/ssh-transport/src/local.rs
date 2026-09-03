@@ -17,7 +17,9 @@ use async_trait::async_trait;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize as PortablePtySize};
 use tokio::process::Command;
 
-use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize, SftpSession, SshError, SshTransport};
+use ssh_manager_core::ssh::{
+    CommandOutput, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
+};
 
 use crate::local_sftp::LocalFileSession;
 
@@ -112,12 +114,16 @@ impl SshTransport for LocalTransport {
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|e| SshError::ChannelError(format!("lokales PTY konnte nicht geöffnet werden: {e}")))?;
+            .map_err(|e| {
+                SshError::ChannelError(format!("lokales PTY konnte nicht geöffnet werden: {e}"))
+            })?;
 
         let child = pair
             .slave
             .spawn_command(default_shell_command())
-            .map_err(|e| SshError::ChannelError(format!("lokale Shell konnte nicht gestartet werden: {e}")))?;
+            .map_err(|e| {
+                SshError::ChannelError(format!("lokale Shell konnte nicht gestartet werden: {e}"))
+            })?;
         // Das Slave-Ende gehört ab hier ausschließlich dem Kindprozess —
         // im Elternprozess offen gehalten, würde ein `read()` auf dem
         // Master nie ein EOF sehen, selbst nachdem die Shell beendet ist.
@@ -249,4 +255,3 @@ mod tests {
         assert!(transport.disconnect().await.is_ok());
     }
 }
-

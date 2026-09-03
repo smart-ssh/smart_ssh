@@ -87,7 +87,10 @@ fn test_t9_accumulate_exec_output_caps_at_2mb() {
 
     let output = accumulate_exec_output(messages);
 
-    assert_eq!(output.stdout.len(), MAX_STREAM_OUTPUT_BYTES + TRUNCATION_NOTICE.len());
+    assert_eq!(
+        output.stdout.len(),
+        MAX_STREAM_OUTPUT_BYTES + TRUNCATION_NOTICE.len()
+    );
     assert!(output.stdout.ends_with(TRUNCATION_NOTICE));
     assert_eq!(output.exit_code, Some(0));
 }

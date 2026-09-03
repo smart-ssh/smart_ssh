@@ -52,14 +52,15 @@ impl AppMcpBackend {
     /// Tab öffnet/wechselt, bevor irgendein Dialog für diese Session
     /// erscheint — sonst liefe eine MCP-Anfrage an einen neuen Server auf
     /// einen für den Nutzer unsichtbaren, ewig wartenden Dialog hinaus.
-    async fn ensure_session(&self, server_id: ServerId) -> Result<(SessionId, Arc<Session>), String> {
+    async fn ensure_session(
+        &self,
+        server_id: ServerId,
+    ) -> Result<(SessionId, Arc<Session>), String> {
         let state = self.state();
 
-        let existing = state
-            .sessions
-            .snapshot()
-            .into_iter()
-            .find(|entry| entry.server_id == server_id && entry.status == ConnectionStatus::Connected);
+        let existing = state.sessions.snapshot().into_iter().find(|entry| {
+            entry.server_id == server_id && entry.status == ConnectionStatus::Connected
+        });
 
         if let Some(entry) = existing {
             emit_mcp_action_tab_requested(&self.app, entry.session_id, server_id);
@@ -390,7 +391,10 @@ mod tests {
     #[test]
     fn test_format_action_result_note_update() {
         let result = serde_json::json!({ "kind": "noteUpdate", "summary": "Notiz für Server web-01 aktualisiert." });
-        assert_eq!(format_action_result(&result), "Notiz für Server web-01 aktualisiert.");
+        assert_eq!(
+            format_action_result(&result),
+            "Notiz für Server web-01 aktualisiert."
+        );
     }
 
     #[test]
@@ -463,7 +467,10 @@ mod tests {
         let inner = TestEmitter::default();
         {
             let capture = CaptureEmitter::new(&inner);
-            capture.emit_event("chat-action-proposed", serde_json::json!({ "decision": "AutoExec" }));
+            capture.emit_event(
+                "chat-action-proposed",
+                serde_json::json!({ "decision": "AutoExec" }),
+            );
             capture.emit_event(
                 "chat-action-result",
                 serde_json::json!({ "result": { "kind": "noteUpdate", "summary": "ok" } }),

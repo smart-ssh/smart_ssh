@@ -47,7 +47,11 @@ fn load_tags<R: Runtime>(app: &AppHandle<R>) -> Vec<String> {
         .ok()
         .and_then(|store| store.get(TAGS_KEY))
         .and_then(|v| v.as_array().cloned())
-        .map(|arr| arr.into_iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+        .map(|arr| {
+            arr.into_iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -189,7 +193,10 @@ mod tests {
         };
         let engine = FilterEngine::new(SingleRulePolicyStore(deny_rule));
 
-        let local_ctx = EvalContext { server_id: LOCAL_SERVER_ID, tags: Vec::new() };
+        let local_ctx = EvalContext {
+            server_id: LOCAL_SERVER_ID,
+            tags: Vec::new(),
+        };
         let local_decision = engine.evaluate("rm -rf /tmp/x", &local_ctx).await;
         assert!(
             matches!(local_decision, ssh_manager_core::filter::Decision::Deny { .. }),
@@ -200,10 +207,16 @@ mod tests {
         // ANDEREN Server nicht greifen — bestätigt, dass die Engine
         // tatsächlich nach ID unterscheidet statt den lokalen Server
         // pauschal zu bevorzugen/übergehen.
-        let other_ctx = EvalContext { server_id: ServerId::new(), tags: Vec::new() };
+        let other_ctx = EvalContext {
+            server_id: ServerId::new(),
+            tags: Vec::new(),
+        };
         let other_decision = engine.evaluate("rm -rf /tmp/x", &other_ctx).await;
         assert!(
-            matches!(other_decision, ssh_manager_core::filter::Decision::Confirm { .. }),
+            matches!(
+                other_decision,
+                ssh_manager_core::filter::Decision::Confirm { .. }
+            ),
             "dieselbe Server-Scope-Regel darf für einen fremden Server nicht greifen"
         );
     }
@@ -223,8 +236,14 @@ mod tests {
         };
         let engine = FilterEngine::new(SingleRulePolicyStore(deny_rule));
 
-        let local_ctx = EvalContext { server_id: LOCAL_SERVER_ID, tags: Vec::new() };
+        let local_ctx = EvalContext {
+            server_id: LOCAL_SERVER_ID,
+            tags: Vec::new(),
+        };
         let decision = engine.evaluate("rm -rf /tmp/x", &local_ctx).await;
-        assert!(matches!(decision, ssh_manager_core::filter::Decision::Confirm { .. }));
+        assert!(matches!(
+            decision,
+            ssh_manager_core::filter::Decision::Confirm { .. }
+        ));
     }
 }

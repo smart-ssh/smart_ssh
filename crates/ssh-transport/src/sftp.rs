@@ -46,10 +46,7 @@ fn remote_entry(name: String, path: String, metadata: &FileAttributes) -> Remote
         is_dir: metadata.is_dir(),
         size: metadata.len(),
         permissions: metadata.permissions.unwrap_or(0) & 0o7777,
-        modified: metadata
-            .modified()
-            .ok()
-            .map(DateTime::<Utc>::from),
+        modified: metadata.modified().ok().map(DateTime::<Utc>::from),
     }
 }
 

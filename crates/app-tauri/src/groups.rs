@@ -196,9 +196,10 @@ mod tests {
             .with_group(child.clone())
             .with_server(server.clone());
 
-        let result = compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, false)
-            .await
-            .unwrap();
+        let result =
+            compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, false)
+                .await
+                .unwrap();
 
         assert!(!result.executed);
         assert_eq!(result.child_groups_to_delete.len(), 1);
@@ -221,9 +222,10 @@ mod tests {
             .with_group(child.clone())
             .with_group(grandchild.clone());
 
-        let result = compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, false)
-            .await
-            .unwrap();
+        let result =
+            compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, false)
+                .await
+                .unwrap();
 
         let ids: Vec<String> = result
             .child_groups_to_delete
@@ -248,18 +250,20 @@ mod tests {
             .with_group(child.clone())
             .with_server(server.clone());
 
-        let preview = compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, false)
-            .await
-            .unwrap();
+        let preview =
+            compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, false)
+                .await
+                .unwrap();
         assert!(!preview.executed);
         assert!(
             store.get_group(&child.id).await.is_ok(),
             "Vorschau löscht nicht"
         );
 
-        let confirmed = compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, true)
-            .await
-            .unwrap();
+        let confirmed =
+            compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, true)
+                .await
+                .unwrap();
         assert!(confirmed.executed);
         store.delete_group(&root.id).await.unwrap();
 

@@ -69,6 +69,10 @@ mod code_tests {
         let mut unique = codes.to_vec();
         unique.sort_unstable();
         unique.dedup();
-        assert_eq!(codes.len(), unique.len(), "doppelt vergebener CommandError-Code: {codes:?}");
+        assert_eq!(
+            codes.len(),
+            unique.len(),
+            "doppelt vergebener CommandError-Code: {codes:?}"
+        );
     }
 }

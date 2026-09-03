@@ -46,7 +46,10 @@ pub fn resolve_sudo_password(
 ) -> Result<(), CommandError> {
     match provided {
         Some(value) if !value.is_empty() => {
-            credential_store.set(&sudo_password_credential_ref(server_id), SecretString::from(value))?;
+            credential_store.set(
+                &sudo_password_credential_ref(server_id),
+                SecretString::from(value),
+            )?;
         }
         _ => {}
     }
@@ -82,7 +85,10 @@ fn write_or_reuse_secret(
             Ok(())
         }
         None if previously_existed => Ok(()),
-        None => Err(CommandError::with_code(format!("{label} ist erforderlich"), code)),
+        None => Err(CommandError::with_code(
+            format!("{label} ist erforderlich"),
+            code,
+        )),
     }
 }
 

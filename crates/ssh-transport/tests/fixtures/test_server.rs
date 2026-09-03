@@ -480,11 +480,19 @@ impl russh_sftp::server::Handler for SftpTestHandler {
         Ok(Name { id, files })
     }
 
-    async fn lstat(&mut self, id: u32, path: String) -> Result<russh_sftp::protocol::Attrs, Self::Error> {
+    async fn lstat(
+        &mut self,
+        id: u32,
+        path: String,
+    ) -> Result<russh_sftp::protocol::Attrs, Self::Error> {
         self.stat(id, path).await
     }
 
-    async fn stat(&mut self, id: u32, path: String) -> Result<russh_sftp::protocol::Attrs, Self::Error> {
+    async fn stat(
+        &mut self,
+        id: u32,
+        path: String,
+    ) -> Result<russh_sftp::protocol::Attrs, Self::Error> {
         let resolved = self.resolve(&path);
         let metadata = fs::metadata(&resolved).await.map_err(map_io_err)?;
         Ok(russh_sftp::protocol::Attrs {
@@ -506,12 +514,16 @@ impl russh_sftp::server::Handler for SftpTestHandler {
         path: String,
         _attrs: FileAttributes,
     ) -> Result<Status, Self::Error> {
-        fs::create_dir(self.resolve(&path)).await.map_err(map_io_err)?;
+        fs::create_dir(self.resolve(&path))
+            .await
+            .map_err(map_io_err)?;
         Ok(ok_status(id))
     }
 
     async fn rmdir(&mut self, id: u32, path: String) -> Result<Status, Self::Error> {
-        fs::remove_dir(self.resolve(&path)).await.map_err(map_io_err)?;
+        fs::remove_dir(self.resolve(&path))
+            .await
+            .map_err(map_io_err)?;
         Ok(ok_status(id))
     }
 

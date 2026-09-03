@@ -86,8 +86,14 @@ mod tests {
         let api_key = store.get(&credential_ref).expect("Key muss auflösbar sein");
         assert_eq!(store.get_calls(), 1);
 
-        let provider =
-            build_ai_provider(ProviderType::OpenAi, None, "gpt-4o", api_key, true, Vec::new());
+        let provider = build_ai_provider(
+            ProviderType::OpenAi,
+            None,
+            "gpt-4o",
+            api_key,
+            true,
+            Vec::new(),
+        );
 
         // Fünf "Chat-Runden" — `send()` liefert nur einen (nicht gepollten)
         // Stream zurück, es geschieht keine echte Netzwerk-I/O, aber jeder

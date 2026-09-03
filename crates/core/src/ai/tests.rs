@@ -196,7 +196,8 @@ fn test_redactor_detects_bearer_token() {
 
     let redacted = stdout_text(&redactor.redact(&input));
 
-    assert!(!redacted.contains("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.t-IDcZMW64A1Rh6mOF9Aq5bE099MV8"));
+    assert!(!redacted
+        .contains("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.t-IDcZMW64A1Rh6mOF9Aq5bE099MV8"));
     assert!(redacted.contains("[REDACTED]"));
 }
 

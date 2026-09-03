@@ -440,7 +440,11 @@ mod ai_error_code_tests {
         let mut unique = codes.clone();
         unique.sort_unstable();
         unique.dedup();
-        assert_eq!(codes.len(), unique.len(), "doppelt vergebener AiError-Code: {codes:?}");
+        assert_eq!(
+            codes.len(),
+            unique.len(),
+            "doppelt vergebener AiError-Code: {codes:?}"
+        );
     }
 
     #[test]

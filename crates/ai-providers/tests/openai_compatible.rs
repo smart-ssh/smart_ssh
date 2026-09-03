@@ -37,7 +37,8 @@ data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\
 data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"command\\\": \\\"ls -la\\\"}\"}}]}}]}\n\n\
 data: [DONE]\n\n";
     let server = mock_server_with_sse_body(sse_body).await;
-    let provider = OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", true, Vec::new());
+    let provider =
+        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", true, Vec::new());
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -59,7 +60,8 @@ data: {\"choices\":[{\"delta\":{\"content\":\"<!--ACTION-->{\\\"action\\\": \\\"
 data: {\"choices\":[{\"delta\":{\"content\":\" Fertig.\"}}]}\n\n\
 data: [DONE]\n\n";
     let server = mock_server_with_sse_body(sse_body).await;
-    let provider = OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", false, Vec::new());
+    let provider =
+        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", false, Vec::new());
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -90,7 +92,8 @@ async fn test_fallback_mode_treats_malformed_action_block_as_plain_text() {
         serde_json::to_string(full_text).unwrap()
     );
     let server = mock_server_with_sse_body(&sse_body).await;
-    let provider = OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", false, Vec::new());
+    let provider =
+        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", false, Vec::new());
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -108,7 +111,8 @@ async fn test_authentication_failure_maps_401_to_ai_error() {
         .respond_with(ResponseTemplate::new(401).set_body_string("unauthorized"))
         .mount(&server)
         .await;
-    let provider = OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "bad-key", true, Vec::new());
+    let provider =
+        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "bad-key", true, Vec::new());
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 

@@ -333,7 +333,10 @@ mod tests {
                 "execute in StubSshTransport nicht erwartet".to_string(),
             ))
         }
-        async fn open_shell(&mut self, _size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
+        async fn open_shell(
+            &mut self,
+            _size: PtySize,
+        ) -> Result<Box<dyn InteractiveShell>, SshError> {
             Err(SshError::ChannelError(
                 "open_shell in StubSshTransport nicht erwartet".to_string(),
             ))
@@ -362,9 +365,7 @@ mod tests {
             _host_keys: Arc<dyn HostKeyStore>,
         ) -> Result<ConnectOutcome, SshError> {
             match &self.0 {
-                MockOutcome::Success => {
-                    Ok(ConnectOutcome::Connected(Box::new(StubSshTransport)))
-                }
+                MockOutcome::Success => Ok(ConnectOutcome::Connected(Box::new(StubSshTransport))),
                 MockOutcome::UnknownHostKey => Ok(ConnectOutcome::PendingHostKeyConfirmation {
                     host: "example.invalid".to_string(),
                     port: 22,
@@ -382,9 +383,7 @@ mod tests {
                         actual_fingerprint: "SHA256:actual".to_string(),
                     },
                 }),
-                MockOutcome::AuthenticationFailed => {
-                    Err(SshError::AuthenticationFailed)
-                }
+                MockOutcome::AuthenticationFailed => Err(SshError::AuthenticationFailed),
                 MockOutcome::NetworkError => {
                     Err(SshError::ConnectionFailed("connection refused".to_string()))
                 }
@@ -629,18 +628,34 @@ mod tests {
                 assert_eq!(target.hops.len(), 2);
 
                 // Jump host credentials (Hop 0) in real store
-                let AuthMethod::Password { credential_ref: jump_ref } = &target.hops[0].auth else {
+                let AuthMethod::Password {
+                    credential_ref: jump_ref,
+                } = &target.hops[0].auth
+                else {
                     panic!("expected password auth for jump host");
                 };
-                let jump_secret = credentials.get(jump_ref).expect("jump host secret must resolve");
-                assert_eq!(secrecy::ExposeSecret::expose_secret(&jump_secret), "jump-stored-secret");
+                let jump_secret = credentials
+                    .get(jump_ref)
+                    .expect("jump host secret must resolve");
+                assert_eq!(
+                    secrecy::ExposeSecret::expose_secret(&jump_secret),
+                    "jump-stored-secret"
+                );
 
                 // Target hop credentials (Hop 1) in ephemeral store
-                let AuthMethod::Password { credential_ref: target_ref } = &target.hops[1].auth else {
+                let AuthMethod::Password {
+                    credential_ref: target_ref,
+                } = &target.hops[1].auth
+                else {
                     panic!("expected password auth for target host");
                 };
-                let target_secret = credentials.get(target_ref).expect("target secret must resolve");
-                assert_eq!(secrecy::ExposeSecret::expose_secret(&target_secret), "target-form-secret");
+                let target_secret = credentials
+                    .get(target_ref)
+                    .expect("target secret must resolve");
+                assert_eq!(
+                    secrecy::ExposeSecret::expose_secret(&target_secret),
+                    "target-form-secret"
+                );
 
                 Ok(ConnectOutcome::Connected(Box::new(StubSshTransport)))
             }

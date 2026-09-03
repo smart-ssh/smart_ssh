@@ -33,12 +33,15 @@ const LOG_FILE_PREFIX: &str = "smart-ssh.log";
 /// `data_dir()` — Logs sind laut XDG-Basisverzeichnis-Spezifikation "state
 /// data", nicht "data", und die Spec verlangt exakt diesen Pfad.
 pub fn default_log_dir() -> PathBuf {
-    let base = BaseDirs::new()
-        .expect("kein Home-Verzeichnis gefunden – kann Log-Ordner nicht ermitteln");
+    let base =
+        BaseDirs::new().expect("kein Home-Verzeichnis gefunden – kann Log-Ordner nicht ermitteln");
 
     #[cfg(target_os = "macos")]
     {
-        base.home_dir().join("Library").join("Logs").join("Smart SSH")
+        base.home_dir()
+            .join("Library")
+            .join("Logs")
+            .join("Smart SSH")
     }
     #[cfg(target_os = "windows")]
     {
@@ -113,7 +116,10 @@ pub fn cleanup_old_logs(dir: &Path, max_age: Duration, now: SystemTime) -> io::R
 pub fn init_logging() -> WorkerGuard {
     let dir = default_log_dir();
     if let Err(err) = fs::create_dir_all(&dir) {
-        eprintln!("Log-Ordner {} konnte nicht angelegt werden: {err}", dir.display());
+        eprintln!(
+            "Log-Ordner {} konnte nicht angelegt werden: {err}",
+            dir.display()
+        );
     }
     if let Err(err) = cleanup_old_logs(&dir, MAX_LOG_AGE, SystemTime::now()) {
         eprintln!("Alte Log-Dateien konnten nicht aufgeräumt werden: {err}");
@@ -156,7 +162,12 @@ mod tests {
         File::create(&path).unwrap();
 
         let far_future = SystemTime::now() + Duration::from_secs(20 * 24 * 60 * 60);
-        cleanup_old_logs(dir.path(), Duration::from_secs(14 * 24 * 60 * 60), far_future).unwrap();
+        cleanup_old_logs(
+            dir.path(),
+            Duration::from_secs(14 * 24 * 60 * 60),
+            far_future,
+        )
+        .unwrap();
 
         assert!(!path.exists());
     }
@@ -199,8 +210,14 @@ mod tests {
 
         cleanup_old_logs(dir.path(), Duration::from_secs(14 * 24 * 60 * 60), now).unwrap();
 
-        assert!(!old_path.exists(), "Datei älter als 14 Tage muss gelöscht werden");
-        assert!(recent_path.exists(), "Datei jünger als 14 Tage muss erhalten bleiben");
+        assert!(
+            !old_path.exists(),
+            "Datei älter als 14 Tage muss gelöscht werden"
+        );
+        assert!(
+            recent_path.exists(),
+            "Datei jünger als 14 Tage muss erhalten bleiben"
+        );
     }
 
     #[test]

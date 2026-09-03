@@ -6,7 +6,9 @@
 use futures::StreamExt;
 use tauri_plugin_store::StoreExt;
 
-use ssh_manager_core::ai::{AiEvent, AiProvider, ChatMessage, MessageContent, Role, SessionContext};
+use ssh_manager_core::ai::{
+    AiEvent, AiProvider, ChatMessage, MessageContent, Role, SessionContext,
+};
 use ssh_manager_core::risk::RiskLevel;
 
 use crate::ai_provider_factory::build_ai_provider;
@@ -40,7 +42,8 @@ pub async fn resolve_second_opinion_provider(
         return None;
     }
     let provider_id_raw = store.get(PROVIDER_ID_KEY)?.as_str()?.to_string();
-    let provider_id = ssh_manager_core::ai::ProviderId(uuid::Uuid::parse_str(&provider_id_raw).ok()?);
+    let provider_id =
+        ssh_manager_core::ai::ProviderId(uuid::Uuid::parse_str(&provider_id_raw).ok()?);
 
     let config = state.ai_provider_store.get(&provider_id).await.ok()?;
     let api_key = state.credential_store.get(&config.credential_ref).ok()?;
@@ -56,7 +59,8 @@ pub async fn resolve_second_opinion_provider(
 }
 
 /// Sinngemäß aus Spec 0026, Abschnitt 3 übernommen.
-const SECOND_OPINION_PROMPT: &str = "Könnte die Ausgabe dieses Kommandos sensible Daten enthalten, \
+const SECOND_OPINION_PROMPT: &str =
+    "Könnte die Ausgabe dieses Kommandos sensible Daten enthalten, \
      die nicht an einen KI-Anbieter weitergegeben werden sollten? Antworte nur mit none/yellow/red \
      und einer kurzen Begründung.";
 
@@ -133,7 +137,9 @@ fn parse_second_opinion(text: &str) -> Option<(RiskLevel, String)> {
         };
 
         let rest = words[i + 1..].join(" ");
-        let rest_trimmed = rest.trim_start_matches(|c: char| !c.is_alphanumeric()).trim();
+        let rest_trimmed = rest
+            .trim_start_matches(|c: char| !c.is_alphanumeric())
+            .trim();
         let reason = if rest_trimmed.is_empty() {
             text.trim().to_string()
         } else {
@@ -157,14 +163,16 @@ mod tests {
 
     #[test]
     fn test_parse_second_opinion_recognizes_yellow() {
-        let (level, reason) = parse_second_opinion("yellow: could contain internal hostnames").unwrap();
+        let (level, reason) =
+            parse_second_opinion("yellow: could contain internal hostnames").unwrap();
         assert_eq!(level, RiskLevel::Yellow);
         assert_eq!(reason, "could contain internal hostnames");
     }
 
     #[test]
     fn test_parse_second_opinion_recognizes_red() {
-        let (level, reason) = parse_second_opinion("red, this looks like a private key dump").unwrap();
+        let (level, reason) =
+            parse_second_opinion("red, this looks like a private key dump").unwrap();
         assert_eq!(level, RiskLevel::Red);
         assert_eq!(reason, "this looks like a private key dump");
     }

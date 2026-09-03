@@ -78,7 +78,8 @@ pub(crate) fn action_from_tool_arguments(
             command: get_str_aliases(&["command", "cmd", "script", "code"])?,
         }),
         "propose_note_update" => {
-            let new_content = get_str_aliases(&["new_content", "content", "notes", "note", "text"])?;
+            let new_content =
+                get_str_aliases(&["new_content", "content", "notes", "note", "text"])?;
             // Spec 0016, Abschnitt 6: kein Freitext-`target_id`-Feld mehr —
             // die KI wählt nur noch zwischen zwei relativen Optionen, nie
             // eine ID. Fehlt `target`, gilt `current_server` als Default
@@ -208,11 +209,9 @@ mod tests {
     /// kennen, um den häufigsten Fall (aktueller Server) auszulösen.
     #[test]
     fn test_action_from_tool_arguments_defaults_missing_target_to_current_server() {
-        let action = action_from_tool_arguments(
-            "propose_note_update",
-            &json!({"new_content": "neu"}),
-        )
-        .unwrap();
+        let action =
+            action_from_tool_arguments("propose_note_update", &json!({"new_content": "neu"}))
+                .unwrap();
 
         assert_eq!(
             action,
@@ -259,10 +258,8 @@ mod tests {
 
     #[test]
     fn test_action_from_tool_arguments_rejects_missing_new_content() {
-        let result = action_from_tool_arguments(
-            "propose_note_update",
-            &json!({"target": "current_server"}),
-        );
+        let result =
+            action_from_tool_arguments("propose_note_update", &json!({"target": "current_server"}));
 
         assert!(matches!(result, Err(AiError::InvalidResponse(_))));
     }
