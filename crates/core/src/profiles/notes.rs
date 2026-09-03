@@ -32,28 +32,49 @@ use super::types::{NoteEditor, NoteRevision, NoteTarget, Server};
 /// selbst `async` ist — diese Funktion ruft es auf und muss das Ergebnis
 /// awaiten, kann also nicht mehr synchron bleiben.
 pub async fn effective_notes(server: &Server, store: &dyn ProfileStore) -> ProfileResult<String> {
+    let sections = effective_notes_sections(server, store).await?;
+    Ok(sections
+        .into_iter()
+        .map(|(label, notes)| format!("## Kontext: {label}\n{notes}"))
+        .collect::<Vec<_>>()
+        .join("\n\n"))
+}
+
+/// Wie [`effective_notes`], liefert die einzelnen Abschnitte aber
+/// unformatiert als (Quelle, Notiztext)-Paare statt als einen
+/// zusammengefügten String — Grundlage für den KI-Kontext-Aufbau (Spec
+/// 0039): dort muss jeder Abschnitt einzeln über `ai::fence_untrusted`
+/// laufen, bevor er in den System-Prompt eingebettet wird, was mit einem
+/// bereits zusammengefügten String nicht mehr möglich wäre. `effective_notes`
+/// bleibt für die menschliche Vorschau (`preview_effective_notes`) und den
+/// MCP-Notizen-Zugriff unverändert bestehen — beide wollen lesbaren Text,
+/// kein Fencing.
+pub async fn effective_notes_sections(
+    server: &Server,
+    store: &dyn ProfileStore,
+) -> ProfileResult<Vec<(String, String)>> {
     let mut sections = Vec::new();
 
     if let Some(group_id) = server.group_id {
         for group in store.group_chain(&group_id).await? {
-            push_section(&mut sections, &group.name, &group.notes);
+            push_section(&mut sections, group.name, group.notes);
         }
     }
 
     push_section(
         &mut sections,
-        &format!("Server \"{}\"", server.name),
-        &server.notes,
+        format!("Server \"{}\"", server.name),
+        server.notes.clone(),
     );
 
-    Ok(sections.join("\n\n"))
+    Ok(sections)
 }
 
-fn push_section(sections: &mut Vec<String>, label: &str, notes: &str) {
+fn push_section(sections: &mut Vec<(String, String)>, label: String, notes: String) {
     if notes.trim().is_empty() {
         return;
     }
-    sections.push(format!("## Kontext: {label}\n{notes}"));
+    sections.push((label, notes));
 }
 
 /// Erzeugt einen neuen [`NoteRevision`]-Eintrag mit Zeitstempel (Spec 0003,

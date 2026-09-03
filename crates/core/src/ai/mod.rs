@@ -12,6 +12,7 @@
 //! frei von I/O-Abhängigkeiten (kein HTTP-Client hier) und schnell über
 //! Mock-Implementierungen testbar.
 
+mod fencing;
 mod provider;
 mod redactor;
 mod types;
@@ -19,6 +20,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
+pub use fencing::{fence_untrusted, UntrustedKind};
 pub use provider::AiProvider;
 pub use redactor::{DefaultOutputRedactor, OutputRedactor};
 pub use types::{
