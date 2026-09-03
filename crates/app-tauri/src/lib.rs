@@ -14,6 +14,7 @@ mod filter_rules;
 mod first_run_notice;
 mod groups;
 mod host_key_store;
+mod local_server;
 mod logging;
 mod mcp_backend;
 mod mcp_settings;
@@ -172,6 +173,8 @@ pub fn run() {
             commands::trust_host_key,
             commands::update_group_notes,
             commands::update_server_notes,
+            commands::update_local_server_notes,
+            commands::update_local_server_tags,
             commands::list_note_revisions,
             commands::rollback_note,
             commands::preview_effective_notes,

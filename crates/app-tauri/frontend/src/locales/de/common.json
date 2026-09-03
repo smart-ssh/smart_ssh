@@ -11,7 +11,8 @@
     "close": "Schließen",
     "loading": "Lädt…",
     "testing": "Testet…",
-    "removing": "Entfernt…"
+    "removing": "Entfernt…",
+    "notes": "Notizen"
   },
   "nav": {
     "connect": "Verbinden",
@@ -51,6 +52,7 @@
   "serverForm": {
     "titleNew": "Neuer Server",
     "titleExisting": "Server: {{name}}",
+    "localHint": "Lokaler Pseudo-Server — Kommandos laufen direkt auf diesem Rechner, keine SSH-Verbindung. Nur Notizen und Tags sind editierbar.",
     "host": "Host",
     "port": "Port",
     "username": "Benutzername",

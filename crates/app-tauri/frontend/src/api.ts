@@ -178,6 +178,14 @@ export const updateGroupNotes = (id: string, content: string) =>
 export const updateServerNotes = (id: string, content: string) =>
   invoke<void>("update_server_notes", { id, content });
 
+/** Spec 0032, Abschnitt 3: eigenes Befehlspaar für den lokalen
+ * Pseudo-Server (keine Revisions-Historie, s. `crate::local_server`). */
+export const updateLocalServerNotes = (content: string) =>
+  invoke<void>("update_local_server_notes", { content });
+
+export const updateLocalServerTags = (tags: string[]) =>
+  invoke<void>("update_local_server_tags", { tags });
+
 export const listNoteRevisions = (target: NoteTarget) =>
   invoke<NoteRevisionDto[]>("list_note_revisions", { target });
 

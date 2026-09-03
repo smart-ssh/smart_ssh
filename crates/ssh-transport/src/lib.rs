@@ -8,6 +8,8 @@ mod error;
 mod exec;
 mod handler;
 mod host_key;
+mod local;
+mod local_sftp;
 mod sftp;
 mod shell;
 mod transport;
@@ -16,4 +18,6 @@ mod transport;
 mod tests;
 
 pub use connect::{connect, ConnectOutcome};
+pub use local::LocalTransport;
+pub use local_sftp::LocalFileSession;
 pub use transport::RusshTransport;

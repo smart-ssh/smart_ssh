@@ -10,6 +10,8 @@ import {
   previewEffectiveNotes,
   testConnection,
   trustHostKey,
+  updateLocalServerNotes,
+  updateLocalServerTags,
   updateServer,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
@@ -113,6 +115,12 @@ export function ServerForm({
   const isCreate = serverId === null;
 
   const [loaded, setLoaded] = useState<ServerDto | null>(null);
+  // Spec 0032, Abschnitt 3: nur bekannt, sobald `loaded` geladen ist (der
+  // lokale Pseudo-Server ist nie `serverId === null`, also nie `isCreate`).
+  const isLocal = loaded?.isLocal ?? false;
+  const [localNotes, setLocalNotes] = useState("");
+  const [savingLocalNotes, setSavingLocalNotes] = useState(false);
+  const [savingLocalTags, setSavingLocalTags] = useState(false);
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("22");
@@ -171,12 +179,15 @@ export function ServerForm({
         setAuth(authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind));
         setSudoPassword("");
         setHasSudoPassword(server.hasSudoPassword);
+        setLocalNotes(server.notes);
       })
       .catch((err) => setError(commandErrorMessage(err)));
   }, [serverId, defaultGroupId]);
 
+  // Spec 0032, Abschnitt 6: der lokale Pseudo-Server kann nicht als
+  // Jump-Host referenziert werden.
   const possibleJumpHosts = useMemo(
-    () => allServers.filter((s) => s.id !== serverId),
+    () => allServers.filter((s) => s.id !== serverId && !s.isLocal),
     [allServers, serverId],
   );
 
@@ -279,6 +290,36 @@ export function ServerForm({
     setTagDraft("");
   };
 
+  // Spec 0032, Abschnitt 3: der lokale Pseudo-Server hat keinen normalen
+  // Formular-Submit (`create_server`/`update_server` lehnen seine ID ab,
+  // s. `crate::commands::update_server`) — Tags/Notizen werden stattdessen
+  // über eigene, dedizierte Befehle gespeichert.
+  const handleSaveLocalTags = async () => {
+    setSavingLocalTags(true);
+    setError(null);
+    try {
+      await updateLocalServerTags(tags);
+      onSaved();
+    } catch (err) {
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+    } finally {
+      setSavingLocalTags(false);
+    }
+  };
+
+  const handleSaveLocalNotes = async () => {
+    setSavingLocalNotes(true);
+    setError(null);
+    try {
+      await updateLocalServerNotes(localNotes);
+      onSaved();
+    } catch (err) {
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+    } finally {
+      setSavingLocalNotes(false);
+    }
+  };
+
   const handlePreview = async () => {
     if (!serverId) return;
     setPreviewLoading(true);
@@ -291,6 +332,86 @@ export function ServerForm({
       setPreviewLoading(false);
     }
   };
+
+  // Spec 0032, Abschnitt 3/5: host/port/username/auth/jump-host sind für
+  // den lokalen Pseudo-Server bedeutungslos (kein `servers`-Datensatz, kein
+  // Verbindungsaufbau) und deshalb komplett ausgeblendet statt nur
+  // deaktiviert — nur Name (fest "Localhost"), Notizen und Tags bleiben
+  // sichtbar/editierbar. Kein Löschen-Button (existiert nicht als
+  // löschbare Zeile) und kein Verbindungstest (es gibt keine Verbindung zu
+  // testen).
+  if (loaded && isLocal) {
+    return (
+      <div className="max-w-2xl space-y-6 p-4">
+        <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">{loaded.name}</h2>
+        <p className="text-sm text-slate-400">{t("serverForm.localHint")}</p>
+
+        {error && <p className="text-sm text-red-400">{error}</p>}
+
+        <div className="block text-sm text-slate-300">
+          {t("serverForm.tags")}
+          <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-slate-600 bg-slate-900 p-1.5">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="flex items-center gap-1 rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-100"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
+                  className="text-slate-400 hover:text-white"
+                  aria-label={t("serverForm.removeTagAria", { tag })}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+            <input
+              type="text"
+              value={tagDraft}
+              onChange={(e) => setTagDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === ",") {
+                  e.preventDefault();
+                  handleAddTag();
+                }
+              }}
+              onBlur={handleAddTag}
+              placeholder={t("serverForm.tagPlaceholder")}
+              className="flex-1 bg-transparent px-1 py-0.5 text-sm text-slate-100 outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleSaveLocalTags}
+            disabled={savingLocalTags}
+            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          >
+            {savingLocalTags ? t("common.saving") : t("common.save")}
+          </button>
+        </div>
+
+        <div className="block text-sm text-slate-300">
+          {t("common.notes")}
+          <textarea
+            value={localNotes}
+            onChange={(e) => setLocalNotes(e.target.value)}
+            rows={6}
+            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
+          />
+          <button
+            type="button"
+            onClick={handleSaveLocalNotes}
+            disabled={savingLocalNotes}
+            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          >
+            {savingLocalNotes ? t("common.saving") : t("common.save")}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl space-y-6 p-4">

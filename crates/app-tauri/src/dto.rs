@@ -51,6 +51,11 @@ pub struct ServerDto {
     /// Kommentar), deshalb kein `From<&Server>`, sondern
     /// [`ServerDto::from_server`] mit explizitem `CredentialStore`-Zugriff.
     pub has_sudo_password: bool,
+    /// Spec 0032, Abschnitt 3: `true` genau für den lokalen Pseudo-Server
+    /// (`crate::local_server::LOCAL_SERVER_ID`) — steuert im Frontend, ob
+    /// Host/Port/Nutzername/Auth/Jump-Host/Löschen/Verbindungstest
+    /// ausgeblendet werden.
+    pub is_local: bool,
 }
 
 impl ServerDto {
@@ -69,6 +74,7 @@ impl ServerDto {
             has_sudo_password: credential_store
                 .get(&sudo_password_credential_ref(server.id))
                 .is_ok(),
+            is_local: crate::local_server::is_local(server.id),
         }
     }
 }

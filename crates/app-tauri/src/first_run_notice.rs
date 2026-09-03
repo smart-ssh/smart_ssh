@@ -47,18 +47,32 @@ pub fn is_acknowledged<R: Runtime>(app: &AppHandle<R>) -> bool {
 /// eines "sauberen" Zustands), (3) `reset()` räumt am Ende wieder auf.
 #[cfg(test)]
 pub(crate) mod test_support {
-    use std::sync::{Mutex, MutexGuard};
-
     use tauri::test::{mock_builder, mock_context, noop_assets, MockRuntime};
     use tauri::AppHandle;
     use tauri_plugin_store::StoreExt;
+    use tokio::sync::{Mutex, MutexGuard};
 
-    static STORE_TEST_LOCK: Mutex<()> = Mutex::new(());
+    // `tokio::sync::Mutex` statt `std::sync::Mutex` (Spec 0032, Abschnitt
+    // 8-Test: `crate::commands::local_server_tests` hält diese Sperre über
+    // einen `.await`-Punkt hinweg — ein `std::sync::MutexGuard` dort wäre
+    // ein Clippy-`await_holding_lock`-Fehler, der async-fähige Typ ist hier
+    // die eigentliche Lösung, kein bloßes Unterdrücken der Warnung).
+    static STORE_TEST_LOCK: Mutex<()> = Mutex::const_new(());
 
-    /// Muss von jedem Test gehalten werden, der `test_app()`/den
-    /// `"settings.json"`-Store anfasst — s. Moduldoc.
+    /// Muss von jedem synchronen Test gehalten werden, der `test_app()`/den
+    /// `"settings.json"`-Store anfasst — s. Moduldoc. `blocking_lock()`
+    /// funktioniert hier (kein Tokio-Executor im Kontext eines einfachen
+    /// `#[test]`s); für `#[tokio::test]`s, die die Sperre über einen
+    /// `await`-Punkt halten müssen, stattdessen [`lock_async`] verwenden.
     pub(crate) fn lock() -> MutexGuard<'static, ()> {
-        STORE_TEST_LOCK.lock().unwrap_or_else(|poison| poison.into_inner())
+        STORE_TEST_LOCK.blocking_lock()
+    }
+
+    /// Async-Variante von [`lock`] für `#[tokio::test]`s, die die Sperre
+    /// über einen `await`-Punkt hinweg halten (z. B. weil sie einen
+    /// `#[tauri::command]`-Kern wie `list_servers_impl` aufrufen).
+    pub(crate) async fn lock_async() -> MutexGuard<'static, ()> {
+        STORE_TEST_LOCK.lock().await
     }
 
     pub(crate) fn test_app() -> tauri::App<MockRuntime> {

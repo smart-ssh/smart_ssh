@@ -52,15 +52,40 @@ use crate::state::{ActionId, AppState, SessionId};
 /// die einfache Liste aus Spec 0007 Teil 1 gebraucht).
 #[tauri::command]
 pub async fn list_servers(
+    app: AppHandle,
     state: State<'_, AppState>,
     group_id: Option<GroupId>,
 ) -> CommandResult<Vec<ServerDto>> {
-    let servers = state.profile_store.list_servers().await?;
-    Ok(servers
+    list_servers_impl(
+        &app,
+        state.profile_store.as_ref(),
+        state.credential_store.as_ref(),
+        group_id,
+    )
+    .await
+}
+
+/// Kern von [`list_servers`], herausgelöst aus dem `#[tauri::command]`-
+/// Wrapper (analog zu `connect`/`connect_session`), damit dieser Test ohne
+/// vollständigen `AppState` (echte SQLite-Stores, Keyring) auskommt — nur
+/// `ProfileStore`/`CredentialStore` als Trait-Objekt plus ein gemocktes
+/// `AppHandle` für `crate::local_server::synthetic_server`.
+async fn list_servers_impl<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    profile_store: &dyn ProfileStore,
+    credential_store: &(dyn ssh_manager_core::profiles::CredentialStore + Send + Sync),
+    group_id: Option<GroupId>,
+) -> CommandResult<Vec<ServerDto>> {
+    let servers = profile_store.list_servers().await?;
+    // Spec 0032, Abschnitt 3: der lokale Pseudo-Server ist immer das erste
+    // Element, unabhängig von `group_id` — er gehört nie einer Gruppe an,
+    // ein Gruppenfilter kann ihn also nie sinnvoll ausschließen.
+    let local = ServerDto::from_server(&crate::local_server::synthetic_server(app), credential_store);
+    let rest = servers
         .iter()
         .filter(|s| group_id.is_none() || s.group_id == group_id)
-        .map(|s| ServerDto::from_server(s, state.credential_store.as_ref()))
-        .collect())
+        .map(|s| ServerDto::from_server(s, credential_store));
+    Ok(std::iter::once(local).chain(rest).collect())
 }
 
 #[tauri::command]
@@ -301,8 +326,12 @@ pub(crate) async fn connect_session(
     // verdient strengere Behandlung"-Logik wie dort.
     ensure_first_run_notice_acknowledged(app)?;
 
-    let server = state.profile_store.get_server(&server_id).await?;
-    let target = resolve_connection_target(&server, state.profile_store.as_ref()).await?;
+    let is_local = crate::local_server::is_local(server_id);
+    let server = if is_local {
+        crate::local_server::synthetic_server(app)
+    } else {
+        state.profile_store.get_server(&server_id).await?
+    };
     let active_config = active_ai_provider_config(state).await?;
     let api_key = state.credential_store.get(&active_config.credential_ref)?;
     let ai_provider = build_ai_provider(
@@ -314,91 +343,100 @@ pub(crate) async fn connect_session(
         active_config.extra_headers.clone(),
     );
 
-    let mut transport = loop {
-        let outcome = ssh_transport::connect(
-            &target,
-            state.credential_store.as_ref(),
-            state.host_key_store.clone(),
-        )
-        .await?;
+    // Spec 0032, Abschnitt 2/3: der lokale Pseudo-Server hat keinen
+    // Verbindungszustand, keinen Host-Key und keine Credentials — "Verbinden"
+    // ist hier nur die Konstruktion eines `LocalTransport`, ohne die
+    // `russh`/Host-Key-Schleife unten zu durchlaufen.
+    let mut transport: Box<dyn ssh_manager_core::ssh::SshTransport> = if is_local {
+        Box::new(ssh_transport::LocalTransport::new())
+    } else {
+        let target = resolve_connection_target(&server, state.profile_store.as_ref()).await?;
+        loop {
+            let outcome = ssh_transport::connect(
+                &target,
+                state.credential_store.as_ref(),
+                state.host_key_store.clone(),
+            )
+            .await?;
 
-        match outcome {
-            ssh_transport::ConnectOutcome::Connected(transport) => break transport,
-            ssh_transport::ConnectOutcome::PendingHostKeyConfirmation {
-                host,
-                port,
-                raw_key,
-                decision,
-            } => {
-                let (kind, fingerprint, expected_fingerprint) = match decision {
-                    HostKeyDecision::Unknown { fingerprint } => {
-                        (HostKeyKind::Unknown, fingerprint, None)
-                    }
-                    HostKeyDecision::Mismatch {
+            match outcome {
+                ssh_transport::ConnectOutcome::Connected(transport) => break transport,
+                ssh_transport::ConnectOutcome::PendingHostKeyConfirmation {
+                    host,
+                    port,
+                    raw_key,
+                    decision,
+                } => {
+                    let (kind, fingerprint, expected_fingerprint) = match decision {
+                        HostKeyDecision::Unknown { fingerprint } => {
+                            (HostKeyKind::Unknown, fingerprint, None)
+                        }
+                        HostKeyDecision::Mismatch {
+                            expected_fingerprint,
+                            actual_fingerprint,
+                        } => (
+                            HostKeyKind::Mismatch,
+                            actual_fingerprint,
+                            Some(expected_fingerprint),
+                        ),
+                        HostKeyDecision::Trusted => {
+                            unreachable!(
+                                "PendingHostKeyConfirmation wird nur für Unknown/Mismatch gebaut"
+                            )
+                        }
+                    };
+
+                    tracing::info!(
+                        session_id = %session_id,
+                        host = %host,
+                        port,
+                        kind = ?kind,
+                        "host key verification needed",
+                    );
+
+                    let rx = state.pending_host_key_confirmations.register(session_id);
+                    // Spec 0017, Abschnitt 2: solange `connect()` hier auf die
+                    // Nutzerentscheidung wartet, existiert `session_id` noch in
+                    // keiner `Session` (die wird erst unten nach erfolgreichem
+                    // Aufbau eingefügt) — ohne diesen Eintrag würde ein
+                    // Frontend-Reload während eines offenen Host-Key-Dialogs den
+                    // zugehörigen Tab in der wiederhergestellten Tab-Leiste
+                    // verlieren.
+                    state.sessions.register_pending_connection(session_id, server_id);
+                    emit_host_key_verification_needed(
+                        app,
+                        session_id,
+                        host.clone(),
+                        port,
+                        kind,
+                        fingerprint,
                         expected_fingerprint,
-                        actual_fingerprint,
-                    } => (
-                        HostKeyKind::Mismatch,
-                        actual_fingerprint,
-                        Some(expected_fingerprint),
-                    ),
-                    HostKeyDecision::Trusted => {
-                        unreachable!(
-                            "PendingHostKeyConfirmation wird nur für Unknown/Mismatch gebaut"
-                        )
-                    }
-                };
+                    );
 
-                tracing::info!(
-                    session_id = %session_id,
-                    host = %host,
-                    port,
-                    kind = ?kind,
-                    "host key verification needed",
-                );
-
-                let rx = state.pending_host_key_confirmations.register(session_id);
-                // Spec 0017, Abschnitt 2: solange `connect()` hier auf die
-                // Nutzerentscheidung wartet, existiert `session_id` noch in
-                // keiner `Session` (die wird erst unten nach erfolgreichem
-                // Aufbau eingefügt) — ohne diesen Eintrag würde ein
-                // Frontend-Reload während eines offenen Host-Key-Dialogs den
-                // zugehörigen Tab in der wiederhergestellten Tab-Leiste
-                // verlieren.
-                state.sessions.register_pending_connection(session_id, server_id);
-                emit_host_key_verification_needed(
-                    app,
-                    session_id,
-                    host.clone(),
-                    port,
-                    kind,
-                    fingerprint,
-                    expected_fingerprint,
-                );
-
-                let user_decision_result = rx.await;
-                state.sessions.clear_pending_connection(session_id);
-                let Ok(user_decision) = user_decision_result else {
-                    return Err("Verbindungsaufbau abgebrochen".into());
-                };
-                match user_decision {
-                    HostKeyUserDecision::Trust => {
-                        tracing::info!(session_id = %session_id, host = %host, port, "host key trusted");
-                        state.host_key_store.trust(&host, port, &raw_key)?;
-                        // Erneuter Versuch mit demselben `target` — s.
-                        // Doc-Kommentar oben.
-                    }
-                    HostKeyUserDecision::Reject => {
-                        tracing::warn!(
-                            session_id = %session_id,
-                            host = %host,
-                            port,
-                            "host key rejected, connection aborted",
-                        );
-                        return Err(format!(
-                            "Verbindung zu {host}:{port} abgelehnt (Host-Key nicht vertraut)"
-                        )
-                        .into());
+                    let user_decision_result = rx.await;
+                    state.sessions.clear_pending_connection(session_id);
+                    let Ok(user_decision) = user_decision_result else {
+                        return Err("Verbindungsaufbau abgebrochen".into());
+                    };
+                    match user_decision {
+                        HostKeyUserDecision::Trust => {
+                            tracing::info!(session_id = %session_id, host = %host, port, "host key trusted");
+                            state.host_key_store.trust(&host, port, &raw_key)?;
+                            // Erneuter Versuch mit demselben `target` — s.
+                            // Doc-Kommentar oben.
+                        }
+                        HostKeyUserDecision::Reject => {
+                            tracing::warn!(
+                                session_id = %session_id,
+                                host = %host,
+                                port,
+                                "host key rejected, connection aborted",
+                            );
+                            return Err(format!(
+                                "Verbindung zu {host}:{port} abgelehnt (Host-Key nicht vertraut)"
+                            )
+                            .into());
+                        }
                     }
                 }
             }
@@ -985,7 +1023,17 @@ pub async fn delete_group(
 // --- Spec 0008: Server -----------------------------------------------------
 
 #[tauri::command]
-pub async fn get_server(state: State<'_, AppState>, id: ServerId) -> CommandResult<ServerDto> {
+pub async fn get_server(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: ServerId,
+) -> CommandResult<ServerDto> {
+    if crate::local_server::is_local(id) {
+        return Ok(ServerDto::from_server(
+            &crate::local_server::synthetic_server(&app),
+            state.credential_store.as_ref(),
+        ));
+    }
     let server = state.profile_store.get_server(&id).await?;
     Ok(ServerDto::from_server(&server, state.credential_store.as_ref()))
 }
@@ -1034,6 +1082,12 @@ pub async fn update_server(
     id: ServerId,
     input: ServerInput,
 ) -> CommandResult<()> {
+    if crate::local_server::is_local(id) {
+        // Spec 0032, Abschnitt 3: existiert nicht als `servers`-Zeile — nur
+        // Notizen/Tags sind editierbar, über die dedizierten
+        // `update_local_server_notes`/`update_local_server_tags`-Befehle.
+        return Err("Der lokale Pseudo-Server kann nicht auf diesem Weg bearbeitet werden".into());
+    }
     let existing = state.profile_store.get_server(&id).await?;
     let auth = resolve_auth_method(
         state.credential_store.as_ref(),
@@ -1063,6 +1117,10 @@ pub async fn update_server(
 
 #[tauri::command]
 pub async fn delete_server(state: State<'_, AppState>, id: ServerId) -> CommandResult<()> {
+    if crate::local_server::is_local(id) {
+        // Spec 0032, Abschnitt 3: existiert nicht als löschbare Zeile.
+        return Err("Der lokale Pseudo-Server kann nicht gelöscht werden".into());
+    }
     let server = state.profile_store.get_server(&id).await?;
     delete_auth_method_secrets(state.credential_store.as_ref(), &server.auth);
     clear_sudo_password(state.credential_store.as_ref(), id);
@@ -1091,6 +1149,12 @@ pub async fn test_connection(
     input: ServerInput,
     existing_server_id: Option<ServerId>,
 ) -> CommandResult<TestConnectionResult> {
+    if existing_server_id.is_some_and(crate::local_server::is_local) {
+        // Spec 0032, Abschnitt 5: kein Verbindungstest-Button für den
+        // lokalen Pseudo-Server (er hat gar keine Verbindung, die getestet
+        // werden könnte).
+        return Err("Für den lokalen Pseudo-Server gibt es keinen Verbindungstest".into());
+    }
     crate::test_connection::test_connection(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
@@ -1172,6 +1236,21 @@ pub async fn rollback_note(
     let revision = record_revision(target, old.content.clone(), NoteEditor::User);
     state.profile_store.record_note_revision(&revision).await?;
     Ok(())
+}
+
+/// Spec 0032, Abschnitt 3: Notizen des lokalen Pseudo-Servers laufen nicht
+/// über `record_note_revision` (keine `servers`-Zeile, s.
+/// `crate::local_server`-Doc-Kommentar) — dediziertes Befehlspaar statt
+/// `update_server_notes`/`NoteTarget::Server`, bewusst **ohne**
+/// Revisions-Historie.
+#[tauri::command]
+pub async fn update_local_server_notes(app: AppHandle, content: String) -> CommandResult<()> {
+    crate::local_server::save_notes(&app, &content).map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn update_local_server_tags(app: AppHandle, tags: Vec<String>) -> CommandResult<()> {
+    crate::local_server::save_tags(&app, &tags).map_err(Into::into)
 }
 
 #[tauri::command]
@@ -1701,4 +1780,71 @@ pub async fn sftp_mkdir(
         .expect("ensure_sftp_open lief erfolgreich durch");
     sftp.create_dir(&path).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod local_server_tests {
+    //! Spec 0032, Abschnitt 8: `list_servers()` enthält den lokalen
+    //! Pseudo-Server immer als erstes Element, unabhängig vom
+    //! `group_id`-Filter — s. `list_servers_impl`.
+
+    use ssh_manager_core::profiles::{AuthMethod, GroupId, Server};
+    use ssh_manager_core::shared::ServerId;
+
+    use crate::first_run_notice::test_support::{lock_async, test_app};
+    use crate::local_server::LOCAL_SERVER_ID;
+    use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+
+    use super::*;
+
+    fn dummy_server(name: &str, group_id: Option<GroupId>) -> Server {
+        let now = Utc::now();
+        Server {
+            id: ServerId::new(),
+            name: name.to_string(),
+            host: "example.invalid".to_string(),
+            port: 22,
+            username: "user".to_string(),
+            group_id,
+            tags: Vec::new(),
+            auth: AuthMethod::Agent,
+            notes: String::new(),
+            jump_host: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_list_servers_always_has_local_pseudo_server_first_regardless_of_filter() {
+        let _guard = lock_async().await;
+        let app = test_app();
+        let handle = app.handle().clone();
+
+        let group_id = GroupId::new();
+        let profile_store = InMemoryProfileStore::new()
+            .with_server(dummy_server("alpha", None))
+            .with_server(dummy_server("beta", Some(group_id)));
+        let credential_store = InMemoryCredentialStore::new();
+
+        // Ohne Filter.
+        let all = list_servers_impl(&handle, &profile_store, &credential_store, None)
+            .await
+            .unwrap();
+        assert_eq!(all.len(), 3);
+        assert_eq!(all[0].id, LOCAL_SERVER_ID.0.to_string());
+        assert!(all[0].is_local);
+        assert!(all[1..].iter().all(|s| !s.is_local));
+
+        // Mit einem Gruppenfilter, der den lokalen Server nicht treffen
+        // könnte (er hat keine Gruppe) — er muss trotzdem als erstes
+        // Element vorhanden bleiben.
+        let filtered = list_servers_impl(&handle, &profile_store, &credential_store, Some(group_id))
+            .await
+            .unwrap();
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].id, LOCAL_SERVER_ID.0.to_string());
+        assert!(filtered[0].is_local);
+        assert_eq!(filtered[1].name, "beta");
+    }
 }

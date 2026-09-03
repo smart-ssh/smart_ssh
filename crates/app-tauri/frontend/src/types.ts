@@ -26,6 +26,8 @@ export interface ServerDto {
   /** Spec 0018, Abschnitt 4: ob ein Sudo-Passwort im Schlüsselbund
    * hinterlegt ist — nie der Wert selbst. */
   hasSudoPassword: boolean;
+  /** Spec 0032, Abschnitt 3: `true` genau für den lokalen Pseudo-Server. */
+  isLocal: boolean;
 }
 
 export interface AiProviderConfigDto {

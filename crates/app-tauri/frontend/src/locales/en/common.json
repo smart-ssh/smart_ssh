@@ -11,7 +11,8 @@
     "close": "Close",
     "loading": "Loading…",
     "testing": "Testing…",
-    "removing": "Removing…"
+    "removing": "Removing…",
+    "notes": "Notes"
   },
   "nav": {
     "connect": "Connect",
@@ -51,6 +52,7 @@
   "serverForm": {
     "titleNew": "New Server",
     "titleExisting": "Server: {{name}}",
+    "localHint": "Local pseudo-server — commands run directly on this machine, no SSH connection. Only notes and tags are editable.",
     "host": "Host",
     "port": "Port",
     "username": "Username",
