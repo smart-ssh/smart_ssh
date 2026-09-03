@@ -615,12 +615,37 @@ async fn build_session_system_context<R: tauri::Runtime>(
     // Funktion sonst dauerhaft mit leeren Notizen liefe, obwohl über
     // `local_server::synthetic_server` tatsächlich welche hinterlegt sein
     // können (unabhängiger Review-Pass, s. docs/adr/0026).
+    // `tracing::warn!` statt stillem `unwrap_or_default()`/leerem Fallback
+    // (unabhängiger Review-Pass, Spec 0003/0004): ein Fehler hier bedeutet
+    // nicht nur "keine Notizen geladen", sondern dass sicherheitsrelevanter
+    // Kontext (z. B. "Produktionsserver, nur außerhalb des Wartungsfensters
+    // anfassen") ohne jedes sichtbare Signal aus dem System-Prompt
+    // verschwindet — die KI schlägt dann Kommandos vor, die sie mit
+    // geladenen Notizen nicht vorschlagen würde.
     let notes = if crate::local_server::is_local(*server_id) {
         crate::local_server::synthetic_server(app).notes
-    } else if let Ok(s) = profile_store.get_server(server_id).await {
-        effective_notes(&s, profile_store).await.unwrap_or_default()
     } else {
-        String::new()
+        match profile_store.get_server(server_id).await {
+            Ok(s) => match effective_notes(&s, profile_store).await {
+                Ok(notes) => notes,
+                Err(err) => {
+                    tracing::warn!(
+                        server_id = %server_id.0,
+                        error = %err,
+                        "effective_notes fehlgeschlagen — Session-Kontext enthält keine Notizen",
+                    );
+                    String::new()
+                }
+            },
+            Err(err) => {
+                tracing::warn!(
+                    server_id = %server_id.0,
+                    error = %err,
+                    "get_server fehlgeschlagen — Session-Kontext enthält keine Notizen",
+                );
+                String::new()
+            }
+        }
     };
 
     let mut context = format!(
