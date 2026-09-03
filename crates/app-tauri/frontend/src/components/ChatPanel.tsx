@@ -44,7 +44,7 @@ import type {
 } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 
-type ChatItem =
+export type ChatItem =
   | { type: "user"; id: string; text: string }
   | { type: "assistant"; id: string; text: string }
   | {
@@ -595,8 +595,14 @@ const RISK_LEVEL_BADGE_CLASS: Record<Exclude<RiskAssessment["serverRisk"], "none
 /** Spec 0026, Abschnitt 4: zwei getrennte Badges ("Server"/"Daten"), nur
  * sichtbar bei Level ≠ `none`, Tooltip mit der Begründung. Bewusst KEIN
  * drittes "grün"-Badge (s. Spec Abschnitt 1) — Abwesenheit heißt "laut
- * bekannten Mustern unauffällig", kein Sicherheitsversprechen, deshalb auch
- * der zurückhaltende Fußnotentext unten statt eines Häkchens/"geprüft". */
+ * bekannten Mustern unauffällig", kein Sicherheitsversprechen (s.
+ * `RiskHintFootnote` für den entsprechenden Text).
+ *
+ * Spec 0029: sitzt jetzt inline in derselben Zeile wie das Aktions-Label
+ * und der Entscheidungs-Badge, statt als eigener Block über dem
+ * Kommando-Text — deshalb kein eigenes `mb-*` mehr hier (das übernimmt die
+ * Zeile als Ganzes), und `null` statt eines leeren Containers, wenn beide
+ * Achsen `none` sind (kein Layout-Sprung, Spec Abschnitt 2). */
 function RiskBadges({
   assessment,
   pending,
@@ -612,7 +618,7 @@ function RiskBadges({
   if (!hasServerBadge && !hasDataBadge && !pending) return null;
 
   return (
-    <div className="mb-1 flex flex-wrap items-center gap-1.5">
+    <span className="flex flex-wrap items-center gap-1.5">
       {hasServerBadge && (
         <span
           title={assessment.serverRiskReason ?? undefined}
@@ -637,14 +643,27 @@ function RiskBadges({
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-500" />
         </span>
       )}
-      {(hasServerBadge || hasDataBadge) && (
-        <span className="text-[10px] text-slate-500">{t("actionCard.riskHint")}</span>
-      )}
-    </div>
+    </span>
   );
 }
 
-function ChatItemView({
+/** Der zurückhaltende Fußnotentext aus der bisherigen `RiskBadges` — bleibt
+ * eine eigene, unterhalb der Label-Zeile stehende Zeile (Spec 0029 regelt
+ * nur die Position der Badges selbst, s. dortiger Abschnitt 2; der
+ * vollständige Satz würde die Label-Zeile sprengen). `null`, wenn kein
+ * Badge gezeigt wird — derselbe "kein leerer Platz"-Grundsatz wie bei
+ * `RiskBadges`. */
+function RiskHintFootnote({ assessment }: { assessment: RiskAssessment | null }) {
+  const { t } = useTranslation();
+  if (!assessment) return null;
+  if (assessment.serverRisk === "none" && assessment.dataRisk === "none") return null;
+  return <p className="mb-1 text-right text-[10px] text-slate-500">{t("actionCard.riskHint")}</p>;
+}
+
+// Exportiert für Komponententests (Spec 0029, Abschnitt 4: strukturelle
+// DOM-Prüfung der Badge-Position) — sonst rein intern von `ChatPanel`
+// genutzt.
+export function ChatItemView({
   item,
   onRespond,
   onAcceptWithRule,
@@ -705,25 +724,34 @@ function ChatItemView({
 
   return (
     <div className={`border p-3 text-sm ${cardTone}`}>
-      <div className="mb-1 flex items-center gap-2">
+      {/* Spec 0029, Abschnitt 2: Label — Lücke — Risiko-Badges —
+       * Entscheidungs-Badge, alle in derselben Zeile, der rechte Cluster
+       * rechtsbündig ans Zeilenende (`ml-auto`). Der Ursprungs-Badge (Spec
+       * 0028) ist in der Positionierungs-Spec nicht erwähnt, reiht sich
+       * aber sinngemäß vor die Risiko-Badges ein — der Entscheidungs-Badge
+       * bleibt so, wie von der Spec verlangt, das letzte Element. */}
+      <div className="mb-1 flex flex-wrap items-center gap-2">
         <span className="font-heading font-semibold tracking-wide text-slate-100">{label}</span>
-        <span
-          className={`font-heading px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${badge.className}`}
-        >
-          {badge.text}
-        </span>
-        {item.origin.kind === "mcp" && (
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+          {item.origin.kind === "mcp" && (
+            <span
+              className="font-heading rounded-sm bg-purple-950 px-2 py-0.5 text-xs font-semibold tracking-wide text-purple-300"
+              title={t("actionCard.mcpOriginHint")}
+            >
+              {t("actionCard.mcpOrigin", {
+                name: item.origin.clientName ?? t("actionCard.mcpOriginGeneric"),
+              })}
+            </span>
+          )}
+          <RiskBadges assessment={item.riskAssessment} pending={item.riskSecondOpinionPending} />
           <span
-            className="font-heading rounded-sm bg-purple-950 px-2 py-0.5 text-xs font-semibold tracking-wide text-purple-300"
-            title={t("actionCard.mcpOriginHint")}
+            className={`font-heading px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${badge.className}`}
           >
-            {t("actionCard.mcpOrigin", {
-              name: item.origin.clientName ?? t("actionCard.mcpOriginGeneric"),
-            })}
+            {badge.text}
           </span>
-        )}
+        </div>
       </div>
-      <RiskBadges assessment={item.riskAssessment} pending={item.riskSecondOpinionPending} />
+      <RiskHintFootnote assessment={item.riskAssessment} />
       {command && (
         <code
           className={`block border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs ${
