@@ -247,7 +247,7 @@ async fn flush_text_buffer(session: &Session, buffer: &mut String) {
 async fn handle_action_proposed(
     session: &Session,
     session_id: SessionId,
-    action: AiAction,
+    mut action: AiAction,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
@@ -255,6 +255,17 @@ async fn handle_action_proposed(
     origin: ActionOrigin,
 ) -> bool {
     let action_id: ActionId = Uuid::new_v4();
+
+    // Unabhängiger Review-Pass (Spec 0020): Pfad-Normalisierung passiert
+    // hier, EINMALIG, bevor irgendein Konsument unten (Filter-Auswertung,
+    // Risikoeinschätzung, Vorschau, `execute_action`) den Pfad sieht — alle
+    // greifen auf dasselbe `action` zu, das ab hier bereits normalisiert
+    // ist.
+    if let AiAction::ReadRemoteFile { path } | AiAction::WriteRemoteFile { path, .. } = &mut action
+    {
+        *path = normalize_remote_path(path);
+    }
+
     let mut decision = evaluate_action(session, &action, profile_store).await;
 
     // Spec 0013, SEC-03: In automatischen Folgerunden (round >= 2) wird jede
@@ -480,6 +491,46 @@ fn sftp_read_pseudo_command(path: &str) -> String {
 
 fn sftp_write_pseudo_command(path: &str) -> String {
     format!("sftp-write {path}")
+}
+
+/// Unabhängiger Review-Pass (Spec 0020): löst `.`/`..`-Segmente rein
+/// lexikalisch auf und kollabiert wiederholte `/`, OHNE das entfernte
+/// Dateisystem zu berühren. `globset`-Muster (z. B. `Allow: sftp-read
+/// /home/deploy/*`) lassen `*` `/` kreuzen — ohne Normalisierung VOR der
+/// Filter-Auswertung hätte ein KI-gelieferter Pfad wie
+/// `/home/deploy/../../etc/shadow` dieselbe Allow-Regel getroffen (und
+/// `/etc/nginx//secret.conf`/`/etc/nginx/./secret.conf` hätten eine
+/// Deny-Regel für `/etc/nginx/secret.conf` umgangen). Wird EINMAL in
+/// `handle_action_proposed` angewendet, bevor irgendein Konsument (Filter-
+/// Auswertung, Risikoeinschätzung, Vorschau, tatsächliche SFTP-Ausführung)
+/// den Pfad sieht, damit alle dieselbe (normalisierte) Zeichenkette
+/// verwenden.
+fn normalize_remote_path(path: &str) -> String {
+    let is_absolute = path.starts_with('/');
+    let mut stack: Vec<&str> = Vec::new();
+    for segment in path.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                if matches!(stack.last(), Some(&last) if last != "..") {
+                    stack.pop();
+                } else if !is_absolute {
+                    stack.push("..");
+                }
+                // Absoluter Pfad: `..` über der Wurzel hinaus wird verworfen
+                // (kann nicht höher als `/`).
+            }
+            other => stack.push(other),
+        }
+    }
+    let joined = stack.join("/");
+    if is_absolute {
+        format!("/{joined}")
+    } else if joined.is_empty() {
+        ".".to_string()
+    } else {
+        joined
+    }
 }
 
 /// Spec 0026, Abschnitt 2, Punkt 5: synchron beim Erzeugen des
@@ -900,7 +951,20 @@ async fn execute_suggested_command(
     match raw_outcome {
         Ok(ExecOutcome { output, cancelled }) => {
             let redacted = session.redactor.redact(&output);
-            log_command_execution(session_id, &command, &redacted);
+            // Unabhängiger Review-Pass (Spec 0016): Spec 0016 Abschnitt 2/3
+            // verlangt dieselbe Redaction-Regel für Logs wie für den
+            // tatsächlichen API-Request — bisher lief nur `output` durch
+            // den Redactor, das Kommando selbst (kann z. B. `mysql
+            // --password=hunter2 ...` sein) landete roh im Log. Nur der
+            // LOG-Aufruf bekommt die redigierte Fassung; das Event/der
+            // Kontext-Eintrag unten bleibt bewusst unverändert (Spec 0018
+            // Abschnitt 5: "voll transparent" für das tatsächlich
+            // ausgeführte Kommando gegenüber Nutzer/KI).
+            log_command_execution(
+                session_id,
+                &session.redactor.redact_text(&command),
+                &redacted,
+            );
             emit_chat_action_result(
                 emitter,
                 session_id,
@@ -4085,6 +4149,105 @@ mod tests {
     }
 
     // --- Spec 0020: SFTP-Dateizugriff (ReadRemoteFile/WriteRemoteFile) -----
+
+    /// Unabhängiger Review-Pass (Spec 0020): `..`/`.`/`//` müssen VOR jeder
+    /// Filter-Auswertung lexikalisch aufgelöst werden.
+    #[test]
+    fn test_normalize_remote_path_resolves_traversal_and_redundant_segments() {
+        assert_eq!(
+            normalize_remote_path("/home/deploy/../../etc/shadow"),
+            "/etc/shadow"
+        );
+        assert_eq!(
+            normalize_remote_path("/etc/nginx//secret.conf"),
+            "/etc/nginx/secret.conf"
+        );
+        assert_eq!(
+            normalize_remote_path("/etc/nginx/./secret.conf"),
+            "/etc/nginx/secret.conf"
+        );
+        assert_eq!(
+            normalize_remote_path("/home/deploy/app.log"),
+            "/home/deploy/app.log"
+        );
+        // Traversal über die Wurzel hinaus kann nicht höher als `/` gehen.
+        assert_eq!(normalize_remote_path("/../../etc/shadow"), "/etc/shadow");
+        assert_eq!(normalize_remote_path("/"), "/");
+    }
+
+    /// Unabhängiger Review-Pass (Spec 0020): eine Allow-Regel für
+    /// `/home/deploy/*` darf NICHT auf einen Traversal-Pfad zutreffen, der
+    /// nach Normalisierung außerhalb dieses Verzeichnisses liegt — vor dem
+    /// Fix hätte `globset`s `*` (kreuzt `/`) den unnormalisierten Pfad
+    /// `/home/deploy/../../etc/shadow` direkt getroffen (AutoExec, kein
+    /// Confirm).
+    #[tokio::test]
+    async fn test_read_remote_file_traversal_path_does_not_match_allow_rule_for_other_dir() {
+        struct AllowDeployDir;
+        #[async_trait]
+        impl PolicyStore for AllowDeployDir {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("allow-deploy-read".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob(
+                        "sftp-read /home/deploy/*".to_string(),
+                    ),
+                    action: ssh_manager_core::filter::RuleAction::Allow,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                }]
+            }
+        }
+
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::ReadRemoteFile {
+                    path: "/home/deploy/../../etc/shadow".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowDeployDir));
+        let mock_sftp = MockSftpSession::new().with_file("/etc/shadow", b"root:x:0:0".to_vec());
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp.clone())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        // Ohne passende Regel fällt die Filter-Engine auf Confirm zurück
+        // (nicht AutoExec) — das erfordert eine Antwort, sonst hängt
+        // `run_chat_turn` auf die nie eintreffende Bestätigung.
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = deny_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        let names = event_names_excluding_auto_continuation(&events);
+        assert_eq!(
+            names.first().copied(),
+            Some("chat-action-proposed"),
+            "erwartet: chat-action-proposed als erstes Event, tatsächlich: {names:?}"
+        );
+        assert!(
+            events[0].1["decision"].get("AutoExec").is_none(),
+            "die Allow-Regel für /home/deploy/* darf den normalisierten Pfad /etc/shadow \
+             nicht treffen — Entscheidung war: {}",
+            events[0].1["decision"]
+        );
+        assert!(
+            mock_sftp.calls().is_empty(),
+            "ohne AutoExec darf read_file nie erreicht werden, tatsächliche Aufrufe: {:?}",
+            mock_sftp.calls()
+        );
+    }
 
     /// Spec 0020, Abschnitt 4.1: `ReadRemoteFile` wird auf `sftp-read
     /// <pfad>` abgebildet und respektiert eine Deny-Regel — kein
