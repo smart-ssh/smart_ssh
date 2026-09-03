@@ -200,6 +200,7 @@ async fn run_one_round(
                     profile_store,
                     action_confirmations,
                     round,
+                    ActionOrigin::Internal,
                 )
                 .await
                 {
@@ -236,7 +237,28 @@ async fn flush_text_buffer(session: &Session, buffer: &mut String) {
     });
 }
 
+/// Herkunft einer vorgeschlagenen Aktion — bestimmt, ob eine zusätzliche
+/// Verschärfung der Filter-Engine-Entscheidung gilt (s. `ActionOrigin::Mcp`
+/// unten) und liefert den Text/Client-Namen für die Ursprungs-Kennzeichnung
+/// im Bestätigungsdialog (Spec 0028, Abschnitt 6/9a — die Anzeige selbst ist
+/// Teil 2 dieser Spec, `client_name` wird hier bereits mitgeführt, um die
+/// Signatur nicht ein zweites Mal ändern zu müssen).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ActionOrigin {
+    /// Vorschlag aus dem eigenen Chat-Flow (Spec 0007/0021).
+    Internal,
+    /// Vorschlag über einen MCP-Tool-Call (Spec 0028) — `client_name` ist
+    /// der optionale `clientInfo.name` aus dem MCP-Handshake, falls der
+    /// verbindende Client ihn übermittelt hat. Erst ab Teil 2 dieser Spec
+    /// (die `McpBackend`-Implementierung, die `handle_action_proposed`
+    /// tatsächlich mit diesem Wert aufruft) produktiv konstruiert — bis
+    /// dahin nur vom Regressionstest unten konstruiert.
+    #[allow(dead_code)]
+    Mcp { client_name: Option<String> },
+}
+
 /// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde.
+#[allow(clippy::too_many_arguments)]
 async fn handle_action_proposed(
     session: &Session,
     session_id: SessionId,
@@ -245,6 +267,7 @@ async fn handle_action_proposed(
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
     round: usize,
+    origin: ActionOrigin,
 ) -> bool {
     let action_id: ActionId = Uuid::new_v4();
     let mut decision = evaluate_action(session, &action, profile_store).await;
@@ -267,6 +290,21 @@ async fn handle_action_proposed(
         decision = Decision::Confirm {
             reason: "Automatische Folgeaktion nach Server-Antwort erfordert Bestätigung".to_string(),
             code: "FILTER_AUTO_CONTINUATION_REQUIRES_CONFIRM".to_string(),
+        };
+    }
+
+    // Spec 0028, Abschnitt 5: ein über MCP (externes Tool) ausgelöster
+    // Vorschlag landet **immer** bei einer Bestätigung, unabhängig von
+    // einer sonst greifenden Allow-Regel — ein externes Tool ist eine neue
+    // Vertrauensgrenze, die strenger behandelt wird als die interne KI
+    // (dieselbe Denkweise wie bei SFTP-Schreibzugriffen, Spec 0020,
+    // Abschnitt 4.2). Diese Einschränkung ist für die Free-Version fest
+    // codiert, keine Einstellung — bewusst als eigener, benannter Schritt
+    // statt als verstecktes Sonderverhalten irgendwo in `evaluate_action`.
+    if matches!(origin, ActionOrigin::Mcp { .. }) && matches!(decision, Decision::AutoExec) {
+        decision = Decision::Confirm {
+            reason: "Über MCP (externes Tool) angefragt – erfordert immer Bestätigung".to_string(),
+            code: "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM".to_string(),
         };
     }
 
@@ -2000,6 +2038,71 @@ mod tests {
         assert!(matches!(
             history[0].content,
             MessageContent::CommandResult { .. }
+        ));
+    }
+
+    /// Spec 0028, Abschnitt 5 (Regressionstest, s. `ActionOrigin::Mcp`):
+    /// dieselbe Allow-Regel, die im Test oben (`ActionOrigin::Internal`) zu
+    /// `AutoExec` führt, muss bei `ActionOrigin::Mcp` trotzdem eine
+    /// Bestätigung erzwingen — ein externer MCP-Client darf interne
+    /// Allow-Regeln nie automatisch ausnutzen.
+    #[tokio::test]
+    async fn test_mcp_origin_downgrades_autoexec_to_confirm_despite_allow_rule() {
+        let mut session = test_session(
+            vec![AiEvent::Done],
+            MockSshTransport::default().with_response("ls -la", output("total 0")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let action_future = handle_action_proposed(
+            &session,
+            session_id,
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            1,
+            ActionOrigin::Mcp {
+                client_name: Some("Claude Code".to_string()),
+            },
+        );
+        let responder = deny_first_proposed_action(&emitter, &confirmations);
+        // Rückgabewert ignoriert: `true` bedeutet hier "Folgerunde nötig"
+        // (Spec 0021, Abschnitt 3, Fall 3 — auch eine Ablehnung löst das
+        // aus), nicht "wurde ausgeführt". Ob tatsächlich ausgeführt wurde,
+        // zeigt sich an `decision`/`history` unten, nicht am Rückgabewert.
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, proposed_payload) = events
+            .iter()
+            .find(|(name, _)| name == "chat-action-proposed")
+            .expect("chat-action-proposed muss gesendet worden sein");
+        assert_eq!(
+            proposed_payload["decision"]["Confirm"]["code"],
+            serde_json::json!("FILTER_MCP_ORIGIN_REQUIRES_CONFIRM"),
+            "eine Allow-Regel darf bei MCP-Ursprung nie zu AutoExec führen — war: {proposed_payload}"
+        );
+
+        let history = session.context.lock().await.history.clone();
+        assert_eq!(history.len(), 1);
+        assert!(matches!(
+            &history[0].content,
+            MessageContent::ActionRejected {
+                reason: RejectionReason::User,
+                ..
+            }
         ));
     }
 
