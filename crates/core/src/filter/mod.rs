@@ -25,6 +25,13 @@ pub use types::{
 // ein internes Detail zwischen den beiden Modulen dieser Crate, keine
 // Garantie für Aufrufer außerhalb.
 pub(crate) use parser::segment_command;
+// Unabhängiger Review-Pass, Spec 0011: von `app-tauri::rule_suggestions`
+// wiederverwendet, damit die Regel-Schnellvorschlag-Heuristik dieselbe
+// Elevation-/Wrapper-Erkennung nutzt wie die Hard-Blacklist-Prüfung, statt
+// eine eigene, potenziell abweichende Liste zu pflegen. Hier bewusst `pub`
+// (nicht nur `pub(crate)`) — anders als `segment_command` wird das von
+// außerhalb dieser Crate gebraucht.
+pub use parser::is_elevation_or_passthrough_wrapper;
 // `ServerId` ist seit Spec 0003 ein von `filter` und `profiles` gemeinsam
 // genutzter Typ, siehe `crate::shared`-Modul-Kommentar.
 pub use crate::shared::ServerId;

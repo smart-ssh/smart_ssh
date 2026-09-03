@@ -3,7 +3,7 @@
 //! bleiben dünn, analog zu `crate::groups`/`crate::filter_rules`.
 
 use persistence_sqlite::{PolicyStoreError, SqlitePolicyStore};
-use ssh_manager_core::filter::{RuleAction, RuleId, Scope};
+use ssh_manager_core::filter::{is_elevation_or_passthrough_wrapper, RuleAction, RuleId, Scope};
 
 use crate::dto::{PatternSuggestionDto, PatternType, RuleInput};
 
@@ -32,14 +32,35 @@ pub fn suggest_rule_patterns(command: &str) -> Vec<PatternSuggestionDto> {
     }
 
     if tokens.len() > 1 {
-        // 2. Basis-Wildcard: erstes Token + " *".
-        let base = format!("{} *", tokens[0]);
-        if seen_patterns.insert(base.clone()) {
-            suggestions.push(PatternSuggestionDto {
-                label: format!("Alle `{}`-Aufrufe: {base}", tokens[0]),
-                pattern_type: PatternType::Glob,
-                pattern_value: base,
-            });
+        // 2. Basis-Wildcard: erstes Token + " *" — AUSSER das erste Token
+        // ist eine Elevation (`sudo`/`doas`) oder ein durchreichendes
+        // Wrapper-Kommando (`env`, ...): ein Vorschlag `sudo *` würde
+        // buchstäblich JEDES sudo-Kommando AutoExec-fähig machen, egal was
+        // der Nutzer im Bestätigungsdialog gerade tatsächlich bestätigt
+        // (unabhängiger Review-Pass, Spec 0011 — verifiziert: `sudo
+        // systemctl status nginx` schlug bislang `sudo *` vor). Stattdessen
+        // wird — falls vorhanden — das ZWEITE Token als Basis verwendet
+        // (`apt *` statt `sudo *`), analog zu `resolve_effective_command`
+        // in der Filter-Engine. Dank des ohnehin bestehenden
+        // Dual-Text-Matchings (ADR 0002) deckt eine solche Regel bewusst
+        // weiterhin auch die sudo-Variante ab (`apt *` matcht auch `sudo
+        // apt ...`) — das ist dieselbe, an anderer Stelle bereits
+        // etablierte Absicht, nur ohne den unbeschränkten Catch-all für
+        // JEDES sudo-Kommando.
+        let wildcard_base_token = if is_elevation_or_passthrough_wrapper(tokens[0]) {
+            tokens.get(1).copied()
+        } else {
+            Some(tokens[0])
+        };
+        if let Some(base_token) = wildcard_base_token {
+            let base = format!("{base_token} *");
+            if seen_patterns.insert(base.clone()) {
+                suggestions.push(PatternSuggestionDto {
+                    label: format!("Alle `{base_token}`-Aufrufe: {base}"),
+                    pattern_type: PatternType::Glob,
+                    pattern_value: base,
+                });
+            }
         }
 
         // 3. Subkommando-Wildcard: nur falls das zweite Token nicht wie
@@ -154,6 +175,42 @@ mod tests {
         deduped.sort();
         deduped.dedup();
         assert_eq!(values.len(), deduped.len());
+    }
+
+    /// Regressionstest für den unabhängigen Review-Pass (Spec 0011): ein
+    /// `sudo`-Kommando darf NIE einen bloßen `sudo *`-Basis-Wildcard
+    /// vorschlagen — das würde ein einziger Klick zu einer Regel machen,
+    /// die buchstäblich jedes sudo-Kommando AutoExec-fähig macht. Der
+    /// Basis-Wildcard wird stattdessen aus dem zweiten Token gebildet.
+    #[test]
+    fn test_sudo_command_never_suggests_bare_sudo_wildcard() {
+        let result = labels_and_patterns("sudo systemctl status nginx");
+        assert!(
+            !result.iter().any(|(_, pattern)| pattern == "sudo *"),
+            "darf niemals einen 'sudo *'-Catch-all vorschlagen, bekam: {result:?}"
+        );
+        assert_eq!(
+            result,
+            vec![
+                (
+                    PatternType::Exact,
+                    "sudo systemctl status nginx".to_string()
+                ),
+                (PatternType::Glob, "systemctl *".to_string()),
+                (PatternType::Glob, "sudo systemctl *".to_string()),
+            ]
+        );
+    }
+
+    /// Dasselbe für einen durchreichenden Wrapper statt einer Elevation.
+    #[test]
+    fn test_wrapper_command_never_suggests_bare_wrapper_wildcard() {
+        let result = labels_and_patterns("env rm -rf /var/log");
+        assert!(
+            !result.iter().any(|(_, pattern)| pattern == "env *"),
+            "darf keinen 'env *'-Catch-all vorschlagen, bekam: {result:?}"
+        );
+        assert!(result.iter().any(|(_, pattern)| pattern == "rm *"));
     }
 
     #[tokio::test]

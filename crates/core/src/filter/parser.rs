@@ -284,6 +284,19 @@ fn is_var_assignment(word: &str) -> bool {
         && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+/// Ob `token` (das erste Wort eines Kommandos) eine Elevation
+/// (`sudo`/`doas`) oder ein bekanntes durchreichendes Wrapper-Kommando (s.
+/// [`PASSTHROUGH_WRAPPERS`]) ist. Öffentlich, damit Aufrufer außerhalb der
+/// Blacklist-Prüfung (z. B. `crate::rule_suggestions` in `app-tauri`s
+/// Regel-Schnellvorschlag, Spec 0011) dieselbe Erkennung nutzen können,
+/// statt eine eigene, potenziell abweichende Liste zu pflegen — unabhängiger
+/// Review-Pass, Spec 0011: die Schnellvorschlag-Heuristik schlug bislang
+/// unbesehen `sudo *` als Regel vor, was jedes sudo-Kommando AutoExec-fähig
+/// macht.
+pub fn is_elevation_or_passthrough_wrapper(token: &str) -> bool {
+    token == "sudo" || token == "doas" || PASSTHROUGH_WRAPPERS.contains(&token)
+}
+
 fn strip_one_elevation_wrapper_or_assignment(cmd: &str) -> String {
     let words: Vec<&str> = cmd.split_whitespace().collect();
     let Some(&head) = words.first() else {
