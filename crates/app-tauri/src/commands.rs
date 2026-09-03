@@ -1413,11 +1413,28 @@ pub async fn suggest_rule_patterns(command: String) -> CommandResult<Vec<Pattern
 /// Spec 0011, Abschnitt 3: legt zuerst die Regel an (Schritt 1, delegiert
 /// an [`crate::filter_rules::create_rule`] über
 /// [`crate::rule_suggestions::create_quick_rule`]), löst **danach** die
-/// wartende `Confirm`-Entscheidung für `action_id` auf (Schritt 2) — exakt
-/// wie ein `respond_to_action`-Aufruf mit `Approve`. Schlägt Schritt 1 fehl,
-/// wird Schritt 2 nicht erreicht (kein `?` vor dem `resolve`-Aufruf nötig,
-/// `?` auf `create_quick_rule` selbst genügt) — kein halb abgeschlossener
-/// Zustand (Regel angelegt, aber Dialog bleibt hängen, oder umgekehrt).
+/// wartende `Confirm`-Entscheidung für `action_id` auf (Schritt 2). Schlägt
+/// Schritt 1 fehl, wird Schritt 2 nicht erreicht (kein `?` vor dem
+/// `resolve`-Aufruf nötig, `?` auf `create_quick_rule` selbst genügt) —
+/// kein halb abgeschlossener Zustand (Regel angelegt, aber Dialog bleibt
+/// hängen, oder umgekehrt).
+///
+/// `edited_command`: unabhängiger Review-Pass (Spec 0007/0008) — das
+/// Frontend zeigt/verwendet zur Muster-Ableitung den vom Nutzer im
+/// Bearbeiten-Feld editierten Text (`ConfirmActionForm`s `edited`-State),
+/// aber diese Funktion löste die Bestätigung bislang immer mit
+/// `ActionUserDecision::Approve` auf — das führt die **ursprüngliche,
+/// unbearbeitete** `AiAction` aus. Ein Nutzer, der z. B. `rm -rf
+/// /var/log/*` zu `ls /var/log` bearbeitet und dann "Regel anlegen &
+/// ausführen" klickt, bekäme eine Regel für `ls /var/log`, während
+/// tatsächlich `rm -rf /var/log/*` ausgeführt würde — exakt der
+/// Bestätigungsdialog-Bypass, gegen den `EditThenApprove` (Aufgabenstellung
+/// Teil 1, Punkt 4) eigentlich schützt. `Some(cmd)` (Text unterscheidet
+/// sich vom ursprünglich vorgeschlagenen Kommando) löst deshalb jetzt mit
+/// `EditThenApprove { command: cmd }` auf — dieselbe erneute
+/// Filter-Engine-Prüfung wie beim regulären "Ausführen"-Button
+/// (`crate::orchestration::handle_user_decision`). `None` (Text
+/// unverändert) verhält sich wie zuvor.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn accept_and_create_rule(
@@ -1432,6 +1449,7 @@ pub async fn accept_and_create_rule(
     pattern_value: String,
     scope: Scope,
     priority: Option<i32>,
+    edited_command: Option<String>,
 ) -> CommandResult<RuleId> {
     let _ = session_id;
     let rule_id = crate::rule_suggestions::create_quick_rule(
@@ -1442,9 +1460,13 @@ pub async fn accept_and_create_rule(
         priority,
     )
     .await?;
+    let decision = match edited_command {
+        Some(command) => ActionUserDecision::EditThenApprove { command },
+        None => ActionUserDecision::Approve,
+    };
     state
         .pending_action_confirmations
-        .resolve(&action_id, ActionUserDecision::Approve)?;
+        .resolve(&action_id, decision)?;
     Ok(rule_id)
 }
 

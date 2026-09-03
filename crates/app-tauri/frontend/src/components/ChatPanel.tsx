@@ -393,22 +393,47 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
 
   /** Spec 0011, Abschnitt 3: `accept_and_create_rule` legt die Regel an
    * **und** löst die Confirm-Entscheidung selbst auf (Backend) — anders als
-   * `respond()` oben ruft dies also `respondToAction` nicht zusätzlich auf. */
+   * `respond()` oben ruft dies also `respondToAction` nicht zusätzlich auf.
+   *
+   * `editedCommand`: unabhängiger Review-Pass (Spec 0007/0008/0011) —
+   * `null`, falls der Text im Bearbeiten-Feld unverändert dem
+   * KI-Vorschlag entspricht (Backend löst dann wie zuvor über `Approve`
+   * auf); sonst der bearbeitete Text, damit das Backend über
+   * `EditThenApprove` tatsächlich DIESEN Text erneut durch die
+   * Filter-Engine schickt und ausführt — sonst würde bei jedem editierten
+   * Kommando das ursprüngliche, unbearbeitete Kommando ausgeführt, während
+   * die neue Regel aus dem bearbeiteten Text abgeleitet wird (genau der
+   * Bestätigungsdialog-Bypass, gegen den `EditThenApprove` beim normalen
+   * "Ausführen"-Button bereits schützt, s. `handleApprove` oben in
+   * `ConfirmActionForm`).
+   * `startedAt`: wie bei `respond()` oben — dieser Pfad führt immer aus
+   * (nie "deny"), ohne das würde weder der Lauf-Indikator noch der
+   * Abbrechen-Button (Spec 0027) für ein per Schnellregel akzeptiertes
+   * Kommando erscheinen. */
   const acceptWithRule = (
     actionId: string,
     patternType: PatternType,
     patternValue: string,
     scope: Scope,
+    editedCommand: string | null,
   ) => {
     setItems((prev) =>
       prev.map((item) =>
         item.type === "action" && item.actionId === actionId
-          ? { ...item, responded: true }
+          ? { ...item, responded: true, startedAt: Date.now() }
           : item,
       ),
     );
     onActionSettled(sessionId);
-    acceptAndCreateRule(sessionId, actionId, patternType, patternValue, scope).catch((err) =>
+    acceptAndCreateRule(
+      sessionId,
+      actionId,
+      patternType,
+      patternValue,
+      scope,
+      undefined,
+      editedCommand,
+    ).catch((err) =>
       setItems((prev) => [
         ...prev,
         { type: "error", id: freshId(), message: commandErrorMessage(err) },
@@ -677,6 +702,7 @@ export function ChatItemView({
     patternType: PatternType,
     patternValue: string,
     scope: Scope,
+    editedCommand: string | null,
   ) => void;
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
   serverId: string;
@@ -886,6 +912,7 @@ function ConfirmActionForm({
     patternType: PatternType,
     patternValue: string,
     scope: Scope,
+    editedCommand: string | null,
   ) => void;
   serverId: string;
 }) {
@@ -940,6 +967,7 @@ function ConfirmActionForm({
           <QuickRuleButton
             actionId={actionId}
             command={edited}
+            wasEdited={edited !== initialCommand}
             serverId={serverId}
             onAccept={onAcceptWithRule}
           />
@@ -959,17 +987,24 @@ function ConfirmActionForm({
 function QuickRuleButton({
   actionId,
   command,
+  wasEdited,
   serverId,
   onAccept,
 }: {
   actionId: string;
   command: string;
+  /** Unabhängiger Review-Pass (Spec 0007/0008/0011): `true`, wenn `command`
+   * vom ursprünglichen KI-Vorschlag abweicht — steuert, ob beim Akzeptieren
+   * `editedCommand` mitgeschickt wird (s. `onAccept`-Doc-Kommentar an
+   * `ConfirmActionForm.onAcceptWithRule`). */
+  wasEdited: boolean;
   serverId: string;
   onAccept: (
     actionId: string,
     patternType: PatternType,
     patternValue: string,
     scope: Scope,
+    editedCommand: string | null,
   ) => void;
 }) {
   const { t } = useTranslation();
@@ -979,6 +1014,14 @@ function QuickRuleButton({
   const [error, setError] = useState<string | null>(null);
   const [scopeKind, setScopeKind] = useState<"server" | "global" | "tag">("server");
   const [tag, setTag] = useState("");
+
+  // Unabhängiger Review-Pass: Vorschläge wurden bislang nur beim ERSTEN
+  // Öffnen geladen und danach nie neu geholt — bearbeitet der Nutzer den
+  // Text nach dem ersten Öffnen weiter, blieben die veralteten
+  // Vorschläge (aus dem alten Text) stehen und ausgewählt.
+  useEffect(() => {
+    setSuggestions([]);
+  }, [command]);
 
   const toggleOpen = () => {
     const next = !open;
@@ -1003,7 +1046,13 @@ function QuickRuleButton({
   const handlePick = (suggestion: PatternSuggestionDto) => {
     const scope = buildScope();
     if (!scope) return;
-    onAccept(actionId, suggestion.patternType, suggestion.patternValue, scope);
+    onAccept(
+      actionId,
+      suggestion.patternType,
+      suggestion.patternValue,
+      scope,
+      wasEdited ? command : null,
+    );
     setOpen(false);
   };
 

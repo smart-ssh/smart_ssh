@@ -3787,6 +3787,112 @@ mod tests {
         );
     }
 
+    /// Regressionstest für den unabhängigen Review-Pass (Spec 0007/0008/
+    /// 0011): akzeptiert der Nutzer eine Schnellregel für ein im
+    /// Bestätigungsdialog BEARBEITETES Kommando, muss tatsächlich das
+    /// bearbeitete Kommando ausgeführt werden — nicht das ursprüngliche,
+    /// unbearbeitete. Vorher löste `commands::accept_and_create_rule` immer
+    /// mit `ActionUserDecision::Approve` auf, was IMMER die ursprüngliche
+    /// `AiAction` ausführt, unabhängig davon, was der Nutzer im
+    /// Bearbeiten-Feld sah/anpasste. Bildet `commands::accept_and_create_rule`
+    /// mit gesetztem `edited_command` nach (Auflösung über
+    /// `EditThenApprove`, wie beim regulären "Ausführen"-Button) und beweist
+    /// über einen `MockSshTransport`, der NUR auf das bearbeitete Kommando
+    /// antwortet, dass tatsächlich dieses ausgeführt wird — würde
+    /// stattdessen (der Bug) das ursprüngliche Kommando ausgeführt, schlägt
+    /// es am unkonfigurierten `MockSshTransport`-Eintrag fehl statt einen
+    /// `chat-action-result` zu liefern.
+    #[tokio::test]
+    async fn test_accept_and_create_rule_with_edited_command_executes_the_edited_command() {
+        let session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "rm -rf /var/log/*".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            // Bewusst NUR auf das bearbeitete Kommando konfiguriert — liefe
+            // stattdessen das ursprüngliche `rm -rf /var/log/*`, schlägt
+            // der Mock mit einem Fehler statt einer Antwort fehl.
+            MockSshTransport::default().with_response("ls /var/log", output("access.log")),
+        );
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
+        let policy_store = persistence_sqlite::SqliteProfileStore::connect(
+            &dir.path().join("test.db"),
+        )
+        .await
+        .expect("frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein")
+        .policy_store();
+
+        let turn = run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = async {
+            loop {
+                let action_id = {
+                    let events = emitter.events.lock().unwrap();
+                    events.iter().find_map(|(name, payload)| {
+                        (name == "chat-action-proposed")
+                            .then(|| payload["actionId"].as_str().unwrap().to_string())
+                    })
+                };
+                if let Some(action_id) = action_id {
+                    let action_id: ActionId = action_id.parse().unwrap();
+                    // Nachbau von `commands::accept_and_create_rule` MIT
+                    // gesetztem `edited_command`.
+                    crate::rule_suggestions::create_quick_rule(
+                        &policy_store,
+                        crate::dto::PatternType::Glob,
+                        "ls /var/log".to_string(),
+                        ssh_manager_core::filter::Scope::Global,
+                        None,
+                    )
+                    .await
+                    .unwrap();
+                    confirmations
+                        .resolve(
+                            &action_id,
+                            ActionUserDecision::EditThenApprove {
+                                command: "ls /var/log".to_string(),
+                            },
+                        )
+                        .unwrap();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+
+        tokio::join!(turn, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names = event_names_excluding_auto_continuation(&events);
+        assert_eq!(
+            event_names,
+            vec!["chat-action-proposed", "chat-action-result"],
+            "das bearbeitete Kommando muss erfolgreich ausgeführt werden, nicht das \
+             ursprüngliche (das am unkonfigurierten Mock-Eintrag fehlschlagen würde)"
+        );
+        let (_, result_payload) = events
+            .iter()
+            .find(|(name, _)| name == "chat-action-result")
+            .expect("chat-action-result sollte vorhanden sein");
+        let result_text = serde_json::to_string(result_payload).unwrap();
+        assert!(
+            result_text.contains("access.log"),
+            "Ausgabe des bearbeiteten Kommandos sollte im Ergebnis stehen, war: {result_text}"
+        );
+    }
+
     // --- Spec 0016, Abschnitt 6: Ziel-Auflösung & Fehler-Containment -------
 
     /// Spec 0016, Abschnitt 6, letzter Absatz — Regressionstest für den
