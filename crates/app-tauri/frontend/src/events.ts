@@ -8,6 +8,7 @@ import type {
   ChatTextDeltaEvent,
   ConnectionStatusChangedEvent,
   HostKeyVerificationNeededEvent,
+  McpActionTabRequestedEvent,
   NoteUpdateSuggestedEvent,
   RiskAssessmentUpdatedEvent,
   SftpTransferFinishedEvent,
@@ -95,6 +96,16 @@ export const onSftpTransferFinished = (
   handler: (event: SftpTransferFinishedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<SftpTransferFinishedEvent>("sftp-transfer-finished", (e) => handler(e.payload));
+
+// --- Spec 0028: MCP-Server-Integration -----------------------------------
+
+/** Spec 0028, Abschnitt 9a — signalisiert, für `serverId` einen Tab zu
+ * öffnen/zu diesem zu wechseln, bevor ein Host-Key- oder Bestätigungsdialog
+ * für diese Session erscheint. Nur für die vier aktionsauslösenden Tools. */
+export const onMcpActionTabRequested = (
+  handler: (event: McpActionTabRequestedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<McpActionTabRequestedEvent>("mcp-action-tab-requested", (e) => handler(e.payload));
 
 /** Base64 → `Uint8Array`, für `TerminalOutputEvent.data` (s. `crate::events`). */
 export function base64ToBytes(base64: string): Uint8Array {

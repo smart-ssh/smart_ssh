@@ -271,10 +271,29 @@ pub async fn connect(
     server_id: ServerId,
 ) -> CommandResult<SessionId> {
     let session_id: SessionId = uuid::Uuid::new_v4();
+    connect_session(&app, &state, server_id, session_id).await
+}
 
+/// Kern von `connect()` (s. dessen Doc-Kommentar zur Host-Key-Logik),
+/// herausgelöst aus dem `#[tauri::command]`-Wrapper, damit Spec 0028
+/// (`crate::mcp_backend`) denselben Verbindungsaufbau nutzen kann, den auch
+/// ein manueller Klick in der Sidebar auslöst — **keine vorherige manuelle
+/// Verbindung nötig**, ein Aufruf über MCP an einen noch nie verbundenen
+/// Server baut die Verbindung selbst auf (Spec 0028, Abschnitt 9a).
+/// `session_id` kommt vom Aufrufer (statt hier neu generiert zu werden),
+/// damit `crate::mcp_backend` sie bereits **vor** diesem Aufruf kennt und
+/// dem Frontend darüber sofort einen Tab zuordnen kann — sonst würde ein
+/// währenddessen auftretender Host-Key-Dialog (s. unten) an eine noch gar
+/// nicht sichtbare Session hängen.
+pub(crate) async fn connect_session(
+    app: &AppHandle,
+    state: &AppState,
+    server_id: ServerId,
+    session_id: SessionId,
+) -> CommandResult<SessionId> {
     let server = state.profile_store.get_server(&server_id).await?;
     let target = resolve_connection_target(&server, state.profile_store.as_ref()).await?;
-    let active_config = active_ai_provider_config(&state).await?;
+    let active_config = active_ai_provider_config(state).await?;
     let api_key = state.credential_store.get(&active_config.credential_ref)?;
     let ai_provider = build_ai_provider(
         active_config.provider_type,
@@ -338,7 +357,7 @@ pub async fn connect(
                 // verlieren.
                 state.sessions.register_pending_connection(session_id, server_id);
                 emit_host_key_verification_needed(
-                    &app,
+                    app,
                     session_id,
                     host.clone(),
                     port,
@@ -404,7 +423,7 @@ pub async fn connect(
     // Spec 0026, Abschnitt 3: einmalig bei `connect()` aufgelöst, s.
     // `Session::risk_second_opinion_provider`-Doc-Kommentar.
     let risk_second_opinion_provider =
-        crate::risk_second_opinion::resolve_second_opinion_provider(&app, &state).await;
+        crate::risk_second_opinion::resolve_second_opinion_provider(app, state).await;
 
     let session = Arc::new(Session {
         transport: tokio::sync::Mutex::new(transport),
@@ -432,7 +451,7 @@ pub async fn connect(
     state.sessions.insert(session_id, session);
 
     tracing::info!(session_id = %session_id, server_id = %server_id.0, "session connected");
-    emit_connection_status_changed(&app, session_id, ConnectionStatus::Connected, None);
+    emit_connection_status_changed(app, session_id, ConnectionStatus::Connected, None);
     Ok(session_id)
 }
 

@@ -227,6 +227,28 @@ pub enum ActionUserDecision {
     EditThenApprove { command: String },
 }
 
+/// Herkunft einer vorgeschlagenen Aktion (Spec 0028, Abschnitt 6/9a) —
+/// bestimmt einerseits eine zusätzliche Verschärfung der
+/// Filter-Engine-Entscheidung (s. `orchestration::handle_action_proposed`),
+/// andererseits die Ursprungs-Kennzeichnung im Bestätigungsdialog. Intern
+/// getaggt (statt Serdes Standard-Außen-Tagging) aus demselben Grund wie
+/// `HostKeyUserDecision`/`ActionUserDecision` oben — die natürlichere Form
+/// für das TypeScript-Frontend, hier nur in Sende- statt Empfangsrichtung.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ActionOrigin {
+    /// Vorschlag aus dem eigenen Chat-Flow (Spec 0007/0021).
+    Internal,
+    /// Vorschlag über einen MCP-Tool-Call (Spec 0028) — `client_name` ist
+    /// der optionale `clientInfo.name` aus dem MCP-Handshake, falls der
+    /// verbindende Client ihn übermittelt hat.
+    Mcp { client_name: Option<String> },
+}
+
 // --- Spec 0008: Server-/Gruppen-Verwaltung ------------------------------
 
 /// Flache Sicht auf eine [`Group`] (Spec 0008, Abschnitt 3 — "Baum wird im

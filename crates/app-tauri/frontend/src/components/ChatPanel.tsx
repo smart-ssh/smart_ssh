@@ -31,6 +31,7 @@ import {
 } from "../promptHistoryNav";
 import { loadRiskClassifierSettings } from "../riskSettings";
 import type {
+  ActionOrigin,
   ActionResultPayload,
   ActionUserDecision,
   AiAction,
@@ -97,6 +98,9 @@ type ChatItem =
        * (wartet auf Bestätigung) — rein clientseitig, kein Backend-Event
        * nötig (s. Spec). Nur für `SuggestCommand` überhaupt relevant. */
       startedAt: number | null;
+      /** Spec 0028, Abschnitt 6/9a: `mcp` zeigt "Angefragt über: <Client
+       * oder generischer Text>" statt des internen Chat-Flows. */
+      origin: ActionOrigin;
     }
   | { type: "error"; id: string; message: string }
   | { type: "document"; id: string; title: string; contentMarkdown: string };
@@ -285,6 +289,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
             // Bestätigung nötig) — bei Confirm/Deny erst später, s.
             // `respond()` unten.
             startedAt: event.decision === "AutoExec" ? Date.now() : null,
+            origin: event.origin,
           },
         ]);
       }),
@@ -707,6 +712,16 @@ function ChatItemView({
         >
           {badge.text}
         </span>
+        {item.origin.kind === "mcp" && (
+          <span
+            className="font-heading rounded-sm bg-purple-950 px-2 py-0.5 text-xs font-semibold tracking-wide text-purple-300"
+            title={t("actionCard.mcpOriginHint")}
+          >
+            {t("actionCard.mcpOrigin", {
+              name: item.origin.clientName ?? t("actionCard.mcpOriginGeneric"),
+            })}
+          </span>
+        )}
       </div>
       <RiskBadges assessment={item.riskAssessment} pending={item.riskSecondOpinionPending} />
       {command && (

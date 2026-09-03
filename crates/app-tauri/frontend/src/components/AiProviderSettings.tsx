@@ -12,6 +12,7 @@ import {
 } from "../api";
 import { setLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from "../i18n";
 import { loadRiskClassifierSettings, saveRiskClassifierSettings } from "../riskSettings";
+import { McpServerSettings } from "./McpServerSettings";
 import {
   type AiProviderConfigDto,
   type AiProviderConfigInput,
@@ -377,6 +378,8 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
             </label>
           )}
         </div>
+
+        <McpServerSettings />
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-200">

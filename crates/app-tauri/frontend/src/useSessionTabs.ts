@@ -8,8 +8,13 @@
 // gerade aktiven Tab (Abschnitt 4, "das ist der wahrscheinlichste
 // Fehlerfall bei dieser Umstellung").
 import { useEffect, useState } from "react";
-import { commandErrorMessage, disconnect, listSessions, respondToAction } from "./api";
-import { onChatActionProposed, onChatActionResult, onConnectionStatusChanged } from "./events";
+import { commandErrorMessage, disconnect, getServer, listSessions, respondToAction } from "./api";
+import {
+  onChatActionProposed,
+  onChatActionResult,
+  onConnectionStatusChanged,
+  onMcpActionTabRequested,
+} from "./events";
 import type { ConnectionStatus } from "./types";
 
 export interface SessionTab {
@@ -91,6 +96,39 @@ export function useSessionTabs() {
               : t,
           ),
         );
+      }),
+      onMcpActionTabRequested((event) => {
+        setTabs((prev) => {
+          if (prev.some((t) => t.sessionId === event.sessionId)) return prev;
+          return [
+            ...prev,
+            {
+              sessionId: event.sessionId,
+              serverId: event.serverId,
+              // Servername unbekannt, bis `getServer()` unten antwortet —
+              // Platzhalter, damit der Tab sofort sichtbar ist (Spec 0028,
+              // Abschnitt 9a: "Zielserver ist immer eindeutig sichtbar").
+              serverName: "…",
+              // Noch nicht `"connected"`: der eigentliche Verbindungsaufbau
+              // (inkl. möglichem Host-Key-Dialog) läuft erst nach diesem
+              // Event — `onConnectionStatusChanged` aktualisiert den
+              // tatsächlichen Status, sobald er feststeht.
+              status: "disconnected",
+              hasPendingAction: false,
+              pendingActionId: null,
+            },
+          ];
+        });
+        setActiveSessionId(event.sessionId);
+        getServer(event.serverId)
+          .then((server) => {
+            setTabs((prev) =>
+              prev.map((t) =>
+                t.sessionId === event.sessionId ? { ...t, serverName: server.name } : t,
+              ),
+            );
+          })
+          .catch((err) => console.error(commandErrorMessage(err)));
       }),
     ];
     return () => {

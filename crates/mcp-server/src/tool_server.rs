@@ -313,7 +313,11 @@ impl SmartSshMcpServer {
 impl ServerHandler for SmartSshMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::from_build_env())
+            // `Implementation::from_build_env()` liest `CARGO_PKG_NAME` zur
+            // Kompilierzeit von `rmcp` selbst aus (nicht von dieser Crate)
+            // und zeigt MCP-Clients dadurch fälschlich "rmcp" statt eines
+            // erkennbaren Servernamens — deshalb explizit gesetzt.
+            .with_server_info(Implementation::new("smart-ssh", env!("CARGO_PKG_VERSION")))
             .with_protocol_version(ProtocolVersion::V_2024_11_05)
             .with_instructions(
                 "Smart SSH exponiert kontrollierten SSH-Zugriff auf freigegebene Server. \

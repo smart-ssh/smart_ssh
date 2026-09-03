@@ -19,7 +19,9 @@ use uuid::Uuid;
 use ssh_manager_core::filter::Decision;
 use ssh_manager_core::profiles::AiAction;
 use ssh_manager_core::risk::{RiskAssessment, RiskLevel};
+use ssh_manager_core::shared::ServerId;
 
+use crate::dto::ActionOrigin;
 use crate::state::{ActionId, SessionId};
 
 pub trait EventEmitter: Send + Sync {
@@ -244,6 +246,10 @@ struct ChatActionProposedPayload {
     /// (`ProposeNoteUpdate`/`GenerateDocument`), s. Aufrufer in
     /// `crate::orchestration`.
     risk_assessment: Option<RiskAssessment>,
+    /// Spec 0028, Abschnitt 6/9a: Ursprungs-Kennzeichnung — der
+    /// Bestätigungsdialog zeigt bei `Mcp` "Angefragt über: <client_name
+    /// oder generischer Text>" statt des sonst gezeigten KI-Provider-Namens.
+    origin: ActionOrigin,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -259,6 +265,7 @@ pub fn emit_chat_action_proposed(
     previous_file_size: Option<u64>,
     target_name: Option<String>,
     risk_assessment: Option<RiskAssessment>,
+    origin: ActionOrigin,
 ) {
     emit(
         emitter,
@@ -274,6 +281,7 @@ pub fn emit_chat_action_proposed(
             previous_file_size,
             target_name,
             risk_assessment,
+            origin,
         },
     );
 }
@@ -568,6 +576,38 @@ pub fn emit_sftp_transfer_finished(
             session_id,
             transfer_id,
             error,
+        },
+    );
+}
+
+// --- Spec 0028: MCP-Server-Integration --------------------------------
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct McpActionTabRequestedPayload {
+    session_id: SessionId,
+    server_id: ServerId,
+}
+
+/// Spec 0028, Abschnitt 9a: signalisiert dem Frontend, für `server_id`
+/// einen Tab zu öffnen (falls noch keiner existiert) bzw. zu diesem zu
+/// wechseln, **bevor** der eigentliche Verbindungsaufbau/die
+/// Host-Key-Bestätigung/der Bestätigungsdialog sichtbar werden — sonst
+/// könnte eine MCP-Anfrage an einen neuen Server scheitern, ohne dass der
+/// Nutzer je die Chance zur Bestätigung bekommt (s. Spec-Text). Nur für die
+/// vier aktionsauslösenden Tools ausgelöst, nie für `list_servers`/
+/// `get_server_notes` (Abschnitt 9a, letzter Punkt).
+pub fn emit_mcp_action_tab_requested(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    server_id: ServerId,
+) {
+    emit(
+        emitter,
+        "mcp-action-tab-requested",
+        &McpActionTabRequestedPayload {
+            session_id,
+            server_id,
         },
     );
 }

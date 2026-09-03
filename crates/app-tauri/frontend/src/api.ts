@@ -9,6 +9,7 @@ import type {
   EvaluationTraceDto,
   GroupDto,
   HostKeyUserDecision,
+  McpServerSettingsDto,
   NoteRevisionDto,
   NoteTarget,
   PatternDto,
@@ -266,3 +267,17 @@ export const sftpRename = (sessionId: string, from: string, to: string) =>
 
 export const sftpMkdir = (sessionId: string, path: string) =>
   invoke<void>("sftp_mkdir", { sessionId, path });
+
+// --- Spec 0028: MCP-Server-Integration -----------------------------------
+
+export const getMcpServerSettings = () =>
+  invoke<McpServerSettingsDto>("get_mcp_server_settings");
+
+export const setMcpServerEnabled = (enabled: boolean) =>
+  invoke<McpServerSettingsDto>("set_mcp_server_enabled", { enabled });
+
+export const regenerateMcpServerToken = () =>
+  invoke<McpServerSettingsDto>("regenerate_mcp_server_token");
+
+export const setMcpServerAllowedServers = (serverIds: string[]) =>
+  invoke<McpServerSettingsDto>("set_mcp_server_allowed_servers", { serverIds });

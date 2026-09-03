@@ -24,6 +24,7 @@ credentials-keyring = { version = "0.3.0", path = "../credentials-keyring" }
 directories = "6.0.0"
 docx-rs = { version = "0.4.22", default-features = false }
 futures = "0.3.34"
+mcp-server = { version = "0.3.0", path = "../mcp-server" }
 persistence-sqlite = { version = "0.3.0", path = "../persistence-sqlite" }
 pulldown-cmark = { version = "0.13.4", default-features = false }
 secrecy = "0.10.3"
@@ -36,6 +37,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-decoration = "3.0"
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-fs = "2.5.1"
+tauri-plugin-notification = "2"
 tauri-plugin-opener = "2.5.5"
 tauri-plugin-os = "2"
 tauri-plugin-store = "2"

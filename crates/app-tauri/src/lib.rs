@@ -14,6 +14,8 @@ mod filter_rules;
 mod groups;
 mod host_key_store;
 mod logging;
+mod mcp_backend;
+mod mcp_settings;
 mod orchestration;
 #[cfg(test)]
 mod policy;
@@ -71,6 +73,7 @@ fn build_app_state() -> AppState {
         pending_host_key_confirmations: ConfirmationRegistry::new(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
+        mcp: crate::state::McpState::default(),
     }
 }
 
@@ -105,6 +108,9 @@ pub fn run() {
         // bei modernen Rust-Toolchains/macOS-SDKs. tauri-plugin-decoration (v3.0.5) ist aktiv
         // gepflegt, unterstützt Tauri v2.10+ und verwaltet native macOS-Ampel-Insets sowie Windows Snap Layouts.
         .plugin(tauri_plugin_decoration::init())
+        // Spec 0028, Abschnitt 9a: native Toast-Benachrichtigung bei einer
+        // wartenden MCP-Bestätigung (s. `crate::mcp_backend`).
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             use tauri::Manager;
             use tauri_plugin_decoration::WebviewWindowExt;
@@ -120,6 +126,15 @@ pub fn run() {
                     }
                 });
             }
+
+            // Spec 0028, Abschnitt 9: ein beim letzten Beenden aktivierter
+            // MCP-Server bleibt über einen Neustart hinweg aktiv, ohne
+            // manuelles erneutes Anschalten.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                crate::mcp_settings::autostart_if_enabled(&handle).await;
+            });
+
             Ok(())
         })
         .manage(build_app_state())
@@ -180,6 +195,10 @@ pub fn run() {
             commands::sftp_delete,
             commands::sftp_rename,
             commands::sftp_mkdir,
+            mcp_settings::get_mcp_server_settings,
+            mcp_settings::set_mcp_server_enabled,
+            mcp_settings::regenerate_mcp_server_token,
+            mcp_settings::set_mcp_server_allowed_servers,
         ])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Tauri-App");

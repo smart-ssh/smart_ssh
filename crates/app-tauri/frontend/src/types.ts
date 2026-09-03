@@ -112,6 +112,13 @@ export type Decision =
   | { Confirm: { reason: string; code: string } }
   | { Deny: { reason: string; code: string } };
 
+/** Spec 0028, Abschnitt 6/9a: Ursprung eines vorgeschlagenen Kommandos —
+ * `mcp` zeigt im Bestätigungsdialog "Angefragt über: <clientName oder
+ * generischer Text>" statt des sonst gezeigten KI-Provider-Namens.
+ * `clientName` ist der optionale `clientInfo.name` aus dem MCP-Handshake,
+ * `null` falls der verbindende Client keinen übermittelt hat. */
+export type ActionOrigin = { kind: "internal" } | { kind: "mcp"; clientName: string | null };
+
 /** Spec 0026, Abschnitt 2 — kein "grün": Abwesenheit eines Badges im UI
  * bedeutet bereits "laut bekannten Mustern unauffällig", kein
  * Sicherheitsversprechen. */
@@ -206,6 +213,8 @@ export interface ChatActionProposedEvent {
    * Kann später über `risk-assessment-updated` (s. `events.ts`) auf der
    * Daten-Risiko-Achse angehoben werden. */
   riskAssessment: RiskAssessment | null;
+  /** Spec 0028, Abschnitt 6/9a. */
+  origin: ActionOrigin;
 }
 
 /** Spec 0026, Abschnitt 3, Punkt 4. */
@@ -466,4 +475,23 @@ export interface SftpTransferFinishedEvent {
   transferId: string;
   /** `null` bei Erfolg, sonst die Fehlermeldung. */
   error: string | null;
+}
+
+// --- Spec 0028: MCP-Server-Integration -----------------------------------
+
+/** Spec 0028, Abschnitt 9a: signalisiert, für `serverId` einen Tab zu
+ * öffnen (falls noch keiner existiert) bzw. zu diesem zu wechseln — nur
+ * für die vier aktionsauslösenden MCP-Tools, nicht für `list_servers`/
+ * `get_server_notes`. */
+export interface McpActionTabRequestedEvent {
+  sessionId: string;
+  serverId: string;
+}
+
+export interface McpServerSettingsDto {
+  enabled: boolean;
+  /** `http://127.0.0.1:<port>` — der Wert für die externe Client-Konfiguration. */
+  endpoint: string;
+  token: string;
+  allowedServerIds: string[];
 }

@@ -51,7 +51,7 @@ use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBase
 use ssh_manager_core::ssh::{CommandOutput, ExecOutcome, SshError};
 
 use crate::confirmation::ConfirmationRegistry;
-use crate::dto::ActionUserDecision;
+use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_chat_action_proposed, emit_chat_action_result, emit_chat_auto_continuation_started,
     emit_chat_document_generated, emit_chat_error, emit_chat_text_delta,
@@ -237,26 +237,6 @@ async fn flush_text_buffer(session: &Session, buffer: &mut String) {
     });
 }
 
-/// Herkunft einer vorgeschlagenen Aktion — bestimmt, ob eine zusätzliche
-/// Verschärfung der Filter-Engine-Entscheidung gilt (s. `ActionOrigin::Mcp`
-/// unten) und liefert den Text/Client-Namen für die Ursprungs-Kennzeichnung
-/// im Bestätigungsdialog (Spec 0028, Abschnitt 6/9a — die Anzeige selbst ist
-/// Teil 2 dieser Spec, `client_name` wird hier bereits mitgeführt, um die
-/// Signatur nicht ein zweites Mal ändern zu müssen).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ActionOrigin {
-    /// Vorschlag aus dem eigenen Chat-Flow (Spec 0007/0021).
-    Internal,
-    /// Vorschlag über einen MCP-Tool-Call (Spec 0028) — `client_name` ist
-    /// der optionale `clientInfo.name` aus dem MCP-Handshake, falls der
-    /// verbindende Client ihn übermittelt hat. Erst ab Teil 2 dieser Spec
-    /// (die `McpBackend`-Implementierung, die `handle_action_proposed`
-    /// tatsächlich mit diesem Wert aufruft) produktiv konstruiert — bis
-    /// dahin nur vom Regressionstest unten konstruiert.
-    #[allow(dead_code)]
-    Mcp { client_name: Option<String> },
-}
-
 /// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde.
 #[allow(clippy::too_many_arguments)]
 async fn handle_action_proposed(
@@ -332,6 +312,7 @@ async fn handle_action_proposed(
         previous_file_size,
         target_name,
         risk_assessment.clone(),
+        origin.clone(),
     );
 
     // Spec 0026, Abschnitt 3: läuft NACH der bereits gesendeten
@@ -409,10 +390,43 @@ async fn handle_action_proposed(
                 user_decision,
                 emitter,
                 profile_store,
+                origin,
             )
             .await
         }
     }
+}
+
+/// Öffentlicher Einstiegspunkt für Spec 0028 (MCP), von
+/// `crate::mcp_backend` genutzt — dieselbe Orchestrierungs-Funktion wie der
+/// interne Chat-Flow oben, nur mit `origin` fest auf `ActionOrigin::Mcp`
+/// (erzwingt die Verschärfung aus Abschnitt 5) und `round` fest auf `1`
+/// (kein Auto-Continuation-Konzept für MCP-Aufrufe, s. Spec 0028,
+/// Abschnitt 3 — es gibt keinen Chatverlauf, der automatisch fortgesetzt
+/// werden müsste). Bewusst dieser schmale Wrapper statt
+/// `handle_action_proposed` selbst `pub(crate)` zu machen: die
+/// internen Parameter `round`/`origin` sollen von außerhalb dieses Moduls
+/// nicht frei wählbar sein.
+pub(crate) async fn handle_mcp_action_proposed(
+    session: &Session,
+    session_id: SessionId,
+    action: AiAction,
+    emitter: &dyn EventEmitter,
+    profile_store: &dyn ProfileStore,
+    action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+    client_name: Option<String>,
+) -> bool {
+    handle_action_proposed(
+        session,
+        session_id,
+        action,
+        emitter,
+        profile_store,
+        action_confirmations,
+        1,
+        ActionOrigin::Mcp { client_name },
+    )
+    .await
 }
 
 /// Aktuelle Tags des Servers dieser Session, für die Filter-Engine-Auswertung
@@ -571,6 +585,7 @@ async fn evaluate_action(
 }
 
 /// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde.
+#[allow(clippy::too_many_arguments)]
 async fn handle_user_decision(
     session: &Session,
     session_id: SessionId,
@@ -579,6 +594,7 @@ async fn handle_user_decision(
     user_decision: ActionUserDecision,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
+    origin: ActionOrigin,
 ) -> bool {
     match user_decision {
         ActionUserDecision::Deny => {
@@ -653,6 +669,7 @@ async fn handle_user_decision(
                             None,
                             None,
                             risk_assessment,
+                            origin,
                         );
                         // Spec 0021, Abschnitt 3, Fall 4: das bearbeitete
                         // Kommando ist am Ende genau ein durch die

@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use persistence_sqlite::{SqliteAiProviderStore, SqlitePolicyStore, SqlitePromptHistoryStore};
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore};
+use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::HostKeyStore;
 
 use crate::confirmation::ConfirmationRegistry;
@@ -66,4 +67,40 @@ pub struct AppState {
     /// `AppState` durchreichen müsste (dieselbe Begründung wie bei
     /// `Session::risk_second_opinion_provider`, Spec 0026).
     pub running_command_cancellations: Arc<ConfirmationRegistry<ActionId, ()>>,
+    /// Spec 0028: Zustand des lokalen MCP-Servers — getrennt von den
+    /// übrigen, rein persistenten Einstellungen (`tauri-plugin-store`,
+    /// s. `crate::mcp_settings`), weil Token/Allow-Liste/laufender Server
+    /// **live** sein müssen (ein "Neu generieren" muss das alte Token
+    /// sofort invalidieren, kein Neustart der App nötig).
+    pub mcp: McpState,
+}
+
+pub struct McpState {
+    /// Live-veränderlich (s. `mcp_server::SharedToken`-Doc-Kommentar) —
+    /// bei "Neu generieren" wird hier direkt hineingeschrieben, ein bereits
+    /// laufender HTTP-Server sieht die Änderung beim nächsten Tool-Call.
+    pub token: mcp_server::SharedToken,
+    /// Spec 0028, Abschnitt 6: welche Server über MCP ansprechbar sind —
+    /// im Speicher gehalten (nicht bei jedem Tool-Call aus dem Store
+    /// gelesen), damit `crate::mcp_backend` sie synchron ohne zusätzliche
+    /// Async-I/O prüfen kann; `crate::mcp_settings` hält diesen Cache und
+    /// den persistierten Store synchron.
+    pub allowed_servers: std::sync::Mutex<std::collections::HashSet<ServerId>>,
+    /// `Some`, während der HTTP-Server läuft — `crate::mcp_settings`
+    /// startet/stoppt ihn und ersetzt diesen Wert entsprechend.
+    pub runtime: tokio::sync::Mutex<Option<mcp_server::McpServerHandle>>,
+}
+
+impl Default for McpState {
+    /// Der `SharedToken`-Startwert ist irrelevant, solange kein Server
+    /// läuft (`runtime` startet als `None`) — `crate::mcp_settings::
+    /// get_mcp_server_settings` synchronisiert ihn beim ersten Aufruf mit
+    /// dem persistierten (oder frisch generierten) Token.
+    fn default() -> Self {
+        Self {
+            token: mcp_server::SharedToken::new(Uuid::new_v4().to_string()),
+            allowed_servers: std::sync::Mutex::new(std::collections::HashSet::new()),
+            runtime: tokio::sync::Mutex::new(None),
+        }
+    }
 }

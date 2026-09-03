@@ -156,7 +156,10 @@
     "runningSince": "running for {{seconds}}s…",
     "cancelCommand": "Disconnect this command",
     "cancellingCommand": "Disconnecting…",
-    "commandCancelledNotice": "⚠ Manually cancelled — output may be incomplete, no regular exit code."
+    "commandCancelledNotice": "⚠ Manually cancelled — output may be incomplete, no regular exit code.",
+    "mcpOrigin": "Requested via: {{name}}",
+    "mcpOriginGeneric": "external tool (MCP)",
+    "mcpOriginHint": "This action was not requested by the internal chat, but by an external tool via the local MCP server."
   },
   "confirmDialog": {
     "editableCommand": "Command — editable",
@@ -267,5 +270,17 @@
     "SERVER_PRIVATE_KEY_REQUIRED": "Private key is required",
     "SERVER_CERTIFICATE_REQUIRED": "Certificate is required",
     "SERVER_CERTIFICATE_KEY_REQUIRED": "Certificate key is required"
+  },
+  "mcpServer": {
+    "title": "MCP server (for external tools like Claude Code)",
+    "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",
+    "enable": "Enable MCP server",
+    "endpointLabel": "Connection endpoint",
+    "tokenLabel": "Token",
+    "regenerateToken": "Regenerate token",
+    "regenerateConfirm": "Generate a new token? The old token becomes invalid immediately — already configured external clients must be updated with the new value.",
+    "allowListLabel": "Server allow list (reachable via MCP)",
+    "noServers": "No servers set up yet.",
+    "exampleConfigHint": "Example configuration for Claude Code (.mcp.json / \"claude mcp add --transport http\"):"
   }
 }
