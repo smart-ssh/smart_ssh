@@ -8,6 +8,12 @@ use crate::ssh::CommandOutput;
 /// **immer**, unabhängig vom gewählten Provider, auch bei lokalen Modellen.
 pub trait OutputRedactor: Send + Sync {
     fn redact(&self, output: &CommandOutput) -> CommandOutput;
+
+    /// Wendet dieselben Muster wie [`Self::redact`] auf eine reine
+    /// Textzeichenkette an — für Stellen, die kein `CommandOutput` haben
+    /// (z. B. das ausgeführte Kommando selbst, das bisher unredigiert
+    /// geloggt wurde, unabhängiger Review-Pass Spec 0016).
+    fn redact_text(&self, text: &str) -> String;
 }
 
 /// Platzhalter, der einen erkannten Treffer ersetzt.
@@ -117,6 +123,10 @@ impl OutputRedactor for DefaultOutputRedactor {
             stderr: redact_bytes(&output.stderr, &self.patterns),
             exit_code: output.exit_code,
         }
+    }
+
+    fn redact_text(&self, text: &str) -> String {
+        String::from_utf8_lossy(&redact_bytes(text.as_bytes(), &self.patterns)).into_owned()
     }
 }
 

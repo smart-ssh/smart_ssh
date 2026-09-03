@@ -128,6 +128,13 @@ pub fn init_logging() -> WorkerGuard {
     let file_appender = tracing_appender::rolling::daily(&dir, LOG_FILE_PREFIX);
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
+    // Unabhängiger Review-Pass (Spec 0016): Log-Dateien tragen Kommando-
+    // Text/System-Kontext (nur best-effort redigiert, s. `log_outgoing_
+    // context`/`log_command_execution`) und verdienen dieselbe
+    // Zugriffsbeschränkung wie die SQLite-DB und `host_keys.json` (0700/
+    // 0600) statt der OS-Standardrechte (typ. 0755/0644, weltlesbar).
+    harden_log_permissions(&dir);
+
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
 
@@ -140,6 +147,28 @@ pub fn init_logging() -> WorkerGuard {
 
     guard
 }
+
+/// Setzt den Log-Ordner auf `0700` und jede darin liegende Datei auf
+/// `0600` — dasselbe Muster wie
+/// `persistence_sqlite::store::SqliteProfileStore::connect` (DB-Datei) und
+/// `host_key_store::write_atomically` (`host_keys.json`). Best-effort (wie
+/// dort): ein fehlgeschlagenes `chmod` verhindert nicht den App-Start.
+#[cfg(unix)]
+fn harden_log_permissions(dir: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o700));
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if entry.file_type().is_ok_and(|t| t.is_file()) {
+            let _ = fs::set_permissions(entry.path(), fs::Permissions::from_mode(0o600));
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn harden_log_permissions(_dir: &Path) {}
 
 #[cfg(test)]
 mod tests {
@@ -170,6 +199,27 @@ mod tests {
         .unwrap();
 
         assert!(!path.exists());
+    }
+
+    /// Unabhängiger Review-Pass (Spec 0016): Log-Ordner/-Dateien müssen
+    /// dieselbe 0700/0600-Beschränkung bekommen wie die SQLite-DB und
+    /// `host_keys.json` (s. `store::tests`/`host_key_store::tests::
+    /// test_t10_posix_permissions_enforced` für dasselbe Testmuster).
+    #[cfg(unix)]
+    #[test]
+    fn test_harden_log_permissions_sets_0700_dir_and_0600_files() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("smart-ssh.log.today");
+        File::create(&file_path).unwrap();
+
+        harden_log_permissions(dir.path());
+
+        let dir_mode = fs::metadata(dir.path()).unwrap().permissions().mode();
+        assert_eq!(dir_mode & 0o777, 0o700);
+        let file_mode = fs::metadata(&file_path).unwrap().permissions().mode();
+        assert_eq!(file_mode & 0o777, 0o600);
     }
 
     #[test]
