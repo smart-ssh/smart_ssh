@@ -260,6 +260,7 @@
     "FILTER_COMMAND_TOO_LONG": "Command exceeds the length limit",
     "FILTER_PARSE_AMBIGUOUS": "Command could not be parsed unambiguously",
     "FILTER_HARD_BLACKLIST": "Hard blacklist: potentially dangerous command",
+    "FILTER_OUTPUT_REDIRECTION": "Output redirection (>, >>, ...) detected",
     "FILTER_COMMAND_SUBSTITUTION": "Command substitution detected",
     "FILTER_RULE_DENY": "Blocked by a rule",
     "FILTER_RULE_CONFIRM": "Rule requires confirmation",
@@ -272,7 +273,8 @@
     "SERVER_PASSWORD_REQUIRED": "Password is required",
     "SERVER_PRIVATE_KEY_REQUIRED": "Private key is required",
     "SERVER_CERTIFICATE_REQUIRED": "Certificate is required",
-    "SERVER_CERTIFICATE_KEY_REQUIRED": "Certificate key is required"
+    "SERVER_CERTIFICATE_KEY_REQUIRED": "Certificate key is required",
+    "SERVER_JUMP_HOST_LOCAL": "The local pseudo-server cannot be used as a jump host"
   },
   "mcpServer": {
     "title": "MCP server (for external tools like Claude Code)",

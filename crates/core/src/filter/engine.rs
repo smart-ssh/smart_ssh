@@ -189,8 +189,19 @@ impl<S: PolicyStore> FilterEngine<S> {
         let original_literal = parser::normalize_whitespace(&original_literal);
         let stripped_literal = parser::normalize_whitespace(&stripped_literal);
 
+        // Zusätzlich zum Original- und Sudo-befreiten Text (Dual-Text-
+        // Matching, ADR 0002 — dort geht es um Nutzerregeln) wird für die
+        // Hard-Blacklist noch eine dritte, aggressiver normalisierte Fassung
+        // geprüft: wiederholt um `sudo`/Wrapper-Präfixe befreit und am
+        // ersten Wort entquotet (`resolve_effective_command`). Sonst
+        // umgehen einfache Verschleierungen wie `env rm -rf /`,
+        // `sudo -u root rm -rf /` oder `"rm" -rf /` die Blacklist komplett,
+        // obwohl Abschnitt 3.1 sie ausdrücklich "unabhängig von
+        // Nutzerregeln" verlangt (unabhängiger Review-Pass, Spec 0002).
+        let resolved_literal = parser::resolve_effective_command(&original_literal);
         let matched_hard_blacklist_entry = blacklist::matching_entry(&original_literal)
-            .or_else(|| blacklist::matching_entry(&stripped_literal));
+            .or_else(|| blacklist::matching_entry(&stripped_literal))
+            .or_else(|| blacklist::matching_entry(&resolved_literal));
         let blacklist_decision = if matched_hard_blacklist_entry.is_some() {
             Decision::Confirm {
                 reason: "Hard-Blacklist: potenziell gefährliches Kommando".to_string(),
@@ -199,6 +210,21 @@ impl<S: PolicyStore> FilterEngine<S> {
         } else {
             Decision::AutoExec
         };
+
+        // Ausgabe-Umleitung (`>`, `>>`, `2>`, ...) erzwingt mindestens
+        // Confirm, unabhängig von einer sonst passenden Allow-Regel — die
+        // Engine kannte Umleitungsziele bislang gar nicht, wodurch z. B.
+        // `Allow: ls *` auch `ls -la > /etc/passwd` unbestätigt durchließ
+        // (unabhängiger Review-Pass, Spec 0002).
+        let redirection_decision =
+            if parser::contains_unquoted_output_redirection(&original_literal) {
+                Decision::Confirm {
+                    reason: "Ausgabe-Umleitung (>, >>, 2>, ...) erkannt".to_string(),
+                    code: FILTER_OUTPUT_REDIRECTION.to_string(),
+                }
+            } else {
+                Decision::AutoExec
+            };
 
         let (rule_decision, matched_rule) =
             evaluate_rules_explained(rules, &original_literal, &stripped_literal);
@@ -224,8 +250,11 @@ impl<S: PolicyStore> FilterEngine<S> {
         };
 
         let decision = combine(
-            combine(rule_decision, substitution_decision),
-            blacklist_decision,
+            combine(
+                combine(rule_decision, substitution_decision),
+                blacklist_decision,
+            ),
+            redirection_decision,
         );
 
         EvaluationTrace {
@@ -374,6 +403,7 @@ const FILTER_EMPTY_COMMAND: &str = "FILTER_EMPTY_COMMAND";
 const FILTER_COMMAND_TOO_LONG: &str = "FILTER_COMMAND_TOO_LONG";
 const FILTER_PARSE_AMBIGUOUS: &str = "FILTER_PARSE_AMBIGUOUS";
 const FILTER_HARD_BLACKLIST: &str = "FILTER_HARD_BLACKLIST";
+const FILTER_OUTPUT_REDIRECTION: &str = "FILTER_OUTPUT_REDIRECTION";
 const FILTER_COMMAND_SUBSTITUTION: &str = "FILTER_COMMAND_SUBSTITUTION";
 const FILTER_RULE_DENY: &str = "FILTER_RULE_DENY";
 const FILTER_RULE_CONFIRM: &str = "FILTER_RULE_CONFIRM";
@@ -389,10 +419,11 @@ fn code_priority(code: &str) -> u8 {
         FILTER_RULE_DENY => 1,
         FILTER_RULE_CONFIRM => 2,
         FILTER_COMMAND_SUBSTITUTION => 3,
-        FILTER_COMMAND_TOO_LONG => 4,
-        FILTER_PARSE_AMBIGUOUS => 5,
-        FILTER_NO_RULE_MATCHED => 6,
-        FILTER_EMPTY_COMMAND => 7,
+        FILTER_OUTPUT_REDIRECTION => 4,
+        FILTER_COMMAND_TOO_LONG => 5,
+        FILTER_PARSE_AMBIGUOUS => 6,
+        FILTER_NO_RULE_MATCHED => 7,
+        FILTER_EMPTY_COMMAND => 8,
         _ => u8::MAX,
     }
 }
@@ -440,6 +471,7 @@ mod code_tests {
             FILTER_COMMAND_TOO_LONG,
             FILTER_PARSE_AMBIGUOUS,
             FILTER_HARD_BLACKLIST,
+            FILTER_OUTPUT_REDIRECTION,
             FILTER_COMMAND_SUBSTITUTION,
             FILTER_RULE_DENY,
             FILTER_RULE_CONFIRM,

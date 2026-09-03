@@ -181,17 +181,169 @@ pub(super) fn strip_substitutions(text: &str) -> (String, Vec<String>) {
 
 /// Here-Docs und `bash -c "..."`-artige Aufrufe komplett als einen Block
 /// behandeln statt zu versuchen sie zu parsen, siehe
-/// `docs/adr/0001-mehrzeilige-skripte-als-block.md`.
+/// `docs/adr/0001-mehrzeilige-skripte-als-block.md`. Prüft sowohl den
+/// unveränderten Text als auch die um `sudo`/Wrapper-Präfixe bereinigte
+/// Fassung (`resolve_effective_command`) — sonst umgeht z. B. `sudo bash -c
+/// "rm -rf /"` diese Prüfung komplett, weil das erste Wort "sudo" statt
+/// "bash" ist (unabhängiger Review-Pass, Spec 0002).
 fn looks_like_heredoc_or_complex_shell_c(cmd: &str) -> bool {
     if cmd.contains("<<") {
         return true;
     }
+    if is_complex_shell_c_invocation(cmd) {
+        return true;
+    }
+    let resolved = resolve_effective_command(cmd);
+    resolved != cmd && is_complex_shell_c_invocation(&resolved)
+}
+
+fn is_complex_shell_c_invocation(cmd: &str) -> bool {
     let mut words = cmd.split_whitespace();
     if let (Some(prog), Some(flag)) = (words.next(), words.next()) {
         let prog = prog.rsplit('/').next().unwrap_or(prog);
-        if matches!(prog, "bash" | "sh" | "zsh" | "dash") && flag == "-c" {
-            return true;
+        if matches!(prog, "bash" | "sh" | "zsh" | "dash") {
+            // Nicht nur das exakte "-c", sondern auch kombinierte
+            // Kurz-Flags, die ein "c" enthalten (`-xc`, `-lc`, `-ec`, ...)
+            // — `bash -xc "..."` ist derselbe "ganzes Skript als ein Block"-
+            // Fall wie `bash -c "..."`.
+            let is_c_flag = flag == "-c"
+                || (flag.starts_with('-') && !flag.starts_with("--") && flag.contains('c'));
+            if is_c_flag {
+                return true;
+            }
         }
+    }
+    false
+}
+
+/// Bekannte "durchreichende" Kommandos — sie führen ihr letztes Argument
+/// unverändert als Kommando aus, ändern selbst aber nichts an der
+/// eigentlichen Aktion. Nicht erschöpfend (kein vollständiger CLI-Parser für
+/// jeden Wrapper), deckt aber die in der Praxis üblichen
+/// Verschleierungsversuche gegen die Hard-Blacklist ab (Spec 0002, Abschnitt
+/// 3.1: "unabhängig von Nutzerregeln" — eine fest verdrahtete Blacklist, die
+/// ein simples `env rm -rf /` nicht erkennt, hält dieses Versprechen nicht).
+const PASSTHROUGH_WRAPPERS: &[&str] = &["env", "nice", "nohup", "time", "command"];
+
+/// Löst den tatsächlich auszuführenden Kommandokern heraus: entfernt
+/// wiederholt (bis zum Fixpunkt, deckt z. B. `sudo sudo rm -rf /` ab)
+/// `sudo`/`doas`-Präfixe samt der gebräuchlichsten wertetragenden Flags
+/// (`-u`/`--user`, `-g`/`--group`) sowie bekannte durchreichende
+/// Wrapper-Kommandos (s. [`PASSTHROUGH_WRAPPERS`]), und entfernt
+/// abschließend umschließende Anführungszeichen/Escapes vom ersten
+/// verbleibenden Wort (`"rm" -rf /` bzw. `r\m -rf /` → `rm -rf /`).
+///
+/// Bewusst kein vollständiger Shell-/CLI-Parser — ein Best-effort-
+/// Normalisierungsschritt gegen die in der Praxis üblichen
+/// Verschleierungsversuche, zusätzlich zum bisherigen einfachen
+/// `detect_elevation` (das für das Dual-Text-Regel-Matching aus ADR 0002
+/// unverändert bleibt — hier geht es ausschließlich um die Hard-Blacklist-
+/// Prüfung, s. `engine::evaluate_segment_explained`).
+pub(super) fn resolve_effective_command(normalized: &str) -> String {
+    let mut current = normalized.to_string();
+    loop {
+        let stripped = strip_one_elevation_or_wrapper(&current);
+        if stripped == current {
+            break;
+        }
+        current = stripped;
+    }
+    unquote_first_word(&current)
+}
+
+fn strip_one_elevation_or_wrapper(cmd: &str) -> String {
+    let words: Vec<&str> = cmd.split_whitespace().collect();
+    let Some(&head) = words.first() else {
+        return cmd.to_string();
+    };
+    let is_elevation = head == "sudo" || head == "doas";
+    let is_wrapper = PASSTHROUGH_WRAPPERS.contains(&head);
+    if !is_elevation && !is_wrapper {
+        return cmd.to_string();
+    }
+
+    let mut i = 1;
+    while i < words.len() && words[i].starts_with('-') {
+        let flag = words[i];
+        i += 1;
+        let takes_value = (is_elevation && matches!(flag, "-u" | "--user" | "-g" | "--group"))
+            || (head == "nice" && flag == "-n");
+        if takes_value && i < words.len() {
+            i += 1;
+        }
+    }
+    normalize_whitespace(&words[i..].join(" "))
+}
+
+/// Entfernt umschließende `'...'`/`"..."`-Anführungszeichen oder
+/// Backslash-Escapes vom ERSTEN Wort (`"rm" -rf /` bzw. `r\m -rf /` →
+/// `rm -rf /`) — eine reine Textzerlegung wie diese Engine sie betreibt
+/// (kein echtes Shell-Tokenizing für die Blacklist-Prüfung) würde das
+/// Blacklist-Muster sonst nie am literal quotierten/escapten ersten Wort
+/// matchen lassen, obwohl eine echte Shell die Quotes/Escapes selbst
+/// entfernen und schlicht `rm -rf /` ausführen würde.
+fn unquote_first_word(cmd: &str) -> String {
+    let trimmed = cmd.trim_start();
+    let rest_start = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
+    let (first, rest) = trimmed.split_at(rest_start);
+
+    let cleaned_first = if first.len() >= 2
+        && ((first.starts_with('\'') && first.ends_with('\''))
+            || (first.starts_with('"') && first.ends_with('"')))
+    {
+        first[1..first.len() - 1].to_string()
+    } else {
+        first.replace('\\', "")
+    };
+
+    if rest.is_empty() {
+        cleaned_first
+    } else {
+        format!("{cleaned_first}{rest}")
+    }
+}
+
+/// Erkennt eine nicht in Anführungszeichen stehende Ausgabe-Umleitung (`>`,
+/// `>>`, `2>`, `&>`, ...) auf Top-Level. Die Engine kannte Umleitungsziele
+/// bislang überhaupt nicht — eine Allow-Regel für z. B. `ls *` ließ dadurch
+/// auch `ls -la > /etc/passwd` unbestätigt durchgehen (unabhängiger
+/// Review-Pass, Spec 0002 — arbiträres Datei-Überschreiben über die
+/// harmloseste denkbare Whitelist-Regel). Ein `>` direkt vor `(` ist
+/// Process-Substitution (`>(...)`, bereits separat über
+/// `strip_substitutions`/Klammer-Tiefe in [`scan_top_level_segments`]
+/// behandelt), keine Umleitung.
+pub(super) fn contains_unquoted_output_redirection(text: &str) -> bool {
+    let chars: Vec<char> = text.chars().collect();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut i = 0usize;
+    while i < chars.len() {
+        let c = chars[i];
+        if in_single {
+            if c == '\'' {
+                in_single = false;
+            }
+            i += 1;
+            continue;
+        }
+        if in_double {
+            if c == '\\' && i + 1 < chars.len() {
+                i += 2;
+                continue;
+            }
+            if c == '"' {
+                in_double = false;
+            }
+            i += 1;
+            continue;
+        }
+        match c {
+            '\'' => in_single = true,
+            '"' => in_double = true,
+            '>' if chars.get(i + 1) != Some(&'(') => return true,
+            _ => {}
+        }
+        i += 1;
     }
     false
 }

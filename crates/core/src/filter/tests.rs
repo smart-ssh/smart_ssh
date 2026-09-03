@@ -471,3 +471,118 @@ async fn test_blacklist_evasion_variants() {
         assert_confirm(&decision);
     }
 }
+
+// --- Unabhängiger Review-Pass (Spec 0002): verifizierte Bypässe ---------
+//
+// Diese drei Testgruppen bilden exakt die vom Review-Agent empirisch gegen
+// die echte Engine nachgewiesenen Umgehungen nach — vorher jeweils
+// AutoExec, obwohl Abschnitt 3.1 die Hard-Blacklist "unabhängig von
+// Nutzerregeln" verlangt bzw. eine Ausgabe-Umleitung von der Engine bislang
+// überhaupt nicht als eigenständig zu bewertendes Element erkannt wurde.
+
+/// Die harmloseste denkbare Whitelist-Regel (`ls *`, das Spec-eigene
+/// Beispiel) durfte bislang trotzdem eine beliebige Datei überschreiben,
+/// weil Umleitungsziele der Engine komplett unsichtbar waren.
+#[tokio::test]
+async fn test_output_redirection_forces_confirm_even_with_matching_allow_rule() {
+    let eng = engine(vec![glob_rule(
+        "allow-ls",
+        "ls *",
+        RuleAction::Allow,
+        Scope::Global,
+        100,
+    )]);
+    for cmd in [
+        "ls -la > /etc/passwd",
+        "ls -la >> /root/.ssh/authorized_keys",
+        "ls -la > \"/etc/shadow\"",
+        "ls -la 2>/tmp/err",
+    ] {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert_confirm(&decision);
+    }
+}
+
+/// Ein `>` innerhalb von Anführungszeichen (reiner Text, keine echte
+/// Umleitung) und `>(` (Process-Substitution, separat behandelt) dürfen
+/// NICHT fälschlich als Umleitung erkannt werden.
+#[tokio::test]
+async fn test_quoted_or_process_substitution_greater_than_is_not_a_redirection() {
+    let eng = engine(vec![glob_rule(
+        "allow-echo",
+        "echo *",
+        RuleAction::Allow,
+        Scope::Global,
+        100,
+    )]);
+    let decision = eng.evaluate("echo \"a > b\"", &ctx("srv1", &[])).await;
+    assert_auto_exec(&decision);
+}
+
+/// Wrapper-Kommandos (`env`, `nice`, `nohup`, `time`, `command`) sowie
+/// Sudo-Flags/-Verdopplung und Quoting/Escaping des ersten Worts durften
+/// die Hard-Blacklist bislang umgehen.
+#[tokio::test]
+async fn test_hard_blacklist_cannot_be_evaded_via_wrappers_sudo_flags_or_quoting() {
+    let eng = engine(vec![]);
+    for cmd in [
+        "env rm -rf /",
+        "nice rm -rf /",
+        "nohup rm -rf /",
+        "time rm -rf /",
+        "command rm -rf /",
+        "sudo -u root rm -rf /",
+        "sudo --user=root rm -rf /",
+        "sudo sudo rm -rf /",
+        "\"rm\" -rf /",
+        "'rm' -rf /",
+        "r\\m -rf /",
+    ] {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert_confirm(&decision);
+    }
+}
+
+/// Dieselbe Wrapper-Umgehung darf auch nicht über Chaining eine sonst
+/// zutreffende Allow-Regel unterlaufen (Testfall 3: "Chaining darf die
+/// Blacklist nicht umgehen").
+#[tokio::test]
+async fn test_chaining_with_wrapper_evasion_still_hits_blacklist() {
+    let eng = engine(vec![
+        glob_rule("allow-ls", "ls *", RuleAction::Allow, Scope::Global, 100),
+        glob_rule(
+            "allow-sudo",
+            "sudo *",
+            RuleAction::Allow,
+            Scope::Global,
+            100,
+        ),
+    ]);
+    let decision = eng
+        .evaluate("ls -la && sudo -u root rm -rf /", &ctx("srv1", &[]))
+        .await;
+    assert_confirm(&decision);
+}
+
+/// `sudo bash -c "..."` / `bash -xc "..."` müssen wie ein einfaches
+/// `bash -c "..."` als Ganzes-Skript-Block behandelt werden (ADR 0001) —
+/// vorher griff der Guard nur, wenn "bash"/"sh"/... exakt das erste Wort
+/// war, nicht nach einem `sudo`-Präfix bzw. bei kombinierten Kurz-Flags.
+#[tokio::test]
+async fn test_sudo_or_combined_flag_shell_c_is_treated_as_complex_script_block() {
+    let eng = engine(vec![glob_rule(
+        "allow-sudo",
+        "sudo *",
+        RuleAction::Allow,
+        Scope::Global,
+        100,
+    )]);
+    for cmd in [
+        "sudo bash -c \"rm -rf /\"",
+        "bash -xc \"rm -rf /\"",
+        "sh -lc 'rm -rf /'",
+    ] {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert_confirm(&decision);
+    }
+}
