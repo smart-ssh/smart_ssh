@@ -226,3 +226,100 @@ fn test_redactor_detects_pgp_and_pkcs8_private_keys() {
     assert!(!redacted_pkcs8.contains("MIIFDjBABgkqhkiG9w0BBQ0wMzAbBgkqhkiG9w0BBQwwDgQI"));
     assert!(redacted_pkcs8.contains("[REDACTED]"));
 }
+
+/// Regressionstest für den unabhängigen Review-Pass (Spec 0006): das
+/// unverschlüsselte, moderne PKCS8-Format ("-----BEGIN PRIVATE KEY-----",
+/// ohne jeden Typ-Präfix — z. B. `openssl genpkey`, Let's-Encrypt-
+/// `privkey.pem`, Kubernetes-`tls.key`, GCP-Service-Account-JSON) wurde
+/// bislang gar nicht erkannt, weil das Muster fälschlich mindestens ein
+/// Zeichen zwischen "BEGIN " und "PRIVATE KEY" verlangte. Genau dieser Fall
+/// ist der von Spec 0006 Abschnitt 5 zuerst genannte ("Private-Key-Blöcke").
+#[test]
+fn test_redactor_detects_plain_unencrypted_pkcs8_private_key() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output(
+        "vor dem Key\n\
+         -----BEGIN PRIVATE KEY-----\n\
+         MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEA\n\
+         -----END PRIVATE KEY-----\n\
+         nach dem Key",
+    );
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(redacted.contains("[REDACTED]"));
+    assert!(!redacted.contains("MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEA"));
+    assert!(redacted.starts_with("vor dem Key"));
+    assert!(redacted.ends_with("nach dem Key"));
+}
+
+/// Regressionstest: fehlt das schließende `-----END ... PRIVATE
+/// KEY-----` (z. B. weil die Ausgabe an der 2-MB-Obergrenze oder durch
+/// einen manuellen Abbruch mitten im Key-Block gekappt wurde), muss die
+/// Redaction trotzdem ab dem erkannten `BEGIN`-Header greifen (Fail-safe,
+/// Spec 0002 Abschnitt 1) statt den unvollständigen Key komplett
+/// durchzulassen.
+#[test]
+fn test_redactor_redacts_truncated_private_key_without_matching_end() {
+    let redactor = DefaultOutputRedactor::new();
+    let input =
+        output("vor dem Key\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKc");
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(redacted.contains("[REDACTED]"));
+    assert!(!redacted.contains("MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKc"));
+    assert!(redacted.starts_with("vor dem Key"));
+}
+
+/// Regressionstest: JSON-artige Ausgaben (`docker inspect`, `kubectl get
+/// -o json`, Service-Account-Dateien) haben den Schlüssel selbst in
+/// Anführungszeichen — direkt gefolgt vom schließenden Quote, nicht vom
+/// Trenner (`"password": "hunter2"` statt `password: "hunter2"`). Ohne ein
+/// optionales Quote-Zeichen direkt nach dem Schlüsselwort brach das
+/// Matching genau an dieser Stelle ab.
+#[test]
+fn test_redactor_detects_json_shaped_credential_fields() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output(r#"{"password": "hunter2", "api_key":"sk-superduper"}"#);
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("hunter2"));
+    assert!(!redacted.contains("sk-superduper"));
+    assert!(redacted.contains("[REDACTED]"));
+}
+
+/// Regressionstest: `aws_secret_access_key = ...` (z. B. aus
+/// `~/.aws/credentials`) wurde vom generischen `secret`-Muster nicht
+/// erfasst — "secret" steckt zwar als Teilstring in
+/// "aws_secret_access_key", aber direkt danach folgt "_access_key", kein
+/// Trenner, wodurch das generische Muster dort nicht matcht.
+#[test]
+fn test_redactor_detects_aws_secret_access_key_line() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output(
+        "aws_access_key_id = AKIAABCDEFGHIJKLMNOP\naws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    );
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"));
+    assert!(redacted.contains("[REDACTED]"));
+}
+
+/// Regressionstest: das neuere, fein-granulare GitHub-Token-Format
+/// (`github_pat_...`) ist deutlich länger als die klassischen Präfixe
+/// (`ghp_`/`gho_`/...) und wurde vom bisherigen Muster nicht erfasst.
+#[test]
+fn test_redactor_detects_github_fine_grained_token() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output(
+        "GITHUB_TOKEN=github_pat_11ABCDEFG0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP",
+    );
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("11ABCDEFG0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP"));
+    assert!(redacted.contains("[REDACTED]"));
+}

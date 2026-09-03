@@ -49,27 +49,64 @@ impl Default for DefaultOutputRedactor {
 fn built_in_patterns() -> Vec<Regex> {
     vec![
         // Private-Key-Blöcke (RSA/EC/OPENSSH/PKCS8 ...), über mehrere
-        // Zeilen hinweg — `(?s)`, damit `.` auch Zeilenumbrüche matcht.
+        // Zeilen hinweg — `(?s)`, damit `.` auch Zeilenumbrüche matcht. Der
+        // Typ-Teil (`RSA `/`OPENSSH `/`ENCRYPTED ` ...) ist absichtlich
+        // OPTIONAL (`(?:...)?`, nicht `+`): das unverschlüsselte, moderne
+        // PKCS8-Format hat schlicht "-----BEGIN PRIVATE KEY-----" ohne
+        // jeden Typ-Präfix (z. B. `openssl genpkey`, Let's-Encrypt-
+        // `privkey.pem`, Kubernetes-`tls.key`, GCP-Service-Account-JSON) —
+        // die vorherige Fassung verlangte hier zwingend mindestens ein
+        // Zeichen und ließ dadurch genau diesen häufigsten Fall
+        // unerkannt durch (unabhängiger Review-Pass, Spec 0006).
         Regex::new(
-            r"(?s)-----BEGIN [A-Z0-9_\- ]+PRIVATE KEY[A-Z0-9_\- ]*-----.*?-----END [A-Z0-9_\- ]+PRIVATE KEY[A-Z0-9_\- ]*-----",
+            r"(?s)-----BEGIN (?:[A-Z0-9_\-]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z0-9_\-]+ )?PRIVATE KEY-----",
         )
         .expect("eingebautes Private-Key-Muster ist gültig"),
-        // PGP Private Keys
+        // Fail-safe-Rückfallebene zum vorigen Muster: fehlt das passende
+        // `-----END ... PRIVATE KEY-----` (z. B. weil die Ausgabe bei der
+        // 2-MB-Obergrenze oder einem manuellen Abbruch mitten im
+        // Key-Block gekappt wurde), matcht das obige Muster gar nicht —
+        // dann lieber ab dem erkannten `BEGIN`-Header bis zum Ende
+        // redigieren als den kompletten (unvollständigen) Key
+        // unredigiert durchzulassen (Spec 0002 Abschnitt 1: Fail-safe).
+        Regex::new(r"(?s)-----BEGIN (?:[A-Z0-9_\-]+ )?PRIVATE KEY-----.*")
+            .expect("eingebautes Private-Key-Rückfallmuster ist gültig"),
+        // PGP Private Keys, mit derselben Fail-safe-Rückfallebene.
         Regex::new(r"(?s)-----BEGIN PGP PRIVATE KEY BLOCK-----.*?-----END PGP PRIVATE KEY BLOCK-----")
             .expect("eingebautes PGP-Private-Key-Muster ist gültig"),
-        // password=/token=/api_key=/secret=/passphrase=-artige Zeilen, auch mit : und Quotes
+        Regex::new(r"(?s)-----BEGIN PGP PRIVATE KEY BLOCK-----.*")
+            .expect("eingebautes PGP-Private-Key-Rückfallmuster ist gültig"),
+        // password=/token=/api_key=/secret=/passphrase=-artige Zeilen, auch
+        // mit : und Quotes. `['"]?` direkt nach dem Schlüsselwort deckt
+        // JSON-artige Ausgaben ab (`"password": "hunter2"` — der Schlüssel
+        // selbst steht dort in Anführungszeichen, direkt gefolgt vom
+        // schließenden Quote, nicht vom Trenner; ohne dieses `['"]?` bricht
+        // das Matching genau an dieser Stelle ab, unabhängiger Review-Pass
+        // Spec 0006).
         Regex::new(
-            r#"(?i)(password|token|api_key|secret|passphrase)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|\S+)"#,
+            r#"(?i)(password|token|api_key|secret|passphrase)['"]?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|\S+)"#,
         )
         .expect("eingebautes Credential-Zeilen-Muster ist gültig"),
+        // `aws_secret_access_key = ...` — vom Muster oben NICHT erfasst:
+        // "secret" ist zwar als Teilstring in "aws_secret_access_key"
+        // enthalten, aber unmittelbar danach folgt "_access_key", kein
+        // Trenner, wodurch das obige Muster dort nicht matcht. Eigenes,
+        // spezifisches Muster für genau diesen (extrem gebräuchlichen,
+        // z. B. `~/.aws/credentials`) Schlüsselnamen.
+        Regex::new(r"(?i)aws_secret_access_key\s*[:=]\s*\S+")
+            .expect("eingebautes AWS-Secret-Key-Muster ist gültig"),
         // Bearer Tokens
         Regex::new(r"(?i)Bearer\s+[A-Za-z0-9_\-\.]{16,}")
             .expect("eingebautes Bearer-Token-Muster ist gültig"),
         // AWS-Access-Key- & Session-Token-Muster (AKIA, ASIA)
         Regex::new(r"(AKIA|ASIA)[0-9A-Z]{16}").expect("eingebautes AWS-Key-Muster ist gültig"),
-        // GitHub Personal Access Tokens (ghp_, gho_, ghu_, ghs_, ghr_)
+        // GitHub Personal Access Tokens: klassisches Format (ghp_, gho_,
+        // ghu_, ghs_, ghr_, 36+ Zeichen) sowie das neuere,
+        // fein-granulare Format (`github_pat_...`, deutlich länger).
         Regex::new(r"(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}")
             .expect("eingebautes GitHub-Token-Muster ist gültig"),
+        Regex::new(r"github_pat_[A-Za-z0-9_]{20,}")
+            .expect("eingebautes GitHub-Fine-Grained-Token-Muster ist gültig"),
     ]
 }
 
