@@ -10,6 +10,7 @@ mod discovery;
 mod error;
 mod fallback;
 mod openai_compatible;
+mod prompt_escape;
 mod request_logging;
 mod sse;
 
