@@ -54,3 +54,4 @@ tempfile = "3.27.0"
 # eigene Tests — nur unter `[dev-dependencies]`, landet also nie in einem
 # Release-Build.
 ssh-manager-core = { path = "../core", features = ["test-support"] }
+tauri = { version = "2", features = ["test"] }

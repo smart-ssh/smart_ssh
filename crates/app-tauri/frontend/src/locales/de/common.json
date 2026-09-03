@@ -282,5 +282,12 @@
     "allowListLabel": "Server-Allow-Liste (über MCP ansprechbar)",
     "noServers": "Noch keine Server angelegt.",
     "exampleConfigHint": "Beispiel-Konfiguration für Claude Code (.mcp.json bzw. „claude mcp add --transport http\"):"
+  },
+  "firstRunNotice": {
+    "title": "Bevor es losgeht",
+    "responsibilityText": "Smart SSH schlägt dir Kommandos vor, die eine KI basierend auf deinen Anfragen generiert. Nichts wird ausgeführt, ohne dass du es bestätigst — außer du hast das über eigene Regeln bewusst anders eingestellt. Die Verantwortung für jedes bestätigte Kommando liegt bei dir.",
+    "encryptionText": "Die lokale Datenbank ist nicht zusätzlich verschlüsselt. Wir empfehlen, die Festplattenverschlüsselung deines Betriebssystems zu aktivieren, falls noch nicht geschehen.",
+    "checkboxLabel": "Ich habe das gelesen und verstanden.",
+    "continueButton": "Weiter"
   }
 }

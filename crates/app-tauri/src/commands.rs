@@ -32,7 +32,7 @@ use crate::dto::{
     PatternSuggestionDto, PatternType, RemoteEntryDto, RuleDto, RuleInput, ServerDto, ServerInput,
     SessionSummaryDto, TestConnectionResult,
 };
-use crate::error::CommandResult;
+use crate::error::{CommandError, CommandResult};
 use crate::events::{
     emit_connection_status_changed, emit_host_key_verification_needed,
     emit_sftp_transfer_finished, emit_sftp_transfer_started, ConnectionStatus, EventEmitter,
@@ -291,6 +291,16 @@ pub(crate) async fn connect_session(
     server_id: ServerId,
     session_id: SessionId,
 ) -> CommandResult<SessionId> {
+    // Spec 0031, Abschnitt 4, letzter Punkt: serverseitige Durchsetzung
+    // zusätzlich zur Frontend-Sperre in `ServerList.tsx` — eine reine
+    // Frontend-Sperre wäre umgehbar (z. B. ein direkter
+    // `invoke("connect", ...)`-Aufruf ohne den UI-Umweg über
+    // `ServerList`). Greift für **jeden** Aufrufer dieser Funktion
+    // gleichermaßen, also auch für `crate::mcp_backend`s automatischen
+    // Verbindungsaufbau (Spec 0028) — dieselbe "neue Vertrauensgrenze
+    // verdient strengere Behandlung"-Logik wie dort.
+    ensure_first_run_notice_acknowledged(app)?;
+
     let server = state.profile_store.get_server(&server_id).await?;
     let target = resolve_connection_target(&server, state.profile_store.as_ref()).await?;
     let active_config = active_ai_provider_config(state).await?;
@@ -453,6 +463,99 @@ pub(crate) async fn connect_session(
     tracing::info!(session_id = %session_id, server_id = %server_id.0, "session connected");
     emit_connection_status_changed(app, session_id, ConnectionStatus::Connected, None);
     Ok(session_id)
+}
+
+/// Spec 0031, Abschnitt 4: der eigentliche Türsteher vor
+/// `connect_session` — als eigene, kleine, generische (über `R:
+/// tauri::Runtime`, damit sie sich mit `tauri::test::MockRuntime` statt
+/// nur der echten `Wry`-Runtime testen lässt) Funktion ausgelagert, statt
+/// nur inline in `connect_session` zu leben: `connect_session` selbst
+/// bräuchte für einen Test einen vollständigen `AppState` (echte
+/// SQLite-Stores, Keyring, Host-Key-Datei) — dieser Türsteher-Schritt
+/// passiert aber nachweislich, bevor irgendetwas davon angefasst wird,
+/// und lässt sich isoliert prüfen.
+fn ensure_first_run_notice_acknowledged<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> CommandResult<()> {
+    if crate::first_run_notice::is_acknowledged(app) {
+        Ok(())
+    } else {
+        Err(CommandError::with_code(
+            "Erststart-Hinweis muss zuerst bestätigt werden",
+            "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED",
+        ))
+    }
+}
+
+#[cfg(test)]
+mod connect_session_gate_tests {
+    use super::*;
+    use crate::first_run_notice::test_support::{lock, reset, test_app};
+    use tauri_plugin_store::StoreExt;
+
+    /// Spec 0031, Abschnitt 6: "`connect()` schlägt fehl/wird blockiert,
+    /// solange `first_run_notice_acknowledged` `false` ist" — geprüft am
+    /// exakten Türsteher-Schritt, den `connect_session` als Allererstes
+    /// aufruft, bevor irgendein anderer Teil der Verbindungslogik läuft.
+    /// `_guard`/`reset(...)`: s. `first_run_notice::test_support`-Moduldoc
+    /// — dieser Test teilt sich denselben echten Store mit
+    /// `first_run_notice::tests` und muss daher denselben Mutex halten und
+    /// seinen eigenen Ausgangszustand explizit herstellen.
+    #[test]
+    fn test_connect_session_gate_blocks_when_not_acknowledged() {
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle().clone();
+        reset(&handle);
+
+        let err = ensure_first_run_notice_acknowledged(&handle)
+            .expect_err("Erststart-Hinweis wurde nie bestätigt, muss fehlschlagen");
+        assert_eq!(err.code, Some("FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED"));
+    }
+
+    #[test]
+    fn test_connect_session_gate_passes_once_acknowledged() {
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle().clone();
+        reset(&handle);
+        let store = handle
+            .store("settings.json")
+            .expect("Store sollte sich öffnen lassen");
+        store.set("first_run_notice_acknowledged", serde_json::json!(true));
+
+        assert!(ensure_first_run_notice_acknowledged(&handle).is_ok());
+        reset(&handle);
+    }
+
+    /// Spec 0031, Abschnitt 6: "Bestätigung setzt die Einstellung korrekt
+    /// und dauerhaft (übersteht einen simulierten Neustart)" — eine zweite,
+    /// unabhängig aufgebaute `App`-Instanz (= simulierter Neustart) muss
+    /// den zuvor per `.save()` auf die Festplatte geschriebenen Wert
+    /// wiederfinden, nicht nur innerhalb derselben `App`-Instanz.
+    #[test]
+    fn test_acknowledgement_persists_across_a_simulated_restart() {
+        let _guard = lock();
+        {
+            let first_run_app = test_app();
+            let handle = first_run_app.handle().clone();
+            reset(&handle);
+            let store = handle
+                .store("settings.json")
+                .expect("Store sollte sich öffnen lassen");
+            store.set("first_run_notice_acknowledged", serde_json::json!(true));
+            store.save().expect("Store sollte sich speichern lassen");
+        }
+
+        // Neue, komplett unabhängige `App`-Instanz mit eigenem
+        // Store-Cache — simuliert einen App-Neustart, bei dem nichts mehr
+        // im Speicher steht außer dem, was tatsächlich auf der Platte
+        // gelandet ist (`store.save()` oben).
+        let restarted_app = test_app();
+        let restarted_handle = restarted_app.handle().clone();
+        assert!(ensure_first_run_notice_acknowledged(&restarted_handle).is_ok());
+        reset(&restarted_handle);
+    }
 }
 
 async fn build_session_system_context(

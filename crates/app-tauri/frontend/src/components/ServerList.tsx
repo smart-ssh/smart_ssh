@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { commandErrorMessage, confirmHostKey, connect, listServers } from "../api";
 import { onHostKeyVerificationNeeded } from "../events";
+import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
 import type { HostKeyVerificationNeededEvent, ServerDto } from "../types";
+import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { HostKeyDialog } from "./HostKeyDialog";
 
 interface ServerListProps {
@@ -35,6 +37,14 @@ export function ServerList({
   const [pendingHostKey, setPendingHostKey] = useState<HostKeyVerificationNeededEvent | null>(
     null,
   );
+  // Spec 0031, Abschnitt 4: `null` = noch nicht geladen (Laden ist ein
+  // schneller lokaler Store-Zugriff, ein kurzes Zeitfenster ohne Sperre
+  // wird bewusst hingenommen — die eigentliche Durchsetzung sitzt ohnehin
+  // serverseitig in `connect_session`, s. dortiger Kommentar; diese
+  // Frontend-Sperre ist nur für eine bewusste, unmittelbare Rückmeldung
+  // statt eines rohen Backend-Fehlers).
+  const [firstRunAcknowledged, setFirstRunAcknowledged] = useState<boolean | null>(null);
+  const [pendingConnectServer, setPendingConnectServer] = useState<ServerDto | null>(null);
 
   useEffect(() => {
     listServers()
@@ -44,18 +54,17 @@ export function ServerList({
   }, []);
 
   useEffect(() => {
+    loadFirstRunNoticeAcknowledged().then(setFirstRunAcknowledged);
+  }, []);
+
+  useEffect(() => {
     const unlisten = onHostKeyVerificationNeeded((event) => setPendingHostKey(event));
     return () => {
       unlisten.then((unlistenFn) => unlistenFn());
     };
   }, []);
 
-  const handleConnect = async (server: ServerDto) => {
-    const existingSessionId = findExistingSessionId(server.id);
-    if (existingSessionId) {
-      onSwitchToExistingTab(existingSessionId);
-      return;
-    }
+  const performConnect = async (server: ServerDto) => {
     setError(null);
     setConnectingId(server.id);
     try {
@@ -67,6 +76,36 @@ export function ServerList({
       setConnectingId(null);
       setPendingHostKey(null);
     }
+  };
+
+  /** Spec 0031, Abschnitt 4: der Screen blockiert nur den ersten
+   * `connect()`-Aufruf, nicht die übrige App-Nutzung davor — deshalb hier
+   * am eigentlichen Verbindungsaufbau abgefangen statt z. B. den ganzen
+   * Screen beim App-Start zu sperren. */
+  const handleConnect = async (server: ServerDto) => {
+    const existingSessionId = findExistingSessionId(server.id);
+    if (existingSessionId) {
+      onSwitchToExistingTab(existingSessionId);
+      return;
+    }
+    if (firstRunAcknowledged === false) {
+      setPendingConnectServer(server);
+      return;
+    }
+    await performConnect(server);
+  };
+
+  const handleFirstRunNoticeAcknowledged = async () => {
+    setFirstRunAcknowledged(true);
+    const server = pendingConnectServer;
+    setPendingConnectServer(null);
+    try {
+      await saveFirstRunNoticeAcknowledged();
+    } catch (err) {
+      setError(commandErrorMessage(err));
+      return;
+    }
+    if (server) await performConnect(server);
   };
 
   const handleHostKeyDecision = async (decision: Parameters<typeof confirmHostKey>[1]) => {
@@ -128,6 +167,9 @@ export function ServerList({
 
       {pendingHostKey && (
         <HostKeyDialog event={pendingHostKey} onDecision={handleHostKeyDecision} />
+      )}
+      {pendingConnectServer && (
+        <FirstRunNoticeScreen onAcknowledge={handleFirstRunNoticeAcknowledged} />
       )}
     </>
   );

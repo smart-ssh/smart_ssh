@@ -11,6 +11,7 @@ mod ephemeral_credentials;
 mod error;
 mod events;
 mod filter_rules;
+mod first_run_notice;
 mod groups;
 mod host_key_store;
 mod logging;
