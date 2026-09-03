@@ -226,8 +226,12 @@ impl<S: PolicyStore> FilterEngine<S> {
                 Decision::AutoExec
             };
 
-        let (rule_decision, matched_rule) =
-            evaluate_rules_explained(rules, &original_literal, &stripped_literal);
+        let (rule_decision, matched_rule) = evaluate_rules_explained(
+            rules,
+            &original_literal,
+            &stripped_literal,
+            &resolved_literal,
+        );
 
         let sub_command_traces: Vec<EvaluationTrace> = inner_contents
             .into_iter()
@@ -283,12 +287,24 @@ impl<S: PolicyStore> FilterEngine<S> {
 /// Matching-Feld (kein `elevated`-Flag am Pattern). Dual-Matching gegen
 /// beide Text-Varianten löst den Widerspruch, ohne die in Abschnitt 2 fest
 /// vorgegebenen Typen zu erweitern. Siehe `docs/adr/0002-sudo-dual-text-matching.md`.
+///
+/// Seit dem unabhängigen Review-Pass (Spec 0009/0013) zusätzlich gegen eine
+/// dritte, aggressiver normalisierte Fassung geprüft (`resolved`, s.
+/// `parser::resolve_effective_command`) — sonst hätten Nutzer-Regeln
+/// (insbesondere Deny) dieselbe Wrapper-/Sudo-Flag-/Variablenzuweisungs-/
+/// Quoting-Lücke wie zuvor die Hard-Blacklist: eine `Deny "docker *"`-Regel
+/// muss auch `env docker rm -f prod` erfassen, nicht nur den wörtlichen
+/// Aufruf. Gilt einheitlich für alle drei Aktionen (auch Allow), damit das
+/// Matching-Verhalten pro Regel konsistent bleibt, unabhängig davon, ob sie
+/// gerade blockiert oder erlaubt.
+///
 /// Wie zuvor `evaluate_rules`, liefert zusätzlich die `RuleId` der
 /// gegriffenen Regel (falls eine gegriffen hat) für `EvaluationTrace`.
 fn evaluate_rules_explained(
     rules: &[Rule],
     original: &str,
     stripped: &str,
+    resolved: &str,
 ) -> (Decision, Option<RuleId>) {
     for action in [RuleAction::Deny, RuleAction::Confirm, RuleAction::Allow] {
         let mut bucket: Vec<&Rule> = rules.iter().filter(|r| r.action == action).collect();
@@ -300,7 +316,8 @@ fn evaluate_rules_explained(
 
         for rule in bucket {
             let is_match = rule.pattern.matches(original)
-                || (original != stripped && rule.pattern.matches(stripped));
+                || (original != stripped && rule.pattern.matches(stripped))
+                || (original != resolved && stripped != resolved && rule.pattern.matches(resolved));
             if is_match {
                 let decision = match action {
                     RuleAction::Deny => Decision::Deny {

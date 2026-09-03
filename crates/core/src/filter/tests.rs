@@ -543,6 +543,40 @@ async fn test_hard_blacklist_cannot_be_evaded_via_wrappers_sudo_flags_or_quoting
     }
 }
 
+/// Regressionstest für den unabhängigen Review-Pass (Spec 0013): weitere,
+/// von einer adversarialen Prüfung gegen die echte Engine verifizierte
+/// Umgehungen — Wrapper mit Pflicht-Positionsargument (`timeout`/`chroot`/
+/// `flock`), zusätzliche einfache Wrapper (`xargs`/`setsid`/`stdbuf`/
+/// `ionice`/`busybox`/`script`), eine bloße Variablenzuweisung ganz ohne
+/// Wrapper-Kommando (`FOO=1 rm -rf /`) sowie teilweise/versetzte Quotierung
+/// des ersten Worts (`r"m"`, `r''m`, `$'rm'`).
+#[tokio::test]
+async fn test_hard_blacklist_cannot_be_evaded_via_positional_wrappers_or_bare_assignment() {
+    let eng = engine(vec![]);
+    for cmd in [
+        "timeout 5 rm -rf /",
+        "timeout --signal=9 5 rm -rf /",
+        "chroot /mnt rm -rf /",
+        "flock /tmp/lock rm -rf /",
+        "xargs rm -rf /",
+        "setsid rm -rf /",
+        "stdbuf -oL rm -rf /",
+        "ionice -c3 rm -rf /",
+        "busybox rm -rf /",
+        "script -c \"rm -rf /\" /dev/null",
+        "FOO=1 rm -rf /",
+        "FOO=1 BAR=2 rm -rf /",
+        "FOO=1 sudo rm -rf /",
+        "LD_PRELOAD=/tmp/x.so rm -rf /",
+        "r\"m\" -rf /",
+        "r''m -rf /",
+        "$'rm' -rf /",
+    ] {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert_confirm(&decision);
+    }
+}
+
 /// Dieselbe Wrapper-Umgehung darf auch nicht über Chaining eine sonst
 /// zutreffende Allow-Regel unterlaufen (Testfall 3: "Chaining darf die
 /// Blacklist nicht umgehen").
@@ -562,6 +596,30 @@ async fn test_chaining_with_wrapper_evasion_still_hits_blacklist() {
         .evaluate("ls -la && sudo -u root rm -rf /", &ctx("srv1", &[]))
         .await;
     assert_confirm(&decision);
+}
+
+/// Regressionstest für den unabhängigen Review-Pass (Spec 0009): eine
+/// Deny-Regel muss dieselbe Wrapper-/Sudo-Flag-/Quoting-Normalisierung
+/// bekommen wie die Hard-Blacklist — sonst umgeht `env docker rm -f prod`
+/// eine explizite `Deny "docker *"`-Regel genauso, wie es vorher die
+/// Blacklist umging.
+#[tokio::test]
+async fn test_deny_rule_cannot_be_evaded_via_wrapper_command() {
+    let eng = engine(vec![glob_rule(
+        "deny-docker",
+        "docker *",
+        RuleAction::Deny,
+        Scope::Global,
+        100,
+    )]);
+    for cmd in [
+        "docker rm -f prod",
+        "env docker rm -f prod",
+        "sudo docker rm -f prod",
+    ] {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert_deny(&decision);
+    }
 }
 
 /// `sudo bash -c "..."` / `bash -xc "..."` müssen wie ein einfaches

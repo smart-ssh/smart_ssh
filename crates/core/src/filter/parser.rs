@@ -223,15 +223,30 @@ fn is_complex_shell_c_invocation(cmd: &str) -> bool {
 /// Verschleierungsversuche gegen die Hard-Blacklist ab (Spec 0002, Abschnitt
 /// 3.1: "unabhängig von Nutzerregeln" — eine fest verdrahtete Blacklist, die
 /// ein simples `env rm -rf /` nicht erkennt, hält dieses Versprechen nicht).
-const PASSTHROUGH_WRAPPERS: &[&str] = &["env", "nice", "nohup", "time", "command"];
+/// Erweitert um `timeout`/`xargs`/`setsid`/`stdbuf`/`ionice`/`chroot`/
+/// `flock`/`busybox`/`script` (unabhängiger Review-Pass, Spec 0013).
+const PASSTHROUGH_WRAPPERS: &[&str] = &[
+    "env", "nice", "nohup", "time", "command", "timeout", "xargs", "setsid", "stdbuf", "ionice",
+    "chroot", "flock", "busybox", "script",
+];
+
+/// Wrapper, die vor dem eigentlichen Kommando genau EIN positionales (nicht
+/// mit `-` beginnendes) Pflichtargument erwarten — die Zeitdauer bei
+/// `timeout`, das neue Wurzelverzeichnis bei `chroot`, die Lock-Datei bei
+/// `flock`. Ohne diese Sonderbehandlung würde z. B. `timeout 5 rm -rf /`
+/// das positionale `5` fälschlich als Kommandoname auffassen und die
+/// Wrapper-Erkennung dort abbrechen.
+const WRAPPERS_WITH_ONE_POSITIONAL_ARG: &[&str] = &["timeout", "chroot", "flock"];
 
 /// Löst den tatsächlich auszuführenden Kommandokern heraus: entfernt
-/// wiederholt (bis zum Fixpunkt, deckt z. B. `sudo sudo rm -rf /` ab)
-/// `sudo`/`doas`-Präfixe samt der gebräuchlichsten wertetragenden Flags
-/// (`-u`/`--user`, `-g`/`--group`) sowie bekannte durchreichende
-/// Wrapper-Kommandos (s. [`PASSTHROUGH_WRAPPERS`]), und entfernt
-/// abschließend umschließende Anführungszeichen/Escapes vom ersten
-/// verbleibenden Wort (`"rm" -rf /` bzw. `r\m -rf /` → `rm -rf /`).
+/// wiederholt (bis zum Fixpunkt, deckt z. B. `sudo sudo rm -rf /` oder
+/// `FOO=1 sudo env BAR=2 rm -rf /` ab) führende
+/// `NAME=wert`-Variablenzuweisungen, `sudo`/`doas`-Präfixe samt der
+/// gebräuchlichsten wertetragenden Flags (`-u`/`--user`, `-g`/`--group`)
+/// sowie bekannte durchreichende Wrapper-Kommandos (s.
+/// [`PASSTHROUGH_WRAPPERS`]), und entfernt abschließend Anführungszeichen/
+/// Escapes aus dem ersten verbleibenden Wort (`"rm" -rf /`, `r"m" -rf /`,
+/// `r\m -rf /`, `$'rm' -rf /` → jeweils `rm -rf /`).
 ///
 /// Bewusst kein vollständiger Shell-/CLI-Parser — ein Best-effort-
 /// Normalisierungsschritt gegen die in der Praxis üblichen
@@ -242,7 +257,7 @@ const PASSTHROUGH_WRAPPERS: &[&str] = &["env", "nice", "nohup", "time", "command
 pub(super) fn resolve_effective_command(normalized: &str) -> String {
     let mut current = normalized.to_string();
     loop {
-        let stripped = strip_one_elevation_or_wrapper(&current);
+        let stripped = strip_one_elevation_wrapper_or_assignment(&current);
         if stripped == current {
             break;
         }
@@ -251,11 +266,34 @@ pub(super) fn resolve_effective_command(normalized: &str) -> String {
     unquote_first_word(&current)
 }
 
-fn strip_one_elevation_or_wrapper(cmd: &str) -> String {
+/// `NAME=wert`-Präfix wie bei `FOO=1 rm -rf /` — ein Shell-typisches Muster,
+/// eine Umgebungsvariable direkt vor einem einzelnen Kommando zu setzen,
+/// ganz ohne Wrapper-Kommando. `name` muss mit Buchstabe/Unterstrich
+/// beginnen und nur aus Alnum/Unterstrich bestehen (POSIX-Bezeichnerregel
+/// für Shell-Variablen) — verhindert, dass z. B. ein Datei-Pfad mit `=`
+/// darin (selten, aber möglich) fälschlich als Zuweisung erkannt wird.
+fn is_var_assignment(word: &str) -> bool {
+    let Some((name, _value)) = word.split_once('=') else {
+        return false;
+    };
+    !name.is_empty()
+        && name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn strip_one_elevation_wrapper_or_assignment(cmd: &str) -> String {
     let words: Vec<&str> = cmd.split_whitespace().collect();
     let Some(&head) = words.first() else {
         return cmd.to_string();
     };
+
+    if is_var_assignment(head) {
+        return normalize_whitespace(&words[1..].join(" "));
+    }
+
     let is_elevation = head == "sudo" || head == "doas";
     let is_wrapper = PASSTHROUGH_WRAPPERS.contains(&head);
     if !is_elevation && !is_wrapper {
@@ -272,29 +310,41 @@ fn strip_one_elevation_or_wrapper(cmd: &str) -> String {
             i += 1;
         }
     }
+    if WRAPPERS_WITH_ONE_POSITIONAL_ARG.contains(&head) && i < words.len() {
+        i += 1;
+    }
     normalize_whitespace(&words[i..].join(" "))
 }
 
-/// Entfernt umschließende `'...'`/`"..."`-Anführungszeichen oder
-/// Backslash-Escapes vom ERSTEN Wort (`"rm" -rf /` bzw. `r\m -rf /` →
-/// `rm -rf /`) — eine reine Textzerlegung wie diese Engine sie betreibt
-/// (kein echtes Shell-Tokenizing für die Blacklist-Prüfung) würde das
-/// Blacklist-Muster sonst nie am literal quotierten/escapten ersten Wort
-/// matchen lassen, obwohl eine echte Shell die Quotes/Escapes selbst
-/// entfernen und schlicht `rm -rf /` ausführen würde.
+/// Entfernt Anführungszeichen/Escapes aus dem ERSTEN Wort (`"rm" -rf /`,
+/// `r"m" -rf /`, `r''m -rf /`, `r\m -rf /` → jeweils `rm -rf /`) — eine
+/// reine Textzerlegung wie diese Engine sie betreibt (kein echtes
+/// Shell-Tokenizing für die Blacklist-Prüfung) würde das Blacklist-Muster
+/// sonst nie am literal quotierten/escapten ersten Wort matchen lassen,
+/// obwohl eine echte Shell die Quotes/Escapes selbst entfernen und schlicht
+/// `rm -rf /` ausführen würde. Entfernt bewusst JEDES `'`/`"`/`\` im ersten
+/// Wort, nicht nur ein exakt umschließendes Quote-Paar (die vorherige
+/// Fassung) — sonst entgeht ihr eine teilweise/versetzte Quotierung wie
+/// `r"m"` oder `r''m` (unabhängiger Review-Pass, Spec 0013).
 fn unquote_first_word(cmd: &str) -> String {
     let trimmed = cmd.trim_start();
     let rest_start = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
     let (first, rest) = trimmed.split_at(rest_start);
 
-    let cleaned_first = if first.len() >= 2
-        && ((first.starts_with('\'') && first.ends_with('\''))
-            || (first.starts_with('"') && first.ends_with('"')))
-    {
-        first[1..first.len() - 1].to_string()
+    // `$'...'`/`$"..."` (ANSI-C- bzw. lokalisierte Shell-Quotierung): das
+    // `$` ist Teil der Quotierungssyntax selbst, kein
+    // Variablen-Expansions-Präfix — ohne diesen Schritt bliebe nach dem
+    // Entfernen der Anführungszeichen ein irreführendes `$rm` stehen.
+    let first = if first.starts_with("$'") || first.starts_with("$\"") {
+        &first[1..]
     } else {
-        first.replace('\\', "")
+        first
     };
+
+    let cleaned_first: String = first
+        .chars()
+        .filter(|&c| !matches!(c, '\'' | '"' | '\\'))
+        .collect();
 
     if rest.is_empty() {
         cleaned_first
