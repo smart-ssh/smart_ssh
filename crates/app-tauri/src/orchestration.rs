@@ -294,6 +294,24 @@ async fn handle_action_proposed(
         };
     }
 
+    // Unabhängiger Review-Pass (Spec 0018): das gespeicherte Sudo-Passwort
+    // ist ein Root-Zugangsdatum — dessen Verwendung verdient dieselbe
+    // "neue Vertrauensgrenze verlangt immer Bestätigung"-Behandlung wie
+    // MCP-Herkunft oder ein SFTP-Schreibzugriff (Spec 0020, Abschnitt 4.2),
+    // unabhängig davon, ob eine (oft für den unprivilegierten Fall
+    // angelegte) Allow-Regel per Dual-Text-Matching (ADR 0002) zufällig
+    // auch die `sudo`-Variante mit abdeckt. Ohne diese Eskalation hätte
+    // z. B. eine harmlos gemeinte Regel "systemctl restart *" ein
+    // gespeichertes Root-Passwort ohne jede Rückfrage verbraucht.
+    let uses_password = uses_stored_sudo_password(session, &action);
+    if uses_password && matches!(decision, Decision::AutoExec) {
+        decision = Decision::Confirm {
+            reason: "Verwendet das hinterlegte Sudo-Passwort – erfordert immer Bestätigung"
+                .to_string(),
+            code: "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM".to_string(),
+        };
+    }
+
     let confirm_rx = if matches!(decision, Decision::Confirm { .. }) {
         Some(action_confirmations.register(action_id))
     } else {
@@ -302,7 +320,6 @@ async fn handle_action_proposed(
 
     let (previous_note_content, target_name) =
         note_target_preview_for_action(&action, session, profile_store).await;
-    let uses_password = uses_stored_sudo_password(session, &action);
     let (previous_file_content, previous_file_size) =
         previous_file_content_for_action(&action, session).await;
     let risk_assessment = risk_assessment_for_action(&action);
@@ -2550,14 +2567,19 @@ mod tests {
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
 
-        run_chat_turn(
+        // Unabhängiger Review-Pass (Spec 0018): ein hinterlegtes
+        // Sudo-Passwort erzwingt jetzt immer Confirm — ohne diese
+        // Genehmigung würde `run_chat_turn` ewig auf die nie eintreffende
+        // Bestätigung warten.
+        let turn = run_chat_turn(
             &session,
             Uuid::new_v4(),
             &emitter,
             &profile_store,
             &confirmations,
-        )
-        .await;
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
 
         let events = emitter.events.lock().unwrap().clone();
         let event_names = event_names_excluding_auto_continuation(&events);
@@ -2646,18 +2668,74 @@ mod tests {
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
 
-        run_chat_turn(
+        // Unabhängiger Review-Pass (Spec 0018): die Verwendung eines
+        // hinterlegten Sudo-Passworts erzwingt jetzt immer Confirm (s.
+        // `test_uses_stored_sudo_password_downgrades_autoexec_to_confirm`
+        // unten) — ohne diese Genehmigung würde `run_chat_turn` ewig auf
+        // die nie eintreffende Bestätigung warten.
+        let turn = run_chat_turn(
             &session,
             Uuid::new_v4(),
             &emitter,
             &profile_store,
             &confirmations,
-        )
-        .await;
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        tokio::join!(turn, responder);
 
         let events = emitter.events.lock().unwrap().clone();
         let (_, proposed_payload) = &events[0];
         assert_eq!(proposed_payload["usesStoredSudoPassword"], true);
+    }
+
+    /// **Der eigentliche Fix des unabhängigen Review-Passes** (Spec 0018):
+    /// ein hinterlegtes Sudo-Passwort darf nie ohne Bestätigung verbraucht
+    /// werden — auch nicht, wenn eine (typischerweise für den
+    /// unprivilegierten Fall angelegte) Allow-Regel die `sudo`-Variante per
+    /// Dual-Text-Matching (ADR 0002) zufällig mit abdeckt.
+    #[tokio::test]
+    async fn test_uses_stored_sudo_password_downgrades_autoexec_to_confirm() {
+        let mut session = test_session(
+            vec![AiEvent::Done],
+            MockSshTransport::default().with_response("ls -la", output("total 0")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let action_future = handle_action_proposed(
+            &session,
+            session_id,
+            AiAction::SuggestCommand {
+                command: "sudo ls -la".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            1,
+            ActionOrigin::Internal,
+        );
+        let responder = deny_first_proposed_action(&emitter, &confirmations);
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, proposed_payload) = events
+            .iter()
+            .find(|(name, _)| name == "chat-action-proposed")
+            .expect("chat-action-proposed muss gesendet worden sein");
+        assert_eq!(
+            proposed_payload["decision"]["Confirm"]["code"],
+            serde_json::json!("FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM"),
+            "ein hinterlegtes Sudo-Passwort darf nie ohne Bestätigung verbraucht werden — war: {proposed_payload}"
+        );
     }
 
     #[tokio::test]
@@ -5576,16 +5654,20 @@ mod tests {
 
         let mut session = session_with_ai_provider(
             MockAiProvider::with_rounds(vec![
-                // Runde 1: AutoExec (erstes sudo-Kommando).
+                // Runde 1: erstes sudo-Kommando — stuft schon wegen
+                // `FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM` (Spec 0018,
+                // unabhängiger Review-Fund) auf Confirm hoch, unabhängig von
+                // der Runden-Nummer.
                 vec![
                     AiEvent::ActionProposed(AiAction::SuggestCommand {
                         command: "sudo systemctl restart nginx".to_string(),
                     }),
                     AiEvent::Done,
                 ],
-                // Runde 2 (automatisch, Spec 0021): SEC-03 stuft dieses
-                // SuggestCommand in Runde >= 2 auf Confirm hoch — zweites
-                // sudo-Kommando, über den Responder unten bestätigt.
+                // Runde 2 (automatisch, Spec 0021): sowohl SEC-03 (Runde >= 2)
+                // als auch die Sudo-Passwort-Eskalation stufen dieses
+                // SuggestCommand auf Confirm hoch — zweites sudo-Kommando,
+                // über den Responder unten bestätigt.
                 vec![
                     AiEvent::ActionProposed(AiAction::SuggestCommand {
                         command: "sudo systemctl status nginx".to_string(),
@@ -5614,26 +5696,35 @@ mod tests {
             &confirmations,
         );
         let responder = async {
+            // Beide Kommandos (Runde 1 wegen der Sudo-Passwort-Eskalation,
+            // Runde 2 zusätzlich wegen SEC-03) verlangen jetzt Confirm —
+            // hier werden beide der Reihe nach bestätigt, statt nur das
+            // erste gefundene.
+            let mut resolved: std::collections::HashSet<String> = std::collections::HashSet::new();
             loop {
                 let confirm_action_id = {
                     let events = emitter.events.lock().unwrap();
                     events.iter().find_map(|(name, payload)| {
-                        (name == "chat-action-proposed"
-                            && payload
-                                .get("decision")
-                                .and_then(|d| d.get("Confirm"))
-                                .is_some())
-                        .then(|| payload["actionId"].as_str().unwrap().to_string())
+                        if name != "chat-action-proposed" {
+                            return None;
+                        }
+                        payload.get("decision").and_then(|d| d.get("Confirm"))?;
+                        let id = payload["actionId"].as_str().unwrap().to_string();
+                        (!resolved.contains(&id)).then_some(id)
                     })
                 };
                 if let Some(action_id_str) = confirm_action_id {
+                    resolved.insert(action_id_str.clone());
                     let action_id: ActionId = action_id_str.parse().unwrap();
                     confirmations
                         .resolve(&action_id, ActionUserDecision::Approve)
                         .unwrap();
-                    break;
+                    if resolved.len() == 2 {
+                        break;
+                    }
+                } else {
+                    tokio::task::yield_now().await;
                 }
-                tokio::task::yield_now().await;
             }
         };
         tokio::join!(turn, responder);

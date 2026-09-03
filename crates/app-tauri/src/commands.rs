@@ -11,8 +11,8 @@ use uuid::Uuid;
 
 use persistence_sqlite::AiProviderConfig;
 use ssh_manager_core::ai::{
-    default_action_schemas, ChatMessage, DefaultOutputRedactor, MessageContent, ProviderId, Role,
-    SessionContext,
+    default_action_schemas, ChatMessage, DefaultOutputRedactor, MessageContent, OutputRedactor,
+    ProviderId, Role, SessionContext,
 };
 use ssh_manager_core::filter::{
     hard_blacklist_patterns, EffectiveScope, EvalContext, FilterEngine, PolicyStore, RuleAction,
@@ -473,6 +473,25 @@ pub(crate) async fn connect_session(
         .get(&sudo_password_credential_ref(server_id))
         .ok();
 
+    // Unabhängiger Review-Pass (Spec 0018): `sudo -S` liest die per Stdin
+    // eingespeiste Passwortzeile nur, wenn `sudo` tatsächlich einen Prompt
+    // zeigt — bei einem `NOPASSWD`-Sudoers-Eintrag oder einem noch
+    // gültigen Sudo-Timestamp liest `sudo` nie von Stdin, wodurch die
+    // ganze Zeile stattdessen an das AUSGEFÜHRTE Programm durchgereicht
+    // wird (`sudo tee datei` schreibt das Passwort in die Datei, `sudo
+    // cat`/`sudo bash`/... geben es auf stdout/stderr aus). Ohne diesen
+    // Zweig kannte der Redactor das Sitzungs-Passwort überhaupt nicht —
+    // es hätte in genau diesem Fall unredigiert den KI-Kontext und das
+    // strukturierte Log erreicht. `regex::escape` neutralisiert
+    // Regex-Sonderzeichen im Passwort selbst.
+    let redactor: Box<dyn OutputRedactor> = match &sudo_password {
+        Some(password) => match regex::Regex::new(&regex::escape(password.expose_secret())) {
+            Ok(pattern) => Box::new(DefaultOutputRedactor::with_extra_patterns(vec![pattern])),
+            Err(_) => Box::new(DefaultOutputRedactor::new()),
+        },
+        None => Box::new(DefaultOutputRedactor::new()),
+    };
+
     // Spec 0026, Abschnitt 3: einmalig bei `connect()` aufgelöst, s.
     // `Session::risk_second_opinion_provider`-Doc-Kommentar.
     let risk_second_opinion_provider =
@@ -490,7 +509,7 @@ pub(crate) async fn connect_session(
         server_id,
         tags: server.tags,
         terminal: std::sync::Mutex::new(None),
-        redactor: Box::new(DefaultOutputRedactor::new()),
+        redactor,
         ai_provider_label: active_config.display_name,
         ai_model: active_config.model,
         sudo_password,

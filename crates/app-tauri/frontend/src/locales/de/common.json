@@ -266,6 +266,8 @@
     "FILTER_RULE_CONFIRM": "Regel erfordert Bestätigung",
     "FILTER_NO_RULE_MATCHED": "Keine passende Regel gefunden",
     "FILTER_AUTO_CONTINUATION_REQUIRES_CONFIRM": "Automatische Folgeaktion erfordert Bestätigung",
+    "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Über MCP angefragt – erfordert immer Bestätigung",
+    "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Verwendet das hinterlegte Sudo-Passwort – erfordert immer Bestätigung",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notiz-Aktualisierungen erfordern immer eine Bestätigung",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Dateischreibvorgänge erfordern immer eine Bestätigung",
     "GROUP_SELF_PARENT": "Eine Gruppe kann nicht ihre eigene übergeordnete Gruppe sein",
