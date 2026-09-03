@@ -160,7 +160,7 @@
     "cancelCommand": "Verbindung zu diesem Kommando trennen",
     "cancellingCommand": "Wird getrennt…",
     "commandCancelledNotice": "⚠ Manuell abgebrochen — Ausgabe möglicherweise unvollständig, kein regulärer Exit-Code.",
-    "mcpOrigin": "Angefragt über: {{name}}",
+    "mcpOrigin": "Externes Tool (MCP): „{{name}}“",
     "mcpOriginGeneric": "externes Tool (MCP)",
     "mcpOriginHint": "Diese Aktion wurde nicht vom internen Chat, sondern über den lokalen MCP-Server von einem externen Tool angefragt."
   },
@@ -276,7 +276,8 @@
     "SERVER_PRIVATE_KEY_REQUIRED": "Private Key ist erforderlich",
     "SERVER_CERTIFICATE_REQUIRED": "Zertifikat ist erforderlich",
     "SERVER_CERTIFICATE_KEY_REQUIRED": "Zertifikats-Key ist erforderlich",
-    "SERVER_JUMP_HOST_LOCAL": "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden"
+    "SERVER_JUMP_HOST_LOCAL": "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
+    "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "Erststart-Hinweis muss zuerst bestätigt werden"
   },
   "mcpServer": {
     "title": "MCP-Server (für externe Tools wie Claude Code)",

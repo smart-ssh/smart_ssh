@@ -988,7 +988,12 @@ async fn execute_suggested_command(
             true
         }
         Err(err) => {
-            log_command_execution_failed(session_id, &command, &err);
+            // Unabhängiger Review-Pass (Spec 0016/0027): derselbe Fund wie im
+            // Erfolgsfall oben (`redact_text` vor dem Log) - ohne das würde
+            // z. B. `mysql --password=hunter2 ...` bei einem Kanalfehler im
+            // Klartext im Logfile landen, obwohl der Erfolgspfad dasselbe
+            // Kommando korrekt redigiert.
+            log_command_execution_failed(session_id, &session.redactor.redact_text(&command), &err);
             emit_action_error(
                 session,
                 emitter,

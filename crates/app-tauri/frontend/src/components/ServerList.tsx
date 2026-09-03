@@ -72,7 +72,17 @@ export function ServerList({
   }, []);
 
   useEffect(() => {
-    loadFirstRunNoticeAcknowledged().then(setFirstRunAcknowledged);
+    // Unabhängiger Review-Pass (Spec 0031): ohne `.catch` bleibt
+    // `firstRunAcknowledged` bei einem Store-Ladefehler (z. B. defekte
+    // `settings.json`) dauerhaft `null` — der Screen erscheint dann NIE
+    // (nur bei explizit `false` wird er gezeigt, s. `handleConnect` unten),
+    // jeder Verbindungsversuch läuft ins Backend-Gate und scheitert mit
+    // einem rohen Fehler, ohne Weg zur Bestätigung. `false` ist hier der
+    // sichere Fallback: zeigt den Hinweis, statt den Nutzer in eine
+    // Sackgasse laufen zu lassen.
+    loadFirstRunNoticeAcknowledged()
+      .then(setFirstRunAcknowledged)
+      .catch(() => setFirstRunAcknowledged(false));
   }, []);
 
   useEffect(() => {
@@ -114,7 +124,13 @@ export function ServerList({
   };
 
   const handleFirstRunNoticeAcknowledged = async () => {
-    setFirstRunAcknowledged(true);
+    // Unabhängiger Review-Pass (Spec 0031): `setFirstRunAcknowledged(true)`
+    // lief vorher VOR dem `await` unten — schlug das Speichern fehl, glaubte
+    // das Frontend fortan "bestätigt", während der Store weiter `false`
+    // sagt. Der Screen wäre dann bis zum Neustart nie wieder erschienen,
+    // jeder weitere Verbindungsversuch wäre am Backend-Gate gescheitert.
+    // Jetzt wird der lokale Zustand erst NACH erfolgreichem Speichern
+    // gesetzt.
     const server = pendingConnectServer;
     setPendingConnectServer(null);
     try {
@@ -123,6 +139,7 @@ export function ServerList({
       setError(commandErrorMessage(err));
       return;
     }
+    setFirstRunAcknowledged(true);
     if (server) await performConnect(server);
   };
 

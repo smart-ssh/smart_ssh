@@ -160,7 +160,7 @@
     "cancelCommand": "Disconnect this command",
     "cancellingCommand": "Disconnecting…",
     "commandCancelledNotice": "⚠ Manually cancelled — output may be incomplete, no regular exit code.",
-    "mcpOrigin": "Requested via: {{name}}",
+    "mcpOrigin": "External tool (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "external tool (MCP)",
     "mcpOriginHint": "This action was not requested by the internal chat, but by an external tool via the local MCP server."
   },
@@ -276,7 +276,8 @@
     "SERVER_PRIVATE_KEY_REQUIRED": "Private key is required",
     "SERVER_CERTIFICATE_REQUIRED": "Certificate is required",
     "SERVER_CERTIFICATE_KEY_REQUIRED": "Certificate key is required",
-    "SERVER_JUMP_HOST_LOCAL": "The local pseudo-server cannot be used as a jump host"
+    "SERVER_JUMP_HOST_LOCAL": "The local pseudo-server cannot be used as a jump host",
+    "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "The first-run notice must be acknowledged first"
   },
   "mcpServer": {
     "title": "MCP server (for external tools like Claude Code)",

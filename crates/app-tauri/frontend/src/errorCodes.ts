@@ -46,6 +46,12 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "SERVER_CERTIFICATE_REQUIRED",
   "SERVER_CERTIFICATE_KEY_REQUIRED",
   "SERVER_JUMP_HOST_LOCAL",
+  // Unabhängiger Review-Pass, Spec 0031: Code existiert seit dem
+  // First-Run-Notice-Gate in error.rs (code_tests), war aber nie hier
+  // eingetragen — ohne diesen Eintrag sah selbst ein Nutzer mit englischer
+  // UI in dem (seltenen) Fall, dass der Backend-Fehler tatsächlich sichtbar
+  // wird, den rohen deutschen Text.
+  "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED",
 ]);
 
 /** Übersetzt `code` über den `errors`-Namespace, fällt bei `null`/

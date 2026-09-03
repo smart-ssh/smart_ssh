@@ -46,6 +46,35 @@ fn generate_token() -> String {
     uuid::Uuid::new_v4().simple().to_string()
 }
 
+/// Unabhängiger Review-Pass (Spec 0028): das MCP-Bearer-Token — das einzige
+/// Geheimnis, das die gesamte MCP-Angriffsfläche freischaltet — landet über
+/// `tauri-plugin-store` mit OS-Standardrechten (typ. 0644, weltlesbar) in
+/// `settings.json`, während dasselbe Projekt Logs (`logging.rs`), die
+/// SQLite-DB und `host_keys.json` bereits konsequent auf 0600/0700 härtet
+/// und API-Keys in den OS-Keychain statt in den Store legt. Jeder
+/// mitlaufende Prozess desselben Nutzerkontos, der die Datei lesen darf,
+/// wird damit zu einem vollwertigen MCP-Client. Härtet die Datei nach jedem
+/// Token-Schreibzugriff best-effort auf 0600 — löst NICHT das größere,
+/// hier bewusst nicht angegangene Problem (Klartext auf der Platte bleibt,
+/// root/derselbe Nutzer kann weiterhin lesen; die vollständige Lösung wäre
+/// das Token in den `CredentialStore` zu verschieben und nur ein Handle in
+/// `settings.json` zu halten — größere Änderung, siehe Abschlussbericht).
+fn harden_settings_store_permissions(app: &AppHandle) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let Ok(config_dir) = app.path().app_config_dir() else {
+            return;
+        };
+        let path = config_dir.join(SETTINGS_STORE_FILE);
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = app;
+    }
+}
+
 /// `None`, falls noch nie eines generiert wurde (erster Aufruf überhaupt).
 fn stored_token(app: &AppHandle) -> CommandResult<Option<String>> {
     let store = app.store(SETTINGS_STORE_FILE)?;
@@ -66,6 +95,7 @@ fn load_or_init_token(app: &AppHandle) -> CommandResult<String> {
     let store = app.store(SETTINGS_STORE_FILE)?;
     store.set(TOKEN_KEY, serde_json::json!(token));
     store.save()?;
+    harden_settings_store_permissions(app);
     Ok(token)
 }
 
@@ -201,6 +231,7 @@ pub async fn regenerate_mcp_server_token(
     let store = app.store(SETTINGS_STORE_FILE)?;
     store.set(TOKEN_KEY, serde_json::json!(new_token));
     store.save()?;
+    harden_settings_store_permissions(&app);
     // Live-Effekt sofort, unabhängig davon, ob der Server gerade läuft
     // (Spec 0028, Abschnitt 9: "invalidiert das alte Token sofort") — ein
     // laufender Server prüft bei jedem Tool-Call gegen `state.mcp.token`,

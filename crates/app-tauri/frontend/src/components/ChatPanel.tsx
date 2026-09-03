@@ -23,6 +23,7 @@ import {
   onChatTextDelta,
   onRiskAssessmentUpdated,
 } from "../events";
+import { translateErrorCode } from "../errorCodes";
 import { formatBytes } from "../format";
 import {
   initialHistoryNavState,
@@ -151,6 +152,19 @@ function formatReason(reason: string): string {
     .split("; ")
     .filter((part, index, all) => all.indexOf(part) === index)
     .join(" · ");
+}
+
+const MCP_CLIENT_NAME_MAX_LENGTH = 40;
+
+/** Unabhängiger Review-Pass (Spec 0028): `clientName` ist ein vom
+ * MCP-Client selbst gewählter, ungeprüfter String (Handshake-`clientInfo.
+ * name`) — ohne Längenbegrenzung könnte ein sehr langer Name das
+ * Badge-Layout sprengen (Risiko-/Entscheidungs-Badge in eine zweite Zeile
+ * gedrückt). Kürzt auf {@link MCP_CLIENT_NAME_MAX_LENGTH} Zeichen. */
+function truncateMcpClientName(name: string): string {
+  const trimmed = name.trim();
+  if (trimmed.length <= MCP_CLIENT_NAME_MAX_LENGTH) return trimmed;
+  return `${trimmed.slice(0, MCP_CLIENT_NAME_MAX_LENGTH)}…`;
 }
 
 function decisionBadge(
@@ -765,7 +779,17 @@ export function ChatItemView({
               title={t("actionCard.mcpOriginHint")}
             >
               {t("actionCard.mcpOrigin", {
-                name: item.origin.clientName ?? t("actionCard.mcpOriginGeneric"),
+                // Unabhängiger Review-Pass (Spec 0028): `clientName` kommt
+                // ungeprüft vom MCP-Client selbst (Handshake-`clientInfo.
+                // name`) — ein böswilliger Client könnte sich z. B.
+                // "Interner Chat" nennen. Der feste "Externes Tool (MCP)"-
+                // Text im Template (s. locale-Datei) macht die Herkunft
+                // unabhängig vom Namen erkennbar; die Kürzung verhindert
+                // zusätzlich, dass ein überlanger Name das Badge-Layout
+                // sprengt.
+                name: truncateMcpClientName(
+                  item.origin.clientName ?? t("actionCard.mcpOriginGeneric"),
+                ),
               })}
             </span>
           )}
@@ -823,13 +847,26 @@ export function ChatItemView({
         <p className="mt-1 text-xs text-red-300">{t("actionCard.rejectedByUser")}</p>
       ) : (
         <>
+          {/* Unabhängiger Review-Pass (Spec 0024, Abschnitt 5): der stabile
+           * `code` liegt im Payload bereits vor (s. `translateErrorCode`,
+           * an anderen Stellen wie `FilterRulesView.tsx` schon verdrahtet),
+           * wurde hier aber nie ausgewertet — genau die sichtbarste Stelle
+           * (jeder Bestätigungsdialog) blieb dadurch hartcodiert deutsch.
+           * Fällt auf den bisherigen (formatierten) Rohtext zurück, wenn
+           * `code` unbekannt/nicht gesetzt ist — keine Regression. */}
           {typeof item.decision === "object" && "Confirm" in item.decision && (
             <p className="mt-1 text-xs text-slate-400">
-              {formatReason(item.decision.Confirm.reason)}
+              {translateErrorCode(
+                t,
+                item.decision.Confirm.code,
+                formatReason(item.decision.Confirm.reason),
+              )}
             </p>
           )}
           {typeof item.decision === "object" && "Deny" in item.decision && (
-            <p className="mt-1 text-xs text-red-300">{formatReason(item.decision.Deny.reason)}</p>
+            <p className="mt-1 text-xs text-red-300">
+              {translateErrorCode(t, item.decision.Deny.code, formatReason(item.decision.Deny.reason))}
+            </p>
           )}
         </>
       )}

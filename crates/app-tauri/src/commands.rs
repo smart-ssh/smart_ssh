@@ -213,6 +213,26 @@ pub async fn discover_models(
         return Err("Modell-Discovery wird für diesen Provider-Typ nicht unterstützt".into());
     }
 
+    // Unabhängiger Review-Pass (Spec 0024/0025): ohne diese Prüfung fällt
+    // ein fehlendes `base_url` unten stillschweigend auf
+    // `DEFAULT_OPENAI_BASE_URL` zurück — bei `GenericOpenAiCompatible`/
+    // `Ollama` ist das aber IMMER falsch (der ganze Sinn dieser Typen ist
+    // ein eigener Endpunkt). Das Frontend erzwingt eine ausgefüllte
+    // Base-URL nur bei Formular-Submit (`required`-Attribut); der
+    // "Modelle laden"-Button ist `type="button"` und ruft diesen Command
+    // schon VOR dem Ausfüllen auf. Ohne diese serverseitige Prüfung würde
+    // der eingegebene API-Key an `api.openai.com` gehen — einen Dritten,
+    // mit dem der Nutzer nie interagieren wollte. Dieselbe
+    // Verteidigung-in-der-Tiefe wie die `provider_type`-Prüfung oben.
+    let needs_base_url = matches!(
+        config.provider_type,
+        ssh_manager_core::ai::ProviderType::GenericOpenAiCompatible
+            | ssh_manager_core::ai::ProviderType::Ollama
+    );
+    if needs_base_url && config.base_url.as_deref().unwrap_or("").trim().is_empty() {
+        return Err("Base-URL erforderlich, bevor Modelle geladen werden können".into());
+    }
+
     let api_key = if !config.api_key.is_empty() {
         config.api_key.clone()
     } else if let Some(id) = existing_provider_id {
@@ -1471,14 +1491,28 @@ pub async fn accept_and_create_rule(
     edited_command: Option<String>,
 ) -> CommandResult<RuleId> {
     let _ = session_id;
-    let rule_id = crate::rule_suggestions::create_quick_rule(
+    let rule_result = crate::rule_suggestions::create_quick_rule(
         &state.policy_store,
         pattern_type,
         pattern_value,
         scope,
         priority,
     )
-    .await?;
+    .await;
+
+    // Unabhängiger Review-Pass (Spec 0021, Abschnitt 7): die Bestätigung
+    // muss UNABHÄNGIG vom Erfolg der Regel-Erstellung aufgelöst werden.
+    // Vorher lief `create_quick_rule(...).await?` zuerst — schlug das fehl
+    // (DB-Fehler, gesperrte Datei), kehrte der Command mit `Err` zurück,
+    // OHNE die Bestätigung je aufzulösen. Das Frontend hatte die Karte zu
+    // diesem Zeitpunkt aber schon optimistisch als beantwortet markiert
+    // (kein erneuter Versuch möglich) — `handle_action_proposed` wartete
+    // dann für den Rest der Session ergebnislos auf `rx.await`, Eingabefeld
+    // und Senden-Button blieben dauerhaft gesperrt. Genau der Fail-Safe-
+    // Verstoß, den Abschnitt 7 verhindern sollte. Die Aktion selbst wird
+    // jetzt immer aufgelöst (der Nutzer hat sie explizit bestätigt); ein
+    // Fehlschlag der Regel-Erstellung wird separat als Fehler zurückgegeben,
+    // statt die Bestätigung mitzureißen.
     let decision = match edited_command {
         Some(command) => ActionUserDecision::EditThenApprove { command },
         None => ActionUserDecision::Approve,
@@ -1486,7 +1520,8 @@ pub async fn accept_and_create_rule(
     state
         .pending_action_confirmations
         .resolve(&action_id, decision)?;
-    Ok(rule_id)
+
+    Ok(rule_result?)
 }
 
 // --- Spec 0012: KI-generierte Dokumente -------------------------------

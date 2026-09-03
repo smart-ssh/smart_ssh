@@ -430,7 +430,18 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
                 <button
                   type="button"
                   onClick={handleDiscoverModels}
-                  disabled={modelsLoading}
+                  // Unabhängiger Review-Pass (Spec 0024/0025): dieser Button
+                  // ist `type="button"`, das `required`-Attribut des
+                  // Base-URL-Felds greift also nicht, solange der Nutzer
+                  // nicht submitted. Ohne diese Sperre könnte ein Klick vor
+                  // dem Ausfüllen der Base-URL den API-Key an den
+                  // Backend-Fallback (OpenAI) statt an den gewählten
+                  // Endpunkt schicken (serverseitig zusätzlich in
+                  // `discover_models` abgefangen).
+                  disabled={
+                    modelsLoading ||
+                    (needsBaseUrl(form.providerType) && !form.baseUrl?.trim())
+                  }
                   className="shrink-0 rounded border border-slate-600 px-2 py-1.5 text-xs whitespace-nowrap text-slate-300 hover:bg-slate-700 disabled:opacity-50"
                 >
                   {modelsLoading ? t("aiProvider.discoveringModels") : t("aiProvider.discoverModels")}
