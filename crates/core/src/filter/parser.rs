@@ -367,7 +367,7 @@ fn is_var_assignment(word: &str) -> bool {
 /// Ob `token` (das erste Wort eines Kommandos) eine Elevation
 /// (`sudo`/`doas`) oder ein bekanntes durchreichendes Wrapper-Kommando (s.
 /// [`PASSTHROUGH_WRAPPERS`]) ist. Öffentlich, damit Aufrufer außerhalb der
-/// Blacklist-Prüfung (z. B. `crate::rule_suggestions` in `app-tauri`s
+/// Blacklist-Prüfung (z. B. `crate::rule_suggestions` in `app-shell`s
 /// Regel-Schnellvorschlag, Spec 0011) dieselbe Erkennung nutzen können,
 /// statt eine eigene, potenziell abweichende Liste zu pflegen — unabhängiger
 /// Review-Pass, Spec 0011: die Schnellvorschlag-Heuristik schlug bislang

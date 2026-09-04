@@ -580,7 +580,7 @@ mod tests {
 
     /// Spec 0028, Abschnitt 5 (Regressionstest gehört zur eigentlichen
     /// Downgrade-Durchsetzung — siehe
-    /// `app-tauri::orchestration::tests::test_mcp_origin_downgrades_autoexec_to_confirm`,
+    /// `app-shell::orchestration::tests::test_mcp_origin_downgrades_autoexec_to_confirm`,
     /// die die reale Filter-Engine/`handle_action_proposed`-Logik prüft;
     /// hier wird nur sichergestellt, dass diese Crate selbst keinen
     /// zweiten, das Downgrade umgehenden Ausführungspfad hat — die

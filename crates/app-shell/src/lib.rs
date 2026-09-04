@@ -255,11 +255,17 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 
             // Spec 0038, Abschnitt 4: hält das Frontend über
             // `entitlements:changed` aktuell, sobald `EntitlementProvider::
-            // watch()` einen neuen Stand liefert — bei `FixedEntitlements`
-            // (Community Edition) passiert das nie, `changed().await` wartet
-            // dann einfach für die gesamte App-Laufzeit, ohne je
-            // zurückzukehren. Die Infrastruktur muss trotzdem stehen, s.
-            // Spec-Text.
+            // watch()` einen neuen Stand liefert. Unabhängiger Review-Pass:
+            // bei `FixedEntitlements` (Community Edition) beendet sich
+            // dieser Task bereits beim Start — `FixedEntitlements::watch()`
+            // droppt ihren `Sender` sofort (s. dortiger Kommentar), also
+            // liefert bereits das erste `changed().await` hier ein `Err`,
+            // die `while`-Schleife läuft kein einziges Mal. Kein aktiver
+            // Leerlauf-Task für die gesamte App-Laufzeit, wie ein früherer
+            // Kommentar hier fälschlich behauptete — die Infrastruktur
+            // (Command + Event) steht trotzdem, s. Spec-Text; ein
+            // künftiger `EntitlementProvider`, der seinen `Sender` am Leben
+            // hält, würde diesen Task tatsächlich laufen lassen.
             let handle_for_entitlements = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let mut receiver = {

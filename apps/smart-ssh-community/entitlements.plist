@@ -5,7 +5,7 @@
   minimal — nur die drei Berechtigungen, die eine Tauri-2-WebView-App
   unter Hardened Runtime tatsächlich braucht, keine darüber
   hinausgehenden (Prinzip der minimalen Rechte, konsistent mit dem Rest
-  des Projekts, s. z. B. `crates/app-tauri/capabilities/`).
+  des Projekts, s. z. B. `apps/smart-ssh-community/capabilities/`).
 
   - com.apple.security.cs.allow-jit /
     com.apple.security.cs.allow-unsigned-executable-memory: ohne diese

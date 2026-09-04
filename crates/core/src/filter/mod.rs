@@ -35,7 +35,7 @@ pub(crate) use parser::segment_command;
 // usw.), s. `risk::classifier`-Doc-Kommentar. Wie `segment_command`
 // bewusst `pub(crate)` — internes Detail zwischen den beiden Modulen.
 pub(crate) use parser::resolve_effective_command;
-// Unabhängiger Review-Pass, Spec 0011: von `app-tauri::rule_suggestions`
+// Unabhängiger Review-Pass, Spec 0011: von `app-shell::rule_suggestions`
 // wiederverwendet, damit die Regel-Schnellvorschlag-Heuristik dieselbe
 // Elevation-/Wrapper-Erkennung nutzt wie die Hard-Blacklist-Prüfung, statt
 // eine eigene, potenziell abweichende Liste zu pflegen. Hier bewusst `pub`

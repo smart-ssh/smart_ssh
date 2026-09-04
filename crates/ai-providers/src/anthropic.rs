@@ -203,10 +203,10 @@ impl AiProvider for AnthropicProvider {
         // KI-Anfrage-Zyklus (Kontext → Streaming-Chunks → Tool-Call-Parsing)
         // — bewusst hier lokal erzeugt statt als `SessionContext`-Feld: das
         // hätte alle neun bestehenden `SessionContext`-Konstruktionsstellen
-        // (Produktivcode + Tests) angefasst, nur damit `app-tauri` eine ID
+        // (Produktivcode + Tests) angefasst, nur damit `app-shell` eine ID
         // vorgibt, die für die Korrelation innerhalb *eines* Provider-Calls
         // ohnehin genauso gut hier entstehen kann. `session_id` (per
-        // `#[tracing::instrument]` in `app-tauri::orchestration` bereits als
+        // `#[tracing::instrument]` in `app-shell::orchestration` bereits als
         // Span-Feld aktiv, s. dortiger Kommentar) bleibt die übergreifende
         // Korrelation über mehrere Runden/Provider-Aufrufe hinweg.
         let request_id = Uuid::new_v4();

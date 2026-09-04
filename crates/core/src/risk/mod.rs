@@ -5,7 +5,7 @@
 //!
 //! `ReadRemoteFile`/`WriteRemoteFile` (Spec 0020) laufen NICHT durch dieses
 //! Modul in Form eines eigenen Pfad-Parameters — der Aufrufer (Kernschleife
-//! in `app-tauri::orchestration`) mappt sie zuerst auf dieselben
+//! in `app-shell::orchestration`) mappt sie zuerst auf dieselben
 //! `sftp-read <pfad>`/`sftp-write <pfad>`-Pseudokommandos, die bereits für
 //! die Filter-Engine-Anbindung existieren (Spec 0020, Abschnitt 4.1), und
 //! ruft dann [`RiskClassifier::classify`] wie für ein normales Kommando auf

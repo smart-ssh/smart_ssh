@@ -14,14 +14,14 @@ use uuid::Uuid;
 
 /// Spec 0016, Abschnitt 4, Punkt 1: der tatsächlich an den Provider
 /// gesendete `SessionContext` — **nach** Redaction. Der hier ankommende
-/// `context` wurde bereits in `app-tauri::orchestration` redigiert, bevor
+/// `context` wurde bereits in `app-shell::orchestration` redigiert, bevor
 /// ein Kommando-Ergebnis überhaupt in `context.history` landete (s.
 /// `OutputRedactor`, Spec 0006 Abschnitt 5) — diese Funktion loggt also nie
 /// rohen, unredigierten Kommando-Output. `CommandResult`-Einträge werden
 /// hier bewusst nur als Kommando + Längen zusammengefasst (nicht der volle
 /// Text): der volle, redigierte Output steht bereits in einem eigenen
 /// Log-Eintrag pro Ausführung (Spec 0016, Abschnitt 4, Punkt 5, s.
-/// `app-tauri::orchestration::log_command_execution`) — ihn hier zusätzlich
+/// `app-shell::orchestration::log_command_execution`) — ihn hier zusätzlich
 /// vollständig zu wiederholen würde Logs nur unnötig aufblähen, ohne neue
 /// Information zu liefern.
 pub(crate) fn log_outgoing_context(request_id: Uuid, context: &SessionContext) {

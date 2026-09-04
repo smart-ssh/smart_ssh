@@ -6,14 +6,14 @@
 //! macOS Keychain Services, Windows Credential Manager, *nix Secret
 //! Service).
 //!
-//! **Eigene Crate statt Teil von `app-tauri`**: `app-tauri` "enthält keine
+//! **Eigene Crate statt Teil von `app-shell`**: `app-shell` "enthält keine
 //! fachliche Logik" (Spec 0007, Abschnitt 3) — ein OS-Keychain-Wrapper ist
 //! zwar keine *fachliche* Logik, aber eine konkrete, austauschbare I/O-
 //! Implementierung eines `core`-Traits, also genau die Sorte Baustein, die
 //! im gesamten Projekt bislang immer eine eigene Crate bekommen hat
 //! (`persistence-sqlite` für `ProfileStore`, `ssh-transport` für
 //! `SshTransport`, `ai-providers` für `AiProvider`). Dieselbe Trennung hier
-//! zu brechen, nur weil `app-tauri` diese eine Implementierung als Erstes
+//! zu brechen, nur weil `app-shell` diese eine Implementierung als Erstes
 //! braucht, würde das Muster inkonsistent machen, ohne echten Vorteil.
 //!
 //! **Kein automatisierter Test gegen den echten Keychain**: anders als

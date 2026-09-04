@@ -56,7 +56,9 @@ smart_ssh/
 │   ├── ai-providers/          # OpenAI, Anthropic, Ollama, SSE-Parser, Fallback-Modus
 │   ├── credentials-keyring/   # OS-Keychain-Anbindung (keyring-Crate)
 │   ├── persistence-sqlite/    # SQLite-Speicher für Profile, Notizen, Regeln & AI-Configs
-│   └── app-tauri/             # Tauri-v2-Desktop-App, Orchestrierung & React-Frontend
+│   └── app-shell/             # App-Wiring, Orchestrierung, Tauri-Commands (Bibliothek)
+├── apps/
+│   └── smart-ssh-community/   # Dünnes Tauri-v2-Binary: app_shell::run(Wiring::community())
 │       └── frontend/          # React 19, TypeScript, Tailwind CSS, xterm.js
 ├── docs/
 │   ├── adr/                   # Architecture Decision Records (0001–0019)

@@ -158,7 +158,7 @@ pub enum NoteTarget {
 /// UUID`-Bugfall. Stattdessen wählt die KI nur noch zwischen zwei relativen
 /// Optionen; das Backend löst daraus die tatsächliche `ServerId`/`GroupId`
 /// **selbst** aus dem Session-Kontext auf (nie eine von der KI gelieferte
-/// ID, s. `app-tauri::orchestration::resolve_note_target`).
+/// ID, s. `app-shell::orchestration::resolve_note_target`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NoteTargetSelector {
     CurrentServer,

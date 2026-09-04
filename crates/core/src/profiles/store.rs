@@ -66,7 +66,7 @@ pub trait ProfileStore: Send + Sync {
     /// Spec 0003/0004 nicht vorgesehen (dort nur gezielte
     /// `get_server(id)`-Lookups), wird aber von Spec 0007s
     /// `list_servers`-Tauri-Befehl vorausgesetzt — daher hier als
-    /// zusätzliche Trait-Methode ergänzt statt in `app-tauri` mit
+    /// zusätzliche Trait-Methode ergänzt statt in `app-shell` mit
     /// Store-internen Interna zu umgehen.
     async fn list_servers(&self) -> ProfileResult<Vec<Server>>;
 

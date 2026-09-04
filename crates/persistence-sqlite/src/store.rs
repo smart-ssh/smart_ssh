@@ -137,7 +137,7 @@ impl SqliteProfileStore {
     }
 
     /// Wie [`Self::ai_provider_store`], für persistente Chat-Sitzungen
-    /// (Spec 0034). `cipher`: Spec 0036 — der Aufrufer (`app-tauri`)
+    /// (Spec 0034). `cipher`: Spec 0036 — der Aufrufer (`app-shell`)
     /// beschafft ihn einmalig über `ssh_manager_core::crypto::
     /// resolve_or_generate_key` + `ChaCha20Poly1305Cipher`, s. dortige
     /// Doc-Kommentare. Kein Default hier: welcher Schlüssel/`CredentialStore`

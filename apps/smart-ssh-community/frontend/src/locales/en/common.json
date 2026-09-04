@@ -33,6 +33,11 @@
       "en": "English"
     }
   },
+  "featureLocked": {
+    "title": "This feature requires a paid plan",
+    "body": "\"{{feature}}\" is not available on your current plan ({{tier}}).",
+    "close": "Close"
+  },
   "sidebar": {
     "addGroup": "+ Group",
     "addServer": "+ Server",

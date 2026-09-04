@@ -109,7 +109,7 @@ pub struct FeatureLocked {
 }
 
 /// Liefert den aktuell geltenden Entitlement-Stand — als Trait modelliert,
-/// damit `app-tauri` (bzw. künftig ein Lizenzschlüssel-/Managed-Backend im
+/// damit `app-shell` (bzw. künftig ein Lizenzschlüssel-/Managed-Backend im
 /// privaten Repo) eine eigene Implementierung einsetzen kann, ohne dass
 /// `core` von einem konkreten Lizenzmechanismus abhängen müsste (analog zum
 /// `ProfileStore`/`PolicyStore`-Muster).

@@ -1,4 +1,4 @@
-// Spiegelt die Rust-DTOs aus `crates/app-tauri/src/dto.rs` (Spec 0007,
+// Spiegelt die Rust-DTOs aus `crates/app-shell/src/dto.rs` (Spec 0007,
 // Abschnitt 8.2). Feldnamen camelCase, weil die DTO-Structs dort
 // `#[serde(rename_all = "camelCase")]` tragen; `ProviderType`-Werte
 // bleiben snake_case (exakt wie im SQL-`CHECK`-Constraint), weil dieser
@@ -385,7 +385,7 @@ export type TestConnectionResult =
 //
 // `Scope`/`RuleAction` (core::filter) tragen wie `Decision` oben kein
 // `serde(rename_all)` — Standard-Außen-Tagging, s. Modul-Kommentar am
-// Dateianfang. `PatternType` (app-tauri-DTO) hat dagegen
+// Dateianfang. `PatternType` (app-shell-DTO) hat dagegen
 // `#[serde(rename_all = "snake_case")]`, also lowercase-Strings.
 
 export type Scope = "Global" | { Server: string } | { Tag: string };

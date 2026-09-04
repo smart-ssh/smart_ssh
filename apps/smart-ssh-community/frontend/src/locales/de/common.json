@@ -33,6 +33,11 @@
       "en": "Englisch"
     }
   },
+  "featureLocked": {
+    "title": "Diese Funktion erfordert einen kostenpflichtigen Plan",
+    "body": "\"{{feature}}\" ist in deiner aktuellen Edition ({{tier}}) nicht verfügbar.",
+    "close": "Schließen"
+  },
   "sidebar": {
     "addGroup": "+ Gruppe",
     "addServer": "+ Server",

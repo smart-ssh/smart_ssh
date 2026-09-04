@@ -1,6 +1,6 @@
 /** Spec 0024, Abschnitt 5: Mapping von stabilen Backend-`code`s (s.
  * `SshError`/`AiError`/`Decision`/`CommandError` in `crates/core`/
- * `crates/app-tauri`) auf Übersetzungs-Keys im `errors`-Namespace der
+ * `crates/app-shell`) auf Übersetzungs-Keys im `errors`-Namespace der
  * `locales/*\/common.json`. Jeder bekannte Code übersetzt 1:1 zu
  * `errors.<CODE>` — die Menge hier definiert, welche Codes das Frontend
  * kennt; alles andere (unbekannter/zukünftiger Code, oder gar keiner) fällt
@@ -23,7 +23,7 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "AI_CONTEXT_TOO_LARGE",
   "AI_PROVIDER_UNAVAILABLE",
   // Decision/EvaluationTrace (crates/core/src/filter/engine.rs +
-  // crates/app-tauri/src/orchestration.rs)
+  // crates/app-shell/src/orchestration.rs)
   "FILTER_EMPTY_COMMAND",
   "FILTER_COMMAND_TOO_LONG",
   "FILTER_PARSE_AMBIGUOUS",
@@ -39,7 +39,7 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM",
   "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM",
   "FILTER_FILE_WRITE_REQUIRES_CONFIRM",
-  // CommandError (crates/app-tauri/src/error.rs) — Server-/Gruppen-Formulare
+  // CommandError (crates/app-shell/src/error.rs) — Server-/Gruppen-Formulare
   "GROUP_SELF_PARENT",
   "GROUP_CYCLE_DETECTED",
   "SERVER_PASSWORD_REQUIRED",

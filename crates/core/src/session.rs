@@ -21,8 +21,8 @@ use crate::filter::{Decision, RuleId, RuleOrigin};
 use crate::shared::ServerId;
 
 /// Eindeutige Kennung einer [`Session`] — eigener Typ statt Wiederverwendung
-/// einer der bestehenden `app-tauri`-internen `SessionId`-Alias (Spec 0007),
-/// da `core` keine Abhängigkeit auf `app-tauri` haben darf (umgekehrt schon,
+/// einer der bestehenden `app-shell`-internen `SessionId`-Alias (Spec 0007),
+/// da `core` keine Abhängigkeit auf `app-shell` haben darf (umgekehrt schon,
 /// s. Moduldoc `lib.rs`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SessionId(pub Uuid);
@@ -41,7 +41,7 @@ impl Default for SessionId {
 
 /// Wer eine Sitzung ausgelöst hat — Spec 0037, Abschnitt 7 nennt
 /// `Human | McpAgent { agent_id }` (dasselbe Unterscheidungsprinzip wie
-/// das bestehende `app-tauri::dto::ActionOrigin`, hier aber als Teil des
+/// das bestehende `app-shell::dto::ActionOrigin`, hier aber als Teil des
 /// Ziel-Session-Modells in `core`, nicht als Tauri-DTO).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SessionOrigin {

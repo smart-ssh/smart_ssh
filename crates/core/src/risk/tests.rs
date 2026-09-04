@@ -233,7 +233,7 @@ fn test_single_segment_matching_both_axes_sets_both_independently() {
 
 #[test]
 fn test_sftp_write_pseudo_command_on_id_rsa_path_yields_data_risk_red() {
-    // Exakt die Pseudokommando-Form aus `app-tauri::orchestration::
+    // Exakt die Pseudokommando-Form aus `app-shell::orchestration::
     // sftp_write_pseudo_command` (Spec 0020, Abschnitt 4.1): "sftp-write
     // <pfad>". Dieses Modul kennt `AiAction`/SFTP nicht selbst (das bleibt
     // Aufgabe des Aufrufers, s. Moduldoc), aber der Klassifizierer muss auf

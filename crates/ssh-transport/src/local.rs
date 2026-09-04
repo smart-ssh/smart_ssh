@@ -103,7 +103,7 @@ impl SshTransport for LocalTransport {
     // ersten Schritt aber bewusst nicht umgesetzt, um den Umfang klein zu
     // halten; `sudo -S`-Stdin-Zufuhr ist für den lokalen Pseudo-Server
     // ohnehin nicht relevant (kein hinterlegtes Sudo-Passwort möglich, s.
-    // `crate::local`-Verwendung in `app-tauri`).
+    // `crate::local`-Verwendung in `app-shell`).
 
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
         let pty_system = native_pty_system();

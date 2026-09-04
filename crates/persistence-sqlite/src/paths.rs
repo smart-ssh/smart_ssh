@@ -14,7 +14,7 @@ const DATA_DIR_OVERRIDE_ENV: &str = "SMART_SSH_DATA_DIR";
 
 /// Ermittelt das App-Datenverzeichnis — Grundlage für [`default_db_path`]
 /// und (über dessen `.parent()`) den Host-Key-Speicher
-/// (`app-tauri::lib::build_app_state`). Reihenfolge:
+/// (`app-shell::lib::build_app_state`). Reihenfolge:
 ///
 /// 1. `SMART_SSH_DATA_DIR`, falls gesetzt und nicht leer (s. o.).
 /// 2. Sonst der plattformübliche Datenpfad — im Release-Build unverändert
@@ -68,7 +68,7 @@ fn resolve_data_dir() -> PathBuf {
 /// - Linux (Debug): `~/.local/share/smart-ssh-dev/smart-ssh.db`
 ///
 /// Öffentlich (nicht nur intern von [`crate::SqliteProfileStore::connect`]
-/// genutzt), damit `app-tauri` später denselben Pfad ermitteln kann, ohne
+/// genutzt), damit `app-shell` später denselben Pfad ermitteln kann, ohne
 /// die Pfad-Logik zu duplizieren (Aufgabenstellung Teil 2, Punkt 5).
 ///
 /// **`BaseDirs` statt `ProjectDirs`**: `ProjectDirs::from("", "", "Smart SSH")`

@@ -8,10 +8,10 @@
 //! Übernommen aus `ai-providers::prompt_escape` (dort ursprünglich nur für
 //! die Kommando-Ausgabe-Fences von `openai_compatible`/`anthropic`
 //! gebaut, unabhängiger Review-Pass Spec 0013) — hierher verschoben statt
-//! dupliziert, damit `app-tauri` (SFTP-Dateiinhalte, Notizen) dieselbe,
+//! dupliziert, damit `app-shell` (SFTP-Dateiinhalte, Notizen) dieselbe,
 //! bereits reparierte Escaping-Logik nutzen kann, ohne dass `core` von
 //! `ai-providers` abhängen müsste (die Abhängigkeitsrichtung ist
-//! `app-tauri -> ai-providers -> ssh-manager-core`, nie umgekehrt).
+//! `app-shell -> ai-providers -> ssh-manager-core`, nie umgekehrt).
 
 /// Welche der vier in Spec 0039 Abschnitt 1 genannten Quellen der Inhalt
 /// hat — bestimmt den Tag-Namen des Fence.

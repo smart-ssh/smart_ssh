@@ -6640,7 +6640,7 @@ mod tests {
         Uuid,
         tempfile::TempDir,
     ) {
-        // Nur die öffentliche `connect(db_path)`-API steht app-tauri zur
+        // Nur die öffentliche `connect(db_path)`-API steht app-shell zur
         // Verfügung (`connect_with`/`:memory:` sind `pub(crate)` in
         // `persistence-sqlite`, s. dortiger Doc-Kommentar) — eine echte,
         // temporäre Datei statt `:memory:`. Das `TempDir` wird an den

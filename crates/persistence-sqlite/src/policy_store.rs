@@ -178,7 +178,7 @@ fn row_to_stored_rule(row: &sqlx::sqlite::SqliteRow) -> Result<StoredRule, Polic
 }
 
 /// `#[derive(Clone)]`: anders als [`crate::SqliteAiProviderStore`] (immer
-/// hinter einem `Arc` gehalten) wird `SqlitePolicyStore` in `app-tauri`
+/// hinter einem `Arc` gehalten) wird `SqlitePolicyStore` in `app-shell`
 /// sowohl in `AppState` gehalten als auch bei jedem `connect()` und jedem
 /// `evaluate_explained`-Aufruf per Wert in eine neue
 /// `FilterEngine<SqlitePolicyStore>` verschoben (`FilterEngine::new`
@@ -203,7 +203,7 @@ impl SqlitePolicyStore {
 
     /// Alle gespeicherten Regeln, unabhängig vom Scope — Grundlage sowohl
     /// für [`PolicyStore::rules_for`] (dort nach `EffectiveScope` gefiltert)
-    /// als auch für `list_rules` in `app-tauri` (dort optional nach einem
+    /// als auch für `list_rules` in `app-shell` (dort optional nach einem
     /// exakten `Scope` für die Regel-Verwaltungsansicht gefiltert). Beide
     /// Filterungen laufen bewusst in Rust statt als zwei verschiedene SQL-
     /// `WHERE`-Klauseln — bei der zu erwartenden Regelzahl (typischerweise
