@@ -97,9 +97,12 @@ const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 10;
 /// vergessener Aufrufer, um eine Nachrichtenart lautlos nie zu
 /// persistieren. Persistiert nur, wenn diese Session überhaupt an eine
 /// `chat_sessions`-Zeile gebunden ist (`chat_session_store`/
-/// `chat_session_id` beide `Some`, s. `Session`-Doc-Kommentar) — Tests und
-/// (aktuell ohnehin nie über diesen Pfad laufende) MCP-Sessions bleiben
-/// dadurch unverändert reines In-Memory-Verhalten.
+/// `chat_session_id` beide `Some`, s. `Session`-Doc-Kommentar) — Tests
+/// bleiben dadurch unverändert reines In-Memory-Verhalten. MCP-Herkunft
+/// wird NICHT hier abgefangen (eine MCP-Aktion kann durchaus dieselbe,
+/// bereits persistierte Session eines offenen Menschen-Tabs mitnutzen, s.
+/// `mcp_backend::AppMcpBackend::ensure_session`) — dafür gibt es
+/// [`push_history_scoped`] mit explizitem `persist: false`.
 ///
 /// Ein Persistenzfehler beendet den Chat-Turn nicht (nur geloggt) — ein
 /// DB-Schreibfehler mitten in einer laufenden KI-Antwort dem Nutzer als
@@ -107,7 +110,24 @@ const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 10;
 /// bleibt im In-Memory-`SessionContext` in jedem Fall korrekt sichtbar,
 /// nur ihre Persistenz fehlt dann für diesen einen Eintrag.
 pub(crate) async fn push_history(session: &Session, message: ChatMessage) {
+    push_history_scoped(session, message, true).await;
+}
+
+/// Wie [`push_history`], mit expliziter Kontrolle darüber, ob die
+/// Nachricht auch persistiert wird (Spec 0040, Abschnitt 4): `persist:
+/// false` für MCP-Herkunft — Spec 0034, Abschnitt 10 verlangt, dass
+/// MCP-Aktionen keine persistierte, wiederaufnehmbare Historie erzeugen,
+/// selbst wenn sie (weil bereits ein Tab für denselben Server offen ist,
+/// s. `mcp_backend::AppMcpBackend::ensure_session`) dieselbe `Session` samt
+/// `chat_session_id` eines Menschen-Tabs mitnutzen. Der In-Memory-
+/// `SessionContext` wird in JEDEM Fall aktualisiert — nur der DB-
+/// Schreibzugriff wird unterdrückt, s. Aufrufer in `handle_action_
+/// proposed`/`handle_user_decision`/`execute_*`.
+async fn push_history_scoped(session: &Session, message: ChatMessage, persist: bool) {
     session.context.lock().await.history.push(message.clone());
+    if !persist {
+        return;
+    }
 
     let Some(store) = &session.chat_session_store else {
         return;
@@ -291,6 +311,13 @@ async fn handle_action_proposed(
     origin: ActionOrigin,
 ) -> bool {
     let action_id: ActionId = Uuid::new_v4();
+    // Spec 0040, Abschnitt 4: MCP-Herkunft schreibt nie in die persistierte,
+    // wiederaufnehmbare Historie — auch nicht, wenn dieselbe `Session`
+    // (samt `chat_session_id`) gerade einen Menschen-Tab bedient (s.
+    // `mcp_backend::AppMcpBackend::ensure_session`). Einmal hier aus
+    // `origin` abgeleitet und durch die gesamte Ausführungskette gereicht,
+    // statt an jeder `push_history`-Stelle einzeln zu entscheiden.
+    let persist = !matches!(origin, ActionOrigin::Mcp { .. });
 
     // Unabhängiger Review-Pass (Spec 0020): Pfad-Normalisierung passiert
     // hier, EINMALIG, bevor irgendein Konsument unten (Filter-Auswertung,
@@ -489,6 +516,7 @@ async fn handle_action_proposed(
                 action,
                 emitter,
                 profile_store,
+                persist,
             )
             .await
         }
@@ -499,7 +527,7 @@ async fn handle_action_proposed(
             // 3, Fall 4: die KI bekommt zusätzlich einen Kontext-Eintrag mit
             // dem Blockier-Grund und automatisch eine Folgerunde, statt
             // stillschweigend übergangen zu werden.
-            push_history(
+            push_history_scoped(
                 session,
                 ChatMessage {
                     role: Role::ActionResult,
@@ -508,6 +536,7 @@ async fn handle_action_proposed(
                         reason: RejectionReason::Blocked(reason),
                     },
                 },
+                persist,
             )
             .await;
             true
@@ -780,6 +809,12 @@ async fn handle_user_decision(
     profile_store: &dyn ProfileStore,
     origin: ActionOrigin,
 ) -> bool {
+    // Spec 0040, Abschnitt 4: s. identischer Kommentar in
+    // `handle_action_proposed` — MCP-Herkunft persistiert nie, auch nicht
+    // über diesen Bestätigungsdialog-Pfad (ein MCP-Vorschlag mit `Confirm`
+    // landet ebenfalls hier, s. Spec 0028, Abschnitt 9a).
+    let persist = !matches!(origin, ActionOrigin::Mcp { .. });
+
     match user_decision {
         ActionUserDecision::Deny => {
             // Spec 0021, Abschnitt 3, Fall 3: der Nutzer hat abgelehnt — das
@@ -791,7 +826,7 @@ async fn handle_user_decision(
             // nachfragen, akzeptieren). Das war der Kern des gemeldeten
             // Bugs: ohne diesen Eintrag + die automatische Folgerunde blieb
             // der Chat nach "Ablehnen" stumm (s. Moduldoc).
-            push_history(
+            push_history_scoped(
                 session,
                 ChatMessage {
                     role: Role::ActionResult,
@@ -800,6 +835,7 @@ async fn handle_user_decision(
                         reason: RejectionReason::User,
                     },
                 },
+                persist,
             )
             .await;
             true
@@ -812,6 +848,7 @@ async fn handle_user_decision(
                 action,
                 emitter,
                 profile_store,
+                persist,
             )
             .await
         }
@@ -866,7 +903,7 @@ async fn handle_user_decision(
                         // erreicht — dieselbe Kontext-Eintrag +
                         // automatische-Folgerunde-Behandlung gilt
                         // einheitlich.
-                        push_history(
+                        push_history_scoped(
                             session,
                             ChatMessage {
                                 role: Role::ActionResult,
@@ -875,6 +912,7 @@ async fn handle_user_decision(
                                     reason: RejectionReason::Blocked(reason),
                                 },
                             },
+                            persist,
                         )
                         .await;
                         return true;
@@ -902,6 +940,7 @@ async fn handle_user_decision(
                 effective_action,
                 emitter,
                 profile_store,
+                persist,
             )
             .await
         }
@@ -920,10 +959,12 @@ async fn execute_action(
     action: AiAction,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
+    persist: bool,
 ) -> bool {
     match action {
         AiAction::SuggestCommand { command } => {
-            execute_suggested_command(session, session_id, action_id, command, emitter).await
+            execute_suggested_command(session, session_id, action_id, command, emitter, persist)
+                .await
         }
         AiAction::ProposeNoteUpdate {
             target,
@@ -937,6 +978,7 @@ async fn execute_action(
                 new_content,
                 emitter,
                 profile_store,
+                persist,
             )
             .await
         }
@@ -944,10 +986,13 @@ async fn execute_action(
             unreachable!("GenerateDocument braucht nie eine Bestätigung, s. evaluate_action")
         }
         AiAction::ReadRemoteFile { path } => {
-            execute_read_remote_file(session, session_id, action_id, path, emitter).await
+            execute_read_remote_file(session, session_id, action_id, path, emitter, persist).await
         }
         AiAction::WriteRemoteFile { path, content } => {
-            execute_write_remote_file(session, session_id, action_id, path, content, emitter).await
+            execute_write_remote_file(
+                session, session_id, action_id, path, content, emitter, persist,
+            )
+            .await
         }
     }
 }
@@ -1003,14 +1048,16 @@ async fn emit_action_error(
     session_id: SessionId,
     message: String,
     code: Option<&'static str>,
+    persist: bool,
 ) -> bool {
     emit_chat_error(emitter, session_id, message.clone(), code);
-    push_history(
+    push_history_scoped(
         session,
         ChatMessage {
             role: Role::ActionResult,
             content: MessageContent::Text(message),
         },
+        persist,
     )
     .await;
     true
@@ -1022,6 +1069,7 @@ async fn execute_suggested_command(
     action_id: ActionId,
     command: String,
     emitter: &dyn EventEmitter,
+    persist: bool,
 ) -> bool {
     // Spec 0018, Abschnitt 5: nur umschreiben/Stdin füttern, wenn tatsächlich
     // ein Passwort hinterlegt ist — sonst unverändertes Verhalten
@@ -1100,7 +1148,7 @@ async fn execute_suggested_command(
                 String::from_utf8_lossy(&redacted.stdout),
                 String::from_utf8_lossy(&redacted.stderr)
             );
-            push_history(
+            push_history_scoped(
                 session,
                 ChatMessage {
                     role: Role::ActionResult,
@@ -1110,6 +1158,7 @@ async fn execute_suggested_command(
                         cancelled,
                     },
                 },
+                persist,
             )
             .await;
             // Spec 0039, Abschnitt 5: `CommandResult` wird erst beim
@@ -1139,6 +1188,7 @@ async fn execute_suggested_command(
                 session_id,
                 format!("Kommando '{command}' konnte nicht ausgeführt werden: {err}"),
                 Some(code),
+                persist,
             )
             .await
         }
@@ -1289,6 +1339,7 @@ async fn note_target_preview_for_action(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn execute_note_update(
     session: &Session,
     session_id: SessionId,
@@ -1297,6 +1348,7 @@ async fn execute_note_update(
     new_content: String,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
+    persist: bool,
 ) -> bool {
     let target = match resolve_note_target(target_selector, session, profile_store).await {
         Ok(target) => target,
@@ -1308,6 +1360,7 @@ async fn execute_note_update(
                 session_id,
                 format!("Notiz konnte nicht aktualisiert werden: {reason}"),
                 None,
+                persist,
             )
             .await;
         }
@@ -1333,12 +1386,13 @@ async fn execute_note_update(
                     summary: summary.clone(),
                 },
             );
-            push_history(
+            push_history_scoped(
                 session,
                 ChatMessage {
                     role: Role::ActionResult,
                     content: MessageContent::Text(summary),
                 },
+                persist,
             )
             .await;
             true
@@ -1350,6 +1404,7 @@ async fn execute_note_update(
                 session_id,
                 format!("Notiz konnte nicht aktualisiert werden: {err}"),
                 None,
+                persist,
             )
             .await
         }
@@ -1432,6 +1487,7 @@ async fn execute_read_remote_file(
     action_id: ActionId,
     path: String,
     emitter: &dyn EventEmitter,
+    persist: bool,
 ) -> bool {
     if let Err(err) = ensure_sftp_open(session).await {
         let code = err.code();
@@ -1441,6 +1497,7 @@ async fn execute_read_remote_file(
             session_id,
             format!("SFTP konnte nicht geöffnet werden: {err}"),
             Some(code),
+            persist,
         )
         .await;
     }
@@ -1467,6 +1524,7 @@ async fn execute_read_remote_file(
                      {MAX_READ_FILE_BYTES} Bytes) — wird nicht gelesen."
                 ),
                 None,
+                persist,
             )
             .await;
         }
@@ -1505,7 +1563,7 @@ async fn execute_read_remote_file(
             // Live-UI-Karte (`ActionResultPayload::FileRead` oben) zeigt
             // bewusst weiter den unformatierten Inhalt — das Fencing ist
             // nur für den KI-Kontext relevant, nicht für die Anzeige.
-            push_history(
+            push_history_scoped(
                 session,
                 ChatMessage {
                     role: Role::ActionResult,
@@ -1514,6 +1572,7 @@ async fn execute_read_remote_file(
                         fence_untrusted(UntrustedKind::RemoteFile, &path, &content)
                     )),
                 },
+                persist,
             )
             .await;
             // Spec 0039, Abschnitt 5.
@@ -1531,6 +1590,7 @@ async fn execute_read_remote_file(
                 session_id,
                 format!("Lesen von '{path}' fehlgeschlagen: {err}"),
                 Some(code),
+                persist,
             )
             .await
         }
@@ -1698,6 +1758,7 @@ async fn execute_write_remote_file(
     path: String,
     content: String,
     emitter: &dyn EventEmitter,
+    persist: bool,
 ) -> bool {
     if let Err(err) = ensure_sftp_open(session).await {
         let code = err.code();
@@ -1707,6 +1768,7 @@ async fn execute_write_remote_file(
             session_id,
             format!("SFTP konnte nicht geöffnet werden: {err}"),
             Some(code),
+            persist,
         )
         .await;
     }
@@ -1741,6 +1803,7 @@ async fn execute_write_remote_file(
                     // hier aber ohne Passwort-Fallback-Versuch abgefangen, bevor
                     // ein neuer `SshError`-Wert entstünde.
                     Some(SshError::SftpPermissionDenied(String::new()).code()),
+                    persist,
                 )
                 .await;
             };
@@ -1758,6 +1821,7 @@ async fn execute_write_remote_file(
                             "Schreiben von '{path}' fehlgeschlagen (auch mit Sudo-Rechten): {err}"
                         ),
                         Some(code),
+                        persist,
                     )
                     .await;
                 }
@@ -1771,6 +1835,7 @@ async fn execute_write_remote_file(
                 session_id,
                 format!("Schreiben von '{path}' fehlgeschlagen: {err}"),
                 Some(code),
+                persist,
             )
             .await;
         }
@@ -1790,12 +1855,13 @@ async fn execute_write_remote_file(
             used_sudo_password,
         },
     );
-    push_history(
+    push_history_scoped(
         session,
         ChatMessage {
             role: Role::ActionResult,
             content: MessageContent::Text(summary),
         },
+        persist,
     )
     .await;
     true
@@ -2072,6 +2138,7 @@ pub async fn suggest_note_update_on_disconnect(
                 new_content,
                 emitter,
                 profile_store,
+                true,
             )
             .await;
         }
@@ -2570,6 +2637,7 @@ mod tests {
             action_id,
             "journalctl -f".to_string(),
             &emitter,
+            true,
         );
         let cancel_future = async {
             // Kleine Verzögerung, damit `exec_future` sicher schon
@@ -2641,6 +2709,7 @@ mod tests {
             action_id,
             "ls -la".to_string(),
             &emitter,
+            true,
         )
         .await;
         assert!(executed);
@@ -6323,6 +6392,90 @@ mod tests {
                     if String::from_utf8_lossy(&output.stdout).contains("REDACTED")
             )),
             "die geladene Historie muss den redigierten Platzhalter enthalten: {loaded:?}"
+        );
+    }
+
+    /// Spec 0040, Abschnitt 4 (Regressionstest, "Verbindliche Entscheidung
+    /// aus der Spec"): eine MCP-Aktion, die dieselbe `Session` (samt
+    /// `chat_session_store`/`chat_session_id`) eines bereits offenen
+    /// Menschen-Tabs mitnutzt, darf trotzdem keine Zeile in dessen
+    /// persistierter, wiederaufnehmbarer Historie erzeugen — sie bleibt
+    /// reines In-Memory-/Live-UI-Verhalten. Prüft zugleich, dass
+    /// `untrusted_content_ingested` (Spec 0039, Abschnitt 5) durch diese
+    /// Persistenz-Unterdrückung NICHT umgangen wird — der Flag muss trotzdem
+    /// gesetzt werden, weil er rein in-memory lebt und nie über
+    /// `push_history`/`push_history_scoped` läuft.
+    #[tokio::test]
+    async fn test_mcp_action_on_shared_human_session_writes_no_persisted_history() {
+        let (mut session, chat_store, chat_session_id, _tmp_dir) =
+            session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default())
+                .await;
+        // `AllowEverythingPolicyStore`: würde bei `ActionOrigin::Internal`
+        // zu AutoExec führen — bei MCP-Ursprung erzwingt die Filter-Engine
+        // trotzdem `Confirm` (s. `test_mcp_origin_downgrades_autoexec_to_
+        // confirm_despite_allow_rule` oben), der Test simuliert daher die
+        // menschliche Genehmigung über `approve_first_proposed_action`.
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let mock_sftp = MockSftpSession::new().with_file(
+            "/home/deploy/app.conf",
+            b"host=localhost\npassword=hunter2\n".to_vec(),
+        );
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp)));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let action_future = handle_action_proposed(
+            &session,
+            session_id,
+            AiAction::ReadRemoteFile {
+                path: "/home/deploy/app.conf".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Mcp {
+                client_name: Some("Claude Code".to_string()),
+            },
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        // Kernaussage: kein einziger Eintrag in der persistierten,
+        // wiederaufnehmbaren Historie — obwohl dieselbe `chat_session_id`
+        // eines Menschen-Tabs verwendet wurde.
+        let loaded = chat_store.load_session(chat_session_id).await.unwrap();
+        assert!(
+            loaded.is_empty(),
+            "MCP-Herkunft darf nie in die persistierte Historie schreiben, geladen: {loaded:?}"
+        );
+
+        // Live im UI/In-Memory-Kontext erscheint der Dateiinhalt trotzdem —
+        // nur der DB-Schreibzugriff wurde unterdrückt, nicht das In-Memory-
+        // Verhalten (s. `push_history_scoped`-Doc-Kommentar).
+        let history = session.context.lock().await.history.clone();
+        assert!(
+            history.iter().any(|m| matches!(
+                &m.content,
+                MessageContent::Text(t) if t.contains("host=localhost")
+            )),
+            "der Dateiinhalt muss trotzdem live im In-Memory-Kontext erscheinen: {history:?}"
+        );
+
+        // `untrusted_content_ingested` bleibt unabhängig von der
+        // Persistenz-Unterdrückung funktionsfähig.
+        assert!(
+            session
+                .untrusted_content_ingested
+                .load(std::sync::atomic::Ordering::SeqCst),
+            "untrusted_content_ingested darf durch die MCP-Persistenz-Unterdrückung nicht umgangen werden"
         );
     }
 
