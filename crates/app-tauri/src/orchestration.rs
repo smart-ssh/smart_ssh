@@ -260,8 +260,36 @@ pub async fn run_chat_turn(
 /// ist sicher, weil `fence_untrusted`s Escaping (`escape_for_prompt_fence`)
 /// garantiert, dass ein literales `<`/`>` in bereits gefenctem Text NIE
 /// aus dem ursprünglichen Inhalt stammt, sondern ausschließlich von den
-/// Fence-Tags selbst — die Marker-Liste kann also nichts fälschlich
-/// "beschützen", das eigentlich redigiert werden müsste.
+/// Fence-Tags selbst — für tatsächlich gefencten Inhalt kann die
+/// Marker-Liste also nichts fälschlich "beschützen", das eigentlich
+/// redigiert werden müsste.
+///
+/// **Bekannte, bewusst nicht geschlossene Restlücke** (unabhängiger
+/// Review-Pass zu diesem Fix selbst, dokumentiert statt stillschweigend
+/// verschwiegen): `MessageContent::Text` trägt auch gewöhnlichen, nie
+/// escapten Chat-Text (Nutzer-Eingabe, KI-Antworttext über
+/// `flush_text_buffer`) — enthält so ein Text zufällig eine Marker-artige
+/// Teilzeichenkette (z. B. ein zitiertes `</stdout>` ohne jeden echten
+/// Fence-Bezug) MITTEN in einem unterminierten Fail-safe-Treffer (etwa
+/// einem von der KI ausgegebenen, abgeschnittenen Private-Key-Block ohne
+/// `END`-Marker), trennt das Segmentieren unten die Fail-safe-Reichweite
+/// an dieser Stelle künstlich ab — der Teil hinter dem Marker enthält
+/// dann keinen `BEGIN`-Header mehr, matcht kein Muster mehr und bleibt
+/// unredigiert. Das ist eine echte, aber eng begrenzte Abschwächung
+/// gegenüber dem Verhalten vor diesem Fix (der bis dahin den gesamten
+/// Text ungeteilt redigierte). Bewusst nicht mitgelöst: aus reinem
+/// String-Inhalt lässt sich nicht zuverlässig unterscheiden, ob ein
+/// Marker-Vorkommen aus einem echten Fence stammt oder zufällig in nie
+/// gefenctem Text auftaucht (das wäre nur mit einer strukturellen
+/// Kennzeichnung "dieser Text ist gefenct" lösbar, die über die
+/// Persistenz hinweg erhalten bliebe — ein größerer Umbau, nicht Teil
+/// dieses Fixes) — und die beiden Fehlerrichtungen widersprechen sich:
+/// bevorzugt man "immer volle Fail-safe-Reichweite", bricht das
+/// wiederum genau den hier eigentlich zu behebenden Fence-Bruch bei
+/// echtem gefenctem Inhalt. Die Redaction-Richtung bleibt in diesem
+/// Rand-Rand-Fall weiterhin sicher (nichts wird sichtbar gemacht, was
+/// vorher nicht sichtbar war) — nur die Reichweite ist geringer als im
+/// theoretischen Idealfall.
 fn reapply_redaction_for_send(
     history: Vec<ChatMessage>,
     redactor: &dyn OutputRedactor,
@@ -7024,6 +7052,97 @@ mod tests {
             }
             other => panic!("Text-Variante erwartet, war: {other:?}"),
         }
+    }
+
+    /// Realistischerer End-to-End-Aufbau der beiden Tests oben
+    /// (unabhängiger Review-Pass zum Fencing-Fix selbst: die eingebaute
+    /// Private-Key-Fail-safe-Regel ist immer aktiv, ein wörtlicher
+    /// abgeschnittener Key wäre also schon bei `execute_read_remote_file`
+    /// redigiert worden — die obigen Tests konstruieren die Historie
+    /// deshalb direkt, statt den echten Lese-Pfad zu durchlaufen). Dieser
+    /// Test geht stattdessen exakt den Weg, auf dem der Bug tatsächlich
+    /// auftreten kann (Spec 0040, Abschnitt 5s eigenes Szenario:
+    /// "nachträglich hinzugefügtes Muster"): eine Datei mit einem beim
+    /// Lesen NOCH nicht erkannten Secret-Format wird gelesen und gefenct
+    /// (Redactor ohne das Muster), danach wird ein Redactor MIT dem
+    /// (gierigen, unterminierten) Zusatzmuster für den Versand verwendet.
+    #[tokio::test]
+    async fn test_read_remote_file_then_send_with_retroactive_greedy_pattern_keeps_fence_intact() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::ReadRemoteFile {
+                    path: "/home/deploy/legacy_secret.pem".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        // Beim Lesen/Fencen noch unbekanntes Secret-Format — kein Muster
+        // im (Standard-)Redactor dieser Session erkennt es, es landet
+        // deshalb unredigiert im gefencten `MessageContent::Text`.
+        let mock_sftp = MockSftpSession::new().with_file(
+            "/home/deploy/legacy_secret.pem",
+            b"-----BEGIN LEGACY SECRET-----\nunbekanntesFormatOhneEndemarker...".to_vec(),
+        );
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp.clone())));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let history = session.context.lock().await.history.clone();
+        let fenced_entry = history
+            .iter()
+            .find_map(|m| match &m.content {
+                MessageContent::Text(t) if t.contains("<remote_file>") => Some(t.clone()),
+                _ => None,
+            })
+            .expect("erwartet: ein gefenceter <remote_file>-Eintrag im Kontext");
+        assert!(
+            fenced_entry.contains("unbekanntesFormatOhneEndemarker"),
+            "zum Lesezeitpunkt noch unbekanntes Format darf noch nicht redigiert sein: \
+             {fenced_entry}"
+        );
+        assert!(fenced_entry.trim_end().ends_with("</remote_file>"));
+
+        // Zeit vergeht, ein neues, gieriges (unterminiertes) Muster für
+        // genau dieses Format wird ergänzt — Spec 0040, Abschnitt 5s
+        // eigenes "nachträglich hinzugefügtes Muster"-Szenario.
+        let retroactive_pattern = regex::Regex::new(r"(?s)-----BEGIN LEGACY SECRET-----.*")
+            .expect("Testmuster ist gültig");
+        let stronger_redactor =
+            DefaultOutputRedactor::with_extra_patterns(vec![retroactive_pattern]);
+
+        let redacted = reapply_redaction_for_send(history, &stronger_redactor);
+        let redacted_entry = redacted
+            .iter()
+            .find_map(|m| match &m.content {
+                MessageContent::Text(t) if t.contains("<remote_file>") => Some(t.clone()),
+                _ => None,
+            })
+            .expect("gefenceter Eintrag muss weiterhin vorhanden sein");
+
+        assert!(
+            !redacted_entry.contains("unbekanntesFormatOhneEndemarker"),
+            "das nachträglich erkannte Secret muss jetzt redigiert sein: {redacted_entry}"
+        );
+        assert_eq!(
+            redacted_entry.matches("</remote_file>").count(),
+            1,
+            "der schließende Fence-Tag muss trotz des gierigen Musters erhalten bleiben: \
+             {redacted_entry}"
+        );
+        assert!(redacted_entry.trim_end().ends_with("</remote_file>"));
     }
 
     /// End-to-End: `session.context` (die für Persistenz/UI maßgebliche

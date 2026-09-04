@@ -32,13 +32,6 @@ impl UntrustedKind {
             UntrustedKind::ServerNote => "server_note",
         }
     }
-
-    const ALL: [UntrustedKind; 4] = [
-        UntrustedKind::CommandStdout,
-        UntrustedKind::CommandStderr,
-        UntrustedKind::RemoteFile,
-        UntrustedKind::ServerNote,
-    ];
 }
 
 /// Alle literalen Fence-Marker-Strings, die [`fence_untrusted`] jemals
@@ -56,9 +49,26 @@ impl UntrustedKind {
 /// irgendetwas an tatsächlich redaktionswürdigem Inhalt zu verschonen.
 /// Öffentlich, statt die Tag-Namen an der Aufrufstelle ein zweites Mal zu
 /// duplizieren.
+///
+/// Iteriert über eine explizite Liste aller vier Varianten statt über ein
+/// separates `UntrustedKind::ALL`-Array, das eine frühere Fassung dieses
+/// Fixes hatte (unabhängiger Review-Pass: ein solches Array ist nicht
+/// automatisch synchron mit der Enum-Definition — eine neue Variante
+/// hätte `tag_name()`s exhaustives `match` zum Nicht-Kompilieren gebracht,
+/// das separate Array aber unbemerkt unvollständig gelassen). Die
+/// tatsächliche Vollständigkeits-Garantie liefert stattdessen
+/// `tests::test_fence_markers_stays_in_sync_with_untrusted_kind_variants`
+/// unten über ein echtes, wildcard-freies `match` auf `UntrustedKind`
+/// selbst — das bricht bei einer neuen Variante zuverlässig den Build,
+/// nicht nur "hoffentlich fällt es jemandem auf".
 pub fn fence_markers() -> Vec<String> {
     let mut markers = vec!["<source>".to_string(), "</source>".to_string()];
-    for kind in UntrustedKind::ALL {
+    for kind in [
+        UntrustedKind::CommandStdout,
+        UntrustedKind::CommandStderr,
+        UntrustedKind::RemoteFile,
+        UntrustedKind::ServerNote,
+    ] {
         let tag = kind.tag_name();
         markers.push(format!("<{tag}>"));
         markers.push(format!("</{tag}>"));
@@ -195,7 +205,7 @@ mod tests {
     #[test]
     fn test_fence_markers_covers_every_untrusted_kind_variant() {
         let markers = fence_markers();
-        for kind in UntrustedKind::ALL {
+        for kind in all_untrusted_kind_variants() {
             let fenced = fence_untrusted(kind, "quelle", "inhalt");
             let opening = format!("<{}>", kind.tag_name());
             let closing = format!("</{}>", kind.tag_name());
@@ -211,5 +221,34 @@ mod tests {
         }
         assert!(markers.contains(&"<source>".to_string()));
         assert!(markers.contains(&"</source>".to_string()));
+    }
+
+    /// Liefert alle `UntrustedKind`-Varianten — der eigentliche Zweck ist
+    /// nicht die Liste selbst, sondern das wildcard-freie `match` darin:
+    /// eine neue Variante lässt diese Funktion nicht mehr kompilieren, bis
+    /// sie hier UND in `fence_markers()`/`tag_name()` ergänzt wurde
+    /// (unabhängiger Review-Pass zum Fencing-Fix: verhindert das stille
+    /// Auseinanderlaufen, das ein separat gepflegtes Array zuließe — s.
+    /// `fence_markers`-Doc-Kommentar).
+    fn all_untrusted_kind_variants() -> Vec<UntrustedKind> {
+        let mut all = Vec::new();
+        for kind in [
+            UntrustedKind::CommandStdout,
+            UntrustedKind::CommandStderr,
+            UntrustedKind::RemoteFile,
+            UntrustedKind::ServerNote,
+        ] {
+            // Kein Wildcard-Arm: fehlt ein `UntrustedKind`-Fall (weil eine
+            // neue Variante hinzukam, aber nicht oben in die Liste
+            // aufgenommen wurde), verweigert der Compiler dieses `match`.
+            match kind {
+                UntrustedKind::CommandStdout
+                | UntrustedKind::CommandStderr
+                | UntrustedKind::RemoteFile
+                | UntrustedKind::ServerNote => {}
+            }
+            all.push(kind);
+        }
+        all
     }
 }
