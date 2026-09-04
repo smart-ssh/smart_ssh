@@ -133,9 +133,17 @@ impl SqliteProfileStore {
     }
 
     /// Wie [`Self::ai_provider_store`], für persistente Chat-Sitzungen
-    /// (Spec 0034).
-    pub fn chat_session_store(&self) -> crate::SqliteChatSessionStore {
-        crate::SqliteChatSessionStore::new(self.pool.clone())
+    /// (Spec 0034). `cipher`: Spec 0036 — der Aufrufer (`app-tauri`)
+    /// beschafft ihn einmalig über `ssh_manager_core::crypto::
+    /// resolve_or_generate_key` + `ChaCha20Poly1305Cipher`, s. dortige
+    /// Doc-Kommentare. Kein Default hier: welcher Schlüssel/`CredentialStore`
+    /// verwendet wird, ist eine Entscheidung des Aufrufers, nicht dieser
+    /// rein persistenzseitigen Crate.
+    pub fn chat_session_store(
+        &self,
+        cipher: std::sync::Arc<dyn ssh_manager_core::crypto::ContentCipher>,
+    ) -> crate::SqliteChatSessionStore {
+        crate::SqliteChatSessionStore::new(self.pool.clone(), cipher)
     }
 
     async fn fetch_tags(&self, server_id: &str) -> ProfileResult<Vec<String>> {

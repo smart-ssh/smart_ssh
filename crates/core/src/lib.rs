@@ -7,6 +7,7 @@
 pub mod ai;
 pub mod audit;
 pub mod credentials;
+pub mod crypto;
 pub mod filter;
 pub mod profiles;
 pub mod risk;

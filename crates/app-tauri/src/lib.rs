@@ -55,7 +55,21 @@ fn build_app_state() -> AppState {
     let ai_provider_store = profile_store.ai_provider_store();
     let policy_store = profile_store.policy_store();
     let prompt_history_store = profile_store.prompt_history_store();
-    let chat_session_store = profile_store.chat_session_store();
+
+    // Spec 0036, Abschnitt 4: einmalig bei App-Start aufgelöst (kein
+    // "erster Schreibzugriff" im wörtlichen Sinn, aber dieselbe Wirkung:
+    // der Schlüssel existiert garantiert, bevor irgendein Schreibzugriff
+    // stattfinden kann — s. Kommentar unten). `.expect(...)`, weil ohne
+    // funktionierenden Verschlüsselungsschlüssel jede Chat-Persistenz
+    // fehlschlagen würde — dieselbe "unverzichtbare Startvoraussetzung"-
+    // Behandlung wie beim DB-Verbindungsaufbau/Host-Key-Speicher oben/unten.
+    let credential_store = KeyringCredentialStore::new();
+    let chat_content_key = ssh_manager_core::crypto::resolve_or_generate_key(&credential_store)
+        .expect("Verschlüsselungsschlüssel für Chat-Inhalte konnte nicht geladen/generiert werden");
+    let chat_content_cipher: Arc<dyn ssh_manager_core::crypto::ContentCipher> = Arc::new(
+        ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&chat_content_key),
+    );
+    let chat_session_store = profile_store.chat_session_store(chat_content_cipher);
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
     // `crate::host_key_store`-Modul-Kommentar zur Begründung (der
@@ -70,7 +84,7 @@ fn build_app_state() -> AppState {
     AppState {
         sessions: SessionManager::new(),
         profile_store: Arc::new(profile_store),
-        credential_store: Arc::new(KeyringCredentialStore::new()),
+        credential_store: Arc::new(credential_store),
         ai_provider_store: Arc::new(ai_provider_store),
         host_key_store: Arc::new(host_key_store),
         policy_store,
