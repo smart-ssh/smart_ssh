@@ -6,3 +6,8 @@ members = ["crates/*"]
 version = "0.3.0"
 edition = "2021"
 license = "FSL-1.1-MIT"
+# Spec 0035 (CI-Dependency-Audit): keine dieser Crates ist für crates.io
+# gedacht (proprietäre App). Macht `[licenses.private] ignore = true` in
+# `deny.toml` wirksam, damit cargo-deny die eigene Projektlizenz nicht
+# gegen die Drittanbieter-Allow-Liste prüft.
+publish = false
