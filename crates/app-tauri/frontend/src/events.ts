@@ -2,6 +2,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ChatActionProposedEvent,
   ChatActionResultEvent,
+  ChatAutoContinuationLimitReachedEvent,
   ChatAutoContinuationStartedEvent,
   ChatDocumentGeneratedEvent,
   ChatErrorEvent,
@@ -60,6 +61,17 @@ export const onChatActionResult = (
 
 export const onChatError = (handler: (event: ChatErrorEvent) => void): Promise<UnlistenFn> =>
   listen<ChatErrorEvent>("chat-error", (e) => handler(e.payload));
+
+/** Spec 0021, Abschnitt 4 / `docs/adr/0021-turn-continuation-design.md`:
+ * das Automatik-Cap ist ein weicher Stopp, kein Fehler — eigenes Event statt
+ * über `onChatError`, damit das Frontend es neutral statt als Fehler-Karte
+ * anzeigen kann. */
+export const onChatAutoContinuationLimitReached = (
+  handler: (event: ChatAutoContinuationLimitReachedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatAutoContinuationLimitReachedEvent>("chat-auto-continuation-limit-reached", (e) =>
+    handler(e.payload),
+  );
 
 /** Spec 0021, Abschnitt 5 — s. `ChatAutoContinuationStartedEvent`-Doc-
  * Kommentar. */

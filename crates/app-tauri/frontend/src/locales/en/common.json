@@ -159,6 +159,7 @@
     "hardBlacklistLabel": "Hard blacklist:"
   },
   "actionCard": {
+    "autoContinuationLimitReached": "Automatic continuation paused after {{limit}} steps — send a message to continue.",
     "suggestCommand": "Suggest command",
     "generateDocument": "Generate document: {{title}}",
     "readFile": "Read file: {{path}}",

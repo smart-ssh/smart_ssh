@@ -56,9 +56,10 @@ use ssh_manager_core::ssh::{CommandOutput, ExecOutcome, SshError};
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
-    emit_chat_action_proposed, emit_chat_action_result, emit_chat_auto_continuation_started,
-    emit_chat_document_generated, emit_chat_error, emit_chat_text_delta,
-    emit_note_update_suggested, emit_risk_assessment_updated, ActionResultPayload, EventEmitter,
+    emit_chat_action_proposed, emit_chat_action_result, emit_chat_auto_continuation_limit_reached,
+    emit_chat_auto_continuation_started, emit_chat_document_generated, emit_chat_error,
+    emit_chat_text_delta, emit_note_update_suggested, emit_risk_assessment_updated,
+    ActionResultPayload, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -150,14 +151,7 @@ pub async fn run_chat_turn(
         }
     }
 
-    emit_chat_error(
-        emitter,
-        session_id,
-        format!(
-            "Automatische Fortsetzung nach {MAX_AUTO_FOLLOWUP_ROUNDS} Schritten angehalten — \
-             schreib weiter, um fortzufahren."
-        ),
-    );
+    emit_chat_auto_continuation_limit_reached(emitter, session_id, MAX_AUTO_FOLLOWUP_ROUNDS);
 }
 
 /// Genau eine KI-Antwortrunde. Gibt zurück, ob dabei mindestens eine
@@ -216,7 +210,12 @@ async fn run_one_round(
             }
             AiEvent::Error(err) => {
                 flush_text_buffer(session, &mut text_buffer).await;
-                emit_chat_error(emitter, session_id, describe_ai_error(&err));
+                emit_chat_error(
+                    emitter,
+                    session_id,
+                    describe_ai_error(&err),
+                    Some(err.code()),
+                );
                 break;
             }
         }
@@ -951,8 +950,9 @@ async fn emit_action_error(
     emitter: &dyn EventEmitter,
     session_id: SessionId,
     message: String,
+    code: Option<&'static str>,
 ) -> bool {
-    emit_chat_error(emitter, session_id, message.clone());
+    emit_chat_error(emitter, session_id, message.clone(), code);
     session.context.lock().await.history.push(ChatMessage {
         role: Role::ActionResult,
         content: MessageContent::Text(message),
@@ -1072,11 +1072,13 @@ async fn execute_suggested_command(
             // Klartext im Logfile landen, obwohl der Erfolgspfad dasselbe
             // Kommando korrekt redigiert.
             log_command_execution_failed(session_id, &session.redactor.redact_text(&command), &err);
+            let code = err.code();
             emit_action_error(
                 session,
                 emitter,
                 session_id,
                 format!("Kommando '{command}' konnte nicht ausgeführt werden: {err}"),
+                Some(code),
             )
             .await
         }
@@ -1245,6 +1247,7 @@ async fn execute_note_update(
                 emitter,
                 session_id,
                 format!("Notiz konnte nicht aktualisiert werden: {reason}"),
+                None,
             )
             .await;
         }
@@ -1282,6 +1285,7 @@ async fn execute_note_update(
                 emitter,
                 session_id,
                 format!("Notiz konnte nicht aktualisiert werden: {err}"),
+                None,
             )
             .await
         }
@@ -1366,11 +1370,13 @@ async fn execute_read_remote_file(
     emitter: &dyn EventEmitter,
 ) -> bool {
     if let Err(err) = ensure_sftp_open(session).await {
+        let code = err.code();
         return emit_action_error(
             session,
             emitter,
             session_id,
             format!("SFTP konnte nicht geöffnet werden: {err}"),
+            Some(code),
         )
         .await;
     }
@@ -1396,6 +1402,7 @@ async fn execute_read_remote_file(
                     "Datei '{path}' ist zu groß ({size} Bytes, Obergrenze \
                      {MAX_READ_FILE_BYTES} Bytes) — wird nicht gelesen."
                 ),
+                None,
             )
             .await;
         }
@@ -1449,11 +1456,13 @@ async fn execute_read_remote_file(
             true
         }
         Err(err) => {
+            let code = err.code();
             emit_action_error(
                 session,
                 emitter,
                 session_id,
                 format!("Lesen von '{path}' fehlgeschlagen: {err}"),
+                Some(code),
             )
             .await
         }
@@ -1623,11 +1632,13 @@ async fn execute_write_remote_file(
     emitter: &dyn EventEmitter,
 ) -> bool {
     if let Err(err) = ensure_sftp_open(session).await {
+        let code = err.code();
         return emit_action_error(
             session,
             emitter,
             session_id,
             format!("SFTP konnte nicht geöffnet werden: {err}"),
+            Some(code),
         )
         .await;
     }
@@ -1657,6 +1668,11 @@ async fn execute_write_remote_file(
                         "Zugriff verweigert beim Schreiben von '{path}' — erhöhte Rechte nötig, \
                          aber kein Sudo-Passwort für diesen Server hinterlegt."
                     ),
+                    // Kein Sudo-Passwort hinterlegt — derselbe zugrundeliegende
+                    // Fehlerfall (`SftpPermissionDenied`) wie der Err-Zweig oben,
+                    // hier aber ohne Passwort-Fallback-Versuch abgefangen, bevor
+                    // ein neuer `SshError`-Wert entstünde.
+                    Some(SshError::SftpPermissionDenied(String::new()).code()),
                 )
                 .await;
             };
@@ -1665,6 +1681,7 @@ async fn execute_write_remote_file(
             {
                 Ok(backup_path) => (backup_path, true),
                 Err(err) => {
+                    let code = err.code();
                     return emit_action_error(
                         session,
                         emitter,
@@ -1672,17 +1689,20 @@ async fn execute_write_remote_file(
                         format!(
                             "Schreiben von '{path}' fehlgeschlagen (auch mit Sudo-Rechten): {err}"
                         ),
+                        Some(code),
                     )
                     .await;
                 }
             }
         }
         Err(err) => {
+            let code = err.code();
             return emit_action_error(
                 session,
                 emitter,
                 session_id,
                 format!("Schreiben von '{path}' fehlgeschlagen: {err}"),
+                Some(code),
             )
             .await;
         }
@@ -4025,7 +4045,11 @@ mod tests {
             .filter(|(name, _)| name == "chat-action-proposed")
             .count();
         assert_eq!(proposed_count, MAX_AUTO_FOLLOWUP_ROUNDS);
-        assert_eq!(events.last().unwrap().0, "chat-error");
+        // Spec 0021, Abschnitt 4 / ADR 0021: weicher Stopp, kein Fehler.
+        assert_eq!(
+            events.last().unwrap().0,
+            "chat-auto-continuation-limit-reached"
+        );
     }
 
     /// T5: uname -a Sanitization verwirft Prompt-Injections und Kontrollzeichen.
@@ -4734,6 +4758,10 @@ mod tests {
             vec!["chat-error"],
             "ein fehlerhafter Tool-Call darf nur als Chat-Fehlermeldung erscheinen"
         );
+        // Spec 0024, Abschnitt 5: `AiError::code()` muss mitgegeben werden,
+        // damit das Frontend übersetzen kann (unabhängiger Review-Pass /
+        // Spec-Audit-Fund — zuvor kam nur der rohe deutsche Text an).
+        assert_eq!(events[0].1["code"].as_str(), Some("AI_INVALID_RESPONSE"),);
 
         let result = session
             .transport
@@ -5152,6 +5180,16 @@ mod tests {
         let events = emitter.events.lock().unwrap().clone();
         let names = event_names_excluding_auto_continuation(&events);
         assert_eq!(names, vec!["chat-action-proposed", "chat-error"]);
+        // Spec 0024, Abschnitt 5: der `chat-error` trägt den stabilen
+        // `SshError`-Code, nicht nur den (deutschen) Rohtext — sonst bleibt
+        // dieser Fehler trotz aktivierter Übersetzung fest auf Deutsch
+        // (unabhängiger Review-Pass / Spec-Audit-Fund).
+        let error_payload = &events
+            .iter()
+            .find(|(name, _)| name == "chat-error")
+            .unwrap()
+            .1;
+        assert_eq!(error_payload["code"].as_str(), Some("SSH_CHANNEL_ERROR"));
 
         let contexts = contexts.lock().unwrap().clone();
         assert_eq!(
@@ -6285,14 +6323,18 @@ mod tests {
             .filter(|(name, _)| name == "chat-action-proposed")
             .count();
         assert_eq!(proposed_count, MAX_AUTO_FOLLOWUP_ROUNDS);
+        // Spec 0021, Abschnitt 4 / ADR 0021: das Erreichen des Caps ist ein
+        // weicher Stopp, kein Fehler — eigenes Event statt `chat-error`
+        // (unabhängiger Review-Pass, Spec-Audit-Fund).
         let (last_name, last_payload) = events.last().unwrap();
-        assert_eq!(last_name, "chat-error");
+        assert_eq!(last_name, "chat-auto-continuation-limit-reached");
         assert!(
-            last_payload["message"]
-                .as_str()
-                .unwrap()
-                .contains(&MAX_AUTO_FOLLOWUP_ROUNDS.to_string()),
-            "die Meldung soll die Rundenzahl nennen: {last_payload}"
+            !events.iter().any(|(name, _)| name == "chat-error"),
+            "Erreichen des Caps darf keinen chat-error auslösen: {events:?}"
+        );
+        assert_eq!(
+            last_payload["limit"].as_u64().unwrap(),
+            MAX_AUTO_FOLLOWUP_ROUNDS as u64,
         );
 
         let history = session.context.lock().await.history.clone();

@@ -292,6 +292,15 @@ export interface ChatActionResultEvent {
 export interface ChatErrorEvent {
   sessionId: string;
   message: string;
+  /** Spec 0024, Abschnitt 5 — stabiler Backend-Code (`SshError`/`AiError`),
+   * `null`/`undefined` wenn keiner vorliegt (reine Validierungsmeldung ohne
+   * typisierten Fehler dahinter). Übersetzung via `translateErrorCode`. */
+  code?: string | null;
+}
+
+export interface ChatAutoContinuationLimitReachedEvent {
+  sessionId: string;
+  limit: number;
 }
 
 /** Antwort auf `host-key-verification-needed` (`confirm_host_key`). */

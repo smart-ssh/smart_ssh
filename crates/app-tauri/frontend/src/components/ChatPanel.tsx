@@ -17,6 +17,7 @@ import {
 import {
   onChatActionProposed,
   onChatActionResult,
+  onChatAutoContinuationLimitReached,
   onChatAutoContinuationStarted,
   onChatDocumentGenerated,
   onChatError,
@@ -103,7 +104,8 @@ export type ChatItem =
        * oder generischer Text>" statt des internen Chat-Flows. */
       origin: ActionOrigin;
     }
-  | { type: "error"; id: string; message: string }
+  | { type: "error"; id: string; message: string; code: string | null }
+  | { type: "autoContinuationLimitReached"; id: string; limit: number }
   | { type: "document"; id: string; title: string; contentMarkdown: string };
 
 /** Spec 0023, Abschnitt 3/4: `targetName` wird für `ProposeNoteUpdate`
@@ -338,7 +340,17 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
       }),
       onChatError((event) => {
         if (event.sessionId !== sessionId) return;
-        setItems((prev) => [...prev, { type: "error", id: freshId(), message: event.message }]);
+        setItems((prev) => [
+          ...prev,
+          { type: "error", id: freshId(), message: event.message, code: event.code ?? null },
+        ]);
+      }),
+      onChatAutoContinuationLimitReached((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) => [
+          ...prev,
+          { type: "autoContinuationLimitReached", id: freshId(), limit: event.limit },
+        ]);
       }),
       onChatAutoContinuationStarted((event) => {
         if (event.sessionId !== sessionId) return;
@@ -386,7 +398,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
     respondToAction(sessionId, actionId, decision).catch((err) =>
       setItems((prev) => [
         ...prev,
-        { type: "error", id: freshId(), message: commandErrorMessage(err) },
+        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
       ]),
     );
   };
@@ -400,7 +412,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
     stopAutoContinuation(sessionId).catch((err) =>
       setItems((prev) => [
         ...prev,
-        { type: "error", id: freshId(), message: commandErrorMessage(err) },
+        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
       ]),
     );
   };
@@ -450,7 +462,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
     ).catch((err) =>
       setItems((prev) => [
         ...prev,
-        { type: "error", id: freshId(), message: commandErrorMessage(err) },
+        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
       ]),
     );
   };
@@ -465,7 +477,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
     } catch (err) {
       setItems((prev) => [
         ...prev,
-        { type: "error", id: freshId(), message: commandErrorMessage(err) },
+        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
       ]);
       throw err;
     }
@@ -484,7 +496,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
     } catch (err) {
       setItems((prev) => [
         ...prev,
-        { type: "error", id: freshId(), message: commandErrorMessage(err) },
+        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
       ]);
     } finally {
       // Spec 0021, Abschnitt 7: Fail-Safe — läuft in JEDEM Fall (Erfolg,
@@ -740,7 +752,16 @@ export function ChatItemView({
   if (item.type === "error") {
     return (
       <div className="border border-red-700/50 bg-red-950 px-3 py-2 text-sm text-red-300">
-        ⚠ {item.message}
+        ⚠ {translateErrorCode(t, item.code, item.message)}
+      </div>
+    );
+  }
+  if (item.type === "autoContinuationLimitReached") {
+    // Spec 0021, Abschnitt 4 / ADR 0021: weicher Stopp, kein Fehler — eigener,
+    // neutraler Ton statt der roten Fehler-Karte oben.
+    return (
+      <div className="border border-slate-600/50 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+        {t("actionCard.autoContinuationLimitReached", { limit: item.limit })}
       </div>
     );
   }

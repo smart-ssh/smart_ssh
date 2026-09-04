@@ -481,6 +481,7 @@ pub fn emit_chat_action_result(
 struct ChatErrorPayload {
     session_id: SessionId,
     message: String,
+    code: Option<&'static str>,
 }
 
 /// **Nicht Teil der Spec-Skizze aus Abschnitt 5** (die dort gelistete
@@ -492,14 +493,59 @@ struct ChatErrorPayload {
 /// `chat-text-delta` missbraucht (damit das Frontend Fehler visuell klar
 /// vom normalen Antworttext unterscheiden kann). Siehe ADR-Vorschlag am
 /// Ende der Aufgabe.
-pub fn emit_chat_error(emitter: &dyn EventEmitter, session_id: SessionId, message: String) {
+///
+/// `code` ist Spec 0024, Abschnitt 5's stabiler Fehler-Code (`SshError::
+/// code()`/`AiError::code()`), sofern der Aufrufer direkten Zugriff auf den
+/// zugrundeliegenden typisierten Fehler hat — `None`, wenn `message` bereits
+/// eine reine, zusammengesetzte Zeichenkette ohne typisierten Fehler
+/// dahinter ist (z. B. eine Validierungsmeldung). Das Frontend übersetzt
+/// anhand des Codes und fällt bei `None`/unbekanntem Code auf `message`
+/// zurück (`translateErrorCode`) — nie eine leere Anzeige.
+pub fn emit_chat_error(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    message: String,
+    code: Option<&'static str>,
+) {
     emit(
         emitter,
         "chat-error",
         &ChatErrorPayload {
             session_id,
             message,
+            code,
         },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatAutoContinuationLimitReachedPayload {
+    session_id: SessionId,
+    limit: usize,
+}
+
+/// Spec 0021, Abschnitt 4 / `docs/adr/0021-turn-continuation-design.md`,
+/// Entscheidung 1, letzter Satz: das Erreichen des Automatik-Caps ist ein
+/// **weicher Stopp mit Fortsetzungsmöglichkeit**, kein harter Fehler — es
+/// wurde aber bislang trotzdem über `emit_chat_error` gesendet und landete
+/// dadurch in derselben roten Fehler-Karte wie ein echter Fehlschlag
+/// (fehlgeschlagenes Kommando, SSH-/KI-Fehler). Eigenes, neutrales Event
+/// statt eines weiteren Felds an `ChatErrorPayload` — das Frontend soll
+/// diesen Fall visuell klar von einem tatsächlichen Fehler unterscheiden
+/// können, nicht nur inhaltlich. `limit` statt eines fertig formatierten
+/// Strings, damit das Frontend die Meldung wie jeden anderen
+/// System-Hinweistext übersetzt (Spec 0024, Abschnitt 2) statt eines
+/// serverseitig fest auf Deutsch komponierten Texts.
+pub fn emit_chat_auto_continuation_limit_reached(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    limit: usize,
+) {
+    emit(
+        emitter,
+        "chat-auto-continuation-limit-reached",
+        &ChatAutoContinuationLimitReachedPayload { session_id, limit },
     );
 }
 
