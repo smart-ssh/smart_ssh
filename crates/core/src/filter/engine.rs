@@ -142,15 +142,41 @@ impl<S: PolicyStore> FilterEngine<S> {
                 matched_hard_blacklist_entry: None,
                 sub_command_traces: Vec::new(),
             },
-            ParseResult::Ambiguous { reason } => EvaluationTrace {
-                decision: Decision::Confirm {
+            ParseResult::Ambiguous { reason } => {
+                let baseline = Decision::Confirm {
                     reason,
                     code: FILTER_PARSE_AMBIGUOUS.to_string(),
-                },
-                matched_rule: None,
-                matched_hard_blacklist_entry: None,
-                sub_command_traces: Vec::new(),
-            },
+                };
+                // Unabhängiger Review-Pass (Spec 0002, Abschnitt 4.6, letzter
+                // Satz): ein Nutzer-`Deny`/die Hard-Blacklist muss auch
+                // greifen, wenn das eigentliche Kommando hinter einem
+                // `bash -c "..."`/`python3 -c "..."`-Wrapper steckt, statt
+                // dass der ganze Aufruf blind bei `Confirm` landet und die
+                // Deny-Regel dadurch faktisch umgangen wird. Rekursion wie
+                // bei Command-Substitution (`sub_command_traces` unten) —
+                // kombiniert wird nur zum jeweils strengeren Ergebnis, der
+                // Ambiguous-Baseline von mindestens `Confirm` wird also nie
+                // unterschritten, nur ggf. auf `Deny` verschärft.
+                match parser::extract_shell_c_style_code(command) {
+                    Some(code_arg) => {
+                        let inner_trace = self.evaluate_parsed_explained(&code_arg, rules);
+                        EvaluationTrace {
+                            decision: combine(baseline, inner_trace.decision.clone()),
+                            matched_rule: inner_trace.matched_rule.clone(),
+                            matched_hard_blacklist_entry: inner_trace
+                                .matched_hard_blacklist_entry
+                                .clone(),
+                            sub_command_traces: vec![inner_trace],
+                        }
+                    }
+                    None => EvaluationTrace {
+                        decision: baseline,
+                        matched_rule: None,
+                        matched_hard_blacklist_entry: None,
+                        sub_command_traces: Vec::new(),
+                    },
+                }
+            }
             ParseResult::Segments(segments) if segments.len() == 1 => {
                 self.evaluate_segment_explained(&segments[0], rules)
             }
@@ -315,9 +341,24 @@ fn evaluate_rules_explained(
         });
 
         for rule in bucket {
+            // Unabhängiger Review-Pass (Spec 0002): `resolved` (volle
+            // Wrapper-/Elevation-/Variablen-Normalisierung, s.
+            // `parser::resolve_effective_command`) darf NUR für Deny/Confirm
+            // zusätzliches Matching liefern, nie für Allow — sonst würde ein
+            // KI-Vorschlag wie `LD_PRELOAD=/tmp/x.so ls -la` oder
+            // `chroot /mnt ls -la` unter einer harmlosen `Allow: ls *`-Regel
+            // AutoExec statt Confirm bekommen, obwohl `original`/`stripped`
+            // gar nicht matchen — eine durch Normalisierung *ausgeweitete*
+            // Vertrauensgrenze, nicht nur eine gleich bleibende. Das
+            // `sudo`/`doas`-Stripping bleibt für Allow erhalten (Testfall 7,
+            // ADR 0002) — das läuft über `stripped`, nicht `resolved`.
+            let resolved_applies = action != RuleAction::Allow;
             let is_match = rule.pattern.matches(original)
                 || (original != stripped && rule.pattern.matches(stripped))
-                || (original != resolved && stripped != resolved && rule.pattern.matches(resolved));
+                || (resolved_applies
+                    && original != resolved
+                    && stripped != resolved
+                    && rule.pattern.matches(resolved));
             if is_match {
                 let decision = match action {
                     RuleAction::Deny => Decision::Deny {

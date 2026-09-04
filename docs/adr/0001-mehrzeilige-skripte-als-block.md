@@ -33,10 +33,35 @@ Zerlegungsversuch komplett als ein Block behandelt, wenn:
   Pfad-Präfix, z. B. `/bin/bash`) und das zweite Wort `-c` ist.
 
 In diesen Fällen liefert der Parser `ParseResult::Ambiguous` mit einer
-entsprechenden Begründung, was in der Engine immer zu `Decision::Confirm`
-führt — nie zu `AutoExec`, unabhängig davon, welche Nutzerregeln konfiguriert
-sind. Es wird kein Versuch unternommen, den Inhalt eines Here-Docs oder den
-String-Inhalt hinter `-c` zu parsen oder in Teilkommandos zu zerlegen.
+entsprechenden Begründung, was in der Engine immer mindestens zu
+`Decision::Confirm` führt — nie zu `AutoExec`, unabhängig davon, welche
+Nutzerregeln konfiguriert sind. Es wird kein Versuch unternommen, den
+Inhalt eines Here-Docs oder den String-Inhalt hinter `-c` in mehrere
+Teilkommandos zu zerlegen (kein Chaining-Sub-Parsing).
+
+> **Nachtrag (unabhängiger Review-Pass, Spec 0002):** Spec 0002, Abschnitt
+> 4.6 wurde nachträglich um den Satz ergänzt: "Der Inhalt des
+> `-c`-Arguments wird als eigenes Kommando … geprüft, nicht als
+> undurchsichtiges Argument durchgewunken." Wörtlich gelesen widersprach
+> das dieser ADR — ein Review-Fund zeigte den konkreten Schaden: eine
+> Nutzer-`Deny`-Regel wie `Deny "docker *"` ließ sich über
+> `bash -c "docker rm -f prod"` vollständig umgehen (landete bei
+> `Confirm` statt `Deny`), was Spec 0002 Abschnitt 3's Garantie
+> "Deny wird gar nicht erst zur Bestätigung angeboten" verletzt. Die
+> Entscheidung dieser ADR bleibt in der Substanz unverändert (der
+> `-c`-Inhalt wird weiterhin **nicht** in mehrere Teilkommandos zerlegt,
+> `bash -c "cd /app && rm -rf /tmp/x"` bleibt ein einziger, nicht weiter
+> aufgespaltener Block) — ergänzt wurde nur: das extrahierte `-c`/`-e`-
+> Argument wird zusätzlich als EIN Kommando (via `resolve_effective_
+> command`) gegen Hard-Blacklist und Nutzerregeln geprüft, mit demselben
+> Rekursionsmechanismus wie Command-Substitution (`crates/core/src/filter/
+> engine.rs`, `evaluate_parsed_explained`s `Ambiguous`-Zweig, s.
+> `parser::extract_shell_c_style_code`). Das Ergebnis wird nur mit dem
+> bisherigen `Confirm`-Baseline zum jeweils strengeren kombiniert — es
+> kann also nur zu `Deny` **eskalieren**, nie zu `AutoExec` **herabgestuft**
+> werden. Damit ist der wörtliche Spec-4.6-Satz erfüllt, ohne die
+> Kern-Begründung dieser ADR (kein fehleranfälliges Mehrfach-Kommando-
+> Parsing) aufzugeben.
 
 ## Konsequenzen
 

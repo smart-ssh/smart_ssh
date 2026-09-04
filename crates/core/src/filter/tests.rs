@@ -622,6 +622,127 @@ async fn test_deny_rule_cannot_be_evaded_via_wrapper_command() {
     }
 }
 
+/// Regressionstest für den unabhängigen Review-Pass (Spec 0002): eine
+/// `Deny`-Regel muss auch greifen, wenn dasselbe Programm über einen
+/// absoluten oder relativen Pfad statt des bloßen Namens aufgerufen wird —
+/// die Hard-Blacklist deckt das bereits über ihre eigene Pfad-Alternation
+/// ab (`blacklist.rs`), `resolve_effective_command` (die laut Spec 0002,
+/// Abschnitt 4.6 "die Basis für jede Prüfung" sein soll) hatte diese Sicht
+/// vorher nicht.
+#[tokio::test]
+async fn test_deny_rule_cannot_be_evaded_via_absolute_or_relative_path() {
+    let eng = engine(vec![glob_rule(
+        "deny-docker",
+        "docker *",
+        RuleAction::Deny,
+        Scope::Global,
+        100,
+    )]);
+    for cmd in ["/usr/bin/docker rm -f prod", "./docker rm -f prod"] {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert_deny(&decision);
+    }
+}
+
+/// Regressionstest für den unabhängigen Review-Pass (Spec 0002): die volle
+/// Wrapper-/Elevation-/Variablen-Normalisierung (`resolved`) darf ein
+/// `Allow` niemals zusätzlich ermöglichen — sonst würde z. B.
+/// `LD_PRELOAD=/tmp/evil.so ls -la` (beliebiger Code über einen
+/// Umgebungsvariablen-Angriff) oder `chroot /mnt ls -la` unter einer
+/// harmlosen `Allow: ls *`-Regel AutoExec statt Confirm bekommen, obwohl
+/// weder der Original- noch der nur-sudo-bereinigte Text matchen. Das
+/// `sudo`-Stripping für Allow (Testfall 7, ADR 0002) bleibt davon
+/// unberührt, da es über `stripped`, nicht `resolved`, läuft.
+#[tokio::test]
+async fn test_allow_rule_is_not_widened_by_full_wrapper_normalization() {
+    let eng = engine(vec![glob_rule(
+        "allow-ls",
+        "ls *",
+        RuleAction::Allow,
+        Scope::Global,
+        100,
+    )]);
+    for cmd in [
+        "LD_PRELOAD=/tmp/evil.so ls -la",
+        "chroot /mnt ls -la",
+        "flock /tmp/l ls -la",
+    ] {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert_confirm(&decision);
+    }
+    // Gegenprobe: `sudo`-Stripping für Allow bleibt erhalten.
+    let decision = eng.evaluate("sudo ls -la", &ctx("srv1", &[])).await;
+    assert_auto_exec(&decision);
+}
+
+/// Regressionstest für den unabhängigen Review-Pass (Spec 0002): `-c`/`-e`-
+/// Code-Flags anderer Skript-Interpreter (nicht nur `bash`/`sh`) müssen
+/// denselben "als Ganzes behandeln, nie AutoExec"-Schutz bekommen wie
+/// `bash -c "..."` — sonst würde `python3 -c "import os; os.system(...)"`
+/// unter einer harmlosen `Allow: python3 *`-Regel beliebigen Code
+/// automatisch ausführen.
+#[tokio::test]
+async fn test_interpreter_code_flag_is_treated_as_complex_script_block() {
+    let eng = engine(vec![glob_rule(
+        "allow-python",
+        "python3 *",
+        RuleAction::Allow,
+        Scope::Global,
+        100,
+    )]);
+    let decision = eng
+        .evaluate(
+            "python3 -c \"import os; os.system('rm -rf /')\"",
+            &ctx("srv1", &[]),
+        )
+        .await;
+    assert_confirm(&decision);
+}
+
+/// Regressionstest für den unabhängigen Review-Pass (Spec 0002, Abschnitt
+/// 4.6, letzter Satz): eine `Deny`-Regel darf nicht dadurch umgangen werden
+/// können, dass das verbotene Kommando in `bash -c "..."` gewickelt wird —
+/// ADR 0001 verlangt weiterhin kein Sub-Parsing in mehrere Kommandos, aber
+/// der `-c`-Inhalt selbst muss trotzdem gegen Deny/Blacklist geprüft
+/// werden.
+#[tokio::test]
+async fn test_deny_rule_cannot_be_evaded_via_shell_c_wrapper() {
+    let eng = engine(vec![glob_rule(
+        "deny-docker",
+        "docker *",
+        RuleAction::Deny,
+        Scope::Global,
+        100,
+    )]);
+    for cmd in [
+        "bash -c \"docker rm -f prod\"",
+        "sudo bash -c \"docker rm -f prod\"",
+        "sh -c 'env docker rm -f prod'",
+    ] {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert_deny(&decision);
+    }
+}
+
+/// Gegenprobe zum vorigen Test: ein harmloser `bash -c`-Aufruf ohne
+/// Deny-/Blacklist-Treffer im Argument bleibt weiterhin bei `Confirm` (nie
+/// `AutoExec`, ADR 0001) — die neue Argument-Prüfung darf nur eskalieren,
+/// nie ein `AutoExec` für den ganzen Block erzeugen.
+#[tokio::test]
+async fn test_benign_shell_c_wrapper_stays_at_confirm_not_autoexec() {
+    let eng = engine(vec![glob_rule(
+        "allow-ls",
+        "ls *",
+        RuleAction::Allow,
+        Scope::Global,
+        100,
+    )]);
+    let decision = eng
+        .evaluate("bash -c \"cd /app && ls -la\"", &ctx("srv1", &[]))
+        .await;
+    assert_confirm(&decision);
+}
+
 /// `sudo bash -c "..."` / `bash -xc "..."` müssen wie ein einfaches
 /// `bash -c "..."` als Ganzes-Skript-Block behandelt werden (ADR 0001) —
 /// vorher griff der Guard nur, wenn "bash"/"sh"/... exakt das erste Wort

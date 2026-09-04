@@ -197,6 +197,59 @@ fn looks_like_heredoc_or_complex_shell_c(cmd: &str) -> bool {
     resolved != cmd && is_complex_shell_c_invocation(&resolved)
 }
 
+/// Extrahiert das eigentliche `-c`/`-e`/`-r`-Code-Argument aus einem von
+/// [`looks_like_heredoc_or_complex_shell_c`] als Shell-/Interpreter-`-c`-
+/// Aufruf erkannten Kommando (nicht für Here-Docs — deren Inhalt steht nicht
+/// in einem einzelnen Token). Unabhängiger Review-Pass, Spec 0002, Abschnitt
+/// 4.6, letzter Satz: "Der Inhalt des `-c`-Arguments wird als eigenes
+/// Kommando ... geprüft, nicht als undurchsichtiges Argument durchgewunken"
+/// — ADR 0001 behandelt den ganzen Aufruf zwar weiterhin als einen Block
+/// (kein Sub-Parsing in mehrere Kommandos), aber ohne diese Funktion wäre
+/// selbst eine explizite Nutzer-`Deny`-Regel oder die Hard-Blacklist über
+/// `bash -c "docker rm -f prod"` bzw. `bash -c "rm -rf /"` vollständig
+/// umgehbar (landet sonst blind bei `Confirm`, nie bei `Deny`) — das würde
+/// die Spec-3-Garantie "Deny wird gar nicht erst zur Bestätigung angeboten"
+/// verletzen. Nutzt `shell_words::split` (bereits als sicher zerlegbar
+/// vorausgesetzt, s. Aufrufer) statt eigenem Tokenizing, damit Quotes/
+/// Escapes im Code-Argument korrekt aufgelöst werden — dasselbe Argument,
+/// das eine echte Shell auch tatsächlich als Code-String sähe.
+pub(super) fn extract_shell_c_style_code(cmd: &str) -> Option<String> {
+    if cmd.contains("<<") {
+        return None;
+    }
+    let candidate = if is_complex_shell_c_invocation(cmd) {
+        cmd.to_string()
+    } else {
+        let resolved = resolve_effective_command(cmd);
+        if resolved != cmd && is_complex_shell_c_invocation(&resolved) {
+            resolved
+        } else {
+            return None;
+        }
+    };
+    let tokens = shell_words::split(&candidate).ok()?;
+    // tokens[0] = Programm, tokens[1] = Code-Flag, tokens[2] = Code-String
+    // — gilt unabhängig davon, ob das Flag exakt "-c" oder eine kombinierte
+    // Kurzform wie "-xc" ist (s. `is_complex_shell_c_invocation`).
+    tokens.into_iter().nth(2)
+}
+
+/// Skript-Interpreter mit einem `-c`/`-e`-artigen "führe diesen String als
+/// Code aus"-Flag — dieselbe Umgehungsklasse wie `bash -c`/`sh -c`, nur mit
+/// einer anderen Sprache (unabhängiger Review-Pass, Spec 0002: `python3 -c
+/// "..."`/`perl -e "..."`/`ruby -e "..."`/`node -e "..."` unter einer
+/// harmlosen `Allow: python3 *`-Regel wären sonst AutoExec-fähig, obwohl
+/// beliebiger Code im `-c`/`-e`-Argument steht). `("python3", "-c")` heißt:
+/// Interpreter `python3` erkennt das Code-Flag `-c`.
+const SCRIPT_INTERPRETER_CODE_FLAGS: &[(&str, &str)] = &[
+    ("python", "-c"),
+    ("python3", "-c"),
+    ("perl", "-e"),
+    ("ruby", "-e"),
+    ("node", "-e"),
+    ("php", "-r"),
+];
+
 fn is_complex_shell_c_invocation(cmd: &str) -> bool {
     let mut words = cmd.split_whitespace();
     if let (Some(prog), Some(flag)) = (words.next(), words.next()) {
@@ -211,6 +264,12 @@ fn is_complex_shell_c_invocation(cmd: &str) -> bool {
             if is_c_flag {
                 return true;
             }
+        }
+        if SCRIPT_INTERPRETER_CODE_FLAGS
+            .iter()
+            .any(|&(interpreter, code_flag)| prog == interpreter && flag == code_flag)
+        {
+            return true;
         }
     }
     false
@@ -263,7 +322,28 @@ pub(crate) fn resolve_effective_command(normalized: &str) -> String {
         }
         current = stripped;
     }
-    unquote_first_word(&current)
+    strip_path_prefix_from_first_word(&unquote_first_word(&current))
+}
+
+/// Ersetzt das erste Wort durch seinen Basename (`/usr/bin/docker` bzw.
+/// `./docker` → `docker`), Rest des Kommandos unverändert. Unabhängiger
+/// Review-Pass (Spec 0002): ohne diesen Schritt umgeht ein absoluter oder
+/// relativer Pfad zum selben Programm eine Nutzer-`Deny`-Regel wie
+/// `Deny "docker *"` (`/usr/bin/docker rm -f prod` landete zuvor im
+/// Default-`Confirm` statt `Deny`), obwohl die Hard-Blacklist genau diesen
+/// Fall über ihre eigene Pfad-Alternation bereits abdeckt (`blacklist.rs`)
+/// — Abschnitt 4.6 verlangt ausdrücklich, dass `resolve_effective_command`
+/// „die Basis für jede Prüfung" ist, also keine schwächere Sicht als die
+/// Blacklist haben darf.
+fn strip_path_prefix_from_first_word(cmd: &str) -> String {
+    let trimmed = cmd.trim_start();
+    let rest_start = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
+    let (first, rest) = trimmed.split_at(rest_start);
+    let basename = first.rsplit('/').next().unwrap_or(first);
+    if basename == first {
+        return cmd.to_string();
+    }
+    format!("{basename}{rest}")
 }
 
 /// `NAME=wert`-Präfix wie bei `FOO=1 rm -rf /` — ein Shell-typisches Muster,
