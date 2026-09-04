@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hardened-Runtime-Entitlements für die macOS-Release-Signierung
+  (Developer ID + Notarisierung, s. README_DEV.md, Abschnitt 6). Bewusst
+  minimal — nur die drei Berechtigungen, die eine Tauri-2-WebView-App
+  unter Hardened Runtime tatsächlich braucht, keine darüber
+  hinausgehenden (Prinzip der minimalen Rechte, konsistent mit dem Rest
+  des Projekts, s. z. B. `crates/app-tauri/capabilities/`).
+
+  - com.apple.security.cs.allow-jit /
+    com.apple.security.cs.allow-unsigned-executable-memory: ohne diese
+    beiden crasht die App nach dem Notarisieren/unter Hardened Runtime
+    direkt beim Start — WKWebView (JavaScriptCore) braucht JIT-Kompilierung
+    und erzeugt zur Laufzeit ausführbaren Speicher, beides verbietet
+    Hardened Runtime standardmäßig.
+  - com.apple.security.network.client: ausgehende Verbindungen (SSH-
+    Verbindungsaufbau, KI-Provider-API-Aufrufe) — ohne dieses Entitlement
+    blockiert die Sandbox-/Netzwerk-Durchsetzung unter Hardened Runtime
+    jeden ausgehenden Socket.
+
+  Kein App-Sandbox-Entitlement (`com.apple.security.app-sandbox`): die
+  App wird nicht über den Mac App Store vertrieben (s. release.yml,
+  GitHub-Releases), Hardened Runtime + Notarisierung allein genügen für
+  Gatekeeper — App Sandbox ist ein separates, hier nicht angefordertes
+  Schutzniveau und würde zusätzliche Entitlements für Dateizugriff/
+  Keychain erzwingen, die für dieses Vertriebsmodell nicht nötig sind.
+  Keychain-Zugriff (`credentials-keyring`) und der native Datei-Dialog
+  (`tauri-plugin-dialog`) benötigen außerhalb der App Sandbox keine
+  eigenen Entitlements.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>
