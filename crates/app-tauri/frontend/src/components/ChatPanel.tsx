@@ -7,6 +7,7 @@ import {
   cancelRunningCommand,
   commandErrorMessage,
   exportDocument,
+  getChatHistory,
   listAiProviders,
   listPromptHistory,
   respondToAction,
@@ -106,7 +107,21 @@ export type ChatItem =
     }
   | { type: "error"; id: string; message: string; code: string | null }
   | { type: "autoContinuationLimitReached"; id: string; limit: number }
-  | { type: "document"; id: string; title: string; contentMarkdown: string };
+  | { type: "document"; id: string; title: string; contentMarkdown: string }
+  // Spec 0034, Abschnitt 6/8: read-only Darstellung eines Kommandoergebnis-
+  // /Ablehnungs-Eintrags aus einer bereits geladenen (fortgesetzten)
+  // Historie — anders als "action" kein Bestätigungsdialog/Live-Zustand,
+  // nur Anzeige dessen, was bereits geschehen ist.
+  | {
+      type: "historyCommandResult";
+      id: string;
+      command: string;
+      stdout: string;
+      stderr: string;
+      exitCode: number | null;
+      cancelled: boolean;
+    }
+  | { type: "historyRejected"; id: string; command: string; reason: string };
 
 /** Spec 0023, Abschnitt 3/4: `targetName` wird für `ProposeNoteUpdate`
  * *immer* im Label gezeigt — auch wenn es der aktuell offene Server der
@@ -260,6 +275,55 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
       .then((settings) => setRiskSecondOpinionEnabled(settings.enabled))
       .catch(() => setRiskSecondOpinionEnabled(false));
   }, []);
+
+  // Spec 0034, Abschnitt 6/8: seedet den bereits geladenen Verlauf einer
+  // fortgesetzten Sitzung (leer bei einem frischen `connect()`, s.
+  // `get_chat_history`-Doc-Kommentar) — ohne das startet der Tab nach
+  // einem "Fortsetzen" fälschlich leer, obwohl das Backend bereits mit
+  // gefüllter Historie gestartet ist. Läuft einmal pro Tab (`sessionId`
+  // ändert sich nie innerhalb desselben Tabs), vor jedem Live-Event.
+  useEffect(() => {
+    getChatHistory(sessionId)
+      .then((entries) => {
+        if (entries.length === 0) return;
+        setItems((prev) => [
+          ...entries.map((entry): ChatItem => {
+            switch (entry.type) {
+              case "text":
+                return {
+                  type: entry.role === "user" ? "user" : "assistant",
+                  id: freshId(),
+                  text: entry.text,
+                };
+              case "commandResult":
+                return {
+                  type: "historyCommandResult",
+                  id: freshId(),
+                  command: entry.command,
+                  stdout: entry.stdout,
+                  stderr: entry.stderr,
+                  exitCode: entry.exitCode,
+                  cancelled: entry.cancelled,
+                };
+              case "actionRejected":
+                return {
+                  type: "historyRejected",
+                  id: freshId(),
+                  command: entry.command,
+                  reason: entry.reason,
+                };
+            }
+          }),
+          ...prev,
+        ]);
+      })
+      .catch(() => {
+        // Best-effort: eine fehlgeschlagene Historie-Ladung soll den Tab
+        // nicht unbenutzbar machen, nur ohne sichtbaren Altverlauf starten
+        // (derselbe Geist wie andere Best-effort-`.catch`-Stellen in
+        // dieser Komponente, z. B. `listPromptHistory` oben).
+      });
+  }, [sessionId]);
 
   useEffect(() => {
     const unlisten = [
@@ -762,6 +826,31 @@ export function ChatItemView({
     return (
       <div className="border border-slate-600/50 bg-slate-800 px-3 py-2 text-sm text-slate-300">
         {t("actionCard.autoContinuationLimitReached", { limit: item.limit })}
+      </div>
+    );
+  }
+  if (item.type === "historyCommandResult") {
+    return (
+      <div className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs">
+        <p className="font-mono text-slate-300">$ {item.command}</p>
+        {item.cancelled && (
+          <p className="mt-1 font-sans text-amber-300">{t("actionCard.commandCancelledNotice")}</p>
+        )}
+        {item.stdout && (
+          <pre className="mt-1 whitespace-pre-wrap text-slate-400">{item.stdout}</pre>
+        )}
+        {item.stderr && <pre className="mt-1 whitespace-pre-wrap text-red-400">{item.stderr}</pre>}
+        {!item.cancelled && (
+          <p className="mt-1 text-slate-500">exit code: {item.exitCode ?? "—"}</p>
+        )}
+      </div>
+    );
+  }
+  if (item.type === "historyRejected") {
+    return (
+      <div className="rounded border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+        <p className="font-mono">$ {item.command}</p>
+        <p className="mt-1">{item.reason}</p>
       </div>
     );
   }

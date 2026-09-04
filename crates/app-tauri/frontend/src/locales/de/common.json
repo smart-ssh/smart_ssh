@@ -322,5 +322,24 @@
     "encryptionText": "Die lokale Datenbank ist nicht zusätzlich verschlüsselt. Wir empfehlen, die Festplattenverschlüsselung deines Betriebssystems zu aktivieren, falls noch nicht geschehen.",
     "checkboxLabel": "Ich habe das gelesen und verstanden.",
     "continueButton": "Weiter"
+  },
+  "chatSessionPicker": {
+    "subtitle": "Für diesen Server gibt es bereits Unterhaltungen. Setze eine fort oder beginne neu.",
+    "newConversation": "Neue Unterhaltung",
+    "pastSessions": "Vergangene Unterhaltungen",
+    "untitled": "Unbenannte Unterhaltung",
+    "messageCount_one": "{{count}} Nachricht",
+    "messageCount_other": "{{count}} Nachrichten",
+    "rename": "Umbenennen",
+    "delete": "Löschen",
+    "deleteConfirm": "Diese Unterhaltung endgültig löschen? Das kann nicht rückgängig gemacht werden.",
+    "cancel": "Abbrechen"
+  },
+  "chatRetention": {
+    "label": "Chat-Verlauf aufbewahren für",
+    "neverDelete": "Nie automatisch löschen",
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tage",
+    "hint": "Löscht automatisch beendete Unterhaltungen, die älter sind. Laufende Unterhaltungen sind davon nie betroffen."
   }
 }

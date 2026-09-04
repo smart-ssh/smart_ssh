@@ -466,6 +466,33 @@ export interface SessionSummaryDto {
   hasPendingAction: boolean;
 }
 
+/** Spec 0034, Abschnitt 6/8: Eintrag im Sitzungs-Auswahl-Screen. */
+export interface ChatSessionSummaryDto {
+  sessionId: string;
+  title: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  messageCount: number;
+}
+
+/** Spec 0034, Abschnitt 6/8: bereits geladene Historie eines Tabs (leer bei
+ * `connect()`, befüllt nach `resume_chat_session()`), s.
+ * `get_chat_history`. */
+export type ChatHistoryRole = "user" | "assistant" | "action_result";
+
+export type ChatHistoryEntryDto =
+  | { type: "text"; role: ChatHistoryRole; text: string }
+  | {
+      type: "commandResult";
+      role: ChatHistoryRole;
+      command: string;
+      stdout: string;
+      stderr: string;
+      exitCode: number | null;
+      cancelled: boolean;
+    }
+  | { type: "actionRejected"; role: ChatHistoryRole; command: string; reason: string };
+
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
 
 export interface RemoteEntryDto {

@@ -692,6 +692,91 @@ impl From<ChatSessionSummary> for ChatSessionSummaryDto {
     }
 }
 
+/// Spec 0034, Abschnitt 8/6: die bereits geladene Historie eines Tabs
+/// (nach `connect`/`resume_chat_session`, s. `commands::get_chat_history`)
+/// — für die Anzeige eines wiederaufgenommenen Chats im Frontend, das
+/// sonst nur über Live-Events (`chat-text-delta` etc.) befüllt wird, die
+/// beim Fortsetzen einer Sitzung logischerweise nicht erneut feuern.
+/// Bewusst eine eigene, schlanke Sicht statt der vollen `MessageContent`
+/// (deren `CommandOutput.stdout`/`stderr` als `Vec<u8>` fürs Frontend
+/// unhandlich wären) — analog zu `ActionResultPayload::Command`, dessen
+/// Form hier für den `command_result`-Fall bewusst wiederverwendet wird.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum ChatHistoryEntryDto {
+    Text {
+        role: ChatHistoryRoleDto,
+        text: String,
+    },
+    CommandResult {
+        role: ChatHistoryRoleDto,
+        command: String,
+        stdout: String,
+        stderr: String,
+        exit_code: Option<i32>,
+        cancelled: bool,
+    },
+    ActionRejected {
+        role: ChatHistoryRoleDto,
+        command: String,
+        reason: String,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatHistoryRoleDto {
+    User,
+    Assistant,
+    ActionResult,
+}
+
+impl From<ssh_manager_core::ai::Role> for ChatHistoryRoleDto {
+    fn from(role: ssh_manager_core::ai::Role) -> Self {
+        match role {
+            ssh_manager_core::ai::Role::User => ChatHistoryRoleDto::User,
+            ssh_manager_core::ai::Role::Assistant => ChatHistoryRoleDto::Assistant,
+            ssh_manager_core::ai::Role::ActionResult => ChatHistoryRoleDto::ActionResult,
+        }
+    }
+}
+
+impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
+    fn from(message: ssh_manager_core::ai::ChatMessage) -> Self {
+        let role = ChatHistoryRoleDto::from(message.role);
+        match message.content {
+            ssh_manager_core::ai::MessageContent::Text(text) => {
+                ChatHistoryEntryDto::Text { role, text }
+            }
+            ssh_manager_core::ai::MessageContent::CommandResult {
+                command,
+                output,
+                cancelled,
+            } => ChatHistoryEntryDto::CommandResult {
+                role,
+                command,
+                stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                exit_code: output.exit_code,
+                cancelled,
+            },
+            ssh_manager_core::ai::MessageContent::ActionRejected { command, reason } => {
+                let reason_text = match reason {
+                    ssh_manager_core::ai::RejectionReason::User => {
+                        "Vom Nutzer abgelehnt.".to_string()
+                    }
+                    ssh_manager_core::ai::RejectionReason::Blocked(reason) => reason,
+                };
+                ChatHistoryEntryDto::ActionRejected {
+                    role,
+                    command,
+                    reason: reason_text,
+                }
+            }
+        }
+    }
+}
+
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
 
 /// Sicht auf einen [`RemoteEntry`] für die Dateiliste im Dateibrowser (Spec

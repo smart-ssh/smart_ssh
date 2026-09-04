@@ -1254,6 +1254,27 @@ pub async fn list_sessions(state: State<'_, AppState>) -> CommandResult<Vec<Sess
     Ok(result)
 }
 
+/// Spec 0034, Abschnitt 6/8: die bereits geladene Historie eines Tabs — für
+/// `connect()` immer leer, für `resume_chat_session()` die aus der DB
+/// geladene (ggf. gekürzte, s. `chat_context_truncation`) Historie. Liest
+/// direkt aus der laufenden `Session` (nicht erneut aus der DB), damit das
+/// Frontend exakt das sieht, womit die Session tatsächlich gestartet ist.
+#[tauri::command]
+pub async fn get_chat_history(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<Vec<crate::dto::ChatHistoryEntryDto>> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    let history = session.context.lock().await.history.clone();
+    Ok(history
+        .into_iter()
+        .map(crate::dto::ChatHistoryEntryDto::from)
+        .collect())
+}
+
 // --- Spec 0008: Gruppen --------------------------------------------------
 
 #[tauri::command]

@@ -1,10 +1,19 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, confirmHostKey, connect, listGroups, listServers } from "../api";
+import {
+  commandErrorMessage,
+  confirmHostKey,
+  connect,
+  listChatSessions,
+  listGroups,
+  listServers,
+  resumeChatSession,
+} from "../api";
 import { onHostKeyVerificationNeeded } from "../events";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
 import { buildGroupTree, type GroupTreeNode } from "../groupTree";
-import type { GroupDto, HostKeyVerificationNeededEvent, ServerDto } from "../types";
+import type { ChatSessionSummaryDto, GroupDto, HostKeyVerificationNeededEvent, ServerDto } from "../types";
+import { ChatSessionPickerScreen } from "./ChatSessionPickerScreen";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { HostKeyDialog } from "./HostKeyDialog";
 
@@ -60,6 +69,13 @@ export function ServerList({
   // statt eines rohen Backend-Fehlers).
   const [firstRunAcknowledged, setFirstRunAcknowledged] = useState<boolean | null>(null);
   const [pendingConnectServer, setPendingConnectServer] = useState<ServerDto | null>(null);
+  // Spec 0034, Abschnitt 6: `null` = kein Auswahl-Screen offen. Enthält
+  // sowohl den Server (für Titel/erneutes Nachladen nach Umbenennen/
+  // Löschen) als auch die aktuell geladene Sitzungsliste.
+  const [sessionPickerState, setSessionPickerState] = useState<{
+    server: ServerDto;
+    sessions: ChatSessionSummaryDto[];
+  } | null>(null);
 
   useEffect(() => {
     Promise.all([listServers(), listGroups()])
@@ -109,7 +125,15 @@ export function ServerList({
   /** Spec 0031, Abschnitt 4: der Screen blockiert nur den ersten
    * `connect()`-Aufruf, nicht die übrige App-Nutzung davor — deshalb hier
    * am eigentlichen Verbindungsaufbau abgefangen statt z. B. den ganzen
-   * Screen beim App-Start zu sperren. */
+   * Screen beim App-Start zu sperren.
+   *
+   * Spec 0034, Abschnitt 6: "Hat ein Server noch keine gespeicherte
+   * Sitzung: kein Auswahl-Screen, direktes Verbinden wie bisher" — der
+   * lokale Pseudo-Server hat nie eine gespeicherte Sitzung (Spec 0032:
+   * keine `servers`-Zeile, s. `commands::connect_session`s
+   * `is_local`-Zweig), `listChatSessions` liefert für ihn also ohnehin
+   * immer eine leere Liste; kein gesonderter Fall hier nötig.
+   */
   const handleConnect = async (server: ServerDto) => {
     const existingSessionId = findExistingSessionId(server.id);
     if (existingSessionId) {
@@ -120,7 +144,48 @@ export function ServerList({
       setPendingConnectServer(server);
       return;
     }
-    await performConnect(server);
+    await openSessionPickerOrConnect(server);
+  };
+
+  const openSessionPickerOrConnect = async (server: ServerDto) => {
+    setError(null);
+    try {
+      const sessions = await listChatSessions(server.id);
+      if (sessions.length === 0) {
+        await performConnect(server);
+        return;
+      }
+      setSessionPickerState({ server, sessions });
+    } catch (err) {
+      setError(commandErrorMessage(err));
+    }
+  };
+
+  const handleResumeSession = async (sessionId: string) => {
+    const server = sessionPickerState?.server;
+    if (!server) return;
+    setSessionPickerState(null);
+    setError(null);
+    setConnectingId(server.id);
+    try {
+      const tabSessionId = await resumeChatSession(server.id, sessionId);
+      onConnected(tabSessionId, server.name, server.id);
+    } catch (err) {
+      setError(commandErrorMessage(err));
+    } finally {
+      setConnectingId(null);
+    }
+  };
+
+  const reloadSessionPicker = async () => {
+    const server = sessionPickerState?.server;
+    if (!server) return;
+    try {
+      const sessions = await listChatSessions(server.id);
+      setSessionPickerState({ server, sessions });
+    } catch (err) {
+      setError(commandErrorMessage(err));
+    }
   };
 
   const handleFirstRunNoticeAcknowledged = async () => {
@@ -260,6 +325,20 @@ export function ServerList({
       )}
       {pendingConnectServer && (
         <FirstRunNoticeScreen onAcknowledge={handleFirstRunNoticeAcknowledged} />
+      )}
+      {sessionPickerState && (
+        <ChatSessionPickerScreen
+          serverName={sessionPickerState.server.name}
+          sessions={sessionPickerState.sessions}
+          onNewConversation={() => {
+            const server = sessionPickerState.server;
+            setSessionPickerState(null);
+            performConnect(server);
+          }}
+          onResume={handleResumeSession}
+          onSessionsChanged={reloadSessionPicker}
+          onCancel={() => setSessionPickerState(null)}
+        />
       )}
     </>
   );

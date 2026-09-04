@@ -187,6 +187,7 @@ pub fn run() {
             chat_retention::get_chat_session_retention_days,
             chat_retention::set_chat_session_retention_days,
             commands::list_sessions,
+            commands::get_chat_history,
             commands::list_groups,
             commands::create_group,
             commands::update_group,

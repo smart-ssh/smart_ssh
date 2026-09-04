@@ -12,6 +12,7 @@ import {
 } from "../api";
 import { setLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from "../i18n";
 import { loadRiskClassifierSettings, saveRiskClassifierSettings } from "../riskSettings";
+import { ChatRetentionSettings } from "./ChatRetentionSettings";
 import { McpServerSettings } from "./McpServerSettings";
 import {
   type AiProviderConfigDto,
@@ -378,6 +379,8 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
             </label>
           )}
         </div>
+
+        <ChatRetentionSettings />
 
         <McpServerSettings />
 

@@ -3,6 +3,8 @@ import type {
   ActionUserDecision,
   AiProviderConfigDto,
   AiProviderConfigInput,
+  ChatHistoryEntryDto,
+  ChatSessionSummaryDto,
   DeleteGroupResult,
   DocumentFormat,
   EvalContextInput,
@@ -90,6 +92,29 @@ export const fetchAttestationInfo = (providerId: string) =>
 // --- Teil 2: Session/Terminal/Chat --------------------------------------
 
 export const connect = (serverId: string) => invoke<string>("connect", { serverId });
+
+// --- Spec 0034: persistente Chat-Sitzungen ------------------------------
+
+export const listChatSessions = (serverId: string) =>
+  invoke<ChatSessionSummaryDto[]>("list_chat_sessions", { serverId });
+
+export const resumeChatSession = (serverId: string, sessionId: string) =>
+  invoke<string>("resume_chat_session", { serverId, sessionId });
+
+export const renameChatSession = (sessionId: string, newTitle: string) =>
+  invoke<void>("rename_chat_session", { sessionId, newTitle });
+
+export const deleteChatSession = (sessionId: string) =>
+  invoke<void>("delete_chat_session", { sessionId });
+
+export const getChatSessionRetentionDays = () =>
+  invoke<number | null>("get_chat_session_retention_days");
+
+export const setChatSessionRetentionDays = (days: number | null) =>
+  invoke<void>("set_chat_session_retention_days", { days });
+
+export const getChatHistory = (sessionId: string) =>
+  invoke<ChatHistoryEntryDto[]>("get_chat_history", { sessionId });
 
 export const confirmHostKey = (sessionId: string, decision: HostKeyUserDecision) =>
   invoke<void>("confirm_host_key", { sessionId, decision });

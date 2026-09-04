@@ -322,5 +322,24 @@
     "encryptionText": "The local database is not separately encrypted. We recommend enabling your operating system's disk encryption if you haven't already.",
     "checkboxLabel": "I've read and understood this.",
     "continueButton": "Continue"
+  },
+  "chatSessionPicker": {
+    "subtitle": "This server has previous conversations. Continue one, or start fresh.",
+    "newConversation": "New conversation",
+    "pastSessions": "Past conversations",
+    "untitled": "Untitled conversation",
+    "messageCount_one": "{{count}} message",
+    "messageCount_other": "{{count}} messages",
+    "rename": "Rename",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this conversation permanently? This cannot be undone.",
+    "cancel": "Cancel"
+  },
+  "chatRetention": {
+    "label": "Keep chat history for",
+    "neverDelete": "Never delete automatically",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "hint": "Automatically deletes ended conversations older than this. Active conversations are never affected."
   }
 }
