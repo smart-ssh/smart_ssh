@@ -222,7 +222,16 @@ export function ServerForm({
     jumpHost,
     sudoPassword: sudoPassword === "" ? null : sudoPassword,
     postIngestPolicy,
-    aiInjectionCheckEnabled: secondOpinionAvailable && aiInjectionCheckEnabled,
+    // Unabhängiger Review-Pass (Spec 0039): NICHT zusätzlich mit
+    // `secondOpinionAvailable` verknüpfen — sonst würde das Speichern eines
+    // Servers aus einem völlig anderen Grund (z. B. Umbenennen), während
+    // gerade kein Zweitmeinungs-Provider konfiguriert ist, eine zuvor
+    // gesetzte Einstellung still auf `false` zurücksetzen und beim späteren
+    // erneuten Konfigurieren des Providers nicht automatisch wiederkommen.
+    // Die Wirksamkeitsprüfung (Provider konfiguriert?) macht ohnehin das
+    // Backend (`Session::injection_check_provider`); die Checkbox hier ist
+    // nur bedienbar, nicht das gespeicherte Feld selbst gegated.
+    aiInjectionCheckEnabled,
   });
 
   const handleSubmit = async (e: FormEvent) => {

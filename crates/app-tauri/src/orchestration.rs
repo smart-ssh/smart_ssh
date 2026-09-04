@@ -332,12 +332,19 @@ async fn handle_action_proposed(
     // `untrusted_content_ingested` oben, das für die ganze Sitzung gilt.
     // Nur Eskalation nach oben, wie bei der Risiko-Zweitmeinung aus Spec
     // 0026 (ein "nein"/keine Prüfung macht nichts zusätzlich AutoExec-
-    // fähig, das es sonst nicht wäre — hier passiert ohnehin nichts, da
-    // dieser Zweig nur bei `true` überhaupt greift).
-    if session
-        .injection_suspected
-        .swap(false, std::sync::atomic::Ordering::SeqCst)
-        && matches!(decision, Decision::AutoExec)
+    // fähig, das es sonst nicht wäre).
+    //
+    // Unabhängiger Review-Pass (Spec 0039): `swap` muss auf den
+    // `AutoExec`-Zweig BESCHRÄNKT bleiben, statt unbedingt bei jedem
+    // Aktionsvorschlag zu laufen — sonst verbraucht z. B. eine an der
+    // Hard-Blacklist scheiternde `Deny`-Aktion (die der Payload absichtlich
+    // vorschieben kann, etwa `rm -rf /`) das Verdachts-Flag, bevor die
+    // eigentlich gemeinte Folgeaktion überhaupt vorgeschlagen wird — diese
+    // liefe dann trotz erkanntem Verdacht ungebremst als `AutoExec`.
+    if matches!(decision, Decision::AutoExec)
+        && session
+            .injection_suspected
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
     {
         decision = Decision::Confirm {
             reason: "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, erkannt – \
@@ -3309,6 +3316,76 @@ mod tests {
         assert!(
             matches!(decision, Decision::Deny { .. }),
             "ein Injection-Verdacht darf eine Deny-Regel nie abschwächen, war: {payload}"
+        );
+    }
+
+    /// Unabhängiger Review-Pass (Spec 0039): eine Aktion, die ohnehin schon
+    /// (unabhängig vom Verdacht) `Deny` bekommt, darf das Verdachts-Flag
+    /// nicht "verbrauchen" — sonst könnte der eingeschleuste Inhalt selbst
+    /// gezielt zuerst ein hart geblacklistetes Kommando vorschlagen lassen
+    /// (das ohnehin scheitert), um damit das Flag zu verbrennen, bevor die
+    /// eigentlich gemeinte Folgeaktion vorgeschlagen wird — die liefe dann
+    /// trotz erkanntem Verdacht ungebremst als `AutoExec`. Regressionstest
+    /// für genau diesen Umgehungspfad.
+    #[tokio::test]
+    async fn test_injection_suspected_survives_an_unrelated_denied_action() {
+        struct DenyLsPolicyStore;
+        #[async_trait]
+        impl PolicyStore for DenyLsPolicyStore {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("deny-ls".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob("ls *".to_string()),
+                    action: ssh_manager_core::filter::RuleAction::Deny,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                }]
+            }
+        }
+
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
+        session
+            .injection_suspected
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        // Erste (vom Payload vorgeschobene) Aktion: per Regel `Deny`,
+        // unabhängig vom Verdachts-Flag.
+        let (first_decision, _) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+        )
+        .await;
+        assert!(matches!(first_decision, Decision::Deny { .. }));
+        assert!(
+            session
+                .injection_suspected
+                .load(std::sync::atomic::Ordering::SeqCst),
+            "eine ohnehin `Deny`-Aktion darf das Verdachts-Flag nicht verbrauchen"
+        );
+
+        // Zweite, eigentlich gemeinte Aktion: wäre ohne den Verdacht
+        // `AutoExec` (andere Policy: alles erlaubt) — muss trotzdem
+        // eskaliert werden, und zwar sichtbar über den
+        // Injection-spezifischen Code, nicht zufällig über
+        // `FILTER_NO_RULE_MATCHED` o. ä.
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let (second_decision, payload) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: "cat /etc/hosts".to_string(),
+            },
+        )
+        .await;
+        assert!(
+            matches!(second_decision, Decision::Confirm { .. }),
+            "das Flag muss für die tatsächlich vorgeschlagene Folgeaktion erhalten bleiben, war: {payload}"
+        );
+        assert_eq!(
+            payload["decision"]["Confirm"]["code"],
+            serde_json::json!("FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM")
         );
     }
 
