@@ -34,6 +34,15 @@ noch ohne größere Folgekosten ändern, da noch kein Frontend-Code existiert.
 
 ## 3. Architektur: `app-tauri` als dünner Wrapper
 
+> **Geändert durch Spec 0038 (Repository-Trennung & App-Shell)**: Die hier
+> als `app-tauri` beschriebene Crate wird zur Library **`app-shell`**
+> refaktoriert; das eigentliche Binary ist ein dünnes
+> `apps/smart-ssh-community/src/main.rs`, das
+> `app_shell::run(Wiring::community())` aufruft. Inhaltlich bleibt alles in
+> diesem Abschnitt unverändert gültig — es liegt nur in einer anderen
+> Crate. Zusätzlich bekommt `AppState` ein
+> `entitlements: Arc<dyn EntitlementProvider>`-Feld (Spec 0037).
+
 `app-tauri` enthält **keine fachliche Logik**, nur:
 - Tauri-Commands, die Core-APIs aufrufen und Ergebnisse als DTOs (serde-
   serialisierbare Structs) an das Frontend zurückgeben

@@ -179,6 +179,13 @@ entsperrtem Nutzerkonto wollen (z. B. durch Malware oder versehentliches
 Cloud-Backup). Kein Bestandteil dieser Spec, keine offene Frage mehr, sondern
 bewusst zurückgestellt.
 
+**Ergänzung**: Mit der Einführung persistenter Chat-Sitzungen (Spec 0034)
+wurde diese Bewertung für Chat-Inhalte verfeinert, nicht revidiert — statt
+Full-Database-Verschlüsselung (technisch mit `sqlx` nicht ohne Weiteres
+umsetzbar, siehe Spec 0036) wird gezielt nur der Konversationsinhalt
+verschlüsselt. Die hier getroffene Einschätzung zu Metadaten bleibt
+unverändert gültig.
+
 ## 8. Weitere offene Punkte
 
 - Soll es einen Export/Import-Mechanismus geben (z. B. verschlüsseltes JSON),

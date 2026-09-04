@@ -52,7 +52,20 @@ Logik wie die Filter-Engine (Spec 0002, Abschnitt 4) — jedes Teilkommando
 wird einzeln klassifiziert, das Gesamtergebnis je Achse ist das jeweils
 höhere Risiko-Level über alle Teile. Die **Muster** selbst nutzen denselben
 `Pattern`-Typ (Glob/Regex/Exact, Spec 0002 Abschnitt 2), zwei eigene,
-containerinterne Listen statt der Filter-Regeln:
+containerinterne Listen statt der Filter-Regeln.
+
+**Kritisch — dieselbe Normalisierung und derselbe Cap wie die
+Filter-Engine**: Der Klassifizierer matcht gegen das **normalisierte**
+effektive Kommando aus Spec 0002, Abschnitt 4, Punkt 6 (Wrapper/Elevation/
+Variablen-Präfixe fixpunkt-abgeschält), **nicht** gegen den Rohtext. Sonst
+entsteht genau die im Audit gefundene Blindheit: `sudo cat /etc/shadow` oder
+`env shutdown -h now` würden als "kein Risiko" durchgehen, weil die
+Muster am Kommandoanfang ankern und der `sudo`/`env`-Präfix davor sitzt.
+Ebenso gilt die Längen-/Rekursions-Begrenzung aus Spec 0002, Abschnitt 4,
+Punkt 7 **auch hier** — der Klassifizierer darf nicht ungebremst in
+verschachtelte `$(...)` absteigen, wo die Filter-Engine das begrenzt (sonst
+Stack-Overflow-Absturz über einen Pfad, der die Filter-Engine gar nicht
+erreicht).
 
 Beispielhafte Server-Risiko-Muster (Rot): `rm -rf *`, `dd if=* of=/dev/*`,
 `mkfs*`, Fork-Bomb-Muster, `shutdown*`/`reboot*`/`poweroff*`,

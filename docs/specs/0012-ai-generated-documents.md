@@ -1,9 +1,20 @@
 # Spec: KI-generierte Dokumente
 
-Status: Entwurf
+Status: Entwurf — **teilweise überholt**, siehe Hinweis unten
 Modul: Erweiterung `core::ai` (Spec 0006), `crates/app-tauri` + `frontend/`
 Abhängigkeiten: `AiAction` (Spec 0003), Chat-Kernschleife (Spec 0007,
 Abschnitt 6)
+
+> **Änderung durch Spec 0037 (Entitlements & Editionen)**: Der in dieser
+> Spec beschriebene **Word-Export-Pfad wurde aus dem öffentlichen Repository
+> entfernt** und wird später im privaten Repo als Pro-Modul neu gebaut
+> (`Feature::DocumentExport`). Grund: Bezahlmodul-Code gehört nicht ins
+> Apache-2.0-lizenzierte öffentliche Repo — auch nicht hinter einem
+> Feature-Flag, da ein Flag nichts an der Lizenz des Codes darunter ändert.
+> Betroffen sind: der `DocumentFormat::Word`-Zweig, die `docx-rs`-
+> Abhängigkeit und der "Als Word speichern"-Button. **Alles andere in
+> dieser Spec — die `GenerateDocument`-Aktion, die Chat-Karte, der
+> Markdown-Export — bleibt unverändert gültig und vollständig Free.**
 
 ## 1. Ziel
 

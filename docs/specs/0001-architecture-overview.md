@@ -99,6 +99,19 @@ Da das Projekt KI-gestützt entwickelt wird (siehe Diskussion zu Claude Code):
 - **Test-Gate vor jedem Commit**: `cargo test --workspace`,
   `cargo clippy --workspace -- -D warnings`, `cargo fmt --check` müssen grün
   sein, bevor committet wird (durchgesetzt sowohl lokal als auch in CI)
+- **Unabhängiger Review-Pass nach größeren Implementierungsschritten**: In
+  einer **frischen** Claude-Code-Session (kein `--resume`/`--continue` der
+  Implementierungs-Session), damit die Bewertung nicht durch die gerade
+  getroffenen Implementierungsentscheidungen voreingenommen ist — dieselbe
+  Logik wie bei menschlichem Code-Review durch eine zweite Person. Die
+  Review-Session liest ausschließlich die betroffene(n) Spec(s) und den
+  Diff, ändert selbst keinen Code, sondern liefert einen strukturierten
+  Bericht. Vorlage dafür liegt unter `docs/review-prompt-template.md`. Bei
+  sicherheitskritischen Modulen (Filter-Engine, Risiko-Klassifizierer,
+  Redactor, Credential-Handling) läuft der Review-Pass mit erhöhter
+  Priorität inklusive adversarialem Testen (gezielte Versuche, die Logik zu
+  umgehen), bei den übrigen Modulen genügt der reguläre
+  Spec-Konformitäts-/Invarianten-Check.
 
 ## 6. Offene Punkte
 

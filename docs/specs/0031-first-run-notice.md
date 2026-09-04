@@ -13,11 +13,23 @@ werden kann, zeigt die App einen Zustimmungs-Screen mit zwei inhaltlichen
 Punkten in einem Rutsch:
 
 1. **Verantwortung**: Die KI schlägt Kommandos vor, aber der Nutzer trägt
-   die Verantwortung für jedes bestätigte Kommando; keine Haftung des
-   Herstellers für Schäden durch ausgeführte Kommandos.
+   die Verantwortung für jedes bestätigte Kommando.
 2. **Datenbank-Verschlüsselung**: Die lokale SQLite-Datenbank ist nicht
    zusätzlich verschlüsselt (Spec 0004, Abschnitt 7), OS-Festplatten-
    verschlüsselung wird empfohlen.
+
+> **Korrektur (Audit-Fund)**: Eine frühere Fassung dieses Abschnitts sprach
+> von einem "Haftungsausschluss des Herstellers". Das war widersprüchlich
+> zum tatsächlich ausformulierten Text in Abschnitt 3, der eine
+> **Verantwortungszuweisung** an den Nutzer enthält, keinen juristischen
+> Haftungsausschluss. Diese Spec (und der Erststart-Screen) leisten bewusst
+> **nur** die Verantwortungszuweisung — ein belastbarer rechtlicher
+> Haftungsausschluss gehört in AGB/EULA (siehe die separaten
+> Disclaimer-/Lizenz-Dokumente und deren anwaltlichen Prüfvorbehalt), nicht
+> in einen Erststart-Dialog. Der Screen ist ein Transparenz- und
+> Bewusstseins-Instrument, kein Ersatz für rechtliche Dokumente. Die
+> Formulierung in Abschnitt 3 ist maßgeblich; dieser Abschnitt 1 wurde
+> daran angeglichen.
 
 Beide Punkte in einem gemeinsamen Screen statt zwei getrennter Popups
 nacheinander — vermeidet, dass der Nutzer zwei ähnliche Dialoge

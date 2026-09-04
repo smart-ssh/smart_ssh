@@ -84,6 +84,11 @@ pub struct EvaluationTrace {
 }
 ```
 
+> **Erweitert durch Spec 0037**: `EvaluationTrace` bekommt zusätzlich ein
+> `matched_rule_origin: Option<RuleOrigin>`-Feld, damit im Testen-Panel
+> (Abschnitt 6) erkennbar ist, ob eine Organisations- oder eine
+> Nutzer-Regel gegriffen hat.
+
 Diese Methode wird **nicht** im eigentlichen KI-Kommando-Loop verwendet
 (dort reicht `evaluate()`), sondern ausschließlich für die
 Testen-Funktion im UI (Abschnitt 6) — Transparenz für den Nutzer, warum eine

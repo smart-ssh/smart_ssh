@@ -54,11 +54,19 @@ pub enum Scope {
 
 ## 3. Präzedenz-Regeln (wichtigster Teil der Spec)
 
+> **Erweitert durch Spec 0037 (Entitlements & Editionen)**: Die hier
+> beschriebene Kette bekommt eine zusätzliche Sortierstufe `RuleOrigin`
+> (`Builtin` → `Organization` → `User`), die **innerhalb desselben
+> Aktions-Tiers** und **vor** der Scope-Spezifität greift. Die unten
+> beschriebene Reihenfolge bleibt in ihrer Substanz unverändert gültig —
+> die maßgebliche, vollständige Fassung des Sortier-Algorithmus steht in
+> Spec 0037, Abschnitt 5.
+
 Reihenfolge der Auswertung, **nicht verhandelbar**:
 
 1. **Hard-Blacklist (fest im Core codiert, nicht vom Nutzer entfernbar)**
    Kommandos wie `rm -rf /`, `dd if=* of=/dev/*`, `mkfs*`, `:(){ :|:& };:`
-   (Fork-Bombe), direkte Manipulation von `/etc/shadow`, `shutdown`/`reboot`
+   (Fork-Bomb), direkte Manipulation von `/etc/shadow`, `shutdown`/`reboot`
    ohne explizite Nutzer-Freigabe. Diese Liste ergibt immer mindestens
    `Confirm`, nie `AutoExec` — unabhängig von Nutzerregeln.
 2. **Nutzerdefinierte `Deny`-Regeln** (nach `Scope`-Spezifität sortiert:
@@ -84,6 +92,18 @@ darf **nicht** als Ganzes gegen `ls *` gematcht werden. Vorgehen:
 1. Kommando wird mit einem Shell-Lexer (empfehlenswert: `shell-words` oder
    eigener minimaler Parser) in Teilkommandos zerlegt, getrennt durch:
    `&&`, `||`, `;`, `|`, sowie Command-Substitution `$(...)` und Backticks.
+   **Ebenfalls modelliert werden schreibende Output-Redirections** (`>`,
+   `>>`, `2>`, `&>`): Ein Redirect-Ziel ist ein Schreibzugriff auf eine
+   Datei und muss als solcher gegen die Policy geprüft werden — `ls -la >
+   /etc/passwd` darf **nicht** unter einer `Allow: ls *`-Regel automatisch
+   ausgeführt werden, nur weil das Kommando mit `ls` beginnt. Das
+   Redirect-Ziel wird als eigener zu prüfender Bestandteil behandelt
+   (mindestens `Confirm`, analog zu einem schreibenden Zugriff), nicht als
+   bloßes Argument von `ls`. **Input-Redirection (`<`) wird bewusst nicht
+   gesondert behandelt**: Ein Lesezugriff wie `cat < /etc/shadow` erhält
+   ohnehin dieselbe Entscheidung wie `cat /etc/shadow`, da das Kommando
+   selbst schon auf die Datei zugreift — eine Extra-Prüfung des
+   `<`-Ziels brächte keine zusätzliche Sicherheit.
 2. **Jedes Teilkommando wird einzeln durch die komplette Präzedenz-Kette
    (Abschnitt 3) geprüft.**
 3. Die Gesamt-Decision ist das **strengste** Ergebnis aller Teile:
@@ -100,6 +120,31 @@ darf **nicht** als Ganzes gegen `ls *` gematcht werden. Vorgehen:
 6. `sudo`/`doas`-Präfixe werden vor dem Matching entfernt und **zusätzlich**
    separat vermerkt (`elevated: true` im Decision-Kontext), sodass später z. B.
    eine Regel "alles mit sudo → immer Confirm" möglich ist.
+
+   **Wichtig — vollständige Normalisierung, nicht nur ein Token**: Das
+   Entfernen darf nicht bei einem einzelnen `sudo`/`doas` haltmachen. Ein
+   Angreifer kann beliebig wrappen: `env rm -rf /`, `sudo -u root rm -rf /`,
+   `sudo sudo rm -rf /`, `timeout 5 rm -rf /`, `xargs rm`, `chroot`, bare
+   `VAR=value`-Präfixe, oder `sudo bash -c "rm -rf /"`. Die Normalisierung
+   läuft deshalb als **Fixpunkt-Schleife**: bekannte Wrapper (Elevation,
+   `env`, `timeout`, `xargs`, `chroot`, Variablen-Zuweisungen) werden
+   wiederholt abgeschält, bis sich der Kommandokopf nicht mehr ändert —
+   erst dann wird gematcht. Das effektive, normalisierte Kommando ist die
+   Basis für **jede** Prüfung (Hard-Blacklist, Nutzerregeln, Risiko-
+   Klassifizierer), damit keine dieser Ebenen eine schwächere Sicht auf das
+   Kommando hat als die anderen. Auch `bash -c "..."`/`sh -c "..."` wird als
+   Wrapper behandelt: Der Inhalt des `-c`-Arguments wird als eigenes
+   Kommando (bzw. bei Nicht-Parsebarkeit als `Confirm`-pflichtig) geprüft,
+   nicht als undurchsichtiges Argument durchgewunken.
+
+7. **Längenbegrenzung als Absturzschutz**: Vor dem Parsen wird die
+   Kommandolänge geprüft (Cap z. B. 4096 Zeichen). Auch die Rekursionstiefe
+   bei verschachtelter Command-Substitution (`$(echo $(echo ...))`) wird
+   begrenzt. Überschreitung → `Confirm` mit entsprechendem Grund, **nie** ein
+   unbegrenzter rekursiver Abstieg, der den Prozess per Stack-Overflow
+   abbrechen lassen könnte. Diese Grenze gilt für **jeden** Konsumenten der
+   Parselogik gleichermaßen (Filter-Engine wie Risiko-Klassifizierer) —
+   kein Konsument parst ungebremst, wo ein anderer bremst.
 
 ## 5. Öffentliche Schnittstelle
 
