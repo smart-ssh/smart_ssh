@@ -173,6 +173,8 @@
     "rejected": "abgelehnt",
     "rejectedByUser": "Vom Nutzer abgelehnt.",
     "usesStoredSudoPassword": "🔑 Wird mit hinterlegtem Sudo-Passwort ausgeführt.",
+    "takeIntoNote": "In Notiz übernehmen",
+    "takeIntoNoteFailed": "Fehlgeschlagen — erneut versuchen",
     "riskServerLabel": "Server",
     "riskDataLabel": "Daten",
     "riskSecondOpinionPending": "KI-Zweitmeinung wird eingeholt…",

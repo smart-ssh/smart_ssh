@@ -14,6 +14,7 @@ import {
   sendChatMessage,
   stopAutoContinuation,
   suggestRulePatterns,
+  takeChatContentIntoNote,
 } from "../api";
 import {
   onChatActionProposed,
@@ -642,6 +643,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
             onAcceptWithRule={acceptWithRule}
             onExport={handleExport}
             serverId={serverId}
+            sessionId={sessionId}
           />
         ))}
         {/* Spec 0021, Abschnitt 5: "Automatik läuft"-Indikator mit
@@ -784,6 +786,7 @@ export function ChatItemView({
   onAcceptWithRule,
   onExport,
   serverId,
+  sessionId,
 }: {
   item: ChatItem;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
@@ -796,6 +799,7 @@ export function ChatItemView({
   ) => void;
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
   serverId: string;
+  sessionId: string;
 }) {
   const { t } = useTranslation();
   if (item.type === "document") {
@@ -811,7 +815,7 @@ export function ChatItemView({
     );
   }
   if (item.type === "assistant") {
-    return <AssistantMessageView text={item.text} onExport={onExport} />;
+    return <AssistantMessageView text={item.text} onExport={onExport} sessionId={sessionId} />;
   }
   if (item.type === "error") {
     return (
@@ -830,9 +834,15 @@ export function ChatItemView({
     );
   }
   if (item.type === "historyCommandResult") {
+    const noteContent = [`$ ${item.command}`, item.stdout, item.stderr]
+      .filter(Boolean)
+      .join("\n");
     return (
       <div className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs">
-        <p className="font-mono text-slate-300">$ {item.command}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-mono text-slate-300">$ {item.command}</p>
+          <TakeIntoNoteButton sessionId={sessionId} content={noteContent} />
+        </div>
         {item.cancelled && (
           <p className="mt-1 font-sans text-amber-300">{t("actionCard.commandCancelledNotice")}</p>
         )}
@@ -998,7 +1008,7 @@ export function ChatItemView({
         <RunningCommandIndicator actionId={item.actionId} startedAt={item.startedAt} />
       )}
 
-      {item.result && <ActionResultView result={item.result} />}
+      {item.result && <ActionResultView result={item.result} sessionId={sessionId} />}
     </div>
   );
 }
@@ -1301,7 +1311,13 @@ function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number; newCon
   );
 }
 
-function ActionResultView({ result }: { result: ActionResultPayload }) {
+function ActionResultView({
+  result,
+  sessionId,
+}: {
+  result: ActionResultPayload;
+  sessionId: string;
+}) {
   const { t } = useTranslation();
   if (result.kind === "noteUpdate") {
     return <p className="mt-2 text-xs text-emerald-300">{result.summary}</p>;
@@ -1310,6 +1326,9 @@ function ActionResultView({ result }: { result: ActionResultPayload }) {
   if (result.kind === "fileRead") {
     return (
       <div className="mt-2 space-y-1 rounded bg-slate-950 p-2 font-mono text-xs">
+        <div className="flex items-start justify-between gap-2 font-sans">
+          <TakeIntoNoteButton sessionId={sessionId} content={result.content} />
+        </div>
         <pre className="whitespace-pre-wrap text-slate-300">{truncate(result.content)}</pre>
       </div>
     );
@@ -1325,6 +1344,7 @@ function ActionResultView({ result }: { result: ActionResultPayload }) {
       </div>
     );
   }
+  const noteContent = [result.stdout, result.stderr].filter(Boolean).join("\n");
   return (
     <div className="mt-2 space-y-1 rounded bg-slate-950 p-2 font-mono text-xs">
       {/* Spec 0027, Abschnitt 4: bei Abbruch statt "exit code: —" ein
@@ -1333,6 +1353,11 @@ function ActionResultView({ result }: { result: ActionResultPayload }) {
       {result.cancelled ? (
         <p className="font-sans text-amber-300">{t("actionCard.commandCancelledNotice")}</p>
       ) : null}
+      {noteContent && (
+        <div className="flex items-start justify-between gap-2 font-sans">
+          <TakeIntoNoteButton sessionId={sessionId} content={noteContent} />
+        </div>
+      )}
       {result.stdout && (
         <pre className="whitespace-pre-wrap text-slate-300">{truncate(result.stdout)}</pre>
       )}
@@ -1341,6 +1366,37 @@ function ActionResultView({ result }: { result: ActionResultPayload }) {
       )}
       {!result.cancelled && <p className="text-slate-500">exit code: {result.exitCode ?? "—"}</p>}
     </div>
+  );
+}
+
+/** Spec 0040, Abschnitt 6: "In Notiz übernehmen" — startet über
+ * `takeChatContentIntoNote` denselben `ProposeNoteUpdate`-Bestätigungsablauf
+ * wie ein KI-Vorschlag (inkl. Diff-Vorschau), vorbefüllt mit `content`
+ * dieser einen Zeile. Der neu vorgeschlagene Eintrag erscheint wie jeder
+ * andere `chat-action-proposed`-Eintrag als eigene Karte im Chat-Verlauf
+ * (`onChatActionProposed` in `ChatPanel`) — dieser Button selbst zeigt
+ * keinen eigenen Dialog, nur einen kurzen Sende-/Fehler-Zustand. */
+function TakeIntoNoteButton({ sessionId, content }: { sessionId: string; content: string }) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<"idle" | "sending" | "error">("idle");
+
+  const handleClick = () => {
+    setState("sending");
+    takeChatContentIntoNote(sessionId, content)
+      .then(() => setState("idle"))
+      .catch(() => setState("error"));
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={state === "sending"}
+      className="shrink-0 border border-slate-700 px-1.5 py-0.5 text-[11px] text-slate-400 hover:border-slate-500 hover:text-slate-200 disabled:opacity-50"
+      title={t("actionCard.takeIntoNote")}
+    >
+      {state === "error" ? t("actionCard.takeIntoNoteFailed") : t("actionCard.takeIntoNote")}
+    </button>
   );
 }
 
@@ -1415,9 +1471,11 @@ function DocumentCard({
 function AssistantMessageView({
   text,
   onExport,
+  sessionId,
 }: {
   text: string;
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
+  sessionId: string;
 }) {
   const [exporting, setExporting] = useState<DocumentFormat | null>(null);
   const [savedFormat, setSavedFormat] = useState<DocumentFormat | null>(null);
@@ -1444,6 +1502,7 @@ function AssistantMessageView({
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t border-slate-700/60 pt-2 text-xs">
+        <TakeIntoNoteButton sessionId={sessionId} content={text} />
         <span className="text-slate-400">Export:</span>
         <button
           type="button"

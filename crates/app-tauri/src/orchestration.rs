@@ -2203,6 +2203,61 @@ pub async fn suggest_note_update_on_disconnect(
     }
 }
 
+/// Spec 0040, Abschnitt 6: "In Notiz übernehmen" — eine UI-Aktion auf einer
+/// Chat-/Ergebnis-Zeile, die den bestehenden `ProposeNoteUpdate`-Ablauf
+/// (Spec 0003, Abschnitt 5.2) mit deren Inhalt vorbefüllt, statt auf einen
+/// KI-Vorschlag zu warten. **Kein neuer Persistenz-/Bestätigungsmechanismus**
+/// — ruft `handle_action_proposed` exakt wie ein regulärer, von der KI
+/// selbst vorgeschlagener `ProposeNoteUpdate` auf (`ActionOrigin::Internal`,
+/// also inkl. normaler Persistenz und desselben `chat-action-proposed`/
+/// `NoteDiffPreview`-UI-Pfads, den `ChatPanel.tsx` bereits rendert).
+///
+/// Ziel ist immer der aktuelle Server (`NoteTargetSelector::CurrentServer`)
+/// — dieselbe Server-Session, deren Chat die Zeile enthält; eine
+/// Gruppen-Auswahl bietet die UI hier bewusst nicht an (Scope-Reduktion,
+/// s. ADR zu Spec 0040). `new_content` ist der bestehende Notizinhalt plus
+/// den übernommenen Zeileninhalt angehängt (Spec: "vollständiger neuer
+/// Text, nicht nur ein Diff", s. `AiAction::ProposeNoteUpdate`-Doc) — die
+/// Diff-Vorschau im bestehenden Dialog zeigt dem Nutzer genau diese
+/// Ergänzung, bevor er bestätigt.
+pub(crate) async fn propose_note_from_chat_content(
+    session: &Session,
+    session_id: SessionId,
+    content: String,
+    emitter: &dyn EventEmitter,
+    profile_store: &dyn ProfileStore,
+    action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+) -> bool {
+    let target = NoteTargetSelector::CurrentServer;
+    let (previous_note_content, _) = note_target_preview_for_action(
+        &AiAction::ProposeNoteUpdate {
+            target,
+            new_content: String::new(),
+        },
+        session,
+        profile_store,
+    )
+    .await;
+    let new_content = match previous_note_content {
+        Some(existing) if !existing.trim().is_empty() => format!("{existing}\n\n{content}"),
+        _ => content,
+    };
+
+    handle_action_proposed(
+        session,
+        session_id,
+        AiAction::ProposeNoteUpdate {
+            target,
+            new_content,
+        },
+        emitter,
+        profile_store,
+        action_confirmations,
+        ActionOrigin::Internal,
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -2405,14 +2460,21 @@ mod tests {
     #[derive(Default)]
     struct InMemoryProfileStore {
         note_revisions: StdMutex<Vec<NoteRevision>>,
+        /// Nur von den Spec-0040-Abschnitt-6-Tests ("In Notiz übernehmen")
+        /// befüllt, die einen tatsächlich auflösbaren `get_server`-Aufruf
+        /// brauchen, um einen bestehenden Notizinhalt vorzuspiegeln — alle
+        /// anderen Tests in diesem Modul lassen die Map leer und verlassen
+        /// sich weiterhin auf den bisherigen `ServerNotFound`-Fallback
+        /// unten.
+        servers: StdMutex<HashMap<ServerId, Server>>,
     }
 
     #[async_trait]
     impl ProfileStore for InMemoryProfileStore {
         async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
-            Err(ssh_manager_core::profiles::ProfileError::ServerNotFound(
-                *id,
-            ))
+            self.servers.lock().unwrap().get(id).cloned().ok_or(
+                ssh_manager_core::profiles::ProfileError::ServerNotFound(*id),
+            )
         }
         async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
             Err(ssh_manager_core::profiles::ProfileError::GroupNotFound(*id))
@@ -5129,6 +5191,143 @@ mod tests {
         let revisions = profile_store.note_revisions.lock().unwrap().clone();
         assert_eq!(revisions.len(), 1);
         assert_eq!(revisions[0].target, NoteTarget::Server(expected_server_id));
+    }
+
+    // --- Spec 0040, Abschnitt 6: "In Notiz übernehmen" -----------------
+
+    /// `propose_note_from_chat_content` muss den bestehenden Notizinhalt
+    /// des aktuellen Servers laden und den übernommenen Chat-Inhalt daran
+    /// anhängen (nicht ersetzen) — derselbe `ProposeNoteUpdate`-Dialog wie
+    /// bei einem KI-Vorschlag zeigt diesen vollständigen neuen Text als
+    /// Diff-Vorschau an.
+    #[tokio::test]
+    async fn test_propose_note_from_chat_content_appends_to_existing_note_and_persists_on_approve()
+    {
+        let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        let server_id = session.server_id;
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let now = chrono::Utc::now();
+        profile_store.servers.lock().unwrap().insert(
+            server_id,
+            Server {
+                id: server_id,
+                name: "Test-Server".to_string(),
+                host: "example.invalid".to_string(),
+                port: 22,
+                username: "deploy".to_string(),
+                group_id: None,
+                tags: Vec::new(),
+                auth: ssh_manager_core::profiles::AuthMethod::Agent,
+                notes: "Bestehende Notiz".to_string(),
+                jump_host: None,
+                post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+                ai_injection_check_enabled: false,
+                created_at: now,
+                updated_at: now,
+            },
+        );
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let action_future = propose_note_from_chat_content(
+            &session,
+            session_id,
+            "Aus dem Chat übernommener Inhalt".to_string(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, proposed_payload) = events
+            .iter()
+            .find(|(name, _)| name == "chat-action-proposed")
+            .expect("chat-action-proposed muss gesendet worden sein");
+        assert_eq!(
+            proposed_payload["action"]["ProposeNoteUpdate"]["new_content"],
+            serde_json::json!("Bestehende Notiz\n\nAus dem Chat übernommener Inhalt"),
+            "die Vorschau muss die bestehende Notiz plus den übernommenen Inhalt zeigen: \
+             {proposed_payload}"
+        );
+
+        let revisions = profile_store.note_revisions.lock().unwrap().clone();
+        assert_eq!(
+            revisions.len(),
+            1,
+            "Bestätigung muss die Notiz tatsächlich aktualisieren"
+        );
+        assert_eq!(revisions[0].target, NoteTarget::Server(server_id));
+        assert_eq!(
+            revisions[0].content,
+            "Bestehende Notiz\n\nAus dem Chat übernommener Inhalt"
+        );
+    }
+
+    /// Ohne bestehenden Notizinhalt (leerer String) wird der übernommene
+    /// Inhalt nicht mit einem führenden Leerzeilen-Präfix versehen — reiner
+    /// Ersatz statt einer sichtbar leeren Anhängung.
+    #[tokio::test]
+    async fn test_propose_note_from_chat_content_with_empty_existing_note_uses_content_directly() {
+        let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        let server_id = session.server_id;
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let now = chrono::Utc::now();
+        profile_store.servers.lock().unwrap().insert(
+            server_id,
+            Server {
+                id: server_id,
+                name: "Test-Server".to_string(),
+                host: "example.invalid".to_string(),
+                port: 22,
+                username: "deploy".to_string(),
+                group_id: None,
+                tags: Vec::new(),
+                auth: ssh_manager_core::profiles::AuthMethod::Agent,
+                notes: String::new(),
+                jump_host: None,
+                post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+                ai_injection_check_enabled: false,
+                created_at: now,
+                updated_at: now,
+            },
+        );
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let action_future = propose_note_from_chat_content(
+            &session,
+            session_id,
+            "Erster Inhalt".to_string(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, proposed_payload) = events
+            .iter()
+            .find(|(name, _)| name == "chat-action-proposed")
+            .expect("chat-action-proposed muss gesendet worden sein");
+        assert_eq!(
+            proposed_payload["action"]["ProposeNoteUpdate"]["new_content"],
+            serde_json::json!("Erster Inhalt"),
+        );
     }
 
     // --- Spec 0020: SFTP-Dateizugriff (ReadRemoteFile/WriteRemoteFile) -----

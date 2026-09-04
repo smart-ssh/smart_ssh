@@ -173,6 +173,8 @@
     "rejected": "rejected",
     "rejectedByUser": "Rejected by user.",
     "usesStoredSudoPassword": "🔑 Runs using the stored sudo password.",
+    "takeIntoNote": "Take into note",
+    "takeIntoNoteFailed": "Failed — try again",
     "riskServerLabel": "Server",
     "riskDataLabel": "Data",
     "riskSecondOpinionPending": "Fetching AI second opinion…",

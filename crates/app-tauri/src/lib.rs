@@ -211,6 +211,7 @@ pub fn run() {
             commands::terminal_input,
             commands::terminal_resize,
             commands::send_chat_message,
+            commands::take_chat_content_into_note,
             commands::respond_to_action,
             commands::cancel_running_command,
             commands::stop_auto_continuation,

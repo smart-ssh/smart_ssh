@@ -130,6 +130,14 @@ export const terminalResize = (sessionId: string, cols: number, rows: number) =>
 export const sendChatMessage = (sessionId: string, text: string) =>
   invoke<void>("send_chat_message", { sessionId, text });
 
+/** Spec 0040, Abschnitt 6: "In Notiz übernehmen" — startet denselben
+ * `ProposeNoteUpdate`-Bestätigungsablauf wie ein KI-Vorschlag (inkl.
+ * `chat-action-proposed`-Event und Diff-Vorschau), nur mit `content`
+ * vorbefüllt. Löst erst auf, wenn der Nutzer die Aktion über
+ * `respondToAction` bestätigt/ablehnt hat. */
+export const takeChatContentIntoNote = (sessionId: string, content: string) =>
+  invoke<void>("take_chat_content_into_note", { sessionId, content });
+
 export const respondToAction = (
   sessionId: string,
   actionId: string,

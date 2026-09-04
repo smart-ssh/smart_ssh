@@ -1125,6 +1125,37 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
     Ok(())
 }
 
+/// Spec 0040, Abschnitt 6: "In Notiz übernehmen" — startet denselben
+/// `ProposeNoteUpdate`-Bestätigungsablauf wie ein KI-Vorschlag, nur mit dem
+/// Inhalt einer bestehenden Chat-/Ergebnis-Zeile vorbefüllt (s.
+/// `crate::orchestration::propose_note_from_chat_content`-Doc-Kommentar).
+/// Wie `send_chat_message` löst dieses Promise erst auf, wenn die Aktion
+/// abgeschlossen ist (Bestätigen/Ablehnen über `respond_to_action`) — kein
+/// Problem für die Tauri-IPC (nicht blockierend für den Rest der App), das
+/// Frontend zeigt in der Zwischenzeit ganz normal den Bestätigungsdialog.
+#[tauri::command]
+pub async fn take_chat_content_into_note(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    content: String,
+) -> CommandResult<()> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    crate::orchestration::propose_note_from_chat_content(
+        &session,
+        session_id,
+        content,
+        &app,
+        state.profile_store.as_ref(),
+        &state.pending_action_confirmations,
+    )
+    .await;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn respond_to_action(
     state: State<'_, AppState>,

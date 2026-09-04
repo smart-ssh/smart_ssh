@@ -56,6 +56,7 @@ function renderItem(item: ChatItem) {
         onAcceptWithRule={vi.fn()}
         onExport={vi.fn()}
         serverId="server-1"
+        sessionId="session-1"
       />
     </I18nextProvider>,
   );
