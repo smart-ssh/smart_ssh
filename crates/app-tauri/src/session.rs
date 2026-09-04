@@ -34,7 +34,9 @@ use std::sync::{Arc, Mutex as StdMutex};
 use async_trait::async_trait;
 use tokio::sync::{mpsc, Mutex as AsyncMutex};
 
-use ssh_manager_core::ai::{AiProvider, OutputRedactor, SessionContext};
+use ssh_manager_core::ai::{
+    AiProvider, ChatMessage, MessageContent, OutputRedactor, SessionContext,
+};
 use ssh_manager_core::filter::{Decision, EvalContext, FilterEngine, PolicyStore};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{PtySize, SftpSession, SshTransport};
@@ -158,6 +160,54 @@ pub struct Session {
     /// `handle_action_proposed` anfassen zu müssen (s. Doc-Kommentar auf
     /// `AppState.running_command_cancellations`).
     pub running_command_cancellations: Arc<ConfirmationRegistry<ActionId, ()>>,
+    /// Spec 0039, Abschnitt 5: `true`, sobald in dieser Sitzung
+    /// **irgendein** durch `ai::fence_untrusted` gelaufener Inhalt in den
+    /// KI-Kontext gelangt ist (Kommando-Ausgabe, SFTP-Dateiinhalt oder
+    /// Server-/Gruppen-Notiz im System-Prompt) — anders als
+    /// `auto_continue_stop` **niemals** zurückgesetzt, auch nicht über neue
+    /// Nutzer-Nachrichten hinweg (ersetzt damit die alte, pro-Turn
+    /// zurückgesetzte SEC-03-Bremse, s. `orchestration::handle_action_
+    /// proposed`-Kommentar an der Eskalationsstelle für die Begründung).
+    /// Initialisiert mit `true`, wenn die Sitzung bereits mit Notizen oder
+    /// (künftig, Spec 0034) vorbelasteter Historie startet — s.
+    /// `history_contains_untrusted_content`.
+    pub untrusted_content_ingested: std::sync::atomic::AtomicBool,
+    /// Spec 0039, Abschnitt 5.1: einmalig bei `connect()` vom Server-Profil
+    /// übernommen (analog zu `ai_provider_label`/`risk_second_opinion_
+    /// provider` oben) — steuert, wie stark eskaliert wird, NACHDEM
+    /// `untrusted_content_ingested` gesetzt ist. Das Fencing selbst
+    /// (Abschnitt 3/4) läuft davon unabhängig immer.
+    pub post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy,
+}
+
+/// Spec 0039, Abschnitt 5: "Bei Session Resume mit vorbelasteter Historie
+/// startet die Sitzung mit `true`." Es gibt aktuell **keinen** Resume-Pfad
+/// (`docs/specs/0034-chat-session-persistence.md` ist noch Entwurf,
+/// `SessionContext.history` startet in `crate::commands::connect` immer
+/// mit `Vec::new()`) — diese Funktion ist die dafür vorbereitete Prüfung,
+/// heute aber faktisch immer mit einer leeren Historie aufgerufen.
+///
+/// `MessageContent::CommandResult` zählt IMMER als untrusted-Inhalt: das
+/// darin gehaltene `CommandOutput` wird erst beim tatsächlichen Versand an
+/// den KI-Provider über `ai::fence_untrusted` in `<stdout>`/`<stderr>`-Tags
+/// gepackt (`ai-providers::{anthropic,openai_compatible}::
+/// format_command_result`) — im in-memory `ChatMessage` selbst steht noch
+/// kein Fence-Text, ein reiner String-Scan würde solche Einträge sonst
+/// übersehen. `MessageContent::Text` (SFTP-Dateiinhalt, ggf. künftig
+/// weitere Fälle) wird dagegen bereits VOR dem Push in die Historie
+/// gefenced (s. `orchestration::execute_read_remote_file`), erkennbar am
+/// literalen Tag-Text.
+pub(crate) fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
+    const FENCE_OPEN_TAGS: [&str; 4] = ["<stdout>", "<stderr>", "<remote_file>", "<server_note>"];
+    history.iter().any(|message| match &message.content {
+        MessageContent::CommandResult { .. } => true,
+        MessageContent::Text(text) => FENCE_OPEN_TAGS.iter().any(|tag| text.contains(tag)),
+        // Kommando/Grund stammen von der KI selbst bzw. der lokalen
+        // Filter-Engine, nie vom Remote-Server (s. `format_action_
+        // rejected`-Doc-Kommentar in `ai-providers`) — keine untrusted
+        // Quelle.
+        MessageContent::ActionRejected { .. } => false,
+    })
 }
 
 /// Startet den Terminal-Aktor (Modul-Kommentar, Punkt 3) als eigenen Task.
@@ -337,7 +387,8 @@ mod tests {
     use uuid::Uuid;
 
     use ssh_manager_core::ai::{
-        default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, SessionContext,
+        default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, RejectionReason, Role,
+        SessionContext,
     };
     use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, SshError};
 
@@ -396,7 +447,74 @@ mod tests {
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             risk_second_opinion_provider: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
+            untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
+            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
         }
+    }
+
+    // --- Spec 0039, Abschnitt 5: history_contains_untrusted_content -------
+
+    #[test]
+    fn test_history_contains_untrusted_content_false_for_empty_history() {
+        assert!(!history_contains_untrusted_content(&[]));
+    }
+
+    #[test]
+    fn test_history_contains_untrusted_content_false_for_plain_text_only() {
+        let history = vec![ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("Wie geht es dir?".to_string()),
+        }];
+        assert!(!history_contains_untrusted_content(&history));
+    }
+
+    #[test]
+    fn test_history_contains_untrusted_content_true_for_command_result() {
+        let history = vec![ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::CommandResult {
+                command: "ls -la".to_string(),
+                output: CommandOutput {
+                    stdout: b"total 0".to_vec(),
+                    stderr: Vec::new(),
+                    exit_code: Some(0),
+                },
+                cancelled: false,
+            },
+        }];
+        assert!(
+            history_contains_untrusted_content(&history),
+            "CommandResult wird beim Versand gefenced (ai-providers::format_command_result), \
+             zählt also schon hier als untrusted-Inhalt"
+        );
+    }
+
+    #[test]
+    fn test_history_contains_untrusted_content_true_for_fenced_remote_file_text() {
+        let history = vec![ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::Text(
+                "Inhalt von '/etc/hosts':\n\n<remote_file>\n<source>/etc/hosts</source>\n\
+                 127.0.0.1 localhost\n</remote_file>"
+                    .to_string(),
+            ),
+        }];
+        assert!(history_contains_untrusted_content(&history));
+    }
+
+    #[test]
+    fn test_history_contains_untrusted_content_false_for_action_rejected() {
+        let history = vec![ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::ActionRejected {
+                command: "rm -rf /".to_string(),
+                reason: RejectionReason::User,
+            },
+        }];
+        assert!(
+            !history_contains_untrusted_content(&history),
+            "Kommando/Grund stammen von der KI/lokalen Filter-Engine, nie vom Remote-Server"
+        );
     }
 
     #[test]

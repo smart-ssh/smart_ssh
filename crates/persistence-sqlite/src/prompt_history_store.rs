@@ -146,7 +146,7 @@ mod tests {
     use chrono::Utc;
 
     use crate::SqliteProfileStore;
-    use ssh_manager_core::profiles::{AuthMethod, ProfileStore, Server};
+    use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileStore, Server};
 
     async fn in_memory_prompt_history_store() -> (SqliteProfileStore, SqlitePromptHistoryStore) {
         let options = SqliteConnectOptions::new().filename(":memory:");
@@ -174,6 +174,7 @@ mod tests {
             auth: AuthMethod::Agent,
             notes: String::new(),
             jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
             created_at: now,
             updated_at: now,
         };

@@ -48,7 +48,7 @@ use ssh_manager_core::ai::{
 };
 use ssh_manager_core::filter::{Decision, EvalContext};
 use ssh_manager_core::profiles::{
-    AiAction, NoteEditor, NoteTarget, NoteTargetSelector, ProfileStore,
+    AiAction, NoteEditor, NoteTarget, NoteTargetSelector, PostIngestPolicy, ProfileStore,
 };
 use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
 use ssh_manager_core::ssh::{CommandOutput, ExecOutcome, SshError};
@@ -143,7 +143,6 @@ pub async fn run_chat_turn(
             emitter,
             profile_store,
             action_confirmations,
-            round,
         )
         .await;
         if !should_continue {
@@ -170,7 +169,6 @@ async fn run_one_round(
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
-    round: usize,
 ) -> bool {
     let request_context = session.context.lock().await.clone();
     let mut stream = session.ai_provider.send(request_context);
@@ -205,7 +203,6 @@ async fn run_one_round(
                     emitter,
                     profile_store,
                     action_confirmations,
-                    round,
                     ActionOrigin::Internal,
                 )
                 .await
@@ -252,7 +249,6 @@ async fn handle_action_proposed(
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
-    round: usize,
     origin: ActionOrigin,
 ) -> bool {
     let action_id: ActionId = Uuid::new_v4();
@@ -269,26 +265,63 @@ async fn handle_action_proposed(
 
     let mut decision = evaluate_action(session, &action, profile_store).await;
 
-    // Spec 0013, SEC-03: In automatischen Folgerunden (round >= 2) wird jede
-    // SuggestCommand-Aktion, die AutoExec wäre, auf Confirm hochgestuft,
-    // um autonome RCE-Schleifen durch manipulierte Server-Outputs zu
-    // verhindern. `ReadRemoteFile` bekommt dieselbe Behandlung — dieselbe
-    // Gefahr gilt hier analog (ein manipulierter Server-Output könnte sonst
-    // versuchen, die KI zum automatischen Auslesen einer sensiblen Datei zu
-    // bewegen). `WriteRemoteFile` braucht keine explizite Nennung: bekommt
-    // laut `evaluate_action` ohnehin nie `AutoExec`.
-    if round >= 2
-        && matches!(
-            action,
-            AiAction::SuggestCommand { .. } | AiAction::ReadRemoteFile { .. }
-        )
+    // Vorgezogen (war vorher erst nach der Eskalationskette berechnet, s.
+    // Git-Historie) — die neue Spec-0039-Eskalation unten braucht die
+    // Server-Risiko-Achse bereits hier für die `Balanced`-Stufe.
+    // `risk_assessment_for_action` ist eine reine, zustandslose Funktion
+    // von `action` allein, der Zeitpunkt der Berechnung ändert also nichts
+    // an ihrem Ergebnis.
+    let risk_assessment = risk_assessment_for_action(&action);
+
+    // Unabhängiger Review-Pass (Spec 0039): ersetzt die bisherige SEC-03-
+    // Bremse aus Spec 0013. Die ALTE Logik: `round` war ein rein lokaler
+    // Schleifenzähler in `run_chat_turn`s `for round in 1..=MAX_AUTO_
+    // FOLLOWUP_ROUNDS`-Schleife, kein Feld auf `Session` — jeder Aufruf von
+    // `send_chat_message` (= jede neue Nutzer-Nachricht) rief `run_chat_
+    // turn` frisch auf, wodurch `round` wieder bei 1 begann. Die alte
+    // Eskalation (`round >= 2 && (SuggestCommand | ReadRemoteFile) &&
+    // AutoExec -> Confirm`) griff deshalb nur INNERHALB einer einzigen
+    // automatischen Fortsetzungskette, nicht über die ganze Sitzung hinweg
+    // — ein in Runde 1 eingeschleustes, aber erst bei der NÄCHSTEN
+    // Nutzer-Nachricht ausgelöstes Payload traf wieder auf `round == 1` und
+    // lief unter normaler, nicht eskalierter Policy (Spec 0039, Abschnitt
+    // 1, Punkt 4).
+    //
+    // `session.untrusted_content_ingested` ist stattdessen session-weit
+    // monoton: einmal gesetzt (durch `fence_untrusted`-Inhalt, der in den
+    // Kontext gelangt ist — Kommando-Ausgabe, SFTP-Dateiinhalt, Notizen im
+    // System-Prompt), bleibt es für den Rest der Sitzung gesetzt,
+    // unabhängig von Runden-/Nachrichtengrenzen. Die tatsächliche Schärfe
+    // danach ist pro Server über `Session::post_ingest_policy`
+    // konfigurierbar (Spec 0039, Abschnitt 5.1), statt global fest, damit
+    // Allow-Regeln nicht für jeden Server wertlos werden.
+    if session
+        .untrusted_content_ingested
+        .load(std::sync::atomic::Ordering::SeqCst)
         && matches!(decision, Decision::AutoExec)
     {
-        decision = Decision::Confirm {
-            reason: "Automatische Folgeaktion nach Server-Antwort erfordert Bestätigung"
-                .to_string(),
-            code: "FILTER_AUTO_CONTINUATION_REQUIRES_CONFIRM".to_string(),
+        let is_modifying_action = risk_assessment
+            .as_ref()
+            .is_some_and(|r| r.server_risk != RiskLevel::None);
+        let escalate = match session.post_ingest_policy {
+            PostIngestPolicy::Strict => true,
+            PostIngestPolicy::Balanced => is_modifying_action,
+            PostIngestPolicy::Standard => false,
         };
+        // `sftp-write`/`ProposeNoteUpdate`/MCP-Herkunft bleiben unabhängig
+        // von dieser Stufe eskalationspflichtig (Spec 0039, Abschnitt 5.1,
+        // letzter Absatz) — nicht als Sonderfall hier nötig: `evaluate_
+        // action` liefert für `WriteRemoteFile`/`ProposeNoteUpdate` nie
+        // `AutoExec`, und die MCP-Eskalation unten läuft unabhängig davon,
+        // ob dieser Zweig hier schon eskaliert hat.
+        if escalate {
+            decision = Decision::Confirm {
+                reason: "Serverinhalt wurde in dieser Sitzung bereits eingelesen – erfordert \
+                         Bestätigung"
+                    .to_string(),
+                code: "FILTER_POST_INGEST_REQUIRES_CONFIRM".to_string(),
+            };
+        }
     }
 
     // Spec 0028, Abschnitt 5: ein über MCP (externes Tool) ausgelöster
@@ -334,7 +367,6 @@ async fn handle_action_proposed(
         note_target_preview_for_action(&action, session, profile_store).await;
     let (previous_file_content, previous_file_size) =
         previous_file_content_for_action(&action, session).await;
-    let risk_assessment = risk_assessment_for_action(&action);
 
     emit_chat_action_proposed(
         emitter,
@@ -463,7 +495,6 @@ pub(crate) async fn handle_mcp_action_proposed(
         emitter,
         profile_store,
         action_confirmations,
-        1,
         ActionOrigin::Mcp { client_name },
     )
     .await
@@ -986,6 +1017,16 @@ async fn execute_suggested_command(
                     cancelled,
                 },
             });
+            // Spec 0039, Abschnitt 5: `CommandResult` wird erst beim
+            // tatsächlichen Versand an den KI-Provider über `ai::
+            // fence_untrusted` in <stdout>/<stderr>-Tags gepackt
+            // (`ai-providers::format_command_result`) — zählt aber schon
+            // hier als "Inhalt aus einer nicht vertrauenswürdigen Quelle
+            // in den KI-Kontext gelangt", s. `session::history_contains_
+            // untrusted_content`, das denselben Fall genauso behandelt.
+            session
+                .untrusted_content_ingested
+                .store(true, std::sync::atomic::Ordering::SeqCst);
             true
         }
         Err(err) => {
@@ -1331,6 +1372,10 @@ async fn execute_read_remote_file(
                     fence_untrusted(UntrustedKind::RemoteFile, &path, &content)
                 )),
             });
+            // Spec 0039, Abschnitt 5.
+            session
+                .untrusted_content_ingested
+                .store(true, std::sync::atomic::Ordering::SeqCst);
             true
         }
         Err(err) => {
@@ -2061,6 +2106,8 @@ mod tests {
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             risk_second_opinion_provider: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
+            untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
+            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
         }
     }
 
@@ -2195,7 +2242,6 @@ mod tests {
             &emitter,
             &profile_store,
             &confirmations,
-            1,
             ActionOrigin::Mcp {
                 client_name: Some("Claude Code".to_string()),
             },
@@ -2796,7 +2842,6 @@ mod tests {
             &emitter,
             &profile_store,
             &confirmations,
-            1,
             ActionOrigin::Internal,
         );
         let responder = deny_first_proposed_action(&emitter, &confirmations);
@@ -2816,6 +2861,293 @@ mod tests {
             proposed_payload["decision"]["Confirm"]["code"],
             serde_json::json!("FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM"),
             "ein hinterlegtes Sudo-Passwort darf nie ohne Bestätigung verbraucht werden — war: {proposed_payload}"
+        );
+    }
+
+    // --- Spec 0039, Abschnitt 5: PostIngestPolicy-Eskalation ---------------
+
+    /// Anders als `deny_first_proposed_action`/`respond_to_first_proposed_
+    /// action` (die blind das ERSTE `chat-action-proposed` auflösen und
+    /// dabei bei `AutoExec` — kein registriertes `confirm_rx`, s.
+    /// `ConfirmationRegistry::resolve` — mit `.unwrap()` paniken würden):
+    /// diese Variante wartet gezielt auf eine `Confirm`-Entscheidung und
+    /// lässt eine `AutoExec`/`Deny`-Aktion (die ohnehin ohne Bestätigung
+    /// durchläuft) einfach von selbst fertig werden. Nötig, weil die
+    /// PostIngestPolicy-Tests unten absichtlich beide Ausgänge prüfen.
+    async fn proposed_decision_code(
+        session: &Session,
+        action: AiAction,
+    ) -> (Decision, serde_json::Value) {
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let action_future = handle_action_proposed(
+            session,
+            session_id,
+            action,
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Internal,
+        );
+        tokio::pin!(action_future);
+
+        let responder = async {
+            loop {
+                let confirm_action_id = {
+                    let events = emitter.events.lock().unwrap();
+                    events.iter().find_map(|(name, payload)| {
+                        if name != "chat-action-proposed" {
+                            return None;
+                        }
+                        payload.get("decision").and_then(|d| d.get("Confirm"))?;
+                        Some(payload["actionId"].as_str().unwrap().to_string())
+                    })
+                };
+                if let Some(id) = confirm_action_id {
+                    let action_id: ActionId = id.parse().unwrap();
+                    let _ = confirmations.resolve(&action_id, ActionUserDecision::Deny);
+                    return;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::pin!(responder);
+
+        // `select!` statt `join!`: bei `AutoExec`/`Deny` wird `action_future`
+        // fertig, OHNE dass `responder` je eine `Confirm`-Entscheidung
+        // findet (die dortige Schleife würde sonst ewig weiterlaufen). Nur
+        // wenn `responder` zuerst fertig wird (eine `Confirm`-Entscheidung
+        // wurde gefunden und aufgelöst), muss `action_future` danach noch
+        // separat abgewartet werden, damit sein `rx.await` tatsächlich
+        // zurückkehrt.
+        tokio::select! {
+            _ = &mut action_future => {}
+            _ = &mut responder => {
+                action_future.await;
+            }
+        }
+
+        let events = emitter.events.lock().unwrap().clone();
+        let (_, proposed_payload) = events
+            .iter()
+            .find(|(name, _)| name == "chat-action-proposed")
+            .expect("chat-action-proposed muss gesendet worden sein")
+            .clone();
+        let decision: Decision = serde_json::from_value(proposed_payload["decision"].clone())
+            .expect("decision muss deserialisierbar sein");
+        (decision, proposed_payload)
+    }
+
+    /// Spec 0039, Abschnitt 7: `Strict` — nach einer gelesenen Ausgabe wird
+    /// auch eine reine Leseaktion, die per Allow-Regel `AutoExec` wäre, zu
+    /// `Confirm` eskaliert.
+    #[tokio::test]
+    async fn test_post_ingest_policy_strict_escalates_even_a_pure_read_action() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.post_ingest_policy = PostIngestPolicy::Strict;
+        session
+            .untrusted_content_ingested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        let (decision, payload) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: "cat /etc/hosts".to_string(),
+            },
+        )
+        .await;
+
+        assert!(
+            matches!(decision, Decision::Confirm { .. }),
+            "Strict muss auch eine reine Leseaktion eskalieren, war: {payload}"
+        );
+        assert_eq!(
+            payload["decision"]["Confirm"]["code"],
+            serde_json::json!("FILTER_POST_INGEST_REQUIRES_CONFIRM")
+        );
+    }
+
+    /// Spec 0039, Abschnitt 7: `Balanced` — nach einer gelesenen Ausgabe
+    /// bleibt eine reine Leseaktion `AutoExec`.
+    #[tokio::test]
+    async fn test_post_ingest_policy_balanced_leaves_pure_read_action_autoexec() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.post_ingest_policy = PostIngestPolicy::Balanced;
+        session
+            .untrusted_content_ingested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        let (decision, payload) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: "cat /etc/hosts".to_string(),
+            },
+        )
+        .await;
+
+        assert!(
+            matches!(decision, Decision::AutoExec),
+            "Balanced darf eine reine Leseaktion (Server-Risiko None) nicht eskalieren, war: {payload}"
+        );
+    }
+
+    /// Spec 0039, Abschnitt 7: `Balanced` — eine verändernde Aktion
+    /// (Server-Risiko ≠ `None`) wird zu `Confirm` eskaliert.
+    #[tokio::test]
+    async fn test_post_ingest_policy_balanced_escalates_modifying_action() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.post_ingest_policy = PostIngestPolicy::Balanced;
+        session
+            .untrusted_content_ingested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        let (decision, payload) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                // Server-Risiko Rot laut `server_risk_patterns()` (`*rm*-rf*`).
+                // Server-Risiko Gelb laut `server_risk_patterns()`
+                // (`systemctl*restart*`) — bewusst NICHT hart geblacklistet
+                // (anders als z. B. `rm -rf`), damit dieser Test wirklich
+                // die neue PostIngestPolicy-Eskalation prüft und nicht
+                // zufällig durch `FILTER_HARD_BLACKLIST` verdeckt wird.
+                command: "systemctl restart nginx".to_string(),
+            },
+        )
+        .await;
+
+        assert!(
+            matches!(decision, Decision::Confirm { .. }),
+            "Balanced muss eine verändernde Aktion (Server-Risiko ≠ None) eskalieren, war: {payload}"
+        );
+        assert_eq!(
+            payload["decision"]["Confirm"]["code"],
+            serde_json::json!("FILTER_POST_INGEST_REQUIRES_CONFIRM")
+        );
+    }
+
+    /// Spec 0039, Abschnitt 7: `Standard` — keine zusätzliche Eskalation
+    /// nach dem Einlesen, auch nicht für eine verändernde Aktion; Regeln
+    /// greifen unverändert.
+    #[tokio::test]
+    async fn test_post_ingest_policy_standard_does_not_escalate() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.post_ingest_policy = PostIngestPolicy::Standard;
+        session
+            .untrusted_content_ingested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        let (decision, payload) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                // Server-Risiko Gelb laut `server_risk_patterns()`
+                // (`systemctl*restart*`) — bewusst NICHT hart geblacklistet
+                // (anders als z. B. `rm -rf`), damit dieser Test wirklich
+                // die neue PostIngestPolicy-Eskalation prüft und nicht
+                // zufällig durch `FILTER_HARD_BLACKLIST` verdeckt wird.
+                command: "systemctl restart nginx".to_string(),
+            },
+        )
+        .await;
+
+        assert!(
+            matches!(decision, Decision::AutoExec),
+            "Standard darf trotz bereits eingelesenem Serverinhalt nicht zusätzlich eskalieren, war: {payload}"
+        );
+    }
+
+    /// Spec 0039, Abschnitt 6: weder eine `PostIngestPolicy`-Stufe noch das
+    /// Flag selbst kann eine `Deny`-Entscheidung abschwächen — auch nicht
+    /// unter `Strict`.
+    #[tokio::test]
+    async fn test_post_ingest_policy_never_downgrades_a_deny_decision() {
+        struct DenyLsPolicyStore;
+        #[async_trait]
+        impl PolicyStore for DenyLsPolicyStore {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("deny-ls".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob("ls *".to_string()),
+                    action: ssh_manager_core::filter::RuleAction::Deny,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                }]
+            }
+        }
+
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
+        session.post_ingest_policy = PostIngestPolicy::Strict;
+        session
+            .untrusted_content_ingested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        let (decision, payload) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+        )
+        .await;
+
+        assert!(
+            matches!(decision, Decision::Deny { .. }),
+            "eine Deny-Regel darf durch die Post-Ingest-Eskalation nie abgeschwächt werden, war: {payload}"
+        );
+    }
+
+    /// Spec 0039, Abschnitt 5: das Flag ist innerhalb einer Sitzung monoton
+    /// — einmal durch eine Kommando-Ausführung gesetzt, bleibt es auch für
+    /// eine völlig neue, danach vorgeschlagene Aktion gesetzt (simuliert
+    /// "nächste Nutzer-Nachricht", ohne dass irgendein Rundenzähler
+    /// zurückgesetzt wird).
+    #[tokio::test]
+    async fn test_untrusted_content_ingested_flag_is_monotonic_across_actions() {
+        let mut session = test_session(
+            vec![AiEvent::Done],
+            MockSshTransport::default().with_response("uptime", output("up 3 days")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.post_ingest_policy = PostIngestPolicy::Strict;
+        assert!(!session
+            .untrusted_content_ingested
+            .load(std::sync::atomic::Ordering::SeqCst));
+
+        // Erste Aktion: AutoExec (Flag noch nicht gesetzt), Ausführung
+        // setzt das Flag als Nebeneffekt (execute_suggested_command).
+        let (first_decision, _) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: "uptime".to_string(),
+            },
+        )
+        .await;
+        assert!(matches!(first_decision, Decision::AutoExec));
+        assert!(
+            session
+                .untrusted_content_ingested
+                .load(std::sync::atomic::Ordering::SeqCst),
+            "Ausführung eines Kommandos muss das Flag setzen"
+        );
+
+        // Zweite, unabhängige Aktion auf derselben Session: Flag ist immer
+        // noch gesetzt, Strict eskaliert entsprechend.
+        let (second_decision, payload) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: "cat /etc/hosts".to_string(),
+            },
+        )
+        .await;
+        assert!(
+            matches!(second_decision, Decision::Confirm { .. }),
+            "das Flag darf zwischen zwei Aktionen nicht verloren gehen, war: {payload}"
         );
     }
 
@@ -3433,19 +3765,32 @@ mod tests {
         assert_eq!(sanitize_uname_output(&too_long), None);
     }
 
-    /// T6: In Folgerunden (round >= 2) wird jede SuggestCommand-Aktion von AutoExec auf Confirm hochgestuft.
+    /// Ursprünglich "T6" (Spec 0013, SEC-03: jede Folgerunden-Aktion ab
+    /// Runde 2 wurde unbedingt hochgestuft, unabhängig vom Server-Inhalt
+    /// selbst — dieser rein rundenbasierte Mechanismus wurde durch Spec
+    /// 0039 ersetzt, s. `handle_action_proposed`-Kommentar an der
+    /// Eskalationsstelle). End-to-End-Gegenstück zu den `test_post_ingest_
+    /// policy_*`-Tests oben (die direkt über `handle_action_proposed`
+    /// gehen und das Flag manuell setzen): hier läuft ein echter
+    /// `run_chat_turn`, der das Flag erst durch die tatsächliche
+    /// Ausführung von Runde 1 setzt, bevor Runde 2 automatisch folgt.
     #[tokio::test]
-    async fn test_t6_server_output_injection_upgrades_followup_autoexec_to_confirm() {
+    async fn test_server_output_ingestion_escalates_followup_action_under_strict_policy() {
         let mut session = session_with_ai_provider(
             MockAiProvider::with_rounds(vec![
-                // Runde 1: Erste legitime Aktion
+                // Runde 1: Erste legitime Aktion — Ausführung setzt
+                // `untrusted_content_ingested`.
                 vec![
                     AiEvent::ActionProposed(AiAction::SuggestCommand {
                         command: "uptime".to_string(),
                     }),
                     AiEvent::Done,
                 ],
-                // Runde 2: Folgerunde schlägt weiteres Kommando vor (das laut Filter AutoExec wäre)
+                // Runde 2: Folgerunde schlägt ein weiteres, für sich
+                // genommen unauffälliges (kein Server-Risiko) Kommando vor
+                // — nur `Strict` eskaliert das noch, `Balanced` (Default)
+                // würde es laufen lassen (s. `test_post_ingest_policy_
+                // balanced_leaves_pure_read_action_autoexec`).
                 vec![
                     AiEvent::ActionProposed(AiAction::SuggestCommand {
                         command: "cat /etc/passwd".to_string(),
@@ -3456,6 +3801,7 @@ mod tests {
             MockSshTransport::default().with_response("uptime", output("up 3 days")),
         );
         session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.post_ingest_policy = PostIngestPolicy::Strict;
         let emitter = TestEmitter::default();
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
@@ -3502,16 +3848,17 @@ mod tests {
         // Runde 1: AutoExec
         assert_eq!(proposed_events[0]["decision"], "AutoExec");
 
-        // Runde 2: Zwingend Confirm
+        // Runde 2: Zwingend Confirm — `Strict` eskaliert, weil Runde 1
+        // bereits Serverinhalt eingelesen hat.
         let round2_decision = &proposed_events[1]["decision"];
         assert!(
             round2_decision.get("Confirm").is_some(),
             "Runde 2 muss Confirm sein, war {:?}",
             round2_decision
         );
-        let reason = round2_decision["Confirm"]["reason"].as_str().unwrap();
-        assert!(
-            reason.contains("Automatische Folgeaktion nach Server-Antwort erfordert Bestätigung")
+        assert_eq!(
+            round2_decision["Confirm"]["code"],
+            serde_json::json!("FILTER_POST_INGEST_REQUIRES_CONFIRM")
         );
     }
 
@@ -3747,6 +4094,7 @@ mod tests {
             auth: ssh_manager_core::profiles::AuthMethod::Agent,
             notes: String::new(),
             jump_host: None,
+            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             created_at: now,
             updated_at: now,
         };
@@ -5071,6 +5419,7 @@ mod tests {
             auth: ssh_manager_core::profiles::AuthMethod::Agent,
             notes: "Bisheriger Inhalt".to_string(),
             jump_host: None,
+            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             created_at: now,
             updated_at: now,
         };
@@ -5157,6 +5506,7 @@ mod tests {
             auth: ssh_manager_core::profiles::AuthMethod::Agent,
             notes: String::new(),
             jump_host: None,
+            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             created_at: now,
             updated_at: now,
         };
@@ -5171,6 +5521,7 @@ mod tests {
             auth: ssh_manager_core::profiles::AuthMethod::Agent,
             notes: String::new(),
             jump_host: None,
+            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             created_at: now,
             updated_at: now,
         };
@@ -5763,9 +6114,11 @@ mod tests {
                 }),
                 AiEvent::Done,
             ],
-            // Runde 2 (automatisch): SEC-03 stuft dieses SuggestCommand in
-            // Runde >= 2 immer auf Confirm hoch, unabhängig von der
-            // Filter-Engine — genau der hier gewollte offene Dialog.
+            // Runde 2 (automatisch): `PostIngestPolicy::Strict` (s. u.)
+            // stuft dieses SuggestCommand hoch, sobald in Runde 1
+            // Serverinhalt eingelesen wurde — genau der hier gewollte
+            // offene Dialog (Spec 0039, ersetzt die frühere SEC-03-
+            // Rundenzähler-Bremse aus Spec 0013).
             vec![
                 AiEvent::ActionProposed(AiAction::SuggestCommand {
                     command: "echo two".to_string(),
@@ -5788,6 +6141,12 @@ mod tests {
                 .with_response("echo two", output("two")),
         );
         session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        // Spec 0039: der Dialog in Runde 2 muss verlässlich auftauchen,
+        // damit "Automatik stoppen" mitten im offenen Dialog überhaupt
+        // testbar ist — `Strict` eskaliert jede Aktion, sobald das Flag
+        // (durch die Ausführung von "echo one" in Runde 1) gesetzt ist,
+        // unabhängig davon, ob "echo two" selbst als "verändernd" gilt.
+        session.post_ingest_policy = PostIngestPolicy::Strict;
         let emitter = TestEmitter::default();
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
@@ -5899,10 +6258,11 @@ mod tests {
                     }),
                     AiEvent::Done,
                 ],
-                // Runde 2 (automatisch, Spec 0021): sowohl SEC-03 (Runde >= 2)
-                // als auch die Sudo-Passwort-Eskalation stufen dieses
-                // SuggestCommand auf Confirm hoch — zweites sudo-Kommando,
-                // über den Responder unten bestätigt.
+                // Runde 2 (automatisch, Spec 0021): die Sudo-Passwort-
+                // Eskalation stuft auch dieses SuggestCommand auf Confirm
+                // hoch (unabhängig von Runde/PostIngestPolicy, s. u.) —
+                // zweites sudo-Kommando, über den Responder unten
+                // bestätigt.
                 vec![
                     AiEvent::ActionProposed(AiAction::SuggestCommand {
                         command: "sudo systemctl status nginx".to_string(),
@@ -5931,10 +6291,9 @@ mod tests {
             &confirmations,
         );
         let responder = async {
-            // Beide Kommandos (Runde 1 wegen der Sudo-Passwort-Eskalation,
-            // Runde 2 zusätzlich wegen SEC-03) verlangen jetzt Confirm —
-            // hier werden beide der Reihe nach bestätigt, statt nur das
-            // erste gefundene.
+            // Beide Kommandos verlangen wegen der Sudo-Passwort-Eskalation
+            // Confirm (unabhängig von Runde/PostIngestPolicy) — hier werden
+            // beide der Reihe nach bestätigt, statt nur das erste gefundene.
             let mut resolved: std::collections::HashSet<String> = std::collections::HashSet::new();
             loop {
                 let confirm_action_id = {

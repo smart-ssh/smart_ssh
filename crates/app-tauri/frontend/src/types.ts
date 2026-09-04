@@ -12,6 +12,11 @@ export type ProviderType =
 
 export type AuthMethodKind = "password" | "private_key" | "agent" | "certificate";
 
+/** Spec 0039, Abschnitt 5.1 — steuert NICHT das Fencing selbst (in jeder
+ * Stufe aktiv), nur ob/wann zusätzlich auf Bestätigung eskaliert wird,
+ * nachdem in der Sitzung Serverinhalt eingelesen wurde. */
+export type PostIngestPolicy = "strict" | "balanced" | "standard";
+
 export interface ServerDto {
   id: string;
   name: string;
@@ -28,6 +33,7 @@ export interface ServerDto {
   hasSudoPassword: boolean;
   /** Spec 0032, Abschnitt 3: `true` genau für den lokalen Pseudo-Server. */
   isLocal: boolean;
+  postIngestPolicy: PostIngestPolicy;
 }
 
 export interface AiProviderConfigDto {
@@ -322,6 +328,7 @@ export interface ServerInput {
    * "kein Sudo-Passwort" (bei `create`). Entfernen eines bereits gesetzten
    * Werts läuft über `clearServerSudoPassword`, nicht über dieses Feld. */
   sudoPassword: string | null;
+  postIngestPolicy: PostIngestPolicy;
 }
 
 export type AuthMethodInput =

@@ -18,5 +18,5 @@ pub use notes::{effective_notes, effective_notes_sections, record_revision};
 pub use store::{ProfileError, ProfileResult, ProfileStore};
 pub use types::{
     AiAction, AuthMethod, CredentialRef, Group, GroupId, NoteEditor, NoteRevision, NoteTarget,
-    NoteTargetSelector, Server,
+    NoteTargetSelector, PostIngestPolicy, Server,
 };

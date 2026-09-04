@@ -14,7 +14,7 @@ use secrecy::{ExposeSecret, SecretString};
 use super::*;
 use crate::profiles::{
     AuthMethod, CredentialError, CredentialRef, CredentialResult, CredentialStore, Group, GroupId,
-    NoteRevision, ProfileError, ProfileResult, ProfileStore, Server,
+    NoteRevision, PostIngestPolicy, ProfileError, ProfileResult, ProfileStore, Server,
 };
 use crate::shared::ServerId;
 
@@ -229,6 +229,7 @@ fn make_server(name: &str, jump_host: Option<ServerId>) -> Server {
         auth: AuthMethod::Agent,
         notes: String::new(),
         jump_host,
+        post_ingest_policy: PostIngestPolicy::default(),
         created_at: now,
         updated_at: now,
     }

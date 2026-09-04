@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use ssh_manager_core::profiles::{AuthMethod, ProfileError};
+use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileError};
 use uuid::Uuid;
 
 /// `auth_method`-Spalte (Spec 0004 Abschnitt 4): JSON-serialisiertes
@@ -16,6 +16,33 @@ pub(crate) fn auth_method_from_json(json: &str) -> Result<AuthMethod, ProfileErr
     serde_json::from_str(json).map_err(|e| {
         ProfileError::Backend(format!("AuthMethod-Deserialisierung fehlgeschlagen: {e}"))
     })
+}
+
+/// `post_ingest_policy`-Spalte (Spec 0039, Abschnitt 5.1): ein einfacher
+/// klein geschriebener Text-Diskriminant (`'strict'`/`'balanced'`/
+/// `'standard'`, s. Migration 0006) statt JSON — anders als `AuthMethod`
+/// hat dieser Enum keine Varianten-Daten, ein zusätzliches Quoting-/
+/// Escaping-Schicht über `serde_json` brächte hier keinen Vorteil und
+/// würde nur vom lesbaren Migrations-Default (`DEFAULT 'balanced'` ohne
+/// Anführungszeichen) abweichen.
+pub(crate) fn post_ingest_policy_to_text(policy: PostIngestPolicy) -> &'static str {
+    match policy {
+        PostIngestPolicy::Strict => "strict",
+        PostIngestPolicy::Balanced => "balanced",
+        PostIngestPolicy::Standard => "standard",
+    }
+}
+
+/// Fail-safe auf `Balanced` bei einem unbekannten/korrupten Wert (z. B.
+/// eine künftige, dieser Version noch unbekannte Stufe) statt eines
+/// harten Fehlers — dieselbe Fail-safe-Haltung wie der Spec-0039-Default
+/// selbst: lieber die geschützte Mitte als gar keine Policy laden können.
+pub(crate) fn post_ingest_policy_from_text(raw: &str) -> PostIngestPolicy {
+    match raw {
+        "strict" => PostIngestPolicy::Strict,
+        "standard" => PostIngestPolicy::Standard,
+        _ => PostIngestPolicy::Balanced,
+    }
 }
 
 /// Alle `id`/`*_id`-Spalten sind `TEXT` (hyphenierte UUID-Strings, siehe

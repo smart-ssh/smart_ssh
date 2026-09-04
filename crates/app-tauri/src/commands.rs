@@ -44,7 +44,9 @@ use crate::server_credentials::{
     clear_sudo_password, delete_auth_method_secrets, resolve_auth_method, resolve_sudo_password,
     sudo_password_credential_ref,
 };
-use crate::session::{spawn_terminal_actor, Session, TerminalCommand};
+use crate::session::{
+    history_contains_untrusted_content, spawn_terminal_actor, Session, TerminalCommand,
+};
 use crate::state::{ActionId, AppState, SessionId};
 
 /// `group_id` erweitert die Spec-0007-Signatur um den in Spec 0008
@@ -475,7 +477,7 @@ pub(crate) async fn connect_session(
         None
     };
 
-    let system_context = build_session_system_context(
+    let (system_context, notes_present) = build_session_system_context(
         app,
         &server.name,
         &server_id,
@@ -518,6 +520,17 @@ pub(crate) async fn connect_session(
     let risk_second_opinion_provider =
         crate::risk_second_opinion::resolve_second_opinion_provider(app, state).await;
 
+    // Spec 0039, Abschnitt 5.1: einmalig übernommen, wie `risk_second_
+    // opinion_provider` oben.
+    let post_ingest_policy = server.post_ingest_policy;
+    // Spec 0039, Abschnitt 5: der System-Prompt oben enthält bereits
+    // gefencte Notizen, falls vorhanden — die Sitzung startet dann mit
+    // gesetztem Flag, nicht erst nach der ersten Kommando-Ausführung.
+    // `history_contains_untrusted_content(&[])` ist heute immer `false`
+    // (frische Sitzung, s. dortiger Kommentar), bereitet aber Spec 0034
+    // (Session Resume mit vorbelasteter Historie) vor.
+    let starts_with_untrusted_content = notes_present || history_contains_untrusted_content(&[]);
+
     let session = Arc::new(Session {
         transport: tokio::sync::Mutex::new(transport),
         ai_provider,
@@ -540,6 +553,10 @@ pub(crate) async fn connect_session(
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         risk_second_opinion_provider,
         running_command_cancellations: state.running_command_cancellations.clone(),
+        untrusted_content_ingested: std::sync::atomic::AtomicBool::new(
+            starts_with_untrusted_content,
+        ),
+        post_ingest_policy,
     });
     state.sessions.insert(session_id, session);
 
@@ -641,6 +658,13 @@ mod connect_session_gate_tests {
     }
 }
 
+/// Gibt neben dem fertigen System-Prompt auch zurück, ob dieser gefencte
+/// Notizen enthält (Spec 0039, Abschnitt 5) — der System-Prompt wird bei
+/// **jeder** Nutzer-Nachricht neu gebaut und in jede KI-Anfrage
+/// eingebettet; enthält er Notizen, ist damit ab diesem Zeitpunkt bereits
+/// Inhalt aus einer nicht vertrauenswürdigen Quelle in den KI-Kontext
+/// gelangt. Der Aufrufer nutzt das, um `Session::untrusted_content_
+/// ingested` entsprechend zu setzen (monoton, s. dortiger Kommentar).
 async fn build_session_system_context<R: tauri::Runtime>(
     app: &AppHandle<R>,
     server_name: &str,
@@ -649,7 +673,7 @@ async fn build_session_system_context<R: tauri::Runtime>(
     remote_os_info: Option<&str>,
     profile_store: &dyn ProfileStore,
     policy_store: &persistence_sqlite::SqlitePolicyStore,
-) -> String {
+) -> (String, bool) {
     // Spec 0032: der lokale Pseudo-Server hat keine `servers`-Zeile —
     // `profile_store.get_server` schlägt für ihn immer fehl, wodurch diese
     // Funktion sonst dauerhaft mit leeren Notizen liefe, obwohl über
@@ -745,7 +769,7 @@ async fn build_session_system_context<R: tauri::Runtime>(
         context.push_str(&format!("\n\n## Remote-System\n{os}"));
     }
 
-    context
+    (context, !note_sections.is_empty())
 }
 
 #[tauri::command]
@@ -878,7 +902,7 @@ pub async fn send_chat_message(
             .map(|pos| ctx.system_context[pos + "## Remote-System\n".len()..].to_string())
     };
 
-    let updated_system_context = build_session_system_context(
+    let (updated_system_context, notes_present) = build_session_system_context(
         &app,
         &server_name,
         &session.server_id,
@@ -888,6 +912,16 @@ pub async fn send_chat_message(
         &state.policy_store,
     )
     .await;
+    // Spec 0039, Abschnitt 5: der System-Prompt wird bei JEDER
+    // Nutzer-Nachricht neu gebaut — enthält er gefencte Notizen (auch
+    // wenn er das schon in einer früheren Nachricht tat), muss das Flag
+    // spätestens jetzt gesetzt sein. Monoton: `store(true, ...)` nur bei
+    // Bedarf, ein bereits gesetztes Flag wird nie zurückgesetzt.
+    if notes_present {
+        session
+            .untrusted_content_ingested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
 
     {
         let mut ctx = session.context.lock().await;
@@ -1190,6 +1224,7 @@ pub async fn create_server(
         auth,
         notes: String::new(),
         jump_host: input.jump_host,
+        post_ingest_policy: input.post_ingest_policy,
         created_at: now,
         updated_at: now,
     };
@@ -1237,6 +1272,7 @@ pub async fn update_server(
         auth,
         notes: existing.notes,
         jump_host: input.jump_host,
+        post_ingest_policy: input.post_ingest_policy,
         created_at: existing.created_at,
         updated_at: Utc::now(),
     };
@@ -1982,7 +2018,7 @@ mod local_server_tests {
     //! Pseudo-Server immer als erstes Element, unabhängig vom
     //! `group_id`-Filter — s. `list_servers_impl`.
 
-    use ssh_manager_core::profiles::{AuthMethod, GroupId, Server};
+    use ssh_manager_core::profiles::{AuthMethod, GroupId, PostIngestPolicy, Server};
     use ssh_manager_core::shared::ServerId;
 
     use crate::first_run_notice::test_support::{lock_async, test_app};
@@ -2004,6 +2040,7 @@ mod local_server_tests {
             auth: AuthMethod::Agent,
             notes: String::new(),
             jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
             created_at: now,
             updated_at: now,
         }
@@ -2065,7 +2102,7 @@ mod local_server_tests {
         .expect("frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein")
         .policy_store();
 
-        let context = build_session_system_context(
+        let (context, notes_present) = build_session_system_context(
             &handle,
             "Localhost",
             &LOCAL_SERVER_ID,
@@ -2080,6 +2117,7 @@ mod local_server_tests {
             context.contains("Docker Compose unter ~/services"),
             "Notizen des lokalen Pseudo-Servers müssen im System-Kontext landen, war: {context}"
         );
+        assert!(notes_present);
 
         crate::local_server::save_notes(&handle, "").unwrap();
     }
@@ -2111,7 +2149,7 @@ mod local_server_tests {
         let app = test_app();
         let handle = app.handle().clone();
 
-        let context = build_session_system_context(
+        let (context, notes_present) = build_session_system_context(
             &handle,
             "web-01",
             &server_id,
@@ -2127,6 +2165,11 @@ mod local_server_tests {
             "Notiz muss gefenced im System-Prompt landen, war: {context}"
         );
         assert!(context.contains("<source>Server \"web-01\"</source>"));
+        assert!(
+            notes_present,
+            "notes_present muss true sein, damit Session::untrusted_content_ingested korrekt \
+             initialisiert wird (Spec 0039, Abschnitt 5)"
+        );
         assert_eq!(
             context.matches("</server_note>").count(),
             1,

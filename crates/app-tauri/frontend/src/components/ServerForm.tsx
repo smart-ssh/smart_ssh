@@ -21,6 +21,7 @@ import type {
   AuthMethodKind,
   GroupDto,
   HostKeyInfo,
+  PostIngestPolicy,
   ServerDto,
   ServerInput,
   TestConnectionResult,
@@ -135,6 +136,7 @@ export function ServerForm({
   const [sudoPassword, setSudoPassword] = useState("");
   const [hasSudoPassword, setHasSudoPassword] = useState(false);
   const [clearingSudoPassword, setClearingSudoPassword] = useState(false);
+  const [postIngestPolicy, setPostIngestPolicy] = useState<PostIngestPolicy>("balanced");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -164,6 +166,7 @@ export function ServerForm({
       setAuth({ kind: "password", value: "" });
       setSudoPassword("");
       setHasSudoPassword(false);
+      setPostIngestPolicy("balanced");
       return;
     }
     getServer(serverId)
@@ -180,6 +183,7 @@ export function ServerForm({
         setSudoPassword("");
         setHasSudoPassword(server.hasSudoPassword);
         setLocalNotes(server.notes);
+        setPostIngestPolicy(server.postIngestPolicy);
       })
       .catch((err) => setError(commandErrorMessage(err)));
   }, [serverId, defaultGroupId]);
@@ -201,6 +205,7 @@ export function ServerForm({
     auth: toAuthMethodInput(auth, isCreate),
     jumpHost,
     sudoPassword: sudoPassword === "" ? null : sudoPassword,
+    postIngestPolicy,
   });
 
   const handleSubmit = async (e: FormEvent) => {
@@ -688,6 +693,34 @@ export function ServerForm({
               {clearingSudoPassword ? t("common.removing") : t("serverForm.removeSudoPassword")}
             </button>
           )}
+        </fieldset>
+
+        <fieldset className="rounded border border-slate-700 p-3">
+          <legend className="px-1 text-sm text-slate-300">
+            {t("serverForm.postIngestFieldset")}
+          </legend>
+          <p className="mb-2 text-xs text-slate-500">{t("serverForm.postIngestHint")}</p>
+          <div className="space-y-2">
+            {(["strict", "balanced", "standard"] as PostIngestPolicy[]).map((option) => (
+              <label key={option} className="flex items-start gap-2 text-sm text-slate-300">
+                <input
+                  type="radio"
+                  name="postIngestPolicy"
+                  value={option}
+                  checked={postIngestPolicy === option}
+                  onChange={() => setPostIngestPolicy(option)}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="font-medium">{t(`serverForm.postIngest.${option}.label`)}</span>
+                  <br />
+                  <span className="text-xs text-slate-500">
+                    {t(`serverForm.postIngest.${option}.description`)}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
         </fieldset>
 
         {error && <p className="text-sm text-red-400">{error}</p>}

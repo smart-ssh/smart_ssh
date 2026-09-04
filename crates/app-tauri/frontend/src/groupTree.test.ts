@@ -28,6 +28,7 @@ function server(
     notes: "",
     hasSudoPassword: false,
     isLocal: false,
+    postIngestPolicy: "balanced",
     ...overrides,
   };
 }

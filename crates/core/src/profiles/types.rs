@@ -60,8 +60,40 @@ pub struct Server {
     pub notes: String,
     /// Bastion/Jump-Host-Verkettung.
     pub jump_host: Option<ServerId>,
+    /// Zusätzliche Eskalation, nachdem in dieser Sitzung Serverinhalt
+    /// eingelesen wurde (Spec 0039, Abschnitt 5.1) — steuert NICHT das
+    /// Fencing selbst (das ist in jeder Stufe aktiv), nur ob/wann danach
+    /// zusätzlich auf `Confirm` eskaliert wird.
+    pub post_ingest_policy: PostIngestPolicy,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+/// Spec 0039, Abschnitt 5.1: steuert ausschließlich die zusätzliche
+/// Eskalation, nachdem `Session::untrusted_content_ingested == true` ist
+/// — das Fencing (Abschnitt 3/4) ist in **allen** Stufen aktiv und nicht
+/// abschaltbar. Bewusste Benennung ohne "safe"/"unsafe" — keine Stufe soll
+/// implizieren, die anderen seien unsicher.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PostIngestPolicy {
+    /// Sobald Serverinhalt gelesen wurde, wird JEDE weitere Aktion
+    /// bestätigt.
+    Strict,
+    /// Nur verändernde/schreibende Aktionen werden eskaliert; reine
+    /// Leseoperationen laufen weiter gemäß Regeln (auch `AutoExec`).
+    Balanced,
+    /// Keine zusätzliche Eskalation; Regeln greifen wie gewohnt. Vertraut
+    /// allein auf Fencing (Abschnitt 3/4) plus die reguläre Filter-Engine.
+    Standard,
+}
+
+impl Default for PostIngestPolicy {
+    /// Ein neuer Server bekommt automatisch den geschützten Fall; wer die
+    /// volle Allow-Regel-Bequemlichkeit will, wählt `Standard` bewusst.
+    fn default() -> Self {
+        PostIngestPolicy::Balanced
+    }
 }
 
 /// Authentifizierungsmethode eines Servers (Spec 0003, Abschnitt 3).

@@ -18,6 +18,7 @@ use tauri_plugin_store::StoreExt;
 use uuid::Uuid;
 
 use ssh_manager_core::profiles::AuthMethod;
+use ssh_manager_core::profiles::PostIngestPolicy;
 use ssh_manager_core::profiles::Server;
 use ssh_manager_core::shared::ServerId;
 
@@ -86,6 +87,10 @@ pub fn synthetic_server<R: Runtime>(app: &AppHandle<R>) -> Server {
         auth: AuthMethod::Agent,
         notes: load_notes(app),
         jump_host: None,
+        // Der lokale Pseudo-Server hat kein Einstellungs-UI für diese Stufe
+        // (keine `servers`-Zeile, s. Moduldoc) — Default wie jeder neue
+        // Server.
+        post_ingest_policy: PostIngestPolicy::default(),
         created_at: now,
         updated_at: now,
     }

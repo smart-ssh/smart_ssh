@@ -13,7 +13,8 @@ use ssh_manager_core::filter::{
     Decision, EvalContext, EvaluationTrace, Pattern, RuleAction, RuleId, Scope,
 };
 use ssh_manager_core::profiles::{
-    AuthMethod, CredentialRef, CredentialStore, Group, GroupId, NoteEditor, NoteRevision, Server,
+    AuthMethod, CredentialRef, CredentialStore, Group, GroupId, NoteEditor, NoteRevision,
+    PostIngestPolicy, Server,
 };
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::RemoteEntry;
@@ -56,6 +57,8 @@ pub struct ServerDto {
     /// Host/Port/Nutzername/Auth/Jump-Host/Löschen/Verbindungstest
     /// ausgeblendet werden.
     pub is_local: bool,
+    /// Spec 0039, Abschnitt 5.1.
+    pub post_ingest_policy: PostIngestPolicy,
 }
 
 impl ServerDto {
@@ -75,6 +78,7 @@ impl ServerDto {
                 .get(&sudo_password_credential_ref(server.id))
                 .is_ok(),
             is_local: crate::local_server::is_local(server.id),
+            post_ingest_policy: server.post_ingest_policy,
         }
     }
 }
@@ -315,6 +319,11 @@ pub struct ServerInput {
     /// bereits gesetzten Werts läuft über den eigenen
     /// `clear_server_sudo_password`-Befehl, nicht über dieses Feld.
     pub sudo_password: Option<String>,
+    /// Spec 0039, Abschnitt 5.1. `#[serde(default)]`: fehlt das Feld (z. B.
+    /// ein älterer Frontend-Build), gilt derselbe Default wie beim
+    /// Migrations-Spaltendefault (`Balanced`), kein harter Fehler.
+    #[serde(default)]
+    pub post_ingest_policy: PostIngestPolicy,
 }
 
 /// Spec 0008, Abschnitt 4. `#[serde(tag = "kind", rename_all =

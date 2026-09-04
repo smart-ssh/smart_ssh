@@ -310,6 +310,7 @@ fn resolve_secret(
 
 #[cfg(test)]
 mod tests {
+    use ssh_manager_core::profiles::PostIngestPolicy;
     use ssh_manager_core::ssh::{CommandOutput, HostKeyDecision, InteractiveShell, PtySize};
 
     use super::*;
@@ -408,6 +409,7 @@ mod tests {
             },
             jump_host: None,
             sudo_password: None,
+            post_ingest_policy: PostIngestPolicy::default(),
         }
     }
 
@@ -582,6 +584,7 @@ mod tests {
             },
             notes: String::new(),
             jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
             created_at: now,
             updated_at: now,
         };
@@ -677,6 +680,7 @@ mod tests {
             },
             notes: String::new(),
             jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
             created_at: now,
             updated_at: now,
         };
@@ -697,6 +701,7 @@ mod tests {
             },
             jump_host: Some(jump_id),
             sudo_password: None,
+            post_ingest_policy: PostIngestPolicy::default(),
         };
 
         let result = test_connection_with_timeout(

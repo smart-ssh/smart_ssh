@@ -26,8 +26,8 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use chrono::Utc;
 use ssh_manager_core::profiles::{
-    effective_notes, AuthMethod, Group, GroupId, NoteRevision, NoteTarget, ProfileError,
-    ProfileResult, ProfileStore, Server,
+    effective_notes, AuthMethod, Group, GroupId, NoteRevision, NoteTarget, PostIngestPolicy,
+    ProfileError, ProfileResult, ProfileStore, Server,
 };
 use ssh_manager_core::shared::ServerId;
 
@@ -207,6 +207,7 @@ async fn main() {
                 Config liegt in /opt/lamp/conf."
             .to_string(),
         jump_host: None,
+        post_ingest_policy: PostIngestPolicy::default(),
         created_at: now,
         updated_at: now,
     };

@@ -1,0 +1,13 @@
+-- Spec 0039, Abschnitt 5.1: zusätzliche Eskalation pro Server, nachdem in
+-- der laufenden Sitzung Serverinhalt (Kommando-Ausgabe, Dateiinhalt,
+-- Notiz) eingelesen wurde. Steuert NICHT das Fencing selbst (Abschnitt
+-- 3/4, in jeder Stufe aktiv) — nur ob/wann danach zusätzlich auf
+-- `Confirm` eskaliert wird.
+--
+-- `NOT NULL DEFAULT 'balanced'` statt NULL-fähig, aus demselben Grund wie
+-- `extra_headers` in Migration 0005: vermeidet ein drittes
+-- Unterscheidungsmerkmal (NULL vs. expliziter Wert) für denselben Fall
+-- "keine besondere Einstellung getroffen" — und 'balanced' ist ohnehin
+-- der in Spec 0039 vorgeschriebene Default für neue UND bestehende
+-- Server.
+ALTER TABLE servers ADD COLUMN post_ingest_policy TEXT NOT NULL DEFAULT 'balanced';

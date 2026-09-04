@@ -18,7 +18,7 @@
 use chrono::Utc;
 
 use persistence_sqlite::{default_db_path, SqliteProfileStore};
-use ssh_manager_core::profiles::{AuthMethod, ProfileStore, Server};
+use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 
 #[tokio::main]
@@ -49,6 +49,7 @@ async fn main() {
         auth: AuthMethod::Agent,
         notes: String::new(),
         jump_host: None,
+        post_ingest_policy: PostIngestPolicy::default(),
         created_at: now,
         updated_at: now,
     };

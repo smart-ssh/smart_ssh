@@ -88,6 +88,22 @@
     "sudoUnchanged": "(empty = unchanged)",
     "sudoUnchangedStored": "(empty = unchanged, currently stored)",
     "removeSudoPassword": "Remove stored sudo password",
+    "postIngestFieldset": "Confirmation After Server Access",
+    "postIngestHint": "Controls whether and when extra confirmation is required after server content (command output, files, notes) has been read during this session. Regardless of this setting, such content is always clearly marked as data, never treated as an instruction.",
+    "postIngest": {
+      "strict": {
+        "label": "Strict",
+        "description": "Once server content has been read during the session, every further action requires confirmation."
+      },
+      "balanced": {
+        "label": "Balanced",
+        "description": "Only actions that change something require extra confirmation afterward; plain read actions keep following the existing rules. Selected automatically for new servers."
+      },
+      "standard": {
+        "label": "Standard",
+        "description": "No extra confirmation after reading — only the existing rules apply."
+      }
+    },
     "testConnection": "Test Connection",
     "contextPreview": "Context Preview",
     "noContext": "(no context)",
@@ -265,7 +281,7 @@
     "FILTER_RULE_DENY": "Blocked by a rule",
     "FILTER_RULE_CONFIRM": "Rule requires confirmation",
     "FILTER_NO_RULE_MATCHED": "No matching rule found",
-    "FILTER_AUTO_CONTINUATION_REQUIRES_CONFIRM": "Automatic follow-up action requires confirmation",
+    "FILTER_POST_INGEST_REQUIRES_CONFIRM": "Server content was already read during this session – requires confirmation",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Requested via MCP – always requires confirmation",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Uses the stored sudo password – always requires confirmation",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Note updates always require confirmation",

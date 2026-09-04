@@ -96,7 +96,7 @@ pub async fn compute_delete_group_result(
 mod tests {
     use chrono::Utc;
 
-    use ssh_manager_core::profiles::{AuthMethod, Group, Server};
+    use ssh_manager_core::profiles::{AuthMethod, Group, PostIngestPolicy, Server};
     use ssh_manager_core::shared::ServerId;
 
     use super::*;
@@ -127,6 +127,7 @@ mod tests {
             auth: AuthMethod::Agent,
             notes: String::new(),
             jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
             created_at: now,
             updated_at: now,
         }

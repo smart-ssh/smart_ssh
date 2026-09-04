@@ -88,6 +88,22 @@
     "sudoUnchanged": "(leer = unverändert)",
     "sudoUnchangedStored": "(leer = unverändert, aktuell hinterlegt)",
     "removeSudoPassword": "Hinterlegtes Sudo-Passwort entfernen",
+    "postIngestFieldset": "Bestätigung nach Serverzugriff",
+    "postIngestHint": "Legt fest, ob und wann nach dem Einlesen von Serverinhalt (Kommando-Ausgabe, Dateien, Notizen) in dieser Sitzung zusätzlich nachgefragt wird. Unabhängig davon wird solcher Inhalt immer klar als Daten gekennzeichnet, nie als Anweisung behandelt.",
+    "postIngest": {
+      "strict": {
+        "label": "Streng",
+        "description": "Sobald in der Sitzung Serverinhalt eingelesen wurde, wird jede weitere Aktion bestätigt."
+      },
+      "balanced": {
+        "label": "Ausgewogen",
+        "description": "Nur verändernde Aktionen werden danach zusätzlich bestätigt, reine Leseaktionen laufen weiter nach den bestehenden Regeln. Für neue Server automatisch ausgewählt."
+      },
+      "standard": {
+        "label": "Standard",
+        "description": "Keine zusätzliche Bestätigung nach dem Einlesen — es gelten ausschließlich die bestehenden Regeln."
+      }
+    },
     "testConnection": "Verbindung testen",
     "contextPreview": "Kontext-Vorschau",
     "noContext": "(kein Kontext)",
@@ -265,7 +281,7 @@
     "FILTER_RULE_DENY": "Durch eine Regel blockiert",
     "FILTER_RULE_CONFIRM": "Regel erfordert Bestätigung",
     "FILTER_NO_RULE_MATCHED": "Keine passende Regel gefunden",
-    "FILTER_AUTO_CONTINUATION_REQUIRES_CONFIRM": "Automatische Folgeaktion erfordert Bestätigung",
+    "FILTER_POST_INGEST_REQUIRES_CONFIRM": "Serverinhalt wurde in dieser Sitzung bereits eingelesen – erfordert Bestätigung",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Über MCP angefragt – erfordert immer Bestätigung",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Verwendet das hinterlegte Sudo-Passwort – erfordert immer Bestätigung",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notiz-Aktualisierungen erfordern immer eine Bestätigung",

@@ -8,8 +8,8 @@ use sqlx::sqlite::SqliteConnectOptions;
 use uuid::Uuid;
 
 use ssh_manager_core::profiles::{
-    AuthMethod, Group, GroupId, NoteEditor, NoteRevision, NoteTarget, ProfileError, ProfileStore,
-    Server,
+    AuthMethod, Group, GroupId, NoteEditor, NoteRevision, NoteTarget, PostIngestPolicy,
+    ProfileError, ProfileStore, Server,
 };
 use ssh_manager_core::shared::ServerId;
 
@@ -47,6 +47,7 @@ fn make_server(name: &str, group_id: Option<GroupId>, tags: Vec<String>) -> Serv
         auth: AuthMethod::Agent,
         notes: String::new(),
         jump_host: None,
+        post_ingest_policy: PostIngestPolicy::default(),
         created_at: now,
         updated_at: now,
     }
