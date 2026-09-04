@@ -11,8 +11,8 @@ The application version is maintained in **three synchronized locations**:
 | Component | File | JSON / TOML Path |
 | :--- | :--- | :--- |
 | **Rust Workspace & Crates** | [`Cargo.toml`](./Cargo.toml) | `[workspace.package] -> version = "0.1.0"` |
-| **Tauri Desktop App** | [`crates/app-tauri/tauri.conf.json`](./crates/app-tauri/tauri.conf.json) | `"version": "0.1.0"` |
-| **Frontend Web App** | [`crates/app-tauri/frontend/package.json`](./crates/app-tauri/frontend/package.json) | `"version": "0.1.0"` |
+| **Tauri Desktop App** | [`apps/smart-ssh-community/tauri.conf.json`](./apps/smart-ssh-community/tauri.conf.json) | `"version": "0.1.0"` |
+| **Frontend Web App** | [`apps/smart-ssh-community/frontend/package.json`](./apps/smart-ssh-community/frontend/package.json) | `"version": "0.1.0"` |
 
 All individual Rust crates in `crates/*` automatically inherit their version from `[workspace.package]` via `version.workspace = true`.
 
@@ -25,12 +25,12 @@ Follow these steps to bump the version and trigger automated multi-platform rele
 ### Step 1: Update Version Numbers
 Update the version string (e.g. from `0.1.0` to `0.2.0`) in all three files:
 1. `Cargo.toml`
-2. `crates/app-tauri/tauri.conf.json`
-3. `crates/app-tauri/frontend/package.json`
+2. `apps/smart-ssh-community/tauri.conf.json`
+3. `apps/smart-ssh-community/frontend/package.json`
 
 ### Step 2: Commit Changes
 ```bash
-git add Cargo.toml crates/app-tauri/tauri.conf.json crates/app-tauri/frontend/package.json
+git add Cargo.toml apps/smart-ssh-community/tauri.conf.json apps/smart-ssh-community/frontend/package.json
 git commit -m "chore: bump version to 0.2.0"
 ```
 
@@ -73,7 +73,7 @@ To produce release executables and installer bundles locally:
 ### Build Commands
 ```bash
 # 1. Install frontend dependencies
-cd crates/app-tauri/frontend
+cd apps/smart-ssh-community/frontend
 npm install
 
 # 2. Build the Tauri desktop application and bundles
@@ -173,18 +173,18 @@ the actual file lives outside the repo at `~/build/smart-ssh-signing.env`:
 
 ```bash
 source ~/build/smart-ssh-signing.env
-cd crates/app-tauri/frontend && npm install && cd ..
+cd apps/smart-ssh-community/frontend && npm install && cd ..
 cargo tauri build
 ```
 
-(`cargo tauri build` must run from `crates/app-tauri` — that's where
+(`cargo tauri build` must run from `apps/smart-ssh-community` — that's where
 `tauri.conf.json` and the `Cargo.toml` `tauri` dependency live, same as
 `./scripts/tauri-dev.sh`/`cargo tauri dev` in section 5.)
 
 `cargo tauri build` builds the frontend, compiles the release binary,
 bundles the `.app`/`.dmg`, signs it with the Developer ID identity from
 `APPLE_SIGNING_IDENTITY` (entitlements from
-[`crates/app-tauri/entitlements.plist`](./crates/app-tauri/entitlements.plist),
+[`apps/smart-ssh-community/entitlements.plist`](./apps/smart-ssh-community/entitlements.plist),
 Hardened Runtime enabled — both configured in `tauri.conf.json`'s
 `bundle.macOS`), then submits it to Apple's notarization service using
 the App Store Connect API key credentials and staples the resulting

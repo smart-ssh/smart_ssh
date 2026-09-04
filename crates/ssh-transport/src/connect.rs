@@ -52,7 +52,7 @@ pub enum ConnectOutcome {
 /// hält die Referenz über `.await`-Punkte hinweg — ohne den Bound ist die
 /// von `connect()` zurückgegebene Future nicht `Send`, was jeden Aufrufer
 /// bricht, der (wie ein Tauri-`#[tauri::command]`) selbst eine `Send`-Future
-/// braucht. Nachträglich beim Verdrahten in `crates/app-tauri` (Spec 0007,
+/// braucht. Nachträglich beim Verdrahten in `crates/app-shell` (Spec 0007,
 /// Teil 2) aufgefallen, nicht beim ursprünglichen Schreiben dieser Funktion
 /// (die Integrationstests riefen `connect()` bislang nur direkt in
 /// `#[tokio::test]`s auf, wo eine `Send`-Future nicht verlangt wird).

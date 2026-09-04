@@ -128,6 +128,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "app-shell"
+version = "0.3.0"
+dependencies = [
+ "ai-providers",
+ "async-trait",
+ "base64 0.23.1",
+ "chrono",
+ "credentials-keyring",
+ "directories",
+ "futures",
+ "mcp-server",
+ "persistence-sqlite",
+ "regex",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "ssh-manager-core",
+ "ssh-transport",
+ "tauri",
+ "tauri-plugin-decoration",
+ "tauri-plugin-dialog",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-os",
+ "tauri-plugin-store",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "apple-native-keyring-store"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5496,6 +5531,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "smart-ssh-community"
+version = "0.3.0"
+dependencies = [
+ "app-shell",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-decoration",
+ "tauri-plugin-dialog",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-os",
+ "tauri-plugin-store",
+]
+
+[[package]]
 name = "socket2"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5829,42 +5879,6 @@ dependencies = [
  "ssh-cipher",
  "ssh-encoding",
  "zeroize",
-]
-
-[[package]]
-name = "ssh-manager-app-tauri"
-version = "0.3.0"
-dependencies = [
- "ai-providers",
- "async-trait",
- "base64 0.23.1",
- "chrono",
- "credentials-keyring",
- "directories",
- "futures",
- "mcp-server",
- "persistence-sqlite",
- "regex",
- "secrecy",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "ssh-manager-core",
- "ssh-transport",
- "tauri",
- "tauri-build",
- "tauri-plugin-decoration",
- "tauri-plugin-dialog",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tauri-plugin-os",
- "tauri-plugin-store",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]

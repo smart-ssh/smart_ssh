@@ -26,7 +26,7 @@ use ssh_manager_core::ai::{ProviderId, ProviderType};
 use ssh_manager_core::profiles::CredentialRef;
 
 /// Vollständige gespeicherte Konfiguration inkl. `credential_ref` — die
-/// reine Persistenzsicht. `crates/app-tauri` bildet daraus die
+/// reine Persistenzsicht. `crates/app-shell` bildet daraus die
 /// nach-außen sichtbare `AiProviderConfigDto` (ohne `credential_ref`, s.
 /// Spec 0007 Abschnitt 8.2: "bewusst KEIN api_key-Feld — der Key geht nie
 /// zurück ans Frontend"; `credential_ref` selbst ist zwar kein Secret, aber
@@ -187,7 +187,7 @@ impl SqliteAiProviderStore {
         rows.iter().map(row_to_config).collect()
     }
 
-    /// Einzelabfrage — genutzt von `app-tauri`s `delete_ai_provider`-Befehl,
+    /// Einzelabfrage — genutzt von `app-shell`s `delete_ai_provider`-Befehl,
     /// um `is_active` **vor** dem (nicht rücknehmbaren) `CredentialStore::delete()`
     /// zu prüfen, ohne die komplette Liste zu laden (s. Spec 0007 Abschnitt
     /// 8.2 zur Lösch-Reihenfolge und Abschnitt 9 zum Aktiv-Löschverbot).

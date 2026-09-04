@@ -1,0 +1,33 @@
+[package]
+name = "smart-ssh-community"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+# Sichtbarer Binary-Name im .app-Bundle (Contents/MacOS/smart-ssh) — bewusst
+# vom `package.name` oben entkoppelt, s. `crates/app-shell`s früheres
+# Pendant (jetzt `crates::app_shell`) zur Begründung des Musters.
+name = "smart-ssh"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+app-shell = { version = "0.3.0", path = "../../crates/app-shell" }
+tauri = { version = "2", features = [] }
+# `tauri-build`'s ACL-/Capability-Auflösung (in `build.rs`, läuft für dieses
+# Binary-Crate) scannt nur die eigenen, direkten Abhängigkeiten dieser
+# Crate nach Plugin-Berechtigungen — eine rein transitive Abhängigkeit über
+# `app-shell` reicht dafür nachweislich nicht (führt zu
+# "Permission ... not found" beim Build). Deshalb müssen dieselben
+# Tauri-Plugins, die `app-shell::run` tatsächlich registriert, hier
+# zusätzlich direkt gelistet sein.
+tauri-plugin-decoration = "3.0"
+tauri-plugin-dialog = "2.7.2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2.5.5"
+tauri-plugin-os = "2"
+tauri-plugin-store = "2"

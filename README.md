@@ -96,13 +96,13 @@ git clone https://github.com/brokoskokoli/smart_ssh.git
 cd smart_ssh
 
 # 2. Frontend-Abhängigkeiten installieren
-cd crates/app-tauri/frontend
+cd apps/smart-ssh-community/frontend
 npm install
 cd ../../..
 
 # 3. Desktop-App im Dev-Modus starten
-cargo tauri dev --manifest-path crates/app-tauri/Cargo.toml
-# oder aus crates/app-tauri/frontend:
+cargo tauri dev --manifest-path apps/smart-ssh-community/Cargo.toml
+# oder aus apps/smart-ssh-community/frontend:
 npm run tauri dev
 ```
 

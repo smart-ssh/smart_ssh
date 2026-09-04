@@ -3,7 +3,7 @@
 //! feature = "test-support"))]` statt nur `#[cfg(test)]`: reine
 //! `#[cfg(test)]`-Module sind ausschließlich innerhalb dieser Crate
 //! sichtbar, aber die Kontroll-Logik für `ReadRemoteFile`/`WriteRemoteFile`
-//! (Spec 0020, Abschnitt 4) lebt in `crates/app-tauri` — das
+//! (Spec 0020, Abschnitt 4) lebt in `crates/app-shell` — das
 //! `test-support`-Feature dieser Crate macht `MockSftpSession` für dessen
 //! `[dev-dependencies]` nutzbar (dasselbe Muster wie andere Crates es für
 //! geteilte Test-Doubles verwenden).

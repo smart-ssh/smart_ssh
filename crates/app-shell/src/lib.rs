@@ -1,6 +1,14 @@
-//! Tauri-App-Schicht von ssh-manager (Spec 0007). Dünner Wrapper: nur
-//! Tauri-Commands, die Core-APIs aufrufen und DTOs zurückgeben, sowie der
-//! `AppState`-Aufbau — keine fachliche Logik hier (Spec 0007, Abschnitt 3).
+//! App-Shell (Spec 0038): Library, die den bisherigen `app-tauri`-Aufbau
+//! (Tauri-Commands, `AppState`-Aufbau, Event-Handling — alles seit Spec
+//! 0007) unverändert in der Substanz bereitstellt, jetzt aber
+//! Edition-parametrisiert über [`Wiring`] statt fest verdrahtet. Ein
+//! konkretes Binary (aktuell nur `apps/smart-ssh-community`, künftig auch
+//! ein privates `Official`-Pendant, s. Spec 0038 Abschnitt 3) unterscheidet
+//! sich nur im übergebenen `Wiring` und ruft [`run`] auf.
+//!
+//! Weiterhin: nur Tauri-Commands, die Core-APIs aufrufen und DTOs
+//! zurückgeben, keine fachliche Logik hier (Spec 0007, Abschnitt 3) — diese
+//! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
 mod ai_provider_factory;
 mod chat_context_truncation;
@@ -31,6 +39,9 @@ mod state;
 mod test_connection;
 #[cfg(test)]
 mod test_support;
+mod wiring;
+
+pub use wiring::{Edition, Wiring};
 
 use std::sync::Arc;
 
@@ -48,7 +59,7 @@ use crate::state::AppState;
 /// überbrückt den einen async `SqliteProfileStore::connect`-Aufruf beim
 /// Start; danach läuft alles über Tauris eigene, bereits laufende
 /// Async-Runtime (jedes `#[tauri::command]` ist selbst `async fn`).
-fn build_app_state() -> AppState {
+fn build_app_state(wiring: &Wiring) -> AppState {
     let db_path = default_db_path();
     let profile_store = tauri::async_runtime::block_on(SqliteProfileStore::connect(&db_path))
         .expect("SQLite-Datenbank konnte nicht geöffnet/migriert werden");
@@ -114,12 +125,10 @@ fn build_app_state() -> AppState {
         policy_store,
         prompt_history_store,
         chat_session_store,
-        // Spec 0037, Abschnitt 2: die Community Edition kennt aktuell nur
-        // diesen einen festen Zustand, kein Lizenzschlüssel-Mechanismus in
-        // diesem Schritt (s. `AppState::entitlements`-Doc-Kommentar).
-        entitlements: Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
-            ssh_manager_core::entitlements::Entitlements::free(),
-        )),
+        // Spec 0038, Abschnitt 2: aus dem übergebenen `Wiring` gelesen statt
+        // hier fest verdrahtet (s. `Wiring::community`-Doc-Kommentar zum
+        // Scope dieses Refactorings).
+        entitlements: wiring.entitlements.clone(),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
@@ -127,7 +136,17 @@ fn build_app_state() -> AppState {
     }
 }
 
-pub fn run() {
+/// Startet die App mit der übergebenen [`Wiring`]/[`tauri::Context`].
+///
+/// Der `Context` wird bewusst vom Aufrufer (`main.rs` des jeweiligen
+/// Binaries, z. B. `apps/smart-ssh-community`) übergeben statt hier per
+/// `tauri::generate_context!()` erzeugt: das Makro liest `tauri.conf.json`
+/// relativ zum `CARGO_MANIFEST_DIR` der Aufrufstelle zur Kompilierzeit —
+/// stünde der Makroaufruf hier in `app-shell`, müssten `tauri.conf.json`/
+/// Icons/Frontend dieser Library-Crate zugeordnet sein, obwohl `app-shell`
+/// künftig mehrere Binaries (Community/Official) mit je eigener Config
+/// bedienen soll (Spec 0038, Abschnitt 3).
+pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Spec 0016, Abschnitt 2/3: so früh wie möglich, damit auch Fehler beim
     // App-Setup selbst (z. B. `build_app_state()`s DB-Verbindungsaufbau)
     // bereits strukturiert geloggt würden. `_log_guard` muss über die
@@ -137,7 +156,15 @@ pub fn run() {
     let _log_guard = crate::logging::init_logging();
     tracing::info!("Smart SSH startet");
 
-    tauri::Builder::default()
+    let app_state = build_app_state(&wiring);
+    let plugins = wiring.plugins;
+
+    let builder = tauri::Builder::default();
+    let builder = plugins
+        .into_iter()
+        .fold(builder, |builder, plugin| plugin(builder));
+
+    builder
         // Für die Key-/Zertifikat-Datei-Auswahl im Server-Formular (Spec
         // 0008, Abschnitt 6): der native Dialog läuft im Backend
         // (`commands::read_credential_file`, Spec 0013 SEC-06 — unabhängiger
@@ -228,7 +255,7 @@ pub fn run() {
 
             Ok(())
         })
-        .manage(build_app_state())
+        .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::list_servers,
             commands::list_ai_providers,
@@ -302,6 +329,6 @@ pub fn run() {
             mcp_settings::set_mcp_server_allowed_servers,
             mcp_settings::set_mcp_server_confirm_timeout_secs,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("Fehler beim Starten der Tauri-App");
 }

@@ -2,10 +2,10 @@
 //! und der tatsächlichen Ausführungslogik der App (Spec 0028, Abschnitt 3:
 //! "Wiederverwendung statt Parallelstruktur").
 //!
-//! Diese Crate hängt bewusst **nicht** von `crates/app-tauri` ab (das würde
-//! eine zyklische Abhängigkeit erzeugen, sobald `app-tauri` seinerseits
+//! Diese Crate hängt bewusst **nicht** von `crates/app-shell` ab (das würde
+//! eine zyklische Abhängigkeit erzeugen, sobald `app-shell` seinerseits
 //! diese Crate einbindet, um den Server zu starten). Stattdessen definiert
-//! sie nur diesen schmalen Trait; `app-tauri` implementiert ihn in einem
+//! sie nur diesen schmalen Trait; `app-shell` implementiert ihn in einem
 //! eigenen Modul, das direkt `orchestration::handle_action_proposed`
 //! aufruft — denselben Code-Pfad, den auch der interne Chat-Flow nutzt. Es
 //! gibt dadurch strukturell exakt eine Implementierung dieses Traits im
@@ -67,7 +67,7 @@ pub enum ActionOutcome {
     Failed { message: String },
 }
 
-/// Schnittstelle, die `crates/app-tauri` implementiert, um MCP-Tool-Calls an
+/// Schnittstelle, die `crates/app-shell` implementiert, um MCP-Tool-Calls an
 /// die reale App-Logik anzubinden (Session-Verwaltung, Filter-Engine,
 /// Bestätigungsdialog). Jede Methode entspricht einer Gruppe von Tools aus
 /// Spec 0028, Abschnitt 4.

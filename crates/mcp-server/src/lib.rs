@@ -5,7 +5,7 @@
 //! Diese Crate enthält **keine** eigene Ausführungslogik — sie übersetzt
 //! MCP-Tool-Calls in `AiAction`-Werte und reicht sie über den [`McpBackend`]
 //! -Trait an eine externe Implementierung weiter (in der laufenden App:
-//! `crates/app-tauri`, das direkt `orchestration::handle_action_proposed`
+//! `crates/app-shell`, das direkt `orchestration::handle_action_proposed`
 //! aufruft). Siehe [`backend`] für die Begründung der Abhängigkeitsrichtung.
 
 mod auth;

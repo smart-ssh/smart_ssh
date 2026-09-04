@@ -22,9 +22,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-APP_TAURI_DIR="$REPO_ROOT/crates/app-tauri"
+APP_DIR="$REPO_ROOT/apps/smart-ssh-community"
 
-cd "$APP_TAURI_DIR"
+cd "$APP_DIR"
 
 if [[ "$(uname)" == "Darwin" ]]; then
   "$SCRIPT_DIR/setup-macos-dev-signing.sh"

@@ -21,7 +21,7 @@ use futures::{Stream, StreamExt};
 /// die zugrunde liegende TCP-Verbindung nicht sauber ab (z. B. Netzwerk-
 /// Aussetzer, Server hält die Verbindung offen ohne weitere Daten zu
 /// senden), würde `AiProvider::send()` sonst nie ein `Done`/`Error`
-/// liefern und `run_chat_turn` (`crates/app-tauri/src/orchestration.rs`)
+/// liefern und `run_chat_turn` (`crates/app-shell/src/orchestration.rs`)
 /// bliebe für immer auf `stream.next().await` hängen — für den Nutzer
 /// sichtbar als Chat, der ohne jede Fehlermeldung einfach nicht mehr
 /// antwortet. Bewusst als Inaktivitäts- statt Gesamt-Timeout (pro
