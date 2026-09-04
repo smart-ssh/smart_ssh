@@ -1992,7 +1992,6 @@ pub async fn export_document(
     let file_name = crate::document_export::default_export_file_name(&title, format);
     let (filter_name, extension): (&str, &str) = match format {
         DocumentFormat::Markdown => ("Markdown", "md"),
-        DocumentFormat::Word => ("Word-Dokument", "docx"),
     };
 
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -2015,10 +2014,6 @@ pub async fn export_document(
     // Analyse-Dokumentgröße unkritisch blockierend.
     match format {
         DocumentFormat::Markdown => std::fs::write(path, content_markdown)?,
-        DocumentFormat::Word => std::fs::write(
-            path,
-            crate::document_export::markdown_to_docx_bytes(&content_markdown),
-        )?,
     }
 
     Ok(())

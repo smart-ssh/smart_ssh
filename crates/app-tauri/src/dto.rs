@@ -639,12 +639,14 @@ pub struct PatternSuggestionDto {
 
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------
 
-/// Exportformat für `export_document` (Spec 0012, Abschnitt 3).
+/// Exportformat für `export_document` (Spec 0012, Abschnitt 3). Seit Spec
+/// 0037, Abschnitt 4, nur noch `Markdown` — der Word-Export wurde komplett
+/// entfernt (kein Gating, s. `crate::document_export`-Moduldoc), nicht auf
+/// eine leere `require(Feature::DocumentExport)`-Prüfung reduziert.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum DocumentFormat {
     Markdown,
-    Word,
 }
 
 // --- Spec 0017: Multi-Tab-Sessions ---------------------------------------

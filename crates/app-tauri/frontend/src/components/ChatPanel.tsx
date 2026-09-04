@@ -1450,19 +1450,7 @@ function DocumentCard({
         >
           {exporting === "markdown" ? "Speichert…" : "Als Markdown speichern"}
         </button>
-        <button
-          type="button"
-          disabled={exporting !== null}
-          onClick={() => handleExportClick("word")}
-          className="rounded bg-indigo-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
-        >
-          {exporting === "word" ? "Speichert…" : "Als Word speichern (.docx)"}
-        </button>
-        {savedFormat && (
-          <span className="text-xs text-emerald-400">
-            ✓ Als {savedFormat === "word" ? "Word-Dokument" : "Markdown"} exportiert
-          </span>
-        )}
+        {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
       </div>
     </div>
   );
@@ -1512,19 +1500,7 @@ function AssistantMessageView({
         >
           {exporting === "markdown" ? "Speichert…" : "📄 Als Markdown"}
         </button>
-        <button
-          type="button"
-          disabled={exporting !== null}
-          onClick={() => handleExportClick("word")}
-          className="rounded bg-slate-700/80 px-2 py-1 text-xs text-slate-200 hover:bg-slate-600 hover:text-white disabled:opacity-50"
-        >
-          {exporting === "word" ? "Speichert…" : "📄 Als Word (.docx)"}
-        </button>
-        {savedFormat && (
-          <span className="text-xs text-emerald-400">
-            ✓ Als {savedFormat === "word" ? "Word" : "Markdown"} exportiert
-          </span>
-        )}
+        {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
       </div>
     </div>
   );

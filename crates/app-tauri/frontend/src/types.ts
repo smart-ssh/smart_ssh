@@ -451,7 +451,9 @@ export interface ChatDocumentGeneratedEvent {
   contentMarkdown: string;
 }
 
-export type DocumentFormat = "markdown" | "word";
+/** Spec 0037, Abschnitt 4: Word-Export komplett entfernt (kein Gating) —
+ * nur noch Markdown. */
+export type DocumentFormat = "markdown";
 
 // --- Spec 0017: Multi-Tab-Sessions --------------------------------------
 
