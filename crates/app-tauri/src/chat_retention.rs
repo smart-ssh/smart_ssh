@@ -63,12 +63,14 @@ pub async fn cleanup_old_chat_sessions_on_startup<R: Runtime>(
     let Some(days) = read_retention_days(app) else {
         return;
     };
+    // Spec 0040, Abschnitt 7: `None`, wenn der Verschlüsselungsschlüssel
+    // beim Start nicht aufgelöst werden konnte (s. `lib::build_app_state`)
+    // — dann existiert ohnehin keine zu bereinigende Chat-Persistenz.
+    let Some(store) = &state.chat_session_store else {
+        return;
+    };
     let cutoff = chrono::Utc::now() - chrono::Duration::days(i64::from(days));
-    match state
-        .chat_session_store
-        .delete_ended_sessions_before(cutoff)
-        .await
-    {
+    match store.delete_ended_sessions_before(cutoff).await {
         Ok(count) if count > 0 => {
             tracing::info!(count, retention_days = days, "old chat sessions cleaned up");
         }

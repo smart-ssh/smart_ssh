@@ -559,9 +559,39 @@ pub(crate) async fn connect_session(
     // Best-effort-Fallback auf eine leere Historie (das würde dem Nutzer
     // eine augenscheinlich "leere" Sitzung zeigen, obwohl tatsächlich
     // Verlauf existiert, aber nicht lesbar war).
+    // Spec 0040, Abschnitt 7: `chat_session_store` ist `None`, wenn der
+    // Verschlüsselungsschlüssel beim App-Start nicht aufgelöst werden
+    // konnte (s. `lib::build_app_state`) — dieselbe "degradiert statt
+    // abzubrechen"-Haltung greift hier: ein explizit angefordertes
+    // `resume` schlägt dann klar fehl (nichts zum Laden da), eine neue
+    // Sitzung verbindet trotzdem, nur ohne Chat-Persistenz (wie beim
+    // Fehlerzweig direkt unten).
     let (initial_history, chat_session_id) = if let Some(existing_id) = resume {
-        let loaded = state.chat_session_store.load_session(existing_id).await?;
-        state.chat_session_store.mark_resumed(existing_id).await?;
+        let Some(store) = &state.chat_session_store else {
+            transport.disconnect().await.ok();
+            return Err(
+                "Chat-Verlauf kann nicht geladen werden — Verschlüsselungsschlüssel für \
+                 Chat-Inhalte nicht verfügbar (s. Log beim App-Start)."
+                    .into(),
+            );
+        };
+        // Unabhängiger Review-Pass (Spec 0040, Abschnitt 7): die
+        // SSH-Verbindung ist an dieser Stelle bereits aufgebaut (s. oben)
+        // — ein `?` hier würde sie beim frühen Rückkehren nur fallen
+        // lassen (impliziter `Drop`, kein `SshTransport::disconnect()`),
+        // statt sie sauber zu schließen. Beide Fehlerzweige unten trennen
+        // deshalb explizit, bevor sie den Fehler weiterreichen.
+        let loaded = match store.load_session(existing_id).await {
+            Ok(loaded) => loaded,
+            Err(err) => {
+                transport.disconnect().await.ok();
+                return Err(err.into());
+            }
+        };
+        if let Err(err) = store.mark_resumed(existing_id).await {
+            transport.disconnect().await.ok();
+            return Err(err.into());
+        }
         (
             crate::chat_context_truncation::truncate_to_budget(loaded),
             Some(existing_id),
@@ -569,22 +599,24 @@ pub(crate) async fn connect_session(
     } else if is_local {
         (Vec::new(), None)
     } else {
-        match state
-            .chat_session_store
-            .create_session(&server_id, Some(active_config.id.0))
-            .await
-        {
-            Ok(id) => (Vec::new(), Some(id)),
-            Err(err) => {
-                // Spec 0034 führt reine Persistenz ein, kein hartes
-                // Zusatz-Erfordernis fürs Verbinden selbst — ein
-                // Schreibfehler hier (z. B. volle Festplatte) soll den
-                // eigentlichen SSH-Verbindungsaufbau nicht verhindern, nur
-                // die Chat-Historie dieser einen Sitzung bleibt dann
-                // unpersistiert.
-                tracing::warn!(error = %err, "chat session creation failed");
-                (Vec::new(), None)
-            }
+        match &state.chat_session_store {
+            Some(store) => match store
+                .create_session(&server_id, Some(active_config.id.0))
+                .await
+            {
+                Ok(id) => (Vec::new(), Some(id)),
+                Err(err) => {
+                    // Spec 0034 führt reine Persistenz ein, kein hartes
+                    // Zusatz-Erfordernis fürs Verbinden selbst — ein
+                    // Schreibfehler hier (z. B. volle Festplatte) soll den
+                    // eigentlichen SSH-Verbindungsaufbau nicht verhindern, nur
+                    // die Chat-Historie dieser einen Sitzung bleibt dann
+                    // unpersistiert.
+                    tracing::warn!(error = %err, "chat session creation failed");
+                    (Vec::new(), None)
+                }
+            },
+            None => (Vec::new(), None),
         }
     };
 
@@ -629,7 +661,7 @@ pub(crate) async fn connect_session(
         injection_check_provider,
         injection_suspected: std::sync::atomic::AtomicBool::new(false),
         chat_session_store: if chat_session_id.is_some() {
-            Some(state.chat_session_store.clone())
+            state.chat_session_store.clone()
         } else {
             None
         },
@@ -651,8 +683,14 @@ pub async fn list_chat_sessions(
     state: State<'_, AppState>,
     server_id: ServerId,
 ) -> CommandResult<Vec<crate::dto::ChatSessionSummaryDto>> {
-    Ok(state
-        .chat_session_store
+    // Spec 0040, Abschnitt 7: kein Verschlüsselungsschlüssel verfügbar ->
+    // es existiert keine Chat-Persistenz für diesen App-Lauf, also eine
+    // leere Liste statt eines Fehlers (derselbe "degradiert statt
+    // abzubrechen"-Gedanke wie beim Nichtaufbau des Stores selbst).
+    let Some(store) = &state.chat_session_store else {
+        return Ok(Vec::new());
+    };
+    Ok(store
         .list_sessions_for_server(&server_id)
         .await?
         .into_iter()
@@ -688,20 +726,43 @@ pub async fn rename_chat_session(
     session_id: uuid::Uuid,
     new_title: String,
 ) -> CommandResult<()> {
-    Ok(state
-        .chat_session_store
-        .rename_session(session_id, &new_title)
-        .await?)
+    let Some(store) = &state.chat_session_store else {
+        return Err(
+            "Chat-Sitzungen können nicht umbenannt werden — Verschlüsselungsschlüssel für \
+             Chat-Inhalte nicht verfügbar (s. Log beim App-Start)."
+                .into(),
+        );
+    };
+    Ok(store.rename_session(session_id, &new_title).await?)
 }
 
 /// Spec 0034, Abschnitt 8: `delete_chat_session` — zugehörige Nachrichten
 /// verschwinden automatisch über `ON DELETE CASCADE`.
+///
+/// Spec 0040, Abschnitt 7: verweigert das Löschen, solange irgendein
+/// gerade verbundener Tab diese Sitzung noch aktiv nutzt (s.
+/// `SessionManager::is_chat_session_active`-Doc-Kommentar für die
+/// Begründung) — klare Fehlermeldung statt stillschweigend eine
+/// Fremdschlüssel-Lücke unter einer laufenden Sitzung aufzureißen.
 #[tauri::command]
 pub async fn delete_chat_session(
     state: State<'_, AppState>,
     session_id: uuid::Uuid,
 ) -> CommandResult<()> {
-    Ok(state.chat_session_store.delete_session(session_id).await?)
+    if state.sessions.is_chat_session_active(session_id).await {
+        return Err(
+            "Diese Chat-Sitzung ist gerade in einem offenen Tab aktiv — erst trennen, dann \
+             löschen."
+                .into(),
+        );
+    }
+    let Some(store) = &state.chat_session_store else {
+        // Keine Chat-Persistenz für diesen App-Lauf (s. o.) — nichts zu
+        // löschen, aber auch kein Fehler: aus Nutzersicht ist die Sitzung
+        // danach ebenso "weg" wie bei einem erfolgreichen Löschen.
+        return Ok(());
+    };
+    Ok(store.delete_session(session_id).await?)
 }
 
 /// Spec 0031, Abschnitt 4: der eigentliche Türsteher vor
@@ -1013,7 +1074,7 @@ pub async fn send_chat_message(
         &session,
         session_id,
         text,
-        &state.prompt_history_store,
+        state.prompt_history_store.as_ref(),
         state.profile_store.as_ref(),
         &state.policy_store,
         &state.pending_action_confirmations,
@@ -1040,7 +1101,7 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
     session: &Session,
     session_id: SessionId,
     text: String,
-    prompt_history_store: &persistence_sqlite::SqlitePromptHistoryStore,
+    prompt_history_store: Option<&persistence_sqlite::SqlitePromptHistoryStore>,
     profile_store: &dyn ProfileStore,
     policy_store: &persistence_sqlite::SqlitePolicyStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
@@ -1048,9 +1109,13 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
     // Spec 0015, Abschnitt 3: Prompt-Historie ist eine Zusatzfunktion für
     // die Pfeiltasten-Navigation im Eingabefeld — ein Fehlschlag beim
     // Persistieren (z. B. kurzzeitig gesperrte DB) soll den eigentlichen
-    // Chat-Versand nicht verhindern, deshalb best-effort statt `?`.
-    if let Err(err) = prompt_history_store.record(&session.server_id, &text).await {
-        eprintln!("Prompt konnte nicht in der Historie gespeichert werden: {err}");
+    // Chat-Versand nicht verhindern, deshalb best-effort statt `?`. Spec
+    // 0040, Abschnitt 7: `None` (kein Verschlüsselungsschlüssel verfügbar,
+    // s. `lib::build_app_state`) ist derselbe Fall — einfach überspringen.
+    if let Some(store) = prompt_history_store {
+        if let Err(err) = store.record(&session.server_id, &text).await {
+            eprintln!("Prompt konnte nicht in der Historie gespeichert werden: {err}");
+        }
     }
 
     // Spec 0032: `profile_store.get_server` findet den lokalen
@@ -1904,7 +1969,12 @@ pub async fn list_prompt_history(
     state: State<'_, AppState>,
     server_id: ServerId,
 ) -> CommandResult<Vec<String>> {
-    Ok(state.prompt_history_store.list(&server_id).await?)
+    // Spec 0040, Abschnitt 7: kein Verschlüsselungsschlüssel verfügbar ->
+    // keine Prompt-Historie für diesen App-Lauf, leere Liste statt Fehler.
+    let Some(store) = &state.prompt_history_store else {
+        return Ok(Vec::new());
+    };
+    Ok(store.list(&server_id).await?)
 }
 
 // --- Spec 0016: Strukturiertes Logging & Diagnose --------------------------
@@ -2603,9 +2673,9 @@ mod send_chat_message_persistence_tests {
             &session,
             uuid::Uuid::new_v4(),
             "räum mal /tmp auf".to_string(),
-            &profile_store.prompt_history_store(Arc::new(
+            Some(&profile_store.prompt_history_store(Arc::new(
                 ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&[21u8; 32]),
-            )),
+            ))),
             &in_memory_profile_store,
             &policy_store,
             &confirmations,
@@ -2620,6 +2690,48 @@ mod send_chat_message_persistence_tests {
                 MessageContent::Text(t) if t == "räum mal /tmp auf"
             ) && m.role == Role::User),
             "die Nutzer-Nachricht muss in chat_messages persistiert sein, geladen: {loaded:?}"
+        );
+    }
+
+    /// Spec 0040, Abschnitt 7: ein gesperrter/verweigerter OS-Schlüsselbund
+    /// beim App-Start lässt `AppState.prompt_history_store` `None` werden
+    /// (s. `lib::build_app_state`) — `send_chat_message_impl` darf dadurch
+    /// nicht scheitern, nur die Prompt-Historie bleibt für diesen App-Lauf
+    /// leer. Regressionstest für genau diesen degradierten Zustand, nicht
+    /// nur den Normalfall oben.
+    #[tokio::test]
+    async fn test_send_chat_message_without_prompt_history_store_still_succeeds() {
+        let (session, profile_store, chat_store, _tmp_dir) = session_with_real_persistence().await;
+        let chat_session_id = session.chat_session_id.lock().await.unwrap();
+        let app = test_app();
+        let handle = app.handle();
+        let emitter = TestEmitter::default();
+        let in_memory_profile_store = InMemoryProfileStore::default();
+        let policy_store = profile_store.policy_store();
+        let confirmations = ConfirmationRegistry::new();
+
+        send_chat_message_impl(
+            handle,
+            &emitter,
+            &session,
+            uuid::Uuid::new_v4(),
+            "ohne Prompt-Historie".to_string(),
+            None,
+            &in_memory_profile_store,
+            &policy_store,
+            &confirmations,
+        )
+        .await
+        .unwrap();
+
+        let loaded = chat_store.load_session(chat_session_id).await.unwrap();
+        assert!(
+            loaded.iter().any(|m| matches!(
+                &m.content,
+                MessageContent::Text(t) if t == "ohne Prompt-Historie"
+            ) && m.role == Role::User),
+            "die Chat-Persistenz selbst darf vom fehlenden Prompt-History-Store unbeeinflusst \
+             bleiben: {loaded:?}"
         );
     }
 }

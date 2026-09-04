@@ -58,21 +58,42 @@ fn build_app_state() -> AppState {
     // Spec 0036, Abschnitt 4: einmalig bei App-Start aufgelöst (kein
     // "erster Schreibzugriff" im wörtlichen Sinn, aber dieselbe Wirkung:
     // der Schlüssel existiert garantiert, bevor irgendein Schreibzugriff
-    // stattfinden kann — s. Kommentar unten). `.expect(...)`, weil ohne
-    // funktionierenden Verschlüsselungsschlüssel jede Chat-Persistenz
-    // fehlschlagen würde — dieselbe "unverzichtbare Startvoraussetzung"-
-    // Behandlung wie beim DB-Verbindungsaufbau/Host-Key-Speicher oben/unten.
+    // stattfinden kann — s. Kommentar unten).
+    //
+    // Spec 0040, Abschnitt 7: KEIN `.expect(...)` mehr — ein gesperrter
+    // oder vom Nutzer verweigerter OS-Schlüsselbund (z. B. macOS-Keychain-
+    // Dialog abgebrochen) darf den App-Start nicht verhindern. Anders als
+    // die DB-Verbindung/den Host-Key-Speicher oben/unten ist ein
+    // funktionierender Verschlüsselungsschlüssel keine Voraussetzung für
+    // die App selbst, nur für EINE optionale Komfortfunktion (Chat-
+    // Persistenz/Prompt-Historie) — degradiert bei einem Fehler zu `None`
+    // für beide betroffenen Stores (s. `AppState::prompt_history_store`/
+    // `chat_session_store`-Doc-Kommentare) statt die ganze App abzubrechen.
     let credential_store = KeyringCredentialStore::new();
-    let chat_content_key = ssh_manager_core::crypto::resolve_or_generate_key(&credential_store)
-        .expect("Verschlüsselungsschlüssel für Chat-Inhalte konnte nicht geladen/generiert werden");
-    let chat_content_cipher: Arc<dyn ssh_manager_core::crypto::ContentCipher> = Arc::new(
-        ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&chat_content_key),
-    );
-    // Spec 0040, Abschnitt 3: derselbe Cipher (und damit derselbe Schlüssel)
-    // wie `chat_session_store` unten — kein zweiter Verschlüsselungs-
-    // mechanismus für `prompt_history`.
-    let prompt_history_store = profile_store.prompt_history_store(chat_content_cipher.clone());
-    let chat_session_store = profile_store.chat_session_store(chat_content_cipher);
+    let (prompt_history_store, chat_session_store) =
+        match ssh_manager_core::crypto::resolve_or_generate_key(&credential_store) {
+            Ok(chat_content_key) => {
+                let chat_content_cipher: Arc<dyn ssh_manager_core::crypto::ContentCipher> =
+                    Arc::new(ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(
+                        &chat_content_key,
+                    ));
+                // Spec 0040, Abschnitt 3: derselbe Cipher (und damit derselbe
+                // Schlüssel) für beide Stores — kein zweiter
+                // Verschlüsselungsmechanismus für `prompt_history`.
+                (
+                    Some(profile_store.prompt_history_store(chat_content_cipher.clone())),
+                    Some(profile_store.chat_session_store(chat_content_cipher)),
+                )
+            }
+            Err(err) => {
+                tracing::warn!(
+                    error = %err,
+                    "encryption key for chat content unavailable — chat persistence and \
+                     prompt history disabled for this app run",
+                );
+                (None, None)
+            }
+        };
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
     // `crate::host_key_store`-Modul-Kommentar zur Begründung (der
@@ -182,7 +203,13 @@ pub fn run() {
             let handle_for_prompt_history_migration = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let state = handle_for_prompt_history_migration.state::<AppState>();
-                match state.prompt_history_store.migrate_legacy_plaintext_content().await {
+                // Spec 0040, Abschnitt 7: `None`, wenn der Verschlüsselungs-
+                // schlüssel beim Start nicht aufgelöst werden konnte (s.
+                // `build_app_state`) — dann gibt es nichts zu migrieren.
+                let Some(store) = &state.prompt_history_store else {
+                    return;
+                };
+                match store.migrate_legacy_plaintext_content().await {
                     Ok(count) if count > 0 => {
                         tracing::info!(count, "legacy plaintext prompt_history rows encrypted");
                     }

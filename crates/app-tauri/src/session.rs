@@ -361,6 +361,26 @@ impl SessionManager {
         self.sessions.lock().unwrap().remove(&id)
     }
 
+    /// Spec 0040, Abschnitt 7: Grundlage für `commands::delete_chat_session`s
+    /// Schutz vor dem Löschen einer gerade aktiv verbundenen Sitzung — ohne
+    /// diese Prüfung würde die zugehörige `chat_sessions`-Zeile unter einer
+    /// noch laufenden `Session` weggezogen, und jeder weitere `push_history`-
+    /// Aufruf dieser Sitzung liefe fortan ins Leere (Fremdschlüssel-Verletzung
+    /// bei jedem Schreibversuch, nur als Warnung geloggt statt sichtbar zu
+    /// scheitern — s. `orchestration::push_history_scoped`). Klont nur die
+    /// `Arc`-Zeiger unter der kurzen synchronen Sperre, bevor der `.await`
+    /// auf `chat_session_id` je Session erfolgt — derselbe Grund wie bei
+    /// `snapshot()` oben.
+    pub async fn is_chat_session_active(&self, chat_session_id: uuid::Uuid) -> bool {
+        let sessions: Vec<Arc<Session>> = self.sessions.lock().unwrap().values().cloned().collect();
+        for session in sessions {
+            if *session.chat_session_id.lock().await == Some(chat_session_id) {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn register_pending_connection(&self, id: SessionId, server_id: ServerId) {
         self.pending_connections
             .lock()
@@ -637,5 +657,36 @@ mod tests {
         assert!(snapshot
             .iter()
             .any(|e| e.session_id == pending_id && e.status == ConnectionStatus::AwaitingHostKey));
+    }
+
+    // --- Spec 0040, Abschnitt 7: is_chat_session_active ---------------------
+
+    #[tokio::test]
+    async fn test_is_chat_session_active_true_for_a_live_session_bound_to_it() {
+        let manager = SessionManager::new();
+        let chat_session_id = Uuid::new_v4();
+        let mut session = dummy_session(ServerId::new());
+        session.chat_session_id = AsyncMutex::new(Some(chat_session_id));
+        manager.insert(Uuid::new_v4(), Arc::new(session));
+
+        assert!(manager.is_chat_session_active(chat_session_id).await);
+    }
+
+    #[tokio::test]
+    async fn test_is_chat_session_active_false_for_an_unrelated_chat_session_id() {
+        let manager = SessionManager::new();
+        let mut session = dummy_session(ServerId::new());
+        session.chat_session_id = AsyncMutex::new(Some(Uuid::new_v4()));
+        manager.insert(Uuid::new_v4(), Arc::new(session));
+
+        assert!(!manager.is_chat_session_active(Uuid::new_v4()).await);
+    }
+
+    #[tokio::test]
+    async fn test_is_chat_session_active_false_when_no_live_session_has_a_chat_session_id() {
+        let manager = SessionManager::new();
+        manager.insert(Uuid::new_v4(), Arc::new(dummy_session(ServerId::new())));
+
+        assert!(!manager.is_chat_session_active(Uuid::new_v4()).await);
     }
 }

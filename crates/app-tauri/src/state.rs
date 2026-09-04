@@ -45,11 +45,19 @@ pub struct AppState {
     pub policy_store: SqlitePolicyStore,
     /// Spec 0015: pro-Server-Prompt-Historie für die Pfeiltasten-Navigation
     /// im Chat-Eingabefeld — wie `policy_store` `Clone` statt `Arc<dyn ...>`
-    /// (kein eigener Trait, teilt sich nur den `SqlitePool`).
-    pub prompt_history_store: SqlitePromptHistoryStore,
+    /// (kein eigener Trait, teilt sich nur den `SqlitePool`). Spec 0040,
+    /// Abschnitt 7: `None`, wenn der Verschlüsselungsschlüssel beim
+    /// Start nicht aufgelöst werden konnte (gesperrtes/verweigertes
+    /// OS-Schlüsselbund) — degradiert dann zu "keine Prompt-Historie
+    /// diese Sitzung", statt den App-Start ganz zu verhindern (s.
+    /// `lib::build_app_state`-Doc-Kommentar).
+    pub prompt_history_store: Option<SqlitePromptHistoryStore>,
     /// Spec 0034: persistente Chat-Sitzungen/-Nachrichten — wie
     /// `policy_store`/`prompt_history_store` `Clone` statt `Arc<dyn ...>`.
-    pub chat_session_store: SqliteChatSessionStore,
+    /// Spec 0040, Abschnitt 7: `None` aus demselben Grund wie
+    /// `prompt_history_store` oben — degradiert zu "kein Chat-Verlauf wird
+    /// gespeichert/kann fortgesetzt werden" für die laufende App-Instanz.
+    pub chat_session_store: Option<SqliteChatSessionStore>,
 
     /// Wartende `connect()`-Aufrufe, die auf `confirm_host_key` warten (s.
     /// `crate::commands::connect`). Schlüssel ist die `SessionId`, die
