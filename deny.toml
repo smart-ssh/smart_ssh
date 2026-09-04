@@ -1,0 +1,107 @@
+# cargo-deny Konfiguration (Spec 0035, Abschnitt 2).
+#
+# Lizenz-Compliance setzt hier technisch durch, was D1 des Architektur-
+# Briefs verbindlich festlegt — keine reine Vorsatz-Regel, sondern ein
+# CI-Gate. Erzeugt via `cargo deny init` und auf die von Spec 0035
+# tatsächlich geforderten Abschnitte reduziert/angepasst (Lizenzen,
+# Herkunft). Advisories werden bewusst NICHT hier konfiguriert — das bleibt
+# `cargo-audit`/`audit.toml` (Spec 0035, Abschnitt 2, letzter Punkt: "keine
+# doppelte Konfiguration derselben Prüfung an zwei Stellen"); der CI-Job
+# ruft entsprechend nur `cargo deny check licenses sources bans` auf, nie
+# `cargo deny check advisories`.
+
+[graph]
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+# This section is considered when running `cargo deny check licenses`.
+[licenses]
+# Allow-Liste gemäß D1: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC,
+# Zlib, Unicode-DFS-2016. Jede Lizenz, die hier NICHT aufgeführt ist, wird
+# von cargo-deny standardmäßig abgelehnt (deny-by-default) — kein
+# stillschweigendes Durchrutschen neuer Abhängigkeiten mit unklarer/nicht
+# erlaubter Lizenz.
+#
+# Unicode-3.0: Nachfolger-Bezeichner von Unicode-DFS-2016 (dieselbe
+# permissive Kategorie, nur neuere/präzisere SPDX-Kennung) — genutzt von der
+# ICU4X-Kette (`icu_*`/`zerovec`/`yoke`/`litemap`/`tinystr`/...), transitiv
+# über `idna`/`url`. Reines Nachziehen der D1-Liste, keine neue Kategorie.
+#
+# "Apache-2.0 WITH LLVM-exception" (target-lexicon): Apache-2.0 plus
+# zusätzliche Ausnahmeklausel — strikt permissiver als reines Apache-2.0,
+# das bereits erlaubt ist. Die kombinierte Erwartung von unicode-ident
+# ("(MIT OR Apache-2.0) AND Unicode-3.0") braucht keinen eigenen Eintrag —
+# sie ist bereits über die Einzel-Atome MIT/Apache-2.0/Unicode-3.0 erfüllt.
+#
+# CDLA-Permissive-2.0 (webpki-roots/webpki-root-certs): Community Data
+# License Agreement, Permissive 2.0 — deckt die gebündelten Mozilla-CA-
+# Root-Zertifikate ab (Daten, kein Code), permissiv, kein Copyleft.
+#
+# MPL-2.0: laut Spec 0035/D1 nur nach Einzelprüfung erlaubt, nicht pauschal.
+# Einzelprüfung durchgeführt (Fund: `cssparser`/`cssparser-macros`/
+# `dtoa-short`/`option-ext`/`selectors`, transitiv über
+# `dom_query → tauri-utils → tauri`) — Ergebnis: erlauben. Begründung:
+# MPL-2.0 ist file-level Copyleft (wirkt nur auf die MPL-lizenzierten
+# Dateien selbst, keine virale Ausbreitung in unseren eigenen Code); wir
+# modifizieren Tauris interne CSS-Parser-Abhängigkeiten nicht; das ist der
+# in der Praxis übliche, unproblematische Fall für eine transitive
+# Tooling-Abhängigkeit, den Spec 0035 selbst als "meist unproblematisch"
+# einordnet. Nutzer-Entscheidung eingeholt, nicht eigenmächtig getroffen.
+#
+# GPL/AGPL/LGPL bewusst NICHT enthalten (Spec 0035, Abschnitt 2) — jeder
+# Fund muss dem Menschen gemeldet werden, nie automatisch toleriert werden.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "CDLA-Permissive-2.0",
+    "MPL-2.0",
+]
+confidence-threshold = 0.8
+
+[licenses.private]
+# Spec 0035 gilt für Abhängigkeiten, nicht für die eigene Lizenz des
+# Projekts (`[workspace.package] license = "FSL-1.1-MIT"`) — cargo-deny
+# prüft standardmäßig aber auch Workspace-Member-Crates mit. `ignore = true`
+# überspringt Crates, die als `publish = false` markiert sind (alle 7
+# Workspace-Crates, s. deren `Cargo.toml`) — die korrekte, enge Lösung
+# (überspringt nur unveröffentlichte eigene Crates), kein Eintrag von
+# FSL-1.1-MIT in die Allow-Liste, die weiterhin ausschließlich für
+# Drittanbieter-Abhängigkeiten gilt.
+ignore = true
+
+# This section is considered when running `cargo deny check bans`.
+[bans]
+# Nicht Gegenstand von Spec 0035 (die geht nur um Lizenzen/Herkunft) —
+# Default-Werte belassen, damit dieser CI-Job nicht wegen harmloser
+# transitiver Versions-Divergenzen rot wird, die nichts mit Lizenz/Herkunft
+# zu tun haben.
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+
+# This section is considered when running `cargo deny check sources`.
+[sources]
+# Nur crates.io als erlaubte Quelle (Spec 0035, Abschnitt 2) — keine
+# Git-Abhängigkeiten oder unbekannten Registries ohne bewusste, kommentierte
+# Ausnahme hier (`allow-git`/`sources.allow-org` bleiben leer).
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]
+github = []
+gitlab = []
+bitbucket = []

@@ -1,0 +1,113 @@
+# cargo-audit Konfiguration (Spec 0035, Abschnitt 3).
+#
+# Läuft gegen `Cargo.lock` über den gesamten Workspace. Jede Ausnahme hier
+# trägt einen Begründungskommentar direkt daneben — nie eine
+# stillschweigend ignorierte Advisory. Entscheidungen unten sind mit dem
+# Nutzer abgestimmt (nicht eigenmächtig getroffen), s. Chat-Verlauf zum
+# lokalen `cargo audit`-Befund vom 2026-09-04.
+#
+# HINWEIS zum Schema (installierte cargo-audit-Version 0.22.2, geprüft
+# gegen deren `AdvisoryConfig`/`Report::generate`-Quelltext, s.
+# ~/.cargo/registry/.../cargo-audit-0.22.2/src/config.rs und
+# rustsec-0.33.0/src/report.rs): `[advisories].ignore` akzeptiert
+# AUSSCHLIESSLICH eine flache Liste von RUSTSEC-IDs (Strings) — keine
+# Tabellen-Einträge mit eingebettetem `reason`-Feld (ein früherer Entwurf
+# dieser Datei ging fälschlich davon aus; die Begründungen stehen deshalb
+# als Kommentare direkt über der jeweiligen ID, nicht inline in der
+# TOML-Struktur). Dieselbe `ignore`-Liste wirkt sowohl auf echte
+# Vulnerabilities als auch auf informational Warnings (unmaintained/
+# unsound), da beide über dieselbe Advisory-ID gefiltert werden.
+#
+# Der `wnaf`-Yanked-Fund (s. u.) hat KEINE RUSTSEC-ID (Yanked-Prüfung läuft
+# separat gegen den crates.io-Index, nicht gegen die Advisory-Datenbank)
+# und kann deshalb strukturell NICHT einzeln in dieser Liste unterdrückt
+# werden — die einzige Stellschraube dafür wäre `[yanked] enabled = false`,
+# was die Yanked-Prüfung *komplett* abschalten würde (auch für künftige,
+# tatsächlich relevante Funde). Bewusst NICHT gemacht — der `wnaf`-Hinweis
+# bleibt daher als sichtbare, nicht blockierende Warnung in jedem Lauf
+# bestehen (im Berichtsmodus ohnehin ohne Auswirkung auf den CI-Status).
+
+[advisories]
+ignore = [
+    # --- Echte Sicherheitslücke: dokumentiertes Risk-Acceptance ---------
+    #
+    # RUSTSEC-2023-0071 — "Marvin Attack": potenzielles RSA-Key-Recovery
+    # über Timing-Seitenkanäle. Betroffen: `rsa` v0.10.0-rc.18, transitiv
+    # über `russh`/`ssh-key` (crates/ssh-transport) — also im aktiven
+    # SSH-Auth-Pfad, nicht totem Code.
+    #
+    # Bedrohungsmodell: Smart SSH ist ein lokaler Client. Der private
+    # RSA-Schlüssel liegt lokal, die Signaturoperation läuft auf der
+    # Maschine des Nutzers selbst. Der Marvin-Angriff braucht viele
+    # präzise Timing-Messungen genau dieser Operation von außen — für
+    # einen lokalen Client strukturell deutlich schwerer auszunutzen als
+    # für einen von außen exponierten TLS-Server-Endpunkt (das übliche
+    # Angriffsszenario dieser Advisory-Klasse).
+    #
+    # Kein Upstream-Fix verfügbar (Advisory selbst: "No fixed upgrade is
+    # available!"). `rsa` wird transitiv über `russh` gezogen — ein
+    # Ersetzen der SSH-Kernbibliothek wäre ein deutlich größerer Eingriff
+    # und selbst riskanter als das verbleibende Risiko dieser Advisory.
+    #
+    # Offener Punkt, NICHT nur hier vermerkt: s.
+    # docs/adr/0028-rsa-marvin-attack-risk-acceptance.md für das Tracking
+    # und den Re-Evaluierungs-Auftrag (bei `russh`/`rsa`-Update erneut
+    # prüfen). Eine mögliche Bevorzugung von Ed25519 in der App ist ein
+    # separates, bewusst NICHT Teil dieses CI-Schritts entschiedenes Thema.
+    "RUSTSEC-2023-0071",
+
+    # --- GTK3-Kette: ausschließlich Tauris Linux-Webview-Backend --------
+    #
+    # Alle folgenden sind "unmaintained"-Warnungen für gtk-rs' GTK3-
+    # Bindings (verifiziert via `cargo tree --target all`: ausschließlich
+    # unter Linux kompiliert, für macOS/Windows-Builds nie in der
+    # Abhängigkeitsmenge). Transitiv, Linux-only, kein Fix verfügbar,
+    # ökosystemweit bekanntes GTK3→GTK4-Migrationsthema (betrifft jede
+    # Tauri-2-App unter Linux gleichermaßen, nicht spezifisch für dieses
+    # Projekt) — ohne Verzicht auf Linux-Support nicht behebbar.
+    "RUSTSEC-2024-0413", # atk — s. GTK3-Begründung oben
+    "RUSTSEC-2024-0416", # atk-sys — s. GTK3-Begründung oben
+    "RUSTSEC-2024-0412", # gdk — s. GTK3-Begründung oben
+    "RUSTSEC-2024-0418", # gdk-sys — s. GTK3-Begründung oben
+    "RUSTSEC-2024-0411", # gdkwayland-sys — s. GTK3-Begründung oben
+    "RUSTSEC-2024-0417", # gdkx11 — s. GTK3-Begründung oben
+    "RUSTSEC-2024-0414", # gdkx11-sys — s. GTK3-Begründung oben
+    "RUSTSEC-2024-0415", # gtk — s. GTK3-Begründung oben
+    "RUSTSEC-2024-0420", # gtk-sys — s. GTK3-Begründung oben
+    "RUSTSEC-2024-0419", # gtk3-macros — s. GTK3-Begründung oben
+    # proc-macro-error — transitiv über glib-macros, Teil derselben
+    # GTK3-Kette (Linux-only), gleiche Begründung wie oben.
+    "RUSTSEC-2024-0370",
+
+    # --- unic-char-*-Kette: transitive Tauri-Abhängigkeit ---------------
+    #
+    # Cross-Plattform (nicht Linux-only, verifiziert via
+    # `cargo tree --target all`), transitiv über `urlpattern` →
+    # `tauri-utils` → `tauri`. Kein Fix verfügbar.
+    "RUSTSEC-2025-0081", # unic-char-property — s. Begründung oben
+    "RUSTSEC-2025-0075", # unic-char-range — s. Begründung oben
+    "RUSTSEC-2025-0080", # unic-common — s. Begründung oben
+    "RUSTSEC-2025-0100", # unic-ucd-ident — s. Begründung oben
+    "RUSTSEC-2025-0098", # unic-ucd-version — s. Begründung oben
+
+    # --- RUSTSEC-2024-0429: bewusst ANDERS behandelt als "unmaintained" -
+    #
+    # Unsoundness in `glib::VariantStrIter`s `Iterator`/
+    # `DoubleEndedIterator`-Implementierungen. Linux-only via gtk-rs (s.
+    # GTK3-Kette oben), tief in gtk-rs-Interna — unser eigener Code ruft
+    # `VariantStrIter` nirgends direkt auf. Anders als die reinen
+    # "unmaintained"-Einträge oben ist das eine "unsound"-Einstufung, kein
+    # bloßes Staleness-Signal — deshalb NICHT als "irrelevant" eingestuft,
+    # sondern als aktiv zu beobachten: bei jedem gtk-rs-Versions-Update
+    # (glib/gtk/atk/gdk*) erneut prüfen, ob ein Fix vorliegt, bevor diese
+    # Ausnahme unverändert stehen bleibt.
+    "RUSTSEC-2024-0429", # glib::VariantStrIter — AKTIV BEOBACHTEN bei gtk-rs-Updates, s. Begründung oben
+]
+
+# `wnaf 0.14.0` (transitiv über primeorder ← p256/p384/p521 ← russh) ist
+# yanked — kein Sicherheitsproblem, aber strukturell nicht in `ignore`
+# oben unterdrückbar (s. Hinweis am Dateianfang: keine RUSTSEC-ID, kein
+# Pro-Crate-Mechanismus in dieser cargo-audit-Version). Bleibt als
+# sichtbare, nicht blockierende Warnung bestehen; `[yanked] enabled` bleibt
+# bewusst auf dem Default `true`, damit künftige, tatsächlich relevante
+# Yanked-Funde weiterhin auffallen.
