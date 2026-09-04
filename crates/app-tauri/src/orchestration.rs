@@ -43,8 +43,8 @@ use futures::StreamExt;
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{
-    fence_untrusted, ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, RejectionReason,
-    Role, UntrustedKind,
+    fence_untrusted, ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, OutputRedactor,
+    RejectionReason, Role, UntrustedKind,
 };
 use ssh_manager_core::filter::{Decision, EvalContext};
 use ssh_manager_core::profiles::{
@@ -204,6 +204,53 @@ pub async fn run_chat_turn(
     emit_chat_auto_continuation_limit_reached(emitter, session_id, MAX_AUTO_FOLLOWUP_ROUNDS);
 }
 
+/// Spec 0040, Abschnitt 5: wird auf die (bereits gekürzte, s.
+/// `chat_context_truncation`) Kopie der Historie angewendet, die tatsächlich
+/// an [`ssh_manager_core::ai::AiProvider::send`] geht — unmittelbar vor
+/// jedem `send()`-Aufruf, an allen drei Aufrufstellen in diesem Modul.
+///
+/// **Kritisch — nur additiv:** wendet denselben [`OutputRedactor`] erneut
+/// auf jede Nachricht an, der auch beim ursprünglichen Erzeugen bereits
+/// lief (Spec 0006, Abschnitt 5, für `CommandResult`; hier neu auch für
+/// freien `Text`-Inhalt über [`OutputRedactor::redact_text`]). Das ist
+/// strukturell garantiert additiv: `redact`/`redact_text` ersetzen
+/// ausschließlich neu erkannte Muster durch den `[REDACTED]`-Platzhalter,
+/// nie umgekehrt — ein bereits vorhandener Platzhalter matcht selbst keines
+/// der Muster erneut, bleibt also unverändert stehen, und kein Aufruf hier
+/// kann jemals Text sichtbar machen, der vorher (in `session.context`/der
+/// DB) redigiert war. Nur diese eine Kopie wird verändert — `session.
+/// context`/die persistierte Historie bleiben unangetastet, exakt wie bei
+/// der Kürzung nebenan.
+///
+/// `command`-Felder (bei `CommandResult`/`ActionRejected`) bleiben bewusst
+/// unangetastet — Spec 0018, Abschnitt 5: das ausgeführte Kommando selbst
+/// ist "bewusst voll transparent", nur seine Ausgabe läuft durch den
+/// Redactor (s. `execute_suggested_command`).
+fn reapply_redaction_for_send(
+    history: Vec<ChatMessage>,
+    redactor: &dyn OutputRedactor,
+) -> Vec<ChatMessage> {
+    history
+        .into_iter()
+        .map(|message| ChatMessage {
+            role: message.role,
+            content: match message.content {
+                MessageContent::Text(text) => MessageContent::Text(redactor.redact_text(&text)),
+                MessageContent::CommandResult {
+                    command,
+                    output,
+                    cancelled,
+                } => MessageContent::CommandResult {
+                    command,
+                    output: redactor.redact(&output),
+                    cancelled,
+                },
+                other @ MessageContent::ActionRejected { .. } => other,
+            },
+        })
+        .collect()
+}
+
 /// Genau eine KI-Antwortrunde. Gibt zurück, ob dabei mindestens eine
 /// Aktion tatsächlich ausgeführt wurde (und damit eine weitere Runde
 /// folgen sollte).
@@ -221,6 +268,10 @@ async fn run_one_round(
     // `chat_context_truncation`-Moduldoc).
     request_context.history =
         crate::chat_context_truncation::truncate_to_budget(request_context.history);
+    // Spec 0040, Abschnitt 5: nur-additive Re-Redaction unmittelbar vor dem
+    // `send()`-Aufruf, s. `reapply_redaction_for_send`-Doc-Kommentar.
+    request_context.history =
+        reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
     let mut stream = session.ai_provider.send(request_context);
 
     let mut text_buffer = String::new();
@@ -1955,6 +2006,10 @@ pub async fn generate_session_title_on_disconnect(session: &Session) {
     let mut request_context = session.context.lock().await.clone();
     request_context.history =
         crate::chat_context_truncation::truncate_to_budget(request_context.history);
+    // Spec 0040, Abschnitt 5: s. Kommentar an der anderen `send()`-Stelle in
+    // `run_one_round`.
+    request_context.history =
+        reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
     request_context.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(TITLE_GENERATION_INSTRUCTION.to_string()),
@@ -2044,10 +2099,13 @@ pub async fn suggest_note_update_on_disconnect(
     }
 
     let mut request_context = session.context.lock().await.clone();
-    // Spec 0034, Abschnitt 9: "vor jedem `AiProvider::send()`-Aufruf" — s.
-    // Kommentar an der anderen `send()`-Stelle in `run_one_round`.
+    // Spec 0034, Abschnitt 9 / Spec 0040, Abschnitt 5: "vor jedem
+    // `AiProvider::send()`-Aufruf" — s. Kommentar an der anderen
+    // `send()`-Stelle in `run_one_round`.
     request_context.history =
         crate::chat_context_truncation::truncate_to_budget(request_context.history);
+    request_context.history =
+        reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
     request_context.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(DISCONNECT_COMPLETION_INSTRUCTION.to_string()),
@@ -6476,6 +6534,198 @@ mod tests {
                 .untrusted_content_ingested
                 .load(std::sync::atomic::Ordering::SeqCst),
             "untrusted_content_ingested darf durch die MCP-Persistenz-Unterdrückung nicht umgangen werden"
+        );
+    }
+
+    // --- Spec 0040, Abschnitt 5: nur-additive Re-Redaction vor `send()` ----
+
+    /// Simuliert genau den Fall, der Abschnitt 5 motiviert: eine Nachricht,
+    /// die entstand, BEVOR ein bestimmtes Redaction-Muster existierte (hier
+    /// über `DefaultOutputRedactor::with_extra_patterns` als "nachträglich
+    /// hinzugefügte Regel" simuliert), landet unredigiert in der Historie.
+    /// `reapply_redaction_for_send` muss sie beim nächsten `send()` trotzdem
+    /// redigieren — sowohl im freien `Text`- als auch im
+    /// `CommandResult.output`-Feld.
+    #[test]
+    fn test_reapply_redaction_for_send_redacts_with_retroactively_added_pattern() {
+        let retroactive_pattern =
+            regex::Regex::new(r"sudo_geheim_[a-z0-9]+").expect("Testmuster ist gültig");
+        let redactor = DefaultOutputRedactor::with_extra_patterns(vec![retroactive_pattern]);
+
+        let history = vec![
+            ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text(
+                    "das sudo-Passwort ist sudo_geheim_abc123, bitte merken".to_string(),
+                ),
+            },
+            ChatMessage {
+                role: Role::ActionResult,
+                content: MessageContent::CommandResult {
+                    command: "cat notes.txt".to_string(),
+                    output: output("Notiz: sudo_geheim_abc123 verwenden"),
+                    cancelled: false,
+                },
+            },
+        ];
+
+        let redacted = reapply_redaction_for_send(history, &redactor);
+
+        match &redacted[0].content {
+            MessageContent::Text(t) => {
+                assert!(
+                    !t.contains("sudo_geheim_abc123"),
+                    "das nachträglich hinzugefügte Muster muss auch Text-Inhalte redigieren: {t}"
+                );
+                assert!(t.contains("[REDACTED]"));
+            }
+            other => panic!("Text-Variante erwartet, war: {other:?}"),
+        }
+        match &redacted[1].content {
+            MessageContent::CommandResult {
+                command, output, ..
+            } => {
+                assert_eq!(command, "cat notes.txt", "Kommandotext bleibt unangetastet");
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                assert!(
+                    !stdout.contains("sudo_geheim_abc123"),
+                    "CommandResult.output muss ebenfalls redigiert werden: {stdout}"
+                );
+            }
+            other => panic!("CommandResult-Variante erwartet, war: {other:?}"),
+        }
+    }
+
+    /// Kritischer Gegentest zur "nur additiv"-Anforderung: Inhalt, der
+    /// bereits redigiert ist (enthält schon den `[REDACTED]`-Platzhalter),
+    /// darf durch einen erneuten Redaction-Durchlauf niemals wieder
+    /// sichtbar/verändert werden — der Durchlauf darf ausschließlich NEU
+    /// erkannte Treffer ersetzen, nie etwas rückgängig machen oder anders
+    /// transformieren.
+    #[test]
+    fn test_reapply_redaction_for_send_never_reverses_existing_redaction() {
+        let redactor = DefaultOutputRedactor::new();
+        // Bewusst OHNE ein "password="/"token="-artiges Schlüsselwort direkt
+        // vor dem Platzhalter — sonst würde das eingebaute Credential-Muster
+        // den Platzhalter selbst (erneut, aber weiterhin sicher) treffen und
+        // "password=[REDACTED]" zu "[REDACTED]" zusammenziehen; das ist kein
+        // Bug (es wird nichts sichtbar, nur zusätzlich redigiert), würde
+        // hier aber nur die eigentliche Testaussage verwässern.
+        let already_redacted =
+            "Kommentar: das Secret wurde bereits entfernt ([REDACTED]), alles gut.".to_string();
+
+        let history = vec![ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::Text(already_redacted.clone()),
+        }];
+
+        let redacted = reapply_redaction_for_send(history, &redactor);
+
+        match &redacted[0].content {
+            MessageContent::Text(t) => assert_eq!(
+                t, &already_redacted,
+                "bereits redigierter Inhalt muss durch einen erneuten Durchlauf unverändert \
+                 bleiben — insbesondere darf der Platzhalter selbst nie wieder aufgelöst werden"
+            ),
+            other => panic!("Text-Variante erwartet, war: {other:?}"),
+        }
+    }
+
+    /// Ergänzung zum Test oben: selbst wenn der Platzhalter unmittelbar auf
+    /// ein Schlüsselwort wie `password=` folgt (das eingebaute
+    /// Credential-Muster matcht dann erneut, s. Kommentar oben), bleibt das
+    /// Ergebnis sicher — der Platzhalter bleibt bestehen, es wird nirgendwo
+    /// ursprünglicher Klartext sichtbar, nur ggf. noch etwas kompakter
+    /// redigiert.
+    #[test]
+    fn test_reapply_redaction_for_send_stays_safe_even_when_pattern_matches_placeholder_again() {
+        let redactor = DefaultOutputRedactor::new();
+        let history = vec![ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::Text(
+                "Verbindung ok, password=[REDACTED], danach normal weitergemacht".to_string(),
+            ),
+        }];
+
+        let redacted = reapply_redaction_for_send(history, &redactor);
+
+        match &redacted[0].content {
+            MessageContent::Text(t) => {
+                assert!(
+                    t.contains("[REDACTED]"),
+                    "der Platzhalter darf nie verschwinden: {t}"
+                );
+                assert!(
+                    !t.to_lowercase().contains("hunter") && !t.contains("password=hunter"),
+                    "kein Klartext-Secret darf jemals sichtbar werden: {t}"
+                );
+            }
+            other => panic!("Text-Variante erwartet, war: {other:?}"),
+        }
+    }
+
+    /// End-to-End: `session.context` (die für Persistenz/UI maßgebliche
+    /// Historie) bleibt exakt so, wie sie war — nur die tatsächlich an
+    /// `AiProvider::send()` übergebene Kopie ist zusätzlich redigiert. Deckt
+    /// damit beide Hälften von Abschnitt 5 gleichzeitig ab: die Re-Redaction
+    /// wirkt (dank `received_contexts_handle`, s. `MockAiProvider`
+    /// sichtbar), und sie verändert nirgendwo außerhalb dieser einen Kopie
+    /// etwas.
+    #[tokio::test]
+    async fn test_send_to_ai_provider_is_redacted_without_altering_persisted_context() {
+        let raw_secret_text = "Notiz: password=hunter2geheim nicht vergessen".to_string();
+        let ai_provider = MockAiProvider::new(vec![AiEvent::Done]);
+        let received_contexts = ai_provider.received_contexts_handle();
+        let mut session = session_with_ai_provider(ai_provider, MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        // Simuliert eine Nachricht, die (aus welchem Grund auch immer, z. B.
+        // eine ältere Redactor-Version) unredigiert in der Historie
+        // gelandet ist — direkt in den In-Memory-Kontext geschrieben, ohne
+        // über `push_history` bzw. dessen normalen Redaction-Pfad zu laufen.
+        session.context.lock().await.history.push(ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text(raw_secret_text.clone()),
+        });
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let sent = received_contexts.lock().unwrap().clone();
+        assert!(
+            !sent.is_empty(),
+            "der Provider muss mindestens einmal aufgerufen worden sein"
+        );
+        let sent_text = sent[0]
+            .history
+            .iter()
+            .find_map(|m| match &m.content {
+                MessageContent::Text(t) if t.contains("Notiz:") => Some(t.clone()),
+                _ => None,
+            })
+            .expect("die Nachricht muss (redigiert) beim Provider ankommen");
+        assert!(
+            !sent_text.contains("hunter2geheim"),
+            "der an die KI gesendete Text muss redigiert sein: {sent_text}"
+        );
+
+        let context_after = session.context.lock().await.history.clone();
+        assert!(
+            context_after.iter().any(|m| matches!(
+                &m.content,
+                MessageContent::Text(t) if t == &raw_secret_text
+            )),
+            "der In-Memory-Kontext/die persistierte Historie muss unverändert (roh) bleiben, \
+             nur die an den Provider gesendete Kopie wird redigiert: {context_after:?}"
         );
     }
 
