@@ -36,3 +36,52 @@ jobs:
 
       - name: cargo test
         run: cargo test --workspace
+
+  # Spec 0035: Dependency-Audit (cargo-audit, RustSec-Advisories) und
+  # Lizenz-/Herkunfts-Compliance (cargo-deny, D1 des Architektur-Briefs).
+  # Eigenständiger, nicht-Matrix-Job auf `ubuntu-latest` (Spec 0035,
+  # Abschnitt 4: nicht plattformspezifisch, ein einzelner Lauf reicht).
+  dependency-audit:
+    name: Dependency Audit (cargo-deny / cargo-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-deny and cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-audit
+
+      # Spec 0035, Abschnitt 2, letzter Punkt: Advisories bleiben
+      # cargo-audits Aufgabe — dieser Aufruf prüft bewusst nur Lizenzen
+      # und Herkunft (keine doppelte Konfiguration derselben Prüfung an
+      # zwei Stellen). Konfiguration: `deny.toml` im Repo-Root.
+      #
+      # Spec 0035, Abschnitt 5 ("zweistufiges Vorgehen"): der aktuelle
+      # Bestand wurde per lokalem Lauf einmalig durchgesehen und die dabei
+      # gefundenen, bewusst freigegebenen Fälle sind bereits in
+      # `deny.toml` eingetragen (s. dortige Kommentare) — trotzdem läuft
+      # dieser Schritt hier noch im BERICHTSMODUS: `continue-on-error:
+      # true`, damit ein künftiger, bislang unbedachter Fund die Pipeline
+      # NICHT sofort rot färbt, sondern zunächst nur sichtbar wird. Der
+      # Umstieg auf blockierend (Entfernen von `continue-on-error`) ist
+      # ein bewusster, separater Folge-Schritt, sobald sich das in der
+      # Praxis bewährt hat — NICHT Teil dieses Schritts.
+      - name: cargo deny check (licenses, sources, bans)
+        run: cargo deny check licenses sources bans
+        continue-on-error: true
+
+      # Konfiguration: `.cargo/audit.toml` (der von cargo-audit selbst
+      # automatisch erkannte Pfad, s. dortiger Kommentar zum Schema/zur
+      # Pfad-Konvention). Ebenfalls Berichtsmodus, gleiche Begründung wie
+      # beim `cargo deny`-Schritt oben.
+      - name: cargo audit
+        run: cargo audit
+        continue-on-error: true
