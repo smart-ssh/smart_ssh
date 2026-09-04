@@ -36,6 +36,40 @@ verlangt hier explizit eine getroffene und dokumentierte Entscheidung
 (entfernen oder tatsächlich produzieren), statt den Leerlauf weiter
 stillschweigend mitzuschleppen.
 
+**Korrektur nach dem verbindlichen `spec-reviewer`-Review dieses Schritts:**
+eine erste Fassung dieses ADR begründete Option 2 (s. u.) fälschlich damit,
+ein generiertes Dokument werde gar nicht persistiert ("kein sichtbarer
+Chat-Eintrag im persistierten Sinn"). Das ist **sachlich falsch** —
+`orchestration::handle_document_generated` ruft `push_history` mit dem
+vollständigen `content_markdown` als `Role::Assistant`/
+`MessageContent::Text` auf:
+
+```rust
+// Spec 0012, Abschnitt 5: "wird als Teil der Assistant-Nachricht in
+// context.history übernommen (wie ein normaler Chat-Text)" — kein
+// Sonderfall gegenüber `flush_text_buffer` oben, derselbe
+// `Role::Assistant`/`MessageContent::Text`.
+push_history(
+    session,
+    ChatMessage {
+        role: Role::Assistant,
+        content: MessageContent::Text(content_markdown),
+    },
+)
+```
+
+Ein generiertes Dokument landet also sehr wohl in `chat_messages` — nur
+eben als ganz gewöhnlicher `content_type = 'text'`-Eintrag, nicht als
+eigener `'document'`-Typ. Was tatsächlich (laut Spec 0012, Abschnitt 2/3,
+und dem Kommentar an der `GenerateDocument`-Verzweigung in
+`run_one_round`) NICHT passiert, ist: kein Filter-Engine-Durchlauf, kein
+`handle_action_proposed`-Bestätigungsdialog — das war die eigentlich
+gemeinte, korrekte Aussage, nur an der falschen Stelle (Persistenz statt
+Bestätigung) angewendet. Die Kernaussage dieses ADR ändert sich dadurch
+nicht: `content_type_for` deckt weiterhin nur drei der vier `CHECK`-Werte
+ab, `'document'` bleibt unerreichbar — nur die Begründung für Option 2
+unten ist entsprechend korrigiert.
+
 ## Entscheidung
 
 **`'document'` bleibt im `CHECK` erhalten — keine Migration, um es zu
@@ -49,17 +83,24 @@ Abgewogene Optionen:
    und ein weiterer TEXT/BLOB-Tabellen-Rebuild allein für einen nie
    erreichten Enum-Wert ist Migrations-Churn ohne Gegenwert.
 2. **Tatsächlich produzieren**: `MessageContent` um eine `Document`-
-   Variante erweitern und generierte Dokumente (Spec 0012,
-   `AiAction::GenerateDocument`) in `chat_messages` persistieren. Das
-   widerspricht aber einer bereits getroffenen, in Spec 0012 Abschnitt 2
-   und im `handle_document_generated`-Doc-Kommentar (`orchestration.rs`)
-   festgehaltenen Design-Entscheidung: ein generiertes Dokument läuft
-   *nicht* durch die Filter-Engine, *keinen* Bestätigungsdialog, "kein
-   sichtbarer Chat-Eintrag" im persistierten Sinn — es ist bewusst reiner,
-   lokaler, exportierbarer Inhalt, keine dauerhaft gespeicherte Chat-
-   Nachricht. Diese Option würde also eine andere, bereits bewusst
-   getroffene Spec-0012-Entscheidung rückgängig machen — nicht Teil
-   dieses "kleiner Fix"-Schritts.
+   Variante erweitern, und `handle_document_generated` diese statt
+   `MessageContent::Text` verwenden lassen, damit ein generiertes Dokument
+   als eigener `content_type = 'document'`-Eintrag statt als gewöhnlicher
+   `'text'`-Eintrag persistiert wird (persistiert wird es — s. Korrektur
+   oben — bereits heute, nur untypisiert). Der Nutzen wäre rein
+   struktureller Natur: eine wiederaufgenommene Sitzung könnte dann
+   erkennen "dies war ein generiertes Dokument" und es entsprechend anders
+   darstellen (z. B. mit erneuten Export-Buttons statt als reinen
+   Fließtext) — genau das leistet die aktuelle `Text`-Behandlung nicht,
+   `resume_chat_session`/`get_chat_history` liefern ein früher generiertes
+   Dokument nach dem Wiederaufnehmen ununterscheidbar von einer normalen
+   KI-Textantwort zurück. Spec 0012 selbst verlangt diese Unterscheidung
+   aber nirgends (die dort getroffene, weiterhin gültige Entscheidung
+   betrifft nur Filter-Engine/Bestätigungsdialog, s. o.) — eine eigene
+   `Document`-Variante wäre eine über den bestehenden Spec-Text
+   hinausgehende **neue** Funktion (bessere Wiederaufnahme-Darstellung),
+   keine bloße Aufräumarbeit an einem toten Enum-Wert, und damit nicht
+   Teil dieses "kleiner Fix"-Schritts.
 3. **Unverändert lassen, dokumentiert als bewusste Reserve.** Der Wert
    kostet nichts (eine `CHECK`-Klausel ist keine Laufzeit-Belastung,
    keine zusätzliche Spalte) und hält die Tür offen für eine *künftige*
@@ -70,9 +111,11 @@ Abgewogene Optionen:
 
 Gewählt: **Option 3.** Der Aufwand für Option 1 (Tabellen-Rebuild) steht
 in keinem Verhältnis zum Nutzen (ein nie erreichter Enum-Wert stört
-weder Korrektheit noch Sicherheit), und Option 2 würde eine bereits
-bewusst getroffene, unabhängige Design-Entscheidung aus Spec 0012 im
-Vorbeigehen revidieren.
+weder Korrektheit noch Sicherheit), und Option 2 wäre eine eigenständige,
+über Spec 0012 hinausgehende neue Funktion (bessere Darstellung
+generierter Dokumente nach dem Wiederaufnehmen) — eine vom Nutzer zu
+treffende Produktentscheidung, kein stiller Nebeneffekt dieses
+"kleiner Fix"-Schritts.
 
 ## Konsequenzen
 
