@@ -53,11 +53,17 @@ When a `v*` tag is pushed (or triggered manually via **Workflow Dispatch** in Gi
   - **Linux** (`ubuntu-22.04`): `.deb` and `.AppImage` packages
 - Automatically creates a GitHub Draft Release under the **Releases** section with all installers and binaries attached for download.
 
-### CI Workflow ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml))
-Runs on every pull request and branch push:
+### CI Workflow ([`.github/workflows/community.yml`](./.github/workflows/community.yml))
+Runs on every pull request and branch push, proving the public repo builds
+standalone from a fresh clone with no secrets (Spec 0038):
 - Code formatting (`cargo fmt --all --check`)
 - Lints (`cargo clippy --workspace --all-targets -- -D warnings`)
 - Workspace unit & integration tests (`cargo test --workspace`)
+- Workspace build (`cargo build --workspace`)
+- Frontend build (`npm ci && npm run build`, i.e. `tsc -b && vite build`)
+- Dependency audit (`cargo-deny`/`cargo-audit`, separate job, currently
+  report-mode/`continue-on-error` per Spec 0035 — see that workflow's own
+  comments for when this becomes blocking)
 
 ---
 

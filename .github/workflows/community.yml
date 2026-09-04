@@ -1,4 +1,14 @@
-name: CI
+name: Community
+
+# Spec 0038, Abschnitt 6: beweist, dass das öffentliche Repo (dieser
+# Workflow läuft aus einem frischen Klon, ohne Secrets) eigenständig baut —
+# schlägt ein Schritt hier künftig fehl, weil etwas aus einem privaten Repo
+# fehlt, ist das ein Bug in der Repository-Trennung, nicht im öffentlichen
+# Code selbst. Umbenennung/Erweiterung des bisherigen `ci.yml` (Spec 0001)
+# statt eines komplett neuen, parallelen Workflows: identische Matrix,
+# identische Rust-Schritte — ein zweiter, redundanter Workflow hätte beide
+# bei jeder künftigen Änderung synchron halten müssen, ohne echten Vorteil.
+# Einzige inhaltliche Ergänzung ist der Frontend-Build (Abschnitt 6, unten).
 
 on:
   push:
@@ -28,6 +38,21 @@ jobs:
       - name: Cache cargo registry & build artifacts
         uses: Swatinem/rust-cache@v2
 
+      # Nur auf Linux nötig: Tauri (genauer `wry`) linkt gegen WebKitGTK,
+      # ohne diese System-Pakete schlägt bereits `cargo build`/`clippy` für
+      # `apps/smart-ssh-community` fehl — dieselben Pakete wie in
+      # `release.yml`s Linux-Leg.
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
       - name: cargo fmt --check
         run: cargo fmt --all --check
 
@@ -37,10 +62,40 @@ jobs:
       - name: cargo test
         run: cargo test --workspace
 
+      - name: cargo build
+        run: cargo build --workspace
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: apps/smart-ssh-community/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: apps/smart-ssh-community/frontend
+        run: npm ci
+
+      - name: Frontend build
+        working-directory: apps/smart-ssh-community/frontend
+        run: npm run build
+
   # Spec 0035: Dependency-Audit (cargo-audit, RustSec-Advisories) und
   # Lizenz-/Herkunfts-Compliance (cargo-deny, D1 des Architektur-Briefs).
   # Eigenständiger, nicht-Matrix-Job auf `ubuntu-latest` (Spec 0035,
   # Abschnitt 4: nicht plattformspezifisch, ein einzelner Lauf reicht).
+  #
+  # Spec 0038, Abschnitt 5: macht aus `cargo deny check licenses` hier einen
+  # PFLICHTSCHRITT (ohne `continue-on-error`), sofern Spec 0035 inzwischen
+  # bereinigt und auf blockierend umgestellt wurde. Das ist zum Zeitpunkt
+  # dieses Commits noch NICHT der Fall — `deny.toml`s eigener Kommentar und
+  # der bisherige `ci.yml`-Job-Kommentar (unverändert unten übernommen)
+  # sagen ausdrücklich, dass der Umstieg auf blockierend ein bewusster,
+  # separater Folge-Schritt ist. Dieser Job bleibt deshalb unverändert im
+  # Berichtsmodus (`continue-on-error: true`) — sobald Spec 0035 auf
+  # blockierend umgestellt wird, muss dieser Kommentar (und die
+  # `continue-on-error`-Zeile bei `cargo deny check licenses`) hier
+  # nachgezogen werden.
   dependency-audit:
     name: Dependency Audit (cargo-deny / cargo-audit)
     runs-on: ubuntu-latest
