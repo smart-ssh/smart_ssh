@@ -15,6 +15,7 @@
 mod fencing;
 mod provider;
 mod redactor;
+mod second_opinion;
 mod types;
 
 #[cfg(test)]
@@ -23,6 +24,7 @@ mod tests;
 pub use fencing::{fence_markers, fence_untrusted, UntrustedKind};
 pub use provider::AiProvider;
 pub use redactor::{DefaultOutputRedactor, OutputRedactor};
+pub use second_opinion::{truncate_for_second_opinion, DEFAULT_SECOND_OPINION_MAX_LEN};
 pub use types::{
     default_action_schemas, ActionParameter, ActionParameterKind, ActionSchema, AiError, AiEvent,
     ChatMessage, MessageContent, ProviderId, ProviderType, RejectionReason, Role, SessionContext,

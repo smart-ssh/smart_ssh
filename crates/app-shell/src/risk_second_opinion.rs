@@ -7,7 +7,8 @@ use futures::StreamExt;
 use tauri_plugin_store::StoreExt;
 
 use ssh_manager_core::ai::{
-    AiEvent, AiProvider, ChatMessage, MessageContent, Role, SessionContext,
+    truncate_for_second_opinion, AiEvent, AiProvider, ChatMessage, MessageContent, Role,
+    SessionContext, DEFAULT_SECOND_OPINION_MAX_LEN,
 };
 use ssh_manager_core::risk::RiskLevel;
 
@@ -64,6 +65,35 @@ const SECOND_OPINION_PROMPT: &str =
      die nicht an einen KI-Anbieter weitergegeben werden sollten? Antworte nur mit none/yellow/red \
      und einer kurzen Begründung.";
 
+/// Baut den `SessionContext` für einen Zweitmeinungs-Aufruf (sowohl
+/// [`fetch_second_opinion`] als auch [`fetch_injection_check`], "dieselbe
+/// Infrastruktur", s. Doc-Kommentar unten bei `INJECTION_CHECK_PROMPT`) —
+/// kürzt `content` zentral über [`truncate_for_second_opinion`] (Spec 0043,
+/// Fund C), bevor es in die `history` wandert, und hängt bei Kürzung einen
+/// Hinweis an `system_prompt` an, damit die Zweitmeinung selbst weiß, dass
+/// ihr nur ein Ausschnitt vorliegt.
+fn build_second_opinion_context(system_prompt: &str, content: &str) -> SessionContext {
+    let (truncated_content, was_truncated) =
+        truncate_for_second_opinion(content, DEFAULT_SECOND_OPINION_MAX_LEN);
+    let system_context = if was_truncated {
+        format!(
+            "{system_prompt}\n\nHinweis: Der folgende Inhalt wurde auf \
+             {DEFAULT_SECOND_OPINION_MAX_LEN} Bytes gekürzt, weil er das Limit für die \
+             Zweitmeinung überschritten hat — er kann unvollständig sein."
+        )
+    } else {
+        system_prompt.to_string()
+    };
+    SessionContext {
+        system_context,
+        history: vec![ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text(truncated_content),
+        }],
+        available_actions: Vec::new(),
+    }
+}
+
 /// Fragt `provider` nach einer Zweitmeinung zur Daten-Risiko-Achse für
 /// `command_or_path` (Spec 0026, Abschnitt 3). **Minimaler Kontext**: nur
 /// der Kommando-/Pfadtext selbst als einzige `history`-Nachricht, kein
@@ -83,14 +113,7 @@ pub async fn fetch_second_opinion(
     provider: &dyn AiProvider,
     command_or_path: &str,
 ) -> Option<(RiskLevel, String)> {
-    let context = SessionContext {
-        system_context: SECOND_OPINION_PROMPT.to_string(),
-        history: vec![ChatMessage {
-            role: Role::User,
-            content: MessageContent::Text(command_or_path.to_string()),
-        }],
-        available_actions: Vec::new(),
-    };
+    let context = build_second_opinion_context(SECOND_OPINION_PROMPT, command_or_path);
 
     let mut stream = provider.send(context);
     let mut text = String::new();
@@ -172,14 +195,7 @@ pub async fn fetch_injection_check(
     provider: &dyn AiProvider,
     content: &str,
 ) -> Option<(bool, String)> {
-    let context = SessionContext {
-        system_context: INJECTION_CHECK_PROMPT.to_string(),
-        history: vec![ChatMessage {
-            role: Role::User,
-            content: MessageContent::Text(content.to_string()),
-        }],
-        available_actions: Vec::new(),
-    };
+    let context = build_second_opinion_context(INJECTION_CHECK_PROMPT, content);
 
     let mut stream = provider.send(context);
     let mut text = String::new();
@@ -228,7 +244,107 @@ fn parse_injection_check(text: &str) -> Option<(bool, String)> {
 
 #[cfg(test)]
 mod tests {
+    use std::pin::Pin;
+    use std::sync::{Arc, Mutex};
+
+    use futures::Stream;
+
     use super::*;
+
+    /// Zeichnet den zuletzt empfangenen `SessionContext` auf (Spec 0043,
+    /// Fund C: Tests prüfen darüber, dass `content` VOR dem Provider-Aufruf
+    /// gekürzt wurde) und antwortet mit einer festen Textsequenz.
+    struct RecordingMockAiProvider {
+        response_text: &'static str,
+        received: Arc<Mutex<Option<SessionContext>>>,
+    }
+
+    impl AiProvider for RecordingMockAiProvider {
+        fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+            *self.received.lock().unwrap() = Some(context);
+            Box::pin(futures::stream::iter(vec![
+                AiEvent::TextDelta(self.response_text.to_string()),
+                AiEvent::Done,
+            ]))
+        }
+    }
+
+    /// Spec 0043, Fund C: Inhalt über dem Cap wird VOR dem Zweitmeinungs-
+    /// Aufruf gekürzt — der Provider bekommt nie mehr als
+    /// `DEFAULT_SECOND_OPINION_MAX_LEN` Bytes im `history`-Text zu sehen,
+    /// und der Prompt trägt einen Kürzungs-Hinweis.
+    #[tokio::test]
+    async fn test_t43_fetch_second_opinion_truncates_oversized_content_before_sending() {
+        let received = Arc::new(Mutex::new(None));
+        let provider = RecordingMockAiProvider {
+            response_text: "none - fine",
+            received: received.clone(),
+        };
+        let oversized = "A".repeat(DEFAULT_SECOND_OPINION_MAX_LEN + 5_000);
+
+        let result = fetch_second_opinion(&provider, &oversized).await;
+
+        assert_eq!(result, Some((RiskLevel::None, "fine".to_string())));
+        let context = received.lock().unwrap().clone().expect("send() aufgerufen");
+        let MessageContent::Text(sent_text) = &context.history[0].content else {
+            panic!("erwartete MessageContent::Text");
+        };
+        assert!(
+            sent_text.len() <= DEFAULT_SECOND_OPINION_MAX_LEN,
+            "gesendeter Inhalt war {} Bytes, Cap ist {}",
+            sent_text.len(),
+            DEFAULT_SECOND_OPINION_MAX_LEN
+        );
+        assert!(
+            context.system_context.contains("gekürzt"),
+            "Prompt muss auf die Kürzung hinweisen, war: {}",
+            context.system_context
+        );
+    }
+
+    /// Spec 0043, Fund C: Inhalt UNTER dem Cap bleibt unverändert, kein
+    /// Kürzungs-Hinweis im Prompt (kein Fehlalarm).
+    #[tokio::test]
+    async fn test_t43_fetch_second_opinion_leaves_undersized_content_unchanged() {
+        let received = Arc::new(Mutex::new(None));
+        let provider = RecordingMockAiProvider {
+            response_text: "none - fine",
+            received: received.clone(),
+        };
+
+        let _ = fetch_second_opinion(&provider, "cat /var/log/syslog").await;
+
+        let context = received.lock().unwrap().clone().expect("send() aufgerufen");
+        let MessageContent::Text(sent_text) = &context.history[0].content else {
+            panic!("erwartete MessageContent::Text");
+        };
+        assert_eq!(sent_text, "cat /var/log/syslog");
+        assert!(!context.system_context.contains("gekürzt"));
+    }
+
+    /// Spec 0043, Fund C: die Zweitmeinung bleibt rein eskalierend — eine
+    /// Kürzung ändert nichts an dieser Eigenschaft, sie beeinflusst nur, was
+    /// der Provider zu sehen bekommt, nie, wie sein `none`/`yellow`/`red`
+    /// interpretiert wird. Belegt hier, dass ein `red` auf gekürztem Inhalt
+    /// unverändert als `RiskLevel::Red` durchkommt — das regelbasierte
+    /// Ergebnis (das dieser Aufruf gar nicht kennt) bleibt davon in
+    /// `orchestration`/`risk` ohnehin unberührt (nur-eskalierend, s.
+    /// `orchestration::escalate_data_risk`).
+    #[tokio::test]
+    async fn test_t43_truncation_preserves_escalation_only_second_opinion() {
+        let provider = RecordingMockAiProvider {
+            response_text: "red - looks like a credential dump",
+            received: Arc::new(Mutex::new(None)),
+        };
+        let oversized = "cat /etc/shadow\n".repeat(2_000);
+
+        let result = fetch_second_opinion(&provider, &oversized).await;
+
+        assert_eq!(
+            result,
+            Some((RiskLevel::Red, "looks like a credential dump".to_string()))
+        );
+    }
 
     #[test]
     fn test_parse_second_opinion_recognizes_none() {
