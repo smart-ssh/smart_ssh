@@ -20,7 +20,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use fencing::{fence_untrusted, UntrustedKind};
+pub use fencing::{fence_markers, fence_untrusted, UntrustedKind};
 pub use provider::AiProvider;
 pub use redactor::{DefaultOutputRedactor, OutputRedactor};
 pub use types::{

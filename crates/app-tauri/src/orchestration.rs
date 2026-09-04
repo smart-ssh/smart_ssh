@@ -226,6 +226,42 @@ pub async fn run_chat_turn(
 /// unangetastet — Spec 0018, Abschnitt 5: das ausgeführte Kommando selbst
 /// ist "bewusst voll transparent", nur seine Ausgabe läuft durch den
 /// Redactor (s. `execute_suggested_command`).
+///
+/// **Fencing-Sicherheit (Nachtrag, unabhängiger Review-Pass zu Spec
+/// 0040):** `MessageContent::Text` kann bereits gefencten Inhalt tragen
+/// (z. B. `execute_read_remote_file`s `<remote_file>...</remote_file>`,
+/// Spec 0039) — anders als `CommandResult` (dessen `output` erst *nach*
+/// dieser Funktion, beim eigentlichen Request-Aufbau in `ai-providers`,
+/// gefenced wird, Redaction dort also bereits strukturell vor dem
+/// Fencing läuft). Ein einfacher `redact_text(&text)` über die GESAMTE,
+/// bereits gefencte Zeichenkette würde ein gieriges Redaction-
+/// Fallback-Muster (z. B. das Private-Key-Rückfallmuster für einen
+/// abgeschnittenen Key-Block ohne `END`-Marker, s.
+/// `ssh_manager_core::ai::redactor`) erlauben, über die Fence-Grenze
+/// hinweg bis zum schließenden Tag zu matchen und diesen mit zu
+/// verschlucken — die Fencing-Garantie aus Spec 0039 (nicht
+/// vertrauenswürdiger Inhalt bleibt sicher eingerahmt) wäre damit
+/// verletzt, obwohl die Redaction-Richtung selbst sicher bleibt (nichts
+/// wird sichtbar, nur zusätzlich gelöscht).
+///
+/// Ein reines Vorziehen des Fencings vor die Redaction (der eigentlich
+/// bevorzugte Fix) ist für `RemoteFile`-Inhalt hier nicht sauber möglich:
+/// der gefencte Text IST die persistierte Repräsentation (`session.
+/// context`/die DB speichern bereits das fertig gefencte `MessageContent::
+/// Text`, s. `execute_read_remote_file`) — ein wiederaufgenommener Chat
+/// redigiert beim nächsten Versand also zwangsläufig bereits gefencten
+/// Text erneut. Stattdessen behandelt `redact_text_preserving_fence_
+/// markers` unten die bekannten, festen Fence-Marker-Strings
+/// (`ssh_manager_core::ai::fence_markers`) als Segment-Grenzen: der Text
+/// wird an jedem Marker aufgetrennt, jedes Segment *zwischen* zwei
+/// Markern unabhängig redigiert (ein gieriges Muster kann dadurch nie
+/// über einen Marker hinausmatchen — die Marker selbst durchlaufen den
+/// Redactor gar nicht erst), die Marker unverändert wieder eingefügt. Das
+/// ist sicher, weil `fence_untrusted`s Escaping (`escape_for_prompt_fence`)
+/// garantiert, dass ein literales `<`/`>` in bereits gefenctem Text NIE
+/// aus dem ursprünglichen Inhalt stammt, sondern ausschließlich von den
+/// Fence-Tags selbst — die Marker-Liste kann also nichts fälschlich
+/// "beschützen", das eigentlich redigiert werden müsste.
 fn reapply_redaction_for_send(
     history: Vec<ChatMessage>,
     redactor: &dyn OutputRedactor,
@@ -235,7 +271,9 @@ fn reapply_redaction_for_send(
         .map(|message| ChatMessage {
             role: message.role,
             content: match message.content {
-                MessageContent::Text(text) => MessageContent::Text(redactor.redact_text(&text)),
+                MessageContent::Text(text) => {
+                    MessageContent::Text(redact_text_preserving_fence_markers(&text, redactor))
+                }
                 MessageContent::CommandResult {
                     command,
                     output,
@@ -249,6 +287,42 @@ fn reapply_redaction_for_send(
             },
         })
         .collect()
+}
+
+/// s. `reapply_redaction_for_send`-Doc-Kommentar ("Fencing-Sicherheit").
+/// Trennt `text` an jedem bekannten Fence-Marker (`ssh_manager_core::ai::
+/// fence_markers`) auf, redigiert nur die Segmente dazwischen und fügt die
+/// Marker unverändert wieder ein — ein Redaction-Muster kann dadurch nie
+/// über eine Fence-Grenze hinausmatchen, unabhängig davon, wie gierig es
+/// ist. Findet `text` keinen Marker (der Normalfall für gewöhnlichen
+/// Chat-Text), verhält sich das identisch zu einem einzelnen
+/// `redactor.redact_text(text)`-Aufruf.
+fn redact_text_preserving_fence_markers(text: &str, redactor: &dyn OutputRedactor) -> String {
+    let markers = ssh_manager_core::ai::fence_markers();
+    let mut result = String::new();
+    let mut remaining = text;
+
+    loop {
+        let earliest = markers
+            .iter()
+            .filter_map(|marker| remaining.find(marker.as_str()).map(|idx| (idx, marker)))
+            .min_by_key(|(idx, _)| *idx);
+
+        match earliest {
+            Some((idx, marker)) => {
+                let (before, after) = remaining.split_at(idx);
+                result.push_str(&redactor.redact_text(before));
+                result.push_str(marker);
+                remaining = &after[marker.len()..];
+            }
+            None => {
+                result.push_str(&redactor.redact_text(remaining));
+                break;
+            }
+        }
+    }
+
+    result
 }
 
 /// Genau eine KI-Antwortrunde. Gibt zurück, ob dabei mindestens eine
@@ -6867,6 +6941,86 @@ mod tests {
                     !t.to_lowercase().contains("hunter") && !t.contains("password=hunter"),
                     "kein Klartext-Secret darf jemals sichtbar werden: {t}"
                 );
+            }
+            other => panic!("Text-Variante erwartet, war: {other:?}"),
+        }
+    }
+
+    /// Unabhängiger Review-Pass zu Spec 0040, Abschnitt 5: ein bereits
+    /// gefencter `<remote_file>`-Eintrag (wie ihn `execute_read_remote_
+    /// file` in `session.context`/der DB ablegt), dessen Inhalt einen
+    /// abgeschnittenen Private-Key-Block OHNE `END`-Marker enthält, würde
+    /// mit dem gierigen Rückfallmuster (`(?s)-----BEGIN ... PRIVATE
+    /// KEY-----.*`, matcht bis zum Ende der Zeichenkette) auch das
+    /// schließende `</remote_file>`-Tag mitfressen — die Fencing-Garantie
+    /// aus Spec 0039 wäre damit verletzt (kaputter Fence = genau die
+    /// Lücke, durch die eingeschleuste Anweisungen wieder als
+    /// vertrauenswürdiger Kontext durchrutschen könnten), obwohl die
+    /// Redaction-Richtung selbst sicher bleibt (nur Löschung, keine
+    /// Enthüllung). Nach dem Fix muss der schließende Tag intakt bleiben.
+    #[test]
+    fn test_reapply_redaction_for_send_never_breaks_an_already_fenced_closing_tag() {
+        let redactor = DefaultOutputRedactor::new();
+        let truncated_key = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqh...(abgeschnitten)";
+        let fenced = fence_untrusted(
+            UntrustedKind::RemoteFile,
+            "/home/deploy/id_rsa",
+            truncated_key,
+        );
+        let history = vec![ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::Text(format!("Inhalt von 'id_rsa':\n\n{fenced}")),
+        }];
+
+        let redacted = reapply_redaction_for_send(history, &redactor);
+
+        match &redacted[0].content {
+            MessageContent::Text(t) => {
+                assert_eq!(
+                    t.matches("</remote_file>").count(),
+                    1,
+                    "der schließende Fence-Tag muss erhalten bleiben, tatsächlicher Text: {t}"
+                );
+                assert!(
+                    t.trim_end().ends_with("</remote_file>"),
+                    "der Fence muss korrekt geschlossen sein, tatsächlicher Text: {t}"
+                );
+                assert!(
+                    !t.contains("MIIEvQIBADANBgkqh"),
+                    "der Key-Inhalt selbst muss weiterhin redigiert sein: {t}"
+                );
+            }
+            other => panic!("Text-Variante erwartet, war: {other:?}"),
+        }
+    }
+
+    /// Ergänzung zum Test oben: ein tatsächliches Secret innerhalb bereits
+    /// gefencten Inhalts wird weiterhin redigiert — der Fix schwächt die
+    /// Redaction nicht ab, er ordnet sie nur relativ zu den Fence-Grenzen.
+    #[test]
+    fn test_reapply_redaction_for_send_still_redacts_a_real_secret_inside_fenced_content() {
+        let redactor = DefaultOutputRedactor::new();
+        let fenced = fence_untrusted(
+            UntrustedKind::RemoteFile,
+            "/etc/app.conf",
+            "host=localhost\npassword=hunter2geheim\n",
+        );
+        let history = vec![ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::Text(fenced),
+        }];
+
+        let redacted = reapply_redaction_for_send(history, &redactor);
+
+        match &redacted[0].content {
+            MessageContent::Text(t) => {
+                assert!(
+                    !t.contains("hunter2geheim"),
+                    "das Secret muss redigiert sein: {t}"
+                );
+                assert!(t.contains("[REDACTED]"));
+                assert_eq!(t.matches("</remote_file>").count(), 1);
+                assert!(t.trim_end().ends_with("</remote_file>"));
             }
             other => panic!("Text-Variante erwartet, war: {other:?}"),
         }

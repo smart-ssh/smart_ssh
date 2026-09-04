@@ -32,6 +32,38 @@ impl UntrustedKind {
             UntrustedKind::ServerNote => "server_note",
         }
     }
+
+    const ALL: [UntrustedKind; 4] = [
+        UntrustedKind::CommandStdout,
+        UntrustedKind::CommandStderr,
+        UntrustedKind::RemoteFile,
+        UntrustedKind::ServerNote,
+    ];
+}
+
+/// Alle literalen Fence-Marker-Strings, die [`fence_untrusted`] jemals
+/// erzeugen kann (öffnende/schließende Tags jeder [`UntrustedKind`]-
+/// Variante plus das gemeinsame `<source>`/`</source>`-Element).
+///
+/// Grundlage für einen additiven Redaction-Durchlauf über bereits
+/// gefencten Text (Spec 0040, Abschnitt 5 — ein unabhängiger Review-Pass
+/// fand, dass ein gieriges Redaction-Fallback-Muster ein schließendes
+/// Fence-Tag mitfressen und damit die Fencing-Garantie aus Spec 0039
+/// verletzen kann): diese Marker sind laut `escape_for_prompt_fence` nie
+/// Teil des escapten `content`/`source` selbst (jedes literale `<`/`>`
+/// darin wird zu `&lt;`/`&gt;`) — ein additiver Redaction-Durchlauf kann
+/// sie deshalb gefahrlos als feste Segment-Grenzen behandeln, ohne
+/// irgendetwas an tatsächlich redaktionswürdigem Inhalt zu verschonen.
+/// Öffentlich, statt die Tag-Namen an der Aufrufstelle ein zweites Mal zu
+/// duplizieren.
+pub fn fence_markers() -> Vec<String> {
+    let mut markers = vec!["<source>".to_string(), "</source>".to_string()];
+    for kind in UntrustedKind::ALL {
+        let tag = kind.tag_name();
+        markers.push(format!("<{tag}>"));
+        markers.push(format!("</{tag}>"));
+    }
+    markers
 }
 
 /// Umschließt `content` aus einer nicht vertrauenswürdigen Quelle mit
@@ -154,5 +186,30 @@ mod tests {
     fn test_fence_untrusted_includes_the_source_for_context() {
         let fenced = fence_untrusted(UntrustedKind::ServerNote, "Server \"web-01\"", "notes");
         assert!(fenced.contains("<source>Server \"web-01\"</source>"));
+    }
+
+    /// `fence_markers()` muss jeden Marker enthalten, den `fence_untrusted`
+    /// für jede `UntrustedKind`-Variante tatsächlich erzeugt — sonst
+    /// bliebe ein additiver Redaction-Durchlauf (Spec 0040), der sich auf
+    /// diese Liste verlässt, für genau diese Variante ungeschützt.
+    #[test]
+    fn test_fence_markers_covers_every_untrusted_kind_variant() {
+        let markers = fence_markers();
+        for kind in UntrustedKind::ALL {
+            let fenced = fence_untrusted(kind, "quelle", "inhalt");
+            let opening = format!("<{}>", kind.tag_name());
+            let closing = format!("</{}>", kind.tag_name());
+            assert!(
+                markers.contains(&opening),
+                "fence_markers() fehlt der öffnende Tag für {kind:?}"
+            );
+            assert!(
+                markers.contains(&closing),
+                "fence_markers() fehlt der schließende Tag für {kind:?}"
+            );
+            assert!(fenced.contains(&opening) && fenced.contains(&closing));
+        }
+        assert!(markers.contains(&"<source>".to_string()));
+        assert!(markers.contains(&"</source>".to_string()));
     }
 }
