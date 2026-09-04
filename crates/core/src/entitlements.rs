@@ -37,6 +37,47 @@ pub enum Feature {
     SelfHosted,
 }
 
+impl Feature {
+    /// Trennt lokale von Dienst-gebundenen Features (Spec 0042, Abschnitt
+    /// 3.5) — Metadaten fürs Lizenzsystem des privaten Repos, das im
+    /// versions-basierten Perpetual-Fallback (abgelaufenes Abo, App-Version
+    /// noch in der zuletzt bezahlten Minor-Reihe) nur die **lokalen**
+    /// Pro-Features aktiv lässt. `core` selbst trifft keine
+    /// Lizenzentscheidung (s. Moduldoc) — diese Methode liefert nur die
+    /// Einordnung, auf der das private `licensing`-Modul aufbaut.
+    ///
+    /// **Kriterium**: "Dienst-gebunden" heißt, ein von uns selbst
+    /// betriebener laufender Dienst steht dahinter, der ohne aktives Abo
+    /// nicht mehr funktionieren darf/kann — nicht dasselbe wie
+    /// Team-/Enterprise-Tier-Zugehörigkeit. `OrgPolicy` (Policy-as-Code aus
+    /// dem Git des Kunden) und `AuditExport` (lokaler signierter Export)
+    /// sind z. B. Team-Tier, aber lokal: kein Dienst von uns, der bei
+    /// Ablauf abgeschaltet werden müsste.
+    ///
+    /// `ManagedAi` (unser KI-Proxy) und `CloudSync` (unser gehosteter
+    /// Sync-Dienst) sind die einzigen aktuell dienst-gebundenen Features.
+    /// Alle anderen bleiben im Fallback aktiv.
+    pub fn is_service_bound(&self) -> bool {
+        match self {
+            Feature::ManagedAi | Feature::CloudSync => true,
+            Feature::SharedInventory
+            | Feature::SharedNotes
+            | Feature::CuratedRulePacks
+            | Feature::OrgPolicy
+            | Feature::MultiServerActions
+            | Feature::OrgAiPolicy
+            | Feature::TeamAgents
+            | Feature::SessionHistory
+            | Feature::ActivityReport
+            | Feature::SessionHandover
+            | Feature::DocumentExport
+            | Feature::AuditExport
+            | Feature::Sso
+            | Feature::SelfHosted => false,
+        }
+    }
+}
+
 /// Lizenzstufe (Spec 0037, Abschnitt 2 — Architektur-Brief Abschnitt 1,
 /// D3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,6 +187,35 @@ impl EntitlementProvider for FixedEntitlements {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0042, Abschnitt 3.5: ein Assert pro Variante statt einer
+    /// Schleife über ein Array — das exhaustive `match` in
+    /// `is_service_bound` selbst sorgt bereits dafür, dass eine künftig
+    /// hinzugefügte `Feature`-Variante ohne Klassifizierung nicht
+    /// kompiliert; dieser Test sichert zusätzlich ab, dass jede *bestehende*
+    /// Variante tatsächlich den beabsichtigten Wert liefert (ein
+    /// Kopier-/Vertauschungsfehler im `match` selbst würde sonst nicht
+    /// auffallen).
+    #[test]
+    fn test_is_service_bound_classifies_every_feature() {
+        assert!(Feature::ManagedAi.is_service_bound());
+        assert!(Feature::CloudSync.is_service_bound());
+
+        assert!(!Feature::SharedInventory.is_service_bound());
+        assert!(!Feature::SharedNotes.is_service_bound());
+        assert!(!Feature::CuratedRulePacks.is_service_bound());
+        assert!(!Feature::OrgPolicy.is_service_bound());
+        assert!(!Feature::MultiServerActions.is_service_bound());
+        assert!(!Feature::OrgAiPolicy.is_service_bound());
+        assert!(!Feature::TeamAgents.is_service_bound());
+        assert!(!Feature::SessionHistory.is_service_bound());
+        assert!(!Feature::ActivityReport.is_service_bound());
+        assert!(!Feature::SessionHandover.is_service_bound());
+        assert!(!Feature::DocumentExport.is_service_bound());
+        assert!(!Feature::AuditExport.is_service_bound());
+        assert!(!Feature::Sso.is_service_bound());
+        assert!(!Feature::SelfHosted.is_service_bound());
+    }
 
     #[test]
     fn test_free_entitlements_has_free_tier_and_empty_feature_set() {
