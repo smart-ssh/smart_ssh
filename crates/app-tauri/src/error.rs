@@ -11,6 +11,8 @@
 
 use serde::Serialize;
 
+use ssh_manager_core::entitlements::FeatureLocked;
+
 #[derive(Debug, Serialize)]
 pub struct CommandError {
     pub message: String,
@@ -24,6 +26,13 @@ pub struct CommandError {
     /// die Validierungsfehler aus den Server-/Gruppen-Formularen (Spec 0008,
     /// s. `groups.rs`/`server_credentials.rs`).
     pub code: Option<&'static str>,
+    /// Spec 0037, Abschnitt 2: strukturiert eingebettet (nicht nur als
+    /// `message`-String), damit das Frontend einen gesperrten Feature-Fehler
+    /// eindeutig von einem fachlichen Fehler unterscheiden kann — inkl.
+    /// `feature`/`tier`, nicht nur "irgendein Fehler ist aufgetreten".
+    /// `None` für jeden anderen Fehler (die weit überwiegende Mehrheit).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feature_locked: Option<FeatureLocked>,
 }
 
 impl CommandError {
@@ -31,6 +40,30 @@ impl CommandError {
         Self {
             message: message.into(),
             code: Some(code),
+            feature_locked: None,
+        }
+    }
+
+    /// Spec 0037, Abschnitt 3 (D5): Gating-Konvention. Kein `impl
+    /// From<FeatureLocked> for CommandError` (und damit kein bloßes `?` wie
+    /// in der Spec-Skizze): `FeatureLocked` implementiert `Display` (über
+    /// `thiserror`), der blanket `impl<E: Display> From<E>` unten deckt es
+    /// also bereits ab — ein zweiter, spezifischerer `From`-Impl für exakt
+    /// diesen einen `Display`-Typ wäre eine von Rusts Kohärenzregeln
+    /// verbotene überlappende Impl (E0119). Ein gegatetes Command ruft
+    /// deshalb explizit `.map_err(CommandError::feature_locked)?` statt nur
+    /// `?` auf `require(...)`.
+    ///
+    /// `#[allow(dead_code)]`: noch kein einziger tatsächlich gegateter
+    /// Command in diesem Schritt (s. `AppState::entitlements`-Doc-
+    /// Kommentar) — bleibt bis zum ersten echten `require(...)`-Aufruf
+    /// unvermeidlich ungenutzt.
+    #[allow(dead_code)]
+    pub fn feature_locked(err: FeatureLocked) -> Self {
+        Self {
+            message: err.to_string(),
+            code: Some("FEATURE_LOCKED"),
+            feature_locked: Some(err),
         }
     }
 }
@@ -40,6 +73,7 @@ impl<E: std::fmt::Display> From<E> for CommandError {
         Self {
             message: err.to_string(),
             code: None,
+            feature_locked: None,
         }
     }
 }
@@ -75,5 +109,43 @@ mod code_tests {
             unique.len(),
             "doppelt vergebener CommandError-Code: {codes:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod feature_locked_tests {
+    use super::*;
+    use ssh_manager_core::entitlements::{Feature, Tier};
+
+    /// Spec 0037, Abschnitt 2: `FeatureLocked` muss strukturiert (nicht nur
+    /// als generischer `message`-String über den blanket `From<E: Display>`)
+    /// im `CommandError` landen, damit das Frontend ihn eindeutig von
+    /// fachlichen Fehlern unterscheiden kann.
+    #[test]
+    fn test_command_error_feature_locked_carries_structured_feature_and_tier() {
+        let err = ssh_manager_core::entitlements::FeatureLocked {
+            feature: Feature::DocumentExport,
+            tier: Tier::Free,
+        };
+
+        let command_error = CommandError::feature_locked(err);
+
+        assert_eq!(command_error.code, Some("FEATURE_LOCKED"));
+        let feature_locked = command_error
+            .feature_locked
+            .expect("feature_locked muss gesetzt sein");
+        assert_eq!(feature_locked.feature, Feature::DocumentExport);
+        assert_eq!(feature_locked.tier, Tier::Free);
+    }
+
+    /// Gegentest: ein gewöhnlicher Fehler (über den blanket `From<E:
+    /// Display>`) darf `feature_locked` nicht setzen — sonst könnte das
+    /// Frontend jeden Fehler fälschlich als gesperrtes Feature behandeln.
+    #[test]
+    fn test_ordinary_error_leaves_feature_locked_none() {
+        let command_error: CommandError = "irgendein fachlicher Fehler".into();
+
+        assert!(command_error.feature_locked.is_none());
+        assert_eq!(command_error.code, None);
     }
 }

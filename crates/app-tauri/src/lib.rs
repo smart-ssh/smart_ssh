@@ -114,6 +114,12 @@ fn build_app_state() -> AppState {
         policy_store,
         prompt_history_store,
         chat_session_store,
+        // Spec 0037, Abschnitt 2: die Community Edition kennt aktuell nur
+        // diesen einen festen Zustand, kein Lizenzschlüssel-Mechanismus in
+        // diesem Schritt (s. `AppState::entitlements`-Doc-Kommentar).
+        entitlements: Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
+            ssh_manager_core::entitlements::Entitlements::free(),
+        )),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),

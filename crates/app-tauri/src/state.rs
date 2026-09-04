@@ -7,6 +7,7 @@ use uuid::Uuid;
 use persistence_sqlite::{
     SqliteAiProviderStore, SqliteChatSessionStore, SqlitePolicyStore, SqlitePromptHistoryStore,
 };
+use ssh_manager_core::entitlements::EntitlementProvider;
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::HostKeyStore;
@@ -58,6 +59,28 @@ pub struct AppState {
     /// `prompt_history_store` oben — degradiert zu "kein Chat-Verlauf wird
     /// gespeichert/kann fortgesetzt werden" für die laufende App-Instanz.
     pub chat_session_store: Option<SqliteChatSessionStore>,
+    /// Spec 0037, Abschnitt 2/3 (D5): aktueller Entitlement-Stand — die
+    /// Community Edition kennt aktuell nur den einen festen Zustand
+    /// `FixedEntitlements(Entitlements::free())`, kein Lizenzschlüssel-
+    /// Mechanismus in diesem Schritt (s. `lib::build_app_state`). `Arc<dyn
+    /// ...>` wie `profile_store`/`credential_store`, nicht `Clone` wie
+    /// `policy_store`: ein künftiges Lizenzschlüssel-/Managed-Backend
+    /// (privates Repo) wird keinen billig klonbaren `SqlitePool`-artigen
+    /// internen Zustand haben.
+    ///
+    /// `#[allow(dead_code)]`: dieser Schritt führt bewusst nur das
+    /// Entitlements-Vokabular ein (Spec 0037, Abschnitt 1: "kennt nur die
+    /// Typen"), ohne einen einzigen tatsächlich gegateten Command — Word-
+    /// Export (der einzige Kandidat) wurde stattdessen komplett entfernt
+    /// (Abschnitt 4), statt gegatet zu werden. Das Feld bleibt bis zum
+    /// ersten echten `require(...)`-Aufruf (künftiges gegatetes Feature,
+    /// privates Repo) unvermeidlich ungelesen — derselbe "Vokabular, noch
+    /// nirgends verwendet"-Fall wie bei `ssh_manager_core::session`s Typen
+    /// (Spec 0037, Abschnitt 7), dort für `core` (als Bibliothek von der
+    /// Dead-Code-Analyse ohnehin ausgenommen), hier explizit markiert, weil
+    /// `app-tauri` auch ein Binary-Target hat.
+    #[allow(dead_code)]
+    pub entitlements: Arc<dyn EntitlementProvider>,
 
     /// Wartende `connect()`-Aufrufe, die auf `confirm_host_key` warten (s.
     /// `crate::commands::connect`). Schlüssel ist die `SessionId`, die
