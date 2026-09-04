@@ -52,7 +52,8 @@ pub enum Tier {
 
 /// Der für einen Nutzer/eine Installation aktuell geltende Entitlement-
 /// Stand.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Entitlements {
     pub tier: Tier,
     pub features: HashSet<Feature>,

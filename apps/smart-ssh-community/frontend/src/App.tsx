@@ -8,6 +8,7 @@ import { NoteSuggestionToast } from "./components/NoteSuggestionToast";
 import { ServerList } from "./components/ServerList";
 import { SessionTabBar } from "./components/SessionTabBar";
 import { SessionView } from "./components/SessionView";
+import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
 import { commandErrorMessage, listAiProviders } from "./api";
 import { useSessionTabs } from "./useSessionTabs";
 
@@ -273,6 +274,8 @@ function MainScreen({
           onProvidersChanged={refreshProviderStatus}
         />
       )}
+
+      <FeatureLockedDialog />
     </div>
   );
 }

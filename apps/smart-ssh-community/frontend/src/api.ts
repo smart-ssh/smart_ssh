@@ -1,4 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import type { FeatureLockedPayload } from "./extensions/entitlements";
+import { publishFeatureLocked } from "./extensions/featureLockedBus";
 import type {
   ActionUserDecision,
   AiProviderConfigDto,
@@ -27,13 +29,40 @@ import type {
   TestConnectionResult,
 } from "./types";
 
-/** Von `crate::error::CommandError` (`crates/app-tauri/src/error.rs`). */
+/** Von `crate::error::CommandError` (`crates/app-shell/src/error.rs`). */
 export interface CommandErrorPayload {
   message: string;
   /** Spec 0024, Abschnitt 5: stabiler Code fürs Frontend-Mapping (s.
    * `errorCodes.ts`) — `null`/fehlend bei den meisten Fehlern, gesetzt nur
    * für die Validierungsfehler aus den Server-/Gruppen-Formularen. */
   code?: string | null;
+  /** Spec 0037/0038: gesetzt, wenn der Fehler aus `Entitlements::require`
+   * stammt (kein `camelCase`-Rename auf `CommandError`, anders als bei den
+   * meisten anderen DTOs — s. `extensions/entitlements.ts`-Kommentar). */
+  feature_locked?: FeatureLockedPayload | null;
+}
+
+/** Extrahiert `feature_locked` aus einem abgelehnten `invoke()`, falls
+ * vorhanden (s. `commandErrorMessage`/`commandErrorCode`-Pendants). */
+export function commandErrorFeatureLocked(err: unknown): FeatureLockedPayload | null {
+  if (typeof err === "object" && err !== null && "feature_locked" in err) {
+    const featureLocked = (err as CommandErrorPayload).feature_locked;
+    if (featureLocked) return featureLocked;
+  }
+  return null;
+}
+
+/** Spec 0038, Abschnitt 4: zentraler `invoke()`-Wrapper, den jede Funktion
+ * unten statt des rohen `invoke` aus `@tauri-apps/api/core` nutzt — meldet
+ * einen `feature_locked`-Fehler an `featureLockedBus`, bevor er (unverändert)
+ * weitergereicht wird, damit einzelne Aufrufstellen `FeatureLocked` nicht
+ * selbst behandeln müssen (s. `extensions/FeatureLockedDialog.tsx`). */
+function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  return tauriInvoke<T>(cmd, args).catch((err: unknown) => {
+    const featureLocked = commandErrorFeatureLocked(err);
+    if (featureLocked) publishFeatureLocked(featureLocked);
+    throw err;
+  });
 }
 
 /** Extrahiert eine anzeigbare Meldung aus einem abgelehnten `invoke()`. */

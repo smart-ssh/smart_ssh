@@ -68,18 +68,14 @@ pub struct AppState {
     /// (privates Repo) wird keinen billig klonbaren `SqlitePool`-artigen
     /// internen Zustand haben.
     ///
-    /// `#[allow(dead_code)]`: dieser Schritt führt bewusst nur das
-    /// Entitlements-Vokabular ein (Spec 0037, Abschnitt 1: "kennt nur die
-    /// Typen"), ohne einen einzigen tatsächlich gegateten Command — Word-
-    /// Export (der einzige Kandidat) wurde stattdessen komplett entfernt
-    /// (Abschnitt 4), statt gegatet zu werden. Das Feld bleibt bis zum
-    /// ersten echten `require(...)`-Aufruf (künftiges gegatetes Feature,
-    /// privates Repo) unvermeidlich ungelesen — derselbe "Vokabular, noch
-    /// nirgends verwendet"-Fall wie bei `ssh_manager_core::session`s Typen
-    /// (Spec 0037, Abschnitt 7), dort für `core` (als Bibliothek von der
-    /// Dead-Code-Analyse ohnehin ausgenommen), hier explizit markiert, weil
-    /// `app-tauri` auch ein Binary-Target hat.
-    #[allow(dead_code)]
+    /// Seit Spec 0038, Abschnitt 4 tatsächlich gelesen:
+    /// `commands::get_entitlements` liefert `current()` ans Frontend,
+    /// `lib::run`s Setup-Task abonniert `watch()` fürs `entitlements:
+    /// changed`-Event. Kein tatsächlich gegatetes Feature existiert davon
+    /// unabhängig weiterhin nicht (Word-Export, der einzige Kandidat, wurde
+    /// komplett entfernt statt gegatet, s. Spec 0037 Abschnitt 4) — nur
+    /// `Entitlements::require(...)` selbst bleibt bis zum ersten echten
+    /// gegateten Command unbenutzt.
     pub entitlements: Arc<dyn EntitlementProvider>,
 
     /// Wartende `connect()`-Aufrufe, die auf `confirm_host_key` warten (s.

@@ -2137,6 +2137,17 @@ pub fn get_platform() -> &'static str {
     }
 }
 
+/// Liefert den aktuellen Entitlement-Stand (Spec 0038, Abschnitt 4). Das
+/// Frontend liest ihn per `useEntitlements()`-Hook einmalig über diesen
+/// Command und hält ihn danach über das `entitlements:changed`-Event (s.
+/// `crate::events`) aktuell, statt wiederholt zu pollen.
+#[tauri::command]
+pub fn get_entitlements(
+    state: State<'_, AppState>,
+) -> ssh_manager_core::entitlements::Entitlements {
+    state.entitlements.current()
+}
+
 /// Aktiviert die Overlay-Titelleiste und konfiguriert macOS-Ampel-Insets (Spec 0014, Abschnitt 3 & 6).
 #[tauri::command]
 pub async fn create_overlay_titlebar(window: tauri::WebviewWindow) -> CommandResult<()> {

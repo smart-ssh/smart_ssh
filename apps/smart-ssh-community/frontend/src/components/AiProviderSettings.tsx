@@ -12,8 +12,8 @@ import {
 } from "../api";
 import { setLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from "../i18n";
 import { loadRiskClassifierSettings, saveRiskClassifierSettings } from "../riskSettings";
-import { ChatRetentionSettings } from "./ChatRetentionSettings";
-import { McpServerSettings } from "./McpServerSettings";
+import "../extensions/registerBuiltinExtensions";
+import { listSettingsSections } from "../extensions/registry";
 import {
   type AiProviderConfigDto,
   type AiProviderConfigInput,
@@ -380,9 +380,9 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
           )}
         </div>
 
-        <ChatRetentionSettings />
-
-        <McpServerSettings />
+        {listSettingsSections().map(({ id, component: Section }) => (
+          <Section key={id} />
+        ))}
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-200">

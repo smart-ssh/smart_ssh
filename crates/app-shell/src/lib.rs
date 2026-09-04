@@ -253,6 +253,26 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 }
             });
 
+            // Spec 0038, Abschnitt 4: hält das Frontend über
+            // `entitlements:changed` aktuell, sobald `EntitlementProvider::
+            // watch()` einen neuen Stand liefert — bei `FixedEntitlements`
+            // (Community Edition) passiert das nie, `changed().await` wartet
+            // dann einfach für die gesamte App-Laufzeit, ohne je
+            // zurückzukehren. Die Infrastruktur muss trotzdem stehen, s.
+            // Spec-Text.
+            let handle_for_entitlements = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let mut receiver = {
+                    let state = handle_for_entitlements.state::<AppState>();
+                    state.entitlements.watch()
+                };
+                while receiver.changed().await.is_ok() {
+                    let current = receiver.borrow_and_update().clone();
+                    tauri::Emitter::emit(&handle_for_entitlements, "entitlements:changed", current)
+                        .ok();
+                }
+            });
+
             Ok(())
         })
         .manage(app_state)
@@ -314,6 +334,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::export_document,
             commands::read_credential_file,
             commands::get_platform,
+            commands::get_entitlements,
             commands::create_overlay_titlebar,
             commands::list_prompt_history,
             commands::open_log_directory,
