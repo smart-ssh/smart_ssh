@@ -26,6 +26,7 @@ use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, PtySize};
 
 use crate::ai_provider_factory::build_ai_provider;
+use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{
     credential_ref_for, sort_remote_entries, ActionUserDecision, AiProviderConfigDto,
     AiProviderConfigInput, DeleteGroupResult, DocumentFormat, EvalContextInput, EvaluationTraceDto,
@@ -1006,16 +1007,49 @@ pub async fn send_chat_message(
         .sessions
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
+    send_chat_message_impl(
+        &app,
+        &app,
+        &session,
+        session_id,
+        text,
+        &state.prompt_history_store,
+        state.profile_store.as_ref(),
+        &state.policy_store,
+        &state.pending_action_confirmations,
+    )
+    .await
+}
 
+/// Kern von `send_chat_message` — herausgelöst, damit Spec 0040 Abschnitt 2
+/// einen Regressionstest schreiben kann, der tatsächlich HIER einsteigt
+/// (nicht erst bei `run_chat_turn`/`push_history`, s. dortiger Spec-Text:
+/// "genau diese Test-Einstiegslücke hat den Fund verdeckt"). Generisch über
+/// `R: tauri::Runtime` (wie `build_session_system_context`/`local_server::
+/// synthetic_server`), damit Tests `tauri::test::MockRuntime` statt der
+/// echten `Wry`-Runtime verwenden können. `emitter` ist bewusst ein
+/// eigener Parameter statt aus `app` abgeleitet: `EventEmitter` ist nur für
+/// die konkrete `AppHandle<Wry>` implementiert (s. `events.rs`), ein Test
+/// mit `MockRuntime` braucht daher einen separaten `TestEmitter` statt
+/// `app` doppelt zu verwenden — in Produktion sind `app`/`emitter` einfach
+/// derselbe Wert (s. Aufrufer oben).
+#[allow(clippy::too_many_arguments)]
+async fn send_chat_message_impl<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    emitter: &dyn EventEmitter,
+    session: &Session,
+    session_id: SessionId,
+    text: String,
+    prompt_history_store: &persistence_sqlite::SqlitePromptHistoryStore,
+    profile_store: &dyn ProfileStore,
+    policy_store: &persistence_sqlite::SqlitePolicyStore,
+    action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+) -> CommandResult<()> {
     // Spec 0015, Abschnitt 3: Prompt-Historie ist eine Zusatzfunktion für
     // die Pfeiltasten-Navigation im Eingabefeld — ein Fehlschlag beim
     // Persistieren (z. B. kurzzeitig gesperrte DB) soll den eigentlichen
     // Chat-Versand nicht verhindern, deshalb best-effort statt `?`.
-    if let Err(err) = state
-        .prompt_history_store
-        .record(&session.server_id, &text)
-        .await
-    {
+    if let Err(err) = prompt_history_store.record(&session.server_id, &text).await {
         eprintln!("Prompt konnte nicht in der Historie gespeichert werden: {err}");
     }
 
@@ -1024,10 +1058,10 @@ pub async fn send_chat_message(
     // der Servername in JEDER Chat-Nachricht auf das generische "Server"
     // degradieren (unabhängiger Review-Pass, s. docs/adr/0026).
     let (server_name, current_tags) = if crate::local_server::is_local(session.server_id) {
-        let local = crate::local_server::synthetic_server(&app);
+        let local = crate::local_server::synthetic_server(app);
         (local.name, local.tags)
     } else {
-        match state.profile_store.get_server(&session.server_id).await {
+        match profile_store.get_server(&session.server_id).await {
             Ok(s) => (s.name, s.tags),
             Err(_) => ("Server".to_string(), session.tags.clone()),
         }
@@ -1041,13 +1075,13 @@ pub async fn send_chat_message(
     };
 
     let (updated_system_context, notes_present) = build_session_system_context(
-        &app,
+        app,
         &server_name,
         &session.server_id,
         &current_tags,
         remote_os.as_deref(),
-        state.profile_store.as_ref(),
-        &state.policy_store,
+        profile_store,
+        policy_store,
     )
     .await;
     // Spec 0039, Abschnitt 5: der System-Prompt wird bei JEDER
@@ -1064,18 +1098,28 @@ pub async fn send_chat_message(
     {
         let mut ctx = session.context.lock().await;
         ctx.system_context = updated_system_context;
-        ctx.history.push(ChatMessage {
+    }
+    // Spec 0040, Abschnitt 2: über `push_history` statt eines direkten
+    // `ctx.history.push(...)`, sonst umgeht die Nutzer-Nachricht die
+    // Persistenz (Spec 0034, Abschnitt 4 verlangt ausdrücklich, dass auch
+    // Nutzertext fortlaufend in `chat_messages` landet — verschlüsselt,
+    // Spec 0036). Muss VOR `run_chat_turn` passieren, damit die Nachricht
+    // in der DB steht, bevor der KI-Aufruf überhaupt startet.
+    crate::orchestration::push_history(
+        session,
+        ChatMessage {
             role: Role::User,
             content: MessageContent::Text(text),
-        });
-    }
+        },
+    )
+    .await;
 
     run_chat_turn(
-        &session,
+        session,
         session_id,
-        &app,
-        state.profile_store.as_ref(),
-        &state.pending_action_confirmations,
+        emitter,
+        profile_store,
+        action_confirmations,
     )
     .await;
     Ok(())
@@ -2367,5 +2411,182 @@ mod local_server_tests {
         assert!(reject_local_jump_host(Some(LOCAL_SERVER_ID)).is_err());
         assert!(reject_local_jump_host(Some(ServerId::new())).is_ok());
         assert!(reject_local_jump_host(None).is_ok());
+    }
+}
+
+/// Spec 0040, Abschnitt 2: Regressionstest, der bei `send_chat_message`
+/// (genauer: dessen testbarem Kern `send_chat_message_impl`) einsteigt —
+/// nicht erst bei `run_chat_turn`/`push_history`. Genau diese
+/// Test-Einstiegslücke hat den ursprünglichen Fund (Nutzer-Nachrichten
+/// umgehen `push_history`) verdeckt: alle bisherigen Persistenz-Tests
+/// setzten tiefer an.
+#[cfg(test)]
+mod send_chat_message_persistence_tests {
+    use async_trait::async_trait;
+    use tokio::sync::Mutex as AsyncMutex;
+
+    use ssh_manager_core::ai::{AiEvent, AiProvider, DefaultOutputRedactor};
+    use ssh_manager_core::ssh::{
+        CommandOutput, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
+    };
+
+    use crate::confirmation::ConfirmationRegistry;
+    use crate::events::TestEmitter;
+    use crate::first_run_notice::test_support::test_app;
+    use crate::test_support::InMemoryProfileStore;
+
+    use super::*;
+
+    /// Nie tatsächlich aufgerufen — dieser Test führt kein Kommando aus,
+    /// die KI schlägt keins vor (s. `NoopAiProvider`).
+    struct UnusedTransport;
+    #[async_trait]
+    impl SshTransport for UnusedTransport {
+        async fn execute(&mut self, _command: &str) -> Result<CommandOutput, SshError> {
+            unreachable!("dieser Test ruft SshTransport::execute nie auf")
+        }
+        async fn open_shell(
+            &mut self,
+            _size: PtySize,
+        ) -> Result<Box<dyn InteractiveShell>, SshError> {
+            unreachable!("dieser Test ruft SshTransport::open_shell nie auf")
+        }
+        async fn disconnect(&mut self) -> Result<(), SshError> {
+            Ok(())
+        }
+    }
+
+    struct NoopAiProvider;
+    impl AiProvider for NoopAiProvider {
+        fn send(
+            &self,
+            _context: SessionContext,
+        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+            Box::pin(futures::stream::iter(vec![AiEvent::Done]))
+        }
+    }
+
+    fn test_session(server_id: ServerId) -> Session {
+        Session {
+            transport: AsyncMutex::new(Box::new(UnusedTransport)),
+            ai_provider: Box::new(NoopAiProvider),
+            context: AsyncMutex::new(SessionContext {
+                system_context: String::new(),
+                history: Vec::new(),
+                available_actions: default_action_schemas(),
+            }),
+            filter_engine: Box::new(FilterEngine::new(crate::policy::NoRulesPolicyStore)),
+            server_id,
+            tags: Vec::new(),
+            terminal: std::sync::Mutex::new(None),
+            redactor: Box::new(DefaultOutputRedactor::new()),
+            ai_provider_label: "test-provider".to_string(),
+            ai_model: "test-model".to_string(),
+            sudo_password: None,
+            status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
+            pending_action: std::sync::Mutex::new(None),
+            sftp: AsyncMutex::new(None::<Box<dyn SftpSession>>),
+            auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+            risk_second_opinion_provider: None,
+            running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
+            untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
+            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+            injection_check_provider: None,
+            injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            chat_session_store: None,
+            chat_session_id: AsyncMutex::new(None),
+        }
+    }
+
+    /// Baut eine echte, migrierte temporäre SQLite-DB samt `servers`-Zeile
+    /// und daran gebundenem `SqliteChatSessionStore` — derselbe Aufbau wie
+    /// `orchestration::tests::session_with_real_chat_persistence`
+    /// (dortiges Modul ist nicht von hier erreichbar, daher lokal
+    /// nachgebaut statt geteilt — reines Test-Setup, keine Produktionslogik).
+    async fn session_with_real_persistence() -> (
+        Session,
+        persistence_sqlite::SqliteProfileStore,
+        persistence_sqlite::SqliteChatSessionStore,
+        tempfile::TempDir,
+    ) {
+        let tmp_dir = tempfile::tempdir().expect("TempDir konnte nicht angelegt werden");
+        let db_path = tmp_dir.path().join("test.sqlite3");
+        let profile_store = persistence_sqlite::SqliteProfileStore::connect(&db_path)
+            .await
+            .expect("frische DB sollte immer aufbaubar sein");
+
+        let server_id = ServerId::new();
+        let now = Utc::now();
+        profile_store
+            .create_server(&Server {
+                id: server_id,
+                name: "Test-Server".to_string(),
+                host: "example.invalid".to_string(),
+                port: 22,
+                username: "deploy".to_string(),
+                group_id: None,
+                tags: Vec::new(),
+                auth: ssh_manager_core::profiles::AuthMethod::Agent,
+                notes: String::new(),
+                jump_host: None,
+                post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+                ai_injection_check_enabled: false,
+                created_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+
+        let cipher: Arc<dyn ssh_manager_core::crypto::ContentCipher> = Arc::new(
+            ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&[21u8; 32]),
+        );
+        let chat_store = profile_store.chat_session_store(cipher);
+        let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
+
+        let mut session = test_session(server_id);
+        session.chat_session_store = Some(chat_store.clone());
+        session.chat_session_id = AsyncMutex::new(Some(chat_session_id));
+
+        (session, profile_store, chat_store, tmp_dir)
+    }
+
+    /// Der eigentliche Regressionstest: ruft `send_chat_message_impl`
+    /// direkt auf (genau die Funktion, die vorher den Nutzertext nur in
+    /// den In-Memory-Kontext schrieb) und prüft, dass die Nachricht
+    /// tatsächlich in `chat_messages` landet — nicht nur in
+    /// `session.context`.
+    #[tokio::test]
+    async fn test_send_chat_message_persists_user_text_via_push_history() {
+        let (session, profile_store, chat_store, _tmp_dir) = session_with_real_persistence().await;
+        let chat_session_id = session.chat_session_id.lock().await.unwrap();
+        let app = test_app();
+        let handle = app.handle();
+        let emitter = TestEmitter::default();
+        let in_memory_profile_store = InMemoryProfileStore::default();
+        let policy_store = profile_store.policy_store();
+        let confirmations = ConfirmationRegistry::new();
+
+        send_chat_message_impl(
+            handle,
+            &emitter,
+            &session,
+            uuid::Uuid::new_v4(),
+            "räum mal /tmp auf".to_string(),
+            &profile_store.prompt_history_store(),
+            &in_memory_profile_store,
+            &policy_store,
+            &confirmations,
+        )
+        .await
+        .unwrap();
+
+        let loaded = chat_store.load_session(chat_session_id).await.unwrap();
+        assert!(
+            loaded.iter().any(|m| matches!(
+                &m.content,
+                MessageContent::Text(t) if t == "räum mal /tmp auf"
+            ) && m.role == Role::User),
+            "die Nutzer-Nachricht muss in chat_messages persistiert sein, geladen: {loaded:?}"
+        );
     }
 }

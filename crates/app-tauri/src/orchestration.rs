@@ -106,7 +106,7 @@ const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 10;
 /// harten Turn-Abbruch zu zeigen wäre unverhältnismäßig; die Nachricht
 /// bleibt im In-Memory-`SessionContext` in jedem Fall korrekt sichtbar,
 /// nur ihre Persistenz fehlt dann für diesen einen Eintrag.
-async fn push_history(session: &Session, message: ChatMessage) {
+pub(crate) async fn push_history(session: &Session, message: ChatMessage) {
     session.context.lock().await.history.push(message.clone());
 
     let Some(store) = &session.chat_session_store else {
