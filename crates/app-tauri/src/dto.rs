@@ -7,7 +7,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use persistence_sqlite::{AiProviderConfig, AiProviderConfigUpdate, StoredRule};
+use persistence_sqlite::{
+    AiProviderConfig, AiProviderConfigUpdate, ChatSessionSummary, StoredRule,
+};
 use ssh_manager_core::ai::{ProviderId, ProviderType};
 use ssh_manager_core::filter::{
     Decision, EvalContext, EvaluationTrace, Pattern, RuleAction, RuleId, Scope,
@@ -662,6 +664,32 @@ pub struct SessionSummaryDto {
     pub server_name: String,
     pub status: ConnectionStatus,
     pub has_pending_action: bool,
+}
+
+// --- Spec 0034, Abschnitt 6/8: persistente Chat-Sitzungen ----------------
+
+/// Für den Auswahl-Screen beim Verbinden (Spec 0034, Abschnitt 6): Titel,
+/// Zeitpunkt, Nachrichtenanzahl je vergangener Sitzung.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatSessionSummaryDto {
+    pub session_id: String,
+    pub title: Option<String>,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: Option<DateTime<Utc>>,
+    pub message_count: i64,
+}
+
+impl From<ChatSessionSummary> for ChatSessionSummaryDto {
+    fn from(s: ChatSessionSummary) -> Self {
+        Self {
+            session_id: s.id.to_string(),
+            title: s.title,
+            started_at: s.started_at,
+            ended_at: s.ended_at,
+            message_count: s.message_count,
+        }
+    }
 }
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------

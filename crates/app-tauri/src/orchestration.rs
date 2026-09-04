@@ -194,7 +194,13 @@ async fn run_one_round(
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> bool {
-    let request_context = session.context.lock().await.clone();
+    let mut request_context = session.context.lock().await.clone();
+    // Spec 0034, Abschnitt 9: "vor jedem `AiProvider::send()`-Aufruf" —
+    // kürzt nur die an den Provider gesendete Kopie, die gespeicherte
+    // Historie in `session.context`/der DB bleibt unangetastet (s.
+    // `chat_context_truncation`-Moduldoc).
+    request_context.history =
+        crate::chat_context_truncation::truncate_to_budget(request_context.history);
     let mut stream = session.ai_provider.send(request_context);
 
     let mut text_buffer = String::new();
@@ -1838,6 +1844,95 @@ async fn handle_document_generated(
 /// Wird nur dem für diesen einen Aufruf **geklonten** `SessionContext`
 /// hinzugefügt, nie der echten `session.context` — Spec: "kein sichtbarer
 /// Chat-Eintrag".
+/// Spec 0034, Abschnitt 7, letzter Satz vor den Punkten: reine Textanfrage,
+/// kein Tool-Schema — die KI kann in diesem Aufruf keine Aktion vorschlagen.
+const TITLE_GENERATION_INSTRUCTION: &str = "Die Sitzung wird jetzt beendet. Fasse den Zweck \
+     dieser Unterhaltung in 2-4 Worten zusammen, als kurzer Titel zum Wiedererkennen. \
+     Antworte NUR mit dem Titel selbst — keine Anführungszeichen, keine Erklärung, kein \
+     Satzzeichen am Ende.";
+
+/// Spec 0034, Abschnitt 7, letzter Punkt vor "`rename_chat_session`":
+/// defensive Obergrenze für den von der KI gelieferten Titel-Text — ein
+/// Provider, der die Instruktion ignoriert und einen ganzen Absatz
+/// zurückgibt, darf keinen unbrauchbar langen "Titel" erzeugen.
+const MAX_GENERATED_TITLE_LENGTH: usize = 60;
+
+/// Spec 0034, Abschnitt 7: automatische Kurztitel-Generierung beim
+/// Verbindungsende. Wie `suggest_note_update_on_disconnect` (s. dortiger
+/// Doc-Kommentar zu `session`s Gültigkeit nach dem Entfernen aus
+/// `AppState.sessions`) — dieselbe "beim Trennen"-Grundvoraussetzung, aber
+/// unabhängige Auslösebedingung: "mindestens eine Nutzer-Nachricht ... und
+/// noch keinen Titel". Kein-op, wenn diese Sitzung gar nicht persistiert
+/// ist (`chat_session_store`/`chat_session_id` beide `Some` nötig, s.
+/// `Session`-Doc-Kommentar) — ohne `chat_sessions`-Zeile gibt es nichts,
+/// dem ein Titel zugeordnet werden könnte.
+#[tracing::instrument(skip_all)]
+pub async fn generate_session_title_on_disconnect(session: &Session) {
+    let Some(store) = &session.chat_session_store else {
+        return;
+    };
+    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+        return;
+    };
+
+    let has_user_message = session
+        .context
+        .lock()
+        .await
+        .history
+        .iter()
+        .any(|m| matches!(m.role, Role::User));
+    if !has_user_message {
+        return;
+    }
+
+    let mut request_context = session.context.lock().await.clone();
+    request_context.history =
+        crate::chat_context_truncation::truncate_to_budget(request_context.history);
+    request_context.history.push(ChatMessage {
+        role: Role::User,
+        content: MessageContent::Text(TITLE_GENERATION_INSTRUCTION.to_string()),
+    });
+    // Kein Tool-Schema anbieten (Spec 0034, Abschnitt 7: "hier aber ohne
+    // Tool-Schema, reine Textanfrage") — analog zu `available_actions:
+    // vec![ActionSchema::propose_note_update()]` beim Notiz-Vorschlag
+    // unten, hier aber gar keine Aktion, nur Text.
+    request_context.available_actions = Vec::new();
+
+    let mut stream = session.ai_provider.send(request_context);
+    let mut text_buffer = String::new();
+    while let Some(event) = stream.next().await {
+        match event {
+            AiEvent::TextDelta(delta) => text_buffer.push_str(&delta),
+            // Kein `ActionProposed` erwartet (keine Schemas angeboten),
+            // aber defensiv wie beim Notiz-Vorschlag: einfach ignorieren
+            // statt eine Aktion auszuführen, die niemand angefordert hat.
+            AiEvent::ActionProposed(_) => {}
+            AiEvent::Done | AiEvent::Error(_) => break,
+        }
+    }
+
+    let Some(title) = sanitize_generated_title(&text_buffer) else {
+        return;
+    };
+    if let Err(err) = store.set_title_if_absent(chat_session_id, &title).await {
+        tracing::warn!(error = %err, "chat session auto-titling failed");
+    }
+}
+
+/// Trimmt Whitespace und ein ggf. von der KI trotz Instruktion hinzugefügtes
+/// umschließendes Anführungszeichen-Paar, kürzt defensiv auf
+/// [`MAX_GENERATED_TITLE_LENGTH`] Zeichen, und liefert `None` für einen
+/// (nach dem Trimmen) leeren Text — kein leerer/bedeutungsloser Titel wird
+/// gespeichert.
+fn sanitize_generated_title(raw: &str) -> Option<String> {
+    let trimmed = raw.trim().trim_matches('"').trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(trimmed.chars().take(MAX_GENERATED_TITLE_LENGTH).collect())
+}
+
 const DISCONNECT_COMPLETION_INSTRUCTION: &str = "Die Sitzung wird jetzt beendet. Gibt es aus \
      dieser Sitzung Informationen, die für künftige Sitzungen an diesem Server als Notiz \
      festgehalten werden sollten (z. B. neue Pfade, installierte Versionen, getroffene \
@@ -1883,6 +1978,10 @@ pub async fn suggest_note_update_on_disconnect(
     }
 
     let mut request_context = session.context.lock().await.clone();
+    // Spec 0034, Abschnitt 9: "vor jedem `AiProvider::send()`-Aufruf" — s.
+    // Kommentar an der anderen `send()`-Stelle in `run_one_round`.
+    request_context.history =
+        crate::chat_context_truncation::truncate_to_budget(request_context.history);
     request_context.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(DISCONNECT_COMPLETION_INSTRUCTION.to_string()),
@@ -6221,6 +6320,134 @@ mod tests {
             )),
             "die geladene Historie muss den redigierten Platzhalter enthalten: {loaded:?}"
         );
+    }
+
+    /// Spec 0034, Abschnitt 9: "vor jedem `AiProvider::send()`-Aufruf" wird
+    /// nur die an den Provider gesendete Kopie gekürzt — die gespeicherte
+    /// Historie in der DB bleibt vollständig. Erzeugt genug Nachrichten,
+    /// dass Kürzung beim nächsten `send()`-Aufruf greifen MUSS (deutlich
+    /// über `chat_context_truncation::DEFAULT_CHAR_BUDGET`), und prüft,
+    /// dass `load_session` danach trotzdem noch alle ursprünglichen
+    /// Nachrichten liefert.
+    #[tokio::test]
+    async fn test_context_truncation_for_provider_request_does_not_affect_persisted_history() {
+        let (mut session, chat_store, chat_session_id, _tmp_dir) =
+            session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default())
+                .await;
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+
+        // Zwei Nachrichten weit über dem Default-Budget (40.000 Zeichen),
+        // direkt über `push_history` (nicht über einen echten Turn) —
+        // reicht, um die Vorbedingung für Kürzung zu erfüllen, ohne den
+        // gesamten Turn-Mechanismus dafür zu bemühen.
+        push_history(
+            &session,
+            ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("a".repeat(30_000)),
+            },
+        )
+        .await;
+        push_history(
+            &session,
+            ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("b".repeat(30_000)),
+            },
+        )
+        .await;
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let loaded = chat_store.load_session(chat_session_id).await.unwrap();
+        let text_lengths: Vec<usize> = loaded
+            .iter()
+            .filter_map(|m| match &m.content {
+                MessageContent::Text(t) => Some(t.chars().count()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            text_lengths.contains(&30_000) && text_lengths.iter().filter(|&&l| l == 30_000).count() == 2,
+            "beide 30.000-Zeichen-Nachrichten müssen weiterhin vollständig in der DB stehen: {text_lengths:?}"
+        );
+    }
+
+    /// Spec 0034, Abschnitt 7: automatische Titel-Generierung — nur bei
+    /// mindestens einer Nutzer-Nachricht und nur, solange noch kein Titel
+    /// gesetzt ist.
+    #[tokio::test]
+    async fn test_auto_title_generation_sets_title_only_once() {
+        let (session, chat_store, _chat_session_id, _tmp_dir) = session_with_real_chat_persistence(
+            vec![
+                AiEvent::TextDelta("Festplatte aufgeräumt".to_string()),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        )
+        .await;
+        push_history(
+            &session,
+            ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("räum mal die Festplatte auf".to_string()),
+            },
+        )
+        .await;
+
+        generate_session_title_on_disconnect(&session).await;
+
+        let listed = chat_store
+            .list_sessions_for_server(&session.server_id)
+            .await
+            .unwrap();
+        assert_eq!(listed[0].title.as_deref(), Some("Festplatte aufgeräumt"));
+
+        // Zweiter Aufruf (z. B. würde ein späteres erneutes `disconnect()`
+        // nach einem Resume das auslösen) darf den bereits gesetzten Titel
+        // NICHT überschreiben, obwohl der Mock-Provider bereitwillig
+        // erneut antworten würde.
+        generate_session_title_on_disconnect(&session).await;
+        let listed_again = chat_store
+            .list_sessions_for_server(&session.server_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            listed_again[0].title.as_deref(),
+            Some("Festplatte aufgeräumt")
+        );
+    }
+
+    /// Gegenprobe: keine Nutzer-Nachricht in der Historie -> kein KI-Aufruf,
+    /// kein Titel.
+    #[tokio::test]
+    async fn test_auto_title_generation_skipped_without_user_message() {
+        let (session, chat_store, _chat_session_id, _tmp_dir) = session_with_real_chat_persistence(
+            vec![
+                AiEvent::TextDelta("sollte nie ankommen".to_string()),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        )
+        .await;
+
+        generate_session_title_on_disconnect(&session).await;
+
+        let listed = chat_store
+            .list_sessions_for_server(&session.server_id)
+            .await
+            .unwrap();
+        assert_eq!(listed[0].title, None);
     }
 
     // --- Spec 0021: Turn-Fortsetzung nach Aktionsergebnis -------------------

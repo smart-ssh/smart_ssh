@@ -3,6 +3,8 @@
 //! `AppState`-Aufbau — keine fachliche Logik hier (Spec 0007, Abschnitt 3).
 
 mod ai_provider_factory;
+mod chat_context_truncation;
+mod chat_retention;
 mod commands;
 mod confirmation;
 mod document_export;
@@ -143,6 +145,19 @@ pub fn run() {
                 crate::mcp_settings::autostart_if_enabled(&handle).await;
             });
 
+            // Spec 0034, Abschnitt 5: Aufbewahrungs-Aufräum-Job beim
+            // App-Start — No-op, solange keine Aufbewahrungsdauer
+            // konfiguriert ist (Default).
+            let handle_for_retention = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let state = handle_for_retention.state::<AppState>();
+                crate::chat_retention::cleanup_old_chat_sessions_on_startup(
+                    &handle_for_retention,
+                    &state,
+                )
+                .await;
+            });
+
             Ok(())
         })
         .manage(build_app_state())
@@ -165,6 +180,12 @@ pub fn run() {
             commands::cancel_running_command,
             commands::stop_auto_continuation,
             commands::disconnect,
+            commands::list_chat_sessions,
+            commands::resume_chat_session,
+            commands::rename_chat_session,
+            commands::delete_chat_session,
+            chat_retention::get_chat_session_retention_days,
+            chat_retention::set_chat_session_retention_days,
             commands::list_sessions,
             commands::list_groups,
             commands::create_group,

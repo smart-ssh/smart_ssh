@@ -74,7 +74,7 @@ impl AppMcpBackend {
         let session_id: SessionId = uuid::Uuid::new_v4();
         emit_mcp_action_tab_requested(&self.app, session_id, server_id);
 
-        connect_session(&self.app, &state, server_id, session_id)
+        connect_session(&self.app, &state, server_id, session_id, None)
             .await
             .map_err(|err| err.message)?;
 

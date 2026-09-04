@@ -236,6 +236,136 @@ impl SqliteChatSessionStore {
             .map_err(backend_err)?;
         Ok(())
     }
+
+    /// Spec 0034, Abschnitt 8: `list_chat_sessions(server_id)`. Neueste
+    /// zuerst (Abschnitt 6: "Liste vergangener Sitzungen darunter, neueste
+    /// zuerst"), inklusive Nachrichtenanzahl (per Korrelations-Subquery,
+    /// kein zweiter Roundtrip pro Sitzung).
+    pub async fn list_sessions_for_server(
+        &self,
+        server_id: &ServerId,
+    ) -> Result<Vec<ChatSessionSummary>, ChatSessionStoreError> {
+        let rows = sqlx::query(
+            "SELECT id, title, started_at, ended_at, \
+                    (SELECT COUNT(*) FROM chat_messages WHERE session_id = chat_sessions.id) AS message_count \
+             FROM chat_sessions WHERE server_id = ? ORDER BY started_at DESC",
+        )
+        .bind(server_id.0.to_string())
+        .fetch_all(&self.pool)
+        .await
+        .map_err(backend_err)?;
+
+        rows.into_iter()
+            .map(|row| {
+                let id_raw: String = row.get("id");
+                let id = Uuid::parse_str(&id_raw).map_err(|e| {
+                    ChatSessionStoreError::Backend(format!("ungültige UUID in Spalte id: {e}"))
+                })?;
+                let started_at_raw: String = row.get("started_at");
+                let started_at = parse_timestamp(&started_at_raw)?;
+                let ended_at = row
+                    .get::<Option<String>, _>("ended_at")
+                    .map(|raw| parse_timestamp(&raw))
+                    .transpose()?;
+                Ok(ChatSessionSummary {
+                    id,
+                    title: row.get("title"),
+                    started_at,
+                    ended_at,
+                    message_count: row.get("message_count"),
+                })
+            })
+            .collect()
+    }
+
+    /// Spec 0034, Abschnitt 8: `rename_chat_session(session_id, new_title)`
+    /// — "überschreibt den automatischen Titel dauerhaft", also
+    /// unbedingt, anders als [`Self::set_title_if_absent`].
+    pub async fn rename_session(
+        &self,
+        session_id: Uuid,
+        new_title: &str,
+    ) -> Result<(), ChatSessionStoreError> {
+        sqlx::query("UPDATE chat_sessions SET title = ? WHERE id = ?")
+            .bind(new_title)
+            .bind(session_id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(backend_err)?;
+        Ok(())
+    }
+
+    /// Spec 0034, Abschnitt 7: automatische Titel-Generierung — "Ein einmal
+    /// automatisch gesetzter Titel wird nicht ... erneut überschrieben".
+    /// Das `WHERE title IS NULL` macht das atomar in der DB statt als
+    /// Read-then-write im Aufrufer (sonst ein theoretisches Race, falls je
+    /// zwei gleichzeitige Trigger für dieselbe Sitzung liefen). Gibt
+    /// zurück, ob tatsächlich gesetzt wurde (`false`, wenn bereits ein
+    /// Titel bestand) — nicht, dass ein Aufrufer das aktuell auswertet,
+    /// aber ehrlicher als stillschweigend zu verschlucken, ob der
+    /// Aufruf etwas bewirkt hat.
+    pub async fn set_title_if_absent(
+        &self,
+        session_id: Uuid,
+        title: &str,
+    ) -> Result<bool, ChatSessionStoreError> {
+        let result =
+            sqlx::query("UPDATE chat_sessions SET title = ? WHERE id = ? AND title IS NULL")
+                .bind(title)
+                .bind(session_id.to_string())
+                .execute(&self.pool)
+                .await
+                .map_err(backend_err)?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Spec 0034, Abschnitt 8: `delete_chat_session(session_id)` —
+    /// zugehörige Nachrichten verschwinden automatisch über
+    /// `ON DELETE CASCADE` (Migration).
+    pub async fn delete_session(&self, session_id: Uuid) -> Result<(), ChatSessionStoreError> {
+        sqlx::query("DELETE FROM chat_sessions WHERE id = ?")
+            .bind(session_id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(backend_err)?;
+        Ok(())
+    }
+
+    /// Spec 0034, Abschnitt 5: Aufbewahrungs-Job — löscht beendete
+    /// Sitzungen, deren `ended_at` vor `cutoff` liegt. Noch aktive
+    /// Sitzungen (`ended_at IS NULL`) werden nie gelöscht, unabhängig vom
+    /// Cutoff — eine laufende Sitzung hat kein "Alter" im Sinne dieser
+    /// Einstellung. Gibt die Anzahl gelöschter Sitzungen zurück (fürs
+    /// Log, s. Aufrufer).
+    pub async fn delete_ended_sessions_before(
+        &self,
+        cutoff: chrono::DateTime<Utc>,
+    ) -> Result<u64, ChatSessionStoreError> {
+        let result =
+            sqlx::query("DELETE FROM chat_sessions WHERE ended_at IS NOT NULL AND ended_at < ?")
+                .bind(cutoff.to_rfc3339())
+                .execute(&self.pool)
+                .await
+                .map_err(backend_err)?;
+        Ok(result.rows_affected())
+    }
+}
+
+/// Spec 0034, Abschnitt 8 (`list_chat_sessions`): Titel, Zeitpunkt,
+/// Nachrichtenanzahl je vergangener Sitzung.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatSessionSummary {
+    pub id: Uuid,
+    pub title: Option<String>,
+    pub started_at: chrono::DateTime<Utc>,
+    pub ended_at: Option<chrono::DateTime<Utc>>,
+    pub message_count: i64,
+}
+
+fn parse_timestamp(raw: &str) -> Result<chrono::DateTime<Utc>, ChatSessionStoreError> {
+    chrono::DateTime::parse_from_rfc3339(raw)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|e| ChatSessionStoreError::Backend(format!("ungültiger Zeitstempel: {e}")))
 }
 
 #[cfg(test)]
@@ -496,5 +626,164 @@ mod tests {
             .unwrap()
             .get("c");
         assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_list_sessions_for_server_orders_newest_first_with_message_counts() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let first = chat_store.create_session(&server_id, None).await.unwrap();
+        // Reihenfolge über `started_at` erzwingen (sonst könnten beide
+        // Sitzungen denselben Zeitstempel bekommen, wenn die Testmaschine
+        // sehr schnell ist) — direktes SQL-Update statt `sleep`, um den
+        // Test schnell und deterministisch zu halten.
+        sqlx::query("UPDATE chat_sessions SET started_at = ? WHERE id = ?")
+            .bind("2020-01-01T00:00:00Z")
+            .bind(first.to_string())
+            .execute(&profile_store.pool)
+            .await
+            .unwrap();
+        chat_store
+            .append_message(first, &text_message(Role::User, "eins"))
+            .await
+            .unwrap();
+
+        let second = chat_store.create_session(&server_id, None).await.unwrap();
+        sqlx::query("UPDATE chat_sessions SET started_at = ? WHERE id = ?")
+            .bind("2020-06-01T00:00:00Z")
+            .bind(second.to_string())
+            .execute(&profile_store.pool)
+            .await
+            .unwrap();
+        chat_store
+            .append_message(second, &text_message(Role::User, "eins"))
+            .await
+            .unwrap();
+        chat_store
+            .append_message(second, &text_message(Role::Assistant, "zwei"))
+            .await
+            .unwrap();
+
+        let listed = chat_store
+            .list_sessions_for_server(&server_id)
+            .await
+            .unwrap();
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].id, second, "neueste zuerst");
+        assert_eq!(listed[0].message_count, 2);
+        assert_eq!(listed[1].id, first);
+        assert_eq!(listed[1].message_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_rename_session_always_overwrites() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store
+            .set_title_if_absent(session_id, "Automatischer Titel")
+            .await
+            .unwrap();
+
+        chat_store
+            .rename_session(session_id, "Manuell umbenannt")
+            .await
+            .unwrap();
+
+        let listed = chat_store
+            .list_sessions_for_server(&server_id)
+            .await
+            .unwrap();
+        assert_eq!(listed[0].title.as_deref(), Some("Manuell umbenannt"));
+    }
+
+    /// Spec 0034, Abschnitt 7: "Ein einmal automatisch gesetzter Titel wird
+    /// nicht ... erneut überschrieben."
+    #[tokio::test]
+    async fn test_set_title_if_absent_does_not_overwrite_existing_title() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+
+        let first_set = chat_store
+            .set_title_if_absent(session_id, "Erster Titel")
+            .await
+            .unwrap();
+        let second_set = chat_store
+            .set_title_if_absent(session_id, "Zweiter Titel")
+            .await
+            .unwrap();
+
+        assert!(first_set);
+        assert!(!second_set);
+        let listed = chat_store
+            .list_sessions_for_server(&server_id)
+            .await
+            .unwrap();
+        assert_eq!(listed[0].title.as_deref(), Some("Erster Titel"));
+    }
+
+    #[tokio::test]
+    async fn test_delete_session_removes_it_from_listing() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+
+        chat_store.delete_session(session_id).await.unwrap();
+
+        assert!(chat_store
+            .list_sessions_for_server(&server_id)
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    /// Spec 0034, Abschnitt 5: nur BEENDETE Sitzungen älter als der
+    /// Cutoff werden gelöscht — eine noch aktive (`ended_at IS NULL`)
+    /// Sitzung nie, unabhängig davon, wie alt `started_at` ist.
+    #[tokio::test]
+    async fn test_delete_ended_sessions_before_cutoff_spares_active_and_recent_sessions() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+
+        let old_ended = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store.mark_ended(old_ended).await.unwrap();
+        sqlx::query("UPDATE chat_sessions SET ended_at = ? WHERE id = ?")
+            .bind("2020-01-01T00:00:00Z")
+            .bind(old_ended.to_string())
+            .execute(&profile_store.pool)
+            .await
+            .unwrap();
+
+        let still_active = chat_store.create_session(&server_id, None).await.unwrap();
+        sqlx::query("UPDATE chat_sessions SET started_at = ? WHERE id = ?")
+            .bind("2020-01-01T00:00:00Z")
+            .bind(still_active.to_string())
+            .execute(&profile_store.pool)
+            .await
+            .unwrap();
+
+        let recently_ended = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store.mark_ended(recently_ended).await.unwrap();
+
+        let cutoff = chrono::DateTime::parse_from_rfc3339("2021-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let deleted_count = chat_store
+            .delete_ended_sessions_before(cutoff)
+            .await
+            .unwrap();
+
+        assert_eq!(deleted_count, 1);
+        let remaining_ids: Vec<Uuid> = chat_store
+            .list_sessions_for_server(&server_id)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert!(!remaining_ids.contains(&old_ended));
+        assert!(remaining_ids.contains(&still_active));
+        assert!(remaining_ids.contains(&recently_ended));
     }
 }

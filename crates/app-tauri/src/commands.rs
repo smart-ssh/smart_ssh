@@ -321,7 +321,7 @@ pub async fn connect(
     server_id: ServerId,
 ) -> CommandResult<SessionId> {
     let session_id: SessionId = uuid::Uuid::new_v4();
-    connect_session(&app, &state, server_id, session_id).await
+    connect_session(&app, &state, server_id, session_id, None).await
 }
 
 /// Kern von `connect()` (s. dessen Doc-Kommentar zur Host-Key-Logik),
@@ -335,11 +335,20 @@ pub async fn connect(
 /// dem Frontend darüber sofort einen Tab zuordnen kann — sonst würde ein
 /// währenddessen auftretender Host-Key-Dialog (s. unten) an eine noch gar
 /// nicht sichtbare Session hängen.
+///
+/// `resume` (Spec 0034, Abschnitt 8): `Some(chat_session_id)`, wenn dieser
+/// Verbindungsaufbau eine bereits gespeicherte Sitzung fortsetzt
+/// (`resume_chat_session`) statt eine neue anzulegen (`connect`/`connect_
+/// session` mit `None`). Der SSH-Verbindungsaufbau selbst (inkl. möglicher
+/// Host-Key-Bestätigung) läuft in beiden Fällen identisch — nur die
+/// `chat_sessions`-Behandlung und die initiale `SessionContext.history`
+/// unterscheiden sich, s. unten.
 pub(crate) async fn connect_session(
     app: &AppHandle,
     state: &AppState,
     server_id: ServerId,
     session_id: SessionId,
+    resume: Option<uuid::Uuid>,
 ) -> CommandResult<SessionId> {
     // Spec 0031, Abschnitt 4, letzter Punkt: serverseitige Durchsetzung
     // zusätzlich zur Frontend-Sperre in `ServerList.tsx` — eine reine
@@ -523,13 +532,6 @@ pub(crate) async fn connect_session(
     // Spec 0039, Abschnitt 5.1: einmalig übernommen, wie `risk_second_
     // opinion_provider` oben.
     let post_ingest_policy = server.post_ingest_policy;
-    // Spec 0039, Abschnitt 5: der System-Prompt oben enthält bereits
-    // gefencte Notizen, falls vorhanden — die Sitzung startet dann mit
-    // gesetztem Flag, nicht erst nach der ersten Kommando-Ausführung.
-    // `history_contains_untrusted_content(&[])` ist heute immer `false`
-    // (frische Sitzung, s. dortiger Kommentar), bereitet aber Spec 0034
-    // (Session Resume mit vorbelasteter Historie) vor.
-    let starts_with_untrusted_content = notes_present || history_contains_untrusted_content(&[]);
 
     // Spec 0039, Abschnitt 5.2: nur `Some`, wenn BEIDE Bedingungen
     // erfüllt sind — die serverspezifische Einstellung UND die app-weite
@@ -548,15 +550,30 @@ pub(crate) async fn connect_session(
     // beschriebene Grenze: die Sonderbehandlung gehört hierher (Session-
     // Konstruktion), nicht in Kernschleife/Filter-Engine — dort läuft der
     // lokale Pseudo-Server unverändert wie jeder echte Server.
-    let chat_session_id = if is_local {
-        None
+    //
+    // `resume`: die gespeicherte Historie MUSS ladbar sein (Spec 0034,
+    // Abschnitt 5, Punkt 1: "Integritätsprüfung, keine korrupten Daten")
+    // — anders als bei einer frischen Sitzung (unten) ist ein
+    // Ladefehler hier ein harter `resume_chat_session`-Fehler, kein
+    // Best-effort-Fallback auf eine leere Historie (das würde dem Nutzer
+    // eine augenscheinlich "leere" Sitzung zeigen, obwohl tatsächlich
+    // Verlauf existiert, aber nicht lesbar war).
+    let (initial_history, chat_session_id) = if let Some(existing_id) = resume {
+        let loaded = state.chat_session_store.load_session(existing_id).await?;
+        state.chat_session_store.mark_resumed(existing_id).await?;
+        (
+            crate::chat_context_truncation::truncate_to_budget(loaded),
+            Some(existing_id),
+        )
+    } else if is_local {
+        (Vec::new(), None)
     } else {
         match state
             .chat_session_store
             .create_session(&server_id, Some(active_config.id.0))
             .await
         {
-            Ok(id) => Some(id),
+            Ok(id) => (Vec::new(), Some(id)),
             Err(err) => {
                 // Spec 0034 führt reine Persistenz ein, kein hartes
                 // Zusatz-Erfordernis fürs Verbinden selbst — ein
@@ -565,17 +582,29 @@ pub(crate) async fn connect_session(
                 // die Chat-Historie dieser einen Sitzung bleibt dann
                 // unpersistiert.
                 tracing::warn!(error = %err, "chat session creation failed");
-                None
+                (Vec::new(), None)
             }
         }
     };
+
+    // Spec 0039, Abschnitt 5: der System-Prompt oben enthält bereits
+    // gefencte Notizen, falls vorhanden — die Sitzung startet dann mit
+    // gesetztem Flag, nicht erst nach der ersten Kommando-Ausführung.
+    // Zusätzlich (Spec 0034 mit diesem Schritt erstmals real, s.
+    // `history_contains_untrusted_content`-Doc-Kommentar): eine
+    // wiederaufgenommene Sitzung mit vorbelasteter Historie startet
+    // ebenfalls mit gesetztem Flag — ein früher schon gelesener
+    // Serverinhalt darf beim Fortsetzen nicht fälschlich als "sauber"
+    // gelten.
+    let starts_with_untrusted_content =
+        notes_present || history_contains_untrusted_content(&initial_history);
 
     let session = Arc::new(Session {
         transport: tokio::sync::Mutex::new(transport),
         ai_provider,
         context: tokio::sync::Mutex::new(SessionContext {
             system_context,
-            history: Vec::new(),
+            history: initial_history,
             available_actions: default_action_schemas(),
         }),
         filter_engine: Box::new(FilterEngine::new(state.policy_store.clone())),
@@ -610,6 +639,68 @@ pub(crate) async fn connect_session(
     tracing::info!(session_id = %session_id, server_id = %server_id.0, "session connected");
     emit_connection_status_changed(app, session_id, ConnectionStatus::Connected, None);
     Ok(session_id)
+}
+
+// --- Spec 0034, Abschnitt 8: persistente Chat-Sitzungen ------------------
+
+/// Spec 0034, Abschnitt 6/8: Liste vergangener Sitzungen für den
+/// Auswahl-Screen beim Verbinden, neueste zuerst.
+#[tauri::command]
+pub async fn list_chat_sessions(
+    state: State<'_, AppState>,
+    server_id: ServerId,
+) -> CommandResult<Vec<crate::dto::ChatSessionSummaryDto>> {
+    Ok(state
+        .chat_session_store
+        .list_sessions_for_server(&server_id)
+        .await?
+        .into_iter()
+        .map(crate::dto::ChatSessionSummaryDto::from)
+        .collect())
+}
+
+/// Spec 0034, Abschnitt 8: "baut wie ein normaler `connect()`-Aufruf die
+/// SSH-Verbindung auf (inkl. ggf. Host-Key-Bestätigung), lädt zusätzlich
+/// die gespeicherte Historie in den `SessionContext`". Reiner dünner
+/// Wrapper um `connect_session` mit `resume: Some(session_id)` — die
+/// eigentliche Resume-Logik (Historie laden, `ended_at` zurücksetzen,
+/// `untrusted_content_ingested` aus der Historie rekonstruieren, Kontext-
+/// Kürzung) lebt dort, s. dortige Kommentare.
+#[tauri::command]
+pub async fn resume_chat_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    server_id: ServerId,
+    session_id: uuid::Uuid,
+) -> CommandResult<SessionId> {
+    let tab_session_id: SessionId = uuid::Uuid::new_v4();
+    connect_session(&app, &state, server_id, tab_session_id, Some(session_id)).await
+}
+
+/// Spec 0034, Abschnitt 8: `rename_chat_session` — manuelles Umbenennen,
+/// überschreibt einen ggf. automatisch gesetzten Titel dauerhaft (anders
+/// als die Auto-Titel-Generierung, s. `orchestration::generate_session_
+/// title_on_disconnect`, die einen bereits vorhandenen Titel nie anfasst).
+#[tauri::command]
+pub async fn rename_chat_session(
+    state: State<'_, AppState>,
+    session_id: uuid::Uuid,
+    new_title: String,
+) -> CommandResult<()> {
+    Ok(state
+        .chat_session_store
+        .rename_session(session_id, &new_title)
+        .await?)
+}
+
+/// Spec 0034, Abschnitt 8: `delete_chat_session` — zugehörige Nachrichten
+/// verschwinden automatisch über `ON DELETE CASCADE`.
+#[tauri::command]
+pub async fn delete_chat_session(
+    state: State<'_, AppState>,
+    session_id: uuid::Uuid,
+) -> CommandResult<()> {
+    Ok(state.chat_session_store.delete_session(session_id).await?)
 }
 
 /// Spec 0031, Abschnitt 4: der eigentliche Türsteher vor
@@ -1111,6 +1202,12 @@ pub async fn disconnect(
     let app_for_suggestion = app.clone();
     tokio::spawn(async move {
         let state = app_for_suggestion.state::<AppState>();
+        // Spec 0034, Abschnitt 7: läuft vor dem Notiz-Vorschlag im selben
+        // Hintergrund-Task (sequentiell, keine zweite parallele
+        // `AiProvider::send()`-Anfrage auf demselben Provider) — beide
+        // sind unabhängige, optionale "beim Trennen"-Extras, s. jeweilige
+        // Doc-Kommentare zur genauen Auslösebedingung.
+        crate::orchestration::generate_session_title_on_disconnect(&session).await;
         crate::orchestration::suggest_note_update_on_disconnect(
             &session,
             session_id,
