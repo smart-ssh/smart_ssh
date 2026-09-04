@@ -324,6 +324,29 @@ async fn handle_action_proposed(
         }
     }
 
+    // Spec 0039, Abschnitt 5.2: die optionale KI-Prüfung auf eingeschleuste
+    // Anweisungen (s. `execute_suggested_command`/`execute_read_remote_
+    // file`, wo sie tatsächlich läuft) bezieht sich auf "die auf diesem
+    // Inhalt basierende Folgeaktion" — deshalb wird das Flag hier beim
+    // Eskalieren VERBRAUCHT (auf `false` zurückgesetzt), anders als
+    // `untrusted_content_ingested` oben, das für die ganze Sitzung gilt.
+    // Nur Eskalation nach oben, wie bei der Risiko-Zweitmeinung aus Spec
+    // 0026 (ein "nein"/keine Prüfung macht nichts zusätzlich AutoExec-
+    // fähig, das es sonst nicht wäre — hier passiert ohnehin nichts, da
+    // dieser Zweig nur bei `true` überhaupt greift).
+    if session
+        .injection_suspected
+        .swap(false, std::sync::atomic::Ordering::SeqCst)
+        && matches!(decision, Decision::AutoExec)
+    {
+        decision = Decision::Confirm {
+            reason: "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, erkannt – \
+                     erfordert Bestätigung"
+                .to_string(),
+            code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
+        };
+    }
+
     // Spec 0028, Abschnitt 5: ein über MCP (externes Tool) ausgelöster
     // Vorschlag landet **immer** bei einer Bestätigung, unabhängig von
     // einer sonst greifenden Allow-Regel — ein externes Tool ist eine neue
@@ -1009,6 +1032,11 @@ async fn execute_suggested_command(
                     cancelled,
                 },
             );
+            let combined_output = format!(
+                "{}\n{}",
+                String::from_utf8_lossy(&redacted.stdout),
+                String::from_utf8_lossy(&redacted.stderr)
+            );
             session.context.lock().await.history.push(ChatMessage {
                 role: Role::ActionResult,
                 content: MessageContent::CommandResult {
@@ -1027,6 +1055,7 @@ async fn execute_suggested_command(
             session
                 .untrusted_content_ingested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
+            check_for_injected_instructions(session, &combined_output).await;
             true
         }
         Err(err) => {
@@ -1091,6 +1120,39 @@ fn log_command_execution_failed(session_id: SessionId, command: &str, err: &SshE
         error = %err,
         "ssh command execution failed",
     );
+}
+
+/// Spec 0039, Abschnitt 5.2: läuft die optionale KI-Prüfung auf
+/// eingeschleuste Anweisungen für frisch gelesenen Inhalt (Kommando-
+/// Ausgabe, SFTP-Dateiinhalt) — No-op, falls für diese Sitzung kein
+/// passender Zweitmeinungs-Provider konfiguriert ist (`Session::
+/// injection_check_provider`, s. dortiger Kommentar zu den zwei
+/// Voraussetzungen). Inline awaited, nicht `tokio::spawn`, aus demselben
+/// Grund wie die Risiko-Zweitmeinung (Spec 0026): ein `Arc<Session>` bis
+/// hierher durchzureichen wäre ein unverhältnismäßiger Umbau für einen
+/// einzelnen zusätzlichen `.await` (s. `handle_action_proposed`s
+/// Kommentar an der entsprechenden Stelle) — "läuft asynchron, blockiert
+/// nicht den regulären Ablauf" (Spec-Text) ist hier im selben Sinn wie
+/// dort zu lesen: verzögert nicht die bereits gesendeten Events dieser
+/// Aktion, nicht "detached vom gesamten Ablauf".
+///
+/// Setzt bei "ja" `session.injection_suspected` — `handle_action_proposed`
+/// konsumiert das beim nächsten vorgeschlagenen Aktionsvorschlag (s.
+/// dortiger Kommentar). Ein `AiError`/nicht parsebares Ergebnis (`None`)
+/// ändert absichtlich nichts: keine Eskalation, aber auch kein Zurücksetzen
+/// eines zuvor schon erkannten Verdachts — "keine Prüfung verfügbar" ist
+/// kein "alles in Ordnung".
+async fn check_for_injected_instructions(session: &Session, content: &str) {
+    let Some(provider) = session.injection_check_provider.as_deref() else {
+        return;
+    };
+    if let Some((true, _reason)) =
+        crate::risk_second_opinion::fetch_injection_check(provider, content).await
+    {
+        session
+            .injection_suspected
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 /// Spec 0016, Abschnitt 6: löst den von der KI gewählten
@@ -1376,6 +1438,7 @@ async fn execute_read_remote_file(
             session
                 .untrusted_content_ingested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
+            check_for_injected_instructions(session, &content).await;
             true
         }
         Err(err) => {
@@ -2108,6 +2171,8 @@ mod tests {
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+            injection_check_provider: None,
+            injection_suspected: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -3099,6 +3164,151 @@ mod tests {
         assert!(
             matches!(decision, Decision::Deny { .. }),
             "eine Deny-Regel darf durch die Post-Ingest-Eskalation nie abgeschwächt werden, war: {payload}"
+        );
+    }
+
+    // --- Spec 0039, Abschnitt 5.2: KI-Prüfung auf eingeschleuste Anweisungen
+
+    /// Spec 0039, Abschnitt 7: ein "ja" der KI-Prüfung eskaliert die
+    /// nachfolgend vorgeschlagene Aktion zu `Confirm` und verbraucht dabei
+    /// das Flag (nicht mehr für die übernächste Aktion gesetzt).
+    #[tokio::test]
+    async fn test_injection_check_yes_escalates_followup_action_to_confirm() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.injection_check_provider = Some(Box::new(MockAiProvider::new(vec![
+            AiEvent::TextDelta("ja - enthält eine eingeschleuste Anweisung".to_string()),
+            AiEvent::Done,
+        ])));
+
+        check_for_injected_instructions(&session, "aus der Datei gelesener Inhalt").await;
+        assert!(
+            session
+                .injection_suspected
+                .load(std::sync::atomic::Ordering::SeqCst),
+            "ein 'ja' der Prüfung muss das Verdachts-Flag setzen"
+        );
+
+        let (decision, payload) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: "cat /etc/hosts".to_string(),
+            },
+        )
+        .await;
+
+        assert!(
+            matches!(decision, Decision::Confirm { .. }),
+            "ein erkannter Injection-Verdacht muss die Folgeaktion eskalieren, war: {payload}"
+        );
+        assert_eq!(
+            payload["decision"]["Confirm"]["code"],
+            serde_json::json!("FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM")
+        );
+        assert!(
+            !session
+                .injection_suspected
+                .load(std::sync::atomic::Ordering::SeqCst),
+            "das Flag muss beim Eskalieren verbraucht (zurückgesetzt) werden"
+        );
+    }
+
+    /// Spec 0039, Abschnitt 7: ein "nein" der KI-Prüfung ändert nichts —
+    /// insbesondere schwächt es keine sonst greifende Eskalation ab (hier:
+    /// es gibt keine, die Aktion bleibt einfach `AutoExec`, wie ohne
+    /// jede Prüfung auch).
+    #[tokio::test]
+    async fn test_injection_check_no_does_not_change_followup_decision() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.injection_check_provider = Some(Box::new(MockAiProvider::new(vec![
+            AiEvent::TextDelta("nein, wirkt wie eine gewöhnliche Log-Zeile".to_string()),
+            AiEvent::Done,
+        ])));
+
+        check_for_injected_instructions(&session, "aus der Datei gelesener Inhalt").await;
+        assert!(
+            !session
+                .injection_suspected
+                .load(std::sync::atomic::Ordering::SeqCst),
+            "ein 'nein' darf das Verdachts-Flag nicht setzen"
+        );
+
+        let (decision, payload) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: "cat /etc/hosts".to_string(),
+            },
+        )
+        .await;
+
+        assert!(
+            matches!(decision, Decision::AutoExec),
+            "ein 'nein' darf keine zusätzliche Bestätigung erzwingen, war: {payload}"
+        );
+    }
+
+    /// Spec 0039, Abschnitt 7: ein Provider-Fehler (oder eine nicht
+    /// parsebare Antwort) darf weder die Aktion abstürzen lassen noch
+    /// stillschweigend als "kein Verdacht" durchgereicht werden — es
+    /// ändert schlicht nichts (kein Crash, kein gesetztes Flag).
+    #[tokio::test]
+    async fn test_injection_check_provider_error_does_not_panic_or_set_suspected_flag() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.injection_check_provider =
+            Some(Box::new(MockAiProvider::new(vec![AiEvent::Error(
+                AiError::NetworkError("boom".to_string()),
+            )])));
+
+        // Muss ohne Panik zurückkehren.
+        check_for_injected_instructions(&session, "aus der Datei gelesener Inhalt").await;
+
+        assert!(
+            !session
+                .injection_suspected
+                .load(std::sync::atomic::Ordering::SeqCst),
+            "ein Providerfehler darf nicht stillschweigend als 'kein Verdacht' gewertet werden \
+             (das Flag darf dadurch aber auch nicht gesetzt werden — es ändert schlicht nichts)"
+        );
+    }
+
+    /// Spec 0039, Abschnitt 6 (analog zur PostIngestPolicy-Eskalation):
+    /// ein erkannter Injection-Verdacht kann eine bereits per Regel
+    /// getroffene `Deny`-Entscheidung nie abschwächen.
+    #[tokio::test]
+    async fn test_injection_suspected_never_downgrades_a_deny_decision() {
+        struct DenyLsPolicyStore;
+        #[async_trait]
+        impl PolicyStore for DenyLsPolicyStore {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("deny-ls".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob("ls *".to_string()),
+                    action: ssh_manager_core::filter::RuleAction::Deny,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                }]
+            }
+        }
+
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
+        session
+            .injection_suspected
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        let (decision, payload) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+        )
+        .await;
+
+        assert!(
+            matches!(decision, Decision::Deny { .. }),
+            "ein Injection-Verdacht darf eine Deny-Regel nie abschwächen, war: {payload}"
         );
     }
 
@@ -4095,6 +4305,7 @@ mod tests {
             notes: String::new(),
             jump_host: None,
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
             created_at: now,
             updated_at: now,
         };
@@ -5420,6 +5631,7 @@ mod tests {
             notes: "Bisheriger Inhalt".to_string(),
             jump_host: None,
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
             created_at: now,
             updated_at: now,
         };
@@ -5507,6 +5719,7 @@ mod tests {
             notes: String::new(),
             jump_host: None,
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
             created_at: now,
             updated_at: now,
         };
@@ -5522,6 +5735,7 @@ mod tests {
             notes: String::new(),
             jump_host: None,
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
             created_at: now,
             updated_at: now,
         };

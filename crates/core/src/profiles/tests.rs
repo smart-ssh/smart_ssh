@@ -218,6 +218,7 @@ fn server(name: &str, group_id: Option<GroupId>, notes: &str) -> Server {
         notes: notes.to_string(),
         jump_host: None,
         post_ingest_policy: PostIngestPolicy::default(),
+        ai_injection_check_enabled: false,
         created_at: now,
         updated_at: now,
     }

@@ -65,6 +65,12 @@ pub struct Server {
     /// Fencing selbst (das ist in jeder Stufe aktiv), nur ob/wann danach
     /// zusätzlich auf `Confirm` eskaliert wird.
     pub post_ingest_policy: PostIngestPolicy,
+    /// Spec 0039, Abschnitt 5.2: optionale KI-Prüfung auf eingeschleuste
+    /// Anweisungen im gelesenen Inhalt — nur wirksam, wenn zusätzlich ein
+    /// Zweitmeinungs-Provider konfiguriert ist (Spec 0026, Abschnitt 3,
+    /// app-weite Einstellung in `settings.json`, nicht hier). Orthogonal zu
+    /// `post_ingest_policy`, mit jeder Stufe kombinierbar.
+    pub ai_injection_check_enabled: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

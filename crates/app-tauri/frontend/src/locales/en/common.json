@@ -104,6 +104,10 @@
         "description": "No extra confirmation after reading — only the existing rules apply."
       }
     },
+    "aiInjectionCheckFieldset": "AI Check for Injected Instructions",
+    "aiInjectionCheckLabel": "Have freshly read server content checked by AI for possible injected instructions",
+    "aiInjectionCheckHint": "Uses the AI provider configured under \"Risk Second Opinion\" for an extra assessment before a follow-up action runs automatically. This check is itself only an AI assessment, not reliable detection — a deliberately crafted attempt can fool it. A suspected match triggers a confirmation prompt; no suspicion leaves the other rules unchanged.",
+    "aiInjectionCheckUnavailableHint": "Requires a configured risk second opinion (Settings → Risk Second Opinion) — without a provider, this option has no effect.",
     "testConnection": "Test Connection",
     "contextPreview": "Context Preview",
     "noContext": "(no context)",
@@ -282,6 +286,7 @@
     "FILTER_RULE_CONFIRM": "Rule requires confirmation",
     "FILTER_NO_RULE_MATCHED": "No matching rule found",
     "FILTER_POST_INGEST_REQUIRES_CONFIRM": "Server content was already read during this session – requires confirmation",
+    "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Possible attempt to inject instructions via server content detected – requires confirmation",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Requested via MCP – always requires confirmation",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Uses the stored sudo password – always requires confirmation",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Note updates always require confirmation",

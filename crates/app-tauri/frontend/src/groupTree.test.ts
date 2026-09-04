@@ -29,6 +29,7 @@ function server(
     hasSudoPassword: false,
     isLocal: false,
     postIngestPolicy: "balanced",
+    aiInjectionCheckEnabled: false,
     ...overrides,
   };
 }

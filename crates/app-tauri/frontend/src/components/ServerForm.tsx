@@ -16,6 +16,7 @@ import {
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
 import { pickAndReadTextFile } from "../fileDialog";
+import { loadRiskClassifierSettings } from "../riskSettings";
 import type {
   AuthMethodInput,
   AuthMethodKind,
@@ -137,6 +138,19 @@ export function ServerForm({
   const [hasSudoPassword, setHasSudoPassword] = useState(false);
   const [clearingSudoPassword, setClearingSudoPassword] = useState(false);
   const [postIngestPolicy, setPostIngestPolicy] = useState<PostIngestPolicy>("balanced");
+  const [aiInjectionCheckEnabled, setAiInjectionCheckEnabled] = useState(false);
+  // Spec 0039, Abschnitt 5.2: die Checkbox ist nur bedienbar, wenn ein
+  // Zweitmeinungs-Provider konfiguriert ist (dieselbe Voraussetzung wie
+  // beim Backend-`Session::injection_check_provider`, s. dortiger
+  // Kommentar) — sonst bliebe die Einstellung wirkungslos, ohne dass das
+  // sichtbar wäre.
+  const [secondOpinionAvailable, setSecondOpinionAvailable] = useState(false);
+
+  useEffect(() => {
+    loadRiskClassifierSettings()
+      .then((settings) => setSecondOpinionAvailable(settings.enabled && settings.providerId !== null))
+      .catch(() => setSecondOpinionAvailable(false));
+  }, []);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +181,7 @@ export function ServerForm({
       setSudoPassword("");
       setHasSudoPassword(false);
       setPostIngestPolicy("balanced");
+      setAiInjectionCheckEnabled(false);
       return;
     }
     getServer(serverId)
@@ -184,6 +199,7 @@ export function ServerForm({
         setHasSudoPassword(server.hasSudoPassword);
         setLocalNotes(server.notes);
         setPostIngestPolicy(server.postIngestPolicy);
+        setAiInjectionCheckEnabled(server.aiInjectionCheckEnabled);
       })
       .catch((err) => setError(commandErrorMessage(err)));
   }, [serverId, defaultGroupId]);
@@ -206,6 +222,7 @@ export function ServerForm({
     jumpHost,
     sudoPassword: sudoPassword === "" ? null : sudoPassword,
     postIngestPolicy,
+    aiInjectionCheckEnabled: secondOpinionAvailable && aiInjectionCheckEnabled,
   });
 
   const handleSubmit = async (e: FormEvent) => {
@@ -721,6 +738,27 @@ export function ServerForm({
               </label>
             ))}
           </div>
+        </fieldset>
+
+        <fieldset className="rounded border border-slate-700 p-3">
+          <legend className="px-1 text-sm text-slate-300">
+            {t("serverForm.aiInjectionCheckFieldset")}
+          </legend>
+          <label className="flex items-start gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={aiInjectionCheckEnabled}
+              disabled={!secondOpinionAvailable}
+              onChange={(e) => setAiInjectionCheckEnabled(e.target.checked)}
+              className="mt-1"
+            />
+            <span>{t("serverForm.aiInjectionCheckLabel")}</span>
+          </label>
+          <p className="mt-2 text-xs text-slate-500">
+            {secondOpinionAvailable
+              ? t("serverForm.aiInjectionCheckHint")
+              : t("serverForm.aiInjectionCheckUnavailableHint")}
+          </p>
         </fieldset>
 
         {error && <p className="text-sm text-red-400">{error}</p>}

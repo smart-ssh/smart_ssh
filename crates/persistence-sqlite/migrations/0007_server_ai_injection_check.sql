@@ -1,0 +1,12 @@
+-- Spec 0039, Abschnitt 5.2: optionale KI-Prüfung auf eingeschleuste
+-- Anweisungen im gelesenen Inhalt, pro Server aktivierbar. Nur wirksam,
+-- wenn zusätzlich ein Zweitmeinungs-Provider konfiguriert ist (Spec 0026,
+-- Abschnitt 3, app-weite Einstellung in `settings.json`, nicht hier) —
+-- orthogonal zu `post_ingest_policy` (Migration 0006), mit jeder Stufe
+-- kombinierbar.
+--
+-- `NOT NULL DEFAULT 0` (aus, wie Spec 0026 Abschnitt 3 Punkt 1 "Standard-
+-- mäßig deaktiviert" für die verwandte Zweitmeinungs-Einstellung fordert)
+-- statt NULL-fähig, aus demselben Grund wie `post_ingest_policy` in
+-- Migration 0006.
+ALTER TABLE servers ADD COLUMN ai_injection_check_enabled INTEGER NOT NULL DEFAULT 0;

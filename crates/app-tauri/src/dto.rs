@@ -59,6 +59,10 @@ pub struct ServerDto {
     pub is_local: bool,
     /// Spec 0039, Abschnitt 5.1.
     pub post_ingest_policy: PostIngestPolicy,
+    /// Spec 0039, Abschnitt 5.2. Das Frontend gated die zugehörige
+    /// Checkbox zusätzlich anhand der app-weiten Zweitmeinungs-Einstellung
+    /// (`riskSettings.ts`), unabhängig von diesem Feld.
+    pub ai_injection_check_enabled: bool,
 }
 
 impl ServerDto {
@@ -79,6 +83,7 @@ impl ServerDto {
                 .is_ok(),
             is_local: crate::local_server::is_local(server.id),
             post_ingest_policy: server.post_ingest_policy,
+            ai_injection_check_enabled: server.ai_injection_check_enabled,
         }
     }
 }
@@ -324,6 +329,10 @@ pub struct ServerInput {
     /// Migrations-Spaltendefault (`Balanced`), kein harter Fehler.
     #[serde(default)]
     pub post_ingest_policy: PostIngestPolicy,
+    /// Spec 0039, Abschnitt 5.2. `#[serde(default)]`: fehlendes Feld ->
+    /// `false`, derselbe Default wie der Migrations-Spaltendefault.
+    #[serde(default)]
+    pub ai_injection_check_enabled: bool,
 }
 
 /// Spec 0008, Abschnitt 4. `#[serde(tag = "kind", rename_all =

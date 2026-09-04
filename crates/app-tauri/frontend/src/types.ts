@@ -34,6 +34,10 @@ export interface ServerDto {
   /** Spec 0032, Abschnitt 3: `true` genau für den lokalen Pseudo-Server. */
   isLocal: boolean;
   postIngestPolicy: PostIngestPolicy;
+  /** Spec 0039, Abschnitt 5.2: nur wirksam, wenn zusätzlich eine
+   * Zweitmeinungs-Provider-Konfiguration vorhanden ist (s.
+   * `loadRiskClassifierSettings` in `riskSettings.ts`). */
+  aiInjectionCheckEnabled: boolean;
 }
 
 export interface AiProviderConfigDto {
@@ -329,6 +333,7 @@ export interface ServerInput {
    * Werts läuft über `clearServerSudoPassword`, nicht über dieses Feld. */
   sudoPassword: string | null;
   postIngestPolicy: PostIngestPolicy;
+  aiInjectionCheckEnabled: boolean;
 }
 
 export type AuthMethodInput =

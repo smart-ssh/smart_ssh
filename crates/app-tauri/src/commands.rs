@@ -531,6 +531,16 @@ pub(crate) async fn connect_session(
     // (Session Resume mit vorbelasteter Historie) vor.
     let starts_with_untrusted_content = notes_present || history_contains_untrusted_content(&[]);
 
+    // Spec 0039, Abschnitt 5.2: nur `Some`, wenn BEIDE Bedingungen
+    // erfüllt sind — die serverspezifische Einstellung UND die app-weite
+    // Zweitmeinungs-Konfiguration (Spec 0026, Abschnitt 3), sonst wäre die
+    // Checkbox im Frontend wirkungslos, obwohl sie aktiviert wurde.
+    let injection_check_provider = if server.ai_injection_check_enabled {
+        crate::risk_second_opinion::resolve_second_opinion_provider(app, state).await
+    } else {
+        None
+    };
+
     let session = Arc::new(Session {
         transport: tokio::sync::Mutex::new(transport),
         ai_provider,
@@ -557,6 +567,8 @@ pub(crate) async fn connect_session(
             starts_with_untrusted_content,
         ),
         post_ingest_policy,
+        injection_check_provider,
+        injection_suspected: std::sync::atomic::AtomicBool::new(false),
     });
     state.sessions.insert(session_id, session);
 
@@ -1225,6 +1237,7 @@ pub async fn create_server(
         notes: String::new(),
         jump_host: input.jump_host,
         post_ingest_policy: input.post_ingest_policy,
+        ai_injection_check_enabled: input.ai_injection_check_enabled,
         created_at: now,
         updated_at: now,
     };
@@ -1273,6 +1286,7 @@ pub async fn update_server(
         notes: existing.notes,
         jump_host: input.jump_host,
         post_ingest_policy: input.post_ingest_policy,
+        ai_injection_check_enabled: input.ai_injection_check_enabled,
         created_at: existing.created_at,
         updated_at: Utc::now(),
     };
@@ -2041,6 +2055,7 @@ mod local_server_tests {
             notes: String::new(),
             jump_host: None,
             post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
             created_at: now,
             updated_at: now,
         }

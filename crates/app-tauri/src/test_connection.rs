@@ -410,6 +410,7 @@ mod tests {
             jump_host: None,
             sudo_password: None,
             post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
         }
     }
 
@@ -585,6 +586,7 @@ mod tests {
             notes: String::new(),
             jump_host: None,
             post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
             created_at: now,
             updated_at: now,
         };
@@ -681,6 +683,7 @@ mod tests {
             notes: String::new(),
             jump_host: None,
             post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
             created_at: now,
             updated_at: now,
         };
@@ -702,6 +705,7 @@ mod tests {
             jump_host: Some(jump_id),
             sudo_password: None,
             post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
         };
 
         let result = test_connection_with_timeout(

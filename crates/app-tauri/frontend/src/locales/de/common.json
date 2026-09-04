@@ -104,6 +104,10 @@
         "description": "Keine zusätzliche Bestätigung nach dem Einlesen — es gelten ausschließlich die bestehenden Regeln."
       }
     },
+    "aiInjectionCheckFieldset": "KI-Prüfung auf eingeschleuste Anweisungen",
+    "aiInjectionCheckLabel": "Frisch eingelesenen Serverinhalt per KI auf mögliche eingeschleuste Anweisungen prüfen lassen",
+    "aiInjectionCheckHint": "Nutzt den unter „Risiko-Zweitmeinung“ konfigurierten KI-Anbieter für eine zusätzliche Einschätzung, bevor eine Folgeaktion automatisch ausgeführt wird. Diese Prüfung ist selbst nur eine KI-Einschätzung, keine zuverlässige Erkennung — ein gezielt formulierter Versuch kann sie täuschen. Ein Verdacht führt zu einer Bestätigungsabfrage, kein Verdacht ändert nichts an den sonstigen Regeln.",
+    "aiInjectionCheckUnavailableHint": "Erfordert eine konfigurierte Risiko-Zweitmeinung (Einstellungen → Risiko-Zweitmeinung) — ohne Anbieter bleibt diese Option wirkungslos.",
     "testConnection": "Verbindung testen",
     "contextPreview": "Kontext-Vorschau",
     "noContext": "(kein Kontext)",
@@ -282,6 +286,7 @@
     "FILTER_RULE_CONFIRM": "Regel erfordert Bestätigung",
     "FILTER_NO_RULE_MATCHED": "Keine passende Regel gefunden",
     "FILTER_POST_INGEST_REQUIRES_CONFIRM": "Serverinhalt wurde in dieser Sitzung bereits eingelesen – erfordert Bestätigung",
+    "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, erkannt – erfordert Bestätigung",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Über MCP angefragt – erfordert immer Bestätigung",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Verwendet das hinterlegte Sudo-Passwort – erfordert immer Bestätigung",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notiz-Aktualisierungen erfordern immer eine Bestätigung",

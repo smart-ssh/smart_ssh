@@ -230,6 +230,7 @@ fn make_server(name: &str, jump_host: Option<ServerId>) -> Server {
         notes: String::new(),
         jump_host,
         post_ingest_policy: PostIngestPolicy::default(),
+        ai_injection_check_enabled: false,
         created_at: now,
         updated_at: now,
     }

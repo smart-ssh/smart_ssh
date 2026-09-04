@@ -178,6 +178,21 @@ pub struct Session {
     /// `untrusted_content_ingested` gesetzt ist. Das Fencing selbst
     /// (Abschnitt 3/4) läuft davon unabhängig immer.
     pub post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy,
+    /// Spec 0039, Abschnitt 5.2: `Some`, wenn sowohl die app-weite
+    /// Zweitmeinungs-Einstellung (Spec 0026, Abschnitt 3) als auch die
+    /// serverspezifische `ai_injection_check_enabled`-Einstellung aktiv
+    /// sind — einmalig bei `connect()` aufgelöst (analog zu
+    /// `risk_second_opinion_provider`, derselbe konfigurierte Provider,
+    /// separat aufgelöst, weil `Box<dyn AiProvider>` nicht `Clone` ist).
+    pub injection_check_provider: Option<Box<dyn AiProvider>>,
+    /// Spec 0039, Abschnitt 5.2: `true`, sobald der letzte gelaufene
+    /// Einschleusungs-Check "ja" ergeben hat — anders als
+    /// `untrusted_content_ingested` NICHT dauerhaft-monoton, sondern
+    /// "klebrig bis verbraucht": `handle_action_proposed` setzt es beim
+    /// Eskalieren einer Aktion wieder auf `false` zurück, weil sich die
+    /// Eskalation laut Spec auf "die auf diesem Inhalt basierende
+    /// Folgeaktion" bezieht (Singular), nicht auf den Rest der Sitzung.
+    pub injection_suspected: std::sync::atomic::AtomicBool,
 }
 
 /// Spec 0039, Abschnitt 5: "Bei Session Resume mit vorbelasteter Historie
@@ -449,6 +464,8 @@ mod tests {
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+            injection_check_provider: None,
+            injection_suspected: std::sync::atomic::AtomicBool::new(false),
         }
     }
 

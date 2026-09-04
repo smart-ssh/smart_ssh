@@ -91,6 +91,7 @@ pub fn synthetic_server<R: Runtime>(app: &AppHandle<R>) -> Server {
         // (keine `servers`-Zeile, s. Moduldoc) — Default wie jeder neue
         // Server.
         post_ingest_policy: PostIngestPolicy::default(),
+        ai_injection_check_enabled: false,
         created_at: now,
         updated_at: now,
     }
