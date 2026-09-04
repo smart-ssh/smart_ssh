@@ -22,18 +22,21 @@ interface SessionTabBarProps {
  * offen ist (sonst zeigt `MainScreen` ohnehin schon dieselbe Übersicht).
  *
  * **Kein `data-tauri-drag-region`** auf den Tabs/Buttons selbst (Spec 0014,
- * Abschnitt 5 / Spec 0017, Abschnitt 3): der umgebende `<AppHeader>`-Bereich
- * trägt das Attribut bereits auf seinem eigenen Container — nur Elemente
- * *ohne* das Attribut bleiben innerhalb einer Drag-Region normal klickbar,
- * ein zusätzliches `data-tauri-drag-region` hier würde Tab-Klicks
- * fälschlich als Fenster-Ziehen interpretieren lassen.
+ * Abschnitt 5 / Spec 0017, Abschnitt 3) — die bleiben klickbar statt das
+ * Fenster zu ziehen. Das Attribut vererbt sich aber **nicht** automatisch
+ * von `<AppHeader>` auf diesen Container (Tauri prüft pro Element, kein
+ * Vererben über Nachfahren) — deshalb trägt der eigene Root-`<div>` hier
+ * das Attribut erneut selbst (wie jede Zwischenebene in `AppHeader`), sonst
+ * würde dieser volle, deckende Container die gesamte Fläche zum
+ * "Loch" machen, sobald mindestens ein Tab existiert — nicht nur die
+ * Buttons selbst.
  */
 export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose }: SessionTabBarProps) {
   const { t } = useTranslation();
   if (tabs.length === 0) return null;
 
   return (
-    <div className="flex w-full items-center gap-1 overflow-x-auto">
+    <div data-tauri-drag-region className="flex w-full items-center gap-1 overflow-x-auto">
       <button
         type="button"
         onClick={() => onSwitch(null)}
@@ -52,6 +55,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
         return (
           <div
             key={tab.sessionId}
+            data-tauri-drag-region
             className={`group flex shrink-0 items-center gap-1.5 border px-2 py-1 text-xs ${
               active
                 ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-300"
