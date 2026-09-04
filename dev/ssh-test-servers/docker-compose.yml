@@ -1,0 +1,46 @@
+services:
+  ssh-server-1:
+    image: lscr.io/linuxserver/openssh-server:latest
+    container_name: smart-ssh-test-1
+    hostname: test-server-1
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Zurich
+      - PASSWORD_ACCESS=true
+      - USER_NAME=testuser
+      - USER_PASSWORD=test1234
+      # Nicht `SUDO_ACCESS=true`: das Image hängt dafür selbst eine
+      # passwortpflichtige "testuser ALL=(ALL) ALL"-Zeile ans Ende von
+      # /etc/sudoers an (nach `@includedir /etc/sudoers.d`) — bei mehreren
+      # passenden sudoers-Regeln gewinnt die zuletzt ausgewertete, das würde
+      # unsere eigene NOPASSWD-Regel unten (`custom-init/`) überstimmen.
+      - SUDO_ACCESS=false
+    volumes:
+      - ./custom-init:/custom-cont-init.d:ro
+    ports:
+      - "2221:2222"
+    restart: unless-stopped
+
+  ssh-server-2:
+    image: lscr.io/linuxserver/openssh-server:latest
+    container_name: smart-ssh-test-2
+    hostname: test-server-2
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Zurich
+      - PASSWORD_ACCESS=true
+      - USER_NAME=testuser
+      - USER_PASSWORD=test1234
+      # Nicht `SUDO_ACCESS=true`: das Image hängt dafür selbst eine
+      # passwortpflichtige "testuser ALL=(ALL) ALL"-Zeile ans Ende von
+      # /etc/sudoers an (nach `@includedir /etc/sudoers.d`) — bei mehreren
+      # passenden sudoers-Regeln gewinnt die zuletzt ausgewertete, das würde
+      # unsere eigene NOPASSWD-Regel unten (`custom-init/`) überstimmen.
+      - SUDO_ACCESS=false
+    volumes:
+      - ./custom-init:/custom-cont-init.d:ro
+    ports:
+      - "2222:2222"
+    restart: unless-stopped
