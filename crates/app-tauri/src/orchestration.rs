@@ -90,6 +90,36 @@ use crate::state::{ActionId, SessionId};
 /// Nachricht.
 const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 10;
 
+/// Spec 0034, Abschnitt 4: "Jede Nachricht ... wird fortlaufend
+/// geschrieben, sobald sie entsteht — kein Sammeln bis zum
+/// Verbindungsende." Zentrale Stelle statt an jedem der zahlreichen
+/// `history.push(...)`-Aufrufer einzeln zu duplizieren — sonst reicht ein
+/// vergessener Aufrufer, um eine Nachrichtenart lautlos nie zu
+/// persistieren. Persistiert nur, wenn diese Session überhaupt an eine
+/// `chat_sessions`-Zeile gebunden ist (`chat_session_store`/
+/// `chat_session_id` beide `Some`, s. `Session`-Doc-Kommentar) — Tests und
+/// (aktuell ohnehin nie über diesen Pfad laufende) MCP-Sessions bleiben
+/// dadurch unverändert reines In-Memory-Verhalten.
+///
+/// Ein Persistenzfehler beendet den Chat-Turn nicht (nur geloggt) — ein
+/// DB-Schreibfehler mitten in einer laufenden KI-Antwort dem Nutzer als
+/// harten Turn-Abbruch zu zeigen wäre unverhältnismäßig; die Nachricht
+/// bleibt im In-Memory-`SessionContext` in jedem Fall korrekt sichtbar,
+/// nur ihre Persistenz fehlt dann für diesen einen Eintrag.
+async fn push_history(session: &Session, message: ChatMessage) {
+    session.context.lock().await.history.push(message.clone());
+
+    let Some(store) = &session.chat_session_store else {
+        return;
+    };
+    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+        return;
+    };
+    if let Err(err) = store.append_message(chat_session_id, &message).await {
+        tracing::warn!(error = %err, "chat message persistence failed");
+    }
+}
+
 /// Die Nutzer-Nachricht muss bereits vom Aufrufer in
 /// `session.context.history` eingetragen worden sein (s.
 /// `crate::commands::send_chat_message`). Läuft so lange in Folgerunden
@@ -233,10 +263,14 @@ async fn flush_text_buffer(session: &Session, buffer: &mut String) {
         return;
     }
     let text = std::mem::take(buffer);
-    session.context.lock().await.history.push(ChatMessage {
-        role: Role::Assistant,
-        content: MessageContent::Text(text),
-    });
+    push_history(
+        session,
+        ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::Text(text),
+        },
+    )
+    .await;
 }
 
 /// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde.
@@ -459,13 +493,17 @@ async fn handle_action_proposed(
             // 3, Fall 4: die KI bekommt zusätzlich einen Kontext-Eintrag mit
             // dem Blockier-Grund und automatisch eine Folgerunde, statt
             // stillschweigend übergangen zu werden.
-            session.context.lock().await.history.push(ChatMessage {
-                role: Role::ActionResult,
-                content: MessageContent::ActionRejected {
-                    command: describe_rejected_action(&action),
-                    reason: RejectionReason::Blocked(reason),
+            push_history(
+                session,
+                ChatMessage {
+                    role: Role::ActionResult,
+                    content: MessageContent::ActionRejected {
+                        command: describe_rejected_action(&action),
+                        reason: RejectionReason::Blocked(reason),
+                    },
                 },
-            });
+            )
+            .await;
             true
         }
         Decision::Confirm { .. } => {
@@ -747,13 +785,17 @@ async fn handle_user_decision(
             // nachfragen, akzeptieren). Das war der Kern des gemeldeten
             // Bugs: ohne diesen Eintrag + die automatische Folgerunde blieb
             // der Chat nach "Ablehnen" stumm (s. Moduldoc).
-            session.context.lock().await.history.push(ChatMessage {
-                role: Role::ActionResult,
-                content: MessageContent::ActionRejected {
-                    command: describe_rejected_action(&action),
-                    reason: RejectionReason::User,
+            push_history(
+                session,
+                ChatMessage {
+                    role: Role::ActionResult,
+                    content: MessageContent::ActionRejected {
+                        command: describe_rejected_action(&action),
+                        reason: RejectionReason::User,
+                    },
                 },
-            });
+            )
+            .await;
             true
         }
         ActionUserDecision::Approve => {
@@ -818,13 +860,17 @@ async fn handle_user_decision(
                         // erreicht — dieselbe Kontext-Eintrag +
                         // automatische-Folgerunde-Behandlung gilt
                         // einheitlich.
-                        session.context.lock().await.history.push(ChatMessage {
-                            role: Role::ActionResult,
-                            content: MessageContent::ActionRejected {
-                                command: edited,
-                                reason: RejectionReason::Blocked(reason),
+                        push_history(
+                            session,
+                            ChatMessage {
+                                role: Role::ActionResult,
+                                content: MessageContent::ActionRejected {
+                                    command: edited,
+                                    reason: RejectionReason::Blocked(reason),
+                                },
                             },
-                        });
+                        )
+                        .await;
                         return true;
                     }
                     AiAction::SuggestCommand { command: edited }
@@ -953,10 +999,14 @@ async fn emit_action_error(
     code: Option<&'static str>,
 ) -> bool {
     emit_chat_error(emitter, session_id, message.clone(), code);
-    session.context.lock().await.history.push(ChatMessage {
-        role: Role::ActionResult,
-        content: MessageContent::Text(message),
-    });
+    push_history(
+        session,
+        ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::Text(message),
+        },
+    )
+    .await;
     true
 }
 
@@ -1044,14 +1094,18 @@ async fn execute_suggested_command(
                 String::from_utf8_lossy(&redacted.stdout),
                 String::from_utf8_lossy(&redacted.stderr)
             );
-            session.context.lock().await.history.push(ChatMessage {
-                role: Role::ActionResult,
-                content: MessageContent::CommandResult {
-                    command,
-                    output: redacted,
-                    cancelled,
+            push_history(
+                session,
+                ChatMessage {
+                    role: Role::ActionResult,
+                    content: MessageContent::CommandResult {
+                        command,
+                        output: redacted,
+                        cancelled,
+                    },
                 },
-            });
+            )
+            .await;
             // Spec 0039, Abschnitt 5: `CommandResult` wird erst beim
             // tatsächlichen Versand an den KI-Provider über `ai::
             // fence_untrusted` in <stdout>/<stderr>-Tags gepackt
@@ -1273,10 +1327,14 @@ async fn execute_note_update(
                     summary: summary.clone(),
                 },
             );
-            session.context.lock().await.history.push(ChatMessage {
-                role: Role::ActionResult,
-                content: MessageContent::Text(summary),
-            });
+            push_history(
+                session,
+                ChatMessage {
+                    role: Role::ActionResult,
+                    content: MessageContent::Text(summary),
+                },
+            )
+            .await;
             true
         }
         Err(err) => {
@@ -1441,13 +1499,17 @@ async fn execute_read_remote_file(
             // Live-UI-Karte (`ActionResultPayload::FileRead` oben) zeigt
             // bewusst weiter den unformatierten Inhalt — das Fencing ist
             // nur für den KI-Kontext relevant, nicht für die Anzeige.
-            session.context.lock().await.history.push(ChatMessage {
-                role: Role::ActionResult,
-                content: MessageContent::Text(format!(
-                    "Inhalt von '{path}':\n\n{}",
-                    fence_untrusted(UntrustedKind::RemoteFile, &path, &content)
-                )),
-            });
+            push_history(
+                session,
+                ChatMessage {
+                    role: Role::ActionResult,
+                    content: MessageContent::Text(format!(
+                        "Inhalt von '{path}':\n\n{}",
+                        fence_untrusted(UntrustedKind::RemoteFile, &path, &content)
+                    )),
+                },
+            )
+            .await;
             // Spec 0039, Abschnitt 5.
             session
                 .untrusted_content_ingested
@@ -1722,10 +1784,14 @@ async fn execute_write_remote_file(
             used_sudo_password,
         },
     );
-    session.context.lock().await.history.push(ChatMessage {
-        role: Role::ActionResult,
-        content: MessageContent::Text(summary),
-    });
+    push_history(
+        session,
+        ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::Text(summary),
+        },
+    )
+    .await;
     true
 }
 
@@ -1756,10 +1822,14 @@ async fn handle_document_generated(
     // context.history übernommen (wie ein normaler Chat-Text)" — kein
     // Sonderfall gegenüber `flush_text_buffer` oben, derselbe
     // `Role::Assistant`/`MessageContent::Text`.
-    session.context.lock().await.history.push(ChatMessage {
-        role: Role::Assistant,
-        content: MessageContent::Text(content_markdown),
-    });
+    push_history(
+        session,
+        ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::Text(content_markdown),
+        },
+    )
+    .await;
 }
 
 /// Spec 0010, Abschnitt 2, Punkt 2 — nahezu wörtlich aus der Spec-Skizze
@@ -2200,6 +2270,12 @@ mod tests {
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             injection_check_provider: None,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            // Spec 0034: Tests laufen bewusst ohne Persistenz-Anbindung
+            // (s. `Session::chat_session_store`-Doc-Kommentar) — kein
+            // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`
+            // no-opt bei `None` bereits vollständig.
+            chat_session_store: None,
+            chat_session_id: AsyncMutex::new(None),
         }
     }
 
@@ -6008,6 +6084,142 @@ mod tests {
         assert!(
             log_text.contains("REDACTED"),
             "der Redaction-Platzhalter muss stattdessen im Log stehen: {log_text}"
+        );
+    }
+
+    // --- Spec 0034: Persistenz-Verdrahtung in die Kernschleife -------------
+
+    /// Baut einen echten, migrierten In-Memory-`SqliteChatSessionStore`
+    /// samt zugehöriger `servers`-Zeile (FK-Pflicht, s.
+    /// `persistence_sqlite::chat_session_store`-Testsuite) und einer bereits
+    /// angelegten `chat_sessions`-Zeile — für Tests, die `push_history`s
+    /// tatsächliche DB-Anbindung end-to-end prüfen wollen, nicht nur den
+    /// In-Memory-`SessionContext`.
+    async fn session_with_real_chat_persistence(
+        ai_events: Vec<AiEvent>,
+        transport: MockSshTransport,
+    ) -> (
+        Session,
+        persistence_sqlite::SqliteChatSessionStore,
+        Uuid,
+        tempfile::TempDir,
+    ) {
+        // Nur die öffentliche `connect(db_path)`-API steht app-tauri zur
+        // Verfügung (`connect_with`/`:memory:` sind `pub(crate)` in
+        // `persistence-sqlite`, s. dortiger Doc-Kommentar) — eine echte,
+        // temporäre Datei statt `:memory:`. Das `TempDir` wird an den
+        // Aufrufer zurückgegeben, damit es nicht vor Testende gedroppt (und
+        // damit die Datei gelöscht) wird.
+        let tmp_dir = tempfile::tempdir().expect("TempDir konnte nicht angelegt werden");
+        let db_path = tmp_dir.path().join("test.sqlite3");
+        let profile_store = persistence_sqlite::SqliteProfileStore::connect(&db_path)
+            .await
+            .expect("frische DB sollte immer aufbaubar sein");
+        let server_id = ServerId::new();
+        let now = chrono::Utc::now();
+        profile_store
+            .create_server(&Server {
+                id: server_id,
+                name: "Test-Server".to_string(),
+                host: "example.invalid".to_string(),
+                port: 22,
+                username: "deploy".to_string(),
+                group_id: None,
+                tags: Vec::new(),
+                auth: ssh_manager_core::profiles::AuthMethod::Agent,
+                notes: String::new(),
+                jump_host: None,
+                post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+                ai_injection_check_enabled: false,
+                created_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+        let chat_store = profile_store.chat_session_store();
+        let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
+
+        let mut session = session_with_ai_provider(MockAiProvider::new(ai_events), transport);
+        session.server_id = server_id;
+        session.chat_session_store = Some(chat_store.clone());
+        session.chat_session_id = AsyncMutex::new(Some(chat_session_id));
+
+        (session, chat_store, chat_session_id, tmp_dir)
+    }
+
+    /// Spec 0034, Abschnitt 4 ("jede Nachricht ... wird fortlaufend
+    /// geschrieben") kombiniert mit Spec 0034, Abschnitt 3 ("`content`
+    /// entspricht exakt dem redigierten Inhalt") sowie dem in dieser
+    /// Aufgabenstellung explizit verlangten Redaction-Test: ein Kommando,
+    /// dessen Output ein Secret enthält, landet **redigiert** in der DB —
+    /// niemals der Rohinhalt. Direkter SQL-Zugriff auf `chat_messages.
+    /// content` (nicht über `load_session`), um wirklich das zu prüfen, was
+    /// physisch auf der Platte steht, nicht nur was der Store beim Lesen
+    /// zurückgibt.
+    #[tokio::test]
+    async fn test_persisted_command_result_contains_redacted_not_raw_secret() {
+        // Der Kommandotext selbst bleibt bewusst "voll transparent" (Spec
+        // 0018, Abschnitt 5) — nur `output` läuft durch den Redactor. Das
+        // Kommando hier enthält deshalb selbst kein Secret (`cat
+        // db.conf`), nur seine simulierte AUSGABE tut das — derselbe Aufbau
+        // wie beim bestehenden `test_log_command_execution_never_logs_
+        // unredacted_secret` oben.
+        let (mut session, chat_store, chat_session_id, _tmp_dir) =
+            session_with_real_chat_persistence(
+                vec![
+                    AiEvent::ActionProposed(AiAction::SuggestCommand {
+                        command: "cat db.conf".to_string(),
+                    }),
+                    AiEvent::Done,
+                ],
+                MockSshTransport::default().with_response(
+                    "cat db.conf",
+                    output("Verbindung ok, password=hunter2geheim"),
+                ),
+            )
+            .await;
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        // `load_session` deserialisiert exakt die `content`-Spalte (reines
+        // JSON-Parsing, keine weitere Transformation, s.
+        // `SqliteChatSessionStore::load_session`) — enthielte die Spalte
+        // das Secret irgendwo, würde es hier unverändert auftauchen. Das
+        // ist derselbe Bestand, den ein direkter SQL-Zugriff auf die Datei
+        // sehen würde, nur bereits geparst statt als rohes JSON.
+        let loaded = chat_store.load_session(chat_session_id).await.unwrap();
+        assert!(
+            !loaded.is_empty(),
+            "es sollte mindestens eine gespeicherte Nachricht geben"
+        );
+        let serialized: Vec<String> = loaded
+            .iter()
+            .map(|m| serde_json::to_string(&m.content).unwrap())
+            .collect();
+        for raw in &serialized {
+            assert!(
+                !raw.contains("hunter2geheim"),
+                "das Secret darf unter keinen Umständen unredigiert in der DB landen: {raw}"
+            );
+        }
+        assert!(
+            loaded.iter().any(|m| matches!(
+                &m.content,
+                MessageContent::CommandResult { output, .. }
+                    if String::from_utf8_lossy(&output.stdout).contains("REDACTED")
+            )),
+            "die geladene Historie muss den redigierten Platzhalter enthalten: {loaded:?}"
         );
     }
 

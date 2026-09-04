@@ -541,6 +541,35 @@ pub(crate) async fn connect_session(
         None
     };
 
+    // Spec 0034, Abschnitt 2: `chat_sessions.server_id` referenziert
+    // `servers(id)` — der lokale Pseudo-Server hat (Spec 0032) bewusst
+    // KEINE eigene `servers`-Zeile, ein `INSERT` würde die Fremdschlüssel-
+    // Einschränkung verletzen. Genau die in `docs/architecture-overview`
+    // beschriebene Grenze: die Sonderbehandlung gehört hierher (Session-
+    // Konstruktion), nicht in Kernschleife/Filter-Engine — dort läuft der
+    // lokale Pseudo-Server unverändert wie jeder echte Server.
+    let chat_session_id = if is_local {
+        None
+    } else {
+        match state
+            .chat_session_store
+            .create_session(&server_id, Some(active_config.id.0))
+            .await
+        {
+            Ok(id) => Some(id),
+            Err(err) => {
+                // Spec 0034 führt reine Persistenz ein, kein hartes
+                // Zusatz-Erfordernis fürs Verbinden selbst — ein
+                // Schreibfehler hier (z. B. volle Festplatte) soll den
+                // eigentlichen SSH-Verbindungsaufbau nicht verhindern, nur
+                // die Chat-Historie dieser einen Sitzung bleibt dann
+                // unpersistiert.
+                tracing::warn!(error = %err, "chat session creation failed");
+                None
+            }
+        }
+    };
+
     let session = Arc::new(Session {
         transport: tokio::sync::Mutex::new(transport),
         ai_provider,
@@ -569,6 +598,12 @@ pub(crate) async fn connect_session(
         post_ingest_policy,
         injection_check_provider,
         injection_suspected: std::sync::atomic::AtomicBool::new(false),
+        chat_session_store: if chat_session_id.is_some() {
+            Some(state.chat_session_store.clone())
+        } else {
+            None
+        },
+        chat_session_id: tokio::sync::Mutex::new(chat_session_id),
     });
     state.sessions.insert(session_id, session);
 
@@ -1049,6 +1084,21 @@ pub async fn disconnect(
 
     tracing::info!(session_id = %session_id, "session disconnected");
     emit_connection_status_changed(&app, session_id, ConnectionStatus::Disconnected, None);
+
+    // Spec 0034, Abschnitt 4: "endet bei `disconnect()`" — vor dem Spawn
+    // unten, damit `ended_at` zuverlässig gesetzt ist, sobald `disconnect()`
+    // selbst zurückkehrt, statt von der Fertigstellung des unabhängigen
+    // Notiz-Vorschlag-Tasks abzuhängen. Best-effort wie der
+    // Transport-Trennvorgang oben: ein Schreibfehler hier blockiert
+    // `disconnect()` nicht.
+    if let (Some(store), Some(chat_session_id)) = (
+        &session.chat_session_store,
+        *session.chat_session_id.lock().await,
+    ) {
+        if let Err(err) = store.mark_ended(chat_session_id).await {
+            tracing::warn!(error = %err, "chat session mark_ended failed");
+        }
+    }
 
     // Spec 0010: läuft als eigener Hintergrund-Task, **nicht** vom
     // `disconnect()`-Command selbst awaitet — der Trennvorgang oben ist

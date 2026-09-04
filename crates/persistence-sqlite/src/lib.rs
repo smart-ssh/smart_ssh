@@ -7,6 +7,7 @@
 //! I/O-Abhängigkeiten, austauschbare Storage-Details gehören hierher.
 
 mod ai_provider_store;
+mod chat_session_store;
 mod error;
 mod mapping;
 mod paths;
@@ -20,6 +21,7 @@ mod tests;
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
 };
+pub use chat_session_store::{ChatSessionStoreError, SqliteChatSessionStore};
 pub use error::{PersistenceError, PersistenceResult};
 pub use paths::default_db_path;
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};

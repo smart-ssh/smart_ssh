@@ -53,6 +53,7 @@ fn build_app_state() -> AppState {
     let ai_provider_store = profile_store.ai_provider_store();
     let policy_store = profile_store.policy_store();
     let prompt_history_store = profile_store.prompt_history_store();
+    let chat_session_store = profile_store.chat_session_store();
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
     // `crate::host_key_store`-Modul-Kommentar zur Begründung (der
@@ -72,6 +73,7 @@ fn build_app_state() -> AppState {
         host_key_store: Arc::new(host_key_store),
         policy_store,
         prompt_history_store,
+        chat_session_store,
         pending_host_key_confirmations: ConfirmationRegistry::new(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),

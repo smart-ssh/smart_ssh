@@ -97,13 +97,20 @@ pub struct SessionContext {
 }
 
 /// Eine Nachricht in der Konversationshistorie (Spec 0006, Abschnitt 3).
-#[derive(Debug, Clone, PartialEq)]
+///
+/// `Serialize`/`Deserialize` (wie schon bei [`crate::profiles::AuthMethod`],
+/// s. dortiger Kommentar): `persistence-sqlite` speichert `MessageContent`
+/// gemäß Spec 0034, Abschnitt 2 als JSON in der `chat_messages.content`-
+/// Spalte, direkt gegen diesen Typ serialisiert statt gegen eine separate
+/// Persistenz-Spiegelstruktur — dieselbe bereits etablierte
+/// Serde-auf-Core-Typen-Konvention.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: Role,
     pub content: MessageContent,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     User,
     Assistant,
@@ -111,7 +118,7 @@ pub enum Role {
 }
 
 /// Inhalt einer [`ChatMessage`] (Spec 0006, Abschnitt 3).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MessageContent {
     Text(String),
     /// Ergebnis eines über die Filter-Engine ausgeführten Kommandos, bereits
@@ -145,7 +152,7 @@ pub enum MessageContent {
 }
 
 /// Warum eine Aktion nicht ausgeführt wurde (Spec 0021, Abschnitt 3).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RejectionReason {
     /// Der Nutzer hat im Bestätigungsdialog auf "Ablehnen" geklickt.
     User,

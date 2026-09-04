@@ -193,6 +193,23 @@ pub struct Session {
     /// Eskalation laut Spec auf "die auf diesem Inhalt basierende
     /// Folgeaktion" bezieht (Singular), nicht auf den Rest der Sitzung.
     pub injection_suspected: std::sync::atomic::AtomicBool,
+    /// Spec 0034: Persistenz-Anbindung für diese Sitzung. `None` für
+    /// Sitzungen, die bewusst keine `chat_sessions`-Zeile bekommen sollen
+    /// (Tests; s. Abschnitt 10 zu MCP — MCP-ausgelöste Aktionen laufen
+    /// ohnehin nie über `run_chat_turn`/eine eigene `Session`, s.
+    /// `crate::mcp_backend`, insofern betrifft dieses Feld sie gar nicht
+    /// erst). Konkreter Store-Typ statt Trait-Abstraktion — derselbe
+    /// Präzedenzfall wie `SqlitePromptHistoryStore` in `AppState` (Spec
+    /// 0015): kein `core`-Trait für diese Art Hilfs-Store, anders als
+    /// `ProfileStore`/`PolicyStore`/`AiProvider`.
+    pub chat_session_store: Option<persistence_sqlite::SqliteChatSessionStore>,
+    /// Die `chat_sessions.id`-Zeile dieser laufenden Sitzung — `None`, bis
+    /// `crate::commands::connect_session` sie anlegt (bzw. bei
+    /// `resume_chat_session`, Teil 2, auf die wiederverwendete Zeile
+    /// gesetzt wird). `AsyncMutex` statt `StdMutex`, weil
+    /// `history_push_and_persist` sie über einen `.await`-Punkt hinweg
+    /// hält (der eigentliche `INSERT`).
+    pub chat_session_id: AsyncMutex<Option<uuid::Uuid>>,
 }
 
 /// Spec 0039, Abschnitt 5: "Bei Session Resume mit vorbelasteter Historie
@@ -466,6 +483,8 @@ mod tests {
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             injection_check_provider: None,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            chat_session_store: None,
+            chat_session_id: AsyncMutex::new(None),
         }
     }
 

@@ -1,8 +1,15 @@
+use serde::{Deserialize, Serialize};
+
 use crate::profiles::AuthMethod;
 
 /// Ergebnis eines ausgeführten Kommandos im Exec-Modus (Spec 0005,
 /// Abschnitt 4).
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `Serialize`/`Deserialize`: Teil von `MessageContent::CommandResult`
+/// (Spec 0034, Abschnitt 2 — `persistence-sqlite` serialisiert die gesamte
+/// `MessageContent` als JSON in `chat_messages.content`), s. dortiger
+/// Kommentar.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommandOutput {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
