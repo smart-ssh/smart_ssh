@@ -351,24 +351,63 @@ fn nested_substitution_command(depth: usize) -> String {
 }
 
 /// Spec 0043, Fund B: ein Kommando, das über den expliziten Rekursions-Cap
-/// hinaus verschachtelt ist, landet bei `Confirm` mit dem korrekten Grund
+/// hinaus verschachtelt ist, landet bei `Deny` mit dem korrekten Grund
 /// ("zu tief verschachtelt") — kein Stack-Overflow, kein `AutoExec`.
+///
+/// `Deny`, NICHT `Confirm` (Abweichung vom wörtlichen Spec-0043-Text, s.
+/// ADR-Kommentar in `engine::evaluate_parsed_explained`): ein zu tief
+/// verschachteltes Kommando ist nicht sicher analysierbar, könnte also
+/// jedes beliebige innere Kommando verstecken — `Confirm` wäre hier eine
+/// Abschwächung gegenüber einem `Deny`, das auf einer nicht mehr
+/// erreichten inneren Ebene gegriffen hätte (s.
+/// `test_t43_deep_nesting_cannot_downgrade_a_deny_rule_to_confirm`).
 #[tokio::test]
-async fn test_t43_substitution_depth_over_cap_forces_confirm_with_reason() {
+async fn test_t43_substitution_depth_over_cap_forces_deny_with_reason() {
     let eng = engine(vec![]);
     let command = nested_substitution_command(super::parser::MAX_SUBSTITUTION_DEPTH + 1);
 
     let trace = eng.evaluate_explained(&command, &ctx("srv1", &[])).await;
 
-    assert_confirm(&trace.decision);
     match &trace.decision {
-        Decision::Confirm { reason, .. } => {
+        Decision::Deny { reason, .. } => {
             assert!(
                 reason.contains("zu tief verschachtelt"),
                 "erwartete Tiefen-Cap-Begründung, war: {reason}"
             );
         }
-        other => panic!("erwartete Confirm, war: {other:?}"),
+        other => panic!("erwartete Deny, war: {other:?}"),
+    }
+}
+
+/// Regressionstest für den spec-reviewer-Fund zu Commit fd5b45a: ein
+/// Nutzer-`Deny "rm *"` darf durch ausreichende Verschachtelungstiefe NICHT
+/// auf `Confirm` abgeschwächt werden — ein 33-fach verschachteltes, nur
+/// ~270 Zeichen langes (also weit unter `DEFAULT_MAX_COMMAND_LENGTH`)
+/// `echo $(...)`-Kommando um `rm -rf /` muss weiterhin `Deny` liefern, auch
+/// wenn die Rekursion die innere `rm`-Ebene wegen des Tiefen-Caps gar nicht
+/// mehr erreicht — der Tiefen-Cap selbst liefert dann `Deny` (s. oben),
+/// nicht `Confirm`.
+#[tokio::test]
+async fn test_t43_deep_nesting_cannot_downgrade_a_deny_rule_to_confirm() {
+    let eng = engine(vec![glob_rule(
+        "deny-rm",
+        "rm *",
+        RuleAction::Deny,
+        Scope::Global,
+        0,
+    )]);
+    let mut inner = "rm -rf /".to_string();
+    for _ in 0..(super::parser::MAX_SUBSTITUTION_DEPTH + 1) {
+        inner = format!("echo $({inner})");
+    }
+
+    let decision = eng.evaluate(&inner, &ctx("srv1", &[])).await;
+
+    match decision {
+        Decision::Deny { .. } => {}
+        other => panic!(
+            "ein Deny darf durch Verschachtelungstiefe nicht auf {other:?} abgeschwächt werden"
+        ),
     }
 }
 

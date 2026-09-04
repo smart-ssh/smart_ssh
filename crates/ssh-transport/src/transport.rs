@@ -247,6 +247,13 @@ impl SshTransport for RusshTransport {
     }
 
     fn set_max_output_bytes(&mut self, limit: usize) {
-        self.max_output_bytes = limit;
+        // spec-reviewer-Fund (Review von Commit 22c49f1): dieser Hook ist
+        // primär für Tests gedacht (s. Doc-Kommentar am Feld), sitzt aber
+        // auf dem produktiven `SshTransport`-Trait und war ungeklemmt —
+        // `set_max_output_bytes(usize::MAX)` hätte den Cap faktisch
+        // deaktiviert. Nach oben auf `exec::MAX_STREAM_OUTPUT_BYTES`
+        // geklemmt: ein Aufrufer kann den Cap nur verschärfen (kleiner
+        // machen, für Tests), nie über den sicheren Default hinaus lockern.
+        self.max_output_bytes = limit.min(crate::exec::MAX_STREAM_OUTPUT_BYTES);
     }
 }

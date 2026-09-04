@@ -275,6 +275,10 @@ export type ActionResultPayload =
        * abgebrochen hat, bevor es von selbst beendet war — dann ist
        * `exitCode` immer `null`, keine Störung. */
       cancelled: boolean;
+      /** Spec 0043, Fund A: `true`, wenn `stdout`/`stderr` beim Streaming am
+       * konfigurierten Output-Cap abgeschnitten wurden — Ausgabe ist
+       * unvollständig, nicht fehlerhaft. */
+      truncated: boolean;
     }
   | { kind: "noteUpdate"; summary: string }
   /** Spec 0020, Abschnitt 4.1 — `content` ist bereits redigiert (Spec 0006). */
@@ -492,6 +496,8 @@ export type ChatHistoryEntryDto =
       stderr: string;
       exitCode: number | null;
       cancelled: boolean;
+      /** Spec 0043, Fund A — s. `ActionResultPayload`'s `truncated`. */
+      truncated: boolean;
     }
   | { type: "actionRejected"; role: ChatHistoryRole; command: string; reason: string };
 

@@ -188,6 +188,7 @@
     "cancelCommand": "Verbindung zu diesem Kommando trennen",
     "cancellingCommand": "Wird getrennt…",
     "commandCancelledNotice": "⚠ Manuell abgebrochen — Ausgabe möglicherweise unvollständig, kein regulärer Exit-Code.",
+    "commandTruncatedNotice": "⚠ Ausgabe wurde am Größenlimit abgeschnitten — möglicherweise unvollständig.",
     "mcpOrigin": "Externes Tool (MCP): „{{name}}“",
     "mcpOriginGeneric": "externes Tool (MCP)",
     "mcpOriginHint": "Diese Aktion wurde nicht vom internen Chat, sondern über den lokalen MCP-Server von einem externen Tool angefragt."
@@ -290,6 +291,7 @@
     "FILTER_HARD_BLACKLIST": "Hard-Blacklist: potenziell gefährliches Kommando",
     "FILTER_OUTPUT_REDIRECTION": "Ausgabe-Umleitung (>, >>, ...) erkannt",
     "FILTER_COMMAND_SUBSTITUTION": "Command-Substitution erkannt",
+    "FILTER_SUBSTITUTION_TOO_DEEP": "Kommando zu tief verschachtelt, konnte nicht sicher analysiert werden",
     "FILTER_RULE_DENY": "Durch eine Regel blockiert",
     "FILTER_RULE_CONFIRM": "Regel erfordert Bestätigung",
     "FILTER_NO_RULE_MATCHED": "Keine passende Regel gefunden",

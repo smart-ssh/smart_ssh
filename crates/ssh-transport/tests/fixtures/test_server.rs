@@ -201,7 +201,7 @@ impl Handler for TestHandler {
         // nur endlich, damit der Test selbst nicht unbegrenzt läuft) — sendet
         // absichtlich mehrere Chunks VOR `exit_status_request`/`eof`/
         // `close`, damit der Test beobachten kann, dass der Client (über
-        // `RusshTransport::with_max_output_bytes`, deutlich kleiner als die
+        // `SshTransport::set_max_output_bytes`, deutlich kleiner als die
         // hier gesendete Gesamtmenge) selbst abbricht, statt alles
         // entgegenzunehmen.
         if command == "flood" {

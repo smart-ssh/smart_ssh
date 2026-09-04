@@ -16,9 +16,10 @@ use ssh_manager_core::ssh::CommandOutput;
 /// [`ExecAccumulator::cap_reached`] `true` liefert.
 /// Maximale Puffergröße pro Stream (stdout / stderr) vor dem Abschneiden (Spec 0013, SEC-09;
 /// Spec 0043, Fund A: greift jetzt WÄHREND des Streamings, s. `crate::transport::drain_channel`).
-/// Default — konfigurierbar über `RusshTransport::with_max_output_bytes`
-/// bzw. `ExecAccumulator::with_limit` (Spec 0043, Abschnitt 7: interne
-/// Konstante mit klarer Benennung reicht, kein Nutzer-Bedienknopf nötig).
+/// Default — konfigurierbar über `SshTransport::set_max_output_bytes`
+/// (Testhook, nach oben geklemmt) bzw. `ExecAccumulator::with_limit`
+/// (Spec 0043, Abschnitt 7: interne Konstante mit klarer Benennung reicht,
+/// kein Nutzer-Bedienknopf nötig).
 pub const MAX_STREAM_OUTPUT_BYTES: usize = 2 * 1024 * 1024; // 2 MB
 pub const TRUNCATION_NOTICE: &[u8] = b"\n[Output truncated: exceeded limit]";
 

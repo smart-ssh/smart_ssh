@@ -188,6 +188,7 @@
     "cancelCommand": "Disconnect this command",
     "cancellingCommand": "Disconnecting…",
     "commandCancelledNotice": "⚠ Manually cancelled — output may be incomplete, no regular exit code.",
+    "commandTruncatedNotice": "⚠ Output was cut off at the size limit — it may be incomplete.",
     "mcpOrigin": "External tool (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "external tool (MCP)",
     "mcpOriginHint": "This action was not requested by the internal chat, but by an external tool via the local MCP server."
@@ -290,6 +291,7 @@
     "FILTER_HARD_BLACKLIST": "Hard blacklist: potentially dangerous command",
     "FILTER_OUTPUT_REDIRECTION": "Output redirection (>, >>, ...) detected",
     "FILTER_COMMAND_SUBSTITUTION": "Command substitution detected",
+    "FILTER_SUBSTITUTION_TOO_DEEP": "Command nested too deeply to be safely analyzed",
     "FILTER_RULE_DENY": "Blocked by a rule",
     "FILTER_RULE_CONFIRM": "Rule requires confirmation",
     "FILTER_NO_RULE_MATCHED": "No matching rule found",

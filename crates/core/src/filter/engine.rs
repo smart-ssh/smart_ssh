@@ -216,12 +216,28 @@ impl<S: PolicyStore> FilterEngine<S> {
         // Spec 0043, Fund B: Tiefen-Cap VOR jedem weiteren Parsing/Abstieg
         // geprüft (tiefenbegrenzter Abstieg, nicht "erst komplett parsen,
         // dann Tiefe prüfen" — das hätte dasselbe Zu-spät-Problem wie Fund
-        // A). Ein zu tief verschachteltes Kommando gilt als nicht sicher
-        // parsebar und landet bei `Confirm`, NIE bei `AutoExec` — dieselbe
-        // Eskalations-only-Richtung wie überall sonst in dieser Engine.
+        // A).
+        //
+        // ADR-Abweichung vom wörtlichen Spec-0043-Text (der hier `Confirm`
+        // vorschlägt, s. Abschnitt 3): `Confirm` ist an dieser Stelle keine
+        // fail-safe Eskalation, sondern eine faktische ABSCHWÄCHUNG — ein
+        // Nutzer-/Organisations-`Deny` auf einem inneren Teilkommando (z. B.
+        // `Deny "rm *"`) würde bei ausreichender Verschachtelungstiefe nicht
+        // mehr gefunden (die Rekursion bricht ja genau deshalb ab), landet
+        // aber ohne diesen Fix trotzdem nur bei `Confirm` statt bei `Deny`
+        // — ein per Prompt-Injection/kompromittierten Provider trivial
+        // erreichbares Downgrade eines expliziten `Deny`
+        // (spec-reviewer-Fund, Review von Commit 22c49f1..fd5b45a). Das
+        // verletzt die projektweite Invariante "Eskalation nur in eine
+        // Richtung, ein regelbasiertes Deny wird nie abgeschwächt"
+        // (CLAUDE.md, Abschnitt "Security-kritische Module") und Spec 0002
+        // Abschnitt 3 ("ein Deny wird gar nicht erst zur Bestätigung
+        // angeboten"). Kein legitimes Kommando verschachtelt 33+ Ebenen tief
+        // — dieselbe Fail-safe-Richtung wie der `Empty`-Fall direkt
+        // darunter: `Deny`, nicht `Confirm`, nie `AutoExec`.
         if depth > parser::MAX_SUBSTITUTION_DEPTH {
             return EvaluationTrace {
-                decision: Decision::Confirm {
+                decision: Decision::Deny {
                     reason: "Kommando zu tief verschachtelt, konnte nicht sicher analysiert \
                              werden"
                         .to_string(),
@@ -599,13 +615,17 @@ const FILTER_NO_RULE_MATCHED: &str = "FILTER_NO_RULE_MATCHED";
 /// s. `evaluate_rules_explained`-Doc-Kommentar.
 fn code_priority(code: &str) -> u8 {
     match code {
+        // Spec 0043, Fund B: jetzt `Deny` (nicht mehr `Confirm`, s. ADR-
+        // Kommentar bei `evaluate_parsed_explained`) — daher hier auf
+        // gleicher Prioritätsstufe wie die anderen Deny-Quellen, nicht mehr
+        // unter `FILTER_COMMAND_SUBSTITUTION` einsortiert.
         FILTER_HARD_BLACKLIST => 0,
-        FILTER_RULE_DENY => 1,
-        FILTER_RULE_CONFIRM => 2,
-        FILTER_COMMAND_SUBSTITUTION => 3,
-        FILTER_OUTPUT_REDIRECTION => 4,
-        FILTER_COMMAND_TOO_LONG => 5,
-        FILTER_SUBSTITUTION_TOO_DEEP => 6,
+        FILTER_SUBSTITUTION_TOO_DEEP => 1,
+        FILTER_RULE_DENY => 2,
+        FILTER_RULE_CONFIRM => 3,
+        FILTER_COMMAND_SUBSTITUTION => 4,
+        FILTER_OUTPUT_REDIRECTION => 5,
+        FILTER_COMMAND_TOO_LONG => 6,
         FILTER_PARSE_AMBIGUOUS => 7,
         FILTER_NO_RULE_MATCHED => 8,
         FILTER_EMPTY_COMMAND => 9,

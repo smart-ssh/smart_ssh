@@ -121,6 +121,7 @@ export type ChatItem =
       stderr: string;
       exitCode: number | null;
       cancelled: boolean;
+      truncated: boolean;
     }
   | { type: "historyRejected"; id: string; command: string; reason: string };
 
@@ -305,6 +306,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
                   stderr: entry.stderr,
                   exitCode: entry.exitCode,
                   cancelled: entry.cancelled,
+                  truncated: entry.truncated,
                 };
               case "actionRejected":
                 return {
@@ -846,6 +848,9 @@ export function ChatItemView({
         {item.cancelled && (
           <p className="mt-1 font-sans text-amber-300">{t("actionCard.commandCancelledNotice")}</p>
         )}
+        {item.truncated && (
+          <p className="mt-1 font-sans text-amber-300">{t("actionCard.commandTruncatedNotice")}</p>
+        )}
         {item.stdout && (
           <pre className="mt-1 whitespace-pre-wrap text-slate-400">{item.stdout}</pre>
         )}
@@ -1352,6 +1357,9 @@ function ActionResultView({
        * eine Störung statt eines bewussten Nutzer-Abbruchs aus. */}
       {result.cancelled ? (
         <p className="font-sans text-amber-300">{t("actionCard.commandCancelledNotice")}</p>
+      ) : null}
+      {result.truncated ? (
+        <p className="font-sans text-amber-300">{t("actionCard.commandTruncatedNotice")}</p>
       ) : null}
       {noteContent && (
         <div className="flex items-start justify-between gap-2 font-sans">
