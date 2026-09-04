@@ -88,7 +88,7 @@ Once built, packages will be located in the root `target/release/` folder:
 | **macOS** | `.dmg` / `.app` | `target/release/bundle/dmg/` & `target/release/bundle/macos/` |
 | **Windows** | `.msi` / `.exe` | `target/release/bundle/msi/` & `target/release/bundle/nsis/` |
 | **Linux** | `.deb` / `.AppImage` | `target/release/bundle/deb/` & `target/release/bundle/appimage/` |
-| **Raw Binary** | Executable binary | `target/release/ssh-manager-app-tauri` |
+| **Raw Binary** | Executable binary | `target/release/smart-ssh` |
 
 ---
 
@@ -126,10 +126,88 @@ macOS-specific).
 
 **How to verify it's working**: run `./scripts/tauri-dev.sh`, make a
 source change (triggering a rebuild), and compare
-`codesign -dv --verbose=4 target/debug/ssh-manager-app-tauri` before and
+`codesign -dv --verbose=4 target/debug/smart-ssh` before and
 after — `CDHash` will differ (expected, content changed), but
-`codesign -d -r- target/debug/ssh-manager-app-tauri` should show the same
-designated requirement (`identifier "ssh-manager-app-tauri" and
+`codesign -d -r- target/debug/smart-ssh` should show the same
+designated requirement (`identifier "smart-ssh" and
 certificate leaf = H"..."`) both times. A keychain permission you granted
 before the change should then still be honored after it, without a new
 prompt.
+
+---
+
+## 6. macOS Release Signing & Notarization (Official Edition)
+
+Release builds distributed as the Official Edition are signed with a
+Developer ID Application certificate and notarized by Apple — separate
+from, and unrelated to, the dev-signing setup in section 5 above (that
+one only stabilizes `cargo tauri dev`'s ad-hoc signature; it never
+touches `bundle.macOS` in `tauri.conf.json`, so the two coexist without
+interference, see
+[`docs/adr/0022-stable-dev-code-signature.md`](docs/adr/0022-stable-dev-code-signature.md)).
+
+**This applies only to the person building the Official Edition with
+their own Apple Developer account credentials — a plain `cargo tauri
+build` from a fresh clone, with none of the environment variables below
+set, still produces an unsigned Community-Edition-equivalent bundle. The
+checked-in `tauri.conf.json` deliberately does not hardcode a
+`signingIdentity` (that value is specific to one developer's
+certificate) — it comes exclusively from the `APPLE_SIGNING_IDENTITY`
+environment variable below, which `tauri-cli` always prefers over any
+config value when set.**
+
+### Required environment variables
+
+None of these are checked into the repository, and the `.env` file
+holding their values must never be committed. Names only, no values —
+the actual file lives outside the repo at `~/build/smart-ssh-signing.env`:
+
+| Variable | Purpose |
+| :--- | :--- |
+| `APPLE_SIGNING_IDENTITY` | The Developer ID Application certificate's SHA-1 fingerprint (not the display name — see `docs/adr/0033-app-store-connect-api-key-notarization.md` for why a fingerprint, not a name). |
+| `APPLE_API_KEY` | App Store Connect API Key ID. |
+| `APPLE_API_ISSUER` | App Store Connect API Issuer ID (UUID). |
+| `APPLE_API_KEY_PATH` | Local filesystem path to the downloaded `AuthKey_<APPLE_API_KEY>.p8` private key file. |
+
+### Build flow
+
+```bash
+source ~/build/smart-ssh-signing.env
+cd crates/app-tauri/frontend && npm install && cd ..
+cargo tauri build
+```
+
+(`cargo tauri build` must run from `crates/app-tauri` — that's where
+`tauri.conf.json` and the `Cargo.toml` `tauri` dependency live, same as
+`./scripts/tauri-dev.sh`/`cargo tauri dev` in section 5.)
+
+`cargo tauri build` builds the frontend, compiles the release binary,
+bundles the `.app`/`.dmg`, signs it with the Developer ID identity from
+`APPLE_SIGNING_IDENTITY` (entitlements from
+[`crates/app-tauri/entitlements.plist`](./crates/app-tauri/entitlements.plist),
+Hardened Runtime enabled — both configured in `tauri.conf.json`'s
+`bundle.macOS`), then submits it to Apple's notarization service using
+the App Store Connect API key credentials and staples the resulting
+ticket onto the bundle.
+
+**Notarization is the slow part** — Apple's service typically takes a
+few minutes, but can occasionally take up to about an hour under load.
+`cargo tauri build` blocks and polls until it completes (or the
+credentials are rejected/missing, which fails fast instead). Don't
+interrupt it while it's waiting; there's no separate "check notarization
+status later" step to resume with the current tooling.
+
+### Artifacts
+
+Same locations as section 4 above
+(`target/release/bundle/macos/`, `target/release/bundle/dmg/`) — now
+signed and notarized instead of unsigned. Verify with:
+
+```bash
+codesign -dv --verbose=4 "target/release/bundle/macos/Smart SSH.app"
+spctl -a -vv "target/release/bundle/macos/Smart SSH.app"
+```
+
+**Never commit `~/build/smart-ssh-signing.env`, the `.p8` API key file,
+or any of the values above.** They belong exclusively on the machine(s)
+used to produce Official Edition releases.
