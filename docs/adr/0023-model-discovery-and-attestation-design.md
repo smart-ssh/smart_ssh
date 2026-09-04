@@ -53,6 +53,30 @@ nur für diese drei Typen) als auch Backend (Command validiert
 `provider_type`) setzen das durch — Verteidigung in der Tiefe statt
 Verlass auf nur eine Schicht.
 
+**6. Die Attestierungs-Antwort rendert in der Provider-**Liste**, nicht im
+Provider-**Formular**, wie Spec 0025, Abschnitt 4 wörtlich sagt ("... zeigt
+die rohe Antwort in einem Read-only-Textblock im Provider-Formular an").
+Es gibt in dieser App kein eigenes Bearbeiten-Formular pro bereits
+gespeichertem Provider (`AiProviderSettings.tsx` hat genau ein Formular:
+das zum **Anlegen** eines neuen Providers; bestehende Provider erscheinen
+nur als Einträge der Liste darunter, mit Aktionen wie Löschen und eben dem
+"Attestierung abrufen"-Button). Der Abruf selbst ist aber unmissverständlich
+an einen bereits gespeicherten, konkreten Provider gebunden (`fetch_
+attestation_info(provider_id)`) — ein rein clientseitiges Feld im
+Anlage-Formular hätte für einen noch nicht gespeicherten Entwurf gar keine
+`provider_id`, gegen die der Abruf laufen könnte. Die Liste ist damit der
+einzige Ort, an dem "dieser konkrete, gespeicherte Provider" und "seine
+zuletzt abgerufene Attestierung" zusammen sinnvoll darstellbar sind — der
+im Spec-Text unterstellte Formular-Kontext existiert für einen bereits
+gespeicherten Provider architektonisch nicht. Der Text der Spec ist damit
+in der Sache erfüllt (Read-only-Textblock, unveränderte Antwort, derselbe
+Disclaimer-Wortlaut), nur der Ort weicht vom wörtlichen Spec-Text ab —
+unabhängiger Review-Pass hat das als dokumentationswürdige, nicht als zu
+behebende Abweichung eingestuft: Spec und Code sollen nicht stillschweigend
+auseinanderlaufen, aber ein neues, redundantes Bearbeiten-Formular nur für
+diese eine Anzeige zu bauen wäre unverhältnismäßiger Aufwand für keinen
+echten Zusatznutzen.
+
 ## Konsequenzen
 
 **Positiv:**
