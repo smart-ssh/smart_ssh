@@ -517,4 +517,6 @@ export interface McpServerSettingsDto {
   endpoint: string;
   token: string;
   allowedServerIds: string[];
+  /** Spec 0028, Abschnitt 7 — wirkt erst auf den nächsten Serverstart. */
+  confirmTimeoutSecs: number;
 }

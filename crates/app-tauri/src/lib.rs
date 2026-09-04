@@ -207,6 +207,7 @@ pub fn run() {
             mcp_settings::set_mcp_server_enabled,
             mcp_settings::regenerate_mcp_server_token,
             mcp_settings::set_mcp_server_allowed_servers,
+            mcp_settings::set_mcp_server_confirm_timeout_secs,
         ])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Tauri-App");

@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, Runtime, State};
 use tauri_plugin_store::StoreExt;
 
 use ssh_manager_core::shared::ServerId;
@@ -26,6 +26,12 @@ const SETTINGS_STORE_FILE: &str = "settings.json";
 const ENABLED_KEY: &str = "mcpServerEnabled";
 const TOKEN_KEY: &str = "mcpServerToken";
 const ALLOWED_SERVERS_KEY: &str = "mcpServerAllowedServerIds";
+/// Spec 0028, Abschnitt 7: "konfigurierbares Timeout (Default 5 Minuten)" —
+/// bislang nur als Konstante (`mcp_server::DEFAULT_CONFIRM_TIMEOUT`)
+/// vorhanden, aber `start_server_if_not_running` konstruierte den Server
+/// immer mit `McpServerConfig::default()`, sodass der Wert faktisch nicht
+/// änderbar war (unabhängiger Review-Pass, Spec-Audit-Fund).
+const CONFIRM_TIMEOUT_SECS_KEY: &str = "mcpServerConfirmTimeoutSecs";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +42,12 @@ pub struct McpServerSettingsDto {
     pub endpoint: String,
     pub token: String,
     pub allowed_server_ids: Vec<String>,
+    /// Spec 0028, Abschnitt 7. Wirkt erst auf den **nächsten** Serverstart
+    /// (wie der Port auch, s. `McpServerConfig`) — ein bereits laufender
+    /// Server wird beim Ändern deshalb neu gestartet (s.
+    /// `set_mcp_server_confirm_timeout_secs`), analog zu einem geänderten
+    /// Port.
+    pub confirm_timeout_secs: u64,
 }
 
 fn generate_token() -> String {
@@ -123,6 +135,14 @@ fn store_allowed_servers(app: &AppHandle, ids: &HashSet<ServerId>) -> CommandRes
     Ok(())
 }
 
+fn load_confirm_timeout_secs<R: Runtime>(app: &AppHandle<R>) -> CommandResult<u64> {
+    let store = app.store(SETTINGS_STORE_FILE)?;
+    Ok(store
+        .get(CONFIRM_TIMEOUT_SECS_KEY)
+        .and_then(|v| v.as_u64())
+        .unwrap_or_else(|| mcp_server::DEFAULT_CONFIRM_TIMEOUT.as_secs()))
+}
+
 fn is_enabled_setting(app: &AppHandle) -> CommandResult<bool> {
     let store = app.store(SETTINGS_STORE_FILE)?;
     Ok(store
@@ -167,6 +187,7 @@ async fn build_dto(app: &AppHandle, state: &AppState) -> CommandResult<McpServer
         ),
         token,
         allowed_server_ids,
+        confirm_timeout_secs: load_confirm_timeout_secs(app)?,
     })
 }
 
@@ -179,7 +200,10 @@ async fn start_server_if_not_running(app: &AppHandle, state: &AppState) -> Comma
         return Ok(());
     }
     let backend: Arc<dyn mcp_server::McpBackend> = Arc::new(AppMcpBackend::new(app.clone()));
-    let config = mcp_server::McpServerConfig::default();
+    let config = mcp_server::McpServerConfig {
+        confirm_timeout: std::time::Duration::from_secs(load_confirm_timeout_secs(app)?),
+        ..mcp_server::McpServerConfig::default()
+    };
     let handle = mcp_server::serve(config, backend, state.mcp.token.clone()).await?;
     tracing::info!(origin = "mcp", addr = %handle.local_addr, "mcp server started");
     *runtime = Some(handle);
@@ -240,6 +264,33 @@ pub async fn regenerate_mcp_server_token(
     build_dto(&app, &state).await
 }
 
+/// Spec 0028, Abschnitt 7/9. `confirm_timeout` wird beim Server-Start in den
+/// `SmartSshMcpServer` einkompiliert (s. `mcp_server::config::serve`), lässt
+/// sich also anders als das Token nicht am laufenden Server austauschen —
+/// ein bereits laufender Server wird deshalb neu gestartet, damit die
+/// Änderung ohne manuellen Aus-/Einschalt-Schritt sofort greift (statt nur
+/// beim nächsten App-Start). Ein währenddessen wartender MCP-Tool-Call würde
+/// dadurch mit einem Verbindungsfehler abbrechen — ein seltener,
+/// vertretbarer Trade-off für eine vom Nutzer bewusst in den Einstellungen
+/// vorgenommene Änderung, kein automatischer Hintergrundvorgang.
+#[tauri::command]
+pub async fn set_mcp_server_confirm_timeout_secs(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    secs: u64,
+) -> CommandResult<McpServerSettingsDto> {
+    let store = app.store(SETTINGS_STORE_FILE)?;
+    store.set(CONFIRM_TIMEOUT_SECS_KEY, serde_json::json!(secs));
+    store.save()?;
+
+    let was_running = state.mcp.runtime.lock().await.is_some();
+    if was_running {
+        stop_server_if_running(&state).await;
+        start_server_if_not_running(&app, &state).await?;
+    }
+    build_dto(&app, &state).await
+}
+
 #[tauri::command]
 pub async fn set_mcp_server_allowed_servers(
     app: AppHandle,
@@ -273,5 +324,57 @@ pub async fn autostart_if_enabled(app: &AppHandle) {
         Err(err) => {
             tracing::warn!(origin = "mcp", error = %err.message, "mcp autostart settings read failed");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::first_run_notice::test_support::{lock, test_app};
+    use tauri_plugin_store::StoreExt;
+
+    /// Spec 0028, Abschnitt 7: Regressionstest für den Audit-Fund, dass
+    /// `start_server_if_not_running` den Server bislang immer mit
+    /// `McpServerConfig::default()` (fest 5 Minuten) konstruierte, egal was
+    /// in den Einstellungen stand. Ohne persistierten Wert muss weiterhin
+    /// exakt der Backend-Default gelten.
+    #[test]
+    fn test_load_confirm_timeout_secs_defaults_to_backend_default_without_stored_value() {
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle();
+        if let Ok(store) = handle.store(SETTINGS_STORE_FILE) {
+            store.delete(CONFIRM_TIMEOUT_SECS_KEY);
+            let _ = store.save();
+        }
+
+        let secs = load_confirm_timeout_secs(handle).expect("laden darf nicht fehlschlagen");
+
+        assert_eq!(secs, mcp_server::DEFAULT_CONFIRM_TIMEOUT.as_secs());
+
+        if let Ok(store) = handle.store(SETTINGS_STORE_FILE) {
+            store.delete(CONFIRM_TIMEOUT_SECS_KEY);
+            let _ = store.save();
+        }
+    }
+
+    /// Der eigentliche Kern des Fixes: ein zuvor gespeicherter Wert wird
+    /// tatsächlich gelesen — das ist genau der Teil, der vorher nirgendwo
+    /// ankam, weil `start_server_if_not_running` ihn nie abfragte.
+    #[test]
+    fn test_load_confirm_timeout_secs_returns_persisted_value() {
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle();
+        let store = handle.store(SETTINGS_STORE_FILE).expect("Store");
+        store.set(CONFIRM_TIMEOUT_SECS_KEY, serde_json::json!(120u64));
+        store.save().expect("Store konnte nicht gespeichert werden");
+
+        let secs = load_confirm_timeout_secs(handle).expect("laden darf nicht fehlschlagen");
+
+        assert_eq!(secs, 120);
+
+        store.delete(CONFIRM_TIMEOUT_SECS_KEY);
+        let _ = store.save();
     }
 }

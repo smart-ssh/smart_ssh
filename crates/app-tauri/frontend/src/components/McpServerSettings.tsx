@@ -6,6 +6,7 @@ import {
   listServers,
   regenerateMcpServerToken,
   setMcpServerAllowedServers,
+  setMcpServerConfirmTimeoutSecs,
   setMcpServerEnabled,
 } from "../api";
 import type { McpServerSettingsDto, ServerDto } from "../types";
@@ -83,6 +84,23 @@ export function McpServerSettings() {
     }
   };
 
+  /** Spec 0028, Abschnitt 7: das Timeout wird als volle Minuten im UI
+   * eingegeben, aber sekundengenau gespeichert/übertragen (Backend-Default
+   * 300s = 5 Minuten) — Minuten sind die für den Nutzer sinnvolle Einheit,
+   * ohne die Backend-Präzision künstlich einzuschränken. */
+  const handleChangeConfirmTimeoutMinutes = async (minutes: number) => {
+    if (!Number.isFinite(minutes) || minutes < 1) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setSettings(await setMcpServerConfirmTimeoutSecs(Math.round(minutes * 60)));
+    } catch (err) {
+      setError(commandErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleToggleAllowedServer = async (serverId: string, checked: boolean) => {
     if (!settings) return;
     const next = checked
@@ -141,6 +159,24 @@ export function McpServerSettings() {
             >
               {t("mcpServer.regenerateToken")}
             </button>
+          </div>
+
+          <div className="mb-3">
+            <label className="mb-1 flex items-center gap-2 text-xs text-slate-400">
+              {t("mcpServer.confirmTimeoutLabel")}
+              <input
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={Math.round(settings.confirmTimeoutSecs / 60)}
+                key={settings.confirmTimeoutSecs}
+                disabled={busy}
+                onBlur={(e) => handleChangeConfirmTimeoutMinutes(e.target.valueAsNumber)}
+                className="w-16 rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 text-sm text-slate-200"
+              />
+              {t("mcpServer.confirmTimeoutUnit")}
+            </label>
+            <p className="text-xs text-slate-500">{t("mcpServer.confirmTimeoutHint")}</p>
           </div>
 
           <div className="mb-3">

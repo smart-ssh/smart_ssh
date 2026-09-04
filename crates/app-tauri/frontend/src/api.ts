@@ -298,3 +298,6 @@ export const regenerateMcpServerToken = () =>
 
 export const setMcpServerAllowedServers = (serverIds: string[]) =>
   invoke<McpServerSettingsDto>("set_mcp_server_allowed_servers", { serverIds });
+
+export const setMcpServerConfirmTimeoutSecs = (secs: number) =>
+  invoke<McpServerSettingsDto>("set_mcp_server_confirm_timeout_secs", { secs });

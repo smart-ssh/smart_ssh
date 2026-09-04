@@ -309,6 +309,9 @@
     "tokenLabel": "Token",
     "regenerateToken": "Token neu generieren",
     "regenerateConfirm": "Neues Token generieren? Das alte Token wird sofort ungültig — bereits konfigurierte externe Clients müssen den neuen Wert eintragen.",
+    "confirmTimeoutLabel": "Bestätigungs-Timeout",
+    "confirmTimeoutUnit": "Minuten",
+    "confirmTimeoutHint": "Wie lange ein wartender externer Tool-Call auf eine Antwort wartet, bevor die App entscheidet — die Bestätigungsanfrage selbst bleibt davon unabhängig in der App offen. Wirkt ab dem nächsten (Neu-)Start des Servers; ein laufender Server wird bei einer Änderung sofort neu gestartet.",
     "allowListLabel": "Server-Allow-Liste (über MCP ansprechbar)",
     "noServers": "Noch keine Server angelegt.",
     "exampleConfigHint": "Beispiel-Konfiguration für Claude Code (.mcp.json bzw. „claude mcp add --transport http\"):"
