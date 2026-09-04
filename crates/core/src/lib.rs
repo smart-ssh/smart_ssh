@@ -12,5 +12,6 @@ pub mod entitlements;
 pub mod filter;
 pub mod profiles;
 pub mod risk;
+pub mod session;
 pub mod shared;
 pub mod ssh;
