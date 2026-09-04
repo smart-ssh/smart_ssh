@@ -20,6 +20,27 @@ node_modules/
 .vscode/
 *.iml
 
+# Claude Code Projekt-Setup vs. lokaler Session-Zustand: `.claude/agents/`
+# enthält die Subagenten-Definitionen des Projekts (u. a.
+# `spec-reviewer.md`, von CLAUDE.md referenziert) und gehört ins Repo.
+# Alles andere unter `.claude/` (Session-Caches, Worktree-Verwaltung,
+# lokale Locks/History, `launch.json`s maschinenspezifischer Dev-Server-
+# Start) ist Maschinen-/Sitzungszustand, nie Projektinhalt.
+.claude/*
+!.claude/agents/
+
+# Signing-Secrets/Credentials — Sicherheitsnetz: der eigentliche
+# Signing-/Notarisierungs-Prozess liegt bewusst außerhalb des Repos
+# (s. README_DEV.md, Abschnitt 6), diese Regeln fangen nur eine
+# versehentliche lokale Kopie ab, bevor sie je gestaged werden könnte.
+*.env
+.env
+.env.*
+*.p8
+*.p12
+*.pem
+*.key
+
 # OS
 .DS_Store
 Thumbs.db

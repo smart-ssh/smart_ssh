@@ -125,6 +125,14 @@ left open, especially a scope reduction (e.g. "X works but without
 history/feature Y, because Z") — say so explicitly rather than silently
 narrowing what was asked for.
 
+**When a spec (and its ADRs) get committed:** together, once the spec's
+implementation step is done and reviewed — not while still a draft (a
+committed draft goes stale as the implementation evolves) and not weeks
+later either (a review then checks the code against an unversioned spec).
+The rhythm: spec drafted (local, not yet committed) → implemented →
+reviewed → the final spec text and any ADRs written during that step are
+committed together as part of finishing the feature.
+
 ## Testing conventions
 
 - Rust: tests live in `#[cfg(test)] mod tests` next to the code, using
