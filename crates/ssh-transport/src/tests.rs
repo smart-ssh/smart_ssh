@@ -39,6 +39,7 @@ fn test_accumulate_exec_output_collects_stdout_stderr_and_exit_code() {
     assert_eq!(output.stdout, b"hello world\n");
     assert_eq!(output.stderr, b"warn: x\n");
     assert_eq!(output.exit_code, Some(0));
+    assert!(!output.truncated);
 }
 
 #[test]
@@ -93,6 +94,10 @@ fn test_t9_accumulate_exec_output_caps_at_2mb() {
     );
     assert!(output.stdout.ends_with(TRUNCATION_NOTICE));
     assert_eq!(output.exit_code, Some(0));
+    assert!(
+        output.truncated,
+        "CommandOutput.truncated muss gesetzt sein"
+    );
 }
 
 // --- Host-Key-Auswertung ------------------------------------------------

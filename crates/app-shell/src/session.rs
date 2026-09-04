@@ -534,6 +534,7 @@ mod tests {
                     stdout: b"total 0".to_vec(),
                     stderr: Vec::new(),
                     exit_code: Some(0),
+                    truncated: false,
                 },
                 cancelled: false,
             },

@@ -92,6 +92,11 @@ impl SshTransport for LocalTransport {
             stdout: output.stdout,
             stderr: output.stderr,
             exit_code: output.status.code(),
+            // Lokaler Pseudo-Server: kein Streaming über ein `russh`-Channel-
+            // Limit, `Command::output()` puffert unbegrenzt — kein Fund-A-
+            // Analogon (kein feindlicher Remote-Server, s. Spec 0043,
+            // Abschnitt 2), daher hier bewusst immer `false`.
+            truncated: false,
         })
     }
 

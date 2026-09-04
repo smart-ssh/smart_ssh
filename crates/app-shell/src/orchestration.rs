@@ -1294,6 +1294,7 @@ async fn execute_suggested_command(
                     stderr: String::from_utf8_lossy(&redacted.stderr).into_owned(),
                     exit_code: redacted.exit_code,
                     cancelled,
+                    truncated: redacted.truncated,
                 },
             );
             let combined_output = format!(
@@ -1697,6 +1698,7 @@ async fn execute_read_remote_file(
                 stdout: bytes,
                 stderr: Vec::new(),
                 exit_code: Some(0),
+                truncated: false,
             });
             let content = String::from_utf8_lossy(&redacted.stdout).into_owned();
             emit_chat_action_result(
@@ -2533,6 +2535,7 @@ mod tests {
                         stdout: b"partial output before cancel".to_vec(),
                         stderr: Vec::new(),
                         exit_code: None,
+                        truncated: false,
                     },
                     cancelled: true,
                 });
@@ -2686,6 +2689,7 @@ mod tests {
             stdout: stdout.as_bytes().to_vec(),
             stderr: Vec::new(),
             exit_code: Some(0),
+            truncated: false,
         }
     }
 
@@ -6607,6 +6611,7 @@ mod tests {
             stdout: b"Verbindung ok, password=hunter2geheim".to_vec(),
             stderr: Vec::new(),
             exit_code: Some(0),
+            truncated: false,
         };
         let redacted = redactor.redact(&raw_output);
 

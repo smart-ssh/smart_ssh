@@ -14,6 +14,14 @@ pub struct CommandOutput {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
     pub exit_code: Option<i32>,
+    /// `true`, wenn `stdout` und/oder `stderr` beim Streaming am
+    /// konfigurierten Output-Cap (Spec 0043, Fund A) abgeschnitten wurden —
+    /// UI und KI-Kontext können das damit kenntlich machen, statt eine
+    /// unvollständige Ausgabe stillschweigend als vollständig auszugeben.
+    /// `#[serde(default)]`, damit bereits persistierte `chat_messages`-Zeilen
+    /// (Spec 0034) ohne dieses Feld weiterhin deserialisierbar bleiben.
+    #[serde(default)]
+    pub truncated: bool,
 }
 
 /// Ergebnis von [`SshTransport::execute_cancellable`](super::SshTransport::execute_cancellable)

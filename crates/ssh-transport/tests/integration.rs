@@ -546,3 +546,36 @@ async fn test_execute_cancellable_behaves_like_execute_without_cancel() {
     assert_eq!(outcome.output.stdout, b"echo:hello world\n");
     assert_eq!(outcome.output.exit_code, Some(0));
 }
+
+/// Spec 0043, Fund A: der in-process-Testserver liefert über das
+/// `"flood"`-Kommando (s. `fixtures::test_server`) deutlich mehr Bytes, als
+/// der (über `SshTransport::set_max_output_bytes` künstlich klein gesetzte)
+/// Output-Cap zulässt — belegt, dass der zurückgelieferte Puffer nie über
+/// das Limit hinaus wächst und das Ergebnis als `truncated` markiert ist,
+/// statt (wie vor dem Fix) erst nach vollständigem Puffern der gesamten
+/// Server-Ausgabe zu greifen.
+#[tokio::test]
+async fn test_t43_execute_caps_output_during_streaming() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    const SMALL_LIMIT: usize = 4096;
+    transport.set_max_output_bytes(SMALL_LIMIT);
+
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        transport.execute("flood"),
+    )
+    .await
+    .expect("execute() darf bei einem flutenden Server nicht hängen bleiben")
+    .expect("execute() sollte trotz Abschneiden Ok liefern");
+
+    assert!(
+        output.stdout.len() <= SMALL_LIMIT + ssh_transport::TRUNCATION_NOTICE.len(),
+        "stdout darf nie über das konfigurierte Limit hinauswachsen, war aber {} Bytes",
+        output.stdout.len()
+    );
+    assert!(
+        output.truncated,
+        "CommandOutput.truncated muss gesetzt sein, wenn der Cap gegriffen hat"
+    );
+}

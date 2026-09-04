@@ -122,6 +122,7 @@ impl OutputRedactor for DefaultOutputRedactor {
             stdout: redact_bytes(&output.stdout, &self.patterns),
             stderr: redact_bytes(&output.stderr, &self.patterns),
             exit_code: output.exit_code,
+            truncated: output.truncated,
         }
     }
 

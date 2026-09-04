@@ -426,6 +426,7 @@ async fn test_mock_ssh_transport_returns_configured_output() {
             stdout: b"hi\n".to_vec(),
             stderr: Vec::new(),
             exit_code: Some(0),
+            truncated: false,
         },
     );
 

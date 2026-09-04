@@ -717,6 +717,8 @@ pub enum ChatHistoryEntryDto {
         stderr: String,
         exit_code: Option<i32>,
         cancelled: bool,
+        /// Spec 0043, Fund A — s. `ActionResultPayload::Command.truncated`.
+        truncated: bool,
     },
     ActionRejected {
         role: ChatHistoryRoleDto,
@@ -761,6 +763,7 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                 stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
                 exit_code: output.exit_code,
                 cancelled,
+                truncated: output.truncated,
             },
             ssh_manager_core::ai::MessageContent::ActionRejected { command, reason } => {
                 let reason_text = match reason {

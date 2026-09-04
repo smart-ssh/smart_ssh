@@ -8,7 +8,7 @@ use ssh_manager_core::ssh::{
 };
 
 use crate::error::map_russh_error;
-use crate::exec::accumulate_exec_output;
+use crate::exec::ExecAccumulator;
 use crate::handler::ClientHandler;
 use crate::sftp::RusshSftpSession;
 use crate::shell::RusshShell;
@@ -25,23 +25,45 @@ pub struct RusshTransport {
     /// ein Zwischen-`Handle` gedroppt wird. Führendes `_`, damit Clippy
     /// dieses "nur am Leben halten"-Feld nicht als totes Feld anmahnt.
     pub(crate) _intermediate_hops: Vec<Handle<ClientHandler>>,
+    /// Output-Cap für `execute*()` (Spec 0043, Fund A) — Default
+    /// `exec::MAX_STREAM_OUTPUT_BYTES`, s. `crate::connect`. Als Feld statt
+    /// festem Konstantenzugriff, damit Tests einen kleineren Wert setzen
+    /// können, ohne echte 2-MB-Nutzlasten durch den in-process-Testserver
+    /// schicken zu müssen (analog zu `FilterEngine::with_max_command_length`).
+    pub(crate) max_output_bytes: usize,
 }
 
-async fn drain_channel(mut channel: Channel<Msg>) -> Result<CommandOutput, SshError> {
-    let mut messages = Vec::new();
+/// Treibt `channel.wait()`, bis der Channel schließt — akkumuliert dabei
+/// **während** des Streamings statt erst danach (Spec 0043, Fund A): sobald
+/// [`ExecAccumulator::cap_reached`] `true` liefert, wird nicht mehr auf
+/// weitere Nachrichten gewartet, der Channel wird stattdessen sauber
+/// geschlossen. So kann ein feindlicher/fehlerhafter Server (z. B. `yes
+/// AAAA | head -c 5G`) den Prozessspeicher nicht mehr über das konfigurierte
+/// Limit hinaus belegen, bevor der Cap greift — anders als zuvor, wo alle
+/// `ChannelMsg`s erst vollständig in einem `Vec` gesammelt wurden.
+async fn drain_channel(
+    mut channel: Channel<Msg>,
+    max_output_bytes: usize,
+) -> Result<CommandOutput, SshError> {
+    let mut acc = ExecAccumulator::with_limit(max_output_bytes);
     loop {
+        if acc.cap_reached() {
+            let _ = channel.eof().await;
+            let _ = channel.close().await;
+            break;
+        }
         match channel.wait().await {
             None => break,
             Some(msg) => {
                 let is_close = matches!(msg, ChannelMsg::Close);
-                messages.push(msg);
+                acc.push(msg);
                 if is_close {
                     break;
                 }
             }
         }
     }
-    Ok(accumulate_exec_output(messages))
+    Ok(acc.into_output())
 }
 
 /// Wie [`drain_channel`], aber bricht früh ab, sobald `cancel` auflöst
@@ -63,16 +85,22 @@ async fn drain_channel(mut channel: Channel<Msg>) -> Result<CommandOutput, SshEr
 async fn drain_channel_cancellable(
     mut channel: Channel<Msg>,
     mut cancel: oneshot::Receiver<()>,
+    max_output_bytes: usize,
 ) -> Result<ExecOutcome, SshError> {
-    let mut messages = Vec::new();
+    let mut acc = ExecAccumulator::with_limit(max_output_bytes);
     loop {
+        if acc.cap_reached() {
+            let _ = channel.eof().await;
+            let _ = channel.close().await;
+            break;
+        }
         tokio::select! {
             _ = &mut cancel => {
                 let _ = channel.signal(russh::Sig::INT).await;
                 let _ = channel.eof().await;
                 let _ = channel.close().await;
                 return Ok(ExecOutcome {
-                    output: accumulate_exec_output(messages),
+                    output: acc.into_output(),
                     cancelled: true,
                 });
             }
@@ -81,7 +109,7 @@ async fn drain_channel_cancellable(
                     None => break,
                     Some(msg) => {
                         let is_close = matches!(msg, ChannelMsg::Close);
-                        messages.push(msg);
+                        acc.push(msg);
                         if is_close {
                             break;
                         }
@@ -91,7 +119,7 @@ async fn drain_channel_cancellable(
         }
     }
     Ok(ExecOutcome {
-        output: accumulate_exec_output(messages),
+        output: acc.into_output(),
         cancelled: false,
     })
 }
@@ -105,7 +133,7 @@ impl SshTransport for RusshTransport {
             .await
             .map_err(map_russh_error)?;
         channel.exec(true, command).await.map_err(map_russh_error)?;
-        drain_channel(channel).await
+        drain_channel(channel, self.max_output_bytes).await
     }
 
     /// Spec 0018, Abschnitt 5: identisch zu `execute`, schreibt `stdin`
@@ -131,7 +159,7 @@ impl SshTransport for RusshTransport {
                 .map_err(map_russh_error)?;
         }
         channel.eof().await.map_err(map_russh_error)?;
-        drain_channel(channel).await
+        drain_channel(channel, self.max_output_bytes).await
     }
 
     async fn execute_cancellable(
@@ -145,7 +173,7 @@ impl SshTransport for RusshTransport {
             .await
             .map_err(map_russh_error)?;
         channel.exec(true, command).await.map_err(map_russh_error)?;
-        drain_channel_cancellable(channel, cancel).await
+        drain_channel_cancellable(channel, cancel, self.max_output_bytes).await
     }
 
     async fn execute_with_stdin_cancellable(
@@ -167,7 +195,7 @@ impl SshTransport for RusshTransport {
                 .map_err(map_russh_error)?;
         }
         channel.eof().await.map_err(map_russh_error)?;
-        drain_channel_cancellable(channel, cancel).await
+        drain_channel_cancellable(channel, cancel, self.max_output_bytes).await
     }
 
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
@@ -216,5 +244,9 @@ impl SshTransport for RusshTransport {
             .disconnect(russh::Disconnect::ByApplication, "", "")
             .await
             .map_err(map_russh_error)
+    }
+
+    fn set_max_output_bytes(&mut self, limit: usize) {
+        self.max_output_bytes = limit;
     }
 }

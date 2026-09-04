@@ -153,6 +153,7 @@ pub async fn connect(
     Ok(ConnectOutcome::Connected(Box::new(RusshTransport {
         handle: current_handle,
         _intermediate_hops: intermediate_hops,
+        max_output_bytes: crate::exec::MAX_STREAM_OUTPUT_BYTES,
     })))
 }
 

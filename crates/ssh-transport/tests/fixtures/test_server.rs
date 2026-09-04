@@ -195,6 +195,31 @@ impl Handler for TestHandler {
             session.data(channel, b"first line\n".to_vec())?;
             return Ok(());
         }
+        // Spec 0043, Fund A: simuliert einen feindlichen/fehlerhaften
+        // Server, der weit mehr als jedes sinnvolle Limit an stdout liefert
+        // (analog zum adversarialen `yes AAAA | head -c 5G` aus der Spec,
+        // nur endlich, damit der Test selbst nicht unbegrenzt läuft) — sendet
+        // absichtlich mehrere Chunks VOR `exit_status_request`/`eof`/
+        // `close`, damit der Test beobachten kann, dass der Client (über
+        // `RusshTransport::with_max_output_bytes`, deutlich kleiner als die
+        // hier gesendete Gesamtmenge) selbst abbricht, statt alles
+        // entgegenzunehmen.
+        if command == "flood" {
+            let chunk = vec![b'F'; 4096];
+            for _ in 0..32 {
+                // 32 * 4096 = 128 KiB, best effort — ein bereits vom Client
+                // geschlossener Channel lässt spätere `data()`-Aufrufe
+                // schlicht fehlschlagen, das ist hier erwartet und kein
+                // Testfehler.
+                if session.data(channel, chunk.clone()).is_err() {
+                    break;
+                }
+            }
+            let _ = session.exit_status_request(channel, 0);
+            let _ = session.eof(channel);
+            let _ = session.close(channel);
+            return Ok(());
+        }
         session.data(channel, format!("echo:{command}\n").into_bytes())?;
         session.exit_status_request(channel, 0)?;
         session.eof(channel)?;

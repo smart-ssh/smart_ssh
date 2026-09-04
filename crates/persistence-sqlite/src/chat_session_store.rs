@@ -509,6 +509,7 @@ mod tests {
                         stdout: b"PID TTY\n1 ?\n".to_vec(),
                         stderr: Vec::new(),
                         exit_code: Some(0),
+                        truncated: false,
                     },
                     cancelled: false,
                 },

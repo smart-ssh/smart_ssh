@@ -432,6 +432,11 @@ pub enum ActionResultPayload {
         /// Spec 0027 — s. `ssh_manager_core::ai::MessageContent::
         /// CommandResult.cancelled`-Doc-Kommentar.
         cancelled: bool,
+        /// Spec 0043, Fund A — `CommandOutput.truncated`: stdout/stderr
+        /// wurden beim Streaming am konfigurierten Output-Cap abgeschnitten,
+        /// das UI kann das damit kenntlich machen statt eine unvollständige
+        /// Ausgabe stillschweigend als vollständig darzustellen.
+        truncated: bool,
     },
     NoteUpdate {
         summary: String,
@@ -700,6 +705,7 @@ mod tests {
             stderr: String::new(),
             exit_code: Some(0),
             cancelled: false,
+            truncated: false,
         };
         let json = serde_json::to_value(&value).unwrap();
 

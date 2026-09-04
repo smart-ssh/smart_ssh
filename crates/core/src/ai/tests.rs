@@ -83,6 +83,7 @@ fn output(stdout: &str) -> CommandOutput {
         stdout: stdout.as_bytes().to_vec(),
         stderr: Vec::new(),
         exit_code: Some(0),
+        truncated: false,
     }
 }
 
