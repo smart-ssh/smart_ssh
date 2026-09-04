@@ -322,7 +322,7 @@ pub async fn connect(
     server_id: ServerId,
 ) -> CommandResult<SessionId> {
     let session_id: SessionId = uuid::Uuid::new_v4();
-    connect_session(&app, &state, server_id, session_id, None).await
+    connect_session(&app, &state, server_id, session_id, None, true).await
 }
 
 /// Kern von `connect()` (s. dessen Doc-Kommentar zur Host-Key-Logik),
@@ -344,12 +344,37 @@ pub async fn connect(
 /// Host-Key-Bestätigung) läuft in beiden Fällen identisch — nur die
 /// `chat_sessions`-Behandlung und die initiale `SessionContext.history`
 /// unterscheiden sich, s. unten.
+///
+/// `persist_chat_session` (Spec 0040, Abschnitt 4, erster Fix-Punkt):
+/// `false` für MCP-ausgelöste Verbindungsaufbauten
+/// (`mcp_backend::AppMcpBackend::ensure_session`) — eine rein MCP-
+/// ausgelöste Sitzung erzeugt dann gar keine `chat_sessions`-Zeile, statt
+/// (wie vorher) eine inhaltsleere, aber existierende Zeile anzulegen, die
+/// dennoch im "Sitzungen fortsetzen"-Screen aufgetaucht wäre. Bewusst
+/// unabhängig von `resume` geprüft: `resume: Some(..)` lädt ohnehin nur
+/// eine bereits bestehende Zeile (legt nie eine neue an), MCP ruft
+/// `connect_session` aber nie mit `resume: Some(..)` auf (kein MCP-Tool
+/// dafür) — die Fälle überschneiden sich also nicht.
+///
+/// Als reine, isolierte Funktion herausgezogen (statt der Bedingung inline
+/// im `if`), damit die eigentliche Entscheidung — die Spec-0040-Abschnitt-
+/// 4-Anforderung "MCP-ausgelöste Aktionen erzeugen keine `chat_sessions`-
+/// Zeile" — ohne einen echten SSH-Verbindungsaufbau testbar ist:
+/// `connect_session` selbst lässt sich für einen Nicht-lokalen Server
+/// nicht sinnvoll unit-testen (`ssh_transport::connect` ist dort fest
+/// verdrahtet, nicht injizierbar — dieselbe Grenze wie beim eigentlichen
+/// Verbindungsaufbau überall sonst in diesem Modul).
+fn should_create_chat_session(is_local: bool, persist_chat_session: bool) -> bool {
+    !is_local && persist_chat_session
+}
+
 pub(crate) async fn connect_session(
     app: &AppHandle,
     state: &AppState,
     server_id: ServerId,
     session_id: SessionId,
     resume: Option<uuid::Uuid>,
+    persist_chat_session: bool,
 ) -> CommandResult<SessionId> {
     // Spec 0031, Abschnitt 4, letzter Punkt: serverseitige Durchsetzung
     // zusätzlich zur Frontend-Sperre in `ServerList.tsx` — eine reine
@@ -596,7 +621,7 @@ pub(crate) async fn connect_session(
             crate::chat_context_truncation::truncate_to_budget(loaded),
             Some(existing_id),
         )
-    } else if is_local {
+    } else if !should_create_chat_session(is_local, persist_chat_session) {
         (Vec::new(), None)
     } else {
         match &state.chat_session_store {
@@ -713,7 +738,15 @@ pub async fn resume_chat_session(
     session_id: uuid::Uuid,
 ) -> CommandResult<SessionId> {
     let tab_session_id: SessionId = uuid::Uuid::new_v4();
-    connect_session(&app, &state, server_id, tab_session_id, Some(session_id)).await
+    connect_session(
+        &app,
+        &state,
+        server_id,
+        tab_session_id,
+        Some(session_id),
+        true,
+    )
+    .await
 }
 
 /// Spec 0034, Abschnitt 8: `rename_chat_session` — manuelles Umbenennen,
@@ -855,6 +888,38 @@ mod connect_session_gate_tests {
         let restarted_handle = restarted_app.handle().clone();
         assert!(ensure_first_run_notice_acknowledged(&restarted_handle).is_ok());
         reset(&restarted_handle);
+    }
+}
+
+/// Spec 0040, Abschnitt 4, erster Fix-Punkt: "MCP-ausgelöste Aktionen
+/// erzeugen keine `chat_sessions`-Zeile". `should_create_chat_session` ist
+/// die vollständige, isolierte Entscheidung dahinter — dieser Test deckt
+/// damit den Fix ab, ohne den (hier nicht sinnvoll mockbaren) echten
+/// SSH-Verbindungsaufbau in `connect_session` selbst zu brauchen (s.
+/// dortiger Doc-Kommentar).
+#[cfg(test)]
+mod should_create_chat_session_tests {
+    use super::*;
+
+    #[test]
+    fn test_mcp_triggered_new_connection_creates_no_chat_session() {
+        assert!(!should_create_chat_session(
+            /* is_local */ false, /* persist_chat_session */ false
+        ));
+    }
+
+    #[test]
+    fn test_regular_human_connection_creates_a_chat_session() {
+        assert!(should_create_chat_session(
+            /* is_local */ false, /* persist_chat_session */ true
+        ));
+    }
+
+    #[test]
+    fn test_local_pseudo_server_never_creates_a_chat_session_even_if_persist_requested() {
+        assert!(!should_create_chat_session(
+            /* is_local */ true, /* persist_chat_session */ true
+        ));
     }
 }
 
