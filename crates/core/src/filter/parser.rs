@@ -2,6 +2,16 @@ use std::sync::OnceLock;
 
 use regex::Regex;
 
+/// Maximale Verschachtelungstiefe für `$(...)`/`<(...)`/`>(...)`/Backtick-
+/// Command-Substitution (Spec 0043, Fund B) — Filter-Engine
+/// (`filter::engine::evaluate_parsed_explained`) und Risiko-Klassifizierer
+/// (dieses Moduls [`segment_command`]) nutzen denselben Wert, damit kein
+/// Konsument tiefer absteigt als der andere (Spec 0043, Abschnitt 5).
+/// Großzügig genug für jeden legitimen Fall, weit unter jeder
+/// Stack-Overflow-Schwelle für den rekursiven Abstieg in beiden
+/// Konsumenten.
+pub const MAX_SUBSTITUTION_DEPTH: usize = 32;
+
 /// Ergebnis von [`split_command`] (Spec 0002, Abschnitt 4).
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum ParseResult {
@@ -91,6 +101,21 @@ pub(super) fn normalize_whitespace(s: &str) -> String {
 /// zerlegbaren Eingaben noch gegen die Muster prüfen können, nur eben ohne
 /// Teilkommando-Auflösung.
 pub(crate) fn segment_command(command: &str) -> Vec<String> {
+    segment_command_at_depth(command, 0)
+}
+
+/// Tiefenbegrenzter Abstieg hinter [`segment_command`] (Spec 0043, Fund B):
+/// bricht die Rekursion ab, SOBALD `depth` den Cap erreicht — geprüft VOR
+/// jedem weiteren rekursiven Aufruf, nicht erst nachdem vollständig
+/// geparst wurde (das hätte dasselbe Zu-spät-Problem wie Fund A). Ab
+/// `MAX_SUBSTITUTION_DEPTH` wird nicht weiter in die verbleibenden inneren
+/// Substitutionen abgestiegen — dasselbe Fail-safe wie beim Längen-Cap
+/// oben in [`FilterEngine`](super::engine::FilterEngine) (ein
+/// unklassifiziertes/unvollständig zerlegtes Ergebnis ist hier
+/// hinnehmbar, weil die eigentliche Sicherheitsentscheidung über die
+/// Filter-Engine läuft, die bei Tiefenüberschreitung separat auf
+/// `Confirm` eskaliert, s. `engine::evaluate_parsed_explained`).
+fn segment_command_at_depth(command: &str, depth: usize) -> Vec<String> {
     match split_command(command) {
         ParseResult::Empty => Vec::new(),
         ParseResult::Ambiguous { .. } => vec![normalize_whitespace(command)],
@@ -100,8 +125,11 @@ pub(crate) fn segment_command(command: &str) -> Vec<String> {
                 let normalized = normalize_whitespace(&segment);
                 let (literal, inner_contents) = strip_substitutions(&normalized);
                 result.push(normalize_whitespace(&literal));
+                if depth >= MAX_SUBSTITUTION_DEPTH {
+                    continue;
+                }
                 for inner in inner_contents {
-                    result.extend(segment_command(&inner));
+                    result.extend(segment_command_at_depth(&inner, depth + 1));
                 }
             }
             result

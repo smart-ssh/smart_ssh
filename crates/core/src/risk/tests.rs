@@ -269,6 +269,38 @@ fn test_classify_does_not_crash_on_oversized_deeply_nested_command() {
     assert_eq!(a.data_risk, RiskLevel::None);
 }
 
+/// Baut ein `depth`-fach verschachteltes Command-Substitutions-Kommando,
+/// klein genug, um WEIT unter `DEFAULT_MAX_COMMAND_LENGTH` zu bleiben —
+/// anders als `test_classify_does_not_crash_on_oversized_deeply_nested_
+/// command` oben (das prüft den bereits bestehenden Längen-Cap) prüft das
+/// hier gezielt den expliziten Rekursions-Cap aus Spec 0043, Fund B: ohne
+/// ihn würde `segment_command` bei ausreichender Tiefe unabhängig von der
+/// Kommandolänge per Stack-Overflow abstürzen.
+fn nested_substitution_command(depth: usize) -> String {
+    let mut cmd = "whoami".to_string();
+    for _ in 0..depth {
+        cmd = format!("echo $({cmd})");
+    }
+    cmd
+}
+
+/// Spec 0043, Fund B: ein kurzes, aber über den Rekursions-Cap hinaus
+/// verschachteltes Kommando (weit unter der Längenschranke) darf den
+/// Klassifizierer nicht per Stack-Overflow zum Absturz bringen — derselbe
+/// Cap wie in der Filter-Engine (`crate::filter::MAX_SUBSTITUTION_DEPTH`),
+/// s. dortiger Test `test_t43_substitution_depth_over_cap_forces_confirm_
+/// with_reason`.
+#[test]
+fn test_t43_classify_does_not_crash_on_deeply_nested_command_under_length_cap() {
+    let command = nested_substitution_command(crate::filter::MAX_SUBSTITUTION_DEPTH + 1);
+    assert!(command.len() < crate::filter::DEFAULT_MAX_COMMAND_LENGTH);
+
+    // Darf nicht abstürzen — welchen Risiko-Level der (absichtlich
+    // abgeschnittene) Rest ergibt, ist hier zweitrangig; die eigentliche
+    // Sicherheitsentscheidung trifft ohnehin die Filter-Engine.
+    let _ = classify(&command);
+}
+
 #[test]
 fn test_classify_yields_no_risk_for_command_just_over_the_length_cap() {
     let over_cap = "rm -rf / ".repeat(1000);

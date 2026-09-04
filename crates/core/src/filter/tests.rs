@@ -337,6 +337,64 @@ async fn test_nested_command_substitution_forces_confirm() {
     assert_confirm(&decision);
 }
 
+/// Baut ein `depth`-fach verschachteltes Command-Substitutions-Kommando
+/// (`echo $(echo $(... whoami ...))`) — `depth` Ebenen `echo $(...)` um
+/// `whoami`. Mit `strip_substitutions`/`segment_command`s Rekursions-
+/// Zählweise wird das innerste `whoami` dann bei genau `depth`
+/// ausgewertet (s. `parser::MAX_SUBSTITUTION_DEPTH`-Doc-Kommentar).
+fn nested_substitution_command(depth: usize) -> String {
+    let mut cmd = "whoami".to_string();
+    for _ in 0..depth {
+        cmd = format!("echo $({cmd})");
+    }
+    cmd
+}
+
+/// Spec 0043, Fund B: ein Kommando, das über den expliziten Rekursions-Cap
+/// hinaus verschachtelt ist, landet bei `Confirm` mit dem korrekten Grund
+/// ("zu tief verschachtelt") — kein Stack-Overflow, kein `AutoExec`.
+#[tokio::test]
+async fn test_t43_substitution_depth_over_cap_forces_confirm_with_reason() {
+    let eng = engine(vec![]);
+    let command = nested_substitution_command(super::parser::MAX_SUBSTITUTION_DEPTH + 1);
+
+    let trace = eng.evaluate_explained(&command, &ctx("srv1", &[])).await;
+
+    assert_confirm(&trace.decision);
+    match &trace.decision {
+        Decision::Confirm { reason, .. } => {
+            assert!(
+                reason.contains("zu tief verschachtelt"),
+                "erwartete Tiefen-Cap-Begründung, war: {reason}"
+            );
+        }
+        other => panic!("erwartete Confirm, war: {other:?}"),
+    }
+}
+
+/// Spec 0043, Fund B, Testbarkeit: ein Kommando knapp UNTER dem Cap wird
+/// weiterhin normal geparst — kein Fehlalarm über die Tiefen-Cap-
+/// Begründung (die übliche "Command-Substitution erkannt"-Confirm bleibt
+/// unabhängig davon bestehen, s. `test_nested_command_substitution_
+/// forces_confirm` oben).
+#[tokio::test]
+async fn test_t43_substitution_depth_at_cap_parses_normally() {
+    let eng = engine(vec![]);
+    let command = nested_substitution_command(super::parser::MAX_SUBSTITUTION_DEPTH);
+
+    let trace = eng.evaluate_explained(&command, &ctx("srv1", &[])).await;
+
+    match &trace.decision {
+        Decision::Confirm { reason, .. } => {
+            assert!(
+                !reason.contains("zu tief verschachtelt"),
+                "Kommando genau am Cap darf nicht als zu tief verschachtelt gelten, Grund war: {reason}"
+            );
+        }
+        other => panic!("erwartete Confirm (Command-Substitution), war: {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn test_sudo_prefix_sets_elevated_flag() {
     let (elevated, rest) = super::parser::detect_elevation("sudo apt update");

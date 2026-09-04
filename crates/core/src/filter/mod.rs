@@ -19,6 +19,11 @@ pub use engine::{
     scope_applies, CombinedPolicySource, FilterEngine, PolicySource, PolicySourceError,
     PolicySourceResult, PolicyStore, DEFAULT_MAX_COMMAND_LENGTH,
 };
+// Spec 0043, Fund B: von `crate::risk::classifier` wiederverwendet, damit
+// beide Konsumenten (Filter-Engine hier, Risiko-Klassifizierer dort)
+// denselben Rekursions-Cap für verschachtelte Command-Substitution nutzen
+// — analog zu `DEFAULT_MAX_COMMAND_LENGTH` oben.
+pub use parser::MAX_SUBSTITUTION_DEPTH;
 pub use types::{
     Decision, EffectiveScope, EvalContext, EvaluationTrace, Pattern, Rule, RuleAction, RuleId,
     RuleOrigin, Scope,

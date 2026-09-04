@@ -193,7 +193,7 @@ impl<S: PolicyStore> FilterEngine<S> {
 
         let scope = EffectiveScope::from(ctx);
         let rules = self.store.rules_for(&scope).await;
-        self.evaluate_parsed_explained(command, &rules)
+        self.evaluate_parsed_explained(command, &rules, 0)
     }
 
     /// Zerlegt `command` in Teilkommandos und wertet sie aus. Bei genau
@@ -207,7 +207,32 @@ impl<S: PolicyStore> FilterEngine<S> {
     /// eindeutig), aber mit einem `sub_command_traces`-Eintrag pro
     /// Teilkommando — genau das macht Spec 0009 Abschnitt 6 für die
     /// Testen-Anzeige ("jeder Teil einzeln ... plus die Gesamt-Entscheidung").
-    fn evaluate_parsed_explained(&self, command: &str, rules: &[Rule]) -> EvaluationTrace {
+    fn evaluate_parsed_explained(
+        &self,
+        command: &str,
+        rules: &[Rule],
+        depth: usize,
+    ) -> EvaluationTrace {
+        // Spec 0043, Fund B: Tiefen-Cap VOR jedem weiteren Parsing/Abstieg
+        // geprüft (tiefenbegrenzter Abstieg, nicht "erst komplett parsen,
+        // dann Tiefe prüfen" — das hätte dasselbe Zu-spät-Problem wie Fund
+        // A). Ein zu tief verschachteltes Kommando gilt als nicht sicher
+        // parsebar und landet bei `Confirm`, NIE bei `AutoExec` — dieselbe
+        // Eskalations-only-Richtung wie überall sonst in dieser Engine.
+        if depth > parser::MAX_SUBSTITUTION_DEPTH {
+            return EvaluationTrace {
+                decision: Decision::Confirm {
+                    reason: "Kommando zu tief verschachtelt, konnte nicht sicher analysiert \
+                             werden"
+                        .to_string(),
+                    code: FILTER_SUBSTITUTION_TOO_DEEP.to_string(),
+                },
+                matched_rule: None,
+                matched_rule_origin: None,
+                matched_hard_blacklist_entry: None,
+                sub_command_traces: Vec::new(),
+            };
+        }
         match parser::split_command(command) {
             ParseResult::Empty => EvaluationTrace {
                 decision: Decision::Deny {
@@ -236,7 +261,8 @@ impl<S: PolicyStore> FilterEngine<S> {
                 // unterschritten, nur ggf. auf `Deny` verschärft.
                 match parser::extract_shell_c_style_code(command) {
                     Some(code_arg) => {
-                        let inner_trace = self.evaluate_parsed_explained(&code_arg, rules);
+                        let inner_trace =
+                            self.evaluate_parsed_explained(&code_arg, rules, depth + 1);
                         EvaluationTrace {
                             decision: combine(baseline, inner_trace.decision.clone()),
                             matched_rule: inner_trace.matched_rule.clone(),
@@ -257,12 +283,12 @@ impl<S: PolicyStore> FilterEngine<S> {
                 }
             }
             ParseResult::Segments(segments) if segments.len() == 1 => {
-                self.evaluate_segment_explained(&segments[0], rules)
+                self.evaluate_segment_explained(&segments[0], rules, depth)
             }
             ParseResult::Segments(segments) => {
                 let sub_command_traces: Vec<EvaluationTrace> = segments
                     .iter()
-                    .map(|segment| self.evaluate_segment_explained(segment, rules))
+                    .map(|segment| self.evaluate_segment_explained(segment, rules, depth))
                     .collect();
                 let decision = sub_command_traces
                     .iter()
@@ -282,7 +308,12 @@ impl<S: PolicyStore> FilterEngine<S> {
     /// Wertet genau ein Teilkommando aus — Hard-Blacklist, Nutzerregeln und
     /// rekursiv jede darin gefundene Command-Substitution (als
     /// `sub_command_traces`, s. `EvaluationTrace`-Doc-Kommentar).
-    fn evaluate_segment_explained(&self, raw_segment: &str, rules: &[Rule]) -> EvaluationTrace {
+    fn evaluate_segment_explained(
+        &self,
+        raw_segment: &str,
+        rules: &[Rule],
+        depth: usize,
+    ) -> EvaluationTrace {
         let normalized = parser::normalize_whitespace(raw_segment);
         // `elevated` wird bewusst nicht in die öffentliche `Decision`
         // geschrieben (die laut Spec Abschnitt 5 exakt AutoExec/Confirm/Deny
@@ -341,7 +372,7 @@ impl<S: PolicyStore> FilterEngine<S> {
 
         let sub_command_traces: Vec<EvaluationTrace> = inner_contents
             .into_iter()
-            .map(|inner| self.evaluate_parsed_explained(&inner, rules))
+            .map(|inner| self.evaluate_parsed_explained(&inner, rules, depth + 1))
             .collect();
         let substitution_decision = if sub_command_traces.is_empty() {
             Decision::AutoExec
@@ -556,6 +587,8 @@ const FILTER_PARSE_AMBIGUOUS: &str = "FILTER_PARSE_AMBIGUOUS";
 const FILTER_HARD_BLACKLIST: &str = "FILTER_HARD_BLACKLIST";
 const FILTER_OUTPUT_REDIRECTION: &str = "FILTER_OUTPUT_REDIRECTION";
 const FILTER_COMMAND_SUBSTITUTION: &str = "FILTER_COMMAND_SUBSTITUTION";
+// Spec 0043, Fund B: Tiefen-Cap für verschachtelte Command-Substitution.
+const FILTER_SUBSTITUTION_TOO_DEEP: &str = "FILTER_SUBSTITUTION_TOO_DEEP";
 const FILTER_RULE_DENY: &str = "FILTER_RULE_DENY";
 const FILTER_RULE_CONFIRM: &str = "FILTER_RULE_CONFIRM";
 const FILTER_NO_RULE_MATCHED: &str = "FILTER_NO_RULE_MATCHED";
@@ -572,9 +605,10 @@ fn code_priority(code: &str) -> u8 {
         FILTER_COMMAND_SUBSTITUTION => 3,
         FILTER_OUTPUT_REDIRECTION => 4,
         FILTER_COMMAND_TOO_LONG => 5,
-        FILTER_PARSE_AMBIGUOUS => 6,
-        FILTER_NO_RULE_MATCHED => 7,
-        FILTER_EMPTY_COMMAND => 8,
+        FILTER_SUBSTITUTION_TOO_DEEP => 6,
+        FILTER_PARSE_AMBIGUOUS => 7,
+        FILTER_NO_RULE_MATCHED => 8,
+        FILTER_EMPTY_COMMAND => 9,
         _ => u8::MAX,
     }
 }
@@ -624,6 +658,7 @@ mod code_tests {
             FILTER_HARD_BLACKLIST,
             FILTER_OUTPUT_REDIRECTION,
             FILTER_COMMAND_SUBSTITUTION,
+            FILTER_SUBSTITUTION_TOO_DEEP,
             FILTER_RULE_DENY,
             FILTER_RULE_CONFIRM,
             FILTER_NO_RULE_MATCHED,
