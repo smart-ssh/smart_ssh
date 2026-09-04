@@ -60,7 +60,30 @@ impl std::fmt::Display for RuleId {
     }
 }
 
-/// Nutzerdefinierte Regel (Spec 0002, Abschnitt 2).
+/// Ebene, von der eine Regel stammt (Spec 0037, Abschnitt 5) — zusätzliches
+/// Ordnungskriterium innerhalb der bestehenden Präzedenz-Kette aus Spec
+/// 0002 Abschnitt 3.
+///
+/// Deklarationsreihenfolge ist bewusst `Builtin < Organization < User`
+/// (per `#[derive(PartialOrd, Ord)]`, s. u.): innerhalb desselben Aktions-
+/// Tiers (Deny/Confirm/Allow) sortiert `engine::evaluate_rules_explained`
+/// **aufsteigend** nach `origin`, wodurch eine `Organization`-Regel vor
+/// einer `User`-Regel gewinnt — unabhängig von deren jeweiliger Scope-
+/// Spezifität (Spec 0037, Abschnitt 5, Schritt 3). `Builtin` selbst wird
+/// nie auf einer `Rule` gesetzt (die Hard-Blacklist läuft komplett separat
+/// über `blacklist::matching_entry`, nicht über `Rule`/`PolicyStore`) —
+/// als Ordnungsanker trotzdem Teil des Vokabulars, damit die drei Ebenen
+/// aus der Spec vollständig abgebildet sind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuleOrigin {
+    Builtin,
+    Organization,
+    User,
+}
+
+/// Nutzerdefinierte Regel (Spec 0002, Abschnitt 2; um `origin` erweitert in
+/// Spec 0037, Abschnitt 5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Rule {
     pub id: RuleId,
@@ -69,6 +92,10 @@ pub struct Rule {
     pub scope: Scope,
     /// höher = wird innerhalb seines Scope-/Action-Buckets zuerst geprüft
     pub priority: i32,
+    /// Welche [`PolicySource`](super::PolicySource) diese Regel geliefert
+    /// hat (Spec 0037, Abschnitt 5) — der bestehende SQLite-Regelspeicher
+    /// (Spec 0009) liefert ausschließlich `RuleOrigin::User`.
+    pub origin: RuleOrigin,
 }
 
 /// Muster, gegen das ein (bereits in Teilkommandos zerlegtes) Kommando
@@ -141,6 +168,10 @@ pub struct EvaluationTrace {
     /// obersten Ebene ebenfalls `None`, da dort kein einzelnes `matched_rule`
     /// mehr sinnvoll ist (s. `sub_command_traces`).
     pub matched_rule: Option<RuleId>,
+    /// `RuleOrigin` der unter `matched_rule` gegriffenen Regel (Spec 0037,
+    /// Abschnitt 5, letzter Satz) — `None` unter denselben Bedingungen wie
+    /// `matched_rule` (immer gemeinsam `Some`/`None`).
+    pub matched_rule_origin: Option<RuleOrigin>,
     /// Anzeigetext des gegriffenen Hard-Blacklist-Musters, falls eines
     /// gegriffen hat (s. `crate::filter::hard_blacklist_patterns`).
     pub matched_hard_blacklist_entry: Option<String>,

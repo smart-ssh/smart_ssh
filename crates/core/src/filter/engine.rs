@@ -5,7 +5,8 @@ use async_trait::async_trait;
 use super::blacklist;
 use super::parser::{self, ParseResult};
 use super::types::{
-    Decision, EffectiveScope, EvalContext, EvaluationTrace, Rule, RuleAction, RuleId, Scope,
+    Decision, EffectiveScope, EvalContext, EvaluationTrace, Rule, RuleAction, RuleId, RuleOrigin,
+    Scope,
 };
 
 /// Ab dieser Zeichenlänge wird ein Kommando ungeprüft auf `Confirm` gesetzt,
@@ -26,6 +27,79 @@ pub const DEFAULT_MAX_COMMAND_LENGTH: usize = 4096;
 #[async_trait]
 pub trait PolicyStore {
     async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule>;
+}
+
+/// Fehler aus [`PolicySource`] (Spec 0037, Abschnitt 5). Analog zu
+/// `profiles::ProfileError::Backend`: `core` selbst darf keine I/O-/DB-
+/// Abhängigkeit bekommen, daher nur eine `String`-Nachricht statt eines
+/// strukturierten Zugriffs auf den jeweiligen Original-Fehlertyp — jede
+/// konkrete `PolicySource`-Implementierung wandelt ihren eigenen Fehler
+/// über `.to_string()` in diese Variante um.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("policy source error: {0}")]
+pub struct PolicySourceError(pub String);
+
+pub type PolicySourceResult<T> = Result<T, PolicySourceError>;
+
+/// Eine einzelne Quelle von [`Rule`]s auf einer bestimmten [`RuleOrigin`]-
+/// Ebene (Spec 0037, Abschnitt 5) — z. B. der bestehende SQLite-
+/// Regelspeicher (`RuleOrigin::User`) oder ein künftiges `OrgPolicy`-Modul
+/// (`RuleOrigin::Organization`, privates Repo, nicht Teil dieser Spec).
+///
+/// Anders als [`PolicyStore::rules_for`] (bereits nach `EffectiveScope`
+/// gefiltert) liefert `rules()` **alle** Regeln dieser Quelle unfiltiert —
+/// die Scope-Filterung übernimmt [`CombinedPolicySource`], die mehrere
+/// `PolicySource`s zu einem `PolicyStore` zusammenführt und dabei jede
+/// Regel mit der `origin()` ihrer Quelle stempelt (s. dortiger
+/// Doc-Kommentar).
+#[async_trait]
+pub trait PolicySource: Send + Sync {
+    fn origin(&self) -> RuleOrigin;
+    async fn rules(&self) -> PolicySourceResult<Vec<Rule>>;
+    async fn watch(&self) -> PolicySourceResult<tokio::sync::watch::Receiver<Vec<Rule>>>;
+}
+
+/// Kombiniert mehrere [`PolicySource`]s zu einem [`PolicyStore`] (Spec
+/// 0037, Abschnitt 5) — die Grundlage dafür, dass `FilterEngine` (die
+/// weiterhin nur einen einzelnen `PolicyStore` kennt) mehrere
+/// unterschiedliche Regel-Ebenen gleichzeitig auswerten kann, sobald mehr
+/// als eine `PolicySource` existiert. In der Community Edition ist die
+/// Liste immer nur die eine SQLite-`User`-Quelle (s. Spec-Text) — dieselbe
+/// Filter-Engine-Logik, keine Sonderbehandlung für den Ein-Quellen-Fall.
+///
+/// Fehler einzelner Quellen werden bewusst nur geloggt, nicht propagiert
+/// (best-effort, analog zu anderen Stellen im Projekt, die eine einzelne
+/// fehlgeschlagene Zusatzquelle nicht den gesamten Vorgang abbrechen
+/// lassen): eine temporär nicht erreichbare `Organization`-Quelle soll
+/// nicht dazu führen, dass gar keine Regel mehr greift (das wäre in der
+/// Wirkung ein Fail-Open auf "keine Nutzerregeln mehr aktiv", nicht
+/// sicherer als ein Fail-Closed).
+pub struct CombinedPolicySource {
+    sources: Vec<std::sync::Arc<dyn PolicySource>>,
+}
+
+impl CombinedPolicySource {
+    pub fn new(sources: Vec<std::sync::Arc<dyn PolicySource>>) -> Self {
+        Self { sources }
+    }
+}
+
+#[async_trait]
+impl PolicyStore for CombinedPolicySource {
+    async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
+        let mut all = Vec::new();
+        for source in &self.sources {
+            match source.rules().await {
+                Ok(rules) => {
+                    all.extend(rules.into_iter().filter(|r| scope_applies(&r.scope, scope)))
+                }
+                Err(err) => {
+                    tracing::warn!(origin = ?source.origin(), error = %err, "policy source unavailable, skipped");
+                }
+            }
+        }
+        all
+    }
 }
 
 /// Wertet Kommandos gegen die Hard-Blacklist und die vom [`PolicyStore`]
@@ -93,6 +167,7 @@ impl<S: PolicyStore> FilterEngine<S> {
                     code: FILTER_EMPTY_COMMAND.to_string(),
                 },
                 matched_rule: None,
+                matched_rule_origin: None,
                 matched_hard_blacklist_entry: None,
                 sub_command_traces: Vec::new(),
             };
@@ -110,6 +185,7 @@ impl<S: PolicyStore> FilterEngine<S> {
                     code: FILTER_COMMAND_TOO_LONG.to_string(),
                 },
                 matched_rule: None,
+                matched_rule_origin: None,
                 matched_hard_blacklist_entry: None,
                 sub_command_traces: Vec::new(),
             };
@@ -139,6 +215,7 @@ impl<S: PolicyStore> FilterEngine<S> {
                     code: FILTER_EMPTY_COMMAND.to_string(),
                 },
                 matched_rule: None,
+                matched_rule_origin: None,
                 matched_hard_blacklist_entry: None,
                 sub_command_traces: Vec::new(),
             },
@@ -163,6 +240,7 @@ impl<S: PolicyStore> FilterEngine<S> {
                         EvaluationTrace {
                             decision: combine(baseline, inner_trace.decision.clone()),
                             matched_rule: inner_trace.matched_rule.clone(),
+                            matched_rule_origin: inner_trace.matched_rule_origin,
                             matched_hard_blacklist_entry: inner_trace
                                 .matched_hard_blacklist_entry
                                 .clone(),
@@ -172,6 +250,7 @@ impl<S: PolicyStore> FilterEngine<S> {
                     None => EvaluationTrace {
                         decision: baseline,
                         matched_rule: None,
+                        matched_rule_origin: None,
                         matched_hard_blacklist_entry: None,
                         sub_command_traces: Vec::new(),
                     },
@@ -192,6 +271,7 @@ impl<S: PolicyStore> FilterEngine<S> {
                 EvaluationTrace {
                     decision,
                     matched_rule: None,
+                    matched_rule_origin: None,
                     matched_hard_blacklist_entry: None,
                     sub_command_traces,
                 }
@@ -252,7 +332,7 @@ impl<S: PolicyStore> FilterEngine<S> {
                 Decision::AutoExec
             };
 
-        let (rule_decision, matched_rule) = evaluate_rules_explained(
+        let (rule_decision, matched_rule, matched_rule_origin) = evaluate_rules_explained(
             rules,
             &original_literal,
             &stripped_literal,
@@ -290,6 +370,7 @@ impl<S: PolicyStore> FilterEngine<S> {
         EvaluationTrace {
             decision,
             matched_rule,
+            matched_rule_origin,
             matched_hard_blacklist_entry,
             sub_command_traces,
         }
@@ -324,19 +405,30 @@ impl<S: PolicyStore> FilterEngine<S> {
 /// Matching-Verhalten pro Regel konsistent bleibt, unabhängig davon, ob sie
 /// gerade blockiert oder erlaubt.
 ///
-/// Wie zuvor `evaluate_rules`, liefert zusätzlich die `RuleId` der
-/// gegriffenen Regel (falls eine gegriffen hat) für `EvaluationTrace`.
+/// Wie zuvor `evaluate_rules`, liefert zusätzlich die `RuleId` **und**
+/// `RuleOrigin` der gegriffenen Regel (falls eine gegriffen hat) für
+/// `EvaluationTrace`.
+///
+/// Sortierung innerhalb eines Aktions-Buckets (Spec 0037, Abschnitt 5,
+/// Schritt 3/4): zuerst `origin` aufsteigend (`Organization` vor `User`,
+/// s. `RuleOrigin`-Doc-Kommentar) — das ist die *neue* Ebene, wirkt
+/// **vor** jeder Scope-/Prioritäts-Betrachtung, damit eine `Organization`-
+/// Regel eine spezifischere `User`-Regel im selben Bucket nicht mehr
+/// unterlaufen kann (genau der in Abschnitt 5 beschriebene Fall). Erst
+/// danach wie bisher Scope-Spezifität (Server > Tag > Global), dann
+/// `priority` absteigend.
 fn evaluate_rules_explained(
     rules: &[Rule],
     original: &str,
     stripped: &str,
     resolved: &str,
-) -> (Decision, Option<RuleId>) {
+) -> (Decision, Option<RuleId>, Option<RuleOrigin>) {
     for action in [RuleAction::Deny, RuleAction::Confirm, RuleAction::Allow] {
         let mut bucket: Vec<&Rule> = rules.iter().filter(|r| r.action == action).collect();
         bucket.sort_by(|a, b| {
-            scope_rank(&b.scope)
-                .cmp(&scope_rank(&a.scope))
+            a.origin
+                .cmp(&b.origin)
+                .then_with(|| scope_rank(&b.scope).cmp(&scope_rank(&a.scope)))
                 .then_with(|| b.priority.cmp(&a.priority))
         });
 
@@ -371,7 +463,7 @@ fn evaluate_rules_explained(
                     },
                     RuleAction::Allow => Decision::AutoExec,
                 };
-                return (decision, Some(rule.id.clone()));
+                return (decision, Some(rule.id.clone()), Some(rule.origin));
             }
         }
     }
@@ -380,6 +472,7 @@ fn evaluate_rules_explained(
             reason: "keine Regel gefunden".to_string(),
             code: FILTER_NO_RULE_MATCHED.to_string(),
         },
+        None,
         None,
     )
 }

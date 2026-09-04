@@ -109,7 +109,7 @@ mod tests {
 
     use ssh_manager_core::filter::{
         EffectiveScope, EvalContext, FilterEngine, Pattern, PolicyStore, Rule, RuleAction, RuleId,
-        Scope,
+        RuleOrigin, Scope,
     };
 
     use crate::first_run_notice::test_support::{lock, test_app};
@@ -196,6 +196,7 @@ mod tests {
             action: RuleAction::Deny,
             scope: Scope::Server(LOCAL_SERVER_ID),
             priority: 0,
+            origin: RuleOrigin::User,
         };
         let engine = FilterEngine::new(SingleRulePolicyStore(deny_rule));
 
@@ -239,6 +240,7 @@ mod tests {
             action: RuleAction::Deny,
             scope: Scope::Server(real_id),
             priority: 0,
+            origin: RuleOrigin::User,
         };
         let engine = FilterEngine::new(SingleRulePolicyStore(deny_rule));
 

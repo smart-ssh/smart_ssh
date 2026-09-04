@@ -25,7 +25,8 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use ssh_manager_core::filter::{
-    scope_applies, EffectiveScope, Pattern, PolicyStore, Rule, RuleAction, RuleId, Scope,
+    scope_applies, EffectiveScope, Pattern, PolicySource, PolicySourceError, PolicySourceResult,
+    PolicyStore, Rule, RuleAction, RuleId, RuleOrigin, Scope,
 };
 use ssh_manager_core::shared::ServerId;
 
@@ -148,6 +149,9 @@ impl StoredRule {
             action: self.action,
             scope: self.scope,
             priority: self.priority,
+            // Spec 0037, Abschnitt 5: der SQLite-Regelspeicher ist und
+            // bleibt die einzige `User`-Quelle.
+            origin: RuleOrigin::User,
         }
     }
 }
@@ -335,6 +339,43 @@ impl PolicyStore for SqlitePolicyStore {
     }
 }
 
+/// Spec 0037, Abschnitt 5: "Der bestehende SQLite-Regelspeicher ... ist und
+/// bleibt die einzige `User`-Quelle" — bindet ihn als [`PolicySource`] ein,
+/// damit er über [`ssh_manager_core::filter::CombinedPolicySource`] neben
+/// künftigen `Organization`-Quellen (privates Repo, `OrgPolicy`-Modul)
+/// verwendbar ist. In der Community Edition ist er die einzige Quelle
+/// (s. Spec-Text) — dieselbe `PolicyStore`-Auswertungslogik wie zuvor,
+/// nur über den neuen Trait erreichbar.
+#[async_trait]
+impl PolicySource for SqlitePolicyStore {
+    fn origin(&self) -> RuleOrigin {
+        RuleOrigin::User
+    }
+
+    async fn rules(&self) -> PolicySourceResult<Vec<Rule>> {
+        self.list_all()
+            .await
+            .map(|stored| stored.into_iter().map(StoredRule::into_rule).collect())
+            .map_err(|err| PolicySourceError(err.to_string()))
+    }
+
+    /// Kein Push-Mechanismus für SQLite-Änderungen in diesem Schritt — der
+    /// zurückgegebene `Receiver` liefert einmalig den Stand zum Zeitpunkt
+    /// des Aufrufs, aktualisiert sich danach nie von selbst (derselbe
+    /// "liefert nur den initialen Wert"-Ansatz wie
+    /// `entitlements::FixedEntitlements::watch`, dortiger Kommentar zur
+    /// Begründung des `_tx`-Drops). Ein echter Live-Update-Mechanismus
+    /// (z. B. Polling oder SQLite-Update-Hooks) ist nicht Teil dieser Spec
+    /// — `rules_for`/`rules()` bleiben der maßgebliche, stets aktuelle
+    /// Abfrageweg; `watch()` existiert nur, um den `PolicySource`-Trait
+    /// vollständig zu implementieren.
+    async fn watch(&self) -> PolicySourceResult<tokio::sync::watch::Receiver<Vec<Rule>>> {
+        let rules = PolicySource::rules(self).await?;
+        let (_tx, rx) = tokio::sync::watch::channel(rules);
+        Ok(rx)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use sqlx::sqlite::SqliteConnectOptions;
@@ -469,6 +510,25 @@ mod tests {
         assert!(ids.contains(&"server-rule".to_string()));
         assert!(ids.contains(&"tag-rule".to_string()));
         assert!(!ids.contains(&"other-server-rule".to_string()));
+    }
+
+    /// Spec 0037, Abschnitt 5: "der bestehende SQLite-Regelspeicher ist
+    /// und bleibt die einzige `User`-Quelle" — `origin()` und jede über
+    /// `PolicySource::rules()` gelieferte `Rule` müssen `RuleOrigin::User`
+    /// tragen.
+    #[tokio::test]
+    async fn test_sqlite_policy_store_is_a_policy_source_with_user_origin() {
+        let store = in_memory_policy_store().await;
+        store
+            .create(&make_rule("allow-ls", Scope::Global, 0))
+            .await
+            .unwrap();
+
+        assert_eq!(PolicySource::origin(&store), RuleOrigin::User);
+
+        let rules = PolicySource::rules(&store).await.unwrap();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].origin, RuleOrigin::User);
     }
 
     #[tokio::test]

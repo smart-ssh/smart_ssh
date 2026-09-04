@@ -15,10 +15,13 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use engine::{scope_applies, FilterEngine, PolicyStore, DEFAULT_MAX_COMMAND_LENGTH};
+pub use engine::{
+    scope_applies, CombinedPolicySource, FilterEngine, PolicySource, PolicySourceError,
+    PolicySourceResult, PolicyStore, DEFAULT_MAX_COMMAND_LENGTH,
+};
 pub use types::{
     Decision, EffectiveScope, EvalContext, EvaluationTrace, Pattern, Rule, RuleAction, RuleId,
-    Scope,
+    RuleOrigin, Scope,
 };
 // Spec 0026, Abschnitt 2: von `crate::risk` wiederverwendet, s.
 // `parser::segment_command`-Doc-Kommentar. `pub(crate)` statt `pub` — bleibt

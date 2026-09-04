@@ -6,6 +6,8 @@
 //! zusätzliche Tests für Groß-/Kleinschreibung, Whitespace-Varianten,
 //! verschachtelte Command-Substitution und die Elevated-Erkennung.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 
 use super::*;
@@ -32,12 +34,28 @@ impl PolicyStore for InMemoryPolicyStore {
 }
 
 fn glob_rule(id: &str, glob: &str, action: RuleAction, scope: Scope, priority: i32) -> Rule {
+    glob_rule_with_origin(id, glob, action, scope, priority, RuleOrigin::User)
+}
+
+/// Wie [`glob_rule`], mit explizit wählbarer `RuleOrigin` — für die Spec-
+/// 0037-Policy-Ebenen-Tests, die eine `Organization`- gegen eine `User`-
+/// Regel im selben Aktions-Bucket testen (s. `AllowEverythingPolicyStore`-
+/// ähnliche `InMemoryPolicyStore`-Instanzen unten).
+fn glob_rule_with_origin(
+    id: &str,
+    glob: &str,
+    action: RuleAction,
+    scope: Scope,
+    priority: i32,
+    origin: RuleOrigin,
+) -> Rule {
     Rule {
         id: RuleId(id.to_string()),
         pattern: Pattern::Glob(glob.to_string()),
         action,
         scope,
         priority,
+        origin,
     }
 }
 
@@ -764,4 +782,196 @@ async fn test_sudo_or_combined_flag_shell_c_is_treated_as_complex_script_block()
         let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
         assert_confirm(&decision);
     }
+}
+
+// --- Spec 0037, Abschnitt 5/9: Policy-Ebenen (RuleOrigin) ------------------
+
+/// Einfache In-Memory-`PolicySource`-Testimplementierung mit fest
+/// vorgegebener `origin()` — Spec 0037, Abschnitt 9: "ergänze für diesen
+/// Test eine einfache In-Memory-PolicySource-Testimplementierung mit
+/// `origin() == Organization`" (hier generisch über `origin` gehalten,
+/// deckt aber auch die `User`-Quelle in denselben Tests ab, statt einen
+/// zweiten, praktisch identischen Typ zu duplizieren).
+struct InMemoryPolicySource {
+    origin: RuleOrigin,
+    rules: Vec<Rule>,
+}
+
+#[async_trait]
+impl PolicySource for InMemoryPolicySource {
+    fn origin(&self) -> RuleOrigin {
+        self.origin
+    }
+
+    async fn rules(&self) -> PolicySourceResult<Vec<Rule>> {
+        Ok(self.rules.clone())
+    }
+
+    async fn watch(&self) -> PolicySourceResult<tokio::sync::watch::Receiver<Vec<Rule>>> {
+        let (_tx, rx) = tokio::sync::watch::channel(self.rules.clone());
+        Ok(rx)
+    }
+}
+
+fn combined_engine(
+    org_rules: Vec<Rule>,
+    user_rules: Vec<Rule>,
+) -> FilterEngine<CombinedPolicySource> {
+    FilterEngine::new(CombinedPolicySource::new(vec![
+        Arc::new(InMemoryPolicySource {
+            origin: RuleOrigin::Organization,
+            rules: org_rules,
+        }),
+        Arc::new(InMemoryPolicySource {
+            origin: RuleOrigin::User,
+            rules: user_rules,
+        }),
+    ]))
+}
+
+/// Spec 0037, Abschnitt 9: "Test für Allow(User) gegen Deny(Organization)
+/// ... mit höherer Scope-Spezifität auf Nutzerseite." Bereits durch die
+/// unveränderte Aktions-Tier-Reihenfolge (Spec 0002 Abschnitt 3: Deny vor
+/// Allow) korrekt entschieden — dieser Test belegt, dass die neue
+/// `RuleOrigin`-Sortierung diese bestehende Garantie nicht versehentlich
+/// abschwächt.
+#[tokio::test]
+async fn test_organization_deny_global_beats_user_allow_server_despite_lower_specificity() {
+    let server_id = ServerId::new();
+    let eng = combined_engine(
+        vec![glob_rule_with_origin(
+            "org-deny-rm",
+            "rm *",
+            RuleAction::Deny,
+            Scope::Global,
+            0,
+            RuleOrigin::Organization,
+        )],
+        vec![glob_rule_with_origin(
+            "user-allow-rm",
+            "rm *",
+            RuleAction::Allow,
+            Scope::Server(server_id),
+            100,
+            RuleOrigin::User,
+        )],
+    );
+
+    let ctx = EvalContext {
+        server_id,
+        tags: Vec::new(),
+    };
+    let decision = eng.evaluate("rm -rf /tmp/x", &ctx).await;
+
+    assert!(
+        matches!(decision, Decision::Deny { .. }),
+        "eine Organization-Deny-Regel darf durch eine spezifischere User-Allow-Regel nicht \
+         aufgehoben werden, war: {decision:?}"
+    );
+}
+
+/// Spec 0037, Abschnitt 5, Schritt 3 (der wörtlich in der Aufgabenstellung
+/// genannte Fall): eine `Organization`-Confirm-Regel mit Global-Scope
+/// gegen eine `User`-Allow-Regel mit Server-Scope (also spezifischer) —
+/// Ergebnis muss `Confirm` sein, nicht `Allow`. Wie beim Deny-Test oben
+/// bereits durch die unveränderte Aktions-Tier-Reihenfolge (Confirm vor
+/// Allow) korrekt entschieden — auch hier: Regressionsschutz, dass
+/// `RuleOrigin` diese Garantie nicht unterläuft.
+#[tokio::test]
+async fn test_organization_confirm_global_beats_user_allow_server_despite_lower_specificity() {
+    let server_id = ServerId::new();
+    let eng = combined_engine(
+        vec![glob_rule_with_origin(
+            "org-confirm-deploy",
+            "deploy *",
+            RuleAction::Confirm,
+            Scope::Global,
+            0,
+            RuleOrigin::Organization,
+        )],
+        vec![glob_rule_with_origin(
+            "user-allow-deploy",
+            "deploy *",
+            RuleAction::Allow,
+            Scope::Server(server_id),
+            100,
+            RuleOrigin::User,
+        )],
+    );
+
+    let ctx = EvalContext {
+        server_id,
+        tags: Vec::new(),
+    };
+    let decision = eng.evaluate("deploy prod", &ctx).await;
+
+    assert!(
+        matches!(decision, Decision::Confirm { .. }),
+        "eine Organization-Confirm-Regel darf durch eine spezifischere User-Allow-Regel nicht \
+         aufgehoben werden, war: {decision:?}"
+    );
+}
+
+/// Die eigentlich *neue* Sortierebene aus Schritt 3 (im Unterschied zu den
+/// beiden Tests oben, die schon allein durch die Aktions-Tier-Reihenfolge
+/// entschieden wären): **innerhalb desselben** Aktions-Tiers (hier beide
+/// `Confirm`) muss die `Organization`-Regel vor der `User`-Regel gewinnen
+/// — unabhängig davon, dass die `User`-Regel den spezifischeren
+/// Server-Scope trägt und ohne Schritt 3 (reine Scope-/Prioritäts-
+/// Sortierung wie vor Spec 0037) zuerst geprüft würde.
+#[tokio::test]
+async fn test_organization_rule_wins_over_more_specific_user_rule_within_same_action_tier() {
+    let server_id = ServerId::new();
+    let eng = combined_engine(
+        vec![glob_rule_with_origin(
+            "org-confirm-restart",
+            "restart *",
+            RuleAction::Confirm,
+            Scope::Global,
+            0,
+            RuleOrigin::Organization,
+        )],
+        vec![glob_rule_with_origin(
+            "user-confirm-restart",
+            "restart *",
+            RuleAction::Confirm,
+            Scope::Server(server_id),
+            100,
+            RuleOrigin::User,
+        )],
+    );
+
+    let ctx = EvalContext {
+        server_id,
+        tags: Vec::new(),
+    };
+    let trace = eng.evaluate_explained("restart nginx", &ctx).await;
+
+    assert!(matches!(trace.decision, Decision::Confirm { .. }));
+    assert_eq!(
+        trace.matched_rule,
+        Some(RuleId("org-confirm-restart".to_string())),
+        "die Organization-Regel muss greifen, nicht die spezifischere User-Regel — \
+         tatsächlicher Trace: {trace:?}"
+    );
+    assert_eq!(trace.matched_rule_origin, Some(RuleOrigin::Organization));
+}
+
+/// `evaluate_explained` nennt korrekt die `RuleOrigin` der greifenden
+/// Regel (Spec 0037, Abschnitt 10) — auch im einfachen Ein-Quellen-Fall
+/// (keine `Organization`-Konkurrenz), damit der Regelfall (Community
+/// Edition: nur die eine SQLite-`User`-Quelle) ebenfalls abgedeckt ist.
+#[tokio::test]
+async fn test_evaluate_explained_reports_user_origin_for_sole_sqlite_style_source() {
+    let eng = engine(vec![glob_rule(
+        "allow-ls",
+        "ls *",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+
+    let trace = eng.evaluate_explained("ls -la", &ctx("srv1", &[])).await;
+
+    assert_eq!(trace.matched_rule_origin, Some(RuleOrigin::User));
 }

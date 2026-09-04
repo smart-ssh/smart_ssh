@@ -2624,6 +2624,7 @@ mod tests {
                 action: ssh_manager_core::filter::RuleAction::Allow,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
+                origin: ssh_manager_core::filter::RuleOrigin::User,
             }]
         }
     }
@@ -3533,6 +3534,7 @@ mod tests {
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,
                     priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
                 }]
             }
         }
@@ -3679,6 +3681,7 @@ mod tests {
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,
                     priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
                 }]
             }
         }
@@ -3723,6 +3726,7 @@ mod tests {
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,
                     priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
                 }]
             }
         }
@@ -3940,6 +3944,7 @@ mod tests {
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,
                     priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
                 }]
             }
         }
@@ -4048,6 +4053,7 @@ mod tests {
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,
                     priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
                 }]
             }
         }
@@ -5377,6 +5383,7 @@ mod tests {
                     action: ssh_manager_core::filter::RuleAction::Allow,
                     scope: ssh_manager_core::filter::Scope::Global,
                     priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
                 }]
             }
         }
@@ -5448,6 +5455,7 @@ mod tests {
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,
                     priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
                 }]
             }
         }
@@ -5791,6 +5799,7 @@ mod tests {
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,
                     priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
                 }]
             }
         }
@@ -7216,6 +7225,7 @@ mod tests {
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,
                     priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
                 }]
             }
         }
@@ -7342,6 +7352,7 @@ mod tests {
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,
                     priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
                 }]
             }
         }
@@ -7425,6 +7436,7 @@ mod tests {
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,
                     priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
                 }]
             }
         }
