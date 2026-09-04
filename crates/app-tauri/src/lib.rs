@@ -54,7 +54,6 @@ fn build_app_state() -> AppState {
         .expect("SQLite-Datenbank konnte nicht geöffnet/migriert werden");
     let ai_provider_store = profile_store.ai_provider_store();
     let policy_store = profile_store.policy_store();
-    let prompt_history_store = profile_store.prompt_history_store();
 
     // Spec 0036, Abschnitt 4: einmalig bei App-Start aufgelöst (kein
     // "erster Schreibzugriff" im wörtlichen Sinn, aber dieselbe Wirkung:
@@ -69,6 +68,10 @@ fn build_app_state() -> AppState {
     let chat_content_cipher: Arc<dyn ssh_manager_core::crypto::ContentCipher> = Arc::new(
         ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&chat_content_key),
     );
+    // Spec 0040, Abschnitt 3: derselbe Cipher (und damit derselbe Schlüssel)
+    // wie `chat_session_store` unten — kein zweiter Verschlüsselungs-
+    // mechanismus für `prompt_history`.
+    let prompt_history_store = profile_store.prompt_history_store(chat_content_cipher.clone());
     let chat_session_store = profile_store.chat_session_store(chat_content_cipher);
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
@@ -170,6 +173,24 @@ pub fn run() {
                     &state,
                 )
                 .await;
+            });
+
+            // Spec 0040, Abschnitt 3: einmalige, idempotente Migration
+            // bestehender Klartext-Zeilen in `prompt_history` — No-op,
+            // sobald alle Zeilen bereits verschlüsselt sind (jeder Start
+            // danach prüft erneut, findet aber nichts mehr zu tun).
+            let handle_for_prompt_history_migration = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let state = handle_for_prompt_history_migration.state::<AppState>();
+                match state.prompt_history_store.migrate_legacy_plaintext_content().await {
+                    Ok(count) if count > 0 => {
+                        tracing::info!(count, "legacy plaintext prompt_history rows encrypted");
+                    }
+                    Ok(_) => {}
+                    Err(err) => {
+                        tracing::warn!(error = %err, "prompt_history encryption migration failed");
+                    }
+                }
             });
 
             Ok(())

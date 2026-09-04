@@ -2572,7 +2572,9 @@ mod send_chat_message_persistence_tests {
             &session,
             uuid::Uuid::new_v4(),
             "räum mal /tmp auf".to_string(),
-            &profile_store.prompt_history_store(),
+            &profile_store.prompt_history_store(Arc::new(
+                ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&[21u8; 32]),
+            )),
             &in_memory_profile_store,
             &policy_store,
             &confirmations,

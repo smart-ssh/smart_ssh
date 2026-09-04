@@ -127,9 +127,13 @@ impl SqliteProfileStore {
     }
 
     /// Wie [`Self::ai_provider_store`], für die Chat-Prompt-Historie (Spec
-    /// 0015).
-    pub fn prompt_history_store(&self) -> crate::SqlitePromptHistoryStore {
-        crate::SqlitePromptHistoryStore::new(self.pool.clone())
+    /// 0015). `cipher`: Spec 0040, Abschnitt 3 — derselbe Cipher/Schlüssel
+    /// wie [`Self::chat_session_store`], kein zweiter Mechanismus.
+    pub fn prompt_history_store(
+        &self,
+        cipher: std::sync::Arc<dyn ssh_manager_core::crypto::ContentCipher>,
+    ) -> crate::SqlitePromptHistoryStore {
+        crate::SqlitePromptHistoryStore::new(self.pool.clone(), cipher)
     }
 
     /// Wie [`Self::ai_provider_store`], für persistente Chat-Sitzungen
