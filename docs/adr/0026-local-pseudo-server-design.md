@@ -77,6 +77,35 @@ außerhalb dieses Projekts wäre nötig. Aus macOS-Entwicklungsumgebung
 heraus ohnehin nicht verifizierbar — dokumentiert statt (ungetestet)
 "behoben" behauptet.
 
+**6. Der lokale Pseudo-Server hat unveränderlich `PostIngestPolicy::
+Balanced` (`crate::local_server::synthetic_server`, s. dortiger
+Kommentar) statt einer über die App einstellbaren Stufe (Spec 0039,
+Abschnitt 5).** Wie bei Notizen/Tags (Entscheidung 2) hat der lokale
+Pseudo-Server keine `servers`-Zeile — `PostIngestPolicy` lebt aber als
+Spalte auf genau dieser Zeile (`persistence-sqlite`, `servers.post_ingest_
+policy`), es gibt also strukturell keinen Speicherort für einen
+nutzerdefinierten Wert, ohne entweder (a) eine dritte Instanz des
+Settings-Store-Musters aus Entscheidung 2 nur für dieses eine Feld
+einzuführen, oder (b) doch eine echte, leere `servers`-Zeile für den
+lokalen Pseudo-Server anzulegen — Letzteres würde genau die in
+Entscheidung 2 bewusst vermiedene Komplikation zurückholen (FK-Ziel für
+`server_tags`, `record_note_revision`-Zielzeile), nur für ein einzelnes
+Enum-Feld. **Bewusst nicht (a) gebaut:** anders als Notizen/Tags (die der
+Spec nach explizit "editierbar" sein müssen) verlangt Spec 0032 an
+keiner Stelle eine einstellbare Eskalationsstufe für den lokalen
+Pseudo-Server — `Balanced` (der App-weite Default für jeden neuen Server,
+s. `PostIngestPolicy::default()`) ist eine sachlich vertretbare, in der
+Spec nicht widersprochene Wahl, kein Behelfsfix.
+
+**Warum gerade `Balanced` und nicht `Strict`:** die Bedrohung, gegen die
+Spec 0039 Abschnitt 5 primär gerichtet ist — über den KI-Kontext
+eingeschleuste Anweisungen aus **fremdem** Serverinhalt, der den Nutzer zu
+riskanten Folgeaktionen bewegt —, ist beim lokalen Pseudo-Server strukturell
+abgeschwächt: "Serverinhalt" ist hier der eigene Rechner des Nutzers, nicht
+ein potenziell kompromittierter Drittserver. `Strict` als unveränderlicher
+Zwang hätte lediglich jede Folgeaktion nach dem ersten lokalen Lesebefehl
+generisch verlangsamt, ohne dass die Spec das für diesen Fall verlangt.
+
 ## Konsequenzen
 
 **Positiv:**
@@ -97,3 +126,9 @@ heraus ohnehin nicht verifizierbar — dokumentiert statt (ungetestet)
   auf Basis der aktuellen `portable-pty`-Version möglicherweise
   eingeschränkt (fehlende moderne Flags) — nicht in dieser
   Entwicklungsumgebung nachstellbar, daher nur dokumentiert.
+- Ein Nutzer, der für den lokalen Pseudo-Server bewusst `Strict` oder
+  `Standard` statt `Balanced` möchte, kann das aktuell nicht einstellen —
+  dieselbe strukturelle Grenze wie bei der fehlenden Notiz-Historie
+  (Entscheidung 2), hier aber ohne eigenen Command-Pfad, der die
+  Einschränkung im UI sichtbar macht (kein Formularfeld existiert
+  überhaupt, das man als deaktiviert anzeigen könnte).
