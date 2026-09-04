@@ -10,7 +10,14 @@ name = "ssh_manager_app_tauri"
 path = "src/lib.rs"
 
 [[bin]]
-name = "ssh-manager-app-tauri"
+# Sichtbarer Binary-Name im .app-Bundle (Contents/MacOS/smart-ssh) — bewusst
+# vom `package.name` oben (`ssh-manager-app-tauri`, bleibt unverändert)
+# entkoppelt: Tauris eigene `main_binary_name`-Doku empfiehlt genau diesen
+# Weg ("change the package name or set the name field instead"), sofern
+# kein `mainBinaryName` in `tauri.conf.json` gesetzt werden soll — hier
+# gibt es ohnehin nur dieses eine `[[bin]]`-Target, `tauri-cli` erkennt es
+# automatisch ohne weitere Konfiguration.
+name = "smart-ssh"
 path = "src/main.rs"
 
 [build-dependencies]
