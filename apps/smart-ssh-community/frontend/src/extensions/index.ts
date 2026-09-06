@@ -3,10 +3,12 @@ export {
   registerPanel,
   registerSettingsSection,
   registerCommandPaletteAction,
+  registerDocumentAction,
   listRoutes,
   listPanels,
   listSettingsSections,
   listCommandPaletteActions,
+  listDocumentActions,
   resetRegistryForTests,
 } from "./registry";
 export type {
@@ -14,6 +16,8 @@ export type {
   PanelContribution,
   SettingsSectionContribution,
   CommandPaletteActionContribution,
+  DocumentAction,
+  DocumentContext,
 } from "./registry";
 
 export { useEntitlements } from "./useEntitlements";

@@ -48,11 +48,34 @@ export interface CommandPaletteActionContribution {
   run: () => void;
 }
 
+/** Kontext, den `ChatPanel`s Dokument-Karte (Spec 0012) einer registrierten
+ * [`DocumentAction`] beim Klick übergibt — Markdown-Inhalt + Titel, analog
+ * zum bestehenden Markdown-Export-Button (Spec 0045, Abschnitt 3). */
+export interface DocumentContext {
+  contentMarkdown: string;
+  title: string;
+}
+
+/** Andockpunkt für Aktionen an einem KI-generierten Dokument (Spec 0045),
+ * gerendert neben dem bestehenden Markdown-Export-Button in `ChatPanel`s
+ * Dokument-Karte. Bewusst entitlement-agnostisch — die Registry kennt kein
+ * `Feature`/`Entitlements` (das wäre Pro-Wissen im öffentlichen Repo); ob
+ * eine Aktion gesperrt ist, entscheidet der Registrierende über `disabled`/
+ * `disabledReason`. */
+export interface DocumentAction {
+  id: string;
+  label: string;
+  onInvoke: (doc: DocumentContext) => void;
+  disabled?: boolean;
+  disabledReason?: string;
+}
+
 interface Registry {
   routes: Map<string, RouteContribution>;
   panels: Map<string, PanelContribution>;
   settingsSections: Map<string, SettingsSectionContribution>;
   commandPaletteActions: Map<string, CommandPaletteActionContribution>;
+  documentActions: Map<string, DocumentAction>;
 }
 
 const registry: Registry = {
@@ -60,6 +83,7 @@ const registry: Registry = {
   panels: new Map(),
   settingsSections: new Map(),
   commandPaletteActions: new Map(),
+  documentActions: new Map(),
 };
 
 /** Registriert (bzw. ersetzt bei gleicher `id`, z. B. bei einem
@@ -82,6 +106,13 @@ export function registerCommandPaletteAction(
   registry.commandPaletteActions.set(action.id, action);
 }
 
+/** Registriert (bzw. ersetzt bei gleicher `id`) eine Dokument-Aktion (Spec
+ * 0045) — gerendert in `ChatPanel`s Dokument-Karte, neben dem bestehenden
+ * Markdown-Export. */
+export function registerDocumentAction(action: DocumentAction): void {
+  registry.documentActions.set(action.id, action);
+}
+
 export function listRoutes(): RouteContribution[] {
   return Array.from(registry.routes.values());
 }
@@ -98,6 +129,10 @@ export function listCommandPaletteActions(): CommandPaletteActionContribution[] 
   return Array.from(registry.commandPaletteActions.values());
 }
 
+export function listDocumentActions(): DocumentAction[] {
+  return Array.from(registry.documentActions.values());
+}
+
 /** Nur für Tests: setzt die Registry zwischen Testfällen zurück, damit
  * Registrierungen aus einem Test nicht in den nächsten durchsickern. */
 export function resetRegistryForTests(): void {
@@ -105,4 +140,5 @@ export function resetRegistryForTests(): void {
   registry.panels.clear();
   registry.settingsSections.clear();
   registry.commandPaletteActions.clear();
+  registry.documentActions.clear();
 }

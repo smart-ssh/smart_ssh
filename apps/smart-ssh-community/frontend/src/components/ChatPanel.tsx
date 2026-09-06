@@ -27,6 +27,8 @@ import {
   onRiskAssessmentUpdated,
 } from "../events";
 import { translateErrorCode } from "../errorCodes";
+import "../extensions/registerBuiltinExtensions";
+import { listDocumentActions } from "../extensions/registry";
 import { formatBytes } from "../format";
 import {
   initialHistoryNavState,
@@ -1459,6 +1461,21 @@ function DocumentCard({
           {exporting === "markdown" ? "Speichert…" : "Als Markdown speichern"}
         </button>
         {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
+        {/* Spec 0045: registrierte Dokument-Aktionen neben dem Markdown-
+         * Export — der bestehende Export-Button bleibt unverändert an
+         * seinem Platz, die Registry-Aktionen kommen daneben, nicht statt. */}
+        {listDocumentActions().map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            disabled={action.disabled}
+            title={action.disabled ? action.disabledReason : undefined}
+            onClick={() => action.onInvoke({ contentMarkdown, title })}
+            className="rounded bg-slate-700/80 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {action.label}
+          </button>
+        ))}
       </div>
     </div>
   );

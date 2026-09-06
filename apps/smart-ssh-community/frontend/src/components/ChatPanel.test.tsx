@@ -1,9 +1,13 @@
 // Spec 0029, Abschnitt 4: strukturelle DOM-Prüfung, dass die Risiko-Badges
 // im selben Zeilen-Container wie das Aktions-Label sitzen, statt als
 // eigener Block über dem Kommando-Text.
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  registerDocumentAction,
+  resetRegistryForTests,
+} from "../extensions/registry";
 import { testI18n } from "../testI18n";
 import type { RiskAssessment } from "../types";
 import { ChatItemView, type ChatItem } from "./ChatPanel";
@@ -106,5 +110,101 @@ describe("risk badge positioning (Spec 0029)", () => {
     expect(screen.queryByText("Server")).toBeNull();
     expect(screen.queryByText("Daten")).toBeNull();
     expect(screen.queryByText(/keine Garantie/)).toBeNull();
+  });
+});
+
+// Spec 0045, Abschnitt 4/7: registrierte Dokument-Aktionen erscheinen neben
+// dem bestehenden Markdown-Export-Button in der Dokument-Karte.
+describe("registered document actions (Spec 0045)", () => {
+  afterEach(() => {
+    resetRegistryForTests();
+  });
+
+  function documentItem(): ChatItem {
+    return {
+      type: "document",
+      id: "doc-1",
+      title: "Ergebnis",
+      contentMarkdown: "# Ergebnis\n\ninhalt",
+    };
+  }
+
+  it("renders an active document action and invokes it with the document context on click", () => {
+    const onInvoke = vi.fn();
+    registerDocumentAction({ id: "save-word", label: "Als Word speichern", onInvoke });
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={documentItem()}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+
+    const button = screen.getByRole("button", { name: "Als Word speichern" });
+    expect(button).not.toBeDisabled();
+
+    fireEvent.click(button);
+
+    expect(onInvoke).toHaveBeenCalledWith({
+      contentMarkdown: "# Ergebnis\n\ninhalt",
+      title: "Ergebnis",
+    });
+  });
+
+  it("renders a disabled document action as visible, greyed out, with disabledReason as a tooltip", () => {
+    const onInvoke = vi.fn();
+    registerDocumentAction({
+      id: "save-word",
+      label: "Als Word speichern",
+      onInvoke,
+      disabled: true,
+      disabledReason: "Erfordert einen kostenpflichtigen Plan",
+    });
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={documentItem()}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+
+    const button = screen.getByRole("button", { name: "Als Word speichern" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", "Erfordert einen kostenpflichtigen Plan");
+
+    fireEvent.click(button);
+    expect(onInvoke).not.toHaveBeenCalled();
+  });
+
+  it("still renders the unchanged markdown export button alongside registered actions", () => {
+    registerDocumentAction({ id: "save-word", label: "Als Word speichern", onInvoke: vi.fn() });
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={documentItem()}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Als Markdown speichern" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Als Word speichern" })).toBeInTheDocument();
   });
 });
