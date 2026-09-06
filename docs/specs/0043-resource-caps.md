@@ -67,10 +67,21 @@ ein — aber die Grenze fehlt tatsächlich explizit.
 Expliziter Tiefen-Cap beim Parsen verschachtelter Command-Substitution
 (Default z. B. 32 Ebenen — großzügig genug für jeden legitimen Fall, weit
 unter jeder Stack-Overflow-Schwelle). Bei Überschreitung: Das Kommando wird
-als **nicht sicher parsebar** behandelt und landet bei `Confirm` mit
-klarem Grund ("Kommando zu tief verschachtelt, konnte nicht sicher
-analysiert werden") — **nie** ein unbegrenzter rekursiver Abstieg, **nie**
-`AutoExec`.
+**blockiert** (`Deny`) mit klarem Grund ("Kommando zu tief verschachtelt,
+konnte nicht sicher analysiert werden") — **nie** ein unbegrenzter
+rekursiver Abstieg, **nie** `AutoExec`.
+
+> **Korrektur (aus dem 0043-Review)**: Eine frühere Fassung dieser Spec
+> schrieb `Confirm` statt `Deny`. Das war ein **Sicherheitsfehler**: Ein
+> gezielt über den Cap hinaus verschachteltes Kommando (z. B. 33 Ebenen
+> `echo $(...)` um ein `rm -rf /`, ~270 Byte, unter dem Längen-Cap) hätte
+> eine `Deny "rm *"`-Regel **umgangen** — der Cap stoppt die Rekursion,
+> *bevor* der Parser das innere `rm` erreicht, und ein bloßes `Confirm`
+> hätte dem Nutzer ein zahmes "bitte bestätigen" gezeigt, ohne dass die
+> Deny-Regel je greift. Ein bewusst analyse-vereitelndes Kommando ist
+> verdächtig, nicht harmlos — es wird blockiert, konsistent mit dem
+> `Empty`-Command-Präzedenzfall. Dokumentiert in ADR 0036 mit
+> Regressionstest, der den exakten Bypass reproduziert.
 
 - Gilt für **beide** Konsumenten der Parselogik einheitlich: Filter-Engine
   (0002) **und** Risiko-Klassifizierer (0026) — konsistent damit, dass beide
@@ -102,9 +113,10 @@ Teil lag — das regelbasierte Ergebnis bleibt davon unberührt.
 ## 5. Sicherheits-Invarianten
 
 - Keiner der drei Caps darf eine Sicherheitsentscheidung **abschwächen**:
-  Fund A markiert nur als abgeschnitten, Fund B eskaliert zu `Confirm`
-  (nie `AutoExec`), Fund C betrifft nur die (rein eskalierende)
-  Zweitmeinung.
+  Fund A markiert nur als abgeschnitten, Fund B **blockiert** (`Deny`) ein
+  über den Cap hinaus verschachteltes Kommando (nie `AutoExec`, nie ein
+  zahmes `Confirm`, das eine Deny-Regel umgehen ließe), Fund C betrifft nur
+  die (rein eskalierende) Zweitmeinung.
 - Der Rekursions-Cap (Fund B) gilt für Filter-Engine und Risiko-
   Klassifizierer **identisch** — kein Konsument hat eine tiefere/schwächere
   Sicht.
