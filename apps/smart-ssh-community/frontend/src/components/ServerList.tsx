@@ -230,8 +230,15 @@ export function ServerList({
       >
         <div>
           <p className="font-medium text-slate-100">{server.name}</p>
+          {/* Spec 0046, Fund 5: der lokale Pseudo-Server hat konzeptionell
+           * keinen Port (direkte Prozessausführung, kein SSH/TCP) —
+           * `server.port` wäre hier immer `0` (s. `local_server::
+           * synthetic_server`), das würde einen nicht existierenden Port
+           * suggerieren statt ihn einfach auszublenden. */}
           <p className="text-sm text-slate-400">
-            {server.username}@{server.host}:{server.port}
+            {server.isLocal
+              ? `${server.username}@${server.host}`
+              : `${server.username}@${server.host}:${server.port}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
