@@ -1,21 +1,12 @@
 export {
-  registerRoute,
-  registerPanel,
   registerSettingsSection,
-  registerCommandPaletteAction,
   registerDocumentAction,
-  listRoutes,
-  listPanels,
   listSettingsSections,
-  listCommandPaletteActions,
   listDocumentActions,
   resetRegistryForTests,
 } from "./registry";
 export type {
-  RouteContribution,
-  PanelContribution,
   SettingsSectionContribution,
-  CommandPaletteActionContribution,
   DocumentAction,
   DocumentContext,
 } from "./registry";
