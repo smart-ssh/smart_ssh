@@ -42,6 +42,16 @@ not feature correctness. On macOS use `./scripts/tauri-dev.sh`, not plain
 repeatedly while iterating — build/test/lint don't need a running window;
 start it once, when a change is actually ready to look at.
 
+## Git staging — never blanket-add
+
+**Never `git add -A` or `git add .`.** Several files are deliberately
+untracked (local `.claude/` caches, signing credentials outside the repo,
+in-progress work), and a blanket add has already once swept untracked
+files into a commit whose message claimed otherwise. Always stage the
+exact paths that belong in the commit, and run `git status` before
+committing to confirm nothing unintended is staged (no secrets, no local
+caches, no unrelated in-progress edits).
+
 ## Architecture rules
 
 ```
@@ -147,6 +157,14 @@ committed together as part of finishing the feature.
 - When a bug is fixed, add the regression test that would have caught it,
   not just the fix — see `crates/app-shell/src/dto.rs`'s
   `rename_all_fields` regression tests for the pattern.
+- **Prove a regression test is real: it must fail against the un-fixed
+  code.** Before accepting a regression test as green, verify it actually
+  catches the bug — revert the fix locally (or run the test against the
+  pre-fix state) and confirm the test fails, then restore the fix. A test
+  that passes both before and after the fix tests nothing; this is the
+  single most effective guard against the tautological tests that a past
+  audit found across the codebase. Say in your report that you verified it
+  this way.
 
 ## Commits
 
@@ -154,7 +172,8 @@ Conventional Commits, scoped to the crate/area, referencing the spec:
 `feat(app-shell): add X per spec 0032`, `fix(ci): ...`,
 `docs(adr): propose design decisions for X (spec 0032)`. Keep the ADR as
 a separate commit after the feature commit it documents. Only commit when
-asked; run the full gate above first.
+asked; run the full gate above first. Stage exact paths, never
+`git add -A` (see "Git staging" above).
 
 
 ## Verbindlicher Review-Workflow nach jedem Spec-Implementierungsschritt
@@ -186,3 +205,16 @@ Abschluss meldest:
 Dieser Workflow ist nicht optional und nicht nur bei offensichtlich
 riskanten Änderungen anzuwenden — er gilt nach jedem Implementierungsschritt
 mit eigenem Commit.
+
+**Falls `spec-reviewer` in deiner Session nicht als registrierter
+Subagent-Typ verfügbar ist** (bekannte Einschränkung): nutze ersatzweise
+einen `general-purpose`-Agenten mit `opus`-Modell und gib ihm die Rolle/den
+Prüfauftrag wörtlich mit (Spec-Konformität + die projektweiten
+Sicherheits-Invarianten, adversariale Haltung bei ERHÖHTER Priorität).
+**Offenbare in deinem Bericht ausdrücklich**, dass du den Ersatz genutzt
+hast und dass die technisch erzwungenen Schreibbeschränkungen
+(`disallowedTools: Write, Edit`) dabei **nicht** griffen — der Review lief
+dann per Konvention, nicht technisch durchgesetzt. (Wenn du Zeit hast, prüf
+einmal, warum `.claude/agents/spec-reviewer.md` nicht als Agent greift, und
+melde es — das ist ein offener Punkt im technical-debt-backlog.)
+
