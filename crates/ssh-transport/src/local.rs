@@ -11,16 +11,19 @@
 //! funktionieren.
 
 use std::io::{Read, Write};
+use std::process::Stdio;
 use std::sync::{Arc, Mutex as StdMutex};
 
 use async_trait::async_trait;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize as PortablePtySize};
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
 use ssh_manager_core::ssh::{
     CommandOutput, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
 };
 
+use crate::exec::{CappedOutput, MAX_STREAM_OUTPUT_BYTES};
 use crate::local_sftp::LocalFileSession;
 
 fn io_err(context: &str, err: std::io::Error) -> SshError {
@@ -67,11 +70,21 @@ fn default_shell_command() -> CommandBuilder {
 
 /// Kein Verbindungszustand nötig (Spec 0032, Abschnitt 2) — jeder
 /// Methodenaufruf startet unabhängig einen neuen lokalen Prozess.
-pub struct LocalTransport;
+pub struct LocalTransport {
+    /// Output-Cap für `execute()` (Spec 0044, dieselbe Mechanik/derselbe
+    /// Default wie `RusshTransport::max_output_bytes`, Spec 0043 Fund A).
+    /// Als Feld statt festem Konstantenzugriff, damit Tests einen
+    /// kleineren Wert setzen können (über `SshTransport::
+    /// set_max_output_bytes`), ohne echte Mehrbyte-Nutzlasten erzeugen zu
+    /// müssen.
+    max_output_bytes: usize,
+}
 
 impl LocalTransport {
     pub fn new() -> Self {
-        Self
+        Self {
+            max_output_bytes: MAX_STREAM_OUTPUT_BYTES,
+        }
     }
 }
 
@@ -83,21 +96,122 @@ impl Default for LocalTransport {
 
 #[async_trait]
 impl SshTransport for LocalTransport {
+    /// Streamt `stdout`/`stderr` des lokalen Kindprozesses inkrementell
+    /// (Spec 0044) statt sie über `Command::output()` erst vollständig zu
+    /// puffern — dasselbe Muster wie `RusshTransport::execute` seit Spec
+    /// 0043, Fund A, nur über rohe Pipes statt `ChannelMsg`s, deshalb
+    /// über den geteilten [`CappedOutput`]-Kern statt [`crate::exec::
+    /// ExecAccumulator`] (der an `ChannelMsg` gebunden ist). Sobald der Cap
+    /// greift, wird nicht weiter gelesen und der Kindprozess beendet — der
+    /// Rest seiner Ausgabe wird verworfen, das Ergebnis als `truncated`
+    /// markiert.
     async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
-        let output = shell_command(command)
-            .output()
-            .await
+        let mut child = shell_command(command)
+            // spec-reviewer-Fund (Review dieses Schritts): `Command::
+            // output()` (der bisherige Aufruf hier) erbt `stdin` vom
+            // Elternprozess wie `spawn()` auch — ein Kommando, das auf
+            // Eingabe wartet (`cat`, `read x`, `sudo` ohne `-S`), würde
+            // sonst unbegrenzt blockieren, während `execute_cancellable`
+            // (Trait-Default) `cancel` ignoriert und die Session-weite
+            // `transport`-Lock währenddessen gehalten wird — ein echter
+            // Hänger ohne UI-Ausweg, genau das, was diese Spec (§5,
+            // importiert aus Spec 0043 §1) ausdrücklich ausschließt. Ein
+            // Nullstream statt geerbtem stdin lässt solche Kommandos
+            // stattdessen sofort/schnell mit einem Fehler enden.
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .map_err(|e| io_err("lokale Ausführung fehlgeschlagen", e))?;
+        let mut stdout = child
+            .stdout
+            .take()
+            .expect("stdout wurde als Stdio::piped() angefordert");
+        let mut stderr = child
+            .stderr
+            .take()
+            .expect("stderr wurde als Stdio::piped() angefordert");
+
+        let mut capped = CappedOutput::with_limit(self.max_output_bytes);
+        let mut stdout_open = true;
+        let mut stderr_open = true;
+        let mut buf_out = [0u8; 8192];
+        let mut buf_err = [0u8; 8192];
+        // spec-reviewer-Fund: ein echter Lese-Fehler auf der Pipe ist NICHT
+        // dasselbe wie ein reguläres EOF (`Ok(0)`) — beide vorher gleich zu
+        // behandeln hätte eine unvollständige Ausgabe unmarkiert (weder
+        // `truncated` noch `Err`) als vollständig/erfolgreich erscheinen
+        // lassen, ein "sauberer, sichtbarer Abbruch" (Spec 0043 §1) sähe
+        // dann aus wie ein stiller Erfolg. Der Fehler wird gemerkt und nach
+        // der Schleife propagiert, statt den Stream einfach als beendet zu
+        // behandeln.
+        let mut io_error: Option<std::io::Error> = None;
+
+        while (stdout_open || stderr_open) && !capped.cap_reached() {
+            tokio::select! {
+                res = stdout.read(&mut buf_out), if stdout_open => {
+                    match res {
+                        Ok(0) => stdout_open = false,
+                        Ok(n) => capped.push_stdout(&buf_out[..n]),
+                        Err(e) => { io_error.get_or_insert(e); stdout_open = false; }
+                    }
+                }
+                res = stderr.read(&mut buf_err), if stderr_open => {
+                    match res {
+                        Ok(0) => stderr_open = false,
+                        Ok(n) => capped.push_stderr(&buf_err[..n]),
+                        Err(e) => { io_error.get_or_insert(e); stderr_open = false; }
+                    }
+                }
+            }
+        }
+
+        // Cap gegriffen, bevor der Prozess von selbst beendet war (oder ein
+        // Lese-Fehler zwingt zum Abbruch): Rest der Ausgabe verwerfen,
+        // Kindprozess beenden statt auf sein reguläres Ende zu warten
+        // (best effort — `kill()` beendet nur den direkten Kindprozess
+        // selbst, z. B. `sh`; ein von ihm gestartetes Pipeline-Glied wie
+        // bei `yes | head` läuft weiter, bis es beim nächsten Schreib-
+        // versuch auf die inzwischen geschlossene Pipe `EPIPE`/`SIGPIPE`
+        // bekommt — kein Hänger für uns, aber kein garantiertes sofortiges
+        // Beenden der gesamten Pipeline, s. `RusshTransport::
+        // drain_channel_cancellable`s identisch begründetem Best-effort-
+        // Kommentar für den Remote-Fall).
+        if capped.cap_reached() || io_error.is_some() {
+            let _ = child.kill().await;
+        }
+        if let Some(e) = io_error {
+            let _ = child.wait().await;
+            return Err(io_err("Lesefehler bei lokaler Kommando-Ausgabe", e));
+        }
+        let status = child
+            .wait()
+            .await
+            .map_err(|e| io_err("Warten auf lokalen Prozess fehlgeschlagen", e))?;
+
+        let truncated = capped.truncated();
+        let (stdout, stderr) = capped.into_parts();
         Ok(CommandOutput {
-            stdout: output.stdout,
-            stderr: output.stderr,
-            exit_code: output.status.code(),
-            // Lokaler Pseudo-Server: kein Streaming über ein `russh`-Channel-
-            // Limit, `Command::output()` puffert unbegrenzt — kein Fund-A-
-            // Analogon (kein feindlicher Remote-Server, s. Spec 0043,
-            // Abschnitt 2), daher hier bewusst immer `false`.
-            truncated: false,
+            stdout,
+            stderr,
+            // Unix: `kill()` beendet den Prozess per Signal statt eines
+            // regulären Exits — `status.code()` ist dann `None`, der
+            // Exit-Code geht beim Cap-Abbruch also verloren (identisch zum
+            // Remote-Pfad, dessen `ExitStatus`-Nachricht beim Cap ebenfalls
+            // nie mehr eintrifft). Kein Datenverlust-Problem, da `truncated`
+            // dieselbe "unvollständig, nicht vertrauenswürdig als vollständiges
+            // Ergebnis" ohnehin trägt.
+            exit_code: status.code(),
+            truncated,
         })
+    }
+
+    fn set_max_output_bytes(&mut self, limit: usize) {
+        // s. `RusshTransport::set_max_output_bytes`-Kommentar (Spec 0043-
+        // Review-Fund): nach oben geklemmt, damit dieser Testhook den Cap
+        // nur verschärfen (verkleinern), nie über den sicheren Default
+        // hinaus lockern kann.
+        self.max_output_bytes = limit.min(MAX_STREAM_OUTPUT_BYTES);
     }
 
     // `execute_with_stdin`/`execute_cancellable`/`execute_with_stdin_cancellable`:
@@ -258,5 +372,97 @@ mod tests {
     async fn test_disconnect_is_a_no_op_success() {
         let mut transport = LocalTransport::new();
         assert!(transport.disconnect().await.is_ok());
+    }
+
+    /// Spec 0044: kein Auseinanderdriften der Default-Caps zwischen Remote-
+    /// (`RusshTransport`, s. `crate::connect::connect_hop_chain`, das
+    /// `max_output_bytes` ebenfalls aus `exec::MAX_STREAM_OUTPUT_BYTES`
+    /// initialisiert) und lokalem Pseudo-Server — beide lesen denselben
+    /// benannten Konstanten-Wert statt je einer eigenen Literal-Kopie.
+    #[test]
+    fn test_t44_default_output_cap_matches_shared_remote_constant() {
+        let transport = LocalTransport::new();
+        assert_eq!(
+            transport.max_output_bytes,
+            crate::exec::MAX_STREAM_OUTPUT_BYTES
+        );
+    }
+
+    /// Spec 0044: ein lokales Kommando, das mehr als das (hier klein
+    /// gesetzte) Limit ausgibt, darf den Puffer nie darüber hinaus wachsen
+    /// lassen — analog zum Remote-Test aus Spec 0043
+    /// (`test_t43_execute_caps_output_during_streaming` in
+    /// `tests/integration.rs`), hier gegen den lokalen Pseudo-Server. `yes`
+    /// endet nie von selbst — beweist zugleich, dass `execute()` trotzdem
+    /// zurückkehrt (kein Hänger, Kindprozess wird beim Cap beendet).
+    #[tokio::test]
+    async fn test_t44_execute_caps_output_during_streaming() {
+        let mut transport = LocalTransport::new();
+        const SMALL_LIMIT: usize = 4096;
+        transport.set_max_output_bytes(SMALL_LIMIT);
+
+        #[cfg(unix)]
+        let command = "yes AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        #[cfg(windows)]
+        // spec-reviewer-Fund: `for /L %i in ()` (leere Mengenangabe) ist
+        // kein gültiges `FOR /L` — `cmd` bricht mit Syntaxfehler ab bzw.
+        // iteriert nicht, der Cap würde also nie greifen. `(1,0,2)`
+        // (Start 1, Schrittweite 0, Ende 2) zählt nie über 2 hinaus und
+        // läuft damit endlos — die eigentlich gewollte Endlosschleife.
+        let command = "for /L %i in (1,0,2) do @echo AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+        let output = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            transport.execute(command),
+        )
+        .await
+        .expect("execute() darf bei einem flutenden lokalen Kommando nicht hängen bleiben")
+        .expect("execute() sollte trotz Abschneiden Ok liefern");
+
+        assert!(
+            output.stdout.len() <= SMALL_LIMIT + crate::exec::TRUNCATION_NOTICE.len(),
+            "stdout darf nie über das konfigurierte Limit hinauswachsen, war aber {} Bytes",
+            output.stdout.len()
+        );
+        assert!(
+            output.truncated,
+            "CommandOutput.truncated muss gesetzt sein, wenn der Cap gegriffen hat"
+        );
+    }
+
+    /// Ein normales, kurzes Kommando bleibt unbeschnitten — kein Fehlalarm
+    /// durch den neuen Cap-Mechanismus.
+    #[tokio::test]
+    async fn test_t44_execute_leaves_small_output_untruncated() {
+        let mut transport = LocalTransport::new();
+        transport.set_max_output_bytes(4096);
+
+        let output = transport.execute("echo hello").await.unwrap();
+
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "hello");
+        assert!(!output.truncated);
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): ein Kommando, das auf
+    /// Eingabe wartet (hier `cat` ohne Argumente), darf nicht auf geerbtes
+    /// Eltern-`stdin` warten — das wäre ein echter, UI-loser Hänger (die
+    /// Session-`transport`-Lock bliebe belegt, `execute_cancellable` hat
+    /// hier keinen echten Abbruch). `stdin(Stdio::null())` lässt `cat`
+    /// sofort per EOF beenden statt zu blockieren.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_t44_execute_does_not_hang_on_a_command_waiting_for_stdin() {
+        let mut transport = LocalTransport::new();
+
+        let output =
+            tokio::time::timeout(std::time::Duration::from_secs(5), transport.execute("cat"))
+                .await
+                .expect(
+                    "execute() darf bei einem auf stdin wartenden Kommando nicht hängen bleiben",
+                )
+                .expect("execute() sollte trotz sofortigem EOF auf stdin Ok liefern");
+
+        assert!(output.stdout.is_empty());
+        assert_eq!(output.exit_code, Some(0));
     }
 }

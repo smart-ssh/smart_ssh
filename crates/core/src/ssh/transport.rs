@@ -77,14 +77,17 @@ pub trait SshTransport: Send + Sync {
     }
     async fn disconnect(&mut self) -> Result<(), SshError>;
 
-    /// Testhook (Spec 0043, Fund A): erlaubt es Integrationstests, den
-    /// Exec-Output-Cap (Default `ssh_transport`s `MAX_STREAM_OUTPUT_BYTES`,
-    /// 2 MB) auf einen kleinen Wert zu setzen, ohne wirklich Megabyte-
-    /// Nutzlasten durch einen Testserver schicken zu müssen. Kein Nutzer-
-    /// Bedienknopf (Spec 0043, Abschnitt 7: eine interne Konstante mit
-    /// klarer Benennung reicht) — Default-Implementierung ist ein No-op,
-    /// bestehende `SshTransport`-Mocks/`LocalTransport` brauchen dafür keine
-    /// Anpassung; nur `RusshTransport` überschreibt sie echt.
+    /// Testhook (Spec 0043, Fund A; Spec 0044 für den lokalen Pseudo-
+    /// Server): erlaubt es Tests, den Exec-Output-Cap (Default
+    /// `ssh_transport`s `MAX_STREAM_OUTPUT_BYTES`, 2 MB) auf einen kleinen
+    /// Wert zu setzen, ohne wirklich Megabyte-Nutzlasten erzeugen zu
+    /// müssen. Kein Nutzer-Bedienknopf (Spec 0043, Abschnitt 7: eine
+    /// interne Konstante mit klarer Benennung reicht) — Default-
+    /// Implementierung ist ein No-op, bestehende `SshTransport`-Mocks
+    /// brauchen dafür keine Anpassung; `RusshTransport` UND
+    /// `LocalTransport` überschreiben sie echt (beide auf denselben
+    /// Default nach oben geklemmt, s. jeweiliger `set_max_output_bytes`-
+    /// Kommentar).
     fn set_max_output_bytes(&mut self, _limit: usize) {}
 }
 
