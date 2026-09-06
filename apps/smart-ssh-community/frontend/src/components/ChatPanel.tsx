@@ -27,7 +27,6 @@ import {
   onRiskAssessmentUpdated,
 } from "../events";
 import { translateErrorCode } from "../errorCodes";
-import "../extensions/registerBuiltinExtensions";
 import { listDocumentActions } from "../extensions/registry";
 import { formatBytes } from "../format";
 import {

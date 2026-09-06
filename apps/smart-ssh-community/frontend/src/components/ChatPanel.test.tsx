@@ -148,6 +148,11 @@ describe("registered document actions (Spec 0045)", () => {
 
     const button = screen.getByRole("button", { name: "Als Word speichern" });
     expect(button).not.toBeDisabled();
+    // spec-reviewer-Fund: eine aktive Aktion darf kein Tooltip-Attribut
+    // tragen — sonst könnte eine Implementierung `disabledReason` immer
+    // als Tooltip setzen, unabhängig von `disabled`, ohne dass dieser Test
+    // es merkt.
+    expect(button).not.toHaveAttribute("title");
 
     fireEvent.click(button);
 

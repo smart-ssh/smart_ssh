@@ -79,6 +79,14 @@ frontend/packages/app/   Registry: registerRoute, registerPanel,
                           registerSettingsSection, registerCommandPalette
 ```
 
+> **Nachtrag (Spec 0045):** `registerRoute`/`registerPanel`/
+> `registerCommandPaletteAction` hatten nie einen tatsächlichen Renderer
+> (keine Route-/Panel-Rendering-Stelle, keine Command-Palette-UI) — totes
+> Vokabular, entfernt in Spec 0045. Aktueller Stand: `registerSettingsSection`
+> (gerendert in `AiProviderSettings`) und `registerDocumentAction`
+> (gerendert in `ChatPanel`s Dokument-Karte, Spec 0045) — jeder verbleibende
+> Typ hat einen echten Renderer.
+
 `useEntitlements()`-Hook: liest den Entitlement-Stand per Command, abonniert
 ein Tauri-Event `entitlements:changed` (Event wird ausgelöst, wenn
 `EntitlementProvider::watch()` einen neuen Stand liefert — in der Community

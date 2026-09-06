@@ -92,6 +92,19 @@ export function listSettingsSections(): SettingsSectionContribution[] {
   return Array.from(registry.settingsSections.values());
 }
 
+/** spec-reviewer-Fund (Review dieses Schritts): rein statisch — kein
+ * Subscription-/Change-Notification-Mechanismus. `ChatPanel` liest diese
+ * Liste bei jedem Render neu, reagiert aber nicht selbst auf eine
+ * Registrierung/ein `disabled`-Umschalten, das NACH dem ersten Render der
+ * jeweiligen Dokument-Karte passiert — ein solcher Aufrufer muss also vor
+ * dem ersten Render registriert haben (wie `registerBuiltinExtensions.ts`
+ * es für `registerSettingsSection` tut) bzw. selbst für einen Re-Render
+ * sorgen (z. B. über ein von außen beobachtetes Entitlement-Update, das
+ * die aufrufende Komponente ohnehin neu rendert). Kein Verstoß gegen Spec
+ * 0045 (die keinen Notify-Mechanismus verlangt), aber genau die Art
+ * "sieht aus wie ein Andockpunkt, verhält sich aber überraschend" von
+ * Falle, die diese Spec eigentlich vermeiden will — deshalb hier explizit
+ * festgehalten statt stillschweigend vorausgesetzt. */
 export function listDocumentActions(): DocumentAction[] {
   return Array.from(registry.documentActions.values());
 }
