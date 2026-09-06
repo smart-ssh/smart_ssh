@@ -213,6 +213,7 @@
     "loadingSuggestions": "Lädt Vorschläge…",
     "noSuggestions": "Keine Vorschläge.",
     "binaryFileHint": "⚠ Binärdatei — kein Textvergleich möglich. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
+    "diffTooLargeHint": "⚠ Inhalt zu groß für Zeilen-Diff. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
     "noContentChange": "(keine inhaltliche Änderung)"
   },
   "hostKeyDialog": {

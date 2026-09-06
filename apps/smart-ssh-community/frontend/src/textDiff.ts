@@ -7,6 +7,23 @@
 
 export type DiffLine = { type: "unchanged" | "added" | "removed"; text: string };
 
+/** Spec 0046, Fund 3: derselbe 256-KB-Cap wie der Lesepfad
+ * (`orchestration::MAX_READ_FILE_BYTES`) — der Zeilen-Diff ist O(n·m)
+ * (klassischer LCS-DP), unproblematisch für kurze Notiztexte, aber ein
+ * Confirm-Dialog-Renderer-Einfrierer für eine große Datei (Spec 0020s
+ * Datei-Write-Diff nutzt dieselbe Komponente wie der Notiz-Diff). Über dem
+ * Cap wird kein Zeilen-Diff berechnet — der Schreibvorgang selbst bleibt
+ * möglich, nur die Vorschau wird gekürzt (s. `isDiffTooLargeToCompute`). */
+export const MAX_DIFF_INPUT_BYTES = 256 * 1024;
+
+/** `true`, wenn `before`/`after` zusammen den Diff-Größen-Cap überschreiten
+ * — Byte-Länge (UTF-8), nicht JS-String-Länge, damit dieselbe Grenze wie
+ * am Lesepfad gilt, der ebenfalls in Bytes zählt. */
+export function isDiffTooLargeToCompute(before: string, after: string): boolean {
+  const byteLength = (s: string) => new TextEncoder().encode(s).length;
+  return byteLength(before) > MAX_DIFF_INPUT_BYTES || byteLength(after) > MAX_DIFF_INPUT_BYTES;
+}
+
 export function diffLines(before: string, after: string): DiffLine[] {
   const a = before.length === 0 ? [] : before.split("\n");
   const b = after.length === 0 ? [] : after.split("\n");

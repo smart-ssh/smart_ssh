@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffLines, shortNoteDiff } from "./textDiff";
+import { diffLines, isDiffTooLargeToCompute, MAX_DIFF_INPUT_BYTES, shortNoteDiff } from "./textDiff";
 
 // Spec 0019, Abschnitt 4 — reine Diff-Logik, losgelöst von der Darstellung.
 
@@ -46,5 +46,27 @@ describe("shortNoteDiff", () => {
   it("behandelt null (keine Zielauflösung) wie einen leeren Ausgangstext", () => {
     const result = shortNoteDiff(null, "erste Notiz");
     expect(result).toEqual([{ type: "added", text: "erste Notiz" }]);
+  });
+});
+
+// Spec 0046, Fund 3: Größen-Cap für die Diff-Berechnung.
+describe("isDiffTooLargeToCompute", () => {
+  it("is false for short content well under the cap", () => {
+    expect(isDiffTooLargeToCompute("a\nb\nc", "a\nb\nd")).toBe(false);
+  });
+
+  it("is true when the previous content alone exceeds the cap", () => {
+    const oversizedBefore = "x".repeat(MAX_DIFF_INPUT_BYTES + 1);
+    expect(isDiffTooLargeToCompute(oversizedBefore, "short")).toBe(true);
+  });
+
+  it("is true when the new content alone exceeds the cap", () => {
+    const oversizedAfter = "x".repeat(MAX_DIFF_INPUT_BYTES + 1);
+    expect(isDiffTooLargeToCompute("short", oversizedAfter)).toBe(true);
+  });
+
+  it("is false right at the cap boundary", () => {
+    const atCap = "x".repeat(MAX_DIFF_INPUT_BYTES);
+    expect(isDiffTooLargeToCompute(atCap, atCap)).toBe(false);
   });
 });
