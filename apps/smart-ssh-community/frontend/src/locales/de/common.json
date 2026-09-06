@@ -162,6 +162,7 @@
     "simulateServer": "Server simulieren (optional)",
     "noServerOption": "(keiner)",
     "simulateTags": "Tags simulieren",
+    "tagFromServer": "Vom gewählten Server übernommen",
     "test": "Testen",
     "overallDecision": "Gesamt-Entscheidung",
     "subCommands": "Teilkommandos",

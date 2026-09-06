@@ -162,6 +162,7 @@
     "simulateServer": "Simulate server (optional)",
     "noServerOption": "(none)",
     "simulateTags": "Simulate tags",
+    "tagFromServer": "Derived from the selected server",
     "test": "Test",
     "overallDecision": "Overall Decision",
     "subCommands": "Sub-commands",

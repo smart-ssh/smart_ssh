@@ -560,7 +560,7 @@ function TraceView({ trace, rules }: { trace: EvaluationTraceDto; rules: RuleDto
 /** Spec 0009, Abschnitt 6: Beispielkommando + optionale Scope-Simulation,
  * `evaluate_explained` — bei Chaining jedes Teilkommando einzeln plus
  * hervorgehobene Gesamt-Entscheidung. */
-function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] }) {
+export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] }) {
   const { t } = useTranslation();
   const [command, setCommand] = useState("");
   const [serverId, setServerId] = useState("");
@@ -569,6 +569,16 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
   const [result, setResult] = useState<EvaluationTraceDto | null>(null);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Spec 0046, Fund 2: der gewählte Server bringt seine eigenen Tags
+  // (`server_tags`, Spec 0004) automatisch mit in die Simulation — sonst
+  // zeigt das Panel für ein tag-scoped `AutoExec`-Kommando fälschlich
+  // "keine Regel matcht", obwohl im echten Betrieb genau diese Tags aus
+  // dem gewählten Server abgeleitet würden.
+  const selectedServerTags = useMemo(
+    () => servers.find((s) => s.id === serverId)?.tags ?? [],
+    [servers, serverId],
+  );
 
   const handleAddTag = () => {
     const value = tagDraft.trim();
@@ -581,7 +591,10 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
     setTesting(true);
     setError(null);
     try {
-      setResult(await evaluateExplained(command, { serverId: serverId || null, tags }));
+      const effectiveTags = Array.from(new Set([...selectedServerTags, ...tags]));
+      setResult(
+        await evaluateExplained(command, { serverId: serverId || null, tags: effectiveTags }),
+      );
     } catch (err) {
       setError(commandErrorMessage(err));
     } finally {
@@ -625,6 +638,17 @@ function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] 
         <div className="block text-sm text-slate-300">
           {t("filterRules.simulateTags")}
           <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-slate-600 bg-slate-900 p-1.5">
+            {selectedServerTags
+              .filter((tag) => !tags.includes(tag))
+              .map((tag) => (
+                <span
+                  key={`server-${tag}`}
+                  title={t("filterRules.tagFromServer")}
+                  className="flex items-center gap-1 rounded bg-indigo-900/60 px-2 py-0.5 text-xs text-indigo-200"
+                >
+                  {tag}
+                </span>
+              ))}
             {tags.map((tag) => (
               <span
                 key={tag}
