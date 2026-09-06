@@ -65,6 +65,22 @@ impl<K: Eq + Hash, T> ConfirmationRegistry<K, T> {
     /// gebraucht wird. Best-effort: fehlt der Eintrag bereits (z. B. eine
     /// seltene Race mit einem gleichzeitigen `resolve()`), passiert
     /// nichts.
+    ///
+    /// **Vorsicht bei Schlüsseln, die erneut registriert werden können**
+    /// (spec-reviewer-Fund, Review dieses Schritts): `register()`s eigener
+    /// Kommentar oben beschreibt genau diesen Fall für die Host-Key-
+    /// Registry (`SessionId`, `connect()`-Retry registriert unter
+    /// demselben Schlüssel neu). Ein `cancel(key)`, das nach so einer
+    /// Neu-Registrierung noch für den ALTEN Wartenden ausgeführt wird,
+    /// würde den NEUEN Eintrag entfernen, ohne dass dessen `Receiver`
+    /// davon weiß — der neue Wartende würde dann selbst ewig hängen.
+    /// Aktuell (Spec 0046, Fund 4) ruft nur die `ActionId`-Instanz dieser
+    /// Registry `cancel()` auf, wo `action_id`s nie wiederverwendet
+    /// werden — kein betroffener Aufrufer heute. Vor einer Wiederverwendung
+    /// auf einem Schlüsseltyp mit Neu-Registrierung (z. B. Host-Key/
+    /// `SessionId`) erst prüfen, ob eine Identitätsprüfung (z. B. über
+    /// einen bei `register()` mit ausgegebenen Generation-Zähler) nötig
+    /// wird.
     pub fn cancel(&self, key: &K) {
         self.pending.lock().unwrap().remove(key);
     }

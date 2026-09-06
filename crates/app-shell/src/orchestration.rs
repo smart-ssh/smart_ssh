@@ -718,8 +718,8 @@ async fn handle_action_proposed(
             let rx = confirm_rx.expect("confirm_rx muss registriert sein");
             let timeout_result = tokio::time::timeout(PENDING_ACTION_CONFIRM_TIMEOUT, rx).await;
             *session.pending_action.lock().unwrap() = None;
-            let user_decision = match timeout_result {
-                Ok(Ok(decision)) => decision,
+            let (user_decision, deny_reason) = match timeout_result {
+                Ok(Ok(decision)) => (decision, RejectionReason::User),
                 Ok(Err(_)) => {
                     // Sender wurde gedroppt (z. B. App beendet, bevor der
                     // Nutzer reagiert hat) — kein Absturz, einfach nichts
@@ -734,13 +734,18 @@ async fn handle_action_proposed(
                     // sie ablehnen konnte). Registry-Eintrag selbst abräumen
                     // (niemand wartet mehr auf `rx`) und als Ablehnung
                     // behandeln — fail-safe, nie als Genehmigung.
+                    // `RejectionReason::Timeout` statt `User`: spec-reviewer-
+                    // Fund (Review dieses Schritts) — kein Mensch hat hier
+                    // tatsächlich entschieden, die KI (und ein Mensch, der
+                    // die Historie später liest) soll das nicht fälschlich
+                    // als bewusste Ablehnung lesen.
                     action_confirmations.cancel(&action_id);
                     tracing::warn!(
                         ?action_id,
                         timeout_secs = PENDING_ACTION_CONFIRM_TIMEOUT.as_secs(),
                         "pending action confirmation timed out without a response, treating as denied"
                     );
-                    ActionUserDecision::Deny
+                    (ActionUserDecision::Deny, RejectionReason::Timeout)
                 }
             };
             handle_user_decision(
@@ -749,6 +754,7 @@ async fn handle_action_proposed(
                 action_id,
                 action,
                 user_decision,
+                deny_reason,
                 emitter,
                 profile_store,
                 origin,
@@ -992,6 +998,12 @@ async fn handle_user_decision(
     action_id: ActionId,
     action: AiAction,
     user_decision: ActionUserDecision,
+    // Spec 0046, Fund 4: nur für den `ActionUserDecision::Deny`-Zweig
+    // relevant — `RejectionReason::User` für eine echte Nutzer-Ablehnung,
+    // `RejectionReason::Timeout` für die vom Backend-Sicherheitsnetz
+    // fabrizierte Ablehnung, wenn `PENDING_ACTION_CONFIRM_TIMEOUT` ablief,
+    // ohne dass je eine Entscheidung eintraf.
+    deny_reason: RejectionReason,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     origin: ActionOrigin,
@@ -1006,20 +1018,23 @@ async fn handle_user_decision(
         ActionUserDecision::Deny => {
             // Spec 0021, Abschnitt 3, Fall 3: der Nutzer hat abgelehnt — das
             // Frontend weiß es bereits (es hat den Aufruf selbst gemacht),
-            // aber die KI bisher nicht. `RejectionReason::User` (nicht
-            // `Blocked`), damit die KI unterscheiden kann "die Filter-Engine
-            // hat blockiert" von "der Mensch wollte das nicht" und
-            // entsprechend reagieren kann (Alternative vorschlagen,
-            // nachfragen, akzeptieren). Das war der Kern des gemeldeten
-            // Bugs: ohne diesen Eintrag + die automatische Folgerunde blieb
-            // der Chat nach "Ablehnen" stumm (s. Moduldoc).
+            // aber die KI bisher nicht. `RejectionReason::User`/`Blocked`
+            // lassen die KI unterscheiden "die Filter-Engine hat blockiert"
+            // von "der Mensch wollte das nicht" und entsprechend reagieren
+            // (Alternative vorschlagen, nachfragen, akzeptieren). Das war
+            // der Kern des gemeldeten Bugs: ohne diesen Eintrag + die
+            // automatische Folgerunde blieb der Chat nach "Ablehnen" stumm
+            // (s. Moduldoc). `deny_reason` ist normalerweise `User`; für den
+            // Timeout-Fall (Spec 0046, Fund 4) `Timeout` — dieselbe
+            // fail-safe Richtung, aber mit ehrlicher Ursache in der
+            // Historie.
             push_history_scoped(
                 session,
                 ChatMessage {
                     role: Role::ActionResult,
                     content: MessageContent::ActionRejected {
                         command: describe_rejected_action(&action),
-                        reason: RejectionReason::User,
+                        reason: deny_reason,
                     },
                 },
                 persist,
@@ -7720,6 +7735,24 @@ mod tests {
             "der Registry-Eintrag muss vom Timeout selbst aktiv abgeräumt worden sein \
              (ConfirmationRegistry::cancel), sonst bliebe ein toter Sender dauerhaft in \
              der Map stehen"
+        );
+
+        // spec-reviewer-Fund (Review dieses Schritts): eine Zeitüberschreitung
+        // muss in der Historie als `RejectionReason::Timeout` erscheinen, NICHT
+        // als `User` — sonst hielte die KI (und ein Mensch, der die Historie
+        // später liest) eine nie getroffene Nutzerentscheidung für real.
+        let history = session.context.lock().await.history.clone();
+        let rejected = history
+            .iter()
+            .find_map(|m| match &m.content {
+                MessageContent::ActionRejected { reason, .. } => Some(reason.clone()),
+                _ => None,
+            })
+            .expect("nach dem Timeout muss ein ActionRejected-Eintrag in der Historie stehen");
+        assert_eq!(
+            rejected,
+            RejectionReason::Timeout,
+            "eine Zeitüberschreitung darf nicht als echte Nutzer-Ablehnung erscheinen"
         );
     }
 

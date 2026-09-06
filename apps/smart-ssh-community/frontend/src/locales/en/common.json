@@ -118,9 +118,10 @@
     "noContext": "(no context)",
     "deleteServer": "Delete Server",
     "deleteImpactTitle": "Impact of deletion:",
-    "deleteNoImpact": "No secrets in the keychain, no other servers affected.",
+    "deleteNoKeychainImpact": "No secrets in the keychain, no other servers affected.",
     "secretWillBeDeleted": "Will be removed from the keychain: {{label}}",
     "serverWillLoseJumpHost": "Loses the jump-host reference to this server: {{name}}",
+    "deleteAlwaysRemovesHistory": "This also permanently deletes this server's chat history, notes, and tags.",
     "confirmDeleteServer": "Delete permanently",
     "testResult": {
       "success": "✓ Connection successful",

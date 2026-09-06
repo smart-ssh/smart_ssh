@@ -4,9 +4,11 @@
 //! isoliert gegen einen `ProfileStore`/`CredentialStore` testen lässt.
 
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore, Server};
+use ssh_manager_core::shared::ServerId;
 
 use crate::dto::{DeleteServerResult, ServerDto};
 use crate::error::CommandResult;
+use crate::server_credentials::{clear_sudo_password, delete_auth_method_secrets};
 
 /// Baut die Vorschau/das Ergebnis von `delete_server` (Spec 0046, Fund 1):
 /// der zu löschende Server selbst (dessen `authKind`/`hasSudoPassword` dem
@@ -38,11 +40,37 @@ pub async fn compute_delete_server_result(
     })
 }
 
+/// Der volle `delete_server`-Ablauf (Spec 0046, Fund 1), losgelöst von
+/// `tauri::State` — `commands::delete_server` ist nur noch ein dünner
+/// Wrapper darum (den lokalen-Pseudo-Server-Ausschluss ausgenommen, der
+/// vor jedem Store-Zugriff greift). spec-reviewer-Fund (Review dieses
+/// Schritts): ohne diese Extraktion lief die eigentliche
+/// "ohne Bestätigung wird nichts gelöscht"-Garantie nur im `#[tauri::
+/// command]`-Handler selbst, der `State<'_, AppState>` braucht und daher
+/// in keinem Unit-Test erreichbar war — getestet wurde bislang nur
+/// `compute_delete_server_result`, das per Konstruktion nie löscht. Jetzt
+/// läuft genau dieselbe Funktion in Produktion UND im Test.
+pub async fn delete_server(
+    store: &dyn ProfileStore,
+    credential_store: &(dyn CredentialStore + Send + Sync),
+    id: ServerId,
+    confirm: bool,
+) -> CommandResult<DeleteServerResult> {
+    let server = store.get_server(&id).await?;
+    let result = compute_delete_server_result(store, credential_store, &server, confirm).await?;
+    if confirm {
+        delete_auth_method_secrets(credential_store, &server.auth);
+        clear_sudo_password(credential_store, id);
+        store.delete_server(&id).await?;
+    }
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
 
-    use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy};
+    use ssh_manager_core::profiles::{AuthMethod, CredentialRef, PostIngestPolicy};
     use ssh_manager_core::shared::ServerId;
 
     use super::*;
@@ -111,36 +139,74 @@ mod tests {
         assert!(result.servers_losing_jump_host.is_empty());
     }
 
-    /// Simuliert den vollen Zweischritt aus `commands::delete_server`:
-    /// Vorschau (nichts ändert sich), dann — erst bei `confirm` — das
-    /// tatsächliche Löschen über `ProfileStore::delete_server` samt
-    /// `ON DELETE SET NULL` auf abhängige Jump-Host-Referenzen.
+    fn server_with_password(
+        name: &str,
+        jump_host: Option<ServerId>,
+        credential_ref: &CredentialRef,
+    ) -> Server {
+        Server {
+            auth: AuthMethod::Password {
+                credential_ref: credential_ref.clone(),
+            },
+            ..server(name, jump_host)
+        }
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): ruft die tatsächliche
+    /// `delete_server`-Funktion auf (denselben Code, den `commands::
+    /// delete_server` in Produktion aufruft), nicht nur `compute_
+    /// delete_server_result` (das per Konstruktion nie löscht) — belegt
+    /// damit die eigentliche, in der Spec geforderte Garantie: "ohne
+    /// Bestätigung wird nichts gelöscht" gilt für den echten Lösch-Pfad
+    /// inklusive Keychain, nicht nur für die Vorschau-Berechnung.
     #[tokio::test]
-    async fn test_delete_server_two_step_preview_then_execute() {
-        let target = server("target", None);
+    async fn test_delete_server_confirm_false_deletes_neither_row_nor_secret() {
+        let credential_ref = CredentialRef::new("test:server-password");
+        let target = server_with_password("target", None, &credential_ref);
+        let store = InMemoryProfileStore::new().with_server(target.clone());
+        let credentials = InMemoryCredentialStore::new().with_secret(&credential_ref, "hunter2");
+
+        let preview = delete_server(&store, &credentials, target.id, false)
+            .await
+            .unwrap();
+
+        assert!(!preview.executed);
+        assert!(
+            store.get_server(&target.id).await.is_ok(),
+            "confirm: false darf die DB-Zeile nicht löschen"
+        );
+        assert!(
+            credentials.get(&credential_ref).is_ok(),
+            "confirm: false darf das Keychain-Secret nicht löschen"
+        );
+    }
+
+    /// Gegenstück: `confirm: true` löscht tatsächlich — Keychain-Secret,
+    /// DB-Zeile, und ein abhängiger Server verliert nur die
+    /// Jump-Host-Referenz (`ON DELETE SET NULL`), wird nicht mitgelöscht.
+    #[tokio::test]
+    async fn test_delete_server_confirm_true_deletes_row_secret_and_nulls_dependent_jump_host() {
+        let credential_ref = CredentialRef::new("test:server-password");
+        let target = server_with_password("target", None, &credential_ref);
         let dependent = server("dependent", Some(target.id));
         let store = InMemoryProfileStore::new()
             .with_server(target.clone())
             .with_server(dependent.clone());
+        let credentials = InMemoryCredentialStore::new().with_secret(&credential_ref, "hunter2");
 
-        let preview =
-            compute_delete_server_result(&store, &InMemoryCredentialStore::new(), &target, false)
-                .await
-                .unwrap();
-        assert!(!preview.executed);
+        let result = delete_server(&store, &credentials, target.id, true)
+            .await
+            .unwrap();
+
+        assert!(result.executed);
         assert!(
-            store.get_server(&target.id).await.is_ok(),
-            "Vorschau löscht nicht"
+            store.get_server(&target.id).await.is_err(),
+            "confirm: true muss die DB-Zeile löschen"
         );
-
-        let confirmed =
-            compute_delete_server_result(&store, &InMemoryCredentialStore::new(), &target, true)
-                .await
-                .unwrap();
-        assert!(confirmed.executed);
-        store.delete_server(&target.id).await.unwrap();
-
-        assert!(store.get_server(&target.id).await.is_err());
+        assert!(
+            credentials.get(&credential_ref).is_err(),
+            "confirm: true muss das Keychain-Secret löschen"
+        );
         let orphaned = store.get_server(&dependent.id).await.unwrap();
         assert_eq!(
             orphaned.jump_host, None,

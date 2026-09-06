@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { diffLines, isDiffTooLargeToCompute, MAX_DIFF_INPUT_BYTES, shortNoteDiff } from "./textDiff";
+import {
+  DiffTooLargeError,
+  diffLines,
+  isDiffTooLargeToCompute,
+  MAX_DIFF_INPUT_BYTES,
+  MAX_DIFF_LINE_PRODUCT,
+  shortNoteDiff,
+} from "./textDiff";
 
 // Spec 0019, Abschnitt 4 — reine Diff-Logik, losgelöst von der Darstellung.
 
@@ -68,5 +75,41 @@ describe("isDiffTooLargeToCompute", () => {
   it("is false right at the cap boundary", () => {
     const atCap = "x".repeat(MAX_DIFF_INPUT_BYTES);
     expect(isDiffTooLargeToCompute(atCap, atCap)).toBe(false);
+  });
+
+  /// spec-reviewer-Fund (Review dieses Schritts): der Byte-Cap allein lässt
+  /// sich mit vielen kurzen Zeilen umgehen — weit unter dem Byte-Cap, aber
+  /// mit einer DP-Tabellengröße, die den Confirm-Dialog-Renderer trotzdem
+  /// einfrieren könnte. Der Zeilenanzahl-Produkt-Cap muss das unabhängig
+  /// vom Byte-Cap erkennen.
+  it("is true for many short lines that stay well under the byte cap but exceed the line-product cap", () => {
+    const manyShortLines = Array.from({ length: 3000 }, (_, i) => `${i}`).join("\n");
+    expect(new TextEncoder().encode(manyShortLines).length).toBeLessThan(MAX_DIFF_INPUT_BYTES);
+    expect(isDiffTooLargeToCompute(manyShortLines, manyShortLines)).toBe(true);
+  });
+
+  it("is false for line counts just under the line-product cap", () => {
+    // 2000 x 2000 = 4_000_000, exakt MAX_DIFF_LINE_PRODUCT — knapp darunter
+    // (1999 Zeilen je Seite) darf nicht als zu groß gelten.
+    const lines = Array.from({ length: 1999 }, (_, i) => `${i}`).join("\n");
+    expect(isDiffTooLargeToCompute(lines, lines)).toBe(false);
+  });
+});
+
+// spec-reviewer-Fund: der Zeilenanzahl-Produkt-Cap muss auch direkt in
+// `diffLines`/`shortNoteDiff` greifen, nicht nur über `isDiffTooLargeToCompute`
+// beim Aufrufer — eine Verteidigungslinie, die kein künftiger Aufrufer
+// versehentlich umgehen kann.
+describe("diffLines line-product guard", () => {
+  it("throws DiffTooLargeError instead of allocating a huge DP table", () => {
+    const manyShortLines = Array.from(
+      { length: Math.ceil(Math.sqrt(MAX_DIFF_LINE_PRODUCT)) + 1 },
+      (_, i) => `${i}`,
+    ).join("\n");
+    expect(() => diffLines(manyShortLines, manyShortLines)).toThrow(DiffTooLargeError);
+  });
+
+  it("does not throw for line counts under the product cap", () => {
+    expect(() => diffLines("a\nb\nc", "a\nb\nd")).not.toThrow();
   });
 });

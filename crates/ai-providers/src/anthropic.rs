@@ -148,6 +148,14 @@ fn format_action_rejected(command: &str, reason: &RejectionReason) -> String {
                 "Automatisch durch eine Filter-Regel blockiert, ohne Bestätigungsdialog: {reason}"
             )
         }
+        // Spec 0046, Fund 4: kein Mensch hat aktiv abgelehnt — der
+        // Bestätigungsdialog blieb unbeantwortet, bis ein internes
+        // Sicherheitsnetz die Aktion aufgelöst hat.
+        RejectionReason::Timeout => {
+            "Die Bestätigung wurde nicht innerhalb der zulässigen Zeit beantwortet und automatisch \
+             abgelehnt (kein aktives Nutzerfeedback)."
+                .to_string()
+        }
     };
     format!(
         "<action_rejected>\n<command>{command}</command>\n<reason>{reason_text}</reason>\n</action_rejected>"

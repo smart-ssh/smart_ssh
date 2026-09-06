@@ -786,6 +786,14 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                         "Vom Nutzer abgelehnt.".to_string()
                     }
                     ssh_manager_core::ai::RejectionReason::Blocked(reason) => reason,
+                    // Spec 0046, Fund 4: eigener Text statt "Vom Nutzer
+                    // abgelehnt" — es gibt hier gerade keinen Nutzer, der
+                    // aktiv abgelehnt hätte.
+                    ssh_manager_core::ai::RejectionReason::Timeout => {
+                        "Zeitüberschreitung — nicht innerhalb der zulässigen Zeit beantwortet, \
+                         automatisch abgelehnt."
+                            .to_string()
+                    }
                 };
                 ChatHistoryEntryDto::ActionRejected {
                     role,

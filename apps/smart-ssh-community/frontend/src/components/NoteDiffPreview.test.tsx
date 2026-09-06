@@ -38,6 +38,16 @@ describe("NoteDiffPreview size cap (Spec 0046, Fund 3)", () => {
     expect(screen.getByText(/zu groß für Zeilen-Diff|too large for a line diff/i)).toBeInTheDocument();
   });
 
+  it("skips the line diff for many short lines that stay under the byte cap but exceed the line-product cap", () => {
+    // spec-reviewer-Fund: der Byte-Cap allein hätte diesen Fall
+    // durchgelassen (weit unter 256 KB) und die volle O(n·m)-DP-Tabelle
+    // berechnet.
+    const manyShortLines = Array.from({ length: 3000 }, (_, i) => `${i}`).join("\n");
+    renderPreview(manyShortLines, manyShortLines);
+
+    expect(screen.getByText(/zu groß für Zeilen-Diff|too large for a line diff/i)).toBeInTheDocument();
+  });
+
   it("still allows the write itself: the hint does not disable anything outside this preview", () => {
     // Die Komponente selbst enthält keinen Schreib-Button — dieser Test
     // dokumentiert die Invariante explizit: die Größen-Hinweis-Ansicht

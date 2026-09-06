@@ -41,6 +41,7 @@ pub(crate) fn log_outgoing_context(request_id: Uuid, context: &SessionContext) {
                 match reason {
                     RejectionReason::User => "user".to_string(),
                     RejectionReason::Blocked(reason) => format!("blocked: {reason}"),
+                    RejectionReason::Timeout => "timeout".to_string(),
                 }
             ),
         })

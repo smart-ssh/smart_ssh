@@ -45,7 +45,6 @@ use crate::server_credentials::{
     clear_sudo_password, delete_auth_method_secrets, resolve_auth_method, resolve_sudo_password,
     sudo_password_credential_ref,
 };
-use crate::servers::compute_delete_server_result;
 use crate::session::{
     history_contains_untrusted_content, spawn_terminal_actor, Session, TerminalCommand,
 };
@@ -1684,20 +1683,13 @@ pub async fn delete_server(
         // Spec 0032, Abschnitt 3: existiert nicht als löschbare Zeile.
         return Err("Der lokale Pseudo-Server kann nicht gelöscht werden".into());
     }
-    let server = state.profile_store.get_server(&id).await?;
-    let result = compute_delete_server_result(
+    crate::servers::delete_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
-        &server,
+        id,
         confirm,
     )
-    .await?;
-    if confirm {
-        delete_auth_method_secrets(state.credential_store.as_ref(), &server.auth);
-        clear_sudo_password(state.credential_store.as_ref(), id);
-        state.profile_store.delete_server(&id).await?;
-    }
-    Ok(result)
+    .await
 }
 
 /// Spec 0018, Abschnitt 4: expliziter "Entfernen"-Weg — ein leeres

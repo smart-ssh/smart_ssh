@@ -842,26 +842,37 @@ export function ServerForm({
             {deletePreview && (
               <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
                 <p className="mb-2 font-medium text-red-200">{t("serverForm.deleteImpactTitle")}</p>
-                <ul className="mb-2 space-y-1 text-red-200">
-                  {deletePreview.server.authKind !== "agent" && (
-                    <li>
-                      {t("serverForm.secretWillBeDeleted", {
-                        label: authKindLabels(t)[deletePreview.server.authKind],
-                      })}
-                    </li>
-                  )}
-                  {deletePreview.server.hasSudoPassword && (
-                    <li>{t("serverForm.secretWillBeDeleted", { label: t("serverForm.sudoLabel") })}</li>
-                  )}
-                  {deletePreview.serversLosingJumpHost.map((s) => (
-                    <li key={s.id}>{t("serverForm.serverWillLoseJumpHost", { name: s.name })}</li>
-                  ))}
-                </ul>
                 {deletePreview.server.authKind === "agent" &&
-                  !deletePreview.server.hasSudoPassword &&
-                  deletePreview.serversLosingJumpHost.length === 0 && (
-                    <p className="mb-2 text-red-200">{t("serverForm.deleteNoImpact")}</p>
-                  )}
+                !deletePreview.server.hasSudoPassword &&
+                deletePreview.serversLosingJumpHost.length === 0 ? (
+                  <p className="mb-2 text-red-200">{t("serverForm.deleteNoKeychainImpact")}</p>
+                ) : (
+                  <ul className="mb-2 space-y-1 text-red-200">
+                    {deletePreview.server.authKind !== "agent" && (
+                      <li>
+                        {t("serverForm.secretWillBeDeleted", {
+                          label: authKindLabels(t)[deletePreview.server.authKind],
+                        })}
+                      </li>
+                    )}
+                    {deletePreview.server.hasSudoPassword && (
+                      <li>
+                        {t("serverForm.secretWillBeDeleted", { label: t("serverForm.sudoLabel") })}
+                      </li>
+                    )}
+                    {deletePreview.serversLosingJumpHost.map((s) => (
+                      <li key={s.id}>{t("serverForm.serverWillLoseJumpHost", { name: s.name })}</li>
+                    ))}
+                  </ul>
+                )}
+                {/* spec-reviewer-Fund (Review dieses Schritts): die Vorschau
+                 * oben deckt nur Secrets/Jump-Host ab (Spec 0046, Fund 1) —
+                 * ohne diesen Hinweis läse sich "keine Secrets, keine
+                 * anderen Server betroffen" wie "löschen ist folgenlos",
+                 * obwohl Chat-Historie/Notizen/Tags dieses Servers beim
+                 * Löschen unwiderruflich mitverschwinden (`ON DELETE
+                 * CASCADE`, Spec 0034/0008). */}
+                <p className="mb-2 text-red-200">{t("serverForm.deleteAlwaysRemovesHistory")}</p>
                 <div className="flex gap-2">
                   <button
                     type="button"

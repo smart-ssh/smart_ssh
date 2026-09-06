@@ -160,6 +160,14 @@ pub enum RejectionReason {
     /// überhaupt ein Bestätigungsdialog gezeigt wurde — der `String` ist
     /// der `Decision::Deny { reason }`-Grund (Spec 0002).
     Blocked(String),
+    /// Spec 0046, Fund 4: eine wartende Bestätigung wurde durch das
+    /// Backend-seitige Sicherheitsnetz aufgelöst, OHNE dass je eine
+    /// Nutzerentscheidung eintraf (z. B. ein Frontend-Reload, der den
+    /// wartenden Dialog aus seinem State verlor). Bewusst nicht `User` —
+    /// die KI (und ein Mensch, der die Historie später liest) soll nicht
+    /// fälschlich annehmen, ein Mensch habe sich aktiv gegen den
+    /// Vorschlag entschieden.
+    Timeout,
 }
 
 /// Beschreibung einer Aktion, die ein Provider per Tool-/Function-Calling

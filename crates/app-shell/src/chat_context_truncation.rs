@@ -35,7 +35,7 @@ fn approximate_char_len(message: &ChatMessage) -> usize {
         MessageContent::ActionRejected { command, reason } => {
             command.chars().count()
                 + match reason {
-                    RejectionReason::User => 0,
+                    RejectionReason::User | RejectionReason::Timeout => 0,
                     RejectionReason::Blocked(reason) => reason.chars().count(),
                 }
         }
