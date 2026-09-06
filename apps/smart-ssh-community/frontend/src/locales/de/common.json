@@ -117,6 +117,11 @@
     "contextPreview": "Kontext-Vorschau",
     "noContext": "(kein Kontext)",
     "deleteServer": "Server löschen",
+    "deleteImpactTitle": "Auswirkungen des Löschens:",
+    "deleteNoImpact": "Keine Secrets im Schlüsselbund, keine anderen Server betroffen.",
+    "secretWillBeDeleted": "Wird aus dem Schlüsselbund entfernt: {{label}}",
+    "serverWillLoseJumpHost": "Verliert die Jump-Host-Referenz auf diesen Server: {{name}}",
+    "confirmDeleteServer": "Endgültig löschen",
     "testResult": {
       "success": "✓ Verbindung erfolgreich",
       "authFailed": "✗ Authentifizierung fehlgeschlagen",

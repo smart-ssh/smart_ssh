@@ -117,6 +117,11 @@
     "contextPreview": "Context Preview",
     "noContext": "(no context)",
     "deleteServer": "Delete Server",
+    "deleteImpactTitle": "Impact of deletion:",
+    "deleteNoImpact": "No secrets in the keychain, no other servers affected.",
+    "secretWillBeDeleted": "Will be removed from the keychain: {{label}}",
+    "serverWillLoseJumpHost": "Loses the jump-host reference to this server: {{name}}",
+    "confirmDeleteServer": "Delete permanently",
     "testResult": {
       "success": "✓ Connection successful",
       "authFailed": "✗ Authentication failed",

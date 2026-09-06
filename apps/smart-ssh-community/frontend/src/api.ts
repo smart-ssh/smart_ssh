@@ -8,6 +8,7 @@ import type {
   ChatHistoryEntryDto,
   ChatSessionSummaryDto,
   DeleteGroupResult,
+  DeleteServerResult,
   DocumentFormat,
   EvalContextInput,
   EvaluationTraceDto,
@@ -218,7 +219,8 @@ export const createServer = (input: ServerInput) =>
 export const updateServer = (id: string, input: ServerInput) =>
   invoke<void>("update_server", { id, input });
 
-export const deleteServer = (id: string) => invoke<void>("delete_server", { id });
+export const deleteServer = (id: string, confirm: boolean) =>
+  invoke<DeleteServerResult>("delete_server", { id, confirm });
 
 /** Spec 0018, Abschnitt 4: expliziter Entfernen-Weg — ein leeres
  * `sudoPassword`-Feld in `updateServer` bedeutet bereits "unverändert". */

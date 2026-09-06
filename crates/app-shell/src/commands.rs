@@ -29,10 +29,10 @@ use crate::ai_provider_factory::build_ai_provider;
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{
     credential_ref_for, sort_remote_entries, ActionUserDecision, AiProviderConfigDto,
-    AiProviderConfigInput, DeleteGroupResult, DocumentFormat, EvalContextInput, EvaluationTraceDto,
-    GroupDto, HostKeyUserDecision, NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType,
-    RemoteEntryDto, RuleDto, RuleInput, ServerDto, ServerInput, SessionSummaryDto,
-    TestConnectionResult,
+    AiProviderConfigInput, DeleteGroupResult, DeleteServerResult, DocumentFormat, EvalContextInput,
+    EvaluationTraceDto, GroupDto, HostKeyUserDecision, NoteRevisionDto, PatternDto,
+    PatternSuggestionDto, PatternType, RemoteEntryDto, RuleDto, RuleInput, ServerDto, ServerInput,
+    SessionSummaryDto, TestConnectionResult,
 };
 use crate::error::{CommandError, CommandResult};
 use crate::events::{
@@ -45,6 +45,7 @@ use crate::server_credentials::{
     clear_sudo_password, delete_auth_method_secrets, resolve_auth_method, resolve_sudo_password,
     sudo_password_credential_ref,
 };
+use crate::servers::compute_delete_server_result;
 use crate::session::{
     history_contains_untrusted_content, spawn_terminal_actor, Session, TerminalCommand,
 };
@@ -1667,17 +1668,36 @@ pub async fn update_server(
     Ok(())
 }
 
+/// Spec 0046, Fund 1: `confirm: false` liefert nur die Vorschau (nichts
+/// wird gelöscht), `confirm: true` löscht tatsächlich — ein zweiter,
+/// expliziter Aufruf, kein Query-Parameter, der versehentlich beim ersten
+/// Aufruf schon `true` sein könnte (analog zu `delete_group`s
+/// `confirm_cascade`). Lösch-Reihenfolge bleibt wie gehabt: erst Keychain,
+/// dann DB-Zeile — nur eben erst nach Bestätigung.
 #[tauri::command]
-pub async fn delete_server(state: State<'_, AppState>, id: ServerId) -> CommandResult<()> {
+pub async fn delete_server(
+    state: State<'_, AppState>,
+    id: ServerId,
+    confirm: bool,
+) -> CommandResult<DeleteServerResult> {
     if crate::local_server::is_local(id) {
         // Spec 0032, Abschnitt 3: existiert nicht als löschbare Zeile.
         return Err("Der lokale Pseudo-Server kann nicht gelöscht werden".into());
     }
     let server = state.profile_store.get_server(&id).await?;
-    delete_auth_method_secrets(state.credential_store.as_ref(), &server.auth);
-    clear_sudo_password(state.credential_store.as_ref(), id);
-    state.profile_store.delete_server(&id).await?;
-    Ok(())
+    let result = compute_delete_server_result(
+        state.profile_store.as_ref(),
+        state.credential_store.as_ref(),
+        &server,
+        confirm,
+    )
+    .await?;
+    if confirm {
+        delete_auth_method_secrets(state.credential_store.as_ref(), &server.auth);
+        clear_sudo_password(state.credential_store.as_ref(), id);
+        state.profile_store.delete_server(&id).await?;
+    }
+    Ok(result)
 }
 
 /// Spec 0018, Abschnitt 4: expliziter "Entfernen"-Weg — ein leeres

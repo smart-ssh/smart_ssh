@@ -143,12 +143,20 @@ impl ProfileStore for InMemoryProfileStore {
     }
 
     async fn delete_server(&self, id: &ServerId) -> ProfileResult<()> {
-        self.servers
-            .lock()
-            .unwrap()
-            .remove(id)
-            .map(|_| ())
-            .ok_or(ProfileError::ServerNotFound(*id))
+        // Spec 0046, Fund 1: bildet `ON DELETE SET NULL` auf `jump_host`
+        // grob nach, damit Tests gegen `compute_delete_server_result` auch
+        // das tatsächliche Löschen verifizieren können (nicht nur die
+        // Vorschau) — analog zum `group_id`-Nachbau in `delete_group` oben.
+        let mut servers = self.servers.lock().unwrap();
+        if servers.remove(id).is_none() {
+            return Err(ProfileError::ServerNotFound(*id));
+        }
+        for server in servers.values_mut() {
+            if server.jump_host == Some(*id) {
+                server.jump_host = None;
+            }
+        }
+        Ok(())
     }
 
     async fn record_note_revision(&self, revision: &NoteRevision) -> ProfileResult<()> {

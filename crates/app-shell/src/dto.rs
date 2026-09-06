@@ -304,6 +304,21 @@ pub struct DeleteGroupResult {
     pub executed: bool,
 }
 
+/// Vorschau bzw. Ergebnis von `delete_server` (Spec 0046, Fund 1 — analog
+/// zu [`DeleteGroupResult`]). `server` trägt bereits `authKind`/
+/// `hasSudoPassword` (s. [`ServerDto::from_server`]), das Frontend kann
+/// daraus ableiten, welche Keychain-Secrets beim Löschen entfernt würden,
+/// ohne dass diese DTO die Secrets selbst benennen muss.
+/// `servers_losing_jump_host` sind die anderen Server, deren `jump_host`
+/// beim tatsächlichen Löschen still auf `NULL` gesetzt würde.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteServerResult {
+    pub server: ServerDto,
+    pub servers_losing_jump_host: Vec<ServerDto>,
+    pub executed: bool,
+}
+
 /// Eingabe für `create_server`/`update_server`/`test_connection` (Spec
 /// 0008, Abschnitt 4). `group_id`/`jump_host` direkt als `GroupId`/
 /// `ServerId` statt `String` — beide sind `Uuid`-Newtypes und

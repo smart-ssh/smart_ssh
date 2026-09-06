@@ -34,6 +34,7 @@ mod policy;
 mod risk_second_opinion;
 mod rule_suggestions;
 mod server_credentials;
+mod servers;
 mod session;
 mod state;
 mod test_connection;

@@ -20,6 +20,7 @@ import { loadRiskClassifierSettings } from "../riskSettings";
 import type {
   AuthMethodInput,
   AuthMethodKind,
+  DeleteServerResult,
   GroupDto,
   HostKeyInfo,
   PostIngestPolicy,
@@ -155,6 +156,7 @@ export function ServerForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deletePreview, setDeletePreview] = useState<DeleteServerResult | null>(null);
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
@@ -168,6 +170,7 @@ export function ServerForm({
     setTestResult(null);
     setPendingHostKey(null);
     setPreview(null);
+    setDeletePreview(null);
     if (serverId === null) {
       setLoaded(null);
       setName("");
@@ -266,12 +269,27 @@ export function ServerForm({
     }
   };
 
-  const handleDelete = async () => {
+  // Spec 0046, Fund 1: analog zu `GroupForm`s zweistufigem
+  // `deleteGroup`-Ablauf — der erste Aufruf (`confirm: false`) löscht
+  // nichts, sondern liefert nur die Vorschau (welche Keychain-Secrets
+  // entfernt würden, welche anderen Server ihre Jump-Host-Referenz
+  // verlieren).
+  const handleDeleteClick = async () => {
+    if (!serverId) return;
+    setError(null);
+    try {
+      setDeletePreview(await deleteServer(serverId, false));
+    } catch (err) {
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+    }
+  };
+
+  const handleConfirmDelete = async () => {
     if (!serverId) return;
     setDeleting(true);
     setError(null);
     try {
-      await deleteServer(serverId);
+      await deleteServer(serverId, true);
       onDeleted();
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
@@ -815,12 +833,54 @@ export function ServerForm({
           <div className="border-t border-slate-700 pt-4">
             <button
               type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="rounded bg-red-900 px-3 py-1.5 text-sm text-red-200 hover:bg-red-800 disabled:opacity-50"
+              onClick={handleDeleteClick}
+              className="rounded bg-red-900 px-3 py-1.5 text-sm text-red-200 hover:bg-red-800"
             >
-              {deleting ? t("common.deleting") : t("serverForm.deleteServer")}
+              {t("serverForm.deleteServer")}
             </button>
+
+            {deletePreview && (
+              <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
+                <p className="mb-2 font-medium text-red-200">{t("serverForm.deleteImpactTitle")}</p>
+                <ul className="mb-2 space-y-1 text-red-200">
+                  {deletePreview.server.authKind !== "agent" && (
+                    <li>
+                      {t("serverForm.secretWillBeDeleted", {
+                        label: authKindLabels(t)[deletePreview.server.authKind],
+                      })}
+                    </li>
+                  )}
+                  {deletePreview.server.hasSudoPassword && (
+                    <li>{t("serverForm.secretWillBeDeleted", { label: t("serverForm.sudoLabel") })}</li>
+                  )}
+                  {deletePreview.serversLosingJumpHost.map((s) => (
+                    <li key={s.id}>{t("serverForm.serverWillLoseJumpHost", { name: s.name })}</li>
+                  ))}
+                </ul>
+                {deletePreview.server.authKind === "agent" &&
+                  !deletePreview.server.hasSudoPassword &&
+                  deletePreview.serversLosingJumpHost.length === 0 && (
+                    <p className="mb-2 text-red-200">{t("serverForm.deleteNoImpact")}</p>
+                  )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeletePreview(null)}
+                    className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmDelete}
+                    disabled={deleting}
+                    className="rounded bg-red-700 px-3 py-1 text-xs text-white hover:bg-red-600 disabled:opacity-50"
+                  >
+                    {deleting ? t("common.deleting") : t("serverForm.confirmDeleteServer")}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

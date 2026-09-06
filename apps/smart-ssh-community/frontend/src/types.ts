@@ -331,6 +331,15 @@ export interface DeleteGroupResult {
   executed: boolean;
 }
 
+/** Vorschau/Ergebnis von `deleteServer` (Spec 0046, Fund 1) — `server`
+ * trägt bereits `authKind`/`hasSudoPassword`, daraus lässt sich ableiten,
+ * welche Keychain-Secrets beim Löschen entfernt würden. */
+export interface DeleteServerResult {
+  server: ServerDto;
+  serversLosingJumpHost: ServerDto[];
+  executed: boolean;
+}
+
 /** Eingabe für `create_server`/`update_server`/`test_connection`. */
 export interface ServerInput {
   name: string;
