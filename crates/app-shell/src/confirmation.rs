@@ -54,4 +54,28 @@ impl<K: Eq + Hash, T> ConfirmationRegistry<K, T> {
             .send(value)
             .map_err(|_| "der wartende Vorgang wurde bereits beendet".to_string())
     }
+
+    /// Entfernt `key` aus der Warteliste, ohne eine Bestätigung zu senden —
+    /// für den Fall, dass der WARTENDE selbst aufgibt (Spec 0046, Fund 4:
+    /// ein Backend-Timeout auf einen `Receiver`, den niemand mehr abwartet,
+    /// sobald diese Funktion zurückkehrt), statt dass ein Antwortender
+    /// (`resolve`) den Eintrag abräumt. Ohne dieses aktive Aufräumen bliebe
+    /// der `Sender` verwaist in der Map — kein Speicherleck in dem Sinne,
+    /// dass irgendetwas wächst, aber ein toter Eintrag, der nie wieder
+    /// gebraucht wird. Best-effort: fehlt der Eintrag bereits (z. B. eine
+    /// seltene Race mit einem gleichzeitigen `resolve()`), passiert
+    /// nichts.
+    pub fn cancel(&self, key: &K) {
+        self.pending.lock().unwrap().remove(key);
+    }
+
+    /// Nur für Tests: ob für `key` noch ein wartender Eintrag existiert —
+    /// unterscheidet "aktiv abgeräumt" (`cancel`) von "der `Receiver` wurde
+    /// nur beiläufig gedroppt" (beides lässt ein späteres `resolve()`
+    /// gleich fehlschlagen, s. Spec 0046 Fund 4, aber nur Ersteres räumt
+    /// den Eintrag selbst aus der Map).
+    #[cfg(test)]
+    pub fn contains(&self, key: &K) -> bool {
+        self.pending.lock().unwrap().contains_key(key)
+    }
 }

@@ -90,6 +90,21 @@ use crate::state::{ActionId, SessionId};
 /// Nachricht.
 const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 10;
 
+/// Spec 0046, Fund 4: Backend-seitige Grundsicherung gegen eine wartende
+/// `Confirm`-Aktion, die niemals aufgelöst wird — "Tab schließen = wartende
+/// Aktion ablehnen" (Spec 0017, Abschnitt 5) hängt am Frontend-State, den
+/// ein Reload (Dev-Hot-Reload, Frontend-Neustart) verliert; ohne dieses
+/// Timeout würde der `oneshot`-Kanal aus `ConfirmationRegistry` dann nie
+/// aufgelöst und dieser Task ewig auf `rx.await` warten. Bewusst großzügig
+/// (nicht wie das kurze MCP-Timeout aus Spec 0028, das einen *externen
+/// Tool-Aufrufer* betrifft, der typischerweise Sekunden, nicht Stunden
+/// wartet) — ein Mensch soll einen riskanten Vorschlag in Ruhe prüfen
+/// können, dieses Timeout ist ein Sicherheitsnetz gegen "nie", nicht eine
+/// UX-Grenze gegen "lange". Läuft es ab, gilt die Aktion als **abgelehnt**
+/// (fail-safe, s. `handle_action_proposed`/`handle_note_update_suggested`),
+/// nie als genehmigt.
+const PENDING_ACTION_CONFIRM_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3600);
+
 /// Spec 0034, Abschnitt 4: "Jede Nachricht ... wird fortlaufend
 /// geschrieben, sobald sie entsteht — kein Sammeln bis zum
 /// Verbindungsende." Zentrale Stelle statt an jedem der zahlreichen
@@ -701,13 +716,32 @@ async fn handle_action_proposed(
             // Abbruch) direkt danach wieder gelöscht.
             *session.pending_action.lock().unwrap() = Some(action_id);
             let rx = confirm_rx.expect("confirm_rx muss registriert sein");
-            let recv_result = rx.await;
+            let timeout_result = tokio::time::timeout(PENDING_ACTION_CONFIRM_TIMEOUT, rx).await;
             *session.pending_action.lock().unwrap() = None;
-            let Ok(user_decision) = recv_result else {
-                // Sender wurde gedroppt (z. B. App beendet, bevor der
-                // Nutzer reagiert hat) — kein Absturz, einfach nichts
-                // ausführen.
-                return false;
+            let user_decision = match timeout_result {
+                Ok(Ok(decision)) => decision,
+                Ok(Err(_)) => {
+                    // Sender wurde gedroppt (z. B. App beendet, bevor der
+                    // Nutzer reagiert hat) — kein Absturz, einfach nichts
+                    // ausführen.
+                    return false;
+                }
+                Err(_elapsed) => {
+                    // Spec 0046, Fund 4: `PENDING_ACTION_CONFIRM_TIMEOUT`
+                    // abgelaufen, ohne dass `respond_to_action` je kam (z. B.
+                    // ein Frontend-Reload, der die wartende Aktion aus seinem
+                    // eigenen State verlor, bevor der Tab-Schließen-Handler
+                    // sie ablehnen konnte). Registry-Eintrag selbst abräumen
+                    // (niemand wartet mehr auf `rx`) und als Ablehnung
+                    // behandeln — fail-safe, nie als Genehmigung.
+                    action_confirmations.cancel(&action_id);
+                    tracing::warn!(
+                        ?action_id,
+                        timeout_secs = PENDING_ACTION_CONFIRM_TIMEOUT.as_secs(),
+                        "pending action confirmation timed out without a response, treating as denied"
+                    );
+                    ActionUserDecision::Deny
+                }
             };
             handle_user_decision(
                 session,
@@ -2276,10 +2310,24 @@ pub async fn suggest_note_update_on_disconnect(
     );
 
     let rx = action_confirmations.register(action_id);
-    let Ok(user_decision) = rx.await else {
-        // Sender gedroppt (z. B. App wurde beendet, bevor der Nutzer
-        // reagiert hat) — kein Absturz, einfach nichts weiter tun.
-        return;
+    let user_decision = match tokio::time::timeout(PENDING_ACTION_CONFIRM_TIMEOUT, rx).await {
+        Ok(Ok(decision)) => decision,
+        Ok(Err(_)) => {
+            // Sender gedroppt (z. B. App wurde beendet, bevor der Nutzer
+            // reagiert hat) — kein Absturz, einfach nichts weiter tun.
+            return;
+        }
+        Err(_elapsed) => {
+            // Spec 0046, Fund 4 — s. identischer Kommentar in
+            // `handle_action_proposed`.
+            action_confirmations.cancel(&action_id);
+            tracing::warn!(
+                ?action_id,
+                timeout_secs = PENDING_ACTION_CONFIRM_TIMEOUT.as_secs(),
+                "pending note-update confirmation timed out without a response, treating as denied"
+            );
+            ActionUserDecision::Deny
+        }
     };
 
     // Spec 0010, Abschnitt 2, Punkt 5: "identischer Ablauf wie bei einem
@@ -7593,6 +7641,85 @@ mod tests {
             session.pending_action.lock().unwrap().is_none(),
             "pending_action muss nach der Ablehnung wieder None sein, sonst bleibt \
              die UI (Tab-Indikator/Eingabe) im Warte-Zustand hängen"
+        );
+    }
+
+    /// Spec 0046, Fund 4: simuliert einen Frontend-Reload (Dev-Hot-Reload
+    /// oder Neustart), der die wartende Aktion aus seinem eigenen State
+    /// verliert, BEVOR der "Tab schließen = ablehnen"-Handler (Spec 0017,
+    /// Abschnitt 5) sie je ablehnen konnte — kein Responder ruft
+    /// `respond_to_action`/`confirmations.resolve(...)` je auf. Ohne das
+    /// Backend-Timeout aus Spec 0046 würde `run_chat_turn` hier ewig auf
+    /// den `oneshot`-Kanal warten. `#[tokio::test(start_paused = true)]` +
+    /// `tokio::time::advance` spult die (in diesem Test virtuelle) Uhr über
+    /// `PENDING_ACTION_CONFIRM_TIMEOUT` hinaus, ohne 3600 echte Sekunden
+    /// abzuwarten.
+    #[tokio::test(start_paused = true)]
+    async fn test_regression_pending_confirm_action_times_out_instead_of_hanging_forever() {
+        let session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "rm -rf /data".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let turn = run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let action_id_slot: std::sync::Arc<std::sync::Mutex<Option<ActionId>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(None));
+        let action_id_slot_for_advancer = action_id_slot.clone();
+        let advancer = async {
+            // Erst abwarten, bis die Aktion tatsächlich als wartend
+            // registriert ist (derselbe Polling-Stil wie bei den übrigen
+            // Tests in dieser Datei, die auf ein Event warten), dann die
+            // Uhr über das Timeout hinaus vorspulen.
+            let action_id = loop {
+                if let Some(id) = *session.pending_action.lock().unwrap() {
+                    break id;
+                }
+                tokio::task::yield_now().await;
+            };
+            *action_id_slot_for_advancer.lock().unwrap() = Some(action_id);
+            tokio::time::advance(
+                PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1),
+            )
+            .await;
+        };
+
+        // Kein äußeres `tokio::time::timeout` nötig: unter `start_paused`
+        // gäbe es ohnehin nichts, wogegen es liefe (echte Zeit steht
+        // still) — hängt `run_chat_turn` tatsächlich, hängt schlicht dieser
+        // Test, was als Testfehler (Timeout des Testrunners selbst) klar
+        // erkennbar ist.
+        tokio::join!(turn, advancer);
+
+        assert!(
+            session.pending_action.lock().unwrap().is_none(),
+            "pending_action muss nach dem Timeout wieder None sein, sonst bleibt \
+             die UI (Tab-Indikator/Eingabe) im Warte-Zustand hängen"
+        );
+
+        let action_id = action_id_slot
+            .lock()
+            .unwrap()
+            .expect("die Aktion muss registriert worden sein");
+        assert!(
+            !confirmations.contains(&action_id),
+            "der Registry-Eintrag muss vom Timeout selbst aktiv abgeräumt worden sein \
+             (ConfirmationRegistry::cancel), sonst bliebe ein toter Sender dauerhaft in \
+             der Map stehen"
         );
     }
 

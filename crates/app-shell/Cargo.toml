@@ -47,3 +47,8 @@ tempfile = "3.27.0"
 # Release-Build.
 ssh-manager-core = { path = "../core", features = ["test-support"] }
 tauri = { version = "2", features = ["test"] }
+# Spec 0046, Fund 4: `start_paused`/`tokio::time::advance` fürs Testen des
+# Backend-Timeouts auf eine wartende `Confirm`-Aktion, ohne 3600 echte
+# Sekunden abzuwarten. Nur unter `[dev-dependencies]`, landet nie in einem
+# Release-Build.
+tokio = { version = "1.53.1", features = ["test-util"] }
