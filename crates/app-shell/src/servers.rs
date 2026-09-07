@@ -3,12 +3,76 @@
 //! analog zu `crate::groups::compute_delete_group_result`, damit sie sich
 //! isoliert gegen einen `ProfileStore`/`CredentialStore` testen lässt.
 
+use chrono::Utc;
+
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 
-use crate::dto::{DeleteServerResult, ServerDto};
+use crate::dto::{DeleteServerResult, ServerDto, ServerInput};
 use crate::error::CommandResult;
-use crate::server_credentials::{clear_sudo_password, delete_auth_method_secrets};
+use crate::server_credentials::{
+    clear_sudo_password, delete_all_possible_server_secrets, delete_auth_method_secrets,
+    resolve_auth_method, resolve_sudo_password,
+};
+
+/// Der volle `create_server`-Ablauf (Spec 0047, Fund A2), losgelöst von
+/// `tauri::State` — analog zu [`delete_server`] unten (das schon dem
+/// Spec-0046-Muster folgt, das diese Spec explizit als Vorbild nennt).
+/// `commands::create_server` ist nur noch ein dünner Wrapper (den
+/// lokalen-Jump-Host-Ausschluss ausgenommen, der vor jedem Store-Zugriff
+/// greift und nichts in den Keychain schreibt).
+///
+/// **Rollback-Garantie**: schlägt irgendein Schritt fehl — `resolve_auth_
+/// method` selbst (kann bei `PrivateKey`/`Certificate` bereits den ersten
+/// von zwei Slots geschrieben haben, bevor der zweite scheitert, s.
+/// dortiger Kommentar), `resolve_sudo_password`, oder der abschließende
+/// `ProfileStore::create_server`-DB-Insert — werden ALLE Keychain-Slots
+/// abgeräumt, die dieser Aufruf potenziell beschrieben haben könnte
+/// (`delete_all_possible_server_secrets`), bevor der Fehler zurückgeht.
+/// Kein verwaister Eintrag für eine `ServerId`, die es nicht (mehr) gibt.
+pub async fn create_server(
+    store: &dyn ProfileStore,
+    credential_store: &(dyn CredentialStore + Send + Sync),
+    input: ServerInput,
+) -> CommandResult<ServerId> {
+    let id = ServerId::new();
+
+    let auth = match resolve_auth_method(credential_store, id, input.auth, None) {
+        Ok(auth) => auth,
+        Err(err) => {
+            delete_all_possible_server_secrets(credential_store, id);
+            return Err(err);
+        }
+    };
+    if let Err(err) = resolve_sudo_password(credential_store, id, input.sudo_password) {
+        delete_all_possible_server_secrets(credential_store, id);
+        return Err(err);
+    }
+
+    let now = Utc::now();
+    let server = Server {
+        id,
+        name: input.name,
+        host: input.host,
+        port: input.port,
+        username: input.username,
+        group_id: input.group_id,
+        tags: input.tags,
+        auth,
+        notes: String::new(),
+        jump_host: input.jump_host,
+        post_ingest_policy: input.post_ingest_policy,
+        ai_injection_check_enabled: input.ai_injection_check_enabled,
+        created_at: now,
+        updated_at: now,
+    };
+
+    if let Err(err) = store.create_server(&server).await {
+        delete_all_possible_server_secrets(credential_store, id);
+        return Err(err.into());
+    }
+    Ok(id)
+}
 
 /// Baut die Vorschau/das Ergebnis von `delete_server` (Spec 0046, Fund 1):
 /// der zu löschende Server selbst (dessen `authKind`/`hasSudoPassword` dem
@@ -211,6 +275,83 @@ mod tests {
         assert_eq!(
             orphaned.jump_host, None,
             "abhängiger Server verliert nur die Jump-Host-Referenz, wird nicht mitgelöscht"
+        );
+    }
+
+    fn password_input(password_value: &str, sudo_password: &str) -> ServerInput {
+        ServerInput {
+            name: "target".to_string(),
+            host: "example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: crate::dto::AuthMethodInput::Password {
+                value: Some(password_value.to_string()),
+            },
+            jump_host: None,
+            sudo_password: Some(sudo_password.to_string()),
+            post_ingest_policy: Default::default(),
+            ai_injection_check_enabled: false,
+        }
+    }
+
+    /// Spec 0047, Fund A2: DB-Insert schlägt fehl, NACHDEM sowohl die
+    /// Auth-Methode (Passwort) als auch das Sudo-Passwort bereits im
+    /// Keychain standen — beide müssen zurückgerollt werden, nicht nur die
+    /// Auth-Methode (der ursprüngliche `commands::create_server`-Code rief
+    /// nur `delete_auth_method_secrets` im Fehlerfall auf, nie
+    /// `clear_sudo_password` — das Sudo-Passwort blieb verwaist).
+    #[tokio::test]
+    async fn test_create_server_rolls_back_all_secrets_on_db_insert_failure() {
+        let store = InMemoryProfileStore::new().with_failing_create_server();
+        let credentials = InMemoryCredentialStore::new();
+
+        let result = create_server(&store, &credentials, password_input("secret", "hunter2")).await;
+
+        assert!(result.is_err());
+        assert!(
+            credentials.secrets.lock().unwrap().is_empty(),
+            "nach einem fehlgeschlagenen create_server darf kein Keychain-Eintrag \
+             übrig bleiben (weder Passwort noch Sudo-Passwort), war aber: {:?}",
+            credentials
+                .secrets
+                .lock()
+                .unwrap()
+                .keys()
+                .collect::<Vec<_>>()
+        );
+    }
+
+    /// Gegenprobe zum selben Fund: das Sudo-Passwort-`set()` schlägt fehl,
+    /// NACHDEM die Auth-Methode (Passwort) bereits erfolgreich geschrieben
+    /// wurde — dieser Pfad erreicht den DB-Insert gar nicht erst
+    /// (`resolve_sudo_password` gibt vorher `Err` zurück), trotzdem darf
+    /// das bereits geschriebene Passwort-Secret nicht verwaist zurück-
+    /// bleiben. Deckt den zweiten, subtileren Leck-Pfad ab, den die reine
+    /// "räum bei DB-Fehler die Auth-Methode auf"-Fassung nicht sah.
+    #[tokio::test]
+    async fn test_create_server_rolls_back_auth_secret_when_sudo_password_write_fails() {
+        let store = InMemoryProfileStore::new();
+        let credentials = InMemoryCredentialStore::new().with_failing_set_for_slot("sudo_password");
+
+        let result = create_server(&store, &credentials, password_input("secret", "hunter2")).await;
+
+        assert!(result.is_err());
+        assert!(
+            credentials.secrets.lock().unwrap().is_empty(),
+            "das bereits geschriebene Passwort-Secret darf nach dem fehlgeschlagenen \
+             Sudo-Passwort-Write nicht übrig bleiben, war aber: {:?}",
+            credentials
+                .secrets
+                .lock()
+                .unwrap()
+                .keys()
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            store.servers.lock().unwrap().is_empty(),
+            "bei einem Fehler vor dem DB-Insert darf keine Server-Zeile entstehen"
         );
     }
 }

@@ -260,6 +260,34 @@ pub fn delete_auth_method_secrets(credential_store: &dyn CredentialStore, auth: 
     }
 }
 
+/// Spec 0047, Fund A2: räumt bei einem fehlgeschlagenen `create_server`
+/// **alle** Keychain-Slots ab, die dieser Aufruf potenziell beschrieben
+/// haben könnte — unabhängig davon, an welcher Stelle genau der Fehler
+/// auftrat (`resolve_auth_method` selbst kann bei `PrivateKey`/
+/// `Certificate` bereits den ersten Slot geschrieben haben, bevor der
+/// zweite fehlschlägt, s. dortiger Kommentar; ebenso kann das
+/// Sudo-Passwort vor einem späteren DB-Fehler bereits gestanden haben).
+/// Sicher, weil `server_id` bei `create_server` immer frisch erzeugt wird
+/// (`ServerId::new()`) — unter dieser ID kann nichts Legitimes stehen
+/// außer dem, was genau dieser (fehlgeschlagene) Aufruf selbst geschrieben
+/// hat. Best-effort wie `delete_auth_method_secrets`: ein bereits
+/// fehlender Slot ist kein Fehler.
+pub fn delete_all_possible_server_secrets(
+    credential_store: &dyn CredentialStore,
+    server_id: ServerId,
+) {
+    for slot in [
+        "password",
+        "private_key",
+        "passphrase",
+        "certificate",
+        "certificate_key",
+        "sudo_password",
+    ] {
+        let _ = credential_store.delete(&credential_ref(server_id, slot));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

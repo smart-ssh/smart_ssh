@@ -25,6 +25,12 @@ pub struct InMemoryProfileStore {
     pub groups: Mutex<HashMap<GroupId, Group>>,
     pub servers: Mutex<HashMap<ServerId, Server>>,
     pub note_revisions: Mutex<Vec<NoteRevision>>,
+    /// Spec 0047, Fund A2: lässt `create_server` deterministisch
+    /// fehlschlagen (simuliert einen DB-Fehler NACH bereits geschriebenen
+    /// Keychain-Secrets), damit der Keychain-Rollback-Pfad in
+    /// `servers::create_server` gegen einen echten Fehler getestet werden
+    /// kann, statt nur den Erfolgsfall abzudecken.
+    pub fail_create_server: bool,
 }
 
 impl InMemoryProfileStore {
@@ -39,6 +45,11 @@ impl InMemoryProfileStore {
 
     pub fn with_server(self, server: Server) -> Self {
         self.servers.lock().unwrap().insert(server.id, server);
+        self
+    }
+
+    pub fn with_failing_create_server(mut self) -> Self {
+        self.fail_create_server = true;
         self
     }
 }
@@ -126,6 +137,11 @@ impl ProfileStore for InMemoryProfileStore {
     }
 
     async fn create_server(&self, server: &Server) -> ProfileResult<()> {
+        if self.fail_create_server {
+            return Err(ProfileError::Backend(
+                "simulierter DB-Fehler (Test)".to_string(),
+            ));
+        }
         self.servers
             .lock()
             .unwrap()
@@ -202,6 +218,14 @@ pub struct InMemoryCredentialStore {
     /// Feld/`AiProvider`-Instanz) bedient wird, statt erneut den Store zu
     /// befragen.
     get_calls: Mutex<usize>,
+    /// Spec 0047, Fund A2: lässt `set()` für jeden Ref fehlschlagen, dessen
+    /// Slot-Suffix (z. B. `:sudo_password`) hierauf passt — Suffix statt
+    /// exaktem Ref, weil `create_server` seine `ServerId` intern frisch
+    /// erzeugt (Test kennt die konkrete ID vorab nicht). Simuliert einen
+    /// Keychain-Fehler NACH bereits erfolgreich geschriebenen anderen
+    /// Slots (z. B. das Sudo-Passwort nach einer bereits gespeicherten
+    /// Auth-Methode) — für den Rollback-Test in `servers::create_server`.
+    fail_set_for_slot_suffix: Option<String>,
 }
 
 impl InMemoryCredentialStore {
@@ -214,6 +238,14 @@ impl InMemoryCredentialStore {
             r.as_str().to_string(),
             SecretString::from(value.to_string()),
         );
+        self
+    }
+
+    /// `slot`, z. B. `"sudo_password"` — matcht jeden Ref, dessen letztes
+    /// `:`-getrenntes Segment gleich `slot` ist (s. `credential_ref` in
+    /// `server_credentials.rs`: `"server:{id}:{slot}"`).
+    pub fn with_failing_set_for_slot(mut self, slot: &str) -> Self {
+        self.fail_set_for_slot_suffix = Some(format!(":{slot}"));
         self
     }
 
@@ -234,6 +266,15 @@ impl CredentialStore for InMemoryCredentialStore {
     }
 
     fn set(&self, r: &CredentialRef, value: SecretString) -> CredentialResult<()> {
+        if self
+            .fail_set_for_slot_suffix
+            .as_deref()
+            .is_some_and(|suffix| r.as_str().ends_with(suffix))
+        {
+            return Err(CredentialError::Backend(
+                "simulierter Keychain-Fehler (Test)".to_string(),
+            ));
+        }
         self.secrets
             .lock()
             .unwrap()

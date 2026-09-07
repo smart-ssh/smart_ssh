@@ -42,8 +42,7 @@ use crate::events::{
 use crate::groups::{compute_delete_group_result, validate_no_cycle};
 use crate::orchestration::run_chat_turn;
 use crate::server_credentials::{
-    clear_sudo_password, delete_auth_method_secrets, resolve_auth_method, resolve_sudo_password,
-    sudo_password_credential_ref,
+    clear_sudo_password, resolve_auth_method, resolve_sudo_password, sudo_password_credential_ref,
 };
 use crate::session::{
     history_contains_untrusted_content, spawn_terminal_actor, Session, TerminalCommand,
@@ -1586,43 +1585,21 @@ fn reject_local_jump_host(jump_host: Option<ServerId>) -> CommandResult<()> {
 
 /// Spec 0008, Abschnitt 4: `CredentialStore` zuerst, dann die DB-Zeile —
 /// dieselbe Reihenfolge/Begründung wie `add_ai_provider` (Spec 0007,
-/// Abschnitt 8.2).
+/// Abschnitt 8.2). Spec 0047, Fund A2: die eigentliche Logik samt
+/// vollständigem Keychain-Rollback bei jedem Fehler lebt in
+/// `crate::servers::create_server`, testbar ohne `tauri::State`.
 #[tauri::command]
 pub async fn create_server(
     state: State<'_, AppState>,
     input: ServerInput,
 ) -> CommandResult<ServerId> {
     reject_local_jump_host(input.jump_host)?;
-    let id = ServerId::new();
-    let auth = resolve_auth_method(state.credential_store.as_ref(), id, input.auth, None)?;
-    resolve_sudo_password(state.credential_store.as_ref(), id, input.sudo_password)?;
-
-    let now = Utc::now();
-    let server = Server {
-        id,
-        name: input.name,
-        host: input.host,
-        port: input.port,
-        username: input.username,
-        group_id: input.group_id,
-        tags: input.tags,
-        auth,
-        notes: String::new(),
-        jump_host: input.jump_host,
-        post_ingest_policy: input.post_ingest_policy,
-        ai_injection_check_enabled: input.ai_injection_check_enabled,
-        created_at: now,
-        updated_at: now,
-    };
-
-    if let Err(err) = state.profile_store.create_server(&server).await {
-        // Best-effort-Aufräumen, analog zu `add_ai_provider`: ohne diesen
-        // Rückbau blieben bei einem DB-Fehler verwaiste Credential-
-        // Einträge im Keychain zurück.
-        delete_auth_method_secrets(state.credential_store.as_ref(), &server.auth);
-        return Err(err.into());
-    }
-    Ok(id)
+    crate::servers::create_server(
+        state.profile_store.as_ref(),
+        state.credential_store.as_ref(),
+        input,
+    )
+    .await
 }
 
 #[tauri::command]
