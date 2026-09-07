@@ -106,7 +106,14 @@ impl SqliteProfileStore {
             .connect_with(options)
             .await?;
 
+        // Spec 0047, Fund B1: eigene Log-Zeilen für Start/Ende der
+        // Migration — ein von hier aus für einen Tester nicht
+        // unterscheidbarer Fehler (hängt die Migration, oder wurde die
+        // Verbindung selbst nie aufgebaut?) lässt sich sonst aus dem Log
+        // nicht mehr auseinanderhalten.
+        tracing::info!("running database migrations");
         sqlx::migrate!().run(&pool).await?;
+        tracing::info!("database migrations complete");
 
         Ok(Self { pool })
     }

@@ -62,8 +62,10 @@ use crate::state::AppState;
 /// Async-Runtime (jedes `#[tauri::command]` ist selbst `async fn`).
 fn build_app_state(wiring: &Wiring) -> AppState {
     let db_path = default_db_path();
+    tracing::info!(data_path = %db_path.display(), "connecting to SQLite database");
     let profile_store = tauri::async_runtime::block_on(SqliteProfileStore::connect(&db_path))
         .expect("SQLite-Datenbank konnte nicht geöffnet/migriert werden");
+    tracing::info!("SQLite database connected");
     let ai_provider_store = profile_store.ai_provider_store();
     let policy_store = profile_store.policy_store();
 
@@ -81,10 +83,12 @@ fn build_app_state(wiring: &Wiring) -> AppState {
     // Persistenz/Prompt-Historie) — degradiert bei einem Fehler zu `None`
     // für beide betroffenen Stores (s. `AppState::prompt_history_store`/
     // `chat_session_store`-Doc-Kommentare) statt die ganze App abzubrechen.
+    tracing::info!("resolving chat-content encryption key from OS keychain");
     let credential_store = KeyringCredentialStore::new();
     let (prompt_history_store, chat_session_store) =
         match ssh_manager_core::crypto::resolve_or_generate_key(&credential_store) {
             Ok(chat_content_key) => {
+                tracing::info!("chat-content encryption key resolved");
                 let chat_content_cipher: Arc<dyn ssh_manager_core::crypto::ContentCipher> =
                     Arc::new(ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(
                         &chat_content_key,
@@ -114,8 +118,10 @@ fn build_app_state(wiring: &Wiring) -> AppState {
         .parent()
         .expect("db_path hat immer ein Elternverzeichnis (s. default_db_path)")
         .join("host_keys.json");
+    tracing::info!(path = %host_key_path.display(), "loading host-key store");
     let host_key_store = FileHostKeyStore::load(host_key_path)
         .expect("Host-Key-Speicher konnte nicht geladen werden");
+    tracing::info!("host-key store loaded");
 
     AppState {
         sessions: SessionManager::new(),
@@ -155,7 +161,33 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // init_logging`-Doc-Kommentar) — `run()` unten blockiert bis zum
     // Beenden der App, danach ist ein finaler Flush ohnehin irrelevant.
     let _log_guard = crate::logging::init_logging();
-    tracing::info!("Smart SSH startet");
+    // Spec 0047, Fund B1: erste Logzeile enthält App-Version, OS/Plattform
+    // und den aufgelösten Datenpfad — genau die drei Angaben, die ein
+    // Tester beim Melden eines "geht nicht" sonst manuell mitteilen
+    // müsste. `context` (mit `package_info()`) liegt bereits vor, ohne
+    // dass dafür irgendetwas geöffnet/verbunden werden muss.
+    let db_path = default_db_path();
+    tracing::info!(
+        version = %context.package_info().version,
+        os = std::env::consts::OS,
+        arch = std::env::consts::ARCH,
+        data_path = %db_path.display(),
+        "Smart SSH startet"
+    );
+
+    // Spec 0047, Fund B1: ohne diesen Hook verschwindet ein Panic beim
+    // Start (z. B. `build_app_state`s DB-/Host-Key-`.expect(...)`) spurlos
+    // aus Sicht der Logdatei — der Standard-Panic-Hook schreibt nur nach
+    // stderr, das bei einem per Doppelklick gestarteten `.app`-Bundle ohne
+    // angehängtes Terminal niemand sieht. `set_hook` ERSETZT den
+    // Standard-Hook, deshalb wird er hier explizit mit aufgerufen (nicht
+    // nur geloggt) — beim Starten aus einem Terminal (Entwicklung) bleibt
+    // die gewohnte Konsolenausgabe erhalten.
+    let default_panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!(panic = %info, "app startup panicked");
+        default_panic_hook(info);
+    }));
 
     let app_state = build_app_state(&wiring);
     let plugins = wiring.plugins;
@@ -196,6 +228,15 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         .setup(|app| {
             use tauri::Manager;
             use tauri_plugin_decoration::WebviewWindowExt;
+
+            // Spec 0047, Fund B1: letzter Startschritt — steht dieser
+            // Eintrag im Log, ist die App bis zum Fenster durchgestartet;
+            // fehlt er, bricht der Start irgendwo davor (DB/Keychain/
+            // Plugin-Setup) ab, was die Schritte oben eingrenzen.
+            tracing::info!(
+                window_found = app.get_webview_window("main").is_some(),
+                "app setup complete, creating main window"
+            );
 
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
