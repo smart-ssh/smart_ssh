@@ -17,6 +17,14 @@ Erste öffentliche Testversion.
 - Word-Export als erstes Pro-Modul **(Pro)**.
 - Lizenz-Eingabe-UI mit Live-Aktivierung **(Pro)**.
 
+### Security
+- Ressourcen-Caps gegen feindliche/fehlerhafte Server: ein Output-Cap, der
+  vorher erst nach vollständigem Puffern griff, begrenzt jetzt bereits
+  während des Streamings; ein expliziter Rekursions-Cap gegen
+  verschachtelte Command-Substitution.
+- Integrität der Fencing-Markierungen für nicht vertrauenswürdigen Inhalt
+  im KI-Kontext abgesichert.
+
 ### Fixed
 - Härtungsrunde für die Testphase: verwaiste Keychain-Einträge nach einem
   fehlgeschlagenen Server-Anlegen werden jetzt zuverlässig zurückgerollt,
@@ -24,12 +32,6 @@ Erste öffentliche Testversion.
   gestartet, …) nennen jetzt den nächsten Schritt statt roher Technik, und
   ein Absturz beim Start landet jetzt garantiert in der Logdatei statt
   spurlos zu verschwinden.
-- Ressourcen-Caps gegen feindliche/fehlerhafte Server: ein Output-Cap, der
-  vorher erst nach vollständigem Puffern griff, begrenzt jetzt bereits
-  während des Streamings; ein expliziter Rekursions-Cap gegen
-  verschachtelte Command-Substitution.
-- Integrität der Fencing-Markierungen für nicht vertrauenswürdigen Inhalt
-  im KI-Kontext abgesichert.
 
 ## [0.3.0] — Initial Early Access
 
