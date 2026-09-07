@@ -9,7 +9,7 @@
 
 use secrecy::SecretString;
 
-use ssh_manager_core::profiles::{AuthMethod, CredentialRef, CredentialStore};
+use ssh_manager_core::profiles::{AuthMethod, CredentialError, CredentialRef, CredentialStore};
 use ssh_manager_core::shared::ServerId;
 
 use crate::dto::AuthMethodInput;
@@ -284,7 +284,24 @@ pub fn delete_all_possible_server_secrets(
         "certificate_key",
         "sudo_password",
     ] {
-        let _ = credential_store.delete(&credential_ref(server_id, slot));
+        // Spec-Reviewer-Fund (Spec 0047, Fund A2): ein fehlendes `NotFound`
+        // ist erwartet (der Slot wurde nie geschrieben) und bleibt still.
+        // Ein `Backend`-Fehler (z. B. gesperrte/verweigerte macOS-Keychain
+        // während des Rollbacks selbst) ließ einen orphaned Eintrag bisher
+        // komplett spurlos zurück — das kollidiert mit der B1/B2-Invariante
+        // dieser selben Spec ("nie spurlos"). Kein Fehler-Return hier (das
+        // Rollback bleibt best-effort, s. Doc-Kommentar oben), aber
+        // mindestens eine Logzeile.
+        if let Err(CredentialError::Backend(msg)) =
+            credential_store.delete(&credential_ref(server_id, slot))
+        {
+            tracing::warn!(
+                server_id = %server_id.0,
+                slot,
+                error = %msg,
+                "Keychain-Rollback fehlgeschlagen: möglicherweise verwaister Eintrag"
+            );
+        }
     }
 }
 

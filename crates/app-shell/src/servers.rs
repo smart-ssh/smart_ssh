@@ -354,4 +354,62 @@ mod tests {
             "bei einem Fehler vor dem DB-Insert darf keine Server-Zeile entstehen"
         );
     }
+
+    fn certificate_input(cert_value: &str, key_value: &str) -> ServerInput {
+        ServerInput {
+            name: "target".to_string(),
+            host: "example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: crate::dto::AuthMethodInput::Certificate {
+                cert_content: Some(cert_value.to_string()),
+                key_content: Some(key_value.to_string()),
+            },
+            jump_host: None,
+            sudo_password: None,
+            post_ingest_policy: Default::default(),
+            ai_injection_check_enabled: false,
+        }
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts, ERHÖHT): deckt den in
+    /// `server_credentials.rs`s eigenem Doc-Kommentar genannten, aber bis
+    /// dahin ungetesteten zweiten Teil-Write-Pfad ab — `Certificate`
+    /// schreibt zuerst den `certificate`-Slot, dann erst den
+    /// `certificate_key`-Slot (s. `resolve_auth_method`). Schlägt der
+    /// zweite Write fehl, muss der bereits geschriebene `certificate`-Slot
+    /// zurückgerollt werden, nicht nur der (hier gar nicht erst
+    /// geschriebene) `certificate_key`-Slot.
+    #[tokio::test]
+    async fn test_create_server_rolls_back_certificate_secret_when_certificate_key_write_fails() {
+        let store = InMemoryProfileStore::new();
+        let credentials =
+            InMemoryCredentialStore::new().with_failing_set_for_slot("certificate_key");
+
+        let result = create_server(
+            &store,
+            &credentials,
+            certificate_input("cert-pem", "key-pem"),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(
+            credentials.secrets.lock().unwrap().is_empty(),
+            "das bereits geschriebene Zertifikat-Secret darf nach dem fehlgeschlagenen \
+             Zertifikats-Key-Write nicht übrig bleiben, war aber: {:?}",
+            credentials
+                .secrets
+                .lock()
+                .unwrap()
+                .keys()
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            store.servers.lock().unwrap().is_empty(),
+            "bei einem Fehler vor dem DB-Insert darf keine Server-Zeile entstehen"
+        );
+    }
 }
