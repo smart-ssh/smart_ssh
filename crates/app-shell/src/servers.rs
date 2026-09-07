@@ -374,6 +374,60 @@ mod tests {
         }
     }
 
+    fn private_key_input(key_value: &str, passphrase_value: &str) -> ServerInput {
+        ServerInput {
+            name: "target".to_string(),
+            host: "example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: crate::dto::AuthMethodInput::PrivateKey {
+                key_content: Some(key_value.to_string()),
+                passphrase: Some(passphrase_value.to_string()),
+            },
+            jump_host: None,
+            sudo_password: None,
+            post_ingest_policy: Default::default(),
+            ai_injection_check_enabled: false,
+        }
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts, ERHÖHT): dieselbe
+    /// Zwei-Slot-Teil-Write-Situation wie bei `Certificate` (s. Test unten),
+    /// nur für `PrivateKey` — der Key-Slot wird zuerst geschrieben, die
+    /// Passphrase erst danach; schlägt deren Write fehl, darf der bereits
+    /// geschriebene `private_key`-Slot nicht verwaist zurückbleiben.
+    #[tokio::test]
+    async fn test_create_server_rolls_back_private_key_secret_when_passphrase_write_fails() {
+        let store = InMemoryProfileStore::new();
+        let credentials = InMemoryCredentialStore::new().with_failing_set_for_slot("passphrase");
+
+        let result = create_server(
+            &store,
+            &credentials,
+            private_key_input("key-pem", "hunter2"),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(
+            credentials.secrets.lock().unwrap().is_empty(),
+            "das bereits geschriebene Private-Key-Secret darf nach dem fehlgeschlagenen \
+             Passphrase-Write nicht übrig bleiben, war aber: {:?}",
+            credentials
+                .secrets
+                .lock()
+                .unwrap()
+                .keys()
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            store.servers.lock().unwrap().is_empty(),
+            "bei einem Fehler vor dem DB-Insert darf keine Server-Zeile entstehen"
+        );
+    }
+
     /// spec-reviewer-Fund (Review dieses Schritts, ERHÖHT): deckt den in
     /// `server_credentials.rs`s eigenem Doc-Kommentar genannten, aber bis
     /// dahin ungetesteten zweiten Teil-Write-Pfad ab — `Certificate`
