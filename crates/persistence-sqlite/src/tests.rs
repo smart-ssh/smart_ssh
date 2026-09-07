@@ -396,10 +396,16 @@ async fn test_foreign_keys_pragma_is_enabled_on_the_connection() {
 /// kopieren-Muster, das bei einer falschen Spaltenliste stillschweigend
 /// Daten verlieren könnte. Alle übrigen Migrationen (0002-0008) sind reine
 /// `CREATE TABLE`/`ALTER TABLE ADD COLUMN`, strukturell nicht
-/// datenverlust-fähig — für die reicht der Nachweis über `groups`/
-/// `servers`/`server_tags`/`note_revisions` (via der normalen
-/// `ProfileStore`-API, exerciert `0001`-`0008` bereits vollständig), ohne
-/// jede einzelne Tabelle separat aufzuführen.
+/// datenverlust-fähig — trotzdem belegt dieser Test seit dem
+/// Spec-0047-Review-Pass mindestens eine Zeile in jeder Tabelle mit
+/// eigenem Anwendungsdaten-Charakter, nicht nur `groups`/`servers`/
+/// `server_tags`/`note_revisions`: die Spec nennt "Regeln" ausdrücklich,
+/// `filter_rules` (0003) ist zudem die sicherheitsrelevanteste Tabelle im
+/// gesamten Schema — eine künftige create-copy-drop-rename-Migration
+/// darauf, die eine Spalte vergisst, verlöre sonst still `deny`-Regeln,
+/// ohne dass dieser Test es bemerkte. `ai_provider_configs` (0002) ergänzt
+/// dieselbe Absicherung für die Provider-Konfiguration (nur die
+/// `credential_ref`-Referenz, nie ein Klartext-Secret).
 ///
 /// Danach öffnet ein regulärer `SqliteProfileStore::connect()` (der volle,
 /// zur Compile-Zeit eingebettete `sqlx::migrate!()`-Satz) dieselbe Datei
@@ -471,6 +477,49 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
         created_at: Utc::now(),
     };
     old_store.record_note_revision(&note).await.unwrap();
+
+    // Spec-Reviewer-Fund (Spec 0047, Review dieses Schritts): die Spec
+    // nennt "Regeln" (`filter_rules`) ausdrücklich als zu schützende Daten
+    // — bislang war nur über die vier oben genannten Tabellen abgesichert,
+    // dass `0001`-`0008` (reine `CREATE`/`ADD COLUMN`) strukturell nicht
+    // datenverlust-fähig sind, ohne `filter_rules`/`ai_provider_configs`
+    // selbst je in einer Zeile zu belegen. Beide Tabellen existieren
+    // bereits seit `0002`/`0003`, also lange vor der Schema-Grenze dieses
+    // Tests — rohes SQL wie bei `chat_sessions` oben statt der
+    // `SqlitePolicyStore`/`SqliteAiProviderStore`-APIs, da die Testdaten
+    // hier absichtlich exakt das Zeilenformat einer echten Installation
+    // auf diesem älteren Schema-Stand abbilden sollen. `credential_ref`
+    // ist bewusst nur eine Referenz-Zeichenkette, kein Klartext-Secret
+    // (das echte Secret läge im Keychain, nicht in dieser DB).
+    let rule_id = "test-rule-deny-rm-rf";
+    sqlx::query(
+        "INSERT INTO filter_rules \
+         (id, pattern_type, pattern_value, action, scope_type, scope_value, priority, \
+          created_at, updated_at) \
+         VALUES (?, 'exact', 'rm -rf /', 'deny', 'global', NULL, 100, ?, ?)",
+    )
+    .bind(rule_id)
+    .bind(Utc::now().to_rfc3339())
+    .bind(Utc::now().to_rfc3339())
+    .execute(&old_pool)
+    .await
+    .unwrap();
+
+    let provider_id = "test-provider-anthropic";
+    let provider_credential_ref = "app:ai_provider:test-provider-anthropic:api_key";
+    sqlx::query(
+        "INSERT INTO ai_provider_configs \
+         (id, provider_type, display_name, base_url, model, \
+          supports_native_tool_calling, credential_ref, is_active, created_at, updated_at) \
+         VALUES (?, 'anthropic', 'Prod Claude', NULL, 'claude-sonnet-5', 1, ?, 0, ?, ?)",
+    )
+    .bind(provider_id)
+    .bind(provider_credential_ref)
+    .bind(Utc::now().to_rfc3339())
+    .bind(Utc::now().to_rfc3339())
+    .execute(&old_pool)
+    .await
+    .unwrap();
 
     let chat_session_id = Uuid::new_v4();
     sqlx::query(
@@ -564,4 +613,25 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
             .await
             .unwrap();
     assert_eq!(migrated_prompt_content, prompt_history_plaintext.as_bytes());
+
+    // Spec-Reviewer-Fund (Spec 0047, Review dieses Schritts): die
+    // sicherheitsrelevanteste Tabelle — eine `deny`-Regel darf einen
+    // Versions-Sprung nicht stillschweigend verlieren.
+    let (fetched_action, fetched_pattern): (String, String) =
+        sqlx::query_as("SELECT action, pattern_value FROM filter_rules WHERE id = ?")
+            .bind(rule_id)
+            .fetch_one(&upgraded.pool)
+            .await
+            .unwrap();
+    assert_eq!(fetched_action, "deny");
+    assert_eq!(fetched_pattern, "rm -rf /");
+
+    let (fetched_model, fetched_credential_ref): (String, String) =
+        sqlx::query_as("SELECT model, credential_ref FROM ai_provider_configs WHERE id = ?")
+            .bind(provider_id)
+            .fetch_one(&upgraded.pool)
+            .await
+            .unwrap();
+    assert_eq!(fetched_model, "claude-sonnet-5");
+    assert_eq!(fetched_credential_ref, provider_credential_ref);
 }
