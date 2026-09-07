@@ -5,7 +5,7 @@
 // seinen Port unverändert.
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
@@ -111,13 +111,22 @@ describe("ServerList port display (Spec 0046, Fund 5)", () => {
 });
 
 describe("ServerList connect-error translation (Spec 0047, Fund D2)", () => {
+  afterEach(() => {
+    void testI18n.changeLanguage("de");
+  });
+
   it("translates a coded backend connect error instead of showing the raw Display text", async () => {
     // Vor dem Fix hing an `connect_session`s `SshError` kein `code` (der
     // blanket `?` in `commands.rs` verwarf ihn) — das Frontend zeigte den
     // rohen, hart-deutschen `Display`-Text inkl. eingebettetem OS-
-    // Fehlertext, unabhängig von der UI-Sprache. Jetzt trägt der Fehler
-    // `code: "SSH_CONNECTION_FAILED"`, und `describeError` (s.
-    // `ServerList.tsx`) übersetzt darüber.
+    // Fehlertext, UNABHÄNGIG von der UI-Sprache. `lng: "en"` beweist genau
+    // das: ohne den Fix stünde hier der deutsche Rohtext in einer
+    // englischen UI. Jetzt trägt der Fehler `code: "SSH_CONNECTION_FAILED"`,
+    // und `describeError` (s. `ServerList.tsx`) übersetzt darüber — inkl.
+    // der von Spec 0047, Fund D2 verlangten Handlungsanleitung ("ist der
+    // Host erreichbar?" / "is the host reachable?"), nicht nur einer
+    // reinen Zustandsbeschreibung.
+    await testI18n.changeLanguage("en");
     vi.mocked(connect).mockRejectedValue({
       message: "Verbindung fehlgeschlagen: Connection refused (os error 61)",
       code: "SSH_CONNECTION_FAILED",
@@ -128,7 +137,12 @@ describe("ServerList connect-error translation (Spec 0047, Fund D2)", () => {
 
     fireEvent.click(screen.getByText("prod-1"));
 
-    await waitFor(() => expect(screen.getByText("Verbindung fehlgeschlagen")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByText("Connection failed – is the host reachable (address, port, network)?"),
+      ).toBeInTheDocument(),
+    );
     expect(screen.queryByText(/os error 61/)).toBeNull();
+    expect(screen.queryByText(/Verbindung fehlgeschlagen/)).toBeNull();
   });
 });
