@@ -380,3 +380,188 @@ async fn test_foreign_keys_pragma_is_enabled_on_the_connection() {
          still nicht mehr"
     );
 }
+
+/// Spec 0047, Fund A3: `test_migrations_are_idempotent_for_same_db_file`
+/// oben belegt nur, dass ein zweiter `connect()` auf einer bereits
+/// VOLLSTÄNDIG migrierten Datei nicht bricht — nicht, dass ein echter
+/// N→N+1-Durchlauf auf einer Datei mit einem ÄLTEREN Schema-Stand UND
+/// vorhandenen Daten diese Daten erhält. Genau das simuliert dieser Test:
+/// eine echte DB-Datei wird zunächst nur mit den Migrationen bis
+/// einschließlich `0008_chat_sessions.sql` aufgebaut (der Stand, auf dem
+/// `chat_messages.content`/`prompt_history.content` noch reines TEXT sind,
+/// nicht die seit `0009`/`0010` genutzte BLOB-Spalte) und mit Testdaten in
+/// jeder betroffenen Tabelle befüllt — genau die beiden riskanten
+/// Migrationen in diesem Projekt: SQLite kennt kein `ALTER COLUMN ...
+/// TYPE`, `0009`/`0010` nutzen daher das Tabelle-neu-anlegen-und-Zeilen-
+/// kopieren-Muster, das bei einer falschen Spaltenliste stillschweigend
+/// Daten verlieren könnte. Alle übrigen Migrationen (0002-0008) sind reine
+/// `CREATE TABLE`/`ALTER TABLE ADD COLUMN`, strukturell nicht
+/// datenverlust-fähig — für die reicht der Nachweis über `groups`/
+/// `servers`/`server_tags`/`note_revisions` (via der normalen
+/// `ProfileStore`-API, exerciert `0001`-`0008` bereits vollständig), ohne
+/// jede einzelne Tabelle separat aufzuführen.
+///
+/// Danach öffnet ein regulärer `SqliteProfileStore::connect()` (der volle,
+/// zur Compile-Zeit eingebettete `sqlx::migrate!()`-Satz) dieselbe Datei
+/// erneut — das wendet `0009`/`0010` auf die bereits vorhandenen Daten an
+/// — und der Test verifiziert, dass jede zuvor geschriebene Zeile
+/// unverändert lesbar ist.
+#[tokio::test]
+async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() {
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+
+    let dir = tempfile::tempdir().expect("temp dir sollte anlegbar sein");
+    let db_path = dir.path().join("upgrade-test.db");
+
+    // 1. Nur die Migrationen bis "0008" in ein temporäres Verzeichnis
+    // kopieren (Dateiname-Präfix reicht als Sortier-/Filterkriterium, alle
+    // vierstellig nullgepolstert) — ein separater `sqlx::migrate::Migrator`
+    // liest zur Laufzeit von Disk, anders als das `sqlx::migrate!()`-Makro
+    // in `store.rs`, das den kompletten, aktuellen Satz zur Compile-Zeit
+    // einbettet und sich daher nicht auf einen Teilstand einschränken
+    // lässt.
+    let real_migrations_dir =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let old_migrations_dir = tempfile::tempdir().expect("temp dir sollte anlegbar sein");
+    for entry in std::fs::read_dir(&real_migrations_dir).expect("migrations/ sollte lesbar sein") {
+        let entry = entry.expect("Verzeichniseintrag sollte lesbar sein");
+        let file_name = entry.file_name();
+        let name = file_name.to_string_lossy();
+        if name.len() >= 4 && &name[..4] <= "0008" {
+            std::fs::copy(entry.path(), old_migrations_dir.path().join(&*name))
+                .expect("Migrationsdatei sollte kopierbar sein");
+        }
+    }
+
+    let old_options = SqliteConnectOptions::new()
+        .filename(&db_path)
+        .create_if_missing(true)
+        .foreign_keys(true);
+    let old_pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(old_options)
+        .await
+        .expect("Verbindung zur alten Schema-Stufe sollte klappen");
+    sqlx::migrate::Migrator::new(old_migrations_dir.path())
+        .await
+        .expect("Teil-Migrator sollte sich aus den kopierten Dateien aufbauen lassen")
+        .run(&old_pool)
+        .await
+        .expect("Migrationen bis 0008 sollten sauber durchlaufen");
+
+    // 2. Testdaten auf diesem älteren Schema-Stand anlegen — `groups`/
+    // `servers`/`server_tags`/`note_revisions` über die normale
+    // `ProfileStore`-API (das Schema für alle vier existiert bereits seit
+    // 0001/0003), `chat_sessions`/`chat_messages`/`prompt_history` über
+    // rohes SQL mit reinem TEXT-Inhalt — genau das Format, das eine echte
+    // Installation auf diesem Schema-Stand tatsächlich geschrieben hätte
+    // (die BLOB-Spalte gibt es dort noch nicht).
+    let old_store = SqliteProfileStore {
+        pool: old_pool.clone(),
+    };
+    let group = make_group("Produktion", None);
+    old_store.create_group(&group).await.unwrap();
+    let server = make_server("web-01", Some(group.id), vec!["prod".to_string()]);
+    old_store.create_server(&server).await.unwrap();
+    let note = NoteRevision {
+        id: Uuid::new_v4(),
+        target: NoteTarget::Server(server.id),
+        content: "Notiz vor dem Upgrade".to_string(),
+        edited_by: NoteEditor::User,
+        created_at: Utc::now(),
+    };
+    old_store.record_note_revision(&note).await.unwrap();
+
+    let chat_session_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO chat_sessions (id, server_id, title, started_at, ended_at, ai_provider_id) \
+         VALUES (?, ?, ?, ?, NULL, NULL)",
+    )
+    .bind(chat_session_id.to_string())
+    .bind(server.id.0.to_string())
+    .bind("Alte Sitzung")
+    .bind(Utc::now().to_rfc3339())
+    .execute(&old_pool)
+    .await
+    .unwrap();
+
+    let chat_message_id = Uuid::new_v4();
+    let chat_message_plaintext = r#"{"Text":"Klartext vor der BLOB-Migration"}"#;
+    sqlx::query(
+        "INSERT INTO chat_messages (id, session_id, role, content_type, content, sequence, created_at) \
+         VALUES (?, ?, 'user', 'text', ?, 1, ?)",
+    )
+    .bind(chat_message_id.to_string())
+    .bind(chat_session_id.to_string())
+    .bind(chat_message_plaintext)
+    .bind(Utc::now().to_rfc3339())
+    .execute(&old_pool)
+    .await
+    .unwrap();
+
+    let prompt_history_id = Uuid::new_v4();
+    let prompt_history_plaintext = "ls -la /var/log";
+    sqlx::query(
+        "INSERT INTO prompt_history (id, server_id, content, created_at) VALUES (?, ?, ?, ?)",
+    )
+    .bind(prompt_history_id.to_string())
+    .bind(server.id.0.to_string())
+    .bind(prompt_history_plaintext)
+    .bind(Utc::now().to_rfc3339())
+    .execute(&old_pool)
+    .await
+    .unwrap();
+
+    old_pool.close().await;
+
+    // 3. Regulärer `connect()` mit dem vollen, aktuellen Migrationssatz —
+    // wendet 0009/0010 auf die vorhandenen Zeilen an.
+    let upgraded = SqliteProfileStore::connect(&db_path)
+        .await
+        .expect("der Aufstieg auf den aktuellen Schema-Stand darf nicht fehlschlagen");
+
+    // 4. Alles muss unverändert da sein.
+    let fetched_group = upgraded.get_group(&group.id).await.unwrap();
+    assert_eq!(fetched_group, group);
+
+    let fetched_server = upgraded.get_server(&server.id).await.unwrap();
+    assert_eq!(fetched_server.name, server.name);
+    assert_eq!(fetched_server.tags, vec!["prod".to_string()]);
+    assert_eq!(fetched_server.notes, "Notiz vor dem Upgrade");
+
+    let revisions = upgraded
+        .list_note_revisions(NoteTarget::Server(server.id))
+        .await
+        .unwrap();
+    assert_eq!(revisions.len(), 1);
+    assert_eq!(revisions[0].content, "Notiz vor dem Upgrade");
+
+    let session_title: String = sqlx::query_scalar("SELECT title FROM chat_sessions WHERE id = ?")
+        .bind(chat_session_id.to_string())
+        .fetch_one(&upgraded.pool)
+        .await
+        .unwrap();
+    assert_eq!(session_title, "Alte Sitzung");
+
+    // 0009 stellt NUR den Spaltentyp um (TEXT -> BLOB), kopiert die Bytes
+    // unverändert — der ehemalige Klartext muss byteidentisch in der neuen
+    // BLOB-Spalte stehen (die eigentliche Verschlüsselung ist eine
+    // separate, bereits eigenständig getestete Anwendungs-Routine, s.
+    // `prompt_history_store::migrate_legacy_plaintext_content`, läuft beim
+    // App-Start NACH dieser SQL-Migration).
+    let migrated_message_content: Vec<u8> =
+        sqlx::query_scalar("SELECT content FROM chat_messages WHERE id = ?")
+            .bind(chat_message_id.to_string())
+            .fetch_one(&upgraded.pool)
+            .await
+            .unwrap();
+    assert_eq!(migrated_message_content, chat_message_plaintext.as_bytes());
+
+    let migrated_prompt_content: Vec<u8> =
+        sqlx::query_scalar("SELECT content FROM prompt_history WHERE id = ?")
+            .bind(prompt_history_id.to_string())
+            .fetch_one(&upgraded.pool)
+            .await
+            .unwrap();
+    assert_eq!(migrated_prompt_content, prompt_history_plaintext.as_bytes());
+}
