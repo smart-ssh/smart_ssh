@@ -161,6 +161,28 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // init_logging`-Doc-Kommentar) — `run()` unten blockiert bis zum
     // Beenden der App, danach ist ein finaler Flush ohnehin irrelevant.
     let _log_guard = crate::logging::init_logging();
+
+    // Spec-Reviewer-Fund (Spec 0047, Review dieses Schritts): muss VOR dem
+    // ersten Aufruf installiert sein, der selbst panicken kann —
+    // `default_db_path()` unten hat ein `.expect(...)` (kein Home-/
+    // XDG-Verzeichnis auflösbar). Vorher stand der Hook erst nach diesem
+    // Aufruf, sodass genau dieser frühe Panic wieder spurlos nur nach
+    // stderr gegangen wäre — derselbe "spurlos verschwunden"-Fall, den
+    // dieser Hook eigentlich schließen soll. (Noch früher, vor
+    // `init_logging()` selbst, brächte nichts: ohne registrierten
+    // `tracing`-Subscriber ist `tracing::error!` ein stiller No-op — ein
+    // Panic in der Log-Verzeichnis-Auflösung selbst lässt sich prinzipiell
+    // nicht in die Logdatei schreiben, die dieser Aufruf gerade erst
+    // anlegen soll.) `set_hook` ERSETZT den Standard-Hook, deshalb wird er
+    // hier explizit mit aufgerufen (nicht nur geloggt) — beim Starten aus
+    // einem Terminal (Entwicklung) bleibt die gewohnte Konsolenausgabe
+    // erhalten.
+    let default_panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!(panic = %info, "app panicked");
+        default_panic_hook(info);
+    }));
+
     // Spec 0047, Fund B1: erste Logzeile enthält App-Version, OS/Plattform
     // und den aufgelösten Datenpfad — genau die drei Angaben, die ein
     // Tester beim Melden eines "geht nicht" sonst manuell mitteilen
@@ -174,20 +196,6 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         data_path = %db_path.display(),
         "Smart SSH startet"
     );
-
-    // Spec 0047, Fund B1: ohne diesen Hook verschwindet ein Panic beim
-    // Start (z. B. `build_app_state`s DB-/Host-Key-`.expect(...)`) spurlos
-    // aus Sicht der Logdatei — der Standard-Panic-Hook schreibt nur nach
-    // stderr, das bei einem per Doppelklick gestarteten `.app`-Bundle ohne
-    // angehängtes Terminal niemand sieht. `set_hook` ERSETZT den
-    // Standard-Hook, deshalb wird er hier explizit mit aufgerufen (nicht
-    // nur geloggt) — beim Starten aus einem Terminal (Entwicklung) bleibt
-    // die gewohnte Konsolenausgabe erhalten.
-    let default_panic_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        tracing::error!(panic = %info, "app startup panicked");
-        default_panic_hook(info);
-    }));
 
     let app_state = build_app_state(&wiring);
     let plugins = wiring.plugins;
