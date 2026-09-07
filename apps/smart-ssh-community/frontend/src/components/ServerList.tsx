@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  commandErrorCode,
   commandErrorMessage,
   confirmHostKey,
   connect,
@@ -9,6 +10,7 @@ import {
   listServers,
   resumeChatSession,
 } from "../api";
+import { translateErrorCode } from "../errorCodes";
 import { onHostKeyVerificationNeeded } from "../events";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
 import { buildGroupTree, type GroupTreeNode } from "../groupTree";
@@ -32,6 +34,22 @@ interface ServerListProps {
    * bleibt, statt bei jedem Remount dieser Komponente zurückzufallen. */
   collapsedGroupIds: Set<string>;
   onToggleGroup: (groupId: string) => void;
+}
+
+/** Spec 0047, Fund D2: bislang zeigte dieser Screen bei jedem Fehler nur
+ * `commandErrorMessage(err)` — den rohen, immer deutschen `Display`-Text
+ * des Backend-Fehlers, auch wenn ein `code` vorhanden und übersetzt wäre
+ * (z. B. `SshError` beim eigentlichen Verbindungsaufbau, s.
+ * `commands.rs::connect_session`). Nutzt stattdessen den bestehenden
+ * Spec-0024-Mechanismus und fällt nur auf den rohen Text zurück, wenn
+ * wirklich kein bekannter Code vorliegt. Als Modul-Funktion (statt einer
+ * im Komponentenkörper geschlossenen Closure über `t`) definiert, damit
+ * sie referenziell stabil ist und keine `useEffect`-Dependency wird. */
+function describeError(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  err: unknown,
+): string {
+  return translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));
 }
 
 /**
@@ -83,9 +101,12 @@ export function ServerList({
         setServers(s);
         setGroups(g);
       })
-      .catch((err) => setError(commandErrorMessage(err)))
+      .catch((err) => setError(describeError(t, err)))
       .finally(() => setLoading(false));
-  }, []);
+    // `t` aus `react-i18next` ist referenziell stabil (löst diesen Effekt
+    // bei einem Sprachwechsel nicht erneut aus) — hier trotzdem korrekt
+    // gelistet, statt des sonst nötigen exhaustive-deps-Lint-Suppressors.
+  }, [t]);
 
   useEffect(() => {
     // Unabhängiger Review-Pass (Spec 0031): ohne `.catch` bleibt
@@ -115,7 +136,7 @@ export function ServerList({
       const sessionId = await connect(server.id);
       onConnected(sessionId, server.name, server.id);
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(describeError(t, err));
     } finally {
       setConnectingId(null);
       setPendingHostKey(null);
@@ -157,7 +178,7 @@ export function ServerList({
       }
       setSessionPickerState({ server, sessions });
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(describeError(t, err));
     }
   };
 
@@ -171,7 +192,7 @@ export function ServerList({
       const tabSessionId = await resumeChatSession(server.id, sessionId);
       onConnected(tabSessionId, server.name, server.id);
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(describeError(t, err));
     } finally {
       setConnectingId(null);
     }
@@ -184,7 +205,7 @@ export function ServerList({
       const sessions = await listChatSessions(server.id);
       setSessionPickerState({ server, sessions });
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(describeError(t, err));
     }
   };
 
@@ -201,7 +222,7 @@ export function ServerList({
     try {
       await saveFirstRunNoticeAcknowledged();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(describeError(t, err));
       return;
     }
     setFirstRunAcknowledged(true);
@@ -215,7 +236,7 @@ export function ServerList({
     try {
       await confirmHostKey(sessionId, decision);
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(describeError(t, err));
     }
   };
 

@@ -3,12 +3,13 @@
 // dafür immer `port: 0` (s. `local_server::synthetic_server`), das darf im
 // UI nicht als echter Port `0` erscheinen. Ein normaler Server zeigt
 // seinen Port unverändert.
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
+import { connect } from "../api";
 
 function localServer(): ServerDto {
   return {
@@ -48,15 +49,23 @@ function remoteServer(): ServerDto {
   };
 }
 
-vi.mock("../api", () => ({
-  listServers: vi.fn(() => Promise.resolve([localServer(), remoteServer()])),
-  listGroups: vi.fn(() => Promise.resolve([] as GroupDto[])),
-  listChatSessions: vi.fn(() => Promise.resolve([])),
-  connect: vi.fn(),
-  confirmHostKey: vi.fn(),
-  resumeChatSession: vi.fn(),
-  commandErrorMessage: (err: unknown) => String(err),
-}));
+vi.mock("../api", async () => {
+  // Spec 0047, Fund D2: `commandErrorCode`/`commandErrorMessage` bleiben die
+  // echten Implementierungen (nicht gemockt) statt der bisherigen
+  // Ad-hoc-`String(err)`-Attrappe — der neue Test unten prüft genau ihr
+  // Zusammenspiel mit `translateErrorCode` in `ServerList`s `describeError`.
+  const actual = await vi.importActual<typeof import("../api")>("../api");
+  return {
+    listServers: vi.fn(() => Promise.resolve([localServer(), remoteServer()])),
+    listGroups: vi.fn(() => Promise.resolve([] as GroupDto[])),
+    listChatSessions: vi.fn(() => Promise.resolve([])),
+    connect: vi.fn(),
+    confirmHostKey: vi.fn(),
+    resumeChatSession: vi.fn(),
+    commandErrorMessage: actual.commandErrorMessage,
+    commandErrorCode: actual.commandErrorCode,
+  };
+});
 
 vi.mock("../events", () => ({
   onHostKeyVerificationNeeded: vi.fn(() => Promise.resolve(() => {})),
@@ -98,5 +107,28 @@ describe("ServerList port display (Spec 0046, Fund 5)", () => {
     await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
 
     expect(screen.getByText("deploy@prod-1.internal:2222")).toBeInTheDocument();
+  });
+});
+
+describe("ServerList connect-error translation (Spec 0047, Fund D2)", () => {
+  it("translates a coded backend connect error instead of showing the raw Display text", async () => {
+    // Vor dem Fix hing an `connect_session`s `SshError` kein `code` (der
+    // blanket `?` in `commands.rs` verwarf ihn) — das Frontend zeigte den
+    // rohen, hart-deutschen `Display`-Text inkl. eingebettetem OS-
+    // Fehlertext, unabhängig von der UI-Sprache. Jetzt trägt der Fehler
+    // `code: "SSH_CONNECTION_FAILED"`, und `describeError` (s.
+    // `ServerList.tsx`) übersetzt darüber.
+    vi.mocked(connect).mockRejectedValue({
+      message: "Verbindung fehlgeschlagen: Connection refused (os error 61)",
+      code: "SSH_CONNECTION_FAILED",
+    });
+
+    renderList();
+    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("prod-1"));
+
+    await waitFor(() => expect(screen.getByText("Verbindung fehlgeschlagen")).toBeInTheDocument());
+    expect(screen.queryByText(/os error 61/)).toBeNull();
   });
 });

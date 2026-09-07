@@ -23,7 +23,7 @@ use ssh_manager_core::profiles::{
     NoteTarget, ProfileStore, Server,
 };
 use ssh_manager_core::shared::ServerId;
-use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, PtySize};
+use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, PtySize, SshError};
 
 use crate::ai_provider_factory::build_ai_provider;
 use crate::confirmation::ConfirmationRegistry;
@@ -367,6 +367,22 @@ fn should_create_chat_session(is_local: bool, persist_chat_session: bool) -> boo
     !is_local && persist_chat_session
 }
 
+/// Spec 0047, Fund D2: `SshError` trägt seit Spec 0024 einen stabilen
+/// `code()` fürs Frontend-Mapping — der blanket `?` auf
+/// `ssh_transport::connect(...)` (über `CommandError`s
+/// `impl<E: Display> From<E>`) verwarf ihn bislang und lieferte
+/// `code: None`. Ein Tester mit nicht erreichbarem Server sah dadurch nur
+/// den rohen, hart-deutschen `Display`-Text inkl. OS-Fehlertext, auch im
+/// englischen UI. Eigene, kleine Funktion statt eines Inline-`.map_err`
+/// in `connect_session`, damit dieser eine Mapping-Schritt (anders als
+/// `connect_session` als Ganzes, s. Doc-Kommentar oben) isoliert testbar
+/// ist, ohne einen echten SSH-Verbindungsaufbau zu brauchen.
+fn map_connect_result(
+    result: Result<ssh_transport::ConnectOutcome, SshError>,
+) -> CommandResult<ssh_transport::ConnectOutcome> {
+    result.map_err(|err| CommandError::with_code(err.to_string(), err.code()))
+}
+
 pub(crate) async fn connect_session(
     app: &AppHandle,
     state: &AppState,
@@ -411,12 +427,14 @@ pub(crate) async fn connect_session(
     } else {
         let target = resolve_connection_target(&server, state.profile_store.as_ref()).await?;
         loop {
-            let outcome = ssh_transport::connect(
-                &target,
-                state.credential_store.as_ref(),
-                state.host_key_store.clone(),
-            )
-            .await?;
+            let outcome = map_connect_result(
+                ssh_transport::connect(
+                    &target,
+                    state.credential_store.as_ref(),
+                    state.host_key_store.clone(),
+                )
+                .await,
+            )?;
 
             match outcome {
                 ssh_transport::ConnectOutcome::Connected(transport) => break transport,
@@ -918,6 +936,49 @@ mod should_create_chat_session_tests {
     fn test_local_pseudo_server_never_creates_a_chat_session_even_if_persist_requested() {
         assert!(!should_create_chat_session(
             /* is_local */ true, /* persist_chat_session */ true
+        ));
+    }
+}
+
+/// Spec 0047, Fund D2: der blanket `impl<E: Display> From<E> for
+/// CommandError` (s. `error.rs`) setzt immer `code: None` — vor der
+/// Extraktion von `map_connect_result` verwarf `connect_session` damit
+/// stillschweigend `SshError::code()`, obwohl der Code existiert und im
+/// Frontend registriert ist (`errorCodes.ts`s `KNOWN_ERROR_CODES`). Ohne
+/// den Code fällt das Frontend auf den rohen, hart-deutschen
+/// `Display`-Text zurück (inkl. eingebettetem OS-Fehlertext), auch im
+/// englischen UI.
+#[cfg(test)]
+mod map_connect_result_tests {
+    use super::*;
+
+    #[test]
+    fn test_connect_error_carries_its_stable_code_not_none() {
+        let err = SshError::ConnectionFailed("Connection refused (os error 61)".to_string());
+        let expected_code = err.code();
+        let expected_message = err.to_string();
+
+        let result = map_connect_result(Err(err));
+
+        let command_error = match result {
+            Ok(_) => panic!("erwarteter Fehler wurde nicht als Err geliefert"),
+            Err(command_error) => command_error,
+        };
+        assert_eq!(command_error.code, Some(expected_code));
+        assert_eq!(command_error.message, expected_message);
+    }
+
+    #[test]
+    fn test_connect_success_passes_the_outcome_through_unchanged() {
+        let transport: Box<dyn ssh_manager_core::ssh::SshTransport> =
+            Box::new(ssh_transport::LocalTransport::new());
+        let outcome = ssh_transport::ConnectOutcome::Connected(transport);
+
+        let result = map_connect_result(Ok(outcome));
+
+        assert!(matches!(
+            result,
+            Ok(ssh_transport::ConnectOutcome::Connected(_))
         ));
     }
 }
