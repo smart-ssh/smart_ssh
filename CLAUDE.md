@@ -143,6 +143,33 @@ The rhythm: spec drafted (local, not yet committed) → implemented →
 reviewed → the final spec text and any ADRs written during that step are
 committed together as part of finishing the feature.
 
+## Versioning & changelog (Spec 0048)
+
+This repo is the single source of truth for the product version — the
+places Tauri and the build actually read it: `apps/smart-ssh-community/
+tauri.conf.json` (`version`), the workspace `Cargo.toml`
+(`[workspace.package].version`, inherited by every crate via
+`version.workspace = true`), the internal path-dependency version pins in
+each crate's `Cargo.toml` (e.g. `ssh-manager-core = { version = "0.4.0",
+path = "../core" }` — these must match the workspace version or the
+workspace fails to build, since Cargo's default caret requirement on a
+0.x version only matches that patch range), and the frontend
+`package.json`/`package-lock.json` (bump both together via `npm version
+X.Y.Z --no-git-tag-version` from `apps/smart-ssh-community/frontend/`,
+not by hand-editing, so the lockfile stays consistent).
+
+- **The version is bumped deliberately by Stefan, never automatically by
+  the coder and never per-feature.** SemVer: a feature bump is minor, a
+  fix bump is patch.
+- **At a bump:** change the version everywhere it's pinned (see above),
+  move `CHANGELOG.md`'s `[Unreleased]` section to `[X.Y.Z] — <date>`, open
+  a fresh empty `[Unreleased]` above it, tag the release.
+- `CHANGELOG.md` (repo root, Keep a Changelog format) holds user-relevant
+  changes only — internal refactors and test-infrastructure work stay out
+  of it (that's what git history is for). Add entries to `[Unreleased]`
+  as user-relevant work lands, not retroactively at bump time. Mark any
+  entry that's only available in a paid edition with `**(Pro)**`.
+
 ## Testing conventions
 
 - Rust: tests live in `#[cfg(test)] mod tests` next to the code, using
