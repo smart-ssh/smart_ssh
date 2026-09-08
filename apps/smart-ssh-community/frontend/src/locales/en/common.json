@@ -27,6 +27,11 @@
   },
   "settings": {
     "title": "Settings",
+    "categories": {
+      "aiProvider": "AI Provider",
+      "displayLanguage": "Display & Language",
+      "diagnostics": "Diagnostics"
+    },
     "language": {
       "label": "Language",
       "de": "German",

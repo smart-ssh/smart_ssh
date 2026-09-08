@@ -41,6 +41,16 @@ import type { ComponentType } from "react";
 export interface SettingsSectionContribution {
   id: string;
   component: ComponentType;
+  /** Spec 0050, Abschnitt 1.2: Anzeige-Text für den linken Navigations-
+   * Eintrag der zweispaltigen Settings-Struktur. Optional statt
+   * Pflichtfeld — eine bestehende Registrierung (z. B. die private
+   * Lizenz-Sektion der Official Edition) kompiliert dadurch unverändert
+   * weiter; ohne `label` erscheint im Nav vorerst die rohe `id` als
+   * Text, statt dass die Sektion komplett aus der Navigation verschwindet
+   * (die Spec-0050-Invariante, die dieser Umbau nicht brechen darf). Ein
+   * sprechendes `label` nachzutragen ist trotzdem empfehlenswert.
+   */
+  label?: string;
 }
 
 /** Kontext, den `ChatPanel`s Dokument-Karte (Spec 0012) einer registrierten

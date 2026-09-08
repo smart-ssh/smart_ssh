@@ -7,13 +7,9 @@ import {
   discoverModels,
   fetchAttestationInfo,
   listAiProviders,
-  openLogDirectory,
   setActiveAiProvider,
 } from "../api";
-import { setLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from "../i18n";
 import { loadRiskClassifierSettings, saveRiskClassifierSettings } from "../riskSettings";
-import "../extensions/registerBuiltinExtensions";
-import { listSettingsSections } from "../extensions/registry";
 import {
   type AiProviderConfigDto,
   type AiProviderConfigInput,
@@ -46,7 +42,6 @@ function emptyForm(): AiProviderConfigInput {
 const MODEL_DATALIST_ID = "ai-provider-model-options";
 
 interface AiProviderSettingsProps {
-  onClose: () => void;
   /** Löst neu laden von `list_ai_providers` im Elternscreen aus (z. B. für
    * den "kein Provider konfiguriert"-Hinweis), sobald sich hier etwas
    * ändert — kein globaler State-Store in Teil 1, dafür reicht ein
@@ -54,8 +49,14 @@ interface AiProviderSettingsProps {
   onProvidersChanged: () => void;
 }
 
-export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSettingsProps) {
-  const { t, i18n } = useTranslation();
+/** Spec 0050, Teil 1: reine Kategorie-Inhaltskomponente für "KI-Provider"
+ * in der zweispaltigen Settings-Struktur (`SettingsScreen.tsx`) — trägt
+ * seit diesem Umbau weder den Modal-Rahmen noch den Sprachumschalter/
+ * Log-Verzeichnis-Button/registrierte Sektionen mehr (jetzt eigene
+ * Kategorien, s. `LanguageSettings.tsx`/`DiagnosticsSettings.tsx` bzw.
+ * `SettingsScreen.tsx`s generisches Rendern registrierter Sektionen). */
+export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsProps) {
+  const { t } = useTranslation();
   const [providers, setProviders] = useState<AiProviderConfigDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<AiProviderConfigInput>(emptyForm());
@@ -94,13 +95,6 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
     } finally {
       setRiskSettingsSaving(false);
     }
-  };
-
-  /** Spec 0024, Abschnitt 4: Wirkung sofort ohne Neustart —
-   * `setLanguage` ruft `i18next.changeLanguage` auf, das automatisch alle
-   * `useTranslation`-Verbraucher (inkl. dieser Komponente) neu rendert. */
-  const handleLanguageChange = (language: SupportedLanguage) => {
-    setLanguage(language).catch((err) => setError(commandErrorMessage(err)));
   };
 
   const reload = () => {
@@ -202,70 +196,13 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
     }
   };
 
-  /** Spec 0016, Abschnitt 5: ein Klick statt manuell zum
-   * plattformspezifischen Log-Ordner navigieren zu müssen. */
-  const handleOpenLogDirectory = async () => {
-    setError(null);
-    try {
-      await openLogDirectory();
-    } catch (err) {
-      setError(commandErrorMessage(err));
-    }
-  };
-
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-slate-800 p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">
-            {t("aiProvider.title")}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-100"
-            aria-label={t("common.close")}
-          >
-            ✕
-          </button>
-        </div>
+    <div>
+      {error && (
+        <p className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>
+      )}
 
-        {error && (
-          <p className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>
-        )}
-
-        <div className="mb-6">
-          <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
-            {t("settings.language.label")}
-          </h3>
-          <div className="flex gap-2">
-            {SUPPORTED_LANGUAGES.map((language) => (
-              <button
-                key={language}
-                type="button"
-                onClick={() => handleLanguageChange(language)}
-                aria-pressed={i18n.language === language}
-                className={`rounded px-3 py-1.5 text-sm ${
-                  i18n.language === language
-                    ? "bg-indigo-600 text-white"
-                    : "bg-slate-700 text-slate-200 hover:bg-slate-600"
-                }`}
-              >
-                {t(`settings.language.${language}`)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleOpenLogDirectory}
-          className="mb-6 w-full rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
-        >
-          {t("aiProvider.openLogs")}
-        </button>
-
-        <ul className="mb-6 divide-y divide-slate-700 rounded-md border border-slate-700">
+      <ul className="mb-6 divide-y divide-slate-700 rounded-md border border-slate-700">
           {providers.length === 0 && (
             <li className="px-4 py-3 text-sm text-slate-400">{t("aiProvider.noProviders")}</li>
           )}
@@ -379,10 +316,6 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
             </label>
           )}
         </div>
-
-        {listSettingsSections().map(({ id, component: Section }) => (
-          <Section key={id} />
-        ))}
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-200">
@@ -581,7 +514,6 @@ export function AiProviderSettings({ onClose, onProvidersChanged }: AiProviderSe
             {submitting ? t("aiProvider.adding") : t("aiProvider.add")}
           </button>
         </form>
-      </div>
     </div>
   );
 }

@@ -27,6 +27,11 @@
   },
   "settings": {
     "title": "Einstellungen",
+    "categories": {
+      "aiProvider": "KI-Provider",
+      "displayLanguage": "Anzeige & Sprache",
+      "diagnostics": "Diagnose"
+    },
     "language": {
       "label": "Sprache",
       "de": "Deutsch",

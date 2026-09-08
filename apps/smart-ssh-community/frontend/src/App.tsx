@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AiProviderSettings } from "./components/AiProviderSettings";
 import { AppHeader } from "./components/AppHeader";
 import { FilterRulesView } from "./components/FilterRulesView";
 import { ManagementView } from "./components/ManagementView";
@@ -8,6 +7,7 @@ import { NoteSuggestionToast } from "./components/NoteSuggestionToast";
 import { ServerList } from "./components/ServerList";
 import { SessionTabBar } from "./components/SessionTabBar";
 import { SessionView } from "./components/SessionView";
+import { SettingsScreen } from "./components/SettingsScreen";
 import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
 import { commandErrorMessage, listAiProviders } from "./api";
 import { useSessionTabs } from "./useSessionTabs";
@@ -269,7 +269,7 @@ function MainScreen({
       )}
 
       {settingsOpen && (
-        <AiProviderSettings
+        <SettingsScreen
           onClose={() => setSettingsOpen(false)}
           onProvidersChanged={refreshProviderStatus}
         />

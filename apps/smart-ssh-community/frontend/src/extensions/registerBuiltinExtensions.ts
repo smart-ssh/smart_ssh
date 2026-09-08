@@ -13,5 +13,16 @@ import { ChatRetentionSettings } from "../components/ChatRetentionSettings";
 import { McpServerSettings } from "../components/McpServerSettings";
 import { registerSettingsSection } from "./registry";
 
-registerSettingsSection({ id: "chat-retention", component: ChatRetentionSettings });
-registerSettingsSection({ id: "mcp-server", component: McpServerSettings });
+// Spec 0050, Teil 1: `label` ist der Anzeige-Text für den linken
+// Navigations-Eintrag der zweispaltigen Settings-Struktur — bewusst ein
+// statischer String statt eines Übersetzungs-Schlüssels (die Registry ist
+// ein reines Modul-Singleton ohne i18n-Anbindung, s. `registry.ts`s
+// Doc-Kommentar zu `label`); reagiert also nicht auf einen Sprachwechsel,
+// anders als der Inhalt der jeweiligen Sektion selbst (der ganz normal
+// `useTranslation` nutzt).
+registerSettingsSection({
+  id: "chat-retention",
+  label: "Sitzungen & Daten",
+  component: ChatRetentionSettings,
+});
+registerSettingsSection({ id: "mcp-server", label: "MCP-Server", component: McpServerSettings });
