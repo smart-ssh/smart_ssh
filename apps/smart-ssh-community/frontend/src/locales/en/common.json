@@ -256,6 +256,7 @@
     "baseUrl": "Base URL",
     "baseUrlPlaceholder": "https://…",
     "apiKey": "API Key",
+    "apiKeyFormatHint": "Doesn't look like a {{providerLabel}} key – expected a prefix like \"{{expectedPrefix}}\". You can still save it; providers change formats occasionally.",
     "nativeToolCalling": "Supports native tool calling",
     "discoverModels": "Load models",
     "discoveringModels": "Loading models…",

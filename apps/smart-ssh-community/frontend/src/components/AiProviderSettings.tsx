@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { apiKeyFormatWarning } from "../apiKeyFormat";
 import {
   addAiProvider,
   commandErrorMessage,
@@ -195,6 +196,8 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       setError(commandErrorMessage(err));
     }
   };
+
+  const apiKeyWarning = apiKeyFormatWarning(form.providerType, form.baseUrl, form.apiKey);
 
   return (
     <div>
@@ -423,6 +426,21 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
             />
           </label>
+          {/* Spec 0050, Teil 2: reiner Offline-Hinweis, kein Blockieren —
+           * `apiKeyFormatWarning` liefert `null`, solange das Feld leer
+           * ist, der Provider kein vorhersagbares Format hat, oder das
+           * Präfix passt. Der Submit-Handler prüft dieses Ergebnis nicht;
+           * Speichern bleibt in jedem Fall möglich. */}
+
+
+          {apiKeyWarning && (
+            <p className="text-xs text-amber-400">
+              {t("aiProvider.apiKeyFormatHint", {
+                providerLabel: PROVIDER_TYPE_LABELS[form.providerType],
+                expectedPrefix: apiKeyWarning.expectedPrefix,
+              })}
+            </p>
+          )}
 
           <label className="flex items-center gap-2 text-sm text-slate-300">
             <input
