@@ -1013,6 +1013,7 @@ pub(crate) async fn connect_session(
             None
         },
         chat_session_id: tokio::sync::Mutex::new(chat_session_id),
+        ai_request_paced_at: tokio::sync::Mutex::new(None),
     });
     state.sessions.insert(session_id, session);
 
@@ -3093,6 +3094,7 @@ mod send_chat_message_persistence_tests {
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
             chat_session_store: None,
             chat_session_id: AsyncMutex::new(None),
+            ai_request_paced_at: AsyncMutex::new(None),
         }
     }
 

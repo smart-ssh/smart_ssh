@@ -155,6 +155,40 @@ async fn push_history_scoped(session: &Session, message: ChatMessage, persist: b
     }
 }
 
+/// Spec 0051, Teil 2: Mindestabstand zwischen zwei `AiProvider::send()`-
+/// Aufrufen derselben Sitzung. Alle Aufrufstellen (Haupt-Chat, Risiko-
+/// Zweitmeinung, Einschleusungs-Check, Auto-Titel, Notiz-Vorschlag) sind
+/// bereits strikt seriell — jede einzelne wird vollständig `.await`et,
+/// bevor die nächste beginnt (s. Spec 0051, Teil-0-Diagnosebericht) —, aber
+/// ohne jeden zeitlichen Abstand: eine Anfrage, die unmittelbar nach einem
+/// 429 der vorherigen abgeschickt wird, trifft in der Praxis dasselbe
+/// Rate-Limit-Fenster (im real reproduzierten Fall lagen nur 31ms
+/// dazwischen). 300ms sind bewusst klein genug, um für den Nutzer nicht
+/// spürbar zu sein (deutlich unter der Reaktionszeit, die ein Streaming-
+/// Antwortbeginn ohnehin braucht), aber groß genug, um zwei App-intern
+/// ausgelöste Anfragen aus demselben Burst zeitlich zu trennen.
+const MIN_AI_REQUEST_SPACING: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Wartet bei Bedarf, bis [`MIN_AI_REQUEST_SPACING`] seit dem letzten
+/// `AiProvider::send()`-Aufruf dieser Sitzung vergangen ist, und
+/// aktualisiert danach den Zeitstempel — s. `Session::ai_request_paced_at`-
+/// Doc-Kommentar zur Begründung, warum dies unabhängig von der konkreten
+/// `AiProvider`-Instanz gilt (Haupt-Provider vs. separat konfigurierter
+/// Zweitmeinungs-/Einschleusungs-Check-Provider können dasselbe Rate-
+/// Limit-Kontingent teilen). Aufzurufen unmittelbar vor jedem `send()`
+/// dieser Sitzung, nicht danach — sonst würde die Wartezeit die ohnehin
+/// schon laufende Anfrage nicht mehr entzerren.
+pub(crate) async fn wait_for_ai_request_slot(session: &Session) {
+    let mut paced_at = session.ai_request_paced_at.lock().await;
+    if let Some(previous) = *paced_at {
+        let elapsed = previous.elapsed();
+        if elapsed < MIN_AI_REQUEST_SPACING {
+            tokio::time::sleep(MIN_AI_REQUEST_SPACING - elapsed).await;
+        }
+    }
+    *paced_at = Some(tokio::time::Instant::now());
+}
+
 /// Die Nutzer-Nachricht muss bereits vom Aufrufer in
 /// `session.context.history` eingetragen worden sein (s.
 /// `crate::commands::send_chat_message`). Läuft so lange in Folgerunden
@@ -389,6 +423,7 @@ async fn run_one_round(
     // `send()`-Aufruf, s. `reapply_redaction_for_send`-Doc-Kommentar.
     request_context.history =
         reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
+    wait_for_ai_request_slot(session).await;
     let mut stream = session.ai_provider.send(request_context);
 
     let mut text_buffer = String::new();
@@ -664,6 +699,7 @@ async fn handle_action_proposed(
         risk_assessment,
     ) {
         if let Some(pseudo_command) = pseudo_command_for_risk_classification(&action) {
+            wait_for_ai_request_slot(session).await;
             let second_opinion =
                 crate::risk_second_opinion::fetch_second_opinion(provider, &pseudo_command).await;
             let (data_risk, reason) = escalate_data_risk(
@@ -1468,6 +1504,7 @@ async fn check_for_injected_instructions(session: &Session, content: &str) {
     let Some(provider) = session.injection_check_provider.as_deref() else {
         return;
     };
+    wait_for_ai_request_slot(session).await;
     if let Some((true, _reason)) =
         crate::risk_second_opinion::fetch_injection_check(provider, content).await
     {
@@ -2173,6 +2210,7 @@ pub async fn generate_session_title_on_disconnect(session: &Session) {
     // unten, hier aber gar keine Aktion, nur Text.
     request_context.available_actions = Vec::new();
 
+    wait_for_ai_request_slot(session).await;
     let mut stream = session.ai_provider.send(request_context);
     let mut text_buffer = String::new();
     while let Some(event) = stream.next().await {
@@ -2268,6 +2306,7 @@ pub async fn suggest_note_update_on_disconnect(
     // vorschlagen.
     request_context.available_actions = vec![ActionSchema::propose_note_update()];
 
+    wait_for_ai_request_slot(session).await;
     let mut stream = session.ai_provider.send(request_context);
     let mut proposed: Option<AiAction> = None;
     while let Some(event) = stream.next().await {
@@ -2730,6 +2769,7 @@ mod tests {
             // no-opt bei `None` bereits vollständig.
             chat_session_store: None,
             chat_session_id: AsyncMutex::new(None),
+            ai_request_paced_at: AsyncMutex::new(None),
         }
     }
 
@@ -8174,6 +8214,49 @@ mod tests {
                 "sudo -S systemctl status nginx"
             ],
             "beide Kommandos müssen tatsächlich mit dem gecachten Passwort gelaufen sein"
+        );
+    }
+
+    /// Spec 0051, Teil 2: zwei unmittelbar aufeinanderfolgende
+    /// `wait_for_ai_request_slot`-Aufrufe derselben Sitzung müssen um
+    /// mindestens `MIN_AI_REQUEST_SPACING` auseinanderliegen — das ist die
+    /// eigentliche "Burst-Entzerrung nachweisbar"-Prüfung aus der Spec.
+    /// `start_paused = true` lässt Tokios virtuelle Uhr bei einem
+    /// anstehenden `sleep` automatisch vorspringen, statt real zu warten
+    /// (s. Spec 0046, Fund 4 zur selben Technik in diesem Crate) — der Test
+    /// bleibt dadurch trotz der 300ms-Wartezeit sofort fertig.
+    #[tokio::test(start_paused = true)]
+    async fn test_wait_for_ai_request_slot_enforces_minimum_spacing_between_calls() {
+        let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+
+        wait_for_ai_request_slot(&session).await;
+        let first_slot = tokio::time::Instant::now();
+        wait_for_ai_request_slot(&session).await;
+        let elapsed = first_slot.elapsed();
+
+        assert!(
+            elapsed >= MIN_AI_REQUEST_SPACING,
+            "zweiter Slot kam nach {elapsed:?}, erwartet mindestens {MIN_AI_REQUEST_SPACING:?}"
+        );
+    }
+
+    /// Gegenprobe zum Test oben: liegt der vorherige Aufruf bereits länger
+    /// als `MIN_AI_REQUEST_SPACING` zurück, wartet der nächste Aufruf gar
+    /// nicht mehr — die Entzerrung bremst nur echte Bursts, nicht jede
+    /// KI-Anfrage generell.
+    #[tokio::test(start_paused = true)]
+    async fn test_wait_for_ai_request_slot_does_not_wait_if_spacing_already_elapsed() {
+        let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+
+        wait_for_ai_request_slot(&session).await;
+        tokio::time::advance(MIN_AI_REQUEST_SPACING * 2).await;
+        let before_second_slot = tokio::time::Instant::now();
+        wait_for_ai_request_slot(&session).await;
+        let elapsed = before_second_slot.elapsed();
+
+        assert!(
+            elapsed < MIN_AI_REQUEST_SPACING,
+            "durfte nicht erneut warten, tat es aber ({elapsed:?})"
         );
     }
 }

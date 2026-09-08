@@ -210,6 +210,17 @@ pub struct Session {
     /// `history_push_and_persist` sie über einen `.await`-Punkt hinweg
     /// hält (der eigentliche `INSERT`).
     pub chat_session_id: AsyncMutex<Option<uuid::Uuid>>,
+    /// Spec 0051, Teil 2: Zeitpunkt des letzten `AiProvider::send()`-
+    /// Aufrufs dieser Sitzung — über alle KI-Anfrage-Arten hinweg
+    /// (Haupt-Chat, Risiko-Zweitmeinung, Einschleusungs-Check, Auto-Titel,
+    /// Notiz-Vorschlag) und unabhängig von der konkreten `AiProvider`-
+    /// Instanz: `risk_second_opinion_provider`/`injection_check_provider`
+    /// können denselben API-Key/dasselbe Rate-Limit-Kontingent wie
+    /// `ai_provider` teilen, ohne dass die App das unterscheiden könnte —
+    /// s. `crate::orchestration::wait_for_ai_request_slot`, das dieses
+    /// Feld unmittelbar vor jedem `send()`-Aufruf konsultiert. `None` vor
+    /// dem ersten Aufruf.
+    pub ai_request_paced_at: AsyncMutex<Option<tokio::time::Instant>>,
 }
 
 /// Spec 0039, Abschnitt 5: "Bei Session Resume mit vorbelasteter Historie
@@ -505,6 +516,7 @@ mod tests {
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
             chat_session_store: None,
             chat_session_id: AsyncMutex::new(None),
+            ai_request_paced_at: AsyncMutex::new(None),
         }
     }
 
