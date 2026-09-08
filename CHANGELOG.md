@@ -9,6 +9,22 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+### Fixed
+- Ein eingefügter API-Key, ein Server-Passwort/Sudo-Passwort oder eine
+  Key-Passphrase mit einem angehängten Zeilenumbruch/Leerzeichen (z. B. von
+  einem Copy-Paste unter Windows) wird jetzt beim Speichern getrimmt, statt
+  die Authentifizierung mit "Credentials ungültig" scheitern zu lassen.
+- Windows: die Titelleiste fällt bei einem Aktivierungsfehler jetzt sauber
+  auf die volle native Titelleiste zurück (inkl. funktionierender
+  Minimieren-/Maximieren-/Schließen-Controls und Fenster-Ziehen), statt in
+  einem kaputten Zwischenzustand hängen zu bleiben.
+
+### Security
+- Bei einem Fehler eines KI-Providers (falscher API-Key, Rate-Limit,
+  Netzwerkfehler, Modell nicht gefunden) landet die Fehlerantwort des
+  Providers jetzt redigiert im Log, ergänzend zur bestehenden
+  UI-Meldung — erleichtert die Diagnose, ohne je ein Secret preiszugeben.
+
 ## [0.4.0] — 2026-09-07
 
 Erste öffentliche Testversion.
