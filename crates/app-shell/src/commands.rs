@@ -2211,17 +2211,73 @@ pub fn get_entitlements(
     state.entitlements.current()
 }
 
-/// Aktiviert die Overlay-Titelleiste und konfiguriert macOS-Ampel-Insets (Spec 0014, Abschnitt 3 & 6).
+/// Aktiviert die Overlay-Titelleiste und konfiguriert macOS-Ampel-Insets
+/// (Spec 0014, Abschnitt 3 & 6). Liefert `"custom"`, wenn die
+/// plattformspezifische Overlay-Titelleiste des Plugins aktiv ist
+/// (macOS-Ampel bzw. die HTML-Controls des Plugins auf Windows/Linux),
+/// sonst `"native"` (Fallback auf die native Titelleiste samt deren
+/// eigenen Minimieren/Maximieren/Schließen-Controls) — das Frontend nutzt
+/// den Rückgabewert, um sein eigenes Layout (reservierter Platz für die
+/// Plugin-Controls) entsprechend umzuschalten (s. `AppHeader.tsx`).
+///
+/// Spec 0049, Fund 3/4: vorher wurde das `Result` von
+/// `activate_decoration()` mit `let _ =` verworfen — schlug die Aktivierung
+/// fehl (z. B. auf Windows, wo die Symptome "nur ein Schließen-Button" und
+/// "Fenster-Ziehen greift nicht" beobachtet wurden), blieb das Fenster in
+/// einem nicht dokumentierten Zwischenzustand hängen: weder vollständig
+/// nativ noch vollständig durch das Plugin decoriert, und **spurlos** —
+/// nichts wurde geloggt. Jetzt: bei einem Fehler wird explizit
+/// `restore_decoration()` aufgerufen (bringt die native Titelleiste
+/// zuverlässig zurück, exakt das vom Plugin selbst dokumentierte
+/// Recovery-Muster) und der Fehler geloggt, statt beides stillschweigend
+/// zu ignorieren.
 #[tauri::command]
-pub async fn create_overlay_titlebar(window: tauri::WebviewWindow) -> CommandResult<()> {
+pub async fn create_overlay_titlebar(window: tauri::WebviewWindow) -> CommandResult<&'static str> {
     use tauri_plugin_decoration::WebviewWindowExt;
-    let _ = window.activate_decoration().await;
+
+    if let Err(error) = window.activate_decoration().await {
+        return Ok(restore_native_decoration(&window, error).await);
+    }
+
     #[cfg(target_os = "macos")]
     {
-        // Spec 0014 Abschnitt 3 & 6: Startwert für Ampel-Positionierung
-        let _ = window.set_traffic_lights_inset(12.0, 16.0).await;
+        // Spec 0014 Abschnitt 3 & 6: Startwert für Ampel-Positionierung.
+        if let Err(error) = window.set_traffic_lights_inset(12.0, 16.0).await {
+            return Ok(restore_native_decoration(&window, error).await);
+        }
     }
-    Ok(())
+
+    Ok("custom")
+}
+
+/// Fallback-Pfad aus dem Plugin-Dokumentationsmuster ("Activate and
+/// recover"): Aktivierung ist fehlgeschlagen, also wird explizit die
+/// native Titelleiste wiederhergestellt statt das Fenster in einem
+/// halb-decorierten Zustand zu belassen. `activation_error` wird geloggt
+/// (nicht verschluckt) — der Startpunkt, um ein künftiges Windows-/
+/// Linux-Problem tatsächlich diagnostizieren zu können, statt wie bisher
+/// zu raten.
+async fn restore_native_decoration(
+    window: &tauri::WebviewWindow,
+    activation_error: impl std::fmt::Display,
+) -> &'static str {
+    use tauri_plugin_decoration::WebviewWindowExt;
+    match window.restore_decoration().await {
+        Ok(()) => {
+            tracing::warn!(
+                error = %activation_error,
+                "custom titlebar decoration activation failed, restored native titlebar"
+            );
+        }
+        Err(restore_error) => {
+            tracing::error!(
+                error = %activation_error,
+                restore_error = %restore_error,
+                "custom titlebar decoration activation failed AND native restoration failed"
+            );
+        }
+    }
+    "native"
 }
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser -------------------------

@@ -3,6 +3,20 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type Platform = "macos" | "windows" | "linux" | "unknown";
 
+/** Spec 0049, Fund 3/4: `create_overlay_titlebar` liefert jetzt zurück, ob
+ * die plattformspezifische Overlay-Titelleiste des Plugins tatsächlich
+ * aktiv ist ("custom" — macOS-Ampel bzw. die HTML-Controls des Plugins auf
+ * Windows/Linux) oder ob die Aktivierung fehlgeschlagen ist und auf die
+ * native Titelleiste zurückgefallen wurde ("native" — dann rendert das
+ * Betriebssystem seine eigene Titelzeile inkl. eigener Minimieren-/
+ * Maximieren-/Schließen-Controls **oberhalb** dieses Headers, der dann
+ * keinerlei reservierten Platz mehr braucht). "pending" ist der kurze
+ * Moment zwischen Mount und der ersten Antwort des Backends — hält
+ * bewusst dieselbe reservierte Platzierung wie "custom", damit während
+ * dieses kurzen Fensters kein sichtbarer Sprung im Layout entsteht, falls
+ * die Aktivierung (der Normalfall) erfolgreich ist. */
+type DecorationMode = "pending" | "custom" | "native";
+
 function detectFallbackPlatform(): Platform {
   if (typeof navigator === "undefined") return "unknown";
   const ua = navigator.userAgent.toLowerCase();
@@ -25,6 +39,7 @@ interface AppHeaderProps {
  */
 export function AppHeader({ children }: AppHeaderProps) {
   const [platform, setPlatform] = useState<Platform>(detectFallbackPlatform);
+  const [decorationMode, setDecorationMode] = useState<DecorationMode>("pending");
 
   useEffect(() => {
     invoke<string>("get_platform")
@@ -37,26 +52,43 @@ export function AppHeader({ children }: AppHeaderProps) {
         console.warn("Konnte Plattform nicht über Tauri-Command ermitteln, nutze Fallback:", err);
       });
 
-    // Initialisiere die Overlay-Titelleiste
-    invoke("create_overlay_titlebar").catch((err) => {
-      console.warn("create_overlay_titlebar Fehler:", err);
-    });
+    // Initialisiere die Overlay-Titelleiste — der Rückgabewert sagt, ob
+    // sie tatsächlich aktiv wurde oder das Backend auf die native
+    // Titelleiste zurückgefallen ist (s. `DecorationMode`-Doc-Kommentar).
+    invoke<string>("create_overlay_titlebar")
+      .then((mode) => {
+        if (mode === "custom" || mode === "native") {
+          setDecorationMode(mode);
+        }
+      })
+      .catch((err) => {
+        console.warn("create_overlay_titlebar Fehler:", err);
+        // Kein Rückgabewert erhalten -> im Zweifel keinen Platz für
+        // Controls reservieren, die vielleicht gar nicht da sind, statt
+        // einer möglicherweise leeren Lücke im Header.
+        setDecorationMode("native");
+      });
   }, []);
 
   const isMac = platform === "macos";
 
-  // Plattformspezifisches Padding:
-  // - macOS: Platz für native Traffic Lights links (Startwert-Offset)
-  // - Windows/Linux: Platz für native Window-Controls rechts (Min/Max/Close)
-  const paddingStyle = isMac
-    ? {
-        paddingLeft: "max(78px, var(--tauri-plugin-decoration-left-clearance, 78px))",
-        paddingRight: "16px",
-      }
-    : {
-        paddingLeft: "16px",
-        paddingRight: "max(140px, var(--tauri-plugin-decoration-right-clearance, 140px))",
-      };
+  // Plattformspezifisches Padding — nur solange die Overlay-Titelleiste
+  // tatsächlich aktiv ist (oder die Aktivierung noch aussteht, s. o.).
+  // Ist auf "native" zurückgefallen, zeichnet das Betriebssystem seine
+  // eigene Titelzeile oberhalb dieses Headers; hier ist dann kein
+  // reservierter Platz mehr nötig.
+  const paddingStyle =
+    decorationMode === "native"
+      ? { paddingLeft: "16px", paddingRight: "16px" }
+      : isMac
+        ? {
+            paddingLeft: "max(78px, var(--tauri-plugin-decoration-left-clearance, 78px))",
+            paddingRight: "16px",
+          }
+        : {
+            paddingLeft: "16px",
+            paddingRight: "max(140px, var(--tauri-plugin-decoration-right-clearance, 140px))",
+          };
 
   return (
     <header
