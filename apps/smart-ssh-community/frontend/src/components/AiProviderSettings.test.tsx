@@ -1,9 +1,10 @@
 // Spec 0050, Teil 2 ("Testbarkeit"): "Format-Hinweis: falscher Präfix →
 // Warnung, Speichern trotzdem möglich; generischer Provider → keine
 // Warnung."
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
+import { testAiProviderCredentials } from "../api";
 import { testI18n } from "../testI18n";
 import { AiProviderSettings } from "./AiProviderSettings";
 
@@ -14,6 +15,7 @@ vi.mock("../api", () => ({
   discoverModels: vi.fn(),
   fetchAttestationInfo: vi.fn(),
   setActiveAiProvider: vi.fn(),
+  testAiProviderCredentials: vi.fn(),
   commandErrorMessage: (err: unknown) => String(err),
 }));
 
@@ -74,5 +76,78 @@ describe("AiProviderSettings API-key format hint (Spec 0050, Teil 2)", () => {
     fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "anthropic" } });
 
     expect(screen.queryByText(/Sieht nicht wie ein/)).not.toBeInTheDocument();
+  });
+});
+
+// Spec 0050, Teil 3 ("Testbarkeit"): "Testen-Button: gültiger Key →
+// 'gültig', falscher → 'Auth fehlgeschlagen', unerreichbar → 'nicht
+// erreichbar'" — the Rust-side three-way classification itself is already
+// covered against a mock AiProvider (crates/app-shell/src/commands.rs's
+// credential_test_tests); these tests cover the other half: that the
+// button actually calls testAiProviderCredentials with the current,
+// unsaved form data and renders each of the three outcomes distinctly.
+describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () => {
+  it("is disabled until an API key is entered", () => {
+    renderForm();
+
+    expect(screen.getByRole("button", { name: "Zugangsdaten testen" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+
+    expect(screen.getByRole("button", { name: "Zugangsdaten testen" })).not.toBeDisabled();
+  });
+
+  it("shows a valid result", async () => {
+    vi.mocked(testAiProviderCredentials).mockResolvedValue({ kind: "valid" });
+    renderForm();
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+
+    await waitFor(() => expect(screen.getByText("✓ Zugangsdaten gültig")).toBeInTheDocument());
+    expect(testAiProviderCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: "sk-abc" }),
+    );
+  });
+
+  it("shows an authentication-failed result", async () => {
+    vi.mocked(testAiProviderCredentials).mockResolvedValue({ kind: "authenticationFailed" });
+    renderForm();
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-wrong" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("✗ Authentifizierung fehlgeschlagen")).toBeInTheDocument(),
+    );
+  });
+
+  it("shows an unreachable result including the message", async () => {
+    vi.mocked(testAiProviderCredentials).mockResolvedValue({
+      kind: "unreachable",
+      message: "connection refused",
+    });
+    renderForm();
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("✗ Provider nicht erreichbar: connection refused"),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("clears a stale result once the key is edited again", async () => {
+    vi.mocked(testAiProviderCredentials).mockResolvedValue({ kind: "valid" });
+    renderForm();
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+    await waitFor(() => expect(screen.getByText("✓ Zugangsdaten gültig")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc-changed" } });
+
+    expect(screen.queryByText("✓ Zugangsdaten gültig")).not.toBeInTheDocument();
   });
 });

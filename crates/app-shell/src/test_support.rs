@@ -287,3 +287,31 @@ impl CredentialStore for InMemoryCredentialStore {
         Ok(())
     }
 }
+
+/// Spec 0050, Fund 3: fest verdrahteter Event-Stream, unabhängig vom
+/// übergebenen `SessionContext` — reicht für
+/// `commands::classify_credential_test_result`, das nur das **erste**
+/// Event auswertet (s. dortiger Doc-Kommentar). `ssh_manager_core::ai`
+/// hat mit `MockAiProvider` (`crates/core/src/ai/tests.rs`) bereits ein
+/// Äquivalent, das aber modul-privat ist (nur für Cores eigene Tests
+/// gedacht) — dieselbe, hier lokal wiederholte Minimal-Implementierung
+/// statt eines öffentlichen Exports nur für einen einzigen Testfall in
+/// einer anderen Crate.
+pub struct MockAiProvider {
+    events: Vec<ssh_manager_core::ai::AiEvent>,
+}
+
+impl MockAiProvider {
+    pub fn new(events: Vec<ssh_manager_core::ai::AiEvent>) -> Self {
+        Self { events }
+    }
+}
+
+impl ssh_manager_core::ai::AiProvider for MockAiProvider {
+    fn send(
+        &self,
+        _context: ssh_manager_core::ai::SessionContext,
+    ) -> std::pin::Pin<Box<dyn futures::Stream<Item = ssh_manager_core::ai::AiEvent> + Send>> {
+        Box::pin(futures::stream::iter(self.events.clone()))
+    }
+}

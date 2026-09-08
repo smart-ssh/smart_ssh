@@ -394,6 +394,15 @@ export type TestConnectionResult =
   | { kind: "networkError"; message: string }
   | { kind: "timeout" };
 
+/** Spec 0050, Teil 3 — s. `crate::commands::TestAiProviderCredentialsResult`
+ * Doc-Kommentar für die Mapping-Entscheidung (`RateLimited`/
+ * `ProviderUnavailable`/etc. fallen alle unter `unreachable`, nicht nur
+ * echte Netzwerkfehler). */
+export type TestAiProviderCredentialsResult =
+  | { kind: "valid" }
+  | { kind: "authenticationFailed" }
+  | { kind: "unreachable"; message: string };
+
 // --- Spec 0009: Filter-Regel-Verwaltung ---------------------------------
 //
 // `Scope`/`RuleAction` (core::filter) tragen wie `Decision` oben kein

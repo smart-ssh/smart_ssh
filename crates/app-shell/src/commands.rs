@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use futures::StreamExt;
 use secrecy::{ExposeSecret, SecretString};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::mpsc;
@@ -11,8 +12,9 @@ use uuid::Uuid;
 
 use persistence_sqlite::AiProviderConfig;
 use ssh_manager_core::ai::{
-    default_action_schemas, fence_untrusted, ChatMessage, DefaultOutputRedactor, MessageContent,
-    OutputRedactor, ProviderId, Role, SessionContext, UntrustedKind,
+    default_action_schemas, fence_untrusted, AiError, AiEvent, AiProvider, ChatMessage,
+    DefaultOutputRedactor, MessageContent, OutputRedactor, ProviderId, Role, SessionContext,
+    UntrustedKind,
 };
 use ssh_manager_core::filter::{
     hard_blacklist_patterns, EffectiveScope, EvalContext, FilterEngine, PolicyStore, RuleAction,
@@ -280,6 +282,203 @@ pub async fn discover_models(
 
     let models = ai_providers::discover_models(base_url, &api_key, &config.extra_headers).await?;
     Ok(models)
+}
+
+/// Spec 0050, Teil 3: Ergebnis von [`test_ai_provider_credentials`] — genau
+/// die drei von der Spec verlangten, unterscheidbaren Fälle ("gültig" /
+/// "Authentifizierung fehlgeschlagen" / "nicht erreichbar"), analog zu
+/// [`crate::dto::TestConnectionResult`] (Spec 0008) für Server.
+///
+/// Mapping-Entscheidung (nicht von der Spec explizit vorgegeben, hier
+/// festgehalten statt stillschweigend getroffen): `AiError::
+/// AuthenticationFailed` wird zu `AuthenticationFailed`, **jeder andere**
+/// `AiError` (`RateLimited`, `NetworkError`, `InvalidResponse`,
+/// `ContextTooLarge`, `ProviderUnavailable` — letzteres deckt laut
+/// `crate::error::map_http_status`s eigenem Design-Kommentar auch einen
+/// falschen Modellnamen ab, s. Spec 0049s Nachbericht) fällt in
+/// `Unreachable`. Für einen dreiwertigen Test-Button ist das die
+/// pragmatischste Aufteilung — ein `RateLimited` z. B. heißt zwar
+/// eigentlich "Credentials sind gültig, aber gerade gedrosselt", passt
+/// aber in keinen der beiden anderen Fälle.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TestAiProviderCredentialsResult {
+    Valid,
+    AuthenticationFailed,
+    Unreachable { message: String },
+}
+
+/// Spec 0050, Teil 3: analog zu `test_connection` (Spec 0008, Abschnitt 7)
+/// für Server — testet die **gerade eingegebenen, noch nicht
+/// gespeicherten** Formulardaten mit einem echten, minimalen Request an den
+/// Provider, bevor überhaupt gespeichert wird. `existing_provider_id` deckt
+/// denselben "leer = unverändert"-Fall wie `discover_models` ab.
+///
+/// Nutzt `build_ai_provider` — denselben Konstruktionsweg wie ein echter
+/// Chat-Request (Spec 0007, Abschnitt 8.3) — statt eines eigenen,
+/// separaten HTTP-Aufbaus: funktioniert dadurch einheitlich für **alle**
+/// vier Provider-Typen (inkl. Anthropic, das anders als bei
+/// `discover_models` hier keine Sonderbehandlung/Ablehnung braucht, weil
+/// kein `/models`-Endpoint involviert ist). Der Request selbst ist eine
+/// einzelne, minimale Nutzernachricht ("Hi") — geht durch denselben
+/// Redaction-sicheren Fehler-Logging-Pfad wie jeder reguläre Chat-Request
+/// (Spec 0049, Fund 2), kein Sonderfall für den Testen-Button nötig. Nur
+/// das **erste** Stream-Event wird ausgewertet, danach wird der Stream
+/// verworfen (nicht bis zum Ende durchlaufen) — für eine Verbindungs-/
+/// Auth-Prüfung reicht das, eine vollständige generierte Antwort
+/// abzuwarten wäre unnötiger Zeit-/Token-Verbrauch.
+#[tauri::command]
+pub async fn test_ai_provider_credentials(
+    state: State<'_, AppState>,
+    config: AiProviderConfigInput,
+    existing_provider_id: Option<ProviderId>,
+) -> CommandResult<TestAiProviderCredentialsResult> {
+    // Spec 0049, Fund 1: derselbe Grund wie bei `add_ai_provider`/
+    // `discover_models` — vor jeder Verwendung von `api_key`/`base_url`.
+    let config = config.trimmed();
+
+    let api_key = if !config.api_key.is_empty() {
+        config.api_key.clone()
+    } else if let Some(id) = existing_provider_id {
+        let existing = state.ai_provider_store.get(&id).await?;
+        state
+            .credential_store
+            .get(&existing.credential_ref)?
+            .expose_secret()
+            .to_string()
+    } else {
+        return Err("API-Key erforderlich, bevor die Zugangsdaten getestet werden können".into());
+    };
+
+    let provider = build_ai_provider(
+        config.provider_type,
+        config.base_url.as_deref(),
+        &config.model,
+        SecretString::from(api_key),
+        config.supports_native_tool_calling,
+        config.extra_headers.clone(),
+    );
+
+    Ok(classify_credential_test_result(provider.as_ref()).await)
+}
+
+/// Von `test_ai_provider_credentials` losgelöst, damit sich das
+/// Ergebnis-Mapping (der eigentlich testenswerte Teil, s. Spec 0050,
+/// Abschnitt "Testbarkeit": "gegen einen Mock-Provider") isoliert gegen
+/// einen `dyn AiProvider` prüfen lässt, ohne einen echten HTTP-Request zu
+/// brauchen — analog zum `Connector`-Trait-Muster in `test_connection.rs`
+/// (Spec 0008). Baut selbst den minimalen `SessionContext` ("Hi"), da der
+/// Inhalt für jeden Aufrufer identisch ist.
+async fn classify_credential_test_result(
+    provider: &dyn AiProvider,
+) -> TestAiProviderCredentialsResult {
+    let context = SessionContext {
+        system_context: String::new(),
+        history: vec![ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("Hi".to_string()),
+        }],
+        available_actions: Vec::new(),
+    };
+
+    let mut events = provider.send(context);
+    let first_event = events.next().await;
+    // `events` wird hier fallen gelassen, statt den Stream zu Ende zu
+    // lesen — s. Doc-Kommentar auf `test_ai_provider_credentials`.
+
+    match first_event {
+        Some(AiEvent::Error(AiError::AuthenticationFailed)) => {
+            TestAiProviderCredentialsResult::AuthenticationFailed
+        }
+        Some(AiEvent::Error(err)) => TestAiProviderCredentialsResult::Unreachable {
+            message: err.to_string(),
+        },
+        _ => TestAiProviderCredentialsResult::Valid,
+    }
+}
+
+/// Spec 0050, Teil 3 ("Testbarkeit"): "Testen-Button: gültiger Key →
+/// 'gültig', falscher → 'Auth fehlgeschlagen', unerreichbar → 'nicht
+/// erreichbar' (gegen einen Mock-Provider)" — genau das, gegen
+/// `test_support::MockAiProvider`, ohne echten HTTP-Request.
+#[cfg(test)]
+mod credential_test_tests {
+    use super::*;
+    use crate::test_support::MockAiProvider;
+
+    #[tokio::test]
+    async fn test_valid_credentials_yield_valid() {
+        let provider = MockAiProvider::new(vec![AiEvent::TextDelta("Hallo!".to_string())]);
+
+        let result = classify_credential_test_result(&provider).await;
+
+        assert!(matches!(result, TestAiProviderCredentialsResult::Valid));
+    }
+
+    #[tokio::test]
+    async fn test_auth_failure_yields_authentication_failed() {
+        let provider = MockAiProvider::new(vec![AiEvent::Error(AiError::AuthenticationFailed)]);
+
+        let result = classify_credential_test_result(&provider).await;
+
+        assert!(matches!(
+            result,
+            TestAiProviderCredentialsResult::AuthenticationFailed
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_network_error_yields_unreachable() {
+        let provider = MockAiProvider::new(vec![AiEvent::Error(AiError::NetworkError(
+            "connection refused".to_string(),
+        ))]);
+
+        let result = classify_credential_test_result(&provider).await;
+
+        match result {
+            TestAiProviderCredentialsResult::Unreachable { message } => {
+                assert!(message.contains("connection refused"));
+            }
+            other => panic!("erwartet: Unreachable, war: {other:?}"),
+        }
+    }
+
+    /// Spec 0006, Abschnitt 6 / `crate::error::map_http_status`s eigener
+    /// Design-Kommentar: ein falscher Modellname landet nicht in einem
+    /// eigenen Fall, sondern kollabiert auf `ProviderUnavailable` — dieser
+    /// Test hält fest, dass das hier bewusst ebenfalls als `Unreachable`
+    /// gilt (s. Doc-Kommentar auf `TestAiProviderCredentialsResult`), nicht
+    /// als `AuthenticationFailed`.
+    #[tokio::test]
+    async fn test_provider_unavailable_yields_unreachable_not_auth_failed() {
+        let provider = MockAiProvider::new(vec![AiEvent::Error(AiError::ProviderUnavailable(
+            "HTTP 404: model not found".to_string(),
+        ))]);
+
+        let result = classify_credential_test_result(&provider).await;
+
+        assert!(matches!(
+            result,
+            TestAiProviderCredentialsResult::Unreachable { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_empty_event_stream_yields_valid() {
+        // Spec-Reviewer-Fund wäre denkbar: kein Event überhaupt (Stream
+        // endet sofort) sollte nicht als Erfolg fehlinterpretiert werden
+        // wie ein "es kam wenigstens etwas zurück"-Fall — dokumentiert das
+        // aktuelle Verhalten (fällt auf `Valid` zurück, `_`-Arm) explizit,
+        // statt es unbeobachtet zu lassen. In der Praxis unwahrscheinlich
+        // (jeder reale `AiProvider` liefert entweder ein Event oder einen
+        // `Error`), aber MockAiProvider mit leerem Vec macht genau das
+        // reproduzierbar.
+        let provider = MockAiProvider::new(vec![]);
+
+        let result = classify_credential_test_result(&provider).await;
+
+        assert!(matches!(result, TestAiProviderCredentialsResult::Valid));
+    }
 }
 
 /// Spec 0025, Abschnitt 4: ruft den beim Provider hinterlegten

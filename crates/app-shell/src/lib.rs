@@ -340,6 +340,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::delete_ai_provider,
             commands::set_active_ai_provider,
             commands::discover_models,
+            commands::test_ai_provider_credentials,
             commands::fetch_attestation_info,
             commands::connect,
             commands::confirm_host_key,

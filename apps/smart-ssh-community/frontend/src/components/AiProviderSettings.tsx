@@ -9,12 +9,14 @@ import {
   fetchAttestationInfo,
   listAiProviders,
   setActiveAiProvider,
+  testAiProviderCredentials,
 } from "../api";
 import { loadRiskClassifierSettings, saveRiskClassifierSettings } from "../riskSettings";
 import {
   type AiProviderConfigDto,
   type AiProviderConfigInput,
   type ProviderType,
+  type TestAiProviderCredentialsResult,
   PROVIDER_TYPE_LABELS,
   needsBaseUrl,
   supportsModelDiscovery,
@@ -66,6 +68,9 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   const [models, setModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsFailed, setModelsFailed] = useState(false);
+  const [credentialTestRunning, setCredentialTestRunning] = useState(false);
+  const [credentialTestResult, setCredentialTestResult] =
+    useState<TestAiProviderCredentialsResult | null>(null);
   const [attestationResults, setAttestationResults] = useState<Record<string, string>>({});
   const [attestationLoading, setAttestationLoading] = useState<Record<string, boolean>>({});
   const [attestationErrors, setAttestationErrors] = useState<Record<string, string>>({});
@@ -120,6 +125,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       setForm(emptyForm());
       setModels([]);
       setModelsFailed(false);
+      setCredentialTestResult(null);
       reload();
       onProvidersChanged();
     } catch (err) {
@@ -145,6 +151,26 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       setModels([]);
     } finally {
       setModelsLoading(false);
+    }
+  };
+
+  /** Spec 0050, Teil 3: testet die gerade eingegebenen, noch nicht
+   * gespeicherten Formulardaten mit einem echten Mini-Request — analog zu
+   * `handleDiscoverModels` oben, aber mit einem klar dreiwertigen Ergebnis
+   * statt "Erfolg oder Fallback aufs Freitextfeld". Ein `catch` hier ist
+   * ein echter Bedienfehler (z. B. kein API-Key gesetzt), nicht einer der
+   * drei regulären Testausgänge — die kommen als normaler Rückgabewert,
+   * kein Wurf. */
+  const handleTestCredentials = async () => {
+    setCredentialTestRunning(true);
+    setCredentialTestResult(null);
+    try {
+      const result = await testAiProviderCredentials(form);
+      setCredentialTestResult(result);
+    } catch (err) {
+      setError(commandErrorMessage(err));
+    } finally {
+      setCredentialTestRunning(false);
     }
   };
 
@@ -329,9 +355,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             {t("aiProvider.type")}
             <select
               value={form.providerType}
-              onChange={(e) =>
-                setForm({ ...form, providerType: e.target.value as ProviderType })
-              }
+              onChange={(e) => {
+                setForm({ ...form, providerType: e.target.value as ProviderType });
+                setCredentialTestResult(null);
+              }}
               className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
             >
               {PROVIDER_TYPES.map((type) => (
@@ -422,7 +449,13 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               type="password"
               required
               value={form.apiKey}
-              onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+              onChange={(e) => {
+                setForm({ ...form, apiKey: e.target.value });
+                // Spec 0050, Teil 3: ein Testergebnis bezieht sich auf den
+                // Stand zum Testzeitpunkt — ändert sich der Key danach,
+                // wäre ein weiterhin angezeigtes "gültig" irreführend.
+                setCredentialTestResult(null);
+              }}
               className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
             />
           </label>
@@ -431,8 +464,6 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
            * ist, der Provider kein vorhersagbares Format hat, oder das
            * Präfix passt. Der Submit-Handler prüft dieses Ergebnis nicht;
            * Speichern bleibt in jedem Fall möglich. */}
-
-
           {apiKeyWarning && (
             <p className="text-xs text-amber-400">
               {t("aiProvider.apiKeyFormatHint", {
@@ -441,6 +472,33 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               })}
             </p>
           )}
+
+          {/* Spec 0050, Teil 3: "Testen"-Button — analog zum
+           * "Verbindung testen" bei Servern (Spec 0008), nutzt die gerade
+           * eingegebenen, noch nicht gespeicherten Formulardaten. */}
+          <div>
+            <button
+              type="button"
+              onClick={handleTestCredentials}
+              disabled={credentialTestRunning || !form.apiKey.trim()}
+              className="rounded border border-slate-600 px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+            >
+              {credentialTestRunning ? t("aiProvider.testingCredentials") : t("aiProvider.testCredentials")}
+            </button>
+            {credentialTestResult && (
+              <p
+                className={`mt-1 text-xs ${
+                  credentialTestResult.kind === "valid" ? "text-emerald-400" : "text-red-400"
+                }`}
+              >
+                {credentialTestResult.kind === "valid" && t("aiProvider.testResultValid")}
+                {credentialTestResult.kind === "authenticationFailed" &&
+                  t("aiProvider.testResultAuthFailed")}
+                {credentialTestResult.kind === "unreachable" &&
+                  t("aiProvider.testResultUnreachable", { message: credentialTestResult.message })}
+              </p>
+            )}
+          </div>
 
           <label className="flex items-center gap-2 text-sm text-slate-300">
             <input

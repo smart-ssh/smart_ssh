@@ -27,6 +27,7 @@ import type {
   ServerDto,
   ServerInput,
   SessionSummaryDto,
+  TestAiProviderCredentialsResult,
   TestConnectionResult,
 } from "./types";
 
@@ -109,6 +110,22 @@ export const setActiveAiProvider = (id: string) =>
  * statt den Fehler als blockierenden Zustand zu behandeln. */
 export const discoverModels = (config: AiProviderConfigInput, existingProviderId?: string) =>
   invoke<string[]>("discover_models", {
+    config,
+    existingProviderId: existingProviderId ?? null,
+  });
+
+/** Spec 0050, Teil 3: analog zu `discoverModels` oben — läuft mit den
+ * aktuellen, noch nicht gespeicherten Formulardaten, `existingProviderId`
+ * für denselben "leer = unverändert"-Fall. Wirft **nicht** bei einem
+ * fehlgeschlagenen Test (Auth-Fehler/nicht erreichbar sind reguläre,
+ * unterscheidbare `TestAiProviderCredentialsResult`-Werte, kein
+ * `CommandError`) — nur ein echter Bedienfehler (z. B. fehlender API-Key)
+ * wirft. */
+export const testAiProviderCredentials = (
+  config: AiProviderConfigInput,
+  existingProviderId?: string,
+) =>
+  invoke<TestAiProviderCredentialsResult>("test_ai_provider_credentials", {
     config,
     existingProviderId: existingProviderId ?? null,
   });
