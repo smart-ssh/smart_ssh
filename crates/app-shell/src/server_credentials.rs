@@ -39,12 +39,20 @@ pub fn sudo_password_credential_ref(server_id: ServerId) -> CredentialRef {
 /// *irgendeinen* Wert für ein Pflichtfeld). `provided: Some("")` wird wie
 /// `None` behandelt (Formularfelder liefern bei "nichts eingegeben" einen
 /// leeren String, keinen fehlenden Wert).
+///
+/// Spec 0049, Fund 1: `provided` wird zuerst rand-getrimmt (führende/
+/// nachfolgende `\r`/`\n`/Tabs/Leerzeichen — z. B. von einem Windows-
+/// Copy-Paste), **bevor** die Leer-Prüfung läuft. Ohne diese Reihenfolge
+/// würde ein rein aus Whitespace bestehender Paste die `!value.is_empty()`-
+/// Prüfung fälschlich bestehen und ein leeres/Whitespace-Secret
+/// überschreiben, statt (wie ein echtes Leerfeld) als "unverändert" zu
+/// gelten.
 pub fn resolve_sudo_password(
     credential_store: &dyn CredentialStore,
     server_id: ServerId,
     provided: Option<String>,
 ) -> Result<(), CommandError> {
-    match provided {
+    match provided.map(|value| value.trim().to_string()) {
         Some(value) if !value.is_empty() => {
             credential_store.set(
                 &sudo_password_credential_ref(server_id),
@@ -71,6 +79,15 @@ pub fn clear_sudo_password(credential_store: &dyn CredentialStore, server_id: Se
 /// Slot nicht (Neuanlage, oder Methodenwechsel bei Update) und `provided`
 /// ist leer, ist das ein Fehler: es gibt keinen "alten Wert", der
 /// übernommen werden könnte.
+///
+/// Spec 0049, Fund 1: `provided` wird zuerst rand-getrimmt. Das deckt
+/// zwei Fälle: (a) der eigentliche Fund — ein Windows-Copy-Paste mit
+/// angehängtem `\r\n` wird nicht ungetrimmt gespeichert; (b) macht diesen
+/// Doc-Kommentar erst wahr — bislang prüfte der Code unten `Some(value)`
+/// unabhängig vom Inhalt, ein rein aus Whitespace bestehender Paste (oder
+/// schlicht ein leerer String bei Neuanlage) wurde also als "gültiger
+/// Wert" durchgereicht und gespeichert, statt wie ein echtes Leerfeld
+/// "unverändert lassen"/"Pflichtfeld fehlt" auszulösen.
 fn write_or_reuse_secret(
     credential_store: &dyn CredentialStore,
     ref_: &CredentialRef,
@@ -79,13 +96,13 @@ fn write_or_reuse_secret(
     label: &str,
     code: &'static str,
 ) -> Result<(), CommandError> {
-    match provided {
-        Some(value) => {
+    match provided.map(|value| value.trim().to_string()) {
+        Some(value) if !value.is_empty() => {
             credential_store.set(ref_, SecretString::from(value))?;
             Ok(())
         }
-        None if previously_existed => Ok(()),
-        None => Err(CommandError::with_code(
+        _ if previously_existed => Ok(()),
+        _ => Err(CommandError::with_code(
             format!("{label} ist erforderlich"),
             code,
         )),
@@ -191,13 +208,20 @@ pub fn resolve_auth_method(
                 }) => Some(r.clone()),
                 _ => None,
             };
-            let passphrase_ref = match passphrase {
-                Some(p) => {
+            // Spec 0049, Fund 1: rand-trimmen, bevor entschieden wird, ob
+            // überhaupt eine neue Passphrase vorliegt — sonst würde ein
+            // rein aus Whitespace bestehender Paste (kommt von der
+            // Frontend-Leer-Prüfung `passphrase === ""` nicht ab, s.
+            // `ServerForm.tsx`s `toAuthMethodInput`) fälschlich als "neue
+            // Passphrase gesetzt" gewertet, statt wie ein echtes Leerfeld
+            // die bestehende Passphrase unverändert zu lassen.
+            let passphrase_ref = match passphrase.map(|p| p.trim().to_string()) {
+                Some(p) if !p.is_empty() => {
                     let r = credential_ref(server_id, "passphrase");
                     credential_store.set(&r, SecretString::from(p))?;
                     Some(r)
                 }
-                None => existing_passphrase_ref,
+                _ => existing_passphrase_ref,
             };
             Ok(AuthMethod::PrivateKey {
                 credential_ref: key_ref,
@@ -565,5 +589,188 @@ mod tests {
         let id = ServerId::new();
 
         clear_sudo_password(&store, id);
+    }
+
+    // --- Spec 0049, Fund 1: Rand-Trimmen (Windows-Copy-Paste-`\r\n`) -------
+
+    #[test]
+    fn test_password_with_trailing_crlf_is_stored_trimmed() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        let auth = resolve_auth_method(
+            &store,
+            id,
+            AuthMethodInput::Password {
+                value: Some("hunter2\r\n".to_string()),
+            },
+            None,
+        )
+        .unwrap();
+
+        let AuthMethod::Password { credential_ref } = &auth else {
+            panic!("erwartete AuthMethod::Password");
+        };
+        assert_eq!(
+            secret_value(&store, credential_ref).as_deref(),
+            Some("hunter2"),
+            "angehängtes \\r\\n muss beim Speichern getrimmt werden"
+        );
+    }
+
+    #[test]
+    fn test_password_with_leading_and_trailing_whitespace_is_trimmed_but_interior_kept() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        let auth = resolve_auth_method(
+            &store,
+            id,
+            AuthMethodInput::Password {
+                value: Some("  hunter two \t".to_string()),
+            },
+            None,
+        )
+        .unwrap();
+
+        let AuthMethod::Password { credential_ref } = &auth else {
+            panic!("erwartete AuthMethod::Password");
+        };
+        assert_eq!(
+            secret_value(&store, credential_ref).as_deref(),
+            Some("hunter two"),
+            "nur der Rand wird getrimmt, das innenliegende Leerzeichen bleibt erhalten"
+        );
+    }
+
+    #[test]
+    fn test_password_of_only_whitespace_on_create_is_rejected_as_missing() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        let result = resolve_auth_method(
+            &store,
+            id,
+            AuthMethodInput::Password {
+                value: Some("  \r\n\t ".to_string()),
+            },
+            None,
+        );
+
+        let err = result.expect_err("ein rein aus Whitespace bestehender Paste ist kein Passwort");
+        assert_eq!(err.code, Some("SERVER_PASSWORD_REQUIRED"));
+    }
+
+    #[test]
+    fn test_password_of_only_whitespace_on_update_leaves_existing_secret_unchanged() {
+        let id = ServerId::new();
+        let existing_ref = credential_ref(id, "password");
+        let store = InMemoryCredentialStore::new().with_secret(&existing_ref, "old-password");
+        let existing = AuthMethod::Password {
+            credential_ref: existing_ref.clone(),
+        };
+
+        resolve_auth_method(
+            &store,
+            id,
+            AuthMethodInput::Password {
+                value: Some(" \r\n ".to_string()),
+            },
+            Some(&existing),
+        )
+        .unwrap();
+
+        assert_eq!(
+            secret_value(&store, &existing_ref).as_deref(),
+            Some("old-password"),
+            "ein Whitespace-Paste bei einem Update darf das bestehende Passwort nicht überschreiben"
+        );
+    }
+
+    #[test]
+    fn test_sudo_password_with_trailing_crlf_is_stored_trimmed() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        resolve_sudo_password(&store, id, Some("sudo-secret\r\n".to_string())).unwrap();
+
+        assert_eq!(
+            secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
+            Some("sudo-secret")
+        );
+    }
+
+    #[test]
+    fn test_sudo_password_of_only_whitespace_on_update_leaves_existing_unchanged() {
+        let id = ServerId::new();
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(id), "old-sudo-password");
+
+        resolve_sudo_password(&store, id, Some("\r\n".to_string())).unwrap();
+
+        assert_eq!(
+            secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
+            Some("old-sudo-password")
+        );
+    }
+
+    #[test]
+    fn test_passphrase_with_trailing_crlf_is_stored_trimmed() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        let auth = resolve_auth_method(
+            &store,
+            id,
+            AuthMethodInput::PrivateKey {
+                key_content: Some("-----BEGIN KEY-----".to_string()),
+                passphrase: Some("passphrase-secret\r\n".to_string()),
+            },
+            None,
+        )
+        .unwrap();
+
+        let AuthMethod::PrivateKey { passphrase_ref, .. } = &auth else {
+            panic!("erwartete AuthMethod::PrivateKey");
+        };
+        let passphrase_ref = passphrase_ref.as_ref().expect("Passphrase wurde gesetzt");
+        assert_eq!(
+            secret_value(&store, passphrase_ref).as_deref(),
+            Some("passphrase-secret")
+        );
+    }
+
+    #[test]
+    fn test_passphrase_of_only_whitespace_on_update_leaves_existing_passphrase_unchanged() {
+        let id = ServerId::new();
+        let key_ref = credential_ref(id, "private_key");
+        let existing_passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&key_ref, "old-key")
+            .with_secret(&existing_passphrase_ref, "old-passphrase");
+        let existing = AuthMethod::PrivateKey {
+            credential_ref: key_ref.clone(),
+            passphrase_ref: Some(existing_passphrase_ref.clone()),
+        };
+
+        let auth = resolve_auth_method(
+            &store,
+            id,
+            AuthMethodInput::PrivateKey {
+                key_content: None,
+                passphrase: Some(" \t ".to_string()),
+            },
+            Some(&existing),
+        )
+        .unwrap();
+
+        let AuthMethod::PrivateKey { passphrase_ref, .. } = &auth else {
+            panic!("erwartete AuthMethod::PrivateKey");
+        };
+        assert_eq!(passphrase_ref.as_ref(), Some(&existing_passphrase_ref));
+        assert_eq!(
+            secret_value(&store, &existing_passphrase_ref).as_deref(),
+            Some("old-passphrase")
+        );
     }
 }

@@ -109,6 +109,9 @@ pub async fn add_ai_provider(
     state: State<'_, AppState>,
     config: AiProviderConfigInput,
 ) -> CommandResult<ProviderId> {
+    // Spec 0049, Fund 1: als Erstes, bevor `api_key`/`base_url` irgendwo
+    // gelesen werden.
+    let config = config.trimmed();
     let id = ProviderId::new();
     let credential_ref = credential_ref_for(id);
     state
@@ -143,6 +146,11 @@ pub async fn update_ai_provider(
     id: ProviderId,
     config: AiProviderConfigInput,
 ) -> CommandResult<()> {
+    // Spec 0049, Fund 1: siehe `add_ai_provider` — muss vor dem
+    // `api_key.is_empty()`-Check unten laufen, sonst besteht ein rein aus
+    // Whitespace bestehender Paste die Prüfung fälschlich und überschreibt
+    // das bestehende Credential mit einem leeren Wert.
+    let config = config.trimmed();
     let api_key = config.api_key.clone();
     state
         .ai_provider_store
@@ -207,6 +215,11 @@ pub async fn discover_models(
     config: AiProviderConfigInput,
     existing_provider_id: Option<ProviderId>,
 ) -> CommandResult<Vec<String>> {
+    // Spec 0049, Fund 1: derselbe Reihenfolge-Grund wie in
+    // `add_ai_provider`/`update_ai_provider` — hier zusätzlich relevant,
+    // weil ein ungetrimmter `api_key` sonst direkt an den echten Provider
+    // ginge und dort mit einem Auth-Fehler abgelehnt würde.
+    let config = config.trimmed();
     if !matches!(
         config.provider_type,
         ssh_manager_core::ai::ProviderType::OpenAi

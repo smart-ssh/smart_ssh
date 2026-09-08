@@ -168,6 +168,25 @@ pub struct AiProviderConfigInput {
 }
 
 impl AiProviderConfigInput {
+    /// Spec 0049, Fund 1: rand-trimmt `api_key` und die Endpunkt-Felder
+    /// (`base_url`, `attestation_url`) — führende/nachfolgende Whitespaces
+    /// inkl. `\r`/`\n`/Tabs, wie sie ein Copy-Paste unter Windows an einen
+    /// eingefügten API-Key oder eine eingefügte URL anhängt. Zentrale
+    /// Stelle statt UI-verstreutem Trimmen: jeder Aufrufer von
+    /// `add_ai_provider`/`update_ai_provider`/`discover_models` ruft dies
+    /// als Erstes auf `config` auf, bevor der Wert irgendwo verwendet
+    /// wird — greift damit unabhängig vom Eingabeweg (Paste, Tippen,
+    /// später Import). Nur der Rand wird angefasst, der Inhalt (auch ein
+    /// `Some("")` nach dem Trimmen) bleibt unverändert — dieselbe "leer ==
+    /// unverändert lassen"-Semantik wie vor dem Trimmen gilt unangetastet
+    /// weiter, das ist nicht Teil dieses Funds.
+    pub fn trimmed(mut self) -> Self {
+        self.api_key = self.api_key.trim().to_string();
+        self.base_url = self.base_url.map(|v| v.trim().to_string());
+        self.attestation_url = self.attestation_url.map(|v| v.trim().to_string());
+        self
+    }
+
     /// Baut die volle [`AiProviderConfig`] für [`persistence_sqlite::SqliteAiProviderStore::create`]
     /// — `id`/`credential_ref` werden hier frisch vergeben (ein Aufruf pro
     /// `add_ai_provider`, s. Spec Abschnitt 8.2: "Backend generiert eine
@@ -975,5 +994,51 @@ mod tests {
 
         let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, vec!["Apps", "bin", "alpha.txt", "zebra.txt"]);
+    }
+
+    // --- Spec 0049, Fund 1: Rand-Trimmen (Windows-Copy-Paste-`\r\n`) -------
+
+    fn ai_provider_config_input(api_key: &str, base_url: Option<&str>) -> AiProviderConfigInput {
+        AiProviderConfigInput {
+            provider_type: ProviderType::Anthropic,
+            display_name: "Test".to_string(),
+            base_url: base_url.map(|s| s.to_string()),
+            model: "claude-sonnet-5".to_string(),
+            supports_native_tool_calling: true,
+            api_key: api_key.to_string(),
+            extra_headers: Vec::new(),
+            attestation_url: None,
+        }
+    }
+
+    #[test]
+    fn test_ai_provider_config_input_trimmed_strips_trailing_crlf_from_api_key() {
+        let config = ai_provider_config_input("sk-ant-secret\r\n", None).trimmed();
+        assert_eq!(config.api_key, "sk-ant-secret");
+    }
+
+    #[test]
+    fn test_ai_provider_config_input_trimmed_keeps_interior_characters() {
+        let config = ai_provider_config_input("  sk ant secret \t", None).trimmed();
+        assert_eq!(
+            config.api_key, "sk ant secret",
+            "nur der Rand wird getrimmt, innenliegende Zeichen bleiben"
+        );
+    }
+
+    #[test]
+    fn test_ai_provider_config_input_trimmed_strips_whitespace_from_base_url() {
+        let config =
+            ai_provider_config_input("sk-key", Some(" https://example.invalid/v1\r\n ")).trimmed();
+        assert_eq!(
+            config.base_url.as_deref(),
+            Some("https://example.invalid/v1")
+        );
+    }
+
+    #[test]
+    fn test_ai_provider_config_input_trimmed_leaves_none_base_url_as_none() {
+        let config = ai_provider_config_input("sk-key", None).trimmed();
+        assert_eq!(config.base_url, None);
     }
 }
