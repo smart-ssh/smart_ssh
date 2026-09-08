@@ -9,6 +9,18 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+### Added
+- Einstellungen neu strukturiert: Navigation links, Inhalt rechts (statt
+  einer langen, ungegliederten Liste) — Kategorien für KI-Provider, Anzeige
+  & Sprache, Diagnose, Sitzungen & Daten und MCP-Server.
+- KI-Provider-Formular: sofortiger, rein lokaler Hinweis, falls ein
+  eingegebener API-Key nicht zum erwarteten Format des gewählten Providers
+  passt (nur ein Hinweis, blockiert nie das Speichern).
+- KI-Provider-Formular: "Zugangsdaten testen"-Button prüft die gerade
+  eingegebenen, noch nicht gespeicherten Zugangsdaten mit einem echten
+  Mini-Request und zeigt, ob sie gültig sind, die Authentifizierung
+  fehlschlägt, oder der Provider nicht erreichbar ist.
+
 ### Fixed
 - Ein eingefügter API-Key, ein Server-Passwort/Sudo-Passwort oder eine
   Key-Passphrase mit einem angehängten Zeilenumbruch/Leerzeichen (z. B. von

@@ -15,8 +15,9 @@
  * als Notlösung). Entfernt — ein entfernter Typ kann jederzeit wiederkommen,
  * wenn ein Feature ihn braucht, dann aber mit Rendering, nicht als leere
  * Deklaration. Verbleibende Typen: `registerSettingsSection` (gerendert in
- * `AiProviderSettings`) und `registerDocumentAction` (gerendert in
- * `ChatPanel`s Dokument-Karte, Spec 0045).
+ * `SettingsScreen`, Spec 0050 — vor dem dortigen Umbau auf die
+ * zweispaltige Struktur in `AiProviderSettings`) und `registerDocumentAction`
+ * (gerendert in `ChatPanel`s Dokument-Karte, Spec 0045).
  *
  * **Scope-Hinweis:** Spec 0038 Abschnitt 4 skizziert dieses Paket unter
  * `frontend/packages/app` (Repo-Root, außerhalb der konkreten App). Das
