@@ -299,7 +299,7 @@
     "SSH_CREDENTIAL_RESOLUTION_FAILED": "Zugangsdaten konnten nicht aufgelöst werden",
     "SSH_SFTP_PERMISSION_DENIED": "Zugriff verweigert",
     "AI_AUTH_FAILED": "Authentifizierung beim KI-Provider fehlgeschlagen – API-Key prüfen",
-    "AI_RATE_LIMITED": "Rate-Limit des KI-Providers erreicht",
+    "AI_RATE_LIMITED": "Der KI-Anbieter drosselt gerade die Anfragen (Rate-Limit) – die App hat es automatisch mehrfach erneut versucht. Bitte kurz warten und die Nachricht erneut senden.",
     "AI_NETWORK_ERROR": "Netzwerkfehler beim KI-Provider – läuft er (z. B. Ollama gestartet)?",
     "AI_INVALID_RESPONSE": "Unerwartete Antwort des KI-Providers",
     "AI_CONTEXT_TOO_LARGE": "Kontext zu groß für den KI-Provider",

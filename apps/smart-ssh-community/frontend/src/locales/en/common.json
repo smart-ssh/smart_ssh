@@ -299,7 +299,7 @@
     "SSH_CREDENTIAL_RESOLUTION_FAILED": "Failed to resolve credentials",
     "SSH_SFTP_PERMISSION_DENIED": "Access denied",
     "AI_AUTH_FAILED": "Authentication with the AI provider failed – check the API key",
-    "AI_RATE_LIMITED": "AI provider rate limit reached",
+    "AI_RATE_LIMITED": "The AI provider is currently throttling requests (rate limit) – the app already retried automatically a few times. Please wait a moment and send the message again.",
     "AI_NETWORK_ERROR": "Network error with the AI provider – is it running (e.g. Ollama started)?",
     "AI_INVALID_RESPONSE": "Unexpected response from the AI provider",
     "AI_CONTEXT_TOO_LARGE": "Context too large for the AI provider",
