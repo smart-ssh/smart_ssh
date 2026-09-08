@@ -278,8 +278,17 @@ impl AiProvider for AnthropicProvider {
                 // erneut gesendet).
                 if response.status().as_u16() == 429 {
                     let elapsed = retry_start.elapsed();
-                    if crate::retry::retry_allowed(attempt + 1, elapsed) {
-                        let delay = crate::retry::retry_delay(response.headers(), attempt);
+                    let remaining = crate::retry::MAX_TOTAL_RETRY_TIME.saturating_sub(elapsed);
+                    let delay = crate::retry::retry_delay(response.headers(), attempt);
+                    // Spec-Reviewer-Fund (Spec 0051, Review dieses
+                    // Schritts): `delay <= remaining` statt `delay.min(
+                    // remaining)` zu schlafen und danach trotzdem zu
+                    // senden — ein `Retry-After`, das länger ist als das
+                    // verbleibende Zeitbudget, ist ein expliziter Hinweis
+                    // des Providers, es vorher nicht erneut zu versuchen;
+                    // ein verfrühter Request danach wäre sinnlos (und
+                    // könnte die Sperre bei manchen Providern verlängern).
+                    if crate::retry::retry_allowed(attempt + 1, elapsed) && delay <= remaining {
                         let text = response.text().await.unwrap_or_default();
                         crate::request_logging::log_provider_rate_limited_retry(
                             request_id,
@@ -288,8 +297,7 @@ impl AiProvider for AnthropicProvider {
                             delay,
                             &[&api_key],
                         );
-                        let remaining = crate::retry::MAX_TOTAL_RETRY_TIME.saturating_sub(elapsed);
-                        tokio::time::sleep(delay.min(remaining)).await;
+                        tokio::time::sleep(delay).await;
                         continue;
                     }
                 }

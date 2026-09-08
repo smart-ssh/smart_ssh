@@ -5,11 +5,15 @@
 //!
 //! **Redaction-Invariante (Spec 0051):** ein Retry wiederholt exakt den
 //! bereits aufgebauten Request-Body unverändert (derselbe `body`-Wert wie
-//! beim Erstversuch) — der Inhalt wurde bereits vor dem `AiProvider::
-//! send()`-Aufruf in `app-shell::orchestration` redigiert
-//! (`reapply_redaction_for_send`). Ein Retry fügt also nie neuen,
-//! unredigierten Inhalt hinzu; er sendet nur denselben, bereits
-//! redigierten Request ein weiteres Mal.
+//! beim Erstversuch) — er kann also nie *zusätzlichen*, unredigierten
+//! Inhalt einbringen, der beim Erstversuch nicht auch schon rausgegangen
+//! wäre. Für den Haupt-Chat-Request/Auto-Titel/Notiz-Vorschlag ist dieser
+//! Inhalt bereits vor `AiProvider::send()` in `app-shell::orchestration`
+//! redigiert (`reapply_redaction_for_send`). Der Risiko-Zweitmeinungs-Pfad
+//! (`app_shell::risk_second_opinion::fetch_second_opinion`) sendet dagegen
+//! bewusst den rohen Pseudo-Befehl ohne diese Redaction (Spec-0026-Design,
+//! unverändert durch Spec 0051) — ein Retry verschlechtert das nicht (s.
+//! oben: identische Bytes), verbessert es aber auch nicht.
 
 use std::time::Duration;
 
@@ -23,7 +27,22 @@ pub(crate) const MAX_ATTEMPTS: u32 = 4;
 /// `Retry-After`-Wert (oder mehrere davon in Folge) den Chat-Turn
 /// praktisch unbegrenzt blockiert, selbst wenn `MAX_ATTEMPTS` noch nicht
 /// erreicht ist.
-pub(crate) const MAX_TOTAL_RETRY_TIME: Duration = Duration::from_secs(60);
+///
+/// Spec-Reviewer-Fund (Spec 0051, Review dieses Schritts): dieselbe
+/// Retry-Schleife läuft auch für die beiden inline-awaiteten
+/// Best-Effort-Nebenpfade (Risiko-Zweitmeinung, Einschleusungs-Check, s.
+/// `AiProvider::send`-Aufrufstellen in `app-shell::orchestration`), die
+/// vor Spec 0051 bei einem 429 sofort (lautlos) aufgaben — ein hoher Wert
+/// hier hätte sie neu zu einem bis zu minutenlangen, für den Nutzer
+/// unsichtbaren Stillstand mitten im Chat-Turn gemacht (z. B. zwischen
+/// Bestätigungsklick und tatsächlicher Ausführung). 20s statt der
+/// ursprünglich gewählten 60s hält das Worst-Case-Fenster spürbar kleiner,
+/// ohne dem Haupt-Chat-Request die in der Spec verlangte
+/// Gesamtzeit-Deckelung zu nehmen — ein voller, providerseitig
+/// unterscheidbarer Retry-Etat pro Aufrufer wäre eine `AiProvider::send`-
+/// Signaturänderung wert gewesen, aber für diesen Schritt unverhältnismäßig
+/// (s. Spec-0051-Abschlussbericht).
+pub(crate) const MAX_TOTAL_RETRY_TIME: Duration = Duration::from_secs(20);
 
 const BASE_BACKOFF: Duration = Duration::from_millis(500);
 const MAX_BACKOFF: Duration = Duration::from_secs(20);
@@ -102,6 +121,31 @@ mod tests {
         );
 
         assert_eq!(parse_retry_after(&headers), None);
+    }
+
+    /// Spec-Reviewer-Fund (Spec 0051, Review dieses Schritts): bislang war
+    /// nur `parse_retry_after`/`backoff_delay` einzeln getestet, nie die
+    /// Vorrangregel selbst (`retry_delay`) — eine Regression, die
+    /// `Retry-After` ignoriert und immer aufs Backoff zurückfällt, wäre
+    /// unbemerkt geblieben (die Integrationstests in `tests/*.rs` nutzen
+    /// `Retry-After: 0`, wo Vorrang und Backoff-Fallback zufällig fast
+    /// gleich aussehen).
+    #[test]
+    fn test_retry_delay_prefers_retry_after_over_backoff() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::RETRY_AFTER, "5".parse().unwrap());
+
+        assert_eq!(retry_delay(&headers, 1), Duration::from_secs(5));
+    }
+
+    #[test]
+    fn test_retry_delay_falls_back_to_backoff_without_retry_after() {
+        let headers = reqwest::header::HeaderMap::new();
+
+        let delay = retry_delay(&headers, 1);
+
+        assert_ne!(delay, Duration::from_secs(5));
+        assert!(delay >= BASE_BACKOFF);
     }
 
     #[test]

@@ -106,9 +106,12 @@ async fn test_fallback_mode_treats_malformed_action_block_as_plain_text() {
 #[tokio::test]
 async fn test_authentication_failure_maps_401_to_ai_error() {
     let server = MockServer::start().await;
+    // `.expect(1)`: s. identischer Kommentar in
+    // `tests/anthropic.rs::test_authentication_failure_maps_401_to_ai_error`.
     Mock::given(method("POST"))
         .and(path("/chat/completions"))
         .respond_with(ResponseTemplate::new(401).set_body_string("unauthorized"))
+        .expect(1)
         .mount(&server)
         .await;
     let provider =
@@ -176,6 +179,29 @@ async fn test_persistent_429_gives_up_after_attempt_cap_with_rate_limited_error(
                 .set_body_string("rate limited"),
         )
         .expect(4)
+        .mount(&server)
+        .await;
+    let provider =
+        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", true, Vec::new());
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(events, vec![AiEvent::Error(AiError::RateLimited)]);
+}
+
+/// Spec-Reviewer-Fund: s. identischer Kommentar in
+/// `tests/anthropic.rs::test_retry_after_longer_than_total_budget_gives_up_without_extra_request`.
+#[tokio::test]
+async fn test_retry_after_longer_than_total_budget_gives_up_without_extra_request() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("retry-after", "3600")
+                .set_body_string("rate limited"),
+        )
+        .expect(1)
         .mount(&server)
         .await;
     let provider =

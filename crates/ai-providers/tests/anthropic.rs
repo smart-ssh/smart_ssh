@@ -110,9 +110,15 @@ event: message_stop\ndata: {{}}\n\n",
 #[tokio::test]
 async fn test_authentication_failure_maps_401_to_ai_error() {
     let server = MockServer::start().await;
+    // Spec-Reviewer-Fund (Spec 0051, Review dieses Schritts): `.expect(1)`
+    // beweist, dass nur 429 automatisch wiederholt wird — ohne diese
+    // Zählung würde eine Regression zu "jeder Nicht-Erfolgs-Status wird
+    // wiederholt" unbemerkt bleiben (die reine Endzustands-Assertion unten
+    // wäre in beiden Fällen identisch grün).
     Mock::given(method("POST"))
         .and(path("/v1/messages"))
         .respond_with(ResponseTemplate::new(401).set_body_string("unauthorized"))
+        .expect(1)
         .mount(&server)
         .await;
     let provider = AnthropicProvider::new(server.uri(), "claude-test", "bad-key", true);
@@ -190,6 +196,32 @@ async fn test_persistent_429_gives_up_after_attempt_cap_with_rate_limited_error(
                 .set_body_string("rate limited"),
         )
         .expect(4)
+        .mount(&server)
+        .await;
+    let provider = AnthropicProvider::new(server.uri(), "claude-test", "test-key", true);
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(events, vec![AiEvent::Error(AiError::RateLimited)]);
+}
+
+/// Spec-Reviewer-Fund (Spec 0051, Review dieses Schritts): ein
+/// `Retry-After`, das länger ist als das verbleibende Gesamtzeit-Budget,
+/// muss sofort aufgeben statt trotzdem noch einen (zu frühen) Request zu
+/// schicken — `.expect(1)` beweist, dass tatsächlich nur der Erstversuch
+/// stattfindet, nicht erst nach einem (in einem echten Test unpraktikablen)
+/// stundenlangen Warten.
+#[tokio::test]
+async fn test_retry_after_longer_than_total_budget_gives_up_without_extra_request() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("retry-after", "3600")
+                .set_body_string("rate limited"),
+        )
+        .expect(1)
         .mount(&server)
         .await;
     let provider = AnthropicProvider::new(server.uri(), "claude-test", "test-key", true);

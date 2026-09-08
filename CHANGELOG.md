@@ -30,6 +30,15 @@ sind mit **(Pro)** markiert.
   auf die volle native Titelleiste zurück (inkl. funktionierender
   Minimieren-/Maximieren-/Schließen-Controls und Fenster-Ziehen), statt in
   einem kaputten Zwischenzustand hängen zu bleiben.
+- Ein vom KI-Provider zurückgemeldetes Rate-Limit (HTTP 429) — bislang der
+  häufigste Grund, warum die KI mitten in einer Sitzung ohne jede Meldung
+  aufhörte zu antworten — wird jetzt automatisch mit Backoff und
+  `Retry-After`-Berücksichtigung wiederholt; die mehreren KI-Anfragen pro
+  Nachricht (Hauptantwort, Risiko-Zweitmeinung, Einschleusungs-Check) werden
+  zeitlich entzerrt statt als Burst abgeschickt. Scheitert es trotzdem, zeigt
+  der Chat jetzt eine eigene, handlungsanleitende Meldung ("bitte kurz warten
+  und erneut senden") statt der generischen "Provider-Konfiguration prüfen"-
+  Meldung.
 
 ### Security
 - Bei einem Fehler eines KI-Providers (falscher API-Key, Rate-Limit,
