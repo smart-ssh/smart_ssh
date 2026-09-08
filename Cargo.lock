@@ -87,6 +87,7 @@ dependencies = [
  "ssh-manager-core",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "wiremock",
 ]

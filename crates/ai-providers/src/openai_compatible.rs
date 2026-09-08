@@ -30,8 +30,9 @@ use crate::action::{action_from_tool_arguments, parameters_json_schema};
 use crate::error::{error_stream, map_http_status, map_transport_error};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
-    log_outgoing_context, log_text_delta_summary, log_tool_call_fragment,
-    log_tool_call_parse_error, log_tool_call_parsed,
+    log_outgoing_context, log_provider_error_response, log_provider_transport_error,
+    log_text_delta_summary, log_tool_call_fragment, log_tool_call_parse_error,
+    log_tool_call_parsed,
 };
 use crate::sse::{sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
@@ -247,22 +248,33 @@ impl AiProvider for OpenAiCompatibleProvider {
             let send = req.json(&body).send();
             let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
                 Ok(Ok(response)) => response,
-                Ok(Err(err)) => return error_stream(map_transport_error(&err)),
+                Ok(Err(err)) => {
+                    let mapped = map_transport_error(&err);
+                    log_provider_transport_error(request_id, &mapped);
+                    return error_stream(mapped);
+                }
                 // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) —
                 // ohne dieses Limit würde ein hängender Verbindungsaufbau
                 // den Chat-Turn für immer ohne jede Fehlermeldung blockieren.
                 Err(_elapsed) => {
-                    return error_stream(AiError::NetworkError(format!(
+                    let mapped = AiError::NetworkError(format!(
                         "Keine Antwort vom KI-Provider seit über {} Sekunden",
                         SSE_INACTIVITY_TIMEOUT.as_secs()
-                    )))
+                    ));
+                    log_provider_transport_error(request_id, &mapped);
+                    return error_stream(mapped);
                 }
             };
 
             if !response.status().is_success() {
                 let status = response.status();
                 let text = response.text().await.unwrap_or_default();
-                return error_stream(map_http_status(status, &text));
+                let mapped = map_http_status(status, &text);
+                // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
+                // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
+                // Varianten) verlieren Status/Body ab hier unwiederbringlich.
+                log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &api_key);
+                return error_stream(mapped);
             }
 
             event_stream_from_response(response, native_tool_calling, request_id)
@@ -451,9 +463,9 @@ fn process_frame_stream(
                     // Antwort unbrauchbar machen.
                 }
                 Ok(Some(Err(err))) => {
-                    state
-                        .pending
-                        .push_back(AiEvent::Error(map_transport_error(&err)));
+                    let mapped = map_transport_error(&err);
+                    log_provider_transport_error(state.request_id, &mapped);
+                    state.pending.push_back(AiEvent::Error(mapped));
                     state.finished = true;
                 }
                 Ok(None) => {
@@ -465,12 +477,12 @@ fn process_frame_stream(
                     // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse)
                     // — ohne dieses Limit würde ein hängender Request den
                     // Chat-Turn für immer ohne jede Fehlermeldung blockieren.
-                    state
-                        .pending
-                        .push_back(AiEvent::Error(AiError::NetworkError(format!(
-                            "Keine Antwort vom KI-Provider seit über {} Sekunden",
-                            SSE_INACTIVITY_TIMEOUT.as_secs()
-                        ))));
+                    let mapped = AiError::NetworkError(format!(
+                        "Keine Antwort vom KI-Provider seit über {} Sekunden",
+                        SSE_INACTIVITY_TIMEOUT.as_secs()
+                    ));
+                    log_provider_transport_error(state.request_id, &mapped);
+                    state.pending.push_back(AiEvent::Error(mapped));
                     state.finished = true;
                 }
             }
