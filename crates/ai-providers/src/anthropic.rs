@@ -250,7 +250,7 @@ impl AiProvider for AnthropicProvider {
                 Ok(Ok(response)) => response,
                 Ok(Err(err)) => {
                     let mapped = map_transport_error(&err);
-                    log_provider_transport_error(request_id, &mapped);
+                    log_provider_transport_error(request_id, &mapped, &[&api_key]);
                     return error_stream(mapped);
                 }
                 // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) —
@@ -261,7 +261,7 @@ impl AiProvider for AnthropicProvider {
                         "Keine Antwort vom KI-Provider seit über {} Sekunden",
                         SSE_INACTIVITY_TIMEOUT.as_secs()
                     ));
-                    log_provider_transport_error(request_id, &mapped);
+                    log_provider_transport_error(request_id, &mapped, &[&api_key]);
                     return error_stream(mapped);
                 }
             };
@@ -273,11 +273,17 @@ impl AiProvider for AnthropicProvider {
                 // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
                 // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
                 // Varianten) verlieren Status/Body ab hier unwiederbringlich.
-                log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &api_key);
+                log_provider_error_response(
+                    request_id,
+                    status.as_u16(),
+                    &text,
+                    &mapped,
+                    &[&api_key],
+                );
                 return error_stream(mapped);
             }
 
-            event_stream_from_response(response, native_tool_calling, request_id)
+            event_stream_from_response(response, native_tool_calling, request_id, api_key)
         };
 
         Box::pin(request.flatten_stream())
@@ -293,6 +299,12 @@ struct AnthropicStreamState {
     frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     blocks: BTreeMap<u64, BlockKind>,
     fallback_text: String,
+    /// Spec 0049, Fund 2: für die Redaction bei einem Transport-Fehler
+    /// mitten im Stream (`reqwest::Error`s `Display` hängt die Ziel-URL an
+    /// — s. `crate::request_logging::log_provider_transport_error`-Doc-
+    /// Kommentar). Leer erlaubt (z. B. in Tests, die `process_frame_stream`
+    /// direkt ohne echten API-Key aufrufen).
+    api_key: String,
     /// Spec 0016, Abschnitt 4, Punkt 2: Gesamtlänge aller bisher erhaltenen
     /// Text-Deltas, für eine zusammengefasste Log-Zeile statt einer pro
     /// Delta (s. `crate::request_logging::log_text_delta_summary`).
@@ -431,11 +443,13 @@ fn event_stream_from_response(
     response: reqwest::Response,
     native_tool_calling: bool,
     request_id: Uuid,
+    api_key: String,
 ) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
     process_frame_stream(
         Box::pin(sse_frame_stream(response)),
         native_tool_calling,
         request_id,
+        api_key,
     )
 }
 
@@ -447,11 +461,13 @@ fn process_frame_stream(
     frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     native_tool_calling: bool,
     request_id: Uuid,
+    api_key: String,
 ) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
     let state = AnthropicStreamState {
         frames,
         blocks: BTreeMap::new(),
         fallback_text: String::new(),
+        api_key,
         text_delta_total_len: 0,
         native_tool_calling,
         pending: VecDeque::new(),
@@ -481,7 +497,7 @@ fn process_frame_stream(
                 }
                 Ok(Some(Err(err))) => {
                     let mapped = map_transport_error(&err);
-                    log_provider_transport_error(state.request_id, &mapped);
+                    log_provider_transport_error(state.request_id, &mapped, &[&state.api_key]);
                     state.pending.push_back(AiEvent::Error(mapped));
                     state.finished = true;
                 }
@@ -505,7 +521,7 @@ fn process_frame_stream(
                         "Keine Antwort vom KI-Provider seit über {} Sekunden",
                         SSE_INACTIVITY_TIMEOUT.as_secs()
                     ));
-                    log_provider_transport_error(state.request_id, &mapped);
+                    log_provider_transport_error(state.request_id, &mapped, &[&state.api_key]);
                     state.pending.push_back(AiEvent::Error(mapped));
                     state.finished = true;
                 }
@@ -529,7 +545,7 @@ mod tests {
         let never_yields: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
             Box::pin(futures::stream::pending());
 
-        let mut events = process_frame_stream(never_yields, true, Uuid::new_v4());
+        let mut events = process_frame_stream(never_yields, true, Uuid::new_v4(), String::new());
         let event = events.next().await;
 
         assert!(

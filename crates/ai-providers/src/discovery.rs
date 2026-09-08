@@ -6,10 +6,12 @@
 //! `AiProvider`-Kontext (`SessionContext`, Streaming).
 
 use serde::Deserialize;
+use uuid::Uuid;
 
 use ssh_manager_core::ai::AiError;
 
 use crate::error::{map_http_status, map_transport_error};
+use crate::request_logging::{log_provider_error_response, log_provider_transport_error};
 
 #[derive(Deserialize)]
 struct ModelsResponse {
@@ -31,6 +33,18 @@ pub async fn discover_models(
     api_key: &str,
     extra_headers: &[(String, String)],
 ) -> Result<Vec<String>, AiError> {
+    // Spec-Reviewer-Fund (Spec 0049, Review von Fund 2): dieser Pfad
+    // (der "Modelle laden"-Button im Formular) ist genau die Stelle, an
+    // der ein Tester einen frisch eingefügten, falschen/untrimmten API-Key
+    // oder Modellnamen zuerst bemerkt — Fund 2 nennt "Modell nicht
+    // gefunden" ausdrücklich als abzudeckenden Fall. War zunächst
+    // übersehen worden: nur `anthropic.rs`/`openai_compatible.rs`s
+    // Chat-Pfad hatte die neuen Log-Aufrufe, dieser Discovery-Pfad nicht.
+    let request_id = Uuid::new_v4();
+    let secrets: Vec<&str> = std::iter::once(api_key)
+        .chain(extra_headers.iter().map(|(_, value)| value.as_str()))
+        .collect();
+
     let client = reqwest::Client::new();
     let url = format!("{}/models", base_url.trim_end_matches('/'));
     let mut request = client.get(&url).bearer_auth(api_key);
@@ -38,15 +52,21 @@ pub async fn discover_models(
         request = request.header(name, value);
     }
 
-    let response = request
-        .send()
-        .await
-        .map_err(|err| map_transport_error(&err))?;
+    let response = match request.send().await {
+        Ok(response) => response,
+        Err(err) => {
+            let mapped = map_transport_error(&err);
+            log_provider_transport_error(request_id, &mapped, &secrets);
+            return Err(mapped);
+        }
+    };
 
     if !response.status().is_success() {
         let status = response.status();
         let text = response.text().await.unwrap_or_default();
-        return Err(map_http_status(status, &text));
+        let mapped = map_http_status(status, &text);
+        log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &secrets);
+        return Err(mapped);
     }
 
     let parsed: ModelsResponse = response
@@ -66,17 +86,26 @@ pub async fn discover_models(
 /// Chat-API selbst — ihm dieselben Zugangsdaten mitzugeben wäre eine
 /// unbegründete Annahme über sein Schutzschema.
 pub async fn fetch_attestation_info(url: &str) -> Result<String, AiError> {
+    // Spec 0049, Fund 2: kein `api_key`/`extra_headers` hier (s. Doc-
+    // Kommentar oben) — nichts zu redigieren, daher eine leere `secrets`-
+    // Liste statt eines eigenen, secret-losen Log-Pfads.
+    let request_id = Uuid::new_v4();
     let client = reqwest::Client::new();
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|err| map_transport_error(&err))?;
+    let response = match client.get(url).send().await {
+        Ok(response) => response,
+        Err(err) => {
+            let mapped = map_transport_error(&err);
+            log_provider_transport_error(request_id, &mapped, &[]);
+            return Err(mapped);
+        }
+    };
 
     if !response.status().is_success() {
         let status = response.status();
         let text = response.text().await.unwrap_or_default();
-        return Err(map_http_status(status, &text));
+        let mapped = map_http_status(status, &text);
+        log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &[]);
+        return Err(mapped);
     }
 
     response
@@ -189,5 +218,45 @@ mod tests {
         let result = fetch_attestation_info(&format!("{}/attestation", server.uri())).await;
 
         assert!(matches!(result, Err(AiError::ProviderUnavailable(_))));
+    }
+
+    // --- Spec-Reviewer-Fund (Spec 0049, Review von Fund 2) -----------------
+    //
+    // `request_logging::error_logging_tests` beweist bereits, dass die
+    // Log-Funktionen selbst korrekt redigieren — was hier fehlte (und die
+    // ursprüngliche Fund-2-Umsetzung in diesem Modul überhaupt verpasst
+    // hatte) ist ein Beweis, dass `discover_models` sie auf dem echten
+    // 401-Antwortpfad tatsächlich AUFRUFT. Nutzt `crate::test_support`
+    // (nicht ein zweites, eigenes `set_global_default` — zwei globale
+    // Test-Subscriber im selben Testbinary lassen sich nicht beide
+    // installieren, der zweite Aufruf schlägt still fehl und die Tests
+    // dieses Moduls hätten in den falschen Puffer geschrieben, s. dortiger
+    // Doc-Kommentar).
+    use crate::test_support::{clear_log_buffer, install_test_subscriber_once, log_buffer_text};
+
+    #[tokio::test]
+    async fn test_discover_models_logs_the_error_response_with_the_key_redacted() {
+        install_test_subscriber_once();
+        clear_log_buffer();
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/models"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("invalid x-api-key"))
+            .mount(&server)
+            .await;
+
+        let result = discover_models(&server.uri(), "sk-real-secret-key", &[]).await;
+        assert!(matches!(result, Err(AiError::AuthenticationFailed)));
+
+        let log_text = log_buffer_text();
+        assert!(
+            log_text.contains("401") && log_text.contains("AI_AUTH_FAILED"),
+            "erwartet: Status + Code im Log, war: {log_text}"
+        );
+        assert!(
+            !log_text.contains("sk-real-secret-key"),
+            "der API-Key darf nicht im Log stehen: {log_text}"
+        );
     }
 }

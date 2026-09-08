@@ -238,6 +238,15 @@ impl AiProvider for OpenAiCompatibleProvider {
         let body = self.build_request_body(&context);
 
         let request = async move {
+            // Spec-Reviewer-Fund (Spec 0049, Review von Fund 2): nicht nur
+            // der API-Key, auch jeder `extra_headers`-Wert (Spec 0025,
+            // Abschnitt 3 — dort trägt ein Nutzer z. B. ein zweites
+            // Gateway-Auth-Token ein) muss in den neuen Fehler-Logzeilen
+            // redigiert werden.
+            let secrets: Vec<&str> = std::iter::once(api_key.as_str())
+                .chain(extra_headers.iter().map(|(_, value)| value.as_str()))
+                .collect();
+
             let mut req = client
                 .post(&url)
                 .bearer_auth(&api_key)
@@ -250,7 +259,7 @@ impl AiProvider for OpenAiCompatibleProvider {
                 Ok(Ok(response)) => response,
                 Ok(Err(err)) => {
                     let mapped = map_transport_error(&err);
-                    log_provider_transport_error(request_id, &mapped);
+                    log_provider_transport_error(request_id, &mapped, &secrets);
                     return error_stream(mapped);
                 }
                 // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) —
@@ -261,7 +270,7 @@ impl AiProvider for OpenAiCompatibleProvider {
                         "Keine Antwort vom KI-Provider seit über {} Sekunden",
                         SSE_INACTIVITY_TIMEOUT.as_secs()
                     ));
-                    log_provider_transport_error(request_id, &mapped);
+                    log_provider_transport_error(request_id, &mapped, &secrets);
                     return error_stream(mapped);
                 }
             };
@@ -273,11 +282,17 @@ impl AiProvider for OpenAiCompatibleProvider {
                 // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
                 // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
                 // Varianten) verlieren Status/Body ab hier unwiederbringlich.
-                log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &api_key);
+                log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &secrets);
                 return error_stream(mapped);
             }
 
-            event_stream_from_response(response, native_tool_calling, request_id)
+            event_stream_from_response(
+                response,
+                native_tool_calling,
+                request_id,
+                api_key,
+                extra_headers,
+            )
         };
 
         Box::pin(request.flatten_stream())
@@ -297,6 +312,13 @@ struct OpenAiStreamState {
     frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     tool_calls: BTreeMap<u64, ToolCallAccumulator>,
     fallback_text: String,
+    /// Spec 0049, Fund 2: API-Key + jeder `extra_headers`-Wert, für die
+    /// Redaction bei einem Transport-Fehler mitten im Stream (s.
+    /// `AnthropicStreamState::api_key`-Doc-Kommentar — derselbe Grund).
+    /// Eigene, besitzende `String`s statt `&str`, da sie über die gesamte
+    /// Stream-Laufzeit gebraucht werden, nicht nur innerhalb der
+    /// `async move`-Anfrage, aus der `api_key`/`extra_headers` stammen.
+    secrets: Vec<String>,
     /// s. `AnthropicStreamState::text_delta_total_len` (Spec 0016,
     /// Abschnitt 4, Punkt 2).
     text_delta_total_len: usize,
@@ -410,11 +432,15 @@ fn event_stream_from_response(
     response: reqwest::Response,
     native_tool_calling: bool,
     request_id: Uuid,
+    api_key: String,
+    extra_headers: Vec<(String, String)>,
 ) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
     process_frame_stream(
         Box::pin(sse_frame_stream(response)),
         native_tool_calling,
         request_id,
+        api_key,
+        extra_headers,
     )
 }
 
@@ -426,11 +452,17 @@ fn process_frame_stream(
     frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     native_tool_calling: bool,
     request_id: Uuid,
+    api_key: String,
+    extra_headers: Vec<(String, String)>,
 ) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+    let secrets: Vec<String> = std::iter::once(api_key)
+        .chain(extra_headers.into_iter().map(|(_, value)| value))
+        .collect();
     let state = OpenAiStreamState {
         frames,
         tool_calls: BTreeMap::new(),
         fallback_text: String::new(),
+        secrets,
         text_delta_total_len: 0,
         native_tool_calling,
         pending: VecDeque::new(),
@@ -464,7 +496,8 @@ fn process_frame_stream(
                 }
                 Ok(Some(Err(err))) => {
                     let mapped = map_transport_error(&err);
-                    log_provider_transport_error(state.request_id, &mapped);
+                    let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
+                    log_provider_transport_error(state.request_id, &mapped, &secrets);
                     state.pending.push_back(AiEvent::Error(mapped));
                     state.finished = true;
                 }
@@ -481,7 +514,8 @@ fn process_frame_stream(
                         "Keine Antwort vom KI-Provider seit über {} Sekunden",
                         SSE_INACTIVITY_TIMEOUT.as_secs()
                     ));
-                    log_provider_transport_error(state.request_id, &mapped);
+                    let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
+                    log_provider_transport_error(state.request_id, &mapped, &secrets);
                     state.pending.push_back(AiEvent::Error(mapped));
                     state.finished = true;
                 }
@@ -502,7 +536,13 @@ mod tests {
         let never_yields: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
             Box::pin(futures::stream::pending());
 
-        let mut events = process_frame_stream(never_yields, true, Uuid::new_v4());
+        let mut events = process_frame_stream(
+            never_yields,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+        );
         let event = events.next().await;
 
         assert!(
