@@ -11,6 +11,7 @@ mod error;
 mod fallback;
 mod openai_compatible;
 mod request_logging;
+mod retry;
 mod sse;
 #[cfg(test)]
 mod test_support;

@@ -121,3 +121,80 @@ async fn test_authentication_failure_maps_401_to_ai_error() {
 
     assert_eq!(events, vec![AiEvent::Error(AiError::AuthenticationFailed)]);
 }
+
+/// Spec 0051, Teil 1: ein 429 mit `Retry-After` wird automatisch wiederholt
+/// und, sobald der Provider wieder antwortet, kehrt `send()` zu einem
+/// normalen erfolgreichen Stream zurück — kein Abbruch, kein Hängen. Der
+/// Wechsel von "immer 429" auf "danach 200" wird über die
+/// Priorität+`up_to_n_times`-Kombination von wiremock simuliert (s.
+/// `Mock::with_priority`-Doku: die höher priorisierte, `up_to_n_times(1)`
+/// begrenzte 429-Mock hört nach dem ersten Treffer auf zu matchen, danach
+/// greift die niedriger priorisierte 200-Mock).
+#[tokio::test]
+async fn test_429_with_retry_after_retries_and_then_succeeds() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("retry-after", "0")
+                .set_body_string("rate limited"),
+        )
+        .up_to_n_times(1)
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    let sse_body = "event: content_block_start\ndata: {\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n\
+event: content_block_delta\ndata: {\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n\
+event: content_block_stop\ndata: {\"index\":0}\n\n\
+event: message_stop\ndata: {}\n\n";
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(sse_body.to_string()),
+        )
+        .with_priority(2)
+        .mount(&server)
+        .await;
+    let provider = AnthropicProvider::new(server.uri(), "claude-test", "test-key", true);
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(
+        events,
+        vec![AiEvent::TextDelta("ok".to_string()), AiEvent::Done]
+    );
+}
+
+/// Spec 0051, Teil 1: bleibt der Provider dauerhaft bei 429, gibt `send()`
+/// nach der harten Obergrenze an Versuchen auf — statt endlos zu warten
+/// oder zu hängen — und liefert `AiEvent::Error(AiError::RateLimited)`.
+/// `Retry-After: 0` hält den Test schnell, ohne die Backoff-Logik selbst
+/// zu berühren (die ist in `crate::retry` isoliert unit-getestet).
+#[tokio::test]
+async fn test_persistent_429_gives_up_after_attempt_cap_with_rate_limited_error() {
+    let server = MockServer::start().await;
+    // `.expect(4)` (nicht nur der Endzustand `Error(RateLimited)`, den auch
+    // der ungefixte Stand ohne jeden Retry sofort liefern würde) ist hier
+    // der eigentliche Regressionstest: `MockServer` panickt beim Shutdown,
+    // falls nicht exakt `crate::retry::MAX_ATTEMPTS` (4) Requests
+    // ankamen — ohne diese Zählung würde dieser Test tautologisch
+    // sowohl gegen den gefixten als auch den ungefixten Stand grün sein.
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("retry-after", "0")
+                .set_body_string("rate limited"),
+        )
+        .expect(4)
+        .mount(&server)
+        .await;
+    let provider = AnthropicProvider::new(server.uri(), "claude-test", "test-key", true);
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(events, vec![AiEvent::Error(AiError::RateLimited)]);
+}

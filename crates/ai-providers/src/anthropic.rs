@@ -239,51 +239,85 @@ impl AiProvider for AnthropicProvider {
         let body = self.build_request_body(&context);
 
         let request = async move {
-            let send = client
-                .post(&url)
-                .header("x-api-key", &api_key)
-                .header("anthropic-version", ANTHROPIC_VERSION)
-                .header("accept", "text/event-stream")
-                .json(&body)
-                .send();
-            let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
-                Ok(Ok(response)) => response,
-                Ok(Err(err)) => {
-                    let mapped = map_transport_error(&err);
-                    log_provider_transport_error(request_id, &mapped, &[&api_key]);
-                    return error_stream(mapped);
-                }
-                // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) —
-                // ohne dieses Limit würde ein hängender Verbindungsaufbau
-                // den Chat-Turn für immer ohne jede Fehlermeldung blockieren.
-                Err(_elapsed) => {
-                    let mapped = AiError::NetworkError(format!(
-                        "Keine Antwort vom KI-Provider seit über {} Sekunden",
-                        SSE_INACTIVITY_TIMEOUT.as_secs()
-                    ));
-                    log_provider_transport_error(request_id, &mapped, &[&api_key]);
-                    return error_stream(mapped);
-                }
-            };
+            let retry_start = tokio::time::Instant::now();
+            let mut attempt: u32 = 0;
+            loop {
+                attempt += 1;
+                let send = client
+                    .post(&url)
+                    .header("x-api-key", &api_key)
+                    .header("anthropic-version", ANTHROPIC_VERSION)
+                    .header("accept", "text/event-stream")
+                    .json(&body)
+                    .send();
+                let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
+                    Ok(Ok(response)) => response,
+                    Ok(Err(err)) => {
+                        let mapped = map_transport_error(&err);
+                        log_provider_transport_error(request_id, &mapped, &[&api_key]);
+                        return error_stream(mapped);
+                    }
+                    // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) —
+                    // ohne dieses Limit würde ein hängender Verbindungsaufbau
+                    // den Chat-Turn für immer ohne jede Fehlermeldung blockieren.
+                    Err(_elapsed) => {
+                        let mapped = AiError::NetworkError(format!(
+                            "Keine Antwort vom KI-Provider seit über {} Sekunden",
+                            SSE_INACTIVITY_TIMEOUT.as_secs()
+                        ));
+                        log_provider_transport_error(request_id, &mapped, &[&api_key]);
+                        return error_stream(mapped);
+                    }
+                };
 
-            if !response.status().is_success() {
-                let status = response.status();
-                let text = response.text().await.unwrap_or_default();
-                let mapped = map_http_status(status, &text);
-                // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
-                // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
-                // Varianten) verlieren Status/Body ab hier unwiederbringlich.
-                log_provider_error_response(
+                // Spec 0051, Teil 1: 429 wird — anders als jeder andere
+                // nicht-erfolgreiche Status — automatisch mit Backoff
+                // wiederholt, statt sofort als terminaler Fehler
+                // zurückzugehen (s. `crate::retry`-Moduldoc zur
+                // Redaction-Invariante: derselbe `body` wird unverändert
+                // erneut gesendet).
+                if response.status().as_u16() == 429 {
+                    let elapsed = retry_start.elapsed();
+                    if crate::retry::retry_allowed(attempt + 1, elapsed) {
+                        let delay = crate::retry::retry_delay(response.headers(), attempt);
+                        let text = response.text().await.unwrap_or_default();
+                        crate::request_logging::log_provider_rate_limited_retry(
+                            request_id,
+                            attempt,
+                            &text,
+                            delay,
+                            &[&api_key],
+                        );
+                        let remaining = crate::retry::MAX_TOTAL_RETRY_TIME.saturating_sub(elapsed);
+                        tokio::time::sleep(delay.min(remaining)).await;
+                        continue;
+                    }
+                }
+
+                if !response.status().is_success() {
+                    let status = response.status();
+                    let text = response.text().await.unwrap_or_default();
+                    let mapped = map_http_status(status, &text);
+                    // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
+                    // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
+                    // Varianten) verlieren Status/Body ab hier unwiederbringlich.
+                    log_provider_error_response(
+                        request_id,
+                        status.as_u16(),
+                        &text,
+                        &mapped,
+                        &[&api_key],
+                    );
+                    return error_stream(mapped);
+                }
+
+                return event_stream_from_response(
+                    response,
+                    native_tool_calling,
                     request_id,
-                    status.as_u16(),
-                    &text,
-                    &mapped,
-                    &[&api_key],
+                    api_key,
                 );
-                return error_stream(mapped);
             }
-
-            event_stream_from_response(response, native_tool_calling, request_id, api_key)
         };
 
         Box::pin(request.flatten_stream())

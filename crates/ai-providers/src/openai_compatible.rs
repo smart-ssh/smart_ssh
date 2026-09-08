@@ -247,52 +247,79 @@ impl AiProvider for OpenAiCompatibleProvider {
                 .chain(extra_headers.iter().map(|(_, value)| value.as_str()))
                 .collect();
 
-            let mut req = client
-                .post(&url)
-                .bearer_auth(&api_key)
-                .header("accept", "text/event-stream");
-            for (name, value) in &extra_headers {
-                req = req.header(name, value);
-            }
-            let send = req.json(&body).send();
-            let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
-                Ok(Ok(response)) => response,
-                Ok(Err(err)) => {
-                    let mapped = map_transport_error(&err);
-                    log_provider_transport_error(request_id, &mapped, &secrets);
+            let retry_start = tokio::time::Instant::now();
+            let mut attempt: u32 = 0;
+            loop {
+                attempt += 1;
+                let mut req = client
+                    .post(&url)
+                    .bearer_auth(&api_key)
+                    .header("accept", "text/event-stream");
+                for (name, value) in &extra_headers {
+                    req = req.header(name, value);
+                }
+                let send = req.json(&body).send();
+                let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
+                    Ok(Ok(response)) => response,
+                    Ok(Err(err)) => {
+                        let mapped = map_transport_error(&err);
+                        log_provider_transport_error(request_id, &mapped, &secrets);
+                        return error_stream(mapped);
+                    }
+                    // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) —
+                    // ohne dieses Limit würde ein hängender Verbindungsaufbau
+                    // den Chat-Turn für immer ohne jede Fehlermeldung blockieren.
+                    Err(_elapsed) => {
+                        let mapped = AiError::NetworkError(format!(
+                            "Keine Antwort vom KI-Provider seit über {} Sekunden",
+                            SSE_INACTIVITY_TIMEOUT.as_secs()
+                        ));
+                        log_provider_transport_error(request_id, &mapped, &secrets);
+                        return error_stream(mapped);
+                    }
+                };
+
+                // Spec 0051, Teil 1: s. identischer Kommentar in
+                // `crate::anthropic::AnthropicProvider::send`.
+                if response.status().as_u16() == 429 {
+                    let elapsed = retry_start.elapsed();
+                    if crate::retry::retry_allowed(attempt + 1, elapsed) {
+                        let delay = crate::retry::retry_delay(response.headers(), attempt);
+                        let text = response.text().await.unwrap_or_default();
+                        crate::request_logging::log_provider_rate_limited_retry(
+                            request_id, attempt, &text, delay, &secrets,
+                        );
+                        let remaining = crate::retry::MAX_TOTAL_RETRY_TIME.saturating_sub(elapsed);
+                        tokio::time::sleep(delay.min(remaining)).await;
+                        continue;
+                    }
+                }
+
+                if !response.status().is_success() {
+                    let status = response.status();
+                    let text = response.text().await.unwrap_or_default();
+                    let mapped = map_http_status(status, &text);
+                    // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
+                    // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
+                    // Varianten) verlieren Status/Body ab hier unwiederbringlich.
+                    log_provider_error_response(
+                        request_id,
+                        status.as_u16(),
+                        &text,
+                        &mapped,
+                        &secrets,
+                    );
                     return error_stream(mapped);
                 }
-                // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) —
-                // ohne dieses Limit würde ein hängender Verbindungsaufbau
-                // den Chat-Turn für immer ohne jede Fehlermeldung blockieren.
-                Err(_elapsed) => {
-                    let mapped = AiError::NetworkError(format!(
-                        "Keine Antwort vom KI-Provider seit über {} Sekunden",
-                        SSE_INACTIVITY_TIMEOUT.as_secs()
-                    ));
-                    log_provider_transport_error(request_id, &mapped, &secrets);
-                    return error_stream(mapped);
-                }
-            };
 
-            if !response.status().is_success() {
-                let status = response.status();
-                let text = response.text().await.unwrap_or_default();
-                let mapped = map_http_status(status, &text);
-                // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
-                // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
-                // Varianten) verlieren Status/Body ab hier unwiederbringlich.
-                log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &secrets);
-                return error_stream(mapped);
+                return event_stream_from_response(
+                    response,
+                    native_tool_calling,
+                    request_id,
+                    api_key,
+                    extra_headers,
+                );
             }
-
-            event_stream_from_response(
-                response,
-                native_tool_calling,
-                request_id,
-                api_key,
-                extra_headers,
-            )
         };
 
         Box::pin(request.flatten_stream())

@@ -163,6 +163,29 @@ pub(crate) fn log_provider_error_response(
     );
 }
 
+/// Spec 0051, Teil 1: ein HTTP 429, das automatisch mit Backoff
+/// wiederholt wird — bewusst eine eigene Log-Zeile statt
+/// [`log_provider_error_response`] wiederzuverwenden: Letztere markiert
+/// einen *terminalen* Fehler (der Aufrufer bricht danach ab), während ein
+/// 429 hier gerade *nicht* terminal ist. Dieselbe Redaction-Regel gilt
+/// trotzdem (`body` könnte im Prinzip Header-Werte eines Proxys spiegeln,
+/// s. [`log_provider_error_response`]-Doc-Kommentar).
+pub(crate) fn log_provider_rate_limited_retry(
+    request_id: Uuid,
+    attempt: u32,
+    body: &str,
+    delay: std::time::Duration,
+    secrets: &[&str],
+) {
+    tracing::warn!(
+        request_id = %request_id,
+        attempt,
+        delay_ms = delay.as_millis() as u64,
+        body = %redact_secrets(body, secrets),
+        "AI provider rate-limited the request (429) — retrying with backoff",
+    );
+}
+
 /// Gegenstück zu [`log_provider_error_response`] für einen Transport-
 /// Fehler (Verbindungsaufbau, Timeout, TLS, ...) — hier existiert kein
 /// HTTP-Status/Response-Body, nur die über `Display` lesbare Fehlermeldung.
