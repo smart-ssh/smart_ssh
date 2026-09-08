@@ -111,6 +111,17 @@ pub async fn add_ai_provider(
 ) -> CommandResult<ProviderId> {
     // Spec 0049, Fund 1: als Erstes, bevor `api_key`/`base_url` irgendwo
     // gelesen werden.
+    //
+    // Spec-Reviewer-Fund (Spec 0049, Review dieses Schritts): dieser
+    // Aufruf selbst ist NICHT unit-getestet — `add_ai_provider` nimmt
+    // `tauri::State<'_, AppState>` direkt entgegen (anders als z. B.
+    // `servers::create_server`, das für Spec 0047 extrahiert wurde) und
+    // lässt sich ohne eine echte, laufende Tauri-App nicht konstruieren.
+    // `AiProviderConfigInput::trimmed()` selbst ist vollständig getestet
+    // (`dto.rs`); dass sie hier tatsächlich aufgerufen wird, ist bewusst
+    // nur durch diesen Kommentar und nicht durch einen automatisierten
+    // Test abgesichert — eine Extraktion analog zu `servers::create_server`
+    // wäre der richtige, aber über Fund 1 hinausgehende nächste Schritt.
     let config = config.trimmed();
     let id = ProviderId::new();
     let credential_ref = credential_ref_for(id);
@@ -2242,8 +2253,23 @@ pub async fn create_overlay_titlebar(window: tauri::WebviewWindow) -> CommandRes
     #[cfg(target_os = "macos")]
     {
         // Spec 0014 Abschnitt 3 & 6: Startwert für Ampel-Positionierung.
+        //
+        // Spec-Reviewer-Fund (Spec 0049, Review dieses Schritts): an dieser
+        // Stelle NICHT `restore_native_decoration` aufrufen. Anders als
+        // beim `activate_decoration()`-Fehler oben ist die Overlay-
+        // Titelleiste hier bereits erfolgreich aktiv — ein fehlgeschlagener
+        // Inset-Aufruf ist rein kosmetisch (Ampel-Position leicht
+        // daneben), kein Grund, die gesamte funktionierende Custom-
+        // Titelleiste zurückzubauen. Das hätte außerdem exakt die einzige
+        // Plattform getroffen, die diese Spec ausdrücklich unverändert
+        // lassen soll (macOS) — der Fund 3/4-Fix ist für Windows/Linux
+        // gedacht, nicht dafür, ein bereits funktionierendes macOS-Setup
+        // bei einem harmlosen Kosmetik-Fehler zu degradieren.
         if let Err(error) = window.set_traffic_lights_inset(12.0, 16.0).await {
-            return Ok(restore_native_decoration(&window, error).await);
+            tracing::warn!(
+                error = %error,
+                "macOS traffic-light inset failed, keeping the custom titlebar active"
+            );
         }
     }
 
