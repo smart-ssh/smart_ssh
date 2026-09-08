@@ -480,7 +480,18 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             <button
               type="button"
               onClick={handleTestCredentials}
-              disabled={credentialTestRunning || !form.apiKey.trim()}
+              // Spec-Reviewer-Fund (Spec 0050, Review dieses Schritts):
+              // dieselbe Sperre wie beim "Modelle laden"-Button oben — ohne
+              // sie würde der eingegebene API-Key bei generic_openai_
+              // compatible/ollama ohne ausgefüllte Base-URL an den
+              // Backend-Fallback (OpenAI) statt an den gewählten Endpunkt
+              // gehen (serverseitig zusätzlich in
+              // `test_ai_provider_credentials` abgefangen).
+              disabled={
+                credentialTestRunning ||
+                !form.apiKey.trim() ||
+                (needsBaseUrl(form.providerType) && !form.baseUrl?.trim())
+              }
               className="rounded border border-slate-600 px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-50"
             >
               {credentialTestRunning ? t("aiProvider.testingCredentials") : t("aiProvider.testCredentials")}

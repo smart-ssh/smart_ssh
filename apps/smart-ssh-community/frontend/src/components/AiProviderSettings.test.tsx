@@ -97,6 +97,28 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
     expect(screen.getByRole("button", { name: "Zugangsdaten testen" })).not.toBeDisabled();
   });
 
+  /** Spec-Reviewer-Fund (Spec 0050, Review dieses Schritts): ohne diese
+   * Sperre könnte ein Klick vor dem Ausfüllen der Base-URL den API-Key an
+   * den Backend-Fallback (OpenAI) statt an den gewählten,
+   * selbstgehosteten Endpunkt schicken — dieselbe Gefahr, gegen die der
+   * "Modelle laden"-Button bereits abgesichert ist. */
+  it("stays disabled for a generic OpenAI-compatible provider until the base URL is filled in, even with a key entered", () => {
+    renderForm();
+
+    fireEvent.change(screen.getByLabelText("Typ"), {
+      target: { value: "generic_openai_compatible" },
+    });
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+
+    expect(screen.getByRole("button", { name: "Zugangsdaten testen" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Base-URL"), {
+      target: { value: "https://my-gateway.example/v1" },
+    });
+
+    expect(screen.getByRole("button", { name: "Zugangsdaten testen" })).not.toBeDisabled();
+  });
+
   it("shows a valid result", async () => {
     vi.mocked(testAiProviderCredentials).mockResolvedValue({ kind: "valid" });
     renderForm();

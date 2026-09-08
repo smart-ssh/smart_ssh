@@ -327,6 +327,74 @@ pub enum TestAiProviderCredentialsResult {
 /// verworfen (nicht bis zum Ende durchlaufen) — für eine Verbindungs-/
 /// Auth-Prüfung reicht das, eine vollständige generierte Antwort
 /// abzuwarten wäre unnötiger Zeit-/Token-Verbrauch.
+/// Spec-Reviewer-Fund (Spec 0050, Review dieses Schritts): isoliert
+/// gehalten, damit sich dieser Schutz (anders als `test_ai_provider_
+/// credentials` selbst, das `tauri::State` braucht) ohne Weiteres
+/// unit-testen lässt — derselbe Grund/dasselbe Muster wie
+/// `map_connect_result` (Spec 0047) oder `should_create_chat_session`
+/// (Spec 0040) an anderer Stelle in dieser Datei.
+fn missing_required_base_url(
+    provider_type: ssh_manager_core::ai::ProviderType,
+    base_url: Option<&str>,
+) -> bool {
+    let needs_base_url = matches!(
+        provider_type,
+        ssh_manager_core::ai::ProviderType::GenericOpenAiCompatible
+            | ssh_manager_core::ai::ProviderType::Ollama
+    );
+    needs_base_url && base_url.unwrap_or("").trim().is_empty()
+}
+
+#[cfg(test)]
+mod missing_required_base_url_tests {
+    use super::*;
+
+    #[test]
+    fn test_generic_openai_compatible_without_base_url_is_missing() {
+        assert!(missing_required_base_url(
+            ssh_manager_core::ai::ProviderType::GenericOpenAiCompatible,
+            None
+        ));
+        assert!(missing_required_base_url(
+            ssh_manager_core::ai::ProviderType::GenericOpenAiCompatible,
+            Some("   ")
+        ));
+    }
+
+    #[test]
+    fn test_ollama_without_base_url_is_missing() {
+        assert!(missing_required_base_url(
+            ssh_manager_core::ai::ProviderType::Ollama,
+            None
+        ));
+    }
+
+    #[test]
+    fn test_generic_openai_compatible_with_base_url_is_not_missing() {
+        assert!(!missing_required_base_url(
+            ssh_manager_core::ai::ProviderType::GenericOpenAiCompatible,
+            Some("https://my-gateway.example/v1")
+        ));
+    }
+
+    /// Der eigentliche Spec-Reviewer-Fund: `openai`/`anthropic` haben
+    /// einen festen Standard-Endpunkt (s. `ai_provider_factory.rs`) — ein
+    /// fehlendes `base_url` ist dort kein Fehler, sonst könnte man diese
+    /// beiden Provider gar nicht ohne eine (für sie sinnlose) Base-URL
+    /// testen.
+    #[test]
+    fn test_openai_and_anthropic_never_require_base_url() {
+        assert!(!missing_required_base_url(
+            ssh_manager_core::ai::ProviderType::OpenAi,
+            None
+        ));
+        assert!(!missing_required_base_url(
+            ssh_manager_core::ai::ProviderType::Anthropic,
+            None
+        ));
+    }
+}
+
 #[tauri::command]
 pub async fn test_ai_provider_credentials(
     state: State<'_, AppState>,
@@ -336,6 +404,20 @@ pub async fn test_ai_provider_credentials(
     // Spec 0049, Fund 1: derselbe Grund wie bei `add_ai_provider`/
     // `discover_models` — vor jeder Verwendung von `api_key`/`base_url`.
     let config = config.trimmed();
+
+    // Spec-Reviewer-Fund (Spec 0050, Review dieses Schritts): derselbe
+    // Schutz wie in `discover_models` oben — ohne diese Prüfung fällt ein
+    // fehlendes `base_url` bei `GenericOpenAiCompatible`/`Ollama`
+    // stillschweigend auf `DEFAULT_OPENAI_BASE_URL` zurück
+    // (`build_ai_provider`/`ai_provider_factory.rs`). Der "Zugangsdaten
+    // testen"-Button ist wie "Modelle laden" ein `type="button"` und läuft
+    // schon vor dem Formular-`required`-Attribut der Base-URL — ohne
+    // diese serverseitige Prüfung würde der eingegebene API-Key an
+    // `api.openai.com` gehen, einen Dritten, mit dem der Nutzer nie
+    // interagieren wollte.
+    if missing_required_base_url(config.provider_type, config.base_url.as_deref()) {
+        return Err("Base-URL erforderlich, bevor die Zugangsdaten getestet werden können".into());
+    }
 
     let api_key = if !config.api_key.is_empty() {
         config.api_key.clone()
