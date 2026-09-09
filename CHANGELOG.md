@@ -9,6 +9,17 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+## [0.4.3] — 2026-09-09
+
+### Fixed
+- **Unbestätigte Hypothese, noch nicht auf echtem Windows verifiziert**:
+  die fehlenden Fenster-Buttons (Minimieren/Maximieren/Schließen) auf
+  Windows könnten daran liegen, dass zwei von `tauri-plugin-decoration`
+  laut eigener Doku verlangte CSS-Variablen
+  (`--tauri-plugin-decoration-titlebar-height`/`-z-index`) nie gesetzt
+  wurden — jetzt gesetzt. Bitte auf einem echten Windows-Build
+  gegenprüfen.
+
 ## [0.4.2] — 2026-09-09
 
 ### Added

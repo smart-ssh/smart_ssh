@@ -10,22 +10,22 @@ name = "app_shell"
 path = "src/lib.rs"
 
 [dependencies]
-ai-providers = { version = "0.4.2", path = "../ai-providers" }
+ai-providers = { version = "0.4.3", path = "../ai-providers" }
 async-trait = "0.1.92"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
-credentials-keyring = { version = "0.4.2", path = "../credentials-keyring" }
+credentials-keyring = { version = "0.4.3", path = "../credentials-keyring" }
 directories = "6.0.0"
 futures = "0.3.34"
-mcp-server = { version = "0.4.2", path = "../mcp-server" }
-persistence-sqlite = { version = "0.4.2", path = "../persistence-sqlite" }
+mcp-server = { version = "0.4.3", path = "../mcp-server" }
+persistence-sqlite = { version = "0.4.3", path = "../persistence-sqlite" }
 regex = "1.13.1"
 secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
-ssh-manager-core = { version = "0.4.2", path = "../core" }
-ssh-transport = { version = "0.4.2", path = "../ssh-transport" }
+ssh-manager-core = { version = "0.4.3", path = "../core" }
+ssh-transport = { version = "0.4.3", path = "../ssh-transport" }
 tauri = { version = "2", features = [] }
 tauri-plugin-decoration = "3.0"
 tauri-plugin-dialog = "2.7.2"
