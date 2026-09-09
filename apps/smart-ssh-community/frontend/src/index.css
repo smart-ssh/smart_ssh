@@ -173,3 +173,27 @@
   --radius-lg: 2px;
   --radius-xl: 3px;
 }
+
+/* Spec 0014/0049: `tauri-plugin-decoration`s eigene Fenster-Controls
+   (Windows/Linux) lesen `--tauri-plugin-decoration-titlebar-height` und
+   `--tauri-plugin-decoration-z-index` von `:root` — laut Plugin-
+   Dokumentation ("Application settings consumed by the embedded
+   controls. They are not measured outputs.") sind das **von der App zu
+   setzende** Werte, keine vom Plugin gelieferten. Ohne sie fällt das
+   Plugin auf seine eigenen CSS-Defaults zurück (`32px`/`z-index: 1`, s.
+   `controls.css` im Crate) — bei uns bislang gar nicht gesetzt. Der
+   niedrige Default-`z-index` kollidiert mit `AppHeader.tsx`s eigenem
+   `<header>` (kein explizites `z-index`, aber `backdrop-blur-sm` +
+   teiltransparenter Hintergrund — ein `backdrop-filter` erzeugt laut
+   CSS-Spezifikation einen eigenen Stacking-Context, wodurch die
+   Geschwister-Stapelreihenfolge zwischen Header und den vom Plugin
+   eingefügten Controls browserabhängig/undefiniert wird): plausible
+   Erklärung für unter Windows unsichtbare (nicht fehlende, nur
+   überdeckte) Minimieren-/Maximieren-/Schließen-Buttons. `36px` passt
+   zur tatsächlichen Header-Höhe (`h-9` in `AppHeader.tsx`); `100` liegt
+   bewusst über den `z-50`-Dialogen (`FirstRunNoticeScreen.tsx` u. a.) —
+   Fenster-Controls sollen immer oberhalb jedes Modals sichtbar bleiben. */
+:root {
+  --tauri-plugin-decoration-titlebar-height: 36px;
+  --tauri-plugin-decoration-z-index: 100;
+}
