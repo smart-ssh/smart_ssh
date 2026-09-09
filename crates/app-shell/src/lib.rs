@@ -209,6 +209,12 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         "Smart SSH startet"
     );
 
+    // Spec 0052, Abschnitt 3.2: `Edition` (`Copy`) separat gesichert, bevor
+    // `wiring.plugins` unten per Wert herausgezogen wird (ein partieller
+    // Move einzelner Felder ist erlaubt) — der Über-Dialog-Command
+    // `get_app_info` braucht sie als `State<Edition>`, `Wiring` selbst
+    // wird nirgends als Tauri-`State` verwaltet.
+    let edition = wiring.edition;
     let app_state = build_app_state(&wiring);
     let plugins = wiring.plugins;
 
@@ -344,6 +350,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             Ok(())
         })
         .manage(app_state)
+        .manage(edition)
         .invoke_handler(tauri::generate_handler![
             commands::list_servers,
             commands::list_ai_providers,
@@ -403,6 +410,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::export_document,
             commands::read_credential_file,
             commands::get_platform,
+            commands::get_app_info,
             commands::get_entitlements,
             commands::create_overlay_titlebar,
             commands::list_prompt_history,

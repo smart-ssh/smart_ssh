@@ -31,10 +31,10 @@ use crate::ai_provider_factory::build_ai_provider;
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{
     credential_ref_for, sort_remote_entries, ActionUserDecision, AiProviderConfigDto,
-    AiProviderConfigInput, DeleteGroupResult, DeleteServerResult, DocumentFormat, EvalContextInput,
-    EvaluationTraceDto, GroupDto, HostKeyUserDecision, NoteRevisionDto, PatternDto,
-    PatternSuggestionDto, PatternType, RemoteEntryDto, RuleDto, RuleInput, ServerDto, ServerInput,
-    SessionSummaryDto, TestConnectionResult,
+    AiProviderConfigInput, AppInfoDto, DeleteGroupResult, DeleteServerResult, DocumentFormat,
+    EvalContextInput, EvaluationTraceDto, GroupDto, HostKeyUserDecision, NoteRevisionDto,
+    PatternDto, PatternSuggestionDto, PatternType, RemoteEntryDto, RuleDto, RuleInput, ServerDto,
+    ServerInput, SessionSummaryDto, TestConnectionResult,
 };
 use crate::error::{CommandError, CommandResult};
 use crate::events::{
@@ -2490,6 +2490,59 @@ pub fn get_platform() -> &'static str {
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         "unknown"
+    }
+}
+
+/// Spec 0052, Abschnitt 3.2/3.3: Version + Commit-Hash + Edition für den
+/// Über-Dialog (Settings, Spec 0050) und die Titelzeile — ein Command für
+/// beide statt zweier fast identischer, damit sie nicht auseinanderlaufen
+/// können.
+#[tauri::command]
+pub fn get_app_info(
+    app: tauri::AppHandle,
+    edition: tauri::State<'_, crate::wiring::Edition>,
+) -> AppInfoDto {
+    build_app_info(&app.package_info().version.to_string(), *edition)
+}
+
+/// Von der Tauri-IPC-Grenze losgelöst (dasselbe Muster wie
+/// `classify_credential_test_result` oben), damit sich das eigentliche
+/// Mapping ohne einen laufenden `AppHandle`/eine echte Tauri-App testen
+/// lässt.
+fn build_app_info(version: &str, edition: crate::wiring::Edition) -> AppInfoDto {
+    AppInfoDto {
+        version: version.to_string(),
+        commit_hash: crate::version::BUILD_COMMIT_HASH.to_string(),
+        version_display: crate::version::version_with_hash(version),
+        edition: match edition {
+            crate::wiring::Edition::Community => "Community".to_string(),
+            crate::wiring::Edition::Official => "Official".to_string(),
+        },
+    }
+}
+
+#[cfg(test)]
+mod app_info_tests {
+    use super::*;
+
+    #[test]
+    fn test_build_app_info_formats_version_display_per_spec() {
+        let info = build_app_info("0.4.1", crate::wiring::Edition::Community);
+
+        assert_eq!(info.version, "0.4.1");
+        assert_eq!(
+            info.version_display,
+            format!("0.4.1 ({})", crate::version::BUILD_COMMIT_HASH)
+        );
+        assert_eq!(info.commit_hash, crate::version::BUILD_COMMIT_HASH);
+        assert_eq!(info.edition, "Community");
+    }
+
+    #[test]
+    fn test_build_app_info_maps_official_edition() {
+        let info = build_app_info("0.4.1", crate::wiring::Edition::Official);
+
+        assert_eq!(info.edition, "Official");
     }
 }
 

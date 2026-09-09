@@ -30,13 +30,20 @@
     "categories": {
       "aiProvider": "KI-Provider",
       "displayLanguage": "Anzeige & Sprache",
-      "diagnostics": "Diagnose"
+      "diagnostics": "Diagnose",
+      "about": "Über"
     },
     "language": {
       "label": "Sprache",
       "de": "Deutsch",
       "en": "Englisch"
     }
+  },
+  "about": {
+    "version": "Version",
+    "copyHint": "Klicken zum Kopieren",
+    "copied": "Kopiert!",
+    "loadFailed": "Versions-/Build-Information konnte nicht geladen werden."
   },
   "featureLocked": {
     "title": "Diese Funktion erfordert einen kostenpflichtigen Plan",

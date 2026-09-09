@@ -573,3 +573,18 @@ export interface McpServerSettingsDto {
   /** Spec 0028, Abschnitt 7 — wirkt erst auf den nächsten Serverstart. */
   confirmTimeoutSecs: number;
 }
+
+// --- Spec 0052: Versions- & Build-Anzeige ---------------------------------
+
+/** Von `crate::dto::AppInfoDto`. */
+export interface AppInfoDto {
+  /** Aus `tauri.conf.json` (Spec 0048), z. B. `"0.4.1"`. */
+  version: string;
+  /** Kurzer Git-Commit-Hash, z. B. `"a5b3e01"`, oder `"unknown"` ohne Git
+   * zur Build-Zeit. */
+  commitHash: string;
+  /** Das geteilte Anzeigeformat: `"0.4.1 (a5b3e01)"`. */
+  versionDisplay: string;
+  /** `"Community"` oder `"Official"`. */
+  edition: string;
+}

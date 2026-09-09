@@ -5,6 +5,7 @@ import type {
   ActionUserDecision,
   AiProviderConfigDto,
   AiProviderConfigInput,
+  AppInfoDto,
   ChatHistoryEntryDto,
   ChatSessionSummaryDto,
   DeleteGroupResult,
@@ -382,3 +383,7 @@ export const setMcpServerAllowedServers = (serverIds: string[]) =>
 
 export const setMcpServerConfirmTimeoutSecs = (secs: number) =>
   invoke<McpServerSettingsDto>("set_mcp_server_confirm_timeout_secs", { secs });
+
+// --- Spec 0052: Versions- & Build-Anzeige ---------------------------------
+
+export const getAppInfo = () => invoke<AppInfoDto>("get_app_info");

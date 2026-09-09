@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../extensions/registerBuiltinExtensions";
 import { listSettingsSections } from "../extensions/registry";
+import { AboutSettings } from "./AboutSettings";
 import { AiProviderSettings } from "./AiProviderSettings";
 import { DiagnosticsSettings } from "./DiagnosticsSettings";
 import { LanguageSettings } from "./LanguageSettings";
@@ -14,6 +15,7 @@ interface SettingsScreenProps {
 const AI_PROVIDER_CATEGORY_ID = "ai-provider";
 const DISPLAY_LANGUAGE_CATEGORY_ID = "display-language";
 const DIAGNOSTICS_CATEGORY_ID = "diagnostics";
+const ABOUT_CATEGORY_ID = "about";
 
 interface NavCategory {
   id: string;
@@ -47,6 +49,15 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
     { id: AI_PROVIDER_CATEGORY_ID, label: t("settings.categories.aiProvider") },
     { id: DISPLAY_LANGUAGE_CATEGORY_ID, label: t("settings.categories.displayLanguage") },
     { id: DIAGNOSTICS_CATEGORY_ID, label: t("settings.categories.diagnostics") },
+    // Spec 0050, Abschnitt 1.1 schlägt "Über" als letzten Eintrag vor,
+    // nach einer möglichen (nur in der Official-Edition registrierten)
+    // "Lizenz"-Kategorie — die kommt aber über `registeredCategories`
+    // unten, IMMER nach allen `builtinCategories` (s. Zusammenführung
+    // weiter unten). "Über" landet deshalb hier nur als letzter
+    // eingebauter Eintrag, nicht strikt nach einer eventuellen
+    // Lizenz-Sektion; eine vollständige Neuordnung dafür wäre für diese
+    // reine Anzeige-Ergänzung unverhältnismäßig.
+    { id: ABOUT_CATEGORY_ID, label: t("settings.categories.about") },
   ];
 
   // Spec 0050, Abschnitt 1.2: registrierte Sektionen bekommen einen eigenen
@@ -112,6 +123,7 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
             )}
             {active?.id === DISPLAY_LANGUAGE_CATEGORY_ID && <LanguageSettings />}
             {active?.id === DIAGNOSTICS_CATEGORY_ID && <DiagnosticsSettings />}
+            {active?.id === ABOUT_CATEGORY_ID && <AboutSettings />}
             {registeredSections.map(
               ({ id, component: Section }) => active?.id === id && <Section key={id} />,
             )}

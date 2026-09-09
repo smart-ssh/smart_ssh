@@ -30,13 +30,20 @@
     "categories": {
       "aiProvider": "AI Provider",
       "displayLanguage": "Display & Language",
-      "diagnostics": "Diagnostics"
+      "diagnostics": "Diagnostics",
+      "about": "About"
     },
     "language": {
       "label": "Language",
       "de": "German",
       "en": "English"
     }
+  },
+  "about": {
+    "version": "Version",
+    "copyHint": "Click to copy",
+    "copied": "Copied!",
+    "loadFailed": "Could not load version/build information."
   },
   "featureLocked": {
     "title": "This feature requires a paid plan",
