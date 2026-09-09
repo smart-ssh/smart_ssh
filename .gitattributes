@@ -1,9 +1,17 @@
-# Erzwingt LF-Zeilenenden im Checkout auf jeder Plattform — ohne das
-# checkt Git for Windows (Standard auf den `windows-latest`-GitHub-Actions-
-# Runnern, `core.autocrlf=true`) Textdateien mit CRLF aus, obwohl die
-# committeten Blobs selbst LF enthalten. `cargo fmt --all --check` (rustfmt
-# normalisiert auf LF) schlägt dann ausschließlich auf dem Windows-Runner
-# der Community-CI (.github/workflows/community.yml) fehl, obwohl der Code
-# korrekt formatiert ist — kein echter Formatierungsfehler, nur ein
-# Zeilenenden-Mismatch zwischen Repository-Inhalt und Checkout.
-* text=auto eol=lf
+# NUR `*.rs` auf LF-Zeilenenden zwingen — das ist alles, was `cargo fmt
+# --all --check` prüft (der ursprüngliche Windows-CI-Fehler, s. Commit
+# "fix(ci): force LF line endings ..."). Ein früherer Versuch hier
+# (`* text=auto eol=lf`, jede Textdatei) hat einen schweren Folgefehler
+# verursacht: `crates/persistence-sqlite/migrations/*.sql` wird über
+# `sqlx::migrate!()` zur COMPILE-ZEIT eingebettet, inklusive eines
+# Prüfsummen-Hashes über den exakten Datei-Inhalt. Jeder Windows-Build vor
+# diesem Fix (0.4.1–0.4.3) checkte diese `.sql`-Dateien mit CRLF aus
+# (Git-for-Windows-Standard `core.autocrlf=true`, ohne `.gitattributes`
+# unverändert) — die Prüfsumme für Migration 0001 in jeder bestehenden
+# Windows-SQLite-Datenbank ist also CRLF-basiert. Die pauschale
+# LF-Erzwingung hätte das für 0.4.4 auf LF umgestellt, eine ANDERE
+# Prüfsumme erzeugt und jede bestehende Windows-Installation beim Start
+# mit `Migrate(VersionMismatch(1))` abstürzen lassen (kein Fehler-Dialog,
+# ein echter Panic). Deshalb jetzt gezielt nur `*.rs` — lässt `.sql` (und
+# alles andere) beim historischen, unveränderten Checkout-Verhalten.
+*.rs text eol=lf
