@@ -11,6 +11,16 @@
 //! `"unknown"` statt eines Hashes), niemals ein Grund, den ganzen Build
 //! scheitern zu lassen.
 //!
+//! **Override-Hook** (additiv, rein generisch): ein konsumierender Build
+//! (ein anderer Workspace, der diese Crate als Pfad-/Submodule-Dependency
+//! nutzt) kann den einzubettenden Hash über die Umgebungsvariable
+//! `SMART_SSH_BUILD_HASH_OVERRIDE` setzen — Cargo isoliert `cargo:rustc-
+//! env` sonst strikt auf diese Crate, ein solcher Build könnte den `git
+//! rev-parse`-Pfad unten also nicht anders beeinflussen und würde immer
+//! den Hash *dieses* Repo-Checkouts einbetten, nie seinen eigenen. Ohne
+//! die Variable (der Fall für dieses Repo selbst) verhält sich alles
+//! exakt wie zuvor.
+//!
 //! **`cargo:rerun-if-changed`** auf `.git/HEAD` sowie die Datei, auf die
 //! `HEAD` zeigt (z. B. `.git/refs/heads/main`) — ohne das würde Cargo den
 //! Build-Script-Output nach dem ersten Lauf cachen und ein inkrementeller
@@ -57,10 +67,27 @@ fn main() {
         "cargo:rustc-env=SMART_SSH_BUILD_HASH={}",
         resolve_commit_hash()
     );
+    println!("cargo:rerun-if-env-changed=SMART_SSH_BUILD_HASH_OVERRIDE");
     emit_rerun_triggers();
 }
 
+/// Additiver Override-Hook: Cargo isoliert `cargo:rustc-env` strikt auf die
+/// eigene Crate, ein konsumierender Build (ein anderer Workspace, der
+/// `app-shell` als Pfad-/Submodule-Dependency nutzt) kann diesem
+/// Build-Script sonst keinen anderen Hash unterschieben und bettet immer
+/// den Hash *dieses* Repos ein statt seines eigenen. `SMART_SSH_BUILD_
+/// HASH_OVERRIDE` (gesetzt, nicht-leer nach dem Trimmen) hat Vorrang vor
+/// dem git-Pfad; ohne die Variable (der Fall für die Community Edition,
+/// die sie nie setzt) bleibt das Verhalten exakt wie zuvor, inklusive des
+/// `"unknown"`-Fallbacks ohne Git.
 fn resolve_commit_hash() -> String {
+    if let Ok(override_hash) = std::env::var("SMART_SSH_BUILD_HASH_OVERRIDE") {
+        let trimmed = override_hash.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
     Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
         .output()
