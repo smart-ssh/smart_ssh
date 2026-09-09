@@ -181,19 +181,54 @@
    controls. They are not measured outputs.") sind das **von der App zu
    setzende** Werte, keine vom Plugin gelieferten. Ohne sie fällt das
    Plugin auf seine eigenen CSS-Defaults zurück (`32px`/`z-index: 1`, s.
-   `controls.css` im Crate) — bei uns bislang gar nicht gesetzt. Der
-   niedrige Default-`z-index` kollidiert mit `AppHeader.tsx`s eigenem
-   `<header>` (kein explizites `z-index`, aber `backdrop-blur-sm` +
-   teiltransparenter Hintergrund — ein `backdrop-filter` erzeugt laut
-   CSS-Spezifikation einen eigenen Stacking-Context, wodurch die
-   Geschwister-Stapelreihenfolge zwischen Header und den vom Plugin
-   eingefügten Controls browserabhängig/undefiniert wird): plausible
-   Erklärung für unter Windows unsichtbare (nicht fehlende, nur
-   überdeckte) Minimieren-/Maximieren-/Schließen-Buttons. `36px` passt
-   zur tatsächlichen Header-Höhe (`h-9` in `AppHeader.tsx`); `100` liegt
-   bewusst über den `z-50`-Dialogen (`FirstRunNoticeScreen.tsx` u. a.) —
-   Fenster-Controls sollen immer oberhalb jedes Modals sichtbar bleiben. */
+   `controls.css` im Crate) — bei uns bislang gar nicht gesetzt. `36px`
+   passt zur tatsächlichen Header-Höhe (`h-9` in `AppHeader.tsx`); `100`
+   liegt bewusst über den `z-50`-Dialogen (`FirstRunNoticeScreen.tsx`
+   u. a.) — Fenster-Controls sollen immer oberhalb jedes Modals sichtbar
+   bleiben. (Ursprünglich außerdem als Erklärung für "Buttons unsichtbar"
+   vermutet — laut Tester-Rückmeldung waren die Buttons aber die ganze
+   Zeit sichtbar, nur mit sehr schlechtem Kontrast, s. Kommentar unten
+   zum eigentlichen Befund.) */
 :root {
   --tauri-plugin-decoration-titlebar-height: 36px;
   --tauri-plugin-decoration-z-index: 100;
+}
+
+/* Tester-Rückmeldung (Windows 11, 0.4.1–0.4.3): Icons "leicht grau, kaum
+   sichtbar", nur der Schließen-Button reagiert sichtbar auf Hover.
+   Ursache gefunden in `controls.css` des Plugins (crates-Registry-Kopie
+   von `tauri-plugin-decoration` 3.0.5): die Icon-Farbe für Windows ist
+   dort standardmäßig `#202020` (dunkelgrau) mit `background: rgba(0,
+   0, 0, 0.1)` beim Hover für Minimieren/Maximieren — beides für eine
+   HELLE native Titelleiste gedacht. Auf HELL schaltet das Plugin nur
+   über `@media (prefers-color-scheme: dark)` um (dann `#f5f5f5` +
+   `rgba(255, 255, 255, 0.1)`) — das spiegelt aber die **OS-Einstellung**
+   wider, nicht unser eigenes, fest dunkles App-Theme (`--color-slate-950`
+   u. a., s. `@theme` oben). Bei einem Windows-System im hellen Modus
+   (Standard bei vielen Installationen) rendert das Plugin also
+   dunkelgraue Icons auf unserer fast schwarzen Titelleiste — exakt das
+   gemeldete Bild. Nur "Schließen" ist davon nicht betroffen: dessen
+   Hover-Stil (`#c42b1c`-Rot + weißes Icon) ist im Plugin fest verdrahtet,
+   nicht an `prefers-color-scheme` gekoppelt.
+   Fix: erzwingt das "dunkle" Farbschema des Plugins bedingungslos (unser
+   Theme ist ohnehin nie hell) — `!important`, da das Plugin sein CSS über
+   eine separat injizierte Stylesheet-Regel lädt, deren Reihenfolge
+   gegenüber dieser Datei nicht garantiert ist; ohne `!important` könnte
+   die `prefers-color-scheme: dark`-Regel des Plugins (falls sie auf
+   einem dunkel eingestellten Windows zufällig zutrifft) je nach
+   Ladereihenfolge wieder gewinnen. Für Linux ist keine `!important`-
+   Überschreibung nötig — das Plugin parametrisiert die Linux-Pille dort
+   bereits über CSS-Variablen (s. `--decoration-tb-actions-icon(-active)?-
+   bg`), die hier einfach auf denselben hellen Kontrast gesetzt werden. */
+[data-tauri-plugin-decoration-root] [data-tauri-decoration-control] {
+  color: #f5f5f5 !important;
+}
+[data-tauri-plugin-decoration-root] [data-tauri-decoration-control]:hover,
+[data-tauri-plugin-decoration-root]
+  [data-tauri-decoration-control][data-tauri-decoration-hover] {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+:root {
+  --decoration-tb-actions-icon-bg: rgba(255, 255, 255, 0.18);
+  --decoration-tb-actions-icon-active-bg: rgba(255, 255, 255, 0.32);
 }
