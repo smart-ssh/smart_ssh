@@ -51,14 +51,16 @@
 // führt Build-Scripts nie als eigenes Test-Target aus (nur `lib`/`bin`/
 // `tests`/`bench`-Targets, s. https://doc.rust-lang.org/cargo/reference/cargo-targets.html)
 // — ein `#[cfg(test)] mod tests` hier würde also nie laufen, ohne dass
-// `cargo test` das anzeigt (stiller toter Code). Die Erfolg/Leer/Fehler-
-// Entscheidungslogik ist deshalb absichtlich trivial genug gehalten, um sie
-// nicht separat testen zu müssen (`Result`/`Option`-Verkettung ohne eigene
-// Fallunterscheidung); tatsächlich getestet ist stattdessen das *Format*,
+// `cargo test` das anzeigt (stiller toter Code). Eine Auslagerung der
+// Entscheidungslogik in ein separat testbares, von `build.rs` und `src/`
+// gemeinsam genutztes Modul wäre für den Umfang hier (eine Env-Var-Prüfung
+// plus die bestehende `Result`/`Option`-Verkettung) unverhältnismäßig viel
+// zusätzliche Struktur; tatsächlich getestet ist stattdessen das *Format*,
 // in dem der eingebettete Hash weiterverwendet wird
 // (`crate::version::version_with_hash`, `src/version.rs`, läuft unter
 // `cargo test -p app-shell`). Das reale build.rs-Verhalten selbst (Hash
-// mit Git, `"unknown"` ohne) wurde manuell verifiziert — s. Commit-Text.
+// mit Git, `"unknown"` ohne, Override gesetzt/leer/mehrzeilig) wurde
+// manuell verifiziert — s. Commit-Text.
 
 use std::process::Command;
 
@@ -75,16 +77,38 @@ fn main() {
 /// eigene Crate, ein konsumierender Build (ein anderer Workspace, der
 /// `app-shell` als Pfad-/Submodule-Dependency nutzt) kann diesem
 /// Build-Script sonst keinen anderen Hash unterschieben und bettet immer
-/// den Hash *dieses* Repos ein statt seines eigenen. `SMART_SSH_BUILD_
-/// HASH_OVERRIDE` (gesetzt, nicht-leer nach dem Trimmen) hat Vorrang vor
-/// dem git-Pfad; ohne die Variable (der Fall für die Community Edition,
-/// die sie nie setzt) bleibt das Verhalten exakt wie zuvor, inklusive des
-/// `"unknown"`-Fallbacks ohne Git.
+/// den Hash *dieses* Repos ein statt seines eigenen.
+/// `SMART_SSH_BUILD_HASH_OVERRIDE` (gesetzt, nicht-leer nach dem Trimmen)
+/// hat Vorrang vor dem git-Pfad; ohne die Variable (der Fall für die
+/// Community Edition, die sie nie setzt) bleibt das Verhalten exakt wie
+/// zuvor, inklusive des `"unknown"`-Fallbacks ohne Git.
+///
+/// Spec-Reviewer-Fund: ein getrimmter, aber intern mehrzeiliger Override-
+/// Wert würde unverändert in `println!("cargo:rustc-env=…={value}")`
+/// landen — Cargo interpretiert *jede* mit `cargo:` beginnende Zeile eines
+/// Build-Scripts als eigene Direktive, ein eingebetteter Zeilenumbruch
+/// könnte also zusätzliche, nicht vorgesehene Direktiven einschleusen.
+/// Kein Privilegiengewinn (wer die Variable setzt, kontrolliert ohnehin
+/// den gesamten Build), aber ein plausibler Fall für eine versehentlich
+/// falsch befüllte CI-Variable (z. B. aus einem mehrzeiligen
+/// `git log`-Format) — deshalb bewusst verworfen statt stillschweigend
+/// durchgereicht: fällt dann auf den git-Pfad zurück, mit einer
+/// `cargo:warning`-Zeile als Hinweis. Eine defensive Längenkappung
+/// verhindert zusätzlich einen unangemessen langen Wert (kosmetisch
+/// relevant: landet in Log/Über-Dialog/Titelzeile, Spec 0052).
 fn resolve_commit_hash() -> String {
     if let Ok(override_hash) = std::env::var("SMART_SSH_BUILD_HASH_OVERRIDE") {
         let trimmed = override_hash.trim();
         if !trimmed.is_empty() {
-            return trimmed.to_string();
+            if trimmed.chars().any(|c| c.is_control()) || trimmed.len() > 128 {
+                println!(
+                    "cargo:warning=SMART_SSH_BUILD_HASH_OVERRIDE ignoriert (enthält \
+                     Steuerzeichen oder ist länger als 128 Zeichen) — falle auf \
+                     `git rev-parse` zurück"
+                );
+            } else {
+                return trimmed.to_string();
+            }
         }
     }
 
@@ -102,12 +126,19 @@ fn resolve_commit_hash() -> String {
 /// Ermittelt `.git`-Verzeichnis und den aktuellen Branch-Ref über `git`
 /// selbst (statt `.git/HEAD` hart anzunehmen) und registriert beide als
 /// `rerun-if-changed`-Trigger. Schlägt die Ermittlung fehl (kein Git, kein
-/// Repo), wird still nichts registriert — derselbe "nie den Build
-/// abbrechen"-Grundsatz wie bei [`resolve_commit_hash`]; ein dann fehlendes
-/// Rerun-Trigger ist unschädlich (Cargo führt ein Build-Script laut
-/// Dokumentation ohnehin bei *jedem* Aufruf erneut aus, wenn gar kein
-/// `rerun-if-changed` registriert wurde — "nie stale" bleibt also selbst
-/// im Fehlerfall gewahrt, nur ohne den gezielten Trigger).
+/// Repo), wird still nichts registriert.
+///
+/// Spec-Reviewer-Fund: der ursprüngliche Kommentar hier berief sich darauf,
+/// dass Cargo ein Build-Script ohne jede registrierte `rerun-if-*`-
+/// Direktive bei jeder Änderung im Paket neu ausführt ("nie stale" auch
+/// ganz ohne Git). Das gilt nicht mehr uneingeschränkt: `main()` gibt
+/// inzwischen immer `cargo:rerun-if-env-changed=SMART_SSH_BUILD_HASH_
+/// OVERRIDE` aus, *bevor* diese Funktion aufgerufen wird — sobald
+/// irgendeine `rerun-if-*`-Direktive vorliegt, entfällt laut Cargo-
+/// Dokumentation der Nur-ohne-jede-Direktive-Fallback. Praktisch folgenlos
+/// bleibt das trotzdem: der einzige Fehlerfall hier ist "kein Git
+/// verfügbar", und dann liefert [`resolve_commit_hash`] ohnehin dauerhaft
+/// `"unknown"` — es gibt keinen aktuelleren Wert, der stale werden könnte.
 ///
 /// Spec-Reviewer-Fund (Spec 0052, Review dieses Schritts): `HEAD` selbst
 /// liegt worktree-lokal (`git rev-parse --git-dir`), aber `refs/heads/…`
