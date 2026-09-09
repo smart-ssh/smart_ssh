@@ -26,29 +26,23 @@ sind mit **(Pro)** markiert.
 ## [0.4.4] — 2026-09-09
 
 ### Fixed
-- **Unbestätigte Hypothese, noch nicht auf echtem Windows verifiziert**:
-  Tester-Rückmeldung zu 0.4.1–0.4.3 (Windows 11) zeigte, dass die
-  Fenster-Buttons die ganze Zeit sichtbar waren, nur mit sehr schlechtem
-  Kontrast (kaum sichtbare graue Icons, nur "Schließen" reagierte
-  erkennbar auf Hover) — die vorherige z-index-Vermutung aus 0.4.3 war
-  damit widerlegt. Tatsächliche Ursache: `tauri-plugin-decoration`
-  färbt seine Windows-/Linux-Controls standardmäßig für eine **helle**
-  Titelleiste ein und wechselt nur bei einem im Betriebssystem
-  eingestellten dunklen Modus auf helle Icons — unsere App ist aber
-  immer dunkel, unabhängig vom Windows-Theme. Erzwingt das dunkle
-  Farbschema jetzt bedingungslos. Bitte erneut auf einem echten
-  Windows-Build gegenprüfen.
+- Titelleisten-Buttons auf Windows/Linux waren die ganze Zeit sichtbar,
+  aber mit sehr schlechtem Kontrast (kaum sichtbare graue Icons, nur
+  "Schließen" reagierte erkennbar auf Hover): `tauri-plugin-decoration`
+  färbt seine Controls standardmäßig für eine **helle** Titelleiste ein
+  und wechselt nur bei einem im Betriebssystem eingestellten dunklen
+  Modus auf helle Icons — unsere App ist aber immer dunkel, unabhängig
+  vom Windows-Theme. Erzwingt das dunkle Farbschema jetzt bedingungslos
+  — auf Windows 11 bestätigt behoben.
 
 ## [0.4.3] — 2026-09-09
 
 ### Fixed
-- **Unbestätigte Hypothese, noch nicht auf echtem Windows verifiziert**:
-  die fehlenden Fenster-Buttons (Minimieren/Maximieren/Schließen) auf
-  Windows könnten daran liegen, dass zwei von `tauri-plugin-decoration`
-  laut eigener Doku verlangte CSS-Variablen
-  (`--tauri-plugin-decoration-titlebar-height`/`-z-index`) nie gesetzt
-  wurden — jetzt gesetzt. Bitte auf einem echten Windows-Build
-  gegenprüfen.
+- Zwei von `tauri-plugin-decoration` laut eigener Doku verlangte
+  CSS-Variablen (`--tauri-plugin-decoration-titlebar-height`/`-z-index`)
+  waren nie gesetzt — jetzt gesetzt. War letztlich nicht die Ursache der
+  gemeldeten Sichtbarkeitsprobleme (s. 0.4.4), aber eine für sich
+  genommen korrekte Ergänzung laut Plugin-Dokumentation.
 
 ## [0.4.2] — 2026-09-09
 
