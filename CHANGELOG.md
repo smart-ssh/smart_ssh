@@ -9,6 +9,22 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+## [0.4.4] — 2026-09-09
+
+### Fixed
+- **Unbestätigte Hypothese, noch nicht auf echtem Windows verifiziert**:
+  Tester-Rückmeldung zu 0.4.1–0.4.3 (Windows 11) zeigte, dass die
+  Fenster-Buttons die ganze Zeit sichtbar waren, nur mit sehr schlechtem
+  Kontrast (kaum sichtbare graue Icons, nur "Schließen" reagierte
+  erkennbar auf Hover) — die vorherige z-index-Vermutung aus 0.4.3 war
+  damit widerlegt. Tatsächliche Ursache: `tauri-plugin-decoration`
+  färbt seine Windows-/Linux-Controls standardmäßig für eine **helle**
+  Titelleiste ein und wechselt nur bei einem im Betriebssystem
+  eingestellten dunklen Modus auf helle Icons — unsere App ist aber
+  immer dunkel, unabhängig vom Windows-Theme. Erzwingt das dunkle
+  Farbschema jetzt bedingungslos. Bitte erneut auf einem echten
+  Windows-Build gegenprüfen.
+
 ## [0.4.3] — 2026-09-09
 
 ### Fixed

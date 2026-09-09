@@ -16,7 +16,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-app-shell = { version = "0.4.3", path = "../../crates/app-shell" }
+app-shell = { version = "0.4.4", path = "../../crates/app-shell" }
 tauri = { version = "2", features = [] }
 # `tauri-build`'s ACL-/Capability-Auflösung (in `build.rs`, läuft für dieses
 # Binary-Crate) scannt nur die eigenen, direkten Abhängigkeiten dieser
