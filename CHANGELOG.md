@@ -9,6 +9,8 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-09-09
+
 ### Added
 - Einstellungen neu strukturiert: Navigation links, Inhalt rechts (statt
   einer langen, ungegliederten Liste) — Kategorien für KI-Provider, Anzeige
