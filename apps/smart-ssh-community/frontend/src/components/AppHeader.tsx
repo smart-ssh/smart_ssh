@@ -1,7 +1,18 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getAppInfo } from "../api";
+import type { AppInfoDto } from "../types";
 
 export type Platform = "macos" | "windows" | "linux" | "unknown";
+
+/** Spec 0052, Abschnitt 3.3: die Titelzeile zeigt Version+Hash nur, solange
+ * die App in der 0.x-Testphase ist — bewusst als **ein** Schalter gebaut
+ * (statt an mehreren Stellen verstreut), gekoppelt an dieselbe "Early
+ * Access"-Kennzeichnung, die im selben Textstück steht. Für die spätere
+ * 1.0 hier auf `false` setzen: Versions-/Hash-Text UND der
+ * "— Early Access"-Zusatz verschwinden dann in einem Schritt aus der
+ * Titelzeile, ohne nach mehreren Stellen suchen zu müssen. */
+const SHOW_EARLY_ACCESS_TITLEBAR_INFO = true;
 
 /** Spec 0049, Fund 3/4: `create_overlay_titlebar` liefert jetzt zurück, ob
  * die plattformspezifische Overlay-Titelleiste des Plugins tatsächlich
@@ -40,6 +51,18 @@ interface AppHeaderProps {
 export function AppHeader({ children }: AppHeaderProps) {
   const [platform, setPlatform] = useState<Platform>(detectFallbackPlatform);
   const [decorationMode, setDecorationMode] = useState<DecorationMode>("pending");
+  const [appInfo, setAppInfo] = useState<AppInfoDto | null>(null);
+
+  useEffect(() => {
+    if (!SHOW_EARLY_ACCESS_TITLEBAR_INFO) return;
+    getAppInfo()
+      .then(setAppInfo)
+      .catch((err) => {
+        // Rein kosmetisch — die Titelzeile zeigt dann einfach nur
+        // "Smart SSH" ohne Versions-Zusatz, kein Blockieren des Headers.
+        console.warn("get_app_info fehlgeschlagen:", err);
+      });
+  }, []);
 
   useEffect(() => {
     invoke<string>("get_platform")
@@ -121,6 +144,14 @@ export function AppHeader({ children }: AppHeaderProps) {
           className="font-heading font-semibold tracking-wide text-slate-100"
         >
           Smart SSH
+          {SHOW_EARLY_ACCESS_TITLEBAR_INFO && appInfo && (
+            <span
+              data-tauri-drag-region
+              className="ml-1.5 font-normal tracking-normal text-slate-500"
+            >
+              {appInfo.versionDisplay} — Early Access
+            </span>
+          )}
         </span>
       </div>
 
