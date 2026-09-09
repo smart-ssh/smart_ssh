@@ -9,8 +9,10 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+## [0.4.2] — 2026-09-09
+
 ### Added
-- Version + Commit-Hash (`0.4.1 (a5b3e01)`) sind jetzt auf einen Blick
+- Version + Commit-Hash (`0.4.2 (a5b3e01)`) sind jetzt auf einen Blick
   sichtbar: in der ersten Log-Zeile, kopierbar in einer neuen "Über"-
   Kategorie der Einstellungen, und (nur während der 0.x-Testphase, leicht
   abschaltbar) zusätzlich in der Titelzeile — identifiziert einen Bug-
