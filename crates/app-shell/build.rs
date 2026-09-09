@@ -20,12 +20,19 @@
 //! eine Datei mit einem Verweis, kein Verzeichnis) hätte den fest codierten
 //! Pfad sonst falsch getroffen.
 //!
-//! Spielt mit `./scripts/build-macos-release.sh` und `.github/workflows/
-//! official.yml` zusammen, ohne dass dort etwas geändert werden muss: beide
-//! bauen aus einem echten Git-Checkout (kein Tarball-Export), `git` ist in
-//! beiden Umgebungen vorhanden (macOS-Entwicklerwerkzeuge bzw. `actions/
-//! checkout` in CI) — der Erfolgspfad greift, kein `"unknown"`-Fallback
-//! nötig.
+//! Spielt mit jedem lokalen Release-Build (`cargo tauri build`, ausgeführt
+//! aus einem normalen Git-Checkout dieses Repos — es gibt aktuell **kein**
+//! dediziertes macOS-Release-Skript in diesem öffentlichen Repo, nur
+//! `scripts/tauri-dev.sh`/`scripts/setup-macos-dev-signing.sh` für den
+//! Dev-Modus) und mit `.github/workflows/release.yml` (`actions/
+//! checkout@v4`, auch als Shallow-Clone: `HEAD` und der aktuelle
+//! Commit-Objekt sind auch bei `fetch-depth: 1` vorhanden, `git rev-parse
+//! --short HEAD` funktioniert also) zusammen, ohne dass dort etwas
+//! geändert werden muss: beide bauen aus einem echten Git-Checkout (kein
+//! Tarball-Export), `git` ist in beiden Umgebungen vorhanden — der
+//! Erfolgspfad greift, kein `"unknown"`-Fallback nötig. Ein privates
+//! `official.yml` (falls es eines gibt) ist von hier aus nicht einsehbar,
+//! dürfte aber demselben Muster folgen (echter Checkout statt Tarball).
 
 // Spec-Testbarkeit (Abschnitt 6, "Ein Build mit Git liefert einen Hash; ein
 // simuliertes Build ohne Git-Zugriff liefert `"unknown"`"): `cargo test`
