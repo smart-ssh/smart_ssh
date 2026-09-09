@@ -2497,9 +2497,18 @@ pub fn get_platform() -> &'static str {
 /// Über-Dialog (Settings, Spec 0050) und die Titelzeile — ein Command für
 /// beide statt zweier fast identischer, damit sie nicht auseinanderlaufen
 /// können.
+///
+/// Generisch über `R: tauri::Runtime` (statt des impliziten `Wry`) —
+/// einzig damit `tauri::test::MockRuntime` die tatsächliche
+/// `tauri::State<Edition>`-Extraktion durchlaufen kann
+/// (`app_info_tests::test_get_app_info_resolves_via_managed_edition_state`),
+/// nicht nur die davon losgelöste `build_app_info`-Logik. `generate_handler!`
+/// in `lib::run()` bindet `R` dort automatisch an `Wry` (den konkreten
+/// Runtime-Typ des `tauri::Builder`), keine Änderung an der Registrierung
+/// nötig.
 #[tauri::command]
-pub fn get_app_info(
-    app: tauri::AppHandle,
+pub fn get_app_info<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     edition: tauri::State<'_, crate::wiring::Edition>,
 ) -> AppInfoDto {
     build_app_info(&app.package_info().version.to_string(), *edition)
@@ -2543,6 +2552,37 @@ mod app_info_tests {
         let info = build_app_info("0.4.1", crate::wiring::Edition::Official);
 
         assert_eq!(info.edition, "Official");
+    }
+
+    /// Spec-Reviewer-Fund (Spec 0052, Review dieses Schritts): die beiden
+    /// Tests oben rufen `build_app_info` direkt auf und umgehen damit
+    /// vollständig die `tauri::State<Edition>`-Extraktion, über die
+    /// `get_app_info` tatsächlich aufgerufen wird — ein vergessenes
+    /// `.manage(edition)` in `lib::run()` (oder eine falsch typisierte
+    /// Registrierung) bliebe von ihnen unbemerkt und würde erst zur
+    /// Laufzeit beim ersten Öffnen des Über-Dialogs als Panic auffallen
+    /// ("state not managed for field"). Dieser Test baut stattdessen eine
+    /// echte (gemockte) Tauri-App, managed `Edition` genauso wie
+    /// `lib::run()` es tut, und ruft `get_app_info` mit einem daraus
+    /// extrahierten `State<Edition>` auf — schließt damit genau diese
+    /// Lücke, auch wenn er (anders als `lib::run()` selbst zu testen, was
+    /// einen vollen App-Bootstrap bräuchte) nicht beweist, dass die
+    /// *echte* Produktions-Wiring in `lib.rs` das `.manage()` tatsächlich
+    /// aufruft — nur, dass die Befehlsfunktion korrekt funktioniert, sobald
+    /// sie es tut.
+    #[test]
+    fn test_get_app_info_resolves_via_managed_edition_state() {
+        let app = tauri::test::mock_builder()
+            .manage(crate::wiring::Edition::Official)
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("mock app konnte nicht gebaut werden");
+        let handle = app.handle().clone();
+
+        let edition_state: tauri::State<'_, crate::wiring::Edition> = handle.state();
+        let info = get_app_info(handle.clone(), edition_state);
+
+        assert_eq!(info.edition, "Official");
+        assert!(info.version_display.contains(&info.commit_hash));
     }
 }
 

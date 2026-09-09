@@ -869,9 +869,11 @@ fn format_unix_permissions(bits: u32) -> String {
 
 /// Spec 0052, Abschnitt 1/3.2/3.3: Version + Commit-Hash + Edition für
 /// Über-Dialog und Titelzeile — dasselbe DTO für beide, damit sich die
-/// Anzeige nicht auseinanderentwickelt (die Titelzeile baut sich
-/// `versionDisplay`/`edition` selbst zu ihrem eigenen kürzeren Text
-/// zusammen, statt einen weiteren, separaten Command zu brauchen).
+/// Anzeige nicht auseinanderentwickelt: `versionDisplay` ist bereits das
+/// fertig formatierte `"0.4.1 (a5b3e01)"` (`crate::version::
+/// version_with_hash`), die Titelzeile übernimmt es unverändert und hängt
+/// nur noch ihren eigenen "— Early Access"-Zusatz an, statt den String
+/// selbst aus `version`/`commitHash` neu zusammenzusetzen.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppInfoDto {

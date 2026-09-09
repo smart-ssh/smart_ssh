@@ -10,11 +10,16 @@
 pub const BUILD_COMMIT_HASH: &str = env!("SMART_SSH_BUILD_HASH");
 
 /// Das eine, überall geteilte Anzeigeformat aus Spec 0052, Abschnitt 1:
-/// `"0.4.1 (a5b3e01)"`. Genutzt von der Startup-Logzeile, dem
-/// Über-Dialog (über [`crate::commands::get_app_info`]) und der
-/// Titelzeile (Frontend baut denselben String selbst aus den einzelnen
-/// Feldern von `AppInfoDto` nach, s. `AppHeader.tsx`) — eine Stelle statt
-/// drei auseinanderlaufender `format!`-Aufrufe.
+/// `"0.4.1 (a5b3e01)"`. Genutzt von der Startup-Logzeile und von
+/// [`crate::commands::get_app_info`] (dessen `AppInfoDto::version_display`-
+/// Feld) — die Titelzeile (`AppHeader.tsx`) und der Über-Dialog
+/// (`AboutSettings.tsx`) übernehmen diesen bereits fertig formatierten
+/// String vom Frontend-DTO unverändert, statt ihn aus `version`/
+/// `commitHash` selbst neu zusammenzusetzen. Spec-Reviewer-Fund (Spec
+/// 0052, Review dieses Schritts): der vorherige Kommentar hier behauptete
+/// fälschlich, das Frontend baue den String "selbst nach" — tut es nicht,
+/// genau das wäre die zweite Format-Implementierung, die diese Funktion
+/// eigentlich vermeiden soll.
 pub fn version_with_hash(version: &str) -> String {
     format!("{version} ({BUILD_COMMIT_HASH})")
 }

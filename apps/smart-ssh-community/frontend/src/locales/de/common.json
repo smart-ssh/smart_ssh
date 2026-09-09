@@ -41,8 +41,10 @@
   },
   "about": {
     "version": "Version",
-    "copyHint": "Klicken zum Kopieren",
+    "copyHint": "In die Zwischenablage kopieren",
+    "copyButton": "Kopieren",
     "copied": "Kopiert!",
+    "copyFailed": "Kopieren fehlgeschlagen — Text lässt sich markieren.",
     "loadFailed": "Versions-/Build-Information konnte nicht geladen werden."
   },
   "featureLocked": {

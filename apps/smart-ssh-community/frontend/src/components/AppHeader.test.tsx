@@ -149,7 +149,9 @@ describe("AppHeader version display (Spec 0052)", () => {
 
     render(<AppHeader />);
 
-    expect(await screen.findByText(/0\.4\.1 \(a5b3e01\) — Early Access/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/0\.4\.1 \(a5b3e01\) · Community — Early Access/),
+    ).toBeInTheDocument();
   });
 
   it("shows no version suffix while get_app_info has not resolved yet (or fails) — cosmetic only", async () => {
@@ -193,5 +195,38 @@ describe("AppHeader version display (Spec 0052)", () => {
 
     const versionText = await screen.findByText(/Early Access/);
     expect(versionText).toHaveAttribute("data-tauri-drag-region");
+  });
+
+  /** Spec-Reviewer-Fund (Spec 0052, Review dieses Schritts): der
+   * Drag-Region-Test oben allein hätte eine Regression nicht erkannt, bei
+   * der der Versions-Span in den *rechten* Bereich verschoben wird — der
+   * reserviert auf Windows/Linux `paddingRight` für die nativen
+   * Fenster-Controls (Spec 0049, Fund 3/4), unter denen der Text sonst
+   * verschwinden würde. Prüft explizit, dass der Versions-Span ein
+   * Nachfahre des *linken* (Icon+Titel-)Bereichs ist, nicht des rechten.
+   */
+  it("keeps the version text in the left icon/title area, not the right window-controls area", async () => {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "get_platform") return Promise.resolve("windows");
+      if (command === "create_overlay_titlebar") return Promise.resolve("custom");
+      if (command === "get_app_info") {
+        return Promise.resolve({
+          version: "0.4.1",
+          commitHash: "a5b3e01",
+          versionDisplay: "0.4.1 (a5b3e01)",
+          edition: "Community",
+        });
+      }
+      return Promise.reject(new Error(`unexpected invoke: ${command}`));
+    });
+
+    const { container } = render(<AppHeader />);
+
+    const versionText = await screen.findByText(/Early Access/);
+    const header = container.querySelector("header");
+    expect(header).not.toBeNull();
+    const [leftDiv, , rightDiv] = header!.querySelectorAll(":scope > div");
+    expect(leftDiv).toContainElement(versionText);
+    expect(rightDiv).not.toContainElement(versionText);
   });
 });

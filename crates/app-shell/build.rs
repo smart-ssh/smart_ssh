@@ -15,10 +15,12 @@
 //! `HEAD` zeigt (z. B. `.git/refs/heads/main`) — ohne das würde Cargo den
 //! Build-Script-Output nach dem ersten Lauf cachen und ein inkrementeller
 //! Build nach einem neuen Commit weiterhin den alten Hash zeigen. Beide
-//! Pfade werden über `git rev-parse --git-dir`/`git symbolic-ref` ermittelt
-//! statt fest als `.git/...` angenommen — ein Git-Worktree (`.git` ist dort
-//! eine Datei mit einem Verweis, kein Verzeichnis) hätte den fest codierten
-//! Pfad sonst falsch getroffen.
+//! Pfade werden über `git rev-parse --git-dir`/`--git-common-dir`/`git
+//! symbolic-ref` ermittelt statt fest als `.git/...` angenommen — u. a.
+//! wegen eines `git worktree`-Checkouts (dieses Repo hat davon welche unter
+//! `.claude/worktrees/`): `HEAD` liegt dort worktree-lokal, `refs/heads/…`
+//! aber im gemeinsamen Git-Verzeichnis — s. `emit_rerun_triggers`-Doc-
+//! Kommentar für die genaue Unterscheidung.
 //!
 //! Spielt mit jedem lokalen Release-Build (`cargo tauri build`, ausgeführt
 //! aus einem normalen Git-Checkout dieses Repos — es gibt aktuell **kein**
@@ -75,8 +77,20 @@ fn resolve_commit_hash() -> String {
 /// `rerun-if-changed`-Trigger. Schlägt die Ermittlung fehl (kein Git, kein
 /// Repo), wird still nichts registriert — derselbe "nie den Build
 /// abbrechen"-Grundsatz wie bei [`resolve_commit_hash`]; ein dann fehlendes
-/// Rerun-Trigger ist unschädlich, da `resolve_commit_hash` in diesem Fall
-/// ohnehin nur `"unknown"` liefert.
+/// Rerun-Trigger ist unschädlich (Cargo führt ein Build-Script laut
+/// Dokumentation ohnehin bei *jedem* Aufruf erneut aus, wenn gar kein
+/// `rerun-if-changed` registriert wurde — "nie stale" bleibt also selbst
+/// im Fehlerfall gewahrt, nur ohne den gezielten Trigger).
+///
+/// Spec-Reviewer-Fund (Spec 0052, Review dieses Schritts): `HEAD` selbst
+/// liegt worktree-lokal (`git rev-parse --git-dir`), aber `refs/heads/…`
+/// liegt bei einem `git worktree`-Checkout im **gemeinsamen** Git-
+/// Verzeichnis aller Worktrees, nicht im worktree-lokalen — `--git-dir`
+/// dafür zu verwenden hätte in einem Worktree auf einen nicht
+/// existierenden Pfad gezeigt (harmlos dank des Verhaltens oben, aber
+/// ohne den beabsichtigten präzisen Trigger). `--git-common-dir` ist in
+/// einem normalen (Nicht-Worktree-)Checkout identisch zu `--git-dir`,
+/// unterscheidet sich also nur dort, wo es tatsächlich nötig ist.
 fn emit_rerun_triggers() {
     let Some(git_dir) = run_git(&["rev-parse", "--git-dir"]) else {
         return;
@@ -89,8 +103,9 @@ fn emit_rerun_triggers() {
     // beobachten (statt `.git/HEAD` allein) schließt genau den Fall, den
     // die Spec ausdrücklich nennt: ein neuer Commit auf dem aktuellen
     // Branch ändert `.git/HEAD` selbst nicht, nur die Ref-Datei dahinter.
+    let common_dir = run_git(&["rev-parse", "--git-common-dir"]).unwrap_or(git_dir);
     if let Some(head_ref) = run_git(&["symbolic-ref", "-q", "HEAD"]) {
-        println!("cargo:rerun-if-changed={git_dir}/{head_ref}");
+        println!("cargo:rerun-if-changed={common_dir}/{head_ref}");
     }
 }
 

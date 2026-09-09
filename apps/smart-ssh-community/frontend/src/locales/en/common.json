@@ -41,8 +41,10 @@
   },
   "about": {
     "version": "Version",
-    "copyHint": "Click to copy",
+    "copyHint": "Copy to clipboard",
+    "copyButton": "Copy",
     "copied": "Copied!",
+    "copyFailed": "Copy failed — text can be selected instead.",
     "loadFailed": "Could not load version/build information."
   },
   "featureLocked": {

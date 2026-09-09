@@ -5,13 +5,16 @@ import type { AppInfoDto } from "../types";
 
 export type Platform = "macos" | "windows" | "linux" | "unknown";
 
-/** Spec 0052, Abschnitt 3.3: die Titelzeile zeigt Version+Hash nur, solange
- * die App in der 0.x-Testphase ist — bewusst als **ein** Schalter gebaut
- * (statt an mehreren Stellen verstreut), gekoppelt an dieselbe "Early
- * Access"-Kennzeichnung, die im selben Textstück steht. Für die spätere
- * 1.0 hier auf `false` setzen: Versions-/Hash-Text UND der
- * "— Early Access"-Zusatz verschwinden dann in einem Schritt aus der
- * Titelzeile, ohne nach mehreren Stellen suchen zu müssen. */
+/** Spec 0052, Abschnitt 3.3: die Titelzeile zeigt Version+Hash (+ Edition,
+ * z. B. "· Official" — spec-optional "falls billig", hier billig genug für
+ * die Zwei-Repo-Situation aus Abschnitt 5: ein privates Official-Binary mit
+ * gespiegeltem `AppHeader.tsx` bekäme sonst gar keine Edition-Kennung in
+ * der Leiste) nur, solange die App in der 0.x-Testphase ist — bewusst als
+ * **ein** Schalter gebaut (statt an mehreren Stellen verstreut), gekoppelt
+ * an dieselbe "Early Access"-Kennzeichnung, die im selben Textstück steht.
+ * Für die spätere 1.0 hier auf `false` setzen: der gesamte Zusatz
+ * verschwindet dann in einem Schritt aus der Titelzeile, ohne nach
+ * mehreren Stellen suchen zu müssen. */
 const SHOW_EARLY_ACCESS_TITLEBAR_INFO = true;
 
 /** Spec 0049, Fund 3/4: `create_overlay_titlebar` liefert jetzt zurück, ob
@@ -149,7 +152,8 @@ export function AppHeader({ children }: AppHeaderProps) {
               data-tauri-drag-region
               className="ml-1.5 font-normal tracking-normal text-slate-500"
             >
-              {appInfo.versionDisplay} — Early Access
+              {appInfo.versionDisplay}
+              {appInfo.edition && ` · ${appInfo.edition}`} — Early Access
             </span>
           )}
         </span>
