@@ -40,6 +40,7 @@ mod state;
 mod test_connection;
 #[cfg(test)]
 mod test_support;
+mod version;
 mod wiring;
 
 pub use wiring::{Edition, Wiring};
