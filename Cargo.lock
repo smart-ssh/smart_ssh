@@ -77,7 +77,7 @@ dependencies = [
 
 [[package]]
 name = "ai-providers"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "futures",
@@ -130,7 +130,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "app-shell"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "ai-providers",
  "async-trait",
@@ -1015,7 +1015,7 @@ dependencies = [
 
 [[package]]
 name = "credentials-keyring"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "keyring",
  "secrecy",
@@ -3248,7 +3248,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "mcp-server"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "axum",
@@ -3980,7 +3980,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "persistence-sqlite"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5533,7 +5533,7 @@ dependencies = [
 
 [[package]]
 name = "smart-ssh-community"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "app-shell",
  "tauri",
@@ -5884,7 +5884,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-manager-core"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5904,7 +5904,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-transport"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "bytes",

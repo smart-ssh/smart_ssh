@@ -9,6 +9,20 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+## [0.4.5] — 2026-09-09
+
+### Fixed
+- **Kritische Regression aus 0.4.4 behoben**: 0.4.4 startete auf Windows
+  überhaupt nicht mehr (`Migrate(VersionMismatch(1))`-Absturz bei jedem
+  Start, per Tester-Log bestätigt). Ursache war ein Seiteneffekt des
+  CI-Fixes aus 0.4.4 selbst (`.gitattributes`) — die Windows-CI checkte
+  dadurch die SQL-Migrationsdateien mit anderen Zeilenenden aus als bei
+  0.4.1–0.4.3, was die zur Compile-Zeit eingebettete Prüfsumme der ersten
+  Migration änderte und sie gegen bestehende Datenbanken bestehender
+  Windows-Installationen ungültig machte. Eingegrenzt auf das, was
+  tatsächlich betroffen war (Rust-Quelldateien) — SQL-Migrationen
+  behalten ihr ursprüngliches Checkout-Verhalten.
+
 ## [0.4.4] — 2026-09-09
 
 ### Fixed
