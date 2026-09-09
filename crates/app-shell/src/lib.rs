@@ -189,9 +189,20 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Tester beim Melden eines "geht nicht" sonst manuell mitteilen
     // müsste. `context` (mit `package_info()`) liegt bereits vor, ohne
     // dass dafür irgendetwas geöffnet/verbunden werden muss.
+    //
+    // Spec 0052, Abschnitt 3.1: Version allein identifiziert einen Build
+    // nicht eindeutig (mehrere Builds können dieselbe Version tragen) —
+    // `commit_hash` (strukturiertes Feld, für ein grep/Log-Tool-Filtering)
+    // ergänzt um `version_display` im überall geteilten Anzeigeformat
+    // (`crate::version::version_with_hash`, s. dortiger Doc-Kommentar),
+    // damit ein an einen Bug-Report angehängtes Log auch beim bloßen
+    // Überfliegen sofort die exakte Build-Kennung zeigt.
     let db_path = default_db_path();
+    let version = context.package_info().version.to_string();
     tracing::info!(
-        version = %context.package_info().version,
+        version = %version,
+        commit_hash = crate::version::BUILD_COMMIT_HASH,
+        version_display = %crate::version::version_with_hash(&version),
         os = std::env::consts::OS,
         arch = std::env::consts::ARCH,
         data_path = %db_path.display(),

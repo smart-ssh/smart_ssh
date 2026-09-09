@@ -7,12 +7,6 @@
 
 /// Kurzer Git-Commit-Hash des gebauten Stands, z. B. `"a5b3e01"`, oder
 /// `"unknown"` ohne Git zur Build-Zeit (s. `build.rs`).
-///
-/// `#[allow(dead_code)]`: dieser Commit legt nur die Grundlage (Spec 0052,
-/// Abschnitt 7, Schritt 1); die Verwendungsstelle (Startzeilen-Log) folgt
-/// im nächsten Commit — bis dahin wäre die Konstante ungenutzt und
-/// `-D warnings` würde den Gate-Lauf sonst grundlos rot färben.
-#[allow(dead_code)]
 pub const BUILD_COMMIT_HASH: &str = env!("SMART_SSH_BUILD_HASH");
 
 /// Das eine, überall geteilte Anzeigeformat aus Spec 0052, Abschnitt 1:
@@ -21,10 +15,6 @@ pub const BUILD_COMMIT_HASH: &str = env!("SMART_SSH_BUILD_HASH");
 /// Titelzeile (Frontend baut denselben String selbst aus den einzelnen
 /// Feldern von `AppInfoDto` nach, s. `AppHeader.tsx`) — eine Stelle statt
 /// drei auseinanderlaufender `format!`-Aufrufe.
-///
-/// `#[allow(dead_code)]`: s. Kommentar auf [`BUILD_COMMIT_HASH`] —
-/// entfernt im nächsten Commit, sobald die Startzeile sie nutzt.
-#[allow(dead_code)]
 pub fn version_with_hash(version: &str) -> String {
     format!("{version} ({BUILD_COMMIT_HASH})")
 }
