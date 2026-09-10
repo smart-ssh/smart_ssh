@@ -187,6 +187,31 @@ impl SftpSession for MockSftpSession {
             .ok_or_else(|| Self::not_found(path))
     }
 
+    /// Dieser Mock kennt keine Symlinks (nur flache Dateien, s. Moduldoc-
+    /// Kommentar) — identisch zu `stat`, nur mit eigener Aufruf-Verfolgung,
+    /// damit ein Test verifizieren kann, DASS `lstat` (statt `stat`)
+    /// aufgerufen wurde, falls das für Spec 0054, Teil 3 relevant wird.
+    async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.calls.push(format!("lstat {path}"));
+        inner
+            .files
+            .get(path)
+            .map(|f| RemoteEntry {
+                name: path.rsplit('/').next().unwrap_or(path).to_string(),
+                path: path.to_string(),
+                is_dir: false,
+                size: f.content.len() as u64,
+                permissions: f.permissions,
+                modified: f.modified,
+                uid: None,
+                gid: None,
+                owner: None,
+                group: None,
+            })
+            .ok_or_else(|| Self::not_found(path))
+    }
+
     async fn remove(&mut self, path: &str) -> Result<(), SshError> {
         let mut inner = self.inner.lock().unwrap();
         inner.calls.push(format!("remove {path}"));

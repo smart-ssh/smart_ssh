@@ -431,9 +431,12 @@ export const sftpOpenForEditing = (sessionId: string, remotePath: string) =>
 export const localFileMtime = (localPath: string) =>
   invoke<string | null>("local_file_mtime", { localPath });
 
-/** Spec 0054, Teil 4, Punkt 6: Watcher beenden + Temp-Datei aufräumen. */
-export const closeEditSession = (localPath: string) =>
-  invoke<void>("close_edit_session", { localPath });
+/** Spec 0054, Teil 4, Punkt 6: Watcher beenden + Temp-Datei aufräumen.
+ * `sessionId` schränkt den Befehl auf den Editier-Temp-Ordner GENAU dieser
+ * Session ein (Spec-Reviewer-Fund: sonst könnte der Befehl jeden
+ * beliebigen lokalen Pfad löschen). */
+export const closeEditSession = (sessionId: string, localPath: string) =>
+  invoke<void>("close_edit_session", { sessionId, localPath });
 
 // --- Spec 0028: MCP-Server-Integration -----------------------------------
 

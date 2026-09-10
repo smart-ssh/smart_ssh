@@ -1278,19 +1278,30 @@ function ChmodDialog({
   onConfirm: (mode: number, recursive: boolean) => void;
 }) {
   const [mode, setMode] = useState(entry.permissionsOctal);
-  const [numericInput, setNumericInput] = useState(mode.toString(8).padStart(3, "0"));
+  // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): mit nur 3
+  // Ziffern (`maxLength={3}`, `/^[0-7]{1,3}$/`) ließ sich eine Datei mit
+  // gesetztem setuid/setgid/sticky-Bit (`permissionsOctal` trägt `&
+  // 0o7777`, also auch diese "vierte Ziffer") über die numerische Eingabe
+  // nicht mehr KORREKT bearbeiten: eine erneute Eingabe von z. B. "755" auf
+  // eine zuvor `4755` (setuid) gesetzte Datei löschte das setuid-Bit still
+  // — die Checkbox-Matrix (togglet einzelne Bits per XOR) war davon nicht
+  // betroffen, zwei inkonsistente Pfade zum selben `mode`. Durchgehend
+  // 4-stellig (führende Null bei "gewöhnlichen" Rechten, z. B. "0644")
+  // macht die vierte Ziffer immer sichtbar und bearbeitbar, statt sie
+  // implizit wegzulassen.
+  const [numericInput, setNumericInput] = useState(mode.toString(8).padStart(4, "0"));
   const [recursive, setRecursive] = useState(false);
 
   const applyMode = (next: number) => {
     setMode(next);
-    setNumericInput(next.toString(8).padStart(3, "0"));
+    setNumericInput(next.toString(8).padStart(4, "0"));
   };
 
   const toggleBit = (bit: number) => applyMode(mode ^ bit);
 
   const handleNumericChange = (value: string) => {
     setNumericInput(value);
-    if (/^[0-7]{1,3}$/.test(value)) {
+    if (/^[0-7]{1,4}$/.test(value)) {
       setMode(Number.parseInt(value, 8));
     }
   };
@@ -1336,7 +1347,7 @@ function ChmodDialog({
           <input
             value={numericInput}
             onChange={(e) => handleNumericChange(e.target.value)}
-            maxLength={3}
+            maxLength={4}
             className="w-16 border border-slate-600 bg-slate-950 px-2 py-1 font-mono text-slate-100 focus:outline-none"
           />
         </label>

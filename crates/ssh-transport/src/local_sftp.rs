@@ -141,8 +141,41 @@ impl SftpSession for LocalFileSession {
         })
     }
 
+    async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
+        let metadata = tokio::fs::symlink_metadata(path)
+            .await
+            .map_err(|e| io_err(path, e))?;
+        let name = std::path::Path::new(path)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string());
+        let (uid, gid) = owner_ids(&metadata);
+        Ok(RemoteEntry {
+            name,
+            path: path.to_string(),
+            is_dir: metadata.is_dir(),
+            size: metadata.len(),
+            permissions: permission_bits(&metadata),
+            modified: modified_time(&metadata),
+            uid,
+            gid,
+            owner: None,
+            group: None,
+        })
+    }
+
+    /// `symlink_metadata` (lstat) statt `metadata` (stat) — SFTP `REMOVE`
+    /// (was dieser Trait-Methode entspricht, s. Doc-Kommentar dort) wirkt
+    /// nie auf ein Symlink-Ziel, sondern immer auf den Pfad selbst. Mit
+    /// `metadata` (folgt Symlinks) würde ein Symlink auf ein Verzeichnis
+    /// hier fälschlich als "ist ein Ordner" erkannt und `remove_dir`
+    /// aufgerufen — das schlägt für einen Symlink-Pfad mit `ENOTDIR` fehl
+    /// (Unix' `rmdir()` verlangt, dass der Pfad selbst ein Verzeichnis
+    /// ist, kein Symlink darauf), statt ihn wie erwartet zu entfernen
+    /// (gefunden beim Testen von `commands::delete_recursive`s
+    /// Symlink-Schutz, Spec 0054, Review des Gesamtpakets).
     async fn remove(&mut self, path: &str) -> Result<(), SshError> {
-        let metadata = tokio::fs::metadata(path)
+        let metadata = tokio::fs::symlink_metadata(path)
             .await
             .map_err(|e| io_err(path, e))?;
         if metadata.is_dir() {

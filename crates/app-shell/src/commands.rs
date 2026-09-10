@@ -2723,11 +2723,85 @@ async fn session_sftp(state: &AppState, session_id: SessionId) -> CommandResult<
 }
 
 fn file_name_of(path: &str) -> String {
-    path.rsplit('/')
+    // Führender Trim gegen einen abschließenden `/` (z. B. `/srv/data/`) —
+    // ohne ihn liefert `rsplit('/').next()` einen leeren String, der
+    // Filter greift, und der `unwrap_or(path)`-Fallback gibt versehentlich
+    // den GESAMTEN Pfad statt nur seines letzten Segments zurück (Spec-
+    // Reviewer-Fund, Spec 0054, Review des Gesamtpakets).
+    path.trim_end_matches('/')
+        .rsplit('/')
         .next()
         .filter(|s| !s.is_empty())
         .unwrap_or(path)
         .to_string()
+}
+
+/// Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets, ERHÖHTE
+/// Priorität): jeder Punkt, an dem ein vom SFTP-SERVER gelieferter Name
+/// (`RemoteEntry::name`, oder ein daraus über `file_name_of` abgeleiteter
+/// Name) als LOKALES Pfadsegment verwendet wird (rekursiver Ordner-
+/// Download, "Lokal öffnen"), ist ein klassisches Zip-Slip-Risiko: ein
+/// (kompromittierter oder fehlerhaft implementierter) Server könnte statt
+/// eines normalen Dateinamens `"../../.zshrc"` oder einen absoluten Pfad
+/// wie `"/Users/u/.ssh/authorized_keys"` liefern — `PathBuf::join(..)`
+/// verlässt bei `..`-Segmenten das Zielverzeichnis, und bei einem
+/// absoluten Pfad ERSETZT `join()` den kompletten bisherigen Präfix statt
+/// ihn anzuhängen. Lehnt jeden Namen ab, der nicht GENAU EIN normales
+/// Pfadsegment ist (kein `.`/`..`, kein eingebetteter Separator, keine
+/// führende Root/Präfix-Komponente) — funktioniert plattformunabhängig,
+/// da `Path::components()` die jeweils betriebssystemeigene
+/// Separator-/Präfix-Erkennung übernimmt.
+fn safe_local_segment(name: &str) -> CommandResult<()> {
+    use std::path::{Component, Path};
+    let mut components = Path::new(name).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(_)), None) => Ok(()),
+        _ => Err(CommandError::from(format!(
+            "Unsicherer Dateiname vom Server abgelehnt: '{name}'"
+        ))),
+    }
+}
+
+#[cfg(test)]
+mod safe_local_segment_tests {
+    //! Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets, ERHÖHTE
+    //! Priorität): Zip-Slip über servergelieferte Dateinamen beim
+    //! rekursiven Ordner-Download/"Lokal öffnen". `download_recursive`/
+    //! `download_entry_to`/`sftp_open_for_editing` rufen `safe_local_segment`
+    //! jetzt vor jedem `PathBuf::join(entry.name)` auf — diese Tests prüfen
+    //! nur die reine Funktion (`std::path::Path::join`s Verhalten bei
+    //! `..`-Segmenten/absoluten Pfaden ist dokumentiertes, stabiles
+    //! Standardbibliotheks-Verhalten, kein separat zu beweisender Teil).
+    use super::*;
+
+    #[test]
+    fn test_accepts_a_plain_file_name() {
+        assert!(safe_local_segment("readme.md").is_ok());
+        assert!(safe_local_segment("nginx.conf.smartssh-backup-123").is_ok());
+    }
+
+    #[test]
+    fn test_rejects_parent_directory_traversal() {
+        assert!(safe_local_segment("..").is_err());
+        assert!(safe_local_segment("../etc/passwd").is_err());
+        assert!(safe_local_segment("../../.zshrc").is_err());
+    }
+
+    #[test]
+    fn test_rejects_current_directory_segment() {
+        assert!(safe_local_segment(".").is_err());
+    }
+
+    #[test]
+    fn test_rejects_an_embedded_separator() {
+        assert!(safe_local_segment("a/b").is_err());
+    }
+
+    #[test]
+    fn test_rejects_an_absolute_path() {
+        assert!(safe_local_segment("/etc/passwd").is_err());
+        assert!(safe_local_segment("/Users/u/.ssh/authorized_keys").is_err());
+    }
 }
 
 #[tauri::command]
@@ -2890,6 +2964,7 @@ async fn download_recursive(
             sftp.list_dir(&remote_dir).await?
         };
         for entry in entries {
+            safe_local_segment(&entry.name)?;
             let local_entry_path = local_dir.join(&entry.name);
             if entry.is_dir {
                 tokio::fs::create_dir_all(&local_entry_path).await?;
@@ -2924,6 +2999,11 @@ async fn download_entry_to(
     local_base_dir: &std::path::Path,
 ) -> CommandResult<()> {
     let root_name = file_name_of(remote_path);
+    // `remote_path` kommt vom Frontend, letztlich aber aus einem früheren
+    // `sftp_list`-Ergebnis (`RemoteEntryDto.path`) — also transitiv
+    // server-kontrolliert. Dieselbe Zip-Slip-Prüfung wie in
+    // `download_recursive` für jeden rekursiv entdeckten Eintrag.
+    safe_local_segment(&root_name)?;
     let root_entry = {
         let mut guard = session.sftp.lock().await;
         let sftp = guard
@@ -3110,7 +3190,10 @@ pub async fn sftp_delete_preview(
         .as_mut()
         .expect("ensure_sftp_open lief erfolgreich durch");
 
-    let root_entry = sftp.stat(&path).await?;
+    // `lstat` statt `stat` — dieselbe Symlink-Begründung wie in
+    // `delete_recursive` (dieselbe Vorschau soll die Zahlen zeigen, die
+    // der anschließende `sftp_delete`-Aufruf tatsächlich löscht).
+    let root_entry = sftp.lstat(&path).await?;
     if !root_entry.is_dir {
         return Ok(DeletePreviewDto {
             file_count: 1,
@@ -3155,7 +3238,15 @@ pub async fn sftp_delete(
 /// `sftp_mutation_tests` unten, gegen den echten lokalen Pseudo-Server via
 /// `ssh_transport::LocalFileSession`).
 async fn delete_recursive(sftp: &mut dyn SftpSession, path: &str) -> Result<(), SshError> {
-    let root_entry = sftp.stat(path).await?;
+    // `lstat` statt `stat` (Spec-Reviewer-Fund, Spec 0054, Review des
+    // Gesamtpakets, ERHÖHTE Priorität): `stat` folgt Symlinks — ein
+    // Eintrag, der selbst ein Symlink auf ein Verzeichnis ist, würde damit
+    // als "ist ein Ordner" erkannt und der Baum DAHINTER (potenziell weit
+    // außerhalb des eigentlich sichtbaren Verzeichnisses, z. B.
+    // `/var/www/current -> /etc`) rekursiv gelöscht. `lstat` meldet für
+    // einen Symlink dessen eigenen Typ, nie den des Ziels — der Symlink
+    // selbst wird dann korrekt nur entfernt, nie in ihn hinein rekursiert.
+    let root_entry = sftp.lstat(path).await?;
     if !root_entry.is_dir {
         sftp.remove(path).await?;
         return Ok(());
@@ -3261,7 +3352,10 @@ async fn chmod_recursive(
         sftp.set_permissions(path, mode).await?;
         return Ok(());
     }
-    let root_entry = sftp.stat(path).await?;
+    // `lstat` statt `stat` — dieselbe Symlink-Begründung wie in
+    // `delete_recursive`: ein Symlink auf ein Verzeichnis darf ein
+    // rekursives chmod nicht in dessen Ziel hinein eskalieren lassen.
+    let root_entry = sftp.lstat(path).await?;
     if !root_entry.is_dir {
         sftp.set_permissions(path, mode).await?;
         return Ok(());
@@ -3458,6 +3552,10 @@ pub async fn sftp_open_for_editing(
 ) -> CommandResult<EditSessionDto> {
     let session = session_sftp(&state, session_id).await?;
     let file_name = file_name_of(&remote_path);
+    // Zip-Slip-Schutz (s. `safe_local_segment`-Doc-Kommentar) — auch hier
+    // landet ein transitiv server-kontrollierter Name als lokales
+    // Pfadsegment.
+    safe_local_segment(&file_name)?;
 
     let (bytes, remote_modified) = {
         let mut guard = session.sftp.lock().await;
@@ -3474,7 +3572,27 @@ pub async fn sftp_open_for_editing(
     let local_path_for_write = local_path.clone();
     tokio::task::spawn_blocking(move || -> std::io::Result<()> {
         std::fs::create_dir_all(&dir)?;
-        std::fs::write(&local_path_for_write, bytes)
+        // Spec-Reviewer-Härtungshinweis (Spec 0054, Review des
+        // Gesamtpakets): der Inhalt ist Remote-Serverinhalt (potenziell
+        // Passwörter/Keys in einer `.conf`-Datei) — ohne restriktive Unix-
+        // Rechte wäre er auf einem Mehrbenutzer-System für andere lokale
+        // Nutzer lesbar (Standard-Umask liegt typischerweise bei
+        // 0755/0644). `0700`/`0600` schränken auf den eigenen Owner ein.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+        }
+        std::fs::write(&local_path_for_write, bytes)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                &local_path_for_write,
+                std::fs::Permissions::from_mode(0o600),
+            )?;
+        }
+        Ok(())
     })
     .await
     .map_err(|e| format!("Hintergrund-Task für lokalen Download fehlgeschlagen: {e}"))??;
@@ -3511,7 +3629,21 @@ pub async fn local_file_mtime(local_path: String) -> Option<String> {
 /// beendet; Temp-Datei aufräumen." Best-effort — eine bereits vom Nutzer
 /// oder dem externen Programm gelöschte Datei ist kein Fehlerfall.
 #[tauri::command]
-pub async fn close_edit_session(local_path: String) -> CommandResult<()> {
+pub async fn close_edit_session(session_id: SessionId, local_path: String) -> CommandResult<()> {
+    // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): ohne
+    // `session_id`-Parameter hätte dieser Befehl JEDEN vom Frontend
+    // übergebenen lokalen Pfad gelöscht — bei einem sauberen Frontend
+    // passiert das nie, aber als Verteidigung in der Tiefe (dieselbe
+    // Webview rendert auch KI-generierten Chat-Inhalt) kostet die
+    // Einschränkung auf den eigenen Editier-Temp-Ordner dieser Session
+    // nichts an Funktionalität — `close_edit_session` wird ohnehin nie mit
+    // einem anderen Pfad aufgerufen.
+    let dir = edit_session_dir(session_id)?;
+    if !std::path::Path::new(&local_path).starts_with(&dir) {
+        return Err(CommandError::from(
+            "Pfad liegt außerhalb des Editier-Temp-Ordners dieser Session",
+        ));
+    }
     match tokio::fs::remove_file(&local_path).await {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -3925,6 +4057,8 @@ mod send_chat_message_persistence_tests {
 /// die lokale Implementierung.
 #[cfg(test)]
 mod sftp_mutation_tests {
+    use std::os::unix::fs::PermissionsExt;
+
     use ssh_transport::LocalFileSession;
 
     use super::*;
@@ -3957,6 +4091,58 @@ mod sftp_mutation_tests {
             .unwrap();
 
         assert!(!file.exists());
+    }
+
+    /// Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets, ERHÖHTE
+    /// Priorität): "Löschen" auf einen Symlink, der auf ein Verzeichnis
+    /// AUSSERHALB des eigentlich gemeinten Baums zeigt, darf niemals in
+    /// dieses Ziel hinein rekursieren — nur der Symlink selbst wird
+    /// entfernt. Verifiziert gegen den un-gefixten Stand: mit `stat` statt
+    /// `lstat` als Root-Prüfung (der Zustand vor diesem Fix) schlägt dieser
+    /// Test fehl, weil `outside/victim.txt` dann mitgelöscht würde.
+    #[tokio::test]
+    async fn test_delete_recursive_does_not_follow_a_symlink_at_the_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("victim.txt"), b"do not delete me").unwrap();
+        let link = dir.path().join("link-to-outside");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        let mut sftp = LocalFileSession::new();
+
+        delete_recursive(&mut sftp, link.to_str().unwrap())
+            .await
+            .expect("delete_recursive() sollte gelingen (löscht nur den Symlink)");
+
+        assert!(!link.exists(), "der Symlink selbst sollte entfernt sein");
+        assert!(
+            outside.join("victim.txt").exists(),
+            "das Symlink-Ziel außerhalb des Baums darf unangetastet bleiben"
+        );
+    }
+
+    /// Gegenstück für rekursives chmod — dieselbe Symlink-Begründung.
+    #[tokio::test]
+    async fn test_chmod_recursive_does_not_follow_a_symlink_at_the_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let victim = outside.join("victim.txt");
+        std::fs::write(&victim, b"x").unwrap();
+        std::fs::set_permissions(&victim, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let link = dir.path().join("link-to-outside");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        let mut sftp = LocalFileSession::new();
+
+        chmod_recursive(&mut sftp, link.to_str().unwrap(), 0o700, true)
+            .await
+            .expect("chmod_recursive() sollte gelingen (setzt nur den Symlink selbst)");
+
+        let victim_entry = sftp.stat(victim.to_str().unwrap()).await.unwrap();
+        assert_eq!(
+            victim_entry.permissions, 0o644,
+            "das Symlink-Ziel außerhalb des Baums darf unangetastet bleiben"
+        );
     }
 
     #[tokio::test]
@@ -4065,15 +4251,18 @@ mod edit_session_tests {
 
     #[tokio::test]
     async fn test_close_edit_session_removes_the_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("edited.txt");
-        std::fs::write(&path, b"x").unwrap();
+        let session_id = SessionId::new_v4();
+        let dir = edit_session_dir(session_id).unwrap();
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let path = dir.join("edited.txt");
+        tokio::fs::write(&path, b"x").await.unwrap();
 
-        close_edit_session(path.to_str().unwrap().to_string())
+        close_edit_session(session_id, path.to_str().unwrap().to_string())
             .await
             .expect("close_edit_session() sollte gelingen");
 
         assert!(!path.exists());
+        let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 
     /// Spec 0054, Teil 4, Punkt 6: "Watcher stoppt ... Temp-Datei
@@ -4081,10 +4270,35 @@ mod edit_session_tests {
     /// selbst gelöschtes Temp-File ist kein Fehlerfall.
     #[tokio::test]
     async fn test_close_edit_session_on_an_already_missing_file_is_not_an_error() {
-        close_edit_session("/this/path/does-not-exist-smart-ssh-test".to_string())
+        let session_id = SessionId::new_v4();
+        let path = edit_session_dir(session_id)
+            .unwrap()
+            .join("never-existed.txt");
+
+        close_edit_session(session_id, path.to_str().unwrap().to_string())
             .await
             .expect(
                 "ein bereits fehlendes Temp-File darf close_edit_session nicht scheitern lassen",
             );
+    }
+
+    /// Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): ohne
+    /// Session-Eingrenzung hätte `close_edit_session` JEDEN übergebenen
+    /// lokalen Pfad gelöscht — Verteidigung in der Tiefe (s. Doc-Kommentar
+    /// an `close_edit_session`).
+    #[tokio::test]
+    async fn test_close_edit_session_rejects_a_path_outside_its_own_session_dir() {
+        let session_id = SessionId::new_v4();
+        let outside = tempfile::tempdir().unwrap();
+        let path = outside.path().join("not-mine.txt");
+        std::fs::write(&path, b"x").unwrap();
+
+        let result = close_edit_session(session_id, path.to_str().unwrap().to_string()).await;
+
+        assert!(result.is_err());
+        assert!(
+            path.exists(),
+            "eine fremde Datei darf nicht gelöscht werden"
+        );
     }
 }

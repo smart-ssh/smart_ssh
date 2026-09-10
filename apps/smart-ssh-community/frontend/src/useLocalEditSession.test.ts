@@ -2,6 +2,7 @@
 // Änderung erkannt -> Upload angeboten -> Diff + Konflikt-Prüfung ->
 // hochgeladen; Watcher sauber beendet; Temp aufgeräumt."
 import { act, renderHook } from "@testing-library/react";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   closeEditSession,
@@ -15,7 +16,7 @@ import {
 import { useLocalEditSession } from "./useLocalEditSession";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
-  openPath: vi.fn(() => Promise.resolve()),
+  openPath: vi.fn(),
 }));
 
 vi.mock("./api", () => ({
@@ -141,6 +142,31 @@ describe("useLocalEditSession", () => {
     });
   });
 
+  it("buildUploadOffer conservatively flags a conflict when both timestamps are null", async () => {
+    // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): weder der
+    // Server liefert einen `modified`-Zeitstempel, noch konnte der
+    // aktuelle `sftpStat`-Aufruf einen liefern (z. B. weil er fehlschlug)
+    // — in diesem Fall lässt sich gar nichts prüfen, die Spec verlangt
+    // trotzdem konservativ eine Warnung statt eines stillen "unverändert".
+    vi.mocked(sftpOpenForEditing).mockResolvedValue({
+      localPath: "/tmp/edit/nginx.conf",
+      remoteModified: null,
+    });
+    vi.mocked(localFileMtime).mockResolvedValue("2026-01-01T00:00:01Z");
+    vi.mocked(readLocalTextPreview).mockResolvedValue({ text: "neu", size: 3 });
+    vi.mocked(sftpStat).mockRejectedValue(new Error("stat failed"));
+    vi.mocked(sftpReadText).mockResolvedValue("alt");
+
+    const { result } = renderHook(() => useLocalEditSession("session-1"));
+    await act(async () => {
+      await result.current.startEditing({ ...entry, modified: null });
+    });
+
+    const offer = await act(async () => result.current.buildUploadOffer());
+
+    expect(offer?.remoteChangedSinceDownload).toBe(true);
+  });
+
   it("buildUploadOffer reports no conflict when the remote mtime is unchanged", async () => {
     vi.mocked(sftpOpenForEditing).mockResolvedValue({
       localPath: "/tmp/edit/nginx.conf",
@@ -187,6 +213,40 @@ describe("useLocalEditSession", () => {
     expect(result.current.session?.status).toBe("editing");
   });
 
+  it("cleans up the downloaded temp file if opening it locally fails", async () => {
+    // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): ein
+    // Fehlschlag NACH dem erfolgreichen Download (hier: `openPath` findet
+    // kein passendes Programm) darf die bereits heruntergeladene Kopie
+    // nicht als Leiche zurücklassen — ohne gesetzten Session-State gäbe es
+    // sonst keinen Weg mehr, sie aufzuräumen.
+    vi.mocked(sftpOpenForEditing).mockResolvedValue({
+      localPath: "/tmp/edit/nginx.conf",
+      remoteModified: "2026-01-01T00:00:00Z",
+    });
+    vi.mocked(openPath).mockRejectedValueOnce(new Error("no application found"));
+
+    const { result } = renderHook(() => useLocalEditSession("session-1"));
+
+    // Der Fehler wird INNERHALB von `act()` gefangen (statt über
+    // `expect(act(...)).rejects...`) — nur so ist garantiert, dass der
+    // catch-Zweig in `startEditing` (der `closeEditSession` aufruft)
+    // tatsächlich vollständig durchgelaufen ist, bevor die folgenden
+    // Assertions laufen.
+    let thrown: unknown;
+    await act(async () => {
+      try {
+        await result.current.startEditing(entry);
+      } catch (err) {
+        thrown = err;
+      }
+    });
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe("no application found");
+    expect(closeEditSession).toHaveBeenCalledWith("session-1", "/tmp/edit/nginx.conf");
+    expect(result.current.session).toBeNull();
+  });
+
   it("endSession stops polling and cleans up the temp file", async () => {
     vi.mocked(sftpOpenForEditing).mockResolvedValue({
       localPath: "/tmp/edit/nginx.conf",
@@ -203,7 +263,7 @@ describe("useLocalEditSession", () => {
       result.current.endSession();
     });
 
-    expect(closeEditSession).toHaveBeenCalledWith("/tmp/edit/nginx.conf");
+    expect(closeEditSession).toHaveBeenCalledWith("session-1", "/tmp/edit/nginx.conf");
     expect(result.current.session).toBeNull();
 
     // Nach dem Ende darf kein weiteres Polling mehr passieren (Watcher

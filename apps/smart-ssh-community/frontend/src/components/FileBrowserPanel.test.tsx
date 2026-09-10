@@ -19,6 +19,7 @@ import {
   localFileMtime,
   readLocalTextPreview,
   sftpChmod,
+  sftpDelete,
   sftpDeletePreview,
   sftpDownload,
   sftpDownloadDefault,
@@ -502,12 +503,42 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByRole("button", { name: "⋮" }));
     fireEvent.click(screen.getByText("Rechte bearbeiten…"));
 
-    const numeric = await screen.findByDisplayValue("644");
-    fireEvent.change(numeric, { target: { value: "700" } });
+    const numeric = await screen.findByDisplayValue("0644");
+    fireEvent.change(numeric, { target: { value: "0700" } });
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
       expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o700, false),
+    );
+  });
+
+  it("chmod dialog's numeric field shows and preserves the setuid/setgid/sticky bit", async () => {
+    // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): mit einem
+    // auf 3 Ziffern begrenzten Eingabefeld war die "vierte Ziffer"
+    // (setuid/setgid/sticky) unsichtbar — jede Bearbeitung der Zahl löschte
+    // sie still. Mit setuid (0o4755) muss das Feld "4755" zeigen, und ein
+    // Übernehmen mit unverändertem Text darf das Bit nicht verlieren.
+    const setuidEntry: RemoteEntryDto = {
+      ...entry,
+      name: "suid-bin",
+      path: "suid-bin",
+      permissionsOctal: 0o4755,
+    };
+    vi.mocked(sftpList).mockResolvedValue([setuidEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpChmod).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/suid-bin/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Rechte bearbeiten…"));
+
+    expect(await screen.findByDisplayValue("4755")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    await waitFor(() =>
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "suid-bin", 0o4755, false),
     );
   });
 
@@ -544,6 +575,11 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     await waitFor(() => expect(sftpDeletePreview).toHaveBeenCalledWith("session-1", "logs"));
     expect(await screen.findByText("3")).toBeVisible();
     expect(screen.getByText("2")).toBeVisible();
+    // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): die
+    // härteste Spec-Invariante hier ist "Bestätigung Pflicht" — ohne diese
+    // Prüfung würde ein Test, der `sftpDelete` versehentlich schon beim
+    // Öffnen des Dialogs auslöst, nicht auffallen.
+    expect(sftpDelete).not.toHaveBeenCalled();
   });
 
   it("rename checks for a collision and asks before overwriting", async () => {
@@ -708,7 +744,7 @@ describe("FileBrowserPanel 'Lokal öffnen' flow (Spec 0054, Teil 4)", () => {
 
     fireEvent.click(screen.getByText("Bearbeitung beenden"));
 
-    expect(closeEditSession).toHaveBeenCalledWith("/tmp/edit/a.txt");
+    expect(closeEditSession).toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt");
     expect(screen.queryByText(/wird lokal bearbeitet/)).not.toBeInTheDocument();
   });
 });

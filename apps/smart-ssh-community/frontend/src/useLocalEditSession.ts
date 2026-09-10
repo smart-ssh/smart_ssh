@@ -89,27 +89,36 @@ export function useLocalEditSession(sessionId: string) {
       // Moduldoc-Kommentar — nur eine aktive Bearbeitung gleichzeitig).
       if (session) {
         stopPolling();
-        closeEditSession(session.localPath).catch(() => {});
+        closeEditSession(sessionId, session.localPath).catch(() => {});
       }
 
-      // Absichtlich KEIN try/catch hier: ein Fehlschlag beim Download oder
-      // beim Start des lokalen Programms ("Programm nicht gefunden") ist
-      // Sache des Aufrufers (`FileBrowserPanel`s bestehende `setError`-
-      // Anzeige) — dieser Hook bleibt UI-frei, s. Moduldoc-Kommentar zu
-      // `buildUploadOffer`. Kein halb-initialisierter Session-State bei
-      // einem Fehlschlag.
+      // Der Fehler selbst wird weitergereicht (Sache des Aufrufers,
+      // `FileBrowserPanel`s bestehende `setError`-Anzeige — dieser Hook
+      // bleibt UI-frei, s. Moduldoc-Kommentar zu `buildUploadOffer`), aber
+      // NACH einem erfolgreichen Download muss ein späterer Fehlschlag
+      // (z. B. `openPath`: "Programm nicht gefunden") die bereits
+      // heruntergeladene Temp-Kopie wieder aufräumen — sonst bliebe sie
+      // für immer liegen, weil ohne gesetzten Session-State kein Weg mehr
+      // existiert, `close_edit_session` später dafür auszulösen
+      // (Spec-Reviewer-Fund, Spec 0054, Review des Gesamtpakets: "Temp-
+      // Datei-Leichen im Fehlerpfad").
       const editSession = await sftpOpenForEditing(sessionId, entry.path);
-      remoteModifiedAtDownloadRef.current = editSession.remoteModified;
+      try {
+        remoteModifiedAtDownloadRef.current = editSession.remoteModified;
 
-      const apps = await loadFileTypeApps().catch(() => ({}));
-      const appPath = appForFileName(apps, entry.name) ?? undefined;
-      await openPath(editSession.localPath, appPath);
+        const apps = await loadFileTypeApps().catch(() => ({}));
+        const appPath = appForFileName(apps, entry.name) ?? undefined;
+        await openPath(editSession.localPath, appPath);
 
-      lastSeenMtimeRef.current = await localFileMtime(editSession.localPath);
+        lastSeenMtimeRef.current = await localFileMtime(editSession.localPath);
 
-      setSession({ entry, localPath: editSession.localPath, status: "editing", error: null });
-      stopPolling();
-      pollTimerRef.current = setInterval(() => poll(editSession.localPath), POLL_INTERVAL_MS);
+        setSession({ entry, localPath: editSession.localPath, status: "editing", error: null });
+        stopPolling();
+        pollTimerRef.current = setInterval(() => poll(editSession.localPath), POLL_INTERVAL_MS);
+      } catch (err) {
+        closeEditSession(sessionId, editSession.localPath).catch(() => {});
+        throw err;
+      }
     },
     [poll, session, sessionId, stopPolling],
   );
@@ -128,7 +137,17 @@ export function useLocalEditSession(sessionId: string) {
     ]);
     const remoteModifiedNow = remoteEntry?.modified ?? null;
     const baseline = remoteModifiedAtDownloadRef.current;
-    const remoteChangedSinceDownload = remoteModifiedNow !== baseline;
+    // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): die
+    // Doc-Kommentar-Zusage an `UploadOffer.remoteChangedSinceDownload`
+    // ("konservativ true, wenn einer der beiden Zeitstempel fehlt") war
+    // hier nicht umgesetzt — ein simples `!==` liefert `false`, wenn BEIDE
+    // Seiten `null` sind (Server ohne `modified`-Unterstützung, oder
+    // `sftpStat` ist oben fehlgeschlagen und landete im `.catch(() =>
+    // null)`) — genau der Fall, in dem gar nichts geprüft werden konnte,
+    // nie stillschweigend als "unverändert" gelten darf (Spec 0054, Teil
+    // 4, Punkt 5: Datenverlust durch stilles Überschreiben vermeiden).
+    const remoteChangedSinceDownload =
+      baseline === null || remoteModifiedNow === null || remoteModifiedNow !== baseline;
     return {
       localText: localPreview.text,
       localSize: localPreview.size,
@@ -166,11 +185,11 @@ export function useLocalEditSession(sessionId: string) {
   const endSession = useCallback(() => {
     if (!session) return;
     stopPolling();
-    closeEditSession(session.localPath).catch((err) =>
+    closeEditSession(sessionId, session.localPath).catch((err) =>
       console.warn("Konnte Temp-Datei nicht aufräumen:", err),
     );
     setSession(null);
-  }, [session, stopPolling]);
+  }, [session, sessionId, stopPolling]);
 
   return { session, startEditing, buildUploadOffer, confirmUpload, dismissChange, endSession };
 }

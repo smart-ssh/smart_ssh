@@ -110,6 +110,14 @@ pub trait SftpSession: Send {
     async fn read_file(&mut self, path: &str) -> Result<Vec<u8>, SshError>;
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError>;
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError>;
+    /// Wie `stat`, folgt aber KEINEM Symlink am Zielpfad selbst (SFTP
+    /// `LSTAT`) — meldet für einen Symlink dessen eigenen Typ (`is_dir ==
+    /// false`, unabhängig davon, worauf er zeigt). Spec 0054, Teil 3: die
+    /// Grundlage dafür, dass rekursives Löschen/chmod nie versehentlich in
+    /// ein Symlink-Ziel außerhalb des sichtbaren Baums hinein traversiert
+    /// (s. `commands::delete_recursive`/`chmod_recursive`, die den
+    /// Wurzelpfad damit statt mit `stat` prüfen).
+    async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError>;
     async fn remove(&mut self, path: &str) -> Result<(), SshError>;
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError>;
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError>;

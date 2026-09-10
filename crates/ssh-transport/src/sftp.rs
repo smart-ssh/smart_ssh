@@ -115,6 +115,16 @@ impl SftpSession for RusshSftpSession {
         Ok(remote_entry(name, path.to_string(), &metadata))
     }
 
+    async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
+        let metadata = self
+            .inner
+            .symlink_metadata(path)
+            .await
+            .map_err(|e| map_sftp_error(path, e))?;
+        let name = path.rsplit('/').next().unwrap_or(path).to_string();
+        Ok(remote_entry(name, path.to_string(), &metadata))
+    }
+
     async fn remove(&mut self, path: &str) -> Result<(), SshError> {
         self.inner
             .remove_file(path)
