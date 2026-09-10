@@ -52,11 +52,16 @@ export function ChatRetentionSettings() {
 
   if (!loaded) return null;
 
+  // Spec 0055, Teil 3: `SettingsScreen` rendert den Sektions-Titel bereits
+  // selbst (`{active?.label}`) — die eigene `<h3>` hier war eine doppelte
+  // Überschrift. Mit ihr fällt auch der `border-t`/`pt-4`-Rahmen weg: der
+  // war für eine unterhalb von anderem Inhalt angehängte Sektion gedacht
+  // (vor Spec 0050 lag das hier direkt unter `AiProviderSettings`), diese
+  // Sektion ist seit Spec 0050 aber die ALLEINIGE Kategorie-Inhalts-
+  // Komponente — ein oberer Trennstrich direkt unter dem
+  // SettingsScreen-eigenen Header-Rahmen sähe wie eine doppelte Linie aus.
   return (
-    <div className="mb-6 border-t border-slate-700 pt-4">
-      <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
-        {t("chatRetention.label")}
-      </h3>
+    <div>
       {error && <p className="mb-2 rounded bg-red-950 px-2 py-1 text-xs text-red-300">{error}</p>}
       <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
         <input

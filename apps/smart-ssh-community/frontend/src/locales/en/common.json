@@ -35,7 +35,6 @@
       "fileTypes": "Files"
     },
     "language": {
-      "label": "Language",
       "de": "German",
       "en": "English"
     }
@@ -352,7 +351,6 @@
     "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "The first-run notice must be acknowledged first"
   },
   "mcpServer": {
-    "title": "MCP server (for external tools like Claude Code)",
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",
     "enable": "Enable MCP server",
     "endpointLabel": "Connection endpoint",
@@ -386,7 +384,6 @@
     "cancel": "Cancel"
   },
   "chatRetention": {
-    "label": "Keep chat history for",
     "neverDelete": "Never delete automatically",
     "days_one": "{{count}} day",
     "days_other": "{{count}} days",

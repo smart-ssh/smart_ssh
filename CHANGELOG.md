@@ -14,6 +14,11 @@ sind mit **(Pro)** markiert.
   Shift+Enter fügt einen Zeilenumbruch ein, das Feld wächst mit dem Inhalt
   bis zu einer Maximalhöhe und scrollt danach intern.
 
+### Fixed
+- Einstellungen: einige Kategorien ("Anzeige & Sprache", "Sitzungen &
+  Daten", "MCP-Server") zeigten ihren Titel doppelt (einmal von der
+  Einstellungen-Navigation, einmal als eigene Überschrift im Inhalt).
+
 ## [0.4.6] — 2026-09-10
 
 ### Added

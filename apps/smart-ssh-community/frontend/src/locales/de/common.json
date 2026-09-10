@@ -35,7 +35,6 @@
       "fileTypes": "Dateien"
     },
     "language": {
-      "label": "Sprache",
       "de": "Deutsch",
       "en": "Englisch"
     }
@@ -352,7 +351,6 @@
     "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "Erststart-Hinweis muss zuerst bestätigt werden"
   },
   "mcpServer": {
-    "title": "MCP-Server (für externe Tools wie Claude Code)",
     "hint": "Externe MCP-Clients können darüber Kommandos, Datei-Lese-/Schreibzugriffe und Notiz-Aktualisierungen auf freigegebenen Servern vorschlagen — jede Anfrage landet immer bei einer Bestätigung in der App, unabhängig von bestehenden Allow-Regeln.",
     "enable": "MCP-Server aktivieren",
     "endpointLabel": "Verbindungs-Endpunkt",
@@ -386,7 +384,6 @@
     "cancel": "Abbrechen"
   },
   "chatRetention": {
-    "label": "Chat-Verlauf aufbewahren für",
     "neverDelete": "Nie automatisch löschen",
     "days_one": "{{count}} Tag",
     "days_other": "{{count}} Tage",

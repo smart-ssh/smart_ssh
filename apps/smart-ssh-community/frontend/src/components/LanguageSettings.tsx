@@ -17,12 +17,12 @@ export function LanguageSettings() {
     setLanguage(language).catch((err) => setError(commandErrorMessage(err)));
   };
 
+  // Spec 0055, Teil 3: `SettingsScreen` rendert den Sektions-Titel bereits
+  // selbst ("Anzeige & Sprache") — dieselbe doppelte Überschrift wie in
+  // `ChatRetentionSettings.tsx`/`McpServerSettings.tsx`.
   return (
     <div>
       {error && <p className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
-      <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
-        {t("settings.language.label")}
-      </h3>
       <div className="flex gap-2">
         {SUPPORTED_LANGUAGES.map((language) => (
           <button

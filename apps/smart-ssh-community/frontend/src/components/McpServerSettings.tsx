@@ -117,11 +117,11 @@ export function McpServerSettings() {
     }
   };
 
+  // Spec 0055, Teil 3: `SettingsScreen` rendert den Sektions-Titel bereits
+  // selbst — s. `ChatRetentionSettings.tsx`s identischer Fund/Begründung
+  // (auch für den hier ebenfalls entfernten `border-t`/`pt-4`-Rahmen).
   return (
-    <div className="mb-6 border-t border-slate-700 pt-4">
-      <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
-        {t("mcpServer.title")}
-      </h3>
+    <div>
       <p className="mb-2 text-xs text-slate-500">{t("mcpServer.hint")}</p>
 
       {error && <p className="mb-2 rounded bg-red-950 px-2 py-1 text-xs text-red-300">{error}</p>}
