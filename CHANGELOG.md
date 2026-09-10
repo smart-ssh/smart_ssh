@@ -9,6 +9,8 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+## [0.4.6] — 2026-09-10
+
 ### Added
 - Dateimanager: Spaltenbreiten (Name, Größe, Rechte, Geändert) lassen sich
   jetzt per Ziehen anpassen (Mindestbreiten, Name bleibt der flexible
