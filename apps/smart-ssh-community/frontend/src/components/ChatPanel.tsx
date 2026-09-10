@@ -1524,6 +1524,24 @@ function DocumentCard({
   );
 }
 
+/** Spec 0055, Teil 2: "Export to Markdown"/"Als Notiz übernehmen" hingen
+ * bisher an JEDER Antwort, auch an trivialen ("ok, verstanden") — verwässert
+ * die Bedeutung der Aktionen und wirkt unaufgeräumt. Zwei der drei von der
+ * Spec vorgeschlagenen Wege kombiniert (die dritte, "Dokument vs. normale
+ * Antwort", trennt `AssistantMessageView` von `DocumentCard` bereits
+ * strukturell — die Aktionen hier erscheinen nie an einem generierten
+ * Dokument, s. dortige Komponente ohne `TakeIntoNoteButton`):
+ * 1. Nur ab dieser Mindestlänge überhaupt anzeigen (rein optische Länge
+ *    des getrimmten Texts, keine Wort-/Satzanalyse — reicht, um ein kurzes
+ *    "Ok, verstanden." zuverlässig auszublenden, ohne eine tatsächlich
+ *    kurze aber inhaltsreiche Antwort zu treffen).
+ * 2. Bei einer substanziellen Antwort dezent statt permanent: die
+ *    Aktionsleiste blendet erst bei Hover (bzw. Tastaturfokus auf einem
+ *    ihrer Buttons, `focus-within` — sonst wäre sie für reine
+ *    Tastaturbedienung unerreichbar) ein, statt dauerhaft sichtbar zu
+ *    sein. */
+const MIN_SUBSTANTIAL_REPLY_LENGTH = 40;
+
 function AssistantMessageView({
   text,
   onExport,
@@ -1552,24 +1570,28 @@ function AssistantMessageView({
     }
   };
 
+  const isSubstantial = text.trim().length >= MIN_SUBSTANTIAL_REPLY_LENGTH;
+
   return (
-    <div className="max-w-[85%] space-y-2 rounded-lg bg-slate-800 p-3 text-sm text-slate-100 shadow-sm">
+    <div className="group max-w-[85%] space-y-2 rounded-lg bg-slate-800 p-3 text-sm text-slate-100 shadow-sm">
       <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-slate-950 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div>
-      <div className="flex flex-wrap items-center gap-2 border-t border-slate-700/60 pt-2 text-xs">
-        <TakeIntoNoteButton sessionId={sessionId} content={text} />
-        <span className="text-slate-400">Export:</span>
-        <button
-          type="button"
-          disabled={exporting !== null}
-          onClick={() => handleExportClick("markdown")}
-          className="rounded bg-slate-700/80 px-2 py-1 text-xs text-slate-200 hover:bg-slate-600 hover:text-white disabled:opacity-50"
-        >
-          {exporting === "markdown" ? "Speichert…" : "📄 Als Markdown"}
-        </button>
-        {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
-      </div>
+      {isSubstantial && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-700/60 pt-2 text-xs opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
+          <TakeIntoNoteButton sessionId={sessionId} content={text} />
+          <span className="text-slate-400">Export:</span>
+          <button
+            type="button"
+            disabled={exporting !== null}
+            onClick={() => handleExportClick("markdown")}
+            className="rounded bg-slate-700/80 px-2 py-1 text-xs text-slate-200 hover:bg-slate-600 hover:text-white disabled:opacity-50"
+          >
+            {exporting === "markdown" ? "Speichert…" : "📄 Als Markdown"}
+          </button>
+          {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
+        </div>
+      )}
     </div>
   );
 }

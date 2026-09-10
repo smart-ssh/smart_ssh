@@ -213,3 +213,52 @@ describe("registered document actions (Spec 0045)", () => {
     expect(screen.getByRole("button", { name: "Als Word speichern" })).toBeInTheDocument();
   });
 });
+
+// Spec 0055, Teil 2 ("Testbarkeit"): "Aktionen erscheinen nach der
+// gewählten Regel (substanziell/Hover), bestehende Funktion (Export/Notiz)
+// weiter erreichbar."
+describe("assistant message actions (Spec 0055, Teil 2)", () => {
+  function assistantItem(text: string): ChatItem {
+    return { type: "assistant", id: "assistant-1", text };
+  }
+
+  function renderAssistantItem(text: string) {
+    return render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={assistantItem(text)}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+  }
+
+  it("hides the action row entirely for a trivial reply", () => {
+    renderAssistantItem("Ok, verstanden.");
+
+    expect(screen.queryByText("Export:")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Markdown/ })).not.toBeInTheDocument();
+    expect(screen.queryByTitle("In Notiz übernehmen")).not.toBeInTheDocument();
+  });
+
+  it("still renders (reachable, not display:none) the action row for a substantial reply", () => {
+    const longReply =
+      "Das Kommando hat drei Zeilen Ausgabe erzeugt, die wichtigste Information steht am Ende.";
+    const { container } = renderAssistantItem(longReply);
+
+    expect(screen.getByText("Export:")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Als Markdown/ })).toBeInTheDocument();
+    // Dezent statt permanent (Spec 0055, Teil 2): die Aktionsleiste ist im
+    // DOM (per Tastatur erreichbar), aber visuell erst bei Hover/Fokus
+    // eingeblendet — `opacity-0` + `group-hover:opacity-100` statt
+    // `hidden`/`display: none`.
+    const actionRow = screen.getByText("Export:").closest("div");
+    expect(actionRow).toHaveClass("opacity-0");
+    expect(actionRow).toHaveClass("group-hover:opacity-100");
+    expect(container.querySelector(".group")).not.toBeNull();
+  });
+});

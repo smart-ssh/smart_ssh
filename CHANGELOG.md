@@ -13,6 +13,10 @@ sind mit **(Pro)** markiert.
 - Chat-Eingabefeld erlaubt jetzt mehrzeilige Eingaben: Enter sendet,
   Shift+Enter fügt einen Zeilenumbruch ein, das Feld wächst mit dem Inhalt
   bis zu einer Maximalhöhe und scrollt danach intern.
+- Chat: "In Notiz übernehmen"/"Als Markdown exportieren" hängen nicht mehr
+  an jeder Antwort — bei kurzen, trivialen Antworten (z. B. "Ok,
+  verstanden.") fehlen sie ganz, bei substanziellen Antworten blenden sie
+  erst bei Hover/Tastaturfokus ein statt dauerhaft sichtbar zu sein.
 
 ### Fixed
 - Einstellungen: einige Kategorien ("Anzeige & Sprache", "Sitzungen &
