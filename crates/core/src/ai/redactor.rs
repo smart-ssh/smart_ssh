@@ -196,29 +196,54 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // Sidekiq-Configs so verwendet. Mit `+` (verlangt mindestens ein
         // Zeichen) matchte dieser extrem häufige Fall gar nicht.
         //
-        // Nutzername-/Passwort-Zeichenklasse schließt bewusst
-        // `, ; " ' =` aus (spec-reviewer-Fund, ERSTE Review-Runde dieses
-        // Musters — echte, nicht nur theoretische Regression): die
-        // ursprüngliche Zeichenklasse `[^@/\s]+` lief bei einer Zeile wie
+        // Nutzername-/Passwort-Zeichenklasse schließt bewusst `, ; "` aus
+        // (spec-reviewer-Fund, ERSTE Review-Runde dieses Musters — echte,
+        // nicht nur theoretische Regression): die ursprüngliche
+        // Zeichenklasse `[^@/\s]+` lief bei einer Zeile wie
         // `redis://cache:6379,password=p@ssw0rd` über das komma-getrennte
         // `password=`-Feld bis zum NÄCHSTEN `@` (dem in `p@ssw0rd`)
         // hinweg — das zerstörte den Anker, auf den das generische
         // `password=`-Muster weiter unten angewiesen ist, und `ssw0rd`
         // blieb im Klartext stehen (`redis://cache:[REDACTED]@ssw0rd`)
         // statt vollständig redigiert zu werden. Dieselbe Einschränkung
-        // verhindert außerdem Über-Redaktion, wenn irgendwo später in
-        // derselben Zeile ein UNABHÄNGIGES `@` auftaucht (z. B. eine
-        // E-Mail-Adresse in JSON: `{"redis":"redis://cache:6379",
-        // "admin":"ops@example.com"}` — mit den jetzt ausgeschlossenen
-        // Trennzeichen (`"` u. a.) bricht das Matching vor dem `admin`-Feld
-        // ab, statt bis zur E-Mail-Adresse durchzulaufen). Damit ist die
-        // vorher hier behauptete Zusicherung "kein Match ohne echtes
-        // `user:pass@`-Paar" jetzt tatsächlich zutreffend — vorher war sie
-        // nur für den einfachen Fall (URL allein auf ihrer eigenen Zeile)
-        // korrekt, s. Review-Bericht.
+        // mindert Über-Redaktion, wenn irgendwo später in derselben Zeile
+        // ein UNABHÄNGIGES `@` auftaucht (z. B. eine E-Mail-Adresse in
+        // JSON: `{"redis":"redis://cache:6379","admin":"ops@example.com"}`
+        // — das schließende `"` bricht das Matching vor dem `admin`-Feld
+        // ab).
+        //
+        // ZWEITE Review-Runde deckte auf, dass die erste Fassung dieses
+        // Ausschlusses (`, ; " ' =`) zu weit ging: `=` und `'`
+        // auszuschließen trug NICHTS zur Behebung der beiden obigen Funde
+        // bei (die entstehen durch `,`/`;`/`"` als Feldtrenner in
+        // Shell-/JSON-Kontexten, nicht durch `=`/`'`), kostete aber echte
+        // Redaction-Abdeckung: ein Base64-generiertes Passwort mit
+        // `=`-Padding (`openssl rand -base64 24`, Kubernetes-Secrets,
+        // Terraform-generierte DB-Passwörter — alltäglich, nicht exotisch)
+        // wie `postgres://user:c2VjcmV0Cg==@host/db` wurde dadurch
+        // versehentlich WIEDER unredigiert durchgelassen — eine neue
+        // Regression, die die erste Fassung dieses Kommentars nicht
+        // erwähnte. `=` und `'` sind jetzt wieder erlaubt.
+        //
+        // Bekannter, bewusst akzeptierter Restfall (spec-reviewer
+        // bestätigt, kein vollständiger Schutz möglich ohne echtes
+        // URL-Parsing statt Regex): ein Passwort, das selbst ein
+        // UNENCODIERTES `,`/`;`/`"` enthält (z. B. `pw,with,commas`),
+        // matcht nicht — dieselben drei Zeichen sind ja genau die, die
+        // diese Klasse als Feldtrenner ausschließen MUSS, um die beiden
+        // oben genannten Funde zu schließen. Diese drei Zeichen roh
+        // (nicht Prozent-kodiert) in einem echten Connection-String-
+        // Passwort sind selten (die meisten Connection-String-Ersteller
+        // kodieren URI-Sonderzeichen ohnehin); die Alternative (sie
+        // wieder erlauben) würde die beiden oben genannten, real
+        // aufgetretenen Falsch-Negative erneut öffnen. Ebenso bleibt ein
+        // Restrisiko für Über-Redaktion bei anderen, selteneren
+        // Feldtrennern (`|`/`#`/`&`) — kein vollständiger Schutz, nur eine
+        // Verengung auf die in beiden Review-Runden tatsächlich
+        // beobachteten Trennzeichen.
         PatternRule {
             regex: Regex::new(
-                r#"(?i)(?P<scheme>postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?)://(?P<user>[^:@/\s,;"'=]*):[^@/\s,;"'=]+@"#,
+                r#"(?i)(?P<scheme>postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?)://(?P<user>[^:@/\s,;"]*):[^@/\s,;"]+@"#,
             )
             .expect("eingebautes DB-Connection-String-Muster ist gültig"),
             replacement: "${scheme}://${user}:[REDACTED]@",

@@ -744,19 +744,69 @@ fn test_redactor_detects_db_connection_strings_with_uppercase_scheme() {
 
 /// Regressionstest, spec-reviewer-Fund (Review dieses Schritts): RFC
 /// 3986 erlaubt in der Userinfo-Komponente einer URL Sonderzeichen wie
-/// `~ ! ' ( ) * , ;`, die von der ursprünglichen Nutzername-Zeichenklasse
+/// `~ ! ' ( ) *`, die von der ursprünglichen Nutzername-Zeichenklasse
 /// (`[A-Za-z0-9_.%+-]`) nicht abgedeckt waren — ein Nutzername wie
 /// `user~name` ließ das Muster komplett ins Leere laufen (kein Treffer,
 /// Passwort blieb im Klartext).
+///
+/// Deckt NICHT `,`/`;`/`"` ab — diese drei sind weiterhin bewusst
+/// ausgeschlossen (s. Doc-Kommentar beim Muster in `built_in_patterns()`,
+/// zweite Review-Runde): sie werden als Feldtrenner gebraucht, um zwei
+/// andere, real aufgetretene Regressionen zu schließen. Ein Nutzername
+/// mit rohem Komma/Semikolon/Anführungszeichen matcht deshalb nicht —
+/// bekannter, offengelegter Restfall, kein Testversehen.
 #[test]
 fn test_redactor_detects_db_connection_string_with_rfc3986_special_username_chars() {
     let redactor = DefaultOutputRedactor::new();
-    let input = output("postgres://user~name:hunter2@host/db\npostgres://user!name:pw@host/db");
+    let input = output(
+        "postgres://user~name:hunter2@host/db\n\
+         postgres://user!name:pw@host/db\n\
+         postgres://user'name:pw2@host/db",
+    );
 
     let redacted = stdout_text(&redactor.redact(&input));
 
     assert!(!redacted.contains("hunter2"));
     assert!(!redacted.contains(":pw@"));
+    assert!(!redacted.contains(":pw2@"));
     assert!(redacted.contains("postgres://user~name:[REDACTED]@host/db"));
     assert!(redacted.contains("postgres://user!name:[REDACTED]@host/db"));
+    assert!(redacted.contains("postgres://user'name:[REDACTED]@host/db"));
+}
+
+/// Regressionstest, spec-reviewer-Fund (ZWEITE Review-Runde): die erste
+/// Fassung des Feldtrenner-Ausschlusses (`, ; " ' =`) schloss `=` mit ein
+/// — trug aber nichts zur Behebung der gemeldeten Funde bei und verpasste
+/// dadurch neu ein extrem alltägliches Passwort-Format: Base64-generierte
+/// Secrets enden wegen des Padding-Zeichens sehr häufig auf `=` (z. B.
+/// `openssl rand -base64 24`, von Kubernetes/Terraform generierte
+/// DB-Passwörter). `=` ist jetzt wieder im Passwort-Zeichensatz erlaubt.
+#[test]
+fn test_redactor_detects_db_connection_string_with_base64_padded_password() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("postgres://user:c2VjcmV0Cg==@host/db");
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("c2VjcmV0Cg=="));
+    assert_eq!(redacted, "postgres://user:[REDACTED]@host/db");
+}
+
+/// Dokumentiert den bewusst akzeptierten Restfall (spec-reviewer
+/// bestätigt, zweite Review-Runde): ein Passwort mit einem ROHEN
+/// (nicht Prozent-kodierten) Komma/Semikolon/Anführungszeichen matcht
+/// nicht — dieselben drei Zeichen müssen als Feldtrenner ausgeschlossen
+/// bleiben, um `test_redactor_does_not_let_db_pattern_swallow_a_later_
+/// password_keyword_field` und `test_redactor_does_not_over_redact_
+/// across_an_unrelated_at_sign_later_in_the_line` nicht wieder zu öffnen.
+/// Kein Falsch-Positiv-Test — bewusst dokumentiertes Verhalten, kein
+/// Fehler.
+#[test]
+fn test_redactor_does_not_detect_db_password_containing_a_raw_comma_or_semicolon() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("mongodb://admin:abc,def@mongo:27017/admin");
+
+    let redacted = redactor.redact(&input);
+
+    assert_eq!(redacted.stdout, input.stdout);
 }
