@@ -9,6 +9,8 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-11
+
 ### Added
 - Chat-Eingabefeld erlaubt jetzt mehrzeilige Eingaben: Enter sendet,
   Shift+Enter fügt einen Zeilenumbruch ein, das Feld wächst mit dem Inhalt

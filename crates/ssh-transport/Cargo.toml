@@ -17,7 +17,7 @@ portable-pty = "0.9"
 russh = "0.63.1"
 russh-sftp = "2.4.0"
 secrecy = "0.10.3"
-ssh-manager-core = { version = "0.4.6", path = "../core" }
+ssh-manager-core = { version = "0.5.0", path = "../core" }
 # `process`/`fs`: Spec 0032 (lokaler Pseudo-Server) — `LocalTransport`
 # ruft die Plattform-Shell als Kindprozess auf, `LocalFileSession` (Spec
 # 0020-Trait, lokal implementiert) greift direkt aufs Dateisystem zu,
