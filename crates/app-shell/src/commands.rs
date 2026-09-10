@@ -2740,11 +2740,63 @@ pub async fn sftp_list(
     Ok(dtos)
 }
 
+/// Lädt genau eine Remote-Datei nach `local_path` herunter — der
+/// eigentliche Transfer-Kern hinter `sftp_download`, `sftp_download_default`
+/// und `sftp_download_dir` (Ordner-Rekursion, s. `download_recursive`
+/// unten): jeweils ein `sftp-transfer-started`/`-finished`-Ereignispaar (s.
+/// `crate::events`-Moduldoc zur Fortschritts-Design-Entscheidung), dann
+/// Lesen per SFTP + lokales Schreiben via `spawn_blocking` (Downloads können
+/// beliebig groß sein, Spec 0020 Abschnitt 5 verlangt ausdrücklich, dass
+/// Transfers die Session nicht blockieren).
+async fn download_one_file(
+    app: &AppHandle,
+    session: &Session,
+    session_id: SessionId,
+    remote_path: &str,
+    local_path: std::path::PathBuf,
+    total_bytes: Option<u64>,
+) -> CommandResult<()> {
+    let file_name = file_name_of(remote_path);
+    let transfer_id = Uuid::new_v4();
+    emit_sftp_transfer_started(
+        app,
+        session_id,
+        transfer_id,
+        SftpTransferKind::Download,
+        file_name,
+        total_bytes,
+    );
+
+    let result: CommandResult<()> = async {
+        let bytes = {
+            let mut guard = session.sftp.lock().await;
+            let sftp = guard
+                .as_mut()
+                .expect("ensure_sftp_open lief erfolgreich durch");
+            sftp.read_file(remote_path).await?
+        };
+        tokio::task::spawn_blocking(move || std::fs::write(&local_path, bytes))
+            .await
+            .map_err(|e| format!("Hintergrund-Task für Download fehlgeschlagen: {e}"))??;
+        Ok(())
+    }
+    .await;
+
+    emit_sftp_transfer_finished(
+        app,
+        session_id,
+        transfer_id,
+        result.as_ref().err().map(|e| e.message.clone()),
+    );
+    result
+}
+
 /// Spec 0020, Abschnitt 5: "nativer Speichern-Dialog" — derselbe
 /// oneshot-Kanal-Umweg wie `export_document` (dortiger Doc-Kommentar erklärt
-/// das Warum), gefolgt von einem `sftp-transfer-started`/`-finished`-
-/// Ereignispaar (s. `crate::events`-Moduldoc zur Fortschritts-Design-
-/// Entscheidung) und dem eigentlichen Lesen+lokalem Schreiben.
+/// das Warum). Datei-only (s. Moduldoc "Design-Entscheidung" oben) und
+/// per Dialog an einen präzisen lokalen Zielpfad — Ordner-Download und
+/// Download ohne Dialog sind `sftp_download_dir`/`sftp_download_default`
+/// (Spec 0054, Teil 2) weiter unten.
 #[tauri::command]
 pub async fn sftp_download(
     app: AppHandle,
@@ -2781,42 +2833,159 @@ pub async fn sftp_download(
     };
     let local_path = local_path.into_path()?;
 
-    let transfer_id = Uuid::new_v4();
-    emit_sftp_transfer_started(
+    download_one_file(
         &app,
+        &session,
         session_id,
-        transfer_id,
-        SftpTransferKind::Download,
-        file_name,
+        &remote_path,
+        local_path,
         total_bytes,
-    );
+    )
+    .await
+}
 
-    let result: CommandResult<()> = async {
-        let bytes = {
+/// Ermittelt das Standard-Downloadverzeichnis des Betriebssystems (Spec
+/// 0054, Teil 2: "Standard-Downloadverzeichnis ODER präziser Pfad per
+/// Dialog") — `directories::UserDirs` ist bereits Projektabhängigkeit (s.
+/// `logging.rs`).
+fn default_downloads_dir() -> CommandResult<std::path::PathBuf> {
+    directories::UserDirs::new()
+        .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
+        .ok_or("Kein Standard-Downloadverzeichnis gefunden")
+        .map_err(CommandError::from)
+}
+
+/// Rekursiver Ordner-Download (Spec 0054, Teil 2: "Ordner rekursiv"):
+/// listet iterativ (kein async-rekursiver Aufruf nötig — vermeidet das
+/// Boxing, das ein `async fn`, das sich selbst aufruft, in Rust braucht)
+/// über eine Arbeits-Warteschlange, legt lokale Unterordner an und lädt
+/// jede gefundene Datei einzeln über `download_one_file` — dadurch bekommt
+/// jede Datei ihr eigenes `sftp-transfer-started`/`-finished`-Paar, die
+/// Transfer-Liste im Frontend zeigt also automatisch den Fortschritt über
+/// den ganzen Baum, ohne einen zweiten Fortschritts-Mechanismus.
+async fn download_recursive(
+    app: &AppHandle,
+    session: &Session,
+    session_id: SessionId,
+    remote_root: &str,
+    local_root: &std::path::Path,
+) -> CommandResult<()> {
+    tokio::fs::create_dir_all(local_root).await?;
+    let mut queue = vec![(remote_root.to_string(), local_root.to_path_buf())];
+    while let Some((remote_dir, local_dir)) = queue.pop() {
+        let entries = {
             let mut guard = session.sftp.lock().await;
             let sftp = guard
                 .as_mut()
                 .expect("ensure_sftp_open lief erfolgreich durch");
-            sftp.read_file(&remote_path).await?
+            sftp.list_dir(&remote_dir).await?
         };
-        // `spawn_blocking` statt eines direkten `std::fs::write` (anders als
-        // z. B. `read_credential_file`s kleine Zertifikatsdateien): Downloads
-        // hier können beliebig groß sein, Spec 0020 Abschnitt 5 verlangt
-        // ausdrücklich, dass Transfers die Session nicht blockieren.
-        tokio::task::spawn_blocking(move || std::fs::write(&local_path, bytes))
-            .await
-            .map_err(|e| format!("Hintergrund-Task für Download fehlgeschlagen: {e}"))??;
-        Ok(())
+        for entry in entries {
+            let local_entry_path = local_dir.join(&entry.name);
+            if entry.is_dir {
+                tokio::fs::create_dir_all(&local_entry_path).await?;
+                queue.push((entry.path, local_entry_path));
+            } else {
+                download_one_file(
+                    app,
+                    session,
+                    session_id,
+                    &entry.path,
+                    local_entry_path,
+                    Some(entry.size),
+                )
+                .await?;
+            }
+        }
     }
-    .await;
+    Ok(())
+}
 
-    emit_sftp_transfer_finished(
-        &app,
-        session_id,
-        transfer_id,
-        result.as_ref().err().map(|e| e.message.clone()),
-    );
-    result
+/// Lädt `remote_path` (Datei oder Ordner) unter `local_base_dir` herunter —
+/// gemeinsame Logik von `sftp_download_default` und `sftp_download_dir`.
+/// Eine Datei landet direkt als `local_base_dir/<dateiname>`, ein Ordner
+/// als `local_base_dir/<ordnername>/...` (rekursiv) — nie werden die
+/// Inhalte eines Ordners direkt lose in `local_base_dir` verstreut, das
+/// bliebe sonst nicht als "der heruntergeladene Ordner" wiedererkennbar.
+async fn download_entry_to(
+    app: &AppHandle,
+    session: &Session,
+    session_id: SessionId,
+    remote_path: &str,
+    local_base_dir: &std::path::Path,
+) -> CommandResult<()> {
+    let root_name = file_name_of(remote_path);
+    let root_entry = {
+        let mut guard = session.sftp.lock().await;
+        let sftp = guard
+            .as_mut()
+            .expect("ensure_sftp_open lief erfolgreich durch");
+        sftp.stat(remote_path).await?
+    };
+    if root_entry.is_dir {
+        download_recursive(
+            app,
+            session,
+            session_id,
+            remote_path,
+            &local_base_dir.join(&root_name),
+        )
+        .await
+    } else {
+        download_one_file(
+            app,
+            session,
+            session_id,
+            remote_path,
+            local_base_dir.join(&root_name),
+            Some(root_entry.size),
+        )
+        .await
+    }
+}
+
+/// Spec 0054, Teil 2: Herunterladen ohne Dialog, direkt ins
+/// Standard-Downloadverzeichnis — Datei oder Ordner (rekursiv).
+#[tauri::command]
+pub async fn sftp_download_default(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    remote_path: String,
+) -> CommandResult<()> {
+    let session = session_sftp(&state, session_id).await?;
+    let downloads_dir = default_downloads_dir()?;
+    download_entry_to(&app, &session, session_id, &remote_path, &downloads_dir).await
+}
+
+/// Spec 0054, Teil 2: Ordner-Download an einen per Dialog gewählten
+/// Zielort — Gegenstück zu `sftp_download`s Datei-Speichern-Dialog, nur
+/// dass ein Ordner keinen Dateinamen zum Speichern hat, sondern ein
+/// Zielverzeichnis braucht (`pick_folder` statt `save_file`).
+#[tauri::command]
+pub async fn sftp_download_dir(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    remote_path: String,
+) -> CommandResult<()> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let session = session_sftp(&state, session_id).await?;
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_title("Zielordner wählen")
+        .pick_folder(move |path| {
+            let _ = tx.send(path);
+        });
+    let Some(local_dir) = rx.await.ok().flatten() else {
+        return Ok(()); // Abbrechen ist kein Fehler.
+    };
+    let local_dir = local_dir.into_path()?;
+
+    download_entry_to(&app, &session, session_id, &remote_path, &local_dir).await
 }
 
 /// `local_path` ist bereits vom Frontend aufgelöst — entweder über den
@@ -2928,6 +3097,54 @@ pub async fn sftp_mkdir(
         .expect("ensure_sftp_open lief erfolgreich durch");
     sftp.create_dir(&path).await?;
     Ok(())
+}
+
+/// Obergrenze für "Dateiinhalt kopieren" (Spec 0054, Teil 2). Bewusst
+/// **kein** gemeinsamer Code-Pfad und keine gemeinsame Konstante mit
+/// `orchestration::ReadRemoteFile`s 256-KB-Cap (Spec 0020, Abschnitt
+/// 4.1) — das liefe für einen manuellen Klick über KI-Infrastruktur
+/// (Redaction, Filter-Mapping), genau die Vermischung, die Spec 0054s
+/// Sicherheitsmodell ausschließt ("manuelle Aktionen laufen NIE durch
+/// KI-/Filter-Code, auch nicht nur durch eine Hilfsfunktion davon"). Der
+/// gleiche Zahlenwert ist reiner Zufall gleich guter Praxis, keine
+/// geteilte Definition.
+const MAX_TEXT_COPY_BYTES: u64 = 256 * 1024;
+
+/// Spec 0054, Teil 2: "Dateiinhalt kopieren" — liest eine Remote-Datei als
+/// Text für die Zwischenablage (der eigentliche `writeText`-Aufruf passiert
+/// im Frontend, s. `navigator.clipboard` dort). Kein Filter-Engine-/KI-Gate
+/// (Sicherheitsmodell, Spec 0054): eine direkte, unkritische Nutzeraktion,
+/// wie jeder andere `sftp_*`-Befehl in diesem Abschnitt.
+///
+/// Größenprüfung vor dem eigentlichen Lesen (per `stat`), damit eine sehr
+/// große Datei nicht erst vollständig übertragen wird, bevor sie doch
+/// abgelehnt wird — ein fehlgeschlagenes `stat` blockiert den Lesevorgang
+/// selbst nicht (analog zu `sftp_download`s Größen-Vorablauf oben), die
+/// eigentliche `read_file`-Fehlermeldung ist dann aussagekräftig genug.
+#[tauri::command]
+pub async fn sftp_read_text(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    path: String,
+) -> CommandResult<String> {
+    let session = session_sftp(&state, session_id).await?;
+    let mut guard = session.sftp.lock().await;
+    let sftp = guard
+        .as_mut()
+        .expect("ensure_sftp_open lief erfolgreich durch");
+
+    if let Ok(entry) = sftp.stat(&path).await {
+        if entry.size > MAX_TEXT_COPY_BYTES {
+            return Err(CommandError::from(format!(
+                "Datei ist größer als {} KB — zu groß zum Kopieren in die Zwischenablage",
+                MAX_TEXT_COPY_BYTES / 1024
+            )));
+        }
+    }
+
+    let bytes = sftp.read_file(&path).await?;
+    String::from_utf8(bytes)
+        .map_err(|_| CommandError::from("Datei ist keine Textdatei (kein gültiges UTF-8)"))
 }
 
 #[cfg(test)]

@@ -128,6 +128,10 @@ impl SftpSession for MockSftpSession {
                     size: f.content.len() as u64,
                     permissions: f.permissions,
                     modified: f.modified,
+                    uid: None,
+                    gid: None,
+                    owner: None,
+                    group: None,
                 })
             })
             .collect())
@@ -175,6 +179,10 @@ impl SftpSession for MockSftpSession {
                 size: f.content.len() as u64,
                 permissions: f.permissions,
                 modified: f.modified,
+                uid: None,
+                gid: None,
+                owner: None,
+                group: None,
             })
             .ok_or_else(|| Self::not_found(path))
     }

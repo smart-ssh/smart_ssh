@@ -27,6 +27,25 @@ fn modified_time(metadata: &std::fs::Metadata) -> Option<DateTime<Utc>> {
     metadata.modified().ok().map(DateTime::<Utc>::from)
 }
 
+/// Unix: echte `uid`/`gid` des lokalen Dateisystem-Eintrags. Windows kennt
+/// dieses Konzept nicht — dort bleiben beide `None`, genau wie die
+/// `owner`/`group`-Namen (deren Auflösung bräuchte einen weiteren, hier
+/// nicht vorhandenen Abhängigkeits-Aufwand für eine rein informative
+/// Anzeige im lokalen Pseudo-Server, s. `crate::sftp`s Pendant für echtes
+/// SFTP, das vom Server gelieferte Namen — falls vorhanden — unverändert
+/// durchreicht).
+fn owner_ids(metadata: &std::fs::Metadata) -> (Option<u32>, Option<u32>) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        (Some(metadata.uid()), Some(metadata.gid()))
+    }
+    #[cfg(not(unix))]
+    {
+        (None, None)
+    }
+}
+
 /// Unix: tatsächliche `rwx`-Bits. Windows kennt dieses Konzept nicht (nur
 /// ein Nur-Lesen-Flag) — dort ein plausibler fester Platzhalter, passend
 /// zum tatsächlichen Nur-Lesen-Status, aber ohne den Anspruch, echte
@@ -72,6 +91,7 @@ impl SftpSession for LocalFileSession {
         let mut entries = Vec::new();
         while let Some(entry) = read_dir.next_entry().await.map_err(|e| io_err(path, e))? {
             let metadata = entry.metadata().await.map_err(|e| io_err(path, e))?;
+            let (uid, gid) = owner_ids(&metadata);
             entries.push(RemoteEntry {
                 name: entry.file_name().to_string_lossy().into_owned(),
                 path: entry.path().to_string_lossy().into_owned(),
@@ -79,6 +99,10 @@ impl SftpSession for LocalFileSession {
                 size: metadata.len(),
                 permissions: permission_bits(&metadata),
                 modified: modified_time(&metadata),
+                uid,
+                gid,
+                owner: None,
+                group: None,
             });
         }
         Ok(entries)
@@ -102,6 +126,7 @@ impl SftpSession for LocalFileSession {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.to_string());
+        let (uid, gid) = owner_ids(&metadata);
         Ok(RemoteEntry {
             name,
             path: path.to_string(),
@@ -109,6 +134,10 @@ impl SftpSession for LocalFileSession {
             size: metadata.len(),
             permissions: permission_bits(&metadata),
             modified: modified_time(&metadata),
+            uid,
+            gid,
+            owner: None,
+            group: None,
         })
     }
 

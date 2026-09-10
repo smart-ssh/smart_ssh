@@ -47,6 +47,10 @@ fn remote_entry(name: String, path: String, metadata: &FileAttributes) -> Remote
         size: metadata.len(),
         permissions: metadata.permissions.unwrap_or(0) & 0o7777,
         modified: metadata.modified().ok().map(DateTime::<Utc>::from),
+        uid: metadata.uid,
+        gid: metadata.gid,
+        owner: metadata.user.clone(),
+        group: metadata.group.clone(),
     }
 }
 

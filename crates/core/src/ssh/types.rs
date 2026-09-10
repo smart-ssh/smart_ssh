@@ -68,6 +68,12 @@ pub struct ConnectionTarget {
 /// Dateityp-Bits aus `st_mode`) — für die Dateibrowser-Anzeige (Spec 0020,
 /// Abschnitt 5.1: "Rechte"-Spalte) reicht das, `is_dir` trägt die
 /// Typinformation bereits separat.
+/// `uid`/`gid`/`owner`/`group` (Spec 0054, Teil 2 — Eigenschaften-Dialog):
+/// SFTP (v3, was praktisch jeder Server spricht) liefert nur numerische
+/// `uid`/`gid` verbindlich; die Namen (`owner`/`group`) sind eine v4+-
+/// Erweiterung, die längst nicht jeder Server füllt — deshalb beides als
+/// eigene optionale Felder statt eines einzelnen "Besitzer"-Strings, das
+/// Frontend zeigt den Namen wenn vorhanden, sonst die reine Zahl.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemoteEntry {
     pub name: String,
@@ -76,6 +82,10 @@ pub struct RemoteEntry {
     pub size: u64,
     pub permissions: u32,
     pub modified: Option<chrono::DateTime<chrono::Utc>>,
+    pub uid: Option<u32>,
+    pub gid: Option<u32>,
+    pub owner: Option<String>,
+    pub group: Option<String>,
 }
 
 /// Ergebnis einer Host-Key-Prüfung, Trust-on-First-Use (Spec 0005,

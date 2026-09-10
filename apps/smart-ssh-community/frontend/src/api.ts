@@ -349,9 +349,21 @@ export const sftpList = (sessionId: string, path: string) =>
   invoke<RemoteEntryDto[]>("sftp_list", { sessionId, path });
 
 /** Öffnet den nativen Speichern-Dialog im Backend — kehrt ohne Fehler
- * zurück, wenn der Nutzer abbricht (s. `crate::commands::sftp_download`). */
+ * zurück, wenn der Nutzer abbricht (s. `crate::commands::sftp_download`).
+ * Nur für Dateien (s. Moduldoc-Kommentar in `crate::commands`). */
 export const sftpDownload = (sessionId: string, remotePath: string) =>
   invoke<void>("sftp_download", { sessionId, remotePath });
+
+/** Spec 0054, Teil 2: ohne Dialog direkt ins Standard-Downloadverzeichnis
+ * — Datei ODER Ordner (rekursiv), s. `crate::commands::sftp_download_default`. */
+export const sftpDownloadDefault = (sessionId: string, remotePath: string) =>
+  invoke<void>("sftp_download_default", { sessionId, remotePath });
+
+/** Spec 0054, Teil 2: Ordner-Download an einen per Dialog gewählten
+ * Zielort (rekursiv) — kehrt ohne Fehler zurück, wenn der Nutzer abbricht.
+ * s. `crate::commands::sftp_download_dir`. */
+export const sftpDownloadDir = (sessionId: string, remotePath: string) =>
+  invoke<void>("sftp_download_dir", { sessionId, remotePath });
 
 /** `localPath` muss bereits aufgelöst sein (nativer Öffnen-Dialog oder
  * OS-Drag-and-Drop, s. `crate::commands::sftp_upload`-Doc-Kommentar). */
@@ -366,6 +378,13 @@ export const sftpRename = (sessionId: string, from: string, to: string) =>
 
 export const sftpMkdir = (sessionId: string, path: string) =>
   invoke<void>("sftp_mkdir", { sessionId, path });
+
+/** Spec 0054, Teil 2: "Dateiinhalt kopieren" — liefert den Textinhalt einer
+ * Remote-Datei; lehnt zu große oder nicht als UTF-8 dekodierbare
+ * (Binär-)Dateien mit einer erklärenden Fehlermeldung ab (s.
+ * `crate::commands::sftp_read_text`). */
+export const sftpReadText = (sessionId: string, path: string) =>
+  invoke<string>("sftp_read_text", { sessionId, path });
 
 // --- Spec 0028: MCP-Server-Integration -----------------------------------
 

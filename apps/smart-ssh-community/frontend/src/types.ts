@@ -530,6 +530,17 @@ export interface RemoteEntryDto {
   permissions: string;
   /** RFC3339, `null` wenn der Server keine Änderungszeit meldet. */
   modified: string | null;
+  /** Spec 0054, Teil 2: dieselben Bits wie `permissions`, numerisch
+   * (`0o644`-Stil) statt als `rwxr-xr-x`-String — Eigenschaften-Dialog und
+   * Grundlage für den chmod-Dialog (Teil 3). */
+  permissionsOctal: number;
+  /** `null`, wenn der Server keine numerische uid/gid liefert (selten). */
+  uid: number | null;
+  gid: number | null;
+  /** `null`, sofern der Server keine Namensauflösung liefert (die meisten
+   * SFTPv3-Server nicht — dann bleibt nur `uid`/`gid` numerisch). */
+  owner: string | null;
+  group: string | null;
 }
 
 export type SftpTransferKind = "upload" | "download";

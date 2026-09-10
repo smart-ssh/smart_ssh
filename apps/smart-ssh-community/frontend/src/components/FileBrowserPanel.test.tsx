@@ -13,7 +13,13 @@ if (!Element.prototype.setPointerCapture) {
   Element.prototype.setPointerCapture = () => {};
   Element.prototype.releasePointerCapture = () => {};
 }
-import { sftpList } from "../api";
+import {
+  sftpDownload,
+  sftpDownloadDefault,
+  sftpDownloadDir,
+  sftpList,
+  sftpReadText,
+} from "../api";
 import {
   loadFileManagerColumnWidths,
   saveFileManagerColumnWidths,
@@ -27,7 +33,10 @@ vi.mock("../api", () => ({
   sftpList: vi.fn(),
   sftpDelete: vi.fn(),
   sftpDownload: vi.fn(),
+  sftpDownloadDefault: vi.fn(),
+  sftpDownloadDir: vi.fn(),
   sftpMkdir: vi.fn(),
+  sftpReadText: vi.fn(),
   sftpRename: vi.fn(),
   sftpUpload: vi.fn(),
 }));
@@ -59,6 +68,11 @@ const entry: RemoteEntryDto = {
   size: 1024,
   permissions: "rw-r--r--",
   modified: null,
+  permissionsOctal: 0o644,
+  uid: 1000,
+  gid: 1000,
+  owner: null,
+  group: null,
 };
 
 function renderPanel() {
@@ -262,5 +276,154 @@ describe("FileBrowserPanel row action menu (Spec 0054, Teil 0 — Bug-Fix)", () 
 
     fireEvent.click(document.body);
     expect(screen.queryAllByText("Löschen")).toHaveLength(0);
+  });
+});
+
+describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2)", () => {
+  const fileEntry: RemoteEntryDto = { ...entry, name: "a.txt", path: "a.txt" };
+  const dirEntry: RemoteEntryDto = {
+    ...entry,
+    name: "logs",
+    path: "logs",
+    isDir: true,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    });
+  });
+
+  it("right-click opens the same actions as the three-dots menu", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+    fireEvent.contextMenu(row);
+
+    expect(screen.getByText("Herunterladen")).toBeVisible();
+    expect(screen.getByText("Herunterladen nach…")).toBeVisible();
+    expect(screen.getByText("Dateiinhalt kopieren")).toBeVisible();
+    expect(screen.getByText("Pfad kopieren")).toBeVisible();
+    expect(screen.getByText("Eigenschaften")).toBeVisible();
+    expect(screen.getByText("Aktualisieren")).toBeVisible();
+    expect(screen.getByText("Umbenennen")).toBeVisible();
+    expect(screen.getByText("Löschen")).toBeVisible();
+  });
+
+  it("hides content-copy and delete for directories", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    const row = (await screen.findByText(/logs/)).closest("tr")!;
+    fireEvent.contextMenu(row);
+
+    expect(screen.queryByText("Dateiinhalt kopieren")).not.toBeInTheDocument();
+    expect(screen.queryByText("Löschen")).not.toBeInTheDocument();
+    // Herunterladen bleibt für Ordner verfügbar (rekursiv, s. Backend).
+    expect(screen.getByText("Herunterladen")).toBeVisible();
+  });
+
+  it("'Herunterladen' calls the no-dialog default-directory download", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpDownloadDefault).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Herunterladen"));
+
+    expect(sftpDownloadDefault).toHaveBeenCalledWith("session-1", "a.txt");
+  });
+
+  it("'Herunterladen nach…' uses the folder dialog for directories, file dialog for files", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpDownloadDir).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/logs/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Herunterladen nach…"));
+
+    expect(sftpDownloadDir).toHaveBeenCalledWith("session-1", "logs");
+    expect(sftpDownload).not.toHaveBeenCalled();
+  });
+
+  it("copies the path to the clipboard", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Pfad kopieren"));
+
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("a.txt"));
+    expect(await screen.findByText("Pfad kopiert")).toBeVisible();
+  });
+
+  it("copies the file content to the clipboard via sftp_read_text", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpReadText).mockResolvedValue("hallo welt");
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
+
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith("hallo welt"),
+    );
+    expect(await screen.findByText("Inhalt kopiert")).toBeVisible();
+  });
+
+  it("shows a toast with the backend error when the file is not text", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpReadText).mockRejectedValue("Datei ist keine Textdatei (kein gültiges UTF-8)");
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
+
+    expect(await screen.findByText("Datei ist keine Textdatei (kein gültiges UTF-8)")).toBeVisible();
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+  });
+
+  it("shows the properties dialog with numeric and symbolic permissions", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Eigenschaften"));
+
+    expect(await screen.findByText("Eigenschaften")).toBeVisible();
+    // "rw-r--r--" steht sowohl in der Tabellenspalte als auch im Dialog —
+    // die numerische Darstellung ("644") ist eindeutig nur im Dialog.
+    expect(screen.getAllByText("rw-r--r--").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("644")).toBeVisible();
+  });
+
+  it("'Aktualisieren' reloads the current directory", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Aktualisieren"));
+
+    await waitFor(() => expect(sftpList).toHaveBeenCalledTimes(2));
+    expect(sftpList).toHaveBeenLastCalledWith("session-1", ".");
   });
 });

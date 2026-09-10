@@ -839,6 +839,16 @@ pub struct RemoteEntryDto {
     pub size: u64,
     pub permissions: String,
     pub modified: Option<String>,
+    /// Spec 0054, Teil 2 (Eigenschaften-Dialog: "Rechte numerisch +
+    /// symbolisch") — dieselben Bits wie `permissions`, nur numerisch
+    /// (`0o644`-Stil) statt als `rwxr-xr-x`-String. Auch die Grundlage für
+    /// den chmod-Dialog (Teil 3), der von einem numerischen Ausgangswert
+    /// aus editiert statt den `permissions`-String zurückparsen zu müssen.
+    pub permissions_octal: u32,
+    pub uid: Option<u32>,
+    pub gid: Option<u32>,
+    pub owner: Option<String>,
+    pub group: Option<String>,
 }
 
 impl From<&RemoteEntry> for RemoteEntryDto {
@@ -850,6 +860,11 @@ impl From<&RemoteEntry> for RemoteEntryDto {
             size: entry.size,
             permissions: format_unix_permissions(entry.permissions),
             modified: entry.modified.map(|dt| dt.to_rfc3339()),
+            permissions_octal: entry.permissions,
+            uid: entry.uid,
+            gid: entry.gid,
+            owner: entry.owner.clone(),
+            group: entry.group.clone(),
         }
     }
 }
@@ -1005,6 +1020,11 @@ mod tests {
             size: 0,
             permissions: String::new(),
             modified: None,
+            permissions_octal: 0,
+            uid: None,
+            gid: None,
+            owner: None,
+            group: None,
         }
     }
 

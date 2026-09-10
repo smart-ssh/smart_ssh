@@ -17,6 +17,18 @@ sind mit **(Pro)** markiert.
   Dateimanager) lässt sich per Ziehen am Trenner anpassen (Mindestgrößen
   für beide Bereiche, Fallback auf die Standardaufteilung bei sehr kleinen
   Fenstern). Beide Einstellungen überleben einen Neustart.
+- Dateimanager: Rechtsklick öffnet jetzt dasselbe Kontextmenü wie das
+  Drei-Punkte-Symbol, mit neuen Aktionen — Herunterladen direkt ins
+  Standard-Downloadverzeichnis oder per Dialog an einen gewählten Ort
+  (auch für Ordner, rekursiv), Dateiinhalt kopieren, Pfad kopieren,
+  Eigenschaften (Größe, Rechte numerisch + symbolisch, Besitzer/Gruppe,
+  Änderungsdatum) und Aktualisieren.
+
+### Fixed
+- Dateimanager: das Drei-Punkte-Menü an einem Eintrag ließ sich oft nicht
+  öffnen bzw. schloss ein gerade erst geöffnetes Menü eines anderen
+  Eintrags sofort wieder — verursacht durch einen mit jedem weiteren Klick
+  kollidierenden internen "Klick-außerhalb-schließt"-Mechanismus.
 
 ## [0.4.5] — 2026-09-09
 

@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   commandErrorMessage,
   sftpDelete,
   sftpDownload,
+  sftpDownloadDefault,
+  sftpDownloadDir,
   sftpList,
   sftpMkdir,
+  sftpReadText,
   sftpRename,
   sftpUpload,
 } from "../api";
@@ -74,7 +77,24 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const [entries, setEntries] = useState<RemoteEntryDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [menuFor, setMenuFor] = useState<string | null>(null);
+  // Spec 0054, Teil 1: EIN gemeinsamer State für Drei-Punkte-Menü UND
+  // Kontextmenü (Rechtsklick) statt zweier getrennter — beide zeigen
+  // dieselben Aktionen (`FileEntryMenu` unten), der einzige Unterschied ist
+  // die Positionierung (`anchor`). `"row"` rendert das Menü innerhalb der
+  // Aktionsspalte des jeweiligen Eintrags (wie das bisherige Drei-Punkte-
+  // Menü), `{ x, y }` rendert es `fixed` an der Klickposition
+  // (Kontextmenü) — ein zweiter, praktisch identischer State (und eine
+  // zweite "Klick-außerhalb-schließt"-Logik) dafür wäre unnötige Dopplung.
+  const [openMenu, setOpenMenu] = useState<{
+    entry: RemoteEntryDto;
+    anchor: "row" | { x: number; y: number };
+  } | null>(null);
+  const [properties, setProperties] = useState<RemoteEntryDto | null>(null);
+  // Kurzlebiger Hinweis für Aktionen ohne eigenen Dialog (Kopieren-Erfolg/
+  // -Fehlschlag) — dasselbe Muster wie `AboutSettings`s `copyState`, nur
+  // als einzelner Text statt eines dreiwertigen Enums, da hier mehrere
+  // unterschiedliche Aktionen denselben Hinweis-Slot teilen.
+  const [toast, setToast] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ entry: RemoteEntryDto; value: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RemoteEntryDto | null>(null);
   const [mkdirOpen, setMkdirOpen] = useState<string | null>(null);
@@ -163,13 +183,25 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
-  // Schließt das Kontextmenü bei einem Klick irgendwo sonst hin.
+  // Schließt das offene Menü (Drei-Punkte oder Kontextmenü) bei einem Klick
+  // irgendwo sonst hin. Die Trigger (⋮-Button, Rechtsklick) rufen jeweils
+  // `stopPropagation()` auf (s. dortige Kommentare, Spec 0054 Teil 0) —
+  // dieser Listener sieht also nie den Klick, der ein Menü gerade erst
+  // geöffnet/gewechselt hat, nur einen tatsächlich "von außen" kommenden.
   useEffect(() => {
-    if (menuFor === null) return;
-    const handler = () => setMenuFor(null);
+    if (openMenu === null) return;
+    const handler = () => setOpenMenu(null);
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
-  }, [menuFor]);
+  }, [openMenu]);
+
+  // Kurzlebiger Toast (Kopieren-Erfolg/-Fehlschlag) verschwindet nach 2s von
+  // selbst — dasselbe Timeout-Muster wie `AboutSettings`s `copyState`.
+  useEffect(() => {
+    if (toast === null) return;
+    const timer = setTimeout(() => setToast(null), 2000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     const unlisten = [
@@ -258,9 +290,59 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     }
   };
 
-  const handleDownload = (entry: RemoteEntryDto) => {
-    setMenuFor(null);
-    sftpDownload(sessionId, entry.path).catch((err) => setError(commandErrorMessage(err)));
+  /** Spec 0054, Teil 2: "Herunterladen" — direkt ins Standard-
+   * Downloadverzeichnis, ohne Dialog. Datei oder Ordner (rekursiv, Backend
+   * entscheidet anhand `entry.isDir`, s. `sftp_download_default`). */
+  const handleDownloadDefault = (entry: RemoteEntryDto) => {
+    setOpenMenu(null);
+    sftpDownloadDefault(sessionId, entry.path).catch((err) => setError(commandErrorMessage(err)));
+  };
+
+  /** Spec 0054, Teil 2: "Herunterladen nach…" — Dialog für einen präzisen
+   * Zielpfad. Für Dateien der bestehende Speichern-Dialog (exakter
+   * Dateiname wählbar), für Ordner ein Zielordner-Dialog (ein Ordner hat
+   * keinen einzelnen Dateinamen zum Speichern). */
+  const handleDownloadChoose = (entry: RemoteEntryDto) => {
+    setOpenMenu(null);
+    const download = entry.isDir ? sftpDownloadDir : sftpDownload;
+    download(sessionId, entry.path).catch((err) => setError(commandErrorMessage(err)));
+  };
+
+  /** Spec 0054, Teil 2: "Pfad kopieren" — reine Zwischenablage-Aktion, kein
+   * Backend-Aufruf nötig. */
+  const handleCopyPath = async (entry: RemoteEntryDto) => {
+    setOpenMenu(null);
+    try {
+      await navigator.clipboard.writeText(entry.path);
+      setToast("Pfad kopiert");
+    } catch (err) {
+      console.warn("Konnte Pfad nicht in die Zwischenablage kopieren:", err);
+      setToast("Kopieren fehlgeschlagen");
+    }
+  };
+
+  /** Spec 0054, Teil 2: "Dateiinhalt kopieren" — liest den Inhalt (Backend
+   * lehnt zu große/nicht-Text-Dateien mit einer erklärenden Meldung ab, s.
+   * `sftp_read_text`) und kopiert ihn in die Zwischenablage. */
+  const handleCopyContent = async (entry: RemoteEntryDto) => {
+    setOpenMenu(null);
+    try {
+      const content = await sftpReadText(sessionId, entry.path);
+      await navigator.clipboard.writeText(content);
+      setToast("Inhalt kopiert");
+    } catch (err) {
+      setToast(commandErrorMessage(err));
+    }
+  };
+
+  const handleShowProperties = (entry: RemoteEntryDto) => {
+    setOpenMenu(null);
+    setProperties(entry);
+  };
+
+  const handleRefresh = () => {
+    setOpenMenu(null);
+    load(path);
   };
 
   const handleConfirmDelete = () => {
@@ -455,7 +537,19 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
             </thead>
             <tbody>
               {entries.map((entry) => (
-                <tr key={entry.path} className="border-t border-slate-800/70 hover:bg-slate-800/40">
+                <tr
+                  key={entry.path}
+                  className="border-t border-slate-800/70 hover:bg-slate-800/40"
+                  // Spec 0054, Teil 1: Rechtsklick öffnet dasselbe Menü wie
+                  // das Drei-Punkte-Symbol, nur an der Klickposition statt
+                  // in der Aktionsspalte verankert (s. `openMenu`-Doc-
+                  // Kommentar oben). `preventDefault` unterdrückt das
+                  // native Browser-/OS-Kontextmenü.
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setOpenMenu({ entry, anchor: { x: e.clientX, y: e.clientY } });
+                  }}
+                >
                   <td className="max-w-0 px-2 py-1">
                     {entry.isDir ? (
                       <button
@@ -507,46 +601,35 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
                         // auf) — ein echtes Klicken außerhalb von Button und
                         // Menü ist davon unberührt und schließt weiterhin.
                         e.stopPropagation();
-                        setMenuFor(menuFor === entry.path ? null : entry.path);
+                        setOpenMenu(
+                          openMenu?.anchor === "row" && openMenu.entry.path === entry.path
+                            ? null
+                            : { entry, anchor: "row" },
+                        );
                       }}
                       className="px-1.5 text-slate-400 hover:text-slate-100"
                     >
                       ⋮
                     </button>
-                    {menuFor === entry.path && (
-                      <div className="absolute right-2 top-full z-10 w-40 border border-slate-700 bg-slate-900 py-1 text-left shadow-lg">
-                        {!entry.isDir && (
-                          <button
-                            type="button"
-                            onClick={() => handleDownload(entry)}
-                            className="block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14"
-                          >
-                            Herunterladen
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuFor(null);
-                            setRenaming({ entry, value: entry.name });
-                          }}
-                          className="block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14"
-                        >
-                          Umbenennen
-                        </button>
-                        {!entry.isDir && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMenuFor(null);
-                              setDeleteTarget(entry);
-                            }}
-                            className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-600/12"
-                          >
-                            Löschen
-                          </button>
-                        )}
-                      </div>
+                    {openMenu?.anchor === "row" && openMenu.entry.path === entry.path && (
+                      <FileEntryMenu
+                        entry={entry}
+                        className="absolute right-2 top-full z-10"
+                        onDownloadDefault={handleDownloadDefault}
+                        onDownloadChoose={handleDownloadChoose}
+                        onCopyContent={handleCopyContent}
+                        onCopyPath={handleCopyPath}
+                        onShowProperties={handleShowProperties}
+                        onRefresh={handleRefresh}
+                        onRename={(e) => {
+                          setOpenMenu(null);
+                          setRenaming({ entry: e, value: e.name });
+                        }}
+                        onDelete={(e) => {
+                          setOpenMenu(null);
+                          setDeleteTarget(e);
+                        }}
+                      />
                     )}
                   </td>
                 </tr>
@@ -560,6 +643,44 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
           </div>
         )}
       </div>
+
+      {/* Spec 0054, Teil 1: Kontextmenü (Rechtsklick) — dieselbe
+          `FileEntryMenu`-Instanz wie das Drei-Punkte-Menü, nur `fixed` an
+          der Klickposition statt innerhalb der Aktionsspalte verankert.
+          `position: fixed` ignoriert das `overflow-auto` des umgebenden
+          Tabellen-Containers (kein Portal nötig), solange kein Vorfahre
+          `transform`/`filter`/`perspective` setzt — hier nicht der Fall. */}
+      {openMenu && openMenu.anchor !== "row" && (
+        <FileEntryMenu
+          entry={openMenu.entry}
+          className="fixed z-20"
+          style={{ left: openMenu.anchor.x, top: openMenu.anchor.y }}
+          onDownloadDefault={handleDownloadDefault}
+          onDownloadChoose={handleDownloadChoose}
+          onCopyContent={handleCopyContent}
+          onCopyPath={handleCopyPath}
+          onShowProperties={handleShowProperties}
+          onRefresh={handleRefresh}
+          onRename={(e) => {
+            setOpenMenu(null);
+            setRenaming({ entry: e, value: e.name });
+          }}
+          onDelete={(e) => {
+            setOpenMenu(null);
+            setDeleteTarget(e);
+          }}
+        />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 shadow-lg">
+          {toast}
+        </div>
+      )}
+
+      {properties && (
+        <FilePropertiesDialog entry={properties} onClose={() => setProperties(null)} />
+      )}
 
       {renaming && (
         <RenamePrompt
@@ -609,6 +730,135 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Spec 0054, Teil 1: die EINE Aktionsliste, die sowohl vom Drei-Punkte-
+ * Menü als auch vom Kontextmenü (Rechtsklick) gerendert wird — "beide Wege
+ * zeigen dieselben Aktionen". `className`/`style` bestimmen nur die
+ * Positionierung, die Aktionsliste selbst ist davon unabhängig. Reihenfolge
+ * folgt Spec 0054: lesend/lokal zuerst (Herunterladen, Kopieren,
+ * Eigenschaften, Aktualisieren), dann — durch einen Trenner abgesetzt — die
+ * server-verändernden Aktionen (Umbenennen, Löschen; chmod/Verschieben
+ * folgen in Teil 3). */
+function FileEntryMenu({
+  entry,
+  className,
+  style,
+  onDownloadDefault,
+  onDownloadChoose,
+  onCopyContent,
+  onCopyPath,
+  onShowProperties,
+  onRefresh,
+  onRename,
+  onDelete,
+}: {
+  entry: RemoteEntryDto;
+  className: string;
+  style?: CSSProperties;
+  onDownloadDefault: (entry: RemoteEntryDto) => void;
+  onDownloadChoose: (entry: RemoteEntryDto) => void;
+  onCopyContent: (entry: RemoteEntryDto) => void;
+  onCopyPath: (entry: RemoteEntryDto) => void;
+  onShowProperties: (entry: RemoteEntryDto) => void;
+  onRefresh: () => void;
+  onRename: (entry: RemoteEntryDto) => void;
+  onDelete: (entry: RemoteEntryDto) => void;
+}) {
+  const itemClass = "block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14";
+  return (
+    <div
+      className={`${className} w-52 border border-slate-700 bg-slate-900 py-1 text-left text-xs shadow-lg`}
+      style={style}
+    >
+      <button type="button" onClick={() => onDownloadDefault(entry)} className={itemClass}>
+        Herunterladen
+      </button>
+      <button type="button" onClick={() => onDownloadChoose(entry)} className={itemClass}>
+        Herunterladen nach…
+      </button>
+      {!entry.isDir && (
+        <button type="button" onClick={() => onCopyContent(entry)} className={itemClass}>
+          Dateiinhalt kopieren
+        </button>
+      )}
+      <button type="button" onClick={() => onCopyPath(entry)} className={itemClass}>
+        Pfad kopieren
+      </button>
+      <button type="button" onClick={() => onShowProperties(entry)} className={itemClass}>
+        Eigenschaften
+      </button>
+      <button type="button" onClick={onRefresh} className={itemClass}>
+        Aktualisieren
+      </button>
+      <div className="my-1 border-t border-slate-800" />
+      <button type="button" onClick={() => onRename(entry)} className={itemClass}>
+        Umbenennen
+      </button>
+      {!entry.isDir && (
+        <button
+          type="button"
+          onClick={() => onDelete(entry)}
+          className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-600/12"
+        >
+          Löschen
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Spec 0054, Teil 2: "Eigenschaften" — reine Anzeige der bereits geladenen
+ * `RemoteEntryDto` (kein eigener Backend-Aufruf: `sftp_list` liefert
+ * Rechte/Besitzer/Gruppe/Datum schon mit, ein erneutes `stat` wäre
+ * redundant). Rechte numerisch (`permissionsOctal`, 3-stellig oktal) UND
+ * symbolisch (`permissions`, bereits fertig formatiert) nebeneinander, wie
+ * von der Spec verlangt. */
+function FilePropertiesDialog({
+  entry,
+  onClose,
+}: {
+  entry: RemoteEntryDto;
+  onClose: () => void;
+}) {
+  const octal = entry.permissionsOctal.toString(8).padStart(3, "0");
+  const owner = entry.owner ?? (entry.uid !== null ? String(entry.uid) : "—");
+  const group = entry.group ?? (entry.gid !== null ? String(entry.gid) : "—");
+
+  const row = (label: string, value: string) => (
+    <div className="flex justify-between gap-4 py-1">
+      <span className="text-slate-400">{label}</span>
+      <span className="text-right font-mono text-slate-100 break-all">{value}</span>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
+        <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">Eigenschaften</h2>
+        <div className="divide-y divide-slate-800/70 text-xs">
+          {row("Name", entry.name)}
+          {row("Pfad", entry.path)}
+          {row("Typ", entry.isDir ? "Ordner" : "Datei")}
+          {row("Größe", entry.isDir ? "—" : formatBytes(entry.size))}
+          {row("Rechte (symbolisch)", entry.permissions)}
+          {row("Rechte (numerisch)", octal)}
+          {row("Besitzer", owner)}
+          {row("Gruppe", group)}
+          {row("Geändert", entry.modified ? new Date(entry.modified).toLocaleString() : "—")}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+          >
+            Schließen
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
