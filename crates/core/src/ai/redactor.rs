@@ -43,8 +43,9 @@ pub struct DefaultOutputRedactor {
 /// nur das Passwort-Segment zwischen `:` und `@` soll weg, Schema/
 /// Nutzername/Host/Datenbank sollen lesbar bleiben — dafür nutzt die
 /// `regex`-Crate `$name`-Platzhalter in der Ersetzungszeichenkette, die
-/// auf benannte Capture-Groups im Muster zurückgreifen (s.
-/// `db_connection_string_pattern()`). Das erfordert ein individuelles
+/// auf benannte Capture-Groups im Muster zurückgreifen (s. das
+/// DB-Connection-String-Muster in `built_in_patterns()`). Das erfordert
+/// ein individuelles
 /// `replacement` pro Muster statt des bisherigen einzigen globalen
 /// `REDACTED_PLACEHOLDER`-Aufrufs in `redact_bytes`.
 struct PatternRule {
@@ -176,7 +177,9 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // der DevOps-/Homelab-Zielgruppe (Docker-/CI-Logs, Config-Dumps)
         // häufigsten Schemata ab: Postgres, MySQL/MariaDB, MongoDB (inkl.
         // `+srv`), Redis (inkl. TLS-`rediss`) und AMQP/RabbitMQ (inkl.
-        // TLS-`amqps`).
+        // TLS-`amqps`). `(?i)`, weil das Schema in freier Ausgabe auch
+        // großgeschrieben vorkommt (z. B. `POSTGRES://` in manchen
+        // Log-Formatierern) — spec-reviewer-Fund, ursprünglich fehlte das.
         //
         // Ersetzt bewusst NUR das Passwort-Segment, nicht den ganzen
         // Treffer (anders als jedes andere Muster in dieser Liste) —
@@ -187,30 +190,53 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // statt des globalen `REDACTED_PLACEHOLDER` — deshalb das einzige
         // Muster hier, das nicht über `simple()` läuft.
         //
-        // Falsch-Positiv-Vorsicht (explizit gefordert): ein Schema+Host
-        // OHNE Zugangsdaten (`postgres://host:5432/db`, kein `user:pass@`)
-        // matcht nicht — das Muster verlangt zwingend die
-        // `user:passwort@`-Struktur direkt nach dem Schema (das
-        // Passwort-Zeichenklasse `[^@/\s]+` endet erst am `@`, es gibt also
-        // gar keinen Match-Ansatz ohne ein tatsächliches `@`-getrenntes
-        // Credential-Paar).
+        // Nutzername optional (`*` statt `+`, spec-reviewer-Fund): die
+        // KANONISCHE Redis-URL-Form vor ACLs ist `redis://:passwort@host`
+        // (kein Nutzername) — in unzähligen docker-compose-/Heroku-/
+        // Sidekiq-Configs so verwendet. Mit `+` (verlangt mindestens ein
+        // Zeichen) matchte dieser extrem häufige Fall gar nicht.
+        //
+        // Nutzername-/Passwort-Zeichenklasse schließt bewusst
+        // `, ; " ' =` aus (spec-reviewer-Fund, ERSTE Review-Runde dieses
+        // Musters — echte, nicht nur theoretische Regression): die
+        // ursprüngliche Zeichenklasse `[^@/\s]+` lief bei einer Zeile wie
+        // `redis://cache:6379,password=p@ssw0rd` über das komma-getrennte
+        // `password=`-Feld bis zum NÄCHSTEN `@` (dem in `p@ssw0rd`)
+        // hinweg — das zerstörte den Anker, auf den das generische
+        // `password=`-Muster weiter unten angewiesen ist, und `ssw0rd`
+        // blieb im Klartext stehen (`redis://cache:[REDACTED]@ssw0rd`)
+        // statt vollständig redigiert zu werden. Dieselbe Einschränkung
+        // verhindert außerdem Über-Redaktion, wenn irgendwo später in
+        // derselben Zeile ein UNABHÄNGIGES `@` auftaucht (z. B. eine
+        // E-Mail-Adresse in JSON: `{"redis":"redis://cache:6379",
+        // "admin":"ops@example.com"}` — mit den jetzt ausgeschlossenen
+        // Trennzeichen (`"` u. a.) bricht das Matching vor dem `admin`-Feld
+        // ab, statt bis zur E-Mail-Adresse durchzulaufen). Damit ist die
+        // vorher hier behauptete Zusicherung "kein Match ohne echtes
+        // `user:pass@`-Paar" jetzt tatsächlich zutreffend — vorher war sie
+        // nur für den einfachen Fall (URL allein auf ihrer eigenen Zeile)
+        // korrekt, s. Review-Bericht.
         PatternRule {
             regex: Regex::new(
-                r"(?P<scheme>postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?)://(?P<user>[A-Za-z0-9_.%+-]+):[^@/\s]+@",
+                r#"(?i)(?P<scheme>postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?)://(?P<user>[^:@/\s,;"'=]*):[^@/\s,;"'=]+@"#,
             )
             .expect("eingebautes DB-Connection-String-Muster ist gültig"),
             replacement: "${scheme}://${user}:[REDACTED]@",
         },
-        // Slack-Tokens: `xoxb-`/`xoxp-`/`xoxo-`/`xoxa-` (Bot/User/
-        // Legacy-Workspace/App-Token), gefolgt von mehreren
-        // `-`-getrennten alphanumerischen Segmenten. Reale Tokens sind
-        // weit über 24 Zeichen lang (klassische Bot-Tokens z. B. ~50+
-        // Zeichen) — die Mindestlänge ist konservativ niedrig genug, um
-        // keine echte Variante zu verpassen, aber hoch genug, um einen
-        // zufälligen `xoxb-`-Präfix-Treffer auf kurzem, unzusammenhängendem
-        // Text unwahrscheinlich zu machen.
+        // Slack-Tokens: `xoxb-`/`xoxp-`/`xoxo-`/`xoxa-`/`xoxs-` (Bot/User/
+        // Legacy-Workspace/App-/Legacy-Workspace-Signing-Token) sowie das
+        // strukturell andere `xapp-`-Präfix (Socket-Mode-App-Level-Token —
+        // spec-reviewer-Fund: hätte mit erfasst werden sollen, gleiches
+        // Risikoprofil wie die `xox*`-Familie, kein Zusatzaufwand),
+        // gefolgt von mehreren `-`-getrennten alphanumerischen Segmenten.
+        // Reale Tokens sind weit über 24 Zeichen lang (klassische
+        // Bot-Tokens z. B. ~50+ Zeichen) — die Mindestlänge ist
+        // konservativ niedrig genug, um keine echte Variante zu
+        // verpassen, aber hoch genug, um einen zufälligen Präfix-Treffer
+        // auf kurzem, unzusammenhängendem Text unwahrscheinlich zu
+        // machen.
         simple(
-            r"xox[bpoa]-[A-Za-z0-9-]{24,}",
+            r"(?:xox[bpoacs]|xapp)-[A-Za-z0-9-]{24,}",
             "eingebautes Slack-Token-Muster ist gültig",
         ),
         // Stripe-Keys: `sk_`/`pk_` (secret/publishable) je `live`/`test`.

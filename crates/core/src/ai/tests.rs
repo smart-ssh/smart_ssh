@@ -567,10 +567,23 @@ fn test_redactor_fully_redacts_db_password_containing_an_accidental_aws_key_subs
     assert_eq!(redacted, "postgres://user:[REDACTED]@host:5432/db");
 }
 
-/// Regressionstest: Provider-Tokens mit eindeutigem Präfix (Slack,
-/// Stripe — live UND test, s. Doc-Kommentar bei `built_in_patterns()` zur
-/// bewussten Einbeziehung von Test-Keys/publishable Keys —, Google-API,
-/// npm), analog zu den bestehenden AWS-/GitHub-Mustern.
+/// Regressionstest: Provider-Tokens mit eindeutigem Präfix (Slack —
+/// inkl. `xoxs-`/`xapp-`, Stripe — live UND test, s. Doc-Kommentar bei
+/// `built_in_patterns()` zur bewussten Einbeziehung von
+/// Test-Keys/publishable Keys —, Google-API, npm), analog zu den
+/// bestehenden AWS-/GitHub-Mustern.
+///
+/// Spec-reviewer-Fund (Review dieses Schritts): die ursprüngliche Fassung
+/// bettete jedes Token in einen `SCHLÜSSELWORT=wert`-Kontext ein (z. B.
+/// `GOOGLE_API_KEY=AIza...`) — das bereits bestehende generische
+/// `password|token|api_key|secret`-Muster redigiert `API_KEY=...` schon
+/// OHNE die neuen Muster, der Test bewies für Slack/Google/npm also gar
+/// nichts über die neuen Muster selbst (nur Stripe fiel vorher wirklich
+/// durch, weil "SECRET_KEY=" zwar "secret" enthält, aber der Wert dahinter
+/// bereits vom generischen Muster erfasst worden wäre — auch das beweist
+/// nichts Neues). Die Tokens stehen jetzt NACKT (ohne jeden
+/// Schlüsselwort-Kontext) in der Ausgabe — nur die neuen, präfixbasierten
+/// Muster können sie erkennen.
 #[test]
 fn test_redactor_detects_slack_stripe_google_and_npm_tokens() {
     let redactor = DefaultOutputRedactor::new();
@@ -585,35 +598,41 @@ fn test_redactor_detects_slack_stripe_google_and_npm_tokens() {
     // Laufzeit entfernt wird — dadurch matcht im Quelltext selbst nirgends
     // ein zusammenhängender Treffer des jeweiligen Formats, während der
     // tatsächliche Testwert zur Laufzeit exakt dem echten Format entspricht.
-    let slack_fake_token =
+    let slack_bot_fake_token =
         "xoxb-123456~7890123-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx".replace('~', "");
-    let slack = output(&format!("SLACK_BOT_TOKEN={slack_fake_token}"));
-    let redacted_slack = stdout_text(&redactor.redact(&slack));
-    assert!(!redacted_slack.contains(&slack_fake_token));
-    assert!(redacted_slack.contains("[REDACTED]"));
+    let slack_bot = output(&format!("found in build log: {slack_bot_fake_token}"));
+    let redacted_slack_bot = stdout_text(&redactor.redact(&slack_bot));
+    assert!(!redacted_slack_bot.contains(&slack_bot_fake_token));
+    assert!(redacted_slack_bot.contains("[REDACTED]"));
 
-    let stripe_fake_live_key = "sk_live_4eC~39HqLyjWDarjtT1zdp7dc1234567890".replace('~', "");
-    let stripe_live = output(&format!("STRIPE_SECRET_KEY={stripe_fake_live_key}"));
+    // Spec-reviewer-Fund: `xoxs-`/`xapp-` fehlten ursprünglich.
+    let slack_app_fake_token =
+        "xapp-1-A01AB~CDEF-1234567890123-AbCdEfGhIjKlMnOpQrStUvWxYz012345".replace('~', "");
+    let slack_app = output(&slack_app_fake_token);
+    let redacted_slack_app = stdout_text(&redactor.redact(&slack_app));
+    assert!(!redacted_slack_app.contains(&slack_app_fake_token));
+    assert!(redacted_slack_app.contains("[REDACTED]"));
+
+    let stripe_live_fake_key = "sk_live_4eC~39HqLyjWDarjtT1zdp7dc1234567890".replace('~', "");
+    let stripe_live = output(&format!("stripe key in CI output: {stripe_live_fake_key}"));
     let redacted_stripe_live = stdout_text(&redactor.redact(&stripe_live));
-    assert!(!redacted_stripe_live.contains(&stripe_fake_live_key));
+    assert!(!redacted_stripe_live.contains(&stripe_live_fake_key));
     assert!(redacted_stripe_live.contains("[REDACTED]"));
 
-    let stripe_fake_test_key = "sk_test_4eC~39HqLyjWDarjtT1zdp7dc1234567890".replace('~', "");
-    let stripe_test = output(&format!("STRIPE_SECRET_KEY={stripe_fake_test_key}"));
+    let stripe_test_fake_key = "sk_test_4eC~39HqLyjWDarjtT1zdp7dc1234567890".replace('~', "");
+    let stripe_test = output(&format!("stripe key in CI output: {stripe_test_fake_key}"));
     let redacted_stripe_test = stdout_text(&redactor.redact(&stripe_test));
-    assert!(!redacted_stripe_test.contains(&stripe_fake_test_key));
+    assert!(!redacted_stripe_test.contains(&stripe_test_fake_key));
     assert!(redacted_stripe_test.contains("[REDACTED]"));
 
-    let google_fake_key = "AIzaSyD1234~567890abcdefghijklmnopqrstu".replace('~', "");
-    let google = output(&format!("GOOGLE_API_KEY={google_fake_key}"));
+    let google_fake_key = "AIzaSyD1234~567890abcdefghijklmnopqrstuv".replace('~', "");
+    let google = output(&format!("client config uses {google_fake_key} for maps"));
     let redacted_google = stdout_text(&redactor.redact(&google));
     assert!(!redacted_google.contains(&google_fake_key));
     assert!(redacted_google.contains("[REDACTED]"));
 
     let npm_fake_token = "npm_1234~567890abcdefghijklmnopqrstuvwxyz".replace('~', "");
-    let npm = output(&format!(
-        "//registry.npmjs.org/:_authToken={npm_fake_token}"
-    ));
+    let npm = output(&format!("registry auth line: {npm_fake_token}"));
     let redacted_npm = stdout_text(&redactor.redact(&npm));
     assert!(!redacted_npm.contains(&npm_fake_token));
     assert!(redacted_npm.contains("[REDACTED]"));
@@ -636,4 +655,108 @@ fn test_redactor_does_not_flag_too_short_provider_token_lookalikes() {
     let redacted = redactor.redact(&input);
 
     assert_eq!(redacted.stdout, input.stdout);
+}
+
+/// Regressionstest, spec-reviewer-Fund (Review dieses Schritts): die
+/// KANONISCHE Redis-URL-Form vor ACLs hat gar keinen Nutzernamen
+/// (`redis://:passwort@host`) — genau diese Form steht in unzähligen
+/// docker-compose-/Heroku-/Sidekiq-Configs. Die ursprüngliche Fassung
+/// verlangte mindestens ein Zeichen für den Nutzernamen und verpasste
+/// diesen extrem häufigen Fall komplett.
+#[test]
+fn test_redactor_detects_db_connection_string_with_empty_username() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output(
+        "REDIS_URL=redis://:sup3rs3cr3t@redis:6379/0\n\
+         DATABASE_URL=postgres://:hunter2@db:5432/app",
+    );
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("sup3rs3cr3t"));
+    assert!(!redacted.contains("hunter2"));
+    assert!(redacted.contains("REDIS_URL=redis://:[REDACTED]@redis:6379/0"));
+    assert!(redacted.contains("DATABASE_URL=postgres://:[REDACTED]@db:5432/app"));
+}
+
+/// Regressionstest, spec-reviewer-Fund (Review dieses Schritts, echte
+/// Regression, keine nur theoretische): die ursprüngliche
+/// Passwort-Zeichenklasse (`[^@/\s]+`) war zu weit gefasst — bei
+/// `redis://cache:6379,password=p@ssw0rd` (kein echtes DB-Passwort,
+/// sondern ein komma-getrenntes `password=`-Feld DANACH) lief sie über
+/// das `password=`-Feld hinweg bis zum NÄCHSTEN `@` (dem in `p@ssw0rd`)
+/// und zerstörte damit den Anker, auf den das generische
+/// `password=`-Muster weiter unten angewiesen ist — Ergebnis war
+/// `redis://cache:[REDACTED]@ssw0rd`, mit `ssw0rd` im Klartext. Das
+/// verletzt "never loosen an existing check" (CLAUDE.md): vor diesem
+/// DB-URL-Fix wurde diese Zeile vom generischen Muster vollständig
+/// redigiert. Die jetzt engere Zeichenklasse (schließt `, ; " ' =` aus)
+/// lässt das DB-Muster hier gar nicht mehr greifen, sodass das
+/// generische `password=`-Muster wieder ungestört zum Zug kommt.
+#[test]
+fn test_redactor_does_not_let_db_pattern_swallow_a_later_password_keyword_field() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("redis://cache:6379,password=p@ssw0rd");
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("p@ssw0rd"));
+    assert!(!redacted.contains("ssw0rd"));
+    assert_eq!(redacted, "redis://cache:6379,[REDACTED]");
+}
+
+/// Regressionstest, spec-reviewer-Fund (Review dieses Schritts): eine
+/// credential-freie DB-URL, gefolgt später in DERSELBEN Zeile von einem
+/// unabhängigen `@` (z. B. einer E-Mail-Adresse in einem JSON-Einzeiler),
+/// wurde von der ursprünglichen Zeichenklasse fälschlich bis zu diesem
+/// `@` hin "redigiert" — obwohl gar kein `user:pass@`-Paar vorlag. Die im
+/// Code dokumentierte Zusicherung "kein Match ohne echtes Credential-Paar"
+/// stimmte nur für den einfachen Fall (URL allein auf eigener Zeile). Mit
+/// der engeren Zeichenklasse bricht das Matching vor dem MongoDB in Text
+/// eingebetteten Feldtrenner ab.
+#[test]
+fn test_redactor_does_not_over_redact_across_an_unrelated_at_sign_later_in_the_line() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output(r#"{"redis":"redis://cache:6379","admin":"ops@example.com"}"#);
+
+    let redacted = redactor.redact(&input);
+
+    assert_eq!(redacted.stdout, input.stdout);
+}
+
+/// Regressionstest, spec-reviewer-Fund (Review dieses Schritts): das
+/// DB-Connection-String-Schema kam ursprünglich nur kleingeschrieben vor
+/// (`(?i)` fehlte) — `POSTGRES://`/`Mysql://` (z. B. aus manchen
+/// Log-Formatierern oder groß geschriebenen Umgebungsvariablen-Werten)
+/// blieben unredigiert.
+#[test]
+fn test_redactor_detects_db_connection_strings_with_uppercase_scheme() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("POSTGRES://user:hunter2@host/db\nMysql://user:pw@host/db");
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("hunter2"));
+    assert!(!redacted.contains(":pw@"));
+    assert!(redacted.contains("POSTGRES://user:[REDACTED]@host/db"));
+    assert!(redacted.contains("Mysql://user:[REDACTED]@host/db"));
+}
+
+/// Regressionstest, spec-reviewer-Fund (Review dieses Schritts): RFC
+/// 3986 erlaubt in der Userinfo-Komponente einer URL Sonderzeichen wie
+/// `~ ! ' ( ) * , ;`, die von der ursprünglichen Nutzername-Zeichenklasse
+/// (`[A-Za-z0-9_.%+-]`) nicht abgedeckt waren — ein Nutzername wie
+/// `user~name` ließ das Muster komplett ins Leere laufen (kein Treffer,
+/// Passwort blieb im Klartext).
+#[test]
+fn test_redactor_detects_db_connection_string_with_rfc3986_special_username_chars() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("postgres://user~name:hunter2@host/db\npostgres://user!name:pw@host/db");
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("hunter2"));
+    assert!(!redacted.contains(":pw@"));
+    assert!(redacted.contains("postgres://user~name:[REDACTED]@host/db"));
+    assert!(redacted.contains("postgres://user!name:[REDACTED]@host/db"));
 }
