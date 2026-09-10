@@ -173,3 +173,21 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
     expect(screen.queryByText("✓ Zugangsdaten gültig")).not.toBeInTheDocument();
   });
 });
+
+// Spec 0056, Teil 3 ("Testbarkeit"): "Komponententests für die Präsenz der
+// neuen Struktur-Elemente" — die drei neu eingeführten Karten-Abschnitte
+// ("Konfigurierte Provider" / "Risiko-Indikatoren — KI-Zweitmeinung" /
+// "Provider hinzufügen") müssen alle gerendert werden, inklusive der
+// dafür neu eingeführten Überschrift "Konfigurierte Provider" (vorher gab
+// es dafür gar keine eigene Überschrift).
+describe("AiProviderSettings visual structure (Spec 0056, Teil 3)", () => {
+  it("renders all three card sections with their headings", () => {
+    renderForm();
+
+    expect(screen.getByRole("heading", { name: "Konfigurierte Provider" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Risiko-Indikatoren — KI-Zweitmeinung" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Provider hinzufügen" })).toBeInTheDocument();
+  });
+});

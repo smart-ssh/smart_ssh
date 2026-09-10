@@ -52,13 +52,42 @@ const MODEL_DATALIST_ID = "ai-provider-model-options";
  * `bg-slate-900/40`-Karte erzeugt die vom Reviewer/Stefan gewünschte
  * Kontraststufung (Modal-Grund `slate-800` → Karte `slate-900/40` → Feld
  * `slate-950`), `focus:ring-indigo-500` ist der bislang fehlende sichtbare
- * Fokus-Zustand. */
+ * Fokus-Zustand.
+ *
+ * Spec-Reviewer-Fund (Spec 0056, Review dieses Schritts): `FIELD_CLASS`
+ * enthielt ursprünglich auch Layout-Klassen (`mt-1 w-full`) — an drei
+ * Stellen per `` `${FIELD_CLASS} mt-0 w-1/2` `` überschrieben. Tailwind
+ * löst widersprüchliche Utility-Klassen über die Reihenfolge im
+ * generierten Stylesheet, NICHT über die Reihenfolge im `className`-String
+ * — die Overrides griffen deshalb nie (`mt-1`/`w-full` gewannen immer),
+ * mit sichtbarem Versatz beim Modell-Feld/den Zusatz-Header-Feldern. Layout
+ * (Abstand/Breite) ist jetzt bewusst NICHT Teil von `FIELD_CLASS`, sondern
+ * wird an jeder Verwendungsstelle explizit gesetzt — ein echter Konflikt
+ * ist damit strukturell ausgeschlossen. Ebenso `LABEL_CLASS`: `font-medium`
+ * lag vorher auf dem `<label>` selbst und vererbte sich dadurch auf die
+ * darin verschachtelten `<input>`/`<select>` (Tailwind-Preflight setzt dort
+ * `font: inherit`) — Nutzereingaben erschienen halbfett. Der Text-Stil
+ * liegt jetzt auf einem separaten `<span>` um den Label-Text, nicht mehr
+ * auf dem Label-Element. */
 const CARD_CLASS = "rounded-lg border border-slate-700 bg-slate-900/40 p-4";
-const LABEL_CLASS = "block text-sm font-medium text-slate-200";
+const LABEL_CLASS = "block text-sm";
+const LABEL_TEXT_CLASS = "font-medium text-slate-200";
 const FIELD_CLASS =
-  "mt-1 w-full rounded border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-slate-100 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40";
+  "rounded border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-slate-100 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40";
+// Spec-Reviewer-Fund: `focus:` (statt `focus-visible:`) hielt den Ring auf
+// Buttons auch nach einem reinen Mausklick sichtbar stehen, statt nur bei
+// Tastaturfokus — für Eingabefelder ist `focus:` üblich (Klick = Fokus =
+// aktive Eingabe), für Buttons wechselt diese Klasse deshalb auf
+// `focus-visible:`.
 const SECONDARY_BUTTON_CLASS =
-  "shrink-0 rounded border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-50";
+  "shrink-0 rounded border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-50";
+// Spec-Reviewer-Fund: "Aktiv setzen"/"Löschen" trugen eigene, von
+// `SECONDARY_BUTTON_CLASS` abweichende Ad-hoc-Klassenketten (kleinere
+// Innenabstände) — für eine konsistente Aktionshierarchie jetzt dieselbe
+// Größe/denselben Rahmen-Stil wie jeder andere sekundäre Button, nur mit
+// den etablierten semantischen Farben (Spec 0009: `red` = destruktiv).
+const DANGER_BUTTON_CLASS =
+  "shrink-0 rounded border border-red-800 bg-red-900 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-red-200 transition-colors hover:bg-red-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:cursor-not-allowed disabled:opacity-50";
 
 interface AiProviderSettingsProps {
   /** Löst neu laden von `list_ai_providers` im Elternscreen aus (z. B. für
@@ -283,16 +312,12 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     <button
                       type="button"
                       onClick={() => handleSetActive(provider.id)}
-                      className="rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-100 transition-colors hover:border-slate-500 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                      className={SECONDARY_BUTTON_CLASS}
                     >
                       {t("aiProvider.setActive")}
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(provider.id)}
-                    className="rounded border border-red-800 bg-red-900 px-2 py-1 text-xs text-red-200 transition-colors hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                  >
+                  <button type="button" onClick={() => handleDelete(provider.id)} className={DANGER_BUTTON_CLASS}>
                     {t("common.delete")}
                   </button>
                 </div>
@@ -358,12 +383,12 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         </label>
         {riskClassifierEnabled && (
           <label className={LABEL_CLASS}>
-            {t("aiProvider.riskClassifierProvider")}
+            <span className={LABEL_TEXT_CLASS}>{t("aiProvider.riskClassifierProvider")}</span>
             <select
               value={riskClassifierProviderId ?? ""}
               onChange={(e) => handleRiskClassifierChange(true, e.target.value || null)}
               disabled={riskSettingsSaving}
-              className={FIELD_CLASS}
+              className={`mt-1 w-full ${FIELD_CLASS}`}
             >
               <option value="">{t("aiProvider.riskClassifierNoProvider")}</option>
               {providers.map((provider) => (
@@ -387,14 +412,14 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
           </h3>
 
           <label className={LABEL_CLASS}>
-            {t("aiProvider.type")}
+            <span className={LABEL_TEXT_CLASS}>{t("aiProvider.type")}</span>
             <select
               value={form.providerType}
               onChange={(e) => {
                 setForm({ ...form, providerType: e.target.value as ProviderType });
                 setCredentialTestResult(null);
               }}
-              className={FIELD_CLASS}
+              className={`mt-1 w-full ${FIELD_CLASS}`}
             >
               {PROVIDER_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -405,18 +430,18 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
           </label>
 
           <label className={LABEL_CLASS}>
-            {t("aiProvider.providerName")}
+            <span className={LABEL_TEXT_CLASS}>{t("aiProvider.providerName")}</span>
             <input
               type="text"
               required
               value={form.displayName}
               onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-              className={FIELD_CLASS}
+              className={`mt-1 w-full ${FIELD_CLASS}`}
             />
           </label>
 
           <label className={LABEL_CLASS}>
-            {t("aiProvider.model")}
+            <span className={LABEL_TEXT_CLASS}>{t("aiProvider.model")}</span>
             <div className="mt-1 flex gap-2">
               <input
                 type="text"
@@ -425,7 +450,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 placeholder={t("aiProvider.modelPlaceholder")}
                 value={form.model}
                 onChange={(e) => setForm({ ...form, model: e.target.value })}
-                className={`${FIELD_CLASS} mt-0 w-full`}
+                className={`w-full ${FIELD_CLASS}`}
               />
               {supportsModelDiscovery(form.providerType) && (
                 <button
@@ -466,20 +491,20 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
 
           {needsBaseUrl(form.providerType) && (
             <label className={LABEL_CLASS}>
-              {t("aiProvider.baseUrl")}
+              <span className={LABEL_TEXT_CLASS}>{t("aiProvider.baseUrl")}</span>
               <input
                 type="text"
                 required
                 placeholder={t("aiProvider.baseUrlPlaceholder")}
                 value={form.baseUrl ?? ""}
                 onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-                className={FIELD_CLASS}
+                className={`mt-1 w-full ${FIELD_CLASS}`}
               />
             </label>
           )}
 
           <label className={LABEL_CLASS}>
-            {t("aiProvider.apiKey")}
+            <span className={LABEL_TEXT_CLASS}>{t("aiProvider.apiKey")}</span>
             <input
               type="password"
               required
@@ -491,7 +516,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 // wäre ein weiterhin angezeigtes "gültig" irreführend.
                 setCredentialTestResult(null);
               }}
-              className={FIELD_CLASS}
+              className={`mt-1 w-full ${FIELD_CLASS}`}
             />
           </label>
           {/* Spec 0050, Teil 2 (jetzt auch Spec 0056, Teil 1): reiner
@@ -599,14 +624,14 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                           placeholder={t("aiProvider.extraHeaderKeyPlaceholder")}
                           value={key}
                           onChange={(e) => updateExtraHeader(index, e.target.value, value)}
-                          className={`${FIELD_CLASS} mt-0 w-1/2 text-sm`}
+                          className={`w-1/2 text-sm ${FIELD_CLASS}`}
                         />
                         <input
                           type="text"
                           placeholder={t("aiProvider.extraHeaderValuePlaceholder")}
                           value={value}
                           onChange={(e) => updateExtraHeader(index, key, e.target.value)}
-                          className={`${FIELD_CLASS} mt-0 w-1/2 text-sm`}
+                          className={`w-1/2 text-sm ${FIELD_CLASS}`}
                         />
                         <button
                           type="button"
@@ -625,7 +650,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 </div>
 
                 <label className={LABEL_CLASS}>
-                  {t("aiProvider.attestationUrlLabel")}
+                  <span className={LABEL_TEXT_CLASS}>{t("aiProvider.attestationUrlLabel")}</span>
                   <input
                     type="text"
                     placeholder={t("aiProvider.attestationUrlPlaceholder")}
@@ -633,7 +658,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     onChange={(e) =>
                       setForm({ ...form, attestationUrl: e.target.value || null })
                     }
-                    className={FIELD_CLASS}
+                    className={`mt-1 w-full ${FIELD_CLASS}`}
                   />
                 </label>
               </div>
@@ -644,7 +669,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? t("aiProvider.adding") : t("aiProvider.add")}
         </button>

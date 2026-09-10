@@ -18,6 +18,12 @@ sind mit **(Pro)** markiert.
   erst bei Hover/Tastaturfokus ein statt dauerhaft sichtbar zu sein — ein
   laufender/fehlgeschlagener/gerade erfolgreicher Export bzw. eine
   Notiz-Übernahme bleibt dabei immer sichtbar, unabhängig von Hover/Fokus.
+- Einstellungen: der KI-Provider-Bereich ist überarbeitet — konfigurierte
+  Provider, die optionale Risiko-Zweitmeinung und das Formular für einen
+  neuen Provider stehen jetzt in klar umrandeten, gruppierten Karten statt
+  einer kontrastarmen, ungegliederten Liste; alle Formularfelder haben
+  einen sichtbaren Fokus-Rahmen, der Format-Hinweis für den API-Key und
+  das Testen-Ergebnis erscheinen als eigene, klar erkennbare Hinweisboxen.
 
 ### Fixed
 - Chat-Eingabefeld: Enter während einer laufenden IME-Komposition (z. B.
