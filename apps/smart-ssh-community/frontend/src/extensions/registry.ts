@@ -50,6 +50,17 @@ export interface SettingsSectionContribution {
    * Text, statt dass die Sektion komplett aus der Navigation verschwindet
    * (die Spec-0050-Invariante, die dieser Umbau nicht brechen darf). Ein
    * sprechendes `label` nachzutragen ist trotzdem empfehlenswert.
+   *
+   * Spec 0055, Teil 4: kann seitdem ENTWEDER ein fester Anzeigetext ODER
+   * ein i18next-Übersetzungsschlüssel sein — diese Registry bleibt dabei
+   * bewusst komplett i18n-unabhängig (reines Modul-Singleton, kein Zugriff
+   * auf `i18next`/`react-i18next` hier), die Unterscheidung und Auflösung
+   * passiert erst beim Rendern in `SettingsScreen.tsx`s
+   * `resolveSectionLabel` (dortiger Doc-Kommentar erklärt das Wie: über
+   * `i18next.exists(label)`, kein Präfix, kein zweites Feld). Für einen
+   * Registrierenden ändert sich dadurch nichts an der Aufrufform — ob
+   * `label` ein Schlüssel ist oder nicht, entscheidet einzig, ob er im
+   * geladenen Sprachpaket existiert.
    */
   label?: string;
 }

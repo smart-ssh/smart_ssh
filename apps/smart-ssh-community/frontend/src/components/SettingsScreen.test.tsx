@@ -161,3 +161,27 @@ describe("SettingsScreen section headings (Spec 0055, Teil 3)", () => {
     await expectExactlyOneSectionHeading("MCP-Server");
   });
 });
+
+describe("SettingsScreen registered section labels follow the UI language (Spec 0055, Teil 4)", () => {
+  beforeEach(() => {
+    resetRegistryForTests();
+    registerSettingsSection({
+      id: "mcp-server",
+      label: "settings.categories.mcpServer",
+      component: McpServerSettings,
+    });
+  });
+
+  afterEach(async () => {
+    resetRegistryForTests();
+    await testI18n.changeLanguage("de");
+  });
+
+  it("shows the English nav label when the UI language is English", async () => {
+    await testI18n.changeLanguage("en");
+    renderSettingsScreen();
+
+    expect(await screen.findByText("MCP Server")).toBeInTheDocument();
+    expect(screen.queryByText("MCP-Server")).not.toBeInTheDocument();
+  });
+});

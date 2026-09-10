@@ -18,6 +18,10 @@ sind mit **(Pro)** markiert.
 - Einstellungen: einige Kategorien ("Anzeige & Sprache", "Sitzungen &
   Daten", "MCP-Server") zeigten ihren Titel doppelt (einmal von der
   Einstellungen-Navigation, einmal als eigene Überschrift im Inhalt).
+- Einstellungen: die Navigationseinträge "Sitzungen & Daten" und
+  "MCP-Server" standen unabhängig von der UI-Sprache immer auf Deutsch da
+  — erscheinen jetzt in Englisch übersetzt, wenn die UI-Sprache Englisch
+  ist.
 
 ## [0.4.6] — 2026-09-10
 

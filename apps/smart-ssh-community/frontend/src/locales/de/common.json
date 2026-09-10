@@ -32,7 +32,9 @@
       "displayLanguage": "Anzeige & Sprache",
       "diagnostics": "Diagnose",
       "about": "Über",
-      "fileTypes": "Dateien"
+      "fileTypes": "Dateien",
+      "chatRetention": "Sitzungen & Daten",
+      "mcpServer": "MCP-Server"
     },
     "language": {
       "de": "Deutsch",

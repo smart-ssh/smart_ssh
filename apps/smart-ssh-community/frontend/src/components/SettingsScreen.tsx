@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../extensions/registerBuiltinExtensions";
 import { listSettingsSections } from "../extensions/registry";
+import { resolveSectionLabel } from "../resolveSectionLabel";
 import { AboutSettings } from "./AboutSettings";
 import { AiProviderSettings } from "./AiProviderSettings";
 import { DiagnosticsSettings } from "./DiagnosticsSettings";
@@ -45,7 +46,7 @@ interface NavCategory {
  * Kategorien.
  */
 export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const builtinCategories: NavCategory[] = [
     { id: AI_PROVIDER_CATEGORY_ID, label: t("settings.categories.aiProvider") },
@@ -71,10 +72,16 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
   // optional (Spec 0050, Abschnitt 1.3 — Rückwärtskompatibilität für eine
   // bestehende Registrierung ohne `label`, z. B. die private Lizenz-
   // Sektion vor einer Anpassung), fällt in dem Fall auf die `id` zurück.
+  //
+  // Spec 0055, Teil 4: `label` kann jetzt ZUSÄTZLICH ein
+  // Übersetzungsschlüssel sein (s. `resolveSectionLabel`) — das eingebaute
+  // "chat-retention"/"mcp-server" nutzen das seit diesem Schritt, damit in
+  // der englischen UI nicht die festen deutschen Strings aus
+  // `registerBuiltinExtensions.ts` erscheinen.
   const registeredSections = listSettingsSections();
   const registeredCategories: NavCategory[] = registeredSections.map(({ id, label }) => ({
     id,
-    label: label ?? id,
+    label: resolveSectionLabel(label, id, i18n, t),
   }));
 
   const categories = [...builtinCategories, ...registeredCategories];
