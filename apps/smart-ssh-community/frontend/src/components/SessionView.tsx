@@ -15,17 +15,41 @@ const RIGHT_PANEL_MIN_WIDTH = 300;
 const RIGHT_PANEL_DEFAULT_WIDTH = 420;
 const SPLIT_HANDLE_WIDTH = 6;
 
-/** Klemmt die gewünschte Breite des rechten (SSH-/SFTP-)Bereichs auf seine
- * Mindestbreite UND darauf, dass dem linken (KI-)Bereich mindestens
- * `LEFT_PANEL_MIN_WIDTH` bleibt — abhängig von der aktuell tatsächlich
- * verfügbaren Breite des umgebenden Flex-Containers. Passt das Fenster
- * nicht einmal für beide Mindestbreiten zusammen (Spec 0053, Teil 2: "auf
- * kleinen Fenstern... notfalls Fallback auf die Standardaufteilung"),
- * wird auf `RIGHT_PANEL_DEFAULT_WIDTH` zurückgefallen statt einen
- * widersprüchlichen geklemmten Zustand zu erzwingen. */
-function clampRightPanelWidth(proposed: number, containerWidth: number): number {
-  if (containerWidth < LEFT_PANEL_MIN_WIDTH + RIGHT_PANEL_MIN_WIDTH + SPLIT_HANDLE_WIDTH) {
+/** Fenster zu schmal, um beide Mindestbreiten gleichzeitig unterzubringen. */
+function windowTooSmallForBothPanels(containerWidth: number): boolean {
+  return containerWidth < LEFT_PANEL_MIN_WIDTH + RIGHT_PANEL_MIN_WIDTH + SPLIT_HANDLE_WIDTH;
+}
+
+/** Klemmt die *angezeigte* Breite des rechten (SSH-/SFTP-)Bereichs auf
+ * seine Mindestbreite UND darauf, dass dem linken (KI-)Bereich mindestens
+ * `LEFT_PANEL_MIN_WIDTH` bleibt. Passt das Fenster nicht einmal für beide
+ * Mindestbreiten zusammen (Spec 0053, Teil 2: "auf kleinen Fenstern...
+ * notfalls Fallback auf die Standardaufteilung"), wird auf
+ * `RIGHT_PANEL_DEFAULT_WIDTH` zurückgefallen statt einen widersprüchlichen
+ * geklemmten Zustand zu erzwingen. Nur fürs *Rendern* (`effectiveRightWidth`)
+ * gedacht — s. `clampRightPanelWidthForDrag` für die Geste selbst. */
+function clampRightPanelWidthForDisplay(proposed: number, containerWidth: number): number {
+  if (windowTooSmallForBothPanels(containerWidth)) {
     return RIGHT_PANEL_DEFAULT_WIDTH;
+  }
+  const maxRightWidth = containerWidth - LEFT_PANEL_MIN_WIDTH - SPLIT_HANDLE_WIDTH;
+  return Math.min(Math.max(proposed, RIGHT_PANEL_MIN_WIDTH), maxRightWidth);
+}
+
+/** Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts): `preferredRightWidth`
+ * darf NIE auf `RIGHT_PANEL_DEFAULT_WIDTH` gesetzt werden, nur weil das
+ * Fenster gerade zu klein ist — genau das tat der vorherige, gemeinsam mit
+ * `clampRightPanelWidthForDisplay` genutzte Klemm-Code, sobald während
+ * einer Ziehgeste im zu kleinen Fenster `preferredRightWidth` selbst
+ * (nicht nur die Anzeige) auf 420 gesetzt und anschließend auch noch
+ * persistiert wurde — eine gespeicherte Präferenz (z. B. 900px) ging durch
+ * ein einziges Ruckeln am Divider in einem schmalen Fenster dauerhaft
+ * verloren. Diese Variante lässt die Geste im zu-klein-Regime stattdessen
+ * wirkungslos verpuffen (`prev` unverändert), statt die Präferenz
+ * stillschweigend zu überschreiben. */
+function clampRightPanelWidthForDrag(proposed: number, containerWidth: number, prev: number): number {
+  if (windowTooSmallForBothPanels(containerWidth)) {
+    return prev;
   }
   const maxRightWidth = containerWidth - LEFT_PANEL_MIN_WIDTH - SPLIT_HANDLE_WIDTH;
   return Math.min(Math.max(proposed, RIGHT_PANEL_MIN_WIDTH), maxRightWidth);
@@ -110,24 +134,30 @@ export function SessionView({
   const effectiveRightWidth =
     containerWidth === null
       ? preferredRightWidth
-      : clampRightPanelWidth(preferredRightWidth, containerWidth);
+      : clampRightPanelWidthForDisplay(preferredRightWidth, containerWidth);
+
+  // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts): derselbe
+  // StrictMode-Seiteneffekt-im-Updater-Befund wie in
+  // `FileBrowserPanel.tsx` — `preferredRightWidthRef` hält den Wert
+  // synchron nach, `handleSplitDragEnd` liest ihn direkt.
+  const preferredRightWidthRef = useRef(preferredRightWidth);
+  useEffect(() => {
+    preferredRightWidthRef.current = preferredRightWidth;
+  }, [preferredRightWidth]);
 
   const handleSplitDrag = useCallback((deltaX: number) => {
     setPreferredRightWidth((prev) => {
       const containerWidthNow = splitContainerRef.current?.clientWidth ?? Infinity;
       // Divider nach links gezogen (negatives Delta) vergrößert den
       // rechten Bereich, daher `prev - deltaX`.
-      return clampRightPanelWidth(prev - deltaX, containerWidthNow);
+      return clampRightPanelWidthForDrag(prev - deltaX, containerWidthNow, prev);
     });
   }, []);
 
   const handleSplitDragEnd = useCallback(() => {
-    setPreferredRightWidth((current) => {
-      saveAiSshSplitWidthPx(current).catch((err) =>
-        console.warn("Konnte Bereichsaufteilung nicht speichern:", err),
-      );
-      return current;
-    });
+    saveAiSshSplitWidthPx(preferredRightWidthRef.current).catch((err) =>
+      console.warn("Konnte Bereichsaufteilung nicht speichern:", err),
+    );
   }, []);
 
   const splitHandlers = useDragResize(handleSplitDrag, handleSplitDragEnd);

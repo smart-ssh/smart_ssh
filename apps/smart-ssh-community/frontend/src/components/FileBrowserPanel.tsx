@@ -41,7 +41,7 @@ const MIN_COLUMN_WIDTHS: FileManagerColumnWidths = {
 const NAME_MIN_WIDTH = 120;
 /** Feste, nicht verstellbare Aktionsspalte (⋮-Menü) — kein Label, immer
  * gleich schmal, kein Drag-Handle. */
-const ACTIONS_COLUMN_WIDTH = 32;
+const ACTIONS_COLUMN_WIDTH = 36;
 
 interface Transfer {
   id: string;
@@ -113,6 +113,20 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     [],
   );
 
+  // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts): der
+  // Persistenz-Aufruf lief vorher als Seiteneffekt *innerhalb* eines
+  // `setState`-Updaters (`setColumnWidths((current) => { save(current);
+  // return current; })`) — unter `StrictMode` (aktiv in `main.tsx`) ruft
+  // React Updater im Dev-Modus doppelt auf, was `store.save()` doppelt
+  // ausgelöst hätte (harmlos, da idempotent, aber ein vermeidbares
+  // Anti-Pattern). `columnWidthsRef` hält den aktuellen Wert stattdessen
+  // synchron zum State nach, `handleColumnDragEnd` liest ihn direkt statt
+  // über einen Updater.
+  const columnWidthsRef = useRef(columnWidths);
+  useEffect(() => {
+    columnWidthsRef.current = columnWidths;
+  }, [columnWidths]);
+
   const handleColumnDrag = useCallback(
     (column: keyof FileManagerColumnWidths) => (deltaX: number) => {
       setColumnWidths((prev) => {
@@ -125,12 +139,9 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   );
 
   const handleColumnDragEnd = useCallback(() => {
-    setColumnWidths((current) => {
-      saveFileManagerColumnWidths(current).catch((err) =>
-        console.warn("Konnte Spaltenbreiten nicht speichern:", err),
-      );
-      return current;
-    });
+    saveFileManagerColumnWidths(columnWidthsRef.current).catch((err) =>
+      console.warn("Konnte Spaltenbreiten nicht speichern:", err),
+    );
   }, []);
 
   const load = useCallback((targetPath: string) => {
@@ -375,9 +386,31 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
           <p className="p-3 text-xs text-slate-500">(leeres Verzeichnis)</p>
         )}
         {!loading && !error && entries.length > 0 && (
-          <table className="w-full table-fixed text-left text-xs">
-            {/* Spec 0053, Teil 1: `table-fixed` + `<colgroup>` statt des
-                vorherigen automatischen Spaltenlayouts — nur so lassen sich
+          <table
+            className="w-full table-fixed text-left text-xs"
+            style={{
+              // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts):
+              // ohne diese `min-width` konnte die Name-Spalte unter
+              // `table-fixed` auf tatsächlich 0px kollabieren, sobald der
+              // SSH-/SFTP-Bereich (Teil 2, per Divider verstellbar) schmaler
+              // war als die Summe der anderen Spalten — Dateinamen
+              // verschwanden komplett statt nur abgeschnitten zu werden,
+              // und `clampColumnWidth`s `NAME_MIN_WIDTH` griff dabei gar
+              // nicht (das klemmt nur beim Spalten-Drag selbst, nicht beim
+              // Schmaler-Werden des ganzen Panels). Mit dieser Mindestbreite
+              // wächst die Tabelle stattdessen über den Container hinaus,
+              // und der umgebende `overflow-auto`-Container (s. oben)
+              // scrollt horizontal statt die Name-Spalte zu verschlucken.
+              minWidth:
+                columnWidths.size +
+                columnWidths.permissions +
+                columnWidths.modified +
+                ACTIONS_COLUMN_WIDTH +
+                NAME_MIN_WIDTH,
+            }}
+          >
+            {/* `table-fixed` + `<colgroup>` statt des vorherigen
+                automatischen Spaltenlayouts — nur so lassen sich
                 Spaltenbreiten gezielt per Drag setzen. Die Name-Spalte hat
                 bewusst keine `width` (kein `<col>`-Attribut dafür) — unter
                 `table-fixed` nimmt eine Spalte ohne explizite Breite den
@@ -396,7 +429,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
                 <th className="relative">
                   Größe
                   <ColumnResizeHandle
-                    label="Größe-Spalte"
+                    testId="column-resize-size"
                     onDrag={handleColumnDrag("size")}
                     onDragEnd={handleColumnDragEnd}
                   />
@@ -404,7 +437,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
                 <th className="relative">
                   Rechte
                   <ColumnResizeHandle
-                    label="Rechte-Spalte"
+                    testId="column-resize-permissions"
                     onDrag={handleColumnDrag("permissions")}
                     onDragEnd={handleColumnDragEnd}
                   />
@@ -412,7 +445,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
                 <th className="relative">
                   Geändert
                   <ColumnResizeHandle
-                    label="Geändert-Spalte"
+                    testId="column-resize-modified"
                     onDrag={handleColumnDrag("modified")}
                     onDragEnd={handleColumnDragEnd}
                   />
@@ -621,22 +654,29 @@ function RenamePrompt({
  * ist bewusst breiter als die sichtbare Trennlinie (`w-px`), damit sie
  * auch ohne Pixel-genaues Zielen zu treffen ist. `cursor-col-resize` /
  * `touch-none` (kein Scroll-Gestenkonflikt beim Ziehen) als der von der
- * Spec verlangte Hover-/Cursor-Hinweis. */
+ * Spec verlangte Hover-/Cursor-Hinweis.
+ *
+ * Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts): kein
+ * `role="separator"`/`aria-label` mehr — ein per Tastatur nicht
+ * bedienbares, rein visuelles Maus-Element (die Spec verlangt
+ * Tastaturbedienbarkeit ausdrücklich nicht) würde Screenreadern beim
+ * Durchlaufen der Tabellenkopfzeile als benanntes, aber funktionsloses
+ * Element angesagt — irreführend. `aria-hidden` ist hier die ehrlichere
+ * Wahl; `data-testid` bleibt als reiner Test-Anker. */
 function ColumnResizeHandle({
-  label,
+  testId,
   onDrag,
   onDragEnd,
 }: {
-  label: string;
+  testId: string;
   onDrag: (deltaX: number) => void;
   onDragEnd: () => void;
 }) {
   const handlers = useDragResize(onDrag, onDragEnd);
   return (
     <span
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={label}
+      aria-hidden="true"
+      data-testid={testId}
       className="group absolute -right-1 top-0 bottom-0 z-10 flex w-2 cursor-col-resize touch-none select-none justify-center"
       {...handlers}
     >

@@ -105,9 +105,9 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
     await screen.findByText(/readme\.md/);
     stubContainerWidth(container, 1000);
 
-    const handle = screen.getByLabelText("Größe-Spalte");
+    const handle = screen.getByTestId("column-resize-size");
     fireEvent.pointerDown(handle, { clientX: 100 });
-    fireEvent.pointerMove(handle, { clientX: 140 });
+    fireEvent.pointerMove(handle, { clientX: 140, buttons: 1 });
     fireEvent.pointerUp(handle, { clientX: 140 });
 
     await waitFor(() => {
@@ -128,11 +128,55 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
     await screen.findByText(/readme\.md/);
     stubContainerWidth(container, 1000);
 
-    const handle = screen.getByLabelText("Größe-Spalte");
+    const handle = screen.getByTestId("column-resize-size");
     fireEvent.pointerDown(handle, { clientX: 100 });
-    fireEvent.pointerMove(handle, { clientX: 140 });
+    fireEvent.pointerMove(handle, { clientX: 140, buttons: 1 });
 
     expect(saveFileManagerColumnWidths).not.toHaveBeenCalled();
+  });
+
+  it("does not persist on a plain click without any movement", async () => {
+    // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts): die
+    // vorherige "does not persist while merely dragging"-Prüfung deckte
+    // nur den Zwischenzustand ab, nicht den eigentlich riskanteren Pfad —
+    // ein abgeschlossenes `pointerdown`+`pointerup` ganz ohne `pointermove`
+    // dazwischen (`useDragResize`s `movedRef`-Bedingung).
+    vi.mocked(sftpList).mockResolvedValue([entry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    await screen.findByText(/readme\.md/);
+
+    const handle = screen.getByTestId("column-resize-size");
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    fireEvent.pointerUp(handle, { clientX: 100 });
+
+    expect(saveFileManagerColumnWidths).not.toHaveBeenCalled();
+  });
+
+  it("caps growth so the Name column never drops below its own minimum width", async () => {
+    // Spec-Reviewer-Fund: der bisherige Test nutzte einen so breiten
+    // Container (1000px), dass der `NAME_MIN_WIDTH`-Klemm-Zweig in
+    // `clampColumnWidth` nie erreicht wurde.
+    vi.mocked(sftpList).mockResolvedValue([entry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    const { container } = renderPanel();
+    await screen.findByText(/readme\.md/);
+    // 600px Container; andere Spalten (Rechte 90 + Geändert 150 + Aktionen
+    // 36) + Name-Minimum (120) = 396px stehen fest, für "Größe" bleiben
+    // maximal 600 - 396 = 204px.
+    stubContainerWidth(container, 600);
+
+    const handle = screen.getByTestId("column-resize-size");
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    fireEvent.pointerMove(handle, { clientX: 600, buttons: 1 }); // weit über das Maximum hinaus
+    fireEvent.pointerUp(handle, { clientX: 600 });
+
+    await waitFor(() => {
+      const sizeCol = container.querySelectorAll("colgroup col")[1] as HTMLElement;
+      expect(sizeCol.style.width).toBe("204px");
+    });
   });
 
   it("does not shrink a column below its minimum width", async () => {
@@ -143,10 +187,10 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
     await screen.findByText(/readme\.md/);
     stubContainerWidth(container, 1000);
 
-    const handle = screen.getByLabelText("Größe-Spalte");
+    const handle = screen.getByTestId("column-resize-size");
     fireEvent.pointerDown(handle, { clientX: 100 });
     // Weit über die Mindestbreite (56px) hinaus nach links ziehen.
-    fireEvent.pointerMove(handle, { clientX: -500 });
+    fireEvent.pointerMove(handle, { clientX: -500, buttons: 1 });
     fireEvent.pointerUp(handle, { clientX: -500 });
 
     await waitFor(() => {

@@ -20,16 +20,29 @@ export interface FileManagerColumnWidths {
   modified: number;
 }
 
-/** Nur numerisch-endliche, positive Werte gelten als gültig — ein von
- * Hand editiertes oder durch eine künftige Formatänderung
- * unpassend gewordenes `settings.json` darf nie zu `NaN`/negativen
- * Spaltenbreiten oder einer kaputten Aufteilung führen. Aufrufer
- * verschmelzen das Ergebnis mit ihren eigenen Default-/Mindestwerten,
- * hier wird bewusst nicht geklemmt (die genauen Mindest-/Maximalwerte
- * hängen vom aktuellen Container ab, s. `FileBrowserPanel.tsx`/
- * `SessionView.tsx`). */
+/** Obergrenze rein als Sanity-Check gegen eine grob kaputte
+ * `settings.json` (z. B. von Hand editiert) — deutlich über jeder
+ * jemals sinnvollen Fensterbreite, aber klein genug, um eine
+ * `Number.MAX_VALUE`-artige Eingabe zuverlässig abzufangen, bevor sie
+ * (z. B. in `otherColumnsTotal` in `FileBrowserPanel.tsx`) mit einem
+ * weiteren extremen Wert zu `Infinity`/`NaN` führen könnte. */
+const MAX_PLAUSIBLE_WIDTH = 10_000;
+
+/** Nur numerisch-endliche, positive Werte innerhalb einer plausiblen
+ * Obergrenze gelten als gültig — ein von Hand editiertes oder durch eine
+ * künftige Formatänderung unpassend gewordenes `settings.json` darf nie
+ * zu `NaN`/negativen/absurd großen Spaltenbreiten oder einer kaputten
+ * Aufteilung führen. Aufrufer verschmelzen das Ergebnis mit ihren
+ * eigenen Default-/Mindestwerten, hier wird sonst bewusst nicht geklemmt
+ * (die genauen Mindest-/Maximalwerte hängen vom aktuellen Container ab,
+ * s. `FileBrowserPanel.tsx`/`SessionView.tsx`). */
 function isValidWidth(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0;
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value > 0 &&
+    value <= MAX_PLAUSIBLE_WIDTH
+  );
 }
 
 /** Liefert nur die Felder zurück, die tatsächlich gültig gespeichert sind

@@ -36,6 +36,17 @@ export function useDragResize(onDrag: (deltaX: number) => void, onDragEnd?: () =
   const onPointerMove = useCallback(
     (event: React.PointerEvent) => {
       if (!draggingRef.current) return;
+      // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts): ohne
+      // `buttons`-Prüfung würde ein Pointer-Cancel, den der Browser nicht
+      // als eigenes Event liefert (z. B. eine vom Betriebssystem
+      // abgebrochene Touch-Geste), unbemerkt bleiben — jede weitere
+      // Bewegung *über* dem Handle, auch ohne gedrückte Taste, hätte
+      // sonst weiter als Drag gezählt, bis irgendwann zufällig ein
+      // `pointerup` darauf landet.
+      if (event.buttons === 0) {
+        draggingRef.current = false;
+        return;
+      }
       const delta = event.clientX - lastXRef.current;
       if (delta === 0) return;
       lastXRef.current = event.clientX;
@@ -55,5 +66,16 @@ export function useDragResize(onDrag: (deltaX: number) => void, onDragEnd?: () =
     [onDragEnd],
   );
 
-  return { onPointerDown, onPointerMove, onPointerUp };
+  /// Spec-Reviewer-Fund: eine vom System abgebrochene Geste (Touch-Cancel,
+  /// eine OS-Geste, Verlust der Pointer-Capture) liefert nie ein
+  /// `pointerup` — ohne diesen Handler bliebe `draggingRef` hängen.
+  /// Bewusst OHNE `onDragEnd()`-Aufruf: eine abgebrochene Geste soll
+  /// nichts persistieren, nur das Ziehen sauber beenden.
+  const onPointerCancel = useCallback((event: React.PointerEvent) => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    (event.currentTarget as Element).releasePointerCapture(event.pointerId);
+  }, []);
+
+  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel };
 }

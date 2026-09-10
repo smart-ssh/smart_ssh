@@ -49,9 +49,16 @@ function triggerResize(width: number) {
   if (!lastResizeCallback || !lastResizeTarget) {
     throw new Error("kein ResizeObserver registriert");
   }
+  // Kein `new ResizeObserverMock(...)` als zweites Argument: dessen
+  // Konstruktor überschreibt `lastResizeCallback` als Seiteneffekt (s.
+  // oben) — ein zweiter `triggerResize`-Aufruf in demselben Test hätte
+  // damit den echten, registrierten Callback stillschweigend durch einen
+  // No-op ersetzt und wäre wirkungslos verpufft. Ein reiner Objekt-Cast
+  // reicht als zweites Argument, es wird von der Komponente ohnehin nicht
+  // ausgewertet.
   lastResizeCallback(
     [{ target: lastResizeTarget, contentRect: { width } } as ResizeObserverEntry],
-    new ResizeObserverMock(() => {}),
+    {} as ResizeObserver,
   );
 }
 
@@ -82,11 +89,16 @@ describe("SessionView AI/SSH split (Spec 0053, Teil 2)", () => {
   });
 
   it("uses the default width when nothing is persisted", async () => {
+    // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts): der
+    // Ausgangs-State ist bereits 420px, ohne die `toHaveBeenCalled`-
+    // Prüfung würde dieser Test auch dann noch grün sein, wenn
+    // `loadAiSshSplitWidthPx` nie aufgerufen würde.
     vi.mocked(loadAiSshSplitWidthPx).mockResolvedValue(null);
 
     renderSessionView();
 
-    await waitFor(() => expect(getRightPanel().style.width).toBe("420px"));
+    await waitFor(() => expect(loadAiSshSplitWidthPx).toHaveBeenCalled());
+    expect(getRightPanel().style.width).toBe("420px");
   });
 
   it("loads a persisted split width on mount", async () => {
@@ -110,7 +122,7 @@ describe("SessionView AI/SSH split (Spec 0053, Teil 2)", () => {
     });
 
     fireEvent.pointerDown(handle, { clientX: 500 });
-    fireEvent.pointerMove(handle, { clientX: 450 }); // 50px nach links -> +50 rechte Breite
+    fireEvent.pointerMove(handle, { clientX: 450, buttons: 1 }); // 50px nach links -> +50 rechte Breite
     expect(saveAiSshSplitWidthPx).not.toHaveBeenCalled();
     fireEvent.pointerUp(handle, { clientX: 450 });
 
@@ -131,7 +143,7 @@ describe("SessionView AI/SSH split (Spec 0053, Teil 2)", () => {
     });
 
     fireEvent.pointerDown(handle, { clientX: 500 });
-    fireEvent.pointerMove(handle, { clientX: 1200 }); // weit nach rechts
+    fireEvent.pointerMove(handle, { clientX: 1200, buttons: 1 }); // weit nach rechts
     fireEvent.pointerUp(handle, { clientX: 1200 });
 
     await waitFor(() => expect(getRightPanel().style.width).toBe("300px"));
@@ -146,6 +158,42 @@ describe("SessionView AI/SSH split (Spec 0053, Teil 2)", () => {
     triggerResize(500); // < LEFT_MIN (360) + RIGHT_MIN (300) + HANDLE (6)
 
     await waitFor(() => expect(getRightPanel().style.width).toBe("420px"));
+  });
+
+  it("does not lose the stored preference when dragging in a too-small window", async () => {
+    // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts): vorher wurde
+    // im "zu klein"-Regime `preferredRightWidth` selbst (nicht nur die
+    // Anzeige) auf den Default gesetzt UND persistiert — ein einziges
+    // Ruckeln am Divider in einem schmalen Fenster löschte damit eine
+    // gespeicherte Präferenz dauerhaft.
+    vi.mocked(loadAiSshSplitWidthPx).mockResolvedValue(900);
+
+    renderSessionView();
+    await waitFor(() => expect(getRightPanel().style.width).toBe("900px"));
+    triggerResize(500); // < LEFT_MIN (360) + RIGHT_MIN (300) + HANDLE (6)
+    await waitFor(() => expect(getRightPanel().style.width).toBe("420px"));
+
+    const handle = screen.getByLabelText("Bereichsaufteilung");
+    Object.defineProperty(handle.parentElement, "clientWidth", {
+      value: 500,
+      configurable: true,
+    });
+    fireEvent.pointerDown(handle, { clientX: 500 });
+    fireEvent.pointerMove(handle, { clientX: 480, buttons: 1 });
+    fireEvent.pointerUp(handle, { clientX: 480 });
+
+    // Die Geste selbst bewegte den Zeiger, `onDragEnd` feuert also (s.
+    // `useDragResize`s `movedRef`) — entscheidend ist, dass ein dabei
+    // ausgelöster Speichervorgang trotzdem die unveränderte 900px-
+    // Präferenz schreibt, nie einen im zu-kleinen-Regime verfälschten Wert.
+    if (vi.mocked(saveAiSshSplitWidthPx).mock.calls.length > 0) {
+      expect(saveAiSshSplitWidthPx).toHaveBeenCalledWith(900);
+    }
+
+    // Fenster wieder vergrößern -> die ursprüngliche 900px-Präferenz muss
+    // zurückkommen, nicht ein durch das Ruckeln veränderter Wert.
+    triggerResize(1400);
+    await waitFor(() => expect(getRightPanel().style.width).toBe("900px"));
   });
 
   it("existing panel switcher (Terminal/Dateien) still works", async () => {

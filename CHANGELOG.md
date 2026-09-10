@@ -9,6 +9,15 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+### Added
+- Dateimanager: Spaltenbreiten (Name, Größe, Rechte, Geändert) lassen sich
+  jetzt per Ziehen anpassen (Mindestbreiten, Name bleibt der flexible
+  Rest).
+- Die Aufteilung zwischen KI-Bereich und SSH-/SFTP-Bereich (Terminal/
+  Dateimanager) lässt sich per Ziehen am Trenner anpassen (Mindestgrößen
+  für beide Bereiche, Fallback auf die Standardaufteilung bei sehr kleinen
+  Fenstern). Beide Einstellungen überleben einen Neustart.
+
 ## [0.4.5] — 2026-09-09
 
 ### Fixed
