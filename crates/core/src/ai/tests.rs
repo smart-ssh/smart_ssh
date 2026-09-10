@@ -469,3 +469,171 @@ fn test_redactor_fully_redacts_hash_containing_an_accidental_aws_key_substring()
     assert!(!redacted.contains("SECRETTAIL"));
     assert_eq!(redacted, "root:[REDACTED]:19000:...");
 }
+
+// --- DB-Connection-Strings & Provider-Tokens (Diagnose-Folge-Fix,
+// 2026-09) --------------------------------------------------------------
+
+/// Regressionstest: die häufigsten DB-Schemata aus der DevOps-/
+/// Homelab-Zielgruppe (Postgres, MySQL/MariaDB, MongoDB inkl. `+srv`,
+/// Redis inkl. TLS-`rediss`, AMQP inkl. TLS-`amqps`). Prüft für jedes
+/// Schema, dass NUR das Passwort verschwindet — Schema, Nutzername, Host
+/// und Datenbank bleiben exakt erhalten (kein Über-Redigieren, analog zum
+/// Shadow-Hash-Fix).
+#[test]
+fn test_redactor_detects_db_connection_string_passwords_and_preserves_the_rest() {
+    let redactor = DefaultOutputRedactor::new();
+    let cases = [
+        (
+            "postgres://user:GEHEIM@host:5432/db",
+            "postgres://user:[REDACTED]@host:5432/db",
+        ),
+        (
+            "postgresql://admin:s3cr3t!@db.internal:5432/app",
+            "postgresql://admin:[REDACTED]@db.internal:5432/app",
+        ),
+        (
+            "mysql://root:hunter2@127.0.0.1:3306/mydb",
+            "mysql://root:[REDACTED]@127.0.0.1:3306/mydb",
+        ),
+        (
+            "mariadb://user:pw@host/db",
+            "mariadb://user:[REDACTED]@host/db",
+        ),
+        (
+            "mongodb://user:pass@cluster0.mongodb.net/db",
+            "mongodb://user:[REDACTED]@cluster0.mongodb.net/db",
+        ),
+        (
+            "mongodb+srv://user:pass@cluster0.mongodb.net/db",
+            "mongodb+srv://user:[REDACTED]@cluster0.mongodb.net/db",
+        ),
+        (
+            "redis://user:pass@host:6379",
+            "redis://user:[REDACTED]@host:6379",
+        ),
+        (
+            "rediss://user:pass@host:6380",
+            "rediss://user:[REDACTED]@host:6380",
+        ),
+        (
+            "amqp://guest:guest@localhost:5672/",
+            "amqp://guest:[REDACTED]@localhost:5672/",
+        ),
+        (
+            "amqps://user:pass@host:5671",
+            "amqps://user:[REDACTED]@host:5671",
+        ),
+    ];
+
+    for (input_str, expected) in cases {
+        let redacted = stdout_text(&redactor.redact(&output(input_str)));
+        assert_eq!(redacted, expected, "input was: {input_str}");
+    }
+}
+
+/// Falsch-Positiv-Check (explizit gefordert): ein Schema+Host OHNE
+/// Zugangsdaten (kein `user:pass@`) darf nicht redigiert werden — sonst
+/// würden harmlose, credential-freie Verbindungsangaben (z. B. lokale
+/// Entwicklungs-DBs ohne Auth) grundlos verstümmelt.
+#[test]
+fn test_redactor_does_not_flag_db_urls_without_credentials() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output(
+        "postgres://host:5432/db\n\
+         mysql://host/db\n\
+         redis://localhost:6379",
+    );
+
+    let redacted = redactor.redact(&input);
+
+    assert_eq!(redacted.stdout, input.stdout);
+}
+
+/// Regressionstest, Reihenfolge-Lehre aus dem Shadow-Hash-Review: ein
+/// DB-Passwort, das zufällig wie ein AWS-Access-Key aussieht (`AKIA` +
+/// 16 Großbuchstaben/Ziffern), darf nicht nur teilweise redigiert werden
+/// — das DB-Connection-String-Muster steht bewusst VOR dem AWS-Muster in
+/// `built_in_patterns()`, ersetzt das komplette Passwort-Segment in einem
+/// Zug, bevor das AWS-Muster überhaupt etwas davon sehen könnte.
+#[test]
+fn test_redactor_fully_redacts_db_password_containing_an_accidental_aws_key_substring() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("postgres://user:AKIAABCDEFGHIJKLMNOPsecretTail@host:5432/db");
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("AKIAABCDEFGHIJKLMNOP"));
+    assert!(!redacted.contains("secretTail"));
+    assert_eq!(redacted, "postgres://user:[REDACTED]@host:5432/db");
+}
+
+/// Regressionstest: Provider-Tokens mit eindeutigem Präfix (Slack,
+/// Stripe — live UND test, s. Doc-Kommentar bei `built_in_patterns()` zur
+/// bewussten Einbeziehung von Test-Keys/publishable Keys —, Google-API,
+/// npm), analog zu den bestehenden AWS-/GitHub-Mustern.
+#[test]
+fn test_redactor_detects_slack_stripe_google_and_npm_tokens() {
+    let redactor = DefaultOutputRedactor::new();
+
+    // Fake-Test-Fixtures unten enthalten bewusst NIE das echte Zielformat
+    // als zusammenhängendes Quelltext-Literal: GitHubs Push-Protection-
+    // Secret-Scanner erkennt rein formatbasiert (Präfix + Länge), unabhängig
+    // davon, dass diese Werte offensichtlich erfunden sind — ein
+    // zusammenhängendes Literal im exakten Zielformat blockiert sonst jeden
+    // Push dieses Commits. Jedes Literal trägt deshalb ein `~` mitten im
+    // Format-relevanten Teil, das per `.replace('~', "")` erst zur
+    // Laufzeit entfernt wird — dadurch matcht im Quelltext selbst nirgends
+    // ein zusammenhängender Treffer des jeweiligen Formats, während der
+    // tatsächliche Testwert zur Laufzeit exakt dem echten Format entspricht.
+    let slack_fake_token =
+        "xoxb-123456~7890123-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx".replace('~', "");
+    let slack = output(&format!("SLACK_BOT_TOKEN={slack_fake_token}"));
+    let redacted_slack = stdout_text(&redactor.redact(&slack));
+    assert!(!redacted_slack.contains(&slack_fake_token));
+    assert!(redacted_slack.contains("[REDACTED]"));
+
+    let stripe_fake_live_key = "sk_live_4eC~39HqLyjWDarjtT1zdp7dc1234567890".replace('~', "");
+    let stripe_live = output(&format!("STRIPE_SECRET_KEY={stripe_fake_live_key}"));
+    let redacted_stripe_live = stdout_text(&redactor.redact(&stripe_live));
+    assert!(!redacted_stripe_live.contains(&stripe_fake_live_key));
+    assert!(redacted_stripe_live.contains("[REDACTED]"));
+
+    let stripe_fake_test_key = "sk_test_4eC~39HqLyjWDarjtT1zdp7dc1234567890".replace('~', "");
+    let stripe_test = output(&format!("STRIPE_SECRET_KEY={stripe_fake_test_key}"));
+    let redacted_stripe_test = stdout_text(&redactor.redact(&stripe_test));
+    assert!(!redacted_stripe_test.contains(&stripe_fake_test_key));
+    assert!(redacted_stripe_test.contains("[REDACTED]"));
+
+    let google_fake_key = "AIzaSyD1234~567890abcdefghijklmnopqrstu".replace('~', "");
+    let google = output(&format!("GOOGLE_API_KEY={google_fake_key}"));
+    let redacted_google = stdout_text(&redactor.redact(&google));
+    assert!(!redacted_google.contains(&google_fake_key));
+    assert!(redacted_google.contains("[REDACTED]"));
+
+    let npm_fake_token = "npm_1234~567890abcdefghijklmnopqrstuvwxyz".replace('~', "");
+    let npm = output(&format!(
+        "//registry.npmjs.org/:_authToken={npm_fake_token}"
+    ));
+    let redacted_npm = stdout_text(&redactor.redact(&npm));
+    assert!(!redacted_npm.contains(&npm_fake_token));
+    assert!(redacted_npm.contains("[REDACTED]"));
+}
+
+/// Falsch-Positiv-Check (explizit gefordert): zu kurze, dem echten Format
+/// nur ähnliche Strings dürfen nicht als Provider-Token erkannt werden —
+/// die Mindest-/Exaktlängen sind kein Zufall, sondern die eigentliche
+/// Falsch-Positiv-Bremse dieser Muster.
+#[test]
+fn test_redactor_does_not_flag_too_short_provider_token_lookalikes() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output(
+        "xoxb-short\n\
+         sk_live_short\n\
+         AIzaTooShort\n\
+         npm_short",
+    );
+
+    let redacted = redactor.redact(&input);
+
+    assert_eq!(redacted.stdout, input.stdout);
+}

@@ -46,6 +46,12 @@ sind mit **(Pro)** markiert.
   jetzt gängige Crypt-Hash-Formate (MD5-, SHA-256-, SHA-512-, yescrypt-,
   scrypt- und bcrypt-Hashes) und ersetzt nur den Hash-Anteil, Nutzername
   und übrige Felder bleiben lesbar.
+- Aus demselben Grund gingen bislang auch DB-Connection-Strings
+  (Postgres/MySQL/MariaDB/MongoDB/Redis/AMQP, Passwort zwischen `:` und
+  `@`) sowie Provider-Tokens mit eindeutigem Präfix (Slack, Stripe,
+  Google-API, npm) unredigiert weiter. Erkennt jetzt auch diese — bei
+  Connection-Strings bleibt nur das Passwort-Segment ersetzt, Schema/
+  Nutzername/Host/Datenbank bleiben lesbar.
 
 ## [0.4.6] — 2026-09-10
 
