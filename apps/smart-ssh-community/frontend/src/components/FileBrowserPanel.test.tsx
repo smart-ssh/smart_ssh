@@ -211,3 +211,56 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
     await waitFor(() => expect(sftpList).toHaveBeenCalledWith("session-1", "logs"));
   });
 });
+
+describe("FileBrowserPanel row action menu (Spec 0054, Teil 0 — Bug-Fix)", () => {
+  // Regressionstest für den Drei-Punkte-Menü-Bug: der dokumentweite
+  // "Klick-außerhalb-schließt-das-Menü"-Effekt hängte einen rohen
+  // `document`-Click-Listener ein, der bei jedem weiteren Klick den
+  // aktuellen `menuFor`-State auf `null` überschrieb — auch wenn dieser
+  // Klick eigentlich das Menü eines ANDEREN Eintrags öffnen sollte. Vor dem
+  // Fix (`stopPropagation` im Trigger-Button) blieb das zweite Menü also
+  // geschlossen statt sich zu öffnen; das wurde manuell gegen den
+  // unfixierten Stand verifiziert (Test schlägt ohne `stopPropagation` fehl).
+  const entryA: RemoteEntryDto = { ...entry, name: "a.txt", path: "a.txt" };
+  const entryB: RemoteEntryDto = { ...entry, name: "b.txt", path: "b.txt" };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("switches the open menu to a different row instead of closing both", async () => {
+    vi.mocked(sftpList).mockResolvedValue([entryA, entryB]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+
+    const triggers = screen.getAllByRole("button", { name: "⋮" });
+    expect(triggers).toHaveLength(2);
+
+    fireEvent.click(triggers[0]);
+    expect(screen.getAllByText("Löschen")).toHaveLength(1);
+
+    fireEvent.click(triggers[1]);
+    // Vor dem Fix: beide setMenuFor-Aufrufe (onClick von B, dann der
+    // dokumentweite Listener aus dem Effekt für A) liefen im selben
+    // Klick-Batch, der zweite (unbedingt `null`) gewann — kein Menü blieb
+    // offen. Nach dem Fix bleibt genau ein Menü offen: das von B.
+    expect(screen.getAllByText("Löschen")).toHaveLength(1);
+  });
+
+  it("still closes the menu on a genuine click outside", async () => {
+    vi.mocked(sftpList).mockResolvedValue([entryA, entryB]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+
+    const triggers = screen.getAllByRole("button", { name: "⋮" });
+    fireEvent.click(triggers[0]);
+    expect(screen.getAllByText("Löschen")).toHaveLength(1);
+
+    fireEvent.click(document.body);
+    expect(screen.queryAllByText("Löschen")).toHaveLength(0);
+  });
+});

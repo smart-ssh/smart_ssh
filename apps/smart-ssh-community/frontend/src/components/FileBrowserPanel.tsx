@@ -484,7 +484,31 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
                   <td className="relative px-2 py-1 text-right">
                     <button
                       type="button"
-                      onClick={() => setMenuFor(menuFor === entry.path ? null : entry.path)}
+                      onClick={(e) => {
+                        // Bug-Fix (Spec 0054, Teil 0): das "Klick-außerhalb
+                        // schließt das Menü"-Effekt weiter unten hängt einen
+                        // rohen `document.addEventListener("click", ...)`
+                        // ein, der bei JEDEM Klick unbedingt `setMenuFor(null)`
+                        // aufruft. Ohne `stopPropagation` hier lief dieser
+                        // Klick nach dem synthetischen `onClick` (das den
+                        // State auf den NEUEN Eintrag setzt) noch nativ bis
+                        // zu `document` weiter und traf dort den ALTEN,
+                        // noch nicht abgeräumten Listener (Cleanup des
+                        // vorherigen Effekt-Laufs passiert erst nach dem
+                        // Commit, also nach diesem Klick) — dessen
+                        // `setMenuFor(null)` überschrieb den gerade gesetzten
+                        // Wert innerhalb desselben Batches. Effekt: das Menü
+                        // eines anderen Eintrags ließ sich nie öffnen, ein
+                        // bereits offenes Menü verschwand bei jedem weiteren
+                        // Drei-Punkte-Klick sofort wieder, statt zu wechseln.
+                        // `stopPropagation` verhindert, dass dieser Klick den
+                        // dokumentweiten Listener überhaupt erreicht (React
+                        // ruft dabei auch `nativeEvent.stopPropagation()`
+                        // auf) — ein echtes Klicken außerhalb von Button und
+                        // Menü ist davon unberührt und schließt weiterhin.
+                        e.stopPropagation();
+                        setMenuFor(menuFor === entry.path ? null : entry.path);
+                      }}
                       className="px-1.5 text-slate-400 hover:text-slate-100"
                     >
                       ⋮
