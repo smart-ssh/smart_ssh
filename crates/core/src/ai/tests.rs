@@ -324,3 +324,88 @@ fn test_redactor_detects_github_fine_grained_token() {
     assert!(!redacted.contains("11ABCDEFG0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP"));
     assert!(redacted.contains("[REDACTED]"));
 }
+
+// --- Unix-Crypt-/Shadow-Passwort-Hashes (Diagnose-Bericht "unredigierte
+// /etc/shadow-Hashes über den MCP-Pfad", 2026-09) ------------------------
+
+/// Regressionstest für den Kernbefund: ein `/etc/shadow`-Zeile mit einem
+/// SHA-512-Crypt-Hash (`$6$...`) wurde bislang komplett unredigiert
+/// durchgelassen, weil keines der bisherigen Muster auf `keyword=wert`-
+/// oder PEM-Block-Syntax verzichtbare Shadow-Zeilen passt. Prüft
+/// zusätzlich, dass NUR der Hash-Teil verschwindet — Username und die
+/// Aging-Felder (lastchg/min/max/warn/inactive/expire) bleiben lesbar,
+/// wie von der Diagnose ausdrücklich gefordert ("kein Über-Redigieren").
+#[test]
+fn test_redactor_detects_shadow_line_sha512_crypt_hash_and_preserves_surrounding_fields() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output(
+        "root:$6$abcSaltSalt$AzWmGvzQTBbTLYo3lQfDMXf7v2fJDqVvOTBbTLYo3lQfDMXf7v2fJDqVvOTBbTLYo3lQfDMXf7v2:19000:0:99999:7:::",
+    );
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted
+        .contains("AzWmGvzQTBbTLYo3lQfDMXf7v2fJDqVvOTBbTLYo3lQfDMXf7v2fJDqVvOTBbTLYo3lQfDMXf7v2"));
+    assert_eq!(redacted, "root:[REDACTED]:19000:0:99999:7:::");
+}
+
+/// Regressionstest: ein Crypt-Hash AUSSERHALB einer `/etc/shadow`-Zeile
+/// (z. B. in einer Config oder einem Skript, das einen vorgegebenen
+/// Passwort-Hash setzt) muss ebenso erkannt werden — das Muster ist nicht
+/// an die Shadow-Zeilenstruktur gebunden, sondern an die Hash-Syntax
+/// selbst.
+#[test]
+fn test_redactor_detects_crypt_hash_outside_shadow_line() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("useradd -p '$1$O3JMY.Tw$AdLnLjQx5jXF9MzYUlWO0' deploy");
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("AdLnLjQx5jXF9MzYUlWO0"));
+    assert!(redacted.contains("[REDACTED]"));
+}
+
+/// Deckt die übrigen in der Diagnose genannten Crypt-Tag-Familien ab:
+/// SHA-256 mit explizitem `rounds=N`-Parameter, bcrypt (`$2b$`, fixe
+/// Kostenstufe + kombinierter Salt/Hash-Block) und yescrypt (`$y$`,
+/// variabler Parameter-Block).
+#[test]
+fn test_redactor_detects_sha256_bcrypt_and_yescrypt_hashes() {
+    let redactor = DefaultOutputRedactor::new();
+
+    let sha256 = output("$5$rounds=5000$saltsaltsalt$1234567890abcdefghijklmnopqrstuvwxyzABCDEFGH");
+    let redacted_sha256 = stdout_text(&redactor.redact(&sha256));
+    assert!(!redacted_sha256.contains("1234567890abcdefghijklmnopqrstuvwxyzABCDEFGH"));
+    assert!(redacted_sha256.contains("[REDACTED]"));
+
+    let bcrypt = output("$2b$12$eImiTXuWVxfM37uY4JANjQZ4Grv2mHewkQwmzCJk5tHqDNMV6ANyG");
+    let redacted_bcrypt = stdout_text(&redactor.redact(&bcrypt));
+    assert!(!redacted_bcrypt.contains("eImiTXuWVxfM37uY4JANjQZ4Grv2mHewkQwmzCJk5tHqDNMV6ANyG"));
+    assert!(redacted_bcrypt.contains("[REDACTED]"));
+
+    let yescrypt = output("$y$j9T$saltsaltsaltsalt$hashhashhashhashhashhashhashhash");
+    let redacted_yescrypt = stdout_text(&redactor.redact(&yescrypt));
+    assert!(!redacted_yescrypt.contains("hashhashhashhashhashhashhashhash"));
+    assert!(redacted_yescrypt.contains("[REDACTED]"));
+}
+
+/// Falsch-Positiv-Check (Diagnose-Bericht, Verifikationsabschnitt): Git-
+/// Commit-Hashes, UUIDs und kurze Hex-Strings enthalten kein
+/// `$<id>$`-Muster und dürfen nicht redigiert werden. Eine normale
+/// `/etc/passwd`-Zeile (`user:x:1000:...`, Hash liegt in `/etc/shadow`,
+/// hier nur der Platzhalter `x`) darf ebenfalls unangetastet bleiben —
+/// genau das von der Diagnose verlangte "kein Über-Redigieren".
+#[test]
+fn test_redactor_does_not_flag_commit_hashes_uuids_or_passwd_placeholder_lines() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output(
+        "a1b2c3d4e5f67890abcd1234ef567890abcd1234\n\
+         550e8400-e29b-41d4-a716-446655440000\n\
+         deadbeef\n\
+         user:x:1000:1000:User:/home/user:/bin/bash",
+    );
+
+    let redacted = redactor.redact(&input);
+
+    assert_eq!(redacted.stdout, input.stdout);
+}

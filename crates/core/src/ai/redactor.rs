@@ -21,7 +21,9 @@ const REDACTED_PLACEHOLDER: &str = "[REDACTED]";
 
 /// Default-Implementierung (Spec 0006, Abschnitt 5): erkennt
 /// Private-Key-Blöcke, `password=`/`token=`/`api_key=`-artige Zeilen
-/// (Groß-/Kleinschreibung ignoriert) und AWS-Access-Key-Muster.
+/// (Groß-/Kleinschreibung ignoriert), AWS-/GitHub-Zugangsdaten-Muster und
+/// Unix-Crypt-/Shadow-Passwort-Hashes (`$1$`/`$5$`/`$6$`/`$y$`/`$2b$`/`$7$`
+/// & verwandte Varianten, s. `built_in_patterns()`).
 ///
 /// Um "leicht um nutzerdefinierte Muster erweiterbar" zu sein (Aufgabe
 /// Teil 1, Punkt 2 — die Speicherung dieser Muster ist explizit noch nicht
@@ -113,6 +115,48 @@ fn built_in_patterns() -> Vec<Regex> {
             .expect("eingebautes GitHub-Token-Muster ist gültig"),
         Regex::new(r"github_pat_[A-Za-z0-9_]{20,}")
             .expect("eingebautes GitHub-Fine-Grained-Token-Muster ist gültig"),
+        // Unix-Crypt-/Shadow-Passwort-Hashes (Diagnose-Bericht "unredigierte
+        // /etc/shadow-Hashes über den MCP-Pfad", 2026-09): ein `/etc/shadow`
+        // -bestätigter MCP-Testlauf ("cat /etc/shadow" nach korrekt
+        // ausgelöster Confirm-Bestätigung durch die Filter-Engine) zeigte,
+        // dass Passwort-Hashes wie `root:$6$salt$hash:19000:...` unredigiert
+        // an den KI-Anbieter/MCP-Client gingen — keines der obigen Muster
+        // greift, da eine Shadow-Zeile keines der Schlüsselwörter
+        // `password`/`token`/`secret`/... enthält. Deckt die glibc-`crypt()`
+        // -Tag-Familie ab: `$1$` (MD5), `$5$` (SHA-256), `$6$` (SHA-512),
+        // `$y$`/`$gy$` (yescrypt), `$2a$`/`$2b$`/`$2x$`/`$2y$` (bcrypt,
+        // inkl. der "2x"-Buggy-Variante), `$7$` (scrypt).
+        //
+        // Struktur: nach `$<id>$` folgt IMMER mindestens ein weiteres
+        // `$`-getrenntes Segment (Salt bzw. bei bcrypt die kombinierte
+        // Salt+Hash-Zeichenkette), bei den Varianten mit einem expliziten
+        // Parameter-Segment (`rounds=N` bei sha256/sha512, die
+        // Kostenstufe bei yescrypt/scrypt) zwei weitere Segmente
+        // (Parameter, dann Salt, dann Hash) — `(?:\$...){1,2}` deckt
+        // beide Formen ab, ohne pro Algorithmus ein eigenes Muster zu
+        // brauchen. Die crypt-Base64-Zeichenklasse (`./0-9A-Za-z` plus `=`
+        // für `rounds=N`) enthält bewusst KEIN `:` — dadurch matcht dieses
+        // Muster in einer `/etc/shadow`-Zeile
+        // (`user:$6$salt$hash:lastchg:min:max:...`) von selbst nur den
+        // Hash-Teil, nie das Feld-Trennzeichen oder die
+        // Aging-/Username-Felder drumherum (kein Über-Redigieren, s.
+        // Diagnose-Bericht Teil 1 Punkt 2/"Falsch-Positiv-Vorsicht").
+        //
+        // Bewusst KEIN eigenes `/etc/passwd`-spezifisches Muster nötig
+        // (Diagnose-Bericht Teil 1 Punkt 3): eine normale Zeile wie
+        // `user:x:1000:1000:...` enthält gar kein `$id$`-Muster und bleibt
+        // unangetastet; taucht dort ausnahmsweise doch ein echter,
+        // moderner Crypt-Hash auf (uralte Systeme ohne Shadow-Datei),
+        // greift exakt dasselbe Muster, weil die Zeichenkette unabhängig
+        // von der Datei identisch aussieht. Das noch ältere,
+        // nicht-`$`-präfixierte DES-Crypt-Format (13 Zeichen, kein
+        // erkennbares Trennzeichen) wird bewusst NICHT erfasst — ein
+        // Muster dafür hätte praktisch keine Anker außer "13 beliebige
+        // Zeichen aus einem 64er-Alphabet" und würde reihenweise harmlose
+        // kurze Tokens/IDs fälschlich redigieren; DES-Crypt ist zudem seit
+        // Jahrzehnten kein Standard-Ausgabeformat mehr.
+        Regex::new(r"\$(?:1|5|6|7|y|gy|2[abxy])\$[A-Za-z0-9./=]{1,64}(?:\$[A-Za-z0-9./=]{1,150}){1,2}")
+            .expect("eingebautes Unix-Crypt-Hash-Muster ist gültig"),
     ]
 }
 
