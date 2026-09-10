@@ -5,7 +5,16 @@
 // Zeilenzahl beider Texte) — für die hier realistische Textlänge (kurze
 // Notizen, keine großen Dateien) unproblematisch in Laufzeit/Speicher.
 
-export type DiffLine = { type: "unchanged" | "added" | "removed"; text: string };
+/** `lineNumber` ist die 1-basierte Zeilennummer in dem Text, aus dem die
+ * Zeile stammt: für `removed`/`unchanged` die Nummer in `before`, für
+ * `added` die Nummer in `after` (klassische Diff-Konvention — eine
+ * entfernte Zeile hat keine sinnvolle Position im neuen Text, umgekehrt
+ * für eine hinzugefügte). */
+export type DiffLine = {
+  type: "unchanged" | "added" | "removed";
+  text: string;
+  lineNumber: number;
+};
 
 /** Spec 0046, Fund 3: derselbe 256-KB-Cap wie der Lesepfad
  * (`orchestration::MAX_READ_FILE_BYTES`) — deckt den Fall ab, dass eine
@@ -78,28 +87,31 @@ export function diffLines(before: string, after: string): DiffLine[] {
     }
   }
 
+  // `i`/`j` sind bereits die 0-basierten Indizes in `a`/`b` — `i + 1`/
+  // `j + 1` beim jeweiligen `push` ist also direkt die 1-basierte
+  // Zeilennummer der gerade verarbeiteten Zeile in ihrem Ursprungstext.
   const result: DiffLine[] = [];
   let i = 0;
   let j = 0;
   while (i < a.length && j < b.length) {
     if (a[i] === b[j]) {
-      result.push({ type: "unchanged", text: a[i] });
+      result.push({ type: "unchanged", text: a[i], lineNumber: i + 1 });
       i++;
       j++;
     } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
-      result.push({ type: "removed", text: a[i] });
+      result.push({ type: "removed", text: a[i], lineNumber: i + 1 });
       i++;
     } else {
-      result.push({ type: "added", text: b[j] });
+      result.push({ type: "added", text: b[j], lineNumber: j + 1 });
       j++;
     }
   }
   while (i < a.length) {
-    result.push({ type: "removed", text: a[i] });
+    result.push({ type: "removed", text: a[i], lineNumber: i + 1 });
     i++;
   }
   while (j < b.length) {
-    result.push({ type: "added", text: b[j] });
+    result.push({ type: "added", text: b[j], lineNumber: j + 1 });
     j++;
   }
   return result;

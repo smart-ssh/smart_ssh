@@ -41,6 +41,9 @@ sind mit **(Pro)** markiert.
   einer Warnung, falls sich die Datei auf dem Server seit dem Download
   ebenfalls geändert hat. Die Bearbeitungskopie wird beim Beenden der
   Bearbeitung bzw. spätestens beim Trennen der Verbindung aufgeräumt.
+- Datei-Diff-Vorschauen (Notiz-/Dateischreibvorgänge, Datei-Überschreiben
+  beim Hochladen) zeigen jetzt die Zeilennummer vor jeder hinzugefügten
+  oder entfernten Zeile.
 
 ### Fixed
 - Dateimanager: das Drei-Punkte-Menü an einem Eintrag ließ sich oft nicht

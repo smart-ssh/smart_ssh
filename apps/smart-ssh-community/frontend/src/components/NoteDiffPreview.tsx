@@ -49,14 +49,17 @@ export function NoteDiffPreview({
       {lines.map((line, i) => (
         <div
           key={i}
-          className={
+          className={`flex ${
             line.type === "added"
               ? "text-emerald-400"
               : "text-red-400 line-through decoration-red-500/60"
-          }
+          }`}
         >
+          <span className="mr-2 w-8 shrink-0 select-none text-right opacity-50">
+            {line.lineNumber}
+          </span>
           <span className="select-none opacity-70">{line.type === "added" ? "+ " : "− "}</span>
-          {line.text || " "}
+          <span>{line.text || " "}</span>
         </div>
       ))}
     </div>

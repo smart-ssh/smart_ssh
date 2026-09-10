@@ -14,45 +14,57 @@ describe("diffLines", () => {
   it("markiert identische Texte vollständig als unverändert", () => {
     const result = diffLines("a\nb\nc", "a\nb\nc");
     expect(result).toEqual([
-      { type: "unchanged", text: "a" },
-      { type: "unchanged", text: "b" },
-      { type: "unchanged", text: "c" },
+      { type: "unchanged", text: "a", lineNumber: 1 },
+      { type: "unchanged", text: "b", lineNumber: 2 },
+      { type: "unchanged", text: "c", lineNumber: 3 },
     ]);
   });
 
   it("erkennt eine reine Ergänzung als added-Zeile", () => {
     const result = diffLines("a\nb", "a\nb\nc");
     expect(result).toEqual([
-      { type: "unchanged", text: "a" },
-      { type: "unchanged", text: "b" },
-      { type: "added", text: "c" },
+      { type: "unchanged", text: "a", lineNumber: 1 },
+      { type: "unchanged", text: "b", lineNumber: 2 },
+      { type: "added", text: "c", lineNumber: 3 },
     ]);
   });
 
   it("erkennt eine reine Entfernung als removed-Zeile", () => {
     const result = diffLines("a\nb\nc", "a\nc");
     expect(result).toEqual([
-      { type: "unchanged", text: "a" },
-      { type: "removed", text: "b" },
-      { type: "unchanged", text: "c" },
+      { type: "unchanged", text: "a", lineNumber: 1 },
+      { type: "removed", text: "b", lineNumber: 2 },
+      { type: "unchanged", text: "c", lineNumber: 3 },
     ]);
   });
 
   it("behandelt einen leeren Ausgangstext als reine Ergänzung", () => {
     const result = diffLines("", "neu");
-    expect(result).toEqual([{ type: "added", text: "neu" }]);
+    expect(result).toEqual([{ type: "added", text: "neu", lineNumber: 1 }]);
+  });
+
+  it("zählt die Zeilennummer im jeweiligen Ursprungstext (alt für removed, neu für added)", () => {
+    // "b" ist Zeile 2 in `before`, das neue "x" ist Zeile 2 in `after` —
+    // beide "Zeile 2", aber aus unterschiedlichen Texten.
+    const result = diffLines("a\nb\nc", "a\nx\nc");
+    expect(result).toEqual([
+      { type: "unchanged", text: "a", lineNumber: 1 },
+      { type: "removed", text: "b", lineNumber: 2 },
+      { type: "added", text: "x", lineNumber: 2 },
+      { type: "unchanged", text: "c", lineNumber: 3 },
+    ]);
   });
 });
 
 describe("shortNoteDiff", () => {
   it("lässt unveränderte Zeilen weg (kurze Vorschau)", () => {
     const result = shortNoteDiff("a\nb\nc", "a\nb\nc\nd");
-    expect(result).toEqual([{ type: "added", text: "d" }]);
+    expect(result).toEqual([{ type: "added", text: "d", lineNumber: 4 }]);
   });
 
   it("behandelt null (keine Zielauflösung) wie einen leeren Ausgangstext", () => {
     const result = shortNoteDiff(null, "erste Notiz");
-    expect(result).toEqual([{ type: "added", text: "erste Notiz" }]);
+    expect(result).toEqual([{ type: "added", text: "erste Notiz", lineNumber: 1 }]);
   });
 });
 

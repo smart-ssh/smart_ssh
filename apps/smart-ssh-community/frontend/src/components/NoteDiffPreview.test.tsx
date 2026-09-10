@@ -24,6 +24,16 @@ describe("NoteDiffPreview size cap (Spec 0046, Fund 3)", () => {
     expect(screen.queryByText(/zu groß|too large/i)).toBeNull();
   });
 
+  it("shows the line number next to each added/removed line", () => {
+    // "d" ersetzt "c" auf derselben Zeile 3 — im alten Text die Zeilennummer
+    // der entfernten Zeile, im neuen Text die der hinzugefügten.
+    renderPreview("a\nb\nc", "a\nb\nd");
+
+    expect(screen.getByText("d").previousSibling?.textContent).toBe("+ ");
+    expect(screen.getByText("d").closest("div")?.textContent).toContain("3");
+    expect(screen.getByText("c").closest("div")?.textContent).toContain("3");
+  });
+
   it("skips the line diff and shows a size hint when the new content exceeds the cap", () => {
     const oversized = "x".repeat(MAX_DIFF_INPUT_BYTES + 1);
     renderPreview("short before", oversized);
