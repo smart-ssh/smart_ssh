@@ -27,6 +27,7 @@ import {
 import { displayPath, joinPath, localBaseName, parentPath } from "../remotePath";
 import type { DeletePreviewDto, LocalFilePreviewDto, RemoteEntryDto } from "../types";
 import { useDragResize } from "../useDragResize";
+import { useLocalEditSession, type UploadOffer } from "../useLocalEditSession";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 
 /** Spec 0053, Teil 1: Standard-/Mindestbreiten der verstellbaren Spalten
@@ -129,6 +130,10 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const [dragOver, setDragOver] = useState(false);
   const [columnWidths, setColumnWidths] = useState<FileManagerColumnWidths>(DEFAULT_COLUMN_WIDTHS);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  // Spec 0054, Teil 4: "Lokal öffnen -> bearbeiten -> Upload anbieten".
+  const localEdit = useLocalEditSession(sessionId);
+  const [editUploadOffer, setEditUploadOffer] = useState<UploadOffer | null>(null);
 
   // Spec 0053, Teil 1: einmalig beim Mounten geladen (diese Komponente lebt
   // pro Tab, s. Doc-Kommentar oben) — ungültige/fehlende Felder bleiben
@@ -400,6 +405,30 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const handleRefresh = () => {
     setOpenMenu(null);
     load(path);
+  };
+
+  /** Spec 0054, Teil 4, Punkt 1/2: Download in den Editier-Temp-Ordner +
+   * Öffnen mit dem konfigurierten (oder OS-Standard-)Programm. Fehler
+   * (Download gescheitert, Programm nicht gefunden) landen in der
+   * bestehenden `error`-Anzeige — der Hook selbst zeigt keine UI. */
+  const handleOpenLocally = (entry: RemoteEntryDto) => {
+    setOpenMenu(null);
+    localEdit.startEditing(entry).catch((err) => setError(commandErrorMessage(err)));
+  };
+
+  /** Spec 0054, Teil 4, Punkt 5: baut die Diff-/Konflikt-Daten und öffnet
+   * den Bestätigungsdialog — der eigentliche Upload passiert erst nach
+   * Bestätigung in `handleConfirmEditUpload`. */
+  const handleOfferEditUpload = () => {
+    localEdit
+      .buildUploadOffer()
+      .then((offer) => setEditUploadOffer(offer))
+      .catch((err) => setError(commandErrorMessage(err)));
+  };
+
+  const handleConfirmEditUpload = () => {
+    setEditUploadOffer(null);
+    localEdit.confirmUpload().then(() => load(path));
   };
 
   // Spec 0054, Teil 3: "Löschen ... bei Ordnern mit Hinweis auf rekursives
@@ -771,6 +800,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
                       <FileEntryMenu
                         entry={entry}
                         className="absolute right-2 top-full z-10"
+                        onOpenLocally={handleOpenLocally}
                         onDownloadDefault={handleDownloadDefault}
                         onDownloadChoose={handleDownloadChoose}
                         onCopyContent={handleCopyContent}
@@ -813,6 +843,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
           entry={openMenu.entry}
           className="fixed z-20"
           style={{ left: openMenu.anchor.x, top: openMenu.anchor.y }}
+          onOpenLocally={handleOpenLocally}
           onDownloadDefault={handleDownloadDefault}
           onDownloadChoose={handleDownloadChoose}
           onCopyContent={handleCopyContent}
@@ -835,6 +866,98 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
       {toast && (
         <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 shadow-lg">
           {toast}
+        </div>
+      )}
+
+      {/* Spec 0054, Teil 4: Statusleiste für den "Lokal öffnen"-Flow —
+          zeigt an, solange eine Bearbeitung aktiv ist (`editing`), bietet
+          bei einer erkannten lokalen Änderung (`changed`) den Upload an,
+          und macht das "Bearbeitung beenden" jederzeit erreichbar (Spec:
+          "Watcher stoppt, wenn der Nutzer den Flow beendet"). */}
+      {localEdit.session && (
+        <div className="flex items-center gap-2 border-t border-indigo-700/50 bg-indigo-950/40 px-2 py-1.5 text-xs">
+          {localEdit.session.status === "uploading" ? (
+            <span className="text-slate-300">
+              „{localEdit.session.entry.name}" wird hochgeladen…
+            </span>
+          ) : localEdit.session.status === "changed" ? (
+            <>
+              <span className="flex-1 text-amber-300">
+                „{localEdit.session.entry.name}" wurde lokal geändert. Auf den Server hochladen?
+              </span>
+              <button
+                type="button"
+                onClick={handleOfferEditUpload}
+                className="font-heading border border-indigo-600/50 px-2 py-1 text-xs font-semibold text-indigo-300 hover:bg-indigo-600/14"
+              >
+                Hochladen
+              </button>
+              <button
+                type="button"
+                onClick={localEdit.dismissChange}
+                className="border border-slate-700 px-2 py-1 text-slate-400 hover:bg-slate-800"
+              >
+                Später
+              </button>
+            </>
+          ) : (
+            <span className="flex-1 text-slate-300">
+              „{localEdit.session.entry.name}" wird lokal bearbeitet…
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={localEdit.endSession}
+            className="border border-slate-700 px-2 py-1 text-slate-400 hover:bg-slate-800"
+          >
+            Bearbeitung beenden
+          </button>
+          {localEdit.session.error && (
+            <span className="w-full text-red-300">{localEdit.session.error}</span>
+          )}
+        </div>
+      )}
+
+      {editUploadOffer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
+            <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
+              Lokale Änderungen hochladen?
+            </h2>
+            {editUploadOffer.remoteChangedSinceDownload && (
+              <p className="mb-3 border border-red-700/50 bg-red-950/40 px-2 py-1.5 text-xs text-red-300">
+                Die Remote-Datei wurde seit dem Download verändert — ein Hochladen würde diese
+                andere Änderung überschreiben.
+              </p>
+            )}
+            {editUploadOffer.localText !== null && editUploadOffer.remoteText !== null ? (
+              <NoteDiffPreview
+                previousContent={editUploadOffer.remoteText}
+                newContent={editUploadOffer.localText}
+              />
+            ) : (
+              <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
+                Kein Text-Diff möglich (Binärdatei oder zu groß). Neue Größe:{" "}
+                {formatBytes(editUploadOffer.localSize)}.
+              </p>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditUploadOffer(null)}
+                className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmEditUpload}
+                className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
+              >
+                Hochladen
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -997,6 +1120,7 @@ function FileEntryMenu({
   entry,
   className,
   style,
+  onOpenLocally,
   onDownloadDefault,
   onDownloadChoose,
   onCopyContent,
@@ -1011,6 +1135,7 @@ function FileEntryMenu({
   entry: RemoteEntryDto;
   className: string;
   style?: CSSProperties;
+  onOpenLocally: (entry: RemoteEntryDto) => void;
   onDownloadDefault: (entry: RemoteEntryDto) => void;
   onDownloadChoose: (entry: RemoteEntryDto) => void;
   onCopyContent: (entry: RemoteEntryDto) => void;
@@ -1037,6 +1162,11 @@ function FileEntryMenu({
       {!entry.isDir && (
         <button type="button" onClick={() => onCopyContent(entry)} className={itemClass}>
           Dateiinhalt kopieren
+        </button>
+      )}
+      {!entry.isDir && (
+        <button type="button" onClick={() => onOpenLocally(entry)} className={itemClass}>
+          Lokal öffnen…
         </button>
       )}
       <button type="button" onClick={() => onCopyPath(entry)} className={itemClass}>

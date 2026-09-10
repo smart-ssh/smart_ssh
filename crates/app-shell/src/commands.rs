@@ -34,9 +34,9 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{
     credential_ref_for, sort_remote_entries, ActionUserDecision, AiProviderConfigDto,
     AiProviderConfigInput, AppInfoDto, DeleteGroupResult, DeleteServerResult, DocumentFormat,
-    EvalContextInput, EvaluationTraceDto, GroupDto, HostKeyUserDecision, NoteRevisionDto,
-    PatternDto, PatternSuggestionDto, PatternType, RemoteEntryDto, RuleDto, RuleInput, ServerDto,
-    ServerInput, SessionSummaryDto, TestConnectionResult,
+    EditSessionDto, EvalContextInput, EvaluationTraceDto, GroupDto, HostKeyUserDecision,
+    NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType, RemoteEntryDto, RuleDto,
+    RuleInput, ServerDto, ServerInput, SessionSummaryDto, TestConnectionResult,
 };
 use crate::error::{CommandError, CommandResult};
 use crate::events::{
@@ -1749,6 +1749,17 @@ pub async fn disconnect(
     tracing::info!(session_id = %session_id, "session disconnected");
     emit_connection_status_changed(&app, session_id, ConnectionStatus::Disconnected, None);
 
+    // Spec 0054, Teil 4, Punkt 6: "Temp aufräumen (bei Session-Ende
+    // spätestens)" — Fallback-Netz für einen "Lokal öffnen"-Flow, den der
+    // Nutzer nie explizit über `close_edit_session` beendet hat (z. B.
+    // Tab einfach geschlossen, während eine Datei noch offen war). Rein
+    // best-effort: `edit_session_dir` existiert typischerweise gar nicht
+    // (kein Datei-Editier-Flow in dieser Session genutzt), das ist kein
+    // Fehler.
+    if let Ok(dir) = edit_session_dir(session_id) {
+        let _ = tokio::fs::remove_dir_all(dir).await;
+    }
+
     // Spec 0034, Abschnitt 4: "endet bei `disconnect()`" — vor dem Spawn
     // unten, damit `ended_at` zuverlässig gesetzt ist, sobald `disconnect()`
     // selbst zurückkehrt, statt von der Fertigstellung des unabhängigen
@@ -3194,6 +3205,28 @@ pub async fn sftp_exists(
     Ok(sftp.stat(&path).await.is_ok())
 }
 
+/// Spec 0054, Teil 4: einzelnen Eintrag abfragen — Grundlage für die
+/// Konflikt-Prüfung beim "Lokal öffnen"-Upload ("hat sich die Remote-Datei
+/// seit dem Download geändert?", s. `local.ts`/`useLocalEditSession`s
+/// Vergleich von `RemoteEntryDto.modified` vor Download gegen einen
+/// frischen `sftp_stat`-Aufruf vor dem Hochladen). Bislang gab es dafür nur
+/// `sftp_list` (ganzes Verzeichnis) und `sftp_exists` (nur `bool`) — ein
+/// generischer Einzelabfrage-Befehl fehlte.
+#[tauri::command]
+pub async fn sftp_stat(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    path: String,
+) -> CommandResult<RemoteEntryDto> {
+    let session = session_sftp(&state, session_id).await?;
+    let mut guard = session.sftp.lock().await;
+    let sftp = guard
+        .as_mut()
+        .expect("ensure_sftp_open lief erfolgreich durch");
+    let entry = sftp.stat(&path).await?;
+    Ok(RemoteEntryDto::from(&entry))
+}
+
 /// Spec 0054, Teil 3: chmod. `recursive` gilt nur für Ordner (bei einer
 /// Datei ignoriert der Aufrufer das Frontend-seitig ohnehin, s. dortiger
 /// Dialog) — läuft denselben Verzeichnisbaum wie `sftp_delete` ab und setzt
@@ -3378,6 +3411,112 @@ pub async fn read_local_text_preview(
         text: String::from_utf8(bytes).ok(),
         size,
     })
+}
+
+// --- Spec 0054, Teil 4: "Lokal öffnen -> bearbeiten -> Upload anbieten" ----
+//
+// Download in ein **kontrolliertes** Temp-Verzeichnis (Spec-Wortlaut: "nicht
+// irgendwo — ein definiertes Temp-Verzeichnis der App"), das eigentliche
+// "mit lokalem Programm öffnen" läuft über `@tauri-apps/plugin-opener`s
+// bereits registrierte, produktionsreife `openPath`-Funktion direkt im
+// Frontend (kein eigener Befehl nötig — s. `capabilities/default.json`s
+// neu ergänztes `opener:allow-open-path`). Die lokale Änderungserkennung
+// (Datei-Watcher) läuft als Polling auf `local_file_mtime` im Frontend
+// statt über einen nativen Dateisystem-Watcher (z. B. `notify`-Crate): für
+// eine einzelne, während einer aktiven Bearbeitung beobachtete Datei ist
+// ein Poll-Intervall im Sekundenbereich unauffällig genug, um dafür keine
+// neue, plattformübergreifend nicht triviale native Abhängigkeit
+// einzuführen — s. ADR zu dieser Spec.
+
+/// Basisordner für alle Editier-Temp-Dateien EINER Session — eigener
+/// Unterordner pro `session_id`, damit `disconnect()` (unten) beim
+/// Trennen der Verbindung gezielt genau diese und keine fremden
+/// Editier-Sessions aufräumen kann ("Temp aufräumen bei Session-Ende
+/// spätestens", Spec 0054 Teil 4, Punkt 6).
+fn edit_session_dir(session_id: SessionId) -> CommandResult<std::path::PathBuf> {
+    let base = directories::BaseDirs::new()
+        .ok_or("Kein Cache-Verzeichnis gefunden")
+        .map_err(CommandError::from)?;
+    Ok(base
+        .cache_dir()
+        .join("smart-ssh")
+        .join("edit-sessions")
+        .join(session_id.to_string()))
+}
+
+/// Spec 0054, Teil 4, Punkt 1: Download in das kontrollierte
+/// Editier-Temp-Verzeichnis dieser Session. Ein erneutes Öffnen derselben
+/// Remote-Datei überschreibt die lokale Kopie einfach mit dem aktuellen
+/// Remote-Inhalt (keine zweite, veraltete Kopie unter neuem Namen) — wer
+/// eine bereits laufende Bearbeitung fortsetzen will, nutzt die
+/// weiterhin geöffnete Anwendung, nicht einen erneuten "Lokal öffnen"-Klick.
+#[tauri::command]
+pub async fn sftp_open_for_editing(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    remote_path: String,
+) -> CommandResult<EditSessionDto> {
+    let session = session_sftp(&state, session_id).await?;
+    let file_name = file_name_of(&remote_path);
+
+    let (bytes, remote_modified) = {
+        let mut guard = session.sftp.lock().await;
+        let sftp = guard
+            .as_mut()
+            .expect("ensure_sftp_open lief erfolgreich durch");
+        let entry = sftp.stat(&remote_path).await?;
+        let bytes = sftp.read_file(&remote_path).await?;
+        (bytes, entry.modified.map(|dt| dt.to_rfc3339()))
+    };
+
+    let dir = edit_session_dir(session_id)?;
+    let local_path = dir.join(&file_name);
+    let local_path_for_write = local_path.clone();
+    tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(&local_path_for_write, bytes)
+    })
+    .await
+    .map_err(|e| format!("Hintergrund-Task für lokalen Download fehlgeschlagen: {e}"))??;
+
+    Ok(EditSessionDto {
+        local_path: local_path.to_string_lossy().into_owned(),
+        remote_modified,
+    })
+}
+
+/// Spec 0054, Teil 4, Punkt 3/4: Polling-Grundlage für die lokale
+/// Änderungserkennung (s. Moduldoc-Kommentar oben zur Polling- statt
+/// Watcher-Entscheidung). `Ok(None)` sowohl bei einer nicht (mehr)
+/// existierenden Datei als auch bei einem sonstigen Lesefehler — für den
+/// Aufrufer (reines "hat sich etwas geändert?"-Polling) ist "kein
+/// verlässlicher Zeitstempel verfügbar" in beiden Fällen dieselbe
+/// Situation, ein technischer Fehlerdialog dafür wäre für einen
+/// Hintergrund-Poll unangemessen aufdringlich.
+#[tauri::command]
+pub async fn local_file_mtime(local_path: String) -> Option<String> {
+    tokio::task::spawn_blocking(move || {
+        std::fs::metadata(&local_path)
+            .and_then(|m| m.modified())
+            .ok()
+    })
+    .await
+    .ok()
+    .flatten()
+    .map(chrono::DateTime::<chrono::Utc>::from)
+    .map(|dt| dt.to_rfc3339())
+}
+
+/// Spec 0054, Teil 4, Punkt 6: "Watcher stoppt, wenn der Nutzer den Flow
+/// beendet; Temp-Datei aufräumen." Best-effort — eine bereits vom Nutzer
+/// oder dem externen Programm gelöschte Datei ist kein Fehlerfall.
+#[tauri::command]
+pub async fn close_edit_session(local_path: String) -> CommandResult<()> {
+    match tokio::fs::remove_file(&local_path).await {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(CommandError::from(e.to_string())),
+    }
 }
 
 #[cfg(test)]
@@ -3886,5 +4025,66 @@ mod sftp_mutation_tests {
         assert_eq!(root_entry.permissions, 0o700);
         assert_eq!(sub_entry.permissions, 0o700);
         assert_eq!(nested_entry.permissions, 0o700);
+    }
+}
+
+/// Spec 0054, Teil 4: die von `AppState`/einer echten SFTP-Session
+/// losgelösten Bausteine des "Lokal öffnen"-Flows — `sftp_open_for_editing`
+/// selbst bräuchte eine volle `Session` (kein bestehendes Test-Setup dafür,
+/// s. Fehlen jeglicher `sftp_*`-Command-Tests auf dieser Ebene schon vor
+/// Spec 0054), aber `edit_session_dir`/`local_file_mtime`/
+/// `close_edit_session` sind pure bzw. rein-lokale Dateisystem-Funktionen.
+#[cfg(test)]
+mod edit_session_tests {
+    use super::*;
+
+    #[test]
+    fn test_edit_session_dir_is_distinct_per_session() {
+        let a = edit_session_dir(SessionId::new_v4()).unwrap();
+        let b = edit_session_dir(SessionId::new_v4()).unwrap();
+        assert_ne!(a, b);
+        assert!(a.ends_with(a.file_name().unwrap()));
+    }
+
+    #[tokio::test]
+    async fn test_local_file_mtime_returns_some_for_an_existing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("edited.txt");
+        std::fs::write(&path, b"x").unwrap();
+
+        let mtime = local_file_mtime(path.to_str().unwrap().to_string()).await;
+
+        assert!(mtime.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_local_file_mtime_returns_none_for_a_missing_file() {
+        let mtime = local_file_mtime("/this/path/does-not-exist-smart-ssh-test".to_string()).await;
+        assert!(mtime.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_close_edit_session_removes_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("edited.txt");
+        std::fs::write(&path, b"x").unwrap();
+
+        close_edit_session(path.to_str().unwrap().to_string())
+            .await
+            .expect("close_edit_session() sollte gelingen");
+
+        assert!(!path.exists());
+    }
+
+    /// Spec 0054, Teil 4, Punkt 6: "Watcher stoppt ... Temp-Datei
+    /// aufräumen" — ein bereits vom Nutzer oder dem externen Programm
+    /// selbst gelöschtes Temp-File ist kein Fehlerfall.
+    #[tokio::test]
+    async fn test_close_edit_session_on_an_already_missing_file_is_not_an_error() {
+        close_edit_session("/this/path/does-not-exist-smart-ssh-test".to_string())
+            .await
+            .expect(
+                "ein bereits fehlendes Temp-File darf close_edit_session nicht scheitern lassen",
+            );
     }
 }

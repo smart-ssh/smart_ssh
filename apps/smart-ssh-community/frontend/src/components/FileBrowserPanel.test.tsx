@@ -15,6 +15,8 @@ if (!Element.prototype.setPointerCapture) {
 }
 import { open } from "@tauri-apps/plugin-dialog";
 import {
+  closeEditSession,
+  localFileMtime,
   readLocalTextPreview,
   sftpChmod,
   sftpDeletePreview,
@@ -23,6 +25,7 @@ import {
   sftpDownloadDir,
   sftpExists,
   sftpList,
+  sftpOpenForEditing,
   sftpReadText,
   sftpRename,
   sftpUpload,
@@ -50,11 +53,24 @@ vi.mock("../api", () => ({
   sftpExists: vi.fn(),
   sftpChmod: vi.fn(),
   readLocalTextPreview: vi.fn(),
+  sftpStat: vi.fn(),
+  sftpOpenForEditing: vi.fn(),
+  localFileMtime: vi.fn(),
+  closeEditSession: vi.fn(),
 }));
 
 vi.mock("../events", () => ({
   onSftpTransferStarted: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferFinished: vi.fn(() => Promise.resolve(() => {})),
+}));
+
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openPath: vi.fn(),
+}));
+
+vi.mock("../fileTypeSettings", () => ({
+  loadFileTypeApps: vi.fn(() => Promise.resolve({})),
+  appForFileName: () => null,
 }));
 
 vi.mock("@tauri-apps/api/webview", () => ({
@@ -644,5 +660,55 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     );
     expect(screen.queryByText("Datei überschreiben?")).not.toBeInTheDocument();
     expect(readLocalTextPreview).not.toHaveBeenCalled();
+  });
+});
+
+describe("FileBrowserPanel 'Lokal öffnen' flow (Spec 0054, Teil 4)", () => {
+  const fileEntry: RemoteEntryDto = { ...entry, name: "a.txt", path: "a.txt" };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("'Lokal öffnen…' downloads the file and shows an editing banner", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpOpenForEditing).mockResolvedValue({
+      localPath: "/tmp/edit/a.txt",
+      remoteModified: "2026-01-01T00:00:00Z",
+    });
+    vi.mocked(localFileMtime).mockResolvedValue("2026-01-01T00:00:01Z");
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Lokal öffnen…"));
+
+    await waitFor(() =>
+      expect(sftpOpenForEditing).toHaveBeenCalledWith("session-1", "a.txt"),
+    );
+    expect(await screen.findByText(/wird lokal bearbeitet/)).toBeVisible();
+  });
+
+  it("'Bearbeitung beenden' ends the session and removes the banner", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpOpenForEditing).mockResolvedValue({
+      localPath: "/tmp/edit/a.txt",
+      remoteModified: "2026-01-01T00:00:00Z",
+    });
+    vi.mocked(localFileMtime).mockResolvedValue("2026-01-01T00:00:01Z");
+    vi.mocked(closeEditSession).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Lokal öffnen…"));
+    await screen.findByText(/wird lokal bearbeitet/);
+
+    fireEvent.click(screen.getByText("Bearbeitung beenden"));
+
+    expect(closeEditSession).toHaveBeenCalledWith("/tmp/edit/a.txt");
+    expect(screen.queryByText(/wird lokal bearbeitet/)).not.toBeInTheDocument();
   });
 });

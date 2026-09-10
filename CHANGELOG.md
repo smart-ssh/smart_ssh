@@ -34,6 +34,13 @@ sind mit **(Pro)** markiert.
 - Einstellungen: neue Kategorie "Dateien" — pro Dateiendung ein lokales
   Standardprogramm festlegen (Fallback: Betriebssystem-Standard). Rein
   lokal, ohne Server-Bezug.
+- Dateimanager: "Lokal öffnen…" lädt eine Datei in ein kontrolliertes
+  Temp-Verzeichnis herunter, öffnet sie mit dem festgelegten (oder dem
+  Betriebssystem-Standard-)Programm, und bietet nach einer erkannten
+  lokalen Änderung automatisch den Upload an — inklusive Diff-Vorschau und
+  einer Warnung, falls sich die Datei auf dem Server seit dem Download
+  ebenfalls geändert hat. Die Bearbeitungskopie wird beim Beenden der
+  Bearbeitung bzw. spätestens beim Trennen der Verbindung aufgeräumt.
 
 ### Fixed
 - Dateimanager: das Drei-Punkte-Menü an einem Eintrag ließ sich oft nicht

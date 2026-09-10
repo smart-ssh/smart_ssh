@@ -12,6 +12,7 @@ import type {
   DeletePreviewDto,
   DeleteServerResult,
   DocumentFormat,
+  EditSessionDto,
   EvalContextInput,
   EvaluationTraceDto,
   GroupDto,
@@ -413,6 +414,26 @@ export const sftpChmod = (sessionId: string, path: string, mode: number, recursi
  * immer gesetzt (s. `crate::commands::read_local_text_preview`). */
 export const readLocalTextPreview = (localPath: string) =>
   invoke<LocalFilePreviewDto>("read_local_text_preview", { localPath });
+
+/** Spec 0054, Teil 4: einzelnen Eintrag abfragen (Konflikt-Prüfung vor dem
+ * Hochladen aus dem "Lokal öffnen"-Flow). */
+export const sftpStat = (sessionId: string, path: string) =>
+  invoke<RemoteEntryDto>("sftp_stat", { sessionId, path });
+
+/** Spec 0054, Teil 4, Punkt 1: Download in das kontrollierte
+ * Editier-Temp-Verzeichnis dieser Session. */
+export const sftpOpenForEditing = (sessionId: string, remotePath: string) =>
+  invoke<EditSessionDto>("sftp_open_for_editing", { sessionId, remotePath });
+
+/** Spec 0054, Teil 4, Punkt 3/4: Polling-Grundlage für die lokale
+ * Änderungserkennung — RFC3339-Zeitstempel, oder `null`, wenn die Datei
+ * (mehr) nicht lesbar ist. */
+export const localFileMtime = (localPath: string) =>
+  invoke<string | null>("local_file_mtime", { localPath });
+
+/** Spec 0054, Teil 4, Punkt 6: Watcher beenden + Temp-Datei aufräumen. */
+export const closeEditSession = (localPath: string) =>
+  invoke<void>("close_edit_session", { localPath });
 
 // --- Spec 0028: MCP-Server-Integration -----------------------------------
 

@@ -556,6 +556,13 @@ export interface LocalFilePreviewDto {
   size: number;
 }
 
+/** Spec 0054, Teil 4: Ergebnis von `sftpOpenForEditing`. */
+export interface EditSessionDto {
+  localPath: string;
+  /** RFC3339, `null` wenn der Server keine Änderungszeit meldet. */
+  remoteModified: string | null;
+}
+
 export type SftpTransferKind = "upload" | "download";
 
 export interface SftpTransferStartedEvent {

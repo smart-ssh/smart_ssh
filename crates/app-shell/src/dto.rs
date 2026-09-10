@@ -848,6 +848,17 @@ pub struct LocalFilePreviewDto {
     pub size: u64,
 }
 
+/// Spec 0054, Teil 4: Ergebnis von `commands::sftp_open_for_editing` — der
+/// lokale Pfad der Bearbeitungskopie plus die Baseline für die spätere
+/// "hat sich die Remote-Datei seit dem Download geändert?"-Konflikt-Prüfung
+/// vor dem Hochladen.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditSessionDto {
+    pub local_path: String,
+    pub remote_modified: Option<String>,
+}
+
 /// Sicht auf einen [`RemoteEntry`] für die Dateiliste im Dateibrowser (Spec
 /// 0020, Abschnitt 5.1: "Name, Größe, Rechte, Änderungsdatum"). `permissions`
 /// kommt bereits hier als lesbarer `rwxr-xr-x`-String statt als rohe Bits —
