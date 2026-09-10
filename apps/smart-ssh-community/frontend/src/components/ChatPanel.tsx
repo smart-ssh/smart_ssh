@@ -250,7 +250,11 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
    * akzeptierter kleiner Randfall, kein Korrektheitsproblem. */
   const [riskSecondOpinionEnabled, setRiskSecondOpinionEnabled] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  // Spec 0055, Teil 1: `<textarea>` statt `<input type="text">` für die
+  // mehrzeilige Eingabe (Shift+Enter/Auto-Grow) — dieselbe DOM-API
+  // (`.value`/`.selectionStart`/`.setSelectionRange`), die restliche
+  // Historien-Navigationslogik unten bleibt unverändert.
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Spec 0015, Abschnitt 5: einmalig pro Server geladen, kein
   // wiederholtes Nachladen bei jeder Pfeiltaste. `historyNav` verfolgt den
@@ -584,7 +588,21 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
   // Cursor-Bewegung des Browsers unverändert durch (kein `preventDefault`).
   const pendingCaretToEndRef = useRef(false);
 
-  const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const handleInputKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Spec 0055, Teil 1: Standard-Chat-Verhalten — Enter sendet,
+    // Shift+Enter fügt einen Zeilenumbruch ein. `requestSubmit()` statt
+    // eines direkten `handleSubmit(e)`-Aufrufs: `handleSubmit` ist auf
+    // `FormEvent` typisiert (liest `draft`/`sending` ohnehin aus dem
+    // Komponenten-State, nicht aus dem Event) — über das Formular selbst
+    // einzureichen nutzt denselben Pfad wie ein Klick auf "Senden", statt
+    // die Sende-Logik ein zweites Mal zu duplizieren. Ohne aktiven
+    // `<form>`-Vorfahren (sollte hier nie vorkommen) tut `?.` schlicht
+    // nichts — kein Absturz.
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+      return;
+    }
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     const input = e.currentTarget;
     const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
@@ -620,6 +638,24 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
       inputRef.current.setSelectionRange(pos, pos);
       pendingCaretToEndRef.current = false;
     }
+  }, [draft]);
+
+  // Spec 0055, Teil 1: "Feld wächst mit dem Inhalt (auto-grow bis
+  // sinnvolle Maxhöhe, dann intern scrollbar)". Höhe bei jeder
+  // `draft`-Änderung neu berechnen statt per CSS `field-sizing`
+  // (Browser-Unterstützung dafür ist noch zu neu für die von Tauris
+  // WebView abgedeckte Plattformbreite) — `style.height = "auto"` vor dem
+  // Auslesen von `scrollHeight` ist nötig, sonst würde eine gekürzte
+  // Eingabe (z. B. nach Rückgängig-Historie-Navigation) die alte,
+  // größere Höhe nie wieder verkleinern. Tailwinds `max-h-40` (s.
+  // `className` unten, 10rem/160px — rund 8 Zeilen bei `text-sm`) deckelt
+  // das Wachstum; `overflow-y-auto` auf demselben Element übernimmt
+  // darüber das interne Scrollen.
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
   }, [draft]);
 
   const handleDraftChange = (value: string) => {
@@ -682,17 +718,25 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
           Kein aktiver AI-Provider konfiguriert. Bitte zuerst in den Einstellungen einrichten.
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="flex items-center gap-2 border-t border-slate-700 bg-slate-800 p-3">
-          <span className="font-mono text-sm text-indigo-500">&gt;</span>
-          <input
+        <form
+          onSubmit={handleSubmit}
+          className="flex items-end gap-2 border-t border-slate-700 bg-slate-800 p-3"
+        >
+          <span className="self-start pt-1 font-mono text-sm text-indigo-500">&gt;</span>
+          {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
+              Zeilenumbruch ein (s. `handleInputKeyDown`); `rows={1}` +
+              `resize-none` + die Höhen-Effekt oben ergeben das
+              Auto-Grow-bis-`max-h-40`-dann-scrollbar-Verhalten, `align`
+              bleibt sonst wie beim bisherigen `<input>`. */}
+          <textarea
             ref={inputRef}
-            type="text"
+            rows={1}
             value={draft}
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder="Frage stellen oder Kommando beschreiben …"
             disabled={sending}
-            className="flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
+            className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
           />
           <button
             type="submit"

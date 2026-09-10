@@ -9,6 +9,11 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+### Added
+- Chat-Eingabefeld erlaubt jetzt mehrzeilige Eingaben: Enter sendet,
+  Shift+Enter fügt einen Zeilenumbruch ein, das Feld wächst mit dem Inhalt
+  bis zu einer Maximalhöhe und scrollt danach intern.
+
 ## [0.4.6] — 2026-09-10
 
 ### Added
