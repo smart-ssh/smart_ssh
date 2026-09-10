@@ -475,6 +475,50 @@ async fn test_sftp_delete() {
     assert!(!sftp_local_path(&server, "/to-delete.txt").exists());
 }
 
+/// Spec 0054, Teil 3: `remove_dir` löscht ein leeres Verzeichnis — die
+/// eigentliche rekursive Lösch-Logik (erst Dateien, dann Verzeichnisse
+/// bottom-up) lebt in `app-shell::commands::sftp_delete`, hier wird nur die
+/// neue Trait-Methode selbst gegen einen echten SFTP-Roundtrip verifiziert.
+#[tokio::test]
+async fn test_sftp_remove_dir() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    let mut sftp = transport
+        .open_sftp()
+        .await
+        .expect("open_sftp() sollte gelingen");
+
+    sftp.create_dir("/empty-dir").await.unwrap();
+    assert!(sftp_local_path(&server, "/empty-dir").is_dir());
+
+    sftp.remove_dir("/empty-dir")
+        .await
+        .expect("remove_dir() sollte gelingen");
+
+    assert!(!sftp_local_path(&server, "/empty-dir").exists());
+}
+
+/// Spec 0054, Teil 3 (chmod): `set_permissions` ändert die Rechte-Bits
+/// einer existierenden Datei, ein anschließendes `stat()` meldet die neuen
+/// Bits zurück.
+#[tokio::test]
+async fn test_sftp_set_permissions() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    let mut sftp = transport
+        .open_sftp()
+        .await
+        .expect("open_sftp() sollte gelingen");
+
+    sftp.write_file("/chmod-me.txt", b"x").await.unwrap();
+    sftp.set_permissions("/chmod-me.txt", 0o640)
+        .await
+        .expect("set_permissions() sollte gelingen");
+
+    let entry = sftp.stat("/chmod-me.txt").await.unwrap();
+    assert_eq!(entry.permissions, 0o640);
+}
+
 /// Stat: Größe und Verzeichnis-Flag einer existierenden Datei korrekt
 /// gemeldet; ein nicht existierender Pfad liefert einen Fehler statt eines
 /// Platzhalter-Ergebnisses.

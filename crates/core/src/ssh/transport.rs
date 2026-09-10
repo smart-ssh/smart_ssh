@@ -113,6 +113,18 @@ pub trait SftpSession: Send {
     async fn remove(&mut self, path: &str) -> Result<(), SshError>;
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError>;
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError>;
+    /// Löscht ein **leeres** Verzeichnis (SFTP `RMDIR`) — Gegenstück zu
+    /// `remove()`, das nur auf Dateien wirkt (Spec 0054, Teil 3: rekursives
+    /// Ordner-Löschen im Aufrufer baut darauf auf, indem zuerst alle
+    /// Dateien und tiefer liegenden Verzeichnisse entfernt werden, bevor
+    /// `remove_dir` von unten nach oben aufgerufen wird).
+    async fn remove_dir(&mut self, path: &str) -> Result<(), SshError>;
+    /// Setzt die reinen Unix-Rechte-Bits (`0o755`-Stil, wie
+    /// `RemoteEntry::permissions`) — Spec 0054, Teil 3 (chmod). Ändert
+    /// bewusst nur die Rechte, nicht Eigentümer/Gruppe/Zeitstempel (SFTP
+    /// `SETSTAT` könnte das, aber der chmod-Dialog braucht nur dieses eine
+    /// Feld).
+    async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError>;
 }
 
 /// Offene PTY-Shell für den interaktiven Modus (Terminal-Tab, xterm.js im

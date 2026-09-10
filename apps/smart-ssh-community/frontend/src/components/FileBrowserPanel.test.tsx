@@ -13,12 +13,19 @@ if (!Element.prototype.setPointerCapture) {
   Element.prototype.setPointerCapture = () => {};
   Element.prototype.releasePointerCapture = () => {};
 }
+import { open } from "@tauri-apps/plugin-dialog";
 import {
+  readLocalTextPreview,
+  sftpChmod,
+  sftpDeletePreview,
   sftpDownload,
   sftpDownloadDefault,
   sftpDownloadDir,
+  sftpExists,
   sftpList,
   sftpReadText,
+  sftpRename,
+  sftpUpload,
 } from "../api";
 import {
   loadFileManagerColumnWidths,
@@ -32,6 +39,7 @@ vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) => String(err),
   sftpList: vi.fn(),
   sftpDelete: vi.fn(),
+  sftpDeletePreview: vi.fn(),
   sftpDownload: vi.fn(),
   sftpDownloadDefault: vi.fn(),
   sftpDownloadDir: vi.fn(),
@@ -39,6 +47,9 @@ vi.mock("../api", () => ({
   sftpReadText: vi.fn(),
   sftpRename: vi.fn(),
   sftpUpload: vi.fn(),
+  sftpExists: vi.fn(),
+  sftpChmod: vi.fn(),
+  readLocalTextPreview: vi.fn(),
 }));
 
 vi.mock("../events", () => ({
@@ -314,7 +325,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     expect(screen.getByText("Löschen")).toBeVisible();
   });
 
-  it("hides content-copy and delete for directories", async () => {
+  it("hides content-copy for directories (Löschen/Herunterladen work for both, Spec 0054 Teil 3)", async () => {
     vi.mocked(sftpList).mockResolvedValue([dirEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
 
@@ -323,8 +334,10 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     fireEvent.contextMenu(row);
 
     expect(screen.queryByText("Dateiinhalt kopieren")).not.toBeInTheDocument();
-    expect(screen.queryByText("Löschen")).not.toBeInTheDocument();
-    // Herunterladen bleibt für Ordner verfügbar (rekursiv, s. Backend).
+    // Löschen/Herunterladen sind seit Spec 0054, Teil 3 auch für Ordner
+    // verfügbar (rekursiv, s. Backend) — nur "Dateiinhalt kopieren" bleibt
+    // dateispezifisch.
+    expect(screen.getByText("Löschen")).toBeVisible();
     expect(screen.getByText("Herunterladen")).toBeVisible();
   });
 
@@ -425,5 +438,211 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     await waitFor(() => expect(sftpList).toHaveBeenCalledTimes(2));
     expect(sftpList).toHaveBeenLastCalledWith("session-1", ".");
+  });
+});
+
+describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => {
+  const fileEntry: RemoteEntryDto = { ...entry, name: "a.txt", path: "a.txt" };
+  const dirEntry: RemoteEntryDto = {
+    ...entry,
+    name: "logs",
+    path: "logs",
+    isDir: true,
+    permissionsOctal: 0o755,
+    permissions: "rwxr-xr-x",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("chmod dialog toggles a bit and applies the resulting octal mode", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpChmod).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Rechte bearbeiten…"));
+
+    expect(await screen.findByText("Rechte bearbeiten")).toBeVisible();
+    // fileEntry ist 644 (rw-r--r--) — "Owner Schreiben" (0o200) abwählen.
+    fireEvent.click(screen.getByLabelText("Owner 128"));
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    await waitFor(() =>
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o444, false),
+    );
+  });
+
+  it("chmod dialog's numeric input overrides the checkbox matrix", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpChmod).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Rechte bearbeiten…"));
+
+    const numeric = await screen.findByDisplayValue("644");
+    fireEvent.change(numeric, { target: { value: "700" } });
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    await waitFor(() =>
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o700, false),
+    );
+  });
+
+  it("chmod dialog shows a recursive checkbox only for directories", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpChmod).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/logs/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Rechte bearbeiten…"));
+
+    const recursiveLabel = await screen.findByText(/Rekursiv/);
+    fireEvent.click(recursiveLabel.closest("label")!.querySelector("input")!);
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    await waitFor(() =>
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "logs", 0o755, true),
+    );
+  });
+
+  it("delete confirmation shows a file/dir count preview for folders", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpDeletePreview).mockResolvedValue({ fileCount: 3, dirCount: 2 });
+
+    renderPanel();
+    await screen.findByText(/logs/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Löschen"));
+
+    expect(await screen.findByText(/Ordner löschen/)).toBeVisible();
+    await waitFor(() => expect(sftpDeletePreview).toHaveBeenCalledWith("session-1", "logs"));
+    expect(await screen.findByText("3")).toBeVisible();
+    expect(screen.getByText("2")).toBeVisible();
+  });
+
+  it("rename checks for a collision and asks before overwriting", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpExists).mockResolvedValue(true);
+    vi.mocked(sftpRename).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Umbenennen"));
+
+    const input = screen.getByDisplayValue("a.txt");
+    fireEvent.change(input, { target: { value: "b.txt" } });
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    await waitFor(() => expect(sftpExists).toHaveBeenCalledWith("session-1", "b.txt"));
+    expect(await screen.findByText("Ziel existiert bereits")).toBeVisible();
+    expect(sftpRename).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText("Überschreiben"));
+    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt"));
+  });
+
+  it("rename proceeds directly when there is no collision", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpRename).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Umbenennen"));
+
+    const input = screen.getByDisplayValue("a.txt");
+    fireEvent.change(input, { target: { value: "b.txt" } });
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt"));
+    expect(screen.queryByText("Ziel existiert bereits")).not.toBeInTheDocument();
+  });
+
+  it("cut + paste moves the entry into a different directory via sftp_rename", async () => {
+    // Ausschneiden in "." (enthält a.txt + logs/), dann in "logs" navigieren
+    // und dort einfügen — Einfügen in dasselbe Verzeichnis, in dem die
+    // Datei bereits liegt, ist bewusst ein No-op (s. `handlePaste`s
+    // "bereits hier"-Kommentar), dieser Test prüft den eigentlichen
+    // Verschiebe-Fall in ein ANDERES Verzeichnis.
+    vi.mocked(sftpList).mockImplementation((_session, requestedPath) =>
+      Promise.resolve(requestedPath === "logs" ? [] : [fileEntry, dirEntry]),
+    );
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpRename).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    // Mock liefert `[fileEntry, dirEntry]` in dieser Reihenfolge (echtes
+    // Sortieren übernimmt das Backend, nicht diese Komponente) — Zeile 0
+    // ist also a.txt.
+    const rows = screen.getAllByRole("button", { name: "⋮" });
+    fireEvent.click(rows[0]);
+    fireEvent.click(screen.getByText("Ausschneiden"));
+
+    fireEvent.click(await screen.findByText(/logs/));
+    await screen.findByText("(leeres Verzeichnis)");
+
+    fireEvent.click(screen.getByText("Einfügen"));
+
+    await waitFor(() => expect(sftpExists).toHaveBeenCalledWith("session-1", "logs/a.txt"));
+    expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "logs/a.txt");
+  });
+
+  it("upload onto an existing text file shows a diff, confirming uploads it", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpExists).mockResolvedValue(true);
+    vi.mocked(readLocalTextPreview).mockResolvedValue({ text: "neu", size: 3 });
+    vi.mocked(sftpReadText).mockResolvedValue("alt");
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    vi.mocked(open).mockResolvedValue("/local/a.txt");
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Hochladen"));
+
+    expect(await screen.findByText("Datei überschreiben?")).toBeVisible();
+    expect(sftpUpload).not.toHaveBeenCalled();
+    // Diff-Zeilen aus `NoteDiffPreview` (entfernt "alt", hinzugefügt "neu").
+    expect(screen.getByText("alt")).toBeVisible();
+    expect(screen.getByText("neu")).toBeVisible();
+
+    fireEvent.click(screen.getByText("Überschreiben"));
+    await waitFor(() =>
+      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/a.txt", "a.txt"),
+    );
+  });
+
+  it("upload to a new path skips the conflict dialog entirely", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    vi.mocked(open).mockResolvedValue("/local/new.txt");
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Hochladen"));
+
+    await waitFor(() =>
+      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/new.txt", "new.txt"),
+    );
+    expect(screen.queryByText("Datei überschreiben?")).not.toBeInTheDocument();
+    expect(readLocalTextPreview).not.toHaveBeenCalled();
   });
 });

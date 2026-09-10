@@ -9,12 +9,14 @@ import type {
   ChatHistoryEntryDto,
   ChatSessionSummaryDto,
   DeleteGroupResult,
+  DeletePreviewDto,
   DeleteServerResult,
   DocumentFormat,
   EvalContextInput,
   EvaluationTraceDto,
   GroupDto,
   HostKeyUserDecision,
+  LocalFilePreviewDto,
   McpServerSettingsDto,
   NoteRevisionDto,
   NoteTarget,
@@ -370,9 +372,19 @@ export const sftpDownloadDir = (sessionId: string, remotePath: string) =>
 export const sftpUpload = (sessionId: string, localPath: string, remotePath: string) =>
   invoke<void>("sftp_upload", { sessionId, localPath, remotePath });
 
+/** Löscht Datei ODER Ordner (rekursiv, Spec 0054, Teil 3) — die
+ * Bestätigung (inkl. `sftpDeletePreview` bei Ordnern) läuft im Frontend. */
 export const sftpDelete = (sessionId: string, path: string) =>
   invoke<void>("sftp_delete", { sessionId, path });
 
+/** Spec 0054, Teil 3: Vorschau vor dem Löschen eines Ordners — Anzahl
+ * Dateien/Unterordner für den Bestätigungsdialog. */
+export const sftpDeletePreview = (sessionId: string, path: string) =>
+  invoke<DeletePreviewDto>("sftp_delete_preview", { sessionId, path });
+
+/** Umbenennen UND Verschieben (Spec 0054, Teil 3 — SFTP `RENAME` kennt
+ * keinen Unterschied). Kollisionsprüfung läuft im Frontend über
+ * `sftpExists`, bevor dieser Befehl aufgerufen wird. */
 export const sftpRename = (sessionId: string, from: string, to: string) =>
   invoke<void>("sftp_rename", { sessionId, from, to });
 
@@ -385,6 +397,22 @@ export const sftpMkdir = (sessionId: string, path: string) =>
  * `crate::commands::sftp_read_text`). */
 export const sftpReadText = (sessionId: string, path: string) =>
   invoke<string>("sftp_read_text", { sessionId, path });
+
+/** Spec 0054, Teil 3: existiert `path` bereits? Grundlage für die
+ * Kollisionsprüfung bei Umbenennen/Verschieben/Hochladen. */
+export const sftpExists = (sessionId: string, path: string) =>
+  invoke<boolean>("sftp_exists", { sessionId, path });
+
+/** Spec 0054, Teil 3: chmod. `mode` sind die reinen Rechte-Bits
+ * (`0o755`-Stil), `recursive` gilt nur für Ordner. */
+export const sftpChmod = (sessionId: string, path: string, mode: number, recursive: boolean) =>
+  invoke<void>("sftp_chmod", { sessionId, path, mode, recursive });
+
+/** Spec 0054, Teil 3: die lokale Seite der Upload-Überschreib-Diff-
+ * Vorschau — `text: null` bei einer zu großen/nicht-Text-Datei, `size` ist
+ * immer gesetzt (s. `crate::commands::read_local_text_preview`). */
+export const readLocalTextPreview = (localPath: string) =>
+  invoke<LocalFilePreviewDto>("read_local_text_preview", { localPath });
 
 // --- Spec 0028: MCP-Server-Integration -----------------------------------
 

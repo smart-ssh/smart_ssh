@@ -135,4 +135,22 @@ impl SftpSession for RusshSftpSession {
             .await
             .map_err(|e| map_sftp_error(path, e))
     }
+
+    async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
+        self.inner
+            .remove_dir(path)
+            .await
+            .map_err(|e| map_sftp_error(path, e))
+    }
+
+    async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
+        let attrs = FileAttributes {
+            permissions: Some(mode),
+            ..Default::default()
+        };
+        self.inner
+            .set_metadata(path, attrs)
+            .await
+            .map_err(|e| map_sftp_error(path, e))
+    }
 }

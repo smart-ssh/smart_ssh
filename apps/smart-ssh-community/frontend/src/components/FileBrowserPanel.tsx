@@ -3,10 +3,14 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   commandErrorMessage,
+  readLocalTextPreview,
+  sftpChmod,
   sftpDelete,
+  sftpDeletePreview,
   sftpDownload,
   sftpDownloadDefault,
   sftpDownloadDir,
+  sftpExists,
   sftpList,
   sftpMkdir,
   sftpReadText,
@@ -21,8 +25,9 @@ import {
   type FileManagerColumnWidths,
 } from "../layoutSettings";
 import { displayPath, joinPath, localBaseName, parentPath } from "../remotePath";
-import type { RemoteEntryDto } from "../types";
+import type { DeletePreviewDto, LocalFilePreviewDto, RemoteEntryDto } from "../types";
 import { useDragResize } from "../useDragResize";
+import { NoteDiffPreview } from "./NoteDiffPreview";
 
 /** Spec 0053, Teil 1: Standard-/Mindestbreiten der verstellbaren Spalten
  * (alles in px). Die Name-Spalte hat bewusst keinen eigenen Eintrag hier
@@ -97,7 +102,29 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const [toast, setToast] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ entry: RemoteEntryDto; value: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RemoteEntryDto | null>(null);
+  const [deletePreview, setDeletePreview] = useState<DeletePreviewDto | null>(null);
   const [mkdirOpen, setMkdirOpen] = useState<string | null>(null);
+  const [chmodTarget, setChmodTarget] = useState<RemoteEntryDto | null>(null);
+  // Spec 0054, Teil 3: "Verschieben" per Ausschneiden/Einfügen (die Spec
+  // erlaubt ausdrücklich Cut/Paste ODER Drag-and-Drop als Alternativen —
+  // Cut/Paste deckt die Anforderung bereits vollständig ab, ein
+  // zusätzlicher Drag-Mechanismus zwischen Zeilen wäre redundanter Aufwand,
+  // s. ADR). `null` = nichts ausgeschnitten.
+  const [cutEntry, setCutEntry] = useState<RemoteEntryDto | null>(null);
+  // Kollisionsprüfung bei Umbenennen/Verschieben (Spec 0054, Teil 3): beide
+  // laufen über denselben `performMove`-Pfad, da beide backend-seitig
+  // dieselbe `sftp_rename` sind (s. dortiger Kommentar).
+  const [moveCollision, setMoveCollision] = useState<{ from: string; to: string } | null>(null);
+  // Upload-Überschreib-Diff-Vorschau (Spec 0054, Teil 3): `remoteText` ist
+  // `null`, wenn die Remote-Datei nicht als Text lesbar war (Binärdatei/zu
+  // groß) — dann zeigt der Dialog nur einen Größenvergleich.
+  const [uploadConflict, setUploadConflict] = useState<{
+    localPath: string;
+    remotePath: string;
+    localPreview: LocalFilePreviewDto;
+    remoteText: string | null;
+    remoteSize: number;
+  } | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [columnWidths, setColumnWidths] = useState<FileManagerColumnWidths>(DEFAULT_COLUMN_WIDTHS);
@@ -275,10 +302,40 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible, path]);
 
-  const startUpload = (localPath: string, remotePath: string) => {
-    sftpUpload(sessionId, localPath, remotePath).catch((err) => {
+  /** Spec 0054, Teil 3: "Hochladen ... Überschreibt bestehende →
+   * Diff-Vorschau (0020)". Kein Dialog für den unkritischen Normalfall
+   * (Zielpfad existiert noch nicht — direkter Upload wie bisher), nur bei
+   * einer echten Kollision wird die Diff-Vorschau (`uploadConflict`)
+   * aufgebaut: lokale Seite über `readLocalTextPreview` (graceful bei
+   * Binär/zu groß), Remote-Seite über `sftpReadText` — dessen Fehlerfall
+   * (Binär/zu groß) fällt auf die bereits geladene `entries`-Liste zurück,
+   * deren `size` kennt jeder sichtbare Eintrag schon ohne weiteren
+   * Backend-Aufruf. */
+  const startUpload = async (localPath: string, remotePath: string) => {
+    try {
+      const exists = await sftpExists(sessionId, remotePath);
+      if (!exists) {
+        await sftpUpload(sessionId, localPath, remotePath);
+        return;
+      }
+      const [localPreview, remoteText] = await Promise.all([
+        readLocalTextPreview(localPath),
+        sftpReadText(sessionId, remotePath).catch(() => null),
+      ]);
+      const remoteSize = entries.find((e) => e.path === remotePath)?.size ?? 0;
+      setUploadConflict({ localPath, remotePath, localPreview, remoteText, remoteSize });
+    } catch (err) {
       setError(commandErrorMessage(err));
-    });
+    }
+  };
+
+  const handleConfirmUpload = () => {
+    if (!uploadConflict) return;
+    const { localPath, remotePath } = uploadConflict;
+    setUploadConflict(null);
+    sftpUpload(sessionId, localPath, remotePath)
+      .then(() => load(path))
+      .catch((err) => setError(commandErrorMessage(err)));
   };
 
   const handleUploadButton = async () => {
@@ -345,11 +402,62 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     load(path);
   };
 
+  // Spec 0054, Teil 3: "Löschen ... bei Ordnern mit Hinweis auf rekursives
+  // Löschen und Anzahl" — Vorschau nachladen, sobald ein Ordner als
+  // Lösch-Ziel gewählt wird (bei einer Datei ist die Zählung trivial, kein
+  // Backend-Aufruf nötig).
+  useEffect(() => {
+    if (!deleteTarget || !deleteTarget.isDir) {
+      setDeletePreview(null);
+      return;
+    }
+    let cancelled = false;
+    sftpDeletePreview(sessionId, deleteTarget.path)
+      .then((preview) => {
+        if (!cancelled) setDeletePreview(preview);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(commandErrorMessage(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, deleteTarget]);
+
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
     const target = deleteTarget;
     setDeleteTarget(null);
     sftpDelete(sessionId, target.path)
+      .then(() => load(path))
+      .catch((err) => setError(commandErrorMessage(err)));
+  };
+
+  /** Spec 0054, Teil 3: gemeinsamer Weg für "Umbenennen" (Ziel im selben
+   * Ordner) UND "Verschieben" (Ziel in einem anderen Ordner) — SFTP
+   * `RENAME` ist in beiden Fällen derselbe Aufruf (s.
+   * `crate::commands::sftp_rename`s Doc-Kommentar). Kollisionsprüfung
+   * zuerst: existiert das Ziel schon, wird NICHT stillschweigend
+   * überschrieben, sondern erst nachgefragt (`moveCollision`). */
+  const performMove = async (from: string, to: string) => {
+    try {
+      const exists = await sftpExists(sessionId, to);
+      if (exists) {
+        setMoveCollision({ from, to });
+        return;
+      }
+      await sftpRename(sessionId, from, to);
+      load(path);
+    } catch (err) {
+      setError(commandErrorMessage(err));
+    }
+  };
+
+  const handleConfirmMoveCollision = () => {
+    if (!moveCollision) return;
+    const { from, to } = moveCollision;
+    setMoveCollision(null);
+    sftpRename(sessionId, from, to)
       .then(() => load(path))
       .catch((err) => setError(commandErrorMessage(err)));
   };
@@ -362,10 +470,9 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
       return;
     }
     const newPath = joinPath(path, trimmed);
-    sftpRename(sessionId, renaming.entry.path, newPath)
-      .then(() => load(path))
-      .catch((err) => setError(commandErrorMessage(err)))
-      .finally(() => setRenaming(null));
+    const from = renaming.entry.path;
+    setRenaming(null);
+    performMove(from, newPath);
   };
 
   const handleConfirmMkdir = () => {
@@ -373,6 +480,35 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     setMkdirOpen(null);
     if (!name) return;
     sftpMkdir(sessionId, joinPath(path, name))
+      .then(() => load(path))
+      .catch((err) => setError(commandErrorMessage(err)));
+  };
+
+  const handleCut = (entry: RemoteEntryDto) => {
+    setOpenMenu(null);
+    setCutEntry(entry);
+  };
+
+  /** Spec 0054, Teil 3: "Einfügen" — verschiebt den ausgeschnittenen
+   * Eintrag in das aktuell angezeigte Verzeichnis. */
+  const handlePaste = () => {
+    if (!cutEntry) return;
+    const target = joinPath(path, cutEntry.name);
+    setCutEntry(null);
+    if (target === cutEntry.path) return; // bereits hier, kein no-op-Fehler
+    performMove(cutEntry.path, target);
+  };
+
+  const handleChmod = (entry: RemoteEntryDto) => {
+    setOpenMenu(null);
+    setChmodTarget(entry);
+  };
+
+  const handleConfirmChmod = (mode: number, recursive: boolean) => {
+    if (!chmodTarget) return;
+    const target = chmodTarget;
+    setChmodTarget(null);
+    sftpChmod(sessionId, target.path, mode, recursive)
       .then(() => load(path))
       .catch((err) => setError(commandErrorMessage(err)));
   };
@@ -424,6 +560,26 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
         >
           Hochladen
         </button>
+        {cutEntry && (
+          <>
+            <button
+              type="button"
+              onClick={handlePaste}
+              title={`${cutEntry.name} hierher verschieben`}
+              className="font-heading border border-indigo-600/50 px-2 py-1 text-xs font-semibold text-indigo-400 hover:bg-indigo-600/14"
+            >
+              Einfügen
+            </button>
+            <button
+              type="button"
+              onClick={() => setCutEntry(null)}
+              title="Ausschneiden abbrechen"
+              className="border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:bg-slate-800"
+            >
+              ✕
+            </button>
+          </>
+        )}
       </div>
 
       {transfers.length > 0 && (
@@ -625,6 +781,8 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
                           setOpenMenu(null);
                           setRenaming({ entry: e, value: e.name });
                         }}
+                        onCut={handleCut}
+                        onChmod={handleChmod}
                         onDelete={(e) => {
                           setOpenMenu(null);
                           setDeleteTarget(e);
@@ -665,6 +823,8 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
             setOpenMenu(null);
             setRenaming({ entry: e, value: e.name });
           }}
+          onCut={handleCut}
+          onChmod={handleChmod}
           onDelete={(e) => {
             setOpenMenu(null);
             setDeleteTarget(e);
@@ -705,11 +865,22 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-sm border border-red-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-red-300">
-              Datei löschen?
+              {deleteTarget.isDir ? "Ordner löschen?" : "Datei löschen?"}
             </h2>
             <p className="mb-4 text-sm text-slate-300">
               <span className="font-mono text-xs break-all">{deleteTarget.path}</span> wird
               unwiderruflich vom Server gelöscht.
+              {deleteTarget.isDir &&
+                (deletePreview ? (
+                  <>
+                    {" "}
+                    Enthält <strong>{deletePreview.fileCount}</strong> Datei(en) in{" "}
+                    <strong>{deletePreview.dirCount}</strong> Ordner(n) (inkl. diesem) — alle
+                    werden mitgelöscht.
+                  </>
+                ) : (
+                  " Ermittle Inhalt…"
+                ))}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -725,6 +896,86 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
                 className="font-heading bg-red-600 px-3 py-1.5 text-xs font-semibold text-red-50 hover:bg-red-500"
               >
                 Löschen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {chmodTarget && (
+        <ChmodDialog
+          entry={chmodTarget}
+          onCancel={() => setChmodTarget(null)}
+          onConfirm={handleConfirmChmod}
+        />
+      )}
+
+      {moveCollision && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-sm border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
+            <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
+              Ziel existiert bereits
+            </h2>
+            <p className="mb-4 text-sm text-slate-300">
+              <span className="font-mono text-xs break-all">{moveCollision.to}</span> gibt es
+              schon und würde überschrieben.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setMoveCollision(null)}
+                className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmMoveCollision}
+                className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
+              >
+                Überschreiben
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {uploadConflict && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
+            <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
+              Datei überschreiben?
+            </h2>
+            <p className="mb-3 text-sm text-slate-300">
+              <span className="font-mono text-xs break-all">{uploadConflict.remotePath}</span>{" "}
+              existiert bereits auf dem Server.
+            </p>
+            {uploadConflict.localPreview.text !== null && uploadConflict.remoteText !== null ? (
+              <NoteDiffPreview
+                previousContent={uploadConflict.remoteText}
+                newContent={uploadConflict.localPreview.text}
+              />
+            ) : (
+              <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
+                Kein Text-Diff möglich (Binärdatei oder zu groß). Bisherige Größe:{" "}
+                {formatBytes(uploadConflict.remoteSize)}, neue Größe:{" "}
+                {formatBytes(uploadConflict.localPreview.size)}.
+              </p>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setUploadConflict(null)}
+                className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUpload}
+                className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
+              >
+                Überschreiben
               </button>
             </div>
           </div>
@@ -753,6 +1004,8 @@ function FileEntryMenu({
   onShowProperties,
   onRefresh,
   onRename,
+  onCut,
+  onChmod,
   onDelete,
 }: {
   entry: RemoteEntryDto;
@@ -765,6 +1018,8 @@ function FileEntryMenu({
   onShowProperties: (entry: RemoteEntryDto) => void;
   onRefresh: () => void;
   onRename: (entry: RemoteEntryDto) => void;
+  onCut: (entry: RemoteEntryDto) => void;
+  onChmod: (entry: RemoteEntryDto) => void;
   onDelete: (entry: RemoteEntryDto) => void;
 }) {
   const itemClass = "block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14";
@@ -794,18 +1049,22 @@ function FileEntryMenu({
         Aktualisieren
       </button>
       <div className="my-1 border-t border-slate-800" />
+      <button type="button" onClick={() => onChmod(entry)} className={itemClass}>
+        Rechte bearbeiten…
+      </button>
       <button type="button" onClick={() => onRename(entry)} className={itemClass}>
         Umbenennen
       </button>
-      {!entry.isDir && (
-        <button
-          type="button"
-          onClick={() => onDelete(entry)}
-          className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-600/12"
-        >
-          Löschen
-        </button>
-      )}
+      <button type="button" onClick={() => onCut(entry)} className={itemClass}>
+        Ausschneiden
+      </button>
+      <button
+        type="button"
+        onClick={() => onDelete(entry)}
+        className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-600/12"
+      >
+        Löschen
+      </button>
     </div>
   );
 }
@@ -856,6 +1115,131 @@ function FilePropertiesDialog({
             className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
           >
             Schließen
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Reihen-Reihenfolge der chmod-Checkbox-Matrix: owner/group/other × je
+ * einer Bit-Maske pro Spalte (r/w/x), spiegelt exakt `RemoteEntry::
+ * permissions` (Spec 0020: "reine Unix-Rechte-Bits, `0o755`-Stil"). */
+const CHMOD_ROWS: { label: string; read: number; write: number; execute: number }[] = [
+  { label: "Owner", read: 0o400, write: 0o200, execute: 0o100 },
+  { label: "Group", read: 0o040, write: 0o020, execute: 0o010 },
+  { label: "Other", read: 0o004, write: 0o002, execute: 0o001 },
+];
+
+/** Spec 0054, Teil 3: chmod-Dialog — Checkbox-Matrix (owner/group/other ×
+ * r/w/x) UND eine numerische Eingabe, bidirektional synchron über
+ * gemeinsamen `mode`-State (jede Checkbox toggelt ein einzelnes Bit per
+ * XOR, die numerische Eingabe parst die ganze dreistellige Oktalzahl neu —
+ * beide schreiben in denselben State, es gibt keine zwei Quellen der
+ * Wahrheit). "Optional rekursiv... mit deutlicher Kennzeichnung, weil
+ * mächtig" (Spec) nur bei Ordnern sichtbar, mit auffälliger Warnfarbe. */
+function ChmodDialog({
+  entry,
+  onCancel,
+  onConfirm,
+}: {
+  entry: RemoteEntryDto;
+  onCancel: () => void;
+  onConfirm: (mode: number, recursive: boolean) => void;
+}) {
+  const [mode, setMode] = useState(entry.permissionsOctal);
+  const [numericInput, setNumericInput] = useState(mode.toString(8).padStart(3, "0"));
+  const [recursive, setRecursive] = useState(false);
+
+  const applyMode = (next: number) => {
+    setMode(next);
+    setNumericInput(next.toString(8).padStart(3, "0"));
+  };
+
+  const toggleBit = (bit: number) => applyMode(mode ^ bit);
+
+  const handleNumericChange = (value: string) => {
+    setNumericInput(value);
+    if (/^[0-7]{1,3}$/.test(value)) {
+      setMode(Number.parseInt(value, 8));
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
+        <h2 className="font-heading mb-1 text-sm font-semibold text-slate-100">
+          Rechte bearbeiten
+        </h2>
+        <p className="mb-3 font-mono text-xs break-all text-slate-400">{entry.path}</p>
+
+        <table className="mb-3 w-full text-xs text-slate-300">
+          <thead>
+            <tr className="text-slate-500">
+              <th className="text-left font-normal"> </th>
+              <th className="font-normal">Lesen</th>
+              <th className="font-normal">Schreiben</th>
+              <th className="font-normal">Ausführen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {CHMOD_ROWS.map((row) => (
+              <tr key={row.label}>
+                <td>{row.label}</td>
+                {[row.read, row.write, row.execute].map((bit) => (
+                  <td key={bit} className="text-center">
+                    <input
+                      type="checkbox"
+                      checked={(mode & bit) !== 0}
+                      onChange={() => toggleBit(bit)}
+                      aria-label={`${row.label} ${bit}`}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <label className="mb-3 flex items-center gap-2 text-xs text-slate-300">
+          Numerisch
+          <input
+            value={numericInput}
+            onChange={(e) => handleNumericChange(e.target.value)}
+            maxLength={3}
+            className="w-16 border border-slate-600 bg-slate-950 px-2 py-1 font-mono text-slate-100 focus:outline-none"
+          />
+        </label>
+
+        {entry.isDir && (
+          <label className="mb-3 flex items-start gap-2 text-xs text-amber-300">
+            <input
+              type="checkbox"
+              checked={recursive}
+              onChange={(e) => setRecursive(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <strong>Rekursiv</strong> — ändert die Rechte für ALLE Dateien und Unterordner in
+              diesem Ordner. Mächtige Aktion, nicht rückgängig machbar.
+            </span>
+          </label>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+          >
+            Abbrechen
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(mode, recursive)}
+            className="font-heading bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-indigo-500"
+          >
+            Übernehmen
           </button>
         </div>
       </div>

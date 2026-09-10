@@ -543,6 +543,19 @@ export interface RemoteEntryDto {
   group: string | null;
 }
 
+/** Spec 0054, Teil 3: Vorschau vor dem Löschen eines Ordners. */
+export interface DeletePreviewDto {
+  fileCount: number;
+  dirCount: number;
+}
+
+/** Spec 0054, Teil 3: die lokale Seite der Upload-Überschreib-Diff-Vorschau
+ * — `text: null` bei einer zu großen/nicht-Text-Datei. */
+export interface LocalFilePreviewDto {
+  text: string | null;
+  size: number;
+}
+
 export type SftpTransferKind = "upload" | "download";
 
 export interface SftpTransferStartedEvent {

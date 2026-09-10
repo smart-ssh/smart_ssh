@@ -526,6 +526,27 @@ impl russh_sftp::server::Handler for SftpTestHandler {
         })
     }
 
+    /// Spec 0054, Teil 3 (chmod): einzig die `permissions`-Bits werden
+    /// angewendet (`std::fs::set_permissions`, unix-`mode`-Bits) — reicht
+    /// für `test_sftp_set_permissions`, ein echter SFTP-Server würde hier
+    /// auch `uid`/`gid`/Zeitstempel aus `attrs` anwenden, die
+    /// `set_permissions`-Trait-Methode selbst setzt aber ohnehin nur
+    /// `permissions` (s. `RusshSftpSession::set_permissions`).
+    async fn setstat(
+        &mut self,
+        id: u32,
+        path: String,
+        attrs: FileAttributes,
+    ) -> Result<Status, Self::Error> {
+        if let Some(mode) = attrs.permissions {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(self.resolve(&path), std::fs::Permissions::from_mode(mode))
+                .await
+                .map_err(map_io_err)?;
+        }
+        Ok(ok_status(id))
+    }
+
     async fn remove(&mut self, id: u32, filename: String) -> Result<Status, Self::Error> {
         fs::remove_file(self.resolve(&filename))
             .await

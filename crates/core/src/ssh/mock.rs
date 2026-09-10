@@ -216,4 +216,29 @@ impl SftpSession for MockSftpSession {
             .push(format!("create_dir {path}"));
         Ok(())
     }
+
+    /// Wie `create_dir`: reine Aufruf-Verfolgung, kein echtes
+    /// Verzeichnis-Modell (dieser Mock kennt nur flache Dateien, s.
+    /// Moduldoc-Kommentar) — für die orchestration-seitigen
+    /// `ReadRemoteFile`/`WriteRemoteFile`-Tests, die diesen Mock nutzen,
+    /// reicht das; die tatsächliche Rekursions-/Verzeichnis-Logik von Spec
+    /// 0054, Teil 3 wird gegen den echten lokalen Pseudo-Server getestet
+    /// (`ssh-transport`s Integrationstests).
+    async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
+        self.inner
+            .lock()
+            .unwrap()
+            .calls
+            .push(format!("remove_dir {path}"));
+        Ok(())
+    }
+
+    async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.calls.push(format!("set_permissions {path} {mode:o}"));
+        if let Some(file) = inner.files.get_mut(path) {
+            file.permissions = mode;
+        }
+        Ok(())
+    }
 }

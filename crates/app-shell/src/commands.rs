@@ -25,7 +25,9 @@ use ssh_manager_core::profiles::{
     NoteTarget, ProfileStore, Server,
 };
 use ssh_manager_core::shared::ServerId;
-use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, PtySize, SshError};
+use ssh_manager_core::ssh::{
+    resolve_connection_target, HostKeyDecision, PtySize, SftpSession, SshError,
+};
 
 use crate::ai_provider_factory::build_ai_provider;
 use crate::confirmation::ConfirmationRegistry;
@@ -2689,17 +2691,13 @@ async fn restore_native_decoration(
 // Dateibrowser-Panel, analog zum interaktiven Terminal (Spec 0005, Abschnitt
 // 1: auch dort läuft rohe Tastatureingabe ungefiltert durch).
 //
-// **Design-Entscheidung, Löschen/Herunterladen auf Dateien beschränkt**: Der
-// `SftpSession`-Trait (Spec 0020, Abschnitt 3, bereits exakt so in Teil 1
-// committet) bietet nur `remove()` (SFTP `REMOVE`, wirkt ausschließlich auf
-// Dateien) und kein rekursives Verzeichnis-Löschen oder einen
-// Mehrdatei-Download. Ein Versuch, `remove()` auf ein Verzeichnis
-// anzuwenden, schlägt serverseitig mit einem Protokollfehler fehl. Statt
-// das im Frontend erst nach einem verwirrenden Fehler sichtbar zu machen,
-// bietet das Kontextmenü "Herunterladen"/"Löschen" dort von vornherein nur
-// für Dateien an — Verzeichnisse lassen sich weiterhin öffnen (Navigation)
-// und umbenennen (SFTP `RENAME` funktioniert für beide Eintragstypen).
-// Siehe ADR-Vorschlag am Ende der Aufgabe.
+// Historische Anmerkung (Spec 0020, Teil 1): `remove()` (SFTP `REMOVE`)
+// wirkt nur auf Dateien, `sftp_download`/`sftp_delete` waren deshalb lange
+// auf Dateien beschränkt. Spec 0054 hebt das auf: `sftp_download_default`/
+// `sftp_download_dir` (Teil 2) laden Ordner rekursiv herunter, `sftp_delete`
+// (Teil 3, unten) löscht sie rekursiv über die neuen Trait-Methoden
+// `remove_dir`/das Zusammenspiel mit `list_dir`. "Umbenennen" (SFTP
+// `RENAME`, für beide Eintragstypen) war davon nie betroffen.
 
 /// Liefert die Session und öffnet ihre SFTP-Verbindung bei Bedarf (Spec
 /// 0020, Abschnitt 3, `crate::orchestration::ensure_sftp_open`) — gemeinsame
@@ -3049,10 +3047,82 @@ pub async fn sftp_upload(
     result
 }
 
-/// Löschen einer Datei — die Bestätigungsrückfrage selbst läuft im Frontend
-/// (Spec 0020, Abschnitt 5: "Löschen erfordert eine Bestätigungsrückfrage im
-/// UI"), dieser Befehl führt sie nur noch aus. Nur für Dateien angeboten,
-/// s. Moduldoc-Kommentar oben ("Design-Entscheidung").
+/// Sammelt rekursiv **alle** Verzeichnispfade unter `root` (inklusive
+/// `root` selbst) — geteilte Traversierung für `sftp_delete_preview` und
+/// den eigentlichen rekursiven Löschvorgang in `sftp_delete` unten. Liefert
+/// zusätzlich die Anzahl der gefundenen Dateien, damit ein Aufrufer nicht
+/// zweimal denselben Baum ablaufen muss.
+///
+/// Die zurückgegebenen Verzeichnispfade stehen in **Entdeckungsreihenfolge**
+/// (ein Verzeichnis erscheint immer erst NACHDEM sein Elternverzeichnis
+/// verarbeitet wurde) — das reicht, um sie für ein bottom-up-Löschen später
+/// einfach umzudrehen (`.rev()`), unabhängig davon, ob hier DFS oder BFS
+/// traversiert wird (s. `sftp_delete`).
+async fn walk_dirs_and_count_files(
+    sftp: &mut dyn SftpSession,
+    root: &str,
+) -> Result<(Vec<String>, u64), SshError> {
+    let mut dirs = vec![root.to_string()];
+    let mut queue = vec![root.to_string()];
+    let mut file_count = 0u64;
+    while let Some(dir) = queue.pop() {
+        let entries = sftp.list_dir(&dir).await?;
+        for entry in entries {
+            if entry.is_dir {
+                queue.push(entry.path.clone());
+                dirs.push(entry.path);
+            } else {
+                file_count += 1;
+            }
+        }
+    }
+    Ok((dirs, file_count))
+}
+
+/// Spec 0054, Teil 3: Vorschau vor dem eigentlichen Löschen, analog zum
+/// zweistufigen `delete_server` — bei einem Ordner zeigt das Frontend damit
+/// "X Dateien, Y Ordner werden gelöscht" statt einer inhaltslosen
+/// Ja/Nein-Frage. Für eine Datei ist das Ergebnis trivial (1 Datei, 0
+/// Ordner), das Frontend ruft diesen Befehl trotzdem einheitlich für
+/// beide Fälle auf.
+#[tauri::command]
+pub async fn sftp_delete_preview(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    path: String,
+) -> CommandResult<crate::dto::DeletePreviewDto> {
+    use crate::dto::DeletePreviewDto;
+
+    let session = session_sftp(&state, session_id).await?;
+    let mut guard = session.sftp.lock().await;
+    let sftp = guard
+        .as_mut()
+        .expect("ensure_sftp_open lief erfolgreich durch");
+
+    let root_entry = sftp.stat(&path).await?;
+    if !root_entry.is_dir {
+        return Ok(DeletePreviewDto {
+            file_count: 1,
+            dir_count: 0,
+        });
+    }
+    let (dirs, file_count) = walk_dirs_and_count_files(sftp.as_mut(), &path).await?;
+    Ok(DeletePreviewDto {
+        file_count,
+        dir_count: dirs.len() as u64,
+    })
+}
+
+/// Löschen einer Datei ODER eines Ordners (Spec 0054, Teil 3 hebt die
+/// bisherige Datei-Beschränkung auf, s. Moduldoc-Kommentar oben) — die
+/// Bestätigungsrückfrage selbst läuft im Frontend (Spec 0020, Abschnitt 5),
+/// dieser Befehl führt sie nur noch aus.
+///
+/// Ordner werden bottom-up gelöscht: erst alle Dateien im gesamten Baum
+/// (Reihenfolge egal), dann alle Verzeichnisse in umgekehrter
+/// Entdeckungsreihenfolge (tiefste zuerst) — SFTP `RMDIR` verlangt ein
+/// leeres Verzeichnis, ein Verzeichnis kann also erst entfernt werden,
+/// nachdem alles darunter bereits weg ist.
 #[tauri::command]
 pub async fn sftp_delete(
     state: State<'_, AppState>,
@@ -3064,10 +3134,140 @@ pub async fn sftp_delete(
     let sftp = guard
         .as_mut()
         .expect("ensure_sftp_open lief erfolgreich durch");
-    sftp.remove(&path).await?;
+    delete_recursive(sftp.as_mut(), &path).await?;
     Ok(())
 }
 
+/// Eigentliche Rekursions-Logik hinter `sftp_delete` — von der
+/// Tauri-Befehls-Signatur (`State<AppState>`, `SessionId`) losgelöst, damit
+/// sie sich direkt gegen ein `SftpSession`-Testdouble prüfen lässt (s.
+/// `sftp_mutation_tests` unten, gegen den echten lokalen Pseudo-Server via
+/// `ssh_transport::LocalFileSession`).
+async fn delete_recursive(sftp: &mut dyn SftpSession, path: &str) -> Result<(), SshError> {
+    let root_entry = sftp.stat(path).await?;
+    if !root_entry.is_dir {
+        sftp.remove(path).await?;
+        return Ok(());
+    }
+
+    let (dirs, _file_count) = walk_dirs_and_count_files(sftp, path).await?;
+    // Alle Dateien im Baum entfernen — dafür noch einmal denselben Baum
+    // ablaufen statt die Pfade aus `walk_dirs_and_count_files` zu sammeln:
+    // deren Rückgabe zählt Dateien nur, trägt ihre Pfade aber bewusst nicht
+    // mit (für die reine Vorschau in `sftp_delete_preview` unnötiger
+    // Speicher-/Allokations-Ballast bei großen Bäumen). Der zweite Durchlauf
+    // liest dieselben, kleinen Verzeichnislisten erneut — für den ohnehin
+    // seltenen "Ordner löschen"-Fall keine spürbare Mehrkosten.
+    for dir in &dirs {
+        let entries = sftp.list_dir(dir).await?;
+        for entry in entries {
+            if !entry.is_dir {
+                sftp.remove(&entry.path).await?;
+            }
+        }
+    }
+    for dir in dirs.into_iter().rev() {
+        sftp.remove_dir(&dir).await?;
+    }
+    Ok(())
+}
+
+/// Spec 0054, Teil 3: existiert ein Zielpfad bereits? Grundlage für die
+/// Kollisionsprüfung bei "Umbenennen"/"Verschieben" (beide laufen über
+/// dieselbe `sftp_rename` unten — SFTP `RENAME` versteht keinen Unterschied
+/// zwischen "im selben Ordner umbenennen" und "in einen anderen Ordner
+/// verschieben") und bei "Hochladen" (Überschreib-Erkennung vor der
+/// Diff-Vorschau). `stat()` ist hier bewusst der einzige Signalweg — kein
+/// gesonderter `exists()`-Trait-Befehl, das SFTP-Protokoll kennt ohnehin
+/// keine schnellere Existenzprüfung als `STAT`.
+#[tauri::command]
+pub async fn sftp_exists(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    path: String,
+) -> CommandResult<bool> {
+    let session = session_sftp(&state, session_id).await?;
+    let mut guard = session.sftp.lock().await;
+    let sftp = guard
+        .as_mut()
+        .expect("ensure_sftp_open lief erfolgreich durch");
+    Ok(sftp.stat(&path).await.is_ok())
+}
+
+/// Spec 0054, Teil 3: chmod. `recursive` gilt nur für Ordner (bei einer
+/// Datei ignoriert der Aufrufer das Frontend-seitig ohnehin, s. dortiger
+/// Dialog) — läuft denselben Verzeichnisbaum wie `sftp_delete` ab und setzt
+/// dieselben Rechte auf **jeden** gefundenen Eintrag (Dateien UND
+/// Verzeichnisse selbst), nicht nur auf Blätter.
+#[tauri::command]
+pub async fn sftp_chmod(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    path: String,
+    mode: u32,
+    recursive: bool,
+) -> CommandResult<()> {
+    let session = session_sftp(&state, session_id).await?;
+    let mut guard = session.sftp.lock().await;
+    let sftp = guard
+        .as_mut()
+        .expect("ensure_sftp_open lief erfolgreich durch");
+    chmod_recursive(sftp.as_mut(), &path, mode, recursive).await?;
+    Ok(())
+}
+
+/// Eigentliche Rekursions-Logik hinter `sftp_chmod` — s. `delete_recursive`s
+/// Doc-Kommentar zum selben Testbarkeits-Muster.
+async fn chmod_recursive(
+    sftp: &mut dyn SftpSession,
+    path: &str,
+    mode: u32,
+    recursive: bool,
+) -> Result<(), SshError> {
+    if !recursive {
+        sftp.set_permissions(path, mode).await?;
+        return Ok(());
+    }
+    let root_entry = sftp.stat(path).await?;
+    if !root_entry.is_dir {
+        sftp.set_permissions(path, mode).await?;
+        return Ok(());
+    }
+
+    // Erst den ganzen Baum LESEND ablaufen (mit den unveränderten
+    // Original-Rechten), ALLE Pfade sammeln, und die Rechte erst danach in
+    // einem zweiten Durchlauf setzen. Ohne diese Trennung würde ein bereits
+    // umgesetztes Verzeichnis — z. B. `mode` ohne Owner-Execute-Bit — die
+    // eigene weitere Traversierung blockieren (ein Verzeichnis ohne `x` für
+    // den eigenen Owner lässt sich unter Unix selbst vom Owner-Prozess
+    // nicht mehr auflisten), sobald es als Nächstes an der Reihe wäre.
+    let mut all_paths = vec![path.to_string()];
+    let mut queue = vec![path.to_string()];
+    while let Some(dir) = queue.pop() {
+        let entries = sftp.list_dir(&dir).await?;
+        for entry in entries {
+            all_paths.push(entry.path.clone());
+            if entry.is_dir {
+                queue.push(entry.path);
+            }
+        }
+    }
+    // Rückwärts (tiefste zuerst, Wurzel zuletzt) — dieselbe Begründung wie
+    // oben: sobald die Wurzel selbst ihr Execute-Bit verliert, lässt sich
+    // kein Pfad *unter* ihr mehr auflösen, auch nicht nur für ein weiteres
+    // `set_permissions` (Pfadauflösung braucht `x` auf jedem Vorfahren).
+    for entry_path in all_paths.into_iter().rev() {
+        sftp.set_permissions(&entry_path, mode).await?;
+    }
+    Ok(())
+}
+
+/// Spec 0054, Teil 3: "Umbenennen" UND "Verschieben" laufen über denselben
+/// Befehl — SFTP `RENAME` unterscheidet nicht zwischen beidem, `to` kann im
+/// selben Verzeichnis (Umbenennen) oder einem anderen (Verschieben)
+/// liegen. Die Kollisionsprüfung (Zielname existiert schon) läuft im
+/// Frontend **vor** diesem Aufruf über `sftp_exists` — dieser Befehl führt
+/// nur noch aus, analog zu `sftp_delete`s Bestätigung.
 #[tauri::command]
 pub async fn sftp_rename(
     state: State<'_, AppState>,
@@ -3099,7 +3299,8 @@ pub async fn sftp_mkdir(
     Ok(())
 }
 
-/// Obergrenze für "Dateiinhalt kopieren" (Spec 0054, Teil 2). Bewusst
+/// Obergrenze für "Dateiinhalt kopieren" (Spec 0054, Teil 2) UND für die
+/// Upload-Diff-Vorschau (Teil 3, `read_local_text_preview` unten). Bewusst
 /// **kein** gemeinsamer Code-Pfad und keine gemeinsame Konstante mit
 /// `orchestration::ReadRemoteFile`s 256-KB-Cap (Spec 0020, Abschnitt
 /// 4.1) — das liefe für einen manuellen Klick über KI-Infrastruktur
@@ -3108,7 +3309,7 @@ pub async fn sftp_mkdir(
 /// KI-/Filter-Code, auch nicht nur durch eine Hilfsfunktion davon"). Der
 /// gleiche Zahlenwert ist reiner Zufall gleich guter Praxis, keine
 /// geteilte Definition.
-const MAX_TEXT_COPY_BYTES: u64 = 256 * 1024;
+const MAX_TEXT_PREVIEW_BYTES: u64 = 256 * 1024;
 
 /// Spec 0054, Teil 2: "Dateiinhalt kopieren" — liest eine Remote-Datei als
 /// Text für die Zwischenablage (der eigentliche `writeText`-Aufruf passiert
@@ -3134,10 +3335,10 @@ pub async fn sftp_read_text(
         .expect("ensure_sftp_open lief erfolgreich durch");
 
     if let Ok(entry) = sftp.stat(&path).await {
-        if entry.size > MAX_TEXT_COPY_BYTES {
+        if entry.size > MAX_TEXT_PREVIEW_BYTES {
             return Err(CommandError::from(format!(
                 "Datei ist größer als {} KB — zu groß zum Kopieren in die Zwischenablage",
-                MAX_TEXT_COPY_BYTES / 1024
+                MAX_TEXT_PREVIEW_BYTES / 1024
             )));
         }
     }
@@ -3145,6 +3346,38 @@ pub async fn sftp_read_text(
     let bytes = sftp.read_file(&path).await?;
     String::from_utf8(bytes)
         .map_err(|_| CommandError::from("Datei ist keine Textdatei (kein gültiges UTF-8)"))
+}
+
+/// Spec 0054, Teil 3: die "neue" (lokale) Seite der Upload-Überschreib-Diff-
+/// Vorschau — Gegenstück zu `sftp_read_text` für die "alte" (Remote-)Seite,
+/// nur **graceful** statt fehlschlagend: eine zu große oder nicht-Text-Datei
+/// liefert `text: None` (das Frontend zeigt dann einen Größenvergleich-
+/// Hinweis statt eines Diffs, analog zu `BinaryFileChangeHint` bei
+/// KI-Dateischreibvorgängen, Spec 0020 Abschnitt 4.2), statt den ganzen
+/// Upload-Bestätigungsdialog mit einem Fehler abzubrechen — anders als bei
+/// "Dateiinhalt kopieren" ist eine Binärdatei hier ein erwarteter,
+/// alltäglicher Fall (Uploads sind keine Textdateien), kein Ausnahmefall.
+///
+/// `local_path` ist wie bei `sftp_upload` bereits vom Frontend aufgelöst
+/// (nativer Öffnen-Dialog oder OS-Drag-and-Drop) — derselbe Vertrauens-
+/// Grenzfall, dieselbe Begründung wie dort.
+#[tauri::command]
+pub async fn read_local_text_preview(
+    local_path: String,
+) -> CommandResult<crate::dto::LocalFilePreviewDto> {
+    use crate::dto::LocalFilePreviewDto;
+
+    let bytes = tokio::task::spawn_blocking(move || std::fs::read(&local_path))
+        .await
+        .map_err(|e| format!("Hintergrund-Task für Datei-Vorschau fehlgeschlagen: {e}"))??;
+    let size = bytes.len() as u64;
+    if size > MAX_TEXT_PREVIEW_BYTES {
+        return Ok(LocalFilePreviewDto { text: None, size });
+    }
+    Ok(LocalFilePreviewDto {
+        text: String::from_utf8(bytes).ok(),
+        size,
+    })
 }
 
 #[cfg(test)]
@@ -3542,5 +3775,116 @@ mod send_chat_message_persistence_tests {
             "die Chat-Persistenz selbst darf vom fehlenden Prompt-History-Store unbeeinflusst \
              bleiben: {loaded:?}"
         );
+    }
+}
+
+/// Spec 0054, Teil 3: Rekursions-Logik von `sftp_delete`/`sftp_chmod` gegen
+/// den echten lokalen Pseudo-Server (`ssh_transport::LocalFileSession`,
+/// echtes `tokio::fs` auf einem Tempdir) statt gegen `MockSftpSession` —
+/// der Mock kennt keine echten Verzeichnisse (s. dessen Moduldoc-
+/// Kommentar), für Rekursion über einen echten Verzeichnisbaum reicht nur
+/// die lokale Implementierung.
+#[cfg(test)]
+mod sftp_mutation_tests {
+    use ssh_transport::LocalFileSession;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_delete_recursive_removes_nested_files_and_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("tree");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::write(root.join("a.txt"), b"a").unwrap();
+        std::fs::write(root.join("sub/b.txt"), b"b").unwrap();
+        let mut sftp = LocalFileSession::new();
+
+        delete_recursive(&mut sftp, root.to_str().unwrap())
+            .await
+            .expect("delete_recursive() sollte gelingen");
+
+        assert!(!root.exists());
+    }
+
+    #[tokio::test]
+    async fn test_delete_recursive_on_a_plain_file_just_removes_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("solo.txt");
+        std::fs::write(&file, b"x").unwrap();
+        let mut sftp = LocalFileSession::new();
+
+        delete_recursive(&mut sftp, file.to_str().unwrap())
+            .await
+            .unwrap();
+
+        assert!(!file.exists());
+    }
+
+    #[tokio::test]
+    async fn test_walk_dirs_and_count_files_counts_the_whole_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("tree");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::write(root.join("a.txt"), b"a").unwrap();
+        std::fs::write(root.join("sub/b.txt"), b"b").unwrap();
+        std::fs::write(root.join("sub/c.txt"), b"c").unwrap();
+        let mut sftp = LocalFileSession::new();
+
+        let (dirs, file_count) = walk_dirs_and_count_files(&mut sftp, root.to_str().unwrap())
+            .await
+            .unwrap();
+
+        // `dirs` enthält den Wurzelordner selbst plus "sub" — s.
+        // `DeletePreviewDto::dir_count`s Doc-Kommentar ("zählt den Ordner
+        // selbst mit").
+        assert_eq!(dirs.len(), 2);
+        assert_eq!(file_count, 3);
+    }
+
+    #[tokio::test]
+    async fn test_chmod_recursive_without_recursive_flag_only_touches_the_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("tree");
+        std::fs::create_dir_all(&root).unwrap();
+        let child = root.join("child.txt");
+        std::fs::write(&child, b"x").unwrap();
+        let mut sftp = LocalFileSession::new();
+
+        chmod_recursive(&mut sftp, root.to_str().unwrap(), 0o700, false)
+            .await
+            .unwrap();
+
+        let root_entry = sftp.stat(root.to_str().unwrap()).await.unwrap();
+        let child_entry = sftp.stat(child.to_str().unwrap()).await.unwrap();
+        assert_eq!(root_entry.permissions, 0o700);
+        assert_ne!(child_entry.permissions, 0o700);
+    }
+
+    #[tokio::test]
+    async fn test_chmod_recursive_with_recursive_flag_touches_every_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("tree");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        let nested = root.join("sub/child.txt");
+        std::fs::write(&nested, b"x").unwrap();
+        let mut sftp = LocalFileSession::new();
+
+        // 0o700 statt 0o600: das Execute-Bit muss für Verzeichnisse
+        // erhalten bleiben, sonst sperrt man sich beim rekursiven chmod
+        // selbst aus dem eigenen Baum aus (Unix braucht `x` auf jedem
+        // Vorfahren, um einen Pfad darunter überhaupt aufzulösen) — exakt
+        // der Bug, den `chmod_recursive`s "erst lesend traversieren, dann
+        // von unten nach oben setzen"-Reihenfolge verhindern soll; dieser
+        // Test verifiziert das Ergebnis, nicht die Reihenfolge selbst.
+        chmod_recursive(&mut sftp, root.to_str().unwrap(), 0o700, true)
+            .await
+            .expect("chmod_recursive() sollte gelingen");
+
+        let root_entry = sftp.stat(root.to_str().unwrap()).await.unwrap();
+        let sub_entry = sftp.stat(root.join("sub").to_str().unwrap()).await.unwrap();
+        let nested_entry = sftp.stat(nested.to_str().unwrap()).await.unwrap();
+        assert_eq!(root_entry.permissions, 0o700);
+        assert_eq!(sub_entry.permissions, 0o700);
+        assert_eq!(nested_entry.permissions, 0o700);
     }
 }

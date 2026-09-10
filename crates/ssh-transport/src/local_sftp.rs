@@ -164,6 +164,38 @@ impl SftpSession for LocalFileSession {
             .await
             .map_err(|e| io_err(path, e))
     }
+
+    async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
+        tokio::fs::remove_dir(path)
+            .await
+            .map_err(|e| io_err(path, e))
+    }
+
+    async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(mode);
+            tokio::fs::set_permissions(path, perms)
+                .await
+                .map_err(|e| io_err(path, e))
+        }
+        #[cfg(not(unix))]
+        {
+            // Windows kennt keine Unix-Rechte-Bits — der chmod-Dialog ist
+            // dort ohnehin nur gegen den lokalen Pseudo-Server sinnvoll
+            // nutzbar, wo er nichts Sinnvolles tun könnte; ein klarer
+            // Fehler statt eines stillschweigenden No-ops.
+            let _ = mode;
+            Err(io_err(
+                path,
+                std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "Rechte-Änderung wird auf diesem Betriebssystem nicht unterstützt",
+                ),
+            ))
+        }
+    }
 }
 
 #[cfg(test)]

@@ -23,6 +23,14 @@ sind mit **(Pro)** markiert.
   (auch für Ordner, rekursiv), Dateiinhalt kopieren, Pfad kopieren,
   Eigenschaften (Größe, Rechte numerisch + symbolisch, Besitzer/Gruppe,
   Änderungsdatum) und Aktualisieren.
+- Dateimanager: server-verändernde Aktionen — Rechte bearbeiten (chmod,
+  Checkbox-Matrix + numerisch, optional rekursiv für Ordner), Löschen jetzt
+  auch für Ordner (rekursiv, mit Datei-/Ordner-Anzahl in der Bestätigung),
+  Umbenennen mit Kollisionswarnung, Verschieben per Ausschneiden/Einfügen
+  (ebenfalls mit Kollisionswarnung) und Hochladen mit Diff-Vorschau beim
+  Überschreiben einer bestehenden Datei. Keine Bestätigung außer bei
+  irreversiblen/überschreibenden Aktionen — manuelle Dateibrowser-Aktionen
+  laufen (wie das Terminal) nicht durch die Filter-Engine.
 
 ### Fixed
 - Dateimanager: das Drei-Punkte-Menü an einem Eintrag ließ sich oft nicht

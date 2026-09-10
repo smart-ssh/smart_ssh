@@ -826,6 +826,28 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
 
+/// Spec 0054, Teil 3: Vorschau vor dem Löschen eines Ordners — "X Dateien,
+/// Y Ordner werden gelöscht" statt einer inhaltslosen Ja/Nein-Frage, analog
+/// zum zweistufigen `delete_server`. `dir_count` zählt den Ordner selbst
+/// mit (s. `crate::commands::walk_dirs_and_count_files`).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeletePreviewDto {
+    pub file_count: u64,
+    pub dir_count: u64,
+}
+
+/// Spec 0054, Teil 3: Ergebnis von `commands::read_local_text_preview` — die
+/// lokale Seite der Upload-Überschreib-Diff-Vorschau. `text: None` bei einer
+/// zu großen oder nicht als UTF-8 dekodierbaren Datei; `size` ist in jedem
+/// Fall gesetzt (Grundlage für den Größenvergleich-Hinweis in diesem Fall).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalFilePreviewDto {
+    pub text: Option<String>,
+    pub size: u64,
+}
+
 /// Sicht auf einen [`RemoteEntry`] für die Dateiliste im Dateibrowser (Spec
 /// 0020, Abschnitt 5.1: "Name, Größe, Rechte, Änderungsdatum"). `permissions`
 /// kommt bereits hier als lesbarer `rwxr-xr-x`-String statt als rohe Bits —
