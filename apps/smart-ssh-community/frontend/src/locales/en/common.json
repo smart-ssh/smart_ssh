@@ -269,6 +269,7 @@
     "title": "AI Provider",
     "openLogs": "Open diagnostic logs in file manager",
     "noProviders": "No provider configured yet.",
+    "configuredProvidersTitle": "Configured providers",
     "active": "active",
     "setActive": "Set Active",
     "addProvider": "Add Provider",

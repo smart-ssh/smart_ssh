@@ -44,6 +44,22 @@ function emptyForm(): AiProviderConfigInput {
 
 const MODEL_DATALIST_ID = "ai-provider-model-options";
 
+/** Spec 0056, Teil 3: gemeinsame Design-Tokens für dieses Formular statt
+ * pro Feld wiederholter Ad-hoc-Klassenketten — alle vier Farbpaletten
+ * (`slate`/`indigo`/`emerald`/`red`) sind bereits projektweite Tokens
+ * (`index.css`s `@theme`), hier nur konsistent auf Formularfelder/
+ * Sekundäraktionen angewandt. `bg-slate-950` für Felder INNERHALB einer
+ * `bg-slate-900/40`-Karte erzeugt die vom Reviewer/Stefan gewünschte
+ * Kontraststufung (Modal-Grund `slate-800` → Karte `slate-900/40` → Feld
+ * `slate-950`), `focus:ring-indigo-500` ist der bislang fehlende sichtbare
+ * Fokus-Zustand. */
+const CARD_CLASS = "rounded-lg border border-slate-700 bg-slate-900/40 p-4";
+const LABEL_CLASS = "block text-sm font-medium text-slate-200";
+const FIELD_CLASS =
+  "mt-1 w-full rounded border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-slate-100 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40";
+const SECONDARY_BUTTON_CLASS =
+  "shrink-0 rounded border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-50";
+
 interface AiProviderSettingsProps {
   /** Löst neu laden von `list_ai_providers` im Elternscreen aus (z. B. für
    * den "kein Provider konfiguriert"-Hinweis), sobald sich hier etwas
@@ -231,7 +247,18 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <p className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>
       )}
 
-      <ul className="mb-6 divide-y divide-slate-700 rounded-md border border-slate-700">
+      {/* Spec 0056, Teil 3: eigene Karte statt freistehender Liste — macht
+       * sichtbar, dass dies ein abgeschlossener Bereich ("was ist bereits
+       * konfiguriert") ist, getrennt vom Formular darunter ("neuen Provider
+       * anlegen"). Die Liste selbst behält ihre bisherige `divide-y`-
+       * Struktur, bekommt aber einen dunkleren Innenhintergrund
+       * (`slate-950/40`) als die Karte (`slate-900/40`), damit sich Karte
+       * und Listeninhalt trotz gleicher Rahmenfarbe voneinander abheben. */}
+      <section className={`mb-6 ${CARD_CLASS}`}>
+        <h3 className="font-heading mb-3 text-sm font-semibold tracking-wide text-slate-200">
+          {t("aiProvider.configuredProvidersTitle")}
+        </h3>
+        <ul className="divide-y divide-slate-700 rounded-md border border-slate-700 bg-slate-950/40">
           {providers.length === 0 && (
             <li className="px-4 py-3 text-sm text-slate-400">{t("aiProvider.noProviders")}</li>
           )}
@@ -256,7 +283,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     <button
                       type="button"
                       onClick={() => handleSetActive(provider.id)}
-                      className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+                      className="rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-100 transition-colors hover:border-slate-500 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                     >
                       {t("aiProvider.setActive")}
                     </button>
@@ -264,7 +291,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                   <button
                     type="button"
                     onClick={() => handleDelete(provider.id)}
-                    className="rounded bg-red-900 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
+                    className="rounded border border-red-800 bg-red-900 px-2 py-1 text-xs text-red-200 transition-colors hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500/40"
                   >
                     {t("common.delete")}
                   </button>
@@ -277,7 +304,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     type="button"
                     onClick={() => handleFetchAttestation(provider.id)}
                     disabled={attestationLoading[provider.id]}
-                    className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+                    className={SECONDARY_BUTTON_CLASS}
                   >
                     {attestationLoading[provider.id]
                       ? t("aiProvider.attestationFetching")
@@ -306,52 +333,60 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             </li>
           ))}
         </ul>
+      </section>
 
-        {/* Spec 0026, Abschnitt 3, Punkt 1: eigener Abschnitt für die
-         * optionale KI-Zweitmeinung zur Daten-Risiko-Achse — standardmäßig
-         * deaktiviert (Opt-in), separat wählbarer Provider, Hinweis auf ein
-         * empfohlenes lokales Modell. */}
-        <div className="mb-6 border-t border-slate-700 pt-4">
-          <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
-            {t("aiProvider.riskClassifierTitle")}
-          </h3>
-          <p className="mb-2 text-xs text-slate-500">{t("aiProvider.riskClassifierHint")}</p>
-          <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
-            <input
-              type="checkbox"
-              checked={riskClassifierEnabled}
-              onChange={(e) =>
-                handleRiskClassifierChange(e.target.checked, riskClassifierProviderId)
-              }
-            />
-            {t("aiProvider.riskClassifierEnable")}
+      {/* Spec 0026, Abschnitt 3, Punkt 1: eigener Abschnitt für die
+       * optionale KI-Zweitmeinung zur Daten-Risiko-Achse — standardmäßig
+       * deaktiviert (Opt-in), separat wählbarer Provider, Hinweis auf ein
+       * empfohlenes lokales Modell. Spec 0056, Teil 3: eigene Karte statt
+       * einer bloßen oberen Trennlinie — bislang lief dieser Bereich
+       * optisch nahtlos in die Provider-Liste über. */}
+      <section className={`mb-6 ${CARD_CLASS}`}>
+        <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
+          {t("aiProvider.riskClassifierTitle")}
+        </h3>
+        <p className="mb-2 text-xs text-slate-500">{t("aiProvider.riskClassifierHint")}</p>
+        <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={riskClassifierEnabled}
+            onChange={(e) =>
+              handleRiskClassifierChange(e.target.checked, riskClassifierProviderId)
+            }
+          />
+          {t("aiProvider.riskClassifierEnable")}
+        </label>
+        {riskClassifierEnabled && (
+          <label className={LABEL_CLASS}>
+            {t("aiProvider.riskClassifierProvider")}
+            <select
+              value={riskClassifierProviderId ?? ""}
+              onChange={(e) => handleRiskClassifierChange(true, e.target.value || null)}
+              disabled={riskSettingsSaving}
+              className={FIELD_CLASS}
+            >
+              <option value="">{t("aiProvider.riskClassifierNoProvider")}</option>
+              {providers.map((provider) => (
+                <option key={provider.id} value={provider.id}>
+                  {provider.displayName}
+                </option>
+              ))}
+            </select>
           </label>
-          {riskClassifierEnabled && (
-            <label className="block text-sm text-slate-300">
-              {t("aiProvider.riskClassifierProvider")}
-              <select
-                value={riskClassifierProviderId ?? ""}
-                onChange={(e) => handleRiskClassifierChange(true, e.target.value || null)}
-                disabled={riskSettingsSaving}
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-              >
-                <option value="">{t("aiProvider.riskClassifierNoProvider")}</option>
-                {providers.map((provider) => (
-                  <option key={provider.id} value={provider.id}>
-                    {provider.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
+        )}
+      </section>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Spec 0056, Teil 3: Kernfelder (Typ/Name/Modell/Base-URL/Key) als
+         * eine zusammengehörige Karte — vorher liefen sie ohne jede
+         * Rahmung direkt unter der Risiko-Zweitmeinung-Sektion weiter, kaum
+         * von ihr zu unterscheiden. */}
+        <section className={`${CARD_CLASS} space-y-3`}>
           <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-200">
             {t("aiProvider.addProvider")}
           </h3>
 
-          <label className="block text-sm text-slate-300">
+          <label className={LABEL_CLASS}>
             {t("aiProvider.type")}
             <select
               value={form.providerType}
@@ -359,7 +394,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 setForm({ ...form, providerType: e.target.value as ProviderType });
                 setCredentialTestResult(null);
               }}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+              className={FIELD_CLASS}
             >
               {PROVIDER_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -369,18 +404,18 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             </select>
           </label>
 
-          <label className="block text-sm text-slate-300">
+          <label className={LABEL_CLASS}>
             {t("aiProvider.providerName")}
             <input
               type="text"
               required
               value={form.displayName}
               onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+              className={FIELD_CLASS}
             />
           </label>
 
-          <label className="block text-sm text-slate-300">
+          <label className={LABEL_CLASS}>
             {t("aiProvider.model")}
             <div className="mt-1 flex gap-2">
               <input
@@ -390,7 +425,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 placeholder={t("aiProvider.modelPlaceholder")}
                 value={form.model}
                 onChange={(e) => setForm({ ...form, model: e.target.value })}
-                className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+                className={`${FIELD_CLASS} mt-0 w-full`}
               />
               {supportsModelDiscovery(form.providerType) && (
                 <button
@@ -408,7 +443,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     modelsLoading ||
                     (needsBaseUrl(form.providerType) && !form.baseUrl?.trim())
                   }
-                  className="shrink-0 rounded border border-slate-600 px-2 py-1.5 text-xs whitespace-nowrap text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+                  className={SECONDARY_BUTTON_CLASS}
                 >
                   {modelsLoading ? t("aiProvider.discoveringModels") : t("aiProvider.discoverModels")}
                 </button>
@@ -430,7 +465,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
           </label>
 
           {needsBaseUrl(form.providerType) && (
-            <label className="block text-sm text-slate-300">
+            <label className={LABEL_CLASS}>
               {t("aiProvider.baseUrl")}
               <input
                 type="text"
@@ -438,12 +473,12 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 placeholder={t("aiProvider.baseUrlPlaceholder")}
                 value={form.baseUrl ?? ""}
                 onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+                className={FIELD_CLASS}
               />
             </label>
           )}
 
-          <label className="block text-sm text-slate-300">
+          <label className={LABEL_CLASS}>
             {t("aiProvider.apiKey")}
             <input
               type="password"
@@ -456,16 +491,20 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 // wäre ein weiterhin angezeigtes "gültig" irreführend.
                 setCredentialTestResult(null);
               }}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+              className={FIELD_CLASS}
             />
           </label>
-          {/* Spec 0050, Teil 2: reiner Offline-Hinweis, kein Blockieren —
-           * `apiKeyFormatWarning` liefert `null`, solange das Feld leer
-           * ist, der Provider kein vorhersagbares Format hat, oder das
-           * Präfix passt. Der Submit-Handler prüft dieses Ergebnis nicht;
-           * Speichern bleibt in jedem Fall möglich. */}
+          {/* Spec 0050, Teil 2 (jetzt auch Spec 0056, Teil 1): reiner
+           * Offline-Hinweis, kein Blockieren — `apiKeyFormatWarning`
+           * liefert `null`, solange das Feld leer ist, der Provider kein
+           * vorhersagbares Format hat, oder das Präfix passt. Der
+           * Submit-Handler prüft dieses Ergebnis nicht; Speichern bleibt in
+           * jedem Fall möglich. Spec 0056, Teil 3: als eigene, klar
+           * umrandete Hinweisbox statt bloßem Fließtext — bislang ging der
+           * Hinweis optisch kaum vom Rest des Formulars unterscheidbar
+           * unter. */}
           {apiKeyWarning && (
-            <p className="text-xs text-amber-400">
+            <p className="rounded border border-amber-800 bg-amber-950/40 px-2.5 py-1.5 text-xs text-amber-300">
               {t("aiProvider.apiKeyFormatHint", {
                 providerLabel: PROVIDER_TYPE_LABELS[form.providerType],
                 expectedPrefix: apiKeyWarning.expectedPrefix,
@@ -473,9 +512,14 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             </p>
           )}
 
-          {/* Spec 0050, Teil 3: "Testen"-Button — analog zum
-           * "Verbindung testen" bei Servern (Spec 0008), nutzt die gerade
-           * eingegebenen, noch nicht gespeicherten Formulardaten. */}
+          {/* Spec 0050, Teil 3 (jetzt auch Spec 0056, Teil 2): "Testen"-
+           * Button — analog zum "Verbindung testen" bei Servern (Spec
+           * 0008), nutzt die gerade eingegebenen, noch nicht gespeicherten
+           * Formulardaten. Bereits mit der von Spec 0056 verlangten
+           * Drei-Ergebnis-Unterscheidung (gültig/Auth fehlgeschlagen/nicht
+           * erreichbar) und demselben Base-URL-Guard wie "Modelle laden" —
+           * hier nur visuell (eigene Ergebnis-Box) in die neue Struktur
+           * eingebettet, keine funktionale Änderung. */}
           <div>
             <button
               type="button"
@@ -492,14 +536,16 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 !form.apiKey.trim() ||
                 (needsBaseUrl(form.providerType) && !form.baseUrl?.trim())
               }
-              className="rounded border border-slate-600 px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+              className={SECONDARY_BUTTON_CLASS}
             >
               {credentialTestRunning ? t("aiProvider.testingCredentials") : t("aiProvider.testCredentials")}
             </button>
             {credentialTestResult && (
               <p
-                className={`mt-1 text-xs ${
-                  credentialTestResult.kind === "valid" ? "text-emerald-400" : "text-red-400"
+                className={`mt-1.5 rounded border px-2.5 py-1.5 text-xs ${
+                  credentialTestResult.kind === "valid"
+                    ? "border-emerald-800 bg-emerald-950/40 text-emerald-400"
+                    : "border-red-800 bg-red-950/40 text-red-400"
                 }`}
               >
                 {credentialTestResult.kind === "valid" && t("aiProvider.testResultValid")}
@@ -524,8 +570,13 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
 
           {/* Spec 0025, Abschnitt 3/4: Zusatz-Header und Attestierungs-URL
            * hinter einem "Erweitert"-Bereich, damit das Formular für den
-           * Normalfall übersichtlich bleibt. */}
-          <div className="border-t border-slate-700 pt-3">
+           * Normalfall übersichtlich bleibt. Spec 0056, Teil 3: der
+           * aufgeklappte Bereich bekommt jetzt einen eigenen, leicht
+           * abgesetzten Innenrahmen (dunkler als die umgebende Karte) —
+           * macht sichtbar, dass das eine verschachtelte, optionale
+           * Untergruppe ist, nicht gleichrangig mit den Kernfeldern
+           * darüber. */}
+          <div className="border-t border-slate-700/60 pt-3">
             <button
               type="button"
               onClick={() => setShowAdvanced((prev) => !prev)}
@@ -536,7 +587,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             </button>
 
             {showAdvanced && (
-              <div className="mt-3 space-y-3">
+              <div className="mt-3 space-y-3 rounded-md border border-slate-800 bg-slate-950/30 p-3">
                 <div>
                   <p className="text-sm text-slate-300">{t("aiProvider.extraHeadersLabel")}</p>
                   <p className="mt-0.5 text-xs text-slate-500">{t("aiProvider.extraHeadersHint")}</p>
@@ -548,14 +599,14 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                           placeholder={t("aiProvider.extraHeaderKeyPlaceholder")}
                           value={key}
                           onChange={(e) => updateExtraHeader(index, e.target.value, value)}
-                          className="w-1/2 rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
+                          className={`${FIELD_CLASS} mt-0 w-1/2 text-sm`}
                         />
                         <input
                           type="text"
                           placeholder={t("aiProvider.extraHeaderValuePlaceholder")}
                           value={value}
                           onChange={(e) => updateExtraHeader(index, key, e.target.value)}
-                          className="w-1/2 rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
+                          className={`${FIELD_CLASS} mt-0 w-1/2 text-sm`}
                         />
                         <button
                           type="button"
@@ -568,16 +619,12 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                       </div>
                     ))}
                   </div>
-                  <button
-                    type="button"
-                    onClick={addExtraHeader}
-                    className="mt-2 rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700"
-                  >
+                  <button type="button" onClick={addExtraHeader} className={`mt-2 ${SECONDARY_BUTTON_CLASS}`}>
                     {t("aiProvider.extraHeaderAdd")}
                   </button>
                 </div>
 
-                <label className="block text-sm text-slate-300">
+                <label className={LABEL_CLASS}>
                   {t("aiProvider.attestationUrlLabel")}
                   <input
                     type="text"
@@ -586,21 +633,22 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     onChange={(e) =>
                       setForm({ ...form, attestationUrl: e.target.value || null })
                     }
-                    className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+                    className={FIELD_CLASS}
                   />
                 </label>
               </div>
             )}
           </div>
+        </section>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-          >
-            {submitting ? t("aiProvider.adding") : t("aiProvider.add")}
-          </button>
-        </form>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitting ? t("aiProvider.adding") : t("aiProvider.add")}
+        </button>
+      </form>
     </div>
   );
 }
