@@ -37,6 +37,16 @@ sind mit **(Pro)** markiert.
   — erscheinen jetzt in Englisch übersetzt, wenn die UI-Sprache Englisch
   ist.
 
+### Security
+- Kommando-Ausgaben mit Unix-Passwort-Hashes (z. B. `/etc/shadow`,
+  Apache-`.htpasswd`) gingen bislang unredigiert an den KI-Anbieter bzw.
+  einen verbundenen MCP-Client weiter, wenn der Nutzer das zugrunde
+  liegende Kommando (nach dem üblichen Bestätigungsdialog) ausführen
+  ließ — die Redaction kannte deren Hash-Format schlicht nicht. Erkennt
+  jetzt gängige Crypt-Hash-Formate (MD5-, SHA-256-, SHA-512-, yescrypt-,
+  scrypt- und bcrypt-Hashes) und ersetzt nur den Hash-Anteil, Nutzername
+  und übrige Felder bleiben lesbar.
+
 ## [0.4.6] — 2026-09-10
 
 ### Added

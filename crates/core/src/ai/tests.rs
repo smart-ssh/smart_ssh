@@ -409,3 +409,63 @@ fn test_redactor_does_not_flag_commit_hashes_uuids_or_passwd_placeholder_lines()
 
     assert_eq!(redacted.stdout, input.stdout);
 }
+
+/// Regressionstest, `spec-reviewer`-Fund (Review dieses Schritts): Apache
+/// `.htpasswd`-Dateien (`$apr1$...`, dasselbe Format wie `$1$`) sind
+/// mindestens so ein alltägliches Ziel für "cat die Datei" wie
+/// `/etc/shadow` — ursprünglich nicht abgedeckt.
+#[test]
+fn test_redactor_detects_apache_apr1_htpasswd_hash() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("admin:$apr1$salt1234$AbCdEfGhIjKlMnOpQrStUv");
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("AbCdEfGhIjKlMnOpQrStUv"));
+    assert_eq!(redacted, "admin:[REDACTED]");
+}
+
+/// Regressionstest, `spec-reviewer`-Fund (Review dieses Schritts): die
+/// ursprüngliche Fassung des Musters verlangte fürs letzte Segment keine
+/// Mindestlänge — `$1$2$3` (eine gewöhnliche `awk`/`sed`-
+/// Positionsparameter-Referenz, `$1`/`$2`/`$3`, KEIN Hash) wäre
+/// fälschlich als Crypt-Hash erkannt und ersetzt worden. Jeder real
+/// unterstützte Algorithmus liefert mindestens 13 Hash-Zeichen; die neue
+/// 10-Zeichen-Untergrenze fürs letzte Segment schließt diese
+/// Falsch-Positiv-Klasse, ohne einen einzigen echten Hash zu verpassen
+/// (s. die vorherigen Tests in diesem Abschnitt, die alle weiterhin
+/// grün sind).
+#[test]
+fn test_redactor_does_not_flag_short_dollar_delimited_shell_syntax() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output("awk '{print $1$2$3}'\nsed -e 's/(a)(b)/$1$2$3/'\necho $1$2");
+
+    let redacted = redactor.redact(&input);
+
+    assert_eq!(redacted.stdout, input.stdout);
+}
+
+/// Regressionstest, `spec-reviewer`-Fund (Review dieses Schritts): steht
+/// das Crypt-Hash-Muster NACH einem anderen Muster in der Liste (z. B.
+/// dem AWS-Access-Key-Muster `(AKIA|ASIA)[0-9A-Z]{16}`), kann dieses
+/// andere Muster durch puren Zufall genau 20 Zeichen MITTEN in einem
+/// langen Hash treffen (wenn dort zufällig `AKIA`/`ASIA` gefolgt von 16
+/// Großbuchstaben/Ziffern steht) und dort `[REDACTED]` einfügen — das
+/// zerstört die `$`-Struktur, auf die das Crypt-Muster angewiesen ist,
+/// und der Rest des Hashes bliebe unredigiert stehen. Da das Crypt-Muster
+/// jetzt bewusst als ERSTES angewendet wird (s. `built_in_patterns()`),
+/// ist der komplette Hash schon ersetzt, bevor das AWS-Muster ihn
+/// überhaupt sehen könnte.
+#[test]
+fn test_redactor_fully_redacts_hash_containing_an_accidental_aws_key_substring() {
+    let redactor = DefaultOutputRedactor::new();
+    let input = output(
+        "root:$6$saltsalt$AKIAABCDEFGHIJKLMNOP0123456789abcdefghijklmnopqrstuvwxyzSECRETTAIL:19000:...",
+    );
+
+    let redacted = stdout_text(&redactor.redact(&input));
+
+    assert!(!redacted.contains("AKIAABCDEFGHIJKLMNOP"));
+    assert!(!redacted.contains("SECRETTAIL"));
+    assert_eq!(redacted, "root:[REDACTED]:19000:...");
+}
