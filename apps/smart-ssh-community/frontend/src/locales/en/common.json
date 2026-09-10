@@ -31,7 +31,8 @@
       "aiProvider": "AI Provider",
       "displayLanguage": "Display & Language",
       "diagnostics": "Diagnostics",
-      "about": "About"
+      "about": "About",
+      "fileTypes": "Files"
     },
     "language": {
       "label": "Language",
@@ -46,6 +47,18 @@
     "copied": "Copied!",
     "copyFailed": "Copy failed — text can be selected instead.",
     "loadFailed": "Could not load version/build information."
+  },
+  "fileTypes": {
+    "description": "Set a local application per file extension to use for \"Open locally\". Without an entry, the operating system default application is used.",
+    "appPathPlaceholder": "Path to application",
+    "browse": "Browse…",
+    "remove": "Remove row",
+    "addRow": "+ Mapping",
+    "save": "Save",
+    "saved": "Saved!",
+    "saveFailed": "Failed to save.",
+    "loadFailed": "Could not load file type mappings.",
+    "pickAppTitle": "Select application"
   },
   "featureLocked": {
     "title": "This feature requires a paid plan",

@@ -31,6 +31,9 @@ sind mit **(Pro)** markiert.
   Überschreiben einer bestehenden Datei. Keine Bestätigung außer bei
   irreversiblen/überschreibenden Aktionen — manuelle Dateibrowser-Aktionen
   laufen (wie das Terminal) nicht durch die Filter-Engine.
+- Einstellungen: neue Kategorie "Dateien" — pro Dateiendung ein lokales
+  Standardprogramm festlegen (Fallback: Betriebssystem-Standard). Rein
+  lokal, ohne Server-Bezug.
 
 ### Fixed
 - Dateimanager: das Drei-Punkte-Menü an einem Eintrag ließ sich oft nicht

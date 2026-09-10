@@ -31,7 +31,8 @@
       "aiProvider": "KI-Provider",
       "displayLanguage": "Anzeige & Sprache",
       "diagnostics": "Diagnose",
-      "about": "Über"
+      "about": "Über",
+      "fileTypes": "Dateien"
     },
     "language": {
       "label": "Sprache",
@@ -46,6 +47,18 @@
     "copied": "Kopiert!",
     "copyFailed": "Kopieren fehlgeschlagen — Text lässt sich markieren.",
     "loadFailed": "Versions-/Build-Information konnte nicht geladen werden."
+  },
+  "fileTypes": {
+    "description": "Lege pro Dateiendung ein lokales Programm fest, das beim \"Lokal öffnen\" verwendet wird. Ohne Eintrag wird das Standardprogramm des Betriebssystems genutzt.",
+    "appPathPlaceholder": "Pfad zum Programm",
+    "browse": "Durchsuchen…",
+    "remove": "Zeile entfernen",
+    "addRow": "+ Zuordnung",
+    "save": "Speichern",
+    "saved": "Gespeichert!",
+    "saveFailed": "Speichern fehlgeschlagen.",
+    "loadFailed": "Dateityp-Zuordnungen konnten nicht geladen werden.",
+    "pickAppTitle": "Programm auswählen"
   },
   "featureLocked": {
     "title": "Diese Funktion erfordert einen kostenpflichtigen Plan",

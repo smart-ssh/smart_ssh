@@ -5,6 +5,7 @@ import { listSettingsSections } from "../extensions/registry";
 import { AboutSettings } from "./AboutSettings";
 import { AiProviderSettings } from "./AiProviderSettings";
 import { DiagnosticsSettings } from "./DiagnosticsSettings";
+import { FileTypeSettings } from "./FileTypeSettings";
 import { LanguageSettings } from "./LanguageSettings";
 
 interface SettingsScreenProps {
@@ -15,6 +16,7 @@ interface SettingsScreenProps {
 const AI_PROVIDER_CATEGORY_ID = "ai-provider";
 const DISPLAY_LANGUAGE_CATEGORY_ID = "display-language";
 const DIAGNOSTICS_CATEGORY_ID = "diagnostics";
+const FILE_TYPES_CATEGORY_ID = "file-types";
 const ABOUT_CATEGORY_ID = "about";
 
 interface NavCategory {
@@ -49,6 +51,10 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
     { id: AI_PROVIDER_CATEGORY_ID, label: t("settings.categories.aiProvider") },
     { id: DISPLAY_LANGUAGE_CATEGORY_ID, label: t("settings.categories.displayLanguage") },
     { id: DIAGNOSTICS_CATEGORY_ID, label: t("settings.categories.diagnostics") },
+    // Spec 0054, Teil 5: "passt zur neuen zweispaltigen Settings-Struktur,
+    // 'Dateien'- oder 'Editor'-Sektion" — "Dateien" gewählt, näher am
+    // Dateibrowser-Wortlaut ("Dateityp", nicht "Editor-Konfiguration").
+    { id: FILE_TYPES_CATEGORY_ID, label: t("settings.categories.fileTypes") },
     // Spec 0050, Abschnitt 1.1 schlägt "Über" als letzten Eintrag vor,
     // nach einer möglichen (nur in der Official-Edition registrierten)
     // "Lizenz"-Kategorie — die kommt aber über `registeredCategories`
@@ -123,6 +129,7 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
             )}
             {active?.id === DISPLAY_LANGUAGE_CATEGORY_ID && <LanguageSettings />}
             {active?.id === DIAGNOSTICS_CATEGORY_ID && <DiagnosticsSettings />}
+            {active?.id === FILE_TYPES_CATEGORY_ID && <FileTypeSettings />}
             {active?.id === ABOUT_CATEGORY_ID && <AboutSettings />}
             {registeredSections.map(
               ({ id, component: Section }) => active?.id === id && <Section key={id} />,
