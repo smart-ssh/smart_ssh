@@ -12,8 +12,36 @@ import {
 } from "../api";
 import { onSftpTransferFinished, onSftpTransferStarted } from "../events";
 import { formatBytes } from "../format";
+import {
+  loadFileManagerColumnWidths,
+  saveFileManagerColumnWidths,
+  type FileManagerColumnWidths,
+} from "../layoutSettings";
 import { displayPath, joinPath, localBaseName, parentPath } from "../remotePath";
 import type { RemoteEntryDto } from "../types";
+import { useDragResize } from "../useDragResize";
+
+/** Spec 0053, Teil 1: Standard-/Mindestbreiten der verstellbaren Spalten
+ * (alles in px). Die Name-Spalte hat bewusst keinen eigenen Eintrag hier
+ * — sie bekommt nie eine explizite Breite (s. `<colgroup>` unten), nimmt
+ * unter `table-layout: fixed` also automatisch den nach den anderen
+ * Spalten verbleibenden Rest ein. `NAME_MIN_WIDTH` fließt stattdessen in
+ * `clampColumnWidth` ein, damit eine sehr breit gezogene Nachbarspalte
+ * die Name-Spalte nie unter ihre eigene Mindestbreite drückt. */
+const DEFAULT_COLUMN_WIDTHS: FileManagerColumnWidths = {
+  size: 90,
+  permissions: 90,
+  modified: 150,
+};
+const MIN_COLUMN_WIDTHS: FileManagerColumnWidths = {
+  size: 56,
+  permissions: 64,
+  modified: 90,
+};
+const NAME_MIN_WIDTH = 120;
+/** Feste, nicht verstellbare Aktionsspalte (⋮-Menü) — kein Label, immer
+ * gleich schmal, kein Drag-Handle. */
+const ACTIONS_COLUMN_WIDTH = 32;
 
 interface Transfer {
   id: string;
@@ -52,6 +80,58 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const [mkdirOpen, setMkdirOpen] = useState<string | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [columnWidths, setColumnWidths] = useState<FileManagerColumnWidths>(DEFAULT_COLUMN_WIDTHS);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  // Spec 0053, Teil 1: einmalig beim Mounten geladen (diese Komponente lebt
+  // pro Tab, s. Doc-Kommentar oben) — ungültige/fehlende Felder bleiben
+  // beim eingebauten Default (`loadFileManagerColumnWidths` liefert nur
+  // die tatsächlich gültigen Felder zurück, s. dortiger Kommentar).
+  useEffect(() => {
+    loadFileManagerColumnWidths()
+      .then((stored) => setColumnWidths((prev) => ({ ...prev, ...stored })))
+      .catch((err) => console.warn("Konnte Spaltenbreiten nicht laden:", err));
+  }, []);
+
+  /** Klemmt eine vorgeschlagene Breite für `column` auf ihre Mindestbreite
+   * UND darauf, dass die Name-Spalte (die den Rest der verfügbaren Breite
+   * einnimmt, s. `<colgroup>` unten) nie unter `NAME_MIN_WIDTH` fällt —
+   * abhängig von der aktuell tatsächlich verfügbaren Breite des
+   * Tabellen-Containers, nicht von einem festen Annahmewert. */
+  const clampColumnWidth = useCallback(
+    (column: keyof FileManagerColumnWidths, proposed: number, widths: FileManagerColumnWidths) => {
+      const min = MIN_COLUMN_WIDTHS[column];
+      const containerWidth = tableContainerRef.current?.clientWidth ?? Infinity;
+      const otherColumnsTotal =
+        ACTIONS_COLUMN_WIDTH +
+        (Object.keys(widths) as (keyof FileManagerColumnWidths)[])
+          .filter((key) => key !== column)
+          .reduce((sum, key) => sum + widths[key], 0);
+      const maxForThisColumn = containerWidth - otherColumnsTotal - NAME_MIN_WIDTH;
+      return Math.min(Math.max(proposed, min), Math.max(min, maxForThisColumn));
+    },
+    [],
+  );
+
+  const handleColumnDrag = useCallback(
+    (column: keyof FileManagerColumnWidths) => (deltaX: number) => {
+      setColumnWidths((prev) => {
+        const clamped = clampColumnWidth(column, prev[column] + deltaX, prev);
+        if (clamped === prev[column]) return prev;
+        return { ...prev, [column]: clamped };
+      });
+    },
+    [clampColumnWidth],
+  );
+
+  const handleColumnDragEnd = useCallback(() => {
+    setColumnWidths((current) => {
+      saveFileManagerColumnWidths(current).catch((err) =>
+        console.warn("Konnte Spaltenbreiten nicht speichern:", err),
+      );
+      return current;
+    });
+  }, []);
 
   const load = useCallback((targetPath: string) => {
     setLoading(true);
@@ -286,7 +366,8 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
       )}
 
       <div
-        className={`relative min-h-0 flex-1 overflow-y-auto ${dragOver ? "bg-indigo-950/40" : ""}`}
+        ref={tableContainerRef}
+        className={`relative min-h-0 flex-1 overflow-auto ${dragOver ? "bg-indigo-950/40" : ""}`}
       >
         {loading && <p className="p-3 text-xs text-slate-400">Lädt…</p>}
         {error && <p className="p-3 text-xs text-red-400">{error}</p>}
@@ -294,13 +375,48 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
           <p className="p-3 text-xs text-slate-500">(leeres Verzeichnis)</p>
         )}
         {!loading && !error && entries.length > 0 && (
-          <table className="w-full text-left text-xs">
+          <table className="w-full table-fixed text-left text-xs">
+            {/* Spec 0053, Teil 1: `table-fixed` + `<colgroup>` statt des
+                vorherigen automatischen Spaltenlayouts — nur so lassen sich
+                Spaltenbreiten gezielt per Drag setzen. Die Name-Spalte hat
+                bewusst keine `width` (kein `<col>`-Attribut dafür) — unter
+                `table-fixed` nimmt eine Spalte ohne explizite Breite den
+                nach den anderen verbleibenden Rest ein, genau das von der
+                Spec verlangte "flexibler Rest"-Verhalten. */}
+            <colgroup>
+              <col />
+              <col style={{ width: columnWidths.size }} />
+              <col style={{ width: columnWidths.permissions }} />
+              <col style={{ width: columnWidths.modified }} />
+              <col style={{ width: ACTIONS_COLUMN_WIDTH }} />
+            </colgroup>
             <thead className="sticky top-0 bg-slate-900 text-slate-500">
               <tr className="[&>th]:px-2 [&>th]:py-1 [&>th]:font-normal">
                 <th>Name</th>
-                <th>Größe</th>
-                <th>Rechte</th>
-                <th>Geändert</th>
+                <th className="relative">
+                  Größe
+                  <ColumnResizeHandle
+                    label="Größe-Spalte"
+                    onDrag={handleColumnDrag("size")}
+                    onDragEnd={handleColumnDragEnd}
+                  />
+                </th>
+                <th className="relative">
+                  Rechte
+                  <ColumnResizeHandle
+                    label="Rechte-Spalte"
+                    onDrag={handleColumnDrag("permissions")}
+                    onDragEnd={handleColumnDragEnd}
+                  />
+                </th>
+                <th className="relative">
+                  Geändert
+                  <ColumnResizeHandle
+                    label="Geändert-Spalte"
+                    onDrag={handleColumnDrag("modified")}
+                    onDragEnd={handleColumnDragEnd}
+                  />
+                </th>
                 <th />
               </tr>
             </thead>
@@ -497,5 +613,34 @@ function RenamePrompt({
         </form>
       </div>
     </div>
+  );
+}
+
+/** Spec 0053, Teil 1: Drag-Handle am rechten Rand eines Spaltenkopfs — die
+ * Trefferfläche (`w-2`, per `-right-1` über die Spaltengrenze zentriert)
+ * ist bewusst breiter als die sichtbare Trennlinie (`w-px`), damit sie
+ * auch ohne Pixel-genaues Zielen zu treffen ist. `cursor-col-resize` /
+ * `touch-none` (kein Scroll-Gestenkonflikt beim Ziehen) als der von der
+ * Spec verlangte Hover-/Cursor-Hinweis. */
+function ColumnResizeHandle({
+  label,
+  onDrag,
+  onDragEnd,
+}: {
+  label: string;
+  onDrag: (deltaX: number) => void;
+  onDragEnd: () => void;
+}) {
+  const handlers = useDragResize(onDrag, onDragEnd);
+  return (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={label}
+      className="group absolute -right-1 top-0 bottom-0 z-10 flex w-2 cursor-col-resize touch-none select-none justify-center"
+      {...handlers}
+    >
+      <span className="h-full w-px bg-slate-700 group-hover:bg-indigo-500" />
+    </span>
   );
 }
