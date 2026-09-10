@@ -1,8 +1,35 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { onConnectionStatusChanged } from "../events";
+import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
+import { useDragResize } from "../useDragResize";
 import { ChatPanel } from "./ChatPanel";
 import { FileBrowserPanel } from "./FileBrowserPanel";
 import { TerminalView } from "./TerminalView";
+
+/** Spec 0053, Teil 2: Mindestbreiten beider Bereiche (px) — keiner darf auf
+ * 0 gezogen werden. `RIGHT_PANEL_DEFAULT_WIDTH` ist die bisherige feste
+ * Breite (`w-[420px]`), jetzt nur noch der Startwert vor dem ersten Laden
+ * einer Präferenz bzw. der Fallback auf zu kleinen Fenstern. */
+const LEFT_PANEL_MIN_WIDTH = 360;
+const RIGHT_PANEL_MIN_WIDTH = 300;
+const RIGHT_PANEL_DEFAULT_WIDTH = 420;
+const SPLIT_HANDLE_WIDTH = 6;
+
+/** Klemmt die gewünschte Breite des rechten (SSH-/SFTP-)Bereichs auf seine
+ * Mindestbreite UND darauf, dass dem linken (KI-)Bereich mindestens
+ * `LEFT_PANEL_MIN_WIDTH` bleibt — abhängig von der aktuell tatsächlich
+ * verfügbaren Breite des umgebenden Flex-Containers. Passt das Fenster
+ * nicht einmal für beide Mindestbreiten zusammen (Spec 0053, Teil 2: "auf
+ * kleinen Fenstern... notfalls Fallback auf die Standardaufteilung"),
+ * wird auf `RIGHT_PANEL_DEFAULT_WIDTH` zurückgefallen statt einen
+ * widersprüchlichen geklemmten Zustand zu erzwingen. */
+function clampRightPanelWidth(proposed: number, containerWidth: number): number {
+  if (containerWidth < LEFT_PANEL_MIN_WIDTH + RIGHT_PANEL_MIN_WIDTH + SPLIT_HANDLE_WIDTH) {
+    return RIGHT_PANEL_DEFAULT_WIDTH;
+  }
+  const maxRightWidth = containerWidth - LEFT_PANEL_MIN_WIDTH - SPLIT_HANDLE_WIDTH;
+  return Math.min(Math.max(proposed, RIGHT_PANEL_MIN_WIDTH), maxRightWidth);
+}
 
 interface SessionViewProps {
   sessionId: string;
@@ -47,6 +74,64 @@ export function SessionView({
   // Verzeichnisnavigation des Dateibrowsers beim Umschalten verloren gehen.
   const [rightPanelView, setRightPanelView] = useState<"terminal" | "files">("terminal");
 
+  // Spec 0053, Teil 2: `preferredRightWidth` ist die vom Nutzer gewählte
+  // (bzw. geladene) Breite — wird NIE durch ein zu kleines Fenster
+  // stillschweigend überschrieben, nur `effectiveRightWidth` (unten) klemmt
+  // sie zur Anzeige. Andernfalls würde ein zwischenzeitlich verkleinertes
+  // Fenster die eigentliche Präferenz dauerhaft verlieren, sobald das
+  // Fenster wieder vergrößert wird.
+  const [preferredRightWidth, setPreferredRightWidth] = useState(RIGHT_PANEL_DEFAULT_WIDTH);
+  const [containerWidth, setContainerWidth] = useState<number | null>(null);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    loadAiSshSplitWidthPx()
+      .then((stored) => {
+        if (stored !== null) setPreferredRightWidth(stored);
+      })
+      .catch((err) => console.warn("Konnte Bereichsaufteilung nicht laden:", err));
+  }, []);
+
+  // Reagiert auf jede Größenänderung des umgebenden Containers (nicht nur
+  // auf Drag-Gesten) — ein Fenster, das der Nutzer nach dem letzten Ziehen
+  // kleiner macht, darf das Layout nicht unbrauchbar machen (Spec 0053,
+  // Teil 2).
+  useEffect(() => {
+    const el = splitContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setContainerWidth(entry.contentRect.width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const effectiveRightWidth =
+    containerWidth === null
+      ? preferredRightWidth
+      : clampRightPanelWidth(preferredRightWidth, containerWidth);
+
+  const handleSplitDrag = useCallback((deltaX: number) => {
+    setPreferredRightWidth((prev) => {
+      const containerWidthNow = splitContainerRef.current?.clientWidth ?? Infinity;
+      // Divider nach links gezogen (negatives Delta) vergrößert den
+      // rechten Bereich, daher `prev - deltaX`.
+      return clampRightPanelWidth(prev - deltaX, containerWidthNow);
+    });
+  }, []);
+
+  const handleSplitDragEnd = useCallback(() => {
+    setPreferredRightWidth((current) => {
+      saveAiSshSplitWidthPx(current).catch((err) =>
+        console.warn("Konnte Bereichsaufteilung nicht speichern:", err),
+      );
+      return current;
+    });
+  }, []);
+
+  const splitHandlers = useDragResize(handleSplitDrag, handleSplitDragEnd);
+
   useEffect(() => {
     const unlisten = onConnectionStatusChanged((event) => {
       if (event.sessionId !== sessionId) return;
@@ -74,11 +159,25 @@ export function SessionView({
           Trennen
         </button>
       </header>
-      <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 border-r border-slate-800">
+      <div ref={splitContainerRef} className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1">
           <ChatPanel sessionId={sessionId} serverId={serverId} onActionSettled={onActionSettled} />
         </div>
-        <div className="flex w-[420px] shrink-0 flex-col bg-slate-950">
+        {/* Spec 0053, Teil 2: Drag-Divider zwischen KI- und SSH-/SFTP-
+            Bereich — ersetzt den vorherigen statischen `border-r`. */}
+        <span
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Bereichsaufteilung"
+          className="group relative w-1.5 shrink-0 cursor-col-resize touch-none select-none bg-slate-800"
+          {...splitHandlers}
+        >
+          <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-700 group-hover:bg-indigo-500" />
+        </span>
+        <div
+          className="flex shrink-0 flex-col bg-slate-950"
+          style={{ width: effectiveRightWidth }}
+        >
           <div className="flex h-8 shrink-0 items-center gap-3 border-b border-slate-800 px-3">
             <button
               type="button"
