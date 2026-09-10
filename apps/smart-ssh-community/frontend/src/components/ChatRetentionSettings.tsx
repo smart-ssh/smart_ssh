@@ -63,6 +63,15 @@ export function ChatRetentionSettings() {
   return (
     <div>
       {error && <p className="mb-2 rounded bg-red-950 px-2 py-1 text-xs text-red-300">{error}</p>}
+      {/* Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets): die
+       * entfernte `<h3>` (Teil 3) war NICHT nur eine doppelte Kategorie-
+       * Überschrift, sondern trug auch die einzige Feldbeschriftung ("Chat-
+       * Verlauf aufbewahren für") — ohne sie fehlte die Angabe, WOFÜR die
+       * Tage-Checkbox/-Zahl unten gelten. Als schlichter Absatz statt einer
+       * Überschrift wieder eingesetzt (kein erneutes Duplikat des
+       * Kategorie-Titels "Sitzungen & Daten", der weiterhin ausschließlich
+       * von `SettingsScreen` gerendert wird). */}
+      <p className="mb-2 text-sm text-slate-300">{t("chatRetention.label")}</p>
       <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
         <input
           type="checkbox"

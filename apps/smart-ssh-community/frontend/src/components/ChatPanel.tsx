@@ -590,17 +590,43 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
 
   const handleInputKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Spec 0055, Teil 1: Standard-Chat-Verhalten — Enter sendet,
-    // Shift+Enter fügt einen Zeilenumbruch ein. `requestSubmit()` statt
-    // eines direkten `handleSubmit(e)`-Aufrufs: `handleSubmit` ist auf
-    // `FormEvent` typisiert (liest `draft`/`sending` ohnehin aus dem
-    // Komponenten-State, nicht aus dem Event) — über das Formular selbst
-    // einzureichen nutzt denselben Pfad wie ein Klick auf "Senden", statt
-    // die Sende-Logik ein zweites Mal zu duplizieren. Ohne aktiven
-    // `<form>`-Vorfahren (sollte hier nie vorkommen) tut `?.` schlicht
-    // nichts — kein Absturz.
-    if (e.key === "Enter" && !e.shiftKey) {
+    // Shift+Enter fügt einen Zeilenumbruch ein.
+    //
+    // Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets):
+    // `isComposing`/`keyCode === 229` — während einer IME-Komposition
+    // (z. B. Pinyin/Kanji-Eingabe, aber auch macOS-Tot-Tasten für Akzente)
+    // bestätigt Enter erst die Kandidatenauswahl, sendet noch nichts.
+    // Ohne diese Prüfung würde der erste Enter die halbfertige Eingabe
+    // sofort abschicken statt nur die Komposition abzuschließen —
+    // "plattformübliches Verhalten" (Spec, Teil 1) verlangt genau diese
+    // Rücksicht.
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
       e.preventDefault();
-      e.currentTarget.form?.requestSubmit();
+      // `requestSubmit()` statt eines direkten `handleSubmit(e)`-Aufrufs:
+      // `handleSubmit` ist auf `FormEvent` typisiert (liest `draft`/
+      // `sending` ohnehin aus dem Komponenten-State, nicht aus dem
+      // Event) — über das Formular selbst einzureichen nutzt denselben
+      // Pfad wie ein Klick auf "Senden", statt die Sende-Logik ein
+      // zweites Mal zu duplizieren.
+      //
+      // Spec-Reviewer-Fund: `HTMLFormElement.requestSubmit` fehlt in
+      // älteren WebKit-Versionen (vor Safari 16/macOS 13) — ein rein
+      // optionaler Verkettungs-Operator (`form?.requestSubmit()`) schützt
+      // nur gegen ein fehlendes `<form>`, nicht gegen eine fehlende
+      // Methode darauf, und hätte Enter auf so einer Plattform sang- und
+      // klanglos wirkungslos gemacht (der bisherige `<input>`-Pfad hatte
+      // dieses Problem nicht, weil dort das native Browser-Default-Submit
+      // griff). `dispatchEvent` mit einem synthetischen `submit`-Ereignis
+      // ist der Standard-Fallback dafür — dasselbe Ereignis, auf das
+      // React's `onSubmit` ohnehin hört.
+      const form = e.currentTarget.form;
+      if (form) {
+        if (typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+        } else {
+          form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+        }
+      }
       return;
     }
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
@@ -1429,15 +1455,36 @@ function ActionResultView({
  * andere `chat-action-proposed`-Eintrag als eigene Karte im Chat-Verlauf
  * (`onChatActionProposed` in `ChatPanel`) — dieser Button selbst zeigt
  * keinen eigenen Dialog, nur einen kurzen Sende-/Fehler-Zustand. */
-function TakeIntoNoteButton({ sessionId, content }: { sessionId: string; content: string }) {
+function TakeIntoNoteButton({
+  sessionId,
+  content,
+  onStateChange,
+}: {
+  sessionId: string;
+  content: string;
+  /** Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets): optional,
+   * damit `AssistantMessageView` seine hover-ausgeblendete Aktionsleiste
+   * bei einem laufenden/fehlgeschlagenen Versuch erzwungen sichtbar
+   * halten kann (s. dortiger Kommentar) — der unveränderte Aufrufer bei
+   * `historyCommandResult`-Einträgen (immer sichtbar, kein Hover-
+   * Ausblenden) braucht das nicht und lässt es einfach weg. */
+  onStateChange?: (state: "idle" | "sending" | "error") => void;
+}) {
   const { t } = useTranslation();
   const [state, setState] = useState<"idle" | "sending" | "error">("idle");
 
   const handleClick = () => {
     setState("sending");
+    onStateChange?.("sending");
     takeChatContentIntoNote(sessionId, content)
-      .then(() => setState("idle"))
-      .catch(() => setState("error"));
+      .then(() => {
+        setState("idle");
+        onStateChange?.("idle");
+      })
+      .catch(() => {
+        setState("error");
+        onStateChange?.("error");
+      });
   };
 
   return (
@@ -1525,23 +1572,27 @@ function DocumentCard({
 }
 
 /** Spec 0055, Teil 2: "Export to Markdown"/"Als Notiz übernehmen" hingen
- * bisher an JEDER Antwort, auch an trivialen ("ok, verstanden") — verwässert
- * die Bedeutung der Aktionen und wirkt unaufgeräumt. Zwei der drei von der
- * Spec vorgeschlagenen Wege kombiniert (die dritte, "Dokument vs. normale
- * Antwort", trennt `AssistantMessageView` von `DocumentCard` bereits
- * strukturell — die Aktionen hier erscheinen nie an einem generierten
- * Dokument, s. dortige Komponente ohne `TakeIntoNoteButton`):
- * 1. Nur ab dieser Mindestlänge überhaupt anzeigen (rein optische Länge
- *    des getrimmten Texts, keine Wort-/Satzanalyse — reicht, um ein kurzes
- *    "Ok, verstanden." zuverlässig auszublenden, ohne eine tatsächlich
- *    kurze aber inhaltsreiche Antwort zu treffen).
- * 2. Bei einer substanziellen Antwort dezent statt permanent: die
- *    Aktionsleiste blendet erst bei Hover (bzw. Tastaturfokus auf einem
- *    ihrer Buttons, `focus-within` — sonst wäre sie für reine
- *    Tastaturbedienung unerreichbar) ein, statt dauerhaft sichtbar zu
- *    sein. */
-const MIN_SUBSTANTIAL_REPLY_LENGTH = 40;
-
+ * bisher an JEDER Antwort, auch an trivialen ("ok, verstanden") —
+ * verwässert die Bedeutung der Aktionen und wirkt unaufgeräumt. Gewählter
+ * Weg: dezent statt permanent — die Aktionsleiste blendet erst bei Hover
+ * (bzw. Tastaturfokus auf einem ihrer Buttons, `focus-within` — sonst wäre
+ * sie für reine Tastaturbedienung unerreichbar) ein, statt dauerhaft
+ * sichtbar zu sein (die dritte von der Spec vorgeschlagene Unterscheidung,
+ * "Dokument vs. normale Antwort", besteht strukturell bereits:
+ * `AssistantMessageView` ist von `DocumentCard` getrennt, die Aktionen
+ * hier erscheinen nie an einem generierten Dokument, s. dortige
+ * Komponente ohne `TakeIntoNoteButton`).
+ *
+ * **Bewusst NICHT zusätzlich unterhalb einer Mindestlänge ganz entfernt**
+ * (Spec-Reviewer-Fund, Spec 0055, Review des Gesamtpakets): eine frühere
+ * Fassung blendete die Aktionen unter ~40 Zeichen komplett aus dem DOM
+ * aus — das verletzte die Spec wörtlich ("Keine bestehende Funktion
+ * entfernen — nur die Darstellung/Platzierung verbessern"), denn eine
+ * kurze, aber notizwürdige Antwort (z. B. "rm -rf / löscht das ganze
+ * System") wäre dann für "In Notiz übernehmen" gar nicht mehr erreichbar
+ * gewesen, auch nicht per Tastatur. Hover/Fokus allein löst das
+ * ursprüngliche Problem (dauerhafte Sichtbarkeit an trivialen Antworten)
+ * bereits vollständig, ohne diese Erreichbarkeits-Lücke. */
 function AssistantMessageView({
   text,
   onExport,
@@ -1553,6 +1604,7 @@ function AssistantMessageView({
 }) {
   const [exporting, setExporting] = useState<DocumentFormat | null>(null);
   const [savedFormat, setSavedFormat] = useState<DocumentFormat | null>(null);
+  const [noteState, setNoteState] = useState<"idle" | "sending" | "error">("idle");
 
   const handleExportClick = async (format: DocumentFormat) => {
     setExporting(format);
@@ -1570,28 +1622,40 @@ function AssistantMessageView({
     }
   };
 
-  const isSubstantial = text.trim().length >= MIN_SUBSTANTIAL_REPLY_LENGTH;
+  // Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets): ein per
+  // Mausklick betätigter `<button>` bekommt in WKWebView (macOS/Tauri)
+  // standardmäßig KEINEN Fokus — `focus-within` greift für einen
+  // Maus-Klick auf "In Notiz übernehmen"/"Als Markdown" also nie. Bewegt
+  // der Nutzer danach die Maus weg, würde die Leiste (inkl. Erfolgs-/
+  // Fehler-Rückmeldung) ohne dieses Flag sofort unsichtbar — ein
+  // fehlgeschlagenes "In Notiz übernehmen" bliebe damit faktisch
+  // unbemerkt, der Nutzer glaubt, es sei geklappt. Erzwingt die Leiste
+  // sichtbar, solange irgendeine Aktion läuft, fehlgeschlagen ist, oder
+  // gerade eine Erfolgsbestätigung zeigt.
+  const forceVisible = exporting !== null || savedFormat !== null || noteState !== "idle";
 
   return (
     <div className="group max-w-[85%] space-y-2 rounded-lg bg-slate-800 p-3 text-sm text-slate-100 shadow-sm">
       <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-slate-950 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div>
-      {isSubstantial && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-700/60 pt-2 text-xs opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
-          <TakeIntoNoteButton sessionId={sessionId} content={text} />
-          <span className="text-slate-400">Export:</span>
-          <button
-            type="button"
-            disabled={exporting !== null}
-            onClick={() => handleExportClick("markdown")}
-            className="rounded bg-slate-700/80 px-2 py-1 text-xs text-slate-200 hover:bg-slate-600 hover:text-white disabled:opacity-50"
-          >
-            {exporting === "markdown" ? "Speichert…" : "📄 Als Markdown"}
-          </button>
-          {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
-        </div>
-      )}
+      <div
+        className={`flex flex-wrap items-center gap-2 border-t border-slate-700/60 pt-2 text-xs transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 ${
+          forceVisible ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        <TakeIntoNoteButton sessionId={sessionId} content={text} onStateChange={setNoteState} />
+        <span className="text-slate-400">Export:</span>
+        <button
+          type="button"
+          disabled={exporting !== null}
+          onClick={() => handleExportClick("markdown")}
+          className="rounded bg-slate-700/80 px-2 py-1 text-xs text-slate-200 hover:bg-slate-600 hover:text-white disabled:opacity-50"
+        >
+          {exporting === "markdown" ? "Speichert…" : "📄 Als Markdown"}
+        </button>
+        {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
+      </div>
     </div>
   );
 }

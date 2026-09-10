@@ -386,6 +386,7 @@
     "cancel": "Abbrechen"
   },
   "chatRetention": {
+    "label": "Chat-Verlauf aufbewahren für",
     "neverDelete": "Nie automatisch löschen",
     "days_one": "{{count}} Tag",
     "days_other": "{{count}} Tage",

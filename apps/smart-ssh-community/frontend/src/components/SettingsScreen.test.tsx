@@ -137,28 +137,46 @@ describe("SettingsScreen section headings (Spec 0055, Teil 3)", () => {
    * aktive Kategorie (`{active?.label}`). Zeigt eine einzelne
    * Sektions-Komponente zusätzlich ihre eigene Überschrift, wächst diese
    * Zahl — das war genau der 0050-Review-Fund, den dieser Test
-   * regressionssichert. */
-  const expectExactlyOneSectionHeading = async (categoryLabel: string) => {
+   * regressionssichert.
+   *
+   * Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets): die
+   * ursprüngliche Wartebedingung prüfte `getAllByText(categoryLabel)` —
+   * das ist bereits durch den NAVIGATIONS-Button erfüllt, unabhängig
+   * davon, ob der eigentliche Sektionsinhalt (der asynchron lädt) schon
+   * gerendert ist. `waitForSectionContent` erzwingt stattdessen, auf ein
+   * Element zu warten, das NUR im tatsächlichen Sektionsinhalt vorkommt —
+   * sonst wäre der Test auch dann grün, wenn die (im un-gefixten Zustand
+   * vorhandene) `<h3>` noch gar nicht mitgerendert wurde. */
+  const expectExactlyOneSectionHeading = async (
+    categoryLabel: string,
+    waitForSectionContent: () => Promise<unknown>,
+  ) => {
     renderSettingsScreen();
     fireEvent.click(await screen.findByText(categoryLabel));
-    await waitFor(() => expect(screen.getAllByText(categoryLabel).length).toBeGreaterThan(0));
+    await waitForSectionContent();
     const headings = screen.getAllByRole("heading");
     expect(headings).toHaveLength(2); // "Einstellungen" (h2) + Kategorie-Titel (h3)
   };
 
   it("'Anzeige & Sprache' (LanguageSettings) shows the category title exactly once", async () => {
-    await expectExactlyOneSectionHeading("Anzeige & Sprache");
+    await expectExactlyOneSectionHeading("Anzeige & Sprache", () =>
+      screen.findByRole("button", { name: "Deutsch" }),
+    );
   });
 
   it("'Sitzungen & Daten' (registered ChatRetentionSettings) shows the category title exactly once", async () => {
     // `registerBuiltinExtensions.ts` registriert dies als Modul-Nebeneffekt
     // beim Import von `AiProviderSettings.tsx` — hier über denselben Import
     // wie `SettingsScreen.tsx` selbst bereits sichergestellt.
-    await expectExactlyOneSectionHeading("Sitzungen & Daten");
+    await expectExactlyOneSectionHeading("Sitzungen & Daten", () =>
+      screen.findByText("Chat-Verlauf aufbewahren für"),
+    );
   });
 
   it("'MCP-Server' (registered McpServerSettings) shows the category title exactly once", async () => {
-    await expectExactlyOneSectionHeading("MCP-Server");
+    await expectExactlyOneSectionHeading("MCP-Server", () =>
+      screen.findByText("MCP-Server aktivieren"),
+    );
   });
 });
 
@@ -183,5 +201,22 @@ describe("SettingsScreen registered section labels follow the UI language (Spec 
 
     expect(await screen.findByText("MCP Server")).toBeInTheDocument();
     expect(screen.queryByText("MCP-Server")).not.toBeInTheDocument();
+  });
+
+  // Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets): die Tests oben
+  // registrieren `"mcp-server"` selbst mit einem literalen Label-String für
+  // "Sitzungen & Daten" bzw. mit dem Übersetzungsschlüssel für
+  // "MCP-Server" — sie prüfen nie, ob die ECHTEN Schlüssel, die
+  // `registerBuiltinExtensions.ts` tatsächlich verwendet
+  // (`settings.categories.chatRetention`/`settings.categories.mcpServer`),
+  // überhaupt in beiden Sprachdateien existieren. Ein Tippfehler dort wäre
+  // sonst unbemerkt geblieben (Fallback auf den rohen Schlüssel als
+  // sichtbarer Text) und von keinem Test aufgefallen.
+  it("has both real registered-section translation keys defined in every locale", () => {
+    for (const key of ["settings.categories.chatRetention", "settings.categories.mcpServer"]) {
+      for (const lng of ["de", "en"]) {
+        expect(testI18n.exists(key, { lng })).toBe(true);
+      }
+    }
   });
 });

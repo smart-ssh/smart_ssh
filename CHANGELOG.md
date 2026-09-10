@@ -13,12 +13,16 @@ sind mit **(Pro)** markiert.
 - Chat-Eingabefeld erlaubt jetzt mehrzeilige Eingaben: Enter sendet,
   Shift+Enter fügt einen Zeilenumbruch ein, das Feld wächst mit dem Inhalt
   bis zu einer Maximalhöhe und scrollt danach intern.
-- Chat: "In Notiz übernehmen"/"Als Markdown exportieren" hängen nicht mehr
-  an jeder Antwort — bei kurzen, trivialen Antworten (z. B. "Ok,
-  verstanden.") fehlen sie ganz, bei substanziellen Antworten blenden sie
-  erst bei Hover/Tastaturfokus ein statt dauerhaft sichtbar zu sein.
+- Chat: "In Notiz übernehmen"/"Als Markdown exportieren" sind bei jeder
+  Antwort weiterhin vorhanden (auch per Tastatur erreichbar), blenden aber
+  erst bei Hover/Tastaturfokus ein statt dauerhaft sichtbar zu sein — ein
+  laufender/fehlgeschlagener/gerade erfolgreicher Export bzw. eine
+  Notiz-Übernahme bleibt dabei immer sichtbar, unabhängig von Hover/Fokus.
 
 ### Fixed
+- Chat-Eingabefeld: Enter während einer laufenden IME-Komposition (z. B.
+  Kandidatenauswahl bei ostasiatischer Eingabe, Akzent-Eingabe über
+  Tottasten) sendet nicht mehr vorzeitig eine noch unfertige Eingabe.
 - Einstellungen: einige Kategorien ("Anzeige & Sprache", "Sitzungen &
   Daten", "MCP-Server") zeigten ihren Titel doppelt (einmal von der
   Einstellungen-Navigation, einmal als eigene Überschrift im Inhalt).

@@ -386,6 +386,7 @@
     "cancel": "Cancel"
   },
   "chatRetention": {
+    "label": "Keep chat history for",
     "neverDelete": "Never delete automatically",
     "days_one": "{{count}} day",
     "days_other": "{{count}} days",

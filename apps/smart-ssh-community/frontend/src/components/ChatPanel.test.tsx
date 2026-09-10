@@ -237,21 +237,27 @@ describe("assistant message actions (Spec 0055, Teil 2)", () => {
     );
   }
 
-  it("hides the action row entirely for a trivial reply", () => {
+  // Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets): eine frühere
+  // Fassung blendete die Aktionen unter einer Mindestlänge komplett aus
+  // dem DOM aus — das verletzte "Keine bestehende Funktion entfernen"
+  // wörtlich (eine kurze, aber notizwürdige Antwort wäre für "In Notiz
+  // übernehmen" gar nicht mehr erreichbar gewesen, auch nicht per
+  // Tastatur). Die Aktionen sind jetzt für JEDE Antwort im DOM vorhanden,
+  // unabhängig von der Länge — nur die Sichtbarkeit ist dezent (Hover/
+  // Fokus statt permanent).
+  it("keeps the action row reachable (in the DOM) even for a trivial reply", () => {
     renderAssistantItem("Ok, verstanden.");
 
-    expect(screen.queryByText("Export:")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Markdown/ })).not.toBeInTheDocument();
-    expect(screen.queryByTitle("In Notiz übernehmen")).not.toBeInTheDocument();
+    expect(screen.getByText("Export:")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Als Markdown/ })).toBeInTheDocument();
+    expect(screen.getByTitle("In Notiz übernehmen")).toBeInTheDocument();
   });
 
-  it("still renders (reachable, not display:none) the action row for a substantial reply", () => {
+  it("hides the action row visually by default (opacity, not display:none)", () => {
     const longReply =
       "Das Kommando hat drei Zeilen Ausgabe erzeugt, die wichtigste Information steht am Ende.";
     const { container } = renderAssistantItem(longReply);
 
-    expect(screen.getByText("Export:")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Als Markdown/ })).toBeInTheDocument();
     // Dezent statt permanent (Spec 0055, Teil 2): die Aktionsleiste ist im
     // DOM (per Tastatur erreichbar), aber visuell erst bei Hover/Fokus
     // eingeblendet — `opacity-0` + `group-hover:opacity-100` statt
@@ -259,6 +265,7 @@ describe("assistant message actions (Spec 0055, Teil 2)", () => {
     const actionRow = screen.getByText("Export:").closest("div");
     expect(actionRow).toHaveClass("opacity-0");
     expect(actionRow).toHaveClass("group-hover:opacity-100");
+    expect(actionRow).toHaveClass("focus-within:opacity-100");
     expect(container.querySelector(".group")).not.toBeNull();
   });
 });
