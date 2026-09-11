@@ -74,6 +74,60 @@ fn parse_frame(text: &str) -> Option<SseFrame> {
     })
 }
 
+/// Liest einen Fehler-Response-Body (bereits als nicht-2xx erkannt, Header
+/// sind also schon da) begrenzt durch [`SSE_INACTIVITY_TIMEOUT`], statt mit
+/// `response.text().await` unbegrenzt zu warten.
+///
+/// Bug-Diagnose ("AI-Provider-Aufruf kann unbegrenzt hängen (kein Log, kein
+/// Fehler)", 2026-09): `AiProvider::send()` schützt den *Verbindungsaufbau*
+/// (`tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send)`, s. oben) und das
+/// *Frame-Lesen* (`process_frame_stream`) bereits gegen ein hängendes
+/// Gegenüber — aber an vier Stellen (429-Retry- und allgemeiner Fehler-Zweig
+/// in `anthropic.rs`/`openai_compatible.rs`) wurde der Fehler-Body direkt
+/// mit `response.text().await.unwrap_or_default()` gelesen, VOR dem
+/// jeweiligen Log-Aufruf. Ein Server/Proxy, der die Header eines
+/// Fehlerstatus sofort schickt, den Body danach aber hängen lässt (anders
+/// als ein Verbindungsaufbau, der schlicht nie antwortet — hier antwortet
+/// der Server ja bereits, nur unvollständig), lief an diesen vier Stellen
+/// nie in einen der beiden bestehenden Timeouts: der Request selbst war ja
+/// bereits erfolgreich `send()`-et (Header liegen vor), und
+/// `sse_frame_stream`/`process_frame_stream` werden für einen
+/// Fehler-Response nie erreicht (`if !response.status().is_success()`
+/// kommt VOR `event_stream_from_response`). Ergebnis: `.await` ohne
+/// jede obere Schranke — exakt das gemeldete Symptom (Chat antwortet nicht,
+/// kein Log-Eintrag, weil der Log-Aufruf erst NACH diesem `.await` steht).
+///
+/// Fix bewusst minimal: denselben, bereits etablierten
+/// [`SSE_INACTIVITY_TIMEOUT`]-Wert auch aufs Body-Lesen anwenden, kein
+/// neuer Timeout-Wert, kein neuer Mechanismus. Ein Timeout wird wie ein
+/// gewöhnlicher Lesefehler behandelt (leerer String) — dieselbe Semantik,
+/// die `.unwrap_or_default()` an diesen Stellen ohnehin schon für einen
+/// echten `reqwest::Error` beim Body-Lesen hatte, keine neue `AiError`-
+/// Variante nötig. Konsequenzen bewusst in Kauf genommen: der
+/// 429-Retry-Zweig braucht `text` nur fürs Logging (`delay` kommt aus den
+/// Headern) — unberührt; der allgemeine Fehler-Zweig verliert im
+/// Timeout-Fall etwas Body-Detail in `map_http_status(status, "")`, aber
+/// terminiert nach ≤90s statt nie, und der Log-Aufruf (das eigentliche
+/// Ziel — Spec 0049, Fund 2: "kein Fehler ohne Log-Spur") wird garantiert
+/// erreicht.
+///
+/// Nimmt bewusst das `Future` von `response.text()` entgegen statt der
+/// `reqwest::Response` selbst — dadurch lässt sich das Timeout-Verhalten
+/// direkt mit einer synthetischen, nie auflösenden Future testen (s.
+/// Testmodul unten), exakt dasselbe Muster wie
+/// `anthropic::process_frame_stream`s `#[tokio::test(start_paused = true)]`
+/// -Test für den bereits bestehenden Frame-Lese-Timeout — ganz ohne echten
+/// HTTP-Request/Mock-Server oder eine für Tests künstlich verkürzte
+/// Timeout-Konstante.
+pub(crate) async fn read_error_body_with_timeout(
+    body_future: impl std::future::Future<Output = reqwest::Result<String>>,
+) -> String {
+    match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, body_future).await {
+        Ok(result) => result.unwrap_or_default(),
+        Err(_elapsed) => String::new(),
+    }
+}
+
 /// Verwandelt eine `reqwest::Response` mit `text/event-stream`-Body in
 /// einen Stream vollständiger [`SseFrame`]s. Puffert ankommende Bytes, bis
 /// mindestens ein vollständiger Frame vorliegt.
@@ -108,6 +162,46 @@ pub(crate) fn sse_frame_stream(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- read_error_body_with_timeout (Bug-Diagnose "AI-Provider-Aufruf
+    // kann unbegrenzt hängen", 2026-09) -------------------------------
+    //
+    // `#[tokio::test(start_paused = true)]`: dasselbe Muster wie
+    // `anthropic::tests::test_inactivity_timeout_yields_network_error_
+    // instead_of_hanging_forever` — Tokios virtuelle Uhr startet
+    // angehalten, `tokio::time::timeout` wartet dadurch nicht real 90
+    // Sekunden, sondern die Uhr springt automatisch vor, sobald nichts
+    // anderes mehr lauffähig ist. Testet damit den echten
+    // `SSE_INACTIVITY_TIMEOUT`-Wert (keine für den Test verkürzte
+    // Test-Konstante nötig) in Millisekunden Testlaufzeit.
+
+    #[tokio::test(start_paused = true)]
+    async fn test_read_error_body_with_timeout_returns_empty_string_instead_of_hanging_forever() {
+        // `futures::future::pending()` löst nie auf — steht stellvertretend
+        // für einen Server, der die Header eines Fehlerstatus bereits
+        // geschickt hat, den Body danach aber hängen lässt (das exakte
+        // Bug-Szenario: Header da, `.text()` wartet unbegrenzt).
+        let never_resolves: std::pin::Pin<
+            Box<dyn std::future::Future<Output = reqwest::Result<String>> + Send>,
+        > = Box::pin(futures::future::pending());
+
+        let result = read_error_body_with_timeout(never_resolves).await;
+
+        assert_eq!(
+            result, "",
+            "ein Timeout beim Body-Lesen muss wie ein gewöhnlicher Lesefehler \
+             behandelt werden (leerer String), nicht unbegrenzt blockieren"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_read_error_body_with_timeout_passes_through_a_ready_body() {
+        let ready = std::future::ready(Ok("Bad Request".to_string()));
+
+        let result = read_error_body_with_timeout(ready).await;
+
+        assert_eq!(result, "Bad Request");
+    }
 
     #[test]
     fn test_drain_complete_frames_parses_single_data_only_frame() {

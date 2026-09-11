@@ -288,7 +288,10 @@ impl AiProvider for OpenAiCompatibleProvider {
                     // Spec-Reviewer-Fund: s. identischer Kommentar in
                     // `crate::anthropic::AnthropicProvider::send`.
                     if crate::retry::retry_allowed(attempt + 1, elapsed) && delay <= remaining {
-                        let text = response.text().await.unwrap_or_default();
+                        // Bug-Diagnose "AI-Provider-Aufruf kann unbegrenzt
+                        // hängen" (2026-09): s. identischer Kommentar in
+                        // `crate::anthropic::AnthropicProvider::send`.
+                        let text = crate::sse::read_error_body_with_timeout(response.text()).await;
                         crate::request_logging::log_provider_rate_limited_retry(
                             request_id, attempt, &text, delay, &secrets,
                         );
@@ -299,7 +302,8 @@ impl AiProvider for OpenAiCompatibleProvider {
 
                 if !response.status().is_success() {
                     let status = response.status();
-                    let text = response.text().await.unwrap_or_default();
+                    // s. Kommentar beim 429-Retry-Zweig oben.
+                    let text = crate::sse::read_error_body_with_timeout(response.text()).await;
                     let mapped = map_http_status(status, &text);
                     // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
                     // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-

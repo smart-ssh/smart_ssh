@@ -289,7 +289,14 @@ impl AiProvider for AnthropicProvider {
                     // ein verfrühter Request danach wäre sinnlos (und
                     // könnte die Sperre bei manchen Providern verlängern).
                     if crate::retry::retry_allowed(attempt + 1, elapsed) && delay <= remaining {
-                        let text = response.text().await.unwrap_or_default();
+                        // Bug-Diagnose "AI-Provider-Aufruf kann unbegrenzt
+                        // hängen" (2026-09): `response.text().await` allein
+                        // hat keine obere Schranke — ein Server, der die
+                        // Header eines 429 sofort schickt, den Body danach
+                        // aber hängen lässt, blockierte hier für immer, VOR
+                        // dem Log-Aufruf unten (s. `read_error_body_with_
+                        // timeout`-Doc-Kommentar in `crate::sse`).
+                        let text = crate::sse::read_error_body_with_timeout(response.text()).await;
                         crate::request_logging::log_provider_rate_limited_retry(
                             request_id,
                             attempt,
@@ -304,7 +311,10 @@ impl AiProvider for AnthropicProvider {
 
                 if !response.status().is_success() {
                     let status = response.status();
-                    let text = response.text().await.unwrap_or_default();
+                    // s. Kommentar beim 429-Retry-Zweig oben — dasselbe
+                    // Hänger-Risiko, hier zusätzlich zwischen dem noch
+                    // ausstehenden Log-Aufruf unten und dem Nutzer.
+                    let text = crate::sse::read_error_body_with_timeout(response.text()).await;
                     let mapped = map_http_status(status, &text);
                     // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
                     // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
