@@ -9,6 +9,14 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+### Fixed
+- Ein KI-Provider (oder ein zwischengeschalteter Proxy), der einen
+  Fehlerstatus zwar sofort beantwortete, den Antworttext danach aber
+  hängen ließ, konnte einen Chat-Turn unbegrenzt und ohne jede
+  Fehlermeldung blockieren (Chat antwortet nicht mehr, kein Log-Eintrag).
+  Der Aufruf bricht jetzt spätestens nach 90 Sekunden mit einer
+  sichtbaren Fehlermeldung ab.
+
 ## [0.5.0] — 2026-09-11
 
 ### Added

@@ -104,12 +104,13 @@ fn parse_frame(text: &str) -> Option<SseFrame> {
 /// die `.unwrap_or_default()` an diesen Stellen ohnehin schon für einen
 /// echten `reqwest::Error` beim Body-Lesen hatte, keine neue `AiError`-
 /// Variante nötig. Konsequenzen bewusst in Kauf genommen: der
-/// 429-Retry-Zweig braucht `text` nur fürs Logging (`delay` kommt aus den
-/// Headern) — unberührt; der allgemeine Fehler-Zweig verliert im
-/// Timeout-Fall etwas Body-Detail in `map_http_status(status, "")`, aber
-/// terminiert nach ≤90s statt nie, und der Log-Aufruf (das eigentliche
-/// Ziel — Spec 0049, Fund 2: "kein Fehler ohne Log-Spur") wird garantiert
-/// erreicht.
+/// allgemeine Fehler-Zweig verliert im Timeout-Fall etwas Body-Detail in
+/// `map_http_status(status, "")`, terminiert aber diesen EINEN Lesevorgang
+/// nach ≤90s statt nie, und der Log-Aufruf (das eigentliche Ziel — Spec
+/// 0049, Fund 2: "kein Fehler ohne Log-Spur") wird garantiert erreicht.
+/// (Für den 429-Retry-Zweig gilt eine engere Schranke, s.
+/// [`read_error_body_with_timeout_capped`] unten — spec-reviewer-Fund,
+/// Review dieses Schritts.)
 ///
 /// Nimmt bewusst das `Future` von `response.text()` entgegen statt der
 /// `reqwest::Response` selbst — dadurch lässt sich das Timeout-Verhalten
@@ -122,7 +123,28 @@ fn parse_frame(text: &str) -> Option<SseFrame> {
 pub(crate) async fn read_error_body_with_timeout(
     body_future: impl std::future::Future<Output = reqwest::Result<String>>,
 ) -> String {
-    match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, body_future).await {
+    read_error_body_with_timeout_capped(body_future, SSE_INACTIVITY_TIMEOUT).await
+}
+
+/// Wie [`read_error_body_with_timeout`], aber zusätzlich durch `cap`
+/// begrenzt (`SSE_INACTIVITY_TIMEOUT.min(cap)`) — für den 429-Retry-Zweig,
+/// dessen `cap` das noch verbleibende Spec-0051-Gesamtretry-Zeitbudget
+/// (`crate::retry::MAX_TOTAL_RETRY_TIME`, 20s) ist.
+///
+/// Spec-reviewer-Fund (Review dieses Schritts): ohne diese engere Schranke
+/// könnte ein hängender Body in JEDEM 429-Retry-Versuch bis zu volle 90s
+/// kosten, bevor der Fall in den allgemeinen Fehler-Zweig durchfällt und
+/// dort NOCH EINMAL bis zu 90s liest — Worst Case ~180s statt der im
+/// Doc-Kommentar oben behaupteten "≤90s", und das untergräbt genau die
+/// 20s-Gesamtretry-Deckelung aus Spec 0051 ("kein minutenlanger,
+/// unsichtbarer Stillstand mitten im Chat-Turn"). Mit `cap = remaining`
+/// kann ein hängender Body den 429-Zweig nur noch innerhalb des ohnehin
+/// vorgesehenen Retry-Zeitbudgets aufhalten, nicht darüber hinaus.
+pub(crate) async fn read_error_body_with_timeout_capped(
+    body_future: impl std::future::Future<Output = reqwest::Result<String>>,
+    cap: Duration,
+) -> String {
+    match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT.min(cap), body_future).await {
         Ok(result) => result.unwrap_or_default(),
         Err(_elapsed) => String::new(),
     }
@@ -201,6 +223,36 @@ mod tests {
         let result = read_error_body_with_timeout(ready).await;
 
         assert_eq!(result, "Bad Request");
+    }
+
+    /// Regressionstest, spec-reviewer-Fund (Review dieses Schritts): ohne
+    /// [`read_error_body_with_timeout_capped`] konnte ein hängender Body im
+    /// 429-Retry-Zweig bis zu den vollen 90s von `SSE_INACTIVITY_TIMEOUT`
+    /// kosten — und danach im allgemeinen Fehler-Zweig NOCHMAL bis zu 90s,
+    /// macht ~180s statt der beabsichtigten Deckelung durch das
+    /// verbleibende Spec-0051-Retry-Zeitbudget (`remaining`, hier
+    /// stellvertretend 5s). Prüft per virtueller Uhr, dass tatsächlich die
+    /// KÜRZERE Schranke (`cap`, nicht `SSE_INACTIVITY_TIMEOUT`) greift —
+    /// ein Test, der nur `result == ""` prüfte, hätte eine Regression zu
+    /// `SSE_INACTIVITY_TIMEOUT.max(cap)` nicht bemerkt.
+    #[tokio::test(start_paused = true)]
+    async fn test_read_error_body_with_timeout_capped_uses_the_shorter_cap_not_the_full_sse_timeout(
+    ) {
+        let never_resolves: std::pin::Pin<
+            Box<dyn std::future::Future<Output = reqwest::Result<String>> + Send>,
+        > = Box::pin(futures::future::pending());
+        let cap = Duration::from_secs(5);
+
+        let before = tokio::time::Instant::now();
+        let result = read_error_body_with_timeout_capped(never_resolves, cap).await;
+        let elapsed = before.elapsed();
+
+        assert_eq!(result, "");
+        assert_eq!(
+            elapsed, cap,
+            "sollte nach der kürzeren `cap` (5s) abbrechen, nicht erst nach \
+             der vollen SSE_INACTIVITY_TIMEOUT (90s)"
+        );
     }
 
     #[test]

@@ -289,9 +289,14 @@ impl AiProvider for OpenAiCompatibleProvider {
                     // `crate::anthropic::AnthropicProvider::send`.
                     if crate::retry::retry_allowed(attempt + 1, elapsed) && delay <= remaining {
                         // Bug-Diagnose "AI-Provider-Aufruf kann unbegrenzt
-                        // hängen" (2026-09): s. identischer Kommentar in
+                        // hängen" (2026-09) + spec-reviewer-Fund (Review
+                        // dieses Schritts): s. identischer Kommentar in
                         // `crate::anthropic::AnthropicProvider::send`.
-                        let text = crate::sse::read_error_body_with_timeout(response.text()).await;
+                        let text = crate::sse::read_error_body_with_timeout_capped(
+                            response.text(),
+                            remaining,
+                        )
+                        .await;
                         crate::request_logging::log_provider_rate_limited_retry(
                             request_id, attempt, &text, delay, &secrets,
                         );

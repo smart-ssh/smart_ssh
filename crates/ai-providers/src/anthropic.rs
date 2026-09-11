@@ -294,9 +294,20 @@ impl AiProvider for AnthropicProvider {
                         // hat keine obere Schranke — ein Server, der die
                         // Header eines 429 sofort schickt, den Body danach
                         // aber hängen lässt, blockierte hier für immer, VOR
-                        // dem Log-Aufruf unten (s. `read_error_body_with_
-                        // timeout`-Doc-Kommentar in `crate::sse`).
-                        let text = crate::sse::read_error_body_with_timeout(response.text()).await;
+                        // dem Log-Aufruf unten. Begrenzt durch `remaining`
+                        // statt der vollen `SSE_INACTIVITY_TIMEOUT` (spec-
+                        // reviewer-Fund, Review dieses Schritts — s.
+                        // `read_error_body_with_timeout_capped`-Doc-
+                        // Kommentar in `crate::sse`): sonst könnte ein
+                        // hängender Body hier bis zu 90s kosten und danach
+                        // im allgemeinen Fehler-Zweig NOCHMAL bis zu 90s,
+                        // was die 20s-Gesamtretry-Deckelung aus Spec 0051
+                        // unterläuft.
+                        let text = crate::sse::read_error_body_with_timeout_capped(
+                            response.text(),
+                            remaining,
+                        )
+                        .await;
                         crate::request_logging::log_provider_rate_limited_retry(
                             request_id,
                             attempt,
