@@ -46,7 +46,8 @@ use ssh_manager_core::ai::{
     fence_untrusted, ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, OutputRedactor,
     RejectionReason, Role, UntrustedKind,
 };
-use ssh_manager_core::filter::{Decision, EvalContext};
+use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent, LedgerSource};
+use ssh_manager_core::filter::{Decision, EvalContext, EvaluationTrace, RuleId, RuleOrigin};
 use ssh_manager_core::profiles::{
     AiAction, NoteEditor, NoteTarget, NoteTargetSelector, PostIngestPolicy, ProfileStore,
 };
@@ -152,6 +153,77 @@ async fn push_history_scoped(session: &Session, message: ChatMessage, persist: b
     };
     if let Err(err) = store.append_message(chat_session_id, &message).await {
         tracing::warn!(error = %err, "chat message persistence failed");
+    }
+}
+
+/// Ableitung der [`LedgerSource`] eines Ledger-Eintrags aus der
+/// [`ActionOrigin`] eines Aktionsvorschlags (Spec 0057, §1.1). Es gibt
+/// bewusst keinen dritten `ActionOrigin`-Wert für "manuell" — ein
+/// `AiAction`-Vorschlag kommt immer entweder aus dem internen Chat
+/// (`Internal`, von der KI) oder von einem MCP-Client, nie direkt von
+/// einem Menschen (der bestätigt/lehnt nur ab, s. `LedgerSource::User`,
+/// das ausschließlich in `handle_user_decision` vergeben wird, nicht
+/// hier).
+fn ledger_source_for_origin(origin: &ActionOrigin) -> LedgerSource {
+    match origin {
+        ActionOrigin::Internal => LedgerSource::Ai,
+        ActionOrigin::Mcp { .. } => LedgerSource::McpAgent,
+    }
+}
+
+/// Redigiert alle Inhalts-tragenden Varianten eines [`LedgerEntryContent`]
+/// (Spec 0057, §1.2 "PFLICHT") — zentral hier statt an jeder Aufrufstelle
+/// von [`write_ledger_entry`] einzeln, damit ein vergessener Aufrufer
+/// keinen unredigierten Eintrag durchlassen kann. `Decision` trägt keine
+/// Ausgabedaten (nur `reason`/`code`, von der Filter-Engine selbst
+/// erzeugte Texte, kein Serverinhalt) und bleibt deshalb unverändert.
+fn redact_ledger_entry_content(
+    redactor: &dyn OutputRedactor,
+    content: LedgerEntryContent,
+) -> LedgerEntryContent {
+    match content {
+        LedgerEntryContent::CommandProposed { command } => LedgerEntryContent::CommandProposed {
+            command: redactor.redact_text(&command),
+        },
+        LedgerEntryContent::CommandExecuted {
+            command,
+            output,
+            cancelled,
+        } => LedgerEntryContent::CommandExecuted {
+            command: redactor.redact_text(&command),
+            output: redactor.redact(&output),
+            cancelled,
+        },
+        LedgerEntryContent::AiMessage { text } => LedgerEntryContent::AiMessage {
+            text: redactor.redact_text(&text),
+        },
+        decision @ LedgerEntryContent::Decision { .. } => decision,
+    }
+}
+
+/// Zentrale Schreibstelle für das Session-Ledger (Spec 0057, §1) — analog
+/// zu [`push_history`]/[`push_history_scoped`] oben, aber bewusst NICHT
+/// über deren `persist`-Flag/-Gate laufend: jenes Flag schließt MCP-
+/// Herkunft absichtlich aus der wiederaufnehmbaren Chat-Historie aus (Spec
+/// 0034, Abschnitt 10), das Ledger soll MCP-Aktivität aber gerade erfassen
+/// (Spec 0057, §1.1: Quelle `mcp-agent`) — deshalb ein eigenes, von
+/// `persist` unabhängiges Gate: nur `session.ledger_store`/
+/// `session.chat_session_id` müssen gesetzt sein.
+///
+/// Redigiert `content` selbst (s. [`redact_ledger_entry_content`]) —
+/// Aufrufer übergeben unredigierte Daten. Ein Persistenzfehler bricht den
+/// Chat-Turn nicht ab (nur geloggt), aus demselben Grund wie bei
+/// `push_history_scoped`.
+async fn write_ledger_entry(session: &Session, source: LedgerSource, content: LedgerEntryContent) {
+    let Some(store) = &session.ledger_store else {
+        return;
+    };
+    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+        return;
+    };
+    let redacted = redact_ledger_entry_content(session.redactor.as_ref(), content);
+    if let Err(err) = store.append_entry(chat_session_id, source, &redacted).await {
+        tracing::warn!(error = %err, "ledger entry persistence failed");
     }
 }
 
@@ -492,6 +564,17 @@ async fn flush_text_buffer(session: &Session, buffer: &mut String) {
         return;
     }
     let text = std::mem::take(buffer);
+    // Spec 0057, §1.1, vierter Punkt: "KI-Nachricht". Immer
+    // `LedgerSource::Ai` — dieser Text ist buchstäblich die vom
+    // `AiProvider` gestreamte Antwort, unabhängig davon, ob die auslösende
+    // Aktion über den internen Chat oder MCP kam (Letzteres läuft ohnehin
+    // nie über `run_one_round`, s. `crate::mcp_backend`).
+    write_ledger_entry(
+        session,
+        LedgerSource::Ai,
+        LedgerEntryContent::AiMessage { text: text.clone() },
+    )
+    .await;
     push_history(
         session,
         ChatMessage {
@@ -514,6 +597,23 @@ async fn handle_action_proposed(
     origin: ActionOrigin,
 ) -> bool {
     let action_id: ActionId = Uuid::new_v4();
+
+    // Spec 0057, §1.1, erster Punkt: "Kommando vorgeschlagen". Bewusst auf
+    // `SuggestCommand` beschränkt (diese Etappe deckt nur diesen
+    // Aktionstyp ab, s. Spec 0057 §8 "Etappe 1") — `ReadRemoteFile`/
+    // `WriteRemoteFile`/`ProposeNoteUpdate` folgen in einer späteren
+    // Erweiterung.
+    if let AiAction::SuggestCommand { command } = &action {
+        write_ledger_entry(
+            session,
+            ledger_source_for_origin(&origin),
+            LedgerEntryContent::CommandProposed {
+                command: command.clone(),
+            },
+        )
+        .await;
+    }
+
     // Spec 0040, Abschnitt 4: MCP-Herkunft schreibt nie in die persistierte,
     // wiederaufnehmbare Historie — auch nicht, wenn dieselbe `Session`
     // (samt `chat_session_id`) gerade einen Menschen-Tab bedient (s.
@@ -532,7 +632,10 @@ async fn handle_action_proposed(
         *path = normalize_remote_path(path);
     }
 
-    let mut decision = evaluate_action(session, &action, profile_store).await;
+    let evaluation = evaluate_action(session, &action, profile_store).await;
+    let matched_rule = evaluation.matched_rule.clone();
+    let matched_rule_origin = evaluation.matched_rule_origin;
+    let mut decision = evaluation.decision;
 
     // Vorgezogen (war vorher erst nach der Eskalationskette berechnet, s.
     // Git-Historie) — die neue Spec-0039-Eskalation unten braucht die
@@ -713,6 +816,20 @@ async fn handle_action_proposed(
 
     match decision {
         Decision::AutoExec => {
+            if let AiAction::SuggestCommand { .. } = &action {
+                write_ledger_entry(
+                    session,
+                    ledger_source_for_origin(&origin),
+                    LedgerEntryContent::Decision {
+                        outcome: LedgerDecisionOutcome::AutoApproved,
+                        reason: None,
+                        code: None,
+                        matched_rule: matched_rule.clone(),
+                        matched_rule_origin,
+                    },
+                )
+                .await;
+            }
             execute_action(
                 session,
                 session_id,
@@ -724,7 +841,21 @@ async fn handle_action_proposed(
             )
             .await
         }
-        Decision::Deny { reason, .. } => {
+        Decision::Deny { reason, code } => {
+            if let AiAction::SuggestCommand { .. } = &action {
+                write_ledger_entry(
+                    session,
+                    ledger_source_for_origin(&origin),
+                    LedgerEntryContent::Decision {
+                        outcome: LedgerDecisionOutcome::Rejected,
+                        reason: Some(reason.clone()),
+                        code: Some(code),
+                        matched_rule: matched_rule.clone(),
+                        matched_rule_origin,
+                    },
+                )
+                .await;
+            }
             // Spec 0007 Abschnitt 5: informiert nur, keine Ausführung, kein
             // Warten auf `respond_to_action` — das Event oben ist bereits
             // die vollständige Reaktion an den Nutzer. Spec 0021, Abschnitt
@@ -794,6 +925,8 @@ async fn handle_action_proposed(
                 emitter,
                 profile_store,
                 origin,
+                matched_rule,
+                matched_rule_origin,
             )
             .await
         }
@@ -973,7 +1106,7 @@ async fn evaluate_action(
     session: &Session,
     action: &AiAction,
     profile_store: &dyn ProfileStore,
-) -> Decision {
+) -> EvaluationTrace {
     match action {
         AiAction::SuggestCommand { command } => {
             let tags = tags_for_session(session, profile_store).await;
@@ -981,11 +1114,21 @@ async fn evaluate_action(
                 server_id: session.server_id,
                 tags,
             };
-            session.filter_engine.evaluate(command, &ctx).await
+            session
+                .filter_engine
+                .evaluate_explained(command, &ctx)
+                .await
         }
-        AiAction::ProposeNoteUpdate { .. } => Decision::Confirm {
-            reason: "Notiz-Aktualisierungen erfordern immer eine manuelle Bestätigung".to_string(),
-            code: "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM".to_string(),
+        AiAction::ProposeNoteUpdate { .. } => EvaluationTrace {
+            decision: Decision::Confirm {
+                reason: "Notiz-Aktualisierungen erfordern immer eine manuelle Bestätigung"
+                    .to_string(),
+                code: "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM".to_string(),
+            },
+            matched_rule: None,
+            matched_rule_origin: None,
+            matched_hard_blacklist_entry: None,
+            sub_command_traces: Vec::new(),
         },
         AiAction::GenerateDocument { .. } => unreachable!(
             "GenerateDocument wird bereits in run_one_round abgefangen \
@@ -1000,7 +1143,7 @@ async fn evaluate_action(
             };
             session
                 .filter_engine
-                .evaluate(&sftp_read_pseudo_command(path), &ctx)
+                .evaluate_explained(&sftp_read_pseudo_command(path), &ctx)
                 .await
         }
         AiAction::WriteRemoteFile { path, .. } => {
@@ -1009,19 +1152,19 @@ async fn evaluate_action(
                 server_id: session.server_id,
                 tags,
             };
-            let decision = session
+            let mut trace = session
                 .filter_engine
-                .evaluate(&sftp_write_pseudo_command(path), &ctx)
+                .evaluate_explained(&sftp_write_pseudo_command(path), &ctx)
                 .await;
-            match decision {
-                Decision::AutoExec => Decision::Confirm {
+            if matches!(trace.decision, Decision::AutoExec) {
+                trace.decision = Decision::Confirm {
                     reason: "Dateischreibvorgänge werden immer zur Bestätigung angezeigt \
                              (Spec 0020, Abschnitt 4.2)"
                         .to_string(),
                     code: "FILTER_FILE_WRITE_REQUIRES_CONFIRM".to_string(),
-                },
-                other => other,
+                };
             }
+            trace
         }
     }
 }
@@ -1043,6 +1186,8 @@ async fn handle_user_decision(
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     origin: ActionOrigin,
+    matched_rule: Option<RuleId>,
+    matched_rule_origin: Option<RuleOrigin>,
 ) -> bool {
     // Spec 0040, Abschnitt 4: s. identischer Kommentar in
     // `handle_action_proposed` — MCP-Herkunft persistiert nie, auch nicht
@@ -1050,8 +1195,35 @@ async fn handle_user_decision(
     // landet ebenfalls hier, s. Spec 0028, Abschnitt 9a).
     let persist = !matches!(origin, ActionOrigin::Mcp { .. });
 
+    // Spec 0057, §1.1, zweiter Punkt: die im Bestätigungsdialog getroffene
+    // (oder per Timeout fabrizierte, s. `deny_reason`-Doc-Kommentar oben)
+    // Freigabe-Entscheidung. `LedgerSource::User` NUR für eine echte
+    // Nutzer-Entscheidung (`RejectionReason::User`/ein tatsächliches
+    // `Approve`/`EditThenApprove`) — der Timeout-Fall hat keinen Menschen
+    // entscheiden lassen, bekommt deshalb dieselbe Herkunfts-Quelle wie
+    // der ursprüngliche Vorschlag (s. `ledger_source_for_origin`).
+    let decision_source = if matches!(deny_reason, RejectionReason::Timeout) {
+        ledger_source_for_origin(&origin)
+    } else {
+        LedgerSource::User
+    };
+
     match user_decision {
         ActionUserDecision::Deny => {
+            if let AiAction::SuggestCommand { .. } = &action {
+                write_ledger_entry(
+                    session,
+                    decision_source,
+                    LedgerEntryContent::Decision {
+                        outcome: LedgerDecisionOutcome::Rejected,
+                        reason: None,
+                        code: None,
+                        matched_rule: matched_rule.clone(),
+                        matched_rule_origin,
+                    },
+                )
+                .await;
+            }
             // Spec 0021, Abschnitt 3, Fall 3: der Nutzer hat abgelehnt — das
             // Frontend weiß es bereits (es hat den Aufruf selbst gemacht),
             // aber die KI bisher nicht. `RejectionReason::User`/`Blocked`
@@ -1079,6 +1251,20 @@ async fn handle_user_decision(
             true
         }
         ActionUserDecision::Approve => {
+            if let AiAction::SuggestCommand { .. } = &action {
+                write_ledger_entry(
+                    session,
+                    decision_source,
+                    LedgerEntryContent::Decision {
+                        outcome: LedgerDecisionOutcome::Confirmed,
+                        reason: None,
+                        code: None,
+                        matched_rule: matched_rule.clone(),
+                        matched_rule_origin,
+                    },
+                )
+                .await;
+            }
             execute_action(
                 session,
                 session_id,
@@ -1102,6 +1288,20 @@ async fn handle_user_decision(
                 // Bearbeiten-Dialog *ist* bereits die verlangte
                 // Bestätigung.
                 AiAction::SuggestCommand { .. } => {
+                    // Spec 0057, §1.1: der bearbeitete Text ist ein eigener
+                    // Vorschlag (nicht identisch mit dem ursprünglich von
+                    // der KI vorgeschlagenen Kommando) — vom Nutzer selbst
+                    // verfasst, deshalb `LedgerSource::User`, nicht die
+                    // Herkunft des ursprünglichen Vorschlags.
+                    write_ledger_entry(
+                        session,
+                        LedgerSource::User,
+                        LedgerEntryContent::CommandProposed {
+                            command: edited.clone(),
+                        },
+                    )
+                    .await;
+
                     let tags = profile_store
                         .get_server(&session.server_id)
                         .await
@@ -1111,8 +1311,23 @@ async fn handle_user_decision(
                         server_id: session.server_id,
                         tags,
                     };
-                    let re_decision = session.filter_engine.evaluate(&edited, &ctx).await;
-                    if let Decision::Deny { reason, code } = re_decision {
+                    let re_evaluation = session
+                        .filter_engine
+                        .evaluate_explained(&edited, &ctx)
+                        .await;
+                    if let Decision::Deny { reason, code } = re_evaluation.decision {
+                        write_ledger_entry(
+                            session,
+                            ledger_source_for_origin(&origin),
+                            LedgerEntryContent::Decision {
+                                outcome: LedgerDecisionOutcome::Rejected,
+                                reason: Some(reason.clone()),
+                                code: Some(code.clone()),
+                                matched_rule: re_evaluation.matched_rule,
+                                matched_rule_origin: re_evaluation.matched_rule_origin,
+                            },
+                        )
+                        .await;
                         let blocked = AiAction::SuggestCommand {
                             command: edited.clone(),
                         };
@@ -1155,6 +1370,24 @@ async fn handle_user_decision(
                         .await;
                         return true;
                     }
+                    // Der Klick auf "Ausführen" im Bearbeiten-Dialog *ist*
+                    // bereits die verlangte Bestätigung (s. Doc-Kommentar
+                    // oben) — dieselbe `Confirmed`-Semantik wie
+                    // `ActionUserDecision::Approve` oben, `LedgerSource::
+                    // User` aus demselben Grund wie beim `CommandProposed`-
+                    // Eintrag oben.
+                    write_ledger_entry(
+                        session,
+                        LedgerSource::User,
+                        LedgerEntryContent::Decision {
+                            outcome: LedgerDecisionOutcome::Confirmed,
+                            reason: None,
+                            code: None,
+                            matched_rule: re_evaluation.matched_rule,
+                            matched_rule_origin: re_evaluation.matched_rule_origin,
+                        },
+                    )
+                    .await;
                     AiAction::SuggestCommand { command: edited }
                 }
                 // Weder `ProposeNoteUpdate` noch `ReadRemoteFile`/
@@ -1354,6 +1587,31 @@ async fn execute_suggested_command(
 
     match raw_outcome {
         Ok(ExecOutcome { output, cancelled }) => {
+            // Spec 0057, §1.1, dritter Punkt: "Kommando ausgeführt +
+            // Ergebnis (stdout/stderr/exit)". Bewusst mit dem noch
+            // UNREDIGIERTEN `output` aufgerufen — `write_ledger_entry`
+            // redigiert selbst zentral (s. dortiger Doc-Kommentar), eine
+            // hier vorab redigierte Fassung würde nur doppelt redigieren,
+            // ohne einen Sicherheitsgewinn. `persist` als Quelle für
+            // `LedgerSource` (statt `origin`, das hier nicht mehr
+            // ankommt): dieselbe Ableitung wie oben in
+            // `handle_action_proposed`/`push_history_scoped` — `persist ==
+            // false` bedeutet ausschließlich MCP-Herkunft (Spec 0040,
+            // Abschnitt 4).
+            write_ledger_entry(
+                session,
+                if persist {
+                    LedgerSource::Ai
+                } else {
+                    LedgerSource::McpAgent
+                },
+                LedgerEntryContent::CommandExecuted {
+                    command: command.clone(),
+                    output: output.clone(),
+                    cancelled,
+                },
+            )
+            .await;
             let redacted = session.redactor.redact(&output);
             // Unabhängiger Review-Pass (Spec 0016): Spec 0016 Abschnitt 2/3
             // verlangt dieselbe Redaction-Regel für Logs wie für den
@@ -2131,6 +2389,18 @@ async fn handle_document_generated(
         title,
         content_markdown.clone(),
     );
+    // Spec 0057, §1.1, vierter Punkt + Spec 0012, Abschnitt 5: dieselbe
+    // Gleichsetzung mit normalem Chat-Text wie unten bei `push_history` —
+    // gilt genauso für den Ledger-Eintrag, s. `flush_text_buffer`s
+    // identischer Kommentar.
+    write_ledger_entry(
+        session,
+        LedgerSource::Ai,
+        LedgerEntryContent::AiMessage {
+            text: content_markdown.clone(),
+        },
+    )
+    .await;
     // Spec 0012, Abschnitt 5: "wird als Teil der Assistant-Nachricht in
     // context.history übernommen (wie ein normaler Chat-Text)" — kein
     // Sonderfall gegenüber `flush_text_buffer` oben, derselbe
@@ -2768,6 +3038,7 @@ mod tests {
             // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`
             // no-opt bei `None` bereits vollständig.
             chat_session_store: None,
+            ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
             ai_request_paced_at: AsyncMutex::new(None),
         }
@@ -6829,6 +7100,27 @@ mod tests {
         Uuid,
         tempfile::TempDir,
     ) {
+        let (session, chat_store, chat_session_id, tmp_dir, _ledger_store) =
+            session_with_real_chat_and_ledger_persistence(ai_events, transport).await;
+        (session, chat_store, chat_session_id, tmp_dir)
+    }
+
+    /// Wie [`session_with_real_chat_persistence`], zusätzlich mit einem
+    /// echten, migrierten In-Memory-`SqliteLedgerStore` (Spec 0057, §1) —
+    /// derselbe Verschlüsselungs-Cipher wie für `chat_session_store`
+    /// (Spec 0057, §1.3: "wie die Chat-Historie", kein zweiter
+    /// Mechanismus), auf dieselbe `chat_sessions`-Zeile gebunden (Migration
+    /// 0011: `ledger_entries.session_id` referenziert `chat_sessions(id)`).
+    async fn session_with_real_chat_and_ledger_persistence(
+        ai_events: Vec<AiEvent>,
+        transport: MockSshTransport,
+    ) -> (
+        Session,
+        persistence_sqlite::SqliteChatSessionStore,
+        Uuid,
+        tempfile::TempDir,
+        persistence_sqlite::SqliteLedgerStore,
+    ) {
         // Nur die öffentliche `connect(db_path)`-API steht app-shell zur
         // Verfügung (`connect_with`/`:memory:` sind `pub(crate)` in
         // `persistence-sqlite`, s. dortiger Doc-Kommentar) — eine echte,
@@ -6865,15 +7157,17 @@ mod tests {
             std::sync::Arc::new(ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(
                 &[13u8; 32],
             ));
-        let chat_store = profile_store.chat_session_store(test_cipher);
+        let chat_store = profile_store.chat_session_store(test_cipher.clone());
         let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        let ledger_store = profile_store.ledger_store(test_cipher);
 
         let mut session = session_with_ai_provider(MockAiProvider::new(ai_events), transport);
         session.server_id = server_id;
         session.chat_session_store = Some(chat_store.clone());
+        session.ledger_store = Some(ledger_store.clone());
         session.chat_session_id = AsyncMutex::new(Some(chat_session_id));
 
-        (session, chat_store, chat_session_id, tmp_dir)
+        (session, chat_store, chat_session_id, tmp_dir, ledger_store)
     }
 
     /// Spec 0034, Abschnitt 4 ("jede Nachricht ... wird fortlaufend
@@ -6950,6 +7244,399 @@ mod tests {
             )),
             "die geladene Historie muss den redigierten Platzhalter enthalten: {loaded:?}"
         );
+    }
+
+    // --- Spec 0057, §1: Session-Ledger-Grundgerüst --------------------------
+
+    /// Spec 0057, §1.1: der vollständige AutoExec-Durchlauf (Allow-Regel,
+    /// kein Bestätigungsdialog) muss drei Ledger-Einträge in Reihenfolge
+    /// erzeugen — vorgeschlagen, automatisch freigegeben (mit der
+    /// gegriffenen Regel), ausgeführt — plus die abschließende
+    /// KI-Antwort als vierten Eintrag. Deckt zugleich ab, dass das Ledger
+    /// das bestehende KI-Kontext-Verhalten NICHT verändert: derselbe
+    /// Ablauf/dieselben `chat-*`-Events wie im bereits bestehenden
+    /// `test_autoexec_path_runs_command_and_records_result` oben, nur mit
+    /// zusätzlich angehängtem Ledger.
+    #[tokio::test]
+    async fn test_ledger_captures_proposed_decision_executed_and_ai_message_for_autoexec() {
+        let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![
+                    AiEvent::ActionProposed(AiAction::SuggestCommand {
+                        command: "ls -la".to_string(),
+                    }),
+                    AiEvent::TextDelta("Erledigt.".to_string()),
+                    AiEvent::Done,
+                ],
+                MockSshTransport::default().with_response("ls -la", output("total 0")),
+            )
+            .await;
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        assert_eq!(
+            entries.len(),
+            4,
+            "erwartet: vorgeschlagen, entschieden, ausgeführt, KI-Nachricht — bekam: {entries:?}"
+        );
+
+        assert_eq!(entries[0].source, LedgerSource::Ai);
+        assert!(matches!(
+            &entries[0].content,
+            LedgerEntryContent::CommandProposed { command } if command == "ls -la"
+        ));
+
+        assert_eq!(entries[1].source, LedgerSource::Ai);
+        match &entries[1].content {
+            LedgerEntryContent::Decision {
+                outcome,
+                reason,
+                code,
+                matched_rule,
+                matched_rule_origin,
+            } => {
+                assert_eq!(*outcome, LedgerDecisionOutcome::AutoApproved);
+                assert!(reason.is_none());
+                assert!(code.is_none());
+                assert_eq!(
+                    matched_rule.as_ref().map(|r| r.0.as_str()),
+                    Some("allow-all")
+                );
+                assert_eq!(
+                    *matched_rule_origin,
+                    Some(ssh_manager_core::filter::RuleOrigin::User)
+                );
+            }
+            other => panic!("erwartete Decision, bekam {other:?}"),
+        }
+
+        assert_eq!(entries[2].source, LedgerSource::Ai);
+        assert!(matches!(
+            &entries[2].content,
+            LedgerEntryContent::CommandExecuted { command, cancelled, .. }
+                if command == "ls -la" && !cancelled
+        ));
+
+        assert_eq!(entries[3].source, LedgerSource::Ai);
+        assert!(matches!(
+            &entries[3].content,
+            LedgerEntryContent::AiMessage { text } if text == "Erledigt."
+        ));
+    }
+
+    /// Spec 0057, §1.2 "PFLICHT": ein Fake-Secret in der Kommando-Ausgabe
+    /// darf unter keinen Umständen unredigiert im Ledger landen — exakt
+    /// dieselbe Prüfung wie `test_persisted_command_result_contains_
+    /// redacted_not_raw_secret` oben, nur für den neuen Ledger-Store statt
+    /// `chat_session_store`.
+    #[tokio::test]
+    async fn test_ledger_redacts_fake_secret_in_command_executed_output() {
+        let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![
+                    AiEvent::ActionProposed(AiAction::SuggestCommand {
+                        command: "cat db.conf".to_string(),
+                    }),
+                    AiEvent::Done,
+                ],
+                MockSshTransport::default().with_response(
+                    "cat db.conf",
+                    output("Verbindung ok, password=hunter2geheim"),
+                ),
+            )
+            .await;
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        let serialized: Vec<String> = entries
+            .iter()
+            .map(|e| serde_json::to_string(&e.content).unwrap())
+            .collect();
+        for raw in &serialized {
+            assert!(
+                !raw.contains("hunter2geheim"),
+                "das Secret darf unter keinen Umständen unredigiert ins Ledger gelangen: {raw}"
+            );
+        }
+        assert!(
+            entries.iter().any(|e| matches!(
+                &e.content,
+                LedgerEntryContent::CommandExecuted { output, .. }
+                    if String::from_utf8_lossy(&output.stdout).contains("REDACTED")
+            )),
+            "das Ledger muss den redigierten Platzhalter enthalten: {entries:?}"
+        );
+    }
+
+    /// Spec 0057, §1.1, zweiter Punkt: eine automatisch (per Deny-Regel)
+    /// blockierte Aktion bekommt ebenfalls einen `Decision`-Eintrag —
+    /// `Rejected`, mit `reason`/`code` aus der Filter-Engine gefüllt, kein
+    /// `CommandExecuted`-Eintrag danach (die Aktion lief nie).
+    #[tokio::test]
+    async fn test_ledger_records_rejected_decision_for_auto_deny_rule() {
+        struct DenyLsPolicyStore;
+        #[async_trait]
+        impl PolicyStore for DenyLsPolicyStore {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("deny-ls".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob("ls *".to_string()),
+                    action: ssh_manager_core::filter::RuleAction::Deny,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
+                }]
+            }
+        }
+
+        let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done],
+                MockSshTransport::default(),
+            )
+            .await;
+        session.filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        handle_action_proposed(
+            &session,
+            Uuid::new_v4(),
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Internal,
+        )
+        .await;
+
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        assert_eq!(
+            entries.len(),
+            2,
+            "erwartet: vorgeschlagen + abgelehnt, kein Ausführungs-Eintrag: {entries:?}"
+        );
+        match &entries[1].content {
+            LedgerEntryContent::Decision {
+                outcome,
+                reason,
+                code,
+                matched_rule,
+                ..
+            } => {
+                assert_eq!(*outcome, LedgerDecisionOutcome::Rejected);
+                assert!(reason.is_some());
+                assert!(code.is_some());
+                assert_eq!(matched_rule.as_ref().map(|r| r.0.as_str()), Some("deny-ls"));
+            }
+            other => panic!("erwartete Decision, bekam {other:?}"),
+        }
+    }
+
+    /// Spec 0057, §1.1, zweiter Punkt: eine per Bestätigungsdialog vom
+    /// Nutzer freigegebene Aktion bekommt `LedgerSource::User` auf ihrem
+    /// `Decision`-Eintrag — anders als die automatischen Fälle oben, wo die
+    /// Quelle von der ursprünglichen Herkunft (KI/MCP) abgeleitet wird.
+    #[tokio::test]
+    async fn test_ledger_records_user_source_for_confirmed_decision() {
+        let (session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done],
+                MockSshTransport::default().with_response("ls -la", output("total 0")),
+            )
+            .await;
+        // `NoRulesPolicyStore` (Session-Default): keine passende Regel ->
+        // `Confirm` (Default-Fallback der Filter-Engine).
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let action_future = handle_action_proposed(
+            &session,
+            Uuid::new_v4(),
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Internal,
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        assert_eq!(
+            entries.len(),
+            3,
+            "vorgeschlagen, entschieden, ausgeführt: {entries:?}"
+        );
+        assert_eq!(entries[1].source, LedgerSource::User);
+        assert!(matches!(
+            &entries[1].content,
+            LedgerEntryContent::Decision {
+                outcome: LedgerDecisionOutcome::Confirmed,
+                ..
+            }
+        ));
+    }
+
+    /// Wie oben, aber der Nutzer lehnt im Dialog ab — derselbe
+    /// `LedgerSource::User`, `outcome: Rejected`, ohne
+    /// `CommandExecuted`-Eintrag danach.
+    #[tokio::test]
+    async fn test_ledger_records_user_source_for_rejected_decision() {
+        let (session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done],
+                MockSshTransport::default(),
+            )
+            .await;
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let action_future = handle_action_proposed(
+            &session,
+            Uuid::new_v4(),
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Internal,
+        );
+        let responder = deny_first_proposed_action(&emitter, &confirmations);
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        assert_eq!(entries.len(), 2, "vorgeschlagen + abgelehnt: {entries:?}");
+        assert_eq!(entries[1].source, LedgerSource::User);
+        assert!(matches!(
+            &entries[1].content,
+            LedgerEntryContent::Decision {
+                outcome: LedgerDecisionOutcome::Rejected,
+                reason: None,
+                code: None,
+                ..
+            }
+        ));
+    }
+
+    /// Spec 0057, §1.1: "Quelle (user/ai/mcp-agent)" — ein über MCP
+    /// vorgeschlagenes (und vom Menschen im selben, geteilten Tab
+    /// bestätigtes) Kommando bekommt `LedgerSource::McpAgent` auf seinem
+    /// `CommandProposed`-Eintrag (Herkunft des Vorschlags), aber
+    /// `LedgerSource::User` auf dem `Decision`-Eintrag (der Mensch hat
+    /// tatsächlich bestätigt) — und wird, anders als `chat_messages`
+    /// (Spec 0034/0040, s. `test_mcp_action_on_shared_human_session_writes_
+    /// no_persisted_history` oben), TROTZDEM ins Ledger geschrieben (Spec
+    /// 0057, §1.1: "für spätere Audit-„wer"-Unterscheidung" — MCP-Aktivität
+    /// muss gerade sichtbar bleiben).
+    #[tokio::test]
+    async fn test_ledger_captures_mcp_origin_independent_of_chat_persist_flag() {
+        let (mut session, chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done],
+                MockSshTransport::default().with_response("ls -la", output("total 0")),
+            )
+            .await;
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let action_future = handle_action_proposed(
+            &session,
+            Uuid::new_v4(),
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Mcp {
+                client_name: Some("Claude Code".to_string()),
+            },
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        // Gegenstück: keine `chat_messages`-Zeile (Spec 0040 unverändert).
+        let chat_history = chat_store.load_session(chat_session_id).await.unwrap();
+        assert!(
+            chat_history.is_empty(),
+            "MCP-Herkunft darf weiterhin nie in die persistierte Chat-Historie schreiben: {chat_history:?}"
+        );
+
+        // Kernaussage: das Ledger erfasst es trotzdem.
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        assert_eq!(
+            entries.len(),
+            3,
+            "vorgeschlagen, entschieden, ausgeführt: {entries:?}"
+        );
+        assert_eq!(entries[0].source, LedgerSource::McpAgent);
+        assert!(matches!(
+            &entries[0].content,
+            LedgerEntryContent::CommandProposed { .. }
+        ));
+        assert_eq!(entries[1].source, LedgerSource::User);
+        assert!(matches!(
+            &entries[1].content,
+            LedgerEntryContent::Decision {
+                outcome: LedgerDecisionOutcome::Confirmed,
+                ..
+            }
+        ));
+        assert_eq!(entries[2].source, LedgerSource::McpAgent);
+        assert!(matches!(
+            &entries[2].content,
+            LedgerEntryContent::CommandExecuted { .. }
+        ));
     }
 
     /// Spec 0040, Abschnitt 4 (Regressionstest, "Verbindliche Entscheidung

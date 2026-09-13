@@ -9,6 +9,7 @@
 mod ai_provider_store;
 mod chat_session_store;
 mod error;
+mod ledger_store;
 mod mapping;
 mod paths;
 mod policy_store;
@@ -23,6 +24,7 @@ pub use ai_provider_store::{
 };
 pub use chat_session_store::{ChatSessionStoreError, ChatSessionSummary, SqliteChatSessionStore};
 pub use error::{PersistenceError, PersistenceResult};
+pub use ledger_store::{LedgerEntry, LedgerStoreError, SqliteLedgerStore};
 pub use paths::default_db_path;
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};
 pub use prompt_history_store::{PromptHistoryStoreError, SqlitePromptHistoryStore};

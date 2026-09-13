@@ -1014,6 +1014,14 @@ pub(crate) async fn connect_session(
         } else {
             None
         },
+        // Spec 0057, §1: dieselbe Gating-Logik wie `chat_session_store`
+        // direkt darüber — das Ledger braucht dieselbe `chat_sessions.id`
+        // als FK (Migration 0011), kein unabhängiger Persistenz-Pfad.
+        ledger_store: if chat_session_id.is_some() {
+            state.ledger_store.clone()
+        } else {
+            None
+        },
         chat_session_id: tokio::sync::Mutex::new(chat_session_id),
         ai_request_paced_at: tokio::sync::Mutex::new(None),
     });
@@ -3907,6 +3915,7 @@ mod send_chat_message_persistence_tests {
             injection_check_provider: None,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
             chat_session_store: None,
+            ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
             ai_request_paced_at: AsyncMutex::new(None),
         }

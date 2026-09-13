@@ -157,6 +157,17 @@ impl SqliteProfileStore {
         crate::SqliteChatSessionStore::new(self.pool.clone(), cipher)
     }
 
+    /// Wie [`Self::chat_session_store`], für das Session-Ledger (Spec
+    /// 0057, §1.3) — derselbe `chat_content_cipher` wie
+    /// `chat_session_store`/`prompt_history_store`, kein eigener
+    /// Schlüssel.
+    pub fn ledger_store(
+        &self,
+        cipher: std::sync::Arc<dyn ssh_manager_core::crypto::ContentCipher>,
+    ) -> crate::SqliteLedgerStore {
+        crate::SqliteLedgerStore::new(self.pool.clone(), cipher)
+    }
+
     async fn fetch_tags(&self, server_id: &str) -> ProfileResult<Vec<String>> {
         let rows = sqlx::query("SELECT tag FROM server_tags WHERE server_id = ? ORDER BY tag")
             .bind(server_id)

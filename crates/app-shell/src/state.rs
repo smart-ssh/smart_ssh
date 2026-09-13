@@ -5,7 +5,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use persistence_sqlite::{
-    SqliteAiProviderStore, SqliteChatSessionStore, SqlitePolicyStore, SqlitePromptHistoryStore,
+    SqliteAiProviderStore, SqliteChatSessionStore, SqliteLedgerStore, SqlitePolicyStore,
+    SqlitePromptHistoryStore,
 };
 use ssh_manager_core::entitlements::EntitlementProvider;
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore};
@@ -59,6 +60,11 @@ pub struct AppState {
     /// `prompt_history_store` oben — degradiert zu "kein Chat-Verlauf wird
     /// gespeichert/kann fortgesetzt werden" für die laufende App-Instanz.
     pub chat_session_store: Option<SqliteChatSessionStore>,
+    /// Spec 0057, §1: das Session-Ledger — wie `chat_session_store`
+    /// `Option`, aus demselben Grund (`None`, wenn der
+    /// Verschlüsselungsschlüssel beim Start nicht aufgelöst werden konnte)
+    /// und mit demselben `chat_content_cipher` (s. `lib::build_app_state`).
+    pub ledger_store: Option<SqliteLedgerStore>,
     /// Spec 0037, Abschnitt 2/3 (D5): aktueller Entitlement-Stand — die
     /// Community Edition kennt aktuell nur den einen festen Zustand
     /// `FixedEntitlements(Entitlements::free())`, kein Lizenzschlüssel-

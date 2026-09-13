@@ -86,7 +86,7 @@ fn build_app_state(wiring: &Wiring) -> AppState {
     // `chat_session_store`-Doc-Kommentare) statt die ganze App abzubrechen.
     tracing::info!("resolving chat-content encryption key from OS keychain");
     let credential_store = KeyringCredentialStore::new();
-    let (prompt_history_store, chat_session_store) =
+    let (prompt_history_store, chat_session_store, ledger_store) =
         match ssh_manager_core::crypto::resolve_or_generate_key(&credential_store) {
             Ok(chat_content_key) => {
                 tracing::info!("chat-content encryption key resolved");
@@ -94,21 +94,23 @@ fn build_app_state(wiring: &Wiring) -> AppState {
                     Arc::new(ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(
                         &chat_content_key,
                     ));
-                // Spec 0040, Abschnitt 3: derselbe Cipher (und damit derselbe
-                // Schlüssel) für beide Stores — kein zweiter
-                // Verschlüsselungsmechanismus für `prompt_history`.
+                // Spec 0040, Abschnitt 3 (ausgeweitet per Spec 0057, §1.3
+                // auf einen dritten Store): derselbe Cipher (und damit
+                // derselbe Schlüssel) für alle drei Stores — kein weiterer
+                // Verschlüsselungsmechanismus für `prompt_history`/`ledger`.
                 (
                     Some(profile_store.prompt_history_store(chat_content_cipher.clone())),
-                    Some(profile_store.chat_session_store(chat_content_cipher)),
+                    Some(profile_store.chat_session_store(chat_content_cipher.clone())),
+                    Some(profile_store.ledger_store(chat_content_cipher)),
                 )
             }
             Err(err) => {
                 tracing::warn!(
                     error = %err,
-                    "encryption key for chat content unavailable — chat persistence and \
-                     prompt history disabled for this app run",
+                    "encryption key for chat content unavailable — chat persistence, \
+                     prompt history and the session ledger are disabled for this app run",
                 );
-                (None, None)
+                (None, None, None)
             }
         };
 
@@ -133,6 +135,7 @@ fn build_app_state(wiring: &Wiring) -> AppState {
         policy_store,
         prompt_history_store,
         chat_session_store,
+        ledger_store,
         // Spec 0038, Abschnitt 2: aus dem übergebenen `Wiring` gelesen statt
         // hier fest verdrahtet (s. `Wiring::community`-Doc-Kommentar zum
         // Scope dieses Refactorings).

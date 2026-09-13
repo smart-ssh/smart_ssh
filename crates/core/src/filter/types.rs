@@ -151,8 +151,12 @@ impl From<&EvalContext> for EffectiveScope {
 
 /// Nachvollziehbare Spur einer Auswertung (Spec 0009, Abschnitt 4) — löst
 /// den in Spec 0002 Abschnitt 7 offen gelassenen "Simulationsansicht"-Punkt.
-/// Ausschließlich für die Testen-Funktion im UI gedacht, nicht für die
-/// eigentliche KI-Kommandoschleife (dort reicht `Decision` aus `evaluate()`).
+/// Ursprünglich ausschließlich für die Testen-Funktion im UI gedacht (dort
+/// reichte `Decision` aus `evaluate()` für die eigentliche
+/// KI-Kommandoschleife) — seit Spec 0057, §1.1 nutzt auch
+/// `app-shell::orchestration::evaluate_action` `evaluate_explained()`
+/// statt `evaluate()`, um `matched_rule`/`matched_rule_origin` für
+/// Ledger-`Decision`-Einträge verfügbar zu haben.
 ///
 /// `matched_rule`/`matched_hard_blacklist_entry` sind bewusst unabhängig
 /// voneinander gesetzt (beide können gleichzeitig `Some` sein, wenn z. B.

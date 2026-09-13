@@ -37,7 +37,7 @@ use tokio::sync::{mpsc, Mutex as AsyncMutex};
 use ssh_manager_core::ai::{
     AiProvider, ChatMessage, MessageContent, OutputRedactor, SessionContext,
 };
-use ssh_manager_core::filter::{Decision, EvalContext, FilterEngine, PolicyStore};
+use ssh_manager_core::filter::{EvalContext, EvaluationTrace, FilterEngine, PolicyStore};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{PtySize, SftpSession, SshTransport};
 
@@ -54,15 +54,24 @@ use crate::state::{ActionId, SessionId};
 ///
 /// `async fn` seit Spec 0009 (`PolicyStore::rules_for` liest jetzt aus der
 /// SQLite-Datenbank).
+///
+/// Nur `evaluate_explained` (Spec 0057, §1.1: das Ledger braucht die
+/// `matched_rule`/`matched_rule_origin` einer Entscheidung, nicht nur
+/// deren `Decision`) — bisher gab es hier zusätzlich ein reines
+/// `evaluate` ohne Erklärung, das nach der Umstellung aller Aufrufer auf
+/// `evaluate_explained` (für die Ledger-`Decision`-Einträge in
+/// `orchestration::evaluate_action`/`handle_user_decision`) ungenutzt
+/// blieb und deshalb entfernt wurde — `Decision` ist über `.decision` auf
+/// der zurückgegebenen [`EvaluationTrace`] weiterhin trivial erreichbar.
 #[async_trait]
 pub trait CommandEvaluator: Send + Sync {
-    async fn evaluate(&self, command: &str, ctx: &EvalContext) -> Decision;
+    async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace;
 }
 
 #[async_trait]
 impl<S: PolicyStore + Send + Sync> CommandEvaluator for FilterEngine<S> {
-    async fn evaluate(&self, command: &str, ctx: &EvalContext) -> Decision {
-        FilterEngine::evaluate(self, command, ctx).await
+    async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace {
+        FilterEngine::evaluate_explained(self, command, ctx).await
     }
 }
 
@@ -203,6 +212,13 @@ pub struct Session {
     /// 0015): kein `core`-Trait für diese Art Hilfs-Store, anders als
     /// `ProfileStore`/`PolicyStore`/`AiProvider`.
     pub chat_session_store: Option<persistence_sqlite::SqliteChatSessionStore>,
+    /// Spec 0057, §1: das Session-Ledger dieser Sitzung. Bewusst
+    /// UNABHÄNGIG vom `persist`-Flag von `push_history_scoped` (das MCP-
+    /// Herkunft von `chat_messages` ausschließt, Spec 0034/0040) — das
+    /// Ledger soll MCP-Aktivität gerade erfassen (Spec 0057, §1.1: Quelle
+    /// `mcp-agent`). Gleiches `None`-Verhalten wie `chat_session_store`
+    /// (Tests; fehlender Verschlüsselungsschlüssel beim App-Start).
+    pub ledger_store: Option<persistence_sqlite::SqliteLedgerStore>,
     /// Die `chat_sessions.id`-Zeile dieser laufenden Sitzung — `None`, bis
     /// `crate::commands::connect_session` sie anlegt (bzw. bei
     /// `resume_chat_session`, Teil 2, auf die wiederverwendete Zeile
@@ -515,6 +531,7 @@ mod tests {
             injection_check_provider: None,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
             chat_session_store: None,
+            ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
             ai_request_paced_at: AsyncMutex::new(None),
         }
