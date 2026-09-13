@@ -838,6 +838,7 @@ async fn handle_action_proposed(
                 emitter,
                 profile_store,
                 persist,
+                ledger_source_for_origin(&origin),
             )
             .await
         }
@@ -876,7 +877,10 @@ async fn handle_action_proposed(
             .await;
             true
         }
-        Decision::Confirm { .. } => {
+        Decision::Confirm {
+            reason: confirm_reason,
+            code: confirm_code,
+        } => {
             // Spec 0017, Abschnitt 5: Grundlage für den Hintergrund-Tab-
             // Indikator (`SessionSummaryDto.has_pending_action`) — gesetzt,
             // solange auf `rx` gewartet wird, in jedem Fall (Erfolg wie
@@ -927,6 +931,8 @@ async fn handle_action_proposed(
                 origin,
                 matched_rule,
                 matched_rule_origin,
+                confirm_reason,
+                confirm_code,
             )
             .await
         }
@@ -1188,6 +1194,18 @@ async fn handle_user_decision(
     origin: ActionOrigin,
     matched_rule: Option<RuleId>,
     matched_rule_origin: Option<RuleOrigin>,
+    // spec-reviewer-Fund (Review dieses Schritts): die ursprüngliche
+    // `Decision::Confirm { reason, code }`, die zum Bestätigungsdialog
+    // führte — z. B. `FILTER_MCP_ORIGIN_REQUIRES_CONFIRM`/
+    // `FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM`/
+    // `FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM`. Vorher gingen diese
+    // Eskalationsgründe für den finalen Ledger-`Decision`-Eintrag
+    // verloren (`reason`/`code` liefen dort fest auf `None`), obwohl sie
+    // hier längst vorlagen — ein Leser des Ledgers konnte dann nicht
+    // rekonstruieren, WARUM überhaupt eine Bestätigung nötig war, nur DASS
+    // eine Regel gegriffen hätte.
+    confirm_reason: String,
+    confirm_code: String,
 ) -> bool {
     // Spec 0040, Abschnitt 4: s. identischer Kommentar in
     // `handle_action_proposed` — MCP-Herkunft persistiert nie, auch nicht
@@ -1202,11 +1220,26 @@ async fn handle_user_decision(
     // `Approve`/`EditThenApprove`) — der Timeout-Fall hat keinen Menschen
     // entscheiden lassen, bekommt deshalb dieselbe Herkunfts-Quelle wie
     // der ursprüngliche Vorschlag (s. `ledger_source_for_origin`).
-    let decision_source = if matches!(deny_reason, RejectionReason::Timeout) {
-        ledger_source_for_origin(&origin)
-    } else {
-        LedgerSource::User
-    };
+    //
+    // `(decision_reason, decision_code)`: der Timeout-Fall bekommt einen
+    // eigenen, spezifischeren Code (`TIMEOUT`) statt des ursprünglichen
+    // Eskalationsgrunds — spec-reviewer-Fund: ohne diesen Code war eine
+    // Timeout-Ablehnung von einer echten Nutzer-Ablehnung im Ledger nur
+    // indirekt über `source` unterscheidbar.
+    let (decision_source, decision_reason, decision_code) =
+        if matches!(deny_reason, RejectionReason::Timeout) {
+            (
+                ledger_source_for_origin(&origin),
+                Some(
+                    "Bestätigung nicht innerhalb des Zeitfensters erfolgt, als Ablehnung \
+                     behandelt (Spec 0046, Fund 4)"
+                        .to_string(),
+                ),
+                Some("TIMEOUT".to_string()),
+            )
+        } else {
+            (LedgerSource::User, Some(confirm_reason), Some(confirm_code))
+        };
 
     match user_decision {
         ActionUserDecision::Deny => {
@@ -1216,8 +1249,8 @@ async fn handle_user_decision(
                     decision_source,
                     LedgerEntryContent::Decision {
                         outcome: LedgerDecisionOutcome::Rejected,
-                        reason: None,
-                        code: None,
+                        reason: decision_reason.clone(),
+                        code: decision_code.clone(),
                         matched_rule: matched_rule.clone(),
                         matched_rule_origin,
                     },
@@ -1257,8 +1290,8 @@ async fn handle_user_decision(
                     decision_source,
                     LedgerEntryContent::Decision {
                         outcome: LedgerDecisionOutcome::Confirmed,
-                        reason: None,
-                        code: None,
+                        reason: decision_reason.clone(),
+                        code: decision_code.clone(),
                         matched_rule: matched_rule.clone(),
                         matched_rule_origin,
                     },
@@ -1273,6 +1306,7 @@ async fn handle_user_decision(
                 emitter,
                 profile_store,
                 persist,
+                decision_source,
             )
             .await
         }
@@ -1412,6 +1446,7 @@ async fn handle_user_decision(
                 emitter,
                 profile_store,
                 persist,
+                LedgerSource::User,
             )
             .await
         }
@@ -1423,6 +1458,7 @@ async fn handle_user_decision(
 /// (`SshError`/`ProfileError`) ist der Kontext unverändert, eine
 /// automatische Folgerunde (s. Moduldoc) würde dann nur denselben
 /// Vorschlag erneut auslösen, statt der KI etwas Neues mitzuteilen.
+#[allow(clippy::too_many_arguments)]
 async fn execute_action(
     session: &Session,
     session_id: SessionId,
@@ -1431,11 +1467,29 @@ async fn execute_action(
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     persist: bool,
+    // spec-reviewer-Fund (Review dieses Schritts): vorher leitete
+    // `execute_suggested_command` die `LedgerSource` seines
+    // `CommandExecuted`-Eintrags aus `persist` ab (`persist == false` <=>
+    // MCP) — funktioniert nur zufällig, weil `persist` heute dieselbe
+    // Bedeutung trägt, UND schreibt ein vom Menschen *editiertes*
+    // Kommando (`EditThenApprove`) fälschlich `Ai` statt `User` zu. Explizit
+    // durchgereicht statt aus einem semantisch anderen Flag abgeleitet —
+    // nur der `SuggestCommand`-Zweig unten braucht ihn (Etappe-1-Scope,
+    // s. ADR 0047 Punkt 3), die anderen Aktionstypen ignorieren ihn.
+    ledger_source: LedgerSource,
 ) -> bool {
     match action {
         AiAction::SuggestCommand { command } => {
-            execute_suggested_command(session, session_id, action_id, command, emitter, persist)
-                .await
+            execute_suggested_command(
+                session,
+                session_id,
+                action_id,
+                command,
+                emitter,
+                persist,
+                ledger_source,
+            )
+            .await
         }
         AiAction::ProposeNoteUpdate {
             target,
@@ -1541,6 +1595,7 @@ async fn execute_suggested_command(
     command: String,
     emitter: &dyn EventEmitter,
     persist: bool,
+    ledger_source: LedgerSource,
 ) -> bool {
     // Spec 0018, Abschnitt 5: nur umschreiben/Stdin füttern, wenn tatsächlich
     // ein Passwort hinterlegt ist — sonst unverändertes Verhalten
@@ -1592,19 +1647,17 @@ async fn execute_suggested_command(
             // UNREDIGIERTEN `output` aufgerufen — `write_ledger_entry`
             // redigiert selbst zentral (s. dortiger Doc-Kommentar), eine
             // hier vorab redigierte Fassung würde nur doppelt redigieren,
-            // ohne einen Sicherheitsgewinn. `persist` als Quelle für
-            // `LedgerSource` (statt `origin`, das hier nicht mehr
-            // ankommt): dieselbe Ableitung wie oben in
-            // `handle_action_proposed`/`push_history_scoped` — `persist ==
-            // false` bedeutet ausschließlich MCP-Herkunft (Spec 0040,
-            // Abschnitt 4).
+            // ohne einen Sicherheitsgewinn. `ledger_source` kommt jetzt
+            // explizit vom Aufrufer (`handle_action_proposed`/
+            // `handle_user_decision`), nicht mehr aus `persist` abgeleitet
+            // — spec-reviewer-Fund (Review dieses Schritts): `persist`
+            // beschreibt einen ganz anderen Sachverhalt
+            // (Chat-Persistenz-Ausschluss für MCP) und hätte ein vom
+            // Menschen editiertes Kommando (`EditThenApprove`) fälschlich
+            // `Ai` zugeschrieben.
             write_ledger_entry(
                 session,
-                if persist {
-                    LedgerSource::Ai
-                } else {
-                    LedgerSource::McpAgent
-                },
+                ledger_source,
                 LedgerEntryContent::CommandExecuted {
                     command: command.clone(),
                     output: output.clone(),
@@ -1672,6 +1725,31 @@ async fn execute_suggested_command(
             true
         }
         Err(err) => {
+            // spec-reviewer-Fund (Review dieses Schritts): vorher blieb der
+            // Fehlerfall ganz ohne `CommandExecuted`-Eintrag — im Ledger
+            // sah es dann so aus, als sei das Kommando nie ausgeführt
+            // worden, obwohl es den Server ggf. bereits erreicht hat (ein
+            // Transport-/Kanalfehler sagt nichts darüber aus, ob es dort
+            // angekommen ist). `exit_code: None` markiert bewusst "Ergebnis
+            // unbekannt", nicht "erfolgreich beendet"; die Fehlermeldung
+            // selbst landet in `stderr`, damit sie beim (zentralen)
+            // Redigieren in `write_ledger_entry` denselben Behandlung
+            // durchläuft wie eine echte Kommando-Ausgabe.
+            write_ledger_entry(
+                session,
+                ledger_source,
+                LedgerEntryContent::CommandExecuted {
+                    command: command.clone(),
+                    output: CommandOutput {
+                        stdout: Vec::new(),
+                        stderr: err.to_string().into_bytes(),
+                        exit_code: None,
+                        truncated: false,
+                    },
+                    cancelled: false,
+                },
+            )
+            .await;
             // Unabhängiger Review-Pass (Spec 0016/0027): derselbe Fund wie im
             // Erfolgsfall oben (`redact_text` vor dem Log) - ohne das würde
             // z. B. `mysql --password=hunter2 ...` bei einem Kanalfehler im
@@ -3239,6 +3317,7 @@ mod tests {
             "journalctl -f".to_string(),
             &emitter,
             true,
+            LedgerSource::Ai,
         );
         let cancel_future = async {
             // Kleine Verzögerung, damit `exec_future` sicher schon
@@ -3311,6 +3390,7 @@ mod tests {
             "ls -la".to_string(),
             &emitter,
             true,
+            LedgerSource::Ai,
         )
         .await;
         assert!(executed);
@@ -7550,14 +7630,19 @@ mod tests {
         let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
         assert_eq!(entries.len(), 2, "vorgeschlagen + abgelehnt: {entries:?}");
         assert_eq!(entries[1].source, LedgerSource::User);
+        // spec-reviewer-Fund (Review dieses Schritts): `reason`/`code`
+        // tragen jetzt die ursprüngliche `Decision::Confirm`-Begründung
+        // (hier der Default-Fallback der Filter-Engine "keine Regel
+        // gefunden"/`FILTER_NO_RULE_MATCHED`, da `NoRulesPolicyStore` keine
+        // Regel liefert) — vorher liefen sie hier fest auf `None`.
         assert!(matches!(
             &entries[1].content,
             LedgerEntryContent::Decision {
                 outcome: LedgerDecisionOutcome::Rejected,
-                reason: None,
-                code: None,
+                reason: Some(reason),
+                code: Some(code),
                 ..
-            }
+            } if reason == "keine Regel gefunden" && code == "FILTER_NO_RULE_MATCHED"
         ));
     }
 
@@ -7632,11 +7717,365 @@ mod tests {
                 ..
             }
         ));
-        assert_eq!(entries[2].source, LedgerSource::McpAgent);
+        // spec-reviewer-Fund (Review dieses Schritts): die Ausführung
+        // folgt aus der Bestätigung des Menschen (`decision_source` =
+        // `User`, s. `handle_user_decision`) — nicht mehr aus `persist`
+        // abgeleitet (das hätte hier fälschlich `McpAgent` ergeben, ohne
+        // dass ein Mensch dafür Anerkennung bekäme).
+        assert_eq!(entries[2].source, LedgerSource::User);
         assert!(matches!(
             &entries[2].content,
             LedgerEntryContent::CommandExecuted { .. }
         ));
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): der bisherige
+    /// Redaction-Test deckte nur `CommandExecuted.output` ab —
+    /// `CommandProposed.command` und `AiMessage.text` laufen ebenfalls
+    /// durch `redact_ledger_entry_content`, waren aber ungetestet. Ein
+    /// Fake-Secret sowohl im vorgeschlagenen Kommandotext als auch in der
+    /// abschließenden KI-Antwort darf in keinem der beiden Einträge
+    /// unredigiert landen.
+    #[tokio::test]
+    async fn test_ledger_redacts_fake_secret_in_command_proposed_and_ai_message() {
+        let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![
+                    AiEvent::ActionProposed(AiAction::SuggestCommand {
+                        command: "mysql --password=hunter2geheim db".to_string(),
+                    }),
+                    AiEvent::TextDelta(
+                        "Verbunden mit password=hunter2geheim erfolgreich.".to_string(),
+                    ),
+                    AiEvent::Done,
+                ],
+                MockSshTransport::default()
+                    .with_response("mysql --password=hunter2geheim db", output("OK")),
+            )
+            .await;
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        let serialized: Vec<String> = entries
+            .iter()
+            .map(|e| serde_json::to_string(&e.content).unwrap())
+            .collect();
+        for raw in &serialized {
+            assert!(
+                !raw.contains("hunter2geheim"),
+                "das Secret darf unter keinen Umständen unredigiert ins Ledger gelangen: {raw}"
+            );
+        }
+        assert!(
+            matches!(
+                &entries[0].content,
+                LedgerEntryContent::CommandProposed { command } if command.contains("REDACTED")
+            ),
+            "der vorgeschlagene Kommandotext muss redigiert sein: {entries:?}"
+        );
+        assert!(
+            entries.iter().any(|e| matches!(
+                &e.content,
+                LedgerEntryContent::AiMessage { text } if text.contains("REDACTED")
+            )),
+            "die KI-Nachricht muss redigiert sein: {entries:?}"
+        );
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): der Timeout-Fallback
+    /// (Spec 0046, Fund 4 — `PENDING_ACTION_CONFIRM_TIMEOUT` abgelaufen,
+    /// ohne dass je eine Nutzerentscheidung eintraf) bekommt eine eigene,
+    /// von einer echten Nutzer-Ablehnung unterscheidbare Attribution: die
+    /// Herkunft des ursprünglichen Vorschlags (nicht `User` — kein Mensch
+    /// hat entschieden) plus `code: "TIMEOUT"` statt des ursprünglichen
+    /// Eskalationsgrunds.
+    #[tokio::test]
+    async fn test_ledger_records_origin_derived_source_and_timeout_code_for_timed_out_confirmation()
+    {
+        let (session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done],
+                MockSshTransport::default(),
+            )
+            .await;
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        // Kein Responder — die wartende Bestätigung läuft nie auf, muss
+        // also über `PENDING_ACTION_CONFIRM_TIMEOUT` (regulär 3600s) selbst
+        // ablaufen. `tokio::time::pause()` erst HIER, NACH dem
+        // DB-Setup oben (`start_paused = true` auf Testebene, wie in
+        // `test_regression_pending_confirm_action_times_out_instead_of_
+        // hanging_forever` unten, lässt die dortige echte SQLite-
+        // Verbindungsaufnahme in `session_with_real_chat_and_ledger_
+        // persistence` mit `PoolTimedOut` scheitern — dieselbe virtuelle
+        // Uhr, gegen die auch sqlx' interner Pool-Timeout läuft).
+        tokio::time::pause();
+        let action_future = handle_action_proposed(
+            &session,
+            Uuid::new_v4(),
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Internal,
+        );
+        let advancer = async {
+            loop {
+                if session.pending_action.lock().unwrap().is_some() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+            tokio::time::advance(
+                PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1),
+            )
+            .await;
+        };
+        tokio::join!(action_future, advancer);
+        // `resume()` VOR dem folgenden echten DB-Zugriff: unter weiterhin
+        // pausierter Uhr kann sqlx' interner Pool-Acquire-Timeout
+        // (unabhängig von `PENDING_ACTION_CONFIRM_TIMEOUT`) spuriously
+        // feuern, weil die virtuelle Uhr beim Auto-Advance schneller
+        // vorspult, als die tatsächliche (reale) Hintergrund-Thread-I/O von
+        // SQLite braucht — beobachtet als gelegentliches, unter
+        // `cargo test --workspace` reproduzierbares `PoolTimedOut` genau
+        // an dieser Stelle.
+        tokio::time::resume();
+
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        assert_eq!(
+            entries.len(),
+            2,
+            "vorgeschlagen + abgelehnt (Timeout): {entries:?}"
+        );
+        assert_eq!(
+            entries[1].source,
+            LedgerSource::Ai,
+            "Timeout bedeutet KEINE Nutzer-Entscheidung — Quelle bleibt die des Vorschlags"
+        );
+        assert!(matches!(
+            &entries[1].content,
+            LedgerEntryContent::Decision {
+                outcome: LedgerDecisionOutcome::Rejected,
+                code: Some(code),
+                ..
+            } if code == "TIMEOUT"
+        ));
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): der `EditThenApprove`-
+    /// Pfad, in dem die Filter-Engine den BEARBEITETEN Text erneut
+    /// automatisch blockiert (z. B. Hard-Blacklist), war ungetestet.
+    /// Erwartet: eigener `CommandProposed`-Eintrag für den bearbeiteten
+    /// Text (`User` — der Mensch hat ihn verfasst), gefolgt von einer
+    /// automatisch abgelehnten `Decision` (Quelle = Herkunft des
+    /// ursprünglichen Vorschlags, nicht `User` — die Engine hat blockiert,
+    /// nicht der Mensch), kein `CommandExecuted`-Eintrag danach.
+    #[tokio::test]
+    async fn test_ledger_records_edit_then_approve_auto_blocked_edit() {
+        struct DenyEditedPolicyStore;
+        #[async_trait]
+        impl PolicyStore for DenyEditedPolicyStore {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("deny-rm".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob("rm *".to_string()),
+                    action: ssh_manager_core::filter::RuleAction::Deny,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
+                }]
+            }
+        }
+
+        let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done],
+                MockSshTransport::default(),
+            )
+            .await;
+        session.filter_engine = Box::new(FilterEngine::new(DenyEditedPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let action_future = handle_action_proposed(
+            &session,
+            Uuid::new_v4(),
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Internal,
+        );
+        let responder = respond_to_first_proposed_action(
+            &emitter,
+            &confirmations,
+            ActionUserDecision::EditThenApprove {
+                command: "rm -rf /tmp/x".to_string(),
+            },
+        );
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        // vorgeschlagen ("ls -la") — KEIN Decision-Eintrag dafür: der
+        // Nutzer hat den ursprünglichen Vorschlag weder bestätigt noch
+        // abgelehnt, sondern per `EditThenApprove` durch einen neuen Text
+        // ersetzt (s. `handle_user_decision`s `EditThenApprove`-Zweig) —,
+        // vorgeschlagen (bearbeiteter Text "rm -rf /tmp/x"), abgelehnt
+        // (Deny-Regel).
+        assert_eq!(entries.len(), 3, "{entries:?}");
+        assert_eq!(entries[1].source, LedgerSource::User);
+        assert!(matches!(
+            &entries[1].content,
+            LedgerEntryContent::CommandProposed { command } if command == "rm -rf /tmp/x"
+        ));
+        assert_eq!(
+            entries[2].source,
+            LedgerSource::Ai,
+            "die Engine hat den bearbeiteten Text automatisch blockiert, kein Nutzer-Entscheid"
+        );
+        match &entries[2].content {
+            LedgerEntryContent::Decision {
+                outcome,
+                matched_rule,
+                ..
+            } => {
+                assert_eq!(*outcome, LedgerDecisionOutcome::Rejected);
+                assert_eq!(matched_rule.as_ref().map(|r| r.0.as_str()), Some("deny-rm"));
+            }
+            other => panic!("erwartete Decision, bekam {other:?}"),
+        }
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): der `EditThenApprove`-
+    /// Pfad, in dem der bearbeitete Text NICHT erneut blockiert wird
+    /// (Regelfall — "Ausführen" im Bearbeiten-Dialog ist bereits die
+    /// Bestätigung), war ebenfalls ungetestet.
+    #[tokio::test]
+    async fn test_ledger_records_edit_then_approve_accepted_edit() {
+        let (session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done],
+                MockSshTransport::default().with_response("ls -lah", output("total 4")),
+            )
+            .await;
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let action_future = handle_action_proposed(
+            &session,
+            Uuid::new_v4(),
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Internal,
+        );
+        let responder = respond_to_first_proposed_action(
+            &emitter,
+            &confirmations,
+            ActionUserDecision::EditThenApprove {
+                command: "ls -lah".to_string(),
+            },
+        );
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        // vorgeschlagen ("ls -la") — kein Decision-Eintrag dafür (s.
+        // Kommentar im Auto-Blocked-Gegenstück oben) —, vorgeschlagen
+        // (bearbeiteter Text "ls -lah"), bestätigt, ausgeführt.
+        assert_eq!(entries.len(), 4, "{entries:?}");
+        assert_eq!(entries[1].source, LedgerSource::User);
+        assert!(matches!(
+            &entries[1].content,
+            LedgerEntryContent::CommandProposed { command } if command == "ls -lah"
+        ));
+        assert_eq!(entries[2].source, LedgerSource::User);
+        assert!(matches!(
+            &entries[2].content,
+            LedgerEntryContent::Decision {
+                outcome: LedgerDecisionOutcome::Confirmed,
+                ..
+            }
+        ));
+        assert_eq!(entries[3].source, LedgerSource::User);
+        assert!(matches!(
+            &entries[3].content,
+            LedgerEntryContent::CommandExecuted { command, .. } if command == "ls -lah"
+        ));
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): die dokumentierte
+    /// Scope-Reduktion (ADR 0047 Punkt 3 — Etappe 1 erfasst ausschließlich
+    /// `AiAction::SuggestCommand`) als expliziter Negativ-Test, statt nur
+    /// implizit aus dem `if let AiAction::SuggestCommand` an jeder
+    /// Schreibstelle ableitbar zu sein: ein `ReadRemoteFile`-Vorschlag darf
+    /// KEINEN Ledger-Eintrag erzeugen, auch nicht bei `AutoExec`.
+    #[tokio::test]
+    async fn test_ledger_stays_empty_for_read_remote_file_in_this_stage() {
+        let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done],
+                MockSshTransport::default(),
+            )
+            .await;
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let mock_sftp = MockSftpSession::new().with_file("/home/deploy/app.conf", b"ok".to_vec());
+        session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp)));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        handle_action_proposed(
+            &session,
+            Uuid::new_v4(),
+            AiAction::ReadRemoteFile {
+                path: "/home/deploy/app.conf".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Internal,
+        )
+        .await;
+
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        assert!(
+            entries.is_empty(),
+            "Etappe 1 deckt nur SuggestCommand ab (ADR 0047 Punkt 3): {entries:?}"
+        );
     }
 
     /// Spec 0040, Abschnitt 4 (Regressionstest, "Verbindliche Entscheidung

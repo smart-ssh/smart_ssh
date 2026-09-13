@@ -35,7 +35,17 @@ CREATE TABLE ledger_entries (
     -- redigiertes `LedgerEntryContent`-JSON als Klartext vor der
     -- Verschlüsselung.
     content         BLOB NOT NULL,
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    -- spec-reviewer-Fund (Review dieses Schritts): "MAX(sequence)+1" +
+    -- `INSERT` ist nicht atomar — ohne diese Constraint könnten zwei
+    -- gleichzeitige Appends derselben Sitzung (Chat-Turn + MCP-Aktion,
+    -- Spec 0040: laufen nachweislich parallel) dieselbe `sequence`
+    -- bekommen und eine in einem append-only Audit-Protokoll unzulässige
+    -- undefinierte Reihenfolge erzeugen. Ein Verstoß schlägt so als
+    -- Insert-Fehler fehl (von `SqliteLedgerStore::append_entry` nur
+    -- geloggt, nicht fatal, s. dortiger Doc-Kommentar) statt eine
+    -- Kollision still zu verschlucken.
+    UNIQUE (session_id, sequence)
 );
 
 CREATE INDEX idx_ledger_entries_session ON ledger_entries(session_id, sequence);
