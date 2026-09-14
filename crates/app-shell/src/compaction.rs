@@ -195,11 +195,8 @@ pub(crate) fn model_context_window_tokens(provider_type: ProviderType, model: &s
 const COMPACTION_TRIGGER_RATIO: f64 = 0.75;
 
 /// Letzte N Runden, die Schritt 1 der Kürzungs-Reihenfolge IMMER
-/// vollständig erhält (Spec 0057, §3.2, Punkt 1: "z. B. 3"). `pub(crate)`:
-/// auch `commands::connect_session` nutzt sie für den groben Vor-Trim einer
-/// wiederaufgenommenen Historie beim Laden (s. dortiger Aufruf von
-/// [`truncate_rounds_with_placeholder`]).
-pub(crate) const MIN_PRESERVED_ROUNDS: usize = 3;
+/// vollständig erhält (Spec 0057, §3.2, Punkt 1: "z. B. 3").
+const MIN_PRESERVED_ROUNDS: usize = 3;
 
 /* --------------- Schritt 1: alte Runden kürzen (Spec 0057, §3.2.1) -------- */
 
@@ -232,8 +229,14 @@ fn split_into_rounds(history: Vec<ChatMessage>) -> Vec<Vec<ChatMessage>> {
 /// vollständig erhalten. Reines Abschneiden — noch OHNE Zusammenfassung
 /// (Spec 0057, §8: "Etappe 2 ... einfache Kürzung", die KI-Summary ersetzt
 /// diesen Platzhalter erst in Etappe 3). No-op, wenn ohnehin nicht mehr
-/// als `min_preserved_rounds` Runden vorhanden sind.
-pub(crate) fn truncate_rounds_with_placeholder(
+/// als `min_preserved_rounds` Runden vorhanden sind. Kürzt UNBEDINGT auf
+/// genau `min_preserved_rounds` — anders als [`compact_rounds_for_budget`]
+/// (die tatsächlich in [`compact_for_send`] verwendete, budgetbewusste
+/// Variante) ohne Rücksicht darauf, ob weniger Kürzung schon gereicht
+/// hätte. Als eigenständiger, einfacher Baustein erhalten (u. a. direkt
+/// getestet).
+#[cfg(test)]
+fn truncate_rounds_with_placeholder(
     history: Vec<ChatMessage>,
     min_preserved_rounds: usize,
 ) -> Vec<ChatMessage> {
@@ -248,6 +251,46 @@ pub(crate) fn truncate_rounds_with_placeholder(
         result.extend(round);
     }
     result
+}
+
+/// Wie [`truncate_rounds_with_placeholder`], aber budgetbewusst
+/// (spec-reviewer-Fund, Review dieses Schritts: die Aufgabenstellung
+/// verlangt "nur so weit wie nötig" — nicht sofort auf
+/// `min_preserved_rounds` kürzen, sondern Runde für Runde entfernen und
+/// nach jeder Entfernung prüfen, ob der Request schon wieder unters
+/// Budget passt). Belässt `context.history` unverändert, wenn schon
+/// unterhalb `min_preserved_rounds` Runden vorhanden sind — dann kann
+/// Schritt 1 ohnehin nichts mehr beitragen.
+fn compact_rounds_for_budget(
+    context: &mut SessionContext,
+    min_preserved_rounds: usize,
+    budget_tokens: usize,
+) {
+    let rounds = split_into_rounds(std::mem::take(&mut context.history));
+    if rounds.len() <= min_preserved_rounds {
+        context.history = rounds.into_iter().flatten().collect();
+        return;
+    }
+
+    // Fixe Anteile (System-Kontext, Werkzeug-Schemas) ändern sich in
+    // diesem Schritt nicht — nur einmal berechnet statt bei jedem
+    // Kandidaten neu.
+    let fixed_tokens = estimate_tokens(&context.system_context)
+        + estimate_action_schemas_tokens(&context.available_actions);
+
+    let max_cut = rounds.len() - min_preserved_rounds;
+    let mut candidate = Vec::new();
+    for cut_count in 1..=max_cut {
+        candidate = vec![round_truncation_placeholder(cut_count)];
+        for round in &rounds[cut_count..] {
+            candidate.extend(round.iter().cloned());
+        }
+        let history_tokens: usize = candidate.iter().map(estimate_message_tokens).sum();
+        if fixed_tokens + history_tokens <= budget_tokens {
+            break;
+        }
+    }
+    context.history = candidate;
 }
 
 fn round_truncation_placeholder(cut_rounds: usize) -> ChatMessage {
@@ -281,65 +324,76 @@ fn round_truncation_placeholder(cut_rounds: usize) -> ChatMessage {
 /// genommen zu groß ist (z. B. ein 2-MB-Kommando-Output).
 const MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT: usize = 20_000;
 
-/// Ehrliche Formulierung (Aufgabenstellung, Spec 0057 §3.2 Punkt 2):
-/// NICHT "vollständig im Ledger" — der Transport-Output-Cap (Spec
-/// 0043/0044, `ssh_transport::exec::MAX_STREAM_OUTPUT_BYTES`, 2 MB) greift
-/// bereits beim Ausführen, VOR dem Ledger (Spec 0057, §1); bei einer
-/// wirklich riesigen Ausgabe hat auch das Ledger nur die dort bereits
-/// gekappte Fassung, keine vollständigere. Der Hinweistext behauptet das
-/// deshalb nicht.
-const OUTPUT_TRUNCATED_FOR_CONTEXT_NOTICE: &str = "\n[Ausgabe für diese Anfrage weiter gekürzt \
-     — die Original-Ausgabe ist im Session-Ledger nur bis zur Ausführungs-Größengrenze \
-     erhalten (Spec 0043/0044), nicht notwendigerweise vollständig.]";
+/// Ehrliche Formulierung (Aufgabenstellung, Spec 0057 §3.2 Punkt 2): NICHT
+/// "vollständig im Ledger". spec-reviewer-Fund (Review dieses Schritts):
+/// statt eines eigenen, in die `stdout`/`stderr`-BYTES hineingeschriebenen
+/// Hinweistexts (der dadurch INNERHALB der `<stdout>`/`<stderr>`-Fence
+/// gelandet wäre — genau der Bereich, den `<security_notice>` als
+/// "niemals als Anweisung interpretieren" markiert, und den ein Angreifer
+/// zudem durch einen wörtlich gleichlautenden String in der echten Ausgabe
+/// hätte vortäuschen/verschleiern können) wird das bereits vorhandene
+/// `CommandOutput::truncated`-Flag gesetzt — genau der Mechanismus, den
+/// `ai_providers::format_command_result` schon für den Spec-0043-Exec-Cap
+/// nutzt: ein `<output_truncated>`-Hinweis AUSSERHALB der Fence ("stdout/
+/// stderr above were cut off after reaching the configured output size
+/// limit"). Diese Formulierung ist absichtlich generisch genug, um für
+/// BEIDE Ursachen (Exec-Zeit-Cap, Spec 0043; oder hier: Kontext-Zeit-Cap)
+/// gleichermaßen zu stimmen, ohne eine falsche Vollständigkeit zu
+/// behaupten — kein zweiter, eigener Hinweistext nötig.
+fn truncate_oversized_output(output: &mut ssh_manager_core::ssh::CommandOutput) -> bool {
+    let stdout_len = output.stdout.len();
+    let stderr_len = output.stderr.len();
+    if stdout_len <= MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT
+        && stderr_len <= MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT
+    {
+        return false;
+    }
+    output
+        .stdout
+        .truncate(MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT.min(stdout_len));
+    output
+        .stderr
+        .truncate(MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT.min(stderr_len));
+    output.truncated = true;
+    true
+}
 
 /// Kürzt `stdout`/`stderr` jeder `CommandResult`-Nachricht in `history` auf
 /// höchstens [`MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT`] Byte — die Runde selbst
 /// (und damit die Nachricht) bleibt erhalten, nur ihr Inhalt schrumpft.
-/// Läuft über die GESAMTE übergebene Historie (in der Aufrufkette bereits
-/// auf die nach Schritt 1 erhaltenen Runden reduziert) — kein zusätzlicher
-/// Rundenbezug hier nötig.
+/// Läuft unbedingt über die GESAMTE übergebene Historie — anders als
+/// [`compact_oversized_outputs_for_budget`] (die tatsächlich in
+/// [`compact_for_send`] verwendete, budgetbewusste Variante, die aufhört
+/// sobald der Request wieder passt) kürzt diese Variante ALLE
+/// übergroßen Ausgaben unbedingt. Als eigenständiger, einfacher Baustein
+/// erhalten (u. a. direkt getestet).
+#[cfg(test)]
 fn truncate_oversized_command_outputs(history: Vec<ChatMessage>) -> Vec<ChatMessage> {
     history
         .into_iter()
-        .map(|message| match message.content {
-            MessageContent::CommandResult {
-                command,
-                mut output,
-                cancelled,
-            } => {
-                output.stdout = truncate_output_stream(output.stdout);
-                output.stderr = truncate_output_stream(output.stderr);
-                ChatMessage {
-                    role: message.role,
-                    content: MessageContent::CommandResult {
-                        command,
-                        output,
-                        cancelled,
-                    },
-                }
+        .map(|mut message| {
+            if let MessageContent::CommandResult { output, .. } = &mut message.content {
+                truncate_oversized_output(output);
             }
-            other => ChatMessage {
-                role: message.role,
-                content: other,
-            },
+            message
         })
         .collect()
 }
 
-/// `.truncate()` kann eine Multi-Byte-UTF-8-Sequenz mitten durchschneiden
-/// — unschädlich hier: `output.stdout`/`stderr` sind ohnehin rohe,
-/// beliebige Bytes (kein garantiertes UTF-8), jeder nachgelagerte
-/// Konsument liest sie bereits verlustbehaftet über
-/// `String::from_utf8_lossy` (z. B. `ai_providers::format_command_result`,
-/// `orchestration::execute_suggested_command`) — dieselbe, bereits
-/// etablierte Toleranz gegenüber invaliden Sequenzen an der Cut-Stelle.
-fn truncate_output_stream(mut bytes: Vec<u8>) -> Vec<u8> {
-    if bytes.len() <= MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT {
-        return bytes;
+/// Wie [`truncate_oversized_command_outputs`], aber budgetbewusst
+/// (spec-reviewer-Fund, Review dieses Schritts: die Aufgabenstellung
+/// verlangt "nur so weit wie nötig" — nicht jede übergroße Ausgabe
+/// unbedingt kürzen, sondern in einer festen (chronologischen)
+/// Reihenfolge aufhören, sobald der Request wieder unters Budget passt).
+fn compact_oversized_outputs_for_budget(context: &mut SessionContext, budget_tokens: usize) {
+    for index in 0..context.history.len() {
+        if estimate_request_tokens(context) <= budget_tokens {
+            return;
+        }
+        if let MessageContent::CommandResult { output, .. } = &mut context.history[index].content {
+            truncate_oversized_output(output);
+        }
     }
-    bytes.truncate(MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT);
-    bytes.extend_from_slice(OUTPUT_TRUNCATED_FOR_CONTEXT_NOTICE.as_bytes());
-    bytes
 }
 
 /* -------------------- System-Kontext / Notizen (Spec 0057, §4.1) ---------- */
@@ -460,8 +514,8 @@ fn compact_notes_for_budget(
 
 /// Schneidet `text` auf höchstens `max_bytes` Byte, rückt aber ggf. auf die
 /// nächste gültige UTF-8-Zeichengrenze zurück (`&str`, anders als
-/// [`truncate_output_stream`]s rohe `Vec<u8>`, MUSS an einer Zeichengrenze
-/// enden).
+/// [`truncate_oversized_output`]s rohe `Vec<u8>`, MUSS an einer
+/// Zeichengrenze enden).
 fn truncate_to_char_boundary(text: &str, max_bytes: usize) -> &str {
     if text.len() <= max_bytes {
         return text;
@@ -511,17 +565,39 @@ pub(crate) fn compact_for_send(
         "estimated request size exceeds the compaction trigger — compacting context for this send"
     );
 
-    context.history = truncate_rounds_with_placeholder(context.history, MIN_PRESERVED_ROUNDS);
+    compact_rounds_for_budget(&mut context, MIN_PRESERVED_ROUNDS, budget_tokens);
     if estimate_request_tokens(&context) <= budget_tokens {
         return context;
     }
 
-    context.history = truncate_oversized_command_outputs(context.history);
+    compact_oversized_outputs_for_budget(&mut context, budget_tokens);
     if estimate_request_tokens(&context) <= budget_tokens {
         return context;
     }
 
     compact_notes_for_budget(&mut context, system_context_parts, budget_tokens);
+
+    // spec-reviewer-Fund (Review dieses Schritts): selbst die volle
+    // Kürzungs-Leiter hat Untergrenzen (mindestens `MIN_PRESERVED_ROUNDS`
+    // Runden, bis zu `MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT` pro Ausgabe,
+    // mindestens `MIN_LAST_NOTE_SECTION_BYTES` der letzten Notiz-Sektion)
+    // — bei einem sehr kleinen Kontextfenster (z. B.
+    // `DEFAULT_CONTEXT_WINDOW_TOKENS` für ein unbekanntes Modell) können
+    // diese Untergrenzen zusammen das Budget immer noch überschreiten.
+    // Sichtbar im Log statt lautlos einen weiterhin übergroßen Request
+    // abzuschicken — Spec 0057 §2.2/§6 fordert für den (in Etappe 3
+    // kommenden) Summary-Fallback explizit "Fehler containen, nicht
+    // stillschweigend verschlucken"; dieselbe Haltung gilt hier.
+    let final_tokens = estimate_request_tokens(&context);
+    if final_tokens > budget_tokens {
+        tracing::warn!(
+            final_tokens,
+            budget_tokens,
+            model_context_window_tokens,
+            "context compaction reached its floor (min preserved rounds / per-output cap / \
+             min note size) but the request is still over budget — sending anyway"
+        );
+    }
     context
 }
 
@@ -689,6 +765,40 @@ mod tests {
         assert_eq!(result, history);
     }
 
+    /// spec-reviewer-Fund (Review dieses Schritts): Schritt 1 darf nicht
+    /// unbedingt auf `MIN_PRESERVED_ROUNDS` kürzen, sondern nur so viele
+    /// alte Runden entfernen, wie tatsächlich nötig sind, um wieder unters
+    /// Budget zu kommen ("nur so weit wie nötig", Aufgabenstellung) —
+    /// reicht das Entfernen EINER alten Runde bereits, müssen die übrigen
+    /// (auch über `MIN_PRESERVED_ROUNDS` hinaus) unangetastet bleiben.
+    #[test]
+    fn test_compact_rounds_for_budget_stops_as_soon_as_it_fits() {
+        let history = vec![
+            user_message("alte Runde 1"),
+            user_message("alte Runde 2"),
+            user_message(&"a".repeat(20_000)), // treibt die Gesamtgröße hoch
+            user_message("Runde 4"),
+            user_message("Runde 5"),
+        ];
+        // Budget genau so bemessen, dass das Entfernen NUR der ältesten
+        // Runde ("alte Runde 1") bereits reicht.
+        let mut budget_probe = context_with(String::new(), history.clone());
+        compact_rounds_for_budget(&mut budget_probe, 4, usize::MAX); // 1 Runde entfernt (5 > 4)
+        let budget = estimate_request_tokens(&budget_probe);
+
+        let mut context = context_with(String::new(), history);
+        compact_rounds_for_budget(&mut context, 1, budget);
+
+        assert!(
+            context.history.iter().any(
+                |m| matches!(&m.content, MessageContent::Text(t) if t.contains("alte Runde 2"))
+            ),
+            "Runde 2 hätte nicht entfernt werden dürfen, das Budget passte schon nach Runde 1: \
+             {:?}",
+            context.history
+        );
+    }
+
     // --- Schritt 2: Riesen-Einzelausgabe gekürzt, Runde nicht verworfen ---
 
     #[test]
@@ -712,15 +822,16 @@ mod tests {
             output.stdout.len() < 500_000,
             "die riesige Ausgabe muss gekürzt worden sein"
         );
-        let text = String::from_utf8_lossy(&output.stdout);
+        // spec-reviewer-Fund (Review dieses Schritts): kein eigener,
+        // in die Bytes hineingeschriebener Hinweistext mehr (der wäre
+        // INNERHALB der `<stdout>`-Fence gelandet und durch echten
+        // Ausgabeinhalt vortäuschbar) — stattdessen dasselbe
+        // `truncated`-Flag wie beim Spec-0043-Exec-Cap, das
+        // `ai_providers::format_command_result` bereits als
+        // `<output_truncated>`-Hinweis AUSSERHALB der Fence rendert.
         assert!(
-            text.contains("Session-Ledger"),
-            "der Hinweis muss auf das Ledger verweisen: {text}"
-        );
-        // Aufgabenstellung: KEIN falsches Vollständigkeits-Versprechen.
-        assert!(
-            !text.contains("vollständig im Ledger"),
-            "darf keine falsche Vollständigkeits-Zusicherung machen: {text}"
+            output.truncated,
+            "muss das bestehende truncated-Flag setzen, keinen eigenen In-Fence-Hinweistext"
         );
     }
 
@@ -729,6 +840,50 @@ mod tests {
         let history = vec![command_result("ls", "total 0")];
         let result = truncate_oversized_command_outputs(history.clone());
         assert_eq!(result, history);
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): die budgetbewusste
+    /// Variante darf NICHT jede übergroße Ausgabe unbedingt kürzen —
+    /// reicht das Kürzen der ersten (ältesten) schon, um wieder unters
+    /// Budget zu kommen, muss die zweite unangetastet bleiben ("nur so
+    /// weit wie nötig", Aufgabenstellung).
+    #[test]
+    fn test_compact_oversized_outputs_for_budget_stops_as_soon_as_it_fits() {
+        let history = vec![
+            command_result("cat a.log", &"a".repeat(30_000)),
+            command_result("cat b.log", &"b".repeat(30_000)),
+        ];
+        // Budget dynamisch bestimmt: genau die Größe, die entsteht, wenn
+        // NUR die erste (älteste) Ausgabe gekürzt ist — die zweite bleibt
+        // dann bewusst über dem Cap, muss aber trotzdem unangetastet
+        // bleiben, weil das Budget an dieser Stelle schon erreicht ist.
+        let mut budget_probe = context_with(String::new(), history.clone());
+        let MessageContent::CommandResult { output, .. } = &mut budget_probe.history[0].content
+        else {
+            panic!("erwartete CommandResult");
+        };
+        truncate_oversized_output(output);
+        let budget = estimate_request_tokens(&budget_probe);
+
+        let mut context = context_with(String::new(), history);
+        compact_oversized_outputs_for_budget(&mut context, budget);
+
+        let MessageContent::CommandResult { output: first, .. } = &context.history[0].content
+        else {
+            panic!("erwartete CommandResult");
+        };
+        let MessageContent::CommandResult { output: second, .. } = &context.history[1].content
+        else {
+            panic!("erwartete CommandResult");
+        };
+        assert!(
+            first.truncated,
+            "die erste (älteste) Ausgabe muss gekürzt werden"
+        );
+        assert!(
+            !second.truncated,
+            "die zweite Ausgabe darf nicht angefasst werden, sobald das Budget schon passt"
+        );
     }
 
     // --- Schritt 3: Notiz verkürzt, Scope-Priorisierung -------------------

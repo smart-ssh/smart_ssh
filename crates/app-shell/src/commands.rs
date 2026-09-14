@@ -950,20 +950,25 @@ pub(crate) async fn connect_session(
             return Err(err.into());
         }
         (
-            // Spec 0057, §3.2, Schritt 1: dieselbe Rundenkürzung wie beim
-            // eigentlichen Kompaktieren vor jedem `send()` (s.
-            // `compaction::compact_for_send`) — hier nur der erste, grobe
-            // Schritt, ohne Token-Budget/System-Kontext (die stehen an
-            // dieser Stelle noch nicht zur Verfügung, `system_context_parts`
-            // wird erst weiter unten gebaut). Begrenzt eine sehr lange
-            // wiederaufgenommene Historie bereits beim Laden, bevor
-            // überhaupt eine neue Nachricht gesendet wird — der eigentliche,
-            // vollständige Kompaktierungslauf greift dann ohnehin vor dem
-            // ersten `send()`.
-            crate::compaction::truncate_rounds_with_placeholder(
-                loaded,
-                crate::compaction::MIN_PRESERVED_ROUNDS,
-            ),
+            // spec-reviewer-Fund (Review dieses Schritts): HIER bewusst
+            // KEINE Rundenkürzung mehr — ein früherer Versuch, hier
+            // `compaction::truncate_rounds_with_placeholder` unbedingt
+            // aufzurufen, kürzte JEDE wiederaufgenommene Sitzung mit mehr
+            // als `MIN_PRESERVED_ROUNDS` Runden sofort auf 3, unabhängig
+            // vom tatsächlichen Token-Budget (Spec 0057 §3.2 definiert die
+            // letzten N Runden als UNTERGRENZE, nicht als generelle
+            // Obergrenze). Zwei konkrete Folgeschäden: (a) das Frontend
+            // zeigte nach "Fortsetzen" nur noch die letzten 3 Runden statt
+            // der vollständigen Historie, (b) `history_contains_untrusted_
+            // content` unten lief auf der bereits gekürzten Fassung und
+            // konnte einen früher eingeschleusten Inhalt übersehen, wodurch
+            // `untrusted_content_ingested` fälschlich `false` startete und
+            // die Post-Ingest-Eskalation (Spec 0039, Abschnitt 5.1) im
+            // wiederaufgenommenen Tab ausblieb. `loaded` bleibt deshalb
+            // unverändert — der vollständige, budgetbewusste
+            // Kompaktierungslauf (`compaction::compact_for_send`) greift
+            // ohnehin spätestens vor dem ersten `send()` dieser Sitzung.
+            loaded,
             Some(existing_id),
         )
     } else if !should_create_chat_session(is_local, persist_chat_session) {
@@ -1877,9 +1882,10 @@ pub async fn list_sessions(state: State<'_, AppState>) -> CommandResult<Vec<Sess
 }
 
 /// Spec 0034, Abschnitt 6/8: die bereits geladene Historie eines Tabs — für
-/// `connect()` immer leer, für `resume_chat_session()` die aus der DB
-/// geladene (ggf. gekürzte, s. `compaction::truncate_rounds_with_placeholder`)
-/// Historie. Liest
+/// `connect()` immer leer, für `resume_chat_session()` die VOLLSTÄNDIGE aus
+/// der DB geladene Historie (Spec 0057, §3.2: Kompaktierung ist
+/// budgetbewusst und läuft erst vor dem nächsten `send()`, nicht schon
+/// beim Laden — s. `connect_session`s `resume`-Zweig). Liest
 /// direkt aus der laufenden `Session` (nicht erneut aus der DB), damit das
 /// Frontend exakt das sieht, womit die Session tatsächlich gestartet ist.
 #[tauri::command]

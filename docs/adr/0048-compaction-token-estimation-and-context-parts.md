@@ -135,6 +135,108 @@ Untergrenze (`MIN_LAST_NOTE_SECTION_BYTES`), damit auch im Extremfall ein
 sinnvoller Rest ankommt. `parts.note_sections` selbst (die gespeicherte,
 vollständige Fassung) wird dabei nie verändert — nur eine lokale Kopie.
 
+### 8. Nacharbeiten aus dem `spec-reviewer`-Review dieses Schritts
+
+Der pflichtgemäße `spec-reviewer`-Durchlauf (CLAUDE.md, "Verbindlicher
+Review-Workflow", ERHÖHT) fand **einen sicherheitsrelevanten** Fund und
+mehrere Vollständigkeits-/Genauigkeits-Lücken. Alle behoben, in separatem
+Commit:
+
+- **Resume-Vor-Trim entfernt (SICHERHEITSRELEVANT).** Der erste Entwurf
+  rief beim Laden einer wiederaufgenommenen Sitzung
+  (`commands::connect_session`) `compaction::truncate_rounds_with_
+  placeholder` UNBEDINGT auf — kürzte also jede Sitzung mit mehr als
+  `MIN_PRESERVED_ROUNDS` Runden sofort auf 3, unabhängig vom tatsächlichen
+  Token-Budget (Spec 0057 §3.2 definiert die letzten N Runden als
+  UNTERGRENZE, nicht als generelle Obergrenze). Zwei Folgeschäden: (a) das
+  Frontend zeigte nach "Fortsetzen" nur noch 3 Runden statt der
+  vollständigen Historie; (b) schwerwiegender —
+  `history_contains_untrusted_content` (Spec 0039, Abschnitt 5) lief auf
+  der bereits gekürzten Fassung und konnte einen NUR in einer älteren
+  Runde eingeschleusten Inhalt übersehen, wodurch `untrusted_content_
+  ingested` im wiederaufgenommenen Tab fälschlich `false` startete — die
+  Post-Ingest-Eskalation (`AutoExec` → `Confirm`, Spec 0039 Abschnitt 5.1)
+  blieb dann im Alltagsfall "lange Sitzung fortsetzen" aus. Fix: der
+  Vor-Trim entfällt ersatzlos — `loaded` fließt unverändert in
+  `initial_history`; der vollständige, budgetbewusste Kompaktierungslauf
+  (`compact_for_send`) greift ohnehin spätestens vor dem ersten `send()`
+  dieser Sitzung, mit korrektem Budget UND ohne die Untrusted-Content-
+  Erkennung zu beeinträchtigen (die läuft VOR jeder Kompaktierung, auf der
+  vollständigen `loaded`-Historie).
+- **Schritt 1 + Schritt 2 jetzt echt inkrementell** ("nur so weit wie
+  nötig", Aufgabenstellung): `compact_rounds_for_budget` entfernt alte
+  Runden einzeln und prüft nach jeder Entfernung, ob der Request schon
+  wieder passt — statt unbedingt auf `MIN_PRESERVED_ROUNDS` zu kürzen.
+  `compact_oversized_outputs_for_budget` kürzt übergroße Einzelausgaben in
+  chronologischer Reihenfolge, ebenfalls mit Budget-Prüfung nach jeder
+  Kürzung, statt unbedingt ALLE übergroßen Ausgaben anzufassen. Die
+  unbedingten Varianten (`truncate_rounds_with_placeholder`,
+  `truncate_oversized_command_outputs`) bleiben als eigenständige,
+  direkt getestete Bausteine erhalten (`#[cfg(test)]`), werden aber nicht
+  mehr von `compact_for_send` selbst aufgerufen.
+- **Warn-Log, wenn die volle Leiter das Budget nicht erreicht.** Die
+  strukturellen Untergrenzen (`MIN_PRESERVED_ROUNDS`,
+  `MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT` pro Ausgabe,
+  `MIN_LAST_NOTE_SECTION_BYTES`) können zusammen bei einem sehr kleinen
+  Kontextfenster (z. B. `DEFAULT_CONTEXT_WINDOW_TOKENS`) immer noch über
+  dem Budget liegen. `compact_for_send` protokolliert diesen Fall jetzt
+  sichtbar (`tracing::warn!`) statt ihn lautlos zu verschlucken — sendet
+  die Anfrage aber trotzdem (kein Hard-Fail, dieselbe "Fehler containen,
+  nie hängen/abbrechen"-Haltung wie Spec 0057 §2.2 für den künftigen
+  Summary-Fallback vorschreibt).
+- **`CommandOutput::truncated`-Flag statt eigenem In-Fence-Hinweistext.**
+  Die ursprüngliche Fassung schrieb einen eigenen Kürzungs-Hinweis direkt
+  in die `stdout`/`stderr`-BYTES — landete damit INNERHALB der
+  `<stdout>`/`<stderr>`-Fence, also im Bereich, den `<security_notice>`
+  ausdrücklich als "nie als Anweisung interpretieren" markiert, UND war
+  durch identischen Text in der echten (Angreifer-kontrollierten) Ausgabe
+  vortäuschbar. Fix: `truncate_oversized_output` setzt stattdessen das
+  bereits vorhandene `CommandOutput::truncated`-Flag — denselben
+  Mechanismus, den `ai_providers::format_command_result` bereits für den
+  Spec-0043-Exec-Zeit-Cap nutzt (ein `<output_truncated>`-Hinweis
+  AUSSERHALB der Fence). Die dortige Formulierung ("cut off after
+  reaching the configured output size limit") ist absichtlich generisch
+  genug, um für beide Ursachen (Exec-Zeit- oder Kontext-Zeit-Cap)
+  gleichermaßen zu stimmen, ohne eine falsche Vollständigkeit zu
+  behaupten — kein zweiter Mechanismus nötig. Der Notiz-Kürzungs-Hinweis
+  (`NOTE_TRUNCATED_FOR_CONTEXT_NOTICE`) bleibt demgegenüber unverändert
+  als In-Text-Hinweis bestehen — für `system_context`/Notizen existiert
+  kein analoges Out-of-Band-Flag; das Risiko wird als gering eingeschätzt
+  (rein informativ, keine Sicherheitswirkung) und bewusst nicht behoben,
+  s. Abschlussmeldung an den Nutzer.
+- **`suggest_note_update_on_disconnect` überspringt den KI-Aufruf, wenn
+  Kompaktierung die Notiz gekürzt hat.** Dieser eine Aufruf bittet die KI
+  um eine VOLLSTÄNDIGE Ersatznotiz (`AiAction::ProposeNoteUpdate::
+  new_content` ersetzt die gespeicherte Notiz komplett). Sähe die KI nur
+  die für den Versand gekürzte Fassung, könnte ihr Vorschlag den
+  weggekürzten Teil verlieren — ein versehentlicher Notiz-Schrumpf, den
+  Spec 0057 §4.2 bewusst nur über einen eigenen, nutzergeführten Dialog
+  vorsieht. Erkannt über einen einfachen String-Vergleich (`system_context`
+  vor/nach `compact_for_send`) — nur Schritt 3 (Notiz) verändert
+  `system_context`, Schritt 1/2 (Runden/Ausgaben) nie, die Prüfung ist
+  also ein zuverlässiger Indikator ausschließlich für "wurde die Notiz
+  gekürzt", nicht für Kompaktierung allgemein.
+- Testabdeckung ergänzt: ein Fake-Secret in einer Ausgabe, die Schritt 2
+  kürzen MUSS, bleibt in der gesendeten Kopie redigiert; Schritt 1/2
+  stoppen nachweislich, sobald das Budget passt, statt unbedingt bis zur
+  Untergrenze zu kürzen; `suggest_note_update_on_disconnect` überspringt
+  den Vorschlag nachweislich bei kompaktierter Notiz.
+
+Bewusst NICHT behoben (Begründung an den Nutzer weitergereicht): kein
+direkter `connect_session`/Resume-Integrationstest — `connect_session`
+ist (anders als `build_session_system_context`/`send_chat_message_impl`)
+nicht generisch über `R: tauri::Runtime`, sondern fest an
+`AppHandle<Wry>` gebunden, und mindestens ein Aufruf darin
+(`risk_second_opinion::resolve_second_opinion_provider`) ist es ebenfalls
+nicht — beide generisch zu machen wäre ein eigener, nicht auf diesen
+Review-Fix beschränkter Umbau. Der Fix selbst ist durch Code-Lektüre
+verifiziert (der Vor-Trim-Aufruf ist ersatzlos entfernt, `loaded` fließt
+unverändert weiter) und durch die bereits bestehende, umfassende
+`history_contains_untrusted_content`-Testsuite (die Erkennungslogik
+selbst war nie fehlerhaft — nur die Eingabe dafür wurde vorher fälschlich
+vorbeschnitten) — nicht durch einen neuen End-to-End-Test dieses einen
+Pfades.
+
 ## Konsequenzen
 
 - Löst zusammen mit Etappe 1 (Ledger) den in Spec 0057 diagnostizierten

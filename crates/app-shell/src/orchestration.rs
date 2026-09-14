@@ -2645,14 +2645,35 @@ pub async fn suggest_note_update_on_disconnect(
     }
 
     let mut request_context = session.context.lock().await.clone();
+    let system_context_parts = session.system_context_parts.lock().await;
+    let uncompacted_system_context = request_context.system_context.clone();
     // Spec 0057, §3 / Spec 0040, Abschnitt 5: "vor jedem
     // `AiProvider::send()`-Aufruf" — s. Kommentar an der anderen
     // `send()`-Stelle in `run_one_round`.
     request_context = crate::compaction::compact_for_send(
         request_context,
-        &*session.system_context_parts.lock().await,
+        &system_context_parts,
         session.model_context_window_tokens,
     );
+    // spec-reviewer-Fund (Review dieses Schritts): Kompaktierung kann die
+    // im System-Prompt gesendete Notiz-Fassung kürzen (Spec 0057, §3.2
+    // Schritt 3/§4.1) — genau dieser eine Aufruf bittet die KI aber um eine
+    // VOLLSTÄNDIGE Ersatznotiz (`AiAction::ProposeNoteUpdate::new_content`
+    // ersetzt die gespeicherte Notiz komplett, s. `execute_note_update`).
+    // Sähe die KI nur die gekürzte Fassung, könnte ihr Vorschlag den
+    // weggekürzten Teil verlieren — ein versehentlicher Notiz-Schrumpf, den
+    // Spec 0057 §4.2 bewusst nur über einen eigenen, nutzergeführten Dialog
+    // vorsieht, nicht als Nebeneffekt der stillen Sende-Kompaktierung. Statt
+    // dieses Randfalls einfach hinzunehmen: den Vorschlag für diesen einen
+    // (seltenen — nur bei bereits sehr voller Sitzung) Aufruf überspringen.
+    if request_context.system_context != uncompacted_system_context {
+        tracing::info!(
+            "skipping note-update suggestion on disconnect: context compaction shortened the \
+             note for this request, a proposal based on it could drop content"
+        );
+        return;
+    }
+    drop(system_context_parts);
     request_context.history =
         reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
     request_context.history.push(ChatMessage {
@@ -5277,6 +5298,56 @@ mod tests {
                 .iter()
                 .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("Notiz"))),
             "die Abschluss-Instruktion muss im an die KI gesendeten Kontext stehen"
+        );
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): schrumpft die
+    /// Sende-Kompaktierung (Spec 0057 §3.2, Schritt 3) die Notiz im
+    /// System-Prompt, darf `suggest_note_update_on_disconnect` KEINEN
+    /// Vorschlag einholen — die KI sähe sonst nur die gekürzte Fassung,
+    /// obwohl ihr Vorschlag laut `AiAction::ProposeNoteUpdate` die
+    /// gespeicherte Notiz VOLLSTÄNDIG ersetzen würde (Verlustrisiko für den
+    /// weggekürzten Teil).
+    #[tokio::test]
+    async fn test_disconnect_suggestion_skipped_when_compaction_shortens_the_note() {
+        let provider = MockAiProvider::new(vec![AiEvent::Done]);
+        let contexts = provider.received_contexts_handle();
+        let mut session = session_with_ai_provider(provider, MockSshTransport::default());
+        session
+            .context
+            .lock()
+            .await
+            .history
+            .push(command_result_message());
+        // Winziges Fenster + große Notiz erzwingt Schritt 3 (Notiz-Kürzung).
+        session.model_context_window_tokens = 2_000;
+        let parts = crate::compaction::SystemContextParts {
+            base: "Basis".to_string(),
+            note_sections: vec![("Server \"web-01\"".to_string(), "n".repeat(50_000))],
+            remote_os_info: None,
+        };
+        {
+            let mut ctx = session.context.lock().await;
+            ctx.system_context = parts.assemble();
+        }
+        session.system_context_parts = AsyncMutex::new(parts);
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        suggest_note_update_on_disconnect(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        assert!(
+            contexts.lock().unwrap().is_empty(),
+            "kein KI-Aufruf, sobald die Kompaktierung die Notiz für den Versand gekürzt hat"
         );
     }
 
@@ -8214,6 +8285,99 @@ mod tests {
             ledger_stdout_len, 100_000,
             "das Ledger muss die volle Ausgabe behalten, unabhängig von der Kompaktierung \
              der gesendeten Kopie"
+        );
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts) + CLAUDE.md-Pflicht für
+    /// Redaction-berührende Änderungen: ein Fake-Secret in einer riesigen
+    /// Kommando-Ausgabe, die Schritt 2 (Spec 0057 §3.2) für den Versand
+    /// kürzen MUSS, darf trotzdem nicht unredigiert beim Provider ankommen.
+    /// Das Secret sitzt hier bewusst weit VOR der Kürzungs-Kante (Schritt 2
+    /// schneidet nur das Ende ab) — der Regelfall, den die Kompaktierung
+    /// nicht brechen darf: Kompaktierung läuft vor
+    /// `reapply_redaction_for_send`, die Redaction sieht also immer die
+    /// zuletzt gesendete, bereits gekürzte Fassung.
+    #[tokio::test]
+    async fn test_compaction_does_not_bypass_redaction_for_truncated_output() {
+        let mut huge_output = "password=hunter2geheim\n".to_string();
+        huge_output.push_str(&"X".repeat(100_000));
+        let (mut session, _chat_store, _chat_session_id, _tmp_dir, _ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done],
+                MockSshTransport::default().with_response("cat secret.log", output(&huge_output)),
+            )
+            .await;
+        let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
+        session.ai_provider = Box::new(MockAiProvider {
+            rounds: StdMutex::new(
+                vec![
+                    vec![
+                        AiEvent::ActionProposed(AiAction::SuggestCommand {
+                            command: "cat secret.log".to_string(),
+                        }),
+                        AiEvent::Done,
+                    ],
+                    vec![AiEvent::TextDelta("Erledigt.".to_string()), AiEvent::Done],
+                ]
+                .into(),
+            ),
+            received_contexts: received_contexts.clone(),
+        });
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.model_context_window_tokens = 2_000;
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+        {
+            let mut ctx = session.context.lock().await;
+            ctx.history.push(ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("Danke.".to_string()),
+            });
+        }
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let last_sent = received_contexts
+            .lock()
+            .unwrap()
+            .last()
+            .expect("mindestens ein send()-Aufruf muss stattgefunden haben")
+            .clone();
+        let sent_stdouts: Vec<String> = last_sent
+            .history
+            .iter()
+            .filter_map(|m| match &m.content {
+                MessageContent::CommandResult { output, .. } => {
+                    Some(String::from_utf8_lossy(&output.stdout).into_owned())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !sent_stdouts.iter().any(|s| s.contains("hunter2geheim")),
+            "das Secret darf auch nach Kürzung+Kompaktierung nie unredigiert gesendet werden: \
+             {sent_stdouts:?}"
+        );
+        assert!(
+            sent_stdouts.iter().any(|s| s.contains("REDACTED")),
+            "die gesendete Kopie muss den redigierten Platzhalter enthalten: {sent_stdouts:?}"
         );
     }
 
