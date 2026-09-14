@@ -12,9 +12,8 @@ use uuid::Uuid;
 
 use persistence_sqlite::AiProviderConfig;
 use ssh_manager_core::ai::{
-    default_action_schemas, fence_untrusted, AiError, AiEvent, AiProvider, ChatMessage,
-    DefaultOutputRedactor, MessageContent, OutputRedactor, ProviderId, Role, SessionContext,
-    UntrustedKind,
+    default_action_schemas, AiError, AiEvent, AiProvider, ChatMessage, DefaultOutputRedactor,
+    MessageContent, OutputRedactor, ProviderId, Role, SessionContext,
 };
 use ssh_manager_core::filter::{
     hard_blacklist_patterns, EffectiveScope, EvalContext, FilterEngine, PolicyStore, RuleAction,
@@ -836,7 +835,7 @@ pub(crate) async fn connect_session(
         None
     };
 
-    let (system_context, notes_present) = build_session_system_context(
+    let (system_context_parts, notes_present) = build_session_system_context(
         app,
         &server.name,
         &server_id,
@@ -846,6 +845,15 @@ pub(crate) async fn connect_session(
         &state.policy_store,
     )
     .await;
+    let system_context = system_context_parts.assemble();
+
+    // Spec 0057, §3.1: einmalig bei `connect()` aufgelöst, wie
+    // `ai_provider_label`/`ai_model` unten — s. `Session::
+    // model_context_window_tokens`-Doc-Kommentar.
+    let model_context_window_tokens = crate::compaction::model_context_window_tokens(
+        active_config.provider_type,
+        &active_config.model,
+    );
 
     // Spec 0018, Abschnitt 6: einmalig bei `connect()` gelesen, wie
     // `ai_provider_label`/`ai_model` — ein fehlender Eintrag (kein Sudo-
@@ -942,7 +950,20 @@ pub(crate) async fn connect_session(
             return Err(err.into());
         }
         (
-            crate::chat_context_truncation::truncate_to_budget(loaded),
+            // Spec 0057, §3.2, Schritt 1: dieselbe Rundenkürzung wie beim
+            // eigentlichen Kompaktieren vor jedem `send()` (s.
+            // `compaction::compact_for_send`) — hier nur der erste, grobe
+            // Schritt, ohne Token-Budget/System-Kontext (die stehen an
+            // dieser Stelle noch nicht zur Verfügung, `system_context_parts`
+            // wird erst weiter unten gebaut). Begrenzt eine sehr lange
+            // wiederaufgenommene Historie bereits beim Laden, bevor
+            // überhaupt eine neue Nachricht gesendet wird — der eigentliche,
+            // vollständige Kompaktierungslauf greift dann ohnehin vor dem
+            // ersten `send()`.
+            crate::compaction::truncate_rounds_with_placeholder(
+                loaded,
+                crate::compaction::MIN_PRESERVED_ROUNDS,
+            ),
             Some(existing_id),
         )
     } else if !should_create_chat_session(is_local, persist_chat_session) {
@@ -996,6 +1017,8 @@ pub(crate) async fn connect_session(
         redactor,
         ai_provider_label: active_config.display_name,
         ai_model: active_config.model,
+        system_context_parts: tokio::sync::Mutex::new(system_context_parts),
+        model_context_window_tokens,
         sudo_password,
         status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
@@ -1299,13 +1322,17 @@ mod map_connect_result_tests {
     }
 }
 
-/// Gibt neben dem fertigen System-Prompt auch zurück, ob dieser gefencte
-/// Notizen enthält (Spec 0039, Abschnitt 5) — der System-Prompt wird bei
-/// **jeder** Nutzer-Nachricht neu gebaut und in jede KI-Anfrage
+/// Gibt die Rohbestandteile des System-Prompts (Spec 0057, §4.1:
+/// [`crate::compaction::SystemContextParts`] — getrennt gehalten statt
+/// direkt zusammengefügt, damit die Kompaktierung Notiz-Sektionen einzeln
+/// nach Scope priorisiert kürzen kann) zurück, zusammen mit der Info, ob
+/// die Notizen nicht-leer sind (Spec 0039, Abschnitt 5) — der System-Prompt
+/// wird bei **jeder** Nutzer-Nachricht neu gebaut und in jede KI-Anfrage
 /// eingebettet; enthält er Notizen, ist damit ab diesem Zeitpunkt bereits
 /// Inhalt aus einer nicht vertrauenswürdigen Quelle in den KI-Kontext
 /// gelangt. Der Aufrufer nutzt das, um `Session::untrusted_content_
-/// ingested` entsprechend zu setzen (monoton, s. dortiger Kommentar).
+/// ingested` entsprechend zu setzen (monoton, s. dortiger Kommentar). Den
+/// fertig zusammengesetzten String liefert `SystemContextParts::assemble`.
 async fn build_session_system_context<R: tauri::Runtime>(
     app: &AppHandle<R>,
     server_name: &str,
@@ -1314,7 +1341,7 @@ async fn build_session_system_context<R: tauri::Runtime>(
     remote_os_info: Option<&str>,
     profile_store: &dyn ProfileStore,
     policy_store: &persistence_sqlite::SqlitePolicyStore,
-) -> (String, bool) {
+) -> (crate::compaction::SystemContextParts, bool) {
     // Spec 0032: der lokale Pseudo-Server hat keine `servers`-Zeile —
     // `profile_store.get_server` schlägt für ihn immer fehl, wodurch diese
     // Funktion sonst dauerhaft mit leeren Notizen liefe, obwohl über
@@ -1397,20 +1424,13 @@ async fn build_session_system_context<R: tauri::Runtime>(
         context.push_str(&allow_rules.join("\n"));
     }
 
-    if !note_sections.is_empty() {
-        context.push_str("\n\n## Notizen / Kontext\n");
-        let fenced_sections: Vec<String> = note_sections
-            .iter()
-            .map(|(label, notes)| fence_untrusted(UntrustedKind::ServerNote, label, notes))
-            .collect();
-        context.push_str(&fenced_sections.join("\n\n"));
-    }
-
-    if let Some(os) = remote_os_info {
-        context.push_str(&format!("\n\n## Remote-System\n{os}"));
-    }
-
-    (context, !note_sections.is_empty())
+    let parts = crate::compaction::SystemContextParts {
+        base: context,
+        note_sections,
+        remote_os_info: remote_os_info.map(str::to_string),
+    };
+    let has_notes = parts.has_notes();
+    (parts, has_notes)
 }
 
 #[tauri::command]
@@ -1573,14 +1593,22 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
         }
     };
 
-    let remote_os = {
-        let ctx = session.context.lock().await;
-        ctx.system_context
-            .find("## Remote-System\n")
-            .map(|pos| ctx.system_context[pos + "## Remote-System\n".len()..].to_string())
-    };
+    // Spec 0057, §4.1: `session.system_context_parts` trägt `remote_os_info`
+    // seit dessen Einführung bereits strukturiert (statt es hier aus dem
+    // fertig zusammengesetzten `system_context`-String über den
+    // "## Remote-System\n"-Marker zurückzuparsen, wie es dieser Aufruf vor
+    // der Aufteilung in `SystemContextParts` tat) — robuster, da ein
+    // String-Marker-Scan auf potenziell von Notizinhalt beeinflusstem Text
+    // nicht garantiert eindeutig ist (s. `SystemContextParts`-Doc-
+    // Kommentar).
+    let remote_os = session
+        .system_context_parts
+        .lock()
+        .await
+        .remote_os_info
+        .clone();
 
-    let (updated_system_context, notes_present) = build_session_system_context(
+    let (updated_system_context_parts, notes_present) = build_session_system_context(
         app,
         &server_name,
         &session.server_id,
@@ -1601,10 +1629,12 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
+    let updated_system_context = updated_system_context_parts.assemble();
     {
         let mut ctx = session.context.lock().await;
         ctx.system_context = updated_system_context;
     }
+    *session.system_context_parts.lock().await = updated_system_context_parts;
     // Spec 0040, Abschnitt 2: über `push_history` statt eines direkten
     // `ctx.history.push(...)`, sonst umgeht die Nutzer-Nachricht die
     // Persistenz (Spec 0034, Abschnitt 4 verlangt ausdrücklich, dass auch
@@ -1848,7 +1878,8 @@ pub async fn list_sessions(state: State<'_, AppState>) -> CommandResult<Vec<Sess
 
 /// Spec 0034, Abschnitt 6/8: die bereits geladene Historie eines Tabs — für
 /// `connect()` immer leer, für `resume_chat_session()` die aus der DB
-/// geladene (ggf. gekürzte, s. `chat_context_truncation`) Historie. Liest
+/// geladene (ggf. gekürzte, s. `compaction::truncate_rounds_with_placeholder`)
+/// Historie. Liest
 /// direkt aus der laufenden `Session` (nicht erneut aus der DB), damit das
 /// Frontend exakt das sieht, womit die Session tatsächlich gestartet ist.
 #[tauri::command]
@@ -3750,7 +3781,7 @@ mod local_server_tests {
         .expect("frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein")
         .policy_store();
 
-        let (context, notes_present) = build_session_system_context(
+        let (parts, notes_present) = build_session_system_context(
             &handle,
             "Localhost",
             &LOCAL_SERVER_ID,
@@ -3760,6 +3791,7 @@ mod local_server_tests {
             &policy_store,
         )
         .await;
+        let context = parts.assemble();
 
         assert!(
             context.contains("Docker Compose unter ~/services"),
@@ -3797,7 +3829,7 @@ mod local_server_tests {
         let app = test_app();
         let handle = app.handle().clone();
 
-        let (context, notes_present) = build_session_system_context(
+        let (parts, notes_present) = build_session_system_context(
             &handle,
             "web-01",
             &server_id,
@@ -3807,6 +3839,7 @@ mod local_server_tests {
             &policy_store,
         )
         .await;
+        let context = parts.assemble();
 
         assert!(
             context.contains("<server_note>"),
@@ -3903,6 +3936,8 @@ mod send_chat_message_persistence_tests {
             redactor: Box::new(DefaultOutputRedactor::new()),
             ai_provider_label: "test-provider".to_string(),
             ai_model: "test-model".to_string(),
+            system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
+            model_context_window_tokens: usize::MAX / 1_000,
             sudo_password: None,
             status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),

@@ -105,6 +105,23 @@ pub struct Session {
     /// Vorschlag gemacht hat.
     pub ai_provider_label: String,
     pub ai_model: String,
+    /// Spec 0057, §4.1: die ungefencten Rohbestandteile des aktuellen
+    /// System-Prompts (Basis-Text, Notiz-Sektionen nach Scope geordnet,
+    /// Remote-OS-Info) — parallel zu `context.lock().await.system_context`
+    /// (dem bereits zusammengesetzten String) gepflegt, s.
+    /// `crate::compaction::SystemContextParts`-Doc-Kommentar zur
+    /// Begründung, warum das getrennt statt nur aus dem fertigen String
+    /// gehalten wird. Aktualisiert an denselben zwei Stellen wie `context`:
+    /// `crate::commands::connect_session` (initial) und
+    /// `send_chat_message_impl` (bei jeder Nutzer-Nachricht neu gebaut).
+    pub system_context_parts: AsyncMutex<crate::compaction::SystemContextParts>,
+    /// Spec 0057, §3.1: geschätztes Kontextfenster (Token) des bei
+    /// `connect()` aktiven KI-Providers/-Modells — einmalig aufgelöst über
+    /// `crate::compaction::model_context_window_tokens`, analog zu
+    /// `ai_provider_label`/`ai_model` oben (ein während der Sitzung
+    /// geänderter aktiver Provider greift wie dort erst bei der nächsten
+    /// `connect()`).
+    pub model_context_window_tokens: usize,
     /// Spec 0018, Abschnitt 6: optionales Sudo-Passwort, einmalig bei
     /// `connect()` aus dem `CredentialStore` gelesen — `None`, wenn für den
     /// Server keines hinterlegt ist (kein Fehler, s. dortiger Kommentar).
@@ -519,6 +536,12 @@ mod tests {
             redactor: Box::new(DefaultOutputRedactor::new()),
             ai_provider_label: "test-provider".to_string(),
             ai_model: "test-model".to_string(),
+            system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
+            // Absichtlich riesig: Tests sollen nie versehentlich in die
+            // Etappe-2-Kompaktierung laufen, außer sie setzen diesen Wert
+            // explizit klein (s. `orchestration::tests`, `compaction`-Modul
+            // für die dedizierten Kompaktierungs-Tests).
+            model_context_window_tokens: usize::MAX / 1_000,
             sudo_password: None,
             status: StdMutex::new(ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),

@@ -11,9 +11,9 @@
 //! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
 mod ai_provider_factory;
-mod chat_context_truncation;
 mod chat_retention;
 mod commands;
+mod compaction;
 mod confirmation;
 mod document_export;
 mod dto;

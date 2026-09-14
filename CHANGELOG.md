@@ -16,6 +16,13 @@ sind mit **(Pro)** markiert.
   Fehlermeldung blockieren (Chat antwortet nicht mehr, kein Log-Eintrag).
   Der Aufruf bricht jetzt spätestens nach 90 Sekunden mit einer
   sichtbaren Fehlermeldung ab.
+- Eine sehr lange Chat-Sitzung oder eine sehr große Server-Notiz konnte
+  eine KI-Anfrage so groß werden lassen, dass sie das Kontextfenster des
+  Modells sprengte — der Chat blieb dann ohne Antwort/Fehlermeldung
+  hängen. Die App schätzt jetzt vor jeder Anfrage die tatsächliche Größe
+  und kürzt bei Bedarf automatisch (ältere Gesprächsrunden, überlange
+  einzelne Kommando-Ausgaben, zuletzt die Notiz) — die gespeicherte
+  Notiz und der vollständige Sitzungsverlauf bleiben dabei unangetastet.
 
 ## [0.5.0] — 2026-09-11
 

@@ -1,7 +1,15 @@
 # 0029-chat-context-truncation-budget-constant
 
 ## Status
-Vorgeschlagen
+Ersetzt durch [ADR 0048](0048-compaction-token-estimation-and-context-parts.md) —
+`chat_context_truncation`/`DEFAULT_CHAR_BUDGET` existieren seit Spec 0057
+Etappe 2 nicht mehr; das dort begründete "kein fester, providerunabhängiger
+Zeichen-Wert" wird durch einen echten, modellabhängigen Prozentsatz des
+Kontextfensters abgelöst (`compaction::COMPACTION_TRIGGER_RATIO` +
+`model_context_window_tokens`). Dieses Dokument bleibt als historischer
+Kontext erhalten (die damalige Begründung, warum eine einzelne
+Zeichen-Konstante genügt hatte, war korrekt für ihre Zeit und ist der
+direkte Vorläufer der ADR-0048-Entscheidung).
 
 ## Kontext
 

@@ -325,10 +325,11 @@ pub async fn run_chat_turn(
     emit_chat_auto_continuation_limit_reached(emitter, session_id, MAX_AUTO_FOLLOWUP_ROUNDS);
 }
 
-/// Spec 0040, Abschnitt 5: wird auf die (bereits gekürzte, s.
-/// `chat_context_truncation`) Kopie der Historie angewendet, die tatsächlich
-/// an [`ssh_manager_core::ai::AiProvider::send`] geht — unmittelbar vor
-/// jedem `send()`-Aufruf, an allen drei Aufrufstellen in diesem Modul.
+/// Spec 0040, Abschnitt 5: wird auf die (bereits kompaktierte, s.
+/// `compaction::compact_for_send`) Kopie der Historie angewendet, die
+/// tatsächlich an [`ssh_manager_core::ai::AiProvider::send`] geht —
+/// unmittelbar vor jedem `send()`-Aufruf, an allen drei Aufrufstellen in
+/// diesem Modul.
 ///
 /// **Kritisch — nur additiv:** wendet denselben [`OutputRedactor`] erneut
 /// auf jede Nachricht an, der auch beim ursprünglichen Erzeugen bereits
@@ -485,12 +486,15 @@ async fn run_one_round(
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> bool {
     let mut request_context = session.context.lock().await.clone();
-    // Spec 0034, Abschnitt 9: "vor jedem `AiProvider::send()`-Aufruf" —
-    // kürzt nur die an den Provider gesendete Kopie, die gespeicherte
-    // Historie in `session.context`/der DB bleibt unangetastet (s.
-    // `chat_context_truncation`-Moduldoc).
-    request_context.history =
-        crate::chat_context_truncation::truncate_to_budget(request_context.history);
+    // Spec 0057, §3: "vor jedem `AiProvider::send()`-Aufruf" — kompaktiert
+    // nur die an den Provider gesendete Kopie, die gespeicherte Historie in
+    // `session.context`/der DB bleibt unangetastet (s.
+    // `compaction::compact_for_send`-Moduldoc).
+    request_context = crate::compaction::compact_for_send(
+        request_context,
+        &*session.system_context_parts.lock().await,
+        session.model_context_window_tokens,
+    );
     // Spec 0040, Abschnitt 5: nur-additive Re-Redaction unmittelbar vor dem
     // `send()`-Aufruf, s. `reapply_redaction_for_send`-Doc-Kommentar.
     request_context.history =
@@ -2542,8 +2546,11 @@ pub async fn generate_session_title_on_disconnect(session: &Session) {
     }
 
     let mut request_context = session.context.lock().await.clone();
-    request_context.history =
-        crate::chat_context_truncation::truncate_to_budget(request_context.history);
+    request_context = crate::compaction::compact_for_send(
+        request_context,
+        &*session.system_context_parts.lock().await,
+        session.model_context_window_tokens,
+    );
     // Spec 0040, Abschnitt 5: s. Kommentar an der anderen `send()`-Stelle in
     // `run_one_round`.
     request_context.history =
@@ -2638,11 +2645,14 @@ pub async fn suggest_note_update_on_disconnect(
     }
 
     let mut request_context = session.context.lock().await.clone();
-    // Spec 0034, Abschnitt 9 / Spec 0040, Abschnitt 5: "vor jedem
+    // Spec 0057, §3 / Spec 0040, Abschnitt 5: "vor jedem
     // `AiProvider::send()`-Aufruf" — s. Kommentar an der anderen
     // `send()`-Stelle in `run_one_round`.
-    request_context.history =
-        crate::chat_context_truncation::truncate_to_budget(request_context.history);
+    request_context = crate::compaction::compact_for_send(
+        request_context,
+        &*session.system_context_parts.lock().await,
+        session.model_context_window_tokens,
+    );
     request_context.history =
         reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
     request_context.history.push(ChatMessage {
@@ -3100,6 +3110,8 @@ mod tests {
             redactor: Box::new(DefaultOutputRedactor::new()),
             ai_provider_label: "test-provider".to_string(),
             ai_model: "test-model".to_string(),
+            system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
+            model_context_window_tokens: usize::MAX / 1_000,
             sudo_password: None,
             status: StdMutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
@@ -7846,17 +7858,22 @@ mod tests {
                 PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1),
             )
             .await;
+            // `resume()` HIER, NOCH INNERHALB von `advancer`, unmittelbar
+            // nach `advance()` — NICHT erst nach dem `join!` unten: der
+            // Timeout-Zweig in `handle_action_proposed` schreibt nach dem
+            // Ablaufen selbst noch einen Ledger-Eintrag (echte, reale
+            // SQLite-I/O). Bliebe die Uhr bis nach dem `join!` pausiert,
+            // liefe genau dieser nachfolgende Schreibzugriff noch unter
+            // pausierter Zeit — derselbe `PoolTimedOut`-Mechanismus wie
+            // unten beschrieben, nur diesmal beim Schreiben statt beim
+            // Lesen, und wird von `write_ledger_entry` nicht-fatal nur
+            // geloggt (kein Panic) — das Ergebnis war ein gelegentlich
+            // fehlender zweiter Ledger-Eintrag unter `cargo test
+            // --workspace`, nicht reproduzierbar bei isoliertem Lauf dieses
+            // einen Tests.
+            tokio::time::resume();
         };
         tokio::join!(action_future, advancer);
-        // `resume()` VOR dem folgenden echten DB-Zugriff: unter weiterhin
-        // pausierter Uhr kann sqlx' interner Pool-Acquire-Timeout
-        // (unabhängig von `PENDING_ACTION_CONFIRM_TIMEOUT`) spuriously
-        // feuern, weil die virtuelle Uhr beim Auto-Advance schneller
-        // vorspult, als die tatsächliche (reale) Hintergrund-Thread-I/O von
-        // SQLite braucht — beobachtet als gelegentliches, unter
-        // `cargo test --workspace` reproduzierbares `PoolTimedOut` genau
-        // an dieser Stelle.
-        tokio::time::resume();
 
         let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
         assert_eq!(
@@ -8075,6 +8092,224 @@ mod tests {
         assert!(
             entries.is_empty(),
             "Etappe 1 deckt nur SuggestCommand ab (ADR 0047 Punkt 3): {entries:?}"
+        );
+    }
+
+    // --- Spec 0057, §3 + §4.1: Kompaktierung (Etappe 2) --------------------
+
+    /// Spec 0057, §3.3/§6: "Kompaktierung betrifft nur den an die KI
+    /// gesendeten Kontext, nie den Ledger." End-to-End-Beweis: Runde 1
+    /// führt ein Kommando mit einer riesigen Ausgabe aus (landet
+    /// VOLLSTÄNDIG im Ledger, s. `execute_suggested_command`s
+    /// `write_ledger_entry`-Aufruf mit dem noch unkomprimierten `output`).
+    /// Ein winziges `model_context_window_tokens` zwingt Runde 2s
+    /// `send()`-Aufruf dazu, genau diese Ausgabe für die gesendete Kopie zu
+    /// kürzen (Schritt 2, Spec 0057 §3.2) — der `MockAiProvider` zeichnet
+    /// den tatsächlich empfangenen Kontext auf, das Ledger bleibt davon
+    /// unberührt.
+    #[tokio::test]
+    async fn test_compaction_shrinks_sent_copy_but_ledger_keeps_full_output() {
+        let huge_output = "L".repeat(100_000);
+        let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done], // wird unten sofort durch den echten Mehr-Runden-Provider ersetzt
+                MockSshTransport::default().with_response("cat big.log", output(&huge_output)),
+            )
+            .await;
+        // `session_with_real_chat_and_ledger_persistence` konfiguriert nur
+        // einen `MockAiProvider::new` (eine Runde) — hier wird stattdessen
+        // ein waschechter Mehr-Runden-Provider gebraucht (Runde 1: Kommando
+        // vorschlagen, Runde 2: nur noch Text antworten).
+        let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
+        session.ai_provider = Box::new(MockAiProvider {
+            rounds: StdMutex::new(
+                vec![
+                    vec![
+                        AiEvent::ActionProposed(AiAction::SuggestCommand {
+                            command: "cat big.log".to_string(),
+                        }),
+                        AiEvent::Done,
+                    ],
+                    vec![AiEvent::TextDelta("Erledigt.".to_string()), AiEvent::Done],
+                ]
+                .into(),
+            ),
+            received_contexts: received_contexts.clone(),
+        });
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        // Winzig: erzwingt, dass die 100.000-Byte-Ausgabe beim ZWEITEN
+        // `send()` (der die erste Runde bereits in der Historie trägt)
+        // gekürzt werden MUSS.
+        session.model_context_window_tokens = 2_000;
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        // Runde 1: Kommando ausführen (landet mit voller Ausgabe im
+        // Ledger).
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+        // Runde 2 (neue Nutzer-Nachricht): erzwingt einen weiteren
+        // `send()`, dessen Kontext bereits Runde 1s Riesen-Ausgabe trägt —
+        // genau der Aufruf, der kompaktiert werden muss.
+        {
+            let mut ctx = session.context.lock().await;
+            ctx.history.push(ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("Danke, das reicht.".to_string()),
+            });
+        }
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        // Die zuletzt tatsächlich an den Provider gesendete Kopie muss die
+        // Riesen-Ausgabe gekürzt haben.
+        let last_sent = received_contexts
+            .lock()
+            .unwrap()
+            .last()
+            .expect("mindestens ein send()-Aufruf muss stattgefunden haben")
+            .clone();
+        let sent_stdout_len: usize = last_sent
+            .history
+            .iter()
+            .filter_map(|m| match &m.content {
+                MessageContent::CommandResult { output, .. } => {
+                    Some(String::from_utf8_lossy(&output.stdout).len())
+                }
+                _ => None,
+            })
+            .sum();
+        assert!(
+            sent_stdout_len < 100_000,
+            "die an den Provider gesendete Kopie muss gekürzt sein, war {sent_stdout_len} Byte"
+        );
+
+        // Das Ledger dagegen muss die VOLLE, unkomprimierte Ausgabe
+        // enthalten — Kompaktierung betrifft nie das Ledger.
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        let ledger_stdout_len = entries
+            .iter()
+            .find_map(|e| match &e.content {
+                ssh_manager_core::audit::LedgerEntryContent::CommandExecuted { output, .. } => {
+                    Some(output.stdout.len())
+                }
+                _ => None,
+            })
+            .expect("ein CommandExecuted-Eintrag muss existieren");
+        assert_eq!(
+            ledger_stdout_len, 100_000,
+            "das Ledger muss die volle Ausgabe behalten, unabhängig von der Kompaktierung \
+             der gesendeten Kopie"
+        );
+    }
+
+    /// Spec 0057, §3/§4.1, §7 ("Immich-Fall"): eine sehr große, über
+    /// mehrere Scopes verteilte Notiz UND eine lange Historie zusammen
+    /// hätten vor Etappe 2 unbegrenzt an den Provider gesendet werden
+    /// können (der eigentliche, diagnostizierte Hänger). Beweis: nach der
+    /// Kompaktierung bleibt die TATSÄCHLICH gesendete Anfrage unter dem
+    /// Budget — kein Hänger.
+    #[tokio::test]
+    async fn test_immich_case_large_note_and_long_history_stays_under_budget() {
+        let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
+        let mut session = session_with_ai_provider(
+            MockAiProvider {
+                rounds: StdMutex::new(vec![vec![AiEvent::Done]].into()),
+                received_contexts: received_contexts.clone(),
+            },
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        // Wie `GenericOpenAiCompatible`/`Ollama` ohne erkannten Modellnamen
+        // (Spec 0057 §3.1: konservativer Default), s.
+        // `compaction::DEFAULT_CONTEXT_WINDOW_TOKENS`.
+        session.model_context_window_tokens = 32_000;
+
+        // Große, über drei Scopes verteilte Notiz (~200.000 Byte) — analog
+        // zum Immich-Fall aus Spec 0057 §8.
+        let parts = crate::compaction::SystemContextParts {
+            base: "Du bist ein Assistent.".to_string(),
+            note_sections: vec![
+                ("Gruppe \"Global\"".to_string(), "g".repeat(150_000)),
+                ("Gruppe \"Media-Server\"".to_string(), "m".repeat(40_000)),
+                ("Server \"immich\"".to_string(), "s".repeat(10_000)),
+            ],
+            remote_os_info: Some("Linux immich 6.8.0".to_string()),
+        };
+
+        // Lange Historie: 15 Runden mit je einer moderaten Kommando-Ausgabe.
+        let mut history = Vec::new();
+        for i in 0..15 {
+            history.push(ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text(format!("Frage {i}")),
+            });
+            history.push(ChatMessage {
+                role: Role::ActionResult,
+                content: MessageContent::CommandResult {
+                    command: format!("docker logs immich-{i}"),
+                    output: CommandOutput {
+                        stdout: "log-zeile\n".repeat(200).into_bytes(), // ~2 KB
+                        stderr: Vec::new(),
+                        exit_code: Some(0),
+                        truncated: false,
+                    },
+                    cancelled: false,
+                },
+            });
+        }
+        history.push(ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("Was ist der aktuelle Stand?".to_string()),
+        });
+
+        {
+            let mut ctx = session.context.lock().await;
+            ctx.system_context = parts.assemble();
+            ctx.history = history;
+        }
+        session.system_context_parts = AsyncMutex::new(parts);
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let sent = received_contexts
+            .lock()
+            .unwrap()
+            .last()
+            .expect("mindestens ein send()-Aufruf muss stattgefunden haben")
+            .clone();
+        let budget = (session.model_context_window_tokens as f64 * 0.75) as usize;
+        let estimated = crate::compaction::estimate_request_tokens(&sent);
+        assert!(
+            estimated <= budget,
+            "die TATSÄCHLICH gesendete Anfrage muss unter dem Budget bleiben \
+             (geschätzt: {estimated} Token, Budget: {budget} Token) — das ist der \
+             eigentliche Beweis, dass Etappe 2 den Immich-Hänger löst"
         );
     }
 
@@ -8525,24 +8760,25 @@ mod tests {
         );
     }
 
-    /// Spec 0034, Abschnitt 9: "vor jedem `AiProvider::send()`-Aufruf" wird
-    /// nur die an den Provider gesendete Kopie gekürzt — die gespeicherte
-    /// Historie in der DB bleibt vollständig. Erzeugt genug Nachrichten,
-    /// dass Kürzung beim nächsten `send()`-Aufruf greifen MUSS (deutlich
-    /// über `chat_context_truncation::DEFAULT_CHAR_BUDGET`), und prüft,
-    /// dass `load_session` danach trotzdem noch alle ursprünglichen
-    /// Nachrichten liefert.
+    /// Spec 0057, §3: "vor jedem `AiProvider::send()`-Aufruf" wird nur die
+    /// an den Provider gesendete Kopie kompaktiert — die gespeicherte
+    /// Historie in der DB bleibt vollständig. Ein absichtlich winziges
+    /// `model_context_window_tokens` stellt sicher, dass die Kompaktierung
+    /// beim nächsten `send()`-Aufruf greifen MUSS, und prüft, dass
+    /// `load_session` danach trotzdem noch alle ursprünglichen Nachrichten
+    /// liefert.
     #[tokio::test]
     async fn test_context_truncation_for_provider_request_does_not_affect_persisted_history() {
         let (mut session, chat_store, chat_session_id, _tmp_dir) =
             session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default())
                 .await;
         session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.model_context_window_tokens = 1_000;
 
-        // Zwei Nachrichten weit über dem Default-Budget (40.000 Zeichen),
+        // Zwei Nachrichten weit über dem winzigen Kontextfenster oben,
         // direkt über `push_history` (nicht über einen echten Turn) —
-        // reicht, um die Vorbedingung für Kürzung zu erfüllen, ohne den
-        // gesamten Turn-Mechanismus dafür zu bemühen.
+        // reicht, um die Vorbedingung für Kompaktierung zu erfüllen, ohne
+        // den gesamten Turn-Mechanismus dafür zu bemühen.
         push_history(
             &session,
             ChatMessage {
