@@ -122,6 +122,16 @@ pub struct Session {
     /// geänderter aktiver Provider greift wie dort erst bei der nächsten
     /// `connect()`).
     pub model_context_window_tokens: usize,
+    /// Spec 0057, §2: die aktuelle rollierende Zusammenfassung alter,
+    /// bereits aus dem KI-Kontext verdichteter Gesprächsrunden — `None`,
+    /// solange Schritt 1 der Kompaktierungs-Leiter (`compaction::
+    /// compact_for_send`) noch nie greifen musste, oder nach einem
+    /// wiederaufgenommenen Resume ohne zuvor gespeicherte Summary.
+    /// Aktualisiert ausschließlich von `compaction::
+    /// compact_rounds_with_summary` (nie direkt), zusätzlich verschlüsselt
+    /// persistiert wie die Chat-Historie/das Ledger (Spec 0036/0057 §2.3),
+    /// s. `persistence_sqlite::SqliteChatSessionStore::save_summary`.
+    pub summary: AsyncMutex<Option<crate::compaction::RollingSummary>>,
     /// Spec 0018, Abschnitt 6: optionales Sudo-Passwort, einmalig bei
     /// `connect()` aus dem `CredentialStore` gelesen — `None`, wenn für den
     /// Server keines hinterlegt ist (kein Fehler, s. dortiger Kommentar).
@@ -542,6 +552,7 @@ mod tests {
             // explizit klein (s. `orchestration::tests`, `compaction`-Modul
             // für die dedizierten Kompaktierungs-Tests).
             model_context_window_tokens: usize::MAX / 1_000,
+            summary: AsyncMutex::new(None),
             sudo_password: None,
             status: StdMutex::new(ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),

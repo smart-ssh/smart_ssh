@@ -1,9 +1,11 @@
 //! Kompaktierung des an den KI-Provider gesendeten Kontexts (Spec 0057,
-//! §3 + §4.1) — Etappe 2 des "reichen Session-Modells": Token-Schätzung
-//! (Post-Fencing) + der Kompaktierungs-Auslöser, zunächst mit **einfacher
-//! Kürzung** (Runden abschneiden ohne Zusammenfassung, s. Spec 0057 §8,
-//! Etappe 2 — die KI-Zusammenfassung selbst kommt erst in Etappe 3 und
-//! ersetzt dann den hier eingefügten Platzhalter-Hinweis).
+//! §2 + §3 + §4.1) — Etappe 2 (Token-Schätzung/Post-Fencing, der
+//! Kompaktierungs-Auslöser, die Kürzungs-Reihenfolge) UND Etappe 3 (die
+//! rollierende KI-Zusammenfassung, s. [`RollingSummary`]/
+//! [`compact_rounds_with_summary`], die seit Etappe 3 Schritt 1 der
+//! Kürzungs-Leiter bildet — Etappe 2s reines Abschneiden lebt als
+//! `#[cfg(test)]`-Baustein UND als Fallback-Pfad weiter, s. dortiger
+//! Doc-Kommentar).
 //!
 //! **Ersetzt** das bisherige `chat_context_truncation`-Modul (Spec 0034,
 //! Abschnitt 9): jenes kürzte nur nach einem festen, providerunabhängigen
@@ -20,12 +22,20 @@
 //! Kontexts — weder `Session::context` (die im Frontend angezeigte,
 //! vollständige Historie) noch die gespeicherte Notiz noch das Ledger
 //! (Spec 0057, §3.3/§6, Etappe 1) werden je verändert, s.
-//! [`compact_for_send`]-Doc-Kommentar.
+//! [`compact_for_send`]-Doc-Kommentar. Die rollierende Zusammenfassung
+//! selbst wird zwar über die Session hinweg gespeichert (Spec 0057, §2.3),
+//! aber unabhängig von `session.context`/dem Ledger, s.
+//! [`RollingSummary`]-Doc-Kommentar.
+
+use futures::StreamExt;
 
 use ssh_manager_core::ai::{
-    fence_untrusted, ActionSchema, ChatMessage, MessageContent, ProviderType, RejectionReason,
-    Role, SessionContext, UntrustedKind,
+    fence_untrusted, ActionSchema, AiEvent, ChatMessage, MessageContent, ProviderType,
+    RejectionReason, Role, SessionContext, UntrustedKind,
 };
+
+use crate::orchestration::{reapply_redaction_for_send, wait_for_ai_request_slot};
+use crate::session::Session;
 
 /* --------------------- Token-Schätzung (Spec 0057, §3.1) ------------------- */
 
@@ -260,7 +270,13 @@ fn truncate_rounds_with_placeholder(
 /// nach jeder Entfernung prüfen, ob der Request schon wieder unters
 /// Budget passt). Belässt `context.history` unverändert, wenn schon
 /// unterhalb `min_preserved_rounds` Runden vorhanden sind — dann kann
-/// Schritt 1 ohnehin nichts mehr beitragen.
+/// Schritt 1 ohnehin nichts mehr beitragen. Rein synchron, OHNE
+/// Zusammenfassung — seit Etappe 3 nicht mehr der in [`compact_for_send`]
+/// verwendete Pfad (s. [`compact_rounds_with_summary`]), aber als
+/// eigenständiger, direkt getesteter Baustein UND als der Fallback-Pfad
+/// erhalten, auf den [`compact_rounds_with_summary`] zurückfällt, wenn die
+/// Zusammenfassung fehlschlägt (Spec 0057, §2.2).
+#[cfg_attr(not(test), allow(dead_code))]
 fn compact_rounds_for_budget(
     context: &mut SessionContext,
     min_preserved_rounds: usize,
@@ -271,26 +287,319 @@ fn compact_rounds_for_budget(
         context.history = rounds.into_iter().flatten().collect();
         return;
     }
-
-    // Fixe Anteile (System-Kontext, Werkzeug-Schemas) ändern sich in
-    // diesem Schritt nicht — nur einmal berechnet statt bei jedem
-    // Kandidaten neu.
     let fixed_tokens = estimate_tokens(&context.system_context)
         + estimate_action_schemas_tokens(&context.available_actions);
+    let cut_count =
+        determine_round_cut_count(&rounds, min_preserved_rounds, fixed_tokens, budget_tokens);
+    context.history =
+        build_round_result(rounds, cut_count, round_truncation_placeholder(cut_count));
+}
 
+/// Reine Cut-Count-Bestimmung (kein Zusammenfassungs-Aufruf, keine
+/// Seiteneffekte) — dieselbe inkrementelle Suche wie zuvor inline in
+/// [`compact_rounds_for_budget`], jetzt herausgelöst, damit
+/// [`compact_rounds_with_summary`] (Etappe 3) sie ebenfalls nutzen kann,
+/// BEVOR überhaupt ein KI-Aufruf für die Zusammenfassung stattfindet: das
+/// Cut-Count wird konservativ anhand der Größe des einfachen
+/// TEXT-Platzhalters bestimmt (nicht der — a priori unbekannten — Größe
+/// einer künftigen Zusammenfassung). Eine echte Zusammenfassung fällt in
+/// aller Regel deutlich kleiner aus als dieser Platzhalter-Text plus die
+/// wegfallenden Runden, das Ergebnis liegt dann mit zusätzlichem
+/// Sicherheitsabstand unter dem Budget. Schlägt die Zusammenfassung
+/// fehl, passt der so bestimmte `cut_count` — mit dem PLATZHALTER
+/// exakt — schon garantiert unters Budget (Spec 0057 §2.2: der Fallback
+/// muss zuverlässig funktionieren).
+fn determine_round_cut_count(
+    rounds: &[Vec<ChatMessage>],
+    min_preserved_rounds: usize,
+    fixed_tokens: usize,
+    budget_tokens: usize,
+) -> usize {
     let max_cut = rounds.len() - min_preserved_rounds;
-    let mut candidate = Vec::new();
-    for cut_count in 1..=max_cut {
-        candidate = vec![round_truncation_placeholder(cut_count)];
-        for round in &rounds[cut_count..] {
-            candidate.extend(round.iter().cloned());
+    let mut cut_count = max_cut;
+    for candidate in 1..=max_cut {
+        let mut tokens = estimate_message_tokens(&round_truncation_placeholder(candidate));
+        for round in &rounds[candidate..] {
+            tokens += round.iter().map(estimate_message_tokens).sum::<usize>();
         }
-        let history_tokens: usize = candidate.iter().map(estimate_message_tokens).sum();
-        if fixed_tokens + history_tokens <= budget_tokens {
+        if fixed_tokens + tokens <= budget_tokens {
+            cut_count = candidate;
             break;
         }
     }
-    context.history = candidate;
+    cut_count
+}
+
+fn build_round_result(
+    rounds: Vec<Vec<ChatMessage>>,
+    cut_count: usize,
+    placeholder: ChatMessage,
+) -> Vec<ChatMessage> {
+    let mut result = vec![placeholder];
+    for round in rounds.into_iter().skip(cut_count) {
+        result.extend(round);
+    }
+    result
+}
+
+/// Spec 0057, §2.3: die aktuelle rollierende Zusammenfassung — persistiert
+/// als (verschlüsselter Text, Anzahl abgedeckter Runden)-Paar, s.
+/// `persistence_sqlite::SqliteChatSessionStore::{save_summary,
+/// load_summary}`. `rounds_covered` zählt von der ältesten Runde aus
+/// (Index 0 in [`split_into_rounds`]s Ergebnis) — dieselbe Zählweise wie
+/// `cut_count` in [`determine_round_cut_count`], sodass ein späterer aufruf
+/// direkt vergleichen kann, ob diese Zusammenfassung schon ausreicht oder
+/// um weitere, NEU zu kürzende Runden ergänzt werden muss ("rollierend",
+/// Spec 0057 §2.1: "die bisherige Summary + die jetzt zu komprimierenden
+/// Runden").
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct RollingSummary {
+    pub text: String,
+    pub rounds_covered: usize,
+}
+
+/// Prompt für den Zusammenfassungs-Aufruf (Spec 0057, §2.1: "kurz und
+/// faktisch"). Bewusst NICHT als System-Prompt, sondern als letzte
+/// `User`-Nachricht in der eigens für diesen Aufruf gebauten Historie —
+/// dieselbe Technik wie `orchestration::TITLE_GENERATION_INSTRUCTION`/
+/// `DISCONNECT_COMPLETION_INSTRUCTION` (eine reine Text-Anfrage ohne
+/// Werkzeug-Schema, die Instruktion steht am Ende, nach dem
+/// zusammenzufassenden Material).
+const SUMMARY_INSTRUCTION: &str = "Fasse die vorstehende Konversation bündig und rein faktisch \
+     zusammen: was wurde getan, welcher Stand wurde erreicht, welche offenen Punkte gibt es. \
+     Antworte NUR mit der Zusammenfassung selbst, ohne Einleitung, Anführungszeichen oder \
+     Meta-Kommentar.";
+
+/// Äußerer Sicherheits-Zeitrahmen für den GESAMTEN Zusammenfassungs-Aufruf
+/// (Spec 0057, §2.1: "mit Rate-Limit-Handling (0051) + Body-Timeout —
+/// nicht ungeschützt"). Der eigentliche Provider-Aufruf trägt bereits
+/// eigene Schutzmechanismen (SSE-Inaktivitäts-Timeout, Rate-Limit-Retry-
+/// Budget) — dieser äußere Rahmen ist die zusätzliche, unabhängige
+/// Rückversicherung dagegen, dass IRGENDEIN unvorhergesehener Zustand
+/// (z. B. ein Bug in einer Provider-Implementierung, die diese
+/// Mechanismen umgeht) die Sitzung dennoch hängen lässt — "Fehler
+/// containen", dieselbe Invariante wie beim Body-Timeout-Fix. Großzügig
+/// bemessen (deutlich über dem ~90s-SSE-Inaktivitäts-Timeout + dem
+/// ~20s-Retry-Budget der Provider-Schicht), damit ein tatsächlich noch
+/// fortschreitender, nur langsamer Stream nicht vorzeitig abgebrochen
+/// wird.
+const SUMMARY_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Baut die Platzhalter-Nachricht für eine ERFOLGREICH erzeugte
+/// Zusammenfassung — Gegenstück zu [`round_truncation_placeholder`] (dem
+/// Fallback-Hinweis ohne Zusammenfassung).
+fn summary_placeholder_message(summary_text: &str) -> ChatMessage {
+    ChatMessage {
+        // Dieselbe Begründung wie bei `round_truncation_placeholder`:
+        // `ActionResult` ist weder `User` noch `Assistant`, sondern ein
+        // vom Backend eingefügter Systemhinweis.
+        role: Role::ActionResult,
+        content: MessageContent::Text(format!(
+            "[Zusammenfassung der bisherigen Konversation: {summary_text}]"
+        )),
+    }
+}
+
+/// Spec 0057, §3.2, Schritt 1 (Etappe 3: MIT Zusammenfassung statt reinem
+/// Abschneiden). Bestimmt zunächst — rein synchron, kein KI-Aufruf —
+/// dasselbe `cut_count` wie [`compact_rounds_for_budget`]
+/// ([`determine_round_cut_count`]). Deckt die bereits gespeicherte
+/// [`RollingSummary`] (falls vorhanden) diesen `cut_count` schon ab, wird
+/// sie unverändert wiederverwendet (kein KI-Aufruf nötig — "nicht jedes
+/// Mal die ganze History von vorne", Spec 0057 §2.1). Andernfalls wird NUR
+/// das neu hinzugekommene Stück (die Runden zwischen der bisherigen
+/// Abdeckung und `cut_count`) zusammen mit der bisherigen Summary an die
+/// KI zur (rollierenden) Zusammenfassung gegeben
+/// ([`generate_rolling_summary`]).
+///
+/// **Fallback (Spec 0057, §2.2, KRITISCH):** schlägt der
+/// Zusammenfassungs-Aufruf fehl (Timeout, Fehler, leere/unbrauchbare
+/// Antwort), wird `session.summary` NICHT verändert (der zuletzt gültige
+/// Stand bleibt für den nächsten Versuch erhalten) und für DIESE eine
+/// Anfrage exakt der Etappe-2-Platzhalter ohne Zusammenfassung verwendet
+/// (`round_truncation_placeholder`) — identisch zu
+/// [`compact_rounds_for_budget`]s Ergebnis für denselben `cut_count`.
+async fn compact_rounds_with_summary(
+    session: &Session,
+    context: &mut SessionContext,
+    min_preserved_rounds: usize,
+    budget_tokens: usize,
+) {
+    let rounds = split_into_rounds(std::mem::take(&mut context.history));
+    if rounds.len() <= min_preserved_rounds {
+        context.history = rounds.into_iter().flatten().collect();
+        return;
+    }
+    let fixed_tokens = estimate_tokens(&context.system_context)
+        + estimate_action_schemas_tokens(&context.available_actions);
+    let cut_count =
+        determine_round_cut_count(&rounds, min_preserved_rounds, fixed_tokens, budget_tokens);
+
+    let existing_summary = session.summary.lock().await.clone();
+    let already_covered = existing_summary
+        .as_ref()
+        .map_or(0, |s| s.rounds_covered)
+        .min(cut_count);
+
+    let placeholder = if already_covered >= cut_count {
+        // Die vorhandene Summary deckt bereits alles ab, was diese Runde
+        // an Kürzung braucht — direkt wiederverwenden, kein KI-Aufruf.
+        existing_summary
+            .as_ref()
+            .map(|s| summary_placeholder_message(&s.text))
+    } else {
+        None
+    };
+
+    let placeholder = match placeholder {
+        Some(placeholder) => placeholder,
+        None => {
+            // Nur die NEU zu kürzenden Runden (ab der bisherigen
+            // Abdeckung) gehen in den Zusammenfassungs-Aufruf — "nicht
+            // jedes Mal die ganze History von vorne" (Spec 0057, §2.1).
+            let new_rounds: Vec<ChatMessage> = rounds[already_covered..cut_count]
+                .iter()
+                .flatten()
+                .cloned()
+                .collect();
+            let previous_summary_text = existing_summary.as_ref().map(|s| s.text.as_str());
+
+            match generate_rolling_summary(session, previous_summary_text, &new_rounds).await {
+                Some(new_text) => {
+                    let new_summary = RollingSummary {
+                        text: new_text.clone(),
+                        rounds_covered: cut_count,
+                    };
+                    *session.summary.lock().await = Some(new_summary.clone());
+                    persist_rolling_summary(session, &new_summary).await;
+                    summary_placeholder_message(&new_text)
+                }
+                // Spec 0057, §2.2: Fallback auf das reine Abschneiden ohne
+                // Zusammenfassung — `session.summary` bleibt unverändert
+                // (der alte, noch gültige Stand geht nicht verloren).
+                None => round_truncation_placeholder(cut_count),
+            }
+        }
+    };
+
+    context.history = build_round_result(rounds, cut_count, placeholder);
+}
+
+/// Bester-effort-Persistenz der aktuellen [`RollingSummary`] (Spec 0057,
+/// §2.3) — analog zu `orchestration::write_ledger_entry`/`push_history_
+/// scoped`: ein Fehlschlag hier bricht den laufenden Kompaktierungs-/
+/// Sende-Vorgang nicht ab, nur geloggt. `session.summary` (der In-Memory-
+/// Stand) ist zu diesem Zeitpunkt bereits aktualisiert, unabhängig davon,
+/// ob die Persistenz gelingt — dieselbe "In-Memory zuerst, Persistenz
+/// best-effort"-Reihenfolge wie überall sonst in diesem Modul/`
+/// orchestration`.
+async fn persist_rolling_summary(session: &Session, summary: &RollingSummary) {
+    let Some(store) = &session.chat_session_store else {
+        return;
+    };
+    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+        return;
+    };
+    if let Err(err) = store
+        .save_summary(
+            chat_session_id,
+            &summary.text,
+            summary.rounds_covered as i64,
+        )
+        .await
+    {
+        tracing::warn!(error = %err, "session summary persistence failed");
+    }
+}
+
+/// Der eigentliche Zusammenfassungs-KI-Aufruf (Spec 0057, §2.1). Baut eine
+/// eigene, kleine [`SessionContext`] (kein Werkzeug-Schema — reine
+/// Textanfrage, wie `orchestration::generate_session_title_on_disconnect`)
+/// aus der bisherigen Summary (falls vorhanden) + den neu zu faltenden
+/// Runden + der Instruktion, schickt sie über den Haupt-Provider dieser
+/// Session (Spec 0057, §2.1: "über den bestehenden Provider" — kein
+/// eigener/kleinerer Zweitmeinungs-Provider für Etappe 3) und liefert
+/// `None` bei JEDER Art von Fehlschlag (Timeout, `AiEvent::Error`, leere/
+/// nur-Whitespace-Antwort) — der Aufrufer fällt dann auf das reine
+/// Abschneiden zurück (Spec 0057, §2.2).
+///
+/// **Redaction (Spec 0057, §2.1):** `new_rounds` sind bereits redigiert
+/// (dieselbe Redaction, die beim ursprünglichen Ausführen/Speichern lief,
+/// s. `orchestration::execute_suggested_command`) — hier zusätzlich
+/// dieselbe additive Re-Redaction wie vor jedem normalen `send()`
+/// (`reapply_redaction_for_send`) angewendet, bevor sie den Provider
+/// erreichen. Die ZURÜCKKOMMENDE Zusammenfassung wird ebenfalls redigiert,
+/// bevor sie verwendet/gespeichert wird — "wie normaler KI-Inhalt
+/// behandelt", nicht privilegiert.
+async fn generate_rolling_summary(
+    session: &Session,
+    previous_summary: Option<&str>,
+    new_rounds: &[ChatMessage],
+) -> Option<String> {
+    let mut history = Vec::new();
+    if let Some(previous) = previous_summary {
+        history.push(ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::Text(format!("Bisherige Zusammenfassung:\n{previous}")),
+        });
+    }
+    history.extend(reapply_redaction_for_send(
+        new_rounds.to_vec(),
+        session.redactor.as_ref(),
+    ));
+    history.push(ChatMessage {
+        role: Role::User,
+        content: MessageContent::Text(SUMMARY_INSTRUCTION.to_string()),
+    });
+
+    let summary_context = SessionContext {
+        system_context: "Du fasst Chat-Verläufe präzise und knapp zusammen.".to_string(),
+        history,
+        available_actions: Vec::new(),
+    };
+
+    wait_for_ai_request_slot(session).await;
+    let call = async {
+        let mut stream = session.ai_provider.send(summary_context);
+        let mut text = String::new();
+        while let Some(event) = stream.next().await {
+            match event {
+                AiEvent::TextDelta(delta) => text.push_str(&delta),
+                // Kein Tool-Schema angeboten, aber defensiv wie an den
+                // anderen reinen-Text-Aufrufstellen: einfach ignorieren.
+                AiEvent::ActionProposed(_) => {}
+                AiEvent::Done => return Some(text),
+                AiEvent::Error(err) => {
+                    tracing::warn!(
+                        error = %err,
+                        "session summary generation failed, falling back to plain round \
+                         truncation"
+                    );
+                    return None;
+                }
+            }
+        }
+        // Stream endete ohne `Done`/`Error` — genauso wie ein Fehler
+        // behandeln, nicht stillschweigend als Erfolg werten.
+        None
+    };
+
+    let text = match tokio::time::timeout(SUMMARY_CALL_TIMEOUT, call).await {
+        Ok(result) => result,
+        Err(_elapsed) => {
+            tracing::warn!(
+                timeout_secs = SUMMARY_CALL_TIMEOUT.as_secs(),
+                "session summary generation timed out, falling back to plain round truncation"
+            );
+            None
+        }
+    }?;
+
+    // Spec 0057, §2.1: die zurückkommende Zusammenfassung "wie normaler
+    // KI-Inhalt behandelt" — durch denselben Redactor wie alles andere.
+    let redacted = session.redactor.redact_text(&text);
+    let trimmed_is_empty = redacted.trim().is_empty();
+    (!trimmed_is_empty).then_some(redacted)
 }
 
 fn round_truncation_placeholder(cut_rounds: usize) -> ChatMessage {
@@ -546,10 +855,19 @@ fn truncate_to_char_boundary(text: &str, max_bytes: usize) -> &str {
 /// Kontextfensters liegt — der Regelfall für die meisten Anfragen.
 /// Andernfalls die Kürzungs-Reihenfolge aus Spec 0057 §3.2, jeweils nur so
 /// weit wie nötig:
-/// 1. Alte Runden → Platzhalter (letzte [`MIN_PRESERVED_ROUNDS`] immer voll).
+/// 1. Alte Runden → Zusammenfassung, mit Fallback auf einen reinen
+///    Platzhalter bei einem Fehlschlag (Spec 0057, §2; letzte
+///    [`MIN_PRESERVED_ROUNDS`] immer voll erhalten, s.
+///    [`compact_rounds_with_summary`]).
 /// 2. Riesen-Einzelausgaben in den erhaltenen Runden kürzen.
 /// 3. Notiz verkürzt senden (nach Scope priorisiert, lautlos).
-pub(crate) fn compact_for_send(
+///
+/// `async`, seit Etappe 3 einen eigenen KI-Aufruf machen kann (Schritt 1)
+/// — `session` liefert dafür `ai_provider`/`redactor`/die
+/// Anfrage-Pacing-Funktion sowie den Lese-/Schreibzugriff auf die
+/// rollierende [`RollingSummary`].
+pub(crate) async fn compact_for_send(
+    session: &Session,
     mut context: SessionContext,
     system_context_parts: &SystemContextParts,
     model_context_window_tokens: usize,
@@ -565,7 +883,7 @@ pub(crate) fn compact_for_send(
         "estimated request size exceeds the compaction trigger — compacting context for this send"
     );
 
-    compact_rounds_for_budget(&mut context, MIN_PRESERVED_ROUNDS, budget_tokens);
+    compact_rounds_with_summary(session, &mut context, MIN_PRESERVED_ROUNDS, budget_tokens).await;
     if estimate_request_tokens(&context) <= budget_tokens {
         return context;
     }
@@ -685,43 +1003,13 @@ mod tests {
     }
 
     // --- Auslöser bei ~70-80 % (Spec 0057, §7) -----------------------------
-
-    #[test]
-    fn test_compact_for_send_is_noop_below_trigger_ratio() {
-        // Kontextfenster 1000 Token, Budget = 750 — 600 Token bleiben
-        // unangetastet.
-        let context = context_with(String::new(), vec![user_message(&"a".repeat(2400))]); // ~600 Token
-        let parts = SystemContextParts::default();
-        let result = compact_for_send(context.clone(), &parts, 1_000);
-        assert_eq!(
-            result, context,
-            "unterhalb des Auslösers darf nichts verändert werden"
-        );
-    }
-
-    #[test]
-    fn test_compact_for_send_triggers_above_trigger_ratio() {
-        // 4 kurze Runden + eine Riesen-Ausgabe (100.000 Byte, weit über
-        // `MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT`) in der jüngsten Runde —
-        // weit über 75 % von 10.000 Token (Budget 7.500) -> muss auslösen
-        // UND Schritt 2 (nicht nur Schritt 1) tatsächlich durchlaufen, um
-        // wieder unters Budget zu kommen.
-        let history = vec![
-            user_message("Runde 1"),
-            user_message("Runde 2"),
-            user_message("Runde 3"),
-            user_message("Runde 4"),
-            command_result("cat big.log", &"a".repeat(100_000)),
-        ];
-        let context = context_with(String::new(), history.clone());
-        let parts = SystemContextParts::default();
-        let result = compact_for_send(context.clone(), &parts, 10_000);
-        assert_ne!(
-            result, context,
-            "oberhalb des Auslösers (~70-80 %) muss kompaktiert werden"
-        );
-        assert!(estimate_request_tokens(&result) <= 7_500);
-    }
+    //
+    // `compact_for_send` selbst braucht seit Etappe 3 eine `&Session`
+    // (Zusammenfassungs-KI-Aufruf in Schritt 1) — die zugehörigen Tests
+    // leben deshalb in `orchestration::tests`, wo die dafür nötigen
+    // Session-/MockAiProvider-Bausteine bereits existieren
+    // (`test_compact_for_send_is_noop_below_trigger_ratio`/
+    // `test_compact_for_send_triggers_above_trigger_ratio_and_summarizes`).
 
     // --- Schritt 1: letzte N Runden bleiben immer voll erhalten -----------
 

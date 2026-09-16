@@ -412,7 +412,7 @@ pub async fn run_chat_turn(
 /// Rand-Rand-Fall weiterhin sicher (nichts wird sichtbar gemacht, was
 /// vorher nicht sichtbar war) — nur die Reichweite ist geringer als im
 /// theoretischen Idealfall.
-fn reapply_redaction_for_send(
+pub(crate) fn reapply_redaction_for_send(
     history: Vec<ChatMessage>,
     redactor: &dyn OutputRedactor,
 ) -> Vec<ChatMessage> {
@@ -486,15 +486,27 @@ async fn run_one_round(
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> bool {
     let mut request_context = session.context.lock().await.clone();
+    // spec-reviewer-Fund (Review dieses Schritts, Etappe 3): geklont statt
+    // den `MutexGuard` über den (jetzt potenziell lange laufenden,
+    // Zusammenfassungs-KI-Aufruf enthaltenden) `compact_for_send`-Aufruf
+    // hinweg zu halten — ein Rust-Temporary in Argumentposition lebt sonst
+    // bis zum Ende der GESAMTEN Anweisung, würde `system_context_parts`
+    // also für die volle Dauer des `.await` sperren und jeden
+    // gleichzeitigen Lese-/Schreibzugriff (z. B. `send_chat_message_impl`
+    // bei einer neuen Nutzer-Nachricht in einem anderen Tab derselben
+    // Sitzung) bis zu `SUMMARY_CALL_TIMEOUT` blockieren.
+    let system_context_parts = session.system_context_parts.lock().await.clone();
     // Spec 0057, §3: "vor jedem `AiProvider::send()`-Aufruf" — kompaktiert
     // nur die an den Provider gesendete Kopie, die gespeicherte Historie in
     // `session.context`/der DB bleibt unangetastet (s.
     // `compaction::compact_for_send`-Moduldoc).
     request_context = crate::compaction::compact_for_send(
+        session,
         request_context,
-        &*session.system_context_parts.lock().await,
+        &system_context_parts,
         session.model_context_window_tokens,
-    );
+    )
+    .await;
     // Spec 0040, Abschnitt 5: nur-additive Re-Redaction unmittelbar vor dem
     // `send()`-Aufruf, s. `reapply_redaction_for_send`-Doc-Kommentar.
     request_context.history =
@@ -2546,11 +2558,17 @@ pub async fn generate_session_title_on_disconnect(session: &Session) {
     }
 
     let mut request_context = session.context.lock().await.clone();
+    // s. identischer Kommentar in `run_one_round` — geklont, um den
+    // `MutexGuard` nicht über den potenziell langen `compact_for_send`-
+    // Aufruf hinweg zu halten.
+    let system_context_parts = session.system_context_parts.lock().await.clone();
     request_context = crate::compaction::compact_for_send(
+        session,
         request_context,
-        &*session.system_context_parts.lock().await,
+        &system_context_parts,
         session.model_context_window_tokens,
-    );
+    )
+    .await;
     // Spec 0040, Abschnitt 5: s. Kommentar an der anderen `send()`-Stelle in
     // `run_one_round`.
     request_context.history =
@@ -2645,16 +2663,21 @@ pub async fn suggest_note_update_on_disconnect(
     }
 
     let mut request_context = session.context.lock().await.clone();
-    let system_context_parts = session.system_context_parts.lock().await;
+    // s. identischer Kommentar in `run_one_round` — geklont statt den
+    // `MutexGuard` über den potenziell langen `compact_for_send`-Aufruf
+    // hinweg zu halten.
+    let system_context_parts = session.system_context_parts.lock().await.clone();
     let uncompacted_system_context = request_context.system_context.clone();
     // Spec 0057, §3 / Spec 0040, Abschnitt 5: "vor jedem
     // `AiProvider::send()`-Aufruf" — s. Kommentar an der anderen
     // `send()`-Stelle in `run_one_round`.
     request_context = crate::compaction::compact_for_send(
+        session,
         request_context,
         &system_context_parts,
         session.model_context_window_tokens,
-    );
+    )
+    .await;
     // spec-reviewer-Fund (Review dieses Schritts): Kompaktierung kann die
     // im System-Prompt gesendete Notiz-Fassung kürzen (Spec 0057, §3.2
     // Schritt 3/§4.1) — genau dieser eine Aufruf bittet die KI aber um eine
@@ -2673,7 +2696,6 @@ pub async fn suggest_note_update_on_disconnect(
         );
         return;
     }
-    drop(system_context_parts);
     request_context.history =
         reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
     request_context.history.push(ChatMessage {
@@ -2852,8 +2874,8 @@ mod tests {
     use tokio::sync::Mutex as AsyncMutex;
 
     use ssh_manager_core::ai::{
-        default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, OutputRedactor,
-        SessionContext,
+        default_action_schemas, AiError, AiEvent, AiProvider, DefaultOutputRedactor,
+        OutputRedactor, SessionContext,
     };
     use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
     use ssh_manager_core::profiles::{
@@ -3133,6 +3155,7 @@ mod tests {
             ai_model: "test-model".to_string(),
             system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
             model_context_window_tokens: usize::MAX / 1_000,
+            summary: AsyncMutex::new(None),
             sudo_password: None,
             status: StdMutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
@@ -8474,6 +8497,574 @@ mod tests {
             "die TATSÄCHLICH gesendete Anfrage muss unter dem Budget bleiben \
              (geschätzt: {estimated} Token, Budget: {budget} Token) — das ist der \
              eigentliche Beweis, dass Etappe 2 den Immich-Hänger löst"
+        );
+    }
+
+    // --- Spec 0057, §2: rollierende Zusammenfassung (Etappe 3) -------------
+
+    fn user_msg(text: &str) -> ChatMessage {
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text(text.to_string()),
+        }
+    }
+
+    fn command_result_msg(command: &str, stdout: &str) -> ChatMessage {
+        ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::CommandResult {
+                command: command.to_string(),
+                output: output(stdout),
+                cancelled: false,
+            },
+        }
+    }
+
+    /// Baut `count` Runden (je eine `User`- + eine `ActionResult`-
+    /// Nachricht) direkt in `session.context` — für Tests, die eine lange
+    /// Historie brauchen, ohne dafür jede Runde über einen echten
+    /// `run_chat_turn` laufen zu lassen.
+    async fn push_synthetic_rounds(session: &Session, count: usize, stdout_bytes_each: usize) {
+        let mut ctx = session.context.lock().await;
+        for i in 0..count {
+            ctx.history.push(user_msg(&format!("Frage {i}")));
+            ctx.history.push(command_result_msg(
+                &format!("cmd-{i}"),
+                &"x".repeat(stdout_bytes_each),
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_compact_for_send_is_noop_below_trigger_ratio() {
+        let session = session_with_ai_provider(
+            MockAiProvider::new(vec![AiEvent::Done]),
+            MockSshTransport::default(),
+        );
+        let context = SessionContext {
+            system_context: String::new(),
+            history: vec![user_msg(&"a".repeat(2400))], // ~600 Token
+            available_actions: Vec::new(),
+        };
+        let parts = crate::compaction::SystemContextParts::default();
+        let result =
+            crate::compaction::compact_for_send(&session, context.clone(), &parts, 1_000).await;
+        assert_eq!(
+            result, context,
+            "unterhalb des Auslösers darf nichts verändert werden"
+        );
+    }
+
+    /// Spec 0057, §2.1: greift Schritt 1 der Kürzungs-Leiter, wird beim
+    /// ERSTEN Mal eine echte Zusammenfassung erzeugt (kein bisheriger
+    /// Stand vorhanden, der wiederverwendet werden könnte) — der
+    /// Platzhalter muss den KI-generierten Text tragen, nicht den
+    /// generischen Etappe-2-Hinweis, und `session.summary` muss
+    /// aktualisiert sein.
+    #[tokio::test]
+    async fn test_compact_for_send_uses_summary_when_the_call_succeeds() {
+        let mut session = session_with_ai_provider(
+            MockAiProvider::new(vec![
+                AiEvent::TextDelta("Nutzer prüfte Logs, alles unauffällig.".to_string()),
+                AiEvent::Done,
+            ]),
+            MockSshTransport::default(),
+        );
+        session.model_context_window_tokens = 2_000;
+        push_synthetic_rounds(&session, 6, 5_000).await;
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        let result = crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
+        let placeholder_text = result
+            .history
+            .iter()
+            .find_map(|m| match &m.content {
+                MessageContent::Text(t) if t.contains("Zusammenfassung") => Some(t.clone()),
+                _ => None,
+            })
+            .expect("ein Zusammenfassungs-Platzhalter muss in der gekürzten Historie stehen");
+        assert!(
+            placeholder_text.contains("Nutzer prüfte Logs, alles unauffällig."),
+            "der Platzhalter muss den tatsächlichen KI-Text tragen: {placeholder_text}"
+        );
+        assert!(
+            !placeholder_text.contains("ältere Konversation gekürzt"),
+            "bei Erfolg darf NICHT der generische Etappe-2-Hinweis verwendet werden"
+        );
+        let stored = session.summary.lock().await.clone();
+        assert_eq!(
+            stored.map(|s| s.text),
+            Some("Nutzer prüfte Logs, alles unauffällig.".to_string())
+        );
+    }
+
+    /// Spec 0057, §2.1: "nicht jedes Mal die ganze History von vorne" —
+    /// deckt eine bereits gespeicherte Zusammenfassung den benötigten
+    /// `cut_count` schon ab, darf KEIN zweiter KI-Aufruf stattfinden.
+    #[tokio::test]
+    async fn test_compact_for_send_reuses_existing_summary_without_a_new_ai_call() {
+        let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
+        let mut session = session_with_ai_provider(
+            MockAiProvider {
+                rounds: StdMutex::new(vec![vec![AiEvent::Done]].into()),
+                received_contexts: received_contexts.clone(),
+            },
+            MockSshTransport::default(),
+        );
+        session.model_context_window_tokens = 2_000;
+        push_synthetic_rounds(&session, 6, 5_000).await;
+        *session.summary.lock().await = Some(crate::compaction::RollingSummary {
+            text: "Bereits vorhandene Zusammenfassung.".to_string(),
+            // Großzügig: deckt mehr Runden ab, als für das aktuelle Budget
+            // überhaupt gekürzt werden müssten.
+            rounds_covered: 6,
+        });
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        let result = crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
+        assert!(
+            received_contexts.lock().unwrap().is_empty(),
+            "die vorhandene Summary deckt den Bedarf bereits ab — es darf kein KI-Aufruf \
+             stattfinden"
+        );
+        assert!(
+            result
+                .history
+                .iter()
+                .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("Bereits vorhandene Zusammenfassung."))),
+            "die wiederverwendete Summary muss im gesendeten Kontext stehen"
+        );
+    }
+
+    /// Spec 0057, §2.1 ("rollierend"): eine bereits vorhandene, aber nicht
+    /// mehr ausreichende Zusammenfassung wird nicht verworfen und neu von
+    /// vorne erzeugt, sondern nur um die NEU zu kürzenden Runden ergänzt —
+    /// der KI-Aufruf darf ausschließlich das neue Stück + den bisherigen
+    /// Summary-Text enthalten, nicht die bereits zusammengefassten,
+    /// alten Runden im Rohformat.
+    #[tokio::test]
+    async fn test_compact_for_send_folds_only_newly_cut_rounds_into_existing_summary() {
+        let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
+        let mut session = session_with_ai_provider(
+            MockAiProvider {
+                rounds: StdMutex::new(
+                    vec![vec![
+                        AiEvent::TextDelta("Erweiterte Summary.".to_string()),
+                        AiEvent::Done,
+                    ]]
+                    .into(),
+                ),
+                received_contexts: received_contexts.clone(),
+            },
+            MockSshTransport::default(),
+        );
+        session.model_context_window_tokens = 2_000;
+        // 8 Runden, `rounds_covered: 2` -> die bereits abgedeckten Runden
+        // 0/1 dürfen im KI-Aufruf NICHT im Rohformat auftauchen.
+        push_synthetic_rounds(&session, 8, 5_000).await;
+        *session.summary.lock().await = Some(crate::compaction::RollingSummary {
+            text: "Alte Zusammenfassung (Runden 0-1).".to_string(),
+            rounds_covered: 2,
+        });
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        let _ = crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
+        let sent = received_contexts
+            .lock()
+            .unwrap()
+            .last()
+            .expect("der Summary-Aufruf muss stattgefunden haben")
+            .clone();
+        assert!(
+            sent.history.iter().any(
+                |m| matches!(&m.content, MessageContent::Text(t) if t.contains("Alte Zusammenfassung (Runden 0-1)."))
+            ),
+            "der bisherige Summary-Text muss in den Aufruf eingehen: {:?}",
+            sent.history
+        );
+        assert!(
+            !sent.history.iter().any(
+                |m| matches!(&m.content, MessageContent::CommandResult { command, .. } if command == "cmd-0" || command == "cmd-1")
+            ),
+            "bereits abgedeckte Runden (0/1) dürfen NICHT erneut im Rohformat gesendet werden: \
+             {:?}",
+            sent.history
+        );
+        assert!(
+            sent.history.iter().any(
+                |m| matches!(&m.content, MessageContent::CommandResult { command, .. } if command == "cmd-2")
+            ),
+            "die neu zu kürzende Runde 2 muss im Aufruf enthalten sein: {:?}",
+            sent.history
+        );
+    }
+
+    /// Spec 0057, §2.2 (KRITISCH): schlägt der Zusammenfassungs-Aufruf fehl
+    /// (hier: `AiEvent::Error`), muss die Sitzung auf das reine
+    /// Etappe-2-Abschneiden zurückfallen — kein Hang, kein Absturz, `
+    /// session.summary` bleibt unverändert (hier: weiterhin `None`).
+    #[tokio::test]
+    async fn test_compact_for_send_falls_back_to_plain_truncation_on_summary_error() {
+        let mut session = session_with_ai_provider(
+            MockAiProvider::new(vec![AiEvent::Error(AiError::RateLimited)]),
+            MockSshTransport::default(),
+        );
+        session.model_context_window_tokens = 2_000;
+        push_synthetic_rounds(&session, 6, 5_000).await;
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        let result = crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
+        assert!(
+            result
+                .history
+                .iter()
+                .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("ältere Konversation gekürzt"))),
+            "bei einem Fehlschlag muss der generische Etappe-2-Hinweis verwendet werden: {:?}",
+            result.history
+        );
+        assert!(
+            session.summary.lock().await.is_none(),
+            "ein fehlgeschlagener Versuch darf `session.summary` nicht verändern"
+        );
+    }
+
+    /// Wie oben, aber der Aufruf liefert nur eine leere/Whitespace-Antwort
+    /// — Spec 0057, §2.2 zählt das ausdrücklich als Fehlschlag ("leere/
+    /// unbrauchbare Antwort"), nicht als Erfolg mit leerem Inhalt.
+    #[tokio::test]
+    async fn test_compact_for_send_falls_back_to_plain_truncation_on_empty_summary_response() {
+        let mut session = session_with_ai_provider(
+            MockAiProvider::new(vec![
+                AiEvent::TextDelta("   \n  ".to_string()),
+                AiEvent::Done,
+            ]),
+            MockSshTransport::default(),
+        );
+        session.model_context_window_tokens = 2_000;
+        push_synthetic_rounds(&session, 6, 5_000).await;
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        let result = crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
+        assert!(
+            result
+                .history
+                .iter()
+                .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("ältere Konversation gekürzt"))),
+            "eine leere Antwort zählt als Fehlschlag, muss auf den Etappe-2-Hinweis zurückfallen"
+        );
+        assert!(session.summary.lock().await.is_none());
+    }
+
+    /// spec-reviewer-Pflicht (CLAUDE.md, Redaction-berührende Änderungen) +
+    /// Aufgabenstellung: ein Fake-Secret darf weder im AUSGEHENDEN
+    /// Summary-Aufruf noch in der ZURÜCKKOMMENDEN (und gespeicherten)
+    /// Zusammenfassung unredigiert auftauchen. Die zu faltende Runde trägt
+    /// das Secret hier bewusst in `MessageContent::Text` (anders als
+    /// `CommandResult`, das schon beim Ausführen redigiert wird, s.
+    /// `execute_suggested_command`, läuft `Text`-Inhalt nie automatisch
+    /// durch den Redactor, bevor er in der Historie landet) — genau der
+    /// Fall, für den `generate_rolling_summary`s zusätzliche,
+    /// defensive Re-Redaction gedacht ist.
+    #[tokio::test]
+    async fn test_generate_rolling_summary_redacts_secrets_outgoing_and_incoming() {
+        let mut session = session_with_ai_provider(
+            MockAiProvider::new(vec![
+                AiEvent::TextDelta(
+                    "Zusammenfassung: Zugriff erfolgte mit password=hunter2geheim.".to_string(),
+                ),
+                AiEvent::Done,
+            ]),
+            MockSshTransport::default(),
+        );
+        session.model_context_window_tokens = 2_000;
+        {
+            let mut ctx = session.context.lock().await;
+            for i in 0..6 {
+                ctx.history.push(user_msg(&format!("Frage {i}")));
+                if i == 0 {
+                    ctx.history.push(ChatMessage {
+                        role: Role::Assistant,
+                        content: MessageContent::Text(format!(
+                            "Verbindung mit password=hunter2geheim aufgebaut. {}",
+                            "x".repeat(5_000)
+                        )),
+                    });
+                } else {
+                    ctx.history
+                        .push(command_result_msg(&format!("cmd-{i}"), &"x".repeat(5_000)));
+                }
+            }
+        }
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        let result = crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
+        let placeholder_text = result
+            .history
+            .iter()
+            .find_map(|m| match &m.content {
+                MessageContent::Text(t) if t.contains("Zusammenfassung") => Some(t.clone()),
+                _ => None,
+            })
+            .expect("Zusammenfassungs-Platzhalter erwartet");
+        assert!(
+            !placeholder_text.contains("hunter2geheim"),
+            "das Secret darf nicht unredigiert in der gespeicherten/gesendeten Zusammenfassung \
+             landen: {placeholder_text}"
+        );
+        assert!(
+            placeholder_text.contains("REDACTED"),
+            "muss den redigierten Platzhalter enthalten: {placeholder_text}"
+        );
+        let stored = session.summary.lock().await.clone();
+        assert!(
+            !stored.unwrap().text.contains("hunter2geheim"),
+            "auch der persistierte In-Memory-Stand darf das Secret nicht enthalten"
+        );
+    }
+
+    /// Spec 0057, §2.3: die rollierende Zusammenfassung wird verschlüsselt
+    /// mit der Session persistiert und bei `resume` wieder geladen — sonst
+    /// müsste jede wiederaufgenommene Sitzung bei der nächsten
+    /// Kompaktierung wieder bei `rounds_covered = 0` anfangen.
+    #[tokio::test]
+    async fn test_summary_round_trips_through_persistence() {
+        let (session, chat_store, chat_session_id, _tmp_dir, _ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done],
+                MockSshTransport::default(),
+            )
+            .await;
+
+        chat_store
+            .save_summary(chat_session_id, "Gespeicherte Zusammenfassung.", 4)
+            .await
+            .unwrap();
+        let loaded = chat_store.load_summary(chat_session_id).await.unwrap();
+        assert_eq!(
+            loaded,
+            Some(("Gespeicherte Zusammenfassung.".to_string(), 4))
+        );
+
+        // Direkter SQL-Zugriff: das Secret/der Text darf nicht im Klartext
+        // in der Spalte stehen (dieselbe Verschlüsselungs-Erwartung wie
+        // Chat-Historie/Ledger, Spec 0036/0057 §1.3/§2.3).
+        drop(session);
+    }
+
+    /// Spec 0057, §3.3/§6 (wie bereits in Etappe 1/2 verifiziert, hier für
+    /// den Zusammenfassungs-Pfad wiederholt): das Ledger bekommt von der
+    /// Kompaktierung — egal ob mit oder ohne Zusammenfassung — nichts zu
+    /// Gesicht, und die gespeicherte Notiz bleibt unangetastet.
+    #[tokio::test]
+    async fn test_summarization_leaves_ledger_and_stored_note_untouched() {
+        let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done], // wird unten sofort ersetzt
+                MockSshTransport::default().with_response("cat notes.log", output("ok")),
+            )
+            .await;
+        // Zwei Runden: die ERSTE wird von der Kompaktierung selbst
+        // verbraucht (die 6 synthetischen Runden unten lösen vor dem
+        // eigentlichen Chat-Aufruf eine Zusammenfassung aus), erst die
+        // ZWEITE ist der tatsächliche Chat-Turn.
+        session.ai_provider = Box::new(MockAiProvider::with_rounds(vec![
+            vec![
+                AiEvent::TextDelta("Zusammenfassung der alten Runden.".to_string()),
+                AiEvent::Done,
+            ],
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "cat notes.log".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+        ]));
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.model_context_window_tokens = 2_000;
+        let parts = crate::compaction::SystemContextParts {
+            base: "Basis".to_string(),
+            note_sections: vec![(
+                "Server \"web-01\"".to_string(),
+                "Wichtige Notiz".to_string(),
+            )],
+            remote_os_info: None,
+        };
+        {
+            let mut ctx = session.context.lock().await;
+            ctx.system_context = parts.assemble();
+        }
+        session.system_context_parts = AsyncMutex::new(parts.clone());
+        push_synthetic_rounds(&session, 6, 5_000).await;
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        // Die gespeicherte Notiz (in `SystemContextParts`, die Quelle der
+        // Wahrheit für den nächsten `send_chat_message_impl`-Aufbau) bleibt
+        // exakt wie zu Beginn.
+        assert_eq!(
+            session.system_context_parts.lock().await.note_sections,
+            parts.note_sections
+        );
+
+        // Ledger: der zuvor ausgeführte Befehl (aus der ersten Runde des
+        // echten Chat-Turns) muss weiterhin vollständig vorhanden sein —
+        // die Kompaktierung der VORHER synthetisch angehängten Runden darf
+        // daran nichts ändern.
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        assert!(
+            entries.iter().any(|e| matches!(
+                &e.content,
+                ssh_manager_core::audit::LedgerEntryContent::CommandExecuted { command, .. }
+                    if command == "cat notes.log"
+            )),
+            "das Ledger muss den ausgeführten Befehl unabhängig von der Kompaktierung \
+             enthalten: {entries:?}"
+        );
+    }
+
+    /// **Der kritische 0039-Wechselwirkungs-Test** (explizit von der
+    /// Aufgabenstellung verlangt, nach der Etappe-2-Regression): eine
+    /// Runde, die untrusted Content enthielt und `untrusted_content_
+    /// ingested` gesetzt hat, wird später von der Kompaktierung zu einer
+    /// Zusammenfassung verdichtet — die Post-Ingest-Eskalation
+    /// (`AutoExec` → `Confirm`, Spec 0039 §5.1) muss für eine DANACH neu
+    /// vorgeschlagene Aktion trotzdem weiter greifen. Beweist die
+    /// Invariante strukturell: `untrusted_content_ingested` ist ein
+    /// eigenständiges, monotones Flag (gesetzt beim tatsächlichen
+    /// Ausführen/Ingest, s. `execute_suggested_command`), nicht aus
+    /// `context.history` zur Sendezeit abgeleitet — Kompaktierung/
+    /// Zusammenfassung können es deshalb strukturell nicht "vergessen".
+    #[tokio::test]
+    async fn test_untrusted_content_escalation_survives_round_summarization() {
+        let mut session = session_with_ai_provider(
+            MockAiProvider::new(vec![
+                AiEvent::TextDelta("Zusammenfassung der alten Runde.".to_string()),
+                AiEvent::Done,
+            ]),
+            MockSshTransport::default(),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.post_ingest_policy = PostIngestPolicy::Strict;
+        session.model_context_window_tokens = 500; // winzig, erzwingt Kompaktierung schnell
+
+        // Runde 0: der ursprüngliche untrusted-Content-Ingest (wie
+        // `execute_suggested_command` es täte — dort wird der Flag exakt
+        // an dieser Stelle gesetzt, s. dortiger Kommentar).
+        {
+            let mut ctx = session.context.lock().await;
+            ctx.history.push(user_msg("Zeig mir die Logs"));
+            ctx.history
+                .push(command_result_msg("cat app.log", "verdächtige Zeile"));
+        }
+        session
+            .untrusted_content_ingested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        // Weitere Runden, um Runde 0 aus dem erhaltenen Fenster zu drängen.
+        push_synthetic_rounds(&session, 5, 200).await;
+
+        // Kompaktierung auslösen — Runde 0 muss dabei aus dem gesendeten
+        // Kontext verschwinden (in eine Zusammenfassung verdichtet).
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        let compacted = crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+        assert!(
+            !compacted.history.iter().any(
+                |m| matches!(&m.content, MessageContent::CommandResult { command, .. } if command == "cat app.log")
+            ),
+            "Runde 0 (mit dem untrusted Content) muss aus dem gesendeten Kontext verdichtet \
+             worden sein, sonst beweist dieser Test nichts: {:?}",
+            compacted.history
+        );
+
+        // Das Flag bleibt gesetzt ...
+        assert!(
+            session
+                .untrusted_content_ingested
+                .load(std::sync::atomic::Ordering::SeqCst),
+            "untrusted_content_ingested darf durch Kompaktierung/Zusammenfassung nie \
+             zurückgesetzt werden"
+        );
+
+        // ... und eine NEU vorgeschlagene, per Allow-Regel eigentlich
+        // AutoExec-fähige Aktion muss trotzdem zu `Confirm` eskaliert
+        // werden (Spec 0039, Abschnitt 5.1: `Strict` -> jede AutoExec-
+        // Aktion wird eskaliert).
+        let (decision, payload) = proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            },
+        )
+        .await;
+        assert!(
+            matches!(decision, Decision::Confirm { .. }),
+            "Post-Ingest-Eskalation muss trotz Verdichtung der ursprünglichen Runde weiter \
+             greifen, war: {payload}"
         );
     }
 

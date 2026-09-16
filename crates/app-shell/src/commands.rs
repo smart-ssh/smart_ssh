@@ -923,7 +923,7 @@ pub(crate) async fn connect_session(
     // `resume` schlägt dann klar fehl (nichts zum Laden da), eine neue
     // Sitzung verbindet trotzdem, nur ohne Chat-Persistenz (wie beim
     // Fehlerzweig direkt unten).
-    let (initial_history, chat_session_id) = if let Some(existing_id) = resume {
+    let (initial_history, chat_session_id, initial_summary) = if let Some(existing_id) = resume {
         let Some(store) = &state.chat_session_store else {
             transport.disconnect().await.ok();
             return Err(
@@ -949,6 +949,26 @@ pub(crate) async fn connect_session(
             transport.disconnect().await.ok();
             return Err(err.into());
         }
+        // Spec 0057, §2.3: die zuletzt gespeicherte rollierende
+        // Zusammenfassung wieder mitladen, sonst müsste jede
+        // wiederaufgenommene Sitzung bei der ersten Kompaktierung wieder
+        // bei `rounds_covered = 0` anfangen (Spec 0057, §2.1: "nicht jedes
+        // Mal die ganze History von vorne"). Best-effort wie
+        // `load_session`s Geschwister-Aufrufe hier — ein Ladefehler ist
+        // kein harter Fehler wie bei der Historie selbst: ohne Summary
+        // fällt die nächste Kompaktierung einfach auf einen frischen
+        // Zusammenfassungs-Versuch (oder den Etappe-2-Platzhalter) zurück.
+        let initial_summary = match store.load_summary(existing_id).await {
+            Ok(Some((text, rounds_covered))) => Some(crate::compaction::RollingSummary {
+                text,
+                rounds_covered: rounds_covered.max(0) as usize,
+            }),
+            Ok(None) => None,
+            Err(err) => {
+                tracing::warn!(error = %err, "session summary could not be loaded on resume");
+                None
+            }
+        };
         (
             // spec-reviewer-Fund (Review dieses Schritts): HIER bewusst
             // KEINE Rundenkürzung mehr — ein früherer Versuch, hier
@@ -970,16 +990,17 @@ pub(crate) async fn connect_session(
             // ohnehin spätestens vor dem ersten `send()` dieser Sitzung.
             loaded,
             Some(existing_id),
+            initial_summary,
         )
     } else if !should_create_chat_session(is_local, persist_chat_session) {
-        (Vec::new(), None)
+        (Vec::new(), None, None)
     } else {
         match &state.chat_session_store {
             Some(store) => match store
                 .create_session(&server_id, Some(active_config.id.0))
                 .await
             {
-                Ok(id) => (Vec::new(), Some(id)),
+                Ok(id) => (Vec::new(), Some(id), None),
                 Err(err) => {
                     // Spec 0034 führt reine Persistenz ein, kein hartes
                     // Zusatz-Erfordernis fürs Verbinden selbst — ein
@@ -988,10 +1009,10 @@ pub(crate) async fn connect_session(
                     // die Chat-Historie dieser einen Sitzung bleibt dann
                     // unpersistiert.
                     tracing::warn!(error = %err, "chat session creation failed");
-                    (Vec::new(), None)
+                    (Vec::new(), None, None)
                 }
             },
-            None => (Vec::new(), None),
+            None => (Vec::new(), None, None),
         }
     };
 
@@ -1024,6 +1045,7 @@ pub(crate) async fn connect_session(
         ai_model: active_config.model,
         system_context_parts: tokio::sync::Mutex::new(system_context_parts),
         model_context_window_tokens,
+        summary: tokio::sync::Mutex::new(initial_summary),
         sudo_password,
         status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
@@ -3944,6 +3966,7 @@ mod send_chat_message_persistence_tests {
             ai_model: "test-model".to_string(),
             system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
             model_context_window_tokens: usize::MAX / 1_000,
+            summary: AsyncMutex::new(None),
             sudo_password: None,
             status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),

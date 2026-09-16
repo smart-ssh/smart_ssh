@@ -20,9 +20,13 @@ sind mit **(Pro)** markiert.
   eine KI-Anfrage so groß werden lassen, dass sie das Kontextfenster des
   Modells sprengte — der Chat blieb dann ohne Antwort/Fehlermeldung
   hängen. Die App schätzt jetzt vor jeder Anfrage die tatsächliche Größe
-  und kürzt bei Bedarf automatisch (ältere Gesprächsrunden, überlange
-  einzelne Kommando-Ausgaben, zuletzt die Notiz) — die gespeicherte
-  Notiz und der vollständige Sitzungsverlauf bleiben dabei unangetastet.
+  und kürzt bei Bedarf automatisch: ältere Gesprächsrunden werden durch
+  eine von der KI erstellte, laufend aktualisierte Zusammenfassung
+  ersetzt (schlägt dieser Zusammenfassungs-Aufruf fehl, schneidet die App
+  stattdessen wie gehabt ab — der Chat bleibt in jedem Fall funktionsfähig),
+  danach ggf. überlange einzelne Kommando-Ausgaben und zuletzt die Notiz
+  gekürzt — die gespeicherte Notiz und der vollständige Sitzungsverlauf
+  bleiben dabei unangetastet.
 
 ## [0.5.0] — 2026-09-11
 

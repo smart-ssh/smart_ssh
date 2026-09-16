@@ -270,6 +270,65 @@ impl SqliteChatSessionStore {
         Ok(())
     }
 
+    /// Spec 0057, §2.3: speichert die aktuelle rollierende Zusammenfassung
+    /// (`app_shell::compaction::RollingSummary`, hier bewusst nur als
+    /// primitives `(&str, i64)`-Paar entgegengenommen statt des
+    /// app-shell-eigenen Typs — `persistence-sqlite` hängt nicht von
+    /// `app-shell` ab, s. Crate-Grenzen in CLAUDE.md). `text` wird wie
+    /// `content` (Spec 0036) über den mitgegebenen Cipher verschlüsselt;
+    /// `rounds_covered` ist eine reine Buchhaltungszahl (keine
+    /// vertrauliche Nutzdaten), bleibt deshalb als Klartext-`INTEGER`
+    /// stehen. Ein `UPDATE` auf dieselbe `chat_sessions`-Zeile statt einer
+    /// separaten Tabelle — es gibt immer höchstens EINE aktuelle Summary
+    /// pro Sitzung, kein append-only-Bedarf wie beim Ledger (Spec 0057,
+    /// §1).
+    pub async fn save_summary(
+        &self,
+        session_id: Uuid,
+        text: &str,
+        rounds_covered: i64,
+    ) -> Result<(), ChatSessionStoreError> {
+        let blob = self.cipher.encrypt(text)?.to_blob();
+        sqlx::query(
+            "UPDATE chat_sessions SET summary_text = ?, summary_rounds_covered = ? WHERE id = ?",
+        )
+        .bind(blob)
+        .bind(rounds_covered)
+        .bind(session_id.to_string())
+        .execute(&self.pool)
+        .await
+        .map_err(backend_err)?;
+        Ok(())
+    }
+
+    /// Gegenstück zu [`Self::save_summary`] — `Ok(None)`, wenn die Sitzung
+    /// noch nie kompaktiert werden musste (beide Spalten `NULL`, der
+    /// additive Migrations-Default für sowohl neue als auch alte, vor
+    /// Etappe 3 angelegte Zeilen).
+    pub async fn load_summary(
+        &self,
+        session_id: Uuid,
+    ) -> Result<Option<(String, i64)>, ChatSessionStoreError> {
+        let row = sqlx::query(
+            "SELECT summary_text, summary_rounds_covered FROM chat_sessions WHERE id = ?",
+        )
+        .bind(session_id.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(backend_err)?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let blob: Option<Vec<u8>> = row.get("summary_text");
+        let rounds_covered: Option<i64> = row.get("summary_rounds_covered");
+        let (Some(blob), Some(rounds_covered)) = (blob, rounds_covered) else {
+            return Ok(None);
+        };
+        let encrypted = EncryptedContent::from_blob(&blob)?;
+        let text = self.cipher.decrypt(&encrypted)?;
+        Ok(Some((text, rounds_covered)))
+    }
+
     /// Spec 0034, Abschnitt 8: `list_chat_sessions(server_id)`. Neueste
     /// zuerst (Abschnitt 6: "Liste vergangener Sitzungen darunter, neueste
     /// zuerst"), inklusive Nachrichtenanzahl (per Korrelations-Subquery,
