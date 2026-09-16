@@ -966,4 +966,90 @@ mod tests {
             "erwartete einen klaren Cipher-Fehler, kein Panic: {result:?}"
         );
     }
+
+    // --- Spec 0057, §2.3: rollierende Zusammenfassung -----------------------
+
+    /// spec-reviewer-Fund (Review von Spec 0057 Etappe 3): der bisherige
+    /// Round-Trip-Test (`save_summary` gefolgt von `load_summary` über
+    /// DENSELBEN Store) ist gegenüber Verschlüsselung blind — er wäre
+    /// genauso grün, würde `save_summary` den Text im Klartext ablegen.
+    /// Hier wie bei `test_direct_sql_access_to_content_column_never_
+    /// reveals_plaintext` oben: roher SQL-Zugriff auf `summary_text`, am
+    /// `ContentCipher` vorbei.
+    #[tokio::test]
+    async fn test_direct_sql_access_to_summary_text_column_never_reveals_plaintext() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        let secret_summary = "Zusammenfassung: Zugriff mit password=hunter2geheim erfolgt";
+
+        chat_store
+            .save_summary(session_id, secret_summary, 3)
+            .await
+            .unwrap();
+
+        let raw_blob: Vec<u8> = sqlx::query("SELECT summary_text FROM chat_sessions WHERE id = ?")
+            .bind(session_id.to_string())
+            .fetch_one(&profile_store.pool)
+            .await
+            .unwrap()
+            .get("summary_text");
+
+        let raw_as_lossy_string = String::from_utf8_lossy(&raw_blob);
+        assert!(
+            !raw_as_lossy_string.contains("hunter2geheim"),
+            "der rohe BLOB darf den Klartext nicht enthalten: {raw_as_lossy_string}"
+        );
+        assert!(
+            raw_blob.len() > 12,
+            "Blob muss mindestens den 12-Byte-Nonce enthalten"
+        );
+
+        // Die Gegenprobe: über den echten Store (mit dem richtigen
+        // Schlüssel) muss derselbe Klartext wieder herauskommen.
+        let loaded = chat_store.load_summary(session_id).await.unwrap();
+        assert_eq!(loaded, Some((secret_summary.to_string(), 3)));
+    }
+
+    /// Wie [`test_load_session_with_wrong_key_yields_clean_error_not_panic`],
+    /// für `load_summary`.
+    #[tokio::test]
+    async fn test_load_summary_with_wrong_key_yields_clean_error_not_panic() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store
+            .save_summary(session_id, "geheime Zusammenfassung", 2)
+            .await
+            .unwrap();
+
+        let wrong_key_cipher: Arc<dyn ContentCipher> = Arc::new(
+            ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&[99u8; 32]),
+        );
+        let store_with_wrong_key =
+            SqliteChatSessionStore::new(profile_store.pool.clone(), wrong_key_cipher);
+
+        let result = store_with_wrong_key.load_summary(session_id).await;
+
+        assert!(
+            matches!(
+                result,
+                Err(ChatSessionStoreError::Cipher(CipherError::DecryptionFailed))
+            ),
+            "erwartete einen klaren Cipher-Fehler, kein Panic: {result:?}"
+        );
+    }
+
+    /// `load_summary` muss für eine Sitzung ohne je gespeicherte
+    /// Zusammenfassung `Ok(None)` liefern (additive Migration: beide
+    /// Spalten `NULL`), nicht fälschlich einen Fehler.
+    #[tokio::test]
+    async fn test_load_summary_returns_none_when_never_saved() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+
+        let loaded = chat_store.load_summary(session_id).await.unwrap();
+        assert_eq!(loaded, None);
+    }
 }

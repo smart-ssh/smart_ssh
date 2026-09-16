@@ -234,6 +234,19 @@ fn split_into_rounds(history: Vec<ChatMessage>) -> Vec<Vec<ChatMessage>> {
     rounds
 }
 
+/// Anzahl der Runden in `history` (s. [`split_into_rounds`]) — `pub(crate)`
+/// für `commands::connect_session`: eine beim Resume geladene
+/// [`RollingSummary`] trägt ein `rounds_covered`, das theoretisch nicht
+/// mehr zur tatsächlich geladenen Historie passt (spec-reviewer-Fund,
+/// Review dieses Schritts — z. B. wenn frühere MCP-Aktionen bewusst nicht
+/// persistiert wurden, `Spec 0034 §10`, oder ein einzelner `append_
+/// message`-Aufruf best-effort fehlschlug) — der Aufrufer klemmt `rounds_
+/// covered` auf diesen Wert, damit die Kompaktierung nie versucht, mehr
+/// Runden als vorhanden als "bereits abgedeckt" zu behandeln.
+pub(crate) fn round_count(history: &[ChatMessage]) -> usize {
+    split_into_rounds(history.to_vec()).len()
+}
+
 /// Spec 0057, §3.2, Schritt 1: alte Runden werden auf einen einzelnen
 /// Platzhalter-Hinweis gekürzt, die letzten `min_preserved_rounds` bleiben
 /// vollständig erhalten. Reines Abschneiden — noch OHNE Zusammenfassung
@@ -384,6 +397,19 @@ const SUMMARY_INSTRUCTION: &str = "Fasse die vorstehende Konversation bündig un
 /// fortschreitender, nur langsamer Stream nicht vorzeitig abgebrochen
 /// wird.
 const SUMMARY_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// spec-reviewer-Fund (Review dieses Schritts): Obergrenze für eine vom
+/// Provider zurückgelieferte Zusammenfassung — ohne diesen Cap könnte ein
+/// geschwätziges/fehlgeleitetes Modell eine sehr große "Zusammenfassung"
+/// liefern, die über den Reuse-Zweig (`compact_rounds_with_summary`,
+/// `rounds_covered`) danach JEDE weitere Kompaktierung dominiert und
+/// (anders als eine Chat-Runde oder eine Notiz-Sektion) von keinem
+/// späteren Schritt der Leiter mehr verkleinert werden kann. ~2.000
+/// Token bei der ~4-Byte-pro-Token-Heuristik — großzügig für eine "kurz
+/// und faktisch" gehaltene Zusammenfassung (Spec 0057, §2.1), aber
+/// strukturell verhindert es einen dauerhaft übergroßen, "klebrigen"
+/// Zustand.
+const SUMMARY_MAX_BYTES: usize = 8_000;
 
 /// Baut die Platzhalter-Nachricht für eine ERFOLGREICH erzeugte
 /// Zusammenfassung — Gegenstück zu [`round_truncation_placeholder`] (dem
@@ -538,9 +564,20 @@ async fn generate_rolling_summary(
 ) -> Option<String> {
     let mut history = Vec::new();
     if let Some(previous) = previous_summary {
+        // spec-reviewer-Fund (Review dieses Schritts): additiv re-redigiert
+        // wie alles andere Ausgehende — der bisherige Summary-Text war bei
+        // SEINER Erzeugung bereits redigiert, kann aber (a) bei einem
+        // wiederaufgenommenen Resume aus der DB stammen und mit einem
+        // älteren Redactor-Musterstand entstanden sein, oder (b) wie jeder
+        // andere ausgehende Text von der additiven Re-Redaction vor jedem
+        // `send()` profitieren (Spec 0040, Abschnitt 5, dieselbe
+        // Begründung wie bei `reapply_redaction_for_send` selbst).
+        let redacted_previous = session.redactor.redact_text(previous);
         history.push(ChatMessage {
             role: Role::Assistant,
-            content: MessageContent::Text(format!("Bisherige Zusammenfassung:\n{previous}")),
+            content: MessageContent::Text(format!(
+                "Bisherige Zusammenfassung:\n{redacted_previous}"
+            )),
         });
     }
     history.extend(reapply_redaction_for_send(
@@ -599,7 +636,20 @@ async fn generate_rolling_summary(
     // KI-Inhalt behandelt" — durch denselben Redactor wie alles andere.
     let redacted = session.redactor.redact_text(&text);
     let trimmed_is_empty = redacted.trim().is_empty();
-    (!trimmed_is_empty).then_some(redacted)
+    if trimmed_is_empty {
+        return None;
+    }
+    // spec-reviewer-Fund (Review dieses Schritts): ohne Obergrenze könnte
+    // ein geschwätziges/fehlgeleitetes Modell (oder ein Provider, der
+    // Kontext zurückspiegelt) eine sehr große "Zusammenfassung" liefern —
+    // die dann, einmal gespeichert, über den Reuse-Zweig
+    // (`compact_rounds_with_summary`) JEDE weitere Kompaktierung dominiert
+    // und (anders als Rundenkürzung/Notiz-Kürzung) von keinem späteren
+    // Schritt der Leiter mehr verkleinert werden kann — genau die Klasse
+    // von dauerhaft-über-Budget-Hänger, die Etappe 2/3 eigentlich beheben
+    // sollen. Ein harter Byte-Cap hier schließt das strukturell, statt
+    // sich auf ein wohlverhaltendes Modell zu verlassen.
+    Some(truncate_to_char_boundary(&redacted, SUMMARY_MAX_BYTES).to_string())
 }
 
 fn round_truncation_placeholder(cut_rounds: usize) -> ChatMessage {
@@ -1007,9 +1057,14 @@ mod tests {
     // `compact_for_send` selbst braucht seit Etappe 3 eine `&Session`
     // (Zusammenfassungs-KI-Aufruf in Schritt 1) — die zugehörigen Tests
     // leben deshalb in `orchestration::tests`, wo die dafür nötigen
-    // Session-/MockAiProvider-Bausteine bereits existieren
-    // (`test_compact_for_send_is_noop_below_trigger_ratio`/
-    // `test_compact_for_send_triggers_above_trigger_ratio_and_summarizes`).
+    // Session-/MockAiProvider-Bausteine bereits existieren:
+    // `test_compact_for_send_is_noop_below_trigger_ratio` (unterhalb des
+    // Auslösers unverändert) und `test_compact_for_send_triggers_and_
+    // fits_under_budget_with_and_without_summary` (oberhalb des Auslösers,
+    // Budget-Einhaltung sowohl mit als auch ohne erfolgreiche
+    // Zusammenfassung — spec-reviewer-Fund, Review dieses Schritts: der
+    // eigentliche Etappe-2-Test dieser Zusage war beim Verschieben nach
+    // `orchestration::tests` versehentlich nicht wieder angelegt worden).
 
     // --- Schritt 1: letzte N Runden bleiben immer voll erhalten -----------
 

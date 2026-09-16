@@ -8555,6 +8555,77 @@ mod tests {
         );
     }
 
+    /// spec-reviewer-Fund (Review dieses Schritts): der Etappe-2-Test, der
+    /// die eigentliche Zusage der Leiter prüfte — "nach der Kompaktierung
+    /// passt der Request unters Budget" (Spec 0057, §7) — ging beim
+    /// Verschieben nach `orchestration::tests` (Etappe 3, `&Session`-
+    /// Parameter) verloren. Hier für BEIDE Pfade wiederhergestellt: mit
+    /// erfolgreicher Zusammenfassung (Schritt 1 allein reicht) und mit
+    /// fehlgeschlagener Zusammenfassung (Fallback auf den Etappe-2-
+    /// Platzhalter, der ebenfalls unters Budget passen muss — dafür ist
+    /// `determine_round_cut_count` überhaupt konservativ anhand der
+    /// Platzhalter-Größe bemessen, s. ADR 0049 Punkt 3).
+    #[tokio::test]
+    async fn test_compact_for_send_triggers_and_fits_under_budget_with_and_without_summary() {
+        let history = vec![
+            user_msg("Runde 1"),
+            user_msg("Runde 2"),
+            user_msg("Runde 3"),
+            user_msg("Runde 4"),
+            command_result_msg("cat big.log", &"a".repeat(100_000)),
+        ];
+        let budget = (10_000_f64 * 0.75) as usize;
+
+        // Pfad 1: Zusammenfassung gelingt.
+        {
+            let session = session_with_ai_provider(
+                MockAiProvider::new(vec![
+                    AiEvent::TextDelta("Kurze Zusammenfassung.".to_string()),
+                    AiEvent::Done,
+                ]),
+                MockSshTransport::default(),
+            );
+            {
+                let mut ctx = session.context.lock().await;
+                ctx.history = history.clone();
+            }
+            let request_context = session.context.lock().await.clone();
+            let parts = session.system_context_parts.lock().await.clone();
+            let result =
+                crate::compaction::compact_for_send(&session, request_context, &parts, 10_000)
+                    .await;
+            let estimated = crate::compaction::estimate_request_tokens(&result);
+            assert!(
+                estimated <= budget,
+                "mit erfolgreicher Zusammenfassung muss der Request unters Budget passen \
+                 (geschätzt {estimated}, Budget {budget})"
+            );
+        }
+
+        // Pfad 2: Zusammenfassung schlägt fehl -> Fallback.
+        {
+            let session = session_with_ai_provider(
+                MockAiProvider::new(vec![AiEvent::Error(AiError::RateLimited)]),
+                MockSshTransport::default(),
+            );
+            {
+                let mut ctx = session.context.lock().await;
+                ctx.history = history.clone();
+            }
+            let request_context = session.context.lock().await.clone();
+            let parts = session.system_context_parts.lock().await.clone();
+            let result =
+                crate::compaction::compact_for_send(&session, request_context, &parts, 10_000)
+                    .await;
+            let estimated = crate::compaction::estimate_request_tokens(&result);
+            assert!(
+                estimated <= budget,
+                "auch der Fallback-Platzhalter (ohne Zusammenfassung) muss unters Budget \
+                 passen (geschätzt {estimated}, Budget {budget})"
+            );
+        }
+    }
+
     /// Spec 0057, §2.1: greift Schritt 1 der Kürzungs-Leiter, wird beim
     /// ERSTEN Mal eine echte Zusammenfassung erzeugt (kein bisheriger
     /// Stand vorhanden, der wiederverwendet werden könnte) — der
@@ -8795,6 +8866,101 @@ mod tests {
         assert!(session.summary.lock().await.is_none());
     }
 
+    /// spec-reviewer-Fund (Review dieses Schritts, Testabdeckungs-Lücke):
+    /// ein Provider-Stream, der ohne `AiEvent::Done`/`AiEvent::Error`
+    /// einfach endet (z. B. eine abgebrochene Verbindung mitten im
+    /// Streaming), muss GENAUSO wie ein expliziter Fehler behandelt
+    /// werden — nicht stillschweigend als Erfolg mit dem bis dahin
+    /// akkumulierten Text.
+    #[tokio::test]
+    async fn test_compact_for_send_falls_back_when_stream_ends_without_done_or_error() {
+        let mut session = session_with_ai_provider(
+            // Kein `AiEvent::Done` am Ende — der Stream versiegt einfach.
+            MockAiProvider::new(vec![AiEvent::TextDelta(
+                "Unvollständige Antwort".to_string(),
+            )]),
+            MockSshTransport::default(),
+        );
+        session.model_context_window_tokens = 2_000;
+        push_synthetic_rounds(&session, 6, 5_000).await;
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        let result = crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
+        assert!(
+            result
+                .history
+                .iter()
+                .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("ältere Konversation gekürzt"))),
+            "ein Stream-Ende ohne Done/Error muss wie ein Fehlschlag behandelt werden, nicht \
+             als Erfolg mit unvollständigem Text: {:?}",
+            result.history
+        );
+        assert!(session.summary.lock().await.is_none());
+    }
+
+    /// Ein `AiProvider`, dessen Stream nie ein Item liefert (simuliert
+    /// einen Provider, der mitten im Aufruf hängen bleibt, ohne je einen
+    /// Fehler zu melden) — für den Zeitrahmen-Test unten.
+    struct NeverRespondingProvider;
+    impl AiProvider for NeverRespondingProvider {
+        fn send(
+            &self,
+            _context: SessionContext,
+        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+            Box::pin(futures::stream::pending())
+        }
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts, Testabdeckungs-Lücke):
+    /// beweist, dass [`crate::compaction::SUMMARY_CALL_TIMEOUT`] (Spec
+    /// 0057 §2.1: "nicht ungeschützt") tatsächlich feuert, statt sich nur
+    /// auf den Kommentar zu verlassen — ein Provider, dessen Stream
+    /// NIEMALS ein Item liefert (auch keinen Fehler), darf die
+    /// Kompaktierung nicht unbegrenzt blockieren.
+    #[tokio::test(start_paused = true)]
+    async fn test_compact_for_send_falls_back_when_summary_call_never_responds() {
+        let mut session =
+            session_with_ai_provider(NeverRespondingProvider, MockSshTransport::default());
+        session.model_context_window_tokens = 2_000;
+        push_synthetic_rounds(&session, 6, 5_000).await;
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        let compaction = crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        );
+        tokio::pin!(compaction);
+
+        // Unter `start_paused = true` gäbe es ohne aktives Vorspulen
+        // nichts, wogegen der Timeout liefe — `tokio::time::advance`
+        // (dasselbe Muster wie bei `PENDING_ACTION_CONFIRM_TIMEOUT`-Tests)
+        // schiebt die virtuelle Uhr über `SUMMARY_CALL_TIMEOUT` hinaus.
+        let advancer = tokio::time::advance(std::time::Duration::from_secs(121));
+        let (result, ()) = tokio::join!(&mut compaction, advancer);
+
+        assert!(
+            result
+                .history
+                .iter()
+                .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("ältere Konversation gekürzt"))),
+            "ein niemals antwortender Provider muss nach dem Zeitrahmen auf den Fallback \
+             zurückfallen, nicht unbegrenzt blockieren: {:?}",
+            result.history
+        );
+        assert!(session.summary.lock().await.is_none());
+    }
+
     /// spec-reviewer-Pflicht (CLAUDE.md, Redaction-berührende Änderungen) +
     /// Aufgabenstellung: ein Fake-Secret darf weder im AUSGEHENDEN
     /// Summary-Aufruf noch in der ZURÜCKKOMMENDEN (und gespeicherten)
@@ -8807,13 +8973,21 @@ mod tests {
     /// defensive Re-Redaction gedacht ist.
     #[tokio::test]
     async fn test_generate_rolling_summary_redacts_secrets_outgoing_and_incoming() {
+        let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
         let mut session = session_with_ai_provider(
-            MockAiProvider::new(vec![
-                AiEvent::TextDelta(
-                    "Zusammenfassung: Zugriff erfolgte mit password=hunter2geheim.".to_string(),
+            MockAiProvider {
+                rounds: StdMutex::new(
+                    vec![vec![
+                        AiEvent::TextDelta(
+                            "Zusammenfassung: Zugriff erfolgte mit password=hunter2geheim."
+                                .to_string(),
+                        ),
+                        AiEvent::Done,
+                    ]]
+                    .into(),
                 ),
-                AiEvent::Done,
-            ]),
+                received_contexts: received_contexts.clone(),
+            },
             MockSshTransport::default(),
         );
         session.model_context_window_tokens = 2_000;
@@ -8868,6 +9042,100 @@ mod tests {
             !stored.unwrap().text.contains("hunter2geheim"),
             "auch der persistierte In-Memory-Stand darf das Secret nicht enthalten"
         );
+
+        // spec-reviewer-Fund (Review dieses Schritts): der bisherige Test
+        // prüfte nur die eingehende Richtung (die zurückkommende
+        // Zusammenfassung) — hier zusätzlich die AUSGEHENDE Richtung: der
+        // Zusammenfassungs-Aufruf selbst faltet Runde 0 (mit dem Secret in
+        // `MessageContent::Text`, das NIE automatisch beim Ablegen
+        // redigiert wird, anders als `CommandResult`) — die tatsächlich an
+        // den Provider gesendete Anfrage darf das Secret ebenfalls nicht
+        // unredigiert enthalten (`reapply_redaction_for_send` in
+        // `generate_rolling_summary`).
+        let sent = received_contexts
+            .lock()
+            .unwrap()
+            .first()
+            .expect("der Zusammenfassungs-Aufruf muss stattgefunden haben")
+            .clone();
+        let sent_texts: Vec<String> = sent
+            .history
+            .iter()
+            .filter_map(|m| match &m.content {
+                MessageContent::Text(t) => Some(t.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !sent_texts.iter().any(|t| t.contains("hunter2geheim")),
+            "das Secret darf auch im AUSGEHENDEN Zusammenfassungs-Aufruf nicht unredigiert \
+             auftauchen: {sent_texts:?}"
+        );
+        assert!(
+            sent_texts.iter().any(|t| t.contains("REDACTED")),
+            "die ausgehende Fassung muss den redigierten Platzhalter enthalten: {sent_texts:?}"
+        );
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): eine bereits
+    /// gespeicherte (z. B. aus der DB nach `resume` geladene) Zusammen-
+    /// fassung, die einen unredigierten Secret-artigen String trägt (etwa
+    /// weil sie mit einem älteren Redactor-Musterstand erzeugt wurde),
+    /// darf beim FALTEN in einen neuen Zusammenfassungs-Aufruf nicht
+    /// unverändert (unredigiert) an den Provider gehen — dieselbe
+    /// additive Re-Redaction wie für jeden anderen ausgehenden Inhalt.
+    #[tokio::test]
+    async fn test_generate_rolling_summary_reredacts_a_stale_previous_summary() {
+        let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
+        let mut session = session_with_ai_provider(
+            MockAiProvider {
+                rounds: StdMutex::new(
+                    vec![vec![
+                        AiEvent::TextDelta("Neue Zusammenfassung.".to_string()),
+                        AiEvent::Done,
+                    ]]
+                    .into(),
+                ),
+                received_contexts: received_contexts.clone(),
+            },
+            MockSshTransport::default(),
+        );
+        session.model_context_window_tokens = 2_000;
+        *session.summary.lock().await = Some(crate::compaction::RollingSummary {
+            text: "Alte Zusammenfassung mit password=altesecretgeheim.".to_string(),
+            rounds_covered: 1,
+        });
+        push_synthetic_rounds(&session, 6, 5_000).await;
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        let _ = crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
+        let sent = received_contexts
+            .lock()
+            .unwrap()
+            .first()
+            .expect("der Zusammenfassungs-Aufruf muss stattgefunden haben")
+            .clone();
+        let sent_texts: Vec<String> = sent
+            .history
+            .iter()
+            .filter_map(|m| match &m.content {
+                MessageContent::Text(t) => Some(t.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !sent_texts.iter().any(|t| t.contains("altesecretgeheim")),
+            "eine bereits gespeicherte Zusammenfassung muss beim erneuten Falten re-redigiert \
+             werden: {sent_texts:?}"
+        );
     }
 
     /// Spec 0057, §2.3: die rollierende Zusammenfassung wird verschlüsselt
@@ -8876,27 +9144,45 @@ mod tests {
     /// Kompaktierung wieder bei `rounds_covered = 0` anfangen.
     #[tokio::test]
     async fn test_summary_round_trips_through_persistence() {
-        let (session, chat_store, chat_session_id, _tmp_dir, _ledger_store) =
+        // spec-reviewer-Fund (Review dieses Schritts): ein reiner
+        // `save_summary`/`load_summary`-Aufrufpaar über denselben Store
+        // prüft nur die Store-API selbst (jetzt eigenständig und
+        // verschlüsselungs-scharf abgedeckt in
+        // `persistence_sqlite::chat_session_store::tests::
+        // test_direct_sql_access_to_summary_text_column_never_reveals_
+        // plaintext`) — hier stattdessen der tatsächliche END-ZU-ENDE-Pfad:
+        // ein echter `compact_for_send`-Lauf erzeugt über
+        // `persist_rolling_summary` einen DB-Eintrag, den `load_summary`
+        // danach unabhängig wiederfindet.
+        let (mut session, chat_store, chat_session_id, _tmp_dir, _ledger_store) =
             session_with_real_chat_and_ledger_persistence(
-                vec![AiEvent::Done],
+                vec![
+                    AiEvent::TextDelta("Persistierte Zusammenfassung.".to_string()),
+                    AiEvent::Done,
+                ],
                 MockSshTransport::default(),
             )
             .await;
+        session.model_context_window_tokens = 2_000;
+        push_synthetic_rounds(&session, 6, 5_000).await;
 
-        chat_store
-            .save_summary(chat_session_id, "Gespeicherte Zusammenfassung.", 4)
-            .await
-            .unwrap();
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
         let loaded = chat_store.load_summary(chat_session_id).await.unwrap();
         assert_eq!(
             loaded,
-            Some(("Gespeicherte Zusammenfassung.".to_string(), 4))
+            Some(("Persistierte Zusammenfassung.".to_string(), 3)),
+            "die von `compact_for_send` erzeugte Zusammenfassung muss über den echten \
+             `persist_rolling_summary`-Pfad in der DB gelandet sein"
         );
-
-        // Direkter SQL-Zugriff: das Secret/der Text darf nicht im Klartext
-        // in der Spalte stehen (dieselbe Verschlüsselungs-Erwartung wie
-        // Chat-Historie/Ledger, Spec 0036/0057 §1.3/§2.3).
-        drop(session);
     }
 
     /// Spec 0057, §3.3/§6 (wie bereits in Etappe 1/2 verifiziert, hier für
@@ -8977,6 +9263,28 @@ mod tests {
             )),
             "das Ledger muss den ausgeführten Befehl unabhängig von der Kompaktierung \
              enthalten: {entries:?}"
+        );
+
+        // spec-reviewer-Fund (Review dieses Schritts): `MockAiProvider`
+        // liefert bei einer erschöpften Runden-Queue still `[AiEvent::
+        // Done]` zurück (bequemer Test-Default) — ohne diese Assertion
+        // könnte ein Bug, der die Kompaktierung/Zusammenfassung komplett
+        // überspringt, unbemerkt bleiben: die ERSTE konfigurierte Runde
+        // (die eigentlich für den Zusammenfassungs-Aufruf gedacht ist)
+        // würde dann einfach direkt als Kommando-Vorschlag durchgehen, und
+        // der Test bliebe trotzdem grün. Diese Assertion beweist
+        // unabhängig davon, dass tatsächlich eine Zusammenfassung erzeugt
+        // wurde.
+        assert_eq!(
+            session
+                .summary
+                .lock()
+                .await
+                .as_ref()
+                .map(|s| s.text.as_str()),
+            Some("Zusammenfassung der alten Runden."),
+            "die Kompaktierung muss tatsächlich eine Zusammenfassung erzeugt haben, nicht nur \
+             zufällig dieselbe Ledger-/Notiz-Aussage über einen anderen Pfad erfüllt haben"
         );
     }
 

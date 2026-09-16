@@ -961,7 +961,16 @@ pub(crate) async fn connect_session(
         let initial_summary = match store.load_summary(existing_id).await {
             Ok(Some((text, rounds_covered))) => Some(crate::compaction::RollingSummary {
                 text,
-                rounds_covered: rounds_covered.max(0) as usize,
+                // spec-reviewer-Fund (Review dieses Schritts): auf die
+                // tatsächlich geladene Rundenzahl geklemmt — ohne das
+                // könnte eine gespeicherte `rounds_covered`, die (etwa
+                // durch nicht persistierte MCP-Aktionen, Spec 0034 §10,
+                // oder einen best-effort fehlgeschlagenen `append_message`)
+                // nicht mehr zur tatsächlich geladenen Historie passt, mehr
+                // Runden als "bereits abgedeckt" behandeln, als überhaupt
+                // vorhanden sind.
+                rounds_covered: (rounds_covered.max(0) as usize)
+                    .min(crate::compaction::round_count(&loaded)),
             }),
             Ok(None) => None,
             Err(err) => {

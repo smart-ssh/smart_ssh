@@ -154,6 +154,97 @@ absichtlich aus dem Kontext heraus zusammengefasst, und eine danach neu
 vorgeschlagene, an sich `AutoExec`-fähige Aktion muss trotzdem zu
 `Confirm` eskalieren.
 
+### 9. Nacharbeiten aus dem `spec-reviewer`-Review dieses Schritts
+
+Der pflichtgemäße `spec-reviewer`-Durchlauf (CLAUDE.md, "Verbindlicher
+Review-Workflow", ERHÖHT) fand keinen Sicherheits-Bruch der harten
+Invarianten (Filter-Engine, Fencing, Credentials, `untrusted_content_
+ingested`), aber mehrere Vollständigkeits-/Genauigkeits-/Testqualitäts-
+Lücken. Behoben, in separatem Commit:
+
+- **Fehlender Budget-Test.** Beim Verschieben der `compact_for_send`-Tests
+  von `compaction::tests` nach `orchestration::tests` (Etappe 3 macht die
+  Funktion `async`, braucht eine `&Session`) ging der eigentliche
+  Etappe-2-Test verloren, der die Kernzusage der Leiter prüfte: "nach der
+  Kompaktierung passt der Request unters Budget" (Spec 0057 §7). Wieder
+  angelegt, jetzt für BEIDE Pfade (mit und ohne erfolgreiche
+  Zusammenfassung).
+- **Persistenz-Test prüfte nicht, was er behauptete.** Ein Kommentar
+  sprach von "direktem SQL-Zugriff", der tatsächliche Test rief aber nur
+  `save_summary`/`load_summary` über denselben Store auf — gegenüber
+  fehlender Verschlüsselung blind. Ergänzt: ein echter Direkt-SQL-Test
+  (`test_direct_sql_access_to_summary_text_column_never_reveals_plaintext`,
+  analog zum bestehenden Muster für `chat_messages.content`) sowie ein
+  Falscher-Schlüssel-Test, beide in `persistence-sqlite`. Der App-Shell-
+  Test wurde zu einem echten End-zu-Ende-Beweis (`compact_for_send` →
+  `persist_rolling_summary` → `load_summary`) umgebaut.
+- **Obergrenze für die zurückgelieferte Zusammenfassung** (`SUMMARY_MAX_
+  BYTES = 8_000`): ohne Cap könnte eine geschwätzige/fehlgeleitete
+  Provider-Antwort über den Reuse-Zweig (`rounds_covered`) dauerhaft
+  "klebrig" werden — größer als jede spätere Kompaktierung noch verkleinern
+  könnte, genau die Klasse von Dauerhänger, die diese Etappe eigentlich
+  beheben soll.
+- **Additive Re-Redaction auch für den BISHERIGEN Summary-Text**, nicht
+  nur für die neu gefalteten Runden — ein aus der DB geladener alter
+  Summary-Text (ggf. mit einem älteren Redactor-Musterstand entstanden)
+  lief bisher ungeprüft in den nächsten Zusammenfassungs-Aufruf.
+- **`rounds_covered` beim Resume auf die tatsächlich geladene Rundenzahl
+  geklemmt** (`compaction::round_count`) — ohne das hätte eine durch
+  nicht-persistierte MCP-Aktionen (Spec 0034 §10) oder einen best-effort
+  fehlgeschlagenen `append_message`-Aufruf inkonsistent gewordene
+  Abdeckungszahl mehr Runden als "bereits abgedeckt" behandeln können, als
+  überhaupt geladen wurden.
+- **Zwei Testqualitäts-Lücken geschlossen**: der Redaction-Test prüfte
+  bisher nur die eingehende Richtung (die zurückkommende Zusammenfassung)
+  trotz seines Namens — um die ausgehende Richtung (der tatsächlich an
+  den Provider gesendete, gefaltete Aufruf) ergänzt, plus ein eigener Test
+  für die Re-Redaction des bisherigen Summary-Texts. Der Ledger-/Notiz-
+  Test verließ sich stillschweigend auf `MockAiProvider`s bequemen "leere
+  Queue → `[Done]`"-Fallback, wodurch ein Bug, der die Kompaktierung
+  komplett überspringt, unbemerkt geblieben wäre — eine zusätzliche
+  Assertion beweist jetzt unabhängig, dass tatsächlich eine
+  Zusammenfassung erzeugt wurde.
+- **Zwei fehlende, spec-kritische Testfälle ergänzt**: ein Provider-Stream,
+  der ohne `Done`/`Error` einfach endet (muss wie ein Fehlschlag
+  behandelt werden), und ein Provider, dessen Stream nie antwortet (muss
+  nach `SUMMARY_CALL_TIMEOUT` zuverlässig auf den Fallback zurückfallen —
+  mit `#[tokio::test(start_paused = true)]`/`tokio::time::advance`
+  bewiesen, nicht nur behauptet).
+
+Bewusst NICHT behoben, dem Nutzer explizit gemeldet:
+
+- **MCP-Inhalt wird über die Summary doch persistiert.**
+  `push_history_scoped`s `persist: false` schließt MCP-verursachte
+  Einträge bewusst aus der persistierten, wiederaufnehmbaren Chat-Historie
+  aus (Spec 0034 §10/Spec 0040 §4). `compact_rounds_with_summary` faltet
+  aber `session.context.history` — das auch MCP-Einträge enthält, da jenes
+  Flag nur die DB-Persistenz von `chat_messages` betrifft, nicht den
+  In-Memory-Kontext — in eine Zusammenfassung, die anschließend
+  verschlüsselt persistiert UND beim Resume wieder geladen wird. Verdichteter
+  MCP-Inhalt landet damit doch in der persistierten Sitzung, nur in
+  zusammengefasster statt roher Form. Ob das die Zusage aus Spec 0034 §10
+  tatsächlich verletzt (die sich explizit auf "Historie" bezieht, nicht
+  zwangsläufig auf jede abgeleitete Repräsentation), ist eine
+  Produktentscheidung, die Stefan treffen muss, keine rein technische —
+  nicht in dieser Review-Fix-Runde vorweggenommen.
+- **Bis zu ~20 Minuten unsichtbarer Stillstand im Extremfall.**
+  `compact_for_send` läuft in jeder automatischen Folgerunde
+  (`MAX_AUTO_FOLLOWUP_ROUNDS = 10`); ein durchgehend hängender/
+  rate-limitierter Provider könnte theoretisch bis zu zehn `SUMMARY_
+  CALL_TIMEOUT`-Zyklen (120s) ohne jedes Frontend-Event durchlaufen, bevor
+  die Sitzung wieder reagiert — kein Hang (die Sitzung kommt zuverlässig
+  wieder zurück), aber eine lange UI-Stille, die dem Geist von Spec 0057
+  §2.2 nahekommt. Eine saubere Lösung bräuchte ein neues Chat-Event
+  ("Kontext wird zusammengefasst…") — größerer Umfang als ein reiner
+  Review-Fix, für eine spätere Iteration vorgemerkt statt hier
+  hineingezogen.
+- **Seltene, nebenläufige Kompaktierung** (zwei gleichzeitige `send()`-
+  Aufrufe derselben Sitzung, z. B. Tab + MCP, könnten beide eine
+  Zusammenfassung erzeugen und sich gegenseitig überschreiben) — Folge ist
+  ausschließlich verschwendete Kosten/ein Abdeckungs-Rückschritt, kein
+  Datenverlust/keine Sicherheitslücke; als akzeptierter Kompromiss
+  belassen.
+
 ## Konsequenzen
 
 - Genau ein zusätzlicher KI-Aufruf pro Kompaktierungslauf (nur wenn
