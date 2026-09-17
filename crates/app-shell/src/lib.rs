@@ -63,7 +63,10 @@ use crate::state::AppState;
 /// überbrückt den einen async `SqliteProfileStore::connect`-Aufruf beim
 /// Start; danach läuft alles über Tauris eigene, bereits laufende
 /// Async-Runtime (jedes `#[tauri::command]` ist selbst `async fn`).
-fn build_app_state(wiring: &Wiring) -> AppState {
+fn build_app_state(
+    wiring: &Wiring,
+    log_guard: tracing_appender::non_blocking::WorkerGuard,
+) -> (AppState, tracing_appender::non_blocking::WorkerGuard) {
     let db_path = default_db_path();
     tracing::info!(data_path = %db_path.display(), "connecting to SQLite database");
     // Spec 0059, Fälle 1/2/4 (Release-Gate A): vorher ein `.expect(...)` —
@@ -79,8 +82,18 @@ fn build_app_state(wiring: &Wiring) -> AppState {
         Ok(store) => store,
         Err(err) => {
             let kind = err.classify();
-            let text = crate::startup_error_messages::db_connect_failure_text(&kind, &db_path);
+            let log_dir = crate::logging::default_log_dir();
+            let text =
+                crate::startup_error_messages::db_connect_failure_text(&kind, &db_path, &log_dir);
             tracing::error!(error = %err, ?kind, "fatal: SQLite database connect/migrate failed");
+            // spec-reviewer-Fund: `std::process::exit` in `show_fatal_error_
+            // and_exit` führt keine Destruktoren aus — ohne dieses explizite
+            // `drop` würde der `WorkerGuard` (der den nicht-blockierenden
+            // Log-Writer beim Drop synchron flusht, s. `logging::init_
+            // logging`-Doc-Kommentar) nie laufen, und ausgerechnet die
+            // `tracing::error!`-Zeile zum fatalen Fehler könnte im Puffer
+            // verloren gehen.
+            drop(log_guard);
             crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
         }
     };
@@ -141,10 +154,7 @@ fn build_app_state(wiring: &Wiring) -> AppState {
                 // Teil-0-Plans dieses Schritts): kein Abbruch, App startet
                 // unverändert degradiert weiter — s. `startup_dialog::
                 // show_warning`-Doc-Kommentar.
-                if matches!(
-                    err,
-                    ssh_manager_core::crypto::CipherError::KeyStoreAccessFailed(_)
-                ) {
+                if crate::startup_error_messages::should_warn_about_keychain(&err) {
                     let text = crate::startup_error_messages::keychain_unavailable_text(
                         std::env::consts::OS,
                     );
@@ -173,12 +183,15 @@ fn build_app_state(wiring: &Wiring) -> AppState {
         Err(err) => {
             let text = crate::startup_error_messages::host_key_store_failure_text(&host_key_path);
             tracing::error!(error = %err, "fatal: host-key store failed to load");
+            // s. Kommentar bei der DB-Verbindung oben — dieselbe explizite
+            // Log-Flush-Notwendigkeit vor `process::exit`.
+            drop(log_guard);
             crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
         }
     };
     tracing::info!("host-key store loaded");
 
-    AppState {
+    let app_state = AppState {
         sessions: SessionManager::new(),
         profile_store: Arc::new(profile_store),
         credential_store: Arc::new(credential_store),
@@ -196,7 +209,8 @@ fn build_app_state(wiring: &Wiring) -> AppState {
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         mcp: crate::state::McpState::default(),
-    }
+    };
+    (app_state, log_guard)
 }
 
 /// Startet die App mit der übergebenen [`Wiring`]/[`tauri::Context`].
@@ -270,7 +284,14 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // `get_app_info` braucht sie als `State<Edition>`, `Wiring` selbst
     // wird nirgends als Tauri-`State` verwaltet.
     let edition = wiring.edition;
-    let app_state = build_app_state(&wiring);
+    // spec-reviewer-Fund (Spec 0059): `_log_guard` wird hier zur
+    // Weiterreichung an `build_app_state` per Wert übergeben (das
+    // ansonsten fatale `.expect()`-freie Verhalten dort kann den Guard bei
+    // einem der drei fatalen Fehlerfälle explizit droppen, um den
+    // Log-Writer VOR `std::process::exit` blockierend zu flushen — s.
+    // Kommentare in `build_app_state`) und danach für die restliche
+    // App-Laufzeit zurückgegeben.
+    let (app_state, _log_guard) = build_app_state(&wiring, _log_guard);
     let plugins = wiring.plugins;
 
     let builder = tauri::Builder::default();

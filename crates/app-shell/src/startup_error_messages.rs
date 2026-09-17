@@ -22,11 +22,36 @@ pub struct DialogText {
 
 const CANNOT_START_TITLE: &str = "Smart SSH kann nicht starten";
 
+/// spec-reviewer-Fund: ein Datenpfad enthält den Nutzer-Account-Namen (aus
+/// `BaseDirs`), der theoretisch Steuerzeichen enthalten könnte — ohne diese
+/// Bereinigung könnte ein `\n`/`\r` darin den Dialogtext optisch fortsetzen.
+/// Ersetzt Steuerzeichen durch ein sichtbares `?`-Platzhalterzeichen statt
+/// den Pfad stillschweigend zu kürzen (der volle Pfad bleibt für die
+/// Fehlerdiagnose wichtig).
+fn sanitize_path_for_display(path: &Path) -> String {
+    path.display()
+        .to_string()
+        .chars()
+        .map(|c| if c.is_control() { '?' } else { c })
+        .collect()
+}
+
 /// Spec 0059, Fälle 1/2/4 — baut den Dialogtext aus einer bereits
 /// klassifizierten [`ConnectFailureKind`] (s. `PersistenceError::classify`)
 /// und dem Datenpfad, den `SqliteProfileStore::connect` versucht hat zu
-/// öffnen.
-pub fn db_connect_failure_text(kind: &ConnectFailureKind, db_path: &Path) -> DialogText {
+/// öffnen. `log_dir`: spec-reviewer-Fund — der `Other`-Auffangfall (unten)
+/// beschreibt eine Diagnose, die er nicht wirklich hat (er deckt auch
+/// SQLITE_BUSY/gesperrte Datei, eine künftige fehlerhafte Migration, etc.
+/// ab, nicht nur echte Korruption); der Logpfad gibt dem Nutzer/Support
+/// wenigstens einen Weg zur echten Fehlerursache, ohne im Dialogtext selbst
+/// zu spekulieren.
+pub fn db_connect_failure_text(
+    kind: &ConnectFailureKind,
+    db_path: &Path,
+    log_dir: &Path,
+) -> DialogText {
+    let db_path = sanitize_path_for_display(db_path);
+    let log_dir = sanitize_path_for_display(log_dir);
     let message = match kind {
         // Spec 0059, Fall 1 (DB-Downgrade): Versionsnummern wörtlich wie
         // in der Aufgabenstellung gefordert ("angelegt mit X, dieses
@@ -39,30 +64,33 @@ pub fn db_connect_failure_text(kind: &ConnectFailureKind, db_path: &Path) -> Dia
              (Datenbank-Version {applied_version}, dieses Programm kennt Versionen bis \
              {max_known_version}).\n\n\
              Bitte installiere die neueste Version von Smart SSH.\n\n\
-             Datenpfad: {}",
-            db_path.display()
+             Datenpfad: {db_path}"
         ),
         // Spec 0059, Fall 4 (Datenverzeichnis nicht schreibbar).
         ConnectFailureKind::PermissionDenied => format!(
             "Das Datenverzeichnis von Smart SSH ist nicht beschreibbar oder lesbar \
              (Zugriff verweigert).\n\n\
              Bitte die Zugriffsrechte für dieses Verzeichnis prüfen.\n\n\
-             Datenpfad: {}",
-            db_path.display()
+             Datenpfad: {db_path}"
         ),
         // Spec 0059, Fall 2 (DB korrupt/nicht lesbar) — zugleich der
         // generische Auffangfall für jeden anderen, nicht eigens benannten
         // Verbindungs-/Migrationsfehler (s. `ConnectFailureKind::Other`-
-        // Doc-Kommentar in `persistence-sqlite`): "Datenbank beschädigt"
-        // ist die sichere, für einen Nutzer verständliche Beschreibung für
-        // "beim Öffnen/Migrieren ist etwas Unerwartetes schiefgegangen".
+        // Doc-Kommentar in `persistence-sqlite`). spec-reviewer-Fund:
+        // bewusst zurückhaltender formuliert ("konnte nicht geöffnet
+        // werden — möglicherweise beschädigt oder von einem anderen
+        // Programm gesperrt") statt pauschal "beschädigt" zu behaupten,
+        // plus Verweis auf die Logdatei statt einer pauschalen
+        // Backup-Empfehlung als erstem Schritt.
         ConnectFailureKind::Other => format!(
-            "Die Datenbank von Smart SSH ist beschädigt oder nicht lesbar und konnte nicht \
-             geöffnet werden.\n\n\
-             Nächster Schritt: ein vorhandenes Backup der Datenbank einspielen oder den \
-             Smart-SSH-Support kontaktieren.\n\n\
-             Datenpfad: {}",
-            db_path.display()
+            "Die Datenbank von Smart SSH konnte nicht geöffnet werden — möglicherweise \
+             beschädigt, oder von einem anderen laufenden Programm (z. B. einer zweiten \
+             Instanz von Smart SSH) gesperrt.\n\n\
+             Nächster Schritt: prüfe, ob eine andere Instanz von Smart SSH läuft und \
+             beende sie; Details zur genauen Ursache stehen im Log unter {log_dir}. \
+             Hilft das nicht weiter, kann ein vorhandenes Backup der Datenbank eingespielt \
+             oder der Smart-SSH-Support kontaktiert werden.\n\n\
+             Datenpfad: {db_path}"
         ),
     };
     DialogText {
@@ -80,6 +108,7 @@ pub fn db_connect_failure_text(kind: &ConnectFailureKind, db_path: &Path) -> Dia
 /// bekannten, dokumentierten Panics direkt neben den vier behobenen
 /// Fällen.
 pub fn host_key_store_failure_text(path: &Path) -> DialogText {
+    let path = sanitize_path_for_display(path);
     DialogText {
         title: CANNOT_START_TITLE.to_string(),
         message: format!(
@@ -87,11 +116,27 @@ pub fn host_key_store_failure_text(path: &Path) -> DialogText {
              beschädigt oder Zugriffsproblem).\n\n\
              Bitte die Zugriffsrechte für dieses Verzeichnis prüfen. Ist die Datei \
              beschädigt, kann sie gelöscht werden — bereits bekannte Server-Fingerabdrücke \
-             müssen dann beim nächsten Verbindungsaufbau erneut bestätigt werden.\n\n\
-             Datenpfad: {}",
-            path.display()
+             müssen dann beim nächsten Verbindungsaufbau erneut bestätigt werden. \
+             Achtung: eine erneute Erstbestätigung bietet KEINEN Schutz vor einem seither \
+             untergeschobenen Server — prüfe unbekannte Fingerabdrücke nach dem Löschen \
+             gegen eine vertrauenswürdige Quelle (z. B. beim Serverbetreiber nachfragen), \
+             statt sie blind zu bestätigen.\n\n\
+             Datenpfad: {path}"
         ),
     }
+}
+
+/// spec-reviewer-Fund: die Entscheidung "welcher `CipherError` löst die
+/// sichtbare Fall-3-Warnung aus" stand bisher nur als `matches!(...)` direkt
+/// in `crate::run` — ohne echte Keychain/DB ist dieser Aufrufort selbst
+/// nicht unit-testbar. Als eigene, reine Funktion hier lässt sich die
+/// Abgrenzung (nur `KeyStoreAccessFailed`, NICHT `InvalidKey` — s. Spec
+/// 0059, Fall 3 vs. Spec 0040 Abschnitt 7) unabhängig davon festnageln.
+pub fn should_warn_about_keychain(err: &ssh_manager_core::crypto::CipherError) -> bool {
+    matches!(
+        err,
+        ssh_manager_core::crypto::CipherError::KeyStoreAccessFailed(_)
+    )
 }
 
 /// Spec 0059, Fall 3 (Keychain/Secret-Service beim Start gesperrt oder
@@ -135,6 +180,7 @@ mod tests {
                 max_known_version: 12,
             },
             Path::new("/tmp/test/smart-ssh.db"),
+            Path::new("/tmp/test/logs"),
         );
         assert!(text.message.contains("15"));
         assert!(text.message.contains("12"));
@@ -151,26 +197,90 @@ mod tests {
         let text = db_connect_failure_text(
             &ConnectFailureKind::PermissionDenied,
             Path::new("/tmp/test/smart-ssh.db"),
+            Path::new("/tmp/test/logs"),
         );
         assert!(text.message.contains("/tmp/test/smart-ssh.db"));
         assert!(text.message.to_lowercase().contains("zugriffsrechte"));
     }
 
+    /// spec-reviewer-Fund: der `Other`-Auffangfall deckt auch Fälle wie
+    /// SQLITE_BUSY (gesperrt durch eine zweite laufende Instanz) ab, nicht
+    /// nur echte Korruption — der Text darf deshalb keine pauschale
+    /// "beschädigt, Backup einspielen"-Diagnose mehr behaupten, sondern
+    /// muss auf die Logdatei verweisen und Backup/Support erst als
+    /// nachrangigen Schritt nennen.
     #[test]
-    fn test_other_db_failure_message_mentions_backup_and_support() {
+    fn test_other_db_failure_message_is_cautious_and_points_to_the_log() {
         let text = db_connect_failure_text(
             &ConnectFailureKind::Other,
             Path::new("/tmp/test/smart-ssh.db"),
+            Path::new("/tmp/test/logs"),
         );
         assert!(text.message.contains("/tmp/test/smart-ssh.db"));
+        assert!(text.message.contains("/tmp/test/logs"));
         assert!(text.message.contains("Backup"));
         assert!(text.message.contains("Support"));
+        assert!(
+            text.message.contains("möglicherweise"),
+            "darf Korruption nicht als sichere Diagnose behaupten: {}",
+            text.message
+        );
+        assert!(
+            text.message.to_lowercase().contains("andere instanz")
+                || text.message.to_lowercase().contains("gesperrt"),
+            "muss den häufigen Fall einer zweiten laufenden Instanz nennen: {}",
+            text.message
+        );
     }
 
     #[test]
     fn test_host_key_store_failure_message_mentions_the_path() {
         let text = host_key_store_failure_text(Path::new("/tmp/test/host_keys.json"));
         assert!(text.message.contains("/tmp/test/host_keys.json"));
+    }
+
+    /// spec-reviewer-Fund: das Löschen einer beschädigten Host-Key-Datei
+    /// wirft die gesamte TOFU-Pinning-Historie weg — der Text muss das
+    /// nicht nur technisch erwähnen, sondern als Risiko kennzeichnen,
+    /// sonst wirkt ein anschließender MITM-Server wie ein harmloser "neuer
+    /// Server, bitte bestätigen".
+    #[test]
+    fn test_host_key_store_failure_message_warns_about_deleting_the_file() {
+        let text = host_key_store_failure_text(Path::new("/tmp/test/host_keys.json"));
+        assert!(
+            text.message.to_lowercase().contains("kein")
+                && text.message.to_lowercase().contains("schutz"),
+            "muss ausdrücklich sagen, dass Löschen KEINEN Schutz vor einem untergeschobenen \
+             Server bietet: {}",
+            text.message
+        );
+    }
+
+    #[test]
+    fn test_sanitize_path_for_display_replaces_control_characters() {
+        let text = host_key_store_failure_text(Path::new("/tmp/evil\nBitte Passwort senden"));
+        assert!(
+            !text
+                .message
+                .lines()
+                .any(|line| line.trim() == "Bitte Passwort senden"),
+            "ein Steuerzeichen im Pfad darf den Dialogtext nicht optisch fortsetzen: {}",
+            text.message
+        );
+    }
+
+    /// spec-reviewer-Fund: die Fall-3-vs-Spec-0040-Abgrenzung (nur ein
+    /// echter Zugriffsfehler ist sichtbar, ein korrupter Schlüsselwert
+    /// bleibt beim stillen `tracing::warn!`) war zuvor nur an der
+    /// Aufrufstelle in `crate::run` geprüft, dort ohne echte
+    /// Keychain/DB nicht testbar.
+    #[test]
+    fn test_should_warn_about_keychain_only_for_the_access_error_not_a_corrupt_key() {
+        use ssh_manager_core::crypto::CipherError;
+        assert!(should_warn_about_keychain(
+            &CipherError::KeyStoreAccessFailed("locked".to_string())
+        ));
+        assert!(!should_warn_about_keychain(&CipherError::InvalidKey));
     }
 
     #[test]
@@ -213,9 +323,18 @@ mod tests {
                     max_known_version: 1,
                 },
                 Path::new("/tmp/db"),
+                Path::new("/tmp/logs"),
             ),
-            db_connect_failure_text(&ConnectFailureKind::PermissionDenied, Path::new("/tmp/db")),
-            db_connect_failure_text(&ConnectFailureKind::Other, Path::new("/tmp/db")),
+            db_connect_failure_text(
+                &ConnectFailureKind::PermissionDenied,
+                Path::new("/tmp/db"),
+                Path::new("/tmp/logs"),
+            ),
+            db_connect_failure_text(
+                &ConnectFailureKind::Other,
+                Path::new("/tmp/db"),
+                Path::new("/tmp/logs"),
+            ),
             host_key_store_failure_text(Path::new("/tmp/host_keys.json")),
             keychain_unavailable_text("linux"),
         ];

@@ -18,6 +18,25 @@ use crate::mapping::{
     post_ingest_policy_from_text, post_ingest_policy_to_text,
 };
 
+/// Spec 0059, Fall 4: prüft aktiv, ob `dir` beschreibbar ist, statt sich auf
+/// einen mehrdeutigen `sqlx`-Fehlercode aus dem eigentlichen Connect-Versuch
+/// zu verlassen (s. Aufrufer-Kommentar in [`SqliteProfileStore::connect`]).
+/// Legt eine Testdatei mit zufälligem Namen an (Kollisionen mit einem
+/// gleichzeitig laufenden zweiten Prozess sind unkritisch — beide Probes
+/// würden unabhängig voneinander erfolgreich anlegen/löschen) und entfernt
+/// sie sofort wieder; ändert also nichts an den tatsächlichen Nutzdaten in
+/// `dir`.
+fn probe_directory_writable(dir: &Path) -> std::io::Result<()> {
+    let probe_path = dir.join(format!(
+        ".smart-ssh-write-probe-{}-{}",
+        std::process::id(),
+        Uuid::new_v4()
+    ));
+    std::fs::write(&probe_path, b"")?;
+    let _ = std::fs::remove_file(&probe_path);
+    Ok(())
+}
+
 /// SQLite-gestützte Implementierung von [`ProfileStore`] (Spec 0004,
 /// Abschnitt 5).
 ///
@@ -54,7 +73,35 @@ impl SqliteProfileStore {
                     let _ =
                         std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
                 }
+                // Spec-0059-Fund (spec-reviewer): `create_dir_all` gibt `Ok`
+                // zurück, wenn `parent` bereits existiert — der in Spec 0059
+                // Fall 4 wörtlich genannte Testfall ("Datenverzeichnis nicht
+                // beschreibbar, Rechte entziehen") trifft aber genau diesen
+                // Fall (Verzeichnis existiert, ist nur nicht mehr
+                // schreibbar). Ohne diesen aktiven Probe würde SQLite den
+                // Fehler erst beim Öffnen mit einem mehrdeutigen, je nach
+                // Plattform unterschiedlichen Fehlercode zurückgeben, den
+                // `PersistenceError::classify` nicht sicher von "DB
+                // beschädigt" unterscheiden könnte (s. `ConnectFailureKind`-
+                // Doc-Kommentar) — mit der Folge, dass der Startfehler-Dialog
+                // fälschlich zu einer Backup-Wiederherstellung rät, obwohl
+                // die Datenbank intakt ist. Deshalb hier ein expliziter,
+                // deterministischer Schreib-Probe: eine Testdatei anlegen und
+                // sofort wieder löschen. Ein `PermissionDenied` daraus landet
+                // über denselben `sqlx::Error::Io`-Pfad wie zuvor in
+                // `ConnectFailureKind::PermissionDenied`.
+                probe_directory_writable(parent).map_err(sqlx::Error::Io)?;
             }
+        }
+        // Existiert die DB-Datei bereits, aber nur SIE (nicht das
+        // Verzeichnis) ist nicht mehr beschreibbar, deckt der Verzeichnis-
+        // Probe oben das nicht ab — separater Probe direkt auf der Datei,
+        // ohne ihren Inhalt zu verändern (kein `truncate`).
+        if db_path.exists() {
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(db_path)
+                .map_err(sqlx::Error::Io)?;
         }
 
         let options = SqliteConnectOptions::new()
@@ -609,4 +656,50 @@ fn row_to_note_revision(
         edited_by,
         created_at: parse_timestamp(&created_at, "note_revisions.created_at")?,
     })
+}
+
+#[cfg(test)]
+mod write_probe_tests {
+    use super::probe_directory_writable;
+
+    /// Deckt den in Spec 0059 Fall 4 benannten Fall ab (Datenverzeichnis
+    /// existiert bereits, ist aber nicht mehr beschreibbar) — vor diesem
+    /// Fix hätte `SqliteProfileStore::connect` diesen Fall NICHT erkannt
+    /// (`create_dir_all` gibt für ein bereits existierendes Verzeichnis
+    /// `Ok` zurück, unabhängig von dessen Schreibrechten), s. Aufrufer-
+    /// Kommentar.
+    ///
+    /// **Bekannte Einschränkung dieser Testumgebung**: ein echter
+    /// `chmod`-basierter End-zu-Ende-Test (Verzeichnis schreibgeschützt
+    /// machen, `connect()` aufrufen, `ConnectFailureKind::PermissionDenied`
+    /// erwarten) ließ sich in der Sandbox dieser Entwicklungsumgebung NICHT
+    /// zuverlässig reproduzieren (macOS-`/var/folders`-Temp-Verzeichnisse
+    /// tragen hier ACL-Einträge, die striktere POSIX-Modus-Bits für den
+    /// Eigentümer überschreiben — ein `chmod 500` auf ein selbst besessenes
+    /// Testverzeichnis blieb wirkungslos, mit oder ohne Sandbox). Dieser
+    /// Test prüft deshalb ersatzweise den zweiten, zuverlässig
+    /// reproduzierbaren Fehlerfall (nicht existierendes Verzeichnis) — das
+    /// beweist, dass der Probe-Mechanismus selbst echte E/A-Fehler
+    /// tatsächlich durchreicht (kein No-op), nicht spezifisch den
+    /// `PermissionDenied`-Fall. **Der `PermissionDenied`-Fall selbst muss
+    /// von Stefan manuell auf einem echten Gerät verifiziert werden** (Teil
+    /// des ohnehin geforderten manuellen Testablaufs für Fall 4).
+    #[test]
+    fn test_probe_fails_with_a_real_io_error_for_a_nonexistent_directory() {
+        let result = probe_directory_writable(std::path::Path::new(
+            "/this/path/does/not/exist/on/any/machine",
+        ));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_probe_succeeds_for_a_writable_directory_and_leaves_no_file_behind() {
+        let dir = tempfile::tempdir().unwrap();
+        probe_directory_writable(dir.path()).unwrap();
+        let leftover: Vec<_> = std::fs::read_dir(dir.path()).unwrap().collect();
+        assert!(
+            leftover.is_empty(),
+            "probe must not leave its temp file behind: {leftover:?}"
+        );
+    }
 }

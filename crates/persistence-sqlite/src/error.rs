@@ -105,9 +105,13 @@ mod tests {
 
     /// spec-0059-Fund: empirisch gegen eine echte, künstlich "aus der
     /// Zukunft" präparierte DB verifiziert (nicht nur aus der `sqlx`-Doku
-    /// vermutet) — `SqliteProfileStore::connect` liefert für diesen Fall
-    /// exakt `Migrate(VersionMissing(n))`, s. `store::tests` für den
-    /// End-zu-Ende-Beweis. Hier nur die reine Klassifizierungs-Logik.
+    /// vermutet), über einen inzwischen wieder entfernten Diagnose-Test —
+    /// `SqliteProfileStore::connect` liefert für diesen Fall exakt
+    /// `Migrate(VersionMissing(n))`. Hier nur die reine, unabhängig davon
+    /// dauerhaft bestehende Klassifizierungs-Logik; kein laufender
+    /// End-zu-Ende-Test dieses exakten `sqlx`-Fehlerpfads mehr in
+    /// `store.rs` (spec-reviewer-Fund: dieser Kommentar behauptete
+    /// fälschlich einen noch existierenden Beweis dort).
     #[test]
     fn test_classify_recognizes_schema_too_new() {
         let err = PersistenceError::Migrate(sqlx::migrate::MigrateError::VersionMissing(999_999));
@@ -120,10 +124,13 @@ mod tests {
         );
     }
 
-    /// spec-0059-Fund: empirisch verifiziert (ein tatsächlich schreibgeschütztes
-    /// Verzeichnis) — `std::fs::create_dir_all` liefert
-    /// `sqlx::Error::Io(io::Error { kind: PermissionDenied, .. })`, s.
-    /// `store::tests` für den End-zu-Ende-Beweis.
+    /// spec-0059-Fund: reine Klassifizierungs-Logik für den
+    /// `Io(PermissionDenied)`-Fall, den `SqliteProfileStore::connect`s
+    /// aktiver Schreib-Probe (`store::probe_directory_writable`, s. dort)
+    /// jetzt zuverlässig erzeugt, statt sich auf einen mehrdeutigen
+    /// `sqlx`-Fehlercode aus dem eigentlichen Connect-Versuch zu verlassen
+    /// (spec-reviewer-Fund: `create_dir_all` allein erkennt ein bereits
+    /// existierendes, aber schreibgeschütztes Verzeichnis NICHT).
     #[test]
     fn test_classify_recognizes_permission_denied() {
         let io_err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "Permission denied");
