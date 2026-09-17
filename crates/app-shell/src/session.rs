@@ -132,6 +132,25 @@ pub struct Session {
     /// persistiert wie die Chat-Historie/das Ledger (Spec 0036/0057 §2.3),
     /// s. `persistence_sqlite::SqliteChatSessionStore::save_summary`.
     pub summary: AsyncMutex<Option<crate::compaction::RollingSummary>>,
+    /// MCP-Ausschluss aus der rollierenden Summary (Nachtrag zu Spec 0057
+    /// §2.1, Stefans Entscheidung: die Summary bildet Chat-Kontinuität ab,
+    /// MCP-Verkehr ist kein Chat — Audit bleibt vollständig im Ledger,
+    /// Etappe 1, unabhängig davon). Parallel zu `context.history` geführt
+    /// (Index `i` sagt, ob `context.history[i]` MCP-originiert ist,
+    /// `true` ⟺ die Nachricht wurde mit `persist: false` gepusht) —
+    /// `ChatMessage` selbst trägt keine Herkunftsinformation (kein
+    /// `core`-Typ soll App-Shell-Konzepte wie MCP kennen), deshalb dieser
+    /// Session-lokale Spiegel. Ausschließlich von `orchestration::
+    /// push_history_scoped` gepflegt, IM SELBEN `context`-Lock wie der
+    /// `history.push` selbst (atomar, keine zwei Nachrichten können sich
+    /// zwischen den beiden Pushes einschieben) — dieselbe Quelle der
+    /// Wahrheit wie der bereits bestehende `persist`-Parameter, der auch
+    /// den `chat_messages`-Persistenz-Ausschluss steuert (Spec 0034 §10),
+    /// hier nur zusätzlich für die Kompaktierung gespiegelt statt eines
+    /// zweiten, divergierenden Mechanismus. `StdMutex` statt `AsyncMutex`:
+    /// nur kurze, nie über einen `.await`-Punkt gehaltene Push-Operationen,
+    /// wie bei `pending_action`.
+    pub mcp_origin_flags: StdMutex<Vec<bool>>,
     /// Spec 0018, Abschnitt 6: optionales Sudo-Passwort, einmalig bei
     /// `connect()` aus dem `CredentialStore` gelesen — `None`, wenn für den
     /// Server keines hinterlegt ist (kein Fehler, s. dortiger Kommentar).
@@ -553,6 +572,7 @@ mod tests {
             // für die dedizierten Kompaktierungs-Tests).
             model_context_window_tokens: usize::MAX / 1_000,
             summary: AsyncMutex::new(None),
+            mcp_origin_flags: StdMutex::new(Vec::new()),
             sudo_password: None,
             status: StdMutex::new(ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),

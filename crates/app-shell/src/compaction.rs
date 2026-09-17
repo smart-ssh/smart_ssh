@@ -234,6 +234,39 @@ fn split_into_rounds(history: Vec<ChatMessage>) -> Vec<Vec<ChatMessage>> {
     rounds
 }
 
+/// Gruppiert `mcp_flags` (parallel zu `history`, s. `Session::mcp_origin_
+/// flags`-Doc-Kommentar — Index `i` sagt, ob `history[i]` MCP-originiert
+/// ist) nach DENSELBEN Rundengrenzen wie [`split_into_rounds`] — dieselbe
+/// Boundary-Logik bewusst separat dupliziert statt `split_into_rounds`
+/// selbst generisch zu machen (Letzteres hätte alle bestehenden
+/// Aufrufer/Tests angefasst, für eine einzige neue Verwendung
+/// unverhältnismäßig). Eine Runde gilt als MCP-originiert, wenn
+/// IRGENDEINE ihrer Nachrichten es ist — Spec-0057-MCP-Ausschluss-Fund
+/// (Nachtrag): "MCP-originierte Runden gehen nicht in die Summary-Faltung
+/// ein", rundenweise, nicht nachrichtenweise (eine Runde ist die
+/// kohärente Einheit, in der die Kürzungs-Leiter ohnehin denkt).
+///
+/// `mcp_flags` kürzer als `history` (sollte strukturell nie vorkommen,
+/// s. `orchestration::push_history_scoped`, das beide Vektoren atomar im
+/// selben `context`-Lock pflegt) wird defensiv als "ab hier MCP"
+/// behandelt — die sichere Fehlrichtung für ein Ausschluss-Feature ist
+/// "im Zweifel ausschließen", nicht "im Zweifel durchlassen".
+fn split_mcp_flags_into_rounds(history: &[ChatMessage], mcp_flags: &[bool]) -> Vec<bool> {
+    let mut rounds: Vec<bool> = Vec::new();
+    for (index, message) in history.iter().enumerate() {
+        let is_mcp = mcp_flags.get(index).copied().unwrap_or(true);
+        if matches!(message.role, Role::User) || rounds.is_empty() {
+            rounds.push(is_mcp);
+        } else {
+            let last = rounds
+                .last_mut()
+                .expect("mindestens eine Runde existiert bereits, s. Bedingung oben");
+            *last = *last || is_mcp;
+        }
+    }
+    rounds
+}
+
 /// Anzahl der Runden in `history` (s. [`split_into_rounds`]) — `pub(crate)`
 /// für `commands::connect_session`: eine beim Resume geladene
 /// [`RollingSummary`] trägt ein `rounds_covered`, das theoretisch nicht
@@ -451,7 +484,15 @@ async fn compact_rounds_with_summary(
     min_preserved_rounds: usize,
     budget_tokens: usize,
 ) {
-    let rounds = split_into_rounds(std::mem::take(&mut context.history));
+    let history = std::mem::take(&mut context.history);
+    // spec-reviewer-Nachtrag (MCP-Ausschluss aus der Summary): dieselbe
+    // Momentaufnahme, mit der `push_history_scoped` das parallele
+    // MCP-Flag-Array pflegt — s. `Session::mcp_origin_flags`-Doc-
+    // Kommentar. Muss VOR `split_into_rounds` gelesen werden, das
+    // `history` konsumiert.
+    let mcp_flags = session.mcp_origin_flags.lock().unwrap().clone();
+    let round_is_mcp = split_mcp_flags_into_rounds(&history, &mcp_flags);
+    let rounds = split_into_rounds(history);
     if rounds.len() <= min_preserved_rounds {
         context.history = rounds.into_iter().flatten().collect();
         return;
@@ -483,27 +524,61 @@ async fn compact_rounds_with_summary(
             // Nur die NEU zu kürzenden Runden (ab der bisherigen
             // Abdeckung) gehen in den Zusammenfassungs-Aufruf — "nicht
             // jedes Mal die ganze History von vorne" (Spec 0057, §2.1).
+            //
+            // spec-reviewer-Nachtrag: MCP-originierte Runden werden HIER
+            // ausgefiltert — sie gehen nie in den Zusammenfassungs-Aufruf
+            // und landen damit nie in der persistierten Summary (Stefans
+            // Entscheidung: die Summary bildet Chat-Kontinuität ab, MCP-
+            // Verkehr ist kein Chat; Audit bleibt vollständig im Ledger,
+            // Etappe 1, unabhängig davon). Sie werden trotzdem wie jede
+            // andere gekürzte Runde aus dem gesendeten Kontext entfernt —
+            // nur ihr INHALT geht nicht in den KI-Aufruf/die Summary-Text
+            // ein.
             let new_rounds: Vec<ChatMessage> = rounds[already_covered..cut_count]
                 .iter()
-                .flatten()
-                .cloned()
+                .zip(&round_is_mcp[already_covered..cut_count])
+                .filter(|(_, &is_mcp)| !is_mcp)
+                .flat_map(|(round, _)| round.iter().cloned())
                 .collect();
-            let previous_summary_text = existing_summary.as_ref().map(|s| s.text.as_str());
 
-            match generate_rolling_summary(session, previous_summary_text, &new_rounds).await {
-                Some(new_text) => {
-                    let new_summary = RollingSummary {
-                        text: new_text.clone(),
-                        rounds_covered: cut_count,
-                    };
-                    *session.summary.lock().await = Some(new_summary.clone());
-                    persist_rolling_summary(session, &new_summary).await;
-                    summary_placeholder_message(&new_text)
+            if new_rounds.is_empty() {
+                // Alle neu zu kürzenden Runden waren MCP-originiert — es
+                // gibt nichts Chat-Relevantes, das zusammengefasst werden
+                // müsste. Kein KI-Aufruf: die Abdeckung wird trotzdem bis
+                // `cut_count` vorgezogen (diese Runden verschwinden ja so
+                // oder so aus dem Kontext), mit dem bisherigen Summary-
+                // Text (falls vorhanden) als Platzhalter, sonst dem
+                // generischen Etappe-2-Hinweis.
+                match &existing_summary {
+                    Some(summary) => {
+                        let advanced = RollingSummary {
+                            text: summary.text.clone(),
+                            rounds_covered: cut_count,
+                        };
+                        *session.summary.lock().await = Some(advanced.clone());
+                        persist_rolling_summary(session, &advanced).await;
+                        summary_placeholder_message(&advanced.text)
+                    }
+                    None => round_truncation_placeholder(cut_count),
                 }
-                // Spec 0057, §2.2: Fallback auf das reine Abschneiden ohne
-                // Zusammenfassung — `session.summary` bleibt unverändert
-                // (der alte, noch gültige Stand geht nicht verloren).
-                None => round_truncation_placeholder(cut_count),
+            } else {
+                let previous_summary_text = existing_summary.as_ref().map(|s| s.text.as_str());
+                match generate_rolling_summary(session, previous_summary_text, &new_rounds).await {
+                    Some(new_text) => {
+                        let new_summary = RollingSummary {
+                            text: new_text.clone(),
+                            rounds_covered: cut_count,
+                        };
+                        *session.summary.lock().await = Some(new_summary.clone());
+                        persist_rolling_summary(session, &new_summary).await;
+                        summary_placeholder_message(&new_text)
+                    }
+                    // Spec 0057, §2.2: Fallback auf das reine Abschneiden
+                    // ohne Zusammenfassung — `session.summary` bleibt
+                    // unverändert (der alte, noch gültige Stand geht
+                    // nicht verloren).
+                    None => round_truncation_placeholder(cut_count),
+                }
             }
         }
     };

@@ -140,7 +140,19 @@ pub(crate) async fn push_history(session: &Session, message: ChatMessage) {
 /// Schreibzugriff wird unterdrückt, s. Aufrufer in `handle_action_
 /// proposed`/`handle_user_decision`/`execute_*`.
 async fn push_history_scoped(session: &Session, message: ChatMessage, persist: bool) {
-    session.context.lock().await.history.push(message.clone());
+    {
+        // MCP-Ausschluss aus der rollierenden Summary (Nachtrag zu Spec
+        // 0057 §2.1): `mcp_origin_flags` wird IM SELBEN `context`-Lock wie
+        // der `history.push` selbst gepflegt (atomar — kein anderer
+        // `push_history_scoped`-Aufruf kann sich zwischen beide Pushes
+        // schieben, s. `Session::mcp_origin_flags`-Doc-Kommentar).
+        // `!persist` ist exakt dieselbe Bedingung, die auch den
+        // `chat_messages`-Persistenz-Ausschluss steuert (Spec 0034 §10) —
+        // dieselbe Quelle der Wahrheit, kein zweiter Mechanismus.
+        let mut ctx = session.context.lock().await;
+        ctx.history.push(message.clone());
+        session.mcp_origin_flags.lock().unwrap().push(!persist);
+    }
     if !persist {
         return;
     }
@@ -3156,6 +3168,7 @@ mod tests {
             system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
             model_context_window_tokens: usize::MAX / 1_000,
             summary: AsyncMutex::new(None),
+            mcp_origin_flags: StdMutex::new(Vec::new()),
             sudo_password: None,
             status: StdMutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
@@ -8259,6 +8272,7 @@ mod tests {
                 role: Role::User,
                 content: MessageContent::Text("Danke, das reicht.".to_string()),
             });
+            session.mcp_origin_flags.lock().unwrap().push(false);
         }
         run_chat_turn(
             &session,
@@ -8367,6 +8381,7 @@ mod tests {
                 role: Role::User,
                 content: MessageContent::Text("Danke.".to_string()),
             });
+            session.mcp_origin_flags.lock().unwrap().push(false);
         }
         run_chat_turn(
             &session,
@@ -8526,12 +8541,15 @@ mod tests {
     /// `run_chat_turn` laufen zu lassen.
     async fn push_synthetic_rounds(session: &Session, count: usize, stdout_bytes_each: usize) {
         let mut ctx = session.context.lock().await;
+        let mut flags = session.mcp_origin_flags.lock().unwrap();
         for i in 0..count {
             ctx.history.push(user_msg(&format!("Frage {i}")));
+            flags.push(false);
             ctx.history.push(command_result_msg(
                 &format!("cmd-{i}"),
                 &"x".repeat(stdout_bytes_each),
             ));
+            flags.push(false);
         }
     }
 
@@ -8993,8 +9011,10 @@ mod tests {
         session.model_context_window_tokens = 2_000;
         {
             let mut ctx = session.context.lock().await;
+            let mut flags = session.mcp_origin_flags.lock().unwrap();
             for i in 0..6 {
                 ctx.history.push(user_msg(&format!("Frage {i}")));
+                flags.push(false);
                 if i == 0 {
                     ctx.history.push(ChatMessage {
                         role: Role::Assistant,
@@ -9007,6 +9027,7 @@ mod tests {
                     ctx.history
                         .push(command_result_msg(&format!("cmd-{i}"), &"x".repeat(5_000)));
                 }
+                flags.push(false);
             }
         }
 
@@ -9318,9 +9339,12 @@ mod tests {
         // an dieser Stelle gesetzt, s. dortiger Kommentar).
         {
             let mut ctx = session.context.lock().await;
+            let mut flags = session.mcp_origin_flags.lock().unwrap();
             ctx.history.push(user_msg("Zeig mir die Logs"));
+            flags.push(false);
             ctx.history
                 .push(command_result_msg("cat app.log", "verdächtige Zeile"));
+            flags.push(false);
         }
         session
             .untrusted_content_ingested
@@ -9457,6 +9481,227 @@ mod tests {
                 .untrusted_content_ingested
                 .load(std::sync::atomic::Ordering::SeqCst),
             "untrusted_content_ingested darf durch die MCP-Persistenz-Unterdrückung nicht umgangen werden"
+        );
+    }
+
+    /// Spec 0057, Nachtrag (MCP-Ausschluss aus der rollierenden Summary,
+    /// Stefans Entscheidung s. ADR 0049): MCP- und Chat-Runden mischen sich
+    /// in EINER Session (Teil 0 der Aufgabenstellung — bestätigt über
+    /// `mcp_backend::AppMcpBackend::ensure_session`, das dieselbe `Session`
+    /// eines bereits offenen Menschen-Tabs wiederverwendet). Nach
+    /// Kompaktierung/Faltung darf die persistierte Summary keinen
+    /// MCP-Content enthalten — das Ledger dagegen weiterhin den vollen
+    /// MCP-Content (Audit-Funktion, Etappe 1, unberührt von diesem
+    /// Ausschluss).
+    #[tokio::test]
+    async fn test_mcp_rounds_excluded_from_persisted_summary_but_retained_in_ledger() {
+        let (mut session, chat_store, chat_session_id, _tmp_dir, ledger_store) =
+            session_with_real_chat_and_ledger_persistence(
+                vec![AiEvent::Done], // unten sofort ersetzt, s. `received_contexts`
+                MockSshTransport::default()
+                    .with_response("cat mcp_secret.log", output("MCP_GEHEIM_KENNUNG_42")),
+            )
+            .await;
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.model_context_window_tokens = 2_000;
+        // `received_contexts` erfasst den TATSÄCHLICH an den Provider
+        // gesendeten Request der Zusammenfassungs-KI-Anfrage — die einzige
+        // Stelle, an der sich beweisen lässt, dass MCP-Content NICHT in die
+        // Faltung eingeht (der kanonische Mock-Text unten wäre sonst
+        // unabhängig vom tatsächlichen Input immer derselbe und würde die
+        // Aussage nicht beweisen).
+        let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
+        session.ai_provider = Box::new(MockAiProvider {
+            rounds: StdMutex::new(
+                vec![vec![
+                    AiEvent::TextDelta("Zusammenfassung der Chat-Runden.".to_string()),
+                    AiEvent::Done,
+                ]]
+                .into(),
+            ),
+            received_contexts: received_contexts.clone(),
+        });
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        // Runde 0: MCP-Ursprung, auf DERSELBEN Session wie ein
+        // Menschen-Tab (s. `test_mcp_action_on_shared_human_session_writes_
+        // no_persisted_history` oben) — landet im Ledger, nie in
+        // `chat_messages`, aber sehr wohl im In-Memory-`context.history`
+        // (und damit als Kandidat für die Summary-Faltung, wäre da nicht
+        // der neue Ausschluss).
+        let action_future = handle_action_proposed(
+            &session,
+            Uuid::new_v4(),
+            AiAction::SuggestCommand {
+                command: "cat mcp_secret.log".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Mcp {
+                client_name: Some("Claude Code".to_string()),
+            },
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        // Weitere, echte Chat-Runden drängen Runde 0 aus dem erhaltenen
+        // Fenster und lösen die Kompaktierung/Faltung aus.
+        push_synthetic_rounds(&session, 6, 5_000).await;
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
+        // Kernaussage 1: der tatsächlich an die Zusammenfassungs-KI
+        // gesendete Request enthielt den MCP-Content nicht — das ist die
+        // eigentliche Faltungs-Eingabe, nicht nur ihr (im Mock ohnehin
+        // kanonischer) Text-Output.
+        let summarization_requests = received_contexts.lock().unwrap().clone();
+        assert!(
+            !summarization_requests.is_empty(),
+            "die Kompaktierung muss tatsächlich einen Zusammenfassungs-Aufruf ausgelöst haben"
+        );
+        for request in &summarization_requests {
+            let sent_text = format!("{request:?}");
+            assert!(
+                !sent_text.contains("MCP_GEHEIM_KENNUNG_42")
+                    && !sent_text.contains("mcp_secret.log"),
+                "MCP-Content darf nicht in den Zusammenfassungs-Request eingehen: {sent_text}"
+            );
+        }
+
+        // Kernaussage 1b: entsprechend enthält auch die persistierte
+        // Summary (die aus genau diesem Provider-Aufruf hervorgeht) keinen
+        // MCP-Content.
+        let loaded_summary = chat_store.load_summary(chat_session_id).await.unwrap();
+        let summary_text = loaded_summary
+            .as_ref()
+            .map(|(text, _)| text.as_str())
+            .unwrap_or_default();
+        assert!(
+            !summary_text.contains("MCP_GEHEIM_KENNUNG_42"),
+            "MCP-Content darf nicht in die persistierte Summary gefaltet werden: {summary_text}"
+        );
+
+        // Kernaussage 2: das Ledger enthält den MCP-Content weiterhin
+        // vollständig — sowohl den MCP-originierten Vorschlag (`source:
+        // McpAgent`, s. `test_ledger_captures_mcp_origin_independent_of_
+        // chat_persist_flag` oben: die AUSFÜHRUNG selbst trägt `source:
+        // User`, weil ein Mensch bestätigt hat, das Kommando blieb aber
+        // MCP-initiiert) als auch die tatsächliche Kommandoausgabe.
+        let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+        let mcp_proposal_present = entries.iter().any(|e| {
+            e.source == LedgerSource::McpAgent
+                && matches!(
+                    &e.content,
+                    LedgerEntryContent::CommandProposed { command }
+                        if command == "cat mcp_secret.log"
+                )
+        });
+        assert!(
+            mcp_proposal_present,
+            "das Ledger muss den MCP-originierten Vorschlag mit `source: McpAgent` behalten: \
+             {entries:?}"
+        );
+        let executed_output_present = entries.iter().any(|e| {
+            matches!(
+                &e.content,
+                LedgerEntryContent::CommandExecuted { output, .. }
+                    if String::from_utf8_lossy(&output.stdout).contains("MCP_GEHEIM_KENNUNG_42")
+            )
+        });
+        assert!(
+            executed_output_present,
+            "das Ledger muss die volle MCP-Kommandoausgabe behalten: {entries:?}"
+        );
+    }
+
+    /// Spec 0057, Nachtrag: der Randfall aus `compact_rounds_with_summary`
+    /// — sind ALLE neu zu kürzenden Runden MCP-originiert, gibt es nichts
+    /// Chat-Relevantes zu fassen. Kein KI-Aufruf, aber die MCP-Runden
+    /// verschwinden trotzdem aus dem gesendeten Kontext (wie jede gekürzte
+    /// Runde), und `rounds_covered` rückt trotzdem vor (kein Platzhalter-
+    /// Vakuum bei der nächsten Kompaktierung).
+    #[tokio::test]
+    async fn test_compaction_skips_ai_call_when_all_newly_cut_rounds_are_mcp() {
+        let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
+        let mut session = session_with_ai_provider(
+            MockAiProvider {
+                rounds: StdMutex::new(vec![vec![AiEvent::Done]].into()),
+                received_contexts: received_contexts.clone(),
+            },
+            MockSshTransport::default(),
+        );
+        session.model_context_window_tokens = 2_000;
+        {
+            let mut ctx = session.context.lock().await;
+            let mut flags = session.mcp_origin_flags.lock().unwrap();
+            // Sechs rein MCP-originierte Runden — genug, um die Kürzung
+            // auszulösen, aber ohne jeden Chat-relevanten Inhalt.
+            for i in 0..6 {
+                ctx.history.push(user_msg(&format!("MCP-Frage {i}")));
+                flags.push(true);
+                ctx.history.push(command_result_msg(
+                    &format!("mcp-cmd-{i}"),
+                    &"x".repeat(5_000),
+                ));
+                flags.push(true);
+            }
+        }
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        let result = crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
+        assert!(
+            received_contexts.lock().unwrap().is_empty(),
+            "sind alle neu zu kürzenden Runden MCP-originiert, darf kein KI-Aufruf \
+             stattfinden — es gibt nichts Chat-Relevantes zu fassen"
+        );
+        // Der plain Etappe-2-Platzhalter (keine bestehende Summary, auf die
+        // zurückgegriffen werden könnte) muss stehen — Beweis, dass der
+        // neue "alle neu geschnittenen Runden sind MCP"-Zweig tatsächlich
+        // gegriffen hat, statt eines echten KI-Aufrufs.
+        assert!(
+            result.history.iter().any(
+                |m| matches!(&m.content, MessageContent::Text(t) if t.contains("ältere Konversation gekürzt"))
+            ),
+            "der generische Kürzungs-Platzhalter muss stehen: {:?}",
+            result.history
+        );
+        // Die tatsächlich GESCHNITTENEN Runden (die ältesten) müssen aus
+        // dem gesendeten Kontext verschwunden sein — nur die zuletzt
+        // erhaltenen Runden dürfen noch da sein.
+        let remaining_mcp_rounds = result
+            .history
+            .iter()
+            .filter(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("MCP-Frage")))
+            .count();
+        assert!(
+            remaining_mcp_rounds < 6,
+            "mindestens die ältesten MCP-Runden müssen geschnitten worden sein: {:?}",
+            result.history
         );
     }
 
@@ -9780,6 +10025,7 @@ mod tests {
             role: Role::User,
             content: MessageContent::Text(raw_secret_text.clone()),
         });
+        session.mcp_origin_flags.lock().unwrap().push(false);
 
         let emitter = TestEmitter::default();
         let profile_store = InMemoryProfileStore::default();

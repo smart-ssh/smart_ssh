@@ -213,20 +213,6 @@ Lücken. Behoben, in separatem Commit:
 
 Bewusst NICHT behoben, dem Nutzer explizit gemeldet:
 
-- **MCP-Inhalt wird über die Summary doch persistiert.**
-  `push_history_scoped`s `persist: false` schließt MCP-verursachte
-  Einträge bewusst aus der persistierten, wiederaufnehmbaren Chat-Historie
-  aus (Spec 0034 §10/Spec 0040 §4). `compact_rounds_with_summary` faltet
-  aber `session.context.history` — das auch MCP-Einträge enthält, da jenes
-  Flag nur die DB-Persistenz von `chat_messages` betrifft, nicht den
-  In-Memory-Kontext — in eine Zusammenfassung, die anschließend
-  verschlüsselt persistiert UND beim Resume wieder geladen wird. Verdichteter
-  MCP-Inhalt landet damit doch in der persistierten Sitzung, nur in
-  zusammengefasster statt roher Form. Ob das die Zusage aus Spec 0034 §10
-  tatsächlich verletzt (die sich explizit auf "Historie" bezieht, nicht
-  zwangsläufig auf jede abgeleitete Repräsentation), ist eine
-  Produktentscheidung, die Stefan treffen muss, keine rein technische —
-  nicht in dieser Review-Fix-Runde vorweggenommen.
 - **Bis zu ~20 Minuten unsichtbarer Stillstand im Extremfall.**
   `compact_for_send` läuft in jeder automatischen Folgerunde
   (`MAX_AUTO_FOLLOWUP_ROUNDS = 10`); ein durchgehend hängender/
@@ -244,6 +230,74 @@ Bewusst NICHT behoben, dem Nutzer explizit gemeldet:
   ausschließlich verschwendete Kosten/ein Abdeckungs-Rückschritt, kein
   Datenverlust/keine Sicherheitslücke; als akzeptierter Kompromiss
   belassen.
+
+### 10. Nachtrag: MCP-Content aus der rollierenden Summary ausgeschlossen
+
+Punkt 9 oben ließ bewusst offen, ob verdichteter MCP-Inhalt in der
+persistierten Summary eine echte Verletzung von Spec 0034 §10 ist — eine
+Produktentscheidung, keine rein technische. Stefans Entscheidung: MCP-
+Content gehört NICHT in die Summary, aus demselben Grund wie der
+bestehende `chat_messages`-Ausschluss — die Summary bildet die
+**Chat**-Kontinuität ab, MCP-Agent-Verkehr ist kein Chat. Ausdrücklich
+KEINE Audit-Frage: das Ledger (Etappe 1, ADR 0047) enthält MCP-Content
+weiterhin vollständig (`LedgerSource::McpAgent`), unabhängig von diesem
+Ausschluss — nur die Chat-Summary wird sauber gehalten.
+
+**Vorab geklärt (Teil 0 der Aufgabenstellung):** MCP- und Chat-Aktivität
+können sich in EINER Session mischen — `mcp_backend::AppMcpBackend::
+ensure_session` verwendet für einen MCP-Server dieselbe `Session`
+(inklusive `chat_session_id`) wie ein bereits offener Menschen-Tab, falls
+eine verbunden ist. Der Fix musste also RUNDENWEISE filtern, nicht
+sitzungsweise.
+
+**Mechanismus — derselbe wie der bestehende `chat_messages`-Ausschluss,
+gespiegelt statt verdoppelt:** `push_history_scoped`s `persist: bool`
+(`!matches!(origin, ActionOrigin::Mcp { .. })`) ist bereits die einzige
+Quelle der Wahrheit dafür, ob eine Nachricht MCP-originiert ist. Ein
+zweiter `Session`-lokaler Vektor, `mcp_origin_flags: StdMutex<Vec<bool>>`
+(parallel zu `context.history`, Index `i` ⟺ `history[i]` ist
+MCP-originiert), wird von `push_history_scoped` — und ausschließlich dort
+— IM SELBEN `context`-Lock wie der `history.push` selbst gepflegt, mit
+Wert `!persist`. `ChatMessage` (core-Typ) bekommt bewusst KEIN
+Herkunftsfeld — ein App-Shell-Konzept wie MCP gehört nicht in `core`,
+genau wie bei `RollingSummary` selbst (Punkt 2 oben).
+
+`compact_rounds_with_summary` gruppiert `mcp_origin_flags` über dieselbe
+Rundengrenzen-Logik wie `split_into_rounds` (neue Hilfsfunktion
+`split_mcp_flags_into_rounds` in `compaction.rs` — bewusst dupliziert
+statt `split_into_rounds` generisch zu machen, für eine einzige neue
+Verwendung unverhältnismäßig) und filtert die neu zu faltenden Runden
+(`new_rounds`) vor dem eigentlichen Zusammenfassungs-Aufruf: eine Runde
+gilt als MCP-originiert, wenn IRGENDEINE ihrer Nachrichten es ist
+(rundenweise, nicht nachrichtenweise, wie in der Aufgabenstellung
+gefordert). Ein fehlender/zu kurzer `mcp_origin_flags`-Eintrag (strukturell
+sollte das nie vorkommen, da beide Vektoren atomar wachsen) wird defensiv
+als MCP behandelt — sichere Fehlrichtung für ein Ausschluss-Feature ist
+"im Zweifel ausschließen".
+
+Die MCP-Runden werden trotzdem aus dem GESENDETEN Kontext entfernt (wie
+jede geschnittene Runde) — nur ihr Inhalt erreicht nie den
+Zusammenfassungs-Aufruf oder den persistierten Summary-Text. Sind ALLE neu
+zu schneidenden Runden MCP-originiert, gibt es nichts Chat-Relevantes zu
+fassen: kein KI-Aufruf, stattdessen rückt `rounds_covered` unter
+Wiederverwendung des bisherigen Summary-Texts (oder, ohne bestehende
+Summary, des generischen Etappe-2-Platzhalters) einfach vor.
+
+Ein resumiertes `initial_history` (aus `chat_messages` geladen) kann
+strukturell nie MCP-Nachrichten enthalten (die werden dort nie
+persistiert, s. o.) — `initial_mcp_origin_flags` ist deshalb für den
+Resume-Fall immer `vec![false; initial_history.len()]`, keine Sonderfall-
+Behandlung nötig.
+
+Zwei neue Tests decken das ab:
+`test_mcp_rounds_excluded_from_persisted_summary_but_retained_in_ledger`
+(End-zu-Ende: MCP- und Chat-Runden gemischt in einer Session, nach
+Kompaktierung fehlt der MCP-Content im tatsächlich an den Provider
+gesendeten Zusammenfassungs-Request UND in der persistierten Summary,
+das Ledger behält ihn vollständig) und
+`test_compaction_skips_ai_call_when_all_newly_cut_rounds_are_mcp` (der
+Randfall: alle neu geschnittenen Runden sind MCP-originiert, kein
+KI-Aufruf, Platzhalter-Vorrücken funktioniert trotzdem).
 
 ## Konsequenzen
 

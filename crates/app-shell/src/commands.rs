@@ -1036,6 +1036,13 @@ pub(crate) async fn connect_session(
     // gelten.
     let starts_with_untrusted_content =
         notes_present || history_contains_untrusted_content(&initial_history);
+    // MCP-Ausschluss aus der rollierenden Summary (Nachtrag zu Spec 0057
+    // §2.1): `initial_history` kommt entweder leer (frische Sitzung) oder
+    // aus `chat_messages` (Resume) — Letzteres enthält strukturell NIE
+    // MCP-originierte Nachrichten (die werden dort nie persistiert, Spec
+    // 0034 §10/`push_history_scoped`s `persist: false`) — deshalb
+    // durchweg `false`, unabhängig vom Resume-/Frisch-Fall.
+    let initial_mcp_origin_flags = vec![false; initial_history.len()];
 
     let session = Arc::new(Session {
         transport: tokio::sync::Mutex::new(transport),
@@ -1055,6 +1062,7 @@ pub(crate) async fn connect_session(
         system_context_parts: tokio::sync::Mutex::new(system_context_parts),
         model_context_window_tokens,
         summary: tokio::sync::Mutex::new(initial_summary),
+        mcp_origin_flags: std::sync::Mutex::new(initial_mcp_origin_flags),
         sudo_password,
         status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
@@ -3976,6 +3984,7 @@ mod send_chat_message_persistence_tests {
             system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
             model_context_window_tokens: usize::MAX / 1_000,
             summary: AsyncMutex::new(None),
+            mcp_origin_flags: std::sync::Mutex::new(Vec::new()),
             sudo_password: None,
             status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),
