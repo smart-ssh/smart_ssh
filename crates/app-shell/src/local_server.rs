@@ -97,6 +97,32 @@ pub fn synthetic_server<R: Runtime>(app: &AppHandle<R>) -> Server {
     }
 }
 
+/// Spec 0058, Teil 2: `orchestration::NoteShrinkTarget`-Implementierung für
+/// den lokalen Pseudo-Server — liest/schreibt über `load_notes`/`save_notes`
+/// (`tauri-plugin-store`) statt `ProfileStore` (keine `servers`-Zeile, s.
+/// Moduldoc oben). Generisch über `R: Runtime` (wie `synthetic_server`
+/// selbst) statt auf die konkrete Produktions-Runtime festgelegt — sonst
+/// wäre dieser Typ nicht gegen `tauri::test::MockRuntime` testbar (s.
+/// `test_local_note_shrink_target_reads_and_writes_through_the_settings_
+/// store` unten). `R: 'static` (statt nur `R: Runtime`), weil eine
+/// Instanz den `tokio::spawn`-Hintergrund-Task in `commands::request_note_
+/// shrink` überleben muss.
+pub struct LocalNoteShrinkTarget<R: Runtime> {
+    pub app: AppHandle<R>,
+}
+
+#[async_trait::async_trait]
+impl<R: Runtime + 'static> crate::orchestration::NoteShrinkTarget for LocalNoteShrinkTarget<R> {
+    async fn read(&self) -> Option<(String, String)> {
+        let server = synthetic_server(&self.app);
+        Some((server.name, server.notes))
+    }
+
+    async fn write(&self, new_content: String) -> Result<(), String> {
+        save_notes(&self.app, &new_content)
+    }
+}
+
 fn whoami_fallback() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
@@ -112,7 +138,7 @@ mod tests {
         RuleOrigin, Scope,
     };
 
-    use crate::first_run_notice::test_support::{lock, test_app};
+    use crate::first_run_notice::test_support::{lock, lock_async, test_app};
 
     use super::*;
 
@@ -162,6 +188,49 @@ mod tests {
 
         assert_eq!(server.notes, "");
         assert!(server.tags.is_empty());
+    }
+
+    /// Spec 0058, Teil 2 (Etappe-4-Review-Fund): der lokale Pseudo-Server
+    /// kann sehr wohl eine Notiz haben (s. Tests oben) — nicht nur der
+    /// Sitzungsende-Vorschlag selbst (`orchestration::suggest_note_shrink_
+    /// on_disconnect`, dort getestet), sondern auch der eigentliche
+    /// "Ja, zusammenfassen"-Ablauf (`execute_note_shrink_request`) muss für
+    /// ihn tatsächlich lesen/schreiben können — genau das prüft dieser Test
+    /// direkt gegen `LocalNoteShrinkTarget`, ohne die restliche (KI-Aufruf,
+    /// Bestätigungsdialog) Maschinerie aufzubauen.
+    #[tokio::test]
+    async fn test_local_note_shrink_target_reads_and_writes_through_the_settings_store() {
+        use crate::orchestration::NoteShrinkTarget;
+
+        let _guard = lock_async().await;
+        let app = test_app();
+        let handle = app.handle().clone();
+        reset_local_store(&handle);
+        save_notes(&handle, "Die ursprüngliche lokale Notiz.").unwrap();
+
+        let target = LocalNoteShrinkTarget {
+            app: handle.clone(),
+        };
+
+        let (name, notes) = target
+            .read()
+            .await
+            .expect("lokaler Server muss auflösbar sein");
+        assert_eq!(name, "Localhost");
+        assert_eq!(notes, "Die ursprüngliche lokale Notiz.");
+
+        target
+            .write("Gekürzte lokale Notiz.".to_string())
+            .await
+            .expect("Schreiben darf nicht fehlschlagen");
+
+        assert_eq!(load_notes(&handle), "Gekürzte lokale Notiz.");
+        // `read()` muss den frisch geschriebenen Stand widerspiegeln, nicht
+        // einen zwischengespeicherten alten Wert.
+        let (_, notes_after_write) = target.read().await.unwrap();
+        assert_eq!(notes_after_write, "Gekürzte lokale Notiz.");
+
+        reset_local_store(&handle);
     }
 
     struct SingleRulePolicyStore(Rule);

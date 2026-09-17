@@ -2309,18 +2309,42 @@ pub async fn request_note_shrink(
     tokio::spawn(async move {
         let state = app.state::<AppState>();
         let session_id: SessionId = Uuid::new_v4();
-        execute_note_shrink_request(
-            session_id,
-            server_id,
-            ai_provider.as_ref(),
-            redactor.as_ref(),
-            provider_label,
-            model,
-            &app,
-            state.profile_store.as_ref(),
-            &state.pending_action_confirmations,
-        )
-        .await;
+        // Spec 0058, Teil 2: derselbe `is_local`-Verzweigungs-Idiom wie
+        // `commands::disconnect`s Kürzungs-Vorschlag oben und
+        // `build_session_system_context` — der lokale Pseudo-Server braucht
+        // eine grundsätzlich andere Persistenz (`local_server::save_notes`
+        // statt `ProfileStore::record_note_revision`, s. `orchestration::
+        // NoteShrinkTarget`-Doc-Kommentar).
+        if crate::local_server::is_local(server_id) {
+            let target = crate::local_server::LocalNoteShrinkTarget { app: app.clone() };
+            execute_note_shrink_request(
+                session_id,
+                server_id,
+                ai_provider.as_ref(),
+                redactor.as_ref(),
+                &app,
+                &target,
+                &state.pending_action_confirmations,
+            )
+            .await;
+        } else {
+            let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+                profile_store: state.profile_store.as_ref(),
+                server_id,
+                provider_label,
+                model,
+            };
+            execute_note_shrink_request(
+                session_id,
+                server_id,
+                ai_provider.as_ref(),
+                redactor.as_ref(),
+                &app,
+                &target,
+                &state.pending_action_confirmations,
+            )
+            .await;
+        }
     });
 
     Ok(())

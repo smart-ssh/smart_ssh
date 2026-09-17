@@ -3090,6 +3090,60 @@ async fn summarize_note_for_shrink(
     Some(format!("{capped}{TRUNCATION_NOTICE}"))
 }
 
+/// Spec 0058, Teil 2: abstrahiert Lesen/Schreiben der Notiz des
+/// Kürzungs-Ziels — dieselbe Abstraktionsebene wie `AiProvider`/
+/// `OutputRedactor` in dieser Datei, aus demselben Grund: `execute_note_
+/// shrink_request` bleibt dadurch weiterhin Tauri-unabhängig (kein
+/// `tauri::AppHandle` direkt, s. Moduldoc-Kommentar ganz oben), obwohl der
+/// lokale Pseudo-Server (kein `servers`-Zeile, s. `local_server`-Moduldoc)
+/// eine grundsätzlich andere Persistenz braucht als ein echter Server
+/// (`ProfileStore`). `commands::request_note_shrink` wählt die passende
+/// Implementierung anhand von `local_server::is_local`.
+#[async_trait::async_trait]
+pub trait NoteShrinkTarget: Send + Sync {
+    /// Der Servername (für die Diff-Anzeige) und der aktuelle Notizinhalt
+    /// — `None`, wenn das Ziel nicht (mehr) aufgelöst werden kann.
+    async fn read(&self) -> Option<(String, String)>;
+    async fn write(&self, new_content: String) -> Result<(), String>;
+}
+
+/// Spec 0058, Teil 2: die `NoteShrinkTarget`-Implementierung für einen
+/// ECHTEN Server — spiegelt `persist_note_revision`s `ProfileStore`-Pfad,
+/// eigenständig gehalten (statt `persist_note_revision` wiederzuverwenden),
+/// weil Letzteres einen bereits fertigen `NoteEditor` entgegennimmt, den
+/// dieser Trait bewusst nicht kennt (s. `NoteShrinkTarget::write`-Doc).
+pub struct ProfileStoreNoteShrinkTarget<'a> {
+    pub profile_store: &'a dyn ProfileStore,
+    pub server_id: ServerId,
+    pub provider_label: String,
+    pub model: String,
+}
+
+#[async_trait::async_trait]
+impl NoteShrinkTarget for ProfileStoreNoteShrinkTarget<'_> {
+    async fn read(&self) -> Option<(String, String)> {
+        self.profile_store
+            .get_server(&self.server_id)
+            .await
+            .ok()
+            .map(|server| (server.name, server.notes))
+    }
+
+    async fn write(&self, new_content: String) -> Result<(), String> {
+        persist_note_revision(
+            self.profile_store,
+            NoteTarget::Server(self.server_id),
+            new_content,
+            NoteEditor::Ai {
+                provider: self.provider_label.clone(),
+                model: self.model.clone(),
+            },
+        )
+        .await
+        .map(|_summary| ())
+    }
+}
+
 /// Orchestriert den vollständigen "Ja, zusammenfassen"-Ablauf (Spec 0057,
 /// §4.2) NACH dem KI-Aufruf: emittiert bei Erfolg **denselben** `note-
 /// update-suggested`-Vorschlag/Diff-Bestätigungsablauf wie ein regulärer
@@ -3107,19 +3161,16 @@ async fn summarize_note_for_shrink(
 /// an `summarize_note_for_shrink`); `commands::respond_to_action` ignoriert
 /// `session_id` ohnehin bereits explizit (s. dortiger Kommentar), das Feld
 /// existiert nur, weil das wiederverwendete Event-Schema es verlangt.
-#[allow(clippy::too_many_arguments)]
 pub async fn execute_note_shrink_request(
     session_id: SessionId,
     server_id: ServerId,
     ai_provider: &dyn AiProvider,
     redactor: &dyn OutputRedactor,
-    provider_label: String,
-    model: String,
     emitter: &dyn EventEmitter,
-    profile_store: &dyn ProfileStore,
+    target: &dyn NoteShrinkTarget,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) {
-    let Ok(server) = profile_store.get_server(&server_id).await else {
+    let Some((server_name, note_text)) = target.read().await else {
         emit_note_shrink_failed(
             emitter,
             server_id,
@@ -3129,7 +3180,7 @@ pub async fn execute_note_shrink_request(
     };
 
     let Some(new_content) =
-        summarize_note_for_shrink(ai_provider, redactor, &server.name, &server.notes).await
+        summarize_note_for_shrink(ai_provider, redactor, &server_name, &note_text).await
     else {
         emit_note_shrink_failed(
             emitter,
@@ -3142,7 +3193,7 @@ pub async fn execute_note_shrink_request(
     };
 
     let action_id: ActionId = Uuid::new_v4();
-    let previous_notes = server.notes;
+    let previous_notes = note_text;
     emit_note_update_suggested(
         emitter,
         session_id,
@@ -3152,7 +3203,7 @@ pub async fn execute_note_shrink_request(
             new_content: new_content.clone(),
         },
         Some(previous_notes.clone()),
-        Some(server.name),
+        Some(server_name),
     );
 
     let rx = action_confirmations.register(action_id);
@@ -3193,18 +3244,13 @@ pub async fn execute_note_shrink_request(
     // aber Spec 0057 §6 verlangt "nie ohne Nutzer-Bestätigung verändert",
     // und bestätigt wurde hier ein Diff gegen einen inzwischen veralteten
     // Ausgangstext).
-    let current_notes = match profile_store.get_server(&server_id).await {
-        Ok(server) => server.notes,
-        Err(err) => {
-            emit_note_shrink_failed(
-                emitter,
-                server_id,
-                format!(
-                    "Notiz konnte nicht gespeichert werden — Server nicht mehr auffindbar: {err}"
-                ),
-            );
-            return;
-        }
+    let Some((_, current_notes)) = target.read().await else {
+        emit_note_shrink_failed(
+            emitter,
+            server_id,
+            "Notiz konnte nicht gespeichert werden — Server nicht mehr auffindbar.".to_string(),
+        );
+        return;
     };
     if current_notes != previous_notes {
         emit_note_shrink_failed(
@@ -3217,17 +3263,7 @@ pub async fn execute_note_shrink_request(
         return;
     }
 
-    if let Err(err) = persist_note_revision(
-        profile_store,
-        NoteTarget::Server(server_id),
-        new_content,
-        NoteEditor::Ai {
-            provider: provider_label,
-            model,
-        },
-    )
-    .await
-    {
+    if let Err(err) = target.write(new_content).await {
         // spec-reviewer-Fund (Review dieses Schritts): vorher nur geloggt —
         // der Nutzer hatte gerade "Annehmen" geklickt, die Karte verschwand,
         // und ohne dieses Event hätte er angenommen, die Notiz sei jetzt
@@ -6368,15 +6404,19 @@ mod tests {
         let emitter = TestEmitter::default();
         let confirmations = ConfirmationRegistry::new();
 
+        let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+            profile_store: &profile_store,
+            server_id,
+            provider_label: "Test-Provider".to_string(),
+            model: "test-model".to_string(),
+        };
         let flow = execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
             &redactor,
-            "Test-Provider".to_string(),
-            "test-model".to_string(),
             &emitter,
-            &profile_store,
+            &target,
             &confirmations,
         );
         let responder = async {
@@ -6455,15 +6495,19 @@ mod tests {
         let emitter = TestEmitter::default();
         let confirmations = ConfirmationRegistry::new();
 
+        let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+            profile_store: &profile_store,
+            server_id,
+            provider_label: "Test-Provider".to_string(),
+            model: "test-model".to_string(),
+        };
         let flow = execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
             &redactor,
-            "Test-Provider".to_string(),
-            "test-model".to_string(),
             &emitter,
-            &profile_store,
+            &target,
             &confirmations,
         );
         let responder = async {
@@ -6509,15 +6553,19 @@ mod tests {
         let emitter = TestEmitter::default();
         let confirmations = ConfirmationRegistry::new();
 
+        let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+            profile_store: &profile_store,
+            server_id,
+            provider_label: "Test-Provider".to_string(),
+            model: "test-model".to_string(),
+        };
         execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
             &redactor,
-            "Test-Provider".to_string(),
-            "test-model".to_string(),
             &emitter,
-            &profile_store,
+            &target,
             &confirmations,
         )
         .await;
@@ -6551,15 +6599,19 @@ mod tests {
         let emitter = TestEmitter::default();
         let confirmations = ConfirmationRegistry::new();
 
+        let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+            profile_store: &profile_store,
+            server_id,
+            provider_label: "Test-Provider".to_string(),
+            model: "test-model".to_string(),
+        };
         let flow = execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
             &redactor,
-            "Test-Provider".to_string(),
-            "test-model".to_string(),
             &emitter,
-            &profile_store,
+            &target,
             &confirmations,
         );
         let advancer = async {
@@ -6592,16 +6644,21 @@ mod tests {
         let profile_store = crate::test_support::InMemoryProfileStore::new();
         let emitter = TestEmitter::default();
         let confirmations = ConfirmationRegistry::new();
+        let server_id = ServerId::new();
 
+        let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+            profile_store: &profile_store,
+            server_id,
+            provider_label: "Test-Provider".to_string(),
+            model: "test-model".to_string(),
+        };
         execute_note_shrink_request(
             Uuid::new_v4(),
-            ServerId::new(),
+            server_id,
             &provider,
             &redactor,
-            "Test-Provider".to_string(),
-            "test-model".to_string(),
             &emitter,
-            &profile_store,
+            &target,
             &confirmations,
         )
         .await;
@@ -6658,15 +6715,19 @@ mod tests {
         let emitter = TestEmitter::default();
         let confirmations = ConfirmationRegistry::new();
 
+        let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+            profile_store: &profile_store,
+            server_id,
+            provider_label: "Test-Provider".to_string(),
+            model: "test-model".to_string(),
+        };
         let flow = execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
             &redactor,
-            "Test-Provider".to_string(),
-            "test-model".to_string(),
             &emitter,
-            &profile_store,
+            &target,
             &confirmations,
         );
         let responder = async {
@@ -6732,15 +6793,19 @@ mod tests {
         let emitter = TestEmitter::default();
         let confirmations = ConfirmationRegistry::new();
 
+        let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+            profile_store: &profile_store,
+            server_id,
+            provider_label: "Test-Provider".to_string(),
+            model: "test-model".to_string(),
+        };
         let flow = execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
             &redactor,
-            "Test-Provider".to_string(),
-            "test-model".to_string(),
             &emitter,
-            &profile_store,
+            &target,
             &confirmations,
         );
         let responder = async {
