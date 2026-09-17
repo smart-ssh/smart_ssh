@@ -70,7 +70,11 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
   useEffect(() => {
     if (autoFocus) {
       textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      textareaRef.current?.focus();
+      // `preventScroll`: `scrollIntoView({ behavior: "smooth" })` direkt
+      // darüber startet ein animiertes Scrollen, das ein nachfolgendes
+      // `.focus()` ohne dieses Flag sofort (unanimiert) abbrechen würde
+      // (spec-reviewer-Fund, Review dieses Schritts).
+      textareaRef.current?.focus({ preventScroll: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

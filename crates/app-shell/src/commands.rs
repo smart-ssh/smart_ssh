@@ -96,6 +96,28 @@ async fn list_servers_impl<R: tauri::Runtime>(
     Ok(std::iter::once(local).chain(rest).collect())
 }
 
+/// Spec 0058, Teil 2 (spec-reviewer-Fund, Review des Politur-Pakets):
+/// derselbe `is_local`-Verzweigungs-Idiom wie `list_servers_impl`/
+/// `build_session_system_context` — `profile_store.get_server` findet für
+/// den lokalen Pseudo-Server per Design nie eine Zeile (keine
+/// `servers`-Tabellenzeile, s. `local_server`-Moduldoc). Eigenständig
+/// extrahiert (statt inline in `disconnect()`s Hintergrund-Task), damit
+/// genau diese Verzweigung — der eigentliche Fix dafür, dass der
+/// Kürzungs-Vorschlag jetzt auch für den lokalen Server läuft — direkt
+/// testbar ist, statt nur implizit über eine (in diesem Fall
+/// tautologische) reine `orchestration`-Funktion.
+async fn resolve_server_for_note_shrink<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    profile_store: &dyn ProfileStore,
+    server_id: ServerId,
+) -> Option<Server> {
+    if crate::local_server::is_local(server_id) {
+        Some(crate::local_server::synthetic_server(app))
+    } else {
+        profile_store.get_server(&server_id).await.ok()
+    }
+}
+
 #[tauri::command]
 pub async fn list_ai_providers(
     state: State<'_, AppState>,
@@ -1888,23 +1910,12 @@ pub async fn disconnect(
         // Zusammenspiel-Design (nie zwei konkurrierende Notiz-Dialoge am
         // selben Verbindungsende).
         if crate::orchestration::should_suggest_note_shrink(note_update_suggested) {
-            // Spec 0058, Teil 2 (Etappe-4-Review-Fund): derselbe
-            // `is_local`-Verzweigungs-Idiom wie `build_session_system_
-            // context` oben — `profile_store.get_server` findet für den
-            // lokalen Pseudo-Server per Design nie eine Zeile (keine
-            // `servers`-Tabellenzeile, s. `local_server`-Moduldoc), der
-            // Kürzungs-Vorschlag lief bislang deshalb nie für ihn, obwohl
-            // er sehr wohl eine (über `settings.json` gespeicherte) Notiz
-            // haben kann.
-            let server = if crate::local_server::is_local(session.server_id) {
-                Some(crate::local_server::synthetic_server(&app_for_suggestion))
-            } else {
-                state
-                    .profile_store
-                    .get_server(&session.server_id)
-                    .await
-                    .ok()
-            };
+            let server = resolve_server_for_note_shrink(
+                &app_for_suggestion,
+                state.profile_store.as_ref(),
+                session.server_id,
+            )
+            .await;
             if let Some(server) = server {
                 crate::orchestration::suggest_note_shrink_on_disconnect(
                     &app_for_suggestion,
@@ -3951,6 +3962,68 @@ mod local_server_tests {
         assert_eq!(filtered[0].id, LOCAL_SERVER_ID.0.to_string());
         assert!(filtered[0].is_local);
         assert_eq!(filtered[1].name, "beta");
+    }
+
+    /// Spec 0058, Teil 2 (spec-reviewer-Fund, Review des Politur-Pakets):
+    /// direkt gegen die tatsächliche `is_local`-Verzweigung getestet — der
+    /// vorherige Test dafür saß in `orchestration::suggest_note_shrink_on_
+    /// disconnect`, das nach dem Refactoring aber gar nicht mehr zwischen
+    /// "lokal" und "echt" unterscheiden kann (jede `ServerId` verhält sich
+    /// dort identisch) und den eigentlichen Fix deshalb nicht mehr
+    /// nachweisen konnte.
+    #[tokio::test]
+    async fn test_resolve_server_for_note_shrink_uses_synthetic_server_for_the_local_pseudo_server()
+    {
+        let _guard = lock_async().await;
+        let app = test_app();
+        let handle = app.handle().clone();
+        crate::local_server::save_notes(&handle, "Eine lokale Notiz.").unwrap();
+
+        let profile_store = InMemoryProfileStore::new();
+        let server = resolve_server_for_note_shrink(&handle, &profile_store, LOCAL_SERVER_ID)
+            .await
+            .expect("der lokale Pseudo-Server muss auflösbar sein, auch ohne `servers`-Zeile");
+
+        assert_eq!(server.id, LOCAL_SERVER_ID);
+        assert_eq!(server.notes, "Eine lokale Notiz.");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_server_for_note_shrink_uses_profile_store_for_a_real_server() {
+        let _guard = lock_async().await;
+        let app = test_app();
+        let handle = app.handle().clone();
+
+        let server_id = ServerId::new();
+        let profile_store = InMemoryProfileStore::new().with_server({
+            let mut server = dummy_server("web-01", None);
+            server.id = server_id;
+            server.notes = "Eine echte Server-Notiz.".to_string();
+            server
+        });
+
+        let server = resolve_server_for_note_shrink(&handle, &profile_store, server_id)
+            .await
+            .expect("ein tatsächlich existierender Server muss auflösbar sein");
+
+        assert_eq!(server.notes, "Eine echte Server-Notiz.");
+    }
+
+    /// Best-effort wie `orchestration::note_target_preview_for_action`s
+    /// identische Begründung: ein inzwischen gelöschter Server ist kein
+    /// Absturzgrund (Coverage-Wiederherstellung — dieser Fall war vor dem
+    /// Extrahieren dieser Funktion über einen inzwischen entfernten Test in
+    /// `orchestration.rs` abgedeckt).
+    #[tokio::test]
+    async fn test_resolve_server_for_note_shrink_returns_none_when_server_not_found() {
+        let _guard = lock_async().await;
+        let app = test_app();
+        let handle = app.handle().clone();
+        let profile_store = InMemoryProfileStore::new();
+
+        let server = resolve_server_for_note_shrink(&handle, &profile_store, ServerId::new()).await;
+
+        assert!(server.is_none());
     }
 
     /// Regressionstest für den unabhängigen Review-Pass (docs/adr/0026):

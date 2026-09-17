@@ -17,6 +17,7 @@ import {
   updateServer,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
+import { onNoteShrinkSucceeded } from "../events";
 import { pickAndReadTextFile } from "../fileDialog";
 import { loadRiskClassifierSettings } from "../riskSettings";
 import type {
@@ -147,7 +148,8 @@ export function ServerForm({
     if (loaded && isLocal && autoFocusNotes && !hasAutoFocusedLocalNotes.current) {
       hasAutoFocusedLocalNotes.current = true;
       localNotesRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      localNotesRef.current?.focus();
+      // `preventScroll`: s. identischer Kommentar in `NotesPanel.tsx`.
+      localNotesRef.current?.focus({ preventScroll: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, isLocal]);
@@ -218,7 +220,7 @@ export function ServerForm({
   const [preview, setPreview] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  useEffect(() => {
+  const loadServer = () => {
     setError(null);
     setTestResult(null);
     setPendingHostKey(null);
@@ -258,7 +260,26 @@ export function ServerForm({
         setAiInjectionCheckEnabled(server.aiInjectionCheckEnabled);
       })
       .catch((err) => setError(commandErrorMessage(err)));
-  }, [serverId, defaultGroupId]);
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadServer, [serverId, defaultGroupId]);
+
+  // spec-reviewer-Fund (Spec 0058, Review des Politur-Pakets): der neue
+  // "Jetzt zusammenfassen"-Link (unten) kann eine Zustimmung auslösen,
+  // WÄHREND dieses Formular noch offen ist — ohne Neuladen würde ein
+  // anschließender Klick auf "Speichern" die gerade akzeptierte
+  // Zusammenfassung mit dem alten `localNotes`-Entwurf überschreiben.
+  useEffect(() => {
+    if (!loaded) return;
+    const unlisten = onNoteShrinkSucceeded((event) => {
+      if (event.serverId === loaded.id) loadServer();
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded?.id]);
 
   // Spec 0032, Abschnitt 6: der lokale Pseudo-Server kann nicht als
   // Jump-Host referenziert werden.
@@ -498,17 +519,14 @@ export function ServerForm({
           {t("common.notes")}
           {isLocalNoteLarge && (
             <div className="mt-1 rounded border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
-              <p>
-                Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt
-                werden. Die gespeicherte Notiz bleibt vollständig erhalten.
-              </p>
+              <p>{t("serverForm.largeNoteHint")}</p>
               <button
                 type="button"
                 onClick={handleSummarizeLocalNoteNow}
                 disabled={localShrinkRequesting}
                 className="mt-1.5 underline hover:no-underline disabled:opacity-50"
               >
-                {localShrinkRequesting ? "Wird angefragt…" : "Jetzt zusammenfassen"}
+                {localShrinkRequesting ? t("serverForm.summarizeRequesting") : t("serverForm.summarizeNow")}
               </button>
               {localShrinkError && <p className="mt-1 text-red-400">{localShrinkError}</p>}
             </div>

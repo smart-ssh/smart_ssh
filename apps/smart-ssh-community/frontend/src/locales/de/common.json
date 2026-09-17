@@ -158,7 +158,10 @@
       "hostKeyMismatch": "⚠ Host-Key hat sich geändert",
       "networkError": "✗ Netzwerkfehler: {{message}}",
       "timeout": "✗ Zeitüberschreitung"
-    }
+    },
+    "largeNoteHint": "Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt werden. Die gespeicherte Notiz bleibt vollständig erhalten.",
+    "summarizeNow": "Jetzt zusammenfassen",
+    "summarizeRequesting": "Wird angefragt…"
   },
   "filterRules": {
     "title": "Regeln",

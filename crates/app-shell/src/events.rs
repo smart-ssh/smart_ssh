@@ -431,6 +431,31 @@ pub fn emit_note_shrink_failed(emitter: &dyn EventEmitter, server_id: ServerId, 
     );
 }
 
+/// spec-reviewer-Fund (Spec 0058, Review des Politur-Pakets): ohne ein
+/// Erfolgs-Gegenstück blieb ein zeitgleich OFFENER Notiz-Editor (Spec 0058
+/// §1 fügt mit dem "Jetzt zusammenfassen"-Link genau diesen neuen
+/// Einstiegspunkt hinzu, den es in Etappe 4 noch nicht gab — dort kam der
+/// Anstoß immer aus einem Toast nach `disconnect()`, wenn der Editor
+/// typischerweise gar nicht offen war) nach einer erfolgreichen
+/// Zustimmung auf seinem alten, ungekürzten `draft`/`currentNotes` sitzen
+/// — ein anschließender Klick auf "Notiz speichern" hätte die gerade
+/// akzeptierte Zusammenfassung wieder stillschweigend überschrieben.
+/// `NotesPanel`/`ServerForm`s lokaler Zweig hören darauf und laden den
+/// aktuellen Stand neu (`onNotesChanged()`).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NoteShrinkSucceededPayload {
+    server_id: ServerId,
+}
+
+pub fn emit_note_shrink_succeeded(emitter: &dyn EventEmitter, server_id: ServerId) {
+    emit(
+        emitter,
+        "note-shrink-succeeded",
+        &NoteShrinkSucceededPayload { server_id },
+    );
+}
+
 /// Spec 0012, Abschnitt 3 — direkt aus `AiEvent::ActionProposed(GenerateDocument
 /// { .. })` weitergereicht, ohne Umweg über `chat-action-proposed`: es gibt
 /// hier keine `Decision` (kein Filter-Engine-/Bestätigungspfad, s.

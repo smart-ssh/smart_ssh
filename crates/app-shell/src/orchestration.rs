@@ -60,8 +60,9 @@ use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_chat_action_proposed, emit_chat_action_result, emit_chat_auto_continuation_limit_reached,
     emit_chat_auto_continuation_started, emit_chat_document_generated, emit_chat_error,
-    emit_chat_text_delta, emit_note_shrink_failed, emit_note_shrink_suggested,
-    emit_note_update_suggested, emit_risk_assessment_updated, ActionResultPayload, EventEmitter,
+    emit_chat_text_delta, emit_note_shrink_failed, emit_note_shrink_succeeded,
+    emit_note_shrink_suggested, emit_note_update_suggested, emit_risk_assessment_updated,
+    ActionResultPayload, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -3263,20 +3264,31 @@ pub async fn execute_note_shrink_request(
         return;
     }
 
-    if let Err(err) = target.write(new_content).await {
-        // spec-reviewer-Fund (Review dieses Schritts): vorher nur geloggt —
-        // der Nutzer hatte gerade "Annehmen" geklickt, die Karte verschwand,
-        // und ohne dieses Event hätte er angenommen, die Notiz sei jetzt
-        // gekürzt, obwohl nichts geschrieben wurde. Kein `session`, an das
-        // ein `chat-action-result`/-`error` gebunden werden könnte (s.
-        // Doc-Kommentar an der Funktion) — deshalb dasselbe app-weite
-        // `note-shrink-failed` wie bei einem KI-Fehlschlag.
-        tracing::warn!(error = %err, "note shrink persistence failed");
-        emit_note_shrink_failed(
-            emitter,
-            server_id,
-            format!("Notiz konnte nicht gespeichert werden: {err}"),
-        );
+    match target.write(new_content).await {
+        Ok(()) => {
+            // spec-reviewer-Fund (Spec 0058, Review des Politur-Pakets): s.
+            // `emit_note_shrink_succeeded`-Doc-Kommentar — ein zeitgleich
+            // offener Notiz-Editor muss den frisch gekürzten Stand
+            // übernehmen, sonst überschreibt sein nächster "Speichern"-Klick
+            // die gerade akzeptierte Zusammenfassung wieder.
+            emit_note_shrink_succeeded(emitter, server_id);
+        }
+        Err(err) => {
+            // spec-reviewer-Fund (Review dieses Schritts): vorher nur
+            // geloggt — der Nutzer hatte gerade "Annehmen" geklickt, die
+            // Karte verschwand, und ohne dieses Event hätte er angenommen,
+            // die Notiz sei jetzt gekürzt, obwohl nichts geschrieben wurde.
+            // Kein `session`, an das ein `chat-action-result`/-`error`
+            // gebunden werden könnte (s. Doc-Kommentar an der Funktion) —
+            // deshalb dasselbe app-weite `note-shrink-failed` wie bei einem
+            // KI-Fehlschlag.
+            tracing::warn!(error = %err, "note shrink persistence failed");
+            emit_note_shrink_failed(
+                emitter,
+                server_id,
+                format!("Notiz konnte nicht gespeichert werden: {err}"),
+            );
+        }
     }
 }
 
@@ -6202,35 +6214,19 @@ mod tests {
         );
     }
 
-    /// Spec 0058, Teil 2 (Etappe-4-Review-Fund): der lokale Pseudo-Server
-    /// hat keine `servers`-Zeile, aus der `profile_store.get_server` je
-    /// eine Notiz lesen könnte — die Auflösung (`local_server::
-    /// synthetic_server` vs. `profile_store.get_server`) passiert deshalb
-    /// jetzt VOR diesem Aufruf, in `commands::disconnect` (s. Doc-Kommentar
-    /// an der Funktion). Diese Funktion selbst kennt "lokal" vs. "echt"
-    /// gar nicht mehr — sie bekommt Name/Notiz bereits aufgelöst und
-    /// behandelt jeden Server identisch. Test beweist genau das: die
-    /// Nil-UUID (`local_server::LOCAL_SERVER_ID`) ist für diese Funktion
-    /// nur eine ganz normale `ServerId`, keine Sonderbehandlung nötig.
-    #[test]
-    fn test_note_shrink_dialog_treats_the_local_pseudo_server_id_like_any_other() {
-        let large_notes = "n".repeat(LARGE_NOTE_DIALOG_THRESHOLD_BYTES);
-        let emitter = TestEmitter::default();
-
-        suggest_note_shrink_on_disconnect(
-            &emitter,
-            crate::local_server::LOCAL_SERVER_ID,
-            "Localhost".to_string(),
-            &large_notes,
-        );
-
-        let events = emitter.events.lock().unwrap().clone();
-        assert_eq!(events.len(), 1);
-        assert_eq!(
-            events[0].1["serverId"],
-            crate::local_server::LOCAL_SERVER_ID.0.to_string()
-        );
-    }
+    // Spec 0058, Teil 2 (Etappe-4-Review-Fund): der lokale Pseudo-Server
+    // hat keine `servers`-Zeile, aus der `profile_store.get_server` je eine
+    // Notiz lesen könnte — die Auflösung (`local_server::synthetic_server`
+    // vs. `profile_store.get_server`) passiert deshalb VOR diesem Aufruf,
+    // in `commands::resolve_server_for_note_shrink` (dort direkt getestet
+    // — `test_resolve_server_for_note_shrink_uses_synthetic_server_for_
+    // the_local_pseudo_server`). Diese Funktion selbst kennt "lokal" vs.
+    // "echt" gar nicht mehr — sie bekommt Name/Notiz bereits aufgelöst und
+    // behandelt jeden Server identisch. spec-reviewer-Fund (Review dieses
+    // Schritts): ein Test, der hier zusätzlich die Nil-UUID durchreicht,
+    // wäre tautologisch (diese Funktion kann "lokal" strukturell gar nicht
+    // mehr unterscheiden) — der eigentliche Fix wird deshalb bewusst NICHT
+    // hier, sondern an der `commands.rs`-Verzweigung selbst getestet.
 
     /// Spec 0057, §4.2/§6: der KI-Aufruf hinter "Ja, zusammenfassen" ist
     /// session-unabhängig — direkt gegen `&dyn AiProvider`/`&dyn
@@ -6451,7 +6447,12 @@ mod tests {
         tokio::join!(flow, responder);
 
         let events = emitter.events.lock().unwrap().clone();
-        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events.len(),
+            2,
+            "note-update-suggested, dann (nach Zustimmung + erfolgreichem Schreiben) \
+             note-shrink-succeeded — s. `emit_note_shrink_succeeded`-Doc-Kommentar"
+        );
         assert_eq!(events[0].0, "note-update-suggested");
         assert_eq!(
             events[0].1["previousNoteContent"],
@@ -6461,6 +6462,8 @@ mod tests {
             events[0].1["action"]["ProposeNoteUpdate"]["new_content"],
             "Gekürzte Fassung."
         );
+        assert_eq!(events[1].0, "note-shrink-succeeded");
+        assert_eq!(events[1].1["serverId"], server_id.0.to_string());
 
         assert_eq!(
             profile_store.get_server(&server_id).await.unwrap().notes,

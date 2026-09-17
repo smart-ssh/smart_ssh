@@ -11,6 +11,7 @@ import type {
   HostKeyVerificationNeededEvent,
   McpActionTabRequestedEvent,
   NoteShrinkFailedEvent,
+  NoteShrinkSucceededEvent,
   NoteShrinkSuggestedEvent,
   NoteUpdateSuggestedEvent,
   RiskAssessmentUpdatedEvent,
@@ -106,6 +107,13 @@ export const onNoteShrinkFailed = (
   handler: (event: NoteShrinkFailedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<NoteShrinkFailedEvent>("note-shrink-failed", (e) => handler(e.payload));
+
+/** Spec 0058 (Politur-Paket) — das Erfolgs-Gegenstück, s.
+ * `NoteShrinkSucceededEvent`-Doc-Kommentar. */
+export const onNoteShrinkSucceeded = (
+  handler: (event: NoteShrinkSucceededEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<NoteShrinkSucceededEvent>("note-shrink-succeeded", (e) => handler(e.payload));
 
 /** Spec 0012 — läuft, anders als `onChatActionProposed`, nie durch einen
  * Bestätigungsdialog (s. `ChatDocumentGeneratedEvent`-Doc-Kommentar). */

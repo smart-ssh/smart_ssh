@@ -4,10 +4,19 @@
 // älteste zeigt "Ursprüngliche Version" ohne Diff-Darstellung.
 import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { NoteRevisionDto } from "../types";
 import { NotesPanel } from "./NotesPanel";
+
+// spec-reviewer-Fund (Spec 0058, Review des Politur-Pakets): jsdom kennt
+// `scrollIntoView` nicht — die autoFocus-Tests unten überschreiben es global
+// auf `Element.prototype`. Ohne Wiederherstellung würde dieser Stub in JEDEN
+// später in derselben Datei laufenden Test durchsickern.
+const originalScrollIntoView = Element.prototype.scrollIntoView;
+afterEach(() => {
+  Element.prototype.scrollIntoView = originalScrollIntoView;
+});
 
 const revisions: NoteRevisionDto[] = [
   {
@@ -194,6 +203,25 @@ describe("large note hint (Spec 0058, Teil 1)", () => {
 
     fireEvent.click(screen.getByText("Jetzt zusammenfassen"));
     expect(mockRequestNoteShrink).toHaveBeenCalledWith("server-1");
+  });
+
+  it("counts UTF-8 bytes, not UTF-16 code units (multi-byte characters)", async () => {
+    // "ä" ist 1 UTF-16-Code-Einheit (`string.length`), aber 2 UTF-8-Byte —
+    // ein Rückfall von `utf8ByteLength` auf `draft.length` würde diesen Test
+    // nicht bestehen (10 Zeichen, `.length` = 10 < 15, aber 20 UTF-8-Byte
+    // >= 15).
+    mockLargeNoteDialogThresholdBytes.mockResolvedValueOnce(15);
+    const note = "ä".repeat(10);
+    expect(note.length).toBeLessThan(15);
+    expect(new TextEncoder().encode(note).length).toBeGreaterThanOrEqual(15);
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <NotesPanel target={{ Server: "server-1" }} currentNotes={note} onNotesChanged={() => {}} />
+      </I18nextProvider>,
+    );
+
+    await screen.findByText(/sehr groß und kann bei langen Sitzungen/);
   });
 
   it("does not show the hint for a note below the threshold", async () => {

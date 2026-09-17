@@ -158,7 +158,10 @@
       "hostKeyMismatch": "⚠ Host key has changed",
       "networkError": "✗ Network error: {{message}}",
       "timeout": "✗ Timeout"
-    }
+    },
+    "largeNoteHint": "This note is very large and may be shortened for the AI context during long sessions. The stored note stays fully intact.",
+    "summarizeNow": "Summarize now",
+    "summarizeRequesting": "Requesting…"
   },
   "filterRules": {
     "title": "Rules",

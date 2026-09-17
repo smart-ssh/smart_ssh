@@ -272,6 +272,15 @@ export interface NoteShrinkFailedEvent {
   message: string;
 }
 
+/** Spec 0058 (Politur-Paket), spec-reviewer-Fund: das Erfolgs-Gegenstück zu
+ * `NoteShrinkFailedEvent` — ein zeitgleich offener Notiz-Editor (z. B. über
+ * den neuen "Jetzt zusammenfassen"-Link im Editor selbst ausgelöst, s.
+ * `NotesPanel.tsx`) muss nach Zustimmung neu laden, sonst überschreibt sein
+ * nächster "Speichern"-Klick die gerade akzeptierte Zusammenfassung. */
+export interface NoteShrinkSucceededEvent {
+  serverId: string;
+}
+
 /** Spec 0021, Abschnitt 5: signalisiert eine *automatische* Folgerunde (die
  * KI antwortet auf ein Aktionsergebnis, ohne dass der Nutzer getippt hat) —
  * Grundlage für den "Automatik läuft"-Indikator. `round` ist nur zur

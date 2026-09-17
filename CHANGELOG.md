@@ -14,9 +14,16 @@ sind mit **(Pro)** markiert.
   Trennen der Verbindung jetzt an, sie per KI zusammenzufassen (oder
   selbst zu kürzen) — wie bei jedem KI-Notiz-Vorschlag wird die
   Zusammenfassung erst nach Bestätigung im Diff-Vergleich (alt/neu)
-  tatsächlich gespeichert, nie automatisch.
+  tatsächlich gespeichert, nie automatisch. Dieser Vorschlag erscheint
+  jetzt auch für den lokalen Pseudo-Server (Localhost).
+- Der Notiz-Editor zeigt jetzt beim Bearbeiten einer sehr großen Notiz
+  einen dezenten Hinweis mit direktem Link, sie sofort per KI
+  zusammenfassen zu lassen (derselbe Bestätigungs-Ablauf wie beim
+  Trennen-Vorschlag).
 
 ### Fixed
+- "Mache ich selbst" im Kürzungs-Vorschlag scrollt jetzt direkt zum
+  Notizfeld und fokussiert es, statt nur das Server-Formular zu öffnen.
 - Ein KI-Provider (oder ein zwischengeschalteter Proxy), der einen
   Fehlerstatus zwar sofort beantwortete, den Antworttext danach aber
   hängen ließ, konnte einen Chat-Turn unbegrenzt und ohne jede
