@@ -1888,12 +1888,31 @@ pub async fn disconnect(
         // Zusammenspiel-Design (nie zwei konkurrierende Notiz-Dialoge am
         // selben Verbindungsende).
         if crate::orchestration::should_suggest_note_shrink(note_update_suggested) {
-            crate::orchestration::suggest_note_shrink_on_disconnect(
-                &session,
-                &app_for_suggestion,
-                state.profile_store.as_ref(),
-            )
-            .await;
+            // Spec 0058, Teil 2 (Etappe-4-Review-Fund): derselbe
+            // `is_local`-Verzweigungs-Idiom wie `build_session_system_
+            // context` oben — `profile_store.get_server` findet für den
+            // lokalen Pseudo-Server per Design nie eine Zeile (keine
+            // `servers`-Tabellenzeile, s. `local_server`-Moduldoc), der
+            // Kürzungs-Vorschlag lief bislang deshalb nie für ihn, obwohl
+            // er sehr wohl eine (über `settings.json` gespeicherte) Notiz
+            // haben kann.
+            let server = if crate::local_server::is_local(session.server_id) {
+                Some(crate::local_server::synthetic_server(&app_for_suggestion))
+            } else {
+                state
+                    .profile_store
+                    .get_server(&session.server_id)
+                    .await
+                    .ok()
+            };
+            if let Some(server) = server {
+                crate::orchestration::suggest_note_shrink_on_disconnect(
+                    &app_for_suggestion,
+                    server.id,
+                    server.name,
+                    &server.notes,
+                );
+            }
         }
     });
 

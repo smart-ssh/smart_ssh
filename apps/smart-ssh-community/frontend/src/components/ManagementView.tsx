@@ -31,6 +31,13 @@ export function ManagementView({
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [selection, setSelection] = useState<Selection | null>(initialSelection);
   const [error, setError] = useState<string | null>(null);
+  // Spec 0058, Teil 2: `true` genau dann, wenn die aktuelle `selection` aus
+  // `initialSelection` (dem Navigations-Bus, "Mache ich selbst") stammt —
+  // steuert `ServerForm`s `autoFocusNotes`. Auf `false` zurückgesetzt bei
+  // jeder MANUELLEN Sidebar-Auswahl (`selectManually` unten), sonst würde
+  // ein späterer normaler Klick auf einen ANDEREN Server fälschlich
+  // ebenfalls automatisch scrollen/fokussieren.
+  const [focusNotesOnOpen, setFocusNotesOnOpen] = useState(Boolean(initialSelection));
 
   // `initialSelection` kommt von außen (Navigations-Bus), kann sich also
   // ändern, NACHDEM diese Komponente bereits gemountet ist (anders als ein
@@ -39,10 +46,16 @@ export function ManagementView({
   useEffect(() => {
     if (initialSelection) {
       setSelection(initialSelection);
+      setFocusNotesOnOpen(true);
       onInitialSelectionConsumed?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSelection]);
+
+  const selectManually = (next: Selection | null) => {
+    setFocusNotesOnOpen(false);
+    setSelection(next);
+  };
 
   const reload = () => {
     Promise.all([listGroups(), listServers()])
@@ -56,18 +69,18 @@ export function ManagementView({
   useEffect(reload, []);
 
   const handleDeleted = () => {
-    setSelection(null);
+    selectManually(null);
     reload();
   };
 
   const handleCreated = () => {
-    setSelection(null);
+    selectManually(null);
     reload();
   };
 
   return (
     <div className="flex min-h-0 flex-1">
-      <Sidebar groups={groups} servers={servers} selection={selection} onSelect={setSelection} />
+      <Sidebar groups={groups} servers={servers} selection={selection} onSelect={selectManually} />
       <div className="flex-1 overflow-y-auto">
         {error && <p className="p-4 text-sm text-red-400">{error}</p>}
 
@@ -111,6 +124,7 @@ export function ManagementView({
             allServers={servers}
             onSaved={reload}
             onDeleted={handleDeleted}
+            autoFocusNotes={focusNotesOnOpen}
           />
         )}
         {selection?.kind === "newServer" && (

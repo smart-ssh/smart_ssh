@@ -2908,7 +2908,13 @@ pub fn should_suggest_note_shrink(note_update_was_suggested: bool) -> bool {
 /// groß ist wie das, was eine gekürzte Fassung maximal fassen darf, ist ein
 /// sinnvoller Auslöser, ohne bei normal genutzten Notizen (typischerweise
 /// wenige hundert Byte) zu nerven.
-const LARGE_NOTE_DIALOG_THRESHOLD_BYTES: usize = 8_000;
+///
+/// `pub(crate)` statt privat (spec 0058, Teil 1/Etappe 5): derselbe
+/// Schwellwert entscheidet jetzt auch über den proaktiven Hinweis im
+/// Notiz-Editor (`commands::large_note_dialog_threshold_bytes`, von dort ans
+/// Frontend gereicht) — eine Quelle der Wahrheit statt einer zweiten,
+/// hartkodierten Zahl im Frontend.
+pub(crate) const LARGE_NOTE_DIALOG_THRESHOLD_BYTES: usize = 8_000;
 
 /// Spec 0057, §4.2 (Etappe 4): beim Verbindungsende geprüft, im selben
 /// Hintergrund-Task wie `suggest_note_update_on_disconnect`
@@ -2923,20 +2929,32 @@ const LARGE_NOTE_DIALOG_THRESHOLD_BYTES: usize = 8_000;
 /// zusammenfassen" (`commands::request_note_shrink` →
 /// `execute_note_shrink_request`) — kein automatischer
 /// Zusammenfassungsversuch ohne Nutzer-Anstoß, wie §4.2 es verlangt.
-pub async fn suggest_note_shrink_on_disconnect(
-    session: &Session,
+///
+/// **Bewusst rein synchron und ohne `ProfileStore`/`Session`/`AppHandle`**
+/// (spec-0058-Fund, Teil 2 — Etappe-4-Review hatte offen gelassen, ob der
+/// lokale Pseudo-Server je eine Notiz-Größenprüfung durchläuft): die
+/// GESPEICHERTE Notiz eines Servers aufzulösen unterscheidet sich für den
+/// lokalen Pseudo-Server (kein `servers`-Zeile, `local_server::
+/// synthetic_server` + `tauri::AppHandle` nötig, s. dortige Moduldoc) von
+/// jedem echten Server (`profile_store.get_server`) — diese Datei bleibt
+/// laut eigenem Moduldoc-Kommentar bewusst Tauri-unabhängig (kein
+/// `tauri::AppHandle` direkt). Die Auflösung passiert deshalb VOR diesem
+/// Aufruf in `commands::disconnect` (derselbe `is_local`-Verzweigungs-
+/// Idiom wie `commands::build_session_system_context`) — diese Funktion
+/// bekommt Name/Notiz bereits aufgelöst und prüft nur noch die Schwelle.
+/// Ergebnis: der Dialog funktioniert jetzt für JEDEN Server gleich,
+/// einschließlich des lokalen Pseudo-Servers (der sehr wohl eine Notiz
+/// haben kann, s. `local_server::synthetic_server`).
+pub fn suggest_note_shrink_on_disconnect(
     emitter: &dyn EventEmitter,
-    profile_store: &dyn ProfileStore,
+    server_id: ServerId,
+    server_name: String,
+    note_text: &str,
 ) {
-    let Ok(server) = profile_store.get_server(&session.server_id).await else {
-        // Server evtl. inzwischen gelöscht — best effort, kein Fehler (s.
-        // `note_target_preview_for_action`s identische Begründung).
-        return;
-    };
-    if server.notes.len() < LARGE_NOTE_DIALOG_THRESHOLD_BYTES {
+    if note_text.len() < LARGE_NOTE_DIALOG_THRESHOLD_BYTES {
         return;
     }
-    emit_note_shrink_suggested(emitter, server.id, server.name);
+    emit_note_shrink_suggested(emitter, server_id, server_name);
 }
 
 /// Eigener Zeitrahmen für den Notiz-Kürzungs-KI-Aufruf (Spec 0057, §4.2/§6:
@@ -6105,16 +6123,18 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_note_shrink_dialog_appears_for_large_note() {
-        let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-        let server_id = session.server_id;
+    #[test]
+    fn test_note_shrink_dialog_appears_for_large_note() {
+        let server_id = ServerId::new();
         let large_notes = "n".repeat(LARGE_NOTE_DIALOG_THRESHOLD_BYTES);
-        let profile_store = crate::test_support::InMemoryProfileStore::new()
-            .with_server(server_with_notes(server_id, &large_notes));
         let emitter = TestEmitter::default();
 
-        suggest_note_shrink_on_disconnect(&session, &emitter, &profile_store).await;
+        suggest_note_shrink_on_disconnect(
+            &emitter,
+            server_id,
+            "Test-Server".to_string(),
+            &large_notes,
+        );
 
         let events = emitter.events.lock().unwrap().clone();
         assert_eq!(
@@ -6129,15 +6149,16 @@ mod tests {
 
     /// Spec 0057, §4.2, wörtlich: "Nur bei großer Notiz — bei normalen
     /// Notizen kein Dialog (nicht nerven)".
-    #[tokio::test]
-    async fn test_note_shrink_dialog_does_not_appear_for_normal_note() {
-        let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-        let server_id = session.server_id;
-        let profile_store = crate::test_support::InMemoryProfileStore::new()
-            .with_server(server_with_notes(server_id, "Kurze, normale Notiz."));
+    #[test]
+    fn test_note_shrink_dialog_does_not_appear_for_normal_note() {
         let emitter = TestEmitter::default();
 
-        suggest_note_shrink_on_disconnect(&session, &emitter, &profile_store).await;
+        suggest_note_shrink_on_disconnect(
+            &emitter,
+            ServerId::new(),
+            "Test-Server".to_string(),
+            "Kurze, normale Notiz.",
+        );
 
         assert!(
             emitter.events.lock().unwrap().is_empty(),
@@ -6145,17 +6166,34 @@ mod tests {
         );
     }
 
-    /// Best-effort wie `note_target_preview_for_action`s identische
-    /// Begründung: ein inzwischen gelöschter Server ist kein Absturzgrund.
-    #[tokio::test]
-    async fn test_note_shrink_dialog_skipped_when_server_not_found() {
-        let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-        let profile_store = crate::test_support::InMemoryProfileStore::new();
+    /// Spec 0058, Teil 2 (Etappe-4-Review-Fund): der lokale Pseudo-Server
+    /// hat keine `servers`-Zeile, aus der `profile_store.get_server` je
+    /// eine Notiz lesen könnte — die Auflösung (`local_server::
+    /// synthetic_server` vs. `profile_store.get_server`) passiert deshalb
+    /// jetzt VOR diesem Aufruf, in `commands::disconnect` (s. Doc-Kommentar
+    /// an der Funktion). Diese Funktion selbst kennt "lokal" vs. "echt"
+    /// gar nicht mehr — sie bekommt Name/Notiz bereits aufgelöst und
+    /// behandelt jeden Server identisch. Test beweist genau das: die
+    /// Nil-UUID (`local_server::LOCAL_SERVER_ID`) ist für diese Funktion
+    /// nur eine ganz normale `ServerId`, keine Sonderbehandlung nötig.
+    #[test]
+    fn test_note_shrink_dialog_treats_the_local_pseudo_server_id_like_any_other() {
+        let large_notes = "n".repeat(LARGE_NOTE_DIALOG_THRESHOLD_BYTES);
         let emitter = TestEmitter::default();
 
-        suggest_note_shrink_on_disconnect(&session, &emitter, &profile_store).await;
+        suggest_note_shrink_on_disconnect(
+            &emitter,
+            crate::local_server::LOCAL_SERVER_ID,
+            "Localhost".to_string(),
+            &large_notes,
+        );
 
-        assert!(emitter.events.lock().unwrap().is_empty());
+        let events = emitter.events.lock().unwrap().clone();
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0].1["serverId"],
+            crate::local_server::LOCAL_SERVER_ID.0.to_string()
+        );
     }
 
     /// Spec 0057, §4.2/§6: der KI-Aufruf hinter "Ja, zusammenfassen" ist

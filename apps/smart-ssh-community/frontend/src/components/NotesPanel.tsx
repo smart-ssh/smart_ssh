@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   commandErrorMessage,
   listNoteRevisions,
@@ -15,6 +15,13 @@ interface NotesPanelProps {
   /** Nach erfolgreichem Speichern/Rollback — Elternformular lädt den
    * Server/die Gruppe neu, damit `currentNotes` aktuell bleibt. */
   onNotesChanged: () => void;
+  /** Spec 0058, Teil 2 (Etappe-4-Review-Fund): "Mache ich selbst" im
+   * Kürzungs-Vorschlags-Dialog öffnete bisher nur das Server-Formular, ohne
+   * zum Notizfeld zu scrollen/es zu fokussieren — der Nutzer musste es
+   * erst suchen. `true` genau dann, wenn dieses Formular DESHALB geöffnet
+   * wurde (einmalig beim Mounten ausgewertet, s. Effekt unten); Default
+   * `false` für den regulären Aufruf über die Sidebar-Navigation. */
+  autoFocus?: boolean;
 }
 
 /**
@@ -22,7 +29,7 @@ interface NotesPanelProps {
  * Gruppen- und Server-Formular, da beide identisch funktionieren (nur das
  * `NoteTarget` unterscheidet sich).
  */
-export function NotesPanel({ target, currentNotes, onNotesChanged }: NotesPanelProps) {
+export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = false }: NotesPanelProps) {
   const [draft, setDraft] = useState(currentNotes);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +38,20 @@ export function NotesPanel({ target, currentNotes, onNotesChanged }: NotesPanelP
   // Spec 0030, Abschnitt 3: pro Eintrag einzeln auf-/zuklappbar, mehrere
   // gleichzeitig möglich — standardmäßig leer (alles eingeklappt).
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Nur beim Mounten ausgewertet (leere Dependency-Liste) — `NotesPanel`
+  // wird über `ServerForm`s `key={selection.id}` (`ManagementView.tsx`)
+  // bei jedem Server-/Gruppenwechsel frisch gemountet, ein einmaliges
+  // Scroll+Fokus beim Öffnen ist also korrekt, kein erneutes Feuern bei
+  // jedem Tippen im Feld nötig.
+  useEffect(() => {
+    if (autoFocus) {
+      textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      textareaRef.current?.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleExpanded = (revisionId: string) => {
     setExpandedRevisionIds((prev) => {
@@ -91,6 +112,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged }: NotesPanelP
       <label className="block text-sm text-slate-300">
         Notiz (Kontext für die KI)
         <textarea
+          ref={textareaRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={6}

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   clearServerSudoPassword,
@@ -39,6 +39,11 @@ interface ServerFormProps {
   allServers: ServerDto[];
   onSaved: () => void;
   onDeleted: () => void;
+  /** Spec 0058, Teil 2 — s. `NotesPanel.autoFocus`-Doc-Kommentar. Gilt für
+   * BEIDE Notiz-Editoren dieses Formulars (den lokalen Pseudo-Server-Zweig
+   * unten und den regulären `NotesPanel`-Zweig) — "Mache ich selbst" kann
+   * sich auf jeden Server beziehen, den lokalen eingeschlossen. */
+  autoFocusNotes?: boolean;
 }
 
 /** `t` wird als Parameter durchgereicht statt selbst `useTranslation()`
@@ -112,6 +117,7 @@ export function ServerForm({
   allServers,
   onSaved,
   onDeleted,
+  autoFocusNotes = false,
 }: ServerFormProps) {
   const { t } = useTranslation();
   const AUTH_KIND_LABELS = authKindLabels(t);
@@ -124,6 +130,25 @@ export function ServerForm({
   const [localNotes, setLocalNotes] = useState("");
   const [savingLocalNotes, setSavingLocalNotes] = useState(false);
   const [savingLocalTags, setSavingLocalTags] = useState(false);
+  // Spec 0058, Teil 2: derselbe Scroll+Fokus-Effekt wie `NotesPanel`s
+  // `autoFocus`-Prop, hier für den lokalen Pseudo-Server (der `NotesPanel`
+  // gar nicht verwendet, s. `ServerForm.tsx`s eigener Zweig unten/dortiger
+  // Kommentar) separat nachgebaut. `hasAutoFocused`-Ref statt eines
+  // einfachen `[]`-Effekts (der `localNotesRef.current` wäre beim
+  // allerersten Render noch `null`, da `loaded` erst asynchron nachlädt) —
+  // greift dadurch genau EINMAL, sobald `loaded` tatsächlich verfügbar
+  // ist, nicht erneut bei jedem späteren `loaded`-Wechsel (z. B. nach dem
+  // Speichern).
+  const localNotesRef = useRef<HTMLTextAreaElement>(null);
+  const hasAutoFocusedLocalNotes = useRef(false);
+  useEffect(() => {
+    if (loaded && isLocal && autoFocusNotes && !hasAutoFocusedLocalNotes.current) {
+      hasAutoFocusedLocalNotes.current = true;
+      localNotesRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      localNotesRef.current?.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, isLocal]);
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("22");
@@ -444,6 +469,7 @@ export function ServerForm({
         <div className="block text-sm text-slate-300">
           {t("common.notes")}
           <textarea
+            ref={localNotesRef}
             value={localNotes}
             onChange={(e) => setLocalNotes(e.target.value)}
             rows={6}
@@ -812,7 +838,12 @@ export function ServerForm({
 
       {!isCreate && serverId && loaded && (
         <>
-          <NotesPanel target={{ Server: serverId }} currentNotes={loaded.notes} onNotesChanged={onSaved} />
+          <NotesPanel
+            target={{ Server: serverId }}
+            currentNotes={loaded.notes}
+            onNotesChanged={onSaved}
+            autoFocus={autoFocusNotes}
+          />
 
           <div>
             <button

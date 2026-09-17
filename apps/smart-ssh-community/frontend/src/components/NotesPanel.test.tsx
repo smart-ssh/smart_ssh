@@ -111,3 +111,49 @@ describe("note history diff (Spec 0030)", () => {
     expect(container.querySelector(".font-mono")).toBeNull();
   });
 });
+
+// Spec 0058, Teil 2 (Etappe-4-Review-Fund): "Mache ich selbst" öffnete
+// bisher nur das Formular, ohne zum Notizfeld zu scrollen/es zu
+// fokussieren — der Nutzer musste es erst suchen.
+describe("autoFocus (Spec 0058, Teil 2)", () => {
+  it("scrolls to and focuses the textarea when autoFocus is true", () => {
+    const scrollIntoView = vi.fn();
+    // jsdom implementiert `scrollIntoView` nicht — ohne diesen Stub würfe
+    // der Aufruf in `NotesPanel`s Mount-Effekt.
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <NotesPanel
+          target={{ Server: "server-1" }}
+          currentNotes="Eine Notiz"
+          onNotesChanged={() => {}}
+          autoFocus
+        />
+      </I18nextProvider>,
+    );
+
+    const textarea = screen.getByRole("textbox");
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(textarea).toHaveFocus();
+  });
+
+  it("does not scroll or focus when autoFocus is false (the regular navigation case)", () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <NotesPanel
+          target={{ Server: "server-1" }}
+          currentNotes="Eine Notiz"
+          onNotesChanged={() => {}}
+        />
+      </I18nextProvider>,
+    );
+
+    const textarea = screen.getByRole("textbox");
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(textarea).not.toHaveFocus();
+  });
+});
