@@ -264,24 +264,44 @@ genau wie bei `RollingSummary` selbst (Punkt 2 oben).
 
 `compact_rounds_with_summary` gruppiert `mcp_origin_flags` über dieselbe
 Rundengrenzen-Logik wie `split_into_rounds` (neue Hilfsfunktion
-`split_mcp_flags_into_rounds` in `compaction.rs` — bewusst dupliziert
-statt `split_into_rounds` generisch zu machen, für eine einzige neue
-Verwendung unverhältnismäßig) und filtert die neu zu faltenden Runden
-(`new_rounds`) vor dem eigentlichen Zusammenfassungs-Aufruf: eine Runde
-gilt als MCP-originiert, wenn IRGENDEINE ihrer Nachrichten es ist
-(rundenweise, nicht nachrichtenweise, wie in der Aufgabenstellung
-gefordert). Ein fehlender/zu kurzer `mcp_origin_flags`-Eintrag (strukturell
-sollte das nie vorkommen, da beide Vektoren atomar wachsen) wird defensiv
-als MCP behandelt — sichere Fehlrichtung für ein Ausschluss-Feature ist
-"im Zweifel ausschließen".
+`group_mcp_flags_by_round` in `compaction.rs` — bewusst dupliziert statt
+`split_into_rounds` generisch zu machen, für eine einzige neue Verwendung
+unverhältnismäßig) und filtert die neu zu faltenden Nachrichten (`new_
+rounds`) vor dem eigentlichen Zusammenfassungs-Aufruf — **NACHRICHTENWEISE,
+nicht rundenweise** (spec-reviewer-Fund, Review dieses Nachtrags, Punkt 1:
+MCP-Aktionen pushen ausnahmslos `Role::ActionResult`, nie `Role::User`, und
+hängen sich deshalb im geteilten-Session-Regelfall — MCP nutzt die Session
+eines bereits offenen Menschen-Tabs, exakt das Teil-0-Szenario oben — an
+die LAUFENDE Menschen-Runde an, statt eine eigene zu bilden; eine
+rundenweise Verdichtung "irgendeine Nachricht ist MCP ⇒ ganze Runde raus"
+hätte in genau diesem Regelfall echten, zusammenzufassenden Chat-Inhalt
+derselben Runde mit ausgeschlossen). Ein fehlender/zu kurzer `mcp_origin_
+flags`-Eintrag (strukturell sollte das nie vorkommen, da beide Vektoren
+atomar wachsen) wird defensiv als MCP behandelt und zusätzlich mit
+`tracing::warn!` geloggt — sichere Fehlrichtung für ein Ausschluss-Feature
+ist "im Zweifel ausschließen", aber ein Desync soll nicht lautlos die
+Summary de facto abschalten.
 
-Die MCP-Runden werden trotzdem aus dem GESENDETEN Kontext entfernt (wie
-jede geschnittene Runde) — nur ihr Inhalt erreicht nie den
-Zusammenfassungs-Aufruf oder den persistierten Summary-Text. Sind ALLE neu
-zu schneidenden Runden MCP-originiert, gibt es nichts Chat-Relevantes zu
-fassen: kein KI-Aufruf, stattdessen rückt `rounds_covered` unter
-Wiederverwendung des bisherigen Summary-Texts (oder, ohne bestehende
-Summary, des generischen Etappe-2-Platzhalters) einfach vor.
+Die betroffenen RUNDEN werden trotzdem als Ganzes aus dem GESENDETEN
+Kontext entfernt (wie jede geschnittene Runde, das bleibt rundenweise) —
+nur die MCP-NACHRICHTEN darin erreichen nie den Zusammenfassungs-Aufruf
+oder den persistierten Summary-Text, ihre Chat-Geschwister in derselben
+Runde gehen normal ein. Bleibt nach dieser Filterung im gesamten neu zu
+kürzenden Fenster keine einzige Chat-Nachricht übrig, gibt es nichts
+Chat-Relevantes zu fassen: kein KI-Aufruf, stattdessen rückt `rounds_
+covered` unter Wiederverwendung des bisherigen Summary-Texts (oder, ohne
+bestehende Summary, des generischen Etappe-2-Platzhalters) einfach vor.
+
+**Bekannte Grenze** (spec-reviewer-Fund, bewusst nicht weiter verschärft):
+Fasst die KI im selben Chat-Turn eine MCP-Kommandoausgabe in ihrer
+regulären `Assistant`-Textantwort zusammen oder zitiert sie, läuft dieser
+Text ganz normal über `push_history` (`persist: true`, `mcp_origin_flags`-
+Eintrag `false`) — er ist redaktionell und strukturell nicht von echtem
+KI-Chat-Text unterscheidbar. Ein solches Zitat kann deshalb doch in die
+Faltung/Summary gelangen. Kein Regress: derselbe Pfad füllt schon heute
+`chat_messages` genauso. Der Ausschluss verhindert das direkte Folgen
+roher MCP-`ActionResult`-Nachrichten in die Summary zuverlässig, keine
+Analyse des KI-generierten Fließtexts auf Zitate darin.
 
 Ein resumiertes `initial_history` (aus `chat_messages` geladen) kann
 strukturell nie MCP-Nachrichten enthalten (die werden dort nie

@@ -9705,6 +9705,122 @@ mod tests {
         );
     }
 
+    /// spec-reviewer-Fund (Review dieses Nachtrags, Punkt 1 — der
+    /// gewichtigste Fund): MCP-Aktionen pushen ausnahmslos
+    /// `Role::ActionResult`, nie `Role::User` — im geteilten-Session-
+    /// Regelfall (MCP nutzt die Session eines bereits offenen
+    /// Menschen-Tabs, s. `test_mcp_action_on_shared_human_session_writes_
+    /// no_persisted_history` oben) hängt sich eine MCP-Aktion deshalb an
+    /// die LAUFENDE Menschen-Runde an, statt eine eigene zu bilden. Eine
+    /// rundenweise Verdichtung ("irgendeine Nachricht ist MCP ⇒ ganze
+    /// Runde raus") würde in genau diesem Fall echten Chat-Inhalt
+    /// derselben Runde mit aus der Faltung reißen — der
+    /// Kontinuitätsverlust, den Etappe 3 gerade verhindern soll. Dieser
+    /// Test bildet exakt diese Mischung nach und beweist die
+    /// nachrichtenweise (nicht rundenweise) Filterung in
+    /// `group_mcp_flags_by_round`/`compact_rounds_with_summary`.
+    #[tokio::test]
+    async fn test_mcp_action_within_existing_chat_round_only_excludes_the_mcp_message() {
+        let mut session = session_with_ai_provider(
+            MockAiProvider::new(vec![AiEvent::Done]), // unten sofort ersetzt
+            MockSshTransport::default()
+                .with_response("cat mcp_secret.log", output("MCP_GEHEIM_KENNUNG_77")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.model_context_window_tokens = 2_000;
+        let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
+        session.ai_provider = Box::new(MockAiProvider {
+            rounds: StdMutex::new(
+                vec![vec![
+                    AiEvent::TextDelta("Zusammenfassung.".to_string()),
+                    AiEvent::Done,
+                ]]
+                .into(),
+            ),
+            received_contexts: received_contexts.clone(),
+        });
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        // Runde 0: erst eine ECHTE Chat-Runde (Nutzerfrage + Kommando-
+        // ergebnis, beide nicht-MCP) — ein eindeutiger Text, NICHT über
+        // `push_synthetic_rounds` (das unten für die weiteren Runden
+        // erneut ab "Frage 0" zählt und den Text sonst kollidieren ließe,
+        // wodurch die Kernaussage unten selbst dann grün liefe, wenn
+        // Runde 0 fälschlich komplett ausgeschlossen würde).
+        {
+            let mut ctx = session.context.lock().await;
+            let mut flags = session.mcp_origin_flags.lock().unwrap();
+            ctx.history.push(user_msg("Ursprüngliche Chat-Frage"));
+            flags.push(false);
+            ctx.history
+                .push(command_result_msg("echte-chat-runde", "ok"));
+            flags.push(false);
+        }
+        // ... dann, OHNE neue `Role::User`-Nachricht dazwischen, eine
+        // MCP-Aktion auf DERSELBEN Runde — genau der geteilte-Session-
+        // Regelfall aus Teil 0 der Aufgabenstellung.
+        let action_future = handle_action_proposed(
+            &session,
+            Uuid::new_v4(),
+            AiAction::SuggestCommand {
+                command: "cat mcp_secret.log".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Mcp {
+                client_name: Some("Claude Code".to_string()),
+            },
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        let ((), ()) = tokio::join!(
+            async {
+                action_future.await;
+            },
+            responder
+        );
+
+        // Weitere, echte Chat-Runden drängen Runde 0 aus dem erhaltenen
+        // Fenster und lösen die Kompaktierung/Faltung aus.
+        push_synthetic_rounds(&session, 6, 5_000).await;
+
+        let request_context = session.context.lock().await.clone();
+        let parts = session.system_context_parts.lock().await.clone();
+        crate::compaction::compact_for_send(
+            &session,
+            request_context,
+            &parts,
+            session.model_context_window_tokens,
+        )
+        .await;
+
+        let summarization_requests = received_contexts.lock().unwrap().clone();
+        assert!(
+            !summarization_requests.is_empty(),
+            "die Kompaktierung muss tatsächlich einen Zusammenfassungs-Aufruf ausgelöst haben"
+        );
+        for request in &summarization_requests {
+            let sent_text = format!("{request:?}");
+            assert!(
+                !sent_text.contains("MCP_GEHEIM_KENNUNG_77")
+                    && !sent_text.contains("mcp_secret.log"),
+                "MCP-Content darf nicht in den Zusammenfassungs-Request eingehen: {sent_text}"
+            );
+            // Kernaussage: der ECHTE Chat-Inhalt DERSELBEN Runde (Runde 0,
+            // durch die MCP-Aktion nur ERGÄNZT, nicht ersetzt) muss trotzdem
+            // in der Zusammenfassung landen — eine rundenweise Verdichtung
+            // hätte ihn fälschlich mit ausgeschlossen.
+            assert!(
+                sent_text.contains("Ursprüngliche Chat-Frage"),
+                "der echte Chat-Inhalt derselben Runde darf NICHT mitausgeschlossen werden, \
+                 nur weil dieselbe Runde auch eine MCP-Nachricht enthält: {sent_text}"
+            );
+        }
+    }
+
     // --- Spec 0040, Abschnitt 5: nur-additive Re-Redaction vor `send()` ----
 
     /// Simuliert genau den Fall, der Abschnitt 5 motiviert: eine Nachricht,

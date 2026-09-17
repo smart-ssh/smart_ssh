@@ -240,28 +240,53 @@ fn split_into_rounds(history: Vec<ChatMessage>) -> Vec<Vec<ChatMessage>> {
 /// Boundary-Logik bewusst separat dupliziert statt `split_into_rounds`
 /// selbst generisch zu machen (Letzteres hätte alle bestehenden
 /// Aufrufer/Tests angefasst, für eine einzige neue Verwendung
-/// unverhältnismäßig). Eine Runde gilt als MCP-originiert, wenn
-/// IRGENDEINE ihrer Nachrichten es ist — Spec-0057-MCP-Ausschluss-Fund
-/// (Nachtrag): "MCP-originierte Runden gehen nicht in die Summary-Faltung
-/// ein", rundenweise, nicht nachrichtenweise (eine Runde ist die
-/// kohärente Einheit, in der die Kürzungs-Leiter ohnehin denkt).
+/// unverhältnismäßig). Liefert PRO NACHRICHT ein Flag, gruppiert nach
+/// Runde (`Vec<Vec<bool>>`, strukturell parallel zu [`split_into_rounds`]s
+/// Ergebnis) — bewusst NICHT zu einem einzelnen Runden-Flag verdichtet
+/// (spec-reviewer-Fund, Nachtrag zum MCP-Ausschluss): MCP-Aktionen pushen
+/// ausnahmslos `Role::ActionResult` (nie `Role::User`, s.
+/// `orchestration::handle_action_proposed`/`execute_action`) und hängen
+/// sich deshalb im geteilten-Session-Regelfall — MCP nutzt die Session
+/// eines bereits offenen Menschen-Tabs, s. `mcp_backend::AppMcpBackend::
+/// ensure_session` — an die LAUFENDE Menschen-Runde an, statt eine eigene
+/// zu bilden. Eine Verdichtung auf "Runde enthält irgendeine MCP-
+/// Nachricht ⇒ ganze Runde raus" hätte in genau diesem Regelfall echten,
+/// zusammenzufassenden Chat-Inhalt (Nutzerfrage, KI-Antwort, echte
+/// Kommandoergebnisse derselben Runde) mit aus der Summary-Faltung
+/// gerissen — der Kontinuitätsverlust, den Etappe 3 gerade verhindern
+/// soll. Der Aufrufer filtert deshalb NACHRICHTENWEISE innerhalb jeder
+/// Runde, nicht rundenweise.
 ///
 /// `mcp_flags` kürzer als `history` (sollte strukturell nie vorkommen,
 /// s. `orchestration::push_history_scoped`, das beide Vektoren atomar im
 /// selben `context`-Lock pflegt) wird defensiv als "ab hier MCP"
 /// behandelt — die sichere Fehlrichtung für ein Ausschluss-Feature ist
 /// "im Zweifel ausschließen", nicht "im Zweifel durchlassen".
-fn split_mcp_flags_into_rounds(history: &[ChatMessage], mcp_flags: &[bool]) -> Vec<bool> {
-    let mut rounds: Vec<bool> = Vec::new();
+fn group_mcp_flags_by_round(history: &[ChatMessage], mcp_flags: &[bool]) -> Vec<Vec<bool>> {
+    if mcp_flags.len() < history.len() {
+        // spec-reviewer-Fund (Review dieses Schritts): sollte strukturell
+        // nie eintreten (s. Doc-Kommentar oben) — tritt es doch ein, würde
+        // der defensive Fallback unten die Summary-Faltung sonst still
+        // auf "alles ist MCP" degradieren lassen (Summary de facto
+        // abgeschaltet), ohne dass das irgendwo sichtbar wird.
+        tracing::warn!(
+            history_len = history.len(),
+            mcp_flags_len = mcp_flags.len(),
+            "mcp_origin_flags kürzer als history — sollte durch push_history_scoped's \
+             atomares Pflegen beider Vektoren nie vorkommen; behandle fehlende Einträge \
+             defensiv als MCP-originiert"
+        );
+    }
+    let mut rounds: Vec<Vec<bool>> = Vec::new();
     for (index, message) in history.iter().enumerate() {
         let is_mcp = mcp_flags.get(index).copied().unwrap_or(true);
         if matches!(message.role, Role::User) || rounds.is_empty() {
-            rounds.push(is_mcp);
+            rounds.push(vec![is_mcp]);
         } else {
-            let last = rounds
+            rounds
                 .last_mut()
-                .expect("mindestens eine Runde existiert bereits, s. Bedingung oben");
-            *last = *last || is_mcp;
+                .expect("mindestens eine Runde existiert bereits, s. Bedingung oben")
+                .push(is_mcp);
         }
     }
     rounds
@@ -491,7 +516,7 @@ async fn compact_rounds_with_summary(
     // Kommentar. Muss VOR `split_into_rounds` gelesen werden, das
     // `history` konsumiert.
     let mcp_flags = session.mcp_origin_flags.lock().unwrap().clone();
-    let round_is_mcp = split_mcp_flags_into_rounds(&history, &mcp_flags);
+    let mcp_flags_by_round = group_mcp_flags_by_round(&history, &mcp_flags);
     let rounds = split_into_rounds(history);
     if rounds.len() <= min_preserved_rounds {
         context.history = rounds.into_iter().flatten().collect();
@@ -525,26 +550,38 @@ async fn compact_rounds_with_summary(
             // Abdeckung) gehen in den Zusammenfassungs-Aufruf — "nicht
             // jedes Mal die ganze History von vorne" (Spec 0057, §2.1).
             //
-            // spec-reviewer-Nachtrag: MCP-originierte Runden werden HIER
-            // ausgefiltert — sie gehen nie in den Zusammenfassungs-Aufruf
-            // und landen damit nie in der persistierten Summary (Stefans
-            // Entscheidung: die Summary bildet Chat-Kontinuität ab, MCP-
-            // Verkehr ist kein Chat; Audit bleibt vollständig im Ledger,
-            // Etappe 1, unabhängig davon). Sie werden trotzdem wie jede
-            // andere gekürzte Runde aus dem gesendeten Kontext entfernt —
-            // nur ihr INHALT geht nicht in den KI-Aufruf/die Summary-Text
-            // ein.
+            // spec-reviewer-Nachtrag: MCP-originierte NACHRICHTEN werden
+            // HIER ausgefiltert — nachrichtenweise, nicht rundenweise (s.
+            // `group_mcp_flags_by_round`s Doc-Kommentar: MCP hängt sich im
+            // geteilten-Session-Regelfall an eine laufende Menschen-Runde
+            // an, eine rundenweise Verdichtung würde also auch echten
+            // Chat-Inhalt derselben Runde mit ausschließen). Sie gehen nie
+            // in den Zusammenfassungs-Aufruf und landen damit nie in der
+            // persistierten Summary (Stefans Entscheidung: die Summary
+            // bildet Chat-Kontinuität ab, MCP-Verkehr ist kein Chat; Audit
+            // bleibt vollständig im Ledger, Etappe 1, unabhängig davon).
+            // Die RUNDE als Ganzes wird trotzdem wie jede andere gekürzte
+            // Runde aus dem gesendeten Kontext entfernt — nur die
+            // MCP-Nachrichten darin gehen nicht in den KI-Aufruf/die
+            // Summary ein, ihre Chat-Geschwister in derselben Runde schon.
             let new_rounds: Vec<ChatMessage> = rounds[already_covered..cut_count]
                 .iter()
-                .zip(&round_is_mcp[already_covered..cut_count])
-                .filter(|(_, &is_mcp)| !is_mcp)
-                .flat_map(|(round, _)| round.iter().cloned())
+                .zip(&mcp_flags_by_round[already_covered..cut_count])
+                .flat_map(|(round, flags)| {
+                    round
+                        .iter()
+                        .zip(flags.iter())
+                        .filter(|(_, &is_mcp)| !is_mcp)
+                        .map(|(message, _)| message.clone())
+                })
                 .collect();
 
             if new_rounds.is_empty() {
-                // Alle neu zu kürzenden Runden waren MCP-originiert — es
-                // gibt nichts Chat-Relevantes, das zusammengefasst werden
-                // müsste. Kein KI-Aufruf: die Abdeckung wird trotzdem bis
+                // Nach der nachrichtenweisen Filterung blieb NICHTS
+                // Chat-Relevantes übrig (jede Nachricht im neu zu
+                // kürzenden Fenster war MCP-originiert) — es gibt nichts,
+                // das zusammengefasst werden müsste. Kein KI-Aufruf: die
+                // Abdeckung wird trotzdem bis
                 // `cut_count` vorgezogen (diese Runden verschwinden ja so
                 // oder so aus dem Kontext), mit dem bisherigen Summary-
                 // Text (falls vorhanden) als Platzhalter, sonst dem
@@ -1154,6 +1191,42 @@ mod tests {
         assert_eq!(rounds.len(), 2);
         assert_eq!(rounds[0].len(), 2);
         assert_eq!(rounds[1].len(), 1);
+    }
+
+    /// spec-reviewer-Fund (Review des MCP-Ausschluss-Nachtrags, Punkt 5):
+    /// `group_mcp_flags_by_round` dupliziert `split_into_rounds`s
+    /// Rundengrenzen-Logik bewusst (s. dortiger Doc-Kommentar), statt sie
+    /// wiederzuverwenden — ohne einen Test, der beide Funktionen gegen
+    /// DIESELBE Historie prüft, könnte eine spätere Änderung an einer der
+    /// beiden Funktionen (z. B. eine Sonderbehandlung für den
+    /// Platzhalter-Eintrag) unbemerkt auseinanderdriften. Prüft: gleiche
+    /// Rundenzahl, gleiche Rundengrößen — die Gruppierungs-Struktur ist
+    /// identisch, unabhängig vom `mcp_flags`-Inhalt.
+    #[test]
+    fn test_group_mcp_flags_by_round_matches_split_into_rounds_boundaries() {
+        let history = vec![
+            user_message("Frage 1"),
+            command_result("ls", "ok"),
+            command_result("cat x", "ok"),
+            user_message("Frage 2"),
+            user_message("Frage 3"), // zwei `User`-Nachrichten hintereinander
+            command_result("ls", "ok"),
+        ];
+        let mcp_flags = vec![false, true, false, true, false, true];
+
+        let expected_round_sizes: Vec<usize> = split_into_rounds(history.clone())
+            .iter()
+            .map(Vec::len)
+            .collect();
+        let actual_round_sizes: Vec<usize> = group_mcp_flags_by_round(&history, &mcp_flags)
+            .iter()
+            .map(Vec::len)
+            .collect();
+
+        assert_eq!(
+            actual_round_sizes, expected_round_sizes,
+            "die Rundengrenzen beider Funktionen müssen für dieselbe Historie identisch sein"
+        );
     }
 
     #[test]
