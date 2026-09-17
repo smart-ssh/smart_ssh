@@ -5,12 +5,29 @@ import { GroupForm } from "./GroupForm";
 import { ServerForm } from "./ServerForm";
 import { Sidebar, type Selection } from "./Sidebar";
 
+interface ManagementViewProps {
+  /** Spec 0057, §4.2 (Etappe 4): "Mache ich selbst" im Kürzungs-Vorschlags-
+   * Dialog (`NoteShrinkSuggestionToast`, gemountet außerhalb dieser
+   * Komponente) springt direkt zur Server-Bearbeitung eines bestimmten
+   * Servers — übergeben von `App.tsx` über den `navigationBus`. `null`/
+   * `undefined` im Normalfall (regulärer Aufruf über die Navigation). */
+  initialSelection?: Selection | null;
+}
+
 /** Spec 0008, Abschnitt 6: Sidebar links, Formular im Hauptbereich. */
-export function ManagementView() {
+export function ManagementView({ initialSelection = null }: ManagementViewProps) {
   const [groups, setGroups] = useState<GroupDto[]>([]);
   const [servers, setServers] = useState<ServerDto[]>([]);
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const [selection, setSelection] = useState<Selection | null>(initialSelection);
   const [error, setError] = useState<string | null>(null);
+
+  // `initialSelection` kommt von außen (Navigations-Bus), kann sich also
+  // ändern, NACHDEM diese Komponente bereits gemountet ist (anders als ein
+  // normaler Initialwert) — deshalb zusätzlich per Effekt übernommen, nicht
+  // nur als `useState`-Startwert.
+  useEffect(() => {
+    if (initialSelection) setSelection(initialSelection);
+  }, [initialSelection]);
 
   const reload = () => {
     Promise.all([listGroups(), listServers()])

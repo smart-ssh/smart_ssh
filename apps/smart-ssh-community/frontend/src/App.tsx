@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { AppHeader } from "./components/AppHeader";
 import { FilterRulesView } from "./components/FilterRulesView";
 import { ManagementView } from "./components/ManagementView";
+import type { Selection } from "./components/Sidebar";
+import { NoteShrinkSuggestionToast } from "./components/NoteShrinkSuggestionToast";
 import { NoteSuggestionToast } from "./components/NoteSuggestionToast";
 import { ServerList } from "./components/ServerList";
 import { SessionTabBar } from "./components/SessionTabBar";
@@ -10,6 +12,7 @@ import { SessionView } from "./components/SessionView";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
 import { commandErrorMessage, listAiProviders } from "./api";
+import { subscribeRequestServerNoteEdit } from "./navigationBus";
 import { useSessionTabs } from "./useSessionTabs";
 
 type Tab = "connect" | "manage" | "rules";
@@ -18,6 +21,14 @@ function App() {
   const [tab, setTab] = useState<Tab>("connect");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hasActiveProvider, setHasActiveProvider] = useState<boolean | null>(null);
+  // Spec 0057, §4.2 (Etappe 4): "Mache ich selbst" springt zur
+  // Server-Bearbeitung — s. `navigationBus.ts`-Doc-Kommentar. Lebt hier
+  // (statt in `MainScreen`, das `tab` selbst hält), weil auch
+  // `activeSessionId` (unten, aus `useSessionTabs`) hier auf `null` gesetzt
+  // werden muss, um überhaupt zu `MainScreen`/`ManagementView` zu wechseln.
+  const [pendingNoteEditSelection, setPendingNoteEditSelection] = useState<Selection | null>(
+    null,
+  );
   const {
     tabs: sessionTabs,
     activeSessionId,
@@ -27,6 +38,16 @@ function App() {
     markActionSettled,
     requestCloseTab,
   } = useSessionTabs();
+
+  useEffect(
+    () =>
+      subscribeRequestServerNoteEdit((serverId) => {
+        switchTo(null);
+        setTab("manage");
+        setPendingNoteEditSelection({ kind: "server", id: serverId });
+      }),
+    [switchTo],
+  );
 
   const refreshProviderStatus = () => {
     listAiProviders()
@@ -100,6 +121,7 @@ function App() {
         />
       </AppHeader>
       <NoteSuggestionToast />
+      <NoteShrinkSuggestionToast />
 
       {/* Spec 0017, Abschnitt 4: jede offene Session bleibt gemountet
        * (eigener Chat-Verlauf, eigene xterm.js-Instanz samt Scrollback,
@@ -137,6 +159,7 @@ function App() {
           findExistingSessionId={findExistingSessionId}
           onSwitchToExistingTab={switchTo}
           onConnected={(sessionId, serverName, serverId) => openTab(sessionId, serverId, serverName)}
+          pendingNoteEditSelection={pendingNoteEditSelection}
         />
       </div>
     </div>
@@ -149,6 +172,9 @@ interface MainScreenProps {
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
   hasActiveProvider: boolean | null;
+  /** Spec 0057, §4.2 (Etappe 4) — s. `App`s Doc-Kommentar zum
+   * `navigationBus`. */
+  pendingNoteEditSelection: Selection | null;
   refreshProviderStatus: () => void;
   onConnected: (sessionId: string, serverName: string, serverId: string) => void;
   findExistingSessionId: (serverId: string) => string | undefined;
@@ -165,6 +191,7 @@ function MainScreen({
   onConnected,
   findExistingSessionId,
   onSwitchToExistingTab,
+  pendingNoteEditSelection,
 }: MainScreenProps) {
   const { t } = useTranslation();
   // Spec 0033, Abschnitt 4: hier statt in `ServerList` selbst gehalten,
@@ -263,7 +290,7 @@ function MainScreen({
           </section>
         </main>
       ) : tab === "manage" ? (
-        <ManagementView />
+        <ManagementView initialSelection={pendingNoteEditSelection} />
       ) : (
         <FilterRulesView />
       )}

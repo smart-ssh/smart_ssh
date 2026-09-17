@@ -254,6 +254,24 @@ export interface NoteUpdateSuggestedEvent {
   targetName: string | null;
 }
 
+/** Spec 0057, §4.2 (Etappe 4) — der ERSTE Dialog ("Deine Notiz für diesen
+ * Server ist sehr groß …"), bevor überhaupt ein KI-Aufruf stattgefunden hat.
+ * Bewusst kein `sessionId` (s. `crate::events::NoteShrinkSuggestedPayload`):
+ * der Vorschlag bezieht sich immer auf den SERVER, nie auf eine bestimmte
+ * Sitzung. */
+export interface NoteShrinkSuggestedEvent {
+  serverId: string;
+  serverName: string;
+}
+
+/** Spec 0057, §4.2/§6: Gegenstück zu einem erfolgreichen `note-update-
+ * suggested` nach "Ja, zusammenfassen" — der KI-Aufruf ist fehlgeschlagen
+ * oder abgelaufen, die gespeicherte Notiz bleibt unverändert. */
+export interface NoteShrinkFailedEvent {
+  serverId: string;
+  message: string;
+}
+
 /** Spec 0021, Abschnitt 5: signalisiert eine *automatische* Folgerunde (die
  * KI antwortet auf ein Aktionsergebnis, ohne dass der Nutzer getippt hat) —
  * Grundlage für den "Automatik läuft"-Indikator. `round` ist nur zur

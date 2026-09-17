@@ -10,6 +10,8 @@ import type {
   ConnectionStatusChangedEvent,
   HostKeyVerificationNeededEvent,
   McpActionTabRequestedEvent,
+  NoteShrinkFailedEvent,
+  NoteShrinkSuggestedEvent,
   NoteUpdateSuggestedEvent,
   RiskAssessmentUpdatedEvent,
   SftpTransferFinishedEvent,
@@ -89,6 +91,21 @@ export const onNoteUpdateSuggested = (
   handler: (event: NoteUpdateSuggestedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<NoteUpdateSuggestedEvent>("note-update-suggested", (e) => handler(e.payload));
+
+/** Spec 0057, §4.2 (Etappe 4) — der ERSTE Dialog, bevor überhaupt ein
+ * KI-Aufruf stattgefunden hat. App-weit, aus demselben Grund wie
+ * `onNoteUpdateSuggested`. */
+export const onNoteShrinkSuggested = (
+  handler: (event: NoteShrinkSuggestedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<NoteShrinkSuggestedEvent>("note-shrink-suggested", (e) => handler(e.payload));
+
+/** Spec 0057, §4.2/§6 — der KI-Aufruf hinter "Ja, zusammenfassen" ist
+ * fehlgeschlagen oder abgelaufen; die gespeicherte Notiz blieb unverändert. */
+export const onNoteShrinkFailed = (
+  handler: (event: NoteShrinkFailedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<NoteShrinkFailedEvent>("note-shrink-failed", (e) => handler(e.payload));
 
 /** Spec 0012 — läuft, anders als `onChatActionProposed`, nie durch einen
  * Bestätigungsdialog (s. `ChatDocumentGeneratedEvent`-Doc-Kommentar). */

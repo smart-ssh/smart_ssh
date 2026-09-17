@@ -987,7 +987,7 @@ fn compact_notes_for_budget(
 /// nächste gültige UTF-8-Zeichengrenze zurück (`&str`, anders als
 /// [`truncate_oversized_output`]s rohe `Vec<u8>`, MUSS an einer
 /// Zeichengrenze enden).
-fn truncate_to_char_boundary(text: &str, max_bytes: usize) -> &str {
+pub(crate) fn truncate_to_char_boundary(text: &str, max_bytes: usize) -> &str {
     if text.len() <= max_bytes {
         return text;
     }

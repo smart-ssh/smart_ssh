@@ -377,6 +377,60 @@ pub fn emit_note_update_suggested(
     );
 }
 
+/// Spec 0057, §4.2 (Etappe 4): der ERSTE Dialog ("Deine Notiz für diesen
+/// Server ist sehr groß …") — bewusst ein eigenes, app-weites Event statt
+/// einer Erweiterung von `note-update-suggested` (dessen `action`-Feld
+/// eine bereits FERTIGE `AiAction::ProposeNoteUpdate` verlangt; an dieser
+/// Stelle existiert noch gar kein Vorschlagstext, der KI-Aufruf läuft erst
+/// nach "Ja, zusammenfassen", s. `crate::orchestration::execute_note_
+/// shrink_request`). Dieselbe "muss auch nach Verlassen des Screens noch
+/// ankommen"-Begründung wie bei `NoteUpdateSuggestedPayload` — bewusst
+/// OHNE `session_id`: die Sitzung, an deren Verbindungsende der Vorschlag
+/// entstand, ist für den weiteren Ablauf irrelevant (Spec 0057 §4.2 bezieht
+/// sich immer auf den SERVER, nie auf eine bestimmte Sitzung), `server_id`
+/// ist der eigentliche Korrelationsschlüssel.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NoteShrinkSuggestedPayload {
+    server_id: ServerId,
+    server_name: String,
+}
+
+pub fn emit_note_shrink_suggested(
+    emitter: &dyn EventEmitter,
+    server_id: ServerId,
+    server_name: String,
+) {
+    emit(
+        emitter,
+        "note-shrink-suggested",
+        &NoteShrinkSuggestedPayload {
+            server_id,
+            server_name,
+        },
+    );
+}
+
+/// Spec 0057, §4.2/§6 ("KI-Aufruf schlägt fehl → Fehlermeldung"): das
+/// Gegenstück zu einem erfolgreichen `note-update-suggested` nach "Ja,
+/// zusammenfassen" — eigenes, app-weites Event aus demselben Grund wie
+/// [`NoteShrinkSuggestedPayload`] (kein `chat-error`, das an eine
+/// inzwischen möglicherweise längst beendete Session gebunden wäre).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NoteShrinkFailedPayload {
+    server_id: ServerId,
+    message: String,
+}
+
+pub fn emit_note_shrink_failed(emitter: &dyn EventEmitter, server_id: ServerId, message: String) {
+    emit(
+        emitter,
+        "note-shrink-failed",
+        &NoteShrinkFailedPayload { server_id, message },
+    );
+}
+
 /// Spec 0012, Abschnitt 3 — direkt aus `AiEvent::ActionProposed(GenerateDocument
 /// { .. })` weitergereicht, ohne Umweg über `chat-action-proposed`: es gibt
 /// hier keine `Decision` (kein Filter-Engine-/Bestätigungspfad, s.

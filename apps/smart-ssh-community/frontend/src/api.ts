@@ -263,6 +263,13 @@ export const updateGroupNotes = (id: string, content: string) =>
 export const updateServerNotes = (id: string, content: string) =>
   invoke<void>("update_server_notes", { id, content });
 
+/** Spec 0057, §4.2 (Etappe 4): "Ja, zusammenfassen" — löst den KI-Aufruf
+ * aus; das Ergebnis kommt asynchron über `note-update-suggested`/
+ * `note-shrink-failed` an (derselbe Diff-Bestätigungsablauf wie ein
+ * regulärer KI-Notiz-Vorschlag), nicht als Rückgabewert dieses Aufrufs. */
+export const requestNoteShrink = (serverId: string) =>
+  invoke<void>("request_note_shrink", { serverId });
+
 /** Spec 0032, Abschnitt 3: eigenes Befehlspaar für den lokalen
  * Pseudo-Server (keine Revisions-Historie, s. `crate::local_server`). */
 export const updateLocalServerNotes = (content: string) =>

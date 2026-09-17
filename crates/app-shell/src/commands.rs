@@ -43,7 +43,7 @@ use crate::events::{
     emit_sftp_transfer_started, ConnectionStatus, EventEmitter, HostKeyKind, SftpTransferKind,
 };
 use crate::groups::{compute_delete_group_result, validate_no_cycle};
-use crate::orchestration::run_chat_turn;
+use crate::orchestration::{execute_note_shrink_request, run_chat_turn};
 use crate::server_credentials::{
     clear_sudo_password, resolve_auth_method, resolve_sudo_password, sudo_password_credential_ref,
 };
@@ -1874,7 +1874,7 @@ pub async fn disconnect(
         // sind unabhängige, optionale "beim Trennen"-Extras, s. jeweilige
         // Doc-Kommentare zur genauen Auslösebedingung.
         crate::orchestration::generate_session_title_on_disconnect(&session).await;
-        crate::orchestration::suggest_note_update_on_disconnect(
+        let note_update_suggested = crate::orchestration::suggest_note_update_on_disconnect(
             &session,
             session_id,
             &app_for_suggestion,
@@ -1882,6 +1882,19 @@ pub async fn disconnect(
             &state.pending_action_confirmations,
         )
         .await;
+        // Spec 0057, §4.2 (Etappe 4): läuft nur, wenn der Update-Vorschlag
+        // oben KEINEN eigenen Vorschlag gemacht hat — s. `orchestration::
+        // should_suggest_note_shrink`-Doc-Kommentar für das
+        // Zusammenspiel-Design (nie zwei konkurrierende Notiz-Dialoge am
+        // selben Verbindungsende).
+        if crate::orchestration::should_suggest_note_shrink(note_update_suggested) {
+            crate::orchestration::suggest_note_shrink_on_disconnect(
+                &session,
+                &app_for_suggestion,
+                state.profile_store.as_ref(),
+            )
+            .await;
+        }
     });
 
     Ok(())
@@ -2211,6 +2224,68 @@ pub async fn update_server_notes(
 ) -> CommandResult<()> {
     let revision = record_revision(NoteTarget::Server(id), content, NoteEditor::User);
     state.profile_store.record_note_revision(&revision).await?;
+    Ok(())
+}
+
+/// Spec 0057, §4.2 (Etappe 4): "Ja, zusammenfassen" — ausgelöst vom
+/// Kürzungs-Vorschlags-Dialog (`note-shrink-suggested`), potenziell lange
+/// nach dem `disconnect()`, das ihn ursprünglich zeigte. Baut deshalb einen
+/// FRISCHEN `AiProvider` aus der aktuell aktiven Provider-Konfiguration —
+/// derselbe Aufbau-Pfad wie `connect()`/`test_ai_provider_credentials` —
+/// statt sich auf eine (zu diesem Zeitpunkt typischerweise längst
+/// beendete) `Session` zu verlassen (s. `orchestration::summarize_note_
+/// for_shrink`-Doc-Kommentar). Der API-Key wird hier, synchron in diesem
+/// Befehl, EINMALIG aus dem `CredentialStore` gelesen (Spec 0022, Abschnitt
+/// 3 — dieselbe Garantie wie bei jedem anderen `build_ai_provider`-Aufruf)
+/// und danach nur noch als Teil der fertigen `AiProvider`-Instanz in den
+/// Hintergrund-Task verschoben.
+///
+/// Läuft selbst als eigener `tokio::spawn`-Task (überlebt Navigation weg
+/// vom auslösenden Dialog — derselbe Grund wie bei `disconnect()`s
+/// Notiz-Vorschlag-Task, Spec 0010 Abschnitt 2 Punkt 6) und mündet bei
+/// Erfolg in EXAKT denselben `note-update-suggested`/`NoteSuggestionToast`/
+/// `ConfirmationRegistry`-Ablauf wie ein regulärer KI-Notiz-Vorschlag
+/// (Spec 0003/0023) — keine zweite, parallele Diff-UI für dieselbe Sache.
+/// Der Befehl selbst kehrt sofort zurück, sobald der Task gestartet ist;
+/// Erfolg/Fehlschlag des eigentlichen KI-Aufrufs kommen ausschließlich über
+/// `note-update-suggested`/`note-shrink-failed` beim Frontend an.
+#[tauri::command]
+pub async fn request_note_shrink(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    server_id: ServerId,
+) -> CommandResult<()> {
+    let active_config = active_ai_provider_config(&state).await?;
+    let api_key = state.credential_store.get(&active_config.credential_ref)?;
+    let ai_provider = build_ai_provider(
+        active_config.provider_type,
+        active_config.base_url.as_deref(),
+        &active_config.model,
+        api_key,
+        active_config.supports_native_tool_calling,
+        active_config.extra_headers.clone(),
+    );
+    let provider_label = active_config.display_name.clone();
+    let model = active_config.model.clone();
+
+    tokio::spawn(async move {
+        let state = app.state::<AppState>();
+        let redactor = DefaultOutputRedactor::new();
+        let session_id: SessionId = Uuid::new_v4();
+        execute_note_shrink_request(
+            session_id,
+            server_id,
+            ai_provider.as_ref(),
+            &redactor,
+            provider_label,
+            model,
+            &app,
+            state.profile_store.as_ref(),
+            &state.pending_action_confirmations,
+        )
+        .await;
+    });
+
     Ok(())
 }
 
