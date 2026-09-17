@@ -2246,6 +2246,19 @@ pub async fn update_server_notes(
     Ok(())
 }
 
+/// Spec 0058, Teil 1 (Etappe 5): derselbe Schwellwert wie der
+/// Sitzungsende-Kürzungs-Dialog (`orchestration::LARGE_NOTE_DIALOG_
+/// THRESHOLD_BYTES`, Etappe 4) — eine Quelle der Wahrheit statt einer
+/// zweiten, im Frontend hartkodierten Zahl. Reiner, niemals fehlschlagender
+/// Konstanten-Getter (kein `State`/`AppHandle` nötig), trotzdem als
+/// `async fn` mit `CommandResult`, konsistent mit jedem anderen Befehl in
+/// dieser Datei (das Frontend ruft ohnehin immer über ein `Promise`-
+/// basiertes `invoke()` auf).
+#[tauri::command]
+pub async fn large_note_dialog_threshold_bytes() -> CommandResult<u32> {
+    Ok(crate::orchestration::LARGE_NOTE_DIALOG_THRESHOLD_BYTES as u32)
+}
+
 /// Spec 0057, §4.2 (Etappe 4): "Ja, zusammenfassen" — ausgelöst vom
 /// Kürzungs-Vorschlags-Dialog (`note-shrink-suggested`), potenziell lange
 /// nach dem `disconnect()`, das ihn ursprünglich zeigte. Baut deshalb einen

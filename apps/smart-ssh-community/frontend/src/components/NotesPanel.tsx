@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import {
   commandErrorMessage,
+  largeNoteDialogThresholdBytes,
   listNoteRevisions,
+  requestNoteShrink,
   rollbackNote,
   updateGroupNotes,
   updateServerNotes,
 } from "../api";
 import type { NoteRevisionDto, NoteTarget } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
+
+/** UTF-8-Byte-Länge statt `string.length` (UTF-16-Code-Einheiten) — der
+ * Backend-Schwellwert (`orchestration::LARGE_NOTE_DIALOG_THRESHOLD_BYTES`)
+ * zählt Byte, exakt wie `server.notes.len()` in Rust. Bei mehrbyte-Zeichen
+ * (Umlaute, Emoji) würden beide Zählweisen sonst auseinanderlaufen. */
+function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
 
 interface NotesPanelProps {
   target: NoteTarget;
@@ -39,6 +49,18 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
   // gleichzeitig möglich — standardmäßig leer (alles eingeklappt).
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Spec 0058, Teil 1 (Etappe 5): `null`, solange der Schwellwert noch
+  // nicht geladen ist — der Hinweis bleibt in dieser Zeit ausgeblendet
+  // (kein falsches "nicht groß genug"-Aufblitzen).
+  const [largeNoteThreshold, setLargeNoteThreshold] = useState<number | null>(null);
+  const [shrinkRequesting, setShrinkRequesting] = useState(false);
+  const [shrinkError, setShrinkError] = useState<string | null>(null);
+
+  useEffect(() => {
+    largeNoteDialogThresholdBytes()
+      .then(setLargeNoteThreshold)
+      .catch((err) => console.error(commandErrorMessage(err)));
+  }, []);
 
   // Nur beim Mounten ausgewertet (leere Dependency-Liste) — `NotesPanel`
   // wird über `ServerForm`s `key={selection.id}` (`ManagementView.tsx`)
@@ -107,8 +129,51 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
     }
   };
 
+  // Spec 0058, Teil 1 (Etappe 5), optionaler "jetzt zusammenfassen"-Link:
+  // löst denselben KI-Kürzungs-Fluss wie der Sitzungsende-Dialog aus
+  // (Etappe 4, `commands::request_note_shrink`) — inkl. Diff-Bestätigung
+  // über die bereits an der App-Wurzel gemountete `NoteSuggestionToast`.
+  // Nur für Server-Notizen: `NoteTargetSelector::CurrentServer` kennt keine
+  // Gruppen-Variante (s. `orchestration::execute_note_shrink_request`).
+  const handleSummarizeNow = async () => {
+    if (!("Server" in target)) return;
+    setShrinkRequesting(true);
+    setShrinkError(null);
+    try {
+      await requestNoteShrink(target.Server);
+    } catch (err) {
+      setShrinkError(commandErrorMessage(err));
+    } finally {
+      setShrinkRequesting(false);
+    }
+  };
+
+  const isLarge = largeNoteThreshold !== null && utf8ByteLength(draft) >= largeNoteThreshold;
+
   return (
     <div className="space-y-2">
+      {isLarge && (
+        <div className="rounded border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+          <p>
+            Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt
+            werden. Die gespeicherte Notiz bleibt vollständig erhalten.
+          </p>
+          {"Server" in target && (
+            <>
+              <button
+                type="button"
+                onClick={handleSummarizeNow}
+                disabled={shrinkRequesting}
+                className="mt-1.5 underline hover:no-underline disabled:opacity-50"
+              >
+                {shrinkRequesting ? "Wird angefragt…" : "Jetzt zusammenfassen"}
+              </button>
+              {shrinkError && <p className="mt-1 text-red-400">{shrinkError}</p>}
+            </>
+          )}
+        </div>
+      )}
+
       <label className="block text-sm text-slate-300">
         Notiz (Kontext für die KI)
         <textarea

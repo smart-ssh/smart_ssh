@@ -263,6 +263,12 @@ export const updateGroupNotes = (id: string, content: string) =>
 export const updateServerNotes = (id: string, content: string) =>
   invoke<void>("update_server_notes", { id, content });
 
+/** Spec 0058, Teil 1 (Etappe 5): derselbe Schwellwert wie der
+ * Sitzungsende-Kürzungs-Dialog (Etappe 4) — eine Quelle der Wahrheit,
+ * keine zweite, hartkodierte Zahl im Frontend. */
+export const largeNoteDialogThresholdBytes = () =>
+  invoke<number>("large_note_dialog_threshold_bytes");
+
 /** Spec 0057, §4.2 (Etappe 4): "Ja, zusammenfassen" — löst den KI-Aufruf
  * aus; das Ergebnis kommt asynchron über `note-update-suggested`/
  * `note-shrink-failed` an (derselbe Diff-Bestätigungsablauf wie ein

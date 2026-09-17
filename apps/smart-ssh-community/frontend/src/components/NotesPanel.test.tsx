@@ -30,11 +30,22 @@ const revisions: NoteRevisionDto[] = [
   },
 ];
 
+// Spec 0058, Teil 1: ein hoher Default-Schwellwert, damit die bestehenden
+// Historie-Tests (kurze Beispielnotizen) den neuen Hinweis nicht versehentlich
+// mitrendern — die eigenen Hinweis-Tests unten setzen ihn gezielt niedriger.
+// `mock`-Namenspräfix erforderlich: Vitest hoisted `vi.mock`-Factories über
+// alle anderen Top-Level-Deklarationen hinweg, referenzierte Variablen
+// dürfen deshalb nur mit diesem Präfix vorab initialisiert sein.
+const mockLargeNoteDialogThresholdBytes = vi.fn(() => Promise.resolve(1_000_000));
+const mockRequestNoteShrink = vi.fn((_serverId: string) => Promise.resolve());
+
 vi.mock("../api", () => ({
   listNoteRevisions: vi.fn(() => Promise.resolve(revisions)),
   rollbackNote: vi.fn(() => Promise.resolve()),
   updateServerNotes: vi.fn(() => Promise.resolve()),
   updateGroupNotes: vi.fn(() => Promise.resolve()),
+  largeNoteDialogThresholdBytes: () => mockLargeNoteDialogThresholdBytes(),
+  requestNoteShrink: (serverId: string) => mockRequestNoteShrink(serverId),
   commandErrorMessage: (err: unknown) => String(err),
 }));
 
@@ -155,5 +166,86 @@ describe("autoFocus (Spec 0058, Teil 2)", () => {
     const textarea = screen.getByRole("textbox");
     expect(scrollIntoView).not.toHaveBeenCalled();
     expect(textarea).not.toHaveFocus();
+  });
+});
+
+// Spec 0058, Teil 1 (Session-Modell Etappe 5): proaktiver Hinweis beim
+// Bearbeiten einer großen Notiz — das Gegenstück zum Sitzungsende-Dialog
+// (Etappe 4), derselbe Schwellwert (hier über `largeNoteDialogThresholdBytes`
+// gemockt, in der echten App vom Backend geliefert).
+describe("large note hint (Spec 0058, Teil 1)", () => {
+  it("shows the hint and a working 'jetzt zusammenfassen' link when the note is over the threshold", async () => {
+    mockLargeNoteDialogThresholdBytes.mockResolvedValueOnce(10);
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <NotesPanel
+          target={{ Server: "server-1" }}
+          currentNotes="Eine Notiz, die den Schwellwert von 10 Byte klar überschreitet."
+          onNotesChanged={() => {}}
+        />
+      </I18nextProvider>,
+    );
+
+    await screen.findByText(/sehr groß und kann bei langen Sitzungen/);
+    expect(
+      screen.getByText(/Die gespeicherte Notiz bleibt vollständig erhalten/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Jetzt zusammenfassen"));
+    expect(mockRequestNoteShrink).toHaveBeenCalledWith("server-1");
+  });
+
+  it("does not show the hint for a note below the threshold", async () => {
+    mockLargeNoteDialogThresholdBytes.mockResolvedValueOnce(1_000_000);
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <NotesPanel target={{ Server: "server-1" }} currentNotes="Kurze Notiz." onNotesChanged={() => {}} />
+      </I18nextProvider>,
+    );
+
+    // Auf den geladenen Schwellwert warten (sonst könnte der Test grün
+    // durchlaufen, bevor `largeNoteDialogThresholdBytes()` überhaupt
+    // aufgelöst hat, und nichts wirklich beweisen).
+    await vi.waitFor(() => expect(mockLargeNoteDialogThresholdBytes).toHaveBeenCalled());
+
+    expect(screen.queryByText(/sehr groß und kann bei langen Sitzungen/)).toBeNull();
+  });
+
+  it("does not show the 'jetzt zusammenfassen' link for a group note (no server to summarize)", async () => {
+    mockLargeNoteDialogThresholdBytes.mockResolvedValueOnce(10);
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <NotesPanel
+          target={{ Group: "group-1" }}
+          currentNotes="Eine Gruppen-Notiz, die den Schwellwert von 10 Byte klar überschreitet."
+          onNotesChanged={() => {}}
+        />
+      </I18nextProvider>,
+    );
+
+    await screen.findByText(/sehr groß und kann bei langen Sitzungen/);
+    expect(screen.queryByText("Jetzt zusammenfassen")).toBeNull();
+  });
+
+  it("reacts live as the draft grows past the threshold while typing", async () => {
+    mockLargeNoteDialogThresholdBytes.mockResolvedValueOnce(10);
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <NotesPanel target={{ Server: "server-1" }} currentNotes="Kurz" onNotesChanged={() => {}} />
+      </I18nextProvider>,
+    );
+
+    await vi.waitFor(() => expect(mockLargeNoteDialogThresholdBytes).toHaveBeenCalled());
+    expect(screen.queryByText(/sehr groß und kann bei langen Sitzungen/)).toBeNull();
+
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "Eine deutlich längere Notiz, die jetzt über den Schwellwert wächst." },
+    });
+
+    expect(screen.getByText(/sehr groß und kann bei langen Sitzungen/)).toBeInTheDocument();
   });
 });

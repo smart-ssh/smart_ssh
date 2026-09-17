@@ -7,7 +7,9 @@ import {
   createServer,
   deleteServer,
   getServer,
+  largeNoteDialogThresholdBytes,
   previewEffectiveNotes,
+  requestNoteShrink,
   testConnection,
   trustHostKey,
   updateLocalServerNotes,
@@ -149,6 +151,32 @@ export function ServerForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, isLocal]);
+  // Spec 0058, Teil 1 (Etappe 5): derselbe Hinweis wie `NotesPanel`, hier
+  // für den lokalen Pseudo-Server separat nachgebaut (der `NotesPanel`
+  // nicht verwendet, s. Kommentar am lokalen Zweig unten).
+  const [largeLocalNoteThreshold, setLargeLocalNoteThreshold] = useState<number | null>(null);
+  const [localShrinkRequesting, setLocalShrinkRequesting] = useState(false);
+  const [localShrinkError, setLocalShrinkError] = useState<string | null>(null);
+  useEffect(() => {
+    largeNoteDialogThresholdBytes()
+      .then(setLargeLocalNoteThreshold)
+      .catch((err) => console.error(commandErrorMessage(err)));
+  }, []);
+  const isLocalNoteLarge =
+    largeLocalNoteThreshold !== null &&
+    new TextEncoder().encode(localNotes).length >= largeLocalNoteThreshold;
+  const handleSummarizeLocalNoteNow = async () => {
+    if (!loaded) return;
+    setLocalShrinkRequesting(true);
+    setLocalShrinkError(null);
+    try {
+      await requestNoteShrink(loaded.id);
+    } catch (err) {
+      setLocalShrinkError(commandErrorMessage(err));
+    } finally {
+      setLocalShrinkRequesting(false);
+    }
+  };
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("22");
@@ -468,6 +496,23 @@ export function ServerForm({
 
         <div className="block text-sm text-slate-300">
           {t("common.notes")}
+          {isLocalNoteLarge && (
+            <div className="mt-1 rounded border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+              <p>
+                Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt
+                werden. Die gespeicherte Notiz bleibt vollständig erhalten.
+              </p>
+              <button
+                type="button"
+                onClick={handleSummarizeLocalNoteNow}
+                disabled={localShrinkRequesting}
+                className="mt-1.5 underline hover:no-underline disabled:opacity-50"
+              >
+                {localShrinkRequesting ? "Wird angefragt…" : "Jetzt zusammenfassen"}
+              </button>
+              {localShrinkError && <p className="mt-1 text-red-400">{localShrinkError}</p>}
+            </div>
+          )}
           <textarea
             ref={localNotesRef}
             value={localNotes}
