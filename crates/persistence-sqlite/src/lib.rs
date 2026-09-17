@@ -23,7 +23,7 @@ pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
 };
 pub use chat_session_store::{ChatSessionStoreError, ChatSessionSummary, SqliteChatSessionStore};
-pub use error::{PersistenceError, PersistenceResult};
+pub use error::{ConnectFailureKind, PersistenceError, PersistenceResult};
 pub use ledger_store::{LedgerEntry, LedgerStoreError, SqliteLedgerStore};
 pub use paths::default_db_path;
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};

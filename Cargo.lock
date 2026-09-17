@@ -142,6 +142,7 @@ dependencies = [
  "mcp-server",
  "persistence-sqlite",
  "regex",
+ "rfd",
  "secrecy",
  "serde",
  "serde_json",

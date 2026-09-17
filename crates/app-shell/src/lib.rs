@@ -36,6 +36,8 @@ mod rule_suggestions;
 mod server_credentials;
 mod servers;
 mod session;
+mod startup_dialog;
+mod startup_error_messages;
 mod state;
 mod test_connection;
 #[cfg(test)]
@@ -64,8 +66,24 @@ use crate::state::AppState;
 fn build_app_state(wiring: &Wiring) -> AppState {
     let db_path = default_db_path();
     tracing::info!(data_path = %db_path.display(), "connecting to SQLite database");
-    let profile_store = tauri::async_runtime::block_on(SqliteProfileStore::connect(&db_path))
-        .expect("SQLite-Datenbank konnte nicht geöffnet/migriert werden");
+    // Spec 0059, Fälle 1/2/4 (Release-Gate A): vorher ein `.expect(...)` —
+    // ein Panic an dieser Stelle (VOR `tauri::Builder::default()`, s.
+    // `crate::run`) führte für einen Doppelklick-Nutzer nur zu kurzem
+    // Aufblitzen ohne jedes Fenster, völlig undiagnostizierbar. Jetzt: ein
+    // nativer Fehlerdialog mit verständlichem Text (Fehlerart + Datenpfad +
+    // nächster Schritt, s. `startup_error_messages::db_connect_failure_
+    // text`), dann sauberes Beenden — kein Weiterlaufen in einen kaputten
+    // Zustand (Spec 0059, Invarianten).
+    let profile_store = match tauri::async_runtime::block_on(SqliteProfileStore::connect(&db_path))
+    {
+        Ok(store) => store,
+        Err(err) => {
+            let kind = err.classify();
+            let text = crate::startup_error_messages::db_connect_failure_text(&kind, &db_path);
+            tracing::error!(error = %err, ?kind, "fatal: SQLite database connect/migrate failed");
+            crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
+        }
+    };
     tracing::info!("SQLite database connected");
     let ai_provider_store = profile_store.ai_provider_store();
     let policy_store = profile_store.policy_store();
@@ -110,6 +128,28 @@ fn build_app_state(wiring: &Wiring) -> AppState {
                     "encryption key for chat content unavailable — chat persistence, \
                      prompt history and the session ledger are disabled for this app run",
                 );
+                // Spec 0059, Fall 3: nur für den eigentlichen Zugriffsfehler
+                // (gesperrter/fehlender Keychain — `KeyStoreAccessFailed`)
+                // eine SICHTBARE Warnung; ein `InvalidKey` (ein bereits
+                // hinterlegter, aber korrupter Schlüsselwert — ein anderes,
+                // selteneres Problem, nicht Teil der vier in Spec 0059
+                // benannten Fälle) bleibt beim bisherigen, rein internen
+                // `tracing::warn!` oben. Dasselbe, bereits nicht-fatale
+                // Degradieren wie zuvor (Spec 0040, Abschnitt 7) — NEU ist
+                // nur, dass der Zugriffsfehler jetzt zusätzlich sichtbar
+                // wird. Stefans ausdrückliche Entscheidung (Review des
+                // Teil-0-Plans dieses Schritts): kein Abbruch, App startet
+                // unverändert degradiert weiter — s. `startup_dialog::
+                // show_warning`-Doc-Kommentar.
+                if matches!(
+                    err,
+                    ssh_manager_core::crypto::CipherError::KeyStoreAccessFailed(_)
+                ) {
+                    let text = crate::startup_error_messages::keychain_unavailable_text(
+                        std::env::consts::OS,
+                    );
+                    crate::startup_dialog::show_warning(&text.title, &text.message);
+                }
                 (None, None, None)
             }
         };
@@ -122,8 +162,20 @@ fn build_app_state(wiring: &Wiring) -> AppState {
         .expect("db_path hat immer ein Elternverzeichnis (s. default_db_path)")
         .join("host_keys.json");
     tracing::info!(path = %host_key_path.display(), "loading host-key store");
-    let host_key_store = FileHostKeyStore::load(host_key_path)
-        .expect("Host-Key-Speicher konnte nicht geladen werden");
+    // Spec 0059: kein eigener, benannter Fall, aber auf demselben
+    // Datenverzeichnis wie Fall 4 und derselben Fehlerklasse (Zugriffs-/
+    // Korruptionsproblem) — mit demselben Mechanismus geschlossen, statt
+    // eines bekannten `.expect(...)` direkt neben den vier behobenen
+    // Fällen unangetastet zu lassen (s. `startup_error_messages::
+    // host_key_store_failure_text`-Doc-Kommentar).
+    let host_key_store = match FileHostKeyStore::load(host_key_path.clone()) {
+        Ok(store) => store,
+        Err(err) => {
+            let text = crate::startup_error_messages::host_key_store_failure_text(&host_key_path);
+            tracing::error!(error = %err, "fatal: host-key store failed to load");
+            crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
+        }
+    };
     tracing::info!("host-key store loaded");
 
     AppState {

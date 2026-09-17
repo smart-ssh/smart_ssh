@@ -10,6 +10,16 @@ sind mit **(Pro)** markiert.
 ## [Unreleased]
 
 ### Added
+- App zeigt jetzt bei Startfehlern eine verständliche Meldung statt
+  stillem Absturz: kann die Datenbank nicht geöffnet werden (z. B. von
+  einer neueren Programmversion angelegt, beschädigt, oder das
+  Datenverzeichnis nicht beschreibbar) oder der Host-Key-Speicher nicht
+  geladen werden, erscheint jetzt ein Dialog mit der Fehlerursache statt
+  eines unerklärten Absturzes vor dem ersten Fenster. Ist der
+  Systemschlüsselbund beim Start gesperrt oder nicht verfügbar, startet
+  die App wie bisher trotzdem (Chat-Verlauf und Notiz-Zusammenfassungen
+  sind dann für diesen Programmlauf deaktiviert), zeigt das aber jetzt
+  ebenfalls sichtbar an statt es nur stillschweigend zu protokollieren.
 - Ist die gespeicherte Notiz eines Servers sehr groß, bietet die App beim
   Trennen der Verbindung jetzt an, sie per KI zusammenzufassen (oder
   selbst zu kürzen) — wie bei jedem KI-Notiz-Vorschlag wird die

@@ -118,6 +118,22 @@ impl SqliteProfileStore {
         Ok(Self { pool })
     }
 
+    /// Spec 0059 (fataler Startfehler-Dialog), Fall 1: die höchste
+    /// Migrations-Versionsnummer, die dieses Binary kennt ("Y" in "Die DB
+    /// wurde mit Version X angelegt, dieses Programm kennt bis Y") —
+    /// dieselben, zur Kompilierzeit eingebetteten Migrationen wie
+    /// `sqlx::migrate!().run(&pool)` oben (derselbe Makroaufruf, `sqlx`
+    /// liest dafür nie zur Laufzeit von der Platte, s. Doc-Kommentar an
+    /// `connect_with`), hier nur zusätzlich abgefragt statt ausgeführt —
+    /// kein zweiter I/O-Zugriff.
+    pub(crate) fn max_known_migration_version() -> i64 {
+        sqlx::migrate!()
+            .iter()
+            .map(|m| m.version)
+            .max()
+            .unwrap_or(0)
+    }
+
     /// Baut einen [`crate::SqliteAiProviderStore`], der sich denselben
     /// Connection-Pool (und damit dieselbe bereits migrierte Datenbank)
     /// teilt, statt eine zweite, unabhängige Verbindung zu öffnen — s.

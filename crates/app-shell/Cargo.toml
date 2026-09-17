@@ -20,6 +20,26 @@ futures = "0.3.34"
 mcp-server = { version = "0.5.0", path = "../mcp-server" }
 persistence-sqlite = { version = "0.5.0", path = "../persistence-sqlite" }
 regex = "1.13.1"
+# Spec 0059 (fataler Startfehler-Dialog): war bereits transitiv über
+# `tauri-plugin-dialog` im Baum (s. `Cargo.lock`) — hier direkt gepinnt,
+# weil `rfd::MessageDialog` bewusst OHNE `tauri-plugin-dialog`s
+# `AppHandle`-Maschinerie aufgerufen wird (die braucht eine bereits
+# laufende Tauri-App, s. `crate::startup_dialog`-Moduldoc): der native
+# Dialog muss VOR `tauri::Builder::default()` funktionieren.
+# `default-features = false` + `gtk3` (statt `rfd`s eigenem Default
+# `xdg-portal`/`wayland`/`async-std`, ein D-Bus-basierter Linux-Backend):
+# `tauri-plugin-dialog` selbst aktiviert standardmäßig `rfd/gtk3` (s.
+# dessen `Cargo.toml`, `default = ["gtk3"]`) — Cargos Feature-Unifikation
+# würde ohne dieses Override zwar ohnehin beide Backends gleichzeitig
+# kompilieren, hier aber bewusst explizit auf denselben, bereits im
+# echten Build laufenden Backend festgelegt, statt ihn nur zufällig über
+# die transitive Abhängigkeit mitzubekommen. `common-controls-v6`: nötig
+# für einen modern gerenderten Windows-Dialog (`TaskDialogIndirect` statt
+# der alten `MessageBox`-API).
+rfd = { version = "0.16.0", default-features = false, features = [
+    "gtk3",
+    "common-controls-v6",
+] }
 secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
