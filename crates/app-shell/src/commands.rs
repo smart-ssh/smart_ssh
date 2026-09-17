@@ -2267,16 +2267,34 @@ pub async fn request_note_shrink(
     );
     let provider_label = active_config.display_name.clone();
     let model = active_config.model.clone();
+    // spec-reviewer-Fund (Review dieses Schritts): derselbe zusätzliche
+    // Redactor-Musterbau wie in `connect()` (s. dortiger Kommentar) — ein
+    // per "In Notiz übernehmen"/einem angenommenen KI-Notiz-Vorschlag in
+    // die Notiz gelangtes Sudo-Passwort dieses Servers (z. B. aus einem
+    // NOPASSWD-/gültiger-Sudo-Timestamp-Fall, der es unredigiert in eine
+    // Kommandoausgabe hätte durchreichen lassen) wäre sonst hier nicht
+    // erfasst. `sudo_password_credential_ref`/`get(...).ok()` wie dort:
+    // kein hinterlegtes Passwort ist kein harter Fehler.
+    let sudo_password = state
+        .credential_store
+        .get(&sudo_password_credential_ref(server_id))
+        .ok();
+    let redactor: Box<dyn OutputRedactor> = match &sudo_password {
+        Some(password) => match regex::Regex::new(&regex::escape(password.expose_secret())) {
+            Ok(pattern) => Box::new(DefaultOutputRedactor::with_extra_patterns(vec![pattern])),
+            Err(_) => Box::new(DefaultOutputRedactor::new()),
+        },
+        None => Box::new(DefaultOutputRedactor::new()),
+    };
 
     tokio::spawn(async move {
         let state = app.state::<AppState>();
-        let redactor = DefaultOutputRedactor::new();
         let session_id: SessionId = Uuid::new_v4();
         execute_note_shrink_request(
             session_id,
             server_id,
             ai_provider.as_ref(),
-            &redactor,
+            redactor.as_ref(),
             provider_label,
             model,
             &app,

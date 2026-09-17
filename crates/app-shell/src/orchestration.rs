@@ -2974,13 +2974,28 @@ const NOTE_SHRINK_INSTRUCTION: &str = "Fasse die folgende, gespeicherte Notiz k�
 /// NACH-Verbindungsende-Ablauf). `commands::request_note_shrink` baut
 /// deshalb einen FRISCHEN `AiProvider` aus der aktuell aktiven
 /// Provider-Konfiguration (derselbe Aufbau-Pfad wie `commands::connect`/
-/// `test_ai_provider_credentials`) und einen einfachen
-/// `DefaultOutputRedactor::new()` (kein sitzungsspezifisches Sudo-Passwort-
-/// Muster verfügbar/nötig — eine gespeicherte Notiz ist kein
-/// Kommando-Output).
+/// `test_ai_provider_credentials`) und einen `OutputRedactor`, der — wie
+/// bei `connect()` — ein bekanntes, hinterlegtes Sudo-Passwort dieses
+/// Servers als zusätzliches Muster trägt (spec-reviewer-Fund, Review dieses
+/// Schritts: eine über "In Notiz übernehmen"/einen angenommenen
+/// KI-Notiz-Vorschlag in der Notiz gelandete Kommandoausgabe kann ein
+/// zuvor nur wegen des NOPASSWD-/Timestamp-Sonderfalls unredigiertes
+/// Passwort enthalten, s. Kommentar an `commands::connect`s
+/// Redactor-Aufbau).
+///
+/// `note_source_label` wird für [`fence_untrusted`] gebraucht
+/// (spec-reviewer-Fund, Review dieses Schritts): eine gespeicherte
+/// Server-/Gruppen-Notiz ist eine der vier untrusted Quellen aus Spec 0039
+/// §3 — genau wie `compaction::compact_for_send` sie beim SENDEN fenced
+/// (`fence_untrusted(UntrustedKind::ServerNote, ...)`), muss auch dieser
+/// KI-Aufruf die Notiz gefenced einbetten. Ohne das könnte eine über einen
+/// zuvor angenommenen Notiz-Vorschlag eingeschleuste Instruktion (die
+/// ursprünglich aus einer Kommandoausgabe eines Remote-Hosts stammte) hier
+/// als gleichrangiger Prompt-Text statt als Daten gelesen werden.
 async fn summarize_note_for_shrink(
     ai_provider: &dyn AiProvider,
     redactor: &dyn OutputRedactor,
+    note_source_label: &str,
     note_text: &str,
 ) -> Option<String> {
     if note_text.trim().is_empty() {
@@ -2991,13 +3006,12 @@ async fn summarize_note_for_shrink(
     // jedem `send()` redigiert, unabhängig davon, ob die gespeicherte
     // Notiz selbst schon redigiert wirkt.
     let redacted_note = redactor.redact_text(note_text);
+    let fenced_note = fence_untrusted(UntrustedKind::ServerNote, note_source_label, &redacted_note);
     let request_context = SessionContext {
         system_context: "Du kürzt eine gespeicherte Notiz zu einem SSH-Server.".to_string(),
         history: vec![ChatMessage {
             role: Role::User,
-            content: MessageContent::Text(format!(
-                "{NOTE_SHRINK_INSTRUCTION}\n\n---\n{redacted_note}"
-            )),
+            content: MessageContent::Text(format!("{NOTE_SHRINK_INSTRUCTION}\n\n{fenced_note}")),
         }],
         available_actions: Vec::new(),
     };
@@ -3042,7 +3056,20 @@ async fn summarize_note_for_shrink(
     if redacted.trim().is_empty() {
         return None;
     }
-    Some(crate::compaction::truncate_to_char_boundary(&redacted, NOTE_SHRINK_MAX_BYTES).to_string())
+    if redacted.len() <= NOTE_SHRINK_MAX_BYTES {
+        return Some(redacted);
+    }
+    // spec-reviewer-Fund (Review dieses Schritts): ohne Hinweis sähe der
+    // Nutzer im Diff eine mitten im Satz abbrechende Notiz, ohne dass
+    // erkennbar wäre, dass die App selbst gekappt hat (statt die KI
+    // absichtlich mitten im Wort geendet hätte). Der Hinweis selbst zählt
+    // zum Cap mit — `NOTE_SHRINK_MAX_BYTES` bleibt die harte Obergrenze für
+    // das GESAMTE Ergebnis, nicht nur für den reinen Notiztext davor.
+    const TRUNCATION_NOTICE: &str =
+        "\n\n[Hinweis: Zusammenfassung war länger als erlaubt und wurde hier gekappt.]";
+    let budget = NOTE_SHRINK_MAX_BYTES.saturating_sub(TRUNCATION_NOTICE.len());
+    let capped = crate::compaction::truncate_to_char_boundary(&redacted, budget);
+    Some(format!("{capped}{TRUNCATION_NOTICE}"))
 }
 
 /// Orchestriert den vollständigen "Ja, zusammenfassen"-Ablauf (Spec 0057,
@@ -3083,7 +3110,8 @@ pub async fn execute_note_shrink_request(
         return;
     };
 
-    let Some(new_content) = summarize_note_for_shrink(ai_provider, redactor, &server.notes).await
+    let Some(new_content) =
+        summarize_note_for_shrink(ai_provider, redactor, &server.name, &server.notes).await
     else {
         emit_note_shrink_failed(
             emitter,
@@ -3096,6 +3124,7 @@ pub async fn execute_note_shrink_request(
     };
 
     let action_id: ActionId = Uuid::new_v4();
+    let previous_notes = server.notes;
     emit_note_update_suggested(
         emitter,
         session_id,
@@ -3104,7 +3133,7 @@ pub async fn execute_note_shrink_request(
             target: NoteTargetSelector::CurrentServer,
             new_content: new_content.clone(),
         },
-        Some(server.notes),
+        Some(previous_notes.clone()),
         Some(server.name),
     );
 
@@ -3124,30 +3153,76 @@ pub async fn execute_note_shrink_request(
         }
     };
 
-    if matches!(
+    if !matches!(
         user_decision,
         ActionUserDecision::Approve | ActionUserDecision::EditThenApprove { .. }
     ) {
-        if let Err(err) = persist_note_revision(
-            profile_store,
-            NoteTarget::Server(server_id),
-            new_content,
-            NoteEditor::Ai {
-                provider: provider_label,
-                model,
-            },
-        )
-        .await
-        {
-            // Kein `session`, an das ein `chat-action-result`/-`error`
-            // gebunden werden könnte (s. Doc-Kommentar oben) — best effort
-            // geloggt, dieselbe Behandlungsklasse wie andere
-            // Best-Effort-Fehlschläge in diesem Modul (z. B. `chat session
-            // mark_ended failed`). Die gespeicherte Notiz bleibt in diesem
-            // Fall unverändert — kein Teil-Schreiben möglich, `record_note_
-            // revision` schlägt ganz oder gar nicht fehl.
-            tracing::warn!(error = %err, "note shrink persistence failed");
+        return;
+    }
+
+    // spec-reviewer-Fund (Review dieses Schritts): das Bestätigungsfenster
+    // ist bis zu `PENDING_ACTION_CONFIRM_TIMEOUT` (3600s) lang — genug
+    // Zeit, dass der Nutzer die Notiz in der Zwischenzeit selbst bearbeitet
+    // (z. B. über "Mache ich selbst" auf einem ZWEITEN Aufruf desselben
+    // Dialogs, oder einfach über die normale Notiz-Bearbeitung). Der Diff,
+    // dem er gerade zugestimmt hat, bezog sich auf den zum Zeitpunkt des
+    // KI-Aufrufs gelesenen Stand (`previous_notes`) — ist die tatsächlich
+    // gespeicherte Notiz inzwischen eine ANDERE, würde ein blindes
+    // Überschreiben genau die zwischenzeitliche Änderung verlieren, obwohl
+    // der Nutzer NUR dem ALTEN Diff zugestimmt hat. Frisch nachgelesen statt
+    // blind überschrieben — bei Abweichung wird abgebrochen (die
+    // Revisions-Historie macht ein blindes Überschreiben zwar rückholbar,
+    // aber Spec 0057 §6 verlangt "nie ohne Nutzer-Bestätigung verändert",
+    // und bestätigt wurde hier ein Diff gegen einen inzwischen veralteten
+    // Ausgangstext).
+    let current_notes = match profile_store.get_server(&server_id).await {
+        Ok(server) => server.notes,
+        Err(err) => {
+            emit_note_shrink_failed(
+                emitter,
+                server_id,
+                format!(
+                    "Notiz konnte nicht gespeichert werden — Server nicht mehr auffindbar: {err}"
+                ),
+            );
+            return;
         }
+    };
+    if current_notes != previous_notes {
+        emit_note_shrink_failed(
+            emitter,
+            server_id,
+            "Die Notiz wurde zwischenzeitlich anderweitig geändert — die Zusammenfassung wurde \
+             NICHT gespeichert, um diese Änderung nicht zu überschreiben."
+                .to_string(),
+        );
+        return;
+    }
+
+    if let Err(err) = persist_note_revision(
+        profile_store,
+        NoteTarget::Server(server_id),
+        new_content,
+        NoteEditor::Ai {
+            provider: provider_label,
+            model,
+        },
+    )
+    .await
+    {
+        // spec-reviewer-Fund (Review dieses Schritts): vorher nur geloggt —
+        // der Nutzer hatte gerade "Annehmen" geklickt, die Karte verschwand,
+        // und ohne dieses Event hätte er angenommen, die Notiz sei jetzt
+        // gekürzt, obwohl nichts geschrieben wurde. Kein `session`, an das
+        // ein `chat-action-result`/-`error` gebunden werden könnte (s.
+        // Doc-Kommentar an der Funktion) — deshalb dasselbe app-weite
+        // `note-shrink-failed` wie bei einem KI-Fehlschlag.
+        tracing::warn!(error = %err, "note shrink persistence failed");
+        emit_note_shrink_failed(
+            emitter,
+            server_id,
+            format!("Notiz konnte nicht gespeichert werden: {err}"),
+        );
     }
 }
 
@@ -5950,6 +6025,69 @@ mod tests {
         }
     }
 
+    /// spec-reviewer-Fund (Review dieses Schritts): Test-Double, das
+    /// `record_note_revision` unbedingt fehlschlagen lässt (delegiert
+    /// ansonsten vollständig an ein echtes `test_support::
+    /// InMemoryProfileStore`) — deckt den zuvor stillen Fehlerpfad ab, wenn
+    /// die Persistenz NACH einer Nutzer-Zustimmung fehlschlägt.
+    #[derive(Default)]
+    struct FailingRecordProfileStore {
+        inner: crate::test_support::InMemoryProfileStore,
+    }
+
+    impl FailingRecordProfileStore {
+        fn with_server(self, server: Server) -> Self {
+            Self {
+                inner: self.inner.with_server(server),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl ProfileStore for FailingRecordProfileStore {
+        async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
+            self.inner.get_server(id).await
+        }
+        async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
+            self.inner.get_group(id).await
+        }
+        async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
+            self.inner.list_servers().await
+        }
+        async fn list_groups(&self) -> ProfileResult<Vec<Group>> {
+            self.inner.list_groups().await
+        }
+        async fn create_group(&self, group: &Group) -> ProfileResult<()> {
+            self.inner.create_group(group).await
+        }
+        async fn update_group(&self, group: &Group) -> ProfileResult<()> {
+            self.inner.update_group(group).await
+        }
+        async fn delete_group(&self, id: &GroupId) -> ProfileResult<()> {
+            self.inner.delete_group(id).await
+        }
+        async fn create_server(&self, server: &Server) -> ProfileResult<()> {
+            self.inner.create_server(server).await
+        }
+        async fn update_server(&self, server: &Server) -> ProfileResult<()> {
+            self.inner.update_server(server).await
+        }
+        async fn delete_server(&self, id: &ServerId) -> ProfileResult<()> {
+            self.inner.delete_server(id).await
+        }
+        async fn record_note_revision(&self, _revision: &NoteRevision) -> ProfileResult<()> {
+            Err(ssh_manager_core::profiles::ProfileError::Backend(
+                "simulierter DB-Fehler (Test)".to_string(),
+            ))
+        }
+        async fn list_note_revisions(
+            &self,
+            target: NoteTarget,
+        ) -> ProfileResult<Vec<NoteRevision>> {
+            self.inner.list_note_revisions(target).await
+        }
+    }
+
     /// Zusammenspiel-Design (Aufgabenstellung, Abschnitt 4): reine
     /// Prioritäts-Logik, direkt getestet, damit ihre Semantik nicht nur
     /// implizit über die (schwerer aufzusetzende) `commands::disconnect`-
@@ -6033,9 +6171,14 @@ mod tests {
         let contexts = provider.received_contexts_handle();
         let redactor = DefaultOutputRedactor::new();
 
-        let result = summarize_note_for_shrink(&provider, &redactor, "Die ursprüngliche Notiz.")
-            .await
-            .expect("Erfolgsfall muss Some liefern");
+        let result = summarize_note_for_shrink(
+            &provider,
+            &redactor,
+            "Test-Server",
+            "Die ursprüngliche Notiz.",
+        )
+        .await
+        .expect("Erfolgsfall muss Some liefern");
 
         assert!(
             result.contains("Gekürzte Notiz mit"),
@@ -6072,9 +6215,14 @@ mod tests {
         let contexts = provider.received_contexts_handle();
         let redactor = DefaultOutputRedactor::new();
 
-        summarize_note_for_shrink(&provider, &redactor, "Notiz: password=hunter2geheim")
-            .await
-            .expect("Erfolgsfall muss Some liefern");
+        summarize_note_for_shrink(
+            &provider,
+            &redactor,
+            "Test-Server",
+            "Notiz: password=hunter2geheim",
+        )
+        .await
+        .expect("Erfolgsfall muss Some liefern");
 
         let sent = contexts.lock().unwrap();
         let sent_text = format!("{:?}", sent[0].history);
@@ -6089,7 +6237,8 @@ mod tests {
         let provider = MockAiProvider::new(vec![AiEvent::Error(AiError::RateLimited)]);
         let redactor = DefaultOutputRedactor::new();
 
-        let result = summarize_note_for_shrink(&provider, &redactor, "Eine Notiz.").await;
+        let result =
+            summarize_note_for_shrink(&provider, &redactor, "Test-Server", "Eine Notiz.").await;
 
         assert!(
             result.is_none(),
@@ -6105,7 +6254,8 @@ mod tests {
         let provider = MockAiProvider::new(vec![AiEvent::TextDelta("halbe Antwort".to_string())]);
         let redactor = DefaultOutputRedactor::new();
 
-        let result = summarize_note_for_shrink(&provider, &redactor, "Eine Notiz.").await;
+        let result =
+            summarize_note_for_shrink(&provider, &redactor, "Test-Server", "Eine Notiz.").await;
 
         assert!(result.is_none());
     }
@@ -6116,7 +6266,7 @@ mod tests {
         let contexts = provider.received_contexts_handle();
         let redactor = DefaultOutputRedactor::new();
 
-        let result = summarize_note_for_shrink(&provider, &redactor, "   ").await;
+        let result = summarize_note_for_shrink(&provider, &redactor, "Test-Server", "   ").await;
 
         assert!(result.is_none());
         assert!(
@@ -6135,7 +6285,7 @@ mod tests {
         let provider = MockAiProvider::new(vec![AiEvent::TextDelta(huge_reply), AiEvent::Done]);
         let redactor = DefaultOutputRedactor::new();
 
-        let result = summarize_note_for_shrink(&provider, &redactor, "Eine Notiz.")
+        let result = summarize_note_for_shrink(&provider, &redactor, "Test-Server", "Eine Notiz.")
             .await
             .expect("Erfolgsfall muss Some liefern");
 
@@ -6151,7 +6301,7 @@ mod tests {
         let provider = MockAiProvider::new(vec![]); // liefert nie Done/Error
         let redactor = DefaultOutputRedactor::new();
 
-        let call = summarize_note_for_shrink(&provider, &redactor, "Eine Notiz.");
+        let call = summarize_note_for_shrink(&provider, &redactor, "Test-Server", "Eine Notiz.");
         let advancer =
             tokio::time::advance(NOTE_SHRINK_CALL_TIMEOUT + std::time::Duration::from_secs(1));
 
@@ -6421,6 +6571,169 @@ mod tests {
         let events = emitter.events.lock().unwrap().clone();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].0, "note-shrink-failed");
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts, Spec 0039 §3): eine
+    /// gespeicherte Notiz ist eine der vier untrusted Quellen und MUSS
+    /// gefenced in den Prompt eingehen, genau wie beim Sende-Pfad
+    /// (`compaction::compact_for_send`).
+    #[tokio::test]
+    async fn test_summarize_note_for_shrink_fences_the_note_as_untrusted_content() {
+        let provider =
+            MockAiProvider::new(vec![AiEvent::TextDelta("ok".to_string()), AiEvent::Done]);
+        let contexts = provider.received_contexts_handle();
+        let redactor = DefaultOutputRedactor::new();
+
+        summarize_note_for_shrink(&provider, &redactor, "web-01", "Eine Notiz mit Inhalt.")
+            .await
+            .expect("Erfolgsfall muss Some liefern");
+
+        let sent = contexts.lock().unwrap();
+        let sent_text = format!("{:?}", sent[0].history);
+        assert!(
+            sent_text.contains("<server_note>") && sent_text.contains("</server_note>"),
+            "die Notiz muss über `fence_untrusted(UntrustedKind::ServerNote, ...)` eingebettet \
+             werden: {sent_text}"
+        );
+        assert!(
+            sent_text.contains("web-01"),
+            "die Quelle (Servername) muss im Fencing-Tag stehen: {sent_text}"
+        );
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): Lost-Update-Schutz — hat
+    /// sich die gespeicherte Notiz zwischen dem KI-Aufruf (der den
+    /// `previousNoteContent`-Stand für den Diff liest) und der
+    /// tatsächlichen Nutzer-Zustimmung geändert, darf die Zusammenfassung
+    /// NICHT blind darüberschreiben — der Nutzer hat nur einem Diff gegen
+    /// den ALTEN Stand zugestimmt.
+    #[tokio::test]
+    async fn test_execute_note_shrink_request_aborts_when_note_changed_before_approval() {
+        let provider = MockAiProvider::new(vec![
+            AiEvent::TextDelta("Gekürzte Fassung.".to_string()),
+            AiEvent::Done,
+        ]);
+        let redactor = DefaultOutputRedactor::new();
+        let server_id = ServerId::new();
+        let profile_store = crate::test_support::InMemoryProfileStore::new()
+            .with_server(server_with_notes(server_id, "Ursprüngliche Notiz."));
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let flow = execute_note_shrink_request(
+            Uuid::new_v4(),
+            server_id,
+            &provider,
+            &redactor,
+            "Test-Provider".to_string(),
+            "test-model".to_string(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = async {
+            loop {
+                let action_id = {
+                    let events = emitter.events.lock().unwrap();
+                    events.iter().find_map(|(name, payload)| {
+                        (name == "note-update-suggested")
+                            .then(|| payload["actionId"].as_str().unwrap().to_string())
+                    })
+                };
+                if let Some(action_id) = action_id {
+                    // Der Nutzer ändert die Notiz selbst, WÄHREND der
+                    // Diff-Dialog noch offen ist — z. B. über die normale
+                    // Notiz-Bearbeitung in einem anderen Fenster.
+                    let revision = ssh_manager_core::profiles::record_revision(
+                        NoteTarget::Server(server_id),
+                        "Vom Nutzer inzwischen manuell geänderte Notiz.".to_string(),
+                        NoteEditor::User,
+                    );
+                    profile_store.record_note_revision(&revision).await.unwrap();
+
+                    let action_id: ActionId = action_id.parse().unwrap();
+                    confirmations
+                        .resolve(&action_id, ActionUserDecision::Approve)
+                        .unwrap();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+
+        tokio::join!(flow, responder);
+
+        assert_eq!(
+            profile_store.get_server(&server_id).await.unwrap().notes,
+            "Vom Nutzer inzwischen manuell geänderte Notiz.",
+            "die zwischenzeitliche manuelle Änderung darf NICHT von der (gegen den alten Stand \
+             erzeugten) Zusammenfassung überschrieben werden"
+        );
+        let events = emitter.events.lock().unwrap().clone();
+        assert_eq!(
+            events.last().unwrap().0,
+            "note-shrink-failed",
+            "der Abbruch muss dem Nutzer sichtbar gemeldet werden, nicht still verworfen: \
+             {events:?}"
+        );
+    }
+
+    /// spec-reviewer-Fund (Review dieses Schritts): ohne dieses Event hätte
+    /// der Nutzer nach "Annehmen" angenommen, die Notiz sei jetzt gekürzt,
+    /// obwohl der DB-Schreibvorgang fehlschlug.
+    #[tokio::test]
+    async fn test_execute_note_shrink_request_persist_failure_emits_failed_event() {
+        let provider = MockAiProvider::new(vec![
+            AiEvent::TextDelta("Gekürzte Fassung.".to_string()),
+            AiEvent::Done,
+        ]);
+        let redactor = DefaultOutputRedactor::new();
+        let server_id = ServerId::new();
+        let profile_store = FailingRecordProfileStore::default()
+            .with_server(server_with_notes(server_id, "Ursprüngliche Notiz."));
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let flow = execute_note_shrink_request(
+            Uuid::new_v4(),
+            server_id,
+            &provider,
+            &redactor,
+            "Test-Provider".to_string(),
+            "test-model".to_string(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = async {
+            loop {
+                let action_id = {
+                    let events = emitter.events.lock().unwrap();
+                    events.iter().find_map(|(name, payload)| {
+                        (name == "note-update-suggested")
+                            .then(|| payload["actionId"].as_str().unwrap().to_string())
+                    })
+                };
+                if let Some(action_id) = action_id {
+                    let action_id: ActionId = action_id.parse().unwrap();
+                    confirmations
+                        .resolve(&action_id, ActionUserDecision::Approve)
+                        .unwrap();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+
+        tokio::join!(flow, responder);
+
+        let events = emitter.events.lock().unwrap().clone();
+        assert_eq!(
+            events.last().unwrap().0,
+            "note-shrink-failed",
+            "ein fehlgeschlagener DB-Schreibvorgang nach Zustimmung darf nicht still bleiben: \
+             {events:?}"
+        );
     }
 
     // --- Spec 0012: KI-generierte Dokumente -------------------------------

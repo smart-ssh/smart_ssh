@@ -12,10 +12,21 @@ interface ManagementViewProps {
    * Servers — übergeben von `App.tsx` über den `navigationBus`. `null`/
    * `undefined` im Normalfall (regulärer Aufruf über die Navigation). */
   initialSelection?: Selection | null;
+  /** spec-reviewer-Fund (Review dieses Schritts): ohne diesen Rückkanal
+   * bliebe `initialSelection` in `App.tsx` dauerhaft gesetzt — ein SPÄTERER
+   * manueller Wechsel auf "Verwalten" (nach Verlassen und Zurückkommen,
+   * `ManagementView` wird dabei unmounted) würde denselben Server erneut
+   * aufspringen lassen, obwohl der Nutzer längst etwas anderes wollte.
+   * Einmalig aufgerufen, sobald `initialSelection` tatsächlich übernommen
+   * wurde. */
+  onInitialSelectionConsumed?: () => void;
 }
 
 /** Spec 0008, Abschnitt 6: Sidebar links, Formular im Hauptbereich. */
-export function ManagementView({ initialSelection = null }: ManagementViewProps) {
+export function ManagementView({
+  initialSelection = null,
+  onInitialSelectionConsumed,
+}: ManagementViewProps) {
   const [groups, setGroups] = useState<GroupDto[]>([]);
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [selection, setSelection] = useState<Selection | null>(initialSelection);
@@ -26,7 +37,11 @@ export function ManagementView({ initialSelection = null }: ManagementViewProps)
   // normaler Initialwert) — deshalb zusätzlich per Effekt übernommen, nicht
   // nur als `useState`-Startwert.
   useEffect(() => {
-    if (initialSelection) setSelection(initialSelection);
+    if (initialSelection) {
+      setSelection(initialSelection);
+      onInitialSelectionConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSelection]);
 
   const reload = () => {

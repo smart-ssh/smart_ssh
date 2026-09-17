@@ -122,6 +122,92 @@ optionalen `initialSelection`-Prop an `ManagementView` durch (dort per
 Effekt übernommen, da sich der Wert nach dem Mounten noch ändern kann,
 anders als ein normaler `useState`-Startwert).
 
+### 6. Nacharbeiten aus dem `spec-reviewer`-Review dieses Schritts
+
+Der pflichtgemäße `spec-reviewer`-Durchlauf (CLAUDE.md, ERHÖHT) fand keinen
+Bruch der zentralen Invariante (gespeicherte Notiz wird nie ohne
+Diff-Bestätigung verändert — beide `persist_note_revision`-Aufrufer stehen
+hinter einem aufgelösten `Approve`/`EditThenApprove`), aber mehrere
+Sicherheits-/Robustheits-Lücken. Behoben, in separatem Commit:
+
+- **Notiz ungefenced im Kürzungs-Prompt.** Spec 0039 §3 verlangt
+  `fence_untrusted` für jede der vier untrusted Quellen, Server-/
+  Gruppen-Notizen eingeschlossen — `compaction::compact_for_send` tut das
+  beim Senden bereits. `summarize_note_for_shrink` bettete die Notiz aber
+  roh in den Prompt ein. Relevant, weil eine Notiz über "In Notiz
+  übernehmen" (Spec 0040 §6) oder einen angenommenen KI-Notiz-Vorschlag
+  Inhalt tragen kann, der ursprünglich von einem Remote-Host stammte —
+  eine darin eingeschleuste Instruktion wäre sonst als gleichrangiger
+  Prompt-Text statt als Daten gelesen worden. Jetzt `fence_untrusted
+  (UntrustedKind::ServerNote, &server.name, &redacted_note)`, exakt wie im
+  Sende-Pfad.
+- **Schwächerer Redactor als im Session-Pfad.** `request_note_shrink` baute
+  bisher einen einfachen `DefaultOutputRedactor::new()` — ohne das
+  session-spezifische Sudo-Passwort-Muster, das `connect()` für genau den
+  Fall aufbaut, dass `sudo` (NOPASSWD/gültiger Timestamp) das Passwort
+  ungefiltert an die ausgeführte Kommandoausgabe durchreicht. Landet eine
+  solche Ausgabe über "In Notiz übernehmen" in der Notiz, hätte die
+  generische Musterliste ein nacktes Passwort nicht erfasst. Jetzt baut
+  `request_note_shrink` denselben `with_extra_patterns`-Redactor wie
+  `connect()`.
+- **Stiller Fehlschlag nach Zustimmung.** Schlug `persist_note_revision`
+  NACH einem `Approve` fehl (DB gesperrt, Server zwischenzeitlich
+  gelöscht), gab es nur ein `tracing::warn!` — der Nutzer hätte "Annehmen"
+  geklickt, die Karte wäre verschwunden, und er hätte angenommen, die
+  Notiz sei jetzt gekürzt, obwohl nichts geschrieben wurde. Jetzt zusätzlich
+  ein `note-shrink-failed`-Event.
+- **Verlorene zwischenzeitliche Änderung (TOCTOU).** Das
+  Bestätigungsfenster ist bis zu `PENDING_ACTION_CONFIRM_TIMEOUT` (3600s)
+  lang — genug Zeit, dass der Nutzer die Notiz in der Zwischenzeit selbst
+  ändert. Ein blindes Überschreiben mit der KI-Zusammenfassung hätte diese
+  Änderung verloren, obwohl der Nutzer nur einem Diff gegen den ALTEN Stand
+  zugestimmt hatte — eine formale Verletzung von "nie ohne Bestätigung
+  verändert" (bestätigt wurde ein Diff, der nicht mehr dem aktuellen Stand
+  entsprach). `execute_note_shrink_request` liest den Server jetzt
+  unmittelbar vor dem Schreiben erneut, vergleicht gegen den beim
+  KI-Aufruf gelesenen Stand, und bricht bei Abweichung mit
+  `note-shrink-failed` ab, statt zu überschreiben.
+- **Fehlender Kürzungs-Hinweis.** Kappt `NOTE_SHRINK_MAX_BYTES` eine zu
+  lange KI-Antwort, sah der Nutzer im Diff bisher eine mitten im Satz
+  abbrechende Notiz ohne erkennbaren Grund. Jetzt ein kurzer Hinweis-Zusatz
+  (innerhalb desselben Byte-Caps, s. `summarize_note_for_shrink`).
+- **React-Duplicate-Key.** Erschien derselbe Server zweimal hintereinander
+  (z. B. weil die vorherige Karte nie beantwortet wurde), erzeugte
+  `NoteShrinkSuggestionToast` zwei Einträge mit identischem
+  `key={serverId}`. Jetzt beim Einfügen dedupliziert (ersetzt statt
+  angehängt).
+- **`pendingNoteEditSelection` wurde nie zurückgesetzt.** Nach "Mache ich
+  selbst" blieb die Ziel-Auswahl in `App.tsx` dauerhaft gesetzt — ein
+  SPÄTERER manueller Wechsel zu "Verwalten" (nach Verlassen/Zurückkommen,
+  `ManagementView` wird dabei unmounted) wäre erneut zu demselben Server
+  gesprungen. `ManagementView` bekommt jetzt einen
+  `onInitialSelectionConsumed`-Rückkanal, der die Auswahl in `App.tsx`
+  nach der Übernahme löscht.
+
+Bewusst NICHT behoben, dem Nutzer explizit gemeldet:
+
+- **"Mache ich selbst" springt zu `ServerForm` (das den `NotesPanel`
+  enthält), nicht mit Fokus/Scroll direkt auf das Notizfeld.** §4.2 sagt
+  nur "öffnet die Notiz-Bearbeitung", ohne die genaue Zielgranularität
+  vorzuschreiben — bei einer wirklich langen Notiz muss der Nutzer im
+  Formular etwas scrollen. Kein Sicherheitsproblem, reiner UX-Feinschliff
+  für eine spätere Iteration.
+- **Der lokale Pseudo-Server (`LOCAL_SERVER_ID`) bekommt den Dialog nie**
+  (`suggest_note_shrink_on_disconnect`s `profile_store.get_server(...)`
+  schlägt für ihn strukturell fehl, da er keine `servers`-Zeile hat, s.
+  `local_server.rs`) — eine emergente Lücke, kein verbotenes
+  `if server_id == LOCAL_SERVER_ID` im Sicherheitspfad (das wäre laut
+  CLAUDE.md ohnehin unzulässig). Auswirkung ist rein kosmetisch (der
+  lokale Server bekommt den Komfort-Vorschlag nicht), kein
+  Daten-/Sicherheitsproblem — nicht in dieser Runde behoben.
+- **Kein Rate-Limit/keine Entprellung für `request_note_shrink`** — ein
+  direkter, wiederholter Aufruf (z. B. aus den DevTools) könnte mehrere
+  KI-Aufrufe/Diff-Karten für denselben Server erzeugen. Kein
+  Bestätigungs-Bypass (die Persistenz bleibt in jedem Fall hinter dem
+  Diff-Dialog), nur ein potenzieller Kostenpunkt — dieselbe Klasse
+  Kompromiss wie bei jedem anderen ungedrosselten Tauri-Befehl in diesem
+  Projekt, nicht spezifisch für diesen Schritt.
+
 ## Konsequenzen
 
 - Genau ein zusätzlicher KI-Aufruf, ausschließlich nach explizitem "Ja,

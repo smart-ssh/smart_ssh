@@ -37,7 +37,13 @@ export function NoteShrinkSuggestionToast() {
   useEffect(() => {
     const unlistenSuggested = onNoteShrinkSuggested((event) => {
       setSuggestions((prev) => [
-        ...prev,
+        // spec-reviewer-Fund (Review dieses Schritts): derselbe Server kann
+        // über mehrere Verbindungsenden hinweg erneut vorgeschlagen werden
+        // (z. B. wenn die vorherige Karte nie beantwortet wurde) — ohne
+        // Deduplizierung hätten zwei Karten denselben `key={serverId}`
+        // (React-Duplicate-Key-Warnung), und ein `dismiss` hätte beide statt
+        // nur einer entfernt.
+        ...prev.filter((s) => s.serverId !== event.serverId),
         { serverId: event.serverId, serverName: event.serverName },
       ]);
     });

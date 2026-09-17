@@ -9,6 +9,13 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+### Added
+- Ist die gespeicherte Notiz eines Servers sehr groß, bietet die App beim
+  Trennen der Verbindung jetzt an, sie per KI zusammenzufassen (oder
+  selbst zu kürzen) — wie bei jedem KI-Notiz-Vorschlag wird die
+  Zusammenfassung erst nach Bestätigung im Diff-Vergleich (alt/neu)
+  tatsächlich gespeichert, nie automatisch.
+
 ### Fixed
 - Ein KI-Provider (oder ein zwischengeschalteter Proxy), der einen
   Fehlerstatus zwar sofort beantwortete, den Antworttext danach aber

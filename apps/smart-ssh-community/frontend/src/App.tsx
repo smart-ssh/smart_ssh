@@ -160,6 +160,7 @@ function App() {
           onSwitchToExistingTab={switchTo}
           onConnected={(sessionId, serverName, serverId) => openTab(sessionId, serverId, serverName)}
           pendingNoteEditSelection={pendingNoteEditSelection}
+          onNoteEditSelectionConsumed={() => setPendingNoteEditSelection(null)}
         />
       </div>
     </div>
@@ -175,6 +176,7 @@ interface MainScreenProps {
   /** Spec 0057, §4.2 (Etappe 4) — s. `App`s Doc-Kommentar zum
    * `navigationBus`. */
   pendingNoteEditSelection: Selection | null;
+  onNoteEditSelectionConsumed: () => void;
   refreshProviderStatus: () => void;
   onConnected: (sessionId: string, serverName: string, serverId: string) => void;
   findExistingSessionId: (serverId: string) => string | undefined;
@@ -192,6 +194,7 @@ function MainScreen({
   findExistingSessionId,
   onSwitchToExistingTab,
   pendingNoteEditSelection,
+  onNoteEditSelectionConsumed,
 }: MainScreenProps) {
   const { t } = useTranslation();
   // Spec 0033, Abschnitt 4: hier statt in `ServerList` selbst gehalten,
@@ -290,7 +293,10 @@ function MainScreen({
           </section>
         </main>
       ) : tab === "manage" ? (
-        <ManagementView initialSelection={pendingNoteEditSelection} />
+        <ManagementView
+          initialSelection={pendingNoteEditSelection}
+          onInitialSelectionConsumed={onNoteEditSelectionConsumed}
+        />
       ) : (
         <FilterRulesView />
       )}
