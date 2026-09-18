@@ -492,12 +492,17 @@ fn evaluate_rules_explained(
             // `sudo`/`doas`-Stripping bleibt für Allow erhalten (Testfall 7,
             // ADR 0002) — das läuft über `stripped`, nicht `resolved`.
             let resolved_applies = action != RuleAction::Allow;
-            let is_match = rule.pattern.matches(original)
-                || (original != stripped && rule.pattern.matches(stripped))
+            // Spec 0060: `matches_for_user_rule` statt `matches` — hier
+            // werden Nutzer-/Organisations-Regeln (Allow/Deny) ausgewertet,
+            // genau der von Spec 0060 adressierte Fall (s. dortiger
+            // Doc-Kommentar in `pattern.rs` zur Abgrenzung gegenüber
+            // `crate::risk`).
+            let is_match = rule.pattern.matches_for_user_rule(original)
+                || (original != stripped && rule.pattern.matches_for_user_rule(stripped))
                 || (resolved_applies
                     && original != resolved
                     && stripped != resolved
-                    && rule.pattern.matches(resolved));
+                    && rule.pattern.matches_for_user_rule(resolved));
             if is_match {
                 let decision = match action {
                     RuleAction::Deny => Decision::Deny {

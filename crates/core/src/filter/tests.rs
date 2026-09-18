@@ -1072,3 +1072,178 @@ async fn test_evaluate_explained_reports_user_origin_for_sole_sqlite_style_sourc
 
     assert_eq!(trace.matched_rule_origin, Some(RuleOrigin::User));
 }
+
+// --- Spec 0060: Glob `*` überquert `/` nicht mehr (pfadförmige Muster) ---
+
+/// Spec 0060, Testbarkeit: der Grundfall — `*` matcht weiterhin innerhalb
+/// desselben Verzeichnisses.
+#[tokio::test]
+async fn test_path_shaped_allow_rule_matches_within_same_directory() {
+    let eng = engine(vec![glob_rule(
+        "allow-log",
+        "cat /var/log/*",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    let decision = eng.evaluate("cat /var/log/syslog", &ctx("srv1", &[])).await;
+    assert_auto_exec(&decision);
+}
+
+/// Spec 0060, Testbarkeit: `*` überquert keine `/`-Grenze mehr — ein
+/// tieferes Unterverzeichnis matcht nicht mehr automatisch.
+#[tokio::test]
+async fn test_path_shaped_allow_rule_does_not_cross_into_subdirectory() {
+    let eng = engine(vec![glob_rule(
+        "allow-log",
+        "cat /var/log/*",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    let decision = eng
+        .evaluate("cat /var/log/sub/deep", &ctx("srv1", &[]))
+        .await;
+    assert_confirm(&decision);
+}
+
+/// Spec 0060, das titelgebende Problem: `Allow: cat /var/log/*` darf NICHT
+/// mehr auf einen `../`-Ausbruch matchen.
+#[tokio::test]
+async fn test_path_shaped_allow_rule_rejects_the_headline_traversal_case() {
+    let eng = engine(vec![glob_rule(
+        "allow-log",
+        "cat /var/log/*",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    let decision = eng
+        .evaluate("cat /var/log/../../../etc/shadow", &ctx("srv1", &[]))
+        .await;
+    assert_confirm(&decision);
+}
+
+/// Spec 0060, Abschnitt 4 (adversarial, PFLICHT) — jeder erfundene
+/// Umgehungsversuch gegen dieselbe `Allow: cat /var/log/*`-Regel muss zu
+/// „kein Match" (Confirm/Deny, nie AutoExec) führen.
+#[tokio::test]
+async fn test_path_shaped_allow_rule_rejects_all_adversarial_traversal_variants() {
+    let eng = engine(vec![glob_rule(
+        "allow-log",
+        "cat /var/log/*",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    let adversarial_commands = [
+        // Direkte `../`-Ausbrüche, unterschiedlich tief.
+        "cat /var/log/../../etc/shadow",
+        "cat /var/log/../log/../../etc/passwd",
+        // Einzelnes `..`-Segment OHNE eingebettetes `/` — der Fall, den
+        // `literal_separator` allein NICHT abfängt (nur die vorgeschaltete
+        // lexikalische Normalisierung tut das, s. `pattern.rs`).
+        "cat /var/log/..",
+        // Doppelte Slashes / `.`-Segmente dürfen nicht versehentlich einen
+        // Ausbruch ermöglichen (werden zu einem harmlosen, aber
+        // NICHT-matchenden Pfad normalisiert, da sie das Zielverzeichnis
+        // verlassen).
+        "cat /var//log/../../etc/shadow",
+        "cat /var/log/./../../etc/shadow",
+        // Groß-/Kleinschreibungstrick — Matching bleibt case-sensitiv,
+        // ein anderer Groß-/Kleinschreibungs-Pfad matcht `/var/log/*`
+        // ohnehin nicht (kein Bypass, aber zur Dokumentation mitgeprüft).
+        "cat /VAR/LOG/../../etc/shadow",
+        // Whitespace-Trick: zusätzliche Leerzeichen um den Pfad ändern
+        // nichts an der Segment-Auflösung.
+        "cat  /var/log/../../etc/shadow",
+        // Relativer Ausbruch — `foo/bar/*`-artige bare relative Pfade
+        // gelten ebenfalls als pfadförmig (s. `is_path_shaped_pattern`),
+        // ein Ausbruch über mehrere `..` muss also auch hier scheitern.
+        "cat var/log/../../etc/shadow",
+    ];
+    for cmd in adversarial_commands {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert!(
+            !matches!(decision, Decision::AutoExec),
+            "adversarialer Fall darf NIE AutoExec ergeben: {cmd:?} -> {decision:?}"
+        );
+    }
+}
+
+/// Spec 0060, Abschnitt 4: ein Muster, das die „pfadförmig"-Erkennung
+/// austricksen will, indem es KEIN `/` im Muster selbst trägt, aber
+/// trotzdem versucht, über ein Kommando-Argument einen Pfad-artigen Treffer
+/// zu erzwingen. Ein bewusst breiter, vom Regel-Autor selbst so gewählter
+/// Nicht-Pfad-Glob (`cat *`) ist kein Umgehungsfall der Spec-0060-
+/// Schutzmaßnahme (der Autor hat selbst uneingeschränkt erlaubt) — die
+/// eigentliche Prüfung hier: ein Muster, das NUR knapp an der URL-Ausnahme
+/// vorbeischrammt (z. B. ein Trick-Schema ohne echtes `://`), wird trotzdem
+/// als pfadförmig erkannt und bleibt entsprechend strikt.
+#[tokio::test]
+async fn test_pattern_trying_to_evade_path_shaped_detection_stays_strict() {
+    // `file:/var/log/*` enthält kein `://` (nur ein einzelner Doppelpunkt +
+    // Slash) — die URL-Ausnahme greift NICHT, das Muster bleibt pfadförmig.
+    let eng = engine(vec![glob_rule(
+        "allow-trick",
+        "cat file:/var/log/*",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    let decision = eng
+        .evaluate("cat file:/var/log/../../etc/shadow", &ctx("srv1", &[]))
+        .await;
+    assert!(
+        !matches!(decision, Decision::AutoExec),
+        "ein Beinahe-URL-Trick darf die pfadförmig-Erkennung nicht umgehen: {decision:?}"
+    );
+}
+
+/// Spec 0060, Abschnitt 3 / „Die Design-Entscheidung": Nicht-pfadförmige
+/// Globs (z. B. über ein URL-artiges Kommando-Argument) behalten
+/// unverändert das alte Verhalten — `*` überquert weiterhin `/`. Fehlt
+/// dieser Regressionstest, könnte eine künftige Änderung versehentlich
+/// `literal_separator` auf ALLE Globs anwenden und diesen Normalfall
+/// brechen, ohne dass ein Test das auffinge.
+#[tokio::test]
+async fn test_non_path_shaped_glob_still_crosses_slash_boundary_unchanged() {
+    let eng = engine(vec![glob_rule(
+        "allow-url",
+        "curl http://example.com/*",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    let decision = eng
+        .evaluate("curl http://example.com/api/v1/resource", &ctx("srv1", &[]))
+        .await;
+    assert_auto_exec(&decision);
+}
+
+/// Spec 0060, Testbarkeit: das Regel-Test-Panel (0009) nutzt
+/// `evaluate_explained` — dieselbe strengere Auswertung muss sich dort
+/// identisch zeigen (kein separater Codepfad, der die Verschärfung
+/// umgehen könnte).
+#[tokio::test]
+async fn test_evaluate_explained_reflects_the_stricter_path_shaped_matching() {
+    let eng = engine(vec![glob_rule(
+        "allow-log",
+        "cat /var/log/*",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    let trace = eng
+        .evaluate_explained("cat /var/log/../../../etc/shadow", &ctx("srv1", &[]))
+        .await;
+    assert!(
+        !matches!(trace.decision, Decision::AutoExec),
+        "Regel-Test-Panel muss den `../`-Ausbruch als kein-Match/Confirm zeigen: {trace:?}"
+    );
+    assert_ne!(
+        trace.matched_rule,
+        Some(RuleId("allow-log".to_string())),
+        "die Allow-Regel darf für den Ausbruchsversuch nicht mehr als greifend gemeldet werden"
+    );
+}

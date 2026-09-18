@@ -531,6 +531,15 @@ async fn run_one_round(
     let mut text_buffer = String::new();
     let mut executed_action = false;
 
+    // Diagnose "KI antwortet nicht" (2026-09, Stefan-Report): grenzt ein,
+    // ob dieser `run_one_round`-Task hier überhaupt zum ersten Poll des
+    // Streams kommt (ein Live-Repro zeigte: `log_outgoing_context` in
+    // `ai-providers` feuerte, aber laut `lsof` nie eine Verbindung zum
+    // Provider — diese Zeile grenzt ein, ob der Abbruch schon VOR diesem
+    // Punkt liegt, z. B. beim vorherigen `wait_for_ai_request_slot`/
+    // `compact_for_send`, oder erst im Stream selbst).
+    tracing::debug!(session_id = %session_id, "about to poll AI provider stream for the first time");
+
     while let Some(event) = stream.next().await {
         match event {
             AiEvent::TextDelta(delta) => {
@@ -7805,6 +7814,16 @@ mod tests {
 
     /// Spec 0020, Abschnitt 4.2, Punkt 1: eine Deny-Regel blockiert
     /// `WriteRemoteFile` wie gewohnt.
+    ///
+    /// Spec 0060: `/etc/**` statt `/etc/*` — seit Spec 0060 überquert ein
+    /// einzelnes `*` in einem pfadförmigen Muster keine `/`-Grenze mehr
+    /// (Filter-Engine-Umgehungs-Fix), ein einstufiges `/etc/*` würde den
+    /// zweistufigen Zielpfad `/etc/nginx/nginx.conf` also nicht mehr
+    /// matchen (nur noch direkte Kinder von `/etc`). Für mehrstufigen
+    /// Schutz nutzt eine Regel jetzt bewusst `**` (matcht weiterhin über
+    /// beliebig viele Ebenen hinweg, empirisch mit `literal_separator`
+    /// verifiziert) — dieselbe Anpassung, die eine bestehende Deny-Regel in
+    /// der Praxis nach dem Fix bräuchte (s. CHANGELOG/ADR zu Spec 0060).
     #[tokio::test]
     async fn test_write_remote_file_deny_rule_blocks() {
         struct DenyEtcWrite;
@@ -7814,7 +7833,7 @@ mod tests {
                 vec![Rule {
                     id: ssh_manager_core::filter::RuleId("deny-etc-write".to_string()),
                     pattern: ssh_manager_core::filter::Pattern::Glob(
-                        "sftp-write /etc/*".to_string(),
+                        "sftp-write /etc/**".to_string(),
                     ),
                     action: ssh_manager_core::filter::RuleAction::Deny,
                     scope: ssh_manager_core::filter::Scope::Global,

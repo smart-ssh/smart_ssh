@@ -57,6 +57,20 @@ sind mit **(Pro)** markiert.
   TCP-Keepalive, damit eine durch den Aussetzer "leise gestorbene"
   Verbindung schneller erkannt wird.
 
+### Security
+- Glob-`*` in pfadförmigen Allow-/Deny-Regeln (Muster mit einem
+  Dateipfad-artigen Argument, z. B. `Allow: cat /var/log/*`) überquert
+  keine Verzeichnisgrenzen mehr. Bisher konnte eine harmlos erteilte
+  Allow-Regel wie `cat /var/log/*` auch `cat /var/log/../../../etc/shadow`
+  automatisch erlauben, weil der Glob-`*` über `/`-Grenzen hinwegging —
+  die Filter-Engine "erlaubte" damit etwas, das nie freigegeben werden
+  sollte. **Verhaltensänderung**: eine bestehende pfadförmige Regel mit
+  einem einzelnen `*` deckt jetzt nur noch eine Verzeichnisebene ab (z. B.
+  matcht `/etc/*` weiterhin `/etc/passwd`, aber nicht mehr
+  `/etc/nginx/nginx.conf`) — für mehrstufigen Schutz über mehrere
+  Verzeichnisebenen hinweg `**` verwenden (`/etc/**`). Kommando-Argument-
+  Globs ohne Pfad-Charakter (z. B. über eine URL) sind unverändert.
+
 ## [0.5.0] — 2026-09-11
 
 ### Added
