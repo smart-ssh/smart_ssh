@@ -1247,3 +1247,135 @@ async fn test_evaluate_explained_reflects_the_stricter_path_shaped_matching() {
         "die Allow-Regel darf für den Ausbruchsversuch nicht mehr als greifend gemeldet werden"
     );
 }
+
+// --- Spec 0060, spec-reviewer-Funde (ERHÖHT + adversarial): Quoting-/
+// Escaping-Umgehung der lexikalischen Normalisierung, `://`-Skip-Lücke,
+// Deny-Abschwächung ---------------------------------------------------
+
+/// spec-reviewer-Fund 1 (KRITISCH): die rein lexikalische `..`-Erkennung
+/// vergleicht rohe Textsegmente gegen das Literal `".."` — jede
+/// Shell-Schreibweise, die NACH der Shell-Expansion `..` ergibt, übersteht
+/// diesen Vergleich unverändert. Empirisch gegen die ungehärtete Fassung
+/// verifiziert: jeder dieser Fälle ergab dort `AutoExec` statt `Confirm`.
+#[tokio::test]
+async fn test_path_shaped_allow_rule_rejects_shell_quoting_and_escaping_tricks() {
+    let eng = engine(vec![glob_rule(
+        "allow-tmp",
+        "cat /tmp/**",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    let adversarial_commands = [
+        r#"cat /tmp/\../\../etc/shadow"#,
+        r#"cat /tmp/".."/".."/etc/shadow"#,
+        r#"cat /tmp/'..'/'..'/etc/shadow"#,
+        r#"cat /tmp/{..,..}/etc/shadow"#,
+        r#"cat /tmp/.[.]/../etc/shadow"#,
+    ];
+    for cmd in adversarial_commands {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert!(
+            !matches!(decision, Decision::AutoExec),
+            "Shell-Quoting/-Escaping darf die `..`-Erkennung nicht umgehen: {cmd:?} -> {decision:?}"
+        );
+    }
+}
+
+/// spec-reviewer-Fund 1: dieselbe Quoting-Erkennung greift auch für ein
+/// einzelnes `*` (nicht nur `**`) — ein einzelnes maskiertes `..`-Segment
+/// darf ebenfalls nicht mehr durchrutschen.
+#[tokio::test]
+async fn test_path_shaped_allow_rule_rejects_escaped_single_segment_traversal() {
+    let eng = engine(vec![glob_rule(
+        "allow-log",
+        "cat /var/log/*",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    for cmd in [r#"cat /var/log/\.."#, r#"cat /var/log/".""#] {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert!(
+            !matches!(decision, Decision::AutoExec),
+            "ein maskiertes `..`-Segment darf nicht matchen: {cmd:?} -> {decision:?}"
+        );
+    }
+}
+
+/// spec-reviewer-Fund 3: die `://`-Ausnahme aus der Muster-Klassifizierung
+/// darf auf der Kommando-Seite NICHT gelten — ein Token mit zufällig
+/// eingebettetem `://` (z. B. ein zuvor angelegtes Verzeichnis `x:`) darf
+/// die `..`-Normalisierung nicht umgehen.
+#[tokio::test]
+async fn test_path_shaped_allow_rule_rejects_traversal_hidden_behind_embedded_url_syntax() {
+    let eng = engine(vec![glob_rule(
+        "allow-tmp",
+        "cat /tmp/**",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    let decision = eng
+        .evaluate("cat /tmp/x://../../../etc/shadow", &ctx("srv1", &[]))
+        .await;
+    assert!(
+        !matches!(decision, Decision::AutoExec),
+        "ein zufällig eingebettetes `://` darf die Normalisierung nicht umgehen: {decision:?}"
+    );
+}
+
+/// spec-reviewer-Fund 4: eine bestehende Deny-Regel mit einem einzelnen
+/// `*` darf durch Spec 0060 NIE schwächer werden — `matches_for_user_rule`
+/// fällt für Deny/Confirm zusätzlich auf das alte, permissive Matching
+/// zurück (Oder-Verknüpfung), sodass ein legitimer (kein Traversal-)
+/// Unterverzeichnis-Zugriff weiterhin gedeckt bleibt.
+#[tokio::test]
+async fn test_path_shaped_deny_rule_still_matches_subdirectory_like_before_the_fix() {
+    let eng = engine(vec![glob_rule(
+        "deny-home",
+        "rm /home/u/*",
+        RuleAction::Deny,
+        Scope::Global,
+        0,
+    )]);
+    let decision = eng.evaluate("rm /home/u/sub/file", &ctx("srv1", &[])).await;
+    assert_deny(&decision);
+}
+
+/// spec-reviewer-Fund 4, Gegenprobe: die Oder-Verknüpfung darf die
+/// eigentliche Spec-0060-Verbesserung nicht rückgängig machen — ein
+/// tatsächlicher `../`-Ausbruch bleibt für Deny/Confirm weiterhin
+/// erkennbar (über das alte, permissive Matching, das den literalen
+/// String ohnehin schon traf).
+#[tokio::test]
+async fn test_path_shaped_deny_rule_still_catches_traversal_via_permissive_fallback() {
+    let eng = engine(vec![glob_rule(
+        "deny-etc",
+        "cat /etc/*",
+        RuleAction::Deny,
+        Scope::Global,
+        0,
+    )]);
+    let decision = eng
+        .evaluate("cat /etc/../etc/shadow", &ctx("srv1", &[]))
+        .await;
+    assert_deny(&decision);
+}
+
+/// spec-reviewer-Fund: nur `cmd`, nicht das Muster selbst zu normalisieren,
+/// brach ein relatives pfadförmiges Muster (`./foo/*` matchte `./foo/x`
+/// nicht mehr, weil `cmd` zu `foo/x` normalisiert wurde, das Muster aber
+/// `./foo/*` blieb) — beide Seiten werden jetzt symmetrisch normalisiert.
+#[tokio::test]
+async fn test_path_shaped_allow_rule_with_explicit_relative_pattern_still_matches() {
+    let eng = engine(vec![glob_rule(
+        "allow-rel",
+        "cat ./foo/*",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    let decision = eng.evaluate("cat ./foo/x", &ctx("srv1", &[])).await;
+    assert_auto_exec(&decision);
+}

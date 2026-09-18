@@ -60,16 +60,24 @@ sind mit **(Pro)** markiert.
 ### Security
 - Glob-`*` in pfadförmigen Allow-/Deny-Regeln (Muster mit einem
   Dateipfad-artigen Argument, z. B. `Allow: cat /var/log/*`) überquert
-  keine Verzeichnisgrenzen mehr. Bisher konnte eine harmlos erteilte
-  Allow-Regel wie `cat /var/log/*` auch `cat /var/log/../../../etc/shadow`
-  automatisch erlauben, weil der Glob-`*` über `/`-Grenzen hinwegging —
-  die Filter-Engine "erlaubte" damit etwas, das nie freigegeben werden
-  sollte. **Verhaltensänderung**: eine bestehende pfadförmige Regel mit
-  einem einzelnen `*` deckt jetzt nur noch eine Verzeichnisebene ab (z. B.
-  matcht `/etc/*` weiterhin `/etc/passwd`, aber nicht mehr
-  `/etc/nginx/nginx.conf`) — für mehrstufigen Schutz über mehrere
-  Verzeichnisebenen hinweg `**` verwenden (`/etc/**`). Kommando-Argument-
-  Globs ohne Pfad-Charakter (z. B. über eine URL) sind unverändert.
+  keine Verzeichnisgrenzen mehr, auch nicht über Shell-Quoting/-Escaping
+  (`\..`, `".."`, `'..'`, Brace-/Bracket-Tricks) versteckt. Bisher konnte
+  eine harmlos erteilte Allow-Regel wie `cat /var/log/*` auch
+  `cat /var/log/../../../etc/shadow` automatisch erlauben, weil der
+  Glob-`*` über `/`-Grenzen hinwegging — die Filter-Engine "erlaubte"
+  damit etwas, das nie freigegeben werden sollte. **Verhaltensänderung**:
+  eine bestehende pfadförmige Regel mit einem einzelnen `*` deckt jetzt
+  nur noch eine Verzeichnisebene ab (z. B. matcht `/etc/*` weiterhin
+  `/etc/passwd`, aber nicht mehr `/etc/nginx/nginx.conf`). Für
+  **Deny/Confirm**-Regeln mit mehrstufigem Schutzbedarf `**` verwenden
+  (`/etc/**`) — bestehende Deny-Regeln verlieren dabei ohnehin nie
+  Schutzumfang (altes und neues Matching gelten zusätzlich). Für
+  **Allow**-Regeln wird `**` NICHT empfohlen: `**` kann in einer
+  Allow-Regel auch über das eigentlich gemeinte Argument hinweg
+  zusätzliche, unbeabsichtigte Kommando-Teile mit erlauben — für
+  mehrstufigen Allow-Bedarf stattdessen mehrere spezifische,
+  einstufige Allow-Regeln anlegen. Kommando-Argument-Globs ohne
+  Pfad-Charakter (z. B. über eine URL) sind unverändert.
 
 ## [0.5.0] — 2026-09-11
 

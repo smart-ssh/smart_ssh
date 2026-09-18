@@ -1,7 +1,7 @@
 use globset::{Glob, GlobBuilder};
 use regex::Regex;
 
-use super::types::Pattern;
+use super::types::{Pattern, RuleAction};
 
 impl Pattern {
     /// Prüft, ob `cmd` (bereits whitespace-normalisiert) auf dieses Muster
@@ -70,15 +70,63 @@ impl Pattern {
     /// (`Glob::new`, `*` überquert `/`) — sonst bräche der Normalfall (s.
     /// Spec 0060, „Die Design-Entscheidung"). Für `Exact`/`Regex` identisch
     /// zu [`Pattern::matches`] (die Spec betrifft nur Glob-Muster).
-    pub(crate) fn matches_for_user_rule(&self, cmd: &str) -> bool {
+    ///
+    /// **spec-reviewer-Fund (ERHÖHT + adversarial, Review dieses Schritts)**:
+    /// die rein lexikalische Segment-Auflösung in
+    /// [`normalize_path_shaped_tokens`] vergleicht rohe Textsegmente gegen
+    /// das Literal `".."` — jede Shell-Schreibweise, die *nach* der
+    /// Shell-Expansion `..` ergibt (`\..`, `".."`, `'..'`, `{..,..}`,
+    /// `.[.]`, …), übersteht diesen Vergleich unverändert und hebelt die
+    /// Normalisierung vollständig aus, während der eigentliche Remote-Shell-
+    /// Aufruf sie sehr wohl als `..` interpretiert — ein einziger
+    /// Backslash reichte, um wieder `AutoExec` für einen `../`-Ausbruch zu
+    /// bekommen (empirisch gegen die echte `FilterEngine` verifiziert).
+    /// Eine vollständige, rein lexikalische Nachbildung jeder möglichen
+    /// Shell-Expansion ist nicht erreichbar (Variablen-Substitution ist
+    /// grundsätzlich nicht lexikalisch auflösbar). Deshalb, „im Zweifel
+    /// strenger": enthält ein pfadförmiges Token in `cmd`
+    /// Shell-Metazeichen, die Quoting/Escaping/Brace-/Bracket-Expansion
+    /// auslösen könnten (s. [`path_shaped_tokens_contain_shell_metacharacters`]),
+    /// gilt die strengere Prüfung als NICHT erfüllt — für `Allow` bedeutet
+    /// das: kein Match (fällt sicher auf `Confirm`/niedrigere Präzedenz
+    /// zurück, nie `AutoExec`). Für `Deny`/`Confirm` gilt zusätzlich (auch
+    /// unabhängig von Shell-Metazeichen) `self.matches(cmd)` als
+    /// Fallback/Oder-Verknüpfung — das alte, permissive Matching
+    /// (`*` überquert `/`) erkennt weiterhin JEDEN Fall, den es vor Spec
+    /// 0060 erkannt hätte, sodass eine bestehende Deny-Regel durch diesen
+    /// Fix NIE schwächer wird (nur zusätzlich durch die neue Normalisierung
+    /// verstärkt) — schließt den spec-reviewer-Fund, dass ein bestehendes
+    /// `Deny: rm /home/u/*` nach dem Fix `rm /home/u/sub/file` nicht mehr
+    /// gedeckt hätte.
+    pub(crate) fn matches_for_user_rule(&self, cmd: &str, action: &RuleAction) -> bool {
         match self {
             Pattern::Glob(pattern) if is_path_shaped_pattern(pattern) => {
-                let normalized_cmd = normalize_path_shaped_tokens(cmd);
-                GlobBuilder::new(pattern)
-                    .literal_separator(true)
-                    .build()
-                    .map(|glob| glob.compile_matcher().is_match(&normalized_cmd))
-                    .unwrap_or(false)
+                let strict_match = if path_shaped_tokens_contain_shell_metacharacters(cmd) {
+                    false
+                } else {
+                    // spec-reviewer-Fund: nur `cmd` zu normalisieren, nicht
+                    // das MUSTER selbst, brach ein relatives Muster wie
+                    // `./foo/*` (matchte `./foo/x` nicht mehr, weil `cmd`
+                    // zu `foo/x` normalisiert wurde, das Muster aber
+                    // `./foo/*` blieb) — und ließ einen Muster-Nachlaufslash
+                    // (`/var/log/*/`) uneinheitlich zu `cmd`s entferntem
+                    // Nachlaufslash stehen. Dieselbe Normalisierung auf
+                    // beiden Seiten hält beide symmetrisch: `*`/`**` sind
+                    // für `normalize_lexical_path` nur opake Segmente
+                    // (weder `""`, `"."` noch `".."`), bleiben also
+                    // unverändert erhalten.
+                    let normalized_pattern = normalize_path_shaped_tokens(pattern);
+                    let normalized_cmd = normalize_path_shaped_tokens(cmd);
+                    GlobBuilder::new(&normalized_pattern)
+                        .literal_separator(true)
+                        .build()
+                        .map(|glob| glob.compile_matcher().is_match(&normalized_cmd))
+                        .unwrap_or(false)
+                };
+                match action {
+                    RuleAction::Allow => strict_match,
+                    RuleAction::Deny | RuleAction::Confirm => strict_match || self.matches(cmd),
+                }
             }
             _ => self.matches(cmd),
         }
@@ -171,15 +219,25 @@ fn is_path_shaped_pattern(pattern: &str) -> bool {
 ///
 /// Normalisiert wird NUR das jeweilige Token, nicht der gesamte `cmd`-Text
 /// (der Kommandoname und andere Argumente sind keine Pfadsegmente) — und
-/// NUR wenn [`Pattern::matches`] bereits entschieden hat, dass das Muster
-/// pfadförmig ist (dieselbe `is_path_shaped_pattern`-Heuristik, hier auf
-/// `cmd` statt auf das Muster angewendet — ein Angreifer-kontrolliertes
-/// Token mit `/`, das keine URL ist, wird immer normalisiert, unabhängig
-/// davon, ob es „zufällig" schon sauber aussieht).
+/// NUR wenn [`Pattern::matches_for_user_rule`] bereits entschieden hat,
+/// dass das MUSTER pfadförmig ist.
+///
+/// **spec-reviewer-Fund (Review dieses Schritts)**: anders als bei der
+/// Muster-Klassifizierung (`is_path_shaped_pattern`, wo die URL-Ausnahme
+/// nötig ist, damit `curl http://example.com/*` nicht bricht) wird hier
+/// bewusst JEDES Token mit `/` normalisiert, UNABHÄNGIG davon, ob es
+/// `://` enthält. Ein `://`-Ausschluss auf der Kommando-Seite hätte eine
+/// eigene Lücke geöffnet: ein Token wie `/tmp/x://../../../etc/shadow`
+/// (z. B. durch ein zuvor angelegtes Verzeichnis `x:` im erlaubten Baum)
+/// enthält zufällig `://`, ist aber kein echtes URL-Argument — der
+/// `://`-Ausschluss hätte die `..`-Auflösung für genau dieses Token
+/// übersprungen und einen `**`-Ausbruch ermöglicht (empirisch gegen die
+/// echte `FilterEngine` verifiziert). Ein Angreifer-kontrolliertes Token
+/// mit `/` wird deshalb immer normalisiert, unabhängig vom Inhalt.
 fn normalize_path_shaped_tokens(cmd: &str) -> String {
     cmd.split_whitespace()
         .map(|token| {
-            if token.contains('/') && !token.contains("://") {
+            if token.contains('/') {
                 normalize_lexical_path(token)
             } else {
                 token.to_string()
@@ -187,6 +245,23 @@ fn normalize_path_shaped_tokens(cmd: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// spec-reviewer-Fund (ERHÖHT + adversarial, Review dieses Schritts): s.
+/// Doc-Kommentar bei [`Pattern::matches_for_user_rule`] — die rein
+/// lexikalische `..`-Erkennung in [`normalize_lexical_path`] vergleicht
+/// nur rohe Textsegmente und kann durch jede Shell-Schreibweise umgangen
+/// werden, die *nach* der Shell-Expansion `..` ergibt (Backslash-Escape,
+/// einfache/doppelte Anführungszeichen, Brace-Expansion, Bracket-
+/// Pathname-Expansion). Statt jede dieser Schreibweisen einzeln
+/// nachzubilden (prinzipiell unvollständig — Variablen-Substitution ist
+/// gar nicht lexikalisch auflösbar), gilt „im Zweifel strenger": jedes
+/// dieser klassischen Shell-Metazeichen in einem pfadförmigen Token macht
+/// das Ergebnis der Normalisierung nicht mehr vertrauenswürdig.
+fn path_shaped_tokens_contain_shell_metacharacters(cmd: &str) -> bool {
+    const SHELL_METACHARACTERS: [char; 9] = ['\\', '\'', '"', '{', '}', '[', ']', '$', '`'];
+    cmd.split_whitespace()
+        .any(|token| token.contains('/') && token.contains(SHELL_METACHARACTERS.as_slice()))
 }
 
 /// Löst `.`/`..`-Segmente rein lexikalisch auf und kollabiert wiederholte
@@ -288,11 +363,20 @@ mod path_glob_tests {
             normalize_path_shaped_tokens("cat /var/log/../etc/shadow"),
             "cat /var/etc/shadow"
         );
-        // URL-Token bleibt unverändert (keine Pfad-Normalisierung für
-        // Nicht-Dateipfade).
+        assert_eq!(normalize_path_shaped_tokens("cat foo bar"), "cat foo bar");
+    }
+
+    /// spec-reviewer-Fund (ERHÖHT + adversarial, Review dieses Schritts):
+    /// anders als die Muster-Klassifizierung wendet die Kommando-Seiten-
+    /// Normalisierung KEINE URL-Ausnahme an — ein Token mit zufällig
+    /// eingebettetem `://` (z. B. ein Verzeichnis namens `x:` im erlaubten
+    /// Baum) wird trotzdem lexikalisch aufgelöst, sonst könnte ein
+    /// `..`-Ausbruch über genau dieses Token die Normalisierung umgehen.
+    #[test]
+    fn test_normalize_path_shaped_tokens_normalizes_tokens_with_embedded_url_syntax_too() {
         assert_eq!(
-            normalize_path_shaped_tokens("curl http://example.com/../x"),
-            "curl http://example.com/../x"
+            normalize_path_shaped_tokens("cat /tmp/x://../../../etc/shadow"),
+            "cat /etc/shadow"
         );
     }
 }

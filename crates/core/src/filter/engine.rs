@@ -497,12 +497,12 @@ fn evaluate_rules_explained(
             // genau der von Spec 0060 adressierte Fall (s. dortiger
             // Doc-Kommentar in `pattern.rs` zur Abgrenzung gegenüber
             // `crate::risk`).
-            let is_match = rule.pattern.matches_for_user_rule(original)
-                || (original != stripped && rule.pattern.matches_for_user_rule(stripped))
+            let is_match = rule.pattern.matches_for_user_rule(original, &action)
+                || (original != stripped && rule.pattern.matches_for_user_rule(stripped, &action))
                 || (resolved_applies
                     && original != resolved
                     && stripped != resolved
-                    && rule.pattern.matches_for_user_rule(resolved));
+                    && rule.pattern.matches_for_user_rule(resolved, &action));
             if is_match {
                 let decision = match action {
                     RuleAction::Deny => Decision::Deny {
