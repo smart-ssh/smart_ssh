@@ -37,7 +37,7 @@ use crate::request_logging::{
     log_text_delta_summary, log_tool_call_fragment, log_tool_call_parse_error,
     log_tool_call_parsed,
 };
-use crate::sse::{sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
+use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 
@@ -63,7 +63,7 @@ impl AnthropicProvider {
         supports_native_tool_calling: bool,
     ) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: build_http_client(),
             base_url: base_url.into(),
             model: model.into(),
             api_key: api_key.into(),
@@ -239,10 +239,32 @@ impl AiProvider for AnthropicProvider {
         let body = self.build_request_body(&context);
 
         let request = async move {
+            // Diagnose "KI antwortet nicht" (2026-09, Stefan-Report): ob
+            // dieses `async move { ... }` überhaupt jemals gepollt wird,
+            // war bislang nicht separat sichtbar — `log_outgoing_context`
+            // oben feuert synchron beim `send()`-Aufruf, unabhängig davon,
+            // ob der zurückgegebene Stream danach je konsumiert wird. Ein
+            // Live-Repro zeigte: Log-Zeile vorhanden, aber `lsof` NIE eine
+            // Verbindung zum Provider — dieser Log-Punkt beweist, ob der
+            // Future-Body überhaupt zu laufen beginnt.
+            tracing::debug!(
+                request_id = %request_id,
+                "AI request future started executing",
+            );
             let retry_start = tokio::time::Instant::now();
             let mut attempt: u32 = 0;
             loop {
                 attempt += 1;
+                // Diagnose (s. o.): direkt vor dem eigentlichen HTTP-Send —
+                // zusammen mit der Zeile oben lässt sich damit eingrenzen,
+                // ob der Future zwar startet, aber schon vor dem
+                // `.send()`-Aufruf hängt (z. B. beim Klonen/Serialisieren),
+                // oder ob `.send()` selbst nie erreicht wird.
+                tracing::debug!(
+                    request_id = %request_id,
+                    attempt,
+                    "about to send HTTP request to AI provider",
+                );
                 let send = client
                     .post(&url)
                     .header("x-api-key", &api_key)

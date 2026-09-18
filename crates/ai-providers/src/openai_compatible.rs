@@ -34,7 +34,7 @@ use crate::request_logging::{
     log_text_delta_summary, log_tool_call_fragment, log_tool_call_parse_error,
     log_tool_call_parsed,
 };
-use crate::sse::{sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
+use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
 pub struct OpenAiCompatibleProvider {
     client: reqwest::Client,
@@ -63,7 +63,7 @@ impl OpenAiCompatibleProvider {
         extra_headers: Vec<(String, String)>,
     ) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: build_http_client(),
             base_url: base_url.into(),
             model: model.into(),
             api_key: api_key.into(),
@@ -247,10 +247,21 @@ impl AiProvider for OpenAiCompatibleProvider {
                 .chain(extra_headers.iter().map(|(_, value)| value.as_str()))
                 .collect();
 
+            // Diagnose "KI antwortet nicht" — s. identischer Kommentar in
+            // `crate::anthropic::AnthropicProvider::send`.
+            tracing::debug!(
+                request_id = %request_id,
+                "AI request future started executing",
+            );
             let retry_start = tokio::time::Instant::now();
             let mut attempt: u32 = 0;
             loop {
                 attempt += 1;
+                tracing::debug!(
+                    request_id = %request_id,
+                    attempt,
+                    "about to send HTTP request to AI provider",
+                );
                 let mut req = client
                     .post(&url)
                     .bearer_auth(&api_key)

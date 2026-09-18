@@ -30,6 +30,31 @@ use futures::{Stream, StreamExt};
 /// abgebrochen wird, solange der Provider weiterhin Daten schickt.
 pub(crate) const SSE_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(90);
 
+/// Bug-Diagnose "KI antwortet nicht" (2026-09, Stefan-Report): ein
+/// Live-Repro zeigte einen Fall, in dem [`SSE_INACTIVITY_TIMEOUT`] (oben)
+/// NICHT griff — ein 90s-`tokio::time::timeout` ist rein anwendungsseitig
+/// und unabhängig von TCP, sollte also unabhängig vom Verbindungszustand
+/// zuverlässig nach 90s auslösen; trotzdem blieb eine Anfrage nach einem
+/// kurzen, vom Nutzer selbst bemerkten Netzwerk-Aussetzer über mehrere
+/// Minuten ohne jede Log-Zeile hängen (nicht mal die für `SSE_INACTIVITY_
+/// TIMEOUT` selbst). Naheliegendste Erklärung: eine im Verbindungs-Pool
+/// wiederverwendete Verbindung, die während des Aussetzers "leise" starb —
+/// ohne aktives TCP-Keepalive kann das Betriebssystem eine solche tote,
+/// aber nie per FIN/RST geschlossene Verbindung u. U. sehr lange (deutlich
+/// über 90s) nicht erkennen, was das Lesen der Antwort blockiert, bevor der
+/// eigentliche Anfrage-Code (der die 90s-Zeitschranke setzt) überhaupt
+/// wieder zum Zug kommt. `tcp_keepalive` lässt das Betriebssystem tote
+/// Verbindungen stattdessen selbst aktiv erkennen (Sonden alle 15s), als
+/// zusätzliche, von der eigenen Zeitschranke unabhängige Verteidigungslinie
+/// — behebt nicht zwingend die volle Ursache, verkleinert aber das
+/// Zeitfenster für dieses Verhalten erheblich.
+pub(crate) fn build_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .tcp_keepalive(Duration::from_secs(15))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
 /// Ein einzelner geparster SSE-Frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SseFrame {

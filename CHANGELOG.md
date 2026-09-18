@@ -51,6 +51,11 @@ sind mit **(Pro)** markiert.
   danach ggf. überlange einzelne Kommando-Ausgaben und zuletzt die Notiz
   gekürzt — die gespeicherte Notiz und der vollständige Sitzungsverlauf
   bleiben dabei unangetastet.
+- Ein KI-Provider-Aufruf konnte nach einem kurzen Netzwerk-Aussetzer ohne
+  jede Fehlermeldung unbegrenzt hängen bleiben (der Chat antwortete dann
+  einfach nicht mehr). Die Verbindung zum KI-Provider nutzt jetzt aktives
+  TCP-Keepalive, damit eine durch den Aussetzer "leise gestorbene"
+  Verbindung schneller erkannt wird.
 
 ## [0.5.0] — 2026-09-11
 
