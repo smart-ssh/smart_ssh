@@ -359,6 +359,18 @@ export const listPromptHistory = (serverId: string) =>
 /** Öffnet den Log-Ordner im System-Dateimanager (Finder/Explorer). */
 export const openLogDirectory = () => invoke<void>("open_log_directory");
 
+/**
+ * Spec 0063: stellt das redigierte Diagnosepaket zusammen und liefert es als
+ * fertigen Text zurück — kein automatisches Speichern/Versenden, das
+ * Frontend zeigt ihn erst zur Durchsicht an (`DiagnosticsSettings.tsx`).
+ */
+export const generateDiagnosticsBundle = () => invoke<string>("generate_diagnostics_bundle");
+
+/** Öffnet den nativen Speichern-unter-Dialog für ein bereits erzeugtes (und
+ * vom Nutzer gesehenes) Diagnosepaket. */
+export const saveDiagnosticsBundle = (content: string) =>
+  invoke<void>("save_diagnostics_bundle", { content });
+
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
 
 export const sftpList = (sessionId: string, path: string) =>

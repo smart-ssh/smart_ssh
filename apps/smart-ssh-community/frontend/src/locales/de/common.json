@@ -49,6 +49,14 @@
     "copyFailed": "Kopieren fehlgeschlagen — Text lässt sich markieren.",
     "loadFailed": "Versions-/Build-Information konnte nicht geladen werden."
   },
+  "diagnostics": {
+    "generateBundle": "Diagnosepaket erzeugen",
+    "generating": "Wird erzeugt …",
+    "generateFailed": "Diagnosepaket konnte nicht erzeugt werden.",
+    "previewHint": "Vorschau — bitte vor dem Teilen kurz durchsehen. Log-Zeilen wurden redigiert, es werden keine Zugangsdaten eingebettet.",
+    "save": "Speichern unter …",
+    "saveFailed": "Diagnosepaket konnte nicht gespeichert werden."
+  },
   "fileTypes": {
     "description": "Lege pro Dateiendung ein lokales Programm fest, das beim \"Lokal öffnen\" verwendet wird. Ohne Eintrag wird das Standardprogramm des Betriebssystems genutzt.",
     "appPathPlaceholder": "Pfad zum Programm",

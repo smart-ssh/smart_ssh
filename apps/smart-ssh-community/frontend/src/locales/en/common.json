@@ -49,6 +49,14 @@
     "copyFailed": "Copy failed — text can be selected instead.",
     "loadFailed": "Could not load version/build information."
   },
+  "diagnostics": {
+    "generateBundle": "Generate diagnostics bundle",
+    "generating": "Generating …",
+    "generateFailed": "Could not generate the diagnostics bundle.",
+    "previewHint": "Preview — please review before sharing. Log lines have been redacted; no credentials are embedded.",
+    "save": "Save as …",
+    "saveFailed": "Could not save the diagnostics bundle."
+  },
   "fileTypes": {
     "description": "Set a local application per file extension to use for \"Open locally\". Without an entry, the operating system default application is used.",
     "appPathPlaceholder": "Path to application",
