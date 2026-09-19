@@ -11,9 +11,9 @@
 //! statt erst reaktiv nach einem 429 zurückzurudern (Spec 0051, unverändert
 //! als Sicherheitsnetz aktiv).
 //!
-//! **Geteiltes Budget pro Provider-Identität** (Spec 0061 Abschnitt 2, die
-//! Kern-Entscheidung): [`provider_identity_key`] fasst `base_url` + `model`
-//! + einen Hash des API-Keys zusammen — Anthropic limitiert pro
+//! Geteiltes Budget pro Provider-Identität (Spec 0061 Abschnitt 2, die
+//! Kern-Entscheidung): [`provider_identity_key`] fasst `base_url`, `model`
+//! und einen Hash des API-Keys zusammen — Anthropic limitiert pro
 //! Organisation (praktisch: pro Key) UND trennt zusätzlich pro
 //! Modell-Klasse. Ohne eine verlässliche Modell-Klassen-Tabelle wird der
 //! exakte Modellname als konservative Näherung für "Modell-Klasse"
@@ -68,8 +68,12 @@ impl Counter {
     }
 
     /// Wartedauer bis zum Reset (gedeckelt durch [`MAX_PROACTIVE_WAIT`]),
-    /// falls ein fehlender/unsinniger Reset-Zeitpunkt vorliegt oder er
-    /// bereits verstrichen ist.
+    /// für den Fall eines fehlenden Reset-Zeitpunkts. Wird nur aufgerufen,
+    /// wenn `reset_at` entweder `None` ist oder (per [`Counter::is_stale`])
+    /// bereits als "noch in der Zukunft" bestätigt wurde — ein bereits
+    /// verstrichener Reset macht `limit`/`remaining` veraltet und wird VOR
+    /// diesem Aufruf behandelt, nicht hier auf denselben 90s-Deckel
+    /// abgebildet.
     fn capped_wait_until_reset(&self, now: Instant) -> Duration {
         match self.reset_at {
             Some(reset) if reset > now => (reset - now).min(MAX_PROACTIVE_WAIT),
@@ -77,13 +81,39 @@ impl Counter {
         }
     }
 
+    /// `true`, wenn dieser Zähler einen Reset-Zeitpunkt kennt, der bereits
+    /// verstrichen ist — die zuletzt gelesenen `limit`/`remaining`-Werte
+    /// stammen dann aus einem Fenster, das sich seit der letzten Antwort
+    /// bereits wieder aufgefüllt hat, ohne dass eine neuere Antwort
+    /// frischere Zahlen geliefert hätte. Von [`ratio_wait_duration`] UND dem
+    /// Vorab-Schätzungs-Pfad in [`ProviderBudgetGuard::wait_duration`]
+    /// genutzt, damit beide Pfade konsistent "keine verlässlichen Daten"
+    /// statt eines unnötigen [`MAX_PROACTIVE_WAIT`]-Warten aus veralteten
+    /// Zahlen ableiten (spec-reviewer Fund, Spec 0061 Follow-up).
+    fn is_stale(&self, now: Instant) -> bool {
+        matches!(self.reset_at, Some(reset) if reset <= now)
+    }
+
     /// Spec 0061 Abschnitt 3, erster Fall: dieser Zähler allein liegt unter
     /// der 15 %-Schwelle. `None`, wenn `limit`/`remaining` (noch) unbekannt
     /// sind, oder `limit == 0` (unsinniger Wert — wird ignoriert statt
     /// fälschlich als "0 % Restbudget" gewertet).
+    ///
+    /// Ein bereits verstrichener `reset_at` bedeutet: das Fenster hat sich
+    /// seit der letzten gelesenen Antwort bereits aufgefüllt, aber es kam
+    /// seither keine neue Antwort, die frischere Zahlen geliefert hätte —
+    /// `limit`/`remaining` sind dann veraltet, nicht mehr "0,5 % Restbudget"
+    /// wert. Das wird als "keine verlässlichen Daten" behandelt (kein
+    /// Warten), NICHT wie ein fehlender Reset auf den vollen 90s-Deckel
+    /// abgebildet — sonst wartet ein Nutzer, der eine Antwort in Ruhe liest
+    /// und Minuten später antwortet, unnötig die volle Obergrenze, obwohl
+    /// das TPM-Fenster längst wieder voll ist.
     fn ratio_wait_duration(&self, now: Instant) -> Option<Duration> {
         let (limit, remaining) = (self.limit?, self.remaining?);
         if limit == 0 {
+            return None;
+        }
+        if self.is_stale(now) {
             return None;
         }
         let ratio = remaining as f64 / limit as f64;
@@ -212,9 +242,11 @@ impl ProviderBudgetGuard {
         consider(state.output_tokens.ratio_wait_duration(now));
         consider(state.tokens.ratio_wait_duration(now));
 
-        if let Some(remaining) = state.input_tokens.remaining {
-            if estimated_input_tokens > remaining {
-                consider(Some(state.input_tokens.capped_wait_until_reset(now)));
+        if !state.input_tokens.is_stale(now) {
+            if let Some(remaining) = state.input_tokens.remaining {
+                if estimated_input_tokens > remaining {
+                    consider(Some(state.input_tokens.capped_wait_until_reset(now)));
+                }
             }
         }
         longest
@@ -288,7 +320,11 @@ fn header_reset_instant(headers: &reqwest::header::HeaderMap, name: &str) -> Opt
     if delta_ms <= 0 {
         return None;
     }
-    Some(Instant::now() + Duration::from_millis(delta_ms as u64))
+    // `checked_add` instead of `+`: a malformed/adversarial proxy could send
+    // an absurdly-far-future reset timestamp, and `Instant + Duration`
+    // panics on overflow rather than saturating. Treat that case the same
+    // as "unparsable" (`None`) instead of crashing the provider task.
+    Instant::now().checked_add(Duration::from_millis(delta_ms as u64))
 }
 
 /// Spec 0061 Abschnitt 1: Anthropic-spezifische Header-Namen. Bewusst nicht
@@ -411,6 +447,40 @@ mod tests {
         assert!(
             wait.is_some(),
             "800 > 500 verbleibende Tokens muss vorab warten lassen"
+        );
+    }
+
+    /// Regression für den spec-reviewer-Fund (Spec 0061 Follow-up):
+    /// ein `reset_at`, der zwischen dem letzten Header-Lesen und dem
+    /// jetzigen Gate-Check verstrichen ist, muss NICHT wie ein fehlender
+    /// Reset auf den vollen [`MAX_PROACTIVE_WAIT`]-Deckel fallen — die
+    /// Zähler-Daten sind dann veraltet, das TPM-Fenster hat sich längst
+    /// wieder gefüllt. Konstruiert den Zustand direkt über die `pub`
+    /// Testbarkeits-API (s. `RateLimitHeaderSnapshot`-Doc), weil
+    /// `header_reset_instant` einen bereits verstrichenen Header-Wert schon
+    /// beim Parsen zu `None` macht — das reproduziert nicht den Fall, dass
+    /// ein früher gelesener, damals noch zukünftiger Reset inzwischen (real
+    /// vergangene Zeit zwischen zwei Chat-Runden) verstrichen ist.
+    #[test]
+    fn test_guard_does_not_wait_the_full_cap_when_a_previously_future_reset_has_since_elapsed() {
+        let guard = ProviderBudgetGuard::new();
+        let stale_reset = Instant::now()
+            .checked_sub(Duration::from_secs(5))
+            .expect("test instant underflow");
+        guard.record_headers(RateLimitHeaderSnapshot {
+            input_tokens: RawCounter {
+                limit: Some(1000),
+                remaining: Some(5), // 0.5%, weit unter der 15%-Schwelle
+                reset_at: Some(stale_reset),
+            },
+            ..Default::default()
+        });
+        assert_eq!(
+            guard.wait_duration(10),
+            None,
+            "ein verstrichener Reset macht die Restbudget-Zahlen veraltet — \
+             kein Warten auf Basis unbekannt gewordener Daten, statt fälschlich \
+             MAX_PROACTIVE_WAIT wie bei einem fehlenden Reset"
         );
     }
 

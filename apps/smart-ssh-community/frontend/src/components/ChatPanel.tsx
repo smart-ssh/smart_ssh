@@ -435,10 +435,19 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
       }),
       onAiBudgetWaiting((event) => {
         if (event.sessionId !== sessionId) return;
-        setItems((prev) => [
-          ...prev,
-          { type: "aiBudgetWaiting", id: freshId(), waitSeconds: event.waitSeconds },
-        ]);
+        const id = freshId();
+        setItems((prev) => [...prev, { type: "aiBudgetWaiting", id, waitSeconds: event.waitSeconds }]);
+        // Spec 0061 §4: "verschwindet, sobald der Request rausgeht". Es gibt
+        // (bewusst, s. ADR 0054) kein eigenes "Warten beendet"-Event vom
+        // Backend — die Karte ist rein informativ, kein Steuerelement. Ein
+        // client-seitiger Timer approximiert das Verschwinden anhand der
+        // bekannten Wartedauer, statt die Karte dauerhaft stehen zu lassen
+        // (spec-reviewer Fund: Karten stapelten sich sonst über mehrere
+        // Wartevorgänge, z. B. innerhalb einer Auto-Fortsetzungs-Serie).
+        window.setTimeout(
+          () => setItems((prev) => prev.filter((it) => it.id !== id)),
+          Math.max(event.waitSeconds, 1) * 1000,
+        );
       }),
       onChatDocumentGenerated((event) => {
         if (event.sessionId !== sessionId) return;

@@ -43,8 +43,9 @@ use futures::StreamExt;
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{
-    fence_untrusted, ActionSchema, AiError, AiEvent, AiProvider, ChatMessage, MessageContent,
-    OutputRedactor, RejectionReason, Role, SessionContext, UntrustedKind,
+    fence_untrusted, truncate_for_second_opinion, ActionSchema, AiError, AiEvent, AiProvider,
+    ChatMessage, MessageContent, OutputRedactor, RejectionReason, Role, SessionContext,
+    UntrustedKind, DEFAULT_SECOND_OPINION_MAX_LEN,
 };
 use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent, LedgerSource};
 use ssh_manager_core::filter::{Decision, EvalContext, EvaluationTrace, RuleId, RuleOrigin};
@@ -297,7 +298,15 @@ pub(crate) async fn wait_for_rate_limit_budget(
     session_id: SessionId,
 ) {
     if let Some(wait) = budget.wait_duration(estimated_input_tokens as u64) {
-        crate::events::emit_ai_budget_waiting(emitter, session_id, wait.as_secs());
+        // `as_secs_f64().ceil()`, nicht `as_secs()`: Letzteres würde eine
+        // Wartezeit unter 1s zu "in 0s…" abrunden (spec-reviewer Fund) —
+        // die UI soll nie "sofort" suggerieren, während die App tatsächlich
+        // noch wartet.
+        crate::events::emit_ai_budget_waiting(
+            emitter,
+            session_id,
+            wait.as_secs_f64().ceil() as u64,
+        );
         tokio::time::sleep(wait).await;
     }
 }
@@ -1934,9 +1943,18 @@ async fn check_for_injected_instructions(
     };
     wait_for_ai_request_slot(session).await;
     if let Some(budget) = session.injection_check_budget.as_deref() {
+        // Estimate on the content as it will ACTUALLY be sent, not the raw
+        // `content` — `fetch_injection_check` truncates via
+        // `truncate_for_second_opinion` before it ever reaches the
+        // provider (`build_second_opinion_context`). Estimating on the
+        // untruncated content for a large file read massively overshoots
+        // the real request size and made the gate wait near-constantly
+        // (spec-reviewer finding, Spec 0061 follow-up fix).
+        let (truncated_content, _) =
+            truncate_for_second_opinion(content, DEFAULT_SECOND_OPINION_MAX_LEN);
         wait_for_rate_limit_budget(
             budget,
-            crate::compaction::estimate_tokens(content),
+            crate::compaction::estimate_tokens(&truncated_content),
             emitter,
             session_id,
         )
@@ -3273,6 +3291,10 @@ impl NoteShrinkTarget for ProfileStoreNoteShrinkTarget<'_> {
 /// an `summarize_note_for_shrink`); `commands::respond_to_action` ignoriert
 /// `session_id` ohnehin bereits explizit (s. dortiger Kommentar), das Feld
 /// existiert nur, weil das wiederverwendete Event-Schema es verlangt.
+// 8 Parameter, alle unabhängige Kollaborateure ohne natürliche Gruppierung
+// (kein `Session` verfügbar, s. Doc-Kommentar oben) — ein Bündel-Struct nur
+// für diesen einen Aufrufer wäre reine Indirektion ohne Mehrwert.
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_note_shrink_request(
     session_id: SessionId,
     server_id: ServerId,
@@ -4907,6 +4929,52 @@ mod tests {
                 .load(std::sync::atomic::Ordering::SeqCst),
             "ein Providerfehler darf nicht stillschweigend als 'kein Verdacht' gewertet werden \
              (das Flag darf dadurch aber auch nicht gesetzt werden — es ändert schlicht nichts)"
+        );
+    }
+
+    /// Regression für den spec-reviewer-Fund (Spec 0061 Follow-up): das
+    /// Rate-Limit-Gate vor der Einschleusungs-Prüfung muss auf dem
+    /// tatsächlich gesendeten (ggf. via `truncate_for_second_opinion`
+    /// gekürzten) Inhalt schätzen, nicht auf dem rohen `content` — sonst
+    /// löst ein großer Datei-Lese-Inhalt beinahe immer unnötiges Warten
+    /// aus, obwohl der tatsächliche Request klein bleibt. Restbudget so
+    /// gewählt, dass die Schätzung auf dem gekürzten Inhalt (16 KB / 4
+    /// Bytes-pro-Token ≈ 4096 Tokens) klar darunterbleibt, die Schätzung
+    /// auf dem 1 MB großen rohen Inhalt (≈ 262144 Tokens) sie aber massiv
+    /// überschreiten würde.
+    #[tokio::test(start_paused = true)]
+    async fn test_injection_check_gate_estimates_on_truncated_content_not_raw_content() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.injection_check_provider = Some(Box::new(MockAiProvider::new(vec![
+            AiEvent::TextDelta("nein".to_string()),
+            AiEvent::Done,
+        ])));
+        let budget = Arc::new(ai_providers::ProviderBudgetGuard::new());
+        budget.record_headers(ai_providers::RateLimitHeaderSnapshot {
+            input_tokens: ai_providers::RawCounter {
+                limit: Some(10_000),
+                remaining: Some(5_000), // 50%, über der 15%-Schwelle
+                reset_at: Some(std::time::Instant::now() + std::time::Duration::from_secs(30)),
+            },
+            ..Default::default()
+        });
+        session.injection_check_budget = Some(budget);
+
+        let huge_content = "a".repeat(1_000_000);
+        let emitter = TestEmitter::default();
+
+        let before = tokio::time::Instant::now();
+        check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, &huge_content).await;
+        let elapsed = before.elapsed();
+
+        assert!(
+            elapsed < std::time::Duration::from_millis(50),
+            "muss auf dem gekürzten Inhalt schätzen und darf deshalb nicht warten, wartete {elapsed:?}"
+        );
+        assert!(
+            emitter.events.lock().unwrap().is_empty(),
+            "kein Warte-Event, wenn (korrekt) gar nicht gewartet wurde"
         );
     }
 
