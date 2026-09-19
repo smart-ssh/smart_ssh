@@ -10,6 +10,16 @@ sind mit **(Pro)** markiert.
 ## [Unreleased]
 
 ### Added
+- Neuer "Diagnosepaket erzeugen"-Knopf in den Einstellungen (Diagnose)
+  neben "Logpfad öffnen": erzeugt ein einzelnes, redigiertes Text-Paket
+  (Version + Build-Hash, Betriebssystem/Architektur, Datenpfade,
+  konfigurierte KI-Provider-**Typen**, Server-**Anzahl**, die letzten bis
+  zu 500 Log-Zeilen) zur Weitergabe an den Support oder zum Anhängen an
+  ein GitHub-Issue. Enthält **keine** Zugangsdaten, Passwörter, Host-Keys,
+  Server-Adressen oder Notiz-/Chat-Inhalte; eingebettete Log-Zeilen laufen
+  zusätzlich durch dieselbe Redaction wie sonst in der App. Wird vor dem
+  Speichern erst als Vorschau angezeigt — nichts wird automatisch
+  gespeichert oder versendet.
 - App liest jetzt die Rate-Limit-Header des KI-Providers (Anthropic:
   `anthropic-ratelimit-{requests,input-tokens,output-tokens,tokens}-
   {remaining,reset}`) und drosselt proaktiv, statt blind ins Limit zu
