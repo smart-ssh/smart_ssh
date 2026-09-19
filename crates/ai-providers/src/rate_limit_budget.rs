@@ -52,10 +52,29 @@ struct Counter {
     limit: Option<u64>,
     remaining: Option<u64>,
     reset_at: Option<Instant>,
+    /// Wann diese Antwort (irgendeine, nicht nur eine mit neuen Werten für
+    /// GENAU diesen Zähler) zuletzt verarbeitet wurde — s. [`Counter::
+    /// is_stale`]. Follow-up-Fix (2. spec-reviewer-Runde) für eine
+    /// Fail-open-Lücke im ursprünglichen `is_stale`: ohne diesen
+    /// Zeitstempel wurde jeder Zähler mit verstrichenem `reset_at` als
+    /// "veraltet, kein Warten" gewertet — auch wenn die GERADE
+    /// eingetroffene Antwort ein frisches `remaining: 0` meldete, aber
+    /// (z. B. wegen Uhren-Versatz) keinen brauchbaren `-reset`-Header
+    /// mitschickte, sodass der alte, inzwischen verstrichene `reset_at`
+    /// stehen blieb. Das drosselte dann gar nicht mehr, obwohl das
+    /// Restbudget nachweislich 0 war.
+    last_updated: Option<Instant>,
 }
 
 impl Counter {
-    fn update(&mut self, limit: Option<u64>, remaining: Option<u64>, reset_at: Option<Instant>) {
+    fn update(
+        &mut self,
+        now: Instant,
+        limit: Option<u64>,
+        remaining: Option<u64>,
+        reset_at: Option<Instant>,
+    ) {
+        self.last_updated = Some(now);
         if limit.is_some() {
             self.limit = limit;
         }
@@ -91,7 +110,18 @@ impl Counter {
     /// statt eines unnötigen [`MAX_PROACTIVE_WAIT`]-Warten aus veralteten
     /// Zahlen ableiten (spec-reviewer Fund, Spec 0061 Follow-up).
     fn is_stale(&self, now: Instant) -> bool {
-        matches!(self.reset_at, Some(reset) if reset <= now)
+        match (self.reset_at, self.last_updated) {
+            // Veraltet nur, wenn der Reset verstrichen ist UND seither
+            // keine (auch nicht header-lose) Antwort mehr verarbeitet
+            // wurde — kam gerade eine neue Antwort NACH dem Reset-
+            // Zeitpunkt herein (auch ohne einen frischen `-reset`-Wert
+            // selbst), sind `limit`/`remaining` aus dieser Antwort
+            // weiterhin die aktuellsten bekannten Zahlen, kein
+            // Alt-Zustand.
+            (Some(reset), Some(last_updated)) => reset <= now && last_updated <= reset,
+            (Some(reset), None) => reset <= now,
+            (None, _) => false,
+        }
     }
 
     /// Spec 0061 Abschnitt 3, erster Fall: dieser Zähler allein liegt unter
@@ -188,24 +218,29 @@ impl ProviderBudgetGuard {
     /// nur `-remaining`, aber (noch) kein `-reset` in dieser Antwort
     /// mitschickt, verliert den zuletzt bekannten Reset-Zeitpunkt nicht).
     pub fn record_headers(&self, snapshot: RateLimitHeaderSnapshot) {
+        let now = Instant::now();
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.has_any_header_data = true;
         state.requests.update(
+            now,
             snapshot.requests.limit,
             snapshot.requests.remaining,
             snapshot.requests.reset_at,
         );
         state.input_tokens.update(
+            now,
             snapshot.input_tokens.limit,
             snapshot.input_tokens.remaining,
             snapshot.input_tokens.reset_at,
         );
         state.output_tokens.update(
+            now,
             snapshot.output_tokens.limit,
             snapshot.output_tokens.remaining,
             snapshot.output_tokens.reset_at,
         );
         state.tokens.update(
+            now,
             snapshot.tokens.limit,
             snapshot.tokens.remaining,
             snapshot.tokens.reset_at,
@@ -259,9 +294,12 @@ impl ProviderBudgetGuard {
 /// trennt Limits pro Modell-Klasse; der exakte Modellname ist eine
 /// konservative Näherung dafür, s. Modul-Doc) + ein Hash des API-Keys
 /// (steht als eigenständiger String im Registry-Schlüssel, statt den Key
-/// selbst dort im Klartext zu duplizieren — `DefaultHasher` genügt, es geht
-/// nur um Kollisionsvermeidung innerhalb eines Prozesses, nicht um
-/// kryptografische Stärke).
+/// selbst dort im Klartext zu duplizieren — `DefaultHasher` genügt, weil
+/// hier keine kryptografische Stärke nötig ist, nicht weil er instabil
+/// wäre: `DefaultHasher::new()` nutzt feste Schlüssel und ist damit über
+/// Aufrufe UND Prozess-Neustarts hinweg stabil, s. ADR 0054 Abschnitt 1
+/// für die Korrektur einer früheren, sachlich falschen Formulierung
+/// dieser Doc-Zeile).
 pub fn provider_identity_key(base_url: &str, model: &str, api_key: &str) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     api_key.hash(&mut hasher);
@@ -463,24 +501,79 @@ mod tests {
     /// vergangene Zeit zwischen zwei Chat-Runden) verstrichen ist.
     #[test]
     fn test_guard_does_not_wait_the_full_cap_when_a_previously_future_reset_has_since_elapsed() {
+        // Realistisches Szenario: die Header wurden vor 2 Minuten gelesen,
+        // ihr `reset_at` war DAMALS noch 115s in der Zukunft, ist aber seit
+        // 5s verstrichen — und seither kam keine neuere Antwort herein
+        // (`last_updated` bleibt auf den Empfangszeitpunkt stehen). Direkter
+        // Zugriff auf das interne `state`-Feld statt über `record_headers`
+        // (das `last_updated` immer auf "jetzt" setzen würde) — nötig, um
+        // genau diese Kombination nachzustellen, ohne 2 Minuten echte Zeit
+        // verstreichen zu lassen; die Zweitmeinungs-Falle, die der
+        // Follow-up-Fix (`Counter::last_updated`) schließt, betrifft exakt
+        // den Fall "seit dem Empfang der Header ist keine neuere Antwort
+        // mehr verarbeitet worden", s. `test_guard_still_waits_when_a_fresh_
+        // response_reports_zero_remaining_without_a_usable_reset` unten für
+        // die Gegenprobe.
         let guard = ProviderBudgetGuard::new();
-        let stale_reset = Instant::now()
-            .checked_sub(Duration::from_secs(5))
-            .expect("test instant underflow");
-        guard.record_headers(RateLimitHeaderSnapshot {
-            input_tokens: RawCounter {
+        let now = Instant::now();
+        let received_at = now - Duration::from_secs(120);
+        let stale_reset = now - Duration::from_secs(5);
+        {
+            let mut state = guard.state.lock().unwrap();
+            state.has_any_header_data = true;
+            state.input_tokens = Counter {
                 limit: Some(1000),
                 remaining: Some(5), // 0.5%, weit unter der 15%-Schwelle
                 reset_at: Some(stale_reset),
-            },
-            ..Default::default()
-        });
+                last_updated: Some(received_at),
+            };
+        }
         assert_eq!(
             guard.wait_duration(10),
             None,
             "ein verstrichener Reset macht die Restbudget-Zahlen veraltet — \
              kein Warten auf Basis unbekannt gewordener Daten, statt fälschlich \
              MAX_PROACTIVE_WAIT wie bei einem fehlenden Reset"
+        );
+    }
+
+    /// Gegenprobe zum Fix oben (2. spec-reviewer-Runde, Fail-open-Fund):
+    /// kommt eine FRISCHE Antwort mit `remaining: 0` herein, deren
+    /// `-reset`-Header fehlt/unparsbar/bereits verstrichen ist (sodass der
+    /// alte, alte `reset_at` stehen bleibt), darf das NICHT als "veraltet,
+    /// kein Warten" gewertet werden — diese Zahlen sind gerade erst
+    /// eingetroffen, `last_updated` liegt NACH `reset_at`.
+    #[test]
+    fn test_guard_still_waits_when_a_fresh_response_reports_zero_remaining_without_a_usable_reset()
+    {
+        let guard = ProviderBudgetGuard::new();
+        // Erste Antwort: normaler Zustand mit einem (damals) zukünftigen Reset.
+        guard.record_headers(RateLimitHeaderSnapshot {
+            input_tokens: RawCounter {
+                limit: Some(1000),
+                remaining: Some(500),
+                reset_at: Some(Instant::now() + Duration::from_millis(10)),
+            },
+            ..Default::default()
+        });
+        // Der Reset-Zeitpunkt der ersten Antwort verstreicht real.
+        std::thread::sleep(Duration::from_millis(30));
+        // Zweite, FRISCHE Antwort: remaining fällt auf 0, aber ohne
+        // brauchbaren `-reset`-Header (z. B. Uhren-Versatz/unparsbar) — der
+        // alte, jetzt verstrichene `reset_at` bleibt unverändert stehen.
+        guard.record_headers(RateLimitHeaderSnapshot {
+            input_tokens: RawCounter {
+                limit: Some(1000),
+                remaining: Some(0),
+                reset_at: None,
+            },
+            ..Default::default()
+        });
+        assert!(
+            guard.wait_duration(10).is_some(),
+            "eine GERADE eingetroffene Antwort mit remaining: 0 muss weiterhin drosseln, \
+             auch wenn ihr eigener -reset-Header fehlt/unbrauchbar ist — sonst fährt die \
+             App mit bekanntermaßen erschöpftem Budget blind weiter"
         );
     }
 

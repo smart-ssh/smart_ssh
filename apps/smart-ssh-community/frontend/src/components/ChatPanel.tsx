@@ -339,6 +339,10 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
   }, [sessionId]);
 
   useEffect(() => {
+    // Spec 0061 Follow-up (spec-reviewer Fund): Timer für das automatische
+    // Entfernen der `aiBudgetWaiting`-Karte (s. `onAiBudgetWaiting` unten)
+    // dürfen beim Session-Wechsel/Unmount nicht weiterlaufen.
+    const pendingBudgetTimers: number[] = [];
     const unlisten = [
       onChatTextDelta((event) => {
         if (event.sessionId !== sessionId) return;
@@ -444,9 +448,11 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
         // bekannten Wartedauer, statt die Karte dauerhaft stehen zu lassen
         // (spec-reviewer Fund: Karten stapelten sich sonst über mehrere
         // Wartevorgänge, z. B. innerhalb einer Auto-Fortsetzungs-Serie).
-        window.setTimeout(
-          () => setItems((prev) => prev.filter((it) => it.id !== id)),
-          Math.max(event.waitSeconds, 1) * 1000,
+        pendingBudgetTimers.push(
+          window.setTimeout(
+            () => setItems((prev) => prev.filter((it) => it.id !== id)),
+            Math.max(event.waitSeconds, 1) * 1000,
+          ),
         );
       }),
       onChatDocumentGenerated((event) => {
@@ -465,6 +471,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
 
     return () => {
       unlisten.forEach((p) => p.then((unlistenFn) => unlistenFn()));
+      pendingBudgetTimers.forEach((id) => window.clearTimeout(id));
     };
   }, [sessionId, riskSecondOpinionEnabled]);
 

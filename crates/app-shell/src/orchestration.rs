@@ -4953,14 +4953,20 @@ mod tests {
         let budget = Arc::new(ai_providers::ProviderBudgetGuard::new());
         budget.record_headers(ai_providers::RateLimitHeaderSnapshot {
             input_tokens: ai_providers::RawCounter {
-                limit: Some(10_000),
-                remaining: Some(5_000), // 50%, über der 15%-Schwelle
+                limit: Some(100_000),
+                remaining: Some(50_000), // 50%, über der 15%-Schwelle
                 reset_at: Some(std::time::Instant::now() + std::time::Duration::from_secs(30)),
             },
             ..Default::default()
         });
         session.injection_check_budget = Some(budget);
 
+        // Deutlich über dem 16-KB-Kürzungslimit (~4096 geschätzte Tokens),
+        // aber deutlich unter den 50.000 verbleibenden Tokens des Budgets —
+        // die geschätzten ~262144 Tokens des ROHEN Inhalts würden das
+        // Budget dagegen weit überschreiten. Großzügiger Abstand zu beiden
+        // Seiten, damit der Test nicht bei kleinen Änderungen an
+        // BYTES_PER_TOKEN_ESTIMATE/DEFAULT_SECOND_OPINION_MAX_LEN kippt.
         let huge_content = "a".repeat(1_000_000);
         let emitter = TestEmitter::default();
 

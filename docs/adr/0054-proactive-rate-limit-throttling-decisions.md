@@ -154,6 +154,39 @@ dieses Flag nie gesetzt wurde — ein header-loser Provider wird dadurch
 STRUKTURELL nie blockiert, ganz ohne Sonderfall-Prüfung an der
 Gate-Aufrufstelle.
 
+### 5a. Scope-Reduktion: `Retry-After` fließt (noch) nicht in den Wächter ein
+
+Spec 0061 §1 nennt `retry-after` in der Liste der zu berücksichtigenden
+Header, §2 verlangt zusätzlich: "bei einem 429 aktualisiert sich [der
+Wächter] (Budget = 0 bis Reset)". Umgesetzt ist bislang nur der `anthropic-
+ratelimit-*`-Pfad (2. spec-reviewer-Runde hat diese Lücke explizit
+benannt — hier nachträglich dokumentiert, statt sie stillschweigend zu
+lassen).
+
+**Praktische Folge:** ein 429, der KEINE `anthropic-ratelimit-*`-Header
+mitschickt (z. B. ein Proxy/Gateway, das den 429 selbst erzeugt, bevor die
+Anfrage Anthropic erreicht, oder ein OpenAI-kompatibler Endpunkt, der
+generell keine dieser Header kennt), hinterlässt im Wächter weiterhin
+keinerlei neues Wissen. Der reaktive 429-Retry (Abschnitt 4, Schicht 3)
+fängt DIESEN einen Aufruf trotzdem ab — aber ein zweiter, unmittelbar
+folgender Aufruf mit dERSELBEN Provider-Identität (z. B. die Einschleusungs-
+Prüfung direkt nach dem Haupt-Chat-Aufruf) weiß nichts von dem gerade
+erlebten 429 und feuert ungebremst erneut. Das ist genau die
+Doppel-Verbrauchs-Lücke, die das geteilte Budget aus Abschnitt 2
+eigentlich schließen soll.
+
+**Warum trotzdem vertretbar, aber offen:** der einzelne 429 selbst wird
+nicht verschluckt (das reaktive Retry greift), und der Fall betrifft nur
+header-lose 429-Quellen — gegen die echte Anthropic-API (die
+`anthropic-ratelimit-*`-Header auch auf 429-Antworten mitschickt, s. Spec
+0061 §1) tritt die Lücke nicht auf. Ein sauberer Fix (den `Retry-After`-
+Wert als `remaining: 0`/`reset_at: now + retry_after` in den betroffenen
+Zähler einspeisen) wurde zurückgestellt, weil er sorgfältig gegen bereits
+vorhandene, ggf. präzisere `anthropic-ratelimit-*`-Daten abgewogen werden
+müsste (ein zu kurzer `Retry-After` darf ein länger laufendes echtes
+Limit nicht verkürzen) — das ist ein eigenständiger, kleiner Folge-Schritt,
+kein Fund, der diesen Schritt ungültig macht.
+
 ### 6. Kein unbegrenztes Hängen — mit Einschränkungen (aktualisiert nach Follow-up-Review)
 
 `MAX_PROACTIVE_WAIT = 90s` (`ai_providers::rate_limit_budget`) deckelt
