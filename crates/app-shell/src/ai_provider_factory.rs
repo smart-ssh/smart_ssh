@@ -1,7 +1,12 @@
 //! Baut die konkrete `crates/ai-providers`-Implementierung für eine
 //! gespeicherte `AiProviderConfig` (Spec 0007, Abschnitt 8).
 
-use ai_providers::{AnthropicProvider, OpenAiCompatibleProvider};
+use std::sync::Arc;
+
+use ai_providers::{
+    provider_identity_key, AnthropicProvider, OpenAiCompatibleProvider, ProviderBudgetGuard,
+    RateLimitRegistry,
+};
 use secrecy::{ExposeSecret, SecretString};
 use ssh_manager_core::ai::{AiProvider, ProviderType};
 
@@ -14,7 +19,17 @@ const DEFAULT_ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
 /// Standard-Endpoint zurück, falls trotzdem einer hinterlegt wurde, wird er
 /// respektiert (deckt z. B. einen unternehmensinternen Azure-/Proxy-
 /// Endpoint ab, ohne dass die Spec das explizit vorsehen musste).
+///
+/// Spec 0061: gibt zusätzlich den (ggf. mit anderen Aufrufern über
+/// `registry` geteilten) [`ProviderBudgetGuard`] dieser Provider-Identität
+/// zurück — der einzige Konstruktions-Trichter (Spec 0022, Abschnitt 3:
+/// "der Provider-API-Key wird beim Aufbau der `AiProvider`-Instanz
+/// einmalig gelesen") ist auch der einzige Ort, an dem `base_url`/`model`/
+/// der entschärfte `api_key` gleichzeitig vorliegen, um
+/// [`provider_identity_key`] zu bilden, BEVOR der Key als reiner `String`
+/// im Provider verschwindet.
 pub fn build_ai_provider(
+    registry: &RateLimitRegistry,
     provider_type: ProviderType,
     base_url: Option<&str>,
     model: &str,
@@ -25,27 +40,35 @@ pub fn build_ai_provider(
     // abweichenden Request-Formats eine eigene Erweiterung, falls das
     // später gewünscht wird (nicht Teil dieser Spec).
     extra_headers: Vec<(String, String)>,
-) -> Box<dyn AiProvider> {
+) -> (Box<dyn AiProvider>, Arc<ProviderBudgetGuard>) {
     let api_key = api_key.expose_secret().to_string();
     match provider_type {
         ProviderType::OpenAi | ProviderType::GenericOpenAiCompatible | ProviderType::Ollama => {
             let resolved_base_url = base_url.unwrap_or(DEFAULT_OPENAI_BASE_URL);
-            Box::new(OpenAiCompatibleProvider::new(
+            let budget =
+                registry.guard_for(&provider_identity_key(resolved_base_url, model, &api_key));
+            let provider: Box<dyn AiProvider> = Box::new(OpenAiCompatibleProvider::new(
                 resolved_base_url,
                 model,
                 api_key,
                 supports_native_tool_calling,
                 extra_headers,
-            ))
+                budget.clone(),
+            ));
+            (provider, budget)
         }
         ProviderType::Anthropic => {
             let resolved_base_url = base_url.unwrap_or(DEFAULT_ANTHROPIC_BASE_URL);
-            Box::new(AnthropicProvider::new(
+            let budget =
+                registry.guard_for(&provider_identity_key(resolved_base_url, model, &api_key));
+            let provider: Box<dyn AiProvider> = Box::new(AnthropicProvider::new(
                 resolved_base_url,
                 model,
                 api_key,
                 supports_native_tool_calling,
-            ))
+                budget.clone(),
+            ));
+            (provider, budget)
         }
     }
 }
@@ -86,7 +109,9 @@ mod tests {
         let api_key = store.get(&credential_ref).expect("Key muss auflösbar sein");
         assert_eq!(store.get_calls(), 1);
 
-        let provider = build_ai_provider(
+        let registry = RateLimitRegistry::new();
+        let (provider, _budget) = build_ai_provider(
+            &registry,
             ProviderType::OpenAi,
             None,
             "gpt-4o",
@@ -107,6 +132,70 @@ mod tests {
             store.get_calls(),
             1,
             "der Provider-API-Key darf über mehrere send()-Aufrufe hinweg nicht erneut aus dem CredentialStore gelesen werden"
+        );
+    }
+
+    /// Spec 0061, Abschnitt 2 (die Kern-Entscheidung): zwei Aufrufe mit
+    /// identischem Key/Endpunkt/Modell (z. B. Haupt-Provider und
+    /// Zweitmeinungs-Provider, wenn ein Nutzer denselben Provider für beide
+    /// wählt) müssen sich EIN Budget teilen, nicht zwei unabhängige
+    /// bekommen.
+    #[test]
+    fn test_build_ai_provider_shares_one_budget_for_the_same_identity() {
+        let registry = RateLimitRegistry::new();
+        let (_provider_a, budget_a) = build_ai_provider(
+            &registry,
+            ProviderType::Anthropic,
+            None,
+            "claude-test",
+            SecretString::from("sk-same-key".to_string()),
+            true,
+            Vec::new(),
+        );
+        let (_provider_b, budget_b) = build_ai_provider(
+            &registry,
+            ProviderType::Anthropic,
+            None,
+            "claude-test",
+            SecretString::from("sk-same-key".to_string()),
+            true,
+            Vec::new(),
+        );
+
+        assert!(
+            std::sync::Arc::ptr_eq(&budget_a, &budget_b),
+            "gleicher Key/Endpunkt/Modell muss denselben Budget-Wächter liefern"
+        );
+    }
+
+    /// Gegenprobe: ein anderer Key (andere Provider-Identität) bekommt
+    /// einen eigenständigen Wächter — sonst würden fremde Accounts
+    /// versehentlich ein Budget teilen.
+    #[test]
+    fn test_build_ai_provider_uses_separate_budgets_for_different_identities() {
+        let registry = RateLimitRegistry::new();
+        let (_provider_a, budget_a) = build_ai_provider(
+            &registry,
+            ProviderType::Anthropic,
+            None,
+            "claude-test",
+            SecretString::from("sk-key-one".to_string()),
+            true,
+            Vec::new(),
+        );
+        let (_provider_b, budget_b) = build_ai_provider(
+            &registry,
+            ProviderType::Anthropic,
+            None,
+            "claude-test",
+            SecretString::from("sk-key-two".to_string()),
+            true,
+            Vec::new(),
+        );
+
+        assert!(
+            !std::sync::Arc::ptr_eq(&budget_a, &budget_b),
+            "unterschiedliche Keys dürfen sich kein Budget teilen"
         );
     }
 }

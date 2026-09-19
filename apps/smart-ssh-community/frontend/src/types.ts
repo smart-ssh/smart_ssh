@@ -291,6 +291,16 @@ export interface ChatAutoContinuationStartedEvent {
   round: number;
 }
 
+/** Spec 0061, Abschnitt 4: die App wartet proaktiv vor einem KI-Aufruf,
+ * weil das aus den Rate-Limit-Headern bekannte Restbudget knapp ist (oder
+ * der geschätzte Request es überschreiten würde) — rein informativ, kein
+ * Abbrechen-/Trotzdem-Button, der Request geht nach `waitSeconds`
+ * automatisch raus. */
+export interface AiBudgetWaitingEvent {
+  sessionId: string;
+  waitSeconds: number;
+}
+
 export type ActionResultPayload =
   | {
       kind: "command";

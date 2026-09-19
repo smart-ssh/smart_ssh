@@ -209,6 +209,7 @@ fn build_app_state(
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         mcp: crate::state::McpState::default(),
+        rate_limit_registry: ai_providers::RateLimitRegistry::new(),
     };
     (app_state, log_guard)
 }

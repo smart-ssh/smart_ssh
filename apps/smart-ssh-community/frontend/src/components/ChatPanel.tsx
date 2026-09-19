@@ -17,6 +17,7 @@ import {
   takeChatContentIntoNote,
 } from "../api";
 import {
+  onAiBudgetWaiting,
   onChatActionProposed,
   onChatActionResult,
   onChatAutoContinuationLimitReached,
@@ -109,6 +110,10 @@ export type ChatItem =
     }
   | { type: "error"; id: string; message: string; code: string | null }
   | { type: "autoContinuationLimitReached"; id: string; limit: number }
+  // Spec 0061, Abschnitt 4: proaktives Warten vor dem nächsten KI-Aufruf,
+  // rein informativ (kein Button) — dieselbe neutrale Karte wie
+  // "autoContinuationLimitReached" oben.
+  | { type: "aiBudgetWaiting"; id: string; waitSeconds: number }
   | { type: "document"; id: string; title: string; contentMarkdown: string }
   // Spec 0034, Abschnitt 6/8: read-only Darstellung eines Kommandoergebnis-
   // /Ablehnungs-Eintrags aus einer bereits geladenen (fortgesetzten)
@@ -427,6 +432,13 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
       onChatAutoContinuationStarted((event) => {
         if (event.sessionId !== sessionId) return;
         setAutoContinuing(true);
+      }),
+      onAiBudgetWaiting((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) => [
+          ...prev,
+          { type: "aiBudgetWaiting", id: freshId(), waitSeconds: event.waitSeconds },
+        ]);
       }),
       onChatDocumentGenerated((event) => {
         if (event.sessionId !== sessionId) return;
@@ -903,6 +915,15 @@ export function ChatItemView({
     return (
       <div className="border border-slate-600/50 bg-slate-800 px-3 py-2 text-sm text-slate-300">
         {t("actionCard.autoContinuationLimitReached", { limit: item.limit })}
+      </div>
+    );
+  }
+  if (item.type === "aiBudgetWaiting") {
+    // Spec 0061, Abschnitt 4: rein informativ, kein Button — der Request
+    // geht nach `waitSeconds` automatisch raus.
+    return (
+      <div className="border border-slate-600/50 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+        {t("actionCard.aiBudgetWaiting", { seconds: item.waitSeconds })}
       </div>
     );
   }

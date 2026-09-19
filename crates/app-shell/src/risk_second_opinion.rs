@@ -3,6 +3,9 @@
 //! ("semantisches Einordnen ... passt besser zu einer KI-Einschätzung als
 //! Server-Schaden, der sich gut musterbasiert erfassen lässt").
 
+use std::sync::Arc;
+
+use ai_providers::ProviderBudgetGuard;
 use futures::StreamExt;
 use tauri_plugin_store::StoreExt;
 
@@ -36,7 +39,7 @@ const PROVIDER_ID_KEY: &str = "riskClassifierProviderId";
 pub async fn resolve_second_opinion_provider(
     app: &tauri::AppHandle,
     state: &AppState,
-) -> Option<Box<dyn AiProvider>> {
+) -> Option<(Box<dyn AiProvider>, Arc<ProviderBudgetGuard>)> {
     let store = app.store(SETTINGS_STORE_FILE).ok()?;
     let enabled = store.get(ENABLED_KEY)?.as_bool().unwrap_or(false);
     if !enabled {
@@ -50,6 +53,7 @@ pub async fn resolve_second_opinion_provider(
     let api_key = state.credential_store.get(&config.credential_ref).ok()?;
 
     Some(build_ai_provider(
+        &state.rate_limit_registry,
         config.provider_type,
         config.base_url.as_deref(),
         &config.model,

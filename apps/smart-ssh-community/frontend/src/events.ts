@@ -1,5 +1,6 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  AiBudgetWaitingEvent,
   ChatActionProposedEvent,
   ChatActionResultEvent,
   ChatAutoContinuationLimitReachedEvent,
@@ -84,6 +85,12 @@ export const onChatAutoContinuationStarted = (
   listen<ChatAutoContinuationStartedEvent>("chat-auto-continuation-started", (e) =>
     handler(e.payload),
   );
+
+/** Spec 0061, Abschnitt 4 — s. `AiBudgetWaitingEvent`-Doc-Kommentar. */
+export const onAiBudgetWaiting = (
+  handler: (event: AiBudgetWaitingEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<AiBudgetWaitingEvent>("ai-budget-waiting", (e) => handler(e.payload));
 
 /** Spec 0010 — bewusst app-weit abonniert (z. B. in `App.tsx`), nicht nur
  * innerhalb einer offenen `ChatPanel`-Instanz: der Vorschlag kann eintreffen,

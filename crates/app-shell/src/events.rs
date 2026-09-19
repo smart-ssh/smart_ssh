@@ -204,6 +204,39 @@ pub fn emit_chat_auto_continuation_started(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct AiBudgetWaitingPayload {
+    session_id: SessionId,
+    wait_seconds: u64,
+}
+
+/// Spec 0061, Abschnitt 4: gesendet, sobald `crate::orchestration::
+/// wait_for_rate_limit_budget` entscheidet, VOR einem `AiProvider::send()`
+/// zu warten (Restbudget aus den zuletzt gelesenen `anthropic-ratelimit-*`-
+/// Headern unter der Schwelle, oder der geschätzte Request größer als das
+/// bekannte Rest-Token-Budget) — rein informativ, kein Abbrechen-/
+/// Trotzdem-Button (Stefans Entscheidung 2), der Request geht nach
+/// `wait_seconds` automatisch raus. Deckt zusätzlich den Backlog-Punkt
+/// "kein UI-Feedback bei langer Provider-Stille" mit ab: dasselbe
+/// Event-Muster eignet sich für jede Art "die App wartet gerade auf den
+/// KI-Provider, statt dass der Nutzer eine hängende Chat-UI ohne
+/// Erklärung sieht".
+pub fn emit_ai_budget_waiting(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    wait_seconds: u64,
+) {
+    emit(
+        emitter,
+        "ai-budget-waiting",
+        &AiBudgetWaitingPayload {
+            session_id,
+            wait_seconds,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ChatActionProposedPayload {
     session_id: SessionId,
     action_id: ActionId,

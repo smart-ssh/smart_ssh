@@ -53,6 +53,15 @@ pub struct AnthropicProvider {
     model: String,
     api_key: String,
     supports_native_tool_calling: bool,
+    /// Spec 0061: geteilter Rate-Limit-Budget-Wächter für diese
+    /// Provider-Identität (s. `crate::rate_limit_budget::
+    /// provider_identity_key`-Doc-Kommentar) — von `app-shell` beim Bau
+    /// dieses Providers übergeben (`ai-providers` kennt kein `AppState`,
+    /// hält also keine eigene Registry). `send()` aktualisiert ihn mit
+    /// jeder Antwort; das eigentliche Warten VOR dem Send entscheidet
+    /// `app-shell` (hat die Kontext-Größenschätzung/Session/Event-Emitter
+    /// zur Hand, s. Spec 0061 Abschnitt 3/4).
+    budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
 }
 
 impl AnthropicProvider {
@@ -61,6 +70,7 @@ impl AnthropicProvider {
         model: impl Into<String>,
         api_key: impl Into<String>,
         supports_native_tool_calling: bool,
+        budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
     ) -> Self {
         Self {
             client: build_http_client(),
@@ -68,6 +78,7 @@ impl AnthropicProvider {
             model: model.into(),
             api_key: api_key.into(),
             supports_native_tool_calling,
+            budget,
         }
     }
 
@@ -236,6 +247,7 @@ impl AiProvider for AnthropicProvider {
         let url = format!("{}/v1/messages", self.base_url.trim_end_matches('/'));
         let api_key = self.api_key.clone();
         let native_tool_calling = self.supports_native_tool_calling;
+        let budget = self.budget.clone();
         let body = self.build_request_body(&context);
 
         let request = async move {
@@ -291,6 +303,25 @@ impl AiProvider for AnthropicProvider {
                         return error_stream(mapped);
                     }
                 };
+
+                // Spec 0061, Abschnitt 1: Rate-Limit-Header auf JEDER
+                // Antwort lesen (Erfolg UND jeder Fehlerfall) — VOR jedem
+                // Zweig unten, die den `response`-Wert konsumieren
+                // (`.text()`/`sse_frame_stream`) oder ihn über
+                // `map_http_status` auf eine Unit-Variante ohne Header
+                // reduzieren. Ein Provider ohne diese Header (z. B. eine
+                // OpenAI-kompatible Gegenstelle) liefert hier einfach lauter
+                // `None`-Felder — `budget.record_headers` markiert das
+                // Vorhandensein von Headern trotzdem (auch ein leerer
+                // Snapshot zählt als "eine Antwort wurde gesehen"), s.
+                // `crate::openai_compatible`-Gegenstück, das diesen Aufruf
+                // bewusst NICHT macht (dort bleibt der Wächter dauerhaft
+                // "keine Header" -> nie blockierend, Invariante Spec 0061).
+                budget.record_headers(
+                    crate::rate_limit_budget::parse_anthropic_rate_limit_headers(
+                        response.headers(),
+                    ),
+                );
 
                 // Spec 0051, Teil 1: 429 wird — anders als jeder andere
                 // nicht-erfolgreiche Status — automatisch mit Backoff

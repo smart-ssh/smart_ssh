@@ -275,6 +275,33 @@ pub(crate) async fn wait_for_ai_request_slot(session: &Session) {
     *paced_at = Some(tokio::time::Instant::now());
 }
 
+/// Spec 0061, Abschnitt 3: proaktives Warten VOR einem `AiProvider::
+/// send()`-Aufruf, wenn der Rate-Limit-Budget-Wächter dieser
+/// Provider-Identität (aus den zuletzt gelesenen `anthropic-ratelimit-*`-
+/// Headern, s. `ai_providers::rate_limit_budget`) das für nötig hält —
+/// **ergänzt** `wait_for_ai_request_slot` (reines Mindest-Pacing) und das
+/// bestehende reaktive Retry (Spec 0051), ersetzt keins von beidem: ein
+/// header-loser Provider (s. dortige Invariante) liefert hier immer
+/// `None` und wird nie blockiert; ein zu knapp geschätztes/verpasstes
+/// proaktives Warten fängt das reaktive 429-Retry weiterhin ab. Aufrufer
+/// übergibt den zur jeweiligen `AiProvider`-Instanz gehörenden Wächter
+/// (`session.ai_provider_budget`/`risk_second_opinion_budget`/
+/// `injection_check_budget` — s. `Session`-Doc-Kommentare) und eine
+/// Schätzung der Input-Tokens dieses konkreten Requests (`crate::
+/// compaction::estimate_request_tokens`, „denselben Schätzer
+/// wiederverwenden" laut Spec 0061 Abschnitt 3).
+pub(crate) async fn wait_for_rate_limit_budget(
+    budget: &ai_providers::ProviderBudgetGuard,
+    estimated_input_tokens: usize,
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+) {
+    if let Some(wait) = budget.wait_duration(estimated_input_tokens as u64) {
+        crate::events::emit_ai_budget_waiting(emitter, session_id, wait.as_secs());
+        tokio::time::sleep(wait).await;
+    }
+}
+
 /// Die Nutzer-Nachricht muss bereits vom Aufrufer in
 /// `session.context.history` eingetragen worden sein (s.
 /// `crate::commands::send_chat_message`). Läuft so lange in Folgerunden
@@ -516,6 +543,8 @@ async fn run_one_round(
     // `compaction::compact_for_send`-Moduldoc).
     request_context = crate::compaction::compact_for_send(
         session,
+        session_id,
+        emitter,
         request_context,
         &system_context_parts,
         session.model_context_window_tokens,
@@ -526,6 +555,16 @@ async fn run_one_round(
     request_context.history =
         reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
     wait_for_ai_request_slot(session).await;
+    // Spec 0061, Abschnitt 3: proaktives Rate-Limit-Gate, direkt vor dem
+    // Send — nach der Kompaktierung/Redaction, damit die Schätzung den
+    // tatsächlich gesendeten Request widerspiegelt.
+    wait_for_rate_limit_budget(
+        &session.ai_provider_budget,
+        crate::compaction::estimate_request_tokens(&request_context),
+        emitter,
+        session_id,
+    )
+    .await;
     let mut stream = session.ai_provider.send(request_context);
 
     let mut text_buffer = String::new();
@@ -842,6 +881,15 @@ async fn handle_action_proposed(
     ) {
         if let Some(pseudo_command) = pseudo_command_for_risk_classification(&action) {
             wait_for_ai_request_slot(session).await;
+            if let Some(budget) = session.risk_second_opinion_budget.as_deref() {
+                wait_for_rate_limit_budget(
+                    budget,
+                    crate::compaction::estimate_tokens(&pseudo_command),
+                    emitter,
+                    session_id,
+                )
+                .await;
+            }
             let second_opinion =
                 crate::risk_second_opinion::fetch_second_opinion(provider, &pseudo_command).await;
             let (data_risk, reason) = escalate_data_risk(
@@ -1760,7 +1808,7 @@ async fn execute_suggested_command(
             session
                 .untrusted_content_ingested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
-            check_for_injected_instructions(session, &combined_output).await;
+            check_for_injected_instructions(session, session_id, emitter, &combined_output).await;
             true
         }
         Err(err) => {
@@ -1875,11 +1923,25 @@ fn log_command_execution_failed(session_id: SessionId, command: &str, err: &SshE
 /// ändert absichtlich nichts: keine Eskalation, aber auch kein Zurücksetzen
 /// eines zuvor schon erkannten Verdachts — "keine Prüfung verfügbar" ist
 /// kein "alles in Ordnung".
-async fn check_for_injected_instructions(session: &Session, content: &str) {
+async fn check_for_injected_instructions(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+    content: &str,
+) {
     let Some(provider) = session.injection_check_provider.as_deref() else {
         return;
     };
     wait_for_ai_request_slot(session).await;
+    if let Some(budget) = session.injection_check_budget.as_deref() {
+        wait_for_rate_limit_budget(
+            budget,
+            crate::compaction::estimate_tokens(content),
+            emitter,
+            session_id,
+        )
+        .await;
+    }
     if let Some((true, _reason)) =
         crate::risk_second_opinion::fetch_injection_check(provider, content).await
     {
@@ -2231,7 +2293,7 @@ async fn execute_read_remote_file(
             session
                 .untrusted_content_ingested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
-            check_for_injected_instructions(session, &content).await;
+            check_for_injected_instructions(session, session_id, emitter, &content).await;
             true
         }
         Err(err) => {
@@ -2597,7 +2659,11 @@ const MAX_GENERATED_TITLE_LENGTH: usize = 60;
 /// `Session`-Doc-Kommentar) — ohne `chat_sessions`-Zeile gibt es nichts,
 /// dem ein Titel zugeordnet werden könnte.
 #[tracing::instrument(skip_all)]
-pub async fn generate_session_title_on_disconnect(session: &Session) {
+pub async fn generate_session_title_on_disconnect(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+) {
     let Some(store) = &session.chat_session_store else {
         return;
     };
@@ -2623,6 +2689,8 @@ pub async fn generate_session_title_on_disconnect(session: &Session) {
     let system_context_parts = session.system_context_parts.lock().await.clone();
     request_context = crate::compaction::compact_for_send(
         session,
+        session_id,
+        emitter,
         request_context,
         &system_context_parts,
         session.model_context_window_tokens,
@@ -2643,6 +2711,13 @@ pub async fn generate_session_title_on_disconnect(session: &Session) {
     request_context.available_actions = Vec::new();
 
     wait_for_ai_request_slot(session).await;
+    wait_for_rate_limit_budget(
+        &session.ai_provider_budget,
+        crate::compaction::estimate_request_tokens(&request_context),
+        emitter,
+        session_id,
+    )
+    .await;
     let mut stream = session.ai_provider.send(request_context);
     let mut text_buffer = String::new();
     while let Some(event) = stream.next().await {
@@ -2741,6 +2816,8 @@ pub async fn suggest_note_update_on_disconnect(
     // `send()`-Stelle in `run_one_round`.
     request_context = crate::compaction::compact_for_send(
         session,
+        session_id,
+        emitter,
         request_context,
         &system_context_parts,
         session.model_context_window_tokens,
@@ -2776,6 +2853,13 @@ pub async fn suggest_note_update_on_disconnect(
     request_context.available_actions = vec![ActionSchema::propose_note_update()];
 
     wait_for_ai_request_slot(session).await;
+    wait_for_rate_limit_budget(
+        &session.ai_provider_budget,
+        crate::compaction::estimate_request_tokens(&request_context),
+        emitter,
+        session_id,
+    )
+    .await;
     let mut stream = session.ai_provider.send(request_context);
     let mut proposed: Option<AiAction> = None;
     while let Some(event) = stream.next().await {
@@ -3022,6 +3106,9 @@ const NOTE_SHRINK_INSTRUCTION: &str = "Fasse die folgende, gespeicherte Notiz k�
 /// als gleichrangiger Prompt-Text statt als Daten gelesen werden.
 async fn summarize_note_for_shrink(
     ai_provider: &dyn AiProvider,
+    budget: &ai_providers::ProviderBudgetGuard,
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
     redactor: &dyn OutputRedactor,
     note_source_label: &str,
     note_text: &str,
@@ -3043,6 +3130,21 @@ async fn summarize_note_for_shrink(
         }],
         available_actions: Vec::new(),
     };
+
+    // Spec 0061, Abschnitt 3: dieser Aufruf läuft session-unabhängig (s.
+    // Doc-Kommentar an `execute_note_shrink_request` weiter unten) — kein
+    // `Session.ai_request_paced_at`/`wait_for_ai_request_slot` hier
+    // (existierte für diesen Pfad auch vor Spec 0061 schon nicht), aber
+    // das Rate-Limit-Gate gilt trotzdem: derselbe Provider/dieselbe
+    // Provider-Identität kann sich das Budget mit einer noch laufenden
+    // Session teilen (Spec 0061 Abschnitt 2).
+    wait_for_rate_limit_budget(
+        budget,
+        crate::compaction::estimate_request_tokens(&request_context),
+        emitter,
+        session_id,
+    )
+    .await;
 
     let call = async {
         let mut stream = ai_provider.send(request_context);
@@ -3175,6 +3277,7 @@ pub async fn execute_note_shrink_request(
     session_id: SessionId,
     server_id: ServerId,
     ai_provider: &dyn AiProvider,
+    ai_provider_budget: &ai_providers::ProviderBudgetGuard,
     redactor: &dyn OutputRedactor,
     emitter: &dyn EventEmitter,
     target: &dyn NoteShrinkTarget,
@@ -3189,8 +3292,16 @@ pub async fn execute_note_shrink_request(
         return;
     };
 
-    let Some(new_content) =
-        summarize_note_for_shrink(ai_provider, redactor, &server_name, &note_text).await
+    let Some(new_content) = summarize_note_for_shrink(
+        ai_provider,
+        ai_provider_budget,
+        emitter,
+        session_id,
+        redactor,
+        &server_name,
+        &note_text,
+    )
+    .await
     else {
         emit_note_shrink_failed(
             emitter,
@@ -3632,6 +3743,7 @@ mod tests {
         Session {
             transport: AsyncMutex::new(Box::new(transport)),
             ai_provider: Box::new(ai_provider),
+            ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
             context: AsyncMutex::new(SessionContext {
                 system_context: "Testkontext".to_string(),
                 history: Vec::new(),
@@ -3654,10 +3766,12 @@ mod tests {
             sftp: AsyncMutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             risk_second_opinion_provider: None,
+            risk_second_opinion_budget: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             injection_check_provider: None,
+            injection_check_budget: None,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
             // Spec 0034: Tests laufen bewusst ohne Persistenz-Anbindung
             // (s. `Session::chat_session_store`-Doc-Kommentar) — kein
@@ -3680,6 +3794,7 @@ mod tests {
     ) -> Session {
         Session {
             risk_second_opinion_provider: Some(Box::new(second_opinion_provider)),
+            risk_second_opinion_budget: Some(Arc::new(ai_providers::ProviderBudgetGuard::new())),
             ..session_with_ai_provider(MockAiProvider::new(ai_events), transport)
         }
     }
@@ -4682,7 +4797,14 @@ mod tests {
             AiEvent::Done,
         ])));
 
-        check_for_injected_instructions(&session, "aus der Datei gelesener Inhalt").await;
+        let emitter = TestEmitter::default();
+        check_for_injected_instructions(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            "aus der Datei gelesener Inhalt",
+        )
+        .await;
         assert!(
             session
                 .injection_suspected
@@ -4727,7 +4849,14 @@ mod tests {
             AiEvent::Done,
         ])));
 
-        check_for_injected_instructions(&session, "aus der Datei gelesener Inhalt").await;
+        let emitter = TestEmitter::default();
+        check_for_injected_instructions(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            "aus der Datei gelesener Inhalt",
+        )
+        .await;
         assert!(
             !session
                 .injection_suspected
@@ -4763,7 +4892,14 @@ mod tests {
             )])));
 
         // Muss ohne Panik zurückkehren.
-        check_for_injected_instructions(&session, "aus der Datei gelesener Inhalt").await;
+        let emitter = TestEmitter::default();
+        check_for_injected_instructions(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            "aus der Datei gelesener Inhalt",
+        )
+        .await;
 
         assert!(
             !session
@@ -6250,8 +6386,13 @@ mod tests {
         let contexts = provider.received_contexts_handle();
         let redactor = DefaultOutputRedactor::new();
 
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        let emitter = TestEmitter::default();
         let result = summarize_note_for_shrink(
             &provider,
+            &budget,
+            &emitter,
+            Uuid::new_v4(),
             &redactor,
             "Test-Server",
             "Die ursprüngliche Notiz.",
@@ -6294,8 +6435,13 @@ mod tests {
         let contexts = provider.received_contexts_handle();
         let redactor = DefaultOutputRedactor::new();
 
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        let emitter = TestEmitter::default();
         summarize_note_for_shrink(
             &provider,
+            &budget,
+            &emitter,
+            Uuid::new_v4(),
             &redactor,
             "Test-Server",
             "Notiz: password=hunter2geheim",
@@ -6316,8 +6462,18 @@ mod tests {
         let provider = MockAiProvider::new(vec![AiEvent::Error(AiError::RateLimited)]);
         let redactor = DefaultOutputRedactor::new();
 
-        let result =
-            summarize_note_for_shrink(&provider, &redactor, "Test-Server", "Eine Notiz.").await;
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        let emitter = TestEmitter::default();
+        let result = summarize_note_for_shrink(
+            &provider,
+            &budget,
+            &emitter,
+            Uuid::new_v4(),
+            &redactor,
+            "Test-Server",
+            "Eine Notiz.",
+        )
+        .await;
 
         assert!(
             result.is_none(),
@@ -6333,8 +6489,18 @@ mod tests {
         let provider = MockAiProvider::new(vec![AiEvent::TextDelta("halbe Antwort".to_string())]);
         let redactor = DefaultOutputRedactor::new();
 
-        let result =
-            summarize_note_for_shrink(&provider, &redactor, "Test-Server", "Eine Notiz.").await;
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        let emitter = TestEmitter::default();
+        let result = summarize_note_for_shrink(
+            &provider,
+            &budget,
+            &emitter,
+            Uuid::new_v4(),
+            &redactor,
+            "Test-Server",
+            "Eine Notiz.",
+        )
+        .await;
 
         assert!(result.is_none());
     }
@@ -6345,7 +6511,18 @@ mod tests {
         let contexts = provider.received_contexts_handle();
         let redactor = DefaultOutputRedactor::new();
 
-        let result = summarize_note_for_shrink(&provider, &redactor, "Test-Server", "   ").await;
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        let emitter = TestEmitter::default();
+        let result = summarize_note_for_shrink(
+            &provider,
+            &budget,
+            &emitter,
+            Uuid::new_v4(),
+            &redactor,
+            "Test-Server",
+            "   ",
+        )
+        .await;
 
         assert!(result.is_none());
         assert!(
@@ -6364,9 +6541,19 @@ mod tests {
         let provider = MockAiProvider::new(vec![AiEvent::TextDelta(huge_reply), AiEvent::Done]);
         let redactor = DefaultOutputRedactor::new();
 
-        let result = summarize_note_for_shrink(&provider, &redactor, "Test-Server", "Eine Notiz.")
-            .await
-            .expect("Erfolgsfall muss Some liefern");
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        let emitter = TestEmitter::default();
+        let result = summarize_note_for_shrink(
+            &provider,
+            &budget,
+            &emitter,
+            Uuid::new_v4(),
+            &redactor,
+            "Test-Server",
+            "Eine Notiz.",
+        )
+        .await
+        .expect("Erfolgsfall muss Some liefern");
 
         assert!(
             result.len() <= NOTE_SHRINK_MAX_BYTES,
@@ -6380,7 +6567,17 @@ mod tests {
         let provider = MockAiProvider::new(vec![]); // liefert nie Done/Error
         let redactor = DefaultOutputRedactor::new();
 
-        let call = summarize_note_for_shrink(&provider, &redactor, "Test-Server", "Eine Notiz.");
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        let emitter = TestEmitter::default();
+        let call = summarize_note_for_shrink(
+            &provider,
+            &budget,
+            &emitter,
+            Uuid::new_v4(),
+            &redactor,
+            "Test-Server",
+            "Eine Notiz.",
+        );
         let advancer =
             tokio::time::advance(NOTE_SHRINK_CALL_TIMEOUT + std::time::Duration::from_secs(1));
 
@@ -6415,10 +6612,12 @@ mod tests {
             provider_label: "Test-Provider".to_string(),
             model: "test-model".to_string(),
         };
+        let budget = ai_providers::ProviderBudgetGuard::new();
         let flow = execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
+            &budget,
             &redactor,
             &emitter,
             &target,
@@ -6513,10 +6712,12 @@ mod tests {
             provider_label: "Test-Provider".to_string(),
             model: "test-model".to_string(),
         };
+        let budget = ai_providers::ProviderBudgetGuard::new();
         let flow = execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
+            &budget,
             &redactor,
             &emitter,
             &target,
@@ -6571,10 +6772,12 @@ mod tests {
             provider_label: "Test-Provider".to_string(),
             model: "test-model".to_string(),
         };
+        let budget = ai_providers::ProviderBudgetGuard::new();
         execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
+            &budget,
             &redactor,
             &emitter,
             &target,
@@ -6617,10 +6820,12 @@ mod tests {
             provider_label: "Test-Provider".to_string(),
             model: "test-model".to_string(),
         };
+        let budget = ai_providers::ProviderBudgetGuard::new();
         let flow = execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
+            &budget,
             &redactor,
             &emitter,
             &target,
@@ -6664,10 +6869,12 @@ mod tests {
             provider_label: "Test-Provider".to_string(),
             model: "test-model".to_string(),
         };
+        let budget = ai_providers::ProviderBudgetGuard::new();
         execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
+            &budget,
             &redactor,
             &emitter,
             &target,
@@ -6691,9 +6898,19 @@ mod tests {
         let contexts = provider.received_contexts_handle();
         let redactor = DefaultOutputRedactor::new();
 
-        summarize_note_for_shrink(&provider, &redactor, "web-01", "Eine Notiz mit Inhalt.")
-            .await
-            .expect("Erfolgsfall muss Some liefern");
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        let emitter = TestEmitter::default();
+        summarize_note_for_shrink(
+            &provider,
+            &budget,
+            &emitter,
+            Uuid::new_v4(),
+            &redactor,
+            "web-01",
+            "Eine Notiz mit Inhalt.",
+        )
+        .await
+        .expect("Erfolgsfall muss Some liefern");
 
         let sent = contexts.lock().unwrap();
         let sent_text = format!("{:?}", sent[0].history);
@@ -6733,10 +6950,12 @@ mod tests {
             provider_label: "Test-Provider".to_string(),
             model: "test-model".to_string(),
         };
+        let budget = ai_providers::ProviderBudgetGuard::new();
         let flow = execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
+            &budget,
             &redactor,
             &emitter,
             &target,
@@ -6811,10 +7030,12 @@ mod tests {
             provider_label: "Test-Provider".to_string(),
             model: "test-model".to_string(),
         };
+        let budget = ai_providers::ProviderBudgetGuard::new();
         let flow = execute_note_shrink_request(
             Uuid::new_v4(),
             server_id,
             &provider,
+            &budget,
             &redactor,
             &emitter,
             &target,
@@ -9844,8 +10065,15 @@ mod tests {
             available_actions: Vec::new(),
         };
         let parts = crate::compaction::SystemContextParts::default();
-        let result =
-            crate::compaction::compact_for_send(&session, context.clone(), &parts, 1_000).await;
+        let result = crate::compaction::compact_for_send(
+            &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
+            context.clone(),
+            &parts,
+            1_000,
+        )
+        .await;
         assert_eq!(
             result, context,
             "unterhalb des Auslösers darf nichts verändert werden"
@@ -9888,9 +10116,15 @@ mod tests {
             }
             let request_context = session.context.lock().await.clone();
             let parts = session.system_context_parts.lock().await.clone();
-            let result =
-                crate::compaction::compact_for_send(&session, request_context, &parts, 10_000)
-                    .await;
+            let result = crate::compaction::compact_for_send(
+                &session,
+                Uuid::new_v4(),
+                &TestEmitter::default(),
+                request_context,
+                &parts,
+                10_000,
+            )
+            .await;
             let estimated = crate::compaction::estimate_request_tokens(&result);
             assert!(
                 estimated <= budget,
@@ -9911,9 +10145,15 @@ mod tests {
             }
             let request_context = session.context.lock().await.clone();
             let parts = session.system_context_parts.lock().await.clone();
-            let result =
-                crate::compaction::compact_for_send(&session, request_context, &parts, 10_000)
-                    .await;
+            let result = crate::compaction::compact_for_send(
+                &session,
+                Uuid::new_v4(),
+                &TestEmitter::default(),
+                request_context,
+                &parts,
+                10_000,
+            )
+            .await;
             let estimated = crate::compaction::estimate_request_tokens(&result);
             assert!(
                 estimated <= budget,
@@ -9945,6 +10185,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         let result = crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10000,6 +10242,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         let result = crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10055,6 +10299,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         let _ = crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10108,6 +10354,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         let result = crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10147,6 +10395,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         let result = crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10185,6 +10435,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         let result = crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10231,8 +10483,11 @@ mod tests {
 
         let request_context = session.context.lock().await.clone();
         let parts = session.system_context_parts.lock().await.clone();
+        let emitter = TestEmitter::default();
         let compaction = crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &emitter,
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10314,6 +10569,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         let result = crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10411,6 +10668,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         let _ = crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10470,6 +10729,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10638,6 +10899,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         let compacted = crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10840,6 +11103,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -10947,6 +11212,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         let result = crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -11070,6 +11337,8 @@ mod tests {
         let parts = session.system_context_parts.lock().await.clone();
         crate::compaction::compact_for_send(
             &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
             request_context,
             &parts,
             session.model_context_window_tokens,
@@ -11548,7 +11817,8 @@ mod tests {
         )
         .await;
 
-        generate_session_title_on_disconnect(&session).await;
+        generate_session_title_on_disconnect(&session, Uuid::new_v4(), &TestEmitter::default())
+            .await;
 
         let listed = chat_store
             .list_sessions_for_server(&session.server_id)
@@ -11560,7 +11830,8 @@ mod tests {
         // nach einem Resume das auslösen) darf den bereits gesetzten Titel
         // NICHT überschreiben, obwohl der Mock-Provider bereitwillig
         // erneut antworten würde.
-        generate_session_title_on_disconnect(&session).await;
+        generate_session_title_on_disconnect(&session, Uuid::new_v4(), &TestEmitter::default())
+            .await;
         let listed_again = chat_store
             .list_sessions_for_server(&session.server_id)
             .await
@@ -11584,7 +11855,8 @@ mod tests {
         )
         .await;
 
-        generate_session_title_on_disconnect(&session).await;
+        generate_session_title_on_disconnect(&session, Uuid::new_v4(), &TestEmitter::default())
+            .await;
 
         let listed = chat_store
             .list_sessions_for_server(&session.server_id)
@@ -12404,6 +12676,140 @@ mod tests {
         assert!(
             elapsed < MIN_AI_REQUEST_SPACING,
             "durfte nicht erneut warten, tat es aber ({elapsed:?})"
+        );
+    }
+
+    // --- Spec 0061: wait_for_rate_limit_budget --------------------------
+
+    fn low_budget_snapshot() -> ai_providers::RateLimitHeaderSnapshot {
+        ai_providers::RateLimitHeaderSnapshot {
+            input_tokens: ai_providers::RawCounter {
+                limit: Some(1_000),
+                remaining: Some(50), // 5% — klar unter der 15%-Schwelle
+                reset_at: Some(std::time::Instant::now() + std::time::Duration::from_secs(30)),
+            },
+            ..Default::default()
+        }
+    }
+
+    /// Spec 0061, Testbarkeit: "Budget unter 15% → Gate wartet bis Reset,
+    /// dann Send; UI-Event gefeuert."
+    #[tokio::test(start_paused = true)]
+    async fn test_wait_for_rate_limit_budget_waits_and_emits_event_when_budget_is_low() {
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        budget.record_headers(low_budget_snapshot());
+        let emitter = TestEmitter::default();
+        let session_id = Uuid::new_v4();
+
+        let before = tokio::time::Instant::now();
+        wait_for_rate_limit_budget(&budget, 0, &emitter, session_id).await;
+        let elapsed = before.elapsed();
+
+        assert!(
+            elapsed >= std::time::Duration::from_secs(29),
+            "muss bis in die Nähe des Reset-Zeitpunkts warten, wartete nur {elapsed:?}"
+        );
+        let events = emitter.events.lock().unwrap();
+        assert!(
+            events.iter().any(|(name, _)| name == "ai-budget-waiting"),
+            "muss das Warte-Event feuern, tatsächliche Events: {events:?}"
+        );
+    }
+
+    /// Gegenprobe: reichlich Restbudget (weit über der 15%-Schwelle) darf
+    /// den Send nicht verzögern.
+    #[tokio::test(start_paused = true)]
+    async fn test_wait_for_rate_limit_budget_does_not_wait_when_budget_is_healthy() {
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        budget.record_headers(ai_providers::RateLimitHeaderSnapshot {
+            input_tokens: ai_providers::RawCounter {
+                limit: Some(1_000),
+                remaining: Some(900),
+                reset_at: None,
+            },
+            ..Default::default()
+        });
+        let emitter = TestEmitter::default();
+
+        let before = tokio::time::Instant::now();
+        wait_for_rate_limit_budget(&budget, 10, &emitter, Uuid::new_v4()).await;
+
+        assert!(
+            before.elapsed() < std::time::Duration::from_millis(50),
+            "gesundes Budget darf nicht warten lassen"
+        );
+        assert!(
+            emitter.events.lock().unwrap().is_empty(),
+            "kein Warte-Event, wenn gar nicht gewartet wurde"
+        );
+    }
+
+    /// Spec 0061, Invariante: "ein header-loser Provider wird nie
+    /// blockiert" — ein frisch erzeugter Wächter, auf dem noch NIE
+    /// `record_headers` lief, darf den Send unter keinen Umständen
+    /// verzögern, egal wie groß die Schätzung ist.
+    #[tokio::test(start_paused = true)]
+    async fn test_wait_for_rate_limit_budget_never_blocks_a_header_less_provider() {
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        let emitter = TestEmitter::default();
+
+        let before = tokio::time::Instant::now();
+        wait_for_rate_limit_budget(&budget, 999_999_999, &emitter, Uuid::new_v4()).await;
+
+        assert!(before.elapsed() < std::time::Duration::from_millis(50));
+        assert!(emitter.events.lock().unwrap().is_empty());
+    }
+
+    /// Spec 0061, Testbarkeit: "geschätzter Input > Rest-Input-TPM → Gate
+    /// wartet vorab" — unabhängig von der 15%-Schwelle: hier liegt das
+    /// Restbudget bei 90% (weit über der Schwelle), aber der geschätzte
+    /// Request ist größer als das verbleibende Kontingent.
+    #[tokio::test(start_paused = true)]
+    async fn test_wait_for_rate_limit_budget_waits_when_estimate_exceeds_remaining_even_above_threshold(
+    ) {
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        budget.record_headers(ai_providers::RateLimitHeaderSnapshot {
+            input_tokens: ai_providers::RawCounter {
+                limit: Some(1_000),
+                remaining: Some(900),
+                reset_at: Some(std::time::Instant::now() + std::time::Duration::from_secs(5)),
+            },
+            ..Default::default()
+        });
+        let emitter = TestEmitter::default();
+
+        let before = tokio::time::Instant::now();
+        wait_for_rate_limit_budget(&budget, 5_000, &emitter, Uuid::new_v4()).await;
+
+        assert!(
+            before.elapsed() >= std::time::Duration::from_secs(4),
+            "ein Request, der das Restbudget übersteigt, muss vorab warten"
+        );
+    }
+
+    /// Spec 0061, Invariante: "kein unbegrenztes Hängen" — fehlt der
+    /// Reset-Zeitpunkt, wird höchstens `MAX_PROACTIVE_WAIT` gewartet, nicht
+    /// ewig.
+    #[tokio::test(start_paused = true)]
+    async fn test_wait_for_rate_limit_budget_caps_wait_when_reset_is_missing() {
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        budget.record_headers(ai_providers::RateLimitHeaderSnapshot {
+            requests: ai_providers::RawCounter {
+                limit: Some(10),
+                remaining: Some(0),
+                reset_at: None,
+            },
+            ..Default::default()
+        });
+        let emitter = TestEmitter::default();
+
+        let before = tokio::time::Instant::now();
+        wait_for_rate_limit_budget(&budget, 0, &emitter, Uuid::new_v4()).await;
+        let elapsed = before.elapsed();
+
+        assert!(
+            elapsed <= std::time::Duration::from_secs(91),
+            "darf nicht über die gedeckelte Maximalwartezeit hinaus hängen, wartete {elapsed:?}"
         );
     }
 }

@@ -1,12 +1,18 @@
 //! Wiremock-basierte Tests für `OpenAiCompatibleProvider` (Spec 0006,
 //! Abschnitt 7, zweiter Block).
 
-use ai_providers::OpenAiCompatibleProvider;
+use std::sync::Arc;
+
+use ai_providers::{OpenAiCompatibleProvider, ProviderBudgetGuard};
 use futures::StreamExt;
 use ssh_manager_core::ai::{default_action_schemas, AiError, AiEvent, AiProvider, SessionContext};
 use ssh_manager_core::profiles::AiAction;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
+
+fn test_budget() -> Arc<ProviderBudgetGuard> {
+    Arc::new(ProviderBudgetGuard::new())
+}
 
 fn empty_context() -> SessionContext {
     SessionContext {
@@ -37,8 +43,14 @@ data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\
 data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"command\\\": \\\"ls -la\\\"}\"}}]}}]}\n\n\
 data: [DONE]\n\n";
     let server = mock_server_with_sse_body(sse_body).await;
-    let provider =
-        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", true, Vec::new());
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "gpt-test",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -60,8 +72,14 @@ data: {\"choices\":[{\"delta\":{\"content\":\"<!--ACTION-->{\\\"action\\\": \\\"
 data: {\"choices\":[{\"delta\":{\"content\":\" Fertig.\"}}]}\n\n\
 data: [DONE]\n\n";
     let server = mock_server_with_sse_body(sse_body).await;
-    let provider =
-        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", false, Vec::new());
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "gpt-test",
+        "test-key",
+        false,
+        Vec::new(),
+        test_budget(),
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -92,8 +110,14 @@ async fn test_fallback_mode_treats_malformed_action_block_as_plain_text() {
         serde_json::to_string(full_text).unwrap()
     );
     let server = mock_server_with_sse_body(&sse_body).await;
-    let provider =
-        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", false, Vec::new());
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "gpt-test",
+        "test-key",
+        false,
+        Vec::new(),
+        test_budget(),
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -114,8 +138,14 @@ async fn test_authentication_failure_maps_401_to_ai_error() {
         .expect(1)
         .mount(&server)
         .await;
-    let provider =
-        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "bad-key", true, Vec::new());
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "gpt-test",
+        "bad-key",
+        true,
+        Vec::new(),
+        test_budget(),
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -151,8 +181,14 @@ async fn test_429_with_retry_after_retries_and_then_succeeds() {
         .with_priority(2)
         .mount(&server)
         .await;
-    let provider =
-        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", true, Vec::new());
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "gpt-test",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -181,8 +217,14 @@ async fn test_persistent_429_gives_up_after_attempt_cap_with_rate_limited_error(
         .expect(4)
         .mount(&server)
         .await;
-    let provider =
-        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", true, Vec::new());
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "gpt-test",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -204,8 +246,14 @@ async fn test_retry_after_longer_than_total_budget_gives_up_without_extra_reques
         .expect(1)
         .mount(&server)
         .await;
-    let provider =
-        OpenAiCompatibleProvider::new(server.uri(), "gpt-test", "test-key", true, Vec::new());
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "gpt-test",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 

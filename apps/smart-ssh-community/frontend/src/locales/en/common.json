@@ -203,6 +203,7 @@
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatic continuation paused after {{limit}} steps — send a message to continue.",
+    "aiBudgetWaiting": "Waiting for AI budget — next attempt in {{seconds}}s…",
     "suggestCommand": "Suggest command",
     "generateDocument": "Generate document: {{title}}",
     "readFile": "Read file: {{path}}",

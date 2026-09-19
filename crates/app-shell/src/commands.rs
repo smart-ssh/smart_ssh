@@ -455,7 +455,8 @@ pub async fn test_ai_provider_credentials(
         return Err("API-Key erforderlich, bevor die Zugangsdaten getestet werden können".into());
     };
 
-    let provider = build_ai_provider(
+    let (provider, _budget) = build_ai_provider(
+        &state.rate_limit_registry,
         config.provider_type,
         config.base_url.as_deref(),
         &config.model,
@@ -737,7 +738,8 @@ pub(crate) async fn connect_session(
     };
     let active_config = active_ai_provider_config(state).await?;
     let api_key = state.credential_store.get(&active_config.credential_ref)?;
-    let ai_provider = build_ai_provider(
+    let (ai_provider, ai_provider_budget) = build_ai_provider(
+        &state.rate_limit_registry,
         active_config.provider_type,
         active_config.base_url.as_deref(),
         &active_config.model,
@@ -905,9 +907,14 @@ pub(crate) async fn connect_session(
     };
 
     // Spec 0026, Abschnitt 3: einmalig bei `connect()` aufgelöst, s.
-    // `Session::risk_second_opinion_provider`-Doc-Kommentar.
-    let risk_second_opinion_provider =
-        crate::risk_second_opinion::resolve_second_opinion_provider(app, state).await;
+    // `Session::risk_second_opinion_provider`-Doc-Kommentar. Spec 0061:
+    // liefert zusätzlich den (bei gleicher Provider-Identität mit
+    // `injection_check_provider` unten geteilten) Budget-Wächter mit.
+    let (risk_second_opinion_provider, risk_second_opinion_budget) =
+        match crate::risk_second_opinion::resolve_second_opinion_provider(app, state).await {
+            Some((provider, budget)) => (Some(provider), Some(budget)),
+            None => (None, None),
+        };
 
     // Spec 0039, Abschnitt 5.1: einmalig übernommen, wie `risk_second_
     // opinion_provider` oben.
@@ -917,10 +924,13 @@ pub(crate) async fn connect_session(
     // erfüllt sind — die serverspezifische Einstellung UND die app-weite
     // Zweitmeinungs-Konfiguration (Spec 0026, Abschnitt 3), sonst wäre die
     // Checkbox im Frontend wirkungslos, obwohl sie aktiviert wurde.
-    let injection_check_provider = if server.ai_injection_check_enabled {
-        crate::risk_second_opinion::resolve_second_opinion_provider(app, state).await
+    let (injection_check_provider, injection_check_budget) = if server.ai_injection_check_enabled {
+        match crate::risk_second_opinion::resolve_second_opinion_provider(app, state).await {
+            Some((provider, budget)) => (Some(provider), Some(budget)),
+            None => (None, None),
+        }
     } else {
-        None
+        (None, None)
     };
 
     // Spec 0034, Abschnitt 2: `chat_sessions.server_id` referenziert
@@ -1069,6 +1079,7 @@ pub(crate) async fn connect_session(
     let session = Arc::new(Session {
         transport: tokio::sync::Mutex::new(transport),
         ai_provider,
+        ai_provider_budget,
         context: tokio::sync::Mutex::new(SessionContext {
             system_context,
             history: initial_history,
@@ -1091,12 +1102,14 @@ pub(crate) async fn connect_session(
         sftp: tokio::sync::Mutex::new(None),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         risk_second_opinion_provider,
+        risk_second_opinion_budget,
         running_command_cancellations: state.running_command_cancellations.clone(),
         untrusted_content_ingested: std::sync::atomic::AtomicBool::new(
             starts_with_untrusted_content,
         ),
         post_ingest_policy,
         injection_check_provider,
+        injection_check_budget,
         injection_suspected: std::sync::atomic::AtomicBool::new(false),
         chat_session_store: if chat_session_id.is_some() {
             state.chat_session_store.clone()
@@ -1895,7 +1908,12 @@ pub async fn disconnect(
         // `AiProvider::send()`-Anfrage auf demselben Provider) — beide
         // sind unabhängige, optionale "beim Trennen"-Extras, s. jeweilige
         // Doc-Kommentare zur genauen Auslösebedingung.
-        crate::orchestration::generate_session_title_on_disconnect(&session).await;
+        crate::orchestration::generate_session_title_on_disconnect(
+            &session,
+            session_id,
+            &app_for_suggestion,
+        )
+        .await;
         let note_update_suggested = crate::orchestration::suggest_note_update_on_disconnect(
             &session,
             session_id,
@@ -2300,7 +2318,8 @@ pub async fn request_note_shrink(
 ) -> CommandResult<()> {
     let active_config = active_ai_provider_config(&state).await?;
     let api_key = state.credential_store.get(&active_config.credential_ref)?;
-    let ai_provider = build_ai_provider(
+    let (ai_provider, ai_provider_budget) = build_ai_provider(
+        &state.rate_limit_registry,
         active_config.provider_type,
         active_config.base_url.as_deref(),
         &active_config.model,
@@ -2345,6 +2364,7 @@ pub async fn request_note_shrink(
                 session_id,
                 server_id,
                 ai_provider.as_ref(),
+                &ai_provider_budget,
                 redactor.as_ref(),
                 &app,
                 &target,
@@ -2362,6 +2382,7 @@ pub async fn request_note_shrink(
                 session_id,
                 server_id,
                 ai_provider.as_ref(),
+                &ai_provider_budget,
                 redactor.as_ref(),
                 &app,
                 &target,
@@ -4191,6 +4212,7 @@ mod send_chat_message_persistence_tests {
         Session {
             transport: AsyncMutex::new(Box::new(UnusedTransport)),
             ai_provider: Box::new(NoopAiProvider),
+            ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
             context: AsyncMutex::new(SessionContext {
                 system_context: String::new(),
                 history: Vec::new(),
@@ -4213,10 +4235,12 @@ mod send_chat_message_persistence_tests {
             sftp: AsyncMutex::new(None::<Box<dyn SftpSession>>),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             risk_second_opinion_provider: None,
+            risk_second_opinion_budget: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             injection_check_provider: None,
+            injection_check_budget: None,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
             chat_session_store: None,
             ledger_store: None,

@@ -84,6 +84,11 @@ pub enum TerminalCommand {
 pub struct Session {
     pub transport: AsyncMutex<Box<dyn SshTransport>>,
     pub ai_provider: Box<dyn AiProvider>,
+    /// Spec 0061: der Rate-Limit-Budget-Wächter für `ai_provider` (aus
+    /// `AppState.rate_limit_registry` bei `connect()` aufgelöst, s.
+    /// `risk_second_opinion_budget`-Doc-Kommentar zur Begründung, warum
+    /// dieses separate Feld nötig ist).
+    pub ai_provider_budget: Arc<ai_providers::ProviderBudgetGuard>,
     pub context: AsyncMutex<SessionContext>,
     pub filter_engine: Box<dyn CommandEvaluator>,
     pub server_id: ServerId,
@@ -207,6 +212,16 @@ pub struct Session {
     /// Session hätte deutlich mehr Zustands-Plumbing gebraucht, für eine
     /// reine Komfort-Einstellung unverhältnismäßig.
     pub risk_second_opinion_provider: Option<Box<dyn AiProvider>>,
+    /// Spec 0061: derselbe Rate-Limit-Budget-Wächter, den der zugehörige
+    /// `risk_second_opinion_provider` beim Bau (`ai_provider_factory::
+    /// build_ai_provider`) aus `AppState.rate_limit_registry` bekommen hat
+    /// — als eigenständiges Feld gehalten, weil `Box<dyn AiProvider>`
+    /// (s. oben) keinen Weg bietet, nachträglich an seinen internen
+    /// Wächter heranzukommen (die `AiProvider`-Trait-Grenze kennt Spec
+    /// 0061 nicht, s. `crate::orchestration::wait_for_rate_limit_budget`,
+    /// das dieses Feld VOR dem jeweiligen `send()`-Aufruf konsultiert).
+    /// `Some` genau dann, wenn `risk_second_opinion_provider` `Some` ist.
+    pub risk_second_opinion_budget: Option<Arc<ai_providers::ProviderBudgetGuard>>,
     /// Spec 0027: derselbe `Arc` wie `AppState.running_command_
     /// cancellations` — ein billiger Klon bei `connect()`, damit
     /// `orchestration::execute_suggested_command` (die nur `&Session`
@@ -240,6 +255,15 @@ pub struct Session {
     /// `risk_second_opinion_provider`, derselbe konfigurierte Provider,
     /// separat aufgelöst, weil `Box<dyn AiProvider>` nicht `Clone` ist).
     pub injection_check_provider: Option<Box<dyn AiProvider>>,
+    /// Spec 0061: Gegenstück zu `risk_second_opinion_budget`, für
+    /// `injection_check_provider`. In der Praxis oft **derselbe** `Arc`
+    /// wie `risk_second_opinion_budget` (beide werden normalerweise aus
+    /// derselben `riskClassifierProviderId`-Einstellung gebaut, s.
+    /// `risk_second_opinion::resolve_second_opinion_provider` — die
+    /// `RateLimitRegistry` gibt für dieselbe Provider-Identität denselben
+    /// Wächter zurück, unabhängig vom Aufrufzweck, s. Spec 0061 Abschnitt
+    /// 2, "geteiltes Budget pro Provider-Identität").
+    pub injection_check_budget: Option<Arc<ai_providers::ProviderBudgetGuard>>,
     /// Spec 0039, Abschnitt 5.2: `true`, sobald der letzte gelaufene
     /// Einschleusungs-Check "ja" ergeben hat — anders als
     /// `untrusted_content_ingested` NICHT dauerhaft-monoton, sondern
@@ -553,6 +577,7 @@ mod tests {
         Session {
             transport: AsyncMutex::new(Box::new(UnusedTransport)),
             ai_provider: Box::new(UnusedAiProvider),
+            ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
             context: AsyncMutex::new(SessionContext {
                 system_context: String::new(),
                 history: Vec::new(),
@@ -579,10 +604,12 @@ mod tests {
             sftp: AsyncMutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             risk_second_opinion_provider: None,
+            risk_second_opinion_budget: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             injection_check_provider: None,
+            injection_check_budget: None,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
             chat_session_store: None,
             ledger_store: None,

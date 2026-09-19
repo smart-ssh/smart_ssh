@@ -52,6 +52,20 @@ pub struct OpenAiCompatibleProvider {
     /// Namensgleichheit also überschreiben (bewusst: ein Nutzer, der z. B.
     /// selbst einen `accept`-Header einträgt, meint das ernst).
     extra_headers: Vec<(String, String)>,
+    /// Spec 0061, Invariante „header-loser Provider wird nie blockiert":
+    /// diese Familie deckt OpenAI, generische OpenAI-kompatible Endpunkte
+    /// UND Ollama ab — es gibt keine verlässliche, providerübergreifende
+    /// Rate-Limit-Header-Konvention (anders als bei Anthropic), also wird
+    /// `budget` hier absichtlich NIE mit `record_headers` beschrieben (s.
+    /// `send()` unten) — bleibt dauerhaft "keine Header gesehen", der
+    /// Wächter gibt für diese Identität also immer `None` (sofort senden)
+    /// zurück, das bestehende reaktive Retry (Spec 0051) bleibt die einzige
+    /// Absicherung. Das Feld existiert trotzdem (statt `Option`/wegzulassen),
+    /// damit `build_ai_provider` beide Provider-Typen einheitlich mit
+    /// einem Wächter aus derselben Registry bauen kann, ohne
+    /// typspezifisch zu unterscheiden.
+    #[allow(dead_code)]
+    budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
 }
 
 impl OpenAiCompatibleProvider {
@@ -61,6 +75,7 @@ impl OpenAiCompatibleProvider {
         api_key: impl Into<String>,
         supports_native_tool_calling: bool,
         extra_headers: Vec<(String, String)>,
+        budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
     ) -> Self {
         Self {
             client: build_http_client(),
@@ -69,6 +84,7 @@ impl OpenAiCompatibleProvider {
             api_key: api_key.into(),
             supports_native_tool_calling,
             extra_headers,
+            budget,
         }
     }
 

@@ -80,6 +80,7 @@ name = "ai-providers"
 version = "0.5.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "futures",
  "reqwest",
  "serde",

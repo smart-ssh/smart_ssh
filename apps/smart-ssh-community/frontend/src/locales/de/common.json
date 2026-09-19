@@ -203,6 +203,7 @@
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatische Fortsetzung nach {{limit}} Schritten angehalten — schreib weiter, um fortzufahren.",
+    "aiBudgetWaiting": "Warte auf KI-Budget — nächster Versuch in {{seconds}}s…",
     "suggestCommand": "Kommando vorschlagen",
     "generateDocument": "Dokument generieren: {{title}}",
     "readFile": "Datei lesen: {{path}}",

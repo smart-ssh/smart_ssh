@@ -34,8 +34,12 @@ use ssh_manager_core::ai::{
     RejectionReason, Role, SessionContext, UntrustedKind,
 };
 
-use crate::orchestration::{reapply_redaction_for_send, wait_for_ai_request_slot};
+use crate::events::EventEmitter;
+use crate::orchestration::{
+    reapply_redaction_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
+};
 use crate::session::Session;
+use crate::state::SessionId;
 
 /* --------------------- Token-Schätzung (Spec 0057, §3.1) ------------------- */
 
@@ -56,7 +60,14 @@ use crate::session::Session;
 /// ADR 0029 zu verwerfen.
 const BYTES_PER_TOKEN_ESTIMATE: usize = 4;
 
-fn estimate_tokens(text: &str) -> usize {
+/// Spec 0061, Abschnitt 3: `pub(crate)` (statt privat), damit
+/// `crate::orchestration`s Rate-Limit-Gate für die schlanken Zweitmeinungs-/
+/// Einschleusungs-Check-Aufrufe (die keinen vollen `SessionContext` wie
+/// [`estimate_request_tokens`] bauen, sondern nur einen einzelnen
+/// Text-String an den Provider schicken) denselben Schätzer direkt auf
+/// diesem String aufrufen kann, statt ihn dafür extra in einen
+/// `SessionContext` zu verpacken.
+pub(crate) fn estimate_tokens(text: &str) -> usize {
     text.len().div_ceil(BYTES_PER_TOKEN_ESTIMATE)
 }
 
@@ -505,6 +516,8 @@ fn summary_placeholder_message(summary_text: &str) -> ChatMessage {
 /// [`compact_rounds_for_budget`]s Ergebnis für denselben `cut_count`.
 async fn compact_rounds_with_summary(
     session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
     context: &mut SessionContext,
     min_preserved_rounds: usize,
     budget_tokens: usize,
@@ -600,7 +613,15 @@ async fn compact_rounds_with_summary(
                 }
             } else {
                 let previous_summary_text = existing_summary.as_ref().map(|s| s.text.as_str());
-                match generate_rolling_summary(session, previous_summary_text, &new_rounds).await {
+                match generate_rolling_summary(
+                    session,
+                    session_id,
+                    emitter,
+                    previous_summary_text,
+                    &new_rounds,
+                )
+                .await
+                {
                     Some(new_text) => {
                         let new_summary = RollingSummary {
                             text: new_text.clone(),
@@ -671,6 +692,8 @@ async fn persist_rolling_summary(session: &Session, summary: &RollingSummary) {
 /// behandelt", nicht privilegiert.
 async fn generate_rolling_summary(
     session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
     previous_summary: Option<&str>,
     new_rounds: &[ChatMessage],
 ) -> Option<String> {
@@ -708,6 +731,13 @@ async fn generate_rolling_summary(
     };
 
     wait_for_ai_request_slot(session).await;
+    wait_for_rate_limit_budget(
+        &session.ai_provider_budget,
+        estimate_request_tokens(&summary_context),
+        emitter,
+        session_id,
+    )
+    .await;
     let call = async {
         let mut stream = session.ai_provider.send(summary_context);
         let mut text = String::new();
@@ -1030,6 +1060,8 @@ pub(crate) fn truncate_to_char_boundary(text: &str, max_bytes: usize) -> &str {
 /// rollierende [`RollingSummary`].
 pub(crate) async fn compact_for_send(
     session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
     mut context: SessionContext,
     system_context_parts: &SystemContextParts,
     model_context_window_tokens: usize,
@@ -1045,7 +1077,15 @@ pub(crate) async fn compact_for_send(
         "estimated request size exceeds the compaction trigger — compacting context for this send"
     );
 
-    compact_rounds_with_summary(session, &mut context, MIN_PRESERVED_ROUNDS, budget_tokens).await;
+    compact_rounds_with_summary(
+        session,
+        session_id,
+        emitter,
+        &mut context,
+        MIN_PRESERVED_ROUNDS,
+        budget_tokens,
+    )
+    .await;
     if estimate_request_tokens(&context) <= budget_tokens {
         return context;
     }

@@ -111,6 +111,14 @@ pub struct AppState {
     /// **live** sein müssen (ein "Neu generieren" muss das alte Token
     /// sofort invalidieren, kein Neustart der App nötig).
     pub mcp: McpState,
+    /// Spec 0061: geteiltes Rate-Limit-Budget pro Provider-Identität
+    /// (Key/Endpunkt/Modell, s. `ai_providers::provider_identity_key`) —
+    /// einmal pro App-Prozess, damit ALLE Aufrufer (Haupt-Chat, Session-
+    /// Zweitmeinung/Einschleusungs-Check, aber auch der session-
+    /// unabhängige Notiz-Kürzungs-Aufruf, s. `commands::
+    /// request_note_shrink`) denselben Wächter treffen, sobald sie
+    /// denselben Key/Endpunkt/Modell nutzen.
+    pub rate_limit_registry: ai_providers::RateLimitRegistry,
 }
 
 pub struct McpState {

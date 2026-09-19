@@ -10,6 +10,20 @@ sind mit **(Pro)** markiert.
 ## [Unreleased]
 
 ### Added
+- App liest jetzt die Rate-Limit-Header des KI-Providers (Anthropic:
+  `anthropic-ratelimit-{requests,input-tokens,output-tokens,tokens}-
+  {remaining,reset}`) und drosselt proaktiv, statt blind ins Limit zu
+  laufen: sinkt das bekannte Restbudget unter ~15% (oder würde eine
+  geschätzte Anfrage das verbleibende Token-Budget überschreiten), wartet
+  die App bis zum bekannten Reset-Zeitpunkt, bevor sie die Anfrage
+  abschickt — der Chat zeigt dabei "Warte auf KI-Budget — nächster
+  Versuch in Xs…" an, der Versand erfolgt danach automatisch. Gilt für
+  alle KI-Aufrufe (Haupt-Chat, optionale Zweitmeinung/Einschleusungs-
+  Check, Zusammenfassung, Auto-Titel, Notiz-Vorschlag/-Kürzung), die
+  denselben API-Key/Endpunkt/Modell nutzen, teilen sich dabei ein
+  gemeinsames Budget. Provider ohne diese Header (z. B. ein lokaler
+  Ollama-Endpunkt) bleiben unverändert — kein proaktives Warten, nur das
+  bestehende reaktive Wiederholen nach einem 429.
 - App zeigt jetzt bei Startfehlern eine verständliche Meldung statt
   stillem Absturz: kann die Datenbank nicht geöffnet werden (z. B. von
   einer neueren Programmversion angelegt, beschädigt, oder das
