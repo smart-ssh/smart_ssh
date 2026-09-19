@@ -96,6 +96,45 @@ pub fn cleanup_old_logs(dir: &Path, max_age: Duration, now: SystemTime) -> io::R
     Ok(())
 }
 
+/// Spec 0063, Teil 3: die zuletzt beschriebene Log-Datei in `dir` (nach
+/// `mtime`, wie [`cleanup_old_logs`] — bewusst nicht der Dateiname
+/// geparst, funktioniert also unabhängig vom genauen `tracing_appender`-
+/// Namensschema). `None`, falls der Ordner fehlt/leer ist oder keine
+/// lesbare Datei enthält — der Diagnose-Export degradiert dann auf "keine
+/// Log-Zeilen verfügbar" statt abzustürzen.
+fn most_recently_modified_file(dir: &Path) -> Option<PathBuf> {
+    let entries = fs::read_dir(dir).ok()?;
+    entries
+        .flatten()
+        .filter(|entry| entry.file_type().is_ok_and(|t| t.is_file()))
+        .max_by_key(|entry| {
+            entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH)
+        })
+        .map(|entry| entry.path())
+}
+
+/// Spec 0063, Teil 3: die letzten (höchstens) `max_lines` Zeilen der
+/// aktuellsten Log-Datei — Rohtext, **nicht** redigiert (das ist Sache des
+/// Aufrufers, s. `crate::diagnostics`, bevor die Zeilen in ein geteiltes
+/// Paket wandern). Best-effort wie [`cleanup_old_logs`]: kein Log-Ordner,
+/// keine lesbare Datei oder ein I/O-Fehler liefert eine leere Liste statt
+/// eines Fehlers — ein Diagnosepaket ohne Log-Auszug ist immer noch
+/// nützlicher als ein abgebrochener Export.
+pub fn read_last_log_lines(dir: &Path, max_lines: usize) -> Vec<String> {
+    let Some(path) = most_recently_modified_file(dir) else {
+        return Vec::new();
+    };
+    let Ok(content) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let lines: Vec<&str> = content.lines().collect();
+    let start = lines.len().saturating_sub(max_lines);
+    lines[start..].iter().map(|s| s.to_string()).collect()
+}
+
 /// Richtet den globalen `tracing`-Subscriber ein: JSON-Lines in eine
 /// täglich rotierende Datei im plattformspezifischen Log-Ordner (Spec
 /// 0016, Abschnitt 2/3). Räumt vor dem Öffnen der aktuellen Datei alte
@@ -278,5 +317,69 @@ mod tests {
         let result = cleanup_old_logs(&missing, MAX_LOG_AGE, SystemTime::now());
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_read_last_log_lines_returns_only_the_tail() {
+        let dir = tempdir().unwrap();
+        let lines: Vec<String> = (1..=10).map(|n| format!("line {n}")).collect();
+        std::fs::write(
+            dir.path().join("smart-ssh.log.2026-01-01"),
+            lines.join("\n"),
+        )
+        .unwrap();
+
+        let result = read_last_log_lines(dir.path(), 3);
+
+        assert_eq!(result, vec!["line 8", "line 9", "line 10"]);
+    }
+
+    #[test]
+    fn test_read_last_log_lines_returns_all_lines_when_fewer_than_max() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join("smart-ssh.log.2026-01-01"), "a\nb").unwrap();
+
+        let result = read_last_log_lines(dir.path(), 500);
+
+        assert_eq!(result, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn test_read_last_log_lines_on_missing_directory_returns_empty_instead_of_erroring() {
+        let dir = tempdir().unwrap();
+        let missing = dir.path().join("does-not-exist");
+
+        let result = read_last_log_lines(&missing, 500);
+
+        assert!(result.is_empty());
+    }
+
+    /// Spec 0063, Teil 3: bei mehreren Log-Dateien (z. B. nach einem
+    /// Tageswechsel) muss die zuletzt geschriebene gewählt werden, nicht
+    /// irgendeine/die alphabetisch letzte.
+    #[test]
+    fn test_read_last_log_lines_picks_the_most_recently_modified_file() {
+        let dir = tempdir().unwrap();
+        let older = dir.path().join("smart-ssh.log.2026-01-01");
+        let newer = dir.path().join("smart-ssh.log.2026-01-02");
+        std::fs::write(&older, "old content").unwrap();
+        std::fs::write(&newer, "new content").unwrap();
+        let now = SystemTime::now();
+        File::options()
+            .write(true)
+            .open(&older)
+            .unwrap()
+            .set_modified(now - Duration::from_secs(60))
+            .unwrap();
+        File::options()
+            .write(true)
+            .open(&newer)
+            .unwrap()
+            .set_modified(now)
+            .unwrap();
+
+        let result = read_last_log_lines(dir.path(), 10);
+
+        assert_eq!(result, vec!["new content"]);
     }
 }

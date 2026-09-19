@@ -15,6 +15,7 @@ mod chat_retention;
 mod commands;
 mod compaction;
 mod confirmation;
+mod diagnostics;
 mod document_export;
 mod dto;
 mod ephemeral_credentials;
@@ -494,6 +495,8 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::create_overlay_titlebar,
             commands::list_prompt_history,
             commands::open_log_directory,
+            commands::generate_diagnostics_bundle,
+            commands::save_diagnostics_bundle,
             commands::sftp_list,
             commands::sftp_download,
             commands::sftp_download_default,

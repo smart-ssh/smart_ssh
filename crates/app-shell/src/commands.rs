@@ -2687,6 +2687,148 @@ pub async fn open_log_directory(app: AppHandle) -> CommandResult<()> {
     Ok(())
 }
 
+/// Spec 0063: Best-effort-Betriebssystemversion für den Diagnose-Export
+/// (§2: "OS/Plattform (Betriebssystem, Version, Architektur)") — bewusst
+/// KEIN neues Cargo-Dependency (z. B. `os_info`) für dieses eine, nicht
+/// sicherheitskritische Feld, sondern ein auf jeder unterstützten
+/// Plattform bereits vorhandenes Systemkommando ohne Nutzer-Eingabe (feste
+/// Argumente, kein Injection-Risiko). `None` bei jedem Fehler (Kommando
+/// fehlt, liefert einen Fehlerstatus, o. ä.) — die OS-Version ist ein
+/// "nice to have" neben OS-Familie/Architektur (`std::env::consts`, immer
+/// verfügbar), kein Grund, den gesamten Export abzubrechen. Synchroner
+/// Prozessaufruf direkt im `async fn`-Command statt `spawn_blocking`:
+/// derselbe Grund wie bei `export_document`s `std::fs::write` — ein
+/// einzelner, durch eine explizite Nutzeraktion ausgelöster Vorgang, hier
+/// zusätzlich mit realistisch niedriger Laufzeit (< 50ms).
+fn os_version() -> Option<String> {
+    #[cfg(target_os = "macos")]
+    let output = std::process::Command::new("sw_vers")
+        .arg("-productVersion")
+        .output();
+    #[cfg(target_os = "windows")]
+    let output = std::process::Command::new("cmd")
+        .args(["/C", "ver"])
+        .output();
+    #[cfg(target_os = "linux")]
+    let output = std::process::Command::new("uname").arg("-r").output();
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    let output: std::io::Result<std::process::Output> =
+        Err(std::io::Error::other("unbekannte Plattform"));
+
+    let output = output.ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
+}
+
+/// Spec 0063: stellt das redigierte Diagnosepaket zusammen (Version/Hash,
+/// OS, Datenpfade, App-Zustand, letzte Log-Zeilen) und liefert es als
+/// fertigen Text an das Frontend zurück — **kein** automatisches
+/// Speichern/Versenden (Spec 0063, Invarianten). Das Frontend zeigt den
+/// Text zur Durchsicht an ("Vorschau", Spec 0063 §3) und bietet erst
+/// danach über [`save_diagnostics_bundle`] einen expliziten
+/// Speichern-unter-Dialog an.
+///
+/// Sammelt hier (statt in `diagnostics::build_diagnostics_bundle`, das
+/// bewusst rein/IO-frei bleibt, s. dortiger Moduldoc-Kommentar) alle
+/// Eingabedaten: `AiProviderConfig`/`Server` werden auf genau die per Spec
+/// erlaubten Felder reduziert (Provider-**Typ**, nicht der volle
+/// `AiProviderConfig` mit `credential_ref`/`base_url`/`extra_headers`;
+/// Server-**Anzahl**, nicht die `Server`-Liste selbst) — der volle,
+/// potenziell sensible Datensatz verlässt diese Funktion nie.
+#[tauri::command]
+pub async fn generate_diagnostics_bundle<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
+    edition: tauri::State<'_, crate::wiring::Edition>,
+) -> CommandResult<String> {
+    let db_path = persistence_sqlite::default_db_path();
+    let log_dir = crate::logging::default_log_dir();
+    let host_key_path = db_path
+        .parent()
+        .expect("db_path hat immer ein Elternverzeichnis (s. default_db_path)")
+        .join("host_keys.json");
+
+    let provider_types = state
+        .ai_provider_store
+        .list()
+        .await
+        .unwrap_or_default()
+        .iter()
+        .map(|config| config.provider_type.as_db_str().to_string())
+        .collect();
+    let server_count = state
+        .profile_store
+        .list_servers()
+        .await
+        .map(|servers| servers.len())
+        .unwrap_or(0);
+
+    let input = crate::diagnostics::DiagnosticsInput {
+        version_display: crate::version::version_with_hash(&app.package_info().version.to_string()),
+        edition: match *edition {
+            crate::wiring::Edition::Community => "Community".to_string(),
+            crate::wiring::Edition::Official => "Official".to_string(),
+        },
+        os: std::env::consts::OS,
+        arch: std::env::consts::ARCH,
+        os_version: os_version(),
+        db_path: db_path.display().to_string(),
+        log_dir: log_dir.display().to_string(),
+        host_key_path: host_key_path.display().to_string(),
+        provider_types,
+        server_count,
+    };
+    let log_lines =
+        crate::logging::read_last_log_lines(&log_dir, crate::diagnostics::MAX_LOG_LINES);
+
+    Ok(crate::diagnostics::build_diagnostics_bundle(
+        &input,
+        &log_lines,
+        // Spec 0063 §3: zusätzlich zur Redaction, die die Log-Zeilen beim
+        // Schreiben (Spec 0016) bereits durchlaufen haben — Defense in
+        // Depth, weil dieses Paket öffentlich geteilt wird. Eine frische
+        // Instanz ohne nutzerdefinierte Zusatzmuster reicht hier (anders
+        // als `session.redactor`, das ist an keine laufende Sitzung
+        // gebunden): dieselben eingebauten Muster (Spec 0006 + Härtung)
+        // wie überall sonst in der App.
+        &DefaultOutputRedactor::new(),
+    ))
+}
+
+/// Spec 0063 §3: expliziter Speichern-unter-Dialog für das bereits über
+/// [`generate_diagnostics_bundle`] erzeugte (und vom Nutzer in der
+/// Vorschau gesehene) Paket — kein eigenständiges erneutes Sammeln, `content`
+/// kommt unverändert vom Frontend zurück. Dasselbe Muster wie
+/// `export_document`.
+#[tauri::command]
+pub async fn save_diagnostics_bundle(app: AppHandle, content: String) -> CommandResult<()> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_file_name("smart-ssh-diagnose.md")
+        .add_filter("Markdown", &["md"])
+        .save_file(move |path| {
+            let _ = tx.send(path);
+        });
+
+    let Some(path) = rx.await.ok().flatten() else {
+        return Ok(());
+    };
+    let path = path.into_path()?;
+    std::fs::write(path, content)?;
+
+    Ok(())
+}
+
 /// Validiert und bereinigt `uname -a` Output (Spec 0013, SEC-02) vor der
 /// Aufnahme in den privilegierten System-Prompt: max 256 Zeichen, nur
 /// erlaubte Zeichen (alphanumerisch, . _ - # : space tab), keine Steuerzeichen
