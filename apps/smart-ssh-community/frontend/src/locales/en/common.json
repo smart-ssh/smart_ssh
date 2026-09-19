@@ -53,7 +53,7 @@
     "generateBundle": "Generate diagnostics bundle",
     "generating": "Generating …",
     "generateFailed": "Could not generate the diagnostics bundle.",
-    "previewHint": "Preview — please review before sharing. Log lines have been redacted; no credentials are embedded.",
+    "previewHint": "Preview — please review before sharing. Included log lines are limited to non-sensitive diagnostic events and additionally redacted; credentials, chat and note content are never embedded. Paths include your username.",
     "save": "Save as …",
     "saveFailed": "Could not save the diagnostics bundle."
   },

@@ -97,16 +97,31 @@ pub fn cleanup_old_logs(dir: &Path, max_age: Duration, now: SystemTime) -> io::R
 }
 
 /// Spec 0063, Teil 3: die zuletzt beschriebene Log-Datei in `dir` (nach
-/// `mtime`, wie [`cleanup_old_logs`] — bewusst nicht der Dateiname
-/// geparst, funktioniert also unabhängig vom genauen `tracing_appender`-
-/// Namensschema). `None`, falls der Ordner fehlt/leer ist oder keine
-/// lesbare Datei enthält — der Diagnose-Export degradiert dann auf "keine
-/// Log-Zeilen verfügbar" statt abzustürzen.
+/// `mtime` unter den Dateien, die mit [`LOG_FILE_PREFIX`] beginnen —
+/// bewusst nicht das exakte `tracing_appender`-Datumssuffix geparst,
+/// funktioniert also unabhängig vom genauen Namensschema). `None`, falls
+/// der Ordner fehlt/leer ist oder keine passende, lesbare Datei enthält —
+/// der Diagnose-Export degradiert dann auf "keine Log-Zeilen verfügbar"
+/// statt abzustürzen.
+///
+/// Spec-reviewer-Fund (Follow-up-Review, Spec 0063): ursprünglich ohne
+/// Präfix-Filter (wie [`cleanup_old_logs`], das dieselbe Annahme trifft) —
+/// dort ist die Konsequenz eines Fremdartefakts mit neuerer `mtime` im
+/// (app-exklusiven) Log-Ordner nur eine überzählige Löschung, hier aber
+/// eine ungeprüfte Aufnahme in ein öffentlich geteiltes Diagnosepaket.
+/// Deshalb hier zusätzlich eingegrenzt, dort unverändert gelassen (kein
+/// Grund, dessen Verhalten zu ändern).
 fn most_recently_modified_file(dir: &Path) -> Option<PathBuf> {
     let entries = fs::read_dir(dir).ok()?;
     entries
         .flatten()
         .filter(|entry| entry.file_type().is_ok_and(|t| t.is_file()))
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(LOG_FILE_PREFIX)
+        })
         .max_by_key(|entry| {
             entry
                 .metadata()
@@ -381,5 +396,36 @@ mod tests {
         let result = read_last_log_lines(dir.path(), 10);
 
         assert_eq!(result, vec!["new content"]);
+    }
+
+    /// Spec-reviewer-Fund (Follow-up-Review, Spec 0063): eine Fremddatei im
+    /// Log-Ordner mit neuerer `mtime` als die eigentliche Log-Datei darf
+    /// nicht ausgewählt werden — sonst würde ihr (unbekannter, ggf.
+    /// sensibler) Inhalt ungeprüft ins öffentlich geteilte Diagnosepaket
+    /// wandern.
+    #[test]
+    fn test_read_last_log_lines_ignores_newer_non_log_file() {
+        let dir = tempdir().unwrap();
+        let log_file = dir.path().join("smart-ssh.log.2026-01-01");
+        let foreign_file = dir.path().join("some-other-artifact.txt");
+        std::fs::write(&log_file, "actual log content").unwrap();
+        std::fs::write(&foreign_file, "unrelated, possibly sensitive content").unwrap();
+        let now = SystemTime::now();
+        File::options()
+            .write(true)
+            .open(&log_file)
+            .unwrap()
+            .set_modified(now - Duration::from_secs(60))
+            .unwrap();
+        File::options()
+            .write(true)
+            .open(&foreign_file)
+            .unwrap()
+            .set_modified(now)
+            .unwrap();
+
+        let result = read_last_log_lines(dir.path(), 10);
+
+        assert_eq!(result, vec!["actual log content"]);
     }
 }

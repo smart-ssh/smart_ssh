@@ -2755,20 +2755,45 @@ pub async fn generate_diagnostics_bundle<R: tauri::Runtime>(
         .expect("db_path hat immer ein Elternverzeichnis (s. default_db_path)")
         .join("host_keys.json");
 
-    let provider_types = state
-        .ai_provider_store
-        .list()
-        .await
-        .unwrap_or_default()
-        .iter()
-        .map(|config| config.provider_type.as_db_str().to_string())
-        .collect();
+    // Spec-reviewer-Fund (Follow-up-Review): `None` nur bei einem echten
+    // Lese-/DB-Fehler, NICHT bei "null konfiguriert" — ein `unwrap_or_default`
+    // hätte beides ununterscheidbar auf "keine" abgebildet (s.
+    // `diagnostics::DiagnosticsInput::provider_types`-Doc-Kommentar).
+    let provider_types = state.ai_provider_store.list().await.ok().map(|configs| {
+        configs
+            .into_iter()
+            .map(|config| {
+                // Erschöpfendes Destructuring OHNE `..` (spec-reviewer-
+                // Vorschlag, Follow-up-Review): erzwingt einen
+                // Compile-Fehler, sobald `AiProviderConfig` ein neues Feld
+                // bekommt — stärkere Garantie als ein Test, dass hier
+                // niemand versehentlich `credential_ref`/`base_url`/
+                // `extra_headers`/`model`/`display_name` mit einschleust,
+                // ohne das bewusst zu entscheiden.
+                let AiProviderConfig {
+                    provider_type,
+                    id: _,
+                    display_name: _,
+                    base_url: _,
+                    model: _,
+                    supports_native_tool_calling: _,
+                    credential_ref: _,
+                    is_active: _,
+                    extra_headers: _,
+                    attestation_url: _,
+                    created_at: _,
+                    updated_at: _,
+                } = config;
+                provider_type.as_db_str().to_string()
+            })
+            .collect()
+    });
     let server_count = state
         .profile_store
         .list_servers()
         .await
-        .map(|servers| servers.len())
-        .unwrap_or(0);
+        .ok()
+        .map(|servers| servers.len());
 
     let input = crate::diagnostics::DiagnosticsInput {
         version_display: crate::version::version_with_hash(&app.package_info().version.to_string()),

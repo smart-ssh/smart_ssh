@@ -53,7 +53,7 @@
     "generateBundle": "Diagnosepaket erzeugen",
     "generating": "Wird erzeugt …",
     "generateFailed": "Diagnosepaket konnte nicht erzeugt werden.",
-    "previewHint": "Vorschau — bitte vor dem Teilen kurz durchsehen. Log-Zeilen wurden redigiert, es werden keine Zugangsdaten eingebettet.",
+    "previewHint": "Vorschau — bitte vor dem Teilen kurz durchsehen. Enthaltene Log-Zeilen sind auf unkritische Diagnose-Ereignisse beschränkt und zusätzlich redigiert; Zugangsdaten, Chat- und Notiz-Inhalte werden nicht eingebettet. Pfade enthalten deinen Benutzernamen.",
     "save": "Speichern unter …",
     "saveFailed": "Diagnosepaket konnte nicht gespeichert werden."
   },
