@@ -45,6 +45,14 @@ sind mit **(Pro)** markiert.
   zusammenfassen zu lassen (derselbe Bestätigungs-Ablauf wie beim
   Trennen-Vorschlag).
 
+### Changed
+- Der System-Prompt weist die KI jetzt ausdrücklich an, ein angekündigtes
+  Kommando auch tatsächlich über `suggest_command` vorzuschlagen, statt es
+  nur im Fließtext anzukündigen und dort aufzuhören — beobachtetes Muster,
+  bei dem die automatische Fortsetzung dadurch ohne erkennbaren Grund
+  stehen blieb. Kurze Erklärungen vor einem Kommando bleiben ausdrücklich
+  erwünscht.
+
 ### Fixed
 - "Mache ich selbst" im Kürzungs-Vorschlag scrollt jetzt direkt zum
   Notizfeld und fokussiert es, statt nur das Server-Formular zu öffnen.
