@@ -8,8 +8,9 @@
 //! eröffnet einen nach `index` adressierten Block,
 //! `content_block_delta` liefert `delta.type == "text_delta"` (Feld
 //! `text`) bzw. `"input_json_delta"` (Feld `partial_json`, akkumulierend),
-//! `content_block_stop` schließt den Block ab, `message_stop` beendet den
-//! Stream.
+//! `content_block_stop` schließt den Block ab, `message_delta` liefert
+//! `delta.stop_reason` (Spec 0063, Teil 1 — nur geloggt, keine Verhaltens-
+//! Verzweigung danach), `message_stop` beendet den Stream.
 //!
 //! Die Anthropic-API verlangt zwingend ein `max_tokens`-Feld, das die Spec
 //! nicht erwähnt und das dieser Provider aktuell nicht konfigurierbar
@@ -34,7 +35,7 @@ use crate::error::{error_stream, map_http_status, map_transport_error};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
     log_outgoing_context, log_provider_error_response, log_provider_transport_error,
-    log_text_delta_summary, log_tool_call_fragment, log_tool_call_parse_error,
+    log_stop_reason, log_text_delta_summary, log_tool_call_fragment, log_tool_call_parse_error,
     log_tool_call_parsed,
 };
 use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
@@ -497,6 +498,18 @@ impl AnthropicStreamState {
                         .push_back(finalize_tool_use(self.request_id, &name, &json_acc));
                 }
             }
+            // Spec 0063, Teil 1: Anthropic liefert `stop_reason` im
+            // `message_delta`-Event (Feld `delta.stop_reason`), nicht in
+            // `message_stop` — dort steht nur noch ein leerer `"delta": {}`.
+            "message_delta" => {
+                if let Some(stop_reason) = data
+                    .get("delta")
+                    .and_then(|d| d.get("stop_reason"))
+                    .and_then(Value::as_str)
+                {
+                    log_stop_reason(self.request_id, stop_reason);
+                }
+            }
             "message_stop" => {
                 self.finished = true;
                 let events = self.finalize();
@@ -667,6 +680,73 @@ mod tests {
         assert!(
             matches!(event, Some(AiEvent::Error(AiError::NetworkError(_)))),
             "expected NetworkError after inactivity timeout, got {event:?}"
+        );
+    }
+
+    fn frame(event: &str, data: &str) -> Result<SseFrame, reqwest::Error> {
+        Ok(SseFrame {
+            event: Some(event.to_string()),
+            data: data.to_string(),
+        })
+    }
+
+    /// Spec 0063, Teil 1: der eigentliche Testfall aus der Spec — ein
+    /// `message_delta` mit `stop_reason: "end_turn"` muss geloggt werden
+    /// (nicht nur der isolierte `log_stop_reason`-Aufruf, sondern über den
+    /// tatsächlichen SSE-Parsing-Pfad, der ihn im echten Stream findet).
+    #[tokio::test]
+    async fn test_message_delta_with_end_turn_stop_reason_is_logged() {
+        crate::test_support::install_test_subscriber_once();
+        crate::test_support::clear_log_buffer();
+
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(vec![
+                frame(
+                    "message_delta",
+                    r#"{"delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":12}}"#,
+                ),
+                frame("message_stop", "{}"),
+            ]));
+        let request_id = Uuid::new_v4();
+        let events: Vec<AiEvent> = process_frame_stream(frames, true, request_id, String::new())
+            .collect()
+            .await;
+
+        assert_eq!(events, vec![AiEvent::Done]);
+        let log_text = crate::test_support::log_buffer_text();
+        assert!(
+            log_text.contains("end_turn"),
+            "stop_reason muss geloggt werden: {log_text}"
+        );
+        assert!(log_text.contains(&request_id.to_string()));
+    }
+
+    /// Gegenprobe: `max_tokens` (Antwort technisch abgeschnitten) muss
+    /// ebenso sichtbar werden — das ist der Fall, der laut Spec 0063 auf
+    /// einen echten Bug (Token-Limit zu niedrig) hindeuten würde.
+    #[tokio::test]
+    async fn test_message_delta_with_max_tokens_stop_reason_is_logged() {
+        crate::test_support::install_test_subscriber_once();
+        crate::test_support::clear_log_buffer();
+
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(vec![
+                frame(
+                    "message_delta",
+                    r#"{"delta":{"stop_reason":"max_tokens"},"usage":{"output_tokens":4096}}"#,
+                ),
+                frame("message_stop", "{}"),
+            ]));
+        let events: Vec<AiEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![AiEvent::Done]);
+        let log_text = crate::test_support::log_buffer_text();
+        assert!(
+            log_text.contains("max_tokens"),
+            "stop_reason muss geloggt werden: {log_text}"
         );
     }
 }

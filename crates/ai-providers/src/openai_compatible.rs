@@ -9,8 +9,10 @@
 //! vorgeschlagen): `data: {...}`-Frames ohne `event:`-Feld,
 //! `choices[0].delta.content` für Text-Fragmente,
 //! `choices[0].delta.tool_calls[].function.{name,arguments}` für
-//! akkumulierende Tool-Call-Fragmente (nach `index` gruppiert), Abschluss
-//! durch das Literal `data: [DONE]`.
+//! akkumulierende Tool-Call-Fragmente (nach `index` gruppiert),
+//! `choices[0].finish_reason` (Spec 0063, Teil 1 — nur geloggt, keine
+//! Verhaltens-Verzweigung danach), Abschluss durch das Literal
+//! `data: [DONE]`.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::pin::Pin;
@@ -31,7 +33,7 @@ use crate::error::{error_stream, map_http_status, map_transport_error};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
     log_outgoing_context, log_provider_error_response, log_provider_transport_error,
-    log_text_delta_summary, log_tool_call_fragment, log_tool_call_parse_error,
+    log_stop_reason, log_text_delta_summary, log_tool_call_fragment, log_tool_call_parse_error,
     log_tool_call_parsed,
 };
 use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
@@ -395,11 +397,21 @@ struct OpenAiStreamState {
 
 impl OpenAiStreamState {
     fn handle_chunk(&mut self, chunk: &Value) {
-        let Some(delta) = chunk
-            .get("choices")
-            .and_then(|choices| choices.get(0))
-            .and_then(|choice| choice.get("delta"))
-        else {
+        let choice = chunk.get("choices").and_then(|choices| choices.get(0));
+
+        // Spec 0063, Teil 1: analog zu Anthropics `stop_reason` (s.
+        // `AnthropicStreamState::handle_event`s `message_delta`-Zweig) —
+        // `finish_reason` steht auf demselben `choices[0]`-Objekt wie
+        // `delta`, meist im letzten Chunk mit leerem/fehlendem `delta`, also
+        // hier unabhängig vom `delta`-Fetch unten geprüft statt danach.
+        if let Some(finish_reason) = choice
+            .and_then(|c| c.get("finish_reason"))
+            .and_then(Value::as_str)
+        {
+            log_stop_reason(self.request_id, finish_reason);
+        }
+
+        let Some(delta) = choice.and_then(|c| c.get("delta")) else {
             return;
         };
 
@@ -613,6 +625,67 @@ mod tests {
         assert!(
             matches!(event, Some(AiEvent::Error(AiError::NetworkError(_)))),
             "expected NetworkError after inactivity timeout, got {event:?}"
+        );
+    }
+
+    fn frame(data: &str) -> Result<SseFrame, reqwest::Error> {
+        Ok(SseFrame {
+            event: None,
+            data: data.to_string(),
+        })
+    }
+
+    /// Spec 0063, Teil 1: das OpenAI-kompatible Gegenstück zu
+    /// `anthropic::tests::test_message_delta_with_end_turn_stop_reason_is_logged`
+    /// — `choices[0].finish_reason` muss über den echten SSE-Parsing-Pfad
+    /// geloggt werden.
+    #[tokio::test]
+    async fn test_finish_reason_stop_is_logged() {
+        crate::test_support::install_test_subscriber_once();
+        crate::test_support::clear_log_buffer();
+
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(vec![
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#),
+                frame("[DONE]"),
+            ]));
+        let request_id = Uuid::new_v4();
+        let events: Vec<AiEvent> =
+            process_frame_stream(frames, true, request_id, String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![AiEvent::Done]);
+        let log_text = crate::test_support::log_buffer_text();
+        assert!(
+            log_text.contains("\"stop\""),
+            "finish_reason muss geloggt werden: {log_text}"
+        );
+        assert!(log_text.contains(&request_id.to_string()));
+    }
+
+    /// Gegenprobe: `length` (OpenAIs Äquivalent zu Anthropics `max_tokens`)
+    /// muss ebenso sichtbar werden.
+    #[tokio::test]
+    async fn test_finish_reason_length_is_logged() {
+        crate::test_support::install_test_subscriber_once();
+        crate::test_support::clear_log_buffer();
+
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(vec![
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
+                frame("[DONE]"),
+            ]));
+        let events: Vec<AiEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![AiEvent::Done]);
+        let log_text = crate::test_support::log_buffer_text();
+        assert!(
+            log_text.contains("length"),
+            "finish_reason muss geloggt werden: {log_text}"
         );
     }
 }

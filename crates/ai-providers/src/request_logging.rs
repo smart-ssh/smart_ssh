@@ -77,6 +77,25 @@ pub(crate) fn log_text_delta_summary(request_id: Uuid, total_len: usize) {
     );
 }
 
+/// Spec 0063, Teil 1: warum ein Turn endete — Anthropics `stop_reason`
+/// (`message_delta`) bzw. eines OpenAI-kompatiblen Providers `finish_reason`
+/// (`choices[].finish_reason`) wurden vorher nirgends geparst oder geloggt.
+/// Ohne dieses Feld lässt sich ein beobachtetes "KI bricht mitten in der
+/// Antwort ab, ohne das angekündigte Tool aufzurufen" nicht einordnen: `
+/// end_turn`/`stop` (das Modell hat bewusst aufgehört) und `max_tokens`/
+/// `length` (die Antwort wurde technisch abgeschnitten — ein Hinweis auf ein
+/// zu niedriges Token-Limit, also ein echter Bug) sehen für den Nutzer
+/// identisch aus ("die KI hört auf"), erfordern aber unterschiedliche
+/// Reaktionen. Kein sensibler Inhalt: nur `request_id` + der rohe
+/// Enum-/String-Wert des Providers.
+pub(crate) fn log_stop_reason(request_id: Uuid, stop_reason: &str) {
+    tracing::info!(
+        request_id = %request_id,
+        stop_reason,
+        "AI response turn ended",
+    );
+}
+
 /// Spec 0016, Abschnitt 4, Punkt 2: ein vollständig akkumuliertes
 /// Tool-Call-JSON-Fragment, sobald ein Block abgeschlossen ist — "vollständig"
 /// bezieht sich auf den fertigen Block, nicht auf jedes einzelne
@@ -343,5 +362,25 @@ mod error_logging_tests {
             !log_text.contains(embedded_secret),
             "in der URL eingebettetes Secret darf nicht im Log stehen: {log_text}"
         );
+    }
+
+    /// Spec 0063, Teil 1: `end_turn` (Modell hat bewusst aufgehört) und
+    /// `max_tokens` (Antwort technisch abgeschnitten) müssen im Log klar
+    /// unterscheidbar sein — sonst lässt sich ein "KI bricht mitten in der
+    /// Antwort ab" nicht einordnen.
+    #[test]
+    fn test_log_stop_reason_distinguishes_end_turn_from_max_tokens() {
+        install_test_subscriber_once();
+
+        clear_log_buffer();
+        log_stop_reason(Uuid::new_v4(), "end_turn");
+        let log_text = log_buffer_text();
+        assert!(log_text.contains("end_turn"));
+        assert!(!log_text.contains("max_tokens"));
+
+        clear_log_buffer();
+        log_stop_reason(Uuid::new_v4(), "max_tokens");
+        let log_text = log_buffer_text();
+        assert!(log_text.contains("max_tokens"));
     }
 }
