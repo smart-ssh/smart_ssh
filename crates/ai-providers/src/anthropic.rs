@@ -507,7 +507,7 @@ impl AnthropicStreamState {
                     .and_then(|d| d.get("stop_reason"))
                     .and_then(Value::as_str)
                 {
-                    log_stop_reason(self.request_id, stop_reason);
+                    log_stop_reason(self.request_id, "anthropic", stop_reason);
                 }
             }
             "message_stop" => {

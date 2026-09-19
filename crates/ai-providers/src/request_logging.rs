@@ -88,9 +88,16 @@ pub(crate) fn log_text_delta_summary(request_id: Uuid, total_len: usize) {
 /// identisch aus ("die KI hört auf"), erfordern aber unterschiedliche
 /// Reaktionen. Kein sensibler Inhalt: nur `request_id` + der rohe
 /// Enum-/String-Wert des Providers.
-pub(crate) fn log_stop_reason(request_id: Uuid, stop_reason: &str) {
+///
+/// `provider`: fester String je Aufrufer (`"anthropic"`/
+/// `"openai_compatible"`) — spec-reviewer-Fund (Follow-up-Review): beide
+/// Provider melden unter demselben Feldnamen `stop_reason`, ohne diese
+/// Markierung ließe sich beim Log-Triagieren nicht erkennen, welches
+/// Vokabular gilt (`end_turn` vs. `stop`).
+pub(crate) fn log_stop_reason(request_id: Uuid, provider: &str, stop_reason: &str) {
     tracing::info!(
         request_id = %request_id,
+        provider,
         stop_reason,
         "AI response turn ended",
     );
@@ -373,13 +380,13 @@ mod error_logging_tests {
         install_test_subscriber_once();
 
         clear_log_buffer();
-        log_stop_reason(Uuid::new_v4(), "end_turn");
+        log_stop_reason(Uuid::new_v4(), "anthropic", "end_turn");
         let log_text = log_buffer_text();
         assert!(log_text.contains("end_turn"));
         assert!(!log_text.contains("max_tokens"));
 
         clear_log_buffer();
-        log_stop_reason(Uuid::new_v4(), "max_tokens");
+        log_stop_reason(Uuid::new_v4(), "anthropic", "max_tokens");
         let log_text = log_buffer_text();
         assert!(log_text.contains("max_tokens"));
     }

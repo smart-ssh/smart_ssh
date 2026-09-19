@@ -408,7 +408,7 @@ impl OpenAiStreamState {
             .and_then(|c| c.get("finish_reason"))
             .and_then(Value::as_str)
         {
-            log_stop_reason(self.request_id, finish_reason);
+            log_stop_reason(self.request_id, "openai_compatible", finish_reason);
         }
 
         let Some(delta) = choice.and_then(|c| c.get("delta")) else {
