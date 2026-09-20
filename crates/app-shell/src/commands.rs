@@ -874,16 +874,20 @@ pub(crate) async fn connect_session(
     // Spec 0064 (Prompt-Caching): der `uname`-Banner geht als eigene,
     // gefencte Verlaufs-Nachricht rein, nicht mehr in den System-Prompt
     // (s. `SystemContextParts`-Doc-Kommentar zur Begründung). Nur gebaut,
-    // NICHT persistiert und erst weiter unten (nach der Resume-/Frisch-
-    // Weiche) VOR `initial_history` eingefügt — dasselbe "bei jedem
-    // `connect()` frisch, nie in die DB geschrieben"-Muster wie der
-    // System-Prompt selbst, damit auch eine wiederaufgenommene Sitzung
-    // (deren persistierte Historie den Banner naturgemäß nie enthielt, da
-    // er früher Teil des System-Prompts war) ihn bekommt.
-    let os_banner_message: Option<ChatMessage> = sanitized_os.as_deref().map(|os| ChatMessage {
-        role: Role::ActionResult,
-        content: MessageContent::Text(fence_untrusted(UntrustedKind::RemoteOsInfo, "uname -a", os)),
-    });
+    // NICHT direkt persistiert und erst weiter unten (nach der Resume-/
+    // Frisch-Weiche) VOR `initial_history` eingefügt — dasselbe "bei jedem
+    // `connect()` frisch"-Muster wie der System-Prompt selbst, damit auch
+    // eine wiederaufgenommene Sitzung (deren persistierte Historie den
+    // Banner naturgemäß nie enthielt, da er früher Teil des System-Prompts
+    // war) ihn bekommt. Spec-reviewer-Fund (Follow-up-Review): "nie in die
+    // DB" gilt nicht absolut — faltet die Kompaktierung (Spec 0057) diese
+    // erste Runde später in eine rollierende Zusammenfassung, landet der
+    // (zeichen-whitelistete, s. `sanitize_uname_output`) Bannertext
+    // indirekt doch in der persistierten Summary. Geringe Tragweite (kein
+    // Geheimnis), aber hier ehrlich benannt statt der zu absoluten
+    // Formulierung von vorher.
+    let os_banner_message: Option<ChatMessage> =
+        sanitized_os.as_deref().map(build_os_banner_message);
 
     // Spec 0057, §3.1: einmalig bei `connect()` aufgelöst, wie
     // `ai_provider_label`/`ai_model` unten — s. `Session::
@@ -2887,6 +2891,24 @@ pub(crate) fn sanitize_uname_output(raw: &str) -> Option<String> {
     }
 }
 
+/// Spec 0064 (Prompt-Caching): baut die gefencte Verlaufs-Nachricht für den
+/// bereits sanitisierten `uname`-Banner (s. Aufrufstelle in
+/// `connect_session`) — als eigene, pure Funktion extrahiert, damit sich
+/// die Fencing-Zuordnung (`UntrustedKind::RemoteOsInfo`, `Role::
+/// ActionResult`) ohne einen vollen `connect()`-Durchlauf direkt testen
+/// lässt (spec-reviewer-Fund, Follow-up-Review: die vorherigen Tests
+/// prüften nur den System-Prompt, nie diesen konkreten Nachrichtenbau).
+pub(crate) fn build_os_banner_message(sanitized_os: &str) -> ChatMessage {
+    ChatMessage {
+        role: Role::ActionResult,
+        content: MessageContent::Text(fence_untrusted(
+            UntrustedKind::RemoteOsInfo,
+            "uname -a",
+            sanitized_os,
+        )),
+    }
+}
+
 /// Liest den Textinhalt einer vom Nutzer im nativen Dateidialog ausgewählten
 /// Schlüssel-/Zertifikatsdatei (Spec 0013, SEC-06). Ersetzt globale Dateilese-
 /// Berechtigungen im Frontend.
@@ -4267,11 +4289,20 @@ mod local_server_tests {
     /// Spec 0064, Teil 2 (der schlimmste Cache-Killer): kein Datum, keine
     /// Uhrzeit und kein `uname`-Banner im System-Prompt — jedes davon würde
     /// den Anthropic-Cache-Breakpoint auf dem `system`-Block bei jeder
-    /// Sitzung/jedem Tag ungültig machen (s. `SystemContextParts`-Doc-
-    /// Kommentar: der Banner lebt seit diesem Schritt als eigene, gefencte
-    /// Verlaufs-Nachricht, nicht mehr im System-Prompt). Prüft sowohl auf
-    /// ein offensichtliches Jahres-Präfix als auch auf den früheren
-    /// `## Remote-System`-Marker.
+    /// Sitzung/jedem Tag ungültig machen. Spec-reviewer-Fund (Follow-up-
+    /// Review): dieser Test ist ein Zukunfts-Wächter (`build_session_
+    /// system_context` nimmt seit diesem Schritt gar keinen `remote_os_
+    /// info`-Parameter mehr entgegen, könnte den Banner also strukturell
+    /// gar nicht mehr enthalten) — er wäre auch VOR dem eigentlichen Fix
+    /// schon grün gewesen, kein echter Regressionstest für den Umzug
+    /// selbst. Der eigentliche Regressionstest für "der Banner landet
+    /// tatsächlich gefenct in der Historie" ist `test_build_os_banner_
+    /// message_fences_the_sanitized_os_string` unten (prüft `build_os_
+    /// banner_message` direkt) plus `session::tests::test_history_
+    /// contains_untrusted_content_true_for_fenced_remote_os_info_text`
+    /// (prüft, dass genau dieses Fence-Format als Untrusted-Content erkannt
+    /// wird — dort nachweislich gegen den alten hartcodierten Tag-Array
+    /// fehlgeschlagen, bevor auf `fence_markers()` umgestellt wurde).
     #[tokio::test]
     async fn test_build_session_system_context_never_contains_a_date_or_os_banner() {
         let _guard = lock_async().await;
@@ -4950,5 +4981,26 @@ mod edit_session_tests {
             path.exists(),
             "eine fremde Datei darf nicht gelöscht werden"
         );
+    }
+
+    /// Spec 0064: der eigentliche Regressionstest für den Banner-Umzug —
+    /// prüft, dass `build_os_banner_message` tatsächlich mit
+    /// `UntrustedKind::RemoteOsInfo` fenct (Tag `<remote_system>`) und als
+    /// `Role::ActionResult` läuft (wie jeder andere Backend-eingefügte
+    /// Systemhinweis, nicht `User`/`Assistant`).
+    #[test]
+    fn test_build_os_banner_message_fences_the_sanitized_os_string() {
+        let message = build_os_banner_message("Linux srv1 5.10.0");
+
+        assert_eq!(message.role, Role::ActionResult);
+        match &message.content {
+            MessageContent::Text(text) => {
+                assert!(text.starts_with("<remote_system>"));
+                assert!(text.trim_end().ends_with("</remote_system>"));
+                assert!(text.contains("Linux srv1 5.10.0"));
+                assert!(text.contains("<source>uname -a</source>"));
+            }
+            other => panic!("erwartet MessageContent::Text, war: {other:?}"),
+        }
     }
 }

@@ -108,8 +108,9 @@ impl AnthropicProvider {
         // in `context.system_context` zusammengefasst, s. `app_shell::
         // compaction::SystemContextParts`) als cachefähig. Unbedingt
         // gesetzt, auch wenn `system_text` unter der modellabhängigen
-        // Mindestlänge (512–4096 Token) liegt: Anthropic verarbeitet einen
-        // zu kurzen Block dann einfach ohne Caching, ohne Fehler — eine
+        // Mindestlänge liegt (niedriger drei- bis vierstelliger
+        // Token-Bereich, je nach Modell): Anthropic verarbeitet einen zu
+        // kurzen Block dann einfach ohne Caching, ohne Fehler — eine
         // eigene Mindestlängen-Prüfung hier wäre nur zusätzliche
         // Komplexität für denselben Effekt.
         let system_value = json!([{
