@@ -13,7 +13,17 @@ use tracing_appender::non_blocking::WorkerGuard;
 /// Spec 0016, Abschnitt 3: "Aufbewahrung der letzten 14 Tage".
 const MAX_LOG_AGE: Duration = Duration::from_secs(14 * 24 * 60 * 60);
 
-const LOG_FILE_PREFIX: &str = "smart-ssh.log";
+/// Stefans Fund (2026-09): mit `tracing_appender::rolling::daily`s alter
+/// Kurzform (`daily(dir, "smart-ssh.log")`) landete das Datum ans Ende des
+/// Dateinamens (`smart-ssh.log.2026-09-19`) — das `.log` in der Mitte
+/// bricht die dateityp-basierte Programm-/Icon-Zuordnung des
+/// Betriebssystems, die auf eine ENDENDE Erweiterung angewiesen ist (jeder
+/// Tageswechsel hätte sonst erneut zugeordnet werden müssen). Getrennt in
+/// Präfix + Suffix (s. `init_logging`s `Builder`-Aufruf), damit
+/// `tracing_appender` stattdessen `smart-ssh.2026-09-19.log` erzeugt —
+/// `.log` bleibt am Ende, unabhängig vom Datum dazwischen.
+const LOG_FILE_PREFIX: &str = "smart-ssh";
+const LOG_FILE_SUFFIX: &str = "log";
 
 /// Plattformspezifischer Log-Ordner (Spec 0016, Abschnitt 3):
 ///
@@ -117,10 +127,9 @@ fn most_recently_modified_file(dir: &Path) -> Option<PathBuf> {
         .flatten()
         .filter(|entry| entry.file_type().is_ok_and(|t| t.is_file()))
         .filter(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(LOG_FILE_PREFIX)
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with(LOG_FILE_PREFIX) && name.ends_with(LOG_FILE_SUFFIX)
         })
         .max_by_key(|entry| {
             entry
@@ -179,7 +188,19 @@ pub fn init_logging() -> WorkerGuard {
         eprintln!("Alte Log-Dateien konnten nicht aufgeräumt werden: {err}");
     }
 
-    let file_appender = tracing_appender::rolling::daily(&dir, LOG_FILE_PREFIX);
+    // `Builder` statt der `rolling::daily(dir, prefix)`-Kurzform (s.
+    // `LOG_FILE_PREFIX`-Doc-Kommentar): die Kurzform kennt nur einen
+    // einzigen Namensteil und hängt das Datum dahinter an, wodurch `.log`
+    // vor dem Datum landet (`smart-ssh.log.2026-09-19`) statt danach —
+    // `filename_prefix`/`filename_suffix` getrennt ergibt stattdessen
+    // `smart-ssh.2026-09-19.log`, mit der Datei-Erweiterung dort, wo
+    // dateityp-basierte Betriebssystem-Zuordnung sie erwartet.
+    let file_appender = tracing_appender::rolling::Builder::new()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix(LOG_FILE_PREFIX)
+        .filename_suffix(LOG_FILE_SUFFIX)
+        .build(&dir)
+        .expect("Log-Datei-Rotation konnte nicht initialisiert werden");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     // Unabhängiger Review-Pass (Spec 0016): Log-Dateien tragen Kommando-
@@ -231,6 +252,49 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    /// Stefans Fund: `.log` muss am Ende des Dateinamens stehen (Datei-
+    /// zuordnung im Betriebssystem hängt daran), nicht in der Mitte vor
+    /// dem Datum. Baut denselben `Builder`-Aufruf wie `init_logging`
+    /// direkt (statt `init_logging()` selbst aufzurufen — das würde den
+    /// GLOBALEN `tracing`-Subscriber setzen, was in einer Testsuite mit
+    /// mehreren Tests nur einmal möglich ist und mit anderen Tests
+    /// kollidieren würde) und schreibt eine Zeile, um den tatsächlich
+    /// erzeugten Dateinamen zu sehen.
+    #[test]
+    fn test_rolling_log_file_name_ends_with_dot_log_not_the_date() {
+        use std::io::Write;
+
+        let dir = tempdir().unwrap();
+        let mut appender = tracing_appender::rolling::Builder::new()
+            .rotation(tracing_appender::rolling::Rotation::DAILY)
+            .filename_prefix(LOG_FILE_PREFIX)
+            .filename_suffix(LOG_FILE_SUFFIX)
+            .build(dir.path())
+            .unwrap();
+        appender.write_all(b"line\n").unwrap();
+
+        let names: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(
+            names.len(),
+            1,
+            "erwartet genau eine erzeugte Datei: {names:?}"
+        );
+        assert!(
+            names[0].ends_with(".log"),
+            "Dateiname muss mit .log enden, nicht das Datum danach haben: {}",
+            names[0]
+        );
+        assert!(
+            names[0].starts_with("smart-ssh."),
+            "Präfix muss weiterhin vorne stehen: {}",
+            names[0]
+        );
+    }
 
     /// Simuliert Alter über ein weit in der Zukunft liegendes `now` statt
     /// über manipuliertes `mtime` — deckt denselben Pfad wie
@@ -339,7 +403,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let lines: Vec<String> = (1..=10).map(|n| format!("line {n}")).collect();
         std::fs::write(
-            dir.path().join("smart-ssh.log.2026-01-01"),
+            dir.path().join("smart-ssh.2026-01-01.log"),
             lines.join("\n"),
         )
         .unwrap();
@@ -352,7 +416,7 @@ mod tests {
     #[test]
     fn test_read_last_log_lines_returns_all_lines_when_fewer_than_max() {
         let dir = tempdir().unwrap();
-        std::fs::write(dir.path().join("smart-ssh.log.2026-01-01"), "a\nb").unwrap();
+        std::fs::write(dir.path().join("smart-ssh.2026-01-01.log"), "a\nb").unwrap();
 
         let result = read_last_log_lines(dir.path(), 500);
 
@@ -375,8 +439,8 @@ mod tests {
     #[test]
     fn test_read_last_log_lines_picks_the_most_recently_modified_file() {
         let dir = tempdir().unwrap();
-        let older = dir.path().join("smart-ssh.log.2026-01-01");
-        let newer = dir.path().join("smart-ssh.log.2026-01-02");
+        let older = dir.path().join("smart-ssh.2026-01-01.log");
+        let newer = dir.path().join("smart-ssh.2026-01-02.log");
         std::fs::write(&older, "old content").unwrap();
         std::fs::write(&newer, "new content").unwrap();
         let now = SystemTime::now();
@@ -406,7 +470,7 @@ mod tests {
     #[test]
     fn test_read_last_log_lines_ignores_newer_non_log_file() {
         let dir = tempdir().unwrap();
-        let log_file = dir.path().join("smart-ssh.log.2026-01-01");
+        let log_file = dir.path().join("smart-ssh.2026-01-01.log");
         let foreign_file = dir.path().join("some-other-artifact.txt");
         std::fs::write(&log_file, "actual log content").unwrap();
         std::fs::write(&foreign_file, "unrelated, possibly sensitive content").unwrap();
