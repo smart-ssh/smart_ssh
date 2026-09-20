@@ -34,9 +34,9 @@ use crate::action::{action_from_tool_arguments, parameters_json_schema};
 use crate::error::{error_stream, map_http_status, map_transport_error};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
-    log_outgoing_context, log_provider_error_response, log_provider_transport_error,
-    log_stop_reason, log_text_delta_summary, log_tool_call_fragment, log_tool_call_parse_error,
-    log_tool_call_parsed,
+    log_cache_usage, log_outgoing_context, log_provider_error_response,
+    log_provider_transport_error, log_stop_reason, log_text_delta_summary, log_tool_call_fragment,
+    log_tool_call_parse_error, log_tool_call_parsed,
 };
 use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
@@ -100,22 +100,53 @@ impl AnthropicProvider {
             })
             .collect();
 
+        // Spec 0064 (Prompt-Caching): `system` als Ein-Block-Array statt
+        // eines reinen Strings — Anthropic erlaubt `cache_control` nur auf
+        // Content-Blöcken, nicht auf dem String-Kurzformat. Der Cache-
+        // Breakpoint markiert alles bis einschließlich dieses Blocks
+        // (System-Prompt + Werkzeug-Anweisungen + Server-Notiz, alle schon
+        // in `context.system_context` zusammengefasst, s. `app_shell::
+        // compaction::SystemContextParts`) als cachefähig. Unbedingt
+        // gesetzt, auch wenn `system_text` unter der modellabhängigen
+        // Mindestlänge (512–4096 Token) liegt: Anthropic verarbeitet einen
+        // zu kurzen Block dann einfach ohne Caching, ohne Fehler — eine
+        // eigene Mindestlängen-Prüfung hier wäre nur zusätzliche
+        // Komplexität für denselben Effekt.
+        let system_value = json!([{
+            "type": "text",
+            "text": system_text,
+            "cache_control": {"type": "ephemeral"},
+        }]);
+
         let mut body = json!({
             "model": self.model,
-            "system": system_text,
+            "system": system_value,
             "messages": messages,
             "max_tokens": DEFAULT_MAX_TOKENS,
             "stream": true,
         });
 
         if self.supports_native_tool_calling && !context.available_actions.is_empty() {
-            body["tools"] = Value::Array(
-                context
-                    .available_actions
-                    .iter()
-                    .map(anthropic_tool_definition)
-                    .collect(),
-            );
+            let mut tools: Vec<Value> = context
+                .available_actions
+                .iter()
+                .map(anthropic_tool_definition)
+                .collect();
+            // Spec 0064: eigener, zweiter Breakpoint auf dem LETZTEN
+            // Werkzeug — Anthropics interne Prompt-Reihenfolge ist immer
+            // "Werkzeuge, dann System, dann Nachrichten" (unabhängig von
+            // der Feldreihenfolge in diesem JSON-Body), ein Breakpoint hier
+            // markiert also "Werkzeuge" als eigenständig wiederverwendbaren
+            // Cache-Eintrag — geteilt über ALLE Sitzungen/Server hinweg
+            // (der Werkzeug-Satz ist identisch, unabhängig vom Server,
+            // s. Teil 2 unten: "Tool-Satz konstant halten"), nicht nur
+            // innerhalb einer Sitzung wie der System-Breakpoint oben (der
+            // die server-spezifische Notiz enthält). Beide zusammen: 2 von
+            // maximal 4 erlaubten Breakpoints.
+            if let Some(last_tool) = tools.last_mut() {
+                last_tool["cache_control"] = json!({"type": "ephemeral"});
+            }
+            body["tools"] = Value::Array(tools);
         }
 
         body
@@ -499,6 +530,16 @@ impl AnthropicStreamState {
                 }
             }
             // Spec 0063, Teil 1: Anthropic liefert `stop_reason` im
+            // Spec 0064, Teil 5: `usage` (inkl. der Cache-Felder) steht im
+            // `message_start`-Event unter `message.usage`, NICHT unter
+            // `message_delta`s eigenem (dort nur `output_tokens`,
+            // kumulativ nachgeliefert). Einmal pro Antwort, ganz am Anfang
+            // des Streams.
+            "message_start" => {
+                if let Some(usage) = data.get("message").and_then(|m| m.get("usage")) {
+                    log_cache_usage(self.request_id, "anthropic", usage);
+                }
+            }
             // `message_delta`-Event (Feld `delta.stop_reason`), nicht in
             // `message_stop` — dort steht nur noch ein leerer `"delta": {}`.
             "message_delta" => {
@@ -667,7 +708,121 @@ mod tests {
     //! vor, sobald nichts anderes mehr lauffähig ist. So lässt sich das
     //! Timeout-Verhalten in Millisekunden statt real 90 Sekunden testen.
 
+    use ssh_manager_core::ai::default_action_schemas;
+
     use super::*;
+
+    fn test_budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
+        std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
+    }
+
+    fn context_with_actions(system_context: &str, actions: Vec<ActionSchema>) -> SessionContext {
+        SessionContext {
+            system_context: system_context.to_string(),
+            history: vec![ssh_manager_core::ai::ChatMessage {
+                role: ssh_manager_core::ai::Role::User,
+                content: MessageContent::Text("hi".to_string()),
+            }],
+            available_actions: actions,
+        }
+    }
+
+    /// Spec 0064, Teil 3: `system` muss als Content-Block-Array mit
+    /// `cache_control` gebaut werden — Anthropic erlaubt `cache_control`
+    /// nicht auf dem String-Kurzformat (verifiziert gegen die aktuelle
+    /// Anthropic-Doku, s. Commit-Beschreibung/Abschlussbericht).
+    #[test]
+    fn test_system_block_carries_a_cache_control_breakpoint() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "claude-test",
+            "key",
+            true,
+            test_budget(),
+        );
+        let context = context_with_actions("Stabiler System-Prompt.", default_action_schemas());
+
+        let body = provider.build_request_body(&context);
+
+        let system = body["system"]
+            .as_array()
+            .expect("system muss ein Array von Content-Blöcken sein, kein reiner String");
+        assert_eq!(system.len(), 1);
+        assert_eq!(system[0]["type"], "text");
+        assert_eq!(system[0]["text"], "Stabiler System-Prompt.");
+        assert_eq!(system[0]["cache_control"]["type"], "ephemeral");
+    }
+
+    /// Spec 0064, Teil 3: genau EIN Breakpoint auf dem LETZTEN Werkzeug,
+    /// nicht auf jedem — Anthropics Präfix-Cache deckt bei einem
+    /// Breakpoint auf dem letzten Element automatisch alle davorliegenden
+    /// mit ab (s. Abschlussbericht: "liest automatisch vom längsten
+    /// Präfix").
+    #[test]
+    fn test_only_the_last_tool_carries_a_cache_control_breakpoint() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "claude-test",
+            "key",
+            true,
+            test_budget(),
+        );
+        let context = context_with_actions("System.", default_action_schemas());
+
+        let body = provider.build_request_body(&context);
+
+        let tools = body["tools"].as_array().expect("tools muss gesetzt sein");
+        assert!(tools.len() > 1, "Testvoraussetzung: mehrere Werkzeuge");
+        for tool in &tools[..tools.len() - 1] {
+            assert!(
+                tool.get("cache_control").is_none(),
+                "nur das letzte Werkzeug darf einen Breakpoint tragen: {tool}"
+            );
+        }
+        assert_eq!(tools.last().unwrap()["cache_control"]["type"], "ephemeral");
+    }
+
+    /// Fallback-Modus (kein natives Tool-Calling): kein `tools`-Feld, aber
+    /// der System-Block bekommt trotzdem seinen Breakpoint — die
+    /// Fallback-Anweisung selbst landet im (weiterhin gecachten)
+    /// System-Block, kein Grund, dort auf Caching zu verzichten.
+    #[test]
+    fn test_fallback_mode_has_no_tools_field_but_system_still_cached() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "claude-test",
+            "key",
+            false,
+            test_budget(),
+        );
+        let context = context_with_actions("System.", default_action_schemas());
+
+        let body = provider.build_request_body(&context);
+
+        assert!(body.get("tools").is_none());
+        assert_eq!(body["system"][0]["cache_control"]["type"], "ephemeral");
+    }
+
+    /// Spec 0064, Teil 3: Caching wird IMMER gesetzt, auch für einen sehr
+    /// kurzen System-Prompt unterhalb der modellabhängigen Mindestlänge —
+    /// Anthropic verarbeitet das laut Doku ohne Fehler (nur ohne
+    /// tatsächliches Caching), eine eigene Mindestlängen-Prüfung ist
+    /// bewusst NICHT eingebaut (s. `build_request_body`-Kommentar).
+    #[test]
+    fn test_cache_control_set_unconditionally_even_for_a_tiny_system_prompt() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "claude-test",
+            "key",
+            true,
+            test_budget(),
+        );
+        let context = context_with_actions("Hi.", default_action_schemas());
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(body["system"][0]["cache_control"]["type"], "ephemeral");
+    }
 
     #[tokio::test(start_paused = true)]
     async fn test_inactivity_timeout_yields_network_error_instead_of_hanging_forever() {
@@ -688,6 +843,65 @@ mod tests {
             event: Some(event.to_string()),
             data: data.to_string(),
         })
+    }
+
+    /// Spec 0064, Teil 5: der eigentliche Testfall aus der Spec — die
+    /// `usage`-Cache-Felder aus `message_start` müssen geloggt werden, über
+    /// den echten SSE-Parsing-Pfad (nicht nur den isolierten
+    /// `log_cache_usage`-Aufruf).
+    #[tokio::test]
+    async fn test_message_start_cache_usage_fields_are_logged() {
+        crate::test_support::install_test_subscriber_once();
+        crate::test_support::clear_log_buffer();
+
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    "message_start",
+                    r#"{"message":{"usage":{"input_tokens":50,"cache_creation_input_tokens":5120,"cache_read_input_tokens":0,"output_tokens":1}}}"#,
+                ),
+                frame("message_stop", "{}"),
+            ]),
+        );
+        let request_id = Uuid::new_v4();
+        let events: Vec<AiEvent> = process_frame_stream(frames, true, request_id, String::new())
+            .collect()
+            .await;
+
+        assert_eq!(events, vec![AiEvent::Done]);
+        let log_text = crate::test_support::log_buffer_text();
+        assert!(log_text.contains("cache_creation_input_tokens"));
+        assert!(log_text.contains("5120"));
+        assert!(log_text.contains("cache_read_input_tokens"));
+        assert!(log_text.contains(&request_id.to_string()));
+    }
+
+    /// Gegenprobe: eine zweite Antwort mit `cache_read_input_tokens > 0`
+    /// (der eigentliche Cache-TREFFER) muss ebenso sichtbar werden — das
+    /// ist der Wert, den Stefans manueller Verifikationsablauf im Log
+    /// nachschlägt.
+    #[tokio::test]
+    async fn test_message_start_cache_read_hit_is_logged() {
+        crate::test_support::install_test_subscriber_once();
+        crate::test_support::clear_log_buffer();
+
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    "message_start",
+                    r#"{"message":{"usage":{"input_tokens":50,"cache_creation_input_tokens":0,"cache_read_input_tokens":5120,"output_tokens":1}}}"#,
+                ),
+                frame("message_stop", "{}"),
+            ]),
+        );
+        let events: Vec<AiEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![AiEvent::Done]);
+        let log_text = crate::test_support::log_buffer_text();
+        assert!(log_text.contains("\"cache_read_input_tokens\":5120"));
     }
 
     /// Spec 0063, Teil 1: der eigentliche Testfall aus der Spec — ein

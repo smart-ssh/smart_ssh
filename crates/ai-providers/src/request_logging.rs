@@ -8,6 +8,7 @@
 //! Design-Entscheidung, warum diese ID lokal pro Aufruf erzeugt wird statt
 //! ein `SessionContext`-Feld zu sein).
 
+use serde_json::Value;
 use ssh_manager_core::ai::{AiError, MessageContent, RejectionReason, SessionContext};
 use ssh_manager_core::profiles::AiAction;
 use uuid::Uuid;
@@ -100,6 +101,30 @@ pub(crate) fn log_stop_reason(request_id: Uuid, provider: &str, stop_reason: &st
         provider,
         stop_reason,
         "AI response turn ended",
+    );
+}
+
+/// Spec 0064, Teil 5: macht die Prompt-Cache-Trefferquote sichtbar — ohne
+/// dieses Logging weiß niemand, ob die Cache-Disziplin (Reihenfolge +
+/// stabiles Präfix, s. Modul-Doc von `app_shell::compaction`) tatsächlich
+/// greift oder ob irgendetwas das Präfix bricht. `usage` ist Anthropics
+/// rohes `message.usage`-Objekt aus dem `message_start`-Event
+/// (`cache_creation_input_tokens`/`cache_read_input_tokens`/
+/// `input_tokens`/`output_tokens`) — hier NICHT einzeln typisiert
+/// entgegengenommen, sondern als `&Value` durchgereicht und mit
+/// `unwrap_or(0)` gelesen: fehlt ein Feld (älteres API-Verhalten, ein
+/// Provider-Wechsel o. Ä.), loggt diese Funktion trotzdem eine vollständige
+/// Zeile mit `0` statt gar nichts oder eines Parse-Fehlers. Kein sensibler
+/// Inhalt: reine Zählwerte, kein Prompt-/Antwort-Text.
+pub(crate) fn log_cache_usage(request_id: Uuid, provider: &str, usage: &Value) {
+    let field = |name: &str| usage.get(name).and_then(Value::as_u64).unwrap_or(0);
+    tracing::info!(
+        request_id = %request_id,
+        provider,
+        cache_creation_input_tokens = field("cache_creation_input_tokens"),
+        cache_read_input_tokens = field("cache_read_input_tokens"),
+        input_tokens = field("input_tokens"),
+        "AI request token usage (prompt cache visibility)",
     );
 }
 

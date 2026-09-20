@@ -111,8 +111,11 @@ pub struct Session {
     pub ai_provider_label: String,
     pub ai_model: String,
     /// Spec 0057, §4.1: die ungefencten Rohbestandteile des aktuellen
-    /// System-Prompts (Basis-Text, Notiz-Sektionen nach Scope geordnet,
-    /// Remote-OS-Info) — parallel zu `context.lock().await.system_context`
+    /// System-Prompts (Basis-Text, Notiz-Sektionen nach Scope geordnet —
+    /// seit Spec 0064 OHNE die Remote-OS-Info, die lebt jetzt als eigene,
+    /// gefencte Verlaufs-Nachricht, s. `crate::compaction::
+    /// SystemContextParts`-Doc-Kommentar) — parallel zu `context.lock()
+    /// .await.system_context`
     /// (dem bereits zusammengesetzten String) gepflegt, s.
     /// `crate::compaction::SystemContextParts`-Doc-Kommentar zur
     /// Begründung, warum das getrennt statt nur aus dem fertigen String
@@ -327,10 +330,21 @@ pub struct Session {
 /// gefenced (s. `orchestration::execute_read_remote_file`), erkennbar am
 /// literalen Tag-Text.
 pub(crate) fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
-    const FENCE_OPEN_TAGS: [&str; 4] = ["<stdout>", "<stderr>", "<remote_file>", "<server_note>"];
+    // Spec 0064 Nachtrag: aus `fence_markers()` abgeleitet statt einer
+    // separat hier gepflegten Tag-Liste — ein hartcodiertes Array hätte
+    // bei der Einführung von `UntrustedKind::RemoteOsInfo` in diesem
+    // Schritt still unvollständig bleiben können (genau die Drift-Gefahr,
+    // vor der `fence_markers()`s eigener Doc-Kommentar warnt). Filtert auf
+    // öffnende Tags (kein `</...>`, kein gemeinsames `<source>`).
+    let open_tags: Vec<String> = ssh_manager_core::ai::fence_markers()
+        .into_iter()
+        .filter(|marker| {
+            marker.starts_with('<') && !marker.starts_with("</") && marker != "<source>"
+        })
+        .collect();
     history.iter().any(|message| match &message.content {
         MessageContent::CommandResult { .. } => true,
-        MessageContent::Text(text) => FENCE_OPEN_TAGS.iter().any(|tag| text.contains(tag)),
+        MessageContent::Text(text) => open_tags.iter().any(|tag| text.contains(tag.as_str())),
         // Kommando/Grund stammen von der KI selbst bzw. der lokalen
         // Filter-Engine, nie vom Remote-Server (s. `format_action_
         // rejected`-Doc-Kommentar in `ai-providers`) — keine untrusted
@@ -663,6 +677,27 @@ mod tests {
             content: MessageContent::Text(
                 "Inhalt von '/etc/hosts':\n\n<remote_file>\n<source>/etc/hosts</source>\n\
                  127.0.0.1 localhost\n</remote_file>"
+                    .to_string(),
+            ),
+        }];
+        assert!(history_contains_untrusted_content(&history));
+    }
+
+    /// Spec 0064 Nachtrag: eine Regression dieses Schritts selbst gefangen
+    /// — der `uname`-Banner zog von `SystemContextParts` in eine eigene,
+    /// gefencte Verlaufs-Nachricht (`UntrustedKind::RemoteOsInfo`,
+    /// Tag `<remote_system>`) um; ein hartcodiertes `FENCE_OPEN_TAGS`-Array
+    /// hier hätte diesen neuen Tag glatt vergessen können (genau das ist
+    /// vor dem Fix passiert, bevor auf `fence_markers()` umgestellt wurde)
+    /// — eine Sitzung, deren einziger Untrusted-Inhalt der Banner ist
+    /// (kein Notiz, kein Kommando bisher), hätte
+    /// `untrusted_content_ingested` dann fälschlich nie gesetzt.
+    #[test]
+    fn test_history_contains_untrusted_content_true_for_fenced_remote_os_info_text() {
+        let history = vec![ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::Text(
+                "<remote_system>\n<source>uname -a</source>\nLinux srv1 5.10.0\n</remote_system>"
                     .to_string(),
             ),
         }];

@@ -6054,7 +6054,6 @@ mod tests {
         let parts = crate::compaction::SystemContextParts {
             base: "Basis".to_string(),
             note_sections: vec![("Server \"web-01\"".to_string(), "n".repeat(50_000))],
-            remote_os_info: None,
         };
         {
             let mut ctx = session.context.lock().await;
@@ -10024,7 +10023,6 @@ mod tests {
                 ("Gruppe \"Media-Server\"".to_string(), "m".repeat(40_000)),
                 ("Server \"immich\"".to_string(), "s".repeat(10_000)),
             ],
-            remote_os_info: Some("Linux immich 6.8.0".to_string()),
         };
 
         // Lange Historie: 15 Runden mit je einer moderaten Kommando-Ausgabe.
@@ -10856,7 +10854,6 @@ mod tests {
                 "Server \"web-01\"".to_string(),
                 "Wichtige Notiz".to_string(),
             )],
-            remote_os_info: None,
         };
         {
             let mut ctx = session.context.lock().await;

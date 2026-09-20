@@ -904,7 +904,25 @@ fn compact_oversized_outputs_for_budget(context: &mut SessionContext, budget_tok
 /// Kompaktierung muss Notiz-Abschnitte einzeln, nach Scope priorisiert,
 /// kürzen können — ein Wiederaufsplitten aus dem bereits fertigen String
 /// wäre gegen absichtlich in eine Notiz eingeschleusten Text wie
-/// "## Remote-System" nicht robust, s. ADR 0048).
+/// "## Notizen / Kontext" nicht robust, s. ADR 0048).
+///
+/// Spec 0064 (Prompt-Caching): trägt den `uname -a`-Banner NICHT mehr (das
+/// `remote_os_info`-Feld gab es hier bis zu diesem Schritt) — der Banner
+/// wandert stattdessen einmalig bei `connect()` als eigene, gefencte
+/// Nachricht (`UntrustedKind::RemoteOsInfo`) an den Anfang von `context.
+/// history` (s. `commands::connect_session`). Grund: `SystemContextParts::
+/// assemble()` wird bei JEDER neuen Nutzer-Nachricht neu aufgerufen
+/// (`send_chat_message_impl`, Spec 0039 Abschnitt 5) und bildet den Anfang
+/// des `system`-Feldes, auf das der Anthropic-`cache_control`-Breakpoint
+/// gesetzt wird (`ai_providers::anthropic`) — jedes Byte hier ist Teil des
+/// zu cachenden Präfix. Der Banner selbst ändert sich zwar nur selten
+/// (i. d. R. gar nicht innerhalb einer Sitzung), aber ihn strukturell aus
+/// dem gecachten Präfix herauszuhalten vermeidet jede Abhängigkeit von
+/// dieser Annahme und behebt nebenbei den offenen Spec-0039-Backlog-Punkt
+/// ("Banner über `fence_untrusted` führen" — der Banner ist die Ausgabe
+/// eines auf dem Server ausgeführten Kommandos, lief aber bislang als
+/// einziger der vier Untrusted-Content-Fälle ungefenct direkt in den
+/// System-Prompt).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(crate) struct SystemContextParts {
     /// Einleitung + Werkzeug-Anweisungen + Freigegebene-Befehle-Block —
@@ -918,7 +936,6 @@ pub(crate) struct SystemContextParts {
     /// gekürzt/entfernt, der letzte (server-spezifische) bleibt am
     /// längsten erhalten.
     pub note_sections: Vec<(String, String)>,
-    pub remote_os_info: Option<String>,
 }
 
 impl SystemContextParts {
@@ -937,10 +954,10 @@ impl SystemContextParts {
     /// Wie [`Self::assemble`], aber mit explizit übergebenen (ggf. von der
     /// Kompaktierung gekürzten) `note_sections` statt `self.note_sections`
     /// — der Haken, über den [`compact_notes_for_budget`] eine verkürzte
-    /// Fassung einsetzt, ohne `base`/`remote_os_info` anzufassen und ohne
-    /// `self.note_sections` selbst zu verändern (die gespeicherte,
-    /// vollständige Fassung bleibt in `SystemContextParts` unangetastet,
-    /// Spec 0057 §4.1: "gespeicherte Notiz bleibt unangetastet").
+    /// Fassung einsetzt, ohne `base` anzufassen und ohne `self.
+    /// note_sections` selbst zu verändern (die gespeicherte, vollständige
+    /// Fassung bleibt in `SystemContextParts` unangetastet, Spec 0057
+    /// §4.1: "gespeicherte Notiz bleibt unangetastet").
     pub fn assemble_with_notes(&self, note_sections: &[(String, String)]) -> String {
         let mut context = self.base.clone();
         if !note_sections.is_empty() {
@@ -950,9 +967,6 @@ impl SystemContextParts {
                 .map(|(label, notes)| fence_untrusted(UntrustedKind::ServerNote, label, notes))
                 .collect();
             context.push_str(&fenced_sections.join("\n\n"));
-        }
-        if let Some(os) = &self.remote_os_info {
-            context.push_str(&format!("\n\n## Remote-System\n{os}"));
         }
         context
     }
@@ -1427,7 +1441,6 @@ mod tests {
                 ("Gruppe \"Global\"".to_string(), "g".repeat(3000)),
                 ("Server \"db1\"".to_string(), "s".repeat(200)),
             ],
-            remote_os_info: None,
         };
         let mut context = context_with(parts.assemble(), Vec::new());
         // Budget knapp über dem, was die Server-Notiz allein braucht.
@@ -1456,7 +1469,6 @@ mod tests {
         let parts = SystemContextParts {
             base: "Basis".to_string(),
             note_sections: vec![("Server \"db1\"".to_string(), "s".repeat(50_000))],
-            remote_os_info: None,
         };
         let mut context = context_with(parts.assemble(), Vec::new());
         let budget = 100; // sehr klein — zwingt zur Kürzung der letzten Sektion.

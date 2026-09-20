@@ -10,6 +10,17 @@ sind mit **(Pro)** markiert.
 ## [Unreleased]
 
 ### Added
+- App nutzt jetzt Anthropics Prompt-Caching für System-Prompt,
+  Werkzeug-Definitionen und Server-Notiz — diese ändern sich innerhalb
+  einer Sitzung kaum, werden bislang aber bei **jedem** Request neu
+  gesendet und voll gegen das Input-Token-Rate-Limit gezählt. Gecachte
+  Tokens zählen bei den meisten Claude-Modellen **nicht** gegen das
+  Rate-Limit, senkt also Kosten und **Rate-Limit-Last** spürbar (Anthropic
+  nennt als Beispiel 80% Cache-Trefferquote = effektiv 5× mehr
+  Input-Durchsatz pro Minute). Der bisher direkt im System-Prompt
+  eingebettete `uname`-Systembanner des verbundenen Servers wandert dabei
+  in eine eigene, wie Kommando-Ausgaben gekennzeichnete Nachricht (hätte
+  sonst bei jeder Sitzung den Cache ungültig machen können).
 - Neuer "Diagnosepaket erzeugen"-Knopf in den Einstellungen (Diagnose)
   neben "Logpfad öffnen": erzeugt ein einzelnes, redigiertes Text-Paket
   (Version + Build-Hash, Betriebssystem/Architektur, Datenpfade,
