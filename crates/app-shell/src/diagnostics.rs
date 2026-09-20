@@ -44,8 +44,9 @@ use ssh_manager_core::ai::OutputRedactor;
 /// `ssh_manager_core::filter::engine` ("filter engine decision" — voller
 /// Kommandotext), `app_shell::orchestration::log_command_execution`(_failed)
 /// ("ssh command executed"/"ssh command execution failed" — stdout/stderr),
-/// `app_shell::commands` ("host key trusted" — Host+Port, eine
-/// Server-Adresse).
+/// `app_shell::commands` ("host key trusted", "connection attempt failed",
+/// "resolving the connection target (jump host chain) failed" — alle drei
+/// tragen Host+Port, eine Server-Adresse).
 ///
 /// Statt jede aktuelle UND künftige sensible Log-Zeile einzeln
 /// auszuschließen (Denylist — bricht offen, sobald jemand eine neue

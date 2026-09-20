@@ -756,16 +756,58 @@ pub(crate) async fn connect_session(
     let mut transport: Box<dyn ssh_manager_core::ssh::SshTransport> = if is_local {
         Box::new(ssh_transport::LocalTransport::new())
     } else {
-        let target = resolve_connection_target(&server, state.profile_store.as_ref()).await?;
+        let target = match resolve_connection_target(&server, state.profile_store.as_ref()).await {
+            Ok(target) => target,
+            Err(err) => {
+                // Stefans Fund (2026-09): ein fehlgeschlagener Verbindungs-
+                // aufbau (hier: schon das Auflösen der Jump-Host-Kette,
+                // unten der eigentliche `ssh_transport::connect`) landete
+                // bislang NIRGENDS im Log — das `?` reichte den Fehler nur
+                // ans Frontend durch, ohne dass je ein `tracing::`-Aufruf
+                // dazwischenlag (anders als der erfolgreiche Fall, s.
+                // "session connected" unten). Kein Zugangsdaten-Leck: nur
+                // `code()`/die technische Fehlermeldung, keine der drei
+                // `SshError`-Varianten mit `String`-Payload
+                // (`ConnectionFailed`/`ChannelError`/
+                // `CredentialResolutionFailed`) baut ihren Text aus einem
+                // Passwort/Schlüssel — derselbe Text geht ohnehin schon
+                // unverändert ans Frontend (`CommandError::with_code`
+                // unten), hier also keine neue Offenlegung.
+                tracing::warn!(
+                    session_id = %session_id,
+                    server_id = %server_id.0,
+                    code = err.code(),
+                    error = %err,
+                    "resolving the connection target (jump host chain) failed",
+                );
+                return Err(CommandError::with_code(err.to_string(), err.code()));
+            }
+        };
         loop {
-            let outcome = map_connect_result(
+            let outcome = match map_connect_result(
                 ssh_transport::connect(
                     &target,
                     state.credential_store.as_ref(),
                     state.host_key_store.clone(),
                 )
                 .await,
-            )?;
+            ) {
+                Ok(outcome) => outcome,
+                Err(err) => {
+                    let last_hop = target.hops.last();
+                    tracing::warn!(
+                        session_id = %session_id,
+                        server_id = %server_id.0,
+                        host = last_hop.map(|h| h.host.as_str()).unwrap_or("?"),
+                        port = last_hop.map(|h| h.port),
+                        hop_count = target.hops.len(),
+                        code = err.code.unwrap_or("UNKNOWN"),
+                        error = %err.message,
+                        "connection attempt failed",
+                    );
+                    return Err(err);
+                }
+            };
 
             match outcome {
                 ssh_transport::ConnectOutcome::Connected(transport) => break transport,
