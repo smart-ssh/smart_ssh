@@ -368,6 +368,7 @@
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Verwendet das hinterlegte Sudo-Passwort – erfordert immer Bestätigung",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Liest eine Datei mit Zugangsdaten (z. B. SSH-Schlüssel, .env, /etc/shadow) – erfordert immer Bestätigung",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Eine vorherige Aktion dieser Antwort wurde abgelehnt – erfordert Bestätigung",
+    "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten) – erfordert immer Bestätigung",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notiz-Aktualisierungen erfordern immer eine Bestätigung",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Dateischreibvorgänge erfordern immer eine Bestätigung",
     "GROUP_SELF_PARENT": "Eine Gruppe kann nicht ihre eigene übergeordnete Gruppe sein",

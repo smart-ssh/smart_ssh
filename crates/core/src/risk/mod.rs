@@ -18,5 +18,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use classifier::{secret_path_read_reason, RuleBasedRiskClassifier};
+pub use classifier::{
+    secret_path_read_reason, sftp_server_invocation_reason, RuleBasedRiskClassifier,
+};
 pub use types::{RiskAssessment, RiskClassifier, RiskLevel};

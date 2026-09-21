@@ -333,6 +333,7 @@ fn test_server_risk_red_sudo_chmod_recursive_777_root_not_defeated_by_sudo_prefi
 // --- Spec 0068, Teil 2: Lesebefehle auf Secret-Pfade -> immer Confirm ---
 
 use super::secret_path_read_reason;
+use super::sftp_server_invocation_reason;
 
 #[test]
 fn test_secret_path_reads_are_detected_for_every_listed_path_and_command() {
@@ -799,6 +800,47 @@ fn test_fourth_round_checks_leave_ordinary_pipelines_alone() {
             secret_path_read_reason(command),
             None,
             "fälschlich eskaliert: {command}"
+        );
+    }
+}
+
+/// ADR 0058 §8 (Entscheidung Stefan): jeder Aufruf von `sftp-server`
+/// verlangt eine Bestätigung — auch hinter Wrappern, in Code-Strings und per
+/// Pipe an eine Shell; bloße Erwähnungen nicht.
+#[test]
+fn test_sftp_server_invocations_are_detected_for_confirmation() {
+    for command in [
+        "sudo -n /usr/lib/openssh/sftp-server",
+        "sudo -n -u www-data /usr/libexec/openssh/sftp-server",
+        "doas /usr/lib/ssh/sftp-server",
+        "/usr/lib/openssh/sftp-server -e",
+        "printf x | sudo -n /usr/libexec/sftp-server",
+        "env LC_ALL=C sudo /usr/lib/openssh/sftp-server",
+        "timeout 5 /usr/lib/openssh/sftp-server",
+        "nohup sudo -n sftp-server",
+        "sh -c 'sudo -n /usr/lib/openssh/sftp-server'",
+        "ssh localhost 'sudo -n /usr/lib/openssh/sftp-server'",
+        "echo /usr/lib/openssh/sftp-server | sh",
+        "watch sudo -n /usr/lib/openssh/sftp-server",
+        "\"/usr/lib/openssh/sftp-server\"",
+        "FOO=1 /usr/lib/openssh/sftp-server",
+    ] {
+        assert!(
+            sftp_server_invocation_reason(command).is_some(),
+            "nicht erkannt: {command}"
+        );
+    }
+    for command in [
+        "ls -l /usr/lib/openssh/sftp-server",
+        "grep sftp-server /etc/ssh/sshd_config",
+        "which sftp-server",
+        "cat /etc/ssh/sshd_config",
+        "file /usr/libexec/openssh/sftp-server",
+    ] {
+        assert_eq!(
+            sftp_server_invocation_reason(command),
+            None,
+            "fälschlich erkannt: {command}"
         );
     }
 }

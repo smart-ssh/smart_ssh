@@ -880,6 +880,37 @@ async fn handle_action_proposed(
         }
     }
 
+    // ADR 0058 §8 (Entscheidung Stefan, 2026-09-22): ein Aufruf von
+    // `sftp-server` verlangt IMMER eine Bestätigung — auch gegen eine
+    // Allow-Regel (mit der NOPASSWD-Regel des erhöhten Dateibrowsers ist das
+    // passwortloser Root-Dateizugriff). Dasselbe Muster wie die
+    // Secret-Prüfung oben: nur `AutoExec` → `Confirm`, vor der
+    // Injection-Prüfung, deren Flag hier nur gelesen wird.
+    if matches!(decision, Decision::AutoExec) {
+        if let Some(reason) = pseudo_command_for_risk_classification(&action)
+            .as_deref()
+            .and_then(ssh_manager_core::risk::sftp_server_invocation_reason)
+        {
+            decision = if session
+                .injection_suspected
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                Decision::Confirm {
+                    reason: format!(
+                        "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
+                         erkannt; außerdem: {reason} – erfordert Bestätigung"
+                    ),
+                    code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
+                }
+            } else {
+                Decision::Confirm {
+                    reason: format!("{reason} – erfordert immer Bestätigung"),
+                    code: "FILTER_SFTP_SERVER_REQUIRES_CONFIRM".to_string(),
+                }
+            };
+        }
+    }
+
     // Unabhängiger Review-Pass (Spec 0039): ersetzt die bisherige SEC-03-
     // Bremse aus Spec 0013. Die ALTE Logik: `round` war ein rein lokaler
     // Schleifenzähler in `run_chat_turn`s `for round in 1..=MAX_AUTO_
@@ -13718,6 +13749,49 @@ mod tests {
                 "{origin}: normaler Kanal wurde benutzt"
             );
         }
+    }
+
+    /// ADR 0058 §8: ein `sftp-server`-Aufruf wird trotz Allow-Regel nie
+    /// automatisch ausgeführt (Chat und MCP); `Deny` bleibt `Deny`.
+    #[tokio::test]
+    async fn test_sftp_server_invocation_always_requires_confirm_even_with_allow_rule() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        for origin in [
+            ActionOrigin::Internal,
+            ActionOrigin::Mcp { client_name: None },
+        ] {
+            let (decision, payload) = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                proposed_decision_code_with_origin(
+                    &session,
+                    AiAction::SuggestCommand {
+                        command: "sudo -n /usr/lib/openssh/sftp-server".to_string(),
+                    },
+                    origin,
+                ),
+            )
+            .await
+            .expect("Dialog muss enden");
+            assert!(
+                matches!(&decision, Decision::Confirm { code, .. }
+                    if code == "FILTER_SFTP_SERVER_REQUIRES_CONFIRM"),
+                "{payload}"
+            );
+        }
+
+        let (decision, payload) = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            proposed_decision_code(
+                &session,
+                AiAction::SuggestCommand {
+                    command: "ls -l /usr/lib/openssh/sftp-server".to_string(),
+                },
+            ),
+        )
+        .await
+        .expect("Aktion muss enden");
+        assert!(matches!(decision, Decision::AutoExec), "{payload}");
     }
 
     /// Zweite Review-Runde (Spec 0068, ERHÖHT): eine Secret-Lese-Aktion darf

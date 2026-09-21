@@ -217,6 +217,12 @@ pub(super) const SECRET_PATH_HINTS: &[&str] = &[
     ".jks",
 ];
 
+/// Aufruf von `sftp-server` am Anfang eines Teilkommandos, direkt oder per
+/// `sudo`/`doas` mit beliebigen Optionen (ADR 0058 §8). Gemeinsam genutzt
+/// vom Rot-Muster und von `classifier::sftp_server_invocation_reason`.
+pub(super) const SFTP_SERVER_INVOCATION: &str =
+    r"^\s*(?:(?:sudo|doas)(?:\s+-\S+(?:\s+[a-z_][a-z0-9_.-]*)?)*\s+)?(?:\S*/)?sftp-server(?:\s|$)";
+
 pub(super) fn server_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static str)] {
     static PATTERNS: std::sync::OnceLock<Vec<(Pattern, RiskLevel, &'static str)>> =
         std::sync::OnceLock::new();
@@ -231,10 +237,7 @@ pub(super) fn server_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static 
             // Aufrufe, keine bloßen Erwähnungen (`ls …/sftp-server`, `grep
             // sftp-server sshd_config`).
             (
-                Regex(
-                    r"^\s*(?:(?:sudo|doas)(?:\s+-\S+(?:\s+[a-z_][a-z0-9_.-]*)?)*\s+)?(?:\S*/)?sftp-server(?:\s|$)"
-                        .to_string(),
-                ),
+                Regex(SFTP_SERVER_INVOCATION.to_string()),
                 RiskLevel::Red,
                 "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten)",
             ),

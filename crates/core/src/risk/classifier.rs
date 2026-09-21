@@ -4,7 +4,7 @@ use crate::filter::{
 
 use super::patterns::{
     data_risk_patterns, secret_path_patterns, server_risk_patterns, SECRET_FILE_CANDIDATES,
-    SECRET_PATH_HINTS, SECRET_READ_COMMANDS, SECRET_RELATIVE_PREFIXES,
+    SECRET_PATH_HINTS, SECRET_READ_COMMANDS, SECRET_RELATIVE_PREFIXES, SFTP_SERVER_INVOCATION,
 };
 use super::types::{RiskAssessment, RiskClassifier, RiskLevel};
 
@@ -125,6 +125,106 @@ fn best_match(
         .filter(|(pattern, _, _)| pattern.matches(lower_segment))
         .map(|(_, level, reason)| (*level, *reason))
         .max_by_key(|(level, _)| *level)
+}
+
+/// ADR 0058 §8 (Entscheidung Stefan, 2026-09-22): liefert eine Begründung,
+/// wenn `command` `sftp-server` aufruft. Der Aufrufer
+/// (`app-shell::orchestration::handle_action_proposed`) macht aus
+/// `AutoExec` dann immer `Confirm` — auch gegen eine Allow-Regel.
+///
+/// Wie bei [`secret_path_read_reason`] als ODER aufgebaut: (a) das
+/// Rot-Muster des Risiko-Klassifizierers, unverändert, pro Teilkommando und
+/// in der aufgelösten Form; ODER (b) eine breitere Wort-Prüfung —
+/// quote-bewusst, auch hinter Wrappern (`env`, `timeout`, `nohup` …), in
+/// Code-Strings einer weiteren Shell (`sh -c '…'`, `ssh h '…'`) und bei
+/// Übergabe per Pipe an eine Shell. Die Erweiterung kann so nie weniger
+/// erkennen als das Rot-Muster. Bloße Erwähnungen (`ls`, `grep`, `which`,
+/// `cat` auf den Pfad) lösen nichts aus.
+pub fn sftp_server_invocation_reason(command: &str) -> Option<&'static str> {
+    const REASON: &str = "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten)";
+    if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+        return Some("Kommando zu lang für eine Prüfung auf sftp-server-Aufrufe");
+    }
+    static INVOCATION: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let invocation = INVOCATION.get_or_init(|| {
+        regex::Regex::new(SFTP_SERVER_INVOCATION)
+            .expect("eingebautes sftp-server-Muster ist gültig")
+    });
+    // (a) Rot-Muster, wie der Klassifizierer es anwendet.
+    let mut segments = segment_command(command);
+    segments.push(command.to_string());
+    let resolved: Vec<String> = segments
+        .iter()
+        .map(|segment| resolve_effective_command(segment))
+        .collect();
+    segments.extend(resolved);
+    if segments
+        .iter()
+        .any(|segment| invocation.is_match(&segment.to_lowercase()))
+    {
+        return Some(REASON);
+    }
+    // (b) Wort-Prüfung.
+    sftp_server_word_check(command, 0).then_some(REASON)
+}
+
+/// Programme, hinter denen das nächste Nicht-Options-Wort ausgeführt wird.
+const COMMAND_PREFIXES: &[&str] = &[
+    "sudo", "doas", "env", "nice", "nohup", "time", "command", "exec", "timeout", "setsid",
+    "stdbuf", "ionice", "chroot", "flock", "busybox", "xargs", "runuser", "su", "watch", "strace",
+    "ltrace",
+];
+
+fn sftp_server_word_check(command: &str, depth: usize) -> bool {
+    if depth > 3 {
+        return true;
+    }
+    let lower = command.to_lowercase();
+    let words = shell_words(&lower);
+    let name = |word: &ShellWord| word.text.rsplit('/').next().unwrap_or("").to_string();
+    let has_reshell = words
+        .iter()
+        .any(|word| RESHELL_COMMANDS.contains(&name(word).as_str()));
+    let mut at_command_position = true;
+    for word in &words {
+        if word.stage_start {
+            at_command_position = true;
+        }
+        let word_name = name(word);
+        if word_name == "sftp-server" && (at_command_position || has_reshell) {
+            return true;
+        }
+        if word.text.contains(char::is_whitespace)
+            && word.text.contains("sftp-server")
+            && sftp_server_word_check(&word.text, depth + 1)
+        {
+            return true;
+        }
+        if at_command_position {
+            let is_prefix = COMMAND_PREFIXES.contains(&word_name.as_str())
+                || RESHELL_COMMANDS.contains(&word_name.as_str())
+                || word.text.starts_with('-')
+                || is_env_assignment(&word.text)
+                || word
+                    .text
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '.' || c == 's');
+            at_command_position = is_prefix;
+        }
+    }
+    false
+}
+
+/// `NAME=wert` vor einem Kommando.
+fn is_env_assignment(word: &str) -> bool {
+    word.split_once('=').is_some_and(|(name, _)| {
+        !name.is_empty()
+            && name
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    })
 }
 
 /// Spec 0068, Teil 2: liefert eine Begründung, wenn `command` den Inhalt

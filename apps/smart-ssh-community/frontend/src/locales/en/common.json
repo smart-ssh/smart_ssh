@@ -368,6 +368,7 @@
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Uses the stored sudo password – always requires confirmation",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Reads a file with credentials (e.g. SSH key, .env, /etc/shadow) – always requires confirmation",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "An earlier action in this response was rejected – requires confirmation",
+    "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Starts sftp-server (with sudo: file access with root privileges) – always requires confirmation",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Note updates always require confirmation",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "File writes always require confirmation",
     "GROUP_SELF_PARENT": "A group cannot be its own parent group",
