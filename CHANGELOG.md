@@ -175,6 +175,42 @@ sind mit **(Pro)** markiert.
   oder ausgeführt; die App versucht stattdessen einmalig automatisch
   erneut mit mehr Platz, bevor sie im Ausnahmefall einen sichtbaren
   Fehler statt eines unvollständigen Kommandos zeigt.
+- API-Schlüssel von KI-Anbietern und Code-Hostern werden jetzt auch ohne
+  erkennbares Stichwort davor geschwärzt, bevor Text an die KI geht oder
+  gespeichert wird: Anthropic (`sk-ant-…`), OpenAI (`sk-proj-…` u. a.),
+  OpenRouter (`sk-or-v1-…`), GitLab (`glpat-…`, `glrt-…`, `gldt-…`),
+  Hugging Face (`hf_…`), Groq (`gsk_…`) und xAI (`xai-…`). Ebenso Header
+  wie `x-api-key`, `api-key`, `x-goog-api-key`, `Authorization: Basic …`
+  und `Authorization: Token …`, Passwörter in beliebigen Adressen der Form
+  `schema://nutzer:passwort@host` (der Nutzername bleibt lesbar) sowie die
+  Zugangsdaten aus `.netrc`, `.pgpass`, Docker- und kubeconfig-Dateien.
+- Liest ein KI-Vorschlag eine typische Geheimnis-Datei (private SSH- und
+  Host-Schlüssel, `*.pem`, `*.key`, `*.p12`/`*.pfx`/`*.jks`, `.env`/`.envrc`,
+  `/etc/shadow`, `~/.aws/credentials`, `~/.docker/config.json`,
+  `~/.kube/config`, `.netrc`, `.pgpass`, `.git-credentials`, `~/.gnupg`,
+  `/etc/ssl/private`, `~/.npmrc`, `~/.pypirc`, `~/.my.cnf`, Shell-Historien,
+  Prozess-Umgebungen, `wp-config.php`, Kubernetes-Admin-Konfigurationen
+  u. a.), fragt die
+  App jetzt immer nach — auch wenn eine Allow-Regel das Kommando sonst
+  automatisch freigeben würde. Das gilt auch für Anfragen externer
+  MCP-Clients und für das direkte Lesen einer Datei, und es lässt sich
+  nicht über Pfad-Tricks, Verzeichniswechsel, Platzhalter oder
+  vorangestellte Befehle umgehen. **Verhaltensänderung:** rekursives
+  Durchsuchen (`grep -r`, `rg`) und Lesen per `find -exec`/`xargs` fragt
+  ebenfalls immer nach, weil der Inhalt vorab nicht prüfbar ist.
+- Lehnt man eine von mehreren Aktionen einer KI-Antwort ab (oder blockiert
+  eine Regel sie), laufen die übrigen Aktionen derselben Antwort nicht mehr
+  automatisch, sondern fragen ebenfalls nach — sie könnten auf der
+  abgelehnten aufbauen.
+- Der Bestätigungsdialog für das Schreiben einer Datei sagt jetzt vorab,
+  wenn die App bei fehlenden Rechten mit dem hinterlegten Sudo-Passwort
+  schreiben würde. Bisher war das erst im Ergebnis zu sehen.
+- Ein Host-Key-Dialog, der nie beantwortet wird (z. B. weil das Fenster
+  neu geladen wurde), lässt den Verbindungsaufbau nicht mehr ewig warten.
+  Nach einer Stunde bricht die App ab und gilt die Abfrage als abgelehnt;
+  ein Host-Key wird durch Zeitablauf nie vertraut. Auch „Modelle laden“
+  und die Attestierungsabfrage hängen bei einem nicht antwortenden
+  Anbieter nicht mehr, sondern melden nach 90 Sekunden einen Fehler.
 
 ## [0.5.0] — 2026-09-11
 
