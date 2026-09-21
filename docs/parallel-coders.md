@@ -23,9 +23,12 @@ Der Worktree landet unter `.claude/worktrees/spec-0069/` auf dem Branch
 Für einen zweiten Coder ein zweites Terminal mit anderem Namen.
 
 **Variante B — Subagent aus einer koordinierenden Sitzung:**
-"Setze Spec 0069 mit dem smart-ssh-coder-Agent um" — läuft im Hintergrund
-in einem temporären Worktree, kann aber nicht zurückfragen: Er hält nach
-Teil 0 an und berichtet; die Fortsetzung schickst du als Nachricht.
+"Setze Spec 0069 mit dem smart-ssh-coder-Agent in einem eigenen Worktree
+um" — läuft im Hintergrund in einem temporären Worktree, kann aber nicht
+zurückfragen: Er hält nach Teil 0 an und berichtet; die Fortsetzung schickst
+du als Nachricht. Den eigenen Worktree ausdrücklich verlangen: Der Agent
+legt ihn nicht selbst an, weil er auch in bereits vorbereiteten Worktrees
+gestartet wird.
 
 ## Zusammenführen
 

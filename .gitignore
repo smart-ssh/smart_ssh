@@ -49,3 +49,6 @@ Thumbs.db
 
 # Sonstiges
 *.log
+
+# lokaler Arbeitsstand der Coding-Agenten
+.agent/

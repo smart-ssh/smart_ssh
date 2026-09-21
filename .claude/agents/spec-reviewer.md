@@ -59,6 +59,15 @@ strukturierter Bericht.
    Groß-/Kleinschreibungs-Variationen, Whitespace-Tricks), und prüfe sie
    gedanklich gegen den Code.
 
+6. Prüfe **Klarstellungen und Annahmen**: Entspricht der Code den
+   nachgetragenen „Klarstellungen" der Spec? Gibt es `ANNAHME A-n`-Kommentare
+   oder im Aufruf genannte offene Annahmen? Jede unbestätigte Annahme ist ein
+   Fund (Spec-Konformität), bis sie ausdrücklich bestätigt wurde.
+7. Prüfe die **Repository-Grenze**: Bringt der Diff Inhalte in dieses
+   öffentliche Repo, die nicht hierher gehören (Code oder Details der
+   proprietären Module, interne Planungs- oder Geschäftsdokumente)? Ändert
+   er im Pro-Repo Dateien unter `vendor/`?
+
 ## Ausgabeformat
 
 ```
@@ -73,6 +82,9 @@ strukturierter Bericht.
 
 ## Gesamteinschätzung
 [unbedenklich / kleinere Nacharbeit nötig / sicherheitsrelevanter Fund]
+
+## Zurückstellbar
+- [Funde, die nicht in diesen Schritt gehören — Vorschlag fürs Backlog]
 ```
 
 Bei Unsicherheit, ob etwas ein echtes Problem ist: trotzdem aufnehmen, als
