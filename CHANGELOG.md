@@ -10,6 +10,20 @@ sind mit **(Pro)** markiert.
 ## [Unreleased]
 
 ### Added
+- Der Chat ist jetzt jederzeit bedienbar, auch während die KI arbeitet:
+  Eine währenddessen geschriebene Nachricht unterbricht nichts, sondern
+  wird eingereiht und mit der nächsten Anfrage an die KI mitgeschickt
+  (bzw. direkt danach, falls keine weitere Runde folgt) — gut zum
+  Korrigieren, ohne auf das Ende der Antwort warten zu müssen. Der
+  „Stopp"-Knopf erscheint bei jeder laufenden Antwort und bricht die
+  laufende Anfrage an den KI-Anbieter sofort ab, statt nur weitere
+  automatische Runden zu verhindern. Ein gerade laufendes Kommando auf dem
+  Server läuft dabei zu Ende; ein offener Bestätigungsdialog bleibt stehen.
+- Die KI wird jetzt angewiesen, Passwörter, private Schlüssel, Tokens und
+  ähnliche Geheimnisse möglichst nicht zu lesen: Existenz wird über
+  Metadaten (z. B. Dateigröße) geprüft, und solche Dateien werden direkt
+  auf dem Server kopiert (`cp`, Pipe) statt gelesen und neu geschrieben —
+  so landen Geheimnisse gar nicht erst im Chat-Verlauf.
 - App nutzt jetzt Anthropics Prompt-Caching für System-Prompt,
   Werkzeug-Definitionen und Server-Notiz — diese ändern sich innerhalb
   einer Sitzung kaum, werden bislang aber bei **jedem** Request neu
