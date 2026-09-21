@@ -72,12 +72,45 @@ fn anthropic_model_max_output_tokens(model: &str) -> u32 {
         || model.contains("mythos-5")
     {
         128_000
+    } else if model.contains("claude-3") {
+        // Spec-reviewer-Fund (Review dieses Schritts): Claude-3.x-Modelle
+        // (falls in einer bestehenden Konfiguration noch hinterlegt — die
+        // aktuelle Modellübersicht führt sie nicht mehr) hatten ein
+        // deutlich kleineres Output-Maximum (4096-8192, je nach Variante)
+        // als die 4.x-Generation unten — der generische `"claude-"`-Zweig
+        // hätte sie fälschlich mit 64K angefragt und liefe damit ins Risiko
+        // eines 400 "über dem Maximum". Bewusst NICHT versucht, hier exakt
+        // zwischen den einzelnen 3.x-Varianten zu unterscheiden (nicht mehr
+        // gegen aktuelle Dokumentation verifizierbar) — der konservative
+        // Fallback ist für eine auslaufende Generation die sichere Wahl.
+        ANTHROPIC_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS
     } else if model.contains("claude-") || model.contains("anthropic") {
-        // Bekannte ältere Generation (Sonnet/Opus/Haiku 4.x) — durchweg 64K,
+        // Bekannte 4.x-Generation (Sonnet/Opus/Haiku 4.x) — durchweg 64K,
         // ebenfalls verifiziert (s. Funktionsdoc).
         64_000
     } else {
         ANTHROPIC_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS
+    }
+}
+
+/// Standardwert für den Haupt-Chat (Spec 0065, Teil 1: "Vorschlag 16.384
+/// allgemein, Anthropic darf höher sein, z. B. 32k") — BEWUSST kleiner als
+/// [`anthropic_model_max_output_tokens`], das echte Modell-Maximum. Beide
+/// waren in einer früheren Fassung identisch (spec-reviewer-Fund, ERHÖHT,
+/// Review dieses Schritts): der einmalige Retry aus Teil 3 verdoppelt
+/// `max_tokens` "bis zum Modell-Maximum" — war der Default bereits das
+/// Maximum, hatte das Verdoppeln keinen Spielraum mehr und der Retry schickte
+/// faktisch denselben Body ein zweites Mal, ohne die Erfolgschance zu
+/// erhöhen.
+fn anthropic_default_max_tokens(model: &str) -> u32 {
+    anthropic_default_max_tokens_for(anthropic_model_max_output_tokens(model))
+}
+
+fn anthropic_default_max_tokens_for(model_max: u32) -> u32 {
+    match model_max {
+        128_000 => 32_000,
+        64_000 => 16_384,
+        _ => model_max / 2,
     }
 }
 
@@ -190,7 +223,7 @@ impl AnthropicProvider {
         let max_tokens = context
             .max_tokens_hint
             .or(self.max_tokens_override)
-            .unwrap_or_else(|| anthropic_model_max_output_tokens(&self.model));
+            .unwrap_or_else(|| anthropic_default_max_tokens(&self.model));
 
         let mut body = json!({
             "model": self.model,
@@ -525,7 +558,7 @@ impl AiProvider for AnthropicProvider {
         // setzt), bleibt aber defensiv statt `.expect(...)`.
         let max_tokens = body["max_tokens"]
             .as_u64()
-            .unwrap_or(u64::from(anthropic_model_max_output_tokens(&self.model)))
+            .unwrap_or(u64::from(anthropic_default_max_tokens(&self.model)))
             as u32;
         // Spec 0065, Teil 1+3: die Retry-Obergrenze ist jetzt das ECHTE
         // Modell-Maximum (ersetzt den Platzhalter `ANTHROPIC_RETRY_MAX_
@@ -757,7 +790,7 @@ impl AnthropicStreamState {
             }
             "message_stop" => {
                 self.finished = true;
-                let events = self.finalize();
+                let events = self.finalize(false);
                 self.pending.extend(events);
             }
             "error" => {
@@ -776,23 +809,40 @@ impl AnthropicStreamState {
         }
     }
 
-    fn finalize(&mut self) -> Vec<RawEvent> {
+    /// `abrupt`: der Frame-Stream endete OHNE `message_stop` (z. B.
+    /// Verbindungsabbruch) — s. Aufrufer-Kommentare.
+    fn finalize(&mut self, abrupt: bool) -> Vec<RawEvent> {
         log_text_delta_summary(self.request_id, self.text_delta_total_len);
 
         // Spec 0065, Teil 3: ein noch offener `tool_use`-Block (nie sein
-        // eigenes `content_block_stop` erhalten — z. B. bei einem
-        // Verbindungsabbruch mitten im Block, ohne dass überhaupt ein
-        // `message_delta` ankam) ist per Definition unvollständig, egal was
-        // `stop_reason` sagt (der ist hier ggf. gar nicht bekannt). Vor
-        // diesem Fix wurde ein solcher Block hier stillschweigend
-        // verworfen, OHNE Retry — kein Sicherheitsloch (nichts wurde
-        // ausgeführt), aber ein unnötig verlorener Turn, den der Retry
-        // jetzt auffängt.
+        // eigenes `content_block_stop` erhalten) ist per Definition
+        // unvollständig, egal was `stop_reason` sagt.
         let has_open_tool_block = self
             .blocks
             .values()
             .any(|block| matches!(block, BlockKind::ToolUse { .. }));
         let held_tool_events = std::mem::take(&mut self.held_tool_events);
+
+        // Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): ALLOWLIST
+        // statt Denylist. Vorher galt nur ein exaktes `stop_reason ==
+        // "max_tokens"` als Abbruch — jedes andere oder fehlende
+        // `stop_reason` (ein Gateway/Proxy mit abweichender Schreibweise
+        // wie `"Length"`/`"MAX_TOKENS"`, oder ein Verbindungsabbruch
+        // UNMITTELBAR NACH `content_block_stop`, aber VOR `message_delta`)
+        // wurde fälschlich als "vollständig" gewertet und ein bereits in
+        // `held_tool_events` liegender Tool-Call trotzdem freigegeben. Jetzt
+        // umgekehrt: nur ein ausdrücklich als erfolgreicher Abschluss
+        // bekannter `stop_reason` gilt als vollständig — alles andere
+        // (inkl. unbekannt/fehlend/`abrupt`) wird konservativ als
+        // abgeschnitten behandelt (Eskalation, keine Aufweichung, s.
+        // CLAUDE.md "Security-critical modules").
+        let stop_reason_confirms_completion = matches!(
+            self.stop_reason.as_deref(),
+            Some("end_turn") | Some("tool_use") | Some("stop_sequence")
+        );
+        // Für den Text-Abschnitt-Hinweis (Spec 0065, Teil 2) bleibt die
+        // exakte Prüfung sinnvoll — dort geht es nur um die UI-Meldung
+        // "Längenlimit erreicht", kein Sicherheits-Gate.
         let stop_reason_is_max_tokens = self.stop_reason.as_deref() == Some("max_tokens");
 
         // Fallback-Modus (kein natives Tool-Calling, Spec 0006 Abschnitt 4):
@@ -811,8 +861,9 @@ impl AnthropicStreamState {
         }
 
         let tool_call_truncated = has_open_tool_block
-            || (!held_tool_events.is_empty() && stop_reason_is_max_tokens)
-            || (fallback_action.is_some() && stop_reason_is_max_tokens);
+            || abrupt
+            || (!held_tool_events.is_empty() && !stop_reason_confirms_completion)
+            || (fallback_action.is_some() && !stop_reason_confirms_completion);
 
         if tool_call_truncated {
             // Spec 0065, Invariante: weder `held_tool_events` noch
@@ -936,9 +987,19 @@ fn process_frame_stream(
                     // Verbindung endete ohne `message_stop`-Event (z. B.
                     // abgeschnittene Antwort) — trotzdem sauber abschließen
                     // statt den Stream einfach verstummen zu lassen.
+                    // Spec 0065, Teil 3 (spec-reviewer-Fund, ERHÖHT): `abrupt
+                    // = true` — selbst ein bereits per `content_block_stop`
+                    // geschlossener (und damit in `held_tool_events`
+                    // liegender) Tool-Call gilt hier als unvollständig,
+                    // solange kein `message_delta`/`message_stop` den
+                    // Abschluss bestätigt hat. Vorher griff nur `has_open_
+                    // tool_block` (Block noch in `self.blocks`) — ein
+                    // Verbindungsabbruch UNMITTELBAR NACH `content_block_
+                    // stop`, aber vor `message_delta`, hätte den Tool-Call
+                    // sonst freigegeben (Ist-Befund im Review).
                     if !state.finished {
                         state.finished = true;
-                        let events = state.finalize();
+                        let events = state.finalize(true);
                         state.pending.extend(events);
                     } else {
                         return None;
@@ -1357,6 +1418,81 @@ mod tests {
         assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
     }
 
+    /// Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): ein Tool-Call,
+    /// dessen `content_block_stop` schon ankam (JSON also vollständig
+    /// akkumuliert, in `held_tool_events`), dessen `message_delta`/
+    /// `message_stop` aber NIE ankommen (Verbindungsabbruch dazwischen),
+    /// darf trotzdem nicht freigegeben werden — `stop_reason` ist hier
+    /// `None`, nicht `"max_tokens"`. Ist-Befund vor diesem Fix: `has_open_
+    /// tool_block` prüfte nur `self.blocks`, der Block war zu diesem
+    /// Zeitpunkt aber schon nach `held_tool_events` verschoben — die
+    /// Antwort wurde fälschlich als vollständig behandelt und freigegeben.
+    #[tokio::test]
+    async fn test_abrupt_disconnect_after_content_block_stop_but_before_message_delta_triggers_retry(
+    ) {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    "content_block_start",
+                    r#"{"index":0,"content_block":{"type":"tool_use","name":"suggest_command"}}"#,
+                ),
+                frame(
+                    "content_block_delta",
+                    r#"{"index":0,"delta":{"type":"input_json_delta","partial_json":"{\"command\":\"rm -rf /var/log/app\"}"}}"#,
+                ),
+                frame("content_block_stop", r#"{"index":0}"#),
+                // Abbruch HIER: kein message_delta, kein message_stop.
+            ]),
+        );
+
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+                .collect()
+                .await;
+
+        assert_eq!(
+            events,
+            vec![RawEvent::RetryWithHigherMaxTokens],
+            "ein vollständig geparster, aber nie durch stop_reason bestätigter \
+             Tool-Call darf nicht freigegeben werden"
+        );
+    }
+
+    /// Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): ein Gateway/
+    /// Proxy, der `stop_reason` mit abweichender Schreibweise liefert (hier
+    /// `"Length"` statt `"max_tokens"`), darf einen vollständig geparsten
+    /// Tool-Call nicht freigeben — nur explizit bekannte
+    /// Abschluss-Gründe (`end_turn`/`tool_use`/`stop_sequence`) gelten als
+    /// vollständig (Allowlist statt Denylist).
+    #[tokio::test]
+    async fn test_unrecognized_stop_reason_is_treated_as_truncated_not_complete() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    "content_block_start",
+                    r#"{"index":0,"content_block":{"type":"tool_use","name":"suggest_command"}}"#,
+                ),
+                frame(
+                    "content_block_delta",
+                    r#"{"index":0,"delta":{"type":"input_json_delta","partial_json":"{\"command\":\"rm -rf /var/log/app\"}"}}"#,
+                ),
+                frame("content_block_stop", r#"{"index":0}"#),
+                frame(
+                    "message_delta",
+                    r#"{"delta":{"stop_reason":"Length"},"usage":{"output_tokens":4096}}"#,
+                ),
+                frame("message_stop", "{}"),
+            ]),
+        );
+
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
+    }
+
     /// Spec 0065 §3, konservative Multi-Tool-Regel: mehrere Tool-Calls in
     /// einer Antwort, nur der LETZTE abgeschnitten — die ganze Antwort wird
     /// verworfen, auch der vorher vollständige erste Call wird NICHT
@@ -1420,7 +1556,11 @@ mod tests {
 
         let body = provider.build_request_body(&context);
 
-        assert_eq!(body["max_tokens"], 128_000);
+        // Spec-reviewer-Fund (ERHÖHT): der DEFAULT ist bewusst kleiner als
+        // das echte Modell-Maximum (128K) — sonst hätte der Retry aus Teil 3
+        // keinen Spielraum zum Verdoppeln mehr, s.
+        // `anthropic_default_max_tokens`-Doc-Kommentar.
+        assert_eq!(body["max_tokens"], 32_000);
     }
 
     /// Gegenprobe: ein Modell der vorherigen (4.x-)Generation bleibt bei
@@ -1439,7 +1579,7 @@ mod tests {
 
         let body = provider.build_request_body(&context);
 
-        assert_eq!(body["max_tokens"], 64_000);
+        assert_eq!(body["max_tokens"], 16_384);
     }
 
     /// Ein unbekannter Modellname fällt auf den konservativen Fallback
@@ -1461,7 +1601,7 @@ mod tests {
 
         assert_eq!(
             body["max_tokens"],
-            ANTHROPIC_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS
+            ANTHROPIC_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS / 2
         );
     }
 
@@ -1528,5 +1668,32 @@ mod tests {
         let body = provider.build_request_body(&context);
 
         assert_eq!(body["max_tokens"], 4096);
+    }
+
+    /// Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): der Default
+    /// muss STRIKT kleiner als das Modell-Maximum sein, sonst hat der
+    /// einmalige Retry aus Teil 3 keinen Spielraum mehr zum Verdoppeln
+    /// (vorher waren beide identisch — der Retry schickte faktisch
+    /// denselben Body ein zweites Mal). Geprüft für jeden bekannten Bucket.
+    #[test]
+    fn test_default_max_tokens_always_leaves_headroom_below_the_model_maximum() {
+        for model in [
+            "claude-sonnet-5",
+            "claude-opus-5",
+            "claude-fable-5-1",
+            "claude-sonnet-4-5-20250929",
+            "claude-haiku-4-5-20251001",
+            "some-future-model-variant",
+        ] {
+            let default = anthropic_default_max_tokens(model);
+            let max = anthropic_model_max_output_tokens(model);
+            assert!(
+                default < max,
+                "Default ({default}) muss für {model} kleiner als das Modell-Maximum ({max}) sein"
+            );
+            // Eine Verdopplung (der Retry-Schritt) muss tatsächlich näher an
+            // das Maximum herankommen, nicht sofort wieder daran anstoßen.
+            assert!(default.saturating_mul(2).min(max) > default);
+        }
     }
 }

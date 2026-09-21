@@ -344,6 +344,7 @@
     "AI_INVALID_RESPONSE": "Unexpected response from the AI provider",
     "AI_CONTEXT_TOO_LARGE": "Context too large for the AI provider",
     "AI_PROVIDER_UNAVAILABLE": "AI provider unavailable – check the provider configuration and model name",
+    "AI_RESPONSE_TRUNCATED": "The AI response was too long for a complete command",
     "FILTER_EMPTY_COMMAND": "No valid command (empty input)",
     "FILTER_COMMAND_TOO_LONG": "Command exceeds the length limit",
     "FILTER_PARSE_AMBIGUOUS": "Command could not be parsed unambiguously",

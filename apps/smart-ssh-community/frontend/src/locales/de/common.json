@@ -344,6 +344,7 @@
     "AI_INVALID_RESPONSE": "Unerwartete Antwort des KI-Providers",
     "AI_CONTEXT_TOO_LARGE": "Kontext zu groß für den KI-Provider",
     "AI_PROVIDER_UNAVAILABLE": "KI-Provider nicht erreichbar – Provider-Konfiguration und Modellname prüfen",
+    "AI_RESPONSE_TRUNCATED": "Die KI-Antwort war zu lang für einen vollständigen Befehl",
     "FILTER_EMPTY_COMMAND": "Kein sinnvolles Kommando (leere Eingabe)",
     "FILTER_COMMAND_TOO_LONG": "Kommando überschreitet das Längenlimit",
     "FILTER_PARSE_AMBIGUOUS": "Kommando konnte nicht eindeutig analysiert werden",

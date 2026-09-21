@@ -49,6 +49,7 @@ event: content_block_stop\ndata: {\"index\":0}\n\n\
 event: content_block_start\ndata: {\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"suggest_command\",\"input\":{}}}\n\n\
 event: content_block_delta\ndata: {\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\": \\\"ls -la\\\"}\"}}\n\n\
 event: content_block_stop\ndata: {\"index\":1}\n\n\
+event: message_delta\ndata: {\"delta\":{\"stop_reason\":\"tool_use\"}}\n\n\
 event: message_stop\ndata: {}\n\n";
     let server = mock_server_with_sse_body(sse_body).await;
     let provider = AnthropicProvider::new(
@@ -81,6 +82,7 @@ event: content_block_delta\ndata: {\"index\":0,\"delta\":{\"type\":\"text_delta\
 event: content_block_delta\ndata: {\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"<!--ACTION-->{\\\"action\\\": \\\"suggest_command\\\", \\\"parameters\\\": {\\\"command\\\": \\\"df -h\\\"}}<!--/ACTION-->\"}}\n\n\
 event: content_block_delta\ndata: {\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" Fertig.\"}}\n\n\
 event: content_block_stop\ndata: {\"index\":0}\n\n\
+event: message_delta\ndata: {\"delta\":{\"stop_reason\":\"end_turn\"}}\n\n\
 event: message_stop\ndata: {}\n\n";
     let server = mock_server_with_sse_body(sse_body).await;
     let provider = AnthropicProvider::new(
@@ -366,4 +368,111 @@ async fn test_rate_limit_headers_are_recorded_from_a_429_response() {
         budget.wait_duration(0).is_some(),
         "0 verbleibende Requests aus einer 429-Antwort müssen den Wächter zum Warten veranlassen"
     );
+}
+
+/// Spec 0065, Teil 3 (spec-reviewer-Fund, Testbarkeit-Lücke, ERHÖHT):
+/// Ende-zu-Ende-Test über den echten `send()`-Retry-Mechanismus (nicht nur
+/// `process_frame_stream` isoliert) — ein abgeschnittener Tool-Call löst
+/// GENAU EINEN zweiten HTTP-Request aus, der (bei Erfolg) normal
+/// durchgereicht wird. `.expect(2)` beweist, dass wirklich ein zweiter
+/// Request rausging (nicht nur derselbe Body erneut lokal verarbeitet).
+#[tokio::test]
+async fn test_truncated_tool_call_triggers_exactly_one_retry_request_that_then_succeeds() {
+    let server = MockServer::start().await;
+    let truncated_body = "\
+event: content_block_start\ndata: {\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"suggest_command\",\"input\":{}}}\n\n\
+event: content_block_delta\ndata: {\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\": \\\"rm -rf /var/log/app\\\"}\"}}\n\n\
+event: content_block_stop\ndata: {\"index\":0}\n\n\
+event: message_delta\ndata: {\"delta\":{\"stop_reason\":\"max_tokens\"}}\n\n\
+event: message_stop\ndata: {}\n\n";
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(truncated_body.to_string()),
+        )
+        .up_to_n_times(1)
+        .with_priority(1)
+        .expect(1)
+        .mount(&server)
+        .await;
+    let complete_body = "\
+event: content_block_start\ndata: {\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_2\",\"name\":\"suggest_command\",\"input\":{}}}\n\n\
+event: content_block_delta\ndata: {\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\": \\\"ls -la\\\"}\"}}\n\n\
+event: content_block_stop\ndata: {\"index\":0}\n\n\
+event: message_delta\ndata: {\"delta\":{\"stop_reason\":\"tool_use\"}}\n\n\
+event: message_stop\ndata: {}\n\n";
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(complete_body.to_string()),
+        )
+        .with_priority(2)
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = AnthropicProvider::new(
+        server.uri(),
+        "claude-test",
+        "test-key",
+        true,
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    // `.expect(1)` auf beiden Mocks (per Drop-Assertion von wiremock) prüft
+    // bereits die Request-Anzahl — hier zusätzlich das sichtbare Ergebnis:
+    // der ERSTE (abgeschnittene) Tool-Call taucht NIRGENDS auf, nur der
+    // zweite, vollständige.
+    assert_eq!(
+        events,
+        vec![
+            AiEvent::ActionProposed(AiAction::SuggestCommand {
+                command: "ls -la".to_string()
+            }),
+            AiEvent::Done
+        ]
+    );
+}
+
+/// Gegenprobe: scheitert auch der Retry (wieder `max_tokens`), gibt es
+/// GENAU ZWEI Requests insgesamt (kein dritter, keine Schleife) und einen
+/// sichtbaren `AiError::ResponseTruncated` statt einer Ausführung.
+#[tokio::test]
+async fn test_truncated_tool_call_that_fails_twice_yields_response_truncated_error_no_third_request(
+) {
+    let server = MockServer::start().await;
+    let truncated_body = "\
+event: content_block_start\ndata: {\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"suggest_command\",\"input\":{}}}\n\n\
+event: content_block_delta\ndata: {\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\": \\\"rm -rf /var/log/app\\\"}\"}}\n\n\
+event: content_block_stop\ndata: {\"index\":0}\n\n\
+event: message_delta\ndata: {\"delta\":{\"stop_reason\":\"max_tokens\"}}\n\n\
+event: message_stop\ndata: {}\n\n";
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(truncated_body.to_string()),
+        )
+        .expect(2)
+        .mount(&server)
+        .await;
+    let provider = AnthropicProvider::new(
+        server.uri(),
+        "claude-test",
+        "test-key",
+        true,
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(events, vec![AiEvent::Error(AiError::ResponseTruncated)]);
 }

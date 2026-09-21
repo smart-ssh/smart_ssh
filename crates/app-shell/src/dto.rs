@@ -169,8 +169,9 @@ pub struct AiProviderConfigInput {
     /// Spec 0025, Abschnitt 4.
     pub attestation_url: Option<String>,
     /// Spec 0065, Teil 4: `None` = „Automatisch" — validiert in
-    /// [`Self::validated`] (positiv, sinnvolle Obergrenze), NICHT hier im
-    /// reinen Datentyp (derselbe Grund wie bei `trimmed()`: eine
+    /// [`Self::validate_max_tokens_override`] (positiv, sinnvolle
+    /// Obergrenze), NICHT hier im reinen Datentyp (derselbe Grund wie bei
+    /// `trimmed()`: eine
     /// Deserialize-Quelle kennt keine fachliche Validierung).
     pub max_tokens_override: Option<u32>,
 }

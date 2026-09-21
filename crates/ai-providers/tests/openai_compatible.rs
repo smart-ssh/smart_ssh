@@ -42,6 +42,7 @@ async fn test_native_tool_calling_success_yields_action_proposed() {
     let sse_body = "data: {\"choices\":[{\"delta\":{\"content\":\"Klar,\"}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"suggest_command\",\"arguments\":\"\"}}]}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"command\\\": \\\"ls -la\\\"}\"}}]}}]}\n\n\
+data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n\
 data: [DONE]\n\n";
     let server = mock_server_with_sse_body(sse_body).await;
     let provider = OpenAiCompatibleProvider::new(
@@ -72,6 +73,7 @@ async fn test_fallback_mode_parses_action_block_after_stream_completes() {
     let sse_body = "data: {\"choices\":[{\"delta\":{\"content\":\"Sicher. \"}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"content\":\"<!--ACTION-->{\\\"action\\\": \\\"suggest_command\\\", \\\"parameters\\\": {\\\"command\\\": \\\"df -h\\\"}}<!--/ACTION-->\"}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"content\":\" Fertig.\"}}]}\n\n\
+data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n\
 data: [DONE]\n\n";
     let server = mock_server_with_sse_body(sse_body).await;
     let provider = OpenAiCompatibleProvider::new(

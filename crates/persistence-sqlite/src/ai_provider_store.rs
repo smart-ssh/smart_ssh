@@ -167,7 +167,11 @@ fn row_to_config(row: &sqlx::sqlite::SqliteRow) -> Result<AiProviderConfig, AiPr
         is_active: row.get("is_active"),
         extra_headers: parse_extra_headers(&extra_headers_raw)?,
         attestation_url: row.get("attestation_url"),
-        max_tokens_override: max_tokens_override.map(|v| v as u32),
+        // spec-reviewer-Fund (Review dieses Schritts): `as u32` hätte einen
+        // (nur über eine manuelle DB-Bearbeitung erreichbaren) negativen
+        // oder zu großen Wert still umgewrapt statt sichtbar zu clampen —
+        // die Validierung greift nur am Command-Layer, nicht hier.
+        max_tokens_override: max_tokens_override.map(|v| v.clamp(0, i64::from(u32::MAX)) as u32),
         created_at: parse_timestamp(&created_at)?,
         updated_at: parse_timestamp(&updated_at)?,
     })

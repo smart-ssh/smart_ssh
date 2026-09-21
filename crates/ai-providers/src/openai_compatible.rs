@@ -50,6 +50,15 @@ const OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS: u32 = 4_096;
 /// Generation (u. a. `gpt-5.6-*`, `gpt-6-*`) hat durchweg 128K Max-Output;
 /// `gpt-3.5`/klassisches `gpt-4`(-turbo)/`gpt-4o`/`gpt-4.1` sind kleiner,
 /// namentlich bekannte Ausnahmen mit ihrem jeweils dokumentierten Wert.
+///
+/// Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): die Fallback-
+/// Richtung war invertiert — ein UNBEKANNTER Modellname (klassisches
+/// `gpt-4`, `o1`, `o3`, jedes künftige Namensschema) landete im `else`-
+/// Zweig und bekam den GRÖSSTEN Wert (128K) statt des in Spec 0065 §1
+/// verlangten konservativen Fallbacks ("kein 400 wegen ‚über dem
+/// Maximum'"). Jetzt umgekehrt: nur EXPLIZIT als aktuelle Generation
+/// bekannte Namen bekommen 128K, alles andere (inkl. unbekannt) fällt auf
+/// den konservativen Wert zurück.
 fn openai_compatible_model_max_output_tokens(base_url: &str, model: &str) -> u32 {
     if !base_url.contains("api.openai.com") {
         return OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS;
@@ -60,8 +69,59 @@ fn openai_compatible_model_max_output_tokens(base_url: &str, model: &str) -> u32
     } else if model.contains("gpt-4o") || model.contains("gpt-4-turbo") || model.contains("gpt-4.1")
     {
         16_384
-    } else {
+    } else if model.starts_with("gpt-4") {
+        // Klassisches gpt-4/gpt-4-0613 u. ä. — NICHT gpt-4o/-turbo/-4.1
+        // (oben bereits behandelt) — deutlich kleiner als die aktuelle
+        // Generation.
+        8_192
+    } else if model.starts_with("o1-mini") {
+        65_536
+    } else if model.starts_with("o1") {
+        100_000
+    } else if model.contains("gpt-5") || model.contains("gpt-6") || model.starts_with("o3") {
+        // Aktuelle Flaggschiff-/Reasoning-Generation — 128K verifiziert
+        // (s. Funktionsdoc); o3 mangels eigener verifizierter Doku-Zeile
+        // konservativ in dieselbe Gruppe wie die übrige aktuelle Generation
+        // eingeordnet statt in den generellen Unbekannt-Fallback.
         128_000
+    } else {
+        OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS
+    }
+}
+
+/// Standardwert für den Haupt-Chat (Spec 0065, Teil 1) — analog zu
+/// `crate::anthropic::anthropic_default_max_tokens`s Begründung: BEWUSST
+/// kleiner als das Modell-Maximum, sonst hat der einmalige Retry aus Teil 3
+/// keinen Spielraum zum Verdoppeln mehr (spec-reviewer-Fund, ERHÖHT, Review
+/// dieses Schritts — beide waren in einer früheren Fassung identisch).
+fn openai_compatible_default_max_tokens(base_url: &str, model: &str) -> u32 {
+    let max = openai_compatible_model_max_output_tokens(base_url, model);
+    match max {
+        128_000 => 32_000,
+        _ => (max / 2).max(1),
+    }
+}
+
+/// Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): die OpenAI-
+/// Reasoning-Modelle (o1/o3/o4-Serie, gpt-5.x) lehnen das klassische
+/// `max_tokens`-Feld mit einem 400 ab und verlangen stattdessen
+/// `max_completion_tokens` — dieser Provider setzte vor Spec 0065
+/// überhaupt kein `max_tokens`, das ist also eine echte Regression, die
+/// dieser Fix schließt. Nur für die offizielle OpenAI-API ausgewertet
+/// (`model` ist bei einem generischen Gateway frei wählbar und ein
+/// Gateway kann denselben Modellnamen unter dem klassischen Feld
+/// erwarten).
+fn openai_max_tokens_field_name(base_url: &str, model: &str) -> &'static str {
+    let model = model.to_lowercase();
+    if base_url.contains("api.openai.com")
+        && (model.starts_with("o1")
+            || model.starts_with("o3")
+            || model.starts_with("o4")
+            || model.contains("gpt-5"))
+    {
+        "max_completion_tokens"
+    } else {
+        "max_tokens"
     }
 }
 
@@ -169,16 +229,14 @@ impl OpenAiCompatibleProvider {
         let max_tokens = context
             .max_tokens_hint
             .or(self.max_tokens_override)
-            .unwrap_or_else(|| {
-                openai_compatible_model_max_output_tokens(&self.base_url, &self.model)
-            });
+            .unwrap_or_else(|| openai_compatible_default_max_tokens(&self.base_url, &self.model));
 
         let mut body = json!({
             "model": self.model,
             "messages": messages,
             "stream": true,
-            "max_tokens": max_tokens,
         });
+        body[openai_max_tokens_field_name(&self.base_url, &self.model)] = json!(max_tokens);
 
         if self.supports_native_tool_calling && !context.available_actions.is_empty() {
             body["tools"] = Value::Array(
@@ -435,6 +493,11 @@ struct RetryState {
     /// Modell-Maximum (Spec 0065, Teil 1) — der Retry-Deckel, s.
     /// `openai_compatible_model_max_output_tokens`.
     model_max_tokens: u32,
+    /// Spec-reviewer-Fund (ERHÖHT): welcher JSON-Schlüssel den Wert trägt
+    /// (`max_tokens` vs. `max_completion_tokens` für Reasoning-Modelle, s.
+    /// `openai_max_tokens_field_name`) — für den Retry-Schritt unten
+    /// wiederverwendet, statt ihn erneut zu bestimmen.
+    max_tokens_field: &'static str,
     retried: bool,
     inner: Option<Pin<Box<dyn Stream<Item = RawEvent> + Send>>>,
     finished: bool,
@@ -455,10 +518,11 @@ impl AiProvider for OpenAiCompatibleProvider {
         let body = self.build_request_body(&context);
         let model_max_tokens =
             openai_compatible_model_max_output_tokens(&self.base_url, &self.model);
+        let max_tokens_field = openai_max_tokens_field_name(&self.base_url, &self.model);
         // s. `crate::anthropic::AnthropicProvider::send`-Kommentar zum
         // `.unwrap_or(...)`-Fallback — greift praktisch nie, `body` trägt
-        // `max_tokens` immer schon aus `build_request_body`.
-        let max_tokens = body["max_tokens"]
+        // den Wert immer schon aus `build_request_body`.
+        let max_tokens = body[max_tokens_field]
             .as_u64()
             .unwrap_or(u64::from(model_max_tokens)) as u32;
 
@@ -472,6 +536,7 @@ impl AiProvider for OpenAiCompatibleProvider {
             body,
             max_tokens,
             model_max_tokens,
+            max_tokens_field,
             retried: false,
             inner: None,
             finished: false,
@@ -512,7 +577,7 @@ impl AiProvider for OpenAiCompatibleProvider {
                             .max_tokens
                             .saturating_mul(2)
                             .min(state.model_max_tokens);
-                        state.body["max_tokens"] = json!(state.max_tokens);
+                        state.body[state.max_tokens_field] = json!(state.max_tokens);
                         state.inner = None;
                     }
                     None => return None,
@@ -631,10 +696,25 @@ impl OpenAiStreamState {
         // separat als `AiError::NetworkError` sichtbar), keine "Antwort war
         // zu lang"-Situation.
         let finish_reason_is_length = self.finish_reason.as_deref() == Some("length");
-        let truncated_by_length = abrupt || finish_reason_is_length;
+        // Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): ALLOWLIST
+        // statt Denylist für die Sicherheits-Entscheidung (Tool-Call
+        // freigeben oder verwerfen) — analog zu `crate::anthropic`s
+        // identischem Fix. Ein Gateway/Proxy, das `finish_reason` anders
+        // schreibt (`"Length"`, `"MAX_TOKENS"`) oder gar keins liefert,
+        // hätte mit der alten `== "length"`-Prüfung einen abgeschnittenen
+        // Tool-Call fälschlich als vollständig durchgelassen. Nur `"stop"`/
+        // `"tool_calls"` (OpenAIs dokumentierte Erfolgs-Werte) gelten als
+        // vollständig — `finish_reason_is_length` bleibt separat für den
+        // rein informativen `TextTruncated`-UI-Hinweis (kein
+        // Sicherheits-Gate).
+        let finish_reason_confirms_completion = matches!(
+            self.finish_reason.as_deref(),
+            Some("stop") | Some("tool_calls")
+        );
+        let tool_call_truncated = abrupt || !finish_reason_confirms_completion;
 
         if self.native_tool_calling {
-            if truncated_by_length && !self.tool_calls.is_empty() {
+            if tool_call_truncated && !self.tool_calls.is_empty() {
                 // Spec 0065 §3, konservative Multi-Tool-Regel: die GANZE
                 // Antwort verwerfen, nicht nur den zuletzt akkumulierten
                 // Call — OpenAI-kompatible Antworten liefern keine
@@ -662,7 +742,7 @@ impl OpenAiStreamState {
             events
         } else {
             let result = parse_fallback_response(&self.fallback_text);
-            if truncated_by_length && result.action.is_some() {
+            if tool_call_truncated && result.action.is_some() {
                 return vec![RawEvent::RetryWithHigherMaxTokens];
             }
             let mut events = Vec::new();
@@ -987,6 +1067,31 @@ mod tests {
         assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
     }
 
+    /// Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): ein Gateway, das
+    /// `finish_reason` mit abweichender Schreibweise liefert (hier
+    /// `"MAX_TOKENS"` statt `"length"`), darf einen vollständig
+    /// akkumulierten Tool-Call nicht freigeben — nur `"stop"`/`"tool_calls"`
+    /// gelten als vollständig (Allowlist statt Denylist).
+    #[tokio::test]
+    async fn test_unrecognized_finish_reason_is_treated_as_truncated_not_complete() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"suggest_command","arguments":"{\"command\":\"rm -rf /var/log/app\"}"}}]}}]}"#,
+                ),
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"MAX_TOKENS"}]}"#),
+                frame("[DONE]"),
+            ]),
+        );
+
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
+    }
+
     fn test_budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
         std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
     }
@@ -1020,7 +1125,10 @@ mod tests {
 
         let body = provider.build_request_body(&context);
 
-        assert_eq!(body["max_tokens"], 128_000);
+        // Spec-reviewer-Fund (ERHÖHT): der DEFAULT ist bewusst kleiner als
+        // das Modell-Maximum (128K), sonst hätte der Retry aus Teil 3
+        // keinen Spielraum, s. `openai_compatible_default_max_tokens`.
+        assert_eq!(body["max_tokens"], 32_000);
     }
 
     /// Gegenprobe: ein generisches/selbstgehostetes Gateway bekommt den
@@ -1044,7 +1152,7 @@ mod tests {
 
         assert_eq!(
             body["max_tokens"],
-            OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS
+            OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS / 2
         );
     }
 
@@ -1108,5 +1216,102 @@ mod tests {
         let body = provider.build_request_body(&context);
 
         assert_eq!(body["max_tokens"], 4096);
+    }
+
+    /// Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): ein UNBEKANNTER
+    /// Modellname auf der offiziellen OpenAI-API muss auf den konservativen
+    /// Fallback fallen, NICHT auf den größten bekannten Wert (128K) — vorher
+    /// war die Fallback-Richtung invertiert.
+    #[test]
+    fn test_unknown_model_on_official_openai_falls_back_conservatively_not_to_the_largest_value() {
+        let max = openai_compatible_model_max_output_tokens(
+            "https://api.openai.com/v1",
+            "some-future-unlisted-model",
+        );
+        assert_eq!(max, OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS);
+    }
+
+    /// Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): der Default
+    /// muss für jeden Bucket strikt kleiner als das Modell-Maximum sein,
+    /// sonst hat der Retry aus Teil 3 keinen Spielraum.
+    #[test]
+    fn test_default_max_tokens_always_leaves_headroom_below_the_model_maximum() {
+        let base_url = "https://api.openai.com/v1";
+        for model in ["gpt-3.5-turbo", "gpt-4o", "gpt-4-0613", "o1", "gpt-6-astra"] {
+            let default = openai_compatible_default_max_tokens(base_url, model);
+            let max = openai_compatible_model_max_output_tokens(base_url, model);
+            assert!(
+                default < max,
+                "Default ({default}) muss für {model} kleiner als das Modell-Maximum ({max}) sein"
+            );
+        }
+    }
+
+    /// Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): Reasoning-
+    /// Modelle (o1/o3/gpt-5.x) verlangen `max_completion_tokens` statt
+    /// `max_tokens` — vorher sendete der Provider unconditional `max_tokens`
+    /// (Regression gegenüber dem alten Verhalten, das gar kein `max_tokens`
+    /// setzte).
+    #[test]
+    fn test_reasoning_models_use_max_completion_tokens_field_on_official_openai() {
+        let provider = OpenAiCompatibleProvider::new(
+            "https://api.openai.com/v1",
+            "o1-mini",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+            None,
+        );
+        let context = context_with_actions(Vec::new());
+
+        let body = provider.build_request_body(&context);
+
+        assert!(body.get("max_tokens").is_none());
+        assert!(body.get("max_completion_tokens").is_some());
+    }
+
+    /// Gegenprobe: ein normales (Nicht-Reasoning-)Modell behält das
+    /// klassische `max_tokens`-Feld.
+    #[test]
+    fn test_non_reasoning_models_use_classic_max_tokens_field() {
+        let provider = OpenAiCompatibleProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-4o",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+            None,
+        );
+        let context = context_with_actions(Vec::new());
+
+        let body = provider.build_request_body(&context);
+
+        assert!(body.get("max_completion_tokens").is_none());
+        assert!(body.get("max_tokens").is_some());
+    }
+
+    /// Gegenprobe: ein generisches Gateway behält `max_tokens`, selbst wenn
+    /// der Modellname zufällig wie ein Reasoning-Modell aussieht — die
+    /// Feldnamen-Umschaltung gilt nur für die offizielle OpenAI-API (s.
+    /// `openai_max_tokens_field_name`-Doc-Kommentar).
+    #[test]
+    fn test_generic_gateway_keeps_classic_field_even_for_an_o1_like_model_name() {
+        let provider = OpenAiCompatibleProvider::new(
+            "http://localhost:11434/v1",
+            "o1-mini",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+            None,
+        );
+        let context = context_with_actions(Vec::new());
+
+        let body = provider.build_request_body(&context);
+
+        assert!(body.get("max_completion_tokens").is_none());
+        assert!(body.get("max_tokens").is_some());
     }
 }
