@@ -236,12 +236,21 @@ fn first_version_secret_read_reason(command: &str) -> Option<&'static str> {
 /// (`python -c`, `bash -c`, `$(…)`) setzt die Filter-Engine ohnehin auf
 /// Bestätigung; Redaction bleibt die weitere Schicht.
 fn extended_secret_read_reason(command: &str) -> Option<&'static str> {
-    extended_secret_read_reason_in(command, &[], 0, &std::cell::Cell::new(0))
+    extended_secret_read_reason_in(command, &[], 0, &NestedBudget::default())
+}
+
+/// Laufzeitschutz für die Rekursion in Code-Strings: jeder Code-String
+/// wird nur einmal geprüft (er taucht im Teilkommando, im Gesamtkommando
+/// und in der aufgelösten Form auf), die Gesamtzahl ist begrenzt.
+#[derive(Default)]
+struct NestedBudget {
+    checks: std::cell::Cell<usize>,
+    seen: std::cell::RefCell<std::collections::HashSet<String>>,
 }
 
 /// Obergrenze für rekursive Prüfungen von Code-Strings je Kommando — darüber
 /// wird eskaliert statt weiter zu zerlegen (Laufzeitschutz, fail-safe).
-const MAX_NESTED_CHECKS: usize = 32;
+const MAX_NESTED_CHECKS: usize = 64;
 
 /// Programme, die ihre Argumente (auch gequotete) an eine weitere Shell
 /// geben — dort expandieren Platzhalter doch (dritte Review-Runde:
@@ -269,7 +278,22 @@ const RESHELL_COMMANDS: &[&str] = &[
     "nsenter",
     "chroot",
     "systemd-run",
+    // vierte Review-Runde
+    "csh",
+    "tcsh",
+    "ash",
+    "mksh",
+    "pdsh",
+    "ansible",
+    "machinectl",
+    "mosh",
+    "at",
+    "batch",
 ];
+
+/// Archivierer/Kopierer, die ein ganzes Verzeichnis einpacken bzw.
+/// übertragen können (`tar cf - ~/.ssh | base64`).
+const ARCHIVE_COMMANDS: &[&str] = &["tar", "zip", "cpio", "7z", "rsync", "scp"];
 
 /// Wie [`extended_secret_read_reason`], mit geerbten `cd`-Präfixen und
 /// Rekursionstiefe für Code-Strings einer weiteren Shell.
@@ -277,13 +301,13 @@ fn extended_secret_read_reason_in(
     command: &str,
     inherited_prefixes: &[String],
     depth: usize,
-    budget: &std::cell::Cell<usize>,
+    budget: &NestedBudget,
 ) -> Option<&'static str> {
     if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
         return Some("Kommando zu lang für eine Prüfung auf Secret-Pfade");
     }
-    budget.set(budget.get() + 1);
-    if depth > 3 || budget.get() > MAX_NESTED_CHECKS {
+    budget.checks.set(budget.checks.get() + 1);
+    if depth > 3 || budget.checks.get() > MAX_NESTED_CHECKS {
         return Some("Zu tief verschachtelte Shell-Aufrufe für eine Prüfung auf Secret-Pfade");
     }
 
@@ -308,48 +332,68 @@ fn extended_secret_read_reason_in(
         let concrete =
             secret_path_match(&normalize_path(&stripped)).or_else(|| secret_path_match(&stripped));
         let mut words = shell_words(&lower);
-        // In einer weiteren Shell expandieren auch gequotete Platzhalter, und
-        // ein mehrwortiger Code-String ist selbst ein Kommando.
-        if words.iter().any(|word| {
+        // In einer weiteren Shell expandieren auch gequotete Platzhalter —
+        // aber nur für die Wörter NACH dem weitergebenden Programm in
+        // derselben Pipeline-Stufe (vierte Review-Runde: `docker logs web |
+        // sed 's/.*x//'` ist kein Fall). Ein mehrwortiger Code-String ist
+        // selbst ein Kommando; er wird im ganzen Teilkommando geprüft, damit
+        // auch `echo '…' | sh` erfasst bleibt.
+        let is_reshell = |word: &ShellWord| {
             RESHELL_COMMANDS.contains(&word.text.rsplit('/').next().unwrap_or(&word.text))
-        }) {
+        };
+        if words.iter().any(is_reshell) {
+            let mut in_scope = false;
             for word in &mut words {
-                if word.text.contains(['*', '?', '[', '{']) {
+                if word.stage_start {
+                    in_scope = false;
+                }
+                if is_reshell(word) {
+                    in_scope = true;
+                    continue;
+                }
+                if in_scope && word.text.contains(['*', '?', '[', '{']) {
                     word.unquoted_glob = true;
                 }
             }
-            if let Some(reason) = words
+            for word in words
                 .iter()
                 .filter(|word| word.text.contains(char::is_whitespace))
-                .find_map(|word| {
-                    extended_secret_read_reason_in(
-                        &word.text,
-                        cd_prefixes.as_deref().unwrap_or(&[]),
-                        depth + 1,
-                        budget,
-                    )
-                    .or_else(|| first_version_secret_read_reason(&word.text))
-                })
             {
-                return Some(reason);
+                if !budget.seen.borrow_mut().insert(word.text.clone()) {
+                    continue;
+                }
+                if let Some(reason) = extended_secret_read_reason_in(
+                    &word.text,
+                    cd_prefixes.as_deref().unwrap_or(&[]),
+                    depth + 1,
+                    budget,
+                )
+                .or_else(|| first_version_secret_read_reason(&word.text))
+                {
+                    return Some(reason);
+                }
             }
         }
 
-        let globbed = cd_prefixes.as_deref().and_then(|prefixes| {
-            words.iter().find_map(|word| {
-                word.unquoted_glob
-                    .then(|| glob_may_hit_secret(word_value(&word.text), prefixes))
-                    .flatten()
-            })
+        // Ohne bestimmbare `cd`-Präfixe trotzdem prüfen (vierte Runde): mit
+        // den festen Stellvertreter-Verzeichnissen.
+        let prefixes_for_globs = cd_prefixes.as_deref().unwrap_or(&[]);
+        let globbed = words.iter().find_map(|word| {
+            word.unquoted_glob
+                .then(|| glob_may_hit_secret(word_value(&word.text), prefixes_for_globs))
+                .flatten()
         });
+        let outputs = lower.contains('<')
+            || STDOUT_TARGETS
+                .iter()
+                .any(|target| stripped.contains(target));
         if let Some(reason) = concrete.or(globbed) {
-            if lower.contains('<')
-                || STDOUT_TARGETS
-                    .iter()
-                    .any(|target| stripped.contains(target))
-            {
+            if outputs {
                 return Some(reason);
             }
+        }
+        if outputs && cd_prefixes.is_none() && words.iter().any(|word| word.unquoted_glob) {
+            return Some("Umleitung mit Platzhalter nach nicht prüfbarem Verzeichniswechsel");
         }
         if reads_file_via_xargs(&words) {
             return Some("xargs liest Argumente aus einer Datei – Inhalt nicht vorab prüfbar");
@@ -360,6 +404,14 @@ fn extended_secret_read_reason_in(
         };
         if let Some(reason) = concrete {
             return Some(reason);
+        }
+        let reader_name = words[reader].text.rsplit('/').next().unwrap_or("");
+        if ARCHIVE_COMMANDS.contains(&reader_name)
+            && words
+                .iter()
+                .any(|word| is_secret_directory(&normalize_path(&word.text)))
+        {
+            return Some("Packt oder überträgt ein Verzeichnis mit Zugangsdaten");
         }
         if is_bulk_read(&words, reader) {
             return Some(
@@ -419,6 +471,28 @@ struct ShellWord {
     unquoted_glob: bool,
     /// `$` außerhalb einfacher Quotes — Variable/Substitution.
     expands: bool,
+    /// Erstes Wort nach `|`, `;`, `&`, `(`, `)` bzw. am Anfang.
+    stage_start: bool,
+}
+
+/// Ein ganzes Verzeichnis mit Zugangsdaten (`~/.ssh`, `.gnupg`, `.aws`,
+/// `.kube`, `.docker`, `/etc/ssl/private`).
+fn is_secret_directory(word: &str) -> bool {
+    let trimmed = word.trim_end_matches('/');
+    [".ssh", ".gnupg", ".aws", ".kube", ".docker"]
+        .iter()
+        .any(|dir| trimmed == *dir || trimmed.ends_with(&format!("/{dir}")))
+        || trimmed.ends_with("/etc/ssl/private")
+}
+
+/// Beginnt ein neues Wort (erstes Zeichen nach einem Trenner): übernimmt,
+/// ob es eine neue Pipeline-Stufe eröffnet.
+fn start_word(current: &mut ShellWord, in_word: &mut bool, next_stage: &mut bool) {
+    if !*in_word {
+        current.stage_start = *next_stage;
+        *next_stage = false;
+        *in_word = true;
+    }
 }
 
 /// Zerlegt ein (kleingeschriebenes) Teilkommando in Wörter wie die Shell:
@@ -428,6 +502,7 @@ fn shell_words(segment: &str) -> Vec<ShellWord> {
     let mut words = Vec::new();
     let mut current = ShellWord::default();
     let mut in_word = false;
+    let mut next_stage = true;
     let mut quote: Option<char> = None;
     let mut chars = segment.chars();
     while let Some(c) = chars.next() {
@@ -455,22 +530,26 @@ fn shell_words(segment: &str) -> Vec<ShellWord> {
             },
             None => match c {
                 '\'' | '"' => {
+                    start_word(&mut current, &mut in_word, &mut next_stage);
                     quote = Some(c);
-                    in_word = true;
                 }
                 '\\' => {
+                    start_word(&mut current, &mut in_word, &mut next_stage);
                     if let Some(next) = chars.next() {
                         current.text.push(next);
                     }
-                    in_word = true;
                 }
                 c if c.is_whitespace() || matches!(c, '<' | '>' | '|' | ';' | '&' | '(' | ')') => {
                     if in_word {
                         words.push(std::mem::take(&mut current));
                         in_word = false;
                     }
+                    if matches!(c, '|' | ';' | '&' | '(' | ')') {
+                        next_stage = true;
+                    }
                 }
                 _ => {
+                    start_word(&mut current, &mut in_word, &mut next_stage);
                     if matches!(c, '*' | '?' | '[' | '{') {
                         current.unquoted_glob = true;
                     }
@@ -478,7 +557,6 @@ fn shell_words(segment: &str) -> Vec<ShellWord> {
                         current.expands = true;
                     }
                     current.text.push(c);
-                    in_word = true;
                 }
             },
         }

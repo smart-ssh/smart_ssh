@@ -756,3 +756,49 @@ fn test_server_risk_red_sftp_server_invocation() {
         );
     }
 }
+
+/// Vierte Review-Runde (Spec 0068, ERHÖHT): viele `cd`-Präfixe dürfen den
+/// Glob-/Stdout-Check nicht abschalten; weitere Shells und Archivierer.
+#[test]
+fn test_fourth_review_round_bypasses_are_detected() {
+    for command in [
+        "cd a; cd b; cd c; cd d; cd e; cd f; cd g; cp /etc/sha* /dev/stdout",
+        "cd a; cd b; cd c; cd d; cd e; cd f; cd g; cp ~/.ssh/id_* /dev/stdout",
+        "cd $X; cp /etc/sha* /dev/stdout",
+        "csh -c 'cat /etc/sha*'",
+        "tcsh -c 'cat /etc/sha*'",
+        "pdsh -w h 'cat /etc/sha*'",
+        "ansible all -a 'cat /etc/sha*'",
+        "echo 'cat /etc/shadow' | at now",
+        "tar cf - ~/.ssh | base64",
+        "tar czf /tmp/k.tgz /root/.gnupg",
+        "zip -r /tmp/k.zip ~/.aws",
+        "rsync -a ~/.ssh/ backup:/keys/",
+    ] {
+        assert!(
+            secret_path_read_reason(command).is_some(),
+            "nicht erkannt: {command}"
+        );
+    }
+}
+
+/// Keine Fehlalarme: ein weitergebendes Programm wirkt nur auf seine eigene
+/// Pipeline-Stufe; viele harmlose Code-Strings erschöpfen das Budget nicht.
+#[test]
+fn test_fourth_round_checks_leave_ordinary_pipelines_alone() {
+    for command in [
+        "docker logs web 2>&1 | sed 's/.*error//'",
+        "docker logs web | grep -o 'user=[a-z]*'",
+        "kubectl logs pod | grep -E 'err.*'",
+        "ssh h 'echo 1 x' 'echo 2 x' 'echo 3 x' 'echo 4 x' 'echo 5 x' 'echo 6 x' 'echo 7 x' 'echo 8 x'",
+        "docker run -e 'M1=hello world' -e 'M2=hello world' -e 'M3=hello world' -e 'M4=hello world' -e 'M5=hello world' -e 'M6=hello world' -e 'M7=hello world' -e 'M8=hello world' nginx",
+        "tar czf /backup/www.tgz /var/www",
+        "rsync -a /srv/app/ backup:/srv/app/",
+    ] {
+        assert_eq!(
+            secret_path_read_reason(command),
+            None,
+            "fälschlich eskaliert: {command}"
+        );
+    }
+}
