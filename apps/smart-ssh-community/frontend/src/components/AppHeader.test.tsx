@@ -154,6 +154,29 @@ describe("AppHeader version display (Spec 0052)", () => {
     ).toBeInTheDocument();
   });
 
+  it("marks a dev build in the title bar", async () => {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "get_platform") return Promise.resolve("macos");
+      if (command === "create_overlay_titlebar") return Promise.resolve("custom");
+      if (command === "get_app_info") {
+        return Promise.resolve({
+          version: "0.5.0",
+          commitHash: "d887019",
+          versionDisplay: "0.5.0 (d887019)",
+          edition: "Community",
+          buildType: "Dev",
+        });
+      }
+      return Promise.reject(new Error(`unexpected invoke: ${command}`));
+    });
+
+    render(<AppHeader />);
+
+    expect(
+      await screen.findByText(/0\.5\.0 \(d887019\) · Community · Dev — Early Access/),
+    ).toBeInTheDocument();
+  });
+
   it("shows no version suffix while get_app_info has not resolved yet (or fails) — cosmetic only", async () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "get_platform") return Promise.resolve("macos");

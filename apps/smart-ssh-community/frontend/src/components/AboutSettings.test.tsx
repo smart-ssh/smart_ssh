@@ -48,6 +48,19 @@ describe("AboutSettings (Spec 0052)", () => {
     expect(await screen.findByText("0.5.0 (abf7a22) · Community · Dev-Build")).toBeInTheDocument();
   });
 
+  it("omits the build type instead of claiming Release when it is missing", async () => {
+    vi.mocked(getAppInfo).mockResolvedValue({
+      version: "0.5.0",
+      commitHash: "abf7a22",
+      versionDisplay: "0.5.0 (abf7a22)",
+      edition: "Community",
+    } as unknown as Awaited<ReturnType<typeof getAppInfo>>);
+
+    renderAbout();
+
+    expect(await screen.findByText("0.5.0 (abf7a22) · Community")).toBeInTheDocument();
+  });
+
   it("keeps the version text selectable independently of the copy button", async () => {
     // Spec-Reviewer-Fund (Spec 0052, Review dieses Schritts): der Text
     // muss ein eigenes, nicht-interaktives Element sein — ein `<button>`

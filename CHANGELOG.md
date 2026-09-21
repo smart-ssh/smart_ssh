@@ -10,6 +10,11 @@ sind mit **(Pro)** markiert.
 ## [Unreleased]
 
 ### Added
+- Der Über-Dialog zeigt jetzt auch, ob ein Dev- oder Release-Build läuft
+  (z. B. „0.5.0 (d887019) · Community · Dev-Build“); die Titelzeile
+  markiert Dev-Builds mit „· Dev“. Beide nutzen getrennte
+  Datenverzeichnisse — so ist sofort klar, welche Daten man gerade sieht.
+  „Kopieren“ übernimmt die ganze Zeile für Fehlerberichte.
 - Der Chat ist jetzt jederzeit bedienbar, auch während die KI arbeitet:
   Eine währenddessen geschriebene Nachricht unterbricht nichts, sondern
   wird eingereiht und mit der nächsten Anfrage an die KI mitgeschickt

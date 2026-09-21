@@ -153,7 +153,10 @@ export function AppHeader({ children }: AppHeaderProps) {
               className="ml-1.5 font-normal tracking-normal text-slate-500"
             >
               {appInfo.versionDisplay}
-              {appInfo.edition && ` · ${appInfo.edition}`} — Early Access
+              {appInfo.edition && ` · ${appInfo.edition}`}
+              {/* Dev- und Release-Build nutzen getrennte Datenverzeichnisse —
+                  nur Dev wird markiert, Release bleibt der Normalfall. */}
+              {appInfo.buildType === "Dev" && " · Dev"} — Early Access
             </span>
           )}
         </span>

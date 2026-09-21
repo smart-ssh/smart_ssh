@@ -40,7 +40,13 @@ export function AboutSettings() {
     ? [
         info.versionDisplay,
         info.edition,
-        info.buildType === "Dev" ? t("about.buildDev") : t("about.buildRelease"),
+        // Unbekannter/fehlender Wert → weglassen statt still "Release"
+        // anzuzeigen (das wäre die gefährliche Verwechslungsrichtung).
+        info.buildType === "Dev"
+          ? t("about.buildDev")
+          : info.buildType === "Release"
+            ? t("about.buildRelease")
+            : null,
       ]
         .filter(Boolean)
         .join(" · ")
