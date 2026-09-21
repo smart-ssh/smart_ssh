@@ -22,8 +22,10 @@ const REDACTED_PLACEHOLDER: &str = "[REDACTED]";
 /// Default-Implementierung (Spec 0006, Abschnitt 5): erkennt
 /// Private-Key-Blöcke, `password=`/`token=`/`api_key=`-artige Zeilen
 /// (Groß-/Kleinschreibung ignoriert), AWS-/GitHub-/Slack-/Stripe-/Google-/
-/// npm-Zugangsdaten-Muster, DB-Connection-Strings
-/// (`schema://user:pass@host`) und Unix-Crypt-/Shadow-Passwort-Hashes
+/// npm-Zugangsdaten-Muster, DB-Connection-Strings und allgemeine
+/// URL-Zugangsdaten (`schema://user:pass@host`), nackte Provider-Keys
+/// (Anthropic, OpenAI, OpenRouter, GitLab, Hugging Face), `x-api-key`-/
+/// `Authorization: Basic`-Header (Spec 0068) und Unix-Crypt-/Shadow-Passwort-Hashes
 /// (`$1$`/`$5$`/`$6$`/`$y$`/`$2b$`/`$7$`/`$apr1$` & verwandte Varianten,
 /// s. `built_in_patterns()`).
 ///
@@ -171,6 +173,75 @@ fn built_in_patterns() -> Vec<PatternRule> {
             r"\$2[abxy]\$\d{2}\$[A-Za-z0-9./]{53}",
             "eingebautes bcrypt-Hash-Muster ist gültig",
         ),
+        // --- Spec 0068, Teil 1: nackte Provider-Keys und Auth-Header ---
+        //
+        // Formate geprüft gegen die gitleaks-Regeln (config/gitleaks.toml:
+        // anthropic-api-key `sk-ant-api03-…AA`, anthropic-admin-api-key
+        // `sk-ant-admin01-…`, openai-api-key `sk-(proj|svcacct|admin)-…
+        // T3BlbkFJ…` sowie Legacy `sk-<20>T3BlbkFJ<20>`, gitlab-pat
+        // `glpat-[\w-]{20}`, gitlab-pat-routable `glpat-…{27,}.<2><7>`,
+        // huggingface-access-token `hf_<34 Buchstaben>`), gitleaks-Issue
+        // #2158 (Anthropic-OAuth `sk-ant-oat01-`/`sk-ant-ort01-`) und die
+        // OpenRouter-Doku (`sk-or-v1-`). Bewusst über den eindeutigen
+        // Präfix verankert, bei der Länge aber mit Mindest- statt exakter
+        // Länge: ein leicht abweichend langer echter Key soll nicht
+        // durchrutschen (Fail-safe), der Präfix hält Falsch-Positive fern.
+        //
+        // **Reihenfolge**: direkt nach den `$`-Hash-Mustern (Keys enthalten
+        // kein `$`, können von dort also nicht zerteilt werden) und VOR
+        // allen übrigen Mustern — `AKIA…`/`AIza…`/Slack/Stripe könnten
+        // sonst zufällig mitten in einem langen Key treffen, ihn zerteilen
+        // und den Rest im Klartext lassen (Shadow-Fix-Lehre). Umgekehrt
+        // kann keins dieser Muster ein späteres zerstören: sie verlangen
+        // `-`/`_`-Präfixe, die in Base64-Key-Blöcken nicht vorkommen.
+        //
+        // Kein generisches Hoch-Entropie-Muster (Spec 0068: verworfen).
+        simple(
+            r"sk-ant-[a-z]+\d{2}-[A-Za-z0-9_-]{20,}",
+            "eingebautes Anthropic-Key-Muster ist gültig",
+        ),
+        simple(
+            r"sk-(?:proj|svcacct|admin|None)-[A-Za-z0-9_-]{20,}",
+            "eingebautes OpenAI-Projekt-/Service-/Admin-Key-Muster ist gültig",
+        ),
+        // Legacy-OpenAI-Key mit dem Wasserzeichen `T3BlbkFJ` (Base64 für
+        // "OpenAI") — das Wasserzeichen verhindert Treffer auf ein bloßes
+        // `sk-` in normalem Text.
+        simple(
+            r"sk-[A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20}",
+            "eingebautes Legacy-OpenAI-Key-Muster ist gültig",
+        ),
+        simple(
+            r"sk-or-v\d+-[A-Za-z0-9]{32,}",
+            "eingebautes OpenRouter-Key-Muster ist gültig",
+        ),
+        // GitLab PAT inkl. des routbaren Formats mit `.<2><7>`-Suffix — der
+        // Suffix gehört zum Token und wird mit redigiert.
+        simple(
+            r"glpat-[A-Za-z0-9_-]{20,}(?:\.[0-9a-z]{2}\.?[0-9a-z]{7,})?",
+            "eingebautes GitLab-PAT-Muster ist gültig",
+        ),
+        // Hugging Face: `hf_` + 34 Zeichen; Wortgrenzen, damit Bezeichner
+        // wie `hf_hub_download` unberührt bleiben. Organisations-Token
+        // `api_org_` gleich mit.
+        simple(
+            r"\b(?:hf|api_org)_[A-Za-z0-9]{30,}\b",
+            "eingebautes Hugging-Face-Token-Muster ist gültig",
+        ),
+        // `x-api-key`-Header (Anthropic-Header, viele Gateways) — auch in
+        // JSON-/Quote-Form, analog zum Credential-Zeilen-Muster unten, das
+        // `x-api-key` (Bindestrich) nicht erfasst.
+        simple(
+            r#"(?i)\bx-api-key['"]?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s'"]+)"#,
+            "eingebautes x-api-key-Header-Muster ist gültig",
+        ),
+        // `Authorization: Basic <base64>` (auch `Proxy-Authorization`). Nur
+        // mit Header-Namen — ein bloßes "Basic authentication" in Text
+        // bleibt unberührt.
+        simple(
+            r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?basic\s+[A-Za-z0-9+/._~-]+=*"#,
+            "eingebautes Authorization-Basic-Muster ist gültig",
+        ),
         // DB-Connection-Strings (Diagnose-Folge-Fix, 2026-09): das Passwort
         // steht zwischen `:` und `@`, keines der Schlüsselwort-Muster
         // (`password=`/`token=`/...) greift auf diese Syntax. Deckt die in
@@ -246,6 +317,21 @@ fn built_in_patterns() -> Vec<PatternRule> {
                 r#"(?i)(?P<scheme>postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?)://(?P<user>[^:@/\s,;"]*):[^@/\s,;"]+@"#,
             )
             .expect("eingebautes DB-Connection-String-Muster ist gültig"),
+            replacement: "${scheme}://${user}:[REDACTED]@",
+        },
+        // Spec 0068, Teil 1: generische URL-Zugangsdaten für alle übrigen
+        // Schemata (http/https/ftp/sftp/…). Bewusst NACH dem DB-Muster und
+        // mit EXAKT dessen Zeichenklassen für Nutzer und Passwort
+        // (`[^:@/\s,;"]`) — die DB-String-Runde hatte zwei Regressionen
+        // durch zu gierige Klassen, die hier nicht wiederkommen dürfen. Auf
+        // einem vom DB-Muster schon redigierten String ist es idempotent
+        // (`[REDACTED]` wird zu `[REDACTED]`), das DB-Muster bleibt also
+        // unverändert wirksam. Ersetzt wie dort nur das Passwort.
+        PatternRule {
+            regex: Regex::new(
+                r#"(?i)(?P<scheme>\b[a-z][a-z0-9+.-]*)://(?P<user>[^:@/\s,;"]*):[^@/\s,;"]+@"#,
+            )
+            .expect("eingebautes URL-Zugangsdaten-Muster ist gültig"),
             replacement: "${scheme}://${user}:[REDACTED]@",
         },
         // Slack-Tokens: `xoxb-`/`xoxp-`/`xoxo-`/`xoxa-`/`xoxs-` (Bot/User/

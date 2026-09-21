@@ -811,3 +811,134 @@ fn test_redactor_does_not_detect_db_password_containing_a_raw_comma_or_semicolon
 
     assert_eq!(redacted.stdout, input.stdout);
 }
+
+// --- Spec 0068, Teil 1: nackte Provider-Keys und Auth-Header ------------
+//
+// Formate geprüft gegen die gitleaks-Regeln (gitleaks/config/gitleaks.toml:
+// anthropic-api-key, anthropic-admin-api-key, openai-api-key, gitlab-pat,
+// gitlab-pat-routable, huggingface-access-token), gitleaks-Issue #2158
+// (Anthropic-OAuth `sk-ant-oat01-`/`sk-ant-ort01-`) und die OpenRouter-Doku
+// (`sk-or-v1-`). Die Beispiel-Keys unten sind formatgerecht, aber erfunden.
+
+const ANTHROPIC_KEY: &str = concat!("sk-ant-api03-Abcd", "efghijklmnopqrstuvwxyz0123456789_-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345AA");
+const OPENAI_PROJECT_KEY: &str = concat!("sk-proj-Abcd", "efghijklmnopqrstuvwxyz0123456789_-ABCDEFGHIJKLMNOPQRSTUVT3BlbkFJabcdefghijklmnopqrstuvwxyz0123456789_-ABCDEFGHIJKLMNOPQRSTU");
+const OPENAI_LEGACY_KEY: &str = concat!("sk-Abcd", "efghij0123456789T3BlbkFJabcdefghij0123456789");
+const OPENROUTER_KEY: &str = concat!(
+    "sk-or-v1-0123",
+    "456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+);
+const GITLAB_PAT: &str = concat!("glpat-Abcd", "efghij0123456789");
+const GITLAB_PAT_ROUTABLE: &str =
+    concat!("glpat-Abcd", "efghij0123456789_-abcdefghijk.01.0abcdefg");
+const HF_TOKEN: &str = concat!("hf_Abcd", "efghijklmnopqrstuvwxyzABCDEFGH");
+
+fn assert_fully_redacted(input: &str, secret: &str) {
+    let redacted = DefaultOutputRedactor::new().redact_text(input);
+    assert!(
+        redacted.contains("[REDACTED]"),
+        "nichts redigiert: {redacted}"
+    );
+    // Kein Teilstück des Geheimnisses (> 8 Zeichen) darf übrig bleiben —
+    // fängt auch ein von einem anderen Muster zerteiltes Geheimnis.
+    let chars: Vec<char> = secret.chars().collect();
+    for window in chars.windows(9) {
+        let piece: String = window.iter().collect();
+        assert!(
+            !redacted.contains(&piece),
+            "Rest „{piece}“ von {secret} steht noch im Klartext: {redacted}"
+        );
+    }
+}
+
+#[test]
+fn test_bare_provider_keys_without_keyword_are_redacted() {
+    for key in [
+        ANTHROPIC_KEY,
+        concat!("sk-ant-admin01-Abcd", "efghijklmnopqrstuvwxyz0123456789_-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345AA"),
+        concat!("sk-ant-oat01-Abcd", "efghijklmnopqrstuvwxyz0123456789_-ABCDEFGH"),
+        OPENAI_PROJECT_KEY,
+        concat!("sk-svcacct-Abcd", "efghijklmnopqrstuvwxyz0123456789_-ABCDEFGHT3BlbkFJabcdefghij"),
+        concat!("sk-admin-Abcd", "efghijklmnopqrstuvwxyz0123456789_-ABCDEFGHT3BlbkFJabcdefghij"),
+        OPENAI_LEGACY_KEY,
+        OPENROUTER_KEY,
+        GITLAB_PAT,
+        GITLAB_PAT_ROUTABLE,
+        HF_TOKEN,
+    ] {
+        // Kein Schlüsselwort (password=/token=/api_key=) davor — genau der
+        // bisher unerkannte Fall.
+        assert_fully_redacted(&format!("using {key} for requests"), key);
+        assert_fully_redacted(&format!("{{\"key\": \"{key}\"}}"), key);
+    }
+}
+
+#[test]
+fn test_provider_key_containing_accidental_aws_or_google_substring_is_not_split() {
+    // Reihenfolge-Lehre (Shadow-Fix): `AKIA…`/`AIza…` laufen später; ein
+    // zufälliger Treffer mitten im Key darf keinen Rest übrig lassen.
+    let key = concat!(
+        "sk-ant-api03-xxxx",
+        "AKIAABCDEFGHIJKLMNOPyyyyAIzaSyA0123456789abcdefghijklmnopqrstuTAILSECRET0123456789AA"
+    );
+    assert_fully_redacted(&format!("key {key} end"), key);
+}
+
+#[test]
+fn test_auth_headers_are_redacted() {
+    assert_fully_redacted(
+        "x-api-key: someopaquekeyvalue123456",
+        "someopaquekeyvalue123456",
+    );
+    assert_fully_redacted(
+        "X-Api-Key: \"someopaquekeyvalue123456\"",
+        "someopaquekeyvalue123456",
+    );
+    assert_fully_redacted(
+        "curl -H 'x-api-key: someopaquekeyvalue123456' https://api.example.com",
+        "someopaquekeyvalue123456",
+    );
+    assert_fully_redacted(
+        "Authorization: Basic ZGVwbG95OnMzY3JldC1wYXNz",
+        "ZGVwbG95OnMzY3JldC1wYXNz",
+    );
+    assert_fully_redacted(
+        "Proxy-Authorization: basic ZGVwbG95OnMzY3JldC1wYXNz",
+        "ZGVwbG95OnMzY3JldC1wYXNz",
+    );
+}
+
+#[test]
+fn test_generic_url_credentials_redact_only_the_password() {
+    let redactor = DefaultOutputRedactor::new();
+    assert_eq!(
+        redactor.redact_text("remote: https://deploy:s3cretPass@git.example.com/repo.git"),
+        "remote: https://deploy:[REDACTED]@git.example.com/repo.git"
+    );
+    assert_eq!(
+        redactor.redact_text("ftp://backup:hunter2hunter2@files.example.com/"),
+        "ftp://backup:[REDACTED]@files.example.com/"
+    );
+    // Bestehendes DB-Muster unverändert (kein doppeltes/zerstörtes Ergebnis).
+    assert_eq!(
+        redactor.redact_text("postgres://app:pw123456@db:5432/app"),
+        "postgres://app:[REDACTED]@db:5432/app"
+    );
+}
+
+#[test]
+fn test_new_patterns_do_not_flag_harmless_text() {
+    let redactor = DefaultOutputRedactor::new();
+    for harmless in [
+        "Keys start with sk- and are secret.",
+        "use the sk-ant- prefix check",
+        "commit 3aef6ce0f1b2c3d4e5f60718293a4b5c6d7e8f90",
+        "id 550e8400-e29b-41d4-a716-446655440000",
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+        "Basic authentication is configured for the admin area",
+        concat!("from huggingface_hub import hf_hub_", "download"),
+        "see https://example.com:8443/path and http://[::1]:8080/",
+        "ssh://git@github.com:22/org/repo.git",
+    ] {
+        assert_eq!(redactor.redact_text(harmless), harmless, "fälschlich redigiert");
+    }
+}
