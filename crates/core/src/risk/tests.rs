@@ -720,3 +720,39 @@ fn test_secret_check_stays_fast_on_adversarial_long_input() {
         );
     }
 }
+
+/// Spec 0067 / ADR 0058 §8 (Entscheidung Stefan): Aufrufe von
+/// `sftp-server` sind fest Server-Risiko Rot — Erwähnungen nicht.
+#[test]
+fn test_server_risk_red_sftp_server_invocation() {
+    for command in [
+        "sudo -n /usr/lib/openssh/sftp-server",
+        "sudo -n -u www-data /usr/libexec/openssh/sftp-server",
+        "sudo -nu root sftp-server",
+        "doas /usr/lib/ssh/sftp-server",
+        "/usr/lib/openssh/sftp-server -e",
+        "sftp-server",
+        "printf x | sudo -n /usr/libexec/sftp-server",
+        "env LC_ALL=C sudo /usr/lib/openssh/sftp-server",
+        "timeout 5 /usr/lib/openssh/sftp-server",
+    ] {
+        let assessment = RuleBasedRiskClassifier.classify(command);
+        assert_eq!(
+            assessment.server_risk,
+            RiskLevel::Red,
+            "nicht Rot: {command}"
+        );
+    }
+    for command in [
+        "ls -l /usr/lib/openssh/sftp-server",
+        "grep sftp-server /etc/ssh/sshd_config",
+        "which sftp-server",
+    ] {
+        let assessment = RuleBasedRiskClassifier.classify(command);
+        assert_ne!(
+            assessment.server_risk,
+            RiskLevel::Red,
+            "fälschlich Rot: {command}"
+        );
+    }
+}

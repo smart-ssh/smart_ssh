@@ -223,6 +223,21 @@ pub(super) fn server_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static 
     PATTERNS.get_or_init(|| {
         vec![
             // --- Rot: destruktiv/irreversibel/dienstunterbrechend ---------
+            // Spec 0067 / ADR 0058 §8, Entscheidung Stefan (2026-09-22): ein
+            // AUFRUF von `sftp-server` (direkt oder per `sudo`/`doas`, mit
+            // beliebigen Optionen) gilt fest als Rot — mit der
+            // NOPASSWD-Regel für den erhöhten Dateibrowser ist das
+            // passwortloser Root-Dateizugriff, auch für KI-Vorschläge. Nur
+            // Aufrufe, keine bloßen Erwähnungen (`ls …/sftp-server`, `grep
+            // sftp-server sshd_config`).
+            (
+                Regex(
+                    r"^\s*(?:(?:sudo|doas)(?:\s+-\S+(?:\s+[a-z_][a-z0-9_.-]*)?)*\s+)?(?:\S*/)?sftp-server(?:\s|$)"
+                        .to_string(),
+                ),
+                RiskLevel::Red,
+                "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten)",
+            ),
             (
                 Glob("*rm*-rf*".to_string()),
                 RiskLevel::Red,
