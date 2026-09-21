@@ -938,7 +938,77 @@ fn test_new_patterns_do_not_flag_harmless_text() {
         concat!("from huggingface_hub import hf_hub_", "download"),
         "see https://example.com:8443/path and http://[::1]:8080/",
         "ssh://git@github.com:22/org/repo.git",
+        "The password is required for login.",
+        "Enter the password below and press enter",
+        "api-key rotation is documented in the wiki",
+        "10:30:00:12:45 elapsed",
+        "use gsk_ prefix and xai- prefix checks",
     ] {
         assert_eq!(redactor.redact_text(harmless), harmless, "fälschlich redigiert");
     }
+}
+
+/// spec-reviewer-Fund (Spec 0068, ERHÖHT): die generische URL-Regel darf
+/// über einen Port nicht in den Query-String greifen und so den Anker des
+/// `password=`-/`token=`-Musters zerstören (vorher blieb `ssw0rd123` im
+/// Klartext).
+#[test]
+fn test_url_rule_does_not_split_query_string_password() {
+    assert_fully_redacted("https://host:8443?password=p@ssw0rd123", "ssw0rd123");
+    assert_fully_redacted("http://localhost:8080?token=abc@defsecret", "defsecret");
+    assert_fully_redacted("https://h:8443#password=p@ssw0rd123", "ssw0rd123");
+}
+
+#[test]
+fn test_more_provider_keys_and_headers_are_redacted() {
+    for key in [
+        concat!("glrt-Abcd", "efghijklmnopqrst0123"),
+        concat!("gldt-Abcd", "efghijklmnopqrst0123"),
+        concat!("gsk_Abcd", "efghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN"),
+        concat!(
+            "xai-Abcd",
+            "efghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr"
+        ),
+    ] {
+        assert_fully_redacted(&format!("using {key} for requests"), key);
+    }
+    assert_fully_redacted(
+        "api-key: someopaquekeyvalue123456",
+        "someopaquekeyvalue123456",
+    );
+    assert_fully_redacted(
+        "x-goog-api-key: someopaquekeyvalue123456",
+        "someopaquekeyvalue123456",
+    );
+    assert_fully_redacted(
+        "Authorization: Token someopaquekeyvalue123456",
+        "someopaquekeyvalue123456",
+    );
+}
+
+/// Die Dateiformate aus Spec 0068 Teil 2 — nach einem bestätigten Lesen
+/// soll ihr Geheimnis trotzdem nicht im Klartext an die KI gehen.
+#[test]
+fn test_secret_file_formats_are_redacted() {
+    assert_fully_redacted(
+        r#"{"auths": {"registry.example.com": {"auth": "ZGVwbG95OnMzY3JldC1wYXNzd29yZA=="}}}"#,
+        "ZGVwbG95OnMzY3JldC1wYXNzd29yZA",
+    );
+    assert_fully_redacted(
+        "    client-key-data: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQo=",
+        "LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQo",
+    );
+    assert_fully_redacted(
+        "machine api.example.com login deploy password s3cr3tNetrcPw",
+        "s3cr3tNetrcPw",
+    );
+    assert_fully_redacted(
+        "machine api.example.com\n  login deploy\n  password s3cr3tNetrcPw\n",
+        "s3cr3tNetrcPw",
+    );
+    assert_fully_redacted(
+        "db.example.com:5432:app:appuser:s3cr3tPgpassPw",
+        "s3cr3tPgpassPw",
+    );
+    assert_fully_redacted("*:*:*:postgres:s3cr3tPgpassPw", "s3cr3tPgpassPw");
 }

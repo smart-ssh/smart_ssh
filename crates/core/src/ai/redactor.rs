@@ -228,19 +228,71 @@ fn built_in_patterns() -> Vec<PatternRule> {
             r"\b(?:hf|api_org)_[A-Za-z0-9]{30,}\b",
             "eingebautes Hugging-Face-Token-Muster ist gültig",
         ),
-        // `x-api-key`-Header (Anthropic-Header, viele Gateways) — auch in
+        // spec-reviewer-Fund (Spec 0068, ERHÖHT): weitere Präfixe.
+        // GitLab Runner-/Deploy-Token (gitleaks: gitlab-runner-
+        // authentication-token `glrt-[\w-]{20}` inkl. routbarer Form,
+        // gitlab-deploy-token `gldt-[\w-]{20}`); Groq `gsk_` (≈ 48–52
+        // Zeichen, Groq-Beispiele/gitleaks-Issue #2180 — derselbe Präfix
+        // wird auch von Snyk genutzt, ebenfalls ein Geheimnis); xAI `xai-`
+        // (≈ 80 Zeichen, docs.x.ai). Mindestlängen bewusst niedriger als
+        // beobachtet.
+        simple(
+            r"\bgl(?:rt|dt)-[A-Za-z0-9_-]{20,}(?:\.[0-9a-z]{2}\.?[0-9a-z]{7,})?",
+            "eingebautes GitLab-Runner-/Deploy-Token-Muster ist gültig",
+        ),
+        simple(
+            r"\bgsk_[A-Za-z0-9]{32,}\b",
+            "eingebautes Groq-Key-Muster ist gültig",
+        ),
+        simple(
+            r"\bxai-[A-Za-z0-9]{40,}\b",
+            "eingebautes xAI-Key-Muster ist gültig",
+        ),
+        // `x-api-key`-Header (Anthropic-Header, viele Gateways), dazu Azure
+        // `api-key` und Google `x-goog-api-key` (Review-Fund) — auch in
         // JSON-/Quote-Form, analog zum Credential-Zeilen-Muster unten, das
         // `x-api-key` (Bindestrich) nicht erfasst.
         simple(
-            r#"(?i)\bx-api-key['"]?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s'"]+)"#,
+            r#"(?i)\b(?:x-(?:goog-)?)?api-key['"]?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s'"]+)"#,
             "eingebautes x-api-key-Header-Muster ist gültig",
         ),
         // `Authorization: Basic <base64>` (auch `Proxy-Authorization`). Nur
         // mit Header-Namen — ein bloßes "Basic authentication" in Text
         // bleibt unberührt.
         simple(
-            r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?basic\s+[A-Za-z0-9+/._~-]+=*"#,
+            r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?(?:basic|token)\s+[A-Za-z0-9+/._~-]+=*"#,
             "eingebautes Authorization-Basic-Muster ist gültig",
+        ),
+        // spec-reviewer-Fund (Spec 0068, ERHÖHT): die Formate genau der
+        // Dateien, deren Lesen Teil 2 bestätigungspflichtig macht — nach
+        // einem bestätigten Lesen sollen sie trotzdem nicht im Klartext an
+        // die KI gehen.
+        // Docker `~/.docker/config.json`: `"auth": "<base64 user:pass>"`.
+        simple(
+            r#"(?i)"auth"\s*:\s*"[A-Za-z0-9+/=]{8,}""#,
+            "eingebautes Docker-auth-Muster ist gültig",
+        ),
+        // kubeconfig: privater Client-Schlüssel (Base64).
+        simple(
+            r"(?i)\bclient-key-data\s*:\s*\S+",
+            "eingebautes kubeconfig-client-key-data-Muster ist gültig",
+        ),
+        // `.netrc`: `machine h login u password p` bzw. `password p` als
+        // eigene Zeile. Nur in dieser Struktur, damit Fließtext wie
+        // "password is required" unberührt bleibt.
+        simple(
+            r"(?i)\b(?:machine|login)\s+\S+\s+password\s+\S+",
+            "eingebautes netrc-Muster ist gültig",
+        ),
+        simple(
+            r"(?im)^[ \t]*password[ \t]+\S+[ \t]*$",
+            "eingebautes netrc-Zeilen-Muster ist gültig",
+        ),
+        // `.pgpass`: `host:port:datenbank:nutzer:passwort` (Port Zahl oder
+        // `*`) — ganze Zeile.
+        simple(
+            r"(?m)^[^:\s#]+:(?:\d+|\*):[^:\s]+:[^:\s]+:\S+$",
+            "eingebautes pgpass-Muster ist gültig",
         ),
         // DB-Connection-Strings (Diagnose-Folge-Fix, 2026-09): das Passwort
         // steht zwischen `:` und `@`, keines der Schlüsselwort-Muster
@@ -327,9 +379,16 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // einem vom DB-Muster schon redigierten String ist es idempotent
         // (`[REDACTED]` wird zu `[REDACTED]`), das DB-Muster bleibt also
         // unverändert wirksam. Ersetzt wie dort nur das Passwort.
+        //
+        // spec-reviewer-Fund (Spec 0068, ERHÖHT): zusätzlich ohne `?`/`#` in
+        // Nutzer und Passwort — beide sind im Userinfo-Teil einer URL nie
+        // unkodiert erlaubt. Sonst griff die Regel bei
+        // `https://host:8443?password=p@ss…` über den Port in den Query-
+        // String und zerstörte den Anker des `password=`-Musters, sodass
+        // der Rest des Passworts im Klartext blieb.
         PatternRule {
             regex: Regex::new(
-                r#"(?i)(?P<scheme>\b[a-z][a-z0-9+.-]*)://(?P<user>[^:@/\s,;"]*):[^@/\s,;"]+@"#,
+                r#"(?i)(?P<scheme>\b[a-z][a-z0-9+.-]*)://(?P<user>[^:@/\s,;"?#]*):[^@/\s,;"?#]+@"#,
             )
             .expect("eingebautes URL-Zugangsdaten-Muster ist gültig"),
             replacement: "${scheme}://${user}:[REDACTED]@",
