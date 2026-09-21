@@ -134,35 +134,20 @@ fn best_match(
 /// —, reine Eskalation wie bei Spec 0039. Eine `Deny`-Entscheidung bleibt
 /// unberührt.
 ///
-/// Geprüft werden alle Teilkommandos (`;`, `&&`, `|`, `$(...)`), das
-/// Gesamtkommando und die von `sudo`/`env`/Zuweisungen befreite Form, jeweils
-/// kleingeschrieben, ohne Quotes/Backslashes und mit lexikalisch
-/// normalisierten Pfaden (`//`, `/./`, `x/../`). Eskaliert wird, wenn
-/// (spec-reviewer-Fund, ERHÖHT — jeder Punkt nur zusätzlich):
-/// - ein Lesebefehl **irgendwo** im Teilkommando steht (auch hinter
-///   Wrappern wie `docker exec`, `sudo -iu`, `timeout -s`, als `/bin/cat`)
-///   und ein Secret-Pfad vorkommt;
-/// - ein Secret-Pfad per `<` umgeleitet oder nach `/dev/stdout`,
-///   `/dev/fd/…`, `/proc/…/fd/…`, `/dev/tty` geschrieben wird — bei jedem
-///   Befehl (`cp ~/.ssh/id_rsa /dev/stdout`);
-/// - massenhaft gelesen wird (rekursives `grep`, `rg`/`ag`/`ack`,
-///   `-exec`/`xargs`) — jedes Verzeichnis kann eine `.env` enthalten;
-/// - ein Pfad eine Variable enthält (`cat /etc/sha$@dow`, `cat $F`) oder
-///   ein `cd`-Ziel nicht prüfbar ist;
-/// - ein Platzhalter im Verzeichnisteil steht oder der letzte Pfadteil einen
-///   bekannten Secret-Dateinamen treffen kann (`cat /etc/sha*`, `cat *`);
-/// - ein relativer Pfad zusammen mit einem `cd`-Ziel einen Secret-Pfad
-///   ergibt (`cd /etc && cat shadow`);
-/// - das Kommando zu lang für die Prüfung ist.
-///
-/// **Grenzen (ehrlich, bewusst)**: rein lexikalisch. Nicht erkannt werden
-/// Symlinks (`ln -s ~/.ssh/id_rsa x; cat x` — `ln` liest nichts), Programme
-/// außerhalb der Liste (Skriptsprachen mit Dateinamen, Archivierer wie
-/// `tar`), Kodierungen und Umwege über eine zuvor unverdächtig kopierte
-/// Datei. Inline-Code (`python -c`, `bash -c`, `$(…)`) setzt die
-/// Filter-Engine ohnehin auf Bestätigung; Redaction bleibt die weitere
-/// Schicht.
+/// **Nie schwächer als die erste Fassung** (zweite Review-Runde, ERHÖHT):
+/// die erste Fassung ([`first_version_secret_read_reason`]) läuft
+/// unverändert weiter; die erweiterte Prüfung
+/// ([`extended_secret_read_reason`]) kommt nur hinzu. Eine Umstellung der
+/// erweiterten Prüfung kann so nie etwas durchlassen, das vorher
+/// eskaliert wurde.
 pub fn secret_path_read_reason(command: &str) -> Option<&'static str> {
+    first_version_secret_read_reason(command).or_else(|| extended_secret_read_reason(command))
+}
+
+/// Erste Fassung (Commit `8817a6f`), wörtlich: Lesebefehl am Anfang eines
+/// Teilkommandos + Secret-Pfad, `-exec`/`xargs` mit Secret-Hinweis,
+/// Platzhalter auf Punktdateien/Secret-Hinweise.
+fn first_version_secret_read_reason(command: &str) -> Option<&'static str> {
     if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
         return Some("Kommando zu lang für eine Prüfung auf Secret-Pfade");
     }
@@ -175,30 +160,130 @@ pub fn secret_path_read_reason(command: &str) -> Option<&'static str> {
         .collect();
     segments.extend(resolved);
 
-    let cd_prefixes = cd_prefixes(&normalize_for_secret_check(command));
+    let read_start = regex::Regex::new(&format!(r"^\s*{SECRET_READ_COMMANDS}\b"))
+        .expect("eingebautes Lesebefehl-Muster ist gültig");
+    let exec_read = regex::Regex::new(&format!(
+        r"(?:-exec|-execdir|xargs)(?:\s+-\S+)*\s+(?:sudo\s+)?{SECRET_READ_COMMANDS}\b"
+    ))
+    .expect("eingebautes exec-/xargs-Muster ist gültig");
+
+    let normalize = |text: &str| -> String {
+        text.to_lowercase()
+            .chars()
+            .filter(|c| !matches!(c, '\'' | '"' | '\\'))
+            .collect()
+    };
+    let full = normalize(command);
 
     for segment in &segments {
-        let normalized = normalize_for_secret_check(segment);
-        let concrete = secret_path_match(&normalized);
+        let normalized = normalize(segment);
+        if exec_read.is_match(&normalized) && SECRET_PATH_HINTS.iter().any(|h| full.contains(h)) {
+            return Some("Liest Dateien per -exec/xargs aus einem Secret-Pfad");
+        }
+        if !read_start.is_match(&normalized) {
+            continue;
+        }
+        if let Some((_, reason)) = secret_path_patterns()
+            .iter()
+            .find(|(pattern, _)| pattern.is_match(&normalized))
+        {
+            return Some(reason);
+        }
+        let globbed_secret = normalized.split_whitespace().skip(1).any(|arg| {
+            let has_glob = arg.contains(['*', '?', '[', '{']);
+            let last = arg.rsplit('/').next().unwrap_or(arg);
+            has_glob
+                && (last.starts_with('.')
+                    || arg.starts_with('~')
+                    || arg.starts_with("$home")
+                    || arg.starts_with("/root")
+                    || SECRET_PATH_HINTS.iter().any(|h| arg.contains(h)))
+        });
+        if globbed_secret {
+            return Some("Lesebefehl mit Platzhalter auf einen möglichen Secret-Pfad");
+        }
+    }
+    None
+}
 
-        if let Some(reason) = concrete {
-            if normalized.contains('<')
+/// Erweiterte Prüfung (spec-reviewer-Funde, ERHÖHT). Pro Teilkommando
+/// (dieselbe Zerlegung wie die erste Fassung), auf quote-bewusst zerlegten
+/// Wörtern mit lexikalisch normalisierten Pfaden (`//`, `/./`, `x/../`).
+/// Eskaliert, wenn:
+/// - ein Lesebefehl an **beliebiger** Stelle steht (hinter `docker exec`,
+///   `sudo -iu`, `timeout -s`, als `/bin/cat`, `(cat …)`) und ein
+///   Secret-Pfad vorkommt;
+/// - ein Secret-Pfad (auch per Platzhalter) per `<` umgeleitet oder nach
+///   `/dev/stdout`, `/dev/fd/…`, `/dev/pts/…`, `/proc/…/fd/…`, `/dev/tty`
+///   geschrieben wird — bei jedem Befehl (`cp ~/.ssh/id_rsa /dev/stdout`);
+/// - massenhaft gelesen wird (rekursives `grep` auch mit abgekürzten
+///   Langoptionen, `rg`/`ag`/`ack`/`rgrep`, `-exec`/`xargs`, `xargs -a`);
+/// - ein Wort eine nicht in einfachen Quotes stehende Variable oder
+///   Kommando-Substitution enthält, oder ein `cd`-Ziel nicht prüfbar ist;
+/// - ein **ungequoteter** Platzhalter im Verzeichnisteil steht oder den
+///   letzten Pfadteil auf einen bekannten Secret-Dateinamen abbilden kann
+///   (gequotete Platzhalter expandiert die Shell nicht — `sed 's/a.*/b/'`
+///   bleibt unbehelligt);
+/// - ein relativer Pfad zusammen mit einem `cd`-Ziel einen Secret-Pfad
+///   ergibt (`cd /etc && cat shadow`);
+/// - das Kommando zu lang für die Prüfung ist.
+///
+/// **Grenzen (ehrlich, bewusst)**: rein lexikalisch und pro Aktion — ein
+/// Arbeitsverzeichnis aus einer früheren Aktion ist unbekannt. Nicht
+/// erkannt werden Symlinks (`ln -s ~/.ssh/id_rsa x; cat x`), Programme
+/// außerhalb der Liste (Skriptsprachen mit Dateinamen, `tar`), Kodierungen
+/// und Umwege über eine zuvor unverdächtig kopierte Datei. Inline-Code
+/// (`python -c`, `bash -c`, `$(…)`) setzt die Filter-Engine ohnehin auf
+/// Bestätigung; Redaction bleibt die weitere Schicht.
+fn extended_secret_read_reason(command: &str) -> Option<&'static str> {
+    if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+        return Some("Kommando zu lang für eine Prüfung auf Secret-Pfade");
+    }
+
+    let mut segments = segment_command(command);
+    segments.push(command.to_string());
+    let resolved: Vec<String> = segments
+        .iter()
+        .map(|segment| resolve_effective_command(segment))
+        .collect();
+    segments.extend(resolved);
+
+    let cd_prefixes = cd_prefixes(command);
+
+    for segment in &segments {
+        let lower = segment.to_lowercase();
+        let stripped = strip_quotes(&lower);
+        let concrete =
+            secret_path_match(&normalize_path(&stripped)).or_else(|| secret_path_match(&stripped));
+        let words = shell_words(&lower);
+
+        let globbed = cd_prefixes.as_deref().and_then(|prefixes| {
+            words.iter().find_map(|word| {
+                word.unquoted_glob
+                    .then(|| glob_may_hit_secret(word_value(&word.text), prefixes))
+                    .flatten()
+            })
+        });
+        if let Some(reason) = concrete.or(globbed) {
+            if lower.contains('<')
                 || STDOUT_TARGETS
                     .iter()
-                    .any(|target| normalized.contains(target))
+                    .any(|target| stripped.contains(target))
             {
                 return Some(reason);
             }
         }
+        if reads_file_via_xargs(&words) {
+            return Some("xargs liest Argumente aus einer Datei – Inhalt nicht vorab prüfbar");
+        }
 
-        let tokens: Vec<&str> = normalized.split_whitespace().collect();
-        let Some(reader) = tokens.iter().position(|token| is_read_command(token)) else {
+        let Some(reader) = words.iter().position(|word| is_read_command(&word.text)) else {
             continue;
         };
         if let Some(reason) = concrete {
             return Some(reason);
         }
-        if is_bulk_read(&tokens, reader) {
+        if is_bulk_read(&words, reader) {
             return Some(
                 "Liest Dateien rekursiv bzw. per -exec/xargs – Inhalt nicht vorab prüfbar",
             );
@@ -206,18 +291,24 @@ pub fn secret_path_read_reason(command: &str) -> Option<&'static str> {
         let Some(cd_prefixes) = cd_prefixes.as_deref() else {
             return Some("Lesebefehl nach Verzeichniswechsel in ein nicht prüfbares Ziel");
         };
-        // awk-Programme zerfallen an Leerzeichen (`{print $NF}`) — dort zählt
-        // nur `$` in einem Pfad, nicht ein ganzes Variablen-Wort.
-        let awk_program = matches!(
-            tokens[reader].rsplit('/').next(),
-            Some("awk" | "gawk" | "mawk" | "nawk")
-        );
-        for arg in candidate_args(&tokens, reader) {
-            if arg.contains('`') || is_variable_path(arg, awk_program) {
+        for (index, word) in words.iter().enumerate() {
+            if index == reader {
+                continue;
+            }
+            if word.expands || word.text.contains('`') {
                 return Some("Lesebefehl mit Variable im Pfad – Ziel nicht prüfbar");
             }
-            if let Some(reason) = glob_may_hit_secret(arg, cd_prefixes) {
-                return Some(reason);
+            if word.text.starts_with('-') && !word.text.contains('=') {
+                continue;
+            }
+            let arg = word_value(&word.text);
+            if arg.is_empty() {
+                continue;
+            }
+            if word.unquoted_glob {
+                if let Some(reason) = glob_may_hit_secret(arg, cd_prefixes) {
+                    return Some(reason);
+                }
             }
             if !arg.starts_with(['/', '~']) {
                 for prefix in cd_prefixes {
@@ -237,25 +328,107 @@ const STDOUT_TARGETS: &[&str] = &[
     "/dev/stdout",
     "/dev/stderr",
     "/dev/fd/",
+    "/dev/pts/",
     "/dev/tty",
     "/proc/",
 ];
 
-/// Kleinschreibung, ohne Quotes/Backslashes, Pfade lexikalisch normalisiert.
-fn normalize_for_secret_check(text: &str) -> String {
-    let stripped: String = text
-        .to_lowercase()
-        .chars()
+/// Ein Shell-Wort nach Quote-Auflösung (kleingeschrieben).
+#[derive(Default)]
+struct ShellWord {
+    text: String,
+    /// Ein Platzhalter außerhalb von Quotes — nur dann expandiert die Shell.
+    unquoted_glob: bool,
+    /// `$` außerhalb einfacher Quotes — Variable/Substitution.
+    expands: bool,
+}
+
+/// Zerlegt ein (kleingeschriebenes) Teilkommando in Wörter wie die Shell:
+/// Quotes und Backslashes werden aufgelöst, Trenner sind ungequotete
+/// Leerzeichen und `< > | ; & ( )`.
+fn shell_words(segment: &str) -> Vec<ShellWord> {
+    let mut words = Vec::new();
+    let mut current = ShellWord::default();
+    let mut in_word = false;
+    let mut quote: Option<char> = None;
+    let mut chars = segment.chars();
+    while let Some(c) = chars.next() {
+        match quote {
+            Some('\'') => {
+                if c == '\'' {
+                    quote = None;
+                } else {
+                    current.text.push(c);
+                }
+            }
+            Some(_) => match c {
+                '"' => quote = None,
+                '\\' => {
+                    if let Some(next) = chars.next() {
+                        current.text.push(next);
+                    }
+                }
+                _ => {
+                    if c == '$' || c == '`' {
+                        current.expands = true;
+                    }
+                    current.text.push(c);
+                }
+            },
+            None => match c {
+                '\'' | '"' => {
+                    quote = Some(c);
+                    in_word = true;
+                }
+                '\\' => {
+                    if let Some(next) = chars.next() {
+                        current.text.push(next);
+                    }
+                    in_word = true;
+                }
+                c if c.is_whitespace() || matches!(c, '<' | '>' | '|' | ';' | '&' | '(' | ')') => {
+                    if in_word {
+                        words.push(std::mem::take(&mut current));
+                        in_word = false;
+                    }
+                }
+                _ => {
+                    if matches!(c, '*' | '?' | '[' | '{') {
+                        current.unquoted_glob = true;
+                    }
+                    if c == '$' || c == '`' {
+                        current.expands = true;
+                    }
+                    current.text.push(c);
+                    in_word = true;
+                }
+            },
+        }
+    }
+    if in_word {
+        words.push(current);
+    }
+    words
+}
+
+/// Wert eines Worts: `--opt=wert`/`if=wert` → `wert`, Pfad normalisiert.
+fn word_value(text: &str) -> &str {
+    text.split_once('=').map_or(text, |(_, value)| value)
+}
+
+fn strip_quotes(text: &str) -> String {
+    text.chars()
         .filter(|c| !matches!(c, '\'' | '"' | '\\'))
-        .collect();
-    normalize_path(&stripped)
+        .collect()
 }
 
 /// `//` → `/`, `/./` → `/`, `x/../` → `` (wiederholt, rein lexikalisch).
+/// Pfadteile enthalten keine Shell-Trenner (`credentials</../dev/null`
+/// darf `credentials` nicht wegkürzen — zweite Review-Runde).
 fn normalize_path(text: &str) -> String {
     static PARENT: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let parent = PARENT.get_or_init(|| {
-        regex::Regex::new(r"(?P<keep>^|/)(?P<name>[^/\s]+)/\.\.(?:/|$)")
+        regex::Regex::new(r"(?P<keep>^|/)(?P<name>[^/\s<>|&;()]+)/\.\.(?:/|$)")
             .expect("eingebautes Pfad-Muster ist gültig")
     });
     let mut current = text.to_string();
@@ -290,7 +463,9 @@ fn secret_path_match(text: &str) -> Option<&'static str> {
         let rest = &text[index + ".ssh/".len()..];
         let name: String = rest
             .chars()
-            .take_while(|c| !c.is_whitespace() && !matches!(c, ';' | '|' | '&' | ')' | '<' | '>'))
+            .take_while(|c| {
+                !c.is_whitespace() && !matches!(c, ';' | '|' | '&' | ')' | '<' | '>' | '\'' | '"')
+            })
             .collect();
         let harmless = name.is_empty()
             || name.contains(['*', '?', '[', '{'])
@@ -307,110 +482,64 @@ fn secret_path_match(text: &str) -> Option<&'static str> {
     })
 }
 
-fn is_read_command(token: &str) -> bool {
+fn is_read_command(word: &str) -> bool {
     static READ: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let read = READ.get_or_init(|| {
         regex::Regex::new(&format!(r"^{SECRET_READ_COMMANDS}$"))
             .expect("eingebautes Lesebefehl-Muster ist gültig")
     });
-    let trimmed = token.trim_start_matches(['(', '{', '!', '<']);
+    let trimmed = word.trim_start_matches(['{', '!']);
     let name = trimmed.rsplit('/').next().unwrap_or(trimmed);
     read.is_match(name)
 }
 
-/// Rekursives oder per `-exec`/`xargs` verteiltes Lesen.
-fn is_bulk_read(tokens: &[&str], reader: usize) -> bool {
-    if tokens
+/// `xargs -a datei` / `--arg-file=datei` liest eine Datei.
+fn reads_file_via_xargs(words: &[ShellWord]) -> bool {
+    words
         .iter()
-        .any(|token| matches!(*token, "xargs" | "-exec" | "-execdir" | "-ok" | "-okdir"))
-    {
+        .any(|word| word.text.rsplit('/').next() == Some("xargs"))
+        && words.iter().any(|word| {
+            word.text == "-a"
+                || word.text.starts_with("--arg")
+                || (word.text.starts_with("-a") && !word.text.starts_with("--"))
+        })
+}
+
+/// Rekursives oder per `-exec`/`xargs` verteiltes Lesen.
+fn is_bulk_read(words: &[ShellWord], reader: usize) -> bool {
+    if words.iter().any(|word| {
+        matches!(
+            word.text.rsplit('/').next(),
+            Some("xargs" | "-exec" | "-execdir" | "-ok" | "-okdir")
+        )
+    }) {
         return true;
     }
-    let name = tokens[reader].rsplit('/').next().unwrap_or(tokens[reader]);
-    if matches!(name, "rg" | "ag" | "ack") {
+    let text = &words[reader].text;
+    let name = text.rsplit('/').next().unwrap_or(text);
+    if matches!(name, "rg" | "ag" | "ack" | "rgrep") {
         return true;
     }
-    matches!(name, "grep" | "egrep" | "fgrep" | "zgrep")
-        && tokens[reader + 1..]
+    matches!(name, "grep" | "egrep" | "fgrep" | "zgrep" | "ugrep")
+        && words[reader + 1..]
             .iter()
             .enumerate()
-            .any(|(offset, token)| {
-                matches!(
-                    *token,
-                    "--recursive" | "--dereference-recursive" | "--directories=recurse"
-                ) || (*token == "-d" && tokens.get(reader + 2 + offset) == Some(&"recurse"))
+            .any(|(offset, word)| {
+                let token = word.text.as_str();
+                // getopt akzeptiert eindeutige Präfixe (`--rec`, `--dir=rec`,
+                // `--deref`) — im Zweifel als rekursiv werten.
+                token.starts_with("--rec")
+                    || token.starts_with("--der")
+                    || token.starts_with("--dir")
+                    || (token == "-d"
+                        && words
+                            .get(reader + 2 + offset)
+                            .is_some_and(|next| next.text.starts_with("rec")))
                     || (token.starts_with('-')
                         && !token.starts_with("--")
                         && token[1..].chars().all(|c| c.is_ascii_alphanumeric())
                         && token.contains('r'))
             })
-}
-
-/// Pfad-Kandidaten eines Teilkommandos: alle Wörter außer dem Lesebefehl
-/// und Optionen; `--opt=wert`/`if=wert` liefern ihren Wert, Umleitungen ihr
-/// Ziel. Bei Musterbefehlen (grep, sed, awk, jq, …) ist das erste Argument
-/// das Muster/Programm und wird übersprungen — außer es gibt `-e`/`-f`,
-/// dann ist das erste Argument schon eine Datei.
-fn candidate_args<'a>(tokens: &[&'a str], reader: usize) -> Vec<&'a str> {
-    let name = tokens[reader].rsplit('/').next().unwrap_or(tokens[reader]);
-    let takes_pattern = matches!(
-        name,
-        "grep"
-            | "egrep"
-            | "fgrep"
-            | "zgrep"
-            | "sed"
-            | "awk"
-            | "gawk"
-            | "mawk"
-            | "nawk"
-            | "jq"
-            | "yq"
-    ) && !tokens[reader + 1..].iter().any(|token| {
-        matches!(*token, "-e" | "-f" | "--regexp" | "--file" | "--expression")
-            || token.starts_with("--regexp=")
-            || token.starts_with("--file=")
-            || token.starts_with("--expression=")
-            || token.starts_with("--from-file")
-    });
-    let mut pattern_skipped = !takes_pattern;
-    let mut args = Vec::new();
-    for (index, token) in tokens.iter().enumerate() {
-        if index == reader {
-            continue;
-        }
-        let mut arg = *token;
-        if let Some(position) = arg.rfind(['<', '>']) {
-            arg = &arg[position + 1..];
-        }
-        if let Some((_, value)) = arg.split_once('=') {
-            arg = value;
-        } else if arg.starts_with('-') {
-            continue;
-        }
-        let arg = arg.trim_matches(['(', ')', '{', '}', ';']);
-        if arg.is_empty() {
-            continue;
-        }
-        if index > reader && !pattern_skipped {
-            pattern_skipped = true;
-            continue;
-        }
-        args.push(arg);
-    }
-    args
-}
-
-/// `$VAR`, `${VAR}`, `$@`, `$*` als ganzes Argument, oder `$` in einem
-/// Pfad — Ziel lexikalisch nicht bestimmbar. Bewusst nicht: `$1}` o. ä. aus
-/// awk-Programmen.
-fn is_variable_path(arg: &str, path_only: bool) -> bool {
-    static VARIABLE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    let variable = VARIABLE.get_or_init(|| {
-        regex::Regex::new(r"^\$(?:\{[^}]*\}|[a-z_][a-z0-9_]*|[@*])$")
-            .expect("eingebautes Variablen-Muster ist gültig")
-    });
-    arg.contains('$') && (arg.contains('/') || (!path_only && variable.is_match(arg)))
 }
 
 /// Platzhalter in einem Pfad: im Verzeichnisteil immer verdächtig; im
@@ -420,16 +549,13 @@ fn glob_may_hit_secret(arg: &str, cd_prefixes: &[String]) -> Option<&'static str
     if !arg.contains(GLOB) {
         return None;
     }
+    let arg_owned = normalize_path(arg);
+    let arg = arg_owned.as_str();
     let (dir, last) = match arg.rsplit_once('/') {
         Some((dir, last)) => (Some(dir), last),
         None => (None, arg),
     };
-    if last.starts_with('.')
-        || arg.starts_with('~')
-        || arg.starts_with("$home")
-        || arg.starts_with("/root")
-        || SECRET_PATH_HINTS.iter().any(|hint| arg.contains(hint))
-    {
+    if glob_has_secret_hint(arg) {
         return Some("Lesebefehl mit Platzhalter auf einen möglichen Secret-Pfad");
     }
     if dir.is_some_and(|dir| dir.contains(GLOB)) {
@@ -457,6 +583,18 @@ fn glob_may_hit_secret(arg: &str, cd_prefixes: &[String]) -> Option<&'static str
                 secret_path_match(&normalize_path(&format!("{prefix}{candidate}")))
             })
         })
+}
+
+/// Heuristik der ersten Fassung: Platzhalter in einem Wort, das auf eine
+/// Punktdatei, ein Home-Verzeichnis oder einen Secret-Hinweis zeigt.
+fn glob_has_secret_hint(word: &str) -> bool {
+    let last = word.rsplit('/').next().unwrap_or(word);
+    word.contains(['*', '?', '[', '{'])
+        && (last.starts_with('.')
+            || word.starts_with('~')
+            || word.starts_with("$home")
+            || word.starts_with("/root")
+            || SECRET_PATH_HINTS.iter().any(|hint| word.contains(hint)))
 }
 
 /// Shell-Glob eines Pfadteils als verankerte Regex (`*`, `?`, `[…]`,
@@ -510,28 +648,31 @@ fn glob_to_regex(glob: &str) -> Option<regex::Regex> {
     regex::Regex::new(&pattern).ok()
 }
 
-/// Ziele von `cd`/`pushd` im Kommando als Präfixe (`"/etc/"`); ohne Ziel
-/// bzw. `~` das Home-Verzeichnis. `None`, wenn ein Ziel nicht prüfbar ist
-/// (Variable, Platzhalter, Kommando-Substitution).
-fn cd_prefixes(normalized_command: &str) -> Option<Vec<String>> {
-    let tokens: Vec<&str> = normalized_command
-        .split(|c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|' | '(' | ')'))
-        .filter(|token| !token.is_empty())
-        .collect();
+/// Ziele von `cd`/`pushd` als Präfixe (`"/etc/"`), je Teilkommando; ohne
+/// Ziel bzw. `~` das Home-Verzeichnis. `None`, wenn ein Ziel nicht prüfbar
+/// ist (Variable, Platzhalter, Kommando-Substitution).
+fn cd_prefixes(command: &str) -> Option<Vec<String>> {
     let mut prefixes = Vec::new();
-    for (index, token) in tokens.iter().enumerate() {
-        if !matches!(*token, "cd" | "pushd") {
+    for segment in segment_command(command) {
+        let words = shell_words(&segment.to_lowercase());
+        let Some(first) = words.first() else { continue };
+        if !matches!(first.text.as_str(), "cd" | "pushd") {
             continue;
         }
-        let target = tokens[index + 1..]
+        let target = words[1..]
             .iter()
-            .find(|next| !next.starts_with('-') || **next == "-")
-            .copied();
+            .find(|word| !word.text.starts_with('-') || word.text == "-");
         match target {
-            None | Some("~") => prefixes.push("~/".to_string()),
-            Some("-") => {}
-            Some(target) if target.contains(['$', '`', '*', '?', '[', '{']) => return None,
-            Some(target) => prefixes.push(format!("{}/", target.trim_end_matches('/'))),
+            None => prefixes.push("~/".to_string()),
+            Some(word) if word.expands || word.unquoted_glob || word.text.contains('`') => {
+                return None;
+            }
+            Some(word) if word.text == "~" => prefixes.push("~/".to_string()),
+            Some(word) if word.text == "-" => {}
+            Some(word) => prefixes.push(format!(
+                "{}/",
+                normalize_path(word.text.trim_end_matches('/'))
+            )),
         }
     }
     Some(prefixes)

@@ -38,7 +38,7 @@ const READ_COMMAND_PREFIX: &str = r"^(?:cat|less|head|tail|sftp-read|sftp-write)
 /// um `curl`/`wget`/`scp`/`rsync` — die bringen einen Secret-Pfad zwar
 /// nicht in den Chat, aber vom Server weg (strenger ist die sichere
 /// Richtung).
-pub(super) const SECRET_READ_COMMANDS: &str = r"(?:cat|less|more|head|tail|bat|batcat|tac|nl|grep|egrep|fgrep|zgrep|rg|ag|ack|sed|awk|gawk|mawk|nawk|xxd|od|hexdump|strings|base64|base32|openssl|jq|yq|sort|uniq|cut|paste|diff|cmp|comm|column|rev|fold|iconv|tr|pr|fmt|expand|look|dd|tee|zcat|bzcat|xzcat|zless|zmore|gzip|bzip2|xz|view|vim|vi|nano|ex|ed|emacs|curl|wget|scp|rsync|sftp-read)";
+pub(super) const SECRET_READ_COMMANDS: &str = r"(?:cat|less|more|head|tail|bat|batcat|tac|nl|grep|egrep|fgrep|zgrep|rgrep|ugrep|rg|ag|ack|sed|awk|gawk|mawk|nawk|xxd|od|hexdump|strings|base64|base32|openssl|jq|yq|sort|uniq|cut|paste|diff|cmp|comm|column|rev|fold|iconv|tr|pr|fmt|expand|look|dd|tee|zcat|bzcat|xzcat|zless|zmore|gzip|bzip2|xz|view|vim|vi|nano|ex|ed|emacs|curl|wget|scp|rsync|sftp-read)";
 
 /// Spec 0068, Teil 2 (Review-Fund): Dateinamen, gegen die ein Platzhalter
 /// im letzten Pfadteil geprüft wird (`cat /etc/sha*` trifft `shadow`).
@@ -132,7 +132,14 @@ pub(super) fn secret_path_patterns() -> &'static [(regex::Regex, &'static str)] 
             (r"\.env(?:rc)?(?:$|[^a-z0-9])", "Liest eine .env-Datei"),
             // Wie die Anzeige (`data_risk`) als Teilwort, nicht nur unter
             // `/etc/` — sonst wäre die Eskalation enger als das Badge.
+            // Muster der ersten Fassung (Präfix, ohne Wortgrenze — trifft
+            // auch `/etc/shadow_old`) zusätzlich zur Wort-Form.
+            (r"/etc/g?shadow", "Liest /etc/shadow bzw. /etc/gshadow"),
             (r"\bg?shadow\b", "Liest /etc/shadow bzw. /etc/gshadow"),
+            (
+                r"/etc/mysql/debian\.cnf",
+                "Liest MySQL-Wartungszugangsdaten (debian.cnf)",
+            ),
             (r"\.aws/credentials", "Liest AWS-Zugangsdaten"),
             (
                 r"\bcredentials\b",

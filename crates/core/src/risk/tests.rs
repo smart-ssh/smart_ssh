@@ -563,3 +563,83 @@ fn test_tightened_secret_checks_leave_ordinary_reads_alone() {
         );
     }
 }
+
+/// Die Umstellung darf nichts lockern: auch ein Muster-Argument mit
+/// Platzhalter auf einen Secret-Hinweis eskaliert weiter wie in der ersten
+/// Fassung.
+#[test]
+fn test_glob_hint_heuristic_still_covers_pattern_arguments() {
+    for command in [
+        "grep ~/.ssh/i* notes.txt",
+        "sed -n p .en*",
+        "awk 1 ~/.aws/*",
+    ] {
+        assert!(
+            secret_path_read_reason(command).is_some(),
+            "nicht erkannt: {command}"
+        );
+    }
+}
+
+/// Zweite Review-Runde (Spec 0068, ERHÖHT): Eingaben, die die erste
+/// Fassung eskalierte und die erste Nachbesserung durchließ (R1–R5), sowie
+/// weitere Umgehungen unter `grep *`/`cp *`/`xargs *`-Allow-Regeln.
+#[test]
+fn test_second_review_round_bypasses_are_detected() {
+    for command in [
+        // R1/R2: Muster-Argument, das die Datei verdeckt
+        "grep '' ~/.ssh/id*",
+        "grep \"\" /etc/sha*",
+        "sed '' ~/.ssh/i*",
+        "grep -h \"\" .en*",
+        "grep -iex /etc/sha*",
+        "awk -fprog /etc/sha*",
+        // R3: Umleitung in einem Pfadteil
+        "head -n 99 /root/.aws/credentials</../dev/null",
+        "grep x /etc/shadow</../dev/null",
+        // R4: Präfix-Treffer der ersten Fassung
+        "cat /etc/shadow_old",
+        "cat /etc/shadowbak",
+        "head /etc/gshadow1",
+        // R5: angeklebte Trenner
+        "cat${IFS}/root/.ssh/id_rsa",
+        "cat$IFS.env",
+        "cat>&2 ~/.ssh/id_rsa",
+        // weitere
+        "grep --rec -h '' ~",
+        "grep --directories recurse x /srv",
+        "grep --dir=rec x /srv",
+        "grep --derefer x /srv",
+        "rgrep x /srv",
+        "cp ~/.ssh/id_* /dev/stdout",
+        "cp /etc/sha* /dev/stderr",
+        "cp ~/.ssh/id_rsa /dev/pts/0",
+        "xargs -a .env echo",
+        "awk 1 $F",
+        "cd && cat .ssh/deploy",
+        "cat /etc/mysql/debian.cnf",
+    ] {
+        assert!(
+            secret_path_read_reason(command).is_some(),
+            "nicht erkannt: {command}"
+        );
+    }
+}
+
+/// Gequotete Platzhalter expandiert die Shell nicht — Muster in sed/grep
+/// bleiben unbehelligt.
+#[test]
+fn test_quoted_globs_and_awk_fields_are_not_escalated() {
+    for command in [
+        "sed 's/a.*/b/' /etc/hosts",
+        "grep 'err.*' /var/log/syslog",
+        "awk '{print $NF}' /var/log/access.log",
+        "cd /var/www && cat index.html",
+    ] {
+        assert_eq!(
+            secret_path_read_reason(command),
+            None,
+            "fälschlich eskaliert: {command}"
+        );
+    }
+}
