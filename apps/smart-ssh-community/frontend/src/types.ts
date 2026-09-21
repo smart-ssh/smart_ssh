@@ -363,6 +363,12 @@ export interface ChatResponseCancelledEvent {
   sessionId: string;
 }
 
+/** Spec 0066, §2 — während eines laufenden Turns eingereihte Nachrichten
+ * wurden jetzt an die KI übergeben. */
+export interface ChatQueuedMessagesSentEvent {
+  sessionId: string;
+}
+
 /** Antwort auf `host-key-verification-needed` (`confirm_host_key`). */
 export type HostKeyUserDecision = { decision: "trust" } | { decision: "reject" };
 

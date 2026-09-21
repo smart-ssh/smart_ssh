@@ -61,9 +61,10 @@ use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_chat_action_proposed, emit_chat_action_result, emit_chat_auto_continuation_limit_reached,
     emit_chat_auto_continuation_started, emit_chat_document_generated, emit_chat_error,
-    emit_chat_response_cancelled, emit_chat_response_truncated, emit_chat_text_delta,
-    emit_note_shrink_failed, emit_note_shrink_succeeded, emit_note_shrink_suggested,
-    emit_note_update_suggested, emit_risk_assessment_updated, ActionResultPayload, EventEmitter,
+    emit_chat_queued_messages_sent, emit_chat_response_cancelled, emit_chat_response_truncated,
+    emit_chat_text_delta, emit_note_shrink_failed, emit_note_shrink_succeeded,
+    emit_note_shrink_suggested, emit_note_update_suggested, emit_risk_assessment_updated,
+    ActionResultPayload, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -368,6 +369,25 @@ pub async fn run_chat_turn(
                 .load(std::sync::atomic::Ordering::SeqCst)
             {
                 return;
+            }
+            // Spec 0066, §2: während der vorigen Runde eingereihte
+            // Nutzer-Nachrichten gehen mit dieser Anfrage mit — als ganz
+            // normale Nutzer-Nachrichten im Verlauf (außerhalb jeder
+            // Fence, selber Pfad wie `send_chat_message_impl`). Nur hier
+            // UND in `send_chat_message_impl` entnommen, nie aus Tool-Output.
+            let queued = session.take_queued_user_messages();
+            if !queued.is_empty() {
+                for text in queued {
+                    push_history(
+                        session,
+                        ChatMessage {
+                            role: Role::User,
+                            content: MessageContent::Text(text),
+                        },
+                    )
+                    .await;
+                }
+                emit_chat_queued_messages_sent(emitter, session_id);
             }
             emit_chat_auto_continuation_started(emitter, session_id, round);
         }
@@ -3865,6 +3885,7 @@ mod tests {
             sftp: AsyncMutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
+            chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
             risk_second_opinion_provider: None,
             risk_second_opinion_budget: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
@@ -13232,5 +13253,70 @@ mod tests {
             "nach Stopp in der Wartezeit darf kein Request mehr rausgehen"
         );
         assert!(has_event(&emitter, "chat-response-cancelled"));
+    }
+
+    /// Spec 0066, §2: eine während Runde 1 eingereihte Nachricht geht mit
+    /// der Anfrage von Runde 2 an die KI — als normale Nutzer-Nachricht,
+    /// nach dem Kommando-Ergebnis, nicht in Runde 1.
+    #[tokio::test]
+    async fn test_queued_message_is_sent_with_the_next_round() {
+        let provider = MockAiProvider::with_rounds(vec![
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "echo one".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            vec![AiEvent::Done],
+        ]);
+        let contexts = provider.received_contexts_handle();
+        let mut session = session_with_ai_provider(
+            provider,
+            MockSshTransport::default().with_response("echo one", output("one")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        // Entspricht einer Nachricht, die während Runde 1 ankam — entnommen
+        // wird erst an der Grenze zu Runde 2.
+        session
+            .chat_turn
+            .lock()
+            .unwrap()
+            .queued
+            .push("bitte nur lesen".to_string());
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let contexts = contexts.lock().unwrap().clone();
+        assert_eq!(contexts.len(), 2);
+        let is_queued_text = |m: &ChatMessage| {
+            m.role == Role::User
+                && matches!(&m.content, MessageContent::Text(t) if t == "bitte nur lesen")
+        };
+        assert!(!contexts[0].history.iter().any(is_queued_text));
+        let round_two = &contexts[1].history;
+        let queued_at = round_two
+            .iter()
+            .position(is_queued_text)
+            .expect("eingereihte Nachricht muss in Runde 2 mitgehen");
+        let result_at = round_two
+            .iter()
+            .position(|m| matches!(&m.content, MessageContent::CommandResult { .. }))
+            .unwrap();
+        assert!(
+            queued_at > result_at,
+            "nach dem Kommando-Ergebnis einsortiert"
+        );
+        assert!(has_event(&emitter, "chat-queued-messages-sent"));
+        assert!(session.chat_turn.lock().unwrap().queued.is_empty());
     }
 }

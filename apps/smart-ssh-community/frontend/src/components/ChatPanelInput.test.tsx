@@ -8,7 +8,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendChatMessage, stopAutoContinuation } from "../api";
-import { onChatResponseCancelled } from "../events";
+import { onChatQueuedMessagesSent, onChatResponseCancelled } from "../events";
 import { testI18n } from "../testI18n";
 import { ChatPanel } from "./ChatPanel";
 
@@ -56,6 +56,7 @@ vi.mock("../events", () => ({
   onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
   onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
   onChatError: vi.fn(() => Promise.resolve(() => {})),
+  onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
@@ -174,5 +175,43 @@ describe("ChatPanel stop (Spec 0066, §1)", () => {
     handler!({ sessionId: "session-1" });
 
     expect(await screen.findByText("⏹ Antwort abgebrochen.")).toBeInTheDocument();
+  });
+});
+
+describe("ChatPanel queued messages (Spec 0066, §2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("keeps the input enabled while a response runs and queues a second message", async () => {
+    let resolveFirst: () => void = () => {};
+    vi.mocked(sendChatMessage).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (resolveFirst = resolve)),
+    );
+    let queuedHandler: ((event: { sessionId: string }) => void) | null = null;
+    vi.mocked(onChatQueuedMessagesSent).mockImplementation((h) => {
+      queuedHandler = h;
+      return Promise.resolve(() => {});
+    });
+    renderChatPanel();
+    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+
+    fireEvent.change(field, { target: { value: "erste" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await screen.findByRole("button", { name: "Stopp" });
+
+    expect(field).not.toBeDisabled();
+    fireEvent.change(field, { target: { value: "Korrektur" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith("session-1", "Korrektur"));
+    expect(field).toHaveValue("");
+    expect(screen.getByText("⏳ Wird mit der nächsten Anfrage gesendet")).toBeInTheDocument();
+
+    queuedHandler!({ sessionId: "session-1" });
+    await waitFor(() =>
+      expect(screen.queryByText("⏳ Wird mit der nächsten Anfrage gesendet")).not.toBeInTheDocument(),
+    );
+    resolveFirst();
   });
 });

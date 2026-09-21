@@ -209,6 +209,11 @@ pub struct Session {
     /// sofort abgebrochen wird statt erst an der nächsten Rundengrenze.
     /// Immer über [`Session::request_auto_continue_stop`] setzen.
     pub auto_continue_stop_notify: tokio::sync::Notify,
+    /// Spec 0066, §2: ob gerade ein Chat-Turn läuft, und welche
+    /// Nutzer-Nachrichten währenddessen eingereiht wurden. Beides unter
+    /// EINEM Lock, damit keine Nachricht zwischen "Warteschlange leer" und
+    /// "Turn beendet" verloren gehen kann.
+    pub chat_turn: StdMutex<ChatTurnState>,
     /// Spec 0026, Abschnitt 3: `Some`, wenn die optionale KI-Zweitmeinung
     /// zur Daten-Risiko-Achse aktiviert ist UND ein gültiger, separater
     /// Provider dafür konfiguriert ist — einmalig bei `connect()` aus den
@@ -317,7 +322,19 @@ pub struct Session {
     pub ai_request_paced_at: AsyncMutex<Option<tokio::time::Instant>>,
 }
 
+/// Spec 0066, §2 — s. `Session::chat_turn`.
+#[derive(Debug, Default)]
+pub struct ChatTurnState {
+    pub running: bool,
+    pub queued: Vec<String>,
+}
+
 impl Session {
+    /// Spec 0066, §2: entnimmt alle eingereihten Nutzer-Nachrichten.
+    pub(crate) fn take_queued_user_messages(&self) -> Vec<String> {
+        std::mem::take(&mut self.chat_turn.lock().unwrap().queued)
+    }
+
     /// Spec 0066, §1: setzt das Stopp-Flag und weckt eine gerade laufende
     /// Runde auf (bricht deren KI-Stream ab).
     pub fn request_auto_continue_stop(&self) {
@@ -652,6 +669,7 @@ mod tests {
             sftp: AsyncMutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
+            chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
             risk_second_opinion_provider: None,
             risk_second_opinion_budget: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),

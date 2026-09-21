@@ -681,6 +681,24 @@ pub fn emit_chat_response_cancelled(emitter: &dyn EventEmitter, session_id: Sess
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ChatQueuedMessagesSentPayload {
+    session_id: SessionId,
+}
+
+/// Spec 0066, §2: während eines laufenden Turns eingereihte
+/// Nutzer-Nachrichten wurden jetzt an die KI übergeben (an der nächsten
+/// Rundengrenze oder als neuer Turn) — das Frontend entfernt daraufhin den
+/// "wartet"-Hinweis an diesen Nachrichten.
+pub fn emit_chat_queued_messages_sent(emitter: &dyn EventEmitter, session_id: SessionId) {
+    emit(
+        emitter,
+        "chat-queued-messages-sent",
+        &ChatQueuedMessagesSentPayload { session_id },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ChatAutoContinuationLimitReachedPayload {
     session_id: SessionId,
     limit: usize,

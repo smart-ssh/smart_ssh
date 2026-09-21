@@ -40,8 +40,9 @@ use crate::dto::{
 };
 use crate::error::{CommandError, CommandResult};
 use crate::events::{
-    emit_connection_status_changed, emit_host_key_verification_needed, emit_sftp_transfer_finished,
-    emit_sftp_transfer_started, ConnectionStatus, EventEmitter, HostKeyKind, SftpTransferKind,
+    emit_chat_queued_messages_sent, emit_connection_status_changed,
+    emit_host_key_verification_needed, emit_sftp_transfer_finished, emit_sftp_transfer_started,
+    ConnectionStatus, EventEmitter, HostKeyKind, SftpTransferKind,
 };
 use crate::groups::{compute_delete_group_result, validate_no_cycle};
 use crate::orchestration::{execute_note_shrink_request, run_chat_turn};
@@ -1177,6 +1178,7 @@ pub(crate) async fn connect_session(
         sftp: tokio::sync::Mutex::new(None),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         auto_continue_stop_notify: tokio::sync::Notify::new(),
+        chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
         risk_second_opinion_provider,
         risk_second_opinion_budget,
         running_command_cancellations: state.running_command_cancellations.clone(),
@@ -1771,74 +1773,141 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
         }
     }
 
-    // Spec 0032: `profile_store.get_server` findet den lokalen
-    // Pseudo-Server nie (keine `servers`-Zeile) — ohne diesen Zweig würde
-    // der Servername in JEDER Chat-Nachricht auf das generische "Server"
-    // degradieren (unabhängiger Review-Pass, s. docs/adr/0026).
-    let (server_name, current_tags) = if crate::local_server::is_local(session.server_id) {
-        let local = crate::local_server::synthetic_server(app);
-        (local.name, local.tags)
-    } else {
-        match profile_store.get_server(&session.server_id).await {
-            Ok(s) => (s.name, s.tags),
-            Err(_) => ("Server".to_string(), session.tags.clone()),
-        }
-    };
-
-    // Spec 0064: der `uname`-Banner lebt seit diesem Schritt als eigene,
-    // einmalig bei `connect()` eingefügte Verlaufs-Nachricht (s.
-    // `os_banner_message`-Kommentar in `connect_session`), nicht mehr in
-    // `SystemContextParts` — hier also nichts mehr zu übernehmen.
-    let (updated_system_context_parts, notes_present) = build_session_system_context(
-        app,
-        &server_name,
-        &session.server_id,
-        &current_tags,
-        profile_store,
-        policy_store,
-    )
-    .await;
-    // Spec 0039, Abschnitt 5: der System-Prompt wird bei JEDER
-    // Nutzer-Nachricht neu gebaut — enthält er gefencte Notizen (auch
-    // wenn er das schon in einer früheren Nachricht tat), muss das Flag
-    // spätestens jetzt gesetzt sein. Monoton: `store(true, ...)` nur bei
-    // Bedarf, ein bereits gesetztes Flag wird nie zurückgesetzt.
-    if notes_present {
-        session
-            .untrusted_content_ingested
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    let updated_system_context = updated_system_context_parts.assemble();
+    // Spec 0066, §2: läuft für diese Sitzung schon ein Turn, wird die
+    // Nachricht nur eingereiht — sie geht mit der nächsten Anfrage an die KI
+    // mit (s. `run_chat_turn`) bzw. nach Turn-Ende als neuer Turn (unten).
     {
-        let mut ctx = session.context.lock().await;
-        ctx.system_context = updated_system_context;
+        let mut turn = session.chat_turn.lock().unwrap();
+        if turn.running {
+            turn.queued.push(text);
+            return Ok(());
+        }
+        turn.running = true;
     }
-    *session.system_context_parts.lock().await = updated_system_context_parts;
-    // Spec 0040, Abschnitt 2: über `push_history` statt eines direkten
-    // `ctx.history.push(...)`, sonst umgeht die Nutzer-Nachricht die
-    // Persistenz (Spec 0034, Abschnitt 4 verlangt ausdrücklich, dass auch
-    // Nutzertext fortlaufend in `chat_messages` landet — verschlüsselt,
-    // Spec 0036). Muss VOR `run_chat_turn` passieren, damit die Nachricht
-    // in der DB steht, bevor der KI-Aufruf überhaupt startet.
-    crate::orchestration::push_history(
+    let mut running_guard = ChatTurnRunningGuard {
         session,
-        ChatMessage {
-            role: Role::User,
-            content: MessageContent::Text(text),
-        },
-    )
-    .await;
+        armed: true,
+    };
+    let mut texts = vec![text];
 
-    run_chat_turn(
-        session,
-        session_id,
-        emitter,
-        profile_store,
-        action_confirmations,
-    )
-    .await;
+    loop {
+        // Spec 0032: `profile_store.get_server` findet den lokalen
+        // Pseudo-Server nie (keine `servers`-Zeile) — ohne diesen Zweig würde
+        // der Servername in JEDER Chat-Nachricht auf das generische "Server"
+        // degradieren (unabhängiger Review-Pass, s. docs/adr/0026).
+        let (server_name, current_tags) = if crate::local_server::is_local(session.server_id) {
+            let local = crate::local_server::synthetic_server(app);
+            (local.name, local.tags)
+        } else {
+            match profile_store.get_server(&session.server_id).await {
+                Ok(s) => (s.name, s.tags),
+                Err(_) => ("Server".to_string(), session.tags.clone()),
+            }
+        };
+
+        // Spec 0064: der `uname`-Banner lebt seit diesem Schritt als eigene,
+        // einmalig bei `connect()` eingefügte Verlaufs-Nachricht (s.
+        // `os_banner_message`-Kommentar in `connect_session`), nicht mehr in
+        // `SystemContextParts` — hier also nichts mehr zu übernehmen.
+        let (updated_system_context_parts, notes_present) = build_session_system_context(
+            app,
+            &server_name,
+            &session.server_id,
+            &current_tags,
+            profile_store,
+            policy_store,
+        )
+        .await;
+        // Spec 0039, Abschnitt 5: der System-Prompt wird bei JEDER
+        // Nutzer-Nachricht neu gebaut — enthält er gefencte Notizen (auch
+        // wenn er das schon in einer früheren Nachricht tat), muss das Flag
+        // spätestens jetzt gesetzt sein. Monoton: `store(true, ...)` nur bei
+        // Bedarf, ein bereits gesetztes Flag wird nie zurückgesetzt.
+        if notes_present {
+            session
+                .untrusted_content_ingested
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+
+        let updated_system_context = updated_system_context_parts.assemble();
+        {
+            let mut ctx = session.context.lock().await;
+            ctx.system_context = updated_system_context;
+        }
+        *session.system_context_parts.lock().await = updated_system_context_parts;
+        // Spec 0040, Abschnitt 2: über `push_history` statt eines direkten
+        // `ctx.history.push(...)`, sonst umgeht die Nutzer-Nachricht die
+        // Persistenz (Spec 0034, Abschnitt 4 verlangt ausdrücklich, dass auch
+        // Nutzertext fortlaufend in `chat_messages` landet — verschlüsselt,
+        // Spec 0036). Muss VOR `run_chat_turn` passieren, damit die Nachricht
+        // in der DB steht, bevor der KI-Aufruf überhaupt startet.
+        for text in texts {
+            crate::orchestration::push_history(
+                session,
+                ChatMessage {
+                    role: Role::User,
+                    content: MessageContent::Text(text),
+                },
+            )
+            .await;
+        }
+
+        run_chat_turn(
+            session,
+            session_id,
+            emitter,
+            profile_store,
+            action_confirmations,
+        )
+        .await;
+
+        // Prüfen und Zurücksetzen unter demselben Lock wie das Einreihen —
+        // eine gleichzeitig ankommende Nachricht landet entweder noch in
+        // `queued` (und wird hier abgeholt) oder startet selbst einen Turn.
+        let next = {
+            let mut turn = session.chat_turn.lock().unwrap();
+            if turn.queued.is_empty() {
+                turn.running = false;
+                None
+            } else {
+                Some(std::mem::take(&mut turn.queued))
+            }
+        };
+        match next {
+            None => {
+                running_guard.armed = false;
+                break;
+            }
+            Some(queued) => {
+                emit_chat_queued_messages_sent(emitter, session_id);
+                texts = queued;
+            }
+        }
+    }
     Ok(())
+}
+
+/// Spec 0066, §2: setzt `ChatTurnState::running` zurück, falls
+/// `send_chat_message_impl` vorzeitig endet (Panic/abgebrochenes Future) —
+/// sonst würde jede weitere Nachricht dieser Sitzung für immer nur
+/// eingereiht. Im Normalfall entschärft (`armed = false`), weil das
+/// Zurücksetzen dort atomar mit der Warteschlangen-Prüfung passiert.
+struct ChatTurnRunningGuard<'a> {
+    session: &'a Session,
+    armed: bool,
+}
+
+impl Drop for ChatTurnRunningGuard<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            let mut turn = self
+                .session
+                .chat_turn
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            turn.running = false;
+        }
+    }
 }
 
 /// Spec 0040, Abschnitt 6: "In Notiz übernehmen" — startet denselben
@@ -4714,6 +4783,7 @@ mod send_chat_message_persistence_tests {
             sftp: AsyncMutex::new(None::<Box<dyn SftpSession>>),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
+            chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
             risk_second_opinion_provider: None,
             risk_second_opinion_budget: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
@@ -4863,6 +4933,140 @@ mod send_chat_message_persistence_tests {
             "die Chat-Persistenz selbst darf vom fehlenden Prompt-History-Store unbeeinflusst \
              bleiben: {loaded:?}"
         );
+    }
+
+    /// Spec 0066, §2: erster `send()` hängt, bis `gate` geöffnet wird; jeder
+    /// weitere liefert sofort `Done`. Zeichnet jeden gesendeten Kontext auf.
+    struct GatedRecordingProvider {
+        gate: Arc<tokio::sync::Notify>,
+        contexts: Arc<std::sync::Mutex<Vec<SessionContext>>>,
+    }
+    impl AiProvider for GatedRecordingProvider {
+        fn send(
+            &self,
+            context: SessionContext,
+        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+            let mut contexts = self.contexts.lock().unwrap();
+            let first = contexts.is_empty();
+            contexts.push(context);
+            if first {
+                let gate = self.gate.clone();
+                Box::pin(futures::stream::once(async move {
+                    gate.notified().await;
+                    AiEvent::Done
+                }))
+            } else {
+                Box::pin(futures::stream::iter(vec![AiEvent::Done]))
+            }
+        }
+    }
+
+    fn history_texts(context: &SessionContext) -> Vec<String> {
+        context
+            .history
+            .iter()
+            .filter_map(|m| match (&m.role, &m.content) {
+                (Role::User, MessageContent::Text(t)) => Some(t.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Spec 0066, §2: eine Nachricht, die während eines laufenden Turns
+    /// gesendet wird, kehrt sofort zurück (Eingabe nie blockiert), wird
+    /// eingereiht und nach Turn-Ende als normale Nachricht gesendet — über
+    /// denselben Pfad, also auch mit Redaction vor dem Versand.
+    #[tokio::test]
+    async fn test_message_sent_during_running_turn_is_queued_then_sent_redacted() {
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut session = test_session(ServerId::new());
+        session.ai_provider = Box::new(GatedRecordingProvider {
+            gate: gate.clone(),
+            contexts: contexts.clone(),
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let policy_store =
+            persistence_sqlite::SqliteProfileStore::connect(&dir.path().join("t.db"))
+                .await
+                .unwrap()
+                .policy_store();
+        let app = test_app();
+        let handle = app.handle();
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = uuid::Uuid::new_v4();
+
+        let first = send_chat_message_impl(
+            handle,
+            &emitter,
+            &session,
+            session_id,
+            "erste Frage".to_string(),
+            None,
+            &profile_store,
+            &policy_store,
+            &confirmations,
+        );
+        let second = async {
+            while contexts.lock().unwrap().is_empty() {
+                tokio::task::yield_now().await;
+            }
+            tokio::time::timeout(
+                std::time::Duration::from_secs(1),
+                send_chat_message_impl(
+                    handle,
+                    &emitter,
+                    &session,
+                    session_id,
+                    "Korrektur: nimm AKIAABCDEFGHIJKLMNOP nicht".to_string(),
+                    None,
+                    &profile_store,
+                    &policy_store,
+                    &confirmations,
+                ),
+            )
+            .await
+            .expect("Senden während eines laufenden Turns darf nicht blockieren")
+            .unwrap();
+            assert_eq!(
+                contexts.lock().unwrap().len(),
+                1,
+                "die eingereihte Nachricht darf den laufenden Request nicht unterbrechen"
+            );
+            gate.notify_waiters();
+        };
+        let (first_result, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(first, second)
+        })
+        .await
+        .expect("beide Turns müssen enden");
+        first_result.unwrap();
+
+        let contexts = contexts.lock().unwrap().clone();
+        assert_eq!(
+            contexts.len(),
+            2,
+            "eingereihte Nachricht → genau ein Folge-Request"
+        );
+        let sent = history_texts(&contexts[1]);
+        assert!(
+            sent.iter().any(|t| t.starts_with("Korrektur: nimm")),
+            "eingereihte Nachricht muss im Folge-Request stehen: {sent:?}"
+        );
+        assert!(
+            !sent.iter().any(|t| t.contains("AKIAABCDEFGHIJKLMNOP")),
+            "Secret in eingereihter Nachricht muss vor dem Versand redigiert sein: {sent:?}"
+        );
+        assert!(emitter
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(name, _)| name == "chat-queued-messages-sent"));
+        let turn = session.chat_turn.lock().unwrap();
+        assert!(!turn.running && turn.queued.is_empty());
     }
 }
 

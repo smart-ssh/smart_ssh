@@ -25,6 +25,7 @@ import {
   onChatAutoContinuationStarted,
   onChatDocumentGenerated,
   onChatError,
+  onChatQueuedMessagesSent,
   onChatResponseCancelled,
   onChatResponseTruncated,
   onChatTextDelta,
@@ -54,7 +55,14 @@ import type {
 import { NoteDiffPreview } from "./NoteDiffPreview";
 
 export type ChatItem =
-  | { type: "user"; id: string; text: string }
+  | {
+      type: "user";
+      id: string;
+      text: string;
+      /** Spec 0066, §2: während einer laufenden Antwort gesendet — geht mit
+       * der nächsten Anfrage an die KI mit (bis `chat-queued-messages-sent`). */
+      queued?: boolean;
+    }
   | {
       type: "assistant";
       id: string;
@@ -454,6 +462,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
           return [...prev.slice(0, -1), { ...last, truncated: true }];
         });
       }),
+      onChatQueuedMessagesSent((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) =>
+          prev.map((it) => (it.type === "user" && it.queued ? { ...it, queued: false } : it)),
+        );
+      }),
       onChatResponseCancelled((event) => {
         if (event.sessionId !== sessionId) return;
         setItems((prev) => [...prev, { type: "responseCancelled", id: freshId() }]);
@@ -637,7 +651,22 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text) return;
+    if (sending) {
+      // Spec 0066, §2: läuft schon eine Antwort, reiht das Backend die
+      // Nachricht ein (kehrt sofort zurück) und schickt sie mit der
+      // nächsten Anfrage an die KI — die laufende Antwort läuft weiter.
+      setItems((prev) => [...prev, { type: "user", id: freshId(), text, queued: true }]);
+      setDraft("");
+      setHistoryNav(initialHistoryNavState);
+      sendChatMessage(sessionId, text).catch((err) =>
+        setItems((prev) => [
+          ...prev,
+          { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
+        ]),
+      );
+      return;
+    }
     setItems((prev) => [...prev, { type: "user", id: freshId(), text }]);
     setDraft("");
     setHistoryNav(initialHistoryNavState);
@@ -849,12 +878,11 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder="Frage stellen oder Kommando beschreiben …"
-            disabled={sending}
             className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
           />
           <button
             type="submit"
-            disabled={sending || draft.trim().length === 0}
+            disabled={draft.trim().length === 0}
             className="font-heading bg-indigo-600 px-4 py-1.5 text-sm font-semibold tracking-wide text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
           >
             Senden
@@ -975,6 +1003,9 @@ export function ChatItemView({
     return (
       <div className="ml-auto max-w-[80%] border border-indigo-500/60 bg-indigo-700 px-3 py-2 text-sm text-indigo-50">
         {item.text}
+        {item.queued && (
+          <p className="mt-1 text-xs text-indigo-200/80">⏳ Wird mit der nächsten Anfrage gesendet</p>
+        )}
       </div>
     );
   }
