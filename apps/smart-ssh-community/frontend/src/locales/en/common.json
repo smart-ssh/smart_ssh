@@ -450,7 +450,8 @@
     "openedLocally": "“{{name}}” opened locally — changes will be offered for upload",
     "openLocallyFailed": "“{{name}}” could not be opened locally: {{reason}}",
     "editUploaded": "Change to “{{name}}” uploaded",
-    "editUploadFailed": "Change to “{{name}}” could not be uploaded: {{reason}}"
+    "editUploadFailed": "Change to “{{name}}” could not be uploaded: {{reason}}",
+    "uploadFailedMany": "{{name}} files could not be uploaded, e.g.: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Elevated rights",
@@ -468,7 +469,7 @@
     "failureTitle": "Elevated rights not possible",
     "sudoersIntro": "Elevated mode needs a sudo rule without password for sftp-server on the server. This line matches this server and login:",
     "sudoersHowTo": "Add it on the server, e.g. with “sudo visudo -f /etc/sudoers.d/smart-ssh-sftp”.",
-    "sudoersWarning": "Important: this rule gives the SSH login passwordless file access as {{user}} — anyone with the SSH key can read and write every file. Decide deliberately.",
+    "sudoersWarning": "Important: this rule gives the SSH login passwordless file access as {{user}} — not only for this browser but for everything running under this login, including commands suggested by the AI. Anyone with the SSH key can read and write every file; write access as root is practically full root access. Decide deliberately.",
     "copy": "Copy",
     "copied": "Copied!",
     "close": "Close",

@@ -97,6 +97,8 @@ export function SessionView({
   // nur per CSS ausgeblendet, damit weder xterm-Scrollback noch die aktuelle
   // Verzeichnisnavigation des Dateibrowsers beim Umschalten verloren gehen.
   const [rightPanelView, setRightPanelView] = useState<"terminal" | "files">("terminal");
+  // Spec 0067, A5: Ziel-Nutzer des erhöhten Dateibrowser-Modus, `null` = aus.
+  const [filesElevatedUser, setFilesElevatedUser] = useState<string | null>(null);
 
   // Spec 0053, Teil 2: `preferredRightWidth` ist die vom Nutzer gewählte
   // (bzw. geladene) Breite — wird NIE durch ein zu kleines Fenster
@@ -226,6 +228,13 @@ export function SessionView({
               }`}
             >
               Dateien
+              {filesElevatedUser && (
+                // Spec 0067, A5: erhöhter Modus bleibt auch bei verborgener
+                // Dateien-Ansicht sichtbar.
+                <span className="ml-1.5 normal-case tracking-normal text-amber-400">
+                  ⚠ {filesElevatedUser}
+                </span>
+              )}
             </button>
           </div>
           <div className={rightPanelView === "terminal" ? "min-h-0 flex-1 p-2" : "hidden"}>
@@ -235,6 +244,7 @@ export function SessionView({
             <FileBrowserPanel
               sessionId={sessionId}
               isVisible={isActiveTab && rightPanelView === "files"}
+              onElevationChange={setFilesElevatedUser}
             />
           </div>
         </div>

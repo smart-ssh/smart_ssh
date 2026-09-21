@@ -89,9 +89,16 @@ vi.mock("../fileTypeSettings", () => ({
   appForFileName: () => null,
 }));
 
+const dragDrop = vi.hoisted(() => ({
+  handler: null as null | ((event: { payload: { type: string; paths?: string[] } }) => void),
+}));
+
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({
-    onDragDropEvent: vi.fn(() => Promise.resolve(() => {})),
+    onDragDropEvent: vi.fn((h) => {
+      dragDrop.handler = h;
+      return Promise.resolve(() => {});
+    }),
   }),
 }));
 
@@ -265,7 +272,7 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
     const dirButton = await screen.findByText(/logs/);
     fireEvent.click(dirButton);
 
-    await waitFor(() => expect(sftpList).toHaveBeenCalledWith("session-1", "logs", false));
+    await waitFor(() => expect(sftpList).toHaveBeenCalledWith("session-1", "logs", null));
   });
 });
 
@@ -387,7 +394,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     fireEvent.click(screen.getByRole("button", { name: "⋮" }));
     fireEvent.click(screen.getByText("Herunterladen"));
 
-    expect(sftpDownloadDefault).toHaveBeenCalledWith("session-1", "a.txt", false);
+    expect(sftpDownloadDefault).toHaveBeenCalledWith("session-1", "a.txt", null);
   });
 
   it("'Herunterladen nach…' uses the folder dialog for directories, file dialog for files", async () => {
@@ -400,7 +407,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     fireEvent.click(screen.getByRole("button", { name: "⋮" }));
     fireEvent.click(screen.getByText("Herunterladen nach…"));
 
-    expect(sftpDownloadDir).toHaveBeenCalledWith("session-1", "logs", false);
+    expect(sftpDownloadDir).toHaveBeenCalledWith("session-1", "logs", null);
     expect(sftpDownload).not.toHaveBeenCalled();
   });
 
@@ -491,7 +498,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     fireEvent.click(screen.getByText("Aktualisieren"));
 
     await waitFor(() => expect(sftpList).toHaveBeenCalledTimes(2));
-    expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", false);
+    expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", null);
   });
 });
 
@@ -526,7 +533,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o444, false, false),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o444, false, null),
     );
   });
 
@@ -545,7 +552,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o700, false, false),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o700, false, null),
     );
   });
 
@@ -575,7 +582,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "suid-bin", 0o4755, false, false),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "suid-bin", 0o4755, false, null),
     );
   });
 
@@ -594,7 +601,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "logs", 0o755, true, false),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "logs", 0o755, true, null),
     );
   });
 
@@ -609,7 +616,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Löschen"));
 
     expect(await screen.findByText(/Ordner löschen/)).toBeVisible();
-    await waitFor(() => expect(sftpDeletePreview).toHaveBeenCalledWith("session-1", "logs", false));
+    await waitFor(() => expect(sftpDeletePreview).toHaveBeenCalledWith("session-1", "logs", null));
     expect(await screen.findByText("3")).toBeVisible();
     expect(screen.getByText("2")).toBeVisible();
     // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): die
@@ -634,12 +641,12 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.change(input, { target: { value: "b.txt" } });
     fireEvent.click(screen.getByText("Übernehmen"));
 
-    await waitFor(() => expect(sftpExists).toHaveBeenCalledWith("session-1", "b.txt", false));
+    await waitFor(() => expect(sftpExists).toHaveBeenCalledWith("session-1", "b.txt", null));
     expect(await screen.findByText("Ziel existiert bereits")).toBeVisible();
     expect(sftpRename).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByText("Überschreiben"));
-    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt", false));
+    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt", null));
   });
 
   it("rename proceeds directly when there is no collision", async () => {
@@ -657,7 +664,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.change(input, { target: { value: "b.txt" } });
     fireEvent.click(screen.getByText("Übernehmen"));
 
-    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt", false));
+    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt", null));
     expect(screen.queryByText("Ziel existiert bereits")).not.toBeInTheDocument();
   });
 
@@ -688,8 +695,8 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
 
     fireEvent.click(screen.getByText("Einfügen"));
 
-    await waitFor(() => expect(sftpExists).toHaveBeenCalledWith("session-1", "logs/a.txt", false));
-    expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "logs/a.txt", false);
+    await waitFor(() => expect(sftpExists).toHaveBeenCalledWith("session-1", "logs/a.txt", null));
+    expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "logs/a.txt", null);
   });
 
   it("upload onto an existing text file shows a diff, confirming uploads it", async () => {
@@ -713,7 +720,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
 
     fireEvent.click(screen.getByText("Überschreiben"));
     await waitFor(() =>
-      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/a.txt", "a.txt", false),
+      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/a.txt", "a.txt", null),
     );
   });
 
@@ -729,7 +736,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Hochladen"));
 
     await waitFor(() =>
-      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/new.txt", "new.txt", false),
+      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/new.txt", "new.txt", null),
     );
     expect(screen.queryByText("Datei überschreiben?")).not.toBeInTheDocument();
     expect(readLocalTextPreview).not.toHaveBeenCalled();
@@ -758,7 +765,7 @@ describe("FileBrowserPanel 'Lokal öffnen' flow (Spec 0054, Teil 4)", () => {
     fireEvent.click(screen.getByText("Lokal öffnen…"));
 
     await waitFor(() =>
-      expect(sftpOpenForEditing).toHaveBeenCalledWith("session-1", "a.txt", false),
+      expect(sftpOpenForEditing).toHaveBeenCalledWith("session-1", "a.txt", null),
     );
     expect(await screen.findByText(/wird lokal bearbeitet/)).toBeVisible();
   });
@@ -948,7 +955,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
 
     expect(sftpElevationDisable).toHaveBeenCalledWith("session-1");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(sftpList).toHaveBeenCalledWith("session-1", ".", false);
+    expect(sftpList).toHaveBeenCalledWith("session-1", ".", null);
   });
 
   it("marks the browser unmistakably and routes actions through the elevated channel", async () => {
@@ -956,7 +963,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("root");
     expect(document.querySelector('[data-elevated="true"]')).not.toBeNull();
-    await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", true));
+    await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", "root"));
 
     fireEvent.click(screen.getByRole("button", { name: "⋮" }));
     fireEvent.click(screen.getByText("Löschen"));
@@ -964,7 +971,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     vi.mocked(sftpDelete).mockResolvedValue(undefined);
     fireEvent.click(screen.getAllByText("Löschen").at(-1)!);
 
-    await waitFor(() => expect(sftpDelete).toHaveBeenCalledWith("session-1", "a.txt", true));
+    await waitFor(() => expect(sftpDelete).toHaveBeenCalledWith("session-1", "a.txt", "root"));
     await waitFor(() =>
       expect(vi.mocked(showToast).mock.calls.at(-1)?.[0]).toMatchObject({
         kind: "success",
@@ -1016,6 +1023,40 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "root");
   });
 
+  it("a drag-and-drop upload after switching uses the elevated channel (no stale closure)", async () => {
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    await enableElevation();
+
+    act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+
+    await waitFor(() =>
+      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/x.conf", "x.conf", "root"),
+    );
+    expect(sftpUpload).not.toHaveBeenCalledWith("session-1", "/local/x.conf", "x.conf", null);
+  });
+
+  it("reports the elevated user upward so it stays visible when the browser is hidden", async () => {
+    const onElevationChange = vi.fn();
+    vi.mocked(sftpElevationEnable).mockResolvedValue({
+      active: true,
+      targetUser: "root",
+      sftpServerPath: "/usr/lib/openssh/sftp-server",
+      failure: null,
+    });
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <FileBrowserPanel sessionId="session-1" isVisible={true} onElevationChange={onElevationChange} />
+      </I18nextProvider>,
+    );
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+
+    await waitFor(() => expect(onElevationChange).toHaveBeenLastCalledWith("root"));
+    fireEvent.click(screen.getByRole("button", { name: "Erhöhte Rechte beenden" }));
+    await waitFor(() => expect(onElevationChange).toHaveBeenLastCalledWith(null));
+  });
+
   it("drops the elevated mode when the connection goes away", async () => {
     let statusHandler: ((event: { sessionId: string; status: string; reason: null }) => void) | null =
       null;
@@ -1048,7 +1089,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     fireEvent.click(screen.getByRole("button", { name: "⋮" }));
     fireEvent.click(screen.getByText("Lokal öffnen…"));
     await waitFor(() =>
-      expect(sftpOpenForEditing).toHaveBeenCalledWith("session-1", "a.txt", true),
+      expect(sftpOpenForEditing).toHaveBeenCalledWith("session-1", "a.txt", "root"),
     );
     expect(await screen.findByText(/als root geöffnet/)).toBeVisible();
 
@@ -1064,8 +1105,34 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Hochladen" }));
 
     await waitFor(() =>
-      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt", "a.txt", true),
+      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt", "a.txt", "root"),
     );
-    expect(sftpUpload).not.toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt", "a.txt", false);
+    expect(sftpUpload).not.toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt", "a.txt", null);
+  });
+});
+
+describe("FileBrowserPanel upload failure summary (Spec 0067, B2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpList).mockResolvedValue([{ ...entry, name: "a.txt", path: "a.txt" }]);
+  });
+
+  it("several failed uploads produce one error toast, not one per file", async () => {
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpUpload).mockRejectedValue({ message: "Permission denied", code: null });
+    vi.mocked(open).mockResolvedValue(["/local/x", "/local/y", "/local/z"]);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Hochladen"));
+
+    await waitFor(() =>
+      expect(vi.mocked(showToast).mock.calls.at(-1)?.[0]).toMatchObject({
+        kind: "error",
+        message: expect.stringContaining("3 Dateien konnten nicht hochgeladen werden"),
+      }),
+    );
+    expect(showToast).toHaveBeenCalledTimes(1);
   });
 });

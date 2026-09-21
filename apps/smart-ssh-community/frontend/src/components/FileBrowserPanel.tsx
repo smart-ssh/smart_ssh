@@ -99,6 +99,9 @@ interface FileBrowserPanelProps {
    * gerade gewählt ist — bleibt sonst wie `TerminalView` gemountet (eigener
    * Navigationszustand pro Tab bleibt erhalten), nur per CSS ausgeblendet. */
   isVisible: boolean;
+  /** Spec 0067, A5: meldet den Ziel-Nutzer des erhöhten Modus (oder `null`)
+   * nach oben, damit er auch bei verborgener Dateien-Ansicht sichtbar ist. */
+  onElevationChange?: (targetUser: string | null) => void;
 }
 
 /**
@@ -109,7 +112,11 @@ interface FileBrowserPanelProps {
  * Tab-Wechsel gemountet (s. `SessionView`), ihr `path`-State lebt daher
  * automatisch pro Tab getrennt, ohne zusätzliche Buchführung.
  */
-export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps) {
+export function FileBrowserPanel({
+  sessionId,
+  isVisible,
+  onElevationChange,
+}: FileBrowserPanelProps) {
   const [path, setPath] = useState(".");
   const [pathInput, setPathInput] = useState(".");
   const [entries, setEntries] = useState<RemoteEntryDto[]>([]);
@@ -175,7 +182,27 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const [elevationFailure, setElevationFailure] = useState<ElevationResultDto | null>(null);
   const elevated = elevation !== null;
   const elevatedUser = elevation?.targetUser ?? "";
+  // Spec 0067, A5: an jeden Aufruf übergeben — `null` = normaler Kanal,
+  // sonst der erwartete Ziel-Nutzer (Backend prüft ihn gegen den Kanal).
+  const channelUser = elevation?.targetUser ?? null;
   const modeSuffix = elevated ? t("fileToasts.asElevated", { user: elevatedUser }) : "";
+  // Jede Modusänderung erhöht die Generation — eine Freischaltung, die erst
+  // NACH einem Ausschalten/Verbindungsverlust zurückkommt, wird verworfen.
+  const elevationGenerationRef = useRef(0);
+  const onElevationChangeRef = useRef(onElevationChange);
+  onElevationChangeRef.current = onElevationChange;
+  /** Einzige Stelle, die den Modus ändert: hält Elternansicht und (beim
+   * Beenden) das Backend synchron — "Backend aktiv ⇔ UI zeigt erhöht". */
+  const updateElevation = (next: { targetUser: string } | null) => {
+    elevationGenerationRef.current += 1;
+    setElevation(next);
+    onElevationChangeRef.current?.(next?.targetUser ?? null);
+    if (next === null) {
+      sftpElevationDisable(sessionId).catch((err) =>
+        console.warn("Konnte erhöhten Modus nicht beenden:", err),
+      );
+    }
+  };
 
   // Ein evtl. noch offener erhöhter Kanal (z. B. aus einer früheren
   // Ansicht dieser Session) wird beim Öffnen geschlossen — der Browser
@@ -190,12 +217,14 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   useEffect(() => {
     const unlisten = onConnectionStatusChanged((event) => {
       if (event.sessionId === sessionId && event.status !== "connected") {
-        setElevation(null);
+        updateElevation(null);
       }
     });
     return () => {
       unlisten.then((fn) => fn());
     };
+    // `updateElevation` liest nur Refs/State-Setter und `sessionId`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   // Spec 0067, Teil B: jede Aktion meldet ihr Ergebnis als Toast. Nur
@@ -218,7 +247,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
       sftpElevationStatus(sessionId)
         .then((user) => {
           if (user === null) {
-            setElevation(null);
+            updateElevation(null);
             showToast({ kind: "error", message: t("fileElevation.channelLost") });
           }
         })
@@ -228,19 +257,23 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
 
   const handleToggleElevation = async () => {
     if (elevated) {
-      setElevation(null);
-      await sftpElevationDisable(sessionId).catch((err) =>
-        console.warn("Konnte erhöhten Modus nicht beenden:", err),
-      );
-      load(path, false);
+      updateElevation(null);
+      load(path, null);
       return;
     }
     setEnablingElevation(true);
+    const generation = elevationGenerationRef.current;
     try {
       const result = await sftpElevationEnable(sessionId, elevationTargetUser.trim() || null);
+      if (generation !== elevationGenerationRef.current) {
+        // Inzwischen ausgeschaltet/Verbindung weg — nicht wieder "erhöht"
+        // anzeigen, Backend-Kanal schließen.
+        if (result.active) updateElevation(null);
+        return;
+      }
       if (result.active) {
-        setElevation({ targetUser: result.targetUser });
-        load(path, true);
+        updateElevation({ targetUser: result.targetUser });
+        load(path, result.targetUser);
       } else {
         setElevationFailure(result);
       }
@@ -337,10 +370,10 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
 
   // `elevatedOverride`: beim Umschalten ist der neue Modus im State noch
   // nicht angekommen — der Aufrufer übergibt ihn dann explizit.
-  const load = useCallback((targetPath: string, elevatedOverride?: boolean) => {
+  const load = useCallback((targetPath: string, userOverride?: string | null) => {
     setLoading(true);
     setError(null);
-    sftpList(sessionId, targetPath, elevatedOverride ?? elevated)
+    sftpList(sessionId, targetPath, userOverride === undefined ? channelUser : userOverride)
       .then((result) => {
         setEntries(result);
         setPath(targetPath);
@@ -349,7 +382,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
       .catch((err) => setError(commandErrorMessage(err)))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, elevated]);
+  }, [sessionId, channelUser]);
 
   useEffect(() => {
     load(".");
@@ -403,8 +436,10 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     return () => {
       unlisten.forEach((p) => p.then((fn) => fn()));
     };
+    // `channelUser`: das Neuladen nach einem Transfer muss den aktuellen
+    // Kanal nutzen (spec-reviewer-Fund, Spec 0067: veraltete Closure).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, path]);
+  }, [sessionId, path, channelUser]);
 
   // Spec 0020, Abschnitt 5.1: Upload per Drag-and-Drop aus dem Betriebssystem.
   // Nur aktiv, während dieser Tab UND die Dateien-Ansicht sichtbar sind (s.
@@ -435,8 +470,10 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
       cancelled = true;
       unlisten?.();
     };
+    // `channelUser`: nach dem Umschalten muss ein Drop über den neuen Kanal
+    // laufen (spec-reviewer-Fund, Spec 0067: veraltete Closure).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVisible, path]);
+  }, [isVisible, path, channelUser]);
 
   /** Spec 0054, Teil 3: "Hochladen ... Überschreibt bestehende →
    * Diff-Vorschau (0020)". Kein Dialog für den unkritischen Normalfall
@@ -450,23 +487,24 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const startUpload = async (
     localPath: string,
     remotePath: string,
-  ): Promise<"uploaded" | "conflict" | "failed"> => {
+    reportFailure = true,
+  ): Promise<"uploaded" | "conflict" | { failed: unknown }> => {
     try {
-      const exists = await sftpExists(sessionId, remotePath, elevated);
+      const exists = await sftpExists(sessionId, remotePath, channelUser);
       if (!exists) {
-        await sftpUpload(sessionId, localPath, remotePath, elevated);
+        await sftpUpload(sessionId, localPath, remotePath, channelUser);
         return "uploaded";
       }
       const [localPreview, remoteText] = await Promise.all([
         readLocalTextPreview(localPath),
-        sftpReadText(sessionId, remotePath, elevated).catch(() => null),
+        sftpReadText(sessionId, remotePath, channelUser).catch(() => null),
       ]);
       const remoteSize = entries.find((e) => e.path === remotePath)?.size ?? 0;
       setUploadConflict({ localPath, remotePath, localPreview, remoteText, remoteSize });
       return "conflict";
     } catch (err) {
-      notifyFailed("fileToasts.uploadFailed", localBaseName(localPath), err);
-      return "failed";
+      if (reportFailure) notifyFailed("fileToasts.uploadFailed", localBaseName(localPath), err);
+      return { failed: err };
     }
   };
 
@@ -475,7 +513,9 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
    * nach ihrer Bestätigung selbst. */
   const uploadMany = async (localPaths: string[]) => {
     const outcomes = await Promise.all(
-      localPaths.map((localPath) => startUpload(localPath, joinPath(path, localBaseName(localPath)))),
+      localPaths.map((localPath) =>
+        startUpload(localPath, joinPath(path, localBaseName(localPath)), false),
+      ),
     );
     const uploaded = localPaths.filter((_, i) => outcomes[i] === "uploaded");
     if (uploaded.length === 1) {
@@ -483,13 +523,24 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     } else if (uploaded.length > 1) {
       notifyOk("fileToasts.uploadedMany", { count: uploaded.length });
     }
+    // Fehler ebenfalls zusammengefasst — keine Flut stehender Fehler-Toasts
+    // (spec-reviewer-Fund, Spec 0067, B2).
+    const failures = localPaths.flatMap((localPath, i) => {
+      const outcome = outcomes[i];
+      return typeof outcome === "object" ? [{ localPath, error: outcome.failed }] : [];
+    });
+    if (failures.length === 1) {
+      notifyFailed("fileToasts.uploadFailed", localBaseName(failures[0].localPath), failures[0].error);
+    } else if (failures.length > 1) {
+      notifyFailed("fileToasts.uploadFailedMany", String(failures.length), failures[0].error);
+    }
   };
 
   const handleConfirmUpload = () => {
     if (!uploadConflict) return;
     const { localPath, remotePath } = uploadConflict;
     setUploadConflict(null);
-    sftpUpload(sessionId, localPath, remotePath, elevated)
+    sftpUpload(sessionId, localPath, remotePath, channelUser)
       .then(() => {
         notifyOk("fileToasts.uploadedFile", { name: localBaseName(localPath) });
         load(path);
@@ -508,7 +559,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
    * entscheidet anhand `entry.isDir`, s. `sftp_download_default`). */
   const handleDownloadDefault = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
-    sftpDownloadDefault(sessionId, entry.path, elevated)
+    sftpDownloadDefault(sessionId, entry.path, channelUser)
       .then((result) => notifyDownloaded(entry.name, result))
       .catch((err) => notifyFailed("fileToasts.downloadFailed", entry.name, err));
   };
@@ -520,7 +571,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const handleDownloadChoose = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
     const download = entry.isDir ? sftpDownloadDir : sftpDownload;
-    download(sessionId, entry.path, elevated)
+    download(sessionId, entry.path, channelUser)
       .then((result) => {
         // `null` = Dialog abgebrochen, keine Meldung.
         if (result) notifyDownloaded(entry.name, result);
@@ -547,7 +598,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const handleCopyContent = async (entry: RemoteEntryDto) => {
     setOpenMenu(null);
     try {
-      const content = await sftpReadText(sessionId, entry.path, elevated);
+      const content = await sftpReadText(sessionId, entry.path, channelUser);
       await navigator.clipboard.writeText(content);
       notifyOk("fileToasts.contentCopied", { name: entry.name });
     } catch (err) {
@@ -590,11 +641,18 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const handleConfirmEditUpload = () => {
     setEditUploadOffer(null);
     const name = localEdit.session?.entry.name ?? "";
+    // Spec-Reviewer-Fund: der Modus-Zusatz kommt von der Bearbeitung (so
+    // wurde hochgeladen), nicht vom aktuellen Modus der Ansicht.
+    const editUser = localEdit.session?.elevatedUser ?? null;
+    const editSuffix = editUser ? t("fileToasts.asElevated", { user: editUser }) : "";
     localEdit.confirmUpload().then((error) => {
       if (error === null) {
-        notifyOk("fileToasts.editUploaded", { name });
+        showToast({ kind: "success", message: t("fileToasts.editUploaded", { name }) + editSuffix });
       } else {
-        notifyFailed("fileToasts.editUploadFailed", name, error);
+        showToast({
+          kind: "error",
+          message: t("fileToasts.editUploadFailed", { name, reason: error }) + editSuffix,
+        });
       }
       load(path);
     });
@@ -610,7 +668,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
       return;
     }
     let cancelled = false;
-    sftpDeletePreview(sessionId, deleteTarget.path, elevated)
+    sftpDeletePreview(sessionId, deleteTarget.path, channelUser)
       .then((preview) => {
         if (!cancelled) setDeletePreview(preview);
       })
@@ -620,15 +678,17 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     return () => {
       cancelled = true;
     };
+    // Spec-Reviewer-Fund: die Vorschau muss im selben Modus zählen, in dem
+    // danach gelöscht wird.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, deleteTarget]);
+  }, [sessionId, deleteTarget, channelUser]);
 
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
     const target = deleteTarget;
     const preview = deletePreview;
     setDeleteTarget(null);
-    sftpDelete(sessionId, target.path, elevated)
+    sftpDelete(sessionId, target.path, channelUser)
       .then(() => {
         if (target.isDir && preview) {
           notifyOk("fileToasts.deletedDir", {
@@ -660,12 +720,12 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
 
   const performMove = async (from: string, to: string, kind: MoveKind) => {
     try {
-      const exists = await sftpExists(sessionId, to, elevated);
+      const exists = await sftpExists(sessionId, to, channelUser);
       if (exists) {
         setMoveCollision({ from, to, kind });
         return;
       }
-      await sftpRename(sessionId, from, to, elevated);
+      await sftpRename(sessionId, from, to, channelUser);
       notifyMoved(from, to, kind);
       load(path);
     } catch (err) {
@@ -677,7 +737,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     if (!moveCollision) return;
     const { from, to, kind } = moveCollision;
     setMoveCollision(null);
-    sftpRename(sessionId, from, to, elevated)
+    sftpRename(sessionId, from, to, channelUser)
       .then(() => {
         notifyMoved(from, to, kind);
         load(path);
@@ -702,7 +762,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     const name = mkdirOpen?.trim();
     setMkdirOpen(null);
     if (!name) return;
-    sftpMkdir(sessionId, joinPath(path, name), elevated)
+    sftpMkdir(sessionId, joinPath(path, name), channelUser)
       .then(() => {
         notifyOk("fileToasts.mkdirDone", { name });
         load(path);
@@ -735,7 +795,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     const target = chmodTarget;
     setChmodTarget(null);
     const modeText = mode.toString(8).padStart(3, "0");
-    sftpChmod(sessionId, target.path, mode, recursive, elevated)
+    sftpChmod(sessionId, target.path, mode, recursive, channelUser)
       .then((count) => {
         if (recursive && target.isDir) {
           notifyOk("fileToasts.chmodRecursive", { name: target.name, mode: modeText, count });

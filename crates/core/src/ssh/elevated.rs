@@ -36,6 +36,13 @@ pub fn is_safe_absolute_path(path: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '_' | '-' | '+'))
 }
 
+/// Sicherer absoluter Pfad, dessen Dateiname `sftp-server` ist — schützt
+/// davor, per Override z. B. `/bin/sh` mit sudo zu starten (und dafür eine
+/// NOPASSWD-Regel angezeigt zu bekommen).
+pub fn is_plausible_sftp_server_path(path: &str) -> bool {
+    is_safe_absolute_path(path) && path.rsplit('/').next() == Some("sftp-server")
+}
+
 /// POSIX-übliche Nutzernamen (`[a-z_][a-z0-9_-]*`, max. 32 Zeichen).
 pub fn is_valid_target_user(user: &str) -> bool {
     let mut chars = user.chars();
@@ -74,7 +81,7 @@ pub fn parse_sftp_server_probe(output: &CommandOutput) -> Option<String> {
         .next()?
         .trim()
         .to_string();
-    is_safe_absolute_path(&first_line).then_some(first_line)
+    is_plausible_sftp_server_path(&first_line).then_some(first_line)
 }
 
 /// `-u <nutzer>` nur, wenn nicht root — die Standard-sudoers-Regel für root
@@ -96,7 +103,7 @@ pub enum ElevationInputError {
 }
 
 fn validate(path: &str, user: &str) -> Result<(), ElevationInputError> {
-    if !is_safe_absolute_path(path) {
+    if !is_plausible_sftp_server_path(path) {
         return Err(ElevationInputError::InvalidPath);
     }
     if !is_valid_target_user(user) {
@@ -110,7 +117,9 @@ fn validate(path: &str, user: &str) -> Result<(), ElevationInputError> {
 /// [`classify_sudo_check`] englisch und damit erkennbar sind.
 pub fn sudo_check_command(path: &str, user: &str) -> Result<String, ElevationInputError> {
     validate(path, user)?;
-    Ok(format!("LC_ALL=C sudo -n{} -l {path}", user_args(user)))
+    // `env` statt `VAR=… cmd`: funktioniert auch, wenn die Login-Shell kein
+    // POSIX-sh ist (csh/tcsh/fish).
+    Ok(format!("env LC_ALL=C sudo -n{} -l {path}", user_args(user)))
 }
 
 /// Das Exec-Kommando für den erhöhten SFTP-Kanal: `sudo -n [-u <nutzer>]
@@ -120,9 +129,17 @@ pub fn elevated_sftp_command(path: &str, user: &str) -> Result<String, Elevation
     Ok(format!("sudo -n{} {path}", user_args(user)))
 }
 
-/// Die zugeschnittene sudoers-Zeile zum Kopieren (Spec 0067, A3).
-pub fn sudoers_line(login: &str, path: &str, user: &str) -> String {
-    format!("{login} ALL=({user}) NOPASSWD: {path}")
+/// Die zugeschnittene sudoers-Zeile zum Kopieren (Spec 0067, A3). Das
+/// abschließende `""` erlaubt `sftp-server` nur ohne Argumente — genau so
+/// startet die App ihn. `None`, wenn der Login Zeichen enthält, die in
+/// sudoers eine Sonderbedeutung hätten (dann lieber keine Zeile als eine
+/// falsche).
+pub fn sudoers_line(login: &str, path: &str, user: &str) -> Option<String> {
+    let login_ok = !login.is_empty()
+        && login
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+    login_ok.then(|| format!("{login} ALL=({user}) NOPASSWD: {path} \"\""))
 }
 
 /// Ergebnis der Voraussetzungs-Prüfung (`sudo -n -l <pfad>`).
@@ -208,7 +225,7 @@ mod tests {
     fn test_sudo_check_command_lists_exactly_this_path() {
         assert_eq!(
             sudo_check_command("/usr/libexec/openssh/sftp-server", "root").unwrap(),
-            "LC_ALL=C sudo -n -l /usr/libexec/openssh/sftp-server"
+            "env LC_ALL=C sudo -n -l /usr/libexec/openssh/sftp-server"
         );
     }
 
@@ -238,15 +255,39 @@ mod tests {
     }
 
     #[test]
+    fn test_only_paths_named_sftp_server_are_accepted() {
+        assert!(is_plausible_sftp_server_path("/opt/ssh/sftp-server"));
+        for bad in [
+            "/bin/sh",
+            "/bin/bash",
+            "/usr/lib/openssh/sftp-server2",
+            "/usr/lib/openssh/",
+        ] {
+            assert!(!is_plausible_sftp_server_path(bad), "{bad}");
+            assert_eq!(
+                elevated_sftp_command(bad, "root"),
+                Err(ElevationInputError::InvalidPath)
+            );
+        }
+    }
+
+    #[test]
     fn test_sudoers_line_is_tailored_to_login_path_and_user() {
         assert_eq!(
-            sudoers_line("stefan", "/usr/lib/openssh/sftp-server", "root"),
-            "stefan ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server"
+            sudoers_line("stefan", "/usr/lib/openssh/sftp-server", "root").as_deref(),
+            Some("stefan ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server \"\"")
         );
         assert_eq!(
-            sudoers_line("deploy", "/usr/libexec/sftp-server", "www-data"),
-            "deploy ALL=(www-data) NOPASSWD: /usr/libexec/sftp-server"
+            sudoers_line("deploy", "/usr/libexec/sftp-server", "www-data").as_deref(),
+            Some("deploy ALL=(www-data) NOPASSWD: /usr/libexec/sftp-server \"\"")
         );
+        // Sonderzeichen im Login → lieber keine Zeile als eine falsche.
+        for login in ["ad\\user", "a b", "x,y", "#1", ""] {
+            assert_eq!(
+                sudoers_line(login, "/usr/lib/openssh/sftp-server", "root"),
+                None
+            );
+        }
     }
 
     #[test]

@@ -450,7 +450,8 @@
     "openedLocally": "„{{name}}“ lokal geöffnet — Änderungen werden zum Hochladen angeboten",
     "openLocallyFailed": "„{{name}}“ konnte nicht lokal geöffnet werden: {{reason}}",
     "editUploaded": "Änderung an „{{name}}“ hochgeladen",
-    "editUploadFailed": "Änderung an „{{name}}“ konnte nicht hochgeladen werden: {{reason}}"
+    "editUploadFailed": "Änderung an „{{name}}“ konnte nicht hochgeladen werden: {{reason}}",
+    "uploadFailedMany": "{{name}} Dateien konnten nicht hochgeladen werden, z. B.: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Erhöhte Rechte",
@@ -468,7 +469,7 @@
     "failureTitle": "Erhöhte Rechte nicht möglich",
     "sudoersIntro": "Für den erhöhten Modus braucht der Server eine sudo-Regel ohne Passwort für sftp-server. Diese Zeile passt zu diesem Server und Login:",
     "sudoersHowTo": "Auf dem Server z. B. mit „sudo visudo -f /etc/sudoers.d/smart-ssh-sftp“ eintragen.",
-    "sudoersWarning": "Wichtig: Diese Regel gibt dem SSH-Login passwortlosen Dateizugriff als {{user}} — wer den SSH-Schlüssel hat, kann damit jede Datei lesen und schreiben. Bitte bewusst entscheiden.",
+    "sudoersWarning": "Wichtig: Diese Regel gibt dem SSH-Login passwortlosen Dateizugriff als {{user}} — nicht nur für diesen Browser, sondern für alles, was unter diesem Login läuft, auch für Kommandos, die die KI vorschlägt. Wer den SSH-Schlüssel hat, kann damit jede Datei lesen und schreiben; Schreibzugriff als root ist praktisch voller root-Zugriff. Bitte bewusst entscheiden.",
     "copy": "Kopieren",
     "copied": "Kopiert!",
     "close": "Schließen",

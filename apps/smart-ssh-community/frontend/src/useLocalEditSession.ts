@@ -90,7 +90,6 @@ export function useLocalEditSession(sessionId: string) {
 
   const startEditing = useCallback(
     async (entry: RemoteEntryDto, elevatedUser: string | null = null) => {
-      const elevated = elevatedUser !== null;
       // Ein bereits laufender Flow wird zuerst sauber beendet (s.
       // Moduldoc-Kommentar — nur eine aktive Bearbeitung gleichzeitig).
       if (session) {
@@ -108,7 +107,7 @@ export function useLocalEditSession(sessionId: string) {
       // existiert, `close_edit_session` später dafür auszulösen
       // (Spec-Reviewer-Fund, Spec 0054, Review des Gesamtpakets: "Temp-
       // Datei-Leichen im Fehlerpfad").
-      const editSession = await sftpOpenForEditing(sessionId, entry.path, elevated);
+      const editSession = await sftpOpenForEditing(sessionId, entry.path, elevatedUser);
       try {
         remoteModifiedAtDownloadRef.current = editSession.remoteModified;
 
@@ -144,8 +143,8 @@ export function useLocalEditSession(sessionId: string) {
     if (!session) return null;
     const [localPreview, remoteEntry, remoteText] = await Promise.all([
       readLocalTextPreview(session.localPath),
-      sftpStat(sessionId, session.entry.path, session.elevatedUser !== null).catch(() => null),
-      sftpReadText(sessionId, session.entry.path, session.elevatedUser !== null).catch(() => null),
+      sftpStat(sessionId, session.entry.path, session.elevatedUser).catch(() => null),
+      sftpReadText(sessionId, session.entry.path, session.elevatedUser).catch(() => null),
     ]);
     const remoteModifiedNow = remoteEntry?.modified ?? null;
     const baseline = remoteModifiedAtDownloadRef.current;
@@ -174,10 +173,10 @@ export function useLocalEditSession(sessionId: string) {
     if (!session) return null;
     setSession((prev) => (prev ? { ...prev, status: "uploading" } : prev));
     try {
-      await sftpUpload(sessionId, session.localPath, session.entry.path, session.elevatedUser !== null);
+      await sftpUpload(sessionId, session.localPath, session.entry.path, session.elevatedUser);
       const uploadedMtime = await localFileMtime(session.localPath);
       lastSeenMtimeRef.current = uploadedMtime;
-      remoteModifiedAtDownloadRef.current = await sftpStat(sessionId, session.entry.path, session.elevatedUser !== null)
+      remoteModifiedAtDownloadRef.current = await sftpStat(sessionId, session.entry.path, session.elevatedUser)
         .then((e) => e.modified)
         .catch(() => remoteModifiedAtDownloadRef.current);
       setSession((prev) => (prev ? { ...prev, status: "editing", error: null } : prev));

@@ -40,9 +40,9 @@ impl ElevatedSftpSlot {
 }
 
 use ssh_manager_core::ssh::elevated::{
-    classify_sudo_check, elevated_sftp_command, is_safe_absolute_path, is_valid_target_user,
-    parse_sftp_server_probe, sftp_server_probe_command, sudo_check_command, sudoers_line,
-    SudoCheck, DEFAULT_ELEVATION_USER,
+    classify_sudo_check, elevated_sftp_command, is_plausible_sftp_server_path,
+    is_valid_target_user, parse_sftp_server_probe, sftp_server_probe_command, sudo_check_command,
+    sudoers_line, SudoCheck, DEFAULT_ELEVATION_USER,
 };
 
 use crate::dto::{ElevationFailureDto, ElevationFailureKind, ElevationResultDto};
@@ -110,7 +110,7 @@ pub(crate) async fn enable(
     }
 
     let path = match override_path {
-        Some(path) if is_safe_absolute_path(path) => path.to_string(),
+        Some(path) if is_plausible_sftp_server_path(path) => path.to_string(),
         Some(_) => {
             return failure(
                 &target_user,
@@ -152,7 +152,7 @@ pub(crate) async fn enable(
         Ok(output) => classify_sudo_check(&output),
         Err(detail) => SudoCheck::Failed(detail),
     };
-    let sudoers = || Some(sudoers_line(login, &path, &target_user));
+    let sudoers = || sudoers_line(login, &path, &target_user);
     match check {
         SudoCheck::Allowed => {}
         SudoCheck::PasswordRequired => {
@@ -210,6 +210,12 @@ pub(crate) async fn enable(
     };
     match opened {
         Ok(sftp) => {
+            tracing::info!(
+                target_user = %target_user,
+                sftp_server_path = %path,
+                source = "manual",
+                "file browser elevated rights enabled"
+            );
             *session.elevated_sftp.lock(access).await = Some(ElevatedSftp {
                 target_user: target_user.clone(),
                 sftp,
@@ -233,7 +239,9 @@ pub(crate) async fn enable(
 
 /// Schaltet den erhöhten Kanal aus (verwirft ihn).
 pub(crate) async fn disable(session: &Session, access: &BrowserAccess) {
-    *session.elevated_sftp.lock(access).await = None;
+    if session.elevated_sftp.lock(access).await.take().is_some() {
+        tracing::info!(source = "manual", "file browser elevated rights disabled");
+    }
 }
 
 #[cfg(test)]
@@ -338,7 +346,7 @@ mod tests {
         assert_eq!(log.last().unwrap(), &format!("sftp-exec:sudo -n {PATH}"));
         assert!(log
             .iter()
-            .any(|c| c == &format!("exec:LC_ALL=C sudo -n -l {PATH}")));
+            .any(|c| c == &format!("exec:env LC_ALL=C sudo -n -l {PATH}")));
         assert!(session
             .elevated_sftp
             .lock(&BrowserAccess::for_tests())
@@ -361,7 +369,7 @@ mod tests {
         assert_eq!(failure.kind, ElevationFailureKind::PasswordRequired);
         assert_eq!(
             failure.sudoers_line.as_deref(),
-            Some("deploy ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server")
+            Some("deploy ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server \"\"")
         );
         assert!(!log
             .lock()

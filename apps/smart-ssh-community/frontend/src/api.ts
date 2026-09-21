@@ -380,67 +380,70 @@ export const saveDiagnosticsBundle = (content: string) =>
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
 
-export const sftpList = (sessionId: string, path: string, elevated = false) =>
-  invoke<RemoteEntryDto[]>("sftp_list", { sessionId, path, elevated });
+export const sftpList = (sessionId: string, path: string, elevatedUser: string | null = null) =>
+  invoke<RemoteEntryDto[]>("sftp_list", { sessionId, path, elevatedUser });
 
 /** Öffnet den nativen Speichern-Dialog im Backend — kehrt ohne Fehler
  * zurück, wenn der Nutzer abbricht (s. `crate::commands::sftp_download`).
  * Nur für Dateien (s. Moduldoc-Kommentar in `crate::commands`). */
-export const sftpDownload = (sessionId: string, remotePath: string, elevated = false) =>
-  invoke<DownloadResultDto | null>("sftp_download", { sessionId, remotePath, elevated });
+export const sftpDownload = (sessionId: string, remotePath: string, elevatedUser: string | null = null) =>
+  invoke<DownloadResultDto | null>("sftp_download", { sessionId, remotePath, elevatedUser });
 
 /** Spec 0054, Teil 2: ohne Dialog direkt ins Standard-Downloadverzeichnis
  * — Datei ODER Ordner (rekursiv), s. `crate::commands::sftp_download_default`. */
-export const sftpDownloadDefault = (sessionId: string, remotePath: string, elevated = false) =>
-  invoke<DownloadResultDto>("sftp_download_default", { sessionId, remotePath, elevated });
+export const sftpDownloadDefault = (sessionId: string, remotePath: string, elevatedUser: string | null = null) =>
+  invoke<DownloadResultDto>("sftp_download_default", { sessionId, remotePath, elevatedUser });
 
 /** Spec 0054, Teil 2: Ordner-Download an einen per Dialog gewählten
  * Zielort (rekursiv) — kehrt ohne Fehler zurück, wenn der Nutzer abbricht.
  * s. `crate::commands::sftp_download_dir`. */
-export const sftpDownloadDir = (sessionId: string, remotePath: string, elevated = false) =>
-  invoke<DownloadResultDto | null>("sftp_download_dir", { sessionId, remotePath, elevated });
+export const sftpDownloadDir = (sessionId: string, remotePath: string, elevatedUser: string | null = null) =>
+  invoke<DownloadResultDto | null>("sftp_download_dir", { sessionId, remotePath, elevatedUser });
 
 /** `localPath` muss bereits aufgelöst sein (nativer Öffnen-Dialog oder
  * OS-Drag-and-Drop, s. `crate::commands::sftp_upload`-Doc-Kommentar). */
-export const sftpUpload = (sessionId: string, localPath: string, remotePath: string, elevated = false) =>
-  invoke<void>("sftp_upload", { sessionId, localPath, remotePath, elevated });
+export const sftpUpload = (sessionId: string, localPath: string, remotePath: string, elevatedUser: string | null = null) =>
+  invoke<void>("sftp_upload", { sessionId, localPath, remotePath, elevatedUser });
 
 /** Löscht Datei ODER Ordner (rekursiv, Spec 0054, Teil 3) — die
  * Bestätigung (inkl. `sftpDeletePreview` bei Ordnern) läuft im Frontend. */
-export const sftpDelete = (sessionId: string, path: string, elevated = false) =>
-  invoke<void>("sftp_delete", { sessionId, path, elevated });
+export const sftpDelete = (sessionId: string, path: string, elevatedUser: string | null = null) =>
+  invoke<void>("sftp_delete", { sessionId, path, elevatedUser });
 
 /** Spec 0054, Teil 3: Vorschau vor dem Löschen eines Ordners — Anzahl
  * Dateien/Unterordner für den Bestätigungsdialog. */
-export const sftpDeletePreview = (sessionId: string, path: string, elevated = false) =>
-  invoke<DeletePreviewDto>("sftp_delete_preview", { sessionId, path, elevated });
+export const sftpDeletePreview = (sessionId: string, path: string, elevatedUser: string | null = null) =>
+  invoke<DeletePreviewDto>("sftp_delete_preview", { sessionId, path, elevatedUser });
 
 /** Umbenennen UND Verschieben (Spec 0054, Teil 3 — SFTP `RENAME` kennt
  * keinen Unterschied). Kollisionsprüfung läuft im Frontend über
  * `sftpExists`, bevor dieser Befehl aufgerufen wird. */
-export const sftpRename = (sessionId: string, from: string, to: string, elevated = false) =>
-  invoke<void>("sftp_rename", { sessionId, from, to, elevated });
+export const sftpRename = (sessionId: string, from: string, to: string, elevatedUser: string | null = null) =>
+  invoke<void>("sftp_rename", { sessionId, from, to, elevatedUser });
 
-export const sftpMkdir = (sessionId: string, path: string, elevated = false) =>
-  invoke<void>("sftp_mkdir", { sessionId, path, elevated });
+export const sftpMkdir = (sessionId: string, path: string, elevatedUser: string | null = null) =>
+  invoke<void>("sftp_mkdir", { sessionId, path, elevatedUser });
 
 /** Spec 0054, Teil 2: "Dateiinhalt kopieren" — liefert den Textinhalt einer
  * Remote-Datei; lehnt zu große oder nicht als UTF-8 dekodierbare
  * (Binär-)Dateien mit einer erklärenden Fehlermeldung ab (s.
  * `crate::commands::sftp_read_text`). */
-export const sftpReadText = (sessionId: string, path: string, elevated = false) =>
-  invoke<string>("sftp_read_text", { sessionId, path, elevated });
+export const sftpReadText = (sessionId: string, path: string, elevatedUser: string | null = null) =>
+  invoke<string>("sftp_read_text", { sessionId, path, elevatedUser });
 
 /** Spec 0054, Teil 3: existiert `path` bereits? Grundlage für die
  * Kollisionsprüfung bei Umbenennen/Verschieben/Hochladen. */
-export const sftpExists = (sessionId: string, path: string, elevated = false) =>
-  invoke<boolean>("sftp_exists", { sessionId, path, elevated });
+export const sftpExists = (sessionId: string, path: string, elevatedUser: string | null = null) =>
+  invoke<boolean>("sftp_exists", { sessionId, path, elevatedUser });
 
 /** Spec 0054, Teil 3: chmod. `mode` sind die reinen Rechte-Bits
  * (`0o755`-Stil), `recursive` gilt nur für Ordner. */
-/** Liefert die Anzahl geänderter Einträge (Spec 0067, Teil B). */
-export const sftpChmod = (sessionId: string, path: string, mode: number, recursive: boolean, elevated = false) =>
-  invoke<number>("sftp_chmod", { sessionId, path, mode, recursive, elevated });
+/** Liefert die Anzahl geänderter Einträge (Spec 0067, Teil B).
+ * `elevatedUser` (alle `sftp*`-Wrapper): `null` = normaler Kanal, sonst der
+ * erwartete Ziel-Nutzer des erhöhten Kanals — das Backend lehnt ab, wenn der
+ * erhöhte Kanal fehlt oder als anderer Nutzer läuft (Spec 0067, A5). */
+export const sftpChmod = (sessionId: string, path: string, mode: number, recursive: boolean, elevatedUser: string | null = null) =>
+  invoke<number>("sftp_chmod", { sessionId, path, mode, recursive, elevatedUser });
 
 /** Spec 0054, Teil 3: die lokale Seite der Upload-Überschreib-Diff-
  * Vorschau — `text: null` bei einer zu großen/nicht-Text-Datei, `size` ist
@@ -450,13 +453,13 @@ export const readLocalTextPreview = (localPath: string) =>
 
 /** Spec 0054, Teil 4: einzelnen Eintrag abfragen (Konflikt-Prüfung vor dem
  * Hochladen aus dem "Lokal öffnen"-Flow). */
-export const sftpStat = (sessionId: string, path: string, elevated = false) =>
-  invoke<RemoteEntryDto>("sftp_stat", { sessionId, path, elevated });
+export const sftpStat = (sessionId: string, path: string, elevatedUser: string | null = null) =>
+  invoke<RemoteEntryDto>("sftp_stat", { sessionId, path, elevatedUser });
 
 /** Spec 0054, Teil 4, Punkt 1: Download in das kontrollierte
  * Editier-Temp-Verzeichnis dieser Session. */
-export const sftpOpenForEditing = (sessionId: string, remotePath: string, elevated = false) =>
-  invoke<EditSessionDto>("sftp_open_for_editing", { sessionId, remotePath, elevated });
+export const sftpOpenForEditing = (sessionId: string, remotePath: string, elevatedUser: string | null = null) =>
+  invoke<EditSessionDto>("sftp_open_for_editing", { sessionId, remotePath, elevatedUser });
 
 /** Spec 0054, Teil 4, Punkt 3/4: Polling-Grundlage für die lokale
  * Änderungserkennung — RFC3339-Zeitstempel, oder `null`, wenn die Datei

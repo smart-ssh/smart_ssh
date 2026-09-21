@@ -429,10 +429,10 @@ pub fn normalize_sftp_server_path(input: Option<String>) -> Result<Option<String
     if trimmed.is_empty() {
         return Ok(None);
     }
-    if !ssh_manager_core::ssh::elevated::is_safe_absolute_path(trimmed) {
+    if !ssh_manager_core::ssh::elevated::is_plausible_sftp_server_path(trimmed) {
         return Err(format!(
             "Ungültiger sftp-server-Pfad „{trimmed}“ — erlaubt ist ein absoluter Pfad aus \
-             Buchstaben, Ziffern und / . _ - +"
+             Buchstaben, Ziffern und / . _ - +, der auf „sftp-server“ endet"
         ));
     }
     Ok(Some(trimmed.to_string()))
@@ -1305,6 +1305,7 @@ mod sftp_server_path_tests {
     #[test]
     fn test_unsafe_override_is_rejected() {
         for bad in [
+            "/bin/sh",
             "sftp-server",
             "/usr/lib/x; reboot",
             "/usr/lib/$(id)",
