@@ -876,6 +876,17 @@ pub struct DeletePreviewDto {
     pub dir_count: u64,
 }
 
+/// Spec 0067, Teil B: Ergebnis eines Downloads für die Erfolgsmeldung —
+/// wohin (für „Im Finder zeigen") und wie viele Dateien (Ordner-Download).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadResultDto {
+    /// Lokaler Pfad der heruntergeladenen Datei bzw. des Ordners.
+    pub local_path: String,
+    pub is_dir: bool,
+    pub file_count: u64,
+}
+
 /// Spec 0054, Teil 3: Ergebnis von `commands::read_local_text_preview` — die
 /// lokale Seite der Upload-Überschreib-Diff-Vorschau. `text: None` bei einer
 /// zu großen oder nicht als UTF-8 dekodierbaren Datei; `size` ist in jedem

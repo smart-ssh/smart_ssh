@@ -411,5 +411,41 @@
     "days_one": "{{count}} day",
     "days_other": "{{count}} days",
     "hint": "Automatically deletes ended conversations older than this. Active conversations are never affected."
+  },
+  "toast": {
+    "dismiss": "Dismiss message"
+  },
+  "fileToasts": {
+    "asElevated": " (as {{user}})",
+    "revealFinder": "Show in Finder",
+    "revealExplorer": "Show in Explorer",
+    "revealFileManager": "Show in file manager",
+    "downloadedFile": "“{{name}}” downloaded to {{dir}}",
+    "downloadedDir_one": "Folder “{{name}}” downloaded — {{count}} file",
+    "downloadedDir_other": "Folder “{{name}}” downloaded — {{count}} files",
+    "downloadFailed": "Downloading “{{name}}” failed: {{reason}}",
+    "uploadedFile": "“{{name}}” uploaded",
+    "uploadedMany_one": "{{count}} file uploaded",
+    "uploadedMany_other": "{{count}} files uploaded",
+    "uploadFailed": "Uploading “{{name}}” failed: {{reason}}",
+    "deletedFile": "“{{name}}” deleted",
+    "deletedDir": "Folder “{{name}}” deleted — {{files}} files, {{dirs}} subfolders",
+    "deleteFailed": "Deleting “{{name}}” failed: {{reason}}",
+    "renamed": "“{{from}}” renamed to “{{to}}”",
+    "moved": "“{{name}}” moved to {{dir}}",
+    "moveFailed": "Moving/renaming “{{name}}” failed: {{reason}}",
+    "mkdirDone": "Folder “{{name}}” created",
+    "mkdirFailed": "Folder “{{name}}” could not be created: {{reason}}",
+    "chmodDone": "Permissions of “{{name}}” set to {{mode}}",
+    "chmodRecursive_one": "Permissions set to {{mode}} — {{count}} entry in “{{name}}”",
+    "chmodRecursive_other": "Permissions set to {{mode}} — {{count}} entries in “{{name}}”",
+    "chmodFailed": "Permissions of “{{name}}” could not be set: {{reason}}",
+    "pathCopied": "Path copied to clipboard",
+    "contentCopied": "Content of “{{name}}” copied to clipboard",
+    "copyFailed": "Copying to clipboard failed: {{reason}}",
+    "openedLocally": "“{{name}}” opened locally — changes will be offered for upload",
+    "openLocallyFailed": "“{{name}}” could not be opened locally: {{reason}}",
+    "editUploaded": "Change to “{{name}}” uploaded",
+    "editUploadFailed": "Change to “{{name}}” could not be uploaded: {{reason}}"
   }
 }

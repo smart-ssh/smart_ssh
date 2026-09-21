@@ -10,6 +10,7 @@ import type {
   ChatSessionSummaryDto,
   DeleteGroupResult,
   DeletePreviewDto,
+  DownloadResultDto,
   DeleteServerResult,
   DocumentFormat,
   EditSessionDto,
@@ -385,18 +386,18 @@ export const sftpList = (sessionId: string, path: string) =>
  * zurück, wenn der Nutzer abbricht (s. `crate::commands::sftp_download`).
  * Nur für Dateien (s. Moduldoc-Kommentar in `crate::commands`). */
 export const sftpDownload = (sessionId: string, remotePath: string) =>
-  invoke<void>("sftp_download", { sessionId, remotePath });
+  invoke<DownloadResultDto | null>("sftp_download", { sessionId, remotePath });
 
 /** Spec 0054, Teil 2: ohne Dialog direkt ins Standard-Downloadverzeichnis
  * — Datei ODER Ordner (rekursiv), s. `crate::commands::sftp_download_default`. */
 export const sftpDownloadDefault = (sessionId: string, remotePath: string) =>
-  invoke<void>("sftp_download_default", { sessionId, remotePath });
+  invoke<DownloadResultDto>("sftp_download_default", { sessionId, remotePath });
 
 /** Spec 0054, Teil 2: Ordner-Download an einen per Dialog gewählten
  * Zielort (rekursiv) — kehrt ohne Fehler zurück, wenn der Nutzer abbricht.
  * s. `crate::commands::sftp_download_dir`. */
 export const sftpDownloadDir = (sessionId: string, remotePath: string) =>
-  invoke<void>("sftp_download_dir", { sessionId, remotePath });
+  invoke<DownloadResultDto | null>("sftp_download_dir", { sessionId, remotePath });
 
 /** `localPath` muss bereits aufgelöst sein (nativer Öffnen-Dialog oder
  * OS-Drag-and-Drop, s. `crate::commands::sftp_upload`-Doc-Kommentar). */
@@ -436,8 +437,9 @@ export const sftpExists = (sessionId: string, path: string) =>
 
 /** Spec 0054, Teil 3: chmod. `mode` sind die reinen Rechte-Bits
  * (`0o755`-Stil), `recursive` gilt nur für Ordner. */
+/** Liefert die Anzahl geänderter Einträge (Spec 0067, Teil B). */
 export const sftpChmod = (sessionId: string, path: string, mode: number, recursive: boolean) =>
-  invoke<void>("sftp_chmod", { sessionId, path, mode, recursive });
+  invoke<number>("sftp_chmod", { sessionId, path, mode, recursive });
 
 /** Spec 0054, Teil 3: die lokale Seite der Upload-Überschreib-Diff-
  * Vorschau — `text: null` bei einer zu großen/nicht-Text-Datei, `size` ist

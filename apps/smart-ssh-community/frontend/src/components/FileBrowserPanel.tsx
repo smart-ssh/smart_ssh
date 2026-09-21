@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { useTranslation } from "react-i18next";
 import {
   commandErrorMessage,
   readLocalTextPreview,
@@ -25,7 +27,13 @@ import {
   type FileManagerColumnWidths,
 } from "../layoutSettings";
 import { displayPath, joinPath, localBaseName, parentPath } from "../remotePath";
-import type { DeletePreviewDto, LocalFilePreviewDto, RemoteEntryDto } from "../types";
+import { showToast } from "../toastBus";
+import type {
+  DeletePreviewDto,
+  DownloadResultDto,
+  LocalFilePreviewDto,
+  RemoteEntryDto,
+} from "../types";
 import { useDragResize } from "../useDragResize";
 import { useLocalEditSession, type UploadOffer } from "../useLocalEditSession";
 import { NoteDiffPreview } from "./NoteDiffPreview";
@@ -51,6 +59,22 @@ const NAME_MIN_WIDTH = 120;
 /** Feste, nicht verstellbare Aktionsspalte (⋮-Menü) — kein Label, immer
  * gleich schmal, kein Drag-Handle. */
 const ACTIONS_COLUMN_WIDTH = 36;
+
+/** Verzeichnis-Anteil eines lokalen Pfads (POSIX oder Windows). */
+function localDirName(localPath: string): string {
+  const cut = Math.max(localPath.lastIndexOf("/"), localPath.lastIndexOf("\\"));
+  return cut > 0 ? localPath.slice(0, cut) : localPath;
+}
+
+/** „Im Finder/Explorer zeigen“ — Beschriftung passend zum Betriebssystem. */
+function revealLabelKey(): string {
+  const platform = navigator.platform.toLowerCase();
+  if (platform.includes("mac")) return "fileToasts.revealFinder";
+  if (platform.includes("win")) return "fileToasts.revealExplorer";
+  return "fileToasts.revealFileManager";
+}
+
+type MoveKind = "rename" | "move";
 
 interface Transfer {
   id: string;
@@ -96,11 +120,6 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     anchor: "row" | { x: number; y: number };
   } | null>(null);
   const [properties, setProperties] = useState<RemoteEntryDto | null>(null);
-  // Kurzlebiger Hinweis für Aktionen ohne eigenen Dialog (Kopieren-Erfolg/
-  // -Fehlschlag) — dasselbe Muster wie `AboutSettings`s `copyState`, nur
-  // als einzelner Text statt eines dreiwertigen Enums, da hier mehrere
-  // unterschiedliche Aktionen denselben Hinweis-Slot teilen.
-  const [toast, setToast] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ entry: RemoteEntryDto; value: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RemoteEntryDto | null>(null);
   const [deletePreview, setDeletePreview] = useState<DeletePreviewDto | null>(null);
@@ -115,7 +134,11 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   // Kollisionsprüfung bei Umbenennen/Verschieben (Spec 0054, Teil 3): beide
   // laufen über denselben `performMove`-Pfad, da beide backend-seitig
   // dieselbe `sftp_rename` sind (s. dortiger Kommentar).
-  const [moveCollision, setMoveCollision] = useState<{ from: string; to: string } | null>(null);
+  const [moveCollision, setMoveCollision] = useState<{
+    from: string;
+    to: string;
+    kind: MoveKind;
+  } | null>(null);
   // Upload-Überschreib-Diff-Vorschau (Spec 0054, Teil 3): `remoteText` ist
   // `null`, wenn die Remote-Datei nicht als Text lesbar war (Binärdatei/zu
   // groß) — dann zeigt der Dialog nur einen Größenvergleich.
@@ -133,6 +156,38 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
 
   // Spec 0054, Teil 4: "Lokal öffnen -> bearbeiten -> Upload anbieten".
   const localEdit = useLocalEditSession(sessionId);
+  const { t } = useTranslation();
+
+  // Spec 0067, Teil B: jede Aktion meldet ihr Ergebnis als Toast. Nur
+  // Namen/Pfade, nie Dateiinhalte.
+  const notifyOk = (key: string, options: Record<string, unknown>, action?: () => void) =>
+    showToast({
+      kind: "success",
+      message: t(key, options),
+      action: action ? { label: t(revealLabelKey()), onClick: action } : undefined,
+    });
+  const notifyFailed = (key: string, name: string, err: unknown) =>
+    showToast({
+      kind: "error",
+      message: t(key, { name, reason: commandErrorMessage(err) }),
+    });
+
+  const notifyDownloaded = (entryName: string, result: DownloadResultDto) => {
+    const reveal = () => {
+      revealItemInDir(result.localPath).catch((err) =>
+        console.warn("Konnte Download nicht im Dateimanager zeigen:", err),
+      );
+    };
+    if (result.isDir) {
+      notifyOk("fileToasts.downloadedDir", { name: entryName, count: result.fileCount }, reveal);
+    } else {
+      notifyOk(
+        "fileToasts.downloadedFile",
+        { name: entryName, dir: localDirName(result.localPath) },
+        reveal,
+      );
+    }
+  };
   const [editUploadOffer, setEditUploadOffer] = useState<UploadOffer | null>(null);
 
   // Spec 0053, Teil 1: einmalig beim Mounten geladen (diese Komponente lebt
@@ -227,14 +282,6 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     return () => document.removeEventListener("click", handler);
   }, [openMenu]);
 
-  // Kurzlebiger Toast (Kopieren-Erfolg/-Fehlschlag) verschwindet nach 2s von
-  // selbst — dasselbe Timeout-Muster wie `AboutSettings`s `copyState`.
-  useEffect(() => {
-    if (toast === null) return;
-    const timer = setTimeout(() => setToast(null), 2000);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
   useEffect(() => {
     const unlisten = [
       onSftpTransferStarted((event) => {
@@ -291,9 +338,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
           setDragOver(false);
         } else if (event.payload.type === "drop") {
           setDragOver(false);
-          for (const localPath of event.payload.paths) {
-            startUpload(localPath, joinPath(path, localBaseName(localPath)));
-          }
+          uploadMany(event.payload.paths);
         }
       })
       .then((fn) => {
@@ -316,12 +361,15 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
    * (Binär/zu groß) fällt auf die bereits geladene `entries`-Liste zurück,
    * deren `size` kennt jeder sichtbare Eintrag schon ohne weiteren
    * Backend-Aufruf. */
-  const startUpload = async (localPath: string, remotePath: string) => {
+  const startUpload = async (
+    localPath: string,
+    remotePath: string,
+  ): Promise<"uploaded" | "conflict" | "failed"> => {
     try {
       const exists = await sftpExists(sessionId, remotePath);
       if (!exists) {
         await sftpUpload(sessionId, localPath, remotePath);
-        return;
+        return "uploaded";
       }
       const [localPreview, remoteText] = await Promise.all([
         readLocalTextPreview(localPath),
@@ -329,8 +377,25 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
       ]);
       const remoteSize = entries.find((e) => e.path === remotePath)?.size ?? 0;
       setUploadConflict({ localPath, remotePath, localPreview, remoteText, remoteSize });
+      return "conflict";
     } catch (err) {
-      setError(commandErrorMessage(err));
+      notifyFailed("fileToasts.uploadFailed", localBaseName(localPath), err);
+      return "failed";
+    }
+  };
+
+  /** Spec 0067, Teil B: mehrere Dateien → eine Sammelmeldung statt einer
+   * pro Datei. Fehler kommen einzeln (mit Grund), Konflikte melden sich
+   * nach ihrer Bestätigung selbst. */
+  const uploadMany = async (localPaths: string[]) => {
+    const outcomes = await Promise.all(
+      localPaths.map((localPath) => startUpload(localPath, joinPath(path, localBaseName(localPath)))),
+    );
+    const uploaded = localPaths.filter((_, i) => outcomes[i] === "uploaded");
+    if (uploaded.length === 1) {
+      notifyOk("fileToasts.uploadedFile", { name: localBaseName(uploaded[0]) });
+    } else if (uploaded.length > 1) {
+      notifyOk("fileToasts.uploadedMany", { count: uploaded.length });
     }
   };
 
@@ -339,17 +404,17 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     const { localPath, remotePath } = uploadConflict;
     setUploadConflict(null);
     sftpUpload(sessionId, localPath, remotePath)
-      .then(() => load(path))
-      .catch((err) => setError(commandErrorMessage(err)));
+      .then(() => {
+        notifyOk("fileToasts.uploadedFile", { name: localBaseName(localPath) });
+        load(path);
+      })
+      .catch((err) => notifyFailed("fileToasts.uploadFailed", localBaseName(localPath), err));
   };
 
   const handleUploadButton = async () => {
     const picked = await open({ title: "Datei(en) hochladen", multiple: true, directory: false });
     if (!picked) return;
-    const paths = Array.isArray(picked) ? picked : [picked];
-    for (const localPath of paths) {
-      startUpload(localPath, joinPath(path, localBaseName(localPath)));
-    }
+    uploadMany(Array.isArray(picked) ? picked : [picked]);
   };
 
   /** Spec 0054, Teil 2: "Herunterladen" — direkt ins Standard-
@@ -357,7 +422,9 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
    * entscheidet anhand `entry.isDir`, s. `sftp_download_default`). */
   const handleDownloadDefault = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
-    sftpDownloadDefault(sessionId, entry.path).catch((err) => setError(commandErrorMessage(err)));
+    sftpDownloadDefault(sessionId, entry.path)
+      .then((result) => notifyDownloaded(entry.name, result))
+      .catch((err) => notifyFailed("fileToasts.downloadFailed", entry.name, err));
   };
 
   /** Spec 0054, Teil 2: "Herunterladen nach…" — Dialog für einen präzisen
@@ -367,7 +434,12 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const handleDownloadChoose = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
     const download = entry.isDir ? sftpDownloadDir : sftpDownload;
-    download(sessionId, entry.path).catch((err) => setError(commandErrorMessage(err)));
+    download(sessionId, entry.path)
+      .then((result) => {
+        // `null` = Dialog abgebrochen, keine Meldung.
+        if (result) notifyDownloaded(entry.name, result);
+      })
+      .catch((err) => notifyFailed("fileToasts.downloadFailed", entry.name, err));
   };
 
   /** Spec 0054, Teil 2: "Pfad kopieren" — reine Zwischenablage-Aktion, kein
@@ -376,10 +448,10 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     setOpenMenu(null);
     try {
       await navigator.clipboard.writeText(entry.path);
-      setToast("Pfad kopiert");
+      notifyOk("fileToasts.pathCopied", {});
     } catch (err) {
       console.warn("Konnte Pfad nicht in die Zwischenablage kopieren:", err);
-      setToast("Kopieren fehlgeschlagen");
+      notifyFailed("fileToasts.copyFailed", entry.name, err);
     }
   };
 
@@ -391,9 +463,9 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     try {
       const content = await sftpReadText(sessionId, entry.path);
       await navigator.clipboard.writeText(content);
-      setToast("Inhalt kopiert");
+      notifyOk("fileToasts.contentCopied", { name: entry.name });
     } catch (err) {
-      setToast(commandErrorMessage(err));
+      notifyFailed("fileToasts.copyFailed", entry.name, err);
     }
   };
 
@@ -413,7 +485,10 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
    * bestehenden `error`-Anzeige — der Hook selbst zeigt keine UI. */
   const handleOpenLocally = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
-    localEdit.startEditing(entry).catch((err) => setError(commandErrorMessage(err)));
+    localEdit
+      .startEditing(entry)
+      .then(() => notifyOk("fileToasts.openedLocally", { name: entry.name }))
+      .catch((err) => notifyFailed("fileToasts.openLocallyFailed", entry.name, err));
   };
 
   /** Spec 0054, Teil 4, Punkt 5: baut die Diff-/Konflikt-Daten und öffnet
@@ -428,7 +503,15 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
 
   const handleConfirmEditUpload = () => {
     setEditUploadOffer(null);
-    localEdit.confirmUpload().then(() => load(path));
+    const name = localEdit.session?.entry.name ?? "";
+    localEdit.confirmUpload().then((error) => {
+      if (error === null) {
+        notifyOk("fileToasts.editUploaded", { name });
+      } else {
+        notifyFailed("fileToasts.editUploadFailed", name, error);
+      }
+      load(path);
+    });
   };
 
   // Spec 0054, Teil 3: "Löschen ... bei Ordnern mit Hinweis auf rekursives
@@ -456,10 +539,22 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
     const target = deleteTarget;
+    const preview = deletePreview;
     setDeleteTarget(null);
     sftpDelete(sessionId, target.path)
-      .then(() => load(path))
-      .catch((err) => setError(commandErrorMessage(err)));
+      .then(() => {
+        if (target.isDir && preview) {
+          notifyOk("fileToasts.deletedDir", {
+            name: target.name,
+            files: preview.fileCount,
+            dirs: Math.max(preview.dirCount - 1, 0),
+          });
+        } else {
+          notifyOk("fileToasts.deletedFile", { name: target.name });
+        }
+        load(path);
+      })
+      .catch((err) => notifyFailed("fileToasts.deleteFailed", target.name, err));
   };
 
   /** Spec 0054, Teil 3: gemeinsamer Weg für "Umbenennen" (Ziel im selben
@@ -468,27 +563,39 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
    * `crate::commands::sftp_rename`s Doc-Kommentar). Kollisionsprüfung
    * zuerst: existiert das Ziel schon, wird NICHT stillschweigend
    * überschrieben, sondern erst nachgefragt (`moveCollision`). */
-  const performMove = async (from: string, to: string) => {
+  const notifyMoved = (from: string, to: string, kind: MoveKind) => {
+    if (kind === "rename") {
+      notifyOk("fileToasts.renamed", { from: localBaseName(from), to: localBaseName(to) });
+    } else {
+      notifyOk("fileToasts.moved", { name: localBaseName(from), dir: displayPath(parentPath(to)) });
+    }
+  };
+
+  const performMove = async (from: string, to: string, kind: MoveKind) => {
     try {
       const exists = await sftpExists(sessionId, to);
       if (exists) {
-        setMoveCollision({ from, to });
+        setMoveCollision({ from, to, kind });
         return;
       }
       await sftpRename(sessionId, from, to);
+      notifyMoved(from, to, kind);
       load(path);
     } catch (err) {
-      setError(commandErrorMessage(err));
+      notifyFailed("fileToasts.moveFailed", localBaseName(from), err);
     }
   };
 
   const handleConfirmMoveCollision = () => {
     if (!moveCollision) return;
-    const { from, to } = moveCollision;
+    const { from, to, kind } = moveCollision;
     setMoveCollision(null);
     sftpRename(sessionId, from, to)
-      .then(() => load(path))
-      .catch((err) => setError(commandErrorMessage(err)));
+      .then(() => {
+        notifyMoved(from, to, kind);
+        load(path);
+      })
+      .catch((err) => notifyFailed("fileToasts.moveFailed", localBaseName(from), err));
   };
 
   const handleConfirmRename = () => {
@@ -501,7 +608,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     const newPath = joinPath(path, trimmed);
     const from = renaming.entry.path;
     setRenaming(null);
-    performMove(from, newPath);
+    performMove(from, newPath, "rename");
   };
 
   const handleConfirmMkdir = () => {
@@ -509,8 +616,11 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     setMkdirOpen(null);
     if (!name) return;
     sftpMkdir(sessionId, joinPath(path, name))
-      .then(() => load(path))
-      .catch((err) => setError(commandErrorMessage(err)));
+      .then(() => {
+        notifyOk("fileToasts.mkdirDone", { name });
+        load(path);
+      })
+      .catch((err) => notifyFailed("fileToasts.mkdirFailed", name, err));
   };
 
   const handleCut = (entry: RemoteEntryDto) => {
@@ -525,7 +635,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     const target = joinPath(path, cutEntry.name);
     setCutEntry(null);
     if (target === cutEntry.path) return; // bereits hier, kein no-op-Fehler
-    performMove(cutEntry.path, target);
+    performMove(cutEntry.path, target, "move");
   };
 
   const handleChmod = (entry: RemoteEntryDto) => {
@@ -537,9 +647,17 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     if (!chmodTarget) return;
     const target = chmodTarget;
     setChmodTarget(null);
+    const modeText = mode.toString(8).padStart(3, "0");
     sftpChmod(sessionId, target.path, mode, recursive)
-      .then(() => load(path))
-      .catch((err) => setError(commandErrorMessage(err)));
+      .then((count) => {
+        if (recursive && target.isDir) {
+          notifyOk("fileToasts.chmodRecursive", { name: target.name, mode: modeText, count });
+        } else {
+          notifyOk("fileToasts.chmodDone", { name: target.name, mode: modeText });
+        }
+        load(path);
+      })
+      .catch((err) => notifyFailed("fileToasts.chmodFailed", target.name, err));
   };
 
   return (
@@ -861,12 +979,6 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
             setDeleteTarget(e);
           }}
         />
-      )}
-
-      {toast && (
-        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 shadow-lg">
-          {toast}
-        </div>
       )}
 
       {/* Spec 0054, Teil 4: Statusleiste für den "Lokal öffnen"-Flow —

@@ -3571,7 +3571,7 @@ pub async fn sftp_download(
     state: State<'_, AppState>,
     session_id: SessionId,
     remote_path: String,
-) -> CommandResult<()> {
+) -> CommandResult<Option<crate::dto::DownloadResultDto>> {
     use tauri_plugin_dialog::DialogExt;
 
     let session = session_sftp(&state, session_id).await?;
@@ -3597,7 +3597,7 @@ pub async fn sftp_download(
             let _ = tx.send(path);
         });
     let Some(local_path) = rx.await.ok().flatten() else {
-        return Ok(()); // Abbrechen ist kein Fehler, s. `export_document`.
+        return Ok(None); // Abbrechen ist kein Fehler, s. `export_document`.
     };
     let local_path = local_path.into_path()?;
 
@@ -3606,10 +3606,15 @@ pub async fn sftp_download(
         &session,
         session_id,
         &remote_path,
-        local_path,
+        local_path.clone(),
         total_bytes,
     )
-    .await
+    .await?;
+    Ok(Some(crate::dto::DownloadResultDto {
+        local_path: local_path.to_string_lossy().into_owned(),
+        is_dir: false,
+        file_count: 1,
+    }))
 }
 
 /// Ermittelt das Standard-Downloadverzeichnis des Betriebssystems (Spec
@@ -3637,8 +3642,9 @@ async fn download_recursive(
     session_id: SessionId,
     remote_root: &str,
     local_root: &std::path::Path,
-) -> CommandResult<()> {
+) -> CommandResult<u64> {
     tokio::fs::create_dir_all(local_root).await?;
+    let mut file_count = 0u64;
     let mut queue = vec![(remote_root.to_string(), local_root.to_path_buf())];
     while let Some((remote_dir, local_dir)) = queue.pop() {
         let entries = {
@@ -3664,10 +3670,11 @@ async fn download_recursive(
                     Some(entry.size),
                 )
                 .await?;
+                file_count += 1;
             }
         }
     }
-    Ok(())
+    Ok(file_count)
 }
 
 /// Lädt `remote_path` (Datei oder Ordner) unter `local_base_dir` herunter —
@@ -3682,7 +3689,7 @@ async fn download_entry_to(
     session_id: SessionId,
     remote_path: &str,
     local_base_dir: &std::path::Path,
-) -> CommandResult<()> {
+) -> CommandResult<crate::dto::DownloadResultDto> {
     let root_name = file_name_of(remote_path);
     // `remote_path` kommt vom Frontend, letztlich aber aus einem früheren
     // `sftp_list`-Ergebnis (`RemoteEntryDto.path`) — also transitiv
@@ -3696,26 +3703,26 @@ async fn download_entry_to(
             .expect("ensure_sftp_open lief erfolgreich durch");
         sftp.stat(remote_path).await?
     };
-    if root_entry.is_dir {
-        download_recursive(
-            app,
-            session,
-            session_id,
-            remote_path,
-            &local_base_dir.join(&root_name),
-        )
-        .await
+    let local_path = local_base_dir.join(&root_name);
+    let file_count = if root_entry.is_dir {
+        download_recursive(app, session, session_id, remote_path, &local_path).await?
     } else {
         download_one_file(
             app,
             session,
             session_id,
             remote_path,
-            local_base_dir.join(&root_name),
+            local_path.clone(),
             Some(root_entry.size),
         )
-        .await
-    }
+        .await?;
+        1
+    };
+    Ok(crate::dto::DownloadResultDto {
+        local_path: local_path.to_string_lossy().into_owned(),
+        is_dir: root_entry.is_dir,
+        file_count,
+    })
 }
 
 /// Spec 0054, Teil 2: Herunterladen ohne Dialog, direkt ins
@@ -3726,7 +3733,7 @@ pub async fn sftp_download_default(
     state: State<'_, AppState>,
     session_id: SessionId,
     remote_path: String,
-) -> CommandResult<()> {
+) -> CommandResult<crate::dto::DownloadResultDto> {
     let session = session_sftp(&state, session_id).await?;
     let downloads_dir = default_downloads_dir()?;
     download_entry_to(&app, &session, session_id, &remote_path, &downloads_dir).await
@@ -3742,7 +3749,7 @@ pub async fn sftp_download_dir(
     state: State<'_, AppState>,
     session_id: SessionId,
     remote_path: String,
-) -> CommandResult<()> {
+) -> CommandResult<Option<crate::dto::DownloadResultDto>> {
     use tauri_plugin_dialog::DialogExt;
 
     let session = session_sftp(&state, session_id).await?;
@@ -3755,11 +3762,13 @@ pub async fn sftp_download_dir(
             let _ = tx.send(path);
         });
     let Some(local_dir) = rx.await.ok().flatten() else {
-        return Ok(()); // Abbrechen ist kein Fehler.
+        return Ok(None); // Abbrechen ist kein Fehler.
     };
     let local_dir = local_dir.into_path()?;
 
-    download_entry_to(&app, &session, session_id, &remote_path, &local_dir).await
+    download_entry_to(&app, &session, session_id, &remote_path, &local_dir)
+        .await
+        .map(Some)
 }
 
 /// `local_path` ist bereits vom Frontend aufgelöst — entweder über den
@@ -4015,27 +4024,27 @@ pub async fn sftp_chmod(
     path: String,
     mode: u32,
     recursive: bool,
-) -> CommandResult<()> {
+) -> CommandResult<u64> {
     let session = session_sftp(&state, session_id).await?;
     let mut guard = session.sftp.lock().await;
     let sftp = guard
         .as_mut()
         .expect("ensure_sftp_open lief erfolgreich durch");
-    chmod_recursive(sftp.as_mut(), &path, mode, recursive).await?;
-    Ok(())
+    Ok(chmod_recursive(sftp.as_mut(), &path, mode, recursive).await?)
 }
 
 /// Eigentliche Rekursions-Logik hinter `sftp_chmod` — s. `delete_recursive`s
-/// Doc-Kommentar zum selben Testbarkeits-Muster.
+/// Doc-Kommentar zum selben Testbarkeits-Muster. Liefert die Anzahl der
+/// geänderten Einträge (Spec 0067, Teil B: Sammelmeldung).
 async fn chmod_recursive(
     sftp: &mut dyn SftpSession,
     path: &str,
     mode: u32,
     recursive: bool,
-) -> Result<(), SshError> {
+) -> Result<u64, SshError> {
     if !recursive {
         sftp.set_permissions(path, mode).await?;
-        return Ok(());
+        return Ok(1);
     }
     // `lstat` statt `stat` — dieselbe Symlink-Begründung wie in
     // `delete_recursive`: ein Symlink auf ein Verzeichnis darf ein
@@ -4043,7 +4052,7 @@ async fn chmod_recursive(
     let root_entry = sftp.lstat(path).await?;
     if !root_entry.is_dir {
         sftp.set_permissions(path, mode).await?;
-        return Ok(());
+        return Ok(1);
     }
 
     // Erst den ganzen Baum LESEND ablaufen (mit den unveränderten
@@ -4068,10 +4077,11 @@ async fn chmod_recursive(
     // oben: sobald die Wurzel selbst ihr Execute-Bit verliert, lässt sich
     // kein Pfad *unter* ihr mehr auflösen, auch nicht nur für ein weiteres
     // `set_permissions` (Pfadauflösung braucht `x` auf jedem Vorfahren).
+    let count = all_paths.len() as u64;
     for entry_path in all_paths.into_iter().rev() {
         sftp.set_permissions(&entry_path, mode).await?;
     }
-    Ok(())
+    Ok(count)
 }
 
 /// Spec 0054, Teil 3: "Umbenennen" UND "Verschieben" laufen über denselben
@@ -5533,10 +5543,13 @@ mod sftp_mutation_tests {
         // der Bug, den `chmod_recursive`s "erst lesend traversieren, dann
         // von unten nach oben setzen"-Reihenfolge verhindern soll; dieser
         // Test verifiziert das Ergebnis, nicht die Reihenfolge selbst.
-        chmod_recursive(&mut sftp, root.to_str().unwrap(), 0o700, true)
+        let changed = chmod_recursive(&mut sftp, root.to_str().unwrap(), 0o700, true)
             .await
             .expect("chmod_recursive() sollte gelingen");
 
+        // Spec 0067, Teil B: Anzahl für die Sammelmeldung — tree, sub,
+        // sub/child.txt.
+        assert_eq!(changed, 3);
         let root_entry = sftp.stat(root.to_str().unwrap()).await.unwrap();
         let sub_entry = sftp.stat(root.join("sub").to_str().unwrap()).await.unwrap();
         let nested_entry = sftp.stat(nested.to_str().unwrap()).await.unwrap();

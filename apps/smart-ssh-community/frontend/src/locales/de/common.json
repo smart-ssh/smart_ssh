@@ -411,5 +411,41 @@
     "days_one": "{{count}} Tag",
     "days_other": "{{count}} Tage",
     "hint": "Löscht automatisch beendete Unterhaltungen, die älter sind. Laufende Unterhaltungen sind davon nie betroffen."
+  },
+  "toast": {
+    "dismiss": "Meldung schließen"
+  },
+  "fileToasts": {
+    "asElevated": " (als {{user}})",
+    "revealFinder": "Im Finder zeigen",
+    "revealExplorer": "Im Explorer zeigen",
+    "revealFileManager": "Im Dateimanager zeigen",
+    "downloadedFile": "„{{name}}“ heruntergeladen nach {{dir}}",
+    "downloadedDir_one": "Ordner „{{name}}“ heruntergeladen — {{count}} Datei",
+    "downloadedDir_other": "Ordner „{{name}}“ heruntergeladen — {{count}} Dateien",
+    "downloadFailed": "Herunterladen von „{{name}}“ fehlgeschlagen: {{reason}}",
+    "uploadedFile": "„{{name}}“ hochgeladen",
+    "uploadedMany_one": "{{count}} Datei hochgeladen",
+    "uploadedMany_other": "{{count}} Dateien hochgeladen",
+    "uploadFailed": "Hochladen von „{{name}}“ fehlgeschlagen: {{reason}}",
+    "deletedFile": "„{{name}}“ gelöscht",
+    "deletedDir": "Ordner „{{name}}“ gelöscht — {{files}} Dateien, {{dirs}} Unterordner",
+    "deleteFailed": "Löschen von „{{name}}“ fehlgeschlagen: {{reason}}",
+    "renamed": "„{{from}}“ umbenannt in „{{to}}“",
+    "moved": "„{{name}}“ verschoben nach {{dir}}",
+    "moveFailed": "Verschieben/Umbenennen von „{{name}}“ fehlgeschlagen: {{reason}}",
+    "mkdirDone": "Ordner „{{name}}“ angelegt",
+    "mkdirFailed": "Ordner „{{name}}“ konnte nicht angelegt werden: {{reason}}",
+    "chmodDone": "Rechte von „{{name}}“ auf {{mode}} gesetzt",
+    "chmodRecursive_one": "Rechte auf {{mode}} gesetzt — {{count}} Eintrag in „{{name}}“",
+    "chmodRecursive_other": "Rechte auf {{mode}} gesetzt — {{count}} Einträge in „{{name}}“",
+    "chmodFailed": "Rechte von „{{name}}“ konnten nicht gesetzt werden: {{reason}}",
+    "pathCopied": "Pfad in die Zwischenablage kopiert",
+    "contentCopied": "Inhalt von „{{name}}“ in die Zwischenablage kopiert",
+    "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen: {{reason}}",
+    "openedLocally": "„{{name}}“ lokal geöffnet — Änderungen werden zum Hochladen angeboten",
+    "openLocallyFailed": "„{{name}}“ konnte nicht lokal geöffnet werden: {{reason}}",
+    "editUploaded": "Änderung an „{{name}}“ hochgeladen",
+    "editUploadFailed": "Änderung an „{{name}}“ konnte nicht hochgeladen werden: {{reason}}"
   }
 }

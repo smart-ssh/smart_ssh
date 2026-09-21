@@ -606,6 +606,13 @@ export interface RemoteEntryDto {
 }
 
 /** Spec 0054, Teil 3: Vorschau vor dem Löschen eines Ordners. */
+/** Spec 0067, Teil B: `crate::dto::DownloadResultDto`. */
+export interface DownloadResultDto {
+  localPath: string;
+  isDir: boolean;
+  fileCount: number;
+}
+
 export interface DeletePreviewDto {
   fileCount: number;
   dirCount: number;

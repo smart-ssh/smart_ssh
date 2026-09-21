@@ -156,8 +156,10 @@ export function useLocalEditSession(sessionId: string) {
     };
   }, [session, sessionId]);
 
-  const confirmUpload = useCallback(async () => {
-    if (!session) return;
+  /** Liefert `null` bei Erfolg, sonst die Fehlermeldung (Spec 0067, Teil B:
+   * der Aufrufer zeigt daraus eine Meldung). */
+  const confirmUpload = useCallback(async (): Promise<string | null> => {
+    if (!session) return null;
     setSession((prev) => (prev ? { ...prev, status: "uploading" } : prev));
     try {
       await sftpUpload(sessionId, session.localPath, session.entry.path);
@@ -167,8 +169,11 @@ export function useLocalEditSession(sessionId: string) {
         .then((e) => e.modified)
         .catch(() => remoteModifiedAtDownloadRef.current);
       setSession((prev) => (prev ? { ...prev, status: "editing", error: null } : prev));
+      return null;
     } catch (err) {
-      setSession((prev) => (prev ? { ...prev, status: "changed", error: commandErrorMessage(err) } : prev));
+      const message = commandErrorMessage(err);
+      setSession((prev) => (prev ? { ...prev, status: "changed", error: message } : prev));
+      return message;
     }
   }, [session, sessionId]);
 

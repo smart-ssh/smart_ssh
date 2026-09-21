@@ -14,6 +14,7 @@ if (!Element.prototype.setPointerCapture) {
   Element.prototype.releasePointerCapture = () => {};
 }
 import { open } from "@tauri-apps/plugin-dialog";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   closeEditSession,
   localFileMtime,
@@ -36,6 +37,7 @@ import {
   saveFileManagerColumnWidths,
 } from "../layoutSettings";
 import { testI18n } from "../testI18n";
+import { showToast } from "../toastBus";
 import type { RemoteEntryDto } from "../types";
 import { FileBrowserPanel } from "./FileBrowserPanel";
 
@@ -67,6 +69,11 @@ vi.mock("../events", () => ({
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openPath: vi.fn(),
+  revealItemInDir: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("../toastBus", () => ({
+  showToast: vi.fn(),
 }));
 
 vi.mock("../fileTypeSettings", () => ({
@@ -361,7 +368,11 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
   it("'Herunterladen' calls the no-dialog default-directory download", async () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
-    vi.mocked(sftpDownloadDefault).mockResolvedValue(undefined);
+    vi.mocked(sftpDownloadDefault).mockResolvedValue({
+      localPath: "/Users/test/Downloads/a.txt",
+      isDir: false,
+      fileCount: 1,
+    });
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -374,7 +385,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
   it("'Herunterladen nach…' uses the folder dialog for directories, file dialog for files", async () => {
     vi.mocked(sftpList).mockResolvedValue([dirEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
-    vi.mocked(sftpDownloadDir).mockResolvedValue(undefined);
+    vi.mocked(sftpDownloadDir).mockResolvedValue(null);
 
     renderPanel();
     await screen.findByText(/logs/);
@@ -395,7 +406,11 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     fireEvent.click(screen.getByText("Pfad kopieren"));
 
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("a.txt"));
-    expect(await screen.findByText("Pfad kopiert")).toBeVisible();
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: "success", message: "Pfad in die Zwischenablage kopiert" }),
+      ),
+    );
   });
 
   it("copies the file content to the clipboard via sftp_read_text", async () => {
@@ -411,7 +426,14 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     await waitFor(() =>
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith("hallo welt"),
     );
-    expect(await screen.findByText("Inhalt kopiert")).toBeVisible();
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "success",
+          message: "Inhalt von „a.txt“ in die Zwischenablage kopiert",
+        }),
+      ),
+    );
   });
 
   it("shows a toast with the backend error when the file is not text", async () => {
@@ -424,7 +446,14 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     fireEvent.click(screen.getByRole("button", { name: "⋮" }));
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
 
-    expect(await screen.findByText("Datei ist keine Textdatei (kein gültiges UTF-8)")).toBeVisible();
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "error",
+          message: expect.stringContaining("Datei ist keine Textdatei (kein gültiges UTF-8)"),
+        }),
+      ),
+    );
     expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
   });
 
@@ -476,7 +505,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
   it("chmod dialog toggles a bit and applies the resulting octal mode", async () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
-    vi.mocked(sftpChmod).mockResolvedValue(undefined);
+    vi.mocked(sftpChmod).mockResolvedValue(1);
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -496,7 +525,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
   it("chmod dialog's numeric input overrides the checkbox matrix", async () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
-    vi.mocked(sftpChmod).mockResolvedValue(undefined);
+    vi.mocked(sftpChmod).mockResolvedValue(1);
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -526,7 +555,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     };
     vi.mocked(sftpList).mockResolvedValue([setuidEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
-    vi.mocked(sftpChmod).mockResolvedValue(undefined);
+    vi.mocked(sftpChmod).mockResolvedValue(1);
 
     renderPanel();
     await screen.findByText(/suid-bin/);
@@ -545,7 +574,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
   it("chmod dialog shows a recursive checkbox only for directories", async () => {
     vi.mocked(sftpList).mockResolvedValue([dirEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
-    vi.mocked(sftpChmod).mockResolvedValue(undefined);
+    vi.mocked(sftpChmod).mockResolvedValue(1);
 
     renderPanel();
     await screen.findByText(/logs/);
@@ -746,5 +775,139 @@ describe("FileBrowserPanel 'Lokal öffnen' flow (Spec 0054, Teil 4)", () => {
 
     expect(closeEditSession).toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt");
     expect(screen.queryByText(/wird lokal bearbeitet/)).not.toBeInTheDocument();
+  });
+});
+
+describe("FileBrowserPanel result toasts (Spec 0067, Teil B)", () => {
+  const fileEntry: RemoteEntryDto = { ...entry, name: "a.txt", path: "a.txt" };
+  const dirEntry: RemoteEntryDto = { ...entry, name: "logs", path: "logs", isDir: true };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+  });
+
+  const lastToast = () => vi.mocked(showToast).mock.calls.at(-1)?.[0];
+
+  it("download: success toast names file and target dir and offers to reveal it", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(sftpDownloadDefault).mockResolvedValue({
+      localPath: "/Users/test/Downloads/a.txt",
+      isDir: false,
+      fileCount: 1,
+    });
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Herunterladen"));
+
+    await waitFor(() =>
+      expect(lastToast()).toMatchObject({
+        kind: "success",
+        message: "„a.txt“ heruntergeladen nach /Users/test/Downloads",
+      }),
+    );
+    lastToast()!.action!.onClick();
+    expect(revealItemInDir).toHaveBeenCalledWith("/Users/test/Downloads/a.txt");
+  });
+
+  it("folder download: one summary toast with the file count", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+    vi.mocked(sftpDownloadDefault).mockResolvedValue({
+      localPath: "/Users/test/Downloads/logs",
+      isDir: true,
+      fileCount: 42,
+    });
+
+    renderPanel();
+    await screen.findByText(/logs/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Herunterladen"));
+
+    await waitFor(() =>
+      expect(lastToast()).toMatchObject({
+        kind: "success",
+        message: "Ordner „logs“ heruntergeladen — 42 Dateien",
+      }),
+    );
+    expect(showToast).toHaveBeenCalledTimes(1);
+  });
+
+  it("download failure: error toast with the reason", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(sftpDownloadDefault).mockRejectedValue({
+      message: "Keine Berechtigung",
+      code: null,
+    });
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Herunterladen"));
+
+    await waitFor(() =>
+      expect(lastToast()).toMatchObject({
+        kind: "error",
+        message: expect.stringContaining("Herunterladen von „a.txt“ fehlgeschlagen"),
+      }),
+    );
+  });
+
+  it("uploading several files shows one summary toast, not one per file", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    vi.mocked(open).mockResolvedValue(["/local/x.txt", "/local/y.txt", "/local/z.txt"]);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Hochladen"));
+
+    await waitFor(() =>
+      expect(lastToast()).toMatchObject({ kind: "success", message: "3 Dateien hochgeladen" }),
+    );
+    expect(showToast).toHaveBeenCalledTimes(1);
+  });
+
+  it("recursive chmod reports how many entries were changed", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+    vi.mocked(sftpChmod).mockResolvedValue(17);
+
+    renderPanel();
+    await screen.findByText(/logs/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Rechte bearbeiten…"));
+    const recursiveLabel = await screen.findByText(/Rekursiv/);
+    fireEvent.click(recursiveLabel.closest("label")!.querySelector("input")!);
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    await waitFor(() =>
+      expect(lastToast()).toMatchObject({
+        kind: "success",
+        message: "Rechte auf 644 gesetzt — 17 Einträge in „logs“",
+      }),
+    );
+  });
+
+  it("deleting a folder reports the counts from the preview", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+    vi.mocked(sftpDeletePreview).mockResolvedValue({ fileCount: 3, dirCount: 2 });
+    vi.mocked(sftpDelete).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/logs/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Löschen"));
+    await screen.findByText("3");
+    const confirm = screen.getAllByText("Löschen").at(-1)!;
+    fireEvent.click(confirm);
+
+    await waitFor(() =>
+      expect(lastToast()).toMatchObject({
+        kind: "success",
+        message: "Ordner „logs“ gelöscht — 3 Dateien, 1 Unterordner",
+      }),
+    );
   });
 });
