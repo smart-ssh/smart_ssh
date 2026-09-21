@@ -171,7 +171,11 @@
     },
     "largeNoteHint": "Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt werden. Die gespeicherte Notiz bleibt vollständig erhalten.",
     "summarizeNow": "Jetzt zusammenfassen",
-    "summarizeRequesting": "Wird angefragt…"
+    "summarizeRequesting": "Wird angefragt…",
+    "advanced": "Erweitert",
+    "sftpServerPathLabel": "Pfad zu sftp-server (erhöhter Dateizugriff)",
+    "sftpServerPathPlaceholder": "Automatisch",
+    "sftpServerPathHint": "Nur nötig, wenn die automatische Erkennung für den Dateibrowser mit erhöhten Rechten scheitert, z. B. /usr/lib/openssh/sftp-server. Leer lassen = automatisch."
   },
   "filterRules": {
     "title": "Regeln",

@@ -315,3 +315,70 @@ impl ssh_manager_core::ai::AiProvider for MockAiProvider {
         Box::pin(futures::stream::iter(self.events.clone()))
     }
 }
+
+/// Spec 0067: Test-Session mit frei wählbarem Transport und ohne KI — für
+/// Tests des erhöhten Dateibrowser-Kanals.
+pub fn session_with_transport(
+    transport: Box<dyn ssh_manager_core::ssh::SshTransport>,
+) -> crate::session::Session {
+    use std::sync::Arc;
+    use tokio::sync::Mutex as AsyncMutex;
+
+    struct NoAi;
+    impl ssh_manager_core::ai::AiProvider for NoAi {
+        fn send(
+            &self,
+            _context: ssh_manager_core::ai::SessionContext,
+        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = ssh_manager_core::ai::AiEvent> + Send>>
+        {
+            Box::pin(futures::stream::iter(vec![
+                ssh_manager_core::ai::AiEvent::Done,
+            ]))
+        }
+    }
+
+    crate::session::Session {
+        transport: AsyncMutex::new(transport),
+        ai_provider: Box::new(NoAi),
+        ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
+        context: AsyncMutex::new(ssh_manager_core::ai::SessionContext {
+            system_context: String::new(),
+            history: Vec::new(),
+            available_actions: ssh_manager_core::ai::default_action_schemas(),
+            max_tokens_hint: None,
+        }),
+        filter_engine: Box::new(ssh_manager_core::filter::FilterEngine::new(
+            crate::policy::NoRulesPolicyStore,
+        )),
+        server_id: ServerId::new(),
+        tags: Vec::new(),
+        terminal: std::sync::Mutex::new(None),
+        redactor: Box::new(ssh_manager_core::ai::DefaultOutputRedactor::new()),
+        ai_provider_label: "test-provider".to_string(),
+        ai_model: "test-model".to_string(),
+        system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
+        model_context_window_tokens: usize::MAX / 1_000,
+        summary: AsyncMutex::new(None),
+        mcp_origin_flags: std::sync::Mutex::new(Vec::new()),
+        sudo_password: None,
+        status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
+        pending_action: std::sync::Mutex::new(None),
+        sftp: AsyncMutex::new(None),
+        elevated_sftp: crate::elevated_sftp::ElevatedSftpSlot::new(),
+        auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+        auto_continue_stop_notify: tokio::sync::Notify::new(),
+        chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
+        risk_second_opinion_provider: None,
+        risk_second_opinion_budget: None,
+        running_command_cancellations: Arc::new(crate::confirmation::ConfirmationRegistry::new()),
+        untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
+        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+        injection_check_provider: None,
+        injection_check_budget: None,
+        injection_suspected: std::sync::atomic::AtomicBool::new(false),
+        chat_session_store: None,
+        ledger_store: None,
+        chat_session_id: AsyncMutex::new(None),
+        ai_request_paced_at: AsyncMutex::new(None),
+    }
+}

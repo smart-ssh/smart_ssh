@@ -75,6 +75,22 @@ pub trait SshTransport: Send + Sync {
             "SFTP wird von diesem Transport nicht unterstützt".to_string(),
         ))
     }
+    /// Spec 0067, Teil A: SFTP über einen Exec-Kanal statt über das
+    /// `sftp`-Subsystem — `command` startet einen SFTP-Server (z. B. `sudo
+    /// -n /usr/lib/openssh/sftp-server`), dessen stdin/stdout das
+    /// SFTP-Protokoll trägt. Ein zweiter, eigener Kanal neben
+    /// [`open_sftp`](Self::open_sftp). Der Transport kennt kein sudo — das
+    /// Kommando baut `crate::ssh::elevated`. Default: nicht unterstützt
+    /// (u. a. der lokale Pseudo-Server).
+    async fn open_sftp_via_exec(
+        &mut self,
+        command: &str,
+    ) -> Result<Box<dyn SftpSession>, SshError> {
+        let _ = command;
+        Err(SshError::ChannelError(
+            "Erhöhter Dateizugriff wird von diesem Transport nicht unterstützt".to_string(),
+        ))
+    }
     async fn disconnect(&mut self) -> Result<(), SshError>;
 
     /// Testhook (Spec 0043, Fund A; Spec 0044 für den lokalen Pseudo-

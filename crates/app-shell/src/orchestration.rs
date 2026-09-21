@@ -3964,6 +3964,7 @@ mod tests {
             status: StdMutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
             sftp: AsyncMutex::new(None),
+            elevated_sftp: crate::elevated_sftp::ElevatedSftpSlot::new(),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
             chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
@@ -6475,6 +6476,7 @@ mod tests {
             jump_host: None,
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
             created_at: now,
             updated_at: now,
         };
@@ -6537,6 +6539,7 @@ mod tests {
             jump_host: None,
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
             created_at: now,
             updated_at: now,
         }
@@ -7785,6 +7788,7 @@ mod tests {
                 jump_host: None,
                 post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
                 ai_injection_check_enabled: false,
+                sftp_server_path: None,
                 created_at: now,
                 updated_at: now,
             },
@@ -7858,6 +7862,7 @@ mod tests {
                 jump_host: None,
                 post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
                 ai_injection_check_enabled: false,
+                sftp_server_path: None,
                 created_at: now,
                 updated_at: now,
             },
@@ -8823,6 +8828,7 @@ mod tests {
             jump_host: None,
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
             created_at: now,
             updated_at: now,
         };
@@ -8911,6 +8917,7 @@ mod tests {
             jump_host: None,
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
             created_at: now,
             updated_at: now,
         };
@@ -8927,6 +8934,7 @@ mod tests {
             jump_host: None,
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
             created_at: now,
             updated_at: now,
         };
@@ -9153,6 +9161,7 @@ mod tests {
                 jump_host: None,
                 post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
                 ai_injection_check_enabled: false,
+                sftp_server_path: None,
                 created_at: now,
                 updated_at: now,
             })

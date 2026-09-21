@@ -195,6 +195,8 @@ export function ServerForm({
   const [clearingSudoPassword, setClearingSudoPassword] = useState(false);
   const [postIngestPolicy, setPostIngestPolicy] = useState<PostIngestPolicy>("balanced");
   const [aiInjectionCheckEnabled, setAiInjectionCheckEnabled] = useState(false);
+  // Spec 0067, A2: leer = automatisch erkennen.
+  const [sftpServerPath, setSftpServerPath] = useState("");
   // Spec 0039, Abschnitt 5.2: die Checkbox ist nur bedienbar, wenn ein
   // Zweitmeinungs-Provider konfiguriert ist (dieselbe Voraussetzung wie
   // beim Backend-`Session::injection_check_provider`, s. dortiger
@@ -258,6 +260,7 @@ export function ServerForm({
         setLocalNotes(server.notes);
         setPostIngestPolicy(server.postIngestPolicy);
         setAiInjectionCheckEnabled(server.aiInjectionCheckEnabled);
+        setSftpServerPath(server.sftpServerPath ?? "");
       })
       .catch((err) => setError(commandErrorMessage(err)));
   };
@@ -309,6 +312,7 @@ export function ServerForm({
     // Backend (`Session::injection_check_provider`); die Checkbox hier ist
     // nur bedienbar, nicht das gespeicherte Feld selbst gegated.
     aiInjectionCheckEnabled,
+    sftpServerPath: sftpServerPath.trim() === "" ? null : sftpServerPath.trim(),
   });
 
   const handleSubmit = async (e: FormEvent) => {
@@ -876,6 +880,24 @@ export function ServerForm({
               : t("serverForm.aiInjectionCheckUnavailableHint")}
           </p>
         </fieldset>
+
+        {!isLocal && (
+          <details className="rounded border border-slate-700 p-3">
+            <summary className="cursor-pointer text-sm text-slate-300">
+              {t("serverForm.advanced")}
+            </summary>
+            <label className="mt-3 block text-sm text-slate-300">
+              {t("serverForm.sftpServerPathLabel")}
+              <input
+                value={sftpServerPath}
+                onChange={(e) => setSftpServerPath(e.target.value)}
+                placeholder={t("serverForm.sftpServerPathPlaceholder")}
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-sm text-slate-100 focus:outline-none"
+              />
+            </label>
+            <p className="mt-2 text-xs text-slate-500">{t("serverForm.sftpServerPathHint")}</p>
+          </details>
+        )}
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 

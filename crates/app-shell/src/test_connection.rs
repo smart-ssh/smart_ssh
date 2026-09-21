@@ -411,6 +411,7 @@ mod tests {
             sudo_password: None,
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
         }
     }
 
@@ -587,6 +588,7 @@ mod tests {
             jump_host: None,
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
             created_at: now,
             updated_at: now,
         };
@@ -684,6 +686,7 @@ mod tests {
             jump_host: None,
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
             created_at: now,
             updated_at: now,
         };
@@ -706,6 +709,7 @@ mod tests {
             sudo_password: None,
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
         };
 
         let result = test_connection_with_timeout(

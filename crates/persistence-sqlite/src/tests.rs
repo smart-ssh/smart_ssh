@@ -49,6 +49,7 @@ fn make_server(name: &str, group_id: Option<GroupId>, tags: Vec<String>) -> Serv
         jump_host: None,
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
+        sftp_server_path: None,
         created_at: now,
         updated_at: now,
     }
@@ -468,7 +469,42 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
     let group = make_group("Produktion", None);
     old_store.create_group(&group).await.unwrap();
     let server = make_server("web-01", Some(group.id), vec!["prod".to_string()]);
-    old_store.create_server(&server).await.unwrap();
+    // Rohes SQL mit genau den Spalten, die `servers` auf dieser Schema-Stufe
+    // hat — die aktuelle `create_server`-API schreibt auch später
+    // hinzugekommene Spalten (z. B. `sftp_server_path`, 0014), die es hier
+    // noch nicht gibt.
+    sqlx::query(
+        "INSERT INTO servers \
+         (id, name, host, port, username, group_id, auth_method, notes, jump_host_id, \
+          post_ingest_policy, ai_injection_check_enabled, created_at, updated_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(server.id.0.to_string())
+    .bind(&server.name)
+    .bind(&server.host)
+    .bind(i64::from(server.port))
+    .bind(&server.username)
+    .bind(server.group_id.map(|g| g.0.to_string()))
+    .bind(crate::mapping::auth_method_to_json(&server.auth).unwrap())
+    .bind(&server.notes)
+    .bind(server.jump_host.map(|s| s.0.to_string()))
+    .bind(crate::mapping::post_ingest_policy_to_text(
+        server.post_ingest_policy,
+    ))
+    .bind(server.ai_injection_check_enabled)
+    .bind(server.created_at.to_rfc3339())
+    .bind(server.updated_at.to_rfc3339())
+    .execute(&old_pool)
+    .await
+    .unwrap();
+    for tag in &server.tags {
+        sqlx::query("INSERT INTO server_tags (server_id, tag) VALUES (?, ?)")
+            .bind(server.id.0.to_string())
+            .bind(tag)
+            .execute(&old_pool)
+            .await
+            .unwrap();
+    }
     let note = NoteRevision {
         id: Uuid::new_v4(),
         target: NoteTarget::Server(server.id),
@@ -634,4 +670,34 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
             .unwrap();
     assert_eq!(fetched_model, "claude-sonnet-5");
     assert_eq!(fetched_credential_ref, provider_credential_ref);
+}
+
+/// Spec 0067, A2: der optionale `sftp-server`-Override übersteht Anlegen,
+/// Ändern und Zurücksetzen auf "automatisch" (`None`).
+#[tokio::test]
+async fn test_sftp_server_path_override_roundtrip() {
+    let store = in_memory_store().await;
+    let mut server = make_server("mit-override", None, Vec::new());
+    server.sftp_server_path = Some("/usr/libexec/openssh/sftp-server".to_string());
+    store.create_server(&server).await.unwrap();
+    assert_eq!(
+        store
+            .get_server(&server.id)
+            .await
+            .unwrap()
+            .sftp_server_path
+            .as_deref(),
+        Some("/usr/libexec/openssh/sftp-server")
+    );
+
+    server.sftp_server_path = None;
+    store.update_server(&server).await.unwrap();
+    assert_eq!(
+        store.get_server(&server.id).await.unwrap().sftp_server_path,
+        None
+    );
+    assert_eq!(
+        store.list_servers().await.unwrap()[0].sftp_server_path,
+        None
+    );
 }

@@ -8,6 +8,7 @@
 //! Mock-Implementierungen testbar.
 
 mod auth;
+pub mod elevated;
 mod error;
 mod host_key;
 mod jump_host;

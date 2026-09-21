@@ -15,6 +15,12 @@ use crate::shell::RusshShell;
 
 /// `russh`-gestützte Implementierung von `SshTransport` (Spec 0005,
 /// Abschnitt 4).
+/// Spec 0067: Antwortfrist für den SFTP-Handshake über einen Exec-Kanal —
+/// ein von sudo abgelehnter Start meldet sich so nach wenigen Sekunden.
+const EXEC_SFTP_HANDSHAKE_TIMEOUT_SECS: u64 = 5;
+/// Äußere Obergrenze als Sicherheitsnetz, falls der Handshake selbst hängt.
+const EXEC_SFTP_INIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
 pub struct RusshTransport {
     pub(crate) handle: Handle<ClientHandler>,
     /// Handles der Zwischen-Hops (alles außer dem letzten aus
@@ -236,6 +242,43 @@ impl SshTransport for RusshTransport {
         let client = russh_sftp::client::SftpSession::new(channel.into_stream())
             .await
             .map_err(|e| SshError::ChannelError(format!("SFTP-Init fehlgeschlagen: {e}")))?;
+        Ok(Box::new(RusshSftpSession::new(client)))
+    }
+
+    /// Spec 0067, Teil A: wie [`open_sftp`](Self::open_sftp), aber `exec`
+    /// statt `request_subsystem`. stderr des gestarteten Prozesses (z. B.
+    /// eine sudo-Fehlermeldung) gelangt nicht in den Stream — scheitert der
+    /// Start, endet der Kanal und die SFTP-Initialisierung schlägt fehl.
+    /// Timeout, damit ein unerwartet wartender Prozess nie hängen bleibt.
+    async fn open_sftp_via_exec(
+        &mut self,
+        command: &str,
+    ) -> Result<Box<dyn SftpSession>, SshError> {
+        let channel = self
+            .handle
+            .channel_open_session()
+            .await
+            .map_err(map_russh_error)?;
+        channel.exec(true, command).await.map_err(map_russh_error)?;
+        // `russh-sftp` wartet auf jede Antwort bis zum Request-Timeout
+        // (Default 10 s) — auch dann, wenn der Kanal schon zu ist (sudo hat
+        // abgelehnt). Für den Handshake daher kurz, danach der Normalwert.
+        let config = russh_sftp::client::Config {
+            request_timeout_secs: EXEC_SFTP_HANDSHAKE_TIMEOUT_SECS,
+            ..Default::default()
+        };
+        let client = tokio::time::timeout(
+            EXEC_SFTP_INIT_TIMEOUT,
+            russh_sftp::client::SftpSession::new_with_config(channel.into_stream(), config),
+        )
+        .await
+        .map_err(|_| {
+            SshError::ChannelError("SFTP-Start über Exec-Kanal: Zeitüberschreitung".to_string())
+        })?
+        .map_err(|e| {
+            SshError::ChannelError(format!("SFTP-Init über Exec-Kanal fehlgeschlagen: {e}"))
+        })?;
+        client.set_timeout(russh_sftp::client::Config::default().request_timeout_secs);
         Ok(Box::new(RusshSftpSession::new(client)))
     }
 

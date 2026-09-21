@@ -65,6 +65,8 @@ pub struct ServerDto {
     /// Checkbox zusätzlich anhand der app-weiten Zweitmeinungs-Einstellung
     /// (`riskSettings.ts`), unabhängig von diesem Feld.
     pub ai_injection_check_enabled: bool,
+    /// Spec 0067, A2: `None` = automatisch.
+    pub sftp_server_path: Option<String>,
 }
 
 impl ServerDto {
@@ -86,6 +88,7 @@ impl ServerDto {
             is_local: crate::local_server::is_local(server.id),
             post_ingest_policy: server.post_ingest_policy,
             ai_injection_check_enabled: server.ai_injection_check_enabled,
+            sftp_server_path: server.sftp_server_path.clone(),
         }
     }
 }
@@ -408,6 +411,31 @@ pub struct ServerInput {
     /// `false`, derselbe Default wie der Migrations-Spaltendefault.
     #[serde(default)]
     pub ai_injection_check_enabled: bool,
+    /// Spec 0067, A2: Override für den `sftp-server`-Pfad im erhöhten
+    /// Dateibrowser. Leer/fehlend = automatisch (s.
+    /// [`normalize_sftp_server_path`]).
+    #[serde(default)]
+    pub sftp_server_path: Option<String>,
+}
+
+/// Spec 0067, A2: leerer Override = automatisch (`None`); sonst muss es ein
+/// sicherer absoluter Pfad sein — er landet in einem `sudo`-Kommando und in
+/// der angezeigten sudoers-Zeile.
+pub fn normalize_sftp_server_path(input: Option<String>) -> Result<Option<String>, String> {
+    let Some(raw) = input else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if !ssh_manager_core::ssh::elevated::is_safe_absolute_path(trimmed) {
+        return Err(format!(
+            "Ungültiger sftp-server-Pfad „{trimmed}“ — erlaubt ist ein absoluter Pfad aus \
+             Buchstaben, Ziffern und / . _ - +"
+        ));
+    }
+    Ok(Some(trimmed.to_string()))
 }
 
 /// Spec 0008, Abschnitt 4. `#[serde(tag = "kind", rename_all =
@@ -876,6 +904,46 @@ pub struct DeletePreviewDto {
     pub dir_count: u64,
 }
 
+/// Spec 0067, A3: Ergebnis von `sftp_elevation_enable`. Ein Fehlschlag ist
+/// kein `Err`, sondern `failure` — das Frontend zeigt dazu eine
+/// verständliche Erklärung samt kopierbarer sudoers-Zeile.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ElevationResultDto {
+    pub active: bool,
+    pub target_user: String,
+    /// Ermittelter bzw. konfigurierter Pfad, sofern bekannt.
+    pub sftp_server_path: Option<String>,
+    pub failure: Option<ElevationFailureDto>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ElevationFailureDto {
+    pub kind: ElevationFailureKind,
+    /// Zugeschnittene Zeile `<login> ALL=(<nutzer>) NOPASSWD: <pfad>` —
+    /// nur, wenn eine fehlende sudo-Regel die Ursache ist.
+    pub sudoers_line: Option<String>,
+    /// Technisches Detail (erste stderr-Zeile o. ä.), nur zur Anzeige.
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ElevationFailureKind {
+    /// Lokaler Pseudo-Server o. ä. — kein erhöhter Modus möglich.
+    Unsupported,
+    InvalidUser,
+    InvalidPath,
+    SftpServerNotFound,
+    PasswordRequired,
+    NotAllowed,
+    RequireTty,
+    SudoMissing,
+    CheckFailed,
+    StartFailed,
+}
+
 /// Spec 0067, Teil B: Ergebnis eines Downloads für die Erfolgsmeldung —
 /// wohin (für „Im Finder zeigen") und wie viele Dateien (Ordner-Download).
 #[derive(Debug, Clone, Serialize)]
@@ -1210,5 +1278,42 @@ mod tests {
         let mut config = ai_provider_config_input("sk-key", None);
         config.max_tokens_override = Some(MAX_TOKENS_OVERRIDE_UPPER_BOUND);
         assert_eq!(config.validate_max_tokens_override(), Ok(()));
+    }
+}
+
+#[cfg(test)]
+mod sftp_server_path_tests {
+    use super::normalize_sftp_server_path;
+
+    #[test]
+    fn test_empty_override_means_automatic() {
+        assert_eq!(normalize_sftp_server_path(None), Ok(None));
+        assert_eq!(
+            normalize_sftp_server_path(Some("   ".to_string())),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn test_valid_override_is_trimmed_and_kept() {
+        assert_eq!(
+            normalize_sftp_server_path(Some(" /usr/lib/openssh/sftp-server ".to_string())),
+            Ok(Some("/usr/lib/openssh/sftp-server".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_unsafe_override_is_rejected() {
+        for bad in [
+            "sftp-server",
+            "/usr/lib/x; reboot",
+            "/usr/lib/$(id)",
+            "/a/../b",
+        ] {
+            assert!(
+                normalize_sftp_server_path(Some(bad.to_string())).is_err(),
+                "{bad}"
+            );
+        }
     }
 }

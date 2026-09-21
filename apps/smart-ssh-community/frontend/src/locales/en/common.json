@@ -171,7 +171,11 @@
     },
     "largeNoteHint": "This note is very large and may be shortened for the AI context during long sessions. The stored note stays fully intact.",
     "summarizeNow": "Summarize now",
-    "summarizeRequesting": "Requesting…"
+    "summarizeRequesting": "Requesting…",
+    "advanced": "Advanced",
+    "sftpServerPathLabel": "Path to sftp-server (elevated file access)",
+    "sftpServerPathPlaceholder": "Automatic",
+    "sftpServerPathHint": "Only needed if automatic detection fails for the file browser with elevated rights, e.g. /usr/lib/openssh/sftp-server. Leave empty = automatic."
   },
   "filterRules": {
     "title": "Rules",

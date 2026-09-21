@@ -30,6 +30,7 @@ function server(
     isLocal: false,
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
+    sftpServerPath: null,
     ...overrides,
   };
 }

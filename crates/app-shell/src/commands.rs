@@ -1176,6 +1176,7 @@ pub(crate) async fn connect_session(
         status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
         sftp: tokio::sync::Mutex::new(None),
+        elevated_sftp: crate::elevated_sftp::ElevatedSftpSlot::new(),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         auto_continue_stop_notify: tokio::sync::Notify::new(),
         chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
@@ -2328,6 +2329,7 @@ pub async fn update_server(
         return Err("Der lokale Pseudo-Server kann nicht auf diesem Weg bearbeitet werden".into());
     }
     reject_local_jump_host(input.jump_host)?;
+    let sftp_server_path = crate::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
     let existing = state.profile_store.get_server(&id).await?;
     let auth = resolve_auth_method(
         state.credential_store.as_ref(),
@@ -2350,6 +2352,7 @@ pub async fn update_server(
         jump_host: input.jump_host,
         post_ingest_policy: input.post_ingest_policy,
         ai_injection_check_enabled: input.ai_injection_check_enabled,
+        sftp_server_path,
         created_at: existing.created_at,
         updated_at: Utc::now(),
     };
@@ -3395,16 +3398,172 @@ async fn restore_native_decoration(
 // `remove_dir`/das Zusammenspiel mit `list_dir`. "Umbenennen" (SFTP
 // `RENAME`, für beide Eintragstypen) war davon nie betroffen.
 
-/// Liefert die Session und öffnet ihre SFTP-Verbindung bei Bedarf (Spec
-/// 0020, Abschnitt 3, `crate::orchestration::ensure_sftp_open`) — gemeinsame
-/// Vorbedingung aller `sftp_*`-Befehle unten.
-async fn session_sftp(state: &AppState, session_id: SessionId) -> CommandResult<Arc<Session>> {
+/// Spec 0067, Teil A: Zugangsnachweis für den erhöhten SFTP-Kanal
+/// (`crate::elevated_sftp::ElevatedSftpSlot::lock`). Das private Feld macht
+/// ihn außerhalb dieses Moduls unkonstruierbar — KI (`orchestration`) und
+/// MCP (`mcp_backend`) kommen so nie an den erhöhten Kanal.
+pub(crate) struct BrowserAccess(());
+
+#[cfg(test)]
+impl BrowserAccess {
+    /// Nur für Tests des erhöhten Kanals (`crate::elevated_sftp`).
+    pub(crate) fn for_tests() -> Self {
+        Self(())
+    }
+}
+
+/// Welcher SFTP-Kanal eine Browser-Aktion ausführt. Das Frontend wählt ihn
+/// pro Aufruf (`elevated`); ist der erhöhte Kanal inzwischen weg, schlägt
+/// die Aktion fehl — nie ein stiller Rückfall auf den normalen Kanal (Spec
+/// 0067, A5: "kein stiller Upload als normaler Nutzer").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BrowserChannel {
+    Normal,
+    Elevated,
+}
+
+impl BrowserChannel {
+    fn from_flag(elevated: bool) -> Self {
+        if elevated {
+            Self::Elevated
+        } else {
+            Self::Normal
+        }
+    }
+}
+
+const ELEVATED_CHANNEL_INACTIVE: &str =
+    "Der erhöhte Modus ist nicht mehr aktiv (Verbindung getrennt oder ausgeschaltet) — \
+     die Aktion wurde nicht ausgeführt. Bitte den erhöhten Modus erneut einschalten.";
+
+/// Gesperrter SFTP-Kanal einer Browser-Aktion — normal oder erhöht.
+enum BrowserSftpGuard<'a> {
+    Normal(tokio::sync::MutexGuard<'a, Option<Box<dyn SftpSession>>>),
+    Elevated(tokio::sync::MutexGuard<'a, Option<crate::elevated_sftp::ElevatedSftp>>),
+}
+
+impl BrowserSftpGuard<'_> {
+    fn sftp(&mut self) -> CommandResult<&mut Box<dyn SftpSession>> {
+        match self {
+            Self::Normal(guard) => Ok(guard
+                .as_mut()
+                .expect("browser_session öffnet den normalen Kanal vorab")),
+            Self::Elevated(guard) => guard
+                .as_mut()
+                .map(|elevated| &mut elevated.sftp)
+                .ok_or_else(|| CommandError::from(ELEVATED_CHANNEL_INACTIVE)),
+        }
+    }
+}
+
+async fn lock_browser_sftp(session: &Session, channel: BrowserChannel) -> BrowserSftpGuard<'_> {
+    match channel {
+        BrowserChannel::Normal => BrowserSftpGuard::Normal(session.sftp.lock().await),
+        BrowserChannel::Elevated => {
+            BrowserSftpGuard::Elevated(session.elevated_sftp.lock(&BrowserAccess(())).await)
+        }
+    }
+}
+
+/// Liefert die Session und stellt den gewählten Kanal bereit — gemeinsame
+/// Vorbedingung aller `sftp_*`-Befehle unten. Normal: öffnet die
+/// SFTP-Verbindung bei Bedarf (Spec 0020, Abschnitt 3). Erhöht: nur, wenn
+/// der erhöhte Kanal bereits aktiv ist; er wird hier nie implizit geöffnet.
+async fn browser_session(
+    state: &AppState,
+    session_id: SessionId,
+    channel: BrowserChannel,
+) -> CommandResult<Arc<Session>> {
     let session = state
         .sessions
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
-    crate::orchestration::ensure_sftp_open(&session).await?;
+    match channel {
+        BrowserChannel::Normal => crate::orchestration::ensure_sftp_open(&session).await?,
+        BrowserChannel::Elevated => {
+            if session
+                .elevated_sftp
+                .lock(&BrowserAccess(()))
+                .await
+                .is_none()
+            {
+                return Err(ELEVATED_CHANNEL_INACTIVE.into());
+            }
+        }
+    }
     Ok(session)
+}
+
+/// Spec 0067, A1–A3: schaltet den erhöhten Dateibrowser-Kanal ein (`sudo
+/// -n <sftp-server>` über einen Exec-Kanal). Nur passwortloses sudo; ein
+/// Fehlschlag kommt als strukturierte `failure` zurück (inkl. sudoers-Zeile),
+/// nicht als `Err`. Nie persistiert — lebt nur in der Session.
+#[tauri::command]
+pub async fn sftp_elevation_enable(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    target_user: Option<String>,
+) -> CommandResult<crate::dto::ElevationResultDto> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    // Transport-Grenze statt Sonderfall in der Logik: der lokale
+    // Pseudo-Server hat kein sudo/sftp-server (CLAUDE.md, "No
+    // special-casing ... in the core loop").
+    if crate::local_server::is_local(session.server_id) {
+        return Ok(crate::dto::ElevationResultDto {
+            active: false,
+            target_user: target_user.unwrap_or_else(|| {
+                ssh_manager_core::ssh::elevated::DEFAULT_ELEVATION_USER.to_string()
+            }),
+            sftp_server_path: None,
+            failure: Some(crate::dto::ElevationFailureDto {
+                kind: crate::dto::ElevationFailureKind::Unsupported,
+                sudoers_line: None,
+                detail: None,
+            }),
+        });
+    }
+    let server = state.profile_store.get_server(&session.server_id).await?;
+    Ok(crate::elevated_sftp::enable(
+        &session,
+        &server.username,
+        server.sftp_server_path.as_deref(),
+        target_user.as_deref(),
+        &BrowserAccess(()),
+    )
+    .await)
+}
+
+/// Spec 0067, A5: schaltet den erhöhten Kanal aus. Das Frontend ruft das
+/// auch beim Öffnen des Browsers auf, damit ein evtl. noch offener Kanal nie
+/// unbemerkt aktiv bleibt.
+#[tauri::command]
+pub async fn sftp_elevation_disable(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<()> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    crate::elevated_sftp::disable(&session, &BrowserAccess(())).await;
+    Ok(())
+}
+
+/// Spec 0067, A5: Ziel-Nutzer des aktiven erhöhten Kanals, `None` = aus.
+#[tauri::command]
+pub async fn sftp_elevation_status(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<Option<String>> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    let guard = session.elevated_sftp.lock(&BrowserAccess(())).await;
+    Ok(guard.as_ref().map(|elevated| elevated.target_user.clone()))
 }
 
 fn file_name_of(path: &str) -> String {
@@ -3494,13 +3653,13 @@ pub async fn sftp_list(
     state: State<'_, AppState>,
     session_id: SessionId,
     path: String,
+    elevated: bool,
 ) -> CommandResult<Vec<RemoteEntryDto>> {
-    let session = session_sftp(&state, session_id).await?;
+    let channel = BrowserChannel::from_flag(elevated);
+    let session = browser_session(&state, session_id, channel).await?;
     let entries = {
-        let mut guard = session.sftp.lock().await;
-        let sftp = guard
-            .as_mut()
-            .expect("ensure_sftp_open lief erfolgreich durch");
+        let mut guard = lock_browser_sftp(&session, channel).await;
+        let sftp = guard.sftp()?;
         sftp.list_dir(&path).await?
     };
     let mut dtos: Vec<RemoteEntryDto> = entries.iter().map(RemoteEntryDto::from).collect();
@@ -3519,6 +3678,7 @@ pub async fn sftp_list(
 async fn download_one_file(
     app: &AppHandle,
     session: &Session,
+    channel: BrowserChannel,
     session_id: SessionId,
     remote_path: &str,
     local_path: std::path::PathBuf,
@@ -3537,10 +3697,8 @@ async fn download_one_file(
 
     let result: CommandResult<()> = async {
         let bytes = {
-            let mut guard = session.sftp.lock().await;
-            let sftp = guard
-                .as_mut()
-                .expect("ensure_sftp_open lief erfolgreich durch");
+            let mut guard = lock_browser_sftp(session, channel).await;
+            let sftp = guard.sftp()?;
             sftp.read_file(remote_path).await?
         };
         tokio::task::spawn_blocking(move || std::fs::write(&local_path, bytes))
@@ -3571,10 +3729,12 @@ pub async fn sftp_download(
     state: State<'_, AppState>,
     session_id: SessionId,
     remote_path: String,
+    elevated: bool,
 ) -> CommandResult<Option<crate::dto::DownloadResultDto>> {
+    let channel = BrowserChannel::from_flag(elevated);
     use tauri_plugin_dialog::DialogExt;
 
-    let session = session_sftp(&state, session_id).await?;
+    let session = browser_session(&state, session_id, channel).await?;
     let file_name = file_name_of(&remote_path);
 
     // Größe vorab für die Fortschrittsanzeige — ein fehlgeschlagenes
@@ -3582,10 +3742,8 @@ pub async fn sftp_download(
     // blockiert den eigentlichen Download nicht, die Anzeige zeigt dann
     // schlicht keine Gesamtgröße.
     let total_bytes = {
-        let mut guard = session.sftp.lock().await;
-        let sftp = guard
-            .as_mut()
-            .expect("ensure_sftp_open lief erfolgreich durch");
+        let mut guard = lock_browser_sftp(&session, channel).await;
+        let sftp = guard.sftp()?;
         sftp.stat(&remote_path).await.ok().map(|entry| entry.size)
     };
 
@@ -3604,6 +3762,7 @@ pub async fn sftp_download(
     download_one_file(
         &app,
         &session,
+        channel,
         session_id,
         &remote_path,
         local_path.clone(),
@@ -3639,6 +3798,7 @@ fn default_downloads_dir() -> CommandResult<std::path::PathBuf> {
 async fn download_recursive(
     app: &AppHandle,
     session: &Session,
+    channel: BrowserChannel,
     session_id: SessionId,
     remote_root: &str,
     local_root: &std::path::Path,
@@ -3648,10 +3808,8 @@ async fn download_recursive(
     let mut queue = vec![(remote_root.to_string(), local_root.to_path_buf())];
     while let Some((remote_dir, local_dir)) = queue.pop() {
         let entries = {
-            let mut guard = session.sftp.lock().await;
-            let sftp = guard
-                .as_mut()
-                .expect("ensure_sftp_open lief erfolgreich durch");
+            let mut guard = lock_browser_sftp(session, channel).await;
+            let sftp = guard.sftp()?;
             sftp.list_dir(&remote_dir).await?
         };
         for entry in entries {
@@ -3664,6 +3822,7 @@ async fn download_recursive(
                 download_one_file(
                     app,
                     session,
+                    channel,
                     session_id,
                     &entry.path,
                     local_entry_path,
@@ -3686,6 +3845,7 @@ async fn download_recursive(
 async fn download_entry_to(
     app: &AppHandle,
     session: &Session,
+    channel: BrowserChannel,
     session_id: SessionId,
     remote_path: &str,
     local_base_dir: &std::path::Path,
@@ -3697,19 +3857,18 @@ async fn download_entry_to(
     // `download_recursive` für jeden rekursiv entdeckten Eintrag.
     safe_local_segment(&root_name)?;
     let root_entry = {
-        let mut guard = session.sftp.lock().await;
-        let sftp = guard
-            .as_mut()
-            .expect("ensure_sftp_open lief erfolgreich durch");
+        let mut guard = lock_browser_sftp(session, channel).await;
+        let sftp = guard.sftp()?;
         sftp.stat(remote_path).await?
     };
     let local_path = local_base_dir.join(&root_name);
     let file_count = if root_entry.is_dir {
-        download_recursive(app, session, session_id, remote_path, &local_path).await?
+        download_recursive(app, session, channel, session_id, remote_path, &local_path).await?
     } else {
         download_one_file(
             app,
             session,
+            channel,
             session_id,
             remote_path,
             local_path.clone(),
@@ -3733,10 +3892,20 @@ pub async fn sftp_download_default(
     state: State<'_, AppState>,
     session_id: SessionId,
     remote_path: String,
+    elevated: bool,
 ) -> CommandResult<crate::dto::DownloadResultDto> {
-    let session = session_sftp(&state, session_id).await?;
+    let channel = BrowserChannel::from_flag(elevated);
+    let session = browser_session(&state, session_id, channel).await?;
     let downloads_dir = default_downloads_dir()?;
-    download_entry_to(&app, &session, session_id, &remote_path, &downloads_dir).await
+    download_entry_to(
+        &app,
+        &session,
+        channel,
+        session_id,
+        &remote_path,
+        &downloads_dir,
+    )
+    .await
 }
 
 /// Spec 0054, Teil 2: Ordner-Download an einen per Dialog gewählten
@@ -3749,10 +3918,12 @@ pub async fn sftp_download_dir(
     state: State<'_, AppState>,
     session_id: SessionId,
     remote_path: String,
+    elevated: bool,
 ) -> CommandResult<Option<crate::dto::DownloadResultDto>> {
+    let channel = BrowserChannel::from_flag(elevated);
     use tauri_plugin_dialog::DialogExt;
 
-    let session = session_sftp(&state, session_id).await?;
+    let session = browser_session(&state, session_id, channel).await?;
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
@@ -3766,9 +3937,16 @@ pub async fn sftp_download_dir(
     };
     let local_dir = local_dir.into_path()?;
 
-    download_entry_to(&app, &session, session_id, &remote_path, &local_dir)
-        .await
-        .map(Some)
+    download_entry_to(
+        &app,
+        &session,
+        channel,
+        session_id,
+        &remote_path,
+        &local_dir,
+    )
+    .await
+    .map(Some)
 }
 
 /// `local_path` ist bereits vom Frontend aufgelöst — entweder über den
@@ -3786,8 +3964,10 @@ pub async fn sftp_upload(
     session_id: SessionId,
     local_path: String,
     remote_path: String,
+    elevated: bool,
 ) -> CommandResult<()> {
-    let session = session_sftp(&state, session_id).await?;
+    let channel = BrowserChannel::from_flag(elevated);
+    let session = browser_session(&state, session_id, channel).await?;
     let file_name = file_name_of(&remote_path);
 
     let local_path_for_stat = local_path.clone();
@@ -3814,10 +3994,8 @@ pub async fn sftp_upload(
         let bytes = tokio::task::spawn_blocking(move || std::fs::read(local_path_for_read))
             .await
             .map_err(|e| format!("Hintergrund-Task für Upload fehlgeschlagen: {e}"))??;
-        let mut guard = session.sftp.lock().await;
-        let sftp = guard
-            .as_mut()
-            .expect("ensure_sftp_open lief erfolgreich durch");
+        let mut guard = lock_browser_sftp(&session, channel).await;
+        let sftp = guard.sftp()?;
         sftp.write_file(&remote_path, &bytes).await?;
         Ok(())
     }
@@ -3875,14 +4053,14 @@ pub async fn sftp_delete_preview(
     state: State<'_, AppState>,
     session_id: SessionId,
     path: String,
+    elevated: bool,
 ) -> CommandResult<crate::dto::DeletePreviewDto> {
+    let channel = BrowserChannel::from_flag(elevated);
     use crate::dto::DeletePreviewDto;
 
-    let session = session_sftp(&state, session_id).await?;
-    let mut guard = session.sftp.lock().await;
-    let sftp = guard
-        .as_mut()
-        .expect("ensure_sftp_open lief erfolgreich durch");
+    let session = browser_session(&state, session_id, channel).await?;
+    let mut guard = lock_browser_sftp(&session, channel).await;
+    let sftp = guard.sftp()?;
 
     // `lstat` statt `stat` — dieselbe Symlink-Begründung wie in
     // `delete_recursive` (dieselbe Vorschau soll die Zahlen zeigen, die
@@ -3916,12 +4094,12 @@ pub async fn sftp_delete(
     state: State<'_, AppState>,
     session_id: SessionId,
     path: String,
+    elevated: bool,
 ) -> CommandResult<()> {
-    let session = session_sftp(&state, session_id).await?;
-    let mut guard = session.sftp.lock().await;
-    let sftp = guard
-        .as_mut()
-        .expect("ensure_sftp_open lief erfolgreich durch");
+    let channel = BrowserChannel::from_flag(elevated);
+    let session = browser_session(&state, session_id, channel).await?;
+    let mut guard = lock_browser_sftp(&session, channel).await;
+    let sftp = guard.sftp()?;
     delete_recursive(sftp.as_mut(), &path).await?;
     Ok(())
 }
@@ -3981,12 +4159,12 @@ pub async fn sftp_exists(
     state: State<'_, AppState>,
     session_id: SessionId,
     path: String,
+    elevated: bool,
 ) -> CommandResult<bool> {
-    let session = session_sftp(&state, session_id).await?;
-    let mut guard = session.sftp.lock().await;
-    let sftp = guard
-        .as_mut()
-        .expect("ensure_sftp_open lief erfolgreich durch");
+    let channel = BrowserChannel::from_flag(elevated);
+    let session = browser_session(&state, session_id, channel).await?;
+    let mut guard = lock_browser_sftp(&session, channel).await;
+    let sftp = guard.sftp()?;
     Ok(sftp.stat(&path).await.is_ok())
 }
 
@@ -4002,12 +4180,12 @@ pub async fn sftp_stat(
     state: State<'_, AppState>,
     session_id: SessionId,
     path: String,
+    elevated: bool,
 ) -> CommandResult<RemoteEntryDto> {
-    let session = session_sftp(&state, session_id).await?;
-    let mut guard = session.sftp.lock().await;
-    let sftp = guard
-        .as_mut()
-        .expect("ensure_sftp_open lief erfolgreich durch");
+    let channel = BrowserChannel::from_flag(elevated);
+    let session = browser_session(&state, session_id, channel).await?;
+    let mut guard = lock_browser_sftp(&session, channel).await;
+    let sftp = guard.sftp()?;
     let entry = sftp.stat(&path).await?;
     Ok(RemoteEntryDto::from(&entry))
 }
@@ -4024,12 +4202,12 @@ pub async fn sftp_chmod(
     path: String,
     mode: u32,
     recursive: bool,
+    elevated: bool,
 ) -> CommandResult<u64> {
-    let session = session_sftp(&state, session_id).await?;
-    let mut guard = session.sftp.lock().await;
-    let sftp = guard
-        .as_mut()
-        .expect("ensure_sftp_open lief erfolgreich durch");
+    let channel = BrowserChannel::from_flag(elevated);
+    let session = browser_session(&state, session_id, channel).await?;
+    let mut guard = lock_browser_sftp(&session, channel).await;
+    let sftp = guard.sftp()?;
     Ok(chmod_recursive(sftp.as_mut(), &path, mode, recursive).await?)
 }
 
@@ -4096,12 +4274,12 @@ pub async fn sftp_rename(
     session_id: SessionId,
     from: String,
     to: String,
+    elevated: bool,
 ) -> CommandResult<()> {
-    let session = session_sftp(&state, session_id).await?;
-    let mut guard = session.sftp.lock().await;
-    let sftp = guard
-        .as_mut()
-        .expect("ensure_sftp_open lief erfolgreich durch");
+    let channel = BrowserChannel::from_flag(elevated);
+    let session = browser_session(&state, session_id, channel).await?;
+    let mut guard = lock_browser_sftp(&session, channel).await;
+    let sftp = guard.sftp()?;
     sftp.rename(&from, &to).await?;
     Ok(())
 }
@@ -4111,12 +4289,12 @@ pub async fn sftp_mkdir(
     state: State<'_, AppState>,
     session_id: SessionId,
     path: String,
+    elevated: bool,
 ) -> CommandResult<()> {
-    let session = session_sftp(&state, session_id).await?;
-    let mut guard = session.sftp.lock().await;
-    let sftp = guard
-        .as_mut()
-        .expect("ensure_sftp_open lief erfolgreich durch");
+    let channel = BrowserChannel::from_flag(elevated);
+    let session = browser_session(&state, session_id, channel).await?;
+    let mut guard = lock_browser_sftp(&session, channel).await;
+    let sftp = guard.sftp()?;
     sftp.create_dir(&path).await?;
     Ok(())
 }
@@ -4149,12 +4327,12 @@ pub async fn sftp_read_text(
     state: State<'_, AppState>,
     session_id: SessionId,
     path: String,
+    elevated: bool,
 ) -> CommandResult<String> {
-    let session = session_sftp(&state, session_id).await?;
-    let mut guard = session.sftp.lock().await;
-    let sftp = guard
-        .as_mut()
-        .expect("ensure_sftp_open lief erfolgreich durch");
+    let channel = BrowserChannel::from_flag(elevated);
+    let session = browser_session(&state, session_id, channel).await?;
+    let mut guard = lock_browser_sftp(&session, channel).await;
+    let sftp = guard.sftp()?;
 
     if let Ok(entry) = sftp.stat(&path).await {
         if entry.size > MAX_TEXT_PREVIEW_BYTES {
@@ -4244,8 +4422,10 @@ pub async fn sftp_open_for_editing(
     state: State<'_, AppState>,
     session_id: SessionId,
     remote_path: String,
+    elevated: bool,
 ) -> CommandResult<EditSessionDto> {
-    let session = session_sftp(&state, session_id).await?;
+    let channel = BrowserChannel::from_flag(elevated);
+    let session = browser_session(&state, session_id, channel).await?;
     let file_name = file_name_of(&remote_path);
     // Zip-Slip-Schutz (s. `safe_local_segment`-Doc-Kommentar) — auch hier
     // landet ein transitiv server-kontrollierter Name als lokales
@@ -4253,10 +4433,8 @@ pub async fn sftp_open_for_editing(
     safe_local_segment(&file_name)?;
 
     let (bytes, remote_modified) = {
-        let mut guard = session.sftp.lock().await;
-        let sftp = guard
-            .as_mut()
-            .expect("ensure_sftp_open lief erfolgreich durch");
+        let mut guard = lock_browser_sftp(&session, channel).await;
+        let sftp = guard.sftp()?;
         let entry = sftp.stat(&remote_path).await?;
         let bytes = sftp.read_file(&remote_path).await?;
         (bytes, entry.modified.map(|dt| dt.to_rfc3339()))
@@ -4376,6 +4554,7 @@ mod local_server_tests {
             jump_host: None,
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
             created_at: now,
             updated_at: now,
         }
@@ -4853,6 +5032,7 @@ mod send_chat_message_persistence_tests {
             status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),
             sftp: AsyncMutex::new(None::<Box<dyn SftpSession>>),
+            elevated_sftp: crate::elevated_sftp::ElevatedSftpSlot::new(),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
             chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
@@ -4904,6 +5084,7 @@ mod send_chat_message_persistence_tests {
                 jump_host: None,
                 post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
                 ai_injection_check_enabled: false,
+                sftp_server_path: None,
                 created_at: now,
                 updated_at: now,
             })
@@ -5397,6 +5578,73 @@ mod send_chat_message_persistence_tests {
 /// der Mock kennt keine echten Verzeichnisse (s. dessen Moduldoc-
 /// Kommentar), für Rekursion über einen echten Verzeichnisbaum reicht nur
 /// die lokale Implementierung.
+/// Spec 0067, A5: ist der erhöhte Kanal nicht (mehr) aktiv, scheitert eine
+/// als erhöht angeforderte Browser-Aktion — sie fällt nie still auf den
+/// normalen Kanal zurück (sonst liefe z. B. ein Upload aus dem Edit-Flow
+/// unbemerkt als normaler Nutzer).
+#[cfg(test)]
+mod browser_channel_tests {
+    use ssh_manager_core::ssh::{CommandOutput, SshTransport};
+
+    use super::*;
+
+    struct NoTransport;
+    #[async_trait::async_trait]
+    impl SshTransport for NoTransport {
+        async fn execute(&mut self, _command: &str) -> Result<CommandOutput, SshError> {
+            unreachable!()
+        }
+        async fn open_shell(
+            &mut self,
+            _size: PtySize,
+        ) -> Result<Box<dyn ssh_manager_core::ssh::InteractiveShell>, SshError> {
+            unreachable!()
+        }
+        async fn disconnect(&mut self) -> Result<(), SshError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_elevated_request_without_active_channel_fails_instead_of_falling_back() {
+        let session = crate::test_support::session_with_transport(Box::new(NoTransport));
+        *session.sftp.lock().await =
+            Some(Box::new(ssh_manager_core::ssh::mock::MockSftpSession::new()));
+
+        let mut guard = lock_browser_sftp(&session, BrowserChannel::Elevated).await;
+        let err = guard
+            .sftp()
+            .err()
+            .expect("ohne aktiven erhöhten Kanal muss es scheitern");
+        assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
+    }
+
+    #[tokio::test]
+    async fn test_elevated_request_uses_the_elevated_channel_not_the_normal_one() {
+        let session = crate::test_support::session_with_transport(Box::new(NoTransport));
+        let normal = ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "USER");
+        let elevated = ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "ROOT");
+        *session.sftp.lock().await = Some(Box::new(normal));
+        *session.elevated_sftp.lock(&BrowserAccess(())).await =
+            Some(crate::elevated_sftp::ElevatedSftp {
+                target_user: "root".to_string(),
+                sftp: Box::new(elevated),
+            });
+
+        let mut guard = lock_browser_sftp(&session, BrowserChannel::Elevated).await;
+        assert_eq!(
+            guard.sftp().unwrap().read_file("/x").await.unwrap(),
+            b"ROOT"
+        );
+        drop(guard);
+        let mut guard = lock_browser_sftp(&session, BrowserChannel::Normal).await;
+        assert_eq!(
+            guard.sftp().unwrap().read_file("/x").await.unwrap(),
+            b"USER"
+        );
+    }
+}
+
 #[cfg(test)]
 mod sftp_mutation_tests {
     use std::os::unix::fs::PermissionsExt;

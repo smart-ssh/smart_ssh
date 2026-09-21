@@ -623,3 +623,62 @@ async fn test_t43_execute_caps_output_during_streaming() {
         "CommandOutput.truncated muss gesetzt sein, wenn der Cap gegriffen hat"
     );
 }
+
+/// Spec 0067, Teil A: der erhöhte Modus betreibt SFTP über einen
+/// Exec-Kanal (`sudo -n <sftp-server>`) statt über das Subsystem — die
+/// Fixture bedient dafür ein eigenes Unterverzeichnis, also sieht der Test
+/// nur dann `nur-erhoeht.txt`, wenn wirklich der Exec-Kanal benutzt wurde.
+#[tokio::test]
+async fn test_sftp_via_exec_runs_sftp_over_the_exec_channel() {
+    let server = RunningTestServer::start().await;
+    std::fs::create_dir(sftp_local_path(&server, "/elevated")).unwrap();
+    std::fs::write(
+        sftp_local_path(&server, "/elevated/nur-erhoeht.txt"),
+        b"root",
+    )
+    .unwrap();
+    std::fs::write(sftp_local_path(&server, "/normal.txt"), b"user").unwrap();
+
+    let mut transport = connect_trusted(&server).await;
+    let mut elevated = transport
+        .open_sftp_via_exec("sudo -n /usr/lib/openssh/sftp-server")
+        .await
+        .expect("SFTP über den Exec-Kanal sollte starten");
+    let names: Vec<String> = elevated
+        .list_dir("/")
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|e| e.name)
+        .collect();
+    assert_eq!(names, vec!["nur-erhoeht.txt".to_string()]);
+
+    // Der normale Kanal bleibt daneben unverändert nutzbar.
+    let mut normal = transport.open_sftp().await.unwrap();
+    let normal_names: Vec<String> = normal
+        .list_dir("/")
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|e| e.name)
+        .collect();
+    assert!(normal_names.contains(&"normal.txt".to_string()));
+    assert!(!normal_names.contains(&"nur-erhoeht.txt".to_string()));
+}
+
+/// Spec 0067, A1/A3: verweigert sudo (Passwort verlangt), scheitert der
+/// Start sofort mit einem Fehler — er hängt nie.
+#[tokio::test]
+async fn test_sftp_via_exec_fails_fast_when_sudo_refuses() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(8),
+        transport.open_sftp_via_exec("sudo -n /denied/sftp-server"),
+    )
+    .await
+    .expect("ein verweigertes sudo muss nach der kurzen Handshake-Frist scheitern");
+
+    assert!(result.is_err());
+}

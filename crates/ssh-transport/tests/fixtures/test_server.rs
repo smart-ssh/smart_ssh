@@ -185,7 +185,35 @@ impl Handler for TestHandler {
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
-        let command = String::from_utf8_lossy(data);
+        let command = String::from_utf8_lossy(data).to_string();
+        // Spec 0067, Teil A: SFTP über einen Exec-Kanal (`sudo -n
+        // <sftp-server>`). Bedient ein eigenes Unterverzeichnis
+        // `elevated/`, damit ein Test sieht, dass wirklich DIESER Kanal
+        // benutzt wurde und nicht das normale Subsystem.
+        if command == "sudo -n /usr/lib/openssh/sftp-server" {
+            let Some(chan) = self.channels.remove(&channel) else {
+                session.channel_failure(channel)?;
+                return Ok(());
+            };
+            session.channel_success(channel)?;
+            let handler = SftpTestHandler {
+                root: self.sftp_root.join("elevated"),
+                open_files: HashMap::new(),
+                open_dirs: HashMap::new(),
+                next_handle: 0,
+            };
+            russh_sftp::server::run(chan.into_stream(), handler).await;
+            return Ok(());
+        }
+        // Spec 0067, Teil A: sudo verweigert ohne Passwort — Meldung nur auf
+        // stderr, dann Ende. Der Client darf dabei nie hängen.
+        if command == "sudo -n /denied/sftp-server" {
+            session.extended_data(channel, 1, b"sudo: a password is required\n".to_vec())?;
+            session.exit_status_request(channel, 1)?;
+            session.eof(channel)?;
+            session.close(channel)?;
+            return Ok(());
+        }
         // Spec 0027: simuliert ein nie von selbst endendes Kommando
         // (`journalctl -f`/`tail -f`) — sendet eine erste Zeile, danach
         // absichtlich weder `exit_status_request` noch `eof`/`close`. Der

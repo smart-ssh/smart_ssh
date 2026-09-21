@@ -35,6 +35,7 @@ function taggedServer(): ServerDto {
     isLocal: false,
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
+    sftpServerPath: null,
   };
 }
 

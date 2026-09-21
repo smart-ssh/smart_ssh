@@ -35,6 +35,9 @@ pub async fn create_server(
     credential_store: &(dyn CredentialStore + Send + Sync),
     input: ServerInput,
 ) -> CommandResult<ServerId> {
+    // Vor jedem Schlüsselbund-Zugriff prüfen — ein ungültiger Pfad soll
+    // keine Secrets anlegen, die danach wieder abgeräumt werden müssten.
+    let sftp_server_path = crate::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
     let id = ServerId::new();
 
     let auth = match resolve_auth_method(credential_store, id, input.auth, None) {
@@ -63,6 +66,7 @@ pub async fn create_server(
         jump_host: input.jump_host,
         post_ingest_policy: input.post_ingest_policy,
         ai_injection_check_enabled: input.ai_injection_check_enabled,
+        sftp_server_path,
         created_at: now,
         updated_at: now,
     };
@@ -155,6 +159,7 @@ mod tests {
             jump_host,
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
             created_at: now,
             updated_at: now,
         }
@@ -293,6 +298,7 @@ mod tests {
             sudo_password: Some(sudo_password.to_string()),
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
         }
     }
 
@@ -371,6 +377,7 @@ mod tests {
             sudo_password: None,
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
         }
     }
 
@@ -390,6 +397,7 @@ mod tests {
             sudo_password: None,
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
+            sftp_server_path: None,
         }
     }
 

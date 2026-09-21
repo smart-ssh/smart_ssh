@@ -18,6 +18,7 @@ mod confirmation;
 mod diagnostics;
 mod document_export;
 mod dto;
+mod elevated_sftp;
 mod ephemeral_credentials;
 mod error;
 mod events;
@@ -512,6 +513,9 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_exists,
             commands::sftp_stat,
             commands::sftp_chmod,
+            commands::sftp_elevation_enable,
+            commands::sftp_elevation_disable,
+            commands::sftp_elevation_status,
             commands::read_local_text_preview,
             commands::sftp_open_for_editing,
             commands::local_file_mtime,

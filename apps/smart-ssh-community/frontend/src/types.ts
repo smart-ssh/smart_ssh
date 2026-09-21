@@ -38,6 +38,9 @@ export interface ServerDto {
    * Zweitmeinungs-Provider-Konfiguration vorhanden ist (s.
    * `loadRiskClassifierSettings` in `riskSettings.ts`). */
   aiInjectionCheckEnabled: boolean;
+  /** Spec 0067, A2: Override für den `sftp-server`-Pfad im erhöhten
+   * Dateibrowser; `null` = automatisch erkennen. */
+  sftpServerPath: string | null;
 }
 
 export interface AiProviderConfigDto {
@@ -418,6 +421,8 @@ export interface ServerInput {
   sudoPassword: string | null;
   postIngestPolicy: PostIngestPolicy;
   aiInjectionCheckEnabled: boolean;
+  /** Spec 0067, A2: leer/`null` = automatisch. */
+  sftpServerPath: string | null;
 }
 
 export type AuthMethodInput =
@@ -606,6 +611,32 @@ export interface RemoteEntryDto {
 }
 
 /** Spec 0054, Teil 3: Vorschau vor dem Löschen eines Ordners. */
+/** Spec 0067, A3: `crate::dto::ElevationFailureKind`. */
+export type ElevationFailureKind =
+  | "unsupported"
+  | "invalidUser"
+  | "invalidPath"
+  | "sftpServerNotFound"
+  | "passwordRequired"
+  | "notAllowed"
+  | "requireTty"
+  | "sudoMissing"
+  | "checkFailed"
+  | "startFailed";
+
+/** Spec 0067, A3: Ergebnis von `sftp_elevation_enable`. */
+export interface ElevationResultDto {
+  active: boolean;
+  targetUser: string;
+  sftpServerPath: string | null;
+  failure: {
+    kind: ElevationFailureKind;
+    /** Zugeschnittene sudoers-Zeile zum Kopieren, falls eine Regel fehlt. */
+    sudoersLine: string | null;
+    detail: string | null;
+  } | null;
+}
+
 /** Spec 0067, Teil B: `crate::dto::DownloadResultDto`. */
 export interface DownloadResultDto {
   localPath: string;

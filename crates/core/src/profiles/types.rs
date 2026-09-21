@@ -71,6 +71,9 @@ pub struct Server {
     /// app-weite Einstellung in `settings.json`, nicht hier). Orthogonal zu
     /// `post_ingest_policy`, mit jeder Stufe kombinierbar.
     pub ai_injection_check_enabled: bool,
+    /// Spec 0067, A2: Override für den Pfad von `sftp-server` im erhöhten
+    /// Dateibrowser-Modus. `None` = automatisch erkennen.
+    pub sftp_server_path: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

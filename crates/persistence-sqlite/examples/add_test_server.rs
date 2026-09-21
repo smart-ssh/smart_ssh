@@ -51,6 +51,7 @@ async fn main() {
         jump_host: None,
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
+        sftp_server_path: None,
         created_at: now,
         updated_at: now,
     };

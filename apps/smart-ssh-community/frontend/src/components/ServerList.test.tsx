@@ -27,6 +27,7 @@ function localServer(): ServerDto {
     isLocal: true,
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
+    sftpServerPath: null,
   };
 }
 
@@ -46,6 +47,7 @@ function remoteServer(): ServerDto {
     isLocal: false,
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
+    sftpServerPath: null,
   };
 }
 
