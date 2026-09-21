@@ -236,8 +236,55 @@ fn first_version_secret_read_reason(command: &str) -> Option<&'static str> {
 /// (`python -c`, `bash -c`, `$(…)`) setzt die Filter-Engine ohnehin auf
 /// Bestätigung; Redaction bleibt die weitere Schicht.
 fn extended_secret_read_reason(command: &str) -> Option<&'static str> {
+    extended_secret_read_reason_in(command, &[], 0, &std::cell::Cell::new(0))
+}
+
+/// Obergrenze für rekursive Prüfungen von Code-Strings je Kommando — darüber
+/// wird eskaliert statt weiter zu zerlegen (Laufzeitschutz, fail-safe).
+const MAX_NESTED_CHECKS: usize = 32;
+
+/// Programme, die ihre Argumente (auch gequotete) an eine weitere Shell
+/// geben — dort expandieren Platzhalter doch (dritte Review-Runde:
+/// `watch 'cat /etc/sha*'`, `ssh h cat '/etc/sha*'`).
+const RESHELL_COMMANDS: &[&str] = &[
+    "sh",
+    "bash",
+    "zsh",
+    "dash",
+    "ksh",
+    "fish",
+    "eval",
+    "watch",
+    "ssh",
+    "su",
+    "runuser",
+    "script",
+    "tmux",
+    "screen",
+    "kubectl",
+    "docker",
+    "podman",
+    "flock",
+    "parallel",
+    "nsenter",
+    "chroot",
+    "systemd-run",
+];
+
+/// Wie [`extended_secret_read_reason`], mit geerbten `cd`-Präfixen und
+/// Rekursionstiefe für Code-Strings einer weiteren Shell.
+fn extended_secret_read_reason_in(
+    command: &str,
+    inherited_prefixes: &[String],
+    depth: usize,
+    budget: &std::cell::Cell<usize>,
+) -> Option<&'static str> {
     if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
         return Some("Kommando zu lang für eine Prüfung auf Secret-Pfade");
+    }
+    budget.set(budget.get() + 1);
+    if depth > 3 || budget.get() > MAX_NESTED_CHECKS {
+        return Some("Zu tief verschachtelte Shell-Aufrufe für eine Prüfung auf Secret-Pfade");
     }
 
     let mut segments = segment_command(command);
@@ -248,14 +295,45 @@ fn extended_secret_read_reason(command: &str) -> Option<&'static str> {
         .collect();
     segments.extend(resolved);
 
-    let cd_prefixes = cd_prefixes(command);
+    let cd_prefixes = cd_prefixes(command).map(|mut prefixes| {
+        prefixes.extend(inherited_prefixes.iter().cloned());
+        prefixes.sort();
+        prefixes.dedup();
+        prefixes
+    });
 
     for segment in &segments {
         let lower = segment.to_lowercase();
         let stripped = strip_quotes(&lower);
         let concrete =
             secret_path_match(&normalize_path(&stripped)).or_else(|| secret_path_match(&stripped));
-        let words = shell_words(&lower);
+        let mut words = shell_words(&lower);
+        // In einer weiteren Shell expandieren auch gequotete Platzhalter, und
+        // ein mehrwortiger Code-String ist selbst ein Kommando.
+        if words.iter().any(|word| {
+            RESHELL_COMMANDS.contains(&word.text.rsplit('/').next().unwrap_or(&word.text))
+        }) {
+            for word in &mut words {
+                if word.text.contains(['*', '?', '[', '{']) {
+                    word.unquoted_glob = true;
+                }
+            }
+            if let Some(reason) = words
+                .iter()
+                .filter(|word| word.text.contains(char::is_whitespace))
+                .find_map(|word| {
+                    extended_secret_read_reason_in(
+                        &word.text,
+                        cd_prefixes.as_deref().unwrap_or(&[]),
+                        depth + 1,
+                        budget,
+                    )
+                    .or_else(|| first_version_secret_read_reason(&word.text))
+                })
+            {
+                return Some(reason);
+            }
+        }
 
         let globbed = cd_prefixes.as_deref().and_then(|prefixes| {
             words.iter().find_map(|word| {
@@ -510,9 +588,19 @@ fn is_bulk_read(words: &[ShellWord], reader: usize) -> bool {
     if words.iter().any(|word| {
         matches!(
             word.text.rsplit('/').next(),
-            Some("xargs" | "-exec" | "-execdir" | "-ok" | "-okdir")
+            Some("xargs" | "-exec" | "-execdir" | "-ok" | "-okdir" | "parallel")
         )
     }) {
+        return true;
+    }
+    // `fd … -x/-X/--exec cat`
+    if words
+        .iter()
+        .any(|word| matches!(word.text.rsplit('/').next(), Some("fd" | "fdfind")))
+        && words
+            .iter()
+            .any(|word| matches!(word.text.as_str(), "-x" | "-X" | "--exec" | "--exec-batch"))
+    {
         return true;
     }
     let text = &words[reader].text;
@@ -531,10 +619,14 @@ fn is_bulk_read(words: &[ShellWord], reader: usize) -> bool {
                 token.starts_with("--rec")
                     || token.starts_with("--der")
                     || token.starts_with("--dir")
-                    || (token == "-d"
-                        && words
-                            .get(reader + 2 + offset)
-                            .is_some_and(|next| next.text.starts_with("rec")))
+                    // `-d recurse`, auch kombiniert (`-hd recurse`, `-drecurse`)
+                    || (token.starts_with('-')
+                        && !token.starts_with("--")
+                        && (token.contains("drec")
+                            || (token.ends_with('d')
+                                && words
+                                    .get(reader + 2 + offset)
+                                    .is_some_and(|next| next.text.starts_with("rec")))))
                     || (token.starts_with('-')
                         && !token.starts_with("--")
                         && token[1..].chars().all(|c| c.is_ascii_alphanumeric())
@@ -669,10 +761,24 @@ fn cd_prefixes(command: &str) -> Option<Vec<String>> {
             }
             Some(word) if word.text == "~" => prefixes.push("~/".to_string()),
             Some(word) if word.text == "-" => {}
-            Some(word) => prefixes.push(format!(
-                "{}/",
-                normalize_path(word.text.trim_end_matches('/'))
-            )),
+            Some(word) => {
+                let target = normalize_path(word.text.trim_end_matches('/'));
+                // Mehrstufig: `cd /etc/ssl && cd private` → auch
+                // `/etc/ssl/private/` (dritte Review-Runde).
+                if !target.starts_with(['/', '~']) {
+                    let chained: Vec<String> = prefixes
+                        .iter()
+                        .map(|prefix| format!("{prefix}{target}/"))
+                        .collect();
+                    prefixes.extend(chained);
+                }
+                prefixes.push(format!("{target}/"));
+            }
+        }
+        prefixes.sort();
+        prefixes.dedup();
+        if prefixes.len() > 64 {
+            return None;
         }
     }
     Some(prefixes)

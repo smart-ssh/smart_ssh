@@ -38,7 +38,7 @@ const READ_COMMAND_PREFIX: &str = r"^(?:cat|less|head|tail|sftp-read|sftp-write)
 /// um `curl`/`wget`/`scp`/`rsync` — die bringen einen Secret-Pfad zwar
 /// nicht in den Chat, aber vom Server weg (strenger ist die sichere
 /// Richtung).
-pub(super) const SECRET_READ_COMMANDS: &str = r"(?:cat|less|more|head|tail|bat|batcat|tac|nl|grep|egrep|fgrep|zgrep|rgrep|ugrep|rg|ag|ack|sed|awk|gawk|mawk|nawk|xxd|od|hexdump|strings|base64|base32|openssl|jq|yq|sort|uniq|cut|paste|diff|cmp|comm|column|rev|fold|iconv|tr|pr|fmt|expand|look|dd|tee|zcat|bzcat|xzcat|zless|zmore|gzip|bzip2|xz|view|vim|vi|nano|ex|ed|emacs|curl|wget|scp|rsync|sftp-read)";
+pub(super) const SECRET_READ_COMMANDS: &str = r"(?:cat|less|more|head|tail|bat|batcat|tac|nl|grep|egrep|fgrep|zgrep|rgrep|ugrep|rg|ag|ack|sed|awk|gawk|mawk|nawk|xxd|od|hexdump|strings|base64|base32|openssl|jq|yq|sort|uniq|cut|paste|diff|cmp|comm|column|rev|fold|iconv|tr|pr|fmt|expand|look|dd|tee|zcat|bzcat|xzcat|zless|zmore|gzip|bzip2|xz|view|vim|vi|nano|ex|ed|emacs|curl|wget|scp|rsync|tar|getent|perl|python|python3|ruby|php|node|sftp-read)";
 
 /// Spec 0068, Teil 2 (Review-Fund): Dateinamen, gegen die ein Platzhalter
 /// im letzten Pfadteil geprüft wird (`cat /etc/sha*` trifft `shadow`).
@@ -152,6 +152,19 @@ pub(super) fn secret_path_patterns() -> &'static [(regex::Regex, &'static str)] 
             (r"\.npmrc\b", "Liest npm-Zugangsdaten (~/.npmrc)"),
             (r"\.pypirc\b", "Liest PyPI-Zugangsdaten (~/.pypirc)"),
             (r"\.vault-token\b", "Liest ein Vault-Token"),
+            (
+                r"/proc/[^/\s]+/environ",
+                "Liest die Umgebungsvariablen eines Prozesses",
+            ),
+            (
+                r"\.(?:bash|zsh|sh|mysql|psql)_history\b",
+                "Liest eine Shell-/Client-Historie (kann Passwörter enthalten)",
+            ),
+            (
+                r"/etc/kubernetes/[a-z0-9_-]+\.conf",
+                "Liest eine Kubernetes-Admin-Konfiguration",
+            ),
+            (r"\bwp-config\.php\b", "Liest WordPress-Zugangsdaten (wp-config.php)"),
             (
                 r"\.docker/config\.json",
                 "Liest Docker-Registry-Zugangsdaten",

@@ -643,3 +643,80 @@ fn test_quoted_globs_and_awk_fields_are_not_escalated() {
         );
     }
 }
+
+/// Dritte Review-Runde (Spec 0068, ERHÖHT): verschachtelte Shells
+/// expandieren gequotete Platzhalter doch; weitere Lese- und Rekursionswege.
+#[test]
+fn test_third_review_round_bypasses_are_detected() {
+    for command in [
+        "watch -n1 'cat /etc/sha*'",
+        "ssh localhost cat '/etc/sha*'",
+        "su -c 'cat /etc/sha*'",
+        "eval 'cat /etc/sha*'",
+        "kubectl exec p -- sh -c 'cat /etc/sha*'",
+        "flock /tmp/l sh -c 'cat /etc/sh*'",
+        "sh -c 'cd ~/.ssh && cat deploy'",
+        "cd /etc; watch 'cat shadow'",
+        "grep -hd recurse . /etc",
+        "grep -id recurse password /etc",
+        "grep -Hd recurse x ~",
+        "cd /etc/ssl && cd private && cat mysite",
+        "cd /etc && cd mysql && cat debian.cnf",
+        "tar -cO /etc/shadow",
+        "getent shadow",
+        "perl -ne print /etc/shadow",
+        "find ~/.ssh -type f | parallel cat",
+        "fd . ~/.ssh -x cat",
+        "cat /proc/1/environ",
+        "cat ~/.bash_history",
+        "cat /etc/kubernetes/admin.conf",
+        "cat /var/www/html/wp-config.php",
+    ] {
+        assert!(
+            secret_path_read_reason(command).is_some(),
+            "nicht erkannt: {command}"
+        );
+    }
+}
+
+#[test]
+fn test_third_round_checks_leave_ordinary_commands_alone() {
+    for command in [
+        "watch -n1 'df -h'",
+        "ssh backup ls -la /srv",
+        "docker exec app cat /app/README.md",
+        "python3 manage.py migrate",
+        "tar czf /backup/www.tgz /var/www",
+        "grep -h error /var/log/syslog",
+        "cd /var/www && cd html && cat index.html",
+    ] {
+        assert_eq!(
+            secret_path_read_reason(command),
+            None,
+            "fälschlich eskaliert: {command}"
+        );
+    }
+}
+
+/// Lange, verschachtelte Eingaben an der Längengrenze bleiben schnell
+/// (Rekursion in Code-Strings ist tiefenbegrenzt, `cd`-Präfixe gedeckelt).
+#[test]
+fn test_secret_check_stays_fast_on_adversarial_long_input() {
+    let inputs = [
+        format!("watch '{}'", "sh -c 'cd a; cat b* ".repeat(180)),
+        format!("{} cat x*", "cd a; ".repeat(700)),
+        format!("cat {}", "{a,b}/".repeat(600)),
+        "cat ".to_string() + &"a/../".repeat(800),
+    ];
+    for input in inputs {
+        let input: String = input.chars().take(4096).collect();
+        let started = std::time::Instant::now();
+        let _ = secret_path_read_reason(&input);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(3),
+            "zu langsam ({:?}) für Eingabe der Länge {}",
+            started.elapsed(),
+            input.len()
+        );
+    }
+}
