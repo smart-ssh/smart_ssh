@@ -248,6 +248,18 @@ fn built_in_patterns() -> Vec<PatternRule> {
             r"\bxai-[A-Za-z0-9]{40,}\b",
             "eingebautes xAI-Key-Muster ist gültig",
         ),
+        // Die Header-Muster der ersten Fassung (Commit `37c55a1`) zusätzlich
+        // an ihrer ursprünglichen Stelle (dritte Review-Runde): so sehen sie
+        // den Originaltext vor dem Credential-Zeilen-Muster, wie dort. Die
+        // erweiterten Fassungen am Listenende decken den Rest ab.
+        simple(
+            r#"(?i)\bx-api-key['"]?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s'"]+)"#,
+            "eingebautes x-api-key-Header-Muster ist gültig",
+        ),
+        simple(
+            r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?basic\s+[A-Za-z0-9+/._~-]+=*"#,
+            "eingebautes Authorization-Basic-Muster ist gültig",
+        ),
         // DB-Connection-Strings (Diagnose-Folge-Fix, 2026-09): das Passwort
         // steht zwischen `:` und `@`, keines der Schlüsselwort-Muster
         // (`password=`/`token=`/...) greift auf diese Syntax. Deckt die in
@@ -506,7 +518,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // eigene Zeile. Nur in dieser Struktur, damit Fließtext wie
         // "password is required" unberührt bleibt.
         simple(
-            r"(?i)\b(?:machine\s+\S+|default)(?:\s+login\s+\S+)?\s+password\s+[^\s:=]\S*",
+            r"(?i)\b(?:machine\s+\S+(?:\s+login\s+\S+)?|default\s+login\s+\S+)\s+password\s+[^\s:=]\S*",
             "eingebautes netrc-Muster ist gültig",
         ),
         simple(
@@ -563,5 +575,26 @@ fn redact_bytes(data: &[u8], patterns: &[PatternRule]) -> Vec<u8> {
             text = rule.regex.replace_all(&text, rule.replacement).into_owned();
         }
     }
-    text.into_bytes()
+    absorb_fragments_next_to_placeholders(&text).into_bytes()
+}
+
+/// Spec 0068 (dritte Review-Runde, ERHÖHT): hat ein Muster nur einen Teil
+/// eines längeren Tokens ersetzt (z. B. ein zufälliges `AKIA…` mitten in
+/// einem Base64-Wert, einen Provider-Key mitten in einem Bearer-Token),
+/// nimmt jedes spätere Muster, dessen Wert-Klasse kein `[` kennt, den Rest
+/// nicht mehr mit — er bliebe im Klartext. Deshalb zum Schluss: jeder
+/// Platzhalter schluckt die direkt angrenzenden Token-Zeichen
+/// (Base64/URL-sicher). Es entsteht dadurch nie eine neue Redaction ohne
+/// vorhandenen Platzhalter; `:`/`@`/Leerzeichen/Quotes begrenzen, so
+/// bleiben z. B. Nutzer und Host einer URL lesbar.
+fn absorb_fragments_next_to_placeholders(text: &str) -> String {
+    static ABSORB: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let absorb = ABSORB.get_or_init(|| {
+        Regex::new(r"[A-Za-z0-9+/=._~-]*\[REDACTED\][A-Za-z0-9+/=._~-]*")
+            .expect("eingebautes Platzhalter-Muster ist gültig")
+    });
+    if !text.contains(REDACTED_PLACEHOLDER) {
+        return text.to_string();
+    }
+    absorb.replace_all(text, REDACTED_PLACEHOLDER).into_owned()
 }

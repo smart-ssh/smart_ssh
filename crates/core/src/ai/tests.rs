@@ -1058,3 +1058,37 @@ fn test_pgpass_and_netrc_patterns_leave_addresses_and_prose_alone() {
         );
     }
 }
+
+/// Dritte Review-Runde (Spec 0068, ERHÖHT): ein Teiltreffer mitten in einem
+/// längeren Wert darf keinen Rest im Klartext lassen, und die Header-Muster
+/// der ersten Fassung wirken weiter an ihrer ursprünglichen Stelle.
+#[test]
+fn test_partial_matches_inside_values_leave_no_plaintext_tail() {
+    assert_fully_redacted(
+        "Authorization: Basic abcAKIAABCDEFGHIJKLMNOPxyzSECRETTAIL+/==",
+        "xyzSECRETTAIL",
+    );
+    assert_fully_redacted(
+        "Authorization: Basic sk_live_ABCDEFGHIJKLMNOPQRSTUV_SECRETTAIL",
+        "_SECRETTAIL",
+    );
+    assert_fully_redacted(
+        concat!(
+            "Authorization: Bearer xyzsk-proj-ABCD",
+            "EFGHIJKLMNOPQRSTUVWX.SECRETTAIL"
+        ),
+        "SECRETTAIL",
+    );
+    assert_fully_redacted(r#"x-api-key: "SECRETHEAD token=abc""#, "SECRETHEAD");
+}
+
+#[test]
+fn test_netrc_default_branch_needs_login() {
+    let redactor = DefaultOutputRedactor::new();
+    let prose = "The default password is admin123 until changed";
+    assert_eq!(redactor.redact_text(prose), prose);
+    assert_fully_redacted(
+        "default login anonymous password s3cr3tNetrcPw",
+        "s3cr3tNetrcPw",
+    );
+}
