@@ -9,12 +9,15 @@
 //! `content_block_delta` liefert `delta.type == "text_delta"` (Feld
 //! `text`) bzw. `"input_json_delta"` (Feld `partial_json`, akkumulierend),
 //! `content_block_stop` schließt den Block ab, `message_delta` liefert
-//! `delta.stop_reason` (Spec 0063, Teil 1 — nur geloggt, keine Verhaltens-
-//! Verzweigung danach), `message_stop` beendet den Stream.
+//! `delta.stop_reason` (Spec 0063, Teil 1: geloggt; seit Spec 0065, Teil 3
+//! zusätzlich sicherheitskritisch ausgewertet — ein Tool-Call aus einer
+//! Antwort mit `stop_reason: max_tokens` wird nie freigegeben, s.
+//! `AnthropicStreamState::finalize`), `message_stop` beendet den Stream.
 //!
 //! Die Anthropic-API verlangt zwingend ein `max_tokens`-Feld, das die Spec
-//! nicht erwähnt und das dieser Provider aktuell nicht konfigurierbar
-//! macht — s. [`DEFAULT_MAX_TOKENS`].
+//! nicht erwähnt — modellabhängig bestimmt, s.
+//! [`anthropic_model_max_output_tokens`] (Spec 0065, Teil 1) und
+//! `SessionContext::max_tokens_hint` für den Nebenaufruf-Override.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::pin::Pin;
@@ -41,18 +44,42 @@ use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_T
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 
-/// s. Modul-Dokumentation — von der Spec nicht vorgegeben, aber von der
-/// Anthropic-API zwingend verlangt.
-const DEFAULT_MAX_TOKENS: u32 = 4096;
+/// Konservativer Fallback für ein unbekanntes/neues Claude-Modell (Spec
+/// 0065, Teil 1) — analog zu `compaction::DEFAULT_CONTEXT_WINDOW_TOKENS`s
+/// Begründung: lieber ein zu kleiner Default (schneidet im Zweifel eher ab,
+/// der Retry fängt das ab) als ein zu großzügig angenommenes Output-Maximum,
+/// das die Anthropic-API mit einem 400 ablehnt.
+const ANTHROPIC_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS: u32 = 8192;
 
-/// Obergrenze für den einmaligen `max_tokens`-Retry bei einem abgeschnittenen
-/// Tool-Call (Spec 0065, Teil 3) — bewusst konservativ (deckt eine
-/// Verdopplung des heutigen [`DEFAULT_MAX_TOKENS`] exakt ab), NICHT die
-/// modellabhängige Lookup-Tabelle aus Spec 0065 Teil 1 (Commit 2 dieser
-/// Spec — dort löst eine echte Modell-Maximum-Tabelle diese Konstante ab).
-/// Reihenfolge laut Spec: erst der Sicherheits-Fix (dieser Commit), danach
-/// der bessere Default.
-const ANTHROPIC_RETRY_MAX_TOKENS_CAP: u32 = 8192;
+/// Modellabhängiges Output-Maximum für den Haupt-Chat (Spec 0065, Teil 1) —
+/// verifiziert gegen platform.claude.com/docs (Stand dieser Implementierung,
+/// 2026-09), NICHT aus dem Gedächtnis: aktuelle Generation (Claude Opus 5 /
+/// Sonnet 5 / Fable 5.1 — Modell-IDs `claude-opus-5`/`claude-sonnet-5`/
+/// `claude-fable-5-1`) hat durchweg 128K Max-Output; die vorherige
+/// 4.x-Generation (u. a. `claude-sonnet-4-5`, `claude-haiku-4-5`, alle
+/// `claude-opus-4-*`) durchweg 64K. Namens-Substring-Match statt exakter
+/// Modell-IDs (wie schon `compaction::model_context_window_tokens`) — ein
+/// zukünftiges Snapshot-Datum am Ende (`claude-haiku-4-5-20251001`) bleibt
+/// so erkennbar. Wichtig: `"opus-5"`/`"sonnet-5"` matchen NICHT versehentlich
+/// die 4.x-Namen (`"opus-4-5"`/`"sonnet-4-5"`) — dort steht vor der
+/// abschließenden `-5` noch ein `-4`, der Substring `"opus-5"` kommt darin
+/// nicht contiguously vor.
+fn anthropic_model_max_output_tokens(model: &str) -> u32 {
+    let model = model.to_lowercase();
+    if model.contains("opus-5")
+        || model.contains("sonnet-5")
+        || model.contains("fable-5")
+        || model.contains("mythos-5")
+    {
+        128_000
+    } else if model.contains("claude-") || model.contains("anthropic") {
+        // Bekannte ältere Generation (Sonnet/Opus/Haiku 4.x) — durchweg 64K,
+        // ebenfalls verifiziert (s. Funktionsdoc).
+        64_000
+    } else {
+        ANTHROPIC_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS
+    }
+}
 
 /// Internes Zwischenergebnis der SSE-Verarbeitung, NICHT nach außen sichtbar
 /// (`AiProvider::send` liefert weiterhin nur `AiEvent`) — Spec 0065, Teil 3:
@@ -145,11 +172,21 @@ impl AnthropicProvider {
             "cache_control": {"type": "ephemeral"},
         }]);
 
+        // Spec 0065, Teil 1: `max_tokens_hint` (gesetzt von Nebenaufrufen
+        // wie Zweitmeinung/Auto-Titel/Notiz/Summary, s. `app_shell::
+        // orchestration::SIDE_CALL_MAX_TOKENS`) hat Vorrang vor dem
+        // modellabhängigen Haupt-Chat-Default — genau das unterscheidet
+        // einen Nebenaufruf vom Haupt-Chat, s. `SessionContext::
+        // max_tokens_hint`-Doc-Kommentar (core).
+        let max_tokens = context
+            .max_tokens_hint
+            .unwrap_or_else(|| anthropic_model_max_output_tokens(&self.model));
+
         let mut body = json!({
             "model": self.model,
             "system": system_value,
             "messages": messages,
-            "max_tokens": DEFAULT_MAX_TOKENS,
+            "max_tokens": max_tokens,
             "stream": true,
         });
 
@@ -439,6 +476,9 @@ struct RetryState {
     budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
     body: Value,
     max_tokens: u32,
+    /// Modell-Maximum (Spec 0065, Teil 1) — der Retry-Deckel, s.
+    /// `AnthropicProvider::send`-Kommentar.
+    model_max_tokens: u32,
     /// `true`, sobald der einmalige `max_tokens`-Retry bereits verbraucht
     /// wurde — verhindert eine Retry-Schleife (Spec 0065, Invariante
     /// "Retry ist einmalig").
@@ -469,9 +509,19 @@ impl AiProvider for AnthropicProvider {
         let native_tool_calling = self.supports_native_tool_calling;
         let budget = self.budget.clone();
         let body = self.build_request_body(&context);
+        // Spec 0065, Teil 3: Startwert für die Verdopplung beim Retry —
+        // `.unwrap_or(...)` greift praktisch nie (der Wert kommt direkt aus
+        // `build_request_body` oben, das `max_tokens` immer als Zahl
+        // setzt), bleibt aber defensiv statt `.expect(...)`.
         let max_tokens = body["max_tokens"]
             .as_u64()
-            .unwrap_or(u64::from(DEFAULT_MAX_TOKENS)) as u32;
+            .unwrap_or(u64::from(anthropic_model_max_output_tokens(&self.model)))
+            as u32;
+        // Spec 0065, Teil 1+3: die Retry-Obergrenze ist jetzt das ECHTE
+        // Modell-Maximum (ersetzt den Platzhalter `ANTHROPIC_RETRY_MAX_
+        // TOKENS_CAP` aus Commit 1 dieser Spec) — ein Retry darf nie über
+        // das an sich schon gültige Maximum hinaus verdoppeln.
+        let model_max_tokens = anthropic_model_max_output_tokens(&self.model);
 
         let state = RetryState {
             client,
@@ -482,6 +532,7 @@ impl AiProvider for AnthropicProvider {
             budget,
             body,
             max_tokens,
+            model_max_tokens,
             retried: false,
             inner: None,
             finished: false,
@@ -538,7 +589,7 @@ impl AiProvider for AnthropicProvider {
                         state.max_tokens = state
                             .max_tokens
                             .saturating_mul(2)
-                            .min(ANTHROPIC_RETRY_MAX_TOKENS_CAP);
+                            .min(state.model_max_tokens);
                         state.body["max_tokens"] = json!(state.max_tokens);
                         state.inner = None;
                         // Schleife läuft weiter, verbindet oben neu.
@@ -919,6 +970,7 @@ mod tests {
                 content: MessageContent::Text("hi".to_string()),
             }],
             available_actions: actions,
+            max_tokens_hint: None,
         }
     }
 
@@ -1327,5 +1379,85 @@ mod tests {
             "der vorher vollständige erste Tool-Call darf NICHT einzeln \
              freigegeben werden, wenn der zweite abgeschnitten ist"
         );
+    }
+
+    /// Spec 0065, Teil 1: der eigentliche Fix aus dem gemeldeten Vorfall —
+    /// `max_tokens` ist jetzt modellabhängig statt fest ~4000.
+    #[test]
+    fn test_build_request_body_uses_model_aware_max_tokens_for_current_generation() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "claude-sonnet-5",
+            "key",
+            true,
+            test_budget(),
+        );
+        let context = context_with_actions("Hi.", default_action_schemas());
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(body["max_tokens"], 128_000);
+    }
+
+    /// Gegenprobe: ein Modell der vorherigen (4.x-)Generation bleibt bei
+    /// dessen kleinerem, ebenfalls verifiziertem Output-Maximum.
+    #[test]
+    fn test_build_request_body_uses_smaller_max_tokens_for_legacy_generation() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "claude-sonnet-4-5-20250929",
+            "key",
+            true,
+            test_budget(),
+        );
+        let context = context_with_actions("Hi.", default_action_schemas());
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(body["max_tokens"], 64_000);
+    }
+
+    /// Ein unbekannter Modellname fällt auf den konservativen Fallback
+    /// zurück statt versehentlich 128K anzunehmen (Spec 0065, Teil 1: "kein
+    /// 400 wegen 'über dem Maximum'").
+    #[test]
+    fn test_build_request_body_falls_back_to_conservative_default_for_unknown_model() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "some-future-model-variant",
+            "key",
+            true,
+            test_budget(),
+        );
+        let context = context_with_actions("Hi.", default_action_schemas());
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(
+            body["max_tokens"],
+            ANTHROPIC_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS
+        );
+    }
+
+    /// Spec 0065, Teil 1: ein Nebenaufruf (`max_tokens_hint` gesetzt, s.
+    /// `app_shell::orchestration::SIDE_CALL_MAX_TOKENS`) überschreibt den
+    /// modellabhängigen Default, obwohl dasselbe (potenziell 128K-fähige)
+    /// Modell konfiguriert ist — sonst würde z. B. die
+    /// Verlaufs-Zusammenfassung versehentlich mit hochgezogen.
+    #[test]
+    fn test_build_request_body_honors_max_tokens_hint_over_model_default() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "claude-sonnet-5",
+            "key",
+            true,
+            test_budget(),
+        );
+        let mut context = context_with_actions("Hi.", default_action_schemas());
+        context.max_tokens_hint = Some(4096);
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(body["max_tokens"], 4096);
     }
 }

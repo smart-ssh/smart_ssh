@@ -19,6 +19,7 @@ fn empty_context() -> SessionContext {
         system_context: "Testkontext".to_string(),
         history: Vec::new(),
         available_actions: default_action_schemas(),
+        max_tokens_hint: None,
     }
 }
 

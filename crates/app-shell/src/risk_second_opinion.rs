@@ -95,6 +95,10 @@ fn build_second_opinion_context(system_prompt: &str, content: &str) -> SessionCo
             content: MessageContent::Text(truncated_content),
         }],
         available_actions: Vec::new(),
+        // Spec 0065, Teil 1: Nebenaufruf (Zweitmeinung UND Injection-Check
+        // teilen sich diesen Context-Builder) — s. `orchestration::
+        // SIDE_CALL_MAX_TOKENS`-Kommentar.
+        max_tokens_hint: Some(crate::orchestration::SIDE_CALL_MAX_TOKENS),
     }
 }
 

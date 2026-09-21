@@ -596,6 +596,7 @@ mod tests {
                 system_context: String::new(),
                 history: Vec::new(),
                 available_actions: default_action_schemas(),
+                max_tokens_hint: None,
             }),
             filter_engine: Box::new(FilterEngine::new(NoRulesPolicyStore)),
             server_id,

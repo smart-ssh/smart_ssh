@@ -10,8 +10,10 @@
 //! `choices[0].delta.content` für Text-Fragmente,
 //! `choices[0].delta.tool_calls[].function.{name,arguments}` für
 //! akkumulierende Tool-Call-Fragmente (nach `index` gruppiert),
-//! `choices[0].finish_reason` (Spec 0063, Teil 1 — nur geloggt, keine
-//! Verhaltens-Verzweigung danach), Abschluss durch das Literal
+//! `choices[0].finish_reason` (Spec 0063, Teil 1: geloggt; seit Spec 0065,
+//! Teil 3 zusätzlich sicherheitskritisch ausgewertet — ein Tool-Call aus
+//! einer Antwort mit `finish_reason: length` wird nie freigegeben, s.
+//! `OpenAiStreamState::finalize`), Abschluss durch das Literal
 //! `data: [DONE]`.
 
 use std::collections::{BTreeMap, VecDeque};
@@ -27,17 +29,41 @@ use ssh_manager_core::ai::{
 };
 use ssh_manager_core::ssh::CommandOutput;
 
-/// Startwert für den einmaligen `max_tokens`-Retry bei einem abgeschnittenen
-/// Tool-Call (Spec 0065, Teil 3) — anders als bei Anthropic (s. dortiges
-/// `ANTHROPIC_RETRY_MAX_TOKENS_CAP`) setzt `build_request_body` hier heute
-/// GAR KEIN `max_tokens`-Feld (der Provider nutzt seinen eigenen Default,
-/// s. `build_request_body`-Kommentar), es gibt also keinen bekannten Wert
-/// zum Verdoppeln. Bewusst konservativ: reicht für die meisten
-/// selbstgehosteten/gateway-Modelle, ohne über ein unbekanntes
-/// Output-Maximum hinauszuschießen (Spec 0065 §1: ein zu hoher Wert kann
-/// bei manchen Gateways zu einem 400 führen) — Commit 2 dieser Spec ersetzt
-/// dies durch einen echten modellabhängigen Default.
-const OPENAI_COMPATIBLE_RETRY_MAX_TOKENS: u32 = 8192;
+/// Konservativer Fallback für jeden Endpunkt, der nicht nachweislich die
+/// offizielle OpenAI-API ist (Spec 0065, Teil 1: "Nicht-Anthropic-Provider:
+/// Default ebenfalls modellabhängig, aber VORSICHTIGER" — manche Gateways
+/// reservieren anhand von `max_tokens` oder lehnen zu hohe Werte mit 400 ab,
+/// ein selbstgehostetes/lokales Modell hat oft nur ein kleines
+/// Output-Limit). Identisch zum bisherigen, bereits produktiv genutzten
+/// Verhalten dieses Providers (der bislang gar kein `max_tokens` setzte und
+/// damit implizit dem jeweiligen Endpunkt-eigenen Default überließ) — bleibt
+/// bewusst unverändert für alles außer der offiziellen OpenAI-API, s.
+/// [`openai_compatible_model_max_output_tokens`].
+const OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS: u32 = 4_096;
+
+/// Modellabhängiges Output-Maximum (Spec 0065, Teil 1) — nur für die
+/// offizielle OpenAI-API angewendet (erkannt an `base_url`), da `model` bei
+/// einem generischen Gateway/Ollama frei wählbar ist und dessen
+/// tatsächliches Output-Maximum von hier aus grundsätzlich nicht bekannt
+/// sein kann. Verifiziert gegen developers.openai.com/api/docs/models
+/// (Stand dieser Implementierung, 2026-09): die aktuelle Flaggschiff-
+/// Generation (u. a. `gpt-5.6-*`, `gpt-6-*`) hat durchweg 128K Max-Output;
+/// `gpt-3.5`/klassisches `gpt-4`(-turbo)/`gpt-4o`/`gpt-4.1` sind kleiner,
+/// namentlich bekannte Ausnahmen mit ihrem jeweils dokumentierten Wert.
+fn openai_compatible_model_max_output_tokens(base_url: &str, model: &str) -> u32 {
+    if !base_url.contains("api.openai.com") {
+        return OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS;
+    }
+    let model = model.to_lowercase();
+    if model.contains("gpt-3.5") {
+        4_096
+    } else if model.contains("gpt-4o") || model.contains("gpt-4-turbo") || model.contains("gpt-4.1")
+    {
+        16_384
+    } else {
+        128_000
+    }
+}
 
 /// s. `crate::anthropic::RawEvent`-Doc-Kommentar — identisches Muster.
 #[derive(Debug, Clone, PartialEq)]
@@ -128,10 +154,20 @@ impl OpenAiCompatibleProvider {
             }));
         }
 
+        // Spec 0065, Teil 1: `max_tokens_hint` (Nebenaufrufe, s. `app_shell::
+        // orchestration::SIDE_CALL_MAX_TOKENS`) hat Vorrang vor dem
+        // modellabhängigen Haupt-Chat-Default — s. `SessionContext::
+        // max_tokens_hint`-Doc-Kommentar (core) und `crate::anthropic`s
+        // identisches Muster.
+        let max_tokens = context.max_tokens_hint.unwrap_or_else(|| {
+            openai_compatible_model_max_output_tokens(&self.base_url, &self.model)
+        });
+
         let mut body = json!({
             "model": self.model,
             "messages": messages,
             "stream": true,
+            "max_tokens": max_tokens,
         });
 
         if self.supports_native_tool_calling && !context.available_actions.is_empty() {
@@ -385,11 +421,10 @@ struct RetryState {
     request_id: Uuid,
     extra_headers: Vec<(String, String)>,
     body: Value,
-    /// `None`: `build_request_body` hat kein `max_tokens` gesetzt (heutiger
-    /// Normalfall, s. `OPENAI_COMPATIBLE_RETRY_MAX_TOKENS`-Kommentar) — der
-    /// Retry setzt dann erstmals einen konservativen Wert statt einen
-    /// unbekannten zu verdoppeln.
-    max_tokens: Option<u32>,
+    max_tokens: u32,
+    /// Modell-Maximum (Spec 0065, Teil 1) — der Retry-Deckel, s.
+    /// `openai_compatible_model_max_output_tokens`.
+    model_max_tokens: u32,
     retried: bool,
     inner: Option<Pin<Box<dyn Stream<Item = RawEvent> + Send>>>,
     finished: bool,
@@ -408,7 +443,14 @@ impl AiProvider for OpenAiCompatibleProvider {
         let native_tool_calling = self.supports_native_tool_calling;
         let extra_headers = self.extra_headers.clone();
         let body = self.build_request_body(&context);
-        let max_tokens = body["max_tokens"].as_u64().map(|value| value as u32);
+        let model_max_tokens =
+            openai_compatible_model_max_output_tokens(&self.base_url, &self.model);
+        // s. `crate::anthropic::AnthropicProvider::send`-Kommentar zum
+        // `.unwrap_or(...)`-Fallback — greift praktisch nie, `body` trägt
+        // `max_tokens` immer schon aus `build_request_body`.
+        let max_tokens = body["max_tokens"]
+            .as_u64()
+            .unwrap_or(u64::from(model_max_tokens)) as u32;
 
         let state = RetryState {
             client,
@@ -419,6 +461,7 @@ impl AiProvider for OpenAiCompatibleProvider {
             extra_headers,
             body,
             max_tokens,
+            model_max_tokens,
             retried: false,
             inner: None,
             finished: false,
@@ -455,12 +498,10 @@ impl AiProvider for OpenAiCompatibleProvider {
                             return Some((AiEvent::Error(AiError::ResponseTruncated), state));
                         }
                         state.retried = true;
-                        state.max_tokens = Some(match state.max_tokens {
-                            Some(current) => current
-                                .saturating_mul(2)
-                                .min(OPENAI_COMPATIBLE_RETRY_MAX_TOKENS),
-                            None => OPENAI_COMPATIBLE_RETRY_MAX_TOKENS,
-                        });
+                        state.max_tokens = state
+                            .max_tokens
+                            .saturating_mul(2)
+                            .min(state.model_max_tokens);
                         state.body["max_tokens"] = json!(state.max_tokens);
                         state.inner = None;
                     }
@@ -918,5 +959,84 @@ mod tests {
                 .await;
 
         assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
+    }
+
+    fn test_budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
+        std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
+    }
+
+    fn context_with_actions(actions: Vec<ActionSchema>) -> SessionContext {
+        SessionContext {
+            system_context: "Hi.".to_string(),
+            history: vec![ssh_manager_core::ai::ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("hi".to_string()),
+            }],
+            available_actions: actions,
+            max_tokens_hint: None,
+        }
+    }
+
+    /// Spec 0065, Teil 1: für die offizielle OpenAI-API modellabhängig,
+    /// verifiziert gegen developers.openai.com/api/docs/models.
+    #[test]
+    fn test_build_request_body_uses_model_aware_max_tokens_for_official_openai() {
+        let provider = OpenAiCompatibleProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-6-astra",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+        );
+        let context = context_with_actions(Vec::new());
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(body["max_tokens"], 128_000);
+    }
+
+    /// Gegenprobe: ein generisches/selbstgehostetes Gateway bekommt den
+    /// konservativen Fallback, unabhängig vom `model`-Namen — Spec 0065 §1:
+    /// "vorsichtiger" als bei Anthropic, das tatsächliche Output-Maximum
+    /// ist von hier aus nicht bekannt.
+    #[test]
+    fn test_build_request_body_stays_conservative_for_non_openai_endpoint() {
+        let provider = OpenAiCompatibleProvider::new(
+            "http://localhost:11434/v1",
+            "gpt-6-astra",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+        );
+        let context = context_with_actions(Vec::new());
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(
+            body["max_tokens"],
+            OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS
+        );
+    }
+
+    /// Spec 0065, Teil 1: ein Nebenaufruf (`max_tokens_hint`) überschreibt
+    /// den modellabhängigen Default.
+    #[test]
+    fn test_build_request_body_honors_max_tokens_hint_over_model_default() {
+        let provider = OpenAiCompatibleProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-6-astra",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+        );
+        let mut context = context_with_actions(Vec::new());
+        context.max_tokens_hint = Some(4096);
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(body["max_tokens"], 4096);
     }
 }

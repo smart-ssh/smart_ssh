@@ -486,6 +486,7 @@ async fn classify_credential_test_result(
             content: MessageContent::Text("Hi".to_string()),
         }],
         available_actions: Vec::new(),
+        max_tokens_hint: None,
     };
 
     let mut events = provider.send(context);
@@ -1152,6 +1153,7 @@ pub(crate) async fn connect_session(
             system_context,
             history: initial_history,
             available_actions: default_action_schemas(),
+            max_tokens_hint: None,
         }),
         filter_engine: Box::new(FilterEngine::new(state.policy_store.clone())),
         server_id,
@@ -4603,6 +4605,7 @@ mod send_chat_message_persistence_tests {
                 system_context: String::new(),
                 history: Vec::new(),
                 available_actions: default_action_schemas(),
+                max_tokens_hint: None,
             }),
             filter_engine: Box::new(FilterEngine::new(crate::policy::NoRulesPolicyStore)),
             server_id,

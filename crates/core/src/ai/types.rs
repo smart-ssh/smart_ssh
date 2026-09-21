@@ -94,6 +94,19 @@ pub struct SessionContext {
     pub system_context: String,
     pub history: Vec<ChatMessage>,
     pub available_actions: Vec<ActionSchema>,
+    /// Spec 0065, Teil 1: explizite `max_tokens`-Obergrenze für GENAU diese
+    /// eine Anfrage — `None` heißt "der Provider entscheidet" (beim
+    /// Haupt-Chat: sein modellabhängiger Default, s. `ai_providers::
+    /// anthropic`/`openai_compatible`). Existiert, weil mehrere kleine
+    /// KI-Nebenaufrufe (Zweitmeinung, Injection-Check, Auto-Titel,
+    /// Notiz-Vorschlag/-Kürzung, Verlaufs-Zusammenfassung) denselben
+    /// `AiProvider` wie der Haupt-Chat wiederverwenden (`session.
+    /// ai_provider`, EINE Instanz mit EINEM Modell) — ein modellabhängiger
+    /// Provider-Default allein könnte diese Nebenaufrufe nicht von einer
+    /// Haupt-Chat-Runde unterscheiden und würde sie versehentlich mit
+    /// hochziehen. Der Aufrufer (`app-shell`) setzt dieses Feld deshalb
+    /// explizit klein für alle Nebenaufrufe, `None` nur für den Haupt-Chat.
+    pub max_tokens_hint: Option<u32>,
 }
 
 /// Eine Nachricht in der Konversationshistorie (Spec 0006, Abschnitt 3).

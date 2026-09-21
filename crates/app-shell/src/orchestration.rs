@@ -94,6 +94,19 @@ use crate::state::{ActionId, SessionId};
 /// Nachricht.
 const MAX_AUTO_FOLLOWUP_ROUNDS: usize = 10;
 
+/// Spec 0065, Teil 1: `max_tokens_hint` für jeden KI-Nebenaufruf, der
+/// `session.ai_provider` wiederverwendet (Zweitmeinung, Injection-Check,
+/// Auto-Titel, Notiz-Vorschlag/-Kürzung, Verlaufs-Zusammenfassung) — ohne
+/// diesen expliziten, kleinen Wert würden diese Aufrufe den NEUEN,
+/// modellabhängigen Haupt-Chat-Default erben (bis zu 128k bei aktuellen
+/// Claude-Modellen), obwohl dort Kürze gewollt ist (ein Modell, das statt
+/// "red"/eines kurzen Titels/einer gekürzten Notiz einen Aufsatz schreibt).
+/// Bewusst identisch zum bisherigen, unveränderten `DEFAULT_MAX_TOKENS` aus
+/// `ai_providers::anthropic` — der Status quo für alle fünf Nebenaufrufe
+/// bleibt exakt so, wie er heute schon ist, nur jetzt EXPLIZIT statt als
+/// zufälliger Nebeneffekt des (bisher einzigen) Providerweiten Defaults.
+pub(crate) const SIDE_CALL_MAX_TOKENS: u32 = 4096;
+
 /// Spec 0046, Fund 4: Backend-seitige Grundsicherung gegen eine wartende
 /// `Confirm`-Aktion, die niemals aufgelöst wird — "Tab schließen = wartende
 /// Aktion ablehnen" (Spec 0017, Abschnitt 5) hängt am Frontend-State, den
@@ -2727,6 +2740,12 @@ pub async fn generate_session_title_on_disconnect(
     // vec![ActionSchema::propose_note_update()]` beim Notiz-Vorschlag
     // unten, hier aber gar keine Aktion, nur Text.
     request_context.available_actions = Vec::new();
+    // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar.
+    // `request_context` ist ein Klon von `session.context`, das selbst
+    // schon `max_tokens_hint: None` trägt (Haupt-Chat-Default) — hier
+    // ausdrücklich überschrieben, sonst würde diese Kurztitel-Anfrage den
+    // vollen Haupt-Chat-Default erben.
+    request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
 
     wait_for_ai_request_slot(session).await;
     wait_for_rate_limit_budget(
@@ -2869,6 +2888,9 @@ pub async fn suggest_note_update_on_disconnect(
     // anbieten — die KI kann in diesem Aufruf gar nicht erst ein Kommando
     // vorschlagen.
     request_context.available_actions = vec![ActionSchema::propose_note_update()];
+    // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar
+    // (analog zur Auto-Titel-Stelle oben).
+    request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
 
     wait_for_ai_request_slot(session).await;
     wait_for_rate_limit_budget(
@@ -3147,6 +3169,8 @@ async fn summarize_note_for_shrink(
             content: MessageContent::Text(format!("{NOTE_SHRINK_INSTRUCTION}\n\n{fenced_note}")),
         }],
         available_actions: Vec::new(),
+        // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar.
+        max_tokens_hint: Some(SIDE_CALL_MAX_TOKENS),
     };
 
     // Spec 0061, Abschnitt 3: dieser Aufruf läuft session-unabhängig (s.
@@ -3770,6 +3794,7 @@ mod tests {
                 system_context: "Testkontext".to_string(),
                 history: Vec::new(),
                 available_actions: default_action_schemas(),
+                max_tokens_hint: None,
             }),
             filter_engine: Box::new(FilterEngine::new(NoRulesPolicyStore)),
             server_id: ServerId::new(),
@@ -10135,6 +10160,7 @@ mod tests {
             system_context: String::new(),
             history: vec![user_msg(&"a".repeat(2400))], // ~600 Token
             available_actions: Vec::new(),
+            max_tokens_hint: None,
         };
         let parts = crate::compaction::SystemContextParts::default();
         let result = crate::compaction::compact_for_send(

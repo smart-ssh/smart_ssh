@@ -728,6 +728,9 @@ async fn generate_rolling_summary(
         system_context: "Du fasst Chat-Verläufe präzise und knapp zusammen.".to_string(),
         history,
         available_actions: Vec::new(),
+        // Spec 0065, Teil 1: Nebenaufruf — s. `orchestration::
+        // SIDE_CALL_MAX_TOKENS`-Kommentar.
+        max_tokens_hint: Some(crate::orchestration::SIDE_CALL_MAX_TOKENS),
     };
 
     wait_for_ai_request_slot(session).await;
@@ -1172,6 +1175,7 @@ mod tests {
             system_context,
             history,
             available_actions: Vec::new(),
+            max_tokens_hint: None,
         }
     }
 

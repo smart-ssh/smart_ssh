@@ -38,6 +38,7 @@ fn empty_context() -> SessionContext {
         system_context: String::new(),
         history: Vec::new(),
         available_actions: Vec::new(),
+        max_tokens_hint: None,
     }
 }
 
