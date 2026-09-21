@@ -26,11 +26,26 @@ describe("AboutSettings (Spec 0052)", () => {
       commitHash: "a5b3e01",
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
+      buildType: "Release",
     });
 
     renderAbout();
 
-    expect(await screen.findByText("0.4.1 (a5b3e01) · Community")).toBeInTheDocument();
+    expect(await screen.findByText("0.4.1 (a5b3e01) · Community · Release-Build")).toBeInTheDocument();
+  });
+
+  it("shows whether it is a dev or release build", async () => {
+    vi.mocked(getAppInfo).mockResolvedValue({
+      version: "0.5.0",
+      commitHash: "abf7a22",
+      versionDisplay: "0.5.0 (abf7a22)",
+      edition: "Community",
+      buildType: "Dev",
+    });
+
+    renderAbout();
+
+    expect(await screen.findByText("0.5.0 (abf7a22) · Community · Dev-Build")).toBeInTheDocument();
   });
 
   it("keeps the version text selectable independently of the copy button", async () => {
@@ -44,10 +59,11 @@ describe("AboutSettings (Spec 0052)", () => {
       commitHash: "a5b3e01",
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
+      buildType: "Release",
     });
 
     renderAbout();
-    const versionText = await screen.findByText("0.4.1 (a5b3e01) · Community");
+    const versionText = await screen.findByText("0.4.1 (a5b3e01) · Community · Release-Build");
 
     expect(versionText.tagName).not.toBe("BUTTON");
     expect(versionText.closest("button")).toBeNull();
@@ -60,6 +76,7 @@ describe("AboutSettings (Spec 0052)", () => {
       commitHash: "a5b3e01",
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
+      buildType: "Release",
     });
     const writeText = vi.fn(() => Promise.resolve());
     Object.assign(navigator, { clipboard: { writeText } });
@@ -68,7 +85,7 @@ describe("AboutSettings (Spec 0052)", () => {
     const button = await screen.findByRole("button", { name: "Kopieren" });
     fireEvent.click(button);
 
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("0.4.1 (a5b3e01)"));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("0.4.1 (a5b3e01) · Community · Release-Build"));
     expect(await screen.findByText("Kopiert!")).toBeInTheDocument();
   });
 
@@ -78,6 +95,7 @@ describe("AboutSettings (Spec 0052)", () => {
       commitHash: "a5b3e01",
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
+      buildType: "Release",
     });
     const writeText = vi.fn(() => Promise.reject(new Error("denied")));
     Object.assign(navigator, { clipboard: { writeText } });

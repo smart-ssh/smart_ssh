@@ -680,4 +680,6 @@ export interface AppInfoDto {
   versionDisplay: string;
   /** `"Community"` oder `"Official"`. */
   edition: string;
+  /** `"Dev"` (Debug-Build, eigenes Datenverzeichnis) oder `"Release"`. */
+  buildType: "Dev" | "Release";
 }

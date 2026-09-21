@@ -47,7 +47,9 @@
     "copyButton": "Copy",
     "copied": "Copied!",
     "copyFailed": "Copy failed — text can be selected instead.",
-    "loadFailed": "Could not load version/build information."
+    "loadFailed": "Could not load version/build information.",
+    "buildDev": "Dev build",
+    "buildRelease": "Release build"
   },
   "diagnostics": {
     "generateBundle": "Generate diagnostics bundle",

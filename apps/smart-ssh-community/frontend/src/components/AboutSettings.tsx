@@ -34,10 +34,22 @@ export function AboutSettings() {
       });
   }, [t]);
 
+  // Eine Zeile für Anzeige und Zwischenablage, damit ein Bug-Report auch
+  // Edition und Build-Typ (Dev/Release) mitbekommt.
+  const displayLine = info
+    ? [
+        info.versionDisplay,
+        info.edition,
+        info.buildType === "Dev" ? t("about.buildDev") : t("about.buildRelease"),
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
+
   const handleCopy = async () => {
     if (!info) return;
     try {
-      await navigator.clipboard.writeText(info.versionDisplay);
+      await navigator.clipboard.writeText(displayLine);
       setCopyState("copied");
     } catch (err) {
       console.warn("Konnte Version nicht in die Zwischenablage kopieren:", err);
@@ -57,8 +69,7 @@ export function AboutSettings() {
           <span className="block text-xs text-slate-400">{t("about.version")}</span>
           <div className="mt-1 flex items-center gap-2">
             <code className="select-text rounded border border-slate-600 bg-slate-900 px-3 py-1.5 font-mono text-sm text-slate-100">
-              {info.versionDisplay}
-              {info.edition && ` · ${info.edition}`}
+              {displayLine}
             </code>
             <button
               type="button"

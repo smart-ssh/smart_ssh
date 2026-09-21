@@ -3168,14 +3168,18 @@ pub fn get_app_info<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     edition: tauri::State<'_, crate::wiring::Edition>,
 ) -> AppInfoDto {
-    build_app_info(&app.package_info().version.to_string(), *edition)
+    build_app_info(
+        &app.package_info().version.to_string(),
+        *edition,
+        cfg!(debug_assertions),
+    )
 }
 
 /// Von der Tauri-IPC-Grenze losgelöst (dasselbe Muster wie
 /// `classify_credential_test_result` oben), damit sich das eigentliche
 /// Mapping ohne einen laufenden `AppHandle`/eine echte Tauri-App testen
 /// lässt.
-fn build_app_info(version: &str, edition: crate::wiring::Edition) -> AppInfoDto {
+fn build_app_info(version: &str, edition: crate::wiring::Edition, debug_build: bool) -> AppInfoDto {
     AppInfoDto {
         version: version.to_string(),
         commit_hash: crate::version::BUILD_COMMIT_HASH.to_string(),
@@ -3184,6 +3188,7 @@ fn build_app_info(version: &str, edition: crate::wiring::Edition) -> AppInfoDto 
             crate::wiring::Edition::Community => "Community".to_string(),
             crate::wiring::Edition::Official => "Official".to_string(),
         },
+        build_type: if debug_build { "Dev" } else { "Release" }.to_string(),
     }
 }
 
@@ -3193,7 +3198,7 @@ mod app_info_tests {
 
     #[test]
     fn test_build_app_info_formats_version_display_per_spec() {
-        let info = build_app_info("0.4.1", crate::wiring::Edition::Community);
+        let info = build_app_info("0.4.1", crate::wiring::Edition::Community, false);
 
         assert_eq!(info.version, "0.4.1");
         assert_eq!(
@@ -3205,8 +3210,17 @@ mod app_info_tests {
     }
 
     #[test]
+    fn test_build_app_info_reports_build_type() {
+        let dev = build_app_info("0.4.1", crate::wiring::Edition::Community, true);
+        let release = build_app_info("0.4.1", crate::wiring::Edition::Community, false);
+
+        assert_eq!(dev.build_type, "Dev");
+        assert_eq!(release.build_type, "Release");
+    }
+
+    #[test]
     fn test_build_app_info_maps_official_edition() {
-        let info = build_app_info("0.4.1", crate::wiring::Edition::Official);
+        let info = build_app_info("0.4.1", crate::wiring::Edition::Official, false);
 
         assert_eq!(info.edition, "Official");
     }
