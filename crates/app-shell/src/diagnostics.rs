@@ -141,6 +141,8 @@ fn is_safe_diagnostic_log_line(line: &str) -> bool {
 /// `extra_headers`, Server-Adressen, Notiz-/Chat-Inhalte) mit einschleust.
 pub struct DiagnosticsInput {
     pub version_display: String,
+    /// `"Dev"`/`"Release"` (`crate::version::BuildType::as_str`).
+    pub build_type: &'static str,
     pub edition: String,
     pub os: &'static str,
     pub arch: &'static str,
@@ -192,8 +194,8 @@ pub fn build_diagnostics_bundle(
 
     out.push_str("## Version\n");
     out.push_str(&format!(
-        "{} · {}\n\n",
-        input.version_display, input.edition
+        "{} · {} · {}-Build\n\n",
+        input.version_display, input.edition, input.build_type
     ));
 
     out.push_str("## System\n");
@@ -262,6 +264,7 @@ mod tests {
     fn base_input() -> DiagnosticsInput {
         DiagnosticsInput {
             version_display: "0.5.0 (892001f)".to_string(),
+            build_type: "Dev",
             edition: "Community".to_string(),
             os: "macos",
             arch: "aarch64",
@@ -279,8 +282,7 @@ mod tests {
     fn test_bundle_contains_version_os_paths_and_state() {
         let bundle = build_diagnostics_bundle(&base_input(), &[], &DefaultOutputRedactor::new());
 
-        assert!(bundle.contains("0.5.0 (892001f)"));
-        assert!(bundle.contains("Community"));
+        assert!(bundle.contains("0.5.0 (892001f) · Community · Dev-Build"));
         assert!(bundle.contains("macos"));
         assert!(bundle.contains("aarch64"));
         assert!(bundle.contains("15.1"));

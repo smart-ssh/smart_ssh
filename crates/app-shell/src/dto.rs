@@ -979,11 +979,8 @@ pub struct AppInfoDto {
     /// serverseitig über `Entitlements`/`Wiring` entschieden, nie im
     /// Frontend, s. CLAUDE.md "No special-casing").
     pub edition: String,
-    /// `"Dev"` (Debug-Build, z. B. `cargo tauri dev`) oder `"Release"` —
-    /// unterscheidet u. a. das Datenverzeichnis ("Smart SSH (dev)" vs.
-    /// "Smart SSH", s. `persistence_sqlite::paths`), deshalb im Über-Dialog
-    /// sichtbar.
-    pub build_type: String,
+    /// s. [`crate::version::BuildType`].
+    pub build_type: crate::version::BuildType,
 }
 
 /// Sortiert Verzeichniseinträge für die Anzeige: Verzeichnisse zuerst, dann

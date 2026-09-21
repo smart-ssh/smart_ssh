@@ -2991,6 +2991,7 @@ pub async fn generate_diagnostics_bundle<R: tauri::Runtime>(
 
     let input = crate::diagnostics::DiagnosticsInput {
         version_display: crate::version::version_with_hash(&app.package_info().version.to_string()),
+        build_type: crate::version::BuildType::current().as_str(),
         edition: match *edition {
             crate::wiring::Edition::Community => "Community".to_string(),
             crate::wiring::Edition::Official => "Official".to_string(),
@@ -3171,7 +3172,7 @@ pub fn get_app_info<R: tauri::Runtime>(
     build_app_info(
         &app.package_info().version.to_string(),
         *edition,
-        cfg!(debug_assertions),
+        crate::version::BuildType::current(),
     )
 }
 
@@ -3179,7 +3180,11 @@ pub fn get_app_info<R: tauri::Runtime>(
 /// `classify_credential_test_result` oben), damit sich das eigentliche
 /// Mapping ohne einen laufenden `AppHandle`/eine echte Tauri-App testen
 /// lässt.
-fn build_app_info(version: &str, edition: crate::wiring::Edition, debug_build: bool) -> AppInfoDto {
+fn build_app_info(
+    version: &str,
+    edition: crate::wiring::Edition,
+    build_type: crate::version::BuildType,
+) -> AppInfoDto {
     AppInfoDto {
         version: version.to_string(),
         commit_hash: crate::version::BUILD_COMMIT_HASH.to_string(),
@@ -3188,7 +3193,7 @@ fn build_app_info(version: &str, edition: crate::wiring::Edition, debug_build: b
             crate::wiring::Edition::Community => "Community".to_string(),
             crate::wiring::Edition::Official => "Official".to_string(),
         },
-        build_type: if debug_build { "Dev" } else { "Release" }.to_string(),
+        build_type,
     }
 }
 
@@ -3198,7 +3203,11 @@ mod app_info_tests {
 
     #[test]
     fn test_build_app_info_formats_version_display_per_spec() {
-        let info = build_app_info("0.4.1", crate::wiring::Edition::Community, false);
+        let info = build_app_info(
+            "0.4.1",
+            crate::wiring::Edition::Community,
+            crate::version::BuildType::Release,
+        );
 
         assert_eq!(info.version, "0.4.1");
         assert_eq!(
@@ -3211,16 +3220,34 @@ mod app_info_tests {
 
     #[test]
     fn test_build_app_info_reports_build_type() {
-        let dev = build_app_info("0.4.1", crate::wiring::Edition::Community, true);
-        let release = build_app_info("0.4.1", crate::wiring::Edition::Community, false);
+        let dev = build_app_info(
+            "0.4.1",
+            crate::wiring::Edition::Community,
+            crate::version::BuildType::Dev,
+        );
+        let release = build_app_info(
+            "0.4.1",
+            crate::wiring::Edition::Community,
+            crate::version::BuildType::Release,
+        );
 
-        assert_eq!(dev.build_type, "Dev");
-        assert_eq!(release.build_type, "Release");
+        // Das Frontend liest `buildType` mit exakt diesen Werten
+        // (`types.ts`) — eine Umbenennung von Feld oder Werten fiele dort
+        // sonst still als "kein Build-Typ" durch.
+        assert_eq!(serde_json::to_value(&dev).unwrap()["buildType"], "Dev");
+        assert_eq!(
+            serde_json::to_value(&release).unwrap()["buildType"],
+            "Release"
+        );
     }
 
     #[test]
     fn test_build_app_info_maps_official_edition() {
-        let info = build_app_info("0.4.1", crate::wiring::Edition::Official, false);
+        let info = build_app_info(
+            "0.4.1",
+            crate::wiring::Edition::Official,
+            crate::version::BuildType::Release,
+        );
 
         assert_eq!(info.edition, "Official");
     }

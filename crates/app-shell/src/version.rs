@@ -10,18 +10,42 @@
 pub const BUILD_COMMIT_HASH: &str = env!("SMART_SSH_BUILD_HASH");
 
 /// Das eine, überall geteilte Anzeigeformat aus Spec 0052, Abschnitt 1:
-/// `"0.4.1 (a5b3e01)"`. Genutzt von der Startup-Logzeile und von
-/// [`crate::commands::get_app_info`] (dessen `AppInfoDto::version_display`-
-/// Feld) — die Titelzeile (`AppHeader.tsx`) und der Über-Dialog
-/// (`AboutSettings.tsx`) übernehmen diesen bereits fertig formatierten
-/// String vom Frontend-DTO unverändert, statt ihn aus `version`/
-/// `commitHash` selbst neu zusammenzusetzen. Spec-Reviewer-Fund (Spec
-/// 0052, Review dieses Schritts): der vorherige Kommentar hier behauptete
-/// fälschlich, das Frontend baue den String "selbst nach" — tut es nicht,
-/// genau das wäre die zweite Format-Implementierung, die diese Funktion
-/// eigentlich vermeiden soll.
+/// `"0.4.1 (a5b3e01)"`. Genutzt von der Startup-Logzeile, dem
+/// Diagnosepaket und [`crate::commands::get_app_info`] (dessen
+/// `AppInfoDto::version_display`-Feld). Titelzeile (`AppHeader.tsx`) und
+/// Über-Dialog (`AboutSettings.tsx`) übernehmen diesen Teil unverändert und
+/// hängen nur Edition und Build-Typ ([`BuildType`]) mit ` · ` an — den
+/// Versions-/Hash-Teil selbst setzt das Frontend nie neu zusammen.
 pub fn version_with_hash(version: &str) -> String {
     format!("{version} ({BUILD_COMMIT_HASH})")
+}
+
+/// Ob Debug- (`cargo tauri dev`) oder Release-Build. Dev-Builds nutzen ein
+/// eigenes Datenverzeichnis ("Smart SSH (dev)", s. `persistence_sqlite::
+/// paths`, außer bei gesetztem `SMART_SSH_DATA_DIR`) — deshalb in
+/// Über-Dialog, Titelzeile, Startup-Log und Diagnosepaket sichtbar.
+/// Serialisiert als `"Dev"`/`"Release"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum BuildType {
+    Dev,
+    Release,
+}
+
+impl BuildType {
+    pub const fn current() -> Self {
+        if cfg!(debug_assertions) {
+            Self::Dev
+        } else {
+            Self::Release
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Dev => "Dev",
+            Self::Release => "Release",
+        }
+    }
 }
 
 #[cfg(test)]

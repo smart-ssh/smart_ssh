@@ -274,6 +274,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         version = %version,
         commit_hash = crate::version::BUILD_COMMIT_HASH,
         version_display = %crate::version::version_with_hash(&version),
+        build_type = crate::version::BuildType::current().as_str(),
         os = std::env::consts::OS,
         arch = std::env::consts::ARCH,
         data_path = %db_path.display(),
