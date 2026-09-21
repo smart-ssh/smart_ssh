@@ -1761,6 +1761,31 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
     policy_store: &persistence_sqlite::SqlitePolicyStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> CommandResult<()> {
+    // Spec 0066, §2: läuft für diese Sitzung schon ein Turn, wird die
+    // Nachricht nur eingereiht — sie geht mit der nächsten Anfrage an die KI
+    // mit (s. `run_chat_turn`) bzw. nach Turn-Ende als neuer Turn (unten).
+    //
+    // Der Stopp-Reset passiert hier unter demselben Lock wie `running =
+    // true` und VOR jedem `.await` (spec-reviewer-Fund, Spec 0066): ein
+    // früh gedrückter Stopp für diesen Turn kann dadurch nicht mehr von
+    // einem späteren Reset verschluckt werden.
+    let queued_only = {
+        let mut turn = session.chat_turn.lock().unwrap();
+        if turn.running {
+            turn.queued.push(text.clone());
+            true
+        } else {
+            turn.running = true;
+            session
+                .auto_continue_stop
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+            false
+        }
+    };
+    let mut running_guard = ChatTurnRunningGuard {
+        session,
+        armed: !queued_only,
+    };
     // Spec 0015, Abschnitt 3: Prompt-Historie ist eine Zusatzfunktion für
     // die Pfeiltasten-Navigation im Eingabefeld — ein Fehlschlag beim
     // Persistieren (z. B. kurzzeitig gesperrte DB) soll den eigentlichen
@@ -1773,21 +1798,9 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
         }
     }
 
-    // Spec 0066, §2: läuft für diese Sitzung schon ein Turn, wird die
-    // Nachricht nur eingereiht — sie geht mit der nächsten Anfrage an die KI
-    // mit (s. `run_chat_turn`) bzw. nach Turn-Ende als neuer Turn (unten).
-    {
-        let mut turn = session.chat_turn.lock().unwrap();
-        if turn.running {
-            turn.queued.push(text);
-            return Ok(());
-        }
-        turn.running = true;
+    if queued_only {
+        return Ok(());
     }
-    let mut running_guard = ChatTurnRunningGuard {
-        session,
-        armed: true,
-    };
     let mut texts = vec![text];
 
     loop {
@@ -1852,7 +1865,7 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
             .await;
         }
 
-        run_chat_turn(
+        let unanswered_injected_messages = run_chat_turn(
             session,
             session_id,
             emitter,
@@ -1864,12 +1877,18 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
         // Prüfen und Zurücksetzen unter demselben Lock wie das Einreihen —
         // eine gleichzeitig ankommende Nachricht landet entweder noch in
         // `queued` (und wird hier abgeholt) oder startet selbst einen Turn.
+        // Ein Folge-Turn gilt als neuer Turn: das Stopp-Flag wird (wie beim
+        // Start oben) atomar zurückgesetzt — eingereihte Nachrichten werden
+        // auch nach einem Stopp noch beantwortet (Spec 0066, §1).
         let next = {
             let mut turn = session.chat_turn.lock().unwrap();
-            if turn.queued.is_empty() {
+            if turn.queued.is_empty() && !unanswered_injected_messages {
                 turn.running = false;
                 None
             } else {
+                session
+                    .auto_continue_stop
+                    .store(false, std::sync::atomic::Ordering::SeqCst);
                 Some(std::mem::take(&mut turn.queued))
             }
         };
@@ -1879,7 +1898,9 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
                 break;
             }
             Some(queued) => {
-                emit_chat_queued_messages_sent(emitter, session_id);
+                if !queued.is_empty() {
+                    emit_chat_queued_messages_sent(emitter, session_id);
+                }
                 texts = queued;
             }
         }
@@ -5067,6 +5088,255 @@ mod send_chat_message_persistence_tests {
             .any(|(name, _)| name == "chat-queued-messages-sent"));
         let turn = session.chat_turn.lock().unwrap();
         assert!(!turn.running && turn.queued.is_empty());
+    }
+
+    struct AllowEverythingPolicyStore;
+    #[async_trait]
+    impl ssh_manager_core::filter::PolicyStore for AllowEverythingPolicyStore {
+        async fn rules_for(
+            &self,
+            _scope: &ssh_manager_core::filter::EffectiveScope,
+        ) -> Vec<ssh_manager_core::filter::Rule> {
+            vec![ssh_manager_core::filter::Rule {
+                id: ssh_manager_core::filter::RuleId("allow-all".to_string()),
+                pattern: ssh_manager_core::filter::Pattern::Glob("*".to_string()),
+                action: ssh_manager_core::filter::RuleAction::Allow,
+                scope: ssh_manager_core::filter::Scope::Global,
+                priority: 0,
+                origin: ssh_manager_core::filter::RuleOrigin::User,
+            }]
+        }
+    }
+
+    /// Führt jedes Kommando sofort mit fester Ausgabe aus.
+    struct EchoTransport;
+    #[async_trait]
+    impl SshTransport for EchoTransport {
+        async fn execute(&mut self, _command: &str) -> Result<CommandOutput, SshError> {
+            Ok(CommandOutput {
+                stdout: b"ok".to_vec(),
+                stderr: Vec::new(),
+                exit_code: Some(0),
+                truncated: false,
+            })
+        }
+        async fn open_shell(
+            &mut self,
+            _size: PtySize,
+        ) -> Result<Box<dyn InteractiveShell>, SshError> {
+            unreachable!()
+        }
+        async fn disconnect(&mut self) -> Result<(), SshError> {
+            Ok(())
+        }
+    }
+
+    /// Runde 1 hängt bis `gate`, schlägt dann ein Kommando vor; jeder
+    /// weitere Request liefert sofort `Done`.
+    struct GatedActionProvider {
+        gate: Arc<tokio::sync::Notify>,
+        contexts: Arc<std::sync::Mutex<Vec<SessionContext>>>,
+    }
+    impl AiProvider for GatedActionProvider {
+        fn send(
+            &self,
+            context: SessionContext,
+        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+            let mut contexts = self.contexts.lock().unwrap();
+            let first = contexts.is_empty();
+            contexts.push(context);
+            if first {
+                let gate = self.gate.clone();
+                Box::pin(
+                    futures::stream::once(async move {
+                        gate.notified().await;
+                        futures::stream::iter(vec![
+                            AiEvent::ActionProposed(
+                                ssh_manager_core::profiles::AiAction::SuggestCommand {
+                                    command: "echo eins".to_string(),
+                                },
+                            ),
+                            AiEvent::Done,
+                        ])
+                    })
+                    .flatten(),
+                )
+            } else {
+                Box::pin(futures::stream::iter(vec![AiEvent::Done]))
+            }
+        }
+    }
+
+    /// Spec 0066, spec-reviewer-Fund: wird eine eingereihte Nachricht an der
+    /// Rundengrenze in den Verlauf gelegt und der Request danach (vor dem
+    /// Versand) gestoppt, muss sie trotzdem noch beantwortet werden — per
+    /// Folge-Turn.
+    #[tokio::test]
+    async fn test_queued_message_injected_then_stopped_before_send_is_still_answered() {
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut session = test_session(ServerId::new());
+        session.transport = AsyncMutex::new(Box::new(EchoTransport));
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.ai_provider = Box::new(GatedActionProvider {
+            gate: gate.clone(),
+            contexts: contexts.clone(),
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let policy_store =
+            persistence_sqlite::SqliteProfileStore::connect(&dir.path().join("t.db"))
+                .await
+                .unwrap()
+                .policy_store();
+        let app = test_app();
+        let handle = app.handle();
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = uuid::Uuid::new_v4();
+
+        let first = send_chat_message_impl(
+            handle,
+            &emitter,
+            &session,
+            session_id,
+            "erste".to_string(),
+            None,
+            &profile_store,
+            &policy_store,
+            &confirmations,
+        );
+        let driver = async {
+            while contexts.lock().unwrap().is_empty() {
+                tokio::task::yield_now().await;
+            }
+            send_chat_message_impl(
+                handle,
+                &emitter,
+                &session,
+                session_id,
+                "Korrektur".to_string(),
+                None,
+                &profile_store,
+                &policy_store,
+                &confirmations,
+            )
+            .await
+            .unwrap();
+            gate.notify_waiters();
+            // Sobald die Nachricht an der Rundengrenze übergeben ist, steckt
+            // Runde 2 in der Wartezeit vor dem Send (Pacing) — genau dann
+            // Stopp.
+            while !emitter
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(name, _)| name == "chat-queued-messages-sent")
+            {
+                tokio::task::yield_now().await;
+            }
+            session.request_auto_continue_stop();
+        };
+        let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(first, driver)
+        })
+        .await
+        .expect("Turns müssen enden");
+        result.unwrap();
+
+        let contexts = contexts.lock().unwrap().clone();
+        assert_eq!(
+            contexts.len(),
+            2,
+            "Runde 2 wurde gestoppt, die Korrektur braucht trotzdem einen Request"
+        );
+        assert!(history_texts(&contexts[1]).iter().any(|t| t == "Korrektur"));
+        assert!(!session.chat_turn.lock().unwrap().running);
+    }
+
+    /// Spec 0066, spec-reviewer-Fund: ein Stopp, der vor dem eigentlichen
+    /// Rundenbeginn eintrifft, darf nicht verschluckt werden — `run_chat_turn`
+    /// setzt das Flag nicht mehr selbst zurück.
+    #[tokio::test]
+    async fn test_run_chat_turn_does_not_swallow_an_early_stop() {
+        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut session = test_session(ServerId::new());
+        session.ai_provider = Box::new(GatedRecordingProvider {
+            gate: Arc::new(tokio::sync::Notify::new()),
+            contexts: contexts.clone(),
+        });
+        session.request_auto_continue_stop();
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            run_chat_turn(
+                &session,
+                uuid::Uuid::new_v4(),
+                &emitter,
+                &profile_store,
+                &confirmations,
+            ),
+        )
+        .await
+        .expect("ein bereits gesetzter Stopp muss den Turn sofort beenden");
+
+        assert!(
+            contexts.lock().unwrap().is_empty(),
+            "nach einem früh gedrückten Stopp darf kein Request rausgehen"
+        );
+    }
+
+    /// Gegenstück: eine neue Nachricht nach einem alten Stopp läuft normal —
+    /// `send_chat_message_impl` setzt das Flag beim Turn-Start zurück.
+    #[tokio::test]
+    async fn test_new_message_after_an_old_stop_runs_normally() {
+        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut session = test_session(ServerId::new());
+        let gate = Arc::new(tokio::sync::Notify::new());
+        session.ai_provider = Box::new(GatedRecordingProvider {
+            gate: gate.clone(),
+            contexts: contexts.clone(),
+        });
+        session.request_auto_continue_stop();
+        let dir = tempfile::tempdir().unwrap();
+        let policy_store =
+            persistence_sqlite::SqliteProfileStore::connect(&dir.path().join("t.db"))
+                .await
+                .unwrap()
+                .policy_store();
+        let app = test_app();
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let send = send_chat_message_impl(
+            app.handle(),
+            &emitter,
+            &session,
+            uuid::Uuid::new_v4(),
+            "neue Frage".to_string(),
+            None,
+            &profile_store,
+            &policy_store,
+            &confirmations,
+        );
+        let opener = async {
+            while contexts.lock().unwrap().is_empty() {
+                tokio::task::yield_now().await;
+            }
+            gate.notify_waiters();
+        };
+        let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(send, opener)
+        })
+        .await
+        .expect("Turn muss enden");
+        result.unwrap();
+        assert_eq!(contexts.lock().unwrap().len(), 1);
     }
 }
 

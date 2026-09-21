@@ -193,16 +193,15 @@ pub struct Session {
     /// Session offengehalten statt pro Zugriff neu aufgebaut. `AsyncMutex`
     /// wie `transport`/`context` (über `.await`-Punkte hinweg gehalten).
     pub sftp: AsyncMutex<Option<Box<dyn SftpSession>>>,
-    /// Spec 0021, Abschnitt 5: gesetzt durch `crate::commands::
-    /// stop_auto_continuation`, geprüft in `crate::orchestration::
-    /// run_chat_turn` nur *zwischen* automatischen Folgerunden — bricht die
-    /// Fortsetzungskette für die aktuelle Nutzer-Nachricht ab, lässt einen
-    /// bereits offenen Bestätigungsdialog aber unangetastet (die Prüfung
-    /// liegt außerhalb von `run_one_round`). Wird zu Beginn jeder neuen
-    /// `run_chat_turn`-Ausführung (= jede neue Nutzer-Nachricht)
-    /// zurückgesetzt. `AtomicBool` statt `StdMutex<bool>`: einfacher
-    /// Flag-Zustand ohne zusammengesetzte Operationen, für den ein Mutex nur
-    /// unnötigen Overhead bedeuten würde.
+    /// Spec 0021, Abschnitt 5 / Spec 0066, §1: gesetzt über
+    /// [`Session::request_auto_continue_stop`] (`crate::commands::
+    /// stop_auto_continuation`). Beendet die Fortsetzungskette und bricht
+    /// einen laufenden KI-Stream bzw. die Wartezeit vor dem Send sofort ab
+    /// (`crate::orchestration::run_one_round`); ein offener
+    /// Bestätigungsdialog und ein bereits laufendes Kommando bleiben
+    /// unangetastet. Zurückgesetzt in `crate::commands::
+    /// send_chat_message_impl` beim Start eines Turns, atomar mit
+    /// `chat_turn.running`.
     pub auto_continue_stop: std::sync::atomic::AtomicBool,
     /// Spec 0066, §1: weckt eine laufende Runde auf, sobald
     /// `auto_continue_stop` gesetzt wird, damit ein laufender KI-Stream

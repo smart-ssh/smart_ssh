@@ -7,8 +7,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendChatMessage, stopAutoContinuation } from "../api";
-import { onChatQueuedMessagesSent, onChatResponseCancelled } from "../events";
+import { continueTruncatedResponse, sendChatMessage, stopAutoContinuation } from "../api";
+import {
+  onChatQueuedMessagesSent,
+  onChatResponseCancelled,
+  onChatResponseTruncated,
+  onChatTextDelta,
+} from "../events";
 import { testI18n } from "../testI18n";
 import { ChatPanel } from "./ChatPanel";
 
@@ -23,6 +28,7 @@ vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) => String(err),
   acceptAndCreateRule: vi.fn(),
   cancelRunningCommand: vi.fn(),
+  continueTruncatedResponse: vi.fn(() => Promise.resolve()),
   exportDocument: vi.fn(),
   getChatHistory: vi.fn(() => Promise.resolve([])),
   listAiProviders: vi.fn(() =>
@@ -213,5 +219,59 @@ describe("ChatPanel queued messages (Spec 0066, §2)", () => {
       expect(screen.queryByText("⏳ Wird mit der nächsten Anfrage gesendet")).not.toBeInTheDocument(),
     );
     resolveFirst();
+  });
+});
+
+describe("ChatPanel send state edge cases (Spec 0066, review)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("clears a queued label once no send is pending anymore, even without the backend event", async () => {
+    let resolveFirst: () => void = () => {};
+    vi.mocked(sendChatMessage).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (resolveFirst = resolve)),
+    );
+    renderChatPanel();
+    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    fireEvent.change(field, { target: { value: "erste" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await screen.findByRole("button", { name: "Stopp" });
+    fireEvent.change(field, { target: { value: "zweite" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await screen.findByText("⏳ Wird mit der nächsten Anfrage gesendet");
+
+    resolveFirst();
+
+    await waitFor(() =>
+      expect(screen.queryByText("⏳ Wird mit der nächsten Anfrage gesendet")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("button", { name: "Stopp" })).not.toBeInTheDocument();
+  });
+
+  it("shows the Stopp button while a 'Weiter' continuation runs", async () => {
+    let deltaHandler: ((event: { sessionId: string; delta: string }) => void) | null = null;
+    let truncatedHandler: ((event: { sessionId: string }) => void) | null = null;
+    vi.mocked(onChatTextDelta).mockImplementation((h) => {
+      deltaHandler = h as typeof deltaHandler;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(onChatResponseTruncated).mockImplementation((h) => {
+      truncatedHandler = h;
+      return Promise.resolve(() => {});
+    });
+    let resolveContinue: () => void = () => {};
+    vi.mocked(continueTruncatedResponse).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (resolveContinue = resolve)),
+    );
+    renderChatPanel();
+    await waitFor(() => expect(deltaHandler).not.toBeNull());
+    deltaHandler!({ sessionId: "session-1", delta: "Teilantwort" });
+    truncatedHandler!({ sessionId: "session-1" });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Weiter" }));
+
+    expect(await screen.findByRole("button", { name: "Stopp" })).toBeInTheDocument();
+    resolveContinue();
   });
 });

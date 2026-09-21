@@ -259,6 +259,11 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
   const [items, setItems] = useState<ChatItem[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  /** Spec 0066, §2: Anzahl noch nicht aufgelöster `sendChatMessage`/
+   * `continueTruncatedResponse`-Aufrufe. Eingereihte Aufrufe lösen sofort
+   * auf; ein Aufruf, der im Backend selbst einen Turn startet, erst am Ende
+   * — `sending` ist genau dann `false`, wenn im Backend nichts mehr läuft. */
+  const pendingSendsRef = useRef(0);
   /** Spec 0021, Abschnitt 5: `true`, sobald eine *automatische* Folgerunde
    * läuft (KI reagiert auf ein Aktionsergebnis, ohne dass der Nutzer
    * getippt hat) — steuert den "Automatik läuft"-Indikator samt
@@ -635,44 +640,20 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
    * von der Nachricht sofort optimistisch, damit der Knopf nicht doppelt
    * klickbar bleibt, während die Anfrage läuft. */
   const handleContinueTruncated = async (itemId: string) => {
+    // Spec 0066, spec-reviewer-Fund: während eine Antwort läuft, würde die
+    // Fortsetzungs-Anweisung eingereiht und in einem fremden Turn landen.
+    if (sending) return;
     setItems((prev) =>
       prev.map((it) => (it.id === itemId && it.type === "assistant" ? { ...it, truncated: false } : it)),
     );
-    try {
-      await continueTruncatedResponse(sessionId);
-    } catch (err) {
-      setItems((prev) => [
-        ...prev,
-        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
-      ]);
-    }
+    await runSend(() => continueTruncatedResponse(sessionId));
   };
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
-    if (sending) {
-      // Spec 0066, §2: läuft schon eine Antwort, reiht das Backend die
-      // Nachricht ein (kehrt sofort zurück) und schickt sie mit der
-      // nächsten Anfrage an die KI — die laufende Antwort läuft weiter.
-      setItems((prev) => [...prev, { type: "user", id: freshId(), text, queued: true }]);
-      setDraft("");
-      setHistoryNav(initialHistoryNavState);
-      sendChatMessage(sessionId, text).catch((err) =>
-        setItems((prev) => [
-          ...prev,
-          { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
-        ]),
-      );
-      return;
-    }
-    setItems((prev) => [...prev, { type: "user", id: freshId(), text }]);
-    setDraft("");
-    setHistoryNav(initialHistoryNavState);
+  const runSend = async (call: () => Promise<void>) => {
+    pendingSendsRef.current += 1;
     setSending(true);
     try {
-      await sendChatMessage(sessionId, text);
+      await call();
     } catch (err) {
       setItems((prev) => [
         ...prev,
@@ -685,9 +666,33 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
       // automatische Fortsetzung selbst fehlschlägt (z. B. Netzwerkfehler
       // beim Folge-Request an den KI-Provider — landet als `chat-error`,
       // aber `sendChatMessage()` löst trotzdem auf, s. `run_chat_turn`).
-      setSending(false);
-      setAutoContinuing(false);
+      pendingSendsRef.current -= 1;
+      if (pendingSendsRef.current === 0) {
+        setSending(false);
+        setAutoContinuing(false);
+        // Läuft im Backend nichts mehr, wartet auch keine Nachricht mehr.
+        setItems((prev) =>
+          prev.map((it) => (it.type === "user" && it.queued ? { ...it, queued: false } : it)),
+        );
+      }
     }
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    const text = draft.trim();
+    if (!text) return;
+    // Spec 0066, §2: läuft schon eine Antwort, reiht das Backend die
+    // Nachricht ein (kehrt sofort zurück) und schickt sie mit der nächsten
+    // Anfrage an die KI — die laufende Antwort läuft weiter.
+    const queued = sending;
+    setItems((prev) => [
+      ...prev,
+      queued ? { type: "user", id: freshId(), text, queued: true } : { type: "user", id: freshId(), text },
+    ]);
+    setDraft("");
+    setHistoryNav(initialHistoryNavState);
+    await runSend(() => sendChatMessage(sessionId, text));
   };
 
   // Spec 0015, Abschnitt 5: Pfeil-oben/-unten lösen Historien-Navigation nur

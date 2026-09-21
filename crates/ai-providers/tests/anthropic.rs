@@ -479,7 +479,10 @@ event: message_stop\ndata: {}\n\n";
 
 /// Spec 0066, §1: bricht der Aufrufer (Stopp) ab, während `send()` gerade
 /// in der 429-Backoff-Wartezeit steckt, geht danach KEIN weiterer Request
-/// mehr raus — das Verwerfen des Streams verwirft auch den geplanten Retry.
+/// mehr raus. Schützt vor allem dagegen, dass der Retry künftig in einem
+/// losgelösten Task (`tokio::spawn`) läuft, der ein Verwerfen des Streams
+/// überleben würde — dass der Stopp den Stream tatsächlich verwirft, prüft
+/// `app_shell`s `test_stop_aborts_in_flight_ai_stream_immediately`.
 #[tokio::test]
 async fn test_dropping_stream_during_retry_backoff_sends_no_further_request() {
     let server = MockServer::start().await;

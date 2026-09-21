@@ -34,10 +34,11 @@
 //! ausgeführt werden (Spec 0021, Abschnitt 2). Begrenzt auf
 //! [`MAX_AUTO_FOLLOWUP_ROUNDS`] Runden (Spec 0021, Abschnitt 4) sowie
 //! jederzeit manuell abbrechbar über `Session::auto_continue_stop` (Spec
-//! 0021, Abschnitt 5, `crate::commands::stop_auto_continuation`) — Letzteres
-//! lässt einen bereits offenen Bestätigungsdialog unangetastet, da die
-//! Prüfung nur zwischen abgeschlossenen Runden greift, nie innerhalb einer
-//! laufenden `run_one_round`.
+//! 0021, Abschnitt 5, `crate::commands::stop_auto_continuation`). Seit Spec
+//! 0066 bricht der Stopp auch einen laufenden KI-Stream und die Wartezeit
+//! vor dem Send sofort ab (`run_one_round`); ein bereits offener
+//! Bestätigungsdialog und ein bereits laufendes Kommando bleiben
+//! unangetastet.
 
 use futures::StreamExt;
 use uuid::Uuid;
@@ -347,28 +348,22 @@ pub async fn run_chat_turn(
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
-) {
-    // Spec 0021, Abschnitt 4/5: sowohl der Runden-Zähler (s. o.) als auch
-    // das Stop-Flag gelten pro ursprünglicher Nutzer-Nachricht — hier
-    // zurückgesetzt, weil `run_chat_turn` genau einmal pro neuer
-    // Nutzer-Nachricht aufgerufen wird (s. `crate::commands::
-    // send_chat_message`). Ein vorheriger Klick auf "Automatik stoppen"
-    // darf eine ganz neue Nachricht nicht dauerhaft blockieren.
-    session
-        .auto_continue_stop
-        .store(false, std::sync::atomic::Ordering::SeqCst);
-
+) -> bool {
+    // Das Stopp-Flag wird NICHT hier zurückgesetzt, sondern in
+    // `crate::commands::send_chat_message_impl` atomar mit dem Start des
+    // Turns (Spec 0066, spec-reviewer-Fund: ein Reset erst hier, nach
+    // mehreren DB-Zugriffen, verschluckte einen früh gedrückten Stopp).
     for round in 1..=MAX_AUTO_FOLLOWUP_ROUNDS {
+        let mut injected_queued_messages = false;
         if round > 1 {
-            // Spec 0021, Abschnitt 5: nur *zwischen* Runden geprüft — ein
-            // bereits laufendes `run_one_round` (inkl. eines darin gerade
-            // offenen Bestätigungsdialogs) wird dadurch nie unterbrochen,
-            // nur der *nächste* automatische `send()`-Aufruf verhindert.
+            // Stopp zwischen zwei Runden: keine weitere Runde. Eingereihte
+            // Nachrichten bleiben dann in der Warteschlange und werden vom
+            // Aufrufer als neuer Turn gesendet (Spec 0066, §1).
             if session
                 .auto_continue_stop
                 .load(std::sync::atomic::Ordering::SeqCst)
             {
-                return;
+                return false;
             }
             // Spec 0066, §2: während der vorigen Runde eingereihte
             // Nutzer-Nachrichten gehen mit dieser Anfrage mit — als ganz
@@ -377,6 +372,7 @@ pub async fn run_chat_turn(
             // UND in `send_chat_message_impl` entnommen, nie aus Tool-Output.
             let queued = session.take_queued_user_messages();
             if !queued.is_empty() {
+                injected_queued_messages = true;
                 for text in queued {
                     push_history(
                         session,
@@ -392,20 +388,38 @@ pub async fn run_chat_turn(
             emit_chat_auto_continuation_started(emitter, session_id, round);
         }
 
-        let should_continue = run_one_round(
+        match run_one_round(
             session,
             session_id,
             emitter,
             profile_store,
             action_confirmations,
         )
-        .await;
-        if !should_continue {
-            return;
+        .await
+        {
+            RoundOutcome::Continue => {}
+            RoundOutcome::Finished => return false,
+            // spec-reviewer-Fund (Spec 0066): wurde in dieser Runde eine
+            // eingereihte Nachricht in den Verlauf gelegt, der Request aber
+            // vor dem Versand gestoppt, hat die KI sie nie gesehen — der
+            // Aufrufer muss sie mit einem Folge-Turn beantworten lassen.
+            RoundOutcome::StoppedBeforeSend => return injected_queued_messages,
         }
     }
 
     emit_chat_auto_continuation_limit_reached(emitter, session_id, MAX_AUTO_FOLLOWUP_ROUNDS);
+    false
+}
+
+/// Ausgang von [`run_one_round`].
+#[derive(Debug, PartialEq, Eq)]
+enum RoundOutcome {
+    /// Mindestens eine Aktion wurde ausgeführt — eine Folgerunde folgt.
+    Continue,
+    /// Runde regulär beendet (oder während des Streams gestoppt).
+    Finished,
+    /// Stopp, bevor der Request überhaupt rausging (Spec 0066, §1).
+    StoppedBeforeSend,
 }
 
 /// Spec 0040, Abschnitt 5: wird auf die (bereits kompaktierte, s.
@@ -558,16 +572,14 @@ fn redact_text_preserving_fence_markers(text: &str, redactor: &dyn OutputRedacto
     result
 }
 
-/// Genau eine KI-Antwortrunde. Gibt zurück, ob dabei mindestens eine
-/// Aktion tatsächlich ausgeführt wurde (und damit eine weitere Runde
-/// folgen sollte).
+/// Genau eine KI-Antwortrunde, s. [`RoundOutcome`].
 async fn run_one_round(
     session: &Session,
     session_id: SessionId,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
-) -> bool {
+) -> RoundOutcome {
     let mut request_context = session.context.lock().await.clone();
     // spec-reviewer-Fund (Review dieses Schritts, Etappe 3): geklont statt
     // den `MutexGuard` über den (jetzt potenziell lange laufenden,
@@ -618,7 +630,7 @@ async fn run_one_round(
     };
     if stopped_before_send {
         emit_chat_response_cancelled(emitter, session_id);
-        return false;
+        return RoundOutcome::StoppedBeforeSend;
     }
     let mut stream = session.ai_provider.send(request_context);
 
@@ -650,7 +662,7 @@ async fn run_one_round(
             drop(stream);
             flush_text_buffer(session, &mut text_buffer).await;
             emit_chat_response_cancelled(emitter, session_id);
-            return false;
+            return RoundOutcome::Finished;
         };
         let Some(event) = event else { break };
         match event {
@@ -713,7 +725,11 @@ async fn run_one_round(
         }
     }
 
-    executed_action
+    if executed_action {
+        RoundOutcome::Continue
+    } else {
+        RoundOutcome::Finished
+    }
 }
 
 fn describe_ai_error(err: &AiError) -> String {
@@ -985,6 +1001,21 @@ async fn handle_action_proposed(
     }
 
     match decision {
+        // spec-reviewer-Fund (Spec 0066): ein Stopp, der eintrifft, nachdem
+        // der Vorschlag schon aus dem Stream geholt war (z. B. während der
+        // Zweitmeinung oben), verhindert eine noch NICHT gestartete
+        // Auto-Ausführung. Nur für den eigenen Chat — der Stopp gilt dem
+        // Chat-Turn, nicht MCP-Clients. Ein bereits laufendes Kommando
+        // bleibt davon unberührt (Entscheidung 2).
+        Decision::AutoExec
+            if matches!(origin, ActionOrigin::Internal)
+                && session
+                    .auto_continue_stop
+                    .load(std::sync::atomic::Ordering::SeqCst) =>
+        {
+            skip_auto_exec_after_stop(session, session_id, action_id, &action, emitter, persist)
+                .await
+        }
         Decision::AutoExec => {
             if let AiAction::SuggestCommand { .. } = &action {
                 write_ledger_entry(
@@ -1252,6 +1283,56 @@ fn escalate_data_risk(
 /// eines rohen Debug-Werts. `GenerateDocument` erreicht diese Funktion nie
 /// (durchläuft weder `evaluate_action` noch einen Bestätigungsdialog, s.
 /// dort) — der `unreachable!()`-Arm hält dieselbe Invariante fest.
+/// Spec 0066: eine wegen Stopp nicht gestartete Auto-Ausführung wird wie
+/// ein abgebrochenes Kommando gemeldet (Spec 0027, `cancelled: true`,
+/// leere Ausgabe) — die Aktionskarte zeigt dadurch „abgebrochen" statt
+/// dauerhaft „läuft", und die KI sieht im Verlauf, dass nichts lief.
+async fn skip_auto_exec_after_stop(
+    session: &Session,
+    session_id: SessionId,
+    action_id: ActionId,
+    action: &AiAction,
+    emitter: &dyn EventEmitter,
+    persist: bool,
+) -> bool {
+    let command = match action {
+        AiAction::SuggestCommand { command } => command.clone(),
+        other => describe_rejected_action(other),
+    };
+    emit_chat_action_result(
+        emitter,
+        session_id,
+        action_id,
+        ActionResultPayload::Command {
+            command: command.clone(),
+            stdout: String::new(),
+            stderr: String::new(),
+            exit_code: None,
+            cancelled: true,
+            truncated: false,
+        },
+    );
+    push_history_scoped(
+        session,
+        ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::CommandResult {
+                command,
+                output: CommandOutput {
+                    stdout: Vec::new(),
+                    stderr: Vec::new(),
+                    exit_code: None,
+                    truncated: false,
+                },
+                cancelled: true,
+            },
+        },
+        persist,
+    )
+    .await;
+    false
+}
+
 fn describe_rejected_action(action: &AiAction) -> String {
     match action {
         AiAction::SuggestCommand { command } => command.clone(),
@@ -13240,13 +13321,13 @@ mod tests {
             tokio::task::yield_now().await;
             session.request_auto_continue_stop();
         };
-        let (continued, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let (outcome, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
             tokio::join!(round, stopper)
         })
         .await
         .expect("Stopp in der Wartezeit muss die Runde sofort beenden");
 
-        assert!(!continued);
+        assert_eq!(outcome, RoundOutcome::StoppedBeforeSend);
         assert_eq!(
             send_calls.load(std::sync::atomic::Ordering::SeqCst),
             0,
@@ -13318,5 +13399,51 @@ mod tests {
         );
         assert!(has_event(&emitter, "chat-queued-messages-sent"));
         assert!(session.chat_turn.lock().unwrap().queued.is_empty());
+    }
+
+    /// Spec 0066, spec-reviewer-Fund: ein Stopp, der eintrifft, nachdem ein
+    /// AutoExec-Vorschlag schon abgeholt ist, aber bevor die Ausführung
+    /// beginnt, verhindert die Ausführung — nur für den eigenen Chat.
+    #[tokio::test]
+    async fn test_stop_prevents_auto_exec_that_has_not_started_yet() {
+        let mut session = session_with_ai_provider(
+            MockAiProvider::new(vec![AiEvent::Done]),
+            MockSshTransport::default().with_response("echo nie", output("SOLLTE-NIE-LAUFEN")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.request_auto_continue_stop();
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let executed = handle_action_proposed(
+            &session,
+            Uuid::new_v4(),
+            AiAction::SuggestCommand {
+                command: "echo nie".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            ActionOrigin::Internal,
+        )
+        .await;
+
+        assert!(!executed);
+        let history = session.context.lock().await.history.clone();
+        let result = history
+            .iter()
+            .find_map(|m| match &m.content {
+                MessageContent::CommandResult {
+                    output, cancelled, ..
+                } => Some((output.clone(), *cancelled)),
+                _ => None,
+            })
+            .expect("die Karte braucht ein Ergebnis, sonst hängt sie auf „läuft“");
+        assert!(result.1, "als abgebrochen gemeldet");
+        assert!(
+            !String::from_utf8_lossy(&result.0.stdout).contains("SOLLTE-NIE-LAUFEN"),
+            "das Kommando darf nach Stopp nicht mehr gestartet werden"
+        );
     }
 }
