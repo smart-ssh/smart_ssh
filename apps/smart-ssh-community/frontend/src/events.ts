@@ -7,6 +7,7 @@ import type {
   ChatAutoContinuationStartedEvent,
   ChatDocumentGeneratedEvent,
   ChatErrorEvent,
+  ChatResponseCancelledEvent,
   ChatResponseTruncatedEvent,
   ChatTextDeltaEvent,
   ConnectionStatusChangedEvent,
@@ -72,6 +73,12 @@ export const onChatResponseTruncated = (
   handler: (event: ChatResponseTruncatedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatResponseTruncatedEvent>("chat-response-truncated", (e) => handler(e.payload));
+
+/** Spec 0066, §1 — s. `ChatResponseCancelledEvent`-Doc-Kommentar. */
+export const onChatResponseCancelled = (
+  handler: (event: ChatResponseCancelledEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatResponseCancelledEvent>("chat-response-cancelled", (e) => handler(e.payload));
 
 /** Spec 0021, Abschnitt 4 / `docs/adr/0021-turn-continuation-design.md`:
  * das Automatik-Cap ist ein weicher Stopp, kein Fehler — eigenes Event statt

@@ -476,3 +476,41 @@ event: message_stop\ndata: {}\n\n";
 
     assert_eq!(events, vec![AiEvent::Error(AiError::ResponseTruncated)]);
 }
+
+/// Spec 0066, §1: bricht der Aufrufer (Stopp) ab, während `send()` gerade
+/// in der 429-Backoff-Wartezeit steckt, geht danach KEIN weiterer Request
+/// mehr raus — das Verwerfen des Streams verwirft auch den geplanten Retry.
+#[tokio::test]
+async fn test_dropping_stream_during_retry_backoff_sends_no_further_request() {
+    let server = MockServer::start().await;
+    // `.expect(1)`: wiremock prüft beim Drop des Servers, dass genau ein
+    // Request ankam — ein Retry nach dem Abbruch würde das verletzen.
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("retry-after", "1")
+                .set_body_string("rate limited"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = AnthropicProvider::new(
+        server.uri(),
+        "claude-test",
+        "test-key",
+        true,
+        test_budget(),
+        None,
+    );
+
+    let mut stream = provider.send(empty_context());
+    let polled = tokio::time::timeout(std::time::Duration::from_millis(300), stream.next()).await;
+    assert!(
+        polled.is_err(),
+        "innerhalb der 1s-Backoff-Wartezeit darf noch kein Event kommen"
+    );
+    drop(stream);
+
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+}

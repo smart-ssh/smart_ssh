@@ -7,7 +7,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendChatMessage } from "../api";
+import { sendChatMessage, stopAutoContinuation } from "../api";
+import { onChatResponseCancelled } from "../events";
 import { testI18n } from "../testI18n";
 import { ChatPanel } from "./ChatPanel";
 
@@ -42,7 +43,7 @@ vi.mock("../api", () => ({
   listPromptHistory: vi.fn(() => Promise.resolve([])),
   respondToAction: vi.fn(),
   sendChatMessage: vi.fn(() => Promise.resolve()),
-  stopAutoContinuation: vi.fn(),
+  stopAutoContinuation: vi.fn(() => Promise.resolve()),
   suggestRulePatterns: vi.fn(),
   takeChatContentIntoNote: vi.fn(),
 }));
@@ -55,6 +56,7 @@ vi.mock("../events", () => ({
   onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
   onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
   onChatError: vi.fn(() => Promise.resolve(() => {})),
+  onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
   onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
@@ -135,5 +137,42 @@ describe("ChatPanel multiline input (Spec 0055, Teil 1)", () => {
     // Pixelwert.
     fireEvent.change(field, { target: { value: "a\nb\nc" } });
     await waitFor(() => expect(field.style.height).not.toBe(""));
+  });
+});
+
+describe("ChatPanel stop (Spec 0066, §1)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows a Stopp button while a normal (non-automatic) response runs and calls stopAutoContinuation", async () => {
+    let resolveSend: () => void = () => {};
+    vi.mocked(sendChatMessage).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (resolveSend = resolve)),
+    );
+    renderChatPanel();
+    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+
+    fireEvent.change(field, { target: { value: "hallo" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+
+    const stop = await screen.findByRole("button", { name: "Stopp" });
+    fireEvent.click(stop);
+    expect(stopAutoContinuation).toHaveBeenCalledWith("session-1");
+    resolveSend();
+  });
+
+  it("renders a cancelled notice when the backend reports chat-response-cancelled", async () => {
+    let handler: ((event: { sessionId: string }) => void) | null = null;
+    vi.mocked(onChatResponseCancelled).mockImplementation((h) => {
+      handler = h;
+      return Promise.resolve(() => {});
+    });
+    renderChatPanel();
+    await waitFor(() => expect(handler).not.toBeNull());
+
+    handler!({ sessionId: "session-1" });
+
+    expect(await screen.findByText("⏹ Antwort abgebrochen.")).toBeInTheDocument();
   });
 });

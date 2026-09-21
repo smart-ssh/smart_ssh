@@ -357,6 +357,12 @@ export interface ChatResponseTruncatedEvent {
   sessionId: string;
 }
 
+/** Spec 0066, §1 — der Nutzer hat die laufende KI-Anfrage per Stopp
+ * abgebrochen. */
+export interface ChatResponseCancelledEvent {
+  sessionId: string;
+}
+
 /** Antwort auf `host-key-verification-needed` (`confirm_host_key`). */
 export type HostKeyUserDecision = { decision: "trust" } | { decision: "reject" };
 

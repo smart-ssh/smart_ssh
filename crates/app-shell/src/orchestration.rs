@@ -61,9 +61,9 @@ use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_chat_action_proposed, emit_chat_action_result, emit_chat_auto_continuation_limit_reached,
     emit_chat_auto_continuation_started, emit_chat_document_generated, emit_chat_error,
-    emit_chat_response_truncated, emit_chat_text_delta, emit_note_shrink_failed,
-    emit_note_shrink_succeeded, emit_note_shrink_suggested, emit_note_update_suggested,
-    emit_risk_assessment_updated, ActionResultPayload, EventEmitter,
+    emit_chat_response_cancelled, emit_chat_response_truncated, emit_chat_text_delta,
+    emit_note_shrink_failed, emit_note_shrink_succeeded, emit_note_shrink_suggested,
+    emit_note_update_suggested, emit_risk_assessment_updated, ActionResultPayload, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -576,17 +576,30 @@ async fn run_one_round(
     // `send()`-Aufruf, s. `reapply_redaction_for_send`-Doc-Kommentar.
     request_context.history =
         reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
-    wait_for_ai_request_slot(session).await;
-    // Spec 0061, Abschnitt 3: proaktives Rate-Limit-Gate, direkt vor dem
-    // Send — nach der Kompaktierung/Redaction, damit die Schätzung den
-    // tatsächlich gesendeten Request widerspiegelt.
-    wait_for_rate_limit_budget(
-        &session.ai_provider_budget,
-        crate::compaction::estimate_request_tokens(&request_context),
-        emitter,
-        session_id,
-    )
-    .await;
+    // Spec 0066, §1: auch die Wartezeiten vor dem Send sind per Stopp
+    // abbrechbar (beide schlafen nur, Abbruch ist folgenlos).
+    let estimated_tokens = crate::compaction::estimate_request_tokens(&request_context);
+    let stopped_before_send = tokio::select! {
+        biased;
+        () = session.auto_continue_stop_requested() => true,
+        () = async {
+            wait_for_ai_request_slot(session).await;
+            // Spec 0061, Abschnitt 3: proaktives Rate-Limit-Gate, direkt vor
+            // dem Send — nach der Kompaktierung/Redaction, damit die
+            // Schätzung den tatsächlich gesendeten Request widerspiegelt.
+            wait_for_rate_limit_budget(
+                &session.ai_provider_budget,
+                estimated_tokens,
+                emitter,
+                session_id,
+            )
+            .await;
+        } => false,
+    };
+    if stopped_before_send {
+        emit_chat_response_cancelled(emitter, session_id);
+        return false;
+    }
     let mut stream = session.ai_provider.send(request_context);
 
     let mut text_buffer = String::new();
@@ -601,7 +614,25 @@ async fn run_one_round(
     // `compact_for_send`, oder erst im Stream selbst).
     tracing::debug!(session_id = %session_id, "about to poll AI provider stream for the first time");
 
-    while let Some(event) = stream.next().await {
+    loop {
+        // Spec 0066, §1: Stopp gewinnt (`biased`) gegen jedes weitere
+        // Stream-Event — nach einem Stopp wird kein Event mehr verarbeitet,
+        // insbesondere kein `ActionProposed`. Das anschließende Drop des
+        // Streams schließt die HTTP-Verbindung und verwirft auch eine
+        // gerade laufende Retry-/Backoff-Wartezeit aus `ai_providers`
+        // (kein weiterer Request nach Stopp).
+        let next = tokio::select! {
+            biased;
+            () = session.auto_continue_stop_requested() => None,
+            event = stream.next() => Some(event),
+        };
+        let Some(event) = next else {
+            drop(stream);
+            flush_text_buffer(session, &mut text_buffer).await;
+            emit_chat_response_cancelled(emitter, session_id);
+            return false;
+        };
+        let Some(event) = event else { break };
         match event {
             AiEvent::TextDelta(delta) => {
                 emit_chat_text_delta(emitter, session_id, delta.clone());
@@ -3833,6 +3864,7 @@ mod tests {
             pending_action: StdMutex::new(None),
             sftp: AsyncMutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+            auto_continue_stop_notify: tokio::sync::Notify::new(),
             risk_second_opinion_provider: None,
             risk_second_opinion_budget: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
@@ -12982,5 +13014,223 @@ mod tests {
             elapsed <= std::time::Duration::from_secs(91),
             "darf nicht über die gedeckelte Maximalwartezeit hinaus hängen, wartete {elapsed:?}"
         );
+    }
+
+    /// Spec 0066, §1: Provider, dessen Stream erst ein Text-Delta liefert und
+    /// dann hängt, bis `gate` geöffnet wird — danach folgt `after_gate`.
+    /// `dropped` wird gesetzt, sobald der Stream verworfen ist (entspricht
+    /// dem Schließen der HTTP-Verbindung bei einem echten Provider).
+    struct GatedAiProvider {
+        gate: Arc<tokio::sync::Notify>,
+        after_gate: StdMutex<Option<Vec<AiEvent>>>,
+        dropped: Arc<std::sync::atomic::AtomicBool>,
+        send_calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    struct DropFlag(Arc<std::sync::atomic::AtomicBool>);
+    impl Drop for DropFlag {
+        fn drop(&mut self) {
+            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    impl AiProvider for GatedAiProvider {
+        fn send(
+            &self,
+            _context: SessionContext,
+        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+            self.send_calls
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let gate = self.gate.clone();
+            let after_gate = self
+                .after_gate
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap_or_else(|| vec![AiEvent::Done]);
+            let guard = DropFlag(self.dropped.clone());
+            let head = futures::stream::iter(vec![AiEvent::TextDelta("Teil".to_string())]);
+            let tail = futures::stream::once(async move {
+                let _guard = guard;
+                gate.notified().await;
+                futures::stream::iter(after_gate)
+            })
+            .flatten();
+            Box::pin(head.chain(tail))
+        }
+    }
+
+    fn gated_provider(
+        after_gate: Vec<AiEvent>,
+    ) -> (
+        GatedAiProvider,
+        Arc<tokio::sync::Notify>,
+        Arc<std::sync::atomic::AtomicBool>,
+        Arc<std::sync::atomic::AtomicUsize>,
+    ) {
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let send_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        (
+            GatedAiProvider {
+                gate: gate.clone(),
+                after_gate: StdMutex::new(Some(after_gate)),
+                dropped: dropped.clone(),
+                send_calls: send_calls.clone(),
+            },
+            gate,
+            dropped,
+            send_calls,
+        )
+    }
+
+    fn has_event(emitter: &TestEmitter, name: &str) -> bool {
+        emitter
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(event, _)| event == name)
+    }
+
+    /// Spec 0066, §1: Stopp während der Stream läuft bricht ihn sofort ab —
+    /// kein Warten auf das Ende der Antwort, Stream (= HTTP-Verbindung)
+    /// verworfen, bereits gestreamter Text bleibt im Verlauf.
+    #[tokio::test]
+    async fn test_stop_aborts_in_flight_ai_stream_immediately() {
+        let (provider, _gate, dropped, send_calls) = gated_provider(vec![AiEvent::Done]);
+        let session = session_with_ai_provider(provider, MockSshTransport::default());
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let turn = run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let stopper = async {
+            while !has_event(&emitter, "chat-text-delta") {
+                tokio::task::yield_now().await;
+            }
+            session.request_auto_continue_stop();
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(turn, stopper)
+        })
+        .await
+        .expect("Stopp muss den hängenden Stream beenden, nicht auf sein Ende warten");
+
+        assert!(
+            dropped.load(std::sync::atomic::Ordering::SeqCst),
+            "der Stream muss nach Stopp verworfen sein (schließt die Verbindung)"
+        );
+        assert_eq!(send_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(has_event(&emitter, "chat-response-cancelled"));
+        let history = session.context.lock().await.history.clone();
+        assert!(
+            history
+                .iter()
+                .any(|m| matches!(&m.content, MessageContent::Text(t) if t == "Teil")),
+            "bereits gestreamter Text muss im Verlauf bleiben"
+        );
+    }
+
+    /// Spec 0066, §1, Invariante: liegt nach einem Stopp bereits ein
+    /// vollständiger Tool-Call im Stream bereit, wird er trotzdem NIE an
+    /// Filter/Confirm/Ausführung weitergegeben.
+    #[tokio::test]
+    async fn test_stop_never_forwards_an_already_ready_tool_call() {
+        let (provider, gate, _dropped, _send_calls) = gated_provider(vec![
+            AiEvent::ActionProposed(AiAction::SuggestCommand {
+                command: "echo gefaehrlich".to_string(),
+            }),
+            AiEvent::Done,
+        ]);
+        let mut session = session_with_ai_provider(
+            provider,
+            MockSshTransport::default().with_response("echo gefaehrlich", output("x")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let turn = run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let stopper = async {
+            while !has_event(&emitter, "chat-text-delta") {
+                tokio::task::yield_now().await;
+            }
+            // Beides gleichzeitig: Stopp setzen UND den Tool-Call sofort
+            // verfügbar machen — der Stopp muss gewinnen.
+            session.request_auto_continue_stop();
+            gate.notify_waiters();
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(turn, stopper)
+        })
+        .await
+        .expect("Turn muss nach Stopp enden");
+
+        assert!(
+            !has_event(&emitter, "chat-action-proposed"),
+            "nach Stopp darf kein Tool-Call mehr vorgeschlagen werden"
+        );
+        let history = session.context.lock().await.history.clone();
+        assert!(
+            !history
+                .iter()
+                .any(|m| matches!(&m.content, MessageContent::CommandResult { .. })),
+            "nach Stopp darf nichts ausgeführt werden"
+        );
+    }
+
+    /// Spec 0066, §1: ein Stopp während der Wartezeit vor dem Send
+    /// (Pacing/Rate-Limit-Gate) verhindert den Request ganz.
+    #[tokio::test]
+    async fn test_stop_during_pre_send_wait_prevents_the_request() {
+        let (provider, _gate, _dropped, send_calls) = gated_provider(vec![AiEvent::Done]);
+        let session = session_with_ai_provider(provider, MockSshTransport::default());
+        // Letzter Request "gerade eben" → `wait_for_ai_request_slot` schläft.
+        *session.ai_request_paced_at.lock().await = Some(tokio::time::Instant::now());
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        let round = run_one_round(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let stopper = async {
+            tokio::task::yield_now().await;
+            session.request_auto_continue_stop();
+        };
+        let (continued, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(round, stopper)
+        })
+        .await
+        .expect("Stopp in der Wartezeit muss die Runde sofort beenden");
+
+        assert!(!continued);
+        assert_eq!(
+            send_calls.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "nach Stopp in der Wartezeit darf kein Request mehr rausgehen"
+        );
+        assert!(has_event(&emitter, "chat-response-cancelled"));
     }
 }

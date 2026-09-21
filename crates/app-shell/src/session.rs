@@ -204,6 +204,11 @@ pub struct Session {
     /// Flag-Zustand ohne zusammengesetzte Operationen, für den ein Mutex nur
     /// unnötigen Overhead bedeuten würde.
     pub auto_continue_stop: std::sync::atomic::AtomicBool,
+    /// Spec 0066, §1: weckt eine laufende Runde auf, sobald
+    /// `auto_continue_stop` gesetzt wird, damit ein laufender KI-Stream
+    /// sofort abgebrochen wird statt erst an der nächsten Rundengrenze.
+    /// Immer über [`Session::request_auto_continue_stop`] setzen.
+    pub auto_continue_stop_notify: tokio::sync::Notify,
     /// Spec 0026, Abschnitt 3: `Some`, wenn die optionale KI-Zweitmeinung
     /// zur Daten-Risiko-Achse aktiviert ist UND ein gültiger, separater
     /// Provider dafür konfiguriert ist — einmalig bei `connect()` aus den
@@ -310,6 +315,34 @@ pub struct Session {
     /// Feld unmittelbar vor jedem `send()`-Aufruf konsultiert. `None` vor
     /// dem ersten Aufruf.
     pub ai_request_paced_at: AsyncMutex<Option<tokio::time::Instant>>,
+}
+
+impl Session {
+    /// Spec 0066, §1: setzt das Stopp-Flag und weckt eine gerade laufende
+    /// Runde auf (bricht deren KI-Stream ab).
+    pub fn request_auto_continue_stop(&self) {
+        self.auto_continue_stop
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.auto_continue_stop_notify.notify_waiters();
+    }
+
+    /// Wird fertig, sobald `auto_continue_stop` gesetzt ist.
+    pub(crate) async fn auto_continue_stop_requested(&self) {
+        loop {
+            // `notified()` vor der Flag-Prüfung anlegen: ein `Notified`
+            // empfängt `notify_waiters()` ab seiner Erzeugung, auch
+            // ungepollt — sonst ginge ein Stopp zwischen Prüfung und
+            // `.await` verloren.
+            let notified = self.auto_continue_stop_notify.notified();
+            if self
+                .auto_continue_stop
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return;
+            }
+            notified.await;
+        }
+    }
 }
 
 /// Spec 0039, Abschnitt 5: "Bei Session Resume mit vorbelasteter Historie
@@ -618,6 +651,7 @@ mod tests {
             pending_action: StdMutex::new(None),
             sftp: AsyncMutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+            auto_continue_stop_notify: tokio::sync::Notify::new(),
             risk_second_opinion_provider: None,
             risk_second_opinion_budget: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),

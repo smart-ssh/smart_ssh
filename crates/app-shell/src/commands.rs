@@ -1176,6 +1176,7 @@ pub(crate) async fn connect_session(
         pending_action: std::sync::Mutex::new(None),
         sftp: tokio::sync::Mutex::new(None),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+        auto_continue_stop_notify: tokio::sync::Notify::new(),
         risk_second_opinion_provider,
         risk_second_opinion_budget,
         running_command_cancellations: state.running_command_cancellations.clone(),
@@ -1922,12 +1923,11 @@ pub async fn cancel_running_command(
     Ok(())
 }
 
-/// Spec 0021, Abschnitt 5: "Automatik stoppen" — bricht die automatische
-/// Fortsetzungskette für die aktuelle Nutzer-Nachricht sofort ab (keine
-/// weiteren automatischen `AiProvider::send()`-Aufrufe mehr), unabhängig
-/// vom Runden-Zähler. Ein bereits offener Bestätigungsdialog ist davon
-/// nicht betroffen — `run_chat_turn` prüft dieses Flag nur *zwischen*
-/// Runden (s. dortiger Kommentar), nie während eine Runde noch läuft.
+/// Spec 0021, Abschnitt 5 / Spec 0066, §1: "Stopp" — bricht einen gerade
+/// laufenden KI-Request sofort ab und verhindert weitere automatische
+/// Runden. Ein bereits offener Bestätigungsdialog bleibt stehen (der
+/// Nutzer entscheidet selbst), ein laufendes Remote-Kommando läuft zu
+/// Ende.
 #[tauri::command]
 pub async fn stop_auto_continuation(
     state: State<'_, AppState>,
@@ -1937,9 +1937,7 @@ pub async fn stop_auto_continuation(
         .sessions
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
-    session
-        .auto_continue_stop
-        .store(true, std::sync::atomic::Ordering::SeqCst);
+    session.request_auto_continue_stop();
     Ok(())
 }
 
@@ -4715,6 +4713,7 @@ mod send_chat_message_persistence_tests {
             pending_action: std::sync::Mutex::new(None),
             sftp: AsyncMutex::new(None::<Box<dyn SftpSession>>),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+            auto_continue_stop_notify: tokio::sync::Notify::new(),
             risk_second_opinion_provider: None,
             risk_second_opinion_budget: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),

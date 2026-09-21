@@ -663,6 +663,24 @@ pub fn emit_chat_response_truncated(emitter: &dyn EventEmitter, session_id: Sess
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ChatResponseCancelledPayload {
+    session_id: SessionId,
+}
+
+/// Spec 0066, §1: der Nutzer hat eine laufende KI-Anfrage per Stopp
+/// abgebrochen. Eigenes Event statt Hinweistext im Inhalt — aus demselben
+/// Grund wie `emit_chat_response_truncated` (nicht von Modellausgabe
+/// fälschbar).
+pub fn emit_chat_response_cancelled(emitter: &dyn EventEmitter, session_id: SessionId) {
+    emit(
+        emitter,
+        "chat-response-cancelled",
+        &ChatResponseCancelledPayload { session_id },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ChatAutoContinuationLimitReachedPayload {
     session_id: SessionId,
     limit: usize,

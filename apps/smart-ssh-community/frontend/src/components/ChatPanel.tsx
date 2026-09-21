@@ -25,6 +25,7 @@ import {
   onChatAutoContinuationStarted,
   onChatDocumentGenerated,
   onChatError,
+  onChatResponseCancelled,
   onChatResponseTruncated,
   onChatTextDelta,
   onRiskAssessmentUpdated,
@@ -122,6 +123,9 @@ export type ChatItem =
     }
   | { type: "error"; id: string; message: string; code: string | null }
   | { type: "autoContinuationLimitReached"; id: string; limit: number }
+  // Spec 0066, §1: der Nutzer hat die laufende KI-Anfrage per Stopp
+  // abgebrochen — reines UI-Element aus einem Event, nicht Teil des Texts.
+  | { type: "responseCancelled"; id: string }
   // Spec 0061, Abschnitt 4: proaktives Warten vor dem nächsten KI-Aufruf,
   // rein informativ (kein Button) — dieselbe neutrale Karte wie
   // "autoContinuationLimitReached" oben.
@@ -450,6 +454,10 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
           return [...prev.slice(0, -1), { ...last, truncated: true }];
         });
       }),
+      onChatResponseCancelled((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) => [...prev, { type: "responseCancelled", id: freshId() }]);
+      }),
       onChatAutoContinuationLimitReached((event) => {
         if (event.sessionId !== sessionId) return;
         setItems((prev) => [
@@ -527,10 +535,10 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
     );
   };
 
-  /** Spec 0021, Abschnitt 5: optimistisch sofort ausgeblendet — der
-   * eigentliche Effekt (kein weiterer automatischer `send()`-Aufruf mehr)
-   * greift erst beim nächsten Rundenübergang im Backend, aber der Indikator
-   * soll nicht so lange weiter "läuft" suggerieren. */
+  /** Spec 0021, Abschnitt 5 / Spec 0066, §1: bricht den laufenden
+   * KI-Request sofort ab und verhindert weitere automatische Runden. Ein
+   * offener Bestätigungsdialog bleibt stehen, ein laufendes Kommando läuft
+   * zu Ende. */
   const handleStopAutoContinuation = () => {
     setAutoContinuing(false);
     stopAutoContinuation(sessionId).catch((err) =>
@@ -805,7 +813,15 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
           sending && (
             <div className="flex items-center gap-2 rounded-lg bg-slate-800/80 px-3 py-2 text-xs text-indigo-300">
               <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
-              <span>KI generiert Antwort / Dokument…</span>
+              <span className="flex-1">KI generiert Antwort / Dokument…</span>
+              {/* Spec 0066, §1: bricht den laufenden KI-Request sofort ab. */}
+              <button
+                type="button"
+                onClick={handleStopAutoContinuation}
+                className="font-heading border border-indigo-500/60 px-2 py-1 text-xs font-semibold tracking-wide text-indigo-200 hover:bg-indigo-600/20"
+              >
+                Stopp
+              </button>
             </div>
           )
         )}
@@ -988,6 +1004,9 @@ export function ChatItemView({
         {t("actionCard.autoContinuationLimitReached", { limit: item.limit })}
       </div>
     );
+  }
+  if (item.type === "responseCancelled") {
+    return <div className="px-1 text-xs text-slate-400">⏹ Antwort abgebrochen.</div>;
   }
   if (item.type === "aiBudgetWaiting") {
     // Spec 0061, Abschnitt 4: rein informativ, kein Button — der Request
