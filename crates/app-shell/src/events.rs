@@ -248,9 +248,10 @@ struct ChatActionProposedPayload {
     /// neuen Texts. `None` für alle anderen Aktionstypen sowie wenn die
     /// Zielauflösung fehlschlägt.
     previous_note_content: Option<String>,
-    /// Spec 0018, Abschnitt 7: ob beim Ausführen automatisch ein
-    /// hinterlegtes Sudo-Passwort eingespeist würde — Grundlage für den
-    /// Transparenz-Hinweis im Bestätigungsdialog.
+    /// Spec 0018, Abschnitt 7 / Spec 0068, Teil 3: ob beim Ausführen ein
+    /// hinterlegtes Sudo-Passwort eingespeist wird oder (Schreib-Fallback
+    /// nach Rechte-Fehler) werden kann — Grundlage für den Hinweis im
+    /// Bestätigungsdialog. Nur mit diesem Wert darf der Fallback laufen.
     uses_stored_sudo_password: bool,
     /// Spec 0020, Abschnitt 4.2, Punkt 3: nur bei `action: WriteRemoteFile`
     /// gesetzt — aktueller (Text-)Inhalt der Zieldatei, für dieselbe

@@ -99,7 +99,11 @@ async fn discover_models_within(
 
     let parsed: ModelsResponse = match tokio::time::timeout(timeout, response.json()).await {
         Ok(result) => result.map_err(|err| AiError::InvalidResponse(err.to_string()))?,
-        Err(_elapsed) => return Err(discovery_timeout(timeout)),
+        Err(_elapsed) => {
+            let mapped = discovery_timeout(timeout);
+            log_provider_transport_error(request_id, &mapped, &secrets);
+            return Err(mapped);
+        }
     };
     Ok(parsed.data.into_iter().map(|entry| entry.id).collect())
 }
@@ -151,7 +155,11 @@ async fn fetch_attestation_info_within(
 
     match tokio::time::timeout(timeout, response.text()).await {
         Ok(result) => result.map_err(|err| AiError::InvalidResponse(err.to_string())),
-        Err(_elapsed) => Err(discovery_timeout(timeout)),
+        Err(_elapsed) => {
+            let mapped = discovery_timeout(timeout);
+            log_provider_transport_error(request_id, &mapped, &[]);
+            Err(mapped)
+        }
     }
 }
 

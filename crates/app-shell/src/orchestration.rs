@@ -122,6 +122,13 @@ pub(crate) const SIDE_CALL_MAX_TOKENS: u32 = 4096;
 /// UX-Grenze gegen "lange". Läuft es ab, gilt die Aktion als **abgelehnt**
 /// (fail-safe, s. `handle_action_proposed`/`handle_note_update_suggested`),
 /// nie als genehmigt.
+/// Tests, die `handle_action_proposed` direkt aufrufen: ein frisches,
+/// unabhängiges Ablehnungs-Flag pro Aufruf (Spec 0068, Teil 4).
+#[cfg(test)]
+fn test_fresh_rejection_flag() -> &'static std::sync::atomic::AtomicBool {
+    Box::leak(Box::new(std::sync::atomic::AtomicBool::new(false)))
+}
+
 pub(crate) const PENDING_ACTION_CONFIRM_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(3600);
 
@@ -637,6 +644,10 @@ async fn run_one_round(
 
     let mut text_buffer = String::new();
     let mut executed_action = false;
+    // Spec 0068, Teil 4 (Review-Fund): wurde eine Aktion DIESER Antwort
+    // abgelehnt/blockiert, läuft keine weitere Aktion derselben Antwort mehr
+    // ohne Rückfrage (s. `handle_action_proposed`).
+    let response_had_rejection = std::sync::atomic::AtomicBool::new(false);
 
     // Diagnose "KI antwortet nicht" (2026-09, Stefan-Report): grenzt ein,
     // ob dieser `run_one_round`-Task hier überhaupt zum ersten Poll des
@@ -693,6 +704,7 @@ async fn run_one_round(
                     profile_store,
                     action_confirmations,
                     ActionOrigin::Internal,
+                    &response_had_rejection,
                 )
                 .await
                 {
@@ -764,6 +776,12 @@ async fn flush_text_buffer(session: &Session, buffer: &mut String) {
 }
 
 /// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde.
+///
+/// `earlier_rejection` (Spec 0068, Teil 4, Review-Fund): gemeinsam für alle
+/// Aktionen EINER KI-Antwort. Wird hier gesetzt, sobald eine Aktion
+/// blockiert (`Deny`) oder vom Nutzer abgelehnt wird; ist es gesetzt, wird
+/// jede weitere Aktion derselben Antwort von `AutoExec` auf `Confirm`
+/// eskaliert — sie kann inhaltlich auf der abgelehnten aufbauen.
 #[allow(clippy::too_many_arguments)]
 async fn handle_action_proposed(
     session: &Session,
@@ -773,6 +791,7 @@ async fn handle_action_proposed(
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
     origin: ActionOrigin,
+    earlier_rejection: &std::sync::atomic::AtomicBool,
 ) -> bool {
     let action_id: ActionId = Uuid::new_v4();
 
@@ -954,6 +973,18 @@ async fn handle_action_proposed(
         };
     }
 
+    // Spec 0068, Teil 4 (Review-Fund): nach einer Ablehnung in derselben
+    // Antwort nie mehr ohne Rückfrage — nur Eskalation.
+    if matches!(decision, Decision::AutoExec)
+        && earlier_rejection.load(std::sync::atomic::Ordering::SeqCst)
+    {
+        decision = Decision::Confirm {
+            reason: "Eine vorherige Aktion dieser Antwort wurde abgelehnt – erfordert Bestätigung"
+                .to_string(),
+            code: "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM".to_string(),
+        };
+    }
+
     let confirm_rx = if matches!(decision, Decision::Confirm { .. }) {
         Some(action_confirmations.register(action_id))
     } else {
@@ -1058,10 +1089,12 @@ async fn handle_action_proposed(
                 profile_store,
                 persist,
                 ledger_source_for_origin(&origin),
+                uses_password,
             )
             .await
         }
         Decision::Deny { reason, code } => {
+            earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
             if let AiAction::SuggestCommand { .. } = &action {
                 write_ledger_entry(
                     session,
@@ -1114,6 +1147,7 @@ async fn handle_action_proposed(
                     // Sender wurde gedroppt (z. B. App beendet, bevor der
                     // Nutzer reagiert hat) — kein Absturz, einfach nichts
                     // ausführen.
+                    earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
                     return false;
                 }
                 Err(_elapsed) => {
@@ -1138,6 +1172,9 @@ async fn handle_action_proposed(
                     (ActionUserDecision::Deny, RejectionReason::Timeout)
                 }
             };
+            if matches!(user_decision, ActionUserDecision::Deny) {
+                earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
             handle_user_decision(
                 session,
                 session_id,
@@ -1152,6 +1189,7 @@ async fn handle_action_proposed(
                 matched_rule_origin,
                 confirm_reason,
                 confirm_code,
+                uses_password,
             )
             .await
         }
@@ -1185,6 +1223,8 @@ pub(crate) async fn handle_mcp_action_proposed(
         profile_store,
         action_confirmations,
         ActionOrigin::Mcp { client_name },
+        // Ein MCP-Aufruf ist genau eine Aktion — keine Nachbar-Aktionen.
+        &std::sync::atomic::AtomicBool::new(false),
     )
     .await
 }
@@ -1475,6 +1515,10 @@ async fn handle_user_decision(
     // eine Regel gegriffen hätte.
     confirm_reason: String,
     confirm_code: String,
+    // Spec 0068, Teil 3 (Review-Fund): der im Dialog tatsächlich
+    // angekündigte Wert (`usesStoredSudoPassword`) — nur damit darf ein
+    // Schreib-Fallback Sudo nutzen.
+    sudo_fallback_announced: bool,
 ) -> bool {
     // Spec 0040, Abschnitt 4: s. identischer Kommentar in
     // `handle_action_proposed` — MCP-Herkunft persistiert nie, auch nicht
@@ -1576,6 +1620,7 @@ async fn handle_user_decision(
                 profile_store,
                 persist,
                 decision_source,
+                sudo_fallback_announced,
             )
             .await
         }
@@ -1716,6 +1761,7 @@ async fn handle_user_decision(
                 profile_store,
                 persist,
                 LedgerSource::User,
+                sudo_fallback_announced,
             )
             .await
         }
@@ -1746,6 +1792,8 @@ async fn execute_action(
     // nur der `SuggestCommand`-Zweig unten braucht ihn (Etappe-1-Scope,
     // s. ADR 0047 Punkt 3), die anderen Aktionstypen ignorieren ihn.
     ledger_source: LedgerSource,
+    // Spec 0068, Teil 3: s. `handle_user_decision`.
+    sudo_fallback_announced: bool,
 ) -> bool {
     match action {
         AiAction::SuggestCommand { command } => {
@@ -1784,7 +1832,14 @@ async fn execute_action(
         }
         AiAction::WriteRemoteFile { path, content } => {
             execute_write_remote_file(
-                session, session_id, action_id, path, content, emitter, persist,
+                session,
+                session_id,
+                action_id,
+                path,
+                content,
+                emitter,
+                persist,
+                sudo_fallback_announced,
             )
             .await
         }
@@ -1818,19 +1873,15 @@ fn command_with_stdin_password_flag(command: &str) -> Option<String> {
     Some(format!("{prefix} -S{rest}"))
 }
 
-/// Spec 0018, Abschnitt 7: ob beim Ausführen dieser Aktion automatisch ein
-/// hinterlegtes Sudo-Passwort eingespeist würde — für den Transparenz-
-/// Hinweis im Bestätigungsdialog (nur relevant für `SuggestCommand`, nie
-/// für `ProposeNoteUpdate`/`GenerateDocument`).
-/// Ob die Aktion das hinterlegte Sudo-Passwort nutzt bzw. nutzen KANN —
+/// Spec 0018, Abschnitt 7 / Spec 0068, Teil 3: ob die Aktion das hinterlegte Sudo-Passwort nutzt bzw. nutzen KANN —
 /// steuert die Ankündigung im Bestätigungsdialog (`usesStoredSudoPassword`)
 /// und die Eskalation auf `Confirm`.
 ///
 /// Spec 0068, Teil 3 (Release-Gate C): für `WriteRemoteFile` auch dann,
 /// wenn Sudo erst als Fallback nach einem Rechte-Fehler nötig würde
 /// (`execute_write_remote_file`) — sonst schöbe die App Sudo nach der
-/// Bestätigung still nach. Der Fallback dort fragt genau diese Funktion ab,
-/// ist also strukturell an die Ankündigung gebunden.
+/// Bestätigung still nach. Der Fallback dort bekommt genau den im Dialog
+/// gesendeten Wert durchgereicht, ist also an die Ankündigung gebunden.
 fn uses_stored_sudo_password(session: &Session, action: &AiAction) -> bool {
     session.sudo_password.is_some()
         && match action {
@@ -2669,6 +2720,7 @@ async fn write_via_sudo_fallback(
 /// Fallback, sofern für den Server ein Passwort hinterlegt ist. Ohne
 /// Passwort wird der ursprüngliche Fehler unverändert gemeldet (Abschnitt
 /// 4.3, Punkt 5: "kein stiller Fallback").
+#[allow(clippy::too_many_arguments)]
 async fn execute_write_remote_file(
     session: &Session,
     session_id: SessionId,
@@ -2677,6 +2729,7 @@ async fn execute_write_remote_file(
     content: String,
     emitter: &dyn EventEmitter,
     persist: bool,
+    sudo_fallback_announced: bool,
 ) -> bool {
     if let Err(err) = ensure_sftp_open(session).await {
         let code = err.code();
@@ -2708,15 +2761,13 @@ async fn execute_write_remote_file(
         Ok(backup_path) => (backup_path, false),
         Err(SshError::SftpPermissionDenied(_)) => {
             // Spec 0068, Teil 3: Sudo-Fallback nur, wenn der Dialog ihn vorab
-            // angekündigt hat — dieselbe Prüfung wie für die Ankündigung.
-            let announced = uses_stored_sudo_password(
-                session,
-                &AiAction::WriteRemoteFile {
-                    path: path.clone(),
-                    content: String::new(),
-                },
-            );
-            let Some(password) = session.sudo_password.clone().filter(|_| announced) else {
+            // angekündigt hat — genau der im Event gesendete Wert
+            // (Review-Fund: keine Neuberechnung, die auseinanderlaufen kann).
+            let Some(password) = session
+                .sudo_password
+                .clone()
+                .filter(|_| sudo_fallback_announced)
+            else {
                 return emit_action_error(
                     session,
                     emitter,
@@ -3702,6 +3753,7 @@ pub(crate) async fn propose_note_from_chat_content(
         profile_store,
         action_confirmations,
         ActionOrigin::Internal,
+        &std::sync::atomic::AtomicBool::new(false),
     )
     .await
 }
@@ -4217,6 +4269,7 @@ mod tests {
             ActionOrigin::Mcp {
                 client_name: Some("Claude Code".to_string()),
             },
+            test_fresh_rejection_flag(),
         );
         let responder = deny_first_proposed_action(&emitter, &confirmations);
         // Rückgabewert ignoriert: `true` bedeutet hier "Folgerunde nötig"
@@ -4835,6 +4888,7 @@ mod tests {
             &profile_store,
             &confirmations,
             ActionOrigin::Internal,
+            test_fresh_rejection_flag(),
         );
         let responder = deny_first_proposed_action(&emitter, &confirmations);
         let ((), ()) = tokio::join!(
@@ -4870,6 +4924,14 @@ mod tests {
         session: &Session,
         action: AiAction,
     ) -> (Decision, serde_json::Value) {
+        proposed_decision_code_with_origin(session, action, ActionOrigin::Internal).await
+    }
+
+    async fn proposed_decision_code_with_origin(
+        session: &Session,
+        action: AiAction,
+        origin: ActionOrigin,
+    ) -> (Decision, serde_json::Value) {
         let emitter = TestEmitter::default();
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
@@ -4882,7 +4944,8 @@ mod tests {
             &emitter,
             &profile_store,
             &confirmations,
-            ActionOrigin::Internal,
+            origin,
+            test_fresh_rejection_flag(),
         );
         tokio::pin!(action_future);
 
@@ -9504,6 +9567,7 @@ mod tests {
             &profile_store,
             &confirmations,
             ActionOrigin::Internal,
+            test_fresh_rejection_flag(),
         )
         .await;
 
@@ -9558,6 +9622,7 @@ mod tests {
             &profile_store,
             &confirmations,
             ActionOrigin::Internal,
+            test_fresh_rejection_flag(),
         );
         let responder = approve_first_proposed_action(&emitter, &confirmations);
         let ((), ()) = tokio::join!(
@@ -9608,6 +9673,7 @@ mod tests {
             &profile_store,
             &confirmations,
             ActionOrigin::Internal,
+            test_fresh_rejection_flag(),
         );
         let responder = deny_first_proposed_action(&emitter, &confirmations);
         let ((), ()) = tokio::join!(
@@ -9671,6 +9737,7 @@ mod tests {
             ActionOrigin::Mcp {
                 client_name: Some("Claude Code".to_string()),
             },
+            test_fresh_rejection_flag(),
         );
         let responder = approve_first_proposed_action(&emitter, &confirmations);
         let ((), ()) = tokio::join!(
@@ -9824,6 +9891,7 @@ mod tests {
             &profile_store,
             &confirmations,
             ActionOrigin::Internal,
+            test_fresh_rejection_flag(),
         );
         let advancer = async {
             loop {
@@ -9920,6 +9988,7 @@ mod tests {
             &profile_store,
             &confirmations,
             ActionOrigin::Internal,
+            test_fresh_rejection_flag(),
         );
         let responder = respond_to_first_proposed_action(
             &emitter,
@@ -9992,6 +10061,7 @@ mod tests {
             &profile_store,
             &confirmations,
             ActionOrigin::Internal,
+            test_fresh_rejection_flag(),
         );
         let responder = respond_to_first_proposed_action(
             &emitter,
@@ -10063,6 +10133,7 @@ mod tests {
             &profile_store,
             &confirmations,
             ActionOrigin::Internal,
+            test_fresh_rejection_flag(),
         )
         .await;
 
@@ -11356,6 +11427,7 @@ mod tests {
             ActionOrigin::Mcp {
                 client_name: Some("Claude Code".to_string()),
             },
+            test_fresh_rejection_flag(),
         );
         let responder = approve_first_proposed_action(&emitter, &confirmations);
         let ((), ()) = tokio::join!(
@@ -11456,6 +11528,7 @@ mod tests {
             ActionOrigin::Mcp {
                 client_name: Some("Claude Code".to_string()),
             },
+            test_fresh_rejection_flag(),
         );
         let responder = approve_first_proposed_action(&emitter, &confirmations);
         let ((), ()) = tokio::join!(
@@ -11690,6 +11763,7 @@ mod tests {
             ActionOrigin::Mcp {
                 client_name: Some("Claude Code".to_string()),
             },
+            test_fresh_rejection_flag(),
         );
         let responder = approve_first_proposed_action(&emitter, &confirmations);
         let ((), ()) = tokio::join!(
@@ -13499,6 +13573,7 @@ mod tests {
             &profile_store,
             &confirmations,
             ActionOrigin::Internal,
+            test_fresh_rejection_flag(),
         )
         .await;
 
@@ -13670,6 +13745,7 @@ mod tests {
                 &profile_store,
                 &confirmations,
                 ActionOrigin::Internal,
+                test_fresh_rejection_flag(),
             );
             let responder =
                 async {
@@ -13810,6 +13886,29 @@ mod tests {
         .await
         .expect("Dialog muss enden");
         assert_eq!(payload["usesStoredSudoPassword"], false, "{payload}");
+    }
+
+    /// Wie oben, über MCP (Review-Fund): derselbe Hinweis im Dialog.
+    #[tokio::test]
+    async fn test_mcp_write_confirmation_announces_possible_sudo_fallback() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
+        session.sftp = AsyncMutex::new(Some(Box::new(MockSftpSession::new())));
+        let (decision, payload) = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            proposed_decision_code_with_origin(
+                &session,
+                AiAction::WriteRemoteFile {
+                    path: "/etc/nginx/nginx.conf".to_string(),
+                    content: "worker_processes 2;".to_string(),
+                },
+                ActionOrigin::Mcp { client_name: None },
+            ),
+        )
+        .await
+        .expect("Dialog muss enden");
+        assert!(matches!(decision, Decision::Confirm { .. }), "{payload}");
+        assert_eq!(payload["usesStoredSudoPassword"], true, "{payload}");
     }
 
     // --- Spec 0068, Teil 4: mehrere Tool-Calls in einer Antwort ----------
@@ -14043,6 +14142,128 @@ mod tests {
             executed_commands(&history),
             vec!["systemctl start nginx".to_string()],
             "nur die einzeln bestätigte zweite Aktion läuft"
+        );
+    }
+
+    /// Spec 0068, Teil 4 (Review-Fund): lehnt der Nutzer Aktion 1 ab, läuft
+    /// eine per Allow-Regel freigegebene Aktion 2 DERSELBEN Antwort nicht
+    /// mehr automatisch, sondern bekommt einen eigenen Dialog.
+    #[tokio::test]
+    async fn test_user_rejection_escalates_allowed_later_action_of_same_response() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "systemctl stop nginx".to_string(),
+                }),
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default()
+                .with_response("systemctl stop nginx", output(""))
+                .with_response("ls -la", output("a")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowLsOnly));
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+        let profile_store = InMemoryProfileStore::default();
+
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(
+                    &emitter,
+                    &confirmations,
+                    vec![ActionUserDecision::Deny, ActionUserDecision::Deny],
+                ),
+            )
+        })
+        .await
+        .expect("Turn muss enden");
+
+        let decisions = proposed_decisions(&emitter);
+        assert_eq!(decisions[1].0, "ls -la");
+        assert_eq!(
+            decisions[1].1["Confirm"]["code"], "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM",
+            "{decisions:?}"
+        );
+        let history = session.context.lock().await.history.clone();
+        assert!(executed_commands(&history).is_empty(), "{history:?}");
+    }
+
+    /// Wie oben, aber Aktion 1 wird regelbasiert blockiert (`Deny`).
+    #[tokio::test]
+    async fn test_blocked_action_escalates_allowed_later_action_of_same_response() {
+        struct DenyRmAllowLs;
+        #[async_trait]
+        impl PolicyStore for DenyRmAllowLs {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                let rule = |id: &str, glob: &str, action| Rule {
+                    id: ssh_manager_core::filter::RuleId(id.to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob(glob.to_string()),
+                    action,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
+                };
+                vec![
+                    rule(
+                        "deny-rm",
+                        "rm *",
+                        ssh_manager_core::filter::RuleAction::Deny,
+                    ),
+                    rule(
+                        "allow-ls",
+                        "ls*",
+                        ssh_manager_core::filter::RuleAction::Allow,
+                    ),
+                ]
+            }
+        }
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "rm /tmp/x".to_string(),
+                }),
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default().with_response("ls -la", output("a")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(DenyRmAllowLs));
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+        let profile_store = InMemoryProfileStore::default();
+
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
+            )
+        })
+        .await
+        .expect("Turn muss enden");
+
+        let decisions = proposed_decisions(&emitter);
+        assert!(decisions[0].1.get("Deny").is_some(), "{decisions:?}");
+        assert_eq!(
+            decisions[1].1["Confirm"]["code"], "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM",
+            "{decisions:?}"
         );
     }
 
