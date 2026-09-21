@@ -66,6 +66,17 @@ sind mit **(Pro)** markiert.
   zusammenfassen zu lassen (derselbe Bestätigungs-Ablauf wie beim
   Trennen-Vorschlag).
 
+- Die maximale Antwortlänge der KI ist jetzt modellabhängig statt fest
+  auf ~4000 Tokens begrenzt (bei aktuellen Claude-Modellen bis zu 128K)
+  — ein zu knappes Limit führte bislang gelegentlich dazu, dass die
+  Antwort mitten im Satz/Kommando abbrach. Bricht eine Antwort trotzdem
+  am Längenlimit ab, bleibt der bisherige Text sichtbar und ein
+  "Weiter"-Knopf setzt die Antwort exakt dort fort, wo sie endete.
+  Zusätzlich im KI-Provider-Formular unter "Erweitert" ein optionales
+  Feld "Max. Antwortlänge (Tokens)" für Provider mit unbekanntem
+  Output-Maximum (z. B. ein selbstgehostetes Modell) — Standard weiterhin
+  "Automatisch".
+
 ### Changed
 - Der System-Prompt weist die KI jetzt ausdrücklich an, ein angekündigtes
   Kommando auch tatsächlich über `suggest_command` vorzuschlagen, statt es
@@ -121,6 +132,14 @@ sind mit **(Pro)** markiert.
   mehrstufigen Allow-Bedarf stattdessen mehrere spezifische,
   einstufige Allow-Regeln anlegen. Kommando-Argument-Globs ohne
   Pfad-Charakter (z. B. über eine URL) sind unverändert.
+- Ein von der KI vorgeschlagenes Kommando, dessen Antwort mitten im
+  Vorschlag durch das Längenlimit abgeschnitten wurde, konnte in einem
+  seltenen Fall trotzdem — mit zufällig vollständig aussehendem, aber
+  in Wahrheit gekürztem Inhalt — bis zum Bestätigungsdialog durchkommen.
+  Ein solcher abgeschnittener Vorschlag wird jetzt nie mehr angezeigt
+  oder ausgeführt; die App versucht stattdessen einmalig automatisch
+  erneut mit mehr Platz, bevor sie im Ausnahmefall einen sichtbaren
+  Fehler statt eines unvollständigen Kommandos zeigt.
 
 ## [0.5.0] — 2026-09-11
 
