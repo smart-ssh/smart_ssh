@@ -4503,14 +4503,22 @@ mod tests {
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
 
-        run_chat_turn(
-            &session,
-            Uuid::new_v4(),
-            &emitter,
-            &profile_store,
-            &confirmations,
-        )
-        .await;
+        // Spec 0068, Teil 2: ein Secret-Pfad verlangt jetzt immer eine
+        // Bestätigung (auch mit Allow-Regel) — den Dialog beantworten.
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                resolve_first_confirm(&emitter, &confirmations, ActionUserDecision::Deny),
+            )
+        })
+        .await
+        .expect("Turn muss nach der Bestätigung enden");
 
         let events = emitter.events.lock().unwrap().clone();
         let payload = risk_assessment_updated_payload(&events)
@@ -4546,14 +4554,22 @@ mod tests {
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
 
-        run_chat_turn(
-            &session,
-            Uuid::new_v4(),
-            &emitter,
-            &profile_store,
-            &confirmations,
-        )
-        .await;
+        // Spec 0068, Teil 2: ein Secret-Pfad verlangt jetzt immer eine
+        // Bestätigung (auch mit Allow-Regel) — den Dialog beantworten.
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                resolve_first_confirm(&emitter, &confirmations, ActionUserDecision::Deny),
+            )
+        })
+        .await
+        .expect("Turn muss nach der Bestätigung enden");
 
         let events = emitter.events.lock().unwrap().clone();
         assert!(
@@ -11944,14 +11960,22 @@ mod tests {
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
 
-        run_chat_turn(
-            &session,
-            Uuid::new_v4(),
-            &emitter,
-            &profile_store,
-            &confirmations,
-        )
-        .await;
+        // Spec 0068, Teil 2: ein Secret-Pfad verlangt jetzt immer eine
+        // Bestätigung (auch mit Allow-Regel) — den Dialog beantworten.
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                resolve_first_confirm(&emitter, &confirmations, ActionUserDecision::Approve),
+            )
+        })
+        .await
+        .expect("Turn muss nach der Bestätigung enden");
 
         let history = session.context.lock().await.history.clone();
         let fenced_entry = history
@@ -13706,5 +13730,27 @@ mod tests {
         .expect("Deny darf keinen Dialog öffnen");
 
         assert!(matches!(decision, Decision::Deny { .. }), "{payload}");
+    }
+
+    /// Beantwortet den ersten Bestätigungsdialog (Spec 0068: Secret-Pfade
+    /// verlangen immer eine Bestätigung).
+    async fn resolve_first_confirm(
+        emitter: &TestEmitter,
+        confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+        decision: ActionUserDecision,
+    ) {
+        loop {
+            let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
+                (n == "chat-action-proposed" && p["decision"].get("Confirm").is_some())
+                    .then(|| p["actionId"].as_str().unwrap().to_string())
+            });
+            if let Some(id) = pending {
+                confirmations
+                    .resolve(&id.parse().unwrap(), decision)
+                    .unwrap();
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
     }
 }
