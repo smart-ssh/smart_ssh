@@ -216,3 +216,48 @@ gegenüber der ersten Fassung nichts. Gefunden und behoben wurde Folgendes:
   genommen:
   - `api-key: see docs` wird zu `api-key: [REDACTED] docs`.
   - Eine Zeile, die nur `password <wort>` enthält, wird redigiert.
+
+## 9. Vierte Review-Runde
+
+Gefunden und behoben:
+
+- **Redactor:**
+  - **`x-api-key: Bearer …` (hoch):** Die in Runde 3 wieder eingefügten
+    frühen Header-Muster kannten kein `bearer` und keinen `key=`/Quote-Wert.
+    Sie nahmen dem Bearer-Muster den Anker, der Token blieb im Klartext.
+    Die frühen Kopien sind jetzt die erweiterten Fassungen und decken ihren
+    Wert selbst ab.
+  - **`default password x`** (netrc ohne `login`) wird wieder redigiert:
+    Dafür gibt es ein eigenes, am Zeilenanfang verankertes Muster, damit
+    Fließtext unberührt bleibt.
+  - **Ausweiten der Platzhalter:** Links vom Platzhalter zählen `_` und
+    `=` nicht mehr, damit Schlüsselnamen (`GITHUB_TOKEN=`, `DB_PASSWORD=`)
+    lesbar bleiben. Ein Rest links ist der Anfang des Werts, nicht sein
+    Kern.
+- **Klassifizierer:**
+  - **Viele `cd`-Präfixe:** Bei mehr als 64 `cd`-Präfixen oder einem
+    nicht prüfbaren `cd`-Ziel lief der Glob-/Stdout-Check für Befehle ohne
+    Lesebefehl nicht mehr. Er läuft jetzt immer; bei nicht prüfbarem
+    `cd` plus Umleitung und Platzhalter wird eskaliert.
+  - **Scope der Weitergabe an eine andere Shell:** Ein weitergebendes
+    Programm macht gequotete Platzhalter nur noch für die Wörter nach ihm
+    in derselben Pipeline-Stufe zu expandierbaren. Das beseitigt
+    Fehlalarme wie `docker logs web | sed 's/.*x//'`. Davor gequotete
+    Platzhalter expandiert ohnehin niemand. Code-Strings werden weiter im
+    ganzen Teilkommando rekursiv geprüft (`echo '…' | sh`).
+  - **Rekursions-Budget:** Jeder Code-String wird nur einmal geprüft,
+    das Budget liegt bei 64.
+  - **Weitere Shells:** `csh`, `tcsh`, `ash`, `mksh`, `pdsh`, `ansible`,
+    `machinectl`, `mosh`, `at`/`batch`.
+  - **Archivierer:** `tar`/`zip`/`cpio`/`7z`/`rsync`/`scp` auf ein
+    Secret-Verzeichnis (`~/.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`,
+    `/etc/ssl/private`) eskalieren.
+
+Bewusst offen:
+
+- **URL-kodierte Werte:** Ein Treffer mitten in einem URL-kodierten Wert
+  (`%2F…`) kann einen Rest hinter dem `%` stehen lassen. Das ist keine
+  Lockerung, denn vorher blieb mehr stehen.
+- **`[REDACTED]` in Server-Ausgabe:** Ein wörtliches `[REDACTED]` löst
+  ebenfalls das Ausweiten aus. Das kann nur Inhalt vor der KI verbergen,
+  nie aufdecken.
