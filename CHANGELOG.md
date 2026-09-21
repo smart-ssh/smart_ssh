@@ -10,6 +10,22 @@ sind mit **(Pro)** markiert.
 ## [Unreleased]
 
 ### Added
+- Dateibrowser mit erhöhten Rechten: Ein Umschalter „Erhöhte Rechte“ öffnet
+  den Dateibrowser als root (oder einen anderen Nutzer), indem der
+  SFTP-Server per `sudo -n` gestartet wird — wie bei WinSCP. Voraussetzung
+  ist eine sudo-Regel ohne Passwort für `sftp-server` auf dem Server; die
+  App fragt nie nach einem sudo-Passwort. Fehlt die Regel, zeigt die App
+  die passende sudoers-Zeile zum Kopieren samt Hinweis, was sie bedeutet.
+  Der Modus ist nie standardmäßig an, wird nicht gespeichert, ist durch
+  Rahmen und Banner unübersehbar, und Bestätigungen nennen ihn („…als root
+  löschen?“). KI und MCP-Clients haben auf diesen Kanal keinen Zugriff.
+  Den Pfad zu `sftp-server` erkennt die App automatisch; im Server-Profil
+  lässt er sich unter „Erweitert“ überschreiben.
+- Jede Dateibrowser-Aktion meldet jetzt ihr Ergebnis: Erfolg kurz
+  eingeblendet („„datei.conf“ heruntergeladen nach ~/Downloads“, mit „Im
+  Finder zeigen“), Fehler bleiben mit Grund stehen. Ordner-, rekursive und
+  Mehrfach-Aktionen fassen das Ergebnis in einer Meldung mit Anzahl
+  zusammen.
 - Der Über-Dialog zeigt jetzt auch, ob ein Dev- oder Release-Build läuft
   (z. B. „0.5.0 (d887019) · Community · Dev-Build“); die Titelzeile
   markiert Dev-Builds mit „· Dev“. Beide nutzen getrennte
