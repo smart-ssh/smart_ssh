@@ -199,8 +199,10 @@ sind mit **(Pro)** markiert.
   Durchsuchen (`grep -r`, `rg`) und Lesen per `find -exec`/`xargs` fragt
   ebenfalls immer nach, weil der Inhalt vorab nicht prüfbar ist.
 - Schlägt die KI einen Aufruf von `sftp-server` vor (etwa per `sudo -n`),
-  zeigt die Risikoeinschätzung jetzt Rot: Mit der sudo-Regel für den
-  erhöhten Dateibrowser bedeutet das Dateizugriff mit Root-Rechten.
+  zeigt die Risikoeinschätzung jetzt Rot und die App fragt immer nach —
+  auch wenn eine Allow-Regel das Kommando sonst freigeben würde: Mit der
+  sudo-Regel für den erhöhten Dateibrowser bedeutet das Dateizugriff mit
+  Root-Rechten.
 - Lehnt man eine von mehreren Aktionen einer KI-Antwort ab (oder blockiert
   eine Regel sie), laufen die übrigen Aktionen derselben Antwort nicht mehr
   automatisch, sondern fragen ebenfalls nach — sie könnten auf der

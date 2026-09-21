@@ -94,10 +94,13 @@ oder den KI-Kontext.
   ausdrücklich. **Entschieden (Stefan, 2026-09-22, Commit `e052fb8`):**
   Aufrufe von `sftp-server` (direkt oder per `sudo`/`doas`) gelten im
   Risiko-Klassifizierer fest als Server-Risiko Rot; bloße Erwähnungen
-  (`ls`, `grep`, `which`) nicht. Rot ist Anzeige und schärft nach
-  eingelesenem Serverinhalt die Stufe „Ausgewogen“ auf Bestätigung; eine
-  passende Allow-Regel (z. B. `sudo *`) kann einen solchen Aufruf sonst
-  weiterhin automatisch freigeben.
+  (`ls`, `grep`, `which`) nicht. **Zusätzlich (Stefan, 2026-09-22):** ein
+  solcher Aufruf verlangt immer eine Bestätigung, auch gegen eine
+  Allow-Regel (`FILTER_SFTP_SERVER_REQUIRES_CONFIRM`, Chat und MCP).
+  Aufgebaut wie die Secret-Prüfung aus Spec 0068 als ODER: das Rot-Muster
+  unverändert, ODER eine breitere, quote-bewusste Wort-Prüfung (Wrapper,
+  Code-Strings einer weiteren Shell, Pipe an eine Shell) — die Erweiterung
+  kann nie weniger erkennen als das Rot-Muster.
 - **Besitzer-Prüfung des Pfads:** Die App prüft nicht, ob `sftp-server` root
   gehört bzw. für den Login unbeschreibbar ist. Zeigt `sshd_config` auf ein
   vom Login austauschbares Binary, würde die angebotene Regel dieses
