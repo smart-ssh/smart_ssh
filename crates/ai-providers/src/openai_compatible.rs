@@ -17,7 +17,6 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::pin::Pin;
 
-use futures::future::FutureExt;
 use futures::{Stream, StreamExt};
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -27,6 +26,31 @@ use ssh_manager_core::ai::{
     Role, SessionContext, UntrustedKind,
 };
 use ssh_manager_core::ssh::CommandOutput;
+
+/// Startwert für den einmaligen `max_tokens`-Retry bei einem abgeschnittenen
+/// Tool-Call (Spec 0065, Teil 3) — anders als bei Anthropic (s. dortiges
+/// `ANTHROPIC_RETRY_MAX_TOKENS_CAP`) setzt `build_request_body` hier heute
+/// GAR KEIN `max_tokens`-Feld (der Provider nutzt seinen eigenen Default,
+/// s. `build_request_body`-Kommentar), es gibt also keinen bekannten Wert
+/// zum Verdoppeln. Bewusst konservativ: reicht für die meisten
+/// selbstgehosteten/gateway-Modelle, ohne über ein unbekanntes
+/// Output-Maximum hinauszuschießen (Spec 0065 §1: ein zu hoher Wert kann
+/// bei manchen Gateways zu einem 400 führen) — Commit 2 dieser Spec ersetzt
+/// dies durch einen echten modellabhängigen Default.
+const OPENAI_COMPATIBLE_RETRY_MAX_TOKENS: u32 = 8192;
+
+/// s. `crate::anthropic::RawEvent`-Doc-Kommentar — identisches Muster.
+#[derive(Debug, Clone, PartialEq)]
+enum RawEvent {
+    Public(AiEvent),
+    RetryWithHigherMaxTokens,
+}
+
+fn to_raw_stream(
+    inner: Pin<Box<dyn Stream<Item = AiEvent> + Send>>,
+) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
+    Box::pin(inner.map(RawEvent::Public))
+}
 
 use crate::action::{action_from_tool_arguments, parameters_json_schema};
 use crate::error::{error_stream, map_http_status, map_transport_error};
@@ -241,6 +265,136 @@ fn openai_tool_definition(action: &ActionSchema) -> Value {
     })
 }
 
+/// s. `crate::anthropic::connect_and_stream`-Kommentar — identisches Muster,
+/// losgelöst von `send()`, damit Spec 0065 Teil 3 sie ein zweites Mal mit
+/// höherem `max_tokens` aufrufen kann.
+#[allow(clippy::too_many_arguments)]
+async fn connect_and_stream(
+    client: reqwest::Client,
+    url: String,
+    api_key: String,
+    native_tool_calling: bool,
+    request_id: Uuid,
+    extra_headers: Vec<(String, String)>,
+    body: Value,
+) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
+    // Spec-Reviewer-Fund (Spec 0049, Review von Fund 2): nicht nur der
+    // API-Key, auch jeder `extra_headers`-Wert (Spec 0025, Abschnitt 3 —
+    // dort trägt ein Nutzer z. B. ein zweites Gateway-Auth-Token ein) muss
+    // in den neuen Fehler-Logzeilen redigiert werden.
+    let secrets: Vec<&str> = std::iter::once(api_key.as_str())
+        .chain(extra_headers.iter().map(|(_, value)| value.as_str()))
+        .collect();
+
+    // Diagnose "KI antwortet nicht" — s. identischer Kommentar in
+    // `crate::anthropic::connect_and_stream`.
+    tracing::debug!(
+        request_id = %request_id,
+        "AI request future started executing",
+    );
+    let retry_start = tokio::time::Instant::now();
+    let mut attempt: u32 = 0;
+    loop {
+        attempt += 1;
+        tracing::debug!(
+            request_id = %request_id,
+            attempt,
+            "about to send HTTP request to AI provider",
+        );
+        let mut req = client
+            .post(&url)
+            .bearer_auth(&api_key)
+            .header("accept", "text/event-stream");
+        for (name, value) in &extra_headers {
+            req = req.header(name, value);
+        }
+        let send = req.json(&body).send();
+        let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
+            Ok(Ok(response)) => response,
+            Ok(Err(err)) => {
+                let mapped = map_transport_error(&err);
+                log_provider_transport_error(request_id, &mapped, &secrets);
+                return to_raw_stream(error_stream(mapped));
+            }
+            // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) — ohne
+            // dieses Limit würde ein hängender Verbindungsaufbau den
+            // Chat-Turn für immer ohne jede Fehlermeldung blockieren.
+            Err(_elapsed) => {
+                let mapped = AiError::NetworkError(format!(
+                    "Keine Antwort vom KI-Provider seit über {} Sekunden",
+                    SSE_INACTIVITY_TIMEOUT.as_secs()
+                ));
+                log_provider_transport_error(request_id, &mapped, &secrets);
+                return to_raw_stream(error_stream(mapped));
+            }
+        };
+
+        // Spec 0051, Teil 1: s. identischer Kommentar in
+        // `crate::anthropic::connect_and_stream`.
+        if response.status().as_u16() == 429 {
+            let elapsed = retry_start.elapsed();
+            let remaining = crate::retry::MAX_TOTAL_RETRY_TIME.saturating_sub(elapsed);
+            let delay = crate::retry::retry_delay(response.headers(), attempt);
+            // Spec-Reviewer-Fund: s. identischer Kommentar in
+            // `crate::anthropic::connect_and_stream`.
+            if crate::retry::retry_allowed(attempt + 1, elapsed) && delay <= remaining {
+                // Bug-Diagnose "AI-Provider-Aufruf kann unbegrenzt hängen"
+                // (2026-09) + spec-reviewer-Fund (Review dieses Schritts):
+                // s. identischer Kommentar in
+                // `crate::anthropic::connect_and_stream`.
+                let text =
+                    crate::sse::read_error_body_with_timeout_capped(response.text(), remaining)
+                        .await;
+                crate::request_logging::log_provider_rate_limited_retry(
+                    request_id, attempt, &text, delay, &secrets,
+                );
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+        }
+
+        if !response.status().is_success() {
+            let status = response.status();
+            // s. Kommentar beim 429-Retry-Zweig oben.
+            let text = crate::sse::read_error_body_with_timeout(response.text()).await;
+            let mapped = map_http_status(status, &text);
+            // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
+            // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
+            // Varianten) verlieren Status/Body ab hier unwiederbringlich.
+            log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &secrets);
+            return to_raw_stream(error_stream(mapped));
+        }
+
+        return event_stream_from_response(
+            response,
+            native_tool_calling,
+            request_id,
+            api_key,
+            extra_headers,
+        );
+    }
+}
+
+/// Zustand des äußeren Retry-Streams aus `send()` (Spec 0065, Teil 3) — s.
+/// `crate::anthropic::RetryState`-Kommentar für das identische Muster.
+struct RetryState {
+    client: reqwest::Client,
+    url: String,
+    api_key: String,
+    native_tool_calling: bool,
+    request_id: Uuid,
+    extra_headers: Vec<(String, String)>,
+    body: Value,
+    /// `None`: `build_request_body` hat kein `max_tokens` gesetzt (heutiger
+    /// Normalfall, s. `OPENAI_COMPATIBLE_RETRY_MAX_TOKENS`-Kommentar) — der
+    /// Retry setzt dann erstmals einen konservativen Wert statt einen
+    /// unbekannten zu verdoppeln.
+    max_tokens: Option<u32>,
+    retried: bool,
+    inner: Option<Pin<Box<dyn Stream<Item = RawEvent> + Send>>>,
+    finished: bool,
+}
+
 impl AiProvider for OpenAiCompatibleProvider {
     fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
         // s. `crate::anthropic::AnthropicProvider::send`-Kommentar zur
@@ -254,115 +408,66 @@ impl AiProvider for OpenAiCompatibleProvider {
         let native_tool_calling = self.supports_native_tool_calling;
         let extra_headers = self.extra_headers.clone();
         let body = self.build_request_body(&context);
+        let max_tokens = body["max_tokens"].as_u64().map(|value| value as u32);
 
-        let request = async move {
-            // Spec-Reviewer-Fund (Spec 0049, Review von Fund 2): nicht nur
-            // der API-Key, auch jeder `extra_headers`-Wert (Spec 0025,
-            // Abschnitt 3 — dort trägt ein Nutzer z. B. ein zweites
-            // Gateway-Auth-Token ein) muss in den neuen Fehler-Logzeilen
-            // redigiert werden.
-            let secrets: Vec<&str> = std::iter::once(api_key.as_str())
-                .chain(extra_headers.iter().map(|(_, value)| value.as_str()))
-                .collect();
-
-            // Diagnose "KI antwortet nicht" — s. identischer Kommentar in
-            // `crate::anthropic::AnthropicProvider::send`.
-            tracing::debug!(
-                request_id = %request_id,
-                "AI request future started executing",
-            );
-            let retry_start = tokio::time::Instant::now();
-            let mut attempt: u32 = 0;
-            loop {
-                attempt += 1;
-                tracing::debug!(
-                    request_id = %request_id,
-                    attempt,
-                    "about to send HTTP request to AI provider",
-                );
-                let mut req = client
-                    .post(&url)
-                    .bearer_auth(&api_key)
-                    .header("accept", "text/event-stream");
-                for (name, value) in &extra_headers {
-                    req = req.header(name, value);
-                }
-                let send = req.json(&body).send();
-                let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
-                    Ok(Ok(response)) => response,
-                    Ok(Err(err)) => {
-                        let mapped = map_transport_error(&err);
-                        log_provider_transport_error(request_id, &mapped, &secrets);
-                        return error_stream(mapped);
-                    }
-                    // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) —
-                    // ohne dieses Limit würde ein hängender Verbindungsaufbau
-                    // den Chat-Turn für immer ohne jede Fehlermeldung blockieren.
-                    Err(_elapsed) => {
-                        let mapped = AiError::NetworkError(format!(
-                            "Keine Antwort vom KI-Provider seit über {} Sekunden",
-                            SSE_INACTIVITY_TIMEOUT.as_secs()
-                        ));
-                        log_provider_transport_error(request_id, &mapped, &secrets);
-                        return error_stream(mapped);
-                    }
-                };
-
-                // Spec 0051, Teil 1: s. identischer Kommentar in
-                // `crate::anthropic::AnthropicProvider::send`.
-                if response.status().as_u16() == 429 {
-                    let elapsed = retry_start.elapsed();
-                    let remaining = crate::retry::MAX_TOTAL_RETRY_TIME.saturating_sub(elapsed);
-                    let delay = crate::retry::retry_delay(response.headers(), attempt);
-                    // Spec-Reviewer-Fund: s. identischer Kommentar in
-                    // `crate::anthropic::AnthropicProvider::send`.
-                    if crate::retry::retry_allowed(attempt + 1, elapsed) && delay <= remaining {
-                        // Bug-Diagnose "AI-Provider-Aufruf kann unbegrenzt
-                        // hängen" (2026-09) + spec-reviewer-Fund (Review
-                        // dieses Schritts): s. identischer Kommentar in
-                        // `crate::anthropic::AnthropicProvider::send`.
-                        let text = crate::sse::read_error_body_with_timeout_capped(
-                            response.text(),
-                            remaining,
-                        )
-                        .await;
-                        crate::request_logging::log_provider_rate_limited_retry(
-                            request_id, attempt, &text, delay, &secrets,
-                        );
-                        tokio::time::sleep(delay).await;
-                        continue;
-                    }
-                }
-
-                if !response.status().is_success() {
-                    let status = response.status();
-                    // s. Kommentar beim 429-Retry-Zweig oben.
-                    let text = crate::sse::read_error_body_with_timeout(response.text()).await;
-                    let mapped = map_http_status(status, &text);
-                    // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
-                    // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
-                    // Varianten) verlieren Status/Body ab hier unwiederbringlich.
-                    log_provider_error_response(
-                        request_id,
-                        status.as_u16(),
-                        &text,
-                        &mapped,
-                        &secrets,
-                    );
-                    return error_stream(mapped);
-                }
-
-                return event_stream_from_response(
-                    response,
-                    native_tool_calling,
-                    request_id,
-                    api_key,
-                    extra_headers,
-                );
-            }
+        let state = RetryState {
+            client,
+            url,
+            api_key,
+            native_tool_calling,
+            request_id,
+            extra_headers,
+            body,
+            max_tokens,
+            retried: false,
+            inner: None,
+            finished: false,
         };
 
-        Box::pin(request.flatten_stream())
+        // s. `crate::anthropic::AnthropicProvider::send`-Kommentar zum
+        // identischen Retry-Wrapper-Muster (Spec 0065, Teil 3).
+        Box::pin(futures::stream::unfold(state, |mut state| async move {
+            loop {
+                if state.finished {
+                    return None;
+                }
+                if state.inner.is_none() {
+                    let stream = connect_and_stream(
+                        state.client.clone(),
+                        state.url.clone(),
+                        state.api_key.clone(),
+                        state.native_tool_calling,
+                        state.request_id,
+                        state.extra_headers.clone(),
+                        state.body.clone(),
+                    )
+                    .await;
+                    state.inner = Some(stream);
+                }
+                match state.inner.as_mut().expect("gerade gesetzt").next().await {
+                    Some(RawEvent::Public(event)) => return Some((event, state)),
+                    Some(RawEvent::RetryWithHigherMaxTokens) => {
+                        if state.retried {
+                            #[allow(unused_assignments)]
+                            {
+                                state.finished = true;
+                            }
+                            return Some((AiEvent::Error(AiError::ResponseTruncated), state));
+                        }
+                        state.retried = true;
+                        state.max_tokens = Some(match state.max_tokens {
+                            Some(current) => current
+                                .saturating_mul(2)
+                                .min(OPENAI_COMPATIBLE_RETRY_MAX_TOKENS),
+                            None => OPENAI_COMPATIBLE_RETRY_MAX_TOKENS,
+                        });
+                        state.body["max_tokens"] = json!(state.max_tokens);
+                        state.inner = None;
+                    }
+                    None => return None,
+                }
+            }
+        }))
     }
 }
 
@@ -390,9 +495,13 @@ struct OpenAiStreamState {
     /// Abschnitt 4, Punkt 2).
     text_delta_total_len: usize,
     native_tool_calling: bool,
-    pending: VecDeque<AiEvent>,
+    pending: VecDeque<RawEvent>,
     finished: bool,
     request_id: Uuid,
+    /// Spec 0065, Teil 3: letzter gesehener `finish_reason` — `None`, wenn
+    /// noch keiner ankam (z. B. bei einem abrupten Verbindungsabbruch vor
+    /// jedem Chunk mit diesem Feld).
+    finish_reason: Option<String>,
 }
 
 impl OpenAiStreamState {
@@ -409,6 +518,9 @@ impl OpenAiStreamState {
             .and_then(Value::as_str)
         {
             log_stop_reason(self.request_id, "openai_compatible", finish_reason);
+            // Spec 0065, Teil 3: gespeichert, damit `finalize()` weiß, ob
+            // akkumulierte Tool-Call-Fragmente freigegeben werden dürfen.
+            self.finish_reason = Some(finish_reason.to_string());
         }
 
         let Some(delta) = choice.and_then(|c| c.get("delta")) else {
@@ -420,7 +532,7 @@ impl OpenAiStreamState {
                 self.text_delta_total_len += content.len();
                 if self.native_tool_calling {
                     self.pending
-                        .push_back(AiEvent::TextDelta(content.to_string()));
+                        .push_back(RawEvent::Public(AiEvent::TextDelta(content.to_string())));
                 } else {
                     self.fallback_text.push_str(content);
                 }
@@ -453,29 +565,55 @@ impl OpenAiStreamState {
         }
     }
 
-    fn finalize(&mut self) -> Vec<AiEvent> {
+    /// Spec 0065, Teil 3 (sicherheitskritisch): `abrupt` ist `true`, wenn der
+    /// Stream ohne das `[DONE]`-Literal endete (Verbindungsabbruch) — dann
+    /// ist ein ggf. akkumulierter Tool-Call per Definition unvollständig,
+    /// UNABHÄNGIG von `finish_reason` (der in diesem Fall oft gar nicht
+    /// mehr ankam). Der Ist-Befund vor diesem Fix: `finalize()` versuchte
+    /// in JEDEM Fall (auch `abrupt`), akkumulierte `tool_calls` zu parsen —
+    /// ganz ohne Rücksicht auf `finish_reason`/den Verbindungszustand.
+    fn finalize(&mut self, abrupt: bool) -> Vec<RawEvent> {
         log_text_delta_summary(self.request_id, self.text_delta_total_len);
-        let mut events = Vec::new();
+        let truncated_by_length = abrupt || self.finish_reason.as_deref() == Some("length");
+
         if self.native_tool_calling {
+            if truncated_by_length && !self.tool_calls.is_empty() {
+                // Spec 0065 §3, konservative Multi-Tool-Regel: die GANZE
+                // Antwort verwerfen, nicht nur den zuletzt akkumulierten
+                // Call — OpenAI-kompatible Antworten liefern keine
+                // Block-für-Block-Abschlussgrenze wie Anthropics
+                // `content_block_stop`, es lässt sich also nicht
+                // unterscheiden, welcher der akkumulierten Calls
+                // tatsächlich vollständig war.
+                self.tool_calls.clear();
+                return vec![RawEvent::RetryWithHigherMaxTokens];
+            }
+            let mut events = Vec::new();
             for (_, call) in std::mem::take(&mut self.tool_calls) {
                 log_tool_call_fragment(self.request_id, &call.name, &call.arguments);
-                events.push(finalize_tool_call(
+                events.push(RawEvent::Public(finalize_tool_call(
                     self.request_id,
                     &call.name,
                     &call.arguments,
-                ));
+                )));
             }
+            events.push(RawEvent::Public(AiEvent::Done));
+            events
         } else {
             let result = parse_fallback_response(&self.fallback_text);
+            if truncated_by_length && result.action.is_some() {
+                return vec![RawEvent::RetryWithHigherMaxTokens];
+            }
+            let mut events = Vec::new();
             if !result.text.is_empty() {
-                events.push(AiEvent::TextDelta(result.text));
+                events.push(RawEvent::Public(AiEvent::TextDelta(result.text)));
             }
             if let Some(action) = result.action {
-                events.push(AiEvent::ActionProposed(action));
+                events.push(RawEvent::Public(AiEvent::ActionProposed(action)));
             }
+            events.push(RawEvent::Public(AiEvent::Done));
+            events
         }
-        events.push(AiEvent::Done);
-        events
     }
 }
 
@@ -511,7 +649,7 @@ fn event_stream_from_response(
     request_id: Uuid,
     api_key: String,
     extra_headers: Vec<(String, String)>,
-) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
     process_frame_stream(
         Box::pin(sse_frame_stream(response)),
         native_tool_calling,
@@ -531,7 +669,7 @@ fn process_frame_stream(
     request_id: Uuid,
     api_key: String,
     extra_headers: Vec<(String, String)>,
-) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
     let secrets: Vec<String> = std::iter::once(api_key)
         .chain(extra_headers.into_iter().map(|(_, value)| value))
         .collect();
@@ -545,6 +683,7 @@ fn process_frame_stream(
         pending: VecDeque::new(),
         finished: false,
         request_id,
+        finish_reason: None,
     };
 
     Box::pin(futures::stream::unfold(state, |mut state| async move {
@@ -559,7 +698,7 @@ fn process_frame_stream(
                 Ok(Some(Ok(frame))) => {
                     if frame.data.trim() == "[DONE]" {
                         state.finished = true;
-                        let events = state.finalize();
+                        let events = state.finalize(false);
                         state.pending.extend(events);
                         continue;
                     }
@@ -575,12 +714,16 @@ fn process_frame_stream(
                     let mapped = map_transport_error(&err);
                     let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
                     log_provider_transport_error(state.request_id, &mapped, &secrets);
-                    state.pending.push_back(AiEvent::Error(mapped));
+                    state
+                        .pending
+                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
                     state.finished = true;
                 }
                 Ok(None) => {
                     state.finished = true;
-                    let events = state.finalize();
+                    // Spec 0065, Teil 3: `abrupt = true` — kein `[DONE]`
+                    // gesehen, s. `finalize`-Doc-Kommentar.
+                    let events = state.finalize(true);
                     state.pending.extend(events);
                 }
                 Err(_elapsed) => {
@@ -593,7 +736,9 @@ fn process_frame_stream(
                     ));
                     let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
                     log_provider_transport_error(state.request_id, &mapped, &secrets);
-                    state.pending.push_back(AiEvent::Error(mapped));
+                    state
+                        .pending
+                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
                     state.finished = true;
                 }
             }
@@ -623,7 +768,10 @@ mod tests {
         let event = events.next().await;
 
         assert!(
-            matches!(event, Some(AiEvent::Error(AiError::NetworkError(_)))),
+            matches!(
+                event,
+                Some(RawEvent::Public(AiEvent::Error(AiError::NetworkError(_))))
+            ),
             "expected NetworkError after inactivity timeout, got {event:?}"
         );
     }
@@ -650,12 +798,12 @@ mod tests {
                 frame("[DONE]"),
             ]));
         let request_id = Uuid::new_v4();
-        let events: Vec<AiEvent> =
+        let events: Vec<RawEvent> =
             process_frame_stream(frames, true, request_id, String::new(), Vec::new())
                 .collect()
                 .await;
 
-        assert_eq!(events, vec![AiEvent::Done]);
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
         let log_text = crate::test_support::log_buffer_text();
         assert!(
             log_text.contains("\"stop\""),
@@ -676,16 +824,99 @@ mod tests {
                 frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
                 frame("[DONE]"),
             ]));
-        let events: Vec<AiEvent> =
+        let events: Vec<RawEvent> =
             process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
                 .collect()
                 .await;
 
-        assert_eq!(events, vec![AiEvent::Done]);
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
         let log_text = crate::test_support::log_buffer_text();
         assert!(
             log_text.contains("length"),
             "finish_reason muss geloggt werden: {log_text}"
         );
+    }
+
+    /// Pflicht-Regressionstest, Spec 0065 §3 (sicherheitskritisch) — das
+    /// OpenAI-kompatible Gegenstück zu
+    /// `anthropic::tests::test_truncated_but_parseable_tool_call_is_never_forwarded_and_triggers_retry`.
+    /// Ist-Befund vor diesem Fix: `finalize()` versuchte akkumulierte
+    /// `tool_calls` IMMER zu parsen, unabhängig von `finish_reason` — ein
+    /// zufällig vollständiges Argument-JSON wurde bedingungslos als
+    /// `ActionProposed` freigegeben.
+    #[tokio::test]
+    async fn test_truncated_but_parseable_tool_call_is_never_forwarded_and_triggers_retry() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"suggest_command","arguments":"{\"command\":\"rm -rf /var/log/app\"}"}}]}}]}"#,
+                ),
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
+                frame("[DONE]"),
+            ]),
+        );
+
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(
+            events,
+            vec![RawEvent::RetryWithHigherMaxTokens],
+            "ein durch finish_reason=length abgeschnittener Tool-Call darf \
+             nie als ActionProposed/Error freigegeben werden"
+        );
+    }
+
+    /// Gegenprobe: identischer Tool-Call, aber `finish_reason: "tool_calls"`
+    /// (normaler, erfolgreicher Abschluss) — muss ganz normal durchgehen.
+    #[tokio::test]
+    async fn test_complete_tool_call_with_normal_finish_reason_is_forwarded() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"suggest_command","arguments":"{\"command\":\"ls -la\"}"}}]}}]}"#,
+                ),
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#),
+                frame("[DONE]"),
+            ]),
+        );
+
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(
+            events.len(),
+            2,
+            "erwartet: ActionProposed + Done, bekam {events:?}"
+        );
+        assert!(matches!(
+            events[0],
+            RawEvent::Public(AiEvent::ActionProposed(_))
+        ));
+        assert_eq!(events[1], RawEvent::Public(AiEvent::Done));
+    }
+
+    /// Spec 0065 §3: die Verbindung bricht mitten in einem Tool-Call ab,
+    /// OHNE je `[DONE]` oder ein `finish_reason` zu liefern — muss ebenso
+    /// den Retry auslösen statt (wie vor diesem Fix) das unvollständige
+    /// Argument-Fragment einfach zu parsen.
+    #[tokio::test]
+    async fn test_abrupt_disconnect_mid_tool_call_triggers_retry_not_silent_parse() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![frame(
+                r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"suggest_command","arguments":"{\"command\":\"rm -rf /var/log/ap"}}]}}]}"#,
+            )]),
+        );
+
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
     }
 }

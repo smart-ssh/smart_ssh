@@ -396,6 +396,12 @@ pub enum AiError {
     InvalidResponse(String),
     ContextTooLarge,
     ProviderUnavailable(String),
+    /// Spec 0065, Teil 3: ein Tool-Call wurde durch `stop_reason: max_tokens`
+    /// (bzw. `finish_reason: length`) abgeschnitten, UND der automatische
+    /// einmalige Retry mit höherem `max_tokens` ist ebenfalls daran
+    /// gescheitert. Terminal — kein weiterer Retry, kein Ausführen/Vorlegen
+    /// des unvollständigen Kommandos (Sicherheitsinvariante).
+    ResponseTruncated,
 }
 
 impl fmt::Display for AiError {
@@ -411,6 +417,12 @@ impl fmt::Display for AiError {
             }
             AiError::ContextTooLarge => write!(f, "Kontext zu groß für den KI-Provider"),
             AiError::ProviderUnavailable(msg) => write!(f, "KI-Provider nicht erreichbar: {msg}"),
+            AiError::ResponseTruncated => {
+                write!(
+                    f,
+                    "Die KI-Antwort war zu lang für einen vollständigen Befehl"
+                )
+            }
         }
     }
 }
@@ -429,6 +441,7 @@ impl AiError {
             AiError::InvalidResponse(_) => "AI_INVALID_RESPONSE",
             AiError::ContextTooLarge => "AI_CONTEXT_TOO_LARGE",
             AiError::ProviderUnavailable(_) => "AI_PROVIDER_UNAVAILABLE",
+            AiError::ResponseTruncated => "AI_RESPONSE_TRUNCATED",
         }
     }
 }
