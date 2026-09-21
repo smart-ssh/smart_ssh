@@ -1012,3 +1012,49 @@ fn test_secret_file_formats_are_redacted() {
     );
     assert_fully_redacted("*:*:*:postgres:s3cr3tPgpassPw", "s3cr3tPgpassPw");
 }
+
+/// Zweite Review-Runde (Spec 0068, ERHÖHT): die neuen Muster dürfen
+/// älteren Mustern keinen Anker wegnehmen, und die URL-Regel darf nicht
+/// enger sein als in der ersten Fassung.
+#[test]
+fn test_new_patterns_never_leave_plaintext_that_older_patterns_redacted() {
+    assert_fully_redacted(
+        r#"Authorization: Token token="abc123secretvalue""#,
+        "abc123secretvalue",
+    );
+    assert_fully_redacted(
+        "api-key: Bearer abcdefghijklmnopqrstuvwxyz0123",
+        "abcdefghijklmnopqrstuvwxyz0123",
+    );
+    assert_fully_redacted("login admin password = hunter2hunter2", "hunter2hunter2");
+    assert_fully_redacted(
+        "machine h login u password : hunter2hunter2",
+        "hunter2hunter2",
+    );
+    assert_fully_redacted(
+        "smtp://mailer:S3cr#tPassw0rd@mail.example.com",
+        "S3cr#tPassw0rd",
+    );
+    assert_fully_redacted(
+        "https://bob:pa?ssw0rdSecret@example.com/",
+        "pa?ssw0rdSecret",
+    );
+    assert_fully_redacted("ftp://user:secret#1234567@host", "secret#1234567");
+}
+
+#[test]
+fn test_pgpass_and_netrc_patterns_leave_addresses_and_prose_alone() {
+    let redactor = DefaultOutputRedactor::new();
+    for harmless in [
+        "00:15:5d:01:02:03",
+        "aa:bb:cc:dd:ee:ff",
+        "2001:4860:4860:0:0:0:0:8888",
+        "Login failed password incorrect for user",
+    ] {
+        assert_eq!(
+            redactor.redact_text(harmless),
+            harmless,
+            "fälschlich redigiert"
+        );
+    }
+}

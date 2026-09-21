@@ -248,52 +248,6 @@ fn built_in_patterns() -> Vec<PatternRule> {
             r"\bxai-[A-Za-z0-9]{40,}\b",
             "eingebautes xAI-Key-Muster ist gültig",
         ),
-        // `x-api-key`-Header (Anthropic-Header, viele Gateways), dazu Azure
-        // `api-key` und Google `x-goog-api-key` (Review-Fund) — auch in
-        // JSON-/Quote-Form, analog zum Credential-Zeilen-Muster unten, das
-        // `x-api-key` (Bindestrich) nicht erfasst.
-        simple(
-            r#"(?i)\b(?:x-(?:goog-)?)?api-key['"]?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s'"]+)"#,
-            "eingebautes x-api-key-Header-Muster ist gültig",
-        ),
-        // `Authorization: Basic <base64>` (auch `Proxy-Authorization`). Nur
-        // mit Header-Namen — ein bloßes "Basic authentication" in Text
-        // bleibt unberührt.
-        simple(
-            r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?(?:basic|token)\s+[A-Za-z0-9+/._~-]+=*"#,
-            "eingebautes Authorization-Basic-Muster ist gültig",
-        ),
-        // spec-reviewer-Fund (Spec 0068, ERHÖHT): die Formate genau der
-        // Dateien, deren Lesen Teil 2 bestätigungspflichtig macht — nach
-        // einem bestätigten Lesen sollen sie trotzdem nicht im Klartext an
-        // die KI gehen.
-        // Docker `~/.docker/config.json`: `"auth": "<base64 user:pass>"`.
-        simple(
-            r#"(?i)"auth"\s*:\s*"[A-Za-z0-9+/=]{8,}""#,
-            "eingebautes Docker-auth-Muster ist gültig",
-        ),
-        // kubeconfig: privater Client-Schlüssel (Base64).
-        simple(
-            r"(?i)\bclient-key-data\s*:\s*\S+",
-            "eingebautes kubeconfig-client-key-data-Muster ist gültig",
-        ),
-        // `.netrc`: `machine h login u password p` bzw. `password p` als
-        // eigene Zeile. Nur in dieser Struktur, damit Fließtext wie
-        // "password is required" unberührt bleibt.
-        simple(
-            r"(?i)\b(?:machine|login)\s+\S+\s+password\s+\S+",
-            "eingebautes netrc-Muster ist gültig",
-        ),
-        simple(
-            r"(?im)^[ \t]*password[ \t]+\S+[ \t]*$",
-            "eingebautes netrc-Zeilen-Muster ist gültig",
-        ),
-        // `.pgpass`: `host:port:datenbank:nutzer:passwort` (Port Zahl oder
-        // `*`) — ganze Zeile.
-        simple(
-            r"(?m)^[^:\s#]+:(?:\d+|\*):[^:\s]+:[^:\s]+:\S+$",
-            "eingebautes pgpass-Muster ist gültig",
-        ),
         // DB-Connection-Strings (Diagnose-Folge-Fix, 2026-09): das Passwort
         // steht zwischen `:` und `@`, keines der Schlüsselwort-Muster
         // (`password=`/`token=`/...) greift auf diese Syntax. Deckt die in
@@ -512,6 +466,72 @@ fn built_in_patterns() -> Vec<PatternRule> {
             r"github_pat_[A-Za-z0-9_]{20,}",
             "eingebautes GitHub-Fine-Grained-Token-Muster ist gültig",
         ),
+        // --- Spec 0068: Muster, die einen Header-/Schlüsselnamen mit
+        // verbrauchen, stehen bewusst AM ENDE der Liste (spec-reviewer-Fund,
+        // zweite Runde): weiter vorn nahmen sie älteren Mustern (Bearer,
+        // Credential-Zeile) den Anker weg und ließen Klartext stehen, z. B.
+        // `Authorization: Token token="…"` oder `api-key: Bearer …`. Hier
+        // sehen alle älteren Muster den Originaltext zuerst; diese greifen
+        // nur noch, was übrig ist.
+        // `x-api-key`-Header (Anthropic-Header, viele Gateways), dazu Azure
+        // `api-key` und Google `x-goog-api-key` (Review-Fund) — auch in
+        // JSON-/Quote-Form, analog zum Credential-Zeilen-Muster unten, das
+        // `x-api-key` (Bindestrich) nicht erfasst.
+        simple(
+            r#"(?i)\b(?:x-(?:goog-)?)?api-key['"]?\s*[:=]\s*(?:bearer\s+)?(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s'"]+)"#,
+            "eingebautes x-api-key-Header-Muster ist gültig",
+        ),
+        // `Authorization: Basic <base64>` (auch `Proxy-Authorization`). Nur
+        // mit Header-Namen — ein bloßes "Basic authentication" in Text
+        // bleibt unberührt.
+        simple(
+            r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?(?:basic|token)\s+(?:[a-z_]+=)?(?:"[^"\r\n]*"|[A-Za-z0-9+/._~-]+=*)"#,
+            "eingebautes Authorization-Basic-Muster ist gültig",
+        ),
+        // spec-reviewer-Fund (Spec 0068, ERHÖHT): die Formate genau der
+        // Dateien, deren Lesen Teil 2 bestätigungspflichtig macht — nach
+        // einem bestätigten Lesen sollen sie trotzdem nicht im Klartext an
+        // die KI gehen.
+        // Docker `~/.docker/config.json`: `"auth": "<base64 user:pass>"`.
+        simple(
+            r#"(?i)"auth"\s*:\s*"[A-Za-z0-9+/=]{8,}""#,
+            "eingebautes Docker-auth-Muster ist gültig",
+        ),
+        // kubeconfig: privater Client-Schlüssel (Base64).
+        simple(
+            r"(?i)\bclient-key-data\s*:\s*\S+",
+            "eingebautes kubeconfig-client-key-data-Muster ist gültig",
+        ),
+        // `.netrc`: `machine h login u password p` bzw. `password p` als
+        // eigene Zeile. Nur in dieser Struktur, damit Fließtext wie
+        // "password is required" unberührt bleibt.
+        simple(
+            r"(?i)\b(?:machine\s+\S+|default)(?:\s+login\s+\S+)?\s+password\s+[^\s:=]\S*",
+            "eingebautes netrc-Muster ist gültig",
+        ),
+        simple(
+            r"(?im)^[ \t]*password[ \t]+[^\s:=]\S*[ \t]*$",
+            "eingebautes netrc-Zeilen-Muster ist gültig",
+        ),
+        // `.pgpass`: `host:port:datenbank:nutzer:passwort` (Port Zahl oder
+        // `*`) — ganze Zeile. Der Host muss einen Buchstaben/Punkt enthalten
+        // oder `*` sein, damit MAC- und IPv6-Adressen nicht treffen.
+        simple(
+            r"(?im)^(?:\*|[^:\s#]*[a-z.][^:\s#]*):(?:\d{1,5}|\*):[^:\s]+:[^:\s]+:\S+$",
+            "eingebautes pgpass-Muster ist gültig",
+        ),
+        // Die breite URL-Regel der ersten Fassung (Passwort darf `?`/`#`
+        // enthalten, unkodiert in `.env`-Dateien real) zusätzlich am Ende:
+        // der Query-String-Fall (`?password=`) ist hier schon vom
+        // Credential-Zeilen-Muster redigiert, die strenge Regel weiter oben
+        // bleibt davor unverändert (zweite Review-Runde).
+        PatternRule {
+            regex: Regex::new(
+                r#"(?i)(?P<scheme>\b[a-z][a-z0-9+.-]*)://(?P<user>[^:@/\s,;"]*):[^@/\s,;"]+@"#,
+            )
+            .expect("eingebautes breites URL-Zugangsdaten-Muster ist gültig"),
+            replacement: "${scheme}://${user}:[REDACTED]@",
+        },
     ]
 }
 
