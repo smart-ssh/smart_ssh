@@ -122,15 +122,15 @@ pub(crate) const SIDE_CALL_MAX_TOKENS: u32 = 4096;
 /// UX-Grenze gegen "lange". Läuft es ab, gilt die Aktion als **abgelehnt**
 /// (fail-safe, s. `handle_action_proposed`/`handle_note_update_suggested`),
 /// nie als genehmigt.
+pub(crate) const PENDING_ACTION_CONFIRM_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(3600);
+
 /// Tests, die `handle_action_proposed` direkt aufrufen: ein frisches,
 /// unabhängiges Ablehnungs-Flag pro Aufruf (Spec 0068, Teil 4).
 #[cfg(test)]
 fn test_fresh_rejection_flag() -> &'static std::sync::atomic::AtomicBool {
     Box::leak(Box::new(std::sync::atomic::AtomicBool::new(false)))
 }
-
-pub(crate) const PENDING_ACTION_CONFIRM_TIMEOUT: std::time::Duration =
-    std::time::Duration::from_secs(3600);
 
 /// Spec 0034, Abschnitt 4: "Jede Nachricht ... wird fortlaufend
 /// geschrieben, sobald sie entsteht — kein Sammeln bis zum
@@ -842,6 +842,44 @@ async fn handle_action_proposed(
     // an ihrem Ergebnis.
     let risk_assessment = risk_assessment_for_action(&action);
 
+    // Spec 0068, Teil 2: ein Lesebefehl/`sftp-read` auf einen Secret-Pfad
+    // (`~/.ssh/id_*`, `.env`, `/etc/shadow`, …) verlangt IMMER eine
+    // Bestätigung — auch wenn eine Allow-Regel greift. Reine Eskalation
+    // (nur `AutoExec` → `Confirm`, `Deny` bleibt `Deny`), für Chat UND MCP,
+    // weil beide durch diese Funktion laufen.
+    //
+    // Bewusst VOR der Injection-Prüfung (zweite Review-Runde): deren `swap`
+    // verbraucht das Verdachts-Flag nur bei `AutoExec`; läge diese Prüfung
+    // dahinter, verbrauchte eine Secret-Lese-Aktion das Flag, und die
+    // eigentliche Folgeaktion liefe wieder automatisch. Damit der Dialog
+    // trotzdem den alarmierenderen Grund zeigt, wird das Flag hier nur
+    // GELESEN (nicht verbraucht) und bei gesetztem Flag der Injection-Grund
+    // angezeigt.
+    if matches!(decision, Decision::AutoExec) {
+        if let Some(reason) = pseudo_command_for_risk_classification(&action)
+            .as_deref()
+            .and_then(ssh_manager_core::risk::secret_path_read_reason)
+        {
+            decision = if session
+                .injection_suspected
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                Decision::Confirm {
+                    reason: format!(
+                        "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
+                         erkannt; außerdem: {reason} – erfordert Bestätigung"
+                    ),
+                    code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
+                }
+            } else {
+                Decision::Confirm {
+                    reason: format!("{reason} – erfordert immer Bestätigung"),
+                    code: "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM".to_string(),
+                }
+            };
+        }
+    }
+
     // Unabhängiger Review-Pass (Spec 0039): ersetzt die bisherige SEC-03-
     // Bremse aus Spec 0013. Die ALTE Logik: `round` war ein rein lokaler
     // Schleifenzähler in `run_chat_turn`s `for round in 1..=MAX_AUTO_
@@ -921,29 +959,6 @@ async fn handle_action_proposed(
                 .to_string(),
             code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
         };
-    }
-
-    // Spec 0068, Teil 2: ein Lesebefehl/`sftp-read` auf einen Secret-Pfad
-    // (`~/.ssh/id_*`, `.env`, `/etc/shadow`, …) verlangt IMMER eine
-    // Bestätigung — auch wenn eine Allow-Regel greift. Reine Eskalation
-    // (nur `AutoExec` → `Confirm`, `Deny` bleibt `Deny`), für Chat UND MCP,
-    // weil beide durch diese Funktion laufen.
-    //
-    // Bewusst NACH Post-Ingest und Injection-Verdacht (spec-reviewer-Fund):
-    // sonst zeigte der Dialog nur den Secret-Grund, obwohl dieselbe Aktion
-    // auch als Injection-Verdacht gilt — der alarmierendere Grund soll
-    // sichtbar sein. An der Strenge ändert die Reihenfolge nichts (alle
-    // Schritte eskalieren nur `AutoExec`).
-    if matches!(decision, Decision::AutoExec) {
-        if let Some(reason) = pseudo_command_for_risk_classification(&action)
-            .as_deref()
-            .and_then(ssh_manager_core::risk::secret_path_read_reason)
-        {
-            decision = Decision::Confirm {
-                reason: format!("{reason} – erfordert immer Bestätigung"),
-                code: "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM".to_string(),
-            };
-        }
     }
 
     // Spec 0028, Abschnitt 5: ein über MCP (externes Tool) ausgelöster
@@ -1196,6 +1211,7 @@ async fn handle_action_proposed(
                 confirm_reason,
                 confirm_code,
                 uses_password,
+                earlier_rejection,
             )
             .await
         }
@@ -1525,6 +1541,10 @@ async fn handle_user_decision(
     // angekündigte Wert (`usesStoredSudoPassword`) — nur damit darf ein
     // Schreib-Fallback Sudo nutzen.
     sudo_fallback_announced: bool,
+    // Spec 0068, Teil 4 (zweite Review-Runde): auch ein vom Nutzer
+    // bearbeitetes, dann regelbasiert blockiertes Kommando zählt als
+    // Ablehnung für die übrigen Aktionen derselben Antwort.
+    earlier_rejection: &std::sync::atomic::AtomicBool,
 ) -> bool {
     // Spec 0040, Abschnitt 4: s. identischer Kommentar in
     // `handle_action_proposed` — MCP-Herkunft persistiert nie, auch nicht
@@ -1670,6 +1690,7 @@ async fn handle_user_decision(
                         .evaluate_explained(&edited, &ctx)
                         .await;
                     if let Decision::Deny { reason, code } = re_evaluation.decision {
+                        earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
                         write_ledger_entry(
                             session,
                             ledger_source_for_origin(&origin),
@@ -13699,6 +13720,56 @@ mod tests {
         }
     }
 
+    /// Zweite Review-Runde (Spec 0068, ERHÖHT): eine Secret-Lese-Aktion darf
+    /// das Injection-Verdachts-Flag nicht verbrauchen — sonst liefe die
+    /// eigentliche Folgeaktion wieder automatisch. Der Dialog zeigt bei
+    /// gesetztem Flag den Injection-Grund.
+    #[tokio::test]
+    async fn test_secret_read_does_not_consume_injection_suspicion() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session
+            .injection_suspected
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        let (first, payload) = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            proposed_decision_code(
+                &session,
+                AiAction::SuggestCommand {
+                    command: "cat .env".to_string(),
+                },
+            ),
+        )
+        .await
+        .expect("Dialog muss enden");
+        assert!(
+            matches!(&first, Decision::Confirm { code, .. }
+                if code == "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM"),
+            "{payload}"
+        );
+        assert!(session
+            .injection_suspected
+            .load(std::sync::atomic::Ordering::SeqCst));
+
+        let (second, payload) = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            proposed_decision_code(
+                &session,
+                AiAction::SuggestCommand {
+                    command: "systemctl restart nginx".to_string(),
+                },
+            ),
+        )
+        .await
+        .expect("Dialog muss enden");
+        assert!(
+            matches!(&second, Decision::Confirm { code, .. }
+                if code == "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM"),
+            "Folgeaktion darf nicht automatisch laufen: {payload}"
+        );
+    }
+
     /// spec-reviewer-Fund (Spec 0068, ERHÖHT): derselbe Secret-Grund auch
     /// für MCP-Herkunft — sichtbar im Dialog statt des allgemeinen
     /// MCP-Grunds.
@@ -14228,6 +14299,89 @@ mod tests {
         );
         let history = session.context.lock().await.history.clone();
         assert!(executed_commands(&history).is_empty(), "{history:?}");
+    }
+
+    /// Zweite Review-Runde: bearbeitet der Nutzer Aktion 1 zu einem
+    /// Kommando, das eine Regel blockiert, zählt das ebenfalls als
+    /// Ablehnung — Aktion 2 läuft nicht automatisch.
+    #[tokio::test]
+    async fn test_blocked_edit_escalates_allowed_later_action_of_same_response() {
+        struct DenyRmAllowLs2;
+        #[async_trait]
+        impl PolicyStore for DenyRmAllowLs2 {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                let rule = |id: &str, glob: &str, action| Rule {
+                    id: ssh_manager_core::filter::RuleId(id.to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob(glob.to_string()),
+                    action,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
+                };
+                vec![
+                    rule(
+                        "deny-rm",
+                        "rm *",
+                        ssh_manager_core::filter::RuleAction::Deny,
+                    ),
+                    rule(
+                        "allow-ls",
+                        "ls*",
+                        ssh_manager_core::filter::RuleAction::Allow,
+                    ),
+                ]
+            }
+        }
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "systemctl stop nginx".to_string(),
+                }),
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default().with_response("ls -la", output("a")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(DenyRmAllowLs2));
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+        let profile_store = InMemoryProfileStore::default();
+
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(
+                    &emitter,
+                    &confirmations,
+                    vec![
+                        ActionUserDecision::EditThenApprove {
+                            command: "rm /tmp/x".to_string(),
+                        },
+                        ActionUserDecision::Deny,
+                    ],
+                ),
+            )
+        })
+        .await
+        .expect("Turn muss enden");
+
+        let decisions = proposed_decisions(&emitter);
+        let ls = decisions
+            .iter()
+            .find(|(command, _)| command == "ls -la")
+            .expect("ls wurde vorgeschlagen");
+        assert_eq!(
+            ls.1["Confirm"]["code"], "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM",
+            "{decisions:?}"
+        );
     }
 
     /// Wie oben, aber Aktion 1 wird regelbasiert blockiert (`Deny`).
