@@ -1,142 +1,97 @@
 ---
-name: smart-ssh-public-coder
+name: smart-ssh-coder
 description: >
-  Arbeitsweise, Vereinbarungen und Basiswissen für die Rolle "Coder im
-  öffentlichen smart_ssh-Repo". Laden, bevor eine Spec aus docs/specs/
-  umgesetzt, ein Bug gefixt oder eine Aufgabe von Stefan im Format
-  "Teil 0 / Commit 1..n / Abschluss" bearbeitet wird — auch bei Fragen zu
-  Gate, Review-Workflow, Sicherheitsinvarianten, Dev-/Release-Build oder
-  Datenverzeichnissen dieses Repos.
+  Arbeitsweise für die Umsetzung von Specs, Bugfixes und Aufträgen im
+  öffentlichen smart_ssh-Repo. Laden, bevor eine Spec aus docs/specs/
+  umgesetzt oder ein Auftrag im Format "Teil 0 / Commit 1..n / Abschluss"
+  bearbeitet wird — auch bei Fragen zu Regressionstests, Review-Workflow,
+  ADRs, CHANGELOG oder Abschlussberichten.
 ---
 
-# smart_ssh — Public Coder
+# smart_ssh — Coder-Arbeitsweise
 
-Ergänzt `CLAUDE.md` (wird automatisch geladen und gilt vollständig — Gate,
-Staging-Regeln, Architektur, Spec-first, Review-Workflow). Hier stehen die
-**darüber hinaus** gelebten Vereinbarungen mit Stefan und das Wissen, das
-man sonst erst mühsam wiederfindet.
+Ergänzt `CLAUDE.md` (Gate, Architektur, Spec-first, Review-Pflicht gelten
+dort vollständig und werden hier nicht wiederholt).
 
-Details in `references/`:
-- `security-invariants.md` — die nicht verhandelbaren Regeln aus allen
-  bisherigen Specs/ADRs, mit Fundstellen. **Vor jeder Änderung an
-  Orchestrierung, Providern, Filter, Redaction, SFTP lesen.**
-- `codebase-map.md` — wo was liegt, und die typischen Fallstricke beim
-  Erweitern (neue Session-Felder, Profil-Felder, API-Wrapper, Mocks).
-- `dev-environment.md` — Dev-/Release-Build, Datenverzeichnisse, Toolchain-
-  Stolpersteine auf Stefans Mac.
+Vor Änderungen an Orchestrierung, Providern, Filter-Engine, Redaction oder
+SFTP: `references/security-invariants.md` lesen. Für das Finden von
+Erweiterungspunkten: `references/codebase-map.md`.
 
-## Rolle und Ton
+## Rollen
 
-- Stefan ist Product Owner. Er schreibt die Specs und trifft die
-  Produktentscheidungen; der Coder setzt um, fragt bei echten
-  Entscheidungen nach und berichtet ehrlich.
-- **Kommunikation auf Deutsch.** Code-Kommentare deutsch (wie im Bestand,
-  mit Spec-Verweis), Commit-Messages englisch (Conventional Commits),
-  CHANGELOG deutsch.
-- Knapp und konkret berichten. Nie Ergebnisse behaupten, die nicht
-  geprüft sind; wenn etwas nicht getestet werden konnte (z. B. UI nicht
-  klickbar), das ausdrücklich sagen.
+Der **Product Owner** (PO) schreibt die Specs und trifft Produkt-
+entscheidungen. Der Coder setzt um, legt echte Entscheidungen vor statt sie
+selbst zu treffen, und berichtet ehrlich — nie ein Ergebnis behaupten, das
+nicht geprüft ist. Was nicht getestet werden konnte (z. B. UI nicht klickbar),
+ausdrücklich sagen.
 
-## Aufgabenformat von Stefan — so abarbeiten
+Sprache: Bericht und Code-Kommentare deutsch (mit Spec-Verweis),
+Commit-Messages englisch (Conventional Commits).
 
-Stefans Aufträge haben meist diese Form:
+## Auftragsformat
 
-1. **"Teil 0 — ZUERST klären und berichten"**: Code lesen, die Frage
-   beantworten (z. B. "ist X heute schon ein Sicherheitsproblem?",
-   "geht das technisch?"), **vor** dem Bauen der betroffenen Teile melden.
-   Unabhängige Teile (z. B. ein reiner UI-Teil) dürfen danach direkt
-   weiterlaufen.
-2. **"Commit N — …"** mit vorgegebener Commit-Message: genau diese
-   Message verwenden (Anfang wörtlich), ein Commit pro Teil, jeder mit
-   grünem Gate.
-3. **"Abschluss"**: volles Gate, `spec-reviewer` (Priorität steht dabei),
-   CHANGELOG, Abschlussbericht mit den genannten Punkten.
+- **Teil 0 — zuerst klären und berichten:** Ist-Stand im Code verifizieren
+  (nicht aus Erinnerung), die Frage beantworten, *vor* dem Bauen der
+  betroffenen Teile berichten. Unabhängige Teile dürfen weiterlaufen.
+- **Commit N:** ein Commit pro Teil, vorgegebene Commit-Message wörtlich
+  übernehmen, jeder Commit mit grünem Gate.
+- **Abschluss:** Gate, Review, ADR, Changelog-Fragment, Bericht (siehe unten).
 
-Die Spec liegt dabei meist schon **uncommittet** im Working Tree
-(`docs/specs/NNNN-*.md`). Referenzierte Specs vorher lesen. Offene
-Produktfragen mit `AskUserQuestion` klären (empfohlene Option zuerst,
-"(Recommended)"), Antwort in der Spec unter **"Getroffene Entscheidungen
-(Stefan)"** festhalten. Gibt es keine Spec, eine anlegen (nächste freie
-Nummer per `ls docs/specs`), Status "Entwurf", mit Ist-Stand aus dem Code.
+Offene Produktfragen: dem PO vorlegen, mit empfohlener Option zuerst. Wenn
+keine Rückfrage möglich ist (Subagent), **anhalten und berichten** statt zu
+raten. Die Antwort in der Spec unter „Getroffene Entscheidungen" festhalten.
 
-## Ablauf pro Implementierungsschritt
+## Regressionstests mit Gegenbeweis
 
-1. Ist-Stand im Code verifizieren (nicht aus Erinnerung/Memory). Für
-   breite Suchen einen `Explore`-Agenten nutzen.
-2. Umsetzen — kleinstmöglich, im bestehenden Stil, keine Nebenbaustellen.
-3. **Regressionstests mit Gegenbeweis** (Pflicht, siehe unten).
-4. Volles Gate (CLAUDE.md). Zusätzlich: oxlint hat eine Basis von
-   **3 bestehenden `set-state-in-effect`-Warnungen** — keine neuen
-   hinzufügen (Anzahl vorher/nachher vergleichen).
-5. Genau die betroffenen Pfade stagen, `git status` prüfen, committen.
-   Fremde, nicht zur Aufgabe gehörende Änderungen im Working Tree (z. B.
-   eine gerade von Stefan bearbeitete Spec) **nie** mitcommitten oder
-   anfassen.
+Ein Regressionstest zählt erst, wenn er gegen den ungefixten Stand
+fehlschlägt. Deshalb: Fix vorübergehend entfernen, Test rot sehen, Fix
+wiederherstellen, Test grün. Im Bericht erwähnen. Grund: Mehrere frühere
+Tests prüften weniger, als sie behaupteten.
 
-### Gegenbeweis für Regressionstests (so gemacht)
+- Async-Tests, die im Fehlerfall hängen könnten, mit
+  `tokio::time::timeout` umschließen — sonst hängt der Gegenbeweis, statt
+  sauber zu scheitern.
+- Bei Zeit- und Nebenläufigkeitstests echte Signale (Notify, Gate) statt
+  Sleeps.
 
-- Datei vorher in den Scratchpad kopieren, den Fix per gezieltem
-  Python-Replace (oder `git stash push <datei>` bei reinen
-  Frontend-Dateien) entfernen, Test laufen lassen → **muss fehlschlagen**,
-  Datei zurückkopieren, Test erneut → grün. Im Bericht erwähnen.
-- Async-Tests, die im Fehlerfall hängen würden, **immer mit
-  `tokio::time::timeout`** umschließen — sonst hängt der Gegenbeweis statt
-  sauber zu scheitern (macOS hat kein `timeout`-Binary).
-- Nie `.unwrap()`-freie "passt immer"-Assertions; bei Zeit-/Nebenläufig-
-  keitstests echte Signale (Notify/Gate) statt Sleeps.
+## Sicherheitsänderungen: verschärfen, nie lockern
 
-## Review-Workflow (Pflicht, CLAUDE.md) — Praxis
+Bei Filter-, Redaction- und Eskalationslogik darf keine Änderung einen
+bestehenden Schutz schwächen — auch nicht als Nebenwirkung eines Fixes.
+Bewährtes Muster: die alte Prüfung wörtlich behalten und mit der neuen
+ODER-verknüpfen; dann kann die neue Fassung per Konstruktion nicht weniger
+erkennen. Keine stillen Rückfälle: lieber sichtbar scheitern als unbemerkt
+etwas anderes tun.
 
-- `Agent` mit `subagent_type: "spec-reviewer"`, `model: "opus"`, im
-  Hintergrund. Prompt: Spec-Pfad, Commit-Range, Priorität, knappe
-  Beschreibung des Umgesetzten und die **konkreten adversarialen Fragen**
-  (bei ERHÖHT die Angriffswege ausformulieren).
-- Endet die Sitzung, bevor der Review fertig ist, geht er verloren →
-  neu starten, nicht als erledigt behandeln.
-- Jeden Fund triagieren: beheben (eigener Commit, z. B.
-  `fix(...): address spec-reviewer findings on X (Spec NNNN, ERHÖHT)`,
-  mit Tests + Gegenbeweis) **oder** bewusst nicht beheben — dann mit
-  Begründung in einer ADR (Abschnitt "Bewusst NICHT behoben") und im
-  Bericht. Nichts stillschweigend fallen lassen.
-- Kleine Folgearbeiten (z. B. eine Rust-Änderung, die eine laufende
-  Dev-App neu starten würde, während Stefan testet) dürfen aufgeschoben
-  werden — dann ausdrücklich sagen, was noch offen ist.
+## Review
 
-## Abschluss eines Spec-Schritts
+`spec-reviewer`-Agent mit der Priorität aus dem Auftrag, bei ERHÖHT mit
+ausformulierten Angriffswegen. Jeden Fund triagieren:
+- **beheben** — eigener Commit, mit Test und Gegenbeweis, oder
+- **bewusst nicht beheben** — mit Begründung in der ADR und im Bericht.
+Nichts stillschweigend fallen lassen. Hat eine Nachbesserung selbst etwas
+gelockert, eine weitere Runde.
 
-- **ADR** (`docs/adr/NNNN-*.md`, eigene Nummerierung, nächste freie per
-  `ls docs/adr`) für jede Entscheidung, die die Spec offen ließ, jede
-  Abweichung/Scope-Reduktion und alle bewusst nicht behobenen Review-Funde.
-- **Spec + ADR zusammen committen**, wenn Umsetzung und Review fertig
-  sind: `docs(specs,adr): commit spec NNNN and ADR MMMM for <thema>`.
-- **CHANGELOG** (`[Unreleased]`, deutsch, nutzerrelevant, kein
-  Interna-Kram): `docs(changelog): add <thema> entries per spec NNNN`.
-- **Version nie selbst erhöhen** — das macht Stefan.
-- **Abschlussbericht** an Stefan (deutsch), typischerweise:
-  - was umgesetzt ist (kurz, in Nutzersprache),
-  - Teil-0-Befund, falls gefragt,
-  - vom Review gefunden **und behoben**,
-  - vom Review gefunden, **bewusst nicht behoben** + Begründung,
-  - **manuelle Testabläufe** (nummeriert, konkret, inkl. nötiger
-    Server-Einrichtung),
-  - Commit-Liste (Hash + Zweck).
-- Bei UI-Änderungen die Dev-App **einmal am Ende** starten
-  (`./scripts/tauri-dev.sh`), nicht während der Iteration; wenn
-  selbst nicht klickbar, das sagen und Stefan die Testschritte geben.
+## Abschluss
 
-## Was Stefan wichtig ist (aus bisherigen Rückmeldungen)
+- **ADR** für jede offen gelassene Entscheidung, jede Abweichung von der Spec
+  und jeden bewusst nicht behobenen Fund. Nummer steht im Auftrag; fehlt
+  sie, `XXXX` als Platzhalter (wird beim Merge vergeben).
+- **Changelog**: nicht `CHANGELOG.md` direkt ändern, sondern ein Fragment
+  `changelog.d/<spec-nummer>-<thema>.md` (deutsch, nutzerrelevant). Grund:
+  parallele Coder würden sonst dieselben Zeilen ändern.
+- **Version nie selbst erhöhen.**
+- **Bericht**: was umgesetzt ist (in Nutzersprache), Teil-0-Befund, Review-
+  Funde behoben / bewusst nicht behoben mit Grund, **manuelle Testabläufe**
+  (nummeriert, inkl. nötiger Server-Einrichtung), Commit-Liste.
 
-- Kernversprechen: **volle Transparenz und Kontrolle über jedes Kommando,
-  das einen Server erreicht.** KI ist Copilot, nie autonomer Akteur.
-- Sicherheit vor Bequemlichkeit, aber keine Bevormundung bei manuellen
-  Aktionen (Dateibrowser/Terminal sind vertrauenswürdige Nutzeraktionen).
-- Ehrliche Hinweise statt Verharmlosung (z. B. "diese sudoers-Regel gibt
-  passwortlosen Root-Dateizugriff").
-- Keine stillen Rückfälle: lieber sichtbar scheitern als unbemerkt etwas
-  anderes tun (z. B. nie still als normaler Nutzer hochladen, wenn der
-  erhöhte Kanal weg ist).
-- Nachrichten an ihn: nicht zu lange ohne Lebenszeichen arbeiten — bei
-  langen Aufgaben kurze Zwischenstände.
-- Löschbefehle (`rm`, `cargo clean`) werden oft per Berechtigung
-  abgelehnt → dann den Befehl zum Selbst-Ausführen anbieten, nicht
-  umgehen.
+## Was bei diesem Produkt zählt
+
+- Kernversprechen: volle Transparenz und Kontrolle über jedes Kommando, das
+  einen Server erreicht. Die KI ist Copilot, nie autonomer Akteur.
+- Sicherheit vor Bequemlichkeit — aber keine Bevormundung bei manuellen
+  Aktionen (Dateibrowser, Terminal sind vertrauenswürdige Nutzeraktionen).
+- Ehrliche Hinweise statt Verharmlosung.
+- Bei langen Aufgaben kurze Zwischenstände statt langer Funkstille.
+- Wird ein Befehl per Berechtigung abgelehnt (z. B. `rm`), ihn zum
+  Selbst-Ausführen anbieten, nicht umgehen.
