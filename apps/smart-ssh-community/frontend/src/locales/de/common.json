@@ -485,6 +485,7 @@
       "checkFailed": "Die Prüfung der sudo-Rechte ist fehlgeschlagen.",
       "startFailed": "sftp-server ließ sich über sudo nicht starten (mögliche Ursache: „requiretty“ in sudoers)."
     },
-    "channelLost": "Erhöhte Rechte beendet — der erhöhte Kanal ist nicht mehr aktiv."
+    "channelLost": "Erhöhte Rechte beendet — der erhöhte Kanal ist nicht mehr aktiv.",
+    "targetUserLabel": "Ziel-Nutzer der Rechteerhöhung (Standard: root)"
   }
 }

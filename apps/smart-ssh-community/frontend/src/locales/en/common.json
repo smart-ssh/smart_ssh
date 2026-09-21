@@ -485,6 +485,7 @@
       "checkFailed": "Checking the sudo rights failed.",
       "startFailed": "sftp-server could not be started via sudo (possible cause: “requiretty” in sudoers)."
     },
-    "channelLost": "Elevated rights ended — the elevated channel is no longer active."
+    "channelLost": "Elevated rights ended — the elevated channel is no longer active.",
+    "targetUserLabel": "Target user for elevated rights (default: root)"
   }
 }

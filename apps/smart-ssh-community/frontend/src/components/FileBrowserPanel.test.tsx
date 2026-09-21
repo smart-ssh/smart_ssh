@@ -995,6 +995,27 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("can elevate to another user (A4) and names that user everywhere", async () => {
+    vi.mocked(sftpElevationEnable).mockResolvedValue({
+      active: true,
+      targetUser: "www-data",
+      sftpServerPath: "/usr/lib/openssh/sftp-server",
+      failure: null,
+    });
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.change(screen.getByLabelText(/Ziel-Nutzer/), { target: { value: "www-data" } });
+    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+
+    await waitFor(() => expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "www-data"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("www-data");
+  });
+
+  it("uses root when no target user is given", async () => {
+    await enableElevation();
+    expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "root");
+  });
+
   it("drops the elevated mode when the connection goes away", async () => {
     let statusHandler: ((event: { sessionId: string; status: string; reason: null }) => void) | null =
       null;

@@ -170,6 +170,8 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   // persistiert. `null` = normaler Modus.
   const [elevation, setElevation] = useState<{ targetUser: string } | null>(null);
   const [enablingElevation, setEnablingElevation] = useState(false);
+  // Spec 0067, A4: Ziel-Nutzer der Rechteerhöhung, Default root.
+  const [elevationTargetUser, setElevationTargetUser] = useState("root");
   const [elevationFailure, setElevationFailure] = useState<ElevationResultDto | null>(null);
   const elevated = elevation !== null;
   const elevatedUser = elevation?.targetUser ?? "";
@@ -235,7 +237,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     }
     setEnablingElevation(true);
     try {
-      const result = await sftpElevationEnable(sessionId, null);
+      const result = await sftpElevationEnable(sessionId, elevationTargetUser.trim() || null);
       if (result.active) {
         setElevation({ targetUser: result.targetUser });
         load(path, true);
@@ -810,6 +812,15 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
         >
           Hochladen
         </button>
+        {!elevated && (
+          <input
+            value={elevationTargetUser}
+            onChange={(e) => setElevationTargetUser(e.target.value)}
+            aria-label={t("fileElevation.targetUserLabel")}
+            title={t("fileElevation.targetUserLabel")}
+            className="w-20 border border-amber-600/40 bg-slate-950 px-1.5 py-1 font-mono text-xs text-amber-200 focus:outline-none"
+          />
+        )}
         {!elevated && (
           <button
             type="button"
