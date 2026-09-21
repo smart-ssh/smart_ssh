@@ -51,18 +51,29 @@ weiterhin manuell zusätzliche Tags simulierbar.
 ## Fund 3 — Diff-Vorschau großer Remote-Dateien ohne Größen-Cap
 
 Die Diff-Vorschau (Notiz-Diff Spec 0019, und der Datei-Write-Diff aus Spec
-0020) hat **keinen Größen-Cap** — anders als der Lesepfad (256-KB-Cap, Spec
-0020). Eine sehr große Datei/ein sehr großer Inhalt könnte den
-Confirm-Dialog-Renderer einfrieren (der Zeilen-Diff ist O(n·m), gedacht für
-kurzen Notiztext, nicht für riesige Dateien).
+0020) hat **keinen Cap** — anders als der Lesepfad. Eine große Datei/ein
+großer Inhalt könnte den Confirm-Dialog-Renderer einfrieren (der Zeilen-Diff
+ist O(n·m), gedacht für kurzen Notiztext, nicht für riesige Inhalte).
 
-**Fix**: Größen-Cap für die Diff-Berechnung (z. B. dieselbe 256-KB-Grenze
-wie der Lesepfad, oder ein eigener sinnvoller Wert). Überschreitet der
-alte oder neue Inhalt den Cap: **kein** zeilenweiser Diff berechnen,
-stattdessen ein Hinweis ("Inhalt zu groß für Zeilen-Diff") plus die reine
-Information alt/neu-Größe — analog zum Binärdatei-Fall aus Spec 0020,
-Abschnitt 4.2. Der Schreibvorgang selbst bleibt möglich (nur die Vorschau
-ist gekürzt), die Bestätigung erfolgt dann ohne detaillierten Diff.
+> **Korrektur (aus dem 0046-Review)**: Eine frühere Fassung dieser Spec
+> schlug einen **Byte-basierten** Cap (256 KB, wie der Lesepfad) vor. Das
+> **löst das Problem nicht**: Die Diff-Kosten skalieren mit der
+> **Zeilenzahl im Quadrat**, nicht mit Bytes. 250 KB aus lauter 5-Byte-Zeilen
+> bleiben unter dem Byte-Cap, erzeugen aber eine ~2,5-Milliarden-Zellen-
+> DP-Tabelle (im Review gemessen: ~2,6 s / ~800 MB nativ für einen kleineren
+> Fall — ein Browser-Tab wäre schlimmer dran). Ein Byte-Cap ließe genau den
+> Einfrier-Bug zu, den er verhindern soll, nur bei vielen kurzen statt
+> wenigen langen Zeilen.
+
+**Fix**: Ein **Zeilen-Produkt-Cap** (z. B. 2000×2000, d. h. `alt_zeilen *
+neu_zeilen` über der Grenze) statt eines Byte-Caps. Durchgesetzt **sowohl
+am Call-Site als auch defensiv innerhalb der Diff-Funktion selbst** (die
+wirft, wenn der Cap umgangen würde), sodass kein künftiger Aufrufer ihn
+vergessen kann. Überschreitung: **kein** zeilenweiser Diff, stattdessen ein
+Hinweis ("Inhalt zu groß für Zeilen-Diff") plus die reine alt/neu-Größe —
+analog zum Binärdatei-Fall aus Spec 0020, Abschnitt 4.2. Der Schreibvorgang
+selbst bleibt möglich (nur die Vorschau ist gekürzt), die Bestätigung
+erfolgt dann ohne detaillierten Diff.
 
 ## Fund 4 — Tab schließen mit Reload dazwischen verweigert wartende Aktion nicht
 
