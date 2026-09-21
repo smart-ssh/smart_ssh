@@ -637,6 +637,32 @@ pub fn emit_chat_error(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ChatResponseTruncatedPayload {
+    session_id: SessionId,
+}
+
+/// Spec 0065, Teil 2: die zuletzt gestreamte KI-Antwort wurde durch das
+/// Längenlimit (`stop_reason: max_tokens`/`finish_reason: length`)
+/// abgeschnitten, OHNE dass ein Tool-Call betroffen war (der Fall wird
+/// separat über den einmaligen Retry/`AiError::ResponseTruncated`
+/// abgefangen, s. `ai_providers`). Bewusst ein eigenes Event statt eines
+/// Hinweistexts *im* `chat-text-delta`-Inhalt — ein Hinweis im Inhalt selbst
+/// wäre nicht von echter (ggf. manipulierter) Modellausgabe unterscheidbar
+/// (Lehre aus Spec 0057: "ein Hinweis im Fence wäre von echter Ausgabe
+/// fälschbar"). Das Frontend zeigt daraufhin an der zuletzt gestreamten
+/// KI-Nachricht einen Hinweis samt „Weiter"-Aktion (`continue_truncated_
+/// response`-Kommando) — beides außerhalb jeder Fence, da hier reines
+/// Event-Metadaten, kein Chat-Inhalt.
+pub fn emit_chat_response_truncated(emitter: &dyn EventEmitter, session_id: SessionId) {
+    emit(
+        emitter,
+        "chat-response-truncated",
+        &ChatResponseTruncatedPayload { session_id },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ChatAutoContinuationLimitReachedPayload {
     session_id: SessionId,
     limit: usize,

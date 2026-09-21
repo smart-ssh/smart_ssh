@@ -750,7 +750,10 @@ async fn generate_rolling_summary(
                 // Kein Tool-Schema angeboten, aber defensiv wie an den
                 // anderen reinen-Text-Aufrufstellen: einfach ignorieren.
                 AiEvent::ActionProposed(_) => {}
-                AiEvent::Done => return Some(text),
+                // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
+                // Nebenaufruf — eine unvollständige Zusammenfassung ist
+                // immer noch besser als gar keine.
+                AiEvent::Done | AiEvent::TextTruncated => return Some(text),
                 AiEvent::Error(err) => {
                     tracing::warn!(
                         error = %err,

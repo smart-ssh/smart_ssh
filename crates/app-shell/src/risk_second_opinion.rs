@@ -128,7 +128,10 @@ pub async fn fetch_second_opinion(
     while let Some(event) = stream.next().await {
         match event {
             AiEvent::TextDelta(delta) => text.push_str(&delta),
-            AiEvent::Done => break,
+            // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen Nebenaufruf —
+            // eine unvollständige Zweitmeinung wird einfach normal geparst
+            // (parse_second_opinion liefert bei unklarem Text ohnehin None).
+            AiEvent::Done | AiEvent::TextTruncated => break,
             // Netzwerk-/Auth-/sonstiger Providerfehler: keine Zweitmeinung
             // verfügbar, kein Absturz, kein Blockieren der (bereits
             // angezeigten) regelbasierten Einschätzung.
@@ -210,7 +213,8 @@ pub async fn fetch_injection_check(
     while let Some(event) = stream.next().await {
         match event {
             AiEvent::TextDelta(delta) => text.push_str(&delta),
-            AiEvent::Done => break,
+            // Spec 0065, Teil 2: s. identischer Kommentar bei `fetch_second_opinion`.
+            AiEvent::Done | AiEvent::TextTruncated => break,
             AiEvent::Error(_) => return None,
             AiEvent::ActionProposed(_) => {}
         }

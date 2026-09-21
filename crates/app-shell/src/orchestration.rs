@@ -61,9 +61,9 @@ use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_chat_action_proposed, emit_chat_action_result, emit_chat_auto_continuation_limit_reached,
     emit_chat_auto_continuation_started, emit_chat_document_generated, emit_chat_error,
-    emit_chat_text_delta, emit_note_shrink_failed, emit_note_shrink_succeeded,
-    emit_note_shrink_suggested, emit_note_update_suggested, emit_risk_assessment_updated,
-    ActionResultPayload, EventEmitter,
+    emit_chat_response_truncated, emit_chat_text_delta, emit_note_shrink_failed,
+    emit_note_shrink_succeeded, emit_note_shrink_suggested, emit_note_update_suggested,
+    emit_risk_assessment_updated, ActionResultPayload, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -637,6 +637,16 @@ async fn run_one_round(
             }
             AiEvent::Done => {
                 flush_text_buffer(session, &mut text_buffer).await;
+                break;
+            }
+            AiEvent::TextTruncated => {
+                // Spec 0065, Teil 2: der bis hierhin gestreamte Text bleibt
+                // gültig und sichtbar (genau wie bei `Done`) — zusätzlich
+                // ein eigenes Event, das das Frontend in einen Hinweis samt
+                // „Weiter"-Aktion übersetzt, statt Text in den Inhalt zu
+                // mischen (s. `emit_chat_response_truncated`-Doc-Kommentar).
+                flush_text_buffer(session, &mut text_buffer).await;
+                emit_chat_response_truncated(emitter, session_id);
                 break;
             }
             AiEvent::Error(err) => {
@@ -2764,7 +2774,11 @@ pub async fn generate_session_title_on_disconnect(
             // aber defensiv wie beim Notiz-Vorschlag: einfach ignorieren
             // statt eine Aktion auszuführen, die niemand angefordert hat.
             AiEvent::ActionProposed(_) => {}
-            AiEvent::Done | AiEvent::Error(_) => break,
+            // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
+            // Nebenaufruf — ein abgeschnittener Titel wird einfach genau
+            // wie ein sonst leerer/fehlerhafter Titel behandelt (s.
+            // `sanitize_generated_title` unten).
+            AiEvent::Done | AiEvent::Error(_) | AiEvent::TextTruncated => break,
         }
     }
 
@@ -2921,7 +2935,10 @@ pub async fn suggest_note_update_on_disconnect(
             // Nutzer hat den Screen evtl. längst verlassen — eine
             // Fehlermeldung für ein rein optionales Extra wäre hier
             // aufdringlicher als hilfreich.
-            AiEvent::Done | AiEvent::Error(_) => break,
+            // Spec 0065, Teil 2: dieser Nebenaufruf zeigt keinen „Weiter"-
+            // Hinweis an (kein sichtbarer Chat-Turn) — ein abgeschnittener
+            // Vorschlag ist hier gleichbedeutend mit "kein Vorschlag".
+            AiEvent::Done | AiEvent::Error(_) | AiEvent::TextTruncated => break,
             AiEvent::TextDelta(_) => {}
         }
     }
@@ -3197,7 +3214,11 @@ async fn summarize_note_for_shrink(
                 // Kein Tool-Schema angeboten, aber defensiv wie an den
                 // anderen reinen-Text-Aufrufstellen: einfach ignorieren.
                 AiEvent::ActionProposed(_) => {}
-                AiEvent::Done => return Some(text),
+                // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
+                // Nebenaufruf — die gekürzte Notiz gilt trotzdem als
+                // Ergebnis (besser eine unvollständig gekürzte Notiz
+                // zurückgeben als gar keine).
+                AiEvent::Done | AiEvent::TextTruncated => return Some(text),
                 AiEvent::Error(err) => {
                     tracing::warn!(error = %err, "note shrink summarization failed");
                     return None;
@@ -3937,6 +3958,59 @@ mod tests {
             history[0].content,
             MessageContent::CommandResult { .. }
         ));
+    }
+
+    /// Spec 0065, Teil 2 (Regressionstest): eine Antwort, die mit
+    /// `AiEvent::TextTruncated` statt `AiEvent::Done` endet, muss (a) den
+    /// bis dahin gestreamten Text trotzdem in die Historie/den Ledger
+    /// übernehmen (genau wie bei `Done` — "bleibt sichtbar, ist gültig, nur
+    /// unvollständig") und (b) ein `chat-response-truncated`-Event für die
+    /// richtige Session auslösen, DAMIT das Frontend den Hinweis + „Weiter"
+    /// anzeigen kann — kein Text-Hinweis im Inhalt selbst (Lehre aus Spec
+    /// 0057, s. `emit_chat_response_truncated`-Doc-Kommentar).
+    #[tokio::test]
+    async fn test_text_truncated_event_keeps_partial_text_and_emits_notice() {
+        let session = test_session(
+            vec![
+                AiEvent::TextDelta("Teil".to_string()),
+                AiEvent::TextDelta("antwort".to_string()),
+                AiEvent::TextTruncated,
+            ],
+            MockSshTransport::default(),
+        );
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names = event_names_excluding_auto_continuation(&events);
+        assert!(
+            event_names.contains(&"chat-response-truncated"),
+            "erwartet ein chat-response-truncated-Event, bekam: {event_names:?}"
+        );
+        let (_, payload) = events
+            .iter()
+            .find(|(name, _)| name == "chat-response-truncated")
+            .expect("chat-response-truncated fehlt");
+        assert_eq!(payload["sessionId"], serde_json::json!(session_id));
+
+        let history = session.context.lock().await.history.clone();
+        assert_eq!(history.len(), 1);
+        assert_eq!(
+            history[0].content,
+            MessageContent::Text("Teilantwort".to_string())
+        );
+        assert!(matches!(history[0].role, Role::Assistant));
     }
 
     /// Spec 0028, Abschnitt 5 (Regressionstest, s. `ActionOrigin::Mcp`):

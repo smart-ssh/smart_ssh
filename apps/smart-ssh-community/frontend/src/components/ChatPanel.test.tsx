@@ -59,6 +59,7 @@ function renderItem(item: ChatItem) {
         onRespond={vi.fn()}
         onAcceptWithRule={vi.fn()}
         onExport={vi.fn()}
+        onContinueTruncated={vi.fn()}
         serverId="server-1"
         sessionId="session-1"
       />
@@ -140,6 +141,7 @@ describe("registered document actions (Spec 0045)", () => {
           onRespond={vi.fn()}
           onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
           serverId="server-1"
           sessionId="session-1"
         />
@@ -179,6 +181,7 @@ describe("registered document actions (Spec 0045)", () => {
           onRespond={vi.fn()}
           onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
           serverId="server-1"
           sessionId="session-1"
         />
@@ -203,6 +206,7 @@ describe("registered document actions (Spec 0045)", () => {
           onRespond={vi.fn()}
           onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
           serverId="server-1"
           sessionId="session-1"
         />
@@ -230,6 +234,7 @@ describe("assistant message actions (Spec 0055, Teil 2)", () => {
           onRespond={vi.fn()}
           onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
           serverId="server-1"
           sessionId="session-1"
         />
@@ -267,5 +272,75 @@ describe("assistant message actions (Spec 0055, Teil 2)", () => {
     expect(actionRow).toHaveClass("group-hover:opacity-100");
     expect(actionRow).toHaveClass("focus-within:opacity-100");
     expect(container.querySelector(".group")).not.toBeNull();
+  });
+});
+
+// Spec 0065, Teil 2: Hinweis + „Weiter"-Knopf an einer durch das Längenlimit
+// abgeschnittenen Antwort.
+describe("truncated response notice (Spec 0065, Teil 2)", () => {
+  function truncatedItem(truncated: boolean): ChatItem {
+    return { type: "assistant", id: "assistant-1", text: "Teilantwort...", truncated };
+  }
+
+  it("shows no truncation notice for a normal, complete reply", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={truncatedItem(false)}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+
+    expect(screen.queryByText(/abgeschnitten/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Weiter" })).toBeNull();
+  });
+
+  it("shows the truncation notice and a Weiter button for a truncated reply, still rendering the partial text", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={truncatedItem(true)}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+
+    // Der bis dahin gestreamte Text bleibt sichtbar (Spec 0065 §2: "bleibt
+    // sichtbar — sie ist gültig, nur unvollständig").
+    expect(screen.getByText("Teilantwort...")).toBeInTheDocument();
+    expect(screen.getByText(/abgeschnitten/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Weiter" })).toBeInTheDocument();
+  });
+
+  it("calls onContinueTruncated with the item id when Weiter is clicked", () => {
+    const onContinueTruncated = vi.fn();
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={truncatedItem(true)}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          onContinueTruncated={onContinueTruncated}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
+
+    expect(onContinueTruncated).toHaveBeenCalledWith("assistant-1");
   });
 });

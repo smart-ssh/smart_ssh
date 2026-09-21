@@ -615,7 +615,13 @@ impl OpenAiStreamState {
     /// ganz ohne Rücksicht auf `finish_reason`/den Verbindungszustand.
     fn finalize(&mut self, abrupt: bool) -> Vec<RawEvent> {
         log_text_delta_summary(self.request_id, self.text_delta_total_len);
-        let truncated_by_length = abrupt || self.finish_reason.as_deref() == Some("length");
+        // Spec 0065, Teil 2: `TextTruncated` (UI-Hinweis + „Weiter") gilt nur
+        // für ein echtes `finish_reason: length` — ein abrupter
+        // Verbindungsabbruch (`abrupt`) ist ein anderer Fehlerfall (bereits
+        // separat als `AiError::NetworkError` sichtbar), keine "Antwort war
+        // zu lang"-Situation.
+        let finish_reason_is_length = self.finish_reason.as_deref() == Some("length");
+        let truncated_by_length = abrupt || finish_reason_is_length;
 
         if self.native_tool_calling {
             if truncated_by_length && !self.tool_calls.is_empty() {
@@ -638,7 +644,11 @@ impl OpenAiStreamState {
                     &call.arguments,
                 )));
             }
-            events.push(RawEvent::Public(AiEvent::Done));
+            events.push(RawEvent::Public(if finish_reason_is_length {
+                AiEvent::TextTruncated
+            } else {
+                AiEvent::Done
+            }));
             events
         } else {
             let result = parse_fallback_response(&self.fallback_text);
@@ -652,7 +662,11 @@ impl OpenAiStreamState {
             if let Some(action) = result.action {
                 events.push(RawEvent::Public(AiEvent::ActionProposed(action)));
             }
-            events.push(RawEvent::Public(AiEvent::Done));
+            events.push(RawEvent::Public(if finish_reason_is_length {
+                AiEvent::TextTruncated
+            } else {
+                AiEvent::Done
+            }));
             events
         }
     }
@@ -870,7 +884,9 @@ mod tests {
                 .collect()
                 .await;
 
-        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
+        // Spec 0065, Teil 2: kein Tool-Call beteiligt (reiner Text) — seit
+        // diesem Fix `TextTruncated` statt `Done`, s. `finalize`-Kommentar.
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::TextTruncated)]);
         let log_text = crate::test_support::log_buffer_text();
         assert!(
             log_text.contains("length"),

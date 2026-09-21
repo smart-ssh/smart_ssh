@@ -83,6 +83,17 @@ pub enum AiEvent {
     /// Bestätigungsdialog (Spec 0003 Abschnitt 5.2).
     ActionProposed(AiAction),
     Done,
+    /// Spec 0065, Teil 2: die Antwort endete durch `stop_reason: max_tokens`
+    /// (bzw. `finish_reason: length`), OHNE dass ein Tool-Call betroffen war
+    /// — ein reiner Text-Fall. Ersetzt `Done` für genau diese eine Antwort
+    /// (nie beide für dieselbe Antwort): der bis dahin gestreamte Text
+    /// bleibt gültig und sichtbar, ist aber unvollständig. Bewusst ein
+    /// eigenes `AiEvent` statt eines Flags im Text selbst (Lehre aus Spec
+    /// 0057: ein Hinweis *im* Inhalt wäre von echter, ggf. manipulierter
+    /// Modell-/Server-Ausgabe fälschbar) — `app-shell::orchestration`
+    /// übersetzt dieses Ereignis in einen Nicht-Fließtext-Hinweis samt
+    /// „Weiter"-Aktion ans Frontend.
+    TextTruncated,
     Error(AiError),
 }
 

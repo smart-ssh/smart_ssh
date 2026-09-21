@@ -1690,6 +1690,44 @@ pub async fn send_chat_message(
     .await
 }
 
+/// Spec 0065, Teil 2: sinngemäß aus der Spec-Skizze übernommen (dort bereits
+/// als "sinngemäß"-Formulierung vorgegeben) — analog zu
+/// `orchestration::TITLE_GENERATION_INSTRUCTION`, dieselbe Konvention.
+const CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION: &str =
+    "Deine letzte Antwort wurde wegen des Längenlimits abgeschnitten. Fahre exakt an der \
+     Stelle fort, an der sie endete, ohne den bisherigen Teil zu wiederholen.";
+
+/// Spec 0065, Teil 2: „Weiter"-Knopf nach einem `chat-response-truncated`-
+/// Event — schickt die Fortsetzungs-Anweisung als GANZ NORMALE Nachricht
+/// durch exakt denselben Pfad wie [`send_chat_message`] (Kompaktierung,
+/// Rate-Limit-Gate, Caching, Redaction, Filter-Engine) — keine Sonderbahn,
+/// wie in Spec 0065 §2 explizit gefordert. Bewusst kein automatisches
+/// Fortsetzen: dieses Kommando läuft nur, wenn der Nutzer aktiv den Knopf
+/// klickt.
+#[tauri::command]
+pub async fn continue_truncated_response(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<()> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    send_chat_message_impl(
+        &app,
+        &app,
+        &session,
+        session_id,
+        CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION.to_string(),
+        state.prompt_history_store.as_ref(),
+        state.profile_store.as_ref(),
+        &state.policy_store,
+        &state.pending_action_confirmations,
+    )
+    .await
+}
+
 /// Kern von `send_chat_message` — herausgelöst, damit Spec 0040 Abschnitt 2
 /// einen Regressionstest schreiben kann, der tatsächlich HIER einsteigt
 /// (nicht erst bei `run_chat_turn`/`push_history`, s. dortiger Spec-Text:

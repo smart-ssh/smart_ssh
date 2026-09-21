@@ -6,6 +6,7 @@ import {
   acceptAndCreateRule,
   cancelRunningCommand,
   commandErrorMessage,
+  continueTruncatedResponse,
   exportDocument,
   getChatHistory,
   listAiProviders,
@@ -24,6 +25,7 @@ import {
   onChatAutoContinuationStarted,
   onChatDocumentGenerated,
   onChatError,
+  onChatResponseTruncated,
   onChatTextDelta,
   onRiskAssessmentUpdated,
 } from "../events";
@@ -52,7 +54,17 @@ import { NoteDiffPreview } from "./NoteDiffPreview";
 
 export type ChatItem =
   | { type: "user"; id: string; text: string }
-  | { type: "assistant"; id: string; text: string }
+  | {
+      type: "assistant";
+      id: string;
+      text: string;
+      /** Spec 0065, Teil 2: `true`, wenn genau diese Antwort durch das
+       * Längenlimit abgeschnitten wurde (`chat-response-truncated`) — zeigt
+       * einen Hinweis + „Weiter"-Knopf. Kein Inhalt/Text, ein reines
+       * UI-Flag (Lehre aus Spec 0057: ein Hinweis *im* Text wäre von echter
+       * Modellausgabe nicht unterscheidbar). */
+      truncated?: boolean;
+    }
   | {
       type: "action";
       id: string;
@@ -426,6 +438,18 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
           { type: "error", id: freshId(), message: event.message, code: event.code ?? null },
         ]);
       }),
+      onChatResponseTruncated((event) => {
+        if (event.sessionId !== sessionId) return;
+        // Spec 0065, Teil 2: markiert die zuletzt gestreamte Assistant-
+        // Nachricht (dieselbe `last?.type === "assistant"`-Suche wie bei
+        // `onChatTextDelta` oben) — das Event kommt immer unmittelbar nach
+        // dem letzten Text-Delta derselben Antwort.
+        setItems((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.type !== "assistant") return prev;
+          return [...prev.slice(0, -1), { ...last, truncated: true }];
+        });
+      }),
       onChatAutoContinuationLimitReached((event) => {
         if (event.sessionId !== sessionId) return;
         setItems((prev) => [
@@ -583,6 +607,25 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
     }
   };
 
+  /** Spec 0065, Teil 2: „Weiter"-Knopf an einer abgeschnittenen Antwort —
+   * läuft durch `continueTruncatedResponse` (identischer Backend-Pfad wie
+   * `sendChatMessage`, s. dortiger Kommentar). Entfernt das `truncated`-Flag
+   * von der Nachricht sofort optimistisch, damit der Knopf nicht doppelt
+   * klickbar bleibt, während die Anfrage läuft. */
+  const handleContinueTruncated = async (itemId: string) => {
+    setItems((prev) =>
+      prev.map((it) => (it.id === itemId && it.type === "assistant" ? { ...it, truncated: false } : it)),
+    );
+    try {
+      await continueTruncatedResponse(sessionId);
+    } catch (err) {
+      setItems((prev) => [
+        ...prev,
+        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
+      ]);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const text = draft.trim();
@@ -735,6 +778,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
             onRespond={respond}
             onAcceptWithRule={acceptWithRule}
             onExport={handleExport}
+            onContinueTruncated={handleContinueTruncated}
             serverId={serverId}
             sessionId={sessionId}
           />
@@ -886,6 +930,7 @@ export function ChatItemView({
   onRespond,
   onAcceptWithRule,
   onExport,
+  onContinueTruncated,
   serverId,
   sessionId,
 }: {
@@ -899,6 +944,8 @@ export function ChatItemView({
     editedCommand: string | null,
   ) => void;
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
+  /** Spec 0065, Teil 2 — s. `ChatPanel`s `handleContinueTruncated`-Kommentar. */
+  onContinueTruncated: (itemId: string) => void;
   serverId: string;
   sessionId: string;
 }) {
@@ -916,7 +963,15 @@ export function ChatItemView({
     );
   }
   if (item.type === "assistant") {
-    return <AssistantMessageView text={item.text} onExport={onExport} sessionId={sessionId} />;
+    return (
+      <AssistantMessageView
+        text={item.text}
+        onExport={onExport}
+        sessionId={sessionId}
+        truncated={item.truncated ?? false}
+        onContinue={() => onContinueTruncated(item.id)}
+      />
+    );
   }
   if (item.type === "error") {
     return (
@@ -1634,10 +1689,15 @@ function AssistantMessageView({
   text,
   onExport,
   sessionId,
+  truncated,
+  onContinue,
 }: {
   text: string;
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
   sessionId: string;
+  /** Spec 0065, Teil 2 — s. `ChatItem`s `truncated`-Feld-Kommentar. */
+  truncated: boolean;
+  onContinue: () => void;
 }) {
   const [exporting, setExporting] = useState<DocumentFormat | null>(null);
   const [savedFormat, setSavedFormat] = useState<DocumentFormat | null>(null);
@@ -1693,6 +1753,23 @@ function AssistantMessageView({
         </button>
         {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
       </div>
+      {truncated ? (
+        // Spec 0065, Teil 2: dauerhaft sichtbar (nicht Teil der
+        // Hover-Leiste oben) — ein abgebrochener Antworttext ist keine
+        // beiläufige Zusatzfunktion, sondern der Grund, warum die Antwort
+        // gerade unvollständig endet. Reines UI-Element aus dem `truncated`-
+        // Flag, nicht Teil von `text` (nicht fälschbar, s. Feld-Kommentar).
+        <div className="flex flex-wrap items-center gap-2 border-t border-amber-700/40 pt-2 text-xs text-amber-300">
+          <span>✂ Antwort wurde abgeschnitten (Längenlimit erreicht).</span>
+          <button
+            type="button"
+            onClick={onContinue}
+            className="rounded bg-amber-700/80 px-2 py-1 text-xs text-amber-50 hover:bg-amber-600"
+          >
+            Weiter
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

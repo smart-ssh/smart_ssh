@@ -344,6 +344,14 @@ export interface ChatAutoContinuationLimitReachedEvent {
   limit: number;
 }
 
+/** Spec 0065, Teil 2 — die zuletzt gestreamte KI-Antwort wurde durch das
+ * Längenlimit abgeschnitten (kein Tool-Call betroffen, der Fall läuft
+ * separat über den Retry). Zeigt einen Hinweis + „Weiter"-Aktion
+ * (`continue_truncated_response`) an der letzten KI-Nachricht. */
+export interface ChatResponseTruncatedEvent {
+  sessionId: string;
+}
+
 /** Antwort auf `host-key-verification-needed` (`confirm_host_key`). */
 export type HostKeyUserDecision = { decision: "trust" } | { decision: "reject" };
 

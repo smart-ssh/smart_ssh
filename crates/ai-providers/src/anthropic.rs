@@ -823,7 +823,14 @@ impl AnthropicStreamState {
         if let Some(action) = fallback_action {
             events.push(RawEvent::Public(AiEvent::ActionProposed(action)));
         }
-        events.push(RawEvent::Public(AiEvent::Done));
+        // Spec 0065, Teil 2: kein Tool-Call betroffen (sonst wäre oben schon
+        // zurückgekehrt worden), aber `stop_reason: max_tokens` — reiner
+        // Text wurde abgeschnitten. `TextTruncated` statt `Done`, NIE beide.
+        events.push(RawEvent::Public(if stop_reason_is_max_tokens {
+            AiEvent::TextTruncated
+        } else {
+            AiEvent::Done
+        }));
         events
     }
 }
@@ -1206,7 +1213,9 @@ mod tests {
                 .collect()
                 .await;
 
-        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
+        // Spec 0065, Teil 2: kein Tool-Call beteiligt (reiner Text) — seit
+        // diesem Fix `TextTruncated` statt `Done`, s. `finalize`-Kommentar.
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::TextTruncated)]);
         let log_text = crate::test_support::log_buffer_text();
         assert!(
             log_text.contains("max_tokens"),
