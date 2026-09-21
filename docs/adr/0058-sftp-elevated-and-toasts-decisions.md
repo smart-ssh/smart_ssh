@@ -91,10 +91,10 @@ oder den KI-Kontext.
   diesem Login, auch für KI-vorgeschlagene Kommandos (z. B. SFTP-Pakete per
   Pipe an `sudo -n …/sftp-server`). Die App erreicht den Kanal nicht, die
   Regel selbst aber schon. Der Warntext neben der sudoers-Zeile sagt das
-  ausdrücklich. **Entschieden (Stefan, 2026-09-22, Commit `e052fb8`):**
+  ausdrücklich. **Entschieden (Stefan, 2026-09-21, Commit `e052fb8`):**
   Aufrufe von `sftp-server` (direkt oder per `sudo`/`doas`) gelten im
   Risiko-Klassifizierer fest als Server-Risiko Rot; bloße Erwähnungen
-  (`ls`, `grep`, `which`) nicht. **Zusätzlich (Stefan, 2026-09-22):** ein
+  (`ls`, `grep`, `which`) nicht. **Zusätzlich (Stefan, 2026-09-21):** ein
   solcher Aufruf verlangt immer eine Bestätigung, auch gegen eine
   Allow-Regel (`FILTER_SFTP_SERVER_REQUIRES_CONFIRM`, Chat und MCP).
   Aufgebaut wie die Secret-Prüfung aus Spec 0068 als ODER: das Rot-Muster

@@ -127,7 +127,7 @@ fn best_match(
         .max_by_key(|(level, _)| *level)
 }
 
-/// ADR 0058 §8 (Entscheidung Stefan, 2026-09-22): liefert eine Begründung,
+/// ADR 0058 §8 (Entscheidung Stefan, 2026-09-21): liefert eine Begründung,
 /// wenn `command` `sftp-server` aufruft. Der Aufrufer
 /// (`app-shell::orchestration::handle_action_proposed`) macht aus
 /// `AutoExec` dann immer `Confirm` — auch gegen eine Allow-Regel.

@@ -880,7 +880,7 @@ async fn handle_action_proposed(
         }
     }
 
-    // ADR 0058 §8 (Entscheidung Stefan, 2026-09-22): ein Aufruf von
+    // ADR 0058 §8 (Entscheidung Stefan, 2026-09-21): ein Aufruf von
     // `sftp-server` verlangt IMMER eine Bestätigung — auch gegen eine
     // Allow-Regel (mit der NOPASSWD-Regel des erhöhten Dateibrowsers ist das
     // passwortloser Root-Dateizugriff). Dasselbe Muster wie die
