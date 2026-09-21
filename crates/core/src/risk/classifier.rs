@@ -3,8 +3,8 @@ use crate::filter::{
 };
 
 use super::patterns::{
-    data_risk_patterns, secret_path_patterns, server_risk_patterns, SECRET_PATH_HINTS,
-    SECRET_READ_COMMANDS,
+    data_risk_patterns, secret_path_patterns, server_risk_patterns, SECRET_FILE_CANDIDATES,
+    SECRET_PATH_HINTS, SECRET_READ_COMMANDS, SECRET_RELATIVE_PREFIXES,
 };
 use super::types::{RiskAssessment, RiskClassifier, RiskLevel};
 
@@ -128,34 +128,40 @@ fn best_match(
 }
 
 /// Spec 0068, Teil 2: liefert eine Begründung, wenn `command` den Inhalt
-/// eines Secret-Pfads in die Ausgabe bringt (Lesebefehl oder `sftp-read`
-/// auf einen Pfad aus `patterns::secret_path_patterns`). Der Aufrufer
-/// (`app-shell::orchestration::handle_action_proposed`) macht aus
+/// eines Secret-Pfads in die Ausgabe bringt (oder vom Server wegträgt). Der
+/// Aufrufer (`app-shell::orchestration::handle_action_proposed`) macht aus
 /// `AutoExec` dann **immer** `Confirm` — auch wenn eine Allow-Regel greift
 /// —, reine Eskalation wie bei Spec 0039. Eine `Deny`-Entscheidung bleibt
 /// unberührt.
 ///
-/// Dieselbe Zerlegung wie [`RuleBasedRiskClassifier::classify`]:
-/// Teilkommandos (`;`, `&&`, `|`, `$(...)`), das Gesamtkommando und die
-/// von `sudo`/`env`/Zuweisungen befreite Form. Zusätzlich fail-safe:
-/// - Quotes und Backslashes werden vor dem Vergleich entfernt
-///   (`~/.ss''h/id_rsa`, `id\_rsa`).
-/// - Ein Platzhalter (`*`, `?`, `[`, `{`) in einem Argument eines
-///   Lesebefehls, das einen Secret-Hinweis oder eine Punktdatei enthält,
-///   eskaliert im Zweifel (`cat ~/.ssh/i*`, `cat .en*`).
-/// - `find … -exec cat` / `… | xargs cat` eskaliert, sobald das
-///   Gesamtkommando einen Secret-Hinweis enthält.
-/// - Ein zu langes Kommando eskaliert (nicht analysierbar).
+/// Geprüft werden alle Teilkommandos (`;`, `&&`, `|`, `$(...)`), das
+/// Gesamtkommando und die von `sudo`/`env`/Zuweisungen befreite Form, jeweils
+/// kleingeschrieben, ohne Quotes/Backslashes und mit lexikalisch
+/// normalisierten Pfaden (`//`, `/./`, `x/../`). Eskaliert wird, wenn
+/// (spec-reviewer-Fund, ERHÖHT — jeder Punkt nur zusätzlich):
+/// - ein Lesebefehl **irgendwo** im Teilkommando steht (auch hinter
+///   Wrappern wie `docker exec`, `sudo -iu`, `timeout -s`, als `/bin/cat`)
+///   und ein Secret-Pfad vorkommt;
+/// - ein Secret-Pfad per `<` umgeleitet oder nach `/dev/stdout`,
+///   `/dev/fd/…`, `/proc/…/fd/…`, `/dev/tty` geschrieben wird — bei jedem
+///   Befehl (`cp ~/.ssh/id_rsa /dev/stdout`);
+/// - massenhaft gelesen wird (rekursives `grep`, `rg`/`ag`/`ack`,
+///   `-exec`/`xargs`) — jedes Verzeichnis kann eine `.env` enthalten;
+/// - ein Pfad eine Variable enthält (`cat /etc/sha$@dow`, `cat $F`) oder
+///   ein `cd`-Ziel nicht prüfbar ist;
+/// - ein Platzhalter im Verzeichnisteil steht oder der letzte Pfadteil einen
+///   bekannten Secret-Dateinamen treffen kann (`cat /etc/sha*`, `cat *`);
+/// - ein relativer Pfad zusammen mit einem `cd`-Ziel einen Secret-Pfad
+///   ergibt (`cd /etc && cat shadow`);
+/// - das Kommando zu lang für die Prüfung ist.
 ///
-/// **Grenzen (ehrlich, bewusst)**: rein lexikalisch. Umgehbar über
-/// Variablen, deren Wert nicht im Kommando steht (`cat $F`), Symlinks
-/// (`ln -s ~/.ssh/id_rsa x; cat x` — `ln` selbst liest nichts), Umwege
-/// über andere Programme (`python -c …`, `vim`, `cp` in eine unverdächtige
-/// Datei und diese dann lesen) oder Kodierungen. Redaction (private
-/// Schlüsselblöcke, Keys) und die übrigen Bestätigungsregeln bleiben die
-/// weiteren Schichten. Auch eine Umleitung ohne Ausgabe
-/// (`cat .env > /srv/app/.env`) eskaliert — eine sichere Unterscheidung
-/// von `> /dev/stdout`, `>&2`, `| tee` wäre selbst eine Umgehungsfläche.
+/// **Grenzen (ehrlich, bewusst)**: rein lexikalisch. Nicht erkannt werden
+/// Symlinks (`ln -s ~/.ssh/id_rsa x; cat x` — `ln` liest nichts), Programme
+/// außerhalb der Liste (Skriptsprachen mit Dateinamen, Archivierer wie
+/// `tar`), Kodierungen und Umwege über eine zuvor unverdächtig kopierte
+/// Datei. Inline-Code (`python -c`, `bash -c`, `$(…)`) setzt die
+/// Filter-Engine ohnehin auf Bestätigung; Redaction bleibt die weitere
+/// Schicht.
 pub fn secret_path_read_reason(command: &str) -> Option<&'static str> {
     if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
         return Some("Kommando zu lang für eine Prüfung auf Secret-Pfade");
@@ -169,48 +175,364 @@ pub fn secret_path_read_reason(command: &str) -> Option<&'static str> {
         .collect();
     segments.extend(resolved);
 
-    let read_start = regex::Regex::new(&format!(r"^\s*{SECRET_READ_COMMANDS}\b"))
-        .expect("eingebautes Lesebefehl-Muster ist gültig");
-    let exec_read = regex::Regex::new(&format!(
-        r"(?:-exec|-execdir|xargs)(?:\s+-\S+)*\s+(?:sudo\s+)?{SECRET_READ_COMMANDS}\b"
-    ))
-    .expect("eingebautes exec-/xargs-Muster ist gültig");
-
-    let normalize = |text: &str| -> String {
-        text.to_lowercase()
-            .chars()
-            .filter(|c| !matches!(c, '\'' | '"' | '\\'))
-            .collect()
-    };
-    let full = normalize(command);
+    let cd_prefixes = cd_prefixes(&normalize_for_secret_check(command));
 
     for segment in &segments {
-        let normalized = normalize(segment);
-        if exec_read.is_match(&normalized) && SECRET_PATH_HINTS.iter().any(|h| full.contains(h)) {
-            return Some("Liest Dateien per -exec/xargs aus einem Secret-Pfad");
+        let normalized = normalize_for_secret_check(segment);
+        let concrete = secret_path_match(&normalized);
+
+        if let Some(reason) = concrete {
+            if normalized.contains('<')
+                || STDOUT_TARGETS
+                    .iter()
+                    .any(|target| normalized.contains(target))
+            {
+                return Some(reason);
+            }
         }
-        if !read_start.is_match(&normalized) {
+
+        let tokens: Vec<&str> = normalized.split_whitespace().collect();
+        let Some(reader) = tokens.iter().position(|token| is_read_command(token)) else {
             continue;
-        }
-        if let Some((_, reason)) = secret_path_patterns()
-            .iter()
-            .find(|(pattern, _)| pattern.is_match(&normalized))
-        {
+        };
+        if let Some(reason) = concrete {
             return Some(reason);
         }
-        let globbed_secret = normalized.split_whitespace().skip(1).any(|arg| {
-            let has_glob = arg.contains(['*', '?', '[', '{']);
-            let last = arg.rsplit('/').next().unwrap_or(arg);
-            has_glob
-                && (last.starts_with('.')
-                    || arg.starts_with('~')
-                    || arg.starts_with("$home")
-                    || arg.starts_with("/root")
-                    || SECRET_PATH_HINTS.iter().any(|h| arg.contains(h)))
-        });
-        if globbed_secret {
-            return Some("Lesebefehl mit Platzhalter auf einen möglichen Secret-Pfad");
+        if is_bulk_read(&tokens, reader) {
+            return Some(
+                "Liest Dateien rekursiv bzw. per -exec/xargs – Inhalt nicht vorab prüfbar",
+            );
+        }
+        let Some(cd_prefixes) = cd_prefixes.as_deref() else {
+            return Some("Lesebefehl nach Verzeichniswechsel in ein nicht prüfbares Ziel");
+        };
+        // awk-Programme zerfallen an Leerzeichen (`{print $NF}`) — dort zählt
+        // nur `$` in einem Pfad, nicht ein ganzes Variablen-Wort.
+        let awk_program = matches!(
+            tokens[reader].rsplit('/').next(),
+            Some("awk" | "gawk" | "mawk" | "nawk")
+        );
+        for arg in candidate_args(&tokens, reader) {
+            if arg.contains('`') || is_variable_path(arg, awk_program) {
+                return Some("Lesebefehl mit Variable im Pfad – Ziel nicht prüfbar");
+            }
+            if let Some(reason) = glob_may_hit_secret(arg, cd_prefixes) {
+                return Some(reason);
+            }
+            if !arg.starts_with(['/', '~']) {
+                for prefix in cd_prefixes {
+                    let joined = normalize_path(&format!("{prefix}{arg}"));
+                    if let Some(reason) = secret_path_match(&joined) {
+                        return Some(reason);
+                    }
+                }
+            }
         }
     }
     None
+}
+
+/// Ausgabe-Ziele, über die auch ein reines Kopieren den Inhalt ausgibt.
+const STDOUT_TARGETS: &[&str] = &[
+    "/dev/stdout",
+    "/dev/stderr",
+    "/dev/fd/",
+    "/dev/tty",
+    "/proc/",
+];
+
+/// Kleinschreibung, ohne Quotes/Backslashes, Pfade lexikalisch normalisiert.
+fn normalize_for_secret_check(text: &str) -> String {
+    let stripped: String = text
+        .to_lowercase()
+        .chars()
+        .filter(|c| !matches!(c, '\'' | '"' | '\\'))
+        .collect();
+    normalize_path(&stripped)
+}
+
+/// `//` → `/`, `/./` → `/`, `x/../` → `` (wiederholt, rein lexikalisch).
+fn normalize_path(text: &str) -> String {
+    static PARENT: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let parent = PARENT.get_or_init(|| {
+        regex::Regex::new(r"(?P<keep>^|/)(?P<name>[^/\s]+)/\.\.(?:/|$)")
+            .expect("eingebautes Pfad-Muster ist gültig")
+    });
+    let mut current = text.to_string();
+    loop {
+        let mut next = current.replace("//", "/").replace("/./", "/");
+        if let Some(caps) = parent
+            .captures_iter(&next)
+            .find(|caps| &caps["name"] != "..")
+        {
+            let whole = caps.get(0).expect("Gesamttreffer existiert");
+            let keep = caps["keep"].to_string();
+            next = format!("{}{keep}{}", &next[..whole.start()], &next[whole.end()..]);
+        }
+        if next == current {
+            return current;
+        }
+        current = next;
+    }
+}
+
+/// Konkreter Secret-Pfad im Text (Musterliste + Dateien in `~/.ssh`).
+fn secret_path_match(text: &str) -> Option<&'static str> {
+    if let Some((_, reason)) = secret_path_patterns()
+        .iter()
+        .find(|(pattern, _)| pattern.is_match(text))
+    {
+        return Some(reason);
+    }
+    // Private Schlüssel in `~/.ssh` heißen nicht immer `id_*` (`deploy_key`,
+    // `github_ed25519`) — jede Datei dort außer den bekannt öffentlichen.
+    text.match_indices(".ssh/").find_map(|(index, _)| {
+        let rest = &text[index + ".ssh/".len()..];
+        let name: String = rest
+            .chars()
+            .take_while(|c| !c.is_whitespace() && !matches!(c, ';' | '|' | '&' | ')' | '<' | '>'))
+            .collect();
+        let harmless = name.is_empty()
+            || name.contains(['*', '?', '[', '{'])
+            || name.ends_with(".pub")
+            || matches!(
+                name.as_str(),
+                "known_hosts"
+                    | "known_hosts.old"
+                    | "authorized_keys"
+                    | "authorized_keys2"
+                    | "config"
+            );
+        (!harmless).then_some("Liest eine Datei aus ~/.ssh (möglicher privater Schlüssel)")
+    })
+}
+
+fn is_read_command(token: &str) -> bool {
+    static READ: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let read = READ.get_or_init(|| {
+        regex::Regex::new(&format!(r"^{SECRET_READ_COMMANDS}$"))
+            .expect("eingebautes Lesebefehl-Muster ist gültig")
+    });
+    let trimmed = token.trim_start_matches(['(', '{', '!', '<']);
+    let name = trimmed.rsplit('/').next().unwrap_or(trimmed);
+    read.is_match(name)
+}
+
+/// Rekursives oder per `-exec`/`xargs` verteiltes Lesen.
+fn is_bulk_read(tokens: &[&str], reader: usize) -> bool {
+    if tokens
+        .iter()
+        .any(|token| matches!(*token, "xargs" | "-exec" | "-execdir" | "-ok" | "-okdir"))
+    {
+        return true;
+    }
+    let name = tokens[reader].rsplit('/').next().unwrap_or(tokens[reader]);
+    if matches!(name, "rg" | "ag" | "ack") {
+        return true;
+    }
+    matches!(name, "grep" | "egrep" | "fgrep" | "zgrep")
+        && tokens[reader + 1..]
+            .iter()
+            .enumerate()
+            .any(|(offset, token)| {
+                matches!(
+                    *token,
+                    "--recursive" | "--dereference-recursive" | "--directories=recurse"
+                ) || (*token == "-d" && tokens.get(reader + 2 + offset) == Some(&"recurse"))
+                    || (token.starts_with('-')
+                        && !token.starts_with("--")
+                        && token[1..].chars().all(|c| c.is_ascii_alphanumeric())
+                        && token.contains('r'))
+            })
+}
+
+/// Pfad-Kandidaten eines Teilkommandos: alle Wörter außer dem Lesebefehl
+/// und Optionen; `--opt=wert`/`if=wert` liefern ihren Wert, Umleitungen ihr
+/// Ziel. Bei Musterbefehlen (grep, sed, awk, jq, …) ist das erste Argument
+/// das Muster/Programm und wird übersprungen — außer es gibt `-e`/`-f`,
+/// dann ist das erste Argument schon eine Datei.
+fn candidate_args<'a>(tokens: &[&'a str], reader: usize) -> Vec<&'a str> {
+    let name = tokens[reader].rsplit('/').next().unwrap_or(tokens[reader]);
+    let takes_pattern = matches!(
+        name,
+        "grep"
+            | "egrep"
+            | "fgrep"
+            | "zgrep"
+            | "sed"
+            | "awk"
+            | "gawk"
+            | "mawk"
+            | "nawk"
+            | "jq"
+            | "yq"
+    ) && !tokens[reader + 1..].iter().any(|token| {
+        matches!(*token, "-e" | "-f" | "--regexp" | "--file" | "--expression")
+            || token.starts_with("--regexp=")
+            || token.starts_with("--file=")
+            || token.starts_with("--expression=")
+            || token.starts_with("--from-file")
+    });
+    let mut pattern_skipped = !takes_pattern;
+    let mut args = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if index == reader {
+            continue;
+        }
+        let mut arg = *token;
+        if let Some(position) = arg.rfind(['<', '>']) {
+            arg = &arg[position + 1..];
+        }
+        if let Some((_, value)) = arg.split_once('=') {
+            arg = value;
+        } else if arg.starts_with('-') {
+            continue;
+        }
+        let arg = arg.trim_matches(['(', ')', '{', '}', ';']);
+        if arg.is_empty() {
+            continue;
+        }
+        if index > reader && !pattern_skipped {
+            pattern_skipped = true;
+            continue;
+        }
+        args.push(arg);
+    }
+    args
+}
+
+/// `$VAR`, `${VAR}`, `$@`, `$*` als ganzes Argument, oder `$` in einem
+/// Pfad — Ziel lexikalisch nicht bestimmbar. Bewusst nicht: `$1}` o. ä. aus
+/// awk-Programmen.
+fn is_variable_path(arg: &str, path_only: bool) -> bool {
+    static VARIABLE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let variable = VARIABLE.get_or_init(|| {
+        regex::Regex::new(r"^\$(?:\{[^}]*\}|[a-z_][a-z0-9_]*|[@*])$")
+            .expect("eingebautes Variablen-Muster ist gültig")
+    });
+    arg.contains('$') && (arg.contains('/') || (!path_only && variable.is_match(arg)))
+}
+
+/// Platzhalter in einem Pfad: im Verzeichnisteil immer verdächtig; im
+/// letzten Teil, wenn er einen bekannten Secret-Dateinamen trifft.
+fn glob_may_hit_secret(arg: &str, cd_prefixes: &[String]) -> Option<&'static str> {
+    const GLOB: [char; 4] = ['*', '?', '[', '{'];
+    if !arg.contains(GLOB) {
+        return None;
+    }
+    let (dir, last) = match arg.rsplit_once('/') {
+        Some((dir, last)) => (Some(dir), last),
+        None => (None, arg),
+    };
+    if last.starts_with('.')
+        || arg.starts_with('~')
+        || arg.starts_with("$home")
+        || arg.starts_with("/root")
+        || SECRET_PATH_HINTS.iter().any(|hint| arg.contains(hint))
+    {
+        return Some("Lesebefehl mit Platzhalter auf einen möglichen Secret-Pfad");
+    }
+    if dir.is_some_and(|dir| dir.contains(GLOB)) {
+        return Some("Lesebefehl mit Platzhalter im Verzeichnispfad");
+    }
+    let Some(last_regex) = glob_to_regex(last) else {
+        return Some("Lesebefehl mit nicht prüfbarem Platzhalter");
+    };
+    let dir_part = dir.map(|dir| format!("{dir}/")).unwrap_or_default();
+    let prefixes: Vec<String> = if arg.starts_with('/') {
+        vec![dir_part]
+    } else {
+        cd_prefixes
+            .iter()
+            .map(String::as_str)
+            .chain(SECRET_RELATIVE_PREFIXES.iter().copied())
+            .map(|prefix| format!("{prefix}{dir_part}"))
+            .collect()
+    };
+    SECRET_FILE_CANDIDATES
+        .iter()
+        .filter(|candidate| last_regex.is_match(candidate))
+        .find_map(|candidate| {
+            prefixes.iter().find_map(|prefix| {
+                secret_path_match(&normalize_path(&format!("{prefix}{candidate}")))
+            })
+        })
+}
+
+/// Shell-Glob eines Pfadteils als verankerte Regex (`*`, `?`, `[…]`,
+/// `{a,b}`); `None` bei nicht auswertbarer Syntax (→ Aufrufer eskaliert).
+fn glob_to_regex(glob: &str) -> Option<regex::Regex> {
+    let mut pattern = String::from("^");
+    let mut chars = glob.chars().peekable();
+    let mut brace_depth = 0usize;
+    while let Some(c) = chars.next() {
+        match c {
+            '*' => pattern.push_str("[^/]*"),
+            '?' => pattern.push_str("[^/]"),
+            '[' => {
+                pattern.push('[');
+                if matches!(chars.peek(), Some('!' | '^')) {
+                    chars.next();
+                    pattern.push('^');
+                }
+                let mut closed = false;
+                for inner in chars.by_ref() {
+                    if inner == ']' {
+                        closed = true;
+                        break;
+                    }
+                    if matches!(inner, '\\' | '[' | '&' | '~') {
+                        pattern.push('\\');
+                    }
+                    pattern.push(inner);
+                }
+                if !closed {
+                    return None;
+                }
+                pattern.push(']');
+            }
+            '{' => {
+                brace_depth += 1;
+                pattern.push_str("(?:");
+            }
+            ',' if brace_depth > 0 => pattern.push('|'),
+            '}' if brace_depth > 0 => {
+                brace_depth -= 1;
+                pattern.push(')');
+            }
+            other => pattern.push_str(&regex::escape(&other.to_string())),
+        }
+    }
+    if brace_depth > 0 {
+        return None;
+    }
+    pattern.push('$');
+    regex::Regex::new(&pattern).ok()
+}
+
+/// Ziele von `cd`/`pushd` im Kommando als Präfixe (`"/etc/"`); ohne Ziel
+/// bzw. `~` das Home-Verzeichnis. `None`, wenn ein Ziel nicht prüfbar ist
+/// (Variable, Platzhalter, Kommando-Substitution).
+fn cd_prefixes(normalized_command: &str) -> Option<Vec<String>> {
+    let tokens: Vec<&str> = normalized_command
+        .split(|c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|' | '(' | ')'))
+        .filter(|token| !token.is_empty())
+        .collect();
+    let mut prefixes = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if !matches!(*token, "cd" | "pushd") {
+            continue;
+        }
+        let target = tokens[index + 1..]
+            .iter()
+            .find(|next| !next.starts_with('-') || **next == "-")
+            .copied();
+        match target {
+            None | Some("~") => prefixes.push("~/".to_string()),
+            Some("-") => {}
+            Some(target) if target.contains(['$', '`', '*', '?', '[', '{']) => return None,
+            Some(target) => prefixes.push(format!("{}/", target.trim_end_matches('/'))),
+        }
+    }
+    Some(prefixes)
 }

@@ -842,23 +842,6 @@ async fn handle_action_proposed(
     // an ihrem Ergebnis.
     let risk_assessment = risk_assessment_for_action(&action);
 
-    // Spec 0068, Teil 2: ein Lesebefehl/`sftp-read` auf einen Secret-Pfad
-    // (`~/.ssh/id_*`, `.env`, `/etc/shadow`, …) verlangt IMMER eine
-    // Bestätigung — auch wenn eine Allow-Regel greift. Reine Eskalation
-    // (nur `AutoExec` → `Confirm`, `Deny` bleibt `Deny`), für Chat UND MCP,
-    // weil beide durch diese Funktion laufen.
-    if matches!(decision, Decision::AutoExec) {
-        if let Some(reason) = pseudo_command_for_risk_classification(&action)
-            .as_deref()
-            .and_then(ssh_manager_core::risk::secret_path_read_reason)
-        {
-            decision = Decision::Confirm {
-                reason: format!("{reason} – erfordert immer Bestätigung"),
-                code: "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM".to_string(),
-            };
-        }
-    }
-
     // Unabhängiger Review-Pass (Spec 0039): ersetzt die bisherige SEC-03-
     // Bremse aus Spec 0013. Die ALTE Logik: `round` war ein rein lokaler
     // Schleifenzähler in `run_chat_turn`s `for round in 1..=MAX_AUTO_
@@ -938,6 +921,29 @@ async fn handle_action_proposed(
                 .to_string(),
             code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
         };
+    }
+
+    // Spec 0068, Teil 2: ein Lesebefehl/`sftp-read` auf einen Secret-Pfad
+    // (`~/.ssh/id_*`, `.env`, `/etc/shadow`, …) verlangt IMMER eine
+    // Bestätigung — auch wenn eine Allow-Regel greift. Reine Eskalation
+    // (nur `AutoExec` → `Confirm`, `Deny` bleibt `Deny`), für Chat UND MCP,
+    // weil beide durch diese Funktion laufen.
+    //
+    // Bewusst NACH Post-Ingest und Injection-Verdacht (spec-reviewer-Fund):
+    // sonst zeigte der Dialog nur den Secret-Grund, obwohl dieselbe Aktion
+    // auch als Injection-Verdacht gilt — der alarmierendere Grund soll
+    // sichtbar sein. An der Strenge ändert die Reihenfolge nichts (alle
+    // Schritte eskalieren nur `AutoExec`).
+    if matches!(decision, Decision::AutoExec) {
+        if let Some(reason) = pseudo_command_for_risk_classification(&action)
+            .as_deref()
+            .and_then(ssh_manager_core::risk::secret_path_read_reason)
+        {
+            decision = Decision::Confirm {
+                reason: format!("{reason} – erfordert immer Bestätigung"),
+                code: "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM".to_string(),
+            };
+        }
     }
 
     // Spec 0028, Abschnitt 5: ein über MCP (externes Tool) ausgelöster
@@ -13693,9 +13699,35 @@ mod tests {
         }
     }
 
+    /// spec-reviewer-Fund (Spec 0068, ERHÖHT): derselbe Secret-Grund auch
+    /// für MCP-Herkunft — sichtbar im Dialog statt des allgemeinen
+    /// MCP-Grunds.
+    #[tokio::test]
+    async fn test_mcp_secret_path_read_shows_the_secret_reason() {
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let (decision, payload) = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            proposed_decision_code_with_origin(
+                &session,
+                AiAction::SuggestCommand {
+                    command: "cat /etc//shadow".to_string(),
+                },
+                ActionOrigin::Mcp { client_name: None },
+            ),
+        )
+        .await
+        .expect("Dialog muss enden");
+        assert!(
+            matches!(&decision, Decision::Confirm { code, .. }
+                if code == "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM"),
+            "{payload}"
+        );
+    }
+
     /// Spec 0068, Teil 2: Secret-Pfad-Lesen wird trotz Allow-Regel nie
     /// automatisch ausgeführt — Chat-Kommando, `read_remote_file` und
-    /// MCP-Herkunft. Ein öffentlicher Schlüssel bleibt automatisch.
+    /// MCP-Herkunft (s. auch den MCP-Test oben). Ein öffentlicher Schlüssel bleibt automatisch.
     #[tokio::test]
     async fn test_secret_path_read_always_requires_confirm_even_with_allow_rule() {
         let cases: Vec<(AiAction, bool)> = vec![

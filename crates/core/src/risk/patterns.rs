@@ -32,7 +32,63 @@ const READ_COMMAND_PREFIX: &str = r"^(?:cat|less|head|tail|sftp-read|sftp-write)
 /// Aktion als `sftp-read`-Pseudokommando. Bewusst NICHT enthalten: `cp`,
 /// `install`, `mv` — genau die Wege, die die Prompt-Regel aus Spec 0066
 /// empfiehlt, weil der Inhalt dabei nie in einer Ausgabe landet.
-pub(super) const SECRET_READ_COMMANDS: &str = r"(?:cat|less|more|head|tail|bat|batcat|tac|nl|grep|egrep|fgrep|zgrep|rg|sed|awk|gawk|mawk|nawk|xxd|od|hexdump|strings|base64|openssl|sftp-read)";
+///
+/// spec-reviewer-Fund (Spec 0068, ERHÖHT): erweitert um weitere Programme,
+/// die Dateiinhalt ausgeben (jq, sort, diff, dd, zcat, Editoren, …), sowie
+/// um `curl`/`wget`/`scp`/`rsync` — die bringen einen Secret-Pfad zwar
+/// nicht in den Chat, aber vom Server weg (strenger ist die sichere
+/// Richtung).
+pub(super) const SECRET_READ_COMMANDS: &str = r"(?:cat|less|more|head|tail|bat|batcat|tac|nl|grep|egrep|fgrep|zgrep|rg|ag|ack|sed|awk|gawk|mawk|nawk|xxd|od|hexdump|strings|base64|base32|openssl|jq|yq|sort|uniq|cut|paste|diff|cmp|comm|column|rev|fold|iconv|tr|pr|fmt|expand|look|dd|tee|zcat|bzcat|xzcat|zless|zmore|gzip|bzip2|xz|view|vim|vi|nano|ex|ed|emacs|curl|wget|scp|rsync|sftp-read)";
+
+/// Spec 0068, Teil 2 (Review-Fund): Dateinamen, gegen die ein Platzhalter
+/// im letzten Pfadteil geprüft wird (`cat /etc/sha*` trifft `shadow`).
+/// Für Muster, die nur eine Endung verlangen, steht ein Stellvertreter
+/// (`x.pem`).
+pub(super) const SECRET_FILE_CANDIDATES: &[&str] = &[
+    "id_rsa",
+    "id_ed25519",
+    "id_ecdsa",
+    "id_dsa",
+    "shadow",
+    "gshadow",
+    "credentials",
+    "credentials.json",
+    "config",
+    "config.json",
+    "hosts.yml",
+    ".env",
+    ".envrc",
+    ".netrc",
+    ".pgpass",
+    ".git-credentials",
+    ".my.cnf",
+    ".npmrc",
+    ".pypirc",
+    ".vault-token",
+    "x.pem",
+    "x.key",
+    "x.p12",
+    "x.pfx",
+    "x.jks",
+    "ssh_host_ed25519_key",
+    "ssh_host_rsa_key",
+    "ssh_host_ecdsa_key",
+];
+
+/// Spec 0068, Teil 2 (Review-Fund): Verzeichnisse, in denen ein relativer
+/// Pfad ohne bekanntes Arbeitsverzeichnis liegen könnte (`cat *`).
+pub(super) const SECRET_RELATIVE_PREFIXES: &[&str] = &[
+    "",
+    "/etc/",
+    "~/",
+    "~/.ssh/",
+    "~/.aws/",
+    "~/.kube/",
+    "~/.docker/",
+    "~/.config/gh/",
+    "/etc/ssh/",
+    "/etc/ssl/private/",
+];
 
 /// Spec 0068, Teil 2: Secret-Pfade, deren Lesen immer eine Bestätigung
 /// verlangt (s. `classifier::secret_path_read_reason`). Geprüft wird auf
@@ -59,11 +115,36 @@ pub(super) fn secret_path_patterns() -> &'static [(regex::Regex, &'static str)] 
                 r"\bid_[a-z0-9_-]+(?:$|[^a-z0-9_.-]|\.(?:$|[^p]|p(?:$|[^u])|pu(?:$|[^b])))",
                 "Liest einen privaten SSH-Schlüssel (id_*)",
             ),
+            // Host-Private-Keys (`/etc/ssh/ssh_host_*_key`, nicht `.pub`) —
+            // Review-Fund, `\.key\b` trifft `_key` nicht.
+            (
+                r"\bssh_host_[a-z0-9_]+_key(?:$|[^a-z0-9_.-]|\.(?:$|[^p]|p(?:$|[^u])|pu(?:$|[^b])))",
+                "Liest einen privaten SSH-Host-Schlüssel",
+            ),
             (r"\.pem\b", "Liest eine Zertifikat-/Schlüsseldatei (.pem)"),
             (r"\.key\b", "Liest eine Schlüsseldatei (.key)"),
-            (r"\.env\b", "Liest eine .env-Datei"),
-            (r"/etc/g?shadow", "Liest /etc/shadow bzw. /etc/gshadow"),
+            (
+                r"\.(?:p12|pfx|jks|keystore)\b",
+                "Liest einen Schlüsselspeicher (.p12/.pfx/.jks)",
+            ),
+            // `.env`, `.envrc`, `.env.local`, `.env_local` — nicht
+            // `.environment` (Review-Fund: `\b` griff vor `rc`/`_` nicht).
+            (r"\.env(?:rc)?(?:$|[^a-z0-9])", "Liest eine .env-Datei"),
+            // Wie die Anzeige (`data_risk`) als Teilwort, nicht nur unter
+            // `/etc/` — sonst wäre die Eskalation enger als das Badge.
+            (r"\bg?shadow\b", "Liest /etc/shadow bzw. /etc/gshadow"),
             (r"\.aws/credentials", "Liest AWS-Zugangsdaten"),
+            (
+                r"\bcredentials\b",
+                "Liest eine Zugangsdaten-Datei (credentials)",
+            ),
+            (r"\.gnupg/", "Liest den GnuPG-Schlüsselbund"),
+            (r"/etc/ssl/private/", "Liest private TLS-Schlüssel"),
+            (r"\.config/gh/hosts\.yml", "Liest GitHub-CLI-Zugangsdaten"),
+            (r"\.my\.cnf\b", "Liest MySQL-Zugangsdaten (~/.my.cnf)"),
+            (r"\.npmrc\b", "Liest npm-Zugangsdaten (~/.npmrc)"),
+            (r"\.pypirc\b", "Liest PyPI-Zugangsdaten (~/.pypirc)"),
+            (r"\.vault-token\b", "Liest ein Vault-Token"),
             (
                 r"\.docker/config\.json",
                 "Liest Docker-Registry-Zugangsdaten",
@@ -103,6 +184,17 @@ pub(super) const SECRET_PATH_HINTS: &[&str] = &[
     "git-credentials",
     "id_",
     "shadow",
+    "credentials",
+    ".gnupg",
+    "ssh_host",
+    "/etc/ssl/private",
+    "npmrc",
+    "pypirc",
+    "my.cnf",
+    "vault-token",
+    ".p12",
+    ".pfx",
+    ".jks",
 ];
 
 pub(super) fn server_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static str)] {
