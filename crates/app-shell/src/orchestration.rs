@@ -122,7 +122,8 @@ pub(crate) const SIDE_CALL_MAX_TOKENS: u32 = 4096;
 /// UX-Grenze gegen "lange". Läuft es ab, gilt die Aktion als **abgelehnt**
 /// (fail-safe, s. `handle_action_proposed`/`handle_note_update_suggested`),
 /// nie als genehmigt.
-const PENDING_ACTION_CONFIRM_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3600);
+pub(crate) const PENDING_ACTION_CONFIRM_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(3600);
 
 /// Spec 0034, Abschnitt 4: "Jede Nachricht ... wird fortlaufend
 /// geschrieben, sobald sie entsteht — kein Sammeln bis zum

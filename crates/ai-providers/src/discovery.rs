@@ -12,6 +12,7 @@ use ssh_manager_core::ai::AiError;
 
 use crate::error::{map_http_status, map_transport_error};
 use crate::request_logging::{log_provider_error_response, log_provider_transport_error};
+use crate::sse::{read_error_body_with_timeout, SSE_INACTIVITY_TIMEOUT};
 
 #[derive(Deserialize)]
 struct ModelsResponse {
@@ -33,6 +34,28 @@ pub async fn discover_models(
     api_key: &str,
     extra_headers: &[(String, String)],
 ) -> Result<Vec<String>, AiError> {
+    discover_models_within(base_url, api_key, extra_headers, SSE_INACTIVITY_TIMEOUT).await
+}
+
+/// Spec 0068, Teil 5a: Zeitüberschreitung eines Discovery-/Attestierungs-
+/// Aufrufs — dieselbe Meldung wie im Chat-Pfad.
+fn discovery_timeout(timeout: std::time::Duration) -> AiError {
+    AiError::NetworkError(format!(
+        "Keine Antwort vom KI-Provider seit über {} Sekunden",
+        timeout.as_secs()
+    ))
+}
+
+/// Spec 0068, Teil 5a: Verbindungsaufbau und Body-Lesen sind begrenzt —
+/// mit demselben Mechanismus wie der Chat-Pfad (`SSE_INACTIVITY_TIMEOUT`,
+/// `read_error_body_with_timeout`), keine neue Konstante. `timeout` ist nur
+/// ein Parameter, damit Tests nicht 90 s warten müssen.
+async fn discover_models_within(
+    base_url: &str,
+    api_key: &str,
+    extra_headers: &[(String, String)],
+    timeout: std::time::Duration,
+) -> Result<Vec<String>, AiError> {
     // Spec-Reviewer-Fund (Spec 0049, Review von Fund 2): dieser Pfad
     // (der "Modelle laden"-Button im Formular) ist genau die Stelle, an
     // der ein Tester einen frisch eingefügten, falschen/untrimmten API-Key
@@ -52,10 +75,15 @@ pub async fn discover_models(
         request = request.header(name, value);
     }
 
-    let response = match request.send().await {
-        Ok(response) => response,
-        Err(err) => {
+    let response = match tokio::time::timeout(timeout, request.send()).await {
+        Ok(Ok(response)) => response,
+        Ok(Err(err)) => {
             let mapped = map_transport_error(&err);
+            log_provider_transport_error(request_id, &mapped, &secrets);
+            return Err(mapped);
+        }
+        Err(_elapsed) => {
+            let mapped = discovery_timeout(timeout);
             log_provider_transport_error(request_id, &mapped, &secrets);
             return Err(mapped);
         }
@@ -63,16 +91,16 @@ pub async fn discover_models(
 
     if !response.status().is_success() {
         let status = response.status();
-        let text = response.text().await.unwrap_or_default();
+        let text = read_error_body_with_timeout(response.text()).await;
         let mapped = map_http_status(status, &text);
         log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &secrets);
         return Err(mapped);
     }
 
-    let parsed: ModelsResponse = response
-        .json()
-        .await
-        .map_err(|err| AiError::InvalidResponse(err.to_string()))?;
+    let parsed: ModelsResponse = match tokio::time::timeout(timeout, response.json()).await {
+        Ok(result) => result.map_err(|err| AiError::InvalidResponse(err.to_string()))?,
+        Err(_elapsed) => return Err(discovery_timeout(timeout)),
+    };
     Ok(parsed.data.into_iter().map(|entry| entry.id).collect())
 }
 
@@ -86,15 +114,28 @@ pub async fn discover_models(
 /// Chat-API selbst — ihm dieselben Zugangsdaten mitzugeben wäre eine
 /// unbegründete Annahme über sein Schutzschema.
 pub async fn fetch_attestation_info(url: &str) -> Result<String, AiError> {
+    fetch_attestation_info_within(url, SSE_INACTIVITY_TIMEOUT).await
+}
+
+/// s. [`discover_models_within`] (Spec 0068, Teil 5a).
+async fn fetch_attestation_info_within(
+    url: &str,
+    timeout: std::time::Duration,
+) -> Result<String, AiError> {
     // Spec 0049, Fund 2: kein `api_key`/`extra_headers` hier (s. Doc-
     // Kommentar oben) — nichts zu redigieren, daher eine leere `secrets`-
     // Liste statt eines eigenen, secret-losen Log-Pfads.
     let request_id = Uuid::new_v4();
     let client = reqwest::Client::new();
-    let response = match client.get(url).send().await {
-        Ok(response) => response,
-        Err(err) => {
+    let response = match tokio::time::timeout(timeout, client.get(url).send()).await {
+        Ok(Ok(response)) => response,
+        Ok(Err(err)) => {
             let mapped = map_transport_error(&err);
+            log_provider_transport_error(request_id, &mapped, &[]);
+            return Err(mapped);
+        }
+        Err(_elapsed) => {
+            let mapped = discovery_timeout(timeout);
             log_provider_transport_error(request_id, &mapped, &[]);
             return Err(mapped);
         }
@@ -102,16 +143,16 @@ pub async fn fetch_attestation_info(url: &str) -> Result<String, AiError> {
 
     if !response.status().is_success() {
         let status = response.status();
-        let text = response.text().await.unwrap_or_default();
+        let text = read_error_body_with_timeout(response.text()).await;
         let mapped = map_http_status(status, &text);
         log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &[]);
         return Err(mapped);
     }
 
-    response
-        .text()
-        .await
-        .map_err(|err| AiError::InvalidResponse(err.to_string()))
+    match tokio::time::timeout(timeout, response.text()).await {
+        Ok(result) => result.map_err(|err| AiError::InvalidResponse(err.to_string())),
+        Err(_elapsed) => Err(discovery_timeout(timeout)),
+    }
 }
 
 #[cfg(test)]
@@ -119,6 +160,69 @@ mod tests {
     use super::*;
     use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    /// Spec 0068, Teil 5a: ein Server, der nie (rechtzeitig) antwortet,
+    /// lässt "Modelle laden" nicht ewig hängen, sondern liefert einen
+    /// sichtbaren Netzwerkfehler.
+    #[tokio::test]
+    async fn test_discover_models_times_out_instead_of_hanging() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/models"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(std::time::Duration::from_secs(30))
+                    .set_body_json(serde_json::json!({"data": []})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            discover_models_within(
+                &server.uri(),
+                "k",
+                &[],
+                std::time::Duration::from_millis(200),
+            ),
+        )
+        .await
+        .expect("darf nicht hängen");
+
+        assert!(
+            matches!(result, Err(AiError::NetworkError(_))),
+            "{result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_attestation_info_times_out_instead_of_hanging() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/attestation"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(std::time::Duration::from_secs(30))
+                    .set_body_string("{}"),
+            )
+            .mount(&server)
+            .await;
+
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            fetch_attestation_info_within(
+                &format!("{}/attestation", server.uri()),
+                std::time::Duration::from_millis(200),
+            ),
+        )
+        .await
+        .expect("darf nicht hängen");
+
+        assert!(
+            matches!(result, Err(AiError::NetworkError(_))),
+            "{result:?}"
+        );
+    }
 
     #[tokio::test]
     async fn test_discover_models_success_returns_model_ids() {

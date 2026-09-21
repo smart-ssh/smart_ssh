@@ -30,7 +30,7 @@ use ssh_manager_core::ssh::{
 };
 
 use crate::ai_provider_factory::build_ai_provider;
-use crate::confirmation::ConfirmationRegistry;
+use crate::confirmation::{ConfirmationRegistry, RegistrationGeneration};
 use crate::dto::{
     credential_ref_for, sort_remote_entries, ActionUserDecision, AiProviderConfigDto,
     AiProviderConfigInput, AppInfoDto, DeleteGroupResult, DeleteServerResult, DocumentFormat,
@@ -851,7 +851,9 @@ pub(crate) async fn connect_session(
                         "host key verification needed",
                     );
 
-                    let rx = state.pending_host_key_confirmations.register(session_id);
+                    let (generation, rx) = state
+                        .pending_host_key_confirmations
+                        .register_tracked(session_id);
                     // Spec 0017, Abschnitt 2: solange `connect()` hier auf die
                     // Nutzerentscheidung wartet, existiert `session_id` noch in
                     // keiner `Session` (die wird erst unten nach erfolgreichem
@@ -872,10 +874,33 @@ pub(crate) async fn connect_session(
                         expected_fingerprint,
                     );
 
-                    let user_decision_result = rx.await;
+                    let wait = wait_for_host_key_decision(
+                        &state.pending_host_key_confirmations,
+                        session_id,
+                        generation,
+                        rx,
+                        crate::orchestration::PENDING_ACTION_CONFIRM_TIMEOUT,
+                    )
+                    .await;
                     state.sessions.clear_pending_connection(session_id);
-                    let Ok(user_decision) = user_decision_result else {
-                        return Err("Verbindungsaufbau abgebrochen".into());
+                    let user_decision = match wait {
+                        HostKeyWait::Decided(decision) => decision,
+                        HostKeyWait::Abandoned => {
+                            return Err("Verbindungsaufbau abgebrochen".into());
+                        }
+                        HostKeyWait::TimedOut => {
+                            tracing::warn!(
+                                session_id = %session_id,
+                                host = %host,
+                                port,
+                                "host key confirmation timed out, treating as rejected",
+                            );
+                            return Err(format!(
+                                "Verbindung zu {host}:{port} abgebrochen: Host-Key-Bestätigung \
+                                 nicht rechtzeitig beantwortet (nicht vertraut)"
+                            )
+                            .into());
+                        }
                     };
                     match user_decision {
                         HostKeyUserDecision::Trust => {
@@ -1588,6 +1613,39 @@ async fn build_session_system_context<R: tauri::Runtime>(
     };
     let has_notes = parts.has_notes();
     (parts, has_notes)
+}
+
+/// Ausgang des Wartens auf die Host-Key-Entscheidung (Spec 0068, Teil 5b).
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum HostKeyWait {
+    Decided(HostKeyUserDecision),
+    /// Sender gedroppt (Neu-Registrierung, App-Ende) — Abbruch.
+    Abandoned,
+    /// Frist abgelaufen — gilt als Ablehnung, der Host-Key wird **nie**
+    /// durch Zeitablauf vertraut.
+    TimedOut,
+}
+
+/// Spec 0068, Teil 5b: wartet höchstens `timeout` auf `confirm_host_key`
+/// (analog zum Confirm-Timeout aus Spec 0046, Fund 4). Geht ein Frontend
+/// verloren, hängt `connect()` damit nicht mehr ewig. Beim Zeitablauf wird
+/// nur der Eintrag DIESER Registrierung abgeräumt (`generation`), nie einer,
+/// den ein `connect()`-Retry unter derselben `SessionId` neu angelegt hat.
+pub(crate) async fn wait_for_host_key_decision(
+    registry: &ConfirmationRegistry<SessionId, HostKeyUserDecision>,
+    session_id: SessionId,
+    generation: RegistrationGeneration,
+    rx: tokio::sync::oneshot::Receiver<HostKeyUserDecision>,
+    timeout: std::time::Duration,
+) -> HostKeyWait {
+    match tokio::time::timeout(timeout, rx).await {
+        Ok(Ok(decision)) => HostKeyWait::Decided(decision),
+        Ok(Err(_)) => HostKeyWait::Abandoned,
+        Err(_elapsed) => {
+            registry.cancel_if_current(&session_id, generation);
+            HostKeyWait::TimedOut
+        }
+    }
 }
 
 #[tauri::command]
@@ -5095,6 +5153,64 @@ mod send_chat_message_persistence_tests {
     use crate::test_support::InMemoryProfileStore;
 
     use super::*;
+
+    /// Spec 0068, Teil 5b: ein nie beantworteter Host-Key-Dialog (Frontend
+    /// verloren) endet nach der Frist als Ablehnung — nie als Vertrauen —
+    /// und räumt seinen eigenen Eintrag ab.
+    #[tokio::test]
+    async fn test_host_key_wait_times_out_as_rejection_and_cleans_up() {
+        let registry: ConfirmationRegistry<SessionId, HostKeyUserDecision> =
+            ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+        let (generation, rx) = registry.register_tracked(session_id);
+
+        let wait = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            wait_for_host_key_decision(
+                &registry,
+                session_id,
+                generation,
+                rx,
+                std::time::Duration::from_millis(50),
+            ),
+        )
+        .await
+        .expect("darf nicht ewig warten");
+
+        assert_eq!(wait, HostKeyWait::TimedOut);
+        assert!(!registry.contains(&session_id));
+        assert!(
+            registry
+                .resolve(&session_id, HostKeyUserDecision::Trust)
+                .is_err(),
+            "ein spätes Trust darf nach Ablauf niemanden mehr erreichen"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_host_key_wait_returns_the_user_decision() {
+        let registry: ConfirmationRegistry<SessionId, HostKeyUserDecision> =
+            ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+        let (generation, rx) = registry.register_tracked(session_id);
+        registry
+            .resolve(&session_id, HostKeyUserDecision::Reject)
+            .unwrap();
+
+        let wait = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            wait_for_host_key_decision(
+                &registry,
+                session_id,
+                generation,
+                rx,
+                std::time::Duration::from_secs(60),
+            ),
+        )
+        .await
+        .expect("darf nicht hängen");
+        assert_eq!(wait, HostKeyWait::Decided(HostKeyUserDecision::Reject));
+    }
 
     /// Nie tatsächlich aufgerufen — dieser Test führt kein Kommando aus,
     /// die KI schlägt keins vor (s. `NoopAiProvider`).

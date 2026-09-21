@@ -279,7 +279,7 @@ pub fn credential_ref_for(id: ProviderId) -> CredentialRef {
 /// Standard-Außen-Tagging: ergibt `{"decision": "trust"}` statt
 /// `"Trust"`/`{"Trust": null}` — für das TypeScript-Frontend die
 /// natürlichere Form, um diesen Wert selbst zu konstruieren.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(
     tag = "decision",
     rename_all = "camelCase",
