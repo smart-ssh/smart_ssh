@@ -248,16 +248,17 @@ fn built_in_patterns() -> Vec<PatternRule> {
             r"\bxai-[A-Za-z0-9]{40,}\b",
             "eingebautes xAI-Key-Muster ist gültig",
         ),
-        // Die Header-Muster der ersten Fassung (Commit `37c55a1`) zusätzlich
-        // an ihrer ursprünglichen Stelle (dritte Review-Runde): so sehen sie
-        // den Originaltext vor dem Credential-Zeilen-Muster, wie dort. Die
-        // erweiterten Fassungen am Listenende decken den Rest ab.
+        // Die Header-Muster zusätzlich an ihrer ursprünglichen Stelle (dritte
+        // Review-Runde) — in der ERWEITERTEN Form (vierte Runde): die
+        // wörtliche erste Fassung verbrauchte `x-api-key: Bearer` bzw.
+        // `Basic cred=` ohne Wert und nahm dem Bearer-/Credential-Muster den
+        // Anker. Hier deckt jede Kopie ihren Wert selbst vollständig ab.
         simple(
-            r#"(?i)\bx-api-key['"]?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s'"]+)"#,
+            r#"(?i)\b(?:x-(?:goog-)?)?api-key['"]?\s*[:=]\s*(?:bearer\s+)?(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s'"]+)"#,
             "eingebautes x-api-key-Header-Muster ist gültig",
         ),
         simple(
-            r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?basic\s+[A-Za-z0-9+/._~-]+=*"#,
+            r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?(?:basic|token)\s+(?:bearer\s+)?(?:[a-z_]+=)?(?:"[^"\r\n]*"|[A-Za-z0-9+/._~-]+=*)"#,
             "eingebautes Authorization-Basic-Muster ist gültig",
         ),
         // DB-Connection-Strings (Diagnose-Folge-Fix, 2026-09): das Passwort
@@ -497,7 +498,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // mit Header-Namen — ein bloßes "Basic authentication" in Text
         // bleibt unberührt.
         simple(
-            r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?(?:basic|token)\s+(?:[a-z_]+=)?(?:"[^"\r\n]*"|[A-Za-z0-9+/._~-]+=*)"#,
+            r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?(?:basic|token)\s+(?:bearer\s+)?(?:[a-z_]+=)?(?:"[^"\r\n]*"|[A-Za-z0-9+/._~-]+=*)"#,
             "eingebautes Authorization-Basic-Muster ist gültig",
         ),
         // spec-reviewer-Fund (Spec 0068, ERHÖHT): die Formate genau der
@@ -520,6 +521,13 @@ fn built_in_patterns() -> Vec<PatternRule> {
         simple(
             r"(?i)\b(?:machine\s+\S+(?:\s+login\s+\S+)?|default\s+login\s+\S+)\s+password\s+[^\s:=]\S*",
             "eingebautes netrc-Muster ist gültig",
+        ),
+        // `default password x` (ohne `login`, laut netrc-Syntax gültig) —
+        // am Zeilenanfang verankert, damit Fließtext "The default password
+        // is …" unberührt bleibt (vierte Review-Runde).
+        simple(
+            r"(?im)^[ \t]*default\s+(?:login\s+\S+\s+)?password\s+[^\s:=]\S*",
+            "eingebautes netrc-default-Muster ist gültig",
         ),
         simple(
             r"(?im)^[ \t]*password[ \t]+[^\s:=]\S*[ \t]*$",
@@ -586,11 +594,14 @@ fn redact_bytes(data: &[u8], patterns: &[PatternRule]) -> Vec<u8> {
 /// Platzhalter schluckt die direkt angrenzenden Token-Zeichen
 /// (Base64/URL-sicher). Es entsteht dadurch nie eine neue Redaction ohne
 /// vorhandenen Platzhalter; `:`/`@`/Leerzeichen/Quotes begrenzen, so
-/// bleiben z. B. Nutzer und Host einer URL lesbar.
+/// bleiben z. B. Nutzer und Host einer URL lesbar. Links davon zählen `_`
+/// und `=` nicht (vierte Review-Runde): so bleiben Schlüsselnamen wie
+/// `GITHUB_TOKEN=`/`DB_PASSWORD=` lesbar; ein Rest vor dem Treffer ist der
+/// Anfang des Werts, nicht sein Geheimnis-Kern.
 fn absorb_fragments_next_to_placeholders(text: &str) -> String {
     static ABSORB: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     let absorb = ABSORB.get_or_init(|| {
-        Regex::new(r"[A-Za-z0-9+/=._~-]*\[REDACTED\][A-Za-z0-9+/=._~-]*")
+        Regex::new(r"[A-Za-z0-9+/.~-]*\[REDACTED\][A-Za-z0-9+/=._~-]*")
             .expect("eingebautes Platzhalter-Muster ist gültig")
     });
     if !text.contains(REDACTED_PLACEHOLDER) {

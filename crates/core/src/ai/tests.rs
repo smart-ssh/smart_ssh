@@ -1092,3 +1092,36 @@ fn test_netrc_default_branch_needs_login() {
         "s3cr3tNetrcPw",
     );
 }
+
+/// Vierte Review-Runde (Spec 0068, ERHÖHT).
+#[test]
+fn test_fourth_review_round_redaction_findings() {
+    assert_fully_redacted(
+        "x-api-key: Bearer SECRETVALUE1234567890",
+        "SECRETVALUE1234567890",
+    );
+    assert_fully_redacted(
+        "X-API-KEY: bearer abcdefghijklmnopqrstuvwxyz",
+        "abcdefghijklmnopqrstuvwxyz",
+    );
+    assert_fully_redacted("x-api-key: Bearer SHORTSECRET", "SHORTSECRET");
+    assert_fully_redacted(
+        r#"Authorization: Basic cred="SEC RET VALUE""#,
+        "SEC RET VALUE",
+    );
+    assert_fully_redacted(
+        "Authorization: Basic Bearer abcdefghijklmnopqrstuvwx",
+        "abcdefghijklmnopqrstuvwx",
+    );
+    assert_fully_redacted("default password s3cr3tNetrcPw", "s3cr3tNetrcPw");
+    assert_fully_redacted("  default password s3cr3tNetrcPw", "s3cr3tNetrcPw");
+}
+
+/// Der Schlussdurchgang lässt Schlüsselnamen links vom Platzhalter lesbar.
+#[test]
+fn test_placeholder_absorption_keeps_variable_names() {
+    let redactor = DefaultOutputRedactor::new();
+    let out = redactor.redact_text("GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789");
+    assert!(out.starts_with("GITHUB_"), "{out}");
+    assert!(!out.contains("abcdefghijklmnop"), "{out}");
+}
