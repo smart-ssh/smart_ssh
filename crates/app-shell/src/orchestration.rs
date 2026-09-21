@@ -822,6 +822,23 @@ async fn handle_action_proposed(
     // an ihrem Ergebnis.
     let risk_assessment = risk_assessment_for_action(&action);
 
+    // Spec 0068, Teil 2: ein Lesebefehl/`sftp-read` auf einen Secret-Pfad
+    // (`~/.ssh/id_*`, `.env`, `/etc/shadow`, …) verlangt IMMER eine
+    // Bestätigung — auch wenn eine Allow-Regel greift. Reine Eskalation
+    // (nur `AutoExec` → `Confirm`, `Deny` bleibt `Deny`), für Chat UND MCP,
+    // weil beide durch diese Funktion laufen.
+    if matches!(decision, Decision::AutoExec) {
+        if let Some(reason) = pseudo_command_for_risk_classification(&action)
+            .as_deref()
+            .and_then(ssh_manager_core::risk::secret_path_read_reason)
+        {
+            decision = Decision::Confirm {
+                reason: format!("{reason} – erfordert immer Bestätigung"),
+                code: "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM".to_string(),
+            };
+        }
+    }
+
     // Unabhängiger Review-Pass (Spec 0039): ersetzt die bisherige SEC-03-
     // Bremse aus Spec 0013. Die ALTE Logik: `round` war ein rein lokaler
     // Schleifenzähler in `run_chat_turn`s `for round in 1..=MAX_AUTO_
@@ -13552,5 +13569,142 @@ mod tests {
                 "{origin}: normaler Kanal wurde benutzt"
             );
         }
+    }
+
+    /// Spec 0068, Teil 2: Secret-Pfad-Lesen wird trotz Allow-Regel nie
+    /// automatisch ausgeführt — Chat-Kommando, `read_remote_file` und
+    /// MCP-Herkunft. Ein öffentlicher Schlüssel bleibt automatisch.
+    #[tokio::test]
+    async fn test_secret_path_read_always_requires_confirm_even_with_allow_rule() {
+        let cases: Vec<(AiAction, bool)> = vec![
+            (
+                AiAction::SuggestCommand {
+                    command: "cat ~/.ssh/id_rsa".to_string(),
+                },
+                true,
+            ),
+            (
+                AiAction::SuggestCommand {
+                    command: "echo ok; sudo tail /srv/app/.env".to_string(),
+                },
+                true,
+            ),
+            (
+                AiAction::ReadRemoteFile {
+                    path: "/root/.ssh/id_ed25519".to_string(),
+                },
+                true,
+            ),
+            (
+                AiAction::SuggestCommand {
+                    command: "cat ~/.ssh/id_rsa.pub".to_string(),
+                },
+                false,
+            ),
+            (
+                AiAction::SuggestCommand {
+                    command: "cp ~/.ssh/id_rsa /backup/id_rsa".to_string(),
+                },
+                false,
+            ),
+        ];
+        for (action, expect_confirm) in cases {
+            let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+            session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+            let emitter = TestEmitter::default();
+            let profile_store = InMemoryProfileStore::default();
+            let confirmations = ConfirmationRegistry::new();
+
+            let handled = handle_action_proposed(
+                &session,
+                Uuid::new_v4(),
+                action.clone(),
+                &emitter,
+                &profile_store,
+                &confirmations,
+                ActionOrigin::Internal,
+            );
+            let responder =
+                async {
+                    // Ein offener Dialog wird abgelehnt, damit der Test endet.
+                    loop {
+                        let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
+                            (n == "chat-action-proposed" && p["decision"].get("Confirm").is_some())
+                                .then(|| p["actionId"].as_str().unwrap().to_string())
+                        });
+                        if let Some(id) = pending {
+                            let _ = confirmations
+                                .resolve(&id.parse().unwrap(), ActionUserDecision::Deny);
+                            break;
+                        }
+                        if emitter.events.lock().unwrap().iter().any(|(n, p)| {
+                            n == "chat-action-proposed" && p["decision"] == "AutoExec"
+                        }) {
+                            break;
+                        }
+                        tokio::task::yield_now().await;
+                    }
+                };
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                tokio::join!(handled, responder)
+            })
+            .await
+            .expect("Aktion muss enden");
+
+            let events = emitter.events.lock().unwrap().clone();
+            let proposed = &events
+                .iter()
+                .find(|(n, _)| n == "chat-action-proposed")
+                .expect("Vorschlag-Event")
+                .1;
+            let confirm = &proposed["decision"]["Confirm"];
+            if expect_confirm {
+                assert_eq!(
+                    confirm["code"], "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM",
+                    "{action:?}: {proposed}"
+                );
+            } else {
+                assert!(
+                    confirm.is_null(),
+                    "{action:?} fälschlich eskaliert: {proposed}"
+                );
+            }
+        }
+    }
+
+    /// Spec 0068, Teil 2: die Eskalation lockert nie — eine Deny-Regel
+    /// bleibt `Deny`, auch für einen Secret-Pfad.
+    #[tokio::test]
+    async fn test_secret_path_escalation_never_turns_deny_into_confirm() {
+        struct DenyCatPolicyStore;
+        #[async_trait]
+        impl PolicyStore for DenyCatPolicyStore {
+            async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+                vec![Rule {
+                    id: ssh_manager_core::filter::RuleId("deny-cat".to_string()),
+                    pattern: ssh_manager_core::filter::Pattern::Glob("cat *".to_string()),
+                    action: ssh_manager_core::filter::RuleAction::Deny,
+                    scope: ssh_manager_core::filter::Scope::Global,
+                    priority: 0,
+                    origin: ssh_manager_core::filter::RuleOrigin::User,
+                }]
+            }
+        }
+        let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        session.filter_engine = Box::new(FilterEngine::new(DenyCatPolicyStore));
+
+        let (decision, payload) = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            proposed_decision_code(
+                &session,
+                AiAction::SuggestCommand {
+                    command: "cat ~/.ssh/id_rsa".to_string(),
+                },
+            ),
+        )
+        .await
+        .expect("Deny darf keinen Dialog öffnen");
+
+        assert!(matches!(decision, Decision::Deny { .. }), "{payload}");
     }
 }

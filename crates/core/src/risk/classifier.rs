@@ -2,7 +2,10 @@ use crate::filter::{
     resolve_effective_command, segment_command, Pattern, DEFAULT_MAX_COMMAND_LENGTH,
 };
 
-use super::patterns::{data_risk_patterns, server_risk_patterns};
+use super::patterns::{
+    data_risk_patterns, secret_path_patterns, server_risk_patterns, SECRET_PATH_HINTS,
+    SECRET_READ_COMMANDS,
+};
 use super::types::{RiskAssessment, RiskClassifier, RiskLevel};
 
 /// Regelbasierte Umsetzung von [`RiskClassifier`] (Spec 0026, Abschnitt 2) —
@@ -122,4 +125,92 @@ fn best_match(
         .filter(|(pattern, _, _)| pattern.matches(lower_segment))
         .map(|(_, level, reason)| (*level, *reason))
         .max_by_key(|(level, _)| *level)
+}
+
+/// Spec 0068, Teil 2: liefert eine Begründung, wenn `command` den Inhalt
+/// eines Secret-Pfads in die Ausgabe bringt (Lesebefehl oder `sftp-read`
+/// auf einen Pfad aus `patterns::secret_path_patterns`). Der Aufrufer
+/// (`app-shell::orchestration::handle_action_proposed`) macht aus
+/// `AutoExec` dann **immer** `Confirm` — auch wenn eine Allow-Regel greift
+/// —, reine Eskalation wie bei Spec 0039. Eine `Deny`-Entscheidung bleibt
+/// unberührt.
+///
+/// Dieselbe Zerlegung wie [`RuleBasedRiskClassifier::classify`]:
+/// Teilkommandos (`;`, `&&`, `|`, `$(...)`), das Gesamtkommando und die
+/// von `sudo`/`env`/Zuweisungen befreite Form. Zusätzlich fail-safe:
+/// - Quotes und Backslashes werden vor dem Vergleich entfernt
+///   (`~/.ss''h/id_rsa`, `id\_rsa`).
+/// - Ein Platzhalter (`*`, `?`, `[`, `{`) in einem Argument eines
+///   Lesebefehls, das einen Secret-Hinweis oder eine Punktdatei enthält,
+///   eskaliert im Zweifel (`cat ~/.ssh/i*`, `cat .en*`).
+/// - `find … -exec cat` / `… | xargs cat` eskaliert, sobald das
+///   Gesamtkommando einen Secret-Hinweis enthält.
+/// - Ein zu langes Kommando eskaliert (nicht analysierbar).
+///
+/// **Grenzen (ehrlich, bewusst)**: rein lexikalisch. Umgehbar über
+/// Variablen, deren Wert nicht im Kommando steht (`cat $F`), Symlinks
+/// (`ln -s ~/.ssh/id_rsa x; cat x` — `ln` selbst liest nichts), Umwege
+/// über andere Programme (`python -c …`, `vim`, `cp` in eine unverdächtige
+/// Datei und diese dann lesen) oder Kodierungen. Redaction (private
+/// Schlüsselblöcke, Keys) und die übrigen Bestätigungsregeln bleiben die
+/// weiteren Schichten. Auch eine Umleitung ohne Ausgabe
+/// (`cat .env > /srv/app/.env`) eskaliert — eine sichere Unterscheidung
+/// von `> /dev/stdout`, `>&2`, `| tee` wäre selbst eine Umgehungsfläche.
+pub fn secret_path_read_reason(command: &str) -> Option<&'static str> {
+    if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+        return Some("Kommando zu lang für eine Prüfung auf Secret-Pfade");
+    }
+
+    let mut segments = segment_command(command);
+    segments.push(command.to_string());
+    let resolved: Vec<String> = segments
+        .iter()
+        .map(|segment| resolve_effective_command(segment))
+        .collect();
+    segments.extend(resolved);
+
+    let read_start = regex::Regex::new(&format!(r"^\s*{SECRET_READ_COMMANDS}\b"))
+        .expect("eingebautes Lesebefehl-Muster ist gültig");
+    let exec_read = regex::Regex::new(&format!(
+        r"(?:-exec|-execdir|xargs)(?:\s+-\S+)*\s+(?:sudo\s+)?{SECRET_READ_COMMANDS}\b"
+    ))
+    .expect("eingebautes exec-/xargs-Muster ist gültig");
+
+    let normalize = |text: &str| -> String {
+        text.to_lowercase()
+            .chars()
+            .filter(|c| !matches!(c, '\'' | '"' | '\\'))
+            .collect()
+    };
+    let full = normalize(command);
+
+    for segment in &segments {
+        let normalized = normalize(segment);
+        if exec_read.is_match(&normalized) && SECRET_PATH_HINTS.iter().any(|h| full.contains(h)) {
+            return Some("Liest Dateien per -exec/xargs aus einem Secret-Pfad");
+        }
+        if !read_start.is_match(&normalized) {
+            continue;
+        }
+        if let Some((_, reason)) = secret_path_patterns()
+            .iter()
+            .find(|(pattern, _)| pattern.is_match(&normalized))
+        {
+            return Some(reason);
+        }
+        let globbed_secret = normalized.split_whitespace().skip(1).any(|arg| {
+            let has_glob = arg.contains(['*', '?', '[', '{']);
+            let last = arg.rsplit('/').next().unwrap_or(arg);
+            has_glob
+                && (last.starts_with('.')
+                    || arg.starts_with('~')
+                    || arg.starts_with("$home")
+                    || arg.starts_with("/root")
+                    || SECRET_PATH_HINTS.iter().any(|h| arg.contains(h)))
+        });
+        if globbed_secret {
+            return Some("Lesebefehl mit Platzhalter auf einen möglichen Secret-Pfad");
+        }
+    }
+    None
 }

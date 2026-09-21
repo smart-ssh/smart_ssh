@@ -329,3 +329,114 @@ fn test_server_risk_red_sudo_chmod_recursive_777_root_not_defeated_by_sudo_prefi
     let a = classify("sudo chmod -R 777 /");
     assert_eq!(a.server_risk, RiskLevel::Red);
 }
+
+// --- Spec 0068, Teil 2: Lesebefehle auf Secret-Pfade -> immer Confirm ---
+
+use super::secret_path_read_reason;
+
+#[test]
+fn test_secret_path_reads_are_detected_for_every_listed_path_and_command() {
+    let paths = [
+        "~/.ssh/id_rsa",
+        "/root/.ssh/id_ed25519",
+        "/home/deploy/.ssh/id_deploy",
+        "/etc/ssl/private/server.pem",
+        "/etc/nginx/tls.key",
+        ".env",
+        "/srv/app/.env.production",
+        "/srv/app/.env.example",
+        "/etc/shadow",
+        "/etc/gshadow",
+        "~/.aws/credentials",
+        "~/.docker/config.json",
+        "~/.kube/config",
+        "~/.netrc",
+        "~/.pgpass",
+        "~/.git-credentials",
+    ];
+    let commands = [
+        "cat",
+        "less",
+        "more",
+        "head -n 5",
+        "tail",
+        "bat",
+        "grep -i key",
+        "sed -n 1p",
+        "awk '{print}'",
+        "xxd",
+        "od -c",
+        "strings",
+        "base64",
+        "openssl rsa -in",
+    ];
+    for path in paths {
+        for command in commands {
+            let full = format!("{command} {path}");
+            assert!(
+                secret_path_read_reason(&full).is_some(),
+                "nicht erkannt: {full}"
+            );
+        }
+        // Datei-Lese-Aktion (ReadRemoteFile → `sftp-read`).
+        assert!(
+            secret_path_read_reason(&format!("sftp-read {path}")).is_some(),
+            "sftp-read {path}"
+        );
+    }
+}
+
+#[test]
+fn test_secret_path_reads_through_wrappers_chains_and_quoting_are_detected() {
+    for command in [
+        "sudo cat /etc/shadow",
+        "sudo -u root head ~/.ssh/id_rsa",
+        "echo x; cat ~/.ssh/id_rsa",
+        "true && tail -n 1 ~/.pgpass",
+        "ls | cat ~/.netrc",
+        "echo $(cat ~/.aws/credentials)",
+        "cat ~/.ss''h/id_rsa",
+        "cat \"/root/.ssh/id_rsa\"",
+        "cat ~/.ssh/id\\_rsa",
+        "cat $HOME/.ssh/id_rsa",
+        "cat ~/.ssh/id_*",
+        "cat ~/.ssh/i*",
+        "cat /etc/*shadow*",
+        "cat .en*",
+        "head ~/.ssh/{id_rsa,config}",
+        r"find ~/.ssh -name 'id_*' -exec cat {} \;",
+        "ls ~/.ssh/id_* | xargs cat",
+        "CAT ~/.SSH/ID_RSA",
+    ] {
+        assert!(
+            secret_path_read_reason(command).is_some(),
+            "nicht erkannt: {command}"
+        );
+    }
+}
+
+#[test]
+fn test_copying_moving_and_metadata_checks_are_not_escalated() {
+    for command in [
+        "cat ~/.ssh/id_rsa.pub",
+        "cat /home/deploy/.ssh/id_ed25519.pub",
+        "cp ~/.ssh/id_rsa /backup/id_rsa",
+        "install -m 600 .env /srv/app/.env",
+        "mv .env .env.bak",
+        "stat -c %s ~/.ssh/id_rsa",
+        "test -f .env && echo ok",
+        "ls -l ~/.ssh",
+        "cat notes.txt",
+        "grep error *.log",
+        "cat /etc/hostname",
+        "tail -f /var/log/syslog",
+        "grep user_id_x data.csv",
+        "cat environment.md",
+    ] {
+        assert_eq!(
+            secret_path_read_reason(command),
+            None,
+            "fälschlich eskaliert: {command}"
+        );
+    }
+}
