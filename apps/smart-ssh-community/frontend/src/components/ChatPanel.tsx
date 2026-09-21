@@ -1157,7 +1157,13 @@ export function ChatItemView({
         </code>
       )}
       {item.usesStoredSudoPassword && (
-        <p className="mt-1 text-xs text-amber-300">{t("actionCard.usesStoredSudoPassword")}</p>
+        // Spec 0068, Teil 3: beim Schreiben ist Sudo ein möglicher
+        // Fallback nach einem Rechte-Fehler — vorab angekündigt, nie still.
+        <p className="mt-1 text-xs text-amber-300">
+          {"WriteRemoteFile" in item.action
+            ? t("actionCard.writeMayUseStoredSudoPassword")
+            : t("actionCard.usesStoredSudoPassword")}
+        </p>
       )}
       {"ProposeNoteUpdate" in item.action && (
         <div className="mt-2">

@@ -231,6 +231,7 @@
     "rejected": "abgelehnt",
     "rejectedByUser": "Vom Nutzer abgelehnt.",
     "usesStoredSudoPassword": "🔑 Wird mit hinterlegtem Sudo-Passwort ausgeführt.",
+    "writeMayUseStoredSudoPassword": "🔑 Fehlen die Rechte zum Schreiben, schreibt die App mit dem hinterlegten Sudo-Passwort (sudo).",
     "takeIntoNote": "In Notiz übernehmen",
     "takeIntoNoteFailed": "Fehlgeschlagen — erneut versuchen",
     "riskServerLabel": "Server",

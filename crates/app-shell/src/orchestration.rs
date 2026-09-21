@@ -1821,9 +1821,22 @@ fn command_with_stdin_password_flag(command: &str) -> Option<String> {
 /// hinterlegtes Sudo-Passwort eingespeist würde — für den Transparenz-
 /// Hinweis im Bestätigungsdialog (nur relevant für `SuggestCommand`, nie
 /// für `ProposeNoteUpdate`/`GenerateDocument`).
+/// Ob die Aktion das hinterlegte Sudo-Passwort nutzt bzw. nutzen KANN —
+/// steuert die Ankündigung im Bestätigungsdialog (`usesStoredSudoPassword`)
+/// und die Eskalation auf `Confirm`.
+///
+/// Spec 0068, Teil 3 (Release-Gate C): für `WriteRemoteFile` auch dann,
+/// wenn Sudo erst als Fallback nach einem Rechte-Fehler nötig würde
+/// (`execute_write_remote_file`) — sonst schöbe die App Sudo nach der
+/// Bestätigung still nach. Der Fallback dort fragt genau diese Funktion ab,
+/// ist also strukturell an die Ankündigung gebunden.
 fn uses_stored_sudo_password(session: &Session, action: &AiAction) -> bool {
     session.sudo_password.is_some()
-        && matches!(action, AiAction::SuggestCommand { command } if detect_elevation_prefix(command).is_some())
+        && match action {
+            AiAction::SuggestCommand { command } => detect_elevation_prefix(command).is_some(),
+            AiAction::WriteRemoteFile { .. } => true,
+            _ => false,
+        }
 }
 
 /// Meldet einen bei der Ausführung einer Aktion aufgetretenen Fehler sowohl
@@ -2693,7 +2706,16 @@ async fn execute_write_remote_file(
     let (backup_path, used_sudo_password) = match regular {
         Ok(backup_path) => (backup_path, false),
         Err(SshError::SftpPermissionDenied(_)) => {
-            let Some(password) = session.sudo_password.clone() else {
+            // Spec 0068, Teil 3: Sudo-Fallback nur, wenn der Dialog ihn vorab
+            // angekündigt hat — dieselbe Prüfung wie für die Ankündigung.
+            let announced = uses_stored_sudo_password(
+                session,
+                &AiAction::WriteRemoteFile {
+                    path: path.clone(),
+                    content: String::new(),
+                },
+            );
+            let Some(password) = session.sudo_password.clone().filter(|_| announced) else {
                 return emit_action_error(
                     session,
                     emitter,
@@ -13752,5 +13774,40 @@ mod tests {
             }
             tokio::task::yield_now().await;
         }
+    }
+
+    /// Spec 0068, Teil 3 (Release-Gate C): ist ein Sudo-Passwort hinterlegt,
+    /// kündigt der Schreib-Dialog den möglichen Sudo-Fallback VOR der
+    /// Bestätigung an (`usesStoredSudoPassword`) — der Fallback nach einem
+    /// Rechte-Fehler passiert sonst still. Ohne hinterlegtes Passwort gibt
+    /// es keinen Fallback und keine Ankündigung.
+    #[tokio::test]
+    async fn test_write_confirmation_announces_possible_sudo_fallback() {
+        let write = AiAction::WriteRemoteFile {
+            path: "/etc/nginx/nginx.conf".to_string(),
+            content: "worker_processes 2;".to_string(),
+        };
+
+        let mut with_password = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        with_password.sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
+        with_password.sftp = AsyncMutex::new(Some(Box::new(MockSftpSession::new())));
+        let (decision, payload) = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            proposed_decision_code(&with_password, write.clone()),
+        )
+        .await
+        .expect("Dialog muss enden");
+        assert!(matches!(decision, Decision::Confirm { .. }), "{payload}");
+        assert_eq!(payload["usesStoredSudoPassword"], true, "{payload}");
+
+        let mut without = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        without.sftp = AsyncMutex::new(Some(Box::new(MockSftpSession::new())));
+        let (_, payload) = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            proposed_decision_code(&without, write),
+        )
+        .await
+        .expect("Dialog muss enden");
+        assert_eq!(payload["usesStoredSudoPassword"], false, "{payload}");
     }
 }

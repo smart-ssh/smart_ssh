@@ -344,3 +344,27 @@ describe("truncated response notice (Spec 0065, Teil 2)", () => {
     expect(onContinueTruncated).toHaveBeenCalledWith("assistant-1");
   });
 });
+
+describe("Sudo fallback announcement for file writes (Spec 0068, Teil 3)", () => {
+  it("announces before confirming that a write may run with the stored sudo password", () => {
+    renderItem(
+      buildActionItem({
+        action: { WriteRemoteFile: { path: "/etc/nginx/nginx.conf", content: "x" } },
+        usesStoredSudoPassword: true,
+      }),
+    );
+    expect(
+      screen.getByText(/Fehlen die Rechte zum Schreiben, schreibt die App mit dem hinterlegten Sudo-Passwort/),
+    ).toBeVisible();
+  });
+
+  it("shows no sudo announcement when no sudo password is stored", () => {
+    renderItem(
+      buildActionItem({
+        action: { WriteRemoteFile: { path: "/etc/nginx/nginx.conf", content: "x" } },
+        usesStoredSudoPassword: false,
+      }),
+    );
+    expect(screen.queryByText(/Sudo-Passwort/)).not.toBeInTheDocument();
+  });
+});
