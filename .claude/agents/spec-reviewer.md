@@ -64,9 +64,8 @@ strukturierter Bericht.
    oder im Aufruf genannte offene Annahmen? Jede unbestätigte Annahme ist ein
    Fund (Spec-Konformität), bis sie ausdrücklich bestätigt wurde.
 7. Prüfe die **Repository-Grenze**: Bringt der Diff Inhalte in dieses
-   öffentliche Repo, die nicht hierher gehören (Code oder Details der
-   proprietären Module, interne Planungs- oder Geschäftsdokumente)? Ändert
-   er im Pro-Repo Dateien unter `vendor/`?
+   öffentliche Repo, die nicht hierher gehören (interne Planungs- oder
+   Geschäftsdokumente, Zugangsdaten, nicht öffentliche Details)?
 
 ## Ausgabeformat
 

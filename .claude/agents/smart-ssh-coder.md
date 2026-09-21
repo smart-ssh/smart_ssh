@@ -108,9 +108,8 @@ Immer an den Menschen (K3), sobald eines zutrifft: ändert Verhalten laut Spec
 oder entscheidet einen offenen Punkt · berührt eine Sicherheits-Invariante
 (Filter-Engine, Chaining, Redaction, AutoExec/Confirm, Credentials, Host-Keys,
 Fehlerpfade) · Datenformat, Schema, Migration, öffentliche Schnittstelle ·
-neue Abhängigkeit · Scope-Reduktion · Grenze zwischen freien und bezahlten
-Funktionen. Alles, was sich eindeutig aus Spec, ADRs und bestehenden
-Konventionen ableiten lässt, ist eine Klarstellung (K1).
+neue Abhängigkeit · Scope-Reduktion. Alles, was sich eindeutig aus Spec,
+ADRs und bestehenden Konventionen ableiten lässt, ist eine Klarstellung (K1).
 
 ## Grenzen
 
@@ -125,8 +124,7 @@ Konventionen ableiten lässt, ist eine Klarstellung (K1).
 - **`CHANGELOG.md` nicht ändern** — nur ein Fragment in `changelog.d/`.
 - **Keine Spec- oder ADR-Nummer selbst vergeben**, wenn sie nicht im Auftrag
   steht — `XXXX` als Platzhalter. **Version nie selbst erhöhen.**
-- Im Pro-Repo ist `vendor/` tabu; Kernänderungen brauchen eine eigene Spec im
-  öffentlichen Repo.
 - Keine neuen Abhängigkeiten ohne ausdrückliche Freigabe.
-- Keine Inhalte aus proprietären Modulen oder internen Dokumenten in dieses
-  öffentliche Repo.
+- Dieses Repo ist öffentlich: nur Inhalte committen, die öffentlich sein
+  dürfen — keine internen Planungs- oder Geschäftsdokumente, keine
+  Zugangsdaten.
