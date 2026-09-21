@@ -90,10 +90,14 @@ oder den KI-Kontext.
 - **Risiko-Klassifizierer:** Die NOPASSWD-Regel gilt für alles unter
   diesem Login, auch für KI-vorgeschlagene Kommandos (z. B. SFTP-Pakete per
   Pipe an `sudo -n …/sftp-server`). Die App erreicht den Kanal nicht, die
-  Regel selbst aber schon. **Stefans Entscheidung steht aus**, ob Aufrufe
-  von `sftp-server` im Risiko-Klassifizierer fest als Rot gelten sollen
-  (sicherheitskritisches Modul, nur Verschärfung). Der Warntext neben der
-  sudoers-Zeile sagt das jetzt ausdrücklich.
+  Regel selbst aber schon. Der Warntext neben der sudoers-Zeile sagt das
+  ausdrücklich. **Entschieden (Stefan, 2026-09-22, Commit `e052fb8`):**
+  Aufrufe von `sftp-server` (direkt oder per `sudo`/`doas`) gelten im
+  Risiko-Klassifizierer fest als Server-Risiko Rot; bloße Erwähnungen
+  (`ls`, `grep`, `which`) nicht. Rot ist Anzeige und schärft nach
+  eingelesenem Serverinhalt die Stufe „Ausgewogen“ auf Bestätigung; eine
+  passende Allow-Regel (z. B. `sudo *`) kann einen solchen Aufruf sonst
+  weiterhin automatisch freigeben.
 - **Besitzer-Prüfung des Pfads:** Die App prüft nicht, ob `sftp-server` root
   gehört bzw. für den Login unbeschreibbar ist. Zeigt `sshd_config` auf ein
   vom Login austauschbares Binary, würde die angebotene Regel dieses
