@@ -116,6 +116,13 @@ pub struct AnthropicProvider {
     /// `app-shell` (hat die Kontext-Größenschätzung/Session/Event-Emitter
     /// zur Hand, s. Spec 0061 Abschnitt 3/4).
     budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
+    /// Spec 0065, Teil 4: optionaler, nutzergesetzter `max_tokens`-Override
+    /// für den Haupt-Chat (Provider-Formular, „Erweitert" → „Max.
+    /// Antwortlänge") — greift nur, wenn `SessionContext::max_tokens_hint`
+    /// `None` ist (ein Nebenaufruf setzt diesen Hint immer explizit, s.
+    /// `build_request_body`, und hat damit Vorrang, "Nebenaufrufe behalten
+    /// ihre kleinen Werte").
+    max_tokens_override: Option<u32>,
 }
 
 impl AnthropicProvider {
@@ -125,6 +132,7 @@ impl AnthropicProvider {
         api_key: impl Into<String>,
         supports_native_tool_calling: bool,
         budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
+        max_tokens_override: Option<u32>,
     ) -> Self {
         Self {
             client: build_http_client(),
@@ -133,6 +141,7 @@ impl AnthropicProvider {
             api_key: api_key.into(),
             supports_native_tool_calling,
             budget,
+            max_tokens_override,
         }
     }
 
@@ -172,14 +181,15 @@ impl AnthropicProvider {
             "cache_control": {"type": "ephemeral"},
         }]);
 
-        // Spec 0065, Teil 1: `max_tokens_hint` (gesetzt von Nebenaufrufen
-        // wie Zweitmeinung/Auto-Titel/Notiz/Summary, s. `app_shell::
-        // orchestration::SIDE_CALL_MAX_TOKENS`) hat Vorrang vor dem
-        // modellabhängigen Haupt-Chat-Default — genau das unterscheidet
-        // einen Nebenaufruf vom Haupt-Chat, s. `SessionContext::
-        // max_tokens_hint`-Doc-Kommentar (core).
+        // Spec 0065, Teil 1+4: `max_tokens_hint` (Nebenaufrufe, s.
+        // `app_shell::orchestration::SIDE_CALL_MAX_TOKENS`) hat Vorrang vor
+        // dem Nutzer-Override (Teil 4), der wiederum Vorrang vor dem
+        // modellabhängigen Haupt-Chat-Default hat — s. `SessionContext::
+        // max_tokens_hint`-Doc-Kommentar (core) und `Self::max_tokens_
+        // override`-Doc-Kommentar.
         let max_tokens = context
             .max_tokens_hint
+            .or(self.max_tokens_override)
             .unwrap_or_else(|| anthropic_model_max_output_tokens(&self.model));
 
         let mut body = json!({
@@ -993,6 +1003,7 @@ mod tests {
             "key",
             true,
             test_budget(),
+            None,
         );
         let context = context_with_actions("Stabiler System-Prompt.", default_action_schemas());
 
@@ -1020,6 +1031,7 @@ mod tests {
             "key",
             true,
             test_budget(),
+            None,
         );
         let context = context_with_actions("System.", default_action_schemas());
 
@@ -1048,6 +1060,7 @@ mod tests {
             "key",
             false,
             test_budget(),
+            None,
         );
         let context = context_with_actions("System.", default_action_schemas());
 
@@ -1070,6 +1083,7 @@ mod tests {
             "key",
             true,
             test_budget(),
+            None,
         );
         let context = context_with_actions("Hi.", default_action_schemas());
 
@@ -1400,6 +1414,7 @@ mod tests {
             "key",
             true,
             test_budget(),
+            None,
         );
         let context = context_with_actions("Hi.", default_action_schemas());
 
@@ -1418,6 +1433,7 @@ mod tests {
             "key",
             true,
             test_budget(),
+            None,
         );
         let context = context_with_actions("Hi.", default_action_schemas());
 
@@ -1437,6 +1453,7 @@ mod tests {
             "key",
             true,
             test_budget(),
+            None,
         );
         let context = context_with_actions("Hi.", default_action_schemas());
 
@@ -1461,6 +1478,49 @@ mod tests {
             "key",
             true,
             test_budget(),
+            None,
+        );
+        let mut context = context_with_actions("Hi.", default_action_schemas());
+        context.max_tokens_hint = Some(4096);
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(body["max_tokens"], 4096);
+    }
+
+    /// Spec 0065, Teil 4: der Nutzer-Override (Provider-Formular,
+    /// „Erweitert") überschreibt den modellabhängigen Default für den
+    /// Haupt-Chat (`max_tokens_hint: None`).
+    #[test]
+    fn test_build_request_body_honors_provider_level_max_tokens_override() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "claude-sonnet-5",
+            "key",
+            true,
+            test_budget(),
+            Some(20_000),
+        );
+        let context = context_with_actions("Hi.", default_action_schemas());
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(body["max_tokens"], 20_000);
+    }
+
+    /// Gegenprobe: ein Nebenaufruf-`max_tokens_hint` hat weiterhin Vorrang
+    /// vor dem Provider-Override — sonst würde ein vom Nutzer für den
+    /// Haupt-Chat gesetzter Override versehentlich auch die
+    /// Zusammenfassung/Zweitmeinung/den Auto-Titel aufblasen.
+    #[test]
+    fn test_side_call_hint_still_wins_over_provider_level_override() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "claude-sonnet-5",
+            "key",
+            true,
+            test_budget(),
+            Some(20_000),
         );
         let mut context = context_with_actions("Hi.", default_action_schemas());
         context.max_tokens_hint = Some(4096);

@@ -46,6 +46,13 @@ pub struct AiProviderConfig {
     pub extra_headers: Vec<(String, String)>,
     /// Spec 0025, Abschnitt 4.
     pub attestation_url: Option<String>,
+    /// Spec 0065, Teil 4: optionaler `max_tokens`-Override für den
+    /// Haupt-Chat dieses Providers — `None` ("Automatisch") heißt: der
+    /// modellabhängige Provider-Default aus Spec 0065 Teil 1 gilt
+    /// unverändert (s. `SessionContext::max_tokens_hint`-Doc-Kommentar,
+    /// core — dort greift dieser Override nur, wenn KEIN Nebenaufruf-Hint
+    /// gesetzt ist, s. `ai_provider_factory::build_ai_provider`).
+    pub max_tokens_override: Option<u32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -69,6 +76,9 @@ pub struct AiProviderConfigUpdate {
     pub supports_native_tool_calling: bool,
     pub extra_headers: Vec<(String, String)>,
     pub attestation_url: Option<String>,
+    /// Spec 0065, Teil 4 — s. `AiProviderConfig::max_tokens_override`-Doc-
+    /// Kommentar.
+    pub max_tokens_override: Option<u32>,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -141,6 +151,10 @@ fn row_to_config(row: &sqlx::sqlite::SqliteRow) -> Result<AiProviderConfig, AiPr
     })?;
 
     let extra_headers_raw: String = row.get("extra_headers");
+    // Spec 0065, Teil 4: SQLite liefert `NULL` als `None` bereits über
+    // `Option<i64>` — kein manuelles Null-Handling nötig, anders als die
+    // JSON-kodierten `extra_headers` oben.
+    let max_tokens_override: Option<i64> = row.get("max_tokens_override");
 
     Ok(AiProviderConfig {
         id: ProviderId(parse_uuid(&id)?),
@@ -153,6 +167,7 @@ fn row_to_config(row: &sqlx::sqlite::SqliteRow) -> Result<AiProviderConfig, AiPr
         is_active: row.get("is_active"),
         extra_headers: parse_extra_headers(&extra_headers_raw)?,
         attestation_url: row.get("attestation_url"),
+        max_tokens_override: max_tokens_override.map(|v| v as u32),
         created_at: parse_timestamp(&created_at)?,
         updated_at: parse_timestamp(&updated_at)?,
     })
@@ -177,7 +192,7 @@ impl SqliteAiProviderStore {
         let rows = sqlx::query(
             "SELECT id, provider_type, display_name, base_url, model, \
              supports_native_tool_calling, credential_ref, is_active, extra_headers, \
-             attestation_url, created_at, updated_at \
+             attestation_url, max_tokens_override, created_at, updated_at \
              FROM ai_provider_configs ORDER BY created_at",
         )
         .fetch_all(&self.pool)
@@ -195,7 +210,7 @@ impl SqliteAiProviderStore {
         let row = sqlx::query(
             "SELECT id, provider_type, display_name, base_url, model, \
              supports_native_tool_calling, credential_ref, is_active, extra_headers, \
-             attestation_url, created_at, updated_at \
+             attestation_url, max_tokens_override, created_at, updated_at \
              FROM ai_provider_configs WHERE id = ?",
         )
         .bind(id.0.to_string())
@@ -219,8 +234,9 @@ impl SqliteAiProviderStore {
         sqlx::query(
             "INSERT INTO ai_provider_configs \
              (id, provider_type, display_name, base_url, model, supports_native_tool_calling, \
-              credential_ref, is_active, extra_headers, attestation_url, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?, ?, ?)",
+              credential_ref, is_active, extra_headers, attestation_url, max_tokens_override, \
+              created_at, updated_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?, ?, ?, ?)",
         )
         .bind(config.id.0.to_string())
         .bind(config.provider_type.as_db_str())
@@ -231,6 +247,7 @@ impl SqliteAiProviderStore {
         .bind(config.credential_ref.as_str())
         .bind(encode_extra_headers(&config.extra_headers))
         .bind(&config.attestation_url)
+        .bind(config.max_tokens_override.map(|v| v as i64))
         .bind(config.created_at.to_rfc3339())
         .bind(config.updated_at.to_rfc3339())
         .execute(&self.pool)
@@ -249,7 +266,7 @@ impl SqliteAiProviderStore {
         let result = sqlx::query(
             "UPDATE ai_provider_configs SET provider_type = ?, display_name = ?, base_url = ?, \
              model = ?, supports_native_tool_calling = ?, extra_headers = ?, \
-             attestation_url = ?, updated_at = ? WHERE id = ?",
+             attestation_url = ?, max_tokens_override = ?, updated_at = ? WHERE id = ?",
         )
         .bind(update.provider_type.as_db_str())
         .bind(&update.display_name)
@@ -258,6 +275,7 @@ impl SqliteAiProviderStore {
         .bind(update.supports_native_tool_calling)
         .bind(encode_extra_headers(&update.extra_headers))
         .bind(&update.attestation_url)
+        .bind(update.max_tokens_override.map(|v| v as i64))
         .bind(update.updated_at.to_rfc3339())
         .bind(update.id.0.to_string())
         .execute(&self.pool)
@@ -376,6 +394,7 @@ mod tests {
             is_active: false,
             extra_headers: Vec::new(),
             attestation_url: None,
+            max_tokens_override: None,
             created_at: now,
             updated_at: now,
         }
@@ -411,6 +430,7 @@ mod tests {
             supports_native_tool_calling: false,
             extra_headers: vec![("X-Title".to_string(), "Smart SSH".to_string())],
             attestation_url: Some("https://attest.example/report".to_string()),
+            max_tokens_override: Some(16_384),
             updated_at: Utc::now(),
         };
         store.update_fields(&update).await.unwrap();
@@ -435,6 +455,52 @@ mod tests {
             listed[0].credential_ref, config.credential_ref,
             "update_fields darf credential_ref nicht ändern"
         );
+        // Spec 0065, Teil 4: der Override-Wert selbst überlebt den
+        // Roundtrip — NULL-fähige Spalte, kein manuelles (De-)Kodieren wie
+        // bei `extra_headers`.
+        assert_eq!(listed[0].max_tokens_override, Some(16_384));
+    }
+
+    /// Spec 0065, Teil 4, Gegenprobe: `None` ("Automatisch") bleibt `None`
+    /// nach einem Roundtrip — NICHT `Some(0)` oder ein anderer Platzhalter,
+    /// der versehentlich das echte Modell-Maximum überschreiben würde.
+    #[tokio::test]
+    async fn test_max_tokens_override_none_roundtrips_as_automatic() {
+        let store = in_memory_ai_provider_store().await;
+        let config = make_config("Automatisch");
+        assert_eq!(config.max_tokens_override, None);
+        store.create(&config).await.unwrap();
+
+        let listed = store.list().await.unwrap();
+        assert_eq!(listed[0].max_tokens_override, None);
+
+        let mut update = AiProviderConfigUpdate {
+            id: config.id,
+            provider_type: config.provider_type,
+            display_name: config.display_name.clone(),
+            base_url: config.base_url.clone(),
+            model: config.model.clone(),
+            supports_native_tool_calling: config.supports_native_tool_calling,
+            extra_headers: config.extra_headers.clone(),
+            attestation_url: config.attestation_url.clone(),
+            max_tokens_override: Some(32_000),
+            updated_at: Utc::now(),
+        };
+        store.update_fields(&update).await.unwrap();
+        assert_eq!(
+            store.get(&config.id).await.unwrap().max_tokens_override,
+            Some(32_000)
+        );
+
+        // Zurück auf "Automatisch" setzen muss ebenfalls funktionieren
+        // (nicht an `Some` "hängen bleiben").
+        update.max_tokens_override = None;
+        update.updated_at = Utc::now();
+        store.update_fields(&update).await.unwrap();
+        assert_eq!(
+            store.get(&config.id).await.unwrap().max_tokens_override,
+            None
+        );
     }
 
     #[tokio::test]
@@ -449,6 +515,7 @@ mod tests {
             supports_native_tool_calling: true,
             extra_headers: Vec::new(),
             attestation_url: None,
+            max_tokens_override: None,
             updated_at: Utc::now(),
         };
 

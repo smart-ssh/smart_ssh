@@ -51,6 +51,7 @@ data: [DONE]\n\n";
         true,
         Vec::new(),
         test_budget(),
+        None,
     );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
@@ -80,6 +81,7 @@ data: [DONE]\n\n";
         false,
         Vec::new(),
         test_budget(),
+        None,
     );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
@@ -118,6 +120,7 @@ async fn test_fallback_mode_treats_malformed_action_block_as_plain_text() {
         false,
         Vec::new(),
         test_budget(),
+        None,
     );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
@@ -146,6 +149,7 @@ async fn test_authentication_failure_maps_401_to_ai_error() {
         true,
         Vec::new(),
         test_budget(),
+        None,
     );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
@@ -189,6 +193,7 @@ async fn test_429_with_retry_after_retries_and_then_succeeds() {
         true,
         Vec::new(),
         test_budget(),
+        None,
     );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
@@ -225,6 +230,7 @@ async fn test_persistent_429_gives_up_after_attempt_cap_with_rate_limited_error(
         true,
         Vec::new(),
         test_budget(),
+        None,
     );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
@@ -254,6 +260,7 @@ async fn test_retry_after_longer_than_total_budget_gives_up_without_extra_reques
         true,
         Vec::new(),
         test_budget(),
+        None,
     );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;

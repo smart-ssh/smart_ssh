@@ -1,0 +1,13 @@
+-- Spec 0065, Teil 4: optionaler, pro-Provider einstellbarer Override für
+-- `max_tokens` des Haupt-Chats — nur relevant für OpenAI-kompatible/
+-- selbstgehostete Provider, deren Output-Maximum die App nicht kennt (s.
+-- `ai_providers::openai_compatible_model_max_output_tokens`-Kommentar).
+--
+-- NULL-fähig (anders als `extra_headers`/`ai_injection_check_enabled`, s.
+-- Migration 0005/0007): hier gibt es einen echten dritten Zustand jenseits
+-- "gesetzt"/"leer" — NULL heißt "Automatisch" (der modellabhängige
+-- Provider-Default aus Spec 0065 Teil 1 gilt unverändert), nicht "0
+-- Tokens". Ein `INTEGER` statt `TEXT`: das Frontend validiert bereits vor
+-- dem Absenden (positive Zahl, sinnvolle Obergrenze), die Spalte muss also
+-- nur den geparsten Wert oder NULL halten.
+ALTER TABLE ai_provider_configs ADD COLUMN max_tokens_override INTEGER;

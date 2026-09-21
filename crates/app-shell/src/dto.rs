@@ -130,6 +130,8 @@ pub struct AiProviderConfigDto {
     pub extra_headers: Vec<(String, String)>,
     /// Spec 0025, Abschnitt 4.
     pub attestation_url: Option<String>,
+    /// Spec 0065, Teil 4: `None` = „Automatisch" (Default) im Formular.
+    pub max_tokens_override: Option<u32>,
 }
 
 impl From<&AiProviderConfig> for AiProviderConfigDto {
@@ -144,6 +146,7 @@ impl From<&AiProviderConfig> for AiProviderConfigDto {
             is_active: config.is_active,
             extra_headers: config.extra_headers.clone(),
             attestation_url: config.attestation_url.clone(),
+            max_tokens_override: config.max_tokens_override,
         }
     }
 }
@@ -165,7 +168,20 @@ pub struct AiProviderConfigInput {
     pub extra_headers: Vec<(String, String)>,
     /// Spec 0025, Abschnitt 4.
     pub attestation_url: Option<String>,
+    /// Spec 0065, Teil 4: `None` = „Automatisch" — validiert in
+    /// [`Self::validated`] (positiv, sinnvolle Obergrenze), NICHT hier im
+    /// reinen Datentyp (derselbe Grund wie bei `trimmed()`: eine
+    /// Deserialize-Quelle kennt keine fachliche Validierung).
+    pub max_tokens_override: Option<u32>,
 }
+
+/// Spec 0065, Teil 4: sinnvolle Obergrenze für den Override — großzügig
+/// über dem höchsten heute bekannten Modell-Maximum (128K, s.
+/// `ai_providers::anthropic_model_max_output_tokens`/`openai_compatible_
+/// model_max_output_tokens`), damit ein zukünftig größeres Modell nicht
+/// sofort an dieser UI-Grenze scheitert, aber klein genug, um einen
+/// offensichtlichen Tippfehler (z. B. eine zusätzliche Null) abzufangen.
+pub const MAX_TOKENS_OVERRIDE_UPPER_BOUND: u32 = 1_000_000;
 
 impl AiProviderConfigInput {
     /// Spec 0049, Fund 1: rand-trimmt `api_key` und die Endpunkt-Felder
@@ -187,6 +203,26 @@ impl AiProviderConfigInput {
         self
     }
 
+    /// Spec 0065, Teil 4: „positive Zahl, sinnvolle Obergrenze; leer =
+    /// automatisch" — `0` ist ausdrücklich UNGÜLTIG (die Anthropic-API
+    /// verlangt `max_tokens >= 1`, ein `Some(0)` wäre außerdem nicht von
+    /// „kein Override" unterscheidbar gewesen, hätte diese Funktion `0`
+    /// stillschweigend akzeptiert). Aufrufer: `commands::add_ai_provider`/
+    /// `update_ai_provider`, VOR dem Erreichen von `into_new_config`/
+    /// `into_update` — ein Store-Layer, der nie ein ungültiges
+    /// `max_tokens_override` sieht, statt einer Validierung tief in der
+    /// Persistenz.
+    pub fn validate_max_tokens_override(&self) -> Result<(), String> {
+        match self.max_tokens_override {
+            None => Ok(()),
+            Some(0) => Err("Max. Antwortlänge muss größer als 0 sein".to_string()),
+            Some(value) if value > MAX_TOKENS_OVERRIDE_UPPER_BOUND => Err(format!(
+                "Max. Antwortlänge darf {MAX_TOKENS_OVERRIDE_UPPER_BOUND} Tokens nicht überschreiten"
+            )),
+            Some(_) => Ok(()),
+        }
+    }
+
     /// Baut die volle [`AiProviderConfig`] für [`persistence_sqlite::SqliteAiProviderStore::create`]
     /// — `id`/`credential_ref` werden hier frisch vergeben (ein Aufruf pro
     /// `add_ai_provider`, s. Spec Abschnitt 8.2: "Backend generiert eine
@@ -204,6 +240,7 @@ impl AiProviderConfigInput {
             is_active: false,
             extra_headers: self.extra_headers,
             attestation_url: self.attestation_url,
+            max_tokens_override: self.max_tokens_override,
             created_at: now,
             updated_at: now,
         }
@@ -219,6 +256,7 @@ impl AiProviderConfigInput {
             supports_native_tool_calling: self.supports_native_tool_calling,
             extra_headers: self.extra_headers,
             attestation_url: self.attestation_url,
+            max_tokens_override: self.max_tokens_override,
             updated_at: Utc::now(),
         }
     }
@@ -1088,6 +1126,7 @@ mod tests {
             api_key: api_key.to_string(),
             extra_headers: Vec::new(),
             attestation_url: None,
+            max_tokens_override: None,
         }
     }
 
@@ -1120,5 +1159,42 @@ mod tests {
     fn test_ai_provider_config_input_trimmed_leaves_none_base_url_as_none() {
         let config = ai_provider_config_input("sk-key", None).trimmed();
         assert_eq!(config.base_url, None);
+    }
+
+    // --- Spec 0065, Teil 4: max_tokens_override-Validierung -------------
+
+    #[test]
+    fn test_validate_max_tokens_override_accepts_none_automatic() {
+        let mut config = ai_provider_config_input("sk-key", None);
+        config.max_tokens_override = None;
+        assert_eq!(config.validate_max_tokens_override(), Ok(()));
+    }
+
+    #[test]
+    fn test_validate_max_tokens_override_accepts_a_positive_value() {
+        let mut config = ai_provider_config_input("sk-key", None);
+        config.max_tokens_override = Some(16_384);
+        assert_eq!(config.validate_max_tokens_override(), Ok(()));
+    }
+
+    #[test]
+    fn test_validate_max_tokens_override_rejects_zero() {
+        let mut config = ai_provider_config_input("sk-key", None);
+        config.max_tokens_override = Some(0);
+        assert!(config.validate_max_tokens_override().is_err());
+    }
+
+    #[test]
+    fn test_validate_max_tokens_override_rejects_above_the_upper_bound() {
+        let mut config = ai_provider_config_input("sk-key", None);
+        config.max_tokens_override = Some(MAX_TOKENS_OVERRIDE_UPPER_BOUND + 1);
+        assert!(config.validate_max_tokens_override().is_err());
+    }
+
+    #[test]
+    fn test_validate_max_tokens_override_accepts_exactly_the_upper_bound() {
+        let mut config = ai_provider_config_input("sk-key", None);
+        config.max_tokens_override = Some(MAX_TOKENS_OVERRIDE_UPPER_BOUND);
+        assert_eq!(config.validate_max_tokens_override(), Ok(()));
     }
 }

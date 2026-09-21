@@ -52,6 +52,8 @@ export interface AiProviderConfigDto {
   extraHeaders: [string, string][];
   /** Spec 0025, Abschnitt 4. */
   attestationUrl: string | null;
+  /** Spec 0065, Teil 4: `null` = „Automatisch" (Default). */
+  maxTokensOverride: number | null;
 }
 
 export interface AiProviderConfigInput {
@@ -65,6 +67,9 @@ export interface AiProviderConfigInput {
   extraHeaders: [string, string][];
   /** Spec 0025, Abschnitt 4. */
   attestationUrl: string | null;
+  /** Spec 0065, Teil 4: `null` = „Automatisch" — nur relevant für den
+   * Haupt-Chat dieses Providers, Nebenaufrufe behalten ihre kleinen Werte. */
+  maxTokensOverride: number | null;
 }
 
 export const PROVIDER_TYPE_LABELS: Record<ProviderType, string> = {

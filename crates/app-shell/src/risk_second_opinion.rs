@@ -60,6 +60,13 @@ pub async fn resolve_second_opinion_provider(
         api_key,
         config.supports_native_tool_calling,
         config.extra_headers.clone(),
+        // Spec 0065, Teil 4: greift hier ohnehin nie — `build_second_
+        // opinion_context` setzt `max_tokens_hint` immer explizit
+        // (`SIDE_CALL_MAX_TOKENS`), der laut Rangfolge Vorrang hat.
+        // Trotzdem korrekt durchgereicht statt hart `None`, für den Fall,
+        // dass dieser Provider künftig noch für einen zweiten,
+        // hint-losen Zweck wiederverwendet wird.
+        config.max_tokens_override,
     ))
 }
 

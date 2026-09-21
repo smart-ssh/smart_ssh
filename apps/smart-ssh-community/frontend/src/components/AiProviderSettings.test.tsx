@@ -4,7 +4,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
-import { testAiProviderCredentials } from "../api";
+import { addAiProvider, testAiProviderCredentials } from "../api";
 import { testI18n } from "../testI18n";
 import { AiProviderSettings } from "./AiProviderSettings";
 
@@ -189,5 +189,56 @@ describe("AiProviderSettings visual structure (Spec 0056, Teil 3)", () => {
       screen.getByRole("heading", { name: "Risiko-Indikatoren — KI-Zweitmeinung" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Provider hinzufügen" })).toBeInTheDocument();
+  });
+});
+
+// Spec 0065, Teil 4: optionaler max_tokens-Override im "Erweitert"-Bereich.
+describe("AiProviderSettings max_tokens override (Spec 0065, Teil 4)", () => {
+  function openAdvanced() {
+    fireEvent.click(screen.getByRole("button", { name: /Erweitert/ }));
+  }
+
+  it("defaults to empty (Automatisch) and is not sent as 0", async () => {
+    renderForm();
+    openAdvanced();
+
+    const field = screen.getByLabelText("Max. Antwortlänge (Tokens)", { exact: false });
+    expect(field).toHaveValue(null);
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Prov" } });
+    fireEvent.change(screen.getByLabelText("Modell"), { target: { value: "gpt-4o" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+
+    await waitFor(() => expect(addAiProvider).toHaveBeenCalled());
+    expect(vi.mocked(addAiProvider).mock.calls.at(-1)?.[0].maxTokensOverride).toBeNull();
+  });
+
+  it("sends the entered value as a number", async () => {
+    renderForm();
+    openAdvanced();
+
+    fireEvent.change(screen.getByLabelText("Max. Antwortlänge (Tokens)", { exact: false }), {
+      target: { value: "20000" },
+    });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Prov" } });
+    fireEvent.change(screen.getByLabelText("Modell"), { target: { value: "gpt-4o" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+
+    await waitFor(() => expect(addAiProvider).toHaveBeenCalled());
+    expect(vi.mocked(addAiProvider).mock.calls.at(-1)?.[0].maxTokensOverride).toBe(20000);
+  });
+
+  it("shows a validation hint and disables submit for 0", () => {
+    renderForm();
+    openAdvanced();
+
+    fireEvent.change(screen.getByLabelText("Max. Antwortlänge (Tokens)", { exact: false }), {
+      target: { value: "0" },
+    });
+
+    expect(screen.getByText("Max. Antwortlänge muss größer als 0 sein")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hinzufügen" })).toBeDisabled();
   });
 });

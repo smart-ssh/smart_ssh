@@ -51,8 +51,14 @@ event: content_block_delta\ndata: {\"index\":1,\"delta\":{\"type\":\"input_json_
 event: content_block_stop\ndata: {\"index\":1}\n\n\
 event: message_stop\ndata: {}\n\n";
     let server = mock_server_with_sse_body(sse_body).await;
-    let provider =
-        AnthropicProvider::new(server.uri(), "claude-test", "test-key", true, test_budget());
+    let provider = AnthropicProvider::new(
+        server.uri(),
+        "claude-test",
+        "test-key",
+        true,
+        test_budget(),
+        None,
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -83,6 +89,7 @@ event: message_stop\ndata: {}\n\n";
         "test-key",
         false,
         test_budget(),
+        None,
     );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
@@ -120,6 +127,7 @@ event: message_stop\ndata: {{}}\n\n",
         "test-key",
         false,
         test_budget(),
+        None,
     );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
@@ -144,8 +152,14 @@ async fn test_authentication_failure_maps_401_to_ai_error() {
         .expect(1)
         .mount(&server)
         .await;
-    let provider =
-        AnthropicProvider::new(server.uri(), "claude-test", "bad-key", true, test_budget());
+    let provider = AnthropicProvider::new(
+        server.uri(),
+        "claude-test",
+        "bad-key",
+        true,
+        test_budget(),
+        None,
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -188,8 +202,14 @@ event: message_stop\ndata: {}\n\n";
         .with_priority(2)
         .mount(&server)
         .await;
-    let provider =
-        AnthropicProvider::new(server.uri(), "claude-test", "test-key", true, test_budget());
+    let provider = AnthropicProvider::new(
+        server.uri(),
+        "claude-test",
+        "test-key",
+        true,
+        test_budget(),
+        None,
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -223,8 +243,14 @@ async fn test_persistent_429_gives_up_after_attempt_cap_with_rate_limited_error(
         .expect(4)
         .mount(&server)
         .await;
-    let provider =
-        AnthropicProvider::new(server.uri(), "claude-test", "test-key", true, test_budget());
+    let provider = AnthropicProvider::new(
+        server.uri(),
+        "claude-test",
+        "test-key",
+        true,
+        test_budget(),
+        None,
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -250,8 +276,14 @@ async fn test_retry_after_longer_than_total_budget_gives_up_without_extra_reques
         .expect(1)
         .mount(&server)
         .await;
-    let provider =
-        AnthropicProvider::new(server.uri(), "claude-test", "test-key", true, test_budget());
+    let provider = AnthropicProvider::new(
+        server.uri(),
+        "claude-test",
+        "test-key",
+        true,
+        test_budget(),
+        None,
+    );
 
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
@@ -289,6 +321,7 @@ event: message_stop\ndata: {}\n\n";
         "test-key",
         true,
         budget.clone(),
+        None,
     );
 
     let _events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
@@ -324,6 +357,7 @@ async fn test_rate_limit_headers_are_recorded_from_a_429_response() {
         "test-key",
         true,
         budget.clone(),
+        None,
     );
 
     let _events: Vec<AiEvent> = provider.send(empty_context()).collect().await;

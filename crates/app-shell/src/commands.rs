@@ -149,6 +149,8 @@ pub async fn add_ai_provider(
     // Test abgesichert — eine Extraktion analog zu `servers::create_server`
     // wäre der richtige, aber über Fund 1 hinausgehende nächste Schritt.
     let config = config.trimmed();
+    // Spec 0065, Teil 4: vor jedem Persistieren, wie `trimmed()` oben.
+    config.validate_max_tokens_override()?;
     let id = ProviderId::new();
     let credential_ref = credential_ref_for(id);
     state
@@ -188,6 +190,7 @@ pub async fn update_ai_provider(
     // Whitespace bestehender Paste die Prüfung fälschlich und überschreibt
     // das bestehende Credential mit einem leeren Wert.
     let config = config.trimmed();
+    config.validate_max_tokens_override()?;
     let api_key = config.api_key.clone();
     state
         .ai_provider_store
@@ -464,6 +467,7 @@ pub async fn test_ai_provider_credentials(
         SecretString::from(api_key),
         config.supports_native_tool_calling,
         config.extra_headers.clone(),
+        config.max_tokens_override,
     );
 
     Ok(classify_credential_test_result(provider.as_ref()).await)
@@ -748,6 +752,7 @@ pub(crate) async fn connect_session(
         api_key,
         active_config.supports_native_tool_calling,
         active_config.extra_headers.clone(),
+        active_config.max_tokens_override,
     );
 
     // Spec 0032, Abschnitt 2/3: der lokale Pseudo-Server hat keinen
@@ -2420,6 +2425,7 @@ pub async fn request_note_shrink(
         api_key,
         active_config.supports_native_tool_calling,
         active_config.extra_headers.clone(),
+        active_config.max_tokens_override,
     );
     let provider_label = active_config.display_name.clone();
     let model = active_config.model.clone();
@@ -2875,6 +2881,11 @@ pub async fn generate_diagnostics_bundle<R: tauri::Runtime>(
                     is_active: _,
                     extra_headers: _,
                     attestation_url: _,
+                    // Spec 0065, Teil 4: kein Diagnose-relevanter Wert
+                    // (weder Zugangsdaten noch Server-Adresse) — bewusst
+                    // trotzdem im exhaustiven Destructuring aufgeführt,
+                    // s. Kommentar oben.
+                    max_tokens_override: _,
                     created_at: _,
                     updated_at: _,
                 } = config;

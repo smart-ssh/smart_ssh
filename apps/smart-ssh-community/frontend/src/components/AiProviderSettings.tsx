@@ -39,6 +39,7 @@ function emptyForm(): AiProviderConfigInput {
     apiKey: "",
     extraHeaders: [],
     attestationUrl: null,
+    maxTokensOverride: null,
   };
 }
 
@@ -661,6 +662,37 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     className={`mt-1 w-full ${FIELD_CLASS}`}
                   />
                 </label>
+
+                {/* Spec 0065, Teil 4: optionaler max_tokens-Override, Default
+                 * "Automatisch" (leer). Serverseitig nochmals validiert
+                 * (`AiProviderConfigInput::validate_max_tokens_override`) —
+                 * diese Prüfung ist nur die schnelle, clientseitige
+                 * Rückmeldung. */}
+                <label className={LABEL_CLASS}>
+                  <span className={LABEL_TEXT_CLASS}>{t("aiProvider.maxTokensOverrideLabel")}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder={t("aiProvider.maxTokensOverridePlaceholder")}
+                    value={form.maxTokensOverride ?? ""}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setForm({
+                        ...form,
+                        maxTokensOverride: raw === "" ? null : Number(raw),
+                      });
+                    }}
+                    className={`mt-1 w-full ${FIELD_CLASS}`}
+                  />
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {t("aiProvider.maxTokensOverrideHint")}
+                  </p>
+                  {form.maxTokensOverride !== null && form.maxTokensOverride <= 0 && (
+                    <p className="mt-0.5 text-xs text-red-400">
+                      {t("aiProvider.maxTokensOverrideMustBePositive")}
+                    </p>
+                  )}
+                </label>
               </div>
             )}
           </div>
@@ -668,7 +700,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || (form.maxTokensOverride !== null && form.maxTokensOverride <= 0)}
           className="w-full rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? t("aiProvider.adding") : t("aiProvider.add")}

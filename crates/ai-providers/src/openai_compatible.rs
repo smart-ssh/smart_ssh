@@ -118,9 +118,15 @@ pub struct OpenAiCompatibleProvider {
     /// typspezifisch zu unterscheiden.
     #[allow(dead_code)]
     budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
+    /// Spec 0065, Teil 4 — s. `crate::anthropic::AnthropicProvider::
+    /// max_tokens_override`-Doc-Kommentar für das identische Muster
+    /// (Vorrang vor dem modellabhängigen Default, aber NICHT vor einem
+    /// `SessionContext::max_tokens_hint` eines Nebenaufrufs).
+    max_tokens_override: Option<u32>,
 }
 
 impl OpenAiCompatibleProvider {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         base_url: impl Into<String>,
         model: impl Into<String>,
@@ -128,6 +134,7 @@ impl OpenAiCompatibleProvider {
         supports_native_tool_calling: bool,
         extra_headers: Vec<(String, String)>,
         budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
+        max_tokens_override: Option<u32>,
     ) -> Self {
         Self {
             client: build_http_client(),
@@ -137,6 +144,7 @@ impl OpenAiCompatibleProvider {
             supports_native_tool_calling,
             extra_headers,
             budget,
+            max_tokens_override,
         }
     }
 
@@ -154,14 +162,16 @@ impl OpenAiCompatibleProvider {
             }));
         }
 
-        // Spec 0065, Teil 1: `max_tokens_hint` (Nebenaufrufe, s. `app_shell::
-        // orchestration::SIDE_CALL_MAX_TOKENS`) hat Vorrang vor dem
-        // modellabhängigen Haupt-Chat-Default — s. `SessionContext::
-        // max_tokens_hint`-Doc-Kommentar (core) und `crate::anthropic`s
-        // identisches Muster.
-        let max_tokens = context.max_tokens_hint.unwrap_or_else(|| {
-            openai_compatible_model_max_output_tokens(&self.base_url, &self.model)
-        });
+        // Spec 0065, Teil 1+4: `max_tokens_hint` (Nebenaufrufe) > Nutzer-
+        // Override (Teil 4) > modellabhängiger Haupt-Chat-Default — s.
+        // `SessionContext::max_tokens_hint`-Doc-Kommentar (core) und
+        // `crate::anthropic`s identisches Muster.
+        let max_tokens = context
+            .max_tokens_hint
+            .or(self.max_tokens_override)
+            .unwrap_or_else(|| {
+                openai_compatible_model_max_output_tokens(&self.base_url, &self.model)
+            });
 
         let mut body = json!({
             "model": self.model,
@@ -1004,6 +1014,7 @@ mod tests {
             true,
             Vec::new(),
             test_budget(),
+            None,
         );
         let context = context_with_actions(Vec::new());
 
@@ -1025,6 +1036,7 @@ mod tests {
             true,
             Vec::new(),
             test_budget(),
+            None,
         );
         let context = context_with_actions(Vec::new());
 
@@ -1047,6 +1059,48 @@ mod tests {
             true,
             Vec::new(),
             test_budget(),
+            None,
+        );
+        let mut context = context_with_actions(Vec::new());
+        context.max_tokens_hint = Some(4096);
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(body["max_tokens"], 4096);
+    }
+
+    /// Spec 0065, Teil 4: der Nutzer-Override überschreibt den
+    /// modellabhängigen Default für den Haupt-Chat.
+    #[test]
+    fn test_build_request_body_honors_provider_level_max_tokens_override() {
+        let provider = OpenAiCompatibleProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-6-astra",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+            Some(20_000),
+        );
+        let context = context_with_actions(Vec::new());
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(body["max_tokens"], 20_000);
+    }
+
+    /// Gegenprobe: ein Nebenaufruf-`max_tokens_hint` hat weiterhin Vorrang
+    /// vor dem Provider-Override.
+    #[test]
+    fn test_side_call_hint_still_wins_over_provider_level_override() {
+        let provider = OpenAiCompatibleProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-6-astra",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+            Some(20_000),
         );
         let mut context = context_with_actions(Vec::new());
         context.max_tokens_hint = Some(4096);

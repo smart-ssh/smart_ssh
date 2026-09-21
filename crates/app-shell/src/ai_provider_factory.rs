@@ -28,6 +28,7 @@ const DEFAULT_ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
 /// der entschärfte `api_key` gleichzeitig vorliegen, um
 /// [`provider_identity_key`] zu bilden, BEVOR der Key als reiner `String`
 /// im Provider verschwindet.
+#[allow(clippy::too_many_arguments)]
 pub fn build_ai_provider(
     registry: &RateLimitRegistry,
     provider_type: ProviderType,
@@ -40,6 +41,11 @@ pub fn build_ai_provider(
     // abweichenden Request-Formats eine eigene Erweiterung, falls das
     // später gewünscht wird (nicht Teil dieser Spec).
     extra_headers: Vec<(String, String)>,
+    // Spec 0065, Teil 4: „Automatisch" (`None`) bei beiden Familien —
+    // reicht unverändert an den jeweiligen Provider-Konstruktor durch, s.
+    // dortigen `max_tokens_override`-Doc-Kommentar zur Rangfolge gegenüber
+    // `SessionContext::max_tokens_hint`.
+    max_tokens_override: Option<u32>,
 ) -> (Box<dyn AiProvider>, Arc<ProviderBudgetGuard>) {
     let api_key = api_key.expose_secret().to_string();
     match provider_type {
@@ -54,6 +60,7 @@ pub fn build_ai_provider(
                 supports_native_tool_calling,
                 extra_headers,
                 budget.clone(),
+                max_tokens_override,
             ));
             (provider, budget)
         }
@@ -67,6 +74,7 @@ pub fn build_ai_provider(
                 api_key,
                 supports_native_tool_calling,
                 budget.clone(),
+                max_tokens_override,
             ));
             (provider, budget)
         }
@@ -119,6 +127,7 @@ mod tests {
             api_key,
             true,
             Vec::new(),
+            None,
         );
 
         // Fünf "Chat-Runden" — `send()` liefert nur einen (nicht gepollten)
@@ -152,6 +161,7 @@ mod tests {
             SecretString::from("sk-same-key".to_string()),
             true,
             Vec::new(),
+            None,
         );
         let (_provider_b, budget_b) = build_ai_provider(
             &registry,
@@ -161,6 +171,7 @@ mod tests {
             SecretString::from("sk-same-key".to_string()),
             true,
             Vec::new(),
+            None,
         );
 
         assert!(
@@ -183,6 +194,7 @@ mod tests {
             SecretString::from("sk-key-one".to_string()),
             true,
             Vec::new(),
+            None,
         );
         let (_provider_b, budget_b) = build_ai_provider(
             &registry,
@@ -192,6 +204,7 @@ mod tests {
             SecretString::from("sk-key-two".to_string()),
             true,
             Vec::new(),
+            None,
         );
 
         assert!(
