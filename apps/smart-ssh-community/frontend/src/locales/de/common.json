@@ -451,5 +451,40 @@
     "openLocallyFailed": "„{{name}}“ konnte nicht lokal geöffnet werden: {{reason}}",
     "editUploaded": "Änderung an „{{name}}“ hochgeladen",
     "editUploadFailed": "Änderung an „{{name}}“ konnte nicht hochgeladen werden: {{reason}}"
+  },
+  "fileElevation": {
+    "toggle": "Erhöhte Rechte",
+    "toggleTitle": "Dateibrowser mit erhöhten Rechten (sudo) öffnen — braucht eine sudo-Regel ohne Passwort für sftp-server",
+    "enabling": "Prüfe sudo …",
+    "toggleOff": "Erhöhte Rechte beenden",
+    "banner": "Erhöhte Rechte aktiv: Alle Dateiaktionen in diesem Browser laufen als {{user}}.",
+    "deleteFileTitle": "Datei als {{user}} löschen?",
+    "deleteDirTitle": "Ordner als {{user}} löschen?",
+    "overwriteTitle": "Datei als {{user}} überschreiben?",
+    "moveCollisionTitle": "Ziel existiert bereits — als {{user}} überschreiben?",
+    "chmodNote": "Die Rechte werden als {{user}} gesetzt.",
+    "editUploadTitle": "Lokale Änderungen als {{user}} hochladen?",
+    "editOpenedAs": "(als {{user}} geöffnet)",
+    "failureTitle": "Erhöhte Rechte nicht möglich",
+    "sudoersIntro": "Für den erhöhten Modus braucht der Server eine sudo-Regel ohne Passwort für sftp-server. Diese Zeile passt zu diesem Server und Login:",
+    "sudoersHowTo": "Auf dem Server z. B. mit „sudo visudo -f /etc/sudoers.d/smart-ssh-sftp“ eintragen.",
+    "sudoersWarning": "Wichtig: Diese Regel gibt dem SSH-Login passwortlosen Dateizugriff als {{user}} — wer den SSH-Schlüssel hat, kann damit jede Datei lesen und schreiben. Bitte bewusst entscheiden.",
+    "copy": "Kopieren",
+    "copied": "Kopiert!",
+    "close": "Schließen",
+    "detail": "Details: {{detail}}",
+    "failure": {
+      "passwordRequired": "sudo verlangt auf diesem Server ein Passwort für sftp-server. Die App fragt nie nach einem sudo-Passwort.",
+      "notAllowed": "Dieser SSH-Login darf sftp-server nicht ohne Passwort per sudo starten.",
+      "requireTty": "sudo verweigert den Aufruf ohne Terminal („requiretty“ in sudoers). Für diesen Login muss requiretty abgeschaltet werden, z. B. mit „Defaults:<login> !requiretty“.",
+      "sftpServerNotFound": "sftp-server wurde auf dem Server nicht gefunden. Den Pfad bitte im Server-Profil unter „Erweitert“ eintragen.",
+      "sudoMissing": "sudo ist auf dem Server nicht installiert.",
+      "invalidPath": "Der im Server-Profil eingetragene sftp-server-Pfad ist ungültig.",
+      "invalidUser": "Ungültiger Ziel-Nutzer.",
+      "unsupported": "Für den lokalen Server gibt es keinen erhöhten Modus.",
+      "checkFailed": "Die Prüfung der sudo-Rechte ist fehlgeschlagen.",
+      "startFailed": "sftp-server ließ sich über sudo nicht starten (mögliche Ursache: „requiretty“ in sudoers)."
+    },
+    "channelLost": "Erhöhte Rechte beendet — der erhöhte Kanal ist nicht mehr aktiv."
   }
 }

@@ -12,6 +12,9 @@ import {
   sftpDownload,
   sftpDownloadDefault,
   sftpDownloadDir,
+  sftpElevationDisable,
+  sftpElevationEnable,
+  sftpElevationStatus,
   sftpExists,
   sftpList,
   sftpMkdir,
@@ -19,7 +22,11 @@ import {
   sftpRename,
   sftpUpload,
 } from "../api";
-import { onSftpTransferFinished, onSftpTransferStarted } from "../events";
+import {
+  onConnectionStatusChanged,
+  onSftpTransferFinished,
+  onSftpTransferStarted,
+} from "../events";
 import { formatBytes } from "../format";
 import {
   loadFileManagerColumnWidths,
@@ -31,6 +38,7 @@ import { showToast } from "../toastBus";
 import type {
   DeletePreviewDto,
   DownloadResultDto,
+  ElevationResultDto,
   LocalFilePreviewDto,
   RemoteEntryDto,
 } from "../types";
@@ -158,19 +166,93 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const localEdit = useLocalEditSession(sessionId);
   const { t } = useTranslation();
 
+  // Spec 0067, A5: erhöhter Modus pro Browser-Ansicht — nie Default, nicht
+  // persistiert. `null` = normaler Modus.
+  const [elevation, setElevation] = useState<{ targetUser: string } | null>(null);
+  const [enablingElevation, setEnablingElevation] = useState(false);
+  const [elevationFailure, setElevationFailure] = useState<ElevationResultDto | null>(null);
+  const elevated = elevation !== null;
+  const elevatedUser = elevation?.targetUser ?? "";
+  const modeSuffix = elevated ? t("fileToasts.asElevated", { user: elevatedUser }) : "";
+
+  // Ein evtl. noch offener erhöhter Kanal (z. B. aus einer früheren
+  // Ansicht dieser Session) wird beim Öffnen geschlossen — der Browser
+  // startet immer normal, der erhöhte Modus bleibt nie unbemerkt aktiv.
+  useEffect(() => {
+    sftpElevationDisable(sessionId).catch((err) =>
+      console.warn("Konnte erhöhten Modus nicht zurücksetzen:", err),
+    );
+  }, [sessionId]);
+
+  // Verbindung weg → erhöhter Kanal ist weg (lebt nur in der Session).
+  useEffect(() => {
+    const unlisten = onConnectionStatusChanged((event) => {
+      if (event.sessionId === sessionId && event.status !== "connected") {
+        setElevation(null);
+      }
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [sessionId]);
+
   // Spec 0067, Teil B: jede Aktion meldet ihr Ergebnis als Toast. Nur
   // Namen/Pfade, nie Dateiinhalte.
   const notifyOk = (key: string, options: Record<string, unknown>, action?: () => void) =>
     showToast({
       kind: "success",
-      message: t(key, options),
+      message: t(key, options) + modeSuffix,
       action: action ? { label: t(revealLabelKey()), onClick: action } : undefined,
     });
-  const notifyFailed = (key: string, name: string, err: unknown) =>
+  const notifyFailed = (key: string, name: string, err: unknown) => {
     showToast({
       kind: "error",
-      message: t(key, { name, reason: commandErrorMessage(err) }),
+      message: t(key, { name, reason: commandErrorMessage(err) }) + modeSuffix,
     });
+    // Spec 0067, A5: ist der erhöhte Kanal inzwischen weg (z. B. nach einem
+    // Verbindungsabbruch), wird der Modus sichtbar beendet statt weiter
+    // "aktiv" anzuzeigen.
+    if (elevated) {
+      sftpElevationStatus(sessionId)
+        .then((user) => {
+          if (user === null) {
+            setElevation(null);
+            showToast({ kind: "error", message: t("fileElevation.channelLost") });
+          }
+        })
+        .catch(() => {});
+    }
+  };
+
+  const handleToggleElevation = async () => {
+    if (elevated) {
+      setElevation(null);
+      await sftpElevationDisable(sessionId).catch((err) =>
+        console.warn("Konnte erhöhten Modus nicht beenden:", err),
+      );
+      load(path, false);
+      return;
+    }
+    setEnablingElevation(true);
+    try {
+      const result = await sftpElevationEnable(sessionId, null);
+      if (result.active) {
+        setElevation({ targetUser: result.targetUser });
+        load(path, true);
+      } else {
+        setElevationFailure(result);
+      }
+    } catch (err) {
+      setElevationFailure({
+        active: false,
+        targetUser: "root",
+        sftpServerPath: null,
+        failure: { kind: "checkFailed", sudoersLine: null, detail: commandErrorMessage(err) },
+      });
+    } finally {
+      setEnablingElevation(false);
+    }
+  };
 
   const notifyDownloaded = (entryName: string, result: DownloadResultDto) => {
     const reveal = () => {
@@ -251,10 +333,12 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     );
   }, []);
 
-  const load = useCallback((targetPath: string) => {
+  // `elevatedOverride`: beim Umschalten ist der neue Modus im State noch
+  // nicht angekommen — der Aufrufer übergibt ihn dann explizit.
+  const load = useCallback((targetPath: string, elevatedOverride?: boolean) => {
     setLoading(true);
     setError(null);
-    sftpList(sessionId, targetPath)
+    sftpList(sessionId, targetPath, elevatedOverride ?? elevated)
       .then((result) => {
         setEntries(result);
         setPath(targetPath);
@@ -263,7 +347,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
       .catch((err) => setError(commandErrorMessage(err)))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, elevated]);
 
   useEffect(() => {
     load(".");
@@ -366,14 +450,14 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     remotePath: string,
   ): Promise<"uploaded" | "conflict" | "failed"> => {
     try {
-      const exists = await sftpExists(sessionId, remotePath);
+      const exists = await sftpExists(sessionId, remotePath, elevated);
       if (!exists) {
-        await sftpUpload(sessionId, localPath, remotePath);
+        await sftpUpload(sessionId, localPath, remotePath, elevated);
         return "uploaded";
       }
       const [localPreview, remoteText] = await Promise.all([
         readLocalTextPreview(localPath),
-        sftpReadText(sessionId, remotePath).catch(() => null),
+        sftpReadText(sessionId, remotePath, elevated).catch(() => null),
       ]);
       const remoteSize = entries.find((e) => e.path === remotePath)?.size ?? 0;
       setUploadConflict({ localPath, remotePath, localPreview, remoteText, remoteSize });
@@ -403,7 +487,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     if (!uploadConflict) return;
     const { localPath, remotePath } = uploadConflict;
     setUploadConflict(null);
-    sftpUpload(sessionId, localPath, remotePath)
+    sftpUpload(sessionId, localPath, remotePath, elevated)
       .then(() => {
         notifyOk("fileToasts.uploadedFile", { name: localBaseName(localPath) });
         load(path);
@@ -422,7 +506,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
    * entscheidet anhand `entry.isDir`, s. `sftp_download_default`). */
   const handleDownloadDefault = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
-    sftpDownloadDefault(sessionId, entry.path)
+    sftpDownloadDefault(sessionId, entry.path, elevated)
       .then((result) => notifyDownloaded(entry.name, result))
       .catch((err) => notifyFailed("fileToasts.downloadFailed", entry.name, err));
   };
@@ -434,7 +518,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const handleDownloadChoose = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
     const download = entry.isDir ? sftpDownloadDir : sftpDownload;
-    download(sessionId, entry.path)
+    download(sessionId, entry.path, elevated)
       .then((result) => {
         // `null` = Dialog abgebrochen, keine Meldung.
         if (result) notifyDownloaded(entry.name, result);
@@ -461,7 +545,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const handleCopyContent = async (entry: RemoteEntryDto) => {
     setOpenMenu(null);
     try {
-      const content = await sftpReadText(sessionId, entry.path);
+      const content = await sftpReadText(sessionId, entry.path, elevated);
       await navigator.clipboard.writeText(content);
       notifyOk("fileToasts.contentCopied", { name: entry.name });
     } catch (err) {
@@ -486,7 +570,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   const handleOpenLocally = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
     localEdit
-      .startEditing(entry)
+      .startEditing(entry, elevated ? elevatedUser : null)
       .then(() => notifyOk("fileToasts.openedLocally", { name: entry.name }))
       .catch((err) => notifyFailed("fileToasts.openLocallyFailed", entry.name, err));
   };
@@ -524,7 +608,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
       return;
     }
     let cancelled = false;
-    sftpDeletePreview(sessionId, deleteTarget.path)
+    sftpDeletePreview(sessionId, deleteTarget.path, elevated)
       .then((preview) => {
         if (!cancelled) setDeletePreview(preview);
       })
@@ -534,6 +618,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, deleteTarget]);
 
   const handleConfirmDelete = () => {
@@ -541,7 +626,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     const target = deleteTarget;
     const preview = deletePreview;
     setDeleteTarget(null);
-    sftpDelete(sessionId, target.path)
+    sftpDelete(sessionId, target.path, elevated)
       .then(() => {
         if (target.isDir && preview) {
           notifyOk("fileToasts.deletedDir", {
@@ -573,12 +658,12 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
 
   const performMove = async (from: string, to: string, kind: MoveKind) => {
     try {
-      const exists = await sftpExists(sessionId, to);
+      const exists = await sftpExists(sessionId, to, elevated);
       if (exists) {
         setMoveCollision({ from, to, kind });
         return;
       }
-      await sftpRename(sessionId, from, to);
+      await sftpRename(sessionId, from, to, elevated);
       notifyMoved(from, to, kind);
       load(path);
     } catch (err) {
@@ -590,7 +675,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     if (!moveCollision) return;
     const { from, to, kind } = moveCollision;
     setMoveCollision(null);
-    sftpRename(sessionId, from, to)
+    sftpRename(sessionId, from, to, elevated)
       .then(() => {
         notifyMoved(from, to, kind);
         load(path);
@@ -615,7 +700,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     const name = mkdirOpen?.trim();
     setMkdirOpen(null);
     if (!name) return;
-    sftpMkdir(sessionId, joinPath(path, name))
+    sftpMkdir(sessionId, joinPath(path, name), elevated)
       .then(() => {
         notifyOk("fileToasts.mkdirDone", { name });
         load(path);
@@ -648,7 +733,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
     const target = chmodTarget;
     setChmodTarget(null);
     const modeText = mode.toString(8).padStart(3, "0");
-    sftpChmod(sessionId, target.path, mode, recursive)
+    sftpChmod(sessionId, target.path, mode, recursive, elevated)
       .then((count) => {
         if (recursive && target.isDir) {
           notifyOk("fileToasts.chmodRecursive", { name: target.name, mode: modeText, count });
@@ -661,7 +746,25 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div
+      className={`flex h-full flex-col border-2 ${elevated ? "border-amber-500" : "border-transparent"}`}
+      data-elevated={elevated ? "true" : "false"}
+    >
+      {elevated && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 bg-amber-600 px-2 py-1.5 text-xs font-semibold text-slate-950"
+        >
+          <span className="flex-1">⚠ {t("fileElevation.banner", { user: elevatedUser })}</span>
+          <button
+            type="button"
+            onClick={handleToggleElevation}
+            className="border border-slate-950/40 px-2 py-0.5 hover:bg-amber-500"
+          >
+            {t("fileElevation.toggleOff")}
+          </button>
+        </div>
+      )}
       <div className="flex items-center gap-1.5 border-b border-slate-800 px-2 py-1.5">
         <button
           type="button"
@@ -707,6 +810,17 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
         >
           Hochladen
         </button>
+        {!elevated && (
+          <button
+            type="button"
+            onClick={handleToggleElevation}
+            disabled={enablingElevation}
+            title={t("fileElevation.toggleTitle")}
+            className="border border-amber-600/60 px-2 py-1 text-xs text-amber-300 hover:bg-amber-600/14 disabled:opacity-50"
+          >
+            {enablingElevation ? t("fileElevation.enabling") : `🔓 ${t("fileElevation.toggle")}`}
+          </button>
+        )}
         {cutEntry && (
           <>
             <button
@@ -1015,6 +1129,11 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
           ) : (
             <span className="flex-1 text-slate-300">
               „{localEdit.session.entry.name}" wird lokal bearbeitet…
+              {localEdit.session.elevatedUser && (
+                <span className="ml-1 text-amber-300">
+                  {t("fileElevation.editOpenedAs", { user: localEdit.session.elevatedUser })}
+                </span>
+              )}
             </span>
           )}
           <button
@@ -1034,7 +1153,9 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
-              Lokale Änderungen hochladen?
+              {localEdit.session?.elevatedUser
+                ? t("fileElevation.editUploadTitle", { user: localEdit.session.elevatedUser })
+                : "Lokale Änderungen hochladen?"}
             </h2>
             {editUploadOffer.remoteChangedSinceDownload && (
               <p className="mb-3 border border-red-700/50 bg-red-950/40 px-2 py-1.5 text-xs text-red-300">
@@ -1100,7 +1221,13 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-sm border border-red-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-red-300">
-              {deleteTarget.isDir ? "Ordner löschen?" : "Datei löschen?"}
+              {elevated
+                ? t(deleteTarget.isDir ? "fileElevation.deleteDirTitle" : "fileElevation.deleteFileTitle", {
+                    user: elevatedUser,
+                  })
+                : deleteTarget.isDir
+                  ? "Ordner löschen?"
+                  : "Datei löschen?"}
             </h2>
             <p className="mb-4 text-sm text-slate-300">
               <span className="font-mono text-xs break-all">{deleteTarget.path}</span> wird
@@ -1140,6 +1267,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
       {chmodTarget && (
         <ChmodDialog
           entry={chmodTarget}
+          modeNote={elevated ? t("fileElevation.chmodNote", { user: elevatedUser }) : null}
           onCancel={() => setChmodTarget(null)}
           onConfirm={handleConfirmChmod}
         />
@@ -1149,7 +1277,9 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-sm border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
-              Ziel existiert bereits
+              {elevated
+                ? t("fileElevation.moveCollisionTitle", { user: elevatedUser })
+                : "Ziel existiert bereits"}
             </h2>
             <p className="mb-4 text-sm text-slate-300">
               <span className="font-mono text-xs break-all">{moveCollision.to}</span> gibt es
@@ -1179,7 +1309,7 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
-              Datei überschreiben?
+              {elevated ? t("fileElevation.overwriteTitle", { user: elevatedUser }) : "Datei überschreiben?"}
             </h2>
             <p className="mb-3 text-sm text-slate-300">
               <span className="font-mono text-xs break-all">{uploadConflict.remotePath}</span>{" "}
@@ -1215,6 +1345,13 @@ export function FileBrowserPanel({ sessionId, isVisible }: FileBrowserPanelProps
             </div>
           </div>
         </div>
+      )}
+
+      {elevationFailure && (
+        <ElevationFailureDialog
+          result={elevationFailure}
+          onClose={() => setElevationFailure(null)}
+        />
       )}
     </div>
   );
@@ -1382,10 +1519,14 @@ const CHMOD_ROWS: { label: string; read: number; write: number; execute: number 
  * mächtig" (Spec) nur bei Ordnern sichtbar, mit auffälliger Warnfarbe. */
 function ChmodDialog({
   entry,
+  modeNote,
   onCancel,
   onConfirm,
 }: {
   entry: RemoteEntryDto;
+  /** Spec 0067, A5: im erhöhten Modus, z. B. „Die Rechte werden als root
+   * gesetzt.“ */
+  modeNote: string | null;
   onCancel: () => void;
   onConfirm: (mode: number, recursive: boolean) => void;
 }) {
@@ -1425,6 +1566,11 @@ function ChmodDialog({
           Rechte bearbeiten
         </h2>
         <p className="mb-3 font-mono text-xs break-all text-slate-400">{entry.path}</p>
+        {modeNote && (
+          <p className="mb-3 border border-amber-600/60 bg-amber-950/40 px-2 py-1 text-xs text-amber-300">
+            ⚠ {modeNote}
+          </p>
+        )}
 
         <table className="mb-3 w-full text-xs text-slate-300">
           <thead>
@@ -1593,5 +1739,80 @@ function ColumnResizeHandle({
     >
       <span className="h-full w-px bg-slate-700 group-hover:bg-indigo-500" />
     </span>
+  );
+}
+
+/** Spec 0067, A3: verständliche Erklärung, warum der erhöhte Modus nicht
+ * geht — bei fehlender sudo-Regel mit der zugeschnittenen sudoers-Zeile zum
+ * Kopieren und dem ehrlichen Hinweis, was diese Regel bedeutet. */
+function ElevationFailureDialog({
+  result,
+  onClose,
+}: {
+  result: ElevationResultDto;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const failure = result.failure;
+  if (!failure) return null;
+
+  const copy = async () => {
+    if (!failure.sudoersLine) return;
+    try {
+      await navigator.clipboard.writeText(failure.sudoersLine);
+      setCopied(true);
+    } catch (err) {
+      console.warn("Konnte sudoers-Zeile nicht kopieren:", err);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div
+        role="dialog"
+        className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl"
+      >
+        <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
+          {t("fileElevation.failureTitle")}
+        </h2>
+        <p className="mb-3 text-sm text-slate-300">{t(`fileElevation.failure.${failure.kind}`)}</p>
+        {failure.sudoersLine && (
+          <>
+            <p className="mb-2 text-sm text-slate-300">{t("fileElevation.sudoersIntro")}</p>
+            <div className="mb-2 flex items-center gap-2">
+              <code className="min-w-0 flex-1 select-text break-all border border-slate-600 bg-slate-950 px-2 py-1.5 font-mono text-xs text-slate-100">
+                {failure.sudoersLine}
+              </code>
+              <button
+                type="button"
+                onClick={copy}
+                className="shrink-0 border border-slate-600 px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+              >
+                {copied ? t("fileElevation.copied") : t("fileElevation.copy")}
+              </button>
+            </div>
+            <p className="mb-2 text-xs text-slate-400">{t("fileElevation.sudoersHowTo")}</p>
+            <p className="mb-3 border border-red-700/50 bg-red-950/40 px-2 py-1.5 text-xs text-red-300">
+              {t("fileElevation.sudoersWarning", { user: result.targetUser })}
+            </p>
+          </>
+        )}
+        {failure.detail && (
+          <p className="mb-3 font-mono text-xs break-all text-slate-500">
+            {t("fileElevation.detail", { detail: failure.detail })}
+          </p>
+        )}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+          >
+            {t("fileElevation.close")}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

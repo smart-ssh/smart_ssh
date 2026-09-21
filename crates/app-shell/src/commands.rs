@@ -3456,6 +3456,33 @@ impl BrowserSftpGuard<'_> {
     }
 }
 
+impl BrowserSftpGuard<'_> {
+    /// Ziel-Nutzer, wenn diese Aktion über den erhöhten Kanal läuft.
+    fn elevated_user(&self) -> Option<String> {
+        match self {
+            Self::Normal(_) => None,
+            Self::Elevated(guard) => guard.as_ref().map(|e| e.target_user.clone()),
+        }
+    }
+}
+
+/// Spec 0067, A5 (baut auf der Audit-Erfassbarkeit aus 0054 auf): jede
+/// server-verändernde Browser-Aktion im erhöhten Modus hinterlässt eine
+/// strukturierte Log-Zeile mit Kennzeichnung "erhöht" + Ziel-Nutzer, Quelle
+/// "manuell". Nur Aktion und Pfade, nie Dateiinhalte.
+fn audit_elevated_change(elevated_user: Option<&str>, action: &'static str, path: &str) {
+    if let Some(target_user) = elevated_user {
+        tracing::info!(
+            action,
+            path,
+            elevated = true,
+            target_user,
+            source = "manual",
+            "file browser change with elevated rights"
+        );
+    }
+}
+
 async fn lock_browser_sftp(session: &Session, channel: BrowserChannel) -> BrowserSftpGuard<'_> {
     match channel {
         BrowserChannel::Normal => BrowserSftpGuard::Normal(session.sftp.lock().await),
@@ -3995,8 +4022,10 @@ pub async fn sftp_upload(
             .await
             .map_err(|e| format!("Hintergrund-Task für Upload fehlgeschlagen: {e}"))??;
         let mut guard = lock_browser_sftp(&session, channel).await;
+        let elevated_user = guard.elevated_user();
         let sftp = guard.sftp()?;
         sftp.write_file(&remote_path, &bytes).await?;
+        audit_elevated_change(elevated_user.as_deref(), "upload", &remote_path);
         Ok(())
     }
     .await;
@@ -4099,8 +4128,10 @@ pub async fn sftp_delete(
     let channel = BrowserChannel::from_flag(elevated);
     let session = browser_session(&state, session_id, channel).await?;
     let mut guard = lock_browser_sftp(&session, channel).await;
+    let elevated_user = guard.elevated_user();
     let sftp = guard.sftp()?;
     delete_recursive(sftp.as_mut(), &path).await?;
+    audit_elevated_change(elevated_user.as_deref(), "delete", &path);
     Ok(())
 }
 
@@ -4207,8 +4238,11 @@ pub async fn sftp_chmod(
     let channel = BrowserChannel::from_flag(elevated);
     let session = browser_session(&state, session_id, channel).await?;
     let mut guard = lock_browser_sftp(&session, channel).await;
+    let elevated_user = guard.elevated_user();
     let sftp = guard.sftp()?;
-    Ok(chmod_recursive(sftp.as_mut(), &path, mode, recursive).await?)
+    let changed = chmod_recursive(sftp.as_mut(), &path, mode, recursive).await?;
+    audit_elevated_change(elevated_user.as_deref(), "chmod", &path);
+    Ok(changed)
 }
 
 /// Eigentliche Rekursions-Logik hinter `sftp_chmod` — s. `delete_recursive`s
@@ -4279,8 +4313,14 @@ pub async fn sftp_rename(
     let channel = BrowserChannel::from_flag(elevated);
     let session = browser_session(&state, session_id, channel).await?;
     let mut guard = lock_browser_sftp(&session, channel).await;
+    let elevated_user = guard.elevated_user();
     let sftp = guard.sftp()?;
     sftp.rename(&from, &to).await?;
+    audit_elevated_change(
+        elevated_user.as_deref(),
+        "rename",
+        &format!("{from} -> {to}"),
+    );
     Ok(())
 }
 
@@ -4294,8 +4334,10 @@ pub async fn sftp_mkdir(
     let channel = BrowserChannel::from_flag(elevated);
     let session = browser_session(&state, session_id, channel).await?;
     let mut guard = lock_browser_sftp(&session, channel).await;
+    let elevated_user = guard.elevated_user();
     let sftp = guard.sftp()?;
     sftp.create_dir(&path).await?;
+    audit_elevated_change(elevated_user.as_deref(), "mkdir", &path);
     Ok(())
 }
 
@@ -4456,7 +4498,22 @@ pub async fn sftp_open_for_editing(
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
         }
-        std::fs::write(&local_path_for_write, bytes)?;
+        // Spec 0067, A5: Datei gleich mit 0600 anlegen statt erst mit den
+        // Standardrechten zu schreiben und danach einzuschränken — im
+        // erhöhten Modus können das Root-Dateien sein. `set_permissions`
+        // bleibt für eine schon vorhandene Datei (`mode` wirkt nur beim
+        // Neuanlegen).
+        {
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create(true).truncate(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            let mut file = options.open(&local_path_for_write)?;
+            std::io::Write::write_all(&mut file, &bytes)?;
+        }
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

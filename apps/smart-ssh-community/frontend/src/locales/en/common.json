@@ -451,5 +451,40 @@
     "openLocallyFailed": "“{{name}}” could not be opened locally: {{reason}}",
     "editUploaded": "Change to “{{name}}” uploaded",
     "editUploadFailed": "Change to “{{name}}” could not be uploaded: {{reason}}"
+  },
+  "fileElevation": {
+    "toggle": "Elevated rights",
+    "toggleTitle": "Open the file browser with elevated rights (sudo) — requires a passwordless sudo rule for sftp-server",
+    "enabling": "Checking sudo …",
+    "toggleOff": "End elevated rights",
+    "banner": "Elevated rights active: all file actions in this browser run as {{user}}.",
+    "deleteFileTitle": "Delete file as {{user}}?",
+    "deleteDirTitle": "Delete folder as {{user}}?",
+    "overwriteTitle": "Overwrite file as {{user}}?",
+    "moveCollisionTitle": "Target already exists — overwrite as {{user}}?",
+    "chmodNote": "Permissions will be set as {{user}}.",
+    "editUploadTitle": "Upload local changes as {{user}}?",
+    "editOpenedAs": "(opened as {{user}})",
+    "failureTitle": "Elevated rights not possible",
+    "sudoersIntro": "Elevated mode needs a sudo rule without password for sftp-server on the server. This line matches this server and login:",
+    "sudoersHowTo": "Add it on the server, e.g. with “sudo visudo -f /etc/sudoers.d/smart-ssh-sftp”.",
+    "sudoersWarning": "Important: this rule gives the SSH login passwordless file access as {{user}} — anyone with the SSH key can read and write every file. Decide deliberately.",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "close": "Close",
+    "detail": "Details: {{detail}}",
+    "failure": {
+      "passwordRequired": "sudo requires a password for sftp-server on this server. The app never asks for a sudo password.",
+      "notAllowed": "This SSH login may not start sftp-server via sudo without a password.",
+      "requireTty": "sudo refuses to run without a terminal (“requiretty” in sudoers). Disable requiretty for this login, e.g. with “Defaults:<login> !requiretty”.",
+      "sftpServerNotFound": "sftp-server was not found on the server. Please enter its path in the server profile under “Advanced”.",
+      "sudoMissing": "sudo is not installed on the server.",
+      "invalidPath": "The sftp-server path set in the server profile is invalid.",
+      "invalidUser": "Invalid target user.",
+      "unsupported": "The local server has no elevated mode.",
+      "checkFailed": "Checking the sudo rights failed.",
+      "startFailed": "sftp-server could not be started via sudo (possible cause: “requiretty” in sudoers)."
+    },
+    "channelLost": "Elevated rights ended — the elevated channel is no longer active."
   }
 }

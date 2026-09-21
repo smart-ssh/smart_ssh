@@ -71,7 +71,7 @@ describe("useLocalEditSession", () => {
       await result.current.startEditing(entry);
     });
 
-    expect(sftpOpenForEditing).toHaveBeenCalledWith("session-1", "/etc/nginx.conf");
+    expect(sftpOpenForEditing).toHaveBeenCalledWith("session-1", "/etc/nginx.conf", false);
     expect(result.current.session).toEqual(
       expect.objectContaining({ status: "editing", localPath: "/tmp/edit/nginx.conf" }),
     );
@@ -209,6 +209,7 @@ describe("useLocalEditSession", () => {
       "session-1",
       "/tmp/edit/nginx.conf",
       "/etc/nginx.conf",
+      false,
     );
     expect(result.current.session?.status).toBe("editing");
   });

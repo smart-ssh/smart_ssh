@@ -13455,4 +13455,102 @@ mod tests {
             "das Kommando darf nach Stopp nicht mehr gestartet werden"
         );
     }
+
+    /// Spec 0067, A5 (Regressionstest): ist der erhöhte Dateibrowser-Kanal
+    /// aktiv, lesen und schreiben KI- und MCP-Aktionen trotzdem über den
+    /// NORMALEN Kanal — der erhöhte ist nur für Browser-Commands da.
+    #[tokio::test]
+    async fn test_ai_and_mcp_file_actions_never_use_the_elevated_channel() {
+        for origin in ["ai", "mcp"] {
+            let ai_events = if origin == "ai" {
+                vec![
+                    AiEvent::ActionProposed(AiAction::ReadRemoteFile {
+                        path: "/etc/secret.conf".to_string(),
+                    }),
+                    AiEvent::Done,
+                ]
+            } else {
+                vec![AiEvent::Done]
+            };
+            let mut session = test_session(ai_events, MockSshTransport::default());
+            session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+            let normal =
+                MockSftpSession::new().with_file("/etc/secret.conf", b"USER-VIEW".to_vec());
+            let elevated =
+                MockSftpSession::new().with_file("/etc/secret.conf", b"ROOT-VIEW".to_vec());
+            session.sftp = AsyncMutex::new(Some(Box::new(normal.clone())));
+            *session
+                .elevated_sftp
+                .lock(&crate::commands::BrowserAccess::for_tests())
+                .await = Some(crate::elevated_sftp::ElevatedSftp {
+                target_user: "root".to_string(),
+                sftp: Box::new(elevated.clone()),
+            });
+
+            let emitter = TestEmitter::default();
+            let profile_store = InMemoryProfileStore::default();
+            let confirmations = ConfirmationRegistry::new();
+            if origin == "ai" {
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                )
+                .await;
+            } else {
+                // MCP verlangt immer eine Bestätigung — hier genehmigt, damit
+                // die Aktion wirklich ausgeführt wird.
+                let action = handle_mcp_action_proposed(
+                    &session,
+                    Uuid::new_v4(),
+                    AiAction::ReadRemoteFile {
+                        path: "/etc/secret.conf".to_string(),
+                    },
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                    Some("test-client".to_string()),
+                );
+                let responder = async {
+                    loop {
+                        let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
+                            (n == "chat-action-proposed")
+                                .then(|| p["actionId"].as_str().unwrap().to_string())
+                        });
+                        if let Some(id) = pending {
+                            let _ = confirmations
+                                .resolve(&id.parse().unwrap(), ActionUserDecision::Approve);
+                            break;
+                        }
+                        tokio::task::yield_now().await;
+                    }
+                };
+                tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                    tokio::join!(action, responder)
+                })
+                .await
+                .expect("MCP-Aktion muss nach der Bestätigung enden");
+            }
+
+            let events = emitter.events.lock().unwrap().clone();
+            let result = events
+                .iter()
+                .find(|(name, _)| name == "chat-action-result")
+                .unwrap_or_else(|| panic!("{origin}: kein Ergebnis-Event"));
+            let content = result.1["result"]["content"].as_str().unwrap();
+            assert!(content.contains("USER-VIEW"), "{origin}: {content}");
+            assert!(!content.contains("ROOT-VIEW"), "{origin}: {content}");
+            assert!(
+                elevated.calls().is_empty(),
+                "{origin}: der erhöhte Kanal darf nie berührt werden, war: {:?}",
+                elevated.calls()
+            );
+            assert!(
+                !normal.calls().is_empty(),
+                "{origin}: normaler Kanal wurde benutzt"
+            );
+        }
+    }
 }
