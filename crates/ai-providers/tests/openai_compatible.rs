@@ -269,3 +269,74 @@ async fn test_retry_after_longer_than_total_budget_gives_up_without_extra_reques
 
     assert_eq!(events, vec![AiEvent::Error(AiError::RateLimited)]);
 }
+
+/// Spec 0068, Teil 4: parallele `tool_calls` (zwei Indizes) liefern zwei
+/// getrennte Aktionen in Reihenfolge.
+#[tokio::test]
+async fn test_parallel_tool_calls_yield_two_actions_in_order() {
+    let sse_body = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"type\":\"function\",\"function\":{\"name\":\"suggest_command\",\"arguments\":\"\"}},{\"index\":1,\"id\":\"c2\",\"type\":\"function\",\"function\":{\"name\":\"suggest_command\",\"arguments\":\"\"}}]}}]}\n\n\
+data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"command\\\": \\\"ls\\\"}\"}}]}}]}\n\n\
+data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"function\":{\"arguments\":\"{\\\"command\\\": \\\"uptime\\\"}\"}}]}}]}\n\n\
+data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n\
+data: [DONE]\n\n";
+    let server = mock_server_with_sse_body(sse_body).await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "gpt-test",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(
+        events,
+        vec![
+            AiEvent::ActionProposed(AiAction::SuggestCommand {
+                command: "ls".to_string()
+            }),
+            AiEvent::ActionProposed(AiAction::SuggestCommand {
+                command: "uptime".to_string()
+            }),
+            AiEvent::Done,
+        ]
+    );
+}
+
+/// Spec 0068, Teil 4 + 0065: zwei Tool-Calls, Antwort am Längenlimit
+/// abgeschnitten (`finish_reason: length`) — KEINE der beiden Aktionen
+/// wird freigegeben, auch nicht der vollständige erste Call; nach dem
+/// einmaligen Retry mit demselben Ergebnis kommt ein sichtbarer Fehler.
+#[tokio::test]
+async fn test_parallel_tool_calls_cut_off_at_length_release_no_action() {
+    let sse_body = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"type\":\"function\",\"function\":{\"name\":\"suggest_command\",\"arguments\":\"{\\\"command\\\": \\\"ls\\\"}\"}}]}}]}\n\n\
+data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"c2\",\"type\":\"function\",\"function\":{\"name\":\"suggest_command\",\"arguments\":\"{\\\"command\\\": \\\"rm -rf /var/lo\"}}]}}]}\n\n\
+data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n\
+data: [DONE]\n\n";
+    let server = mock_server_with_sse_body(sse_body).await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "gpt-test",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, AiEvent::ActionProposed(_))),
+        "aus einer abgeschnittenen Antwort darf keine Aktion kommen: {events:?}"
+    );
+    assert_eq!(
+        events.last(),
+        Some(&AiEvent::Error(AiError::ResponseTruncated))
+    );
+}

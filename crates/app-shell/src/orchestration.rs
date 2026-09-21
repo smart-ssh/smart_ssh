@@ -13810,4 +13810,307 @@ mod tests {
         .expect("Dialog muss enden");
         assert_eq!(payload["usesStoredSudoPassword"], false, "{payload}");
     }
+
+    // --- Spec 0068, Teil 4: mehrere Tool-Calls in einer Antwort ----------
+
+    /// Allow-Regel nur für `ls*` — alles andere landet im Default-Confirm.
+    struct AllowLsOnly;
+    #[async_trait]
+    impl PolicyStore for AllowLsOnly {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+            vec![Rule {
+                id: ssh_manager_core::filter::RuleId("allow-ls".to_string()),
+                pattern: ssh_manager_core::filter::Pattern::Glob("ls*".to_string()),
+                action: ssh_manager_core::filter::RuleAction::Allow,
+                scope: ssh_manager_core::filter::Scope::Global,
+                priority: 0,
+                origin: ssh_manager_core::filter::RuleOrigin::User,
+            }]
+        }
+    }
+
+    fn proposed_decisions(emitter: &TestEmitter) -> Vec<(String, serde_json::Value)> {
+        emitter
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(n, _)| n == "chat-action-proposed")
+            .map(|(_, p)| {
+                (
+                    p["action"]["SuggestCommand"]["command"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string(),
+                    p["decision"].clone(),
+                )
+            })
+            .collect()
+    }
+
+    fn executed_commands(session_history: &[ChatMessage]) -> Vec<String> {
+        session_history
+            .iter()
+            .filter_map(|m| match &m.content {
+                MessageContent::CommandResult { command, .. } => Some(command.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Beantwortet Dialoge der Reihe nach mit `decisions`; weitere Dialoge
+    /// bleiben unbeantwortet (dann greift das Test-Timeout).
+    async fn answer_dialogs_in_order(
+        emitter: &TestEmitter,
+        confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+        decisions: Vec<ActionUserDecision>,
+    ) {
+        let mut answered = std::collections::HashSet::new();
+        let mut remaining = decisions.into_iter();
+        loop {
+            let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
+                let id = p["actionId"].as_str()?.to_string();
+                (n == "chat-action-proposed"
+                    && p["decision"].get("Confirm").is_some()
+                    && !answered.contains(&id))
+                .then_some(id)
+            });
+            if let Some(id) = pending {
+                let Some(decision) = remaining.next() else {
+                    return;
+                };
+                confirmations
+                    .resolve(&id.parse().unwrap(), decision)
+                    .unwrap();
+                answered.insert(id);
+                continue;
+            }
+            tokio::task::yield_now().await;
+            if remaining.len() == 0 {
+                return;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_two_tool_calls_get_their_own_filter_decision_each() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "systemctl restart nginx".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default()
+                .with_response("ls -la", output("a"))
+                .with_response("systemctl restart nginx", output("")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowLsOnly));
+        session.post_ingest_policy = PostIngestPolicy::Standard;
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+        let profile_store = InMemoryProfileStore::default();
+
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
+            )
+        })
+        .await
+        .expect("Turn muss enden");
+
+        let decisions = proposed_decisions(&emitter);
+        assert_eq!(decisions[0].0, "ls -la");
+        assert_eq!(decisions[0].1, "AutoExec");
+        assert_eq!(decisions[1].0, "systemctl restart nginx");
+        assert!(decisions[1].1.get("Confirm").is_some(), "{decisions:?}");
+        let history = session.context.lock().await.history.clone();
+        assert_eq!(executed_commands(&history), vec!["ls -la".to_string()]);
+    }
+
+    /// Spec 0039 über Aktionsgrenzen: Aktion 1 liest Serverinhalt ein, Aktion
+    /// 2 DERSELBEN Antwort (verändernd) wird eskaliert.
+    #[tokio::test]
+    async fn test_untrusted_escalation_from_first_action_applies_to_second() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls /var/log".to_string(),
+                }),
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "systemctl restart nginx".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default()
+                .with_response("ls /var/log", output("syslog"))
+                .with_response("systemctl restart nginx", output("")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.post_ingest_policy = PostIngestPolicy::Balanced;
+        assert!(!session
+            .untrusted_content_ingested
+            .load(std::sync::atomic::Ordering::SeqCst));
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+        let profile_store = InMemoryProfileStore::default();
+
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
+            )
+        })
+        .await
+        .expect("Turn muss enden");
+
+        let decisions = proposed_decisions(&emitter);
+        assert_eq!(decisions[0].1, "AutoExec", "{decisions:?}");
+        assert_eq!(
+            decisions[1].1["Confirm"]["code"], "FILTER_POST_INGEST_REQUIRES_CONFIRM",
+            "{decisions:?}"
+        );
+    }
+
+    /// Ist-Verhalten dokumentiert (Spec 0068, Teil 4): lehnt der Nutzer
+    /// Aktion 1 ab, wird Aktion 2 trotzdem einzeln entschieden — weder still
+    /// mit abgelehnt noch still mit ausgeführt, sondern mit eigenem Dialog.
+    #[tokio::test]
+    async fn test_rejecting_first_action_leaves_second_to_its_own_decision() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "systemctl stop nginx".to_string(),
+                }),
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "systemctl start nginx".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default()
+                .with_response("systemctl stop nginx", output(""))
+                .with_response("systemctl start nginx", output("")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowLsOnly));
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+        let profile_store = InMemoryProfileStore::default();
+
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(
+                    &emitter,
+                    &confirmations,
+                    vec![ActionUserDecision::Deny, ActionUserDecision::Approve],
+                ),
+            )
+        })
+        .await
+        .expect("Turn muss enden");
+
+        let decisions = proposed_decisions(&emitter);
+        assert!(decisions[0].1.get("Confirm").is_some());
+        assert!(
+            decisions[1].1.get("Confirm").is_some(),
+            "eigener Dialog: {decisions:?}"
+        );
+        let history = session.context.lock().await.history.clone();
+        assert_eq!(
+            executed_commands(&history),
+            vec!["systemctl start nginx".to_string()],
+            "nur die einzeln bestätigte zweite Aktion läuft"
+        );
+    }
+
+    /// Spec 0066 + 0068: Stopp, während Aktion 1 im Dialog steht — nach der
+    /// Bestätigung von Aktion 1 wird Aktion 2 nicht mehr vorgeschlagen und
+    /// nicht ausgeführt.
+    #[tokio::test]
+    async fn test_stop_between_two_tool_calls_prevents_the_second() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "systemctl reload nginx".to_string(),
+                }),
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default()
+                .with_response("systemctl reload nginx", output(""))
+                .with_response("ls -la", output("a")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowLsOnly));
+        session.post_ingest_policy = PostIngestPolicy::Standard;
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+        let profile_store = InMemoryProfileStore::default();
+
+        let responder = async {
+            loop {
+                let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
+                    (n == "chat-action-proposed" && p["decision"].get("Confirm").is_some())
+                        .then(|| p["actionId"].as_str().unwrap().to_string())
+                });
+                if let Some(id) = pending {
+                    session.request_auto_continue_stop();
+                    confirmations
+                        .resolve(&id.parse().unwrap(), ActionUserDecision::Approve)
+                        .unwrap();
+                    return;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                responder,
+            )
+        })
+        .await
+        .expect("Turn muss enden");
+
+        let decisions = proposed_decisions(&emitter);
+        assert_eq!(
+            decisions.len(),
+            1,
+            "Aktion 2 darf nach Stopp nicht kommen: {decisions:?}"
+        );
+        let history = session.context.lock().await.history.clone();
+        assert_eq!(
+            executed_commands(&history),
+            vec!["systemctl reload nginx".to_string()]
+        );
+    }
 }

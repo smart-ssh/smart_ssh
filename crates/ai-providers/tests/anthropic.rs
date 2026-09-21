@@ -517,3 +517,42 @@ async fn test_dropping_stream_during_retry_backoff_sends_no_further_request() {
 
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
 }
+
+/// Spec 0068, Teil 4: eine Antwort mit ZWEI vollständigen `tool_use`-
+/// Blöcken liefert zwei getrennte Aktionen in Reihenfolge — die
+/// Orchestrierung entscheidet dann jede einzeln.
+#[tokio::test]
+async fn test_two_complete_tool_calls_yield_two_actions_in_order() {
+    let sse_body = "event: content_block_start\ndata: {\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"t1\",\"name\":\"suggest_command\"}}\n\n\
+event: content_block_delta\ndata: {\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\": \\\"ls\\\"}\"}}\n\n\
+event: content_block_stop\ndata: {\"index\":0}\n\n\
+event: content_block_start\ndata: {\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"t2\",\"name\":\"suggest_command\"}}\n\n\
+event: content_block_delta\ndata: {\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\": \\\"uptime\\\"}\"}}\n\n\
+event: content_block_stop\ndata: {\"index\":1}\n\n\
+event: message_delta\ndata: {\"delta\":{\"stop_reason\":\"tool_use\"}}\n\n\
+event: message_stop\ndata: {}\n\n";
+    let server = mock_server_with_sse_body(sse_body).await;
+    let provider = AnthropicProvider::new(
+        server.uri(),
+        "claude-test",
+        "test-key",
+        true,
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(
+        events,
+        vec![
+            AiEvent::ActionProposed(AiAction::SuggestCommand {
+                command: "ls".to_string()
+            }),
+            AiEvent::ActionProposed(AiAction::SuggestCommand {
+                command: "uptime".to_string()
+            }),
+            AiEvent::Done,
+        ]
+    );
+}
