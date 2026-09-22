@@ -299,6 +299,7 @@
     "baseUrl": "Base-URL",
     "baseUrlPlaceholder": "https://…",
     "apiKey": "API-Key",
+    "apiKeyNotNeededForOllama": "(bei Ollama nicht nötig)",
     "apiKeyFormatHint": "Sieht nicht wie ein {{providerLabel}}-Key aus – erwartet wird ein Präfix wie \"{{expectedPrefix}}\". Trotzdem speicherbar; Provider ändern Formate gelegentlich.",
     "testCredentials": "Zugangsdaten testen",
     "testingCredentials": "Teste …",
@@ -335,7 +336,19 @@
     "riskClassifierHint": "Optional: ein zweiter KI-Provider schätzt zusätzlich zur regelbasierten Prüfung ein, ob ein Kommando sensible Daten enthalten könnte. Empfohlen wird ein lokal laufendes Modell (z. B. über Ollama), damit auch diese Zweitmeinung nicht zwingend an einen externen Anbieter geht.",
     "riskClassifierEnable": "KI-Zweitmeinung aktivieren",
     "riskClassifierProvider": "Provider für die Zweitmeinung",
-    "riskClassifierNoProvider": "(keiner ausgewählt)"
+    "riskClassifierNoProvider": "(keiner ausgewählt)",
+    "ollamaProviderName": "Ollama (lokal)",
+    "ollamaProbeSearching": "Suche lokales Ollama …",
+    "ollamaProbeFoundHeading": "Ollama läuft auf diesem Rechner.",
+    "ollamaProbeFoundHintWillActivate": "Wird als aktiver Provider verwendet.",
+    "ollamaProbeFoundHintInactive": "Wird als weiterer Provider angelegt (aktuell bleibt ein anderer aktiv).",
+    "ollamaProbeAdopt": "Ollama übernehmen",
+    "ollamaProbeDismiss": "Nein danke",
+    "ollamaProbeEmptyHeading": "Ollama läuft, aber es ist noch kein Modell geladen.",
+    "ollamaProbePullHint": "Ein Modell laden: im Terminal `ollama pull <modell>` ausführen, dann erneut suchen.",
+    "ollamaProbeRetry": "Erneut suchen",
+    "ollamaProbeNotFoundHeading": "Kein lokales Ollama gefunden (Standard-Port 11434).",
+    "ollamaProbeNotFoundInstructions": "Ollama von ollama.com installieren, starten und ein Modell laden (z. B. `ollama pull llama3`), dann erneut suchen."
   },
   "errors": {
     "SSH_CONNECTION_FAILED": "Verbindung fehlgeschlagen – ist der Host erreichbar (Adresse, Port, Netzwerk)?",

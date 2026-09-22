@@ -13,6 +13,7 @@ import {
   testAiProviderCredentials,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
+import { effectiveApiKey, OLLAMA_BASE_URL, OLLAMA_PLACEHOLDER_API_KEY } from "../ollama";
 import { loadRiskClassifierSettings, saveRiskClassifierSettings } from "../riskSettings";
 import {
   type AiProviderConfigDto,
@@ -46,6 +47,17 @@ function emptyForm(): AiProviderConfigInput {
 }
 
 const MODEL_DATALIST_ID = "ai-provider-model-options";
+
+/** Spec 0069, Teil B3: die fünf unterscheidbaren Anzeigezustände der
+ * Ollama-Erkennungskarte. Kein eigener `idle`-artiger Zustand nötig —
+ * `null` (statt eines Werts dieses Typs) heißt "keine Karte", s.
+ * `AiProviderSettings`s `ollamaProbe`-State. */
+type OllamaProbeState =
+  | { status: "loading" }
+  | { status: "found"; models: string[] }
+  | { status: "empty" }
+  | { status: "unreachable" }
+  | { status: "otherError" };
 
 /** Spec 0056, Teil 3: gemeinsame Design-Tokens für dieses Formular statt
  * pro Feld wiederholter Ad-hoc-Klassenketten — alle vier Farbpaletten
@@ -130,6 +142,19 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   const [riskClassifierEnabled, setRiskClassifierEnabled] = useState(false);
   const [riskClassifierProviderId, setRiskClassifierProviderId] = useState<string | null>(null);
   const [riskSettingsSaving, setRiskSettingsSaving] = useState(false);
+  // Spec 0069, Teil B: Ollama-Erkennung. `providersLoaded` gate für B1
+  // ("... UND die Provider-Liste geladen ist") — ohne dieses Flag würde
+  // die Probe schon vor dem ersten `listAiProviders()`-Ergebnis über eine
+  // noch leere `providers`-Liste fälschlich "kein Ollama-Provider"
+  // schließen. `ollamaDismissed` ist reiner Komponenten-State (kein
+  // Storage) — "Nein danke" blendet die Karte bis zum nächsten Öffnen der
+  // Einstellungen aus (Spec B3), also bis zum nächsten Mount dieser
+  // Komponente.
+  const [providersLoaded, setProvidersLoaded] = useState(false);
+  const [ollamaProbe, setOllamaProbe] = useState<OllamaProbeState | null>(null);
+  const [ollamaDismissed, setOllamaDismissed] = useState(false);
+  const [ollamaSelectedModel, setOllamaSelectedModel] = useState("");
+  const [ollamaAdding, setOllamaAdding] = useState(false);
 
   useEffect(() => {
     loadRiskClassifierSettings()
@@ -158,18 +183,113 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
 
   const reload = () => {
     listAiProviders()
-      .then(setProviders)
+      .then((list) => {
+        setProviders(list);
+        setProvidersLoaded(true);
+      })
       .catch((err) => setError(commandErrorMessage(err)));
   };
 
   useEffect(reload, []);
+
+  /** Spec 0069, Teil B2: über den bestehenden `discover_models`-Command,
+   * kein neuer Tauri-Command, kein neuer HTTP-Pfad — Timeout/Logging
+   * kommen unverändert aus `discovery.rs` (Spec 0068, Teil 5a). Die
+   * übrigen Formularfelder in diesem synthetischen Konfigurationsobjekt
+   * sind für `discover_models` irrelevant (das Backend liest nur
+   * `providerType`/`baseUrl`/`apiKey`/`extraHeaders`), aber vom Typ
+   * `AiProviderConfigInput` verlangt. */
+  const runOllamaProbe = async () => {
+    setOllamaProbe({ status: "loading" });
+    try {
+      const models = await discoverModels({
+        providerType: "ollama",
+        displayName: "",
+        baseUrl: OLLAMA_BASE_URL,
+        model: "",
+        supportsNativeToolCalling: true,
+        apiKey: OLLAMA_PLACEHOLDER_API_KEY,
+        extraHeaders: [],
+        attestationUrl: null,
+        maxTokensOverride: null,
+      });
+      if (models.length > 0) {
+        setOllamaProbe({ status: "found", models });
+        setOllamaSelectedModel(models[0]);
+      } else {
+        setOllamaProbe({ status: "empty" });
+      }
+    } catch (err) {
+      // Spec 0069, Teil B3: jeder andere Fehler (z. B. ein anderer Dienst
+      // auf Port 11434) zeigt gar keine Karte — nicht `unreachable`, das
+      // ist nur für den erwarteten "kein lokales Ollama"-Fall.
+      setOllamaProbe(
+        commandErrorCode(err) === "AI_LOCAL_PROVIDER_UNREACHABLE"
+          ? { status: "unreachable" }
+          : { status: "otherError" },
+      );
+    }
+  };
+
+  /** Spec 0069, Teil B1 (E1): Probe genau dann, wenn die Provider-Liste
+   * geladen ist UND kein Provider vom Typ `ollama` existiert. Hängt
+   * bewusst NUR von `providersLoaded` ab (nicht von `providers` selbst)
+   * — sonst würde jedes spätere `reload()` (z. B. nach Hinzufügen/
+   * Löschen eines *anderen* Providers) die Probe erneut auslösen, was
+   * B1 als "kein Retry-Loop, kein Aufruf außerhalb dieser Komponente
+   * [nach dem einen Mount-Zeitpunkt]" ausschließt. Der einzige weitere
+   * Auslöser ist der "Erneut suchen"-Klick (`runOllamaProbe` direkt). */
+  useEffect(() => {
+    if (!providersLoaded) return;
+    if (providers.some((p) => p.providerType === "ollama")) return;
+    void runOllamaProbe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providersLoaded]);
+
+  /** Spec 0069, Teil B4 (E2): Bestätigung des Nutzers ist der Klick selbst
+   * — kein automatisches Übernehmen. */
+  const handleAdoptOllama = async () => {
+    if (ollamaProbe?.status !== "found") return;
+    setOllamaAdding(true);
+    setError(null);
+    try {
+      const wasAnyProviderActive = providers.some((p) => p.isActive);
+      const newId = await addAiProvider({
+        providerType: "ollama",
+        displayName: t("aiProvider.ollamaProviderName"),
+        baseUrl: OLLAMA_BASE_URL,
+        model: ollamaSelectedModel,
+        supportsNativeToolCalling: true,
+        apiKey: OLLAMA_PLACEHOLDER_API_KEY,
+        extraHeaders: [],
+        attestationUrl: null,
+        maxTokensOverride: null,
+      });
+      if (!wasAnyProviderActive) {
+        await setActiveAiProvider(newId);
+      }
+      setOllamaProbe(null);
+      reload();
+      onProvidersChanged();
+    } catch (err) {
+      // Spec 0069, Teil B4: "Fehler wie bei jedem anderen Hinzufügen" —
+      // derselbe Weg wie `handleSubmit`s `catch` unten, nichts aktiv
+      // gesetzt (der `setActiveAiProvider`-Aufruf oben ist nie erreicht,
+      // wenn schon `addAiProvider` wirft).
+      setError(commandErrorMessage(err));
+    } finally {
+      setOllamaAdding(false);
+    }
+  };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      const newId = await addAiProvider(form);
+      // Spec 0069, Teil B5: Ollama mit leerem Key -> Platzhalter statt des
+      // (dann leeren) `form.apiKey` — jeder andere Providertyp unverändert.
+      const newId = await addAiProvider({ ...form, apiKey: effectiveApiKey(form) });
       // Spec 0025, Abschnitt 4: "beim Speichern ... abrufen" — automatisch,
       // wenn eine Attestierungs-URL hinterlegt wurde.
       if (form.attestationUrl) {
@@ -199,7 +319,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     setModelsFailed(false);
     setModelsFailedCode(null);
     try {
-      const discovered = await discoverModels(form);
+      const discovered = await discoverModels({ ...form, apiKey: effectiveApiKey(form) });
       setModels(discovered);
     } catch (err) {
       setModelsFailed(true);
@@ -221,7 +341,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     setCredentialTestRunning(true);
     setCredentialTestResult(null);
     try {
-      const result = await testAiProviderCredentials(form);
+      const result = await testAiProviderCredentials({ ...form, apiKey: effectiveApiKey(form) });
       setCredentialTestResult(result);
     } catch (err) {
       setError(commandErrorMessage(err));
@@ -280,6 +400,21 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   };
 
   const apiKeyWarning = apiKeyFormatWarning(form.providerType, form.baseUrl, form.apiKey);
+
+  // Spec 0069, Teil B3: `otherError` (und `unreachable`, wenn dessen
+  // Sichtbarkeits-Bedingung nicht zutrifft) zeigen "still" gar keine
+  // Karte — nicht nur einen leeren Kartenrahmen. Als eigene Variable
+  // statt der Bedingung direkt im JSX, damit der leere-Rahmen-Fall
+  // strukturell ausgeschlossen ist (derselbe `<section>` wird nur
+  // gerendert, wenn er auch Inhalt hat).
+  const showOllamaCard =
+    ollamaProbe !== null &&
+    !ollamaDismissed &&
+    (ollamaProbe.status === "loading" ||
+      ollamaProbe.status === "found" ||
+      ollamaProbe.status === "empty" ||
+      (ollamaProbe.status === "unreachable" &&
+        (providers.length === 0 || form.providerType === "ollama")));
 
   return (
     <div>
@@ -412,6 +547,99 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         )}
       </section>
 
+      {/* Spec 0069, Teil B3: eine Karte oberhalb von "Provider
+       * hinzufügen", je nach Probe-Ergebnis. `ollamaDismissed` blendet
+       * sie für den Rest dieses Mounts komplett aus (auch einen später
+       * per "Erneut suchen" neu gesetzten Zustand) — "Nein danke" heißt
+       * "nicht mehr fragen, bis die Einstellungen erneut geöffnet
+       * werden". */}
+      {showOllamaCard && ollamaProbe && (
+        <section className={`mb-6 ${CARD_CLASS}`}>
+          {ollamaProbe.status === "loading" && (
+            <p className="text-sm text-slate-400">{t("aiProvider.ollamaProbeSearching")}</p>
+          )}
+
+          {ollamaProbe.status === "found" && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-slate-100">
+                {t("aiProvider.ollamaProbeFoundHeading")}
+              </p>
+              <label className={LABEL_CLASS}>
+                <span className={LABEL_TEXT_CLASS}>{t("aiProvider.model")}</span>
+                <select
+                  value={ollamaSelectedModel}
+                  onChange={(e) => setOllamaSelectedModel(e.target.value)}
+                  className={`mt-1 w-full ${FIELD_CLASS}`}
+                >
+                  {ollamaProbe.models.map((model) => (
+                    <option key={model} value={model}>
+                      {model}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="text-xs text-slate-500">
+                {providers.some((p) => p.isActive)
+                  ? t("aiProvider.ollamaProbeFoundHintInactive")
+                  : t("aiProvider.ollamaProbeFoundHintWillActivate")}
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleAdoptOllama}
+                  disabled={ollamaAdding}
+                  className={SECONDARY_BUTTON_CLASS}
+                >
+                  {ollamaAdding ? t("aiProvider.adding") : t("aiProvider.ollamaProbeAdopt")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOllamaDismissed(true)}
+                  className="text-xs text-slate-400 underline hover:text-slate-200"
+                >
+                  {t("aiProvider.ollamaProbeDismiss")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {ollamaProbe.status === "empty" && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-slate-100">
+                {t("aiProvider.ollamaProbeEmptyHeading")}
+              </p>
+              <p className="text-xs text-slate-500">{t("aiProvider.ollamaProbePullHint")}</p>
+              <button type="button" onClick={runOllamaProbe} className={SECONDARY_BUTTON_CLASS}>
+                {t("aiProvider.ollamaProbeRetry")}
+              </button>
+            </div>
+          )}
+
+          {/* Spec 0069, Teil B3: die "nicht gefunden"-Anleitung nur, wenn
+           * gar kein Provider konfiguriert ist oder im Formular der Typ
+           * Ollama gewählt ist — wer bereits z. B. Anthropic nutzt,
+           * bekommt keinen Ollama-Hinweis aufgedrängt. */}
+          {ollamaProbe.status === "unreachable" &&
+            (providers.length === 0 || form.providerType === "ollama") && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-100">
+                  {t("aiProvider.ollamaProbeNotFoundHeading")}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {t("aiProvider.ollamaProbeNotFoundInstructions")}
+                </p>
+                <button type="button" onClick={runOllamaProbe} className={SECONDARY_BUTTON_CLASS}>
+                  {t("aiProvider.ollamaProbeRetry")}
+                </button>
+              </div>
+            )}
+
+          {/* `otherError` (und `unreachable`, wenn die Sichtbarkeits-
+           * Bedingung oben nicht zutrifft): bewusst keine Karte (Spec
+           * 0069 §3.B3, "still"). */}
+        </section>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Spec 0056, Teil 3: Kernfelder (Typ/Name/Modell/Base-URL/Key) als
          * eine zusammengehörige Karte — vorher liefen sie ohne jede
@@ -427,7 +655,19 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             <select
               value={form.providerType}
               onChange={(e) => {
-                setForm({ ...form, providerType: e.target.value as ProviderType });
+                const nextType = e.target.value as ProviderType;
+                setForm({
+                  ...form,
+                  providerType: nextType,
+                  // Spec 0069, Teil B5: Base-URL bei Wechsel zu Ollama
+                  // vorbelegen, wenn sie noch leer ist — sichtbar,
+                  // änderbar, nie ein bereits eingegebener Wert
+                  // überschrieben.
+                  baseUrl:
+                    nextType === "ollama" && !form.baseUrl?.trim()
+                      ? OLLAMA_BASE_URL
+                      : form.baseUrl,
+                });
                 setCredentialTestResult(null);
               }}
               className={`mt-1 w-full ${FIELD_CLASS}`}
@@ -530,10 +770,18 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
           )}
 
           <label className={LABEL_CLASS}>
-            <span className={LABEL_TEXT_CLASS}>{t("aiProvider.apiKey")}</span>
+            <span className={LABEL_TEXT_CLASS}>
+              {t("aiProvider.apiKey")}
+              {/* Spec 0069, Teil B5: Ollama braucht keinen Key. */}
+              {form.providerType === "ollama" && (
+                <span className="ml-1 font-normal text-slate-500">
+                  {t("aiProvider.apiKeyNotNeededForOllama")}
+                </span>
+              )}
+            </span>
             <input
               type="password"
-              required
+              required={form.providerType !== "ollama"}
               value={form.apiKey}
               onChange={(e) => {
                 setForm({ ...form, apiKey: e.target.value });
@@ -584,7 +832,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               // `test_ai_provider_credentials` abgefangen).
               disabled={
                 credentialTestRunning ||
-                !form.apiKey.trim() ||
+                // Spec 0069, Teil B5: bei Ollama ist ein leerer Key kein
+                // Grund zu sperren — "Zugangsdaten testen" ist ohne Key
+                // freigegeben.
+                (form.providerType !== "ollama" && !form.apiKey.trim()) ||
                 (needsBaseUrl(form.providerType) && !form.baseUrl?.trim())
               }
               className={SECONDARY_BUTTON_CLASS}

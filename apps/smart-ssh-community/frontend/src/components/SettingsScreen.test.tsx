@@ -26,6 +26,18 @@ vi.mock("../api", () => ({
   setActiveAiProvider: vi.fn(),
   openLogDirectory: vi.fn(),
   commandErrorMessage: (err: unknown) => String(err),
+  // Spec 0069, Teil B1: `AiProviderSettings` (gerendert unter "KI-Provider")
+  // löst beim Mounten ohne vorhandenen Ollama-Provider automatisch eine
+  // Hintergrund-Probe aus (`discoverModels` → im Fehlerfall
+  // `commandErrorCode`) — ohne diesen Eintrag bricht die Probe mit einer
+  // "No commandErrorCode export" Unhandled Rejection ab.
+  commandErrorCode: (err: unknown) => {
+    if (typeof err === "object" && err !== null && "code" in err) {
+      const code = (err as { code: unknown }).code;
+      if (typeof code === "string") return code;
+    }
+    return null;
+  },
   // Spec 0055, Teil 3: die Regressionstests unten klicken tatsächlich in
   // "Sitzungen & Daten"/"MCP-Server" hinein (anders als die Tests oben, die
   // nur die Nav-Einträge prüfen) — beide Sektionen laden beim Mounten

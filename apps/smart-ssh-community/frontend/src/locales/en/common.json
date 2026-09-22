@@ -299,6 +299,7 @@
     "baseUrl": "Base URL",
     "baseUrlPlaceholder": "https://…",
     "apiKey": "API Key",
+    "apiKeyNotNeededForOllama": "(not needed for Ollama)",
     "apiKeyFormatHint": "Doesn't look like a {{providerLabel}} key – expected a prefix like \"{{expectedPrefix}}\". You can still save it; providers change formats occasionally.",
     "testCredentials": "Test credentials",
     "testingCredentials": "Testing…",
@@ -335,7 +336,19 @@
     "riskClassifierHint": "Optional: a second AI provider assesses, in addition to the rule-based check, whether a command might contain sensitive data. A locally running model (e.g. via Ollama) is recommended, so this second opinion doesn't necessarily go to an external provider either.",
     "riskClassifierEnable": "Enable AI second opinion",
     "riskClassifierProvider": "Provider for the second opinion",
-    "riskClassifierNoProvider": "(none selected)"
+    "riskClassifierNoProvider": "(none selected)",
+    "ollamaProviderName": "Ollama (local)",
+    "ollamaProbeSearching": "Looking for a local Ollama …",
+    "ollamaProbeFoundHeading": "Ollama is running on this machine.",
+    "ollamaProbeFoundHintWillActivate": "Will be used as the active provider.",
+    "ollamaProbeFoundHintInactive": "Will be added as another provider (another one stays active for now).",
+    "ollamaProbeAdopt": "Use Ollama",
+    "ollamaProbeDismiss": "No thanks",
+    "ollamaProbeEmptyHeading": "Ollama is running, but no model is loaded yet.",
+    "ollamaProbePullHint": "Load a model: run `ollama pull <model>` in a terminal, then search again.",
+    "ollamaProbeRetry": "Search again",
+    "ollamaProbeNotFoundHeading": "No local Ollama found (default port 11434).",
+    "ollamaProbeNotFoundInstructions": "Install Ollama from ollama.com, start it and load a model (e.g. `ollama pull llama3`), then search again."
   },
   "errors": {
     "SSH_CONNECTION_FAILED": "Connection failed – is the host reachable (address, port, network)?",

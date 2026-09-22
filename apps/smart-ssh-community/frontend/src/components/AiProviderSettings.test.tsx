@@ -3,8 +3,15 @@
 // Warnung."
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
-import { describe, expect, it, vi } from "vitest";
-import { addAiProvider, testAiProviderCredentials } from "../api";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  addAiProvider,
+  discoverModels,
+  listAiProviders,
+  setActiveAiProvider,
+  testAiProviderCredentials,
+} from "../api";
+import type { AiProviderConfigDto } from "../types";
 import { testI18n } from "../testI18n";
 import { AiProviderSettings } from "./AiProviderSettings";
 
@@ -12,17 +19,46 @@ vi.mock("../api", () => ({
   listAiProviders: vi.fn(() => Promise.resolve([])),
   addAiProvider: vi.fn(() => Promise.resolve("new-id")),
   deleteAiProvider: vi.fn(),
-  discoverModels: vi.fn(),
+  // Spec 0069, Teil B1: jeder dieser Tests mountet die Komponente ohne
+  // vorhandenen Ollama-Provider — das löst die automatische Probe aus
+  // (`runOllamaProbe`, ruft `discoverModels` auf). Ein bewusst
+  // fehlschlagender Default (statt eines unkonfigurierten `vi.fn()`, der
+  // `undefined` zurückgäbe und `models.length` crashen ließe) hält diese
+  // Hintergrund-Probe in Tests, die sie nicht selbst konfigurieren, aus
+  // dem Weg — Ergebnis "otherError", also keine Karte (s. Spec 0069 §3.B3
+  // "jeder andere Fehler → keine Karte").
+  discoverModels: vi.fn(() => Promise.reject(new Error("not configured in this test"))),
   fetchAttestationInfo: vi.fn(),
   setActiveAiProvider: vi.fn(),
   testAiProviderCredentials: vi.fn(),
   commandErrorMessage: (err: unknown) => String(err),
+  // Spec 0069, Teil B: echte Implementierung (wie in `ServerList.test.tsx`
+  // bereits etabliert) statt einer Attrappe — `runOllamaProbe` braucht das
+  // tatsächliche `code`-Extraktionsverhalten.
+  commandErrorCode: (err: unknown) => {
+    if (typeof err === "object" && err !== null && "code" in err) {
+      const code = (err as { code: unknown }).code;
+      if (typeof code === "string") return code;
+    }
+    return null;
+  },
 }));
 
 vi.mock("../riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
   saveRiskClassifierSettings: vi.fn(),
 }));
+
+// Spec 0069, Teil B, Tests 21/24/25: ohne diesen Reset würden sich
+// Aufrufe (`addAiProvider`/`discoverModels`/`setActiveAiProvider`) über
+// Testfälle hinweg auf demselben Mock ansammeln — die neuen Tests unten
+// prüfen exakte Aufrufzahlen bzw. "nie aufgerufen", was nur mit einem
+// sauberen Mock-Zustand pro Test aussagekräftig ist. Löscht nur die
+// Aufruf-Historie (`mock.calls`), nicht die in `vi.mock(...)` oben
+// hinterlegten Standard-Implementierungen.
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 function renderForm() {
   return render(
@@ -286,5 +322,202 @@ describe("AiProviderSettings max_tokens override (Spec 0065, Teil 4)", () => {
 
     expect(screen.getByText("Max. Antwortlänge muss größer als 0 sein")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Hinzufügen" })).toBeDisabled();
+  });
+});
+
+// Spec 0069, Teil B: Ollama-Erkennung.
+function ollamaProvider(overrides: Partial<AiProviderConfigDto> = {}): AiProviderConfigDto {
+  return {
+    id: "existing-ollama",
+    providerType: "ollama",
+    displayName: "Ollama (lokal)",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    model: "llama3",
+    supportsNativeToolCalling: true,
+    isActive: false,
+    extraHeaders: [],
+    attestationUrl: null,
+    maxTokensOverride: null,
+    ...overrides,
+  };
+}
+
+function activeAnthropicProvider(): AiProviderConfigDto {
+  return {
+    id: "existing-anthropic",
+    providerType: "anthropic",
+    displayName: "Claude",
+    baseUrl: null,
+    model: "claude-sonnet",
+    supportsNativeToolCalling: true,
+    isActive: true,
+    extraHeaders: [],
+    attestationUrl: null,
+    maxTokensOverride: null,
+  };
+}
+
+describe("AiProviderSettings Ollama probe trigger (Spec 0069, Teil B1, Test 21)", () => {
+  it("mounts without an Ollama provider -> exactly one discoverModels call against 127.0.0.1:11434/v1", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([]);
+    vi.mocked(discoverModels).mockResolvedValueOnce([]);
+
+    renderForm();
+
+    await waitFor(() => expect(discoverModels).toHaveBeenCalledTimes(1));
+    const [config] = vi.mocked(discoverModels).mock.calls[0];
+    expect(config.providerType).toBe("ollama");
+    expect(config.baseUrl).toBe("http://127.0.0.1:11434/v1");
+  });
+
+  it("mounts with an existing Ollama provider -> no discoverModels call", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([ollamaProvider()]);
+
+    renderForm();
+
+    // Auf das Laden der Liste warten (sichtbar an der Provider-Zeile),
+    // damit der Test nicht zufällig vor dem Effekt endet.
+    await screen.findByText("Ollama (lokal)");
+    expect(discoverModels).not.toHaveBeenCalled();
+  });
+
+  it('"Erneut suchen" triggers another discoverModels call', async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([]);
+    vi.mocked(discoverModels).mockResolvedValueOnce([]); // -> empty state, shows "Erneut suchen"
+
+    renderForm();
+    await waitFor(() => expect(discoverModels).toHaveBeenCalledTimes(1));
+    await screen.findByText("Erneut suchen");
+
+    vi.mocked(discoverModels).mockResolvedValueOnce(["llama3"]);
+    fireEvent.click(screen.getByRole("button", { name: "Erneut suchen" }));
+
+    await waitFor(() => expect(discoverModels).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("AiProviderSettings Ollama probe results (Spec 0069, Teil B3, Test 23)", () => {
+  it("models found -> suggestion card with a model select", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([]);
+    vi.mocked(discoverModels).mockResolvedValueOnce(["llama3", "mistral"]);
+
+    renderForm();
+
+    await screen.findByText("Ollama läuft auf diesem Rechner.");
+    expect(screen.getByRole("button", { name: "Ollama übernehmen" })).toBeInTheDocument();
+  });
+
+  it("empty model list -> pull instructions, no suggestion card", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([]);
+    vi.mocked(discoverModels).mockResolvedValueOnce([]);
+
+    renderForm();
+
+    await screen.findByText("Ollama läuft, aber es ist noch kein Modell geladen.");
+    expect(screen.queryByRole("button", { name: "Ollama übernehmen" })).not.toBeInTheDocument();
+  });
+
+  it("AI_LOCAL_PROVIDER_UNREACHABLE with no providers configured -> install instructions", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([]);
+    vi.mocked(discoverModels).mockRejectedValueOnce({ code: "AI_LOCAL_PROVIDER_UNREACHABLE" });
+
+    renderForm();
+
+    await screen.findByText("Kein lokales Ollama gefunden (Standard-Port 11434).");
+  });
+
+  it("AI_LOCAL_PROVIDER_UNREACHABLE with an already-configured (non-Ollama) provider -> no card", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([activeAnthropicProvider()]);
+    vi.mocked(discoverModels).mockRejectedValueOnce({ code: "AI_LOCAL_PROVIDER_UNREACHABLE" });
+
+    renderForm();
+
+    await waitFor(() => expect(discoverModels).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByText("Kein lokales Ollama gefunden (Standard-Port 11434)."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("any other error -> no card at all (stays silent)", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([]);
+    vi.mocked(discoverModels).mockRejectedValueOnce({ code: "AI_NETWORK_ERROR" });
+
+    renderForm();
+
+    await waitFor(() => expect(discoverModels).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByText("Kein lokales Ollama gefunden (Standard-Port 11434)."),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Ollama läuft auf diesem Rechner.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Ollama läuft, aber es ist noch kein Modell geladen."),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('AiProviderSettings "Ollama übernehmen" (Spec 0069, Teil B4, Test 24/25)', () => {
+  it("without an active provider -> addAiProvider with the expected fields, then setActiveAiProvider", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([]);
+    vi.mocked(discoverModels).mockResolvedValueOnce(["llama3"]);
+    vi.mocked(addAiProvider).mockResolvedValueOnce("new-ollama-id");
+
+    renderForm();
+    await screen.findByText("Ollama läuft auf diesem Rechner.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Ollama übernehmen" }));
+
+    await waitFor(() => expect(addAiProvider).toHaveBeenCalledTimes(1));
+    expect(addAiProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerType: "ollama",
+        baseUrl: "http://127.0.0.1:11434/v1",
+        model: "llama3",
+        apiKey: "ollama-no-key",
+      }),
+    );
+    await waitFor(() => expect(setActiveAiProvider).toHaveBeenCalledWith("new-ollama-id"));
+  });
+
+  it("with an already-active provider -> addAiProvider but no setActiveAiProvider", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([activeAnthropicProvider()]);
+    vi.mocked(discoverModels).mockResolvedValueOnce(["llama3"]);
+    vi.mocked(addAiProvider).mockResolvedValueOnce("new-ollama-id");
+
+    renderForm();
+    await screen.findByText("Ollama läuft auf diesem Rechner.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Ollama übernehmen" }));
+
+    await waitFor(() => expect(addAiProvider).toHaveBeenCalledTimes(1));
+    // Kein setActiveAiProvider -- gibt genug Zeit für einen fälschlichen
+    // Aufruf, bevor negativ geprüft wird.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(setActiveAiProvider).not.toHaveBeenCalled();
+  });
+
+  it("addAiProvider failing -> no setActiveAiProvider call, error shown like any other add failure", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([]);
+    vi.mocked(discoverModels).mockResolvedValueOnce(["llama3"]);
+    vi.mocked(addAiProvider).mockRejectedValueOnce(new Error("boom"));
+
+    renderForm();
+    await screen.findByText("Ollama läuft auf diesem Rechner.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Ollama übernehmen" }));
+
+    await waitFor(() => expect(screen.getByText("Error: boom")).toBeInTheDocument());
+    expect(setActiveAiProvider).not.toHaveBeenCalled();
+  });
+
+  // Test 25: ohne Klick wird nie addAiProvider aufgerufen, auch nicht nach
+  // einer erfolgreichen Probe.
+  it("never calls addAiProvider without a click, even after a successful probe", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([]);
+    vi.mocked(discoverModels).mockResolvedValueOnce(["llama3"]);
+
+    renderForm();
+    await screen.findByText("Ollama läuft auf diesem Rechner.");
+
+    expect(addAiProvider).not.toHaveBeenCalled();
   });
 });
