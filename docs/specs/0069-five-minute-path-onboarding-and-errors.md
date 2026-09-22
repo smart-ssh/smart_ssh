@@ -1,6 +1,6 @@
 # Spec: Fünf-Minuten-Pfad — Einstieg und verständliche Fehler
 
-Status: Vorschlag (Architekt)
+Status: freigegeben (Stefan, 2026-09-22)
 Backlog: BL-0013 (führend), BL-0153, BL-0036, BL-0082, BL-0110
 Gate: pre-release-0x/D (BL-0013, BL-0082), release-1.0/B (BL-0036, BL-0082,
 Messlatte für BL-0013), release-1.0/C (BL-0110, SOLL)
