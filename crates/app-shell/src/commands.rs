@@ -1,6 +1,7 @@
 //! Tauri-Commands (Spec 0007, Abschnitt 4).
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures::StreamExt;
 use secrecy::{ExposeSecret, SecretString};
@@ -719,6 +720,18 @@ fn map_connect_result(
     result.map_err(|err| CommandError::with_code(err.to_string(), err.code()))
 }
 
+/// Spec 0069, Teil A3: die bestehende 10-Sekunden-Grenze aus
+/// `test_connection.rs` (dort vorher `TEST_CONNECTION_TIMEOUT`), an diese
+/// gemeinsame Stelle verschoben und umbenannt — **keine zweite Konstante**.
+/// Umschließt in `connect_session` unten jeden einzelnen Aufruf von
+/// `ssh_transport::connect` (über `ssh_transport::connect_with_timeout`),
+/// NIE das Warten auf eine Host-Key-Entscheidung (das bleibt bei
+/// `crate::orchestration::PENDING_ACTION_CONFIRM_TIMEOUT`, Spec 0068 Teil
+/// 5b) — s. `ssh_transport::connect_with_timeout`s Doc-Kommentar zur
+/// Sicherheits-Invariante ("liefert immer einen Fehler, nie `Connected`,
+/// nie `trust()`").
+pub(crate) const SSH_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
 pub(crate) async fn connect_session(
     app: &AppHandle,
     state: &AppState,
@@ -792,10 +805,18 @@ pub(crate) async fn connect_session(
         };
         loop {
             let outcome = match map_connect_result(
-                ssh_transport::connect(
-                    &target,
-                    state.credential_store.as_ref(),
-                    state.host_key_store.clone(),
+                // Spec 0069, Teil A3: jeder Verbindungsversuch (auch nach
+                // `Trust` erneut, s. Schleife) läuft unter
+                // `SSH_CONNECT_TIMEOUT` — umschließt bewusst NUR diesen
+                // Aufruf, nicht das Warten auf eine Host-Key-Entscheidung
+                // weiter unten.
+                ssh_transport::connect_with_timeout(
+                    ssh_transport::connect(
+                        &target,
+                        state.credential_store.as_ref(),
+                        state.host_key_store.clone(),
+                    ),
+                    SSH_CONNECT_TIMEOUT,
                 )
                 .await,
             ) {

@@ -17,6 +17,23 @@ pub enum SshError {
     /// Fallback für `WriteRemoteFile`), ohne den Fehlertext parsen zu
     /// müssen.
     SftpPermissionDenied(String),
+    /// Spec 0069, Teil A3: der Server hat die TCP-Verbindung aktiv
+    /// abgelehnt (`io::ErrorKind::ConnectionRefused`) — Port zu oder kein
+    /// SSH-Dienst dort. Bisher in `ConnectionFailed` verschmolzen.
+    ConnectionRefused(String),
+    /// Spec 0069, Teil A3: der Hostname ließ sich nicht auflösen —
+    /// nachträglich per `lookup_host` diagnostiziert, s.
+    /// `ssh_transport::connect`s Doc-Kommentar zur DNS-Diagnose (nur beim
+    /// ersten Hop, nie eine Vorab-Auflösung).
+    HostNotFound(String),
+    /// Spec 0069, Teil A3: `io::ErrorKind::HostUnreachable`/
+    /// `NetworkUnreachable` — keine Route zum Ziel (z. B. fehlendes VPN).
+    HostUnreachable(String),
+    /// Spec 0069, Teil A3: die Verbindung wurde während des Aufbaus beendet
+    /// (`ConnectionReset`/`ConnectionAborted`/`UnexpectedEof`, oder
+    /// `russh::Error::Disconnect`) — z. B. ein Nicht-SSH-Dienst auf dem
+    /// Port, oder ein Server, der zu viele Versuche abwehrt.
+    ConnectionClosed(String),
 }
 
 impl fmt::Display for SshError {
@@ -32,6 +49,12 @@ impl fmt::Display for SshError {
                 write!(f, "Credential-Auflösung fehlgeschlagen: {msg}")
             }
             SshError::SftpPermissionDenied(msg) => write!(f, "Zugriff verweigert: {msg}"),
+            SshError::ConnectionRefused(msg) => write!(f, "Verbindung abgelehnt: {msg}"),
+            SshError::HostNotFound(msg) => write!(f, "Host nicht gefunden: {msg}"),
+            SshError::HostUnreachable(msg) => write!(f, "Host nicht erreichbar: {msg}"),
+            SshError::ConnectionClosed(msg) => {
+                write!(f, "Verbindung während des Aufbaus beendet: {msg}")
+            }
         }
     }
 }
@@ -52,6 +75,10 @@ impl SshError {
             SshError::JumpHostCycle => "SSH_JUMP_HOST_CYCLE",
             SshError::CredentialResolutionFailed(_) => "SSH_CREDENTIAL_RESOLUTION_FAILED",
             SshError::SftpPermissionDenied(_) => "SSH_SFTP_PERMISSION_DENIED",
+            SshError::ConnectionRefused(_) => "SSH_CONNECTION_REFUSED",
+            SshError::HostNotFound(_) => "SSH_HOST_NOT_FOUND",
+            SshError::HostUnreachable(_) => "SSH_HOST_UNREACHABLE",
+            SshError::ConnectionClosed(_) => "SSH_CONNECTION_CLOSED",
         }
     }
 }
@@ -75,6 +102,10 @@ mod code_tests {
             SshError::JumpHostCycle,
             SshError::CredentialResolutionFailed("x".to_string()),
             SshError::SftpPermissionDenied("x".to_string()),
+            SshError::ConnectionRefused("x".to_string()),
+            SshError::HostNotFound("x".to_string()),
+            SshError::HostUnreachable("x".to_string()),
+            SshError::ConnectionClosed("x".to_string()),
         ];
         let codes: Vec<&'static str> = samples.iter().map(SshError::code).collect();
         let mut unique = codes.clone();

@@ -1,4 +1,6 @@
+use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 
 use russh::client;
 use ssh_manager_core::profiles::CredentialStore;
@@ -112,9 +114,17 @@ pub async fn connect(
     )
     .await;
     let mut current_handle =
-        match resolve_or_pending(connect_result, &first_hop.host, first_hop.port)? {
-            Ok(handle) => handle,
-            Err(outcome) => return Ok(outcome),
+        match resolve_or_pending(connect_result, &first_hop.host, first_hop.port) {
+            Ok(Ok(handle)) => handle,
+            Ok(Err(outcome)) => return Ok(outcome),
+            // Spec 0069, Teil A3: DNS-Diagnose nur für den ersten Hop, nur
+            // im Fehlerfall, nur nachträglich — s. `diagnose_connection_
+            // failed_dns`-Doc-Kommentar.
+            Err(err) => {
+                return Err(
+                    diagnose_connection_failed_dns(err, &first_hop.host, first_hop.port).await,
+                )
+            }
         };
 
     authenticate(&mut current_handle, first_hop, credentials).await?;
@@ -178,5 +188,108 @@ fn resolve_or_pending<H>(
             }))
         }
         Err(other) => Err(map_transport_error(other)),
+    }
+}
+
+/// Spec 0069, Teil A3, §4.2: DNS wird **nachträglich** diagnostiziert, nicht
+/// vorab aufgelöst. Der eigentliche Verbindungsversuch oben (`client::
+/// connect`) reicht `first_hop.host` unverändert an `russh` durch — dieser
+/// Helfer läuft komplett NACH einem bereits gescheiterten Versuch und
+/// ändert nichts an ihm (keine Vorab-Auflösung, kein Ersetzen des
+/// Hostnamens durch eine IP, der Erfolgs- und der Host-Key-Pfad bleiben
+/// dadurch byte-gleich zum bisherigen Verhalten). Nur `ConnectionFailed`
+/// wird nachdiagnostiziert — die übrigen neuen `SshError`-Varianten (s.
+/// `crate::error::map_io_error`) sind bereits präziser zugeordnet und
+/// brauchen keine weitere Unterscheidung. Wird ausschließlich für den
+/// **ersten** Hop aufgerufen (s. `connect()` oben) — Jump-Hosts ab dem
+/// zweiten Hop bleiben wie vor dieser Spec (§2, Nicht-Ziele).
+async fn diagnose_connection_failed_dns(err: SshError, host: &str, port: u16) -> SshError {
+    let SshError::ConnectionFailed(detail) = &err else {
+        return err;
+    };
+    match tokio::net::lookup_host((host, port)).await {
+        Ok(_) => err,
+        Err(_) => SshError::HostNotFound(format!(
+            "Host '{host}' ist nicht auflösbar (ursprünglicher Fehler: {detail})"
+        )),
+    }
+}
+
+/// Spec 0069, Teil A3: verhindert, dass ein hängender Verbindungsaufbau
+/// (TCP-SYN ohne Antwort, eine Gegenstelle, die annimmt, aber nie ein
+/// SSH-Banner schickt, …) den Nutzer endlos warten lässt — vorher rief
+/// `connect_session` `ssh_transport::connect` ohne jeden Timeout auf (nur
+/// `test_connection` hatte eine eigene 10-Sekunden-Grenze). Generisch über
+/// `T`/die Future, damit sie in Tests (11/13) auch eine nie fertig
+/// werdende Fake-Future umschließen kann, ohne einen echten
+/// Netzwerkaufbau zu brauchen. Umschließt bewusst **nur** die übergebene
+/// Future — nie das Warten auf eine Host-Key-Entscheidung; das bleibt
+/// Sache des Aufrufers (`app-shell::commands::connect_session`, der jeden
+/// `ssh_transport::connect`-Aufruf einzeln hiermit umschließt, aber NICHT
+/// den Host-Key-Wartezyklus, s. dortiger Kommentar und Spec 0069 §5:
+/// "Der Connect-Timeout liefert immer einen Fehler, nie `Connected`, nie
+/// `trust()`").
+pub async fn connect_with_timeout<F, T>(fut: F, timeout: Duration) -> Result<T, SshError>
+where
+    F: Future<Output = Result<T, SshError>>,
+{
+    match tokio::time::timeout(timeout, fut).await {
+        Ok(result) => result,
+        Err(_elapsed) => Err(SshError::Timeout),
+    }
+}
+
+#[cfg(test)]
+mod connect_with_timeout_tests {
+    //! Spec 0069, Teil A3, adversarial (ERHÖHT). Der eigentliche
+    //! End-to-End-Nachweis gegen einen echten (aber hängenden) SSH-Server
+    //! steht in `tests/integration.rs` (Test 13) — hier die reinen,
+    //! netzwerkfreien Eigenschaften des Helpers selbst.
+    use super::*;
+
+    /// Test 11 (Teil): eine nie fertig werdende Future liefert
+    /// `Err(SshError::Timeout)`, nicht Hängen. *Gegenbeweis:* ohne den
+    /// `tokio::time::timeout`-Aufruf (z. B. `fut.await` direkt) würde
+    /// dieser Test mit `#[tokio::test(start_paused = true)]` nie
+    /// terminieren, da die virtuelle Uhr ohne einen `timeout()`, der auf
+    /// sie wartet, nicht von selbst voranschreitet — ein hart timeoutender
+    /// äußerer Test-Timeout stellt zusätzlich sicher, dass ein
+    /// versehentliches "hängt für immer" hier sauber als Fehlschlag
+    /// auffällt statt den gesamten Testlauf zu blockieren.
+    #[tokio::test(start_paused = true)]
+    async fn test_never_finishing_future_yields_ssh_timeout_not_a_hang() {
+        let result = tokio::time::timeout(
+            Duration::from_secs(20),
+            connect_with_timeout(
+                std::future::pending::<Result<(), SshError>>(),
+                Duration::from_secs(10),
+            ),
+        )
+        .await
+        .expect("connect_with_timeout selbst darf nicht hängen");
+
+        assert_eq!(result, Err(SshError::Timeout));
+    }
+
+    // `connect_with_timeout`s Signatur (s. oben) nimmt keinen `HostKeyStore`
+    // entgegen — sie kann daher strukturell, nicht nur im Testfall, niemals
+    // selbst `trust()` aufrufen (0 Aufrufe garantiert durch Konstruktion,
+    // nicht durch einen Mock-Zähler zur Laufzeit). Der Aufrufer
+    // (`app-shell::commands::connect_session`) übergibt ihr ausschließlich
+    // den `ssh_transport::connect(...)`-Aufruf; die Host-Key-Entscheidung
+    // liegt vollständig außerhalb dieser Funktion — per Code-Struktur
+    // nachprüfbar (wie Test 16 in `tests/integration.rs`), nicht per
+    // Laufzeit-Assertion.
+
+    /// Erfolgsfall: eine sofort fertige Future liefert ihr Ergebnis
+    /// unverändert durch, ohne auf den Timeout zu warten.
+    #[tokio::test]
+    async fn test_fast_future_resolves_before_timeout() {
+        let result = connect_with_timeout(
+            async { Ok::<&'static str, SshError>("connected") },
+            Duration::from_secs(10),
+        )
+        .await;
+        assert_eq!(result, Ok("connected"));
     }
 }

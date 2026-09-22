@@ -59,6 +59,16 @@ impl CredentialStore for TestCredentialStore {
 #[derive(Default)]
 struct TestHostKeyStore {
     known: Mutex<HashMap<(String, u16), Vec<u8>>>,
+    /// Spec 0069, Teil A3, Test 11/13: zählt `trust()`-Aufrufe, damit der
+    /// Timeout-Gegenbeweis belegen kann, dass ein Verbindungs-Timeout NIE
+    /// einen Host-Key akzeptiert (Spec 0069 §5, Sicherheits-Invariante).
+    trust_calls: Mutex<usize>,
+}
+
+impl TestHostKeyStore {
+    fn trust_calls(&self) -> usize {
+        *self.trust_calls.lock().unwrap()
+    }
 }
 
 impl HostKeyStore for TestHostKeyStore {
@@ -76,6 +86,7 @@ impl HostKeyStore for TestHostKeyStore {
     }
 
     fn trust(&self, host: &str, port: u16, key: &[u8]) -> Result<(), SshError> {
+        *self.trust_calls.lock().unwrap() += 1;
         self.known
             .lock()
             .unwrap()
@@ -365,6 +376,218 @@ async fn test_unknown_host_key_pauses_then_trust_continues() {
             panic!("nach trust() hätte die Verbindung gelingen müssen")
         }
     }
+}
+
+// --- Spec 0069, Teil A3 (ERHÖHT): Verbindungsfehler unterscheiden ---------
+
+/// Test 7: Verbindung zu einem geschlossenen lokalen Port → `ConnectionRefused`.
+/// *Gegenbeweis:* vor diesem Schritt lieferte `map_russh_error` hier
+/// unterschiedslos `ConnectionFailed` (jeder `io::Error` fiel in denselben
+/// Zweig) — dieser Test schlug vor dem Fix fehl (der `matches!` traf nicht
+/// zu), s. Bericht.
+#[tokio::test]
+async fn test_connect_to_closed_local_port_yields_connection_refused() {
+    // Port binden, dann sofort wieder freigeben — verlässlich "zu" (kein
+    // Dienst dahinter), ohne einen Port fest zu verdrahten.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", port)],
+    };
+    let credentials = TestCredentialStore::default();
+    let host_keys: std::sync::Arc<dyn HostKeyStore> =
+        std::sync::Arc::new(TestHostKeyStore::default());
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        ssh_transport::connect(&target, &credentials, host_keys),
+    )
+    .await
+    .expect("darf nicht hängen");
+    let err = match result {
+        Err(err) => err,
+        Ok(_) => panic!("ein geschlossener Port darf keine Verbindung liefern"),
+    };
+
+    assert!(
+        matches!(err, SshError::ConnectionRefused(_)),
+        "erwartet ConnectionRefused, bekam {err:?}"
+    );
+    assert_eq!(err.code(), "SSH_CONNECTION_REFUSED");
+}
+
+/// Test 7: Verbindung zu einem nicht auflösbaren Hostnamen → `HostNotFound`
+/// (nachträgliche DNS-Diagnose, s. `connect::diagnose_connection_failed_dns`).
+/// `.invalid` ist laut RFC 2606 reserviert und darf nie auflösbar sein.
+/// *Gegenbeweis:* vor der DNS-Diagnose lieferte dieser Fall `ConnectionFailed`
+/// (derselbe Auffangfall wie jeder andere `io::Error`), dieser Test schlug
+/// vorher fehl.
+#[tokio::test]
+async fn test_connect_to_unresolvable_host_yields_host_not_found() {
+    let target = ConnectionTarget {
+        hops: vec![password_hop("this-host-does-not-exist.invalid", 22)],
+    };
+    let credentials = TestCredentialStore::default();
+    let host_keys: std::sync::Arc<dyn HostKeyStore> =
+        std::sync::Arc::new(TestHostKeyStore::default());
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        ssh_transport::connect(&target, &credentials, host_keys),
+    )
+    .await
+    .expect("darf nicht hängen");
+    let err = match result {
+        Err(err) => err,
+        Ok(_) => panic!("ein nicht auflösbarer Hostname darf keine Verbindung liefern"),
+    };
+
+    assert!(
+        matches!(err, SshError::HostNotFound(_)),
+        "erwartet HostNotFound, bekam {err:?}"
+    );
+    assert_eq!(err.code(), "SSH_HOST_NOT_FOUND");
+}
+
+/// Test 15: ein geänderter Host-Key bleibt weiterhin `Mismatch` — nie ein
+/// Verbindungsfehler-Code, auch nicht nach Einführung der neuen
+/// `SshError`-Varianten in diesem Schritt (Sicherheits-Invariante, Spec
+/// 0069 §5).
+#[tokio::test]
+async fn test_changed_host_key_still_yields_mismatch_not_a_connection_error() {
+    let server = RunningTestServer::start().await;
+    let host_keys = TestHostKeyStore::default();
+    // Absichtlich ein ANDERER Key als der tatsächliche Server-Key.
+    let wrong_key = {
+        let mut k = server.host_public_key.clone();
+        k.push(0xFF);
+        k
+    };
+    host_keys
+        .trust("127.0.0.1", server.addr.port(), &wrong_key)
+        .unwrap();
+    let host_keys: std::sync::Arc<dyn HostKeyStore> = std::sync::Arc::new(host_keys);
+
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", server.addr.port())],
+    };
+    let credentials = TestCredentialStore::default();
+
+    let outcome = ssh_transport::connect(&target, &credentials, host_keys)
+        .await
+        .expect("connect() selbst darf bei Mismatch nicht fehlschlagen");
+
+    match outcome {
+        ConnectOutcome::PendingHostKeyConfirmation { decision, .. } => {
+            assert!(
+                matches!(decision, HostKeyDecision::Mismatch { .. }),
+                "erwartet Mismatch, bekam {decision:?}"
+            );
+        }
+        ConnectOutcome::Connected(_) => {
+            panic!("ein geänderter Host-Key darf niemals stillschweigend akzeptiert werden")
+        }
+    }
+}
+
+/// Test 13: ein hängender Handshake (Gegenstelle nimmt an, schickt aber nie
+/// ein SSH-Banner) endet nach dem (verkürzten) Timeout mit `SshError::Timeout`
+/// statt für immer zu hängen — und akzeptiert dabei keinen Host-Key (0
+/// `trust()`-Aufrufe). Test selbst mit äußerem `tokio::time::timeout`
+/// abgesichert, damit ein Regressions-Bug hier sauber fehlschlägt statt den
+/// gesamten Testlauf hängen zu lassen.
+#[tokio::test]
+async fn test_hanging_handshake_times_out_and_never_trusts_a_host_key() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    // Nimmt die Verbindung an, hält sie aber offen, ohne je ein
+    // SSH-Identifikations-Banner zu schicken — genau der Fall, den
+    // `SSH_CONNECT_TIMEOUT` abfangen soll.
+    std::thread::spawn(move || {
+        if let Ok((stream, _)) = listener.accept() {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            drop(stream);
+        }
+    });
+
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", port)],
+    };
+    let credentials = TestCredentialStore::default();
+    let host_keys = std::sync::Arc::new(TestHostKeyStore::default());
+    let host_keys_dyn: std::sync::Arc<dyn HostKeyStore> = host_keys.clone();
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        ssh_transport::connect_with_timeout(
+            ssh_transport::connect(&target, &credentials, host_keys_dyn),
+            std::time::Duration::from_millis(300),
+        ),
+    )
+    .await
+    .expect("connect_with_timeout selbst darf nicht hängen");
+
+    match result {
+        Err(SshError::Timeout) => {}
+        Err(other) => panic!("erwartet SshError::Timeout, bekam {other:?}"),
+        Ok(_) => panic!("ein hängender Handshake darf niemals als verbunden gelten"),
+    }
+    assert_eq!(
+        host_keys.trust_calls(),
+        0,
+        "ein Timeout darf niemals einen Host-Key vertrauen"
+    );
+}
+
+/// Test 17: ein Verbindungsversuch mit Passwort gegen einen geschlossenen
+/// Port darf das Passwort weder in der Fehlermeldung noch im Log
+/// preisgeben — auch nicht in einer der neuen, präziseren `SshError`-
+/// Varianten (deren Payload aus `io::Error`-Text besteht, nie aus
+/// Zugangsdaten).
+#[tokio::test]
+async fn test_connection_error_against_closed_port_never_leaks_the_password() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+
+    const SECRET_MARKER: &str = "s3cr3t-teil-a3-marker";
+    struct PasswordProbeStore;
+    impl CredentialStore for PasswordProbeStore {
+        fn get(&self, _r: &CredentialRef) -> CredentialResult<SecretString> {
+            Ok(SecretString::from(SECRET_MARKER.to_string()))
+        }
+        fn set(&self, _r: &CredentialRef, _value: SecretString) -> CredentialResult<()> {
+            Ok(())
+        }
+        fn delete(&self, _r: &CredentialRef) -> CredentialResult<()> {
+            Ok(())
+        }
+    }
+
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", port)],
+    };
+    let host_keys: std::sync::Arc<dyn HostKeyStore> =
+        std::sync::Arc::new(TestHostKeyStore::default());
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        ssh_transport::connect(&target, &PasswordProbeStore, host_keys),
+    )
+    .await
+    .expect("darf nicht hängen");
+    let err = match result {
+        Err(err) => err,
+        Ok(_) => panic!("ein geschlossener Port darf keine Verbindung liefern"),
+    };
+
+    let rendered = format!("{err} {err:?}");
+    assert!(
+        !rendered.contains(SECRET_MARKER),
+        "das Passwort darf nicht in der Fehlermeldung auftauchen: {rendered}"
+    );
 }
 
 // --- Spec 0020, Abschnitt 6: SFTP-Integrationstests ------------------------

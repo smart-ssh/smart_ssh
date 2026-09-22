@@ -15,11 +15,10 @@ use ssh_manager_core::ssh::{
 };
 use ssh_transport::ConnectOutcome;
 
+use crate::commands::SSH_CONNECT_TIMEOUT;
 use crate::dto::{AuthMethodInput, ServerInput, TestConnectionResult};
 use crate::ephemeral_credentials::EphemeralCredentialStore;
 use crate::error::{CommandError, CommandResult};
-
-const TEST_CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Kapselt `ssh_transport::connect()` hinter einem Trait, rein damit
 /// `test_connection`s Logik (Ephemeral-Credential-Aufbau, Hop-Kette,
@@ -77,7 +76,7 @@ pub async fn test_connection(
         connector,
         input,
         existing_server_id,
-        TEST_CONNECTION_TIMEOUT,
+        SSH_CONNECT_TIMEOUT,
     )
     .await
 }
