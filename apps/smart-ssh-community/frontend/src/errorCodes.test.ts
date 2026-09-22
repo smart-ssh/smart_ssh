@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { translateErrorCode } from "./errorCodes";
+import { FIVE_MINUTE_PATH_ERROR_CODES, translateErrorCode } from "./errorCodes";
 import { testI18n } from "./testI18n";
 
 /** Testdouble für `useTranslation()`s `t` — löst bekannte Keys auf einen
@@ -57,5 +57,32 @@ describe("translateErrorCode", () => {
     );
     expect(text).toMatch(/wait/i);
     expect(text).toMatch(/again/i);
+  });
+});
+
+// Spec 0069, Teil A, Test 18: jeder Code des Fünf-Minuten-Pfads ist in
+// KNOWN_ERROR_CODES (indirekt geprüft: `translateErrorCode` liefert für
+// einen bekannten Code nie den Fallback zurück), hat einen nicht-leeren
+// DE- und EN-Text, und DE unterscheidet sich von EN (kein vergessener
+// Copy-Paste-Platzhalter). *Gegenbeweis:* vor Spec 0069 fehlten
+// FIVE_MINUTE_PATH_ERROR_CODES und die neuen Codes komplett — dieser Test
+// schlug fehl (Import-Fehler bzw. leere Liste).
+describe("FIVE_MINUTE_PATH_ERROR_CODES", () => {
+  const FALLBACK = "__FALLBACK_SENTINEL__";
+
+  it.each(FIVE_MINUTE_PATH_ERROR_CODES)("%s ist bekannt und DE/EN unterscheiden sich", (code) => {
+    const de = translateErrorCode(testI18n.getFixedT("de"), code, FALLBACK);
+    const en = translateErrorCode(testI18n.getFixedT("en"), code, FALLBACK);
+
+    expect(de).not.toBe(FALLBACK);
+    expect(en).not.toBe(FALLBACK);
+    expect(de.trim().length).toBeGreaterThan(0);
+    expect(en.trim().length).toBeGreaterThan(0);
+    expect(de).not.toBe(en);
+  });
+
+  it("enthält keine doppelten Codes", () => {
+    const unique = new Set(FIVE_MINUTE_PATH_ERROR_CODES);
+    expect(unique.size).toBe(FIVE_MINUTE_PATH_ERROR_CODES.length);
   });
 });

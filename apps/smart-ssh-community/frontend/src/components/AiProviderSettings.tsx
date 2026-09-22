@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { apiKeyFormatWarning } from "../apiKeyFormat";
 import {
   addAiProvider,
+  commandErrorCode,
   commandErrorMessage,
   deleteAiProvider,
   discoverModels,
@@ -11,6 +12,7 @@ import {
   setActiveAiProvider,
   testAiProviderCredentials,
 } from "../api";
+import { translateErrorCode } from "../errorCodes";
 import { loadRiskClassifierSettings, saveRiskClassifierSettings } from "../riskSettings";
 import {
   type AiProviderConfigDto,
@@ -114,6 +116,11 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   const [models, setModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsFailed, setModelsFailed] = useState(false);
+  // Spec 0069, Teil A5: bekannter Backend-Code des letzten Discovery-
+  // Fehlschlags, für den übersetzten Grund unter dem bisherigen Hinweis —
+  // `null` sowohl "kein Fehlschlag" als auch "Fehlschlag ohne bekannten
+  // Code" (dann bleibt nur der bisherige generische Hinweis stehen).
+  const [modelsFailedCode, setModelsFailedCode] = useState<string | null>(null);
   const [credentialTestRunning, setCredentialTestRunning] = useState(false);
   const [credentialTestResult, setCredentialTestResult] =
     useState<TestAiProviderCredentialsResult | null>(null);
@@ -171,6 +178,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       setForm(emptyForm());
       setModels([]);
       setModelsFailed(false);
+      setModelsFailedCode(null);
       setCredentialTestResult(null);
       reload();
       onProvidersChanged();
@@ -189,11 +197,13 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   const handleDiscoverModels = async () => {
     setModelsLoading(true);
     setModelsFailed(false);
+    setModelsFailedCode(null);
     try {
       const discovered = await discoverModels(form);
       setModels(discovered);
-    } catch {
+    } catch (err) {
       setModelsFailed(true);
+      setModelsFailedCode(commandErrorCode(err));
       setModels([]);
     } finally {
       setModelsLoading(false);
@@ -486,7 +496,22 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               ))}
             </datalist>
             {modelsFailed && (
-              <p className="mt-1 text-xs text-slate-500">{t("aiProvider.modelDiscoveryFailedHint")}</p>
+              <>
+                <p className="mt-1 text-xs text-slate-500">{t("aiProvider.modelDiscoveryFailedHint")}</p>
+                {/* Spec 0069, Teil A5: zusätzlich der übersetzte Grund,
+                 * wenn der Fehler einen bekannten Code trägt (z. B.
+                 * AI_MODEL_NOT_FOUND, AI_LOCAL_PROVIDER_UNREACHABLE) —
+                 * unter dem bisherigen, unveränderten Hinweis, nicht
+                 * anstelle davon. `translateErrorCode` fällt bei
+                 * unbekanntem Code auf den leeren String zurück, den wir
+                 * hier explizit unterdrücken statt eine leere Box zu
+                 * zeigen. */}
+                {modelsFailedCode && translateErrorCode(t, modelsFailedCode, "") && (
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {translateErrorCode(t, modelsFailedCode, "")}
+                  </p>
+                )}
+              </>
             )}
           </label>
 
@@ -578,7 +603,20 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 {credentialTestResult.kind === "authenticationFailed" &&
                   t("aiProvider.testResultAuthFailed")}
                 {credentialTestResult.kind === "unreachable" &&
-                  t("aiProvider.testResultUnreachable", { message: credentialTestResult.message })}
+                  // Spec 0069, Teil A5: bekannter Code → übersetzte
+                  // Meldung statt des rohen Backend-Texts. Sonderfall
+                  // AI_RATE_LIMITED: eigener Text (die Chat-Meldung sagt
+                  // "Nachricht erneut senden" — passt im Testen-Kontext
+                  // nicht). Ohne Code: bisheriges Verhalten.
+                  (credentialTestResult.code === "AI_RATE_LIMITED"
+                    ? t("aiProvider.testResultRateLimited")
+                    : translateErrorCode(
+                        t,
+                        credentialTestResult.code,
+                        t("aiProvider.testResultUnreachable", {
+                          message: credentialTestResult.message,
+                        }),
+                      ))}
               </p>
             )}
           </div>

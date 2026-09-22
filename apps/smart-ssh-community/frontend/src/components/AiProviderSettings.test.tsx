@@ -140,7 +140,9 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
     fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
 
     await waitFor(() =>
-      expect(screen.getByText("✗ Authentifizierung fehlgeschlagen")).toBeInTheDocument(),
+      expect(
+        screen.getByText("✗ Authentifizierung fehlgeschlagen – API-Key prüfen"),
+      ).toBeInTheDocument(),
     );
   });
 
@@ -159,6 +161,50 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
         screen.getByText("✗ Provider nicht erreichbar: connection refused"),
       ).toBeInTheDocument(),
     );
+  });
+
+  // Spec 0069, Teil A5, Test 19: `unreachable` mit `AI_RATE_LIMITED` zeigt
+  // den eigenen "testResultRateLimited"-Text (nicht den generischen
+  // "Provider nicht erreichbar: ..."-Fallback — die Zugangsdaten sind ja
+  // vermutlich gültig, nur gerade gedrosselt).
+  it("shows the rate-limited-specific text for AI_RATE_LIMITED, not the generic unreachable text", async () => {
+    vi.mocked(testAiProviderCredentials).mockResolvedValue({
+      kind: "unreachable",
+      message: "HTTP 429: too many requests",
+      code: "AI_RATE_LIMITED",
+    });
+    renderForm();
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Zugangsdaten vermutlich gültig, der Anbieter drosselt aber gerade. In einer Minute erneut testen.",
+        ),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/Provider nicht erreichbar/)).not.toBeInTheDocument();
+  });
+
+  // Spec 0069, Teil A5, Test 19: mit `AI_MODEL_NOT_FOUND` zeigt die Box
+  // den übersetzten Text statt des rohen `message`-Strings.
+  it("shows the translated text for AI_MODEL_NOT_FOUND instead of the raw message", async () => {
+    vi.mocked(testAiProviderCredentials).mockResolvedValue({
+      kind: "unreachable",
+      message: "HTTP 404: model_not_found",
+      code: "AI_MODEL_NOT_FOUND",
+    });
+    renderForm();
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/kennt dieses Modell nicht/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/HTTP 404: model_not_found/)).not.toBeInTheDocument();
   });
 
   it("clears a stale result once the key is edited again", async () => {

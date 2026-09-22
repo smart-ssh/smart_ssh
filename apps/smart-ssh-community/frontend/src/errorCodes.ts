@@ -5,6 +5,34 @@
  * `errors.<CODE>` — die Menge hier definiert, welche Codes das Frontend
  * kennt; alles andere (unbekannter/zukünftiger Code, oder gar keiner) fällt
  * auf den mitgegebenen `fallback`-Text zurück, nie eine leere Anzeige. */
+/** Spec 0069, Teil A1: die Codes des Fünf-Minuten-Pfads (Provider
+ * einrichten → Server anlegen → Verbindung testen → verbinden → Frage
+ * stellen) — jeder hier gelistete Code hat DE/EN-Text mit Ursache und
+ * nächstem Schritt (geprüft von `errorCodes.test.ts`/`spec-reviewer`) UND
+ * steht in `KNOWN_ERROR_CODES` unten. Bewusst als eigene, geprüfte Liste
+ * statt implizit "alles in `KNOWN_ERROR_CODES`" — die größere Liste
+ * enthält auch Filter-/Formular-Codes außerhalb dieses Pfads, für die die
+ * "Ursache + nächster Schritt"-Anforderung nicht gilt. */
+export const FIVE_MINUTE_PATH_ERROR_CODES = [
+  "AI_AUTH_FAILED",
+  "AI_MODEL_NOT_FOUND",
+  "AI_LOCAL_PROVIDER_UNREACHABLE",
+  "AI_NETWORK_ERROR",
+  "AI_TIMEOUT",
+  "AI_PROVIDER_UNAVAILABLE",
+  "AI_RATE_LIMITED",
+  "AI_NO_ACTIVE_PROVIDER",
+  "SSH_CONNECTION_REFUSED",
+  "SSH_HOST_NOT_FOUND",
+  "SSH_HOST_UNREACHABLE",
+  "SSH_TIMEOUT",
+  "SSH_CONNECTION_CLOSED",
+  "SSH_CONNECTION_FAILED",
+  "SSH_AUTH_FAILED",
+  "SSH_HOST_KEY_NOT_TRUSTED",
+  "SSH_HOST_KEY_CONFIRM_TIMEOUT",
+] as const;
+
 const KNOWN_ERROR_CODES = new Set<string>([
   // SshError (crates/core/src/ssh/error.rs)
   "SSH_CONNECTION_FAILED",
@@ -15,6 +43,14 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "SSH_JUMP_HOST_CYCLE",
   "SSH_CREDENTIAL_RESOLUTION_FAILED",
   "SSH_SFTP_PERMISSION_DENIED",
+  // Spec 0069, Teil A3:
+  "SSH_CONNECTION_REFUSED",
+  "SSH_HOST_NOT_FOUND",
+  "SSH_HOST_UNREACHABLE",
+  "SSH_CONNECTION_CLOSED",
+  // Spec 0069, Teil A4:
+  "SSH_HOST_KEY_NOT_TRUSTED",
+  "SSH_HOST_KEY_CONFIRM_TIMEOUT",
   // AiError (crates/core/src/ai/types.rs)
   "AI_AUTH_FAILED",
   "AI_RATE_LIMITED",
@@ -26,6 +62,12 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // hier — die englische UI zeigte bislang den rohen deutschen
   // Backend-Text statt einer Übersetzung.
   "AI_RESPONSE_TRUNCATED",
+  // Spec 0069, Teil A2:
+  "AI_MODEL_NOT_FOUND",
+  "AI_LOCAL_PROVIDER_UNREACHABLE",
+  "AI_TIMEOUT",
+  // Spec 0069, Teil A4:
+  "AI_NO_ACTIVE_PROVIDER",
   // Decision/EvaluationTrace (crates/core/src/filter/engine.rs +
   // crates/app-shell/src/orchestration.rs)
   "FILTER_EMPTY_COMMAND",

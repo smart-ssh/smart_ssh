@@ -1028,7 +1028,10 @@ export function ServerForm({
   );
 }
 
-function TestResultBadge({ result }: { result: TestConnectionResult }) {
+// Spec 0069, Teil A5, Test 20: exportiert (statt modulprivat), damit sich
+// die code->Übersetzung ohne einen vollständigen `ServerForm`-Render
+// testen lässt.
+export function TestResultBadge({ result }: { result: TestConnectionResult }) {
   const { t } = useTranslation();
   switch (result.kind) {
     case "success":
@@ -1042,9 +1045,15 @@ function TestResultBadge({ result }: { result: TestConnectionResult }) {
     case "hostKeyMismatch":
       return <span className="text-sm text-red-400">{t("serverForm.testResult.hostKeyMismatch")}</span>;
     case "networkError":
+      // Spec 0069, Teil A5: bekannter Code → übersetzte Meldung; ohne
+      // Code → wie bisher der rohe Backend-Text.
       return (
         <span className="text-sm text-red-400">
-          {t("serverForm.testResult.networkError", { message: result.message })}
+          {translateErrorCode(
+            t,
+            result.code,
+            t("serverForm.testResult.networkError", { message: result.message }),
+          )}
         </span>
       );
     case "timeout":
