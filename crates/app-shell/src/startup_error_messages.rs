@@ -20,6 +20,78 @@ pub struct DialogText {
     pub message: String,
 }
 
+/// Sprache der Startdialoge (Spec 0071, A11a). Bewusst nur zwei Werte: Der
+/// Startdialog läuft **vor** der Tauri-Runtime und damit vor der
+/// Frontend-`i18n`; er kann deren Übersetzungskatalog nicht benutzen und
+/// trägt seine Texte selbst.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Language {
+    De,
+    En,
+}
+
+/// Spec 0071, A11a/A11c: Sprachwahl des Startdialogs als **reine** Funktion
+/// über den bereits ausgewählten Umgebungswert — unit-testbar ohne
+/// Umgebungsmanipulation, dieselbe Parameter-Injection wie bei
+/// [`keychain_unavailable_text`]. Nur der Aufrufer in `crate::run` liest die
+/// Variablen tatsächlich aus (s. [`preferred_locale_value`]).
+///
+/// Ausgewertet wird nur das Sprach-Präfix vor `_`, `.` oder `@`
+/// (`de_DE.UTF-8` → `de`). Beginnt es mit `de` → Deutsch, sonst Englisch.
+/// Ist nichts gesetzt oder der Wert unbrauchbar (`C`, `POSIX`, leer), gilt
+/// **Deutsch** als Vorgabe — dasselbe Verhalten wie vor Spec 0071, damit ein
+/// System ohne Locale-Einstellung nicht stillschweigend die Sprache wechselt.
+///
+/// `#[allow(dead_code)]`: in diesem Commit bewusst noch ohne Wirkung — die
+/// Verdrahtung in `crate::run` folgt in §7 Schritt 5, damit der reine,
+/// vollständig getestete Teil einzeln prüfbar bleibt.
+#[allow(dead_code)]
+pub fn startup_language(raw: Option<&str>) -> Language {
+    let Some(raw) = raw else {
+        return Language::De;
+    };
+    let prefix = raw
+        .split(['_', '.', '@'])
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+
+    // `C`/`POSIX` sind keine Sprachangaben, sondern die "keine Locale"-
+    // Angabe von POSIX. Ohne diese Sonderbehandlung landeten sie in der
+    // `else`-Hälfte unten und ergäben Englisch — die Spec verlangt hier
+    // ausdrücklich die Vorgabe (A11a, T11a).
+    if prefix.is_empty() || prefix == "c" || prefix == "posix" {
+        return Language::De;
+    }
+
+    if prefix.starts_with("de") {
+        Language::De
+    } else {
+        Language::En
+    }
+}
+
+/// Spec 0071, A11a: die erste gesetzte, nicht leere Variable aus `LC_ALL`,
+/// `LC_MESSAGES`, `LANG` — in genau dieser Reihenfolge (POSIX-Rangfolge:
+/// `LC_ALL` überstimmt alles, `LANG` ist die schwächste Angabe).
+///
+/// Ebenfalls rein: Der Aufrufer liest die drei Variablen, diese Funktion
+/// entscheidet nur, welche davon zählt.
+///
+/// `#[allow(dead_code)]`: s. [`startup_language`].
+#[allow(dead_code)]
+pub fn preferred_locale_value<'a>(
+    lc_all: Option<&'a str>,
+    lc_messages: Option<&'a str>,
+    lang: Option<&'a str>,
+) -> Option<&'a str> {
+    [lc_all, lc_messages, lang]
+        .into_iter()
+        .flatten()
+        .find(|value| !value.trim().is_empty())
+}
+
 const CANNOT_START_TITLE: &str = "Smart SSH kann nicht starten";
 
 /// spec-reviewer-Fund: ein Datenpfad enthält den Nutzer-Account-Namen (aus
@@ -171,6 +243,65 @@ pub fn keychain_unavailable_text(target_os: &str) -> DialogText {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0071, T11a — die vollständige Tabelle aus A11a, inklusive der
+    /// Vorgabe-Fälle. `C`/`POSIX` sind der eigentliche Stolperstein: Sie
+    /// beginnen nicht mit `de` und ergäben ohne Sonderbehandlung Englisch,
+    /// obwohl die Spec dort die Vorgabe (Deutsch) verlangt.
+    #[test]
+    fn test_startup_language_reads_only_the_language_prefix_and_defaults_to_german() {
+        for raw in ["de", "de_DE.UTF-8", "de_AT@euro", "de_CH", "DE_DE.UTF-8"] {
+            assert_eq!(
+                startup_language(Some(raw)),
+                Language::De,
+                "{raw} muss Deutsch ergeben"
+            );
+        }
+        for raw in ["en_US.UTF-8", "fr_FR", "ja_JP.UTF-8", "en", "nl_NL"] {
+            assert_eq!(
+                startup_language(Some(raw)),
+                Language::En,
+                "{raw} muss Englisch ergeben"
+            );
+        }
+        for raw in ["C", "POSIX", "C.UTF-8", "", "   "] {
+            assert_eq!(
+                startup_language(Some(raw)),
+                Language::De,
+                "{raw:?} ist keine brauchbare Sprachangabe und muss auf die Vorgabe fallen"
+            );
+        }
+        assert_eq!(
+            startup_language(None),
+            Language::De,
+            "keine Variable gesetzt → Vorgabe"
+        );
+    }
+
+    /// Spec 0071, A11a: POSIX-Rangfolge `LC_ALL` > `LC_MESSAGES` > `LANG`,
+    /// wobei eine gesetzte, aber leere Variable übersprungen wird (sonst
+    /// würde ein `LC_ALL=""` die tatsächlich gesetzte `LANG` verdecken).
+    #[test]
+    fn test_preferred_locale_value_follows_the_posix_precedence() {
+        assert_eq!(
+            preferred_locale_value(Some("en_US.UTF-8"), Some("de_DE"), Some("fr_FR")),
+            Some("en_US.UTF-8")
+        );
+        assert_eq!(
+            preferred_locale_value(None, Some("de_DE"), Some("fr_FR")),
+            Some("de_DE")
+        );
+        assert_eq!(
+            preferred_locale_value(None, None, Some("fr_FR")),
+            Some("fr_FR")
+        );
+        assert_eq!(preferred_locale_value(None, None, None), None);
+        assert_eq!(
+            preferred_locale_value(Some(""), Some("  "), Some("en_GB")),
+            Some("en_GB"),
+            "gesetzt, aber leer darf die nächste Variable nicht verdecken"
+        );
+    }
 
     #[test]
     fn test_schema_too_new_message_contains_both_version_numbers_and_the_path() {
