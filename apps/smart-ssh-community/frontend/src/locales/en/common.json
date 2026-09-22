@@ -57,7 +57,18 @@
     "generateFailed": "Could not generate the diagnostics bundle.",
     "previewHint": "Preview — please review before sharing. Included log lines are limited to non-sensitive diagnostic events and additionally redacted; credentials, chat and note content are never embedded. Paths include your username.",
     "save": "Save as …",
-    "saveFailed": "Could not save the diagnostics bundle."
+    "saveFailed": "Could not save the diagnostics bundle.",
+    "keychainLabel": "System keyring",
+    "keychainAvailable": "available",
+    "keychainUnknownState": "checking …",
+    "keychainUnavailable": {
+      "no_session_bus": "unavailable — no D-Bus session bus reachable. Next step: `sudo apt install dbus-user-session`, then sign in again.",
+      "no_secret_service_provider": "unavailable — no Secret Service provider installed. Next step: `sudo apt install gnome-keyring` (GNOME), `sudo apt install kwalletd6` (KWallet on KDE), or KeePassXC with Secret Service integration enabled, then sign in again.",
+      "locked": "unavailable — present but locked. Next step: unlock it and restart Smart SSH. No package is missing.",
+      "unknown": "unavailable — cause unknown. Next step: check whether a keyring service is running and unlocked, then restart Smart SSH."
+    },
+    "keychainBlocked": "While this is the case, no API key, no server password, no passphrase and no sudo password can be saved or read.",
+    "keychainLoadFailed": "Could not load the system keyring state."
   },
   "fileTypes": {
     "description": "Set a local application per file extension to use for \"Open locally\". Without an entry, the operating system default application is used.",

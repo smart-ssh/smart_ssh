@@ -37,6 +37,7 @@ export interface ServerDto {
    * werden, sonst behauptet die Oberfläche "kein Sudo-Passwort
    * hinterlegt", obwohl sie es nicht weiß. */
   sudoPasswordUnknown: boolean;
+
   /** Spec 0032, Abschnitt 3: `true` genau für den lokalen Pseudo-Server. */
   isLocal: boolean;
   postIngestPolicy: PostIngestPolicy;
@@ -726,4 +727,23 @@ export interface AppInfoDto {
   edition: string;
   /** `"Dev"` (Debug-Build, eigenes Datenverzeichnis) oder `"Release"`. */
   buildType: "Dev" | "Release";
+}
+
+// --- Spec 0071: Systemschlüsselbund-Zustand -------------------------------
+
+/** Warum der Systemschlüsselbund nicht verfügbar ist — von
+ * `crate::dto::KeychainUnavailableReasonDto` (Spec 0071, A1). */
+export type KeychainUnavailableReason =
+  | "no_session_bus"
+  | "no_secret_service_provider"
+  | "locked"
+  | "unknown";
+
+/** Von `crate::dto::KeychainStatusDto` (Spec 0071, A15). Trägt bewusst
+ * keinen Fehlertext — die anzeigbaren Texte stehen im
+ * Übersetzungskatalog. */
+export interface KeychainStatusDto {
+  available: boolean;
+  /** `null`, wenn `available`. */
+  reason: KeychainUnavailableReason | null;
 }

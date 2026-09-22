@@ -57,7 +57,18 @@
     "generateFailed": "Diagnosepaket konnte nicht erzeugt werden.",
     "previewHint": "Vorschau — bitte vor dem Teilen kurz durchsehen. Enthaltene Log-Zeilen sind auf unkritische Diagnose-Ereignisse beschränkt und zusätzlich redigiert; Zugangsdaten, Chat- und Notiz-Inhalte werden nicht eingebettet. Pfade enthalten deinen Benutzernamen.",
     "save": "Speichern unter …",
-    "saveFailed": "Diagnosepaket konnte nicht gespeichert werden."
+    "saveFailed": "Diagnosepaket konnte nicht gespeichert werden.",
+    "keychainLabel": "Systemschlüsselbund",
+    "keychainAvailable": "verfügbar",
+    "keychainUnknownState": "wird geprüft …",
+    "keychainUnavailable": {
+      "no_session_bus": "nicht verfügbar — kein D-Bus-Session-Bus erreichbar. Nächster Schritt: `sudo apt install dbus-user-session`, danach neu anmelden.",
+      "no_secret_service_provider": "nicht verfügbar — kein Secret-Service-Anbieter installiert. Nächster Schritt: `sudo apt install gnome-keyring` (GNOME), `sudo apt install kwalletd6` (KWallet unter KDE) oder KeePassXC mit aktivierter Secret-Service-Integration, danach neu anmelden.",
+      "locked": "nicht verfügbar — vorhanden, aber gesperrt. Nächster Schritt: entsperren und Smart SSH neu starten. Es fehlt kein Paket.",
+      "unknown": "nicht verfügbar — Ursache unbekannt. Nächster Schritt: prüfen, ob ein Schlüsselbund-Dienst läuft und entsperrt ist, danach Smart SSH neu starten."
+    },
+    "keychainBlocked": "Solange das so ist, lassen sich kein API-Key, kein Server-Passwort, keine Passphrase und kein Sudo-Passwort speichern oder lesen.",
+    "keychainLoadFailed": "Zustand des Systemschlüsselbunds konnte nicht geladen werden."
   },
   "fileTypes": {
     "description": "Lege pro Dateiendung ein lokales Programm fest, das beim \"Lokal öffnen\" verwendet wird. Ohne Eintrag wird das Standardprogramm des Betriebssystems genutzt.",

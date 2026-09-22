@@ -7,6 +7,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use credentials_keyring::{KeychainAvailability, KeychainUnavailableReason};
 use persistence_sqlite::{
     AiProviderConfig, AiProviderConfigUpdate, ChatSessionSummary, StoredRule,
 };
@@ -108,6 +109,56 @@ impl ServerDto {
             post_ingest_policy: server.post_ingest_policy,
             ai_injection_check_enabled: server.ai_injection_check_enabled,
             sftp_server_path: server.sftp_server_path.clone(),
+        }
+    }
+}
+
+/// Spec 0071, A15: der Schlüsselbund-Zustand für die Diagnose-Ansicht.
+///
+/// Bewusst nur ein Flag und eine Aufzählung — **kein** Fehlertext, keine
+/// D-Bus-Adresse, kein Pfad (I1/A10). Die anzeigbaren Texte liegen im
+/// Frontend-Übersetzungskatalog, nicht hier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeychainStatusDto {
+    pub available: bool,
+    /// `None`, wenn `available` — sonst der klassifizierte Grund.
+    pub reason: Option<KeychainUnavailableReasonDto>,
+}
+
+/// Serialisierbare Fassung von
+/// [`credentials_keyring::KeychainUnavailableReason`]. Eigener Typ statt
+/// `Serialize` auf dem Core-Enum: `credentials-keyring` soll `serde` nicht
+/// kennen müssen (dieselbe Trennung wie bei allen anderen DTOs hier).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KeychainUnavailableReasonDto {
+    NoSessionBus,
+    NoSecretServiceProvider,
+    Locked,
+    Unknown,
+}
+
+impl From<KeychainAvailability> for KeychainStatusDto {
+    fn from(availability: KeychainAvailability) -> Self {
+        match availability.unavailable_reason() {
+            None => Self {
+                available: true,
+                reason: None,
+            },
+            Some(reason) => Self {
+                available: false,
+                reason: Some(match reason {
+                    KeychainUnavailableReason::NoSessionBus => {
+                        KeychainUnavailableReasonDto::NoSessionBus
+                    }
+                    KeychainUnavailableReason::NoSecretServiceProvider => {
+                        KeychainUnavailableReasonDto::NoSecretServiceProvider
+                    }
+                    KeychainUnavailableReason::Locked => KeychainUnavailableReasonDto::Locked,
+                    KeychainUnavailableReason::Unknown => KeychainUnavailableReasonDto::Unknown,
+                }),
+            },
         }
     }
 }

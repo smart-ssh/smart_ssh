@@ -35,8 +35,9 @@ use crate::dto::{
     credential_ref_for, sort_remote_entries, ActionUserDecision, AiProviderConfigDto,
     AiProviderConfigInput, AppInfoDto, DeleteGroupResult, DeleteServerResult, DocumentFormat,
     EditSessionDto, EvalContextInput, EvaluationTraceDto, GroupDto, HostKeyUserDecision,
-    NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType, RemoteEntryDto, RuleDto,
-    RuleInput, ServerDto, ServerInput, SessionSummaryDto, TestConnectionResult,
+    KeychainStatusDto, NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType,
+    RemoteEntryDto, RuleDto, RuleInput, ServerDto, ServerInput, SessionSummaryDto,
+    TestConnectionResult,
 };
 use crate::error::{keychain_aware_credential_error, CommandError, CommandResult};
 use crate::events::{
@@ -2940,6 +2941,18 @@ pub async fn list_prompt_history(
 }
 
 // --- Spec 0016: Strukturiertes Logging & Diagnose --------------------------
+
+/// Spec 0071, A15: Der Startdialog ist weggeklickt, sobald der Nutzer ihn
+/// bestätigt hat — der Zustand muss trotzdem nachschlagbar bleiben. Liefert
+/// den **bereits beim Start ermittelten** Zustand aus dem `AppState` (A16);
+/// dieser Befehl probiert den Schlüsselbund nicht erneut an.
+///
+/// Gibt nur die Aufzählung zurück, nie einen Fehlertext (I1) — die Texte
+/// dazu liegen im Frontend-Übersetzungskatalog.
+#[tauri::command]
+pub async fn get_keychain_status(state: State<'_, AppState>) -> CommandResult<KeychainStatusDto> {
+    Ok(KeychainStatusDto::from(state.keychain))
+}
 
 /// Spec 0016, Abschnitt 5: öffnet den Log-Ordner im System-Dateimanager
 /// (Finder/Explorer) — ein Klick statt manuell zum plattformspezifischen

@@ -556,6 +556,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::create_overlay_titlebar,
             commands::list_prompt_history,
             commands::open_log_directory,
+            commands::get_keychain_status,
             commands::generate_diagnostics_bundle,
             commands::save_diagnostics_bundle,
             commands::sftp_list,
