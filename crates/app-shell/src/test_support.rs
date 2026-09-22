@@ -226,6 +226,11 @@ pub struct InMemoryCredentialStore {
     /// Slots (z. B. das Sudo-Passwort nach einer bereits gespeicherten
     /// Auth-Methode) — für den Rollback-Test in `servers::create_server`.
     fail_set_for_slot_suffix: Option<String>,
+    /// Spec 0071, X4: lässt `get()` mit `CredentialError::Backend`
+    /// fehlschlagen, **obwohl** der Wert hinterlegt ist — der Fall "der
+    /// Schlüsselbund kann nicht antworten", der sich von "kein Eintrag
+    /// vorhanden" unterscheiden muss.
+    fail_get_with_backend: bool,
 }
 
 impl InMemoryCredentialStore {
@@ -249,6 +254,15 @@ impl InMemoryCredentialStore {
         self
     }
 
+    /// Spec 0071, X4: simuliert einen nicht erreichbaren Schlüsselbund beim
+    /// **Lesen**. Bewusst unabhängig von `with_secret`, damit sich der
+    /// kritische Fall bauen lässt: Wert ist hinterlegt, der Store kann es
+    /// aber nicht sagen.
+    pub fn with_failing_get(mut self) -> Self {
+        self.fail_get_with_backend = true;
+        self
+    }
+
     pub fn get_calls(&self) -> usize {
         *self.get_calls.lock().unwrap()
     }
@@ -257,6 +271,11 @@ impl InMemoryCredentialStore {
 impl CredentialStore for InMemoryCredentialStore {
     fn get(&self, r: &CredentialRef) -> CredentialResult<SecretString> {
         *self.get_calls.lock().unwrap() += 1;
+        if self.fail_get_with_backend {
+            return Err(CredentialError::Backend(
+                "simulierter Keychain-Lesefehler (Test)".to_string(),
+            ));
+        }
         self.secrets
             .lock()
             .unwrap()

@@ -31,6 +31,12 @@ export interface ServerDto {
   /** Spec 0018, Abschnitt 4: ob ein Sudo-Passwort im Schlüsselbund
    * hinterlegt ist — nie der Wert selbst. */
   hasSudoPassword: boolean;
+  /** Spec 0071, A14: `true`, wenn der Systemschlüsselbund nicht sagen
+   * konnte, ob ein Sudo-Passwort hinterlegt ist. Dann ist
+   * `hasSudoPassword` ebenfalls `false` — dieses Feld muss zuerst geprüft
+   * werden, sonst behauptet die Oberfläche "kein Sudo-Passwort
+   * hinterlegt", obwohl sie es nicht weiß. */
+  sudoPasswordUnknown: boolean;
   /** Spec 0032, Abschnitt 3: `true` genau für den lokalen Pseudo-Server. */
   isLocal: boolean;
   postIngestPolicy: PostIngestPolicy;

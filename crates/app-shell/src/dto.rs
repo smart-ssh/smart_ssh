@@ -15,8 +15,8 @@ use ssh_manager_core::filter::{
     Decision, EvalContext, EvaluationTrace, Pattern, RuleAction, RuleId, Scope,
 };
 use ssh_manager_core::profiles::{
-    AuthMethod, CredentialRef, CredentialStore, Group, GroupId, NoteEditor, NoteRevision,
-    PostIngestPolicy, Server,
+    AuthMethod, CredentialError, CredentialRef, CredentialStore, Group, GroupId, NoteEditor,
+    NoteRevision, PostIngestPolicy, Server,
 };
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::RemoteEntry;
@@ -54,6 +54,16 @@ pub struct ServerDto {
     /// Kommentar), deshalb kein `From<&Server>`, sondern
     /// [`ServerDto::from_server`] mit explizitem `CredentialStore`-Zugriff.
     pub has_sudo_password: bool,
+    /// Spec 0071, A14/I4: `true`, wenn der Schlüsselbund **nicht sagen
+    /// konnte**, ob ein Sudo-Passwort hinterlegt ist (`CredentialError::
+    /// Backend`). Vorher lieferte `.is_ok()` in diesem Fall `false` — die
+    /// Oberfläche behauptete also "kein Sudo-Passwort hinterlegt", obwohl
+    /// sie es schlicht nicht wusste. "Unbekannt" ist nicht "nein".
+    ///
+    /// `has_sudo_password` ist dann ebenfalls `false`; die Oberfläche muss
+    /// dieses Feld zuerst prüfen und einen neutralen Zustand anzeigen,
+    /// statt eine Aussage zu treffen.
+    pub sudo_password_unknown: bool,
     /// Spec 0032, Abschnitt 3: `true` genau für den lokalen Pseudo-Server
     /// (`crate::local_server::LOCAL_SERVER_ID`) — steuert im Frontend, ob
     /// Host/Port/Nutzername/Auth/Jump-Host/Löschen/Verbindungstest
@@ -71,6 +81,16 @@ pub struct ServerDto {
 
 impl ServerDto {
     pub fn from_server(server: &Server, credential_store: &dyn CredentialStore) -> Self {
+        // Spec 0071, A14/X4: drei Ausgänge statt zwei. Der Unterschied
+        // zwischen "es gibt keinen Eintrag" und "der Schlüsselbund konnte
+        // nicht antworten" steckt bereits im Fehlertyp — es braucht dafür
+        // keinen zusätzlichen Blick auf den Schlüsselbund-Zustand (A16).
+        let (has_sudo_password, sudo_password_unknown) =
+            match credential_store.get(&sudo_password_credential_ref(server.id)) {
+                Ok(_) => (true, false),
+                Err(CredentialError::NotFound(_)) => (false, false),
+                Err(CredentialError::Backend(_)) => (false, true),
+            };
         Self {
             id: server.id.0.to_string(),
             name: server.name.clone(),
@@ -82,9 +102,8 @@ impl ServerDto {
             auth_kind: AuthMethodKind::from(&server.auth),
             jump_host: server.jump_host.map(|j| j.0.to_string()),
             notes: server.notes.clone(),
-            has_sudo_password: credential_store
-                .get(&sudo_password_credential_ref(server.id))
-                .is_ok(),
+            has_sudo_password,
+            sudo_password_unknown,
             is_local: crate::local_server::is_local(server.id),
             post_ingest_policy: server.post_ingest_policy,
             ai_injection_check_enabled: server.ai_injection_check_enabled,
@@ -1278,6 +1297,103 @@ mod tests {
         let mut config = ai_provider_config_input("sk-key", None);
         config.max_tokens_override = Some(MAX_TOKENS_OVERRIDE_UPPER_BOUND);
         assert_eq!(config.validate_max_tokens_override(), Ok(()));
+    }
+}
+
+#[cfg(test)]
+mod sudo_password_state_tests {
+    //! Spec 0071, A14/X4/I4: "unbekannt" ist nicht "nein". Vor diesem
+    //! Schritt fasste `credential_store.get(...).is_ok()` beide Fälle
+    //! zusammen — ein nicht erreichbarer Schlüsselbund sah für die
+    //! Oberfläche genauso aus wie ein Server ohne hinterlegtes
+    //! Sudo-Passwort, und sie behauptete dann "kein Sudo-Passwort
+    //! hinterlegt", obwohl sie es nicht wusste.
+
+    use super::*;
+    use crate::server_credentials::sudo_password_credential_ref;
+    use crate::test_support::InMemoryCredentialStore;
+    use chrono::Utc;
+    use ssh_manager_core::profiles::PostIngestPolicy;
+
+    fn server() -> Server {
+        let now = Utc::now();
+        Server {
+            id: ServerId::new(),
+            name: "web-01".to_string(),
+            host: "example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: AuthMethod::Agent,
+            notes: String::new(),
+            jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
+            sftp_server_path: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn test_stored_sudo_password_is_reported_as_present() {
+        let server = server();
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(server.id), "sudo-secret");
+
+        let dto = ServerDto::from_server(&server, &store);
+
+        assert!(dto.has_sudo_password);
+        assert!(!dto.sudo_password_unknown);
+    }
+
+    #[test]
+    fn test_missing_entry_is_reported_as_absent_not_unknown() {
+        let server = server();
+        let store = InMemoryCredentialStore::new();
+
+        let dto = ServerDto::from_server(&server, &store);
+
+        assert!(!dto.has_sudo_password);
+        assert!(
+            !dto.sudo_password_unknown,
+            "ein fehlender Eintrag ist eine echte Aussage, kein Unwissen"
+        );
+    }
+
+    /// Spec 0071, X4 — der eigentliche Regressionstest: Das Sudo-Passwort
+    /// **ist** hinterlegt, der Schlüsselbund kann es aber nicht sagen. Am
+    /// ungefixten Stand (`.is_ok()`) meldete das DTO hier
+    /// `has_sudo_password: false` — eine Behauptung, die es nicht decken
+    /// kann.
+    #[test]
+    fn test_unreadable_keychain_is_reported_as_unknown_not_as_absent() {
+        let server = server();
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(server.id), "sudo-secret")
+            .with_failing_get();
+
+        let dto = ServerDto::from_server(&server, &store);
+
+        assert!(
+            dto.sudo_password_unknown,
+            "ein Backend-Fehler muss als 'unbekannt' erkennbar sein"
+        );
+        assert!(!dto.has_sudo_password);
+    }
+
+    /// Das Feld muss das Frontend auch tatsächlich erreichen — in
+    /// camelCase, wie alle anderen `ServerDto`-Felder (s. `rename_all`).
+    #[test]
+    fn test_unknown_flag_is_serialised_as_camel_case() {
+        let server = server();
+        let store = InMemoryCredentialStore::new().with_failing_get();
+
+        let json = serde_json::to_value(ServerDto::from_server(&server, &store)).unwrap();
+
+        assert_eq!(json["sudoPasswordUnknown"], serde_json::json!(true));
+        assert_eq!(json["hasSudoPassword"], serde_json::json!(false));
     }
 }
 

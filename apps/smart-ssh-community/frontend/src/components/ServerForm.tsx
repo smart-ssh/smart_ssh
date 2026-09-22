@@ -192,6 +192,10 @@ export function ServerForm({
   // "Entfernen"-Weg für einen bereits gesetzten Wert (s. `handleClearSudoPassword`).
   const [sudoPassword, setSudoPassword] = useState("");
   const [hasSudoPassword, setHasSudoPassword] = useState(false);
+  // Spec 0071, A14/I4: Der Schlüsselbund konnte nicht sagen, ob ein
+  // Sudo-Passwort hinterlegt ist. "Unbekannt" ist nicht "nein" — die
+  // Oberfläche darf in diesem Fall keine der beiden Aussagen treffen.
+  const [sudoPasswordUnknown, setSudoPasswordUnknown] = useState(false);
   const [clearingSudoPassword, setClearingSudoPassword] = useState(false);
   const [postIngestPolicy, setPostIngestPolicy] = useState<PostIngestPolicy>("balanced");
   const [aiInjectionCheckEnabled, setAiInjectionCheckEnabled] = useState(false);
@@ -257,6 +261,7 @@ export function ServerForm({
         setAuth(authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind));
         setSudoPassword("");
         setHasSudoPassword(server.hasSudoPassword);
+        setSudoPasswordUnknown(server.sudoPasswordUnknown);
         setLocalNotes(server.notes);
         setPostIngestPolicy(server.postIngestPolicy);
         setAiInjectionCheckEnabled(server.aiInjectionCheckEnabled);
@@ -811,7 +816,11 @@ export function ServerForm({
           <label className="block text-sm text-slate-300">
             {t("serverForm.sudoLabel")}{" "}
             <span className="text-slate-500">
-              {hasSudoPassword ? t("serverForm.sudoUnchangedStored") : t("serverForm.sudoUnchanged")}
+              {sudoPasswordUnknown
+                ? t("serverForm.sudoUnchangedUnknown")
+                : hasSudoPassword
+                  ? t("serverForm.sudoUnchangedStored")
+                  : t("serverForm.sudoUnchanged")}
             </span>
             <input
               type="password"
@@ -820,7 +829,7 @@ export function ServerForm({
               className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
             />
           </label>
-          {hasSudoPassword && (
+          {(hasSudoPassword || sudoPasswordUnknown) && (
             <button
               type="button"
               onClick={handleClearSudoPassword}
@@ -960,6 +969,7 @@ export function ServerForm({
                 <p className="mb-2 font-medium text-red-200">{t("serverForm.deleteImpactTitle")}</p>
                 {deletePreview.server.authKind === "agent" &&
                 !deletePreview.server.hasSudoPassword &&
+                !deletePreview.server.sudoPasswordUnknown &&
                 deletePreview.serversLosingJumpHost.length === 0 ? (
                   <p className="mb-2 text-red-200">{t("serverForm.deleteNoKeychainImpact")}</p>
                 ) : (
@@ -974,6 +984,15 @@ export function ServerForm({
                     {deletePreview.server.hasSudoPassword && (
                       <li>
                         {t("serverForm.secretWillBeDeleted", { label: t("serverForm.sudoLabel") })}
+                      </li>
+                    )}
+                    {/* Spec 0071, A14: Ist der Schlüsselbund nicht lesbar,
+                     * darf hier weder "wird gelöscht" noch gar nichts
+                     * stehen — beides wäre eine Behauptung über einen
+                     * Zustand, den die Oberfläche nicht kennt. */}
+                    {deletePreview.server.sudoPasswordUnknown && (
+                      <li>
+                        {t("serverForm.secretMayBeDeleted", { label: t("serverForm.sudoLabel") })}
                       </li>
                     )}
                     {deletePreview.serversLosingJumpHost.map((s) => (
