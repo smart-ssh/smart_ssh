@@ -628,6 +628,8 @@ Loopback-Regel und die nachträgliche DNS-Diagnose.
 
 ## 8. Offene Punkte
 
+Beide Punkte am 2026-09-22 von Stefan entschieden, siehe Klarstellungen (§ 9).
+
 1. **Reichweite von E3 — `code`-Feld in zwei Ergebnis-DTOs (K3,
    Schnittstelle).** `TestConnectionResult::NetworkError` und
    `TestAiProviderCredentialsResult::Unreachable` sind Fehlerausgänge,
@@ -653,3 +655,11 @@ Loopback-Regel und die nachträgliche DNS-Diagnose.
 ## 9. Klarstellungen
 
 (wird während der Umsetzung nachgetragen: Datum · Frage-ID · Antwort)
+
+- 2026-09-22 · Offener Punkt 1 (Tor 1) · **Option a:** E3 deckt das optionale
+  `code`-Feld in `TestConnectionResult::NetworkError` und
+  `TestAiProviderCredentialsResult::Unreachable` ab (additiv, optional).
+- 2026-09-22 · Offener Punkt 2 (Tor 1) · **Option a, aber nicht in dieser
+  Spec:** Ein manuell angelegter erster Provider soll automatisch aktiv werden;
+  das läuft als eigenes Item. Diese Spec aktiviert weiterhin nur beim
+  Ollama-Vorschlag nach Klick (B4).
