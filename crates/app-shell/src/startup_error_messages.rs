@@ -339,41 +339,48 @@ pub fn keychain_unavailable_text(
 
     let (title, state, next_step) = match (linux, reason, language) {
         // ── Kein Anbieter (Linux) ──────────────────────────────────────
-        // ANNAHME A-1: Die Paketnamen sind aus §1.1/A5 der Spec übernommen,
-        // nicht gemessen — der Container-Teil von Teil 0 (A0.3) war im
-        // Coder-Lauf nicht durchführbar (Entscheidung vom 2026-09-22,
-        // festgehalten als Klarstellung in §9 der Spec). Vor dem Merge
-        // durch die manuellen Tests M1–M4 zu bestätigen.
+        // Paketnamen **gemessen** auf Debian 13 (Spec 0071 §9,
+        // Klarstellung vom 2026-09-22 — die frühere `ANNAHME A-1` ist
+        // damit aufgelöst und war teils falsch):
         //
-        // **Vollständige Fundstellenliste** (spec-reviewer-Fund: `grep -r
-        // "ANNAHME A-1"` fand vorher nur diese eine Stelle), alle sind zu
-        // bestätigen:
-        //   1. dieser Arm und der EN-Arm darunter (`gnome-keyring`,
-        //      `kwalletd6`, KeePassXC),
-        //   2. die beiden `NoSessionBus`-Arme (`dbus-user-session`),
-        //   3. `locales/de/common.json` und `locales/en/common.json`,
-        //      Schlüssel `diagnostics.keychainUnavailable.no_session_bus`
-        //      und `….no_secret_service_provider` — JSON trägt keinen
-        //      Kommentar, deshalb stehen sie nur hier,
-        //   4. `changelog.d/0071-linux-secret-service-meldung.md`.
+        // - `gnome-keyring` ist der **einzige**, bei dem Installieren und
+        //   neu anmelden genügt. Es ist das einzige Paket im Archiv mit
+        //   `/usr/share/dbus-1/services/org.freedesktop.secrets.service`
+        //   und startet damit per D-Bus-Aktivierung von selbst. Gilt
+        //   nachweislich auch unter KDE.
+        // - `kwalletd6` **gibt es nicht**; der Daemon heißt `kwallet6` und
+        //   registriert `org.kde.kwalletd5`/`…6`, nicht
+        //   `org.freedesktop.secrets`. Ein `apt install` behebt die Lage
+        //   dort also nicht.
+        // - KeePassXC bringt keine D-Bus-Dienstdatei mit — der Name wird
+        //   erst angemeldet, wenn die Anwendung läuft UND die
+        //   Secret-Service-Integration eingeschaltet ist (Vorgabe: aus).
+        //
+        // Deshalb genau **ein** Installationsbefehl und ein zweiter Satz
+        // für die beiden anderen als "falls ohnehin in Gebrauch". Sie als
+        // gleichwertige Alternativen nebeneinanderzustellen, wäre nach der
+        // Messung schlicht falsch.
         (true, KeychainUnavailableReason::NoSecretServiceProvider, Language::De) => (
             "Kein Systemschlüsselbund gefunden",
             "Smart SSH speichert Passwörter, Passphrasen und API-Keys ausschließlich im \
              Schlüsselbund des Betriebssystems. Auf diesem System läuft kein \
              Secret-Service-Anbieter.",
-            "Nächster Schritt — einen Anbieter einrichten und danach neu anmelden, z. B.: \
-             `sudo apt install gnome-keyring` (GNOME), `sudo apt install kwalletd6` \
-             (KWallet unter KDE) oder KeePassXC mit aktivierter \
-             Secret-Service-Integration.",
+            "Nächster Schritt — `sudo apt install gnome-keyring` ausführen und danach neu \
+             anmelden. Das genügt auch unter KDE.\n\n\
+             Nutzt du ohnehin schon KWallet (`kwallet6`) oder KeePassXC: Deren \
+             Secret-Service-Integration muss dafür laufen bzw. eingeschaltet sein — ein \
+             Nachinstallieren allein reicht bei beiden nicht.",
         ),
         (true, KeychainUnavailableReason::NoSecretServiceProvider, Language::En) => (
             "No system keyring found",
             "Smart SSH stores passwords, passphrases and API keys exclusively in the \
              operating system's keyring. No Secret Service provider is running on this \
              system.",
-            "Next step — set up a provider and sign in again, for example: \
-             `sudo apt install gnome-keyring` (GNOME), `sudo apt install kwalletd6` \
-             (KWallet on KDE), or KeePassXC with Secret Service integration enabled.",
+            "Next step — run `sudo apt install gnome-keyring` and sign in again. This works \
+             on KDE as well.\n\n\
+             If you already use KWallet (`kwallet6`) or KeePassXC: their Secret Service \
+             integration has to be running or switched on — installing them is not enough \
+             on its own.",
         ),
 
         // ── Kein Session-Bus (Linux) ───────────────────────────────────
@@ -381,8 +388,9 @@ pub fn keychain_unavailable_text(
         // würden hier nichts helfen, weil ohne Session-Bus auch ein
         // installierter Anbieter nicht erreichbar ist.
         //
-        // ANNAHME A-1 (Fundstelle 2, s. Liste oben): `dbus-user-session`
-        // ist ebenfalls nicht gemessen.
+        // `dbus-user-session` ist gemessen (Debian 13, s. §9): ohne
+        // Session-Bus meldet `store_status()`
+        // `PlatformFailure(Zbus(Connection(NotFound, "/run/user/0/bus")))`.
         (true, KeychainUnavailableReason::NoSessionBus, Language::De) => (
             "Kein D-Bus-Session-Bus gefunden",
             "Smart SSH speichert Passwörter, Passphrasen und API-Keys ausschließlich im \
@@ -437,19 +445,19 @@ pub fn keychain_unavailable_text(
             "Systemschlüsselbund nicht verfügbar",
             "Der Systemschlüsselbund konnte nicht geöffnet werden; die genaue Ursache ließ \
              sich nicht bestimmen.",
-            "Nächster Schritt — prüfen, ob ein Secret-Service-Anbieter läuft (z. B. \
-             gnome-keyring, KWallet oder KeePassXC mit aktivierter \
-             Secret-Service-Integration) und ob er entsperrt ist; danach Smart SSH neu \
-             starten. Bewusst ohne Paketvorschlag: Solange unklar ist, ob ein Anbieter fehlt \
-             oder nur gesperrt ist, kann ein zusätzliches Paket den Zustand verschlimmern.",
+            "Nächster Schritt — prüfen, ob ein Secret-Service-Anbieter läuft und entsperrt \
+             ist: gnome-keyring, oder KWallet (`kwallet6`) bzw. KeePassXC mit \
+             eingeschalteter Secret-Service-Integration. Danach Smart SSH neu starten. \
+             Bewusst ohne Paketvorschlag: Solange unklar ist, ob ein Anbieter fehlt oder nur \
+             gesperrt ist, kann ein zusätzliches Paket den Zustand verschlimmern.",
         ),
         (true, KeychainUnavailableReason::Unknown, Language::En) => (
             "System keyring unavailable",
             "The system keyring could not be opened; the exact cause could not be \
              determined.",
-            "Next step — check whether a Secret Service provider is running (for example \
-             gnome-keyring, KWallet, or KeePassXC with Secret Service integration enabled) \
-             and whether it is unlocked; then restart Smart SSH. Deliberately without a \
+            "Next step — check whether a Secret Service provider is running and unlocked: \
+             gnome-keyring, or KWallet (`kwallet6`) or KeePassXC with Secret Service \
+             integration switched on. Then restart Smart SSH. Deliberately without a \
              package suggestion: as long as it is unclear whether a provider is missing or \
              merely locked, adding one can make things worse.",
         ),
@@ -759,8 +767,17 @@ mod tests {
     /// Spec 0071, T6: Fehlt der Anbieter, nennt der Text alle drei
     /// gängigen Anbieter und mindestens einen Installationsbefehl — das ist
     /// der Kern von BL-0031 ("klare Meldung, welches Paket fehlt").
+    ///
+    /// **Nach der Messung vom 2026-09-22 (Spec §9) zugespitzt:** Auf Debian
+    /// 13 ist `gnome-keyring` der einzige Anbieter, bei dem Installieren
+    /// genügt — es ist das einzige Paket mit einer
+    /// `org.freedesktop.secrets`-D-Bus-Dienstdatei. `kwalletd6` existiert
+    /// gar nicht, und KeePassXC meldet den Namen erst zur Laufzeit an.
+    /// Deshalb darf **genau einer** der drei einen `apt install`-Befehl
+    /// bekommen; die anderen beiden als gleichwertige Installationsoption
+    /// zu nennen wäre nachweislich falsch.
     #[test]
-    fn test_missing_provider_names_all_three_providers_and_an_install_command() {
+    fn test_missing_provider_names_all_three_providers_and_exactly_one_install_command() {
         for language in [Language::De, Language::En] {
             let text = keychain_unavailable_text(
                 KeychainUnavailableReason::NoSecretServiceProvider,
@@ -770,9 +787,22 @@ mod tests {
             assert!(text.message.contains("gnome-keyring"), "{language:?}");
             assert!(text.message.contains("KWallet"), "{language:?}");
             assert!(text.message.contains("KeePassXC"), "{language:?}");
+
+            assert_eq!(
+                text.message.matches("apt install").count(),
+                1,
+                "{language:?}: genau ein Installationsbefehl, sonst stellt der Text \
+                 Anbieter als gleichwertig dar, die es nicht sind: {}",
+                text.message
+            );
             assert!(
-                text.message.contains("apt install"),
-                "{language:?} muss einen konkreten Befehl nennen: {}",
+                text.message.contains("apt install gnome-keyring"),
+                "{language:?}: und zwar der einzige, der die Lage nachweislich behebt: {}",
+                text.message
+            );
+            assert!(
+                !text.message.contains("kwalletd6"),
+                "{language:?}: das Paket existiert nicht: {}",
                 text.message
             );
         }

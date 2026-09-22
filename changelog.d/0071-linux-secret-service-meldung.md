@@ -3,10 +3,13 @@
   „No default store has been set, so cannot search or create entries" nennt
   Smart SSH jetzt den tatsächlichen Zustand, die dadurch blockierten
   Funktionen und das Paket, das ihn behebt — je nachdem, ob kein
-  Secret-Service-Anbieter läuft (`gnome-keyring`, `kwalletd6`, KeePassXC),
-  kein D-Bus-Session-Bus erreichbar ist (`dbus-user-session`) oder der
-  Schlüsselbund nur gesperrt ist. Ein gesperrter Schlüsselbund führt dabei
-  nie zu einem Installationsvorschlag.
+  Secret-Service-Anbieter läuft (`sudo apt install gnome-keyring`, auch
+  unter KDE), kein D-Bus-Session-Bus erreichbar ist
+  (`sudo apt install dbus-user-session`) oder der Schlüsselbund nur
+  gesperrt ist. Ein gesperrter Schlüsselbund führt dabei nie zu einem
+  Installationsvorschlag. Wer KWallet oder KeePassXC ohnehin nutzt, wird
+  darauf hingewiesen, dass deren Secret-Service-Integration laufen bzw.
+  eingeschaltet sein muss — Nachinstallieren allein genügt dort nicht.
 - Der Startdialog behauptete bisher, ohne Schlüsselbund funktioniere alles
   außer dem Chat-Verlauf normal. Das stimmte nicht: Ohne Schlüsselbund
   lassen sich weder KI-Provider noch Server-Passwörter, Passphrasen oder

@@ -63,9 +63,9 @@
     "keychainUnknownState": "checking …",
     "keychainUnavailable": {
       "no_session_bus": "unavailable — no D-Bus session bus reachable. Next step: `sudo apt install dbus-user-session`, then sign in again.",
-      "no_secret_service_provider": "unavailable — no Secret Service provider installed. Next step: `sudo apt install gnome-keyring` (GNOME), `sudo apt install kwalletd6` (KWallet on KDE), or KeePassXC with Secret Service integration enabled, then sign in again.",
+      "no_secret_service_provider": "unavailable — no Secret Service provider is running. Next step: `sudo apt install gnome-keyring`, then sign in again — this works on KDE as well. If you already use KWallet (`kwallet6`) or KeePassXC: their Secret Service integration has to be running or switched on; installing them is not enough on its own.",
       "locked": "unavailable — present but locked. Next step: unlock it and restart Smart SSH. No package is missing.",
-      "unknown": "unavailable — cause unknown. Next step: check whether a keyring service is running and unlocked, then restart Smart SSH."
+      "unknown": "unavailable — cause unknown. Next step: check whether a Secret Service provider is running and unlocked (gnome-keyring, or KWallet or KeePassXC with Secret Service integration switched on), then restart Smart SSH."
     },
     "keychainBlocked": "While this is the case, no API key, no server password, no passphrase and no sudo password can be saved or read.",
     "keychainLoadFailed": "Could not load the system keyring state."

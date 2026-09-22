@@ -14,47 +14,44 @@ rekonstruieren muss, ob das Absicht war.
 
 ## Entscheidungen
 
-### 1. Die Paketnamen sind nicht gemessen (`ANNAHME A-1`)
+### 1. Die Paketnamen — gemessen, und die erste Annahme war teils falsch
 
 Spec 0071 §3 A0.3 verlangt die Paketnamen „nachgewiesen durch `apt install`
 und einen anschließend erfolgreichen Provider-Anlegeversuch, nicht aus dem
-Gedächtnis". Die dafür nötige Linux-Umgebung stand bei der Umsetzung nicht
-zur Verfügung.
+Gedächtnis". Bei der Umsetzung stand keine Linux-Umgebung zur Verfügung;
+die Namen gingen deshalb zunächst als markierte Annahme (`ANNAHME A-1`) in
+den Code. **Die Messung ist inzwischen nachgeholt** (Debian 13 „trixie",
+Container; Zahlen und Fehlerketten in §9 der Spec), die Annahme ist
+aufgelöst — und sie war an zwei Stellen falsch.
 
-**Entscheidung (2026-09-22, als Klarstellung in §9 der Spec festgehalten):**
-Trotzdem bauen. Die Paketnamen stammen aus §1.1/A5/A6 der Spec selbst
-(`gnome-keyring`, `kwalletd6`, `dbus-user-session`, KeePassXC).
+**Befund:**
 
-**Konsequenz:** Solange die Annahme nicht durch die manuellen Tests M1–M4
-bestätigt ist, kann Smart SSH auf einer echten Debian-Minimal-Installation
-den falschen Paketnamen nennen. Die Bestätigung ist Vorbedingung für das
-Zusammenführen, kein optionaler Nachtrag.
+| Bisher im Text | Debian 13 | Ergebnis |
+|---|---|---|
+| `gnome-keyring` | 48.0-1 | **richtig und ausreichend.** Einziges Paket im Archiv mit `/usr/share/dbus-1/services/org.freedesktop.secrets.service`, startet also per D-Bus-Aktivierung von selbst. `libpam-gnome-keyring` ist **nicht** nötig (nur fürs automatische Entsperren beim Login) — mein Zweifel im Bericht ging hier fehl. |
+| `dbus-user-session` | 1.16.2-2 | richtig für den fehlenden Session-Bus. |
+| `kwalletd6` | **existiert nicht** | Der Daemon heißt `kwallet6` und registriert `org.kde.kwalletd5`/`…6`, nicht `org.freedesktop.secrets`. Installieren behebt die Lage dort also nicht. |
+| KeePassXC | 2.7.10 | Paket existiert, bringt aber keine D-Bus-Dienstdatei mit: Der Name wird erst angemeldet, wenn die Anwendung läuft **und** die Secret-Service-Integration eingeschaltet ist (Vorgabe: aus). |
 
-**Fundstellen** (alle fünf, weil ein `grep` allein sie nicht findet — die
-Locale-Dateien können keinen Kommentar tragen):
+**Entscheidung:** Der Text stellt die drei nicht länger als gleichwertige
+Alternativen nebeneinander, weil sie es nachweislich nicht sind.
 
-1. `startup_error_messages.rs`, `NoSecretServiceProvider`-Arme (DE + EN),
-2. ebenda, `NoSessionBus`-Arme (DE + EN),
-3. `locales/de/common.json` → `diagnostics.keychainUnavailable.*`,
-4. `locales/en/common.json` → dieselben Schlüssel,
-5. `changelog.d/0071-linux-secret-service-meldung.md` (dort bewusst **ohne**
-   Kommentar-Marker: Das Fragment wandert beim Release wörtlich nach
-   `CHANGELOG.md`, ein interner Annahme-Vermerk stünde dann im
-   veröffentlichten Changelog — diese Liste hier ist der Nachweis).
+- **Genau ein** Installationsbefehl: `sudo apt install gnome-keyring` —
+  ausdrücklich auch für KDE, weil er dort nachweislich funktioniert.
+- KWallet (`kwallet6`) und KeePassXC stehen in einem zweiten Satz als
+  „falls ohnehin in Gebrauch", mit dem Hinweis, dass ihre
+  Secret-Service-Integration laufen bzw. eingeschaltet sein muss.
+  **Kein** `apt install` für die beiden.
 
-Nicht in dieser Liste, weil sie keinen Installationsbefehl enthalten und
-damit nichts Falsches behaupten können: die beiden `Unknown`-Linux-Arme in
-`startup_error_messages.rs` und der Schlüssel
-`diagnostics.keychainUnavailable.unknown`. Sie nennen dieselben Anbieter,
-aber nur als „prüfen, ob einer läuft".
+Ein Test hält das fest: Der Anbieter-Text darf `apt install` genau
+**einmal** enthalten, und zwar für `gnome-keyring`. Ohne diese Grenze
+könnte jemand den zweiten Satz wieder zu einem Installationsvorschlag
+ausbauen, der die Lage nicht behebt.
 
-Zusätzlicher Zweifel aus dem Review, der bei M2/M3 ausdrücklich zu prüfen
-ist: `gnome-keyring` allein bringt auf einer Minimal-Installation
-vermutlich **keinen** laufenden Secret Service — es fehlen wahrscheinlich
-`dbus-user-session` und `libpam-gnome-keyring` (Entsperren beim Login).
-Ebenso ist `kwalletd6` ohne `kwallet-pam` fraglich. Der Text sagt
-„einrichten und danach neu anmelden", was das teilweise abfedert; die
-Paketliste ist aber wahrscheinlich zu kurz.
+**Weiterhin offen, nur an einer echten KDE-Sitzung zu klären (M4):** ob
+eine vollständige Plasma-Installation den Secret Service doch über eine
+andere Komponente bereitstellt. Bis dahin nennt der Text auch für KDE
+`gnome-keyring` als den Weg, der belegt funktioniert.
 
 ### 2. Der Schlüsselbund-Zustand darf sich nachträglich verschärfen
 
@@ -210,6 +207,23 @@ Dialogtext nicht optisch fortsetzen kann.
 
 **Entscheidung:** Der Variablenwert verlässt `lib.rs` nie.
 
+**Messung nachgetragen (A0.4, 2026-09-22):** `store_status()` hängt
+nicht. Erstaufruf 3,7 ms (kein Session-Bus), 19 ms (kein Anbieter), 38 ms
+(Anbieter vorhanden); jeder weitere Aufruf 167 ns bis 3 µs, weil `keyring`
+das Ergebnis in einem `LazyLock` hält. Weit unter der 2-s-Schwelle aus
+A0.4 — die Sorge, ein toter Bus-Socket könnte den Start blockieren, hat
+sich nicht bestätigt. **Nicht gemessen** ist ein *gesperrter* Anbieter
+(braucht eine Sitzung mit Anzeige); das bleibt bei M4.
+
+**§4.3 ist belegt, nicht mehr nur plausibel:** Beide Linux-Fehlerlagen
+liefern denselben `keyring::Error`-Zweig (`PlatformFailure`) — „kein
+Session-Bus" als `Zbus(Connection(NotFound, …))`, „Bus ohne Anbieter" als
+`Zbus(MethodError(ServiceUnknown, …))`. Am `keyring`-API sind sie nicht
+unterscheidbar; das Umgebungsindiz aus A3 trennt sie korrekt. Die
+Entscheidung gegen einen String-Vergleich auf fremde Fehlertexte war
+richtig: Die beiden Texte hätten sich zwar unterschieden, aber genau so
+ein Vergleich bricht beim nächsten Versionssprung still.
+
 **Konsequenz:** X1 ist per Konstruktion erfüllt und braucht keine
 Bereinigung analog `sanitize_path_for_display` — in **Texten** taucht der
 Wert nirgends auf. Im Log kann er dagegen sehr wohl stehen: Die neue Zeile
@@ -255,7 +269,10 @@ stillschweigend verschwinden.
 4. **`ServerDto::from_server` macht einen Schlüsselbund-Lesezugriff pro
    Server.** Auf einem gesperrten Linux-Keyring kann `list_servers` damit
    N Entsperr-Prompts auslösen. Vorbestehend, durch diese Spec nur sichtbar
-   geworden; passt zu der nie gemessenen Laufzeitfrage A0.4.
+   geworden. Die Laufzeitmessung (A0.4, s. Entscheidung 7) entlastet das
+   nur teilweise: Sie deckt den *fehlenden*, nicht den *gesperrten*
+   Anbieter ab — und ein Entsperr-Prompt kostet nicht Millisekunden,
+   sondern eine Nutzerinteraktion.
 
 5. **`sanitize_path_for_display` filtert nur `char::is_control()`.**
    U+2028 (Zeilentrenner) und U+202E (Richtungswechsel) kommen durch.

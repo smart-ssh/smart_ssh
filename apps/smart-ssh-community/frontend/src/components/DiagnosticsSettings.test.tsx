@@ -135,6 +135,13 @@ describe("DiagnosticsSettings — Schlüsselbund-Zustand (Spec 0071, A15)", () =
     expect(row).toHaveTextContent("gnome-keyring");
     expect(row).toHaveTextContent("KeePassXC");
     expect(row).toHaveTextContent("API-Key");
+    // Messung vom 2026-09-22 (Spec §9): `gnome-keyring` ist der einzige
+    // Anbieter auf Debian 13, bei dem Installieren genügt. KWallet und
+    // KeePassXC dürfen deshalb keinen eigenen Installationsbefehl
+    // bekommen — sonst installiert jemand ein Paket, das die Lage nicht
+    // behebt.
+    expect(row.textContent?.match(/apt install/g)).toHaveLength(1);
+    expect(row).not.toHaveTextContent("kwalletd6");
   });
 
   // X3: ein gesperrter Schlüsselbund ist kein fehlendes Paket — auch hier
