@@ -711,5 +711,55 @@ bekanntes, offenes Muster ist.
   melden, aber nicht blockieren. Eingearbeitet als **A17** und als
   Korrektur in X6.
 
+- **2026-09-22 · `ANNAHME A-1` aufgelöst durch Messung (Debian 13
+  „trixie", `rust:trixie`-Container).** §3 A0 gilt: der Messwert gewinnt.
+
+  **Gemessene Fehlerketten (A0.1):**
+
+  | Lage | `store_status()` | Umgebung |
+  |---|---|---|
+  | kein Session-Bus | `PlatformFailure(Zbus(Connection(NotFound, "/run/user/0/bus")))` | `DBUS_SESSION_BUS_ADDRESS` nicht gesetzt |
+  | Bus, kein Anbieter | `PlatformFailure(Zbus(MethodError(ServiceUnknown, "The name org.freedesktop.secrets was not provided by any .service files")))` | gesetzt |
+  | `gnome-keyring` entsperrt | `Ok(())`, `set_password` und Rücklesen erfolgreich | gesetzt |
+
+  Beide Fehlerlagen liefern **denselben** `keyring::Error`-Zweig
+  (`PlatformFailure`). Das Umgebungsindiz aus A3 trennt sie korrekt — §4.3
+  ist damit belegt, nicht mehr nur plausibel. Eine Unterscheidung über den
+  Fehlertext wäre nicht möglich gewesen.
+
+  **Laufzeiten (A0.4):** Erstaufruf 3,7 ms (kein Bus), 19 ms (kein
+  Anbieter), 38 ms (Anbieter vorhanden); jeder weitere Aufruf 167 ns bis
+  3 µs (`LazyLock`). Kein Hängen, weit unter der 2-s-Schwelle. Ein
+  gesperrter Anbieter ist damit **nicht** gemessen (braucht eine Sitzung
+  mit Anzeige) — bleibt bei M4.
+
+  **Paketnamen (A0.3) — die Annahme war teils falsch:**
+
+  | Im bisherigen Text | Debian 13 | Befund |
+  |---|---|---|
+  | `gnome-keyring` | 48.0-1 | **richtig und ausreichend.** Einziges Paket im Archiv mit `/usr/share/dbus-1/services/org.freedesktop.secrets.service`, startet also per D-Bus-Aktivierung von selbst. `libpam-gnome-keyring` ist **nicht** nötig, damit der Dienst existiert (nur fürs automatische Entsperren beim Login). |
+  | `dbus-user-session` | 1.16.2-2 | richtig für den fehlenden Session-Bus. |
+  | `kwalletd6` | existiert nicht | **falsch.** Der Daemon heißt `kwallet6` — registriert aber `org.kde.kwalletd5`/`org.kde.kwalletd6`, **nicht** `org.freedesktop.secrets`. Installieren allein behebt die Lage also nicht. |
+  | KeePassXC (`keepassxc`) | 2.7.10 | Paket existiert, bringt **keine** D-Bus-Dienstdatei mit: Der Name wird erst zur Laufzeit angemeldet, wenn die Anwendung läuft **und** die Secret-Service-Integration eingeschaltet ist (Vorgabe: aus). |
+
+  **Folge für A5/A6 — die Texte sind nachzuziehen.** Die drei Anbieter
+  sind auf Debian **nicht gleichwertig**, und der Text darf das nicht
+  länger suggerieren:
+
+  - Als **Installationsvorschlag** bleibt nur `gnome-keyring` — der
+    einzige, bei dem Installieren und neu anmelden genügt. Er arbeitet
+    auch unter KDE.
+  - KWallet und KeePassXC gehören in einen zweiten Satz als
+    **„falls bereits in Gebrauch"**, mit dem Hinweis, dass ihre
+    Secret-Service-Integration laufen bzw. eingeschaltet sein muss. Kein
+    `apt install`-Befehl für sie, weil Installieren die Lage nicht behebt.
+  - `kwalletd6` verschwindet ersatzlos; wo der Daemon genannt wird, heißt
+    er `kwallet6`.
+
+  **Weiterhin offen und nur an einer echten KDE-Sitzung zu klären
+  (M4):** ob eine vollständige Plasma-Installation den Secret Service doch
+  über eine andere Komponente bereitstellt. Bis dahin nennt der Text für
+  KDE `gnome-keyring` als den Weg, der nachweislich funktioniert.
+
 *(weitere Klarstellungen werden während der Umsetzung nachgetragen:
 Datum · Frage-ID · Antwort)*
