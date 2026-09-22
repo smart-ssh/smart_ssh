@@ -1,6 +1,6 @@
 # Spec 0070 — Lizenzwechsel FSL-1.1-MIT → Apache License 2.0
 
-Status: Vorschlag (Architekt) · Backlog: BL-0055 · Gate: Release-Gate 1.0, G
+Status: freigegeben (Stefan, 2026-09-22) · Backlog: BL-0055 · Gate: Release-Gate 1.0, G
 Repo: **öffentlich** `smart_ssh` — Repo-Wurzel (`LICENSE*`, `NOTICE`,
 `README.md`, `CHANGELOG.md`, `Cargo.toml`, `deny.toml`), Frontend-Manifest
 (`apps/smart-ssh-community/frontend/package.json`, `package-lock.json`),
@@ -209,13 +209,13 @@ als Drittlizenz).
 
 ### 4.7 CHANGELOG
 
-Unter `[Unreleased]` → `### Changed` als erster Eintrag (Vorschlag gemäß
-Empfehlung zu OP-3):
+Unter `[Unreleased]` → `### Changed` als erster Eintrag (gemäß
+Entscheidung zu OP-3, Option 2 — rückwirkend, siehe §9):
 
 > - Smart SSH ist jetzt Open Source unter der **Apache License 2.0**
->   (bisher Functional Source License 1.1, FSL-1.1-MIT). Der Wechsel gilt
->   ab dieser Version; bereits veröffentlichte Versionen behalten ihre
->   bisherige Lizenz.
+>   (bisher Functional Source License 1.1, FSL-1.1-MIT). Das gilt
+>   rückwirkend: Auch alle bereits veröffentlichten Versionen dürfen unter
+>   der Apache License 2.0 genutzt werden.
 
 ### 4.8 ADR 0060 (vom Coder zu schreiben)
 
@@ -231,8 +231,8 @@ Format nach `docs/adr/README.md`, kurz:
   mit der bestehenden `cargo deny`-Allow-Liste. Keine externen
   Beitragenden, daher keine Zustimmung nötig. Dateiname `LICENSE`;
   Umgang mit `NOTICE` und Dateikopfzeilen gemäß Entscheidung zu OP-1/OP-2.
-- **Konsequenzen:** unumkehrbar für veröffentlichten Code; frühere
-  Versionen behalten ihre Lizenz (gemäß OP-3); ADRs/Specs, die FSL
+- **Konsequenzen:** unumkehrbar für veröffentlichten Code; auch alle
+  früheren Versionen sind rückwirkend unter Apache 2.0 nutzbar (OP-3); ADRs/Specs, die FSL
   erwähnen, bleiben als historische Dokumente unverändert.
 
 Keine Aussagen zu Editionen oder Geschäftsmodell im ADR.
@@ -347,9 +347,20 @@ Wirkung).** Optionen:
 die nicht verlangt sind; Option 2 lässt sich jederzeit nachholen, aber
 nicht zurücknehmen.
 
+**Alle drei Punkte am 2026-09-22 von Stefan entschieden, siehe §9.**
+
 Solange OP-1 bis OP-3 offen sind, ist die Spec **nicht umsetzbar** (sie
 bestimmen, welche Dateien entstehen und welcher Wortlaut öffentlich wird).
 
 ## 9. Klarstellungen
 
 (wird während der Umsetzung nachgetragen: Datum · Frage-ID · Antwort)
+
+- 2026-09-22 · OP-1 (Tor 1) · **Option 1:** keine Dateikopfzeilen einführen.
+  Der Gate-Unterpunkt „Dateikopfzeilen" gilt als geprüft (keine vorhanden)
+  und bewusst nicht eingeführt; im ADR 0060 festhalten.
+- 2026-09-22 · OP-2 (Tor 1) · **Option 1:** minimale `NOTICE` wie in §4.3.
+- 2026-09-22 · OP-3 (Tor 1) · **Option 2, rückwirkend:** Auch alle bereits
+  veröffentlichten Versionen dürfen unter Apache 2.0 genutzt werden.
+  Wortlaut CHANGELOG §4.7, ADR-Konsequenz §4.8 entsprechend angepasst.
+  README bleibt ohne Hinweis auf frühere Lizenzen (§4.6).
