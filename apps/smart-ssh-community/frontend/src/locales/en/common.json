@@ -127,6 +127,7 @@
     "choosePrivateKeyDialogTitle": "Select private key",
     "chooseCertificateDialogTitle": "Select certificate",
     "chooseKeyDialogTitle": "Select key",
+    "ed25519Recommendation": "Recommended: Ed25519 key. Generate a new one with `ssh-keygen -t ed25519`. RSA keys keep working.",
     "passphraseOptional": "Passphrase (optional)",
     "agentHint": "Uses the locally running SSH agent, no further details needed.",
     "certificateLabel": "Certificate",

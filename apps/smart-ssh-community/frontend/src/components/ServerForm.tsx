@@ -730,6 +730,11 @@ export function ServerForm({
                   rows={4}
                   className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-100"
                 />
+                {/* Spec 0069, Teil C2 (BL-0110): reiner Hinweistext — keine
+                 * Prüfung des Inhalts, keine Sperre, kein Einfluss auf
+                 * Speichern/Verbinden. RSA-Schlüssel funktionieren
+                 * unverändert weiter. */}
+                <p className="mt-1 text-xs text-slate-500">{t("serverForm.ed25519Recommendation")}</p>
               </div>
               <label className="block text-sm text-slate-300">
                 {t("serverForm.passphraseOptional")}
