@@ -346,8 +346,17 @@ pub fn keychain_unavailable_text(
         // - `gnome-keyring` ist der **einzige**, bei dem Installieren und
         //   neu anmelden genügt. Es ist das einzige Paket im Archiv mit
         //   `/usr/share/dbus-1/services/org.freedesktop.secrets.service`
-        //   und startet damit per D-Bus-Aktivierung von selbst. Gilt
-        //   nachweislich auch unter KDE.
+        //   und startet damit per D-Bus-Aktivierung von selbst.
+        //
+        //   **Der Satz "Das genügt auch unter KDE" ist Inferenz, nicht
+        //   Messung** (spec-reviewer-Fund): Gemessen wurde in einem
+        //   Container ohne Arbeitsumgebung. Dass D-Bus-Aktivierung
+        //   desktop-unabhängig funktioniert, ist plausibel und der Grund
+        //   für den Satz — belegt ist es nicht. **M4 klärt es**; zeigt
+        //   eine echte Plasma-Sitzung, dass Plasma den Secret Service
+        //   selbst bereitstellt, setzt dieser Rat einen zweiten Anbieter
+        //   neben einen laufenden — genau der Schaden, vor dem X3 im
+        //   "gesperrt"-Zweig warnt.
         // - `kwalletd6` **gibt es nicht**; der Daemon heißt `kwallet6` und
         //   registriert `org.kde.kwalletd5`/`…6`, nicht
         //   `org.freedesktop.secrets`. Ein `apt install` behebt die Lage
@@ -805,6 +814,27 @@ mod tests {
                 "{language:?}: das Paket existiert nicht: {}",
                 text.message
             );
+
+            // spec-reviewer-Fund: Der Zähler oben fängt genau **eine**
+            // Schreibweise. Ein zweiter Vorschlag als `apt-get install
+            // kwallet6`, `pkcon install …` oder schlicht "installiere
+            // zusätzlich das Paket kwallet6" liefe an ihm vorbei. Diese
+            // beiden Prüfungen greifen unabhängig vom Paketmanager und von
+            // der Formulierung — sie sind der eigentliche Schutz davor,
+            // dass der zweite Satz wieder zu einem Installationsvorschlag
+            // anwächst, der die Lage nicht behebt.
+            let lower = text.message.to_lowercase();
+            assert!(
+                !lower.contains("install kwallet"),
+                "{language:?}: KWallet zu installieren behebt nichts: {}",
+                text.message
+            );
+            assert!(
+                !lower.contains("install keepassxc"),
+                "{language:?}: KeePassXC zu installieren behebt nichts — die Integration \
+                 muss laufen: {}",
+                text.message
+            );
         }
     }
 
@@ -824,16 +854,19 @@ mod tests {
                 "{language:?} muss das Session-Bus-Paket nennen: {}",
                 text.message
             );
-            assert!(
-                !text.message.contains("gnome-keyring"),
-                "{language:?} darf nicht auf ein Schlüsselbund-Paket zeigen: {}",
-                text.message
-            );
-            assert!(
-                !text.message.contains("KWallet") && !text.message.contains("KeePassXC"),
-                "{language:?} darf nicht auf ein Schlüsselbund-Paket zeigen: {}",
-                text.message
-            );
+            // spec-reviewer-Fund: Schreibweisen-unabhängig prüfen. Zuvor
+            // stand hier `contains("KWallet")` — die Paketschreibweise
+            // `kwallet6` wäre daran vorbeigelaufen, obwohl die A6-Schranke
+            // genau sie meint.
+            let lower = text.message.to_lowercase();
+            for forbidden in ["gnome-keyring", "kwallet", "keepassxc"] {
+                assert!(
+                    !lower.contains(forbidden),
+                    "{language:?} darf nicht auf '{forbidden}' zeigen — ohne Session-Bus \
+                     hilft kein Schlüsselbund-Paket: {}",
+                    text.message
+                );
+            }
         }
     }
 

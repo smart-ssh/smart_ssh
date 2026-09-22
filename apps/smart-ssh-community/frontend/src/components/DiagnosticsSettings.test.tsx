@@ -142,6 +142,11 @@ describe("DiagnosticsSettings — Schlüsselbund-Zustand (Spec 0071, A15)", () =
     // behebt.
     expect(row.textContent?.match(/apt install/g)).toHaveLength(1);
     expect(row).not.toHaveTextContent("kwalletd6");
+    // Schreibweisen-unabhaengig: kein zweiter Installationsvorschlag,
+    // egal mit welchem Paketmanager formuliert.
+    const rowText = (row.textContent ?? "").toLowerCase();
+    expect(rowText).not.toContain("install kwallet");
+    expect(rowText).not.toContain("install keepassxc");
   });
 
   // X3: ein gesperrter Schlüsselbund ist kein fehlendes Paket — auch hier
@@ -154,8 +159,12 @@ describe("DiagnosticsSettings — Schlüsselbund-Zustand (Spec 0071, A15)", () =
 
     const row = await screen.findByTestId("keychain-status");
     await waitFor(() => expect(row).toHaveTextContent("gesperrt"));
-    expect(row).not.toHaveTextContent("apt");
-    expect(row).not.toHaveTextContent("install");
+    // spec-reviewer-Fund: schreibweisen-unabhaengig pruefen — ein
+    // kuenftiges "Installation"/"APT" waere an der Gross-/Kleinschreibung
+    // vorbeigelaufen.
+    const lower = (row.textContent ?? "").toLowerCase();
+    expect(lower).not.toContain("apt");
+    expect(lower).not.toContain("install");
   });
 
   // A4: Ein künftiger, dem Frontend unbekannter Grund darf keine leere

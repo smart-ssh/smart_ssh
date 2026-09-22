@@ -28,7 +28,7 @@ aufgelöst — und sie war an zwei Stellen falsch.
 
 | Bisher im Text | Debian 13 | Ergebnis |
 |---|---|---|
-| `gnome-keyring` | 48.0-1 | **richtig und ausreichend.** Einziges Paket im Archiv mit `/usr/share/dbus-1/services/org.freedesktop.secrets.service`, startet also per D-Bus-Aktivierung von selbst. `libpam-gnome-keyring` ist **nicht** nötig (nur fürs automatische Entsperren beim Login) — mein Zweifel im Bericht ging hier fehl. |
+| `gnome-keyring` | 48.0-1 | **richtig und ausreichend.** Einziges Paket im Archiv mit `/usr/share/dbus-1/services/org.freedesktop.secrets.service`, startet also per D-Bus-Aktivierung von selbst. `libpam-gnome-keyring` ist **nicht** nötig, damit der Dienst existiert (nur fürs automatische Entsperren beim Login) — der vorher geäußerte Verdacht, es fehle, war unbegründet. |
 | `dbus-user-session` | 1.16.2-2 | richtig für den fehlenden Session-Bus. |
 | `kwalletd6` | **existiert nicht** | Der Daemon heißt `kwallet6` und registriert `org.kde.kwalletd5`/`…6`, nicht `org.freedesktop.secrets`. Installieren behebt die Lage dort also nicht. |
 | KeePassXC | 2.7.10 | Paket existiert, bringt aber keine D-Bus-Dienstdatei mit: Der Name wird erst angemeldet, wenn die Anwendung läuft **und** die Secret-Service-Integration eingeschaltet ist (Vorgabe: aus). |
@@ -37,7 +37,12 @@ aufgelöst — und sie war an zwei Stellen falsch.
 Alternativen nebeneinander, weil sie es nachweislich nicht sind.
 
 - **Genau ein** Installationsbefehl: `sudo apt install gnome-keyring` —
-  ausdrücklich auch für KDE, weil er dort nachweislich funktioniert.
+  ausdrücklich auch für KDE. **Achtung, hier endet die Messung und beginnt
+  die Inferenz** (spec-reviewer-Fund): Gemessen wurde in einem Container
+  ohne Arbeitsumgebung. Dass D-Bus-Aktivierung desktop-unabhängig
+  funktioniert, ist plausibel — belegt ist es nicht. Es ist die einzige
+  Aussage in diesen Texten, die auf einem Schluss statt auf einer Messung
+  steht, und sie ist im Code an der Fundstelle so markiert.
 - KWallet (`kwallet6`) und KeePassXC stehen in einem zweiten Satz als
   „falls ohnehin in Gebrauch", mit dem Hinweis, dass ihre
   Secret-Service-Integration laufen bzw. eingeschaltet sein muss.
@@ -48,10 +53,19 @@ Ein Test hält das fest: Der Anbieter-Text darf `apt install` genau
 könnte jemand den zweiten Satz wieder zu einem Installationsvorschlag
 ausbauen, der die Lage nicht behebt.
 
-**Weiterhin offen, nur an einer echten KDE-Sitzung zu klären (M4):** ob
-eine vollständige Plasma-Installation den Secret Service doch über eine
-andere Komponente bereitstellt. Bis dahin nennt der Text auch für KDE
-`gnome-keyring` als den Weg, der belegt funktioniert.
+**Weiterhin offen, nur an einer echten KDE-Sitzung zu klären (M4):**
+
+1. Ob eine vollständige Plasma-Installation den Secret Service doch über
+   eine andere Komponente bereitstellt. **Falls ja, ist dieser Rat
+   schädlich:** Er setzt dann einen zweiten Anbieter neben einen
+   laufenden — genau der Schaden, vor dem X3 im „gesperrt"-Zweig warnt,
+   nur im „fehlt"-Zweig. Der Text ist in dem Fall erneut nachzuziehen.
+2. Ob KWallet überhaupt eine einschaltbare Secret-Service-Integration
+   hat. Der zweite Satz behauptet das (Wortlaut aus §9 der Spec); gemessen
+   ist nur, dass `kwallet6` keine Dienstdatei mitbringt und
+   `org.kde.kwalletd5`/`…6` registriert. Für KeePassXC ist die
+   Integration belegt, für KWallet nicht. Trifft es nicht zu, sucht ein
+   KDE-Nutzer nach einem Schalter, den es nicht gibt.
 
 ### 2. Der Schlüsselbund-Zustand darf sich nachträglich verschärfen
 
