@@ -56,13 +56,22 @@ pub fn show_fatal_error_and_exit(title: &str, message: &str) -> ! {
 
 /// Zeigt eine SICHTBARE, aber nicht-fatale Warnung — die App läuft danach
 /// unverändert weiter. Spec 0059, Fall 3 (Keychain/Secret-Service gesperrt
-/// oder fehlt): Stefans ausdrückliche Entscheidung, die bestehende, bereits
-/// bewusst getroffene Spec-0040-Design-Entscheidung zu bewahren, dass ein
-/// Keychain-Problem nur EINE optionale Komfortfunktion betrifft (Chat-
-/// Persistenz/Prompt-Historie/Ledger), nicht den App-Kern (SSH-
-/// Verbindungen, KI-Chat, Filter-Engine funktionieren unverändert) — der
-/// Dialog macht das bisher stille `tracing::warn!` nur zusätzlich
+/// oder fehlt): bewusste Entscheidung, die Spec-0040-Design-Entscheidung zu
+/// bewahren, dass ein Keychain-Problem den App-**Start** nicht verhindert —
+/// der Dialog macht das bisher stille `tracing::warn!` nur zusätzlich
 /// SICHTBAR, statt die App abzubrechen.
+///
+/// **Korrektur durch Spec 0071 (spec-reviewer-Fund):** Hier stand bis dahin,
+/// ein Keychain-Problem betreffe „nur EINE optionale Komfortfunktion
+/// (Chat-Persistenz/Prompt-Historie/Ledger), nicht den App-Kern
+/// (SSH-Verbindungen, KI-Chat, Filter-Engine funktionieren unverändert)".
+/// Das ist falsch und war der Kern von BL-0031: Ohne Schlüsselbund
+/// scheitert **jeder** Zugriff auf den `CredentialStore`, also lässt sich
+/// kein KI-Provider anlegen (und damit gibt es keinen KI-Chat), kein
+/// Server-Passwort, keine Passphrase und kein Sudo-Passwort speichern oder
+/// lesen. Unverändert funktionieren nur SSH-Verbindungen über den
+/// SSH-Agent oder mit einem Schlüssel ohne Passphrase. Nicht-fatal heißt
+/// also „die App startet", nicht „alles andere geht".
 pub fn show_warning(title: &str, message: &str) {
     tracing::warn!(title, message, "showing non-fatal startup warning dialog");
     MessageDialog::new()

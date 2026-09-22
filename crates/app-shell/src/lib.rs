@@ -151,10 +151,23 @@ fn build_app_state(
     let xdg_runtime_bus_exists = std::env::var("XDG_RUNTIME_DIR")
         .ok()
         .is_some_and(|dir| std::path::Path::new(&dir).join("bus").exists());
-    let keychain = credentials_keyring::probe_keychain_availability(
+    //
+    // `mut`: spec-reviewer-Fund — der Schnappschuss kann sich unten noch
+    // **verschärfen** (nie abschwächen, s. `escalate_to_unavailable`).
+    let mut keychain = credentials_keyring::probe_keychain_availability(
         std::env::consts::OS,
         credentials_keyring::session_bus_present(dbus_address.as_deref(), xdg_runtime_bus_exists),
     );
+    // spec-reviewer-Fund zur Klarstellung Q-BL-0031-01: §6.4 M1 verlangt
+    // "Log enthält den vollen Grund". Der klassifizierte Zustand oben ist
+    // dafür zu grob — die eigentliche `store_status()`-Fehlerkette existiert
+    // nur hier. Sie geht ausschließlich ins Log, nie in einen Dialog, ein
+    // DTO oder das Diagnosepaket (I1/X2; die Zeile steht bewusst NICHT in
+    // `diagnostics::SAFE_LOG_MESSAGES` und fliegt damit aus dem exportierten
+    // Paket).
+    if let Some(chain) = credentials_keyring::store_status_cause_chain_for_log() {
+        tracing::warn!(cause_chain = %chain, "OS keychain store initialisation failed");
+    }
     tracing::info!(?keychain, "probed OS keychain availability");
 
     tracing::info!("resolving chat-content encryption key from OS keychain");
@@ -206,6 +219,21 @@ fn build_app_state(
                 // aber trotzdem scheitert: A4 verlangt auch dann einen
                 // vollständigen Text, nie gar keine Meldung.
                 if crate::startup_error_messages::should_warn_about_keychain(&err) {
+                    // spec-reviewer-Fund: `store_status()` kann `Ok(())`
+                    // melden (der Anbieter antwortet auf den
+                    // Verbindungsaufbau) und der erste echte Zugriff
+                    // trotzdem scheitern — typischerweise bei einem
+                    // vorhandenen, aber gesperrten Schlüsselbund. Ohne diese
+                    // Eskalation bliebe `keychain` auf `Available`, und
+                    // weder der Fehlercode (A13) noch die Diagnose-Zeile
+                    // (A15) bekämen davon etwas mit: Die Oberfläche meldete
+                    // "verfügbar", während jeder Credential-Zugriff
+                    // scheitert — also wieder der englische Rohtext im UI.
+                    // Nur Verschärfung, nie Abschwächung.
+                    keychain = credentials_keyring::escalate_to_unavailable(
+                        keychain,
+                        credentials_keyring::KeychainUnavailableReason::Unknown,
+                    );
                     let reason = keychain
                         .unavailable_reason()
                         .unwrap_or(credentials_keyring::KeychainUnavailableReason::Unknown);

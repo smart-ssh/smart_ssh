@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { apiKeyFormatWarning } from "../apiKeyFormat";
 import {
   addAiProvider,
+  commandErrorCode,
   commandErrorMessage,
   deleteAiProvider,
   discoverModels,
@@ -11,6 +12,7 @@ import {
   setActiveAiProvider,
   testAiProviderCredentials,
 } from "../api";
+import { translateErrorCode } from "../errorCodes";
 import { loadRiskClassifierSettings, saveRiskClassifierSettings } from "../riskSettings";
 import {
   type AiProviderConfigDto,
@@ -130,7 +132,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         setRiskClassifierEnabled(settings.enabled);
         setRiskClassifierProviderId(settings.providerId);
       })
-      .catch((err) => setError(commandErrorMessage(err)));
+      .catch((err) => setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err))));
   }, []);
 
   /** Spec 0026, Abschnitt 3, Punkt 1: erst bei der nächsten `connect()`
@@ -143,7 +145,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     try {
       await saveRiskClassifierSettings({ enabled, providerId });
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setRiskSettingsSaving(false);
     }
@@ -152,7 +154,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   const reload = () => {
     listAiProviders()
       .then(setProviders)
-      .catch((err) => setError(commandErrorMessage(err)));
+      .catch((err) => setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err))));
   };
 
   useEffect(reload, []);
@@ -175,7 +177,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       reload();
       onProvidersChanged();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setSubmitting(false);
     }
@@ -214,7 +216,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       const result = await testAiProviderCredentials(form);
       setCredentialTestResult(result);
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setCredentialTestRunning(false);
     }
@@ -230,7 +232,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       const info = await fetchAttestationInfo(providerId);
       setAttestationResults((prev) => ({ ...prev, [providerId]: info }));
     } catch (err) {
-      setAttestationErrors((prev) => ({ ...prev, [providerId]: commandErrorMessage(err) }));
+      setAttestationErrors((prev) => ({
+        ...prev,
+        [providerId]: translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)),
+      }));
     } finally {
       setAttestationLoading((prev) => ({ ...prev, [providerId]: false }));
     }
@@ -254,7 +259,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       reload();
       onProvidersChanged();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     }
   };
 
@@ -265,7 +270,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       reload();
       onProvidersChanged();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     }
   };
 

@@ -302,7 +302,8 @@ pub async fn discover_models(
         let existing = state.ai_provider_store.get(&id).await?;
         state
             .credential_store
-            .get(&existing.credential_ref)?
+            .get(&existing.credential_ref)
+            .map_err(|err| keychain_aware_credential_error(err, state.keychain))?
             .expose_secret()
             .to_string()
     } else {
@@ -459,7 +460,8 @@ pub async fn test_ai_provider_credentials(
         let existing = state.ai_provider_store.get(&id).await?;
         state
             .credential_store
-            .get(&existing.credential_ref)?
+            .get(&existing.credential_ref)
+            .map_err(|err| keychain_aware_credential_error(err, state.keychain))?
             .expose_secret()
             .to_string()
     } else {
@@ -2489,6 +2491,7 @@ pub async fn test_connection(
     crate::test_connection::test_connection(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
+        state.keychain,
         state.host_key_store.clone(),
         &crate::test_connection::RealConnector,
         input,

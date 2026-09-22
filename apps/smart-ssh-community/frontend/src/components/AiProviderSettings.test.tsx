@@ -16,7 +16,14 @@ vi.mock("../api", () => ({
   fetchAttestationInfo: vi.fn(),
   setActiveAiProvider: vi.fn(),
   testAiProviderCredentials: vi.fn(),
-  commandErrorMessage: (err: unknown) => String(err),
+  commandErrorMessage: (err: unknown) =>
+    typeof err === "object" && err !== null && "message" in err
+      ? String((err as { message: unknown }).message)
+      : String(err),
+  commandErrorCode: (err: unknown) =>
+    typeof err === "object" && err !== null && "code" in err
+      ? ((err as { code: string | null }).code ?? null)
+      : null,
 }));
 
 vi.mock("../riskSettings", () => ({
@@ -240,5 +247,31 @@ describe("AiProviderSettings max_tokens override (Spec 0065, Teil 4)", () => {
 
     expect(screen.getByText("Max. Antwortlänge muss größer als 0 sein")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Hinzufügen" })).toBeDisabled();
+  });
+});
+
+// Spec 0071, A13: Der Provider-Dialog ist der Ort, an dem BL-0031 zuerst
+// weh tut (§1.2: "der Fünf-Minuten-Pfad endet hier"). Ohne diesen Test
+// prüfte nur `errorCodes.test.ts` die Übersetzungsfunktion — die auf
+// diesem Pfad vorher gar nicht aufgerufen wurde (spec-reviewer-Fund).
+describe("AiProviderSettings — Schlüsselbund nicht verfügbar (Spec 0071, A13)", () => {
+  it("zeigt den übersetzten Text statt des rohen englischen Bibliothekstexts", async () => {
+    vi.mocked(addAiProvider).mockRejectedValue({
+      code: "KEYCHAIN_UNAVAILABLE",
+      message: "Der Systemschlüsselbund ist nicht verfügbar.",
+    });
+
+    renderForm();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Claude" } });
+    fireEvent.change(screen.getByLabelText("Modell"), { target: { value: "sonnet" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-x" } });
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+
+    const error = await screen.findByText(/Systemschlüsselbund ist nicht verfügbar/);
+    // Der übersetzte Text nennt die blockierten Funktionen und den Ort mit
+    // dem konkreten nächsten Schritt — der `message`-Fallback tut das nicht.
+    expect(error).toHaveTextContent("Passphrase");
+    expect(error).toHaveTextContent("Diagnose");
+    expect(error).not.toHaveTextContent("No default store");
   });
 });

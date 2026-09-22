@@ -170,7 +170,7 @@
     "deleteImpactTitle": "Impact of deletion:",
     "deleteNoKeychainImpact": "No secrets in the keychain, no other servers affected.",
     "secretWillBeDeleted": "Will be removed from the keychain: {{label}}",
-    "secretMayBeDeleted": "Will be removed if stored (system keyring not readable): {{label}}",
+    "secretMayBeDeleted": "Could not be checked (system keyring not readable), will be removed if possible: {{label}}",
     "serverWillLoseJumpHost": "Loses the jump-host reference to this server: {{name}}",
     "deleteAlwaysRemovesHistory": "This also permanently deletes this server's chat history, notes, and tags.",
     "confirmDeleteServer": "Delete permanently",

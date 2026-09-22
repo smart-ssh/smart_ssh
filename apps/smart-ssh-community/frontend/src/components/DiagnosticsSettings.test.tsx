@@ -6,7 +6,7 @@
 // (`crates/app-shell/src/diagnostics.rs`, dort unit-getestet).
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   generateDiagnosticsBundle,
   getKeychainStatus,
@@ -24,12 +24,17 @@ vi.mock("../api", () => ({
   getKeychainStatus: vi.fn(),
 }));
 
+// spec-reviewer-Fund: Die Voreinstellung hing zuvor an der Aufrufhistorie
+// des Mocks (`mock.results.length === 0`) und damit an der Reihenfolge der
+// Tests. Ein später ergänztes `clearMocks`/`vi.clearAllMocks()` hätte die
+// in den Tests gesetzten Werte überschrieben und die A15-Tests still
+// grün-falsch gemacht. Jetzt: vor jedem Test neu setzen, jeder Test
+// überschreibt bei Bedarf.
+beforeEach(() => {
+  vi.mocked(getKeychainStatus).mockResolvedValue({ available: true, reason: null });
+});
+
 function renderDiagnostics() {
-  // Voreinstellung für die Tests, die den Schlüsselbund nicht selbst
-  // setzen — sonst bliebe die `useEffect`-Promise unaufgelöst.
-  if (vi.mocked(getKeychainStatus).mock.results.length === 0) {
-    vi.mocked(getKeychainStatus).mockResolvedValue({ available: true, reason: null });
-  }
   return render(
     <I18nextProvider i18n={testI18n}>
       <DiagnosticsSettings />

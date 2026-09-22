@@ -168,6 +168,61 @@ pub fn classify_store_failure(
     KeychainAvailability::Unavailable(reason)
 }
 
+/// Die vollständige `Display`+`source()`-Kette von
+/// [`keyring::Entry::store_status`] — **ausschließlich fürs Log** (Spec
+/// 0071, §6.4 M1: "Log enthält den vollen Grund", und die Klarstellung
+/// Q-BL-0031-01, die die `source()`-Kette aus A0.1 auf die manuellen Tests
+/// verschiebt). `None`, wenn der Store initialisiert ist.
+///
+/// **Die eine bewusste Ausnahme von I1 in diesem Modul** — und deshalb so
+/// benannt, dass ein Fehlgebrauch auffällt. Der Rückgabewert darf nie in
+/// einen Dialog, ein DTO, eine `CommandError.message` oder ins
+/// Diagnosepaket gelangen (X2); dafür gibt es [`classify_store_failure`].
+/// Der Aufrufer in `app-shell` loggt ihn und wirft ihn weg; die Logzeile
+/// steht absichtlich nicht in `diagnostics::SAFE_LOG_MESSAGES` und fliegt
+/// damit aus dem exportierbaren Diagnosepaket (Spec 0063).
+pub fn store_status_cause_chain_for_log() -> Option<String> {
+    let err = keyring::Entry::store_status().as_ref().err()?;
+    let mut chain = err.to_string();
+    let mut source = std::error::Error::source(err);
+    while let Some(cause) = source {
+        chain.push_str(" <- ");
+        chain.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    Some(chain)
+}
+
+/// Verschärft einen bereits ermittelten Zustand — **nur** in Richtung
+/// "nicht verfügbar", nie zurück (spec-reviewer-Fund, Review zu Spec 0071).
+///
+/// Hintergrund: [`probe_keychain_availability`] ist ein Schnappschuss vom
+/// Programmstart. `store_status()` kann `Ok(())` melden (der Anbieter
+/// antwortet auf den Verbindungsaufbau), und der erste echte Zugriff
+/// scheitert trotzdem — der typische Fall ist ein vorhandener, aber
+/// gesperrter Schlüsselbund, bei dem die Sperre erst beim Item-Zugriff
+/// sichtbar wird. Ohne diese Eskalation bliebe der Zustand `Available`,
+/// und damit bekäme weder der Fehlercode `KEYCHAIN_UNAVAILABLE` (A13) noch
+/// die Diagnose-Zeile (A15) etwas davon mit: Die Oberfläche meldete
+/// "verfügbar", während jeder Credential-Zugriff scheitert, und der rohe
+/// englische Bibliothekstext stünde wieder im UI — genau der Zustand, den
+/// BL-0031 beanstandet.
+///
+/// **Nur Eskalation** (Muster aus ADR 0024, "only escalation, never
+/// softening"): Ein bereits klassifizierter Grund bleibt erhalten, weil er
+/// spezifischer ist als der später nachgereichte. Es gibt keinen Weg,
+/// über diese Funktion wieder auf [`KeychainAvailability::Available`] zu
+/// kommen.
+pub fn escalate_to_unavailable(
+    current: KeychainAvailability,
+    reason: KeychainUnavailableReason,
+) -> KeychainAvailability {
+    match current {
+        KeychainAvailability::Available => KeychainAvailability::Unavailable(reason),
+        already_unavailable => already_unavailable,
+    }
+}
+
 /// Der eine Aufruf pro Programmlauf (Spec 0071, A16). `store_status()`
 /// selbst ist beliebig oft billig — es liest denselben `LazyLock` und
 /// startet höchstens einmal einen Verbindungsversuch —, aber A16 verlangt
@@ -312,6 +367,49 @@ mod tests {
             !format!("{failure:?}").contains("hunter2"),
             "der Debug-Text der Klassifizierung darf den Rohfehler nicht mitschleppen"
         );
+    }
+
+    /// spec-reviewer-Fund: Ein `Available`-Schnappschuss muss sich
+    /// nachträglich verschärfen lassen, sonst meldet die Oberfläche
+    /// "verfügbar", während jeder Zugriff scheitert.
+    #[test]
+    fn test_escalation_turns_available_into_unavailable() {
+        assert_eq!(
+            escalate_to_unavailable(
+                KeychainAvailability::Available,
+                KeychainUnavailableReason::Unknown
+            ),
+            KeychainAvailability::Unavailable(KeychainUnavailableReason::Unknown)
+        );
+    }
+
+    /// Die andere Richtung — der eigentliche Punkt: Eskalation darf **nie**
+    /// abschwächen. Weder zurück auf `Available` noch auf einen weniger
+    /// spezifischen Grund. Ohne diese Zusicherung könnte ein später
+    /// nachgereichtes `Unknown` eine bereits erkannte, konkrete Ursache
+    /// (und damit den Paketnamen im Text) überschreiben.
+    #[test]
+    fn test_escalation_never_softens_an_existing_verdict() {
+        for existing in [
+            KeychainUnavailableReason::NoSessionBus,
+            KeychainUnavailableReason::NoSecretServiceProvider,
+            KeychainUnavailableReason::Locked,
+            KeychainUnavailableReason::Unknown,
+        ] {
+            for nachgereicht in [
+                KeychainUnavailableReason::Unknown,
+                KeychainUnavailableReason::Locked,
+            ] {
+                assert_eq!(
+                    escalate_to_unavailable(
+                        KeychainAvailability::Unavailable(existing),
+                        nachgereicht
+                    ),
+                    KeychainAvailability::Unavailable(existing),
+                    "{existing:?} darf von {nachgereicht:?} nicht überschrieben werden"
+                );
+            }
+        }
     }
 
     /// Spec 0071, A3.

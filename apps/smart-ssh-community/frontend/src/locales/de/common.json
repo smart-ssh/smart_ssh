@@ -170,7 +170,7 @@
     "deleteImpactTitle": "Auswirkungen des Löschens:",
     "deleteNoKeychainImpact": "Keine Secrets im Schlüsselbund, keine anderen Server betroffen.",
     "secretWillBeDeleted": "Wird aus dem Schlüsselbund entfernt: {{label}}",
-    "secretMayBeDeleted": "Wird entfernt, falls hinterlegt (Systemschlüsselbund nicht lesbar): {{label}}",
+    "secretMayBeDeleted": "Konnte nicht geprüft werden (Systemschlüsselbund nicht lesbar), wird nach Möglichkeit entfernt: {{label}}",
     "serverWillLoseJumpHost": "Verliert die Jump-Host-Referenz auf diesen Server: {{name}}",
     "deleteAlwaysRemovesHistory": "Zusätzlich werden Chat-Historie, Notizen und Tags dieses Servers unwiderruflich gelöscht.",
     "confirmDeleteServer": "Endgültig löschen",

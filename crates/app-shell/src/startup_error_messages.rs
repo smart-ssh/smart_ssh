@@ -339,10 +339,23 @@ pub fn keychain_unavailable_text(
 
     let (title, state, next_step) = match (linux, reason, language) {
         // ── Kein Anbieter (Linux) ──────────────────────────────────────
-        // ANNAHME A-1 (Q-BL-0031-01): Die Paketnamen sind aus §1.1/A5 der
-        // Spec übernommen, nicht gemessen — der Container-Teil von Teil 0
-        // (A0.3) war im Coder-Lauf nicht durchführbar (Stefans Entscheidung
-        // vom 2026-09-22, Option 1). Vor Tor 2 durch M1–M4 zu bestätigen.
+        // ANNAHME A-1: Die Paketnamen sind aus §1.1/A5 der Spec übernommen,
+        // nicht gemessen — der Container-Teil von Teil 0 (A0.3) war im
+        // Coder-Lauf nicht durchführbar (Entscheidung vom 2026-09-22,
+        // festgehalten als Klarstellung in §9 der Spec). Vor dem Merge
+        // durch die manuellen Tests M1–M4 zu bestätigen.
+        //
+        // **Vollständige Fundstellenliste** (spec-reviewer-Fund: `grep -r
+        // "ANNAHME A-1"` fand vorher nur diese eine Stelle), alle sind zu
+        // bestätigen:
+        //   1. dieser Arm und der EN-Arm darunter (`gnome-keyring`,
+        //      `kwalletd6`, KeePassXC),
+        //   2. die beiden `NoSessionBus`-Arme (`dbus-user-session`),
+        //   3. `locales/de/common.json` und `locales/en/common.json`,
+        //      Schlüssel `diagnostics.keychainUnavailable.no_session_bus`
+        //      und `….no_secret_service_provider` — JSON trägt keinen
+        //      Kommentar, deshalb stehen sie nur hier,
+        //   4. `changelog.d/0071-linux-secret-service-meldung.md`.
         (true, KeychainUnavailableReason::NoSecretServiceProvider, Language::De) => (
             "Kein Systemschlüsselbund gefunden",
             "Smart SSH speichert Passwörter, Passphrasen und API-Keys ausschließlich im \
@@ -367,6 +380,9 @@ pub fn keychain_unavailable_text(
         // A6: nennt ausdrücklich NICHT die Schlüsselbund-Pakete — sie
         // würden hier nichts helfen, weil ohne Session-Bus auch ein
         // installierter Anbieter nicht erreichbar ist.
+        //
+        // ANNAHME A-1 (Fundstelle 2, s. Liste oben): `dbus-user-session`
+        // ist ebenfalls nicht gemessen.
         (true, KeychainUnavailableReason::NoSessionBus, Language::De) => (
             "Kein D-Bus-Session-Bus gefunden",
             "Smart SSH speichert Passwörter, Passphrasen und API-Keys ausschließlich im \
