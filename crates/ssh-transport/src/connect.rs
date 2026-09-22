@@ -292,4 +292,35 @@ mod connect_with_timeout_tests {
         .await;
         assert_eq!(result, Ok("connected"));
     }
+
+    /// Test 12 (Spec 0069, Teil A3, adversarial — spec-reviewer-Fund,
+    /// Review dieses Schritts: bislang nur per Code-Struktur belegt, nicht
+    /// per Test): modelliert den realen `connect_session`-Fall — die
+    /// umschlossene Future liefert schnell ein Ergebnis (dort:
+    /// `PendingHostKeyConfirmation`), danach vergeht — AUSSERHALB dieses
+    /// Aufrufs, während der eigentlichen Host-Key-Wartezeit
+    /// (`PENDING_ACTION_CONFIRM_TIMEOUT`, Spec 0068 Teil 5b) — mehr Zeit
+    /// als `SSH_CONNECT_TIMEOUT`. Der `.await` oben ist zu diesem
+    /// Zeitpunkt bereits vollständig abgeschlossen; es gibt keinen
+    /// zweiten Poll-Punkt, an dem der 10-Sekunden-Timeout erneut greifen
+    /// könnte. Deckt NICHT die Verdrahtung in `commands.rs` selbst ab (das
+    /// ist laut Spec 0069 §2, Nicht-Ziele, bewusst nicht mockbar) — dafür
+    /// bleibt der Code-Struktur-Nachweis (`connect_session`s Kommentar,
+    /// spec-reviewer-Review) maßgeblich; dieser Test sichert nur, dass
+    /// `connect_with_timeout` selbst keine Zeit über sein eigenes
+    /// `.await` hinaus "mitzählt".
+    #[tokio::test(start_paused = true)]
+    async fn test_timeout_does_not_apply_to_time_after_it_already_returned() {
+        let result = connect_with_timeout(
+            async { Ok::<&'static str, SshError>("pending-host-key-confirmation") },
+            Duration::from_secs(10),
+        )
+        .await;
+        assert_eq!(result, Ok("pending-host-key-confirmation"));
+
+        // Simuliert die potenziell sehr lange Host-Key-Wartezeit, die in
+        // `connect_session` erst NACH diesem (bereits abgeschlossenen)
+        // Aufruf beginnt.
+        tokio::time::advance(Duration::from_secs(3601)).await;
+    }
 }

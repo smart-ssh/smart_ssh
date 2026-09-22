@@ -372,6 +372,7 @@
     "SSH_CONNECTION_CLOSED": "The server closed the connection during setup. Check that an SSH service runs on this port; wait a moment if too many attempts were made.",
     "SSH_HOST_KEY_NOT_TRUSTED": "Connection cancelled because the host key wasn't confirmed. If you trust the server, connect again and verify the fingerprint.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "The host key prompt wasn't answered in time; the key was not trusted. Connect again.",
+    "SSH_CONNECTION_ABANDONED": "Connection attempt cancelled (e.g. the app reloaded while the host key prompt was open). Connect again.",
     "AI_AUTH_FAILED": "Authentication with the AI provider failed – check the API key",
     "AI_RATE_LIMITED": "The AI provider is currently throttling requests (rate limit) – the app already retried automatically a few times. Please wait a moment and send the message again.",
     "AI_NETWORK_ERROR": "Can't reach the AI provider. Check your internet connection and, for a custom endpoint, the base URL, then send again.",

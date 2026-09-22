@@ -372,6 +372,7 @@
     "SSH_CONNECTION_CLOSED": "Der Server hat die Verbindung während des Aufbaus beendet. Prüfen, ob auf diesem Port ein SSH-Dienst läuft; ggf. kurz warten (Schutz vor zu vielen Versuchen).",
     "SSH_HOST_KEY_NOT_TRUSTED": "Verbindung abgebrochen, weil der Host-Key nicht bestätigt wurde. Wenn du dem Server vertraust: erneut verbinden und den Fingerprint prüfen.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Die Host-Key-Abfrage wurde nicht rechtzeitig beantwortet; der Key wurde nicht übernommen. Erneut verbinden.",
+    "SSH_CONNECTION_ABANDONED": "Verbindungsaufbau abgebrochen (z. B. durch ein Neuladen der App, während die Host-Key-Abfrage offen war). Erneut verbinden.",
     "AI_AUTH_FAILED": "Authentifizierung beim KI-Provider fehlgeschlagen – API-Key prüfen",
     "AI_RATE_LIMITED": "Der KI-Anbieter drosselt gerade die Anfragen (Rate-Limit) – die App hat es automatisch mehrfach erneut versucht. Bitte kurz warten und die Nachricht erneut senden.",
     "AI_NETWORK_ERROR": "Keine Verbindung zum KI-Provider. Internetverbindung und – bei eigenem Endpunkt – die Base-URL prüfen, dann erneut senden.",

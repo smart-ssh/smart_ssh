@@ -104,6 +104,8 @@ mod code_tests {
             "AI_NO_ACTIVE_PROVIDER",
             "SSH_HOST_KEY_NOT_TRUSTED",
             "SSH_HOST_KEY_CONFIRM_TIMEOUT",
+            // Spec 0069, Teil A5 (spec-reviewer-Fund):
+            "SSH_CONNECTION_ABANDONED",
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();

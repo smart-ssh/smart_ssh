@@ -86,6 +86,17 @@ pub(crate) fn map_transport_error(err: &reqwest::Error) -> AiError {
         return AiError::LocalProviderUnreachable(err.to_string());
     }
     if err.is_timeout() {
+        // spec-reviewer-Fund (Review dieses Schritts): `err.is_timeout()`
+        // meldet nur "es gab einen Timeout", nicht welche Frist griff —
+        // `reqwest::Client` bekommt in diesem Projekt aktuell nirgends ein
+        // eigenes `.timeout(...)` (s. `crate::sse::build_http_client`, nur
+        // `tcp_keepalive`), dieser Zweig ist also nur eine Absicherung für
+        // den Fall, dass das künftig doch gesetzt wird. `SSE_INACTIVITY_
+        // TIMEOUT` ist dafür die einzige im Projekt bekannte Frist — eine
+        // bewusste Näherung (nicht die tatsächlich abgelaufene Zeit), kein
+        // Bug: der `Display`-Text zeigt eine plausible, aber ggf. nicht
+        // exakte Sekundenzahl; das Frontend zeigt ohnehin nur den
+        // `AI_TIMEOUT`-Text ohne Zahl an (s. `errors.AI_TIMEOUT`).
         return AiError::Timeout {
             secs: crate::sse::SSE_INACTIVITY_TIMEOUT.as_secs(),
         };

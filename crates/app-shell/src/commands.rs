@@ -1017,7 +1017,16 @@ pub(crate) async fn connect_session(
                     let user_decision = match wait {
                         HostKeyWait::Decided(decision) => decision,
                         HostKeyWait::Abandoned => {
-                            return Err("Verbindungsaufbau abgebrochen".into());
+                            // Spec 0069, Teil A5 (spec-reviewer-Fund, Review
+                            // dieses Schritts): der dritte Ausgang derselben
+                            // Host-Key-Wartestelle (neben Reject/TimedOut,
+                            // die bereits einen Code tragen) zeigte bislang
+                            // rohen deutschen Text auch in der englischen
+                            // UI. Neuer, additiver Code (E3).
+                            return Err(CommandError::with_code(
+                                "Verbindungsaufbau abgebrochen",
+                                "SSH_CONNECTION_ABANDONED",
+                            ));
                         }
                         HostKeyWait::TimedOut => {
                             tracing::warn!(
