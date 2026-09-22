@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use credentials_keyring::KeychainAvailability;
 use persistence_sqlite::{
     SqliteAiProviderStore, SqliteChatSessionStore, SqliteLedgerStore, SqlitePolicyStore,
     SqlitePromptHistoryStore,
@@ -34,6 +35,17 @@ pub struct AppState {
     // taugt, ohne den Trait selbst (der auch synchron/nicht-App-spezifisch
     // bleiben soll) anzufassen.
     pub credential_store: Arc<dyn CredentialStore + Send + Sync>,
+    /// Spec 0071, A16: ob der OS-Schlüsselbund bei diesem Programmstart
+    /// erreichbar war — **einmal** in `lib::build_app_state` ermittelt und
+    /// danach nur noch gelesen. Kein Kommando probiert den Schlüsselbund
+    /// zusätzlich ab, um diesen Zustand zu erfahren; das würde sich sonst
+    /// ausgerechnet auf dem `list_servers`-Pfad summieren, der
+    /// `ServerDto::from_server` pro Server aufruft.
+    ///
+    /// Gelesen von `error::keychain_aware_credential_error` (A13),
+    /// `dto::ServerDto::from_server` (A14) und `commands::get_keychain_
+    /// status` für die Diagnose-Ansicht (A15).
+    pub keychain: KeychainAvailability,
     pub ai_provider_store: Arc<SqliteAiProviderStore>,
     pub host_key_store: Arc<dyn HostKeyStore>,
     /// Spec 0009: echte, persistente Filter-Regeln statt des bisherigen

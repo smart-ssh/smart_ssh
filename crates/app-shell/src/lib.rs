@@ -254,6 +254,7 @@ fn build_app_state(
         sessions: SessionManager::new(),
         profile_store: Arc::new(profile_store),
         credential_store: Arc::new(credential_store),
+        keychain,
         ai_provider_store: Arc::new(ai_provider_store),
         host_key_store: Arc::new(host_key_store),
         policy_store,

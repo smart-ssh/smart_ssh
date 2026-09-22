@@ -11,7 +11,44 @@
 
 use serde::Serialize;
 
+use credentials_keyring::KeychainAvailability;
 use ssh_manager_core::entitlements::FeatureLocked;
+use ssh_manager_core::profiles::CredentialError;
+
+/// Spec 0071, A13: stabiler Code für "der OS-Schlüsselbund ist bei diesem
+/// Programmlauf nicht erreichbar". Das Frontend übersetzt ihn über
+/// `errorCodes.ts` und zeigt den eigenen Text, statt den englischen
+/// `Display`-Text der `keyring`-Crate durchzureichen.
+pub const KEYCHAIN_UNAVAILABLE: &str = "KEYCHAIN_UNAVAILABLE";
+
+/// Spec 0071, A13/X2: Wandelt einen [`CredentialError`] in einen
+/// [`CommandError`] und hängt genau dann den Code
+/// [`KEYCHAIN_UNAVAILABLE`] an, wenn der Schlüsselbund bei diesem
+/// Programmstart ohnehin schon als nicht verfügbar erkannt wurde (A16 —
+/// `keychain` kommt aus dem `AppState`, es wird hier **nicht** erneut
+/// probiert).
+///
+/// **X2 — der Code ersetzt den Text, er ergänzt ihn nicht:** Die Nutzlast
+/// von [`CredentialError::Backend`] wird verworfen, nicht in die `message`
+/// übernommen. Enthielte ein Backend-Fehler jemals einen Secret-artigen
+/// Wert, käme er über diesen Pfad nicht ins Frontend.
+///
+/// [`CredentialError::NotFound`] bleibt bewusst unverändert: "kein Eintrag
+/// vorhanden" ist eine fachliche Aussage und hat mit der Verfügbarkeit des
+/// Schlüsselbunds nichts zu tun — sie mit `KEYCHAIN_UNAVAILABLE` zu
+/// überschreiben wäre genau die Verwechslung, die A14/I4 verbietet.
+pub fn keychain_aware_credential_error(
+    err: CredentialError,
+    keychain: KeychainAvailability,
+) -> CommandError {
+    match err {
+        CredentialError::Backend(_) if !keychain.is_available() => CommandError::with_code(
+            "Der Systemschlüsselbund ist nicht verfügbar.",
+            KEYCHAIN_UNAVAILABLE,
+        ),
+        other => CommandError::from(other),
+    }
+}
 
 #[derive(Debug, Serialize)]
 pub struct CommandError {
@@ -100,6 +137,8 @@ mod code_tests {
             "SERVER_CERTIFICATE_KEY_REQUIRED",
             "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED",
             "SERVER_JUMP_HOST_LOCAL",
+            // Spec 0071, A13.
+            super::KEYCHAIN_UNAVAILABLE,
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();
@@ -109,6 +148,72 @@ mod code_tests {
             unique.len(),
             "doppelt vergebener CommandError-Code: {codes:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod keychain_code_tests {
+    use super::*;
+    use credentials_keyring::KeychainUnavailableReason;
+    use ssh_manager_core::profiles::CredentialRef;
+
+    const UNAVAILABLE: KeychainAvailability =
+        KeychainAvailability::Unavailable(KeychainUnavailableReason::NoSecretServiceProvider);
+
+    /// Spec 0071, A13: Ist der Schlüsselbund nicht verfügbar, erreicht der
+    /// Fehler das Frontend mit dem stabilen Code — nicht mehr als
+    /// codeloser, englischer Bibliothekstext.
+    #[test]
+    fn test_backend_error_gets_the_stable_code_when_the_keychain_is_unavailable() {
+        let err = keychain_aware_credential_error(
+            CredentialError::Backend(
+                "No default store has been set, so cannot search or create entries".to_string(),
+            ),
+            UNAVAILABLE,
+        );
+        assert_eq!(err.code, Some(KEYCHAIN_UNAVAILABLE));
+    }
+
+    /// Spec 0071, X2: Der Code **ersetzt** den Text. Ein Platzhalter-Secret
+    /// aus der Fehlerkette darf in keiner `CommandError.message` mit diesem
+    /// Code auftauchen — sonst hätte die Redaktionszusage genau hier ein
+    /// Loch, an einer Stelle, die direkt ins UI geht.
+    #[test]
+    fn test_backend_error_text_never_reaches_the_frontend_with_this_code() {
+        let err = keychain_aware_credential_error(
+            CredentialError::Backend("token sk-live-hunter2 rejected by keyring".to_string()),
+            UNAVAILABLE,
+        );
+        assert_eq!(err.code, Some(KEYCHAIN_UNAVAILABLE));
+        assert!(
+            !err.message.contains("hunter2") && !err.message.contains("sk-live"),
+            "der rohe Backend-Fehlertext darf nicht mitgereicht werden: {}",
+            err.message
+        );
+    }
+
+    /// Gegenprobe: Ist der Schlüsselbund verfügbar, ist ein `Backend`-Fehler
+    /// etwas anderes (z. B. ein einzelner verweigerter Eintrag) und bekommt
+    /// den Code nicht — sonst schickte die Oberfläche den Nutzer wegen eines
+    /// beliebigen Keychain-Fehlers zu `apt install`.
+    #[test]
+    fn test_backend_error_keeps_its_message_when_the_keychain_is_available() {
+        let err = keychain_aware_credential_error(
+            CredentialError::Backend("user denied access".to_string()),
+            KeychainAvailability::Available,
+        );
+        assert_eq!(err.code, None);
+        assert!(err.message.contains("user denied access"));
+    }
+
+    /// Spec 0071, A14/I4: "nicht vorhanden" ist keine Schlüsselbund-Störung.
+    #[test]
+    fn test_not_found_is_never_reported_as_an_unavailable_keychain() {
+        let err = keychain_aware_credential_error(
+            CredentialError::NotFound(CredentialRef::new("server:1:sudo_password".to_string())),
+            UNAVAILABLE,
+        );
+        assert_eq!(err.code, None);
     }
 }
 

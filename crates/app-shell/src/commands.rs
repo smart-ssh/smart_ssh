@@ -38,7 +38,7 @@ use crate::dto::{
     NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType, RemoteEntryDto, RuleDto,
     RuleInput, ServerDto, ServerInput, SessionSummaryDto, TestConnectionResult,
 };
-use crate::error::{CommandError, CommandResult};
+use crate::error::{keychain_aware_credential_error, CommandError, CommandResult};
 use crate::events::{
     emit_chat_queued_messages_sent, emit_connection_status_changed,
     emit_host_key_verification_needed, emit_sftp_transfer_finished, emit_sftp_transfer_started,
@@ -156,7 +156,8 @@ pub async fn add_ai_provider(
     let credential_ref = credential_ref_for(id);
     state
         .credential_store
-        .set(&credential_ref, SecretString::from(config.api_key.clone()))?;
+        .set(&credential_ref, SecretString::from(config.api_key.clone()))
+        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
 
     let new_config = config.into_new_config(id);
     if let Err(err) = state.ai_provider_store.create(&new_config).await {
@@ -201,7 +202,8 @@ pub async fn update_ai_provider(
     if !api_key.is_empty() {
         state
             .credential_store
-            .set(&credential_ref_for(id), SecretString::from(api_key))?;
+            .set(&credential_ref_for(id), SecretString::from(api_key))
+            .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
     }
     Ok(())
 }
@@ -221,7 +223,10 @@ pub async fn delete_ai_provider(state: State<'_, AppState>, id: ProviderId) -> C
         );
     }
 
-    state.credential_store.delete(&existing.credential_ref)?;
+    state
+        .credential_store
+        .delete(&existing.credential_ref)
+        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
     state.ai_provider_store.delete(&id).await?;
     Ok(())
 }
@@ -744,7 +749,10 @@ pub(crate) async fn connect_session(
         state.profile_store.get_server(&server_id).await?
     };
     let active_config = active_ai_provider_config(state).await?;
-    let api_key = state.credential_store.get(&active_config.credential_ref)?;
+    let api_key = state
+        .credential_store
+        .get(&active_config.credential_ref)
+        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
     let (ai_provider, ai_provider_budget) = build_ai_provider(
         &state.rate_limit_registry,
         active_config.provider_type,
@@ -2369,6 +2377,7 @@ pub async fn create_server(
     crate::servers::create_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
+        state.keychain,
         input,
     )
     .await
@@ -2391,11 +2400,17 @@ pub async fn update_server(
     let existing = state.profile_store.get_server(&id).await?;
     let auth = resolve_auth_method(
         state.credential_store.as_ref(),
+        state.keychain,
         id,
         input.auth,
         Some(&existing.auth),
     )?;
-    resolve_sudo_password(state.credential_store.as_ref(), id, input.sudo_password)?;
+    resolve_sudo_password(
+        state.credential_store.as_ref(),
+        state.keychain,
+        id,
+        input.sudo_password,
+    )?;
 
     let server = Server {
         id,
@@ -2566,7 +2581,10 @@ pub async fn request_note_shrink(
     server_id: ServerId,
 ) -> CommandResult<()> {
     let active_config = active_ai_provider_config(&state).await?;
-    let api_key = state.credential_store.get(&active_config.credential_ref)?;
+    let api_key = state
+        .credential_store
+        .get(&active_config.credential_ref)
+        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
     let (ai_provider, ai_provider_budget) = build_ai_provider(
         &state.rate_limit_registry,
         active_config.provider_type,

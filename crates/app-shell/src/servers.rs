@@ -33,6 +33,7 @@ use crate::server_credentials::{
 pub async fn create_server(
     store: &dyn ProfileStore,
     credential_store: &(dyn CredentialStore + Send + Sync),
+    keychain: credentials_keyring::KeychainAvailability,
     input: ServerInput,
 ) -> CommandResult<ServerId> {
     // Vor jedem Schlüsselbund-Zugriff prüfen — ein ungültiger Pfad soll
@@ -40,14 +41,14 @@ pub async fn create_server(
     let sftp_server_path = crate::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
     let id = ServerId::new();
 
-    let auth = match resolve_auth_method(credential_store, id, input.auth, None) {
+    let auth = match resolve_auth_method(credential_store, keychain, id, input.auth, None) {
         Ok(auth) => auth,
         Err(err) => {
             delete_all_possible_server_secrets(credential_store, id);
             return Err(err);
         }
     };
-    if let Err(err) = resolve_sudo_password(credential_store, id, input.sudo_password) {
+    if let Err(err) = resolve_sudo_password(credential_store, keychain, id, input.sudo_password) {
         delete_all_possible_server_secrets(credential_store, id);
         return Err(err);
     }
@@ -143,6 +144,12 @@ mod tests {
 
     use super::*;
     use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+
+    /// Spec 0071: Der In-Memory-Store dieser Tests ist per Definition
+    /// verfügbar — hier geht es um das Rollback-Verhalten, nicht um die
+    /// Schlüsselbund-Verfügbarkeit.
+    const AVAILABLE: credentials_keyring::KeychainAvailability =
+        credentials_keyring::KeychainAvailability::Available;
 
     fn server(name: &str, jump_host: Option<ServerId>) -> Server {
         let now = Utc::now();
@@ -313,7 +320,13 @@ mod tests {
         let store = InMemoryProfileStore::new().with_failing_create_server();
         let credentials = InMemoryCredentialStore::new();
 
-        let result = create_server(&store, &credentials, password_input("secret", "hunter2")).await;
+        let result = create_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            password_input("secret", "hunter2"),
+        )
+        .await;
 
         assert!(result.is_err());
         assert!(
@@ -341,7 +354,13 @@ mod tests {
         let store = InMemoryProfileStore::new();
         let credentials = InMemoryCredentialStore::new().with_failing_set_for_slot("sudo_password");
 
-        let result = create_server(&store, &credentials, password_input("secret", "hunter2")).await;
+        let result = create_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            password_input("secret", "hunter2"),
+        )
+        .await;
 
         assert!(result.is_err());
         assert!(
@@ -414,6 +433,7 @@ mod tests {
         let result = create_server(
             &store,
             &credentials,
+            AVAILABLE,
             private_key_input("key-pem", "hunter2"),
         )
         .await;
@@ -453,6 +473,7 @@ mod tests {
         let result = create_server(
             &store,
             &credentials,
+            AVAILABLE,
             certificate_input("cert-pem", "key-pem"),
         )
         .await;

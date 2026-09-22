@@ -378,7 +378,8 @@
     "SERVER_CERTIFICATE_REQUIRED": "Zertifikat ist erforderlich",
     "SERVER_CERTIFICATE_KEY_REQUIRED": "Zertifikats-Key ist erforderlich",
     "SERVER_JUMP_HOST_LOCAL": "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
-    "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "Erststart-Hinweis muss zuerst bestätigt werden"
+    "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "Erststart-Hinweis muss zuerst bestätigt werden",
+    "KEYCHAIN_UNAVAILABLE": "Der Systemschlüsselbund ist nicht verfügbar. Solange das so ist, lassen sich kein API-Key, kein Server-Passwort, keine Passphrase und kein Sudo-Passwort speichern oder lesen. Den genauen Grund und den nächsten Schritt zeigt die Diagnose-Ansicht in den Einstellungen."
   },
   "mcpServer": {
     "hint": "Externe MCP-Clients können darüber Kommandos, Datei-Lese-/Schreibzugriffe und Notiz-Aktualisierungen auf freigegebenen Servern vorschlagen — jede Anfrage landet immer bei einer Bestätigung in der App, unabhängig von bestehenden Allow-Regeln.",

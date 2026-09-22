@@ -12,8 +12,10 @@ use secrecy::SecretString;
 use ssh_manager_core::profiles::{AuthMethod, CredentialError, CredentialRef, CredentialStore};
 use ssh_manager_core::shared::ServerId;
 
+use credentials_keyring::KeychainAvailability;
+
 use crate::dto::AuthMethodInput;
-use crate::error::CommandError;
+use crate::error::{keychain_aware_credential_error, CommandError};
 
 /// Deterministischer `CredentialRef` pro `(server_id, slot)` — kein
 /// zusätzlicher Zustand nötig, um sich "den Ref von vorhin" zu merken; bei
@@ -47,17 +49,27 @@ pub fn sudo_password_credential_ref(server_id: ServerId) -> CredentialRef {
 /// Prüfung fälschlich bestehen und ein leeres/Whitespace-Secret
 /// überschreiben, statt (wie ein echtes Leerfeld) als "unverändert" zu
 /// gelten.
+///
+/// Spec 0071, A13: `keychain` wird nur durchgereicht, um einem
+/// Schreibfehler bei nicht verfügbarem Schlüsselbund den stabilen Code
+/// `KEYCHAIN_UNAVAILABLE` zu geben (s. `error::keychain_aware_credential_
+/// error`). Der Zustand kommt aus dem `AppState` (A16) — hier wird nichts
+/// zusätzlich abgefragt, und am Schreibverhalten selbst ändert sich nichts:
+/// Der Fehler wird unverändert weitergereicht, nie verschluckt (X6).
 pub fn resolve_sudo_password(
     credential_store: &dyn CredentialStore,
+    keychain: KeychainAvailability,
     server_id: ServerId,
     provided: Option<String>,
 ) -> Result<(), CommandError> {
     match provided.map(|value| value.trim().to_string()) {
         Some(value) if !value.is_empty() => {
-            credential_store.set(
-                &sudo_password_credential_ref(server_id),
-                SecretString::from(value),
-            )?;
+            credential_store
+                .set(
+                    &sudo_password_credential_ref(server_id),
+                    SecretString::from(value),
+                )
+                .map_err(|err| keychain_aware_credential_error(err, keychain))?;
         }
         _ => {}
     }
@@ -90,6 +102,7 @@ pub fn clear_sudo_password(credential_store: &dyn CredentialStore, server_id: Se
 /// "unverändert lassen"/"Pflichtfeld fehlt" auszulösen.
 fn write_or_reuse_secret(
     credential_store: &dyn CredentialStore,
+    keychain: KeychainAvailability,
     ref_: &CredentialRef,
     provided: Option<String>,
     previously_existed: bool,
@@ -98,7 +111,9 @@ fn write_or_reuse_secret(
 ) -> Result<(), CommandError> {
     match provided.map(|value| value.trim().to_string()) {
         Some(value) if !value.is_empty() => {
-            credential_store.set(ref_, SecretString::from(value))?;
+            credential_store
+                .set(ref_, SecretString::from(value))
+                .map_err(|err| keychain_aware_credential_error(err, keychain))?;
             Ok(())
         }
         _ if previously_existed => Ok(()),
@@ -162,8 +177,12 @@ fn cleanup_abandoned_slots(
 /// `update_server` (für "leer = unverändert" + Aufräumen bei
 /// Methodenwechsel), `None` bei `create_server` (dort ist jeder
 /// benötigte Slot zwingend, s. [`write_or_reuse_secret`]).
+///
+/// Spec 0071, A13: `keychain` wird nur für die Fehlerkennzeichnung
+/// durchgereicht (s. [`resolve_sudo_password`]).
 pub fn resolve_auth_method(
     credential_store: &dyn CredentialStore,
+    keychain: KeychainAvailability,
     server_id: ServerId,
     input: AuthMethodInput,
     existing: Option<&AuthMethod>,
@@ -176,6 +195,7 @@ pub fn resolve_auth_method(
             let existed = matches!(existing, Some(AuthMethod::Password { .. }));
             write_or_reuse_secret(
                 credential_store,
+                keychain,
                 &ref_,
                 value,
                 existed,
@@ -194,6 +214,7 @@ pub fn resolve_auth_method(
             let existed_key = matches!(existing, Some(AuthMethod::PrivateKey { .. }));
             write_or_reuse_secret(
                 credential_store,
+                keychain,
                 &key_ref,
                 key_content,
                 existed_key,
@@ -218,7 +239,9 @@ pub fn resolve_auth_method(
             let passphrase_ref = match passphrase.map(|p| p.trim().to_string()) {
                 Some(p) if !p.is_empty() => {
                     let r = credential_ref(server_id, "passphrase");
-                    credential_store.set(&r, SecretString::from(p))?;
+                    credential_store
+                        .set(&r, SecretString::from(p))
+                        .map_err(|err| keychain_aware_credential_error(err, keychain))?;
                     Some(r)
                 }
                 _ => existing_passphrase_ref,
@@ -238,6 +261,7 @@ pub fn resolve_auth_method(
             let existed = matches!(existing, Some(AuthMethod::Certificate { .. }));
             write_or_reuse_secret(
                 credential_store,
+                keychain,
                 &cert_ref,
                 cert_content,
                 existed,
@@ -246,6 +270,7 @@ pub fn resolve_auth_method(
             )?;
             write_or_reuse_secret(
                 credential_store,
+                keychain,
                 &key_ref,
                 key_content,
                 existed,
@@ -332,6 +357,11 @@ pub fn delete_all_possible_server_secrets(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0071: In diesen Tests geht es nicht um die Verfügbarkeit des
+    /// Schlüsselbunds, sondern um das Schreibverhalten — der In-Memory-Store
+    /// ist per Definition verfügbar.
+    const AVAILABLE: KeychainAvailability = KeychainAvailability::Available;
     use crate::test_support::InMemoryCredentialStore;
 
     fn secret_value(store: &InMemoryCredentialStore, r: &CredentialRef) -> Option<String> {
@@ -344,8 +374,13 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        let result =
-            resolve_auth_method(&store, id, AuthMethodInput::Password { value: None }, None);
+        let result = resolve_auth_method(
+            &store,
+            AVAILABLE,
+            id,
+            AuthMethodInput::Password { value: None },
+            None,
+        );
 
         let err = result.expect_err("erwartet: Fehler bei fehlendem Passwort");
         // Spec 0024, Abschnitt 5: stabiler Code fürs Frontend-Mapping.
@@ -359,6 +394,7 @@ mod tests {
 
         let result = resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::PrivateKey {
                 key_content: None,
@@ -378,6 +414,7 @@ mod tests {
 
         let result = resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::Certificate {
                 cert_content: None,
@@ -397,6 +434,7 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some("hunter2".to_string()),
@@ -421,6 +459,7 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::PrivateKey {
                 key_content: Some("-----BEGIN KEY-----".to_string()),
@@ -443,6 +482,7 @@ mod tests {
 
         let result = resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::Certificate {
                 cert_content: Some("cert".to_string()),
@@ -460,7 +500,8 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        let auth = resolve_auth_method(&store, id, AuthMethodInput::Agent, None).unwrap();
+        let auth =
+            resolve_auth_method(&store, AVAILABLE, id, AuthMethodInput::Agent, None).unwrap();
 
         assert!(matches!(auth, AuthMethod::Agent));
     }
@@ -476,6 +517,7 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::Password { value: None },
             Some(&existing),
@@ -501,8 +543,14 @@ mod tests {
             credential_ref: old_ref.clone(),
         };
 
-        let auth =
-            resolve_auth_method(&store, id, AuthMethodInput::Agent, Some(&existing)).unwrap();
+        let auth = resolve_auth_method(
+            &store,
+            AVAILABLE,
+            id,
+            AuthMethodInput::Agent,
+            Some(&existing),
+        )
+        .unwrap();
 
         assert!(matches!(auth, AuthMethod::Agent));
         assert!(
@@ -537,7 +585,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        resolve_sudo_password(&store, id, Some("hunter2".to_string())).unwrap();
+        resolve_sudo_password(&store, AVAILABLE, id, Some("hunter2".to_string())).unwrap();
 
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
@@ -550,8 +598,8 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        resolve_sudo_password(&store, id, None).unwrap();
-        resolve_sudo_password(&store, id, Some(String::new())).unwrap();
+        resolve_sudo_password(&store, AVAILABLE, id, None).unwrap();
+        resolve_sudo_password(&store, AVAILABLE, id, Some(String::new())).unwrap();
 
         assert!(secret_value(&store, &sudo_password_credential_ref(id)).is_none());
     }
@@ -564,7 +612,7 @@ mod tests {
 
         // Leeres Feld bei "update" bedeutet unverändert (Spec 0018,
         // Abschnitt 4) — kein Löschen, kein Überschreiben.
-        resolve_sudo_password(&store, id, Some(String::new())).unwrap();
+        resolve_sudo_password(&store, AVAILABLE, id, Some(String::new())).unwrap();
 
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
@@ -600,6 +648,7 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some("hunter2\r\n".to_string()),
@@ -625,6 +674,7 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some("  hunter two \t".to_string()),
@@ -650,6 +700,7 @@ mod tests {
 
         let result = resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some("  \r\n\t ".to_string()),
@@ -672,6 +723,7 @@ mod tests {
 
         resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some(" \r\n ".to_string()),
@@ -692,7 +744,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        resolve_sudo_password(&store, id, Some("sudo-secret\r\n".to_string())).unwrap();
+        resolve_sudo_password(&store, AVAILABLE, id, Some("sudo-secret\r\n".to_string())).unwrap();
 
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
@@ -706,12 +758,55 @@ mod tests {
         let store = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(id), "old-sudo-password");
 
-        resolve_sudo_password(&store, id, Some("\r\n".to_string())).unwrap();
+        resolve_sudo_password(&store, AVAILABLE, id, Some("\r\n".to_string())).unwrap();
 
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
             Some("old-sudo-password")
         );
+    }
+
+    /// Spec 0071, A13/X6: Schlägt ein Schreibzugriff fehl, während der
+    /// Schlüsselbund als nicht verfügbar bekannt ist, geht der Fehler
+    /// weiter (nie ein stiller Erfolg) — und zwar mit dem stabilen Code,
+    /// damit das Frontend den übersetzten Text zeigt statt des englischen
+    /// Bibliothekstexts.
+    #[test]
+    fn test_failed_write_reports_the_keychain_code_and_never_silently_succeeds() {
+        let unavailable = KeychainAvailability::Unavailable(
+            credentials_keyring::KeychainUnavailableReason::NoSecretServiceProvider,
+        );
+        let store = InMemoryCredentialStore::new().with_failing_set_for_slot("sudo_password");
+        let id = ServerId::new();
+
+        let err = resolve_sudo_password(&store, unavailable, id, Some("sudo-secret".to_string()))
+            .expect_err("ein fehlgeschlagener Schreibzugriff darf nicht als Erfolg gelten");
+
+        assert_eq!(err.code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
+        assert!(
+            !err.message.contains("simulierter Keychain-Fehler"),
+            "der rohe Backend-Text darf nicht mitgereicht werden: {}",
+            err.message
+        );
+        assert!(
+            secret_value(&store, &sudo_password_credential_ref(id)).is_none(),
+            "nichts darf gespeichert worden sein"
+        );
+    }
+
+    /// Gegenprobe zu oben: Derselbe Schreibfehler bei **verfügbarem**
+    /// Schlüsselbund ist ein gewöhnlicher Fehler ohne diesen Code — sonst
+    /// schickte die Oberfläche den Nutzer wegen eines einzelnen
+    /// verweigerten Eintrags zu einer Paketinstallation.
+    #[test]
+    fn test_failed_write_with_an_available_keychain_keeps_its_ordinary_error() {
+        let store = InMemoryCredentialStore::new().with_failing_set_for_slot("sudo_password");
+        let id = ServerId::new();
+
+        let err = resolve_sudo_password(&store, AVAILABLE, id, Some("sudo-secret".to_string()))
+            .expect_err("ein fehlgeschlagener Schreibzugriff darf nicht als Erfolg gelten");
+
+        assert_eq!(err.code, None);
     }
 
     #[test]
@@ -721,6 +816,7 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::PrivateKey {
                 key_content: Some("-----BEGIN KEY-----".to_string()),
@@ -755,6 +851,7 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
+            AVAILABLE,
             id,
             AuthMethodInput::PrivateKey {
                 key_content: None,
