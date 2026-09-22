@@ -30,6 +30,13 @@
 //! der Tauri-App (`cargo tauri dev`, Anlegen eines echten AI-Providers) zu
 //! verifizieren.
 
+pub mod availability;
+
+pub use availability::{
+    classify_store_failure, probe_keychain_availability, session_bus_present, store_failure_of,
+    KeychainAvailability, KeychainUnavailableReason, StoreFailure,
+};
+
 use secrecy::{ExposeSecret, SecretString};
 use ssh_manager_core::profiles::{
     CredentialError, CredentialRef, CredentialResult, CredentialStore,
