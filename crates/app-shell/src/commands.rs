@@ -2471,7 +2471,7 @@ pub async fn clear_server_sudo_password(
 ) -> CommandResult<()> {
     // Spec 0071, A17: schlägt sichtbar fehl, statt Erfolg zu melden,
     // während das Passwort im Schlüsselbund stehen bleibt.
-    clear_sudo_password(state.credential_store.as_ref(), state.keychain, id)
+    clear_sudo_password(state.credential_store.as_ref(), id)
 }
 
 /// Spec 0008, Abschnitt 7. `existing_server_id` ist eine gegenüber der

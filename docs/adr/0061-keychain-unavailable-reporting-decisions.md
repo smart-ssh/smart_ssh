@@ -126,6 +126,25 @@ beiden Hälften von A17 sollen sich nicht über einen Parameter vermischen
 lassen. Die `tracing::warn!`-Zeilen aus der vorigen Runde bleiben in
 beiden Fällen.
 
+**Abweichung von Entscheidung 4, bewusst:** `clear_sudo_password` hängt
+`KEYCHAIN_UNAVAILABLE` **unbedingt** an, nicht abhängig vom
+Schlüsselbund-Zustand aus dem `AppState`. Grund (spec-reviewer-Fund):
+Dieser Fehlerpfad entsteht durch A17 überhaupt erst; wäre er an den
+Startzustand gekoppelt, stünde dort der rohe englische Bibliothekstext,
+sobald der Schlüsselbund erst *während* der Sitzung klemmt — also genau
+das, was §2 ausschließt. Sachlich ist die unbedingte Zuordnung hier auch
+richtig: Ein `Backend`-Fehler auf einem `delete` hat keine andere Ursache
+als einen Schlüsselbund, der nicht tut, was er soll. Der allgemeine
+Fall (offener Punkt 1 unten) bleibt davon unberührt.
+
+**Der generische Code-Text reicht auf diesem Pfad nicht:** Er spricht von
+„speichern oder lesen" und sagt damit nicht, worauf es hier ankommt — dass
+das Passwort weiter im Schlüsselbund liegt und beim nächsten `sudo` erneut
+eingespeist wird. Das Formular stellt deshalb einen eigenen Satz voran
+(`serverForm.removeSudoPasswordFailed`), statt dafür einen zweiten
+Fehlercode einzuführen. Dasselbe Muster nutzt die Diagnose-Ansicht bereits
+für ihre Fehlermeldungen.
+
 ### 3. Außerhalb von Linux gilt immer der neutrale Text
 
 A8 verlangt, dass auf macOS/Windows kein Linux-Paketname, kein `apt`-Befehl
@@ -254,7 +273,28 @@ stillschweigend verschwinden.
    ergänzen; beides geht über den Umfang dieser Spec hinaus. Eigenes
    Vorhaben.
 
-7. **Keine vollständige Testabdeckung für `ServerForm.tsx`.** Die Datei
+7. **`cleanup_abandoned_slots` loggt als einziger verschluckter `delete`
+   nicht.** Er ist nach der X6-Korrektur zu Recht ein Aufräumpfad (Wechsel
+   der Auth-Methode), aber wenn er scheitert, verschwindet ein verwaistes
+   Secret spurlos — und `delete_auth_method_secrets` räumt später nur die
+   Slots der *aktuellen* Methode ab, meldet den Altbestand also auch nicht
+   in `secrets_left_behind`. Eigenes Vorhaben; die Abhilfe
+   (`delete_all_possible_server_secrets` beim Löschen statt nur die
+   aktuelle Methode) berührt Spec 0047.
+
+8. **Die Rückstandsliste geht verloren, wenn der DB-Löschvorgang danach
+   scheitert.** `servers.rs` bricht dann mit `?` ab; die Secrets sind ggf.
+   schon weg, der Server bleibt. Vorbestehende Reihenfolge, durch A17 nicht
+   schlechter geworden — aber die neue Meldung erreicht den Nutzer in genau
+   diesem Fall nicht.
+
+9. **Keine Steuerzeichen-/Bidi-Bereinigung für die Refs im
+   Rückstandshinweis.** React escaped HTML, aber U+202E/U+2028 in einem aus
+   der DB stammenden `CredentialRef` könnten den Hinweistext optisch
+   verfälschen. Setzt Schreibzugriff auf die DB voraus; gleiche Klasse wie
+   Punkt 5.
+
+10. **Keine vollständige Testabdeckung für `ServerForm.tsx`.** Die Datei
    hatte bis zu dieser Spec gar keine Testdatei. Angelegt wurde eine, die
    genau die zwei Stellen abdeckt, die diese Spec ehrlicher macht (A14 und
    A17) — nicht mehr. Eine Rundum-Abdeckung des Formulars ist ein eigenes

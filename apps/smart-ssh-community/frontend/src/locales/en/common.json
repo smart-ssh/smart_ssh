@@ -145,6 +145,7 @@
     "deletedWithLeftoverSecretsTitle": "Server deleted — secrets remain in the keyring",
     "deletedWithLeftoverSecretsHint": "The server is gone, but the system keyring could not delete these entries. They are now orphaned (the server no longer exists) and can be removed by hand in your keyring manager under the service \"Smart SSH\":",
     "removeSudoPassword": "Remove stored sudo password",
+    "removeSudoPasswordFailed": "The sudo password could not be removed — it is still in the system keyring and will be fed in again on the next \"sudo\".",
     "postIngestFieldset": "Confirmation After Server Access",
     "postIngestHint": "Controls whether and when extra confirmation is required after server content (command output, files, notes) has been read during this session. Regardless of this setting, such content is always clearly marked as data, never treated as an instruction.",
     "postIngest": {

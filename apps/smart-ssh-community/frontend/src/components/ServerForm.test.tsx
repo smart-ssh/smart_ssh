@@ -12,14 +12,20 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deleteServer, getServer } from "../api";
+import { clearServerSudoPassword, deleteServer, getServer } from "../api";
 import { testI18n } from "../testI18n";
 import type { ServerDto } from "../types";
 import { ServerForm } from "./ServerForm";
 
 vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
+  commandErrorMessage: (err: unknown) =>
+    typeof err === "object" && err !== null && "message" in err
+      ? String((err as { message: unknown }).message)
+      : String(err),
+  commandErrorCode: (err: unknown) =>
+    typeof err === "object" && err !== null && "code" in err
+      ? ((err as { code: string | null }).code ?? null)
+      : null,
   clearServerSudoPassword: vi.fn(),
   createServer: vi.fn(),
   deleteServer: vi.fn(),
@@ -86,7 +92,10 @@ function renderForm() {
 }
 
 beforeEach(() => {
-  onDeleted.mockClear();
+  // Vorsorge gegen Reihenfolgeabhaengigkeit: Jeder Test setzt seine Mocks
+  // selbst, nichts traegt aus dem vorigen herueber (spec-reviewer-Fund zur
+  // Mock-Hygiene in `DiagnosticsSettings.test.tsx`).
+  vi.clearAllMocks();
   vi.mocked(getServer).mockResolvedValue(serverDto());
 });
 
@@ -164,5 +173,28 @@ describe("ServerForm — Löschen mit Rückständen (Spec 0071, A17)", () => {
 
     await waitFor(() => expect(onDeleted).toHaveBeenCalled());
     expect(screen.queryByTestId("secrets-left-behind")).not.toBeInTheDocument();
+  });
+});
+
+describe("ServerForm — Sudo-Passwort entfernen schlägt fehl (Spec 0071, A17)", () => {
+  it("sagt ausdrücklich, dass das Passwort weiter wirksam bleibt", async () => {
+    vi.mocked(getServer).mockResolvedValue(serverDto({ hasSudoPassword: true }));
+    vi.mocked(clearServerSudoPassword).mockRejectedValue({
+      code: "KEYCHAIN_UNAVAILABLE",
+      message: "Der Systemschlüsselbund ist nicht verfügbar.",
+    });
+
+    renderForm();
+    fireEvent.click(await screen.findByText("Hinterlegtes Sudo-Passwort entfernen"));
+
+    // Der generische Code-Text allein sagt nur "speichern oder lesen" —
+    // dass das Passwort beim naechsten `sudo` wieder eingespeist wird, ist
+    // die eigentliche Information auf diesem Pfad.
+    const error = await screen.findByText(/konnte nicht entfernt werden/);
+    expect(error).toHaveTextContent("weiterhin im Systemschlüsselbund");
+    expect(error).toHaveTextContent("sudo");
+    // Und die Maske darf nicht auf "kein Sudo-Passwort hinterlegt"
+    // umschalten, obwohl nichts entfernt wurde.
+    expect(screen.getByText("(leer = unverändert, aktuell hinterlegt)")).toBeInTheDocument();
   });
 });

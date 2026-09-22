@@ -350,8 +350,19 @@ export function ServerForm({
     try {
       await clearServerSudoPassword(serverId);
       setHasSudoPassword(false);
+      setSudoPasswordUnknown(false);
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      // Spec 0071, A17 (spec-reviewer-Fund): Der generische
+      // KEYCHAIN_UNAVAILABLE-Text spricht von „speichern oder lesen" — das
+      // Entscheidende auf diesem Pfad sagt er nicht. Der Nutzer muss
+      // wissen, dass das Passwort weiter im Schlüsselbund liegt und beim
+      // nächsten `sudo` erneut eingespeist wird; genau das ist die
+      // Begründung, aus der A17 diesen Fall überhaupt scheitern lässt.
+      setError(
+        t("serverForm.removeSudoPasswordFailed") +
+          " " +
+          translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)),
+      );
     } finally {
       setClearingSudoPassword(false);
     }

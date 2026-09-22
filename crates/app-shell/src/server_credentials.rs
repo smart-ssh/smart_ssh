@@ -124,7 +124,6 @@ fn delete_user_requested_secret(
 /// vom Frontend übersetzt.
 pub fn clear_sudo_password(
     credential_store: &dyn CredentialStore,
-    keychain: KeychainAvailability,
     server_id: ServerId,
 ) -> Result<(), CommandError> {
     let r = sudo_password_credential_ref(server_id);
@@ -137,7 +136,26 @@ pub fn clear_sudo_password(
                 error = %err,
                 "Sudo-Passwort konnte nicht entfernt werden — der Eintrag bleibt im Schlüsselbund"
             );
-            Err(keychain_aware_credential_error(err, keychain))
+            // A17: „Der Fehler nutzt denselben Weg wie A13
+            // (`KEYCHAIN_UNAVAILABLE`, übersetzt)" — hier **unbedingt**,
+            // nicht abhängig vom Startzustand aus dem `AppState`.
+            //
+            // spec-reviewer-Fund: `keychain_aware_credential_error` hängt
+            // den Code nur an, wenn der Schlüsselbund schon beim Start als
+            // nicht verfügbar erkannt wurde. Klemmt er erst danach (der
+            // Anbieter sperrt sich während der Sitzung, ein Entsperr-Prompt
+            // wird abgebrochen), stünde auf diesem — durch A17 überhaupt
+            // erst entstandenen — Fehlerpfad der rohe englische
+            // Bibliothekstext im UI. Genau das schließt §2 aus.
+            //
+            // Hier ist die unbedingte Zuordnung auch sachlich richtig: Ein
+            // `Backend`-Fehler auf einem `delete` hat keine andere Ursache
+            // als einen Schlüsselbund, der nicht tut, was er soll. Der
+            // Code ersetzt den Text, er ergänzt ihn nicht (X2).
+            Err(CommandError::with_code(
+                "Der Systemschlüsselbund ist nicht verfügbar.",
+                crate::error::KEYCHAIN_UNAVAILABLE,
+            ))
         }
     }
 }
@@ -717,7 +735,7 @@ mod tests {
         let store = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(id), "hunter2");
 
-        clear_sudo_password(&store, AVAILABLE, id).unwrap();
+        clear_sudo_password(&store, id).unwrap();
 
         assert!(secret_value(&store, &sudo_password_credential_ref(id)).is_none());
     }
@@ -727,7 +745,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        clear_sudo_password(&store, AVAILABLE, id).unwrap();
+        clear_sudo_password(&store, id).unwrap();
     }
 
     // --- Spec 0049, Fund 1: Rand-Trimmen (Windows-Copy-Paste-`\r\n`) -------
@@ -864,17 +882,21 @@ mod tests {
     /// „kein Sudo-Passwort hinterlegt", während das Passwort weiter im
     /// Schlüsselbund lag und beim nächsten `sudo` wieder eingespeist
     /// worden wäre.
+    ///
+    /// Der Code hängt hier **unbedingt** am Fehler, nicht abhängig vom
+    /// Schlüsselbund-Zustand beim Start (A17: „denselben Weg wie A13") —
+    /// sonst stünde der rohe englische Bibliothekstext im Formular, sobald
+    /// der Schlüsselbund erst während der Sitzung klemmt. Der Store in
+    /// diesem Test bildet genau das nach: Er ist nicht als „nicht
+    /// verfügbar" bekannt, sondern scheitert erst beim `delete`.
     #[test]
     fn test_clearing_a_sudo_password_fails_visibly_when_nothing_was_removed() {
-        let unavailable = KeychainAvailability::Unavailable(
-            credentials_keyring::KeychainUnavailableReason::Locked,
-        );
         let id = ServerId::new();
         let store = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(id), "sudo-secret")
             .with_failing_delete();
 
-        let err = clear_sudo_password(&store, unavailable, id)
+        let err = clear_sudo_password(&store, id)
             .expect_err("ein fehlgeschlagenes Entfernen darf nicht als Erfolg gelten");
 
         assert_eq!(err.code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
@@ -890,7 +912,7 @@ mod tests {
     #[test]
     fn test_clearing_an_absent_sudo_password_still_succeeds() {
         let store = InMemoryCredentialStore::new();
-        clear_sudo_password(&store, AVAILABLE, ServerId::new())
+        clear_sudo_password(&store, ServerId::new())
             .expect("kein Eintrag vorhanden ist kein Fehler");
     }
 
@@ -936,6 +958,11 @@ mod tests {
         let left_behind = delete_sudo_password_on_server_delete(&store, id);
 
         assert_eq!(left_behind, vec![sudo_password_credential_ref(id)]);
+        assert_eq!(
+            secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
+            Some("sudo-secret"),
+            "der Test taugt nur, wenn das Secret tatsächlich stehen bleibt"
+        );
     }
 
     /// Spec 0071, A13/X6: Schlägt ein Schreibzugriff fehl, während der

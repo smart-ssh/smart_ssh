@@ -145,6 +145,7 @@
     "deletedWithLeftoverSecretsTitle": "Server gelöscht — Secrets blieben im Schlüsselbund",
     "deletedWithLeftoverSecretsHint": "Der Server ist entfernt, der Systemschlüsselbund konnte diese Einträge aber nicht löschen. Sie sind jetzt verwaist (der Server existiert nicht mehr) und lassen sich im Schlüsselbund-Verwaltungsprogramm unter dem Dienst \"Smart SSH\" von Hand entfernen:",
     "removeSudoPassword": "Hinterlegtes Sudo-Passwort entfernen",
+    "removeSudoPasswordFailed": "Das Sudo-Passwort konnte nicht entfernt werden — es liegt weiterhin im Systemschlüsselbund und wird beim nächsten „sudo“ erneut eingespeist.",
     "postIngestFieldset": "Bestätigung nach Serverzugriff",
     "postIngestHint": "Legt fest, ob und wann nach dem Einlesen von Serverinhalt (Kommando-Ausgabe, Dateien, Notizen) in dieser Sitzung zusätzlich nachgefragt wird. Unabhängig davon wird solcher Inhalt immer klar als Daten gekennzeichnet, nie als Anweisung behandelt.",
     "postIngest": {

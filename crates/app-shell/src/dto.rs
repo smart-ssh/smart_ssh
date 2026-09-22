@@ -1450,6 +1450,31 @@ mod sudo_password_state_tests {
         assert!(!dto.has_sudo_password);
     }
 
+    /// Spec 0071, A17: Dasselbe für das Rückstandsfeld an
+    /// `DeleteServerResult`. spec-reviewer-Fund: Der Schlüsselname war
+    /// bisher nur im handgeschriebenen Mock von `ServerForm.test.tsx`
+    /// festgehalten — ein Rename im Rust-DTO wäre von keinem Test bemerkt
+    /// worden, und die Oberfläche hätte den Hinweis stillschweigend nicht
+    /// mehr angezeigt.
+    #[test]
+    fn test_secrets_left_behind_is_serialised_as_camel_case() {
+        let server = server();
+        let store = InMemoryCredentialStore::new();
+        let result = DeleteServerResult {
+            server: ServerDto::from_server(&server, &store),
+            servers_losing_jump_host: Vec::new(),
+            executed: true,
+            secrets_left_behind: vec!["server:abc:password".to_string()],
+        };
+
+        let json = serde_json::to_value(&result).unwrap();
+
+        assert_eq!(
+            json["secretsLeftBehind"],
+            serde_json::json!(["server:abc:password"])
+        );
+    }
+
     /// Das Feld muss das Frontend auch tatsächlich erreichen — in
     /// camelCase, wie alle anderen `ServerDto`-Felder (s. `rename_all`).
     #[test]
