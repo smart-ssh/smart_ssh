@@ -22,7 +22,7 @@ Apache License 2.0 (SPDX `Apache-2.0`) für das gesamte öffentliche Repo
 - Kompatibel mit der bestehenden `cargo deny`-Allow-Liste (Apache-2.0 steht
   dort bereits als zulässige Drittlizenz).
 
-Keine externen Beitragenden vorhanden (alle 302 Commits vom Rechteinhaber,
+Keine externen Beitragenden vorhanden (alle Commits vom Rechteinhaber,
 geprüft) — eine Zustimmung Dritter war daher nicht nötig.
 
 Umsetzung: `LICENSE` (ohne Endung, unveränderter offizieller Text inkl.
