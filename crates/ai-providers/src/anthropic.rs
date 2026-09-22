@@ -33,7 +33,7 @@ use ssh_manager_core::ai::{
 use ssh_manager_core::ssh::CommandOutput;
 
 use crate::action::{action_from_tool_arguments, parameters_json_schema};
-use crate::error::{error_stream, map_http_status, map_transport_error};
+use crate::error::{error_stream, map_http_status, map_transport_error, timeout_error};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
     log_cache_usage, log_outgoing_context, log_provider_error_response,
@@ -422,10 +422,7 @@ async fn connect_and_stream(
             // dieses Limit würde ein hängender Verbindungsaufbau den
             // Chat-Turn für immer ohne jede Fehlermeldung blockieren.
             Err(_elapsed) => {
-                let mapped = AiError::NetworkError(format!(
-                    "Keine Antwort vom KI-Provider seit über {} Sekunden",
-                    SSE_INACTIVITY_TIMEOUT.as_secs()
-                ));
+                let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
                 log_provider_transport_error(request_id, &mapped, &[&api_key]);
                 return to_raw_stream(error_stream(mapped));
             }
@@ -1009,10 +1006,7 @@ fn process_frame_stream(
                     // s. Begründung bei `SSE_INACTIVITY_TIMEOUT`: ohne
                     // dieses Limit würde ein hängender Request den Chat-Turn
                     // für immer ohne jede Fehlermeldung blockieren.
-                    let mapped = AiError::NetworkError(format!(
-                        "Keine Antwort vom KI-Provider seit über {} Sekunden",
-                        SSE_INACTIVITY_TIMEOUT.as_secs()
-                    ));
+                    let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
                     log_provider_transport_error(state.request_id, &mapped, &[&state.api_key]);
                     state
                         .pending
@@ -1164,9 +1158,9 @@ mod tests {
         assert!(
             matches!(
                 event,
-                Some(RawEvent::Public(AiEvent::Error(AiError::NetworkError(_))))
+                Some(RawEvent::Public(AiEvent::Error(AiError::Timeout { .. })))
             ),
-            "expected NetworkError after inactivity timeout, got {event:?}"
+            "expected Timeout after inactivity timeout, got {event:?}"
         );
     }
 

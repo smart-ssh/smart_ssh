@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use ssh_manager_core::ai::AiError;
 
-use crate::error::{map_http_status, map_transport_error};
+use crate::error::{map_http_status, map_transport_error, timeout_error};
 use crate::request_logging::{log_provider_error_response, log_provider_transport_error};
 use crate::sse::{read_error_body_with_timeout, SSE_INACTIVITY_TIMEOUT};
 
@@ -38,12 +38,11 @@ pub async fn discover_models(
 }
 
 /// Spec 0068, Teil 5a: Zeitüberschreitung eines Discovery-/Attestierungs-
-/// Aufrufs — dieselbe Meldung wie im Chat-Pfad.
+/// Aufrufs — dieselbe Meldung wie im Chat-Pfad. Spec 0069, Teil A2:
+/// `AiError::Timeout` statt `NetworkError` (Log-Text unverändert, s.
+/// `timeout_error`-Doc-Kommentar).
 fn discovery_timeout(timeout: std::time::Duration) -> AiError {
-    AiError::NetworkError(format!(
-        "Keine Antwort vom KI-Provider seit über {} Sekunden",
-        timeout.as_secs()
-    ))
+    timeout_error(timeout)
 }
 
 /// Spec 0068, Teil 5a: Verbindungsaufbau und Body-Lesen sind begrenzt —
@@ -197,10 +196,7 @@ mod tests {
         .await
         .expect("darf nicht hängen");
 
-        assert!(
-            matches!(result, Err(AiError::NetworkError(_))),
-            "{result:?}"
-        );
+        assert!(matches!(result, Err(AiError::Timeout { .. })), "{result:?}");
     }
 
     #[tokio::test]
@@ -226,10 +222,7 @@ mod tests {
         .await
         .expect("darf nicht hängen");
 
-        assert!(
-            matches!(result, Err(AiError::NetworkError(_))),
-            "{result:?}"
-        );
+        assert!(matches!(result, Err(AiError::Timeout { .. })), "{result:?}");
     }
 
     #[tokio::test]

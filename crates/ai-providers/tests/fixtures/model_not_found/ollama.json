@@ -1,0 +1,6 @@
+{
+  "status": 404,
+  "body": {
+    "error": "model 'llama9-does-not-exist' not found, try pulling it first"
+  }
+}

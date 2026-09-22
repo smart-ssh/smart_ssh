@@ -1,0 +1,9 @@
+{
+  "status": 400,
+  "body": {
+    "error": {
+      "message": "vendor/does-not-exist-9 is not a valid model ID",
+      "code": 400
+    }
+  }
+}

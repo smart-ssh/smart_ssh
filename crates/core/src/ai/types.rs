@@ -426,6 +426,32 @@ pub enum AiError {
     /// gescheitert. Terminal — kein weiterer Retry, kein Ausführen/Vorlegen
     /// des unvollständigen Kommandos (Sicherheitsinvariante).
     ResponseTruncated,
+    /// Spec 0069, Teil A2: der Provider kennt das angefragte Modell nicht
+    /// (z. B. Tippfehler im Modellnamen, oder ein bei Ollama noch nicht
+    /// per `ollama pull` geladenes Modell) — vorher nicht von einem
+    /// generischen 5xx/Wartungsfehler unterscheidbar
+    /// (`ProviderUnavailable`).
+    ModelNotFound(String),
+    /// Spec 0069, Teil A2: ein Verbindungsaufbau zu einem **lokalen**
+    /// KI-Dienst (Loopback-Adresse) ist gescheitert — typischerweise, weil
+    /// Ollama (oder ein anderer lokaler Server) nicht läuft. Getrennt von
+    /// `NetworkError`, damit die Meldung nicht fälschlich "starte Ollama"
+    /// sagt, wenn in Wahrheit ein entfernter Provider nicht erreichbar ist
+    /// (s. `crate::ai`-Modul-Doc bzw. Spec 0069 §4.2: die Unterscheidung
+    /// hängt an der Loopback-Adresse, nicht am Provider-*Typ* — ein Ollama
+    /// auf einem anderen Rechner verhält sich wie jeder andere entfernte
+    /// Endpunkt).
+    LocalProviderUnreachable(String),
+    /// Spec 0069, Teil A2: keine Antwort innerhalb der Frist
+    /// (`SSE_INACTIVITY_TIMEOUT`/`reqwest`-Timeout) — vorher als
+    /// `NetworkError` mit einem fest formulierten Text gebaut (fünf
+    /// Kopien, s. `ai_providers::sse`/`discovery`/`anthropic`/
+    /// `openai_compatible`), jetzt eine eigene Variante mit demselben
+    /// `Display`-Text (Log-Kontinuität) für eine eigene Übersetzung samt
+    /// nächstem Schritt im Frontend.
+    Timeout {
+        secs: u64,
+    },
 }
 
 impl fmt::Display for AiError {
@@ -447,6 +473,13 @@ impl fmt::Display for AiError {
                     "Die KI-Antwort war zu lang für einen vollständigen Befehl"
                 )
             }
+            AiError::ModelNotFound(msg) => write!(f, "Modell nicht gefunden: {msg}"),
+            AiError::LocalProviderUnreachable(msg) => {
+                write!(f, "Lokaler KI-Dienst nicht erreichbar: {msg}")
+            }
+            AiError::Timeout { secs } => {
+                write!(f, "Keine Antwort vom KI-Provider seit über {secs} Sekunden")
+            }
         }
     }
 }
@@ -466,6 +499,9 @@ impl AiError {
             AiError::ContextTooLarge => "AI_CONTEXT_TOO_LARGE",
             AiError::ProviderUnavailable(_) => "AI_PROVIDER_UNAVAILABLE",
             AiError::ResponseTruncated => "AI_RESPONSE_TRUNCATED",
+            AiError::ModelNotFound(_) => "AI_MODEL_NOT_FOUND",
+            AiError::LocalProviderUnreachable(_) => "AI_LOCAL_PROVIDER_UNREACHABLE",
+            AiError::Timeout { .. } => "AI_TIMEOUT",
         }
     }
 }
@@ -487,6 +523,10 @@ mod ai_error_code_tests {
             AiError::InvalidResponse("x".to_string()),
             AiError::ContextTooLarge,
             AiError::ProviderUnavailable("x".to_string()),
+            AiError::ResponseTruncated,
+            AiError::ModelNotFound("x".to_string()),
+            AiError::LocalProviderUnreachable("x".to_string()),
+            AiError::Timeout { secs: 90 },
         ];
         let codes: Vec<&'static str> = samples.iter().map(AiError::code).collect();
         let mut unique = codes.clone();
@@ -504,6 +544,21 @@ mod ai_error_code_tests {
         assert_eq!(
             AiError::NetworkError("a".to_string()).code(),
             AiError::NetworkError("b".to_string()).code(),
+        );
+        assert_eq!(
+            AiError::Timeout { secs: 30 }.code(),
+            AiError::Timeout { secs: 90 }.code(),
+        );
+    }
+
+    /// Spec 0069, Teil A2: der `Display`-Text von `AiError::Timeout` muss
+    /// wörtlich der bisherigen, an fünf Stellen wiederholten
+    /// String-Konstruktion entsprechen (Log-Kontinuität) — kein neuer Text.
+    #[test]
+    fn test_timeout_display_matches_the_historical_wording_verbatim() {
+        assert_eq!(
+            AiError::Timeout { secs: 90 }.to_string(),
+            "Keine Antwort vom KI-Provider seit über 90 Sekunden"
         );
     }
 }

@@ -1,0 +1,10 @@
+{
+  "status": 404,
+  "body": {
+    "type": "error",
+    "error": {
+      "type": "not_found_error",
+      "message": "model not found: claude-9-does-not-exist"
+    }
+  }
+}
