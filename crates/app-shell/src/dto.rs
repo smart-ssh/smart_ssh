@@ -548,6 +548,10 @@ pub enum TestConnectionResult {
     },
     NetworkError {
         message: String,
+        /// Spec 0069, Teil A4/E3: additiv, optional — ein altes Frontend
+        /// ignoriert das Feld, ein unbekannter Code fällt im Frontend auf
+        /// `message` zurück. Gesetzt aus `SshError::code()`.
+        code: Option<&'static str>,
     },
     Timeout,
 }

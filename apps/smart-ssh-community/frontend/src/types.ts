@@ -458,7 +458,13 @@ export type TestConnectionResult =
       expectedFingerprint: string;
       actualFingerprint: string;
     }
-  | { kind: "networkError"; message: string }
+  | {
+      kind: "networkError";
+      message: string;
+      /** Spec 0069, Teil A4/E3: additiv, optional — `null`/`undefined`
+       * fällt im Frontend auf `message` zurück. */
+      code?: string | null;
+    }
   | { kind: "timeout" };
 
 /** Spec 0050, Teil 3 — s. `crate::commands::TestAiProviderCredentialsResult`
@@ -468,7 +474,13 @@ export type TestConnectionResult =
 export type TestAiProviderCredentialsResult =
   | { kind: "valid" }
   | { kind: "authenticationFailed" }
-  | { kind: "unreachable"; message: string };
+  | {
+      kind: "unreachable";
+      message: string;
+      /** Spec 0069, Teil A4/E3 (BL-0153): additiv, optional — `null`/
+       * `undefined` fällt im Frontend auf `message` zurück. */
+      code?: string | null;
+    };
 
 // --- Spec 0009: Filter-Regel-Verwaltung ---------------------------------
 //

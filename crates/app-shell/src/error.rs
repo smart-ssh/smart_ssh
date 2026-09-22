@@ -100,6 +100,10 @@ mod code_tests {
             "SERVER_CERTIFICATE_KEY_REQUIRED",
             "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED",
             "SERVER_JUMP_HOST_LOCAL",
+            // Spec 0069, Teil A4:
+            "AI_NO_ACTIVE_PROVIDER",
+            "SSH_HOST_KEY_NOT_TRUSTED",
+            "SSH_HOST_KEY_CONFIRM_TIMEOUT",
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();

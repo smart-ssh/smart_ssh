@@ -309,7 +309,13 @@ pub async fn discover_models(
         .as_deref()
         .unwrap_or(crate::ai_provider_factory::DEFAULT_OPENAI_BASE_URL);
 
-    let models = ai_providers::discover_models(base_url, &api_key, &config.extra_headers).await?;
+    // Spec 0069, Teil A4: mit `err.code()` statt über das blanket `From<E:
+    // Display>` unten (`CommandError::from`), das den Code verwirft — sonst
+    // zeigt "Modelle laden" bei z. B. `AI_MODEL_NOT_FOUND`/
+    // `AI_LOCAL_PROVIDER_UNREACHABLE` nur den rohen Text ohne Übersetzung.
+    let models = ai_providers::discover_models(base_url, &api_key, &config.extra_headers)
+        .await
+        .map_err(|err| CommandError::with_code(err.to_string(), err.code()))?;
     Ok(models)
 }
 
@@ -334,7 +340,16 @@ pub async fn discover_models(
 pub enum TestAiProviderCredentialsResult {
     Valid,
     AuthenticationFailed,
-    Unreachable { message: String },
+    Unreachable {
+        message: String,
+        /// Spec 0069, Teil A4/E3 (BL-0153): additiv, optional — ein altes
+        /// Frontend ignoriert das Feld, ein unbekannter Code fällt im
+        /// Frontend weiterhin auf `message` zurück. Gesetzt aus
+        /// `AiError::code()`, `None` nur wenn `classify_credential_test_
+        /// result` je an einer Stelle ohne `AiError` (kann heute nicht
+        /// vorkommen, s. `match` dort) aufgerufen würde.
+        code: Option<&'static str>,
+    },
 }
 
 /// Spec 0050, Teil 3: analog zu `test_connection` (Spec 0008, Abschnitt 7)
@@ -506,6 +521,7 @@ async fn classify_credential_test_result(
         }
         Some(AiEvent::Error(err)) => TestAiProviderCredentialsResult::Unreachable {
             message: err.to_string(),
+            code: Some(err.code()),
         },
         _ => TestAiProviderCredentialsResult::Valid,
     }
@@ -550,10 +566,39 @@ mod credential_test_tests {
         let result = classify_credential_test_result(&provider).await;
 
         match result {
-            TestAiProviderCredentialsResult::Unreachable { message } => {
+            TestAiProviderCredentialsResult::Unreachable { message, code } => {
                 assert!(message.contains("connection refused"));
+                assert_eq!(code, Some("AI_NETWORK_ERROR"));
             }
             other => panic!("erwartet: Unreachable, war: {other:?}"),
+        }
+    }
+
+    /// Test 5 (Spec 0069, Teil A4/BL-0153): `RateLimited`, `ModelNotFound`,
+    /// `LocalProviderUnreachable` müssen als `Unreachable` mit dem
+    /// jeweiligen Code ankommen — *Gegenbeweis:* vor diesem Schritt hatte
+    /// `Unreachable` gar kein `code`-Feld.
+    #[tokio::test]
+    async fn test_unreachable_carries_the_specific_ai_error_code() {
+        for (err, expected_code) in [
+            (AiError::RateLimited, "AI_RATE_LIMITED"),
+            (
+                AiError::ModelNotFound("x".to_string()),
+                "AI_MODEL_NOT_FOUND",
+            ),
+            (
+                AiError::LocalProviderUnreachable("x".to_string()),
+                "AI_LOCAL_PROVIDER_UNREACHABLE",
+            ),
+        ] {
+            let provider = MockAiProvider::new(vec![AiEvent::Error(err)]);
+            let result = classify_credential_test_result(&provider).await;
+            match result {
+                TestAiProviderCredentialsResult::Unreachable { code, .. } => {
+                    assert_eq!(code, Some(expected_code));
+                }
+                other => panic!("erwartet: Unreachable, war: {other:?}"),
+            }
         }
     }
 
@@ -619,16 +664,81 @@ pub async fn fetch_attestation_info(
 /// über `list()`, ein zusätzlicher SQL-Pfad nur für diesen einen Aufrufer
 /// wäre unnötige API-Fläche.
 async fn active_ai_provider_config(state: &AppState) -> CommandResult<AiProviderConfig> {
-    state
-        .ai_provider_store
-        .list()
-        .await?
-        .into_iter()
-        .find(|c| c.is_active)
-        .ok_or_else(|| {
-            "kein aktiver AI-Provider konfiguriert — bitte zuerst in den Einstellungen einrichten"
-                .into()
-        })
+    pick_active_provider(state.ai_provider_store.list().await?)
+}
+
+/// Reine Auswahl-Logik aus `active_ai_provider_config` herausgezogen (wie
+/// `missing_required_base_url`/`map_connect_result` an anderer Stelle in
+/// dieser Datei), damit sich der "kein aktiver Provider"-Fehlerfall ohne
+/// eine vollständige `AppState` (u. a. `ProfileStore`, `CredentialStore`,
+/// `HostKeyStore`, ...) testen lässt.
+///
+/// Spec 0069, Teil A4: Code statt eines rohen, hart-deutschen Strings —
+/// die englische UI zeigte diesen Text vorher unübersetzt an (§1 der Spec,
+/// Zeile "Kein aktiver KI-Provider beim Verbinden").
+fn pick_active_provider(configs: Vec<AiProviderConfig>) -> CommandResult<AiProviderConfig> {
+    configs.into_iter().find(|c| c.is_active).ok_or_else(|| {
+        CommandError::with_code(
+            "kein aktiver AI-Provider konfiguriert — bitte zuerst in den Einstellungen einrichten",
+            "AI_NO_ACTIVE_PROVIDER",
+        )
+    })
+}
+
+#[cfg(test)]
+mod pick_active_provider_tests {
+    use super::*;
+    use ssh_manager_core::profiles::CredentialRef;
+
+    /// Test 9 (Spec 0069, Teil A4): kein aktiver Provider → Code
+    /// `AI_NO_ACTIVE_PROVIDER`. *Gegenbeweis:* vor diesem Schritt lieferte
+    /// dieser Zweig einen `CommandError` ohne `code` (über den blanket
+    /// `From<E: Display>`).
+    #[test]
+    fn test_no_active_provider_yields_ai_no_active_provider_code() {
+        let err = pick_active_provider(Vec::new()).expect_err("keine Configs → Fehler erwartet");
+        assert_eq!(err.code, Some("AI_NO_ACTIVE_PROVIDER"));
+    }
+
+    #[test]
+    fn test_no_provider_is_active_yields_ai_no_active_provider_code() {
+        let inactive = test_ai_provider_config(false);
+        let err = pick_active_provider(vec![inactive])
+            .expect_err("keine aktive Config → Fehler erwartet");
+        assert_eq!(err.code, Some("AI_NO_ACTIVE_PROVIDER"));
+    }
+
+    #[test]
+    fn test_active_provider_among_several_is_returned() {
+        let active = test_ai_provider_config(true);
+        let id = active.id;
+        let configs = vec![
+            test_ai_provider_config(false),
+            active,
+            test_ai_provider_config(false),
+        ];
+        let picked = pick_active_provider(configs).expect("aktive Config vorhanden");
+        assert_eq!(picked.id, id);
+    }
+
+    fn test_ai_provider_config(is_active: bool) -> AiProviderConfig {
+        let now = chrono::Utc::now();
+        AiProviderConfig {
+            id: ProviderId::new(),
+            display_name: "test".to_string(),
+            provider_type: ssh_manager_core::ai::ProviderType::Anthropic,
+            base_url: None,
+            model: "claude-test".to_string(),
+            credential_ref: CredentialRef::new("test:ai"),
+            is_active,
+            supports_native_tool_calling: true,
+            extra_headers: Vec::new(),
+            max_tokens_override: None,
+            attestation_url: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
 }
 
 /// Spec 0007, Abschnitt 4/6. `session_id` wird **vor** dem eigentlichen
@@ -916,11 +1026,16 @@ pub(crate) async fn connect_session(
                                 port,
                                 "host key confirmation timed out, treating as rejected",
                             );
-                            return Err(format!(
-                                "Verbindung zu {host}:{port} abgebrochen: Host-Key-Bestätigung \
-                                 nicht rechtzeitig beantwortet (nicht vertraut)"
-                            )
-                            .into());
+                            // Spec 0069, Teil A4: Code zusätzlich zur
+                            // bisherigen, host:port-tragenden Meldung
+                            // (Text unverändert).
+                            return Err(CommandError::with_code(
+                                format!(
+                                    "Verbindung zu {host}:{port} abgebrochen: Host-Key-Bestätigung \
+                                     nicht rechtzeitig beantwortet (nicht vertraut)"
+                                ),
+                                "SSH_HOST_KEY_CONFIRM_TIMEOUT",
+                            ));
                         }
                     };
                     match user_decision {
@@ -937,10 +1052,15 @@ pub(crate) async fn connect_session(
                                 port,
                                 "host key rejected, connection aborted",
                             );
-                            return Err(format!(
-                                "Verbindung zu {host}:{port} abgelehnt (Host-Key nicht vertraut)"
-                            )
-                            .into());
+                            // Spec 0069, Teil A4: Code zusätzlich zur
+                            // bisherigen, host:port-tragenden Meldung
+                            // (Text unverändert).
+                            return Err(CommandError::with_code(
+                                format!(
+                                    "Verbindung zu {host}:{port} abgelehnt (Host-Key nicht vertraut)"
+                                ),
+                                "SSH_HOST_KEY_NOT_TRUSTED",
+                            ));
                         }
                     }
                 }

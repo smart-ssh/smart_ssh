@@ -172,6 +172,7 @@ async fn test_connection_with_timeout(
         Err(SshError::Timeout) => TestConnectionResult::Timeout,
         Err(other) => TestConnectionResult::NetworkError {
             message: other.to_string(),
+            code: Some(other.code()),
         },
     })
 }
