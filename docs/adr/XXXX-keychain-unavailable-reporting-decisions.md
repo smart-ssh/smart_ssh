@@ -41,7 +41,16 @@ Locale-Dateien können keinen Kommentar tragen):
 2. ebenda, `NoSessionBus`-Arme (DE + EN),
 3. `locales/de/common.json` → `diagnostics.keychainUnavailable.*`,
 4. `locales/en/common.json` → dieselben Schlüssel,
-5. `changelog.d/0071-linux-secret-service-meldung.md`.
+5. `changelog.d/0071-linux-secret-service-meldung.md` (dort bewusst **ohne**
+   Kommentar-Marker: Das Fragment wandert beim Release wörtlich nach
+   `CHANGELOG.md`, ein interner Annahme-Vermerk stünde dann im
+   veröffentlichten Changelog — diese Liste hier ist der Nachweis).
+
+Nicht in dieser Liste, weil sie keinen Installationsbefehl enthalten und
+damit nichts Falsches behaupten können: die beiden `Unknown`-Linux-Arme in
+`startup_error_messages.rs` und der Schlüssel
+`diagnostics.keychainUnavailable.unknown`. Sie nennen dieselben Anbieter,
+aber nur als „prüfen, ob einer läuft".
 
 Zusätzlicher Zweifel aus dem Review, der bei M2/M3 ausdrücklich zu prüfen
 ist: `gnome-keyring` allein bringt auf einer Minimal-Installation
@@ -71,9 +80,22 @@ Information fällt auf dem bestehenden Startpfad ohnehin an. Ohne die
 Eskalation liefen A13 und A15 im wichtigsten Fall (gesperrter
 Schlüsselbund) ins Leere.
 
-**Konsequenz:** Sperrt sich der Schlüsselbund erst *nach* dem Start
+**Konsequenz 1:** Sperrt sich der Schlüsselbund erst *nach* dem Start
 (Bildschirmsperre nach Zeitablauf), bleibt der Zustand weiterhin stale.
 Siehe offener Punkt 1 unten.
+
+**Konsequenz 2 (spec-reviewer-Fund, 2. Runde — ausdrücklich benannt):**
+`CipherError::KeyStoreAccessFailed` entsteht aus **jedem**
+`CredentialError::Backend` auf dem App-Schlüssel-Slot. Auf macOS genügt
+damit ein einziges „Nicht erlauben" im Keychain-Dialog beim Start, um den
+ganzen Programmlauf auf `Unavailable(Unknown)` zu setzen. Folge: Die
+Diagnose-Zeile meldet „nicht verfügbar — Ursache unbekannt", obwohl der
+Schlüsselbund grundsätzlich funktioniert, und spätere Backend-Fehler
+zeigen den generischen Text statt der spezifischen OS-Meldung. Die
+Richtung ist konservativ (nie ein falsches „verfügbar"), aber M5 verlangt
+auf macOS „unverändertes Verhalten" — **das ist beim manuellen Test M5
+ausdrücklich mitzuprüfen**, und falls es stört, ist die Eskalation auf
+Linux einzugrenzen.
 
 ### 3. Außerhalb von Linux gilt immer der neutrale Text
 
@@ -141,8 +163,14 @@ Dialogtext nicht optisch fortsetzen kann.
 **Entscheidung:** Der Variablenwert verlässt `lib.rs` nie.
 
 **Konsequenz:** X1 ist per Konstruktion erfüllt und braucht keine
-Bereinigung analog `sanitize_path_for_display`. Der Preis: Der Wert steht
-auch nicht im Log.
+Bereinigung analog `sanitize_path_for_display` — in **Texten** taucht der
+Wert nirgends auf. Im Log kann er dagegen sehr wohl stehen: Die neue Zeile
+mit der `store_status()`-Fehlerkette (s. Entscheidung 5) enthält auf Linux
+häufig die D-Bus-Adresse samt Socket-Pfad und damit den Benutzernamen. Das
+ist dieselbe Kategorie wie die ohnehin geloggten Datenpfade, bleibt lokal
+und fliegt aus dem exportierbaren Diagnosepaket; ein `\n` darin kann keine
+zweite Logzeile vortäuschen, weil der Logger JSON schreibt und `serde_json`
+escaped.
 
 ## Bewusst nicht behoben
 
@@ -204,7 +232,19 @@ stillschweigend verschwinden.
    U+2028 (Zeilentrenner) und U+202E (Richtungswechsel) kommen durch.
    Vorbestehend, von dieser Spec nicht berührt.
 
-7. **Kein Komponententest für den neutralen Sudo-Zustand im
+7. **Verbindungstest über einen Jump-Host zeigt weiterhin den rohen
+   Bibliothekstext.** Die Secrets vorgelagerter Hops liest der Connector
+   über den `TieredCredentialStore` und `core::ssh::auth::resolve_auth`;
+   ein Fehler landet dort als `SshError::CredentialResolutionFailed` und
+   im Formular als „✗ Netzwerkfehler: Passwort: No default store …".
+   Der reguläre Verbindungsaufbau ist davon nicht betroffen (dort greift
+   `SSH_CREDENTIAL_RESOLUTION_FAILED`, das im Frontend übersetzt wird) —
+   nur der Verbindungstest. Das sauber zu schließen hieße, den Zustand
+   durch `core` zu fädeln oder eine `TestConnectionResult`-Variante zu
+   ergänzen; beides geht über den Umfang dieser Spec hinaus. Eigenes
+   Vorhaben.
+
+8. **Kein Komponententest für den neutralen Sudo-Zustand im
    Server-Formular.** `ServerForm.tsx` hat bislang überhaupt keine
    Testdatei; die DTO-Seite (A14/X4) ist im Backend geprüft. Eine
    Testdatei nur für dieses eine Feld anzulegen wäre unverhältnismäßig —

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { apiKeyFormatWarning } from "../apiKeyFormat";
 import {
@@ -108,6 +108,15 @@ interface AiProviderSettingsProps {
  * `SettingsScreen.tsx`s generisches Rendern registrierter Sektionen). */
 export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsProps) {
   const { t } = useTranslation();
+  // Spec 0071, A13 (spec-reviewer-Fund, 2. Runde): Die beiden Lade-Effekte
+  // unten laufen genau einmal beim Mount. `t` direkt zu verwenden hätte sie
+  // an die Sprachwahl gekoppelt (und damit bei jedem Sprachwechsel neu
+  // geladen); ein Ref hält die jeweils aktuelle Übersetzungsfunktion, ohne
+  // die Abhängigkeitsliste aufzublähen.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
   const [providers, setProviders] = useState<AiProviderConfigDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<AiProviderConfigInput>(emptyForm());
@@ -132,7 +141,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         setRiskClassifierEnabled(settings.enabled);
         setRiskClassifierProviderId(settings.providerId);
       })
-      .catch((err) => setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err))));
+      .catch((err) => setError(translateErrorCode(tRef.current, commandErrorCode(err), commandErrorMessage(err))));
   }, []);
 
   /** Spec 0026, Abschnitt 3, Punkt 1: erst bei der nächsten `connect()`
@@ -154,7 +163,9 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   const reload = () => {
     listAiProviders()
       .then(setProviders)
-      .catch((err) => setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err))));
+      .catch((err) =>
+        setError(translateErrorCode(tRef.current, commandErrorCode(err), commandErrorMessage(err))),
+      );
   };
 
   useEffect(reload, []);

@@ -81,8 +81,28 @@ pub fn resolve_sudo_password(
 /// einmal gesetztes Sudo-Passwort braucht daher einen eigenen Weg, um es
 /// wieder zu löschen. Best-effort: ein bereits fehlender Eintrag ist kein
 /// Fehler.
+///
+/// spec-reviewer-Fund (Spec 0071, 2. Runde): Anders als die übrigen
+/// verschluckten `delete`-Aufrufe in diesem Modul ist das **kein**
+/// Aufräumpfad, sondern eine bewusst ausgelöste Entfernen-Aktion — Spec
+/// 0071 §6.3 X6 führt ihn trotzdem in der Aufräumpfad-Liste. Scheitert das
+/// Löschen (nicht verfügbarer oder gesperrter Schlüsselbund), meldet die
+/// Oberfläche weiterhin Erfolg, während das Secret stehen bleibt. Die
+/// Korrektur dieses Verhaltens ist eine eigene Entscheidung (s. ADR, Punkt
+/// "Bewusst nicht behoben"); bis dahin wird der Zustand wenigstens
+/// **sichtbar geloggt** statt spurlos zu verschwinden — dieselbe Zeile wie
+/// in [`delete_all_possible_server_secrets`], und keine Verhaltensänderung.
 pub fn clear_sudo_password(credential_store: &dyn CredentialStore, server_id: ServerId) {
-    let _ = credential_store.delete(&sudo_password_credential_ref(server_id));
+    if let Err(CredentialError::Backend(msg)) =
+        credential_store.delete(&sudo_password_credential_ref(server_id))
+    {
+        tracing::warn!(
+            server_id = %server_id.0,
+            slot = "sudo_password",
+            error = %msg,
+            "Sudo-Passwort konnte nicht entfernt werden — der Eintrag bleibt im Schlüsselbund"
+        );
+    }
 }
 
 /// Schreibt `provided` unter `ref_`, falls gesetzt; ist `provided` leer
@@ -287,24 +307,35 @@ pub fn resolve_auth_method(
 /// Konvention wie `delete_ai_provider` in Spec 0007). Best-effort: ein
 /// fehlender/schon gelöschter Eintrag soll `delete_server` nicht
 /// scheitern lassen.
+///
+/// spec-reviewer-Fund (Spec 0071, 2. Runde): wie [`clear_sudo_password`]
+/// kein Aufräumpfad, sondern Teil einer bewussten Lösch-Aktion. Bleibt das
+/// Löschen erfolglos, verschwindet die DB-Zeile, und die Secrets bleiben
+/// als verwaiste Einträge unter einer nicht mehr existierenden Server-ID
+/// zurück. Verhalten unverändert (best-effort, s. oben) — aber nicht mehr
+/// spurlos.
 pub fn delete_auth_method_secrets(credential_store: &dyn CredentialStore, auth: &AuthMethod) {
-    match auth {
-        AuthMethod::Password { credential_ref } => {
-            let _ = credential_store.delete(credential_ref);
-        }
+    let refs: Vec<&CredentialRef> = match auth {
+        AuthMethod::Password { credential_ref } => vec![credential_ref],
         AuthMethod::PrivateKey {
             credential_ref,
             passphrase_ref,
         } => {
-            let _ = credential_store.delete(credential_ref);
-            if let Some(r) = passphrase_ref {
-                let _ = credential_store.delete(r);
-            }
+            let mut refs = vec![credential_ref];
+            refs.extend(passphrase_ref.iter());
+            refs
         }
-        AuthMethod::Agent => {}
-        AuthMethod::Certificate { cert_ref, key_ref } => {
-            let _ = credential_store.delete(cert_ref);
-            let _ = credential_store.delete(key_ref);
+        AuthMethod::Agent => Vec::new(),
+        AuthMethod::Certificate { cert_ref, key_ref } => vec![cert_ref, key_ref],
+    };
+    for r in refs {
+        if let Err(CredentialError::Backend(msg)) = credential_store.delete(r) {
+            tracing::warn!(
+                credential_ref = %r.as_str(),
+                error = %msg,
+                "Secret konnte beim Löschen des Servers nicht entfernt werden — \
+                 möglicherweise verwaister Eintrag im Schlüsselbund"
+            );
         }
     }
 }

@@ -1,8 +1,3 @@
-<!-- ANNAHME A-1 (Fundstelle 5, s. ADR XXXX): Die unten genannten
-     Paketnamen sind nicht gemessen und vor dem Release durch die manuellen
-     Tests M1–M4 zu bestätigen. Diese Zeile entfernen, sobald das erledigt
-     ist. -->
-
 ### Behoben
 - Linux ohne Systemschlüsselbund: Statt des englischen Bibliothekstexts
   „No default store has been set, so cannot search or create entries" nennt
