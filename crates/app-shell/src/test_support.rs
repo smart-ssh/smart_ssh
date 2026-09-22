@@ -231,6 +231,12 @@ pub struct InMemoryCredentialStore {
     /// Schlüsselbund kann nicht antworten", der sich von "kein Eintrag
     /// vorhanden" unterscheiden muss.
     fail_get_with_backend: bool,
+    /// Spec 0071, A17: lässt `delete()` mit `CredentialError::Backend`
+    /// fehlschlagen — der Fall „der Nutzer fordert das Entfernen an, der
+    /// Schlüsselbund kann es nicht ausführen". Der Wert bleibt dabei
+    /// absichtlich gespeichert, damit ein Test nachweisen kann, dass das
+    /// Secret tatsächlich zurückbleibt.
+    fail_delete_with_backend: bool,
 }
 
 impl InMemoryCredentialStore {
@@ -260,6 +266,13 @@ impl InMemoryCredentialStore {
     /// aber nicht sagen.
     pub fn with_failing_get(mut self) -> Self {
         self.fail_get_with_backend = true;
+        self
+    }
+
+    /// Spec 0071, A17: simuliert einen nicht erreichbaren Schlüsselbund
+    /// beim **Löschen**.
+    pub fn with_failing_delete(mut self) -> Self {
+        self.fail_delete_with_backend = true;
         self
     }
 
@@ -302,6 +315,14 @@ impl CredentialStore for InMemoryCredentialStore {
     }
 
     fn delete(&self, r: &CredentialRef) -> CredentialResult<()> {
+        if self.fail_delete_with_backend {
+            // Absichtlich **ohne** `remove`: Das Secret bleibt stehen, so
+            // wie es ein echter Schlüsselbund täte, der den Löschauftrag
+            // nicht ausführen konnte.
+            return Err(CredentialError::Backend(
+                "simulierter Keychain-Löschfehler (Test)".to_string(),
+            ));
+        }
         self.secrets.lock().unwrap().remove(r.as_str());
         Ok(())
     }

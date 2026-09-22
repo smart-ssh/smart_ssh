@@ -410,6 +410,12 @@ export interface DeleteServerResult {
   server: ServerDto;
   serversLosingJumpHost: ServerDto[];
   executed: boolean;
+  /** Spec 0071, A17: `CredentialRef`-Strings der Secrets, die beim Löschen
+   * **nicht** aus dem Schlüsselbund entfernt werden konnten. Der Server ist
+   * trotzdem gelöscht — die Einträge sind danach verwaist und müssen von
+   * Hand entfernt werden. Leer im Normalfall und immer leer bei
+   * `executed: false`. Kein Secret, nur der Account-Name im Schlüsselbund. */
+  secretsLeftBehind: string[];
 }
 
 /** Eingabe für `create_server`/`update_server`/`test_connection`. */

@@ -76,32 +76,69 @@ pub fn resolve_sudo_password(
     Ok(())
 }
 
+/// Ein einzelner `delete` auf einem **vom Nutzer ausgelösten**
+/// Entfernen-Pfad (Spec 0071, A17 und die X6-Korrektur vom 2026-09-22).
+///
+/// Liefert den `CredentialRef` zurück, wenn das Secret **nicht** entfernt
+/// werden konnte und damit im Schlüsselbund stehen bleibt. `NotFound` gilt
+/// als Erfolg (es gab nichts zu löschen) — dieselbe Idempotenz wie in
+/// `KeyringCredentialStore::delete`.
+///
+/// In jedem Fehlerfall zusätzlich eine Logzeile: Der Zustand darf nicht
+/// spurlos verschwinden, auch wenn der Aufrufer ihn (bei `delete_server`,
+/// s. A17) bewusst nicht zum Abbruch nimmt.
+fn delete_user_requested_secret(
+    credential_store: &dyn CredentialStore,
+    r: &CredentialRef,
+) -> Option<CredentialRef> {
+    match credential_store.delete(r) {
+        Ok(()) | Err(CredentialError::NotFound(_)) => None,
+        Err(err) => {
+            tracing::warn!(
+                credential_ref = %r.as_str(),
+                error = %err,
+                "vom Nutzer angefordertes Entfernen eines Secrets ist fehlgeschlagen — \
+                 der Eintrag bleibt im Schlüsselbund"
+            );
+            Some(r.clone())
+        }
+    }
+}
+
 /// Explizites Entfernen (Spec 0018, Abschnitt 4) — "Feld leer lassen"
 /// bedeutet bereits "unverändert" (s. [`resolve_sudo_password`]), ein
 /// einmal gesetztes Sudo-Passwort braucht daher einen eigenen Weg, um es
-/// wieder zu löschen. Best-effort: ein bereits fehlender Eintrag ist kein
-/// Fehler.
+/// wieder zu löschen. Ein bereits fehlender Eintrag ist kein Fehler.
 ///
-/// spec-reviewer-Fund (Spec 0071, 2. Runde): Anders als die übrigen
-/// verschluckten `delete`-Aufrufe in diesem Modul ist das **kein**
-/// Aufräumpfad, sondern eine bewusst ausgelöste Entfernen-Aktion — Spec
-/// 0071 §6.3 X6 führt ihn trotzdem in der Aufräumpfad-Liste. Scheitert das
-/// Löschen (nicht verfügbarer oder gesperrter Schlüsselbund), meldet die
-/// Oberfläche weiterhin Erfolg, während das Secret stehen bleibt. Die
-/// Korrektur dieses Verhaltens ist eine eigene Entscheidung (s. ADR, Punkt
-/// "Bewusst nicht behoben"); bis dahin wird der Zustand wenigstens
-/// **sichtbar geloggt** statt spurlos zu verschwinden — dieselbe Zeile wie
-/// in [`delete_all_possible_server_secrets`], und keine Verhaltensänderung.
-pub fn clear_sudo_password(credential_store: &dyn CredentialStore, server_id: ServerId) {
-    if let Err(CredentialError::Backend(msg)) =
-        credential_store.delete(&sudo_password_credential_ref(server_id))
-    {
-        tracing::warn!(
-            server_id = %server_id.0,
-            slot = "sudo_password",
-            error = %msg,
-            "Sudo-Passwort konnte nicht entfernt werden — der Eintrag bleibt im Schlüsselbund"
-        );
+/// Spec 0071, A17: **schlägt sichtbar fehl**, wenn das Sudo-Passwort nicht
+/// entfernt werden konnte.
+///
+/// Begründung (A17, erster Punkt): Anders als beim Löschen eines Servers
+/// ist hier sonst *nichts* geschehen — es gibt keinen Teilerfolg, den man
+/// melden könnte. Ein `Ok(())` wäre schlicht unwahr: Der Nutzer sähe „kein
+/// Sudo-Passwort hinterlegt", während das Passwort weiter im
+/// Schlüsselbund liegt und beim nächsten `sudo` wieder eingespeist würde.
+///
+/// Der Fehlerweg ist derselbe wie überall sonst (A13): bei nicht
+/// verfügbarem Schlüsselbund der stabile Code `KEYCHAIN_UNAVAILABLE`,
+/// vom Frontend übersetzt.
+pub fn clear_sudo_password(
+    credential_store: &dyn CredentialStore,
+    keychain: KeychainAvailability,
+    server_id: ServerId,
+) -> Result<(), CommandError> {
+    let r = sudo_password_credential_ref(server_id);
+    match credential_store.delete(&r) {
+        Ok(()) | Err(CredentialError::NotFound(_)) => Ok(()),
+        Err(err) => {
+            tracing::warn!(
+                server_id = %server_id.0,
+                slot = "sudo_password",
+                error = %err,
+                "Sudo-Passwort konnte nicht entfernt werden — der Eintrag bleibt im Schlüsselbund"
+            );
+            Err(keychain_aware_credential_error(err, keychain))
+        }
     }
 }
 
@@ -308,13 +345,23 @@ pub fn resolve_auth_method(
 /// fehlender/schon gelöschter Eintrag soll `delete_server` nicht
 /// scheitern lassen.
 ///
-/// spec-reviewer-Fund (Spec 0071, 2. Runde): wie [`clear_sudo_password`]
-/// kein Aufräumpfad, sondern Teil einer bewussten Lösch-Aktion. Bleibt das
-/// Löschen erfolglos, verschwindet die DB-Zeile, und die Secrets bleiben
-/// als verwaiste Einträge unter einer nicht mehr existierenden Server-ID
-/// zurück. Verhalten unverändert (best-effort, s. oben) — aber nicht mehr
-/// spurlos.
-pub fn delete_auth_method_secrets(credential_store: &dyn CredentialStore, auth: &AuthMethod) {
+/// Spec 0071, A17 (zweiter Punkt): Das Löschen **läuft durch**, auch wenn
+/// ein Secret nicht entfernt werden konnte — niemand soll auf einem
+/// unlöschbaren Server sitzen bleiben, nur weil der Schlüsselbund klemmt.
+/// Anders als bei [`clear_sudo_password`] gibt es hier einen echten
+/// Teilerfolg (das Profil ist weg), der sich melden lässt.
+///
+/// Gibt deshalb die Refs zurück, die **stehen geblieben** sind. Der
+/// Aufrufer reicht sie im Ergebnis ans Frontend weiter, damit der Nutzer
+/// erfährt, dass die Einträge im Schlüsselbund verwaist sind (die
+/// Server-ID existiert nicht mehr) und von Hand gelöscht werden können.
+/// Sie stillschweigend zu verschlucken wäre das falsche Erfolgssignal aus
+/// der X6-Korrektur.
+#[must_use]
+pub fn delete_auth_method_secrets(
+    credential_store: &dyn CredentialStore,
+    auth: &AuthMethod,
+) -> Vec<CredentialRef> {
     let refs: Vec<&CredentialRef> = match auth {
         AuthMethod::Password { credential_ref } => vec![credential_ref],
         AuthMethod::PrivateKey {
@@ -328,16 +375,25 @@ pub fn delete_auth_method_secrets(credential_store: &dyn CredentialStore, auth: 
         AuthMethod::Agent => Vec::new(),
         AuthMethod::Certificate { cert_ref, key_ref } => vec![cert_ref, key_ref],
     };
-    for r in refs {
-        if let Err(CredentialError::Backend(msg)) = credential_store.delete(r) {
-            tracing::warn!(
-                credential_ref = %r.as_str(),
-                error = %msg,
-                "Secret konnte beim Löschen des Servers nicht entfernt werden — \
-                 möglicherweise verwaister Eintrag im Schlüsselbund"
-            );
-        }
-    }
+    refs.into_iter()
+        .filter_map(|r| delete_user_requested_secret(credential_store, r))
+        .collect()
+}
+
+/// Spec 0071, A17: das Sudo-Passwort auf dem **Server-Löschen**-Pfad —
+/// dort gilt „durchlaufen und melden", nicht „sichtbar scheitern" (s.
+/// [`delete_auth_method_secrets`]). Bewusst getrennt von
+/// [`clear_sudo_password`], damit die beiden Entscheidungen aus A17 nicht
+/// über einen Parameter vermischt werden und ein künftiger Aufrufer nicht
+/// versehentlich die falsche Hälfte bekommt.
+#[must_use]
+pub fn delete_sudo_password_on_server_delete(
+    credential_store: &dyn CredentialStore,
+    server_id: ServerId,
+) -> Vec<CredentialRef> {
+    delete_user_requested_secret(credential_store, &sudo_password_credential_ref(server_id))
+        .into_iter()
+        .collect()
 }
 
 /// Spec 0047, Fund A2: räumt bei einem fehlgeschlagenen `create_server`
@@ -603,7 +659,11 @@ mod tests {
             passphrase_ref: Some(passphrase_ref.clone()),
         };
 
-        delete_auth_method_secrets(&store, &auth);
+        let left_behind = delete_auth_method_secrets(&store, &auth);
+        assert!(
+            left_behind.is_empty(),
+            "ein funktionierender Store lässt nichts zurück"
+        );
 
         assert!(secret_value(&store, &key_ref).is_none());
         assert!(secret_value(&store, &passphrase_ref).is_none());
@@ -657,7 +717,7 @@ mod tests {
         let store = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(id), "hunter2");
 
-        clear_sudo_password(&store, id);
+        clear_sudo_password(&store, AVAILABLE, id).unwrap();
 
         assert!(secret_value(&store, &sudo_password_credential_ref(id)).is_none());
     }
@@ -667,7 +727,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        clear_sudo_password(&store, id);
+        clear_sudo_password(&store, AVAILABLE, id).unwrap();
     }
 
     // --- Spec 0049, Fund 1: Rand-Trimmen (Windows-Copy-Paste-`\r\n`) -------
@@ -795,6 +855,87 @@ mod tests {
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
             Some("old-sudo-password")
         );
+    }
+
+    /// Spec 0071, A17 (erster Punkt): „Hinterlegtes Sudo-Passwort
+    /// entfernen" schlägt **sichtbar** fehl, wenn nichts entfernt werden
+    /// konnte. Am Stand vor A17 stand hier `let _ = delete(...)` und die
+    /// Funktion gab `()` zurück — die Oberfläche meldete Erfolg und zeigte
+    /// „kein Sudo-Passwort hinterlegt", während das Passwort weiter im
+    /// Schlüsselbund lag und beim nächsten `sudo` wieder eingespeist
+    /// worden wäre.
+    #[test]
+    fn test_clearing_a_sudo_password_fails_visibly_when_nothing_was_removed() {
+        let unavailable = KeychainAvailability::Unavailable(
+            credentials_keyring::KeychainUnavailableReason::Locked,
+        );
+        let id = ServerId::new();
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(id), "sudo-secret")
+            .with_failing_delete();
+
+        let err = clear_sudo_password(&store, unavailable, id)
+            .expect_err("ein fehlgeschlagenes Entfernen darf nicht als Erfolg gelten");
+
+        assert_eq!(err.code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
+        assert_eq!(
+            secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
+            Some("sudo-secret"),
+            "der Test taugt nur, wenn das Secret tatsächlich stehen bleibt"
+        );
+    }
+
+    /// Gegenprobe: Ohne hinterlegtes Passwort ist „entfernen" weiterhin
+    /// erfolgreich — `NotFound` ist kein Fehler (Idempotenz, Spec 0018).
+    #[test]
+    fn test_clearing_an_absent_sudo_password_still_succeeds() {
+        let store = InMemoryCredentialStore::new();
+        clear_sudo_password(&store, AVAILABLE, ServerId::new())
+            .expect("kein Eintrag vorhanden ist kein Fehler");
+    }
+
+    /// Spec 0071, A17 (zweiter Punkt): Das Löschen eines Servers läuft
+    /// **durch**, meldet aber, was im Schlüsselbund zurückblieb. Am Stand
+    /// vor A17 gab die Funktion `()` zurück, der Rückstand war nur im Log
+    /// sichtbar — das Ergebnis behauptete implizit, alles sei entfernt.
+    #[test]
+    fn test_deleting_auth_secrets_reports_what_stayed_behind() {
+        let id = ServerId::new();
+        let key_ref = credential_ref(id, "private_key");
+        let passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&key_ref, "key")
+            .with_secret(&passphrase_ref, "phrase")
+            .with_failing_delete();
+        let auth = AuthMethod::PrivateKey {
+            credential_ref: key_ref.clone(),
+            passphrase_ref: Some(passphrase_ref.clone()),
+        };
+
+        let left_behind = delete_auth_method_secrets(&store, &auth);
+
+        assert_eq!(left_behind.len(), 2, "beide Slots blieben stehen");
+        assert!(left_behind.contains(&key_ref));
+        assert!(left_behind.contains(&passphrase_ref));
+        assert_eq!(
+            secret_value(&store, &key_ref).as_deref(),
+            Some("key"),
+            "der Test taugt nur, wenn die Secrets tatsächlich stehen bleiben"
+        );
+    }
+
+    /// A17: dasselbe für das Sudo-Passwort auf dem Lösch-Pfad — hier
+    /// **kein** Fehler, sondern ein Eintrag in der Rückstandsliste.
+    #[test]
+    fn test_deleting_the_sudo_password_on_server_delete_reports_instead_of_failing() {
+        let id = ServerId::new();
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(id), "sudo-secret")
+            .with_failing_delete();
+
+        let left_behind = delete_sudo_password_on_server_delete(&store, id);
+
+        assert_eq!(left_behind, vec![sudo_password_credential_ref(id)]);
     }
 
     /// Spec 0071, A13/X6: Schlägt ein Schreibzugriff fehl, während der

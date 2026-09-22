@@ -2469,8 +2469,9 @@ pub async fn clear_server_sudo_password(
     state: State<'_, AppState>,
     id: ServerId,
 ) -> CommandResult<()> {
-    clear_sudo_password(state.credential_store.as_ref(), id);
-    Ok(())
+    // Spec 0071, A17: schlägt sichtbar fehl, statt Erfolg zu melden,
+    // während das Passwort im Schlüsselbund stehen bleibt.
+    clear_sudo_password(state.credential_store.as_ref(), state.keychain, id)
 }
 
 /// Spec 0008, Abschnitt 7. `existing_server_id` ist eine gegenüber der

@@ -16,6 +16,14 @@
 - Das Server-Formular meldete „kein Sudo-Passwort hinterlegt", wenn der
   Schlüsselbund gar nicht antworten konnte. Es zeigt jetzt einen neutralen
   Zustand, statt etwas zu behaupten, das es nicht wissen kann.
+- „Hinterlegtes Sudo-Passwort entfernen" meldete Erfolg, auch wenn der
+  Schlüsselbund den Eintrag gar nicht löschen konnte — das Passwort wäre
+  beim nächsten `sudo` weiter eingespeist worden. Der Vorgang schlägt jetzt
+  sichtbar fehl.
+- Einen Server zu löschen funktioniert weiterhin auch dann, wenn der
+  Schlüsselbund klemmt. Neu ist: Smart SSH sagt danach ausdrücklich, welche
+  Einträge im Schlüsselbund zurückgeblieben sind, dass sie dort jetzt
+  verwaist sind und wie sie sich von Hand entfernen lassen.
 
 ### Neu
 - Die Diagnose-Ansicht zeigt eine Zeile „Systemschlüsselbund: verfügbar /

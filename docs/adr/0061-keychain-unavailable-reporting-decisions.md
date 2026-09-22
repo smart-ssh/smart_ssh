@@ -1,8 +1,4 @@
-# XXXX-keychain-unavailable-reporting-decisions
-
-> **Nummer noch offen.** Die Aufgabenstellung gab keine ADR-Nummer vor;
-> `XXXX` ist ein Platzhalter und wird beim Zusammenführen vergeben (s.
-> `docs/adr/README.md`).
+# 0061-keychain-unavailable-reporting-decisions
 
 ## Status
 
@@ -97,6 +93,39 @@ auf macOS „unverändertes Verhalten" — **das ist beim manuellen Test M5
 ausdrücklich mitzuprüfen**, und falls es stört, ist die Eskalation auf
 Linux einzugrenzen.
 
+### 2a. Vom Nutzer ausgelöstes Entfernen: scheitern vs. melden (A17)
+
+Der Review dieser Spec zeigte, dass §6.3 X6 zwei verschiedene Dinge in
+einen Topf warf: echte Aufräumpfade (ein `delete`, das einen bereits
+gescheiterten Vorgang zurückbaut) und **vom Nutzer angeforderte**
+Entfernen-Aktionen. Bei letzteren meldete ein verschluckter Fehler Erfolg,
+während das Secret im Schlüsselbund stehen blieb. Die Spec wurde
+daraufhin korrigiert (A17 ist neu, X6 trägt die Korrektur).
+
+**Entscheidung (2026-09-22), zwei verschiedene Antworten für zwei
+verschiedene Lagen:**
+
+- **„Hinterlegtes Sudo-Passwort entfernen"** schlägt **sichtbar fehl**
+  (Fehlerweg wie A13). Begründung: Es ist sonst nichts geschehen — es gibt
+  keinen Teilerfolg, den man melden könnte. Ein `Ok(())` wäre unwahr, und
+  der Nutzer sähe „kein Sudo-Passwort hinterlegt", während das Passwort
+  beim nächsten `sudo` weiter eingespeist würde.
+- **Server löschen** läuft **durch**. Begründung: Hier gibt es einen
+  echten Teilerfolg (das Profil ist weg), und niemand soll auf einem
+  unlöschbaren Server sitzen bleiben, nur weil der Schlüsselbund klemmt.
+  Das Ergebnis trägt dafür `secrets_left_behind` — die `CredentialRef`s,
+  die im Schlüsselbund blieben. Sie sind danach verwaist (die Server-ID
+  existiert nicht mehr), deshalb nennt die Oberfläche sie beim Namen: ohne
+  den Ref findet der Nutzer den Eintrag im Schlüsselbund nicht wieder. Ein
+  `CredentialRef` ist kein Secret, nur der Account-Name innerhalb des
+  Service „Smart SSH".
+
+**Konsequenz:** Zwei getrennte Funktionen (`clear_sudo_password` und
+`delete_sudo_password_on_server_delete`) statt eines Schalters — die
+beiden Hälften von A17 sollen sich nicht über einen Parameter vermischen
+lassen. Die `tracing::warn!`-Zeilen aus der vorigen Runde bleiben in
+beiden Fällen.
+
 ### 3. Außerhalb von Linux gilt immer der neutrale Text
 
 A8 verlangt, dass auf macOS/Windows kein Linux-Paketname, kein `apt`-Befehl
@@ -189,26 +218,7 @@ stillschweigend verschwinden.
    („aus einem nicht verfügbaren Store") nicht entscheidet; sie gehört
    vorgelegt, nicht nebenbei getroffen.
 
-2. **`clear_sudo_password` und `delete_server` melden Erfolg, auch wenn
-   das Secret nicht gelöscht werden konnte.** `clear_sudo_password`
-   schluckt den Fehler (`let _ = delete(...)`), das Kommando liefert
-   unbedingt `Ok(())`, und die Oberfläche setzt daraufhin „kein
-   Sudo-Passwort hinterlegt". Bei nicht verfügbarem Schlüsselbund bleibt
-   das Secret dann im Schlüsselbund, während die App Erfolg meldet.
-   Dasselbe gilt für `delete_auth_method_secrets` beim Löschen eines
-   Servers: Die DB-Zeile verschwindet, die Secrets bleiben als verwaiste
-   Einträge zurück — ohne die Logzeile, die
-   `delete_all_possible_server_secrets` für den Rollback-Pfad bereits hat.
-   Spec 0071 §6.3 X6 führt genau diese Aufrufe ausdrücklich als
-   „Aufräumpfade" auf, die verschluckt bleiben sollen. Das trifft auf ein
-   bewusstes „Entfernen"-Kommando nicht zu — die Spec-Annahme ist hier
-   falsch. Die Korrektur ändert Verhalten und berührt eine
-   Sicherheits-Invariante (kein falsches Erfolgssignal), gehört also
-   entschieden und nicht vom Umsetzenden angenommen. Abgemildert wurde nur
-   der Teil, der in dieser Spec neu entstand: Die Löschvorschau behauptet
-   keine Entfernung mehr.
-
-3. **Ein nicht lesbares Sudo-Passwort schaltet still eine Redaktionsschicht
+2. **Ein nicht lesbares Sudo-Passwort schaltet still eine Redaktionsschicht
    ab.** `commands.rs` macht an zwei Stellen aus jedem `CredentialError`
    ein `None`. Der `sudo -S`-Pfad läuft dann ohne Passwort weiter (fail-safe),
    aber der Redactor bekommt das Sudo-Passwort-Muster nicht — obwohl der
@@ -218,21 +228,21 @@ stillschweigend verschwinden.
    Abschwächung und gehört mindestens geloggt. Außerhalb des Umfangs
    dieser Spec.
 
-4. **`risk_second_opinion.rs` verschluckt den Credential-Fehler mit
+3. **`risk_second_opinion.rs` verschluckt den Credential-Fehler mit
    `.ok()?`.** Fail-safe im Sinne von ADR 0024 (die Zweitmeinung kann nur
    eskalieren, ihr Ausfall senkt keine Einstufung), aber unsichtbar: Ohne
    Schlüsselbund ist sie für die ganze Sitzung stumm aus. Eigenes Vorhaben.
 
-5. **`ServerDto::from_server` macht einen Schlüsselbund-Lesezugriff pro
+4. **`ServerDto::from_server` macht einen Schlüsselbund-Lesezugriff pro
    Server.** Auf einem gesperrten Linux-Keyring kann `list_servers` damit
    N Entsperr-Prompts auslösen. Vorbestehend, durch diese Spec nur sichtbar
    geworden; passt zu der nie gemessenen Laufzeitfrage A0.4.
 
-6. **`sanitize_path_for_display` filtert nur `char::is_control()`.**
+5. **`sanitize_path_for_display` filtert nur `char::is_control()`.**
    U+2028 (Zeilentrenner) und U+202E (Richtungswechsel) kommen durch.
    Vorbestehend, von dieser Spec nicht berührt.
 
-7. **Verbindungstest über einen Jump-Host zeigt weiterhin den rohen
+6. **Verbindungstest über einen Jump-Host zeigt weiterhin den rohen
    Bibliothekstext.** Die Secrets vorgelagerter Hops liest der Connector
    über den `TieredCredentialStore` und `core::ssh::auth::resolve_auth`;
    ein Fehler landet dort als `SshError::CredentialResolutionFailed` und
@@ -244,8 +254,8 @@ stillschweigend verschwinden.
    ergänzen; beides geht über den Umfang dieser Spec hinaus. Eigenes
    Vorhaben.
 
-8. **Kein Komponententest für den neutralen Sudo-Zustand im
-   Server-Formular.** `ServerForm.tsx` hat bislang überhaupt keine
-   Testdatei; die DTO-Seite (A14/X4) ist im Backend geprüft. Eine
-   Testdatei nur für dieses eine Feld anzulegen wäre unverhältnismäßig —
-   der Punkt gehört in die manuellen Tests.
+7. **Keine vollständige Testabdeckung für `ServerForm.tsx`.** Die Datei
+   hatte bis zu dieser Spec gar keine Testdatei. Angelegt wurde eine, die
+   genau die zwei Stellen abdeckt, die diese Spec ehrlicher macht (A14 und
+   A17) — nicht mehr. Eine Rundum-Abdeckung des Formulars ist ein eigenes
+   Vorhaben.

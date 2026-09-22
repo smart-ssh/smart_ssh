@@ -218,6 +218,11 @@ export function ServerForm({
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deletePreview, setDeletePreview] = useState<DeleteServerResult | null>(null);
+  // Spec 0071, A17: Der Server ist gelöscht, aber mindestens ein Secret
+  // konnte nicht aus dem Schlüsselbund entfernt werden. Die Einträge sind
+  // jetzt verwaist (die Server-ID gibt es nicht mehr) — das muss der
+  // Nutzer erfahren, bevor die Maske zugeht.
+  const [secretsLeftBehind, setSecretsLeftBehind] = useState<string[] | null>(null);
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
@@ -372,7 +377,15 @@ export function ServerForm({
     setDeleting(true);
     setError(null);
     try {
-      await deleteServer(serverId, true);
+      const result = await deleteServer(serverId, true);
+      // Spec 0071, A17: Das Löschen ist bewusst durchgelaufen. Gab es
+      // Rückstände, nicht stillschweigend schließen — sonst wäre das
+      // genau das falsche Erfolgssignal, das die X6-Korrektur meint.
+      if (result.secretsLeftBehind.length > 0) {
+        setDeletePreview(null);
+        setSecretsLeftBehind(result.secretsLeftBehind);
+        return;
+      }
       onDeleted();
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
@@ -963,6 +976,39 @@ export function ServerForm({
             >
               {t("serverForm.deleteServer")}
             </button>
+
+            {/* Spec 0071, A17: Der Server ist weg, aber mindestens ein
+             * Secret blieb im Schlüsselbund. Kein stilles Schließen — der
+             * Nutzer braucht die Refs, um die verwaisten Einträge im
+             * Schlüsselbund-Verwaltungsprogramm wiederzufinden. */}
+            {secretsLeftBehind && (
+              <div
+                className="mt-3 rounded border border-amber-700 bg-amber-950 p-3 text-sm"
+                data-testid="secrets-left-behind"
+              >
+                <p className="mb-2 font-medium text-amber-200">
+                  {t("serverForm.deletedWithLeftoverSecretsTitle")}
+                </p>
+                <p className="mb-2 text-amber-200">
+                  {t("serverForm.deletedWithLeftoverSecretsHint")}
+                </p>
+                <ul className="mb-2 space-y-1 font-mono text-xs text-amber-200">
+                  {secretsLeftBehind.map((ref) => (
+                    <li key={ref}>{ref}</li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSecretsLeftBehind(null);
+                    onDeleted();
+                  }}
+                  className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+                >
+                  {t("common.close")}
+                </button>
+              </div>
+            )}
 
             {deletePreview && (
               <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">

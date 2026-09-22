@@ -448,6 +448,22 @@ pub struct DeleteServerResult {
     pub server: ServerDto,
     pub servers_losing_jump_host: Vec<ServerDto>,
     pub executed: bool,
+    /// Spec 0071, A17: Secrets, die beim Löschen **nicht** aus dem
+    /// Schlüsselbund entfernt werden konnten (nicht verfügbarer oder
+    /// gesperrter Schlüsselbund). Der Server ist trotzdem gelöscht — das
+    /// ist die bewusste Entscheidung aus A17, damit niemand auf einem
+    /// unlöschbaren Server sitzen bleibt.
+    ///
+    /// Die Einträge sind danach **verwaist**: Sie tragen die ID eines
+    /// Servers, den es nicht mehr gibt. Deshalb stehen hier die
+    /// `CredentialRef`-Strings selbst — der Nutzer braucht sie, um die
+    /// Einträge im Schlüsselbund-Verwaltungsprogramm wiederzufinden. Das
+    /// ist **kein** Secret (s. `CredentialRef`-Doc-Kommentar), nur der
+    /// Account-Name innerhalb des Service „Smart SSH".
+    ///
+    /// Leer im Normalfall und immer leer bei `executed: false` (dann wurde
+    /// nichts gelöscht).
+    pub secrets_left_behind: Vec<String>,
 }
 
 /// Eingabe für `create_server`/`update_server`/`test_connection` (Spec
