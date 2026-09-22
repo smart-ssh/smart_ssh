@@ -81,9 +81,21 @@ gelockert, eine weitere Runde.
   `changelog.d/<spec-nummer>-<thema>.md` (deutsch, nutzerrelevant). Grund:
   parallele Coder würden sonst dieselben Zeilen ändern.
 - **Version nie selbst erhöhen.**
-- **Bericht**: was umgesetzt ist (in Nutzersprache), Teil-0-Befund, Review-
-  Funde behoben / bewusst nicht behoben mit Grund, **manuelle Testabläufe**
-  (nummeriert, inkl. nötiger Server-Einrichtung), Commit-Liste.
+- **Bericht**: `.agent/report.md` — was umgesetzt ist (in Nutzersprache),
+  Teil-0-Befund, Review-Funde behoben / bewusst nicht behoben mit Grund,
+  **manuelle Testabläufe** (nummeriert, inkl. nötiger Server-Einrichtung),
+  Commit-Liste.
+- **Zusammenfassung**: zusätzlich `.agent/summary.md`, **höchstens 40
+  Zeilen**, in dieser Reihenfolge:
+  1. Status und ob das Gate grün ist,
+  2. was entschieden werden muss (je Punkt eine Zeile, mit Verweis auf den
+     Abschnitt im Bericht),
+  3. offene Annahmen (`ANNAHME A-n`) und wodurch sie aufgelöst werden,
+  4. Kosten des Laufs.
+  Grund: Der Architekt liest zuerst diese Datei und öffnet den langen
+  Bericht nur, wenn sie ihn auf eine Stelle zeigt. Ein 370-Zeilen-Bericht
+  landet sonst vollständig in seinem Kontext. Die Zusammenfassung ersetzt
+  den Bericht nicht — sie verweist auf ihn.
 
 ## Was bei diesem Produkt zählt
 

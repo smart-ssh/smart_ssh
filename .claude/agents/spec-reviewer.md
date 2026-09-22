@@ -52,7 +52,8 @@ strukturierter Bericht.
      (Datei-Überschreiben, Notiz-Änderung, Löschen), irgendwo automatisch
      ohne Anzeige ausgeführt?
 5. Ist die im Aufruf genannte Priorität "ERHÖHT" (typisch bei Filter-Engine,
-   Risiko-Klassifizierer, Redactor, Credential-Handling): nimm zusätzlich
+   Risiko-Klassifizierer, Redactor, Credential-Handling, Ausführungspfad,
+   Verschlüsselung, Migration): nimm zusätzlich
    eine **adversariale Haltung** ein. Erfinde 5–10 konkrete Kommando-/
    Aktions-Beispiele, die die Logik möglicherweise umgehen könnten
    (ungewöhnliches Quoting, Unicode-Tricks, tief verschachteltes Chaining,
