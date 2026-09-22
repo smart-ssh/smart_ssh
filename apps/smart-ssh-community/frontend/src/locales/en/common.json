@@ -23,7 +23,13 @@
     "noActiveProvider": "No active AI provider configured yet.",
     "setupProviderNow": "Set it up now in Settings",
     "serversHeading": "Servers",
-    "ungrouped": "Ungrouped"
+    "ungrouped": "Ungrouped",
+    "loadingServers": "Loading servers…",
+    "connecting": "Connecting…",
+    "emptyStateTitle": "No server added yet",
+    "emptyStateHint": "Add your first server to connect over SSH.",
+    "emptyStateCreateFirstServer": "Add first server",
+    "emptyStateTryLocalhost": "Try it without a server: \"Localhost\" above opens a session on this machine — with the same confirmations as on a real server."
   },
   "settings": {
     "title": "Settings",

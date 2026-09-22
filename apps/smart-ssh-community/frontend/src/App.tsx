@@ -50,6 +50,17 @@ function App() {
     [switchTo],
   );
 
+  /** Spec 0069, Teil C1 (BL-0082): "Ersten Server anlegen" im
+   * Einstiegs-Block von `ServerList` — derselbe `pendingNoteEditSelection`-
+   * Mechanismus wie oben (Spec 0057, §4.2), hier nur mit `newServer` statt
+   * `server`. Kein `switchTo(null)` nötig: `ServerList` ist ohnehin nur
+   * sichtbar, wenn kein Session-Tab aktiv ist (s. `activeSessionId === null`-
+   * Zweig unten). */
+  const handleCreateFirstServer = () => {
+    setTab("manage");
+    setPendingNoteEditSelection({ kind: "newServer", groupId: null });
+  };
+
   const refreshProviderStatus = () => {
     listAiProviders()
       .then((providers) => setHasActiveProvider(providers.some((p) => p.isActive)))
@@ -163,6 +174,7 @@ function App() {
           onConnected={(sessionId, serverName, serverId) => openTab(sessionId, serverId, serverName)}
           pendingNoteEditSelection={pendingNoteEditSelection}
           onNoteEditSelectionConsumed={() => setPendingNoteEditSelection(null)}
+          onCreateFirstServer={handleCreateFirstServer}
         />
       </div>
     </div>
@@ -183,6 +195,8 @@ interface MainScreenProps {
   onConnected: (sessionId: string, serverName: string, serverId: string) => void;
   findExistingSessionId: (serverId: string) => string | undefined;
   onSwitchToExistingTab: (sessionId: string) => void;
+  /** Spec 0069, Teil C1 (BL-0082). */
+  onCreateFirstServer: () => void;
 }
 
 function MainScreen({
@@ -197,6 +211,7 @@ function MainScreen({
   onSwitchToExistingTab,
   pendingNoteEditSelection,
   onNoteEditSelectionConsumed,
+  onCreateFirstServer,
 }: MainScreenProps) {
   const { t } = useTranslation();
   // Spec 0033, Abschnitt 4: hier statt in `ServerList` selbst gehalten,
@@ -291,6 +306,7 @@ function MainScreen({
               onSwitchToExistingTab={onSwitchToExistingTab}
               collapsedGroupIds={collapsedGroupIds}
               onToggleGroup={toggleGroup}
+              onCreateFirstServer={onCreateFirstServer}
             />
           </section>
         </main>

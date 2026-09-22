@@ -34,6 +34,10 @@ interface ServerListProps {
    * bleibt, statt bei jedem Remount dieser Komponente zurückzufallen. */
   collapsedGroupIds: Set<string>;
   onToggleGroup: (groupId: string) => void;
+  /** Spec 0069, Teil C1 (BL-0082): Klick auf "Ersten Server anlegen" im
+   * Einstiegs-Block — wechselt zum Tab "Verwalten" mit geöffnetem
+   * Neu-Formular (`App.tsx`s `handleCreateFirstServer`). */
+  onCreateFirstServer: () => void;
 }
 
 /** Spec 0047, Fund D2: bislang zeigte dieser Screen bei jedem Fehler nur
@@ -69,6 +73,7 @@ export function ServerList({
   onSwitchToExistingTab,
   collapsedGroupIds,
   onToggleGroup,
+  onCreateFirstServer,
 }: ServerListProps) {
   const { t } = useTranslation();
   const [servers, setServers] = useState<ServerDto[]>([]);
@@ -268,7 +273,9 @@ export function ServerList({
               {tag}
             </span>
           ))}
-          {connectingId === server.id && <span className="text-xs text-indigo-300">Verbinde…</span>}
+          {connectingId === server.id && (
+            <span className="text-xs text-indigo-300">{t("mainScreen.connecting")}</span>
+          )}
         </div>
       </button>
     </li>
@@ -304,15 +311,22 @@ export function ServerList({
   };
 
   if (loading) {
-    return <p className="text-sm text-slate-400">Lade Server…</p>;
+    return <p className="text-sm text-slate-400">{t("mainScreen.loadingServers")}</p>;
   }
 
   const localServer = servers.find((s) => s.isLocal);
   const tree = buildGroupTree(groups, servers);
+  // Spec 0069, Teil C1 (BL-0082): "leer" für den Einstiegs-Block heißt
+  // ausschließlich "keine echten Server" — der lokale Pseudo-Server zählt
+  // nie mit, Gruppen (auch leere) zählen für DIESE Bedingung nicht: eine
+  // Gruppe ohne Server ist kein Einstieg in den Pfad. Bewusst getrennt von
+  // der Frage unten, ob der Gruppenbaum überhaupt etwas zu zeigen hat
+  // (die zwei Bedingungen sind nicht dasselbe — nur-Gruppen-ohne-Server
+  // zeigt BEIDES: Block und Baum).
+  const hasRealServers = servers.some((s) => !s.isLocal);
   // Spec 0032, Abschnitt 3: der lokale Pseudo-Server ist immer vorhanden,
-  // `servers` ist deshalb nie tatsächlich leer — "nichts angelegt" heißt
-  // hier: außer ihm gibt es keine echten Server/Gruppen.
-  const hasNoRealServersOrGroups = groups.length === 0 && tree.ungroupedServers.length === 0;
+  // `servers` ist deshalb nie tatsächlich leer.
+  const hasGroupTreeContent = groups.length > 0 || tree.ungroupedServers.length > 0;
 
   return (
     <>
@@ -327,12 +341,28 @@ export function ServerList({
         </ul>
       )}
 
-      {hasNoRealServersOrGroups && !error ? (
-        <p className="text-sm text-slate-400">
-          Noch keine weiteren Server angelegt (s. <code>profiles_demo</code>-Beispiel oder
-          CLI-Helfer, solange es noch keine Anlege-UI gibt).
-        </p>
-      ) : (
+      {/* Spec 0069, Teil C1 (BL-0082): ersetzt den früheren
+       * Entwicklertext ("s. profiles_demo-Beispiel..."). Existieren
+       * Gruppen, wird der Gruppenbaum unten ZUSÄTZLICH gezeigt (nicht
+       * ausschließend) — s. `hasGroupTreeContent`. */}
+      {!hasRealServers && !error && (
+        <div className="mb-4 rounded-md border border-slate-700 bg-slate-900/40 p-4">
+          <p className="text-sm font-medium text-slate-100">
+            {t("mainScreen.emptyStateTitle")}
+          </p>
+          <p className="mt-1 text-sm text-slate-400">{t("mainScreen.emptyStateHint")}</p>
+          <button
+            type="button"
+            onClick={onCreateFirstServer}
+            className="mt-3 rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+          >
+            {t("mainScreen.emptyStateCreateFirstServer")}
+          </button>
+          <p className="mt-3 text-xs text-slate-500">{t("mainScreen.emptyStateTryLocalhost")}</p>
+        </div>
+      )}
+
+      {hasGroupTreeContent && (
         <ul className="divide-y divide-slate-700 rounded-md border border-slate-700">
           {tree.roots.map((node) => renderGroupSection(node, 0))}
           {tree.ungroupedServers.length > 0 && (

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
-import { connect } from "../api";
+import { connect, listGroups, listServers } from "../api";
 
 function localServer(): ServerDto {
   return {
@@ -78,7 +78,7 @@ vi.mock("../firstRunNotice", () => ({
   saveFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve()),
 }));
 
-function renderList() {
+function renderList(onCreateFirstServer: () => void = vi.fn()) {
   return render(
     <I18nextProvider i18n={testI18n}>
       <ServerList
@@ -87,9 +87,20 @@ function renderList() {
         onSwitchToExistingTab={vi.fn()}
         collapsedGroupIds={new Set()}
         onToggleGroup={vi.fn()}
+        onCreateFirstServer={onCreateFirstServer}
       />
     </I18nextProvider>,
   );
+}
+
+function group(overrides: Partial<GroupDto> = {}): GroupDto {
+  return {
+    id: "group-1",
+    name: "Prod",
+    parentId: null,
+    notes: "",
+    ...overrides,
+  };
 }
 
 describe("ServerList port display (Spec 0046, Fund 5)", () => {
@@ -146,5 +157,52 @@ describe("ServerList connect-error translation (Spec 0047, Fund D2)", () => {
     );
     expect(screen.queryByText(/os error 61/)).toBeNull();
     expect(screen.queryByText(/Verbindung fehlgeschlagen/)).toBeNull();
+  });
+});
+
+// Spec 0069, Teil C1 (BL-0082), Tests 27/28.
+describe("ServerList empty-state entry block (Spec 0069, Teil C1)", () => {
+  it("shows the entry block when only the local pseudo-server exists, and the old dev text is gone", async () => {
+    vi.mocked(listServers).mockResolvedValueOnce([localServer()]);
+    vi.mocked(listGroups).mockResolvedValueOnce([]);
+
+    renderList();
+
+    await screen.findByText("Noch kein Server angelegt");
+    expect(screen.getByRole("button", { name: "Ersten Server anlegen" })).toBeInTheDocument();
+    expect(screen.queryByText(/profiles_demo/)).not.toBeInTheDocument();
+  });
+
+  it("hides the entry block once a real server exists", async () => {
+    vi.mocked(listServers).mockResolvedValueOnce([localServer(), remoteServer()]);
+    vi.mocked(listGroups).mockResolvedValueOnce([]);
+
+    renderList();
+
+    await screen.findByText("prod-1");
+    expect(screen.queryByText("Noch kein Server angelegt")).not.toBeInTheDocument();
+  });
+
+  it("shows both the entry block and the (empty) group tree when only groups exist, no servers", async () => {
+    vi.mocked(listServers).mockResolvedValueOnce([localServer()]);
+    vi.mocked(listGroups).mockResolvedValueOnce([group()]);
+
+    renderList();
+
+    await screen.findByText("Noch kein Server angelegt");
+    expect(screen.getByRole("button", { name: /Prod/ })).toBeInTheDocument();
+  });
+
+  it('clicking "Ersten Server anlegen" invokes the callback', async () => {
+    vi.mocked(listServers).mockResolvedValueOnce([localServer()]);
+    vi.mocked(listGroups).mockResolvedValueOnce([]);
+    const onCreateFirstServer = vi.fn();
+
+    renderList(onCreateFirstServer);
+    await screen.findByText("Noch kein Server angelegt");
+
+    fireEvent.click(screen.getByRole("button", { name: "Ersten Server anlegen" }));
+
+    expect(onCreateFirstServer).toHaveBeenCalledTimes(1);
   });
 });

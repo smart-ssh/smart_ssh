@@ -23,7 +23,13 @@
     "noActiveProvider": "Noch kein aktiver AI-Provider konfiguriert.",
     "setupProviderNow": "Jetzt in den Einstellungen einrichten",
     "serversHeading": "Server",
-    "ungrouped": "Ohne Gruppe"
+    "ungrouped": "Ohne Gruppe",
+    "loadingServers": "Lade Server…",
+    "connecting": "Verbinde…",
+    "emptyStateTitle": "Noch kein Server angelegt",
+    "emptyStateHint": "Lege deinen ersten Server an, um dich per SSH zu verbinden.",
+    "emptyStateCreateFirstServer": "Ersten Server anlegen",
+    "emptyStateTryLocalhost": "Ohne Server ausprobieren: „Localhost“ oben öffnet eine Sitzung auf diesem Rechner — mit denselben Bestätigungen wie auf einem Server."
   },
   "settings": {
     "title": "Einstellungen",
