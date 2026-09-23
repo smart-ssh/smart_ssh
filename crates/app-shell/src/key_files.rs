@@ -747,6 +747,36 @@ mod tests {
         );
     }
 
+    /// §6.4.6 nennt `/dev/stdin` ausdrücklich. Er steht hier getrennt vom
+    /// Test darüber, weil seine Natur von der Umgebung abhängt: Läuft
+    /// `cargo test` mit umgeleitetem stdin aus einer regulären Datei, **ist**
+    /// `/dev/stdin` eine reguläre Datei; hängt er an einem Terminal, ist er
+    /// ein Zeichengerät; in einer Pipeline ein Rohr.
+    ///
+    /// Zugesichert wird deshalb genau das, was §6.4.6 zusichert — „entweder
+    /// ein sauberer Fehler oder ein gelesener Schlüssel, in keinem Fall ein
+    /// Hänger, ein Panic oder ein unbegrenzter Lesevorgang". Der Zeitrahmen
+    /// ist der eigentliche Prüfpunkt: Hinge das Öffnen, liefe der Test in
+    /// den Timeout.
+    #[test]
+    #[cfg(unix)]
+    fn test_dev_stdin_yields_a_clean_outcome_and_never_hangs() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let outcome = match OsKeyFileReader::new().read("/dev/stdin", false) {
+                // Ein gelesener Schlüssel wäre erlaubt — dass es dazu kommt,
+                // ist bei einem frisch umgeleiteten stdin unwahrscheinlich,
+                // aber kein Fehler.
+                Ok(_) => "gelesen".to_string(),
+                Err(err) => format!("{err:?}"),
+            };
+            let _ = tx.send(outcome);
+        });
+
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .expect("§6.4.6: /dev/stdin darf das Lesen nicht hängen lassen");
+    }
+
     /// §6.2.6, **zweite Hälfte** — die verbindliche Grenze.
     ///
     /// spec-reviewer-Fund: `test_file_larger_than_the_limit_is_rejected`
