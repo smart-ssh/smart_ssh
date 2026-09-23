@@ -1,6 +1,6 @@
 # Spec 0076 — Anmeldung mit einer Schlüsseldatei
 
-Status: Vorschlag (Architekt, K3 entschieden) · Backlog: BL-0221, BL-0222 · Gate: release-1.0/D
+Status: **freigegeben** (Stefan, 2026-09-23) · Backlog: BL-0221, BL-0222 · Gate: release-1.0/D
 Repo: **öffentlich** `smart-ssh` — `crates/core/src/ssh/auth.rs` und
 `crates/core/src/profiles/types.rs` (Anmeldeart und Auflösung),
 `crates/ssh-transport/` (Aufrufkette), `crates/app-shell/` (Dateizugriff,

@@ -1,6 +1,6 @@
 # Spec 0075 — Server-Profile aus `ssh_config` importieren und dorthin exportieren
 
-Status: Vorschlag (Architekt) · Backlog: BL-0216, BL-0218 · Gate: release-1.0/D
+Status: **freigegeben** (Stefan, 2026-09-23) · Backlog: BL-0216, BL-0218 · Gate: release-1.0/D
 Repo: **öffentlich** `smart-ssh` — `crates/core/src/profiles/` (Abbildung),
 `crates/app-shell/src/` (Kommandos, Dateizugriff, DTOs), Frontend
 (Vorschau-Dialog)
