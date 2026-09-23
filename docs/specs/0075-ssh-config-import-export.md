@@ -2,8 +2,10 @@
 
 Status: Vorschlag (Architekt) · Backlog: BL-0216, BL-0218 · Gate: release-1.0/D
 Repo: **öffentlich** `smart-ssh` — `crates/core/src/profiles/` (Abbildung),
-`crates/app-shell/src/` (Kommandos, Dateizugriff, DTOs),
-`crates/persistence-sqlite/` (ein Feld), Frontend (Vorschau-Dialog)
+`crates/app-shell/src/` (Kommandos, Dateizugriff, DTOs), Frontend
+(Vorschau-Dialog)
+**Setzt Spec 0076 voraus** (Anmeldeart `AuthMethod::IdentityFile`); deren
+Umsetzung geht dieser voraus, s. §7.
 Review-Priorität: **ERHÖHT** (der Import erzeugt Server-Profile — die
 Objekte, gegen die später Filterregeln, Risikobewertung und der
 Ausführungspfad laufen — und er öffnet Dateien, deren Pfade aus einer
@@ -74,10 +76,20 @@ let parsed = PrivateKey::from_openssh(key.expose_secret().as_bytes())
 
 **Damit gibt es in Smart SSH heute keine dateibasierte
 Schlüssel-Authentifizierung.** `ssh_config` kennt aber nur den Pfad.
-Entschieden (§9, E-2): Der Pfad wird in einem neuen Feld **gemerkt und
-exportiert, aber von dieser Spec nicht zur Anmeldung benutzt**; die
-dateibasierte Anmeldung folgt unmittelbar als **Spec 0076**. §3.1.9 und
-§4.6 halten fest, was die Oberfläche deshalb sagen muss.
+
+Entschieden (§9, E-2): **Spec 0076 führt sie ein** — eine fünfte Variante
+`AuthMethod::IdentityFile { path, passphrase_ref }`, in der Oberfläche
+wählbar wie jede andere, plus einen Knopf, der eine Schlüsseldatei in einen
+gespeicherten Schlüssel überführt. Diese Spec **benutzt** sie und fragt
+beim Import, welchen Weg der Nutzer will (§3.1.9).
+
+Dass das ohne Wanderung geht, ist gemessen: `auth_method` liegt als **JSON**
+in einer Textspalte (`crates/persistence-sqlite/migrations/0001_initial.sql:31`
+— „JSON-serialisiertes AuthMethod-Enum"), serialisiert über
+`auth_method_to_json`/`_from_json` (`crates/persistence-sqlite/src/mapping.rs:9-17`).
+Eine zusätzliche Variante braucht deshalb **keine Schema-Änderung** — und
+kein eigenes Feld neben der Anmeldeart, in dem derselbe Pfad ein zweites
+Mal stünde.
 
 ### 1.3 Was beim Anlegen eines Servers **nicht** geprüft wird
 
@@ -129,16 +141,17 @@ ergibt dieselben Profile.
 2. **Kein CSV-Import.** Das ist BL-0217 und hängt an einer eigenen
    Entscheidung über Geheimnisse im Klartext.
 3. **Kein verschlüsseltes Eigenformat.** Das ist BL-0081.
-4. **Kein Einlesen von Schlüsseldateien.** Der `IdentityFile`-Pfad wird
-   gespeichert und exportiert, aber die Datei dahinter wird von dieser
-   Spec **nie geöffnet**. Das Einlesen in den Schlüsselbund ist eine
-   ausdrückliche, vom Nutzer ausgelöste Handlung und gehört in **Spec
-   0076** (§1.2, §4.6, §9/E-2 und E-5) — nicht in einen Vorgang, der
-   eine fremde Datei verarbeitet.
-5. **Kein Geheimnis in keiner Richtung.** Weder liest der Import eine
-   Schlüsseldatei, noch schreibt der Export ein Passwort, eine
-   Passphrase oder Schlüsselmaterial.
-6. **Keine Verwaltung der echten `~/.ssh/config`.** Wir schreiben nie in
+4. **Keine neue Anmeldeart.** Die Anmeldeart `AuthMethod::IdentityFile`,
+   ihre Oberfläche und der Überführungsknopf sind **Spec 0076**. Diese
+   Spec benutzt sie nur. Steht 0076 nicht, ist Weg (a) aus §3.1.9 nicht
+   verfügbar und der Import bietet nur (b) und (c) an.
+5. **Keine Schlüsseldatei wird ungefragt geöffnet.** Der Import liest eine
+   Schlüsseldatei **nur**, wenn der Nutzer in der Vorschau ausdrücklich
+   Weg (b) gewählt hat, und nur die Dateien, die die Vorschau vorher
+   namentlich genannt hat (§3.1.9, §5.1).
+6. **Kein Geheimnis im Export.** Der Export schreibt nie ein Passwort,
+   eine Passphrase oder Schlüsselmaterial — nur Pfade.
+7. **Keine Verwaltung der echten `~/.ssh/config`.** Wir schreiben nie in
    die Datei des Nutzers (§3.2.5).
 
 ## 3. Anforderungen
@@ -159,7 +172,7 @@ auch nicht `~/.ssh/config`. Weitere Dateien öffnet er nur über
 | `Port` | `port` | fehlt sie: 22 |
 | `User` | `username` | fehlt sie: leer |
 | `ProxyJump` | `jump_host` | §3.1.6 |
-| `IdentityFile` | `identity_file` | **nie eingelesen**, §3.1.9 |
+| `IdentityFile` | Anmeldeart | der Nutzer wählt, §3.1.9 |
 | `Include` | Untergruppe | §3.1.4 |
 
 **3.1.3 Platzhalterblöcke werden Vorgaben und Schlagworte, keine
@@ -207,9 +220,27 @@ Untergruppe.** Entschieden in §9/E-4.
   ist, lässt den Import nicht scheitern: Sie wird übersprungen und
   gemeldet.
 
-**3.1.5 Nicht übernommene Direktiven werden sichtbar gemeldet**, je
-Block und Direktive, mit **Datei und Zeilennummer**. Stillschweigend
-verschlucken ist ausgeschlossen (BL-0216, Akzeptanz).
+**3.1.4a Eine Datei, die keine `ssh_config` ist, wird übersprungen —
+nicht Zeile für Zeile gemeldet.** Erkannt an einem der drei Merkmale:
+Sie enthält ein NUL-Byte, sie ist kein gültiges UTF-8, oder sie enthält
+**keine einzige** erkannte Direktive. Die Meldung lautet dann
+`<pfad>: keine ssh_config, übersprungen` — **ohne Inhalt**. Das gilt für
+eingebundene Dateien; für die **gewählte** Datei greift stattdessen
+§3.1.13 (Abbruch mit Meldung).
+
+Das ist die Stelle, an der der Parser den Anzeige-Kanal aus §5.4
+zumacht, statt dass eine Regel ihn später auffangen müsste.
+
+**3.1.5 Nicht übernommene Direktiven werden gemeldet — mit Namen, nicht
+mit Inhalt.** Je Block und Direktive, mit **Datei und Zeilennummer**.
+Gemeldet wird der **Name** der Direktive, also das erste Wort der Zeile,
+**nie ihr Wert und nie die ganze Zeile**. Sieht das erste Wort nicht wie
+ein Direktivenname aus (nicht `[A-Za-z][A-Za-z0-9-]{0,31}`), lautet die
+Meldung `unlesbare Zeile` mit der Zeilennummer und sonst nichts.
+
+Stillschweigend verschlucken bleibt ausgeschlossen (BL-0216,
+Akzeptanz) — der Nutzer erfährt **dass** und **wo** etwas nicht
+übernommen wurde, nur eben nicht den Inhalt.
 
 **3.1.6 `ProxyJump`** bildet auf `jump_host: Option<ServerId>` ab:
 
@@ -241,14 +272,40 @@ wird nicht überschrieben. Die Vorschau zeigt den Konflikt; der Nutzer
 wählt je Eintrag: überspringen (Vorgabe) oder als neues Profil mit
 abweichendem Namen anlegen.
 
-**3.1.9 `IdentityFile` wird gemerkt, nicht gelesen und nicht benutzt.**
-Der Pfad landet unverändert im neuen Feld `identity_file` (§4.6). Die
-Datei, auf die er zeigt, wird **nicht geöffnet**. Die
-Authentifizierungsart des angelegten Servers ist `AuthMethod::Agent`.
-Die Oberfläche MUSS am Feld erkennbar machen, dass der Pfad angezeigt
-und exportiert, aber **nicht zur Anmeldung benutzt** wird, und auf Spec
-0076 verweisen. Mehrere `IdentityFile`-Zeilen in einem Block: Der erste
-Wert gewinnt, die weiteren werden als nicht übernommen gemeldet.
+**3.1.9 `IdentityFile` — der Nutzer entscheidet, was damit geschieht.**
+Die Vorschau bietet drei Wege an, umstellbar für den ganzen Import und
+einzeln je Eintrag. Voreingestellt ist (a), weil nur dieser Weg keine
+einzige zusätzliche Datei öffnet:
+
+**(a) Als Schlüsseldatei übernehmen** *(Vorgabe)*. Der Server bekommt
+`AuthMethod::IdentityFile { path, passphrase_ref: None }` (Spec 0076).
+Der Pfad wird **unverändert** übernommen — kein `realpath`, keine
+Existenzprüfung, kein Auflösen von `~` (§4.6). **Die Datei bleibt
+ungeöffnet.** Später überführt der Nutzer sie mit einem Knopfdruck in
+einen gespeicherten Schlüssel, wenn er will (Spec 0076).
+
+**(b) Schlüssel einlesen und im Schlüsselbund ablegen.** Beim
+**Bestätigen** des Imports — nicht in der Vorschau — wird jede betroffene
+Datei **einmal** gelesen und ihr Inhalt in den Schlüsselbund gelegt; der
+Server bekommt `AuthMethod::PrivateKey`. Dabei gilt:
+
+  - Die Vorschau nennt **vorher** jede Datei, die dabei geöffnet würde,
+    mit vollem Pfad, und wie viele es insgesamt sind.
+  - Eine Datei, die fehlt, nicht lesbar ist oder kein gültiger
+    OpenSSH-Schlüssel ist, lässt den Import **nicht** scheitern: Dieser
+    eine Server fällt auf Weg (a) zurück und die Meldung sagt, warum.
+  - Ein passphrase-geschützter Schlüssel wird nach Spec 0076 behandelt;
+    fragt der Nutzer die Passphrase nicht ab, fällt der Server auf Weg
+    (a) zurück.
+  - Der Dateiinhalt geht **ausschließlich** in den Schlüsselbund —
+    nicht in den Plan, nicht in die Datenbank, nicht in ein Log
+    (§5.1, §6.4.1).
+
+**(c) Nicht übernehmen.** Der Server bekommt `AuthMethod::Agent`,
+`IdentityFile` erscheint unter „nicht übernommen" (3.1.5).
+
+Mehrere `IdentityFile`-Zeilen in einem Block: Der erste Wert gewinnt, die
+weiteren werden als nicht übernommen gemeldet.
 
 **3.1.10 Wiederholbarkeit.** Ein zweiter Import derselben Datei ohne
 zwischenzeitliche Änderung legt **nichts** an (alles Konflikt, alles
@@ -275,7 +332,8 @@ gelesenen Datei ein `Host`-Block gefunden wird, oder eine Grenze aus
 **3.2.1** Exportiert werden je Server: `Host <name>`, `HostName <host>`,
 `Port <port>` (wenn ≠ 22), `User <username>` (wenn nicht leer),
 `ProxyJump <name des Jump-Hosts>` (wenn gesetzt) und `IdentityFile
-<pfad>` (wenn `identity_file` gesetzt).
+<pfad>` — Letzteres genau dann, wenn die Anmeldeart des Servers
+`AuthMethod::IdentityFile` ist (Spec 0076).
 
 **3.2.2 Kein Geheimnis in der Datei.** Nie ein Passwort, nie eine
 Passphrase, nie Schlüsselmaterial. Ein Server mit
@@ -285,7 +343,11 @@ beabsichtigt und wird als Kommentar vermerkt (3.2.3).
 **3.2.3 Was sich nicht abbilden lässt, wird benannt.** Gruppen,
 Schlagworte, Notizen, Filterregeln, Risiko-Einstellungen,
 `post_ingest_policy`, `ai_injection_check_enabled`, `sftp_server_path`
-und die Art der Anmeldung haben in `ssh_config` kein Gegenstück. Sie
+und die Art der Anmeldung haben in `ssh_config` kein Gegenstück. Das
+trifft ausdrücklich auch den Server, dessen Schlüssel **im
+Schlüsselbund** liegt (`AuthMethod::PrivateKey`): Für ihn gibt es keinen
+Pfad, den wir schreiben könnten, also steht im Kommentar, dass sein
+Schlüssel in der Datei fehlt und woher er stammt. Diese Angaben
 erscheinen als Kommentarzeilen über dem jeweiligen Block, beginnend mit
 `# smart-ssh:`, und zusätzlich in einer Zusammenfassung im Kopf der
 Datei. Diese Kommentare sind **Hinweis, kein Format**: Der Import liest
@@ -438,31 +500,32 @@ Wiederholbarkeit (3.1.10) bleibt gewahrt, weil bei einem zweiten Import
 derselben Datei ohnehin kein Server übrig bleibt und die Gruppe dann
 gar nicht erst angelegt wird.
 
-### 4.6 Das Feld `identity_file`
+### 4.6 Warum kein eigenes Feld neben der Anmeldeart
 
-Ein neues Feld `identity_file: Option<String>` am `Server`, gefüllt vom
-Import, gelesen vom Export, angezeigt in der Oberfläche — **nicht
-benutzt zur Anmeldung** (§1.2, §3.1.9). Wanderung
-`0015_server_identity_file.sql` nach dem Muster von
-`0014_server_sftp_server_path.sql`.
+Ein früherer Entwurf dieser Spec hatte ein Feld `identity_file` am
+`Server`, neben `auth`. Das ist verworfen: Mit `AuthMethod::IdentityFile
+{ path, .. }` aus Spec 0076 steht der Pfad **in** der Anmeldeart, wo er
+hingehört. Ein zweites Feld daneben würde denselben Wert doppelt führen,
+und zwei Quellen für dieselbe Tatsache laufen früher oder später
+auseinander — spätestens, wenn der Überführungsknopf aus 0076 die
+Anmeldeart auf `PrivateKey` umstellt und niemand daran denkt, das Feld
+mitzuziehen.
+
+Gemessene Folge: **keine Wanderung** (§1.2). `auth_method` ist eine
+JSON-Textspalte; eine Variante mehr ändert am Schema nichts.
 
 Der Pfad wird als Zeichenkette gespeichert, **unverändert**: kein
-`realpath`, keine Existenzprüfung, kein Auflösen von `~`. `ssh` löst
-`~` selbst auf, und jede Auflösung unsererseits wäre eine Aussage
-darüber, welche Dateien auf dem Rechner liegen (§5.4).
+`realpath`, keine Existenzprüfung, kein Auflösen von `~`. Das ist beim
+Import Absicht (§5.5) — `ssh` löst `~` selbst auf, und jede Auflösung
+unsererseits wäre eine Aussage darüber, welche Dateien auf dem Rechner
+liegen. Was beim **Verbinden** mit dem Pfad geschieht, regelt Spec 0076,
+nicht diese.
 
-Ein Feld, das aussieht, als täte es etwas, und es nicht tut, ist
-schlimmer als keins — deshalb ist der Hinweis in der Oberfläche
-(3.1.9) Teil der Anforderung und nicht Kosmetik.
-
-**Was Spec 0076 daraus macht** (§9/E-5): einen Dateidialog beim Anlegen
-eines Servers und eine ausdrückliche Nachlese für importierte Server.
-Der Schlüssel wird dabei **einmal** gelesen und in den Schlüsselbund
-gelegt; von da an benutzt Smart SSH die Fassung aus dem Schlüsselbund,
-genau wie bei einem eingefügten Schlüssel heute. Die Datei wird nicht
-bei jedem Verbinden erneut geöffnet. `identity_file` behält damit seine
-Rolle: Es merkt sich, **woher** der Schlüssel kam, und füttert den
-Export.
+**Was der Nutzer nach dem Import in der Hand hat** (Weg (a) aus §3.1.9):
+einen Server, der sich mit der Schlüsseldatei anmeldet, genau wie `ssh`
+es täte — und einen Knopf, der daraus einen im Schlüsselbund
+gespeicherten Schlüssel macht, wenn er das lieber hat. Beides kommt aus
+0076; diese Spec sorgt nur dafür, dass der Import dort richtig ankommt.
 
 ## 5. Sicherheits-Invarianten
 
@@ -471,12 +534,22 @@ Profile **Ausführungspfad** und **Filter-/Risiko-Bewertung**, und neu:
 **Dateizugriff auf Pfade, die aus einer fremden Datei stammen**. Daher
 `Review-Priorität: ERHÖHT`.
 
-**5.1 Kein Geheimnis wird gelesen oder geschrieben.** Der Import öffnet
-ausschließlich `ssh_config`-Dateien — die gewählte und die über
-`Include` erreichten. **Nie** eine Datei, auf die `IdentityFile` zeigt,
-und nie den Schlüsselbund zum Schreiben von Schlüsselmaterial. Der
-Export schreibt keinen Wert, der aus dem Schlüsselbund stammt.
-Nachgewiesen durch §6.4.1 und §6.4.2.
+**5.1 Eine Schlüsseldatei wird nur geöffnet, wenn der Nutzer es
+ausdrücklich verlangt hat — und nur die angekündigten.**
+
+- **Von sich aus** öffnet der Import ausschließlich `ssh_config`-Dateien:
+  die gewählte und die über `Include` erreichten.
+- Eine Datei, auf die `IdentityFile` zeigt, wird **nur** auf Weg (b)
+  aus §3.1.9 geöffnet, **nur beim Bestätigen** (nie in der Vorschau) und
+  **nur**, wenn die Vorschau sie vorher mit vollem Pfad genannt hat. Eine
+  Datei, die dort nicht stand, wird nicht geöffnet — auch dann nicht,
+  wenn sich die Konfigurationsdatei zwischenzeitlich geändert hat.
+- Auf Weg (b) geht der gelesene Inhalt **ausschließlich** in den
+  Schlüsselbund: nicht in den Importplan, nicht in die Datenbank, nicht
+  in ein Log, nicht in eine Fehlermeldung.
+- Der Export schreibt keinen Wert, der aus dem Schlüsselbund stammt.
+
+Nachgewiesen durch §6.4.1, §6.4.1a und §6.4.2.
 
 **5.2 Eine fremde Datei ändert keine Sicherheitseinstellung.**
 `post_ingest_policy` und `ai_injection_check_enabled` kommen
@@ -491,36 +564,50 @@ Import abgelehnt, nicht erst beim Verbinden — heute prüft das nur
 wollte. Der Import bringt die Prüfung nach vorn (§1.3). Nachgewiesen
 durch §6.4.4.
 
-**5.4 Gelesene Dateiinhalte bleiben auf dem Gerät — das ist die
-Invariante, die `Include` erst zulässig macht.**
+**5.4 Aus einer gelesenen Datei gelangt kein Inhalt nach draußen — auch
+nicht auf den Bildschirm.**
 
 Mit der Entscheidung E-4 bestimmt eine fremde Datei, welche weiteren
-Dateien wir öffnen, ohne Einschränkung der Pfade. Eine untergeschobene
-`ssh_config` kann also `Include /etc/passwd` enthalten, und wir lesen
-sie. Was das **nicht** ist: ein Weg, Daten abfließen zu lassen — der
-Nutzer kann diese Dateien ohnehin selbst lesen. Was es **wäre**, wenn
-wir nicht aufpassen: ein Weg, fremden Dateiinhalt irgendwohin zu
-befördern. Daraus folgen drei bindende Regeln:
+Dateien wir öffnen, ohne Einschränkung der Pfade. Das ist weniger
+dramatisch, als es zunächst klingt, und die Einordnung gehört in die
+Spec, damit sie nicht bei jeder Lesung neu erfunden wird:
 
-1. Der Inhalt gelesener Dateien, die Liste nicht übernommener
-   Direktiven (3.1.5) und die Dateiliste (3.1.4) **verlassen das Gerät
-   nicht**: nicht in eine Fehlermeldung nach außen, nicht in
-   Telemetrie, nicht in einen KI-Prompt, nicht in die Zwischenablage
-   ohne ausdrückliche Nutzeraktion.
-2. Nichts aus einer gelesenen Datei wird **ausgeführt**, interpretiert
-   oder als Kommando behandelt.
-3. Die Vorschau nennt **jede** gelesene Datei mit vollem Pfad (3.1.4).
-   Ein Nutzer, dem eine Datei untergeschoben wurde, sieht vor dem
-   Anlegen, was sie aufgemacht hat — das ist der Ersatz für die
-   Pfadprüfung, auf die wir verzichten.
+- **Keine Rechteausweitung.** Wir lesen mit den Rechten des Nutzers und
+  können nichts öffnen, was er nicht ohnehin selbst lesen kann.
+- **Keine Ausführung.** `ssh_config` ist Beschreibung, kein Programm. Es
+  gibt keinen Weg von einer Direktive zu einem Kommando.
+- **Was bleibt, ist die Anzeige.** Eine untergeschobene Konfiguration mit
+  `Include ~/.ssh/id_rsa` könnte fremden Inhalt in die Vorschau spülen,
+  wo er auf einem geteilten Bildschirm, in einem Screenshot oder in einem
+  Support-Anhang landet.
+
+**Diesen einen Kanal macht der Parser zu, nicht eine Liste von Verboten**
+(E-7):
+
+1. Eine eingebundene Datei ohne erkannte Direktive, mit NUL-Byte oder
+   ohne gültiges UTF-8 wird übersprungen (3.1.4a) — nicht Zeile für
+   Zeile gemeldet.
+2. Von einer nicht übernommenen Zeile wird nur der Direktivenname
+   gemeldet, nie ihr Wert (3.1.5).
+3. Übernommen werden ausschließlich die Werte aus §3.1.2 — und die
+   stehen ohnehin als Serverfelder in der Vorschau, dafür ist sie da.
+
+Ergänzend, weil es nichts kostet: Dateiliste und Direktivenliste gehen in
+**keinen** KI-Prompt, in keine Telemetrie und in kein Log außerhalb des
+Geräts. Und die Vorschau nennt jede gelesene Datei mit vollem Pfad
+(3.1.4) — wer eine untergeschobene Datei importiert, sieht vor dem
+Anlegen, was sie aufgemacht hat.
 
 Nachgewiesen durch §6.4.9.
 
-**5.5 Kein Pfad zu einer Schlüsseldatei wird aufgelöst.** Ein
-`IdentityFile`-Wert ist für uns eine Zeichenkette (§4.6): kein
+**5.5 Auf Weg (a) wird kein Pfad zu einer Schlüsseldatei aufgelöst.** Ein
+`IdentityFile`-Wert ist dann für uns eine Zeichenkette (§4.6): kein
 `realpath`, keine Existenzprüfung, kein Lesen. Damit gibt es weder
 Pfaddurchquerung noch ein Orakel darüber, welche Schlüssel auf dem
-Rechner liegen.
+Rechner liegen. Auf Weg (b) wird die Datei geöffnet — dann gelten die
+Prüfungen aus Spec 0076 (Dateirechte, symbolische Links, Gültigkeit des
+Schlüssels), und zwar dieselben wie beim Anlegen eines Servers von Hand.
+Der Import erfindet dafür keine eigenen, schwächeren Regeln.
 
 **5.6 Begrenzte Aufnahme.** §3.3, über alle Dateien zusammen, plus
 Tiefenbegrenzung und Schleifenerkennung (3.1.4). Eine überlange, tief
@@ -556,9 +643,9 @@ wie es die Architekturregel verlangt.
    Platzhalterblock → `root` bleibt stehen („der erste gewinnt").
 9. Ein Host passt auf `*.prod.de` und auf `*.de` → **zwei** Schlagworte.
 10. `Host *` erzeugt kein Schlagwort (3.1.3).
-11. Zwei `IdentityFile`-Zeilen in einem Block → der erste Wert steht im
-    Feld, der zweite in der Liste der nicht übernommenen Direktiven
-    (3.1.9).
+11. Zwei `IdentityFile`-Zeilen in einem Block → der erste Wert steht in
+    der Anmeldeart, der zweite in der Liste der nicht übernommenen
+    Direktiven (3.1.9).
 12. Kommentare und Leerzeilen ändern nichts.
 
 ### 6.2 Dateien, `Include`, Gruppen (in `app-shell`)
@@ -587,12 +674,18 @@ wie es die Architekturregel verlangt.
 1. Zwölf Hosts, Platzhalterblock, ein `ProxyJump` → Vorschau und
    Ergebnis stimmen Feld für Feld überein (BL-0216, Akzeptanz).
 2. **`ssh -F <datei> -G <host>`** gibt 0 zurück und meldet `hostname`,
-   `port`, `user`, `identityfile` wie erwartet (3.2.6). `-G` statt einer
-   echten Verbindung: prüft die Datei, braucht kein Netz.
-3. **Rundlauf:** Export → Import in einen leeren Bestand → Name,
-   Adresse, Port, Benutzer, Jump-Host-Kette und `identity_file` stimmen
-   mit dem Original überein (BL-0218, Akzeptanz). Gruppe, Schlagworte
-   und Notizen werden ausdrücklich **nicht** verglichen (§4.4).
+   `port`, `user` und — für einen Server mit `AuthMethod::IdentityFile`
+   — `identityfile` wie erwartet (3.2.6). `-G` statt einer echten
+   Verbindung: prüft die Datei, braucht kein Netz.
+3. **Rundlauf** (Import auf Weg (a)): Export → Import in einen leeren
+   Bestand → Name, Adresse, Port, Benutzer, Jump-Host-Kette **und der
+   Schlüsselpfad in der Anmeldeart** stimmen mit dem Original überein
+   (BL-0218, Akzeptanz). Gruppe, Schlagworte und Notizen werden
+   ausdrücklich **nicht** verglichen (§4.4).
+3a. **Rundlauf nach Weg (b):** Ein Server, dessen Schlüssel im
+   Schlüsselbund liegt, erzeugt beim Export **kein** `IdentityFile`,
+   sondern den Kommentar aus 3.2.3 — und die Datei enthält kein
+   Schlüsselmaterial (§6.4.2).
 4. Zweiter Import derselben Datei → **null** neue Profile und **keine**
    neue Gruppe (3.1.10).
 5. Namenskonflikt → Vorgabe „überspringen"; das bestehende Profil ist
@@ -612,12 +705,29 @@ wie es die Architekturregel verlangt.
 
 ### 6.4 Adversariale Fälle (Pflicht bei ERHÖHT)
 
-1. **Keine Schlüsseldatei wird gelesen.** Eine Konfiguration zeigt mit
+1. **Weg (a) liest keine Schlüsseldatei.** Eine Konfiguration zeigt mit
    `IdentityFile` auf eine im Test angelegte Datei mit erkennbarem
-   Inhalt. Nach dem Import: Der **Pfad** steht im Feld, der **Inhalt**
-   kommt nirgends vor — nicht im Plan, nicht im Profil, nicht in der
-   Datenbank, nicht im Log. Der Test scheitert, sobald jemand
-   „hilfsbereit" den Schlüssel einliest.
+   Inhalt. Nach einem Import in der Vorgabeeinstellung: Der **Pfad**
+   steht in der Anmeldeart, der **Inhalt** kommt nirgends vor — nicht im
+   Plan, nicht im Profil, nicht in der Datenbank, nicht im Log. Zusatz:
+   Die Datei wird im Test so präpariert, dass jedes Öffnen auffällt
+   (nicht lesbare Rechte), und der Import läuft trotzdem durch. Der Test
+   scheitert, sobald jemand „hilfsbereit" den Schlüssel einliest.
+
+1a. **Weg (b) liest genau die angekündigten Dateien und sonst keine.**
+   Drei Server mit `IdentityFile`, davon einer abgewählt. Nach dem
+   bestätigten Import: Die Schlüssel der zwei gewählten liegen im
+   Schlüsselbund, der dritte nicht; **der Inhalt keiner** der drei taucht
+   im Plan, in der Datenbank oder im Log auf (5.1). Weitere Fälle: eine
+   fehlende Datei, eine nicht lesbare Datei und eine Datei, die kein
+   gültiger Schlüssel ist → der jeweilige Server fällt auf Weg (a)
+   zurück, die anderen werden normal angelegt, und die Meldung nennt den
+   Grund (3.1.9).
+
+1b. **Die Vorschau öffnet nichts.** Derselbe Aufbau wie 1a, aber der
+   Nutzer bricht in der Vorschau ab. Keine der Schlüsseldateien wurde
+   geöffnet (nachgewiesen über Rechte oder Zugriffszeit), und im
+   Schlüsselbund liegt nichts (5.1).
 2. **Kein Geheimnis im Export.** Ein Server mit Passwort und ein Server
    mit hinterlegtem Schlüssel werden exportiert; die erzeugte Datei wird
    gegen die Leak-Muster und gegen die im Test gesetzten Werte geprüft —
@@ -654,16 +764,30 @@ wie es die Architekturregel verlangt.
 8. **Der lokale Pseudo-Server als Jump-Host.** Eine Konfiguration, deren
    `ProxyJump` auf den Namen des lokalen Servers zeigt → abgelehnt mit
    `SERVER_JUMP_HOST_LOCAL` (5.7).
-9. **Gelesener Fremdinhalt bleibt hier.** Eine Konfiguration mit
-   `Include` auf eine Datei, die kein `ssh_config` ist und eine
-   erkennbare Zeichenfolge enthält. Der Test prüft, dass diese
-   Zeichenfolge zwar in der Vorschau erscheinen **darf** (der Nutzer
-   soll sehen, was aufgemacht wurde), aber in **keinem** ausgehenden
-   Weg auftaucht: kein KI-Prompt, keine Telemetrie, keine
-   Fehlermeldung nach außen, kein Log außerhalb des Geräts (5.4).
-   Zugleich: der volle Pfad der Datei steht in der Vorschau.
+9. **Fremdinhalt erscheint nirgends, auch nicht in der Vorschau.** Vier
+   Fälle, je mit `Include` auf eine Datei, die kein `ssh_config` ist:
+   (a) ein privater Schlüssel im OpenSSH-Format; (b) eine Textdatei mit
+   einer erkennbaren Zeichenfolge; (c) eine Binärdatei mit NUL-Bytes;
+   (d) eine Datei mit ungültigem UTF-8. In **allen** Fällen gilt: Die
+   erkennbare Zeichenfolge bzw. jeder Byte-Inhalt der Datei taucht
+   **nirgends** auf — nicht in der Vorschau, nicht im Plan, nicht in
+   einer Meldung, nicht im Log (5.4, 3.1.4a). Was auftaucht, ist genau
+   zweierlei: der volle **Pfad** der Datei und der Satz
+   „keine ssh_config, übersprungen".
+
+9a. **Der Direktivenname verrät den Wert nicht.** Eine gültige
+   `ssh_config` mit `Compression yes` und einer Zeile
+   `UnknownDirective <geheimnisverdächtiger Wert>`. Die Liste der nicht
+   übernommenen Direktiven enthält `Compression` und
+   `UnknownDirective` mit Zeilennummern — und **keinen** der beiden
+   Werte (3.1.5).
 
 ## 7. Umsetzungsreihenfolge
+
+**Vorbedingung: Spec 0076 ist umgesetzt** — mindestens ihr Teil, der
+`AuthMethod::IdentityFile` einführt und persistiert. Ohne sie fehlt Weg
+(a) aus §3.1.9; der Import wäre dann auf (b) und (c) beschränkt und der
+Rundlauf (§6.3.3) nicht fahrbar.
 
 Jeder Schritt ist für sich committbar und lässt das Gate grün.
 
@@ -684,22 +808,22 @@ Tests, andere Innerei.
    Schleifenerkennung und Platzhalterpfaden (3.1.4), Gesamtgrenzen
    (§3.3), Gruppenbaum (§4.5). Tests §6.2, §6.4.5, §6.4.9. *(opus —
    hier liegt die neue Angriffsfläche)*
-3. **Persistenz**: Wanderung `0015_server_identity_file.sql` nach dem
-   Muster von `0014`; Feld durch `Server`, `ServerInput`, Speicher und
-   DTOs durchreichen. *(opus — Wanderung)*
-4. **Kommandos**: `preview_ssh_config_import`,
-   `apply_ssh_config_import`, `export_ssh_config`; Rollback für Profile
-   **und** Gruppen (3.1.11); `is_local` ausschließen. Tests §6.3.8–10,
-   §6.4.1, §6.4.2, §6.4.8. *(opus — Credential-Nähe)*
-5. **Schreiber** (Export) inklusive Alias-Regel (4.3) und Kommentaren
-   (3.2.3). Tests §6.3.1–3, §6.3.11–12. *(sonnet)*
-6. **Frontend**: Vorschau-Dialog mit Abwahl je Eintrag,
-   Konfliktanzeige, Dateiliste, Gruppenbaum, Liste der nicht
-   übernommenen Direktiven; Hinweis am `identity_file`-Feld (3.1.9);
-   Export-Dialog mit der `Include`-Zeile. i18n vollständig. *(sonnet)*
-7. **`CHANGELOG.md`** unter `[Unreleased]`, Nutzersicht. *(sonnet)*
+3. **Kommandos**: `preview_ssh_config_import`,
+   `apply_ssh_config_import`, `export_ssh_config`; die drei Wege aus
+   §3.1.9 inklusive Rückfall auf (a); Rollback für Profile **und**
+   Gruppen (3.1.11); `is_local` ausschließen. Tests §6.3.8–10, §6.4.1,
+   §6.4.1a, §6.4.1b, §6.4.2, §6.4.8. *(opus — Credential-Nähe, und der
+   einzige Schritt, in dem überhaupt eine Schlüsseldatei geöffnet wird)*
+4. **Schreiber** (Export) inklusive Alias-Regel (4.3) und Kommentaren
+   (3.2.3). Tests §6.3.1–3, §6.3.3a, §6.3.11–12. *(sonnet)*
+5. **Frontend**: Vorschau-Dialog mit Abwahl je Eintrag, Konfliktanzeige,
+   Dateiliste, Gruppenbaum, Liste der nicht übernommenen Direktiven; die
+   Wahl zwischen den drei Wegen aus §3.1.9 samt der Liste der Dateien,
+   die auf Weg (b) geöffnet würden; Export-Dialog mit der
+   `Include`-Zeile. i18n vollständig. *(sonnet)*
+6. **`CHANGELOG.md`** unter `[Unreleased]`, Nutzersicht. *(sonnet)*
 
-Der Rundlauftest (§6.3.3) läuft ab Schritt 5 und ist die Abnahme für
+Der Rundlauftest (§6.3.3) läuft ab Schritt 4 und ist die Abnahme für
 beide Items.
 
 ## 8. Offene Punkte
@@ -721,12 +845,24 @@ mit der Bedingung, dass Schritt 7.0 ihr Verhalten bei `Include`, `Match`
 und Platzhalterblöcken **misst**, bevor die Abhängigkeit steht.
 Eingearbeitet in §4.2 und §7.0.
 
-**2026-09-23 · E-2 · `IdentityFile`.** Stefan: Der Pfad wird in einem
-neuen Feld `identity_file` gemerkt und exportiert, aber von dieser Spec
-**nicht** zur Anmeldung benutzt; die dateibasierte Anmeldung wird
-**unmittelbar danach als eigene Spec 0076** geschrieben, nicht als
-Backlog-Item für später. Eingearbeitet in §1.2, §2 (Nicht-Ziel 4),
-§3.1.9, §4.6, §5.5 und §7.3.
+**2026-09-23 · E-2 · `IdentityFile`** *(ersetzt eine frühere Fassung
+desselben Punktes)*. Stefan: Eine Schlüsseldatei wird **als solche
+übernommen** und von der Platte gelesen — das ist eine **weitere
+Anmeldeart**, nicht ein Merkposten. Sie ist in der Oberfläche wählbar
+(„Privater Schlüssel" / „Schlüsseldatei"), sonst ließe sie sich nur durch
+einen Import erzeugen. Dazu kommt ein Knopf, der eine Schlüsseldatei mit
+einem Druck in einen gespeicherten Schlüssel überführt. Beim Import wird
+gefragt, was der Nutzer will.
+
+Daraus wurden **zwei Specs** (Stefan: „mach daraus mehrere specs wenn du
+willst"): **0076** führt die Anmeldeart, ihre Oberfläche und den
+Überführungsknopf ein; **0075** benutzt sie und stellt die Frage beim
+Import. 0076 wird zuerst umgesetzt (§7, Vorbedingung).
+
+Die frühere Fassung — Pfad in einem eigenen Feld merken, nicht benutzen —
+ist damit hinfällig. Sie hätte denselben Wert doppelt geführt (§4.6).
+Eingearbeitet in Kopf, §1.2, §2 (Nicht-Ziele 4 und 5), §3.1.2, §3.1.9,
+§3.2.1, §3.2.3, §4.6, §5.1, §5.5, §6.3.2–3a, §6.4.1/1a/1b und §7.
 
 **2026-09-23 · E-3 · Gruppen und Schlagworte.** Stefan: eine Gruppe je
 Import, darin je eine Untergruppe pro eingebundener Datei; die
@@ -741,18 +877,38 @@ höchstens 3, keine Schleifen, **keine Anzahlgrenze** für Dateien, und
 jede eingebundene Datei wird ein Ordner in Smart SSH. Eingearbeitet in
 §3.1.4, §4.5 und §5.4.
 
-**2026-09-23 · E-5 · Zuschnitt von Spec 0076.** Stefan: Zusammen mit der
-Unterstützung für Schlüsseldateien soll auch das **Anlegen** eines Servers
-mit Schlüsseldatei möglich sein; die Datei wird **eingelesen und im
-Schlüsselbund gespeichert**, und danach wird die Fassung aus dem
-Schlüsselbund benutzt. Damit ist 0076 kein neuer Anmeldeweg, sondern ein
-Dateidialog vor dem bestehenden `key_content`-Pfad — die Anmeldung selbst
-bleibt unverändert (`auth.rs:69`). Für diese Spec ändert sich nichts außer
-dem Ausblick in §4.6; die Grenze bleibt: **Spec 0075 öffnet keine
-Schlüsseldatei**, auch nicht die, deren Pfad sie gerade importiert hat.
-Das Einlesen ist in 0076 immer eine eigene, sichtbare Handlung des
-Nutzers — beim Anlegen über den Dateidialog, für importierte Server über
-eine Nachlese, die je Server zeigt, was gelesen würde.
+**2026-09-23 · E-5 · Zuschnitt von Spec 0076.** Aus E-2: 0076 umfasst
+(1) die Anmeldeart `AuthMethod::IdentityFile { path, passphrase_ref }`
+samt allem, was beim Verbinden daran hängt — Dateirechte, symbolische
+Links, Passphrase, fehlende Datei; (2) ihre Wahl in der Oberfläche beim
+**Anlegen und Bearbeiten** eines Servers, nicht nur über den Import;
+(3) den Knopf, der eine Schlüsseldatei einliest, den Inhalt in den
+Schlüsselbund legt und die Anmeldeart auf `PrivateKey` umstellt. Die
+Datei bleibt dabei unberührt; was sich ändert, ist nur, woher Smart SSH
+den Schlüssel nimmt.
+
+**2026-09-23 · E-6 · Wahl beim Import.** Stefan: „beim import können wir
+fragen, wie die es wollen." Umgesetzt als die drei Wege in §3.1.9, mit
+(a) als Vorgabe — es ist der einzige, der keine zusätzliche Datei
+öffnet, und der Nutzer kann jeden Server später einzeln mit dem Knopf
+aus 0076 umstellen. Die Wahl gilt für den ganzen Import und ist je
+Eintrag umstellbar.
+
+**2026-09-23 · E-7 · Der Parser filtert, statt dass Regeln es auffangen.**
+Stefan, zu E-4: „warum ist das mit den includes so gefährlich? sollte das
+der parser nicht filtern? also wenn die kein ssh format haben, ignoriert
+der die?" — Berechtigt, und die frühere Fassung von §5.4 hat die Gefahr
+überzeichnet und die Abhilfe an der falschen Stelle gesucht. Es gibt
+weder Rechteausweitung noch Ausführung; der einzige reale Kanal war die
+**Anzeige** — und zwar durch meine eigene Anforderung 3.1.5, die
+unbekannte Zeilen mitsamt Inhalt in die Vorschau geschrieben hätte.
+
+Umgesetzt: Eine eingebundene Datei, die keine `ssh_config` ist, wird
+übersprungen statt Zeile für Zeile gemeldet (3.1.4a), und von einer nicht
+übernommenen Zeile erscheint nur der Direktivenname, nie sein Wert
+(3.1.5). Damit kann kein Fremdinhalt mehr auf den Schirm, und §5.4 ist
+von einer Liste von Verboten auf eine Eigenschaft des Parsers
+geschrumpft. Zusätzliche Tests: §6.4.9 (vier Fälle) und §6.4.9a.
 
 *Anmerkung des Architekten zur Grenze:* „Unbegrenzt viele Dateien"
 bezieht sich auf die **Anzahl**. Die Gesamtgrenzen aus §3.3 (Bytes,
