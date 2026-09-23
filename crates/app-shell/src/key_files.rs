@@ -39,8 +39,31 @@ use ssh_transport::{classify_openssh_key, KeyClassification};
 /// `test_named_pipe_is_rejected_without_blocking` öffnet ein benanntes Rohr
 /// ohne Schreiber unter einem Timeout — stimmte die Konstante nicht, hinge
 /// der Test, statt grün zu werden.
-#[cfg(any(target_os = "linux", target_os = "android"))]
+///
+/// **Die Staffelung geht nach `target_arch`, nicht nur nach `target_os`**
+/// (spec-reviewer-Fund). Auf Linux gilt `0o4000` nur für die
+/// asm-generic-Architekturen; `mips` benutzt `0o200`, `sparc64` `0x4000`.
+/// Eine Staffelung allein nach `target_os` hätte dort einen **stillen
+/// falschen Wert** gesetzt — und das Fehlerbild wäre genau der von A-3
+/// verbotene Hänger gewesen, nicht ein Übersetzungsfehler. Deshalb sind die
+/// Architekturen aufgezählt: Was nicht aufgezählt ist, übersetzt nicht.
+#[cfg(all(
+    any(target_os = "linux", target_os = "android"),
+    any(
+        target_arch = "x86",
+        target_arch = "x86_64",
+        target_arch = "arm",
+        target_arch = "aarch64",
+        target_arch = "riscv32",
+        target_arch = "riscv64",
+        target_arch = "loongarch64",
+        target_arch = "s390x",
+        target_arch = "powerpc",
+        target_arch = "powerpc64"
+    )
+))]
 const O_NONBLOCK: i32 = 0o4000;
+
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
@@ -103,9 +126,18 @@ impl OsKeyFileReader {
             path: path.to_string(),
         };
 
+        // spec-reviewer-Fund: Der Backslash-Zweig fehlte. A-3 schränkt die
+        // Tilde-Auflösung auf keine Plattform ein, ein Windows-Nutzer tippt
+        // aber `~\.ssh\id_ed25519` — der wäre in den `~user`-Zweig gefallen
+        // und mit „absoluter Pfad nötig" abgelehnt worden, obwohl er ein
+        // völlig normales `~` gemeint hat.
+        let tilde_rest = path
+            .strip_prefix("~/")
+            .or_else(|| cfg!(windows).then(|| path.strip_prefix("~\\")).flatten());
+
         let expanded = if path == "~" {
             self.home_dir().ok_or_else(not_absolute)?
-        } else if let Some(rest) = path.strip_prefix("~/") {
+        } else if let Some(rest) = tilde_rest {
             let mut home = self.home_dir().ok_or_else(not_absolute)?;
             home.push(rest);
             home
@@ -135,10 +167,14 @@ impl OsKeyFileReader {
                 path: path.to_string(),
             },
             // Jeder andere Öffnungsfehler — fehlende Rechte, ein Pfad mit
-            // NUL-Byte (`InvalidInput`), ein kaputter Link — ist aus Sicht
-            // des Nutzers dasselbe: die Datei ist nicht lesbar. 5.4: Wir
-            // nennen den Grund, durchsuchen aber nichts und schlagen
+            // NUL-Byte (`InvalidInput`), eine zu lange Pfadkette — ist aus
+            // Sicht des Nutzers dasselbe: die Datei ist nicht lesbar. 5.4:
+            // Wir nennen den Grund, durchsuchen aber nichts und schlagen
             // nichts vor.
+            //
+            // (Ein **toter Symlink** gehört ausdrücklich nicht hierher: Der
+            // liefert `ENOENT` und landet damit oben bei „nicht gefunden" —
+            // was auch die ehrlichere Auskunft ist.)
             _ => KeyFileError::NotReadable {
                 path: path.to_string(),
             },
@@ -179,7 +215,10 @@ impl OsKeyFileReader {
 
         Ok(Probe {
             permissions_too_open,
-            content: read_and_classify(file, path),
+            // `meta.len()` ist hier bereits als `<= MAX_KEY_FILE_BYTES`
+            // bekannt und dient nur als Kapazitätshinweis — die
+            // verbindliche Grenze zieht `read_and_classify` selbst.
+            content: read_and_classify(file, path, meta.len()),
         })
     }
 }
@@ -209,11 +248,18 @@ fn open_readable(path: &Path) -> std::io::Result<File> {
     OpenOptions::new().read(true).open(path)
 }
 
-/// A-4/E-1: „genauso ablehnen wie `ssh`". OpenSSH prüft
+/// A-4/E-1: „genauso ablehnen wie `ssh`". OpenSSHs `sshkey_perm_ok` prüft
 /// `(st_mode & 077) != 0` — also **jedes** Recht für Gruppe oder Welt, nicht
-/// nur das Leserecht. Diese Fassung übernimmt die Regel wörtlich; sie ist
-/// damit eher strenger als die Formulierung „für Gruppe oder Welt lesbar"
-/// und in keinem Fall laxer.
+/// nur das Leserecht. Diese Fassung übernimmt genau diese Bedingung und ist
+/// damit strenger als die Formulierung „für Gruppe oder Welt lesbar" aus
+/// A-4.
+///
+/// **Was der Vergleich umfasst, und was nicht:** Verglichen werden die
+/// Rechte-Bits. OpenSSHs Eigentümer- und Pfadketten-Prüfungen
+/// (`safe_path`/`auth_secure_path`) gelten dort Konfigurations- und
+/// serverseitigen Dateien, nicht dem Schlüssel beim Client-Login; sie sind
+/// hier deshalb nicht nachgebildet. Die Dateiart prüft `probe` bereits
+/// eine Zeile vorher (`is_file`), ebenfalls auf dem Handle.
 ///
 /// Auf Windows entfällt die Prüfung, wie bei OpenSSH selbst.
 #[cfg(unix)]
@@ -241,14 +287,28 @@ fn permission_facts(_meta: &std::fs::Metadata) -> (bool, u32) {
 /// Zwischenform ist unvermeidbar — eine `SecretString` entsteht über einen
 /// `String`, also über eine UTF-8-Prüfung —, wird aber kurz gehalten und
 /// auf jedem Fehlerpfad überschrieben.
-fn read_and_classify(mut file: File, path: &str) -> Result<KeyFileContent, KeyFileError> {
+///
+/// `size_hint` kommt aus dem `fstat` desselben Handles und dient **nur**
+/// der Vorab-Reservierung. Grund (spec-reviewer-Fund): Ein wachsender `Vec`
+/// realloziert, und die dabei freigegebenen Zwischenpuffer enthalten
+/// Schlüsselmaterial, das `zeroize` am Ende nicht mehr erreicht — es kennt
+/// nur den letzten Puffer. Mit der richtigen Kapazität von Anfang an gibt
+/// es diese Zwischenpuffer im Regelfall gar nicht erst. Die
+/// **verbindliche** Grenze bleibt das `take` unten; `size_hint` ist ein
+/// Hinweis, keine Zusicherung.
+fn read_and_classify(
+    mut file: File,
+    path: &str,
+    size_hint: u64,
+) -> Result<KeyFileContent, KeyFileError> {
     use secrecy::zeroize::Zeroize;
 
     let invalid = || KeyFileError::InvalidKey {
         path: path.to_string(),
     };
 
-    let mut buf = Vec::new();
+    let capacity = size_hint.saturating_add(1).min(MAX_KEY_FILE_BYTES + 1) as usize;
+    let mut buf = Vec::with_capacity(capacity);
     let read_result = file
         .by_ref()
         .take(MAX_KEY_FILE_BYTES + 1)
@@ -665,21 +725,100 @@ mod tests {
 
     /// §6.2.7/§6.4.6: Ein Zeichengerät meldet Größe 0 und käme durch jede
     /// Größenprüfung — `/dev/zero` würde beim Lesen endlos liefern.
+    ///
+    /// spec-reviewer-Fund: Hier stand zusätzlich `/dev/stdin`, und die
+    /// Zusicherung war auf `NotARegularFile | NotReadable` aufgeweicht, um
+    /// es unterzubringen. Beides ist jetzt weg. `/dev/stdin` ist kein
+    /// tauglicher Prüfstein: Läuft `cargo test` mit umgeleitetem stdin aus
+    /// einer **regulären** Datei, ist `/dev/stdin` eine reguläre Datei, und
+    /// der Test hing an der Umgebung statt am Code. `/dev/zero` ist immer
+    /// ein Zeichengerät — und die Zusicherung darf deshalb scharf sein.
     #[test]
     #[cfg(unix)]
     fn test_character_device_is_rejected() {
-        for device in ["/dev/zero", "/dev/stdin"] {
-            let err = reader()
-                .read(device, false)
+        let err = reader()
+            .read("/dev/zero", false)
+            .err()
+            .expect("/dev/zero ist keine reguläre Datei");
+
+        assert!(
+            matches!(err, KeyFileError::NotARegularFile { .. }),
+            "erwartet NotARegularFile, bekam {err:?}"
+        );
+    }
+
+    /// §6.2.6, **zweite Hälfte** — die verbindliche Grenze.
+    ///
+    /// spec-reviewer-Fund: `test_file_larger_than_the_limit_is_rejected`
+    /// oben legt eine Datei an, deren `fstat` schon über der Grenze liegt;
+    /// sie wird von der Abkürzung in `probe` abgefangen und erreicht die
+    /// Lesegrenze **nie**. A-3 nennt aber ausdrücklich die Lesegrenze als
+    /// die verbindliche — und die war damit ungetestet.
+    ///
+    /// Dieser Test ruft `read_and_classify` deshalb direkt auf, mit einem
+    /// `size_hint` von 0 (so, wie ein Objekt sich meldet, das seine Größe
+    /// verschweigt und trotzdem liefert). Er scheitert, sobald jemand die
+    /// Lesegrenze für überflüssig hält, weil „`fstat` das ja schon prüft".
+    #[test]
+    fn test_the_read_limit_holds_even_when_fstat_understates_the_size() {
+        let dir = TempDir::new().unwrap();
+        let oversized = "A".repeat((MAX_KEY_FILE_BYTES + 1024) as usize);
+        let path = write_file(dir.path(), "understated", &oversized, 0o600);
+        let handle = File::open(&path).unwrap();
+
+        let err = read_and_classify(handle, &as_str(&path), 0)
+            .err()
+            .expect("über 1 MiB wird nicht gelesen, egal was fstat behauptet");
+
+        assert!(
+            matches!(err, KeyFileError::TooLarge { .. }),
+            "erwartet TooLarge, bekam {err:?}"
+        );
+    }
+
+    /// §6.2.9, vollständig: `inspect` liefert für dieselben Dateien
+    /// denselben Befund, den `read` zurückmeldet — **inklusive `problem`**
+    /// bei relativem Pfad, fehlender Datei, zu großer Datei und
+    /// Nicht-Datei.
+    ///
+    /// spec-reviewer-Fund: Diese vier Fälle waren gegen die echte
+    /// Umsetzung ungetestet; geprüft wurde nur gegen die Attrappe. Damit
+    /// war insbesondere `inspect`s `exists`-Ableitung ungeprüft — und die
+    /// ist es, die der Oberfläche „Datei fehlt" von „Datei taugt nicht"
+    /// unterscheiden hilft (B-3).
+    #[test]
+    fn test_inspect_reports_the_same_problem_that_read_returns() {
+        let dir = TempDir::new().unwrap();
+        let missing = as_str(&dir.path().join("does_not_exist"));
+        let oversized = "A".repeat((MAX_KEY_FILE_BYTES + 1024) as usize);
+        let too_large = as_str(&write_file(dir.path(), "huge", &oversized, 0o600));
+        let a_directory = as_str(dir.path());
+
+        let cases = [
+            ("relativer Pfad", "relative/id_ed25519".to_string(), false),
+            ("fehlende Datei", missing, false),
+            ("zu große Datei", too_large, true),
+            ("Verzeichnis", a_directory, true),
+        ];
+
+        for (label, path, expected_exists) in cases {
+            let from_read = reader()
+                .read(&path, true)
                 .err()
-                .expect("{device} ist keine reguläre Datei");
-            assert!(
-                matches!(
-                    err,
-                    KeyFileError::NotARegularFile { .. } | KeyFileError::NotReadable { .. }
-                ),
-                "{device}: erwartet NotARegularFile/NotReadable, bekam {err:?}"
+                .unwrap_or_else(|| panic!("{label}: muss scheitern"));
+            let facts = reader().inspect(&path);
+
+            assert_eq!(
+                facts.problem.as_ref(),
+                Some(&from_read),
+                "{label}: inspect muss denselben Grund melden wie read"
             );
+            assert_eq!(
+                facts.exists, expected_exists,
+                "{label}: exists unterscheidet „gibt es nicht“ von „taugt nicht“"
+            );
+            assert!(!facts.valid_key, "{label}");
+            assert!(!facts.encrypted, "{label}");
         }
     }
 
@@ -697,9 +836,19 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let fifo = dir.path().join("pipe");
         let Some(()) = make_fifo(&fifo) else {
-            // Kein `mkfifo` auf diesem System — dann gibt es auch nichts
-            // zu prüfen. Sichtbar übersprungen, nicht still grün.
-            eprintln!("mkfifo nicht verfügbar — §6.2.7 (Rohr) übersprungen");
+            // spec-reviewer-Fund: Hier stand ein `eprintln!` und ein
+            // stilles `return`. Damit wäre auf einem Runner ohne `mkfifo`
+            // der **einzige** Nachweis für den Wert der selbst gehaltenen
+            // `O_NONBLOCK`-Konstante spurlos verschwunden, und niemand
+            // hätte es gemerkt. Auf den Plattformen, die wir ausliefern,
+            // gehört `mkfifo` zum Grundbestand — fehlt es, ist das ein
+            // Befund, kein Grund zum Weitergehen.
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            panic!(
+                "mkfifo nicht verfügbar — damit fehlt der einzige Nachweis, dass die \
+                 selbst gehaltene O_NONBLOCK-Konstante auf dieser Plattform stimmt"
+            );
+            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
             return;
         };
         let path = as_str(&fifo);
@@ -871,19 +1020,36 @@ mod tests {
     /// §6.4.3, auf Ebene der Leseumsetzung: Was nicht gelesen werden darf,
     /// ergibt **einen Fehler** — nie einen leeren oder ersatzweisen
     /// Schlüssel, mit dem die Anmeldung dann doch weiterliefe (5.3).
+    ///
+    /// spec-reviewer-Fund: Von den vier in §6.4.3 namentlich genannten
+    /// Fällen standen hier nur zwei; „Rechte zu weit" und „zu groß" fehlten
+    /// (sie existierten zwar als eigene Tests, aber nicht unter dieser
+    /// Zusicherung). Jetzt sind alle vier beisammen.
     #[test]
     fn test_a_failed_check_never_yields_a_usable_key() {
         let dir = TempDir::new().unwrap();
         let missing = as_str(&dir.path().join("does_not_exist"));
+        let valid_key = test_keys::unencrypted_private_key();
+        #[cfg(unix)]
+        let too_open = as_str(&write_file(dir.path(), "too_open", &valid_key, 0o644));
+        let _ = &valid_key;
+        let oversized = "A".repeat((MAX_KEY_FILE_BYTES + 1024) as usize);
+        let too_large = as_str(&write_file(dir.path(), "too_large", &oversized, 0o600));
 
-        for (case, path, enforce) in [
-            ("fehlende Datei", missing.as_str(), true),
-            ("relativer Pfad", "relative/id_ed25519", true),
-            ("Verzeichnis", dir.path().to_str().unwrap(), true),
-        ] {
-            let result = reader().read(path, enforce);
+        let cases = [
+            ("fehlende Datei", missing),
+            ("relativer Pfad", "relative/id_ed25519".to_string()),
+            ("Verzeichnis", as_str(dir.path())),
+            ("zu große Datei", too_large),
+            // Unter Windows entfällt die Rechteprüfung (A-4) — dort ist
+            // dieser Fall gegenstandslos und die Datei schlicht lesbar.
+            #[cfg(unix)]
+            ("Rechte zu weit", too_open),
+        ];
+
+        for (case, path) in cases {
             assert!(
-                result.is_err(),
+                reader().read(&path, true).is_err(),
                 "{case}: 5.3 verlangt Abbruch, kein Ersatzschlüssel"
             );
         }

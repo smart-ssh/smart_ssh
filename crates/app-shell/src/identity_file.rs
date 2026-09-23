@@ -94,7 +94,19 @@ pub async fn convert_identity_file_to_keychain(
     // also nichts liegen; falls doch, wird es wiederhergestellt statt
     // gelöscht. Ein Rollback, der fremde Daten entfernt, wäre kein
     // Rollback.
-    let previous = credential_store.get(&key_ref).ok();
+    //
+    // spec-reviewer-Fund: Hier stand `…get(&key_ref).ok()`. Das machte aus
+    // „der Schlüsselbund konnte nicht antworten" dasselbe wie „der Slot ist
+    // leer" — und ein späterer Rollback hätte dann **gelöscht**, statt
+    // wiederherzustellen. Genau das Gegenteil dessen, was der Absatz
+    // darüber zusichert. Ein `Backend`-Fehler bricht deshalb **vor** dem
+    // Schreiben ab: Wer nicht weiß, was er überschreibt, überschreibt
+    // nichts.
+    let previous = match credential_store.get(&key_ref) {
+        Ok(value) => Some(value),
+        Err(CredentialError::NotFound(_)) => None,
+        Err(err) => return Err(keychain_aware_credential_error(err, keychain)),
+    };
 
     // Schritt 2 (C-4): byte-gleich, ohne Trimmen. `write_or_reuse_secret`
     // scheidet deshalb aus — die trimmt, und §6.4.5 verlangt Byte-Gleichheit
@@ -111,25 +123,54 @@ pub async fn convert_identity_file_to_keychain(
 
     // Schritt 4 (C-6, zweite Richtung).
     if let Err(err) = store.update_server(&server).await {
-        roll_back_key_slot(credential_store, &key_ref, previous);
-        return Err(err.into());
+        let command_error = CommandError::from(err);
+        // spec-reviewer-Fund: Scheitert der Rollback selbst, bleibt ein
+        // privater Schlüssel im Schlüsselbund liegen, auf den kein Server
+        // zeigt — genau der Zustand, den C-6 ausschließt. Das nur ins Log
+        // zu schreiben wäre dasselbe falsche Erfolgssignal, das Spec 0071
+        // A17 an anderer Stelle bereits abgeräumt hat: Der Nutzer bekäme
+        // „Speichern fehlgeschlagen" und wüsste nicht, dass etwas
+        // zurückblieb. Also sagen wir es ihm.
+        if roll_back_key_slot(credential_store, &key_ref, previous) == Rollback::LeftBehind {
+            return Err(CommandError::with_code(
+                format!(
+                    "{} Außerdem konnte der bereits in den Schlüsselbund geschriebene \
+                     Schlüssel nicht wieder entfernt werden — der Eintrag „{}“ ist dort \
+                     liegen geblieben und kann von Hand gelöscht werden.",
+                    command_error.message,
+                    key_ref.as_str()
+                ),
+                crate::error::KEYCHAIN_UNAVAILABLE,
+            ));
+        }
+        return Err(command_error);
     }
 
     Ok(ServerDto::from_server(&server, credential_store))
 }
 
+/// Ob der Rollback den Schlüsselbund wieder in den Ausgangszustand
+/// gebracht hat — oder ob dort etwas liegen geblieben ist, das der Nutzer
+/// erfahren muss (C-6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Rollback {
+    Clean,
+    LeftBehind,
+}
+
 /// Nimmt Schritt 2 zurück: den vorherigen Wert wiederherstellen, oder — wenn
 /// es keinen gab — den Slot leeren.
 ///
-/// Best-effort wie die übrigen Rollbacks dieser Crate (s.
-/// `server_credentials::delete_all_possible_server_secrets`): Klemmt der
-/// Schlüsselbund ausgerechnet jetzt, gibt es nichts mehr zu tun außer es
-/// aufzuschreiben. Still verschwinden darf es nicht.
+/// Gibt zurück, ob das gelungen ist. Der Aufrufer sagt es weiter, statt es
+/// nur ins Log zu schreiben: Ein liegen gebliebener privater Schlüssel, auf
+/// den kein Server zeigt, ist genau der halbe Zustand, den C-6 ausschließt
+/// — und „Speichern fehlgeschlagen" allein verschweigt ihn.
+#[must_use]
 fn roll_back_key_slot(
     credential_store: &(dyn CredentialStore + Send + Sync),
     key_ref: &CredentialRef,
     previous: Option<SecretString>,
-) {
+) -> Rollback {
     let outcome = match previous {
         Some(value) => credential_store.set(key_ref, value),
         None => match credential_store.delete(key_ref) {
@@ -137,13 +178,16 @@ fn roll_back_key_slot(
             other => other,
         },
     };
-    if let Err(err) = outcome {
-        tracing::warn!(
-            credential_ref = %key_ref.as_str(),
-            error = %err,
-            "Rollback der Schlüsselbund-Überführung fehlgeschlagen: möglicherweise \
-             verwaister Eintrag"
-        );
+    match outcome {
+        Ok(()) => Rollback::Clean,
+        Err(err) => {
+            tracing::warn!(
+                credential_ref = %key_ref.as_str(),
+                error = %err,
+                "Rollback der Schlüsselbund-Überführung fehlgeschlagen: verwaister Eintrag"
+            );
+            Rollback::LeftBehind
+        }
     }
 }
 
@@ -454,6 +498,80 @@ mod tests {
         assert_eq!(
             stored(&credential_store, &key_slot(id)).as_deref(),
             Some("etwas-das-schon-da-war")
+        );
+    }
+
+    /// **spec-reviewer-Fund:** Kann der Schlüsselbund beim Lesen des
+    /// Ziel-Slots nicht antworten, wird **vor** dem Schreiben abgebrochen.
+    ///
+    /// Vorher stand hier `…get(&key_ref).ok()`, was „kann nicht antworten"
+    /// mit „ist leer" gleichsetzte — ein späterer Rollback hätte dann
+    /// gelöscht statt wiederhergestellt. Wer nicht weiß, was er
+    /// überschreibt, überschreibt nichts.
+    #[tokio::test]
+    async fn test_an_unreadable_target_slot_aborts_before_anything_is_written() {
+        let id = ServerId::new();
+        let profile_store = InMemoryProfileStore::new().with_server(identity_server(id, None));
+        let credential_store = InMemoryCredentialStore::new()
+            .with_secret(&key_slot(id), "etwas-das-schon-da-war")
+            .with_failing_get();
+        let key_files = MockKeyFileReader::new().with_key(PATH, "the-key-bytes");
+
+        convert_identity_file_to_keychain(
+            &profile_store,
+            &credential_store,
+            AVAILABLE,
+            &key_files,
+            id,
+        )
+        .await
+        .expect_err("ein nicht antwortender Schlüsselbund ist kein „Slot ist leer“");
+
+        assert!(
+            matches!(
+                profile_store.get_server(&id).await.unwrap().auth,
+                AuthMethod::IdentityFile { .. }
+            ),
+            "der Server bleibt unverändert"
+        );
+    }
+
+    /// **spec-reviewer-Fund (C-6):** Scheitert der Rollback selbst, bleibt
+    /// ein privater Schlüssel im Schlüsselbund liegen, auf den kein Server
+    /// zeigt. Das ist der halbe Zustand, den C-6 ausschließt — und der
+    /// Nutzer muss davon erfahren, statt nur „Speichern fehlgeschlagen" zu
+    /// lesen (dieselbe Linie wie Spec 0071, A17).
+    ///
+    /// Der Test scheitert, sobald der Rückstand wieder nur ins Log wandert.
+    #[tokio::test]
+    async fn test_a_failed_rollback_tells_the_user_what_stayed_behind() {
+        let id = ServerId::new();
+        let profile_store = InMemoryProfileStore::new()
+            .with_server(identity_server(id, None))
+            .with_failing_update_server();
+        let credential_store = InMemoryCredentialStore::new().with_failing_delete();
+        let key_files = MockKeyFileReader::new().with_key(PATH, "the-key-bytes");
+
+        let err = convert_identity_file_to_keychain(
+            &profile_store,
+            &credential_store,
+            AVAILABLE,
+            &key_files,
+            id,
+        )
+        .await
+        .expect_err("das Speichern schlägt fehl");
+
+        assert!(
+            err.message.contains(key_slot(id).as_str()),
+            "die Meldung muss den liegen gebliebenen Eintrag benennen: {}",
+            err.message
+        );
+        assert_eq!(err.code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
+        // Der Test taugt nur, wenn der Eintrag tatsächlich stehen bleibt.
+        assert_eq!(
+            stored(&credential_store, &key_slot(id)).as_deref(),
+            Some("the-key-bytes")
         );
     }
 
