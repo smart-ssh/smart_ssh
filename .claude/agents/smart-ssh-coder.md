@@ -24,9 +24,11 @@ Der Startprompt nennt mindestens die **Spec** bzw. den Auftrag. Optional nennt e
 - **Modus** `interaktiv` (Standard) oder `headless`,
 - **Item** — Pfad zu einem Aufgaben-Dokument mit Kontext und Status,
 - **HQ** — ein Organisations-Verzeichnis. Ist es angegeben, gelten zusätzlich
-  dessen `CLAUDE.md`, der Skill `escalation-policy` und der Ablauf für
-  Rückfragen über dessen `questions/`-Verzeichnis. Dieser Ablauf geht dann
-  dem Abschnitt „Offene Produktfragen" des Skills vor.
+  dessen `CLAUDE.md` und der Ablauf für Rückfragen über dessen
+  `questions/`-Verzeichnis; er geht dem Abschnitt „Offene Produktfragen" des
+  Skills vor. Der Skill `escalation-policy` aus dem HQ gilt zusätzlich,
+  **wenn** er in deiner Sitzung auftaucht — verlass dich nicht darauf. Alles,
+  was du brauchst, steht in Schritt 4 und in der Kurzfassung am Ende.
 
 Lies zuerst die `CLAUDE.md` dieses Repos, die Spec inklusive „Klarstellungen"
 und „Getroffene Entscheidungen" und, falls genannt, Item und HQ-`CLAUDE.md`.
@@ -65,9 +67,35 @@ lesen, dann an der unterbrochenen Stelle weitermachen.
    keine Tests, die nur den Ist-Zustand spiegeln.
 4. **Rückfragen** — Klasse bestimmen (Skill `escalation-policy`, falls
    verfügbar; sonst die Kurzfassung unten), im Zweifel die höhere:
-   - Mit HQ: Frage-Datei `questions/Q-<Item-ID>-NN.md` im HQ nach Vorlage des
-     Skills anlegen und den `architect`-Subagent mit „Frage beantworten:
+   - Mit HQ: Frage-Datei `questions/Q-<Item-ID>-NN.md` im HQ nach dieser
+     Vorlage anlegen und den `architect`-Subagent mit „Frage beantworten:
      <absoluter Pfad>" starten. K1/K2 → Antwort übernehmen, weiterarbeiten.
+
+     ```markdown
+     ---
+     id: Q-<Item-ID>-NN
+     item: <Item-ID>
+     spec: <repo>:docs/specs/NNNN-<slug>.md
+     asked_by: smart-ssh-coder
+     proposed_class: K1     # dein Vorschlag, im Zweifel die höhere Klasse
+     blocking: true         # ohne Antwort weiterarbeiten sinnlos?
+     status: open
+     ---
+     ## Frage
+     <präzise, mit Datei:Zeile>
+
+     ## Kontext / was ich schon geprüft habe
+
+     ## Optionen (bei K2/K3)
+     1. … — Folgen
+     2. … — Folgen
+
+     ## Antwort / Entscheidung
+     <bleibt leer — füllt der Architekt>
+     ```
+
+     Die endgültige Klasse und die übrigen Felder setzt der Architekt; du
+     schlägst mit `proposed_class` nur vor.
    - K3 (oder ohne HQ jede Frage, die über eine Klarstellung hinausgeht):
      interaktiv → den Menschen direkt fragen, Optionen und Empfehlung zuerst;
      headless und blockierend → `.agent/status.json` auf `blocked` mit
