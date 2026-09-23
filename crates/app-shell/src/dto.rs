@@ -277,9 +277,15 @@ impl AiProviderConfigInput {
     /// `White_Space`-Eigenschaft weg (BOM, Zero-Width-Space und die
     /// weiteren aus `INVISIBLE_CREDENTIAL_EDGE_CHARS`), wie sie beim
     /// Kopieren aus einer Datei mit BOM oder von einer Webseite an einem
-    /// Key hängen. Ausdrücklich **nicht** angefasst werden
-    /// `display_name` und `model`: Der Helfer gilt für Zugangsdaten und
-    /// Endpunkte, nicht für Anzeigetexte (T12).
+    /// Key hängen. Die Spec nennt genau diese drei Felder; `display_name`
+    /// ist ein Anzeigetext und bleibt unangetastet (T12).
+    ///
+    /// `model` bleibt hier ebenfalls unangetastet — das ist **kein**
+    /// Ergebnis dieser Spec, sondern der Stand vor ihr. Ob ein Modellname
+    /// mit Randzeichen getrimmt gehört (er geht in jeden Provider-Request
+    /// und in `provider_identity_key`, ein Randzeichen ergibt also ein
+    /// `AI_MODEL_NOT_FOUND` ohne sichtbaren Grund), ist eine offene
+    /// Produktfrage, s. ADR 0064.
     pub fn trimmed(mut self) -> Self {
         self.api_key = trim_credential_value(&self.api_key);
         self.base_url = self.base_url.map(|v| trim_credential_value(&v));
@@ -520,11 +526,16 @@ pub struct ServerInput {
 ///
 // ANNAHME A-1 (Q-BL-0149-01): Diese Stelle steht in der §1-Tabelle von Spec
 // 0073, ist aber kein Zugangsdaten-Wert, sondern ein Pfad-Override für den
-// erhöhten Dateibrowser. Sie bleibt deshalb vorerst bei `str::trim`. Ein
-// unsichtbares Randzeichen führt hier heute zu einer Ablehnung durch
-// `is_plausible_sftp_server_path`, nicht zu einer Bereinigung — die Prüfung
-// selbst bliebe in beiden Fällen unverändert und liefe auf demselben
-// Endwert. Die Entscheidung dazu ist offen, s. ADR 0064.
+// erhöhten Dateibrowser — er landet in einem `sudo`-Kommando. Sie bleibt
+// deshalb vorerst bei `str::trim`, bis die Frage entschieden ist (ADR 0064).
+//
+// Der Unterschied ist **nicht** kosmetisch: `"/usr/lib/sftp-server\u{200B}"`
+// wird heute abgelehnt (das ZWSP übersteht `str::trim` und fällt dann durch
+// `is_plausible_sftp_server_path`), mit dem Helfer würde derselbe Pfad
+// bereinigt und angenommen. Die Prüfung selbst bleibt in beiden Fassungen
+// unverändert und läuft in beiden Fassungen nach dem Trimmen, der
+// angenommene Endwert ist also in jedem Fall voll validiert; es ändert sich
+// aber, ob eine solche Eingabe als Fehler oder als bereinigter Pfad endet.
 pub fn normalize_sftp_server_path(input: Option<String>) -> Result<Option<String>, String> {
     let Some(raw) = input else {
         return Ok(None);
@@ -1398,16 +1409,18 @@ mod tests {
     }
 
     // Spec 0073, T12: Der Helfer gilt für Zugangsdaten und Endpunkte, nicht
-    // für Anzeigetexte. Ein Anzeigename (und ein Modellname) mit einem
-    // Zero-Width-Space bleibt unverändert — auch der Rand.
+    // für Anzeigetexte. Ein Anzeigename mit einem Zero-Width-Space bleibt
+    // unverändert — auch am Rand.
+    //
+    // Bewusst nur `display_name`: Ob `model` getrimmt gehört, ist eine
+    // offene Frage (ADR 0064) und wird hier nicht durch eine Assertion
+    // vorentschieden.
     #[test]
-    fn test_t12_display_name_and_model_are_not_trimmed() {
+    fn test_t12_display_name_is_not_trimmed() {
         let mut input = ai_provider_config_input("sk-key", None);
         input.display_name = "\u{200B}Mein Provider\u{200B}".to_string();
-        input.model = " claude-sonnet-5 ".to_string();
         let config = input.trimmed();
         assert_eq!(config.display_name, "\u{200B}Mein Provider\u{200B}");
-        assert_eq!(config.model, " claude-sonnet-5 ");
     }
 
     // --- Spec 0065, Teil 4: max_tokens_override-Validierung -------------

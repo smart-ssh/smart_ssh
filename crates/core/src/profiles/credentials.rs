@@ -109,6 +109,49 @@ mod tests {
         assert_eq!(trim_credential_value("sk-key\r"), "sk-key");
     }
 
+    // Spec 0073, I3: Der Helfer darf nie *weniger* entfernen als
+    // `str::trim`. `str::trim` entfernt genau die Zeichen mit der
+    // Unicode-Eigenschaft `White_Space`, also genau `char::is_whitespace`.
+    //
+    // Dieser Test prüft das über den **gesamten** Unicode-Bereich statt an
+    // einer Handvoll Beispiele. Grund: Die übrigen Tests kommen mit Space,
+    // Tab, `\r` und `\n` aus — würde jemand `c.is_whitespace()` später
+    // durch das naheliegend wirkende `c.is_ascii_whitespace()` ersetzen,
+    // bliebe die ganze Suite grün, während I3 gebrochen wäre. Betroffen
+    // wären u. a. U+00A0 (geschütztes Leerzeichen, der klassische
+    // Web-Copy-Paste), U+3000 und U+2028.
+    #[test]
+    fn test_i3_every_unicode_whitespace_char_is_still_trimmed() {
+        let mut checked = 0_u32;
+        for code in 0..=0x10_FFFF_u32 {
+            let Some(c) = char::from_u32(code) else {
+                continue;
+            };
+            if !c.is_whitespace() {
+                continue;
+            }
+            checked += 1;
+            let input = format!("{c}a{c}");
+            assert_eq!(
+                trim_credential_value(&input),
+                "a",
+                "U+{code:04X} ist Unicode-Whitespace und muss weiterhin fallen (I3)"
+            );
+            // Gegenprobe zur Referenz: Was `str::trim` entfernt hätte, muss
+            // auch der Helfer entfernen.
+            assert_eq!(trim_credential_value(&input), input.trim());
+        }
+        assert!(
+            checked > 20,
+            "es wurden nur {checked} Whitespace-Zeichen geprüft — der Test läuft ins Leere"
+        );
+        // Die drei namentlich genannten Fälle, damit ein Fehlschlag sie
+        // sofort zeigt statt nur einen Codepunkt.
+        assert_eq!(trim_credential_value("\u{00A0}sk-key\u{00A0}"), "sk-key");
+        assert_eq!(trim_credential_value("\u{3000}sk-key"), "sk-key");
+        assert_eq!(trim_credential_value("\u{2028}sk-key"), "sk-key");
+    }
+
     // Spec 0073, T3: je ein Fall für jedes Zeichen aus A1, am Anfang, am
     // Ende und beidseitig. Scheitert gegen den Stand vor dieser Spec.
     #[test]
@@ -224,17 +267,12 @@ mod tests {
     }
 
     // Spec 0073, X2: dieselbe Länge, aber ohne Nutzzeichen — leerer
-    // String, keine Panik, keine Unterlauf-Arithmetik an den Enden.
+    // String, keine Panik, keine Unterlauf-Arithmetik an den Enden. Hier
+    // ohne Zeitschranke: X2 verlangt sie nicht, X1 deckt die Laufzeit ab.
     #[test]
     fn test_x2_edge_chars_only_at_full_length_becomes_empty() {
         let input = "\u{200B}".repeat(100_000);
-
-        let started = std::time::Instant::now();
-        let result = trim_credential_value(&input);
-        let elapsed = started.elapsed();
-
-        assert_eq!(result, "");
-        assert!(elapsed < std::time::Duration::from_secs(5), "{elapsed:?}");
+        assert_eq!(trim_credential_value(&input), "");
     }
 
     // Spec 0073, X3: Die Liste aus A1 ist bewusst **endlich**. U+2800
