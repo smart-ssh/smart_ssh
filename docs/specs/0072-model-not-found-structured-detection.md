@@ -257,7 +257,7 @@ nicht „keine Modelle". Der bestehende Pfad über `map_http_status` bleibt.
   einmal in der Anfrage.
 
 **Nicht Teil dieser Spec:** *wann* die Erkennung ausgelöst wird (Knopf
-gegen automatisch nach Key-Eingabe). Das ist BL-0214 und berührt die
+gegen automatisch nach Key-Eingabe). Das ist BL-0220 und berührt die
 Invariante „kein Netzwerkaufruf ohne Nutzeraktion" (BL-0042).
 
 ---
