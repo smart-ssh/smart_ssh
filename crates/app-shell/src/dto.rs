@@ -16,8 +16,8 @@ use ssh_manager_core::filter::{
     Decision, EvalContext, EvaluationTrace, Pattern, RuleAction, RuleId, Scope,
 };
 use ssh_manager_core::profiles::{
-    AuthMethod, CredentialError, CredentialRef, CredentialStore, Group, GroupId, NoteEditor,
-    NoteRevision, PostIngestPolicy, Server,
+    trim_credential_value, AuthMethod, CredentialError, CredentialRef, CredentialStore, Group,
+    GroupId, NoteEditor, NoteRevision, PostIngestPolicy, Server,
 };
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::RemoteEntry;
@@ -270,10 +270,20 @@ impl AiProviderConfigInput {
     /// `Some("")` nach dem Trimmen) bleibt unverändert — dieselbe "leer ==
     /// unverändert lassen"-Semantik wie vor dem Trimmen gilt unangetastet
     /// weiter, das ist nicht Teil dieses Funds.
+    ///
+    /// Spec 0073, A3: benutzt statt `str::trim` den geteilten
+    /// [`trim_credential_value`] aus `core` — dieselbe Semantik wie
+    /// bisher, zusätzlich fallen unsichtbare Randzeichen ohne
+    /// `White_Space`-Eigenschaft weg (BOM, Zero-Width-Space und die
+    /// weiteren aus `INVISIBLE_CREDENTIAL_EDGE_CHARS`), wie sie beim
+    /// Kopieren aus einer Datei mit BOM oder von einer Webseite an einem
+    /// Key hängen. Ausdrücklich **nicht** angefasst werden
+    /// `display_name` und `model`: Der Helfer gilt für Zugangsdaten und
+    /// Endpunkte, nicht für Anzeigetexte (T12).
     pub fn trimmed(mut self) -> Self {
-        self.api_key = self.api_key.trim().to_string();
-        self.base_url = self.base_url.map(|v| v.trim().to_string());
-        self.attestation_url = self.attestation_url.map(|v| v.trim().to_string());
+        self.api_key = trim_credential_value(&self.api_key);
+        self.base_url = self.base_url.map(|v| trim_credential_value(&v));
+        self.attestation_url = self.attestation_url.map(|v| trim_credential_value(&v));
         self
     }
 
@@ -507,6 +517,14 @@ pub struct ServerInput {
 /// Spec 0067, A2: leerer Override = automatisch (`None`); sonst muss es ein
 /// sicherer absoluter Pfad sein — er landet in einem `sudo`-Kommando und in
 /// der angezeigten sudoers-Zeile.
+///
+// ANNAHME A-1 (Q-BL-0149-01): Diese Stelle steht in der §1-Tabelle von Spec
+// 0073, ist aber kein Zugangsdaten-Wert, sondern ein Pfad-Override für den
+// erhöhten Dateibrowser. Sie bleibt deshalb vorerst bei `str::trim`. Ein
+// unsichtbares Randzeichen führt hier heute zu einer Ablehnung durch
+// `is_plausible_sftp_server_path`, nicht zu einer Bereinigung — die Prüfung
+// selbst bliebe in beiden Fällen unverändert und liefe auf demselben
+// Endwert. Die Entscheidung dazu ist offen, s. ADR 0064.
 pub fn normalize_sftp_server_path(input: Option<String>) -> Result<Option<String>, String> {
     let Some(raw) = input else {
         return Ok(None);
@@ -1331,6 +1349,65 @@ mod tests {
     fn test_ai_provider_config_input_trimmed_leaves_none_base_url_as_none() {
         let config = ai_provider_config_input("sk-key", None).trimmed();
         assert_eq!(config.base_url, None);
+    }
+
+    // --- Spec 0073: geteilter Trim, inkl. unsichtbarer Randzeichen ------
+
+    // Spec 0073, T9: eine BOM am `api_key` — der typische Kopierunfall aus
+    // einer UTF-8-Datei mit BOM — fällt weg. Scheitert gegen den Stand vor
+    // Spec 0073, weil `str::trim` U+FEFF stehen lässt.
+    #[test]
+    fn test_t9_ai_provider_config_input_trimmed_strips_bom_from_api_key() {
+        let config = ai_provider_config_input("\u{FEFF}sk-ant-secret\u{FEFF}", None).trimmed();
+        assert_eq!(config.api_key, "sk-ant-secret");
+    }
+
+    // Spec 0073, T9 (Endpunkt-Felder): dasselbe für `base_url` und
+    // `attestation_url` — auch sie stehen in der §1-Tabelle.
+    #[test]
+    fn test_t9_ai_provider_config_input_trimmed_strips_invisible_chars_from_urls() {
+        let mut input =
+            ai_provider_config_input("sk-key", Some("\u{200B}https://example.invalid/v1\u{2060}"));
+        input.attestation_url = Some("\u{FEFF}https://example.invalid/att \u{200B}".to_string());
+        let config = input.trimmed();
+        assert_eq!(
+            config.base_url.as_deref(),
+            Some("https://example.invalid/v1")
+        );
+        assert_eq!(
+            config.attestation_url.as_deref(),
+            Some("https://example.invalid/att")
+        );
+    }
+
+    // Spec 0073, T11 / A4 / I4: ein `api_key`, der **nur** aus unsichtbaren
+    // Zeichen besteht, wird leer — und leer heißt nach Spec 0007,
+    // Abschnitt 8.2, „Credential unverändert lassen", nicht „löschen".
+    // Genau diesen leeren String liest der `!api_key.is_empty()`-Wächter in
+    // `commands::update_ai_provider` (Spec 0049, Fund 1): Er überspringt
+    // dann den `credential_store.set`. Das ist beabsichtigt — wer diese
+    // Semantik später umdreht, macht diesen Test rot.
+    #[test]
+    fn test_t11_api_key_of_only_invisible_chars_becomes_empty_meaning_unchanged() {
+        let config = ai_provider_config_input("\u{FEFF}\u{200B}\u{2060}", None).trimmed();
+        assert!(
+            config.api_key.is_empty(),
+            "ein nur aus unsichtbaren Zeichen bestehender Key muss leer werden, damit \
+             `update_ai_provider` das bestehende Credential unverändert lässt"
+        );
+    }
+
+    // Spec 0073, T12: Der Helfer gilt für Zugangsdaten und Endpunkte, nicht
+    // für Anzeigetexte. Ein Anzeigename (und ein Modellname) mit einem
+    // Zero-Width-Space bleibt unverändert — auch der Rand.
+    #[test]
+    fn test_t12_display_name_and_model_are_not_trimmed() {
+        let mut input = ai_provider_config_input("sk-key", None);
+        input.display_name = "\u{200B}Mein Provider\u{200B}".to_string();
+        input.model = " claude-sonnet-5 ".to_string();
+        let config = input.trimmed();
+        assert_eq!(config.display_name, "\u{200B}Mein Provider\u{200B}");
+        assert_eq!(config.model, " claude-sonnet-5 ");
     }
 
     // --- Spec 0065, Teil 4: max_tokens_override-Validierung -------------
