@@ -195,6 +195,114 @@ mod tests {
         assert_eq!(trim_credential_value("日本語"), "日本語");
     }
 
+    // --- Spec 0073, §6.3: adversariale Fälle --------------------------
+
+    // Spec 0073, X1: sehr viele Randzeichen. Ergebnis ist das eine
+    // Nutzzeichen — und die Laufzeit bleibt linear.
+    //
+    // Zur Schranke: `trim_matches` ist ein einzelner Durchlauf von beiden
+    // Enden, also ~10^5 Zeichenprüfungen — im Debug-Build Mikrosekunden.
+    // Ein quadratisches Abschneiden in einer Schleife (jedes Mal den Rest
+    // neu kopieren) wären ~10^10 Operationen, also Minuten. Zwischen
+    // beidem liegen vier Größenordnungen; die Schranke von 5 s trennt sie
+    // auch auf einer stark ausgelasteten Maschine zuverlässig, ohne dass
+    // dieser Test von Laufzeitschwankungen abhängt.
+    #[test]
+    fn test_x1_many_edge_chars_stay_linear() {
+        let input = format!("{}x", "\u{200B}".repeat(100_000));
+
+        let started = std::time::Instant::now();
+        let result = trim_credential_value(&input);
+        let elapsed = started.elapsed();
+
+        assert_eq!(result, "x");
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "100 000 Randzeichen dauerten {elapsed:?} — das deutet auf ein \
+             quadratisches Abschneiden hin"
+        );
+    }
+
+    // Spec 0073, X2: dieselbe Länge, aber ohne Nutzzeichen — leerer
+    // String, keine Panik, keine Unterlauf-Arithmetik an den Enden.
+    #[test]
+    fn test_x2_edge_chars_only_at_full_length_becomes_empty() {
+        let input = "\u{200B}".repeat(100_000);
+
+        let started = std::time::Instant::now();
+        let result = trim_credential_value(&input);
+        let elapsed = started.elapsed();
+
+        assert_eq!(result, "");
+        assert!(elapsed < std::time::Duration::from_secs(5), "{elapsed:?}");
+    }
+
+    // Spec 0073, X3: Die Liste aus A1 ist bewusst **endlich**. U+2800
+    // (Braille Blank) und U+3164 (Hangul Filler) sind ebenfalls unsichtbar,
+    // stehen aber nicht darin — sie bleiben erhalten. Dieser Test hält die
+    // Festlegung fest: „alles Unsichtbare" wäre geraten (§4.3). Wer die
+    // Liste erweitert, muss das hier bewusst tun und melden (§8).
+    #[test]
+    fn test_x3_invisible_chars_outside_the_list_are_kept() {
+        for c in ['\u{2800}', '\u{3164}'] {
+            let code = c as u32;
+            assert!(
+                !INVISIBLE_CREDENTIAL_EDGE_CHARS.contains(&c),
+                "U+{code:04X} gehört nicht in die Liste aus A1"
+            );
+            let input = format!("{c}sk-key{c}");
+            assert_eq!(
+                trim_credential_value(&input),
+                input,
+                "U+{code:04X} steht nicht in der Liste und muss erhalten bleiben"
+            );
+        }
+    }
+
+    // Spec 0073, X4: Der Helfer entfernt keine Satzzeichen. Ein Secret, das
+    // mit `-` oder `_` beginnt oder endet, bleibt unverändert.
+    #[test]
+    fn test_x4_punctuation_at_the_edges_is_kept() {
+        for input in ["-abc", "_abc", "abc-", "abc_", "--abc__", ".abc.", "+abc="] {
+            assert_eq!(
+                trim_credential_value(input),
+                input,
+                "Satzzeichen am Rand dürfen nicht entfernt werden"
+            );
+        }
+    }
+
+    // Spec 0073, X5: Im Normalfall tut die Änderung nichts. 1 000 gültige
+    // Keys aus dem üblichen Zeichenvorrat gehen unverändert durch.
+    //
+    // Der Generator ist ein deterministischer Xorshift mit festem Startwert
+    // statt einer Zufallsquelle: kein neuer Abhängigkeitsbedarf, und ein
+    // Fehlschlag ist mit demselben Eingabewert reproduzierbar.
+    #[test]
+    fn test_x5_valid_keys_pass_through_unchanged() {
+        const ALPHABET: &[u8] =
+            b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.";
+        let mut state: u64 = 0x2073_0073_2073_0073;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+
+        for _ in 0..1_000 {
+            let len = 8 + (next() % 57) as usize;
+            let key: String = (0..len)
+                .map(|_| ALPHABET[(next() % ALPHABET.len() as u64) as usize] as char)
+                .collect();
+            assert_eq!(
+                trim_credential_value(&key),
+                key,
+                "ein gültiger Key darf unverändert durchgehen"
+            );
+        }
+    }
+
     // Spec 0073, A2: das Ergebnis ist nie länger als die Eingabe.
     #[test]
     fn test_a2_result_is_never_longer_than_the_input() {
