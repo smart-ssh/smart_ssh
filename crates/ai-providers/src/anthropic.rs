@@ -42,7 +42,11 @@ use crate::request_logging::{
 };
 use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
-const ANTHROPIC_VERSION: &str = "2023-06-01";
+/// Spec 0072, B1: `pub(crate)`, damit `discovery::discover_models` (Modell-
+/// Discovery gegen `GET /v1/models`) dieselbe Version nutzt wie der
+/// Chat-Pfad hier — eine Quelle der Wahrheit statt zweier Zeichenketten, die
+/// auseinanderdriften könnten.
+pub(crate) const ANTHROPIC_VERSION: &str = "2023-06-01";
 
 /// Konservativer Fallback für ein unbekanntes/neues Claude-Modell (Spec
 /// 0065, Teil 1) — analog zu `compaction::DEFAULT_CONTEXT_WINDOW_TOKENS`s

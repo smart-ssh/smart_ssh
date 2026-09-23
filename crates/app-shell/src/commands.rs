@@ -245,18 +245,17 @@ pub async fn set_active_ai_provider(
     Ok(())
 }
 
-/// Spec 0025, Abschnitt 2: `GET {base_url}/models` — läuft mit den gerade
-/// im Formular eingegebenen, noch nicht gespeicherten Werten (analog zu
-/// `test_connection`, Spec 0008 Abschnitt 7), nicht mit einer bereits
-/// persistierten Config. `existing_provider_id` deckt denselben Fall wie
-/// dort ab: ist das `api_key`-Feld leer (Bearbeiten eines gespeicherten
+/// Spec 0025, Abschnitt 2 / Spec 0072, B1: `GET {base_url}/models` — läuft
+/// mit den gerade im Formular eingegebenen, noch nicht gespeicherten Werten
+/// (analog zu `test_connection`, Spec 0008 Abschnitt 7), nicht mit einer
+/// bereits persistierten Config. `existing_provider_id` deckt denselben Fall
+/// wie dort ab: ist das `api_key`-Feld leer (Bearbeiten eines gespeicherten
 /// Providers, "leer = unverändert"), wird stattdessen dessen bereits
 /// hinterlegtes Credential herangezogen.
 ///
-/// Nur für die OpenAI-kompatible Familie unterstützt (Spec 0025, Abschnitt
-/// 2) — `anthropic` hat kein äquivalentes `/models`-Endpoint-Verhalten in
-/// dieser Spec und wird mit einem klaren Fehler abgelehnt, statt einen
-/// wahrscheinlich falsch geformten Request zu versuchen.
+/// Seit Spec 0072 auch für `anthropic` unterstützt — die frühere Annahme,
+/// Anthropic habe "kein äquivalentes `/models`-Endpoint-Verhalten", traf
+/// nicht zu (Spec 0072 §1: `GET /v1/models` existiert, ohne Beta-Header).
 #[tauri::command]
 pub async fn discover_models(
     state: State<'_, AppState>,
@@ -271,6 +270,7 @@ pub async fn discover_models(
     if !matches!(
         config.provider_type,
         ssh_manager_core::ai::ProviderType::OpenAi
+            | ssh_manager_core::ai::ProviderType::Anthropic
             | ssh_manager_core::ai::ProviderType::GenericOpenAiCompatible
             | ssh_manager_core::ai::ProviderType::Ollama
     ) {
@@ -311,18 +311,30 @@ pub async fn discover_models(
         return Err("API-Key erforderlich".into());
     };
 
-    let base_url = config
-        .base_url
-        .as_deref()
-        .unwrap_or(crate::ai_provider_factory::DEFAULT_OPENAI_BASE_URL);
+    // Spec 0072, B1: derselbe provider-abhängige Default wie
+    // `ai_provider_factory::build_ai_provider` — sonst ginge ein Anthropic-
+    // Discovery-Aufruf ohne eingegebene `base_url` fälschlich gegen
+    // `api.openai.com`.
+    let default_base_url = match config.provider_type {
+        ssh_manager_core::ai::ProviderType::Anthropic => {
+            crate::ai_provider_factory::DEFAULT_ANTHROPIC_BASE_URL
+        }
+        _ => crate::ai_provider_factory::DEFAULT_OPENAI_BASE_URL,
+    };
+    let base_url = config.base_url.as_deref().unwrap_or(default_base_url);
 
     // Spec 0069, Teil A4: mit `err.code()` statt über das blanket `From<E:
     // Display>` unten (`CommandError::from`), das den Code verwirft — sonst
     // zeigt "Modelle laden" bei z. B. `AI_MODEL_NOT_FOUND`/
     // `AI_LOCAL_PROVIDER_UNREACHABLE` nur den rohen Text ohne Übersetzung.
-    let models = ai_providers::discover_models(base_url, &api_key, &config.extra_headers)
-        .await
-        .map_err(|err| CommandError::with_code(err.to_string(), err.code()))?;
+    let models = ai_providers::discover_models(
+        config.provider_type,
+        base_url,
+        &api_key,
+        &config.extra_headers,
+    )
+    .await
+    .map_err(|err| CommandError::with_code(err.to_string(), err.code()))?;
     Ok(models)
 }
 

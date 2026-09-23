@@ -117,6 +117,21 @@ describe("AiProviderSettings API-key format hint (Spec 0050, Teil 2)", () => {
   });
 });
 
+// Spec 0072, B2/B3: der "Modelle laden"-Button (`supportsModelDiscovery`)
+// war für `anthropic` bislang ausgeblendet (Spec 0025, Abschnitt 2 nahm an,
+// Anthropic habe kein äquivalentes `/models`-Endpoint-Verhalten — traf nicht
+// zu, s. Spec 0072 §1). *Gegenbeweis:* vor der Erweiterung von
+// `supportsModelDiscovery` fehlte der Button hier, dieser Test schlug fehl.
+describe('AiProviderSettings "Modelle laden"-Button (Spec 0072, B2/B3)', () => {
+  it("erscheint auch für den Provider-Typ anthropic", () => {
+    renderForm();
+
+    fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "anthropic" } });
+
+    expect(screen.getByRole("button", { name: "Modelle laden" })).toBeInTheDocument();
+  });
+});
+
 // Spec 0050, Teil 3 ("Testbarkeit"): "Testen-Button: gültiger Key →
 // 'gültig', falscher → 'Auth fehlgeschlagen', unerreichbar → 'nicht
 // erreichbar'" — the Rust-side three-way classification itself is already

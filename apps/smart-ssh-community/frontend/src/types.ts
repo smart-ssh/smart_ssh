@@ -95,11 +95,20 @@ export function needsBaseUrl(type: ProviderType): boolean {
   return type === "generic_openai_compatible" || type === "ollama";
 }
 
-// Spec 0025, Abschnitt 2: `discover_models` funktioniert nur gegen die
-// OpenAI-kompatible Familie (`GET {base_url}/models`) — `anthropic` hat
-// kein äquivalentes Endpoint-Verhalten.
+// Spec 0072, B2/B3: `discover_models` (`GET {base_url}/models`) funktioniert
+// gegen alle vier Provider-Typen — `anthropic` hat, anders als in Spec 0025
+// Abschnitt 2 angenommen, dasselbe Endpoint-Verhalten (Spec 0072 §1), nur
+// mit `x-api-key`/`anthropic-version` statt `Authorization: Bearer` (dort
+// vom Backend gewählt, s. `crates/ai-providers/src/discovery.rs`). Weiterhin
+// als Funktion (statt schlicht `true` überall zu verwenden) für den Fall
+// eines künftigen `ProviderType`, der das nicht unterstützt.
 export function supportsModelDiscovery(type: ProviderType): boolean {
-  return type === "openai" || type === "generic_openai_compatible" || type === "ollama";
+  return (
+    type === "openai" ||
+    type === "anthropic" ||
+    type === "generic_openai_compatible" ||
+    type === "ollama"
+  );
 }
 
 // --- Teil 2: Session/Terminal/Chat ------------------------------------

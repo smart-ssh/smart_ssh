@@ -8,8 +8,9 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-use ssh_manager_core::ai::AiError;
+use ssh_manager_core::ai::{AiError, ProviderType};
 
+use crate::anthropic::ANTHROPIC_VERSION;
 use crate::error::{map_http_status, map_transport_error, timeout_error};
 use crate::request_logging::{log_provider_error_response, log_provider_transport_error};
 use crate::sse::{read_error_body_with_timeout, SSE_INACTIVITY_TIMEOUT};
@@ -24,17 +25,69 @@ struct ModelEntry {
     id: String,
 }
 
-/// Ruft `GET {base_url}/models` auf (OpenAI-API-Konvention, Spec 0025
-/// Abschnitt 2 — von OpenAI selbst, generischen OpenAI-kompatiblen
-/// Endpunkten und Ollama im OpenAI-kompatiblen Modus gleichermaßen
-/// unterstützt) und liefert die Modell-IDs. `base_url` ohne abschließenden
-/// Slash erwartet, wie bei [`crate::OpenAiCompatibleProvider`].
+/// Spec 0072, B1: die Auth-Kopfzeilen, mit denen `GET {base_url}/models`
+/// angefragt wird, hängen vom Provider ab — Anthropic verlangt `x-api-key`
+/// und `anthropic-version` statt `Authorization: Bearer` (dieselben Header
+/// wie im Chat-Pfad, s. `crate::anthropic::connect_and_stream`).
+///
+/// `extra_headers` werden **danach** angewendet (B3): setzt der Nutzer dort
+/// denselben Namen (case-insensitiv, wie HTTP-Header es sind) erneut, gilt
+/// sein Wert — aber genau einmal, nicht zusätzlich zum Default. Deshalb ein
+/// `Vec`, das per Name überschrieben statt nur angehängt wird, statt der
+/// bisherigen Kette aus `.header(...)`-Aufrufen (die bei `reqwest` einen
+/// zweiten, nicht ersetzten Header-Eintrag erzeugt hätte).
+fn effective_headers(
+    provider_type: ProviderType,
+    api_key: &str,
+    extra_headers: &[(String, String)],
+) -> Vec<(String, String)> {
+    let mut headers: Vec<(String, String)> = match provider_type {
+        ProviderType::Anthropic => vec![
+            ("x-api-key".to_string(), api_key.to_string()),
+            (
+                "anthropic-version".to_string(),
+                ANTHROPIC_VERSION.to_string(),
+            ),
+        ],
+        ProviderType::OpenAi | ProviderType::GenericOpenAiCompatible | ProviderType::Ollama => {
+            vec![("authorization".to_string(), format!("Bearer {api_key}"))]
+        }
+    };
+    for (name, value) in extra_headers {
+        if let Some(existing) = headers
+            .iter_mut()
+            .find(|(existing_name, _)| existing_name.eq_ignore_ascii_case(name))
+        {
+            existing.1 = value.clone();
+        } else {
+            headers.push((name.clone(), value.clone()));
+        }
+    }
+    headers
+}
+
+/// Ruft `GET {base_url}/models` auf und liefert die Modell-IDs. Für die
+/// OpenAI-kompatible Familie (OpenAI selbst, generische OpenAI-kompatible
+/// Endpunkte, Ollama im OpenAI-kompatiblen Modus) die OpenAI-API-Konvention
+/// (Spec 0025, Abschnitt 2); für Anthropic dasselbe Endpoint-Verhalten unter
+/// eigenen Auth-Headern (Spec 0072, B1 — die Annahme aus Spec 0025, Anthropic
+/// habe "kein äquivalentes Endpoint-Verhalten", traf nicht zu, s. Spec 0072
+/// §1 dortiger Ausgangslage-Abschnitt). `base_url` ohne abschließenden Slash
+/// erwartet, wie bei [`crate::OpenAiCompatibleProvider`].
 pub async fn discover_models(
+    provider_type: ProviderType,
     base_url: &str,
     api_key: &str,
     extra_headers: &[(String, String)],
 ) -> Result<Vec<String>, AiError> {
-    discover_models_within(base_url, api_key, extra_headers, SSE_INACTIVITY_TIMEOUT).await
+    discover_models_within(
+        provider_type,
+        base_url,
+        api_key,
+        extra_headers,
+        SSE_INACTIVITY_TIMEOUT,
+    )
+    .await
 }
 
 /// Spec 0068, Teil 5a: Zeitüberschreitung eines Discovery-/Attestierungs-
@@ -50,6 +103,7 @@ fn discovery_timeout(timeout: std::time::Duration) -> AiError {
 /// `read_error_body_with_timeout`), keine neue Konstante. `timeout` ist nur
 /// ein Parameter, damit Tests nicht 90 s warten müssen.
 async fn discover_models_within(
+    provider_type: ProviderType,
     base_url: &str,
     api_key: &str,
     extra_headers: &[(String, String)],
@@ -69,8 +123,9 @@ async fn discover_models_within(
 
     let client = reqwest::Client::new();
     let url = format!("{}/models", base_url.trim_end_matches('/'));
-    let mut request = client.get(&url).bearer_auth(api_key);
-    for (name, value) in extra_headers {
+    let headers = effective_headers(provider_type, api_key, extra_headers);
+    let mut request = client.get(&url);
+    for (name, value) in &headers {
         request = request.header(name, value);
     }
 
@@ -187,6 +242,7 @@ mod tests {
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(5),
             discover_models_within(
+                ProviderType::GenericOpenAiCompatible,
                 &server.uri(),
                 "k",
                 &[],
@@ -240,7 +296,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let models = discover_models(&server.uri(), "test-key", &[])
+        let models = discover_models(ProviderType::OpenAi, &server.uri(), "test-key", &[])
             .await
             .unwrap();
 
@@ -259,7 +315,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let result = discover_models(&server.uri(), "test-key", &[]).await;
+        let result = discover_models(ProviderType::OpenAi, &server.uri(), "test-key", &[]).await;
 
         assert!(matches!(result, Err(AiError::ProviderUnavailable(_))));
     }
@@ -279,6 +335,7 @@ mod tests {
             .await;
 
         let result = discover_models(
+            ProviderType::OpenAi,
             &server.uri(),
             "test-key",
             &[("X-Title".to_string(), "Smart SSH".to_string())],
@@ -291,6 +348,91 @@ mod tests {
         assert!(
             result.is_ok(),
             "erwartet: Header korrekt gesetzt, bekam {result:?}"
+        );
+    }
+
+    /// Spec 0072, B-T1: Anthropic bekommt `x-api-key` +
+    /// `anthropic-version`, **kein** `authorization` — *Gegenbeweis*: gegen
+    /// den Stand vor `effective_headers`/`ProviderType`-Parameter schlug
+    /// dieser Test fehl, weil `discover_models` unbedingt `bearer_auth`
+    /// setzte (und `ProviderType` noch gar kein Parameter war).
+    #[tokio::test]
+    async fn test_discover_models_anthropic_sends_x_api_key_and_version_not_bearer() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/models"))
+            .and(header("x-api-key", "test-key"))
+            .and(header("anthropic-version", ANTHROPIC_VERSION))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"object": "list", "data": []})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = discover_models(ProviderType::Anthropic, &server.uri(), "test-key", &[]).await;
+
+        assert!(
+            result.is_ok(),
+            "erwartet: x-api-key + anthropic-version korrekt gesetzt, bekam {result:?}"
+        );
+    }
+
+    /// Spec 0072, B-T3 (Backend-Teil): `ProviderType::Anthropic` läuft über
+    /// denselben Code-Pfad wie die OpenAI-kompatible Familie, nur mit
+    /// anderen Headern — kein separater "Anthropic wird abgelehnt"-Zweig
+    /// mehr in `discover_models` selbst (der lebt, wenn überhaupt, nur noch
+    /// im aufrufenden `app-shell`-Command, s. dortigen Test).
+    #[tokio::test]
+    async fn test_discover_models_anthropic_401_yields_authentication_failed() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/models"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("invalid x-api-key"))
+            .mount(&server)
+            .await;
+
+        let result =
+            discover_models(ProviderType::Anthropic, &server.uri(), "wrong-key", &[]).await;
+
+        // B-T4: 401 ergibt `AuthenticationFailed`, nie eine (fälschlich)
+        // leere Modell-Liste.
+        assert!(matches!(result, Err(AiError::AuthenticationFailed)));
+    }
+
+    /// Spec 0072, B-T5: eine per `extra_headers` gesetzte `x-api-key`
+    /// erscheint genau einmal in der Anfrage — nicht zusätzlich zu der
+    /// intern gesetzten. `wiremock`s `header(...)`-Matcher prüft nicht
+    /// direkt "genau einmal", deshalb hier zusätzlich über
+    /// `Mock::given(...).expect(1)` plus einem Matcher auf den
+    /// **überschriebenen** Wert — träfe der interne Default-Wert noch (weil
+    /// beide Header gesendet würden), würde `header("x-api-key",
+    /// "overridden-by-user")` nicht matchen und der Request liefe auf
+    /// `wiremock`s 404-Fallback statt auf `200`.
+    #[tokio::test]
+    async fn test_discover_models_extra_header_overrides_default_x_api_key_exactly_once() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/models"))
+            .and(header("x-api-key", "overridden-by-user"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"object": "list", "data": []})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = discover_models(
+            ProviderType::Anthropic,
+            &server.uri(),
+            "default-key",
+            &[("x-api-key".to_string(), "overridden-by-user".to_string())],
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "erwartet: extra_headers überschreibt den Default-Wert genau einmal, bekam {result:?}"
         );
     }
 
@@ -351,7 +493,13 @@ mod tests {
             .mount(&server)
             .await;
 
-        let result = discover_models(&server.uri(), "sk-real-secret-key", &[]).await;
+        let result = discover_models(
+            ProviderType::OpenAi,
+            &server.uri(),
+            "sk-real-secret-key",
+            &[],
+        )
+        .await;
         assert!(matches!(result, Err(AiError::AuthenticationFailed)));
 
         let log_text = log_buffer_text();
