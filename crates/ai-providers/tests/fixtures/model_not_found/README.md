@@ -18,7 +18,10 @@ Die übrigen drei Dateien sind weiterhin aus öffentlich dokumentiertem/
 bekanntem API-Verhalten rekonstruiert, **nicht** durch einen echten Aufruf
 verifiziert (Key bzw. laufende Ollama-Instanz fehlten beim Messlauf). BL-0200
 bleibt deshalb offen, bis auch sie gemessen sind. Keine der Dateien enthält
-echte Zugangsdaten.
+echte Zugangsdaten; `anthropic.json`s `request_id` ist nachträglich durch
+einen generischen Platzhalter ersetzt (Spec-Reviewer-Fund, Review dieses
+Schritts) — kein Geheimnis, aber ein mit Anthropics Anfrageprotokollen
+korrelierbarer Bezeichner, für die Fixture ohne Funktion.
 
 Vor dem nächsten Release bitte einmal gegen echte Accounts abgleichen
 (s. „Manuelle Testabläufe“ im Abschlussbericht: „Falscher Modellname bei

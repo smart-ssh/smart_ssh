@@ -84,14 +84,22 @@ pub(crate) fn map_http_status(status: reqwest::StatusCode, body: &str) -> AiErro
 /// die Markerliste zurück. Rein additiv: kein Fall, den die Markerliste
 /// bisher erkannte, wird durch diese Funktion "entzogen".
 ///
-/// Restrisiko (Spec 0072, §4.2), bewusst hier dokumentiert statt versteckt:
-/// `error.type == "not_found_error"` ist bei Anthropic nicht auf Modelle
-/// beschränkt — ein unbekannter Pfad oder eine unbekannte Ressourcen-ID
-/// erzeugt denselben Typ. Innerhalb dieser Crate unkritisch, da
-/// `ai-providers` nur `POST /v1/messages` und `GET /v1/models` aufruft und
-/// bei beiden die einzige vom Nutzer gesetzte Ressource der Modellname ist.
-/// Kommt später ein Aufruf mit weiteren Ressourcen hinzu, ist diese Annahme
-/// neu zu prüfen.
+/// Restrisiko (Spec 0072, §4.2), bewusst hier dokumentiert statt versteckt —
+/// **breiter als die Spec annahm, s. Spec-Reviewer-Fund (Review dieses
+/// Schritts):** `error.type == "not_found_error"` ist bei Anthropic nicht
+/// auf Modelle beschränkt — ein unbekannter Pfad oder eine unbekannte
+/// Ressourcen-ID erzeugt denselben Typ. Innerhalb dieser Crate betrifft das
+/// nicht nur `POST /v1/messages`/`GET /v1/models` (dort ist die einzige vom
+/// Nutzer gesetzte Ressource der Modellname), sondern auch
+/// `fetch_attestation_info`, das denselben `map_http_status` gegen eine
+/// **frei vom Nutzer eingetragene** Attestierungs-URL aufruft (s.
+/// `crate::discovery::fetch_attestation_info`) — ein Tippfehler dort kann
+/// ebenfalls als "Modell nicht gefunden" erscheinen, obwohl der Endpunkt mit
+/// Modellen nichts zu tun hat. Rein kosmetisch (Fehlertext), kein
+/// Ausführungspfad/keine Filter-/Auto-Exec-Entscheidung hängt daran — aber
+/// nicht mehr "nur zwei eng umrissene Aufrufstellen", wie die Spec annahm.
+/// Käme später ein dritter Aufruf mit weiteren Ressourcen hinzu, ist diese
+/// Einschätzung erneut zu prüfen.
 fn is_structured_model_not_found(body: &str) -> bool {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
         return false;
@@ -381,10 +389,19 @@ mod map_http_status_tests {
     }
 
     /// X3: ein sehr großer Body darf `is_structured_model_not_found` nicht
-    /// unbegrenzt Zeit/Speicher kosten oder zum Absturz bringen — der
-    /// eigentliche Größen-Cap sitzt bereits vorgelagert auf dem Lesepfad
-    /// (`crate::sse::read_error_body_with_timeout`); diese Funktion muss
-    /// nur robust bleiben, falls sie dennoch einen großen String bekommt.
+    /// zum Absturz bringen. Spec-Reviewer-Fund (Review dieses Schritts,
+    /// „gemessen statt angenommen"): anders als eine frühere Fassung dieses
+    /// Kommentars behauptete, gibt es auf dem Lesepfad
+    /// (`crate::sse::read_error_body_with_timeout`) **keinen** Byte-Cap,
+    /// nur einen Zeit-Timeout (`tokio::time::timeout` um `response.text()`)
+    /// — ein Provider/Proxy, der einen sehr großen Fehlerbody schnell genug
+    /// liefert, wird vollständig gelesen und hier vollständig geparst. Ein
+    /// Byte-Cap wäre eine sinnvolle Ergänzung, ist aber nicht Teil dieser
+    /// Spec (Backlog-Hinweis, kein Fix hier). Diese Funktion selbst bleibt
+    /// unabhängig davon robust, wenn sie dennoch einen großen String bekommt
+    /// (kein Stack-Overflow: `serde_json`s Rekursionslimit fängt tiefe
+    /// Verschachtelung ab, s. X2-Test oben; linearer Zeitaufwand für einen
+    /// flachen, aber langen String).
     #[test]
     fn test_very_large_body_is_handled_without_panicking() {
         let padding = "x".repeat(5 * 1024 * 1024);

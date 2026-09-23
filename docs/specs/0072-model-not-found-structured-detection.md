@@ -301,3 +301,19 @@ Markerliste — beides unbelegt.
 ## 9. Klarstellungen
 
 *(wird während der Umsetzung nachgetragen: Datum · Frage-ID · Antwort)*
+
+- **2026-09-23, spec-reviewer (Review des Umsetzungsschritts):** zwei
+  Annahmen dieser Spec trafen nicht zu, gemessen statt weiter angenommen:
+  - **Teil 2, §1 „URL":** „mit Anthropics Basis-URL ergibt das genau den
+    Endpunkt" — trifft nicht zu. Anthropics `base_url`
+    (`DEFAULT_ANTHROPIC_BASE_URL`) enthält, anders als die der OpenAI-
+    Familie, kein `/v1`-Präfix; `{base_url}/models` traf entsprechend
+    `https://api.anthropic.com/models` (gemessen: HTTP 404) statt
+    `/v1/models` (gemessen: HTTP 401 ohne Key, also der richtige Endpunkt).
+    Behoben in `discovery.rs`: `/v1/models` nur für `ProviderType::
+    Anthropic`, `/models` unverändert für die OpenAI-Familie.
+  - **§6.3, X3:** „der bestehende Lese-Cap auf dem Fehlerpfad
+    (`read_error_body_with_timeout`) bleibt davor" — es gibt dort keinen
+    Byte-Cap, nur einen Zeit-Timeout. Nicht Teil dieses Schritts behoben
+    (Backlog-Hinweis für einen künftigen Schritt), aber der entsprechende
+    Code-Kommentar in `error.rs` behauptet es nicht mehr fälschlich.

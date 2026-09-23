@@ -31,11 +31,23 @@ struct ModelEntry {
 /// wie im Chat-Pfad, s. `crate::anthropic::connect_and_stream`).
 ///
 /// `extra_headers` werden **danach** angewendet (B3): setzt der Nutzer dort
-/// denselben Namen (case-insensitiv, wie HTTP-Header es sind) erneut, gilt
-/// sein Wert — aber genau einmal, nicht zusätzlich zum Default. Deshalb ein
-/// `Vec`, das per Name überschrieben statt nur angehängt wird, statt der
-/// bisherigen Kette aus `.header(...)`-Aufrufen (die bei `reqwest` einen
-/// zweiten, nicht ersetzten Header-Eintrag erzeugt hätte).
+/// denselben Namen (case-insensitiv, wie HTTP-Header es sind) erneut wie
+/// einer der oben gesetzten Defaults, gilt sein Wert — aber genau einmal,
+/// nicht zusätzlich zum Default. Deshalb wird nur gegen die ursprünglich
+/// gesetzten Default-Einträge dedupliziert (`headers[..default_len]`), nicht
+/// gegen bereits durch `extra_headers` selbst hinzugefügte Einträge: trägt
+/// ein Nutzer denselben Namen zweimal in `extra_headers` ein, werden
+/// weiterhin beide gesendet (unverändertes Bestandsverhalten für diesen
+/// Fall — B3 verlangt nur die Default-Override-Eigenschaft, keine
+/// Deduplizierung von Nutzereingaben untereinander).
+///
+/// Spec-Reviewer-Fund (Review dieses Schritts): `reqwest`s `.header(...)`
+/// markiert einen Wert nur über `bearer_auth(...)` als „sensitive" (kein
+/// Klartext in `Debug`-Ausgaben, keine HTTP/2-HPACK-Indizierung). Ein
+/// simpler `String` verliert diese Markierung. `sensitive_header_value`
+/// stellt sie für die beiden hier bekannten Auth-Header (`authorization`,
+/// `x-api-key`) wieder her — auch dann, wenn ihr Wert per `extra_headers`
+/// überschrieben wurde.
 fn effective_headers(
     provider_type: ProviderType,
     api_key: &str,
@@ -53,8 +65,9 @@ fn effective_headers(
             vec![("authorization".to_string(), format!("Bearer {api_key}"))]
         }
     };
+    let default_len = headers.len();
     for (name, value) in extra_headers {
-        if let Some(existing) = headers
+        if let Some(existing) = headers[..default_len]
             .iter_mut()
             .find(|(existing_name, _)| existing_name.eq_ignore_ascii_case(name))
         {
@@ -66,14 +79,46 @@ fn effective_headers(
     headers
 }
 
-/// Ruft `GET {base_url}/models` auf und liefert die Modell-IDs. Für die
-/// OpenAI-kompatible Familie (OpenAI selbst, generische OpenAI-kompatible
-/// Endpunkte, Ollama im OpenAI-kompatiblen Modus) die OpenAI-API-Konvention
-/// (Spec 0025, Abschnitt 2); für Anthropic dasselbe Endpoint-Verhalten unter
-/// eigenen Auth-Headern (Spec 0072, B1 — die Annahme aus Spec 0025, Anthropic
-/// habe "kein äquivalentes Endpoint-Verhalten", traf nicht zu, s. Spec 0072
-/// §1 dortiger Ausgangslage-Abschnitt). `base_url` ohne abschließenden Slash
+/// Namen der Header, deren Wert ein Zugangsdaten-Geheimnis trägt und deshalb
+/// als `sensitive` an `reqwest` übergeben werden muss (s. `effective_headers`-
+/// Doc-Kommentar) — case-insensitiver Vergleich, wie bei HTTP-Headern üblich.
+fn is_secret_header_name(name: &str) -> bool {
+    name.eq_ignore_ascii_case("authorization") || name.eq_ignore_ascii_case("x-api-key")
+}
+
+/// Baut einen `HeaderValue`, der in `reqwest`/`hyper` als „sensitive"
+/// markiert ist — `None`, wenn `value` keine gültigen Header-Bytes enthält;
+/// der Aufrufer fällt dann auf den unmarkierten `&str`-Pfad zurück, `reqwest`
+/// validiert (und lehnt ggf. ab) beim eigentlichen `.send()` wie zuvor.
+fn sensitive_header_value(value: &str) -> Option<reqwest::header::HeaderValue> {
+    let mut header_value = reqwest::header::HeaderValue::from_str(value).ok()?;
+    header_value.set_sensitive(true);
+    Some(header_value)
+}
+
+/// Ruft `GET {base_url}/models` auf (bzw. `GET {base_url}/v1/models` für
+/// Anthropic, s. u.) und liefert die Modell-IDs. Für die OpenAI-kompatible
+/// Familie (OpenAI selbst, generische OpenAI-kompatible Endpunkte, Ollama im
+/// OpenAI-kompatiblen Modus) die OpenAI-API-Konvention (Spec 0025, Abschnitt
+/// 2); für Anthropic dasselbe Endpoint-Verhalten unter eigenen Auth-Headern
+/// (Spec 0072, B1 — die Annahme aus Spec 0025, Anthropic habe "kein
+/// äquivalentes Endpoint-Verhalten", traf nicht zu, s. Spec 0072 §1
+/// dortiger Ausgangslage-Abschnitt). `base_url` ohne abschließenden Slash
 /// erwartet, wie bei [`crate::OpenAiCompatibleProvider`].
+///
+/// Spec-Reviewer-Fund (Review dieses Schritts, gemessen statt angenommen —
+/// `curl -o /dev/null -w '%{http_code}' https://api.anthropic.com/models`
+/// → 404, `.../v1/models` → 401 bei fehlendem Key, also der richtige
+/// Endpunkt): Anthropics `base_url` (`DEFAULT_ANTHROPIC_BASE_URL` in
+/// `app-shell::ai_provider_factory`, ebenso ein selbst eingetragener Wert)
+/// enthält — anders als bei der OpenAI-Familie — **kein** `/v1`-Präfix; der
+/// Chat-Pfad hängt es deshalb selbst an (`crate::anthropic`s
+/// `format!("{}/v1/messages", ...)`). Ohne dieselbe Ergänzung hier lief
+/// „Modelle laden" für Anthropic gegen den falschen Pfad — und wurde durch
+/// [`is_structured_model_not_found`](crate::error) sogar als "Modell nicht
+/// gefunden" (statt sichtbar falsch) angezeigt, weil Anthropics generische
+/// 404-Antwort auf einen unbekannten Pfad zufällig `error.type ==
+/// "not_found_error"` trägt.
 pub async fn discover_models(
     provider_type: ProviderType,
     base_url: &str,
@@ -122,11 +167,31 @@ async fn discover_models_within(
         .collect();
 
     let client = reqwest::Client::new();
-    let url = format!("{}/models", base_url.trim_end_matches('/'));
+    let base_url = base_url.trim_end_matches('/');
+    // Spec-Reviewer-Fund (Review dieses Schritts): Anthropics `base_url`
+    // trägt kein `/v1`-Präfix (s. Doc-Kommentar von `discover_models`) — nur
+    // hier ergänzt, nicht für die OpenAI-Familie, deren `base_url`
+    // (`DEFAULT_OPENAI_BASE_URL`/eine selbst eingetragene) es bereits
+    // enthält.
+    let url = match provider_type {
+        ProviderType::Anthropic => format!("{base_url}/v1/models"),
+        ProviderType::OpenAi | ProviderType::GenericOpenAiCompatible | ProviderType::Ollama => {
+            format!("{base_url}/models")
+        }
+    };
     let headers = effective_headers(provider_type, api_key, extra_headers);
     let mut request = client.get(&url);
     for (name, value) in &headers {
-        request = request.header(name, value);
+        request = if is_secret_header_name(name) {
+            match sensitive_header_value(value) {
+                Some(header_value) => request.header(name, header_value),
+                // Ungültige Header-Bytes: fällt auf den unmarkierten Pfad
+                // zurück, `reqwest` validiert/lehnt beim `.send()` wie zuvor.
+                None => request.header(name, value),
+            }
+        } else {
+            request.header(name, value)
+        };
     }
 
     let response = match tokio::time::timeout(timeout, request.send()).await {
@@ -221,7 +286,84 @@ async fn fetch_attestation_info_within(
 mod tests {
     use super::*;
     use wiremock::matchers::{header, method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::{Mock, MockServer, Request, ResponseTemplate};
+
+    /// Spec-Reviewer-Fund (Review dieses Schritts): `wiremock`s eingebaute
+    /// Matcher können nur Anwesenheit/Wert eines Headers prüfen, nicht
+    /// dessen **Abwesenheit** — ohne diesen Matcher hätte B-T1 auch dann
+    /// noch grün gemeldet, wenn `discover_models` versehentlich sowohl
+    /// `x-api-key` als auch `authorization` gesendet hätte (`wiremock`
+    /// ignoriert unbekannte zusätzliche Header stillschweigend).
+    struct HeaderAbsent(&'static str);
+
+    impl wiremock::Match for HeaderAbsent {
+        fn matches(&self, request: &Request) -> bool {
+            !request.headers.contains_key(self.0)
+        }
+    }
+
+    /// Spec-Reviewer-Fund (Review dieses Schritts): der API-Key muss als
+    /// `sensitive` markiert werden (kein Klartext in `Debug`-Ausgaben, keine
+    /// HTTP/2-HPACK-Indizierung) — genau das, was `reqwest::bearer_auth`
+    /// bisher lieferte und ein einfacher `String` über `.header(name,
+    /// value)` nicht mehr tut. *Gegenbeweis:* vor Einführung von
+    /// `set_sensitive(true)` lieferte diese Funktion einen `HeaderValue`
+    /// mit `is_sensitive() == false`, dieser Test schlug fehl.
+    #[test]
+    fn test_sensitive_header_value_marks_the_value_as_sensitive() {
+        let value = sensitive_header_value("sk-ant-real-secret-key").expect("gültige Bytes");
+        assert!(value.is_sensitive());
+        assert_eq!(value.to_str().unwrap(), "sk-ant-real-secret-key");
+    }
+
+    #[test]
+    fn test_sensitive_header_value_returns_none_for_invalid_bytes_instead_of_panicking() {
+        // Ein eingebettetes Steuerzeichen ist kein gültiger Header-Wert.
+        assert!(sensitive_header_value("sk-ant-\ninjected").is_none());
+    }
+
+    /// Spec-Reviewer-Fund (Review dieses Schritts): `effective_headers`
+    /// dedupliziert bewusst nur gegen die ursprünglichen Default-Einträge,
+    /// nicht `extra_headers` untereinander — B3 verlangt nur, dass ein
+    /// Nutzer-Header einen gleichnamigen Default ersetzt, nicht dass zwei
+    /// vom Nutzer selbst doppelt eingetragene Header zu einem
+    /// zusammenfallen (unverändertes Bestandsverhalten für diesen Fall).
+    #[test]
+    fn test_effective_headers_overrides_only_the_matching_default_not_other_extra_entries() {
+        let headers = effective_headers(
+            ProviderType::Anthropic,
+            "default-key",
+            &[
+                ("x-api-key".to_string(), "overridden".to_string()),
+                ("x-custom".to_string(), "first".to_string()),
+                ("x-custom".to_string(), "second".to_string()),
+            ],
+        );
+
+        let api_key_values: Vec<&str> = headers
+            .iter()
+            .filter(|(name, _)| name.eq_ignore_ascii_case("x-api-key"))
+            .map(|(_, value)| value.as_str())
+            .collect();
+        assert_eq!(api_key_values, vec!["overridden"]);
+
+        let custom_values: Vec<&str> = headers
+            .iter()
+            .filter(|(name, _)| name.eq_ignore_ascii_case("x-custom"))
+            .map(|(_, value)| value.as_str())
+            .collect();
+        assert_eq!(custom_values, vec!["first", "second"]);
+    }
+
+    #[test]
+    fn test_is_secret_header_name_matches_case_insensitively() {
+        assert!(is_secret_header_name("authorization"));
+        assert!(is_secret_header_name("Authorization"));
+        assert!(is_secret_header_name("x-api-key"));
+        assert!(is_secret_header_name("X-Api-Key"));
+        assert!(!is_secret_header_name("anthropic-version"));
+        assert!(!is_secret_header_name("x-title"));
+    }
 
     /// Spec 0068, Teil 5a: ein Server, der nie (rechtzeitig) antwortet,
     /// lässt "Modelle laden" nicht ewig hängen, sondern liefert einen
@@ -352,17 +494,24 @@ mod tests {
     }
 
     /// Spec 0072, B-T1: Anthropic bekommt `x-api-key` +
-    /// `anthropic-version`, **kein** `authorization` — *Gegenbeweis*: gegen
-    /// den Stand vor `effective_headers`/`ProviderType`-Parameter schlug
-    /// dieser Test fehl, weil `discover_models` unbedingt `bearer_auth`
-    /// setzte (und `ProviderType` noch gar kein Parameter war).
+    /// `anthropic-version`, **kein** `authorization`, unter `/v1/models`
+    /// (nicht dem bloßen `/models`, das die OpenAI-Familie nutzt — s.
+    /// Spec-Reviewer-Fund/Doc-Kommentar an [`discover_models`]).
+    /// *Gegenbeweis:* gegen den Stand vor `effective_headers`/
+    /// `ProviderType`-Parameter schlug dieser Test fehl, weil
+    /// `discover_models` unbedingt `bearer_auth` setzte und `/models` ohne
+    /// `/v1`-Präfix ansprach (letzteres verifiziert: gegen den Zwischenstand
+    /// nach dem ersten Review-Fund, der `path("/models")` noch verwendete,
+    /// schlug dieser Test ebenfalls fehl, weil `wiremock` die Anfrage an
+    /// `/v1/models` nicht auf den bei `/models` gemounteten Mock matchte).
     #[tokio::test]
     async fn test_discover_models_anthropic_sends_x_api_key_and_version_not_bearer() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/models"))
+            .and(path("/v1/models"))
             .and(header("x-api-key", "test-key"))
             .and(header("anthropic-version", ANTHROPIC_VERSION))
+            .and(HeaderAbsent("authorization"))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_json(serde_json::json!({"object": "list", "data": []})),
@@ -387,7 +536,7 @@ mod tests {
     async fn test_discover_models_anthropic_401_yields_authentication_failed() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/models"))
+            .and(path("/v1/models"))
             .respond_with(ResponseTemplate::new(401).set_body_string("invalid x-api-key"))
             .mount(&server)
             .await;
@@ -413,7 +562,7 @@ mod tests {
     async fn test_discover_models_extra_header_overrides_default_x_api_key_exactly_once() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/models"))
+            .and(path("/v1/models"))
             .and(header("x-api-key", "overridden-by-user"))
             .respond_with(
                 ResponseTemplate::new(200)

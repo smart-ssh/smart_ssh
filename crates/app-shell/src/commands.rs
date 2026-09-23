@@ -267,6 +267,14 @@ pub async fn discover_models(
     // weil ein ungetrimmter `api_key` sonst direkt an den echten Provider
     // ginge und dort mit einem Auth-Fehler abgelehnt würde.
     let config = config.trimmed();
+    // Spec-Reviewer-Fund (Review dieses Schritts): seit Spec 0072 listet
+    // dieser `matches!` alle vier heute existierenden `ProviderType`-
+    // Varianten — für den aktuellen Typ also unerreichbar, nicht mehr "die
+    // OpenAI-Familie plus jetzt Anthropic gegen den Rest abgrenzen". Bewusst
+    // trotzdem stehen gelassen (nicht entfernt) als Verteidigung-in-der-
+    // Tiefe für eine **künftige** fünfte `ProviderType`-Variante: die käme
+    // ohne Anpassung hier automatisch auf diesen klaren Fehler statt
+    // stillschweigend auf einen wahrscheinlich falsch geformten Request.
     if !matches!(
         config.provider_type,
         ssh_manager_core::ai::ProviderType::OpenAi
@@ -380,9 +388,11 @@ pub enum TestAiProviderCredentialsResult {
 /// Nutzt `build_ai_provider` — denselben Konstruktionsweg wie ein echter
 /// Chat-Request (Spec 0007, Abschnitt 8.3) — statt eines eigenen,
 /// separaten HTTP-Aufbaus: funktioniert dadurch einheitlich für **alle**
-/// vier Provider-Typen (inkl. Anthropic, das anders als bei
-/// `discover_models` hier keine Sonderbehandlung/Ablehnung braucht, weil
-/// kein `/models`-Endpoint involviert ist). Der Request selbst ist eine
+/// vier Provider-Typen, inkl. Anthropic. Seit Spec 0072 gilt das auch für
+/// `discover_models` (davor lehnte dieser Command Anthropic mangels
+/// `/models`-Endpoint-Unterstützung ab — dieser Kommentar hielt den
+/// Unterschied fest, den es inzwischen nicht mehr gibt). Der Request selbst
+/// ist eine
 /// einzelne, minimale Nutzernachricht ("Hi") — geht durch denselben
 /// Redaction-sicheren Fehler-Logging-Pfad wie jeder reguläre Chat-Request
 /// (Spec 0049, Fund 2), kein Sonderfall für den Testen-Button nötig. Nur

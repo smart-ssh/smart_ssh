@@ -396,20 +396,21 @@ mod error_logging_tests {
         );
     }
 
-    /// Spec 0063, Teil 1: `end_turn` (Modell hat bewusst aufgehört) und
-    /// `max_tokens` (Antwort technisch abgeschnitten) müssen im Log klar
-    /// unterscheidbar sein — sonst lässt sich ein "KI bricht mitten in der
-    /// Antwort ab" nicht einordnen.
     /// Spec 0072, X1: ein Anbieter-Fehlertext ist nicht vertrauenswürdig —
     /// selbst wenn `map_http_status` daraus (strukturell, über
     /// `error.type == "not_found_error"`) ein `ModelNotFound` macht, dessen
     /// Wert den vollen Body wörtlich enthält (s. `crate::error`-Test
     /// `test_model_not_found_value_carries_the_full_body_for_downstream_
-    /// redaction`), darf ein darin eingebettetes Secret nie ungeschwärzt im
-    /// Log landen. Nutzt denselben Redaction-Pfad wie jeder andere
-    /// `AiError` (`secrets`-Parameter) — diese Spec ändert an der Redaction
-    /// selbst nichts, sie bestätigt nur, dass der neue, strukturierte
-    /// `ModelNotFound`-Fall keine Ausnahme davon ist.
+    /// redaction`), muss ein darin eingebettetes, als `secrets` bekanntes
+    /// Secret weiterhin redigiert werden. Nutzt denselben Redaction-Pfad wie
+    /// jeder andere `AiError` (`redact_secrets`, oben bereits durch
+    /// `test_provider_error_response_never_logs_the_api_key_verbatim` u. a.
+    /// belegt) — dieser Test bestätigt nur, dass der neue, strukturierte
+    /// `ModelNotFound`-Fall über denselben Pfad läuft und keine Ausnahme
+    /// davon ist, prüft **nicht** einen neuen Redaction-Mechanismus. Deckt
+    /// bewusst nicht den Fall ab, dass der Provider-Text ein Secret enthält,
+    /// das nicht in `secrets` steht — dafür gibt es auf diesem Pfad (Spec
+    /// 0072 §5) keinen Muster-basierten Redactor.
     #[test]
     fn test_model_not_found_error_response_redacts_a_placeholder_secret_in_the_body() {
         install_test_subscriber_once();
@@ -432,6 +433,10 @@ mod error_logging_tests {
         assert!(log_text.contains("AI_MODEL_NOT_FOUND"));
     }
 
+    /// Spec 0063, Teil 1: `end_turn` (Modell hat bewusst aufgehört) und
+    /// `max_tokens` (Antwort technisch abgeschnitten) müssen im Log klar
+    /// unterscheidbar sein — sonst lässt sich ein "KI bricht mitten in der
+    /// Antwort ab" nicht einordnen.
     #[test]
     fn test_log_stop_reason_distinguishes_end_turn_from_max_tokens() {
         install_test_subscriber_once();
