@@ -72,6 +72,26 @@ ausformulierten Angriffswegen. Jeden Fund triagieren:
 Nichts stillschweigend fallen lassen. Hat eine Nachbesserung selbst etwas
 gelockert, eine weitere Runde.
 
+## Die App starten — während der Arbeit nicht, am Ende einmal
+
+**Während du arbeitest, startest du keine sichtbare Instanz der App.**
+Bauen, Testen und Linten brauchen kein Fenster. Jede Instanz, die du
+zwischendurch hochziehst, nimmt Stefan den Bildschirm und hinterlässt
+Fenster, die niemand zuordnen kann.
+
+**Ausnahme, und die gilt wirklich:** Lässt sich etwas anders nicht prüfen —
+ein Layout, ein Dialogablauf, ein Zustand, den kein Test abbildet —, dann
+starte sie, sieh nach, und **schließe sie danach wieder**. Sag im Bericht,
+warum es nötig war.
+
+**Genau eine Instanz am Ende**, wenn das Gate grün ist und du fertig
+meldest, damit Stefan prüfen kann. Schreib in den Bericht dazu, **was er
+sich ansehen soll** — welcher Ablauf, welcher Bildschirm, worauf zu achten
+ist. Eine laufende App ohne diesen Hinweis nützt ihm nichts.
+
+Auf macOS immer `./scripts/tauri-dev.sh`, nie `cargo tauri dev` direkt
+(Signatur-Eigenheit, s. `docs/adr/0022-stable-dev-code-signature.md`).
+
 ## Abschluss
 
 - **ADR** für jede offen gelassene Entscheidung, jede Abweichung von der Spec
