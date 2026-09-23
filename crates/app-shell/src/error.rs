@@ -21,6 +21,24 @@ use ssh_manager_core::profiles::CredentialError;
 /// `Display`-Text der `keyring`-Crate durchzureichen.
 pub const KEYCHAIN_UNAVAILABLE: &str = "KEYCHAIN_UNAVAILABLE";
 
+/// Spec 0076, C-6: Die Überführung einer Schlüsseldatei in den
+/// Schlüsselbund ist gescheitert, **und** der eben geschriebene Schlüssel
+/// ließ sich nicht wieder entfernen — es liegt jetzt ein privater Schlüssel
+/// im Schlüsselbund, auf den kein Server zeigt.
+///
+/// **Eigener Code, nicht [`KEYCHAIN_UNAVAILABLE`]** (spec-reviewer-Fund,
+/// Runde 2): Das Frontend **ersetzt** bei einem bekannten Code die Meldung
+/// durch seinen eigenen Text (`errorCodes.ts`). Mit
+/// `KEYCHAIN_UNAVAILABLE` hätte der Nutzer „Der Systemschlüsselbund ist
+/// nicht verfügbar" gelesen — und ausgerechnet **nicht** erfahren, welcher
+/// Eintrag liegen geblieben ist. Das ist die Auskunft, für die dieser Weg
+/// überhaupt existiert.
+///
+/// Solange Schritt 5 der Spec keine Übersetzung dafür ergänzt, ist der Code
+/// dem Frontend unbekannt — und genau dann zeigt es die `message`, die den
+/// Slot nennt. Die Übersetzung sollte ihn als Parameter führen.
+pub const IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND: &str = "IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND";
+
 /// Spec 0071, A13/X2: Wandelt einen [`CredentialError`] in einen
 /// [`CommandError`] und hängt genau dann den Code
 /// [`KEYCHAIN_UNAVAILABLE`] an, wenn der Schlüsselbund bei diesem
@@ -145,6 +163,22 @@ mod code_tests {
             "SSH_CONNECTION_ABANDONED",
             // Spec 0071, A13.
             super::KEYCHAIN_UNAVAILABLE,
+            // Spec 0076 (BL-0221/BL-0222). Die `KEY_FILE_*`-Codes kommen
+            // aus `ssh_manager_core::ssh::KeyFileError::code()` und werden
+            // über `identity_file::identity_file_error_to_command_error`
+            // in einen `CommandError` gehängt — sie gehören deshalb in
+            // dieselbe Eindeutigkeitsprüfung wie die hier direkt
+            // vergebenen.
+            "SERVER_IDENTITY_FILE_REQUIRED",
+            "SERVER_NOT_AN_IDENTITY_FILE",
+            super::IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND,
+            "KEY_FILE_NOT_FOUND",
+            "KEY_FILE_NOT_READABLE",
+            "KEY_FILE_PERMISSIONS_TOO_OPEN",
+            "KEY_FILE_TOO_LARGE",
+            "KEY_FILE_NOT_A_REGULAR_FILE",
+            "KEY_FILE_PATH_NOT_ABSOLUTE",
+            "KEY_FILE_INVALID_KEY",
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();

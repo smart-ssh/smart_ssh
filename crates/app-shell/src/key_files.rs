@@ -254,12 +254,16 @@ fn open_readable(path: &Path) -> std::io::Result<File> {
 /// damit strenger als die Formulierung „für Gruppe oder Welt lesbar" aus
 /// A-4.
 ///
-/// **Was der Vergleich umfasst, und was nicht:** Verglichen werden die
-/// Rechte-Bits. OpenSSHs Eigentümer- und Pfadketten-Prüfungen
-/// (`safe_path`/`auth_secure_path`) gelten dort Konfigurations- und
-/// serverseitigen Dateien, nicht dem Schlüssel beim Client-Login; sie sind
-/// hier deshalb nicht nachgebildet. Die Dateiart prüft `probe` bereits
-/// eine Zeile vorher (`is_file`), ebenfalls auf dem Handle.
+/// **Ein Unterschied, und er geht in die strenge Richtung**
+/// (spec-reviewer-Fund, Runde 2): OpenSSH prüft die Bits nur an Dateien,
+/// die dem aufrufenden Nutzer **gehören** (`st.st_uid == getuid() &&
+/// (st.st_mode & 077) != 0`). Wir prüfen sie unbedingt, also auch an einer
+/// fremden Datei. Damit lehnen wir Fälle ab, die `ssh` durchließe — nie
+/// umgekehrt. Eine frühere Fassung dieses Kommentars behauptete, die
+/// uid-Bedingung stehe woanders; das war schlicht falsch.
+///
+/// Die Dateiart prüft `probe` bereits eine Zeile vorher (`is_file`),
+/// ebenfalls auf dem Handle.
 ///
 /// Auf Windows entfällt die Prüfung, wie bei OpenSSH selbst.
 #[cfg(unix)]
@@ -292,10 +296,21 @@ fn permission_facts(_meta: &std::fs::Metadata) -> (bool, u32) {
 /// der Vorab-Reservierung. Grund (spec-reviewer-Fund): Ein wachsender `Vec`
 /// realloziert, und die dabei freigegebenen Zwischenpuffer enthalten
 /// Schlüsselmaterial, das `zeroize` am Ende nicht mehr erreicht — es kennt
-/// nur den letzten Puffer. Mit der richtigen Kapazität von Anfang an gibt
-/// es diese Zwischenpuffer im Regelfall gar nicht erst. Die
-/// **verbindliche** Grenze bleibt das `take` unten; `size_hint` ist ein
-/// Hinweis, keine Zusicherung.
+/// nur den letzten Puffer. Mit passender Kapazität von Anfang an entstehen
+/// diese Zwischenpuffer beim Lesen gar nicht erst.
+///
+/// **Was das nicht leistet** (spec-reviewer-Fund, Runde 2): Der Übergang
+/// `String` → [`SecretString`] geht über `into_boxed_str`, also über ein
+/// `shrink_to_fit` — ist die Kapazität größer als die Länge, kann auch dort
+/// eine nicht genullte Kopie zurückbleiben. Die Kapazität ist deshalb
+/// **exakt** `size_hint`, damit `read_to_end` im Regelfall mit
+/// `len == capacity` endet und das `shrink_to_fit` nichts mehr zu tun hat.
+/// Restlos ausschließen lässt sich die Zwischenform nicht; 5.1 räumt genau
+/// das ein.
+///
+/// Die **verbindliche** Grenze bleibt das `take` unten; `size_hint` ist ein
+/// Hinweis, keine Zusicherung — nachgewiesen durch
+/// `test_an_endless_source_is_never_read_beyond_the_limit`.
 fn read_and_classify(
     mut file: File,
     path: &str,
@@ -307,7 +322,7 @@ fn read_and_classify(
         path: path.to_string(),
     };
 
-    let capacity = size_hint.saturating_add(1).min(MAX_KEY_FILE_BYTES + 1) as usize;
+    let capacity = size_hint.min(MAX_KEY_FILE_BYTES) as usize;
     let mut buf = Vec::with_capacity(capacity);
     let read_result = file
         .by_ref()
@@ -787,8 +802,14 @@ mod tests {
     ///
     /// Dieser Test ruft `read_and_classify` deshalb direkt auf, mit einem
     /// `size_hint` von 0 (so, wie ein Objekt sich meldet, das seine Größe
-    /// verschweigt und trotzdem liefert). Er scheitert, sobald jemand die
-    /// Lesegrenze für überflüssig hält, weil „`fstat` das ja schon prüft".
+    /// verschweigt und trotzdem liefert).
+    ///
+    /// **Was er belegt und was nicht** (spec-reviewer-Fund, Runde 2): Er
+    /// belegt die **Ablehnung** über die Längenprüfung. Er belegt
+    /// **nicht**, dass nie mehr als 1 MiB in den Speicher gelesen wird —
+    /// ohne das `take` läse `read_to_end` die ganze Datei, und die
+    /// Längenprüfung meldete trotzdem `TooLarge`. Diese zweite, eigentliche
+    /// Zusage aus A-3 prüft der Test darunter.
     #[test]
     fn test_the_read_limit_holds_even_when_fstat_understates_the_size() {
         let dir = TempDir::new().unwrap();
@@ -803,6 +824,43 @@ mod tests {
         assert!(
             matches!(err, KeyFileError::TooLarge { .. }),
             "erwartet TooLarge, bekam {err:?}"
+        );
+    }
+
+    /// §6.2.6/A-3, die **verbindliche** Zusage: „Es wird nie mehr als
+    /// 1 MiB in den Speicher gelesen, auch wenn `fstat` weniger meldet."
+    ///
+    /// Geprüft an einer Quelle, die genau das tut: `/dev/zero` meldet
+    /// Größe 0 und liefert endlos. Ohne die Lesegrenze läuft `read_to_end`
+    /// nie zu Ende — der Test würde nicht „falsch antworten", sondern gar
+    /// nicht mehr zurückkommen. Deshalb läuft er in einem eigenen Thread
+    /// unter Timeout: **Ein entferntes `take` macht ihn rot, nicht
+    /// hängend.**
+    ///
+    /// Das ist der Test, den §6.2.6 eigentlich meint. Der darüber prüft
+    /// nur die Ablehnung.
+    #[test]
+    #[cfg(unix)]
+    fn test_an_endless_source_is_never_read_beyond_the_limit() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let handle = File::open("/dev/zero").expect("/dev/zero ist lesbar");
+            // `size_hint: 0` — genau das, was `/dev/zero` per `fstat`
+            // meldet. Die Abkürzung in `probe` greift hier also nicht.
+            let outcome = match read_and_classify(handle, "/dev/zero", 0) {
+                Ok(_) => "unerwartet gelesen".to_string(),
+                Err(err) => format!("{err:?}"),
+            };
+            let _ = tx.send(outcome);
+        });
+
+        let outcome = rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("A-3: eine endlose Quelle darf das Lesen nicht unbegrenzt laufen lassen");
+
+        assert!(
+            outcome.contains("TooLarge"),
+            "erwartet TooLarge, bekam {outcome}"
         );
     }
 

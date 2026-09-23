@@ -134,13 +134,19 @@ pub async fn convert_identity_file_to_keychain(
         if roll_back_key_slot(credential_store, &key_ref, previous) == Rollback::LeftBehind {
             return Err(CommandError::with_code(
                 format!(
-                    "{} Außerdem konnte der bereits in den Schlüsselbund geschriebene \
+                    "{}. Außerdem konnte der bereits in den Schlüsselbund geschriebene \
                      Schlüssel nicht wieder entfernt werden — der Eintrag „{}“ ist dort \
                      liegen geblieben und kann von Hand gelöscht werden.",
-                    command_error.message,
+                    command_error.message.trim_end_matches(['.', ' ']),
                     key_ref.as_str()
                 ),
-                crate::error::KEYCHAIN_UNAVAILABLE,
+                // spec-reviewer-Fund (Runde 2): **eigener** Code, nicht
+                // `KEYCHAIN_UNAVAILABLE`. Das Frontend ersetzt bei einem
+                // bekannten Code die Meldung durch seinen eigenen Text —
+                // mit dem Schlüsselbund-Code hätte der Nutzer „Der
+                // Systemschlüsselbund ist nicht verfügbar" gelesen und
+                // ausgerechnet nicht erfahren, was liegen geblieben ist.
+                crate::error::IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND,
             ));
         }
         return Err(command_error);
@@ -567,7 +573,22 @@ mod tests {
             "die Meldung muss den liegen gebliebenen Eintrag benennen: {}",
             err.message
         );
-        assert_eq!(err.code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
+        // Eigener Code — **nicht** `KEYCHAIN_UNAVAILABLE`. Das Frontend
+        // ersetzt bei einem bekannten Code die Meldung durch seinen
+        // eigenen Text; mit dem Schlüsselbund-Code ginge genau die
+        // Auskunft verloren, die dieser Pfad transportieren soll.
+        assert_eq!(
+            err.code,
+            Some(crate::error::IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND)
+        );
+        assert_ne!(err.code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
+        // Die ursprüngliche Ursache bleibt erhalten, statt vom
+        // Rollback-Problem verdrängt zu werden.
+        assert!(
+            err.message.contains("simulierter DB-Fehler"),
+            "der eigentliche Grund darf nicht verloren gehen: {}",
+            err.message
+        );
         // Der Test taugt nur, wenn der Eintrag tatsächlich stehen bleibt.
         assert_eq!(
             stored(&credential_store, &key_slot(id)).as_deref(),

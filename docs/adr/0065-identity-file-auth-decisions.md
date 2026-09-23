@@ -224,7 +224,60 @@ verlangt `T: Debug`).
 zweimal tatsächlich eingetreten (einmal in einem Test, einmal in einem
 Kanal-`send`) und beide Male sofort aufgefallen — genau das soll es.
 
-## 11. Bewusst **nicht** behobene Review-Funde
+## 11. `~\` wird auf Windows aufgelöst (Festlegung, die die Spec offenlässt)
+
+**Frage:** A-3 sagt „`~` am Anfang wird aufgelöst" ohne Plattformangabe und
+nennt als Beispiel `~/.ssh/id_ed25519`. Ein Windows-Nutzer tippt
+`~\.ssh\id_ed25519`.
+
+**Entscheidung:** Auf Windows wird zusätzlich `~\` als Tilde-Präfix
+erkannt. Auf Unix bleibt es bei `~/` — dort ist `\` ein gültiges
+Dateinamenszeichen, und ein Pfad `~\foo` wäre eine Datei namens `~\foo`.
+
+**Warum nicht anders:** Ohne den Zweig wäre `~\…` in den `~user`-Zweig
+gefallen und mit „absoluter Pfad nötig" abgelehnt worden — eine stille
+Verengung von A-3, und zwar genau auf der Plattform, auf der `\` die
+normale Schreibweise ist.
+
+**Was dabei nicht aufgeht:** Der Zweig öffnet keinen vorher geschlossenen
+Weg. `is_absolute()` greift danach unverändert, `~user` verhält sich weiter
+wie verlangt, und ein `~\..\..` erreicht nichts, was der Nutzer nicht schon
+mit seinen eigenen Rechten lesen dürfte — §6.4.6 sieht den `..`-Fall
+ausdrücklich vor.
+
+**Ungetestet:** Für diesen Zweig gibt es keinen Test, weil er unter
+`#[cfg(windows)]` liefe und die Umsetzung auf macOS entstanden ist. Die CI
+testet auf `windows-latest`; ein `#[cfg(windows)]`-Pendant zu
+`test_tilde_is_expanded_to_the_home_directory` gehört dort ergänzt.
+
+## 12. Ein scheiternder Rollback bekommt einen **eigenen** Fehlercode
+
+**Frage:** Bleibt nach einem gescheiterten Rollback ein privater Schlüssel
+im Schlüsselbund liegen, muss der Nutzer es erfahren (C-6). Unter welchem
+stabilen Code?
+
+**Erste Fassung, und warum sie falsch war:** Zuerst stand dort
+`KEYCHAIN_UNAVAILABLE`. Der zweite Review-Durchgang hat gezeigt, dass das
+die Nachbesserung wirkungslos gemacht hätte: `errorCodes.ts` **ersetzt**
+bei einem bekannten Code die Meldung durch den eigenen Übersetzungstext und
+benutzt die mitgelieferte `message` gar nicht. Der Nutzer hätte „Der
+Systemschlüsselbund ist nicht verfügbar" gelesen — und ausgerechnet nicht,
+welcher Eintrag liegen geblieben ist. Dazu widerspräche es Spec 0071 A13:
+Dieser Code gilt dort ausdrücklich nur, wenn der Schlüsselbund als nicht
+verfügbar bekannt ist.
+
+**Entscheidung:** eigener Code
+`IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND` in `error.rs`. Solange Schritt 5
+keine Übersetzung ergänzt, ist er dem Frontend unbekannt — und genau dann
+zeigt es die `message`, die den Slot nennt. **Für Schritt 5:** Die
+Übersetzung braucht den Slot als Parameter, sonst geht die Auskunft wieder
+verloren.
+
+Die ursprüngliche Fehlerursache (warum das Speichern scheiterte) bleibt im
+Text erhalten und wird vom Rollback-Problem nicht verdrängt; ein Test
+prüft beides.
+
+## 13. Bewusst **nicht** behobene Review-Funde
 
 Der `spec-reviewer` hat mit ERHÖHTER Priorität geprüft. Alle Funde bis auf
 die folgenden sind behoben (Commit `Review-Nacharbeit`). Was stehen bleibt,
@@ -267,7 +320,38 @@ unerreichbar, weil die Oberfläche keine solchen Server erzeugen kann. Mit
 bekommt Server, die die Oberfläche nicht darstellen kann. Diese Reihenfolge
 gehört beachtet.
 
-## 12. Kein Changelog-Eintrag aus diesem Lauf
+**d) `test_dev_stdin_yields_a_clean_outcome_and_never_hangs` ist in der CI
+faktisch ein Rauchtest.** Mit stdin an `/dev/null` oder einer Datei kann er
+für keinen Code-Defekt rot werden.
+
+*Warum nicht behoben:* §6.4.6 nennt `/dev/stdin` namentlich, und die
+Zusage, die dort steht („entweder ein sauberer Fehler oder ein gelesener
+Schlüssel, in keinem Fall ein Hänger"), ist genau das, was der Test prüft.
+Mehr gibt der Fall nicht her, weil `/dev/stdin` je nach Umgebung eine
+reguläre Datei, ein Zeichengerät oder ein Rohr ist. Der belastbare
+`O_NONBLOCK`-Nachweis ist der FIFO-Test, der belastbare Lesegrenzen-Nachweis
+`test_an_endless_source_is_never_read_beyond_the_limit`.
+
+**e) Der neue Abbruchpfad kann bei verfügbarem Schlüsselbund einen rohen
+`keyring`-Text ans Frontend reichen.** `keychain_aware_credential_error`
+hängt den stabilen Code nur an, wenn der Schlüsselbund schon beim Start als
+nicht verfügbar erkannt wurde.
+
+*Warum nicht behoben:* Das ist das bestehende Verhalten aller
+Schlüsselbund-Schreibzugriffe in dieser Crate, und Spec 0071 X2 verspricht
+die Unterdrückung ausdrücklich nur für den „nicht verfügbar"-Fall. Der Pfad
+ist durch den Fix lediglich **neu erreichbar** (vorher verschluckte `.ok()`
+den Fehler ganz — was schlechter war). Eine Änderung hier wäre eine
+Spec-0071-Frage, keine Spec-0076-Frage.
+
+**f) UNC-Pfade (`\\server\share\key`) gelten unter Windows als absolut.**
+Ein Schlüssel würde über SMB gelesen.
+
+*Warum nicht behoben:* Von dieser Spec weder eingeführt noch adressiert.
+Gehört als eigenes Item festgehalten — die Frage ist eine Produktfrage
+(„darf ein Schlüssel von einer Netzfreigabe kommen?"), keine Umsetzungsfrage.
+
+## 14. Kein Changelog-Eintrag aus diesem Lauf
 
 **Frage:** Der Abschluss eines Umsetzungsschritts sieht normalerweise ein
 Fragment unter `changelog.d/` vor.
