@@ -31,6 +31,11 @@ pub struct InMemoryProfileStore {
     /// `servers::create_server` gegen einen echten Fehler getestet werden
     /// kann, statt nur den Erfolgsfall abzudecken.
     pub fail_create_server: bool,
+    /// Spec 0076, C-6 (zweite Richtung): lässt `update_server`
+    /// deterministisch fehlschlagen — simuliert einen DB-Fehler **nach**
+    /// dem bereits geschriebenen Schlüsselbund-Eintrag, damit der Rollback
+    /// der Überführung gegen einen echten Fehler geprüft werden kann.
+    pub fail_update_server: bool,
 }
 
 impl InMemoryProfileStore {
@@ -50,6 +55,11 @@ impl InMemoryProfileStore {
 
     pub fn with_failing_create_server(mut self) -> Self {
         self.fail_create_server = true;
+        self
+    }
+
+    pub fn with_failing_update_server(mut self) -> Self {
+        self.fail_update_server = true;
         self
     }
 }
@@ -150,6 +160,11 @@ impl ProfileStore for InMemoryProfileStore {
     }
 
     async fn update_server(&self, server: &Server) -> ProfileResult<()> {
+        if self.fail_update_server {
+            return Err(ProfileError::Backend(
+                "simulierter DB-Fehler beim Speichern des Servers".to_string(),
+            ));
+        }
         let mut servers = self.servers.lock().unwrap();
         if !servers.contains_key(&server.id) {
             return Err(ProfileError::ServerNotFound(server.id));

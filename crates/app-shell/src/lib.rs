@@ -26,6 +26,7 @@ mod filter_rules;
 mod first_run_notice;
 mod groups;
 mod host_key_store;
+mod identity_file;
 mod key_files;
 mod local_server;
 mod logging;
@@ -560,6 +561,10 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::update_server,
             commands::delete_server,
             commands::clear_server_sudo_password,
+            // Spec 0076 (BL-0221/BL-0222): Schlüsseldatei-Befund und
+            // Überführung in den Schlüsselbund.
+            commands::inspect_key_file,
+            commands::convert_identity_file_to_keychain,
             commands::test_connection,
             commands::trust_host_key,
             commands::update_group_notes,

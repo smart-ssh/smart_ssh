@@ -2651,6 +2651,46 @@ pub async fn clear_server_sudo_password(
     clear_sudo_password(state.credential_store.as_ref(), id)
 }
 
+/// Spec 0076, B-3/C-7: Was an einer Schlüsseldatei auffällt, **bevor**
+/// gespeichert wird — existiert sie, passen die Rechte, sieht sie wie ein
+/// OpenSSH-Schlüssel aus, ist sie verschlüsselt.
+///
+/// Ein Fehlbefund hindert das Speichern **nicht** (B-3): Die Datei darf
+/// erst später entstehen. Er sagt nur, was gerade zu sehen ist.
+///
+/// Gibt **kein** Schlüsselmaterial zurück — die Feststellung läuft über
+/// `inspect`, nicht über `read` (§4.2).
+#[tauri::command]
+pub async fn inspect_key_file(
+    state: State<'_, AppState>,
+    path: String,
+) -> CommandResult<crate::dto::KeyFileFactsDto> {
+    Ok(crate::identity_file::inspect_key_file(
+        state.key_file_reader.as_ref(),
+        &path,
+    ))
+}
+
+/// Spec 0076, C-1/C-3 (BL-0222): „In den Schlüsselbund übernehmen".
+///
+/// Der Aufruf setzt voraus, dass der Nutzer den Dialog aus C-2 bereits
+/// gesehen hat — welche Datei gelesen wird, was sich ändert und was nicht.
+/// Was er **nicht** tut: die Ursprungsdatei anfassen (C-5).
+#[tauri::command]
+pub async fn convert_identity_file_to_keychain(
+    state: State<'_, AppState>,
+    id: ServerId,
+) -> CommandResult<ServerDto> {
+    crate::identity_file::convert_identity_file_to_keychain(
+        state.profile_store.as_ref(),
+        state.credential_store.as_ref(),
+        state.keychain,
+        state.key_file_reader.as_ref(),
+        id,
+    )
+    .await
+}
+
 /// Spec 0008, Abschnitt 7. `existing_server_id` ist eine gegenüber der
 /// Spec-Skizze notwendige Ergänzung — s. Doc-Kommentar an
 /// `crate::test_connection::test_connection`.

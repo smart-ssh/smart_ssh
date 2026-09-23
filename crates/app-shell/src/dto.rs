@@ -130,6 +130,53 @@ impl ServerDto {
     }
 }
 
+/// Spec 0076, B-3/C-7: der Vorab-Befund über eine Schlüsseldatei.
+///
+/// **Kein Feld für den Schlüssel.** Der Befund entsteht über
+/// [`ssh_manager_core::ssh::KeyFileReader::inspect`], das per Konstruktion
+/// kein Schlüsselmaterial herausgibt (§4.2) — dieses DTO hat deshalb gar
+/// keine Stelle, an der welches hinausgehen könnte (§5.2). Der Pfad ist
+/// ebenfalls nicht enthalten: Das Frontend hat ihn gerade selbst
+/// geschickt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyFileFactsDto {
+    pub exists: bool,
+    /// Nur Unix; auf Windows immer `false`, wie bei OpenSSH selbst (A-4).
+    pub permissions_too_open: bool,
+    pub valid_key: bool,
+    pub encrypted: bool,
+    /// `None`, wenn die Datei grundsätzlich in Frage kommt. Sonst der
+    /// Grund, warum nicht — mit stabilem Code fürs Übersetzen (Spec 0024,
+    /// Abschnitt 5) und dem Text als Rückfallebene.
+    pub problem: Option<KeyFileProblemDto>,
+}
+
+/// Der Grund aus [`KeyFileFactsDto::problem`]. Trägt **nie** Dateiinhalt —
+/// die Meldungen stammen aus [`ssh_manager_core::ssh::KeyFileError`], die
+/// genau das zusichert (§5.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyFileProblemDto {
+    pub code: String,
+    pub message: String,
+}
+
+impl From<ssh_manager_core::ssh::KeyFileFacts> for KeyFileFactsDto {
+    fn from(facts: ssh_manager_core::ssh::KeyFileFacts) -> Self {
+        Self {
+            exists: facts.exists,
+            permissions_too_open: facts.permissions_too_open,
+            valid_key: facts.valid_key,
+            encrypted: facts.encrypted,
+            problem: facts.problem.map(|err| KeyFileProblemDto {
+                code: err.code().to_string(),
+                message: err.to_string(),
+            }),
+        }
+    }
+}
+
 /// Spec 0071, A15: der Schlüsselbund-Zustand für die Diagnose-Ansicht.
 ///
 /// Bewusst nur ein Flag und eine Aufzählung — **kein** Fehlertext, keine
