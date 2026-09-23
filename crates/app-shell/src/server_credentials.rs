@@ -9,7 +9,9 @@
 
 use secrecy::SecretString;
 
-use ssh_manager_core::profiles::{AuthMethod, CredentialError, CredentialRef, CredentialStore};
+use ssh_manager_core::profiles::{
+    trim_credential_value, AuthMethod, CredentialError, CredentialRef, CredentialStore,
+};
 use ssh_manager_core::shared::ServerId;
 
 use credentials_keyring::KeychainAvailability;
@@ -56,13 +58,20 @@ pub fn sudo_password_credential_ref(server_id: ServerId) -> CredentialRef {
 /// error`). Der Zustand kommt aus dem `AppState` (A16) — hier wird nichts
 /// zusätzlich abgefragt, und am Schreibverhalten selbst ändert sich nichts:
 /// Der Fehler wird unverändert weitergereicht, nie verschluckt (X6).
+///
+/// Spec 0073, A3: getrimmt wird über den geteilten
+/// [`trim_credential_value`] — dieselbe Semantik wie bisher, zusätzlich
+/// fallen unsichtbare Randzeichen ohne `White_Space`-Eigenschaft weg. Die
+/// Reihenfolge „erst trimmen, dann Leer-Prüfung" bleibt unverändert, ein
+/// nur aus solchen Zeichen bestehender Paste gilt damit wie ein echtes
+/// Leerfeld als „unverändert" (I4).
 pub fn resolve_sudo_password(
     credential_store: &dyn CredentialStore,
     keychain: KeychainAvailability,
     server_id: ServerId,
     provided: Option<String>,
 ) -> Result<(), CommandError> {
-    match provided.map(|value| value.trim().to_string()) {
+    match provided.map(|value| trim_credential_value(&value)) {
         Some(value) if !value.is_empty() => {
             credential_store
                 .set(
@@ -175,6 +184,12 @@ pub fn clear_sudo_password(
 /// schlicht ein leerer String bei Neuanlage) wurde also als "gültiger
 /// Wert" durchgereicht und gespeichert, statt wie ein echtes Leerfeld
 /// "unverändert lassen"/"Pflichtfeld fehlt" auszulösen.
+///
+/// Spec 0073, A3: dasselbe Trimmen, nur über den geteilten
+/// [`trim_credential_value`] — zusätzlich fallen unsichtbare Randzeichen
+/// ohne `White_Space`-Eigenschaft weg. Beide oben beschriebenen Fälle
+/// gelten unverändert weiter, jetzt auch für einen Paste, der nur aus
+/// solchen Zeichen besteht.
 fn write_or_reuse_secret(
     credential_store: &dyn CredentialStore,
     keychain: KeychainAvailability,
@@ -184,7 +199,7 @@ fn write_or_reuse_secret(
     label: &str,
     code: &'static str,
 ) -> Result<(), CommandError> {
-    match provided.map(|value| value.trim().to_string()) {
+    match provided.map(|value| trim_credential_value(&value)) {
         Some(value) if !value.is_empty() => {
             credential_store
                 .set(ref_, SecretString::from(value))
@@ -311,7 +326,10 @@ pub fn resolve_auth_method(
             // `ServerForm.tsx`s `toAuthMethodInput`) fälschlich als "neue
             // Passphrase gesetzt" gewertet, statt wie ein echtes Leerfeld
             // die bestehende Passphrase unverändert zu lassen.
-            let passphrase_ref = match passphrase.map(|p| p.trim().to_string()) {
+            // Spec 0073, A3: über den geteilten `trim_credential_value` —
+            // dasselbe gilt damit auch für einen Paste, der nur aus
+            // unsichtbaren Zeichen besteht.
+            let passphrase_ref = match passphrase.map(|p| trim_credential_value(&p)) {
                 Some(p) if !p.is_empty() => {
                     let r = credential_ref(server_id, "passphrase");
                     credential_store
@@ -1067,6 +1085,195 @@ mod tests {
         assert_eq!(
             secret_value(&store, &existing_passphrase_ref).as_deref(),
             Some("old-passphrase")
+        );
+    }
+
+    // --- Spec 0073, T10: unsichtbare Randzeichen an Server-Secrets --------
+    //
+    // Die drei Slots dieses Moduls (Passwort, Passphrase, Sudo-Passwort)
+    // laufen über denselben geteilten `trim_credential_value`. Getestet wird
+    // je Slot einmal „Randzeichen fällt weg" und einmal „nur Randzeichen
+    // heißt unverändert" (I4) — dieselbe Paarung wie bei den
+    // Whitespace-Tests aus Spec 0049 darüber.
+
+    #[test]
+    fn test_t10_password_with_bom_and_zero_width_edges_is_stored_cleaned() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        let auth = resolve_auth_method(
+            &store,
+            AVAILABLE,
+            id,
+            AuthMethodInput::Password {
+                value: Some("\u{FEFF}hunter2\u{200B}".to_string()),
+            },
+            None,
+        )
+        .unwrap();
+
+        let AuthMethod::Password { credential_ref } = &auth else {
+            panic!("erwartete AuthMethod::Password");
+        };
+        assert_eq!(
+            secret_value(&store, credential_ref).as_deref(),
+            Some("hunter2"),
+            "BOM und Zero-Width-Space am Rand dürfen nicht mitgespeichert werden"
+        );
+    }
+
+    // Gegenstück zu I1: ein unsichtbares Zeichen **innerhalb** des
+    // Passworts bleibt erhalten — ein Secret ist undurchsichtig.
+    #[test]
+    fn test_t10_password_with_an_invisible_char_inside_keeps_it() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        let auth = resolve_auth_method(
+            &store,
+            AVAILABLE,
+            id,
+            AuthMethodInput::Password {
+                value: Some(" hunter\u{200B}2 ".to_string()),
+            },
+            None,
+        )
+        .unwrap();
+
+        let AuthMethod::Password { credential_ref } = &auth else {
+            panic!("erwartete AuthMethod::Password");
+        };
+        assert_eq!(
+            secret_value(&store, credential_ref).as_deref(),
+            Some("hunter\u{200B}2"),
+            "nur der Rand wird bereinigt, das innenliegende Zeichen bleibt"
+        );
+    }
+
+    #[test]
+    fn test_t10_password_of_only_invisible_chars_on_update_leaves_existing_unchanged() {
+        let id = ServerId::new();
+        let existing_ref = credential_ref(id, "password");
+        let store = InMemoryCredentialStore::new().with_secret(&existing_ref, "old-password");
+        let existing = AuthMethod::Password {
+            credential_ref: existing_ref.clone(),
+        };
+
+        let auth = resolve_auth_method(
+            &store,
+            AVAILABLE,
+            id,
+            AuthMethodInput::Password {
+                value: Some("\u{FEFF}\u{200B}\u{2060}".to_string()),
+            },
+            Some(&existing),
+        )
+        .unwrap();
+
+        let AuthMethod::Password { credential_ref } = &auth else {
+            panic!("erwartete AuthMethod::Password");
+        };
+        assert_eq!(credential_ref, &existing_ref);
+        assert_eq!(
+            secret_value(&store, &existing_ref).as_deref(),
+            Some("old-password"),
+            "ein Paste nur aus unsichtbaren Zeichen darf das bestehende Passwort nicht \
+             überschreiben"
+        );
+    }
+
+    #[test]
+    fn test_t10_passphrase_with_bom_edge_is_stored_cleaned() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        let auth = resolve_auth_method(
+            &store,
+            AVAILABLE,
+            id,
+            AuthMethodInput::PrivateKey {
+                key_content: Some("-----BEGIN KEY-----".to_string()),
+                passphrase: Some("\u{FEFF}passphrase-secret\u{2060}".to_string()),
+            },
+            None,
+        )
+        .unwrap();
+
+        let AuthMethod::PrivateKey { passphrase_ref, .. } = &auth else {
+            panic!("erwartete AuthMethod::PrivateKey");
+        };
+        let passphrase_ref = passphrase_ref.as_ref().expect("Passphrase wurde gesetzt");
+        assert_eq!(
+            secret_value(&store, passphrase_ref).as_deref(),
+            Some("passphrase-secret")
+        );
+    }
+
+    #[test]
+    fn test_t10_passphrase_of_only_invisible_chars_on_update_leaves_existing_unchanged() {
+        let id = ServerId::new();
+        let key_ref = credential_ref(id, "private_key");
+        let existing_passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&key_ref, "old-key")
+            .with_secret(&existing_passphrase_ref, "old-passphrase");
+        let existing = AuthMethod::PrivateKey {
+            credential_ref: key_ref.clone(),
+            passphrase_ref: Some(existing_passphrase_ref.clone()),
+        };
+
+        let auth = resolve_auth_method(
+            &store,
+            AVAILABLE,
+            id,
+            AuthMethodInput::PrivateKey {
+                key_content: None,
+                passphrase: Some("\u{200B}\u{FEFF}".to_string()),
+            },
+            Some(&existing),
+        )
+        .unwrap();
+
+        let AuthMethod::PrivateKey { passphrase_ref, .. } = &auth else {
+            panic!("erwartete AuthMethod::PrivateKey");
+        };
+        assert_eq!(passphrase_ref.as_ref(), Some(&existing_passphrase_ref));
+        assert_eq!(
+            secret_value(&store, &existing_passphrase_ref).as_deref(),
+            Some("old-passphrase")
+        );
+    }
+
+    #[test]
+    fn test_t10_sudo_password_with_zero_width_edges_is_stored_cleaned() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        resolve_sudo_password(
+            &store,
+            AVAILABLE,
+            id,
+            Some("\u{200B}sudo-secret\u{FEFF}".to_string()),
+        )
+        .unwrap();
+
+        assert_eq!(
+            secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
+            Some("sudo-secret")
+        );
+    }
+
+    #[test]
+    fn test_t10_sudo_password_of_only_invisible_chars_leaves_existing_unchanged() {
+        let id = ServerId::new();
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(id), "old-sudo-password");
+
+        resolve_sudo_password(&store, AVAILABLE, id, Some("\u{FEFF}\u{200D}".to_string())).unwrap();
+
+        assert_eq!(
+            secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
+            Some("old-sudo-password")
         );
     }
 }
