@@ -530,8 +530,12 @@ mod tests {
     /// Spec 0072, B-T3 (Backend-Teil): `ProviderType::Anthropic` läuft über
     /// denselben Code-Pfad wie die OpenAI-kompatible Familie, nur mit
     /// anderen Headern — kein separater "Anthropic wird abgelehnt"-Zweig
-    /// mehr in `discover_models` selbst (der lebt, wenn überhaupt, nur noch
-    /// im aufrufenden `app-shell`-Command, s. dortigen Test).
+    /// mehr in `discover_models` selbst. Der frühere Ablehnungs-Zweig lebt
+    /// nur noch im aufrufenden `app-shell`-Command
+    /// (`crates::app_shell::commands::discover_models`) als Verteidigung-
+    /// in-der-Tiefe für eine künftige, noch unbekannte fünfte
+    /// `ProviderType`-Variante — dafür existiert dort (noch) kein eigener
+    /// Test, s. Spec-Reviewer-Fund (Review dieses Schritts).
     #[tokio::test]
     async fn test_discover_models_anthropic_401_yields_authentication_failed() {
         let server = MockServer::start().await;
@@ -552,12 +556,14 @@ mod tests {
     /// Spec 0072, B-T5: eine per `extra_headers` gesetzte `x-api-key`
     /// erscheint genau einmal in der Anfrage — nicht zusätzlich zu der
     /// intern gesetzten. `wiremock`s `header(...)`-Matcher prüft nicht
-    /// direkt "genau einmal", deshalb hier zusätzlich über
-    /// `Mock::given(...).expect(1)` plus einem Matcher auf den
-    /// **überschriebenen** Wert — träfe der interne Default-Wert noch (weil
+    /// direkt "genau einmal", deshalb hier ein Matcher auf den
+    /// **überschriebenen** Wert: träfe der interne Default-Wert noch (weil
     /// beide Header gesendet würden), würde `header("x-api-key",
     /// "overridden-by-user")` nicht matchen und der Request liefe auf
-    /// `wiremock`s 404-Fallback statt auf `200`.
+    /// `wiremock`s 404-Fallback statt auf `200` — `result.is_ok()` schlüge
+    /// fehl. Dieselbe Eigenschaft zusätzlich direkt (ohne HTTP-Mock) belegt
+    /// durch `test_effective_headers_overrides_only_the_matching_default_
+    /// not_other_extra_entries` unten.
     #[tokio::test]
     async fn test_discover_models_extra_header_overrides_default_x_api_key_exactly_once() {
         let server = MockServer::start().await;
