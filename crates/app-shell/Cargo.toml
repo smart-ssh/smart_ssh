@@ -66,6 +66,11 @@ tempfile = "3.27.0"
 # eigene Tests — nur unter `[dev-dependencies]`, landet also nie in einem
 # Release-Build.
 ssh-manager-core = { path = "../core", features = ["test-support"] }
+# Spec 0076, §6.2: `ssh_transport::test_keys` erzeugt echte
+# OpenSSH-Schlüssel für die Tests der `KeyFileReader`-Umsetzung — erzeugt
+# statt eingebettet, damit in diesem öffentlichen Repo kein privater
+# Schlüssel im Klartext liegt. Nur `[dev-dependencies]`.
+ssh-transport = { path = "../ssh-transport", features = ["test-support"] }
 tauri = { version = "2", features = ["test"] }
 # Spec 0046, Fund 4: `start_paused`/`tokio::time::advance` fürs Testen des
 # Backend-Timeouts auf eine wartende `Confirm`-Aktion, ohne 3600 echte

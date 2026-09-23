@@ -227,6 +227,14 @@ fn cleanup_abandoned_slots(
     input: &AuthMethodInput,
 ) {
     let Some(existing) = existing else { return };
+    // **Achtung, stille Bruchstelle.** Dieses `matches!` hat einen
+    // impliziten `false`-Zweig: Fehlt hier das Paar für eine
+    // `AuthMethod`-Variante, gilt beim Bearbeiten eines solchen Servers
+    // `same_kind == false` — und `update_server` löscht dann dessen
+    // Secret-Slots aus dem Schlüsselbund, obwohl sich die Anmeldeart gar
+    // nicht geändert hat. Das wäre ein Credential-Verlust **ohne**
+    // Fehlermeldung, den kein Test der Spec 0076 §6 fände. Wer `AuthMethod`
+    // um eine Variante erweitert, erweitert diese Liste mit.
     let same_kind = matches!(
         (existing, input),
         (
@@ -239,6 +247,13 @@ fn cleanup_abandoned_slots(
             | (
                 AuthMethod::Certificate { .. },
                 AuthMethodInput::Certificate { .. }
+            )
+            // Spec 0076, §7.1: das Paar, dessen Fehlen die hinterlegte
+            // Passphrase einer Schlüsseldatei beim Bearbeiten gelöscht
+            // hätte.
+            | (
+                AuthMethod::IdentityFile { .. },
+                AuthMethodInput::IdentityFile { .. }
             )
     );
     if same_kind {
@@ -256,6 +271,9 @@ fn cleanup_abandoned_slots(
         }
         AuthMethod::Agent => Vec::new(),
         AuthMethod::Certificate { cert_ref, key_ref } => vec![cert_ref, key_ref],
+        // Spec 0076: Der Pfad steht in der DB, nicht im Schlüsselbund —
+        // aufzuräumen ist hier nur die optionale Passphrase.
+        AuthMethod::IdentityFile { passphrase_ref, .. } => passphrase_ref.iter().collect(),
     };
     for r in abandoned {
         let _ = credential_store.delete(r);
@@ -372,6 +390,43 @@ pub fn resolve_auth_method(
             )?;
             Ok(AuthMethod::Certificate { cert_ref, key_ref })
         }
+        // Spec 0076, A-1/A-5. Der Pfad ist kein Secret und geht **nicht**
+        // in den Schlüsselbund — er wird unverändert gespeichert, wie der
+        // Nutzer ihn angegeben hat (kein `realpath`, keine Normalisierung,
+        // kein Auflösen von `~`; das passiert erst beim Lesen, §4.4).
+        // Schlüsselbund-Arbeit fällt hier nur für die optionale Passphrase
+        // an, und zwar mit derselben „leer = unverändert"-Semantik wie bei
+        // `PrivateKey`.
+        AuthMethodInput::IdentityFile { path, passphrase } => {
+            if path.trim().is_empty() {
+                return Err(CommandError::with_code(
+                    "Pfad zur Schlüsseldatei ist erforderlich",
+                    "SERVER_IDENTITY_FILE_REQUIRED",
+                ));
+            }
+
+            let existing_passphrase_ref = match existing {
+                Some(AuthMethod::IdentityFile {
+                    passphrase_ref: Some(r),
+                    ..
+                }) => Some(r.clone()),
+                _ => None,
+            };
+            let passphrase_ref = match passphrase.map(|p| trim_credential_value(&p)) {
+                Some(p) if !p.is_empty() => {
+                    let r = credential_ref(server_id, "passphrase");
+                    credential_store
+                        .set(&r, SecretString::from(p))
+                        .map_err(|err| keychain_aware_credential_error(err, keychain))?;
+                    Some(r)
+                }
+                _ => existing_passphrase_ref,
+            };
+            Ok(AuthMethod::IdentityFile {
+                path,
+                passphrase_ref,
+            })
+        }
     }
 }
 
@@ -410,6 +465,11 @@ pub fn delete_auth_method_secrets(
         }
         AuthMethod::Agent => Vec::new(),
         AuthMethod::Certificate { cert_ref, key_ref } => vec![cert_ref, key_ref],
+        // Spec 0076: nur die Passphrase liegt im Schlüsselbund. Die
+        // Schlüsseldatei selbst wird **nicht** angefasst (C-5 gilt
+        // erst recht beim Löschen eines Servers): Wir haben sie nie
+        // angelegt, wir löschen sie nicht.
+        AuthMethod::IdentityFile { passphrase_ref, .. } => passphrase_ref.iter().collect(),
     };
     refs.into_iter()
         .filter_map(|r| delete_user_requested_secret(credential_store, r))
@@ -702,6 +762,188 @@ mod tests {
         );
 
         assert!(secret_value(&store, &key_ref).is_none());
+        assert!(secret_value(&store, &passphrase_ref).is_none());
+    }
+
+    // --- Spec 0076: Schlüsseldatei -----------------------------------------
+
+    const IDENTITY_PATH: &str = "/home/deploy/.ssh/id_ed25519";
+
+    fn identity_file_input(passphrase: Option<&str>) -> AuthMethodInput {
+        AuthMethodInput::IdentityFile {
+            path: IDENTITY_PATH.to_string(),
+            passphrase: passphrase.map(str::to_string),
+        }
+    }
+
+    /// **Spec 0076, §7.1 — die Stelle, die still bricht.**
+    ///
+    /// Das `matches!` in [`cleanup_abandoned_slots`] zählt Paare auf und hat
+    /// einen impliziten `false`-Zweig. Fehlt das Paar
+    /// `(IdentityFile, IdentityFile)`, gilt beim bloßen **Bearbeiten** eines
+    /// solchen Servers `same_kind == false` — und der `passphrase`-Slot wird
+    /// aus dem Schlüsselbund gelöscht, obwohl sich die Anmeldeart gar nicht
+    /// geändert hat.
+    ///
+    /// Das Tückische daran: Das zurückgegebene `AuthMethod` sieht danach
+    /// **richtig** aus (`passphrase_ref` kommt aus `existing`, nicht aus dem
+    /// Store) — nur der Schlüsselbund ist leer. Der Nutzer erfährt davon
+    /// erst beim nächsten Verbindungsversuch. Dieser Test prüft deshalb den
+    /// **Store-Inhalt**, nicht nur den Rückgabewert; nur so wird er rot.
+    #[test]
+    fn test_editing_an_identity_file_server_does_not_wipe_its_stored_passphrase() {
+        let id = ServerId::new();
+        let passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryCredentialStore::new().with_secret(&passphrase_ref, "old-passphrase");
+        let existing = AuthMethod::IdentityFile {
+            path: IDENTITY_PATH.to_string(),
+            passphrase_ref: Some(passphrase_ref.clone()),
+        };
+
+        let auth = resolve_auth_method(
+            &store,
+            AVAILABLE,
+            id,
+            // Leeres Passphrase-Feld = unverändert lassen; genau der Fall,
+            // der beim Bearbeiten eines Servers entsteht.
+            identity_file_input(None),
+            Some(&existing),
+        )
+        .unwrap();
+
+        let AuthMethod::IdentityFile {
+            passphrase_ref: kept,
+            path,
+        } = &auth
+        else {
+            panic!("erwartete AuthMethod::IdentityFile");
+        };
+        assert_eq!(path, IDENTITY_PATH, "A-1: der Pfad bleibt unverändert");
+        assert_eq!(kept.as_ref(), Some(&passphrase_ref));
+        assert_eq!(
+            secret_value(&store, &passphrase_ref).as_deref(),
+            Some("old-passphrase"),
+            "die hinterlegte Passphrase darf beim Bearbeiten nicht aus dem Schlüsselbund \
+             verschwinden — das wäre ein Credential-Verlust ohne Fehlermeldung"
+        );
+    }
+
+    /// Gegenprobe zum Test darüber: Bei einem **echten** Wechsel der
+    /// Anmeldeart wird der Passphrase-Slot sehr wohl aufgeräumt — sonst
+    /// bliebe ein verwaister Eintrag im Schlüsselbund zurück, auf den kein
+    /// `AuthMethod` mehr zeigt.
+    ///
+    /// Ohne diese Gegenprobe ließe sich der Test darüber auch dadurch grün
+    /// bekommen, dass man das Aufräumen ganz abschaltet.
+    #[test]
+    fn test_switching_away_from_an_identity_file_cleans_up_the_passphrase_slot() {
+        let id = ServerId::new();
+        let passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryCredentialStore::new().with_secret(&passphrase_ref, "old-passphrase");
+        let existing = AuthMethod::IdentityFile {
+            path: IDENTITY_PATH.to_string(),
+            passphrase_ref: Some(passphrase_ref.clone()),
+        };
+
+        let auth = resolve_auth_method(
+            &store,
+            AVAILABLE,
+            id,
+            AuthMethodInput::Agent,
+            Some(&existing),
+        )
+        .unwrap();
+
+        assert!(matches!(auth, AuthMethod::Agent));
+        assert!(
+            secret_value(&store, &passphrase_ref).is_none(),
+            "verwaister Passphrase-Slot muss aufgeräumt werden"
+        );
+    }
+
+    /// A-1: Der Pfad geht **nicht** in den Schlüsselbund — er ist kein
+    /// Secret und steht als Klartext in der Datenbank (§4.4, B-4).
+    #[test]
+    fn test_identity_file_path_is_never_written_to_the_keychain() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        resolve_auth_method(&store, AVAILABLE, id, identity_file_input(None), None).unwrap();
+
+        for slot in ["private_key", "password", "passphrase", "certificate"] {
+            assert!(
+                secret_value(&store, &credential_ref(id, slot)).is_none(),
+                "ein Dateipfad gehört in keinen Schlüsselbund-Slot ({slot})"
+            );
+        }
+    }
+
+    /// A-5: Eine angegebene Passphrase landet im gewohnten Slot — dieselbe
+    /// Behandlung wie bei `PrivateKey`, inklusive Rand-Trimmen (Spec 0073,
+    /// A3).
+    #[test]
+    fn test_identity_file_passphrase_is_stored_trimmed() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        let auth = resolve_auth_method(
+            &store,
+            AVAILABLE,
+            id,
+            identity_file_input(Some("passphrase-secret\r\n")),
+            None,
+        )
+        .unwrap();
+
+        let AuthMethod::IdentityFile { passphrase_ref, .. } = &auth else {
+            panic!("erwartete AuthMethod::IdentityFile");
+        };
+        let passphrase_ref = passphrase_ref.as_ref().expect("Passphrase wurde gesetzt");
+        assert_eq!(
+            secret_value(&store, passphrase_ref).as_deref(),
+            Some("passphrase-secret")
+        );
+    }
+
+    /// Ein leerer Pfad ist kein gültiger Ort für einen Schlüssel — und
+    /// „leer = unverändert" gilt nur für Schlüsselbund-Slots, nicht für ein
+    /// Klartextfeld.
+    #[test]
+    fn test_identity_file_requires_a_path() {
+        let store = InMemoryCredentialStore::new();
+        let id = ServerId::new();
+
+        let result = resolve_auth_method(
+            &store,
+            AVAILABLE,
+            id,
+            AuthMethodInput::IdentityFile {
+                path: "   ".to_string(),
+                passphrase: None,
+            },
+            None,
+        );
+
+        let err = result.expect_err("ein leerer Pfad ist kein Pfad");
+        assert_eq!(err.code, Some("SERVER_IDENTITY_FILE_REQUIRED"));
+    }
+
+    /// C-5/A-1: Beim Löschen eines Servers wird die **Passphrase** entfernt
+    /// — und sonst nichts. Die Schlüsseldatei haben wir nie angelegt, also
+    /// fassen wir sie auch nicht an.
+    #[test]
+    fn test_deleting_an_identity_file_server_removes_only_the_passphrase() {
+        let id = ServerId::new();
+        let passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryCredentialStore::new().with_secret(&passphrase_ref, "phrase");
+        let auth = AuthMethod::IdentityFile {
+            path: IDENTITY_PATH.to_string(),
+            passphrase_ref: Some(passphrase_ref.clone()),
+        };
+
+        let left_behind = delete_auth_method_secrets(&store, &auth);
+
+        assert!(left_behind.is_empty());
         assert!(secret_value(&store, &passphrase_ref).is_none());
     }
 

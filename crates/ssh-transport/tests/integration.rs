@@ -17,13 +17,31 @@ use ssh_manager_core::profiles::{
     AuthMethod, CredentialError, CredentialRef, CredentialResult, CredentialStore,
 };
 use ssh_manager_core::ssh::{
-    ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, PtySize, SshError,
+    ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, KeyFileContent, KeyFileError,
+    KeyFileFacts, KeyFileReader, PtySize, SshError,
 };
 use ssh_transport::ConnectOutcome;
 
 use fixtures::test_server::{sftp_local_path, RunningTestServer, TEST_PASSWORD, TEST_USERNAME};
 
 const PASSWORD_CREDENTIAL: &str = "test-password-credential";
+
+/// Spec 0076, §4.2: Diese Integrationstests melden sich mit **Passwort**
+/// an; eine Schlüsseldatei wird auf keinem ihrer Pfade gelesen. Statt einer
+/// stillen Attrappe steht hier deshalb eine, die laut wird — käme ein
+/// Dateizugriff dazwischen, wäre das eine Verhaltensänderung, die niemand
+/// bestellt hat (§2, Nicht-Ziel 5: keine neue Verzweigung im Transport).
+struct NoKeyFiles;
+
+impl KeyFileReader for NoKeyFiles {
+    fn read(&self, path: &str, _enforce_permissions: bool) -> Result<KeyFileContent, KeyFileError> {
+        panic!("unerwarteter Schlüsseldatei-Zugriff auf {path} in einem Passwort-Test");
+    }
+
+    fn inspect(&self, path: &str) -> KeyFileFacts {
+        panic!("unerwarteter Schlüsseldatei-Befund zu {path} in einem Passwort-Test");
+    }
+}
 
 #[derive(Default)]
 struct TestCredentialStore {
@@ -128,7 +146,7 @@ async fn connect_trusted(
     };
     let credentials = TestCredentialStore::default();
 
-    match ssh_transport::connect(&target, &credentials, host_keys)
+    match ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys)
         .await
         .expect("connect() sollte gelingen")
     {
@@ -180,7 +198,7 @@ async fn test_ssh_login_credential_read_once_regardless_of_execute_calls() {
     };
     let credentials = TestCredentialStore::default();
 
-    let mut transport = match ssh_transport::connect(&target, &credentials, host_keys)
+    let mut transport = match ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys)
         .await
         .expect("connect() sollte gelingen")
     {
@@ -297,7 +315,7 @@ async fn test_two_hop_jump_connection() {
     };
     let credentials = TestCredentialStore::default();
 
-    let outcome = ssh_transport::connect(&target, &credentials, host_keys)
+    let outcome = ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys)
         .await
         .expect("Zwei-Hop-connect() sollte gelingen");
 
@@ -332,9 +350,10 @@ async fn test_unknown_host_key_pauses_then_trust_continues() {
     };
     let credentials = TestCredentialStore::default();
 
-    let first_attempt = ssh_transport::connect(&target, &credentials, host_keys.clone())
-        .await
-        .expect("connect() selbst darf bei Unknown-Key nicht fehlschlagen");
+    let first_attempt =
+        ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys.clone())
+            .await
+            .expect("connect() selbst darf bei Unknown-Key nicht fehlschlagen");
 
     let (host, port, raw_key) = match first_attempt {
         ConnectOutcome::PendingHostKeyConfirmation {
@@ -355,9 +374,10 @@ async fn test_unknown_host_key_pauses_then_trust_continues() {
     };
 
     // Ohne trust() bleibt jeder weitere Versuch PendingHostKeyConfirmation.
-    let second_attempt = ssh_transport::connect(&target, &credentials, host_keys.clone())
-        .await
-        .expect("connect() darf bei erneutem Unknown-Key nicht fehlschlagen");
+    let second_attempt =
+        ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys.clone())
+            .await
+            .expect("connect() darf bei erneutem Unknown-Key nicht fehlschlagen");
     assert!(matches!(
         second_attempt,
         ConnectOutcome::PendingHostKeyConfirmation { .. }
@@ -367,7 +387,7 @@ async fn test_unknown_host_key_pauses_then_trust_continues() {
         .trust(&host, port, &raw_key)
         .expect("trust() sollte gelingen");
 
-    let after_trust = ssh_transport::connect(&target, &credentials, host_keys)
+    let after_trust = ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys)
         .await
         .expect("connect() nach trust() sollte gelingen");
     match after_trust {
@@ -402,7 +422,7 @@ async fn test_connect_to_closed_local_port_yields_connection_refused() {
 
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(15),
-        ssh_transport::connect(&target, &credentials, host_keys),
+        ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys),
     )
     .await
     .expect("darf nicht hängen");
@@ -435,7 +455,7 @@ async fn test_connect_to_unresolvable_host_yields_host_not_found() {
 
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(15),
-        ssh_transport::connect(&target, &credentials, host_keys),
+        ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys),
     )
     .await
     .expect("darf nicht hängen");
@@ -475,7 +495,7 @@ async fn test_changed_host_key_still_yields_mismatch_not_a_connection_error() {
     };
     let credentials = TestCredentialStore::default();
 
-    let outcome = ssh_transport::connect(&target, &credentials, host_keys)
+    let outcome = ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys)
         .await
         .expect("connect() selbst darf bei Mismatch nicht fehlschlagen");
 
@@ -522,7 +542,7 @@ async fn test_hanging_handshake_times_out_and_never_trusts_a_host_key() {
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(10),
         ssh_transport::connect_with_timeout(
-            ssh_transport::connect(&target, &credentials, host_keys_dyn),
+            ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys_dyn),
             std::time::Duration::from_millis(300),
         ),
     )
@@ -574,7 +594,7 @@ async fn test_connection_error_against_closed_port_never_leaks_the_password() {
 
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(15),
-        ssh_transport::connect(&target, &PasswordProbeStore, host_keys),
+        ssh_transport::connect(&target, &PasswordProbeStore, &NoKeyFiles, host_keys),
     )
     .await
     .expect("darf nicht hängen");

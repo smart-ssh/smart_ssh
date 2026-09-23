@@ -4,7 +4,7 @@ use russh::client;
 use russh::keys::{Certificate, PrivateKey, PrivateKeyWithHashAlg};
 use secrecy::{ExposeSecret, SecretString};
 use ssh_manager_core::profiles::CredentialStore;
-use ssh_manager_core::ssh::{resolve_auth, Hop, ResolvedAuth, SshError};
+use ssh_manager_core::ssh::{resolve_auth, Hop, KeyFileReader, ResolvedAuth, SshError};
 
 use crate::error::map_russh_error;
 use crate::handler::ClientHandler;
@@ -13,12 +13,17 @@ use crate::handler::ClientHandler;
 /// 3 der Aufgabenstellung): löst `hop.auth` über `credentials` auf (reine
 /// `core`-Logik, s. `ssh_manager_core::ssh::resolve_auth`) und übersetzt das
 /// Ergebnis in den passenden `russh`-Auth-Aufruf.
+///
+/// Spec 0076, §4.2: `key_files` reist neben `credentials` mit — die
+/// Anmeldelogik selbst bleibt dabei inhaltlich unverändert (§2, Nicht-Ziel
+/// 5: keine neue Verzweigung auf die Anmeldeart im Transport).
 pub(crate) async fn authenticate(
     handle: &mut client::Handle<ClientHandler>,
     hop: &Hop,
     credentials: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
 ) -> Result<(), SshError> {
-    let resolved = resolve_auth(&hop.auth, credentials)?;
+    let resolved = resolve_auth(&hop.auth, credentials, key_files)?;
 
     let result = match resolved {
         ResolvedAuth::Password(secret) => handle
@@ -55,6 +60,45 @@ pub(crate) async fn authenticate(
         Ok(())
     } else {
         Err(SshError::AuthenticationFailed)
+    }
+}
+
+/// Was die Prüfung einer Schlüsseldatei auf Gültigkeit ergibt (Spec 0076,
+/// §4.2). Bewusst **ohne** den Fehlertext der Parse-Bibliothek: Ob
+/// `ssh_key`s `Display` je Eingabebytes wiedergibt, wissen wir nicht, und
+/// eine Sicherheits-Invariante darf nicht am Anzeigeverhalten einer fremden
+/// Kiste ruhen (5.2). Wer diesen Typ bekommt, formuliert seine eigene
+/// Meldung.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyClassification {
+    /// Ein gültiger OpenSSH-Schlüssel. `encrypted` ist eine
+    /// **Feststellung**, kein Urteil: ob eine fehlende Passphrase ein
+    /// Fehler ist, entscheidet `resolve_auth` (Spec 0076, A-5).
+    Valid {
+        encrypted: bool,
+    },
+    Invalid,
+}
+
+/// Prüft rohe Bytes auf einen gültigen OpenSSH-Privatschlüssel und meldet,
+/// ob er verschlüsselt ist (Spec 0076, §4.2).
+///
+/// Liegt hier und nicht in `app-shell`, obwohl die `KeyFileReader`-
+/// Umsetzung dort wohnt: Das Parsen von Schlüsseln ist bereits Sache dieser
+/// Crate (s. [`load_private_key`] direkt darunter, dieselbe
+/// `PrivateKey::from_openssh`-Zeile), und `app-shell` hat keine eigene
+/// Schlüssel-Bibliothek — sie dafür aufzunehmen wäre eine neue
+/// Abhängigkeit für eine Zeile, die es hier schon gibt. `core` scheidet
+/// ohnehin aus (keine I/O- und keine `russh`-Abhängigkeit, §1.3).
+pub fn classify_openssh_key(bytes: &[u8]) -> KeyClassification {
+    match PrivateKey::from_openssh(bytes) {
+        Ok(parsed) => KeyClassification::Valid {
+            encrypted: parsed.is_encrypted(),
+        },
+        // Der Fehler wird bewusst fallen gelassen, nicht durchgereicht
+        // (5.2) — der Aufrufer formuliert eine eigene, pfadtragende
+        // Meldung ohne Dateiinhalt.
+        Err(_) => KeyClassification::Invalid,
     }
 }
 

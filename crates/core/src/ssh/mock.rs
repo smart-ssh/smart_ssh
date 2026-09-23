@@ -22,7 +22,9 @@ use std::sync::{Arc, Mutex as StdMutex};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use secrecy::SecretString;
 
+use super::auth::{KeyFileContent, KeyFileError, KeyFileFacts, KeyFileReader};
 use super::error::SshError;
 use super::transport::SftpSession;
 use super::types::RemoteEntry;
@@ -265,5 +267,171 @@ impl SftpSession for MockSftpSession {
             file.permissions = mode;
         }
         Ok(())
+    }
+}
+
+// --- Spec 0076: Attrappe für den Dateizugriff ---------------------------
+
+/// Eine Schlüsseldatei, wie die Attrappe sie kennt — **ohne** Dateisystem
+/// (Spec 0076, §4.2: „in Tests steht eine Attrappe, mit der sich jeder
+/// Fehlerfall aus A-6 ohne echte Datei herstellen lässt").
+#[derive(Debug, Clone)]
+pub struct MockKeyFile {
+    /// Der Dateiinhalt, wie ihn [`KeyFileReader::read`] als
+    /// [`SecretString`] herausgibt.
+    pub content: String,
+    /// Ob der Schlüssel verschlüsselt ist — eine **Feststellung**, kein
+    /// Fehler (A-5): ob daraus ein Fehler folgt, entscheidet
+    /// `resolve_auth`.
+    pub encrypted: bool,
+    /// Rechte zu weit im Sinne von A-4. Wirkt in [`KeyFileReader::read`]
+    /// nur bei `enforce_permissions == true` — genau die Unterscheidung,
+    /// die Test §6.2.10 prüft.
+    pub permissions_too_open: bool,
+}
+
+/// Test-Double für [`KeyFileReader`] (Spec 0076, §4.2). Gated wie
+/// [`MockSftpSession`] hinter `test-support`, damit auch `app-shell`s
+/// Tests ihn nutzen können.
+///
+/// Zählt seine Aufrufe: Test §6.3.2 verlangt, dass der Vorab-Befund
+/// `inspect` benutzt und **nicht** `read` (der Befund darf kein
+/// Schlüsselmaterial herausgeben), und E-5 verlangt, dass bei **jedem**
+/// Verbindungsaufbau neu gelesen wird.
+#[derive(Default, Clone)]
+pub struct MockKeyFileReader {
+    inner: Arc<StdMutex<KeyFileInner>>,
+}
+
+#[derive(Default)]
+struct KeyFileInner {
+    files: HashMap<String, Result<MockKeyFile, KeyFileError>>,
+    calls: Vec<String>,
+}
+
+impl MockKeyFileReader {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Eine lesbare Datei mit gültigem, unverschlüsseltem Schlüssel.
+    pub fn with_key(self, path: &str, content: &str) -> Self {
+        self.with_file(
+            path,
+            MockKeyFile {
+                content: content.to_string(),
+                encrypted: false,
+                permissions_too_open: false,
+            },
+        )
+    }
+
+    /// Eine lesbare Datei mit gültigem, **verschlüsseltem** Schlüssel.
+    pub fn with_encrypted_key(self, path: &str, content: &str) -> Self {
+        self.with_file(
+            path,
+            MockKeyFile {
+                content: content.to_string(),
+                encrypted: true,
+                permissions_too_open: false,
+            },
+        )
+    }
+
+    pub fn with_file(self, path: &str, file: MockKeyFile) -> Self {
+        self.inner
+            .lock()
+            .unwrap()
+            .files
+            .insert(path.to_string(), Ok(file));
+        self
+    }
+
+    /// Stellt genau einen der Fehlerfälle aus A-6 her, ohne eine echte
+    /// Datei zu brauchen.
+    pub fn with_error(self, path: &str, error: KeyFileError) -> Self {
+        self.inner
+            .lock()
+            .unwrap()
+            .files
+            .insert(path.to_string(), Err(error));
+        self
+    }
+
+    /// Alle Aufrufe in Reihenfolge, z. B. `"read /x true"`, `"inspect /x"`.
+    pub fn calls(&self) -> Vec<String> {
+        self.inner.lock().unwrap().calls.clone()
+    }
+
+    pub fn read_calls(&self) -> usize {
+        self.calls()
+            .iter()
+            .filter(|c| c.starts_with("read "))
+            .count()
+    }
+
+    fn lookup(&self, path: &str) -> Result<MockKeyFile, KeyFileError> {
+        match self.inner.lock().unwrap().files.get(path) {
+            Some(Ok(file)) => Ok(file.clone()),
+            Some(Err(err)) => Err(err.clone()),
+            None => Err(KeyFileError::NotFound {
+                path: path.to_string(),
+            }),
+        }
+    }
+}
+
+impl KeyFileReader for MockKeyFileReader {
+    fn read(&self, path: &str, enforce_permissions: bool) -> Result<KeyFileContent, KeyFileError> {
+        self.inner
+            .lock()
+            .unwrap()
+            .calls
+            .push(format!("read {path} {enforce_permissions}"));
+        let file = self.lookup(path)?;
+        // A-4/§4.2: zu weite Rechte sperren **nur** den Anmeldepfad. Mit
+        // `enforce_permissions == false` (Überführung C-3) wird dieselbe
+        // Datei gelesen — sonst wäre der Rettungsknopf aus C-1 genau dann
+        // gesperrt, wenn er gebraucht wird.
+        if enforce_permissions && file.permissions_too_open {
+            return Err(KeyFileError::PermissionsTooOpen {
+                path: path.to_string(),
+                mode: 0o644,
+            });
+        }
+        Ok(KeyFileContent {
+            key: SecretString::from(file.content.clone()),
+            encrypted: file.encrypted,
+        })
+    }
+
+    fn inspect(&self, path: &str) -> KeyFileFacts {
+        self.inner
+            .lock()
+            .unwrap()
+            .calls
+            .push(format!("inspect {path}"));
+        match self.lookup(path) {
+            Ok(file) => KeyFileFacts {
+                exists: true,
+                permissions_too_open: file.permissions_too_open,
+                valid_key: true,
+                encrypted: file.encrypted,
+                problem: None,
+            },
+            Err(err) => KeyFileFacts {
+                // Ein Pfad, der gar keiner ist, und eine fehlende Datei
+                // sind die beiden Fälle, in denen nichts existiert; bei
+                // allen übrigen gibt es etwas, es taugt nur nicht.
+                exists: !matches!(
+                    err,
+                    KeyFileError::NotFound { .. } | KeyFileError::PathNotAbsolute { .. }
+                ),
+                permissions_too_open: matches!(err, KeyFileError::PermissionsTooOpen { .. }),
+                valid_key: false,
+                encrypted: false,
+                problem: Some(err),
+            },
+        }
     }
 }

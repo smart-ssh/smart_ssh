@@ -957,6 +957,11 @@ pub(crate) async fn connect_session(
                     ssh_transport::connect(
                         &target,
                         state.credential_store.as_ref(),
+                        // Spec 0076, §4.2: der echte Produktionspfad —
+                        // dieser Aufruf geht direkt an `ssh_transport`,
+                        // nicht über den `Connector`-Trait (das ist die
+                        // Testabstraktion daneben).
+                        state.key_file_reader.as_ref(),
                         state.host_key_store.clone(),
                     ),
                     SSH_CONNECT_TIMEOUT,
@@ -2664,6 +2669,7 @@ pub async fn test_connection(
     crate::test_connection::test_connection(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
+        state.key_file_reader.as_ref(),
         state.keychain,
         state.host_key_store.clone(),
         &crate::test_connection::RealConnector,

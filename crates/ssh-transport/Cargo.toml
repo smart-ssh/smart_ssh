@@ -9,11 +9,24 @@ publish.workspace = true
 name = "ssh_transport"
 path = "src/lib.rs"
 
+[features]
+# Spec 0076, §6.2/§6.4.2: macht `test_keys::*` außerhalb dieser Crate
+# nutzbar. `app-shell`s Tests brauchen echte OpenSSH-Schlüssel, um die
+# `KeyFileReader`-Umsetzung zu prüfen — erzeugt statt eingebettet, damit
+# in diesem **öffentlichen** Repo kein privater Schlüssel im Klartext
+# liegt. Abhängige Crates aktivieren es unter `[dev-dependencies]`,
+# es landet also nie in einem Release-Build.
+test-support = ["dep:rand"]
+
 [dependencies]
 async-trait = "0.1.92"
 bytes = "1.12.1"
 chrono = "0.4.45"
 portable-pty = "0.9"
+# Nur für `test-support` (s. oben) — ohne das Feature nicht mitkompiliert.
+# Dieselbe Kiste, die die Integrationstests dieser Crate ohnehin schon
+# unter `[dev-dependencies]` benutzen, keine neue Abhängigkeit.
+rand = { version = "0.10.2", optional = true }
 russh = "0.63.1"
 russh-sftp = "2.4.0"
 secrecy = "0.10.3"

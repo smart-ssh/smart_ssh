@@ -12,7 +12,7 @@ use persistence_sqlite::{
 use ssh_manager_core::entitlements::EntitlementProvider;
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore};
 use ssh_manager_core::shared::ServerId;
-use ssh_manager_core::ssh::HostKeyStore;
+use ssh_manager_core::ssh::{HostKeyStore, KeyFileReader};
 
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionUserDecision, HostKeyUserDecision};
@@ -35,6 +35,15 @@ pub struct AppState {
     // taugt, ohne den Trait selbst (der auch synchron/nicht-App-spezifisch
     // bleiben soll) anzufassen.
     pub credential_store: Arc<dyn CredentialStore + Send + Sync>,
+    /// Spec 0076, §4.2: die äußere Grenze zum Dateisystem für
+    /// [`ssh_manager_core::profiles::AuthMethod::IdentityFile`]. Gebaut wie
+    /// `credential_store` und mit derselben Lebensdauer — sie reist auf
+    /// jedem Verbindungspfad neben ihm mit, weil `resolve_auth` beide
+    /// zusammen braucht.
+    ///
+    /// `Send + Sync` steht wie bei `credential_store` am Objekttyp, nicht
+    /// am Trait: `KeyFileReader` soll synchron und app-unabhängig bleiben.
+    pub key_file_reader: Arc<dyn KeyFileReader + Send + Sync>,
     /// Spec 0071, A16: ob der OS-Schlüsselbund bei diesem Programmstart
     /// erreichbar war — **einmal** in `lib::build_app_state` ermittelt und
     /// danach nur noch gelesen. Kein Kommando probiert den Schlüsselbund

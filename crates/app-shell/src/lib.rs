@@ -26,6 +26,7 @@ mod filter_rules;
 mod first_run_notice;
 mod groups;
 mod host_key_store;
+mod key_files;
 mod local_server;
 mod logging;
 mod mcp_backend;
@@ -282,6 +283,9 @@ fn build_app_state(
         sessions: SessionManager::new(),
         profile_store: Arc::new(profile_store),
         credential_store: Arc::new(credential_store),
+        // Spec 0076, §4.2: zustandslos — sie hält nichts fest, weil bei
+        // jedem Verbindungsaufbau neu gelesen wird (E-5, §4.3).
+        key_file_reader: Arc::new(crate::key_files::OsKeyFileReader::new()),
         keychain,
         ai_provider_store: Arc::new(ai_provider_store),
         host_key_store: Arc::new(host_key_store),

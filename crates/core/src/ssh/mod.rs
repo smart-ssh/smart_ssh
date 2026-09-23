@@ -20,7 +20,10 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use auth::{resolve_auth, ResolvedAuth};
+pub use auth::{
+    resolve_auth, KeyFileContent, KeyFileError, KeyFileFacts, KeyFileReader, ResolvedAuth,
+    MAX_KEY_FILE_BYTES,
+};
 pub use error::SshError;
 pub use host_key::HostKeyStore;
 pub use jump_host::resolve_connection_target;

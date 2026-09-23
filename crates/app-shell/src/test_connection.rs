@@ -11,7 +11,8 @@ use secrecy::SecretString;
 use ssh_manager_core::profiles::{AuthMethod, CredentialRef, CredentialStore, ProfileStore};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{
-    resolve_connection_target, ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, SshError,
+    resolve_connection_target, ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, KeyFileReader,
+    SshError,
 };
 use ssh_transport::ConnectOutcome;
 
@@ -38,6 +39,7 @@ pub trait Connector: Send + Sync {
         &self,
         target: &ConnectionTarget,
         credentials: &(dyn CredentialStore + Send + Sync),
+        key_files: &(dyn KeyFileReader + Send + Sync),
         host_keys: Arc<dyn HostKeyStore>,
     ) -> Result<ConnectOutcome, SshError>;
 }
@@ -50,9 +52,10 @@ impl Connector for RealConnector {
         &self,
         target: &ConnectionTarget,
         credentials: &(dyn CredentialStore + Send + Sync),
+        key_files: &(dyn KeyFileReader + Send + Sync),
         host_keys: Arc<dyn HostKeyStore>,
     ) -> Result<ConnectOutcome, SshError> {
-        ssh_transport::connect(target, credentials, host_keys).await
+        ssh_transport::connect(target, credentials, key_files, host_keys).await
     }
 }
 
@@ -63,9 +66,14 @@ impl Connector for RealConnector {
 /// Spec selbst verlangt aber genau dieses Verhalten ("wird für den Test
 /// das bereits gespeicherte Credential des existierenden Servers
 /// herangezogen"). Siehe ADR-Vorschlag am Ende der Aufgabe.
+#[allow(clippy::too_many_arguments)]
 pub async fn test_connection(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
+    // Spec 0076, §4.2: reist neben `real_credential_store` mit — ein
+    // Verbindungstest gegen einen Server mit Schlüsseldatei muss dieselbe
+    // Datei lesen wie der echte Verbindungsaufbau.
+    key_files: &(dyn KeyFileReader + Send + Sync),
     // Spec 0071, A13: nur für die Fehlerkennzeichnung durchgereicht (s.
     // `error::keychain_aware_credential_error`) — dieser Pfad liest bei
     // leerem Formularfeld das bereits gespeicherte Secret, und ohne
@@ -80,6 +88,7 @@ pub async fn test_connection(
     test_connection_with_timeout(
         profile_store,
         real_credential_store,
+        key_files,
         keychain,
         host_key_store,
         connector,
@@ -101,6 +110,7 @@ pub async fn test_connection(
 async fn test_connection_with_timeout(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
     keychain: KeychainAvailability,
     host_key_store: Arc<dyn HostKeyStore>,
     connector: &dyn Connector,
@@ -145,7 +155,7 @@ async fn test_connection_with_timeout(
         real: real_credential_store,
     };
 
-    let attempt = connector.connect(&target, &tiered, host_key_store);
+    let attempt = connector.connect(&target, &tiered, key_files, host_key_store);
     let outcome = match tokio::time::timeout(timeout, attempt).await {
         Err(_elapsed) => return Ok(TestConnectionResult::Timeout),
         Ok(result) => result,
@@ -298,6 +308,38 @@ fn resolve_final_hop_auth(
 
             Ok(AuthMethod::Certificate { cert_ref, key_ref })
         }
+        // Spec 0076: Der Pfad wandert unverändert in den Test-Hop — er ist
+        // kein Secret und braucht keinen Ephemeral-Slot. Gelesen wird die
+        // Datei erst im Verbindungsversuch selbst, über denselben
+        // `KeyFileReader` wie beim echten Verbinden. Nur die Passphrase
+        // folgt der gewohnten „leer = das Gespeicherte nehmen"-Regel.
+        AuthMethodInput::IdentityFile { path, passphrase } => {
+            let passphrase_ref = match passphrase {
+                Some(p) if !p.trim().is_empty() => {
+                    let r = CredentialRef::new("test:passphrase");
+                    ephemeral.insert(&r, SecretString::from(p));
+                    Some(r)
+                }
+                _ => match existing {
+                    Some(AuthMethod::IdentityFile {
+                        passphrase_ref: Some(existing_ref),
+                        ..
+                    }) => {
+                        let secret = real_credential_store
+                            .get(existing_ref)
+                            .map_err(|err| keychain_aware_credential_error(err, keychain))?;
+                        let r = CredentialRef::new("test:passphrase");
+                        ephemeral.insert(&r, secret);
+                        Some(r)
+                    }
+                    _ => None,
+                },
+            };
+            Ok(AuthMethod::IdentityFile {
+                path,
+                passphrase_ref,
+            })
+        }
     }
 }
 
@@ -361,6 +403,7 @@ mod tests {
     const AVAILABLE: KeychainAvailability = KeychainAvailability::Available;
 
     use ssh_manager_core::profiles::PostIngestPolicy;
+    use ssh_manager_core::ssh::mock::MockKeyFileReader;
     use ssh_manager_core::ssh::{CommandOutput, HostKeyDecision, InteractiveShell, PtySize};
 
     use super::*;
@@ -413,6 +456,7 @@ mod tests {
             &self,
             _target: &ConnectionTarget,
             _credentials: &(dyn CredentialStore + Send + Sync),
+            _key_files: &(dyn KeyFileReader + Send + Sync),
             _host_keys: Arc<dyn HostKeyStore>,
         ) -> Result<ConnectOutcome, SshError> {
             match &self.0 {
@@ -473,6 +517,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            &MockKeyFileReader::new(),
             AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Success),
@@ -494,6 +539,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            &MockKeyFileReader::new(),
             AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::UnknownHostKey),
@@ -518,6 +564,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            &MockKeyFileReader::new(),
             AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::MismatchHostKey),
@@ -542,6 +589,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            &MockKeyFileReader::new(),
             AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::AuthenticationFailed),
@@ -563,6 +611,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            &MockKeyFileReader::new(),
             AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::NetworkError),
@@ -584,6 +633,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            &MockKeyFileReader::new(),
             AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Timeout),
@@ -610,6 +660,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            &MockKeyFileReader::new(),
             AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Success),
@@ -661,6 +712,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            &MockKeyFileReader::new(),
             AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Success),
@@ -688,6 +740,7 @@ mod tests {
                 &self,
                 target: &ConnectionTarget,
                 credentials: &(dyn CredentialStore + Send + Sync),
+                _key_files: &(dyn KeyFileReader + Send + Sync),
                 _host_keys: Arc<dyn HostKeyStore>,
             ) -> Result<ConnectOutcome, SshError> {
                 assert_eq!(target.hops.len(), 2);
@@ -773,6 +826,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &real_credential_store,
+            &MockKeyFileReader::new(),
             AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &InspectingConnector,

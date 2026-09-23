@@ -124,6 +124,24 @@ pub enum AuthMethod {
         cert_ref: CredentialRef,
         key_ref: CredentialRef,
     },
+    /// Spec 0076, A-1: Anmeldung mit einer Schlüsseldatei auf der Platte
+    /// statt mit einem im Schlüsselbund abgelegten Schlüsselinhalt.
+    ///
+    /// `path` wird gespeichert, **wie der Nutzer ihn angegeben hat** — kein
+    /// `realpath`, keine Normalisierung, kein Auflösen von `~` beim
+    /// Speichern (A-1, §4.4): `~/.ssh/id_ed25519` wird auf zwei Rechnern zu
+    /// zwei verschiedenen Pfaden, der Server hinge sonst an dem Rechner, auf
+    /// dem er angelegt wurde. Aufgelöst wird erst beim Lesen (A-3).
+    ///
+    /// Ein Pfad ist **kein** Secret (anders als die übrigen Varianten trägt
+    /// diese hier deshalb einen Klartextwert) — er darf in der DB, im Log
+    /// und im `ServerDto` stehen (B-4). Die optionale Passphrase liegt
+    /// weiterhin im Schlüsselbund, genau wie bei
+    /// [`AuthMethod::PrivateKey`] (A-5).
+    IdentityFile {
+        path: String,
+        passphrase_ref: Option<CredentialRef>,
+    },
 }
 
 /// Opaker Schlüssel ins OS-Keychain (Spec 0003, Abschnitt 4). **Kein**

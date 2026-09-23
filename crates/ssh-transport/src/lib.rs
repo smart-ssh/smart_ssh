@@ -12,11 +12,14 @@ mod local;
 mod local_sftp;
 mod sftp;
 mod shell;
+#[cfg(feature = "test-support")]
+pub mod test_keys;
 mod transport;
 
 #[cfg(test)]
 mod tests;
 
+pub use auth::{classify_openssh_key, KeyClassification};
 pub use connect::{connect, connect_with_timeout, ConnectOutcome};
 pub use exec::{MAX_STREAM_OUTPUT_BYTES, TRUNCATION_NOTICE};
 pub use local::LocalTransport;

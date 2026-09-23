@@ -172,6 +172,10 @@ pub enum AuthMethodKind {
     PrivateKey,
     Agent,
     Certificate,
+    /// Spec 0076, A-1. Wie die übrigen Varianten **ohne** Inhalt — der
+    /// Pfad reist in einem eigenen Feld des [`ServerDto`] (B-4), damit
+    /// dieses Enum weiterhin nur „welche Methode" sagt.
+    IdentityFile,
 }
 
 impl From<&AuthMethod> for AuthMethodKind {
@@ -181,6 +185,7 @@ impl From<&AuthMethod> for AuthMethodKind {
             AuthMethod::PrivateKey { .. } => AuthMethodKind::PrivateKey,
             AuthMethod::Agent => AuthMethodKind::Agent,
             AuthMethod::Certificate { .. } => AuthMethodKind::Certificate,
+            AuthMethod::IdentityFile { .. } => AuthMethodKind::IdentityFile,
         }
     }
 }
@@ -577,6 +582,17 @@ pub enum AuthMethodInput {
     Certificate {
         cert_content: Option<String>,
         key_content: Option<String>,
+    },
+    /// Spec 0076, A-1/B-2. Anders als bei den übrigen Varianten ist `path`
+    /// **kein** Secret und **nicht** optional: „leer = unverändert lassen"
+    /// gilt für Schlüsselbund-Slots, nicht für ein Klartextfeld, das
+    /// ohnehin vorbefüllt aus dem `ServerDto` zurückkommt (B-4).
+    ///
+    /// `passphrase` verhält sich dagegen genau wie bei
+    /// [`AuthMethodInput::PrivateKey`]: leer bedeutet unverändert (A-5).
+    IdentityFile {
+        path: String,
+        passphrase: Option<String>,
     },
 }
 

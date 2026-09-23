@@ -5,7 +5,7 @@ use std::time::Duration;
 use russh::client;
 use ssh_manager_core::profiles::CredentialStore;
 use ssh_manager_core::ssh::{
-    ConnectionTarget, HostKeyDecision, HostKeyStore, SshError, SshTransport,
+    ConnectionTarget, HostKeyDecision, HostKeyStore, KeyFileReader, SshError, SshTransport,
 };
 
 use crate::auth::authenticate;
@@ -80,9 +80,14 @@ pub enum ConnectOutcome {
 /// demselben grundsätzlichen Muster (SSH-über-SSH via
 /// `channel_open_direct_tcpip`) in
 /// `docs/adr/0008-russh-nested-tunnel-limitation.md`.
+///
+/// Spec 0076, §4.2: `key_files` ist die äußere Grenze zum Dateisystem für
+/// [`ssh_manager_core::profiles::AuthMethod::IdentityFile`] — durchgereicht
+/// bis `authenticate`, das je Hop läuft (A-8).
 pub async fn connect(
     target: &ConnectionTarget,
     credentials: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
 ) -> Result<ConnectOutcome, SshError> {
     let Some((first_hop, remaining_hops)) = target.hops.split_first() else {
@@ -127,7 +132,7 @@ pub async fn connect(
             }
         };
 
-    authenticate(&mut current_handle, first_hop, credentials).await?;
+    authenticate(&mut current_handle, first_hop, credentials, key_files).await?;
 
     let mut intermediate_hops = Vec::new();
 
@@ -157,7 +162,7 @@ pub async fn connect(
         let previous_handle = std::mem::replace(&mut current_handle, next_handle);
         intermediate_hops.push(previous_handle);
 
-        authenticate(&mut current_handle, hop, credentials).await?;
+        authenticate(&mut current_handle, hop, credentials, key_files).await?;
     }
 
     Ok(ConnectOutcome::Connected(Box::new(RusshTransport {
