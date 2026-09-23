@@ -952,8 +952,11 @@ wie es die Architekturregel verlangt.
 
 ## 7. Umsetzungsreihenfolge
 
-**Vorbedingung: Spec 0076 ist umgesetzt** — mindestens ihr Teil, der
-`AuthMethod::IdentityFile` einführt und persistiert. Ohne sie fehlt Weg
+**Vorbedingung: Spec 0076 ist umgesetzt, und zwar einschließlich ihres
+Schritts 5 (Frontend)** — nicht nur des Teils, der
+`AuthMethod::IdentityFile` einführt und persistiert. Sonst erzeugt der
+Import Server, die die Oberfläche nicht darstellen kann (Spec 0076 §9
+K-1). Ohne sie fehlt Weg
 (a) aus §3.1.9; der Import wäre dann auf (b) und (c) beschränkt und der
 Rundlauf (§6.3.3) nicht fahrbar.
 

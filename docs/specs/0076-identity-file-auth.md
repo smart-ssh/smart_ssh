@@ -713,7 +713,8 @@ Test verlangt, dass Schlüsselmaterial nach einem Verbindungsaufbau weder
 in der Datenbank noch in der Oberfläche auftaucht — beides gibt es vor
 Schritt 3 bzw. 5 nicht.
 
-Nach Schritt 3 ist Spec 0075 fahrbar; 4 und 5 können danach laufen.
+~~Nach Schritt 3 ist Spec 0075 fahrbar.~~ **Falsch, siehe §9 K-1:** Spec
+0075 darf erst **nach Schritt 5** laufen.
 
 ## 8. Offene Punkte
 
@@ -759,3 +760,20 @@ Schlüssel wirkt sofort, und nichts liegt länger im Speicher als nötig.
 
 *(Weitere Klarstellungen während der Umsetzung hier nachtragen: Datum ·
 Frage-ID · Antwort.)*
+
+**2026-09-24 · K-1 · Reihenfolge gegenüber Spec 0075 — Korrektur.** Der
+Coder-Lauf zu den Schritten 1–4 hat gefunden (ADR 0065 §13 c), dass der
+Satz in §7 „Nach Schritt 3 ist Spec 0075 fahrbar" **falsch** war. Spec
+0075 erzeugt beim Import `IdentityFile`-Server; kennt das Frontend die
+Variante noch nicht (`frontend/src/types.ts:13`, `ServerDto` ohne
+`identityFilePath`), entstehen Server, die die Oberfläche **nicht
+darstellen** kann. Richtig ist: **Spec 0075 frühestens nach Schritt 5.**
+Der Fehler lag in der Spec, nicht in der Umsetzung — ich hatte nur die
+Backend-Voraussetzung bedacht.
+
+**2026-09-24 · K-2 · Schritte 1 und 2 sind ein Commit geworden.** §7
+verlangt das neue `AppState`-Feld in Schritt 1; befüllen lässt es sich
+aber nur mit der Leseumsetzung aus Schritt 2. Abweichung vom Schnitt,
+nicht vom Inhalt — dasselbe Muster wie der Grund, warum Schritt 1 schon
+die Kette mitnimmt (ADR 0065 §1).
+
