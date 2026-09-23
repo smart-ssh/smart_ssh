@@ -507,7 +507,10 @@ describe('AiProviderSettings "Ollama übernehmen" (Spec 0069, Teil B4, Test 24/2
 
     fireEvent.click(screen.getByRole("button", { name: "Ollama übernehmen" }));
 
-    await waitFor(() => expect(screen.getByText("Error: boom")).toBeInTheDocument());
+    // Spec 0071 merge: `commandErrorMessage` extrahiert jetzt `.message`
+    // statt eines rohen `String(err)` — ein natives `Error`-Objekt liefert
+    // hier "boom", nicht mehr "Error: boom" (s. Mock oben).
+    await waitFor(() => expect(screen.getByText("boom")).toBeInTheDocument());
     expect(setActiveAiProvider).not.toHaveBeenCalled();
   });
 
