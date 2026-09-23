@@ -13,7 +13,10 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use credentials::{CredentialError, CredentialResult, CredentialStore};
+pub use credentials::{
+    trim_credential_value, CredentialError, CredentialResult, CredentialStore,
+    INVISIBLE_CREDENTIAL_EDGE_CHARS,
+};
 pub use notes::{effective_notes, effective_notes_sections, record_revision};
 pub use store::{ProfileError, ProfileResult, ProfileStore};
 pub use types::{
