@@ -23,7 +23,7 @@ pub(crate) async fn authenticate(
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
 ) -> Result<(), SshError> {
-    let resolved = resolve_auth(&hop.auth, credentials, key_files)?;
+    let resolved = resolve_auth(&hop.auth, credentials, key_files).map_err(|e| name_hop(e, hop))?;
 
     let result = match resolved {
         ResolvedAuth::Password(secret) => handle
@@ -31,7 +31,8 @@ pub(crate) async fn authenticate(
             .await
             .map_err(map_russh_error)?,
         ResolvedAuth::PrivateKey { key, passphrase } => {
-            let private_key = load_private_key(&key, passphrase.as_ref())?;
+            let private_key =
+                load_private_key(&key, passphrase.as_ref()).map_err(|e| name_hop(e, hop))?;
             let hash_alg = handle
                 .best_supported_rsa_hash()
                 .await
@@ -45,9 +46,12 @@ pub(crate) async fn authenticate(
         }
         ResolvedAuth::Agent => authenticate_via_agent(handle, &hop.username).await?,
         ResolvedAuth::Certificate { cert, key } => {
-            let private_key = load_private_key(&key, None)?;
+            let private_key = load_private_key(&key, None).map_err(|e| name_hop(e, hop))?;
             let certificate = Certificate::from_openssh(cert.expose_secret()).map_err(|e| {
-                SshError::CredentialResolutionFailed(format!("Zertifikat ungültig: {e}"))
+                name_hop(
+                    SshError::CredentialResolutionFailed(format!("Zertifikat ungültig: {e}")),
+                    hop,
+                )
             })?;
             handle
                 .authenticate_openssh_cert(hop.username.clone(), Arc::new(private_key), certificate)
@@ -60,6 +64,31 @@ pub(crate) async fn authenticate(
         Ok(())
     } else {
         Err(SshError::AuthenticationFailed)
+    }
+}
+
+/// Spec 0076, A-8: **Die Meldung muss sagen, welcher Hop gescheitert ist.**
+///
+/// `authenticate` läuft je Hop der Verbindungskette
+/// (`connect::connect`), und ein Jump-Host mit Schlüsseldatei ist damit
+/// ohne Zusatzarbeit möglich — aber eine Meldung wie „Die Schlüsseldatei
+/// … wurde nicht gefunden" ist wertlos, wenn die Kette drei Rechner lang
+/// ist und offenbleibt, welcher gemeint war.
+///
+/// Angereichert wird **nur** [`SshError::CredentialResolutionFailed`]:
+/// Jede andere Variante entsteht entweder gar nicht je Hop oder trägt
+/// keinen Text, in den etwas passte. Der stabile `code()` bleibt dabei
+/// unverändert — das Frontend-Mapping hängt nicht am Text (Spec 0024,
+/// Abschnitt 5).
+///
+/// Benutzername, Host und Port sind keine Geheimnisse; Dateiinhalt oder
+/// Schlüsselmaterial kommen hier ohnehin nicht vorbei (5.2).
+fn name_hop(error: SshError, hop: &Hop) -> SshError {
+    match error {
+        SshError::CredentialResolutionFailed(message) => SshError::CredentialResolutionFailed(
+            format!("{}@{}:{}: {message}", hop.username, hop.host, hop.port),
+        ),
+        other => other,
     }
 }
 

@@ -158,6 +158,29 @@ impl Handler for TestHandler {
         }
     }
 
+    /// Spec 0076, §6.3.7/§6.3.8: Für die Schlüsseldatei-Tests muss dieser
+    /// Server **irgendeinen** öffentlichen Schlüssel annehmen — welcher es
+    /// ist, prüft er bewusst nicht.
+    ///
+    /// Das ist hier keine Nachlässigkeit, sondern der Punkt: Geprüft wird
+    /// der Weg **bis** zur Signatur — Datei lesen, Passphrase auflösen,
+    /// Schlüssel entschlüsseln. Ob der Server den Schlüssel kennt, ist eine
+    /// andere Frage und würde den Test nur daran scheitern lassen, dass
+    /// niemand den frisch erzeugten Testschlüssel hinterlegt hat. Ein
+    /// **falsches** Passphrase-Ergebnis kommt hier gar nicht erst an: Dann
+    /// scheitert schon das Entschlüsseln, vor jedem Netzverkehr.
+    async fn auth_publickey(
+        &mut self,
+        user: &str,
+        _key: &russh::keys::PublicKey,
+    ) -> Result<Auth, Self::Error> {
+        if user == TEST_USERNAME {
+            Ok(Auth::Accept)
+        } else {
+            Ok(Auth::reject())
+        }
+    }
+
     /// Muss explizit überschrieben werden: der *Default* von
     /// `channel_open_session` nutzt (wie bei `channel_open_direct_tcpip`,
     /// s. u.) das übergebene `ChannelOpenHandle` nicht — ungenutzt gedroppt

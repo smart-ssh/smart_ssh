@@ -701,3 +701,54 @@ async fn test_sftp_server_path_override_roundtrip() {
         None
     );
 }
+
+/// **Spec 0076, §6.3.1: Die Anmeldeart überlebt den Rundlauf durch die
+/// Datenbank.**
+///
+/// `auth_method` ist eine JSON-Textspalte (Migration 0001) — eine Variante
+/// mehr ändert am Schema nichts (§1.4), und genau das prüft dieser Test:
+/// anlegen, neu laden, bearbeiten, wieder laden. Der Pfad kommt dabei
+/// **unverändert** zurück, ohne `realpath` und ohne aufgelöstes `~` (A-1,
+/// §4.4).
+#[tokio::test]
+async fn test_identity_file_auth_survives_the_database_roundtrip() {
+    let store = in_memory_store().await;
+    let mut server = make_server("mit-schluesseldatei", None, Vec::new());
+    let passphrase_ref = ssh_manager_core::profiles::CredentialRef::new("server:x:passphrase");
+    // Bewusst mit `~`: Gespeichert wird, was der Nutzer getippt hat.
+    server.auth = AuthMethod::IdentityFile {
+        path: "~/.ssh/id_ed25519".to_string(),
+        passphrase_ref: Some(passphrase_ref.clone()),
+    };
+    store.create_server(&server).await.unwrap();
+
+    let loaded = store.get_server(&server.id).await.unwrap();
+    assert_eq!(
+        loaded.auth,
+        AuthMethod::IdentityFile {
+            path: "~/.ssh/id_ed25519".to_string(),
+            passphrase_ref: Some(passphrase_ref.clone()),
+        },
+        "die Tilde darf beim Speichern nicht aufgelöst werden (A-1, §4.4)"
+    );
+
+    // Auch über `list_servers` — der Pfad, auf dem heute eine unlesbare
+    // Zeile die ganze Liste mitreißen würde.
+    let listed = store.list_servers().await.unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].auth, loaded.auth);
+
+    // Bearbeiten: anderer Pfad, keine Passphrase mehr.
+    server.auth = AuthMethod::IdentityFile {
+        path: "/etc/ssh/deploy_key".to_string(),
+        passphrase_ref: None,
+    };
+    store.update_server(&server).await.unwrap();
+    assert_eq!(
+        store.get_server(&server.id).await.unwrap().auth,
+        AuthMethod::IdentityFile {
+            path: "/etc/ssh/deploy_key".to_string(),
+            passphrase_ref: None,
+        }
+    );
+}
