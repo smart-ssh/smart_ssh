@@ -105,6 +105,10 @@ lesen, dann an der unterbrochenen Stelle weitermachen.
    - Nicht blockierend → Annahme `A-n` treffen, im Code als
      `// ANNAHME A-n (<Frage-ID>): …` markieren, an anderen Teilen weiterarbeiten.
    - Nie eine Produktentscheidung raten, um weiterarbeiten zu können.
+   - Fällt dir eine offene Entscheidung erst beim Schreiben eines ADR oder
+     des Berichts auf, gehört sie trotzdem hierher. **Ein ADR ist ein
+     Protokoll, kein Weg zum Architekten** — eine nur dort vermerkte Frage
+     erreicht niemanden und bleibt liegen.
 5. **Fertig implementiert:** Test-Gate selbst ausführen — `cargo fmt --all --
    --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
    `cargo test --workspace`, bei Frontend-Änderungen zusätzlich Tests und
