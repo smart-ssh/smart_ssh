@@ -100,8 +100,11 @@ lesen, dann an der unterbrochenen Stelle weitermachen.
      Branches kollidieren (z. B. `commands.rs`, Locale-Dateien).
 
    Dann `.agent/status.json` (und das Item) auf `review` bzw. `needs-stefan`.
-   Wird `review` gesetzt, prüft ein Hook das Test-Gate noch einmal; ist es
-   rot, geht es zurück an dich.
+   **Setz `review` erst, wenn du das Gate aus Schritt 5 selbst grün gesehen
+   hast.** Niemand prüft das automatisch nach: Deine Aussage „Gate grün" ist
+   die einzige, die es dazu gibt, bis sie jemand von Hand nachfährt. Verkette
+   die Gate-Befehle mit `&&`, nie mit `;`, und schick sie nie durch eine
+   Pipe — `… | tail` liefert den Exit-Code von `tail`, also immer 0.
 
 ## Kurzfassung Eskalation (falls der Skill fehlt)
 
