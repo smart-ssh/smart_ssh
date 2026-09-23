@@ -8,20 +8,22 @@ use std::pin::Pin;
 use futures::Stream;
 use ssh_manager_core::ai::{AiError, AiEvent};
 
-/// Spec 0069, Teil A2/Teil 0.2: Textbausteine, die (case-insensitive) in
-/// einem 404- oder 400-Body auf "das angefragte Modell existiert nicht"
-/// hindeuten, statt auf ein generisches Server-/Routing-Problem. Aus den
-/// Fixtures in `tests/fixtures/model_not_found/` übernommen (OpenAI,
-/// Ollama, OpenRouter — Teil-0-Bericht: nicht per echtem Aufruf oder
-/// Web-Recherche verifiziert, s. dortige `README.md`; vor dem nächsten
-/// Release gegen echte Accounts abgleichen).
+/// Spec 0072, A5 (vormals Spec 0069, Teil A2/Teil 0.2): Auffangnetz
+/// **hinter** [`is_structured_model_not_found`] — Textbausteine
+/// (case-insensitive), die auf "das angefragte Modell existiert nicht"
+/// hindeuten, für Provider-Antworten, die kein strukturiertes Feld dafür
+/// liefern. Aus den Fixtures in `tests/fixtures/model_not_found/`
+/// übernommen; die Einträge für OpenAI, OpenRouter und Ollama sind nach wie
+/// vor **unbelegt** (BL-0200 misst sie erst noch gegen echte Accounts, s.
+/// dortige `README.md`). Anthropics echte Antwort (gemessen, Spec 0072 §1)
+/// trifft keinen dieser Marker — dafür ist [`is_structured_model_not_found`]
+/// zuständig.
 ///
 /// **Warum eine Substring-Liste statt eines strikten JSON-Schemas pro
-/// Provider:** die vier Provider-Formate unterscheiden sich strukturell zu
+/// Provider:** die Provider-Formate unterscheiden sich strukturell zu
 /// sehr (OpenAI: `error.code == "model_not_found"`; Ollama: freier
-/// String; OpenRouter: `error.message`; Anthropic: `error.type` +
-/// `error.message`) für ein gemeinsames Schema, ohne vier separate Parser
-/// zu bauen — ein Substring-Match ist robuster gegen kleine
+/// String; OpenRouter: `error.message`) für ein gemeinsames Schema, ohne
+/// separate Parser zu bauen — ein Substring-Match ist robuster gegen kleine
 /// Formulierungs-Änderungen der Provider als ein exaktes Feld-Mapping, auf
 /// Kosten eines (durch die Wortwahl unten geprüft: gering gehaltenen)
 /// False-Positive-Risikos gegen einen unrelated 404 (z. B. falsche
@@ -45,21 +47,61 @@ pub(crate) const MODEL_NOT_FOUND_MARKERS: &[&str] = &[
 /// Endpoint) und nicht wie 401/429 einen spezifischen, für die
 /// aufrufende App handlungsrelevanten Fall.
 ///
-/// Spec 0069, Teil A2: 404 **oder** 400, wenn der Body einen der
-/// [`MODEL_NOT_FOUND_MARKERS`] enthält (case-insensitive) → `ModelNotFound`
-/// statt `ProviderUnavailable` — das war vorher nicht unterscheidbar
-/// (jeder Nicht-401/403/429-Status landete gleich). 401/403 bleiben
-/// `AuthenticationFailed` auch dann, wenn "model" zufällig im Body steht
-/// (Prüfreihenfolge: Status zuerst).
+/// Spec 0072, A1/A2: 404 **oder** 400, wenn der Body **entweder** an der
+/// Antwortstruktur ([`is_structured_model_not_found`]) **oder** — als
+/// Auffangnetz, additiv, nie exklusiv — an einem der
+/// [`MODEL_NOT_FOUND_MARKERS`] (case-insensitive) als "Modell nicht
+/// gefunden" erkennbar ist → `ModelNotFound` statt `ProviderUnavailable`.
+/// 401/403 bleiben `AuthenticationFailed` auch dann, wenn "model" zufällig
+/// im Body steht oder die Struktur zuträfe (Prüfreihenfolge: Status
+/// zuerst, A3).
 pub(crate) fn map_http_status(status: reqwest::StatusCode, body: &str) -> AiError {
     match status.as_u16() {
         401 | 403 => AiError::AuthenticationFailed,
         429 => AiError::RateLimited,
-        404 | 400 if contains_model_not_found_marker(body) => {
+        404 | 400
+            if is_structured_model_not_found(body) || contains_model_not_found_marker(body) =>
+        {
             AiError::ModelNotFound(format!("HTTP {status}: {body}"))
         }
         _ => AiError::ProviderUnavailable(format!("HTTP {status}: {body}")),
     }
+}
+
+/// Spec 0072, A1: erkennt "Modell nicht gefunden" an einem strukturierten
+/// Feld der Provider-Antwort statt an Prosa — `error.type ==
+/// "not_found_error"` (Anthropic, gemessen §1) oder `error.code ==
+/// "model_not_found"` (OpenAI-kompatible Familie). Geprüft wird genau die
+/// **erste** Ebene unter `error` (Spec 0072, X2) — kein rekursives Suchen
+/// im Baum, das würde z. B. `{"error":{"error":{"type":
+/// "not_found_error"}}}` fälschlich treffen, obwohl der äußere Fehler etwas
+/// anderes bedeuten könnte.
+///
+/// A2: greift keine der beiden Formen — sei es, weil `body` kein gültiges
+/// JSON ist, `error` fehlt oder kein Objekt ist, oder die Felder einen
+/// anderen Typ als `String` haben (Spec 0072, X4) —, liefert diese
+/// Funktion `false`, nie einen Fehler/Panic; der Aufrufer fällt dann auf
+/// die Markerliste zurück. Rein additiv: kein Fall, den die Markerliste
+/// bisher erkannte, wird durch diese Funktion "entzogen".
+///
+/// Restrisiko (Spec 0072, §4.2), bewusst hier dokumentiert statt versteckt:
+/// `error.type == "not_found_error"` ist bei Anthropic nicht auf Modelle
+/// beschränkt — ein unbekannter Pfad oder eine unbekannte Ressourcen-ID
+/// erzeugt denselben Typ. Innerhalb dieser Crate unkritisch, da
+/// `ai-providers` nur `POST /v1/messages` und `GET /v1/models` aufruft und
+/// bei beiden die einzige vom Nutzer gesetzte Ressource der Modellname ist.
+/// Kommt später ein Aufruf mit weiteren Ressourcen hinzu, ist diese Annahme
+/// neu zu prüfen.
+fn is_structured_model_not_found(body: &str) -> bool {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
+        return false;
+    };
+    let Some(error) = value.get("error") else {
+        return false;
+    };
+    let error_type = error.get("type").and_then(serde_json::Value::as_str);
+    let error_code = error.get("code").and_then(serde_json::Value::as_str);
+    error_type == Some("not_found_error") || error_code == Some("model_not_found")
 }
 
 fn contains_model_not_found_marker(body: &str) -> bool {
@@ -145,6 +187,13 @@ mod map_http_status_tests {
     //! diesem Schritt lieferte `map_http_status` für jeden dieser Fälle
     //! `ProviderUnavailable` — die Fixture-Tests unten schlugen fehl, bis
     //! `contains_model_not_found_marker` eingeführt wurde.
+    //!
+    //! Spec 0072, §6: `test_anthropic_model_not_found_fixture_maps_to_
+    //! model_not_found` (T1) ist der Regressionstest für diesen Schritt —
+    //! *Gegenbeweis*: gegen den Stand vor `is_structured_model_not_found`
+    //! schlug er fehl (verifiziert: die neue, gemessene Fixture trifft
+    //! keinen der `MODEL_NOT_FOUND_MARKERS`, s. `anthropic.json`-Kommentar
+    //! im Item BL-0200).
     use reqwest::StatusCode;
 
     use super::*;
@@ -244,6 +293,125 @@ mod map_http_status_tests {
             map_http_status(StatusCode::TOO_MANY_REQUESTS, "model rate limit exceeded"),
             AiError::RateLimited
         ));
+    }
+
+    // --- Spec 0072, §6.1: Struktur-Erkennung, unabhängig von der Markerliste --
+
+    /// T2 (verschärft): `error.code == "model_not_found"` trifft **auch
+    /// dann**, wenn der `message`-Text keinen der `MODEL_NOT_FOUND_MARKERS`
+    /// enthält — belegt, dass A1 eigenständig greift, nicht nur zufällig
+    /// zusammen mit der Marker-Liste (die echte `openai.json`-Fixture
+    /// träfe ohnehin auch über den Marker "does not exist or you do not
+    /// have access").
+    #[test]
+    fn test_structured_error_code_without_any_marker_text_maps_to_model_not_found() {
+        let body = r#"{"error":{"message":"nope.","type":"invalid_request_error","code":"model_not_found"}}"#;
+        assert!(matches!(
+            map_http_status(StatusCode::NOT_FOUND, body),
+            AiError::ModelNotFound(_)
+        ));
+    }
+
+    /// T5: leerer Body — kein gültiges JSON, kein Marker-Treffer, kein
+    /// Absturz (A2).
+    #[test]
+    fn test_empty_body_stays_provider_unavailable() {
+        assert!(matches!(
+            map_http_status(StatusCode::NOT_FOUND, ""),
+            AiError::ProviderUnavailable(_)
+        ));
+    }
+
+    /// T6 (A3): `not_found_error` bei einem Status außerhalb 404/400 bleibt
+    /// `ProviderUnavailable` — die Statusbedingung wird durch A1 nicht
+    /// aufgeweicht.
+    #[test]
+    fn test_structured_not_found_error_at_500_stays_provider_unavailable() {
+        let body = r#"{"type":"error","error":{"type":"not_found_error","message":"model: x"}}"#;
+        assert!(matches!(
+            map_http_status(StatusCode::INTERNAL_SERVER_ERROR, body),
+            AiError::ProviderUnavailable(_)
+        ));
+    }
+
+    /// T7 (A3): 401 geht der Struktur-Prüfung vor — derselbe Body, der bei
+    /// 404 `ModelNotFound` ergäbe, bleibt bei 401 `AuthenticationFailed`.
+    #[test]
+    fn test_structured_not_found_error_at_401_stays_authentication_failed() {
+        let body = r#"{"type":"error","error":{"type":"not_found_error","message":"model: x"}}"#;
+        assert!(matches!(
+            map_http_status(StatusCode::UNAUTHORIZED, body),
+            AiError::AuthenticationFailed
+        ));
+    }
+
+    /// T8 (A3): dasselbe für 429 — `RateLimited`, nicht `ModelNotFound`.
+    #[test]
+    fn test_structured_not_found_error_at_429_stays_rate_limited() {
+        let body = r#"{"type":"error","error":{"type":"not_found_error","message":"model: x"}}"#;
+        assert!(matches!(
+            map_http_status(StatusCode::TOO_MANY_REQUESTS, body),
+            AiError::RateLimited
+        ));
+    }
+
+    // --- Spec 0072, §6.3: adversariale Fälle -----------------------------
+
+    /// X2: `error.type` **eine Ebene tiefer** (`error.error.type`) darf
+    /// nicht treffen — geprüft wird genau `error.type` auf der ersten
+    /// Ebene unter dem Top-Level-Body, nicht "irgendwo im Baum".
+    #[test]
+    fn test_deeply_nested_not_found_error_does_not_match() {
+        let body = r#"{"error":{"error":{"type":"not_found_error"}}}"#;
+        assert!(matches!(
+            map_http_status(StatusCode::NOT_FOUND, body),
+            AiError::ProviderUnavailable(_)
+        ));
+    }
+
+    /// X4: ein `error.type`, das kein String ist, darf nicht abstürzen —
+    /// Rückfall auf die Markerliste (die hier ebenfalls nicht trifft).
+    #[test]
+    fn test_non_string_error_type_does_not_panic_and_falls_back_to_markers() {
+        let body = r#"{"error":{"type":123}}"#;
+        assert!(matches!(
+            map_http_status(StatusCode::NOT_FOUND, body),
+            AiError::ProviderUnavailable(_)
+        ));
+    }
+
+    /// X3: ein sehr großer Body darf `is_structured_model_not_found` nicht
+    /// unbegrenzt Zeit/Speicher kosten oder zum Absturz bringen — der
+    /// eigentliche Größen-Cap sitzt bereits vorgelagert auf dem Lesepfad
+    /// (`crate::sse::read_error_body_with_timeout`); diese Funktion muss
+    /// nur robust bleiben, falls sie dennoch einen großen String bekommt.
+    #[test]
+    fn test_very_large_body_is_handled_without_panicking() {
+        let padding = "x".repeat(5 * 1024 * 1024);
+        let body = format!(r#"{{"error":{{"message":"{padding}"}}}}"#);
+        assert!(matches!(
+            map_http_status(StatusCode::NOT_FOUND, &body),
+            AiError::ProviderUnavailable(_)
+        ));
+    }
+
+    /// X1: Ein Anbieter-Fehlertext ist nicht vertrauenswürdig — selbst wenn
+    /// er (hier: platzhalterhaft) wie ein Secret aussieht, entscheidet er
+    /// nur über den *Wert* von `ModelNotFound`, nie darüber, was geloggt
+    /// wird. Die eigentliche Redaction sitzt in
+    /// `request_logging::log_provider_error_response` (geprüft dort) — hier
+    /// wird nur belegt, dass der volle Body (inkl. Platzhalter) unverändert
+    /// in den `AiError`-Wert übernommen wird, also überhaupt etwas zu
+    /// redigieren ist, bevor es geloggt werden darf.
+    #[test]
+    fn test_model_not_found_value_carries_the_full_body_for_downstream_redaction() {
+        let body =
+            r#"{"error":{"type":"not_found_error","message":"model: x (key sk-live-hunter2)"}}"#;
+        let mapped = map_http_status(StatusCode::NOT_FOUND, body);
+        match mapped {
+            AiError::ModelNotFound(msg) => assert!(msg.contains("sk-live-hunter2")),
+            other => panic!("erwartet ModelNotFound, bekam {other:?}"),
+        }
     }
 }
 

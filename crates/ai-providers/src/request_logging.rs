@@ -400,6 +400,38 @@ mod error_logging_tests {
     /// `max_tokens` (Antwort technisch abgeschnitten) müssen im Log klar
     /// unterscheidbar sein — sonst lässt sich ein "KI bricht mitten in der
     /// Antwort ab" nicht einordnen.
+    /// Spec 0072, X1: ein Anbieter-Fehlertext ist nicht vertrauenswürdig —
+    /// selbst wenn `map_http_status` daraus (strukturell, über
+    /// `error.type == "not_found_error"`) ein `ModelNotFound` macht, dessen
+    /// Wert den vollen Body wörtlich enthält (s. `crate::error`-Test
+    /// `test_model_not_found_value_carries_the_full_body_for_downstream_
+    /// redaction`), darf ein darin eingebettetes Secret nie ungeschwärzt im
+    /// Log landen. Nutzt denselben Redaction-Pfad wie jeder andere
+    /// `AiError` (`secrets`-Parameter) — diese Spec ändert an der Redaction
+    /// selbst nichts, sie bestätigt nur, dass der neue, strukturierte
+    /// `ModelNotFound`-Fall keine Ausnahme davon ist.
+    #[test]
+    fn test_model_not_found_error_response_redacts_a_placeholder_secret_in_the_body() {
+        install_test_subscriber_once();
+        clear_log_buffer();
+
+        let placeholder_secret = "sk-live-hunter2";
+        let body = format!(
+            r#"{{"error":{{"type":"not_found_error","message":"model: x (key {placeholder_secret})"}}}}"#
+        );
+        let error = crate::error::map_http_status(reqwest::StatusCode::NOT_FOUND, &body);
+        assert!(matches!(error, AiError::ModelNotFound(_)));
+
+        log_provider_error_response(Uuid::new_v4(), 404, &body, &error, &[placeholder_secret]);
+
+        let log_text = log_buffer_text();
+        assert!(
+            !log_text.contains(placeholder_secret),
+            "der Platzhalter darf in keiner geloggten Zeile auftauchen: {log_text}"
+        );
+        assert!(log_text.contains("AI_MODEL_NOT_FOUND"));
+    }
+
     #[test]
     fn test_log_stop_reason_distinguishes_end_turn_from_max_tokens() {
         install_test_subscriber_once();
