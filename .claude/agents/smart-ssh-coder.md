@@ -160,3 +160,10 @@ ADRs und bestehenden Konventionen ableiten lässt, ist eine Klarstellung (K1).
 - Dieses Repo ist öffentlich: nur Inhalte committen, die öffentlich sein
   dürfen — keine internen Planungs- oder Geschäftsdokumente, keine
   Zugangsdaten.
+- **Keine erzählte Herkunft.** Kein Satz, den du schreibst, schildert
+  Werkzeuge, Entscheidungen, Zeitpunkte oder Begründungen der Organisation
+  hinter diesem Repo. Was du schreibst, beschreibt den Mechanismus, nicht den
+  Betrieb — in Dateien wie in Commit-Messages. Aktenzeichen bleiben erlaubt:
+  Item-IDs, Gate-Kennungen, Frage-IDs, die Freigabe-Zeile einer Spec. Fällt
+  dir beim Schreiben eine Begründung von dort ein, lass sie weg, statt sie
+  umzuformulieren.
