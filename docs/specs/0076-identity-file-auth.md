@@ -55,9 +55,12 @@ Option<SecretString> }`, `Agent`, `Certificate { cert, key }`.
 credentials)?`, je Hop der Verbindungskette. Dazu vier Aufrufe in
 `crates/core/src/ssh/tests.rs:366,381,391,405`.
 
-Daraus folgt der Zuschnitt dieser Spec fast von selbst (§4.1): Der
-Eingriff ist auf eine Funktion, eine Aufrufstelle und vier Tests
-begrenzt.
+**Vorsicht bei dem, was diese Zahl bedeutet.** Sie sagt, wie oft
+`resolve_auth` **gerufen** wird — nicht, wie groß der Eingriff ist. §4.2
+gibt der Funktion einen dritten Parameter, und der muss durch die ganze
+Kette geliefert werden, die ihn heute nirgends kennt: sechs Signaturen,
+aufgezählt in §4.2. Die Aufrufstellen-Zahl ist also eine echte Messung
+der falschen Größe; §4.2 und §7.3 messen die richtige.
 
 ### 1.3 `resolve_auth` liegt in `core` — und `core` darf nicht ans Dateisystem
 
@@ -77,11 +80,14 @@ serialisiertes AuthMethod-Enum"), serialisiert über
 (`crates/persistence-sqlite/src/mapping.rs:9-17`). Eine Variante mehr
 ändert am Schema nichts.
 
-**Eine Folge davon gehört benannt:** Eine ältere Programmfassung, die
-denselben Datenbestand öffnet, kann einen Server mit der neuen Variante
-**nicht** lesen — `auth_method_from_json` scheitert. Das trifft jeden, der
-nach einem Update zurückgeht. Anforderung A-9 regelt, dass daraus eine
-verständliche Meldung wird und kein Absturz.
+**Eine Folge davon gehört benannt, und zwar richtig:** Eine
+Programmfassung, die eine `auth_method`-Variante nicht kennt, kann den
+Server nicht lesen — `auth_method_from_json` scheitert. Für einen
+**Rückschritt auf eine bereits ausgelieferte** Fassung hilft dagegen
+nichts: Die hat den Code, der es abfangen würde, nie bekommen. A-9 wirkt
+also **nach vorn** — für jede künftige Variante, die wir hinzufügen —,
+nicht rückwirkend. Genau deshalb steht sie jetzt hier und nicht später:
+Sie ist erst ab der Fassung wirksam, in der sie ausgeliefert wird.
 
 ## 2. Ziel und Nicht-Ziele
 
@@ -99,8 +105,11 @@ verständliche Meldung wird und kein Absturz.
 3. **Kein Agent-Ersatz.** Wer `ssh-agent` benutzt, bleibt bei
    `AuthMethod::Agent`; diese Spec ändert daran nichts.
 4. **Kein Import.** Das ist Spec 0075, die diese hier voraussetzt.
-5. **Keine Änderung am Transport.** `ssh-transport` bekommt dieselbe
-   `ResolvedAuth::PrivateKey` wie heute (§4.1).
+5. **Keine neue Verzweigung auf die Anmeldeart im Transport.**
+   `ssh-transport` bekommt dieselbe `ResolvedAuth::PrivateKey` wie heute
+   (§4.1); die Anmeldelogik selbst bleibt unverändert. Angefasst wird
+   dort nur, was der zusätzliche Parameter erzwingt (§4.2) und die
+   Fehlermeldung je Hop (A-8).
 
 ## 3. Anforderungen
 
@@ -126,21 +135,41 @@ Unterschied; es gibt **keine** neue `ResolvedAuth`-Variante (§4.1).
 
 **A-3** Beim Auflösen wird die Datei gelesen. Dabei gilt:
 
-- `~` und `~user` am Anfang werden aufgelöst; ein relativer Pfad wird
-  **abgelehnt** (Fehlermeldung), weil „relativ wozu" beim Verbinden keine
-  beantwortbare Frage ist.
-- Symbolischen Links wird gefolgt — `ssh` tut das auch (OP-2).
+- `~` am Anfang wird aufgelöst; ein relativer Pfad wird **abgelehnt**
+  (Fehlermeldung), weil „relativ wozu" beim Verbinden keine beantwortbare
+  Frage ist. **`~user` wird nicht unterstützt** — es bräuchte einen
+  passwd-Lookup, den die Standardbibliothek nicht hergibt, gibt es auf
+  Windows nicht, und keine Messung stützt eine Abhängigkeit dafür. Ein
+  Pfad in dieser Form wird wie ein relativer behandelt: abgelehnt mit
+  Begründung.
+- Symbolischen Links wird gefolgt — `ssh` tut das auch (E-2).
 - Die Datei wird **bei jedem Verbindungsaufbau** gelesen, nicht
-  zwischengespeichert (OP-3). Ein getauschter Schlüssel wirkt damit
+  zwischengespeichert (E-5). Ein getauschter Schlüssel wirkt damit
   sofort, und nichts liegt länger im Speicher als nötig.
-- Größe höchstens **1 MiB**. Darüber: Fehlermeldung, kein Lesen in den
-  Speicher.
+- **Nur reguläre Dateien.** Ein Verzeichnis, ein Zeichengerät
+  (`/dev/zero`, `/dev/stdin`), ein benanntes Rohr oder ein Socket wird
+  abgelehnt, **bevor** geöffnet wird. Das ist keine Feinheit: Solche
+  Objekte melden in den Metadaten Größe 0, kämen also durch jede
+  Größenprüfung, und ein Rohr blockiert beim Öffnen, bis ein Schreiber
+  erscheint.
+- Größe höchstens **1 MiB**, geprüft an den Metadaten **und** beim Lesen:
+  Es wird nie mehr als 1 MiB in den Speicher gelesen, auch wenn die
+  Metadaten weniger melden. Die Metadatenprüfung ist die schnelle
+  Abkürzung, die Lesegrenze ist die verbindliche.
 
 **A-4 Dateirechte.** Ist die Datei auf einem Unix-System für Gruppe oder
 Welt lesbar, wird die Anmeldung **abgelehnt** — mit derselben Begründung
 wie `ssh` („unprotected private key file"), in eigener Formulierung und
 mit dem `chmod`-Befehl, der es behebt. Auf Windows entfällt die Prüfung,
-wie bei OpenSSH. Entscheidbar in OP-1.
+wie bei OpenSSH. Entschieden in E-1.
+
+**A-4 gilt für die Anmeldung, nicht für den Befund und nicht für die
+Überführung.** Der Vorab-Befund (B-3) und die Überführung (C-3) dürfen
+eine Datei mit zu weiten Rechten lesen und **melden** den Mangel, statt
+sie zu verweigern. Andernfalls wäre der Rettungsknopf aus C-1 genau dann
+gesperrt, wenn er gebraucht wird — er behebt den Mangel ja (§4.5). Nach
+der Überführung hängt die Anmeldung am Schlüsselbund, und A-4 ist
+gegenstandslos.
 
 **A-5** Die Passphrase wird wie bei `PrivateKey` behandelt: optional im
 Schlüsselbund unter `passphrase_ref`. Ist keine hinterlegt und der
@@ -157,9 +186,23 @@ enthält Dateiinhalt (§5.2):
 | Rechte zu weit (A-4) | den Pfad und den `chmod`-Befehl |
 | größer als 1 MiB | den Pfad und die Grenze |
 | kein gültiger OpenSSH-Schlüssel | den Pfad, „kein gültiger Schlüssel" |
+| nicht als Text lesbar (kein UTF-8, NUL-Bytes) | den Pfad, „kein gültiger Schlüssel" |
 | verschlüsselt, keine Passphrase | den Pfad, „Passphrase nötig" |
-| Passphrase falsch | „Passphrase falsch" |
-| relativer Pfad | den Pfad, „absoluter Pfad nötig" |
+| Passphrase falsch | „Passphrase falsch" (ohne Pfad, s. u.) |
+| relativer Pfad oder `~user` | den Pfad, „absoluter Pfad nötig" |
+| kein reguläres Objekt (Verzeichnis, Gerät, Rohr) | den Pfad, „keine reguläre Datei" |
+
+**Wer welche dieser Meldungen erzeugt, ist keine Geschmacksfrage.** Alle
+Zeilen mit Pfad entstehen in der `KeyFileReader`-Umsetzung (§4.2) —
+**einschließlich** „kein gültiger Schlüssel" und „Passphrase nötig".
+Grund: Nach A-2 gelangt in `ssh-transport` bewusst nur
+`ResolvedAuth::PrivateKey { key, passphrase }`, **ohne Pfad**; dort
+könnte eine Meldung ihn gar nicht nennen
+(`crates/ssh-transport/src/auth.rs:69-80` erzeugt heute genau diese
+beiden Fehler, pfadlos). Die Umsetzung prüft den Schlüssel deshalb selbst
+auf Gültigkeit und darauf, ob er verschlüsselt ist. In `ssh-transport`
+bleibt nur „Passphrase falsch" — die einzige Zeile, die keinen Pfad
+braucht.
 
 **A-7** Fehler beim Lesen sind `SshError::CredentialResolutionFailed`,
 wie jeder andere Auflösungsfehler heute (`auth.rs:44-71`). Kein neuer
@@ -170,11 +213,32 @@ Hop (`ssh-transport/src/auth.rs:21`); ein Jump-Host mit Schlüsseldatei
 funktioniert damit ohne Zusatzarbeit. Die Fehlermeldung MUSS sagen,
 **welcher** Hop gescheitert ist.
 
-**A-9 Ältere Programmfassungen.** Trifft `auth_method_from_json` auf eine
-unbekannte Variante, ergibt das eine verständliche Meldung („dieser Server
-wurde mit einer neueren Fassung angelegt"), keinen Absturz und keinen
-Datenverlust: Der Server bleibt in der Datenbank, wird in der Liste als
-nicht benutzbar markiert und lässt sich löschen.
+**A-9 Eine unlesbare Anmeldeart reißt nicht die ganze Liste mit.** Trifft
+`auth_method_from_json` auf eine unbekannte Variante, ergibt das eine
+verständliche Meldung („mit einer neueren Fassung angelegt"), keinen
+Absturz und keinen Datenverlust.
+
+**Der Umfang dieser Anforderung ist größer, als sie klingt** — deshalb
+steht er hier und nicht als Überraschung in Schritt 4. Heute bricht eine
+einzige unlesbare Zeile das Laden **aller** Server ab
+(`crates/persistence-sqlite/src/store.rs:354`,
+`servers.push(row_to_server(row, tags)?)`, mit `:290`
+`auth: auth_method_from_json(&auth_json)?`), `Server.auth` ist ein
+nicht-optionales `AuthMethod`, und das Löschen braucht ein `AuthMethod`,
+um die Schlüsselbund-Slots abzuräumen
+(`crates/app-shell/src/server_credentials.rs:397-413`).
+
+Für diese Spec gilt der **kleinste** Zuschnitt, der die Aussage trägt:
+
+- `row_to_server` scheitert nicht mehr am Ganzen — die übrigen Server
+  bleiben sichtbar.
+- Der betroffene Server erscheint in der Liste mit einem eigenen Zustand
+  „nicht benutzbar" im DTO.
+- Er lässt sich löschen, **ohne** dass ein `AuthMethod` vorliegt; seine
+  Schlüsselbund-Einträge bleiben dabei stehen und werden in der Meldung
+  benannt, statt blind geraten zu werden.
+
+Mehr nicht. Ein allgemein fehlertolerantes Laden ist ein eigenes Item.
 
 ### 3.2 Teil B — in der Oberfläche
 
@@ -197,6 +261,14 @@ erst später entstehen.
 
 **B-4** In der Serverliste und in den Serverdetails ist erkennbar, dass
 die Anmeldung an einer Datei hängt, und **wo** die Datei liegt.
+
+Dafür braucht das Server-DTO ein **Ausgabefeld für den Pfad**. Heute
+trägt es als einzigen Auth-Träger `auth_kind: AuthMethodKind`
+(`crates/app-shell/src/dto.rs:49`), ein Enum ausdrücklich **ohne**
+Inhalt (`:166-186`), weil dort nie ein Geheimnis hinaus soll
+(`:36-38`). **Ein Dateipfad ist kein Geheimnis** — er darf hinaus, und
+ohne ihn ist B-4 nicht umsetzbar. Das Feld ist leer, wenn die
+Anmeldeart eine andere ist.
 
 **B-5** i18n vollständig für `de` und `en`; keine fest verdrahteten Texte.
 
@@ -222,11 +294,22 @@ heutigen Verhalten bei `key_content`.
 
 **C-5 Die Ursprungsdatei wird nicht angefasst** — nicht gelöscht, nicht
 geändert, nicht in den Rechten verändert. Ein Angebot, sie zu löschen,
-ist **nicht** Teil dieser Spec (OP-5).
+ist **nicht** Teil dieser Spec (E-4).
 
-**C-6** Schlägt das Schreiben in den Schlüsselbund fehl, bleibt der Server
-unverändert auf `IdentityFile` — kein halber Zustand. Das entspricht dem
-Rollback-Verhalten in `crates/app-shell/src/servers.rs:44-54`.
+**C-6 Kein halber Zustand, in beide Richtungen.**
+
+- Schlägt das **Schreiben in den Schlüsselbund** fehl, bleibt der Server
+  unverändert auf `IdentityFile`.
+- Schlägt danach das **Speichern des Servers** fehl, wird der eben
+  geschriebene Schlüsselbund-Eintrag wieder entfernt. Sonst bliebe ein
+  privater Schlüssel im Schlüsselbund liegen, auf den kein Server zeigt
+  — genau der verwaiste Zustand, den diese Anforderung ausschließen
+  soll.
+
+Beide Richtungen sind das bestehende Muster, nicht eine Erfindung:
+`crates/app-shell/src/servers.rs:25-32` beschreibt es für `create_server`
+(alle Keychain-Slots werden abgeräumt, wenn der abschließende DB-Insert
+scheitert), `:44-54` setzt es um.
 
 **C-7** Die Überführung ist erst wählbar, wenn die Datei tatsächlich
 lesbar und ein gültiger Schlüssel ist; sonst nennt der Knopf den Grund,
@@ -244,23 +327,57 @@ nichts: Der Unterschied zwischen „Schlüssel aus dem Schlüsselbund" und
 `SecretString`, geparst von derselben Zeile
 (`ssh-transport/src/auth.rs:69`).
 
-Folge: `crates/ssh-transport/` bekommt **keine neue Verzweigung**, und die
-Anmeldelogik, die heute funktioniert und getestet ist, bleibt Wort für
-Wort stehen. Eine eigene `ResolvedAuth::IdentityFile`-Variante wäre eine
+Folge: `crates/ssh-transport/` bekommt **keine neue Verzweigung auf die
+Anmeldeart**, und die Anmeldelogik selbst bleibt inhaltlich unverändert.
+Die Signaturen wandern trotzdem — dazu §4.2, letzter Abschnitt. Eine eigene `ResolvedAuth::IdentityFile`-Variante wäre eine
 zweite Fassung derselben Sache — verworfen.
 
 ### 4.2 Die Schnittstelle zum Dateisystem
 
-`core` darf nicht ans Dateisystem (§1.3). Also:
+`core` darf nicht ans Dateisystem (§1.3). Also bekommt das Lesen eine
+Schnittstelle, wie jede andere äußere Grenze in diesem Projekt
+(`SshTransport`, `CredentialStore`, `ProfileStore`) — mit **zwei**
+Operationen, weil zwei verschiedene Aufrufer zwei verschiedene Dinge
+brauchen:
 
 ```rust
 // crates/core/src/ssh/auth.rs
 pub trait KeyFileReader {
-    /// Liest die Schlüsseldatei unter `path`. Der Aufrufer prüft Pfad,
-    /// Rechte und Größe; diese Funktion gibt nur zurück, was dort steht.
+    /// Prüft Pfadform, Dateiart, Rechte und Größe auf **demselben**
+    /// offenen Handle, liest den Schlüssel und prüft ihn auf
+    /// Gültigkeit — alle pfadtragenden Fehler aus A-6 entstehen hier.
     fn read(&self, path: &str) -> Result<SecretString, KeyFileError>;
+
+    /// Derselbe Weg, aber ohne den Schlüssel herauszugeben: Was ist mit
+    /// dieser Datei? Grundlage für B-3, C-7 und Spec 0075 Weg (b).
+    fn inspect(&self, path: &str) -> KeyFileBefund;
+}
+
+pub struct KeyFileBefund {
+    pub existiert: bool,
+    pub rechte_zu_weit: bool,   // nur Unix, sonst immer false
+    pub gueltiger_schluessel: bool,
+    pub verschluesselt: bool,
 }
 ```
+
+`KeyFileError` hat **eine Variante je pfadtragender Zeile aus A-6** —
+nicht eine Zeichenkette, gegen die §6.1.5 dann nur noch per
+Textvergleich prüfen könnte:
+
+`NichtGefunden` · `NichtLesbar` · `RechteZuWeit` · `ZuGross` ·
+`KeinReguläresObjekt` · `PfadNichtAbsolut` · `KeinGueltigerSchluessel` ·
+`PassphraseNoetig`. Jede trägt den Pfad. `A-7` bildet sie am Ende auf
+`SshError::CredentialResolutionFailed` ab; die Unterscheidbarkeit bleibt
+aber bis dorthin erhalten, damit §6.1.5 gegen Varianten prüfen kann.
+
+**Warum `inspect` eine eigene Operation ist:** B-3 (Vorab-Befund), C-7
+(ist der Knopf wählbar?) und Spec 0075 Weg (b) brauchen alle dieselbe
+Feststellung — existiert die Datei, wie sind die Rechte, ist es ein
+gültiger Schlüssel, ist er verschlüsselt — **ohne** dass der Schlüssel
+herausgegeben wird. Ohne benannte Operation baut jeder der drei sie neu,
+womöglich mit anderen Regeln. Spec 0075 §5.5 verlässt sich ausdrücklich
+darauf, dass es **dieselben** Regeln sind.
 
 `resolve_auth` bekommt einen Parameter mehr:
 
@@ -272,20 +389,35 @@ pub fn resolve_auth(
 ) -> Result<ResolvedAuth, SshError>
 ```
 
-Das ist derselbe Bau wie bei `SshTransport`, `CredentialStore` und
-`ProfileStore` — die Regel der `CLAUDE.md`, nicht eine Erfindung dieser
-Spec. Die konkrete Umsetzung liegt in `app-shell` (oder einer eigenen
-Kiste, falls sie dort stört); in Tests steht eine Attrappe, mit der sich
-jeder Fehlerfall aus A-6 ohne echte Datei herstellen lässt.
+**Und das ist der Punkt, an dem diese Spec ehrlich sein muss.** Die
+Messung in §1.2 — „genau eine Produktions-Aufrufstelle" — stimmt, misst
+aber die falsche Größe: Ein zusätzlicher Parameter muss durch die
+**ganze Kette** geliefert werden, die ihn heute nirgends kennt. Der
+`KeyFileReader` reist dabei überall neben `credentials` mit, weil er
+dieselbe Lebensdauer und dieselbe Herkunft hat. Betroffen sind:
 
-**Wer prüft was:** Die Umsetzung von `KeyFileReader` prüft Pfadform,
-Rechte (A-4) und Größe (A-3) — dort, wo das Dateisystem ist. `core` prüft
-nichts davon nach, sondern verarbeitet nur das Ergebnis. Zwei Stellen mit
-halben Prüfungen sind schlimmer als eine mit ganzen.
+| Stelle | heute |
+|---|---|
+| `ssh-transport/src/auth.rs:16-21` | `authenticate(handle, hop, credentials)` |
+| `ssh-transport/src/connect.rs:130`, `:160` | rufen `authenticate` |
+| `ssh-transport/src/connect.rs:83-87` | `connect(target, credentials, host_keys)` |
+| `app-shell/src/test_connection.rs:36-43` | Trait `Connector` |
+| `app-shell/src/test_connection.rs:48-57` | `RealConnector` |
+| `app-shell/src/test_connection.rs:412`, `:687` | zwei Mock-Umsetzungen |
 
-**Genau eine Produktions-Aufrufstelle** ist anzupassen
-(`ssh-transport/src/auth.rs:21`) plus vier Tests
-(`core/src/ssh/tests.rs:366,381,391,405`) — gemessen, §1.2.
+Das sind sechs Signaturen plus deren Aufrufer, nicht „eine Zeile".
+§7.3 ist entsprechend zugeschnitten.
+
+**Wer prüft was:** Die Umsetzung von `KeyFileReader` prüft alles —
+Pfadform, Dateiart, Rechte (A-4), Größe (A-3) und Gültigkeit des
+Schlüssels — dort, wo das Dateisystem ist, und auf **demselben offenen
+Handle** (§6.4.7). `core` prüft nichts davon nach, sondern verarbeitet
+nur das Ergebnis. Zwei Stellen mit halben Prüfungen sind schlimmer als
+eine mit ganzen.
+
+Die konkrete Umsetzung liegt in `app-shell`; in Tests steht eine
+Attrappe, mit der sich jeder Fehlerfall aus A-6 ohne echte Datei
+herstellen lässt.
 
 ### 4.3 Warum bei jedem Verbinden gelesen wird
 
@@ -309,7 +441,9 @@ Ein Server mit Schlüsseldatei ist genau so stark wie die Datei. Liegen
 ihre Rechte zu weit, hilft A-4 beim Verbinden — aber eine Datei, die
 zwischen zwei Verbindungen verändert wird, bemerken wir nicht, und das
 ist auch nicht unsere Aufgabe. Wer das nicht will, benutzt C-1 und legt
-den Schlüssel in den Schlüsselbund. Genau dafür ist der Knopf da, und
+den Schlüssel in den Schlüsselbund — der Knopf ist auch dann wählbar,
+wenn die Rechte zu weit liegen (A-4, letzter Absatz), denn er behebt
+genau das. Genau dafür ist der Knopf da, und
 genau so gehört er in der Oberfläche begründet.
 
 ## 5. Sicherheits-Invarianten
@@ -318,16 +452,31 @@ Berührt: **Credential-Handling** und **Ausführungspfad** (die Anmeldung
 steht am Anfang jeder Verbindung). Daher `Review-Priorität: ERHÖHT`.
 
 **5.1 Schlüsselmaterial bleibt in `SecretString`.** Der gelesene Inhalt
-wird nie in einen `String`, nie in eine Struktur mit abgeleitetem `Debug`
-und nie über eine Grenze gereicht, die ihn protokolliert. `KeyFileReader`
-gibt `SecretString` zurück, nicht `Vec<u8>` — damit gibt es keine
-Zwischenform, die versehentlich irgendwo landet. Nachgewiesen durch
-§6.4.1.
+wird nie in eine Struktur mit abgeleitetem `Debug` und nie über eine
+Grenze gereicht, die ihn protokolliert. `KeyFileReader::read` gibt
+`SecretString` zurück, nicht `Vec<u8>`, damit am Übergang kein
+ungeschützter Wert entsteht.
+
+**Eine Einschränkung gehört dazu, sonst ist die Zusage falsch:** Eine
+`SecretString` entsteht über einen `String`, also über eine
+UTF-8-Prüfung — eine Zwischenform gibt es damit zwangsläufig, nur eine
+kurzlebige und lokale. Inhalt, der kein gültiges UTF-8 ist (Binärdatei,
+NUL-Bytes), scheitert schon dort; A-6 bildet das auf „kein gültiger
+Schlüssel" ab. Nachgewiesen durch §6.4.1.
 
 **5.2 Keine Fehlermeldung enthält Dateiinhalt.** Jede Meldung aus A-6
 nennt **Pfad und Grund**, nie eine Zeile aus der Datei. Das betrifft
 besonders „kein gültiger Schlüssel": Die Versuchung, den Anfang der Datei
-mitzuliefern, ist genau der Fehler. Nachgewiesen durch §6.4.2.
+mitzuliefern, ist genau der Fehler.
+
+**Der Fehlertext der Parse-Bibliothek wird nicht durchgereicht**, sondern
+durch eine eigene Meldung ersetzt. Heute wandert er wörtlich hinein
+(`crates/ssh-transport/src/auth.rs:70`,
+`format!("Private Key ungültig: {e}")`). Ob `ssh_key`s `Display` je
+Eingabebytes wiedergibt, wissen wir nicht — und eine
+Sicherheits-Invariante darf nicht auf dem Anzeigeverhalten einer fremden
+Kiste ruhen. Eine eigene Meldung macht die Messung überflüssig.
+Nachgewiesen durch §6.4.2.
 
 **5.3 Was nicht gelesen werden darf, wird nicht benutzt.** Schlägt eine
 Prüfung aus A-3 oder A-4 fehl, wird die Anmeldung **abgebrochen**, nicht
@@ -367,7 +516,10 @@ Sicherheitslogik.
    Panic (A-7).
 4. Die vier bestehenden Tests (`tests.rs:366,381,391,405`) laufen nach der
    Signaturänderung unverändert im Ergebnis.
-5. Jeder Fehlerfall aus A-6 ergibt genau eine unterscheidbare Meldung.
+5. Jeder Fehlerfall aus A-6 ergibt genau eine unterscheidbare
+   `KeyFileError`-**Variante** (§4.2) — geprüft gegen die Variante, nicht
+   gegen den Meldungstext. Ein Test gegen Zeichenketten wäre kaum zum
+   Scheitern zu bringen und würde beim nächsten Umformulieren rot.
 
 ### 6.2 Dateizugriff (Umsetzung von `KeyFileReader`)
 
@@ -378,8 +530,14 @@ Sicherheitslogik.
    übersprungen.
 5. Symbolischer Link auf eine gültige Datei → gefolgt (A-3).
 6. Datei über 1 MiB → Fehler, und die Umsetzung liest sie **nicht**
-   vollständig in den Speicher (Prüfung über die Metadaten vor dem Lesen).
-7. Verzeichnis statt Datei → Fehler, kein Panik.
+   vollständig in den Speicher.
+7. Verzeichnis, Zeichengerät und benanntes Rohr → je ein Fehler „keine
+   reguläre Datei", **ohne** dass geöffnet wird; der Test auf das Rohr
+   darf nicht blockieren (A-3).
+8. `~user/…` → Fehler „absoluter Pfad nötig" (A-3), nicht etwa ein
+   Versuch, den Nutzer aufzulösen.
+9. `inspect` liefert für dieselben Dateien denselben Befund wie `read`
+   zurückmeldet — und gibt **nie** Schlüsselmaterial heraus (§4.2).
 
 ### 6.3 Oberfläche und Überführung
 
@@ -387,7 +545,14 @@ Sicherheitslogik.
    und bearbeiten; die Anmeldeart überlebt den Rundlauf durch die
    Datenbank (JSON, §1.4).
 2. Der Vorab-Befund aus B-3 meldet fehlende Datei, zu weite Rechte und
-   „verschlüsselt" richtig — und hindert das Speichern nicht.
+   „verschlüsselt" richtig — und hindert das Speichern nicht. Er benutzt
+   `inspect`, nicht `read` (§4.2).
+2a. Liste und Details zeigen den Pfad des Schlüssels; bei jeder anderen
+   Anmeldeart ist das Feld leer (B-4). Der Test scheitert, solange das
+   DTO den Pfad nicht trägt.
+2b. Eine Datei mit Rechten `0644` lässt sich **überführen** (C-3) und der
+   Knopf ist wählbar (C-7), obwohl A-4 die Anmeldung damit ablehnen
+   würde. Das ist der Fall, für den es den Knopf gibt.
 3. Überführung eines **unverschlüsselten** Schlüssels: Anmeldeart danach
    `PrivateKey`, Verbindung gegen die Testumgebung unverändert
    erfolgreich.
@@ -395,7 +560,9 @@ Sicherheitslogik.
    Schlüsselbund ist **byte-gleich** mit der Datei, die `passphrase_ref`
    ist mitgewandert, die Verbindung klappt (C-3, C-4).
 5. Schreiben in den Schlüsselbund schlägt fehl → Server unverändert auf
-   `IdentityFile` (C-6).
+   `IdentityFile` (C-6). **Und umgekehrt:** Schlüsselbund-Schreiben
+   gelingt, das Speichern des Servers scheitert → der eben geschriebene
+   Eintrag ist wieder weg, kein verwaister Schlüssel bleibt zurück.
 6. Ein Jump-Host mit Schlüsseldatei verbindet; schlägt er fehl, nennt die
    Meldung **den Hop** (A-8).
 7. Eine unbekannte `auth_method`-Variante in der Datenbank ergibt eine
@@ -442,30 +609,51 @@ Sicherheitslogik.
 
 ## 7. Umsetzungsreihenfolge
 
-1. **Schnittstelle und Variante** in `core`: `KeyFileReader`,
-   `AuthMethod::IdentityFile`, `resolve_auth` erweitern, die vier
-   bestehenden Tests anpassen. Tests §6.1. *(opus — Credential-Handling)*
-2. **Umsetzung des Lesens** samt Pfad-, Rechte- und Größenprüfung.
-   Tests §6.2, §6.4.2, §6.4.3, §6.4.6, §6.4.7. *(opus)*
-3. **Aufrufstelle** in `ssh-transport` (eine Zeile) und die Fehlermeldung
-   je Hop (A-8). Tests §6.3.6. *(opus)*
-4. **Persistenz und DTOs**: `AuthMethodInput::IdentityFile`, Rundlauf
-   durch die JSON-Spalte, A-9. Tests §6.3.1, §6.3.7. *(opus)*
-5. **Überführung** (Teil C) inklusive Rollback. Tests §6.3.3–5, §6.4.4,
-   §6.4.5. *(opus — Credential-Handling)*
-6. **Frontend**: Anmeldeart wählbar, Pfadfeld und Dateidialog, Vorab-
-   Befund (B-3), Anzeige in Liste und Details, Überführungsdialog (C-2).
-   i18n `de`/`en`. Tests §6.3.2. *(sonnet)*
+**Jeder Schritt muss für sich committbar sein und das Gate grün lassen**
+(Repo-`CLAUDE.md`). Das bestimmt den Zuschnitt von Schritt 1: Eine neue
+`AuthMethod`-Variante bricht sofort jeden erschöpfenden `match` über
+`AuthMethod` — der Arbeitsbaum übersetzt sonst nicht, und ein nicht
+übersetzbarer Zwischenstand ist kein committbarer Schritt.
+
+1. **Variante, Schnittstelle und alles, was dadurch bricht.**
+   `AuthMethod::IdentityFile`, `KeyFileReader` mit `read`/`inspect`,
+   `KeyFileError`, `resolve_auth` erweitern — **und im selben Schritt**
+   die beiden erschöpfenden `match`-Ausdrücke über `AuthMethod`
+   mitziehen (`crates/app-shell/src/dto.rs:179`,
+   `crates/app-shell/src/server_credentials.rs:401`, beide ohne
+   Auffangarm) sowie die Aufrufstelle in `ssh-transport`. Die vier
+   bestehenden Tests anpassen. Tests §6.1. *(opus —
+   Credential-Handling)*
+2. **Umsetzung des Lesens**: Pfadform, Dateiart, Rechte, Größe und
+   Gültigkeit auf demselben Handle; `inspect` daneben. Tests §6.2,
+   §6.4.1, §6.4.2, §6.4.3, §6.4.6, §6.4.7. *(opus)*
+3. **Der Parameter durch die Kette**: die sechs Signaturen aus §4.2
+   (`authenticate` → `connect` → Trait `Connector`, `RealConnector`,
+   beide Mocks) plus die Fehlermeldung je Hop (A-8). **Kein
+   Ein-Zeilen-Schritt** — die Tabelle in §4.2 ist die Arbeitsliste.
+   Tests §6.3.6, §6.4.8. *(opus)*
+4. **Persistenz und DTOs**: `AuthMethodInput::IdentityFile`, das
+   Ausgabefeld für den Pfad (B-4), Rundlauf durch die JSON-Spalte.
+   Tests §6.3.1, §6.3.2a. *(opus)*
+4a. **A-9** im Zuschnitt aus §3.1: fehlertolerantes `row_to_server`, der
+   Zustand „nicht benutzbar" im DTO, Löschen ohne `AuthMethod`. Eigener
+   Schritt, weil er andere Dateien anfasst als 4 und für sich prüfbar
+   ist. Tests §6.3.7. *(opus)*
+5. **Überführung** (Teil C) inklusive Rollback in beide Richtungen.
+   Tests §6.3.2b, §6.3.3–5, §6.4.4, §6.4.5. *(opus —
+   Credential-Handling)*
+6. **Frontend**: Anmeldeart wählbar, Pfadfeld und Dateidialog,
+   Vorab-Befund (B-3), Anzeige in Liste und Details (B-4),
+   Überführungsdialog (C-2). i18n `de`/`en`. Tests §6.3.2. *(sonnet)*
 7. **`CHANGELOG.md`** unter `[Unreleased]`. *(sonnet)*
 
-Nach Schritt 4 ist Spec 0075 fahrbar; Schritt 5 und 6 können danach
-laufen.
+Nach Schritt 4 ist Spec 0075 fahrbar; 4a, 5 und 6 können danach laufen.
 
 ## 8. Offene Punkte
 
-Keine. Die fünf Punkte, die diese Spec zur Entscheidung vorgelegt hat,
-sind in §9 als E-1 bis E-5 entschieden; der Text oben ist bereits die
-entschiedene Fassung.
+Keine. Vier Punkte sind Stefan zur Entscheidung vorgelegt worden (E-1
+bis E-4), einer zur Kenntnis (E-5, K2); alle fünf stehen in §9, und der
+Text oben ist bereits die entschiedene Fassung.
 
 ## 9. Klarstellungen
 
