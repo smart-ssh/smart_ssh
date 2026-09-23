@@ -6,8 +6,13 @@
 // (`crates/app-shell/src/diagnostics.rs`, dort unit-getestet).
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
-import { describe, expect, it, vi } from "vitest";
-import { generateDiagnosticsBundle, openLogDirectory, saveDiagnosticsBundle } from "../api";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  generateDiagnosticsBundle,
+  getKeychainStatus,
+  openLogDirectory,
+  saveDiagnosticsBundle,
+} from "../api";
 import { testI18n } from "../testI18n";
 import { DiagnosticsSettings } from "./DiagnosticsSettings";
 
@@ -16,7 +21,18 @@ vi.mock("../api", () => ({
   openLogDirectory: vi.fn(),
   generateDiagnosticsBundle: vi.fn(),
   saveDiagnosticsBundle: vi.fn(),
+  getKeychainStatus: vi.fn(),
 }));
+
+// spec-reviewer-Fund: Die Voreinstellung hing zuvor an der Aufrufhistorie
+// des Mocks (`mock.results.length === 0`) und damit an der Reihenfolge der
+// Tests. Ein später ergänztes `clearMocks`/`vi.clearAllMocks()` hätte die
+// in den Tests gesetzten Werte überschrieben und die A15-Tests still
+// grün-falsch gemacht. Jetzt: vor jedem Test neu setzen, jeder Test
+// überschreibt bei Bedarf.
+beforeEach(() => {
+  vi.mocked(getKeychainStatus).mockResolvedValue({ available: true, reason: null });
+});
 
 function renderDiagnostics() {
   return render(
@@ -89,5 +105,82 @@ describe("DiagnosticsSettings (Spec 0063)", () => {
       await screen.findByText("Diagnosepaket konnte nicht gespeichert werden. Error: disk full"),
     ).toBeInTheDocument();
     expect(await screen.findByDisplayValue("bundle content")).toBeInTheDocument();
+  });
+});
+
+// Spec 0071, A15: Der Startdialog verschwindet, sobald er bestätigt wurde —
+// ohne diese Zeile gäbe es danach keinen Ort mehr, an dem ein Nutzer den
+// Schlüsselbund-Zustand und den nächsten Schritt nachschlagen kann.
+describe("DiagnosticsSettings — Schlüsselbund-Zustand (Spec 0071, A15)", () => {
+  it("zeigt 'verfügbar', wenn der Schlüsselbund erreichbar war", async () => {
+    vi.mocked(getKeychainStatus).mockResolvedValue({ available: true, reason: null });
+
+    renderDiagnostics();
+
+    const row = await screen.findByTestId("keychain-status");
+    await waitFor(() => expect(row).toHaveTextContent("Systemschlüsselbund: verfügbar"));
+    expect(row).not.toHaveTextContent("apt install");
+  });
+
+  it("nennt bei fehlendem Anbieter das Paket und die blockierten Funktionen", async () => {
+    vi.mocked(getKeychainStatus).mockResolvedValue({
+      available: false,
+      reason: "no_secret_service_provider",
+    });
+
+    renderDiagnostics();
+
+    const row = await screen.findByTestId("keychain-status");
+    await waitFor(() => expect(row).toHaveTextContent("nicht verfügbar"));
+    expect(row).toHaveTextContent("gnome-keyring");
+    expect(row).toHaveTextContent("KeePassXC");
+    expect(row).toHaveTextContent("API-Key");
+    // Messung vom 2026-09-22 (Spec §9): `gnome-keyring` ist der einzige
+    // Anbieter auf Debian 13, bei dem Installieren genügt. KWallet und
+    // KeePassXC dürfen deshalb keinen eigenen Installationsbefehl
+    // bekommen — sonst installiert jemand ein Paket, das die Lage nicht
+    // behebt.
+    expect(row.textContent?.match(/apt install/g)).toHaveLength(1);
+    expect(row).not.toHaveTextContent("kwalletd6");
+    // Schreibweisen-unabhaengig: kein zweiter Installationsvorschlag,
+    // egal mit welchem Paketmanager formuliert.
+    const rowText = (row.textContent ?? "").toLowerCase();
+    expect(rowText).not.toContain("install kwallet");
+    expect(rowText).not.toContain("install keepassxc");
+  });
+
+  // X3: ein gesperrter Schlüsselbund ist kein fehlendes Paket — auch hier
+  // nicht, sonst installiert ein KDE-Nutzer `gnome-keyring` neben sein
+  // laufendes KWallet.
+  it("schickt bei einem gesperrten Schlüsselbund nicht zu einer Paketinstallation", async () => {
+    vi.mocked(getKeychainStatus).mockResolvedValue({ available: false, reason: "locked" });
+
+    renderDiagnostics();
+
+    const row = await screen.findByTestId("keychain-status");
+    await waitFor(() => expect(row).toHaveTextContent("gesperrt"));
+    // spec-reviewer-Fund: schreibweisen-unabhaengig pruefen — ein
+    // kuenftiges "Installation"/"APT" waere an der Gross-/Kleinschreibung
+    // vorbeigelaufen.
+    const lower = (row.textContent ?? "").toLowerCase();
+    expect(lower).not.toContain("apt");
+    expect(lower).not.toContain("install");
+  });
+
+  // A4: Ein künftiger, dem Frontend unbekannter Grund darf keine leere
+  // Zeile ergeben.
+  it("fällt bei einem unbekannten Grund auf den vollständigen Auffangtext zurück", async () => {
+    vi.mocked(getKeychainStatus).mockResolvedValue({
+      available: false,
+      // Absichtlich ein Wert, den `KeychainUnavailableReason` (noch) nicht
+      // kennt — simuliert ein neueres Backend.
+      reason: "something_new_from_a_future_backend" as never,
+    });
+
+    renderDiagnostics();
+
+    const row = await screen.findByTestId("keychain-status");
+    await waitFor(() => expect(row).toHaveTextContent("nicht verfügbar"));
+    expect(row).toHaveTextContent("Ursache unbekannt");
   });
 });

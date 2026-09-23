@@ -32,6 +32,7 @@ function taggedServer(): ServerDto {
     jumpHost: null,
     notes: "",
     hasSudoPassword: false,
+    sudoPasswordUnknown: false,
     isLocal: false,
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,

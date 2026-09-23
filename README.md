@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/brokoskokoli/smart_ssh/actions/workflows/community.yml/badge.svg)](https://github.com/brokoskokoli/smart_ssh/actions/workflows/community.yml)
 [![Release](https://github.com/brokoskokoli/smart_ssh/actions/workflows/release.yml/badge.svg)](https://github.com/brokoskokoli/smart_ssh/actions/workflows/release.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8D8.svg)](https://tauri.app/)
 
@@ -133,4 +133,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 📄 Lizenz
 
-Dieses Projekt ist unter der **Functional Source License, Version 1.1 (FSL-1.1-MIT)** lizenziert (mit automatischem Übergang zur MIT-Lizenz nach zwei Jahren) – siehe [LICENSE.md](LICENSE.md) für Details.
+Smart SSH steht unter der **Apache License 2.0** – siehe [LICENSE](LICENSE). Urheberrechtsvermerk: [NOTICE](NOTICE).

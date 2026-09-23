@@ -192,6 +192,10 @@ export function ServerForm({
   // "Entfernen"-Weg für einen bereits gesetzten Wert (s. `handleClearSudoPassword`).
   const [sudoPassword, setSudoPassword] = useState("");
   const [hasSudoPassword, setHasSudoPassword] = useState(false);
+  // Spec 0071, A14/I4: Der Schlüsselbund konnte nicht sagen, ob ein
+  // Sudo-Passwort hinterlegt ist. "Unbekannt" ist nicht "nein" — die
+  // Oberfläche darf in diesem Fall keine der beiden Aussagen treffen.
+  const [sudoPasswordUnknown, setSudoPasswordUnknown] = useState(false);
   const [clearingSudoPassword, setClearingSudoPassword] = useState(false);
   const [postIngestPolicy, setPostIngestPolicy] = useState<PostIngestPolicy>("balanced");
   const [aiInjectionCheckEnabled, setAiInjectionCheckEnabled] = useState(false);
@@ -214,6 +218,11 @@ export function ServerForm({
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deletePreview, setDeletePreview] = useState<DeleteServerResult | null>(null);
+  // Spec 0071, A17: Der Server ist gelöscht, aber mindestens ein Secret
+  // konnte nicht aus dem Schlüsselbund entfernt werden. Die Einträge sind
+  // jetzt verwaist (die Server-ID gibt es nicht mehr) — das muss der
+  // Nutzer erfahren, bevor die Maske zugeht.
+  const [secretsLeftBehind, setSecretsLeftBehind] = useState<string[] | null>(null);
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
@@ -257,6 +266,7 @@ export function ServerForm({
         setAuth(authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind));
         setSudoPassword("");
         setHasSudoPassword(server.hasSudoPassword);
+        setSudoPasswordUnknown(server.sudoPasswordUnknown);
         setLocalNotes(server.notes);
         setPostIngestPolicy(server.postIngestPolicy);
         setAiInjectionCheckEnabled(server.aiInjectionCheckEnabled);
@@ -340,8 +350,19 @@ export function ServerForm({
     try {
       await clearServerSudoPassword(serverId);
       setHasSudoPassword(false);
+      setSudoPasswordUnknown(false);
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      // Spec 0071, A17 (spec-reviewer-Fund): Der generische
+      // KEYCHAIN_UNAVAILABLE-Text spricht von „speichern oder lesen" — das
+      // Entscheidende auf diesem Pfad sagt er nicht. Der Nutzer muss
+      // wissen, dass das Passwort weiter im Schlüsselbund liegt und beim
+      // nächsten `sudo` erneut eingespeist wird; genau das ist die
+      // Begründung, aus der A17 diesen Fall überhaupt scheitern lässt.
+      setError(
+        t("serverForm.removeSudoPasswordFailed") +
+          " " +
+          translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)),
+      );
     } finally {
       setClearingSudoPassword(false);
     }
@@ -367,7 +388,15 @@ export function ServerForm({
     setDeleting(true);
     setError(null);
     try {
-      await deleteServer(serverId, true);
+      const result = await deleteServer(serverId, true);
+      // Spec 0071, A17: Das Löschen ist bewusst durchgelaufen. Gab es
+      // Rückstände, nicht stillschweigend schließen — sonst wäre das
+      // genau das falsche Erfolgssignal, das die X6-Korrektur meint.
+      if (result.secretsLeftBehind.length > 0) {
+        setDeletePreview(null);
+        setSecretsLeftBehind(result.secretsLeftBehind);
+        return;
+      }
       onDeleted();
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
@@ -816,7 +845,11 @@ export function ServerForm({
           <label className="block text-sm text-slate-300">
             {t("serverForm.sudoLabel")}{" "}
             <span className="text-slate-500">
-              {hasSudoPassword ? t("serverForm.sudoUnchangedStored") : t("serverForm.sudoUnchanged")}
+              {sudoPasswordUnknown
+                ? t("serverForm.sudoUnchangedUnknown")
+                : hasSudoPassword
+                  ? t("serverForm.sudoUnchangedStored")
+                  : t("serverForm.sudoUnchanged")}
             </span>
             <input
               type="password"
@@ -825,7 +858,7 @@ export function ServerForm({
               className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
             />
           </label>
-          {hasSudoPassword && (
+          {(hasSudoPassword || sudoPasswordUnknown) && (
             <button
               type="button"
               onClick={handleClearSudoPassword}
@@ -960,11 +993,45 @@ export function ServerForm({
               {t("serverForm.deleteServer")}
             </button>
 
+            {/* Spec 0071, A17: Der Server ist weg, aber mindestens ein
+             * Secret blieb im Schlüsselbund. Kein stilles Schließen — der
+             * Nutzer braucht die Refs, um die verwaisten Einträge im
+             * Schlüsselbund-Verwaltungsprogramm wiederzufinden. */}
+            {secretsLeftBehind && (
+              <div
+                className="mt-3 rounded border border-amber-700 bg-amber-950 p-3 text-sm"
+                data-testid="secrets-left-behind"
+              >
+                <p className="mb-2 font-medium text-amber-200">
+                  {t("serverForm.deletedWithLeftoverSecretsTitle")}
+                </p>
+                <p className="mb-2 text-amber-200">
+                  {t("serverForm.deletedWithLeftoverSecretsHint")}
+                </p>
+                <ul className="mb-2 space-y-1 font-mono text-xs text-amber-200">
+                  {secretsLeftBehind.map((ref) => (
+                    <li key={ref}>{ref}</li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSecretsLeftBehind(null);
+                    onDeleted();
+                  }}
+                  className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+                >
+                  {t("common.close")}
+                </button>
+              </div>
+            )}
+
             {deletePreview && (
               <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
                 <p className="mb-2 font-medium text-red-200">{t("serverForm.deleteImpactTitle")}</p>
                 {deletePreview.server.authKind === "agent" &&
                 !deletePreview.server.hasSudoPassword &&
+                !deletePreview.server.sudoPasswordUnknown &&
                 deletePreview.serversLosingJumpHost.length === 0 ? (
                   <p className="mb-2 text-red-200">{t("serverForm.deleteNoKeychainImpact")}</p>
                 ) : (
@@ -979,6 +1046,15 @@ export function ServerForm({
                     {deletePreview.server.hasSudoPassword && (
                       <li>
                         {t("serverForm.secretWillBeDeleted", { label: t("serverForm.sudoLabel") })}
+                      </li>
+                    )}
+                    {/* Spec 0071, A14: Ist der Schlüsselbund nicht lesbar,
+                     * darf hier weder "wird gelöscht" noch gar nichts
+                     * stehen — beides wäre eine Behauptung über einen
+                     * Zustand, den die Oberfläche nicht kennt. */}
+                    {deletePreview.server.sudoPasswordUnknown && (
+                      <li>
+                        {t("serverForm.secretMayBeDeleted", { label: t("serverForm.sudoLabel") })}
                       </li>
                     )}
                     {deletePreview.serversLosingJumpHost.map((s) => (

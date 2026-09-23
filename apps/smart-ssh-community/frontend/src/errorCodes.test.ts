@@ -58,6 +58,25 @@ describe("translateErrorCode", () => {
     expect(text).toMatch(/wait/i);
     expect(text).toMatch(/again/i);
   });
+
+  // Spec 0071, A13/X2: Der Backend-Fehler kommt als
+  // `{ code: "KEYCHAIN_UNAVAILABLE" }` — das Frontend muss den eigenen,
+  // übersetzten Text zeigen, nicht den `message`-Fallback. Ohne den Eintrag
+  // in `KNOWN_ERROR_CODES` stünde hier der rohe englische
+  // `keyring`-Bibliothekstext, also genau der Fehler aus BL-0031.
+  it.each(["de", "en"] as const)(
+    "übersetzt KEYCHAIN_UNAVAILABLE (%s) statt den rohen Bibliothekstext zu zeigen",
+    (language) => {
+      const raw = "Credential-Backend-Fehler: No default store has been set";
+      const text = translateErrorCode(testI18n.getFixedT(language), "KEYCHAIN_UNAVAILABLE", raw);
+
+      expect(text).not.toBe(raw);
+      expect(text).not.toMatch(/no default store/i);
+      // Muss sagen, was blockiert ist (A5 b), nicht nur "Fehler".
+      expect(text).toMatch(/API/i);
+      expect(text).toMatch(/passphrase/i);
+    },
+  );
 });
 
 // Spec 0069, Teil A, Test 18: jeder Code des Fünf-Minuten-Pfads ist in

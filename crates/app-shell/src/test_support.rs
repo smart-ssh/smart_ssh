@@ -226,6 +226,17 @@ pub struct InMemoryCredentialStore {
     /// Slots (z. B. das Sudo-Passwort nach einer bereits gespeicherten
     /// Auth-Methode) — für den Rollback-Test in `servers::create_server`.
     fail_set_for_slot_suffix: Option<String>,
+    /// Spec 0071, X4: lässt `get()` mit `CredentialError::Backend`
+    /// fehlschlagen, **obwohl** der Wert hinterlegt ist — der Fall "der
+    /// Schlüsselbund kann nicht antworten", der sich von "kein Eintrag
+    /// vorhanden" unterscheiden muss.
+    fail_get_with_backend: bool,
+    /// Spec 0071, A17: lässt `delete()` mit `CredentialError::Backend`
+    /// fehlschlagen — der Fall „der Nutzer fordert das Entfernen an, der
+    /// Schlüsselbund kann es nicht ausführen". Der Wert bleibt dabei
+    /// absichtlich gespeichert, damit ein Test nachweisen kann, dass das
+    /// Secret tatsächlich zurückbleibt.
+    fail_delete_with_backend: bool,
 }
 
 impl InMemoryCredentialStore {
@@ -249,6 +260,22 @@ impl InMemoryCredentialStore {
         self
     }
 
+    /// Spec 0071, X4: simuliert einen nicht erreichbaren Schlüsselbund beim
+    /// **Lesen**. Bewusst unabhängig von `with_secret`, damit sich der
+    /// kritische Fall bauen lässt: Wert ist hinterlegt, der Store kann es
+    /// aber nicht sagen.
+    pub fn with_failing_get(mut self) -> Self {
+        self.fail_get_with_backend = true;
+        self
+    }
+
+    /// Spec 0071, A17: simuliert einen nicht erreichbaren Schlüsselbund
+    /// beim **Löschen**.
+    pub fn with_failing_delete(mut self) -> Self {
+        self.fail_delete_with_backend = true;
+        self
+    }
+
     pub fn get_calls(&self) -> usize {
         *self.get_calls.lock().unwrap()
     }
@@ -257,6 +284,11 @@ impl InMemoryCredentialStore {
 impl CredentialStore for InMemoryCredentialStore {
     fn get(&self, r: &CredentialRef) -> CredentialResult<SecretString> {
         *self.get_calls.lock().unwrap() += 1;
+        if self.fail_get_with_backend {
+            return Err(CredentialError::Backend(
+                "simulierter Keychain-Lesefehler (Test)".to_string(),
+            ));
+        }
         self.secrets
             .lock()
             .unwrap()
@@ -283,6 +315,14 @@ impl CredentialStore for InMemoryCredentialStore {
     }
 
     fn delete(&self, r: &CredentialRef) -> CredentialResult<()> {
+        if self.fail_delete_with_backend {
+            // Absichtlich **ohne** `remove`: Das Secret bleibt stehen, so
+            // wie es ein echter Schlüsselbund täte, der den Löschauftrag
+            // nicht ausführen konnte.
+            return Err(CredentialError::Backend(
+                "simulierter Keychain-Löschfehler (Test)".to_string(),
+            ));
+        }
         self.secrets.lock().unwrap().remove(r.as_str());
         Ok(())
     }

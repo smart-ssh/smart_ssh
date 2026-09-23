@@ -1,4 +1,4 @@
-# ADR XXXX: Entscheidungen bei der Umsetzung von Spec 0069 (Fünf-Minuten-Pfad: Einstieg und verständliche Fehler)
+# ADR 0062: Entscheidungen bei der Umsetzung von Spec 0069 (Fünf-Minuten-Pfad: Einstieg und verständliche Fehler)
 
 Status: Angenommen
 Bezug: docs/specs/0069-five-minute-path-onboarding-and-errors.md, Commits

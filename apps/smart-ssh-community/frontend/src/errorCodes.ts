@@ -106,6 +106,11 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // UI in dem (seltenen) Fall, dass der Backend-Fehler tatsächlich sichtbar
   // wird, den rohen deutschen Text.
   "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED",
+  // Spec 0071, A13: Ohne diesen Eintrag zeigte das Frontend den rohen,
+  // englischen `Display`-Text der `keyring`-Crate ("No default store has
+  // been set, so cannot search or create entries") — genau der Fehler, den
+  // BL-0031 beanstandet.
+  "KEYCHAIN_UNAVAILABLE",
 ]);
 
 /** Übersetzt `code` über den `errors`-Namespace, fällt bei `null`/

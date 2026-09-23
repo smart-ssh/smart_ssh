@@ -85,7 +85,8 @@ lesen, dann an der unterbrochenen Stelle weitermachen.
    (`git log --diff-filter=A --format=%H -- <specdatei>`), dann den
    `spec-reviewer`-Subagent starten: „invoke for spec <pfad>, commit range
    <spec-commit>..HEAD, Priorität <normal|ERHÖHT>" (ERHÖHT bei Filter-Engine,
-   Risiko-Klassifizierer, Redactor, Credential-Handling; dann mit
+   Risiko-Klassifizierer, Redactor, Credential-Handling, Ausführungspfad,
+   Verschlüsselung, Migration; dann mit
    ausformulierten Angriffswegen). Funde triagieren wie im Skill beschrieben
    und erneut prüfen lassen, höchstens zwei Runden. Bleibt danach etwas offen:
    Status `needs-stefan` mit `reason`.

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
+  commandErrorCode,
   commandErrorMessage,
   largeNoteDialogThresholdBytes,
   listNoteRevisions,
@@ -8,6 +10,7 @@ import {
   updateGroupNotes,
   updateServerNotes,
 } from "../api";
+import { translateErrorCode } from "../errorCodes";
 import type { NoteRevisionDto, NoteTarget } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 
@@ -40,6 +43,9 @@ interface NotesPanelProps {
  * `NoteTarget` unterscheidet sich).
  */
 export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = false }: NotesPanelProps) {
+  // Spec 0071, A13: Fehlercodes werden übersetzt gezeigt, nicht der rohe
+  // Backend-Text (s. `translateErrorCode`).
+  const { t } = useTranslation();
   const [draft, setDraft] = useState(currentNotes);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +102,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
   const loadHistory = () => {
     listNoteRevisions(target)
       .then(setRevisions)
-      .catch((err) => setError(commandErrorMessage(err)));
+      .catch((err) => setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err))));
   };
 
   useEffect(() => {
@@ -116,7 +122,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
       onNotesChanged();
       if (showHistory) loadHistory();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setSaving(false);
     }
@@ -129,7 +135,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
       onNotesChanged();
       loadHistory();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     }
   };
 
@@ -146,7 +152,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
     try {
       await requestNoteShrink(target.Server);
     } catch (err) {
-      setShrinkError(commandErrorMessage(err));
+      setShrinkError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setShrinkRequesting(false);
     }

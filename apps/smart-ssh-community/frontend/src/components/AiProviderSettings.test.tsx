@@ -31,17 +31,19 @@ vi.mock("../api", () => ({
   fetchAttestationInfo: vi.fn(),
   setActiveAiProvider: vi.fn(),
   testAiProviderCredentials: vi.fn(),
-  commandErrorMessage: (err: unknown) => String(err),
-  // Spec 0069, Teil B: echte Implementierung (wie in `ServerList.test.tsx`
-  // bereits etabliert) statt einer Attrappe — `runOllamaProbe` braucht das
-  // tatsächliche `code`-Extraktionsverhalten.
-  commandErrorCode: (err: unknown) => {
-    if (typeof err === "object" && err !== null && "code" in err) {
-      const code = (err as { code: unknown }).code;
-      if (typeof code === "string") return code;
-    }
-    return null;
-  },
+  // Spec 0069, Teil B: `runOllamaProbe` braucht das tatsächliche
+  // `code`-Extraktionsverhalten (wie in `ServerList.test.tsx` bereits
+  // etabliert), Spec 0071 braucht `.message`-Extraktion für
+  // `KEYCHAIN_UNAVAILABLE`-artige Fehlerobjekte — echte Implementierungen
+  // statt einer vereinfachten Attrappe.
+  commandErrorMessage: (err: unknown) =>
+    typeof err === "object" && err !== null && "message" in err
+      ? String((err as { message: unknown }).message)
+      : String(err),
+  commandErrorCode: (err: unknown) =>
+    typeof err === "object" && err !== null && "code" in err
+      ? ((err as { code: string | null }).code ?? null)
+      : null,
 }));
 
 vi.mock("../riskSettings", () => ({
@@ -519,5 +521,31 @@ describe('AiProviderSettings "Ollama übernehmen" (Spec 0069, Teil B4, Test 24/2
     await screen.findByText("Ollama läuft auf diesem Rechner.");
 
     expect(addAiProvider).not.toHaveBeenCalled();
+  });
+});
+
+// Spec 0071, A13: Der Provider-Dialog ist der Ort, an dem BL-0031 zuerst
+// weh tut (§1.2: "der Fünf-Minuten-Pfad endet hier"). Ohne diesen Test
+// prüfte nur `errorCodes.test.ts` die Übersetzungsfunktion — die auf
+// diesem Pfad vorher gar nicht aufgerufen wurde (spec-reviewer-Fund).
+describe("AiProviderSettings — Schlüsselbund nicht verfügbar (Spec 0071, A13)", () => {
+  it("zeigt den übersetzten Text statt des rohen englischen Bibliothekstexts", async () => {
+    vi.mocked(addAiProvider).mockRejectedValue({
+      code: "KEYCHAIN_UNAVAILABLE",
+      message: "Der Systemschlüsselbund ist nicht verfügbar.",
+    });
+
+    renderForm();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Claude" } });
+    fireEvent.change(screen.getByLabelText("Modell"), { target: { value: "sonnet" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-x" } });
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+
+    const error = await screen.findByText(/Systemschlüsselbund ist nicht verfügbar/);
+    // Der übersetzte Text nennt die blockierten Funktionen und den Ort mit
+    // dem konkreten nächsten Schritt — der `message`-Fallback tut das nicht.
+    expect(error).toHaveTextContent("Passphrase");
+    expect(error).toHaveTextContent("Diagnose");
+    expect(error).not.toHaveTextContent("No default store");
   });
 });

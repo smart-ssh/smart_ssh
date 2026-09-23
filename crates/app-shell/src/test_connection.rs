@@ -18,7 +18,9 @@ use ssh_transport::ConnectOutcome;
 use crate::commands::SSH_CONNECT_TIMEOUT;
 use crate::dto::{AuthMethodInput, ServerInput, TestConnectionResult};
 use crate::ephemeral_credentials::EphemeralCredentialStore;
-use crate::error::{CommandError, CommandResult};
+use credentials_keyring::KeychainAvailability;
+
+use crate::error::{keychain_aware_credential_error, CommandError, CommandResult};
 
 /// Kapselt `ssh_transport::connect()` hinter einem Trait, rein damit
 /// `test_connection`s Logik (Ephemeral-Credential-Aufbau, Hop-Kette,
@@ -64,6 +66,12 @@ impl Connector for RealConnector {
 pub async fn test_connection(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
+    // Spec 0071, A13: nur für die Fehlerkennzeichnung durchgereicht (s.
+    // `error::keychain_aware_credential_error`) — dieser Pfad liest bei
+    // leerem Formularfeld das bereits gespeicherte Secret, und ohne
+    // Schlüsselbund stünde sonst der englische Bibliothekstext im
+    // Server-Formular.
+    keychain: KeychainAvailability,
     host_key_store: Arc<dyn HostKeyStore>,
     connector: &dyn Connector,
     input: ServerInput,
@@ -72,6 +80,7 @@ pub async fn test_connection(
     test_connection_with_timeout(
         profile_store,
         real_credential_store,
+        keychain,
         host_key_store,
         connector,
         input,
@@ -83,9 +92,16 @@ pub async fn test_connection(
 
 /// Testbare Variante mit injizierbarem Timeout — die echten 10 Sekunden
 /// aus der Spec wären in einem Unit-Test schlicht zu langsam.
+/// `#[allow(clippy::too_many_arguments)]`: Spec 0071 ergänzt einen achten
+/// Parameter (`keychain`). Ihn in eine Struct zu bündeln hieße, die
+/// Signatur der öffentlichen [`test_connection`] mitzuziehen, ohne dass
+/// diese Spec daran etwas fachlich ändert — dasselbe Muster wie an den
+/// übrigen Stellen in dieser Crate.
+#[allow(clippy::too_many_arguments)]
 async fn test_connection_with_timeout(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
+    keychain: KeychainAvailability,
     host_key_store: Arc<dyn HostKeyStore>,
     connector: &dyn Connector,
     input: ServerInput,
@@ -101,6 +117,7 @@ async fn test_connection_with_timeout(
     let final_auth = resolve_final_hop_auth(
         &ephemeral,
         real_credential_store,
+        keychain,
         input.auth,
         existing_auth.as_ref(),
     )?;
@@ -184,15 +201,23 @@ async fn test_connection_with_timeout(
 fn resolve_final_hop_auth(
     ephemeral: &EphemeralCredentialStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
+    keychain: KeychainAvailability,
     input: AuthMethodInput,
     existing: Option<&AuthMethod>,
 ) -> CommandResult<AuthMethod> {
     match input {
         AuthMethodInput::Password { value } => {
-            let secret = resolve_secret(value, existing, real_credential_store, |a| match a {
-                AuthMethod::Password { credential_ref } => Some(credential_ref),
-                _ => None,
-            })?;
+            let secret =
+                resolve_secret(
+                    value,
+                    existing,
+                    real_credential_store,
+                    keychain,
+                    |a| match a {
+                        AuthMethod::Password { credential_ref } => Some(credential_ref),
+                        _ => None,
+                    },
+                )?;
             let r = CredentialRef::new("test:password");
             ephemeral.insert(&r, secret);
             Ok(AuthMethod::Password { credential_ref: r })
@@ -201,11 +226,16 @@ fn resolve_final_hop_auth(
             key_content,
             passphrase,
         } => {
-            let key_secret =
-                resolve_secret(key_content, existing, real_credential_store, |a| match a {
+            let key_secret = resolve_secret(
+                key_content,
+                existing,
+                real_credential_store,
+                keychain,
+                |a| match a {
                     AuthMethod::PrivateKey { credential_ref, .. } => Some(credential_ref),
                     _ => None,
-                })?;
+                },
+            )?;
             let key_ref = CredentialRef::new("test:private_key");
             ephemeral.insert(&key_ref, key_secret);
 
@@ -220,7 +250,9 @@ fn resolve_final_hop_auth(
                         passphrase_ref: Some(existing_ref),
                         ..
                     }) => {
-                        let secret = real_credential_store.get(existing_ref)?;
+                        let secret = real_credential_store
+                            .get(existing_ref)
+                            .map_err(|err| keychain_aware_credential_error(err, keychain))?;
                         let r = CredentialRef::new("test:passphrase");
                         ephemeral.insert(&r, secret);
                         Some(r)
@@ -238,19 +270,29 @@ fn resolve_final_hop_auth(
             cert_content,
             key_content,
         } => {
-            let cert_secret =
-                resolve_secret(cert_content, existing, real_credential_store, |a| match a {
+            let cert_secret = resolve_secret(
+                cert_content,
+                existing,
+                real_credential_store,
+                keychain,
+                |a| match a {
                     AuthMethod::Certificate { cert_ref, .. } => Some(cert_ref),
                     _ => None,
-                })?;
+                },
+            )?;
             let cert_ref = CredentialRef::new("test:certificate");
             ephemeral.insert(&cert_ref, cert_secret);
 
-            let key_secret =
-                resolve_secret(key_content, existing, real_credential_store, |a| match a {
+            let key_secret = resolve_secret(
+                key_content,
+                existing,
+                real_credential_store,
+                keychain,
+                |a| match a {
                     AuthMethod::Certificate { key_ref, .. } => Some(key_ref),
                     _ => None,
-                })?;
+                },
+            )?;
             let key_ref = CredentialRef::new("test:certificate_key");
             ephemeral.insert(&key_ref, key_secret);
 
@@ -295,6 +337,7 @@ fn resolve_secret(
     provided: Option<String>,
     existing: Option<&AuthMethod>,
     real_store: &(dyn CredentialStore + Send + Sync),
+    keychain: KeychainAvailability,
     extract_ref: impl Fn(&AuthMethod) -> Option<&CredentialRef>,
 ) -> CommandResult<SecretString> {
     if let Some(value) = provided {
@@ -305,11 +348,18 @@ fn resolve_secret(
             "Secret erforderlich (kein bestehender Server zum Wiederverwenden gefunden)",
         )
     })?;
-    Ok(real_store.get(existing_ref)?)
+    real_store
+        .get(existing_ref)
+        .map_err(|err| keychain_aware_credential_error(err, keychain))
 }
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0071: Diese Tests prüfen den Verbindungstest, nicht die
+    /// Schlüsselbund-Verfügbarkeit — der In-Memory-Store ist per Definition
+    /// verfügbar.
+    const AVAILABLE: KeychainAvailability = KeychainAvailability::Available;
+
     use ssh_manager_core::profiles::PostIngestPolicy;
     use ssh_manager_core::ssh::{CommandOutput, HostKeyDecision, InteractiveShell, PtySize};
 
@@ -423,6 +473,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Success),
             password_input(),
@@ -443,6 +494,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::UnknownHostKey),
             password_input(),
@@ -466,6 +518,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::MismatchHostKey),
             password_input(),
@@ -489,6 +542,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::AuthenticationFailed),
             password_input(),
@@ -509,6 +563,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::NetworkError),
             password_input(),
@@ -529,6 +584,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Timeout),
             password_input(),
@@ -554,6 +610,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Success),
             input,
@@ -604,6 +661,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &credential_store,
+            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Success),
             input,
@@ -715,6 +773,7 @@ mod tests {
         let result = test_connection_with_timeout(
             &profile_store,
             &real_credential_store,
+            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &InspectingConnector,
             input,

@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   commandErrorMessage,
   generateDiagnosticsBundle,
+  getKeychainStatus,
   openLogDirectory,
   saveDiagnosticsBundle,
 } from "../api";
+import type { KeychainStatusDto } from "../types";
 
 /** Spec 0050, Teil 1: aus `AiProviderSettings` herausgelöst — eigene
  * Kategorie ("Diagnose") in der zweispaltigen Settings-Struktur. */
@@ -14,6 +16,31 @@ export function DiagnosticsSettings() {
   const [error, setError] = useState<string | null>(null);
   const [bundle, setBundle] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  // Spec 0071, A15: Der Startdialog ist weggeklickt, sobald der Nutzer ihn
+  // bestätigt hat — hier bleibt der Zustand nachschlagbar. `null` =
+  // noch nicht geladen.
+  const [keychain, setKeychain] = useState<KeychainStatusDto | null>(null);
+  const [keychainError, setKeychainError] = useState(false);
+
+  useEffect(() => {
+    getKeychainStatus()
+      .then(setKeychain)
+      .catch(() => setKeychainError(true));
+  }, []);
+
+  /** Spec 0071, A15: "verfügbar" oder "nicht verfügbar (Grund)". Der Grund
+   * kommt als stabile Aufzählung aus dem Backend und wird hier übersetzt —
+   * kein Backend-Text wird angezeigt (I1). Ein unbekannter (künftiger)
+   * Grund fällt auf den `unknown`-Text zurück, nie auf eine leere Zeile. */
+  const keychainStateText = () => {
+    if (keychainError) return t("diagnostics.keychainLoadFailed");
+    if (!keychain) return t("diagnostics.keychainUnknownState");
+    if (keychain.available) return t("diagnostics.keychainAvailable");
+    const reason = keychain.reason ?? "unknown";
+    const key = `diagnostics.keychainUnavailable.${reason}`;
+    const text = t(key);
+    return text === key ? t("diagnostics.keychainUnavailable.unknown") : text;
+  };
 
   /** Spec 0016, Abschnitt 5: ein Klick statt manuell zum
    * plattformspezifischen Log-Ordner navigieren zu müssen. */
@@ -57,6 +84,16 @@ export function DiagnosticsSettings() {
   return (
     <div className="space-y-4">
       {error && <p className="rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
+      <div
+        className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-300"
+        data-testid="keychain-status"
+      >
+        <span className="text-slate-400">{t("diagnostics.keychainLabel")}:</span>{" "}
+        <span>{keychainStateText()}</span>
+        {keychain && !keychain.available && (
+          <p className="mt-1 text-xs text-slate-400">{t("diagnostics.keychainBlocked")}</p>
+        )}
+      </div>
       <button
         type="button"
         onClick={handleOpenLogDirectory}

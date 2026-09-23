@@ -36,10 +36,11 @@ use crate::dto::{
     credential_ref_for, sort_remote_entries, ActionUserDecision, AiProviderConfigDto,
     AiProviderConfigInput, AppInfoDto, DeleteGroupResult, DeleteServerResult, DocumentFormat,
     EditSessionDto, EvalContextInput, EvaluationTraceDto, GroupDto, HostKeyUserDecision,
-    NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType, RemoteEntryDto, RuleDto,
-    RuleInput, ServerDto, ServerInput, SessionSummaryDto, TestConnectionResult,
+    KeychainStatusDto, NoteRevisionDto, PatternDto, PatternSuggestionDto, PatternType,
+    RemoteEntryDto, RuleDto, RuleInput, ServerDto, ServerInput, SessionSummaryDto,
+    TestConnectionResult,
 };
-use crate::error::{CommandError, CommandResult};
+use crate::error::{keychain_aware_credential_error, CommandError, CommandResult};
 use crate::events::{
     emit_chat_queued_messages_sent, emit_connection_status_changed,
     emit_host_key_verification_needed, emit_sftp_transfer_finished, emit_sftp_transfer_started,
@@ -157,7 +158,8 @@ pub async fn add_ai_provider(
     let credential_ref = credential_ref_for(id);
     state
         .credential_store
-        .set(&credential_ref, SecretString::from(config.api_key.clone()))?;
+        .set(&credential_ref, SecretString::from(config.api_key.clone()))
+        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
 
     let new_config = config.into_new_config(id);
     if let Err(err) = state.ai_provider_store.create(&new_config).await {
@@ -202,7 +204,8 @@ pub async fn update_ai_provider(
     if !api_key.is_empty() {
         state
             .credential_store
-            .set(&credential_ref_for(id), SecretString::from(api_key))?;
+            .set(&credential_ref_for(id), SecretString::from(api_key))
+            .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
     }
     Ok(())
 }
@@ -222,7 +225,10 @@ pub async fn delete_ai_provider(state: State<'_, AppState>, id: ProviderId) -> C
         );
     }
 
-    state.credential_store.delete(&existing.credential_ref)?;
+    state
+        .credential_store
+        .delete(&existing.credential_ref)
+        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
     state.ai_provider_store.delete(&id).await?;
     Ok(())
 }
@@ -297,7 +303,8 @@ pub async fn discover_models(
         let existing = state.ai_provider_store.get(&id).await?;
         state
             .credential_store
-            .get(&existing.credential_ref)?
+            .get(&existing.credential_ref)
+            .map_err(|err| keychain_aware_credential_error(err, state.keychain))?
             .expose_secret()
             .to_string()
     } else {
@@ -469,7 +476,8 @@ pub async fn test_ai_provider_credentials(
         let existing = state.ai_provider_store.get(&id).await?;
         state
             .credential_store
-            .get(&existing.credential_ref)?
+            .get(&existing.credential_ref)
+            .map_err(|err| keychain_aware_credential_error(err, state.keychain))?
             .expose_secret()
             .to_string()
     } else {
@@ -867,7 +875,10 @@ pub(crate) async fn connect_session(
         state.profile_store.get_server(&server_id).await?
     };
     let active_config = active_ai_provider_config(state).await?;
-    let api_key = state.credential_store.get(&active_config.credential_ref)?;
+    let api_key = state
+        .credential_store
+        .get(&active_config.credential_ref)
+        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
     let (ai_provider, ai_provider_budget) = build_ai_provider(
         &state.rate_limit_registry,
         active_config.provider_type,
@@ -2519,6 +2530,7 @@ pub async fn create_server(
     crate::servers::create_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
+        state.keychain,
         input,
     )
     .await
@@ -2541,11 +2553,17 @@ pub async fn update_server(
     let existing = state.profile_store.get_server(&id).await?;
     let auth = resolve_auth_method(
         state.credential_store.as_ref(),
+        state.keychain,
         id,
         input.auth,
         Some(&existing.auth),
     )?;
-    resolve_sudo_password(state.credential_store.as_ref(), id, input.sudo_password)?;
+    resolve_sudo_password(
+        state.credential_store.as_ref(),
+        state.keychain,
+        id,
+        input.sudo_password,
+    )?;
 
     let server = Server {
         id,
@@ -2601,8 +2619,9 @@ pub async fn clear_server_sudo_password(
     state: State<'_, AppState>,
     id: ServerId,
 ) -> CommandResult<()> {
-    clear_sudo_password(state.credential_store.as_ref(), id);
-    Ok(())
+    // Spec 0071, A17: schlägt sichtbar fehl, statt Erfolg zu melden,
+    // während das Passwort im Schlüsselbund stehen bleibt.
+    clear_sudo_password(state.credential_store.as_ref(), id)
 }
 
 /// Spec 0008, Abschnitt 7. `existing_server_id` ist eine gegenüber der
@@ -2623,6 +2642,7 @@ pub async fn test_connection(
     crate::test_connection::test_connection(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
+        state.keychain,
         state.host_key_store.clone(),
         &crate::test_connection::RealConnector,
         input,
@@ -2716,7 +2736,10 @@ pub async fn request_note_shrink(
     server_id: ServerId,
 ) -> CommandResult<()> {
     let active_config = active_ai_provider_config(&state).await?;
-    let api_key = state.credential_store.get(&active_config.credential_ref)?;
+    let api_key = state
+        .credential_store
+        .get(&active_config.credential_ref)
+        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
     let (ai_provider, ai_provider_budget) = build_ai_provider(
         &state.rate_limit_registry,
         active_config.provider_type,
@@ -3072,6 +3095,18 @@ pub async fn list_prompt_history(
 }
 
 // --- Spec 0016: Strukturiertes Logging & Diagnose --------------------------
+
+/// Spec 0071, A15: Der Startdialog ist weggeklickt, sobald der Nutzer ihn
+/// bestätigt hat — der Zustand muss trotzdem nachschlagbar bleiben. Liefert
+/// den **bereits beim Start ermittelten** Zustand aus dem `AppState` (A16);
+/// dieser Befehl probiert den Schlüsselbund nicht erneut an.
+///
+/// Gibt nur die Aufzählung zurück, nie einen Fehlertext (I1) — die Texte
+/// dazu liegen im Frontend-Übersetzungskatalog.
+#[tauri::command]
+pub async fn get_keychain_status(state: State<'_, AppState>) -> CommandResult<KeychainStatusDto> {
+    Ok(KeychainStatusDto::from(state.keychain))
+}
 
 /// Spec 0016, Abschnitt 5: öffnet den Log-Ordner im System-Dateimanager
 /// (Finder/Explorer) — ein Klick statt manuell zum plattformspezifischen

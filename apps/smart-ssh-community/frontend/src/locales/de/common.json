@@ -63,7 +63,18 @@
     "generateFailed": "Diagnosepaket konnte nicht erzeugt werden.",
     "previewHint": "Vorschau — bitte vor dem Teilen kurz durchsehen. Enthaltene Log-Zeilen sind auf unkritische Diagnose-Ereignisse beschränkt und zusätzlich redigiert; Zugangsdaten, Chat- und Notiz-Inhalte werden nicht eingebettet. Pfade enthalten deinen Benutzernamen.",
     "save": "Speichern unter …",
-    "saveFailed": "Diagnosepaket konnte nicht gespeichert werden."
+    "saveFailed": "Diagnosepaket konnte nicht gespeichert werden.",
+    "keychainLabel": "Systemschlüsselbund",
+    "keychainAvailable": "verfügbar",
+    "keychainUnknownState": "wird geprüft …",
+    "keychainUnavailable": {
+      "no_session_bus": "nicht verfügbar — kein D-Bus-Session-Bus erreichbar. Nächster Schritt: `sudo apt install dbus-user-session`, danach neu anmelden.",
+      "no_secret_service_provider": "nicht verfügbar — kein Secret-Service-Anbieter läuft. Nächster Schritt: `sudo apt install gnome-keyring`, danach neu anmelden — das genügt auch unter KDE. Nutzt du ohnehin KWallet (`kwallet6`) oder KeePassXC: Deren Secret-Service-Integration muss laufen bzw. eingeschaltet sein; Nachinstallieren allein reicht dort nicht.",
+      "locked": "nicht verfügbar — vorhanden, aber gesperrt. Nächster Schritt: entsperren und Smart SSH neu starten. Es fehlt kein Paket.",
+      "unknown": "nicht verfügbar — Ursache unbekannt. Nächster Schritt: prüfen, ob ein Secret-Service-Anbieter läuft und entsperrt ist (gnome-keyring, oder KWallet bzw. KeePassXC mit eingeschalteter Secret-Service-Integration), danach Smart SSH neu starten."
+    },
+    "keychainBlocked": "Solange das so ist, lassen sich kein API-Key, kein Server-Passwort, keine Passphrase und kein Sudo-Passwort speichern oder lesen.",
+    "keychainLoadFailed": "Zustand des Systemschlüsselbunds konnte nicht geladen werden."
   },
   "fileTypes": {
     "description": "Lege pro Dateiendung ein lokales Programm fest, das beim \"Lokal öffnen\" verwendet wird. Ohne Eintrag wird das Standardprogramm des Betriebssystems genutzt.",
@@ -137,7 +148,11 @@
     "sudoLabel": "Sudo-Passwort",
     "sudoUnchanged": "(leer = unverändert)",
     "sudoUnchangedStored": "(leer = unverändert, aktuell hinterlegt)",
+    "sudoUnchangedUnknown": "(leer = unverändert; ob eines hinterlegt ist, lässt sich ohne Systemschlüsselbund nicht feststellen)",
+    "deletedWithLeftoverSecretsTitle": "Server gelöscht — Secrets blieben im Schlüsselbund",
+    "deletedWithLeftoverSecretsHint": "Der Server ist entfernt, der Systemschlüsselbund konnte diese Einträge aber nicht löschen. Sie sind jetzt verwaist (der Server existiert nicht mehr) und lassen sich im Schlüsselbund-Verwaltungsprogramm unter dem Dienst \"Smart SSH\" von Hand entfernen:",
     "removeSudoPassword": "Hinterlegtes Sudo-Passwort entfernen",
+    "removeSudoPasswordFailed": "Das Sudo-Passwort konnte nicht entfernt werden — es liegt weiterhin im Systemschlüsselbund und wird beim nächsten „sudo“ erneut eingespeist.",
     "postIngestFieldset": "Bestätigung nach Serverzugriff",
     "postIngestHint": "Legt fest, ob und wann nach dem Einlesen von Serverinhalt (Kommando-Ausgabe, Dateien, Notizen) in dieser Sitzung zusätzlich nachgefragt wird. Unabhängig davon wird solcher Inhalt immer klar als Daten gekennzeichnet, nie als Anweisung behandelt.",
     "postIngest": {
@@ -165,6 +180,7 @@
     "deleteImpactTitle": "Auswirkungen des Löschens:",
     "deleteNoKeychainImpact": "Keine Secrets im Schlüsselbund, keine anderen Server betroffen.",
     "secretWillBeDeleted": "Wird aus dem Schlüsselbund entfernt: {{label}}",
+    "secretMayBeDeleted": "Konnte nicht geprüft werden (Systemschlüsselbund nicht lesbar), wird nach Möglichkeit entfernt: {{label}}",
     "serverWillLoseJumpHost": "Verliert die Jump-Host-Referenz auf diesen Server: {{name}}",
     "deleteAlwaysRemovesHistory": "Zusätzlich werden Chat-Historie, Notizen und Tags dieses Servers unwiderruflich gelöscht.",
     "confirmDeleteServer": "Endgültig löschen",
@@ -410,7 +426,8 @@
     "SERVER_CERTIFICATE_REQUIRED": "Zertifikat ist erforderlich",
     "SERVER_CERTIFICATE_KEY_REQUIRED": "Zertifikats-Key ist erforderlich",
     "SERVER_JUMP_HOST_LOCAL": "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
-    "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "Erststart-Hinweis muss zuerst bestätigt werden"
+    "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "Erststart-Hinweis muss zuerst bestätigt werden",
+    "KEYCHAIN_UNAVAILABLE": "Der Systemschlüsselbund ist nicht verfügbar. Solange das so ist, lassen sich kein API-Key, kein Server-Passwort, keine Passphrase und kein Sudo-Passwort speichern oder lesen. Den genauen Grund und den nächsten Schritt zeigt die Diagnose-Ansicht in den Einstellungen."
   },
   "mcpServer": {
     "hint": "Externe MCP-Clients können darüber Kommandos, Datei-Lese-/Schreibzugriffe und Notiz-Aktualisierungen auf freigegebenen Servern vorschlagen — jede Anfrage landet immer bei einer Bestätigung in der App, unabhängig von bestehenden Allow-Regeln.",

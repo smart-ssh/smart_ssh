@@ -11,8 +11,8 @@ use ssh_manager_core::shared::ServerId;
 use crate::dto::{DeleteServerResult, ServerDto, ServerInput};
 use crate::error::CommandResult;
 use crate::server_credentials::{
-    clear_sudo_password, delete_all_possible_server_secrets, delete_auth_method_secrets,
-    resolve_auth_method, resolve_sudo_password,
+    delete_all_possible_server_secrets, delete_auth_method_secrets,
+    delete_sudo_password_on_server_delete, resolve_auth_method, resolve_sudo_password,
 };
 
 /// Der volle `create_server`-Ablauf (Spec 0047, Fund A2), losgelöst von
@@ -33,6 +33,7 @@ use crate::server_credentials::{
 pub async fn create_server(
     store: &dyn ProfileStore,
     credential_store: &(dyn CredentialStore + Send + Sync),
+    keychain: credentials_keyring::KeychainAvailability,
     input: ServerInput,
 ) -> CommandResult<ServerId> {
     // Vor jedem Schlüsselbund-Zugriff prüfen — ein ungültiger Pfad soll
@@ -40,14 +41,14 @@ pub async fn create_server(
     let sftp_server_path = crate::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
     let id = ServerId::new();
 
-    let auth = match resolve_auth_method(credential_store, id, input.auth, None) {
+    let auth = match resolve_auth_method(credential_store, keychain, id, input.auth, None) {
         Ok(auth) => auth,
         Err(err) => {
             delete_all_possible_server_secrets(credential_store, id);
             return Err(err);
         }
     };
-    if let Err(err) = resolve_sudo_password(credential_store, id, input.sudo_password) {
+    if let Err(err) = resolve_sudo_password(credential_store, keychain, id, input.sudo_password) {
         delete_all_possible_server_secrets(credential_store, id);
         return Err(err);
     }
@@ -105,6 +106,10 @@ pub async fn compute_delete_server_result(
         server: ServerDto::from_server(server, credential_store),
         servers_losing_jump_host,
         executed,
+        // Spec 0071, A17: Diese Funktion löscht per Konstruktion nichts
+        // (s. Doc-Kommentar oben) — es kann also auch nichts stehen
+        // geblieben sein. `delete_server` unten füllt das Feld.
+        secrets_left_behind: Vec::new(),
     })
 }
 
@@ -125,11 +130,23 @@ pub async fn delete_server(
     confirm: bool,
 ) -> CommandResult<DeleteServerResult> {
     let server = store.get_server(&id).await?;
-    let result = compute_delete_server_result(store, credential_store, &server, confirm).await?;
+    let mut result =
+        compute_delete_server_result(store, credential_store, &server, confirm).await?;
     if confirm {
-        delete_auth_method_secrets(credential_store, &server.auth);
-        clear_sudo_password(credential_store, id);
+        // Spec 0071, A17 (zweiter Punkt): Das Löschen läuft durch, auch
+        // wenn ein Secret nicht entfernt werden konnte — das Profil
+        // verschwindet, und das Ergebnis sagt ausdrücklich, was im
+        // Schlüsselbund zurückblieb. Der Nutzer soll nicht auf einem
+        // unlöschbaren Server sitzen bleiben, nur weil der Schlüsselbund
+        // klemmt; verschweigen darf man den Rückstand aber auch nicht
+        // (X6-Korrektur vom 2026-09-22).
+        let mut left_behind = delete_auth_method_secrets(credential_store, &server.auth);
+        left_behind.extend(delete_sudo_password_on_server_delete(credential_store, id));
         store.delete_server(&id).await?;
+        result.secrets_left_behind = left_behind
+            .into_iter()
+            .map(|r| r.as_str().to_string())
+            .collect();
     }
     Ok(result)
 }
@@ -143,6 +160,12 @@ mod tests {
 
     use super::*;
     use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+
+    /// Spec 0071: Der In-Memory-Store dieser Tests ist per Definition
+    /// verfügbar — hier geht es um das Rollback-Verhalten, nicht um die
+    /// Schlüsselbund-Verfügbarkeit.
+    const AVAILABLE: credentials_keyring::KeychainAvailability =
+        credentials_keyring::KeychainAvailability::Available;
 
     fn server(name: &str, jump_host: Option<ServerId>) -> Server {
         let now = Utc::now();
@@ -281,6 +304,69 @@ mod tests {
             orphaned.jump_host, None,
             "abhängiger Server verliert nur die Jump-Host-Referenz, wird nicht mitgelöscht"
         );
+        assert!(
+            result.secrets_left_behind.is_empty(),
+            "bei funktionierendem Schlüsselbund bleibt nichts zurück"
+        );
+    }
+
+    /// Spec 0071, A17 (zweiter Punkt): Klemmt der Schlüsselbund, wird der
+    /// Server **trotzdem** gelöscht — niemand soll auf einem unlöschbaren
+    /// Server sitzen bleiben. Das Ergebnis sagt dafür ausdrücklich, welche
+    /// Einträge im Schlüsselbund zurückblieben; sie sind danach verwaist,
+    /// weil die Server-ID nicht mehr existiert.
+    ///
+    /// Am Stand vor A17 war `secrets_left_behind` nicht vorhanden und der
+    /// Rückstand nur im Log sichtbar — das Ergebnis behauptete implizit,
+    /// alles sei entfernt.
+    #[tokio::test]
+    async fn test_delete_server_succeeds_but_reports_secrets_it_could_not_remove() {
+        let credential_ref = CredentialRef::new("test:server-password");
+        let target = server_with_password("target", None, &credential_ref);
+        let store = InMemoryProfileStore::new().with_server(target.clone());
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&credential_ref, "hunter2")
+            .with_failing_delete();
+
+        let result = delete_server(&store, &credentials, target.id, true)
+            .await
+            .expect("das Löschen darf am Schlüsselbund nicht scheitern");
+
+        assert!(result.executed);
+        assert!(
+            store.get_server(&target.id).await.is_err(),
+            "der Server muss trotz Schlüsselbund-Fehler verschwinden"
+        );
+        assert!(
+            result
+                .secrets_left_behind
+                .contains(&credential_ref.as_str().to_string()),
+            "der Rückstand muss im Ergebnis stehen, nicht nur im Log: {:?}",
+            result.secrets_left_behind
+        );
+        assert!(
+            credentials.get(&credential_ref).is_ok(),
+            "der Test taugt nur, wenn das Secret tatsächlich stehen bleibt"
+        );
+    }
+
+    /// Gegenprobe zu A17: Ohne Bestätigung wird nichts gelöscht — und
+    /// damit kann auch nichts zurückbleiben.
+    #[tokio::test]
+    async fn test_delete_server_preview_never_reports_leftovers() {
+        let credential_ref = CredentialRef::new("test:server-password");
+        let target = server_with_password("target", None, &credential_ref);
+        let store = InMemoryProfileStore::new().with_server(target.clone());
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&credential_ref, "hunter2")
+            .with_failing_delete();
+
+        let preview = delete_server(&store, &credentials, target.id, false)
+            .await
+            .unwrap();
+
+        assert!(!preview.executed);
+        assert!(preview.secrets_left_behind.is_empty());
     }
 
     fn password_input(password_value: &str, sudo_password: &str) -> ServerInput {
@@ -313,7 +399,13 @@ mod tests {
         let store = InMemoryProfileStore::new().with_failing_create_server();
         let credentials = InMemoryCredentialStore::new();
 
-        let result = create_server(&store, &credentials, password_input("secret", "hunter2")).await;
+        let result = create_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            password_input("secret", "hunter2"),
+        )
+        .await;
 
         assert!(result.is_err());
         assert!(
@@ -341,7 +433,13 @@ mod tests {
         let store = InMemoryProfileStore::new();
         let credentials = InMemoryCredentialStore::new().with_failing_set_for_slot("sudo_password");
 
-        let result = create_server(&store, &credentials, password_input("secret", "hunter2")).await;
+        let result = create_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            password_input("secret", "hunter2"),
+        )
+        .await;
 
         assert!(result.is_err());
         assert!(
@@ -414,6 +512,7 @@ mod tests {
         let result = create_server(
             &store,
             &credentials,
+            AVAILABLE,
             private_key_input("key-pem", "hunter2"),
         )
         .await;
@@ -453,6 +552,7 @@ mod tests {
         let result = create_server(
             &store,
             &credentials,
+            AVAILABLE,
             certificate_input("cert-pem", "key-pem"),
         )
         .await;

@@ -70,13 +70,13 @@ confidence-threshold = 0.8
 
 [licenses.private]
 # Spec 0035 gilt für Abhängigkeiten, nicht für die eigene Lizenz des
-# Projekts (`[workspace.package] license = "FSL-1.1-MIT"`) — cargo-deny
-# prüft standardmäßig aber auch Workspace-Member-Crates mit. `ignore = true`
-# überspringt Crates, die als `publish = false` markiert sind (alle 7
-# Workspace-Crates, s. deren `Cargo.toml`) — die korrekte, enge Lösung
-# (überspringt nur unveröffentlichte eigene Crates), kein Eintrag von
-# FSL-1.1-MIT in die Allow-Liste, die weiterhin ausschließlich für
-# Drittanbieter-Abhängigkeiten gilt.
+# Projekts (`[workspace.package] license = "Apache-2.0"`, Spec 0070) —
+# cargo-deny prüft standardmäßig aber auch Workspace-Member-Crates mit.
+# `ignore = true` überspringt Crates, die als `publish = false` markiert
+# sind (alle 8 Workspace-Crates, s. deren `Cargo.toml`) — die korrekte,
+# enge Lösung (überspringt nur unveröffentlichte eigene Crates), kein
+# Eintrag der eigenen Lizenz in die Allow-Liste, die weiterhin
+# ausschließlich für Drittanbieter-Abhängigkeiten gilt.
 ignore = true
 
 # This section is considered when running `cargo deny check bans`.

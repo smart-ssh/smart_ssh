@@ -69,6 +69,23 @@ fn build_app_state(
     wiring: &Wiring,
     log_guard: tracing_appender::non_blocking::WorkerGuard,
 ) -> (AppState, tracing_appender::non_blocking::WorkerGuard) {
+    // Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
+    // Programmlaufs — hier, an der einzigen Stelle, die tatsächlich die
+    // Umgebung liest. Die Entscheidungslogik selbst ist rein und liegt in
+    // `startup_error_messages` (A11c). Würde jeder Dialog seine Sprache
+    // selbst bestimmen, zeigte ein englischsprachiges System bei einem
+    // DB-Fehler Deutsch und bei einem Schlüsselbund-Fehler Englisch.
+    let lc_all = std::env::var("LC_ALL").ok();
+    let lc_messages = std::env::var("LC_MESSAGES").ok();
+    let lang = std::env::var("LANG").ok();
+    let language = crate::startup_error_messages::startup_language(
+        crate::startup_error_messages::preferred_locale_value(
+            lc_all.as_deref(),
+            lc_messages.as_deref(),
+            lang.as_deref(),
+        ),
+    );
+
     let db_path = default_db_path();
     tracing::info!(data_path = %db_path.display(), "connecting to SQLite database");
     // Spec 0059, Fälle 1/2/4 (Release-Gate A): vorher ein `.expect(...)` —
@@ -85,8 +102,9 @@ fn build_app_state(
         Err(err) => {
             let kind = err.classify();
             let log_dir = crate::logging::default_log_dir();
-            let text =
-                crate::startup_error_messages::db_connect_failure_text(&kind, &db_path, &log_dir);
+            let text = crate::startup_error_messages::db_connect_failure_text(
+                &kind, &db_path, &log_dir, language,
+            );
             tracing::error!(error = %err, ?kind, "fatal: SQLite database connect/migrate failed");
             // spec-reviewer-Fund: `std::process::exit` in `show_fatal_error_
             // and_exit` führt keine Destruktoren aus — ohne dieses explizite
@@ -117,6 +135,41 @@ fn build_app_state(
     // Persistenz/Prompt-Historie) — degradiert bei einem Fehler zu `None`
     // für beide betroffenen Stores (s. `AppState::prompt_history_store`/
     // `chat_session_store`-Doc-Kommentare) statt die ganze App abzubrechen.
+
+    // Spec 0071, A3/A16: Das Session-Bus-Indiz und der Schlüsselbund-Zustand
+    // werden hier EINMAL pro Programmlauf ermittelt und danach im `AppState`
+    // weitergereicht — kein Kommando probiert den Schlüsselbund zusätzlich
+    // ab, um den Zustand zu erfahren (insbesondere nicht `list_servers`, das
+    // `ServerDto::from_server` pro Server aufruft).
+    //
+    // Nur diese Stelle liest die Umgebung; die Regel selbst ist rein und
+    // liegt in `credentials_keyring::session_bus_present` (A3). Der Wert von
+    // `DBUS_SESSION_BUS_ADDRESS` wird dabei zu einem `bool` verdichtet und
+    // nirgends weitergereicht — ein Steuerzeichen darin kann deshalb keinen
+    // Dialogtext fortsetzen (X1).
+    let dbus_address = std::env::var("DBUS_SESSION_BUS_ADDRESS").ok();
+    let xdg_runtime_bus_exists = std::env::var("XDG_RUNTIME_DIR")
+        .ok()
+        .is_some_and(|dir| std::path::Path::new(&dir).join("bus").exists());
+    //
+    // `mut`: spec-reviewer-Fund — der Schnappschuss kann sich unten noch
+    // **verschärfen** (nie abschwächen, s. `escalate_to_unavailable`).
+    let mut keychain = credentials_keyring::probe_keychain_availability(
+        std::env::consts::OS,
+        credentials_keyring::session_bus_present(dbus_address.as_deref(), xdg_runtime_bus_exists),
+    );
+    // spec-reviewer-Fund zur Klarstellung Q-BL-0031-01: §6.4 M1 verlangt
+    // "Log enthält den vollen Grund". Der klassifizierte Zustand oben ist
+    // dafür zu grob — die eigentliche `store_status()`-Fehlerkette existiert
+    // nur hier. Sie geht ausschließlich ins Log, nie in einen Dialog, ein
+    // DTO oder das Diagnosepaket (I1/X2; die Zeile steht bewusst NICHT in
+    // `diagnostics::SAFE_LOG_MESSAGES` und fliegt damit aus dem exportierten
+    // Paket).
+    if let Some(chain) = credentials_keyring::store_status_cause_chain_for_log() {
+        tracing::warn!(cause_chain = %chain, "OS keychain store initialisation failed");
+    }
+    tracing::info!(?keychain, "probed OS keychain availability");
+
     tracing::info!("resolving chat-content encryption key from OS keychain");
     let credential_store = KeyringCredentialStore::new();
     let (prompt_history_store, chat_session_store, ledger_store) =
@@ -156,9 +209,38 @@ fn build_app_state(
                 // Teil-0-Plans dieses Schritts): kein Abbruch, App startet
                 // unverändert degradiert weiter — s. `startup_dialog::
                 // show_warning`-Doc-Kommentar.
+                //
+                // Spec 0071, A12: statt des bisherigen pauschalen
+                // `keychain_unavailable_text(OS)` jetzt mit dem oben
+                // klassifizierten Grund — der Text nennt damit den
+                // tatsächlichen Zustand und das Paket, das ihn behebt.
+                // `Unknown` als Rückfall, falls der Schlüsselbund beim
+                // Probieren noch erreichbar schien, `resolve_or_generate_key`
+                // aber trotzdem scheitert: A4 verlangt auch dann einen
+                // vollständigen Text, nie gar keine Meldung.
                 if crate::startup_error_messages::should_warn_about_keychain(&err) {
+                    // spec-reviewer-Fund: `store_status()` kann `Ok(())`
+                    // melden (der Anbieter antwortet auf den
+                    // Verbindungsaufbau) und der erste echte Zugriff
+                    // trotzdem scheitern — typischerweise bei einem
+                    // vorhandenen, aber gesperrten Schlüsselbund. Ohne diese
+                    // Eskalation bliebe `keychain` auf `Available`, und
+                    // weder der Fehlercode (A13) noch die Diagnose-Zeile
+                    // (A15) bekämen davon etwas mit: Die Oberfläche meldete
+                    // "verfügbar", während jeder Credential-Zugriff
+                    // scheitert — also wieder der englische Rohtext im UI.
+                    // Nur Verschärfung, nie Abschwächung.
+                    keychain = credentials_keyring::escalate_to_unavailable(
+                        keychain,
+                        credentials_keyring::KeychainUnavailableReason::Unknown,
+                    );
+                    let reason = keychain
+                        .unavailable_reason()
+                        .unwrap_or(credentials_keyring::KeychainUnavailableReason::Unknown);
                     let text = crate::startup_error_messages::keychain_unavailable_text(
+                        reason,
                         std::env::consts::OS,
+                        language,
                     );
                     crate::startup_dialog::show_warning(&text.title, &text.message);
                 }
@@ -183,7 +265,10 @@ fn build_app_state(
     let host_key_store = match FileHostKeyStore::load(host_key_path.clone()) {
         Ok(store) => store,
         Err(err) => {
-            let text = crate::startup_error_messages::host_key_store_failure_text(&host_key_path);
+            let text = crate::startup_error_messages::host_key_store_failure_text(
+                &host_key_path,
+                language,
+            );
             tracing::error!(error = %err, "fatal: host-key store failed to load");
             // s. Kommentar bei der DB-Verbindung oben — dieselbe explizite
             // Log-Flush-Notwendigkeit vor `process::exit`.
@@ -197,6 +282,7 @@ fn build_app_state(
         sessions: SessionManager::new(),
         profile_store: Arc::new(profile_store),
         credential_store: Arc::new(credential_store),
+        keychain,
         ai_provider_store: Arc::new(ai_provider_store),
         host_key_store: Arc::new(host_key_store),
         policy_store,
@@ -498,6 +584,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::create_overlay_titlebar,
             commands::list_prompt_history,
             commands::open_log_directory,
+            commands::get_keychain_status,
             commands::generate_diagnostics_bundle,
             commands::save_diagnostics_bundle,
             commands::sftp_list,

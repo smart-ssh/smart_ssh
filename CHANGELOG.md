@@ -113,6 +113,10 @@ sind mit **(Pro)** markiert.
   "Automatisch".
 
 ### Changed
+- Smart SSH ist jetzt Open Source unter der **Apache License 2.0**
+  (bisher Functional Source License 1.1, FSL-1.1-MIT). Das gilt
+  rückwirkend: Auch alle bereits veröffentlichten Versionen dürfen unter
+  der Apache License 2.0 genutzt werden.
 - Der System-Prompt weist die KI jetzt ausdrücklich an, ein angekündigtes
   Kommando auch tatsächlich über `suggest_command` vorzuschlagen, statt es
   nur im Fließtext anzukündigen und dort aufzuhören — beobachtetes Muster,

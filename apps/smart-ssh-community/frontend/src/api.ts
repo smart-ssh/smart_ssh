@@ -19,6 +19,7 @@ import type {
   EvaluationTraceDto,
   GroupDto,
   HostKeyUserDecision,
+  KeychainStatusDto,
   LocalFilePreviewDto,
   McpServerSettingsDto,
   NoteRevisionDto,
@@ -365,6 +366,11 @@ export const listPromptHistory = (serverId: string) =>
 
 /** Öffnet den Log-Ordner im System-Dateimanager (Finder/Explorer). */
 export const openLogDirectory = () => invoke<void>("open_log_directory");
+
+/** Spec 0071, A15: der beim Start ermittelte Schlüsselbund-Zustand — damit
+ * er auch dann nachschlagbar bleibt, wenn der Startdialog weggeklickt
+ * wurde. Fragt den Schlüsselbund nicht erneut ab (A16). */
+export const getKeychainStatus = () => invoke<KeychainStatusDto>("get_keychain_status");
 
 /**
  * Spec 0063: stellt das redigierte Diagnosepaket zusammen und liefert es als

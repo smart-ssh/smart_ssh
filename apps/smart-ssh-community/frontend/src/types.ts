@@ -31,6 +31,13 @@ export interface ServerDto {
   /** Spec 0018, Abschnitt 4: ob ein Sudo-Passwort im Schlüsselbund
    * hinterlegt ist — nie der Wert selbst. */
   hasSudoPassword: boolean;
+  /** Spec 0071, A14: `true`, wenn der Systemschlüsselbund nicht sagen
+   * konnte, ob ein Sudo-Passwort hinterlegt ist. Dann ist
+   * `hasSudoPassword` ebenfalls `false` — dieses Feld muss zuerst geprüft
+   * werden, sonst behauptet die Oberfläche "kein Sudo-Passwort
+   * hinterlegt", obwohl sie es nicht weiß. */
+  sudoPasswordUnknown: boolean;
+
   /** Spec 0032, Abschnitt 3: `true` genau für den lokalen Pseudo-Server. */
   isLocal: boolean;
   postIngestPolicy: PostIngestPolicy;
@@ -403,6 +410,12 @@ export interface DeleteServerResult {
   server: ServerDto;
   serversLosingJumpHost: ServerDto[];
   executed: boolean;
+  /** Spec 0071, A17: `CredentialRef`-Strings der Secrets, die beim Löschen
+   * **nicht** aus dem Schlüsselbund entfernt werden konnten. Der Server ist
+   * trotzdem gelöscht — die Einträge sind danach verwaist und müssen von
+   * Hand entfernt werden. Leer im Normalfall und immer leer bei
+   * `executed: false`. Kein Secret, nur der Account-Name im Schlüsselbund. */
+  secretsLeftBehind: string[];
 }
 
 /** Eingabe für `create_server`/`update_server`/`test_connection`. */
@@ -732,4 +745,23 @@ export interface AppInfoDto {
   edition: string;
   /** `"Dev"` (Debug-Build, eigenes Datenverzeichnis) oder `"Release"`. */
   buildType: "Dev" | "Release";
+}
+
+// --- Spec 0071: Systemschlüsselbund-Zustand -------------------------------
+
+/** Warum der Systemschlüsselbund nicht verfügbar ist — von
+ * `crate::dto::KeychainUnavailableReasonDto` (Spec 0071, A1). */
+export type KeychainUnavailableReason =
+  | "no_session_bus"
+  | "no_secret_service_provider"
+  | "locked"
+  | "unknown";
+
+/** Von `crate::dto::KeychainStatusDto` (Spec 0071, A15). Trägt bewusst
+ * keinen Fehlertext — die anzeigbaren Texte stehen im
+ * Übersetzungskatalog. */
+export interface KeychainStatusDto {
+  available: boolean;
+  /** `null`, wenn `available`. */
+  reason: KeychainUnavailableReason | null;
 }
