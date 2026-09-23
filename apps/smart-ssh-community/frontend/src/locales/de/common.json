@@ -98,6 +98,9 @@
     "addServer": "+ Server",
     "empty": "Noch nichts angelegt."
   },
+  "management": {
+    "emptyState": "Links eine Gruppe oder einen Server auswählen, oder über \"{{addGroup}}\"/\"{{addServer}}\" etwas Neues anlegen."
+  },
   "groupForm": {
     "titleNew": "Neue Gruppe",
     "titleExisting": "Gruppe: {{name}}",

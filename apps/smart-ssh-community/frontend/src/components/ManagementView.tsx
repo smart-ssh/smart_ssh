@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { commandErrorMessage, listGroups, listServers } from "../api";
 import type { GroupDto, ServerDto } from "../types";
 import { GroupForm } from "./GroupForm";
@@ -27,6 +28,7 @@ export function ManagementView({
   initialSelection = null,
   onInitialSelectionConsumed,
 }: ManagementViewProps) {
+  const { t } = useTranslation();
   const [groups, setGroups] = useState<GroupDto[]>([]);
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [selection, setSelection] = useState<Selection | null>(initialSelection);
@@ -139,9 +141,16 @@ export function ManagementView({
           />
         )}
         {!selection && (
+          // Spec 0072, Teil 3 (BL-0202): dieser Platzhaltertext stand fest
+          // deutsch da und erschien so auch in der englischen Oberfläche —
+          // lag außerhalb des Dateisatzes von Spec 0069. Interpoliert die
+          // Button-Beschriftungen aus `sidebar.addGroup`/`sidebar.addServer`
+          // statt sie hier ein zweites Mal wörtlich zu führen.
           <p className="p-4 text-sm text-slate-400">
-            Links eine Gruppe oder einen Server auswählen, oder über "+ Gruppe"/"+ Server" etwas Neues
-            anlegen.
+            {t("management.emptyState", {
+              addGroup: t("sidebar.addGroup"),
+              addServer: t("sidebar.addServer"),
+            })}
           </p>
         )}
       </div>
