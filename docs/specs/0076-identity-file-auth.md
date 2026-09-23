@@ -1,6 +1,6 @@
 # Spec 0076 — Anmeldung mit einer Schlüsseldatei
 
-Status: Vorschlag (Architekt) · Backlog: BL-0221, BL-0222 · Gate: release-1.0/D
+Status: Vorschlag (Architekt, K3 entschieden) · Backlog: BL-0221, BL-0222 · Gate: release-1.0/D
 Repo: **öffentlich** `smart-ssh` — `crates/core/src/ssh/auth.rs` und
 `crates/core/src/profiles/types.rs` (Anmeldeart und Auflösung),
 `crates/ssh-transport/` (Aufrufstelle), `crates/app-shell/` (Dateizugriff,
@@ -463,70 +463,42 @@ laufen.
 
 ## 8. Offene Punkte
 
-### OP-1 — Wie streng bei zu weiten Dateirechten? (K3)
-
-`ssh` verweigert einen Schlüssel, der für Gruppe oder Welt lesbar ist.
-
-- **(a) Genauso ablehnen** (A-4 wie geschrieben). Wer von `ssh` kommt,
-  kennt das Verhalten; bei einem Sicherheitsprodukt ist „wir sind laxer
-  als `ssh`" schwer zu begründen. Preis: Ein Nutzer mit `0644` kommt nicht
-  weiter, bis er `chmod` ausführt — die Meldung nennt den Befehl.
-- **(b) Warnen und verbinden.** Bequemer. Preis: Die Warnung wird beim
-  zweiten Mal weggeklickt, und wir haben ein Sicherheitsversprechen
-  weicher gemacht als das Werkzeug, das wir ersetzen.
-- **(c) Abgestuft:** ablehnen bei „für alle lesbar", warnen bei „für die
-  Gruppe lesbar".
-
-**Empfehlung: (a).** Es ist die einzige Fassung, die man in
-`THREAT-MODEL.md` (BL-0049) ohne Einschränkung aufschreiben kann.
-
-### OP-2 — Symbolischen Links folgen? (K3, klein)
-
-- **(a) Folgen** (A-3 wie geschrieben). `ssh` tut es; ein Link auf einen
-  Schlüssel auf einem verschlüsselten Datenträger ist ein übliches
-  Muster.
-- **(b) Nicht folgen.** Schließt aus, dass ein getauschter Link
-  unbemerkt auf einen anderen Schlüssel zeigt. Preis: bricht eine
-  verbreitete Einrichtung ohne erkennbaren Gewinn — wer den Link tauschen
-  kann, kann auch die Datei tauschen.
-
-**Empfehlung: (a).** Die Rechteprüfung (A-4) greift auf der Datei, die
-tatsächlich gelesen wird (§6.4.7), nicht auf dem Link.
-
-### OP-3 — Bei jedem Verbinden lesen? (K2, zur Kenntnis)
-
-§4.3 entscheidet: ja. Ich führe es auf, weil es eine spürbare Eigenschaft
-ist (getauschter Schlüssel wirkt sofort) und keine, die man einer Spec
-später ansieht. Widerspruch bitte jetzt, nicht nach Schritt 2.
-
-### OP-4 — Darf die Passphrase in den Schlüsselbund? (K3)
-
-- **(a) Ja, optional, wie heute bei `PrivateKey`** (A-5). Gleiches
-  Verhalten für beide Schlüsselarten, nichts Neues zu erklären.
-- **(b) Nein, jedes Mal fragen.** Sicherer gegen einen kompromittierten
-  Schlüsselbund. Preis: weicht von `PrivateKey` ab, und wer das will,
-  kann die Passphrase heute schon weglassen.
-
-**Empfehlung: (a).** Zwei Regeln für dieselbe Sache sind schlechter als
-eine, und der Nutzer hat die Wahl bereits.
-
-### OP-5 — Nach der Überführung das Löschen der Datei anbieten? (K3)
-
-C-5 sagt nein. Dagegen spricht: Der Sinn der Überführung ist ja, den
-Schlüssel von der Platte in den Schlüsselbund zu bekommen — solange die
-Datei liegen bleibt, ist wenig gewonnen. Dafür spricht: Ein Werkzeug, das
-private Schlüssel löscht, braucht sehr gute Gründe, und ein
-Bedienungsfehler ist hier unwiederbringlich.
-
-- **(a) Nicht anbieten** (C-5). Der Nutzer löscht selbst, wenn er will.
-- **(b) Anbieten, abgewählt voreingestellt**, mit deutlichem Hinweis und
-  einer zweiten Bestätigung.
-
-**Empfehlung: (a) für 1.0.** Wenn sich herausstellt, dass Nutzer die
-Datei regelmäßig vergessen, ist (b) ein eigenes Item — aber der erste
-Löschvorgang einer Schlüsseldatei sollte nicht der eines frisch gebauten
-Knopfes sein.
+Keine. Die fünf Punkte, die diese Spec zur Entscheidung vorgelegt hat,
+sind in §9 als E-1 bis E-5 entschieden; der Text oben ist bereits die
+entschiedene Fassung.
 
 ## 9. Klarstellungen
 
-(wird während der Umsetzung nachgetragen: Datum · Frage-ID · Antwort)
+**2026-09-23 · E-1 · Dateirechte** (→ A-4). Stefan: **genauso ablehnen
+wie `ssh`**. Ist die Datei auf einem Unix-System für Gruppe oder Welt
+lesbar, wird die Anmeldung abgelehnt; die Meldung nennt den
+`chmod`-Befehl. Auf Windows entfällt die Prüfung, wie bei OpenSSH selbst.
+Begründung: Es ist die einzige Fassung, die in `THREAT-MODEL.md`
+(BL-0049) ohne Einschränkung aufschreibbar ist — „wir sind laxer als
+`ssh`“ wäre bei diesem Produkt schwer zu vertreten.
+
+**2026-09-23 · E-2 · Symbolische Links** (→ A-3). Stefan: **folgen**, wie
+`ssh`. Ein Link auf einen Schlüssel auf einem verschlüsselten
+Datenträger ist ein verbreitetes Muster. Wichtig für die Umsetzung: Die
+Rechteprüfung aus E-1 greift auf der Datei, die **tatsächlich gelesen
+wird**, nicht auf dem Link — deshalb Prüfung und Lesen auf demselben
+offenen Dateihandle (§4.2, Test §6.4.7).
+
+**2026-09-23 · E-3 · Passphrase** (→ A-5). Stefan: **optional im
+Schlüsselbund, wie heute bei `PrivateKey`**. Gleiches Verhalten für beide
+Schlüsselarten; die Wahl, sie nicht zu hinterlegen, hat der Nutzer
+bereits.
+
+**2026-09-23 · E-4 · Kein Löschangebot** (→ C-5). Stefan: Nach der
+Überführung wird **nicht** angeboten, die Ursprungsdatei zu löschen. Der
+Nutzer löscht selbst. Zeigt sich, dass die Datei regelmäßig vergessen
+wird, ist das ein eigenes Item — nicht ein Knopf, der in seiner ersten
+Fassung private Schlüssel löscht.
+
+**2026-09-23 · E-5 · Lesen bei jedem Verbinden** (→ A-3, §4.3, K2, zur
+Kenntnis vorgelegt, kein Widerspruch). Die Datei wird bei jedem
+Verbindungsaufbau gelesen, nicht zwischengespeichert: Ein getauschter
+Schlüssel wirkt sofort, und nichts liegt länger im Speicher als nötig.
+
+*(Weitere Klarstellungen während der Umsetzung hier nachtragen: Datum ·
+Frage-ID · Antwort.)*
