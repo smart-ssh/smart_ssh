@@ -92,11 +92,45 @@ ist. Eine laufende App ohne diesen Hinweis nützt ihm nichts.
 Auf macOS immer `./scripts/tauri-dev.sh`, nie `cargo tauri dev` direkt
 (Signatur-Eigenheit, s. `docs/adr/0022-stable-dev-code-signature.md`).
 
+## Das Gate belegen, nicht behaupten
+
+Deine Aussage „Gate grün" ist für den Architekten unbrauchbar, solange er
+sie nicht nachvollziehen kann — und er fährt das Gate ohnehin selbst noch
+einmal. Damit ein Unterschied **diagnostizierbar** wird statt nur
+ärgerlich, schreibst du beim letzten Durchlauf mit:
+
+```bash
+{ date -u +%FT%TZ; echo "HEAD=$(git rev-parse HEAD)"; } > .agent/<BL-ID>/gate.txt
+( cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings     && cargo test --workspace ) >> .agent/<BL-ID>/gate.txt 2>&1
+echo "RUST_EXIT=$?" >> .agent/<BL-ID>/gate.txt
+fe="$(ls -d apps/*/frontend | head -n1)"
+( cd "$fe" && npx tsc -b && npx oxlint && npx vitest run && npx vite build )     >> .agent/<BL-ID>/gate.txt 2>&1
+echo "FE_EXIT=$?" >> .agent/<BL-ID>/gate.txt
+```
+
+Drei Regeln dazu:
+
+- **Nach dem letzten Commit**, nicht davor. Der `HEAD` in der Datei muss
+  der Stand sein, den du abgibst — sonst belegt sie einen anderen Code.
+- **Beide Rückgabewerte gehören in die Zusammenfassung**, zusammen mit dem
+  `HEAD`-Kürzel. „Gate grün" ohne diese drei Angaben ist keine Aussage.
+- **Nie durch eine Pipe.** `… | tail` liefert den Rückgabewert von `tail`,
+  also immer 0.
+
+Scheitert ein Schritt, ist das **kein** Grund, ihn zu wiederholen, bis er
+durchgeht. Ein Test, der mal scheitert und mal nicht, ist ein eigener Fund
+und gehört in den Bericht — mit der Zahl der Versuche.
+
 ## Abschluss
 
 - **ADR** für jede offen gelassene Entscheidung, jede Abweichung von der Spec
-  und jeden bewusst nicht behobenen Fund. Nummer steht im Auftrag; fehlt
-  sie, `XXXX` als Platzhalter (wird beim Merge vergeben).
+  und jeden bewusst nicht behobenen Fund. **Die Nummer vergibst du selbst:
+  die höchste in `docs/adr/` plus eins** (`ls docs/adr/ | sort | tail -3`).
+  Kein `XXXX` mehr — der Platzhalter stammte aus der Zeit paralleler
+  Branches, in der zwei Läufe dieselbe Nummer hätten greifen können. Es
+  läuft nur noch ein Item je Repo, also kann das nicht mehr passieren.
+  **Lies die Nummer nach dem Anlegen zurück** und prüfe, dass sie genau
+  einmal vorkommt.
 - **Changelog**: nicht `CHANGELOG.md` direkt ändern, sondern ein Fragment
   `changelog.d/<spec-nummer>-<thema>.md` (deutsch, nutzerrelevant). Grund:
   parallele Coder würden sonst dieselben Zeilen ändern.
