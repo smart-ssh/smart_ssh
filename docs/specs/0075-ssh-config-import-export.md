@@ -23,7 +23,7 @@ fremden Datei stammen; adversariale Fälle in §6.4)
 2026-09-23:
 
 ```
-$ grep -rln "ssh_config|\.ssh/config|SshConfig" --include="*.rs" .
+$ grep -rlnE "ssh_config|\.ssh/config|SshConfig" --include="*.rs" .
 crates/core/src/risk/tests.rs
 ```
 
@@ -175,12 +175,17 @@ auch nicht `~/.ssh/config`. Weitere Dateien öffnet er nur über
 | `Include` | Untergruppe | §3.1.4 |
 
 **Randzeichen.** Von jedem übernommenen Wert werden am **Rand** dieselben
-unsichtbaren Zeichen entfernt, die Spec 0073 für Zugangsdaten festlegt
-(Leerraum plus U+FEFF, U+200B, U+200C, U+200D, U+2060). Nicht weil es
+unsichtbaren Zeichen entfernt, die Spec 0073 für Zugangsdaten festlegt.
+Die Liste existiert bereits als `INVISIBLE_CREDENTIAL_EDGE_CHARS`
+(`crates/core/src/profiles/credentials.rs:17`, re-exportiert in
+`profiles/mod.rs:17-18`) — sie wird **benutzt**, nicht abgeschrieben,
+sonst steht dieselbe Tatsache an zwei Stellen. Nicht weil es
 Zugangsdaten wären — 0073 gilt ausdrücklich nur für die —, sondern damit
 ein aus einer Webseite kopierter `HostName` nicht an einem unsichtbaren
 Zeichen scheitert. Die **Zeichenliste** wird geteilt, nicht der
 Geltungsbereich. Zeichen **innerhalb** eines Werts bleiben unangetastet.
+Getrimmt wird **nach** dem Auflösen der Anführungszeichen: `User " max"`
+ergibt `max`.
 
 **3.1.3 Platzhalterblöcke werden Vorgaben und Schlagworte, keine
 Profile.** Ein `Host`-Muster mit `*`, `?` oder `!` beschreibt keinen
@@ -255,18 +260,37 @@ Akzeptanz) — der Nutzer erfährt **dass** und **wo** etwas nicht
   hinweg) oder bereits im Bestand vorkommt → `jump_host` zeigt darauf.
 - **Mehrere Hops** (`ProxyJump a,b,c`): Unser Modell kettet über je ein
   `jump_host` **pro Server**, kann eine Kette also nur darstellen, indem
-  es `jump_host` **an den Zwischenstationen** setzt. Daraus folgen zwei
-  harte Bedingungen, ohne die der Import bestehende Profile verändern
-  oder Unmögliches versuchen würde:
+  es `jump_host` **an den Zwischenstationen** setzt.
+
+  **Die Richtung gehört hingeschrieben, sonst rät sie jemand.** In
+  OpenSSH ist `a` der **zuerst** kontaktierte Hop; bei uns zeigt
+  `jump_host` auf den Hop, **über den** ein Server erreicht wird. Für
+  `Host x` mit `ProxyJump a,b,c` entstehen also genau diese Kanten:
+
+  ```
+  x.jump_host = c
+  c.jump_host = b
+  b.jump_host = a
+  a.jump_host = (nicht gesetzt)
+  ```
+
+  „Zwischenstation" meint im Folgenden `a`, `b` und `c` — alle in der
+  `ProxyJump`-Zeile genannten Hosts, auch `a`, an dem am Ende kein
+  `jump_host` steht. Daraus folgen zwei harte Bedingungen, ohne die der
+  Import bestehende Profile verändern oder Unmögliches versuchen würde:
 
   1. **Alle Zwischenstationen entstehen in diesem Import neu.** Liegt
      auch nur eine schon im Bestand, wird die Kette **nicht** angelegt —
      sie zu bauen hieße, ein fremdes Profil zu ändern, und das verbietet
      3.1.8.
-  2. **Jede Zwischenstation kommt in genau einer Kette vor.** `jump_host`
-     ist einwertig (`types.rs:62`, `Option<ServerId>`); taucht `b` in
-     zwei Ketten mit verschiedenen Vorgängern auf, ist die Darstellung
-     schlicht unmöglich.
+  2. **Für das `jump_host` einer Zwischenstation gibt es genau eine
+     Quelle.** `jump_host` ist einwertig (`types.rs:62`,
+     `Option<ServerId>`). Eine zweite Quelle entsteht auf zwei Wegen, und
+     beide zählen: wenn `b` in **zwei Ketten** mit verschiedenen
+     Vorgängern vorkommt, **oder** wenn `b` in seinem **eigenen**
+     `Host`-Block ein `ProxyJump` trägt (`Host x` mit `ProxyJump a,b`
+     und zugleich `Host b` mit `ProxyJump q`). In beiden Fällen gilt
+     dieselbe Rechtsfolge.
 
   Ist eine der beiden Bedingungen verletzt, wird `ProxyJump` bei **allen**
   beteiligten Einträgen als nicht übernommen gemeldet (3.1.5), mit der
@@ -308,9 +332,9 @@ Existenzprüfung, kein Auflösen von `~` (§4.6). **Die Datei bleibt
 ungeöffnet.** Später überführt der Nutzer sie mit einem Knopfdruck in
 einen gespeicherten Schlüssel, wenn er will (Spec 0076).
 
-  **Ein relativer Pfad wird übernommen, aber sichtbar markiert.**
-  `ssh_config` erlaubt relative `IdentityFile`-Werte; Spec 0076 (A-3)
-  lehnt sie beim **Verbinden** ab. Ohne Hinweis entstünden hier
+  **Ein relativer Pfad oder ein Pfad in `~user`-Form wird übernommen,
+  aber sichtbar markiert.** `ssh_config` erlaubt beides; Spec 0076 (A-3)
+  lehnt beides beim **Verbinden** ab. Ohne Hinweis entstünden hier
   stillschweigend Server, die sich nie anmelden können. Die Vorschau
   kennzeichnet solche Einträge deshalb als „beim Verbinden nicht
   benutzbar, absoluter Pfad nötig".
@@ -352,7 +376,10 @@ entspricht dem bestehenden Rollback-Verhalten in `servers.rs:44-54`.
 
 **Reihenfolge:** `servers.jump_host_id` ist ein Fremdschlüssel auf
 `servers(id)` (§1.4). Jump-Host-**Ziele** werden deshalb vor den
-Profilen angelegt, die auf sie zeigen; Gruppen vor ihren Servern.
+Profilen angelegt, die auf sie zeigen. `groups.parent_id` ist ebenfalls
+ein Fremdschlüssel (`0001_initial.sql:16`), und §4.5 baut einen
+mehrstufigen Baum — also: **Elterngruppen vor Untergruppen, Gruppen vor
+ihren Servern, Jump-Host-Ziele vor ihren Nutzern.**
 
 **3.1.12 Keine Sicherheitseinstellung aus der Datei.** Der Import setzt
 `post_ingest_policy` und `ai_injection_check_enabled` **ausschließlich**
@@ -442,8 +469,17 @@ legt nichts an.
 
 Die Abbildung von geparsten Blöcken auf `Server`/`Group` ist **reine
 Logik** und gehört nach `crates/core/src/profiles/ssh_config/` — ohne
-Tauri, ohne Dateisystem. Sie nimmt eine Liste bereits gelesener Dateien
-(Pfad + Inhalt) entgegen und gibt einen Importplan zurück.
+Tauri, ohne Dateisystem. Sie nimmt **drei** Eingaben entgegen und gibt
+einen Importplan zurück: die Liste bereits gelesener Dateien (Pfad +
+Inhalt), den **bestehenden Bestand** an Servern und Gruppen und die
+**bestehenden Filterregeln**.
+
+Die letzten beiden sind keine Zutat, sondern Voraussetzung: Ohne den
+Bestand lassen sich weder Konflikte (3.1.8) noch `ProxyJump`-Ziele im
+Bestand (3.1.6) bestimmen, ohne die Regeln nicht die Schlagwort-Treffer
+(5.2a). Läge diese Arbeit stattdessen in `app-shell`, liefen Vorschau
+und Plan wieder auseinander — genau das, was dieser Abschnitt
+verhindert.
 
 **Das Lesen der Dateien, inklusive `Include`-Auflösung, macht
 `app-shell`** — es ist der einzige Teil, der das Dateisystem anfasst, und
@@ -486,8 +522,12 @@ zum Importzeitpunkt niemand kennt. `Match`-Blöcke werden als nicht
 
 ### 4.3 Namen
 
-Import: Der `Host`-Alias wird `name`. Ist er leer oder schon vergeben,
-greift 3.1.8.
+Import: Der `Host`-Alias wird `name`. Ist er **schon vergeben**, greift
+3.1.8. Ist er **leer** — auch erst nach dem Randzeichen-Trim aus §3.1.2,
+siehe §6.4.7 (c) —, wird **kein Profil angelegt**, sondern der Block als
+nicht übernommen gemeldet (3.1.5). Beim Anlegen von Hand greift heute
+kein Pflichtfeld-Check (§1.3); der Import bringt ihn mit, weil er sonst
+namenlose Profile in Serie erzeugen könnte.
 
 Export: Ein Alias darf keine Leerzeichen, kein `#`, keine
 Anführungszeichen und keine Platzhalter enthalten. Regel: Zeichen
@@ -791,9 +831,9 @@ wie es die Architekturregel verlangt.
     (4.3).
 14. `~/.ssh/config` als Exportziel wird abgelehnt, auch bei bestätigtem
     Dialog; die vorhandene Datei ist danach byte-gleich (3.2.5).
-15. Ein Eintrag mit **relativem** `IdentityFile`-Pfad erscheint in der
-    Vorschau als „beim Verbinden nicht benutzbar" und wird trotzdem
-    angelegt (3.1.9 a).
+15. Ein Eintrag mit **relativem** `IdentityFile`-Pfad und einer mit
+    `~user/…` erscheinen in der Vorschau als „beim Verbinden nicht
+    benutzbar" und werden trotzdem angelegt (3.1.9 a).
 16. Ein **verschlüsselter** Schlüssel auf Weg (b): Der Eintrag ist in
     der Vorschau als „Passphrase nachzutragen" gekennzeichnet; nach dem
     Import steht der Schlüssel verschlüsselt im Schlüsselbund und es
@@ -849,12 +889,16 @@ wie es die Architekturregel verlangt.
    wird `ProxyJump` bei **allen** beteiligten Einträgen als nicht
    übernommen gemeldet, und die Profile selbst entstehen normal (3.1.6).
 
-4a. **Mehr-Hop-Ketten rühren keine fremden Profile an.** (a)
-   `ProxyJump a,b,c`, alle drei neu im Import → Kette wird angelegt.
+4a. **Mehr-Hop-Ketten: richtige Richtung, keine fremden Profile.** (a)
+   `Host x` mit `ProxyJump a,b,c`, alle neu im Import → es entstehen
+   **genau** die Kanten `x→c`, `c→b`, `b→a`, und `a` hat kein
+   `jump_host` (3.1.6). Der Test prüft jede Kante einzeln; ohne das
+   würde eine seitenverkehrt gebaute Kette grün.
    (b) `b` liegt bereits im Bestand → Kette wird **nicht** angelegt,
    gemeldet, und `b` ist danach Feld für Feld unverändert. (c) `b` kommt
    in zwei Ketten mit verschiedenen Vorgängern vor → beide gemeldet,
-   keine angelegt (3.1.6).
+   keine angelegt. (d) `b` ist Zwischenstation **und** trägt im eigenen
+   Block ein `ProxyJump` → zweite Quelle, dieselbe Rechtsfolge (3.1.6).
 5. **Aufblähung und Schleifen in `Include`.**
    (a) Gesamtgröße über 8 MiB, verteilt auf viele kleine Dateien —
    greift die **Gesamt**grenze, nicht die je Datei (§3.3);
@@ -866,11 +910,17 @@ wie es die Architekturregel verlangt.
    selbst enthält.
    Jeder Fall: verständliche Meldung, nichts angelegt, kein Hänger
    (5.6).
-6. **Bösartige Aliase.** `Host ../../etc/passwd`, `Host $(whoami)`,
-   `Host a b` mit Steuerzeichen, ein Alias mit `\n` im Wert. Ergebnis:
-   entweder abgelehnt oder als harmloser Name übernommen — in keinem
-   Fall entsteht ein Pfad, ein Kommando oder eine zweite Zeile in der
-   exportierten Datei.
+6. **Bösartige Aliase, Importseite.** `Host ../../etc/passwd`,
+   `Host $(whoami)`, `Host a b` mit Steuerzeichen, ein Alias mit `\n` im
+   Wert. Ergebnis: entweder abgelehnt oder als harmloser Name
+   übernommen — in keinem Fall entsteht daraus ein Pfad oder ein
+   Kommando.
+
+6a. **Dieselben Namen, Exportseite.** Ein Server, dessen Name `\n`, `#`
+   oder ein Anführungszeichen enthält, erzeugt beim Export **keine**
+   zweite Zeile und keinen Kommentarabbruch; `ssh -F … -G` besteht
+   (4.3). Getrennt von 6, weil der Schreiber erst in Schritt 4 entsteht
+   und Schritt 1 sonst nicht für sich prüfbar wäre.
 7. **Unsichtbare Randzeichen.** (a) Ein `HostName` mit BOM und
    Zero-Width-Space an den **Rändern** → die Zeichen sind entfernt, der
    Wert ist der erwartete (3.1.2, Absatz „Randzeichen"). (b) Dieselben
@@ -919,9 +969,9 @@ Tests, andere Innerei.
 1. **Abhängigkeit und Abbildung** in
    `crates/core/src/profiles/ssh_config/`: Blöcke → Importplan, inklusive
    Platzhalter-Vorgaben und -Schlagworten (3.1.3), `ProxyJump`-Auflösung
-   (3.1.6), Konflikten (3.1.8), Zyklusprüfung (5.3). Tests §6.1,
-   §6.4.3, §6.4.4, §6.4.6, §6.4.7. *(opus — hier entsteht die Logik,
-   gegen die §6.4 fährt)*
+   (3.1.6) inklusive der Kantenrichtung, Konflikten (3.1.8),
+   Zyklusprüfung (5.3). Tests §6.1, §6.4.3, §6.4.4, §6.4.4a, §6.4.6,
+   §6.4.7. *(opus — hier entsteht die Logik, gegen die §6.4 fährt)*
 2. **Dateizugriff in `app-shell`**: `Include`-Auflösung mit Tiefe,
    Schleifenerkennung und Platzhalterpfaden (3.1.4), Übergehen von
    Nicht-`ssh_config`-Dateien (3.1.4a), Gesamtgrenzen (§3.3),
@@ -930,13 +980,20 @@ Tests, andere Innerei.
 3. **Kommandos**: `preview_ssh_config_import`,
    `apply_ssh_config_import`, `export_ssh_config`; die drei Wege aus
    §3.1.9 inklusive Rückfall auf (a); Rollback für Profile **und**
-   Gruppen (3.1.11); `is_local` ausschließen. Tests §6.3.8–10, §6.4.1,
-   §6.3.4–7, §6.3.15, §6.3.16, §6.4.1, §6.4.1a, §6.4.1b, §6.4.2,
-   §6.4.3a, §6.4.8. *(opus — Credential-Nähe, und der einzige Schritt,
-   in dem überhaupt eine Schlüsseldatei geöffnet wird)*
+   Gruppen (3.1.11); `is_local` ausschließen. Tests §6.3.4–9,
+   §6.3.15–16, §6.4.1, §6.4.1a, §6.4.1b, §6.4.3a, §6.4.8. *(opus —
+   Credential-Nähe, und der einzige Schritt, in dem überhaupt eine
+   Schlüsseldatei geöffnet wird)*
 4. **Schreiber** (Export) inklusive Alias- und Wert-Regel (4.3),
    `ProxyJump`-Alias (3.2.1), Ablehnung von `~/.ssh/config` (3.2.5) und
-   Kommentaren (3.2.3). Tests §6.3.1–3, §6.3.3a, §6.3.11–14. *(sonnet)*
+   Kommentaren (3.2.3). Tests §6.3.1–3, §6.3.3a, §6.3.10–14, §6.4.2,
+   §6.4.6a. *(sonnet)*
+
+   **Warum die Export-Tests hier stehen und nicht früher:** §6.3.10
+   („kommt in der exportierten Datei nicht vor"), §6.4.2 (erzeugte Datei
+   gegen die Leak-Muster) und §6.4.6a brauchen alle den Schreiber. In
+   einem früheren Schritt zugeordnet, wäre „jeder Schritt lässt das Gate
+   grün" nicht haltbar.
 5. **Frontend**: Vorschau-Dialog mit Abwahl je Eintrag, Konfliktanzeige,
    Dateiliste, Gruppenbaum, Liste der nicht übernommenen Direktiven; die
    Wahl zwischen den drei Wegen aus §3.1.9 samt der Liste der Dateien,
