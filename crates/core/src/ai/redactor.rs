@@ -426,6 +426,38 @@ fn built_in_patterns() -> Vec<PatternRule> {
             .expect("eingebautes Query-Parameter-Muster ist gültig"),
             replacement: "${sep}${key}=[REDACTED]",
         },
+        // ZWEITE Anwendung derselben Regel, wörtlich gleich
+        // (spec-reviewer-Fund, dritte Runde, gemessene Lockerung).
+        //
+        // `replace_all` sucht nur vorwärts, und die Trennergruppe kann
+        // wegen des ausgeschlossenen `@` nicht über einen schon
+        // `@`-haltigen Parameter hinweglaufen. Bei ZWEI `@`-haltigen
+        // Schlüsselwort-Parametern im selben Token erreichte die Regel
+        // deshalb nur den ersten:
+        // `redis://cache:6379?password=p@ss&token=abc@SECRETTAIL` wurde zu
+        // `redis://cache:[REDACTED]@SECRETTAIL` — das DB-Muster fraß
+        // danach den Anker des zweiten Parameters, und dessen Schwanz
+        // stand im Klartext, wo er VOR Spec 0078 geschwärzt war.
+        //
+        // Nach dem ersten Durchlauf steht dort `[REDACTED]` statt des
+        // ersten Werts, und `[REDACTED]` enthält kein `@` — die
+        // Trennergruppe kommt jetzt daran vorbei und erreicht den zweiten
+        // Parameter. Eine zusätzliche Anwendung derselben Regel kann per
+        // Konstruktion nur mehr redigieren, nie weniger.
+        //
+        // RESTFALL: Drei und mehr `@`-haltige Schlüsselwort-Parameter im
+        // selben Token brauchten je eine weitere Anwendung; ab dem dritten
+        // bleibt es beim Verhalten von vor Spec 0078. Eine Schleife wäre
+        // die saubere Form, sie hieße aber `redact_bytes` umzubauen — von
+        // Spec 0078 §2 ausdrücklich ausgeschlossen. Test
+        // `…_redacts_two_at_bearing_query_parameters_in_one_token`.
+        PatternRule {
+            regex: Regex::new(
+                r#"(?i)(?P<sep>\?(?:[^\s,;"'#?@&]*&)*)(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)"#,
+            )
+            .expect("eingebautes Query-Parameter-Muster (zweite Anwendung) ist gültig"),
+            replacement: "${sep}${key}=[REDACTED]",
+        },
         // DB-Connection-Strings (Diagnose-Folge-Fix, 2026-09): das Passwort
         // steht zwischen `:` und `@`, keines der Schlüsselwort-Muster
         // (`password=`/`token=`/...) greift auf diese Syntax. Deckt die in

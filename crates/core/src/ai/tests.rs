@@ -1366,9 +1366,11 @@ fn test_redactor_handles_a_pathological_number_of_at_signs_in_time() {
 /// Spec 0078, §6.2 (T-A11, Positionsbeleg für die neue URL-Regel): sie
 /// läuft als LETZTE, damit sie dem Schlüsselwort-Muster nicht den Anker
 /// nimmt. Stünde sie davor, griffe sie bis zu dem `@` in `ab@cdSecret`
-/// und ließe `cdSecret` im Klartext stehen. Die Varianten mit `|` und
-/// `'` belegen die Position; die `&`-Variante fängt schon die
-/// Query-String-Regel ab und bleibt als Gegenprobe.
+/// und ließe `cdSecret` im Klartext stehen. Alle drei Varianten belegen
+/// die Position. (Bis Spec 0078 §9 fing die `&`-Variante schon die
+/// Query-String-Regel ab; seit diese ein `?` im selben Token verlangt,
+/// läuft auch sie über strenges URL- und Schlüsselwort-Muster, genau wie
+/// die `|`-Variante.)
 #[test]
 fn test_redactor_does_not_let_the_at_url_rule_swallow_a_later_password_keyword() {
     let redactor = DefaultOutputRedactor::new();
@@ -1448,13 +1450,14 @@ fn test_redactor_known_remaining_case_password_with_at_sign_and_question_mark() 
 /// vollständig redigiert wurde. Das verletzt „nie weniger redigieren"
 /// (CLAUDE.md, Spec 0078 §2).
 ///
-/// Behoben, indem die freie Wertklasse der Regel mindestens ein `@`
-/// verlangt: die Regel existiert allein, damit das DB-Muster den
-/// Parameter nicht als Passwort lesen kann, und das DB-Muster kann nur
-/// über einen Wert MIT `@` hinweglaufen. Ein Wert ohne `@` braucht sie
-/// nicht — dort redigiert wie bisher das Schlüsselwort-Muster. Ein
-/// PEM-/PGP-Anker enthält kein `@`, also kann die Regel ihn per
-/// Konstruktion nicht mehr anschneiden.
+/// Erste Behebung war, dass die Wertklasse der Regel mindestens ein `@`
+/// verlangt. **Das genügt nicht** und die frühere Begründung an dieser
+/// Stelle („ein PEM-/PGP-Anker enthält kein `@`, also ist er per
+/// Konstruktion unerreichbar") war falsch: Nicht der Anker muss das `@`
+/// enthalten, sondern der Wert, und der beginnt vor dem Anker — s.
+/// `…_redacts_a_key_block_behind_an_at_sign_in_a_query_parameter`.
+/// Geschützt wird der Anker seit Spec 0078 §9 (Q-BL-0248-02) durch die
+/// Kopien der vier Schlüsselmuster ganz am Anfang der Musterliste.
 #[test]
 fn test_redactor_query_rule_does_not_cut_a_private_key_armor_anchor() {
     let redactor = DefaultOutputRedactor::new();
@@ -1589,6 +1592,51 @@ fn test_redactor_redacts_a_key_block_behind_a_header_name() {
     assert!(
         !redacted.contains("MIIEvQbodyOfKey"),
         "Schlüsselkörper im Klartext: {redacted}"
+    );
+}
+
+/// Regressionstest, spec-reviewer-Fund (dritte Runde, ERHÖHT, echte
+/// Lockerung — selbst nachgemessen an drei Ständen): Bei ZWEI
+/// `@`-haltigen Schlüsselwort-Parametern im selben Token erreichte die
+/// Query-String-Regel nur den ersten. `replace_all` sucht nur vorwärts,
+/// und ihre Trennergruppe kann wegen des ausgeschlossenen `@` nicht über
+/// einen schon `@`-haltigen Parameter hinweglaufen. Das DB-Muster fraß
+/// danach den Anker des zweiten Parameters:
+/// `redis://cache:[REDACTED]@SECRETTAIL`, mit `SECRETTAIL` im Klartext —
+/// wo es VOR Spec 0078 geschwärzt war (dort
+/// `redis://cache:[REDACTED]@ss&[REDACTED]`). Verstoß gegen §2.
+///
+/// Behoben durch eine zweite, wörtlich gleiche Anwendung derselben
+/// Regel: nach dem ersten Durchlauf steht am ersten Parameter
+/// `[REDACTED]`, das kein `@` enthält, und die Trennergruppe kommt daran
+/// vorbei.
+#[test]
+fn test_redactor_redacts_two_at_bearing_query_parameters_in_one_token() {
+    let redactor = DefaultOutputRedactor::new();
+
+    let redacted = redactor.redact_text("redis://cache:6379?password=p@ss&token=abc@SECRETTAIL");
+
+    assert!(!redacted.contains("SECRETTAIL"), "{redacted}");
+    assert!(!redacted.contains("p@ss"), "{redacted}");
+    assert_eq!(redacted, "redis://cache:6379?[REDACTED]");
+}
+
+/// Bekannter Restfall der `&`-Form, festgehalten damit er nicht
+/// unbemerkt kippt: Ohne vorangehendes `?` greift die Query-String-Regel
+/// nicht, und das DB-Muster läuft bis zum `@` im Wert. Gemessen: das ist
+/// **genau das Verhalten vor Spec 0078** — die Regel nahm es
+/// zwischenzeitlich mit, aber nur um den Preis der Lockerung bei
+/// `https://u:Geheim&token=b@h/x` (s.
+/// `…_does_not_treat_an_ampersand_without_a_question_mark_as_a_query_string`).
+/// §2 ist damit gewahrt; besser wird es hier nicht, schlechter auch
+/// nicht.
+#[test]
+fn test_redactor_known_remaining_case_keyword_parameter_without_a_question_mark() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("redis://cache:6379&password=p@ssw0rd"),
+        "redis://cache:[REDACTED]@ssw0rd"
     );
 }
 
