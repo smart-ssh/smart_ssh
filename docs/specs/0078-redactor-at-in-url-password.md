@@ -339,13 +339,9 @@ gepusht.
 
 ## 8. Offene Punkte (K3, Stefan)
 
-**Q-BL-0248-03:** Bleibt es bei der festen zweiten Anwendung von N1
-(§3.1, Empfehlung), oder wird `redact_bytes` zu einer Schleife umgebaut,
-die N1 bis zur Unveränderlichkeit anwendet? Die Schleife deckt beliebig
-viele `@`-haltige Schlüsselwort-Parameter je Token ab, kippt aber ein
-Nicht-Ziel aus §2 und wirkt auf alle Regeln. Bis zur Entscheidung gilt
-die feste zweite Anwendung; der Restfall ab dem dritten Parameter steht
-in §5.
+Keine mehr. **Q-BL-0248-03 ist entschieden** (Stefan, 2026-09-24):
+Die feste zweite Anwendung von N1 bleibt (§3.1). Der Restfall ab dem
+dritten Parameter steht in §5. Die Ursache wird gesondert behandelt.
 
 Sonst keine. Die Messung hat zusätzlich zum Item drei Dinge ergeben: den
 Benutzernamen mit `@` (B), den Positionsfehler von N2 und den Fall mit
@@ -407,7 +403,7 @@ verlangt eine Produktentscheidung.
 
   Der Restfall aus Q-BL-0248-01 ist unverändert und auf `?` beschränkt.
 
-- **2026-09-24 · Q-BL-0248-03 · K3, Entscheidung steht aus** (Fund
+- **2026-09-24 · Q-BL-0248-03 · K3, entschieden: feste zweite Anwendung bleibt** (Fund
   `spec-reviewer`, Runde 3, nachgemessen). Der umgesetzte Stand ist die
   feste zweite Anwendung; er erfüllt §2 und ist unabhängig vom Ausgang
   der sichere Zustand. Offen ist nur, ob es dabei bleibt (§8).
