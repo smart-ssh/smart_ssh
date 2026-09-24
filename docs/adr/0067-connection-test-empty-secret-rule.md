@@ -1,7 +1,8 @@
 # ADR 0067: Verbindungstest und Speichern bewerten leere Zugangsdaten gleich
 
 Status: Angenommen
-Bezug: docs/specs/0073-shared-credential-trim.md (§9, Q-BL-0149-02),
+Bezug: docs/specs/0073-shared-credential-trim.md (§9, Q-BL-0149-02,
+Q-BL-0149-03),
 ADR 0066 §3 (dort als offen protokolliert), Spec 0049 (Fund 1),
 Spec 0008 (§4, §7)
 
@@ -85,10 +86,9 @@ Die Änderung verschärft in beide Richtungen und lockert nichts:
 - Ein Wert, der vorher zu einem Anmeldeversuch mit leerem Secret führte,
   führt jetzt zum Fehler oder zum hinterlegten Credential. Es entsteht
   kein Pfad, auf dem ein Anmeldeversuch **mehr** darf als vorher.
-- Die Fehlermeldung bleibt die vorhandene („Secret erforderlich (kein
-  bestehender Server zum Wiederverwenden gefunden)"), ohne neuen
-  Fehlercode. Absicht: Die Entscheidung betrifft, **wann** abgebrochen
-  wird, nicht wie der Abbruch nach außen aussieht.
+- Wie der Abbruch nach außen aussieht, hat Q-BL-0149-03 nachträglich
+  entschieden (§6); die Entscheidung dieses ADR betrifft, **wann**
+  abgebrochen wird, und blieb dabei unberührt.
 - Kein Secret gelangt in eine Meldung oder ein Log (I2). Getrimmt wird im
   Kern, die Meldung nennt nur den Slot.
 
@@ -123,12 +123,9 @@ Moduls „ohne irgendetwas zu persistieren" festnageln:
   `set` auf `server:sabotage:certificate_key` lässt alle drei Tests mit
   dieser Meldung scheitern.
 - Der Neuanlage-Test prüft, dass der Abbruch der fehlenden Eingabe gilt,
-  nicht irgendeinem anderen Grund. Das hängt derzeit am Anfang des
-  Fehlertextes — eine **Zwischenlösung**, solange Q-BL-0149-03 offen ist
-  (s. §3). Bekommt der Fehler dort einen `code`, gehört die Zusicherung auf
-  diesen umgestellt; erhält er zugleich die Meldung des Speicher-Wegs,
-  scheitert der Test sichtbar, und das ist die richtige Stelle zum
-  bewussten Nachziehen.
+  nicht irgendeinem anderen Grund — über den `code` des Fehlers (§6),
+  nicht über den Anfang des Textes. Der Text ist nur der Rückfall ohne
+  Übersetzung; der Code ist die Schnittstelle zum Frontend.
 
 ## 5. Was offen bleibt
 
@@ -162,8 +159,43 @@ dieser Spec:
   Lesefehler des `KeyFileReader` (`NetworkError`) statt in
   `SERVER_IDENTITY_FILE_REQUIRED` wie beim Speichern. Dieselbe Art
   Divergenz wie Q-BL-0149-02, aber der Pfad ist kein Secret und führt zu
-  keinem falschen Erfolg — zusammen mit Q-BL-0149-03 zu betrachten.
+  keinem falschen Erfolg. Von Q-BL-0149-03 (§6) nicht abgedeckt.
 - **`expose`s Panic-Text im Testmodul** sagt „Passphrase-Slot muss
   auflösbar sein", wird inzwischen aber auch für Passwort-, Zertifikats-
   und Key-Slots benutzt. Einzeiler, vorbestehend, irreführend nur im
   Fehlerfall eines Tests.
+
+## 6. Der Fehler trägt die Codes des Speicherns (Q-BL-0149-03)
+
+Entschieden (Q-BL-0149-03, Option 1): `resolve_secret` bekommt einen
+Parameter `code: &'static str`, wie ihn `write_or_reuse_secret` schon hat.
+Die vier Aufrufe geben `SERVER_PASSWORD_REQUIRED`,
+`SERVER_PRIVATE_KEY_REQUIRED`, `SERVER_CERTIFICATE_REQUIRED` und
+`SERVER_CERTIFICATE_KEY_REQUIRED` mit. Beide Knöpfe zeigen damit bei
+derselben Eingabe denselben übersetzten Satz. Das Frontend, die
+Übersetzungen und `keychain_aware_credential_error` bleiben unverändert;
+der Schlüsselbund-Zweig (`KEYCHAIN_UNAVAILABLE`) ist nicht berührt.
+
+- **Der Text** (`Secret erforderlich (Feld leer, kein hinterlegtes
+  Credential dieser Anmeldeart)`) ist nur noch der Rückfall, falls ein
+  Code einmal keine Übersetzung findet. Der frühere Wortlaut „kein
+  bestehender Server zum Wiederverwenden gefunden" war für einen
+  bestehenden Server mit **anderer** Anmeldeart falsch (gespeichert
+  `Agent`, im Formular auf „Passwort" umgestellt, Feld leer) und ist
+  deshalb nicht beibehalten worden.
+- **Keine Lockerung:** Abgebrochen wird an derselben Stelle und unter
+  denselben Bedingungen wie zuvor; geändert sind allein `code` und Text
+  des Fehlers. Weder der eingegebene noch ein hinterlegter Wert gelangt in
+  die Meldung (I2; getestet).
+- **Tests:** je Slot der `code` gegen ein Literal im Test (nicht aus dem
+  Speicher-Weg abgeleitet), bei Neuanlage und bei „bestehender Server mit
+  Agent bzw. anderer Secret-Anmeldeart, Feld leer" — jeweils für den
+  Verbindungstest **und** das Speichern.
+- **Gegenbeweis (gemessen):** Gegen den Stand `5051e68` (Fehler ohne
+  `code`) scheitern beide Code-Tests beim ersten Slot mit `code: None`.
+  Ein Code, der an einer Aufrufstelle mit dem des Nachbar-Slots vertauscht
+  wird (Zertifikats-Key meldet `SERVER_CERTIFICATE_REQUIRED`), lässt
+  dieselben Tests ebenfalls scheitern.
+- **Nicht Teil dieser Entscheidung:** ob „Verbindung testen" bei leeren
+  Pflichtfeldern gar nicht erst anlaufen soll (Frontend-Frage), und der
+  leere `identityFile.path` (§5).

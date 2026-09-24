@@ -7,6 +7,8 @@
   melden, obwohl sich derselbe Server anschließend nicht speichern ließ.
   Beim Bearbeiten bedeutet ein leeres Feld weiterhin „das hinterlegte
   Zugangsdatum verwenden".
+  Die Meldung ist dieselbe (und in der eingestellten Sprache) wie beim
+  Speichern, etwa „Passwort ist erforderlich".
 - „Verbindung testen" behandelt die Passphrase einer Schlüsseldatei oder
   eines privaten Schlüssels jetzt genauso wie „Speichern". Bisher konnte
   derselbe eingefügte Wert den Verbindungstest scheitern lassen und
