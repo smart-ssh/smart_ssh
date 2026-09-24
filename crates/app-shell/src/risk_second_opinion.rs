@@ -573,15 +573,19 @@ mod tests {
     /// als der alte, und er findet genau dann ein Urteil, wenn der alte eines
     /// fand (A3: kein Urteil bleibt `None`, wird nie zur Entwarnung).
     ///
-    /// Grenze dieses Tests, ausdrücklich benannt (spec-reviewer Runde 1):
-    /// Der Vergleichsmaßstab ist der alte Parser selbst, also kann dieser
-    /// Test gegen den **ungefixten** Stand nicht scheitern — er ist ein
-    /// Wächter gegen künftige Abschwächung, nicht der Nachweis, dass der
-    /// Fix wirkt (den führen T2/T7/T8/T10/X1/X6). Damit er nicht still zur
-    /// leeren Hülle wird, zählt er mit, wie oft der neue Parser tatsächlich
-    /// **höher** meldet, und verlangt am Ende, dass das vorkam; sonst
-    /// könnte ein degenerierter Generator ihn grün lassen, ohne je einen
-    /// Mehrfach-Urteil-Fall erzeugt zu haben.
+    /// Was dieser Test leistet und was nicht (spec-reviewer Runde 1 und 2):
+    /// Die Vergleichs**eigenschaft** `current >= legacy` allein kann gegen
+    /// den ungefixten Stand nicht scheitern — der Vergleichsmaßstab ist der
+    /// alte Parser selbst, dort sind beide Seiten identisch. Der **Zähler**
+    /// am Ende schon: Er verlangt mindestens einen Fall, in dem der neue
+    /// Parser tatsächlich höher meldet, und der bleibt gegen „erstes Wort
+    /// gewinnt" zwangsläufig bei null. Gemessen, nicht behauptet: Gegen die
+    /// First-wins-Fassung scheitern beide T1-Tests an genau diesem Zähler.
+    ///
+    /// Der Zähler trägt damit zweierlei — er macht den Test falsifizierend,
+    /// und er verhindert, dass ein später degenerierter Generator ihn still
+    /// zur leeren Hülle macht. Die Beispiele T2/T7/T8/T10/X1/X6 bleiben
+    /// trotzdem der direkte Nachweis, dass der Fix wirkt.
     ///
     /// Zusätzlich geprüft: Stimmen altes und neues Urteil überein, ist auch
     /// die **Begründung** wortgleich (A4).

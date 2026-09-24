@@ -4,9 +4,10 @@
   eine Antwort mehrere Urteilswörter, zählt das warnende. Bisher zählte das
   zuerst genannte — eine Antwort, die den geprüften Text zitierte und darin
   ein „nein"/„none" enthielt, konnte so eine danach ausgesprochene Warnung
-  verschlucken. Da der geprüfte Text aus einer nicht vertrauenswürdigen
-  Quelle stammt, ließ sich das gezielt ausnutzen. Eine Warnung kann jetzt
-  nicht mehr durch die Wortstellung verlorengehen.
+  verschlucken. Bei der Prüfung auf eingeschleuste Anweisungen ließ sich das
+  gezielt ausnutzen, weil der geprüfte Text dort aus einer nicht
+  vertrauenswürdigen Quelle stammt. Eine Warnung kann jetzt nicht mehr durch
+  die Wortstellung verlorengehen.
 
 ### Geändert
 - Als Folge davon kann die Prüfung auf eingeschleuste Anweisungen jetzt
