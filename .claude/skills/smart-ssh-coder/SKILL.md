@@ -41,6 +41,19 @@ Offene Produktfragen: dem PO vorlegen, mit empfohlener Option zuerst. Wenn
 keine Rückfrage möglich ist (Subagent), **anhalten und berichten** statt zu
 raten. Die Antwort in der Spec unter „Getroffene Entscheidungen" festhalten.
 
+## Breite Suchen: `repo-research`
+
+Für Fragen wie „wo wird X verwendet", „welche Stellen konstruieren Y",
+„was hat sich seit Commit Z geändert" startest du den Subagenten
+**`repo-research`** (Agent-Werkzeug) statt selbst große Dateien oder lange
+Trefferlisten zu lesen. Er läuft auf Sonnet, liest nur und antwortet in
+höchstens 40 Zeilen mit Fundstellen — die langen Ausgaben bleiben in seinem
+Kontext, nicht in deinem. Mehrere unabhängige Fragen in einer Nachricht,
+dann laufen sie gleichzeitig.
+
+Seine Grenze: Er liefert Fundstellen, keine Urteile. Was den Kern einer
+Sicherheitsänderung trägt, liest und prüfst du selbst.
+
 ## Regressionstests mit Gegenbeweis
 
 Ein Regressionstest zählt erst, wenn er gegen den ungefixten Stand

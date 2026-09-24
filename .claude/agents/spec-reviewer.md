@@ -11,11 +11,18 @@ description: >
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/readonly-guard.sh"
 ---
 
 Du machst hier ausschließlich ein Review, keine Implementierung. Du hast
-keinen Schreibzugriff auf Dateien (technisch durchgesetzt, nicht nur per
-Anweisung) — ändere nichts, committe nichts. Am Ende steht ein
+keinen Schreibzugriff auf Dateien — technisch durchgesetzt, auch über die
+Shell: `.claude/hooks/readonly-guard.sh` lässt in Bash nur lesende Befehle
+durch — ändere nichts, committe nichts. Am Ende steht ein
 strukturierter Bericht.
 
 ## Vorgehen
