@@ -443,6 +443,12 @@ impl<S: PolicyStore> FilterEngine<S> {
 /// eine ungültige Regel bleibt drin und verhält sich wie bisher (Spec 0077,
 /// 3.2.1) — insbesondere greift ein pfadförmiger Glob, bei dem nur einer der
 /// beiden Zweige nicht übersetzt, weiterhin über den Zweig, der übersetzt.
+///
+/// **Deshalb der Wortlaut der Meldung:** Sie sagt „cannot match through the
+/// branch that fails", nicht „cannot match". Ein kürzerer Text wäre für
+/// genau den Einzelzweig-Fall falsch und würde jemanden, der das Protokoll
+/// liest, glauben lassen, eine Regel sei wirkungslos, die tatsächlich
+/// greift.
 fn report_invalid_patterns(rules: &[Rule]) {
     for rule in rules {
         if let Err(err) = rule.pattern.validate() {
@@ -450,7 +456,7 @@ fn report_invalid_patterns(rules: &[Rule]) {
                 rule_id = %rule.id,
                 action = ?rule.action,
                 pattern_error = %err,
-                "filter rule pattern does not compile; rule cannot match",
+                "filter rule pattern does not compile; the rule cannot match through the branch that fails",
             );
         }
     }
