@@ -593,33 +593,38 @@ pub struct ServerInput {
 /// sicherer absoluter Pfad sein — er landet in einem `sudo`-Kommando und in
 /// der angezeigten sudoers-Zeile.
 ///
-// ANNAHME A-1 (Q-BL-0149-01): Diese Stelle steht in der §1-Tabelle von Spec
-// 0073, ist aber kein Zugangsdaten-Wert, sondern ein Pfad-Override für den
-// erhöhten Dateibrowser — er landet in einem `sudo`-Kommando. Sie bleibt
-// deshalb vorerst bei `str::trim`, bis die Frage entschieden ist (ADR 0064).
-//
-// Der Unterschied ist **nicht** kosmetisch: `"/usr/lib/sftp-server\u{200B}"`
-// wird heute abgelehnt (das ZWSP übersteht `str::trim` und fällt dann durch
-// `is_plausible_sftp_server_path`), mit dem Helfer würde derselbe Pfad
-// bereinigt und angenommen. Die Prüfung selbst bleibt in beiden Fassungen
-// unverändert und läuft in beiden Fassungen nach dem Trimmen, der
-// angenommene Endwert ist also in jedem Fall voll validiert; es ändert sich
-// aber, ob eine solche Eingabe als Fehler oder als bereinigter Pfad endet.
+/// Spec 0073, §9 (Q-BL-0149-01): Getrimmt wird über den geteilten
+/// [`trim_credential_value`], obwohl der Pfad kein Zugangsdaten-Wert ist —
+/// §1 der Spec listet diese Stelle, A3 verlangt für sie den Helfer. Der
+/// Unterschied zu `str::trim` ist **nicht** kosmetisch:
+/// `"/usr/lib/sftp-server\u{200B}"` wurde vorher abgelehnt (das ZWSP
+/// übersteht `str::trim` und fällt dann durch
+/// `is_plausible_sftp_server_path`), jetzt wird derselbe Pfad bereinigt und
+/// angenommen. Geändert hat sich damit nur, ob ein eingefügter Pfad mit
+/// Randzeichen als Fehler oder als bereinigter Pfad endet.
+///
+/// **Die Sicherheitsprüfung selbst ist wörtlich unverändert und läuft
+/// weiterhin nach dem Trimmen, auf genau dem Wert, der zurückgegeben wird.**
+/// Der Helfer entfernt nur Randzeichen (Spec 0073, A2/I1); ein unsichtbares
+/// Zeichen *innerhalb* des Pfades überlebt ihn und wird von
+/// `is_plausible_sftp_server_path` nach wie vor abgelehnt. In ein
+/// `sudo`-Kommando kann also in keinem Fall ein Zeichen außerhalb des
+/// erlaubten Zeichensatzes gelangen.
 pub fn normalize_sftp_server_path(input: Option<String>) -> Result<Option<String>, String> {
     let Some(raw) = input else {
         return Ok(None);
     };
-    let trimmed = raw.trim();
+    let trimmed = trim_credential_value(&raw);
     if trimmed.is_empty() {
         return Ok(None);
     }
-    if !ssh_manager_core::ssh::elevated::is_plausible_sftp_server_path(trimmed) {
+    if !ssh_manager_core::ssh::elevated::is_plausible_sftp_server_path(&trimmed) {
         return Err(format!(
             "Ungültiger sftp-server-Pfad „{trimmed}“ — erlaubt ist ein absoluter Pfad aus \
              Buchstaben, Ziffern und / . _ - +, der auf „sftp-server“ endet"
         ));
     }
-    Ok(Some(trimmed.to_string()))
+    Ok(Some(trimmed))
 }
 
 /// Spec 0008, Abschnitt 4. `#[serde(tag = "kind", rename_all =
@@ -1698,6 +1703,60 @@ mod sftp_server_path_tests {
                 "{bad}"
             );
         }
+    }
+
+    // --- Spec 0073, §9 (Q-BL-0149-01) -----------------------------------
+    //
+    // Der Pfad-Override läuft über denselben geteilten
+    // `trim_credential_value` wie die Zugangsdaten-Werte. Die
+    // Sicherheitsprüfung `is_plausible_sftp_server_path` ist dabei wörtlich
+    // unverändert geblieben und läuft weiterhin auf dem Endwert — die drei
+    // Tests halten beides fest: Was am **Rand** klebt, wird bereinigt; was
+    // **innen** steht, wird weiterhin abgelehnt.
+
+    #[test]
+    fn test_invisible_edge_chars_are_cleaned_not_rejected() {
+        // Gegen den Stand vor der Umstellung rot: `str::trim` lässt BOM und
+        // Zero-Width-Space stehen, der Pfad fiel danach durch
+        // `is_plausible_sftp_server_path` und endete als Fehler.
+        assert_eq!(
+            normalize_sftp_server_path(Some(
+                "\u{FEFF} /usr/lib/openssh/sftp-server \u{200B}".to_string()
+            )),
+            Ok(Some("/usr/lib/openssh/sftp-server".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_invisible_char_inside_is_still_rejected() {
+        // Der Kern der Entscheidung: Bereinigt wird nur der Rand. Ein
+        // unsichtbares Zeichen **innerhalb** des Pfades überlebt das Trimmen
+        // und wird von der unveränderten Prüfung abgelehnt — es kann also in
+        // kein `sudo`-Kommando gelangen.
+        for bad in [
+            "/usr/lib/open\u{200B}ssh/sftp-server",
+            "/usr/lib/openssh/sftp-\u{FEFF}server",
+            "/usr/lib\u{2060}/openssh/sftp-server",
+        ] {
+            assert!(
+                normalize_sftp_server_path(Some(bad.to_string())).is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_override_of_only_invisible_chars_means_automatic() {
+        // Wie „nur Leerzeichen": nach dem Trimmen leer, und leer heißt
+        // „automatisch" (`None`), nicht „ungültiger Pfad".
+        assert_eq!(
+            normalize_sftp_server_path(Some("\u{FEFF}\u{200B}\u{2060}".to_string())),
+            Ok(None)
+        );
+        assert_eq!(
+            normalize_sftp_server_path(Some(" \u{FEFF} \u{200C}\u{200D}\t\r\n".to_string())),
+            Ok(None)
+        );
     }
 }
 
