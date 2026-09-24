@@ -9321,6 +9321,12 @@ mod tests {
         // db.conf`), nur seine simulierte AUSGABE tut das — derselbe Aufbau
         // wie beim bestehenden `test_log_command_execution_never_logs_
         // unredacted_secret` oben.
+        //
+        // Spec 0078 (T-A13): die zweite Zeile ist eine Verbindungs-URL, bei
+        // der der BENUTZERNAME ein `@` enthält — bis Spec 0078 griff dort
+        // keines der URL-Muster, und `pw123` wäre vollständig im Klartext in
+        // der DB gelandet. Der Persistenzpfad wird hier mitgeprüft, nicht
+        // nur der Redactor allein.
         let (mut session, chat_store, chat_session_id, _tmp_dir) =
             session_with_real_chat_persistence(
                 vec![
@@ -9331,7 +9337,10 @@ mod tests {
                 ],
                 MockSshTransport::default().with_response(
                     "cat db.conf",
-                    output("Verbindung ok, password=hunter2geheim"),
+                    output(
+                        "Verbindung ok, password=hunter2geheim\n\
+                         postgres://svc@tenant:pw123@db/x",
+                    ),
                 ),
             )
             .await;
@@ -9360,14 +9369,36 @@ mod tests {
             !loaded.is_empty(),
             "es sollte mindestens eine gespeicherte Nachricht geben"
         );
-        let serialized: Vec<String> = loaded
+        // Spec 0078 (T-A13): Die JSON-Form allein reicht als Prüfung NICHT.
+        // `CommandOutput::stdout` ist ein `Vec<u8>` und serialisiert als
+        // Zahlen-Array (`[86,101,…]`) — ein Geheimnis im Kommando-Output
+        // taucht dort nie als lesbare Zeichenkette auf, ein
+        // `contains("…")` darauf kann also gar nicht anschlagen. Deshalb
+        // zusätzlich die dekodierte Form jedes `CommandResult`: genau die
+        // Bytes, die auf der Platte stehen, nur wieder als Text gelesen.
+        let mut inspected: Vec<String> = loaded
             .iter()
             .map(|m| serde_json::to_string(&m.content).unwrap())
             .collect();
-        for raw in &serialized {
+        inspected.extend(loaded.iter().filter_map(|m| match &m.content {
+            MessageContent::CommandResult { output, .. } => Some(format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            )),
+            _ => None,
+        }));
+        for raw in &inspected {
             assert!(
                 !raw.contains("hunter2geheim"),
                 "das Secret darf unter keinen Umständen unredigiert in der DB landen: {raw}"
+            );
+            // Spec 0078 (T-A13): auch das Passwort hinter einem
+            // Benutzernamen mit `@` darf die Platte nicht im Klartext
+            // erreichen.
+            assert!(
+                !raw.contains("pw123"),
+                "das URL-Passwort darf unter keinen Umständen unredigiert in der DB landen: {raw}"
             );
         }
         assert!(
@@ -12129,7 +12160,12 @@ mod tests {
     /// etwas.
     #[tokio::test]
     async fn test_send_to_ai_provider_is_redacted_without_altering_persisted_context() {
-        let raw_secret_text = "Notiz: password=hunter2geheim nicht vergessen".to_string();
+        // Spec 0078 (T-A13): zusätzlich eine Verbindungs-URL, deren
+        // BENUTZERNAME ein `@` enthält — bis Spec 0078 ging `pw123` hier
+        // vollständig im Klartext an den KI-Anbieter.
+        let raw_secret_text =
+            "Notiz: password=hunter2geheim nicht vergessen, postgres://svc@tenant:pw123@db/x"
+                .to_string();
         let ai_provider = MockAiProvider::new(vec![AiEvent::Done]);
         let received_contexts = ai_provider.received_contexts_handle();
         let mut session = session_with_ai_provider(ai_provider, MockSshTransport::default());
@@ -12173,6 +12209,12 @@ mod tests {
         assert!(
             !sent_text.contains("hunter2geheim"),
             "der an die KI gesendete Text muss redigiert sein: {sent_text}"
+        );
+        // Spec 0078 (T-A13): auch das Passwort hinter einem Benutzernamen
+        // mit `@` darf den Anbieter nie im Klartext erreichen.
+        assert!(
+            !sent_text.contains("pw123"),
+            "das URL-Passwort muss im Request an die KI redigiert sein: {sent_text}"
         );
 
         let context_after = session.context.lock().await.history.clone();
