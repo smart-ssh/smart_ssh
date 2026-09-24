@@ -222,3 +222,15 @@ Anforderung, sondern die Vervollständigung von A3. Test: dieselbe
 Passphrase mit Rand-Leerraum, BOM und Zero-Width-Space führt in beiden
 Wegen zum selben Ergebnis, je Anmeldeart mit Passphrase.
 
+**2026-09-24 · Q-BL-0149-02 · Verbindungstest und Speichern behandeln alle
+Zugangsdaten gleich.** Stefan: Option 2b. `resolve_secret` im
+Verbindungstest trimmt über den geteilten Helfer und wendet dieselbe
+Leer-Regel an wie das Speichern: nicht leer → dieser Wert; leer oder
+nicht angegeben → das gespeicherte Credential des bestehenden Servers,
+sonst Fehler. Gilt für Passwort, Schlüsselinhalt, Zertifikat und
+Zertifikats-Schlüssel. Sichtbare Folge: Ein leeres Pflichtfeld bei
+Neuanlage führt im Verbindungstest zur Fehlermeldung statt zu einem
+Anmeldeversuch mit leerem Wert. Tests: je Slot Randzeichen → dasselbe
+Secret wie beim Speichern; nur Randzeichen bei Update → gespeichertes
+Credential; dasselbe bei Neuanlage → Fehler (scheitert am heutigen Stand).
+
