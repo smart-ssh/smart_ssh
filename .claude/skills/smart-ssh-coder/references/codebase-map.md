@@ -40,14 +40,22 @@ Namen können sich ändern.
 
 ## Fallstricke beim Erweitern
 
-- **Neues `Session`-Feld**: 4 Konstruktionsstellen (`session.rs`,
-  `commands.rs` zweimal, `orchestration.rs`-Tests) **plus**
-  `test_support::session_with_transport`. Per Regex nach einem bekannten
-  Nachbarfeld einfügen, dann `cargo check --workspace --all-targets`.
+- **Neues `Session`-Feld**: Die Konstruktionsstellen nicht aus dem
+  Gedächtnis zählen, sondern auflisten lassen:
+  ```bash
+  grep -rnE '\bSession \{' --include='*.rs' crates apps | grep -v -e '->' -e 'struct ' -e 'impl '
+  ```
+  Liefert die Struct-Literale (produktiv in `commands.rs`, dazu Tests und
+  `test_support`) — ohne Signaturen und ohne andere Typen. Jede Stelle
+  bekommt das Feld, danach `cargo check --workspace --all-targets`.
 - **Neues `Server`-Profilfeld**: viele Struct-Literale über mehrere Crates
-  (auch Examples, Tests, `ServerInput`-Literale) — nach
-  `ai_injection_check_enabled: false,` einfügen; dazu Migration,
-  `store.rs` (2× SELECT, INSERT, UPDATE, `row_to_server`), DTO,
+  (auch Examples, Tests, `ServerInput`-Literale). Hat das Feld keinen
+  Default, zeigt `cargo check --workspace --all-targets` jede fehlende
+  Stelle — eingefügt wird jeweils **hinter dem letzten Feld** des Literals,
+  nicht hinter einem namentlich genannten (die Reihenfolge ändert sich mit
+  jeder Migration). Dazu Migration, `store.rs` (beide SELECTs, INSERT, das
+  vollständige UPDATE, `row_to_server` — auflisten mit
+  `grep -nE 'FROM servers|INSERT INTO servers|UPDATE servers|fn row_to_server' crates/persistence-sqlite/src/store.rs`), DTO,
   Frontend-Typ + Test-Fixtures. Der Migrationstest
   (`test_migration_from_earlier_schema_…`) legt Daten im **alten** Schema
   per rohem SQL an — neue Spalten dürfen dort nicht vorkommen.
