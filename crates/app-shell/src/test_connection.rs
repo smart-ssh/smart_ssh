@@ -387,6 +387,25 @@ impl<'a> CredentialStore for TieredCredentialStore<'a> {
     }
 }
 
+/// Das Secret, mit dem der Verbindungstest antritt — aus dem Formularfeld
+/// oder, wenn das leer ist, aus dem gespeicherten Credential des bestehenden
+/// Servers.
+///
+/// Spec 0073, §9 (Q-BL-0149-02): dieselbe Form wie
+/// `server_credentials::write_or_reuse_secret` beim Speichern. Der
+/// eingegebene Wert läuft über den geteilten [`trim_credential_value`], und
+/// **danach** entscheidet dieselbe Leer-Regel: nicht leer → dieser Wert;
+/// leer oder nicht angegeben → das gespeicherte Credential; gibt es keins,
+/// der Fehler. Vorher nahm dieser Weg jeden `Some`-Wert, auch `""` — das
+/// Formular schickt bei Neuanlage für ein leeres Pflichtfeld aber genau
+/// `""` (`ServerForm.tsx`, `orNullIfUpdate` greift nur beim Bearbeiten).
+/// „Neuer Server, Passwortfeld leer, Verbindung testen" endete damit auf
+/// einem Server mit `PermitEmptyPasswords yes` im Erfolg für ein Profil,
+/// das sich anschließend nicht speichern ließ.
+///
+/// Reihenfolge „erst trimmen, dann Leer-Prüfung" wie in Spec 0049, Fund 1:
+/// Andernfalls bestünde ein reiner Leerraum-Paste die Leer-Prüfung und
+/// würde zu einem Anmeldeversuch mit Leerraum als Secret.
 fn resolve_secret(
     provided: Option<String>,
     existing: Option<&AuthMethod>,
@@ -394,17 +413,22 @@ fn resolve_secret(
     keychain: KeychainAvailability,
     extract_ref: impl Fn(&AuthMethod) -> Option<&CredentialRef>,
 ) -> CommandResult<SecretString> {
-    if let Some(value) = provided {
-        return Ok(SecretString::from(value));
+    // Bewusst dieselbe Gestalt wie `write_or_reuse_secret`: derselbe Trim,
+    // dieselbe Bedingung, dieselbe Reihenfolge der Zweige. Weicht eine der
+    // beiden Stellen künftig ab, fällt es beim Vergleich auf.
+    match provided.map(|value| trim_credential_value(&value)) {
+        Some(value) if !value.is_empty() => Ok(SecretString::from(value)),
+        _ => {
+            let existing_ref = existing.and_then(extract_ref).ok_or_else(|| {
+                CommandError::from(
+                    "Secret erforderlich (kein bestehender Server zum Wiederverwenden gefunden)",
+                )
+            })?;
+            real_store
+                .get(existing_ref)
+                .map_err(|err| keychain_aware_credential_error(err, keychain))
+        }
     }
-    let existing_ref = existing.and_then(extract_ref).ok_or_else(|| {
-        CommandError::from(
-            "Secret erforderlich (kein bestehender Server zum Wiederverwenden gefunden)",
-        )
-    })?;
-    real_store
-        .get(existing_ref)
-        .map_err(|err| keychain_aware_credential_error(err, keychain))
 }
 
 #[cfg(test)]
@@ -1023,6 +1047,217 @@ mod tests {
                 Some("ge\u{200B}heim"),
                 "{kind:?}: ein Zeichen innerhalb der Passphrase gehört dort möglicherweise hin"
             );
+        }
+    }
+
+    // --- Spec 0073, §9 (Q-BL-0149-02): die übrigen Secret-Slots -----------
+    //
+    // Dieselbe Begründung wie beim Passphrase-Block oben, jetzt für die
+    // Pflicht-Secrets selbst: Passwort, Key-Inhalt, Zertifikat und
+    // Zertifikats-Key. Zwei Unterschiede waren zu schließen — der Trim und
+    // die Bedeutung von „leer". Geprüft wird je Slot, dass beide Wege
+    // dasselbe Secret benutzen bzw. beide denselben Ausgang nehmen, nicht
+    // dass sie denselben Funktionsnamen aufrufen.
+
+    #[derive(Clone, Copy, Debug)]
+    enum SecretSlot {
+        Password,
+        PrivateKeyContent,
+        CertificateContent,
+        CertificateKeyContent,
+    }
+
+    const SECRET_SLOTS: [SecretSlot; 4] = [
+        SecretSlot::Password,
+        SecretSlot::PrivateKeyContent,
+        SecretSlot::CertificateContent,
+        SecretSlot::CertificateKeyContent,
+    ];
+
+    /// Füllt das jeweils **andere** Pflichtfeld derselben Anmeldeart, damit
+    /// ein Fehler eindeutig vom geprüften Slot kommt und nicht vom Nachbarn.
+    const SIBLING_FILLER: &str = "-----BEGIN CERTIFICATE----- nachbar";
+
+    /// Die leeren Eingaben, die das Formular tatsächlich schicken kann:
+    /// ein echtes Leerfeld bei Neuanlage (`""`, s. `ServerForm.tsx`s
+    /// `orNullIfUpdate`), ein Leerraum-Paste und ein Paste aus lauter
+    /// unsichtbaren Zeichen.
+    const EMPTY_INPUTS: [&str; 3] = ["", "   \r\n", "\u{200B} \u{FEFF}"];
+
+    impl SecretSlot {
+        fn input(self, value: Option<&str>) -> AuthMethodInput {
+            let value = value.map(str::to_string);
+            let filler = || Some(SIBLING_FILLER.to_string());
+            match self {
+                SecretSlot::Password => AuthMethodInput::Password { value },
+                SecretSlot::PrivateKeyContent => AuthMethodInput::PrivateKey {
+                    key_content: value,
+                    passphrase: None,
+                },
+                SecretSlot::CertificateContent => AuthMethodInput::Certificate {
+                    cert_content: value,
+                    key_content: filler(),
+                },
+                SecretSlot::CertificateKeyContent => AuthMethodInput::Certificate {
+                    cert_content: filler(),
+                    key_content: value,
+                },
+            }
+        }
+
+        /// Der Credential-Slot, aus dem sich das Secret ergibt, mit dem
+        /// angemeldet würde — aus der zurückgegebenen `AuthMethod` gelesen,
+        /// damit derselbe Helfer für beide Wege taugt (die Refs heißen
+        /// verschieden: `test:password` gegen `server:{id}:password`).
+        fn secret_ref_of(self, auth: &AuthMethod) -> CredentialRef {
+            match (self, auth) {
+                (SecretSlot::Password, AuthMethod::Password { credential_ref })
+                | (SecretSlot::PrivateKeyContent, AuthMethod::PrivateKey { credential_ref, .. }) => {
+                    credential_ref.clone()
+                }
+                (SecretSlot::CertificateContent, AuthMethod::Certificate { cert_ref, .. }) => {
+                    cert_ref.clone()
+                }
+                (SecretSlot::CertificateKeyContent, AuthMethod::Certificate { key_ref, .. }) => {
+                    key_ref.clone()
+                }
+                (slot, other) => panic!("{slot:?}: unerwartete AuthMethod {other:?}"),
+            }
+        }
+    }
+
+    /// Dieselbe Eingabe durch beide Wege. Zurück kommt je Weg das Secret,
+    /// mit dem tatsächlich angemeldet würde — oder die Fehlermeldung, wenn
+    /// der Weg abbricht.
+    ///
+    /// `stored` ist das bereits hinterlegte Secret eines bestehenden Servers
+    /// (`None` = Neuanlage ohne Vorgeschichte). Der Ausgangszustand entsteht
+    /// durch einen echten Speicher-Vorgang, damit die Credential-Refs genau
+    /// die sind, die `update_server` später wiederverwendet. Beide Wege
+    /// bekommen getrennte, gleich befüllte Stores, damit der schreibende
+    /// Speicher-Weg dem lesenden Test-Weg die Ausgangslage nicht verändert.
+    fn secret_both_ways(
+        slot: SecretSlot,
+        pasted: Option<&str>,
+        stored: Option<&str>,
+    ) -> (Result<String, String>, Result<String, String>) {
+        let server_id = ServerId::new();
+
+        let seed = || {
+            let store = InMemoryCredentialStore::new();
+            let existing = stored.map(|value| {
+                crate::server_credentials::resolve_auth_method(
+                    &store,
+                    AVAILABLE,
+                    server_id,
+                    slot.input(Some(value)),
+                    None,
+                )
+                .expect("Ausgangszustand des bestehenden Servers muss speicherbar sein")
+            });
+            (store, existing)
+        };
+
+        // Weg 1: „Verbindung testen" — Secrets landen im Ephemeral-Store.
+        let (real_store, existing) = seed();
+        let ephemeral = EphemeralCredentialStore::new();
+        let via_test = resolve_final_hop_auth(
+            &ephemeral,
+            &real_store,
+            AVAILABLE,
+            slot.input(pasted),
+            existing.as_ref(),
+        )
+        .map(|auth| {
+            expose(
+                &ephemeral as &dyn CredentialStore,
+                &slot.secret_ref_of(&auth),
+            )
+        })
+        .map_err(|err| err.message);
+
+        // Weg 2: „Speichern" — Secrets landen im echten Store.
+        let (save_store, existing) = seed();
+        let via_save = crate::server_credentials::resolve_auth_method(
+            &save_store,
+            AVAILABLE,
+            server_id,
+            slot.input(pasted),
+            existing.as_ref(),
+        )
+        .map(|auth| {
+            expose(
+                &save_store as &dyn CredentialStore,
+                &slot.secret_ref_of(&auth),
+            )
+        })
+        .map_err(|err| err.message);
+
+        (via_test, via_save)
+    }
+
+    #[test]
+    fn test_q0149_02_pasted_secret_is_trimmed_the_same_way_in_both_paths() {
+        for slot in SECRET_SLOTS {
+            let (via_test, via_save) =
+                secret_both_ways(slot, Some(" \u{FEFF}s3cr3t-wert\u{200B}\r\n"), None);
+
+            assert_eq!(
+                via_test, via_save,
+                "{slot:?}: Verbindungstest und Speichern müssen dasselbe Secret benutzen"
+            );
+            assert_eq!(
+                via_test.as_deref(),
+                Ok("s3cr3t-wert"),
+                "{slot:?}: Rand-Leerraum, BOM und Zero-Width-Space gehören weggetrimmt"
+            );
+        }
+    }
+
+    #[test]
+    fn test_q0149_02_empty_secret_on_update_keeps_the_stored_one_in_both_paths() {
+        for slot in SECRET_SLOTS {
+            for pasted in EMPTY_INPUTS {
+                let (via_test, via_save) =
+                    secret_both_ways(slot, Some(pasted), Some("alt-gespeichert"));
+
+                assert_eq!(
+                    via_test, via_save,
+                    "{slot:?}/{pasted:?}: ein leeres Feld muss in beiden Wegen dasselbe heißen"
+                );
+                assert_eq!(
+                    via_test.as_deref(),
+                    Ok("alt-gespeichert"),
+                    "{slot:?}/{pasted:?}: leer heißt „das Hinterlegte nehmen\", \
+                     nicht „mit leer anmelden\""
+                );
+            }
+        }
+    }
+
+    /// Der Kern der Entscheidung zu Q-BL-0149-02: Bei Neuanlage gibt es
+    /// nichts zum Wiederverwenden, also endet ein leeres Pflichtfeld in
+    /// beiden Wegen im Fehler. Vorher meldete „Verbindung testen" hier auf
+    /// einem Server mit `PermitEmptyPasswords yes` einen Erfolg für ein
+    /// Profil, das sich anschließend nicht speichern ließ.
+    #[test]
+    fn test_q0149_02_empty_secret_on_create_is_an_error_in_both_paths() {
+        for slot in SECRET_SLOTS {
+            for pasted in EMPTY_INPUTS {
+                let (via_test, via_save) = secret_both_ways(slot, Some(pasted), None);
+
+                assert!(
+                    via_save.is_err(),
+                    "{slot:?}/{pasted:?}: Speichern lehnt ein leeres Pflichtfeld ab — \
+                     Ausgangslage des Tests, nicht das Prüfziel"
+                );
+                assert!(
+                    via_test.is_err(),
+                    "{slot:?}/{pasted:?}: „Verbindung testen\" darf bei Neuanlage mit leerem \
+                     Pflichtfeld keinen Anmeldeversuch mit leerem Secret starten, \
+                     sondern muss denselben Fehler melden wie das Speichern (war: {via_test:?})"
+                );
+            }
         }
     }
 }

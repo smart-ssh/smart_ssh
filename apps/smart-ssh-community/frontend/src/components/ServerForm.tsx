@@ -100,6 +100,14 @@ function authStateFromKind(kind: AuthFormState["kind"]): AuthFormState {
  * schlicht noch nicht ausgefüllt (leerer String bleibt leerer String —
  * das Backend verlangt dort zwingend einen Wert und lehnt sonst ab). Die
  * Passphrase ist immer optional, auch bei Neuanlage.
+ *
+ * Spec 0073, §9 (Q-BL-0149-02): Derselbe `buildInput()` bedient auch
+ * "Verbindung testen" (s. unten) — und dort gilt seither dieselbe Regel.
+ * Ein leeres Pflichtfeld bei Neuanlage endet also in beiden Fällen in der
+ * Fehlermeldung, nicht in einem Anmeldeversuch mit leerem Secret. Auf
+ * Randzeichen muss dieses Formular deshalb nicht prüfen: Beide Wege
+ * trimmen im Kern über denselben Helfer, und zwar bevor sie "leer"
+ * entscheiden.
  */
 function toAuthMethodInput(state: AuthFormState, isCreate: boolean): AuthMethodInput {
   const orNullIfUpdate = (value: string) => (value === "" && !isCreate ? null : value);
