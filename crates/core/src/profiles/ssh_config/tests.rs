@@ -232,9 +232,22 @@ fn t_6_1_12_kommentare_und_leerzeilen_aendern_nichts() {
 #[test]
 fn t_match_ist_blockgrenze_kein_fehlmerge() {
     // Der Messbefund aus §9/M-1, als Test: `ssh2-config` gab `Host a` hier
-    // `user = "y"`. Wer den Fehlmerge nachbaut, lässt diesen Test scheitern.
-    let plan = empty_plan("Host a\n  User x\nMatch host b\n  User y\n");
+    // `user = "y"`.
+    //
+    // **Der Fall aus §9/Q-1 Punkt 4 allein genügt nicht**, und das ist beim
+    // Gegenbeweis aufgefallen: Nimmt man die Blockgrenze heraus, bleibt
+    // `a.username == "x"` trotzdem stehen — „der erste gewinnt" innerhalb
+    // des Blocks fängt den Fehlmerge zufällig ab. Der Test wäre damit einer,
+    // der nicht scheitern kann. Deshalb steht hier zusätzlich ein Feld, das
+    // der `Host`-Block **nicht** setzt (`Port`): Nur daran ist der
+    // Fehlmerge überhaupt sichtbar.
+    let plan = empty_plan("Host a\n  User x\nMatch host b\n  User y\n  Port 9999\n");
     assert_eq!(entry(&plan, "a").username.value, "x");
+    assert_eq!(
+        entry(&plan, "a").port.value,
+        22,
+        "Port aus dem Match-Block darf das Profil nicht erreichen"
+    );
     // `Match` selbst und die Zeile darin stehen als nicht übernommen da.
     let reported: Vec<&SkippedReport> = plan.skipped.iter().collect();
     assert!(
