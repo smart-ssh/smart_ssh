@@ -10,11 +10,11 @@ name = "app_shell"
 path = "src/lib.rs"
 
 [dependencies]
-ai-providers = { version = "0.5.0", path = "../ai-providers" }
+ai-providers = { version = "0.5.1", path = "../ai-providers" }
 async-trait = "0.1.92"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
-credentials-keyring = { version = "0.5.0", path = "../credentials-keyring" }
+credentials-keyring = { version = "0.5.1", path = "../credentials-keyring" }
 directories = "6.0.0"
 futures = "0.3.34"
 # Spec 0076, §9 K-3: liefert `O_NONBLOCK` für `key_files.rs` (A-3) — vorher
@@ -23,8 +23,8 @@ futures = "0.3.34"
 # `tauri`), diese Zeile macht daraus nur eine direkte Abhängigkeit statt
 # eines neuen Pakets in der Lieferkette.
 libc = "0.2.189"
-mcp-server = { version = "0.5.0", path = "../mcp-server" }
-persistence-sqlite = { version = "0.5.0", path = "../persistence-sqlite" }
+mcp-server = { version = "0.5.1", path = "../mcp-server" }
+persistence-sqlite = { version = "0.5.1", path = "../persistence-sqlite" }
 regex = "1.13.1"
 # Spec 0059 (fataler Startfehler-Dialog): war bereits transitiv über
 # `tauri-plugin-dialog` im Baum (s. `Cargo.lock`) — hier direkt gepinnt,
@@ -50,8 +50,8 @@ secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
-ssh-manager-core = { version = "0.5.0", path = "../core" }
-ssh-transport = { version = "0.5.0", path = "../ssh-transport" }
+ssh-manager-core = { version = "0.5.1", path = "../core" }
+ssh-transport = { version = "0.5.1", path = "../ssh-transport" }
 tauri = { version = "2", features = [] }
 tauri-plugin-decoration = "3.0"
 tauri-plugin-dialog = "2.7.2"

@@ -9,6 +9,8 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-09-25
+
 ### Added
 - Dateibrowser mit erhöhten Rechten: Ein Umschalter „Erhöhte Rechte“ öffnet
   den Dateibrowser als root (oder einen anderen Nutzer), indem der
@@ -111,6 +113,35 @@ sind mit **(Pro)** markiert.
   Feld "Max. Antwortlänge (Tokens)" für Provider mit unbekanntem
   Output-Maximum (z. B. ein selbstgehostetes Modell) — Standard weiterhin
   "Automatisch".
+- Öffnest du die KI-Provider-Einstellungen ohne konfigurierten
+  Ollama-Provider, sucht die App einmalig ein lokal laufendes Ollama
+  (`127.0.0.1:11434`) und bietet an, es zu übernehmen — inklusive
+  Modellauswahl. Ohne gefundenes Ollama zeigt eine kompakte Anleitung, wie
+  man es installiert. Kein Netzwerkaufruf ohne diese Aktion oder einen
+  Klick auf „Erneut suchen".
+- Ist noch kein eigener Server angelegt, führt die Serverliste jetzt aktiv
+  mit „Ersten Server anlegen" in den Anlage-Dialog, statt nur einen
+  Entwicklertext zu zeigen.
+- Beim Anlegen eines Servers mit Schlüssel-Anmeldung empfiehlt ein Hinweis
+  Ed25519-Schlüssel (`ssh-keygen -t ed25519`) — RSA bleibt unterstützt.
+- Bei Ollama ist der API-Key im Formular nicht mehr erforderlich.
+- Die Diagnose-Ansicht zeigt eine Zeile „Systemschlüsselbund: verfügbar /
+  nicht verfügbar (Grund)" samt nächstem Schritt — nachschlagbar auch dann,
+  wenn der Startdialog bereits weggeklickt wurde.
+- Der Button „Modelle laden" ist jetzt auch für Anthropic-Provider
+  verfügbar — bisher fehlte er dort ganz.
+- Beim Anlegen und Bearbeiten eines Servers steht neben Passwort, Private
+  Key, SSH-Agent und Zertifikat jetzt eine fünfte Anmeldeart zur Wahl:
+  „Schlüsseldatei“ — ein Pfad statt eines im Schlüsselbund gespeicherten
+  Inhalts, wie `IdentityFile` in `ssh_config`. Vor dem Speichern zeigt die
+  Oberfläche, ob die Datei existiert, ob die Rechte passen, ob sie wie ein
+  OpenSSH-Schlüssel aussieht und ob sie verschlüsselt ist. Server-Liste und
+  -Details zeigen den Pfad, an dem die Anmeldung hängt.
+- Ein Knopf „In den Schlüsselbund übernehmen“ legt den Inhalt einer solchen
+  Schlüsseldatei einmalig in den Systemschlüsselbund und stellt die
+  Anmeldeart auf „Private Key“ um — die Ursprungsdatei bleibt dabei
+  unverändert liegen. Vorher zeigt ein Dialog, welche Datei gelesen wird
+  und was sich ändert.
 
 ### Changed
 - Smart SSH ist jetzt Open Source unter der **Apache License 2.0**
@@ -123,6 +154,62 @@ sind mit **(Pro)** markiert.
   bei dem die automatische Fortsetzung dadurch ohne erkennbaren Grund
   stehen blieb. Kurze Erklärungen vor einem Kommando bleiben ausdrücklich
   erwünscht.
+- Fehlermeldungen auf dem Weg „Provider einrichten → Server anlegen →
+  Verbindung testen → verbinden" nennen jetzt durchgängig Ursache **und**
+  nächsten Schritt, auf Deutsch und Englisch — u. a. für falschen API-Key,
+  unbekanntes Modell, nicht erreichbaren lokalen KI-Dienst, abgelehnte
+  SSH-Verbindung, unbekannten Host, nicht erreichbaren Host und
+  abgelehnten/nicht rechtzeitig bestätigten Host-Key.
+- Der SSH-Verbindungsaufbau bricht jetzt nach 10 Sekunden ohne Antwort mit
+  einer klaren Meldung ab, statt minutenlang auf das Betriebssystem zu
+  warten.
+- Die Startdialoge (Datenbank-, Host-Key- und Schlüsselbund-Fehler) sprechen
+  jetzt Deutsch oder Englisch, abhängig von `LC_ALL`/`LC_MESSAGES`/`LANG`.
+  Vorgabe bleibt Deutsch, wenn keine brauchbare Spracheinstellung gesetzt
+  ist.
+- Ein vertippter Modellname zeigt bei Anthropic jetzt korrekt „Modell nicht
+  gefunden" statt „Provider nicht erreichbar".
+- Der Platzhaltertext in der Verwalten-Ansicht ohne ausgewählte
+  Gruppe/Server ist jetzt auch auf Englisch übersetzt (erschien zuvor auch
+  in der englischen Oberfläche auf Deutsch).
+- API-Key, Server-Passwort, Passphrase und Sudo-Passwort werden an den
+  Rändern nach derselben Regel bereinigt. Nur die Ränder: Was innerhalb
+  eines Wertes steht, bleibt unangetastet — auch ein ungewöhnliches
+  Zeichen, das dort hingehören könnte.
+- Beim selbst gesetzten Pfad zum `sftp-server` (erhöhter Dateibrowser)
+  gilt dieselbe Regel: Ein unsichtbares Zeichen am Rand wird entfernt,
+  statt den Pfad als ungültig abzulehnen. Ein solches Zeichen
+  **innerhalb** des Pfades führt unverändert zur Ablehnung.
+- Als Folge davon kann die Prüfung auf eingeschleuste Anweisungen jetzt
+  häufiger anschlagen — etwa wenn das Modell in seiner Begründung eine
+  gewöhnliche Konfigurationszeile wie `PermitRootLogin yes` zitiert. Die
+  nächste Aktion verlangt dann eine Bestätigung, statt automatisch zu
+  laufen. Das ist die sichere Richtung: Eine Nachfrage zu viel ist sichtbar
+  und mit einem Klick erledigt, eine verschluckte Warnung nicht.
+- Eine bereits gespeicherte Regel mit einem solchen Muster — etwa aus einer
+  älteren Programmfassung — wird in der Regelliste sichtbar markiert, mit
+  dem Hinweis, dass das Muster ungültig ist, und der Fundstelle darin.
+  Bearbeiten und Löschen bleiben möglich; Speichern verlangt dann ein
+  gültiges Muster. Zusätzlich wird eine solche Regel bei jeder Auswertung
+  im Protokoll vermerkt (mit Regel-Kennung, nie mit dem Kommando).
+- Meldet das Regel-Formular ein ungültiges Muster, steht dort jetzt ein
+  verständlicher Satz in der eingestellten Sprache und darunter die genaue
+  Fundstelle im Muster — bisher nur der englische Text der zugrunde
+  liegenden Bibliothek.
+- An einer so markierten Regel lässt sich die Priorität nicht mehr über die
+  Pfeiltasten verschieben; die Pfeile sind deaktiviert und nennen den Grund.
+- Der Vorschlag, eine sehr große Notiz per KI zusammenzufassen, hat jetzt
+  einen ✕-Knopf zum Schließen sowie einen Knopf „Später“, nach dem er für
+  diesen Server bis zum nächsten Start der App nicht wieder erscheint.
+- Dieser Vorschlag sowie der Hinweis beim Bearbeiten einer großen Notiz im
+  Notiz-Editor erscheinen jetzt erst ab 10 000 Zeichen statt bisher 8 000
+  Byte.
+- KI-Antworten ohne Text verschwinden nicht mehr still. Bricht die
+  Antwort eines Reasoning-Modells wegen des Ausgabe-Limits leer ab, wird
+  sie einmal automatisch mit mehr Budget wiederholt; bleibt eine Antwort
+  auf eine Nachricht trotzdem ganz ohne Text und ohne Vorschlag, zeigt der
+  Chat jetzt einen Hinweis mit dem Tipp, das Ausgabe-Limit in den
+  Provider-Einstellungen zu erhöhen.
 
 ### Fixed
 - "Mache ich selbst" im Kürzungs-Vorschlag scrollt jetzt direkt zum
@@ -149,6 +236,77 @@ sind mit **(Pro)** markiert.
   einfach nicht mehr). Die Verbindung zum KI-Provider nutzt jetzt aktives
   TCP-Keepalive, damit eine durch den Aussetzer "leise gestorbene"
   Verbindung schneller erkannt wird.
+- Linux ohne Systemschlüsselbund: Statt des englischen Bibliothekstexts
+  „No default store has been set, so cannot search or create entries" nennt
+  Smart SSH jetzt den tatsächlichen Zustand, die dadurch blockierten
+  Funktionen und das Paket, das ihn behebt — je nachdem, ob kein
+  Secret-Service-Anbieter läuft (`sudo apt install gnome-keyring`, auch
+  unter KDE), kein D-Bus-Session-Bus erreichbar ist
+  (`sudo apt install dbus-user-session`) oder der Schlüsselbund nur
+  gesperrt ist. Ein gesperrter Schlüsselbund führt dabei nie zu einem
+  Installationsvorschlag. Wer KWallet oder KeePassXC ohnehin nutzt, wird
+  darauf hingewiesen, dass deren Secret-Service-Integration laufen bzw.
+  eingeschaltet sein muss — Nachinstallieren allein genügt dort nicht.
+- Der Startdialog behauptete bisher, ohne Schlüsselbund funktioniere alles
+  außer dem Chat-Verlauf normal. Das stimmte nicht: Ohne Schlüsselbund
+  lassen sich weder KI-Provider noch Server-Passwörter, Passphrasen oder
+  Sudo-Passwörter speichern oder lesen. Der Dialog zählt jetzt auf, was
+  wirklich blockiert ist — und was weiterhin geht (SSH-Agent, Schlüssel
+  ohne Passphrase).
+- Das Server-Formular meldete „kein Sudo-Passwort hinterlegt", wenn der
+  Schlüsselbund gar nicht antworten konnte. Es zeigt jetzt einen neutralen
+  Zustand, statt etwas zu behaupten, das es nicht wissen kann.
+- „Hinterlegtes Sudo-Passwort entfernen" meldete Erfolg, auch wenn der
+  Schlüsselbund den Eintrag gar nicht löschen konnte — das Passwort wäre
+  beim nächsten `sudo` weiter eingespeist worden. Der Vorgang schlägt jetzt
+  sichtbar fehl.
+- Einen Server zu löschen funktioniert weiterhin auch dann, wenn der
+  Schlüsselbund klemmt. Neu ist: Smart SSH sagt danach ausdrücklich, welche
+  Einträge im Schlüsselbund zurückgeblieben sind, dass sie dort jetzt
+  verwaist sind und wie sie sich von Hand entfernen lassen.
+- „Verbindung testen" bewertet leere und eingefügte Zugangsdaten jetzt
+  genau wie „Speichern". Legt man einen neuen Server an und lässt das
+  Passwort-, Schlüssel- oder Zertifikatsfeld leer, meldet der Test die
+  Fehlermeldung, statt sich mit einem leeren Wert anzumelden — auf einem
+  Server, der leere Passwörter erlaubt, konnte er dafür bisher Erfolg
+  melden, obwohl sich derselbe Server anschließend nicht speichern ließ.
+  Beim Bearbeiten bedeutet ein leeres Feld weiterhin „das hinterlegte
+  Zugangsdatum verwenden".
+  Die Meldung ist dieselbe (und in der eingestellten Sprache) wie beim
+  Speichern, etwa „Passwort ist erforderlich".
+- „Verbindung testen" behandelt die Passphrase einer Schlüsseldatei oder
+  eines privaten Schlüssels jetzt genauso wie „Speichern". Bisher konnte
+  derselbe eingefügte Wert den Verbindungstest scheitern lassen und
+  danach trotzdem richtig gespeichert werden — der Test sagte damit
+  etwas anderes aus als der Server, der daraus entstand.
+- Ein eingefügter API-Key oder ein eingefügtes Passwort funktioniert jetzt
+  auch dann, wenn beim Kopieren ein unsichtbares Zeichen an den Rand
+  geraten ist — etwa ein BOM aus einer Textdatei oder ein Zero-Width-Space
+  aus einer Webseite. Bisher wurde ein solcher Wert unverändert
+  gespeichert, die Anmeldung schlug fehl, und der Key sah in der
+  Oberfläche trotzdem richtig aus.
+- Eine Filterregel, deren Muster sich nicht übersetzen lässt, wird beim
+  Anlegen und beim Ändern jetzt abgewiesen, statt gespeichert zu werden und
+  anschließend wirkungslos in der Liste zu stehen. Das galt bisher für jede
+  Aktion — auch für eine Deny- oder Bestätigen-Regel, die dadurch stillschweigend
+  nichts tat. Das gilt für das Regel-Formular und für die Schnellregel aus
+  dem Bestätigungsdialog.
+- Der Bestätigungsdialog schlägt keine Schnellregel mehr vor, deren Muster
+  sich nicht übersetzen lässt. Bisher entstand ein solcher Vorschlag aus
+  einem Kommando mit einer Klammer im Argument und ließ sich anwählen,
+  führte aber zu keiner wirksamen Regel.
+- Zugangsdaten in einer Verbindungs-URL werden jetzt auch dann vollständig
+  geschwärzt, wenn Passwort oder Benutzername ein unkodiertes `@` enthalten
+  (etwa `postgres://app:Xy9@kLm2@db/prod` oder die bei mehreren gehosteten
+  Datenbanken vorgeschriebene Schreibweise `benutzer@mandant`). Das gilt für
+  alles, was an das KI-Modell geht, und für alles, was in der
+  Gesprächshistorie gespeichert wird.
+- Ein Passwort-Parameter im Query-String einer Verbindungs-URL ohne Pfad
+  (`redis://cache:6379?password=…`) wird ebenfalls vollständig geschwärzt.
+- „Zugangsdaten testen“ für einen Anthropic-Provider schlug fälschlich mit
+  „Provider nicht erreichbar“ fehl, obwohl der Schlüssel gültig war — die
+  Probe schickte keinen System-Prompt, und Anthropic lehnt einen leeren
+  System-Textblock mit Caching-Markierung ab.
 
 ### Security
 - Glob-`*` in pfadförmigen Allow-/Deny-Regeln (Muster mit einem
@@ -220,6 +378,15 @@ sind mit **(Pro)** markiert.
   ein Host-Key wird durch Zeitablauf nie vertraut. Auch „Modelle laden“
   und die Attestierungsabfrage hängen bei einem nicht antwortenden
   Anbieter nicht mehr, sondern melden nach 90 Sekunden einen Fehler.
+- Die KI-Zweitmeinung zum Datenrisiko und die Prüfung auf eingeschleuste
+  Anweisungen lesen ihr Urteil jetzt zuverlässig aus der Antwort: Enthält
+  eine Antwort mehrere Urteilswörter, zählt das warnende. Bisher zählte das
+  zuerst genannte — eine Antwort, die den geprüften Text zitierte und darin
+  ein „nein"/„none" enthielt, konnte so eine danach ausgesprochene Warnung
+  verschlucken. Bei der Prüfung auf eingeschleuste Anweisungen ließ sich das
+  gezielt ausnutzen, weil der geprüfte Text dort aus einer nicht
+  vertrauenswürdigen Quelle stammt. Eine Warnung kann jetzt nicht mehr durch
+  die Wortstellung verlorengehen.
 
 ## [0.5.0] — 2026-09-11
 
