@@ -404,6 +404,146 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
     expect(screen.getByRole("button", { name: "Anlegen" })).not.toBeDisabled();
   });
 
+  // spec-reviewer-Fund (Review Runde 2): Die erste Fassung des B-3-Fixes
+  // behauptete "Rechte eng genug gesetzt" auch dann, wenn die Rechte gar
+  // nie gemessen wurden (z. B. TOO_LARGE via `fstat`, bevor überhaupt
+  // gelesen wird — vgl. `key_files.rs::probe`). Regressionstest mit
+  // Gegenbeweis: mit `permissionsAreKnown = true` fest verdrahtet (statt
+  // der Prüfung auf `KEY_FILE_INVALID_KEY`) erscheint "Rechte eng genug
+  // gesetzt" trotz `KEY_FILE_TOO_LARGE" — dieser Test schlägt dann fehl.
+  // Verifiziert, danach wiederhergestellt.
+  it("behauptet bei KEY_FILE_TOO_LARGE keine nie gemessenen Rechte (spec-reviewer-Fund, Runde 2)", async () => {
+    vi.mocked(inspectKeyFile).mockResolvedValue({
+      exists: true,
+      permissionsTooOpen: false,
+      validKey: false,
+      encrypted: false,
+      problem: { code: "KEY_FILE_TOO_LARGE", message: "zu groß" },
+    });
+    renderNewServerForm();
+    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
+      target: { value: IDENTITY_PATH },
+    });
+
+    await waitFor(() => expect(inspectKeyFile).toHaveBeenCalledWith(IDENTITY_PATH), {
+      timeout: 2000,
+    });
+    await screen.findByText("Die Schlüsseldatei überschreitet die zulässige Größe von 1 MiB.");
+
+    expect(screen.queryByText("Die Dateirechte sind eng genug gesetzt.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Die Dateirechte sind zu offen (für Gruppe oder Welt lesbar oder beschreibbar). Beim Verbinden wird die Anmeldung deshalb abgelehnt — z. B. mit „chmod 600“ auf die Datei beheben.",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  // Gegenstück: Bei `KEY_FILE_INVALID_KEY` SIND die Rechte verlässlich
+  // ermittelt (der einzige Fehlercode, der erst nach einer erfolgreichen
+  // Rechteprüfung entstehen kann) — B-3 verlangt diese Zeile hier
+  // ausdrücklich.
+  it("zeigt Rechte-Warnung bei KEY_FILE_INVALID_KEY, weil sie dort verlässlich ermittelt ist", async () => {
+    vi.mocked(inspectKeyFile).mockResolvedValue({
+      exists: true,
+      permissionsTooOpen: true,
+      validKey: false,
+      encrypted: false,
+      problem: { code: "KEY_FILE_INVALID_KEY", message: "kein gültiger Schlüssel" },
+    });
+    renderNewServerForm();
+    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
+      target: { value: IDENTITY_PATH },
+    });
+
+    expect(
+      await screen.findByText(
+        "Die Dateirechte sind zu offen (für Gruppe oder Welt lesbar oder beschreibbar). Beim Verbinden wird die Anmeldung deshalb abgelehnt — z. B. mit „chmod 600“ auf die Datei beheben.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  // Regressionstest mit Gegenbeweis: den sofortigen `setIdentityFacts(null)`
+  // am Effektanfang entfernt (dem Stand vor diesem Fix), bleibt der Befund
+  // des VORHERIGEN Pfads bis zum Ablauf der 400-ms-Verzögerung sichtbar —
+  // dieser Test schlägt dann fehl, weil "gültiger Schlüssel" weiterhin für
+  // den neuen, noch ungeprüften Pfad angezeigt würde. Verifiziert, danach
+  // wiederhergestellt.
+  it("zeigt beim Pfadwechsel sofort 'wird geprüft', nicht den Befund des alten Pfads (Fix 7)", async () => {
+    vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
+    renderNewServerForm();
+    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    const input = screen.getByPlaceholderText("~/.ssh/id_ed25519");
+    fireEvent.change(input, { target: { value: IDENTITY_PATH } });
+
+    await screen.findByText("Sieht aus wie ein gültiger OpenSSH-Schlüssel.");
+
+    fireEvent.change(input, { target: { value: "/tmp/anderer-pfad" } });
+
+    // Sofort nach dem Tippen (noch innerhalb der 400-ms-Verzögerung) darf
+    // der alte, jetzt nicht mehr zutreffende Befund nicht mehr stehen.
+    expect(screen.queryByText("Sieht aus wie ein gültiger OpenSSH-Schlüssel.")).not.toBeInTheDocument();
+    expect(screen.getByText("Wird geprüft …")).toBeInTheDocument();
+  });
+
+  // Regressionstest mit Gegenbeweis: die drei `setConvertConfirmOpen(false)`/
+  // `setConverting(false)`/`setConvertError(null)`-Zeilen in `loadServer`
+  // entfernt (dem Stand vor diesem Fix), bleibt der Bestätigungsdialog nach
+  // einem Serverwechsel auf demselben gemounteten Formular offen und würde
+  // — träfe der zweite Server ebenfalls auf `identity_file` — den Pfad des
+  // ERSTEN Servers weiter zeigen. Verifiziert, danach wiederhergestellt.
+  it("schließt den Überführungsdialog defensiv, wenn ein anderer Server geladen wird (Fix 8)", async () => {
+    const OTHER_ID = "22222222-2222-4222-8222-222222222222";
+    const OTHER_PATH = "/home/other/.ssh/id_ed25519";
+    vi.mocked(getServer).mockImplementation((id: string) =>
+      Promise.resolve(
+        id === SERVER_ID
+          ? serverDto({ authKind: "identity_file", identityFilePath: IDENTITY_PATH })
+          : serverDto({
+              id: OTHER_ID,
+              authKind: "identity_file",
+              identityFilePath: OTHER_PATH,
+            }),
+      ),
+    );
+    vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
+
+    const { rerender } = render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerForm
+          serverId={SERVER_ID}
+          defaultGroupId={null}
+          allGroups={[]}
+          allServers={[]}
+          onSaved={vi.fn()}
+          onDeleted={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+
+    const button = await screen.findByRole("button", { name: "In den Schlüsselbund übernehmen" });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    fireEvent.click(button);
+    expect(await screen.findByText(IDENTITY_PATH)).toBeInTheDocument();
+
+    rerender(
+      <I18nextProvider i18n={testI18n}>
+        <ServerForm
+          serverId={OTHER_ID}
+          defaultGroupId={null}
+          allGroups={[]}
+          allServers={[]}
+          onSaved={vi.fn()}
+          onDeleted={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+
+    await waitFor(() => expect(screen.queryByText(IDENTITY_PATH)).not.toBeInTheDocument());
+    expect(screen.queryByText("Übernehmen")).not.toBeInTheDocument();
+  });
+
   // Regressionstest mit Gegenbeweis: mit `setAuth(authStateFromKind(...))`
   // statt der pfaderhaltenden Fallunterscheidung (dem Stand vor diesem
   // Schritt) bleibt das Feld leer — verifiziert, danach wiederhergestellt.

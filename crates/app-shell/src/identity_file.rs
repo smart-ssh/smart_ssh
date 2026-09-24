@@ -796,24 +796,51 @@ mod tests {
     /// weder in der Datenbank noch in der Oberfläche auftaucht — beides
     /// gibt es vor Schritt 3 bzw. 5 nicht", §7).**
     ///
-    /// „Zum Verbinden benutzt" heißt hier: über [`resolve_auth`], denselben
-    /// Weg, den `ssh-transport` bei jeder echten Verbindung geht. Der
-    /// eigentliche SSH-Handshake ist bereits durch
-    /// `ssh-transport/tests/integration.rs`s `test_t6_3_8_…`/
-    /// `test_t6_3_6_…` gegen einen echten Testserver abgedeckt und wird
-    /// hier nicht wiederholt — dieser Test prüft die vier in 5.1/§6.4.1
-    /// genannten Orte, an denen der Inhalt NICHT auftauchen darf, jeden
-    /// einzeln und mit einem eindeutigen Erkennungsmerkmal:
+    /// Zwei Wege, auf denen der Inhalt einer Schlüsseldatei tatsächlich
+    /// durch den Prozessspeicher läuft, geprüft gegen die vier in 5.1/
+    /// §6.4.1 genannten Orte:
     ///
-    /// 1. Debug-Ausdruck von [`ResolvedAuth`] (`secrecy`s redigiertes
-    ///    `Debug` auf `SecretString` — auch ein versehentliches `{:?}` auf
-    ///    dem aufgelösten Material selbst darf nichts zeigen).
-    /// 2. Debug-Ausdruck des aus der **echten** SQLite-Datenbank
-    ///    zurückgelesenen [`Server`].
-    /// 3. Die **rohen Bytes** der SQLite-Datei selbst — nicht nur der
-    ///    Store-Trait, der ohnehin nur zurückgibt, was er gespeichert hat.
-    /// 4. Die JSON-Serialisierung von [`ServerDto`] und
-    ///    [`KeyFileFactsDto`] — das, was tatsächlich ans Frontend geht.
+    /// - **Auflösung** über [`resolve_auth`], derselbe Weg, den
+    ///   `ssh-transport` bei jeder echten Verbindung geht (der eigentliche
+    ///   SSH-Handshake ist bereits durch
+    ///   `ssh-transport/tests/integration.rs`s `test_t6_3_8_…`/
+    ///   `test_t6_3_6_…` gegen einen echten Testserver abgedeckt und wird
+    ///   hier nicht wiederholt) — geprüft am Debug-Ausdruck des
+    ///   aufgelösten [`ResolvedAuth`] (`secrecy`s redigiertes `Debug`,
+    ///   auch ein versehentliches `{:?}` auf dem Material selbst darf
+    ///   nichts zeigen).
+    /// - **Überführung** über [`convert_identity_file_to_keychain`] (C-3),
+    ///   die den Inhalt liest UND danach `store.update_server(&server)`
+    ///   aufruft — der einzige Punkt in diesem Modul, an dem gelesener
+    ///   Dateiinhalt und ein tatsächlicher DB-Schreibzugriff in
+    ///   derselben Funktion zusammentreffen. Ein Test, der nur einen frisch
+    ///   angelegten `IdentityFile`-Server (der laut Typ `AuthMethod::
+    ///   IdentityFile { path, passphrase_ref }` nie ein Inhaltsfeld
+    ///   bekommen KANN) gegen die Datenbank prüft, bewiese nur eine per
+    ///   Konstruktion wahre Aussage — der Marker würde `create_server`
+    ///   nie erreichen. Erst nach dieser Überführung geprüft:
+    ///   Debug-Ausdruck des aus der **echten** SQLite-Datenbank
+    ///   zurückgelesenen [`Server`], die **rohen Bytes** der SQLite-Datei
+    ///   selbst, sowie die JSON-Serialisierung von [`ServerDto`] und
+    ///   [`KeyFileFactsDto`] — das, was tatsächlich ans Frontend geht.
+    ///
+    /// (spec-reviewer-Fund, Review Runde 2, zwei Ebenen: **Erstens** prüfte
+    /// die erste Fassung Server-Debug/DB-Bytes an einem frisch angelegten,
+    /// nie konvertierten Server — dort konnten diese beiden Zusicherungen
+    /// per Konstruktion nicht rot werden, weil der Marker nie an
+    /// `create_server` übergeben wurde; behoben durch die Überführung
+    /// oben. **Zweitens**, beim Verifizieren dieser Korrektur entdeckt: ein
+    /// Byte-Scan, der nur `db_path` selbst liest, hätte einen echten Leck
+    /// trotzdem übersehen — `sqlx`/SQLite laufen standardmäßig im
+    /// WAL-Modus, ein frischer Schreibzugriff steht zunächst nur in
+    /// `<db>-wal`, `drop(store)` checkpointet nicht zuverlässig. Beide
+    /// Ebenen mit demselben Gegenbeweis verifiziert: Marker vor der
+    /// Überführung in `server.notes` eingeschleust (ein echtes,
+    /// persistiertes Feld) — Server-Debug-Zusicherung UND die
+    /// WAL-einschließende DB-Bytes-Zusicherung wurden beide rot, erst
+    /// danach fiel auf, dass `db_path` allein die WAL-Datei gar nicht
+    /// mitgelesen hätte; Fix (Mitlesen von `-wal`/`-journal`) zurückgesetzt
+    /// und erneut verifiziert.)
     ///
     /// **Was hier bewusst NICHT nachgestellt wird:** „nicht im Log" aus 5.1
     /// hat auf diesem Pfad keine Gegenstelle — weder `resolve_auth` noch
@@ -823,7 +850,8 @@ mod tests {
     /// `CredentialRef`-Namen und den Fehler nennt, s. dort). Ein
     /// Log-Mitschnitt bräuchte in `ssh-transport` eine neue
     /// `tracing`-Testabhängigkeit — ohne Freigabe nicht aufgenommen
-    /// (spec-reviewer-Fund, Review dieses Schritts).
+    /// (spec-reviewer-Fund, Review Runde 1; diese Auslassung ist zusätzlich
+    /// in ADR 0065 §16 vermerkt).
     #[tokio::test]
     async fn test_t6_4_1_key_content_never_reaches_the_database_debug_output_or_dto() {
         use ssh_manager_core::ssh::{resolve_auth, ResolvedAuth};
@@ -843,9 +871,10 @@ mod tests {
             .await
             .expect("Server mit IdentityFile-Anmeldeart muss sich anlegen lassen");
 
-        // Der Weg, den jede echte Verbindung nimmt.
         let key_files = MockKeyFileReader::new().with_key(PATH, MARKER);
         let credential_store = InMemoryCredentialStore::new();
+
+        // Weg 1: Auflösung, wie bei jeder echten Verbindung.
         let resolved = resolve_auth(&server.auth, &credential_store, &key_files)
             .expect("ein gültiger, unverschlüsselter Schlüssel muss auflösen");
         let ResolvedAuth::PrivateKey { key, .. } = &resolved else {
@@ -856,14 +885,20 @@ mod tests {
             MARKER,
             "Gegenprobe: der Marker muss tatsächlich ankommen, sonst prüft der Rest nichts"
         );
-
-        // 1. Debug-Ausdruck des aufgelösten Auth-Materials.
         assert!(
             !format!("{resolved:?}").contains(MARKER),
             "5.1: SecretStrings redigiertes Debug darf den Schlüssel nicht zeigen"
         );
 
-        // 2. Debug-Ausdruck des aus der Datenbank zurückgelesenen Servers.
+        // Weg 2: Überführung — liest den Marker UND schreibt danach in
+        // dieselbe (echte) Datenbank.
+        convert_identity_file_to_keychain(&store, &credential_store, AVAILABLE, &key_files, id)
+            .await
+            .expect("ein gültiger, unverschlüsselter Schlüssel muss sich überführen lassen");
+
+        // 1. Debug-Ausdruck des aus der Datenbank zurückgelesenen Servers —
+        // NACH der Überführung, die den Marker durch den Prozessspeicher
+        // geführt und den Server neu geschrieben hat.
         let reloaded = store
             .get_server(&id)
             .await
@@ -873,17 +908,36 @@ mod tests {
             "5.1: kein Schlüsselinhalt im Server-Debug-Ausdruck"
         );
 
-        // 3. Die SQLite-Datei selbst, auf Byte-Ebene.
+        // 2. Die SQLite-Datei selbst, auf Byte-Ebene — inklusive WAL-Datei
+        // (spec-reviewer-Fund, Runde 2, beim Gegenbeweis unten entdeckt:
+        // `sqlx`/SQLite laufen standardmäßig im WAL-Modus; ein frischer
+        // Schreibzugriff steht zunächst NUR in `<db>-wal`, nicht in der
+        // Hauptdatei — ein Byte-Scan, der nur `db_path` liest, hätte einen
+        // Marker in der WAL-Datei stillschweigend übersehen und „nicht
+        // gefunden" gemeldet, obwohl er da war). `drop(store)` schließt den
+        // Pool, checkpointet aber nicht zuverlässig — deshalb werden alle
+        // drei möglichen SQLite-Begleitdateien gelesen, jede, die existiert.
         drop(store);
-        let raw_db_bytes = std::fs::read(&db_path).expect("DB-Datei muss lesbar sein");
+        let raw_db_bytes: Vec<u8> = ["", "-wal", "-journal"]
+            .iter()
+            .filter_map(|suffix| {
+                let path = dir.path().join(format!("t641.db{suffix}"));
+                std::fs::read(&path).ok()
+            })
+            .flatten()
+            .collect();
+        assert!(
+            !raw_db_bytes.is_empty(),
+            "Gegenprobe: mindestens die Hauptdatei muss existieren und lesbar sein"
+        );
         assert!(
             !raw_db_bytes
                 .windows(MARKER.len())
                 .any(|window| window == MARKER.as_bytes()),
-            "5.1: der Marker darf in keiner Form in der SQLite-Datei stehen"
+            "5.1: der Marker darf in keiner Form in der SQLite-Datei (oder ihrer WAL-Datei) stehen"
         );
 
-        // 4. Was tatsächlich ans Frontend geht: ServerDto und der
+        // 3. Was tatsächlich ans Frontend geht: ServerDto und der
         // Vorab-Befund (B-3/B-4).
         let dto = crate::dto::ServerDto::from_server(&reloaded, &credential_store);
         let dto_json = serde_json::to_string(&dto).unwrap();
@@ -897,6 +951,14 @@ mod tests {
         assert!(
             !facts_json.contains(MARKER),
             "5.1/B-3: kein Schlüsselinhalt im serialisierten Vorab-Befund"
+        );
+
+        // Und: der Marker ist tatsächlich dort gelandet, wo er hingehört —
+        // sonst bewiesen die Abwesenheits-Prüfungen oben gar nichts.
+        assert_eq!(
+            stored(&credential_store, &key_slot(id)).as_deref(),
+            Some(MARKER),
+            "Gegenprobe: der Marker muss im Schlüsselbund liegen"
         );
     }
 }

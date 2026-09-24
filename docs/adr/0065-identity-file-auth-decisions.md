@@ -436,3 +436,34 @@ Datei bereits vorhandenen Muster für „kann die Oberfläche nicht sicher
 wissen" (`secretMayBeDeleted`). Eine neue `ServerDto`-Auskunft eigens dafür
 (z. B. `hasIdentityFilePassphrase`, analog `hasSudoPassword`) wäre eine
 größere, in der Spec nicht verlangte Änderung gewesen und ist unterblieben.
+
+## 16. §6.4.1 — der „nicht im Log"-Teil von 5.1 ist nicht durch einen eigenen Test belegt
+
+**Frage:** Spec 0076 §7 ordnet Test §6.4.1 ausdrücklich Schritt 5 zu und
+verlangt: „Der Inhalt steht nicht in der Datenbank, nicht im Log, nicht in
+einem Debug-Ausdruck des Servers, nicht in der Oberfläche (5.1)." Der neue
+Test `identity_file::tests::
+test_t6_4_1_key_content_never_reaches_the_database_debug_output_or_dto`
+deckt drei der vier Orte ab (Datenbank inkl. WAL-Datei, Server-Debug,
+Oberfläche/DTO-Serialisierung) — **nicht** „im Log".
+
+**Entscheidung:** Keine eigene Log-Mitschnitt-Prüfung ergänzt.
+
+**Warum:** Weder `resolve_auth` (`crates/core/src/ssh/auth.rs`) noch
+`OsKeyFileReader`/`convert_identity_file_to_keychain`
+(`crates/app-shell/src/key_files.rs`, `identity_file.rs`) rufen
+`tracing::*!` mit dem Schlüsselinhalt auf — geprüft per Durchsicht, die
+einzige `tracing`-Zeile in `identity_file.rs` ist `roll_back_key_slot`s
+Warnung, die nur den `CredentialRef`-Namen und den Fehler nennt, nie den
+Schlüssel. Ein belastbarer Mitschnitt-Test bräuchte in `ssh-transport`
+(wo der eigentliche Verbindungsaufbau läuft) einen globalen
+`tracing`-Test-Subscriber wie ihn `app_shell::orchestration` und
+`ai_providers::test_support` bereits je für ihre eigene Crate pflegen —
+`ssh-transport` hat aber weder `tracing` noch `tracing-subscriber` als
+Abhängigkeit, auch nicht unter `[dev-dependencies]`. Eine neue Abhängigkeit
+dafür aufzunehmen ist ohne Freigabe ausgeschlossen.
+
+**Was das offenlässt:** Sollte `ssh-transport` künftig aus anderem Grund
+eine `tracing`-Abhängigkeit bekommen, gehört ein Log-Mitschnitt-Test für
+§6.4.1 nachgezogen — bis dahin beruht die „nicht im Log"-Zusage allein auf
+der Durchsicht oben, nicht auf einem automatisierten Nachweis.

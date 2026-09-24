@@ -164,6 +164,7 @@
       "hint": "Legt den Inhalt der Schlüsseldatei einmalig in den Systemschlüsselbund und stellt die Anmeldeart auf „Private Key“ um. Schützt vor einer Datei mit zu weiten Rechten oder einem Verzeichnis, das jemand anders mitlesen kann.",
       "button": "In den Schlüsselbund übernehmen",
       "checking": "Wird geprüft …",
+      "checkFailed": "Der Vorab-Befund konnte nicht abgefragt werden — der Knopf bleibt deshalb gesperrt. Erneut versuchen, z. B. durch einen Wechsel zu einem anderen Server und zurück.",
       "confirmWhatChanges": "Die Anmeldung hängt danach am Systemschlüsselbund, nicht mehr an dieser Datei.",
       "confirmWhatStays": "Die Datei bleibt unverändert auf der Platte liegen — sie wird nicht gelöscht oder verändert:",
       "confirm": "Übernehmen",

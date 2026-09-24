@@ -164,6 +164,7 @@
       "hint": "Copies the key file's content into the system keychain once and switches the auth method to \"Private Key\". Protects against a file with permissions that are too open, or a directory someone else can read.",
       "button": "Move into the keychain",
       "checking": "Checking …",
+      "checkFailed": "The pre-check could not be requested, so the button stays disabled. Try again, e.g. by switching to another server and back.",
       "confirmWhatChanges": "The login will then depend on the system keychain, no longer on this file.",
       "confirmWhatStays": "The file stays unchanged on disk — it is neither deleted nor modified:",
       "confirm": "Move",

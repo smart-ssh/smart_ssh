@@ -173,23 +173,36 @@ function IdentityFileFacts({
   );
 
   // B-3 verlangt Existenz, Rechte, Gültigkeit UND Verschlüsselung — auch
-  // wenn die Datei einen ungültigen Schlüssel enthält (spec-reviewer-Fund,
-  // Review dieses Schritts: die erste Fassung zeigte in diesem Fall NUR
-  // die Problemmeldung und ließ den ebenfalls schon ermittelten
-  // Rechte-Befund fallen). Ohne `exists` ist über Rechte oder
-  // Verschlüsselung nichts bekannt — dann bleibt es bei der einen Zeile.
+  // wenn die Datei einen ungültigen Schlüssel enthält. Ohne `exists` ist
+  // über Rechte oder Verschlüsselung nichts bekannt — dann bleibt es bei
+  // der einen Zeile.
   if (!facts.exists) {
     return <ul className="mt-1 space-y-0.5 text-xs">{problemLine}</ul>;
   }
 
+  // spec-reviewer-Fund (Review Runde 2): `permissions_too_open` ist in
+  // `OsKeyFileReader::inspect` (`key_files.rs`) nur dann verlässlich
+  // ermittelt, wenn entweder gar kein Problem vorliegt ODER das Problem
+  // `KEY_FILE_INVALID_KEY` ist — das ist der EINZIGE Fehlercode, der
+  // beweisbar erst NACH der Rechteprüfung entsteht (er kommt ausschließlich
+  // aus `read_and_classify`, das schon einen erfolgreichen `Probe` voraus-
+  // setzt). Für `NotARegularFile` wird die Prüfung nie erreicht, für
+  // `NotReadable`/`TooLarge` ist nicht unterscheidbar, ob sie vor oder
+  // nach der Rechteprüfung entstanden sind — das DTO trägt dafür keine
+  // zusätzliche Information. Die erste Fassung dieser Komponente zeigte in
+  // all diesen Fällen unbedingt „Rechte eng genug gesetzt" — eine
+  // verharmlosende Behauptung über einen Wert, der nie gemessen wurde.
+  const permissionsAreKnown = !facts.problem || facts.problem.code === "KEY_FILE_INVALID_KEY";
+
   return (
     <ul className="mt-1 space-y-0.5 text-xs">
       {problemLine}
-      {facts.permissionsTooOpen ? (
-        <li className="text-amber-400">{t("serverForm.identityFile.permissionsTooOpen")}</li>
-      ) : (
-        <li className="text-slate-500">{t("serverForm.identityFile.permissionsOk")}</li>
-      )}
+      {permissionsAreKnown &&
+        (facts.permissionsTooOpen ? (
+          <li className="text-amber-400">{t("serverForm.identityFile.permissionsTooOpen")}</li>
+        ) : (
+          <li className="text-slate-500">{t("serverForm.identityFile.permissionsOk")}</li>
+        ))}
       {/* `encrypted` ist nur aussagekräftig, wenn der Schlüssel überhaupt
        * gültig ist (bei einem Problem steht das Feld immer auf `false`,
        * s. `crate::dto::KeyFileFactsDto::from`). */}
@@ -354,6 +367,13 @@ export function ServerForm({
     // aber eine Eigenschaft des Aufrufers, nicht der Komponente selbst.
     // `convertFacts`/-`Error` reagieren bereits über den eigenen Effekt auf
     // `loaded`; nur diese drei bräuchten sonst einen fremden Anker.
+    // spec-reviewer-Fund (Review Runde 1, verifiziert in Runde 2): ohne
+    // diesen Reset hinge die C-2-Bestätigungsgrenze allein an
+    // `ManagementView`s `key={id}` (das `ServerForm` bei jedem
+    // Serverwechsel neu montiert) — richtig, aber eine Eigenschaft des
+    // Aufrufers, nicht der Komponente selbst. `convertFacts`/-`Error`
+    // reagieren bereits über den eigenen Effekt auf `loaded`; nur diese
+    // drei bräuchten sonst einen fremden Anker.
     setConvertConfirmOpen(false);
     setConverting(false);
     setConvertError(null);
@@ -1120,7 +1140,7 @@ export function ServerForm({
                 {!convertFacts?.validKey && (
                   <p className="mt-2 text-xs text-amber-400">
                     {convertFactsError
-                      ? t("serverForm.identityFile.checkFailed")
+                      ? t("serverForm.convertToKeychain.checkFailed")
                       : convertFacts
                         ? translateErrorCode(
                             t,
