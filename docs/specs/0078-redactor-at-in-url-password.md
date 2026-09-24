@@ -55,8 +55,9 @@ redigiert. Die Stoppzeichen `,` `;` `"` sind bewusst gesetzt
 
 ## 2. Ziel und Nicht-Ziele
 
-**Ziel:** Die Fälle A, B und C werden vollständig redigiert. Keine heute
-redigierte Eingabe wird weniger redigiert.
+**Ziel:** Die Fälle A, B und C werden vollständig redigiert. Außer den in
+§5 genannten Restfällen wird keine heute redigierte Eingabe weniger
+redigiert.
 
 **Nicht-Ziele:**
 - Alle bestehenden Muster bleiben **wörtlich** und an ihrer Stelle. Das
@@ -76,7 +77,7 @@ Anforderung und durch Tests gebunden (§6.2, T-A11/T-A12).
   **vor dem Kommentarblock des DB-Musters** eingefügt (`redactor.rs:264`):
 
   ```
-  (?i)(?P<sep>[?&])(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*'|"[^"\r\n]*"|[^&#\s,;"']+)
+  (?i)(?P<sep>[?&])(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)
   ```
 
   Ersetzung: `${sep}${key}=[REDACTED]`. Die Schlüsselwörter sind genau die
@@ -85,10 +86,32 @@ Anforderung und durch Tests gebunden (§6.2, T-A11/T-A12).
   Ganzes genommen. Ohne Anführungszeichen endet er an `&` `#`,
   Leerraum, `,` `;` `"` `'`. N1 läuft vor dem DB-Muster, damit dieses
   den Parameter nicht mehr als Passwortteil lesen kann.
-  **Warum die Anführungszeichen:** Ohne sie nahm N1 bei
-  `?password='top secret 123'` nur `'top`. Dem Schlüsselwort-Muster fehlte
-  danach der öffnende Quote, und ` secret 123'` blieb im Klartext stehen,
-  wo es heute redigiert wird (gemessen).
+
+  **Jeder der drei Zweige verlangt mindestens ein `@` im Wert**
+  (Klarstellung, s. §9, Q-BL-0248-01). Damit gilt für N1 ein einziger
+  Satz: *sie ersetzt ausschließlich Werte, die ein `@` enthalten; ein
+  Anker ohne `@` ist für sie unerreichbar.* Ohne diese Forderung
+  zerschneidet N1 den mehrteiligen Anker der Private-Key-Muster, die
+  weiter unten in der Liste stehen — `?secret=-----BEGIN PRIVATE KEY-----`
+  wird bis zum Leerzeichen ersetzt (freier Zweig), mit `"…"` bis zum
+  schließenden Quote. Danach greift weder das PEM-Muster noch sein
+  Fail-safe-Rückfallmuster, und der komplette Schlüsselkörper steht im
+  Klartext (gemessen, an beiden Ständen).
+
+  Die Forderung kostet keine Abdeckung, aber der Grund ist enger als er
+  aussieht: Das DB-Muster **läuft** sehr wohl über einen Wert ohne `@`
+  hinweg (seine Passwortklasse endet erst am ersten `@`, das irgendwo
+  dahinter stehen darf) — alles, worüber es läuft, liegt jedoch innerhalb
+  seiner eigenen Ersetzung und ist damit redigiert. Ein Teil des
+  Parameterwerts kann nur dann hinter dem `@` stehenbleiben, wenn der Wert
+  das `@` selbst enthält, und dann greift N1. Ein Wert ohne `@` wird
+  unverändert vom Schlüsselwort-Muster redigiert.
+
+  **Warum die Anführungszeichen:** Ohne sie griffe N1 bei
+  `redis://cache:6379?password='p@ss w0rd'` gar nicht — die freie
+  Wertklasse schließt `'` aus. Das DB-Muster läse dann
+  `6379?password='p` als Passwort, und `ss w0rd'` bliebe im Klartext
+  stehen, wo es heute redigiert wird (gemessen).
 - **3.2 Regel N2, `@` in Benutzer und Passwort (Fälle A und B).** Sie
   wird **als letzte Regel** der Liste eingefügt, also hinter dem breiten
   URL-Muster (`:543-554`) und vor dem Absorb-Schritt, der ohnehin danach
@@ -149,6 +172,26 @@ Anforderung und durch Tests gebunden (§6.2, T-A11/T-A12).
   `/ ? #` enthält, wird weiter nur teilweise redigiert. Gemessen:
   `postgres://app:a@b?c@db/x` → `postgres://app:[REDACTED]@b?c@db/x`.
   Dasselbe gilt wie bisher für `,` `;` `"`. Test T-R1 hält das fest.
+- **Restfall, neu durch N1 (Entscheidung Stefan, 2026-09-24,
+  Q-BL-0248-01):** Enthält das Passwort einer Verbindungs-URL wörtlich
+  `?<schlüsselwort>=` mit einem der Schlüsselwörter aus §3.1 und danach
+  ein `@`, so redigiert N1 ab dem Schlüsselwort, und der Passwort-Präfix
+  **vor** dem `?` bleibt im Klartext. Gemessen:
+  `postgres://u:a?password=b@h/x` → vorher `postgres://u:[REDACTED]@h/x`,
+  jetzt `postgres://u:a?[REDACTED]`. Der Präfix kann beliebig lang sein.
+
+  Das ist die **eine** Stelle, an der weniger redigiert wird als vorher —
+  daher die Einschränkung in §2. Ursache ist die Position von N1 vor dem
+  DB-Muster, also dieselbe Position, die Fall C löst: Die Zeichenkette hat
+  zwei Lesarten (Passwort `a?password=b` mit Host `h`, oder Passwort `a`
+  mit Query-String), und ohne echtes URL-Parsing kann kein Muster sie
+  unterscheiden. Vorher war die erste Lesart zu und die zweite offen,
+  jetzt umgekehrt. Betroffen sind nur DB-Schemata. Test T-R3 hält es fest.
+
+  Nicht betroffen ist der verwandte Fall **ohne** `@` im Parameterwert
+  (`postgres://u:SuperSecret123?password=pl/ain&x=y@h/db`): der Präfix
+  bleibt dort sichtbar, aber genauso wie vor dieser Spec — hier ändert
+  sich nichts.
 
 ## 6. Tests
 
@@ -248,6 +291,11 @@ deshalb nicht allein.
   `ssh://git@host:[REDACTED]@server` und `https://u:p@h:1|user=me@mail` →
   `https://u:[REDACTED]@mail`, mit dem Kommentar „bekannte Überredaktion,
   Spec 0078 §5".
+- **T-R3** `postgres://u:a?password=b@h/x` → `postgres://u:a?[REDACTED]`,
+  mit dem Kommentar „bekannter Restfall, Spec 0078 §5" und dem Hinweis,
+  dass hier als einziger Stelle weniger redigiert wird als vor dieser
+  Spec. Kein Gegenbeweis möglich und keiner nötig: der Test hält eine
+  bewusst getroffene Entscheidung fest, kein behobenes Verhalten.
 
 ## 7. Umsetzungsreihenfolge
 
@@ -278,4 +326,30 @@ verlangt eine Produktentscheidung.
 
 ## 9. Klarstellungen
 
-(wird während der Umsetzung nachgetragen: Datum · Frage-ID · Antwort)
+- **2026-09-24 · Q-BL-0248-01 · Entscheidung Stefan, Option 1.** Der
+  Restfall „Passwort mit Query-Präfix" (`postgres://u:a?password=b@h/x`)
+  wird als bekannter Restfall aufgenommen statt behoben. §2 ist
+  entsprechend präzisiert („außer den in §5 genannten Restfällen"), §5 um
+  den Fall erweitert, §6.3 um Test T-R3. Grund: Die Zeichenkette ist echt
+  zweideutig; sie zu lösen hieße, N1s Position aufzugeben und damit Fall
+  C wieder zu öffnen.
+- **2026-09-24 · Q-BL-0248-01 · Entscheidung Stefan.** Die Wertklasse von
+  N1 in §3.1 verlangt in **allen drei** Zweigen ein `@` im Wert. Die
+  ursprünglich vorgeschriebene Fassung (`[^&#\s,;"']+` ohne `@`-Pflicht,
+  Quote-Zweige ohne Einschränkung) zerschnitt den Anker der
+  Private-Key-Muster, sodass ein kompletter privater Schlüssel im Klartext
+  an den KI-Anbieter ging. Gemessen an beiden Ständen, in zwei
+  Review-Runden gefunden (freier Zweig, dann Quote-Zweige).
+- **2026-09-24 · Runde 1 des `spec-reviewer` · Korrektur an §3.1.** Die
+  ursprüngliche Begründung der Anführungszeichen-Alternativen („ohne sie
+  nahm N1 bei `?password='top secret 123'` nur `'top`") war sachlich
+  falsch: die freie Wertklasse schließt `'` aus, N1 greift dort ohne die
+  Alternativen gar nicht, und das Schlüsselwort-Muster redigiert wie
+  bisher. Der Nutzen der Alternativen bleibt, der Grund ist ein anderer —
+  §3.1 nennt jetzt den zutreffenden (`?password='p@ss w0rd'`).
+- **2026-09-24 · Runde 1 des `spec-reviewer` · Status von T-A14.** T-A14
+  ist ein **Wächter**, kein Gegenbeweis für die Quote-Alternativen: seine
+  Fälle sind auch ohne sie grün. Der Gegenbeweis steckt in den
+  Query-Parameter-Fällen aus §6.1 (T-7a/T-7b). Die Formulierung in §6.2
+  („Scheitert, wenn N1 einen Wert in Anführungszeichen anschneidet")
+  trifft so nicht zu.
