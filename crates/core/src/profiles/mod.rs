@@ -7,6 +7,8 @@
 
 mod credentials;
 mod notes;
+/// Spec 0075: `ssh_config` lesen und auf Profile abbilden.
+pub mod ssh_config;
 mod store;
 mod types;
 
