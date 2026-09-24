@@ -1131,6 +1131,21 @@ mod tests {
         }
     }
 
+    /// Der vollständige Inhalt eines Stores als sortierte (Ref, Wert)-Liste.
+    /// Grundlage der Gegenprobe, dass der Verbindungstest nur liest.
+    fn snapshot(store: &InMemoryCredentialStore) -> Vec<(String, String)> {
+        use secrecy::ExposeSecret;
+        let mut entries: Vec<(String, String)> = store
+            .secrets
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(r, secret)| (r.clone(), secret.expose_secret().to_string()))
+            .collect();
+        entries.sort();
+        entries
+    }
+
     /// Dieselbe Eingabe durch beide Wege. Zurück kommt je Weg das Secret,
     /// mit dem tatsächlich angemeldet würde — oder die Fehlermeldung, wenn
     /// der Weg abbricht.
@@ -1165,6 +1180,7 @@ mod tests {
 
         // Weg 1: „Verbindung testen" — Secrets landen im Ephemeral-Store.
         let (real_store, existing) = seed();
+        let store_before = snapshot(&real_store);
         let ephemeral = EphemeralCredentialStore::new();
         let via_test = resolve_final_hop_auth(
             &ephemeral,
@@ -1182,32 +1198,19 @@ mod tests {
         .map_err(|err| err.message);
 
         // Gegenprobe zur Modul-Zusage „ohne irgendetwas zu persistieren":
-        // Der Test-Weg darf am echten Store nichts verändert haben. Steht
-        // hier im Helfer, damit alle drei Tests sie mittragen — ein
-        // künftiges `set` auf dem echten Store fiele sofort auf.
-        if let (Some(value), Some(existing_auth)) = (stored, existing.as_ref()) {
-            assert_eq!(
-                expose(
-                    &real_store as &dyn CredentialStore,
-                    &slot.secret_ref_of(existing_auth)
-                ),
-                value,
-                "{slot:?}: der Verbindungstest hat das hinterlegte Credential verändert"
-            );
-        }
-        for leaked in [
-            "test:password",
-            "test:private_key",
-            "test:passphrase",
-            "test:certificate",
-            "test:certificate_key",
-        ] {
-            assert!(
-                real_store.get(&CredentialRef::new(leaked)).is_err(),
-                "{slot:?}: {leaked} ist im echten Store gelandet — Test-Secrets \
-                 gehören ausschließlich in den Ephemeral-Store"
-            );
-        }
+        // Der echte Store muss nach dem Test-Weg Zeichen für Zeichen so
+        // aussehen wie davor. Alle drei Tests tragen sie mit, auch der
+        // Neuanlage-Fall, in dem es kein hinterlegtes Credential zum
+        // Vergleichen gibt — verglichen wird der **ganze** Inhalt, nicht
+        // eine Liste erwarteter `test:*`-Refs: Ein künftiger Slot, den
+        // niemand in eine solche Liste einträgt, fällt so trotzdem auf,
+        // und ein Schreiben auf den Nachbar-Slot ebenso.
+        assert_eq!(
+            snapshot(&real_store),
+            store_before,
+            "{slot:?}: der Verbindungstest hat den echten Schlüsselbund verändert — \
+             er darf ausschließlich lesen"
+        );
 
         // Weg 2: „Speichern" — Secrets landen im echten Store.
         let (save_store, existing) = seed();

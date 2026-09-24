@@ -47,9 +47,9 @@ als gar nicht — deshalb trug die Frage eine Option, die beides ändert.
 
 ## 2. Was sich für den Nutzer sichtbar ändert
 
-Nur ein Fall, und der war vorher irreführend: Bei **Neuanlage** mit leerem
-Pflichtfeld endet „Verbindung testen" jetzt in der Fehlermeldung statt in
-einem Anmeldeversuch mit leerem Secret. Auf einem Server mit
+Der Fall, um den es ging, war vorher irreführend: Bei **Neuanlage** mit
+leerem Pflichtfeld endet „Verbindung testen" jetzt in der Fehlermeldung
+statt in einem Anmeldeversuch mit leerem Secret. Auf einem Server mit
 `PermitEmptyPasswords yes` meldete der Test bisher Erfolg für ein Profil,
 das sich anschließend nicht speichern ließ.
 
@@ -61,13 +61,18 @@ mit einem Wert, den der Nutzer nicht gemeint hat. Ersetzt wird dabei
 nichts — der Verbindungstest liest nur (`real_store.get`), er schreibt
 kein Credential und löscht keines.
 
-Diese Richtung ist zugleich die einzige, in der der Diff etwas
-aufweicht: Ein Verbindungstest, der vorher an einem Leerraum-Paste
-scheiterte, kann jetzt grün werden, und die Erfolgsmeldung gilt dann für
-das hinterlegte Zugangsdatum. Genau das tut „Speichern" seit Spec 0008 §4
-auch, und §9 verlangt die Gleichstellung ausdrücklich — festgehalten sei
-es trotzdem, weil eine Erfolgsmeldung damit über etwas aussagt, das nicht
-im Feld stand.
+Das ist die einzige Richtung, in der eine Erfolgsmeldung nach diesem Diff
+über einen Wert aussagt, den der Nutzer **nicht** eingegeben hat: Ein
+Verbindungstest, der vorher an einem Leerraum-Paste scheiterte, kann jetzt
+grün werden — mit dem hinterlegten Zugangsdatum. Genau das tut „Speichern"
+seit Spec 0008 §4 auch, und §9 verlangt die Gleichstellung ausdrücklich.
+Festgehalten sei es trotzdem.
+
+Ein zweiter Fall geht ebenfalls von rot auf grün, ist aber harmlos: Ein
+**nicht** leerer Paste mit Randzeichen scheiterte vorher an der
+Authentifizierung und geht jetzt durch — mit dem getrimmten **eigenen**
+Wert des Nutzers, nicht mit einem fremden. Das ist der Zweck der Spec
+(§3 erster Punkt unten).
 
 ## 3. Keine Lockerung
 
@@ -107,6 +112,24 @@ zufällig passen.
 **Gegenbeweis:** Alle drei scheitern gegen den Stand vor dem Fix; der
 gemessene Ist-Wert war jeweils `Ok("")` bzw. der ungetrimmte Paste.
 
+Dazu zwei Zusicherungen, die nicht den Fix prüfen, sondern die Zusage des
+Moduls „ohne irgendetwas zu persistieren" festnageln:
+
+- Der echte Store muss nach dem Test-Weg Inhalt für Inhalt so aussehen wie
+  davor. Verglichen wird der **ganze** Store, nicht eine Liste erwarteter
+  `test:*`-Refs — sonst deckt die Prüfung den Neuanlage-Fall nicht ab, in
+  dem es kein hinterlegtes Credential gibt, und auch kein Schreiben auf
+  einen Nachbar-Slot. Gegenbeweis gemessen: ein vorübergehend eingebautes
+  `set` auf `server:sabotage:certificate_key` lässt alle drei Tests mit
+  dieser Meldung scheitern.
+- Der Neuanlage-Test prüft, dass der Abbruch der fehlenden Eingabe gilt,
+  nicht irgendeinem anderen Grund. Das hängt derzeit am Anfang des
+  Fehlertextes — eine **Zwischenlösung**, solange Q-BL-0149-03 offen ist
+  (s. §3). Bekommt der Fehler dort einen `code`, gehört die Zusicherung auf
+  diesen umgestellt; erhält er zugleich die Meldung des Speicher-Wegs,
+  scheitert der Test sichtbar, und das ist die richtige Stelle zum
+  bewussten Nachziehen.
+
 ## 5. Was offen bleibt
 
 Die in ADR 0066 aufgeführten Punkte bleiben unverändert offen — ADR 0064
@@ -121,3 +144,26 @@ dieser Spec:
   eine UI-Meldung, die geloggt werden kann; ein Steuerzeichen im Wert
   kommt so mit. Kein Secret, deshalb kein Redaction-Fall, aber ein
   eigener Backlog-Punkt wert.
+- **Credential-Verlust bei fehlgeschlagenem Methodenwechsel**
+  (`server_credentials.rs:298` mit `commands.rs:2581`).
+  `resolve_auth_method` ruft `cleanup_abandoned_slots` **vor** der
+  Pflichtfeld-Prüfung, und `update_server` bricht danach mit `?` ab, ohne
+  das Gelöschte wiederherzustellen: Wer bei einem bestehenden Server mit
+  Passwort auf „Zertifikat" umstellt, die Felder leer lässt und speichert,
+  sieht „Feld fehlt" — das alte Passwort ist aber aus dem Schlüsselbund
+  weg, während die Datenbank weiter `AuthMethod::Password` trägt. Ein
+  Löschen ohne Bestätigung und ohne Sichtbarkeit. Von diesem Diff nicht
+  verursacht und nicht berührt; der Weg liegt aber genau dort, wo §1 über
+  „Schlüsselbund-Eintrag verschwunden" argumentiert — erreichbar also auch
+  von innen. Eigener Backlog-Punkt mit eigener Spec-Klärung (Reihenfolge
+  umdrehen oder Rollback wie in `servers.rs:44-50`); der Befund ist aus
+  Codelesen hergeleitet, nicht im laufenden Programm gemessen.
+- **Leerer `identityFile.path` im Verbindungstest** endet in einem
+  Lesefehler des `KeyFileReader` (`NetworkError`) statt in
+  `SERVER_IDENTITY_FILE_REQUIRED` wie beim Speichern. Dieselbe Art
+  Divergenz wie Q-BL-0149-02, aber der Pfad ist kein Secret und führt zu
+  keinem falschen Erfolg — zusammen mit Q-BL-0149-03 zu betrachten.
+- **`expose`s Panic-Text im Testmodul** sagt „Passphrase-Slot muss
+  auflösbar sein", wird inzwischen aber auch für Passwort-, Zertifikats-
+  und Key-Slots benutzt. Einzeiler, vorbestehend, irreführend nur im
+  Fehlerfall eines Tests.
