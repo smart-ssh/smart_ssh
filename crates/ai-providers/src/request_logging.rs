@@ -78,6 +78,27 @@ pub(crate) fn log_text_delta_summary(request_id: Uuid, total_len: usize) {
     );
 }
 
+/// Spec 0080, A4: Am Ende jeder Runde des OpenAI-kompatiblen Providers
+/// werden `text_len` (**auch bei 0**, anders als [`log_text_delta_summary`]
+/// oben, das bei 0 ganz ausbleibt) und `reasoning_len` (Länge der
+/// akkumulierten Denk-Deltas, `delta.reasoning_content`/`delta.reasoning`)
+/// geloggt. Bewusst eine eigene Funktion statt [`log_text_delta_summary`]
+/// zu erweitern: Spec 0080 §2 schließt Änderungen am Anthropic-Provider
+/// aus, der Weiterhin `log_text_delta_summary` mit seinem bestehenden
+/// "Skip bei 0"-Verhalten nutzt — genau der `text_len == 0`-Fall ist aber
+/// der, den Spec 0080 sichtbar machen will (die leere, abgeschnittene
+/// Runde aus §1, oft bei einem Reasoning-Modell, dessen Denk-Tokens das
+/// Budget vor jedem Text aufbrauchen). Kein sensibler Inhalt: reine
+/// Längenwerte, kein Text.
+pub(crate) fn log_openai_round_summary(request_id: Uuid, text_len: usize, reasoning_len: usize) {
+    tracing::info!(
+        request_id = %request_id,
+        text_len,
+        reasoning_len,
+        "AI response round ended (text/reasoning length)",
+    );
+}
+
 /// Spec 0063, Teil 1: warum ein Turn endete — Anthropics `stop_reason`
 /// (`message_delta`) bzw. eines OpenAI-kompatiblen Providers `finish_reason`
 /// (`choices[].finish_reason`) wurden vorher nirgends geparst oder geloggt.
@@ -451,5 +472,26 @@ mod error_logging_tests {
         log_stop_reason(Uuid::new_v4(), "anthropic", "max_tokens");
         let log_text = log_buffer_text();
         assert!(log_text.contains("max_tokens"));
+    }
+
+    /// Spec 0080, A4: anders als [`log_text_delta_summary`] muss diese
+    /// Funktion `text_len` AUCH BEI 0 loggen — genau der Fall, den Spec
+    /// 0080 sichtbar machen will.
+    #[test]
+    fn test_log_openai_round_summary_logs_zero_text_len_and_reasoning_len() {
+        install_test_subscriber_once();
+        clear_log_buffer();
+
+        log_openai_round_summary(Uuid::new_v4(), 0, 42);
+
+        let log_text = log_buffer_text();
+        assert!(
+            log_text.contains("\"text_len\":0"),
+            "text_len muss auch bei 0 geloggt werden: {log_text}"
+        );
+        assert!(
+            log_text.contains("\"reasoning_len\":42"),
+            "reasoning_len muss die Länge der Denk-Deltas tragen: {log_text}"
+        );
     }
 }

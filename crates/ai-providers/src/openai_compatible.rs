@@ -29,17 +29,24 @@ use ssh_manager_core::ai::{
 };
 use ssh_manager_core::ssh::CommandOutput;
 
-/// Konservativer Fallback für jeden Endpunkt, der nicht nachweislich die
-/// offizielle OpenAI-API ist (Spec 0065, Teil 1: "Nicht-Anthropic-Provider:
-/// Default ebenfalls modellabhängig, aber VORSICHTIGER" — manche Gateways
+/// Fallback für jeden Endpunkt, der nicht nachweislich die offizielle
+/// OpenAI-API ist (Spec 0065, Teil 1: "Nicht-Anthropic-Provider: Default
+/// ebenfalls modellabhängig, aber VORSICHTIGER" — manche Gateways
 /// reservieren anhand von `max_tokens` oder lehnen zu hohe Werte mit 400 ab,
 /// ein selbstgehostetes/lokales Modell hat oft nur ein kleines
-/// Output-Limit). Identisch zum bisherigen, bereits produktiv genutzten
-/// Verhalten dieses Providers (der bislang gar kein `max_tokens` setzte und
-/// damit implizit dem jeweiligen Endpunkt-eigenen Default überließ) — bleibt
-/// bewusst unverändert für alles außer der offiziellen OpenAI-API, s.
-/// [`openai_compatible_model_max_output_tokens`].
-const OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS: u32 = 4_096;
+/// Output-Limit).
+///
+/// **Spec 0080, §8, Klarstellung (Stefan, 2026-09-24, P1 Variante b):** vor
+/// diesem Wert galt hier 4096 (Default 2048) — beobachtet zu knapp für
+/// Reasoning-Modelle an einem Nicht-OpenAI-Endpunkt, deren Denk-Tokens das
+/// Budget aufbrauchen, bevor überhaupt Text entsteht (Spec 0080 §1). Jetzt
+/// 16384 (Default 8192, s. [`openai_compatible_default_max_tokens`]), auf
+/// Basis einer Recherche der Anbieter-Doku: harte Output-Obergrenzen liegen
+/// bei den gängigen Anbietern bei 8192 oder höher. Ein HTTP 400 wegen "über
+/// dem Limit" bleibt möglich (vor allem bei selbst gehosteten Servern mit
+/// kleinem Kontext) — dafür existiert `max_tokens_override`
+/// (Spec 0065, Teil 4).
+const OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS: u32 = 16_384;
 
 /// Modellabhängiges Output-Maximum (Spec 0065, Teil 1) — nur für die
 /// offizielle OpenAI-API angewendet (erkannt an `base_url`), da `model` bei
@@ -142,9 +149,9 @@ use crate::action::{action_from_tool_arguments, parameters_json_schema};
 use crate::error::{error_stream, map_http_status, map_transport_error, timeout_error};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
-    log_outgoing_context, log_provider_error_response, log_provider_transport_error,
-    log_stop_reason, log_text_delta_summary, log_tool_call_fragment, log_tool_call_parse_error,
-    log_tool_call_parsed,
+    log_openai_round_summary, log_outgoing_context, log_provider_error_response,
+    log_provider_transport_error, log_stop_reason, log_tool_call_fragment,
+    log_tool_call_parse_error, log_tool_call_parsed,
 };
 use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
@@ -607,6 +614,11 @@ struct OpenAiStreamState {
     /// s. `AnthropicStreamState::text_delta_total_len` (Spec 0016,
     /// Abschnitt 4, Punkt 2).
     text_delta_total_len: usize,
+    /// Spec 0080, A4: Gesamtlänge der Denk-Deltas (`delta.reasoning_content`
+    /// bzw. `delta.reasoning`, je nach Gateway) — nur gezählt, s.
+    /// `handle_chunk`. Nie in `fallback_text` oder als `TextDelta`
+    /// weitergegeben (Spec 0080 §4, Invariante 1).
+    reasoning_delta_total_len: usize,
     native_tool_calling: bool,
     pending: VecDeque<RawEvent>,
     finished: bool,
@@ -652,6 +664,23 @@ impl OpenAiStreamState {
             }
         }
 
+        // Spec 0080, A4: Denk-Deltas nur zählen — NIE an `fallback_text`
+        // anhängen (sonst könnte ein zufällig aktionsblock-förmiger
+        // Denkinhalt vom Fallback-Aktions-Parser gelesen werden, s. T9) und
+        // NIE als `TextDelta` weiterreichen (Invariante 1, Spec 0080 §4).
+        // Feldname je Gateway unterschiedlich (`reasoning_content` z. B.
+        // DeepSeek-artige Konvention, `reasoning` andere Anbieter) — beide
+        // geprüft, `reasoning_content` zuerst (kein bekannter Gateway
+        // liefert je beide gleichzeitig, die Reihenfolge ist also nur zur
+        // Eindeutigkeit dieser Implementierung, keine echte Priorisierung).
+        let reasoning_delta = delta
+            .get("reasoning_content")
+            .and_then(Value::as_str)
+            .or_else(|| delta.get("reasoning").and_then(Value::as_str));
+        if let Some(reasoning) = reasoning_delta {
+            self.reasoning_delta_total_len += reasoning.len();
+        }
+
         if !self.native_tool_calling {
             return;
         }
@@ -686,7 +715,18 @@ impl OpenAiStreamState {
     /// in JEDEM Fall (auch `abrupt`), akkumulierte `tool_calls` zu parsen —
     /// ganz ohne Rücksicht auf `finish_reason`/den Verbindungszustand.
     fn finalize(&mut self, abrupt: bool) -> Vec<RawEvent> {
-        log_text_delta_summary(self.request_id, self.text_delta_total_len);
+        // Spec 0080, A4: eigene, IMMER (auch bei `text_len == 0`) loggende
+        // Funktion statt der geteilten `log_text_delta_summary` — die
+        // überspringt bei 0 ganz (für Anthropic unverändert gewollt, s.
+        // `crate::anthropic::AnthropicStreamState::finalize`, Spec 0080 §2:
+        // "keine Änderungen am Anthropic-Provider"), aber genau der
+        // `text_len == 0`-Fall ist hier der interessante, den Spec 0080
+        // messbar machen will (die leere, abgeschnittene Runde aus §1).
+        log_openai_round_summary(
+            self.request_id,
+            self.text_delta_total_len,
+            self.reasoning_delta_total_len,
+        );
         // Spec 0065, Teil 2: `TextTruncated` (UI-Hinweis + „Weiter") gilt nur
         // für ein echtes `finish_reason: length` — ein abrupter
         // Verbindungsabbruch (`abrupt`) ist ein anderer Fehlerfall (bereits
@@ -722,6 +762,25 @@ impl OpenAiStreamState {
                 self.tool_calls.clear();
                 return vec![RawEvent::RetryWithHigherMaxTokens];
             }
+            // Spec 0080, A1: die leere, abgeschnittene Runde — nur bei
+            // echtem `finish_reason: "length"`, OHNE jeden Textinhalt und
+            // OHNE jeden Tool-Call — löst denselben (bestehenden) Retry aus
+            // statt in `TextTruncated` zu enden (§1: bei einem
+            // Reasoning-Modell ohne `max_tokens_override` verbraucht die
+            // Denkphase sonst das ganze Budget, die Antwort bleibt für den
+            // Nutzer unsichtbar). `self.tool_calls.is_empty()` ist an dieser
+            // Stelle bereits durch das `if` oben impliziert (wäre es nicht
+            // leer UND `tool_call_truncated`, wäre schon dort
+            // zurückgekehrt) — trotzdem explizit geprüft: die bestehende
+            // Tool-Call-Prüfung bleibt unverändert stehen, diese neue
+            // Bedingung kommt nur ODER-verknüpft hinzu (nie eine bestehende
+            // Prüfung ersetzen, s. CLAUDE.md "Sicherheitsänderungen").
+            if finish_reason_is_length
+                && self.text_delta_total_len == 0
+                && self.tool_calls.is_empty()
+            {
+                return vec![RawEvent::RetryWithHigherMaxTokens];
+            }
             let mut events = Vec::new();
             for (_, call) in std::mem::take(&mut self.tool_calls) {
                 log_tool_call_fragment(self.request_id, &call.name, &call.arguments);
@@ -740,6 +799,15 @@ impl OpenAiStreamState {
         } else {
             let result = parse_fallback_response(&self.fallback_text);
             if tool_call_truncated && result.action.is_some() {
+                return vec![RawEvent::RetryWithHigherMaxTokens];
+            }
+            // Spec 0080, A1 — Fallback-Pendant zum nativen Zweig oben:
+            // dieselbe leere Runde, hier ohne erkannte Aktion statt ohne
+            // Tool-Call. `result.action.is_none()` ist an dieser Stelle
+            // bereits durch das `if` oben impliziert, s. dortiger
+            // Kommentar zur selben expliziten Redundanz.
+            if finish_reason_is_length && self.text_delta_total_len == 0 && result.action.is_none()
+            {
                 return vec![RawEvent::RetryWithHigherMaxTokens];
             }
             let mut events = Vec::new();
@@ -821,6 +889,7 @@ fn process_frame_stream(
         fallback_text: String::new(),
         secrets,
         text_delta_total_len: 0,
+        reasoning_delta_total_len: 0,
         native_tool_calling,
         pending: VecDeque::new(),
         finished: false,
@@ -951,10 +1020,18 @@ mod tests {
         assert!(log_text.contains(&request_id.to_string()));
     }
 
-    /// Gegenprobe: `length` (OpenAIs Äquivalent zu Anthropics `max_tokens`)
-    /// muss ebenso sichtbar werden.
+    /// T1 (Spec 0080, A1): `finish_reason: "length"` OHNE jeden Inhalt (kein
+    /// Text, kein Tool-Call) — die leere, abgeschnittene Runde aus Spec
+    /// 0080 §1 (typischerweise ein Reasoning-Modell, dessen Denk-Tokens das
+    /// Budget vor jedem Text aufbrauchen). Löst jetzt den bestehenden Retry
+    /// aus statt (der alte, bis Spec 0080 gültige Befund) `TextTruncated` zu
+    /// werden, das ohne vorherigen Assistant-Eintrag im Frontend
+    /// stillschweigend verworfen wurde (Spec 0080 §1, letzter Punkt). Ersetzt
+    /// den alten `test_finish_reason_length_is_logged` (Spec 0080 §5: "Der
+    /// bestehende Test ... wird angepasst") — `finish_reason` bleibt
+    /// weiterhin geloggt, nur die Ereignis-Erwartung ändert sich.
     #[tokio::test]
-    async fn test_finish_reason_length_is_logged() {
+    async fn test_finish_reason_length_with_no_content_triggers_retry_and_is_logged() {
         crate::test_support::install_test_subscriber_once();
         crate::test_support::clear_log_buffer();
 
@@ -968,13 +1045,178 @@ mod tests {
                 .collect()
                 .await;
 
-        // Spec 0065, Teil 2: kein Tool-Call beteiligt (reiner Text) — seit
-        // diesem Fix `TextTruncated` statt `Done`, s. `finalize`-Kommentar.
-        assert_eq!(events, vec![RawEvent::Public(AiEvent::TextTruncated)]);
+        assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
         let log_text = crate::test_support::log_buffer_text();
         assert!(
             log_text.contains("length"),
             "finish_reason muss geloggt werden: {log_text}"
+        );
+    }
+
+    /// T2 (Spec 0080, Wächter): `length` MIT tatsächlichem Textinhalt bleibt
+    /// `TextTruncated`, kein Retry — der neue Retry aus A1 gilt nur für die
+    /// LEERE Runde.
+    #[tokio::test]
+    async fn test_finish_reason_length_with_text_content_stays_text_truncated() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(vec![
+                frame(r#"{"choices":[{"delta":{"content":"abc"}}]}"#),
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
+                frame("[DONE]"),
+            ]));
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(
+            events,
+            vec![
+                RawEvent::Public(AiEvent::TextDelta("abc".to_string())),
+                RawEvent::Public(AiEvent::TextTruncated),
+            ]
+        );
+    }
+
+    /// T4 (Spec 0080, A1): wie T1, im Fallback-Modus (kein natives
+    /// Tool-Calling) — leere `length`-Runde löst denselben Retry aus.
+    #[tokio::test]
+    async fn test_fallback_mode_finish_reason_length_with_no_content_triggers_retry() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(vec![
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
+                frame("[DONE]"),
+            ]));
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, false, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
+    }
+
+    /// T5 (Spec 0080, Wächter): `content_filter` (kein `length`) bleibt beim
+    /// bisherigen Verhalten (`Done`), auch ohne jeden Inhalt — der neue
+    /// Retry aus A1 greift nur für `finish_reason: "length"`. Grün auch mit
+    /// dem alten Code (Spec 0080 §5).
+    #[tokio::test]
+    async fn test_content_filter_finish_reason_with_no_content_does_not_trigger_retry() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(vec![
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"content_filter"}]}"#),
+                frame("[DONE]"),
+            ]));
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
+    }
+
+    /// T6 (Spec 0080, Wächter): Verbindungsende ohne jedes `finish_reason`,
+    /// ohne Inhalt — kein Retry aus A1 (der prüft explizit auf
+    /// `finish_reason: "length"`, ein fehlender Grund ist etwas anderes).
+    /// Grün auch mit dem alten Code.
+    #[tokio::test]
+    async fn test_abrupt_disconnect_without_finish_reason_and_no_content_does_not_trigger_empty_round_retry(
+    ) {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![frame(r#"{"choices":[{"delta":{}}]}"#)]),
+        );
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
+    }
+
+    /// T7 (Spec 0080, Wächter): `length` mit Inhalt aus reinem Leerraum —
+    /// es GAB Text (`text_delta_total_len > 0`), also kein Retry aus A1,
+    /// bleibt `TextTruncated`. Grün auch mit dem alten Code.
+    #[tokio::test]
+    async fn test_length_with_whitespace_only_content_does_not_trigger_empty_round_retry() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(vec![
+                frame(r#"{"choices":[{"delta":{"content":"   "}}]}"#),
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
+                frame("[DONE]"),
+            ]));
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(
+            events,
+            vec![
+                RawEvent::Public(AiEvent::TextDelta("   ".to_string())),
+                RawEvent::Public(AiEvent::TextTruncated),
+            ]
+        );
+    }
+
+    // T8 (Spec 0080, Wächter — "`length`, kein Text, aber ein halber
+    // Tool-Call → bestehender Tool-Call-Pfad, Call wird nicht
+    // weitergegeben") ist bereits durch
+    // `test_truncated_but_parseable_tool_call_is_never_forwarded_and_triggers_retry`
+    // unten abgedeckt: `self.tool_calls` ist dort nicht leer, A1s neue
+    // Prüfung (die explizit `self.tool_calls.is_empty()` verlangt) wird
+    // also gar nicht erreicht — kein eigener Test nötig.
+
+    /// T9 (Spec 0080, Wächter): Fallback-Modus, ein gültig aussehender
+    /// Aktionsblock steckt in einem Denk-Delta (`reasoning_content`), der
+    /// eigentliche Inhalt (`content`) bleibt leer — Denk-Deltas werden nie
+    /// an `fallback_text` angehängt (A4-Invariante), der Aktions-Parser
+    /// sieht davon also nichts: keine Aktion, kein Text. Grün auch mit dem
+    /// alten Code (der `reasoning_content` schon vor A4 ignorierte).
+    #[tokio::test]
+    async fn test_fallback_mode_action_like_content_in_reasoning_delta_is_never_parsed_as_action() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    r#"{"choices":[{"delta":{"reasoning_content":"<!--ACTION-->{\"action\": \"suggest_command\", \"parameters\": {\"command\": \"ls\"}}<!--/ACTION-->"}}]}"#,
+                ),
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#),
+                frame("[DONE]"),
+            ]),
+        );
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, false, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
+    }
+
+    /// T10 (Spec 0080, A4): nur Denk-Deltas, dann `stop` — kein Text,
+    /// `reasoning_len > 0` und `text_len = 0` im Rundenabschluss-Log.
+    #[tokio::test]
+    async fn test_only_reasoning_deltas_logs_reasoning_len_with_zero_text_len() {
+        crate::test_support::install_test_subscriber_once();
+        crate::test_support::clear_log_buffer();
+
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(vec![
+                frame(r#"{"choices":[{"delta":{"reasoning_content":"denk denk denk"}}]}"#),
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#),
+                frame("[DONE]"),
+            ]));
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
+        let log_text = crate::test_support::log_buffer_text();
+        assert!(
+            log_text.contains("\"text_len\":0"),
+            "text_len muss auch bei 0 geloggt werden: {log_text}"
+        );
+        assert!(
+            log_text.contains("\"reasoning_len\":14"),
+            "reasoning_len muss die Länge der Denk-Deltas tragen: {log_text}"
         );
     }
 
@@ -1148,6 +1390,30 @@ mod tests {
             body["max_tokens"],
             OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS / 2
         );
+    }
+
+    /// T17 (Spec 0080 §8, Klarstellung P1 Variante b): ein unbekanntes
+    /// Modell an einem Nicht-OpenAI-Endpunkt ohne Override schickt jetzt
+    /// **8192** (vorher 2048) — bewusst der Literalwert, nicht über die
+    /// Konstante hergeleitet (anders als der Test oben), damit ein
+    /// versehentlich mitgeänderter Konstantenwert dieselbe Regression nicht
+    /// tautologisch grün durchließe.
+    #[test]
+    fn test_unknown_model_on_non_openai_endpoint_sends_8192_by_default() {
+        let provider = OpenAiCompatibleProvider::new(
+            "http://localhost:11434/v1",
+            "some-unknown-model",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+            None,
+        );
+        let context = context_with_actions(Vec::new());
+
+        let body = provider.build_request_body(&context);
+
+        assert_eq!(body["max_tokens"], 8192);
     }
 
     /// Spec 0065, Teil 1: ein Nebenaufruf (`max_tokens_hint`) überschreibt

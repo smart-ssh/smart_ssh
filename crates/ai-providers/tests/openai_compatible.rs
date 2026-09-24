@@ -8,7 +8,19 @@ use futures::StreamExt;
 use ssh_manager_core::ai::{default_action_schemas, AiError, AiEvent, AiProvider, SessionContext};
 use ssh_manager_core::profiles::AiAction;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, MockServer, Request, ResponseTemplate};
+
+/// Spec 0080, T3: prüft den tatsächlich gesendeten `max_tokens`-Wert im
+/// Request-Body, statt (wie die übrigen Retry-Tests dieser Datei) nur die
+/// Zahl der Requests über `.expect(n)` zu zählen — das allein würde eine
+/// falsch verdoppelte Zahl nicht auffangen.
+struct BodyContains(String);
+
+impl wiremock::Match for BodyContains {
+    fn matches(&self, request: &Request) -> bool {
+        String::from_utf8_lossy(&request.body).contains(self.0.as_str())
+    }
+}
 
 fn test_budget() -> Arc<ProviderBudgetGuard> {
     Arc::new(ProviderBudgetGuard::new())
@@ -338,5 +350,64 @@ data: [DONE]\n\n";
     assert_eq!(
         events.last(),
         Some(&AiEvent::Error(AiError::ResponseTruncated))
+    );
+}
+
+/// T3 (Spec 0080, A1): zwei aufeinanderfolgende leere `length`-Antworten
+/// (kein Text, kein Tool-Call) am OpenAI-kompatiblen Provider — ein
+/// Nicht-OpenAI-Endpunkt mit unbekanntem Modell, Default 8192 (Spec 0080
+/// §8, P1 Variante b). Zwei Requests: der erste mit dem Default (8192), der
+/// zweite mit dem verdoppelten Budget (16384, gedeckelt am Modell-Maximum,
+/// das hier zufällig ebenfalls 16384 ist). Am Ende `Error(ResponseTruncated)`,
+/// nie `TextTruncated` — die leere Runde darf nicht kommentarlos als
+/// "abgeschnittener Text" enden, s. Spec 0080 §1.
+#[tokio::test]
+async fn test_empty_length_round_retries_once_with_doubled_budget_then_errors() {
+    let server = MockServer::start().await;
+    let empty_length_body =
+        "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n";
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":8192".to_string()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(empty_length_body),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":16384".to_string()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(empty_length_body),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    // `.expect(1)` auf beiden Mocks (Drop-Assertion von wiremock) prüft
+    // bereits, dass GENAU der erwartete `max_tokens`-Wert in jedem der
+    // beiden Requests stand — würde die Verdopplung ausbleiben oder
+    // falsch rechnen, träfe keiner der beiden Mocks zweimal, wiremock
+    // panickt dann beim Server-Drop.
+    assert_eq!(events, vec![AiEvent::Error(AiError::ResponseTruncated)]);
+    assert!(
+        !events.iter().any(|e| matches!(e, AiEvent::TextTruncated)),
+        "eine leere, abgeschnittene Runde darf nicht als TextTruncated enden: {events:?}"
     );
 }
