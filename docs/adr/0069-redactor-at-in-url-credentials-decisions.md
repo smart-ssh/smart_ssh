@@ -133,45 +133,54 @@ Testkommentar zu T-A14 sagt außerdem, dass T-A14 ein Wächter ist und
 nicht der Gegenbeweis für die Alternativen (der steht bei den
 Query-Parameter-Fällen). Fund des `spec-reviewer`, erste Runde.
 
-## 6. Bewusst nicht behoben: Passwort mit einem Query-Präfix
+## 6. Bewusst hingenommen: Passwort mit einem Query-Präfix
+
+**Entschieden (Stefan, 2026-09-24, Q-BL-0248-01, Option 1):** Der Fall
+bleibt als bekannter Restfall stehen. Spec §2 ist entsprechend präzisiert
+(„außer den in §5 genannten Restfällen"), §5 um den Fall erweitert, §6.3
+um Test T-R3.
 
 `postgres://u:a?password=b@h/x` wurde vor Spec 0078 zu
 `postgres://u:[REDACTED]@h/x` und wird jetzt zu `postgres://u:a?[REDACTED]`
-— der Passwort-Präfix vor dem `?` steht neu im Klartext.
+— der Passwort-Präfix vor dem `?` steht neu im Klartext. Der Präfix kann
+beliebig lang sein, also ein vollständiges Passwort.
 
-Das ist eine echte Verringerung und widerspricht dem absoluten Wortlaut
-von Spec §2. Es ist **nicht** behoben, weil es sich nicht beheben lässt,
-ohne die Position der Query-String-Regel aufzugeben (und damit den
-auslösenden Fall des Items wieder zu öffnen): Die Zeichenkette hat zwei
-Lesarten — Passwort `a?password=b` mit Host `h`, oder Passwort `a` mit
-Query-String —, und ohne echtes URL-Parsing kann kein Muster sie
-unterscheiden. Vor Spec 0078 war die erste Lesart zu und die zweite offen,
-jetzt umgekehrt.
+**Das ist die einzige Stelle, an der Spec 0078 weniger redigiert als der
+Stand davor.** Nicht behebbar, ohne die Position der Query-String-Regel
+aufzugeben (und damit den auslösenden Fall des Items wieder zu öffnen):
+Die Zeichenkette hat zwei Lesarten — Passwort `a?password=b` mit Host
+`h`, oder Passwort `a` mit Query-String —, und ohne echtes URL-Parsing
+kann kein Muster sie unterscheiden. Vor Spec 0078 war die erste Lesart zu
+und die zweite offen, jetzt umgekehrt. Betroffen sind nur DB-Schemata und
+nur Passwörter, die wörtlich `?password=`/`&token=`/… **mit einem `@` im
+Wert** enthalten.
 
-Betroffen sind nur DB-Schemata und nur Passwörter, die wörtlich
-`?password=`/`&token=`/… enthalten.
+Geprüft und verworfen, um den Fall zu schließen: die Regel hinter das
+DB-Muster (öffnet Fall C, belegt); ihre Wertklasse weiter verengen (hilft
+nicht, der Wert erfüllt jede Verengung, die Fall C noch löst); den
+Separator kontextabhängig prüfen (die `regex`-Crate kennt kein
+Lookbehind). Auch `?`/`#` im DB-Muster als Stoppzeichen zu ergänzen löst
+ihn nicht — dann greift dort gar kein URL-Muster mehr, und der Präfix
+bleibt genauso sichtbar (Herleitung des Architekten in der Frage-Datei).
 
-**Zweite Ausprägung derselben Familie** (zweite Review-Runde, gemessen):
-Der Präfix bleibt auch dann sichtbar, wenn der Parameterwert **kein** `@`
-enthält, sobald er ein `/` enthält und irgendwo dahinter ein `@` steht —
+**Davon zu unterscheiden, weil es NICHT neu ist:** Ohne `@` im
+Parameterwert bleibt der Präfix ebenfalls sichtbar, sobald der Wert ein
+`/` enthält und dahinter irgendwo ein `@` steht —
 `postgres://u:SuperSecret123?password=pl/ain&x=y@h/db` →
-`postgres://u:SuperSecret123?[REDACTED]`. Das DB-Muster stoppt am `/` im
-Wert und findet das `@` dahinter nicht mehr. Der Präfix kann also ein
-**vollständiges Passwort beliebiger Länge** sein, nicht nur ein Zeichen.
+`postgres://u:SuperSecret123?[REDACTED]`, weil das DB-Muster am `/` im
+Wert hängenbleibt. Gemessen an allen Ständen: **vor Spec 0078 identisch**.
+Hier ändert sich nichts.
 
-Wichtig für die Einordnung, gemessen an allen drei Ständen: Gegenüber dem
-Stand **vor Spec 0078** ist dieses Verhalten **unverändert** (auch dort
-bleibt `SuperSecret123` sichtbar). Spec §2 („keine *heute* redigierte
-Eingabe wird weniger redigiert") ist damit gewahrt. Nur gegenüber der
-ersten, zu breiten Fassung der Query-String-Regel — die den Fall
-versehentlich mit schloss, um den Preis des Private-Key-Lecks aus §4 — ist
-es ein Rückschritt. Diese Fassung war nie ein tragfähiger Bezugspunkt.
-
-Der Punkt liegt als Frage **Q-BL-0248-01** zur Entscheidung vor
-(Einstufung K3). Bis dahin ist er hier festgehalten, nicht stillschweigend
-hingenommen. Ein Test dazu wird erst angelegt, wenn entschieden ist, ob
-das Verhalten so bleiben soll — ein Test, der es jetzt festschreibt, würde
-die Entscheidung vorwegnehmen.
+**Korrektur einer eigenen Fehlaussage.** Die erste Fassung dieses ADR und
+die Kurzfassung des Coder-Berichts verallgemeinerten von diesem zweiten
+Beispiel auf den ganzen Fall und behaupteten, gegenüber dem Stand vor Spec
+0078 verschlechtere sich nichts. Das ist falsch — für das erste Beispiel
+(`@` im Parameterwert) verschlechtert es sich sehr wohl. Der Architekt hat
+das nachgemessen und die Aussage widerlegt; sie war aus einer Messung des
+zweiten Beispiels hochgerechnet, statt das erste erneut zu messen. Genau
+der Fehlertyp, gegen den die Messpflicht im Skill steht. T-R3 hält
+deshalb **beide** Beispiele fest, damit sie nicht wieder verwechselt
+werden.
 
 ## 7. Bekannte Restfälle und Überredaktion, die bleiben
 
@@ -212,17 +221,19 @@ dieser Fassung wird er ohne die neuen Regeln rot (belegt).
   greift. Nicht durch diesen Schritt verursacht, nicht Gegenstand der
   Spec.
 
-## 10. Was der committete Spec-Text noch nicht sagt
+## 10. Spec-Text nachgezogen
 
-Der Reviewer weist zu Recht darauf hin, dass die committete Spec (§3.1,
-§6.2 T-A14) dem Code an drei Stellen widerspricht und §9
-(„Klarstellungen") leer ist: die Wertklasse der Query-String-Regel (§4
-hier), die Begründung der Anführungszeichen-Alternativen (§5 hier) und
-der Status von T-A14 als Wächter.
+Der Reviewer hatte beanstandet, dass die committete Spec dem Code an drei
+Stellen widersprach und §9 („Klarstellungen") leer war. Mit der
+Entscheidung zu Q-BL-0248-01 ist das nachgezogen:
 
-Die Spec wird hier **bewusst nicht** nachgezogen: Die Abweichung der
-Wertklasse und der Restfall aus §6 liegen als K3-Frage bei Stefan
-(Q-BL-0248-01), und der Architekt hat die Spec-Änderung ausdrücklich bis
-zu dieser Entscheidung zurückgestellt. Bis dahin ist dieses ADR die
-Stelle, an der die drei Punkte stehen. Wird die Frage entschieden, gehören
-sie in Spec §9.
+- §2 präzisiert („außer den in §5 genannten Restfällen"),
+- §3.1 auf die bestätigte Wertklasse mit `@`-Pflicht in allen drei
+  Zweigen, samt der korrigierten Begründung für die
+  Anführungszeichen-Alternativen,
+- §5 um den Restfall „Passwort mit Query-Präfix" (§6 hier),
+- §6.3 um Test T-R3,
+- §9 um vier Klarstellungen mit Datum und Frage-ID, darunter der Status
+  von T-A14 als Wächter.
+
+Spec und Code decken sich damit wieder.
