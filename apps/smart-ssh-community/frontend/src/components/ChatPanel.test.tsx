@@ -343,6 +343,71 @@ describe("truncated response notice (Spec 0065, Teil 2)", () => {
 
     expect(onContinueTruncated).toHaveBeenCalledWith("assistant-1");
   });
+
+  // Spec 0080, A3, zweiter Punkt: eine abgeschnittene Antwort ohne jeden
+  // Text (z. B. weil `chat-response-truncated` ohne vorherige Assistant-
+  // Nachricht ankam, s. `ChatPanel`s Event-Handler) zeigt den Hinweis +
+  // „Weiter" trotzdem — aber keine Export-/Notiz-Leiste, es gibt nichts zu
+  // exportieren.
+  it("shows the truncation notice and Weiter even for an empty reply, but hides the export/notiz bar", () => {
+    const emptyTruncatedItem: ChatItem = {
+      type: "assistant",
+      id: "assistant-1",
+      text: "",
+      truncated: true,
+    };
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={emptyTruncatedItem}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+
+    expect(screen.getByText(/abgeschnitten/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Weiter" })).toBeInTheDocument();
+    expect(screen.queryByText("Export:")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("In Notiz übernehmen")).not.toBeInTheDocument();
+  });
+});
+
+// Spec 0080, A3: reiner Hinweis für eine Runde ohne Text und ohne
+// vorgeschlagene Aktion (`chat-response-empty`) — kein „Weiter" (die Runde
+// ist nicht abgeschnitten, sondern leer), keine Export-/Notiz-Leiste.
+describe("empty response notice (Spec 0080, A3)", () => {
+  function renderEmptyResponseItem() {
+    return render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={{ type: "emptyResponse", id: "empty-1" }}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+  }
+
+  it("shows the empty-response hint with no Weiter button and no export/notiz bar", () => {
+    renderEmptyResponseItem();
+
+    expect(
+      screen.getByText(
+        "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Weiter" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Export:")).not.toBeInTheDocument();
+  });
 });
 
 describe("Sudo fallback announcement for file writes (Spec 0068, Teil 3)", () => {

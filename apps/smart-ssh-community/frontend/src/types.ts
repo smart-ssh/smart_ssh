@@ -383,6 +383,15 @@ export interface ChatResponseTruncatedEvent {
   sessionId: string;
 }
 
+/** Spec 0080, A2 — eine Runde endete ohne jeden Text und ohne vorgeschlagene
+ * Aktion (z. B. ein Reasoning-Modell, dessen Denk-Tokens das ganze Budget
+ * vor jedem Text aufbrauchen). Zeigt einen reinen Hinweis ohne „Weiter" und
+ * ohne Export-/Notiz-Leiste — es gibt nichts, das fortgesetzt oder
+ * exportiert werden könnte. */
+export interface ChatResponseEmptyEvent {
+  sessionId: string;
+}
+
 /** Spec 0066, §1 — der Nutzer hat die laufende KI-Anfrage per Stopp
  * abgebrochen. */
 export interface ChatResponseCancelledEvent {

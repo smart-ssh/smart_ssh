@@ -662,6 +662,12 @@ pub fn emit_chat_response_truncated(emitter: &dyn EventEmitter, session_id: Sess
     );
 }
 
+// Spec 0080, A2 (`chat-response-empty`): noch nicht verdrahtet — offene
+// Frage Q-BL-0259-01 (welche Runden zählen), Stand `waiting-stefan`. Die
+// Funktion kommt zusammen mit ihrem Aufrufer in `orchestration.rs`, sobald
+// die Frage beantwortet ist (s. dortiger Kommentar im `AiEvent::Done`-Zweig
+// von `run_one_round`).
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ChatResponseCancelledPayload {

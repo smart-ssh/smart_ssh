@@ -11,6 +11,7 @@ import { continueTruncatedResponse, sendChatMessage, stopAutoContinuation } from
 import {
   onChatQueuedMessagesSent,
   onChatResponseCancelled,
+  onChatResponseEmpty,
   onChatResponseTruncated,
   onChatTextDelta,
 } from "../events";
@@ -64,6 +65,7 @@ vi.mock("../events", () => ({
   onChatError: vi.fn(() => Promise.resolve(() => {})),
   onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
+  onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
   onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
@@ -273,5 +275,70 @@ describe("ChatPanel send state edge cases (Spec 0066, review)", () => {
 
     expect(await screen.findByRole("button", { name: "Stopp" })).toBeInTheDocument();
     resolveContinue();
+  });
+});
+
+// Spec 0080, A3: der volle Ereignis-Pfad über `ChatPanel` (nicht nur
+// `ChatItemView` isoliert, s. `ChatPanel.test.tsx`) — mit echter
+// Event-Verdrahtung, weil T15/T16 auch prüfen, WAS im Chat-Verlauf landet
+// (ein neues Element statt eines veränderten/verworfenen).
+describe("ChatPanel empty/truncated response notices (Spec 0080, A3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // T15: `chat-response-empty` → Hinweis sichtbar, kein „Weiter", keine
+  // Export-/Notiz-Leiste; ein danach eintreffendes Text-Delta landet in
+  // einem NEUEN Element, nicht im Hinweis.
+  it("shows the empty-response hint and starts a fresh element for a later text delta", async () => {
+    let emptyHandler: ((event: { sessionId: string }) => void) | null = null;
+    let deltaHandler: ((event: { sessionId: string; delta: string }) => void) | null = null;
+    vi.mocked(onChatResponseEmpty).mockImplementation((h) => {
+      emptyHandler = h;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(onChatTextDelta).mockImplementation((h) => {
+      deltaHandler = h as typeof deltaHandler;
+      return Promise.resolve(() => {});
+    });
+    renderChatPanel();
+    await waitFor(() => expect(emptyHandler).not.toBeNull());
+
+    emptyHandler!({ sessionId: "session-1" });
+
+    const hintText =
+      "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.";
+    expect(await screen.findByText(hintText)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Weiter" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Export:")).not.toBeInTheDocument();
+
+    deltaHandler!({ sessionId: "session-1", delta: "Neue Antwort" });
+
+    expect(await screen.findByText("Neue Antwort")).toBeInTheDocument();
+    // Der Hinweis bleibt unverändert als eigenes Element stehen — der neue
+    // Text ist NICHT hineingerutscht.
+    expect(screen.getByText(hintText)).toBeInTheDocument();
+  });
+
+  // T16: `chat-response-truncated` OHNE vorherige Assistant-Nachricht (z. B.
+  // eine Runde, die schon am Limit endet, bevor ein Text-Delta ankam) —
+  // früher wurde das Event verworfen (kein `last?.type === "assistant"`),
+  // der Nutzer sah trotz Kürzung nichts. Jetzt: Kürzungs-Hinweis + „Weiter"
+  // sichtbar.
+  it("shows the truncation notice with Weiter even when no assistant text preceded it", async () => {
+    let truncatedHandler: ((event: { sessionId: string }) => void) | null = null;
+    vi.mocked(onChatResponseTruncated).mockImplementation((h) => {
+      truncatedHandler = h;
+      return Promise.resolve(() => {});
+    });
+    renderChatPanel();
+    await waitFor(() => expect(truncatedHandler).not.toBeNull());
+
+    truncatedHandler!({ sessionId: "session-1" });
+
+    expect(
+      await screen.findByText("✂ Antwort wurde abgeschnitten (Längenlimit erreicht)."),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Weiter" })).toBeInTheDocument();
   });
 });

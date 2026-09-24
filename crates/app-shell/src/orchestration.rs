@@ -713,6 +713,15 @@ async fn run_one_round(
             }
             AiEvent::Done => {
                 flush_text_buffer(session, &mut text_buffer).await;
+                // Spec 0080, A2 (chat-response-empty) ist hier bewusst NOCH
+                // NICHT verdrahtet — offene Frage Q-BL-0259-01 (welche
+                // Runden zählen: nur Runde 1 eines Turns, oder auch jede
+                // Runde, die eine eingereihte Nutzer-Nachricht beantwortet;
+                // Stand: `waiting-stefan`). Ohne diese Antwort würde eine
+                // wörtliche "jede Runde"-Umsetzung nach praktisch jeder
+                // ausgeführten/geblockten Aktion einen Hinweis einblenden,
+                // dessen Häufigkeit im Betrieb nicht gemessen ist — s.
+                // Frage-Datei für die volle Abwägung.
                 break;
             }
             AiEvent::TextTruncated => {

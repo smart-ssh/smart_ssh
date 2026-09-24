@@ -9,6 +9,7 @@ import type {
   ChatErrorEvent,
   ChatQueuedMessagesSentEvent,
   ChatResponseCancelledEvent,
+  ChatResponseEmptyEvent,
   ChatResponseTruncatedEvent,
   ChatTextDeltaEvent,
   ConnectionStatusChangedEvent,
@@ -74,6 +75,12 @@ export const onChatResponseTruncated = (
   handler: (event: ChatResponseTruncatedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatResponseTruncatedEvent>("chat-response-truncated", (e) => handler(e.payload));
+
+/** Spec 0080, A2 — s. `ChatResponseEmptyEvent`-Doc-Kommentar. */
+export const onChatResponseEmpty = (
+  handler: (event: ChatResponseEmptyEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatResponseEmptyEvent>("chat-response-empty", (e) => handler(e.payload));
 
 /** Spec 0066, §1 — s. `ChatResponseCancelledEvent`-Doc-Kommentar. */
 export const onChatResponseCancelled = (

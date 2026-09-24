@@ -28,6 +28,7 @@ import {
   onChatError,
   onChatQueuedMessagesSent,
   onChatResponseCancelled,
+  onChatResponseEmpty,
   onChatResponseTruncated,
   onChatTextDelta,
   onRiskAssessmentUpdated,
@@ -132,6 +133,10 @@ export type ChatItem =
     }
   | { type: "error"; id: string; message: string; code: string | null }
   | { type: "autoContinuationLimitReached"; id: string; limit: number }
+  // Spec 0080, A3: eine Runde ohne Text und ohne vorgeschlagene Aktion
+  // (`chat-response-empty`) — reines UI-Element aus dem Event, kein
+  // Chat-Inhalt (dieselbe Begründung wie bei `responseCancelled`).
+  | { type: "emptyResponse"; id: string }
   // Spec 0066, §1: der Nutzer hat die laufende KI-Anfrage per Stopp
   // abgebrochen — reines UI-Element aus einem Event, nicht Teil des Texts.
   | { type: "responseCancelled"; id: string }
@@ -464,9 +469,27 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
         // dem letzten Text-Delta derselben Antwort.
         setItems((prev) => {
           const last = prev[prev.length - 1];
-          if (last?.type !== "assistant") return prev;
-          return [...prev.slice(0, -1), { ...last, truncated: true }];
+          if (last?.type === "assistant") {
+            return [...prev.slice(0, -1), { ...last, truncated: true }];
+          }
+          // Spec 0080, A3, zweiter Punkt: früher wurde das Event hier
+          // verworfen, wenn keine Assistant-Nachricht direkt vorherging
+          // (z. B. eine Runde, die schon am Limit endet, bevor auch nur ein
+          // Text-Delta kam) — der Nutzer sah dann trotz Kürzung gar
+          // nichts. Jetzt kommt stattdessen ein leeres Assistant-Element
+          // mit Kürzungs-Hinweis + „Weiter" dazu.
+          return [...prev, { type: "assistant", id: freshId(), text: "", truncated: true }];
         });
+      }),
+      onChatResponseEmpty((event) => {
+        if (event.sessionId !== sessionId) return;
+        // Spec 0080, A3: eigenes Element statt eines markierten Assistant-
+        // Eintrags — kein „Weiter" (die Runde ist nicht abgeschnitten,
+        // sondern leer), keine Export-/Notiz-Leiste (nichts zu exportieren).
+        // Text der NÄCHSTEN Runde landet nie hier: `onChatTextDelta` prüft
+        // `last?.type === "assistant"`, "emptyResponse" erfüllt das nie,
+        // ein Folge-Delta hängt sich also immer an ein neues Element.
+        setItems((prev) => [...prev, { type: "emptyResponse", id: freshId() }]);
       }),
       onChatQueuedMessagesSent((event) => {
         if (event.sessionId !== sessionId) return;
@@ -1049,6 +1072,19 @@ export function ChatItemView({
   }
   if (item.type === "responseCancelled") {
     return <div className="px-1 text-xs text-slate-400">⏹ Antwort abgebrochen.</div>;
+  }
+  if (item.type === "emptyResponse") {
+    // Spec 0080, A3: kein „Weiter"-Knopf (der Fortsetzungstext meint eine
+    // abgeschnittene Antwort, das passt hier nicht) und keine
+    // Export-/Notiz-Leiste (es gibt nichts zu exportieren) — anders als die
+    // Kürzungs-Karte unten (`AssistantMessageView`, `truncated`) bewusst
+    // kein eigenständiges Element mit Aktionen, nur ein Hinweis.
+    return (
+      <div className="border border-amber-700/40 bg-slate-800 px-3 py-2 text-sm text-amber-200">
+        Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres
+        Ausgabe-Limit in den Provider-Einstellungen.
+      </div>
+    );
   }
   if (item.type === "aiBudgetWaiting") {
     // Spec 0061, Abschnitt 4: rein informativ, kein Button — der Request
@@ -1803,23 +1839,33 @@ function AssistantMessageView({
       <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-slate-950 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div>
-      <div
-        className={`flex flex-wrap items-center gap-2 border-t border-slate-700/60 pt-2 text-xs transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 ${
-          forceVisible ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        <TakeIntoNoteButton sessionId={sessionId} content={text} onStateChange={setNoteState} />
-        <span className="text-slate-400">Export:</span>
-        <button
-          type="button"
-          disabled={exporting !== null}
-          onClick={() => handleExportClick("markdown")}
-          className="rounded bg-slate-700/80 px-2 py-1 text-xs text-slate-200 hover:bg-slate-600 hover:text-white disabled:opacity-50"
+      {/* Spec 0080, A3, zweiter Punkt: keine Export-/Notiz-Leiste bei
+       * leerem Text — anders als die (bewusst verworfene) Mindestlängen-
+       * Sperre aus Spec 0055 (s. `AssistantMessageView`-Moduldoc oben, "NICHT
+       * zusätzlich unterhalb einer Mindestlänge") geht es hier nicht um
+       * "kurz, aber ggf. notizwürdig", sondern um LEER: eine abgeschnittene
+       * Antwort ohne jeden Text (z. B. über `onChatResponseTruncated` neu
+       * angelegt, s. `ChatPanel`s Event-Handler) hat nichts, das exportiert
+       * oder in eine Notiz übernommen werden könnte. */}
+      {text.trim().length > 0 && (
+        <div
+          className={`flex flex-wrap items-center gap-2 border-t border-slate-700/60 pt-2 text-xs transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 ${
+            forceVisible ? "opacity-100" : "opacity-0"
+          }`}
         >
-          {exporting === "markdown" ? "Speichert…" : "📄 Als Markdown"}
-        </button>
-        {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
-      </div>
+          <TakeIntoNoteButton sessionId={sessionId} content={text} onStateChange={setNoteState} />
+          <span className="text-slate-400">Export:</span>
+          <button
+            type="button"
+            disabled={exporting !== null}
+            onClick={() => handleExportClick("markdown")}
+            className="rounded bg-slate-700/80 px-2 py-1 text-xs text-slate-200 hover:bg-slate-600 hover:text-white disabled:opacity-50"
+          >
+            {exporting === "markdown" ? "Speichert…" : "📄 Als Markdown"}
+          </button>
+          {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
+        </div>
+      )}
       {truncated ? (
         // Spec 0065, Teil 2: dauerhaft sichtbar (nicht Teil der
         // Hover-Leiste oben) — ein abgebrochener Antworttext ist keine
