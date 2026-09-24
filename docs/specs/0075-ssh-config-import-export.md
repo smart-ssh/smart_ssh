@@ -1093,6 +1093,41 @@ Umgesetzt: Eine eingebundene Datei, die keine `ssh_config` ist, wird
 von einer Liste von Verboten auf eine Eigenschaft des Parsers
 geschrumpft. Zusätzliche Tests: §6.4.9 (vier Fälle) und §6.4.9a.
 
+**2026-09-25 · M-1 · Ergebnis der Messung aus §7.0: `ssh2-config` fällt
+durch, Schritt 1 wird ein eigener Parser.** Gemessen gegen
+`ssh2-config` 0.7.2, Quelle mit `cargo vendor` gegengelesen
+(Frage `Q-BL-0216-01`). E-1 war ausdrücklich an diese Messung geknüpft;
+§4.2, §7.0 und §7.1 schreiben für einen schlechten Ausgang den eigenen
+Parser vor. Die Befunde:
+
+| Anforderung | `ssh2-config` 0.7.2 |
+|---|---|
+| §3.1.5 Meldung **mit Zeilennummer** | `ignored_fields`/`unsupported_fields` sind `HashMap<String, Vec<String>>` (params.rs:74-76): Name→Werte, **keine** Zeilennummern und als `HashMap` auch keine Lesereihenfolge. Strukturell nicht nachrüstbar. |
+| §3.1.5/§5.4 nur der **Name**, nie der Wert | liefert Name **und** Wert (`{"UnknownDirective": ["SECRETVALUE"]}`); der `STRICT`-Fehler trägt den Wert ebenfalls. |
+| §4.1 Dateien liest **`app-shell`** | löst `Include` **selbst** auf, mit `File::open` und `glob` (parser.rs:383, 576, 583) — das Dateisystem läge damit in `core`. |
+| §3.1.4 relativer `Include` relativ zur **einbindenden Datei** | löst gegen `$HOME/.ssh` auf (parser.rs:541-561) — genau das Verhalten, das §3.1.4 verwirft. Eine gewählte Datei aus `/tmp/import/` mit `Include conf.d/*.conf` läse `~/.ssh/conf.d/*.conf`. |
+| §3.1.4/§5.6 Tiefe ≤ 3, keine Schleifen | kein Tiefenzähler, keine Besuchtmenge; `include_files` ruft `Self::parse` rekursiv. Belegt: eine Datei, die sich selbst einbindet, ergibt `fatal runtime error: stack overflow, aborting` — ein **Prozessabbruch**, nicht per `catch_unwind` abfangbar. §6.4.5 (d) wäre damit nicht erfüllbar. |
+| §3.3 Gesamtgrenzen | keine — und weil `Include` intern aufgelöst wird, käme eine Grenze davor an die eingebundenen Dateien gar nicht heran. |
+| §4.2 `Match` nicht auswerten, melden | **mischt den `Match`-Block in den vorhergehenden `Host`-Block**: `Host a / User x` + `Match host b / User y` ergibt für `Host a` `user = "y"`. Ein `Match … / User root` verschöbe also stillschweigend den Benutzer eines fremden Profils. |
+| §3.1.4a Nicht-`ssh_config` überspringen | Binärmüll wird zur „Direktive": `{"\0\u{1}binary": ["junk"]}`. |
+| §3.1.3 Platzhalter, „erster gewinnt", Herkunft | `get_hosts()` liefert **rohe** Blöcke ohne Vererbung — Merge und Herkunft hätten wir ohnehin selbst gebaut. |
+| §3.1.2 `Host web1 web2`, Anführungszeichen, `=` | korrekt. |
+| `ProxyJump`, mehrere `IdentityFile` | vorhanden und brauchbar. |
+
+Ausschlaggebend sind die Zeilennummern (harte Anforderung aus §3.1.5,
+nicht nachrüstbar) und die `Include`-Behandlung (falsches
+Basisverzeichnis, keine Tiefe, keine Schleifenerkennung mit belegtem
+Prozessabbruch). Der `Match`-Fehlmerge ist der Grund, warum auch „nur
+die `Host`-Blöcke übernehmen" nicht trägt: schon die übernommenen Felder
+wären falsch.
+
+**Folge:** `crates/core/src/profiles/ssh_config/` bringt einen eigenen,
+zeilenweisen Parser mit — er kennt genau die Direktiven aus §3.1.2, gibt
+für alles andere Name und Zeilennummer zurück und liest **keine**
+Dateien. **Keine neue Abhängigkeit** (und keine sechs transitiven).
+Die Tests aus §6 bleiben unverändert — „dieselben Tests, andere
+Innerei" (§7.1).
+
 *Anmerkung des Architekten zur Grenze:* „Unbegrenzt viele Dateien"
 bezieht sich auf die **Anzahl**. Die Gesamtgrenzen aus §3.3 (Bytes,
 Zeilen, `Host`-Blöcke) gelten weiterhin — aber ausdrücklich **über alle
