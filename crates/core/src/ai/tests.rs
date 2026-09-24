@@ -1300,8 +1300,9 @@ fn test_redactor_leaves_unrelated_at_signs_and_credential_free_urls_alone() {
         "git@github.com:org/repo.git and a@b",
         "https://example.com:8080/path a@b",
         r#"{"redis":"redis://cache:6379","admin":"ops@example.com"}"#,
-        // Leerer Wert: die Query-String-Regel verlangt mindestens ein
-        // Zeichen und greift hier bewusst nicht.
+        // Leerer Wert: weder die Query-String-Regel (sie verlangt ein
+        // `@` im Wert) noch das Schlüsselwort-Muster greifen hier — es
+        // gibt nichts zu redigieren.
         "https://x.com/?q=password&token=",
     ] {
         assert_eq!(redactor.redact_text(unchanged), unchanged);
@@ -1473,12 +1474,25 @@ fn test_redactor_query_rule_does_not_cut_a_private_key_armor_anchor() {
     );
     assert!(!pgp.contains("secretpgpbody"), "{pgp}");
     assert_eq!(pgp, "https://v/api?[REDACTED]");
+
+    // Zweite Review-Runde: derselbe Anker in Anführungszeichen. Die
+    // `@`-Forderung gilt deshalb in ALLEN drei Zweigen der Wertklasse,
+    // nicht nur im freien — der quotierte Zweig schnitt den Anker sonst
+    // genauso durch, und `MIIEvQbodyOfKey` stand im Klartext, wo es vor
+    // Spec 0078 vollständig redigiert wurde.
+    let quoted = redactor.redact_text(
+        "https://x/?secret=\"-----BEGIN PRIVATE KEY-----\"\n\
+         MIIEvQbodyOfKey\n\
+         -----END PRIVATE KEY-----",
+    );
+    assert!(!quoted.contains("MIIEvQbodyOfKey"), "{quoted}");
+    assert_eq!(quoted, "https://x/?[REDACTED]");
 }
 
-/// Gegenprobe zum Test darüber: ein Parameterwert OHNE `@` wird
-/// weiterhin vollständig redigiert — das übernimmt das
-/// Schlüsselwort-Muster, genau wie vor Spec 0078. Die engere Wertklasse
-/// der Query-String-Regel kostet also keine Abdeckung.
+/// Wächter, kein Gegenbeweis (grün vor und nach der Verengung der
+/// Wertklasse): ein Parameterwert OHNE `@` wird weiterhin vollständig
+/// redigiert — das übernimmt das Schlüsselwort-Muster, genau wie vor
+/// Spec 0078. Die Verengung kostet also keine Abdeckung.
 #[test]
 fn test_redactor_still_redacts_a_query_parameter_without_an_at_sign() {
     let redactor = DefaultOutputRedactor::new();
@@ -1490,6 +1504,12 @@ fn test_redactor_still_redacts_a_query_parameter_without_an_at_sign() {
     assert_eq!(
         redactor.redact_text("https://api.example.com/v1?token=abcdef&x=1"),
         "https://api.example.com/v1?[REDACTED]"
+    );
+    // Auch quotiert und ohne `@` — hier greift die Query-String-Regel
+    // nicht mehr, das Schlüsselwort-Muster aber unverändert.
+    assert_eq!(
+        redactor.redact_text("https://x/?password='top secret 123'"),
+        "https://x/?[REDACTED]"
     );
 }
 

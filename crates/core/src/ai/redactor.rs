@@ -298,20 +298,43 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // ist derselbe, der Grund ein anderer. spec-reviewer-Fund, erste
         // Review-Runde.)
         //
-        // Die freie Form verlangt MINDESTENS EIN `@` (spec-reviewer-Fund,
-        // erste Review-Runde, echte Regression): ohne diese Forderung
-        // schnitt die Regel den mehrteiligen Anker der Private-Key-Muster
-        // durch, die weiter unten stehen — `?secret=-----BEGIN PRIVATE
-        // KEY-----` wurde bis zum Leerzeichen ersetzt, danach griff weder
-        // das PEM-Muster noch sein Rückfallmuster, und der komplette
-        // Schlüsselkörper stand im Klartext. Die Forderung kostet keine
-        // Abdeckung: diese Regel existiert allein, damit das DB-Muster den
-        // Parameter nicht als Passwort lesen kann, und dafür braucht das
-        // DB-Muster ein `@` im Wert. Ein Wert ohne `@` wird unverändert
-        // vom Schlüsselwort-Muster redigiert. Ein PEM-/PGP-Anker enthält
-        // kein `@`, kann also per Konstruktion nicht mehr angeschnitten
-        // werden. Tests `…_does_not_cut_a_private_key_armor_anchor` und
+        // JEDER der drei Zweige verlangt MINDESTENS EIN `@` im Wert
+        // (spec-reviewer-Fund, erste und zweite Review-Runde, beide Male
+        // eine echte Regression): ohne diese Forderung schnitt die Regel
+        // den mehrteiligen Anker der Private-Key-Muster durch, die weiter
+        // unten stehen — `?secret=-----BEGIN PRIVATE KEY-----` wurde bis
+        // zum Leerzeichen ersetzt (freier Zweig), `?secret="-----BEGIN
+        // PRIVATE KEY-----"` bis zum schließenden Quote (quotierter
+        // Zweig). Danach griff weder das PEM-Muster noch sein
+        // Rückfallmuster, und der komplette Schlüsselkörper stand im
+        // Klartext — dort, wo er vor Spec 0078 vollständig redigiert
+        // wurde. Die Forderung in nur einem Zweig reichte nicht; erst in
+        // allen dreien gilt der Satz, der diese Regel trägt:
+        //
+        //   Diese Regel ersetzt ausschließlich Werte, die ein `@`
+        //   enthalten. Ein Anker ohne `@` ist für sie unerreichbar.
+        //
+        // Sie kostet dadurch keine Abdeckung. Der Grund ist enger, als er
+        // zunächst aussieht, deshalb genau: Das DB-Muster LÄUFT sehr wohl
+        // über einen Wert ohne `@` hinweg (seine Passwortklasse endet erst
+        // am ersten `@`, das irgendwo dahinter stehen darf) — aber alles,
+        // worüber es läuft, liegt INNERHALB seiner Ersetzung und ist damit
+        // redigiert. Ein Teil des Parameterwerts kann nur dann hinter dem
+        // `@` stehenbleiben, wenn der Wert das `@` selbst enthält, und
+        // dann greift diese Regel. Ein Wert ohne `@` wird unverändert vom
+        // Schlüsselwort-Muster redigiert. Tests
+        // `…_does_not_cut_a_private_key_armor_anchor` und
         // `…_still_redacts_a_query_parameter_without_an_at_sign`.
+        //
+        // Die Kehrseite, gemessen und bewusst hingenommen: Weil diese
+        // Regel bei einem Wert ohne `@` nicht mehr ersetzt, kann das
+        // DB-Muster an einem `/` IM Wert hängenbleiben und dann gar nicht
+        // greifen — bei `postgres://u:Geheim?password=pl/ain&x=y@h/db`
+        // bleibt `Geheim` sichtbar. Gegenüber dem Stand VOR Spec 0078 ist
+        // das unverändert (auch dort bleibt es sichtbar); nur gegenüber
+        // der ersten, zu breiten Fassung dieser Regel, die den Fall
+        // versehentlich mit schloss, ist es ein Rückschritt. Gehört zur
+        // Familie „Passwort mit Query-Präfix", s. ADR 0069 §6.
         //
         // Restfall, bewusst (Spec 0078 §5): ein leerer Wert
         // (`?token=` am Zeilenende) wird nicht erfasst — es gibt nichts zu
@@ -320,7 +343,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // bisher das Schlüsselwort-Muster.
         PatternRule {
             regex: Regex::new(
-                r#"(?i)(?P<sep>[?&])(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*'|"[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)"#,
+                r#"(?i)(?P<sep>[?&])(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)"#,
             )
             .expect("eingebautes Query-Parameter-Muster ist gültig"),
             replacement: "${sep}${key}=[REDACTED]",
