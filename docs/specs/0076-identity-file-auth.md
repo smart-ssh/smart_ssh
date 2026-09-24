@@ -777,3 +777,10 @@ aber nur mit der Leseumsetzung aus Schritt 2. Abweichung vom Schnitt,
 nicht vom Inhalt — dasselbe Muster wie der Grund, warum Schritt 1 schon
 die Kette mitnimmt (ADR 0065 §1).
 
+**2026-09-24 · K-3 · `libc` als direkte Abhängigkeit.** Stefan: ja. `libc`
+liegt bereits transitiv im `Cargo.lock` (0.2.189, von 73 Paketen gezogen),
+die Aufnahme bringt also kein neues Paket in die Lieferkette. Die von Hand
+gepflegte `O_NONBLOCK`-Tabelle in `crates/app-shell/src/key_files.rs`
+entfällt zugunsten von `libc::O_NONBLOCK`; die bestehenden Tests
+(FIFO, Lesegrenze) müssen unverändert grün bleiben.
+
