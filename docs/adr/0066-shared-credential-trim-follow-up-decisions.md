@@ -17,11 +17,15 @@ hat (Q-BL-0149-02).
   Produktentscheidung, nicht getroffen.
 - **ADR 0064 §3** — `model` wird nicht getrimmt. Offen gelassen, nicht
   vorentschieden.
+- **ADR 0064 §4** — `add_ai_provider` legt bei einem `api_key` aus lauter
+  unsichtbaren Zeichen still einen Provider ohne Credential an. Bewusst
+  nicht behoben (ein Fehler wäre neues Verhalten bei leerer Eingabe,
+  Spec 0073 §2 Nicht-Ziel 3), vorgemerkt als Backlog-Punkt.
 - **ADR 0064 §7** — die dort vorgemerkten Punkte, darunter das fehlende
   `Zeroize` auf dem Zwischen-`String` von `trim_credential_value`.
 
 Wer hier liest, hat damit noch nicht gelesen, was von Spec 0073 offen ist;
-dafür ist ADR 0064 §2, §3 und §7 zu lesen.
+dafür ist ADR 0064 zu lesen, u. a. §2, §3, §4 und §7.
 
 ## 1. `normalize_sftp_server_path` benutzt den Helfer (A-1 aufgelöst)
 
