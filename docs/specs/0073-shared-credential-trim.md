@@ -234,3 +234,17 @@ Anmeldeversuch mit leerem Wert. Tests: je Slot Randzeichen → dasselbe
 Secret wie beim Speichern; nur Randzeichen bei Update → gespeichertes
 Credential; dasselbe bei Neuanlage → Fehler (scheitert am heutigen Stand).
 
+
+**2026-09-24 · Q-BL-0149-03 · Der Verbindungstest meldet ein fehlendes
+Pflichtfeld mit denselben Codes wie das Speichern.** Stefan: Option 1.
+`resolve_secret` in `test_connection.rs` bekommt einen Parameter
+`code: &'static str`, so wie `write_or_reuse_secret` ihn schon hat. Die
+vier Aufrufe übergeben die Codes des Speicherns:
+`SERVER_PASSWORD_REQUIRED`, `SERVER_PRIVATE_KEY_REQUIRED`,
+`SERVER_CERTIFICATE_REQUIRED` und `SERVER_CERTIFICATE_KEY_REQUIRED`.
+Damit ersetzt diese Klarstellung „sonst der vorhandene Fehler" aus
+Q-BL-0149-02 für diesen Zweig. Der Zweig
+`keychain_aware_credential_error` bleibt unverändert, und das Frontend
+braucht keine Änderung. Tests: je Slot `err.code`, auch im Fall
+„bestehender Server mit anderer Anmeldeart, Feld leer". Der
+Neuanlage-Test prüft den Code statt des Textanfangs (ADR 0067 §4).
