@@ -473,24 +473,40 @@ mod tests {
     // ---------------------------------------------------------------
 
     /// Der **alte** Parser, wörtlich wie vor Spec 0074: erstes passendes
-    /// Wort gewinnt. Existiert nur hier, als Vergleichsmaßstab für die
-    /// Monotonie-Eigenschaft (T1) — er darf nie wieder in den
-    /// Produktionspfad.
-    fn legacy_first_wins<V: Copy>(text: &str, classify: impl Fn(&str) -> Option<V>) -> Option<V> {
-        for word in text.split_whitespace() {
+    /// Wort gewinnt, und die Begründung ist der Text danach. Existiert nur
+    /// hier, als Vergleichsmaßstab für die Monotonie-Eigenschaft (T1) — er
+    /// darf nie wieder in den Produktionspfad. Die Begründungs-Berechnung
+    /// ist bewusst mitkopiert (spec-reviewer Runde 1): nur so lässt sich
+    /// als Eigenschaft prüfen, dass A4 für jede Antwort mit genau einem
+    /// Urteil **wortgleich** dasselbe liefert wie vorher.
+    fn legacy_first_wins<V: Copy>(
+        text: &str,
+        classify: impl Fn(&str) -> Option<V>,
+    ) -> Option<(V, String)> {
+        let words: Vec<&str> = text.split_whitespace().collect();
+        for (i, word) in words.iter().enumerate() {
             let cleaned: String = word
                 .chars()
                 .filter(|c| c.is_alphanumeric())
                 .flat_map(char::to_lowercase)
                 .collect();
             if let Some(verdict) = classify(&cleaned) {
-                return Some(verdict);
+                let rest = words[i + 1..].join(" ");
+                let rest_trimmed = rest
+                    .trim_start_matches(|c: char| !c.is_alphanumeric())
+                    .trim();
+                let reason = if rest_trimmed.is_empty() {
+                    text.trim().to_string()
+                } else {
+                    rest_trimmed.to_string()
+                };
+                return Some((verdict, reason));
             }
         }
         None
     }
 
-    fn legacy_parse_second_opinion(text: &str) -> Option<RiskLevel> {
+    fn legacy_parse_second_opinion(text: &str) -> Option<(RiskLevel, String)> {
         legacy_first_wins(text, |cleaned| match cleaned {
             "none" => Some(RiskLevel::None),
             "yellow" => Some(RiskLevel::Yellow),
@@ -499,7 +515,7 @@ mod tests {
         })
     }
 
-    fn legacy_parse_injection_check(text: &str) -> Option<bool> {
+    fn legacy_parse_injection_check(text: &str) -> Option<(bool, String)> {
         legacy_first_wins(text, |cleaned| match cleaned {
             "ja" | "yes" => Some(true),
             "nein" | "no" => Some(false),
@@ -556,6 +572,19 @@ mod tests {
     /// Antworten hinweg meldet der neue Parser nie eine **niedrigere** Stufe
     /// als der alte, und er findet genau dann ein Urteil, wenn der alte eines
     /// fand (A3: kein Urteil bleibt `None`, wird nie zur Entwarnung).
+    ///
+    /// Grenze dieses Tests, ausdrücklich benannt (spec-reviewer Runde 1):
+    /// Der Vergleichsmaßstab ist der alte Parser selbst, also kann dieser
+    /// Test gegen den **ungefixten** Stand nicht scheitern — er ist ein
+    /// Wächter gegen künftige Abschwächung, nicht der Nachweis, dass der
+    /// Fix wirkt (den führen T2/T7/T8/T10/X1/X6). Damit er nicht still zur
+    /// leeren Hülle wird, zählt er mit, wie oft der neue Parser tatsächlich
+    /// **höher** meldet, und verlangt am Ende, dass das vorkam; sonst
+    /// könnte ein degenerierter Generator ihn grün lassen, ohne je einen
+    /// Mehrfach-Urteil-Fall erzeugt zu haben.
+    ///
+    /// Zusätzlich geprüft: Stimmen altes und neues Urteil überein, ist auch
+    /// die **Begründung** wortgleich (A4).
     #[test]
     fn test_t1_second_opinion_parser_is_monotonic_vs_legacy() {
         const VOCABULARY: &[&str] = &[
@@ -563,53 +592,91 @@ mod tests {
             "[red]",
         ];
         let mut rng = Lcg(0x5EED_0074);
+        let mut escalations = 0_u32;
         for _ in 0..5_000 {
             let answer = generate_answer(&mut rng, VOCABULARY);
             let legacy = legacy_parse_second_opinion(&answer);
-            let current = parse_second_opinion(&answer).map(|(level, _)| level);
+            let current = parse_second_opinion(&answer);
 
             assert_eq!(
                 legacy.is_some(),
                 current.is_some(),
                 "Erkennbarkeit darf sich nicht ändern, Antwort: {answer:?}"
             );
-            if let (Some(legacy), Some(current)) = (legacy, current) {
+            if let (Some((legacy_level, legacy_reason)), Some((current_level, current_reason))) =
+                (legacy, current)
+            {
                 assert!(
-                    current >= legacy,
-                    "neuer Parser meldete {current:?}, alter {legacy:?} — \
+                    current_level >= legacy_level,
+                    "neuer Parser meldete {current_level:?}, alter {legacy_level:?} — \
                      das wäre eine Abschwächung. Antwort: {answer:?}"
                 );
+                if current_level == legacy_level {
+                    assert_eq!(
+                        current_reason, legacy_reason,
+                        "gleiches Urteil, aber andere Begründung — A4 verletzt. \
+                         Antwort: {answer:?}"
+                    );
+                } else {
+                    escalations += 1;
+                }
             }
         }
+        assert!(
+            escalations > 0,
+            "der Generator hat keinen einzigen Fall mit mehreren \
+             unterschiedlichen Urteilswörtern erzeugt — die Eigenschaft wäre leer"
+        );
     }
 
     /// Spec 0074, T1 / I1 — dieselbe Eigenschaft für den Injektions-Check:
-    /// nie `false`, wo der alte Parser `true` lieferte.
+    /// nie `false`, wo der alte Parser `true` lieferte. Grenzen und der
+    /// Eskalations-Zähler wie bei der Zweitmeinung oben.
     #[test]
     fn test_t1_injection_check_parser_is_monotonic_vs_legacy() {
         const VOCABULARY: &[&str] = &[
             "ja", "Ja", "JA!", "(ja)", "yes", "Yes", "YES,", "nein", "Nein.", "no", "No", "\"no\"",
         ];
         let mut rng = Lcg(0x5EED_0121);
+        let mut escalations = 0_u32;
         for _ in 0..5_000 {
             let answer = generate_answer(&mut rng, VOCABULARY);
             let legacy = legacy_parse_injection_check(&answer);
-            let current = parse_injection_check(&answer).map(|(detected, _)| detected);
+            let current = parse_injection_check(&answer);
 
             assert_eq!(
                 legacy.is_some(),
                 current.is_some(),
                 "Erkennbarkeit darf sich nicht ändern, Antwort: {answer:?}"
             );
-            if legacy == Some(true) {
-                assert_eq!(
-                    current,
-                    Some(true),
-                    "alter Parser meldete einen Verdacht, neuer nicht — \
-                     das wäre eine verschluckte Eskalation. Antwort: {answer:?}"
-                );
+            if let (
+                Some((legacy_detected, legacy_reason)),
+                Some((current_detected, current_reason)),
+            ) = (legacy, current)
+            {
+                if legacy_detected {
+                    assert!(
+                        current_detected,
+                        "alter Parser meldete einen Verdacht, neuer nicht — \
+                         das wäre eine verschluckte Eskalation. Antwort: {answer:?}"
+                    );
+                }
+                if current_detected == legacy_detected {
+                    assert_eq!(
+                        current_reason, legacy_reason,
+                        "gleiches Urteil, aber andere Begründung — A4 verletzt. \
+                         Antwort: {answer:?}"
+                    );
+                } else {
+                    escalations += 1;
+                }
             }
         }
+        assert!(
+            escalations > 0,
+            "der Generator hat keinen einzigen Fall erzeugt, in dem ein \
+             späteres „ja\" ein früheres „nein\" überstimmt — die Eigenschaft wäre leer"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -675,6 +742,38 @@ mod tests {
     fn test_t10_second_opinion_yellow_beats_none() {
         let (level, _) = parse_second_opinion("none für den Pfad, yellow für den Inhalt").unwrap();
         assert_eq!(level, RiskLevel::Yellow);
+    }
+
+    /// Spec 0074, A2 — das Paar `yellow` + `red`, in beiden Reihenfolgen.
+    /// Das ist der Fall, der in `escalate_data_risk` eine regelbasierte
+    /// Yellow-Einstufung auf Red hebt; T8/T9/T10 pinnen ihn nicht, und der
+    /// Monotonie-Test kann ihn nicht fangen (bei „yellow … red" erfüllt
+    /// auch ein falsches `Yellow` noch `current >= legacy`).
+    /// Fund aus spec-reviewer Runde 1.
+    #[test]
+    fn test_a2_red_beats_yellow_in_both_orders() {
+        let (level, _) = parse_second_opinion("yellow für den Pfad, red für den Inhalt").unwrap();
+        assert_eq!(level, RiskLevel::Red);
+
+        let (level, _) = parse_second_opinion("red für den Inhalt, yellow für den Pfad").unwrap();
+        assert_eq!(level, RiskLevel::Red);
+    }
+
+    /// Spec 0074, A4 — Randfall der Rückfallregel: Steht das gewinnende
+    /// Wort am **Ende** der Antwort, bleibt nichts dahinter, und die
+    /// Begründung wird wie bisher die volle Antwort. Neu daran ist, dass
+    /// diese Regel jetzt auch greifen kann, wenn vorne ein schwächeres
+    /// Urteil stand — die angezeigte Begründung enthält dann auch den Text
+    /// **vor** dem Urteil. Das ist A4 wörtlich und unbedenklich (der Text
+    /// ist bereits redigiert und wird nur angezeigt, I4), aber es ist eine
+    /// Verhaltensänderung und wird deshalb hier festgehalten statt
+    /// unbemerkt zu bleiben. Fund aus spec-reviewer Runde 1.
+    #[test]
+    fn test_a4_winning_word_at_the_end_falls_back_to_the_full_answer() {
+        let (level, reason) =
+            parse_second_opinion("none, wirkt harmlos, aber genauer: red").unwrap();
+        assert_eq!(level, RiskLevel::Red);
+        assert_eq!(reason, "none, wirkt harmlos, aber genauer: red");
     }
 
     /// Spec 0074, X1 — der Fall aus BL-0121: Die Antwort zitiert den
