@@ -3,15 +3,17 @@
 Status: Angenommen
 Bezug: docs/specs/0076-identity-file-auth.md, Commits `8062078` (Variante,
 Schnittstelle, Kette, Leseumsetzung), `f3d13c3` (DTO-Pfad, Hop-Angabe),
-`489718c` (Überführung)
+`489718c` (Überführung), `d0cc3a4` (§9 K-3, `libc::O_NONBLOCK`), `28b14fd`
+(Schritt 5, Frontend)
 
 Spec 0076 §8 sagt „Offene Punkte: Keine". Beim Umsetzen sind trotzdem
 Festlegungen aufgelaufen, die die Spec nicht trifft — und zwei davon
 weichen von ihr ab. Sie stehen hier, damit sie sichtbar bleiben statt in
 einer Commit-Message zu versanden.
 
-Dieser Lauf umfasst die Schritte 1 bis 4 aus §7. Schritt 5 (Frontend) und
-Schritt 6 (CHANGELOG) laufen getrennt.
+Die Schritte 1 bis 4 aus §7 sind unter §1–§14 protokolliert. §15 gehört zu
+Schritt 5 (Frontend); Schritt 6 (`CHANGELOG.md`-Fragment) brauchte keine
+eigene Entscheidung.
 
 ## 1. Schritt 1 und Schritt 2 sind **ein** Commit geworden (Abweichung von §7)
 
@@ -387,3 +389,39 @@ gehört auch das Fragment hin.
 Die Tauri-Kommandos `inspect_key_file` und
 `convert_identity_file_to_keychain` sind registriert und benutzbar — aber
 nur von einem Frontend, das es noch nicht gibt.
+
+**Nachtrag (Schritt 5, Commit `28b14fd`):** Mit dem Frontend ist die
+Anmeldeart jetzt erreichbar; das Fragment
+`changelog.d/0076-identity-file-auth.md` liegt bei.
+
+## 15. Die Lösch-Vorschau behauptet für `identity_file` nicht mehr, ein Secret werde entfernt
+
+**Frage:** `ServerForm.tsx`s Lösch-Vorschau (Spec 0046, Fund 1) zeigt für
+jede Anmeldeart außer `agent` die Zeile „Wird aus dem Schlüsselbund
+entfernt: `<Label der Anmeldeart>`" — für `password`/`privateKey`/
+`certificate` korrekt, weil dort immer ein Pflicht-Secret im Schlüsselbund
+liegt. Bei `identity_file` liegt dort höchstens eine **optionale**
+Passphrase (`AuthMethod::IdentityFile.passphrase_ref`); ob sie gesetzt
+ist, sagt `ServerDto` nicht (anders als `hasSudoPassword` für das
+Sudo-Passwort). Ohne Eingriff hätte die Zeile für jeden
+`identity_file`-Server „Wird aus dem Schlüsselbund entfernt: Schlüsseldatei"
+behauptet — die Datei selbst liegt aber nie im Schlüsselbund und wird vom
+Löschen nie berührt (C-5 gilt selbst hier sinngemäß: Löschen des Servers
+ist keine Überführung, die Datei war nie dort).
+
+**Entscheidung:** `identity_file` ist von der bedingungslosen Zeile
+ausgenommen; stattdessen erscheint — unabhängig vom sonstigen Zustand —
+die bereits vorhandene „mag entfernt werden"-Formulierung (bisher nur für
+den Fall `sudoPasswordUnknown`, Spec 0071 A14), mit dem Label „Passphrase
+der Schlüsseldatei". Das ist ehrlich in beide Richtungen: Weder wird ein
+Secret behauptet, das vielleicht gar nicht existiert, noch wird verschwiegen,
+dass eines existieren könnte.
+
+**Warum keine Rückfrage:** Kein Punkt aus Spec 0076 (die die Lösch-Vorschau
+gar nicht erwähnt), sondern eine Ableitung aus dem bestehenden Prinzip
+dieser Maske selbst (§6.3.2 der Spec: „ehrliche Hinweise statt
+Verharmlosung", hier: statt Überbehauptung) — sowie aus dem in derselben
+Datei bereits vorhandenen Muster für „kann die Oberfläche nicht sicher
+wissen" (`secretMayBeDeleted`). Eine neue `ServerDto`-Auskunft eigens dafür
+(z. B. `hasIdentityFilePassphrase`, analog `hasSudoPassword`) wäre eine
+größere, in der Spec nicht verlangte Änderung gewesen und ist unterblieben.
