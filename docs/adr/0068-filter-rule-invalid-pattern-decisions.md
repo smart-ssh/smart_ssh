@@ -184,11 +184,26 @@ Item.
   Typ oder die Prüfung an der Speichergrenze das, was eine künftige zweite
   Schreibstelle automatisch erfasst — das ist eine Architekturänderung und
   gehört nicht in einen Fix.
+- **Der Fehlercode hängt an der Disziplin der Aufrufer.** `CommandError` hat
+  einen pauschalen `From` für alles, was `Display` ist, und der setzt
+  `code: None`. Schreibt jemand später ein `?` über einem `RuleWriteError`,
+  statt die Umwandlungsfunktion aus 3.1.3 zu rufen, übersetzt der pauschale
+  `From` das klaglos, und die Oberfläche verliert den Code wieder — ohne dass
+  der Übersetzer meckert. Heute ist es an allen drei Stellen richtig, und
+  T-6d hält das fest. Ein Schutz zur Übersetzungszeit ist nicht gebaut
+  worden: Er bräuchte dieselbe Änderung am Fehlertyp wie das Geländer an der
+  Speicher-API, und 3.1.3 nimmt diese Lage ausdrücklich hin. Gehört mit dem
+  vorigen Punkt in ein Item „Tiefenverteidigung Regel-Schreibweg".
 - **Die Auswertung übersetzt jetzt jedes Muster der Regelmenge.** Vorher
-  übersetzte die Bucket-Schleife nur bis zum ersten Treffer. Nicht behoben,
-  weil §2 der Spec das Zwischenspeichern von Mustern ausdrücklich ausschließt.
-  Der saubere Ort dafür wäre, ein Muster einmal zu übersetzen und am `Rule`
-  mitzuführen.
+  übersetzte die Bucket-Schleife nur bis zum ersten Treffer. Die Abwägung
+  hier ist eine eigene, nicht eine der Spec: §2 schließt das
+  Zwischenspeichern von Mustern aus, aber das war als „kein Zwischenspeicher
+  nötig" gemeint, nicht als „zusätzliche Übersetzungsarbeit kostet nichts".
+  Nicht behoben, weil die Meldung aus 3.2.2 ohne diese Schleife nicht
+  vollständig wäre (sie soll jede Regel melden, nicht nur die vor dem ersten
+  Treffer) und weil ein Zwischenspeicher eine Änderung am `Rule`-Typ wäre,
+  die über einen Fix hinausgeht. Der saubere Ort dafür wäre, ein Muster
+  einmal zu übersetzen und am `Rule` mitzuführen.
 - **Die Testen-Ansicht markiert nichts.** Sie zeigt für eine Regel mit
   ungültigem Muster weiterhin nur „passt nicht". 3.2.3 verlangt die Markierung
   ausdrücklich nur für die Regelliste.

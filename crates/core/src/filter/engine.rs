@@ -445,10 +445,13 @@ impl<S: PolicyStore> FilterEngine<S> {
 /// beiden Zweige nicht übersetzt, weiterhin über den Zweig, der übersetzt.
 ///
 /// **Deshalb der Wortlaut der Meldung:** Sie sagt „cannot match through the
-/// branch that fails", nicht „cannot match". Ein kürzerer Text wäre für
+/// branch(es) that fail", nicht „cannot match". Ein kürzerer Text wäre für
 /// genau den Einzelzweig-Fall falsch und würde jemanden, der das Protokoll
 /// liest, glauben lassen, eine Regel sei wirkungslos, die tatsächlich
-/// greift.
+/// greift. Der Plural ist ebenso Absicht: Bei einem Regex und bei einem
+/// nicht pfadförmigen Glob gibt es nur einen Zweig, und dann ist die Regel
+/// wirklich ganz wirkungslos — die Einzahl würde diesen häufigsten Fall
+/// schwächer beschreiben, als er ist.
 fn report_invalid_patterns(rules: &[Rule]) {
     for rule in rules {
         if let Err(err) = rule.pattern.validate() {
@@ -456,7 +459,7 @@ fn report_invalid_patterns(rules: &[Rule]) {
                 rule_id = %rule.id,
                 action = ?rule.action,
                 pattern_error = %err,
-                "filter rule pattern does not compile; the rule cannot match through the branch that fails",
+                "filter rule pattern does not compile; the rule cannot match through the branch(es) that fail",
             );
         }
     }
