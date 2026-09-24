@@ -101,6 +101,12 @@ vor dem Fix.
 
 ## 3. Offen: Passwort und Key-Inhalt im Verbindungstest (Q-BL-0149-02)
 
+> **Nachtrag 2026-09-24: entschieden und umgesetzt, s. ADR 0067.** Stefan
+> hat Option 2b gewählt (Spec 0073 §9): `resolve_secret` trimmt über den
+> geteilten Helfer und wendet dieselbe Leer-Regel an wie das Speichern. Der
+> folgende Abschnitt beschreibt den Stand **vor** dieser Entscheidung und
+> bleibt als Begründung stehen, warum es zwei Läufe gebraucht hat.
+
 Dieselbe Divergenz besteht für die übrigen Slots des Verbindungstests.
 `test_connection::resolve_secret` reicht einen eingegebenen Wert
 ungetrimmt weiter, während `write_or_reuse_secret` beim Speichern trimmt —

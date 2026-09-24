@@ -1,4 +1,12 @@
 ### Behoben
+- „Verbindung testen" bewertet leere und eingefügte Zugangsdaten jetzt
+  genau wie „Speichern". Legt man einen neuen Server an und lässt das
+  Passwort-, Schlüssel- oder Zertifikatsfeld leer, meldet der Test die
+  Fehlermeldung, statt sich mit einem leeren Wert anzumelden — auf einem
+  Server, der leere Passwörter erlaubt, konnte er dafür bisher Erfolg
+  melden, obwohl sich derselbe Server anschließend nicht speichern ließ.
+  Beim Bearbeiten bedeutet ein leeres Feld weiterhin „das hinterlegte
+  Zugangsdatum verwenden".
 - „Verbindung testen" behandelt die Passphrase einer Schlüsseldatei oder
   eines privaten Schlüssels jetzt genauso wie „Speichern". Bisher konnte
   derselbe eingefügte Wert den Verbindungstest scheitern lassen und
