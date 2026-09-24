@@ -3331,11 +3331,11 @@ pub fn should_suggest_note_shrink(note_update_was_suggested: bool) -> bool {
 
 /// Schwellwert für "die gespeicherte Notiz ist groß genug für den
 /// Kürzungs-Vorschlag" (Spec 0057, §4.2: "Ist die Notiz groß (Schwellwert)
-/// … Nur bei großer Notiz — bei normalen Notizen kein Dialog"). Bewusst
-/// Schwelle in Unicode-Skalarwerten (Zeichen, nicht Byte), bewusst deutlich
-/// über der Zusammenfassungs-Obergrenze [`NOTE_SHRINK_MAX_BYTES`]
-/// (4_000 Byte), damit normal genutzte Notizen (typischerweise wenige
-/// hundert Zeichen) nicht auslösen.
+/// … Nur bei großer Notiz — bei normalen Notizen kein Dialog"). Schwelle in
+/// Unicode-Skalarwerten (Zeichen, nicht Byte), bewusst deutlich über der
+/// Zusammenfassungs-Obergrenze [`NOTE_SHRINK_MAX_BYTES`] (4_000 Byte), damit
+/// normal genutzte Notizen (typischerweise wenige hundert Zeichen) nicht
+/// auslösen.
 ///
 /// `pub(crate)` statt privat (spec 0058, Teil 1/Etappe 5): derselbe
 /// Schwellwert entscheidet jetzt auch über den proaktiven Hinweis im

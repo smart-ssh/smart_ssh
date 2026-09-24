@@ -205,7 +205,7 @@ describe("large note hint (Spec 0058, Teil 1)", () => {
       <I18nextProvider i18n={testI18n}>
         <NotesPanel
           target={{ Server: "server-1" }}
-          currentNotes="Eine Notiz, die den Schwellwert von 10 Byte klar überschreitet."
+          currentNotes="Eine Notiz, die den Schwellwert von 10 Zeichen klar überschreitet."
           onNotesChanged={() => {}}
         />
       </I18nextProvider>,
@@ -299,7 +299,7 @@ describe("large note hint (Spec 0058, Teil 1)", () => {
       <I18nextProvider i18n={testI18n}>
         <NotesPanel
           target={{ Group: "group-1" }}
-          currentNotes="Eine Gruppen-Notiz, die den Schwellwert von 10 Byte klar überschreitet."
+          currentNotes="Eine Gruppen-Notiz, die den Schwellwert von 10 Zeichen klar überschreitet."
           onNotesChanged={() => {}}
         />
       </I18nextProvider>,
