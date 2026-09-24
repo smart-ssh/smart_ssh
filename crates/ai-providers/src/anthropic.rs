@@ -1146,7 +1146,10 @@ mod tests {
     /// kurzen System-Prompt unterhalb der modellabhängigen Mindestlänge —
     /// Anthropic verarbeitet das laut Doku ohne Fehler (nur ohne
     /// tatsächliches Caching), eine eigene Mindestlängen-Prüfung ist
-    /// bewusst NICHT eingebaut (s. `build_request_body`-Kommentar).
+    /// bewusst NICHT eingebaut (s. `build_request_body`-Kommentar). Das
+    /// gilt für jeden nicht-leeren Prompt — ist er leer oder reiner
+    /// Leerraum, entfällt der Block stattdessen komplett (Spec 0081, s.
+    /// `test_no_system_field_when_system_text_is_empty_with_native_tool_calling`).
     #[test]
     fn test_cache_control_set_unconditionally_even_for_a_tiny_system_prompt() {
         let provider = AnthropicProvider::new(
@@ -1170,7 +1173,11 @@ mod tests {
     /// Feld enthalten, sonst lehnt Anthropic mit HTTP 400
     /// `cache_control cannot be set for empty text blocks` ab (belegt im
     /// App-Log, s. Spec Abschnitt 1). Scheitert ohne den Fix, weil der
-    /// Body den leeren Block mit `cache_control` enthielte.
+    /// Body den leeren Block mit `cache_control` enthielte. Deckt beide
+    /// von der Spec genannten Literale ab (`""` als Hauptfall, `"  \n"`
+    /// zusätzlich als reiner Leerraum) sowie die exakte Konstellation der
+    /// echten Probe: `system_context: ""` **und** keine Aktionen (die
+    /// Probe schickt keine Werkzeuge mit), also auch ohne `tools`-Feld.
     #[test]
     fn test_no_system_field_when_system_text_is_empty_with_native_tool_calling() {
         let provider = AnthropicProvider::new(
@@ -1181,13 +1188,29 @@ mod tests {
             test_budget(),
             None,
         );
-        let context = context_with_actions("   \n", default_action_schemas());
 
-        let body = provider.build_request_body(&context);
+        for system_context in ["", "  \n"] {
+            let context = context_with_actions(system_context, default_action_schemas());
+            let body = provider.build_request_body(&context);
+            assert!(
+                body.get("system").is_none(),
+                "system-Feld muss bei system_context {system_context:?} ganz fehlen: {body}"
+            );
+        }
 
+        // Die reale Probe (`classify_credential_test_result`) schickt weder
+        // Aktionen noch einen System-Prompt — dann fehlen `system` UND
+        // `tools` gleichzeitig, was für die Anthropic-API zulässig ist
+        // (`messages` bleibt nicht leer).
+        let probe_context = context_with_actions("", Vec::new());
+        let probe_body = provider.build_request_body(&probe_context);
         assert!(
-            body.get("system").is_none(),
-            "system-Feld muss bei nur Leerraum ganz fehlen: {body}"
+            probe_body.get("system").is_none(),
+            "system-Feld muss bei der echten Probe (leerer Prompt, keine Aktionen) fehlen: {probe_body}"
+        );
+        assert!(
+            probe_body.get("tools").is_none(),
+            "tools-Feld muss bei leerer Aktionsliste fehlen: {probe_body}"
         );
     }
 
