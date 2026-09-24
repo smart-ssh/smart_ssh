@@ -23,13 +23,18 @@ node_modules/
 # Claude Code Projekt-Setup vs. lokaler Session-Zustand: `.claude/agents/`
 # enthält die Subagenten-Definitionen des Projekts (u. a.
 # `spec-reviewer.md`, von CLAUDE.md referenziert) und gehört ins Repo,
-# ebenso `.claude/skills/` (Projekt-Skills, z. B. `smart-ssh-public-coder`).
+# ebenso `.claude/skills/` (Projekt-Skills, z. B. `smart-ssh-public-coder`)
+# und `.claude/hooks/` (die Wächter-Skripte, auf die diese Definitionen
+# sich stützen — ohne diese Zeile fiele ein neues Hook-Skript stillschweigend
+# unter `.claude/*` und wäre erst beim nächsten frischen Klon als fehlend
+# zu bemerken).
 # Alles andere unter `.claude/` (Session-Caches, Worktree-Verwaltung,
 # lokale Locks/History, `launch.json`s maschinenspezifischer Dev-Server-
 # Start) ist Maschinen-/Sitzungszustand, nie Projektinhalt.
 .claude/*
 !.claude/agents/
 !.claude/skills/
+!.claude/hooks/
 
 # Signing-Secrets/Credentials — Sicherheitsnetz: der eigentliche
 # Signing-/Notarisierungs-Prozess liegt bewusst außerhalb des Repos
