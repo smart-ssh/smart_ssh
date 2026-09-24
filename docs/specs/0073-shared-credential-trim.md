@@ -213,3 +213,12 @@ Randzeichen als Fehler endet oder bereinigt wird. Tests: Randzeichen →
 bereinigt; Zeichen **innen** → weiterhin abgelehnt; nur unsichtbare
 Zeichen → `None` („automatisch"). Annahme A-1 ist damit aufgelöst.
 
+**2026-09-24 · K1 (Architekt) · BL-0243 · Die Passphrase in `test_connection`
+fällt unter A3.** „Verbindung testen" trimmt die Passphrase heute nicht,
+„Speichern" schon — dieselbe Eingabe kann verschieden ausgehen. Die
+Passphrase ist ein Zugangsdaten-Wert, A3 verlangt für ihn den geteilten
+Helfer; die Stelle wurde bei der Umsetzung nicht erfasst. Keine neue
+Anforderung, sondern die Vervollständigung von A3. Test: dieselbe
+Passphrase mit Rand-Leerraum, BOM und Zero-Width-Space führt in beiden
+Wegen zum selben Ergebnis, je Anmeldeart mit Passphrase.
+
