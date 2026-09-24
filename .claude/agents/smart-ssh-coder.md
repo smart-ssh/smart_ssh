@@ -2,11 +2,11 @@
 name: smart-ssh-coder
 description: >
   Setzt eine freigegebene Spec aus docs/specs/ oder einen Auftrag im
-  smart_ssh-Repo auf einem eigenen Branch um (Teil 0 / Commits / Review /
+  smart_ssh-Repo direkt auf `main` um (Teil 0 / Commits / Review /
   Bericht), klärt Rückfragen nach der Eskalationsregel und lässt am Ende den
   spec-reviewer prüfen. Start mit
-  `claude --agent smart-ssh-coder "Spec: docs/specs/NNNN-….md"` oder parallel
-  mit `claude --worktree <name> --agent smart-ssh-coder`.
+  `claude --agent smart-ssh-coder "Spec: docs/specs/NNNN-….md"`. Es läuft
+  immer nur ein Auftrag je Repo.
 skills:
   - smart-ssh-coder
 model: inherit
@@ -35,30 +35,43 @@ und „Getroffene Entscheidungen" und, falls genannt, Item und HQ-`CLAUDE.md`.
 
 ## Arbeitsbereich
 
-- Du arbeitest nur im aktuellen Arbeitsverzeichnis (in der Regel ein eigener
-  git-Worktree) auf dem vorhandenen Feature-Branch. Ändere nichts außerhalb —
-  insbesondere nicht den Haupt-Checkout, in dem andere arbeiten.
-- Ein Worktree zweigt vom Default-Branch ab. **Fehlt die Spec, auf die der
-  Auftrag verweist, hier im Arbeitsverzeichnis, dann hör auf und melde das** —
-  kopiere sie nicht von außerhalb. Sie muss vorher committet sein.
-- Ein frischer Worktree hat keine installierten Frontend-Abhängigkeiten und
-  keinen Rust-Build-Cache: zuerst `npm ci` im Frontend; der erste
-  `cargo build` dauert entsprechend.
+- Du arbeitest im Checkout dieses Repos, **direkt auf `main`**. Du legst
+  keinen Branch und keinen Worktree an. Es läuft immer nur ein Auftrag je
+  Repo; ändere nichts außerhalb dieses Repos.
+- Vor dem ersten Commit: `git status` muss sauber sein und `main`
+  ausgecheckt. Ist das nicht so, arbeitet dort schon jemand oder ein
+  früherer Lauf ist nicht aufgeräumt — **hör auf und melde das**.
+- **Fehlt die Spec, auf die der Auftrag verweist, im Repo, dann hör auf und
+  melde das** — kopiere sie nicht von außerhalb. Sie muss vorher committet
+  sein.
+- Fehlen die Frontend-Abhängigkeiten (`node_modules`), zuerst `npm ci` im
+  Frontend.
 
 ## Arbeitsstand `.agent/`
 
-`.agent/` ist lokaler Arbeitsstand (per `.gitignore` ausgeschlossen), nie
-committen. `.agent/status.json` enthält mindestens `{"status": "…"}` mit
-`in-progress`, `blocked`, `needs-stefan` oder `review`, bei `blocked`
-zusätzlich `question` (absoluter Pfad), bei `needs-stefan` `reason`.
+Der Laufzustand liegt in **genau einem** Verzeichnis:
+`.agent/<BL-ID>/`, wobei `<BL-ID>` die Item-ID aus dem Auftrag ist (der
+Startprompt nennt es als „Laufzustand"). Es ist vom Versionieren
+ausgeschlossen und wird nie committet. Darin:
+
+| Datei | Inhalt |
+|---|---|
+| `status.json` | mindestens `{"status": "…"}` mit `in-progress`, `blocked`, `needs-stefan` oder `review`; bei `blocked` zusätzlich `question` (absoluter Pfad), bei `needs-stefan` `reason`; bei `review` zusätzlich `head` und `gate` mit `rust_exit`/`fe_exit` |
+| `gate.txt` | der Gate-Beleg laut Skill |
+| `review-NN.md` | jeder Bericht des `spec-reviewer`, **wörtlich**, eine Datei je Runde |
+| `summary.md` | die Kurzfassung (höchstens 40 Zeilen) laut Skill |
+| `report.md` | der ausführliche Bericht |
+| `decision.md` | Entscheidungen, die bei einer Fortsetzung vorliegen |
+
+Ein anderer Ort als `.agent/<BL-ID>/` wird nicht gelesen.
 
 ## Ablauf
 
 Bei einer **Fortsetzung** (Startprompt sagt „Fortsetzung"): zuerst die
-entschiedenen Fragen, neue Klarstellungen der Spec und `.agent/decision.md`
+entschiedenen Fragen, neue Klarstellungen der Spec und `.agent/<BL-ID>/decision.md`
 lesen, dann an der unterbrochenen Stelle weitermachen.
 
-1. `.agent/status.json` auf `in-progress`; ist ein Item genannt, dort ebenso
+1. `.agent/<BL-ID>/status.json` auf `in-progress`; ist ein Item genannt, dort ebenso
    `status: in-progress`.
 2. Ist der Auftrag im Format „Teil 0 / Commit N / Abschluss" gestellt, zuerst
    Teil 0 laut Skill. Dann in kleinen, thematischen Commits implementieren
@@ -98,8 +111,8 @@ lesen, dann an der unterbrochenen Stelle weitermachen.
      schlägst mit `proposed_class` nur vor.
    - K3 (oder ohne HQ jede Frage, die über eine Klarstellung hinausgeht):
      interaktiv → den Menschen direkt fragen, Optionen und Empfehlung zuerst;
-     headless und blockierend → `.agent/status.json` auf `blocked` mit
-     `question`, `.agent/report.md` schreiben, beenden; als Subagent ohne
+     headless und blockierend → `.agent/<BL-ID>/status.json` auf `blocked` mit
+     `question`, `.agent/<BL-ID>/report.md` schreiben, beenden; als Subagent ohne
      Rückfragemöglichkeit → Befund und offene Entscheidungen berichten und
      **anhalten**, die Fortsetzung kommt als Nachricht.
    - Nicht blockierend → Annahme `A-n` treffen, im Code als
@@ -119,19 +132,21 @@ lesen, dann an der unterbrochenen Stelle weitermachen.
    <spec-commit>..HEAD, Priorität <normal|ERHÖHT>" (ERHÖHT bei Filter-Engine,
    Risiko-Klassifizierer, Redactor, Credential-Handling, Ausführungspfad,
    Verschlüsselung, Migration; dann mit
-   ausformulierten Angriffswegen). Funde triagieren wie im Skill beschrieben
+   ausformulierten Angriffswegen). **Den Bericht jeder Runde legst du
+   wörtlich unter `.agent/<BL-ID>/review-NN.md` ab, bevor du triagierst** —
+   so ist nachprüfbar, welcher Fund behoben und welcher bewusst stehen
+   gelassen wurde. Funde triagieren wie im Skill beschrieben
    und erneut prüfen lassen, höchstens zwei Runden. Bleibt danach etwas offen:
    Status `needs-stefan` mit `reason`.
 7. **Abschluss:** ADR und Changelog-Fragment laut Skill. Dann den Bericht
-   (headless in `.agent/report.md`, sonst in der Sitzung) — zusätzlich zum
+   (headless in `.agent/<BL-ID>/report.md`, sonst in der Sitzung) — zusätzlich zum
    Bericht aus dem Skill:
    - Reviewer-Ergebnis der letzten Runde (wörtlich), offene Annahmen, bewusst
      zurückgestellte Funde, was gepusht werden soll,
-   - Branch-Name und Arbeitsverzeichnis, ob der Branch auf dem aktuellen
-     Default-Branch aufsetzt und welche Dateien voraussichtlich mit anderen
-     Branches kollidieren (z. B. `commands.rs`, Locale-Dateien).
+   - die Commit-Range dieses Laufs (`<erster>..<letzter>`) und die
+     berührten Dateien.
 
-   Dann `.agent/status.json` (und das Item) auf `review` bzw. `needs-stefan`.
+   Dann `.agent/<BL-ID>/status.json` (und das Item) auf `review` bzw. `needs-stefan`.
    **Setz `review` erst, wenn du das Gate aus Schritt 5 selbst grün gesehen
    hast.** Niemand prüft das automatisch nach: Deine Aussage „Gate grün" ist
    die einzige, die es dazu gibt, bis sie jemand von Hand nachfährt. Verkette
@@ -151,15 +166,14 @@ ADRs und bestehenden Konventionen ableiten lässt, ist eine Klarstellung (K1).
 
 - Die Spec ist der Auftrag. Änderungen daran nur als dokumentierte
   Klarstellung — nie still vereinfachen oder weglassen.
-- **Nicht pushen, taggen oder mergen, nicht auf den Default-Branch
-  committen.** Du committest nur auf deinen Branch; das Zusammenführen macht
-  der Mensch.
-- **Keine Dev-App starten.** Dev-Apps aus parallelen Worktrees kollidieren bei
-  Port und App-Datenverzeichnis. Gib stattdessen konkrete manuelle
-  Testschritte.
+- **Nicht pushen, taggen oder mergen.** Du committest direkt auf `main`;
+  nach `origin` bringt es der Mensch.
+- **Während der Arbeit keine sichtbare App-Instanz.** Am Ende genau eine,
+  wenn die Änderung in der Oberfläche sichtbar ist — Einzelheiten im Skill.
+  Dazu immer konkrete manuelle Testschritte im Bericht.
 - **`CHANGELOG.md` nicht ändern** — nur ein Fragment in `changelog.d/`.
-- **Keine Spec- oder ADR-Nummer selbst vergeben**, wenn sie nicht im Auftrag
-  steht — `XXXX` als Platzhalter. **Version nie selbst erhöhen.**
+- **ADR-Nummern vergibst du selbst** (nächste freie in `docs/adr/`, laut
+  Skill). **Spec-Nummern und die Version nie.**
 - Keine neuen Abhängigkeiten ohne ausdrückliche Freigabe.
 - Dieses Repo ist öffentlich: nur Inhalte committen, die öffentlich sein
   dürfen — keine internen Planungs- oder Geschäftsdokumente, keine

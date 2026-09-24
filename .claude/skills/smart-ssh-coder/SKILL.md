@@ -126,20 +126,19 @@ und gehört in den Bericht — mit der Zahl der Versuche.
 - **ADR** für jede offen gelassene Entscheidung, jede Abweichung von der Spec
   und jeden bewusst nicht behobenen Fund. **Die Nummer vergibst du selbst:
   die höchste in `docs/adr/` plus eins** (`ls docs/adr/ | sort | tail -3`).
-  Kein `XXXX` mehr — der Platzhalter stammte aus der Zeit paralleler
-  Branches, in der zwei Läufe dieselbe Nummer hätten greifen können. Es
-  läuft nur noch ein Item je Repo, also kann das nicht mehr passieren.
+  Kein Platzhalter. Da immer nur ein Auftrag je Repo läuft, kann keine
+  zweite Sitzung dieselbe Nummer greifen.
   **Lies die Nummer nach dem Anlegen zurück** und prüfe, dass sie genau
   einmal vorkommt.
 - **Changelog**: nicht `CHANGELOG.md` direkt ändern, sondern ein Fragment
   `changelog.d/<spec-nummer>-<thema>.md` (deutsch, nutzerrelevant). Grund:
   parallele Coder würden sonst dieselben Zeilen ändern.
 - **Version nie selbst erhöhen.**
-- **Bericht**: `.agent/report.md` — was umgesetzt ist (in Nutzersprache),
+- **Bericht**: `.agent/<BL-ID>/report.md` — was umgesetzt ist (in Nutzersprache),
   Teil-0-Befund, Review-Funde behoben / bewusst nicht behoben mit Grund,
   **manuelle Testabläufe** (nummeriert, inkl. nötiger Server-Einrichtung),
   Commit-Liste.
-- **Zusammenfassung**: zusätzlich `.agent/summary.md`, **höchstens 40
+- **Zusammenfassung**: zusätzlich `.agent/<BL-ID>/summary.md`, **höchstens 40
   Zeilen**, in dieser Reihenfolge:
   1. Status und ob das Gate grün ist,
   2. was entschieden werden muss (je Punkt eine Zeile, mit Verweis auf den
