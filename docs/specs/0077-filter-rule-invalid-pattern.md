@@ -442,3 +442,20 @@ Keine mehr. Entschieden am 2026-09-24:
   beide Zweige), 3.2.1 und jede Aussage über das Verhalten des Produkts.
   Die Abdeckung wird größer statt kleiner — T-A12 belegt 3.2.1 jetzt in
   beide Richtungen und T-4 beide Richtungen von 3.1.1.
+
+- **2026-09-24 · Q-BL-0249-02 · K2:** In der Regelliste sind die
+  Pfeiltasten ↑/↓ an einer Regel mit `patternError` deaktiviert, mit einem
+  `title`, der den Grund nennt. `movePriority` bricht **vor dem ersten**
+  `updateRule` ab, wenn eine der beiden Regeln `patternError` trägt. 3.1.2
+  bleibt wörtlich: Jeder Schreibweg prüft. Test: Komponente mit einer
+  markierten Regel. Die Pfeile sind deaktiviert, und `updateRule` wird
+  nicht aufgerufen, auch nicht für die Nachbarregel.
+- **2026-09-24 · Q-BL-0249-03 · Stefan:** Der Log-Eintrag aus 3.2.2
+  enthält **weder das Muster noch einen Fehlertext, der es zitiert**. Die
+  Fehlertexte von `regex` und `globset` zitieren das Muster wörtlich,
+  deshalb stehen im Eintrag Regel-ID, Aktion und ein fester Kurztext je
+  Fall (etwa „regex does not compile“, „glob does not compile (strict
+  branch)“). `patternError` im DTO und die Anzeige in der Regelliste
+  bleiben unverändert. Test: ein ungültiges Muster, das ein Geheimnis
+  enthält. Kein ERROR-Ereignis enthält das Geheimnis. Der Test scheitert
+  gegen `ee017af`.
