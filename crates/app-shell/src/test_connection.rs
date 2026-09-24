@@ -8,7 +8,9 @@ use std::time::Duration;
 use async_trait::async_trait;
 use secrecy::SecretString;
 
-use ssh_manager_core::profiles::{AuthMethod, CredentialRef, CredentialStore, ProfileStore};
+use ssh_manager_core::profiles::{
+    trim_credential_value, AuthMethod, CredentialRef, CredentialStore, ProfileStore,
+};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{
     resolve_connection_target, ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, KeyFileReader,
@@ -249,13 +251,19 @@ fn resolve_final_hop_auth(
             let key_ref = CredentialRef::new("test:private_key");
             ephemeral.insert(&key_ref, key_secret);
 
-            let passphrase_ref = match passphrase {
-                Some(p) => {
+            // Spec 0073, §9 (K1, BL-0243): dieselbe Trim-Semantik und
+            // dieselbe „leer = das Gespeicherte nehmen"-Regel wie beim
+            // Speichern (`server_credentials::resolve_auth_method`).
+            // Vorher trat der Verbindungstest mit der Passphrase an, wie
+            // sie im Feld stand — derselbe Paste konnte den Test scheitern
+            // lassen und danach trotzdem richtig gespeichert werden.
+            let passphrase_ref = match passphrase.map(|p| trim_credential_value(&p)) {
+                Some(p) if !p.is_empty() => {
                     let r = CredentialRef::new("test:passphrase");
                     ephemeral.insert(&r, SecretString::from(p));
                     Some(r)
                 }
-                None => match existing {
+                _ => match existing {
                     Some(AuthMethod::PrivateKey {
                         passphrase_ref: Some(existing_ref),
                         ..
@@ -314,8 +322,12 @@ fn resolve_final_hop_auth(
         // `KeyFileReader` wie beim echten Verbinden. Nur die Passphrase
         // folgt der gewohnten „leer = das Gespeicherte nehmen"-Regel.
         AuthMethodInput::IdentityFile { path, passphrase } => {
-            let passphrase_ref = match passphrase {
-                Some(p) if !p.trim().is_empty() => {
+            // Spec 0073, §9 (K1, BL-0243): wie im `PrivateKey`-Zweig über
+            // den geteilten `trim_credential_value` statt über
+            // `str::trim` — und der getrimmte Wert ist auch der, der in
+            // den Ephemeral-Store geht, nicht der rohe.
+            let passphrase_ref = match passphrase.map(|p| trim_credential_value(&p)) {
+                Some(p) if !p.is_empty() => {
                     let r = CredentialRef::new("test:passphrase");
                     ephemeral.insert(&r, SecretString::from(p));
                     Some(r)
@@ -838,5 +850,179 @@ mod tests {
         .unwrap();
 
         assert!(matches!(result, TestConnectionResult::Success));
+    }
+
+    // --- Spec 0073, §9 (K1, BL-0243): Passphrase im Verbindungstest ------
+    //
+    // „Verbindung testen" und „Speichern" bekommen dieselbe Eingabe aus
+    // demselben Formularfeld. Behandeln sie sie verschieden, sagt ein
+    // grüner Verbindungstest nichts über den Server aus, der danach
+    // gespeichert wird — und ein roter nichts über die Passphrase. Beide
+    // Wege laufen deshalb über denselben `trim_credential_value` mit
+    // derselben „leer = das Gespeicherte nehmen"-Regel.
+    //
+    // Geprüft wird je Anmeldeart mit Passphrase (`PrivateKey`,
+    // `IdentityFile`), dass die **Ergebnisse** übereinstimmen, nicht dass
+    // beide Stellen denselben Funktionsnamen aufrufen.
+
+    #[derive(Clone, Copy, Debug)]
+    enum PassphraseAuth {
+        PrivateKey,
+        IdentityFile,
+    }
+
+    const PASSPHRASE_AUTH_KINDS: [PassphraseAuth; 2] =
+        [PassphraseAuth::PrivateKey, PassphraseAuth::IdentityFile];
+
+    impl PassphraseAuth {
+        fn input(self, passphrase: Option<&str>) -> AuthMethodInput {
+            let passphrase = passphrase.map(str::to_string);
+            match self {
+                PassphraseAuth::PrivateKey => AuthMethodInput::PrivateKey {
+                    key_content: Some("-----BEGIN OPENSSH PRIVATE KEY-----".to_string()),
+                    passphrase,
+                },
+                PassphraseAuth::IdentityFile => AuthMethodInput::IdentityFile {
+                    path: "/home/deploy/.ssh/id_ed25519".to_string(),
+                    passphrase,
+                },
+            }
+        }
+
+        fn existing(self, passphrase_ref: CredentialRef) -> AuthMethod {
+            match self {
+                PassphraseAuth::PrivateKey => AuthMethod::PrivateKey {
+                    credential_ref: CredentialRef::new("server:existing:private_key"),
+                    passphrase_ref: Some(passphrase_ref),
+                },
+                PassphraseAuth::IdentityFile => AuthMethod::IdentityFile {
+                    path: "/home/deploy/.ssh/id_ed25519".to_string(),
+                    passphrase_ref: Some(passphrase_ref),
+                },
+            }
+        }
+    }
+
+    fn passphrase_ref_of(auth: &AuthMethod) -> Option<CredentialRef> {
+        match auth {
+            AuthMethod::PrivateKey { passphrase_ref, .. }
+            | AuthMethod::IdentityFile { passphrase_ref, .. } => passphrase_ref.clone(),
+            other => panic!("unerwartete AuthMethod ohne Passphrase-Slot: {other:?}"),
+        }
+    }
+
+    fn expose(store: &dyn CredentialStore, r: &CredentialRef) -> String {
+        use secrecy::ExposeSecret;
+        store
+            .get(r)
+            .expect("Passphrase-Slot muss auflösbar sein")
+            .expose_secret()
+            .to_string()
+    }
+
+    /// Dieselbe Eingabe durch beide Wege. Zurück kommt je Weg die
+    /// Passphrase, mit der tatsächlich angemeldet würde — `None`, wenn
+    /// kein Passphrase-Slot entstand.
+    ///
+    /// `stored` ist die bereits hinterlegte Passphrase eines bestehenden
+    /// Servers (`None` = neuer Server ohne Vorgeschichte). Die beiden Wege
+    /// bekommen getrennte, gleich befüllte Stores, damit der schreibende
+    /// Speicher-Weg dem lesenden Test-Weg nicht die Ausgangslage
+    /// verändert.
+    fn passphrase_both_ways(
+        kind: PassphraseAuth,
+        pasted: Option<&str>,
+        stored: Option<&str>,
+    ) -> (Option<String>, Option<String>) {
+        let existing_ref = CredentialRef::new("server:existing:passphrase");
+        let existing_auth = stored.map(|_| kind.existing(existing_ref.clone()));
+
+        let seed = || match stored {
+            Some(value) => InMemoryCredentialStore::new().with_secret(&existing_ref, value),
+            None => InMemoryCredentialStore::new(),
+        };
+
+        // Weg 1: „Verbindung testen" — Secrets landen im Ephemeral-Store.
+        let real_store = seed();
+        let ephemeral = EphemeralCredentialStore::new();
+        let test_auth = resolve_final_hop_auth(
+            &ephemeral,
+            &real_store,
+            AVAILABLE,
+            kind.input(pasted),
+            existing_auth.as_ref(),
+        )
+        .expect("Verbindungstest-Auth muss auflösen");
+        let via_test =
+            passphrase_ref_of(&test_auth).map(|r| expose(&ephemeral as &dyn CredentialStore, &r));
+
+        // Weg 2: „Speichern" — Secrets landen im echten Store.
+        let save_store = seed();
+        let save_auth = crate::server_credentials::resolve_auth_method(
+            &save_store,
+            AVAILABLE,
+            ServerId::new(),
+            kind.input(pasted),
+            existing_auth.as_ref(),
+        )
+        .expect("Speicher-Auth muss auflösen");
+        let via_save =
+            passphrase_ref_of(&save_auth).map(|r| expose(&save_store as &dyn CredentialStore, &r));
+
+        (via_test, via_save)
+    }
+
+    #[test]
+    fn test_bl0243_pasted_passphrase_is_trimmed_the_same_way_in_both_paths() {
+        for kind in PASSPHRASE_AUTH_KINDS {
+            let (via_test, via_save) =
+                passphrase_both_ways(kind, Some(" \u{FEFF}geheime-passphrase\u{200B}\r\n"), None);
+
+            assert_eq!(
+                via_test, via_save,
+                "{kind:?}: Verbindungstest und Speichern müssen dieselbe Passphrase benutzen"
+            );
+            assert_eq!(
+                via_test.as_deref(),
+                Some("geheime-passphrase"),
+                "{kind:?}: Rand-Leerraum, BOM und Zero-Width-Space gehören weggetrimmt"
+            );
+        }
+    }
+
+    #[test]
+    fn test_bl0243_passphrase_of_only_invisible_chars_keeps_the_stored_one_in_both_paths() {
+        for kind in PASSPHRASE_AUTH_KINDS {
+            let (via_test, via_save) =
+                passphrase_both_ways(kind, Some("\u{200B} \u{FEFF}"), Some("gespeicherte-alte"));
+
+            assert_eq!(
+                via_test, via_save,
+                "{kind:?}: ein Paste aus lauter unsichtbaren Zeichen muss in beiden Wegen \
+                 dasselbe heißen"
+            );
+            assert_eq!(
+                via_test.as_deref(),
+                Some("gespeicherte-alte"),
+                "{kind:?}: leer heißt „das Hinterlegte nehmen\", nicht „mit leer anmelden\""
+            );
+        }
+    }
+
+    // Gegenstück zu I1: Nur der Rand wird bereinigt. Eine Passphrase mit
+    // einem unsichtbaren Zeichen **innen** behält es — in beiden Wegen.
+    #[test]
+    fn test_bl0243_invisible_char_inside_the_passphrase_survives_in_both_paths() {
+        for kind in PASSPHRASE_AUTH_KINDS {
+            let (via_test, via_save) =
+                passphrase_both_ways(kind, Some("  ge\u{200B}heim  "), Some("gespeicherte-alte"));
+
+            assert_eq!(via_test, via_save, "{kind:?}");
+            assert_eq!(
+                via_test.as_deref(),
+                Some("ge\u{200B}heim"),
+                "{kind:?}: ein Zeichen innerhalb der Passphrase gehört dort möglicherweise hin"
+            );
+        }
     }
 }
