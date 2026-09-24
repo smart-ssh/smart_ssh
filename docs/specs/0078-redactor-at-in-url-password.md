@@ -339,7 +339,15 @@ gepusht.
 
 ## 8. Offene Punkte (K3, Stefan)
 
-Keine. Die Messung hat zusätzlich zum Item drei Dinge ergeben: den
+**Q-BL-0248-03:** Bleibt es bei der festen zweiten Anwendung von N1
+(§3.1, Empfehlung), oder wird `redact_bytes` zu einer Schleife umgebaut,
+die N1 bis zur Unveränderlichkeit anwendet? Die Schleife deckt beliebig
+viele `@`-haltige Schlüsselwort-Parameter je Token ab, kippt aber ein
+Nicht-Ziel aus §2 und wirkt auf alle Regeln. Bis zur Entscheidung gilt
+die feste zweite Anwendung; der Restfall ab dem dritten Parameter steht
+in §5.
+
+Sonst keine. Die Messung hat zusätzlich zum Item drei Dinge ergeben: den
 Benutzernamen mit `@` (B), den Positionsfehler von N2 und den Fall mit
 Anführungszeichen bei N1. Alle drei sind eingearbeitet, und keiner
 verlangt eine Produktentscheidung.
@@ -399,8 +407,11 @@ verlangt eine Produktentscheidung.
 
   Der Restfall aus Q-BL-0248-01 ist unverändert und auf `?` beschränkt.
 
-- **2026-09-24 · Q-BL-0248-03 · K2 (Fund `spec-reviewer`, Runde 3,
-  nachgemessen):** Die Trennergruppe aus Q-BL-0248-02 schließt `@` aus
+- **2026-09-24 · Q-BL-0248-03 · K3, Entscheidung steht aus** (Fund
+  `spec-reviewer`, Runde 3, nachgemessen). Der umgesetzte Stand ist die
+  feste zweite Anwendung; er erfüllt §2 und ist unabhängig vom Ausgang
+  der sichere Zustand. Offen ist nur, ob es dabei bleibt (§8).
+  Die Trennergruppe aus Q-BL-0248-02 schließt `@` aus
   und kann deshalb nicht über einen schon `@`-haltigen Parameter
   hinweglaufen; `replace_all` sucht nur vorwärts. Bei **zwei**
   `@`-haltigen Schlüsselwort-Parametern im selben Token erreichte N1
@@ -414,8 +425,19 @@ verlangt eine Produktentscheidung.
   gleich. Nach dem ersten Durchlauf steht am ersten Parameter
   `[REDACTED]` ohne `@`, und die Trennergruppe kommt daran vorbei.
   Ergebnis jetzt `redis://cache:6379?[REDACTED]`, also besser als vor
-  dieser Spec. Eine zusätzliche Anwendung derselben Regel kann per
-  Konstruktion nur mehr redigieren.
+  dieser Spec.
+
+  **Nicht** „per Konstruktion nur mehr redigieren": Der Satz gilt für die
+  Ersetzung selbst — der Trenner wird über `${sep}` wörtlich
+  zurückgeschrieben, ersetzt wird allein `<schlüsselwort>=<wert>`, nichts
+  wird freigelegt. Er gilt **nicht** für die Kette: Wie die erste
+  Anwendung kann die zweite einem späteren Muster einen mehrteiligen
+  Anker zerschneiden, der im Wert beginnt und hinter dem ersten Leerraum
+  weiterläuft. Über `<schlüsselwort>=` erreichbar sind heute nur die
+  PEM-/PGP-Anker, und die decken die Kopien am Listenanfang ab (A);
+  netrc und `client-key-data` haben keine `=`-Trennung und sind
+  unerreichbar (ADR 0069 §9). Die Aussage stützt sich also auf (A) und
+  die Messung, nicht auf die Konstruktion.
 
   Restfall: Drei und mehr `@`-haltige Schlüsselwort-Parameter im selben
   Token bräuchten je eine weitere Anwendung; ab dem dritten bleibt es

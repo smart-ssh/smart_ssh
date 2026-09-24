@@ -451,8 +451,22 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // Nach dem ersten Durchlauf steht dort `[REDACTED]` statt des
         // ersten Werts, und `[REDACTED]` enthält kein `@` — die
         // Trennergruppe kommt jetzt daran vorbei und erreicht den zweiten
-        // Parameter. Eine zusätzliche Anwendung derselben Regel kann per
-        // Konstruktion nur mehr redigieren, nie weniger.
+        // Parameter.
+        //
+        // NICHT „per Konstruktion nur mehr redigieren": Der Satz gilt für
+        // die Ersetzung selbst (der Trenner wird über `${sep}` wörtlich
+        // zurückgeschrieben, ersetzt wird allein `<schlüsselwort>=<wert>`,
+        // nichts wird freigelegt), aber NICHT für die Kette. Wie die erste
+        // Anwendung kann die zweite einem späteren Muster einen
+        // mehrteiligen Anker zerschneiden, der im Wert beginnt und hinter
+        // dem ersten Leerraum weiterläuft. Über `<schlüsselwort>=`
+        // erreichbar sind heute nur die PEM-/PGP-Anker, und die deckt die
+        // Kopie am Listenanfang ab; netrc und `client-key-data` haben
+        // keine `=`-Trennung und sind unerreichbar. Die Unbedenklichkeit
+        // stützt sich also auf die Kopien und auf die Messung, nicht auf
+        // die Konstruktion. (Eine frühere Fassung dieses Kommentars
+        // behauptete das Gegenteil — Korrektur des Architekten zu
+        // Q-BL-0248-03, s. Spec 0078 §9.)
         //
         // RESTFALL: Drei und mehr `@`-haltige Schlüsselwort-Parameter im
         // selben Token brauchten je eine weitere Anwendung; ab dem dritten

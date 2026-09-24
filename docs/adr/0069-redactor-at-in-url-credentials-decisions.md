@@ -338,10 +338,28 @@ und hat das gesagt.
 
 **Korrektur: N1 steht zweimal hintereinander in der Liste, wörtlich
 gleich.** Nach dem ersten Durchlauf steht am ersten Parameter `[REDACTED]`,
-das kein `@` enthält, und die Trennergruppe kommt daran vorbei. Eine
-zusätzliche Anwendung derselben Regel kann per Konstruktion nur mehr
-redigieren, nie weniger — das ist der ganze Grund, warum diese Form der
-Korrektur vertretbar ist, ohne die Kette erneut zu vermessen.
+das kein `@` enthält, und die Trennergruppe kommt daran vorbei.
+
+**Warum das unbedenklich ist — und warum die erste Begründung dafür nicht
+taugte.** Ich hatte geschrieben, eine zusätzliche Anwendung derselben
+Regel könne „per Konstruktion nur mehr redigieren, nie weniger". Der
+Architekt hat das zu Recht zurückgewiesen (Spec §9): Der Satz gilt für die
+**Ersetzung** — der Trenner wird über `${sep}` wörtlich zurückgeschrieben,
+ersetzt wird allein `<schlüsselwort>=<wert>`, nichts wird freigelegt. Für
+die **Kette** gilt er nicht: Wie die erste Anwendung kann die zweite einem
+späteren Muster einen mehrteiligen Anker zerschneiden, der im Wert beginnt
+und hinter dem ersten Leerraum weiterläuft — genau der Fehler aus §4 und
+§11. Über `<schlüsselwort>=` erreichbar sind heute nur die PEM-/PGP-Anker,
+und die deckt (A) ab; netrc und `client-key-data` haben keine
+`=`-Trennung. Die Unbedenklichkeit stützt sich also auf (A) und auf die
+Messung, nicht auf die Konstruktion.
+
+Das ist innerhalb dieses Schritts die **vierte** Begründung an dieser
+Regel, die sich als falsch herausgestellt hat (nach der Quote-Begründung,
+„das DB-Muster läuft nur über Werte mit `@`" und „ein Anker ohne `@` ist
+unerreichbar"). Alle vier hatten dieselbe Form: eine plausible Aussage über
+eine einzelne Regel, hochgerechnet auf eine Kette, die sequenziell
+arbeitet. Wer hier etwas ändert, misst besser, als er schließt.
 
 **Restfall:** Drei und mehr `@`-haltige Schlüsselwort-Parameter im selben
 Token bräuchten je eine weitere Anwendung; ab dem dritten bleibt es beim

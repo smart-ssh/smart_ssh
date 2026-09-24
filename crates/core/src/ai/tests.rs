@@ -1626,6 +1626,30 @@ fn test_redactor_redacts_two_at_bearing_query_parameters_in_one_token() {
     assert_eq!(redacted, "redis://cache:6379?[REDACTED]");
 }
 
+/// Gegenprobe, Auflage des Architekten zu Q-BL-0248-03: Der Anker eines
+/// Schlüsselblocks steht im **zweiten** `@`-haltigen Parameter, also in
+/// dem, den erst die zweite Anwendung der Query-String-Regel erreicht.
+///
+/// Damit ist gemessen statt hergeleitet, dass die Kopien der
+/// Schlüsselmuster am Listenanfang auch die zweite Anwendung decken —
+/// genau die Fehlerklasse, die in diesem Schritt zweimal zugeschlagen
+/// hat (Anker im Wert zerschnitten, Schlüsselkörper im Klartext), war
+/// für die zweite Anwendung sonst ungetestet.
+#[test]
+fn test_redactor_redacts_a_key_block_in_the_second_query_parameter() {
+    let redactor = DefaultOutputRedactor::new();
+
+    let redacted = redactor.redact_text(
+        "https://v/api?password=p@ss&secret=a@-----BEGIN PRIVATE KEY-----\n\
+         MIIEvQbodyOfKey\n\
+         -----END PRIVATE KEY-----",
+    );
+
+    assert!(!redacted.contains("MIIEvQbodyOfKey"), "{redacted}");
+    assert!(!redacted.contains("p@ss"), "{redacted}");
+    assert_eq!(redacted, "https://v/api?[REDACTED]");
+}
+
 /// Bekannter Restfall der `&`-Form, festgehalten damit er nicht
 /// unbemerkt kippt: Ohne vorangehendes `?` greift die Query-String-Regel
 /// nicht, und das DB-Muster läuft bis zum `@` im Wert. Gemessen: das ist
