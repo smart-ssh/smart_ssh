@@ -140,7 +140,12 @@ export function NoteShrinkSuggestionToast() {
             Deine Notiz für diesen Server ist sehr groß und kann bei langen Sitzungen gekürzt
             werden müssen. Soll ich sie zusammenfassen?
           </p>
-          <div className="mt-2 flex gap-2">
+          {/* Spec 0079, A2: dritter Knopf ("Später") zusätzlich zu den
+           * bisherigen zweien — bei `w-80` (320px, abzüglich `p-3` 296px
+           * nutzbar) reichen drei `text-xs`/`px-3`-Knöpfe in einer Zeile
+           * rechnerisch nicht mehr aus. `flex-wrap` lässt sie sauber
+           * umbrechen statt sich zu stauchen. */}
+          <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => later(suggestion.serverId)}
