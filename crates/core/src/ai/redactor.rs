@@ -326,15 +326,29 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // `…_does_not_cut_a_private_key_armor_anchor` und
         // `…_still_redacts_a_query_parameter_without_an_at_sign`.
         //
-        // Die Kehrseite, gemessen und bewusst hingenommen: Weil diese
-        // Regel bei einem Wert ohne `@` nicht mehr ersetzt, kann das
-        // DB-Muster an einem `/` IM Wert hängenbleiben und dann gar nicht
-        // greifen — bei `postgres://u:Geheim?password=pl/ain&x=y@h/db`
-        // bleibt `Geheim` sichtbar. Gegenüber dem Stand VOR Spec 0078 ist
-        // das unverändert (auch dort bleibt es sichtbar); nur gegenüber
-        // der ersten, zu breiten Fassung dieser Regel, die den Fall
-        // versehentlich mit schloss, ist es ein Rückschritt. Gehört zur
-        // Familie „Passwort mit Query-Präfix", s. ADR 0069 §6.
+        // BEKANNTER RESTFALL, bewusst entschieden (Stefan, 2026-09-24,
+        // Q-BL-0248-01; Spec 0078 §5, Test
+        // `…_known_remaining_case_password_with_a_query_parameter_prefix`):
+        // Enthält das PASSWORT einer Verbindungs-URL wörtlich
+        // `?<schlüsselwort>=` mit einem `@` im Wert, greift diese Regel,
+        // und der Passwort-Präfix VOR dem `?` bleibt sichtbar —
+        // `postgres://u:a?password=b@h/x` wird zu
+        // `postgres://u:a?[REDACTED]`, vorher `postgres://u:[REDACTED]@h/x`.
+        // Der Präfix kann beliebig lang sein. Das ist die EINZIGE Stelle,
+        // an der Spec 0078 weniger redigiert als der Stand davor.
+        //
+        // Nicht auflösbar, ohne die Position dieser Regel aufzugeben und
+        // damit Fall C wieder zu öffnen: Die Zeichenkette hat zwei
+        // Lesarten (Passwort `a?password=b` mit Host `h`, oder Passwort
+        // `a` mit Query-String), die ohne echtes URL-Parsing niemand
+        // trennen kann. Vorher war die erste Lesart zu und die zweite
+        // offen, jetzt umgekehrt. Betroffen sind nur DB-Schemata.
+        //
+        // Davon zu unterscheiden, weil es NICHT neu ist: Ohne `@` im
+        // Parameterwert bleibt der Präfix ebenfalls sichtbar
+        // (`postgres://u:Geheim?password=pl/ain&x=y@h/db` — das DB-Muster
+        // bleibt am `/` im Wert hängen), aber das war vor Spec 0078
+        // genauso. Gemessen.
         //
         // Restfall, bewusst (Spec 0078 §5): ein leerer Wert
         // (`?token=` am Zeilenende) wird nicht erfasst — es gibt nichts zu

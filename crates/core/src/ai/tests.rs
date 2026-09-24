@@ -1531,3 +1531,40 @@ fn test_redactor_known_over_redaction_across_a_pipe_separated_second_at_sign() {
         "https://u:[REDACTED]@mail"
     );
 }
+
+/// Spec 0078, §6.3 (T-R3): bekannter Restfall, Spec 0078 §5 —
+/// Entscheidung Stefan vom 2026-09-24 (Q-BL-0248-01).
+///
+/// Dies ist die **einzige** Stelle, an der Spec 0078 weniger redigiert
+/// als der Stand davor: Enthält das Passwort einer Verbindungs-URL
+/// wörtlich `?<schlüsselwort>=` mit einem `@` im Wert, greift die
+/// Query-String-Regel, und der Passwort-Präfix **vor** dem `?` bleibt
+/// sichtbar. Vorher redigierte das DB-Muster `a?password=b` als Ganzes
+/// (`postgres://u:[REDACTED]@h/x`). Der Präfix kann beliebig lang sein.
+///
+/// Ursache ist die Position der Query-String-Regel vor dem DB-Muster —
+/// dieselbe Position, die den auslösenden Fall des Items löst. Die
+/// Zeichenkette hat zwei Lesarten (Passwort `a?password=b` mit Host `h`,
+/// oder Passwort `a` mit Query-String `?password=b@h/x`), und ohne
+/// echtes URL-Parsing kann kein Muster sie unterscheiden: vorher war die
+/// erste Lesart zu und die zweite offen, jetzt umgekehrt.
+///
+/// Kein Falsch-Positiv-Test und kein Gegenbeweis — bewusst entschiedenes
+/// Verhalten, hier festgehalten, damit es nicht unbemerkt kippt.
+#[test]
+fn test_redactor_known_remaining_case_password_with_a_query_parameter_prefix() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("postgres://u:a?password=b@h/x"),
+        "postgres://u:a?[REDACTED]"
+    );
+
+    // Ohne `@` im Parameterwert ist der Fall NICHT neu: der Präfix bleibt
+    // dort sichtbar, aber genauso wie vor Spec 0078 (gemessen). Hier
+    // festgehalten, damit die beiden Fälle nicht verwechselt werden.
+    assert_eq!(
+        redactor.redact_text("postgres://u:SuperSecret123?password=pl/ain&x=y@h/db"),
+        "postgres://u:SuperSecret123?[REDACTED]"
+    );
+}
