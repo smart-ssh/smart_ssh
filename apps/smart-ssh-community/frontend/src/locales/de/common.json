@@ -238,6 +238,7 @@
     "priority": "Prio {{value}}",
     "increasePriority": "Priorität erhöhen",
     "decreasePriority": "Priorität senken",
+    "priorityDisabledPatternError": "Nicht verschiebbar: Das Muster dieser Regel ist ungültig.",
     "newRule": "Neue Regel",
     "editRule": "Regel bearbeiten",
     "patternType": "Pattern-Typ",

@@ -2,7 +2,7 @@
 // lässt, muss im Regel-Formular verständlich UND mit der Stelle im Muster
 // erscheinen (3.1.4) — und eine schon gespeicherte Regel mit einem solchen
 // Muster muss in der Regelliste als wirkungslos erkennbar sein (3.2.3).
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
@@ -15,6 +15,7 @@ const LIBRARY_ERROR = "regex parse error: unclosed group";
 
 const listRulesMock = vi.fn<() => Promise<RuleDto[]>>();
 const createRuleMock = vi.fn();
+const updateRuleMock = vi.fn(() => Promise.resolve());
 
 vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) =>
@@ -32,7 +33,7 @@ vi.mock("../api", () => ({
   listKnownTags: vi.fn(() => Promise.resolve([])),
   listRules: () => listRulesMock(),
   listServers: vi.fn(() => Promise.resolve([])),
-  updateRule: vi.fn(() => Promise.resolve()),
+  updateRule: (...args: unknown[]) => updateRuleMock(...args),
 }));
 
 function validRule(): RuleDto {
@@ -73,6 +74,7 @@ const invalidPatternText = () =>
 beforeEach(() => {
   listRulesMock.mockReset();
   createRuleMock.mockReset();
+  updateRuleMock.mockReset();
 });
 
 describe("Regel-Formular bei ungültigem Muster (Spec 0077, T-6)", () => {
@@ -149,5 +151,88 @@ describe("Regelliste markiert ein ungültiges Muster (Spec 0077, T-6e)", () => {
     await screen.findByRole("alert");
     expect(screen.getByRole("button", { name: /^(Bearbeiten|Edit)$/ })).toBeEnabled();
     expect(screen.getByRole("button", { name: /^(Löschen|Delete)$/ })).toBeEnabled();
+  });
+});
+
+// Spec 0077, Klarstellung Q-BL-0249-02: Die Pfeiltasten an einer Regel mit
+// ungültigem Muster dürfen die Priorität nicht verschieben — weder die
+// eigenen Pfeile noch die einer Nachbarregel, deren Verschieben die
+// markierte Regel mitbeträfe. `updateRule` darf in keinem der beiden Fälle
+// aufgerufen werden.
+describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, Q-BL-0249-02)", () => {
+  function ruleAt(id: string, priority: number, patternError: string | null): RuleDto {
+    return {
+      id,
+      patternType: "glob",
+      patternValue: `${id}-pattern *`,
+      action: "Allow",
+      scope: "Global",
+      priority,
+      patternError,
+    };
+  }
+
+  it("deaktiviert beide Pfeile an der markierten Regel selbst, mit Begründung im title", async () => {
+    // Drei Regeln im selben Scope, die markierte in der Mitte (Prio 100),
+    // damit "deaktiviert" nicht bloß der triviale Rand-Fall (erste/letzte
+    // Regel) ist, sondern wirklich an `patternError` hängt.
+    listRulesMock.mockResolvedValue([
+      ruleAt("rule-top", 200, null),
+      ruleAt("rule-broken", 100, LIBRARY_ERROR),
+      ruleAt("rule-bottom", 0, null),
+    ]);
+    renderView();
+
+    await screen.findByText(/rule-broken-pattern/);
+    const brokenRow = screen.getByText(/rule-broken-pattern/).closest("li")!;
+    const up = within(brokenRow).getByRole("button", { name: /Priorität erhöhen|Increase priority/ });
+    const down = within(brokenRow).getByRole("button", {
+      name: /Priorität senken|Decrease priority/,
+    });
+
+    expect(up).toBeDisabled();
+    expect(down).toBeDisabled();
+    expect(up).toHaveAttribute("title", expect.stringMatching(/./));
+
+    fireEvent.click(up);
+    fireEvent.click(down);
+    expect(updateRuleMock).not.toHaveBeenCalled();
+  });
+
+  it("bricht vor dem ersten updateRule ab, wenn nur die Nachbarregel patternError trägt", async () => {
+    listRulesMock.mockResolvedValue([
+      ruleAt("rule-top", 200, null),
+      ruleAt("rule-broken", 100, LIBRARY_ERROR),
+      ruleAt("rule-bottom", 0, null),
+    ]);
+    renderView();
+
+    await screen.findByText(/rule-top-pattern/);
+    // `rule-top` selbst hat kein patternError, sein Abwärts-Pfeil ist also
+    // anklickbar — die Nachbarregel (`rule-broken`), auf die er zielt, hat
+    // aber ein ungültiges Muster. movePriority muss trotzdem abbrechen,
+    // bevor auch nur die erste `updateRule` läuft.
+    const topRow = screen.getByText(/rule-top-pattern/).closest("li")!;
+    const topDown = within(topRow).getByRole("button", {
+      name: /Priorität senken|Decrease priority/,
+    });
+    expect(topDown).toBeEnabled();
+
+    // `movePriority` ist zwar `async`, der Abbruch (`return`) steht aber
+    // vor dem ersten `await` — er läuft also synchron innerhalb des Klicks,
+    // ohne dass es auf ein Mikrotask-Ticken ankäme.
+    fireEvent.click(topDown);
+    expect(updateRuleMock).not.toHaveBeenCalled();
+
+    // Symmetrischer Fall: die Regel unterhalb der markierten greift ebenso
+    // auf sie zu (Aufwärts-Pfeil von `rule-bottom`).
+    const bottomRow = screen.getByText(/rule-bottom-pattern/).closest("li")!;
+    const bottomUp = within(bottomRow).getByRole("button", {
+      name: /Priorität erhöhen|Increase priority/,
+    });
+    expect(bottomUp).toBeEnabled();
+
+    fireEvent.click(bottomUp);
+    expect(updateRuleMock).not.toHaveBeenCalled();
   });
 });

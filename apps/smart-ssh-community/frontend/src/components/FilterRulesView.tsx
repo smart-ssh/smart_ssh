@@ -132,6 +132,14 @@ export function FilterRulesView() {
     if (otherIndex < 0 || otherIndex >= groupRules.length) return;
     const a = groupRules[index];
     const b = groupRules[otherIndex];
+    // Spec 0077, Klarstellung Q-BL-0249-02: Bricht vor dem ersten
+    // `updateRule` ab, wenn eine der beiden beteiligten Regeln ein
+    // ungültiges Muster trägt — auch wenn nur die Nachbarregel betroffen
+    // ist und der eigene Pfeil deshalb noch anklickbar wäre. 3.1.2 bleibt
+    // wörtlich: Jeder Schreibweg (auch dieser) prüft das Muster; diese
+    // Prüfung ist eine zusätzliche Absicherung davor, sie überhaupt erst
+    // anzustoßen.
+    if (a.patternError || b.patternError) return;
     try {
       // Tauscht die Prioritätswerte zweier benachbarter Regeln, statt sie
       // nur um 1 zu verschieben — vermeidet, dass wiederholtes Klicken
@@ -206,7 +214,8 @@ export function FilterRulesView() {
                     <button
                       type="button"
                       onClick={() => movePriority(group.rules, index, -1)}
-                      disabled={index === 0}
+                      disabled={index === 0 || !!rule.patternError}
+                      title={rule.patternError ? t("filterRules.priorityDisabledPatternError") : undefined}
                       className="bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
                       aria-label={t("filterRules.increasePriority")}
                     >
@@ -215,7 +224,8 @@ export function FilterRulesView() {
                     <button
                       type="button"
                       onClick={() => movePriority(group.rules, index, 1)}
-                      disabled={index === group.rules.length - 1}
+                      disabled={index === group.rules.length - 1 || !!rule.patternError}
+                      title={rule.patternError ? t("filterRules.priorityDisabledPatternError") : undefined}
                       className="bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
                       aria-label={t("filterRules.decreasePriority")}
                     >

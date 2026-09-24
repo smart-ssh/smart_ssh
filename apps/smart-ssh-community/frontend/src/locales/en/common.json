@@ -238,6 +238,7 @@
     "priority": "Priority {{value}}",
     "increasePriority": "Increase priority",
     "decreasePriority": "Decrease priority",
+    "priorityDisabledPatternError": "Cannot move: this rule's pattern is invalid.",
     "newRule": "New Rule",
     "editRule": "Edit Rule",
     "patternType": "Pattern Type",
