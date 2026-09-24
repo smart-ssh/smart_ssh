@@ -790,4 +790,113 @@ mod tests {
         assert!(!facts.valid_key);
         assert!(!facts.exists);
     }
+
+    /// **§6.4.1 (Spec 0076, Schritt 5 — die Spec ordnet ihn hier zu: „Der
+    /// Test verlangt, dass Schlüsselmaterial nach einem Verbindungsaufbau
+    /// weder in der Datenbank noch in der Oberfläche auftaucht — beides
+    /// gibt es vor Schritt 3 bzw. 5 nicht", §7).**
+    ///
+    /// „Zum Verbinden benutzt" heißt hier: über [`resolve_auth`], denselben
+    /// Weg, den `ssh-transport` bei jeder echten Verbindung geht. Der
+    /// eigentliche SSH-Handshake ist bereits durch
+    /// `ssh-transport/tests/integration.rs`s `test_t6_3_8_…`/
+    /// `test_t6_3_6_…` gegen einen echten Testserver abgedeckt und wird
+    /// hier nicht wiederholt — dieser Test prüft die vier in 5.1/§6.4.1
+    /// genannten Orte, an denen der Inhalt NICHT auftauchen darf, jeden
+    /// einzeln und mit einem eindeutigen Erkennungsmerkmal:
+    ///
+    /// 1. Debug-Ausdruck von [`ResolvedAuth`] (`secrecy`s redigiertes
+    ///    `Debug` auf `SecretString` — auch ein versehentliches `{:?}` auf
+    ///    dem aufgelösten Material selbst darf nichts zeigen).
+    /// 2. Debug-Ausdruck des aus der **echten** SQLite-Datenbank
+    ///    zurückgelesenen [`Server`].
+    /// 3. Die **rohen Bytes** der SQLite-Datei selbst — nicht nur der
+    ///    Store-Trait, der ohnehin nur zurückgibt, was er gespeichert hat.
+    /// 4. Die JSON-Serialisierung von [`ServerDto`] und
+    ///    [`KeyFileFactsDto`] — das, was tatsächlich ans Frontend geht.
+    ///
+    /// **Was hier bewusst NICHT nachgestellt wird:** „nicht im Log" aus 5.1
+    /// hat auf diesem Pfad keine Gegenstelle — weder `resolve_auth` noch
+    /// `OsKeyFileReader`/`convert_identity_file_to_keychain` rufen
+    /// `tracing::*!` mit dem Schlüssel auf (die einzige `tracing`-Zeile in
+    /// diesem Modul ist `roll_back_key_slot`s Warnung, die nur den
+    /// `CredentialRef`-Namen und den Fehler nennt, s. dort). Ein
+    /// Log-Mitschnitt bräuchte in `ssh-transport` eine neue
+    /// `tracing`-Testabhängigkeit — ohne Freigabe nicht aufgenommen
+    /// (spec-reviewer-Fund, Review dieses Schritts).
+    #[tokio::test]
+    async fn test_t6_4_1_key_content_never_reaches_the_database_debug_output_or_dto() {
+        use ssh_manager_core::ssh::{resolve_auth, ResolvedAuth};
+
+        const MARKER: &str = "MARKER-6-4-1-MUST-NEVER-LEAK-OUTSIDE-SECRETSTRING";
+
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("t641.db");
+        let store = persistence_sqlite::SqliteProfileStore::connect(&db_path)
+            .await
+            .expect("temporäre SQLite-Datenbank muss sich öffnen lassen");
+
+        let id = ServerId::new();
+        let server = identity_server(id, None);
+        store
+            .create_server(&server)
+            .await
+            .expect("Server mit IdentityFile-Anmeldeart muss sich anlegen lassen");
+
+        // Der Weg, den jede echte Verbindung nimmt.
+        let key_files = MockKeyFileReader::new().with_key(PATH, MARKER);
+        let credential_store = InMemoryCredentialStore::new();
+        let resolved = resolve_auth(&server.auth, &credential_store, &key_files)
+            .expect("ein gültiger, unverschlüsselter Schlüssel muss auflösen");
+        let ResolvedAuth::PrivateKey { key, .. } = &resolved else {
+            panic!("erwartet PrivateKey, bekam {resolved:?}");
+        };
+        assert_eq!(
+            key.expose_secret(),
+            MARKER,
+            "Gegenprobe: der Marker muss tatsächlich ankommen, sonst prüft der Rest nichts"
+        );
+
+        // 1. Debug-Ausdruck des aufgelösten Auth-Materials.
+        assert!(
+            !format!("{resolved:?}").contains(MARKER),
+            "5.1: SecretStrings redigiertes Debug darf den Schlüssel nicht zeigen"
+        );
+
+        // 2. Debug-Ausdruck des aus der Datenbank zurückgelesenen Servers.
+        let reloaded = store
+            .get_server(&id)
+            .await
+            .expect("Server muss wieder lesbar sein");
+        assert!(
+            !format!("{reloaded:?}").contains(MARKER),
+            "5.1: kein Schlüsselinhalt im Server-Debug-Ausdruck"
+        );
+
+        // 3. Die SQLite-Datei selbst, auf Byte-Ebene.
+        drop(store);
+        let raw_db_bytes = std::fs::read(&db_path).expect("DB-Datei muss lesbar sein");
+        assert!(
+            !raw_db_bytes
+                .windows(MARKER.len())
+                .any(|window| window == MARKER.as_bytes()),
+            "5.1: der Marker darf in keiner Form in der SQLite-Datei stehen"
+        );
+
+        // 4. Was tatsächlich ans Frontend geht: ServerDto und der
+        // Vorab-Befund (B-3/B-4).
+        let dto = crate::dto::ServerDto::from_server(&reloaded, &credential_store);
+        let dto_json = serde_json::to_string(&dto).unwrap();
+        assert!(
+            !dto_json.contains(MARKER),
+            "5.1/B-4: kein Schlüsselinhalt in der ServerDto-Serialisierung"
+        );
+
+        let facts = inspect_key_file(&key_files, PATH);
+        let facts_json = serde_json::to_string(&facts).unwrap();
+        assert!(
+            !facts_json.contains(MARKER),
+            "5.1/B-3: kein Schlüsselinhalt im serialisierten Vorab-Befund"
+        );
+    }
 }

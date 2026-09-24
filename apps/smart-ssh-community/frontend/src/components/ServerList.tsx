@@ -271,7 +271,11 @@ export function ServerList({
            * er abgeschnitten wird. */}
           {server.identityFilePath && (
             <p className="truncate text-xs text-slate-500" title={server.identityFilePath}>
-              🔑 {server.identityFilePath}
+              {/* spec-reviewer-Fund (Review dieses Schritts): das Emoji
+               * allein trägt keine barrierefreie Bedeutung — `aria-hidden`
+               * nimmt es aus dem Accessibility-Baum, der sichtbare Pfad
+               * daneben bleibt der eigentliche Inhalt der Zeile. */}
+              <span aria-hidden="true">🔑</span> {server.identityFilePath}
             </p>
           )}
         </div>

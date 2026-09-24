@@ -411,16 +411,27 @@ ist keine Überführung, die Datei war nie dort).
 
 **Entscheidung:** `identity_file` ist von der bedingungslosen Zeile
 ausgenommen; stattdessen erscheint — unabhängig vom sonstigen Zustand —
-die bereits vorhandene „mag entfernt werden"-Formulierung (bisher nur für
-den Fall `sudoPasswordUnknown`, Spec 0071 A14), mit dem Label „Passphrase
-der Schlüsseldatei". Das ist ehrlich in beide Richtungen: Weder wird ein
-Secret behauptet, das vielleicht gar nicht existiert, noch wird verschwiegen,
-dass eines existieren könnte.
+ein eigener Text `identityFilePassphraseMayBeDeleted` („Falls für diese
+Schlüsseldatei eine Passphrase hinterlegt ist, wird sie mit entfernt. Die
+Schlüsseldatei selbst bleibt unangetastet auf der Platte liegen — sie
+liegt nie im Schlüsselbund."). Das ist ehrlich in beide Richtungen: Weder
+wird ein Secret behauptet, das vielleicht gar nicht existiert, noch wird
+verschwiegen, dass eines existieren könnte — und anders als die
+allgemeine „mag entfernt werden"-Formulierung (`secretMayBeDeleted`,
+bisher nur für `sudoPasswordUnknown`, Spec 0071 A14) nennt der Text nicht
+fälschlich „Systemschlüsselbund nicht lesbar" als Grund, wenn der
+Schlüsselbund in Wahrheit einwandfrei lesbar ist, nur eben nicht sagen
+kann, ob dort etwas für diesen Server liegt.
+(spec-reviewer-Fund, Review dieses Schritts: die erste Fassung
+wiederverwendete `secretMayBeDeleted` mit diesem irreführenden
+Klammerzusatz.)
 
 **Warum keine Rückfrage:** Kein Punkt aus Spec 0076 (die die Lösch-Vorschau
 gar nicht erwähnt), sondern eine Ableitung aus dem bestehenden Prinzip
-dieser Maske selbst (§6.3.2 der Spec: „ehrliche Hinweise statt
-Verharmlosung", hier: statt Überbehauptung) — sowie aus dem in derselben
+dieser Maske selbst und aus dem Produktgrundsatz „ehrliche Hinweise statt
+Verharmlosung" (Coder-Skill, Abschnitt „Was bei diesem Produkt zählt" —
+**nicht** Spec 0076, eine frühere Fassung dieses Absatzes zitierte fälschlich
+„§6.3.2 der Spec" dafür, spec-reviewer-Fund) — sowie aus dem in derselben
 Datei bereits vorhandenen Muster für „kann die Oberfläche nicht sicher
 wissen" (`secretMayBeDeleted`). Eine neue `ServerDto`-Auskunft eigens dafür
 (z. B. `hasIdentityFilePassphrase`, analog `hasSudoPassword`) wäre eine

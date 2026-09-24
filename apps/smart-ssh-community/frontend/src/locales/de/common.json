@@ -150,14 +150,14 @@
     "identityFilePathLabel": "Pfad zur Schlüsseldatei",
     "identityFilePathPlaceholder": "~/.ssh/id_ed25519",
     "chooseIdentityFileDialogTitle": "Schlüsseldatei auswählen",
-    "identityFilePassphraseLabel": "Passphrase der Schlüsseldatei",
     "identityFile": {
       "checking": "Wird geprüft …",
       "looksValid": "Sieht aus wie ein gültiger OpenSSH-Schlüssel.",
       "permissionsTooOpen": "Die Dateirechte sind zu offen (für Gruppe oder Welt lesbar oder beschreibbar). Beim Verbinden wird die Anmeldung deshalb abgelehnt — z. B. mit „chmod 600“ auf die Datei beheben.",
       "permissionsOk": "Die Dateirechte sind eng genug gesetzt.",
       "encrypted": "Der Schlüssel ist verschlüsselt — beim Verbinden ist die hinterlegte Passphrase nötig.",
-      "notEncrypted": "Der Schlüssel ist nicht verschlüsselt."
+      "notEncrypted": "Der Schlüssel ist nicht verschlüsselt.",
+      "checkFailed": "Der Vorab-Befund konnte nicht abgefragt werden. Das hindert das Speichern nicht — beim Verbinden wird die Datei ohnehin neu geprüft."
     },
     "convertToKeychain": {
       "legend": "In den Schlüsselbund übernehmen",
@@ -207,6 +207,7 @@
     "deleteNoKeychainImpact": "Keine Secrets im Schlüsselbund, keine anderen Server betroffen.",
     "secretWillBeDeleted": "Wird aus dem Schlüsselbund entfernt: {{label}}",
     "secretMayBeDeleted": "Konnte nicht geprüft werden (Systemschlüsselbund nicht lesbar), wird nach Möglichkeit entfernt: {{label}}",
+    "identityFilePassphraseMayBeDeleted": "Falls für diese Schlüsseldatei eine Passphrase hinterlegt ist, wird sie mit entfernt. Die Schlüsseldatei selbst bleibt unangetastet auf der Platte liegen — sie liegt nie im Schlüsselbund.",
     "serverWillLoseJumpHost": "Verliert die Jump-Host-Referenz auf diesen Server: {{name}}",
     "deleteAlwaysRemovesHistory": "Zusätzlich werden Chat-Historie, Notizen und Tags dieses Servers unwiderruflich gelöscht.",
     "confirmDeleteServer": "Endgültig löschen",

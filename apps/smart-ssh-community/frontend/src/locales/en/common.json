@@ -150,14 +150,14 @@
     "identityFilePathLabel": "Path to key file",
     "identityFilePathPlaceholder": "~/.ssh/id_ed25519",
     "chooseIdentityFileDialogTitle": "Select key file",
-    "identityFilePassphraseLabel": "Key file passphrase",
     "identityFile": {
       "checking": "Checking …",
       "looksValid": "Looks like a valid OpenSSH key.",
       "permissionsTooOpen": "The file's permissions are too open (readable or writable by group or others). Connecting will be refused until the permissions are tightened — e.g. fix it with \"chmod 600\" on the file.",
       "permissionsOk": "The file's permissions are tight enough.",
       "encrypted": "The key is encrypted — the stored passphrase is required to connect.",
-      "notEncrypted": "The key is not encrypted."
+      "notEncrypted": "The key is not encrypted.",
+      "checkFailed": "The pre-check could not be requested. This does not block saving — the file is checked again when connecting."
     },
     "convertToKeychain": {
       "legend": "Move into the keychain",
@@ -207,6 +207,7 @@
     "deleteNoKeychainImpact": "No secrets in the keychain, no other servers affected.",
     "secretWillBeDeleted": "Will be removed from the keychain: {{label}}",
     "secretMayBeDeleted": "Could not be checked (system keyring not readable), will be removed if possible: {{label}}",
+    "identityFilePassphraseMayBeDeleted": "If a passphrase is stored for this key file, it will be removed as well. The key file itself stays untouched on disk — it is never in the keychain.",
     "serverWillLoseJumpHost": "Loses the jump-host reference to this server: {{name}}",
     "deleteAlwaysRemovesHistory": "This also permanently deletes this server's chat history, notes, and tags.",
     "confirmDeleteServer": "Delete permanently",

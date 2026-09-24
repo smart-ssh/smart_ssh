@@ -345,6 +345,65 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
     ).toBeInTheDocument();
   });
 
+  // spec-reviewer-Fund (Review dieses Schritts): ein gescheiterter
+  // `inspect_key_file`-Aufruf selbst verschwand bisher im `.catch(() =>
+  // null)`, ununterscheidbar von "noch nicht geprüft". Regressionstest mit
+  // Gegenbeweis: mit `.catch(() => { if (!cancelled) setIdentityFacts(null); })`
+  // statt `setIdentityFactsError(true)` (dem Stand vor diesem Fix) zeigt
+  // die Oberfläche nach dem Scheitern nichts an — dieser Test schlägt dann
+  // fehl, weil der Fehlertext nie erscheint. Verifiziert, danach
+  // wiederhergestellt.
+  it("zeigt einen Hinweis, wenn der Vorab-Befund selbst nicht abgefragt werden konnte", async () => {
+    vi.mocked(inspectKeyFile).mockRejectedValue(new Error("IPC kaputt"));
+    renderNewServerForm();
+    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
+      target: { value: IDENTITY_PATH },
+    });
+
+    expect(
+      await screen.findByText(
+        "Der Vorab-Befund konnte nicht abgefragt werden. Das hindert das Speichern nicht — beim Verbinden wird die Datei ohnehin neu geprüft.",
+        {},
+        { timeout: 2000 },
+      ),
+    ).toBeInTheDocument();
+  });
+
+  // §6.3.2, restliche Fälle: zu weite Rechte und "verschlüsselt" werden
+  // gemeldet, UND das Speichern bleibt möglich (B-3, letzter Satz — der
+  // Submit-Knopf hängt an `saving`, nicht an den Vorab-Befund-Fakten).
+  it("meldet zu weite Rechte und Verschlüsselung, hindert das Speichern aber nicht (§6.3.2)", async () => {
+    vi.mocked(inspectKeyFile).mockResolvedValue({
+      exists: true,
+      permissionsTooOpen: true,
+      validKey: true,
+      encrypted: true,
+      problem: null,
+    });
+    renderNewServerForm();
+    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
+      target: { value: IDENTITY_PATH },
+    });
+
+    await waitFor(() => expect(inspectKeyFile).toHaveBeenCalledWith(IDENTITY_PATH), {
+      timeout: 2000,
+    });
+
+    expect(
+      await screen.findByText(
+        "Die Dateirechte sind zu offen (für Gruppe oder Welt lesbar oder beschreibbar). Beim Verbinden wird die Anmeldung deshalb abgelehnt — z. B. mit „chmod 600“ auf die Datei beheben.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Der Schlüssel ist verschlüsselt — beim Verbinden ist die hinterlegte Passphrase nötig.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Anlegen" })).not.toBeDisabled();
+  });
+
   // Regressionstest mit Gegenbeweis: mit `setAuth(authStateFromKind(...))`
   // statt der pfaderhaltenden Fallunterscheidung (dem Stand vor diesem
   // Schritt) bleibt das Feld leer — verifiziert, danach wiederhergestellt.

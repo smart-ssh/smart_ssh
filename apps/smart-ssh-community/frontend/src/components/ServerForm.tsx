@@ -143,39 +143,63 @@ function toAuthMethodInput(state: AuthFormState, isCreate: boolean): AuthMethodI
 function IdentityFileFacts({
   loading,
   facts,
+  error,
   emptyPath,
 }: {
   loading: boolean;
   facts: KeyFileFactsDto | null;
+  /** spec-reviewer-Fund (Review dieses Schritts): der `inspect_key_file`-
+   * Aufruf selbst kann scheitern (z. B. IPC-Fehler) — ohne dieses Flag war
+   * das ununterscheidbar von "noch nicht geprüft" und verschwand
+   * kommentarlos. */
+  error: boolean;
   emptyPath: boolean;
 }) {
   const { t } = useTranslation();
   if (emptyPath) return null;
+  if (error) {
+    return <p className="mt-1 text-xs text-amber-400">{t("serverForm.identityFile.checkFailed")}</p>;
+  }
   if (facts === null) {
     return loading ? (
       <p className="mt-1 text-xs text-slate-500">{t("serverForm.identityFile.checking")}</p>
     ) : null;
   }
-  if (facts.problem) {
-    return (
-      <p className="mt-1 text-xs text-amber-400">
-        {translateErrorCode(t, facts.problem.code, facts.problem.message)}
-      </p>
-    );
+
+  const problemLine = facts.problem ? (
+    <li className="text-amber-400">{translateErrorCode(t, facts.problem.code, facts.problem.message)}</li>
+  ) : (
+    <li className="text-emerald-400">{t("serverForm.identityFile.looksValid")}</li>
+  );
+
+  // B-3 verlangt Existenz, Rechte, Gültigkeit UND Verschlüsselung — auch
+  // wenn die Datei einen ungültigen Schlüssel enthält (spec-reviewer-Fund,
+  // Review dieses Schritts: die erste Fassung zeigte in diesem Fall NUR
+  // die Problemmeldung und ließ den ebenfalls schon ermittelten
+  // Rechte-Befund fallen). Ohne `exists` ist über Rechte oder
+  // Verschlüsselung nichts bekannt — dann bleibt es bei der einen Zeile.
+  if (!facts.exists) {
+    return <ul className="mt-1 space-y-0.5 text-xs">{problemLine}</ul>;
   }
+
   return (
     <ul className="mt-1 space-y-0.5 text-xs">
-      <li className="text-emerald-400">{t("serverForm.identityFile.looksValid")}</li>
+      {problemLine}
       {facts.permissionsTooOpen ? (
         <li className="text-amber-400">{t("serverForm.identityFile.permissionsTooOpen")}</li>
       ) : (
         <li className="text-slate-500">{t("serverForm.identityFile.permissionsOk")}</li>
       )}
-      <li className="text-slate-500">
-        {facts.encrypted
-          ? t("serverForm.identityFile.encrypted")
-          : t("serverForm.identityFile.notEncrypted")}
-      </li>
+      {/* `encrypted` ist nur aussagekräftig, wenn der Schlüssel überhaupt
+       * gültig ist (bei einem Problem steht das Feld immer auf `false`,
+       * s. `crate::dto::KeyFileFactsDto::from`). */}
+      {!facts.problem && (
+        <li className="text-slate-500">
+          {facts.encrypted
+            ? t("serverForm.identityFile.encrypted")
+            : t("serverForm.identityFile.notEncrypted")}
+        </li>
+      )}
     </ul>
   );
 }
@@ -261,10 +285,17 @@ export function ServerForm({
   // nicht (B-3), er wird nur angezeigt.
   const [identityFacts, setIdentityFacts] = useState<KeyFileFactsDto | null>(null);
   const [identityFactsLoading, setIdentityFactsLoading] = useState(false);
+  // spec-reviewer-Fund (Review dieses Schritts): ein gescheiterter
+  // `inspect_key_file`-Aufruf selbst (nicht: ein Befund über die Datei)
+  // verschwand bisher spurlos im `.catch(() => null)` — ununterscheidbar
+  // vom Zustand "noch nichts geprüft". Eigenes Flag, damit die Anzeige das
+  // ehrlich sagen kann, statt einfach nichts zu zeigen.
+  const [identityFactsError, setIdentityFactsError] = useState(false);
   // Spec 0076, C-7: unabhängig vom obigen Entwurfszustand — bezieht sich
   // auf den tatsächlich GESPEICHERTEN Pfad (`loaded.identityFilePath`) und
   // entscheidet, ob der Überführen-Knopf wählbar ist.
   const [convertFacts, setConvertFacts] = useState<KeyFileFactsDto | null>(null);
+  const [convertFactsError, setConvertFactsError] = useState(false);
   const [convertConfirmOpen, setConvertConfirmOpen] = useState(false);
   const [converting, setConverting] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
@@ -317,6 +348,15 @@ export function ServerForm({
     setPendingHostKey(null);
     setPreview(null);
     setDeletePreview(null);
+    // spec-reviewer-Fund (Review dieses Schritts): ohne diesen Reset hinge
+    // die C-2-Bestätigungsgrenze allein an `ManagementView`s `key={id}`
+    // (das `ServerForm` bei jedem Serverwechsel neu montiert) — richtig,
+    // aber eine Eigenschaft des Aufrufers, nicht der Komponente selbst.
+    // `convertFacts`/-`Error` reagieren bereits über den eigenen Effekt auf
+    // `loaded`; nur diese drei bräuchten sonst einen fremden Anker.
+    setConvertConfirmOpen(false);
+    setConverting(false);
+    setConvertError(null);
     if (serverId === null) {
       setLoaded(null);
       setName("");
@@ -374,8 +414,15 @@ export function ServerForm({
   // (die Datei darf erst später entstehen, B-3).
   const identityPath = auth.kind === "identityFile" ? auth.path : "";
   useEffect(() => {
+    // spec-reviewer-Fund (Review dieses Schritts): `identityFacts` blieb
+    // beim Pfadwechsel bis zum Ablauf der Verzögerung auf dem Befund des
+    // VORHERIGEN Pfads stehen — ein gültiger Pfad, zu einem ungültigen
+    // umgetippt, zeigte bis zu 400 ms lang weiter "gültiger Schlüssel". Der
+    // sofortige Reset hier schließt das Fenster; die Anzeige fällt in der
+    // Zwischenzeit auf "wird geprüft" zurück (B-3).
+    setIdentityFacts(null);
+    setIdentityFactsError(false);
     if (auth.kind !== "identityFile" || identityPath.trim() === "") {
-      setIdentityFacts(null);
       setIdentityFactsLoading(false);
       return;
     }
@@ -387,7 +434,7 @@ export function ServerForm({
           if (!cancelled) setIdentityFacts(facts);
         })
         .catch(() => {
-          if (!cancelled) setIdentityFacts(null);
+          if (!cancelled) setIdentityFactsError(true);
         })
         .finally(() => {
           if (!cancelled) setIdentityFactsLoading(false);
@@ -404,8 +451,9 @@ export function ServerForm({
   // davon, was der Nutzer gerade im Formular entwirft (der Knopf wirkt auf
   // den Server in der Datenbank, nicht auf den Entwurf).
   useEffect(() => {
+    setConvertFacts(null);
+    setConvertFactsError(false);
     if (!loaded || loaded.authKind !== "identity_file" || !loaded.identityFilePath) {
-      setConvertFacts(null);
       return;
     }
     let cancelled = false;
@@ -414,7 +462,7 @@ export function ServerForm({
         if (!cancelled) setConvertFacts(facts);
       })
       .catch(() => {
-        if (!cancelled) setConvertFacts(null);
+        if (!cancelled) setConvertFactsError(true);
       });
     return () => {
       cancelled = true;
@@ -1032,6 +1080,7 @@ export function ServerForm({
                 <IdentityFileFacts
                   loading={identityFactsLoading}
                   facts={identityFacts}
+                  error={identityFactsError}
                   emptyPath={auth.path.trim() === ""}
                 />
               </div>
@@ -1070,13 +1119,15 @@ export function ServerForm({
                 </button>
                 {!convertFacts?.validKey && (
                   <p className="mt-2 text-xs text-amber-400">
-                    {convertFacts
-                      ? translateErrorCode(
-                          t,
-                          convertFacts.problem?.code,
-                          convertFacts.problem?.message ?? t("serverForm.convertToKeychain.checking"),
-                        )
-                      : t("serverForm.convertToKeychain.checking")}
+                    {convertFactsError
+                      ? t("serverForm.identityFile.checkFailed")
+                      : convertFacts
+                        ? translateErrorCode(
+                            t,
+                            convertFacts.problem?.code,
+                            convertFacts.problem?.message ?? t("serverForm.convertToKeychain.checking"),
+                          )
+                        : t("serverForm.convertToKeychain.checking")}
                   </p>
                 )}
               </>
@@ -1331,11 +1382,7 @@ export function ServerForm({
                         </li>
                       )}
                     {deletePreview.server.authKind === "identity_file" && (
-                      <li>
-                        {t("serverForm.secretMayBeDeleted", {
-                          label: t("serverForm.identityFilePassphraseLabel"),
-                        })}
-                      </li>
+                      <li>{t("serverForm.identityFilePassphraseMayBeDeleted")}</li>
                     )}
                     {deletePreview.server.hasSudoPassword && (
                       <li>
