@@ -1540,6 +1540,11 @@ fn test_redactor_redacts_a_key_block_behind_an_at_sign_in_a_query_parameter() {
             !redacted.contains("MIIEvQbodyOfKey"),
             "{label}: Schlüsselkörper im Klartext: {redacted}"
         );
+        // Zusätzlich die exakte Ausgabe (Spec 0078 §6, „assert_eq auf die
+        // exakte Ausgabe"): ein `contains` allein bestünde auch ein
+        // Muster, das den Körper nur mittig anschneidet und `odyOfKey`
+        // stehen lässt. spec-reviewer-Fund, dritte Runde.
+        assert_eq!(redacted, "https://v/api?[REDACTED]", "{label}");
     }
 }
 
