@@ -91,4 +91,29 @@ Zertifikats-Key.
 Die Klarstellung K1 nennt ausdrücklich nur die Passphrase, und eine
 Änderung am Anmeldepfad für Passwörter ist eine Produktentscheidung, keine
 Ableitung. Deshalb **nicht** mitgeändert, sondern als Q-BL-0149-02
-vorgelegt. Der Stand der Frage steht im Abschlussbericht dieses Laufs.
+vorgelegt (Klasse K3, offen). Der Stand der Frage steht im
+Abschlussbericht dieses Laufs.
+
+**Der Trim ist dabei der kleinere Teil.** Beim Einordnen der Frage ist
+aufgefallen, dass die beiden Wege sich schon in der Bedeutung von „leer"
+unterscheiden, unabhängig von unsichtbaren Zeichen:
+
+```rust
+// test_connection.rs, resolve_secret
+if let Some(value) = provided { return Ok(SecretString::from(value)); }
+```
+
+nimmt jeden `Some`-Wert, auch `""`. Beim Speichern heißt ein nach dem
+Trimmen leerer Wert „unverändert lassen" bzw. „Passwort ist
+erforderlich". Das Formular schickt bei **Neuanlage** für ein leeres
+Pflichtfeld `""` statt `null` (`ServerForm.tsx`, `orNullIfUpdate` greift
+nur beim Bearbeiten), und derselbe `buildInput()` bedient den
+Verbindungstest. „Neuer Server, Passwortfeld leer, Verbindung testen"
+meldet damit auf einem Server mit `PermitEmptyPasswords yes` einen
+Erfolg für ein Profil, das sich anschließend nicht speichern lässt.
+
+Ein reiner Trim ohne die Leer-Regel würde diesen Fall **häufiger**
+machen, weil ein Leerraum- oder BOM-Paste dann auf `""` fällt. Die Frage
+trägt deshalb eine Option, die beides zusammen ändert. Bis sie
+entschieden ist, bleibt `resolve_secret` unangetastet — halbherzig
+nachzuziehen wäre hier schlechter als gar nicht.
