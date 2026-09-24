@@ -219,17 +219,17 @@ fn resolve_final_hop_auth(
 ) -> CommandResult<AuthMethod> {
     match input {
         AuthMethodInput::Password { value } => {
-            let secret =
-                resolve_secret(
-                    value,
-                    existing,
-                    real_credential_store,
-                    keychain,
-                    |a| match a {
-                        AuthMethod::Password { credential_ref } => Some(credential_ref),
-                        _ => None,
-                    },
-                )?;
+            let secret = resolve_secret(
+                value,
+                existing,
+                real_credential_store,
+                keychain,
+                "SERVER_PASSWORD_REQUIRED",
+                |a| match a {
+                    AuthMethod::Password { credential_ref } => Some(credential_ref),
+                    _ => None,
+                },
+            )?;
             let r = CredentialRef::new("test:password");
             ephemeral.insert(&r, secret);
             Ok(AuthMethod::Password { credential_ref: r })
@@ -243,6 +243,7 @@ fn resolve_final_hop_auth(
                 existing,
                 real_credential_store,
                 keychain,
+                "SERVER_PRIVATE_KEY_REQUIRED",
                 |a| match a {
                     AuthMethod::PrivateKey { credential_ref, .. } => Some(credential_ref),
                     _ => None,
@@ -293,6 +294,7 @@ fn resolve_final_hop_auth(
                 existing,
                 real_credential_store,
                 keychain,
+                "SERVER_CERTIFICATE_REQUIRED",
                 |a| match a {
                     AuthMethod::Certificate { cert_ref, .. } => Some(cert_ref),
                     _ => None,
@@ -306,6 +308,7 @@ fn resolve_final_hop_auth(
                 existing,
                 real_credential_store,
                 keychain,
+                "SERVER_CERTIFICATE_KEY_REQUIRED",
                 |a| match a {
                     AuthMethod::Certificate { key_ref, .. } => Some(key_ref),
                     _ => None,
@@ -411,6 +414,7 @@ fn resolve_secret(
     existing: Option<&AuthMethod>,
     real_store: &(dyn CredentialStore + Send + Sync),
     keychain: KeychainAvailability,
+    code: &'static str,
     extract_ref: impl Fn(&AuthMethod) -> Option<&CredentialRef>,
 ) -> CommandResult<SecretString> {
     // Bewusst dieselbe Gestalt wie `write_or_reuse_secret`: derselbe Trim,
@@ -424,9 +428,16 @@ fn resolve_secret(
     match provided.map(|value| trim_credential_value(&value)) {
         Some(value) if !value.is_empty() => Ok(SecretString::from(value)),
         _ => {
+            // Spec 0073, §9 (Q-BL-0149-03): derselbe Code wie beim Speichern
+            // (`write_or_reuse_secret`), damit beide Knöpfe bei derselben
+            // Eingabe denselben übersetzten Satz zeigen. Der Text (nur
+            // Rückfall ohne Übersetzung) behauptet nicht „kein Server
+            // gefunden": Der Zweig gilt auch für einen bestehenden Server
+            // mit anderer Anmeldeart, der für diese Art keinen Slot hat.
             let existing_ref = existing.and_then(extract_ref).ok_or_else(|| {
-                CommandError::from(
-                    "Secret erforderlich (kein bestehender Server zum Wiederverwenden gefunden)",
+                CommandError::with_code(
+                    "Secret erforderlich (Feld leer, kein hinterlegtes Credential dieser Anmeldeart)",
+                    code,
                 )
             })?;
             real_store
@@ -1110,6 +1121,28 @@ mod tests {
             }
         }
 
+        /// Der Code, den das **Speichern** für ein fehlendes Pflichtfeld dieses
+        /// Slots vergibt (`server_credentials::resolve_auth_method`). Hier
+        /// bewusst als Literal, nicht aus dem Speicher-Weg abgeleitet — sonst
+        /// prüfte der Test nur, dass beide Wege gleich lügen.
+        fn required_code(self) -> &'static str {
+            match self {
+                SecretSlot::Password => "SERVER_PASSWORD_REQUIRED",
+                SecretSlot::PrivateKeyContent => "SERVER_PRIVATE_KEY_REQUIRED",
+                SecretSlot::CertificateContent => "SERVER_CERTIFICATE_REQUIRED",
+                SecretSlot::CertificateKeyContent => "SERVER_CERTIFICATE_KEY_REQUIRED",
+            }
+        }
+
+        /// Ein Slot einer **anderen** Anmeldeart als `self` — Ausgangslage
+        /// „bestehender Server mit anderer Anmeldeart".
+        fn other_method(self) -> SecretSlot {
+            match self {
+                SecretSlot::Password => SecretSlot::PrivateKeyContent,
+                _ => SecretSlot::Password,
+            }
+        }
+
         /// Der Credential-Slot, aus dem sich das Secret ergibt, mit dem
         /// angemeldet würde — aus der zurückgegebenen `AuthMethod` gelesen,
         /// damit derselbe Helfer für beide Wege taugt (die Refs heißen
@@ -1146,36 +1179,55 @@ mod tests {
         entries
     }
 
+    /// Was ein Weg meldet, wenn er abbricht: der stabile Code fürs Frontend
+    /// und der Rückfalltext.
+    #[derive(Debug, PartialEq)]
+    struct Refusal {
+        code: Option<&'static str>,
+        message: String,
+    }
+
     /// Dieselbe Eingabe durch beide Wege. Zurück kommt je Weg das Secret,
-    /// mit dem tatsächlich angemeldet würde — oder die Fehlermeldung, wenn
+    /// mit dem tatsächlich angemeldet würde — oder die Ablehnung, wenn
     /// der Weg abbricht.
     ///
     /// `stored` ist das bereits hinterlegte Secret eines bestehenden Servers
-    /// (`None` = Neuanlage ohne Vorgeschichte). Der Ausgangszustand entsteht
-    /// durch einen echten Speicher-Vorgang, damit die Credential-Refs genau
-    /// die sind, die `update_server` später wiederverwendet. Beide Wege
-    /// bekommen getrennte, gleich befüllte Stores, damit der schreibende
-    /// Speicher-Weg dem lesenden Test-Weg die Ausgangslage nicht verändert.
+    /// derselben Anmeldeart (`None` = Neuanlage ohne Vorgeschichte).
     fn secret_both_ways(
         slot: SecretSlot,
         pasted: Option<&str>,
         stored: Option<&str>,
-    ) -> (Result<String, String>, Result<String, String>) {
+    ) -> (Result<String, Refusal>, Result<String, Refusal>) {
+        secret_both_ways_from(slot, pasted, &|| stored.map(|v| slot.input(Some(v))))
+    }
+
+    /// Wie [`secret_both_ways`], aber der bestehende Server entsteht aus
+    /// einer beliebigen Eingabe — auch einer anderen Anmeldeart. Der
+    /// Ausgangszustand entsteht durch einen echten Speicher-Vorgang, damit
+    /// die Credential-Refs genau die sind, die `update_server` später
+    /// wiederverwendet. Beide Wege bekommen getrennte, gleich befüllte
+    /// Stores, damit der schreibende Speicher-Weg dem lesenden Test-Weg die
+    /// Ausgangslage nicht verändert.
+    fn secret_both_ways_from(
+        slot: SecretSlot,
+        pasted: Option<&str>,
+        existing_input: &dyn Fn() -> Option<AuthMethodInput>,
+    ) -> (Result<String, Refusal>, Result<String, Refusal>) {
         let server_id = ServerId::new();
 
         let seed = || {
             let store = InMemoryCredentialStore::new();
-            let existing = stored.map(|value| {
+            let existing = existing_input().map(|input| {
                 crate::server_credentials::resolve_auth_method(
-                    &store,
-                    AVAILABLE,
-                    server_id,
-                    slot.input(Some(value)),
-                    None,
+                    &store, AVAILABLE, server_id, input, None,
                 )
                 .expect("Ausgangszustand des bestehenden Servers muss speicherbar sein")
             });
             (store, existing)
+        };
+        let refusal = |err: CommandError| Refusal {
+            code: err.code,
+            message: err.message,
         };
 
         // Weg 1: „Verbindung testen" — Secrets landen im Ephemeral-Store.
@@ -1195,11 +1247,11 @@ mod tests {
                 &slot.secret_ref_of(&auth),
             )
         })
-        .map_err(|err| err.message);
+        .map_err(refusal);
 
         // Gegenprobe zur Modul-Zusage „ohne irgendetwas zu persistieren":
         // Der echte Store muss nach dem Test-Weg Zeichen für Zeichen so
-        // aussehen wie davor. Alle drei Tests tragen sie mit, auch der
+        // aussehen wie davor. Alle Tests tragen sie mit, auch der
         // Neuanlage-Fall, in dem es kein hinterlegtes Credential zum
         // Vergleichen gibt — verglichen wird der **ganze** Inhalt, nicht
         // eine Liste erwarteter `test:*`-Refs: Ein künftiger Slot, den
@@ -1227,7 +1279,7 @@ mod tests {
                 &slot.secret_ref_of(&auth),
             )
         })
-        .map_err(|err| err.message);
+        .map_err(refusal);
 
         (via_test, via_save)
     }
@@ -1294,17 +1346,77 @@ mod tests {
                      sondern muss denselben Fehler melden wie das Speichern (war: {via_test:?})"
                 );
                 // Und zwar aus `resolve_secret`, nicht aus einem beliebigen
-                // anderen Grund: Ohne diese Zusicherung bliebe der Test auch
-                // dann grün, wenn der Abbruch künftig vom Nachbar-Slot oder
-                // von einer ganz anderen Prüfung käme.
-                assert!(
-                    via_test
-                        .as_ref()
-                        .is_err_and(|message| message.starts_with("Secret erforderlich")),
-                    "{slot:?}/{pasted:?}: der Abbruch muss der fehlenden Eingabe gelten, \
-                     nicht irgendetwas anderem (war: {via_test:?})"
+                // anderen Grund — und mit dem Code des Speicher-Wegs
+                // (Q-BL-0149-03), nicht mit einem Textanfang: Der Code ist
+                // die Schnittstelle zum Frontend, der Text nur der Rückfall.
+                let code = slot.required_code();
+                assert_eq!(
+                    via_test.as_ref().err().map(|r| r.code),
+                    Some(Some(code)),
+                    "{slot:?}/{pasted:?}: der Verbindungstest muss den Code des Speicherns \
+                     melden (war: {via_test:?})"
+                );
+                assert_eq!(
+                    via_save.as_ref().err().map(|r| r.code),
+                    Some(Some(code)),
+                    "{slot:?}/{pasted:?}: Ausgangslage — das Speichern meldet diesen Code"
                 );
             }
+        }
+    }
+
+    /// Q-BL-0149-03: Auch ein **bestehender** Server hilft nicht, wenn seine
+    /// Anmeldeart eine andere ist — es gibt für diesen Slot nichts
+    /// Hinterlegtes. Der alte Text behauptete hier „kein bestehender Server
+    /// gefunden", obwohl es ihn gibt; der Code stimmt in beiden Fällen und
+    /// ist derselbe wie beim Speichern.
+    #[test]
+    fn test_q0149_03_existing_server_with_other_auth_method_and_empty_field_reports_required_code()
+    {
+        for slot in SECRET_SLOTS {
+            let code = slot.required_code();
+            let other = slot.other_method();
+            // Bestehender Server mit `Agent` (gar kein Secret-Slot) und mit
+            // einer anderen Secret-Anmeldeart (Slot vorhanden, aber der
+            // falsche).
+            let agent: &dyn Fn() -> Option<AuthMethodInput> = &|| Some(AuthMethodInput::Agent);
+            let other_secret: &dyn Fn() -> Option<AuthMethodInput> =
+                &|| Some(other.input(Some("fremdes-secret")));
+
+            for pasted in EMPTY_INPUTS {
+                for (label, existing) in [("Agent", agent), ("andere Anmeldeart", other_secret)] {
+                    let (via_test, via_save) = secret_both_ways_from(slot, Some(pasted), existing);
+
+                    assert_eq!(
+                        via_save.as_ref().err().map(|r| r.code),
+                        Some(Some(code)),
+                        "{slot:?}/{label}/{pasted:?}: Ausgangslage — Speichern meldet {code}"
+                    );
+                    assert_eq!(
+                        via_test.as_ref().err().map(|r| r.code),
+                        Some(Some(code)),
+                        "{slot:?}/{label}/{pasted:?}: der Verbindungstest muss {code} \
+                         melden (war: {via_test:?})"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Die Meldung verrät keinen Wert (I2): auch der hinterlegte Secret-Wert
+    /// eines Nachbar-Slots taucht in ihr nicht auf.
+    #[test]
+    fn test_q0149_03_refusal_message_carries_no_secret() {
+        for slot in SECRET_SLOTS {
+            let other = slot.other_method();
+            let (via_test, _) = secret_both_ways_from(slot, Some("\u{200B}"), &|| {
+                Some(other.input(Some("geheimer-nachbarwert")))
+            });
+            let refusal = via_test.expect_err("leeres Feld ohne passendes Hinterlegtes");
+            assert!(
+                !refusal.message.contains("geheimer-nachbarwert"),
+                "{slot:?}: Meldung darf kein Secret enthalten: {refusal:?}"
+            );
         }
     }
 }
