@@ -233,15 +233,3 @@ Dieser Workflow ist nicht optional und nicht nur bei offensichtlich
 riskanten Änderungen anzuwenden — er gilt nach jedem Implementierungsschritt
 mit eigenem Commit.
 
-**Falls `spec-reviewer` in deiner Session nicht als registrierter
-Subagent-Typ verfügbar ist** (bekannte Einschränkung): nutze ersatzweise
-einen `general-purpose`-Agenten mit `opus`-Modell und gib ihm die Rolle/den
-Prüfauftrag wörtlich mit (Spec-Konformität + die projektweiten
-Sicherheits-Invarianten, adversariale Haltung bei ERHÖHTER Priorität).
-**Offenbare in deinem Bericht ausdrücklich**, dass du den Ersatz genutzt
-hast und dass die technisch erzwungenen Schreibbeschränkungen
-(`disallowedTools: Write, Edit`) dabei **nicht** griffen — der Review lief
-dann per Konvention, nicht technisch durchgesetzt. (Wenn du Zeit hast, prüf
-einmal, warum `.claude/agents/spec-reviewer.md` nicht als Agent greift, und
-melde es — das ist ein offener Punkt im technical-debt-backlog.)
-
