@@ -73,8 +73,7 @@ protokolliert (3.2.2). Die Entscheidung, es dabei zu belassen, liegt in der
 Spec (§1, §4); dieses ADR hält nur fest, dass sie bewusst getroffen wurde
 und nicht übersehen ist.
 
-## 4. Das Protokoll trägt die Regel, nie das Kommando — und seit
-Q-BL-0249-03 auch nie das Muster im Klartext
+## 4. Das Protokoll trägt die Regel, nie das Kommando, seit Q-BL-0249-03 auch nie das Muster im Klartext
 
 3.2.2 und §5 der Spec verlangen, dass der Eintrag nur Regel-Kennung, Aktion
 und einen Hinweis auf den Fehler enthält. Das Kommando bleibt draußen: Der
@@ -180,13 +179,15 @@ ohne Verhaltensänderung:
 Keiner davon ist sicherheitsrelevant; jeder ist ein Kandidat für ein eigenes
 Item.
 
-- ~~Der Protokolleintrag ist weder gekürzt noch entdoppelt.~~ **Erledigt
-  durch Q-BL-0249-03:** Der Eintrag trägt seit dieser Klarstellung nur noch
-  einen von drei festen Kurztexten (§4) statt des Bibliothekstexts — er
-  entsteht zwar weiterhin bei jeder Auswertung neu, kann aber wegen der
-  festen Länge die Protokolldatei nicht mehr über eine lange Altzeile
-  aufblähen. Der ursprüngliche Fund (unbegrenzte Länge **und** Zitat des
-  Musters) ist damit gegenstandslos.
+- **Der Protokolleintrag ist weder gekürzt noch entdoppelt — der Längenteil
+  ist durch Q-BL-0249-03 erledigt, die Entdopplung bleibt offen.** Der
+  Eintrag trägt seit dieser Klarstellung nur noch einen von drei festen
+  Kurztexten (§4) statt des Bibliothekstexts — die Sorge um eine durch ein
+  langes Altmuster aufgeblähte Protokolldatei ist damit gegenstandslos,
+  weil die Zeilenlänge jetzt fest ist. Der Eintrag entsteht aber weiterhin
+  bei **jeder** Auswertung neu, auch für dieselbe Regel; eine Entdopplung
+  wäre unverändert eine Architekturänderung (Zustand über Auswertungen
+  hinweg) und ist nicht gebaut.
 - **Die Speicher-API hat kein eigenes Geländer.** `SqlitePolicyStore::create`
   und `update` sind weiterhin öffentlich und prüfen nichts; dass kein
   Schreibweg an der Prüfung vorbeiführt, hängt an der Disziplin in
@@ -253,7 +254,7 @@ entsteht (`updateRule(a)` liefe durch, `updateRule(b)` würde von Schicht 1
 abgewiesen — zwei Regeln blieben dann mit vertauschten, aber inkonsistent
 angewendeten Prioritäten zurück).
 
-**Bewusst nicht zusätzlich behoben (Review-Fund, `review-03.md`):** Der
+**Bewusst nicht zusätzlich behoben (spec-reviewer-Fund):** Der
 Pfeil einer benachbarten, selbst gültigen Regel bleibt anklickbar, auch wenn
 ein Klick wegen der kaputten Nachbarregel folgenlos bleibt (stummes
 `return`, keine Meldung). Das ist wörtlich das, was die Klarstellung
@@ -271,7 +272,7 @@ widersprochen hätte).
 
 ### 9.3 Aus dem Review dieses Nachlaufs bewusst zurückgestellt
 
-Aus `review-03.md`, keiner sicherheitsrelevant:
+Aus dem spec-reviewer-Bericht zu diesem Nachlauf, keiner sicherheitsrelevant:
 
 - **Kein Drift-Schutz zwischen `validate()` und `compile_failure_reason()`.**
   Beide prüfen heute identische Zweige in identischer Reihenfolge, rein

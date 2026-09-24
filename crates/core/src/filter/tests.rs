@@ -1768,7 +1768,7 @@ async fn test_spec_0077_q_bl_0249_03_pattern_error_log_never_quotes_the_pattern(
         // Nicht nur das vollständige Geheimnis, auch ein Ausschnitt des
         // Musters darf nicht durchsickern — sonst bestünde eine gekürzte
         // Fassung des Bibliothekstexts diesen Test, obwohl sie weiterhin
-        // ein Fragment des Musters zitiert (Review-Fund, review-03.md).
+        // ein Fragment des Musters zitiert (spec-reviewer-Fund).
         assert!(
             !line.contains("--token="),
             "Musterausschnitt im ERROR-Log: {line}"

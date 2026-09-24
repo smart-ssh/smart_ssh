@@ -219,7 +219,9 @@ sichtbar gemacht (3.2).
   - `FilterRulesView` zeigt an der Regel einen Hinweis mit dem Text aus
     3.1.6 und dem Fehlertext als Detail.
   - Bearbeiten und Löschen bleiben möglich. Speichern verlangt nach
-    Schicht 1 ein gültiges Muster.
+    Schicht 1 ein gültiges Muster. (**Ergänzt durch Q-BL-0249-02, §9:** Die
+    Pfeiltasten zum Verschieben der Priorität sind an einer solchen Regel
+    deaktiviert.)
 - **3.2.4** `Pattern::matches` und die `unwrap_or(false)`-Stellen in
   `pattern.rs` bleiben **wörtlich** stehen. Für `crate::risk` ändert sich
   nichts.

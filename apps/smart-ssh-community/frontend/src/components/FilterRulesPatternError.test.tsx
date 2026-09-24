@@ -19,7 +19,7 @@ const createRuleMock = vi.fn();
 // ohne Implementierung bleibt): Erst dadurch hat der Mock eine
 // `(...args: unknown[]) => …`-Signatur, in die sich `...args` weiter unten
 // spreaden lässt — mit `vi.fn(() => Promise.resolve())` (feste 0-Arity)
-// scheiterte das an TS2556 (Review-Fund, review-03.md).
+// scheiterte das an TS2556 (spec-reviewer-Fund).
 const updateRuleMock = vi.fn((..._args: unknown[]) => Promise.resolve());
 
 vi.mock("../api", () => ({
@@ -239,5 +239,40 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, Q
 
     fireEvent.click(bottomUp);
     expect(updateRuleMock).not.toHaveBeenCalled();
+  });
+
+  // Positivkontrolle (spec-reviewer-Fund, Runde 2): Die beiden Tests oben
+  // sind rein negativ — ohne diesen Fall bliebe eine Guard-Bedingung, die
+  // versehentlich *jeden* Klick abfängt (nicht nur die mit `patternError`
+  // beteiligten), unbemerkt grün.
+  it("verschiebt zwei gültige Nachbarregeln weiterhin per Prioritätentausch", async () => {
+    listRulesMock.mockResolvedValue([
+      ruleAt("rule-top", 200, null),
+      ruleAt("rule-bottom", 100, null),
+    ]);
+    renderView();
+
+    await screen.findByText(/rule-top-pattern/);
+    const topRow = screen.getByText(/rule-top-pattern/).closest("li")!;
+    const topDown = within(topRow).getByRole("button", {
+      name: /Priorität senken|Decrease priority/,
+    });
+
+    fireEvent.click(topDown);
+
+    // Anders als beim Abbruch-Guard (der vor dem ersten `await` zurückkehrt)
+    // liegt der zweite `updateRule`-Aufruf hier hinter dem ersten `await` —
+    // erst nach dessen Mikrotask ist er ausgelöst.
+    await waitFor(() => expect(updateRuleMock).toHaveBeenCalledTimes(2));
+    expect(updateRuleMock).toHaveBeenNthCalledWith(
+      1,
+      "rule-top",
+      expect.objectContaining({ priority: 100 }),
+    );
+    expect(updateRuleMock).toHaveBeenNthCalledWith(
+      2,
+      "rule-bottom",
+      expect.objectContaining({ priority: 200 }),
+    );
   });
 });
