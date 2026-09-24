@@ -129,6 +129,12 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // been set, so cannot search or create entries") — genau der Fehler, den
   // BL-0031 beanstandet.
   "KEYCHAIN_UNAVAILABLE",
+  // Spec 0077, 3.1.4/3.1.6: Das Muster einer Filterregel lässt sich nicht
+  // übersetzen. Im Regel-Formular steht unter dem übersetzten Satz
+  // zusätzlich der Fehlertext der Bibliothek (er nennt die Stelle im
+  // Muster) — bei der Schnellregel bewusst nicht, dort wird ein Vorschlag
+  // angelegt und kein selbstgeschriebenes Muster.
+  "FILTER_RULE_PATTERN_INVALID",
 ]);
 
 /** Übersetzt `code` über den `errors`-Namespace, fällt bei `null`/

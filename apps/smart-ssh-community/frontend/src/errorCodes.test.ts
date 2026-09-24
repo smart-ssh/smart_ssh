@@ -105,3 +105,36 @@ describe("FIVE_MINUTE_PATH_ERROR_CODES", () => {
     expect(unique.size).toBe(FIVE_MINUTE_PATH_ERROR_CODES.length);
   });
 });
+
+// Spec 0077, T-6 (3.1.4/3.1.6): Ohne den Eintrag in `KNOWN_ERROR_CODES`
+// zeigte das Regel-Formular den rohen Bibliothekstext der `regex`/
+// `globset`-Crate ("... unclosed group") statt eines Satzes, der sagt, was
+// zu tun ist.
+describe("FILTER_RULE_PATTERN_INVALID (Spec 0077)", () => {
+  const RAW = "regex parse error: unclosed group";
+
+  it.each(["de", "en"] as const)(
+    "übersetzt den Code (%s) statt den Rohcode oder den Bibliothekstext zu zeigen",
+    (language) => {
+      const text = translateErrorCode(
+        testI18n.getFixedT(language),
+        "FILTER_RULE_PATTERN_INVALID",
+        RAW,
+      );
+
+      expect(text).not.toBe(RAW);
+      expect(text).not.toBe("FILTER_RULE_PATTERN_INVALID");
+      expect(text).not.toMatch(/^errors\./);
+      expect(text.trim().length).toBeGreaterThan(0);
+      // Muss das Muster als Ursache benennen, nicht nur "Fehler".
+      expect(text).toMatch(language === "de" ? /muster/i : /pattern/i);
+    },
+  );
+
+  it("DE und EN sind eigene Texte, nicht derselbe String", () => {
+    const de = translateErrorCode(testI18n.getFixedT("de"), "FILTER_RULE_PATTERN_INVALID", RAW);
+    const en = translateErrorCode(testI18n.getFixedT("en"), "FILTER_RULE_PATTERN_INVALID", RAW);
+
+    expect(de).not.toBe(en);
+  });
+});

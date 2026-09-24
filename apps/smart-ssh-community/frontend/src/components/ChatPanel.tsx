@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import {
   acceptAndCreateRule,
   cancelRunningCommand,
+  commandErrorCode,
   commandErrorMessage,
   continueTruncatedResponse,
   exportDocument,
@@ -613,7 +614,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
     ).catch((err) =>
       setItems((prev) => [
         ...prev,
-        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
+        // Spec 0077, 3.1.4: Code weiterreichen statt `null`, damit ein
+        // ungültiges Muster auch hier übersetzt erscheint. Die Anzeige
+        // ersetzt die `message` durch den übersetzten Satz — hier bewusst
+        // ohne den Fehlertext der Bibliothek: Es wird ein Vorschlag
+        // angelegt, kein selbstgeschriebenes Muster.
+        { type: "error", id: freshId(), message: commandErrorMessage(err), code: commandErrorCode(err) },
       ]),
     );
   };

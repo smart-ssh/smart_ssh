@@ -438,6 +438,7 @@
     "FILTER_RULE_DENY": "Blocked by a rule",
     "FILTER_RULE_CONFIRM": "Rule requires confirmation",
     "FILTER_NO_RULE_MATCHED": "No matching rule found",
+    "FILTER_RULE_PATTERN_INVALID": "Invalid pattern in a filter rule. Please correct the pattern.",
     "FILTER_POST_INGEST_REQUIRES_CONFIRM": "Server content was already read during this session – requires confirmation",
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Possible attempt to inject instructions via server content detected – requires confirmation",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Requested via MCP – always requires confirmation",

@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  commandErrorCode,
   commandErrorMessage,
   createRule,
   deleteRule,
@@ -188,8 +189,9 @@ export function FilterRulesView() {
                 {group.rules.map((rule, index) => (
                   <li
                     key={rule.id}
-                    className={`flex items-center gap-2 border border-l-4 border-slate-700 bg-slate-800/60 px-3 py-2 text-sm ${ACTION_BORDER[rule.action]}`}
+                    className={`border border-l-4 border-slate-700 bg-slate-800/60 px-3 py-2 text-sm ${ACTION_BORDER[rule.action]}`}
                   >
+                    <div className="flex items-center gap-2">
                     <span
                       className={`font-heading w-[70px] shrink-0 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${ACTION_COLORS[rule.action]}`}
                     >
@@ -233,6 +235,18 @@ export function FilterRulesView() {
                     >
                       {t("common.delete")}
                     </button>
+                    </div>
+                    {/* Spec 0077, 3.2.3: Eine Regel, deren Muster sich nicht
+                        übersetzen lässt, kann nicht greifen, soweit ihr Muster
+                        nicht übersetzt — das muss man ihr ansehen. Bearbeiten
+                        und Löschen bleiben möglich; Speichern verlangt dann
+                        ein gültiges Muster. */}
+                    {rule.patternError && (
+                      <p className="mt-1.5 text-xs text-amber-300" role="alert">
+                        ⚠ {t("errors.FILTER_RULE_PATTERN_INVALID")}{" "}
+                        <span className="font-mono text-amber-200/70">{rule.patternError}</span>
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -286,6 +300,11 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
   const [priority, setPriority] = useState(rule?.priority ?? 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Spec 0077, 3.1.4: Fehlertext der Bibliothek zu einem ungültigen
+   * Muster — steht **zusätzlich** unter dem übersetzten Satz, weil er die
+   * Stelle im Muster nennt. `translateErrorCode` ersetzt die `message` bei
+   * bekanntem Code vollständig, sie ginge sonst verloren. */
+  const [patternErrorDetail, setPatternErrorDetail] = useState<string | null>(null);
 
   const buildScope = (): Scope | null => {
     if (kind === "global") return "Global";
@@ -304,6 +323,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
     const input: RuleInput = { patternType, patternValue, action, scope, priority };
     setSaving(true);
     setError(null);
+    setPatternErrorDetail(null);
     try {
       if (isCreate) {
         await createRule(input);
@@ -312,7 +332,18 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
       }
       onSaved();
     } catch (err) {
-      setError(commandErrorMessage(err));
+      // Spec 0077, 3.1.4: Für `FILTER_RULE_PATTERN_INVALID` den übersetzten
+      // Satz zeigen UND darunter den Fehlertext der Bibliothek. Andere Codes
+      // bleiben wie bisher beim rohen `message`-Text — diese Spec ändert nur
+      // das Verhalten für den einen neuen Code.
+      const code = commandErrorCode(err);
+      const message = commandErrorMessage(err);
+      if (code === "FILTER_RULE_PATTERN_INVALID") {
+        setError(translateErrorCode(t, code, message));
+        setPatternErrorDetail(message);
+      } else {
+        setError(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -433,7 +464,16 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
         )}
       </div>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <div className="space-y-1">
+          <p className="text-sm text-red-400">{error}</p>
+          {/* Spec 0077, 3.1.4: der Fehlertext der Bibliothek als Detail — er
+              nennt die Stelle im Muster. */}
+          {patternErrorDetail && (
+            <p className="font-mono text-xs text-red-300/80">{patternErrorDetail}</p>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-2">
         <button

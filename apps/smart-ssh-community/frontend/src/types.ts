@@ -537,6 +537,13 @@ export interface RuleDto {
   action: RuleAction;
   scope: Scope;
   priority: number;
+  /** Spec 0077, 3.2.3: Fehlertext, wenn sich das Muster dieser Regel nicht
+   * übersetzen lässt — sonst `null`. Eine solche Regel kann bei der
+   * Auswertung nicht greifen, soweit ihr Muster nicht übersetzt; die Liste
+   * markiert sie deshalb sichtbar. Kann bei einer Regel entstehen, die eine
+   * ältere Programmfassung gespeichert hat; neu angelegt werden kann sie
+   * nicht mehr (Schicht 1). */
+  patternError: string | null;
 }
 
 /** Eingabe für `create_rule`/`update_rule`. */
