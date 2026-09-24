@@ -3,7 +3,55 @@ use regex::Regex;
 
 use super::types::{Pattern, RuleAction};
 
+/// Ein Muster, das sich nicht übersetzen lässt (Spec 0077, 3.1.1). Trägt den
+/// Fehlertext der Bibliothek (`regex`/`globset`) unverändert, inklusive der
+/// Stelle im Muster, die die Bibliothek nennt.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{message}")]
+pub struct PatternError {
+    pub message: String,
+}
+
+impl PatternError {
+    fn from_library(err: impl std::fmt::Display) -> Self {
+        Self {
+            message: err.to_string(),
+        }
+    }
+}
+
 impl Pattern {
+    /// Prüft, ob sich das Muster übersetzen lässt (Spec 0077, 3.1.1).
+    ///
+    /// Übersetzt **genau die Varianten, die die Auswertung übersetzt** —
+    /// [`Pattern::matches`] (`Glob::new` bzw. `Regex::new`) und für ein
+    /// pfadförmiges Glob zusätzlich den strengen Zweig aus
+    /// [`Pattern::matches_for_user_rule`]. Scheitert einer davon, ist das
+    /// Muster ungültig: Beim Speichern wird es abgewiesen, bei der
+    /// Auswertung gemeldet (Spec 0077, 3.1.2 und 3.2.2).
+    ///
+    /// Ändert nichts an der Auswertung selbst — `matches` und
+    /// `matches_for_user_rule` behalten ihr `unwrap_or(false)` (Spec 0077,
+    /// 3.2.4).
+    pub fn validate(&self) -> Result<(), PatternError> {
+        match self {
+            Pattern::Exact(_) => Ok(()),
+            Pattern::Regex(pattern) => Regex::new(pattern)
+                .map(|_| ())
+                .map_err(PatternError::from_library),
+            Pattern::Glob(pattern) => {
+                Glob::new(pattern).map_err(PatternError::from_library)?;
+                if is_path_shaped_pattern(pattern) {
+                    GlobBuilder::new(&normalize_path_shaped_tokens(pattern))
+                        .literal_separator(true)
+                        .build()
+                        .map_err(PatternError::from_library)?;
+                }
+                Ok(())
+            }
+        }
+    }
+
     /// Prüft, ob `cmd` (bereits whitespace-normalisiert) auf dieses Muster
     /// passt.
     ///
@@ -304,6 +352,119 @@ fn normalize_lexical_path(path: &str) -> String {
 #[cfg(test)]
 mod path_glob_tests {
     use super::*;
+
+    // --- Spec 0077, 3.1.1: `Pattern::validate` ---------------------------
+
+    /// Spec 0077, T-5 (core-Teil): gültige Muster werden weiter angenommen —
+    /// fängt eine zu strenge Prüfung ab.
+    #[test]
+    fn test_spec_0077_t5_validate_accepts_valid_patterns() {
+        for pattern in [
+            Pattern::Glob("*".to_string()),
+            Pattern::Glob("**".to_string()),
+            Pattern::Glob("systemctl *".to_string()),
+            Pattern::Glob("ls [abc]*".to_string()),
+            Pattern::Glob("cat {a,b}.log".to_string()),
+            Pattern::Glob("cat /var/log/**".to_string()),
+            Pattern::Glob("cat /var/log/*".to_string()),
+            Pattern::Glob("cat ./foo/*".to_string()),
+            Pattern::Glob("rm /x/[a/../b]".to_string()),
+            Pattern::Glob("curl http://example.com/*".to_string()),
+            Pattern::Glob("echo grüße *".to_string()),
+            Pattern::Regex("^systemctl stop .*$".to_string()),
+            Pattern::Regex(r"^(?:ls|cat)\s+(\S+)$".to_string()),
+            Pattern::Regex("^echo [äöü]+$".to_string()),
+            Pattern::Regex("a{3}".to_string()),
+            Pattern::Exact("ls -la".to_string()),
+            Pattern::Exact("[(".to_string()),
+        ] {
+            assert_eq!(pattern.validate(), Ok(()), "{pattern:?}");
+        }
+    }
+
+    /// Spec 0077, 3.1.1: Syntaxfehler in Regex und Glob werden gemeldet, mit
+    /// dem Fehlertext der Bibliothek.
+    ///
+    /// Das ungültige Regex-Literal wird aus Teilstücken zusammengesetzt:
+    /// `clippy::invalid_regex` erkennt ein ungültiges Literal in
+    /// `Regex::new` und bricht den Lint-Lauf ab — hier ist die Ungültigkeit
+    /// aber genau der Prüfgegenstand.
+    #[test]
+    fn test_spec_0077_validate_rejects_invalid_regex_and_glob() {
+        let invalid_regex = ["^systemctl stop ", "(", ".*"].concat();
+        let err = Pattern::Regex(invalid_regex.clone())
+            .validate()
+            .unwrap_err();
+        assert_eq!(
+            err.message,
+            Regex::new(&invalid_regex).unwrap_err().to_string()
+        );
+        let err = Pattern::Glob("systemctl [stop".to_string())
+            .validate()
+            .unwrap_err();
+        assert_eq!(
+            err.message,
+            Glob::new("systemctl [stop").unwrap_err().to_string()
+        );
+    }
+
+    /// Spec 0077, T-A9 (core-Teil): Ein Regex über dem Größenlimit der
+    /// `regex`-Voreinstellung gilt wie ein Syntaxfehler.
+    #[test]
+    fn test_spec_0077_validate_rejects_regex_over_size_limit() {
+        let err = Pattern::Regex("a{1000}{1000}".to_string())
+            .validate()
+            .unwrap_err();
+        assert!(err.message.contains("size limit"), "{}", err.message);
+    }
+
+    /// Baut den strengen Zweig aus 3.1.1 genau so wie
+    /// [`Pattern::validate`] und [`Pattern::matches_for_user_rule`].
+    fn strict_branch_compiles(pattern: &str) -> bool {
+        GlobBuilder::new(&normalize_path_shaped_tokens(pattern))
+            .literal_separator(true)
+            .build()
+            .is_ok()
+    }
+
+    /// Spec 0077, T-4 (core-Teil): Ein pfadförmiger Glob, bei dem nur
+    /// **einer** der beiden Zweige nicht übersetzt, ist ungültig — in
+    /// **beiden** Richtungen (§1, Tabelle „Gemessen, zweiter Befund";
+    /// Klarstellung Q-BL-0249-01).
+    ///
+    /// Beide Richtungen zusammen belegen, dass `validate` wirklich beide
+    /// Zweige baut: Eine Fassung, die nur den strengen Zweig prüft, käme
+    /// durch die erste Zeile, eine, die nur `Glob::new` prüft, durch die
+    /// zweite. Welcher Zweig übersetzt, hält der Test als Zusicherung fest
+    /// — sonst würde er still zu einem Test über ein durchweg ungültiges
+    /// Muster, falls sich `globset` einmal anders verhält.
+    #[test]
+    fn test_spec_0077_t4_validate_rejects_globs_failing_in_only_one_branch() {
+        // (Muster, übersetzt mit `Glob::new`, übersetzt im strengen Zweig)
+        for (pattern, permissive_ok, strict_ok) in [
+            // `..` löscht `b]`, die öffnende `[` bleibt ohne Gegenstück:
+            // normalisiert `rm /x/[a/c`.
+            ("rm /x/[a/b]/../c", true, false),
+            // Umgekehrt: dieselbe Auflösung repariert das Muster zu
+            // `rm /x/b`, das `Glob::new` roh nicht übersetzt.
+            ("rm /x/[a/../b", false, true),
+        ] {
+            assert_eq!(
+                Glob::new(pattern).is_ok(),
+                permissive_ok,
+                "Zusicherung permissiver Zweig: {pattern}"
+            );
+            assert_eq!(
+                strict_branch_compiles(pattern),
+                strict_ok,
+                "Zusicherung strenger Zweig: {pattern}"
+            );
+            assert!(
+                Pattern::Glob(pattern.to_string()).validate().is_err(),
+                "muss abgewiesen werden: {pattern}"
+            );
+        }
+    }
 
     #[test]
     fn test_is_path_shaped_recognizes_absolute_paths() {

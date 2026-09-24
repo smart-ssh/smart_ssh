@@ -24,6 +24,8 @@ pub use engine::{
 // denselben Rekursions-Cap für verschachtelte Command-Substitution nutzen
 // — analog zu `DEFAULT_MAX_COMMAND_LENGTH` oben.
 pub use parser::MAX_SUBSTITUTION_DEPTH;
+// Spec 0077, 3.1.1: Prüfung eines Musters beim Speichern und Melden.
+pub use pattern::PatternError;
 pub use types::{
     Decision, EffectiveScope, EvalContext, EvaluationTrace, Pattern, Rule, RuleAction, RuleId,
     RuleOrigin, Scope,

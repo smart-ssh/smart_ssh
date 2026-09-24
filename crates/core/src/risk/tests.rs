@@ -844,3 +844,32 @@ fn test_sftp_server_invocations_are_detected_for_confirmation() {
         );
     }
 }
+
+// --- Spec 0077, T-7: fest eingebaute Muster übersetzen ---------------------
+
+/// Spec 0077, T-7: Jedes eingebaute Risiko-Muster übersetzt mit genau der
+/// Übersetzung, die `Pattern::matches` benutzt (`Glob::new`/`Regex::new`).
+/// Ein Muster, das nicht übersetzt, passt dort still nie — dieser Test macht
+/// das sichtbar. Den strengen Glob-Zweig benutzt `crate::risk` nicht, er
+/// wird hier deshalb nicht verlangt.
+#[test]
+fn test_spec_0077_t7_builtin_risk_patterns_all_compile() {
+    use crate::filter::Pattern;
+    let all = super::patterns::server_risk_patterns()
+        .iter()
+        .chain(super::patterns::data_risk_patterns().iter());
+    let mut count = 0;
+    for (pattern, _, _) in all {
+        count += 1;
+        let result = match pattern {
+            Pattern::Exact(_) => Ok(()),
+            Pattern::Glob(p) => globset::Glob::new(p).map(|_| ()).map_err(|e| e.to_string()),
+            Pattern::Regex(p) => regex::Regex::new(p).map(|_| ()).map_err(|e| e.to_string()),
+        };
+        assert!(
+            result.is_ok(),
+            "eingebautes Risiko-Muster übersetzt nicht: {pattern:?}: {result:?}"
+        );
+    }
+    assert!(count > 0, "keine eingebauten Risiko-Muster gefunden");
+}

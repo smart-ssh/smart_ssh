@@ -1379,3 +1379,26 @@ async fn test_path_shaped_allow_rule_with_explicit_relative_pattern_still_matche
     let decision = eng.evaluate("cat ./foo/x", &ctx("srv1", &[])).await;
     assert_auto_exec(&decision);
 }
+
+// --- Spec 0077: Muster, die sich nicht übersetzen lassen --------------------
+
+/// Spec 0077, T-7: Jedes Muster der Hard-Blacklist übersetzt mit genau der
+/// Übersetzung, die `Pattern::matches` benutzt (`Glob::new`/`Regex::new`).
+/// Ein Muster, das nicht übersetzt, passt still nie — dieser Test macht das
+/// sichtbar. Den strengen Glob-Zweig benutzt die Hard-Blacklist nicht.
+#[test]
+fn test_spec_0077_t7_hard_blacklist_patterns_all_compile() {
+    let patterns = blacklist::hard_blacklist();
+    assert!(!patterns.is_empty());
+    for pattern in patterns {
+        let result = match pattern {
+            Pattern::Exact(_) => Ok(()),
+            Pattern::Glob(p) => globset::Glob::new(p).map(|_| ()).map_err(|e| e.to_string()),
+            Pattern::Regex(p) => regex::Regex::new(p).map(|_| ()).map_err(|e| e.to_string()),
+        };
+        assert!(
+            result.is_ok(),
+            "Hard-Blacklist-Muster übersetzt nicht: {pattern:?}: {result:?}"
+        );
+    }
+}
