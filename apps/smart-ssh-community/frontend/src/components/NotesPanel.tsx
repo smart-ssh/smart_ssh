@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   commandErrorCode,
   commandErrorMessage,
-  largeNoteDialogThresholdBytes,
+  largeNoteDialogThresholdChars,
   listNoteRevisions,
   requestNoteShrink,
   rollbackNote,
@@ -13,14 +13,6 @@ import {
 import { translateErrorCode } from "../errorCodes";
 import type { NoteRevisionDto, NoteTarget } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
-
-/** UTF-8-Byte-Länge statt `string.length` (UTF-16-Code-Einheiten) — der
- * Backend-Schwellwert (`orchestration::LARGE_NOTE_DIALOG_THRESHOLD_BYTES`)
- * zählt Byte, exakt wie `server.notes.len()` in Rust. Bei mehrbyte-Zeichen
- * (Umlaute, Emoji) würden beide Zählweisen sonst auseinanderlaufen. */
-function utf8ByteLength(text: string): number {
-  return new TextEncoder().encode(text).length;
-}
 
 interface NotesPanelProps {
   target: NoteTarget;
@@ -63,7 +55,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
   const [shrinkError, setShrinkError] = useState<string | null>(null);
 
   useEffect(() => {
-    largeNoteDialogThresholdBytes()
+    largeNoteDialogThresholdChars()
       .then(setLargeNoteThreshold)
       .catch((err) => console.error(commandErrorMessage(err)));
   }, []);
@@ -158,7 +150,10 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
     }
   };
 
-  const isLarge = largeNoteThreshold !== null && utf8ByteLength(draft) >= largeNoteThreshold;
+  // Spec 0079, A4: Unicode-Skalarwerte (`[...text].length`), nicht
+  // UTF-16-Code-Einheiten (`.length`) — Zeichen außerhalb der BMP (z. B.
+  // Emoji) zählen sonst doppelt.
+  const isLarge = largeNoteThreshold !== null && [...draft].length >= largeNoteThreshold;
 
   return (
     <div className="space-y-2">

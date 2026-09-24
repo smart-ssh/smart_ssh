@@ -284,9 +284,10 @@ export const updateServerNotes = (id: string, content: string) =>
 
 /** Spec 0058, Teil 1 (Etappe 5): derselbe Schwellwert wie der
  * Sitzungsende-Kürzungs-Dialog (Etappe 4) — eine Quelle der Wahrheit,
- * keine zweite, hartkodierte Zahl im Frontend. */
-export const largeNoteDialogThresholdBytes = () =>
-  invoke<number>("large_note_dialog_threshold_bytes");
+ * keine zweite, hartkodierte Zahl im Frontend. Spec 0079: Zeichen statt
+ * Byte. */
+export const largeNoteDialogThresholdChars = () =>
+  invoke<number>("large_note_dialog_threshold_chars");
 
 /** Spec 0057, §4.2 (Etappe 4): "Ja, zusammenfassen" — löst den KI-Aufruf
  * aus; das Ergebnis kommt asynchron über `note-update-suggested`/

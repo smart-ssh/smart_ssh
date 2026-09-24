@@ -39,17 +39,15 @@ NÄCHSTEN Verbindungsende — nichts geht dauerhaft verloren, es ist reine
 zeitliche Entflechtung. Ergebnis: **nie mehr als ein Notiz-Dialog pro
 Verbindungsende.**
 
-### 2. Schwellwert: `LARGE_NOTE_DIALOG_THRESHOLD_BYTES = 8_000`
+### 2. Schwellwert: `LARGE_NOTE_DIALOG_THRESHOLD_CHARS = 10_000`
 
-Deutlich über `compaction::MIN_LAST_NOTE_SECTION_BYTES` (2_000 — die
-Kompaktierungs-UNTERGRENZE für die *gesendete* Fassung beim verlustfreien
-Kürzen, Spec 0057 §4.1, kein "ist groß"-Indikator) und in derselben
-Größenordnung wie die spätere Zusammenfassungs-Obergrenze
-`NOTE_SHRINK_MAX_BYTES` (4_000): eine Notiz, die schon doppelt so groß ist
-wie das, was eine gekürzte Fassung maximal fassen darf, ist ein sinnvoller
-Auslöser, ohne bei normal genutzten Notizen (typischerweise wenige hundert
-Byte) zu nerven (§4.2, wörtlich: "Nur bei großer Notiz — bei normalen
-Notizen kein Dialog").
+Deutlich über der Zusammenfassungs-Obergrenze `NOTE_SHRINK_MAX_BYTES`
+(4_000 Byte), damit normal genutzte Notizen (typischerweise wenige hundert
+Zeichen) nicht nerven (§4.2, wörtlich: "Nur bei großer Notiz — bei normalen
+Notizen kein Dialog"). Gezählt werden Unicode-Skalarwerte (Zeichen), nicht
+Byte — Spec 0079 stellt die ursprüngliche Byte-Schwelle (8_000) auf Zeichen
+um, überall dort, wo die Konstante wirkt (dieser Dialog und der proaktive
+Hinweis im Notiz-Editor).
 
 ### 3. Der KI-Aufruf ist bewusst session-unabhängig
 

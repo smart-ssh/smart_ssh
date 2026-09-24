@@ -2,7 +2,7 @@
 // mittlere zeigt beim Aufklappen korrekt den Diff gegenüber der direkt
 // vorherigen (nicht gegenüber der ältesten oder der aktuellen), die
 // älteste zeigt "Ursprüngliche Version" ohne Diff-Darstellung.
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
@@ -45,7 +45,7 @@ const revisions: NoteRevisionDto[] = [
 // `mock`-Namenspräfix erforderlich: Vitest hoisted `vi.mock`-Factories über
 // alle anderen Top-Level-Deklarationen hinweg, referenzierte Variablen
 // dürfen deshalb nur mit diesem Präfix vorab initialisiert sein.
-const mockLargeNoteDialogThresholdBytes = vi.fn(() => Promise.resolve(1_000_000));
+const mockLargeNoteDialogThresholdChars = vi.fn(() => Promise.resolve(1_000_000));
 const mockRequestNoteShrink = vi.fn((_serverId: string) => Promise.resolve());
 
 vi.mock("../api", () => ({
@@ -53,7 +53,7 @@ vi.mock("../api", () => ({
   rollbackNote: vi.fn(() => Promise.resolve()),
   updateServerNotes: vi.fn(() => Promise.resolve()),
   updateGroupNotes: vi.fn(() => Promise.resolve()),
-  largeNoteDialogThresholdBytes: () => mockLargeNoteDialogThresholdBytes(),
+  largeNoteDialogThresholdChars: () => mockLargeNoteDialogThresholdChars(),
   requestNoteShrink: (serverId: string) => mockRequestNoteShrink(serverId),
   commandErrorMessage: (err: unknown) => String(err),
 }));
@@ -178,13 +178,28 @@ describe("autoFocus (Spec 0058, Teil 2)", () => {
   });
 });
 
+/** Wartet, bis der über `largeNoteDialogThresholdChars()` geladene
+ * Schwellwert im Component-State angekommen ist — nicht nur, bis der Mock
+ * AUFGERUFEN wurde (das beweist nur den synchronen Aufruf, nicht dass das
+ * `.then(setLargeNoteThreshold)` schon gefeuert und React den Re-Render
+ * committet hat). Ein bloßes `vi.waitFor(() => expect(mock).toHaveBeenCalled())`
+ * gefolgt von einer sofortigen Abwesenheits-Prüfung kann grün durchlaufen,
+ * OBWOHL der Schwellwert noch gar nicht geladen ist (Race Condition) — bei
+ * genau den Zeichen/Byte-Grenzfällen unten macht das den Unterschied
+ * zwischen einem Test, der wirklich etwas beweist, und einem, der zufällig
+ * durchläuft. `act(async () => {})` flusht die durch das Promise
+ * ausgelöste State-Aktualisierung synchron, bevor der Test weiterläuft. */
+async function waitForThresholdLoaded() {
+  await act(async () => {});
+}
+
 // Spec 0058, Teil 1 (Session-Modell Etappe 5): proaktiver Hinweis beim
 // Bearbeiten einer großen Notiz — das Gegenstück zum Sitzungsende-Dialog
-// (Etappe 4), derselbe Schwellwert (hier über `largeNoteDialogThresholdBytes`
+// (Etappe 4), derselbe Schwellwert (hier über `largeNoteDialogThresholdChars`
 // gemockt, in der echten App vom Backend geliefert).
 describe("large note hint (Spec 0058, Teil 1)", () => {
   it("shows the hint and a working 'jetzt zusammenfassen' link when the note is over the threshold", async () => {
-    mockLargeNoteDialogThresholdBytes.mockResolvedValueOnce(10);
+    mockLargeNoteDialogThresholdChars.mockResolvedValueOnce(10);
 
     render(
       <I18nextProvider i18n={testI18n}>
@@ -205,15 +220,51 @@ describe("large note hint (Spec 0058, Teil 1)", () => {
     expect(mockRequestNoteShrink).toHaveBeenCalledWith("server-1");
   });
 
-  it("counts UTF-8 bytes, not UTF-16 code units (multi-byte characters)", async () => {
-    // "ä" ist 1 UTF-16-Code-Einheit (`string.length`), aber 2 UTF-8-Byte —
-    // ein Rückfall von `utf8ByteLength` auf `draft.length` würde diesen Test
-    // nicht bestehen (10 Zeichen, `.length` = 10 < 15, aber 20 UTF-8-Byte
-    // >= 15).
-    mockLargeNoteDialogThresholdBytes.mockResolvedValueOnce(15);
+  // Spec 0079, §6: Schwelle in Unicode-Zeichen (`[...text].length`), nicht
+  // Byte (`utf8ByteLength`, entfernt) und nicht UTF-16-Code-Einheiten
+  // (`string.length`).
+  it("counts Unicode chars, not UTF-8 bytes (multi-byte characters below the threshold)", async () => {
+    // 5 × "ä" = 10 Byte (UTF-8), aber nur 5 Zeichen — bei Schwelle 10 darf
+    // das keinen Hinweis auslösen. Scheitert mit der alten Byte-Zählung
+    // (10 Byte >= 10).
+    mockLargeNoteDialogThresholdChars.mockResolvedValueOnce(10);
+    const note = "ä".repeat(5);
+    expect(new TextEncoder().encode(note).length).toBe(10);
+    expect([...note].length).toBe(5);
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <NotesPanel target={{ Server: "server-1" }} currentNotes={note} onNotesChanged={() => {}} />
+      </I18nextProvider>,
+    );
+
+    await waitForThresholdLoaded();
+    expect(screen.queryByText(/sehr groß und kann bei langen Sitzungen/)).toBeNull();
+  });
+
+  it("counts Unicode chars, not UTF-16 code units (characters outside the BMP below the threshold)", async () => {
+    // 6 × "😀" = 12 UTF-16-Code-Einheiten (`string.length`, Surrogatpaare),
+    // aber nur 6 Zeichen — bei Schwelle 10 darf das keinen Hinweis
+    // auslösen. Scheitert mit `draft.length` (12 >= 10).
+    mockLargeNoteDialogThresholdChars.mockResolvedValueOnce(10);
+    const note = "😀".repeat(6);
+    expect(note.length).toBe(12);
+    expect([...note].length).toBe(6);
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <NotesPanel target={{ Server: "server-1" }} currentNotes={note} onNotesChanged={() => {}} />
+      </I18nextProvider>,
+    );
+
+    await waitForThresholdLoaded();
+    expect(screen.queryByText(/sehr groß und kann bei langen Sitzungen/)).toBeNull();
+  });
+
+  it("shows the hint once the char count reaches the threshold", async () => {
+    mockLargeNoteDialogThresholdChars.mockResolvedValueOnce(10);
     const note = "ä".repeat(10);
-    expect(note.length).toBeLessThan(15);
-    expect(new TextEncoder().encode(note).length).toBeGreaterThanOrEqual(15);
+    expect([...note].length).toBe(10);
 
     render(
       <I18nextProvider i18n={testI18n}>
@@ -225,7 +276,7 @@ describe("large note hint (Spec 0058, Teil 1)", () => {
   });
 
   it("does not show the hint for a note below the threshold", async () => {
-    mockLargeNoteDialogThresholdBytes.mockResolvedValueOnce(1_000_000);
+    mockLargeNoteDialogThresholdChars.mockResolvedValueOnce(1_000_000);
 
     render(
       <I18nextProvider i18n={testI18n}>
@@ -234,15 +285,15 @@ describe("large note hint (Spec 0058, Teil 1)", () => {
     );
 
     // Auf den geladenen Schwellwert warten (sonst könnte der Test grün
-    // durchlaufen, bevor `largeNoteDialogThresholdBytes()` überhaupt
+    // durchlaufen, bevor `largeNoteDialogThresholdChars()` überhaupt
     // aufgelöst hat, und nichts wirklich beweisen).
-    await vi.waitFor(() => expect(mockLargeNoteDialogThresholdBytes).toHaveBeenCalled());
+    await vi.waitFor(() => expect(mockLargeNoteDialogThresholdChars).toHaveBeenCalled());
 
     expect(screen.queryByText(/sehr groß und kann bei langen Sitzungen/)).toBeNull();
   });
 
   it("does not show the 'jetzt zusammenfassen' link for a group note (no server to summarize)", async () => {
-    mockLargeNoteDialogThresholdBytes.mockResolvedValueOnce(10);
+    mockLargeNoteDialogThresholdChars.mockResolvedValueOnce(10);
 
     render(
       <I18nextProvider i18n={testI18n}>
@@ -259,7 +310,7 @@ describe("large note hint (Spec 0058, Teil 1)", () => {
   });
 
   it("reacts live as the draft grows past the threshold while typing", async () => {
-    mockLargeNoteDialogThresholdBytes.mockResolvedValueOnce(10);
+    mockLargeNoteDialogThresholdChars.mockResolvedValueOnce(10);
 
     render(
       <I18nextProvider i18n={testI18n}>
@@ -267,7 +318,7 @@ describe("large note hint (Spec 0058, Teil 1)", () => {
       </I18nextProvider>,
     );
 
-    await vi.waitFor(() => expect(mockLargeNoteDialogThresholdBytes).toHaveBeenCalled());
+    await vi.waitFor(() => expect(mockLargeNoteDialogThresholdChars).toHaveBeenCalled());
     expect(screen.queryByText(/sehr groß und kann bei langen Sitzungen/)).toBeNull();
 
     fireEvent.change(screen.getByRole("textbox"), {

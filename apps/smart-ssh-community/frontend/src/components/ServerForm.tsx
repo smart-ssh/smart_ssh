@@ -9,7 +9,7 @@ import {
   deleteServer,
   getServer,
   inspectKeyFile,
-  largeNoteDialogThresholdBytes,
+  largeNoteDialogThresholdChars,
   previewEffectiveNotes,
   requestNoteShrink,
   testConnection,
@@ -274,13 +274,13 @@ export function ServerForm({
   const [localShrinkRequesting, setLocalShrinkRequesting] = useState(false);
   const [localShrinkError, setLocalShrinkError] = useState<string | null>(null);
   useEffect(() => {
-    largeNoteDialogThresholdBytes()
+    largeNoteDialogThresholdChars()
       .then(setLargeLocalNoteThreshold)
       .catch((err) => console.error(commandErrorMessage(err)));
   }, []);
+  // Spec 0079, A4: Unicode-Skalarwerte (`[...text].length`), nicht Byte.
   const isLocalNoteLarge =
-    largeLocalNoteThreshold !== null &&
-    new TextEncoder().encode(localNotes).length >= largeLocalNoteThreshold;
+    largeLocalNoteThreshold !== null && [...localNotes].length >= largeLocalNoteThreshold;
   const handleSummarizeLocalNoteNow = async () => {
     if (!loaded) return;
     setLocalShrinkRequesting(true);

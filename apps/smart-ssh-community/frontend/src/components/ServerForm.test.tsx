@@ -47,7 +47,7 @@ vi.mock("../api", () => ({
   deleteServer: vi.fn(),
   getServer: vi.fn(),
   inspectKeyFile: vi.fn(),
-  largeNoteDialogThresholdBytes: vi.fn(() => Promise.resolve(100000)),
+  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
   previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
   requestNoteShrink: vi.fn(),
   testConnection: vi.fn(),

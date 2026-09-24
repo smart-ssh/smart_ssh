@@ -14,6 +14,25 @@ interface ShrinkFailure {
 }
 
 /**
+ * Spec 0079, A2/A3: Server-IDs, für die "Später" geklickt wurde — bewusst
+ * eine Modul-Variable statt Komponenten-`State`, damit sie ein Neu-Einhängen
+ * von `NoteShrinkSuggestionToast` überlebt (die Komponente ist app-weit
+ * gemountet, s. Moduldoc oben, ein Neu-Mount ist also kein alltäglicher
+ * Fall, aber Tests hängen z. B. bewusst aus- und wieder ein). Nur im
+ * Arbeitsspeicher: kein `localStorage`/`sessionStorage`, kein Backend — ein
+ * Neustart der App vergisst "Später" wieder (ausdrücklich gewollt, §2
+ * Nicht-Ziele).
+ */
+const snoozedServerIds = new Set<string>();
+
+/** Nur für Tests: leert die Merkmenge, damit ein „Später“ aus einem
+ * früheren Test nicht in den nächsten durchsickert (Modul-Variablen leben
+ * über `beforeEach`/`render`-Aufrufe hinweg fort). */
+export function resetSnoozedNoteShrinkServersForTests(): void {
+  snoozedServerIds.clear();
+}
+
+/**
  * Spec 0057, §4.2 (Etappe 4): der ERSTE Dialog beim Verbindungsende, wenn
  * die gespeicherte Notiz eines Servers groß ist — "Ja, zusammenfassen" /
  * "Mache ich selbst". App-weit gemountet (wie `NoteSuggestionToast`,
@@ -36,6 +55,10 @@ export function NoteShrinkSuggestionToast() {
 
   useEffect(() => {
     const unlistenSuggested = onNoteShrinkSuggested((event) => {
+      // Spec 0079, A2: für "Später" vorgemerkte Server bekommen bis zum
+      // Neustart der App keine Karte mehr — früher Ausstieg, bevor
+      // überhaupt State geändert wird.
+      if (snoozedServerIds.has(event.serverId)) return;
       setSuggestions((prev) => [
         // spec-reviewer-Fund (Review dieses Schritts): derselbe Server kann
         // über mehrere Verbindungsenden hinweg erneut vorgeschlagen werden
@@ -58,6 +81,13 @@ export function NoteShrinkSuggestionToast() {
 
   const dismiss = (serverId: string) => {
     setSuggestions((prev) => prev.filter((s) => s.serverId !== serverId));
+  };
+
+  // Spec 0079, A2: merkt den Server dauerhaft (bis zum App-Neustart) vor,
+  // zusätzlich zum bloßen Wegklicken der aktuellen Karte.
+  const later = (serverId: string) => {
+    snoozedServerIds.add(serverId);
+    dismiss(serverId);
   };
 
   const dismissFailure = (id: string) => {
@@ -90,14 +120,34 @@ export function NoteShrinkSuggestionToast() {
           key={suggestion.serverId}
           className="rounded-lg border border-slate-700 bg-slate-800 p-3 text-sm shadow-lg"
         >
-          <p className="font-semibold text-slate-100">
-            Notiz für Server „{suggestion.serverName}“ ist sehr groß
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-semibold text-slate-100">
+              Notiz für Server „{suggestion.serverName}“ ist sehr groß
+            </p>
+            {/* Spec 0079, A1: gestaltet wie der ✕-Knopf der Fehler-Karten
+             * unten (`dismissFailure`) — entfernt nur diese Karte, merkt den
+             * Server NICHT vor (anders als „Später“). */}
+            <button
+              type="button"
+              onClick={() => dismiss(suggestion.serverId)}
+              className="shrink-0 rounded bg-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-600"
+              aria-label="Hinweis schließen"
+            >
+              ✕
+            </button>
+          </div>
           <p className="mt-1 text-xs text-slate-400">
             Deine Notiz für diesen Server ist sehr groß und kann bei langen Sitzungen gekürzt
             werden müssen. Soll ich sie zusammenfassen?
           </p>
           <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => later(suggestion.serverId)}
+              className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
+            >
+              Später
+            </button>
             <button
               type="button"
               onClick={() => editMyself(suggestion)}
