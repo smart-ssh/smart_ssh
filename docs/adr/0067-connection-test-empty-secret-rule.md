@@ -29,6 +29,16 @@ und `Certificate.key_content`. Die Passphrase lief schon vorher so
 (ADR 0066 §2), damit ist der Verbindungstest in allen Secret-Slots
 gleichförmig.
 
+**„Dieselbe Gestalt" heißt dieselbe Entscheidungsregel, nicht
+Verhaltensgleichheit in jedem Fall.** Ein Unterschied bleibt und ist
+gewollt: Beim Speichern genügt die Feststellung, dass der Slot derselben
+Anmeldeart vorher existierte (`previously_existed`); der Verbindungstest
+muss das Secret zusätzlich **lesen**, weil er sich damit anmeldet. Ist der
+Schlüsselbund-Eintrag von außen verschwunden, ist Speichern deshalb `Ok`
+und der Test `Err`. Das galt für ein `None`-Feld schon vor diesem Diff und
+ist die richtige Richtung: Der Test soll nicht behaupten, er habe ein
+Credential benutzt, das er nicht bekommen hat.
+
 **Warum beides zusammen und nicht nur der Trim:** Ein reiner Trim ohne die
 Leer-Regel hätte den Fehlerfall **häufiger** gemacht, weil ein Leerraum-
 oder BOM-Paste dann auf `""` fällt und vorher genau dieses `""` in den
@@ -46,8 +56,18 @@ das sich anschließend nicht speichern ließ.
 Beim **Bearbeiten** ändert sich nichts an der Bedeutung: leer heißt
 weiterhin „das hinterlegte Credential verwenden" (Spec 0008 §4). Neu ist
 nur, dass auch ein Leerraum- oder Nur-unsichtbare-Zeichen-Paste als leer
-gilt und nicht mehr das hinterlegte Credential durch einen Wert ersetzt,
-den der Nutzer nicht gemeint hat.
+gilt: Der Test meldet sich dann mit dem hinterlegten Credential an, statt
+mit einem Wert, den der Nutzer nicht gemeint hat. Ersetzt wird dabei
+nichts — der Verbindungstest liest nur (`real_store.get`), er schreibt
+kein Credential und löscht keines.
+
+Diese Richtung ist zugleich die einzige, in der der Diff etwas
+aufweicht: Ein Verbindungstest, der vorher an einem Leerraum-Paste
+scheiterte, kann jetzt grün werden, und die Erfolgsmeldung gilt dann für
+das hinterlegte Zugangsdatum. Genau das tut „Speichern" seit Spec 0008 §4
+auch, und §9 verlangt die Gleichstellung ausdrücklich — festgehalten sei
+es trotzdem, weil eine Erfolgsmeldung damit über etwas aussagt, das nicht
+im Feld stand.
 
 ## 3. Keine Lockerung
 

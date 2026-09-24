@@ -105,9 +105,11 @@ function authStateFromKind(kind: AuthFormState["kind"]): AuthFormState {
  * "Verbindung testen" (s. unten) — und dort gilt seither dieselbe Regel.
  * Ein leeres Pflichtfeld bei Neuanlage endet also in beiden Fällen in der
  * Fehlermeldung, nicht in einem Anmeldeversuch mit leerem Secret. Auf
- * Randzeichen muss dieses Formular deshalb nicht prüfen: Beide Wege
- * trimmen im Kern über denselben Helfer, und zwar bevor sie "leer"
- * entscheiden.
+ * Randzeichen muss dieses Formular bei den **Secret-Feldern** deshalb
+ * nicht prüfen: Beide Wege trimmen im Kern über denselben Helfer, und
+ * zwar bevor sie "leer" entscheiden. Für `identityFile.path` gilt das
+ * ausdrücklich **nicht** — der Pfad wird bewusst nicht getrimmt
+ * (ADR 0065 §5, s. Kommentar am Zweig unten).
  */
 function toAuthMethodInput(state: AuthFormState, isCreate: boolean): AuthMethodInput {
   const orNullIfUpdate = (value: string) => (value === "" && !isCreate ? null : value);

@@ -416,6 +416,11 @@ fn resolve_secret(
     // Bewusst dieselbe Gestalt wie `write_or_reuse_secret`: derselbe Trim,
     // dieselbe Bedingung, dieselbe Reihenfolge der Zweige. Weicht eine der
     // beiden Stellen künftig ab, fällt es beim Vergleich auf.
+    //
+    // Gleiche Regel, nicht gleiches Ergebnis in jedem Fall: Beim Speichern
+    // genügt „der Slot existierte vorher", hier wird das Secret zusätzlich
+    // gelesen — ist der Schlüsselbund-Eintrag von außen verschwunden, ist
+    // Speichern `Ok` und der Test `Err` (ADR 0067 §1).
     match provided.map(|value| trim_credential_value(&value)) {
         Some(value) if !value.is_empty() => Ok(SecretString::from(value)),
         _ => {
@@ -1176,6 +1181,34 @@ mod tests {
         })
         .map_err(|err| err.message);
 
+        // Gegenprobe zur Modul-Zusage „ohne irgendetwas zu persistieren":
+        // Der Test-Weg darf am echten Store nichts verändert haben. Steht
+        // hier im Helfer, damit alle drei Tests sie mittragen — ein
+        // künftiges `set` auf dem echten Store fiele sofort auf.
+        if let (Some(value), Some(existing_auth)) = (stored, existing.as_ref()) {
+            assert_eq!(
+                expose(
+                    &real_store as &dyn CredentialStore,
+                    &slot.secret_ref_of(existing_auth)
+                ),
+                value,
+                "{slot:?}: der Verbindungstest hat das hinterlegte Credential verändert"
+            );
+        }
+        for leaked in [
+            "test:password",
+            "test:private_key",
+            "test:passphrase",
+            "test:certificate",
+            "test:certificate_key",
+        ] {
+            assert!(
+                real_store.get(&CredentialRef::new(leaked)).is_err(),
+                "{slot:?}: {leaked} ist im echten Store gelandet — Test-Secrets \
+                 gehören ausschließlich in den Ephemeral-Store"
+            );
+        }
+
         // Weg 2: „Speichern" — Secrets landen im echten Store.
         let (save_store, existing) = seed();
         let via_save = crate::server_credentials::resolve_auth_method(
@@ -1256,6 +1289,17 @@ mod tests {
                     "{slot:?}/{pasted:?}: „Verbindung testen\" darf bei Neuanlage mit leerem \
                      Pflichtfeld keinen Anmeldeversuch mit leerem Secret starten, \
                      sondern muss denselben Fehler melden wie das Speichern (war: {via_test:?})"
+                );
+                // Und zwar aus `resolve_secret`, nicht aus einem beliebigen
+                // anderen Grund: Ohne diese Zusicherung bliebe der Test auch
+                // dann grün, wenn der Abbruch künftig vom Nachbar-Slot oder
+                // von einer ganz anderen Prüfung käme.
+                assert!(
+                    via_test
+                        .as_ref()
+                        .is_err_and(|message| message.starts_with("Secret erforderlich")),
+                    "{slot:?}/{pasted:?}: der Abbruch muss der fehlenden Eingabe gelten, \
+                     nicht irgendetwas anderem (war: {via_test:?})"
                 );
             }
         }
