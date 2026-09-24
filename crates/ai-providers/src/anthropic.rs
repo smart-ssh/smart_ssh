@@ -211,12 +211,23 @@ impl AnthropicProvider {
         // Token-Bereich, je nach Modell): Anthropic verarbeitet einen zu
         // kurzen Block dann einfach ohne Caching, ohne Fehler — eine
         // eigene Mindestlängen-Prüfung hier wäre nur zusätzliche
-        // Komplexität für denselben Effekt.
-        let system_value = json!([{
-            "type": "text",
-            "text": system_text,
-            "cache_control": {"type": "ephemeral"},
-        }]);
+        // Komplexität für denselben Effekt. Ausnahme (Spec 0081): Ist
+        // `system_text` nach dem optionalen Fallback-Zusatz leer oder
+        // besteht nur aus Leerraum, gibt es KEINEN Block und damit auch
+        // kein `system`-Feld — Anthropic lehnt `cache_control` auf einem
+        // leeren Textblock mit HTTP 400 ab (`system.0: cache_control
+        // cannot be set for empty text blocks`), das Feld ganz wegzulassen
+        // ist der einzige Weg, das zu vermeiden, ohne den (unerreichbaren)
+        // Cache-Breakpoint auf nichts zu setzen.
+        let system_value = if system_text.trim().is_empty() {
+            None
+        } else {
+            Some(json!([{
+                "type": "text",
+                "text": system_text,
+                "cache_control": {"type": "ephemeral"},
+            }]))
+        };
 
         // Spec 0065, Teil 1+4: `max_tokens_hint` (Nebenaufrufe, s.
         // `app_shell::orchestration::SIDE_CALL_MAX_TOKENS`) hat Vorrang vor
@@ -231,11 +242,13 @@ impl AnthropicProvider {
 
         let mut body = json!({
             "model": self.model,
-            "system": system_value,
             "messages": messages,
             "max_tokens": max_tokens,
             "stream": true,
         });
+        if let Some(system_value) = system_value {
+            body["system"] = system_value;
+        }
 
         if self.supports_native_tool_calling && !context.available_actions.is_empty() {
             let mut tools: Vec<Value> = context
@@ -1149,6 +1162,62 @@ mod tests {
         let body = provider.build_request_body(&context);
 
         assert_eq!(body["system"][0]["cache_control"]["type"], "ephemeral");
+    }
+
+    /// Spec 0081, T1: „Zugangsdaten testen“ ruft mit nativem Tool-Calling
+    /// und leerem `system_context` auf (`classify_credential_test_result`
+    /// in `app-shell::commands`) — der Body darf dann **kein** `system`-
+    /// Feld enthalten, sonst lehnt Anthropic mit HTTP 400
+    /// `cache_control cannot be set for empty text blocks` ab (belegt im
+    /// App-Log, s. Spec Abschnitt 1). Scheitert ohne den Fix, weil der
+    /// Body den leeren Block mit `cache_control` enthielte.
+    #[test]
+    fn test_no_system_field_when_system_text_is_empty_with_native_tool_calling() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "claude-test",
+            "key",
+            true,
+            test_budget(),
+            None,
+        );
+        let context = context_with_actions("   \n", default_action_schemas());
+
+        let body = provider.build_request_body(&context);
+
+        assert!(
+            body.get("system").is_none(),
+            "system-Feld muss bei nur Leerraum ganz fehlen: {body}"
+        );
+    }
+
+    /// Spec 0081, T2: Wächter für den Fallback-Pfad (kein natives
+    /// Tool-Calling) — auch bei leerem `system_context` hängt
+    /// `fallback_system_prompt_addition` etwas Nicht-Leeres an, der Block
+    /// bleibt also erhalten und weiterhin gecacht.
+    #[test]
+    fn test_fallback_mode_keeps_cached_system_block_even_with_empty_system_context() {
+        let provider = AnthropicProvider::new(
+            "https://example.test",
+            "claude-test",
+            "key",
+            false,
+            test_budget(),
+            None,
+        );
+        let context = context_with_actions("", default_action_schemas());
+
+        let body = provider.build_request_body(&context);
+
+        let system = body["system"]
+            .as_array()
+            .expect("system muss im Fallback-Modus gesetzt bleiben");
+        assert_eq!(system.len(), 1);
+        assert!(
+            !system[0]["text"].as_str().unwrap().trim().is_empty(),
+            "Fallback-Zusatz muss nicht-leeren Text liefern: {system:?}"
+        );
+        assert_eq!(system[0]["cache_control"]["type"], "ephemeral");
     }
 
     #[tokio::test(start_paused = true)]
