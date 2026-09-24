@@ -201,3 +201,15 @@ Coder nicht erweitern soll, ohne es zu melden.
 ## 9. Klarstellungen
 
 *(wird während der Umsetzung nachgetragen: Datum · Frage-ID · Antwort)*
+
+**2026-09-24 · Q-BL-0149-01 · `normalize_sftp_server_path` benutzt den
+Helfer.** Stefan: Option 1. §1 listet `dto.rs:514`, A3 verlangt „alle in
+§1 genannten Stellen" — damit gilt der Helfer auch dort, obwohl
+`sftp_server_path` kein Zugangsdaten-Wert ist. Die Sicherheitsprüfung
+`is_plausible_sftp_server_path` bleibt unverändert und läuft weiterhin auf
+dem gespeicherten Endwert; ein unsichtbares Zeichen kann in keinem Fall
+ins Kommando gelangen. Geändert wird nur, ob ein eingefügter Pfad mit
+Randzeichen als Fehler endet oder bereinigt wird. Tests: Randzeichen →
+bereinigt; Zeichen **innen** → weiterhin abgelehnt; nur unsichtbare
+Zeichen → `None` („automatisch"). Annahme A-1 ist damit aufgelöst.
+
