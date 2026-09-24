@@ -1765,7 +1765,24 @@ async fn test_spec_0077_q_bl_0249_03_pattern_error_log_never_quotes_the_pattern(
             !line.contains(SECRET),
             "Geheimnis aus dem Muster im ERROR-Log: {line}"
         );
+        // Nicht nur das vollständige Geheimnis, auch ein Ausschnitt des
+        // Musters darf nicht durchsickern — sonst bestünde eine gekürzte
+        // Fassung des Bibliothekstexts diesen Test, obwohl sie weiterhin
+        // ein Fragment des Musters zitiert (Review-Fund, review-03.md).
+        assert!(
+            !line.contains("--token="),
+            "Musterausschnitt im ERROR-Log: {line}"
+        );
     }
+    // Der feste Kurztext, nicht bloß "irgendein Text ohne das Geheimnis" —
+    // stellt sicher, dass wirklich `compile_failure_reason()` greift und
+    // nicht etwa eine andere, zufällig ebenso geheimnisfreie Kürzung.
+    assert!(
+        events
+            .iter()
+            .any(|line| line.contains("\"pattern_error\":\"regex does not compile\"")),
+        "erwarteter fester Kurztext fehlt: {events:?}"
+    );
 }
 
 /// Spec 0077, T-A12 (§1, Tabelle „Gemessen, zweiter Befund"): Ein

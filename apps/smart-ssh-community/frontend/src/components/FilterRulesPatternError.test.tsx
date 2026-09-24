@@ -15,7 +15,12 @@ const LIBRARY_ERROR = "regex parse error: unclosed group";
 
 const listRulesMock = vi.fn<() => Promise<RuleDto[]>>();
 const createRuleMock = vi.fn();
-const updateRuleMock = vi.fn(() => Promise.resolve());
+// Rest-Parameter statt fester Arity (wie bei `createRuleMock` oben, das ganz
+// ohne Implementierung bleibt): Erst dadurch hat der Mock eine
+// `(...args: unknown[]) => …`-Signatur, in die sich `...args` weiter unten
+// spreaden lässt — mit `vi.fn(() => Promise.resolve())` (feste 0-Arity)
+// scheiterte das an TS2556 (Review-Fund, review-03.md).
+const updateRuleMock = vi.fn((..._args: unknown[]) => Promise.resolve());
 
 vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) =>
