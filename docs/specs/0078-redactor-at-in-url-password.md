@@ -353,3 +353,26 @@ verlangt eine Produktentscheidung.
   Query-Parameter-Fällen aus §6.1 (T-7a/T-7b). Die Formulierung in §6.2
   („Scheitert, wenn N1 einen Wert in Anführungszeichen anschneidet")
   trifft so nicht zu.
+
+- **2026-09-24 · Q-BL-0248-02 · K2:** N1 zerschnitt einen Schlüsselblock
+  auch dann, wenn vor `-----BEGIN` ein `@` im Wert steht
+  (`?secret=a@-----BEGIN PRIVATE KEY-----…`, frei, in Anführungszeichen,
+  PGP, ohne END). Außerdem nahm N1 dem strengen URL-Muster den Anker, wenn
+  das Passwort `&<schlüsselwort>=` enthält (`https://u:Geheim&token=b@h/x`).
+  Beides wurde vor dieser Spec redigiert. Korrektur:
+  - **(A)** Die vier Private-Key- und PGP-Muster kommen zusätzlich als
+    Kopie an den **Anfang** der Liste. Die Originale bleiben wörtlich an
+    ihrer Stelle.
+  - **(B)** N1 zählt `&` nur nach einem `?` im selben Token:
+    `(?i)(?P<sep>\?(?:[^\s,;"'#?@&]*&)*)(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)`,
+    Ersetzung `${sep}${key}=[REDACTED]`.
+
+  Tests, jeweils heute rot:
+  - die vier Schlüssel-Eingaben, vollständig geschwärzt,
+  - `https://u:Geheim&token=b@h/x`, `ssh://u:Geheim&password=b@h/x` und
+    `postgres://u:a&token=b@h/x`, jeweils → `…:[REDACTED]@h/x`,
+  - `api-key: -----BEGIN PRIVATE KEY-----…`, vollständig geschwärzt (war
+    schon vor dieser Spec offen und ist mit A zu),
+  - `redis://cache:6379?db=1&password=p@ssw0rd` → `redis://cache:6379?db=1&[REDACTED]`.
+
+  Der Restfall aus Q-BL-0248-01 ist unverändert und auf `?` beschränkt.
