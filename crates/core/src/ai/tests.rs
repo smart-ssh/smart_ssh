@@ -1489,6 +1489,109 @@ fn test_redactor_query_rule_does_not_cut_a_private_key_armor_anchor() {
     assert_eq!(quoted, "https://x/?[REDACTED]");
 }
 
+/// Regressionstest, Fund des `regression-guard` über `ee017af..387a91e`,
+/// vom Architekten vorher/nachher gemessen (Spec 0078 §9, Q-BL-0248-02,
+/// echte Lockerung): Die Query-String-Regel zerschnitt den Anker der
+/// Schlüsselmuster auch dann, wenn das geforderte `@` **vor** dem Anker
+/// im Wert steht — `?secret=a@-----BEGIN PRIVATE KEY-----`. Die frühere
+/// Begründung „ein Anker ohne `@` ist für die Regel unerreichbar" war
+/// deshalb falsch: nicht der Anker muss das `@` enthalten, sondern der
+/// Wert, und der beginnt vor dem Anker.
+///
+/// Behoben durch Kopien der vier Schlüsselmuster ganz am Anfang der
+/// Liste (die Originale bleiben wörtlich an ihrer Stelle): ein
+/// Schlüsselblock ist geschwärzt, bevor irgendeine wertverbrauchende
+/// Regel seinen Anker überhaupt sehen kann. Das ist die Begründung, die
+/// der Kommentar an den Shadow-Hash-Mustern seit Langem führt.
+#[test]
+fn test_redactor_redacts_a_key_block_behind_an_at_sign_in_a_query_parameter() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for (label, input) in [
+        (
+            "frei",
+            "https://v/api?secret=a@-----BEGIN PRIVATE KEY-----\n\
+             MIIEvQbodyOfKey\n\
+             -----END PRIVATE KEY-----",
+        ),
+        (
+            "quotiert",
+            "https://v/api?secret=\"a@-----BEGIN PRIVATE KEY-----\"\n\
+             MIIEvQbodyOfKey\n\
+             -----END PRIVATE KEY-----",
+        ),
+        (
+            "PGP",
+            "https://v/api?secret=a@-----BEGIN PGP PRIVATE KEY BLOCK-----\n\
+             MIIEvQbodyOfKey\n\
+             -----END PGP PRIVATE KEY BLOCK-----",
+        ),
+        (
+            "ohne END",
+            "https://v/api?secret=a@-----BEGIN PRIVATE KEY-----\n\
+             MIIEvQbodyOfKey",
+        ),
+    ] {
+        let redacted = redactor.redact_text(input);
+        assert!(
+            !redacted.contains("MIIEvQbodyOfKey"),
+            "{label}: Schlüsselkörper im Klartext: {redacted}"
+        );
+    }
+}
+
+/// Regressionstest zum selben Fund (Spec 0078 §9, Q-BL-0248-02): Die
+/// Query-String-Regel zählte `&` auch ohne vorangehendes `?` und nahm
+/// damit dem strengen URL-Muster den Anker, wenn das PASSWORT ein
+/// `&<schlüsselwort>=` enthält. Gemessen: vor Spec 0078 vollständig
+/// redigiert, danach stand der Passwort-Präfix im Klartext.
+///
+/// Behoben, indem die Regel `&` nur noch nach einem `?` im selben Token
+/// akzeptiert. Der von Stefan entschiedene Restfall (§5) bleibt dadurch
+/// auf die `?`-Form beschränkt, so wie §5 ihn beschreibt.
+#[test]
+fn test_redactor_does_not_treat_an_ampersand_without_a_question_mark_as_a_query_string() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for (input, expected) in [
+        ("https://u:Geheim&token=b@h/x", "https://u:[REDACTED]@h/x"),
+        ("ssh://u:Geheim&password=b@h/x", "ssh://u:[REDACTED]@h/x"),
+        ("postgres://u:a&token=b@h/x", "postgres://u:[REDACTED]@h/x"),
+    ] {
+        let redacted = redactor.redact_text(input);
+        assert!(!redacted.contains("Geheim"), "Eingabe: {input}");
+        assert_eq!(redacted, expected, "Eingabe: {input}");
+    }
+
+    // Gegenprobe: mit vorangehendem `?` bleibt `&` ein Query-Trenner,
+    // Fall C also unverändert zu.
+    assert_eq!(
+        redactor.redact_text("redis://cache:6379?db=1&password=p@ssw0rd"),
+        "redis://cache:6379?db=1&[REDACTED]"
+    );
+}
+
+/// Nebenwirkung der Kopien am Listenanfang, und eine Verbesserung: Ein
+/// Schlüsselblock hinter einem Header-Namen wurde **schon vor Spec 0078**
+/// zerschnitten — die frühe `api-key`-Kopie verbrauchte `-----BEGIN` und
+/// nahm den Schlüsselmustern den Anker. Mit den Kopien ganz vorn ist
+/// dieses ältere Leck mit zu (Spec 0078 §9, Q-BL-0248-02).
+#[test]
+fn test_redactor_redacts_a_key_block_behind_a_header_name() {
+    let redactor = DefaultOutputRedactor::new();
+
+    let redacted = redactor.redact_text(
+        "api-key: -----BEGIN PRIVATE KEY-----\n\
+         MIIEvQbodyOfKey\n\
+         -----END PRIVATE KEY-----",
+    );
+
+    assert!(
+        !redacted.contains("MIIEvQbodyOfKey"),
+        "Schlüsselkörper im Klartext: {redacted}"
+    );
+}
+
 /// Wächter, kein Gegenbeweis (grün vor und nach der Verengung der
 /// Wertklasse): ein Parameterwert OHNE `@` wird weiterhin vollständig
 /// redigiert — das übernimmt das Schlüsselwort-Muster, genau wie vor

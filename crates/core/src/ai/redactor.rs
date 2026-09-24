@@ -95,6 +95,51 @@ fn simple(pattern: &str, expect_msg: &str) -> PatternRule {
 
 fn built_in_patterns() -> Vec<PatternRule> {
     vec![
+        // Spec 0078 §9 (Q-BL-0248-02, Fund des regression-guard, gemessen):
+        // KOPIEN der vier Schlüsselmuster ganz am Anfang der Liste. Die
+        // Originale bleiben wörtlich an ihrer Stelle weiter unten; hier
+        // steht nur eine zusätzliche, frühere Anwendung.
+        //
+        // Grund: Diese vier sind die einzigen Muster mit einem
+        // MEHRTEILIGEN, durch Leerraum getrennten Anker
+        // (`-----BEGIN … PRIVATE KEY-----`). Jede Regel, die einen Wert
+        // verbraucht und an Leerraum stoppt, kann ihn genau in der Mitte
+        // durchschneiden — danach greift weder das Muster selbst noch sein
+        // Fail-safe-Rückfall, und der komplette Schlüsselkörper steht im
+        // Klartext. Das ist im Redactor dreimal passiert: bei der frühen
+        // `api-key`-Kopie (`api-key: -----BEGIN …`, schon vor Spec 0078
+        // offen) und zweimal bei der Query-String-Regel von Spec 0078.
+        //
+        // Die Query-String-Regel verlangt inzwischen ein `@` im Wert. Das
+        // reicht NICHT: Das `@` darf vor dem Anker stehen
+        // (`?secret=a@-----BEGIN PRIVATE KEY-----`), der Anker liegt dann
+        // innerhalb des Werts. Nicht der Anker braucht das `@`, sondern
+        // der Wert — ein Unterschied, den die frühere Begründung an jener
+        // Regel übersah.
+        //
+        // Ganz vorn angewendet ist ein Schlüsselblock geschwärzt, bevor
+        // irgendeine wertverbrauchende Regel seinen Anker überhaupt sieht.
+        // Damit ist die Ursachenklasse geschlossen statt einzelner
+        // Ausprägungen. Dieselbe Begründung führt der Kommentar an den
+        // Shadow-Hash-Mustern direkt darunter; die beiden stören einander
+        // nicht, weil ein Crypt-Hash keinen PEM-Anker enthält und
+        // umgekehrt.
+        simple(
+            r"(?s)-----BEGIN (?:[A-Z0-9_\-]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z0-9_\-]+ )?PRIVATE KEY-----",
+            "eingebautes Private-Key-Muster (frühe Kopie) ist gültig",
+        ),
+        simple(
+            r"(?s)-----BEGIN (?:[A-Z0-9_\-]+ )?PRIVATE KEY-----.*",
+            "eingebautes Private-Key-Rückfallmuster (frühe Kopie) ist gültig",
+        ),
+        simple(
+            r"(?s)-----BEGIN PGP PRIVATE KEY BLOCK-----.*?-----END PGP PRIVATE KEY BLOCK-----",
+            "eingebautes PGP-Private-Key-Muster (frühe Kopie) ist gültig",
+        ),
+        simple(
+            r"(?s)-----BEGIN PGP PRIVATE KEY BLOCK-----.*",
+            "eingebautes PGP-Private-Key-Rückfallmuster (frühe Kopie) ist gültig",
+        ),
         // Unix-Crypt-/Shadow-Passwort-Hashes (Diagnose-Bericht "unredigierte
         // /etc/shadow-Hashes über den MCP-Pfad", 2026-09): ein `/etc/shadow`
         // -bestätigter MCP-Testlauf ("cat /etc/shadow" nach korrekt
@@ -301,18 +346,24 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // JEDER der drei Zweige verlangt MINDESTENS EIN `@` im Wert
         // (spec-reviewer-Fund, erste und zweite Review-Runde, beide Male
         // eine echte Regression): ohne diese Forderung schnitt die Regel
-        // den mehrteiligen Anker der Private-Key-Muster durch, die weiter
-        // unten stehen — `?secret=-----BEGIN PRIVATE KEY-----` wurde bis
-        // zum Leerzeichen ersetzt (freier Zweig), `?secret="-----BEGIN
-        // PRIVATE KEY-----"` bis zum schließenden Quote (quotierter
-        // Zweig). Danach griff weder das PEM-Muster noch sein
-        // Rückfallmuster, und der komplette Schlüsselkörper stand im
-        // Klartext — dort, wo er vor Spec 0078 vollständig redigiert
-        // wurde. Die Forderung in nur einem Zweig reichte nicht; erst in
-        // allen dreien gilt der Satz, der diese Regel trägt:
+        // den mehrteiligen Anker der Schlüsselmuster durch —
+        // `?secret=-----BEGIN PRIVATE KEY-----` wurde bis zum Leerzeichen
+        // ersetzt (freier Zweig), `?secret="-----BEGIN PRIVATE KEY-----"`
+        // bis zum schließenden Quote (quotierter Zweig). Der komplette
+        // Schlüsselkörper stand danach im Klartext.
         //
-        //   Diese Regel ersetzt ausschließlich Werte, die ein `@`
-        //   enthalten. Ein Anker ohne `@` ist für sie unerreichbar.
+        // Die `@`-Forderung allein schützt den Anker aber NICHT, und die
+        // frühere Fassung dieses Kommentars behauptete genau das („ein
+        // Anker ohne `@` ist für diese Regel unerreichbar"). Das ist
+        // falsch: Nicht der Anker muss das `@` enthalten, sondern der
+        // WERT — und der beginnt vor dem Anker. Bei
+        // `?secret=a@-----BEGIN PRIVATE KEY-----` liefert das `a@` die
+        // Bedingung, und der Anker liegt mitten im Treffer (Fund des
+        // regression-guard über `ee017af..387a91e`, gemessen, Spec 0078
+        // §9 / Q-BL-0248-02). Geschützt wird der Anker deshalb an einer
+        // anderen Stelle: durch die KOPIEN der vier Schlüsselmuster ganz
+        // am Anfang der Liste (s. dort). Die `@`-Forderung bleibt, weil
+        // sie die Regel auf ihren Zweck begrenzt.
         //
         // Sie kostet dadurch keine Abdeckung. Der Grund ist enger, als er
         // zunächst aussieht, deshalb genau: Das DB-Muster LÄUFT sehr wohl
@@ -323,8 +374,21 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // `@` stehenbleiben, wenn der Wert das `@` selbst enthält, und
         // dann greift diese Regel. Ein Wert ohne `@` wird unverändert vom
         // Schlüsselwort-Muster redigiert. Tests
-        // `…_does_not_cut_a_private_key_armor_anchor` und
-        // `…_still_redacts_a_query_parameter_without_an_at_sign`.
+        // `…_does_not_cut_a_private_key_armor_anchor`,
+        // `…_redacts_a_key_block_behind_an_at_sign_in_a_query_parameter`
+        // und `…_still_redacts_a_query_parameter_without_an_at_sign`.
+        //
+        // Der Trenner: ein `?`, danach beliebig viele weitere Parameter
+        // mit `&`. Ein `&` OHNE vorangehendes `?` im selben Token zählt
+        // NICHT (Spec 0078 §9 / Q-BL-0248-02, gemessene Lockerung): sonst
+        // griff diese Regel mitten in ein Passwort, das ein
+        // `&<schlüsselwort>=` enthält, und nahm dem strengen URL-Muster
+        // den Anker — `https://u:Geheim&token=b@h/x` wurde zu
+        // `https://u:Geheim&[REDACTED]`, wo vor Spec 0078
+        // `https://u:[REDACTED]@h/x` stand. Die Zeichenklasse zwischen
+        // `?` und `&` schließt `@` aus, damit der Trenner nicht selbst
+        // über Zugangsdaten hinwegläuft. Test
+        // `…_does_not_treat_an_ampersand_without_a_question_mark_as_a_query_string`.
         //
         // BEKANNTER RESTFALL, bewusst entschieden (Stefan, 2026-09-24,
         // Q-BL-0248-01; Spec 0078 §5, Test
@@ -357,7 +421,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // bisher das Schlüsselwort-Muster.
         PatternRule {
             regex: Regex::new(
-                r#"(?i)(?P<sep>[?&])(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)"#,
+                r#"(?i)(?P<sep>\?(?:[^\s,;"'#?@&]*&)*)(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)"#,
             )
             .expect("eingebautes Query-Parameter-Muster ist gültig"),
             replacement: "${sep}${key}=[REDACTED]",
