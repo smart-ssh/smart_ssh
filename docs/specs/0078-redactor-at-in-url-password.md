@@ -448,3 +448,14 @@ verlangt eine Produktentscheidung.
   gleich dem Stand vor dieser Spec: die `&`-Form ohne `?`
   (`redis://cache:6379&password=p@ssw0rd` → `redis://cache:[REDACTED]@ssw0rd`)
   und die `#`-Form (`…?db=1#password=p@ss`). Beide in §5 aufgenommen.
+
+- **2026-09-24 · Q-BL-0248-01, Ergänzung (Architekt, gemessen):** Der
+  Restfall „Passwort mit Query-Präfix" aus §5 umfasst auch die Form mit
+  einer `&`-Kette. Enthält das Passwort `?…&<schlüsselwort>=…@`, bleibt
+  alles vor dem Schlüsselwort sichtbar, also der Anfang vor dem `?` und
+  die Parameter dazwischen. Gemessen:
+  `postgres://u:Secret1?x=Secret2&token=b@h/db` →
+  `postgres://u:Secret1?x=Secret2&[REDACTED]`. Vor dieser Spec war das
+  `postgres://u:[REDACTED]@h/db`. Der Mechanismus ist derselbe wie bei
+  T-R3: Ohne echtes URL-Parsing ist die Zeichenkette zweideutig. Ein Test,
+  der diese Form festhält, steht noch aus (BL-0256).
