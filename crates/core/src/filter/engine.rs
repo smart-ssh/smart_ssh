@@ -193,6 +193,7 @@ impl<S: PolicyStore> FilterEngine<S> {
 
         let scope = EffectiveScope::from(ctx);
         let rules = self.store.rules_for(&scope).await;
+        report_invalid_patterns(&rules);
         self.evaluate_parsed_explained(command, &rules, 0)
     }
 
@@ -420,6 +421,37 @@ impl<S: PolicyStore> FilterEngine<S> {
             matched_rule_origin,
             matched_hard_blacklist_entry,
             sub_command_traces,
+        }
+    }
+}
+
+/// Spec 0077, 3.2.2: Meldet jede Regel, deren Muster sich nicht übersetzen
+/// lässt, auf ERROR-Ebene — mit Regel-ID, Aktion und dem Fehlertext der
+/// Bibliothek.
+///
+/// **Warum hier und nicht in der Bucket-Schleife:**
+/// [`evaluate_rules_explained`] kehrt beim ersten Treffer zurück und würde
+/// jede Regel hinter dem Treffer nie melden; außerdem läuft sie je
+/// Teilkommando mehrfach. Diese Schleife läuft genau einmal über die
+/// Regelmenge eines Aufrufs, direkt nach `rules_for`.
+///
+/// **Das Kommando wird bewusst NICHT geloggt** (Spec 0077, 3.2.2 und §5):
+/// Dieses Log ist eine neue Datensenke, und ein Kommando kann ein Geheimnis
+/// enthalten (Passwort in einem Argument). Gemeldet wird nur die Regel.
+///
+/// Ändert die Auswertung nicht: `rules` wird unverändert weitergereicht,
+/// eine ungültige Regel bleibt drin und verhält sich wie bisher (Spec 0077,
+/// 3.2.1) — insbesondere greift ein pfadförmiger Glob, bei dem nur einer der
+/// beiden Zweige nicht übersetzt, weiterhin über den Zweig, der übersetzt.
+fn report_invalid_patterns(rules: &[Rule]) {
+    for rule in rules {
+        if let Err(err) = rule.pattern.validate() {
+            tracing::error!(
+                rule_id = %rule.id,
+                action = ?rule.action,
+                pattern_error = %err,
+                "filter rule pattern does not compile; rule cannot match",
+            );
         }
     }
 }

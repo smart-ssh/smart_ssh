@@ -34,3 +34,7 @@ uuid = { version = "1.26.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+# Spec 0077, T-A10: Der Test zeichnet die ERROR-Ereignisse aus 3.2.2 auf und
+# prüft, dass das Kommando nicht darin landet. Nur für Tests — dieselbe
+# Fassung und dasselbe Muster wie in `ai-providers`/`app-shell`.
+tracing-subscriber = { version = "0.3.23", features = ["json"] }

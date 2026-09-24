@@ -1402,3 +1402,554 @@ fn test_spec_0077_t7_hard_blacklist_patterns_all_compile() {
         );
     }
 }
+
+// --- Spec 0077, 3.2.2/6.3: Auswertung mit ungültigen Mustern ---------------
+
+/// Aufzeichnung der ERROR-Ereignisse aus 3.2.2 (Spec 0077, T-A10).
+///
+/// Dasselbe Muster wie `ai_providers::test_support` und
+/// `app_shell::orchestration`: **ein** globaler Subscriber pro Testprozess
+/// (`Once`), der in einen thread-lokalen Puffer schreibt — mehrere
+/// `set_global_default`-Aufrufe im selben Testbinary gewinnen sonst nur beim
+/// ersten, und die übrigen Tests sähen nie ihre eigenen Zeilen.
+///
+/// Bewusst auf `Level::ERROR` begrenzt: 3.2.2 ist eine Aussage über
+/// ERROR-Ereignisse, und `evaluate_explained` loggt das Kommando schon
+/// heute auf INFO (`engine.rs`, Spec 0016). Ohne diese Grenze würde T-A10
+/// dieses INFO-Ereignis mitlesen und über etwas urteilen, das nicht
+/// Gegenstand dieser Spec ist.
+mod pattern_error_log {
+    thread_local! {
+        static BUFFER: std::cell::RefCell<Vec<u8>> =
+            const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    #[derive(Clone, Default)]
+    pub(super) struct Writer;
+
+    impl std::io::Write for Writer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            BUFFER.with(|b| b.borrow_mut().extend_from_slice(buf));
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for Writer {
+        type Writer = Writer;
+        fn make_writer(&'a self) -> Self::Writer {
+            self.clone()
+        }
+    }
+
+    /// Installiert den Subscriber einmal pro Testprozess und leert den
+    /// Puffer dieses Threads. Jeder Test ruft das als Erstes auf.
+    pub(super) fn start_recording() {
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| {
+            let subscriber = tracing_subscriber::fmt()
+                .json()
+                .with_max_level(tracing::Level::ERROR)
+                .with_writer(Writer)
+                .finish();
+            // `let _ =`: schlägt nur fehl, wenn schon ein globaler Default
+            // gesetzt ist — dann ist es dank `Once` bereits dieser hier.
+            let _ = tracing::subscriber::set_global_default(subscriber);
+        });
+        BUFFER.with(|b| b.borrow_mut().clear());
+    }
+
+    /// Die aufgezeichneten Ereignisse, eine JSON-Zeile je Ereignis. Alle
+    /// sind ERROR-Ereignisse (s. `with_max_level` oben).
+    pub(super) fn recorded_error_events() -> Vec<String> {
+        BUFFER.with(|b| {
+            String::from_utf8(b.borrow().clone())
+                .expect("Log ist kein UTF-8")
+                .lines()
+                .map(str::to_string)
+                .collect()
+        })
+    }
+}
+
+/// Belegt, dass genau für `rule_id` ein ERROR-Ereignis aus 3.2.2 vorliegt.
+fn assert_pattern_error_logged(rule_id: &str) {
+    let events = pattern_error_log::recorded_error_events();
+    let hits: Vec<&String> = events
+        .iter()
+        .filter(|line| {
+            line.contains("filter rule pattern does not compile")
+                && line.contains(&format!("\"rule_id\":\"{rule_id}\""))
+        })
+        .collect();
+    assert_eq!(
+        hits.len(),
+        1,
+        "genau ein ERROR-Ereignis für Regel {rule_id} erwartet, \
+         aufgezeichnet: {events:?}"
+    );
+}
+
+/// Belegt, dass für `rule_id` **kein** ERROR-Ereignis aus 3.2.2 vorliegt —
+/// eine gültige Regel wird nicht gemeldet.
+fn assert_no_pattern_error_logged(rule_id: &str) {
+    let events = pattern_error_log::recorded_error_events();
+    assert!(
+        !events
+            .iter()
+            .any(|line| line.contains(&format!("\"rule_id\":\"{rule_id}\""))),
+        "unerwartetes ERROR-Ereignis für Regel {rule_id}: {events:?}"
+    );
+}
+
+fn regex_rule(id: &str, regex: &str, action: RuleAction, priority: i32) -> Rule {
+    Rule {
+        id: RuleId(id.to_string()),
+        pattern: Pattern::Regex(regex.to_string()),
+        action,
+        scope: Scope::Global,
+        priority,
+        origin: RuleOrigin::User,
+    }
+}
+
+/// Spec 0077, T-A1: Allow `systemctl *` neben einer Deny-Regel, deren Regex
+/// nicht übersetzt — die Entscheidung ist dieselbe wie mit der Allow-Regel
+/// allein (**AutoExec**), und die ungültige Regel wird gemeldet.
+///
+/// Scheitert, wenn eine Ersatz-Eskalation auf Confirm/Deny eingebaut wird
+/// (3.2.1, Entscheidung in §1) oder wenn das Log aus 3.2.2 fehlt.
+#[tokio::test]
+async fn test_spec_0077_ta1_invalid_deny_regex_leaves_decision_at_auto_exec_and_is_logged() {
+    pattern_error_log::start_recording();
+    let eng = engine(vec![
+        glob_rule(
+            "allow-systemctl",
+            "systemctl *",
+            RuleAction::Allow,
+            Scope::Global,
+            0,
+        ),
+        regex_rule("deny-broken", "^systemctl stop (.*", RuleAction::Deny, 100),
+    ]);
+
+    let decision = eng
+        .evaluate("systemctl stop nginx", &ctx("srv1", &[]))
+        .await;
+
+    assert_auto_exec(&decision);
+    assert_pattern_error_logged("deny-broken");
+    assert_no_pattern_error_logged("allow-systemctl");
+}
+
+/// Spec 0077, T-A2: wie T-A1, aber mit einem Glob, der nicht übersetzt.
+#[tokio::test]
+async fn test_spec_0077_ta2_invalid_deny_glob_leaves_decision_at_auto_exec_and_is_logged() {
+    pattern_error_log::start_recording();
+    let eng = engine(vec![
+        glob_rule(
+            "allow-systemctl",
+            "systemctl *",
+            RuleAction::Allow,
+            Scope::Global,
+            0,
+        ),
+        glob_rule(
+            "deny-broken",
+            "systemctl [stop",
+            RuleAction::Deny,
+            Scope::Global,
+            100,
+        ),
+    ]);
+
+    let decision = eng
+        .evaluate("systemctl stop nginx", &ctx("srv1", &[]))
+        .await;
+
+    assert_auto_exec(&decision);
+    assert_pattern_error_logged("deny-broken");
+}
+
+/// Spec 0077, T-A3: wie T-A1, aber mit einer Confirm-Regel — auch sie wird
+/// nicht durch eine Ersatz-Eskalation aufgewertet.
+#[tokio::test]
+async fn test_spec_0077_ta3_invalid_confirm_rule_leaves_decision_at_auto_exec_and_is_logged() {
+    pattern_error_log::start_recording();
+    let eng = engine(vec![
+        glob_rule(
+            "allow-systemctl",
+            "systemctl *",
+            RuleAction::Allow,
+            Scope::Global,
+            0,
+        ),
+        regex_rule(
+            "confirm-broken",
+            "^systemctl stop (.*",
+            RuleAction::Confirm,
+            100,
+        ),
+    ]);
+
+    let decision = eng
+        .evaluate("systemctl stop nginx", &ctx("srv1", &[]))
+        .await;
+
+    assert_auto_exec(&decision);
+    assert_pattern_error_logged("confirm-broken");
+}
+
+/// Spec 0077, T-A4: Eine gültige Deny-Regel und eine ungültige Deny-Regel
+/// mit **niedrigerer** Priorität; das Kommando passt auf die gültige.
+///
+/// Scheitert, wenn eine ungültige Regel die Auswertung abbricht oder die
+/// übrigen Regeln überspringt — und, weil die ungültige Regel **hinter**
+/// dem Treffer liegt, auch dann, wenn das Log in der Bucket-Schleife sitzt
+/// statt vor der Auswertung (3.2.2): Die Bucket-Schleife kehrt beim ersten
+/// Treffer zurück und käme an `deny-broken` nie vorbei.
+#[tokio::test]
+async fn test_spec_0077_ta4_valid_deny_still_bites_and_lower_priority_invalid_rule_is_logged() {
+    pattern_error_log::start_recording();
+    let eng = engine(vec![
+        glob_rule(
+            "allow-systemctl",
+            "systemctl *",
+            RuleAction::Allow,
+            Scope::Global,
+            0,
+        ),
+        glob_rule(
+            "deny-valid",
+            "systemctl stop *",
+            RuleAction::Deny,
+            Scope::Global,
+            100,
+        ),
+        regex_rule("deny-broken", "^systemctl stop (.*", RuleAction::Deny, 1),
+    ]);
+
+    let trace = eng
+        .evaluate_explained("systemctl stop nginx", &ctx("srv1", &[]))
+        .await;
+
+    assert_deny(&trace.decision);
+    assert_eq!(
+        trace.matched_rule.as_ref().map(|r| r.0.as_str()),
+        Some("deny-valid"),
+        "die gültige Regel muss greifen"
+    );
+    assert_pattern_error_logged("deny-broken");
+}
+
+/// Spec 0077, T-A5: Eine Allow-Regel mit ungültigem Muster allein führt nie
+/// zu AutoExec — es bleibt beim Confirm „keine Regel", wie ohne die Regel.
+#[tokio::test]
+async fn test_spec_0077_ta5_invalid_allow_rule_alone_never_grants_auto_exec() {
+    pattern_error_log::start_recording();
+    let eng = engine(vec![glob_rule(
+        "allow-broken",
+        "ls [la",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+
+    let decision = eng.evaluate("ls -la", &ctx("srv1", &[])).await;
+
+    assert_confirm(&decision);
+    assert_pattern_error_logged("allow-broken");
+}
+
+/// Spec 0077, T-A9: Ein Regex über dem Größenlimit der `regex`-
+/// Voreinstellung verhält sich wie ein Syntaxfehler (kein eigenes Limit,
+/// §8 Punkt 3).
+#[tokio::test]
+async fn test_spec_0077_ta9_regex_over_size_limit_behaves_like_a_syntax_error() {
+    pattern_error_log::start_recording();
+    let eng = engine(vec![
+        glob_rule(
+            "allow-systemctl",
+            "systemctl *",
+            RuleAction::Allow,
+            Scope::Global,
+            0,
+        ),
+        regex_rule("deny-toolarge", "a{1000}{1000}", RuleAction::Deny, 100),
+    ]);
+
+    let decision = eng
+        .evaluate("systemctl stop nginx", &ctx("srv1", &[]))
+        .await;
+
+    assert_auto_exec(&decision);
+    assert_pattern_error_logged("deny-toolarge");
+}
+
+/// Spec 0077, T-A10: Das Log aus 3.2.2 ist eine neue Datensenke — es trägt
+/// die Regel, nie das Kommando. Hier mit einem Kommando, das ein Geheimnis
+/// im Argument trägt.
+///
+/// Scheitert, wenn das Kommando (oder ein Teil davon) in ein
+/// ERROR-Ereignis geschrieben wird. Geprüft werden nur ERROR-Ereignisse:
+/// `evaluate_explained` loggt das Kommando schon heute auf INFO, und das
+/// ist nicht Gegenstand dieser Spec (§6.3, T-A10).
+#[tokio::test]
+async fn test_spec_0077_ta10_pattern_error_log_names_the_rule_but_never_the_command() {
+    pattern_error_log::start_recording();
+    let eng = engine(vec![
+        glob_rule(
+            "allow-systemctl",
+            "systemctl *",
+            RuleAction::Allow,
+            Scope::Global,
+            0,
+        ),
+        regex_rule("deny-broken", "^systemctl stop (.*", RuleAction::Deny, 100),
+    ]);
+
+    let decision = eng
+        .evaluate("systemctl stop nginx --password=hunter2", &ctx("srv1", &[]))
+        .await;
+
+    assert_auto_exec(&decision);
+    assert_pattern_error_logged("deny-broken");
+
+    let events = pattern_error_log::recorded_error_events();
+    assert!(!events.is_empty(), "kein ERROR-Ereignis aufgezeichnet");
+    for line in &events {
+        assert!(
+            !line.contains("hunter2"),
+            "Geheimnis aus dem Kommando im ERROR-Log: {line}"
+        );
+        assert!(!line.contains("nginx"), "Kommando im ERROR-Log: {line}");
+    }
+}
+
+/// Spec 0077, T-A12 (§1, Tabelle „Gemessen, zweiter Befund"): Ein
+/// pfadförmiger Glob, bei dem nur **einer** der beiden Zweige übersetzt,
+/// greift weiter über den Zweig, der übersetzt — „wie nicht vorhanden"
+/// gilt nur für das, was nicht übersetzt (3.2.1).
+///
+/// Erster Fall: der **strenge** Zweig trägt (`rm /x/[a/../b` normalisiert
+/// zu `rm /x/b`). Gegenbeweis geführt: rot gegen eine Fassung, die Regeln
+/// mit ungültigem Muster vor der Auswertung verwirft.
+#[tokio::test]
+async fn test_spec_0077_ta12_single_branch_invalid_deny_still_bites_via_strict_branch() {
+    pattern_error_log::start_recording();
+    let eng = engine(vec![
+        glob_rule("allow-rm", "rm *", RuleAction::Allow, Scope::Global, 0),
+        glob_rule(
+            "deny-half-broken",
+            "rm /x/[a/../b",
+            RuleAction::Deny,
+            Scope::Global,
+            100,
+        ),
+    ]);
+
+    let trace = eng.evaluate_explained("rm /x/b", &ctx("srv1", &[])).await;
+
+    assert_deny(&trace.decision);
+    assert!(
+        matches!(&trace.decision, Decision::Deny { code, .. } if code == "FILTER_RULE_DENY"),
+        "erwartet FILTER_RULE_DENY, bekommen: {:?}",
+        trace.decision
+    );
+    assert_eq!(
+        trace.matched_rule.as_ref().map(|r| r.0.as_str()),
+        Some("deny-half-broken")
+    );
+    assert_pattern_error_logged("deny-half-broken");
+}
+
+/// Spec 0077, T-A12, zweiter Fall: die andere Richtung — hier trägt der
+/// **permissive** Zweig (`rm /x/[a/b]/../c` übersetzt roh, der strenge
+/// Zweig scheitert an `rm /x/[a/c`). Gegenbeweis geführt.
+#[tokio::test]
+async fn test_spec_0077_ta12_single_branch_invalid_deny_still_bites_via_permissive_branch() {
+    pattern_error_log::start_recording();
+    let eng = engine(vec![
+        glob_rule("allow-rm", "rm *", RuleAction::Allow, Scope::Global, 0),
+        glob_rule(
+            "deny-half-broken",
+            "rm /x/[a/b]/../c",
+            RuleAction::Deny,
+            Scope::Global,
+            100,
+        ),
+    ]);
+
+    let trace = eng
+        .evaluate_explained("rm /x/a/../c", &ctx("srv1", &[]))
+        .await;
+
+    assert_deny(&trace.decision);
+    assert!(
+        matches!(&trace.decision, Decision::Deny { code, .. } if code == "FILTER_RULE_DENY"),
+        "erwartet FILTER_RULE_DENY, bekommen: {:?}",
+        trace.decision
+    );
+    assert_eq!(
+        trace.matched_rule.as_ref().map(|r| r.0.as_str()),
+        Some("deny-half-broken")
+    );
+    assert_pattern_error_logged("deny-half-broken");
+}
+
+/// Spec 0077, T-A12, dritter Fall: dieselbe Regel, ein Kommando, auf das
+/// **kein** Zweig passt → AutoExec wie heute, mit ERROR-Ereignis.
+///
+/// Scheitert, wenn eine Ersatz-Eskalation eingebaut wird oder das Log fehlt.
+#[tokio::test]
+async fn test_spec_0077_ta12_single_branch_invalid_deny_does_not_escalate_when_nothing_matches() {
+    pattern_error_log::start_recording();
+    let eng = engine(vec![
+        glob_rule("allow-rm", "rm *", RuleAction::Allow, Scope::Global, 0),
+        glob_rule(
+            "deny-half-broken",
+            "rm /x/[a/b]/../c",
+            RuleAction::Deny,
+            Scope::Global,
+            100,
+        ),
+    ]);
+
+    let decision = eng.evaluate("rm /x/c", &ctx("srv1", &[])).await;
+
+    assert_auto_exec(&decision);
+    assert_pattern_error_logged("deny-half-broken");
+}
+
+/// Spec 0077, T-A6 (Sicherheits-Invariante aus §5, „Nicht lockern"): Für
+/// jede Kombination aus Aktion, Musterzustand und Mustertyp ist die
+/// Entscheidung **dieselbe** wie vor der Änderung — jeweils neben einer
+/// Allow-Regel, die passt.
+///
+/// Die erwarteten Werte sind die am unveränderten Stand gemessenen. Der
+/// Test ist bewusst ein Invarianz-Test: Er ist vor und nach der Änderung
+/// grün. Rot wird er, sobald die Auswertung doch angefasst wird — etwa
+/// durch eine Ersatz-Eskalation (ungültig würde zu Confirm/Deny) oder durch
+/// ein Verwerfen ungültiger Regeln (die Einzelzweig-Zeilen würden zu
+/// AutoExec).
+#[tokio::test]
+async fn test_spec_0077_ta6_decision_matrix_is_unchanged_for_every_pattern_state() {
+    // (Fall, Muster der Testregel, Kommando, erwartet je Aktion
+    //  Allow / Confirm / Deny)
+    #[derive(Debug)]
+    struct Row {
+        label: &'static str,
+        pattern: Pattern,
+        command: &'static str,
+        expected_allow: &'static str,
+        expected_confirm: &'static str,
+        expected_deny: &'static str,
+    }
+
+    let rows = vec![
+        Row {
+            label: "glob, gültig passend",
+            pattern: Pattern::Glob("rm /x/c".to_string()),
+            command: "rm /x/c",
+            expected_allow: "auto_exec",
+            expected_confirm: "confirm",
+            expected_deny: "deny",
+        },
+        Row {
+            label: "glob, gültig nicht passend",
+            pattern: Pattern::Glob("rm /y/*".to_string()),
+            command: "rm /x/c",
+            expected_allow: "auto_exec",
+            expected_confirm: "auto_exec",
+            expected_deny: "auto_exec",
+        },
+        Row {
+            label: "glob, ungültig (beide Zweige)",
+            pattern: Pattern::Glob("rm /x/[a/b/..".to_string()),
+            command: "rm /x/c",
+            expected_allow: "auto_exec",
+            expected_confirm: "auto_exec",
+            expected_deny: "auto_exec",
+        },
+        Row {
+            label: "glob, nur strenger Zweig ungültig, permissiv passend",
+            pattern: Pattern::Glob("rm /x/[a/b]/../c".to_string()),
+            command: "rm /x/a/../c",
+            // Allow verlangt den strengen Zweig (Spec 0060) — er trägt hier
+            // nicht, die Regel matcht also nicht; die Basis-Allow-Regel
+            // `rm *` entscheidet.
+            expected_allow: "auto_exec",
+            expected_confirm: "confirm",
+            expected_deny: "deny",
+        },
+        Row {
+            label: "glob, nur permissiver Zweig ungültig, streng passend",
+            pattern: Pattern::Glob("rm /x/[a/../b".to_string()),
+            command: "rm /x/b",
+            expected_allow: "auto_exec",
+            expected_confirm: "confirm",
+            expected_deny: "deny",
+        },
+        Row {
+            label: "regex, gültig passend",
+            pattern: Pattern::Regex("^rm /x/c$".to_string()),
+            command: "rm /x/c",
+            expected_allow: "auto_exec",
+            expected_confirm: "confirm",
+            expected_deny: "deny",
+        },
+        Row {
+            label: "regex, gültig nicht passend",
+            pattern: Pattern::Regex("^rm /y/.*$".to_string()),
+            command: "rm /x/c",
+            expected_allow: "auto_exec",
+            expected_confirm: "auto_exec",
+            expected_deny: "auto_exec",
+        },
+        Row {
+            label: "regex, ungültig",
+            pattern: Pattern::Regex("^rm /x/(.*".to_string()),
+            command: "rm /x/c",
+            expected_allow: "auto_exec",
+            expected_confirm: "auto_exec",
+            expected_deny: "auto_exec",
+        },
+        // „nur in einem Zweig ungültig" entfällt für Regex: Ein Regex hat
+        // keinen zweiten Zweig (§6.3, T-A6).
+    ];
+
+    for row in &rows {
+        for (action, expected) in [
+            (RuleAction::Allow, row.expected_allow),
+            (RuleAction::Confirm, row.expected_confirm),
+            (RuleAction::Deny, row.expected_deny),
+        ] {
+            let action_label = format!("{action:?}");
+            let eng = engine(vec![
+                glob_rule("allow-rm", "rm *", RuleAction::Allow, Scope::Global, 0),
+                Rule {
+                    id: RuleId("under-test".to_string()),
+                    pattern: row.pattern.clone(),
+                    action,
+                    scope: Scope::Global,
+                    priority: 100,
+                    origin: RuleOrigin::User,
+                },
+            ]);
+
+            let decision = eng.evaluate(row.command, &ctx("srv1", &[])).await;
+            let actual = match &decision {
+                Decision::AutoExec => "auto_exec",
+                Decision::Confirm { .. } => "confirm",
+                Decision::Deny { .. } => "deny",
+            };
+            assert_eq!(
+                actual, expected,
+                "{} / {action_label} / Kommando {:?}: {decision:?}",
+                row.label, row.command
+            );
+        }
+    }
+}
