@@ -569,7 +569,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::trust_host_key,
             commands::update_group_notes,
             commands::update_server_notes,
-            commands::large_note_dialog_threshold_bytes,
+            commands::large_note_dialog_threshold_chars,
             commands::request_note_shrink,
             commands::update_local_server_notes,
             commands::update_local_server_tags,

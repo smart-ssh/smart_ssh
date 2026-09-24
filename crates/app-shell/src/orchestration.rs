@@ -3332,21 +3332,17 @@ pub fn should_suggest_note_shrink(note_update_was_suggested: bool) -> bool {
 /// Schwellwert für "die gespeicherte Notiz ist groß genug für den
 /// Kürzungs-Vorschlag" (Spec 0057, §4.2: "Ist die Notiz groß (Schwellwert)
 /// … Nur bei großer Notiz — bei normalen Notizen kein Dialog"). Bewusst
-/// deutlich über `compaction::MIN_LAST_NOTE_SECTION_BYTES` (2_000 — die
-/// Kompaktierungs-UNTERGRENZE für die *gesendete* Fassung beim
-/// verlustfreien Kürzen, Spec 0057 §4.1, kein "ist groß"-Indikator) und in
-/// derselben Größenordnung wie die spätere Zusammenfassungs-Obergrenze
-/// [`NOTE_SHRINK_MAX_BYTES`] (4_000) — eine Notiz, die schon doppelt so
-/// groß ist wie das, was eine gekürzte Fassung maximal fassen darf, ist ein
-/// sinnvoller Auslöser, ohne bei normal genutzten Notizen (typischerweise
-/// wenige hundert Byte) zu nerven.
+/// Schwelle in Unicode-Skalarwerten (Zeichen, nicht Byte), bewusst deutlich
+/// über der Zusammenfassungs-Obergrenze [`NOTE_SHRINK_MAX_BYTES`]
+/// (4_000 Byte), damit normal genutzte Notizen (typischerweise wenige
+/// hundert Zeichen) nicht auslösen.
 ///
 /// `pub(crate)` statt privat (spec 0058, Teil 1/Etappe 5): derselbe
 /// Schwellwert entscheidet jetzt auch über den proaktiven Hinweis im
-/// Notiz-Editor (`commands::large_note_dialog_threshold_bytes`, von dort ans
+/// Notiz-Editor (`commands::large_note_dialog_threshold_chars`, von dort ans
 /// Frontend gereicht) — eine Quelle der Wahrheit statt einer zweiten,
 /// hartkodierten Zahl im Frontend.
-pub(crate) const LARGE_NOTE_DIALOG_THRESHOLD_BYTES: usize = 8_000;
+pub(crate) const LARGE_NOTE_DIALOG_THRESHOLD_CHARS: usize = 10_000;
 
 /// Spec 0057, §4.2 (Etappe 4): beim Verbindungsende geprüft, im selben
 /// Hintergrund-Task wie `suggest_note_update_on_disconnect`
@@ -3383,7 +3379,7 @@ pub fn suggest_note_shrink_on_disconnect(
     server_name: String,
     note_text: &str,
 ) {
-    if note_text.len() < LARGE_NOTE_DIALOG_THRESHOLD_BYTES {
+    if note_text.chars().count() < LARGE_NOTE_DIALOG_THRESHOLD_CHARS {
         return;
     }
     emit_note_shrink_suggested(emitter, server_id, server_name);
@@ -6805,7 +6801,7 @@ mod tests {
     #[test]
     fn test_note_shrink_dialog_appears_for_large_note() {
         let server_id = ServerId::new();
-        let large_notes = "n".repeat(LARGE_NOTE_DIALOG_THRESHOLD_BYTES);
+        let large_notes = "n".repeat(LARGE_NOTE_DIALOG_THRESHOLD_CHARS);
         let emitter = TestEmitter::default();
 
         suggest_note_shrink_on_disconnect(
@@ -6842,6 +6838,68 @@ mod tests {
         assert!(
             emitter.events.lock().unwrap().is_empty(),
             "eine normal große Notiz darf keinen Dialog auslösen"
+        );
+    }
+
+    /// Spec 0079, §6, T5: genau an der Schwelle — 9 999 Zeichen lösen noch
+    /// nichts aus, 10 000 Zeichen lösen aus.
+    #[test]
+    fn test_note_shrink_dialog_threshold_boundary_in_chars() {
+        let emitter = TestEmitter::default();
+        let just_below = "n".repeat(LARGE_NOTE_DIALOG_THRESHOLD_CHARS - 1);
+
+        suggest_note_shrink_on_disconnect(
+            &emitter,
+            ServerId::new(),
+            "Test-Server".to_string(),
+            &just_below,
+        );
+
+        assert!(
+            emitter.events.lock().unwrap().is_empty(),
+            "9 999 Zeichen liegen unter der Schwelle -> kein Vorschlag"
+        );
+
+        let at_threshold = "n".repeat(LARGE_NOTE_DIALOG_THRESHOLD_CHARS);
+        suggest_note_shrink_on_disconnect(
+            &emitter,
+            ServerId::new(),
+            "Test-Server".to_string(),
+            &at_threshold,
+        );
+
+        assert_eq!(
+            emitter.events.lock().unwrap().len(),
+            1,
+            "10 000 Zeichen erreichen die Schwelle -> ein Vorschlag"
+        );
+    }
+
+    /// Spec 0079, §6, T6: 6 000 Zeichen "ä" sind 12 000 UTF-8-Byte (über der
+    /// ALTEN Byte-Schwelle von 8 000), aber nur 6 000 Zeichen (unter der
+    /// NEUEN Zeichen-Schwelle von 10 000) -> kein Vorschlag. Scheitert mit
+    /// der alten Byte-Zählung (`note_text.len()`).
+    #[test]
+    fn test_note_shrink_dialog_counts_chars_not_bytes() {
+        let emitter = TestEmitter::default();
+        let multi_byte_notes = "ä".repeat(6_000);
+        assert_eq!(
+            multi_byte_notes.len(),
+            12_000,
+            "6 000 × 'ä' sind 12 000 UTF-8-Byte"
+        );
+        assert_eq!(multi_byte_notes.chars().count(), 6_000);
+
+        suggest_note_shrink_on_disconnect(
+            &emitter,
+            ServerId::new(),
+            "Test-Server".to_string(),
+            &multi_byte_notes,
+        );
+
+        assert!(
+            emitter.events.lock().unwrap().is_empty(),
+            "6 000 Zeichen liegen unter der Zeichen-Schwelle, obwohl es 12 000 Byte sind"
         );
     }
 
