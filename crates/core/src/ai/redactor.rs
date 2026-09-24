@@ -23,7 +23,9 @@ const REDACTED_PLACEHOLDER: &str = "[REDACTED]";
 /// Private-Key-Blöcke, `password=`/`token=`/`api_key=`-artige Zeilen
 /// (Groß-/Kleinschreibung ignoriert), AWS-/GitHub-/Slack-/Stripe-/Google-/
 /// npm-Zugangsdaten-Muster, DB-Connection-Strings und allgemeine
-/// URL-Zugangsdaten (`schema://user:pass@host`), nackte Provider-Keys
+/// URL-Zugangsdaten (`schema://user:pass@host`, auch mit unkodiertem `@`
+/// in Benutzer oder Passwort und als Passwort-Parameter im Query-String,
+/// Spec 0078), nackte Provider-Keys
 /// (Anthropic, OpenAI, OpenRouter, GitLab, Hugging Face), `x-api-key`-/
 /// `Authorization: Basic`-Header (Spec 0068) und Unix-Crypt-/Shadow-Passwort-Hashes
 /// (`$1$`/`$5$`/`$6$`/`$y$`/`$2b$`/`$7$`/`$apr1$` & verwandte Varianten,
@@ -281,12 +283,35 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // also nichts, es läuft weiter über jenes.
         //
         // Wert: erst die beiden Anführungszeichen-Formen, dann die freie.
-        // Ohne die Quote-Alternativen nähme diese Regel bei
-        // `?password='top secret 123'` nur `'top`; dem Schlüsselwort-Muster
-        // fehlte danach der öffnende Quote, und ` secret 123'` bliebe im
-        // Klartext stehen — wo es HEUTE schon redigiert wird. Die freie
+        // Die Quote-Alternativen sind nötig, weil die freie Form `'` und
+        // `"` ausschließt: ohne sie griffe diese Regel bei
+        // `redis://cache:6379?password='p@ss w0rd'` gar nicht, das
+        // DB-Muster läse `6379?password='p` als Passwort, und `ss w0rd'`
+        // bliebe im Klartext stehen (Test `…_redacts_a_password_query_
+        // parameter_containing_an_at_sign`, Fälle mit Quotes). Die freie
         // Form endet an `&` `#`, Leerraum und an den Feldtrennern `,` `;`
         // `"` `'`, aus demselben Grund wie beim DB-Muster unten.
+        // (Spec 0078 §3.1 begründet die Quote-Alternativen mit
+        // `?password='top secret 123'`; das trifft nicht zu — dort matcht
+        // diese Regel ohnehin nicht, weil die freie Form am `'` scheitert,
+        // und das Schlüsselwort-Muster redigiert wie bisher. Der Nutzen
+        // ist derselbe, der Grund ein anderer. spec-reviewer-Fund, erste
+        // Review-Runde.)
+        //
+        // Die freie Form verlangt MINDESTENS EIN `@` (spec-reviewer-Fund,
+        // erste Review-Runde, echte Regression): ohne diese Forderung
+        // schnitt die Regel den mehrteiligen Anker der Private-Key-Muster
+        // durch, die weiter unten stehen — `?secret=-----BEGIN PRIVATE
+        // KEY-----` wurde bis zum Leerzeichen ersetzt, danach griff weder
+        // das PEM-Muster noch sein Rückfallmuster, und der komplette
+        // Schlüsselkörper stand im Klartext. Die Forderung kostet keine
+        // Abdeckung: diese Regel existiert allein, damit das DB-Muster den
+        // Parameter nicht als Passwort lesen kann, und dafür braucht das
+        // DB-Muster ein `@` im Wert. Ein Wert ohne `@` wird unverändert
+        // vom Schlüsselwort-Muster redigiert. Ein PEM-/PGP-Anker enthält
+        // kein `@`, kann also per Konstruktion nicht mehr angeschnitten
+        // werden. Tests `…_does_not_cut_a_private_key_armor_anchor` und
+        // `…_still_redacts_a_query_parameter_without_an_at_sign`.
         //
         // Restfall, bewusst (Spec 0078 §5): ein leerer Wert
         // (`?token=` am Zeilenende) wird nicht erfasst — es gibt nichts zu
@@ -295,7 +320,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // bisher das Schlüsselwort-Muster.
         PatternRule {
             regex: Regex::new(
-                r#"(?i)(?P<sep>[?&])(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*'|"[^"\r\n]*"|[^&#\s,;"']+)"#,
+                r#"(?i)(?P<sep>[?&])(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*'|"[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)"#,
             )
             .expect("eingebautes Query-Parameter-Muster ist gültig"),
             replacement: "${sep}${key}=[REDACTED]",

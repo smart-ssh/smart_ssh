@@ -1392,12 +1392,14 @@ fn test_redactor_does_not_let_the_at_url_rule_swallow_a_later_password_keyword()
     }
 }
 
-/// Spec 0078, §6.2 (T-A14): die Query-String-Regel nimmt einen Wert in
-/// Anführungszeichen als Ganzes. Ohne diese Unterscheidung schnitte sie
-/// bei `?password='top secret 123'` nach `'top` ab, dem
-/// Schlüsselwort-Muster fehlte danach der öffnende Quote, und
-/// ` secret 123'` bliebe im Klartext stehen — wo es heute redigiert
-/// wird.
+/// Spec 0078, §6.2 (T-A14): Werte in Anführungszeichen bleiben
+/// vollständig redigiert. Wächter, kein Gegenbeweis — diese drei Fälle
+/// sind auch ohne die Quote-Alternativen der Query-String-Regel grün,
+/// weil deren freie Form an `'`/`"` scheitert und dann wie bisher das
+/// Schlüsselwort-Muster greift (spec-reviewer-Fund, erste Review-Runde:
+/// die Begründung in Spec 0078 §3.1 trifft so nicht zu). Der echte
+/// Gegenbeweis für die Quote-Alternativen steht in
+/// `…_redacts_a_password_query_parameter_containing_an_at_sign`.
 #[test]
 fn test_redactor_keeps_quoted_query_parameter_values_fully_redacted() {
     let redactor = DefaultOutputRedactor::new();
@@ -1431,6 +1433,63 @@ fn test_redactor_known_remaining_case_password_with_at_sign_and_question_mark() 
     assert_eq!(
         redactor.redact_text("postgres://app:a@b?c@db/x"),
         "postgres://app:[REDACTED]@b?c@db/x"
+    );
+}
+
+/// Regressionstest, spec-reviewer-Fund (Spec 0078, erste Review-Runde,
+/// ERHÖHT — echte Regression, keine nur theoretische): die
+/// Query-String-Regel steht VOR den Private-Key-Mustern. Ihre freie
+/// Wertklasse erlaubt `-`, stoppt aber an Leerraum — sie schnitt damit
+/// den mehrteiligen Anker `-----BEGIN … PRIVATE KEY-----` genau in der
+/// Mitte durch (`?secret=-----BEGIN` wurde ersetzt). Danach griff weder
+/// das PEM-Muster noch sein Fail-safe-Rückfallmuster, und der komplette
+/// Schlüsselkörper stand im Klartext — dort, wo er VOR Spec 0078
+/// vollständig redigiert wurde. Das verletzt „nie weniger redigieren"
+/// (CLAUDE.md, Spec 0078 §2).
+///
+/// Behoben, indem die freie Wertklasse der Regel mindestens ein `@`
+/// verlangt: die Regel existiert allein, damit das DB-Muster den
+/// Parameter nicht als Passwort lesen kann, und das DB-Muster kann nur
+/// über einen Wert MIT `@` hinweglaufen. Ein Wert ohne `@` braucht sie
+/// nicht — dort redigiert wie bisher das Schlüsselwort-Muster. Ein
+/// PEM-/PGP-Anker enthält kein `@`, also kann die Regel ihn per
+/// Konstruktion nicht mehr anschneiden.
+#[test]
+fn test_redactor_query_rule_does_not_cut_a_private_key_armor_anchor() {
+    let redactor = DefaultOutputRedactor::new();
+
+    let pem = redactor.redact_text(
+        "https://vault.example/api?secret=-----BEGIN PRIVATE KEY-----\n\
+         MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAsecretkeybody\n\
+         -----END PRIVATE KEY-----",
+    );
+    assert!(!pem.contains("secretkeybody"), "{pem}");
+    assert_eq!(pem, "https://vault.example/api?[REDACTED]");
+
+    let pgp = redactor.redact_text(
+        "https://v/api?passphrase=-----BEGIN PGP PRIVATE KEY BLOCK-----\n\
+         lQPGBFsecretpgpbody\n\
+         -----END PGP PRIVATE KEY BLOCK-----",
+    );
+    assert!(!pgp.contains("secretpgpbody"), "{pgp}");
+    assert_eq!(pgp, "https://v/api?[REDACTED]");
+}
+
+/// Gegenprobe zum Test darüber: ein Parameterwert OHNE `@` wird
+/// weiterhin vollständig redigiert — das übernimmt das
+/// Schlüsselwort-Muster, genau wie vor Spec 0078. Die engere Wertklasse
+/// der Query-String-Regel kostet also keine Abdeckung.
+#[test]
+fn test_redactor_still_redacts_a_query_parameter_without_an_at_sign() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("redis://cache:6379?password=plainpw"),
+        "redis://cache:6379?[REDACTED]"
+    );
+    assert_eq!(
+        redactor.redact_text("https://api.example.com/v1?token=abcdef&x=1"),
+        "https://api.example.com/v1?[REDACTED]"
     );
 }
 
