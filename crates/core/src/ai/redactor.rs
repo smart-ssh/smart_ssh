@@ -261,6 +261,45 @@ fn built_in_patterns() -> Vec<PatternRule> {
             r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?(?:basic|token)\s+(?:bearer\s+)?(?:[a-z_]+=)?(?:"[^"\r\n]*"|[A-Za-z0-9+/._~-]+=*)"#,
             "eingebautes Authorization-Basic-Muster ist gültig",
         ),
+        // Spec 0078: Passwort-Parameter im Query-String einer URL. Steht
+        // BEWUSST VOR dem DB-Muster — das schließt `?`/`#` nicht aus und
+        // liest bei einer URL ohne Pfad (`redis://cache:6379?password=p@ss…`)
+        // `6379?password=p` als Passwort. Damit nimmt es dem
+        // Schlüsselwort-Muster weiter unten den Anker, und der Rest des
+        // Werts bleibt im Klartext stehen. Diese Regel greift vorher und
+        // ersetzt den Wert, sodass hinter dem `=` kein `@` mehr steht, über
+        // das das DB-Muster laufen könnte. Mit Pfad (`…/0?password=…`)
+        // stoppt das DB-Muster ohnehin am `/`.
+        //
+        // Das DB-Muster bleibt dafür WÖRTLICH unangetastet (Spec 0078 §4):
+        // es ist über vier Review-Runden gegen echte Regressionen verengt
+        // worden, und `?`/`#` dort nachzutragen hieße, ein geprüftes Muster
+        // zu ändern statt zu ergänzen.
+        //
+        // Die Schlüsselwörter sind genau die des Schlüsselwort-Musters
+        // weiter unten; ein hier nicht erfasstes Schlüsselwort verliert
+        // also nichts, es läuft weiter über jenes.
+        //
+        // Wert: erst die beiden Anführungszeichen-Formen, dann die freie.
+        // Ohne die Quote-Alternativen nähme diese Regel bei
+        // `?password='top secret 123'` nur `'top`; dem Schlüsselwort-Muster
+        // fehlte danach der öffnende Quote, und ` secret 123'` bliebe im
+        // Klartext stehen — wo es HEUTE schon redigiert wird. Die freie
+        // Form endet an `&` `#`, Leerraum und an den Feldtrennern `,` `;`
+        // `"` `'`, aus demselben Grund wie beim DB-Muster unten.
+        //
+        // Restfall, bewusst (Spec 0078 §5): ein leerer Wert
+        // (`?token=` am Zeilenende) wird nicht erfasst — es gibt nichts zu
+        // redigieren. Ein Wert, der selbst ein rohes `,`/`;`/`"`/`'`
+        // enthält, wird nur bis dorthin erfasst; den Rest übernimmt wie
+        // bisher das Schlüsselwort-Muster.
+        PatternRule {
+            regex: Regex::new(
+                r#"(?i)(?P<sep>[?&])(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*'|"[^"\r\n]*"|[^&#\s,;"']+)"#,
+            )
+            .expect("eingebautes Query-Parameter-Muster ist gültig"),
+            replacement: "${sep}${key}=[REDACTED]",
+        },
         // DB-Connection-Strings (Diagnose-Folge-Fix, 2026-09): das Passwort
         // steht zwischen `:` und `@`, keines der Schlüsselwort-Muster
         // (`password=`/`token=`/...) greift auf diese Syntax. Deckt die in
@@ -550,6 +589,52 @@ fn built_in_patterns() -> Vec<PatternRule> {
                 r#"(?i)(?P<scheme>\b[a-z][a-z0-9+.-]*)://(?P<user>[^:@/\s,;"]*):[^@/\s,;"]+@"#,
             )
             .expect("eingebautes breites URL-Zugangsdaten-Muster ist gültig"),
+            replacement: "${scheme}://${user}:[REDACTED]@",
+        },
+        // Spec 0078: URL-Zugangsdaten, bei denen Benutzername ODER Passwort
+        // ein unkodiertes `@` enthalten. Formal müsste dort `%40` stehen
+        // (die prozentkodierte Form fangen die Muster oben schon), in der
+        // Praxis schreiben Menschen und Werkzeuge das `@` roh, und viele
+        // Clients werten das LETZTE `@` als Trenner. Alle Muster oben
+        // schließen `@` aus beiden Klassen aus: das Passwort endete am
+        // ersten `@` und der Rest blieb im Klartext; enthielt der BENUTZER
+        // ein `@` (`postgres://svc@tenant:pw@db/x` — bei mehreren
+        // gehosteten Datenbanken die vorgeschriebene Schreibweise), griff
+        // gar keines von ihnen.
+        //
+        // Das ist das strenge URL-Muster (s. oben) mit genau einem
+        // Unterschied: `@` fehlt in beiden ausgeschlossenen Klassen. Der
+        // Benutzer endet am ersten `:`, das Passwort reicht gierig bis zum
+        // LETZTEN `@` vor einem Stoppzeichen. Alle Muster oben bleiben
+        // wörtlich und an ihrer Stelle; diese Regel ergänzt nur.
+        //
+        // Steht BEWUSST AM ENDE der Liste, nach dem Schlüsselwort-Muster:
+        // weiter vorn schluckt sie ein späteres `password=` samt dessen
+        // Anker (`https://u:x@h:1|password=ab@cdSecret` → `…@cdSecret`,
+        // Rest im Klartext) — derselbe Fehler, den die Muster mit
+        // Header-/Schlüsselnamen weiter oben schon einmal gemacht haben.
+        // Hier sehen alle älteren Muster den Text zuerst.
+        //
+        // `?` und `#` bleiben Stoppzeichen (wie beim strengen Muster): ohne
+        // sie liefe die Regel über einen Query-String mit `@` hinweg und
+        // schluckte den Host
+        // (`postgres://app:pw@db?sslmode=require&user=x@y` → `…:[REDACTED]@y`).
+        //
+        // Bewusst akzeptiert (Spec 0078 §5, Tests `…_known_remaining_case_…`
+        // und `…_known_over_redaction_…`):
+        // - Ein Passwort, das `@` UND eines der Zeichen `/ ? #` enthält,
+        //   wird weiter nur bis zum ersten dieser Zeichen redigiert —
+        //   dieselben Zeichen müssen Stoppzeichen bleiben. Ebenso `,` `;`
+        //   `"` wie beim DB-Muster.
+        // - Überredaktion: folgt einer URL ohne Stoppzeichen ein weiteres
+        //   `@` (etwa hinter `|`), wird der Teil dazwischen mit geschwärzt.
+        //   Dabei leakt nichts; dieselbe Art Nebenwirkung wie die schon
+        //   dokumentierte bei `|`/`&` am DB-Muster.
+        PatternRule {
+            regex: Regex::new(
+                r#"(?i)(?P<scheme>\b[a-z][a-z0-9+.-]*)://(?P<user>[^:/\s,;"?#]*):[^/\s,;"?#]+@"#,
+            )
+            .expect("eingebautes URL-Muster mit @ in den Zugangsdaten ist gültig"),
             replacement: "${scheme}://${user}:[REDACTED]@",
         },
     ]

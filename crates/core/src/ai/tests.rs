@@ -1125,3 +1125,330 @@ fn test_placeholder_absorption_keeps_variable_names() {
     assert!(out.starts_with("GITHUB_"), "{out}");
     assert!(!out.contains("abcdefghijklmnop"), "{out}");
 }
+
+// --- Spec 0078: `@` in den Zugangsdaten einer URL -----------------------
+//
+// Alle Fälle prüfen die EXAKTE Ausgabe (`assert_eq`), nicht nur
+// "irgendwo steht [REDACTED]": `assert_fully_redacted` oben betrachtet
+// Fenster aus 9 Zeichen und prüft bei kürzeren Geheimnissen (`pw123`,
+// `p@ss`) gar nichts. Die erwarteten Zeichenketten sind gegen den
+// echten Redactor gemessen (Spec 0078, §6).
+
+/// Spec 0078, §6.1 (T-1, T-2a bis T-2f): enthält das Passwort einer
+/// Verbindungs-URL ein unkodiertes `@`, wird es bis zum LETZTEN `@` vor
+/// dem Host redigiert, nicht nur bis zum ersten. Deckt die Schemata ab,
+/// die auch das DB-Muster kennt, plus die generischen (`https`, `ftp`).
+#[test]
+fn test_redactor_redacts_a_url_password_containing_an_unencoded_at_sign() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for (input, expected) in [
+        (
+            "postgres://app:Xy9@kLm2@db.internal/prod",
+            "postgres://app:[REDACTED]@db.internal/prod",
+        ),
+        (
+            "mysql://root:a@b@c@db:3306/x",
+            "mysql://root:[REDACTED]@db:3306/x",
+        ),
+        (
+            "mongodb+srv://u:p@ss@cluster0.example.net/db",
+            "mongodb+srv://u:[REDACTED]@cluster0.example.net/db",
+        ),
+        (
+            "amqps://guest:g@st@mq:5671",
+            "amqps://guest:[REDACTED]@mq:5671",
+        ),
+        (
+            "redis://:p@ss@cache:6379/0",
+            "redis://:[REDACTED]@cache:6379/0",
+        ),
+        (
+            "https://deploy:t0k@n@git.example.com/repo.git",
+            "https://deploy:[REDACTED]@git.example.com/repo.git",
+        ),
+        (
+            "ftp://anon:mail@example.com@ftp.example.org/pub",
+            "ftp://anon:[REDACTED]@ftp.example.org/pub",
+        ),
+    ] {
+        assert_eq!(redactor.redact_text(input), expected, "Eingabe: {input}");
+    }
+}
+
+/// Spec 0078, §6.1 (T-3, T-4): derselbe Fall mit einem
+/// Umgebungsvariablen-Präfix davor und mit zwei URLs in einer Zeile —
+/// beide werden vollständig redigiert, und die zweite URL beginnt ein
+/// eigenes Passwort-Segment.
+#[test]
+fn test_redactor_redacts_at_passwords_with_a_prefix_and_in_repeated_urls() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("DATABASE_URL=postgres://app:Xy9@kLm2@db.internal/prod"),
+        "DATABASE_URL=postgres://app:[REDACTED]@db.internal/prod"
+    );
+    assert_eq!(
+        redactor.redact_text("https://u:a@b@host:8443 and https://v:c@d@other"),
+        "https://u:[REDACTED]@host:8443 and https://v:[REDACTED]@other"
+    );
+}
+
+/// Spec 0078, §6.1 (T-5a bis T-5c): enthält der BENUTZERNAME ein `@`
+/// (bei mehreren gehosteten Datenbanken die vorgeschriebene Schreibweise
+/// `benutzer@mandant`), blieb das Passwort bisher vollständig sichtbar,
+/// weil alle bestehenden URL-Muster `@` aus der Benutzerklasse
+/// ausschließen. Der Benutzername bleibt lesbar, wie bei allen anderen
+/// URL-Mustern auch.
+#[test]
+fn test_redactor_redacts_the_password_when_the_url_user_contains_an_at_sign() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for (input, expected) in [
+        (
+            "postgres://svc@tenant:pw123@db/x",
+            "postgres://svc@tenant:[REDACTED]@db/x",
+        ),
+        (
+            "https://user@corp:pw123@host/x",
+            "https://user@corp:[REDACTED]@host/x",
+        ),
+        (
+            "https://user@corp:p@ss@host/x",
+            "https://user@corp:[REDACTED]@host/x",
+        ),
+    ] {
+        assert_eq!(redactor.redact_text(input), expected, "Eingabe: {input}");
+    }
+}
+
+/// Spec 0078, §6.1 (T-6, T-7a, T-7b) und §6.2 (T-A12, Positionsbeleg für
+/// die Query-String-Regel): ein Passwort-Parameter mit `@` im
+/// Query-String einer URL ohne Pfad. Das DB-Muster schließt `?` nicht aus
+/// und las bisher `6379?password=p` als Passwort — damit war der Anker
+/// des Schlüsselwort-Musters zerstört und `ssw0rd` blieb im Klartext.
+/// Steht die Query-String-Regel HINTER dem DB-Muster, scheitert dieser
+/// Test.
+#[test]
+fn test_redactor_redacts_a_password_query_parameter_containing_an_at_sign() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for (input, expected) in [
+        (
+            "redis://cache:6379?password=p@ssw0rd",
+            "redis://cache:6379?[REDACTED]",
+        ),
+        (
+            "redis://cache:6379?password='p@ss w0rd'",
+            "redis://cache:6379?[REDACTED]",
+        ),
+        (
+            "redis://cache:6379?password='p@ss&w0rd'&db=1",
+            "redis://cache:6379?[REDACTED]",
+        ),
+    ] {
+        assert_eq!(redactor.redact_text(input), expected, "Eingabe: {input}");
+    }
+}
+
+/// Spec 0078, §6.2 (T-A2, T-A3): Gegenprobe zu den beiden neuen Regeln —
+/// `?` und `/` bleiben Stoppzeichen. Ohne sie liefe die neue URL-Regel
+/// über den Query-String hinweg und schluckte den Host samt allem, was
+/// bis zum nächsten `@` folgt.
+#[test]
+fn test_redactor_does_not_run_across_a_query_string_when_redacting_an_at_password() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for (input, expected) in [
+        (
+            "https://u:p@host?next=a@b",
+            "https://u:[REDACTED]@host?next=a@b",
+        ),
+        (
+            "https://u:p@host/path?x=a@b.com",
+            "https://u:[REDACTED]@host/path?x=a@b.com",
+        ),
+        (
+            "postgres://app:pw@db?sslmode=require&user=x@y",
+            "postgres://app:[REDACTED]@db?sslmode=require&user=x@y",
+        ),
+    ] {
+        assert_eq!(redactor.redact_text(input), expected, "Eingabe: {input}");
+    }
+}
+
+/// Spec 0078, §6.2 (T-A4, T-A5, T-A6): unabhängige `@` in derselben
+/// Zeile (E-Mail-Adressen, `git@host`-Kurzform, komma-getrennte
+/// MongoDB-Hostliste) bleiben stehen. Ohne diese Gegenprobe könnte die
+/// neue Regel unbemerkt halbe Zeilen schwärzen.
+#[test]
+fn test_redactor_leaves_unrelated_at_signs_and_credential_free_urls_alone() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("postgres://app:pw@db1/x admin@example.com"),
+        "postgres://app:[REDACTED]@db1/x admin@example.com"
+    );
+    assert_eq!(
+        redactor.redact_text("mongodb://u:p@h1:27017,h2@x:27017/db"),
+        "mongodb://u:[REDACTED]@h1:27017,h2@x:27017/db"
+    );
+
+    for unchanged in [
+        "see https://example.com/@user and mailto:a@b",
+        "ssh://git@github.com:22/x",
+        "git@github.com:org/repo.git and a@b",
+        "https://example.com:8080/path a@b",
+        r#"{"redis":"redis://cache:6379","admin":"ops@example.com"}"#,
+        // Leerer Wert: die Query-String-Regel verlangt mindestens ein
+        // Zeichen und greift hier bewusst nicht.
+        "https://x.com/?q=password&token=",
+    ] {
+        assert_eq!(redactor.redact_text(unchanged), unchanged);
+    }
+}
+
+/// Spec 0078, §6.2 (T-A7, T-A8, T-A9): was heute schon vollständig
+/// redigiert wird, wird es weiterhin — die prozentkodierte Form, das
+/// komma-getrennte `password=`-Feld aus der DB-Muster-Runde und
+/// Passwort-Parameter hinter einem Pfad.
+#[test]
+fn test_redactor_still_fully_redacts_the_cases_that_were_already_closed() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for (input, expected) in [
+        (
+            "postgres://app:Xy9%40kLm2@db.internal/prod",
+            "postgres://app:[REDACTED]@db.internal/prod",
+        ),
+        (
+            "redis://cache:6379,password=p@ssw0rd",
+            "redis://cache:6379,[REDACTED]",
+        ),
+        (
+            "redis://cache:6379/0?password=p@ssw0rd&db=1",
+            "redis://cache:6379/0?[REDACTED]",
+        ),
+        (
+            "postgres://db:5432/x?sslmode=require&password=p@ss;w",
+            "postgres://db:5432/x?sslmode=require&[REDACTED]",
+        ),
+        (
+            "https://api.example.com/v1?token=abc@def&x=1",
+            "https://api.example.com/v1?[REDACTED]",
+        ),
+    ] {
+        assert_eq!(redactor.redact_text(input), expected, "Eingabe: {input}");
+    }
+}
+
+/// Spec 0078, §6.2 (T-A10): eine URL mit 10 000 `@` im Passwort. Die
+/// `regex`-Crate kennt kein katastrophales Rückverfolgen, ein Tausch der
+/// Bibliothek könnte das ändern — deshalb der Test mit großzügiger
+/// Zeitgrenze in einem eigenen Thread, damit er im Fehlerfall scheitert
+/// statt zu hängen.
+#[test]
+fn test_redactor_handles_a_pathological_number_of_at_signs_in_time() {
+    let input = format!("https://u:{}host/x", "a@".repeat(10_000));
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(DefaultOutputRedactor::new().redact_text(&input));
+    });
+
+    let redacted = rx
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .expect("die Redaction muss in unter 10 s fertig sein");
+    assert_eq!(redacted, "https://u:[REDACTED]@host/x");
+}
+
+/// Spec 0078, §6.2 (T-A11, Positionsbeleg für die neue URL-Regel): sie
+/// läuft als LETZTE, damit sie dem Schlüsselwort-Muster nicht den Anker
+/// nimmt. Stünde sie davor, griffe sie bis zu dem `@` in `ab@cdSecret`
+/// und ließe `cdSecret` im Klartext stehen. Die Varianten mit `|` und
+/// `'` belegen die Position; die `&`-Variante fängt schon die
+/// Query-String-Regel ab und bleibt als Gegenprobe.
+#[test]
+fn test_redactor_does_not_let_the_at_url_rule_swallow_a_later_password_keyword() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for (input, expected) in [
+        (
+            "https://u:x@h:1|password=ab@cdSecret",
+            "https://u:[REDACTED]@h:1|[REDACTED]",
+        ),
+        (
+            "https://u:x@h:1'password=ab@cdSecret",
+            "https://u:[REDACTED]@h:1'[REDACTED]",
+        ),
+        (
+            "https://u:x@h:1&password=ab@cdSecret",
+            "https://u:[REDACTED]@h:1&[REDACTED]",
+        ),
+    ] {
+        let redacted = redactor.redact_text(input);
+        assert!(!redacted.contains("cdSecret"), "Eingabe: {input}");
+        assert_eq!(redacted, expected, "Eingabe: {input}");
+    }
+}
+
+/// Spec 0078, §6.2 (T-A14): die Query-String-Regel nimmt einen Wert in
+/// Anführungszeichen als Ganzes. Ohne diese Unterscheidung schnitte sie
+/// bei `?password='top secret 123'` nach `'top` ab, dem
+/// Schlüsselwort-Muster fehlte danach der öffnende Quote, und
+/// ` secret 123'` bliebe im Klartext stehen — wo es heute redigiert
+/// wird.
+#[test]
+fn test_redactor_keeps_quoted_query_parameter_values_fully_redacted() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("https://x/?password='top secret 123'"),
+        "https://x/?[REDACTED]"
+    );
+    assert_eq!(
+        redactor.redact_text(r#"https://x/?password="top secret 123""#),
+        "https://x/?[REDACTED]"
+    );
+    // Unbeendetes Anführungszeichen: heutiges Verhalten des
+    // Schlüsselwort-Musters, nicht Gegenstand von Spec 0078 — hier
+    // festgehalten, damit die neue Regel es nicht unbemerkt verändert.
+    assert_eq!(
+        redactor.redact_text("https://x/?password='unterminated p@ss"),
+        "https://x/?[REDACTED] p@ss"
+    );
+}
+
+/// Spec 0078, §6.3 (T-R1): bekannter Restfall, Spec 0078 §5 — ein
+/// Passwort, das `@` UND eines der Zeichen `/ ? #` enthält, wird weiter
+/// nur teilweise redigiert. Kein Falsch-Positiv-Test, sondern bewusst
+/// dokumentiertes Verhalten: `?` und `#` müssen Stoppzeichen bleiben
+/// (s. `test_redactor_does_not_run_across_a_query_string_…`).
+#[test]
+fn test_redactor_known_remaining_case_password_with_at_sign_and_question_mark() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("postgres://app:a@b?c@db/x"),
+        "postgres://app:[REDACTED]@b?c@db/x"
+    );
+}
+
+/// Spec 0078, §6.3 (T-R2): bekannte Überredaktion, Spec 0078 §5 — folgt
+/// einer URL ohne Stoppzeichen ein weiteres `@` (etwa hinter `|`), wird
+/// der Teil dazwischen mit geschwärzt. Nichts leakt; dieselbe Art
+/// Nebenwirkung wie die schon dokumentierte bei `|`/`&` (s. den
+/// Kommentar am DB-Muster in `redactor.rs`).
+#[test]
+fn test_redactor_known_over_redaction_across_a_pipe_separated_second_at_sign() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("ssh://git@host:2222|deploy@server"),
+        "ssh://git@host:[REDACTED]@server"
+    );
+    assert_eq!(
+        redactor.redact_text("https://u:p@h:1|user=me@mail"),
+        "https://u:[REDACTED]@mail"
+    );
+}
