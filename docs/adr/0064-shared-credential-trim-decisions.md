@@ -13,6 +13,11 @@ fachliche Festlegungen, die über den Auftrag hinausgingen.
 
 ## 1. `normalize_sftp_server_path` bleibt vorerst bei `str::trim` (Abweichung von A3)
 
+> **Erledigt.** Q-BL-0149-01 ist entschieden (Option 1, Spec 0073 §9):
+> Die Stelle benutzt den Helfer, Annahme A-1 ist aufgelöst. Der Abschnitt
+> bleibt als Protokoll stehen; die Umsetzung und ihre Begründung stehen in
+> ADR 0066.
+
 **Frage:** A3 verlangt „Alle in §1 genannten Stellen benutzen den Helfer",
 und §1 listet `dto.rs:514` — das ist `normalize_sftp_server_path`. Derselbe
 Satz A3 schränkt aber auf Zugangsdaten-Werte ein, und A1/A5 beschreiben den
