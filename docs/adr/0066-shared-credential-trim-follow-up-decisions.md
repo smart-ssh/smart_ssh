@@ -5,8 +5,23 @@ Bezug: docs/specs/0073-shared-credential-trim.md (§9 Klarstellungen),
 ADR 0064, Commits `2956e57` (Pfad-Override), `cb07f0c` (Passphrase im
 Verbindungstest)
 
-ADR 0064 hat zwei Punkte offen protokolliert und einen dritten nicht
-gesehen. Dieses ADR hält fest, wie sie ausgegangen sind.
+ADR 0064 hat mehrere Punkte offen protokolliert. Dieses ADR räumt **einen**
+davon ab (0064 §1, Annahme A-1), hält eine Klarstellung fest, die es dort
+noch nicht gab (BL-0243), und legt einen Punkt offen, den 0064 nicht gesehen
+hat (Q-BL-0149-02).
+
+**Unverändert offen und ausdrücklich nicht Gegenstand dieses ADR:**
+
+- **ADR 0064 §2** — die Zeichenliste aus A1 ist unvollständig
+  (U+200E/200F, U+202A–202E, U+2066–2069, U+00AD stehen nicht darin).
+  Produktentscheidung, nicht getroffen.
+- **ADR 0064 §3** — `model` wird nicht getrimmt. Offen gelassen, nicht
+  vorentschieden.
+- **ADR 0064 §7** — die dort vorgemerkten Punkte, darunter das fehlende
+  `Zeroize` auf dem Zwischen-`String` von `trim_credential_value`.
+
+Wer hier liest, hat damit noch nicht gelesen, was von Spec 0073 offen ist;
+dafür ist ADR 0064 §2, §3 und §7 zu lesen.
 
 ## 1. `normalize_sftp_server_path` benutzt den Helfer (A-1 aufgelöst)
 
