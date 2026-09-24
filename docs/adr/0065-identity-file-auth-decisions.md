@@ -96,6 +96,25 @@ Abhängigkeit nur deshalb nicht auf, weil die Regel „keine neuen
 Abhängigkeiten ohne Freigabe" gilt — nicht, weil `libc` hier sachlich
 falsch wäre.
 
+**Nachtrag (Spec 0076 §9 K-3, 2026-09-24):** Stefan hat die Aufnahme
+freigegeben. `libc = "0.2.189"` ist jetzt direkte Abhängigkeit von
+`app-shell` (`crates/app-shell/Cargo.toml`); dieselbe Version, die vorher
+schon transitiv im `Cargo.lock` stand — kein neues Paket in der
+Lieferkette. `open_readable` benutzt `libc::O_NONBLOCK`, die beiden
+`#[cfg(target_os = …)]`/`#[cfg(target_arch = …)]`-Konstanten oben sind
+entfallen. `test_named_pipe_is_rejected_without_blocking` (der Nachweis für
+den Wert der Konstante) und `test_an_endless_source_is_never_read_beyond_the_limit`/
+`test_the_read_limit_holds_even_when_fstat_understates_the_size` (die
+Lesegrenzen-Tests) blieben dabei unverändert grün — erneut per Gegenbeweis
+geprüft: `.custom_flags(libc::O_NONBLOCK)` entfernt, FIFO-Test scheitert
+nach 10 s mit „Timeout" statt zu hängen, Fix wiederhergestellt, Test wieder
+grün.
+
+Die „Was daran unschön bleibt"-Warnung oben (stilles Übersetzungsscheitern
+auf einer nicht aufgezählten Architektur) gilt seitdem nicht mehr: `libc`
+deckt die Zielarchitekturen der Kiste selbst ab, es gibt keine von Hand
+gepflegte Aufzählung mehr, die veralten könnte.
+
 ## 4. Die Rechteprüfung folgt OpenSSH wörtlich (`st_mode & 077`), nicht der Formulierung von A-4
 
 **Frage:** A-4 sagt „für Gruppe oder Welt **lesbar**". E-1 sagt „genauso

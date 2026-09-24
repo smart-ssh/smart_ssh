@@ -17,6 +17,12 @@ chrono = { version = "0.4.45", features = ["serde"] }
 credentials-keyring = { version = "0.5.0", path = "../credentials-keyring" }
 directories = "6.0.0"
 futures = "0.3.34"
+# Spec 0076, §9 K-3: liefert `O_NONBLOCK` für `key_files.rs` (A-3) — vorher
+# eine handgepflegte `#[cfg(target_os/target_arch)]`-Tabelle in dieser
+# Crate. `libc` lag schon transitiv im Baum (`Cargo.lock`, u. a. über
+# `tauri`), diese Zeile macht daraus nur eine direkte Abhängigkeit statt
+# eines neuen Pakets in der Lieferkette.
+libc = "0.2.189"
 mcp-server = { version = "0.5.0", path = "../mcp-server" }
 persistence-sqlite = { version = "0.5.0", path = "../persistence-sqlite" }
 regex = "1.13.1"

@@ -25,55 +25,6 @@ use ssh_manager_core::ssh::{
 };
 use ssh_transport::{classify_openssh_key, KeyClassification};
 
-/// `O_NONBLOCK`, je Plattform.
-///
-/// A-3 verlangt ihn ausdrücklich („sonst blockiert ein benanntes Rohr, bis
-/// ein Schreiber erscheint"). Rusts Standardbibliothek gibt die Konstante
-/// nicht heraus; sie kommt hier trotzdem **nicht** aus einer neuen
-/// Abhängigkeit (`libc` ist im Arbeitsbereich nirgends direkt eingebunden,
-/// und eine Abhängigkeit für eine einzelne Zahl aufzunehmen, wäre nicht
-/// verhältnismäßig). Die Werte sind Teil der jeweiligen Kernel-ABI und
-/// damit so unveränderlich wie eine Syscall-Nummer.
-///
-/// **Der Wert wird nicht behauptet, sondern gemessen:**
-/// `test_named_pipe_is_rejected_without_blocking` öffnet ein benanntes Rohr
-/// ohne Schreiber unter einem Timeout — stimmte die Konstante nicht, hinge
-/// der Test, statt grün zu werden.
-///
-/// **Die Staffelung geht nach `target_arch`, nicht nur nach `target_os`**
-/// (spec-reviewer-Fund). Auf Linux gilt `0o4000` nur für die
-/// asm-generic-Architekturen; `mips` benutzt `0o200`, `sparc64` `0x4000`.
-/// Eine Staffelung allein nach `target_os` hätte dort einen **stillen
-/// falschen Wert** gesetzt — und das Fehlerbild wäre genau der von A-3
-/// verbotene Hänger gewesen, nicht ein Übersetzungsfehler. Deshalb sind die
-/// Architekturen aufgezählt: Was nicht aufgezählt ist, übersetzt nicht.
-#[cfg(all(
-    any(target_os = "linux", target_os = "android"),
-    any(
-        target_arch = "x86",
-        target_arch = "x86_64",
-        target_arch = "arm",
-        target_arch = "aarch64",
-        target_arch = "riscv32",
-        target_arch = "riscv64",
-        target_arch = "loongarch64",
-        target_arch = "s390x",
-        target_arch = "powerpc",
-        target_arch = "powerpc64"
-    )
-))]
-const O_NONBLOCK: i32 = 0o4000;
-
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd",
-    target_os = "dragonfly"
-))]
-const O_NONBLOCK: i32 = 0x0004;
-
 /// Liest Schlüsseldateien vom lokalen Dateisystem (Spec 0076).
 pub struct OsKeyFileReader {
     /// Nur für Tests belegt: `~` löst sonst über
@@ -234,12 +185,21 @@ struct Probe {
 /// A-3: unter Unix mit `O_NONBLOCK`, sonst hinge das Öffnen eines benannten
 /// Rohrs, bis ein Schreiber erscheint. Auf Windows entfällt der Zusatz;
 /// dort genügt die Prüfung auf dem Handle.
+///
+/// Die Konstante kommt seit Spec 0076 §9 K-3 aus `libc` — vorher stand hier
+/// eine von Hand gepflegte `#[cfg(target_os/target_arch)]`-Tabelle mit den
+/// rohen Zahlenwerten je Plattform (s. ADR 0065 §3). `libc` lag im
+/// Arbeitsbereich immer schon transitiv im `Cargo.lock`; die Aufnahme als
+/// direkte Abhängigkeit dieser Crate bringt kein neues Paket in die
+/// Lieferkette, ersetzt aber eine Stelle, die für jede künftige Plattform
+/// von Hand hätte nachgezogen werden müssen, durch die von der `libc`-Kiste
+/// gepflegte.
 #[cfg(unix)]
 fn open_readable(path: &Path) -> std::io::Result<File> {
     use std::os::unix::fs::OpenOptionsExt;
     OpenOptions::new()
         .read(true)
-        .custom_flags(O_NONBLOCK)
+        .custom_flags(libc::O_NONBLOCK)
         .open(path)
 }
 
@@ -915,9 +875,10 @@ mod tests {
     /// beim Öffnen (A-3); ohne das Flag hinge dieser Test, bis ihn jemand
     /// abbricht, statt sauber rot zu werden.
     ///
-    /// Der Test belegt damit zugleich, dass die selbst gehaltene
-    /// `O_NONBLOCK`-Konstante auf dieser Plattform den richtigen Wert hat
-    /// (s. deren Doc-Kommentar).
+    /// Der Test belegt damit zugleich, dass `libc::O_NONBLOCK` (Spec 0076
+    /// §9 K-3) beim `open()` tatsächlich ankommt und wirkt — unabhängig
+    /// davon, ob die Konstante aus `libc` oder, wie vor K-3, aus einer
+    /// selbst gepflegten Tabelle stammt.
     #[test]
     #[cfg(unix)]
     fn test_named_pipe_is_rejected_without_blocking() {
@@ -926,15 +887,15 @@ mod tests {
         let Some(()) = make_fifo(&fifo) else {
             // spec-reviewer-Fund: Hier stand ein `eprintln!` und ein
             // stilles `return`. Damit wäre auf einem Runner ohne `mkfifo`
-            // der **einzige** Nachweis für den Wert der selbst gehaltenen
-            // `O_NONBLOCK`-Konstante spurlos verschwunden, und niemand
-            // hätte es gemerkt. Auf den Plattformen, die wir ausliefern,
-            // gehört `mkfifo` zum Grundbestand — fehlt es, ist das ein
-            // Befund, kein Grund zum Weitergehen.
+            // der **einzige** Nachweis für die Wirkung von `O_NONBLOCK`
+            // spurlos verschwunden, und niemand hätte es gemerkt. Auf den
+            // Plattformen, die wir ausliefern, gehört `mkfifo` zum
+            // Grundbestand — fehlt es, ist das ein Befund, kein Grund zum
+            // Weitergehen.
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             panic!(
-                "mkfifo nicht verfügbar — damit fehlt der einzige Nachweis, dass die \
-                 selbst gehaltene O_NONBLOCK-Konstante auf dieser Plattform stimmt"
+                "mkfifo nicht verfügbar — damit fehlt der einzige Nachweis, dass \
+                 O_NONBLOCK auf dieser Plattform wirkt"
             );
             #[cfg(not(any(target_os = "linux", target_os = "macos")))]
             return;
@@ -961,9 +922,10 @@ mod tests {
         );
     }
 
-    /// Legt ein benanntes Rohr an. Ohne `libc` im Arbeitsbereich geht das
-    /// nur über `mkfifo(1)` — in einem Test völlig ausreichend und die
-    /// ehrlichere Variante, als dafür eine Abhängigkeit aufzunehmen.
+    /// Legt ein benanntes Rohr an, über `mkfifo(1)` statt über
+    /// `libc::mkfifo` — die Kiste ist seit K-3 zwar im Arbeitsbereich, ein
+    /// `unsafe`-FFI-Aufruf für eine einmalige Testvorbereitung bringt aber
+    /// keinen Gewinn gegenüber dem vorhandenen Kommandozeilenwerkzeug.
     #[cfg(unix)]
     fn make_fifo(path: &Path) -> Option<()> {
         let status = std::process::Command::new("mkfifo")
