@@ -3018,14 +3018,17 @@ pub async fn suggest_rule_patterns(command: String) -> CommandResult<Vec<Pattern
     Ok(crate::rule_suggestions::suggest_rule_patterns(&command))
 }
 
-/// Spec 0011, Abschnitt 3: legt zuerst die Regel an (Schritt 1, delegiert
-/// an [`crate::filter_rules::create_rule`] über
+/// Spec 0011, Abschnitt 3: versucht zuerst, die Regel anzulegen (Schritt 1,
+/// delegiert an [`crate::filter_rules::create_rule`] über
 /// [`crate::rule_suggestions::create_quick_rule`]), löst **danach** die
-/// wartende `Confirm`-Entscheidung für `action_id` auf (Schritt 2). Schlägt
-/// Schritt 1 fehl, wird Schritt 2 nicht erreicht (kein `?` vor dem
-/// `resolve`-Aufruf nötig, `?` auf `create_quick_rule` selbst genügt) —
-/// kein halb abgeschlossener Zustand (Regel angelegt, aber Dialog bleibt
-/// hängen, oder umgekehrt).
+/// wartende `Confirm`-Entscheidung für `action_id` auf (Schritt 2).
+///
+/// Schlägt Schritt 1 fehl, wird Schritt 2 trotzdem erreicht: Das Ergebnis
+/// von Schritt 1 wird zwischengespeichert und erst am Ende zurückgegeben,
+/// damit ein Fehlschlag beim Anlegen der Regel die Bestätigung nicht
+/// mitreißt (Spec 0021, Abschnitt 7 — Begründung im Kommentar an der
+/// `resolve`-Stelle weiter unten). Der Nutzer bekommt dann den Fehler der
+/// Regel-Erstellung, und die bestätigte Aktion läuft trotzdem.
 ///
 /// `edited_command`: unabhängiger Review-Pass (Spec 0007/0008) — das
 /// Frontend zeigt/verwendet zur Muster-Ableitung den vom Nutzer im
