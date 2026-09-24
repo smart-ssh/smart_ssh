@@ -62,10 +62,10 @@ use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_chat_action_proposed, emit_chat_action_result, emit_chat_auto_continuation_limit_reached,
     emit_chat_auto_continuation_started, emit_chat_document_generated, emit_chat_error,
-    emit_chat_queued_messages_sent, emit_chat_response_cancelled, emit_chat_response_truncated,
-    emit_chat_text_delta, emit_note_shrink_failed, emit_note_shrink_succeeded,
-    emit_note_shrink_suggested, emit_note_update_suggested, emit_risk_assessment_updated,
-    ActionResultPayload, EventEmitter,
+    emit_chat_queued_messages_sent, emit_chat_response_cancelled, emit_chat_response_empty,
+    emit_chat_response_truncated, emit_chat_text_delta, emit_note_shrink_failed,
+    emit_note_shrink_succeeded, emit_note_shrink_suggested, emit_note_update_suggested,
+    emit_risk_assessment_updated, ActionResultPayload, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -396,12 +396,25 @@ pub async fn run_chat_turn(
             emit_chat_auto_continuation_started(emitter, session_id, round);
         }
 
+        // Spec 0080, A2, Klarstellung Q-BL-0259-01 (Stefan, 2026-09-24,
+        // Variante b): "leere Runde" gilt nur für eine Runde, die eine
+        // Nutzer-Nachricht beantwortet — Runde 1 dieses Turns (neue
+        // Nachricht oder „Weiter") sowie jede spätere Runde, in die
+        // gerade eingereihte Nutzer-Nachrichten eingespeist wurden. EINE
+        // automatische Folgerunde nach einer ausgeführten oder geblockten
+        // Aktion (Spec 0021, Abschnitt 3, Fall 4), die ohne Text endet,
+        // bleibt bewusst still — das Aktions-Ergebnis-Kärtchen ist dort
+        // bereits die Antwort, und A1s eigener Retry deckt eine wegen des
+        // Längenlimits leere Folgerunde ohnehin ab (s. Frage-Datei).
+        let check_for_empty_response = round == 1 || injected_queued_messages;
+
         match run_one_round(
             session,
             session_id,
             emitter,
             profile_store,
             action_confirmations,
+            check_for_empty_response,
         )
         .await
         {
@@ -581,12 +594,20 @@ fn redact_text_preserving_fence_markers(text: &str, redactor: &dyn OutputRedacto
 }
 
 /// Genau eine KI-Antwortrunde, s. [`RoundOutcome`].
+///
+/// `check_for_empty_response` (Spec 0080, A2, Klarstellung Q-BL-0259-01):
+/// `true` nur für eine Runde, die eine Nutzer-Nachricht beantwortet — der
+/// Aufrufer [`run_chat_turn`] setzt das für Runde 1 eines Turns sowie für
+/// jede Runde, in die gerade eingereihte Nutzer-Nachrichten eingespeist
+/// wurden, `false` für jede automatische Folgerunde nach einer
+/// ausgeführten/geblockten Aktion.
 async fn run_one_round(
     session: &Session,
     session_id: SessionId,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+    check_for_empty_response: bool,
 ) -> RoundOutcome {
     let mut request_context = session.context.lock().await.clone();
     // spec-reviewer-Fund (Review dieses Schritts, Etappe 3): geklont statt
@@ -644,6 +665,14 @@ async fn run_one_round(
 
     let mut text_buffer = String::new();
     let mut executed_action = false;
+    // Spec 0080, A2: unabhängig von `text_buffer` (das ein `ActionProposed`
+    // schon vorher per `flush_text_buffer` leert) und von `executed_action`
+    // (die nur eine tatsächlich AUSGEFÜHRTE Aktion zählt) — A2 verlangt
+    // "Text angefallen ODER eine Aktion vorgeschlagen", unabhängig davon,
+    // ob die Aktion später abgelehnt/blockiert wurde. Einmal `true`, bleibt
+    // es für den Rest dieser Runde `true`. Nur relevant, wenn
+    // `check_for_empty_response` überhaupt gilt (s. Funktions-Doc-Kommentar).
+    let mut round_had_content = false;
     // Spec 0068, Teil 4 (Review-Fund): wurde eine Aktion DIESER Antwort
     // abgelehnt/blockiert, läuft keine weitere Aktion derselben Antwort mehr
     // ohne Rückfrage (s. `handle_action_proposed`).
@@ -679,6 +708,9 @@ async fn run_one_round(
         let Some(event) = event else { break };
         match event {
             AiEvent::TextDelta(delta) => {
+                if !delta.is_empty() {
+                    round_had_content = true;
+                }
                 emit_chat_text_delta(emitter, session_id, delta.clone());
                 text_buffer.push_str(&delta);
             }
@@ -686,6 +718,10 @@ async fn run_one_round(
                 title,
                 content_markdown,
             }) => {
+                // Spec 0080, A2: "eine Aktion vorgeschlagen" gilt auch hier
+                // — der Nutzer sieht sofort ein Dokument, diese Runde ist
+                // alles andere als leer.
+                round_had_content = true;
                 // Spec 0012, Abschnitt 2/3: läuft weder durch die
                 // Filter-Engine noch durch `handle_action_proposed`s
                 // Confirm-Pfad — reiner lokaler Inhalt, direkt ans Frontend
@@ -695,6 +731,12 @@ async fn run_one_round(
                     .await;
             }
             AiEvent::ActionProposed(action) => {
+                // Spec 0080, A2: gilt schon bei der Vorschlags-Absicht,
+                // unabhängig vom späteren Ausgang (abgelehnt/blockiert
+                // zählt genauso wie ausgeführt — anders als
+                // `executed_action` unten, das nur die tatsächliche
+                // Ausführung für die Auto-Folgerunden-Logik zählt).
+                round_had_content = true;
                 flush_text_buffer(session, &mut text_buffer).await;
                 if handle_action_proposed(
                     session,
@@ -713,15 +755,19 @@ async fn run_one_round(
             }
             AiEvent::Done => {
                 flush_text_buffer(session, &mut text_buffer).await;
-                // Spec 0080, A2 (chat-response-empty) ist hier bewusst NOCH
-                // NICHT verdrahtet — offene Frage Q-BL-0259-01 (welche
-                // Runden zählen: nur Runde 1 eines Turns, oder auch jede
-                // Runde, die eine eingereihte Nutzer-Nachricht beantwortet;
-                // Stand: `waiting-stefan`). Ohne diese Antwort würde eine
-                // wörtliche "jede Runde"-Umsetzung nach praktisch jeder
-                // ausgeführten/geblockten Aktion einen Hinweis einblenden,
-                // dessen Häufigkeit im Betrieb nicht gemessen ist — s.
-                // Frage-Datei für die volle Abwägung.
+                // Spec 0080, A2, Klarstellung Q-BL-0259-01 (Variante b): nur
+                // bei `Done` (nicht bei `TextTruncated`/`Error`, s.
+                // jeweiliger Zweig), nur wenn diese Runde wirklich nichts
+                // hervorgebracht hat, UND nur, wenn diese Runde überhaupt
+                // eine Nutzer-Nachricht beantwortet (`check_for_empty_
+                // response`, s. Funktions-Doc-Kommentar) — eine automatische
+                // Folgerunde nach einer ausgeführten/geblockten Aktion
+                // bleibt bewusst still. Nichts davon geht in
+                // Ledger/Historie (das passiert bereits vorher/gar nicht,
+                // dieses Event ist rein informativ fürs Frontend).
+                if check_for_empty_response && !round_had_content {
+                    emit_chat_response_empty(emitter, session_id);
+                }
                 break;
             }
             AiEvent::TextTruncated => {
@@ -4303,6 +4349,258 @@ mod tests {
         assert!(matches!(history[0].role, Role::Assistant));
     }
 
+    /// T11 (Spec 0080, A2): eine Runde, die nur mit `Done` endet (Runde 1
+    /// eines Turns — beantwortet direkt die Nutzer-Nachricht) → genau ein
+    /// `chat-response-empty`, keine Ledger-/Historie-Zeile (`flush_text_
+    /// buffer` schreibt bei leerem Puffer nichts, s. dortige Prüfung).
+    #[tokio::test]
+    async fn test_bare_done_round_emits_chat_response_empty_once_with_no_history_entry() {
+        let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+
+        run_chat_turn(
+            &session,
+            session_id,
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names = event_names_excluding_auto_continuation(&events);
+        assert_eq!(event_names, vec!["chat-response-empty"]);
+        let (_, payload) = events
+            .iter()
+            .find(|(name, _)| name == "chat-response-empty")
+            .expect("chat-response-empty fehlt");
+        assert_eq!(payload["sessionId"], serde_json::json!(session_id));
+
+        let history = session.context.lock().await.history.clone();
+        assert!(
+            history.is_empty(),
+            "eine leere Runde darf keine Historien-/Ledger-Zeile hinterlassen: {history:?}"
+        );
+    }
+
+    /// T12 (Spec 0080, Wächter): Text + `Done` → kein `chat-response-empty`.
+    #[tokio::test]
+    async fn test_text_then_done_does_not_emit_chat_response_empty() {
+        let session = test_session(
+            vec![AiEvent::TextDelta("Hallo.".to_string()), AiEvent::Done],
+            MockSshTransport::default(),
+        );
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names = event_names_excluding_auto_continuation(&events);
+        assert!(
+            !event_names.contains(&"chat-response-empty"),
+            "eine Antwort mit Text darf nicht als leer gelten: {event_names:?}"
+        );
+    }
+
+    /// T13 (Spec 0080, Wächter): eine Aktion wird in DERSELBEN Runde
+    /// vorgeschlagen, in der Text ausbleibt — kein `chat-response-empty`,
+    /// unabhängig vom späteren Ausgang der Aktion. Hier: AutoExec (wie
+    /// `test_autoexec_path_runs_command_and_records_result`), damit die
+    /// Runde ohne Warten auf eine nie eintreffende Bestätigung sofort mit
+    /// `Done` endet — `round_had_content` wird schon beim `ActionProposed`-
+    /// Event gesetzt, VOR jedem Warten auf `handle_action_proposed`, das
+    /// macht die genaue Art der Aktions-Auflösung für diesen Test
+    /// irrelevant.
+    #[tokio::test]
+    async fn test_action_proposed_without_text_in_the_same_round_does_not_emit_chat_response_empty()
+    {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default().with_response("ls -la", output("total 0")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names = event_names_excluding_auto_continuation(&events);
+        assert!(
+            !event_names.contains(&"chat-response-empty"),
+            "eine vorgeschlagene Aktion zählt als \"nicht leer\", auch ohne Text: {event_names:?}"
+        );
+    }
+
+    /// T14 (Spec 0080, Wächter): `Error` → kein `chat-response-empty`.
+    #[tokio::test]
+    async fn test_error_round_does_not_emit_chat_response_empty() {
+        let session = test_session(
+            vec![AiEvent::Error(AiError::RateLimited)],
+            MockSshTransport::default(),
+        );
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names = event_names_excluding_auto_continuation(&events);
+        assert!(
+            !event_names.contains(&"chat-response-empty"),
+            "auf einen Fehler darf kein chat-response-empty folgen: {event_names:?}"
+        );
+        assert!(event_names.contains(&"chat-error"));
+    }
+
+    /// Klarstellung Q-BL-0259-01 (Spec 0080, Variante b), erster
+    /// Wächter-Test aus der Entscheidung: eine in Runde 1 AUSGEFÜHRTE
+    /// Aktion löst eine automatische Folgerunde aus (Spec 0021, Abschnitt
+    /// 3); endet die ohne Text nur mit `Done`, bleibt das still — kein
+    /// `chat-response-empty`. Scheitert gegen eine wörtliche "jede
+    /// Runde"-Umsetzung von A2 (Variante c aus der Frage-Datei).
+    #[tokio::test]
+    async fn test_silent_followup_round_after_executed_action_does_not_emit_chat_response_empty() {
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default().with_response("ls -la", output("total 0")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.ai_provider = Box::new(MockAiProvider::with_rounds(vec![
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            // Runde 2 (automatische Folgerunde nach der ausgeführten
+            // Aktion) — bleibt ohne jeden Text, wie ein Modell, das der
+            // Aktion nichts mehr hinzuzufügen hat.
+            vec![AiEvent::Done],
+        ]));
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names = event_names_excluding_auto_continuation(&events);
+        assert_eq!(
+            event_names,
+            vec!["chat-action-proposed", "chat-action-result"],
+            "eine stille Folgerunde nach einer ausgeführten Aktion darf kein \
+             chat-response-empty auslösen: {event_names:?}"
+        );
+    }
+
+    /// Klarstellung Q-BL-0259-01 (Spec 0080, Variante b), zweiter
+    /// Wächter-Test aus der Entscheidung: eine WÄHREND der ersten Runde
+    /// eingereihte Nutzer-Nachricht (Spec 0066, §2) wird in Runde 2
+    /// beantwortet — endet die ohne Text nur mit `Done`, gilt sie trotzdem
+    /// als "beantwortet eine Nutzer-Nachricht" und löst
+    /// `chat-response-empty` aus (anders als eine gewöhnliche automatische
+    /// Folgerunde, s. Test oben).
+    #[tokio::test]
+    async fn test_followup_round_answering_a_queued_message_emits_chat_response_empty() {
+        let mut session = test_session(
+            vec![AiEvent::Done],
+            MockSshTransport::default().with_response("ls -la", output("total 0")),
+        );
+        session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.ai_provider = Box::new(MockAiProvider::with_rounds(vec![
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            // Runde 2 beantwortet die eingereihte Nachricht unten, bleibt
+            // aber ohne jeden eigenen Text.
+            vec![AiEvent::Done],
+        ]));
+        // Spec 0066, §2: identisch zu `commands::send_chat_message_impl`s
+        // "es läuft schon ein Turn" -Zweig — hier direkt gesetzt, weil
+        // dieser Test `run_chat_turn` ohne den umschließenden Tauri-Command
+        // aufruft.
+        session
+            .chat_turn
+            .lock()
+            .unwrap()
+            .queued
+            .push("Und was ist mit /var/log?".to_string());
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        )
+        .await;
+
+        let events = emitter.events.lock().unwrap().clone();
+        let event_names = event_names_excluding_auto_continuation(&events);
+        assert_eq!(
+            event_names,
+            vec![
+                "chat-action-proposed",
+                "chat-action-result",
+                "chat-queued-messages-sent",
+                "chat-response-empty",
+            ],
+            "eine Runde, die eine eingereihte Nachricht beantwortet, zählt wie Runde 1: {event_names:?}"
+        );
+    }
+
     /// Spec 0028, Abschnitt 5 (Regressionstest, s. `ActionOrigin::Mcp`):
     /// dieselbe Allow-Regel, die im Test oben (`ActionOrigin::Internal`) zu
     /// `AutoExec` führt, muss bei `ActionOrigin::Mcp` trotzdem eine
@@ -6074,11 +6372,15 @@ mod tests {
 
         tokio::join!(slow_turn, fast_turn);
 
-        assert_eq!(
-            emitter_fast.events.lock().unwrap().len(),
-            0,
-            "Session B hat nur `Done` erhalten, keine sichtbaren Events erwartet"
-        );
+        // Spec 0080, A2: Session B bekommt Runde 1 eines frischen Turns nur
+        // mit `Done` — seit A2 (Klarstellung Q-BL-0259-01) also GENAU das
+        // `chat-response-empty`-Event, nicht mehr gar keins. Diese Zeile
+        // prüft nicht den Kern dieses Tests (Nebenläufigkeit, s. oben) —
+        // sie hält nur fest, dass sich außer dieser einen, erwarteten
+        // Ergänzung nichts an Session B geändert hat.
+        let events_fast = emitter_fast.events.lock().unwrap().clone();
+        let event_names: Vec<&str> = events_fast.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(event_names, vec!["chat-response-empty"]);
     }
 
     /// Sicherheitsgrenze: eine KI, die in jeder Runde erneut ein Kommando
@@ -13573,6 +13875,7 @@ mod tests {
             &emitter,
             &profile_store,
             &confirmations,
+            true,
         );
         let stopper = async {
             tokio::task::yield_now().await;

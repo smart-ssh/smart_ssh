@@ -662,11 +662,37 @@ pub fn emit_chat_response_truncated(emitter: &dyn EventEmitter, session_id: Sess
     );
 }
 
-// Spec 0080, A2 (`chat-response-empty`): noch nicht verdrahtet — offene
-// Frage Q-BL-0259-01 (welche Runden zählen), Stand `waiting-stefan`. Die
-// Funktion kommt zusammen mit ihrem Aufrufer in `orchestration.rs`, sobald
-// die Frage beantwortet ist (s. dortiger Kommentar im `AiEvent::Done`-Zweig
-// von `run_one_round`).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatResponseEmptyPayload {
+    session_id: SessionId,
+}
+
+/// Spec 0080, A2: eine Runde endete mit `Done` (kein Fehler), aber weder
+/// Text noch eine vorgeschlagene Aktion fielen in dieser Runde an — bislang
+/// verschwand das für den Nutzer komplett spurlos (Spec 0080 §1: bei einem
+/// Reasoning-Modell verbrauchen die Denk-Tokens das ganze Budget, `Done`
+/// kommt trotzdem, `flush_text_buffer` schreibt bei leerem Puffer nichts in
+/// Ledger/Historie). Eigenes Event statt eines Hinweistexts im
+/// `chat-text-delta`-Inhalt — aus demselben Grund wie bei
+/// `emit_chat_response_truncated` (nicht von echter Modellausgabe
+/// unterscheidbar/fälschbar). Das Frontend hängt daraufhin einen reinen
+/// Hinweis an (Spec 0080 A3) — kein „Weiter" (der Fortsetzungstext meint
+/// eine abgeschnittene Antwort, das passt hier nicht) und keine
+/// Export-/Notiz-Leiste (es gibt nichts zu exportieren).
+///
+/// Klarstellung Q-BL-0259-01 (Stefan, 2026-09-24, Variante b): der Aufrufer
+/// (`app_shell::orchestration::run_one_round`) ruft diese Funktion nur für
+/// eine Runde, die eine Nutzer-Nachricht beantwortet — nicht für eine
+/// automatische Folgerunde nach einer ausgeführten/geblockten Aktion, s.
+/// dortiger `check_for_empty_response`-Doc-Kommentar.
+pub fn emit_chat_response_empty(emitter: &dyn EventEmitter, session_id: SessionId) {
+    emit(
+        emitter,
+        "chat-response-empty",
+        &ChatResponseEmptyPayload { session_id },
+    );
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
