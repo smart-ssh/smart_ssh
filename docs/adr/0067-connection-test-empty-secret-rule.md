@@ -120,7 +120,7 @@ Moduls „ohne irgendetwas zu persistieren" festnageln:
   `test:*`-Refs — sonst deckt die Prüfung den Neuanlage-Fall nicht ab, in
   dem es kein hinterlegtes Credential gibt, und auch kein Schreiben auf
   einen Nachbar-Slot. Gegenbeweis gemessen: ein vorübergehend eingebautes
-  `set` auf `server:sabotage:certificate_key` lässt alle drei Tests mit
+  `set` auf `server:sabotage:certificate_key` lässt damals alle drei Tests mit
   dieser Meldung scheitern.
 - Der Neuanlage-Test prüft, dass der Abbruch der fehlenden Eingabe gilt,
   nicht irgendeinem anderen Grund — über den `code` des Fehlers (§6),
@@ -186,7 +186,12 @@ der Schlüsselbund-Zweig (`KEYCHAIN_UNAVAILABLE`) ist nicht berührt.
 - **Keine Lockerung:** Abgebrochen wird an derselben Stelle und unter
   denselben Bedingungen wie zuvor; geändert sind allein `code` und Text
   des Fehlers. Weder der eingegebene noch ein hinterlegter Wert gelangt in
-  die Meldung (I2; getestet).
+  die Meldung (I2). Der Test dazu
+  (`test_q0149_03_refusal_message_carries_no_secret`) kann heute nicht
+  scheitern — die Meldung ist ein festes Literal —, er schlägt erst an,
+  wenn jemand einen Wert in sie hineinformatiert; er prüft nur den
+  hinterlegten Wert eines Nachbar-Slots, ein eingegebener nicht leerer
+  Wert führt nie in diesen Zweig.
 - **Tests:** je Slot der `code` gegen ein Literal im Test (nicht aus dem
   Speicher-Weg abgeleitet), bei Neuanlage und bei „bestehender Server mit
   Agent bzw. anderer Secret-Anmeldeart, Feld leer" — jeweils für den
@@ -196,6 +201,13 @@ der Schlüsselbund-Zweig (`KEYCHAIN_UNAVAILABLE`) ist nicht berührt.
   Ein Code, der an einer Aufrufstelle mit dem des Nachbar-Slots vertauscht
   wird (Zertifikats-Key meldet `SERVER_CERTIFICATE_REQUIRED`), lässt
   dieselben Tests ebenfalls scheitern.
+- **Zurückgestellt (Review Runde 5):** Kein Frontend-Test belegt, dass
+  `runTest` einen `SERVER_*_REQUIRED`-Fehler übersetzt anzeigt — die Kette
+  ist durch Lesen von `ServerForm.tsx` und `errorCodes.ts` belegt, nicht
+  durch einen Test. Der Rückfalltext des Test-Wegs weicht vom Rückfalltext
+  des Speicherns („Passwort ist erforderlich") ab; in der Oberfläche
+  unsichtbar, da alle vier Codes übersetzt sind. Ein extern gelöschter
+  Schlüsselbund-Eintrag lässt den Test weiter ohne Code scheitern (§1).
 - **Nicht Teil dieser Entscheidung:** ob „Verbindung testen" bei leeren
   Pflichtfeldern gar nicht erst anlaufen soll (Frontend-Frage), und der
   leere `identityFile.path` (§5).
