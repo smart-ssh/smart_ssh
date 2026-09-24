@@ -385,10 +385,19 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // `&<schlüsselwort>=` enthält, und nahm dem strengen URL-Muster
         // den Anker — `https://u:Geheim&token=b@h/x` wurde zu
         // `https://u:Geheim&[REDACTED]`, wo vor Spec 0078
-        // `https://u:[REDACTED]@h/x` stand. Die Zeichenklasse zwischen
-        // `?` und `&` schließt `@` aus, damit der Trenner nicht selbst
-        // über Zugangsdaten hinwegläuft. Test
+        // `https://u:[REDACTED]@h/x` stand. Test
         // `…_does_not_treat_an_ampersand_without_a_question_mark_as_a_query_string`.
+        //
+        // Die Zeichenklasse zwischen `?` und `&` schließt `@` aus. Das
+        // schützt NICHTS — der Trenner wird über `${sep}` wörtlich
+        // zurückgeschrieben und kann gar nichts zerstören, worüber er
+        // läuft (eine frühere Fassung dieses Kommentars behauptete das
+        // Gegenteil, spec-reviewer-Fund der dritten Runde). Sein einziger
+        // realer Effekt ist, dass der Trenner nicht über einen schon
+        // `@`-haltigen Parameter hinwegkommt — genau deshalb braucht es
+        // die zweite Anwendung unten. Der Ausschluss bleibt, weil er Teil
+        // der gemessenen Fassung aus Spec 0078 §9 (Q-BL-0248-02) ist; ihn
+        // zu entfernen bräuchte eine eigene Messrunde.
         //
         // BEKANNTER RESTFALL, bewusst entschieden (Stefan, 2026-09-24,
         // Q-BL-0248-01; Spec 0078 §5, Test

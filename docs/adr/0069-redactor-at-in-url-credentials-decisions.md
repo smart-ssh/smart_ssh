@@ -292,10 +292,70 @@ und `&` schließt `@` aus, damit der Trenner nicht selbst über Zugangsdaten
 läuft.
 
 Nebeneffekt, gewollt: Der in §6 beschriebene Restfall ist damit wieder auf
-die `?`-Form beschränkt, so wie Spec §5 ihn beschreibt. Die `&`-Form ist
-zu. Gemessen und bestätigt: Bei einem Nicht-DB-Schema
-(`https://u:a?token=b@h/x`) blieb der Präfix schon vor Spec 0078 stehen —
-die Einschränkung „nur DB-Schemata" in §5 stimmt also weiterhin, und §5
-brauchte keine Änderung.
+die `?`-Form beschränkt, so wie Spec §5 ihn beschreibt. Gemessen und
+bestätigt: Bei einem Nicht-DB-Schema (`https://u:a?token=b@h/x`) blieb der
+Präfix schon vor Spec 0078 stehen — die Einschränkung „nur DB-Schemata" in
+§5 stimmt also weiterhin.
+
+**Korrektur an einer eigenen Aussage:** Eine frühere Fassung dieses
+Abschnitts behauptete „Die `&`-Form ist zu". Das ist falsch. `(B)` schließt
+die **Lockerung** bei `https://u:Geheim&token=b@h/x`, öffnet aber die
+Spiegelseite wieder: `redis://cache:6379&password=p@ssw0rd` →
+`redis://cache:[REDACTED]@ssw0rd`. Gemessen ist das identisch mit dem Stand
+**vor** Spec 0078 — also kein Verstoß gegen §2, aber auch keine
+Verbesserung. Zwischenzeitlich (`387a91e`) war der Fall zu, und zwar genau
+durch die Lockerung, die `(B)` beseitigt. Steht jetzt als Restfall in Spec
+§5. Fund des `spec-reviewer`, dritte Runde.
+
+**Zweite Nebenwirkung von (A), nachgetragen:** Wo ein früheres Muster den
+Anker bisher zerschnitt und der Rest lesbar blieb, schwärzt das gierige
+Rückfallmuster jetzt alles ab dem `BEGIN` bis zum Textende. Das ist die
+gewollte Fail-safe-Richtung (Spec 0002 §1) und dieselbe Überredaktion, die
+das Rückfallmuster an seiner alten Stelle schon immer hatte — sie tritt nur
+jetzt häufiger ein. Nichts leakt dadurch.
 
 Alle drei Tests sind gegen `387a91e` rot gesehen worden.
+
+## 12. N1 läuft zweimal (Q-BL-0248-03)
+
+Die Trennergruppe aus §11 schließt `@` aus und kann deshalb nicht über
+einen schon `@`-haltigen Parameter hinweglaufen; `replace_all` sucht nur
+vorwärts und findet hinter dem ersten Treffer kein `?` mehr. Bei **zwei**
+`@`-haltigen Schlüsselwort-Parametern im selben Token erreichte N1 damit
+nur den ersten, das DB-Muster fraß danach den Anker des zweiten, und dessen
+Schwanz stand im Klartext:
+
+| Stand | `redis://cache:6379?password=p@ss&token=abc@SECRETTAIL` |
+|---|---|
+| vor Spec 0078 | `redis://cache:[REDACTED]@ss&[REDACTED]` |
+| `387a91e` | `redis://cache:6379?[REDACTED]` |
+| nach (B), vor dieser Korrektur | `redis://cache:[REDACTED]@SECRETTAIL` ← Verstoß gegen §2 |
+| jetzt | `redis://cache:6379?[REDACTED]` |
+
+Fund des `spec-reviewer` (dritte Runde, ERHÖHT), von mir an allen vier
+Ständen nachgemessen — der Reviewer konnte in dieser Runde nicht ausführen
+und hat das gesagt.
+
+**Korrektur: N1 steht zweimal hintereinander in der Liste, wörtlich
+gleich.** Nach dem ersten Durchlauf steht am ersten Parameter `[REDACTED]`,
+das kein `@` enthält, und die Trennergruppe kommt daran vorbei. Eine
+zusätzliche Anwendung derselben Regel kann per Konstruktion nur mehr
+redigieren, nie weniger — das ist der ganze Grund, warum diese Form der
+Korrektur vertretbar ist, ohne die Kette erneut zu vermessen.
+
+**Restfall:** Drei und mehr `@`-haltige Schlüsselwort-Parameter im selben
+Token bräuchten je eine weitere Anwendung; ab dem dritten bleibt es beim
+Verhalten vor Spec 0078. Die saubere Form wäre eine Schleife, bis sich
+nichts mehr ändert — das hieße `redact_bytes` umzubauen, was Spec §2
+ausdrücklich ausschließt. Deshalb die feste zweite Anwendung statt einer
+dritten, vierten und fünften: sie deckt den gemessenen Fall ab, und alles
+darüber ist in §5 als Restfall benannt statt stillschweigend offen.
+
+**Die Begründung des `@`-Ausschlusses im Trenner trägt nicht** (auch ein
+Fund der dritten Runde): Der Trenner wird über `${sep}` wörtlich
+zurückgeschrieben, kann also nichts zerstören, worüber er läuft. Sein
+einziger realer Effekt ist die Reichweitenbegrenzung — genau die, die den
+Fund oben verursacht hat. Der Ausschluss bleibt trotzdem stehen, weil er
+Teil der gemessenen Fassung aus Q-BL-0248-02 ist und ihn zu entfernen eine
+eigene Messrunde bräuchte; der Kommentar im Code nennt jetzt aber den
+zutreffenden Grund statt des falschen.

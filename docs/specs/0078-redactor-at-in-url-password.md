@@ -77,7 +77,7 @@ Anforderung und durch Tests gebunden (§6.2, T-A11/T-A12).
   **vor dem Kommentarblock des DB-Musters** eingefügt (`redactor.rs:264`):
 
   ```
-  (?i)(?P<sep>[?&])(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)
+  (?i)(?P<sep>\?(?:[^\s,;"'#?@&]*&)*)(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)
   ```
 
   Ersetzung: `${sep}${key}=[REDACTED]`. Die Schlüsselwörter sind genau die
@@ -87,16 +87,25 @@ Anforderung und durch Tests gebunden (§6.2, T-A11/T-A12).
   Leerraum, `,` `;` `"` `'`. N1 läuft vor dem DB-Muster, damit dieses
   den Parameter nicht mehr als Passwortteil lesen kann.
 
+  Der Trenner ist ein `?`, danach beliebig viele weitere Parameter mit
+  `&`. Ein `&` **ohne** vorangehendes `?` im selben Token zählt nicht
+  (Klarstellung, s. §9, Q-BL-0248-02).
+
+  N1 steht **zweimal hintereinander** in der Liste, wörtlich gleich
+  (Klarstellung, s. §9, Q-BL-0248-03).
+
   **Jeder der drei Zweige verlangt mindestens ein `@` im Wert**
-  (Klarstellung, s. §9, Q-BL-0248-01). Damit gilt für N1 ein einziger
-  Satz: *sie ersetzt ausschließlich Werte, die ein `@` enthalten; ein
-  Anker ohne `@` ist für sie unerreichbar.* Ohne diese Forderung
-  zerschneidet N1 den mehrteiligen Anker der Private-Key-Muster, die
-  weiter unten in der Liste stehen — `?secret=-----BEGIN PRIVATE KEY-----`
-  wird bis zum Leerzeichen ersetzt (freier Zweig), mit `"…"` bis zum
-  schließenden Quote. Danach greift weder das PEM-Muster noch sein
-  Fail-safe-Rückfallmuster, und der komplette Schlüsselkörper steht im
-  Klartext (gemessen, an beiden Ständen).
+  (Klarstellung, s. §9, Q-BL-0248-01). Ohne diese Forderung zerschneidet
+  N1 den mehrteiligen Anker der Schlüsselmuster —
+  `?secret=-----BEGIN PRIVATE KEY-----` wird bis zum Leerzeichen ersetzt
+  (freier Zweig), mit `"…"` bis zum schließenden Quote. Der komplette
+  Schlüsselkörper steht danach im Klartext (gemessen).
+
+  Die Forderung schützt den Anker aber **nicht** — das `@` darf vor ihm
+  im Wert stehen (`?secret=a@-----BEGIN …`). Geschützt wird er durch die
+  Kopien der Schlüsselmuster am Listenanfang (§9, Q-BL-0248-02). Ein
+  früher hier stehender Satz („ein Anker ohne `@` ist für N1
+  unerreichbar") war falsch und ist gestrichen.
 
   Die Forderung kostet keine Abdeckung, aber der Grund ist enger als er
   aussieht: Das DB-Muster **läuft** sehr wohl über einen Wert ohne `@`
@@ -192,6 +201,17 @@ Anforderung und durch Tests gebunden (§6.2, T-A11/T-A12).
   (`postgres://u:SuperSecret123?password=pl/ain&x=y@h/db`): der Präfix
   bleibt dort sichtbar, aber genauso wie vor dieser Spec — hier ändert
   sich nichts.
+- **Restfälle, unverändert gegenüber dem Stand vor dieser Spec**
+  (Q-BL-0248-03, gemessen; kein Verstoß gegen §2, hier nur festgehalten,
+  damit sie nicht unbemerkt kippen):
+  - Ein Schlüsselwort-Parameter **ohne** vorangehendes `?` im selben
+    Token: `redis://cache:6379&password=p@ssw0rd` →
+    `redis://cache:[REDACTED]@ssw0rd`. N1 greift nicht, das DB-Muster
+    läuft bis zum `@` im Wert. Zwischenzeitlich war der Fall zu, aber nur
+    um den Preis der Lockerung bei `https://u:Geheim&token=b@h/x`.
+  - Dasselbe mit `#` statt `&` (`…?db=1#password=p@ss`).
+  - Ab dem **dritten** `@`-haltigen Schlüsselwort-Parameter im selben
+    Token (§9, Q-BL-0248-03).
 
 ## 6. Tests
 
@@ -373,6 +393,36 @@ verlangt eine Produktentscheidung.
     `postgres://u:a&token=b@h/x`, jeweils → `…:[REDACTED]@h/x`,
   - `api-key: -----BEGIN PRIVATE KEY-----…`, vollständig geschwärzt (war
     schon vor dieser Spec offen und ist mit A zu),
-  - `redis://cache:6379?db=1&password=p@ssw0rd` → `redis://cache:6379?db=1&[REDACTED]`.
+  - `redis://cache:6379?db=1&password=p@ssw0rd` → `redis://cache:6379?db=1&[REDACTED]`
+    (Gegenprobe, **nicht** rot gegen den Stand davor — sie ist erst rot
+    gegen den Stand vor dieser Spec; nachgemessen).
 
   Der Restfall aus Q-BL-0248-01 ist unverändert und auf `?` beschränkt.
+
+- **2026-09-24 · Q-BL-0248-03 · K2 (Fund `spec-reviewer`, Runde 3,
+  nachgemessen):** Die Trennergruppe aus Q-BL-0248-02 schließt `@` aus
+  und kann deshalb nicht über einen schon `@`-haltigen Parameter
+  hinweglaufen; `replace_all` sucht nur vorwärts. Bei **zwei**
+  `@`-haltigen Schlüsselwort-Parametern im selben Token erreichte N1
+  deshalb nur den ersten, das DB-Muster fraß danach den Anker des
+  zweiten, und dessen Schwanz stand im Klartext. Gemessen:
+  `redis://cache:6379?password=p@ss&token=abc@SECRETTAIL` → vor dieser
+  Spec `redis://cache:[REDACTED]@ss&[REDACTED]`, danach
+  `redis://cache:[REDACTED]@SECRETTAIL`. Verstoß gegen §2.
+
+  Korrektur: **N1 steht zweimal hintereinander in der Liste**, wörtlich
+  gleich. Nach dem ersten Durchlauf steht am ersten Parameter
+  `[REDACTED]` ohne `@`, und die Trennergruppe kommt daran vorbei.
+  Ergebnis jetzt `redis://cache:6379?[REDACTED]`, also besser als vor
+  dieser Spec. Eine zusätzliche Anwendung derselben Regel kann per
+  Konstruktion nur mehr redigieren.
+
+  Restfall: Drei und mehr `@`-haltige Schlüsselwort-Parameter im selben
+  Token bräuchten je eine weitere Anwendung; ab dem dritten bleibt es
+  beim Verhalten vor dieser Spec (§5). Eine Schleife wäre die saubere
+  Form, hieße aber `redact_bytes` umzubauen — von §2 ausgeschlossen.
+
+  Ebenfalls in dieser Runde festgehalten, **kein** Verstoß gegen §2, weil
+  gleich dem Stand vor dieser Spec: die `&`-Form ohne `?`
+  (`redis://cache:6379&password=p@ssw0rd` → `redis://cache:[REDACTED]@ssw0rd`)
+  und die `#`-Form (`…?db=1#password=p@ss`). Beide in §5 aufgenommen.
