@@ -174,3 +174,13 @@ löst den Einzelfall ohne Risiko für andere Endpunkte.
 
 - Neue Log-Einträge aus A4 kommen in die Allowlist des Diagnose-Exports,
   falls sie dort erscheinen sollen.
+
+- **Q-BL-0259-01 entschieden (Stefan, 2026-09-24): Variante (b).** A2
+  gilt nur für eine Runde, die eine Nutzer-Nachricht beantwortet: Runde 1
+  eines Turns (neue Nachricht oder „Weiter“) sowie jede spätere Runde, in
+  die eingereihte Nutzer-Nachrichten eingespeist wurden. Eine automatische
+  Folgerunde nach einer ausgeführten oder geblockten Aktion, die ohne Text
+  endet, bleibt still. Zusätzliche Tests: (1) Aktion in Runde 1 ausgeführt
+  bzw. geblockt, Folgerunde endet nur mit `Done` → **kein**
+  `chat-response-empty`; (2) eingereihte Nachricht in einer Runde > 1,
+  die Runde endet nur mit `Done` → `chat-response-empty`.
