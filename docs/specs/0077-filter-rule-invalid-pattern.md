@@ -207,7 +207,10 @@ sichtbar gemacht (3.2).
   (`engine.rs:506-518`), würde also Regeln hinter dem Treffer nie
   melden, und läuft je Teilkommando mehrfach (`:302/307/391`). Gemeldet
   wird mit Regel-ID, Aktion und
-  Fehlertext der Bibliothek. Das **Kommando wird nicht geloggt**, sondern
+  Fehlertext der Bibliothek (**eingeschränkt durch Q-BL-0249-03, §9:** statt
+  des Fehlertexts der Bibliothek einer von drei festen, textfreien
+  Kurztexten — der Fehlertext zitiert das Muster wörtlich, und ein Muster
+  kann ein Geheimnis enthalten). Das **Kommando wird nicht geloggt**, sondern
   nur die Regel. Das Kommando könnte ein Geheimnis enthalten, und dieses
   Log ist eine neue Datensenke. Das gilt für alle drei Aktionen.
 - **3.2.3** Die Regelliste markiert eine Regel mit ungültigem Muster sichtbar:
@@ -255,7 +258,9 @@ sichtbar gemacht (3.2).
 - **Hard-Blacklist und `crate::risk` bleiben unberührt**, ebenso ihre
   Reihenfolge vor den Nutzerregeln.
 - **Neue Datensenke:** das Log aus 3.2.2. Dort landen nur Regel-ID,
-  Aktion und Fehlertext des Musters, nie das Kommando.
+  Aktion und Fehlertext des Musters, nie das Kommando (**eingeschränkt durch
+  Q-BL-0249-03, §9:** auch der Fehlertext des Musters landet dort nicht mehr
+  im Klartext, nur einer von drei festen Kurztexten).
 - **Bekannte, hingenommene Restlücke:** eine schon gespeicherte ungültige
   Deny-Regel neben einer Allow-Regel (§4, „Was bleibt").
 

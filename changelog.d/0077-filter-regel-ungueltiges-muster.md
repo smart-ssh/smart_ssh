@@ -21,3 +21,5 @@
   verständlicher Satz in der eingestellten Sprache und darunter die genaue
   Fundstelle im Muster — bisher nur der englische Text der zugrunde
   liegenden Bibliothek.
+- An einer so markierten Regel lässt sich die Priorität nicht mehr über die
+  Pfeiltasten verschieben; die Pfeile sind deaktiviert und nennen den Grund.
