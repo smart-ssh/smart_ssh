@@ -85,6 +85,17 @@ ausformulierten Angriffswegen. Jeden Fund triagieren:
 Nichts stillschweigend fallen lassen. Hat eine Nachbesserung selbst etwas
 gelockert, eine weitere Runde.
 
+**Runde 2 prüft nur das Delta.** Die zweite Runde bekommt nicht noch
+einmal die ganze Range, sondern:
+- die Funde aus `review-01.md` mit deiner Triage (behoben mit Commit,
+  oder bewusst nicht behoben mit Grund),
+- die Commit-Range **seit Runde 1**,
+- den Auftrag, zu prüfen, ob die Funde behoben sind und ob die
+  Nachbesserungen etwas gelockert haben.
+
+Eine volle Runde ist nur nötig, wenn die Nachbesserung den Kern umbaut und
+nicht bloß ergänzt.
+
 ## Die App starten — während der Arbeit nicht, am Ende einmal
 
 **Während du arbeitest, startest du keine sichtbare Instanz der App.**
