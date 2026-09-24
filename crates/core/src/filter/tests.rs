@@ -1728,6 +1728,46 @@ async fn test_spec_0077_ta10_pattern_error_log_names_the_rule_but_never_the_comm
     }
 }
 
+/// Spec 0077, Klarstellung Q-BL-0249-03: Ein Muster ist selbst geschriebener
+/// Text und kann ebenso ein Geheimnis enthalten wie ein Kommando — hier eine
+/// Deny-Regel, die durch einen Tippfehler (fehlende schließende Klammer)
+/// ungültig ist und ein Passwort im eigenen Muster trägt. Der Fehlertext von
+/// `regex` zitiert das Muster wörtlich; das Log aus 3.2.2 darf dieses Zitat
+/// nicht übernehmen, auch nicht mittelbar über den Bibliothekstext.
+///
+/// Scheitert gegen `ee017af`: Dort trägt das Feld `pattern_error` den vollen
+/// Fehlertext von `regex`, der das Geheimnis aus dem Muster zitiert.
+#[tokio::test]
+async fn test_spec_0077_q_bl_0249_03_pattern_error_log_never_quotes_the_pattern() {
+    pattern_error_log::start_recording();
+    const SECRET: &str = "geheimwert-9f3a1c";
+    let eng = engine(vec![regex_rule(
+        "deny-broken-with-secret",
+        &format!("^deploy --token={SECRET}(.*"),
+        RuleAction::Deny,
+        100,
+    )]);
+
+    // Keine andere Regel: Die ungültige Deny-Regel verhält sich wie nicht
+    // vorhanden (3.2.1), der Default greift (Confirm „keine Regel
+    // gefunden"), nicht AutoExec — wie in T-A5.
+    let decision = eng
+        .evaluate("deploy --token=other", &ctx("srv1", &[]))
+        .await;
+
+    assert_confirm(&decision);
+    assert_pattern_error_logged("deny-broken-with-secret");
+
+    let events = pattern_error_log::recorded_error_events();
+    assert!(!events.is_empty(), "kein ERROR-Ereignis aufgezeichnet");
+    for line in &events {
+        assert!(
+            !line.contains(SECRET),
+            "Geheimnis aus dem Muster im ERROR-Log: {line}"
+        );
+    }
+}
+
 /// Spec 0077, T-A12 (§1, Tabelle „Gemessen, zweiter Befund"): Ein
 /// pfadförmiger Glob, bei dem nur **einer** der beiden Zweige übersetzt,
 /// greift weiter über den Zweig, der übersetzt — „wie nicht vorhanden"

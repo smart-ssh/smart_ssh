@@ -52,6 +52,46 @@ impl Pattern {
         }
     }
 
+    /// Klassifiziert ein ungültiges Muster für das Protokoll aus 3.2.2, ohne
+    /// je Nutzertext zurückzugeben (Spec 0077, Klarstellung Q-BL-0249-03).
+    ///
+    /// `validate()` liefert den Fehlertext von `regex`/`globset` — der
+    /// zitiert das Muster wörtlich, was für das Formular (3.1.4) und das DTO
+    /// (3.2.3) richtig ist, in einem Protokoll aber eine neue Datensenke
+    /// wäre: Ein Muster ist selbst geschriebener Text und kann ein Geheimnis
+    /// enthalten (etwa eine Deny-Regel, die auf ein Passwort im Argument
+    /// zielt und durch einen Tippfehler ungültig ist). Diese Methode prüft
+    /// dieselben Zweige wie `validate()` (bewusst dupliziert statt aus dem
+    /// `PatternError` abgeleitet, damit ein Bibliothekstext nie auch nur
+    /// mittelbar hierher gelangen kann) und gibt nur einen von drei festen,
+    /// textfreien Kurztexten zurück.
+    pub(super) fn compile_failure_reason(&self) -> Option<&'static str> {
+        match self {
+            Pattern::Exact(_) => None,
+            Pattern::Regex(pattern) => {
+                if Regex::new(pattern).is_err() {
+                    Some("regex does not compile")
+                } else {
+                    None
+                }
+            }
+            Pattern::Glob(pattern) => {
+                if Glob::new(pattern).is_err() {
+                    Some("glob does not compile")
+                } else if is_path_shaped_pattern(pattern)
+                    && GlobBuilder::new(&normalize_path_shaped_tokens(pattern))
+                        .literal_separator(true)
+                        .build()
+                        .is_err()
+                {
+                    Some("glob does not compile (strict branch)")
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     /// Prüft, ob `cmd` (bereits whitespace-normalisiert) auf dieses Muster
     /// passt.
     ///

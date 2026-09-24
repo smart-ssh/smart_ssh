@@ -426,8 +426,8 @@ impl<S: PolicyStore> FilterEngine<S> {
 }
 
 /// Spec 0077, 3.2.2: Meldet jede Regel, deren Muster sich nicht übersetzen
-/// lässt, auf ERROR-Ebene — mit Regel-ID, Aktion und dem Fehlertext der
-/// Bibliothek.
+/// lässt, auf ERROR-Ebene — mit Regel-ID, Aktion und einem festen Kurztext,
+/// der den scheiternden Zweig benennt.
 ///
 /// **Warum hier und nicht in der Bucket-Schleife:**
 /// [`evaluate_rules_explained`] kehrt beim ersten Treffer zurück und würde
@@ -438,6 +438,16 @@ impl<S: PolicyStore> FilterEngine<S> {
 /// **Das Kommando wird bewusst NICHT geloggt** (Spec 0077, 3.2.2 und §5):
 /// Dieses Log ist eine neue Datensenke, und ein Kommando kann ein Geheimnis
 /// enthalten (Passwort in einem Argument). Gemeldet wird nur die Regel.
+///
+/// **Auch das Muster selbst steht nicht im Klartext im Log** (Klarstellung
+/// Q-BL-0249-03): Anders als `Pattern::validate()` liefert
+/// [`Pattern::compile_failure_reason`] nie den Fehlertext von
+/// `regex`/`globset` — der zitiert das Muster wörtlich, und ein Muster ist
+/// selbst geschriebener Text, der ebenso ein Geheimnis enthalten kann (eine
+/// Deny-Regel, die durch einen Tippfehler ungültig ist und auf ein Passwort
+/// im Argument zielt). Das DTO (3.2.3) und das Formular (3.1.4) bleiben bei
+/// `validate()` und damit beim vollen Bibliothekstext — nur dieses Log
+/// bekommt den festen Kurztext.
 ///
 /// Ändert die Auswertung nicht: `rules` wird unverändert weitergereicht,
 /// eine ungültige Regel bleibt drin und verhält sich wie bisher (Spec 0077,
@@ -454,11 +464,11 @@ impl<S: PolicyStore> FilterEngine<S> {
 /// schwächer beschreiben, als er ist.
 fn report_invalid_patterns(rules: &[Rule]) {
     for rule in rules {
-        if let Err(err) = rule.pattern.validate() {
+        if let Some(reason) = rule.pattern.compile_failure_reason() {
             tracing::error!(
                 rule_id = %rule.id,
                 action = ?rule.action,
-                pattern_error = %err,
+                pattern_error = reason,
                 "filter rule pattern does not compile; the rule cannot match through the branch(es) that fail",
             );
         }
