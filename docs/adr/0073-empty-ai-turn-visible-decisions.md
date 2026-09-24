@@ -8,10 +8,14 @@ Review-Nacharbeit (dieser Commit)
 ## Kontext
 
 Ein `spec-reviewer`-Review (ERHÖHT, adversarial) der ersten Fassung fand
-sechs Spec-Konformitäts-Punkte und einen sicherheitsrelevanten
+sieben Spec-Konformitäts-Punkte und einen sicherheitsrelevanten
 Budget-Fund; keiner davon betraf den eigentlichen Tool-Call-Schutz oder
 den Retry-Zähler (beide wurden im Review ausdrücklich als unverletzt
-bestätigt). Diese ADR hält die dabei getroffenen Entscheidungen fest.
+bestätigt). Eine zweite, auf das Delta beschränkte Runde hat die Fixes
+bestätigt (der Retry-Budget-Fix insbesondere nachgerechnet: außerhalb
+eines gesetzten `max_tokens_override` ein striktes No-Op) und keine neuen
+blockierenden Funde gemeldet. Diese ADR hält die dabei getroffenen
+Entscheidungen fest.
 
 ## 1. Die P1(b)-Klarstellung gilt NICHT für den Unbekannt-Fallback der offiziellen OpenAI-API
 
@@ -126,3 +130,13 @@ Sachverhalt korrekt ab.
 - **`text.trim().length > 0` blendet die Export-/Notiz-Leiste auch bei
   einer legitimen, aber reinen Leerraum-Antwort aus** — harmloser Randfall
   (eine Antwort aus nur Leerzeichen ist ohnehin nicht notizwürdig).
+- **`base_url.contains("api.openai.com")` ist case-sensitiv**
+  (`openai_compatible_model_max_output_tokens`/`openai_max_tokens_field_
+  name`) — mit einer groß geschriebenen `base_url` (z. B.
+  `https://API.openai.com/v1`) fällt ein unbekanntes Modell an der
+  offiziellen API in den Nicht-OpenAI-Zweig aus Fund 1 (16384/8192 statt
+  4096/2048) und Reasoning-Modelle bekommen nicht `max_completion_tokens`.
+  Vorbestehende, von Spec 0080 unabhängige Lücke (Runde-2-Fund des
+  Reviews), sicherheitsmäßig harmlos (`base_url` ist Nutzerkonfiguration,
+  Folge höchstens ein sichtbarer HTTP 400). Eigener, sehr kleiner
+  Backlog-Kandidat (`to_lowercase()` auf `base_url` vor dem Vergleich).
