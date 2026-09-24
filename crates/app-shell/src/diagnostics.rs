@@ -111,6 +111,13 @@ const SAFE_LOG_MESSAGES: &[&str] = &[
     "about to poll AI provider stream for the first time",
     "received text delta stream (summarized)",
     "AI response turn ended",
+    // Spec 0080, A4: Nachfolger von "received text delta stream
+    // (summarized)" für den OpenAI-kompatiblen Provider — trägt dieselbe
+    // Art Inhalt (nur `request_id` + zwei Längen, kein Prompt-/Antworttext),
+    // s. `ai_providers::request_logging::log_openai_round_summary`-
+    // Doc-Kommentar. Ohne diesen Eintrag würde das Diagnosepaket für diesen
+    // Provider genau die Information verlieren, die Spec 0080 §1 fehlte.
+    "AI response round ended (text/reasoning length)",
     "AI provider returned an error response",
     "AI provider rate-limited the request (429) — retrying with backoff",
     "AI provider transport/connection error",
@@ -413,6 +420,27 @@ mod tests {
             build_diagnostics_bundle(&base_input(), &log_lines, &DefaultOutputRedactor::new());
 
         assert!(bundle.contains("session connected"));
+        assert!(!bundle.contains("(keine Log-Zeilen verfügbar)"));
+    }
+
+    /// Spec-reviewer-Fund (Spec 0080, Review dieses Schritts): die neue A4-
+    /// Log-Zeile des OpenAI-kompatiblen Providers (`text_len`/
+    /// `reasoning_len`, kein Prompt-/Antworttext) muss im Diagnosepaket
+    /// erhalten bleiben — ohne diesen Allowlist-Eintrag würde sie (wie jede
+    /// unbekannte Zeile) fail-closed ausgeschlossen, und für diesen
+    /// Provider verschwände genau die Information wieder, die Spec 0080
+    /// §1 ursprünglich fehlte.
+    #[test]
+    fn test_a4_round_summary_log_line_is_allowlisted() {
+        let log_lines = vec![json_log_line(
+            "AI response round ended (text/reasoning length)",
+            r#","text_len":0,"reasoning_len":42"#,
+        )];
+
+        let bundle =
+            build_diagnostics_bundle(&base_input(), &log_lines, &DefaultOutputRedactor::new());
+
+        assert!(bundle.contains("AI response round ended (text/reasoning length)"));
         assert!(!bundle.contains("(keine Log-Zeilen verfügbar)"));
     }
 

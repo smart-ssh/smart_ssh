@@ -411,3 +411,46 @@ async fn test_empty_length_round_retries_once_with_doubled_budget_then_errors() 
         "eine leere, abgeschnittene Runde darf nicht als TextTruncated enden: {events:?}"
     );
 }
+
+/// Spec-reviewer-Fund (ERHÖHT, Spec 0080, Review dieses Schritts): ein
+/// `max_tokens_override` (Spec 0065, Teil 4), der bewusst über dem
+/// Modell-Maximum liegt, darf der A1-Retry NICHT halbieren. Ohne den Fix
+/// hätte `min(verdoppelt, kleineres Modell-Maximum)` den zweiten Request
+/// mit WENIGER Budget geschickt als der Nutzer explizit eingestellt hat —
+/// gerade in der Reasoning-Modell-Situation, für die Spec 0080 gedacht
+/// ist. Modell-Maximum an diesem (Nicht-OpenAI-)Endpunkt ist 16384 (Spec
+/// 0080 §8), der Override 32000 liegt bewusst darüber.
+#[tokio::test]
+async fn test_empty_length_retry_never_sends_less_than_an_explicit_max_tokens_override() {
+    let server = MockServer::start().await;
+    let empty_length_body =
+        "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n";
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":32000".to_string()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(empty_length_body),
+        )
+        .expect(2)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        Some(32_000),
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    // `.expect(2)` oben ist der eigentliche Beweis: BEIDE Requests trugen
+    // `"max_tokens":32000` — würde der zweite stattdessen 16384 (halbiert
+    // statt beibehalten) schicken, träfe der Mock nur einmal, und
+    // wiremock ließe den Server-Drop fehlschlagen.
+    assert_eq!(events, vec![AiEvent::Error(AiError::ResponseTruncated)]);
+}

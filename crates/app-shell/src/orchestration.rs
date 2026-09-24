@@ -404,8 +404,9 @@ pub async fn run_chat_turn(
         // automatische Folgerunde nach einer ausgeführten oder geblockten
         // Aktion (Spec 0021, Abschnitt 3, Fall 4), die ohne Text endet,
         // bleibt bewusst still — das Aktions-Ergebnis-Kärtchen ist dort
-        // bereits die Antwort, und A1s eigener Retry deckt eine wegen des
-        // Längenlimits leere Folgerunde ohnehin ab (s. Frage-Datei).
+        // bereits die Antwort, und A1s eigener Retry (im Provider, je
+        // Anfrage) deckt eine wegen des Längenlimits leere Folgerunde
+        // bereits unabhängig davon ab.
         let check_for_empty_response = round == 1 || injected_queued_messages;
 
         match run_one_round(
@@ -4491,7 +4492,8 @@ mod tests {
     /// Aktion löst eine automatische Folgerunde aus (Spec 0021, Abschnitt
     /// 3); endet die ohne Text nur mit `Done`, bleibt das still — kein
     /// `chat-response-empty`. Scheitert gegen eine wörtliche "jede
-    /// Runde"-Umsetzung von A2 (Variante c aus der Frage-Datei).
+    /// Runde"-Umsetzung von A2 — genau die Alternative, die die
+    /// Klarstellung in Spec 0080 §8 zugunsten von Variante (b) verwirft.
     #[tokio::test]
     async fn test_silent_followup_round_after_executed_action_does_not_emit_chat_response_empty() {
         let mut session = test_session(

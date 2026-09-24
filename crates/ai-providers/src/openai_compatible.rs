@@ -46,7 +46,25 @@ use ssh_manager_core::ssh::CommandOutput;
 /// dem Limit" bleibt möglich (vor allem bei selbst gehosteten Servern mit
 /// kleinem Kontext) — dafür existiert `max_tokens_override`
 /// (Spec 0065, Teil 4).
-const OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS: u32 = 16_384;
+///
+/// Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): die Klarstellung
+/// ist wörtlich auf "Endpunkte außer der offiziellen OpenAI-API" begrenzt
+/// — dieser Wert wird deshalb NUR noch im frühen Rückgabe-Zweig für einen
+/// Nicht-OpenAI-`base_url` verwendet. Der unabhängige Unbekannt-Fallback
+/// FÜR die offizielle API (ein Modellname, der zu keinem der bekannten
+/// Muster passt) bleibt [`OPENAI_COMPATIBLE_OFFICIAL_API_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS`]
+/// unverändert bei 4096 — für den lässt Spec 0080 keine Anhebung zu, und
+/// die offizielle API ist ohnehin die Umgebung, in der ein tatsächlich
+/// zu enges Limit am ehesten dokumentiert (und damit vermeidbar) wäre.
+const OPENAI_COMPATIBLE_NON_OPENAI_ENDPOINT_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS: u32 = 16_384;
+
+/// Unbekannter Modellname AN DER OFFIZIELLEN OpenAI-API (kein Muster unten
+/// passt) — bewusst eine EIGENE, von
+/// [`OPENAI_COMPATIBLE_NON_OPENAI_ENDPOINT_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS`]
+/// getrennte Konstante seit Spec 0080 (s. deren Doc-Kommentar): vor Spec
+/// 0080 teilten sich beide Fälle denselben Wert (4096), Spec 0080 §8 hebt
+/// aber ausdrücklich nur den Nicht-OpenAI-Fall an.
+const OPENAI_COMPATIBLE_OFFICIAL_API_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS: u32 = 4_096;
 
 /// Modellabhängiges Output-Maximum (Spec 0065, Teil 1) — nur für die
 /// offizielle OpenAI-API angewendet (erkannt an `base_url`), da `model` bei
@@ -68,7 +86,7 @@ const OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS: u32 = 16_384;
 /// den konservativen Wert zurück.
 fn openai_compatible_model_max_output_tokens(base_url: &str, model: &str) -> u32 {
     if !base_url.contains("api.openai.com") {
-        return OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS;
+        return OPENAI_COMPATIBLE_NON_OPENAI_ENDPOINT_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS;
     }
     let model = model.to_lowercase();
     if model.contains("gpt-3.5") {
@@ -92,7 +110,7 @@ fn openai_compatible_model_max_output_tokens(base_url: &str, model: &str) -> u32
         // eingeordnet statt in den generellen Unbekannt-Fallback.
         128_000
     } else {
-        OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS
+        OPENAI_COMPATIBLE_OFFICIAL_API_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS
     }
 }
 
@@ -577,10 +595,24 @@ impl AiProvider for OpenAiCompatibleProvider {
                             return Some((AiEvent::Error(AiError::ResponseTruncated), state));
                         }
                         state.retried = true;
-                        state.max_tokens = state
+                        let doubled_and_capped = state
                             .max_tokens
                             .saturating_mul(2)
                             .min(state.model_max_tokens);
+                        // Spec-reviewer-Fund (ERHÖHT, Spec 0080, Review
+                        // dieses Schritts): `max_tokens_override` (Spec
+                        // 0065, Teil 4) hat Vorrang vor dem
+                        // modellabhängigen Default und wird bei der
+                        // ANFANGS-Anfrage bewusst NICHT an `model_max_
+                        // tokens` gedeckelt — ohne dieses `.max(...)` hätte
+                        // der Deckel hier einen über `model_max_tokens`
+                        // liegenden Override auf dem Retry STILL HALBIERT
+                        // statt verdoppelt (`min(verdoppelt, kleineres
+                        // Modell-Maximum)` kann unter den Ausgangswert
+                        // fallen). Der Retry wird für diesen Fall
+                        // wirkungslos (derselbe Wert nochmal), statt die
+                        // explizite Nutzereinstellung zu unterlaufen.
+                        state.max_tokens = doubled_and_capped.max(state.max_tokens);
                         state.body[state.max_tokens_field] = json!(state.max_tokens);
                         state.inner = None;
                     }
@@ -1157,13 +1189,39 @@ mod tests {
         );
     }
 
-    // T8 (Spec 0080, Wächter — "`length`, kein Text, aber ein halber
-    // Tool-Call → bestehender Tool-Call-Pfad, Call wird nicht
-    // weitergegeben") ist bereits durch
-    // `test_truncated_but_parseable_tool_call_is_never_forwarded_and_triggers_retry`
-    // unten abgedeckt: `self.tool_calls` ist dort nicht leer, A1s neue
-    // Prüfung (die explizit `self.tool_calls.is_empty()` verlangt) wird
-    // also gar nicht erreicht — kein eigener Test nötig.
+    /// T8 (Spec 0080, Wächter): `length`, kein Text, aber ein SYNTAKTISCH
+    /// UNVOLLSTÄNDIGES Tool-Call-Argument (kein valides JSON, anders als
+    /// `test_truncated_but_parseable_tool_call_is_never_forwarded_and_
+    /// triggers_retry` unten, deren Argument-JSON zufällig bereits
+    /// vollständig ist) — bestehender Tool-Call-Pfad greift trotzdem
+    /// zuerst, A1s neue Prüfung (die explizit `self.tool_calls.is_empty()`
+    /// verlangt) wird gar nicht erreicht. Spec-reviewer-Fund (ERHÖHT,
+    /// Review dieses Schritts): ohne diesen Test hatte T8 keinen echten
+    /// Wächter für den "halben" (nicht bloß den vollständigen) Fall.
+    #[tokio::test]
+    async fn test_length_with_no_text_and_a_syntactically_incomplete_tool_call_triggers_retry_not_forward(
+    ) {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"suggest_command","arguments":"{\"command\": \"rm -rf /var/log/ap"}}]}}]}"#,
+                ),
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
+                frame("[DONE]"),
+            ]),
+        );
+
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
+                .collect()
+                .await;
+
+        assert_eq!(
+            events,
+            vec![RawEvent::RetryWithHigherMaxTokens],
+            "ein syntaktisch unvollständiger Tool-Call darf bei length nie geparst/freigegeben werden"
+        );
+    }
 
     /// T9 (Spec 0080, Wächter): Fallback-Modus, ein gültig aussehender
     /// Aktionsblock steckt in einem Denk-Delta (`reasoning_content`), der
@@ -1388,7 +1446,7 @@ mod tests {
 
         assert_eq!(
             body["max_tokens"],
-            OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS / 2
+            OPENAI_COMPATIBLE_NON_OPENAI_ENDPOINT_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS / 2
         );
     }
 
@@ -1482,13 +1540,22 @@ mod tests {
     /// Modellname auf der offiziellen OpenAI-API muss auf den konservativen
     /// Fallback fallen, NICHT auf den größten bekannten Wert (128K) — vorher
     /// war die Fallback-Richtung invertiert.
+    ///
+    /// Spec-reviewer-Fund (Spec 0080, Review dieses Schritts): dieser Fall
+    /// bleibt bei 4096 — die Anhebung aus Spec 0080 §8/P1(b) gilt wörtlich
+    /// nur für Endpunkte AUSSER der offiziellen OpenAI-API, s.
+    /// `OPENAI_COMPATIBLE_OFFICIAL_API_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS`.
     #[test]
     fn test_unknown_model_on_official_openai_falls_back_conservatively_not_to_the_largest_value() {
         let max = openai_compatible_model_max_output_tokens(
             "https://api.openai.com/v1",
             "some-future-unlisted-model",
         );
-        assert_eq!(max, OPENAI_COMPATIBLE_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS);
+        assert_eq!(
+            max,
+            OPENAI_COMPATIBLE_OFFICIAL_API_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS
+        );
+        assert_eq!(max, 4_096);
     }
 
     /// Spec-reviewer-Fund (ERHÖHT, Review dieses Schritts): der Default
