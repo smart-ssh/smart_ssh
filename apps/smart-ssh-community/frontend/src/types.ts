@@ -10,7 +10,7 @@ export type ProviderType =
   | "generic_openai_compatible"
   | "ollama";
 
-export type AuthMethodKind = "password" | "private_key" | "agent" | "certificate";
+export type AuthMethodKind = "password" | "private_key" | "agent" | "certificate" | "identity_file";
 
 /** Spec 0039, Abschnitt 5.1 — steuert NICHT das Fencing selbst (in jeder
  * Stufe aktiv), nur ob/wann zusätzlich auf Bestätigung eskaliert wird,
@@ -26,6 +26,10 @@ export interface ServerDto {
   groupId: string | null;
   tags: string[];
   authKind: AuthMethodKind;
+  /** Spec 0076, B-4: **wo** die Schlüsseldatei liegt — `null` bei jeder
+   * anderen Anmeldeart. Kein Geheimnis, deshalb Teil dieses DTOs (s.
+   * `crate::dto::ServerDto::identity_file_path`-Doc-Kommentar). */
+  identityFilePath: string | null;
   jumpHost: string | null;
   notes: string;
   /** Spec 0018, Abschnitt 4: ob ein Sudo-Passwort im Schlüsselbund
@@ -454,7 +458,13 @@ export type AuthMethodInput =
   | { kind: "password"; value: string | null }
   | { kind: "privateKey"; keyContent: string | null; passphrase: string | null }
   | { kind: "agent" }
-  | { kind: "certificate"; certContent: string | null; keyContent: string | null };
+  | { kind: "certificate"; certContent: string | null; keyContent: string | null }
+  /** Spec 0076, A-1/B-2 — anders als bei den übrigen Varianten ist `path`
+   * kein Secret und nicht optional (s. `crate::dto::AuthMethodInput::
+   * IdentityFile`-Doc-Kommentar: „leer = unverändert" gilt für
+   * Schlüsselbund-Slots, nicht für dieses Klartextfeld). `passphrase`
+   * verhält sich dagegen wie bei `privateKey` (A-5). */
+  | { kind: "identityFile"; path: string; passphrase: string | null };
 
 export type NoteEditorDto =
   | { kind: "user" }
@@ -776,4 +786,28 @@ export interface KeychainStatusDto {
   available: boolean;
   /** `null`, wenn `available`. */
   reason: KeychainUnavailableReason | null;
+}
+
+// --- Spec 0076: Anmeldung mit einer Schlüsseldatei -----------------------
+
+/** Der Grund aus `KeyFileFactsDto.problem` (`crate::dto::
+ * KeyFileProblemDto`) — `code` ist ein stabiler Bezeichner (Spec 0024,
+ * Abschnitt 5, s. `errorCodes.ts`), `message` der deutsche Fallback-Text,
+ * falls `code` einmal nicht bekannt ist. Trägt nie Dateiinhalt (§5.2). */
+export interface KeyFileProblemDto {
+  code: string;
+  message: string;
+}
+
+/** Von `crate::dto::KeyFileFactsDto` (Spec 0076, B-3/C-7) — der
+ * Vorab-Befund über eine Schlüsseldatei, ohne je den Schlüssel selbst
+ * herauszugeben (§4.2, §5.2). */
+export interface KeyFileFactsDto {
+  exists: boolean;
+  /** Nur Unix; auf Windows immer `false` (A-4). */
+  permissionsTooOpen: boolean;
+  validKey: boolean;
+  encrypted: boolean;
+  /** `null`, wenn die Datei grundsätzlich in Frage kommt. */
+  problem: KeyFileProblemDto | null;
 }

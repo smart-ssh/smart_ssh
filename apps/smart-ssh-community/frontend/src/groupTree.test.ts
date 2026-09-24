@@ -24,6 +24,7 @@ function server(
     groupId,
     tags: [],
     authKind: "agent",
+    identityFilePath: null,
     jumpHost: null,
     notes: "",
     hasSudoPassword: false,

@@ -100,6 +100,24 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "SERVER_CERTIFICATE_REQUIRED",
   "SERVER_CERTIFICATE_KEY_REQUIRED",
   "SERVER_JUMP_HOST_LOCAL",
+  // Spec 0076 (BL-0221/BL-0222): `KeyFileError` (crates/core/src/ssh/
+  // auth.rs) — Vorab-Befund (B-3), Überführungsknopf (C-7) und
+  // Überführung selbst (C-1) können jeden dieser Codes zurückgeben.
+  "KEY_FILE_NOT_FOUND",
+  "KEY_FILE_NOT_READABLE",
+  "KEY_FILE_PERMISSIONS_TOO_OPEN",
+  "KEY_FILE_TOO_LARGE",
+  "KEY_FILE_NOT_A_REGULAR_FILE",
+  "KEY_FILE_PATH_NOT_ABSOLUTE",
+  "KEY_FILE_INVALID_KEY",
+  // Spec 0076, A-1: leerer Pfad beim Speichern.
+  "SERVER_IDENTITY_FILE_REQUIRED",
+  // Spec 0076, C-1: `convert_identity_file_to_keychain` auf einem Server,
+  // der sich nicht mit einer Schlüsseldatei anmeldet.
+  "SERVER_NOT_AN_IDENTITY_FILE",
+  // Spec 0076, C-6 (ADR 0065 §12): der Rollback der Überführung konnte den
+  // Schlüsselbund nicht zurücksetzen — ein Eintrag ist liegen geblieben.
+  "IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND",
   // Unabhängiger Review-Pass, Spec 0031: Code existiert seit dem
   // First-Run-Notice-Gate in error.rs (code_tests), war aber nie hier
   // eingetragen — ohne diesen Eintrag sah selbst ein Nutzer mit englischer

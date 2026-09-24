@@ -4,9 +4,11 @@ import {
   clearServerSudoPassword,
   commandErrorCode,
   commandErrorMessage,
+  convertIdentityFileToKeychain,
   createServer,
   deleteServer,
   getServer,
+  inspectKeyFile,
   largeNoteDialogThresholdBytes,
   previewEffectiveNotes,
   requestNoteShrink,
@@ -18,7 +20,7 @@ import {
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
 import { onNoteShrinkSucceeded } from "../events";
-import { pickAndReadTextFile } from "../fileDialog";
+import { pickAndReadTextFile, pickFilePath } from "../fileDialog";
 import { loadRiskClassifierSettings } from "../riskSettings";
 import type {
   AuthMethodInput,
@@ -26,6 +28,7 @@ import type {
   DeleteServerResult,
   GroupDto,
   HostKeyInfo,
+  KeyFileFactsDto,
   PostIngestPolicy,
   ServerDto,
   ServerInput,
@@ -52,13 +55,17 @@ interface ServerFormProps {
 /** `t` wird als Parameter durchgereicht statt selbst `useTranslation()`
  * aufzurufen — diese Funktion läuft außerhalb einer Komponente, Hooks sind
  * hier nicht erlaubt. */
-function authKindLabels(t: (key: string) => string): Record<AuthMethodKind | "privateKey", string> {
+function authKindLabels(
+  t: (key: string) => string,
+): Record<AuthMethodKind | "privateKey" | "identityFile", string> {
   return {
     password: t("serverForm.authKind.password"),
     private_key: t("serverForm.authKind.privateKey"),
     privateKey: t("serverForm.authKind.privateKey"),
     agent: t("serverForm.authKind.agent"),
     certificate: t("serverForm.authKind.certificate"),
+    identity_file: t("serverForm.authKind.identityFile"),
+    identityFile: t("serverForm.authKind.identityFile"),
   };
 }
 
@@ -70,7 +77,8 @@ type AuthFormState =
   | { kind: "password"; value: string }
   | { kind: "privateKey"; keyContent: string; passphrase: string }
   | { kind: "agent" }
-  | { kind: "certificate"; certContent: string; keyContent: string };
+  | { kind: "certificate"; certContent: string; keyContent: string }
+  | { kind: "identityFile"; path: string; passphrase: string };
 
 function authStateFromKind(kind: AuthFormState["kind"]): AuthFormState {
   switch (kind) {
@@ -82,6 +90,8 @@ function authStateFromKind(kind: AuthFormState["kind"]): AuthFormState {
       return { kind: "agent" };
     case "certificate":
       return { kind: "certificate", certContent: "", keyContent: "" };
+    case "identityFile":
+      return { kind: "identityFile", path: "", passphrase: "" };
   }
 }
 
@@ -110,7 +120,64 @@ function toAuthMethodInput(state: AuthFormState, isCreate: boolean): AuthMethodI
         certContent: orNullIfUpdate(state.certContent),
         keyContent: orNullIfUpdate(state.keyContent),
       };
+    case "identityFile":
+      // Spec 0076, A-1: der Pfad ist kein Secret und immer voll gesendet —
+      // "leer = unverändert" gilt hier nicht, anders als bei `keyContent`
+      // oben (ADR 0065 §5 begründet, warum der Pfad selbst nicht getrimmt
+      // wird; die Leer-Prüfung übernimmt das Backend, SERVER_IDENTITY_
+      // FILE_REQUIRED).
+      return {
+        kind: "identityFile",
+        path: state.path,
+        passphrase: state.passphrase === "" ? null : state.passphrase,
+      };
   }
+}
+
+/** Spec 0076, B-3: zeigt den Vorab-Befund über eine Schlüsseldatei —
+ * existiert sie, passen die Rechte, sieht sie wie ein OpenSSH-Schlüssel
+ * aus, ist sie verschlüsselt. Ein Fehlbefund (`facts.problem`) hindert das
+ * Speichern nicht, er wird nur angezeigt (B-3, letzter Satz). Eigene
+ * Komponente statt Inline-JSX, damit `ServerForm` nicht noch länger wird —
+ * reiner Anzeige-Baustein ohne eigenen Zustand. */
+function IdentityFileFacts({
+  loading,
+  facts,
+  emptyPath,
+}: {
+  loading: boolean;
+  facts: KeyFileFactsDto | null;
+  emptyPath: boolean;
+}) {
+  const { t } = useTranslation();
+  if (emptyPath) return null;
+  if (facts === null) {
+    return loading ? (
+      <p className="mt-1 text-xs text-slate-500">{t("serverForm.identityFile.checking")}</p>
+    ) : null;
+  }
+  if (facts.problem) {
+    return (
+      <p className="mt-1 text-xs text-amber-400">
+        {translateErrorCode(t, facts.problem.code, facts.problem.message)}
+      </p>
+    );
+  }
+  return (
+    <ul className="mt-1 space-y-0.5 text-xs">
+      <li className="text-emerald-400">{t("serverForm.identityFile.looksValid")}</li>
+      {facts.permissionsTooOpen ? (
+        <li className="text-amber-400">{t("serverForm.identityFile.permissionsTooOpen")}</li>
+      ) : (
+        <li className="text-slate-500">{t("serverForm.identityFile.permissionsOk")}</li>
+      )}
+      <li className="text-slate-500">
+        {facts.encrypted
+          ? t("serverForm.identityFile.encrypted")
+          : t("serverForm.identityFile.notEncrypted")}
+      </li>
+    </ul>
+  );
 }
 
 export function ServerForm({
@@ -188,6 +255,19 @@ export function ServerForm({
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
   const [auth, setAuth] = useState<AuthFormState>({ kind: "password", value: "" });
+  // Spec 0076, B-3: der Vorab-Befund über die im Formular gerade
+  // eingetragene Schlüsseldatei — `null`, solange kein Pfad gesetzt ist
+  // oder noch keine Antwort da ist. Ein Fehlbefund hindert das Speichern
+  // nicht (B-3), er wird nur angezeigt.
+  const [identityFacts, setIdentityFacts] = useState<KeyFileFactsDto | null>(null);
+  const [identityFactsLoading, setIdentityFactsLoading] = useState(false);
+  // Spec 0076, C-7: unabhängig vom obigen Entwurfszustand — bezieht sich
+  // auf den tatsächlich GESPEICHERTEN Pfad (`loaded.identityFilePath`) und
+  // entscheidet, ob der Überführen-Knopf wählbar ist.
+  const [convertFacts, setConvertFacts] = useState<KeyFileFactsDto | null>(null);
+  const [convertConfirmOpen, setConvertConfirmOpen] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
   // Spec 0018, Abschnitt 4: leer = unverändert (bei Update), separater
   // "Entfernen"-Weg für einen bereits gesetzten Wert (s. `handleClearSudoPassword`).
   const [sudoPassword, setSudoPassword] = useState("");
@@ -263,7 +343,16 @@ export function ServerForm({
         setGroupId(server.groupId);
         setJumpHost(server.jumpHost);
         setTags(server.tags);
-        setAuth(authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind));
+        // Spec 0076, B-4: der Pfad kommt vorbefüllt aus dem DTO — anders
+        // als bei den übrigen Anmeldearten reicht `authStateFromKind`
+        // allein nicht, das leere Formularfeld bräuchte sonst erst einen
+        // manuellen Klick auf "Datei wählen", obwohl der Server längst
+        // einen Pfad hat.
+        setAuth(
+          server.authKind === "identity_file"
+            ? { kind: "identityFile", path: server.identityFilePath ?? "", passphrase: "" }
+            : authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind),
+        );
         setSudoPassword("");
         setHasSudoPassword(server.hasSudoPassword);
         setSudoPasswordUnknown(server.sudoPasswordUnknown);
@@ -277,6 +366,60 @@ export function ServerForm({
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(loadServer, [serverId, defaultGroupId]);
+
+  // Spec 0076, B-3: fragt `inspect_key_file` für den Pfad an, der gerade im
+  // Formular steht — entkoppelt, gedämpft (400 ms), damit nicht jeder
+  // Tastenanschlag einen eigenen Aufruf auslöst. Läuft nur, solange die
+  // Anmeldeart "Schlüsseldatei" ist; ein leerer Pfad ruft gar nicht erst an
+  // (die Datei darf erst später entstehen, B-3).
+  const identityPath = auth.kind === "identityFile" ? auth.path : "";
+  useEffect(() => {
+    if (auth.kind !== "identityFile" || identityPath.trim() === "") {
+      setIdentityFacts(null);
+      setIdentityFactsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setIdentityFactsLoading(true);
+    const timer = setTimeout(() => {
+      inspectKeyFile(identityPath)
+        .then((facts) => {
+          if (!cancelled) setIdentityFacts(facts);
+        })
+        .catch(() => {
+          if (!cancelled) setIdentityFacts(null);
+        })
+        .finally(() => {
+          if (!cancelled) setIdentityFactsLoading(false);
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.kind, identityPath]);
+
+  // Spec 0076, C-7: derselbe Befund für den GESPEICHERTEN Pfad — unabhängig
+  // davon, was der Nutzer gerade im Formular entwirft (der Knopf wirkt auf
+  // den Server in der Datenbank, nicht auf den Entwurf).
+  useEffect(() => {
+    if (!loaded || loaded.authKind !== "identity_file" || !loaded.identityFilePath) {
+      setConvertFacts(null);
+      return;
+    }
+    let cancelled = false;
+    inspectKeyFile(loaded.identityFilePath)
+      .then((facts) => {
+        if (!cancelled) setConvertFacts(facts);
+      })
+      .catch(() => {
+        if (!cancelled) setConvertFacts(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loaded]);
 
   // spec-reviewer-Fund (Spec 0058, Review des Politur-Pakets): der neue
   // "Jetzt zusammenfassen"-Link (unten) kann eine Zustimmung auslösen,
@@ -365,6 +508,27 @@ export function ServerForm({
       );
     } finally {
       setClearingSudoPassword(false);
+    }
+  };
+
+  // Spec 0076, C-1/C-3 (BL-0222): der eigentliche Übernahme-Aufruf, erst
+  // nach dem Bestätigungsdialog aus C-2. Bei Erfolg wird der Server neu
+  // geladen (die Anmeldeart hat sich geändert, `loadServer` zeigt jetzt
+  // "Private Key" statt "Schlüsseldatei") und `onSaved` informiert den
+  // Aufrufer wie nach jedem anderen Speichern.
+  const handleConvertToKeychain = async () => {
+    if (!serverId) return;
+    setConverting(true);
+    setConvertError(null);
+    try {
+      await convertIdentityFileToKeychain(serverId);
+      setConvertConfirmOpen(false);
+      loadServer();
+      onSaved();
+    } catch (err) {
+      setConvertError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+    } finally {
+      setConverting(false);
     }
   };
 
@@ -715,6 +879,7 @@ export function ServerForm({
             <option value="privateKey">{AUTH_KIND_LABELS.privateKey}</option>
             <option value="agent">{AUTH_KIND_LABELS.agent}</option>
             <option value="certificate">{AUTH_KIND_LABELS.certificate}</option>
+            <option value="identityFile">{AUTH_KIND_LABELS.identityFile}</option>
           </select>
 
           {auth.kind === "password" && (
@@ -837,7 +1002,119 @@ export function ServerForm({
               </div>
             </div>
           )}
+
+          {auth.kind === "identityFile" && (
+            <div className="space-y-2">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-300">{t("serverForm.identityFilePathLabel")}</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const path = await pickFilePath(t("serverForm.chooseIdentityFileDialogTitle"));
+                      if (path !== null) setAuth({ ...auth, path });
+                    }}
+                    className="rounded bg-slate-700 px-2 py-0.5 text-xs hover:bg-slate-600"
+                  >
+                    {t("serverForm.chooseFile")}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={auth.path}
+                  onChange={(e) => setAuth({ ...auth, path: e.target.value })}
+                  placeholder={t("serverForm.identityFilePathPlaceholder")}
+                  className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-100"
+                />
+                {/* Spec 0076, B-3: Vorab-Befund — hindert das Speichern
+                 * nicht, die Datei darf erst später entstehen. */}
+                <IdentityFileFacts
+                  loading={identityFactsLoading}
+                  facts={identityFacts}
+                  emptyPath={auth.path.trim() === ""}
+                />
+              </div>
+              <label className="block text-sm text-slate-300">
+                {t("serverForm.passphraseOptional")}
+                <input
+                  type="password"
+                  value={auth.passphrase}
+                  onChange={(e) => setAuth({ ...auth, passphrase: e.target.value })}
+                  className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+                />
+              </label>
+            </div>
+          )}
         </fieldset>
+
+        {/* Spec 0076, C-1/C-2/C-7 (BL-0222): nur für einen bereits
+         * gespeicherten Server, dessen Anmeldeart tatsächlich (nicht nur im
+         * Entwurf) eine Schlüsseldatei ist — der Knopf wirkt auf den
+         * gespeicherten Server, nicht auf den gerade offenen Entwurf. */}
+        {!isCreate && loaded && loaded.authKind === "identity_file" && (
+          <fieldset className="rounded border border-slate-700 p-3">
+            <legend className="px-1 text-sm text-slate-300">
+              {t("serverForm.convertToKeychain.legend")}
+            </legend>
+            <p className="mb-2 text-xs text-slate-500">{t("serverForm.convertToKeychain.hint")}</p>
+            {!convertConfirmOpen && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setConvertConfirmOpen(true)}
+                  disabled={!convertFacts?.validKey}
+                  className="rounded bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700 disabled:opacity-50"
+                >
+                  {t("serverForm.convertToKeychain.button")}
+                </button>
+                {!convertFacts?.validKey && (
+                  <p className="mt-2 text-xs text-amber-400">
+                    {convertFacts
+                      ? translateErrorCode(
+                          t,
+                          convertFacts.problem?.code,
+                          convertFacts.problem?.message ?? t("serverForm.convertToKeychain.checking"),
+                        )
+                      : t("serverForm.convertToKeychain.checking")}
+                  </p>
+                )}
+              </>
+            )}
+            {convertConfirmOpen && (
+              <div className="rounded border border-slate-600 bg-slate-950 p-3 text-sm">
+                <p className="mb-2 text-slate-200">{t("serverForm.convertToKeychain.confirmWhatChanges")}</p>
+                <p className="mb-2 text-slate-400">{t("serverForm.convertToKeychain.confirmWhatStays")}</p>
+                <p className="mb-3 font-mono text-xs break-all text-slate-300">
+                  {loaded.identityFilePath}
+                </p>
+                {convertError && <p className="mb-2 text-xs text-red-400">{convertError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConvertConfirmOpen(false);
+                      setConvertError(null);
+                    }}
+                    className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConvertToKeychain}
+                    disabled={converting}
+                    className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-500 disabled:opacity-50"
+                  >
+                    {converting
+                      ? t("serverForm.convertToKeychain.converting")
+                      : t("serverForm.convertToKeychain.confirm")}
+                  </button>
+                </div>
+              </div>
+            )}
+          </fieldset>
+        )}
 
         <fieldset className="rounded border border-slate-700 p-3">
           <legend className="px-1 text-sm text-slate-300">{t("serverForm.sudoFieldset")}</legend>
@@ -1036,10 +1313,27 @@ export function ServerForm({
                   <p className="mb-2 text-red-200">{t("serverForm.deleteNoKeychainImpact")}</p>
                 ) : (
                   <ul className="mb-2 space-y-1 text-red-200">
-                    {deletePreview.server.authKind !== "agent" && (
+                    {/* Spec 0076: `identity_file` hat keinen Secret-Inhalt
+                     * im Schlüsselbund, der zwingend existiert — anders als
+                     * bei den übrigen Anmeldearten steht dort höchstens
+                     * eine OPTIONALE Passphrase, und das DTO sagt nicht,
+                     * ob sie gesetzt ist. "Wird gelöscht" wäre hier eine
+                     * Behauptung, die die Oberfläche nicht belegen kann;
+                     * die eigene "mag gelöscht werden"-Zeile unten (wie bei
+                     * `sudoPasswordUnknown`) bleibt deshalb der einzige
+                     * Hinweis für diese Anmeldeart. */}
+                    {deletePreview.server.authKind !== "agent" &&
+                      deletePreview.server.authKind !== "identity_file" && (
+                        <li>
+                          {t("serverForm.secretWillBeDeleted", {
+                            label: authKindLabels(t)[deletePreview.server.authKind],
+                          })}
+                        </li>
+                      )}
+                    {deletePreview.server.authKind === "identity_file" && (
                       <li>
-                        {t("serverForm.secretWillBeDeleted", {
-                          label: authKindLabels(t)[deletePreview.server.authKind],
+                        {t("serverForm.secretMayBeDeleted", {
+                          label: t("serverForm.identityFilePassphraseLabel"),
                         })}
                       </li>
                     )}

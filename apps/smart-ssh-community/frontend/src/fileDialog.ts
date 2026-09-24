@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 
 /**
  * Ruft den Backend-Command `read_credential_file` (Spec 0013, SEC-06) auf,
@@ -16,4 +17,20 @@ import { invoke } from "@tauri-apps/api/core";
  */
 export async function pickAndReadTextFile(title: string): Promise<string | null> {
   return invoke<string | null>("read_credential_file", { title });
+}
+
+/**
+ * Spec 0076, B-2: der Dateidialog für den Pfad einer Schlüsseldatei —
+ * anders als [`pickAndReadTextFile`] geht es hier **um den Pfad selbst**,
+ * nicht um Dateiinhalt (`AuthMethod::IdentityFile { path }` speichert den
+ * Pfad, wie der Nutzer ihn angibt, s. Spec 0076 A-1/§4.4). Der Aufruf bleibt
+ * deshalb im Webview, wie bei anderen reinen Pfad-Auswahlen dieser App
+ * (`FileTypeSettings.tsx`, `FileBrowserPanel.tsx`) — kein Backend-Umweg
+ * nötig, weil hier nie Dateiinhalt zurückkommt, an dem sich die
+ * `read_credential_file`-Begründung (Pfad bleibt beim Backend) festmachen
+ * würde. `null`, falls der Dialog abgebrochen wurde.
+ */
+export async function pickFilePath(title: string): Promise<string | null> {
+  const picked = await open({ title, multiple: false, directory: false });
+  return typeof picked === "string" ? picked : null;
 }

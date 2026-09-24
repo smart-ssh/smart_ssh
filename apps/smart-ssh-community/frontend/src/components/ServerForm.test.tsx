@@ -16,9 +16,16 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clearServerSudoPassword, deleteServer, getServer } from "../api";
+import {
+  clearServerSudoPassword,
+  convertIdentityFileToKeychain,
+  deleteServer,
+  getServer,
+  inspectKeyFile,
+} from "../api";
+import { pickFilePath } from "../fileDialog";
 import { testI18n } from "../testI18n";
-import type { ServerDto } from "../types";
+import type { KeyFileFactsDto, ServerDto } from "../types";
 import { ServerForm } from "./ServerForm";
 
 vi.mock("../api", () => ({
@@ -35,9 +42,11 @@ vi.mock("../api", () => ({
       ? ((err as { code: string | null }).code ?? null)
       : null,
   clearServerSudoPassword: vi.fn(),
+  convertIdentityFileToKeychain: vi.fn(),
   createServer: vi.fn(),
   deleteServer: vi.fn(),
   getServer: vi.fn(),
+  inspectKeyFile: vi.fn(),
   largeNoteDialogThresholdBytes: vi.fn(() => Promise.resolve(100000)),
   previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
   requestNoteShrink: vi.fn(),
@@ -54,6 +63,7 @@ vi.mock("../events", () => ({
 
 vi.mock("../fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
+  pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
 
 vi.mock("../riskSettings", () => ({
@@ -72,6 +82,7 @@ function serverDto(overrides: Partial<ServerDto> = {}): ServerDto {
     groupId: null,
     tags: [],
     authKind: "agent",
+    identityFilePath: null,
     jumpHost: null,
     notes: "",
     hasSudoPassword: false,
@@ -268,5 +279,148 @@ describe("ServerForm — Sudo-Passwort entfernen schlägt fehl (Spec 0071, A17)"
     // Und die Maske darf nicht auf "kein Sudo-Passwort hinterlegt"
     // umschalten, obwohl nichts entfernt wurde.
     expect(screen.getByText("(leer = unverändert, aktuell hinterlegt)")).toBeInTheDocument();
+  });
+});
+
+function validKeyFacts(overrides: Partial<KeyFileFactsDto> = {}): KeyFileFactsDto {
+  return {
+    exists: true,
+    permissionsTooOpen: false,
+    validKey: true,
+    encrypted: false,
+    problem: null,
+    ...overrides,
+  };
+}
+
+const IDENTITY_PATH = "/home/deploy/.ssh/id_ed25519";
+
+describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () => {
+  it("ist im Dropdown wählbar und zeigt danach Pfadfeld + Dateidialog-Knopf (B-1, B-2)", () => {
+    renderNewServerForm();
+
+    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+
+    expect(screen.getByPlaceholderText("~/.ssh/id_ed25519")).toBeInTheDocument();
+    expect(screen.getByText("Datei wählen…")).toBeInTheDocument();
+  });
+
+  it("übernimmt den vom Dateidialog gewählten Pfad ins Textfeld (B-2)", async () => {
+    vi.mocked(pickFilePath).mockResolvedValue(IDENTITY_PATH);
+    renderNewServerForm();
+    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+
+    fireEvent.click(screen.getByText("Datei wählen…"));
+
+    expect(await screen.findByDisplayValue(IDENTITY_PATH)).toBeInTheDocument();
+  });
+
+  // Regressionstest mit Gegenbeweis: mit der Bedingung `auth.kind !==
+  // "identityFile"` durch `true` ersetzt (Effekt ruft `inspectKeyFile` nie
+  // auf) schlägt dieser Test fehl — verifiziert, danach wiederhergestellt.
+  it("fragt nach einer Pause den Vorab-Befund ab und zeigt die übersetzte Meldung (B-3)", async () => {
+    vi.mocked(inspectKeyFile).mockResolvedValue({
+      exists: false,
+      permissionsTooOpen: false,
+      validKey: false,
+      encrypted: false,
+      problem: { code: "KEY_FILE_NOT_FOUND", message: "Datei nicht gefunden: /tmp/nope" },
+    });
+    renderNewServerForm();
+    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
+      target: { value: "/tmp/nope" },
+    });
+
+    await waitFor(() => expect(inspectKeyFile).toHaveBeenCalledWith("/tmp/nope"), {
+      timeout: 2000,
+    });
+    // Der übersetzte, generische Text — NICHT der deutsche Backend-Fallback
+    // mit dem konkreten Pfad — belegt, dass der Code (nicht nur die
+    // Nachricht) durchgereicht wird (Spec 0024, Abschnitt 5).
+    expect(
+      await screen.findByText(
+        "Die Schlüsseldatei wurde unter dem angegebenen Pfad nicht gefunden.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  // Regressionstest mit Gegenbeweis: mit `setAuth(authStateFromKind(...))`
+  // statt der pfaderhaltenden Fallunterscheidung (dem Stand vor diesem
+  // Schritt) bleibt das Feld leer — verifiziert, danach wiederhergestellt.
+  it("befüllt beim Bearbeiten eines Schlüsseldatei-Servers den Pfad vor (B-4)", async () => {
+    vi.mocked(getServer).mockResolvedValue(
+      serverDto({ authKind: "identity_file", identityFilePath: IDENTITY_PATH }),
+    );
+    vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
+
+    renderForm();
+
+    expect(await screen.findByDisplayValue(IDENTITY_PATH)).toBeInTheDocument();
+  });
+});
+
+describe("ServerForm — Überführung in den Schlüsselbund (Spec 0076, C-1/C-2/C-7)", () => {
+  it("zeigt keinen Überführen-Knopf für andere Anmeldearten", async () => {
+    vi.mocked(getServer).mockResolvedValue(serverDto({ authKind: "agent" }));
+
+    renderForm();
+
+    await screen.findByText(/web-01/);
+    expect(
+      screen.queryByRole("button", { name: "In den Schlüsselbund übernehmen" }),
+    ).not.toBeInTheDocument();
+  });
+
+  // Regressionstest mit Gegenbeweis: mit `disabled={false}` statt
+  // `disabled={!convertFacts?.validKey}` bliebe der Knopf trotz
+  // ungültigem Schlüssel klickbar — verifiziert, danach wiederhergestellt.
+  it("Knopf bleibt gesperrt, solange der gespeicherte Pfad kein gültiger Schlüssel ist (C-7)", async () => {
+    vi.mocked(getServer).mockResolvedValue(
+      serverDto({ authKind: "identity_file", identityFilePath: IDENTITY_PATH }),
+    );
+    vi.mocked(inspectKeyFile).mockResolvedValue(
+      validKeyFacts({
+        validKey: false,
+        problem: { code: "KEY_FILE_INVALID_KEY", message: "kein gültiger Schlüssel" },
+      }),
+    );
+
+    renderForm();
+
+    const button = await screen.findByRole("button", {
+      name: "In den Schlüsselbund übernehmen",
+    });
+    await waitFor(() => expect(inspectKeyFile).toHaveBeenCalledWith(IDENTITY_PATH));
+    expect(button).toBeDisabled();
+  });
+
+  // Regressionstest mit Gegenbeweis: `onClick` von `handleConvertToKeychain`
+  // auf ein No-op geändert lässt `convertIdentityFileToKeychain` nie
+  // aufrufen — dieser Test schlägt dann fehl. Verifiziert, danach
+  // wiederhergestellt.
+  it("zeigt vor der Übernahme Pfad und Folgen, ruft dann convert_identity_file_to_keychain auf (C-1/C-2)", async () => {
+    vi.mocked(getServer).mockResolvedValue(
+      serverDto({ authKind: "identity_file", identityFilePath: IDENTITY_PATH }),
+    );
+    vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
+    vi.mocked(convertIdentityFileToKeychain).mockResolvedValue(
+      serverDto({ authKind: "private_key" }),
+    );
+
+    renderForm();
+    const button = await screen.findByRole("button", {
+      name: "In den Schlüsselbund übernehmen",
+    });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    fireEvent.click(button);
+
+    // C-2: der Dialog nennt den vollen Pfad, bevor irgendetwas passiert.
+    expect(await screen.findByText(IDENTITY_PATH)).toBeInTheDocument();
+    expect(convertIdentityFileToKeychain).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
+
+    await waitFor(() => expect(convertIdentityFileToKeychain).toHaveBeenCalledWith(SERVER_ID));
   });
 });

@@ -20,6 +20,7 @@ import type {
   GroupDto,
   HostKeyUserDecision,
   KeychainStatusDto,
+  KeyFileFactsDto,
   LocalFilePreviewDto,
   McpServerSettingsDto,
   NoteRevisionDto,
@@ -264,6 +265,16 @@ export const testConnection = (input: ServerInput, existingServerId?: string) =>
 
 export const trustHostKey = (host: string, port: number, rawKey: number[]) =>
   invoke<void>("trust_host_key", { host, port, rawKey });
+
+/** Spec 0076, B-3/C-7: Vorab-Befund über eine Schlüsseldatei — liest sie,
+ * gibt aber nie den Schlüssel selbst heraus (§4.2). */
+export const inspectKeyFile = (path: string) =>
+  invoke<KeyFileFactsDto>("inspect_key_file", { path });
+
+/** Spec 0076, C-1/C-3 (BL-0222): „In den Schlüsselbund übernehmen" — setzt
+ * voraus, dass der Nutzer den Dialog aus C-2 bereits gesehen hat. */
+export const convertIdentityFileToKeychain = (id: string) =>
+  invoke<ServerDto>("convert_identity_file_to_keychain", { id });
 
 export const updateGroupNotes = (id: string, content: string) =>
   invoke<void>("update_group_notes", { id, content });

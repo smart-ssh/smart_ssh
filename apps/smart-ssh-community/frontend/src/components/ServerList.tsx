@@ -266,6 +266,14 @@ export function ServerList({
               ? `${server.username}@${server.host}`
               : `${server.username}@${server.host}:${server.port}`}
           </p>
+          {/* Spec 0076, B-4: erkennbar, dass die Anmeldung an einer Datei
+           * hängt, und wo sie liegt — `title` zeigt den vollen Pfad, falls
+           * er abgeschnitten wird. */}
+          {server.identityFilePath && (
+            <p className="truncate text-xs text-slate-500" title={server.identityFilePath}>
+              🔑 {server.identityFilePath}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {server.tags.map((tag) => (

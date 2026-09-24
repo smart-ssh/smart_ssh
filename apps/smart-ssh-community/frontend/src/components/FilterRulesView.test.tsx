@@ -29,6 +29,7 @@ function taggedServer(): ServerDto {
     groupId: null,
     tags: ["production"],
     authKind: "agent",
+    identityFilePath: null,
     jumpHost: null,
     notes: "",
     hasSudoPassword: false,
