@@ -781,7 +781,10 @@ impl From<&Pattern> for PatternType {
     }
 }
 
-fn pattern_from_parts(pattern_type: PatternType, pattern_value: String) -> Pattern {
+/// `pub(crate)`: Spec 0077, 3.1.5 — `rule_suggestions` baut damit dasselbe
+/// [`Pattern`] wie das Anlegen, um einen Vorschlag zu prüfen, statt die
+/// Zuordnung Typ → Variante ein zweites Mal nachzubilden.
+pub(crate) fn pattern_from_parts(pattern_type: PatternType, pattern_value: String) -> Pattern {
     match pattern_type {
         PatternType::Glob => Pattern::Glob(pattern_value),
         PatternType::Regex => Pattern::Regex(pattern_value),
@@ -842,6 +845,16 @@ pub struct RuleDto {
     pub action: RuleAction,
     pub scope: Scope,
     pub priority: i32,
+    /// Spec 0077, 3.2.3: Fehlertext, wenn sich das Muster dieser Regel
+    /// nicht übersetzen lässt — sonst `None`. Eine solche Regel kann bei
+    /// der Auswertung nicht greifen, soweit ihr Muster nicht übersetzt;
+    /// die Liste macht das sichtbar, statt sie wie eine wirksame Regel
+    /// anzuzeigen.
+    ///
+    /// Bewusst **kein** `skip_serializing_if`: Das Frontend soll das Feld
+    /// immer sehen (`null` statt fehlend), damit ein vergessenes Befüllen
+    /// nicht wie „Muster in Ordnung" aussieht.
+    pub pattern_error: Option<String>,
 }
 
 impl From<&StoredRule> for RuleDto {
@@ -853,6 +866,10 @@ impl From<&StoredRule> for RuleDto {
             action: rule.action.clone(),
             scope: rule.scope.clone(),
             priority: rule.priority,
+            // Spec 0077, 3.2.3: aus derselben Prüfung wie Schicht 1 —
+            // eine Regel, die heute nicht mehr gespeichert werden könnte,
+            // wird in der Liste als solche erkennbar.
+            pattern_error: rule.pattern.validate().err().map(|e| e.to_string()),
         }
     }
 }

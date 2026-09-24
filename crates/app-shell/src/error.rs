@@ -39,6 +39,38 @@ pub const KEYCHAIN_UNAVAILABLE: &str = "KEYCHAIN_UNAVAILABLE";
 /// Slot nennt. Die Übersetzung sollte ihn als Parameter führen.
 pub const IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND: &str = "IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND";
 
+/// Spec 0077, 3.1.3: Das Muster einer Filterregel lässt sich nicht
+/// übersetzen — die Regel wurde deshalb **nicht** gespeichert.
+pub const FILTER_RULE_PATTERN_INVALID: &str = "FILTER_RULE_PATTERN_INVALID";
+
+/// Spec 0077, 3.1.3: Wandelt einen [`RuleWriteError`] in einen
+/// [`CommandError`] und hängt für ein ungültiges Muster den Code
+/// [`FILTER_RULE_PATTERN_INVALID`] an.
+///
+/// **Warum eine ausdrückliche Funktion und kein `From`-Impl:** Der blanket
+/// `impl<E: Display> From<E> for CommandError` weiter unten deckt
+/// [`RuleWriteError`] bereits ab (er implementiert `Display` über
+/// `thiserror`); ein zweiter, spezifischerer `From`-Impl wäre eine von
+/// Rusts Kohärenzregeln verbotene überlappende Impl (E0119). Ein blosses
+/// `?` oder `.map_err(Into::into)` liefe deshalb **still** über den
+/// blanket-Impl und setzte `code: None` — der Code ginge verloren, ohne
+/// dass irgendwo etwas scheitert. Dasselbe Muster wie
+/// [`keychain_aware_credential_error`] und
+/// [`CommandError::feature_locked`].
+///
+/// Als `message` steht der Fehlertext der Bibliothek (mit der Stelle im
+/// Muster). Das Frontend ersetzt bei bekanntem Code zwar den Text, zeigt
+/// die `message` für diesen Code aber zusätzlich darunter an (3.1.4) —
+/// genau dafür wird sie hier mitgegeben.
+pub fn rule_write_error(err: crate::filter_rules::RuleWriteError) -> CommandError {
+    match err {
+        crate::filter_rules::RuleWriteError::InvalidPattern(pattern_err) => {
+            CommandError::with_code(pattern_err.to_string(), FILTER_RULE_PATTERN_INVALID)
+        }
+        crate::filter_rules::RuleWriteError::Store(store_err) => CommandError::from(store_err),
+    }
+}
+
 /// Spec 0071, A13/X2: Wandelt einen [`CredentialError`] in einen
 /// [`CommandError`] und hängt genau dann den Code
 /// [`KEYCHAIN_UNAVAILABLE`] an, wenn der Schlüsselbund bei diesem
@@ -179,6 +211,8 @@ mod code_tests {
             "KEY_FILE_NOT_A_REGULAR_FILE",
             "KEY_FILE_PATH_NOT_ABSOLUTE",
             "KEY_FILE_INVALID_KEY",
+            // Spec 0077, 3.1.3 (BL-0249).
+            super::FILTER_RULE_PATTERN_INVALID,
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();
@@ -188,6 +222,48 @@ mod code_tests {
             unique.len(),
             "doppelt vergebener CommandError-Code: {codes:?}"
         );
+    }
+
+    /// Spec 0077, T-6d: Die Umwandlung aus 3.1.3 hängt für ein ungültiges
+    /// Muster den stabilen Code an und reicht den Fehlertext der
+    /// Bibliothek als `message` durch.
+    ///
+    /// Scheitert, wenn jemand die ausdrückliche Umwandlung durch `?` oder
+    /// `.map_err(Into::into)` ersetzt: Dann liefe der Fehler über den
+    /// pauschalen `From<E: Display>`, und `code` wäre still `None`.
+    #[test]
+    fn test_spec_0077_t6d_invalid_pattern_keeps_its_code_and_library_message() {
+        let pattern_err =
+            ssh_manager_core::filter::Pattern::Regex("^systemctl stop (.*".to_string())
+                .validate()
+                .unwrap_err();
+        let expected_message = pattern_err.to_string();
+
+        let err = super::rule_write_error(crate::filter_rules::RuleWriteError::InvalidPattern(
+            pattern_err,
+        ));
+
+        assert_eq!(err.code, Some(super::FILTER_RULE_PATTERN_INVALID));
+        assert_eq!(err.message, expected_message);
+        assert!(
+            err.message.contains("unclosed group"),
+            "die Stelle im Muster gehört in die Meldung: {}",
+            err.message
+        );
+    }
+
+    /// Spec 0077, 3.1.3: Ein Speicher-Fehler wird umgewandelt wie bisher —
+    /// ohne Code. Belegt, dass die neue Umwandlung nicht pauschal den
+    /// Muster-Code an jeden Schreibfehler hängt.
+    #[test]
+    fn test_spec_0077_store_error_keeps_converting_without_a_code() {
+        let err = super::rule_write_error(crate::filter_rules::RuleWriteError::Store(
+            persistence_sqlite::PolicyStoreError::NotFound(ssh_manager_core::filter::RuleId(
+                "irgendeine-regel".to_string(),
+            )),
+        ));
+
+        assert_eq!(err.code, None);
     }
 }
 

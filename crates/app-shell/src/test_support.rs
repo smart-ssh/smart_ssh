@@ -437,3 +437,86 @@ pub fn session_with_transport(
         ai_request_paced_at: AsyncMutex::new(None),
     }
 }
+
+/// Aufzeichnung der `tracing`-Ereignisse dieses Testbinaries.
+///
+/// **Warum geteilt und nicht je Testmodul eigen** (Spec 0077, T-6c): Ein
+/// globaler `tracing`-Default lässt sich pro Prozess nur **einmal** setzen.
+/// Installierte jedes Testmodul seinen eigenen, gewänne nur das zuerst
+/// laufende; alle anderen Module schrieben danach in den thread-lokalen
+/// Puffer des fremden Subscribers und sähen ihre eigenen Zeilen nie — je
+/// nach Testreihenfolge mal so, mal so. Dieselbe Lehre steht in
+/// `ai_providers::test_support`. Deshalb: **ein** Subscriber für das ganze
+/// Binary, von `orchestration` und `filter_rules` gemeinsam genutzt.
+///
+/// **Warum global statt `with_default`**: `tracing-core` cacht das
+/// Callsite-Interesse prozessweit. Trifft ein Thread ohne Subscriber eine
+/// Log-Stelle zuerst, kann sie als „niemand interessiert" gecacht werden,
+/// und ein späteres `with_default` auf einem anderen Thread gewinnt dieses
+/// Wettrennen nicht zuverlässig zurück (beobachtet in `orchestration`:
+/// etwa jeder dritte Lauf verlor den Eintrag).
+///
+/// Kein Level-Filter: `orchestration` prüft INFO-Ereignisse, Spec 0077
+/// ERROR-Ereignisse. Gefiltert wird deshalb beim Lesen
+/// ([`recorded_error_lines`]), nicht beim Aufzeichnen.
+pub(crate) mod log_capture {
+    thread_local! {
+        /// Je Thread ein eigener Puffer — sicher unter paralleler
+        /// Testausführung, da jeder Test-Thread nur seine eigenen Zeilen
+        /// sieht.
+        static BUFFER: std::cell::RefCell<Vec<u8>> =
+            const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    #[derive(Clone, Default)]
+    pub(crate) struct ThreadLocalTestWriter;
+
+    impl std::io::Write for ThreadLocalTestWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            BUFFER.with(|b| b.borrow_mut().extend_from_slice(buf));
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for ThreadLocalTestWriter {
+        type Writer = ThreadLocalTestWriter;
+        fn make_writer(&'a self) -> Self::Writer {
+            self.clone()
+        }
+    }
+
+    /// Installiert den Subscriber einmal pro Testprozess und leert den
+    /// Puffer dieses Threads. Jeder aufzeichnende Test ruft das als Erstes.
+    pub(crate) fn start_recording() {
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| {
+            let subscriber = tracing_subscriber::fmt()
+                .json()
+                .with_writer(ThreadLocalTestWriter)
+                .finish();
+            // `let _ =`: schlägt nur fehl, wenn schon ein globaler Default
+            // gesetzt ist — dank `Once` wäre das bereits dieser hier.
+            let _ = tracing::subscriber::set_global_default(subscriber);
+        });
+        BUFFER.with(|b| b.borrow_mut().clear());
+    }
+
+    /// Der rohe aufgezeichnete Text dieses Threads.
+    pub(crate) fn recorded_text() -> String {
+        BUFFER.with(|b| String::from_utf8(b.borrow().clone()).expect("Log ist kein UTF-8"))
+    }
+
+    /// Nur die Ereignisse auf ERROR-Ebene, eine JSON-Zeile je Ereignis
+    /// (Spec 0077, T-6c/T-A10: Aussagen über das ERROR-Log dürfen nicht
+    /// versehentlich ein INFO-Ereignis mitlesen).
+    pub(crate) fn recorded_error_lines() -> Vec<String> {
+        recorded_text()
+            .lines()
+            .filter(|line| line.contains("\"level\":\"ERROR\""))
+            .map(str::to_string)
+            .collect()
+    }
+}

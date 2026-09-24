@@ -2,10 +2,28 @@
 //! testbare Logik; die `#[tauri::command]`-Wrapper in `crate::commands`
 //! bleiben dünn, analog zu `crate::groups`/`crate::filter_rules`.
 
-use persistence_sqlite::{PolicyStoreError, SqlitePolicyStore};
+use persistence_sqlite::SqlitePolicyStore;
 use ssh_manager_core::filter::{is_elevation_or_passthrough_wrapper, RuleAction, RuleId, Scope};
 
 use crate::dto::{PatternSuggestionDto, PatternType, RuleInput};
+use crate::filter_rules::RuleWriteError;
+
+/// Spec 0077, 3.1.5: Ein Vorschlag, der die Prüfung aus 3.1.1 nicht
+/// besteht, wird **weggelassen** — nicht verändert.
+///
+/// Nötig, weil die Vorschläge oben ungeprüft aus Kommando-Token gebaut
+/// werden (`"{token} *"`): Enthält ein Token eine öffnende Klammer, ist das
+/// entstehende Glob-Muster syntaktisch kaputt. Ein solcher Vorschlag würde
+/// beim Anlegen ohnehin an Schicht 1 scheitern — ihn gar nicht erst
+/// anzubieten erspart dem Nutzer die Sackgasse.
+///
+/// Ein Muster zu „reparieren" wäre falsch: Die Regel hieße dann etwas
+/// anderes, als der Nutzer im Dialog gelesen hat.
+fn suggestion_pattern_is_valid(suggestion: &PatternSuggestionDto) -> bool {
+    crate::dto::pattern_from_parts(suggestion.pattern_type, suggestion.pattern_value.clone())
+        .validate()
+        .is_ok()
+}
 
 /// Spec 0011, Abschnitt 2: bewusst einfache Wort-Tokenisierung (kein
 /// `shell_words`/der volle `core::filter`-Parser mit Chaining-/
@@ -77,6 +95,12 @@ pub fn suggest_rule_patterns(command: &str) -> Vec<PatternSuggestionDto> {
         }
     }
 
+    // Spec 0077, 3.1.5: Vorschläge mit einem Muster, das sich nicht
+    // übersetzen lässt, fallen weg. Bewusst **vor** `truncate`, damit das
+    // Limit von drei für die verbleibenden, brauchbaren Vorschläge gilt
+    // und nicht durch einen unbrauchbaren aufgebraucht wird.
+    suggestions.retain(suggestion_pattern_is_valid);
+
     // Spec Abschnitt 2: "Maximal drei Vorschläge" — durch die Reihenfolge
     // oben (Exakt, Basis, Subkommando) kann `suggestions` ohnehin nie mehr
     // als 3 Einträge enthalten, `truncate` ist hier nur eine explizite
@@ -92,13 +116,17 @@ pub fn suggest_rule_patterns(command: &str) -> Vec<PatternSuggestionDto> {
 /// bietet laut Abschnitt 4 kein eigenes Prioritäts-Feld an). Reine
 /// Delegation an [`crate::filter_rules::create_rule`] (Spec 0009) — keine
 /// eigene Anlege-Logik.
+///
+/// Spec 0077, 3.1.2/3.1.3: Übernimmt damit auch die Prüfung aus Schicht 1
+/// und denselben Fehlertyp — ein ungültiges Muster wird hier genauso
+/// abgewiesen wie im Formular.
 pub async fn create_quick_rule(
     policy_store: &SqlitePolicyStore,
     pattern_type: PatternType,
     pattern_value: String,
     scope: Scope,
     priority: Option<i32>,
-) -> Result<RuleId, PolicyStoreError> {
+) -> Result<RuleId, RuleWriteError> {
     let input = RuleInput {
         pattern_type,
         pattern_value,
@@ -118,6 +146,74 @@ mod tests {
             .into_iter()
             .map(|s| (s.pattern_type, s.pattern_value))
             .collect()
+    }
+
+    // --- Spec 0077: Vorschläge und Schnellregel ---------------------------
+
+    /// Spec 0077, T-6b (3.1.5): Für `ls [abc def` entstünde aus dem ersten
+    /// Token der Glob `ls *` (gültig) und aus den ersten beiden
+    /// `ls [abc *` — und der übersetzt nicht. Der unbrauchbare Vorschlag
+    /// wird weggelassen, die brauchbaren bleiben.
+    ///
+    /// Scheitert, wenn Vorschläge ungeprüft angeboten werden: Dann stünde
+    /// dem Nutzer ein Vorschlag zur Auswahl, den Schicht 1 anschließend
+    /// abweist.
+    #[test]
+    fn test_spec_0077_t6b_suggestions_never_offer_a_pattern_that_does_not_compile() {
+        let result = labels_and_patterns("ls [abc def");
+
+        for (pattern_type, pattern_value) in &result {
+            let pattern = crate::dto::pattern_from_parts(*pattern_type, pattern_value.clone());
+            assert!(
+                pattern.validate().is_ok(),
+                "unbrauchbarer Vorschlag angeboten: {pattern_value:?}"
+            );
+        }
+        assert!(
+            !result.iter().any(|(_, value)| value == "ls [abc *"),
+            "der nicht übersetzende Vorschlag muss wegfallen: {result:?}"
+        );
+        // Die brauchbaren Vorschläge bleiben erhalten — 3.1.5 lässt sie
+        // weg, verändert sie nicht und wirft nicht alle weg.
+        assert!(
+            result.contains(&(PatternType::Exact, "ls [abc def".to_string())),
+            "der Exakt-Vorschlag ist gültig und muss bleiben: {result:?}"
+        );
+        assert!(
+            result.contains(&(PatternType::Glob, "ls *".to_string())),
+            "der Basis-Wildcard ist gültig und muss bleiben: {result:?}"
+        );
+    }
+
+    /// Spec 0077, T-6a: Die Schnellregel läuft über
+    /// `filter_rules::create_rule` und wird damit von Schicht 1 gedeckt —
+    /// ein ungültiger Glob wird abgewiesen, nichts wird gespeichert.
+    #[tokio::test]
+    async fn test_spec_0077_t6a_quick_rule_rejects_an_invalid_glob_and_stores_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = persistence_sqlite::SqliteProfileStore::connect(&dir.path().join("test.db"))
+            .await
+            .unwrap()
+            .policy_store();
+
+        let err = create_quick_rule(
+            &store,
+            PatternType::Glob,
+            "ls [abc *".to_string(),
+            Scope::Global,
+            None,
+        )
+        .await
+        .expect_err("ein Glob, der nicht übersetzt, darf nicht gespeichert werden");
+
+        assert!(
+            matches!(err, RuleWriteError::InvalidPattern(_)),
+            "InvalidPattern erwartet, bekommen: {err:?}"
+        );
+        assert!(
+            store.list_all().await.unwrap().is_empty(),
+            "die Schnellregel darf nichts angelegt haben"
+        );
     }
 
     /// Spec 0011, Abschnitt 2, wörtliches Beispiel: `-la` sieht wie eine

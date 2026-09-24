@@ -2957,9 +2957,11 @@ pub async fn list_rules(
 
 #[tauri::command]
 pub async fn create_rule(state: State<'_, AppState>, input: RuleInput) -> CommandResult<RuleId> {
+    // Spec 0077, 3.1.3: ausdrücklich umwandeln, nie `.map_err(Into::into)` —
+    // der blanket `From<E: Display>` würde den Code still verschlucken.
     crate::filter_rules::create_rule(&state.policy_store, input)
         .await
-        .map_err(Into::into)
+        .map_err(crate::error::rule_write_error)
 }
 
 #[tauri::command]
@@ -2968,9 +2970,10 @@ pub async fn update_rule(
     id: RuleId,
     input: RuleInput,
 ) -> CommandResult<()> {
+    // Spec 0077, 3.1.3: s. `create_rule`.
     crate::filter_rules::update_rule(&state.policy_store, id, input)
         .await
-        .map_err(Into::into)
+        .map_err(crate::error::rule_write_error)
 }
 
 #[tauri::command]
@@ -3087,7 +3090,11 @@ pub async fn accept_and_create_rule(
         .pending_action_confirmations
         .resolve(&action_id, decision)?;
 
-    Ok(rule_result?)
+    // Spec 0077, 3.1.3: auch hier ausdrücklich umwandeln, damit die
+    // Schnellregel denselben Code liefert wie das Formular. Der Fehlerweg
+    // bleibt wie bisher: Die Bestätigung ist oben schon aufgelöst, der
+    // Fehler der Regel-Erstellung kommt getrennt zurück (3.1.2).
+    rule_result.map_err(crate::error::rule_write_error)
 }
 
 // --- Spec 0012: KI-generierte Dokumente -------------------------------

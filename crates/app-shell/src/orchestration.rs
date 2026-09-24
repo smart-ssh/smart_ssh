@@ -9176,68 +9176,12 @@ mod tests {
 
     // --- Spec 0016: Strukturiertes Logging & Diagnose ----------------------
 
-    thread_local! {
-        /// Je Thread ein eigener Puffer — sicher unter paralleler
-        /// Testausführung, da jeder `#[test]`-Thread nur seine eigenen
-        /// Log-Zeilen sieht (andere Tests/Threads schreiben in ihren
-        /// eigenen Thread-lokalen Puffer, keine Vermischung).
-        static TEST_LOG_BUFFER: std::cell::RefCell<Vec<u8>> =
-            const { std::cell::RefCell::new(Vec::new()) };
-    }
-
-    #[derive(Clone, Default)]
-    struct ThreadLocalTestWriter;
-
-    impl std::io::Write for ThreadLocalTestWriter {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            TEST_LOG_BUFFER.with(|b| b.borrow_mut().extend_from_slice(buf));
-            Ok(buf.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for ThreadLocalTestWriter {
-        type Writer = ThreadLocalTestWriter;
-        fn make_writer(&'a self) -> Self::Writer {
-            self.clone()
-        }
-    }
-
-    /// Installiert genau einmal pro Testprozess einen echten, globalen
-    /// `tracing`-Subscriber (`set_global_default`, nicht `with_default`).
-    ///
-    /// **Warum nicht `tracing::subscriber::with_default`** (der
-    /// naheliegendere, thread-lokal scopende Ansatz): `tracing-core`s
-    /// Callsite-Interesse ("hört überhaupt irgendjemand auf dieses
-    /// `tracing::info!` zu?") wird **prozessweit gecacht**, nicht pro
-    /// Thread. Andere Tests in diesem Modul rufen dieselbe
-    /// `log_command_execution`-Stelle über den ganz normalen
-    /// Ausführungspfad auf (z. B. `test_autoexec_path_runs_command_and_
-    /// records_result`), parallel auf anderen Threads, **ohne** je einen
-    /// Subscriber zu installieren. Trifft ein solcher Thread die Callsite
-    /// zuerst, cacht `tracing-core` sie ggf. als "niemand interessiert" —
-    /// und ein anschließendes `with_default` auf einem *anderen* Thread
-    /// gewinnt dieses Wettrennen nicht zuverlässig zurück (beobachtet:
-    /// ca. 1 von 3 Testläufen verlor den Log-Eintrag komplett, s. Commit-
-    /// Historie). Ein einmalig installierter **globaler** Default behebt
-    /// das strukturell: es gibt nach der Installation nie wieder einen
-    /// Zustand "kein Subscriber", gegen den ein Callsite als uninteressant
-    /// gecacht werden könnte.
-    fn install_test_subscriber_once() {
-        static INIT: std::sync::Once = std::sync::Once::new();
-        INIT.call_once(|| {
-            let subscriber = tracing_subscriber::fmt()
-                .json()
-                .with_writer(ThreadLocalTestWriter)
-                .finish();
-            // `let _ =`: schlägt nur fehl, wenn bereits ein globaler
-            // Default gesetzt ist (z. B. durch eine andere Testdatei) —
-            // dann ist ohnehin schon einer aktiv, kein Grund zum Abbruch.
-            let _ = tracing::subscriber::set_global_default(subscriber);
-        });
-    }
+    // Spec 0077, T-6c: Aufzeichnung liegt jetzt in
+    // `crate::test_support::log_capture` und wird mit den Tests von
+    // `filter_rules` geteilt — ein globaler `tracing`-Default lässt sich pro
+    // Prozess nur einmal setzen, zwei Aufzeichnungen im selben Testbinary
+    // gewinnen je nach Testreihenfolge gegeneinander (Begründung dort).
+    use crate::test_support::log_capture;
 
     /// Spec 0016, Abschnitt 4, Punkt 1 / Abschnitt 1: "Logs sind kein
     /// Schlupfloch für Secrets, die die Redaction eigentlich unterdrücken
@@ -9248,8 +9192,7 @@ mod tests {
     /// mit dem Ergebnis) und prüft die tatsächliche JSON-Log-Zeile.
     #[test]
     fn test_log_command_execution_never_logs_unredacted_secret() {
-        install_test_subscriber_once();
-        TEST_LOG_BUFFER.with(|b| b.borrow_mut().clear());
+        log_capture::start_recording();
 
         let redactor = DefaultOutputRedactor::new();
         let raw_output = CommandOutput {
@@ -9262,7 +9205,7 @@ mod tests {
 
         log_command_execution(Uuid::new_v4(), "connect-check", &redacted);
 
-        let log_text = TEST_LOG_BUFFER.with(|b| String::from_utf8(b.borrow().clone()).unwrap());
+        let log_text = log_capture::recorded_text();
         assert!(
             !log_text.contains("hunter2geheim"),
             "das Secret darf unter keinen Umständen im Log-Output auftauchen: {log_text}"
