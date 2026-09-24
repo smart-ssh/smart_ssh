@@ -63,16 +63,29 @@ großes Muster ab. **Gemessen:** `a{1000}{1000}` →
 „Compiled regex exceeds size limit of 10485760 bytes". Das ist für diese
 Spec derselbe Fall wie ein Syntaxfehler.
 
-**Gemessen, zweiter Befund:** Bei einem pfadförmigen Glob kann genau
-**einer** der beiden Zweige scheitern. Mit Allow `rm *` daneben:
+**Gemessen, zweiter Befund** (2026-09-24; zweite Tabellenzeile am selben
+Tag korrigiert, Q-BL-0249-01, §9): Bei einem pfadförmigen Glob kann genau
+**einer** der beiden Zweige scheitern, und zwar in beide Richtungen. Mit
+Allow `rm *` daneben:
 
-| Deny-Muster | `Glob::new` | strenger Zweig | Kommando | heute |
+| Deny-Muster | `Glob::new` | strenger Zweig (normalisiertes Muster) | Kommando | heute |
 |---|---|---|---|---|
-| `rm /x/[a/../b` | Fehler | ok | `rm /x/b` | **Deny** (über den strengen Zweig) |
-| `rm /x/{a/..}/b` | ok | Fehler | `rm /x/a/b` | AutoExec |
+| `rm /x/[a/../b` | Fehler | ok (`rm /x/b`) | `rm /x/b` | **Deny** (über den strengen Zweig) |
+| `rm /x/[a/b]/../c` | ok | Fehler (`rm /x/[a/c`) | `rm /x/a/../c` | **Deny** (über den permissiven Zweig) |
+| `rm /x/[a/b]/../c` | ok | Fehler | `rm /x/c` | AutoExec (kein Zweig passt) |
+
+Die Richtung „nur der strenge Zweig scheitert" entsteht so:
+`normalize_lexical_path` zerlegt das Token an `/`, das Segment `..` löscht
+das vorangehende Segment `b]`, und die öffnende `[` bleibt ohne Gegenstück
+stehen. Umgekehrt repariert dieselbe Auflösung `rm /x/[a/../b` zu
+`rm /x/b`, das der permissive Zweig nicht übersetzt. Ein Muster, dessen
+`..` **innerhalb** einer Klammer steht (`rm /x/{a/..}/b`), ist kein Fall
+dieser Art: Das Segment heißt dort `..}`, wird nicht als Aufwärts-Segment
+erkannt, und das Muster übersetzt in beiden Zweigen.
 
 Eine Regel, die in einem Zweig nicht übersetzt, kann also heute trotzdem
-greifen. Schicht 2 darf ihr das nicht wegnehmen (3.2.1).
+greifen — über den jeweils anderen Zweig. Schicht 2 darf ihr das nicht
+wegnehmen (3.2.1).
 
 **Entscheidung (Stefan, 2026-09-24):** Eine Regel mit ungültigem Muster
 wird bei der Auswertung behandelt, **als würde sie nicht existieren**.
@@ -260,10 +273,13 @@ Jeder Test nennt, woran er bei einer falschen Umsetzung scheitert.
   Fehler, und die gespeicherte Regel hat danach noch das **alte** Muster
   (per `get` geprüft). Scheitert, wenn erst geschrieben und dann geprüft
   wird.
-- **T-4** Ein pfadförmiger Glob, der nur im strengen Zweig scheitert,
-  wird abgewiesen. Den passenden Fall misst der Coder zuerst. Gibt es
-  keinen, hält eine Klarstellung das fest, und T-4 prüft dann nur, dass
-  `validate` den strengen Zweig überhaupt baut.
+- **T-4** Beide Einzelzweig-Richtungen aus §1 werden abgewiesen:
+  `rm /x/[a/b]/../c` (nur der strenge Zweig scheitert) — scheitert, wenn
+  `validate` nur `Glob::new` aufruft — und `rm /x/[a/../b` (nur der
+  permissive Zweig scheitert) — scheitert, wenn `validate` nur den
+  strengen Zweig baut. Beide Vorbedingungen (welcher Zweig übersetzt)
+  hält der Test selbst als Zusicherung fest, damit er nicht still zu
+  einem Test über ein durchweg ungültiges Muster wird.
 - **T-5** Gültige Glob-, Regex- und Exact-Muster werden weiter angenommen.
   Die Stichprobe umfasst `*`, `**`, Klammern, Anker, Unicode und ein
   pfadförmiges Muster. Das fängt eine zu strenge Prüfung ab.
@@ -336,6 +352,8 @@ Auswertung, an Schicht 1 vorbei (Fall „Organisations-Quelle"). Den Fall
 - **T-A6** Tabelle: Aktion {Allow, Confirm, Deny} × Muster {gültig
   passend, gültig nicht passend, ungültig, nur in einem Zweig ungültig}
   × Typ {Glob, Regex}, jeweils neben einer Allow-Regel, die passt. Für
+  „nur in einem Zweig ungültig" die beiden gemessenen Muster aus §1; mit
+  Regex entfällt diese Spalte (ein Regex hat keinen zweiten Zweig). Für
   jede Zeile ist die Entscheidung **gleich** der des unveränderten
   Stands. Der Test hält sie als erwarteten Wert fest, der vor der
   Änderung gemessen wurde.
@@ -353,12 +371,21 @@ Auswertung, an Schicht 1 vorbei (Fall „Organisations-Quelle"). Den Fall
   `ai-providers/src/test_support.rs:36-50`. Mit der Freigabe dieser Spec
   ist das erlaubt.
 - **T-A12** Die gemessenen Einzelzweig-Fälle aus §1, jeweils mit Allow
-  `rm *` daneben: Deny `rm /x/[a/../b` und `rm /x/b` → weiterhin **Deny**
-  mit `FILTER_RULE_DENY`. Scheitert, wenn „wie nicht vorhanden" die
-  ganze Regel streicht (3.2.1). Deny `rm /x/{a/..}/b` und `rm /x/a/b` →
-  AutoExec wie heute, mit ERROR-Ereignis. Gegenbeweis Pflicht für den
-  ersten Fall: rot gegen eine Fassung, die Regeln mit ungültigem Muster
-  vor der Auswertung verwirft.
+  `rm *` daneben:
+  - Deny `rm /x/[a/../b`, Kommando `rm /x/b` → weiterhin **Deny** mit
+    `FILTER_RULE_DENY`, dazu ein ERROR-Ereignis mit der Regel-ID.
+    Scheitert, wenn „wie nicht vorhanden" die ganze Regel streicht
+    (3.2.1).
+  - Deny `rm /x/[a/b]/../c`, Kommando `rm /x/a/../c` → **Deny** über den
+    permissiven Zweig, dazu ein ERROR-Ereignis. Belegt 3.2.1 in der
+    anderen Richtung als der erste Fall (dort trägt der strenge Zweig,
+    hier der permissive).
+  - Dieselbe Deny-Regel, Kommando `rm /x/c` → **AutoExec** wie heute
+    (kein Zweig passt), mit ERROR-Ereignis. Scheitert, wenn eine
+    Ersatz-Eskalation eingebaut wird oder das Log fehlt.
+
+  Gegenbeweis Pflicht für die ersten beiden Fälle: rot gegen eine
+  Fassung, die Regeln mit ungültigem Muster vor der Auswertung verwirft.
 
 (T-A7, T-A8 und T-A11 der vorigen Fassung sind mit der Ersatz-Eskalation
 entfallen. Die Nummern bleiben frei, damit Verweise stabil bleiben.)
@@ -401,3 +428,17 @@ Keine mehr. Entschieden am 2026-09-24:
 ## 9. Klarstellungen
 
 (wird während der Umsetzung nachgetragen: Datum · Frage-ID · Antwort)
+
+- **2026-09-24 · Q-BL-0249-01 · K1:** Die zweite Zeile der
+  Einzelzweig-Tabelle in §1 war falsch. `rm /x/{a/..}/b` übersetzt in
+  **beiden** Zweigen: `normalize_lexical_path` zerlegt das Token an `/`,
+  das Segment heißt dort `..}` und gilt nicht als Aufwärts-Segment, das
+  Muster bleibt also unverändert. Das in §1 beobachtete AutoExec stimmt,
+  hat aber eine andere Ursache — das Muster ist gültig und passt schlicht
+  nicht (`{a/..}` verlangt wörtlich `a/..`). Der echte Fall „nur der
+  strenge Zweig scheitert" ist `rm /x/[a/b]/../c`: normalisiert
+  `rm /x/[a/c`, offene `[` ohne Gegenstück. §1, T-4, T-A6 und T-A12
+  benennen jetzt diesen Fall. **Unverändert:** 3.1.1 (die Prüfung selbst,
+  beide Zweige), 3.2.1 und jede Aussage über das Verhalten des Produkts.
+  Die Abdeckung wird größer statt kleiner — T-A12 belegt 3.2.1 jetzt in
+  beide Richtungen und T-4 beide Richtungen von 3.1.1.
