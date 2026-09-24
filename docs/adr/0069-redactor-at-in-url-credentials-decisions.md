@@ -112,11 +112,27 @@ Gegenbeweis für beide Runden geführt: `…_does_not_cut_a_private_key_
 armor_anchor` ist rot gegen die Spec-Fassung **und** rot gegen die
 Fassung, die nur den freien Zweig verengt.
 
-Der Vorschlag des Reviewers, stattdessen die PEM-/PGP-Muster an den Anfang
-der Liste zu ziehen, wurde **nicht** umgesetzt: er verschiebt bestehende
-Muster und widerspricht damit Spec §2 („wörtlich und an ihrer Stelle").
-Er bleibt als eigenes Thema sinnvoll, weil er zugleich einen **bereits
-bestehenden** Geschwisterfall bei `api-key: -----BEGIN …` schlösse.
+**Nachtrag (Q-BL-0248-02): die `@`-Forderung allein genügt nicht, und die
+Begründung dazu war falsch.** Der `regression-guard` fand über
+`ee017af..387a91e` eine dritte Ausprägung, vom Architekten vorher/nachher
+gemessen: `?secret=a@-----BEGIN PRIVATE KEY-----`. Der Satz „ein Anker
+ohne `@` ist für die Regel unerreichbar" stimmt nicht — nicht der **Anker**
+muss das `@` enthalten, sondern der **Wert**, und der beginnt vor dem
+Anker. Das `a@` erfüllt die Bedingung, der Anker liegt mitten im Treffer.
+Dasselbe quotiert, als PGP-Block und abgeschnitten ohne `END`.
+
+Damit ist die Ursache dort behoben, wo sie sitzt (§11): Kopien der vier
+Schlüsselmuster laufen jetzt ganz am Anfang der Liste. Die `@`-Forderung
+bleibt, aber sie trägt nicht mehr den Schutz des Ankers — sie begrenzt die
+Regel nur noch auf ihren Zweck.
+
+Der ursprüngliche Vorschlag des Reviewers aus Runde 1 war genau das, und
+er wurde damals **nicht** umgesetzt, weil er bestehende Muster verschiebt
+und Spec §2 widerspricht („wörtlich und an ihrer Stelle"). Die jetzige
+Lösung hält beides ein: **Kopien** vorn, **Originale** unverändert an
+ihrer Stelle. Rückblickend war die Ablehnung in Runde 1 zu eng — der
+Reviewer hatte die Ursachenklasse richtig benannt, und zwei weitere
+Ausprägungen sind danach noch aufgetreten.
 
 ## 5. Sachlich falsche Begründung in Spec §3.1, korrigiert
 
@@ -214,12 +230,15 @@ dieser Fassung wird er ohne die neuen Regeln rot (belegt).
   (`?token=Bearer abcdef…`): das Schlüsselwort-Muster verbraucht `Bearer`
   und stoppt am Leerzeichen, das Bearer-Muster steht danach ohne Anker da.
   Besteht unabhängig von Spec 0078 und wird davon nicht verändert.
-- **Muster mit mehrteiligem Anker generell vor die wertverbrauchenden
-  Muster ziehen** (PEM, PGP, netrc, `client-key-data`) — s. §4. Schlösse
-  die Ursachenklasse statt einzelner Ausprägungen.
 - **Unicode-Homoglyphen im Userinfo-Teil** (`＠` U+FF20): kein Muster
   greift. Nicht durch diesen Schritt verursacht, nicht Gegenstand der
   Spec.
+- **netrc und `client-key-data`** haben ebenfalls mehrteilige Anker und
+  stehen weiterhin hinten. Sie sind hier nicht mit nach vorn gezogen, weil
+  für sie keine Lockerung gemessen wurde und ihre Anker keine
+  `=`-Trennung haben, über die eine Wert-Regel stolpert. Wenn die
+  Ursachenklasse einmal vollständig geschlossen werden soll, gehören sie
+  dazu — eigenes Item, eigene Messrunde.
 
 ## 10. Spec-Text nachgezogen
 
@@ -236,4 +255,47 @@ Entscheidung zu Q-BL-0248-01 ist das nachgezogen:
 - §9 um vier Klarstellungen mit Datum und Frage-ID, darunter der Status
   von T-A14 als Wächter.
 
+Dazu kam die Klarstellung zu Q-BL-0248-02 (§11).
+
 Spec und Code decken sich damit wieder.
+
+## 11. Schlüsselmuster zuerst, und `&` nur nach `?` (Q-BL-0248-02)
+
+Der `regression-guard` fand über `ee017af..387a91e` zwei Lockerungen durch
+die Query-String-Regel, beide vom Architekten vorher/nachher gemessen und
+als K2 entschieden (Spec §9). Beide verletzten Spec §2.
+
+**(A) Kopien der vier Schlüsselmuster an den Anfang der Liste.** Die
+Originale bleiben wörtlich an ihrer Stelle; vorn steht nur eine
+zusätzliche, frühere Anwendung. Damit ist ein Schlüsselblock geschwärzt,
+bevor irgendeine wertverbrauchende Regel seinen Anker sieht.
+
+Das schließt die Ursachenklasse statt einzelner Ausprägungen. Sie ist im
+Redactor dreimal aufgetreten: bei der frühen `api-key`-Kopie (schon **vor**
+Spec 0078 offen, `api-key: -----BEGIN …` ließ den Schlüsselkörper stehen)
+und zweimal bei der Query-String-Regel. Der bestehende Fall ist als
+Nebenwirkung mit zu — eine Verbesserung gegenüber dem Stand vor dieser
+Spec, gemessen und durch einen Test gebunden.
+
+Die Kopien stehen **vor** den Shadow-Hash-Mustern, die ihrerseits „bewusst
+als erste" dokumentiert sind. Das stört einander nicht: Ein Crypt-Hash
+enthält keinen PEM-Anker und ein PEM-Block keine `$id$`-Struktur, die
+beiden Mustergruppen können sich also nicht gegenseitig anschneiden. Die
+Begründung für „ganz vorn" ist bei beiden dieselbe.
+
+**(B) Die Query-String-Regel zählt `&` nur nach einem `?` im selben
+Token.** Vorher griff sie auch mitten in einem Passwort, das ein
+`&<schlüsselwort>=` enthält, und nahm dem strengen URL-Muster den Anker:
+`https://u:Geheim&token=b@h/x` → `https://u:Geheim&[REDACTED]`, wo vor
+Spec 0078 `https://u:[REDACTED]@h/x` stand. Die Zeichenklasse zwischen `?`
+und `&` schließt `@` aus, damit der Trenner nicht selbst über Zugangsdaten
+läuft.
+
+Nebeneffekt, gewollt: Der in §6 beschriebene Restfall ist damit wieder auf
+die `?`-Form beschränkt, so wie Spec §5 ihn beschreibt. Die `&`-Form ist
+zu. Gemessen und bestätigt: Bei einem Nicht-DB-Schema
+(`https://u:a?token=b@h/x`) blieb der Präfix schon vor Spec 0078 stehen —
+die Einschränkung „nur DB-Schemata" in §5 stimmt also weiterhin, und §5
+brauchte keine Änderung.
+
+Alle drei Tests sind gegen `387a91e` rot gesehen worden.
