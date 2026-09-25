@@ -484,6 +484,10 @@ pub struct PreviewTagDto {
     pub tag: String,
     /// §5.2a: nicht leer ⇒ das Schlagwort trifft diese bestehenden Regeln.
     pub matched_rules: Vec<String>,
+    /// Schlagwort ohne Platzhalter, aus einer buchstäblichen Angabe in einem
+    /// gemischten Block — trifft eine Tag-Regel **exakt** und gehört deshalb
+    /// deutlicher gekennzeichnet (§5.2a, offene Entscheidung Q-BL-0216-02).
+    pub is_literal: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -561,6 +565,7 @@ pub fn build_preview_dto(
                         .iter()
                         .map(|m| m.rule_id.0.clone())
                         .collect(),
+                    is_literal: t.is_literal,
                 })
                 .collect(),
             identity_file: e.identity_file.as_ref().map(|i| i.path.clone()),

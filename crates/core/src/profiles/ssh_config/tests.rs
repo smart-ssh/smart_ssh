@@ -913,29 +913,22 @@ fn t_review1_gemischter_platzhalterblock_wird_gemeldet() {
 }
 
 #[test]
-fn t_review1_buchstaebliches_schlagwort_entsteht_nicht() {
-    // Der Fund aus Review-Runde 1: Über einen gemischten Block konnte eine
-    // fremde Datei ein **buchstäbliches** Schlagwort anhängen und damit jede
-    // bestehende `Scope::Tag`-Regel exakt treffen. §5.2a stützt seine
-    // Risikoeinschätzung darauf, dass importierte Schlagworte immer einen
-    // Platzhalter enthalten — genau das stellt die Prüfung wieder her.
+fn t_review2_buchstaebliches_schlagwort_bleibt_aber_ist_gekennzeichnet() {
+    // Runde 1 wollte dieses Schlagwort weglassen; Runde 2 hat gezeigt, dass
+    // das die Abdeckung durch eine bestehende Tag-**Deny**-Regel wegnimmt —
+    // eine Lockerung in der anderen Richtung. Es bleibt also, und wird
+    // stattdessen gekennzeichnet (§5.2a).
     let plan = empty_plan("Host prod\n  HostName 10.0.0.1\nHost prod *\n  User deploy\n");
     let e = entry(&plan, "prod");
-    assert!(
-        !e.tags.iter().any(|t| t.tag == "prod"),
-        "buchstäbliches Schlagwort ist doch entstanden: {:?}",
-        e.tags
-    );
-    // Jedes Schlagwort, das entsteht, trägt einen Platzhalter.
-    for t in &e.tags {
-        assert!(
-            t.tag.contains('*') || t.tag.contains('?'),
-            "Schlagwort ohne Platzhalter: {}",
-            t.tag
-        );
-    }
-    // Die Vorgabe aus dem Block wirkt trotzdem.
-    assert_eq!(e.username.value, "deploy");
+    let t = e
+        .tags
+        .iter()
+        .find(|t| t.tag == "prod")
+        .expect("buchstäbliches Schlagwort fehlt — Deny-Abdeckung verloren");
+    assert!(t.is_literal, "nicht als buchstäblich gekennzeichnet");
+    // Ein Muster-Schlagwort ist dagegen nicht als buchstäblich markiert.
+    let plan2 = empty_plan("Host *.prod.de\n  User deploy\nHost web1.prod.de\n");
+    assert!(!entry(&plan2, "web1.prod.de").tags[0].is_literal);
 }
 
 #[test]

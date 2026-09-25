@@ -249,6 +249,27 @@ async fn t_6_4_1a_weg_b_liest_genau_die_angekuendigten_dateien() {
         !dump.contains("GEHEIMER_SCHLUESSEL"),
         "Schlüsselinhalt ist entwichen"
     );
+
+    // §3.1.9 (b) / Spec 0076 C-4: Was gelesen wurde, liegt **byte-gleich**
+    // im Schlüsselbund — auch ein verschlüsselter Schlüssel wird nicht
+    // umgeformt. Diese Zusicherung fiel beim Umstellen auf den echten
+    // `KeyFileReader` aus den Tests heraus (Lockerungs-Gegencheck, Runde 2);
+    // sie gehört hierher, weil sie die Durchleitung in `apply_import`
+    // betrifft, nicht die Treue des Lesers selbst (das ist Spec 0076).
+    let secrets = f.creds.secrets.lock().unwrap();
+    let stored: Vec<&secrecy::SecretString> = secrets
+        .iter()
+        .filter(|(k, _)| k.ends_with(":private_key"))
+        .map(|(_, v)| v)
+        .collect();
+    assert_eq!(stored.len(), 2, "zwei Schlüssel erwartet");
+    for v in stored {
+        assert_eq!(
+            v.expose_secret(),
+            MARKER_KEY,
+            "Inhalt wurde beim Ablegen verändert"
+        );
+    }
 }
 
 #[tokio::test]

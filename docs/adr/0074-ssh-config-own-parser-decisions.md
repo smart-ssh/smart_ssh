@@ -156,3 +156,68 @@ Adresse** aufgelöst. Die Spec sagt nur „vorkommt". In einer `ssh_config`
 steht in `ProxyJump` üblicherweise ein Alias, deshalb hat der Name
 Vorrang. Falls das einmal zu einem falschen Treffer führt, ist die
 Reihenfolge die Stelle, an der man ansetzt.
+
+## 10. Was aus den Review-Runden stehen bleibt
+
+**Behoben, mit Regressionstest:** Weg (b) benutzt jetzt denselben
+`KeyFileReader` wie die Handstelle (§5.5 wörtlich — die erste Fassung war
+an drei Stellen schwächer: keine Größengrenze, keine Prüfung der Dateiart,
+Teilstring statt Schlüsselgültigkeit); das Rollback räumt die
+Schlüsselbund-Slots mit ab (sonst blieben private Schlüssel unter
+`ServerId`s zurück, die es nicht mehr gibt); ein gemischter
+Platzhalterblock wird gemeldet statt verschluckt; die Wertgrenze aus §3.3
+gilt auch für unbekannte Direktiven; die Zeilengrenze greift vor dem
+Parser; `rename_to` wird getrimmt und leer abgelehnt; der Plan wird unter
+einer Sperre entnommen.
+
+**Bewusst nicht behoben — mit Grund:**
+
+1. **Die Verengung der Schlagwort-Regel ist zurückgenommen.** Der Fund aus
+   Runde 1 (eine fremde Datei kann über `Host prod *` ein buchstäbliches
+   Schlagwort anhängen und eine Tag-`Allow`-Regel exakt treffen) lässt sich
+   durch Weglassen des Schlagworts schließen — der Lockerungs-Gegencheck
+   (Runde 2) hat aber gezeigt, dass damit die Abdeckung durch eine
+   bestehende Tag-**`Deny`**-Regel verloren geht. Eine Verengung in der
+   einen Richtung ist hier eine Lockerung in der anderen. Nach „Eskalation
+   nur in eine Richtung" (ADR 0024) ist der `Deny`-Verlust die teurere
+   Hälfte; es bleibt deshalb beim geprüften Verhalten, ergänzt um
+   `PlannedTag::is_literal` zur Kennzeichnung. **Welche Richtung gelten
+   soll, ist eine Produktentscheidung: `Q-BL-0216-02`.**
+2. **Die Vorschau-DTOs tragen die Herkunft der Werte noch nicht**
+   (`Sourced::origin`, `IdentityFilePlan::origin`, `PlannedTag::origin`),
+   ebenso nicht `Conflict::kind` und den Namen eines Jump-Ziels aus dem
+   Bestand (dort steht vorläufig ein Platzhaltertext). `core` berechnet all
+   das; es fehlt nur die Durchleitung. §3.1.7 verlangt es für die
+   Vorschau — **das ist damit eine Vorbedingung für Schritt 5** und keine
+   Lücke, die dort erst auffallen darf.
+3. **Die feineren `SkipReason`-Varianten** (`AlreadySet`, `EmptyValue`,
+   `OutsideHostBlock`) werden noch nicht befüllt; alle Parser-Meldungen
+   kommen als `Unsupported` an. §3.1.5 ist erfüllt (Datei, Zeile, Name),
+   aber der erklärte Entwurf und das Erzeugte laufen auseinander.
+4. **Ein ungültiger `Port` in einem Platzhalterblock wird je passendem
+   Server gemeldet**, nicht je Block. §3.1.5 sagt „je Block".
+5. **§3.1.4a bleibt an einem einzelnen Schlüsselwort hängen.** Eine
+   Prosadatei, die irgendwo eine Zeile mit `host`, `user`, `port`, `match`
+   oder `compression` beginnt, gilt als `ssh_config`; danach erscheinen die
+   ersten Wörter ihrer Zeilen als „nicht übernommene Direktive". Das ist
+   wörtlich spec-konform (§3.1.4a, §9/Q-1 Punkt 3: „keine einzige erkannte
+   Direktive") und deshalb hier nicht eigenmächtig geändert — der
+   Reviewer hat aber einen tragfähigen Vorschlag gemacht (mindestens zwei
+   verschiedene Schlüsselwörter, oder eine `Host`/`Match`/`Include`-Zeile
+   **mit** Argument), der keinen Test aus §6 bricht. Gehört vorgelegt.
+6. **`globset` trifft im `Include`-Pfad auch Punktdateien**, `glob(3)`
+   nicht; ein buchstäbliches `[` im Pfad wird wegen `has_wildcard` nie
+   gefolgt (Nebenwirkung von A-2, sichtbar gemeldet). Beides klein, beides
+   benannt.
+7. **Der Dialogtitel der Vorschau kommt vom Frontend.** Wie bei
+   `read_credential_file` bestimmt das Frontend nur die Beschriftung, nie
+   den Pfad; §5.1 bleibt heil. Erwähnt, weil es dieselbe
+   Vertrauensrichtung betrifft.
+8. **Annahmen A-1 und A-2 sind unbelegt.** Beide sind begründet notiert
+   (Punkt 5), aber ohne Test — eine Regression daran fällt niemandem auf.
+   Nachzuziehen, sobald sie bestätigt sind.
+9. **Der Changelog-Schnipsel beschreibt die Vorschau als Nutzerfunktion**,
+   obwohl das Frontend erst in Schritt 5 entsteht. Bewusst stehen
+   gelassen: Die Fragmente werden erst beim Release nach `CHANGELOG.md`
+   übernommen, und bis dahin sind Schritt 4–6 gebaut. Wird das Release
+   vorher gefahren, ist der Schnipsel zu kürzen.

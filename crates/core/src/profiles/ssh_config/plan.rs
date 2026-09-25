@@ -58,6 +58,17 @@ pub struct PlannedTag {
     /// Nicht leer ⇒ die Vorschau MUSS das Schlagwort kennzeichnen und die
     /// Regeln nennen (§5.2a).
     pub matched_rules: Vec<MatchedRule>,
+    /// `true` ⇒ das Schlagwort traegt **keinen** Platzhalter, stammt also aus
+    /// einer buchstaeblichen Angabe in einem gemischten Block
+    /// (`Host prod *`).
+    ///
+    /// §5.2a stuetzt seine Risikoeinschaetzung auf die Annahme, importierte
+    /// Schlagworte enthielten **immer** `*`, `?` oder `!` — fuer diesen Fall
+    /// trifft das nicht zu, und genau er kann eine bestehende
+    /// `Scope::Tag`-Regel **exakt** treffen. Die Vorschau soll ihn deshalb
+    /// deutlicher kennzeichnen als ein Mustern-Schlagwort (Review-Runde 1
+    /// und 2, offene Entscheidung `Q-BL-0216-02`).
+    pub is_literal: bool,
 }
 
 /// §3.1.9 (a): Der Pfad wird **unverändert** übernommen — kein `realpath`,
@@ -472,22 +483,31 @@ pub fn build_plan(sources: &[ImportSource], inv: Inventory<'_>) -> ImportPlan {
                             // `Host *` trägt keine Information (§3.1.3).
                             continue;
                         }
-                        // **Nur ein Muster wird ein Schlagwort, nie ein
-                        // buchstäblicher Name.** Ein gemischter Block wie
-                        // `Host prod *` ist ein Platzhalterblock (ADR 0074,
-                        // Punkt 3) — ohne diese Zeile würde daraus für den
-                        // Server `prod` das Schlagwort `prod` entstehen, und
-                        // damit könnte eine fremde Datei **jedes beliebige**
-                        // buchstäbliche Schlagwort anhängen und jede
-                        // bestehende `Scope::Tag`-Regel exakt treffen
-                        // (Review-Runde 1). §5.2a stützt seine
-                        // Risikoeinschätzung ausdrücklich darauf, dass
-                        // importierte Schlagworte **immer** `*`, `?` oder
-                        // `!` enthalten; diese Prüfung stellt genau das her,
-                        // statt die Annahme zu unterlaufen.
-                        if !c.is_wildcard() {
-                            continue;
-                        }
+                        // **Hier stand in Review-Runde 1 ein
+                        // `if !c.is_wildcard() { continue; }`** — und der
+                        // Lockerungs-Gegencheck (Runde 2) hat gezeigt, dass
+                        // das eine Verschlechterung war, keine Verbesserung:
+                        //
+                        // Der Fund aus Runde 1 war, dass ein gemischter Block
+                        // (`Host prod *`) dem Server `prod` das
+                        // buchstäbliche Schlagwort `prod` gibt und damit eine
+                        // bestehende Tag-**Allow**-Regel exakt treffen kann
+                        // (`Confirm` → `Allow`). Das Schlagwort wegzulassen
+                        // schließt diesen Weg — nimmt aber demselben Profil
+                        // auch die Abdeckung durch eine bestehende
+                        // Tag-**Deny**-Regel. Eine Verengung in der einen
+                        // Richtung ist hier eine Lockerung in der anderen,
+                        // und `Deny` nicht mehr greifen zu lassen ist die
+                        // teurere Hälfte („Eskalation nur in eine Richtung",
+                        // ADR 0024).
+                        //
+                        // Deshalb bleibt das Schlagwort, und der Weg wird
+                        // dort geschlossen, wo §5.2a ihn ohnehin schließen
+                        // will: Es wird gekennzeichnet (`is_literal`) und ist
+                        // in der Vorschau einzeln abwählbar. Welche der
+                        // beiden Richtungen am Ende gelten soll, ist eine
+                        // Produktentscheidung — vorgelegt als
+                        // `Q-BL-0216-02`, s. ADR 0074 Punkt 10.
                         if !c.matches(alias) || tag_seen.contains(&c.pattern) {
                             continue;
                         }
@@ -503,6 +523,7 @@ pub fn build_plan(sources: &[ImportSource], inv: Inventory<'_>) -> ImportPlan {
                             })
                             .collect();
                         tags.push(PlannedTag {
+                            is_literal: !c.is_wildcard(),
                             tag: c.pattern.clone(),
                             origin: prov(block.line),
                             matched_rules,
