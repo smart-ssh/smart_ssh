@@ -21,14 +21,22 @@
 //! weil sie keine Zeilennummern liefert (§3.1.5), `Include` selbst gegen
 //! `$HOME/.ssh` auflöst und einen `Match`-Block in den vorhergehenden
 //! `Host`-Block mischt.
+//!
+//! Die **Gegenrichtung** — Profile nach `ssh_config` schreiben (§3.2) —
+//! liegt in [`export`]. Beide Richtungen teilen sich [`quoting`]: welche
+//! Zeichen ein Wert quoten braucht, ist eine Eigenschaft des Formats, nicht
+//! der Leserichtung (§9/Q-1 Punkt 5).
 
+pub mod export;
 pub mod parser;
 pub mod pattern;
 pub mod plan;
+pub mod quoting;
 
 #[cfg(test)]
 mod tests;
 
+pub use export::{build_export, ExportPlan, ExportedServer};
 pub use parser::{
     parse_source, FileParse, HostBlock, IncludeDirective, ParsedFile, SkippedDirective,
     SkippedKind, Value, ValueTooLong, MAX_VALUE_CHARS,
@@ -39,3 +47,4 @@ pub use plan::{
     JumpTarget, MatchedRule, PlannedEntry, PlannedGroup, PlannedTag, Provenance,
     ProxyJumpRejection, SkipReason, SkippedReport, Sourced,
 };
+pub use quoting::{needs_quoting, quote_value};
