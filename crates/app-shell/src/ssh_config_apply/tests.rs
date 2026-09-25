@@ -1,7 +1,6 @@
 //! Tests zu Spec 0075, Schritt 3 (§6.3.4–9, §6.3.15–16, §6.4.1, §6.4.1a,
 //! §6.4.1b, §6.4.3a, §6.4.8).
 
-use std::path::Path;
 use std::sync::Mutex;
 
 use ssh_manager_core::profiles::ssh_config::{build_plan, ImportSource, Inventory};
@@ -147,22 +146,64 @@ async fn t_6_4_1_weg_a_liest_keine_schluesseldatei() {
     assert!(!dump.contains("GEHEIMER_SCHLUESSEL"));
 }
 
+/// §6.4.1b — **Die Vorschau öffnet nichts.** Der Nachweis läuft über den
+/// echten Vorschau-Pfad (`read_import` + `build_plan`) gegen echte Dateien
+/// auf der Platte, und die Schlüsseldateien sind so präpariert, dass jedes
+/// Öffnen auffiele: Rechte `000`.
+///
+/// Die erste Fassung dieses Tests konnte nicht scheitern (Review-Runde 1):
+/// Sie rief die Vorschau nie auf, sondern prüfte nur, dass eine frische
+/// Fixture leer ist.
+#[cfg(unix)]
 #[tokio::test]
 async fn t_6_4_1b_die_vorschau_oeffnet_nichts() {
-    // §6.4.1b: Derselbe Aufbau, aber der Nutzer bricht ab — hier: es wird
-    // gar nicht angewandt. Der Plan allein darf nichts geöffnet haben.
-    let plan = plan_from(
-        "Host a\n  IdentityFile /k/a\nHost b\n  IdentityFile /k/b\nHost c\n  IdentityFile /k/c\n",
-    );
-    let f = Fixture::new();
-    // Der Plan steht — und trägt die Pfade, aber keinen Inhalt.
-    for (i, name) in ["a", "b", "c"].iter().enumerate() {
-        assert_eq!(plan.entries[i].name, *name);
-        assert!(plan.entries[i].identity_file.is_some());
+    use std::os::unix::fs::PermissionsExt;
+
+    let d = tempfile::tempdir().unwrap();
+    // Drei Schlüsseldateien mit erkennbarem Inhalt, für niemanden lesbar.
+    let mut key_paths = Vec::new();
+    for n in ["a", "b", "c"] {
+        let p = d.path().join(format!("id_{n}"));
+        std::fs::write(&p, MARKER_KEY).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o000)).unwrap();
+        key_paths.push(p);
     }
-    assert!(!format!("{plan:?}").contains("GEHEIMER_SCHLUESSEL"));
-    // Abbruch: nichts angewandt ⇒ Serverliste unverändert (§6.3.8).
+    let cfg = d.path().join("config");
+    let mut text = String::new();
+    for (n, p) in ["a", "b", "c"].iter().zip(&key_paths) {
+        text.push_str(&format!("Host {n}\n  IdentityFile {}\n", p.display()));
+    }
+    std::fs::write(&cfg, &text).unwrap();
+
+    // Der **echte** Vorschau-Pfad.
+    let read = crate::ssh_config_import::read_import(&cfg).expect("Vorschau");
+    let plan = build_plan(
+        &read.sources,
+        Inventory {
+            servers: &[],
+            groups: &[],
+            rules: &[],
+            local_server_id: ssh_manager_core::shared::ServerId(Uuid::nil()),
+        },
+    );
+
+    // Die Pfade stehen im Plan — der Inhalt nirgends. Wäre eine der Dateien
+    // geöffnet worden, wäre der Marker hier (oder der Lauf wäre an den
+    // Rechten gescheitert).
+    assert_eq!(plan.entries.len(), 3);
+    for e in &plan.entries {
+        assert!(e.identity_file.is_some(), "{} ohne Pfad", e.name);
+    }
+    let dump = format!("{read:?}{plan:?}");
+    assert!(
+        !dump.contains("GEHEIMER_SCHLUESSEL"),
+        "die Vorschau hat eine Schlüsseldatei geöffnet"
+    );
+
+    // Und der Nutzer bricht ab: nichts angewandt, nichts angelegt (§6.3.8).
+    let f = Fixture::new();
     assert!(f.servers().await.is_empty());
+    assert!(f.creds.secrets.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -457,6 +498,44 @@ async fn t_6_3_9_fehler_mitten_im_anlegen_nimmt_profile_und_gruppen_zurueck() {
     );
 }
 
+/// §3.1.11 und die Zusage aus `servers::create_server` („Kein verwaister
+/// Eintrag für eine `ServerId`, die es nicht (mehr) gibt"): Nach einem
+/// Fehler darf auf Weg (b) **kein** Schlüssel im Schlüsselbund
+/// zurückbleiben.
+///
+/// Der andere Rollback-Test fährt Weg (a), wo nichts geschrieben wird, und
+/// konnte diesen Fund aus Review-Runde 1 deshalb nicht sehen.
+#[tokio::test]
+async fn t_3_1_11_rollback_raeumt_auch_den_schluesselbund() {
+    let plan = plan_from(
+        "Host a\n  IdentityFile /k/a\nHost b\n  IdentityFile /k/b\nHost c\n  IdentityFile /k/c\n",
+    );
+    let f = Fixture::new();
+    let spy = SpyKeyFiles::default();
+    let choices: Vec<EntryChoice> = (0..3)
+        .map(|i| choose(i, IdentityMode::IntoKeychain))
+        .collect();
+    // Der dritte Aufruf scheitert — zwei Schlüssel liegen dann schon im
+    // Schlüsselbund.
+    f.store.fail_create_server_after(3);
+
+    f.apply(&plan, &choices, &spy)
+        .await
+        .expect_err("sollte scheitern");
+
+    // Profile und Gruppen sind weg …
+    assert!(f.servers().await.is_empty());
+    assert!(f.store.list_groups().await.unwrap().is_empty());
+    // … und der Schlüsselbund ist leer. Ohne das Abräumen lägen hier zwei
+    // private Schlüssel unter ServerIds, die es nicht mehr gibt.
+    let left = f.creds.secrets.lock().unwrap();
+    assert!(
+        left.is_empty(),
+        "verwaiste Schlüsselbund-Einträge: {:?}",
+        left.keys().collect::<Vec<_>>()
+    );
+}
+
 // ------------------------------------------- Jump-Host
 
 #[tokio::test]
@@ -523,29 +602,69 @@ async fn t_6_3_15_markierter_pfad_wird_trotzdem_angelegt() {
 
 // ------------------------------------------- DiskKeyFiles
 
+/// §5.5: Weg (b) benutzt **denselben** Leser wie die Handstelle, also den
+/// echten [`crate::key_files::OsKeyFileReader`] mit allen Prüfungen aus
+/// Spec 0076 — nicht eine eigene, schwächere Fassung.
+fn disk() -> DiskKeyFiles<'static> {
+    // `Box::leak`: Der Leser ist zustandslos und lebt im Betrieb ohnehin so
+    // lange wie der `AppState`; im Test spart das eine Hilfsstruktur.
+    let reader: &'static crate::key_files::OsKeyFileReader =
+        Box::leak(Box::new(crate::key_files::OsKeyFileReader::new()));
+    DiskKeyFiles { reader }
+}
+
 #[test]
-fn t_disk_key_files_meldet_gruende_ohne_inhalt() {
+fn t_5_5_weg_b_benutzt_dieselben_pruefungen_wie_die_handstelle() {
     let d = tempfile::tempdir().unwrap();
+
+    // (1) Fehlende Datei.
     let missing = d.path().join("gibtsnicht");
     assert_eq!(
-        DiskKeyFiles.read_key(&missing.display().to_string()),
+        disk().read_key(&missing.display().to_string()),
         Err(IdentityFallbackReason::Missing)
     );
 
-    let not_a_key = d.path().join("notes.txt");
-    std::fs::write(&not_a_key, "GEHEIMER_TEXT_4711\n").unwrap();
-    let err = DiskKeyFiles
-        .read_key(&not_a_key.display().to_string())
-        .expect_err("kein Schlüssel");
+    // (2) **Der Fund aus Review-Runde 1:** eine gewöhnliche Textdatei, die
+    // die Zeichenfolge `PRIVATE KEY` enthält, aber kein gültiger Schlüssel
+    // ist. Die erste Fassung prüfte nur diesen Teilstring und hätte den
+    // Inhalt als „privaten Schlüssel" in den Schlüsselbund gelegt.
+    let fake = d.path().join("notizen.txt");
+    std::fs::write(
+        &fake,
+        "-----BEGIN OPENSSH PRIVATE KEY-----\nGEHEIMER_TEXT_4711\n-----END OPENSSH PRIVATE KEY-----\n",
+    )
+    .unwrap();
+    let err = disk()
+        .read_key(&fake.display().to_string())
+        .expect_err("kein gültiger Schlüssel");
     assert_eq!(err, IdentityFallbackReason::NotAKey);
-    // Der Grund trägt keinen Dateiinhalt.
+    // Der Grund trägt keinen Dateiinhalt (§5.1).
     assert!(!format!("{err:?}").contains("GEHEIMER_TEXT"));
 
-    let real = d.path().join("id_ed25519");
-    std::fs::write(&real, MARKER_KEY).unwrap();
+    // (3) Ein relativer Pfad ist beim Lesen nicht auflösbar (Spec 0076 A-3).
     assert_eq!(
-        DiskKeyFiles.read_key(&real.display().to_string()),
-        Ok(MARKER_KEY.to_string())
+        disk().read_key("keys/id_rsa"),
+        Err(IdentityFallbackReason::PathNotAbsolute)
     );
-    let _ = Path::new("");
+}
+
+/// §5.6 / Review-Runde 1: Ein FIFO am `IdentityFile`-Pfad darf das Kommando
+/// nicht unbegrenzt hängen lassen. Die erste Fassung benutzte
+/// `fs::read_to_string` ohne `O_NONBLOCK` und ohne Prüfung der Dateiart.
+#[cfg(unix)]
+#[test]
+fn t_5_5_fifo_haengt_nicht() {
+    let d = tempfile::tempdir().unwrap();
+    let fifo = d.path().join("pipe");
+    let c = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
+    // SAFETY: gültiger, nullterminierter Pfad in einem frischen Tempdir.
+    let rc = unsafe { libc::mkfifo(c.as_ptr(), 0o600) };
+    assert_eq!(rc, 0, "mkfifo fehlgeschlagen");
+
+    // Ohne Leser-seitige Prüfung blockiert schon das Öffnen — der Test
+    // käme nie zurück. Mit ihr ist es ein Befund.
+    let err = disk()
+        .read_key(&fifo.display().to_string())
+        .expect_err("FIFO ist kein Schlüssel");
+    assert_eq!(err, IdentityFallbackReason::NotARegularFile);
 }

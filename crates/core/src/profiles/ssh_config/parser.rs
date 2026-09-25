@@ -331,6 +331,24 @@ pub fn parse_source(bytes: &[u8]) -> Result<FileParse, ValueTooLong> {
         }
 
         let Some(known) = Known::from_keyword(&kw_lower) else {
+            // §3.3 gilt **unbedingt**, nicht nur für die sieben übernommenen
+            // Direktiven: Der Vorspann sagt „Wird eine überschritten, bricht
+            // der Import ab", ohne Einschränkung. Vorher stand die Prüfung
+            // ausschließlich hinter diesem Filter, sodass
+            // `UnknownDirective <100 000 Zeichen>` durchlief
+            // (Review-Runde 1).
+            //
+            // Gemessen wird der **Wert** (`rest`), nicht die Rohzeile: §3.3
+            // spricht von der „Länge eines einzelnen Werts", und das
+            // Schlüsselwort samt Einrückung gehört nicht dazu. Ohne zu
+            // tokenisieren — für eine Zeile, die wir ohnehin nur melden,
+            // wäre das verschwendet.
+            if too_long.is_none() {
+                let n = rest.chars().count();
+                if n > MAX_VALUE_CHARS {
+                    too_long = Some(ValueTooLong { line, chars: n });
+                }
+            }
             // §3.1.5: Name melden, nie den Wert — und wenn das erste Wort
             // nicht wie ein Name aussieht, nur die Zeilennummer.
             let kind = if looks_like_directive_name(kw) {

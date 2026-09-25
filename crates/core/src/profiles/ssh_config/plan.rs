@@ -134,6 +134,10 @@ pub enum SkipReason {
     InvalidValue,
     /// Block ohne verwendbaren Alias (§4.3).
     EmptyAlias,
+    /// Ein gemischter `Host`-Block (`Host web1 *.de`) gilt ganz als
+    /// Platzhalterblock (ADR 0074, Punkt 3); seine buchstäblichen Angaben
+    /// ergeben **kein** Profil. Gemeldet statt verschluckt (§3.1.5).
+    MixedWildcardBlock,
     /// `Include` jenseits von Tiefe 3 (§3.1.4).
     IncludeTooDeep,
     /// Diese Datei wurde in diesem Import schon gelesen (§3.1.4).
@@ -342,6 +346,22 @@ pub fn build_plan(sources: &[ImportSource], inv: Inventory<'_>) -> ImportPlan {
     for (fi, src) in sources.iter().enumerate() {
         for block in &src.parsed.blocks {
             if block.is_wildcard() {
+                // Ein **gemischter** Block (`Host web1 *.de`) gilt ganz als
+                // Platzhalterblock (ADR 0074, Punkt 3). Seine
+                // buchstäblichen Angaben ergeben deshalb kein Profil — aber
+                // das darf nicht stillschweigend geschehen (§3.1.5,
+                // „Stillschweigend verschlucken bleibt ausgeschlossen"):
+                // Der Nutzer, der `web1` erwartet hat, bekäme sonst weder
+                // ein Profil noch einen Hinweis (Review-Runde 1).
+                if block.clauses.iter().any(|c| !c.negated && !c.is_wildcard()) {
+                    plan.skipped.push(SkippedReport {
+                        file: src.path.clone(),
+                        line: block.line,
+                        directive: SkippedKind::Directive("Host".to_string()),
+                        reason: SkipReason::MixedWildcardBlock,
+                        entry: None,
+                    });
+                }
                 continue;
             }
             let mut any = false;
@@ -450,6 +470,22 @@ pub fn build_plan(sources: &[ImportSource], inv: Inventory<'_>) -> ImportPlan {
                     for c in &block.clauses {
                         if c.negated || c.pattern == "*" {
                             // `Host *` trägt keine Information (§3.1.3).
+                            continue;
+                        }
+                        // **Nur ein Muster wird ein Schlagwort, nie ein
+                        // buchstäblicher Name.** Ein gemischter Block wie
+                        // `Host prod *` ist ein Platzhalterblock (ADR 0074,
+                        // Punkt 3) — ohne diese Zeile würde daraus für den
+                        // Server `prod` das Schlagwort `prod` entstehen, und
+                        // damit könnte eine fremde Datei **jedes beliebige**
+                        // buchstäbliche Schlagwort anhängen und jede
+                        // bestehende `Scope::Tag`-Regel exakt treffen
+                        // (Review-Runde 1). §5.2a stützt seine
+                        // Risikoeinschätzung ausdrücklich darauf, dass
+                        // importierte Schlagworte **immer** `*`, `?` oder
+                        // `!` enthalten; diese Prüfung stellt genau das her,
+                        // statt die Annahme zu unterlaufen.
+                        if !c.is_wildcard() {
                             continue;
                         }
                         if !c.matches(alias) || tag_seen.contains(&c.pattern) {

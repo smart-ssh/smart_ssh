@@ -198,6 +198,17 @@ impl Walker {
         }
         self.bytes += bytes.len() as u64;
 
+        // §4.2 und §9/Q-1 Punkt 6: „Die Grenzen aus §3.3 greifen weiter
+        // **vor** dem Parser." Für die Zeilengrenze galt das vorher nicht —
+        // eine 8-MiB-Datei mit Millionen kurzer unbekannter Zeilen wurde
+        // erst vollständig geparst und baute dabei Millionen Meldungen auf,
+        // bevor die Grenze feuerte (Review-Runde 1). Hier gezählt, ohne zu
+        // parsen.
+        let newlines = bytes.iter().filter(|b| **b == b'\n').count() as u64;
+        if self.lines + newlines + 1 > MAX_TOTAL_LINES {
+            return Err(ImportAbort::TotalLines);
+        }
+
         let parsed = match parse_source(&bytes) {
             Err(too_long) => {
                 return Err(ImportAbort::ValueTooLong {

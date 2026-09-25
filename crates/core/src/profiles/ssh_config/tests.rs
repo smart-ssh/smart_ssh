@@ -891,3 +891,60 @@ fn t_platzhalter_wirkt_ueber_dateigrenze() {
     );
     assert_eq!(entry(&plan, "web1.prod.de").username.value, "deploy");
 }
+
+// ------------------------- Review-Runde 1: Nachbesserungen
+
+#[test]
+fn t_review1_gemischter_platzhalterblock_wird_gemeldet() {
+    // ADR 0074 Punkt 3: `Host web1 *.de` gilt ganz als Platzhalterblock, es
+    // entsteht also **kein** Profil `web1`. Das darf aber nicht
+    // stillschweigend geschehen (§3.1.5) — vorher fehlte die Meldung.
+    let plan = empty_plan("Host web1 *.de\n  User deploy\nHost echt.de\n");
+    assert!(!names(&plan).contains(&"web1".to_string()));
+    assert!(
+        plan.skipped
+            .iter()
+            .any(|s| s.reason == SkipReason::MixedWildcardBlock && s.line == 1),
+        "gemischter Block nicht gemeldet: {:?}",
+        plan.skipped
+    );
+    // Als Vorgabe wirkt der Block weiter.
+    assert_eq!(entry(&plan, "echt.de").username.value, "deploy");
+}
+
+#[test]
+fn t_review1_buchstaebliches_schlagwort_entsteht_nicht() {
+    // Der Fund aus Review-Runde 1: Über einen gemischten Block konnte eine
+    // fremde Datei ein **buchstäbliches** Schlagwort anhängen und damit jede
+    // bestehende `Scope::Tag`-Regel exakt treffen. §5.2a stützt seine
+    // Risikoeinschätzung darauf, dass importierte Schlagworte immer einen
+    // Platzhalter enthalten — genau das stellt die Prüfung wieder her.
+    let plan = empty_plan("Host prod\n  HostName 10.0.0.1\nHost prod *\n  User deploy\n");
+    let e = entry(&plan, "prod");
+    assert!(
+        !e.tags.iter().any(|t| t.tag == "prod"),
+        "buchstäbliches Schlagwort ist doch entstanden: {:?}",
+        e.tags
+    );
+    // Jedes Schlagwort, das entsteht, trägt einen Platzhalter.
+    for t in &e.tags {
+        assert!(
+            t.tag.contains('*') || t.tag.contains('?'),
+            "Schlagwort ohne Platzhalter: {}",
+            t.tag
+        );
+    }
+    // Die Vorgabe aus dem Block wirkt trotzdem.
+    assert_eq!(e.username.value, "deploy");
+}
+
+#[test]
+fn t_review1_wertgrenze_gilt_auch_fuer_unbekannte_direktive() {
+    // §3.3 ist unbedingt formuliert. Vorher stand die Prüfung hinter dem
+    // Filter der sieben übernommenen Direktiven, sodass dieser Fall durchlief.
+    let long = "x".repeat(super::parser::MAX_VALUE_CHARS + 1);
+    let text = format!("Host a\n  UnknownDirective {long}\n");
+    let err = parse_source(text.as_bytes()).expect_err("Grenze greift");
+    assert_eq!(err.line, 2);
+    assert!(!format!("{err:?}").contains(&long));
+}

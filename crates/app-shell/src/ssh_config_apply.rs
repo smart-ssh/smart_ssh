@@ -9,9 +9,11 @@
 //! diesem Lauf erzeugten Profile **und Gruppen** wieder abgeräumt.
 
 use chrono::Utc;
+use secrecy::ExposeSecret;
 use ssh_manager_core::profiles::ssh_config::{ImportPlan, JumpTarget};
 use ssh_manager_core::profiles::{CredentialStore, Group, GroupId, ProfileStore};
 use ssh_manager_core::shared::ServerId;
+use ssh_manager_core::ssh::{KeyFileError, KeyFileReader};
 
 use crate::dto::{AuthMethodInput, ServerInput};
 use crate::error::{CommandError, CommandResult};
@@ -76,12 +78,42 @@ pub struct IdentityFallback {
     pub reason: IdentityFallbackReason,
 }
 
+/// Warum ein Eintrag auf Weg (a) zurueckgefallen ist (§3.1.9 b).
+///
+/// Die Varianten spiegeln [`KeyFileError`] — der Import erfindet keine
+/// eigenen Kategorien und vor allem keine eigenen, schwaecheren Pruefungen
+/// (§5.5). Traegt **nie** Dateiinhalt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum IdentityFallbackReason {
     Missing,
     Unreadable,
     NotAKey,
+    /// Spec 0076: keine gewoehnliche Datei (etwa ein FIFO) — ohne diese
+    /// Pruefung haenge das Kommando an einer Pipe unbegrenzt.
+    NotARegularFile,
+    /// Spec 0076: ueber der Groessengrenze.
+    TooLarge,
+    /// §3.1.9 (a) haette es markiert; beim Lesen ist ein nicht absoluter
+    /// Pfad nicht aufloesbar.
+    PathNotAbsolute,
+}
+
+impl From<&KeyFileError> for IdentityFallbackReason {
+    fn from(e: &KeyFileError) -> Self {
+        match e {
+            KeyFileError::NotFound { .. } => IdentityFallbackReason::Missing,
+            KeyFileError::NotReadable { .. } => IdentityFallbackReason::Unreadable,
+            // §5.5: Fuer den Import ist ein Rechte-Mangel ein **Befund**,
+            // keine Sperre — `enforce_permissions = false`. Kaeme die
+            // Variante doch, waere "nicht lesbar" die ehrliche Auskunft.
+            KeyFileError::PermissionsTooOpen { .. } => IdentityFallbackReason::Unreadable,
+            KeyFileError::TooLarge { .. } => IdentityFallbackReason::TooLarge,
+            KeyFileError::NotARegularFile { .. } => IdentityFallbackReason::NotARegularFile,
+            KeyFileError::PathNotAbsolute { .. } => IdentityFallbackReason::PathNotAbsolute,
+            KeyFileError::InvalidKey { .. } => IdentityFallbackReason::NotAKey,
+        }
+    }
 }
 
 /// Liest eine Schlüsseldatei für Weg (b). Getrennt als Trait, damit die
@@ -122,8 +154,23 @@ pub async fn apply_import(
             })
     };
 
-    // Welche Einträge entstehen wirklich? §3.1.8: ein Konflikt wird
-    // übersprungen, wenn der Nutzer keinen neuen Namen gewählt hat.
+    // §4.3: "Ist er leer ..., wird **kein Profil angelegt**." Das gilt auch
+    // fuer den Namen, den der Nutzer bei einem Konflikt eingibt - er ist der
+    // einzige Freitext, der von aussen in ein erzeugtes Profil gelangt.
+    // Vorher wurde er ungetrimmt und auch leer uebernommen (Review-Runde 1),
+    // womit der Import genau die namenlosen Profile in Serie erzeugen konnte,
+    // die §4.3 ausschliesst.
+    let clean_rename = |c: &EntryChoice| -> Option<String> {
+        let name = c.rename_to.as_ref()?.trim().to_string();
+        if name.is_empty() {
+            None
+        } else {
+            Some(name)
+        }
+    };
+
+    // Welche Eintraege entstehen wirklich? §3.1.8: ein Konflikt wird
+    // uebersprungen, wenn der Nutzer keinen brauchbaren neuen Namen hat.
     let mut take = vec![false; plan.entries.len()];
     let mut outcome = ApplyOutcome::default();
     for (i, e) in plan.entries.iter().enumerate() {
@@ -131,7 +178,7 @@ pub async fn apply_import(
         if !c.selected {
             continue;
         }
-        if e.conflict.is_some() && c.rename_to.is_none() {
+        if e.conflict.is_some() && clean_rename(&c).is_none() {
             outcome.skipped_conflicts += 1;
             continue;
         }
@@ -181,7 +228,7 @@ pub async fn apply_import(
             updated_at: now,
         };
         if let Err(err) = store.create_group(&group).await {
-            rollback(store, &made_servers, &made_groups).await;
+            rollback(store, credential_store, &made_servers, &made_groups).await;
             return Err(err.into());
         }
         group_ids[i] = Some(group.id);
@@ -251,7 +298,7 @@ pub async fn apply_import(
             .collect();
 
         let input = ServerInput {
-            name: c.rename_to.clone().unwrap_or_else(|| e.name.clone()),
+            name: clean_rename(&c).unwrap_or_else(|| e.name.clone()),
             host: e.host.value.clone(),
             port: e.port.value,
             username: e.username.value.clone(),
@@ -275,7 +322,7 @@ pub async fn apply_import(
                 outcome.created_servers += 1;
             }
             Err(err) => {
-                rollback(store, &made_servers, &made_groups).await;
+                rollback(store, credential_store, &made_servers, &made_groups).await;
                 return Err(CommandError {
                     message: format!(
                         "Eintrag „{}“ konnte nicht angelegt werden: {}. Es wurde nichts angelegt.",
@@ -295,8 +342,22 @@ pub async fn apply_import(
 /// zuerst — `groups.parent_id`/`servers.group_id` sind Fremdschlüssel, und
 /// Gruppen in umgekehrter Anlegereihenfolge, damit ein Kind vor seinem
 /// Elternteil verschwindet.
-async fn rollback(store: &dyn ProfileStore, servers: &[ServerId], groups: &[GroupId]) {
+async fn rollback(
+    store: &dyn ProfileStore,
+    credential_store: &(dyn CredentialStore + Send + Sync),
+    servers: &[ServerId],
+    groups: &[GroupId],
+) {
     for id in servers.iter().rev() {
+        // **Erst der Schluesselbund, dann die Zeile.** Auf Weg (b) hat
+        // `create_server` den Schluesselinhalt schon unter
+        // `server:<id>:private_key` abgelegt; nur das Profil zu loeschen
+        // liesse ihn als verwaisten Eintrag zu einer `ServerId` zurueck, die
+        // es nicht mehr gibt - genau das, was `servers::create_server` fuer
+        // seinen eigenen Fehlerpfad ausdruecklich zusichert. Eine erste
+        // Fassung dieses Rollbacks tat das (Review-Runde 1); der
+        // Rollback-Test fuhr Weg (a) und konnte es nicht sehen.
+        crate::server_credentials::delete_all_possible_server_secrets(credential_store, *id);
         // Ein Fehler beim Aufräumen darf den ursprünglichen Fehler nicht
         // verdecken — er wird vermerkt, nicht weitergeworfen.
         if let Err(err) = store.delete_server(id).await {
@@ -318,25 +379,45 @@ async fn rollback(store: &dyn ProfileStore, servers: &[ServerId], groups: &[Grou
     }
 }
 
-/// Weg (b) im Betrieb: liest die Datei von der Platte.
+/// Weg (b) im Betrieb - ueber **denselben** [`KeyFileReader`], den das
+/// Anlegen eines Servers von Hand benutzt.
 ///
-/// §5.1: Geöffnet wird **nur**, was im Plan stand. Diese Quelle bekommt
+/// §5.5 ist hier woertlich zu nehmen: "dann gelten die Pruefungen aus Spec
+/// 0076 (Dateirechte, symbolische Links, Gueltigkeit des Schluessels), und
+/// zwar dieselben wie beim Anlegen eines Servers von Hand. Der Import
+/// erfindet dafuer keine eigenen, schwaecheren Regeln."
+///
+/// Die erste Fassung tat genau das - `exists()` + `read_to_string` +
+/// Teilstring-Suche nach `PRIVATE KEY` - und war damit an drei Stellen
+/// schwaecher als die Handstelle (Review-Runde 1): keine Groessengrenze,
+/// keine Pruefung der Dateiart (ein FIFO haette das Kommando unbegrenzt
+/// haengen lassen), und eine Teilstring-Pruefung statt echter
+/// Schluesselgueltigkeit, ueber die eine beliebige Textdatei mit dieser
+/// Zeichenfolge als "privater Schluessel" in den Schluesselbund gewandert
+/// waere.
+///
+/// `enforce_permissions: false` - fuer den Import ist ein Rechte-Mangel ein
+/// **Befund**, keine Sperre; genau so sieht es der Trait-Kommentar zu
+/// [`KeyFileReader::read`] fuer den Import ausdruecklich vor.
+///
+/// §5.1: Geoeffnet wird **nur**, was im Plan stand. Diese Quelle bekommt
 /// deshalb den Pfad aus dem Plan, nie einen aus dem Frontend.
-pub struct DiskKeyFiles;
+pub struct DiskKeyFiles<'a> {
+    pub reader: &'a (dyn KeyFileReader + Send + Sync),
+}
 
-impl KeyFileSource for DiskKeyFiles {
+impl KeyFileSource for DiskKeyFiles<'_> {
     fn read_key(&self, path: &str) -> Result<String, IdentityFallbackReason> {
-        let p = std::path::Path::new(path);
-        if !p.exists() {
-            return Err(IdentityFallbackReason::Missing);
+        match self.reader.read(path, false) {
+            // §3.1.9 (b) / Spec 0076 C-4: Der Dateiinhalt geht byte-gleich
+            // in den Schluesselbund, auch wenn er verschluesselt ist - nach
+            // einer Passphrase wird beim Import nicht gefragt.
+            Ok(content) => Ok(content.key.expose_secret().to_string()),
+            // Kein Fehler laesst den Import scheitern: dieser eine Server
+            // faellt auf Weg (a) zurueck, und die Meldung sagt warum
+            // (§3.1.9 b). Der Grund traegt nie Dateiinhalt.
+            Err(err) => Err(IdentityFallbackReason::from(&err)),
         }
-        let content = std::fs::read_to_string(p).map_err(|_| IdentityFallbackReason::Unreadable)?;
-        // Eine Datei, die kein gültiger OpenSSH-Schlüssel ist, lässt den
-        // Import nicht scheitern (§3.1.9 b) — sie fällt auf Weg (a) zurück.
-        if !content.contains("PRIVATE KEY") {
-            return Err(IdentityFallbackReason::NotAKey);
-        }
-        Ok(content)
     }
 }
 
@@ -434,6 +515,7 @@ fn reason_key(r: &ssh_manager_core::profiles::ssh_config::SkipReason) -> String 
         R::OutsideHostBlock => "outsideHostBlock",
         R::InvalidValue => "invalidValue",
         R::EmptyAlias => "emptyAlias",
+        R::MixedWildcardBlock => "mixedWildcardBlock",
         R::IncludeTooDeep => "includeTooDeep",
         R::IncludeAlreadyRead => "includeAlreadyRead",
         R::IncludeUnreadable => "includeUnreadable",
@@ -620,11 +702,15 @@ pub async fn apply_ssh_config_import(
     state: tauri::State<'_, crate::state::AppState>,
     choices: Vec<EntryChoice>,
 ) -> CommandResult<ApplyOutcome> {
+    // **Nehmen und leeren in einem Zug**, unter derselben Sperre: Vorher
+    // wurde nur geklont und erst nach Erfolg geleert - zwei ueberlappende
+    // Aufrufe sahen beide `Some` und haetten beide angelegt (Review-Runde 1).
+    // `take` macht aus dem Kommentar "der Plan ist verbraucht" eine Tatsache.
     let pending = state
         .pending_ssh_config_import
         .lock()
         .expect("pending import lock")
-        .clone();
+        .take();
     let Some(pending) = pending else {
         return Err(CommandError::from(
             "Es liegt keine Import-Vorschau vor. Bitte die Datei erneut wählen.".to_string(),
@@ -637,16 +723,11 @@ pub async fn apply_ssh_config_import(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         state.keychain,
-        &DiskKeyFiles,
+        &DiskKeyFiles {
+            reader: state.key_file_reader.as_ref(),
+        },
     )
     .await?;
-
-    // Der Plan ist verbraucht — ein zweites Bestätigen darf nicht noch
-    // einmal anlegen.
-    *state
-        .pending_ssh_config_import
-        .lock()
-        .expect("pending import lock") = None;
     Ok(outcome)
 }
 
