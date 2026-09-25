@@ -4,8 +4,9 @@
 // jeder Änderung der Wahl neu berechnet (nicht die statische
 // `identityFilePaths`-Liste aus dem DTO); ein buchstäbliches Schlagwort ist
 // abwählbar und geht bei Abwahl als `droppedTags` in die Bestätigung; die
-// Vorgabe entspricht dem Kern (alles angewählt, s.
-// `defaultTagSelected`-Kommentar zu Q-BL-0216-02).
+// Vorgabe folgt Q-BL-0216-02: ein buchstäbliches Schlagwort, das eine
+// bestehende Tag-Allow-Regel trifft, ist standardmäßig abgewählt, jedes
+// andere bleibt angewählt (s. `defaultTagSelected`).
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -81,6 +82,21 @@ function preview(): SshConfigImportPreviewDto {
   };
 }
 
+// Q-BL-0216-02: derselbe Grundriss wie `preview()`, aber mit einem
+// zusätzlichen buchstäblichen Schlagwort, das **nur** eine Deny-Regel
+// trifft — als Gegenstück zum buchstäblichen "prod" (trifft eine
+// Allow-Regel) in der gemeinsamen Fixture.
+function previewWithDenyOnlyLiteralTag(): SshConfigImportPreviewDto {
+  const dto = preview();
+  dto.entries[0].tags.push({
+    tag: "onlydeny",
+    origin: { file: "/tmp/config", line: 6, block: "onlydeny *" },
+    matchedRules: [{ ruleId: "rule-3", action: "deny" }],
+    isLiteral: true,
+  });
+  return dto;
+}
+
 function renderDialog(onImported = vi.fn(), onClose = vi.fn()) {
   render(
     <I18nextProvider i18n={testI18n}>
@@ -143,7 +159,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     expect(warnBox.closest("div")).toHaveTextContent("/keys/id_ed25519");
   });
 
-  it("submits the default choice unchanged: identity mode keepAsFile, no dropped tags", async () => {
+  it("submits the default choice unchanged: identity mode keepAsFile, the literal Allow-tag pre-dropped (Q-BL-0216-02)", async () => {
     vi.mocked(previewSshConfigImport).mockResolvedValue(preview());
     vi.mocked(applySshConfigImport).mockResolvedValue({
       createdServers: 2,
@@ -164,12 +180,33 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
       index: 0,
       selected: true,
       identityMode: "keepAsFile",
-      droppedTags: [],
+      // "prod" ist buchstäblich und trifft eine Allow-Regel (rule-2) —
+      // Q-BL-0216-02 lässt es standardmäßig abgewählt, ohne dass der Nutzer
+      // etwas tut. "*.prod.de" (Muster, trifft nur eine Confirm-Regel)
+      // bleibt angewählt.
+      droppedTags: ["prod"],
     });
     expect(onImported).toHaveBeenCalled();
   });
 
-  it("deselecting the literal tag sends it as droppedTags on confirm", async () => {
+  // Q-BL-0216-02 (Spec 0075, §9): Ein buchstäbliches Schlagwort, das eine
+  // bestehende Tag-Allow-Regel trifft, ist in der Vorschau standardmäßig
+  // abgewählt; trifft es nur eine Deny- oder Confirm-Regel (oder keine),
+  // bleibt es angewählt. Gegen den alten Stand (`defaultTagSelected` gab
+  // immer `true` zurück) rot gesehen: beide Erwartungen unten schlugen
+  // fehl, weil "prod" (Allow-Treffer) als angewählt startete.
+  it("Q-BL-0216-02: a literal tag hitting an Allow rule starts deselected, one hitting only Deny stays selected", async () => {
+    vi.mocked(previewSshConfigImport).mockResolvedValue(previewWithDenyOnlyLiteralTag());
+    renderDialog();
+    await screen.findByText("web1");
+
+    const allowHitCheckbox = screen.getByText("prod").closest("label")?.querySelector("input");
+    const denyOnlyHitCheckbox = screen.getByText("onlydeny").closest("label")?.querySelector("input");
+    expect(allowHitCheckbox).not.toBeChecked();
+    expect(denyOnlyHitCheckbox).toBeChecked();
+  });
+
+  it("reselecting the literal Allow-tag that starts deselected removes it from droppedTags on confirm", async () => {
     vi.mocked(previewSshConfigImport).mockResolvedValue(preview());
     vi.mocked(applySshConfigImport).mockResolvedValue({
       createdServers: 2,
@@ -183,13 +220,14 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
 
     const literalTagCheckbox = screen.getByText("prod").closest("label")?.querySelector("input");
     expect(literalTagCheckbox).toBeTruthy();
+    expect(literalTagCheckbox).not.toBeChecked();
     fireEvent.click(literalTagCheckbox as HTMLInputElement);
 
     fireEvent.click(screen.getByText("Importieren"));
 
     await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
     const choices = vi.mocked(applySshConfigImport).mock.calls[0][0];
-    expect(choices[0].droppedTags).toEqual(["prod"]);
+    expect(choices[0].droppedTags).toEqual([]);
   });
 
   it("cancel closes the dialog without applying anything", async () => {

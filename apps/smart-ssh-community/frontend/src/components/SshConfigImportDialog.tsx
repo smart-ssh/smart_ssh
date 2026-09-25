@@ -18,15 +18,17 @@ interface SshConfigImportDialogProps {
   onImported: () => void;
 }
 
-/** Spec 0075, §5.2a — ob ein Schlagwort standardmäßig angewählt bleibt. Die
- * Frage, ob ein buchstäblicher Treffer auf eine Allow-Regel standardmäßig
- * abgewählt sein soll, ist offen (Q-BL-0216-02) und noch nicht entschieden.
- * **Einzige Stelle**, die sich ändern muss, sobald eine Antwort vorliegt.
- * Bis dahin gilt unverändert die Vorgabe aus `core`: alles angewählt — die
- * Kennzeichnung in der Oberfläche (nicht die Vorgabe) trägt hier die
- * Sichtbarkeit. */
-function defaultTagSelected(_tag: SshConfigPreviewTagDto): boolean {
-  return true;
+/** Spec 0075, §5.2a — ob ein Schlagwort standardmäßig angewählt bleibt.
+ * Q-BL-0216-02 (Stefan, 2026-09-25, §9 der Spec): Ein buchstäbliches
+ * Schlagwort (`isLiteral`), das eine bestehende Tag-**Allow**-Regel trifft,
+ * ist standardmäßig **abgewählt** — es hebt sonst ein importiertes Profil
+ * unbemerkt von `Confirm` auf `Allow`. Trifft es nur `Deny`/`Confirm` oder
+ * keine Regel, bleibt es angewählt — eine Tag-`Deny`-Regel bleibt so ohne
+ * Zutun wirksam. Der Nutzer kann in beide Richtungen umwählen
+ * (`toggleTag`). Dies ist die **einzige** Stelle, die diese Vorgabe trägt. */
+function defaultTagSelected(tag: SshConfigPreviewTagDto): boolean {
+  if (!tag.isLiteral) return true;
+  return !tag.matchedRules.some((r) => r.action === "allow");
 }
 
 interface EntryUiState {
