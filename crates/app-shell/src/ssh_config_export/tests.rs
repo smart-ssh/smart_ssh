@@ -138,7 +138,80 @@ fn t_6_3_12_proxyjump_mit_umbenanntem_alias_besteht_ssh_g() {
     );
 }
 
+// -------------------------------------------------- §6.4.6a äußerer Zeuge
+
+/// §6.4.6a verlangt ausdrücklich „`ssh -F … -G` besteht" — der Test in
+/// `crates/core/src/profiles/ssh_config/export/tests.rs` prüft nur den
+/// eigenen Alias-Rundlauf (spec-reviewer-Fund, Runde 1: das ist genau die
+/// Symmetriefalle, die §9/Q-1 Punkt 5 ausschließen will). Hier der externe
+/// Zeuge dazu, mit demselben bösartigen Namen wie dort.
+#[test]
+fn t_6_4_6a_ssh_g_besteht_mit_boesartigem_namen() {
+    let s = server("evil\n#\"name", "10.0.0.1", 22, "");
+    let plan = build_export(std::slice::from_ref(&s), &[], LOCAL);
+    let alias = &plan.exported[0].alias;
+
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("export.conf");
+    std::fs::write(&file, &plan.text).unwrap();
+
+    let (code, values) = ssh_g(&file, alias);
+    assert_eq!(code, 0, "ssh -G verwarf die Datei mit dem sanierten Alias");
+    assert_eq!(values.get("hostname").map(String::as_str), Some("10.0.0.1"));
+}
+
+// -------------------------------------------- Fall 2/13 aus Review-Runde 1
+
+/// §9/Q-1 Punkt 5: `ssh -G` als äußerer Zeuge entscheidet, welche
+/// Quoting-Fassung stimmt — nicht der Rundlauf durch unseren eigenen Leser
+/// (der `\"` nicht entschachtelt, s. `quoting.rs`-Moduldoc). Ein Wert mit
+/// eingebettetem `"`.
+#[test]
+fn t_review1_quote_value_maskiert_eingebettetes_anfuehrungszeichen() {
+    let s = server("web1", "10.0.0.1", 22, "a \"b c");
+    let plan = build_export(std::slice::from_ref(&s), &[], LOCAL);
+
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("export.conf");
+    std::fs::write(&file, &plan.text).unwrap();
+
+    let (code, values) = ssh_g(&file, "web1");
+    assert_eq!(code, 0, "ssh -G verwarf die Datei:\n{}", plan.text);
+    assert_eq!(values.get("user").map(String::as_str), Some("a \"b c"));
+}
+
+/// spec-reviewer Fall 13, Runde 1: Ein Wert, der **unmittelbar vor dem
+/// schließenden Anführungszeichen** auf `\` endet — ohne Maskierung des
+/// Backslashs selbst frisst `\"` das schließende Zeichen, und `ssh` liest
+/// den Rest der Zeile als Müll statt als eigenen Wert. *Gegenbeweis:* mit
+/// `quote_value`s `\`-Maskierung entfernt, scheitert dieser Test (geprüft,
+/// danach wiederhergestellt — s. Bericht: mit dem *ursprünglichen* Wert aus
+/// Runde 1 [Leerzeichen vor dem `\`] bestand `ssh -G` überraschend auch
+/// ohne Maskierung; erst dieser Wert — der `\` steht direkt vor dem
+/// schließenden Zeichen — zeigt den Fehler zuverlässig).
+#[test]
+fn t_review1_quote_value_maskiert_trailing_backslash() {
+    let s = server("web1", "10.0.0.1", 22, "a b\\");
+    let plan = build_export(std::slice::from_ref(&s), &[], LOCAL);
+
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("export.conf");
+    std::fs::write(&file, &plan.text).unwrap();
+
+    let (code, values) = ssh_g(&file, "web1");
+    assert_eq!(code, 0, "ssh -G verwarf die Datei:\n{}", plan.text);
+    assert_eq!(values.get("user").map(String::as_str), Some("a b\\"));
+}
+
 // ------------------------------------------------------- §3.2.5 / §6.3.14
+//
+// Die meisten Fälle laufen über `resolves_to_ssh_config_under` mit einem
+// `tempdir()` als injiziertem Home-Verzeichnis (spec-reviewer-Fund, Runde 1:
+// die ursprüngliche Fassung testete nur gegen das *echte* `~` dieser
+// Maschine — Fall 3/4 unten ließen sich damit gar nicht zuverlässig
+// herstellen, weil `~/.ssh` nicht überall existiert). Der Wrapper
+// `resolves_to_user_ssh_config` (echtes `~`) bekommt genau einen Test, der
+// nur die Verdrahtung prüft.
 
 #[test]
 fn t_6_3_14_eigene_ssh_config_wird_als_ziel_abgelehnt() {
@@ -151,30 +224,73 @@ fn t_6_3_14_eigene_ssh_config_wird_als_ziel_abgelehnt() {
 
 #[test]
 fn t_6_3_14_anderer_pfad_wird_nicht_abgelehnt() {
-    let dir = tempfile::tempdir().unwrap();
-    let other = dir.path().join("smart-ssh-export.conf");
-    assert!(!super::resolves_to_user_ssh_config(&other));
+    let home = tempfile::tempdir().unwrap();
+    let other_dir = tempfile::tempdir().unwrap();
+    let other = other_dir.path().join("smart-ssh-export.conf");
+    assert!(!super::resolves_to_ssh_config_under(&other, home.path()));
 }
 
 #[test]
 fn t_6_3_14_symlink_auf_ssh_verzeichnis_wird_erkannt() {
-    let Some(home) = super::home_dir() else {
-        return;
-    };
-    let real_ssh = home.join(".ssh");
-    if !real_ssh.is_dir() {
-        // Auf einer frischen Maschine ohne `~/.ssh` ist der Symlink-Fall
-        // gar nicht herstellbar — der lexikalische Vergleich (oberer Test)
-        // deckt den häufigsten Fall bereits ab.
-        return;
-    }
-    let dir = tempfile::tempdir().unwrap();
-    let link = dir.path().join("ssh-link");
+    let home = tempfile::tempdir().unwrap();
+    let real_ssh = home.path().join(".ssh");
+    std::fs::create_dir_all(&real_ssh).unwrap();
+    let target_dir = tempfile::tempdir().unwrap();
+    let link = target_dir.path().join("ssh-link");
     #[cfg(unix)]
     {
-        if std::os::unix::fs::symlink(&real_ssh, &link).is_err() {
-            return;
-        }
-        assert!(super::resolves_to_user_ssh_config(&link.join("config")));
+        std::os::unix::fs::symlink(&real_ssh, &link).unwrap();
+        assert!(super::resolves_to_ssh_config_under(
+            &link.join("config"),
+            home.path()
+        ));
     }
+}
+
+/// spec-reviewer-Fund, Runde 1: `~/.ssh/Config`/`~/.ssh/CONFIG` wichen dem
+/// lexikalischen **und** dem alten `file_name() ==`-Vergleich aus — auf
+/// macOS (APFS/HFS+ Standardeinstellung) und Windows ist das aber dieselbe
+/// Datei wie `~/.ssh/config`. *Gegenbeweis:* mit dem ursprünglichen
+/// `path.file_name() == target.file_name()` (byteweise) statt
+/// `filenames_match_case_insensitive` scheitert dieser Test (geprüft,
+/// danach wiederhergestellt — s. Bericht).
+#[test]
+fn t_review1_andere_gross_kleinschreibung_wird_erkannt() {
+    let home = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(home.path().join(".ssh")).unwrap();
+    for variant in ["Config", "CONFIG", "cOnFiG"] {
+        let candidate = home.path().join(".ssh").join(variant);
+        assert!(
+            super::resolves_to_ssh_config_under(&candidate, home.path()),
+            "{variant} wurde nicht als ~/.ssh/config erkannt"
+        );
+    }
+    // Eine andere Datei im selben Ordner bleibt erlaubt — die
+    // Groß-/Kleinschreibung darf nicht zu einer pauschalen Ablehnung jeder
+    // Datei in `~/.ssh` führen.
+    assert!(!super::resolves_to_ssh_config_under(
+        &home.path().join(".ssh").join("known_hosts"),
+        home.path()
+    ));
+}
+
+/// spec-reviewer-Fund, Runde 1: Ein Symlink, der die gewählte Datei selbst
+/// (nicht nur ihr Elternverzeichnis) auf die echte `~/.ssh/config` zeigen
+/// lässt, wich der alten Prüfung aus — `canonicalize` lief nur über das
+/// Elternverzeichnis von `path`. *Gegenbeweis:* ohne Fall 3 (Auflösen von
+/// `path` selbst) scheitert dieser Test (geprüft, danach wiederhergestellt).
+#[cfg(unix)]
+#[test]
+fn t_review1_symlink_auf_die_datei_selbst_wird_erkannt() {
+    let home = tempfile::tempdir().unwrap();
+    let ssh_dir = home.path().join(".ssh");
+    std::fs::create_dir_all(&ssh_dir).unwrap();
+    let real_config = ssh_dir.join("config");
+    std::fs::write(&real_config, "# echte Konfiguration\n").unwrap();
+
+    let other_dir = tempfile::tempdir().unwrap();
+    let link = other_dir.path().join("smart-ssh-export.conf");
+    std::os::unix::fs::symlink(&real_config, &link).unwrap();
+
+    assert!(super::resolves_to_ssh_config_under(&link, home.path()));
 }

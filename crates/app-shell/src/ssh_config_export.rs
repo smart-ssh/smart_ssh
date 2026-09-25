@@ -11,7 +11,7 @@
 
 use std::path::{Path, PathBuf};
 
-use ssh_manager_core::profiles::ssh_config::{build_export, ExportPlan};
+use ssh_manager_core::profiles::ssh_config::{build_export, quote_value, ExportPlan};
 
 use crate::error::{CommandError, CommandResult};
 
@@ -50,7 +50,12 @@ fn build_result_dto(plan: &ExportPlan, path: &Path) -> ExportResultDto {
                 renamed: e.renamed,
             })
             .collect(),
-        include_hint: format!("Include {}", path.display()),
+        // spec-reviewer-Fund, Runde 1: ungequotet war die Zeile für jeden
+        // Pfad mit Leerzeichen (z. B. "…/Google Drive/…") schlicht falsch —
+        // `ssh` läse sie am ersten Leerzeichen ab als „garbage at end of
+        // line". Dieselbe Quoting-Regel wie im Schreiber selbst (§4.3),
+        // nicht neu erfunden.
+        include_hint: format!("Include {}", quote_value(&path.display().to_string())),
     }
 }
 
@@ -65,26 +70,81 @@ fn home_dir() -> Option<PathBuf> {
 /// Ziel ab — auch wenn der Nutzer sie im Dialog auswählt und bestätigt."
 ///
 /// `~/.ssh/config` existiert auf vielen Rechnern **nicht**, ein reines
-/// `canonicalize()` scheiterte also am häufigsten Fall. Deshalb zuerst ein
-/// rein lexikalischer Vergleich (funktioniert unabhängig davon, ob die
-/// Datei existiert), zusätzlich — falls das Elternverzeichnis existiert —
-/// ein Vergleich der **aufgelösten** Elternverzeichnisse, damit ein
-/// symlink-verschleiertes `~/.ssh` nicht durchrutscht.
+/// `canonicalize()` scheiterte also am häufigsten Fall. Deshalb mehrere
+/// Prüfungen, jede für sich verschärfend, nie lockernd (spec-reviewer-Fund,
+/// Runde 1 — die ersten beiden Fassungen bestanden beide adversarialen
+/// Fälle unten NICHT):
+///
+/// 1. Rein lexikalischer Vergleich — funktioniert unabhängig davon, ob die
+///    Datei existiert.
+/// 2. Derselbe Vergleich, aber der **Dateiname case-insensitiv**: macOS
+///    (APFS/HFS+ in der Standardeinstellung) und Windows behandeln
+///    `Config`/`CONFIG` als dieselbe Datei wie `config`. Ein Nutzer, der
+///    versehentlich (oder absichtlich) die Groß-/Kleinschreibung ändert,
+///    überschreibt auf diesen Systemen trotzdem die echte Datei — ein
+///    Treffer mehr kostet hier nichts außer einem selteneren
+///    Dateinamenswunsch, ein verpasster Treffer kostet die Datei.
+/// 3. **Aufgelöst**: Ist `path` selbst ein Symlink (oder Hardlink) auf die
+///    tatsächliche `~/.ssh/config`, erkennt das nur `canonicalize(path)`
+///    direkt — nicht nur des Elternverzeichnisses.
+/// 4. Wie 2, aber auf den **aufgelösten Elternverzeichnissen** — deckt ein
+///    symlink-verschleiertes `~/.ssh`-Verzeichnis ab.
 fn resolves_to_user_ssh_config(path: &Path) -> bool {
     let Some(home) = home_dir() else {
         return false;
     };
+    resolves_to_ssh_config_under(path, &home)
+}
+
+/// Kern von [`resolves_to_user_ssh_config`], mit injizierbarem
+/// Home-Verzeichnis — testbar mit einem `tempdir()` statt dem echten `~`
+/// dieser Maschine (die z. B. kein `.ssh` haben muss, damit Fall 3/4 prüfbar
+/// sind).
+fn resolves_to_ssh_config_under(path: &Path, home: &Path) -> bool {
     let target = home.join(".ssh").join("config");
 
+    // 1) Lexikalisch, exakt.
     if path.components().eq(target.components()) {
         return true;
     }
 
+    // 2) Lexikalisch, Dateiname case-insensitiv (setzt gleiches
+    // Elternverzeichnis voraus — sonst träfe es jede beliebige Datei
+    // namens "config" irgendwo im Dateisystem).
+    if path
+        .parent()
+        .is_some_and(|p| p.components().eq(target.parent().unwrap().components()))
+        && filenames_match_case_insensitive(path, &target)
+    {
+        return true;
+    }
+
+    // 3) Aufgelöst: `path` selbst könnte ein Symlink/Hardlink auf die
+    // echte Datei sein.
+    if let Ok(canon_target) = std::fs::canonicalize(&target) {
+        if let Ok(canon_path) = std::fs::canonicalize(path) {
+            if canon_path == canon_target {
+                return true;
+            }
+        }
+    }
+
+    // 4) Aufgelöste Elternverzeichnisse, Dateiname case-insensitiv.
     match (
         path.parent().and_then(|p| std::fs::canonicalize(p).ok()),
         target.parent().and_then(|p| std::fs::canonicalize(p).ok()),
     ) {
-        (Some(a), Some(b)) => a == b && path.file_name() == target.file_name(),
+        (Some(a), Some(b)) => a == b && filenames_match_case_insensitive(path, &target),
+        _ => false,
+    }
+}
+
+fn filenames_match_case_insensitive(a: &Path, b: &Path) -> bool {
+    match (
+        a.file_name().and_then(|n| n.to_str()),
+        b.file_name().and_then(|n| n.to_str()),
+    ) {
+        (Some(x), Some(y)) => x.eq_ignore_ascii_case(y),
         _ => false,
     }
 }

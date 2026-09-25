@@ -628,11 +628,24 @@
         "drop": "Nicht übernehmen"
       },
       "notUsable": "beim Verbinden nicht benutzbar, absoluter Pfad nötig",
-      "willOpenHeading": "Diese {{count}} Datei(en) würden beim Bestätigen gelesen:"
+      "willOpenHeading": "Diese {{count}} Datei(en) würden beim Bestätigen gelesen:",
+      "fallbackReason": {
+        "missing": "Datei fehlt",
+        "unreadable": "nicht lesbar",
+        "notAKey": "kein gültiger Schlüssel",
+        "notARegularFile": "keine gewöhnliche Datei",
+        "tooLarge": "zu groß",
+        "pathNotAbsolute": "Pfad nicht absolut"
+      }
     },
     "tag": {
       "literalHint": "Buchstäbliches Schlagwort aus einer fremden Datei — kann eine Allow-Regel exakt treffen. Einzeln abwählbar.",
-      "matchesRuleHint": "trifft {{count}} bestehende Filterregel(n)"
+      "matchesRuleHint": "trifft {{count}} bestehende Filterregel(n): {{actions}}",
+      "action": {
+        "allow": "Allow",
+        "confirm": "Confirm",
+        "deny": "Deny"
+      }
     },
     "skippedHeading": "{{count}} nicht übernommene Zeile(n)",
     "skipped": {
@@ -662,7 +675,8 @@
     "applying": "Importiert …",
     "result": {
       "success": "{{created}} Server angelegt, {{groups}} Ordner, {{skipped}} Konflikt(e) übersprungen.",
-      "withFallbacks": "{{created}} Server angelegt, {{groups}} Ordner, {{skipped}} Konflikt(e) übersprungen. {{fallbacks}} Schlüsseldatei(en) konnten nicht eingelesen werden — der Pfad wurde stattdessen übernommen."
+      "fallbacksDetail": "{{count}} Schlüsseldatei(en) konnten nicht eingelesen werden, der Pfad wurde stattdessen übernommen: {{detail}}.",
+      "encryptedDetail": "{{count}} Schlüssel wurden verschlüsselt übernommen — Passphrase nachtragen, bevor die erste Verbindung gelingt: {{detail}}."
     }
   },
   "sshConfigExport": {

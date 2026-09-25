@@ -63,8 +63,14 @@ fn reparse(text: &str) -> crate::profiles::ssh_config::ImportPlan {
 
 // ------------------------------------------------------- §6.3.1 Grundform
 
+// spec-reviewer-Fund, Runde 1: hieß zuvor `t_6_3_1_…`, prüfte aber die
+// bedingten Felder (§3.2.1), nicht §6.3.1 (Vorschau==Ergebnis, Feld für
+// Feld) — der echte §6.3.1-Test steht in
+// `crates/app-shell/src/ssh_config_apply/tests.rs`
+// (`t_6_3_1_vorschau_und_ergebnis_stimmen_ueberein`), wo Vorschau-DTO und
+// angewandtes Ergebnis beide verfügbar sind.
 #[test]
-fn t_6_3_1_pflichtfelder_und_bedingte_felder() {
+fn t_3_2_1_pflichtfelder_und_bedingte_felder() {
     let mut a = server("web1", "10.0.0.1", 22, "");
     a.id = ServerId::new();
     let mut b = server("web2", "10.0.0.2", 2222, "max");
@@ -296,6 +302,21 @@ fn t_6_4_6a_name_mit_newline_raute_anfuehrungszeichen() {
     assert_eq!(reimported.entries[0].name, exported.alias);
 }
 
+/// spec-reviewer Fall 3, Runde 1: `username` hat beim Anlegen von Hand
+/// keinen Format-Zwang (§1.3) — ein eingebettetes `\n` durfte nicht dazu
+/// führen, dass aus dem Rest des Werts eine eigene, wirksame Zeile wird.
+#[test]
+fn t_review1_username_mit_newline_bricht_nicht_aus_dem_wert_aus() {
+    let s = server("web1", "10.0.0.1", 22, "max\nProxyJump evil.example.com");
+    let plan = build_export(std::slice::from_ref(&s), &[], LOCAL);
+
+    assert!(
+        !plan.text.contains("\nProxyJump evil.example.com"),
+        "der Username brach aus der Zeile aus:\n{}",
+        plan.text
+    );
+}
+
 // ----------------------------------------------------- Weitere Kernfälle
 
 #[test]
@@ -321,4 +342,76 @@ fn gruppenname_erscheint_als_kommentar_nicht_als_direktive() {
 
     let plan = build_export(&[s], std::slice::from_ref(&group), LOCAL);
     assert!(plan.text.contains("# smart-ssh: Gruppe „Produktion“"));
+}
+
+// ------------------------- spec-reviewer-Fund, Runde 1: Kommentar-Ausbruch
+
+/// Ein Gruppenname ist der Name der Datei, aus der die Gruppe beim Import
+/// entstand (§4.5) — roh übernommen, nicht saniert wie ein `Host`-Alias
+/// (§4.3 gilt nur für Aliase). Ein `\n` darin beendete die `#`-Kommentar-
+/// zeile vorzeitig; alles danach stand als **eigene, wirksame** Zeile *vor*
+/// dem ersten `Host`-Block und galt damit („der erste gewinnt") für jeden
+/// Host der Datei. *Gegenbeweis:* mit `sanitize_comment_text` durch die
+/// Identität ersetzt, scheitert dieser Test (geprüft, danach
+/// wiederhergestellt — s. Bericht).
+#[test]
+fn t_review1_gruppenname_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
+    let group_id = GroupId::new();
+    let group = Group {
+        id: group_id,
+        name: "x\nProxyJump evil.example.com\n#.conf".to_string(),
+        parent_id: None,
+        notes: String::new(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+    let mut s = server("web1", "10.0.0.1", 22, "");
+    s.group_id = Some(group_id);
+
+    let plan = build_export(&[s], std::slice::from_ref(&group), LOCAL);
+
+    assert!(
+        !plan.text.contains("\nProxyJump evil.example.com\n"),
+        "der Gruppenname brach aus dem Kommentar aus:\n{}",
+        plan.text
+    );
+    // Jede Zeile ist entweder ein Kommentar oder Teil des einen Blocks —
+    // keine zusätzliche, nicht eingerückte `ProxyJump`-Zeile.
+    for line in plan.text.lines() {
+        assert!(
+            line.starts_with('#')
+                || line.is_empty()
+                || line.starts_with("Host")
+                || line.starts_with("    "),
+            "unerwartete Zeile außerhalb eines Kommentars/Blocks: {line:?}"
+        );
+    }
+}
+
+/// Dasselbe Schutzziel für Schlagworte (§6.4.6, Exportseite) — ein
+/// Schlagwort kann wörtlich aus einer fremden `ssh_config` stammen
+/// (§3.1.3).
+#[test]
+fn t_review1_schlagwort_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
+    let mut s = server("web1", "10.0.0.1", 22, "");
+    s.tags = vec!["x\nUser root\n#".to_string()];
+
+    let plan = build_export(&[s], &[], LOCAL);
+
+    assert!(
+        !plan.text.contains("\nUser root\n"),
+        "das Schlagwort brach aus dem Kommentar aus:\n{}",
+        plan.text
+    );
+}
+
+/// §1.3: das Anlegen von Hand kennt keinen Pflichtfeld-Check — ein leerer
+/// `host` ist erreichbar. `HostName ""` ist gegenüber echtem `ssh`
+/// fragwürdig; die Zeile bleibt deshalb ganz weg (§3.2.1 setzt implizit
+/// einen nicht-leeren Wert voraus, s. Moduldoc).
+#[test]
+fn leerer_host_erzeugt_keine_hostname_zeile() {
+    let s = server("web1", "", 22, "");
+    let plan = build_export(&[s], &[], LOCAL);
+    assert!(!plan.text.contains("HostName"));
 }

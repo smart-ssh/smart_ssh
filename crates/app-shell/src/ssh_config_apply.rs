@@ -68,6 +68,21 @@ pub struct ApplyOutcome {
     /// §3.1.9 (b): Einträge, die auf Weg (a) zurückgefallen sind, mit
     /// Grund — **nie** mit Dateiinhalt.
     pub identity_fallbacks: Vec<IdentityFallback>,
+    /// §3.1.9 (b), letzter Punkt: Einträge, deren Schlüssel auf Weg (b)
+    /// **verschlüsselt** übernommen wurde — die Vorschau kann das nicht
+    /// vorher wissen (§5.1: eine Schlüsseldatei wird nur beim Bestätigen
+    /// geöffnet, nie in der Vorschau), deshalb steht es erst hier, nach dem
+    /// tatsächlichen Lesen. Die Meldung dazu MUSS sagen, dass die
+    /// Passphrase nachzutragen ist, bevor die erste Verbindung gelingt
+    /// (spec-reviewer-Fund, Runde 1: fehlte bisher ganz).
+    pub identity_encrypted: Vec<IdentityEncryptedNotice>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdentityEncryptedNotice {
+    pub entry: String,
+    pub path: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -116,6 +131,15 @@ impl From<&KeyFileError> for IdentityFallbackReason {
     }
 }
 
+/// Ergebnis eines erfolgreichen Lesens auf Weg (b) — der Inhalt für den
+/// Schlüsselbund plus, ob der Schlüssel verschlüsselt war (Grundlage für
+/// [`IdentityEncryptedNotice`], §3.1.9 b).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyFileRead {
+    pub content: String,
+    pub encrypted: bool,
+}
+
 /// Liest eine Schlüsseldatei für Weg (b). Getrennt als Trait, damit die
 /// Tests belegen können, **welche** Dateien geöffnet wurden — und dass die
 /// Vorschau keine öffnet (§6.4.1b).
@@ -124,7 +148,7 @@ impl From<&KeyFileError> for IdentityFallbackReason {
 /// Anlegen jedes Profils ist async), und ohne diese Schranke wäre das
 /// Future des Tauri-Kommandos nicht `Send`.
 pub trait KeyFileSource: Send + Sync {
-    fn read_key(&self, path: &str) -> Result<String, IdentityFallbackReason>;
+    fn read_key(&self, path: &str) -> Result<KeyFileRead, IdentityFallbackReason>;
 }
 
 /// Führt den bestätigten Plan aus (§3.1.11).
@@ -248,13 +272,27 @@ pub async fn apply_import(
         // §3.1.9: Der Weg entscheidet, ob überhaupt eine Datei aufgeht.
         let auth = match (&e.identity_file, c.identity_mode) {
             (Some(idf), IdentityMode::IntoKeychain) => match keys.read_key(&idf.path) {
-                Ok(content) => AuthMethodInput::PrivateKey {
-                    key_content: Some(content),
-                    // §3.1.9 (b): Nach einer Passphrase wird beim Import
-                    // **nicht** gefragt; ein verschlüsselter Schlüssel geht
-                    // byte-gleich in den Schlüsselbund (Spec 0076, C-4).
-                    passphrase: None,
-                },
+                Ok(read) => {
+                    // §3.1.9 (b), letzter Punkt: Die Vorschau konnte das
+                    // nicht wissen (§5.1) — jetzt, nach dem tatsächlichen
+                    // Lesen, steht es in der Abschlussmeldung, damit der
+                    // Nutzer die Passphrase nachträgt, bevor er sich zum
+                    // ersten Mal verbindet.
+                    if read.encrypted {
+                        outcome.identity_encrypted.push(IdentityEncryptedNotice {
+                            entry: e.name.clone(),
+                            path: idf.path.clone(),
+                        });
+                    }
+                    AuthMethodInput::PrivateKey {
+                        key_content: Some(read.content),
+                        // §3.1.9 (b): Nach einer Passphrase wird beim Import
+                        // **nicht** gefragt; ein verschlüsselter Schlüssel
+                        // geht byte-gleich in den Schlüsselbund (Spec 0076,
+                        // C-4).
+                        passphrase: None,
+                    }
+                }
                 Err(reason) => {
                     // Ein Fehler lässt den Import **nicht** scheitern:
                     // dieser eine Server fällt auf Weg (a) zurück, und die
@@ -407,12 +445,17 @@ pub struct DiskKeyFiles<'a> {
 }
 
 impl KeyFileSource for DiskKeyFiles<'_> {
-    fn read_key(&self, path: &str) -> Result<String, IdentityFallbackReason> {
+    fn read_key(&self, path: &str) -> Result<KeyFileRead, IdentityFallbackReason> {
         match self.reader.read(path, false) {
             // §3.1.9 (b) / Spec 0076 C-4: Der Dateiinhalt geht byte-gleich
             // in den Schluesselbund, auch wenn er verschluesselt ist - nach
-            // einer Passphrase wird beim Import nicht gefragt.
-            Ok(content) => Ok(content.key.expose_secret().to_string()),
+            // einer Passphrase wird beim Import nicht gefragt. `encrypted`
+            // wandert mit, damit die Abschlussmeldung sagen kann, dass die
+            // Passphrase nachzutragen ist (spec-reviewer-Fund, Runde 1).
+            Ok(content) => Ok(KeyFileRead {
+                content: content.key.expose_secret().to_string(),
+                encrypted: content.encrypted,
+            }),
             // Kein Fehler laesst den Import scheitern: dieser eine Server
             // faellt auf Weg (a) zurueck, und die Meldung sagt warum
             // (§3.1.9 b). Der Grund traegt nie Dateiinhalt.
@@ -479,7 +522,7 @@ pub struct PreviewEntryDto {
 /// `origin: None` ⇒ Vorgabe des Produkts, nicht aus der Datei — spiegelt
 /// [`ssh_manager_core::profiles::ssh_config::Sourced`] 1:1, nur
 /// `camelCase` und ohne die interne `Provenance`-Struct direkt zu
-/// serialisieren (ADR zu diesem Schritt, P10 Nr. 2).
+/// serialisieren (ADR 0075).
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourcedDto<T> {
@@ -566,11 +609,35 @@ pub struct PreviewTagDto {
     pub tag: String,
     pub origin: OriginDto,
     /// §5.2a: nicht leer ⇒ das Schlagwort trifft diese bestehenden Regeln.
-    pub matched_rules: Vec<String>,
+    pub matched_rules: Vec<PreviewMatchedRuleDto>,
     /// Schlagwort ohne Platzhalter, aus einer buchstäblichen Angabe in einem
     /// gemischten Block — trifft eine Tag-Regel **exakt** und gehört deshalb
     /// deutlicher gekennzeichnet (§5.2a, offene Entscheidung Q-BL-0216-02).
     pub is_literal: bool,
+}
+
+/// §5.2a verlangt, „die betroffene Regel" zu nennen, nicht nur, dass eine
+/// Regel getroffen wurde (spec-reviewer-Fund, Runde 1 — `action` fehlte
+/// vorher ganz, das DTO warf `MatchedRule::action` weg). `action` ist das
+/// sicherheitsrelevante Feld: Nur eine **Allow**-Regel kann ein importiertes
+/// Profil von `Confirm` auf `Allow` heben (§5.2a) — eine `Deny`-Regel bleibt
+/// ohnehin wirksam. `Rule` selbst hat keinen sprechenden Namen (nur Muster +
+/// Aktion); eine vollständige Musteranzeige wäre eine weitere Ausbaustufe.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewMatchedRuleDto {
+    pub rule_id: String,
+    /// `"allow" | "confirm" | "deny"`.
+    pub action: String,
+}
+
+fn rule_action_key(a: &ssh_manager_core::filter::RuleAction) -> &'static str {
+    use ssh_manager_core::filter::RuleAction;
+    match a {
+        RuleAction::Allow => "allow",
+        RuleAction::Confirm => "confirm",
+        RuleAction::Deny => "deny",
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -622,8 +689,8 @@ fn reason_key(r: &ssh_manager_core::profiles::ssh_config::SkipReason) -> String 
 
 /// Baut die Vorschau aus Plan, Dateiliste und Bestand. Rein, damit sie
 /// prüfbar ist. `servers` wird **nur** gelesen, um den echten Namen eines
-/// Bestands-Jump-Ziels aufzulösen (`PreviewJumpDto`, ADR zu diesem Schritt,
-/// P10 Nr. 2) — vorher stand dort der Platzhaltertext `"(Bestand)"`.
+/// Bestands-Jump-Ziels aufzulösen (`PreviewJumpDto`, ADR 0075) — vorher
+/// stand dort der Platzhaltertext `"(Bestand)"`.
 pub fn build_preview_dto(
     plan: &ImportPlan,
     files: &[crate::ssh_config_import::FileReport],
@@ -651,7 +718,10 @@ pub fn build_preview_dto(
                     matched_rules: t
                         .matched_rules
                         .iter()
-                        .map(|m| m.rule_id.0.clone())
+                        .map(|m| PreviewMatchedRuleDto {
+                            rule_id: m.rule_id.0.clone(),
+                            action: rule_action_key(&m.action).to_string(),
+                        })
                         .collect(),
                     is_literal: t.is_literal,
                 })

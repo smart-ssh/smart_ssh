@@ -30,15 +30,43 @@ pub fn needs_quoting(value: &str) -> bool {
             .any(|c| c.is_whitespace() || c == '#' || c == '"')
 }
 
+/// Ersetzt Zeilenumbrüche (`\n`, `\r`) durch ein Leerzeichen.
+///
+/// **Anführungszeichen schützen davor nicht** — `ssh_config` ist
+/// zeilenbasiert wie unser eigener Parser: Ein echtes `\n` **innerhalb**
+/// eines gequoteten Werts beendet trotzdem die Zeile, der Rest steht als
+/// **eigene** Zeile in der Datei und kann eine wirksame Direktive werden
+/// (spec-reviewer-Fund, Runde 1). Betrifft jeden Wert, der ungeprüft aus
+/// dem Bestand kommt — `host`/`username` haben beim Anlegen von Hand
+/// keinen Format-Zwang (§1.3) — und jeden `# smart-ssh:`-Kommentar
+/// (Gruppenname, Schlagworte, `sftp_server_path`).
+///
+/// Eine allgemeine Kontrollzeichen-Politik für Server-/Gruppenfelder wäre
+/// die sauberere, aber größere Lösung (an der Eingangsgrenze, nicht hier);
+/// diese Funktion ist die Verteidigung im Schreiber, die für den Export
+/// unabhängig davon greift.
+pub fn strip_line_breaks(value: &str) -> String {
+    value.replace(['\n', '\r'], " ")
+}
+
 /// Setzt `value` bei Bedarf in Anführungszeichen (OpenSSH-Regel, §4.3): ein
 /// enthaltenes `"` wird mit `\"` maskiert. Wird nicht gequotet, wenn es
 /// nicht nötig ist — ein unnötig gequoteter Wert wäre kein Fehler, aber
 /// unnötige Abweichung von dem, was ein Nutzer von Hand geschrieben hätte.
+///
+/// **Zeilenumbrüche werden zuerst entfernt** ([`strip_line_breaks`]), dann
+/// **`\` maskiert, dann `"`** (beides spec-reviewer-Funde, Runde 1): Ohne
+/// die erste Reihenfolge könnte ein `\n` im Wert die Zeile aufbrechen (s.
+/// dortigen Kommentar); ohne die zweite ergab ein Wert, der auf `\` endet
+/// (`a b\`), vorher `"a b\"` — das Escapezeichen verschluckte das
+/// schließende Anführungszeichen, und `ssh` las den Rest der Zeile als
+/// Müll.
 pub fn quote_value(value: &str) -> String {
-    if !needs_quoting(value) {
-        return value.to_string();
+    let value = strip_line_breaks(value);
+    if !needs_quoting(&value) {
+        return value;
     }
-    let escaped = value.replace('"', "\\\"");
+    let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
     format!("\"{escaped}\"")
 }
 
@@ -73,5 +101,23 @@ mod tests {
         // Wort — `User ` (gefolgt von nichts) ist nicht dasselbe wie
         // `User ""`.
         assert_eq!(quote_value(""), "\"\"");
+    }
+
+    /// spec-reviewer-Fund, Runde 1: ein `\n` im Wert bricht die Zeile auf,
+    /// egal ob quotiert — Anführungszeichen sind kein mehrzeiliger
+    /// Container in einem zeilenbasierten Format.
+    #[test]
+    fn newline_in_value_does_not_break_the_line() {
+        let quoted = quote_value("max\nProxyJump evil");
+        assert!(
+            !quoted.contains('\n'),
+            "quotiert, aber trotzdem ein Zeilenumbruch: {quoted:?}"
+        );
+        assert_eq!(quoted, "\"max ProxyJump evil\"");
+    }
+
+    #[test]
+    fn carriage_return_in_value_is_also_stripped() {
+        assert!(!quote_value("a\rb").contains('\r'));
     }
 }

@@ -16,7 +16,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::quoting::quote_value;
+use super::quoting::{quote_value, strip_line_breaks};
 use crate::profiles::types::{AuthMethod, Group, GroupId, PostIngestPolicy, Server};
 use crate::shared::ServerId;
 
@@ -83,7 +83,7 @@ fn sanitize_alias_base(name: &str) -> String {
 /// Kollision — mit einem echten Namen oder einem anderen `server-<n>` —
 /// bekommt `-2`, `-3`, … angehängt. Die Spec legt die genaue Zählweise
 /// nicht fest; diese ist deterministisch und für den Rundlauf ausreichend
-/// (Design-Entscheidung, s. ADR zu diesem Schritt).
+/// (Design-Entscheidung, s. ADR 0075).
 fn assign_aliases(servers: &[&Server]) -> HashMap<ServerId, String> {
     let mut used: HashSet<String> = HashSet::new();
     let mut next_empty: u32 = 1;
@@ -116,6 +116,20 @@ fn assign_aliases(servers: &[&Server]) -> HashMap<ServerId, String> {
     out
 }
 
+/// §3.2.3-Kommentare tragen Werte, die **nicht** aus der `ssh_config`
+/// selbst stammen, sondern aus dem Bestand — ein Gruppenname ist der Name
+/// einer beim Import angelegten Datei (`file_stem_name`, roh übernommen),
+/// ein Schlagwort kann wörtlich aus einer fremden Datei stammen (§3.1.3).
+/// Beides landet hier in einer `#`-Kommentarzeile; ein `\n`/`\r` darin
+/// würde die Zeile beenden und alles Folgende als **eigene, wirksame**
+/// Direktive erscheinen lassen (spec-reviewer-Fund, Runde 1). Dieselbe
+/// [`strip_line_breaks`], die `quote_value` für Direktivenwerte benutzt —
+/// eine Zeichenklasse, eine Funktion, nicht zwei, die auseinanderlaufen
+/// könnten.
+fn sanitize_comment_text(value: &str) -> String {
+    strip_line_breaks(value)
+}
+
 /// Kommentarzeilen über einem Block (§3.2.3): was für **diesen** Server
 /// nicht abgebildet werden kann. Leer bleibt, was ohnehin leer/Vorgabe ist
 /// — eine Zeile „hier nicht abgebildet" für etwas, das es gar nicht gibt,
@@ -125,13 +139,19 @@ fn block_comments(server: &Server, group_name: Option<&str>) -> Vec<String> {
 
     if let Some(g) = group_name {
         lines.push(format!(
-            "# smart-ssh: Gruppe „{g}“ ist hier nicht abgebildet."
+            "# smart-ssh: Gruppe „{}“ ist hier nicht abgebildet.",
+            sanitize_comment_text(g)
         ));
     }
     if !server.tags.is_empty() {
+        let tags: Vec<String> = server
+            .tags
+            .iter()
+            .map(|t| sanitize_comment_text(t))
+            .collect();
         lines.push(format!(
             "# smart-ssh: Schlagworte ({}) sind hier nicht abgebildet.",
-            server.tags.join(", ")
+            tags.join(", ")
         ));
     }
     if !server.notes.trim().is_empty() {
@@ -147,7 +167,8 @@ fn block_comments(server: &Server, group_name: Option<&str>) -> Vec<String> {
     }
     if let Some(path) = &server.sftp_server_path {
         lines.push(format!(
-            "# smart-ssh: eigener sftp-server-Pfad ({path}) ist hier nicht abgebildet."
+            "# smart-ssh: eigener sftp-server-Pfad ({}) ist hier nicht abgebildet.",
+            sanitize_comment_text(path)
         ));
     }
 
@@ -211,7 +232,18 @@ pub fn build_export(servers: &[Server], groups: &[Group], local_server_id: Serve
             block.push('\n');
         }
         block.push_str(&format!("Host {}\n", quote_value(&alias)));
-        block.push_str(&format!("    HostName {}\n", quote_value(&s.host)));
+        // §3.2.1 nennt `HostName` ohne Bedingung — die Spec setzt einen
+        // nicht-leeren `host` voraus. §1.3 hält aber ausdrücklich fest,
+        // dass das Anlegen von Hand keinen Pflichtfeld-Check kennt; ein
+        // leerer `host` ist also erreichbar. `HostName ""` ist eine
+        // fragwürdige Zeile (ob `ssh -G` sie akzeptiert, hängt von der
+        // Version ab, s. ADR 0075) — ausgelassen verhält sich `ssh` wie
+        // ohne `HostName`: es nimmt den Alias. Das ist die sicherere
+        // Verallgemeinerung, keine Abweichung von einem Fall, den die Spec
+        // tatsächlich bedacht hat.
+        if !s.host.is_empty() {
+            block.push_str(&format!("    HostName {}\n", quote_value(&s.host)));
+        }
         // §3.2.1: nur wenn ≠ 22.
         if s.port != 22 {
             block.push_str(&format!("    Port {}\n", s.port));

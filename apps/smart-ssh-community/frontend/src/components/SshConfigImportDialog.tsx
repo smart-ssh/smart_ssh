@@ -18,14 +18,13 @@ interface SshConfigImportDialogProps {
   onImported: () => void;
 }
 
-/** Spec 0075, §5.2a/Q-BL-0216-02 (K3, noch offen — s. Frage-Datei): Ob ein
- * Schlagwort standardmäßig angewählt bleibt. **Einzige Stelle**, die sich
- * ändern muss, sollte die Antwort auf Q-BL-0216-02 eine andere Vorgabe für
- * buchstäbliche Treffer auf eine Allow-Regel verlangen (Architekten-
- * Empfehlung dort: Vorgabe nur für DIESEN Fall auf abgewählt drehen). Bis
- * dahin unverändert der Kern-Vorgabe: alles angewählt — die Kennzeichnung
- * in der Oberfläche (nicht die Vorgabe) trägt hier die Sichtbarkeit.
- */
+/** Spec 0075, §5.2a — ob ein Schlagwort standardmäßig angewählt bleibt. Die
+ * Frage, ob ein buchstäblicher Treffer auf eine Allow-Regel standardmäßig
+ * abgewählt sein soll, ist offen (Q-BL-0216-02) und noch nicht entschieden.
+ * **Einzige Stelle**, die sich ändern muss, sobald eine Antwort vorliegt.
+ * Bis dahin gilt unverändert die Vorgabe aus `core`: alles angewählt — die
+ * Kennzeichnung in der Oberfläche (nicht die Vorgabe) trägt hier die
+ * Sichtbarkeit. */
 function defaultTagSelected(_tag: SshConfigPreviewTagDto): boolean {
   return true;
 }
@@ -148,23 +147,38 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
     });
     try {
       const outcome = await applySshConfigImport(choices);
-      const fallbackCount = outcome.identityFallbacks.length;
-      showToast({
-        kind: "success",
-        message:
-          fallbackCount > 0
-            ? t("sshConfigImport.result.withFallbacks", {
-                created: outcome.createdServers,
-                groups: outcome.createdGroups,
-                skipped: outcome.skippedConflicts,
-                fallbacks: fallbackCount,
-              })
-            : t("sshConfigImport.result.success", {
-                created: outcome.createdServers,
-                groups: outcome.createdGroups,
-                skipped: outcome.skippedConflicts,
-              }),
-      });
+      // spec-reviewer-Fund, Runde 1: vorher stand hier nur die Anzahl —
+      // §3.1.9 (b) verlangt aber, dass die Meldung **sagt, warum** ein
+      // Eintrag zurückfiel bzw. **dass** eine Passphrase nachzutragen ist,
+      // je Eintrag.
+      const parts = [
+        t("sshConfigImport.result.success", {
+          created: outcome.createdServers,
+          groups: outcome.createdGroups,
+          skipped: outcome.skippedConflicts,
+        }),
+      ];
+      if (outcome.identityFallbacks.length > 0) {
+        const detail = outcome.identityFallbacks
+          .map((f) => `${f.entry} (${t(`sshConfigImport.identityFile.fallbackReason.${f.reason}`)})`)
+          .join(", ");
+        parts.push(
+          t("sshConfigImport.result.fallbacksDetail", {
+            count: outcome.identityFallbacks.length,
+            detail,
+          }),
+        );
+      }
+      if (outcome.identityEncrypted.length > 0) {
+        const detail = outcome.identityEncrypted.map((e) => e.entry).join(", ");
+        parts.push(
+          t("sshConfigImport.result.encryptedDetail", {
+            count: outcome.identityEncrypted.length,
+            detail,
+          }),
+        );
+      }
+      showToast({ kind: "success", message: parts.join(" ") });
       onImported();
       onClose();
     } catch (err) {
@@ -362,6 +376,14 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                             {e.tags.map((tag) => {
                               const dropped = st.droppedTags.has(tag.tag);
                               const flagged = tag.matchedRules.length > 0;
+                              // §5.2a verlangt, die betroffene Regel zu
+                              // nennen — mindestens ihre Wirkung (Allow
+                              // kann Confirm→Allow heben, Deny/Confirm
+                              // ändern nichts an der bestehenden Stufe).
+                              const actions = [...new Set(tag.matchedRules.map((r) => r.action))];
+                              const actionLabels = actions
+                                .map((a) => t(`sshConfigImport.tag.action.${a}`))
+                                .join(", ");
                               return (
                                 <label
                                   key={tag.tag}
@@ -376,7 +398,10 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                                     tag.isLiteral
                                       ? t("sshConfigImport.tag.literalHint")
                                       : flagged
-                                        ? t("sshConfigImport.tag.matchesRuleHint", { count: tag.matchedRules.length })
+                                        ? t("sshConfigImport.tag.matchesRuleHint", {
+                                            count: tag.matchedRules.length,
+                                            actions: actionLabels,
+                                          })
                                         : undefined
                                   }
                                 >
@@ -387,7 +412,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                                   />
                                   {tag.isLiteral && <span aria-hidden>⚠</span>}
                                   {tag.tag}
-                                  {flagged && <span>({tag.matchedRules.length})</span>}
+                                  {flagged && <span>({actionLabels})</span>}
                                 </label>
                               );
                             })}

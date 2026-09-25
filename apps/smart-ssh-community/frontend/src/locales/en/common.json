@@ -628,11 +628,24 @@
         "drop": "Don't take over"
       },
       "notUsable": "not usable when connecting, needs an absolute path",
-      "willOpenHeading": "These {{count}} file(s) would be read on confirm:"
+      "willOpenHeading": "These {{count}} file(s) would be read on confirm:",
+      "fallbackReason": {
+        "missing": "file missing",
+        "unreadable": "not readable",
+        "notAKey": "not a valid key",
+        "notARegularFile": "not a regular file",
+        "tooLarge": "too large",
+        "pathNotAbsolute": "path not absolute"
+      }
     },
     "tag": {
       "literalHint": "Literal tag from a foreign file — can match an Allow rule exactly. Deselectable individually.",
-      "matchesRuleHint": "matches {{count}} existing filter rule(s)"
+      "matchesRuleHint": "matches {{count}} existing filter rule(s): {{actions}}",
+      "action": {
+        "allow": "Allow",
+        "confirm": "Confirm",
+        "deny": "Deny"
+      }
     },
     "skippedHeading": "{{count}} line(s) not taken over",
     "skipped": {
@@ -662,7 +675,8 @@
     "applying": "Importing …",
     "result": {
       "success": "{{created}} servers created, {{groups}} folders, {{skipped}} conflict(s) skipped.",
-      "withFallbacks": "{{created}} servers created, {{groups}} folders, {{skipped}} conflict(s) skipped. {{fallbacks}} key file(s) could not be read — the path was kept instead."
+      "fallbacksDetail": "{{count}} key file(s) could not be read, the path was kept instead: {{detail}}.",
+      "encryptedDetail": "{{count}} key(s) were taken over encrypted — add the passphrase before the first connection: {{detail}}."
     }
   },
   "sshConfigExport": {

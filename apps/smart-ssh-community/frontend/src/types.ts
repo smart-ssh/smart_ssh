@@ -846,12 +846,21 @@ export interface SshConfigSourcedDto<T> {
   origin: SshConfigOriginDto | null;
 }
 
+/** §5.2a verlangt, „die betroffene Regel" zu nennen — `action` ist das
+ * sicherheitsrelevante Feld: Nur eine `allow`-Regel kann ein importiertes
+ * Profil von `Confirm` auf `Allow` heben, eine `deny`-Regel bleibt ohnehin
+ * wirksam. */
+export interface SshConfigPreviewMatchedRuleDto {
+  ruleId: string;
+  action: "allow" | "confirm" | "deny";
+}
+
 export interface SshConfigPreviewTagDto {
   tag: string;
   origin: SshConfigOriginDto;
-  /** §5.2a: nicht leer ⇒ dieses Schlagwort trifft eine bestehende
-   * Filterregel — die Regel-IDs stehen hier drin. */
-  matchedRules: string[];
+  /** §5.2a: nicht leer ⇒ dieses Schlagwort trifft diese bestehenden
+   * Filterregeln. */
+  matchedRules: SshConfigPreviewMatchedRuleDto[];
   /** `true` ⇒ das Schlagwort trägt **keinen** Platzhalter (buchstäbliche
    * Angabe in einem gemischten `Host`-Block, z. B. `Host prod *`) und
    * trifft eine `Scope::Tag`-Regel **exakt** — deutlicher zu kennzeichnen
@@ -979,6 +988,15 @@ export interface SshConfigIdentityFallbackDto {
   reason: SshConfigIdentityFallbackReason;
 }
 
+/** §3.1.9 (b), letzter Punkt: ein auf Weg (b) übernommener Schlüssel war
+ * verschlüsselt — die Vorschau konnte das nicht wissen (§5.1), deshalb
+ * steht es erst hier. Die Passphrase muss nachgetragen werden, bevor die
+ * erste Verbindung gelingt. */
+export interface SshConfigIdentityEncryptedDto {
+  entry: string;
+  path: string;
+}
+
 /** Von `crate::ssh_config_apply::ApplyOutcome` — Grundlage der
  * Abschlussmeldung nach dem Bestätigen. */
 export interface SshConfigApplyOutcomeDto {
@@ -986,6 +1004,7 @@ export interface SshConfigApplyOutcomeDto {
   createdGroups: number;
   skippedConflicts: number;
   identityFallbacks: SshConfigIdentityFallbackDto[];
+  identityEncrypted: SshConfigIdentityEncryptedDto[];
 }
 
 /** Von `crate::ssh_config_export::ExportedServerDto` (§3.2.7). */

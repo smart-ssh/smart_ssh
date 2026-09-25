@@ -45,13 +45,13 @@ function preview(): SshConfigImportPreviewDto {
           {
             tag: "*.prod.de",
             origin: { file: "/tmp/config", line: 1, block: "*.prod.de" },
-            matchedRules: ["rule-1"],
+            matchedRules: [{ ruleId: "rule-1", action: "confirm" }],
             isLiteral: false,
           },
           {
             tag: "prod",
             origin: { file: "/tmp/config", line: 5, block: "prod *" },
-            matchedRules: ["rule-2"],
+            matchedRules: [{ ruleId: "rule-2", action: "allow" }],
             isLiteral: true,
           },
         ],
@@ -134,6 +134,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
       createdGroups: 1,
       skippedConflicts: 0,
       identityFallbacks: [],
+      identityEncrypted: [],
     });
     const { onImported } = renderDialog();
     await screen.findByText("web1");
@@ -159,6 +160,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
       createdGroups: 1,
       skippedConflicts: 0,
       identityFallbacks: [],
+      identityEncrypted: [],
     });
     renderDialog();
     await screen.findByText("web1");

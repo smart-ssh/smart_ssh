@@ -20,15 +20,20 @@ struct SpyKeyFiles {
     opened: Mutex<Vec<String>>,
     /// Pfade, die absichtlich scheitern sollen.
     fail: Vec<(String, IdentityFallbackReason)>,
+    /// Pfade, die als verschlüsselt gelten sollen (§3.1.9 b).
+    encrypted: Vec<String>,
 }
 
 impl KeyFileSource for SpyKeyFiles {
-    fn read_key(&self, path: &str) -> Result<String, IdentityFallbackReason> {
+    fn read_key(&self, path: &str) -> Result<KeyFileRead, IdentityFallbackReason> {
         self.opened.lock().unwrap().push(path.to_string());
         if let Some((_, why)) = self.fail.iter().find(|(p, _)| p == path) {
             return Err(*why);
         }
-        Ok(MARKER_KEY.to_string())
+        Ok(KeyFileRead {
+            content: MARKER_KEY.to_string(),
+            encrypted: self.encrypted.iter().any(|p| p == path),
+        })
     }
 }
 
@@ -109,6 +114,103 @@ fn choose(index: usize, mode: IdentityMode) -> EntryChoice {
         rename_to: None,
         dropped_tags: Vec::new(),
     }
+}
+
+// ------------------------------------------------------------- §6.3.1
+//
+// spec-reviewer-Fund, Runde 1: Die Spec ordnet §6.3.1 („Vorschau und
+// Ergebnis stimmen Feld für Feld überein", BL-0216-Akzeptanz) ausdrücklich
+// Schritt 4 zu (§7). Der ursprüngliche `t_6_3_1_…`-Test in
+// `crates/core/src/profiles/ssh_config/export/tests.rs` prüfte etwas
+// anderes (bedingte Exportfelder) und wurde umbenannt
+// (`t_3_2_1_pflichtfelder_und_bedingte_felder`) — hier der tatsächliche
+// Test, mit Vorschau-DTO **und** angewandtem Ergebnis nebeneinander.
+
+/// Zwölf konkrete Hosts, ein Platzhalterblock, ein `ProxyJump` — dieselbe
+/// Kombination wie in der Akzeptanz von BL-0216.
+fn zwoelf_hosts_config() -> String {
+    let mut text = String::from("Host bastion\n  HostName 10.0.0.1\nHost web1.prod.de\n  HostName 10.0.1.1\n  ProxyJump bastion\n");
+    for n in 2..=11 {
+        text.push_str(&format!("Host web{n}.prod.de\n  HostName 10.0.1.{n}\n"));
+    }
+    text.push_str("Host *.prod.de\n  User deploy\n");
+    text
+}
+
+#[tokio::test]
+async fn t_6_3_1_vorschau_und_ergebnis_stimmen_ueberein() {
+    let text = zwoelf_hosts_config();
+    let plan = plan_from(&text);
+    // Zwölf konkrete Profile (bastion + web1..web11), der Platzhalterblock
+    // erzeugt keins (§3.1.3).
+    assert_eq!(plan.entries.len(), 12);
+
+    let preview = build_preview_dto(&plan, &[], &[]);
+    assert_eq!(preview.entries.len(), 12);
+
+    let f = Fixture::new();
+    let choices: Vec<EntryChoice> = (0..plan.entries.len())
+        .map(|i| choose(i, IdentityMode::KeepAsFile))
+        .collect();
+    f.apply(&plan, &choices, &SpyKeyFiles::default())
+        .await
+        .expect("Import");
+
+    for entry_dto in &preview.entries {
+        let actual = f.server(&entry_dto.name).await;
+
+        assert_eq!(
+            actual.host, entry_dto.host.value,
+            "host bei {}",
+            entry_dto.name
+        );
+        assert_eq!(
+            actual.port, entry_dto.port.value,
+            "port bei {}",
+            entry_dto.name
+        );
+        assert_eq!(
+            actual.username, entry_dto.username.value,
+            "username bei {}",
+            entry_dto.name
+        );
+
+        let mut expected_tags: Vec<String> = entry_dto.tags.iter().map(|t| t.tag.clone()).collect();
+        expected_tags.sort();
+        let mut actual_tags = actual.tags.clone();
+        actual_tags.sort();
+        assert_eq!(actual_tags, expected_tags, "tags bei {}", entry_dto.name);
+
+        match (&entry_dto.jump_host, actual.jump_host) {
+            (Some(jump_dto), Some(actual_jump_id)) => {
+                let actual_jump_server = f
+                    .servers()
+                    .await
+                    .into_iter()
+                    .find(|s| s.id == actual_jump_id)
+                    .expect("Jump-Ziel muss existieren");
+                assert_eq!(
+                    actual_jump_server.name, jump_dto.name,
+                    "jump_host-Ziel bei {}",
+                    entry_dto.name
+                );
+            }
+            (None, None) => {}
+            other => panic!(
+                "jump_host bei {}: Vorschau/Ergebnis auseinander: {other:?}",
+                entry_dto.name
+            ),
+        }
+    }
+
+    // Genau die Kante aus dem `ProxyJump` — konkret geprüft, nicht nur
+    // "irgendein" Jump-Host.
+    let web1 = f.server("web1.prod.de").await;
+    let bastion = f.server("bastion").await;
+    assert_eq!(web1.jump_host, Some(bastion.id));
+
+    // Der Platzhalterblock selbst ist **kein** Profil geworden.
+    assert!(f.servers().await.iter().all(|s| s.name != "*.prod.de"));
 }
 
 // --------------------------------------------- §6.4.1: Weg (a) liest nichts
@@ -285,6 +387,7 @@ async fn t_6_4_1a_fehlende_unlesbare_und_ungueltige_datei_fallen_auf_weg_a() {
             ("/k/unlesbar".into(), IdentityFallbackReason::Unreadable),
             ("/k/keinkey".into(), IdentityFallbackReason::NotAKey),
         ],
+        encrypted: vec![],
     };
     let choices: Vec<EntryChoice> = (0..4)
         .map(|i| choose(i, IdentityMode::IntoKeychain))
@@ -619,6 +722,52 @@ async fn t_6_3_15_markierter_pfad_wird_trotzdem_angelegt() {
         AuthMethod::IdentityFile { path, .. } => assert_eq!(path, "keys/id_rsa"),
         other => panic!("erwartet IdentityFile, war {other:?}"),
     }
+}
+
+/// §6.3.16 / §3.1.9 (b), letzter Punkt (spec-reviewer-Fund, Runde 1: fehlte
+/// bisher — weder `ApplyOutcome` noch die Vorschau trugen ein Signal
+/// dafür). Die Vorschau kann eine Verschlüsselung nicht kennen (§5.1: die
+/// Datei wird nicht geöffnet, bevor bestätigt wurde) — die Meldung dazu
+/// gehört deshalb ins `ApplyOutcome`, nach dem tatsächlichen Lesen.
+#[tokio::test]
+async fn t_6_3_16_verschluesselter_schluessel_erscheint_im_ergebnis() {
+    let plan = plan_from("Host web1\n  IdentityFile /k/verschluesselt\n");
+    let f = Fixture::new();
+    let spy = SpyKeyFiles {
+        opened: Default::default(),
+        fail: vec![],
+        encrypted: vec!["/k/verschluesselt".to_string()],
+    };
+    let out = f
+        .apply(&plan, &[choose(0, IdentityMode::IntoKeychain)], &spy)
+        .await
+        .expect("Import");
+
+    assert_eq!(out.identity_encrypted.len(), 1);
+    assert_eq!(out.identity_encrypted[0].entry, "web1");
+    assert_eq!(out.identity_encrypted[0].path, "/k/verschluesselt");
+    // Und der Schlüssel liegt trotzdem verschlüsselt im Schlüsselbund, ohne
+    // `passphrase_ref` — Spec 0076 C-4, §3.1.9 (b).
+    match &f.server("web1").await.auth {
+        AuthMethod::PrivateKey { passphrase_ref, .. } => assert!(passphrase_ref.is_none()),
+        other => panic!("erwartet PrivateKey, war {other:?}"),
+    }
+}
+
+/// Gegenprobe: ein **unverschlüsselter** Schlüssel erzeugt keine Meldung.
+#[tokio::test]
+async fn t_6_3_16_unverschluesselter_schluessel_erscheint_nicht_im_ergebnis() {
+    let plan = plan_from("Host web1\n  IdentityFile /k/klartext\n");
+    let f = Fixture::new();
+    let out = f
+        .apply(
+            &plan,
+            &[choose(0, IdentityMode::IntoKeychain)],
+            &SpyKeyFiles::default(),
+        )
+        .await
+        .expect("Import");
+    assert!(out.identity_encrypted.is_empty());
 }
 
 // ------------------------------------------- DiskKeyFiles
