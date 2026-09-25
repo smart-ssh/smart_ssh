@@ -17,6 +17,17 @@ chrono = { version = "0.4.45", features = ["serde"] }
 credentials-keyring = { version = "0.5.1", path = "../credentials-keyring" }
 directories = "6.0.0"
 futures = "0.3.34"
+# Spec 0075, §9 Q-1 Punkt 1: löst die Platzhalter in einem `Include`-Pfad
+# auf (§3.1.4, z. B. `Include conf.d/*.conf`). **Kein neues Paket** — schon
+# direkte Abhängigkeit von `core` (`crates/core/Cargo.toml`) und damit
+# ohnehin in `Cargo.lock`; hier wird nur aus einer transitiven Kante eine
+# direkte, nach demselben Muster wie `libc` (Spec 0076 K-3).
+#
+# Ausdrücklich **nicht** für `Host`-Muster (Q-1 Punkt 2): Dort kennt
+# OpenSSH nur `*`, `?` und `!`, während `globset` zusätzlich `[…]`/`{…}`
+# mitbringt und die Verneinung nicht kennt. Für einen **Pfad** ist
+# `globset`s Grammatik dagegen die richtige — `glob(3)` kann dort dasselbe.
+globset = "0.4.20"
 # Spec 0076, §9 K-3: liefert `O_NONBLOCK` für `key_files.rs` (A-3) — vorher
 # eine handgepflegte `#[cfg(target_os/target_arch)]`-Tabelle in dieser
 # Crate. `libc` lag schon transitiv im Baum (`Cargo.lock`, u. a. über

@@ -140,6 +140,17 @@ pub struct AppState {
     /// request_note_shrink`) denselben Wächter treffen, sobald sie
     /// denselben Key/Endpunkt/Modell nutzen.
     pub rate_limit_registry: ai_providers::RateLimitRegistry,
+    /// Spec 0075, §5.1: Der Importplan der letzten Vorschau bleibt **im
+    /// Backend**. Das Frontend bekommt ihn nur zur Anzeige und schickt beim
+    /// Bestätigen ausschließlich Indizes zurück, nie einen Pfad.
+    ///
+    /// Das ist derselbe Gedanke wie bei `commands::read_credential_file`
+    /// (Spec 0013/SEC-06): Käme der Pfad vom Frontend, könnte beliebiger
+    /// Code im Webview eine Datei unterschieben, die die Vorschau nie
+    /// genannt hat — und §5.1 verlangt ausdrücklich, dass **nur** die
+    /// angekündigten Dateien geöffnet werden, „auch dann nicht, wenn sich
+    /// die Konfigurationsdatei zwischenzeitlich geändert hat".
+    pub pending_ssh_config_import: std::sync::Mutex<Option<crate::ssh_config_apply::PendingImport>>,
 }
 
 pub struct McpState {

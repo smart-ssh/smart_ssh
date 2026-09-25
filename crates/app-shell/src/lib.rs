@@ -40,6 +40,13 @@ mod rule_suggestions;
 mod server_credentials;
 mod servers;
 mod session;
+/// Spec 0075, §7.3: den bestätigten Importplan ausführen — der einzige
+/// Schritt, in dem überhaupt eine Schlüsseldatei geöffnet wird (§5.1).
+mod ssh_config_apply;
+/// Spec 0075, §7.2: Dateizugriff und `Include`-Auflösung für den
+/// `ssh_config`-Import — der einzige Teil, der dabei das Dateisystem
+/// anfasst.
+mod ssh_config_import;
 mod startup_dialog;
 mod startup_error_messages;
 mod state;
@@ -303,6 +310,8 @@ fn build_app_state(
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         mcp: crate::state::McpState::default(),
         rate_limit_registry: ai_providers::RateLimitRegistry::new(),
+        // Spec 0075, §5.1: leer, bis eine Vorschau gelaufen ist.
+        pending_ssh_config_import: std::sync::Mutex::new(None),
     };
     (app_state, log_guard)
 }
@@ -587,6 +596,11 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::accept_and_create_rule,
             commands::export_document,
             commands::read_credential_file,
+            // Spec 0075, §7.3: Vorschau und Ausführung des
+            // `ssh_config`-Imports. Die Vorschau öffnet den Dateidialog
+            // selbst; das Ausführen nimmt nur Indizes (§5.1).
+            ssh_config_apply::preview_ssh_config_import,
+            ssh_config_apply::apply_ssh_config_import,
             commands::get_platform,
             commands::get_app_info,
             commands::get_entitlements,

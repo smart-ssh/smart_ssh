@@ -1,0 +1,551 @@
+//! Tests zu Spec 0075, Schritt 3 (§6.3.4–9, §6.3.15–16, §6.4.1, §6.4.1a,
+//! §6.4.1b, §6.4.3a, §6.4.8).
+
+use std::path::Path;
+use std::sync::Mutex;
+
+use ssh_manager_core::profiles::ssh_config::{build_plan, ImportSource, Inventory};
+use ssh_manager_core::profiles::{AuthMethod, ProfileStore};
+use uuid::Uuid;
+
+use super::*;
+use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+
+const MARKER_KEY: &str =
+    "-----BEGIN OPENSSH PRIVATE KEY-----\nGEHEIMER_SCHLUESSEL_4711\n-----END OPENSSH PRIVATE KEY-----";
+
+/// Zählt mit, welche Pfade geöffnet wurden — das ist der Zeuge für §5.1 und
+/// §6.4.1/1a/1b. Ohne ihn wäre „hat nichts geöffnet" nicht prüfbar.
+#[derive(Default)]
+struct SpyKeyFiles {
+    opened: Mutex<Vec<String>>,
+    /// Pfade, die absichtlich scheitern sollen.
+    fail: Vec<(String, IdentityFallbackReason)>,
+}
+
+impl KeyFileSource for SpyKeyFiles {
+    fn read_key(&self, path: &str) -> Result<String, IdentityFallbackReason> {
+        self.opened.lock().unwrap().push(path.to_string());
+        if let Some((_, why)) = self.fail.iter().find(|(p, _)| p == path) {
+            return Err(*why);
+        }
+        Ok(MARKER_KEY.to_string())
+    }
+}
+
+fn keychain() -> credentials_keyring::KeychainAvailability {
+    credentials_keyring::KeychainAvailability::Available
+}
+
+fn plan_from(text: &str) -> ssh_manager_core::profiles::ssh_config::ImportPlan {
+    plan_from_inv(text, &[], &[])
+}
+
+fn plan_from_inv(
+    text: &str,
+    servers: &[ssh_manager_core::profiles::Server],
+    rules: &[ssh_manager_core::filter::Rule],
+) -> ssh_manager_core::profiles::ssh_config::ImportPlan {
+    let parsed = match ssh_manager_core::profiles::ssh_config::parse_source(text.as_bytes())
+        .expect("kein Grenzfehler")
+    {
+        ssh_manager_core::profiles::ssh_config::FileParse::Parsed(p) => p,
+        other => panic!("erwartet Parsed, war {other:?}"),
+    };
+    build_plan(
+        &[ImportSource {
+            path: "/tmp/config".to_string(),
+            parent: None,
+            parsed,
+        }],
+        Inventory {
+            servers,
+            groups: &[],
+            rules,
+            local_server_id: ssh_manager_core::shared::ServerId(Uuid::nil()),
+        },
+    )
+}
+
+struct Fixture {
+    store: InMemoryProfileStore,
+    creds: InMemoryCredentialStore,
+}
+
+impl Fixture {
+    fn new() -> Self {
+        Self {
+            store: InMemoryProfileStore::new(),
+            creds: InMemoryCredentialStore::new(),
+        }
+    }
+
+    async fn apply(
+        &self,
+        plan: &ssh_manager_core::profiles::ssh_config::ImportPlan,
+        choices: &[EntryChoice],
+        keys: &dyn KeyFileSource,
+    ) -> CommandResult<ApplyOutcome> {
+        apply_import(plan, choices, &self.store, &self.creds, keychain(), keys).await
+    }
+
+    async fn servers(&self) -> Vec<ssh_manager_core::profiles::Server> {
+        self.store.list_servers().await.expect("list")
+    }
+
+    async fn server(&self, name: &str) -> ssh_manager_core::profiles::Server {
+        self.servers()
+            .await
+            .into_iter()
+            .find(|s| s.name == name)
+            .unwrap_or_else(|| panic!("Server {name} fehlt"))
+    }
+}
+
+fn choose(index: usize, mode: IdentityMode) -> EntryChoice {
+    EntryChoice {
+        index,
+        selected: true,
+        identity_mode: mode,
+        rename_to: None,
+        dropped_tags: Vec::new(),
+    }
+}
+
+// --------------------------------------------- §6.4.1: Weg (a) liest nichts
+
+#[tokio::test]
+async fn t_6_4_1_weg_a_liest_keine_schluesseldatei() {
+    let plan = plan_from("Host a\n  HostName 1.1.1.1\n  IdentityFile /keys/id_ed25519\n");
+    let f = Fixture::new();
+    let spy = SpyKeyFiles::default();
+    // Vorgabeeinstellung = Weg (a): keine Wahl übergeben.
+    let out = f.apply(&plan, &[], &spy).await.expect("Import");
+
+    assert_eq!(out.created_servers, 1);
+    // **Keine** Datei wurde geöffnet. Der Test scheitert, sobald jemand
+    // „hilfsbereit" den Schlüssel einliest.
+    assert!(
+        spy.opened.lock().unwrap().is_empty(),
+        "geöffnet: {:?}",
+        spy.opened.lock().unwrap()
+    );
+    // Der Pfad steht in der Anmeldeart, unverändert (§4.6).
+    let s = f.server("a").await;
+    match &s.auth {
+        AuthMethod::IdentityFile {
+            path,
+            passphrase_ref,
+        } => {
+            assert_eq!(path, "/keys/id_ed25519");
+            assert!(passphrase_ref.is_none());
+        }
+        other => panic!("erwartet IdentityFile, war {other:?}"),
+    }
+    // Und der Inhalt kommt nirgends vor — nicht im Plan, nicht im Profil.
+    let dump = format!("{plan:?}{:?}", f.servers().await);
+    assert!(!dump.contains("GEHEIMER_SCHLUESSEL"));
+}
+
+#[tokio::test]
+async fn t_6_4_1b_die_vorschau_oeffnet_nichts() {
+    // §6.4.1b: Derselbe Aufbau, aber der Nutzer bricht ab — hier: es wird
+    // gar nicht angewandt. Der Plan allein darf nichts geöffnet haben.
+    let plan = plan_from(
+        "Host a\n  IdentityFile /k/a\nHost b\n  IdentityFile /k/b\nHost c\n  IdentityFile /k/c\n",
+    );
+    let f = Fixture::new();
+    // Der Plan steht — und trägt die Pfade, aber keinen Inhalt.
+    for (i, name) in ["a", "b", "c"].iter().enumerate() {
+        assert_eq!(plan.entries[i].name, *name);
+        assert!(plan.entries[i].identity_file.is_some());
+    }
+    assert!(!format!("{plan:?}").contains("GEHEIMER_SCHLUESSEL"));
+    // Abbruch: nichts angewandt ⇒ Serverliste unverändert (§6.3.8).
+    assert!(f.servers().await.is_empty());
+}
+
+#[tokio::test]
+async fn t_6_4_1a_weg_b_liest_genau_die_angekuendigten_dateien() {
+    let plan = plan_from(
+        "Host a\n  IdentityFile /k/a\nHost b\n  IdentityFile /k/b\nHost c\n  IdentityFile /k/c\n",
+    );
+    let f = Fixture::new();
+    let spy = SpyKeyFiles::default();
+    // a und c auf Weg (b), b **abgewählt**.
+    let choices = vec![
+        choose(0, IdentityMode::IntoKeychain),
+        EntryChoice {
+            index: 1,
+            selected: false,
+            identity_mode: IdentityMode::IntoKeychain,
+            rename_to: None,
+            dropped_tags: Vec::new(),
+        },
+        choose(2, IdentityMode::IntoKeychain),
+    ];
+    let out = f.apply(&plan, &choices, &spy).await.expect("Import");
+    assert_eq!(out.created_servers, 2);
+
+    // Genau die zwei gewählten Dateien — und die des abgewählten **nicht**.
+    let opened = spy.opened.lock().unwrap().clone();
+    assert_eq!(opened, vec!["/k/a".to_string(), "/k/c".to_string()]);
+    assert!(!opened.contains(&"/k/b".to_string()));
+
+    // Die zwei liegen als Schlüsselbund-Schlüssel vor …
+    for n in ["a", "c"] {
+        match &f.server(n).await.auth {
+            AuthMethod::PrivateKey { passphrase_ref, .. } => {
+                // §3.1.9 (b): keine Passphrase beim Import erfragt.
+                assert!(passphrase_ref.is_none(), "{n} hat eine passphrase_ref");
+            }
+            other => panic!("{n}: erwartet PrivateKey, war {other:?}"),
+        }
+    }
+    // … und der Inhalt taucht weder im Plan noch in den Profilen auf (§5.1).
+    let dump = format!("{plan:?}{:?}", f.servers().await);
+    assert!(
+        !dump.contains("GEHEIMER_SCHLUESSEL"),
+        "Schlüsselinhalt ist entwichen"
+    );
+}
+
+#[tokio::test]
+async fn t_6_4_1a_fehlende_unlesbare_und_ungueltige_datei_fallen_auf_weg_a() {
+    let plan = plan_from(
+        "Host fehlt\n  IdentityFile /k/fehlt\nHost unlesbar\n  IdentityFile /k/unlesbar\nHost keinkey\n  IdentityFile /k/keinkey\nHost gut\n  IdentityFile /k/gut\n",
+    );
+    let f = Fixture::new();
+    let spy = SpyKeyFiles {
+        opened: Default::default(),
+        fail: vec![
+            ("/k/fehlt".into(), IdentityFallbackReason::Missing),
+            ("/k/unlesbar".into(), IdentityFallbackReason::Unreadable),
+            ("/k/keinkey".into(), IdentityFallbackReason::NotAKey),
+        ],
+    };
+    let choices: Vec<EntryChoice> = (0..4)
+        .map(|i| choose(i, IdentityMode::IntoKeychain))
+        .collect();
+    let out = f.apply(&plan, &choices, &spy).await.expect("Import");
+
+    // Der Import scheitert **nicht** — alle vier entstehen.
+    assert_eq!(out.created_servers, 4);
+    // Die drei fallen auf Weg (a) zurück, mit Grund.
+    assert_eq!(out.identity_fallbacks.len(), 3);
+    let reason = |n: &str| {
+        out.identity_fallbacks
+            .iter()
+            .find(|fb| fb.entry == n)
+            .map(|fb| fb.reason)
+    };
+    assert_eq!(reason("fehlt"), Some(IdentityFallbackReason::Missing));
+    assert_eq!(reason("unlesbar"), Some(IdentityFallbackReason::Unreadable));
+    assert_eq!(reason("keinkey"), Some(IdentityFallbackReason::NotAKey));
+    // Sie tragen den Pfad in der Anmeldeart …
+    for n in ["fehlt", "unlesbar", "keinkey"] {
+        assert!(
+            matches!(f.server(n).await.auth, AuthMethod::IdentityFile { .. }),
+            "{n} ist nicht auf Weg (a) zurückgefallen"
+        );
+    }
+    // … und der, der ging, liegt im Schlüsselbund.
+    assert!(matches!(
+        f.server("gut").await.auth,
+        AuthMethod::PrivateKey { .. }
+    ));
+}
+
+#[tokio::test]
+async fn t_3_1_9c_weg_c_ergibt_agent() {
+    let plan = plan_from("Host a\n  IdentityFile /k/a\n");
+    let f = Fixture::new();
+    let spy = SpyKeyFiles::default();
+    f.apply(&plan, &[choose(0, IdentityMode::Drop)], &spy)
+        .await
+        .expect("Import");
+    assert!(spy.opened.lock().unwrap().is_empty(), "Weg (c) hat gelesen");
+    assert_eq!(f.server("a").await.auth, AuthMethod::Agent);
+}
+
+// ------------------------------------------- §5.2 / §6.4.3: Einstellungen
+
+#[tokio::test]
+async fn t_6_4_3_importiertes_profil_hat_die_produktvorgaben() {
+    let plan =
+        plan_from("Host a\n  HostName 1.1.1.1\n  PostIngestPolicy allow\n  AiInjectionCheck no\n");
+    let f = Fixture::new();
+    f.apply(&plan, &[], &SpyKeyFiles::default())
+        .await
+        .expect("Import");
+    let s = f.server("a").await;
+    // §3.1.12: ausschließlich die Vorgabewerte des Produkts.
+    assert_eq!(
+        s.post_ingest_policy,
+        ssh_manager_core::profiles::PostIngestPolicy::default()
+    );
+    assert!(!s.ai_injection_check_enabled);
+}
+
+// ------------------------------------------- §6.4.3a: Schlagwort abwählen
+
+#[tokio::test]
+async fn t_6_4_3a_abgewaehltes_schlagwort_landet_nicht_am_profil() {
+    use ssh_manager_core::filter::{Pattern, Rule, RuleAction, RuleId, RuleOrigin, Scope};
+    let rules = vec![Rule {
+        id: RuleId("r-allow".into()),
+        pattern: Pattern::Glob("systemctl restart *".into()),
+        action: RuleAction::Allow,
+        scope: Scope::Tag("*.prod.de".into()),
+        priority: 0,
+        origin: RuleOrigin::User,
+    }];
+    let plan = plan_from_inv(
+        "Host *.prod.de\n  User deploy\nHost web1.prod.de\n",
+        &[],
+        &rules,
+    );
+    // Die Vorschau kennzeichnet das Schlagwort (§5.2a) …
+    assert!(!plan.entries[0].tags[0].matched_rules.is_empty());
+
+    // … und wählt der Nutzer es ab, trägt das Profil es nicht.
+    let f = Fixture::new();
+    f.apply(
+        &plan,
+        &[EntryChoice {
+            index: 0,
+            selected: true,
+            identity_mode: IdentityMode::default(),
+            rename_to: None,
+            dropped_tags: vec!["*.prod.de".to_string()],
+        }],
+        &SpyKeyFiles::default(),
+    )
+    .await
+    .expect("Import");
+    assert!(
+        f.server("web1.prod.de").await.tags.is_empty(),
+        "abgewähltes Schlagwort ist doch am Profil"
+    );
+}
+
+#[tokio::test]
+async fn t_5_2a_nicht_abgewaehltes_schlagwort_bleibt() {
+    // Gegenprobe: ohne sie wäre „Schlagworte immer weglassen" grün.
+    let plan = plan_from("Host *.prod.de\n  User deploy\nHost web1.prod.de\n");
+    let f = Fixture::new();
+    f.apply(&plan, &[], &SpyKeyFiles::default())
+        .await
+        .expect("Import");
+    assert_eq!(f.server("web1.prod.de").await.tags, vec!["*.prod.de"]);
+}
+
+// ------------------------------------------- §6.3.4/5: Konflikte, zweiter Import
+
+#[tokio::test]
+async fn t_6_3_5_namenskonflikt_wird_uebersprungen_bestand_unveraendert() {
+    let f = Fixture::new();
+    // Erster Import.
+    let plan = plan_from("Host a\n  HostName 1.1.1.1\n  User max\n");
+    f.apply(&plan, &[], &SpyKeyFiles::default())
+        .await
+        .expect("erster Import");
+    let before = f.server("a").await;
+
+    // Zweiter Import derselben Datei — jetzt mit dem Bestand als Inventar.
+    let existing = f.servers().await;
+    let plan2 = plan_from_inv("Host a\n  HostName 1.1.1.1\n  User max\n", &existing, &[]);
+    assert!(
+        plan2.entries[0].conflict.is_some(),
+        "Konflikt nicht erkannt"
+    );
+    let out = f
+        .apply(&plan2, &[], &SpyKeyFiles::default())
+        .await
+        .expect("zweiter Import");
+
+    // §3.1.10: **nichts** angelegt — und auch keine zweite Gruppe.
+    assert_eq!(out.created_servers, 0);
+    assert_eq!(out.created_groups, 0);
+    assert_eq!(out.skipped_conflicts, 1);
+    assert_eq!(f.servers().await.len(), 1);
+    // Das bestehende Profil ist Feld für Feld unverändert.
+    assert_eq!(f.server("a").await, before);
+}
+
+#[tokio::test]
+async fn t_3_1_8_konflikt_mit_neuem_namen_wird_angelegt() {
+    let f = Fixture::new();
+    let plan = plan_from("Host a\n  HostName 1.1.1.1\n");
+    f.apply(&plan, &[], &SpyKeyFiles::default())
+        .await
+        .expect("erster");
+    let existing = f.servers().await;
+    let plan2 = plan_from_inv("Host a\n  HostName 1.1.1.1\n", &existing, &[]);
+    let out = f
+        .apply(
+            &plan2,
+            &[EntryChoice {
+                index: 0,
+                selected: true,
+                identity_mode: IdentityMode::default(),
+                rename_to: Some("a (importiert)".to_string()),
+                dropped_tags: Vec::new(),
+            }],
+            &SpyKeyFiles::default(),
+        )
+        .await
+        .expect("zweiter");
+    assert_eq!(out.created_servers, 1);
+    assert_eq!(f.servers().await.len(), 2);
+    assert_eq!(f.server("a (importiert)").await.host, "1.1.1.1");
+}
+
+// ------------------------------------------- §6.3.8: Abbruch
+
+#[tokio::test]
+async fn t_6_3_8_alle_abgewaehlt_legt_nichts_an() {
+    let plan = plan_from("Host a\nHost b\n");
+    let f = Fixture::new();
+    let choices: Vec<EntryChoice> = (0..2)
+        .map(|i| EntryChoice {
+            index: i,
+            selected: false,
+            identity_mode: IdentityMode::default(),
+            rename_to: None,
+            dropped_tags: Vec::new(),
+        })
+        .collect();
+    let out = f
+        .apply(&plan, &choices, &SpyKeyFiles::default())
+        .await
+        .expect("Import");
+    assert_eq!(out.created_servers, 0);
+    // §3.1.10: keine Gruppe, wenn kein Server übrig bleibt.
+    assert_eq!(out.created_groups, 0);
+    assert!(f.servers().await.is_empty());
+    assert!(f.store.list_groups().await.unwrap().is_empty());
+}
+
+// ------------------------------------------- §6.3.9: Rollback
+
+#[tokio::test]
+async fn t_6_3_9_fehler_mitten_im_anlegen_nimmt_profile_und_gruppen_zurueck() {
+    let plan = plan_from("Host a\nHost b\nHost c\n");
+    let f = Fixture::new();
+    // Der dritte Insert scheitert.
+    f.store.fail_create_server_after(2);
+
+    let err = f
+        .apply(&plan, &[], &SpyKeyFiles::default())
+        .await
+        .expect_err("sollte scheitern");
+    assert!(
+        err.message.contains("Es wurde nichts angelegt"),
+        "Meldung: {}",
+        err.message
+    );
+    // §3.1.11: kein Profil **und keine Gruppe** dieses Laufs bleibt übrig.
+    assert!(
+        f.servers().await.is_empty(),
+        "übrig: {:?}",
+        f.servers().await
+    );
+    assert!(
+        f.store.list_groups().await.unwrap().is_empty(),
+        "Gruppe übrig geblieben"
+    );
+}
+
+// ------------------------------------------- Jump-Host
+
+#[tokio::test]
+async fn t_3_1_6_jump_host_zeigt_auf_das_importierte_profil() {
+    let plan = plan_from("Host bastion\n  HostName 1.1.1.1\nHost x\n  ProxyJump bastion\n");
+    let f = Fixture::new();
+    f.apply(&plan, &[], &SpyKeyFiles::default())
+        .await
+        .expect("Import");
+    let bastion = f.server("bastion").await;
+    assert_eq!(f.server("x").await.jump_host, Some(bastion.id));
+}
+
+#[tokio::test]
+async fn t_3_1_6_abgewaehltes_jump_ziel_ergibt_keinen_jump_host() {
+    let plan = plan_from("Host bastion\n  HostName 1.1.1.1\nHost x\n  ProxyJump bastion\n");
+    let f = Fixture::new();
+    // Das Ziel abwählen — `x` darf dann keinen Jump-Host bekommen statt auf
+    // etwas zu zeigen, das nicht existiert.
+    let bastion_idx = plan
+        .entries
+        .iter()
+        .position(|e| e.name == "bastion")
+        .unwrap();
+    f.apply(
+        &plan,
+        &[EntryChoice {
+            index: bastion_idx,
+            selected: false,
+            identity_mode: IdentityMode::default(),
+            rename_to: None,
+            dropped_tags: Vec::new(),
+        }],
+        &SpyKeyFiles::default(),
+    )
+    .await
+    .expect("Import");
+    assert_eq!(f.server("x").await.jump_host, None);
+}
+
+// ------------------------------------------- §6.3.15: relativer Pfad
+
+#[tokio::test]
+async fn t_6_3_15_markierter_pfad_wird_trotzdem_angelegt() {
+    let plan = plan_from("Host rel\n  IdentityFile keys/id_rsa\n");
+    assert!(
+        !plan.entries[0]
+            .identity_file
+            .as_ref()
+            .unwrap()
+            .usable_when_connecting,
+        "hätte als nicht benutzbar markiert sein müssen"
+    );
+    let f = Fixture::new();
+    f.apply(&plan, &[], &SpyKeyFiles::default())
+        .await
+        .expect("Import");
+    // Trotzdem angelegt, mit dem Pfad unverändert (§3.1.9 a).
+    match &f.server("rel").await.auth {
+        AuthMethod::IdentityFile { path, .. } => assert_eq!(path, "keys/id_rsa"),
+        other => panic!("erwartet IdentityFile, war {other:?}"),
+    }
+}
+
+// ------------------------------------------- DiskKeyFiles
+
+#[test]
+fn t_disk_key_files_meldet_gruende_ohne_inhalt() {
+    let d = tempfile::tempdir().unwrap();
+    let missing = d.path().join("gibtsnicht");
+    assert_eq!(
+        DiskKeyFiles.read_key(&missing.display().to_string()),
+        Err(IdentityFallbackReason::Missing)
+    );
+
+    let not_a_key = d.path().join("notes.txt");
+    std::fs::write(&not_a_key, "GEHEIMER_TEXT_4711\n").unwrap();
+    let err = DiskKeyFiles
+        .read_key(&not_a_key.display().to_string())
+        .expect_err("kein Schlüssel");
+    assert_eq!(err, IdentityFallbackReason::NotAKey);
+    // Der Grund trägt keinen Dateiinhalt.
+    assert!(!format!("{err:?}").contains("GEHEIMER_TEXT"));
+
+    let real = d.path().join("id_ed25519");
+    std::fs::write(&real, MARKER_KEY).unwrap();
+    assert_eq!(
+        DiskKeyFiles.read_key(&real.display().to_string()),
+        Ok(MARKER_KEY.to_string())
+    );
+    let _ = Path::new("");
+}

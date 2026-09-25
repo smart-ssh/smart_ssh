@@ -36,6 +36,13 @@ pub struct InMemoryProfileStore {
     /// dem bereits geschriebenen Schlüsselbund-Eintrag, damit der Rollback
     /// der Überführung gegen einen echten Fehler geprüft werden kann.
     pub fail_update_server: bool,
+    /// Spec 0075, §6.3.9: lässt `create_server` **ab dem n-ten** Aufruf
+    /// scheitern. `fail_create_server` allein reicht dort nicht: Ein Fehler
+    /// schon beim ersten Insert erreicht den interessanten Zustand nie —
+    /// geprüft werden soll die Rücknahme, wenn bereits Profile **und** eine
+    /// Gruppe angelegt sind (§3.1.11).
+    pub fail_create_server_after: Mutex<Option<usize>>,
+    create_server_calls: Mutex<usize>,
 }
 
 impl InMemoryProfileStore {
@@ -61,6 +68,12 @@ impl InMemoryProfileStore {
     pub fn with_failing_update_server(mut self) -> Self {
         self.fail_update_server = true;
         self
+    }
+
+    /// Spec 0075, §6.3.9: ab dem `n`-ten `create_server`-Aufruf (1-basiert)
+    /// scheitert jeder weitere.
+    pub fn fail_create_server_after(&self, n: usize) {
+        *self.fail_create_server_after.lock().unwrap() = Some(n);
     }
 }
 
@@ -151,6 +164,17 @@ impl ProfileStore for InMemoryProfileStore {
             return Err(ProfileError::Backend(
                 "simulierter DB-Fehler (Test)".to_string(),
             ));
+        }
+        {
+            let mut calls = self.create_server_calls.lock().unwrap();
+            *calls += 1;
+            if let Some(n) = *self.fail_create_server_after.lock().unwrap() {
+                if *calls >= n {
+                    return Err(ProfileError::Backend(
+                        "simulierter DB-Fehler ab Aufruf n (Test)".to_string(),
+                    ));
+                }
+            }
         }
         self.servers
             .lock()

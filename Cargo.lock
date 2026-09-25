@@ -140,6 +140,7 @@ dependencies = [
  "credentials-keyring",
  "directories",
  "futures",
+ "globset",
  "libc",
  "mcp-server",
  "persistence-sqlite",
