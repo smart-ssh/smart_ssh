@@ -466,22 +466,105 @@ pub struct PreviewEntryDto {
     pub index: usize,
     pub name: String,
     pub group: usize,
-    pub host: String,
-    pub port: u16,
-    pub username: String,
+    pub host: SourcedDto<String>,
+    pub port: SourcedDto<u16>,
+    pub username: SourcedDto<String>,
     pub tags: Vec<PreviewTagDto>,
-    pub identity_file: Option<String>,
+    pub identity_file: Option<PreviewIdentityFileDto>,
+    pub jump_host: Option<PreviewJumpDto>,
+    pub conflict: Option<PreviewConflictDto>,
+}
+
+/// Ein Feldwert mit seiner Herkunft (§3.1.7 „samt … Herkunft der Werte").
+/// `origin: None` ⇒ Vorgabe des Produkts, nicht aus der Datei — spiegelt
+/// [`ssh_manager_core::profiles::ssh_config::Sourced`] 1:1, nur
+/// `camelCase` und ohne die interne `Provenance`-Struct direkt zu
+/// serialisieren (ADR zu diesem Schritt, P10 Nr. 2).
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourcedDto<T> {
+    pub value: T,
+    pub origin: Option<OriginDto>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OriginDto {
+    pub file: String,
+    pub line: u32,
+    /// Die `Host`-Angaben des Blocks, aus dem der Wert kommt (§3.1.3).
+    pub block: String,
+}
+
+impl From<&ssh_manager_core::profiles::ssh_config::Provenance> for OriginDto {
+    fn from(p: &ssh_manager_core::profiles::ssh_config::Provenance) -> Self {
+        OriginDto {
+            file: p.file.clone(),
+            line: p.line,
+            block: p.block.clone(),
+        }
+    }
+}
+
+fn sourced_dto<T: Clone>(s: &ssh_manager_core::profiles::ssh_config::Sourced<T>) -> SourcedDto<T> {
+    SourcedDto {
+        value: s.value.clone(),
+        origin: s.origin.as_ref().map(OriginDto::from),
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewIdentityFileDto {
+    pub path: String,
+    pub origin: OriginDto,
     /// §3.1.9 (a): `false` ⇒ „beim Verbinden nicht benutzbar, absoluter
     /// Pfad nötig".
-    pub identity_file_usable: bool,
-    pub jump_host: Option<String>,
-    pub conflict: Option<String>,
+    pub usable_when_connecting: bool,
+}
+
+/// Wohin ein `jump_host` zeigt — mit dem **tatsächlichen** Namen des
+/// Ziels, nicht mehr dem Platzhaltertext `"(Bestand)"` (ADR zu diesem
+/// Schritt, P10 Nr. 2): Für ein Bestandsziel steht hier sein echter
+/// `Server::name`, für ein geplantes Ziel der Alias, den es in diesem
+/// Import bekäme.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewJumpDto {
+    pub name: String,
+    /// `true` ⇒ das Ziel liegt bereits im Bestand, `false` ⇒ es entsteht in
+    /// diesem Import. Das Frontend braucht das, um z. B. beim Abwählen
+    /// eines geplanten Ziels zu erklären, warum die Kante verschwindet
+    /// (§3.1.6/ADR 0074 Punkt 8), während ein Bestandsziel davon unberührt
+    /// bleibt.
+    pub existing: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewConflictDto {
+    /// `"name"` oder `"address"` (§3.1.8) — bisher fehlte diese
+    /// Unterscheidung im DTO, obwohl `core` sie längst kennt (ADR zu diesem
+    /// Schritt, P10 Nr. 2). Das Frontend braucht sie für die richtige
+    /// Meldung („Name schon vergeben" vs. „Adresse/Port/Nutzer schon
+    /// vergeben").
+    pub kind: String,
+    pub existing_name: String,
+}
+
+fn conflict_kind_key(k: ssh_manager_core::profiles::ssh_config::ConflictKind) -> &'static str {
+    use ssh_manager_core::profiles::ssh_config::ConflictKind;
+    match k {
+        ConflictKind::Name => "name",
+        ConflictKind::Address => "address",
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewTagDto {
     pub tag: String,
+    pub origin: OriginDto,
     /// §5.2a: nicht leer ⇒ das Schlagwort trifft diese bestehenden Regeln.
     pub matched_rules: Vec<String>,
     /// Schlagwort ohne Platzhalter, aus einer buchstäblichen Angabe in einem
@@ -537,10 +620,14 @@ fn reason_key(r: &ssh_manager_core::profiles::ssh_config::SkipReason) -> String 
     .to_string()
 }
 
-/// Baut die Vorschau aus Plan und Dateiliste. Rein, damit sie prüfbar ist.
+/// Baut die Vorschau aus Plan, Dateiliste und Bestand. Rein, damit sie
+/// prüfbar ist. `servers` wird **nur** gelesen, um den echten Namen eines
+/// Bestands-Jump-Ziels aufzulösen (`PreviewJumpDto`, ADR zu diesem Schritt,
+/// P10 Nr. 2) — vorher stand dort der Platzhaltertext `"(Bestand)"`.
 pub fn build_preview_dto(
     plan: &ImportPlan,
     files: &[crate::ssh_config_import::FileReport],
+    servers: &[ssh_manager_core::profiles::Server],
 ) -> ImportPreviewDto {
     use ssh_manager_core::profiles::ssh_config::SkippedKind;
 
@@ -552,14 +639,15 @@ pub fn build_preview_dto(
             index: i,
             name: e.name.clone(),
             group: e.group,
-            host: e.host.value.clone(),
-            port: e.port.value,
-            username: e.username.value.clone(),
+            host: sourced_dto(&e.host),
+            port: sourced_dto(&e.port),
+            username: sourced_dto(&e.username),
             tags: e
                 .tags
                 .iter()
                 .map(|t| PreviewTagDto {
                     tag: t.tag.clone(),
+                    origin: OriginDto::from(&t.origin),
                     matched_rules: t
                         .matched_rules
                         .iter()
@@ -568,17 +656,28 @@ pub fn build_preview_dto(
                     is_literal: t.is_literal,
                 })
                 .collect(),
-            identity_file: e.identity_file.as_ref().map(|i| i.path.clone()),
-            identity_file_usable: e
-                .identity_file
-                .as_ref()
-                .is_none_or(|i| i.usable_when_connecting),
+            identity_file: e.identity_file.as_ref().map(|idf| PreviewIdentityFileDto {
+                path: idf.path.clone(),
+                origin: OriginDto::from(&idf.origin),
+                usable_when_connecting: idf.usable_when_connecting,
+            }),
             jump_host: match e.jump {
-                Some(JumpTarget::Planned(t)) => plan.entries.get(t).map(|x| x.name.clone()),
-                Some(JumpTarget::Existing(_)) => Some("(Bestand)".to_string()),
+                Some(JumpTarget::Planned(t)) => plan.entries.get(t).map(|x| PreviewJumpDto {
+                    name: x.name.clone(),
+                    existing: false,
+                }),
+                Some(JumpTarget::Existing(id)) => {
+                    servers.iter().find(|s| s.id == id).map(|s| PreviewJumpDto {
+                        name: s.name.clone(),
+                        existing: true,
+                    })
+                }
                 None => None,
             },
-            conflict: e.conflict.as_ref().map(|c| c.existing_name.clone()),
+            conflict: e.conflict.as_ref().map(|c| PreviewConflictDto {
+                kind: conflict_kind_key(c.kind).to_string(),
+                existing_name: c.existing_name.clone(),
+            }),
         })
         .collect();
 
@@ -692,7 +791,7 @@ pub async fn preview_ssh_config_import(
     let mut plan = plan;
     plan.skipped.extend(read.include_issues.clone());
 
-    let dto = build_preview_dto(&plan, &read.files);
+    let dto = build_preview_dto(&plan, &read.files, &servers);
     *state
         .pending_ssh_config_import
         .lock()

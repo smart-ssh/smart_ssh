@@ -689,3 +689,110 @@ fn t_5_5_fifo_haengt_nicht() {
         .expect_err("FIFO ist kein Schlüssel");
     assert_eq!(err, IdentityFallbackReason::NotARegularFile);
 }
+
+// ------------------------- `build_preview_dto`: ADR-Nachtrag P10 Nr. 2 ---
+//
+// Drei Lücken, die ADR 0074 (Schritte 0–3) ausdrücklich als Vorbedingung
+// für Schritt 5 benannt hatte: Herkunft der Werte fehlte im DTO ganz,
+// `Conflict::kind` kam nicht durch, und ein Bestands-Jump-Ziel zeigte nur
+// den Platzhaltertext `"(Bestand)"` statt seines echten Namens. `core`
+// kannte alle drei Tatsachen schon vorher — hier wird geprüft, dass sie
+// jetzt tatsächlich im DTO ankommen.
+
+fn inventory_server(
+    name: &str,
+    host: &str,
+    port: u16,
+    user: &str,
+) -> ssh_manager_core::profiles::Server {
+    ssh_manager_core::profiles::Server {
+        id: ssh_manager_core::shared::ServerId::new(),
+        name: name.to_string(),
+        host: host.to_string(),
+        port,
+        username: user.to_string(),
+        group_id: None,
+        tags: vec![],
+        auth: AuthMethod::Agent,
+        notes: String::new(),
+        jump_host: None,
+        post_ingest_policy: Default::default(),
+        ai_injection_check_enabled: false,
+        sftp_server_path: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    }
+}
+
+#[test]
+fn t_p10_2_dto_traegt_herkunft_der_werte() {
+    let plan = plan_from("Host web1\n  HostName 10.0.0.1\n  Port 2222\n  User max\n");
+    let dto = build_preview_dto(&plan, &[], &[]);
+    let e = &dto.entries[0];
+
+    assert_eq!(e.host.value, "10.0.0.1");
+    let origin = e.host.origin.as_ref().expect("HostName kam aus der Datei");
+    assert_eq!(origin.line, 2);
+    assert_eq!(origin.file, "/tmp/config");
+
+    // Vorgabewert (kein `User` in der Datei) ⇒ `origin: None`.
+    let plan_no_user = plan_from("Host web1\n  HostName 10.0.0.1\n");
+    let dto_no_user = build_preview_dto(&plan_no_user, &[], &[]);
+    assert!(dto_no_user.entries[0].username.origin.is_none());
+    assert_eq!(dto_no_user.entries[0].username.value, "");
+}
+
+#[test]
+fn t_p10_2_dto_traegt_conflict_kind() {
+    let existing = inventory_server("web1", "9.9.9.9", 22, "root");
+    let plan = plan_from_inv(
+        "Host web1\n  HostName 10.0.0.1\n",
+        std::slice::from_ref(&existing),
+        &[],
+    );
+    let dto = build_preview_dto(&plan, &[], std::slice::from_ref(&existing));
+    let conflict = dto.entries[0].conflict.as_ref().expect("Namenskonflikt");
+    assert_eq!(conflict.kind, "name");
+    assert_eq!(conflict.existing_name, "web1");
+
+    let existing2 = inventory_server("other", "10.0.0.5", 22, "root");
+    let plan2 = plan_from_inv(
+        "Host web2\n  HostName 10.0.0.5\n  Port 22\n  User root\n",
+        std::slice::from_ref(&existing2),
+        &[],
+    );
+    let dto2 = build_preview_dto(&plan2, &[], std::slice::from_ref(&existing2));
+    let conflict2 = dto2.entries[0].conflict.as_ref().expect("Adresskonflikt");
+    assert_eq!(conflict2.kind, "address");
+}
+
+#[test]
+fn t_p10_2_dto_zeigt_echten_namen_des_bestands_jump_ziels() {
+    let bastion = inventory_server("prod-bastion", "10.0.0.9", 22, "ops");
+    let plan = plan_from_inv(
+        "Host web1\n  HostName 10.0.0.1\n  ProxyJump prod-bastion\n",
+        std::slice::from_ref(&bastion),
+        &[],
+    );
+    let dto = build_preview_dto(&plan, &[], std::slice::from_ref(&bastion));
+    let jump = dto.entries[0]
+        .jump_host
+        .as_ref()
+        .expect("Jump-Ziel im Bestand");
+    // Vorher stand hier der Platzhaltertext "(Bestand)" — jetzt der
+    // tatsächliche `Server::name`.
+    assert_eq!(jump.name, "prod-bastion");
+    assert!(jump.existing);
+}
+
+#[test]
+fn t_p10_2_dto_kennzeichnet_geplantes_jump_ziel_als_nicht_bestand() {
+    let plan = plan_from(
+        "Host bastion\n  HostName 10.0.0.9\nHost web1\n  HostName 10.0.0.1\n  ProxyJump bastion\n",
+    );
+    let dto = build_preview_dto(&plan, &[], &[]);
+    let web1 = dto.entries.iter().find(|e| e.name == "web1").unwrap();
+    let jump = web1.jump_host.as_ref().expect("Jump-Ziel im selben Import");
+    assert_eq!(jump.name, "bastion");
+    assert!(!jump.existing);
+}
