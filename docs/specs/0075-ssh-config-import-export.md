@@ -493,27 +493,22 @@ nicht übernommenen Direktiven. Genau dieser Plan ist die Vorschau
 (3.1.7), und genau er wird bestätigt ausgeführt. Damit können Vorschau
 und Ergebnis nicht auseinanderlaufen — sie sind dasselbe Objekt.
 
-### 4.2 Parser: `ssh2-config`
+### 4.2 Parser: eigener, zeilenweiser Parser
 
-Entschieden (§9/E-1): Wir nehmen die Kiste `ssh2-config` (MIT, 0.7.2)
-statt einen eigenen Parser zu schreiben. Sie liest **und** schreibt
-(`to_string()`), wurde ausdrücklich für reine Rust-SSH-Stacks wie russh
-gebaut, hat sechs kleine Abhängigkeiten (`bitflags`, `dirs`, `glob`,
-`log`, `thiserror`, `wildmatch`), und ihr `HostParams` trägt neben
-`host_name`, `user`, `port`, `proxy_jump` und `identity_file` auch
-`ignored_fields` und `unsupported_fields` — womit sie die **Bausteine**
-für §3.1.5 liefert. Ob sie dabei **Zeilennummern** mitgibt, die §3.1.5
-verlangt, ist **nicht belegt** und genau eine der Fragen aus §7.0. Bis
-dahin gilt: Bausteine ja, Anforderung erfüllt erst nach der Messung.
-
-**Vor Schritt 1 wird gemessen, nicht angenommen** (§7.0): wie sie
-`Include`, `Match` und einen Platzhalterblock behandelt. Fällt das
-schlecht aus, schreiben wir den Parser doch selbst; die Entscheidung
-kostet dann eine Viertelstunde und nicht einen Coder-Lauf. Ergebnis der
-Messung gehört als Klarstellung in §9.
+**Es gibt keine Parser-Abhängigkeit.** E-1 hatte eine vorgesehen
+(`ssh2-config`), aber ausdrücklich unter der Bedingung, dass §7.0 ihr
+Verhalten vorher **misst**. Die Messung ist gefahren und fiel schlecht aus
+(§9/M-1, Befunde im Einzelnen); damit greift der zweite Zweig, den §7.0
+selbst vorschreibt: **`crates/core/src/profiles/ssh_config/` bringt einen
+eigenen, zeilenweisen Parser mit** — er kennt genau die Direktiven aus
+§3.1.2, gibt für alles andere Name und Zeilennummer zurück (§3.1.5),
+behandelt `Match` als Blockgrenze, liefert `Include` als **Rohwert** und
+liest selbst **keine** Dateien (§4.1). Was daran im Einzelnen hängt —
+Schlüsselwortliste für §3.1.4a, Musterabgleich, geteilte Zitierroutine —
+steht in §9/Q-1 und ist verbindlich.
 
 Die Grenzen aus §3.3 setzen wir in **jedem** Fall selbst davor, bevor
-Inhalt an die Kiste geht — sie ist dafür nicht gebaut.
+Inhalt in den Parser geht.
 
 `Match` wird in dieser Spec **nicht** ausgewertet: Es hängt von Laufzeit
 und Umgebung ab (`exec`, `originalhost`, `user`), also von Dingen, die
@@ -962,15 +957,20 @@ Rundlauf (§6.3.3) nicht fahrbar.
 
 Jeder Schritt ist für sich committbar und lässt das Gate grün.
 
-**0. Messen, bevor die Abhängigkeit steht** *(vor Schritt 1, ~15 min)*.
+**0. Messen, bevor die Abhängigkeit steht** *(vor Schritt 1, ~15 min)* —
+**erledigt, Ergebnis in §9/M-1: schlechter Ausgang, Schritt 1 wird der
+eigene Parser (§9/Q-1).**
 Kleines Testprogramm gegen `ssh2-config` 0.7.2: Wie behandelt sie
 `Include`, `Match` und einen Platzhalterblock? Liefert sie
 `unsupported_fields` mit Zeilennummern? Ergebnis als Klarstellung in §9.
 Fällt es schlecht aus, wird Schritt 1 ein eigener Parser — dieselben
 Tests, andere Innerei.
 
-1. **Abhängigkeit und Abbildung** in
-   `crates/core/src/profiles/ssh_config/`: Blöcke → Importplan, inklusive
+1. **Parser und Abbildung** in
+   `crates/core/src/profiles/ssh_config/` *(keine Abhängigkeit, §9/Q-1:
+   der Parser ist eigener Code, mit Schlüsselwortliste (§3.1.4a),
+   Zeilennummern (§3.1.5), `Match` als Blockgrenze und `Include` als
+   Rohwert)*: Blöcke → Importplan, inklusive
    Platzhalter-Vorgaben und -Schlagworten (3.1.3), `ProxyJump`-Auflösung
    (3.1.6) inklusive der Kantenrichtung, Konflikten (3.1.8),
    Zyklusprüfung (5.3). Tests §6.1, §6.4.3, §6.4.4, §6.4.4a, §6.4.6,
@@ -1127,6 +1127,77 @@ für alles andere Name und Zeilennummer zurück und liest **keine**
 Dateien. **Keine neue Abhängigkeit** (und keine sechs transitiven).
 Die Tests aus §6 bleiben unverändert — „dieselben Tests, andere
 Innerei" (§7.1).
+
+**2026-09-25 · Q-1 · Antwort auf `Q-BL-0216-01`: der eigene Parser ist
+bestätigt, und was daran hängt.** M-1 ist der zweite Zweig von E-1, nicht
+sein Gegenteil: Die Aufnahme der Abhängigkeit war ausdrücklich an die
+Messung geknüpft, und §4.2/§7.0/§7.1 schreiben für einen schlechten
+Ausgang den eigenen Parser vor. Keine Anforderung aus §3 ändert sich.
+Sechs Punkte werden dadurch verbindlich:
+
+1. **Kein Ersatzpaket.** Der Wegfall von `ssh2-config` erlaubt keine
+   andere Kiste an seiner Stelle. Ein Paket, das nicht bereits in
+   `Cargo.lock` steht, ist eine neue Abhängigkeit und wird vorgelegt,
+   nicht angenommen. Bereits im Baum: `globset` (direkte Abhängigkeit von
+   `core`); wird es in `app-shell` für die Platzhalter im `Include`-Pfad
+   (§3.1.4) gebraucht, darf es dort eine direkte Zeile werden — mit
+   begründendem Kommentar wie bei `libc` (Spec 0076 K-3), weil es kein
+   neues Paket ist, sondern eine direkte statt einer transitiven Kante.
+2. **`globset` nicht für `Host`-Muster.** OpenSSH kennt dort genau `*`,
+   `?` und `!` (§3.1.3). `globset` bringt zusätzlich `[…]` und `{…}` und
+   kennt kein `!`: `Host web[1` wäre ein Übersetzungsfehler statt eines
+   wörtlichen Namens — dass ein unbalanciertes `[` in `globset` ein Fehler
+   ist, steht schon als Zusicherung in `crates/core/src/filter/pattern.rs`
+   (`Glob::new("systemctl [stop").unwrap_err()`) —, und `Host web[1-9]`
+   träfe Server, die `ssh` nie trifft (§6.4.6). Der Musterabgleich ist eigener Code nach OpenSSH-Semantik —
+   und er benutzt `filter::Pattern` **nicht**: Ein importiertes Schlagwort
+   wird wörtlich zu einem `Scope::Tag` (§5.2a), und zwei Grammatiken an
+   einem sicherheitskritischen Typ gehören getrennt.
+3. **„Erkannte Direktive" in §3.1.4a ist ein Schlüsselwort aus einer
+   festen Liste**, die der Parser mitbringt (`Host`, `Match`, `Include`
+   gehören hinein), verglichen ohne Rücksicht auf
+   Groß-/Kleinschreibung. **Nicht** die Form
+   `[A-Za-z][A-Za-z0-9-]{0,31}` aus §3.1.5 — die bricht §6.4.9 (b): In
+   einer eingebundenen Prosadatei hat fast jede Zeile ein formgültiges
+   erstes Wort, die Datei zählte als `ssh_config`, und §3.1.5 meldete
+   dieses Wort. Also zwei Ebenen: Die **Liste** entscheidet über die
+   Datei (§3.1.4a), die **Form** nur noch darüber, ob innerhalb einer
+   anerkannten Datei ein Name gemeldet wird oder `unlesbare Zeile`
+   (§3.1.5). Die Liste muss nicht vollständig sein: Eine Lücke lässt eine
+   dünn besetzte echte `ssh_config` übersprungen und mit Pfad gemeldet
+   werden — die Richtung, in der nichts nach außen gelangt. Im Zweifel
+   die kürzere Liste. Die **gewählte** Datei betrifft das nicht (§3.1.13).
+4. **`Match` ist eine Blockgrenze.** Ein `Match` beendet den laufenden
+   `Host`-Block; keine Zeile darin wirkt auf ein Profil. Gemeldet werden
+   `Match` und jede Direktive im Block nach §3.1.5 (Name, Zeilennummer,
+   kein Wert). Der Test in §6.1 („`Match`-Block erscheint als nicht
+   übernommen") bekommt den Fall aus M-1 dazu: `Host a` / `User x`, dann
+   `Match host b` / `User y` ⇒ `a.username == "x"`. Ohne ihn kann der Test
+   nicht scheitern, wenn der Fehlmerge nachgebaut wird.
+5. **Leser und Schreiber teilen eine Zitier- und Trennerroutine — dann
+   belegt der Rundlauf sie nicht allein.** Eine symmetrisch falsche
+   Zitierregel besteht §6.3.3 fehlerfrei. Äußerer Zeuge ist §6.3.2
+   (`ssh -F … -G`), und dessen Prüfling MUSS deshalb mindestens einen Wert
+   enthalten, der Anführungszeichen erzwingt: ein `username` mit
+   Leerzeichen (§6.1.5, §4.3).
+6. **Zuschnitt von §7 unverändert**, nur Schritt 1 trägt jetzt den Parser
+   (Empfehlung: eigener Modulteil mit eigenen Tests, §6.1.4/5 zielen
+   ohnehin dorthin). Die Grenzen aus §3.3 greifen weiter **vor** dem
+   Parser.
+7. **Zwei Genauigkeiten am Prüfling von §6.4.9a**, damit der Test aus dem
+   richtigen Grund grün wird: Die Datei braucht einen `Host`-Block (ohne
+   ihn greift §3.1.13 und die Liste der nicht übernommenen Direktiven
+   entsteht nie), und `Compression` gehört in die Schlüsselwortliste aus
+   Punkt 3 — liegt der Prüfling hinter einem `Include` und fehlt das Wort
+   in der Liste, gilt die Datei nach §3.1.4a als keine `ssh_config` und
+   wird übersprungen, der Test scheiterte also an der Einordnung statt an
+   der Meldung.
+
+Gewinn, der zum Protokoll gehört: Die Rekursion liegt jetzt allein in der
+`Include`-Auflösung von `app-shell` (§7.2), mit Tiefe ≤ 3 und
+Besuchtmenge. Damit sind §6.4.5 (d), (e) und (f) überhaupt erst fahrbar —
+zuvor endete (d) in einem Prozessabbruch, den kein Test abfängt. Genau
+diese Eigenschaft trägt §5.6.
 
 *Anmerkung des Architekten zur Grenze:* „Unbegrenzt viele Dateien"
 bezieht sich auf die **Anzahl**. Die Gesamtgrenzen aus §3.3 (Bytes,
