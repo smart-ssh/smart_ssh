@@ -28,7 +28,11 @@ interface SshConfigImportDialogProps {
  * (`toggleTag`). Dies ist die **einzige** Stelle, die diese Vorgabe trägt. */
 function defaultTagSelected(tag: SshConfigPreviewTagDto): boolean {
   if (!tag.isLiteral) return true;
-  return !tag.matchedRules.some((r) => r.action === "allow");
+  // spec-reviewer-Fund (Runde 1, I-1): `.toLowerCase()` statt eines exakten
+  // Vergleichs auf die aktuell einzige Kodierung (`"allow"`) — ein
+  // künftiger Wechsel der DTO-Kodierung soll hier in die sichere Richtung
+  // (weiter abgewählt) fallen, nicht stillschweigend in die unsichere.
+  return !tag.matchedRules.some((r) => r.action.toLowerCase() === "allow");
 }
 
 interface EntryUiState {
@@ -383,6 +387,15 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                             {e.tags.map((tag) => {
                               const dropped = st.droppedTags.has(tag.tag);
                               const flagged = tag.matchedRules.length > 0;
+                              // Q-BL-0216-02 verlangt nicht nur die Vorgabe
+                              // (`defaultTagSelected`), sondern auch, dass
+                              // dieser Fall sichtbar **anders** markiert ist
+                              // als ein buchstäbliches Schlagwort, das nur
+                              // Deny/Confirm trifft — sonst unterscheiden
+                              // sich beide nur am Häkchen (spec-reviewer-Fund,
+                              // Runde 1, K-3). Bewusst dieselbe Funktion wie
+                              // die Vorgabe selbst, keine zweite Ableitung.
+                              const autoDeselected = !defaultTagSelected(tag);
                               // §5.2a verlangt, die betroffene Regel zu
                               // nennen — mindestens ihre Wirkung (Allow
                               // kann Confirm→Allow heben, Deny/Confirm
@@ -402,14 +415,16 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                                         : "border border-slate-600 bg-slate-900 text-slate-300"
                                   }`}
                                   title={
-                                    tag.isLiteral
-                                      ? t("sshConfigImport.tag.literalHint")
-                                      : flagged
-                                        ? t("sshConfigImport.tag.matchesRuleHint", {
-                                            count: tag.matchedRules.length,
-                                            actions: actionLabels,
-                                          })
-                                        : undefined
+                                    autoDeselected
+                                      ? t("sshConfigImport.tag.literalDeselectedHint")
+                                      : tag.isLiteral
+                                        ? t("sshConfigImport.tag.literalHint")
+                                        : flagged
+                                          ? t("sshConfigImport.tag.matchesRuleHint", {
+                                              count: tag.matchedRules.length,
+                                              actions: actionLabels,
+                                            })
+                                          : undefined
                                   }
                                 >
                                   <input
@@ -420,6 +435,11 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                                   {tag.isLiteral && <span aria-hidden>⚠</span>}
                                   {tag.tag}
                                   {flagged && <span>({actionLabels})</span>}
+                                  {autoDeselected && (
+                                    <span className="font-semibold text-red-100">
+                                      · {t("sshConfigImport.tag.autoDeselectedBadge")}
+                                    </span>
+                                  )}
                                 </label>
                               );
                             })}

@@ -641,6 +641,8 @@
     },
     "tag": {
       "literalHint": "Literal tag from a foreign file — can match an Allow rule exactly. Deselectable individually.",
+      "literalDeselectedHint": "Literal tag — matches an existing Allow rule and is therefore deselected by default. Selectable again individually.",
+      "autoDeselectedBadge": "automatically deselected",
       "matchesRuleHint": "matches {{count}} existing filter rule(s): {{actions}}",
       "action": {
         "allow": "Allow",

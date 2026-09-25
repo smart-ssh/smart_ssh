@@ -504,10 +504,14 @@ pub fn build_plan(sources: &[ImportSource], inv: Inventory<'_>) -> ImportPlan {
                         // Deshalb bleibt das Schlagwort, und der Weg wird
                         // dort geschlossen, wo §5.2a ihn ohnehin schließen
                         // will: Es wird gekennzeichnet (`is_literal`) und ist
-                        // in der Vorschau einzeln abwählbar. Welche der
-                        // beiden Richtungen am Ende gelten soll, ist eine
-                        // Produktentscheidung — vorgelegt als
-                        // `Q-BL-0216-02`, s. ADR 0074 Punkt 10.
+                        // in der Vorschau einzeln abwählbar. Q-BL-0216-02
+                        // (Stefan, 2026-09-25, §9 der Spec) hat entschieden,
+                        // welche der beiden Richtungen die Vorgabe trägt:
+                        // Trifft das buchstäbliche Schlagwort eine
+                        // Allow-Regel, ist es in der Vorschau standardmäßig
+                        // abgewählt (umgesetzt in `defaultTagSelected`,
+                        // `SshConfigImportDialog.tsx`) — s. ADR 0074 Punkt 8,
+                        // ADR 0075 §9.
                         if !c.matches(alias) || tag_seen.contains(&c.pattern) {
                             continue;
                         }

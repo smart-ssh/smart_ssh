@@ -612,7 +612,10 @@ pub struct PreviewTagDto {
     pub matched_rules: Vec<PreviewMatchedRuleDto>,
     /// Schlagwort ohne Platzhalter, aus einer buchstäblichen Angabe in einem
     /// gemischten Block — trifft eine Tag-Regel **exakt** und gehört deshalb
-    /// deutlicher gekennzeichnet (§5.2a, offene Entscheidung Q-BL-0216-02).
+    /// deutlicher gekennzeichnet (§5.2a). Trifft es zusätzlich eine
+    /// Allow-Regel, ist es in der Vorschau standardmäßig abgewählt
+    /// (Q-BL-0216-02, entschieden — `defaultTagSelected` in
+    /// `SshConfigImportDialog.tsx`).
     pub is_literal: bool,
 }
 

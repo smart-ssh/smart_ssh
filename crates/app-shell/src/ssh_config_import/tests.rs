@@ -112,6 +112,17 @@ fn t_6_2_3_platzhalter_im_include_pfad() {
 
 // ---------------------------- ANNAHME A-2 (ADR 0074 Punkt 5/8, §9 Spec)
 
+// spec-reviewer-Fund (Runde 1, S-1): `*` ist auf Windows kein gültiges
+// Pfadzeichen — `create_dir_all` auf ein Verzeichnis, das buchstäblich `*`
+// heißt, schlägt dort mit `ERROR_INVALID_NAME` fehl, und `.expect("mkdir")`
+// paniert. Der CI-Workflow fährt `cargo test --workspace` auch unter
+// `windows-latest` (`.github/workflows/community.yml`). Die geprüfte
+// Produktionslogik (`has_wildcard(&dir)`) ist plattformunabhängig; nur der
+// Gegenbeweis-Aufbau dieses Tests braucht ein Unix-Dateisystem — deshalb
+// `#[cfg(unix)]`, wie an den anderen Stellen dieses Repos, die ein
+// Sonderzeichen im Dateinamen brauchen (z. B.
+// `ssh_config_export/tests.rs::t_review1_symlink_auf_die_datei_selbst_wird_erkannt`).
+#[cfg(unix)]
 #[test]
 fn t_a2_platzhalter_vor_letzter_pfadkomponente_wird_gemeldet_nicht_aufgeloest() {
     // ANNAHME A-2, bestätigt (Architekt, 2026-09-25, §9 der Spec): Ein

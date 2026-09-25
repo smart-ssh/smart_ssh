@@ -206,6 +206,26 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     expect(denyOnlyHitCheckbox).toBeChecked();
   });
 
+  // spec-reviewer-Fund (Runde 1, I-1): `action` ist heute immer klein
+  // geschrieben (`rule_action_key` in `ssh_config_apply.rs` ist exhaustiv),
+  // aber ein Vergleich, der das voraussetzt, fällt bei einer künftigen
+  // Änderung der DTO-Kodierung stillschweigend in die unsichere Richtung
+  // (angewählt). Hält die für diesen Fall sichere Richtung fest.
+  it("treats a differently-cased 'Allow' action as an allow match too", async () => {
+    const dto = preview();
+    // Die DTO-Kodierung sagt heute exhaustiv `"allow"` klein; der Cast
+    // simuliert absichtlich eine andere Schreibweise, um `.toLowerCase()`
+    // in `defaultTagSelected` zu verifizieren.
+    (dto.entries[0].tags[1].matchedRules as unknown as Array<{ ruleId: string; action: string }>)[0].action =
+      "Allow";
+    vi.mocked(previewSshConfigImport).mockResolvedValue(dto);
+    renderDialog();
+    await screen.findByText("web1");
+
+    const literalTagCheckbox = screen.getByText("prod").closest("label")?.querySelector("input");
+    expect(literalTagCheckbox).not.toBeChecked();
+  });
+
   it("reselecting the literal Allow-tag that starts deselected removes it from droppedTags on confirm", async () => {
     vi.mocked(previewSshConfigImport).mockResolvedValue(preview());
     vi.mocked(applySshConfigImport).mockResolvedValue({
@@ -228,6 +248,42 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
     const choices = vi.mocked(applySshConfigImport).mock.calls[0][0];
     expect(choices[0].droppedTags).toEqual([]);
+  });
+
+  // spec-reviewer-Fund (Runde 1, K-4): Der Test oben deckt nur noch die
+  // "wieder anwählen"-Richtung von `toggleTag` (`dropped.delete`) ab, weil
+  // "prod" bereits abgewählt startet. Ohne einen Test für die
+  // "abwählen"-Richtung (`dropped.add`) fiele eine Regression, die ein von
+  // Hand abgewähltes Schlagwort stillschweigend doch mit anlegt, niemandem
+  // auf — genau die Fähigkeit, auf die §5.2a und §6.4.3a aufsetzen. Das
+  // Muster-Schlagwort "*.prod.de" ist angewählt (nicht buchstäblich, s.
+  // `defaultTagSelected`) und deckt zusätzlich ab, dass Nicht-Literale
+  // wirklich mit der Vorgabe "angewählt" starten.
+  it("deselecting the pattern tag by hand sends it as droppedTags on confirm", async () => {
+    vi.mocked(previewSshConfigImport).mockResolvedValue(preview());
+    vi.mocked(applySshConfigImport).mockResolvedValue({
+      createdServers: 2,
+      createdGroups: 1,
+      skippedConflicts: 0,
+      identityFallbacks: [],
+      identityEncrypted: [],
+    });
+    renderDialog();
+    await screen.findByText("web1");
+
+    const patternTagCheckbox = screen.getByText("*.prod.de").closest("label")?.querySelector("input");
+    expect(patternTagCheckbox).toBeTruthy();
+    expect(patternTagCheckbox).toBeChecked();
+    fireEvent.click(patternTagCheckbox as HTMLInputElement);
+    expect(patternTagCheckbox).not.toBeChecked();
+
+    fireEvent.click(screen.getByText("Importieren"));
+
+    await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
+    const choices = vi.mocked(applySshConfigImport).mock.calls[0][0];
+    // "prod" ist ohnehin schon per Vorgabe abgewählt; nach dem Klick auf
+    // "*.prod.de" sind es beide.
+    expect(choices[0].droppedTags.sort()).toEqual(["*.prod.de", "prod"]);
   });
 
   it("cancel closes the dialog without applying anything", async () => {

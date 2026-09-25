@@ -641,6 +641,8 @@
     },
     "tag": {
       "literalHint": "Buchstäbliches Schlagwort aus einer fremden Datei — kann eine Allow-Regel exakt treffen. Einzeln abwählbar.",
+      "literalDeselectedHint": "Buchstäbliches Schlagwort — trifft eine bestehende Allow-Regel und ist deshalb standardmäßig abgewählt. Einzeln wieder anwählbar.",
+      "autoDeselectedBadge": "automatisch abgewählt",
       "matchesRuleHint": "trifft {{count}} bestehende Filterregel(n): {{actions}}",
       "action": {
         "allow": "Allow",
