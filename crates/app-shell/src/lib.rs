@@ -43,6 +43,10 @@ mod session;
 /// Spec 0075, §7.3: den bestätigten Importplan ausführen — der einzige
 /// Schritt, in dem überhaupt eine Schlüsseldatei geöffnet wird (§5.1).
 mod ssh_config_apply;
+/// Spec 0075, §7.4: Export nach `ssh_config` — Dateidialog,
+/// `~/.ssh/config`-Ablehnung, Schreiben. Die Abbildung selbst liegt in
+/// `ssh_manager_core::profiles::ssh_config::export`.
+mod ssh_config_export;
 /// Spec 0075, §7.2: Dateizugriff und `Include`-Auflösung für den
 /// `ssh_config`-Import — der einzige Teil, der dabei das Dateisystem
 /// anfasst.
@@ -601,6 +605,9 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             // selbst; das Ausführen nimmt nur Indizes (§5.1).
             ssh_config_apply::preview_ssh_config_import,
             ssh_config_apply::apply_ssh_config_import,
+            // Spec 0075, §7.4: Export nach `ssh_config`. Öffnet den
+            // Speichern-Dialog selbst (§5.1-Muster).
+            ssh_config_export::export_ssh_config,
             commands::get_platform,
             commands::get_app_info,
             commands::get_entitlements,
