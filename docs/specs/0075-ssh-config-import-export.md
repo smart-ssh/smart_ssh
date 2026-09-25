@@ -661,9 +661,10 @@ Entschärfend, und nachgesehen: Die Engine sortiert
 (`crates/core/src/filter/engine.rs:473`) — ein `Deny` lässt sich durch
 ein importiertes Schlagwort **nicht** abschwächen. Was bleibt, ist eine
 Tag-`Allow`-Regel, die ein importiertes Profil von der Vorgabe
-`Confirm` auf `Allow` hebt. Weil importierte Schlagworte immer `*`, `?`
-oder `!` enthalten (3.1.3), ist die Trefferfläche schmal — aber nicht
-leer, und „schmal" ist bei ERHÖHTER Priorität kein Argument.
+`Confirm` auf `Allow` hebt. Importierte Schlagworte enthalten meist
+`*`, `?` oder `!` (3.1.3), aber **nicht immer**: Ein gemischter Block wie
+`Host prod *` gibt dem Server `prod` das buchstäbliche Schlagwort `prod`
+(Klarstellung Q-BL-0216-02 in §9). Die Trefferfläche ist also nicht leer.
 
 **Anforderung daraus:** Die Vorschau MUSS Schlagworte, die auf eine
 **bestehende** Filterregel passen, als solche kennzeichnen und die
@@ -1207,3 +1208,28 @@ Kette von `Include`-Dateien umgangen würde. Ohne irgendeine
 Gesamtgrenze wäre §5.6 nicht haltbar. Stefan am 2026-09-23 vorgelegt,
 kein Widerspruch — die Grenzen aus §3.3 gelten damit als entschieden,
 §8 bleibt bei „keine offenen Punkte".
+
+**Q-BL-0216-02 entschieden (Stefan, 2026-09-25).** Ein buchstäbliches
+importiertes Schlagwort (aus einem gemischten Block wie `Host prod *`)
+entsteht wie jedes andere, damit bestehende Tag-`Deny`-Regeln weiter
+greifen. **Trifft es eine bestehende Tag-`Allow`-Regel, ist es in der
+Vorschau standardmäßig abgewählt** und deutlich als solches
+gekennzeichnet, samt der betroffenen Regel. Trifft es nur `Deny`- oder
+`Confirm`-Regeln oder keine, bleibt es angewählt. Der Nutzer kann in
+beide Richtungen umwählen. Zusätzlicher Test: buchstäbliches Schlagwort
+mit Treffer auf eine Tag-`Allow`-Regel → in der Vorschau abgewählt;
+dasselbe Schlagwort mit Treffer nur auf eine `Deny`-Regel → angewählt.
+
+**Klarstellung zu §3.1.9 (b) und §5.1 (Architekt, 2026-09-25, K2).**
+„Die Vorschau nennt den Passphrase-Bedarf" gilt für Weg (b) als „die
+Abschlussmeldung nach dem Bestätigen nennt ihn", denn vor dem Bestätigen
+darf keine Schlüsseldatei geöffnet werden (§5.1). Die Vorschau zeigt dazu
+einen allgemeinen Hinweis. So umgesetzt (ADR 0075, Punkt 8).
+
+**Annahmen A-1 bis A-3 aus ADR 0074 bestätigt (Architekt, 2026-09-25,
+K2).** A-1: `Include` innerhalb eines `Match`-Blocks wird gemeldet, nicht
+gefolgt. A-2: Platzhalter nur in der letzten Pfadkomponente eines
+`Include`; weiter vorne wird gemeldet, nicht aufgelöst. A-3: Ein
+ungültiger `Port` fällt auf 22 zurück **und** erscheint unter „nicht
+übernommen". A-1 und A-2 bekommen je einen Test, der gegen das
+gegenteilige Verhalten scheitert.
