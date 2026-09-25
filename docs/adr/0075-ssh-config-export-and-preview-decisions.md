@@ -200,8 +200,10 @@ eine `Allow`-Regel startet abgewählt, eines mit Treffer nur auf eine
 `Deny`-Regel bleibt angewählt (`SshConfigImportDialog.test.tsx`,
 „Q-BL-0216-02: a literal tag hitting an Allow rule starts deselected, one
 hitting only Deny stays selected"); die beiden Bestandstests, die die
-vorherige neutrale Vorgabe voraussetzten, sind an die neue Vorgabe
-angepasst.
+vorherige neutrale Vorgabe voraussetzten, wurden angepasst — einer davon
+(„deselecting the literal tag …") dabei in seiner Richtung **umgedreht**,
+nicht bloß in den erwarteten Werten geändert (spec-reviewer-Fund, Runde 1,
+K-4/K-5 in `.agent/BL-0216/review-05.md`, Nachbesserung in §11).
 
 ## 10. Was aus den Review-Runden stehen bleibt
 
@@ -254,3 +256,87 @@ zum Zeitpunkt dieses Runs (Schritte 4–6) unverändert offen, s.
 Abschlussbericht. *Beide sind seither aufgelöst:* A-1/A-2 haben Tests
 (nachgezogen in diesem Nachlauf, s. ADR 0074 Punkt 5/8), Q-BL-0216-02 ist
 entschieden (§9 oben).
+
+## 11. Nachlauf-Review (Runde 1, Priorität NORMAL): Q-BL-0216-02-Umsetzung nachgebessert
+
+Nach Umsetzung von §9 und der A-1/A-2-Tests (ADR 0074 Punkt 8) hat der
+`spec-reviewer` genau das Delta seit dem letzten Spec-Commit geprüft
+(Range `f8dff73..492b0f3`, wörtlicher Bericht in
+`.agent/BL-0216/review-05.md`). Gesamteinschätzung: „kleinere Nacharbeit
+nötig" — die Kernumsetzung (Vorgabe an der richtigen Stelle, beide
+Gegenbeweise scharf) hielt.
+
+**Behoben, mit Test:**
+
+1. **S-1 — Windows-CI.** Der A-2-Test legt zum Gegenbeweis ein Verzeichnis
+   an, das buchstäblich `*` heißt; `*` ist unter Windows kein gültiges
+   Pfadzeichen, `create_dir_all` wäre dort abgestürzt, und CI fährt
+   `cargo test --workspace` auch unter `windows-latest`. Mit `#[cfg(unix)]`
+   versehen, wie an den bestehenden Stellen dieses Repos, die ein
+   Sonderzeichen im Dateinamen brauchen (`ssh_config_export/tests.rs`).
+2. **K-4 — verlorene Testabdeckung.** Der angepasste Bestandstest deckte
+   nur noch die „wieder anwählen"-Richtung von `toggleTag` ab; die
+   „abwählen"-Richtung (`dropped.add`) hatte keinen Frontend-Test mehr.
+   Neuer Test wählt das Muster-Schlagwort `*.prod.de` von Hand ab und
+   prüft `droppedTags` — deckt zugleich, dass ein nicht-buchstäbliches
+   Schlagwort wirklich mit „angewählt" startet.
+3. **K-3 — Kennzeichnung fehlte.** Q-BL-0216-02 verlangt „standardmäßig
+   abgewählt **und** deutlich als solches gekennzeichnet, samt der
+   betroffenen Regel" — umgesetzt war nur die Vorgabe. Ein automatisch
+   abgewähltes Schlagwort sah optisch identisch aus wie eines, das nur
+   eine Deny-Regel trifft (gleicher roter Rahmen, gleiches ⚠, gleicher
+   `literalHint`-Tooltip). Jetzt: eigener sichtbarer Zusatz
+   („· automatisch abgewählt") und eigener Tooltip-Text
+   (`tag.literalDeselectedHint`, de/en), abgeleitet aus `defaultTagSelected`
+   selbst statt einer zweiten, potenziell abdriftenden Ableitung.
+4. **I-1 — Robustheit der Action-Prüfung.** `r.action === "allow"` auf
+   `r.action.toLowerCase() === "allow"` umgestellt, damit eine künftige
+   Änderung der DTO-Kodierung in die sichere Richtung (weiter abgewählt)
+   fällt statt stillschweigend in die unsichere.
+5. **K-6 — veraltete „offen"-Kommentare.** Vier Stellen sagten nach der
+   Entscheidung weiter „offene Entscheidung Q-BL-0216-02"
+   (`plan.rs`, `ssh_config_apply.rs::PreviewTagDto::is_literal`,
+   `types.ts::SshConfigPreviewTagDto.isLiteral`, ADR 0074 Punkt 5/10.1) —
+   aktualisiert.
+6. **K-5.** Der Satz in §9 oben, der die Testanpassung als reine
+   Wertänderung beschrieb, nennt jetzt, dass ein Test dabei die Richtung
+   gewechselt hat.
+
+**Bewusst nicht behoben — mit Grund:**
+
+1. **I-2 — Vorgabe lebt nur im Frontend.** Fehlt zu einem Eintrag eine
+   `EntryChoice` beim `apply`, fällt `apply_import` auf „alles angewählt"
+   zurück, inklusive eines Allow-Treffers. Heute nicht erreichbar (der
+   Dialog schickt für jeden Planeintrag eine Wahl) und Spec §9 formuliert
+   die Vorgabe ausdrücklich als Vorschau-Verhalten — keine Spec-Verletzung.
+   Die sauberere Tiefenverteidigung (Vorgabe von `core` im Plan/DTO tragen
+   lassen, Backend-Fallback folgt ihr) ist ein größerer Schnitt durch
+   `plan.rs`/DTO/Frontend und damit über den engen Umfang dieses Nachlaufs
+   hinaus. Backlog-Punkt.
+2. **I-3 — gemischter Allow+Deny-Treffer auf demselben Tag.** Trifft ein
+   buchstäbliches Schlagwort gleichzeitig eine Tag-`Allow`- und eine
+   Tag-`Deny`-Regel (zwei verschiedene Regeln, je eigenes Kommandomuster),
+   nimmt die Abwahl **beide** — das Profil verliert auch die
+   `Deny`-Abdeckung. Spec §9 entscheidet wörtlich „trifft es eine
+   Allow-Regel, ist es abgewählt", ohne den gemischten Fall zu nennen; der
+   Code ist damit spec-konform, aber der Zielkonflikt aus Punkt 10.1
+   („Verengung in der einen Richtung ist hier eine Lockerung in der
+   anderen") gilt für diesen Fall unverändert. Eine Produktentscheidung,
+   keine, die ein Coder-Lauf an der Spec vornimmt — vor Stefan zu bringen
+   (Abschlussbericht).
+3. **Testfall 3 aus dem Review — Muster-Schlagwort mit exaktem
+   Regel-Scope.** Trifft ein **Muster**-Schlagwort (z. B. `*.prod.de`) eine
+   Tag-`Allow`-Regel mit demselben Scope (`Scope::Tag("*.prod.de")` — genau
+   der Aufbau, den §6.4.3a selbst baut), hebt es ein Profil ebenso
+   unbemerkt von `Confirm` auf `Allow`, bleibt aber angewählt, weil
+   Q-BL-0216-02 nur den buchstäblichen Fall (`isLiteral`) entscheidet.
+   Spec-konform (§6.4.3a verlangt für diesen Fall nur Kennzeichnung +
+   Abwählbarkeit, nicht die Vorgabe „abgewählt"), aber dieselbe Begründung
+   trägt hier ebenso. Folgefrage, vor Stefan zu bringen.
+4. **K-2 — `SkipReason` für A-2 nicht eigens unterscheidbar.** Der
+   A-2-Fall trägt `SkipReason::IncludeNoMatch`, dieselbe Variante wie „kein
+   Treffer" und „Verzeichnis nicht lesbar" — in der Meldung an den Nutzer
+   nicht unterscheidbar. Vorbestehend (ADR 0074 Punkt 10.3 nennt die grobe
+   `SkipReason`-Auflösung bereits als offene Nacharbeit), durch den neuen
+   Test jetzt nur belegt, nicht verursacht — zusammen mit Punkt 10.3 zu
+   erledigen, nicht zweimal.

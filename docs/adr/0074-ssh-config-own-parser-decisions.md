@@ -96,8 +96,10 @@ nicht, ob `ssh` sie erfüllt sähe; die Datei zu öffnen hieße, eine Datei
 zu lesen, die der Nutzer selbst vielleicht nie liest. §5.1 („von sich aus
 öffnet der Import ausschließlich `ssh_config`-Dateien") zeigt in die
 Richtung, in der weniger geöffnet wird.
-*Aufgelöst durch:* eine Entscheidung des PO, falls `Match`-Includes
-gefolgt werden sollen. Kostet dann eine Zeile.
+*Aufgelöst:* bestätigt (Architekt, 2026-09-25, §9 der Spec) — `Match`-Includes
+werden **nicht** gefolgt, wie hier gewählt. Regressionstest mit
+Gegenbeweis: `t_a1_include_im_match_block_wird_gemeldet_nicht_gefolgt`
+(`crates/core/src/profiles/ssh_config/tests.rs`, s. Punkt 8).
 
 **ANNAHME A-2 — Platzhalter nur in der letzten Pfadkomponente.**
 `Include conf.d/*.conf` wird aufgelöst (der Fall, den §3.1.4 nennt und
@@ -105,8 +107,11 @@ gefolgt werden sollen. Kostet dann eine Zeile.
 als nicht übernommen gemeldet. Grund: Ein solches Muster aus fremder Hand
 würde einen Verzeichnisbaum durchlaufen, den niemand begrenzt hat — das
 liefe §5.6 zuwider.
-*Aufgelöst durch:* eine Entscheidung, ob die Fidelität zu `glob(3)` diesen
-Durchlauf wert ist. Dann braucht es eine eigene Grenze dafür.
+*Aufgelöst:* bestätigt (Architekt, 2026-09-25, §9 der Spec) — die Fidelität
+zu `glob(3)` ist den unbegrenzten Durchlauf nicht wert, es bleibt beim
+Melden. Regressionstest mit Gegenbeweis:
+`t_a2_platzhalter_vor_letzter_pfadkomponente_wird_gemeldet_nicht_aufgeloest`
+(`crates/app-shell/src/ssh_config_import/tests.rs`, s. Punkt 8).
 
 **ANNAHME A-3 — ein ungültiger `Port` wird gemeldet, nicht stillschweigend
 zu 22.** §3.1.2 regelt nur den **fehlenden** `Port`. Ein `Port abc` oder
@@ -181,8 +186,11 @@ einer Sperre entnommen.
    einen Richtung ist hier eine Lockerung in der anderen. Nach „Eskalation
    nur in eine Richtung" (ADR 0024) ist der `Deny`-Verlust die teurere
    Hälfte; es bleibt deshalb beim geprüften Verhalten, ergänzt um
-   `PlannedTag::is_literal` zur Kennzeichnung. **Welche Richtung gelten
-   soll, ist eine Produktentscheidung: `Q-BL-0216-02`.**
+   `PlannedTag::is_literal` zur Kennzeichnung. **Welche Richtung die Vorgabe
+   trägt, war die Produktentscheidung `Q-BL-0216-02` — entschieden** (Stefan,
+   2026-09-25, §9 der Spec): Trifft das Schlagwort eine `Allow`-Regel, ist
+   es in der Vorschau standardmäßig abgewählt; trifft es nur `Deny`/
+   `Confirm` oder keine Regel, bleibt es angewählt. Details in ADR 0075 §9.
 2. **Die Vorschau-DTOs tragen die Herkunft der Werte noch nicht**
    (`Sourced::origin`, `IdentityFilePlan::origin`, `PlannedTag::origin`),
    ebenso nicht `Conflict::kind` und den Namen eines Jump-Ziels aus dem
