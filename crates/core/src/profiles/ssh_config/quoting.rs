@@ -30,7 +30,8 @@ pub fn needs_quoting(value: &str) -> bool {
             .any(|c| c.is_whitespace() || c == '#' || c == '"')
 }
 
-/// Ersetzt Zeilenumbrüche (`\n`, `\r`) durch ein Leerzeichen.
+/// Ersetzt **alle** C0-Steuerzeichen (`\n`, `\r`, NUL, …) durch ein
+/// Leerzeichen.
 ///
 /// **Anführungszeichen schützen davor nicht** — `ssh_config` ist
 /// zeilenbasiert wie unser eigener Parser: Ein echtes `\n` **innerhalb**
@@ -41,12 +42,23 @@ pub fn needs_quoting(value: &str) -> bool {
 /// keinen Format-Zwang (§1.3) — und jeden `# smart-ssh:`-Kommentar
 /// (Gruppenname, Schlagworte, `sftp_server_path`).
 ///
+/// **Nicht nur `\n`/`\r`** (spec-reviewer-Fund, Runde 2): Ein `\0` schriebe
+/// den Rest des Werts zwar nicht in eine zweite Zeile, aber echtes `ssh`
+/// schneidet einen Wert dort ab (`fgets`/C-String) — und unsere **eigene**
+/// exportierte Datei würde beim Wiedereinlesen unter §3.1.4a fallen
+/// („enthält ein NUL-Byte" ⇒ „keine ssh_config, übersprungen"), ohne dass
+/// irgendwo eine Meldung entsteht. `char::is_control()` deckt NUL und die
+/// übrigen C0-Steuerzeichen ab, nicht nur die beiden Zeilenumbruch-Formen.
+///
 /// Eine allgemeine Kontrollzeichen-Politik für Server-/Gruppenfelder wäre
 /// die sauberere, aber größere Lösung (an der Eingangsgrenze, nicht hier);
 /// diese Funktion ist die Verteidigung im Schreiber, die für den Export
 /// unabhängig davon greift.
-pub fn strip_line_breaks(value: &str) -> String {
-    value.replace(['\n', '\r'], " ")
+pub fn strip_control_chars(value: &str) -> String {
+    value
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect()
 }
 
 /// Setzt `value` bei Bedarf in Anführungszeichen (OpenSSH-Regel, §4.3): ein
@@ -54,7 +66,7 @@ pub fn strip_line_breaks(value: &str) -> String {
 /// nicht nötig ist — ein unnötig gequoteter Wert wäre kein Fehler, aber
 /// unnötige Abweichung von dem, was ein Nutzer von Hand geschrieben hätte.
 ///
-/// **Zeilenumbrüche werden zuerst entfernt** ([`strip_line_breaks`]), dann
+/// **Steuerzeichen werden zuerst entfernt** ([`strip_control_chars`]), dann
 /// **`\` maskiert, dann `"`** (beides spec-reviewer-Funde, Runde 1): Ohne
 /// die erste Reihenfolge könnte ein `\n` im Wert die Zeile aufbrechen (s.
 /// dortigen Kommentar); ohne die zweite ergab ein Wert, der auf `\` endet
@@ -62,7 +74,7 @@ pub fn strip_line_breaks(value: &str) -> String {
 /// schließende Anführungszeichen, und `ssh` las den Rest der Zeile als
 /// Müll.
 pub fn quote_value(value: &str) -> String {
-    let value = strip_line_breaks(value);
+    let value = strip_control_chars(value);
     if !needs_quoting(&value) {
         return value;
     }
@@ -119,5 +131,13 @@ mod tests {
     #[test]
     fn carriage_return_in_value_is_also_stripped() {
         assert!(!quote_value("a\rb").contains('\r'));
+    }
+
+    /// spec-reviewer-Fund, Runde 2: nicht nur `\n`/`\r` — ein `\0` ließe
+    /// echtes `ssh` den Wert abschneiden, und unsere eigene exportierte
+    /// Datei fiele beim Wiedereinlesen unter §3.1.4a.
+    #[test]
+    fn nul_byte_in_value_is_stripped() {
+        assert!(!quote_value("a\0b").contains('\0'));
     }
 }

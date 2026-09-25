@@ -127,12 +127,16 @@ fn choose(index: usize, mode: IdentityMode) -> EntryChoice {
 // Test, mit Vorschau-DTO **und** angewandtem Ergebnis nebeneinander.
 
 /// Zwölf konkrete Hosts, ein Platzhalterblock, ein `ProxyJump` — dieselbe
-/// Kombination wie in der Akzeptanz von BL-0216.
+/// Kombination wie in der Akzeptanz von BL-0216. Der letzte Host trägt
+/// zusätzlich ein `IdentityFile`, damit der Vergleich auch dieses Feld
+/// erfasst (spec-reviewer-Fund, Runde 2: „Feld für Feld" schloss
+/// `identityFile` vorher nicht ein).
 fn zwoelf_hosts_config() -> String {
     let mut text = String::from("Host bastion\n  HostName 10.0.0.1\nHost web1.prod.de\n  HostName 10.0.1.1\n  ProxyJump bastion\n");
-    for n in 2..=11 {
+    for n in 2..=10 {
         text.push_str(&format!("Host web{n}.prod.de\n  HostName 10.0.1.{n}\n"));
     }
+    text.push_str("Host web11.prod.de\n  HostName 10.0.1.11\n  IdentityFile /keys/web11\n");
     text.push_str("Host *.prod.de\n  User deploy\n");
     text
 }
@@ -181,6 +185,30 @@ async fn t_6_3_1_vorschau_und_ergebnis_stimmen_ueberein() {
         actual_tags.sort();
         assert_eq!(actual_tags, expected_tags, "tags bei {}", entry_dto.name);
 
+        // identityFile (spec-reviewer-Fund, Runde 2).
+        match (&entry_dto.identity_file, &actual.auth) {
+            (Some(idf_dto), AuthMethod::IdentityFile { path, .. }) => {
+                assert_eq!(
+                    &idf_dto.path, path,
+                    "identityFile-Pfad bei {}",
+                    entry_dto.name
+                );
+            }
+            (None, AuthMethod::Agent) => {}
+            other => panic!(
+                "identityFile bei {}: Vorschau/Ergebnis auseinander: {other:?}",
+                entry_dto.name
+            ),
+        }
+
+        // conflict — der Bestand ist in diesem Test leer, also darf kein
+        // Eintrag einen Konflikt tragen (spec-reviewer-Fund, Runde 2).
+        assert!(
+            entry_dto.conflict.is_none(),
+            "unerwarteter Konflikt bei {}",
+            entry_dto.name
+        );
+
         match (&entry_dto.jump_host, actual.jump_host) {
             (Some(jump_dto), Some(actual_jump_id)) => {
                 let actual_jump_server = f
@@ -208,6 +236,12 @@ async fn t_6_3_1_vorschau_und_ergebnis_stimmen_ueberein() {
     let web1 = f.server("web1.prod.de").await;
     let bastion = f.server("bastion").await;
     assert_eq!(web1.jump_host, Some(bastion.id));
+
+    // Gesamtzahl (spec-reviewer-Fund, Runde 2): ohne diese Zeile fiele ein
+    // zusätzlich angelegtes Profil nicht auf, weil die Schleife oben nur
+    // über die Vorschau-Einträge iteriert, nicht über den tatsächlichen
+    // Bestand.
+    assert_eq!(f.servers().await.len(), 12);
 
     // Der Platzhalterblock selbst ist **kein** Profil geworden.
     assert!(f.servers().await.iter().all(|s| s.name != "*.prod.de"));
@@ -944,6 +978,38 @@ fn t_p10_2_dto_kennzeichnet_geplantes_jump_ziel_als_nicht_bestand() {
     let jump = web1.jump_host.as_ref().expect("Jump-Ziel im selben Import");
     assert_eq!(jump.name, "bastion");
     assert!(!jump.existing);
+}
+
+/// §5.2a „die betroffene Regel nennen" — spec-reviewer-Fund, Runde 2: der
+/// Fix aus Runde 1 (Action mit ins DTO) hatte keinen Test, der bei einem
+/// Rückfall auf `rule_id`-only rot geworden wäre. `action` ist das
+/// sicherheitsrelevante Feld: Nur `allow` kann `Confirm` → `Allow` heben.
+#[test]
+fn t_review2_dto_traegt_die_aktion_der_getroffenen_regel() {
+    use ssh_manager_core::filter::{Pattern, Rule, RuleAction, RuleId, RuleOrigin, Scope};
+    let rules = vec![Rule {
+        id: RuleId("r-allow".into()),
+        pattern: Pattern::Glob("systemctl restart *".into()),
+        action: RuleAction::Allow,
+        scope: Scope::Tag("*.prod.de".into()),
+        priority: 0,
+        origin: RuleOrigin::User,
+    }];
+    let plan = plan_from_inv(
+        "Host *.prod.de\n  User deploy\nHost web1.prod.de\n",
+        &[],
+        &rules,
+    );
+    let dto = build_preview_dto(&plan, &[], &[]);
+    let web1 = dto
+        .entries
+        .iter()
+        .find(|e| e.name == "web1.prod.de")
+        .unwrap();
+    let matched = &web1.tags[0].matched_rules;
+    assert_eq!(matched.len(), 1);
+    assert_eq!(matched[0].rule_id, "r-allow");
+    assert_eq!(matched[0].action, "allow");
 }
 
 /// Belegt das JSON-Vokabular, auf das sich das Frontend (`types.ts`)

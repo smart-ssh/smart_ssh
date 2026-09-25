@@ -107,6 +107,22 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     expect(patternTagLabel?.textContent).not.toContain("⚠");
   });
 
+  // spec-reviewer-Fund, Runde 2: die Action einer getroffenen Regel
+  // (Allow/Confirm/Deny) wurde nirgends per Test geprüft — ein Rückfall auf
+  // nur die Anzahl wäre unbemerkt geblieben.
+  it("shows which rule action matched a flagged tag (§5.2a)", async () => {
+    vi.mocked(previewSshConfigImport).mockResolvedValue(preview());
+    renderDialog();
+    await screen.findByTestId("entry-0-name");
+
+    // Das buchstäbliche Schlagwort "prod" trifft eine allow-Regel.
+    const literalTagLabel = screen.getByText("prod").closest("label");
+    expect(literalTagLabel?.textContent).toContain("Allow");
+    // Das Muster-Schlagwort "*.prod.de" trifft eine confirm-Regel.
+    const patternTagLabel = screen.getByText("*.prod.de").closest("label");
+    expect(patternTagLabel?.textContent).toContain("Confirm");
+  });
+
   it("recomputes the 'will open' file list when the identity mode changes — not a static list", async () => {
     vi.mocked(previewSshConfigImport).mockResolvedValue(preview());
     renderDialog();

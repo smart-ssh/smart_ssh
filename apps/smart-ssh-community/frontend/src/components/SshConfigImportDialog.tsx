@@ -258,6 +258,11 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                         </li>
                       ))}
                     </ul>
+                    {/* §3.1.9 (b): ob EIN konkreter Schlüssel verschlüsselt
+                     * ist, weiß erst das tatsächliche Lesen beim Bestätigen
+                     * (§5.1 — die Vorschau öffnet nichts); dieser Hinweis
+                     * ist deshalb bewusst allgemein, nicht pro Datei. */}
+                    <p className="mt-1">{t("sshConfigImport.identityFile.encryptedHint")}</p>
                   </div>
                 )}
               </section>

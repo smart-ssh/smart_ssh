@@ -294,3 +294,23 @@ fn t_review1_symlink_auf_die_datei_selbst_wird_erkannt() {
 
     assert!(super::resolves_to_ssh_config_under(&link, home.path()));
 }
+
+/// spec-reviewer-Fund, Runde 2: `canonicalize` (Fall 3) löst **keine**
+/// Hardlinks auf — zwei Hardlinks auf dieselbe Inode haben verschiedene
+/// kanonische Pfade. *Gegenbeweis:* mit Fall 5 (Inode-Vergleich) entfernt,
+/// scheitert dieser Test (geprüft, danach wiederhergestellt — s. Bericht).
+#[cfg(unix)]
+#[test]
+fn t_review2_hardlink_auf_die_datei_selbst_wird_erkannt() {
+    let home = tempfile::tempdir().unwrap();
+    let ssh_dir = home.path().join(".ssh");
+    std::fs::create_dir_all(&ssh_dir).unwrap();
+    let real_config = ssh_dir.join("config");
+    std::fs::write(&real_config, "# echte Konfiguration\n").unwrap();
+
+    let other_dir = tempfile::tempdir().unwrap();
+    let hardlink = other_dir.path().join("smart-ssh-export.conf");
+    std::fs::hard_link(&real_config, &hardlink).unwrap();
+
+    assert!(super::resolves_to_ssh_config_under(&hardlink, home.path()));
+}

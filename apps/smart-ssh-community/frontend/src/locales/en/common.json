@@ -629,6 +629,7 @@
       },
       "notUsable": "not usable when connecting, needs an absolute path",
       "willOpenHeading": "These {{count}} file(s) would be read on confirm:",
+      "encryptedHint": "If one of the keys is encrypted, it's taken over anyway — the passphrase then has to be added to the server profile before the first connection succeeds.",
       "fallbackReason": {
         "missing": "file missing",
         "unreadable": "not readable",

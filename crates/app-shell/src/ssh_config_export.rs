@@ -84,11 +84,18 @@ fn home_dir() -> Option<PathBuf> {
 ///    überschreibt auf diesen Systemen trotzdem die echte Datei — ein
 ///    Treffer mehr kostet hier nichts außer einem selteneren
 ///    Dateinamenswunsch, ein verpasster Treffer kostet die Datei.
-/// 3. **Aufgelöst**: Ist `path` selbst ein Symlink (oder Hardlink) auf die
-///    tatsächliche `~/.ssh/config`, erkennt das nur `canonicalize(path)`
-///    direkt — nicht nur des Elternverzeichnisses.
+/// 3. **Aufgelöst**: Ist `path` selbst ein Symlink auf die tatsächliche
+///    `~/.ssh/config`, erkennt das nur `canonicalize(path)` direkt — nicht
+///    nur des Elternverzeichnisses. `canonicalize` löst **keine**
+///    Hardlinks auf (zwei Hardlinks auf dieselbe Inode haben verschiedene
+///    kanonische Pfade) — dafür ist Fall 5 da.
 /// 4. Wie 2, aber auf den **aufgelösten Elternverzeichnissen** — deckt ein
 ///    symlink-verschleiertes `~/.ssh`-Verzeichnis ab.
+/// 5. **Selbe Inode** (nur Unix): Ein Hardlink auf `~/.ssh/config` hat
+///    einen anderen Pfad, aber dieselbe `(device, inode)`-Kombination —
+///    `canonicalize` (Fall 3) sieht das nicht, `MetadataExt` schon
+///    (spec-reviewer-Fund, Runde 2: der Doc-Kommentar hatte „oder
+///    Hardlink" behauptet, ohne dass Fall 3 das je geleistet hätte).
 fn resolves_to_user_ssh_config(path: &Path) -> bool {
     let Some(home) = home_dir() else {
         return false;
@@ -98,8 +105,8 @@ fn resolves_to_user_ssh_config(path: &Path) -> bool {
 
 /// Kern von [`resolves_to_user_ssh_config`], mit injizierbarem
 /// Home-Verzeichnis — testbar mit einem `tempdir()` statt dem echten `~`
-/// dieser Maschine (die z. B. kein `.ssh` haben muss, damit Fall 3/4 prüfbar
-/// sind).
+/// dieser Maschine (die z. B. kein `.ssh` haben muss, damit Fall 3/4/5
+/// prüfbar sind).
 fn resolves_to_ssh_config_under(path: &Path, home: &Path) -> bool {
     let target = home.join(".ssh").join("config");
 
@@ -119,8 +126,8 @@ fn resolves_to_ssh_config_under(path: &Path, home: &Path) -> bool {
         return true;
     }
 
-    // 3) Aufgelöst: `path` selbst könnte ein Symlink/Hardlink auf die
-    // echte Datei sein.
+    // 3) Aufgelöst: `path` selbst könnte ein Symlink auf die echte Datei
+    // sein.
     if let Ok(canon_target) = std::fs::canonicalize(&target) {
         if let Ok(canon_path) = std::fs::canonicalize(path) {
             if canon_path == canon_target {
@@ -130,11 +137,34 @@ fn resolves_to_ssh_config_under(path: &Path, home: &Path) -> bool {
     }
 
     // 4) Aufgelöste Elternverzeichnisse, Dateiname case-insensitiv.
-    match (
+    let via_parent = match (
         path.parent().and_then(|p| std::fs::canonicalize(p).ok()),
         target.parent().and_then(|p| std::fs::canonicalize(p).ok()),
     ) {
         (Some(a), Some(b)) => a == b && filenames_match_case_insensitive(path, &target),
+        _ => false,
+    };
+    if via_parent {
+        return true;
+    }
+
+    // 5) Dieselbe Inode (nur Unix) — fängt einen Hardlink auf
+    // `~/.ssh/config`, den `canonicalize` (Fall 3) nicht auflöst.
+    #[cfg(unix)]
+    {
+        if same_file_unix(path, &target) {
+            return true;
+        }
+    }
+
+    false
+}
+
+#[cfg(unix)]
+fn same_file_unix(a: &Path, b: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (std::fs::metadata(a), std::fs::metadata(b)) {
+        (Ok(ma), Ok(mb)) => ma.dev() == mb.dev() && ma.ino() == mb.ino(),
         _ => false,
     }
 }

@@ -629,6 +629,7 @@
       },
       "notUsable": "beim Verbinden nicht benutzbar, absoluter Pfad nötig",
       "willOpenHeading": "Diese {{count}} Datei(en) würden beim Bestätigen gelesen:",
+      "encryptedHint": "Ist einer der Schlüssel verschlüsselt, wird er trotzdem übernommen — die Passphrase muss danach im Server-Profil nachgetragen werden, bevor die erste Verbindung gelingt.",
       "fallbackReason": {
         "missing": "Datei fehlt",
         "unreadable": "nicht lesbar",

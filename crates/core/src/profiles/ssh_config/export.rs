@@ -16,7 +16,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::quoting::{quote_value, strip_line_breaks};
+use super::quoting::{quote_value, strip_control_chars};
 use crate::profiles::types::{AuthMethod, Group, GroupId, PostIngestPolicy, Server};
 use crate::shared::ServerId;
 
@@ -123,11 +123,11 @@ fn assign_aliases(servers: &[&Server]) -> HashMap<ServerId, String> {
 /// Beides landet hier in einer `#`-Kommentarzeile; ein `\n`/`\r` darin
 /// würde die Zeile beenden und alles Folgende als **eigene, wirksame**
 /// Direktive erscheinen lassen (spec-reviewer-Fund, Runde 1). Dieselbe
-/// [`strip_line_breaks`], die `quote_value` für Direktivenwerte benutzt —
+/// [`strip_control_chars`], die `quote_value` für Direktivenwerte benutzt —
 /// eine Zeichenklasse, eine Funktion, nicht zwei, die auseinanderlaufen
 /// könnten.
 fn sanitize_comment_text(value: &str) -> String {
-    strip_line_breaks(value)
+    strip_control_chars(value)
 }
 
 /// Kommentarzeilen über einem Block (§3.2.3): was für **diesen** Server
