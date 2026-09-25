@@ -172,7 +172,38 @@ Sätzen der Spec ist real und gehört als redaktionelle Klarstellung in
 Entscheidung, die ein Coder-Lauf an der Spec selbst vornimmt. Vorgelegt
 im Abschlussbericht dieses Laufs.
 
-## 9. Was aus den Review-Runden stehen bleibt
+## 9. Q-BL-0216-02 entschieden: buchstäbliches Schlagwort mit Allow-Treffer standardmäßig abgewählt
+
+ADR 0074, Punkt 5 (§5.2a) und Punkt 10.1 hatten die Richtung offen
+gelassen, in die die Vorgabe für ein buchstäbliches Schlagwort
+(`PlannedTag::is_literal`) zeigen soll, das eine bestehende Tag-Regel
+trifft — vorgelegt als `Q-BL-0216-02`. Stefan hat entschieden (2026-09-25,
+eingearbeitet in Spec §9):
+
+- Trifft das Schlagwort eine bestehende Tag-**`Allow`**-Regel, ist es in
+  der Vorschau standardmäßig **abgewählt**. Ohne diese Vorgabe würde ein
+  Import stillschweigend ein Profil von `Confirm` auf `Allow` heben, nur
+  weil ein gemischter Block wie `Host prod *` dem Server `prod` das
+  buchstäbliche Schlagwort `prod` gibt (§5.2a).
+- Trifft es nur eine `Deny`- oder `Confirm`-Regel, oder keine, bleibt es
+  wie jedes andere Schlagwort **angewählt** — eine bestehende
+  Tag-`Deny`-Regel bleibt damit ohne Zutun wirksam, genau das, was der
+  Lockerungs-Gegencheck aus ADR 0074 Punkt 10.1 verlangt hatte.
+- Der Nutzer kann in beide Richtungen umwählen.
+
+Umgesetzt an der **einzigen** dafür vorgesehenen Stelle,
+`defaultTagSelected` in `SshConfigImportDialog.tsx` — core liefert
+`is_literal` und `matched_rules` (samt `action`) bereits vollständig, die
+Vorgabe war zuvor bewusst neutral (`return true`) belassen, bis diese
+Antwort vorlag. Getestet: ein buchstäbliches Schlagwort mit Treffer auf
+eine `Allow`-Regel startet abgewählt, eines mit Treffer nur auf eine
+`Deny`-Regel bleibt angewählt (`SshConfigImportDialog.test.tsx`,
+„Q-BL-0216-02: a literal tag hitting an Allow rule starts deselected, one
+hitting only Deny stays selected"); die beiden Bestandstests, die die
+vorherige neutrale Vorgabe voraussetzten, sind an die neue Vorgabe
+angepasst.
+
+## 10. Was aus den Review-Runden stehen bleibt
 
 **Runde 1 (11 Funde) — behoben:** Kommentar-/Wert-Ausbruch über
 Steuerzeichen (Punkt 7 oben); `~/.ssh/config`-Umgehung per
@@ -218,5 +249,8 @@ Passphrase-Hinweis in der Vorschau ergänzt (Punkt 8).
 **Vorbestehend, nicht Gegenstand dieses Laufs, aber vor Stefan zu
 bringen:** ANNAHME A-1/A-2/A-3 aus ADR 0074 (unbestätigt seit Schritten
 0–3) und die offene Entscheidung Q-BL-0216-02 (§5.2a, Vorgabe für ein
-buchstäbliches Schlagwort, das eine Allow-Regel trifft) — beide bleiben
-unverändert offen, s. Abschlussbericht.
+buchstäbliches Schlagwort, das eine Allow-Regel trifft) — beide blieben
+zum Zeitpunkt dieses Runs (Schritte 4–6) unverändert offen, s.
+Abschlussbericht. *Beide sind seither aufgelöst:* A-1/A-2 haben Tests
+(nachgezogen in diesem Nachlauf, s. ADR 0074 Punkt 5/8), Q-BL-0216-02 ist
+entschieden (§9 oben).

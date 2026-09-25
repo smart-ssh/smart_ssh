@@ -213,9 +213,20 @@ einer Sperre entnommen.
    `read_credential_file` bestimmt das Frontend nur die Beschriftung, nie
    den Pfad; §5.1 bleibt heil. Erwähnt, weil es dieselbe
    Vertrauensrichtung betrifft.
-8. **Annahmen A-1 und A-2 sind unbelegt.** Beide sind begründet notiert
-   (Punkt 5), aber ohne Test — eine Regression daran fällt niemandem auf.
-   Nachzuziehen, sobald sie bestätigt sind.
+8. **Annahmen A-1 und A-2 waren unbelegt — jetzt mit Test.** Beide waren
+   begründet notiert (Punkt 5), aber ohne Test — eine Regression daran
+   wäre niemandem aufgefallen. Beide sind seither bestätigt (Architekt,
+   2026-09-25, §9 der Spec) und je ein Regressionstest nachgezogen:
+   `t_a1_include_im_match_block_wird_gemeldet_nicht_gefolgt`
+   (`crates/core/src/profiles/ssh_config/tests.rs`, prüft, dass ein
+   `Include` innerhalb eines `Match`-Blocks in `ParsedFile::includes`
+   fehlt und stattdessen gemeldet wird) und
+   `t_a2_platzhalter_vor_letzter_pfadkomponente_wird_gemeldet_nicht_aufgeloest`
+   (`crates/app-shell/src/ssh_config_import/tests.rs`, legt ein
+   Verzeichnis an, das buchstäblich `*` heißt, damit ein Treffer bei
+   fehlender A-2-Prüfung überhaupt möglich wäre, und prüft, dass er
+   trotzdem ausbleibt). Beide gegen den jeweiligen Sonderfall temporär
+   ausgeschaltet rot gesehen, dann wiederhergestellt.
 9. **Der Changelog-Schnipsel beschreibt die Vorschau als Nutzerfunktion**,
    obwohl das Frontend erst in Schritt 5 entsteht. Bewusst stehen
    gelassen: Die Fragmente werden erst beim Release nach `CHANGELOG.md`
