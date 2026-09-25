@@ -796,3 +796,28 @@ fn t_p10_2_dto_kennzeichnet_geplantes_jump_ziel_als_nicht_bestand() {
     assert_eq!(jump.name, "bastion");
     assert!(!jump.existing);
 }
+
+/// Belegt das JSON-Vokabular, auf das sich das Frontend (`types.ts`)
+/// verlässt — ohne diesen Test wäre eine stillschweigende Umbenennung einer
+/// `IdentityFallbackReason`-Variante erst zur Laufzeit im Frontend
+/// bemerkbar (falsche/nicht übersetzte Fehlermeldung), nicht am Gate.
+#[test]
+fn identity_fallback_reason_serializes_to_the_strings_the_frontend_expects() {
+    let cases = [
+        (IdentityFallbackReason::Missing, "\"missing\""),
+        (IdentityFallbackReason::Unreadable, "\"unreadable\""),
+        (IdentityFallbackReason::NotAKey, "\"notAKey\""),
+        (
+            IdentityFallbackReason::NotARegularFile,
+            "\"notARegularFile\"",
+        ),
+        (IdentityFallbackReason::TooLarge, "\"tooLarge\""),
+        (
+            IdentityFallbackReason::PathNotAbsolute,
+            "\"pathNotAbsolute\"",
+        ),
+    ];
+    for (reason, expected) in cases {
+        assert_eq!(serde_json::to_string(&reason).unwrap(), expected);
+    }
+}

@@ -35,6 +35,10 @@ import type {
   ServerDto,
   ServerInput,
   SessionSummaryDto,
+  SshConfigApplyOutcomeDto,
+  SshConfigEntryChoice,
+  SshConfigExportResultDto,
+  SshConfigImportPreviewDto,
   TestAiProviderCredentialsResult,
   TestConnectionResult,
 } from "./types";
@@ -524,3 +528,24 @@ export const sftpElevationDisable = (sessionId: string) =>
 /** Ziel-Nutzer des aktiven erhöhten Kanals, `null` = aus. */
 export const sftpElevationStatus = (sessionId: string) =>
   invoke<string | null>("sftp_elevation_status", { sessionId });
+
+// --- Spec 0075: Import/Export von OpenSSH-`ssh_config` --------------------
+
+/** Öffnet den Öffnen-Dialog im Backend (§5.1 — das Frontend bestimmt nie
+ * einen Pfad) und baut die Vorschau (§3.1.7). `null`, wenn der Nutzer den
+ * Dialog abbricht — kein Fehlerfall. Der Plan liegt danach im `AppState`
+ * (`pending_ssh_config_import`); `applySshConfigImport` nimmt nur Indizes. */
+export const previewSshConfigImport = (title: string) =>
+  invoke<SshConfigImportPreviewDto | null>("preview_ssh_config_import", { title });
+
+/** Führt die zuletzt gebaute Vorschau aus (§3.1.11: alles oder nichts).
+ * Ohne vorherige `previewSshConfigImport` (oder nach einem zweiten Aufruf,
+ * der den Plan schon verbraucht hat) liefert das Backend einen Fehler. */
+export const applySshConfigImport = (choices: SshConfigEntryChoice[]) =>
+  invoke<SshConfigApplyOutcomeDto>("apply_ssh_config_import", { choices });
+
+/** Öffnet den Speichern-unter-Dialog im Backend, lehnt `~/.ssh/config` als
+ * Ziel ab (§3.2.5) und schreibt die Server (ohne den lokalen
+ * Pseudo-Server). `null`, wenn der Nutzer den Dialog abbricht. */
+export const exportSshConfig = (title: string) =>
+  invoke<SshConfigExportResultDto | null>("export_ssh_config", { title });

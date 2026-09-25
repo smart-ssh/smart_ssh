@@ -5,6 +5,8 @@ import type { GroupDto, ServerDto } from "../types";
 import { GroupForm } from "./GroupForm";
 import { ServerForm } from "./ServerForm";
 import { Sidebar, type Selection } from "./Sidebar";
+import { SshConfigExportDialog } from "./SshConfigExportDialog";
+import { SshConfigImportDialog } from "./SshConfigImportDialog";
 
 interface ManagementViewProps {
   /** Spec 0057, §4.2 (Etappe 4): "Mache ich selbst" im Kürzungs-Vorschlags-
@@ -40,6 +42,11 @@ export function ManagementView({
   // ein späterer normaler Klick auf einen ANDEREN Server fälschlich
   // ebenfalls automatisch scrollen/fokussieren.
   const [focusNotesOnOpen, setFocusNotesOnOpen] = useState(Boolean(initialSelection));
+  // Spec 0075: Import-Vorschau-Dialog bzw. Export-Ergebnis-Dialog. Jeweils
+  // nur eines gleichzeitig sichtbar — beide öffnen einen nativen
+  // Dateidialog im Backend, ein zweiter gleichzeitig wäre verwirrend.
+  const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // `initialSelection` kommt von außen (Navigations-Bus), kann sich also
   // ändern, NACHDEM diese Komponente bereits gemountet ist (anders als ein
@@ -82,7 +89,24 @@ export function ManagementView({
 
   return (
     <div className="flex min-h-0 flex-1">
-      <Sidebar groups={groups} servers={servers} selection={selection} onSelect={selectManually} />
+      <Sidebar
+        groups={groups}
+        servers={servers}
+        selection={selection}
+        onSelect={selectManually}
+        onImportSshConfig={() => setImportOpen(true)}
+        onExportSshConfig={() => setExportOpen(true)}
+      />
+      {importOpen && (
+        <SshConfigImportDialog
+          onClose={() => setImportOpen(false)}
+          onImported={() => {
+            reload();
+            selectManually(null);
+          }}
+        />
+      )}
+      {exportOpen && <SshConfigExportDialog onClose={() => setExportOpen(false)} />}
       <div className="flex-1 overflow-y-auto">
         {error && <p className="p-4 text-sm text-red-400">{error}</p>}
 

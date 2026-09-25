@@ -96,7 +96,11 @@
   "sidebar": {
     "addGroup": "+ Gruppe",
     "addServer": "+ Server",
-    "empty": "Noch nichts angelegt."
+    "empty": "Noch nichts angelegt.",
+    "importSshConfig": "Import …",
+    "importSshConfigHint": "Server aus einer OpenSSH-ssh_config-Datei importieren",
+    "exportSshConfig": "Export …",
+    "exportSshConfigHint": "Server nach OpenSSH-ssh_config exportieren"
   },
   "management": {
     "emptyState": "Links eine Gruppe oder einen Server auswählen, oder über \"{{addGroup}}\"/\"{{addServer}}\" etwas Neues anlegen."
@@ -581,5 +585,94 @@
     },
     "channelLost": "Erhöhte Rechte beendet — der erhöhte Kanal ist nicht mehr aktiv.",
     "targetUserLabel": "Ziel-Nutzer der Rechteerhöhung (Standard: root)"
+  },
+  "sshConfigImport": {
+    "dialogTitle": "ssh_config importieren",
+    "filesHeading": "Gelesene Dateien",
+    "fileStatus": {
+      "read": "gelesen",
+      "notSshConfig": "keine ssh_config, übersprungen",
+      "unreadable": "nicht lesbar, übersprungen",
+      "alreadyRead": "schon gelesen, übersprungen"
+    },
+    "groupsHeading": "Entstehende Ordnerstruktur",
+    "entriesHeading": "{{count}} Server",
+    "field": {
+      "host": "Adresse",
+      "port": "Port",
+      "username": "Benutzer",
+      "jumpHost": "Jump-Host",
+      "identityFile": "Schlüsseldatei",
+      "emptyValue": "(leer)"
+    },
+    "origin": {
+      "default": "Vorgabe",
+      "fromFile": "aus {{file}}:{{line}} („{{block}}“)"
+    },
+    "jumpHost": {
+      "existing": "im Bestand",
+      "planned": "wird in diesem Import angelegt"
+    },
+    "conflict": {
+      "name": "Name „{{name}}“ schon vergeben",
+      "address": "Adresse/Port/Benutzer wie „{{name}}“ schon vorhanden",
+      "renameLabel": "Unter neuem Namen anlegen:",
+      "renamePlaceholder": "neuer Name",
+      "skipHint": "Ohne neuen Namen wird dieser Eintrag übersprungen; der bestehende Server bleibt unverändert."
+    },
+    "identityFile": {
+      "modeHeading": "Schlüsseldatei (IdentityFile) — Vorgabe für alle Einträge",
+      "mode": {
+        "keepAsFile": "Als Schlüsseldatei übernehmen (öffnet nichts)",
+        "intoKeychain": "Einlesen und im Schlüsselbund ablegen",
+        "drop": "Nicht übernehmen"
+      },
+      "notUsable": "beim Verbinden nicht benutzbar, absoluter Pfad nötig",
+      "willOpenHeading": "Diese {{count}} Datei(en) würden beim Bestätigen gelesen:"
+    },
+    "tag": {
+      "literalHint": "Buchstäbliches Schlagwort aus einer fremden Datei — kann eine Allow-Regel exakt treffen. Einzeln abwählbar.",
+      "matchesRuleHint": "trifft {{count}} bestehende Filterregel(n)"
+    },
+    "skippedHeading": "{{count}} nicht übernommene Zeile(n)",
+    "skipped": {
+      "unreadableLine": "unlesbare Zeile"
+    },
+    "skipReason": {
+      "unsupported": "nicht unterstützte Direktive",
+      "alreadySet": "zweiter Wert in diesem Block, der erste gilt",
+      "emptyValue": "nach dem Entfernen unsichtbarer Randzeichen leer",
+      "outsideHostBlock": "außerhalb eines Host-Blocks",
+      "invalidValue": "ungültiger Wert",
+      "emptyAlias": "kein brauchbarer Alias",
+      "mixedWildcardBlock": "gemischter Platzhalterblock — kein Profil daraus",
+      "includeTooDeep": "Include zu tief verschachtelt (mehr als 3 Ebenen)",
+      "includeAlreadyRead": "diese Datei wurde in diesem Import schon gelesen",
+      "includeUnreadable": "Datei nicht lesbar",
+      "includeNotSshConfig": "keine ssh_config",
+      "includeNoMatch": "Include-Muster traf keine Datei",
+      "proxyJumpCycle": "ProxyJump-Kette bildet eine Schleife",
+      "proxyJumpHopUnresolved": "ein Sprung in der ProxyJump-Kette lässt sich nicht auflösen",
+      "proxyJumpIntermediateExists": "eine Zwischenstation liegt bereits im Bestand",
+      "proxyJumpAmbiguousPredecessor": "mehrdeutiger Vorgänger in der ProxyJump-Kette",
+      "proxyJumpOwnAndIntermediate": "Zwischenstation hat selbst ein ProxyJump",
+      "proxyJumpLocalPseudoServer": "zeigt auf den lokalen Pseudo-Server"
+    },
+    "confirm": "Importieren",
+    "applying": "Importiert …",
+    "result": {
+      "success": "{{created}} Server angelegt, {{groups}} Ordner, {{skipped}} Konflikt(e) übersprungen.",
+      "withFallbacks": "{{created}} Server angelegt, {{groups}} Ordner, {{skipped}} Konflikt(e) übersprungen. {{fallbacks}} Schlüsseldatei(en) konnten nicht eingelesen werden — der Pfad wurde stattdessen übernommen."
+    }
+  },
+  "sshConfigExport": {
+    "dialogTitle": "Nach ssh_config exportieren",
+    "result": {
+      "summary": "{{count}} Server exportiert nach {{path}}.",
+      "renamedHeading": "Umbenannte Aliase (ungültige Zeichen im Servernamen):",
+      "includeHintLabel": "So bindest du die Datei in deine eigene ~/.ssh/config ein:",
+      "copy": "Kopieren",
+      "notRepresentedHint": "Gruppen, Schlagworte, Notizen, Filterregeln und Sicherheitseinstellungen stehen nicht in dieser Datei — was für einen einzelnen Server fehlt, steht als Kommentar über seinem Eintrag."
+    }
   }
 }

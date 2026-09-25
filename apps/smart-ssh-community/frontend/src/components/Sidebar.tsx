@@ -13,6 +13,9 @@ interface SidebarProps {
   servers: ServerDto[];
   selection: Selection | null;
   onSelect: (selection: Selection) => void;
+  /** Spec 0075, §3.1.7/§3.2 — Import aus bzw. Export nach `ssh_config`. */
+  onImportSshConfig: () => void;
+  onExportSshConfig: () => void;
 }
 
 /** Spec 0008, Abschnitt 6: rekursiv aus `list_groups()`/`list_servers()`
@@ -25,7 +28,14 @@ interface SidebarProps {
  * oberhalb des Baums angeheftet dargestellt, sonst gäbe es in der
  * Verwalten-Ansicht keine Möglichkeit, seine Notizen/Tags zu bearbeiten
  * (Spec 0032, Abschnitt 3). */
-export function Sidebar({ groups, servers, selection, onSelect }: SidebarProps) {
+export function Sidebar({
+  groups,
+  servers,
+  selection,
+  onSelect,
+  onImportSshConfig,
+  onExportSshConfig,
+}: SidebarProps) {
   const { t } = useTranslation();
   const tree = buildGroupTree(groups, servers);
   const localServer = servers.find((s) => s.isLocal);
@@ -82,6 +92,24 @@ export function Sidebar({ groups, servers, selection, onSelect }: SidebarProps) 
           className="flex-1 rounded bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700"
         >
           {t("sidebar.addServer")}
+        </button>
+      </div>
+      <div className="flex gap-1 border-b border-slate-800 p-2">
+        <button
+          type="button"
+          onClick={onImportSshConfig}
+          title={t("sidebar.importSshConfigHint")}
+          className="flex-1 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+        >
+          {t("sidebar.importSshConfig")}
+        </button>
+        <button
+          type="button"
+          onClick={onExportSshConfig}
+          title={t("sidebar.exportSshConfigHint")}
+          className="flex-1 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+        >
+          {t("sidebar.exportSshConfig")}
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-2">

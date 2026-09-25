@@ -827,3 +827,178 @@ export interface KeyFileFactsDto {
   /** `null`, wenn die Datei grundsätzlich in Frage kommt. */
   problem: KeyFileProblemDto | null;
 }
+
+// --- Spec 0075: Import/Export von OpenSSH-`ssh_config` -------------------
+
+/** Von `crate::ssh_config_apply::OriginDto` — woher ein Feldwert stammt
+ * (§3.1.3): welche Datei, welche Zeile, welcher `Host`-Block. */
+export interface SshConfigOriginDto {
+  file: string;
+  line: number;
+  block: string;
+}
+
+/** Ein Feldwert mit seiner Herkunft (`crate::ssh_config_apply::
+ * SourcedDto`). `origin: null` heißt: Vorgabe des Produkts, nicht aus der
+ * Datei (§3.1.2, z. B. `port` ohne `Port`-Zeile). */
+export interface SshConfigSourcedDto<T> {
+  value: T;
+  origin: SshConfigOriginDto | null;
+}
+
+export interface SshConfigPreviewTagDto {
+  tag: string;
+  origin: SshConfigOriginDto;
+  /** §5.2a: nicht leer ⇒ dieses Schlagwort trifft eine bestehende
+   * Filterregel — die Regel-IDs stehen hier drin. */
+  matchedRules: string[];
+  /** `true` ⇒ das Schlagwort trägt **keinen** Platzhalter (buchstäbliche
+   * Angabe in einem gemischten `Host`-Block, z. B. `Host prod *`) und
+   * trifft eine `Scope::Tag`-Regel **exakt** — deutlicher zu kennzeichnen
+   * als ein Muster-Schlagwort (§5.2a, offene Entscheidung Q-BL-0216-02). */
+  isLiteral: boolean;
+}
+
+export interface SshConfigPreviewIdentityFileDto {
+  path: string;
+  origin: SshConfigOriginDto;
+  /** §3.1.9 (a): `false` ⇒ beim Verbinden nicht benutzbar (relativer Pfad
+   * oder `~user/…`-Form), absoluter Pfad nötig. */
+  usableWhenConnecting: boolean;
+}
+
+/** Wohin ein `jump_host` zeigt — `name` ist immer der tatsächliche Name
+ * (Bestand: `Server.name`; geplant: der Alias in diesem Import),
+ * `existing` unterscheidet beide Fälle. */
+export interface SshConfigPreviewJumpDto {
+  name: string;
+  existing: boolean;
+}
+
+export interface SshConfigPreviewConflictDto {
+  kind: "name" | "address";
+  existingName: string;
+}
+
+export interface SshConfigPreviewEntryDto {
+  index: number;
+  name: string;
+  group: number;
+  host: SshConfigSourcedDto<string>;
+  port: SshConfigSourcedDto<number>;
+  username: SshConfigSourcedDto<string>;
+  tags: SshConfigPreviewTagDto[];
+  identityFile: SshConfigPreviewIdentityFileDto | null;
+  jumpHost: SshConfigPreviewJumpDto | null;
+  conflict: SshConfigPreviewConflictDto | null;
+}
+
+export interface SshConfigPreviewGroupDto {
+  name: string;
+  /** Index der Elterngruppe in `ImportPreviewDto.groups`, `null` = Wurzel. */
+  parent: number | null;
+  sourcePath: string;
+}
+
+export interface SshConfigPreviewFileDto {
+  path: string;
+  depth: number;
+  status: "read" | "notSshConfig" | "unreadable" | "alreadyRead";
+}
+
+/** Warum eine Zeile nicht übernommen wurde (§3.1.5) — der Text dazu kommt
+ * aus dem Übersetzungskatalog (`sshConfigImport.skipReason.*`), nie aus
+ * dem Backend, s. `crate::ssh_config_apply::reason_key`. */
+export type SshConfigSkipReasonKey =
+  | "unsupported"
+  | "alreadySet"
+  | "emptyValue"
+  | "outsideHostBlock"
+  | "invalidValue"
+  | "emptyAlias"
+  | "mixedWildcardBlock"
+  | "includeTooDeep"
+  | "includeAlreadyRead"
+  | "includeUnreadable"
+  | "includeNotSshConfig"
+  | "includeNoMatch"
+  | "proxyJumpCycle"
+  | "proxyJumpHopUnresolved"
+  | "proxyJumpIntermediateExists"
+  | "proxyJumpAmbiguousPredecessor"
+  | "proxyJumpOwnAndIntermediate"
+  | "proxyJumpLocalPseudoServer";
+
+export interface SshConfigPreviewSkippedDto {
+  file: string;
+  line: number;
+  /** Der **Name** der Direktive — `null` für „unlesbare Zeile" (§3.1.5).
+   * Nie ein Wert. */
+  directive: string | null;
+  reason: SshConfigSkipReasonKey;
+  entry: string | null;
+}
+
+/** Von `crate::ssh_config_apply::ImportPreviewDto` (§3.1.7) — die
+ * vollständige Vorschau, bevor irgendetwas angelegt wird. */
+export interface SshConfigImportPreviewDto {
+  groups: SshConfigPreviewGroupDto[];
+  entries: SshConfigPreviewEntryDto[];
+  files: SshConfigPreviewFileDto[];
+  skipped: SshConfigPreviewSkippedDto[];
+  /** §3.1.9 (b): welche Dateien auf Weg (b) geöffnet **würden** — genannt,
+   * bevor irgendetwas passiert. */
+  identityFilePaths: string[];
+}
+
+/** Was mit `IdentityFile` geschehen soll (§3.1.9); Vorgabe `keepAsFile`
+ * (a) — der einzige Weg, der keine Datei öffnet. */
+export type SshConfigIdentityMode = "keepAsFile" | "intoKeychain" | "drop";
+
+/** Die Wahl zu **einem** Eintrag der Vorschau — Eingabe für
+ * `applySshConfigImport` (`crate::ssh_config_apply::EntryChoice`). */
+export interface SshConfigEntryChoice {
+  index: number;
+  selected: boolean;
+  identityMode: SshConfigIdentityMode;
+  renameTo: string | null;
+  droppedTags: string[];
+}
+
+export type SshConfigIdentityFallbackReason =
+  | "missing"
+  | "unreadable"
+  | "notAKey"
+  | "notARegularFile"
+  | "tooLarge"
+  | "pathNotAbsolute";
+
+export interface SshConfigIdentityFallbackDto {
+  entry: string;
+  path: string;
+  reason: SshConfigIdentityFallbackReason;
+}
+
+/** Von `crate::ssh_config_apply::ApplyOutcome` — Grundlage der
+ * Abschlussmeldung nach dem Bestätigen. */
+export interface SshConfigApplyOutcomeDto {
+  createdServers: number;
+  createdGroups: number;
+  skippedConflicts: number;
+  identityFallbacks: SshConfigIdentityFallbackDto[];
+}
+
+/** Von `crate::ssh_config_export::ExportedServerDto` (§3.2.7). */
+export interface SshConfigExportedServerDto {
+  originalName: string;
+  alias: string;
+  renamed: boolean;
+}
+
+/** Von `crate::ssh_config_export::ExportResultDto`. */
+export interface SshConfigExportResultDto {
+  path: string;
+  exported: SshConfigExportedServerDto[];
+  /** §3.2.5: fertig formatierte `Include <pfad>`-Zeile. */
+  includeHint: string;
+}

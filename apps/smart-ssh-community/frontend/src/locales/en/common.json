@@ -96,7 +96,11 @@
   "sidebar": {
     "addGroup": "+ Group",
     "addServer": "+ Server",
-    "empty": "Nothing created yet."
+    "empty": "Nothing created yet.",
+    "importSshConfig": "Import …",
+    "importSshConfigHint": "Import servers from an OpenSSH ssh_config file",
+    "exportSshConfig": "Export …",
+    "exportSshConfigHint": "Export servers to OpenSSH ssh_config"
   },
   "management": {
     "emptyState": "Select a group or server on the left, or create something new via \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -581,5 +585,94 @@
     },
     "channelLost": "Elevated rights ended — the elevated channel is no longer active.",
     "targetUserLabel": "Target user for elevated rights (default: root)"
+  },
+  "sshConfigImport": {
+    "dialogTitle": "Import ssh_config",
+    "filesHeading": "Files read",
+    "fileStatus": {
+      "read": "read",
+      "notSshConfig": "not an ssh_config, skipped",
+      "unreadable": "not readable, skipped",
+      "alreadyRead": "already read, skipped"
+    },
+    "groupsHeading": "Resulting folder structure",
+    "entriesHeading": "{{count}} servers",
+    "field": {
+      "host": "Address",
+      "port": "Port",
+      "username": "User",
+      "jumpHost": "Jump host",
+      "identityFile": "Key file",
+      "emptyValue": "(empty)"
+    },
+    "origin": {
+      "default": "default",
+      "fromFile": "from {{file}}:{{line}} (“{{block}}”)"
+    },
+    "jumpHost": {
+      "existing": "already exists",
+      "planned": "created in this import"
+    },
+    "conflict": {
+      "name": "name “{{name}}” already taken",
+      "address": "address/port/user already matches “{{name}}”",
+      "renameLabel": "Create under a new name:",
+      "renamePlaceholder": "new name",
+      "skipHint": "Without a new name this entry is skipped; the existing server stays unchanged."
+    },
+    "identityFile": {
+      "modeHeading": "Key file (IdentityFile) — default for all entries",
+      "mode": {
+        "keepAsFile": "Keep as key file (opens nothing)",
+        "intoKeychain": "Read and store in the keychain",
+        "drop": "Don't take over"
+      },
+      "notUsable": "not usable when connecting, needs an absolute path",
+      "willOpenHeading": "These {{count}} file(s) would be read on confirm:"
+    },
+    "tag": {
+      "literalHint": "Literal tag from a foreign file — can match an Allow rule exactly. Deselectable individually.",
+      "matchesRuleHint": "matches {{count}} existing filter rule(s)"
+    },
+    "skippedHeading": "{{count}} line(s) not taken over",
+    "skipped": {
+      "unreadableLine": "unreadable line"
+    },
+    "skipReason": {
+      "unsupported": "unsupported directive",
+      "alreadySet": "second value in this block, the first one stands",
+      "emptyValue": "empty after removing invisible edge characters",
+      "outsideHostBlock": "outside a Host block",
+      "invalidValue": "invalid value",
+      "emptyAlias": "no usable alias",
+      "mixedWildcardBlock": "mixed wildcard block — no profile from it",
+      "includeTooDeep": "Include nested too deep (more than 3 levels)",
+      "includeAlreadyRead": "this file was already read in this import",
+      "includeUnreadable": "file not readable",
+      "includeNotSshConfig": "not an ssh_config",
+      "includeNoMatch": "Include pattern matched no file",
+      "proxyJumpCycle": "ProxyJump chain forms a loop",
+      "proxyJumpHopUnresolved": "a hop in the ProxyJump chain can't be resolved",
+      "proxyJumpIntermediateExists": "an intermediate hop already exists",
+      "proxyJumpAmbiguousPredecessor": "ambiguous predecessor in the ProxyJump chain",
+      "proxyJumpOwnAndIntermediate": "intermediate hop has its own ProxyJump",
+      "proxyJumpLocalPseudoServer": "points to the local pseudo server"
+    },
+    "confirm": "Import",
+    "applying": "Importing …",
+    "result": {
+      "success": "{{created}} servers created, {{groups}} folders, {{skipped}} conflict(s) skipped.",
+      "withFallbacks": "{{created}} servers created, {{groups}} folders, {{skipped}} conflict(s) skipped. {{fallbacks}} key file(s) could not be read — the path was kept instead."
+    }
+  },
+  "sshConfigExport": {
+    "dialogTitle": "Export to ssh_config",
+    "result": {
+      "summary": "{{count}} servers exported to {{path}}.",
+      "renamedHeading": "Renamed aliases (invalid characters in the server name):",
+      "includeHintLabel": "How to include this file in your own ~/.ssh/config:",
+      "copy": "Copy",
+      "notRepresentedHint": "Groups, tags, notes, filter rules and security settings aren't in this file — what's missing for a given server is noted as a comment above its entry."
+    }
   }
 }
