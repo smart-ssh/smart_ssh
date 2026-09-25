@@ -110,6 +110,42 @@ fn t_6_2_3_platzhalter_im_include_pfad() {
     assert!(!names.contains(&"nichtdabei"), "Nicht-Treffer gelesen");
 }
 
+// ---------------------------- ANNAHME A-2 (ADR 0074 Punkt 5/8, §9 Spec)
+
+#[test]
+fn t_a2_platzhalter_vor_letzter_pfadkomponente_wird_gemeldet_nicht_aufgeloest() {
+    // ANNAHME A-2, bestätigt (Architekt, 2026-09-25, §9 der Spec): Ein
+    // Platzhalter weiter vorne als die letzte Pfadkomponente
+    // (`Include */conf.d/x.conf`) wird gemeldet, nicht aufgelöst — sonst
+    // liefe ein Muster aus fremder Hand einen unbegrenzten Verzeichnisbaum
+    // ab (§5.6). `resolve_include` prüft das vor jedem Dateizugriff
+    // (`has_wildcard(&dir…)`).
+    //
+    // Damit der Gegenbeweis überhaupt etwas beweist, muss ein Treffer
+    // *möglich* sein, wenn die Prüfung fehlte: Auf Unix ist `*` ein
+    // gültiges Zeichen in einem Dateinamen, also legen wir ein
+    // Verzeichnis an, das buchstäblich `*` heißt — genau das Verzeichnis,
+    // das `*/conf.d/x.conf` treffen würde, gäbe es die Prüfung nicht.
+    let d = tempfile::tempdir().unwrap();
+    write(d.path(), "*/conf.d/x.conf", "Host getroffen\n");
+    let c = write(d.path(), "config", "Include */conf.d/x.conf\nHost a\n");
+
+    let read = read_ok(&c);
+    let plan = plan_of(&read);
+    let names: Vec<&str> = plan.entries.iter().map(|e| e.name.as_str()).collect();
+    assert!(
+        !names.contains(&"getroffen"),
+        "Platzhalter vor der letzten Pfadkomponente wurde aufgelöst: {names:?}"
+    );
+    assert!(
+        read.include_issues
+            .iter()
+            .any(|i| i.reason == SkipReason::IncludeNoMatch),
+        "nicht gemeldet: {:?}",
+        read.include_issues
+    );
+}
+
 #[test]
 fn t_6_2_4_relativer_include_relativ_zur_einbindenden_datei() {
     // Der Messbefund gegen `ssh2-config` (§9/M-1) als Test: Sie löst

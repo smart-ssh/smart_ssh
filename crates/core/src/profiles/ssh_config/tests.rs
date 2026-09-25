@@ -276,6 +276,33 @@ fn t_match_beendet_block_auch_fuer_folgende_hosts() {
     assert_eq!(entry(&plan, "b").port.value, 22);
 }
 
+// ------------------------------ ANNAHME A-1 (ADR 0074 Punkt 5/8, §9 Spec)
+
+#[test]
+fn t_a1_include_im_match_block_wird_gemeldet_nicht_gefolgt() {
+    // ANNAHME A-1, bestätigt (Architekt, 2026-09-25, §9 der Spec): Ein
+    // `Include` **innerhalb** eines `Match`-Blocks wird gemeldet, nicht
+    // gefolgt — wir werten die `Match`-Bedingung nicht aus (§4.2) und
+    // wüssten deshalb nicht, ob `ssh` sie erfüllt sähe.
+    let p = parsed("Host a\nMatch host b\n  Include other.conf\n");
+    // Der Gegenbeweis (Sonderfall `Known::Include if in_match` aus
+    // `parser.rs` entfernt) lässt genau diese Zeile scheitern: Ohne ihn
+    // landet der rohe Include-Wert in `includes`, als wäre er außerhalb
+    // eines `Match`-Blocks gestanden.
+    assert!(
+        p.includes.is_empty(),
+        "Include im Match-Block wurde zum Folgen vorgemerkt: {:?}",
+        p.includes
+    );
+    assert!(
+        p.skipped
+            .iter()
+            .any(|s| s.line == 3 && s.kind == SkippedKind::Directive("Include".into())),
+        "Include im Match-Block nicht gemeldet: {:?}",
+        p.skipped
+    );
+}
+
 // ------------------------------------------ §3.1.5: Name, nie der Wert
 
 #[test]
