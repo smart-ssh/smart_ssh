@@ -1,0 +1,445 @@
+//! Spec 0067: erhöhter SFTP-Kanal für den Dateibrowser (Zugangsnachweis,
+//! Kanalwahl, Ein-/Ausschalten) — Teil der Spec-0083-Aufteilung von
+//! `commands.rs`.
+
+use std::sync::Arc;
+
+use tauri::State;
+
+use ssh_manager_core::ssh::SftpSession;
+
+use crate::error::{CommandError, CommandResult};
+use crate::session::Session;
+use crate::state::{AppState, SessionId};
+
+// --- Spec 0020, Abschnitt 5: Manueller Dateibrowser -------------------------
+//
+// Bewusst OHNE Filter-Engine-Prüfung — anders als `ReadRemoteFile`/
+// `WriteRemoteFile` (Spec 0020, Abschnitt 4, `crate::orchestration`) laufen
+// diese Befehle nie über den KI-Chat, sondern sind direkte Nutzeraktionen im
+// Dateibrowser-Panel, analog zum interaktiven Terminal (Spec 0005, Abschnitt
+// 1: auch dort läuft rohe Tastatureingabe ungefiltert durch).
+//
+// Historische Anmerkung (Spec 0020, Teil 1): `remove()` (SFTP `REMOVE`)
+// wirkt nur auf Dateien, `sftp_download`/`sftp_delete` waren deshalb lange
+// auf Dateien beschränkt. Spec 0054 hebt das auf: `sftp_download_default`/
+// `sftp_download_dir` (Teil 2) laden Ordner rekursiv herunter, `sftp_delete`
+// (Teil 3, unten) löscht sie rekursiv über die neuen Trait-Methoden
+// `remove_dir`/das Zusammenspiel mit `list_dir`. "Umbenennen" (SFTP
+// `RENAME`, für beide Eintragstypen) war davon nie betroffen.
+
+/// Spec 0067, Teil A: Zugangsnachweis für den erhöhten SFTP-Kanal
+/// (`crate::elevated_sftp::ElevatedSftpSlot::lock`). Das private Feld macht
+/// ihn außerhalb dieses Moduls unkonstruierbar — KI (`orchestration`) und
+/// MCP (`mcp_backend`) kommen so nie an den erhöhten Kanal.
+pub(crate) struct BrowserAccess(());
+
+#[cfg(test)]
+impl BrowserAccess {
+    /// Nur für Tests des erhöhten Kanals (`crate::elevated_sftp`).
+    pub(crate) fn for_tests() -> Self {
+        Self(())
+    }
+}
+
+/// Welcher SFTP-Kanal eine Browser-Aktion ausführt. Das Frontend wählt ihn
+/// pro Aufruf (`elevated_user`); ist der erhöhte Kanal inzwischen weg oder
+/// läuft er als ein anderer Nutzer als erwartet, schlägt die Aktion fehl —
+/// nie ein stiller Rückfall auf den normalen Kanal oder einen anderen
+/// Nutzer (Spec 0067, A5: "kein stiller Upload als normaler Nutzer";
+/// spec-reviewer-Fund: Edit-Flow darf nicht unter einem inzwischen
+/// umgeschalteten Nutzer hochladen).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum BrowserChannel {
+    Normal,
+    /// Erwarteter Ziel-Nutzer des erhöhten Kanals.
+    Elevated(String),
+}
+
+impl BrowserChannel {
+    pub(super) fn from_request(elevated_user: Option<String>) -> Self {
+        match elevated_user {
+            Some(user) => Self::Elevated(user),
+            None => Self::Normal,
+        }
+    }
+}
+
+const ELEVATED_CHANNEL_INACTIVE: &str =
+    "Der erhöhte Modus ist nicht mehr aktiv (Verbindung getrennt oder ausgeschaltet) — \
+     die Aktion wurde nicht ausgeführt. Bitte den erhöhten Modus erneut einschalten.";
+
+/// Gesperrter SFTP-Kanal einer Browser-Aktion — normal oder erhöht.
+pub(super) enum BrowserSftpGuard<'a> {
+    Normal(tokio::sync::MutexGuard<'a, Option<Box<dyn SftpSession>>>),
+    Elevated {
+        guard: tokio::sync::MutexGuard<'a, Option<crate::elevated_sftp::ElevatedSftp>>,
+        expected_user: String,
+    },
+}
+
+impl BrowserSftpGuard<'_> {
+    pub(super) fn sftp(&mut self) -> CommandResult<&mut Box<dyn SftpSession>> {
+        match self {
+            Self::Normal(guard) => Ok(guard
+                .as_mut()
+                .expect("browser_session öffnet den normalen Kanal vorab")),
+            Self::Elevated {
+                guard,
+                expected_user,
+            } => match guard.as_mut() {
+                None => Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE)),
+                Some(elevated) if elevated.target_user != *expected_user => {
+                    Err(CommandError::from(format!(
+                        "Der erhöhte Modus läuft inzwischen als „{}“, nicht als „{}“ — die \
+                         Aktion wurde nicht ausgeführt.",
+                        elevated.target_user, expected_user
+                    )))
+                }
+                Some(elevated) => Ok(&mut elevated.sftp),
+            },
+        }
+    }
+}
+
+impl BrowserSftpGuard<'_> {
+    /// Ziel-Nutzer, wenn diese Aktion über den erhöhten Kanal läuft.
+    pub(super) fn elevated_user(&self) -> Option<String> {
+        match self {
+            Self::Normal(_) => None,
+            Self::Elevated { guard, .. } => guard.as_ref().map(|e| e.target_user.clone()),
+        }
+    }
+}
+
+pub(super) fn write_local_download(
+    path: &std::path::Path,
+    bytes: &[u8],
+    owner_only: bool,
+) -> std::io::Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    if owner_only {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    #[cfg(not(unix))]
+    let _ = owner_only;
+    let mut file = options.open(path)?;
+    std::io::Write::write_all(&mut file, bytes)?;
+    #[cfg(unix)]
+    if owner_only {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
+}
+
+/// Spec 0067, A5 (baut auf der Audit-Erfassbarkeit aus 0054 auf): jede
+/// server-verändernde Browser-Aktion im erhöhten Modus hinterlässt eine
+/// strukturierte Log-Zeile mit Kennzeichnung "erhöht" + Ziel-Nutzer, Quelle
+/// "manuell". Nur Aktion und Pfade, nie Dateiinhalte.
+/// Auch bei einem Fehlschlag protokolliert (`ok = false`) — ein rekursives
+/// Löschen/chmod kann mittendrin scheitern, nachdem schon Einträge geändert
+/// wurden.
+pub(super) fn audit_elevated_change(
+    elevated_user: Option<&str>,
+    action: &'static str,
+    path: &str,
+    ok: bool,
+) {
+    if let Some(target_user) = elevated_user {
+        tracing::info!(
+            action,
+            path,
+            ok,
+            elevated = true,
+            target_user,
+            source = "manual",
+            "file browser change with elevated rights"
+        );
+    }
+}
+
+pub(super) async fn lock_browser_sftp<'a>(
+    session: &'a Session,
+    channel: &BrowserChannel,
+) -> BrowserSftpGuard<'a> {
+    match channel {
+        BrowserChannel::Normal => BrowserSftpGuard::Normal(session.sftp.lock().await),
+        BrowserChannel::Elevated(expected_user) => BrowserSftpGuard::Elevated {
+            guard: session.elevated_sftp.lock(&BrowserAccess(())).await,
+            expected_user: expected_user.clone(),
+        },
+    }
+}
+
+/// Liefert die Session und stellt den gewählten Kanal bereit — gemeinsame
+/// Vorbedingung aller `sftp_*`-Befehle unten. Normal: öffnet die
+/// SFTP-Verbindung bei Bedarf (Spec 0020, Abschnitt 3). Erhöht: nur, wenn
+/// der erhöhte Kanal bereits aktiv ist; er wird hier nie implizit geöffnet.
+pub(super) async fn browser_session(
+    state: &AppState,
+    session_id: SessionId,
+    channel: &BrowserChannel,
+) -> CommandResult<Arc<Session>> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    match channel {
+        BrowserChannel::Normal => crate::orchestration::ensure_sftp_open(&session).await?,
+        BrowserChannel::Elevated(_) => {
+            if session
+                .elevated_sftp
+                .lock(&BrowserAccess(()))
+                .await
+                .is_none()
+            {
+                return Err(ELEVATED_CHANNEL_INACTIVE.into());
+            }
+        }
+    }
+    Ok(session)
+}
+
+/// Spec 0067, A1–A3: schaltet den erhöhten Dateibrowser-Kanal ein (`sudo
+/// -n <sftp-server>` über einen Exec-Kanal). Nur passwortloses sudo; ein
+/// Fehlschlag kommt als strukturierte `failure` zurück (inkl. sudoers-Zeile),
+/// nicht als `Err`. Nie persistiert — lebt nur in der Session.
+#[tauri::command]
+pub async fn sftp_elevation_enable(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    target_user: Option<String>,
+) -> CommandResult<crate::dto::ElevationResultDto> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    // Transport-Grenze statt Sonderfall in der Logik: der lokale
+    // Pseudo-Server hat kein sudo/sftp-server (CLAUDE.md, "No
+    // special-casing ... in the core loop").
+    if crate::local_server::is_local(session.server_id) {
+        return Ok(crate::dto::ElevationResultDto {
+            active: false,
+            target_user: target_user.unwrap_or_else(|| {
+                ssh_manager_core::ssh::elevated::DEFAULT_ELEVATION_USER.to_string()
+            }),
+            sftp_server_path: None,
+            failure: Some(crate::dto::ElevationFailureDto {
+                kind: crate::dto::ElevationFailureKind::Unsupported,
+                sudoers_line: None,
+                detail: None,
+            }),
+        });
+    }
+    let server = state.profile_store.get_server(&session.server_id).await?;
+    Ok(crate::elevated_sftp::enable(
+        &session,
+        &server.username,
+        server.sftp_server_path.as_deref(),
+        target_user.as_deref(),
+        &BrowserAccess(()),
+    )
+    .await)
+}
+
+/// Spec 0067, A5: schaltet den erhöhten Kanal aus. Das Frontend ruft das
+/// auch beim Öffnen des Browsers auf, damit ein evtl. noch offener Kanal nie
+/// unbemerkt aktiv bleibt.
+#[tauri::command]
+pub async fn sftp_elevation_disable(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<()> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    crate::elevated_sftp::disable(&session, &BrowserAccess(())).await;
+    Ok(())
+}
+
+/// Spec 0067, A5: Ziel-Nutzer des aktiven erhöhten Kanals, `None` = aus.
+#[tauri::command]
+pub async fn sftp_elevation_status(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<Option<String>> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    let guard = session.elevated_sftp.lock(&BrowserAccess(())).await;
+    Ok(guard.as_ref().map(|elevated| elevated.target_user.clone()))
+}
+
+pub(super) fn file_name_of(path: &str) -> String {
+    // Führender Trim gegen einen abschließenden `/` (z. B. `/srv/data/`) —
+    // ohne ihn liefert `rsplit('/').next()` einen leeren String, der
+    // Filter greift, und der `unwrap_or(path)`-Fallback gibt versehentlich
+    // den GESAMTEN Pfad statt nur seines letzten Segments zurück (Spec-
+    // Reviewer-Fund, Spec 0054, Review des Gesamtpakets).
+    path.trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(path)
+        .to_string()
+}
+
+/// Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets, ERHÖHTE
+/// Priorität): jeder Punkt, an dem ein vom SFTP-SERVER gelieferter Name
+/// (`RemoteEntry::name`, oder ein daraus über `file_name_of` abgeleiteter
+/// Name) als LOKALES Pfadsegment verwendet wird (rekursiver Ordner-
+/// Download, "Lokal öffnen"), ist ein klassisches Zip-Slip-Risiko: ein
+/// (kompromittierter oder fehlerhaft implementierter) Server könnte statt
+/// eines normalen Dateinamens `"../../.zshrc"` oder einen absoluten Pfad
+/// wie `"/Users/u/.ssh/authorized_keys"` liefern — `PathBuf::join(..)`
+/// verlässt bei `..`-Segmenten das Zielverzeichnis, und bei einem
+/// absoluten Pfad ERSETZT `join()` den kompletten bisherigen Präfix statt
+/// ihn anzuhängen. Lehnt jeden Namen ab, der nicht GENAU EIN normales
+/// Pfadsegment ist (kein `.`/`..`, kein eingebetteter Separator, keine
+/// führende Root/Präfix-Komponente) — funktioniert plattformunabhängig,
+/// da `Path::components()` die jeweils betriebssystemeigene
+/// Separator-/Präfix-Erkennung übernimmt.
+pub(super) fn safe_local_segment(name: &str) -> CommandResult<()> {
+    use std::path::{Component, Path};
+    let mut components = Path::new(name).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(_)), None) => Ok(()),
+        _ => Err(CommandError::from(format!(
+            "Unsicherer Dateiname vom Server abgelehnt: '{name}'"
+        ))),
+    }
+}
+
+#[cfg(test)]
+mod safe_local_segment_tests {
+    //! Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets, ERHÖHTE
+    //! Priorität): Zip-Slip über servergelieferte Dateinamen beim
+    //! rekursiven Ordner-Download/"Lokal öffnen". `download_recursive`/
+    //! `download_entry_to`/`sftp_open_for_editing` rufen `safe_local_segment`
+    //! jetzt vor jedem `PathBuf::join(entry.name)` auf — diese Tests prüfen
+    //! nur die reine Funktion (`std::path::Path::join`s Verhalten bei
+    //! `..`-Segmenten/absoluten Pfaden ist dokumentiertes, stabiles
+    //! Standardbibliotheks-Verhalten, kein separat zu beweisender Teil).
+    use super::*;
+
+    #[test]
+    fn test_accepts_a_plain_file_name() {
+        assert!(safe_local_segment("readme.md").is_ok());
+        assert!(safe_local_segment("nginx.conf.smartssh-backup-123").is_ok());
+    }
+
+    #[test]
+    fn test_rejects_parent_directory_traversal() {
+        assert!(safe_local_segment("..").is_err());
+        assert!(safe_local_segment("../etc/passwd").is_err());
+        assert!(safe_local_segment("../../.zshrc").is_err());
+    }
+
+    #[test]
+    fn test_rejects_current_directory_segment() {
+        assert!(safe_local_segment(".").is_err());
+    }
+
+    #[test]
+    fn test_rejects_an_embedded_separator() {
+        assert!(safe_local_segment("a/b").is_err());
+    }
+
+    #[test]
+    fn test_rejects_an_absolute_path() {
+        assert!(safe_local_segment("/etc/passwd").is_err());
+        assert!(safe_local_segment("/Users/u/.ssh/authorized_keys").is_err());
+    }
+}
+
+#[cfg(test)]
+mod browser_channel_tests {
+    use ssh_manager_core::ssh::{CommandOutput, PtySize, SshError, SshTransport};
+
+    use super::*;
+
+    struct NoTransport;
+    #[async_trait::async_trait]
+    impl SshTransport for NoTransport {
+        async fn execute(&mut self, _command: &str) -> Result<CommandOutput, SshError> {
+            unreachable!()
+        }
+        async fn open_shell(
+            &mut self,
+            _size: PtySize,
+        ) -> Result<Box<dyn ssh_manager_core::ssh::InteractiveShell>, SshError> {
+            unreachable!()
+        }
+        async fn disconnect(&mut self) -> Result<(), SshError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_elevated_request_without_active_channel_fails_instead_of_falling_back() {
+        let session = crate::test_support::session_with_transport(Box::new(NoTransport));
+        *session.sftp.lock().await =
+            Some(Box::new(ssh_manager_core::ssh::mock::MockSftpSession::new()));
+
+        let mut guard =
+            lock_browser_sftp(&session, &BrowserChannel::Elevated("root".to_string())).await;
+        let err = guard
+            .sftp()
+            .err()
+            .expect("ohne aktiven erhöhten Kanal muss es scheitern");
+        assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
+    }
+
+    /// spec-reviewer-Fund (Spec 0067): läuft der erhöhte Kanal inzwischen
+    /// als ein anderer Nutzer als erwartet (z. B. Edit-Flow als www-data
+    /// geöffnet, danach als root neu eingeschaltet), scheitert die Aktion.
+    #[tokio::test]
+    async fn test_elevated_request_for_another_user_than_active_fails() {
+        let session = crate::test_support::session_with_transport(Box::new(NoTransport));
+        *session.elevated_sftp.lock(&BrowserAccess(())).await =
+            Some(crate::elevated_sftp::ElevatedSftp {
+                target_user: "root".to_string(),
+                sftp: Box::new(ssh_manager_core::ssh::mock::MockSftpSession::new()),
+            });
+
+        let mut guard =
+            lock_browser_sftp(&session, &BrowserChannel::Elevated("www-data".to_string())).await;
+        let err = guard
+            .sftp()
+            .err()
+            .expect("anderer Nutzer als erwartet muss scheitern");
+        assert!(err.message.contains("www-data"), "{}", err.message);
+    }
+
+    #[tokio::test]
+    async fn test_elevated_request_uses_the_elevated_channel_not_the_normal_one() {
+        let session = crate::test_support::session_with_transport(Box::new(NoTransport));
+        let normal = ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "USER");
+        let elevated = ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "ROOT");
+        *session.sftp.lock().await = Some(Box::new(normal));
+        *session.elevated_sftp.lock(&BrowserAccess(())).await =
+            Some(crate::elevated_sftp::ElevatedSftp {
+                target_user: "root".to_string(),
+                sftp: Box::new(elevated),
+            });
+
+        let mut guard =
+            lock_browser_sftp(&session, &BrowserChannel::Elevated("root".to_string())).await;
+        assert_eq!(
+            guard.sftp().unwrap().read_file("/x").await.unwrap(),
+            b"ROOT"
+        );
+        drop(guard);
+        let mut guard = lock_browser_sftp(&session, &BrowserChannel::Normal).await;
+        assert_eq!(
+            guard.sftp().unwrap().read_file("/x").await.unwrap(),
+            b"USER"
+        );
+    }
+}
