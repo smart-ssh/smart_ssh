@@ -1125,8 +1125,10 @@ pub async fn sftp_open_for_editing(
 /// `max_bytes` ist ein Parameter statt direkt [`MAX_EDIT_OPEN_BYTES`]
 /// (Spec 0086, T5): die Prüfung **nach** dem Lesen ließe sich sonst nur mit
 /// einem echten 50-MB-Puffer je Testfall abdecken. Der Produktivpfad
-/// (`sftp_open_for_editing` oben) gibt immer die echte Konstante mit, es
-/// gibt keinen zweiten Aufrufer — s. ADR 0080.
+/// (`sftp_open_for_editing` oben) gibt immer die echte Konstante mit und ist
+/// der einzige **produktive** Aufrufer; die übrigen Aufrufstellen liegen in
+/// `revocation_tests.rs` (ebenfalls mit der echten Konstante) und
+/// `size_limit_tests.rs` (mit kleinen Werten) — s. ADR 0080.
 async fn open_for_editing_impl(
     session: &Session,
     channel: &BrowserChannel,

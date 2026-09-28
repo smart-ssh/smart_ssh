@@ -15,9 +15,16 @@
 //!
 //! Spec 0086, A4.2: Hier stand zusätzlich ein Verweis auf eine gleichnamige
 //! Funktion in `app-shell`. Die gibt es dort nicht — sie liegt in dieser
-//! Datei, der Verweis zeigte also auf sich selbst und ist entfernt. Wer das
-//! Muster ein zweites Mal sehen will: `ssh_manager_core::filter::tests`
-//! (Spec 0077, T-A10) hält den ERROR-Mitschnitt genauso.
+//! Datei, der Verweis zeigte also auf sich selbst.
+//!
+//! Das heutige Ziel ist `app_logic::test_support::log_capture`: dort steht
+//! unter **„Warum global statt `with_default`"** die Begründung, die der
+//! alte Verweis mitnahm — `tracing-core` cacht das Callsite-Interesse
+//! prozessweit, ein `with_default` auf einem anderen Thread gewinnt das
+//! Wettrennen nicht zuverlässig zurück. Sie gilt für den Subscriber hier
+//! genauso. Wer das Muster ein drittes Mal sehen will:
+//! `ssh_manager_core::filter::tests` (Spec 0077, T-A10) hält den
+//! ERROR-Mitschnitt ebenso.
 
 thread_local! {
     static TEST_LOG_BUFFER: std::cell::RefCell<Vec<u8>> =
