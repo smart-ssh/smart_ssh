@@ -32,11 +32,13 @@ pub(crate) const MAX_READ_FILE_BYTES: u64 = 256 * 1024;
 /// Abschnitt 5, `crate::commands::sftp_*`) braucht dieselbe Lazy-Open-Logik,
 /// läuft aber komplett außerhalb der KI-Kernschleife dieser Datei.
 pub async fn ensure_sftp_open(session: &Session) -> Result<(), SshError> {
-    let mut guard = session.sftp.lock().await;
-    if guard.is_none() {
+    let mut guard = session.lock_sftp().await;
+    if !guard.is_open() {
         let mut transport = session.transport.lock().await;
         let sftp = transport.open_sftp().await?;
-        *guard = Some(sftp);
+        // Spec 0085, A3.2: die eine Stelle, die den normalen Kanal befüllt —
+        // und sie nimmt ihn aus dem Transport dieser Sitzung selbst.
+        guard.install(sftp);
     }
     Ok(())
 }
@@ -60,8 +62,8 @@ pub(crate) async fn previous_file_content_for_action(
     if ensure_sftp_open(session).await.is_err() {
         return (None, None);
     }
-    let mut guard = session.sftp.lock().await;
-    let Some(sftp) = guard.as_mut() else {
+    let mut guard = session.lock_sftp().await;
+    let Some(sftp) = guard.sftp() else {
         return (None, None);
     };
     match sftp.read_file(path).await {
@@ -105,9 +107,9 @@ pub(crate) async fn execute_read_remote_file(
     // könnten `stat` anders behandeln als `read`), die Prüfung wird dann
     // schlicht übersprungen statt den ganzen Aufruf scheitern zu lassen.
     let size = {
-        let mut guard = session.sftp.lock().await;
+        let mut guard = session.lock_sftp().await;
         let sftp = guard
-            .as_mut()
+            .sftp()
             .expect("ensure_sftp_open lief erfolgreich durch");
         sftp.stat(&path).await.map(|entry| entry.size).ok()
     };
@@ -129,9 +131,9 @@ pub(crate) async fn execute_read_remote_file(
     }
 
     let raw = {
-        let mut guard = session.sftp.lock().await;
+        let mut guard = session.lock_sftp().await;
         let sftp = guard
-            .as_mut()
+            .sftp()
             .expect("ensure_sftp_open lief erfolgreich durch");
         sftp.read_file(&path).await
     };
@@ -229,17 +231,17 @@ async fn write_via_sftp_with_backup(
     };
 
     if let Some(backup) = &backup_path {
-        let mut guard = session.sftp.lock().await;
+        let mut guard = session.lock_sftp().await;
         let sftp = guard
-            .as_mut()
+            .sftp()
             .expect("ensure_sftp_open lief erfolgreich durch");
         let old_content = sftp.read_file(path).await?;
         sftp.write_file(backup, &old_content).await?;
     }
 
-    let mut guard = session.sftp.lock().await;
+    let mut guard = session.lock_sftp().await;
     let sftp = guard
-        .as_mut()
+        .sftp()
         .expect("ensure_sftp_open lief erfolgreich durch");
     sftp.write_file(path, content.as_bytes()).await?;
 
@@ -315,9 +317,9 @@ async fn write_via_sudo_fallback(
     // Pfade konventionell relativ zum Home-Verzeichnis auf.
     let temp_name = format!(".smartssh-tmp-{}", Uuid::new_v4());
     {
-        let mut guard = session.sftp.lock().await;
+        let mut guard = session.lock_sftp().await;
         let sftp = guard
-            .as_mut()
+            .sftp()
             .expect("ensure_sftp_open lief erfolgreich durch");
         sftp.write_file(&temp_name, content.as_bytes())
             .await
@@ -335,8 +337,8 @@ async fn write_via_sudo_fallback(
 
     // Temp-Datei aufräumen, unabhängig vom Ergebnis des `install`-Aufrufs.
     {
-        let mut guard = session.sftp.lock().await;
-        if let Some(sftp) = guard.as_mut() {
+        let mut guard = session.lock_sftp().await;
+        if let Some(sftp) = guard.sftp() {
             let _ = sftp.remove(&temp_name).await;
         }
     }
@@ -375,9 +377,9 @@ pub(crate) async fn execute_write_remote_file(
     }
 
     let (existed, old_mode) = {
-        let mut guard = session.sftp.lock().await;
+        let mut guard = session.lock_sftp().await;
         let sftp = guard
-            .as_mut()
+            .sftp()
             .expect("ensure_sftp_open lief erfolgreich durch");
         match sftp.stat(&path).await {
             Ok(entry) => (true, Some(entry.permissions)),

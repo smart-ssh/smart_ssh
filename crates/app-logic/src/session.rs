@@ -81,7 +81,90 @@ pub enum TerminalCommand {
     Resize(PtySize),
 }
 
+/// Spec 0085, A3: der **normale** SFTP-Kanal einer Sitzung.
+///
+/// Spec 0020, Abschnitt 3: lazy geöffnet (erst beim ersten
+/// `ReadRemoteFile`/`WriteRemoteFile`/Dateibrowser-Zugriff, s.
+/// [`crate::orchestration::ensure_sftp_open`]), danach für die Dauer der
+/// Session offengehalten statt pro Zugriff neu aufgebaut. `AsyncMutex` wie
+/// `transport`/`context` (über `.await`-Punkte hinweg gehalten).
+///
+/// **Eigener Typ mit privatem Inneren, und ein privates Feld an [`Session`]**
+/// (Spec 0085, A3.1): Über diesen Kanal laufen die KI-Dateiaktionen
+/// (`ReadRemoteFile`/`WriteRemoteFile`) und MCP. Könnte Code außerhalb von
+/// `app-logic` ihn setzen, ließe sich ein **erhöhter** Kanal hineinschieben —
+/// und KI und MCP liefen erhöht, entgegen Spec 0067 A. Befüllt wird er
+/// deshalb nur hier, aus dem Transport der Sitzung selbst
+/// ([`NormalSftpGuard::install`], einziger Aufrufer `ensure_sftp_open`);
+/// nach außen gibt [`Session::lock_sftp`] nur eine Referenz auf das
+/// Trait-Objekt heraus, und die lässt sich nicht ersetzen.
+#[derive(Default)]
+pub struct NormalSftpChannel {
+    inner: AsyncMutex<Option<Box<dyn SftpSession>>>,
+}
+
+/// Der gesperrte normale SFTP-Kanal — s. [`Session::lock_sftp`].
+pub struct NormalSftpGuard<'a>(tokio::sync::MutexGuard<'a, Option<Box<dyn SftpSession>>>);
+
+impl NormalSftpGuard<'_> {
+    /// Der Kanal, **nur zum Benutzen**.
+    ///
+    /// Spec 0085, A3.1: bewusst `&mut dyn SftpSession` und nicht
+    /// `&mut Box<dyn SftpSession>` oder `&mut Option<…>`. Ein Trait-Objekt
+    /// ist nicht `Sized`, damit scheitern `std::mem::replace`, `swap` und
+    /// `take` auf dieser Referenz schon beim Kompilieren — die Grenze verläuft
+    /// am Typ der herausgegebenen Referenz, nicht bloß an der Sichtbarkeit
+    /// des Felds.
+    ///
+    /// `None`, solange niemand `ensure_sftp_open` aufgerufen hat.
+    pub fn sftp(&mut self) -> Option<&mut (dyn SftpSession + 'static)> {
+        self.0.as_deref_mut()
+    }
+
+    /// Ist der Kanal schon geöffnet?
+    pub fn is_open(&self) -> bool {
+        self.0.is_some()
+    }
+
+    /// Spec 0085, A3.2: Befüllt den Kanal. `pub(crate)` — nur `app-logic`
+    /// darf das, und dort nur `ensure_sftp_open` aus dem Transport **dieser**
+    /// Sitzung.
+    pub(crate) fn install(&mut self, sftp: Box<dyn SftpSession>) {
+        *self.0 = Some(sftp);
+    }
+}
+
+/// Eine laufende Server-Session.
+///
+/// Spec 0085, A3: Die Struktur ist in zwei Teile getrennt. Alles, was der
+/// Aufrufer beim Verbinden mitgibt, steht in [`SessionParts`] und ist über
+/// `Deref`/`DerefMut` unverändert als `session.<feld>` erreichbar. Der
+/// normale SFTP-Kanal dagegen ist ein **privates** Feld: er wird nie
+/// übergeben, sondern startet leer und wird nur hier befüllt (s.
+/// [`NormalSftpChannel`]).
 pub struct Session {
+    parts: SessionParts,
+    sftp: NormalSftpChannel,
+}
+
+impl std::ops::Deref for Session {
+    type Target = SessionParts;
+    fn deref(&self) -> &SessionParts {
+        &self.parts
+    }
+}
+
+impl std::ops::DerefMut for Session {
+    fn deref_mut(&mut self) -> &mut SessionParts {
+        &mut self.parts
+    }
+}
+
+/// Alle Bestandteile einer [`Session`], die beim Verbinden mitgegeben werden
+/// — der normale SFTP-Kanal gehört bewusst **nicht** dazu (Spec 0085, A3:
+/// „Der Konstruktor nimmt keinen Kanal an", ein neu erzeugter Kanal ist
+/// immer leer).
+pub struct SessionParts {
     pub transport: AsyncMutex<Box<dyn SshTransport>>,
     pub ai_provider: Box<dyn AiProvider>,
     /// Spec 0061: der Rate-Limit-Budget-Wächter für `ai_provider` (aus
@@ -187,12 +270,10 @@ pub struct Session {
     /// `SessionManager` entfernt wurde, und ist als App-weite Benachrichtigung
     /// (`note-update-suggested`) ohnehin nie an einen Tab gebunden.
     pub pending_action: StdMutex<Option<ActionId>>,
-    /// Spec 0020, Abschnitt 3: lazy geöffnet (erst beim ersten
-    /// `ReadRemoteFile`/`WriteRemoteFile`/Dateibrowser-Zugriff, s.
-    /// `crate::orchestration::ensure_sftp_open`), danach für die Dauer der
-    /// Session offengehalten statt pro Zugriff neu aufgebaut. `AsyncMutex`
-    /// wie `transport`/`context` (über `.await`-Punkte hinweg gehalten).
-    pub sftp: AsyncMutex<Option<Box<dyn SftpSession>>>,
+    // Spec 0085, A3: Der normale SFTP-Kanal war bis hierhin ein `pub`-Feld
+    // dieser Struktur. Er liegt jetzt als privates Feld an `Session` selbst
+    // (s. `NormalSftpChannel`): so kann Code außerhalb von `app-logic` ihn
+    // weder setzen noch ersetzen noch herausnehmen, sondern nur benutzen.
     // Spec 0067, Teil A: Der erhöhte SFTP-Kanal (`sudo -n <sftp-server>`)
     // war bis Spec 0084 ein Feld dieser Struktur. Er liegt jetzt in
     // `crate::elevated_sftp::ElevatedSftpRegistry`, einem eigenen, von Tauri
@@ -335,6 +416,117 @@ pub struct ChatTurnState {
 }
 
 impl Session {
+    /// Spec 0085, A3: der einzige Weg, eine `Session` zu bauen. Der normale
+    /// SFTP-Kanal startet immer leer; er wird beim ersten Zugriff aus dem
+    /// Transport **dieser** Sitzung geöffnet (`ensure_sftp_open`).
+    pub fn new(parts: SessionParts) -> Self {
+        Self {
+            parts,
+            sftp: NormalSftpChannel::default(),
+        }
+    }
+
+    /// Der normale SFTP-Kanal dieser Sitzung, gesperrt — **zum Benutzen**.
+    ///
+    /// Spec 0085, A3.1/T11: Weder über diese Referenz noch über das Feld
+    /// lässt sich der Kanal setzen, ersetzen oder herausnehmen. Die folgenden
+    /// Beispiele belegen das aus der Sicht eines **anderen** Crates (ein
+    /// Doctest wird als eigene Kiste gegen `app_logic` gebaut); zu jedem
+    /// verbotenen Fall steht der kompilierende Zwilling daneben, der sich nur
+    /// in der verbotenen Zeile unterscheidet — so scheitert der Fall
+    /// nachweislich an ihr und nicht an einem Tippfehler. (Der Fehlercode
+    /// selbst wird von `rustdoc` nicht geprüft, deshalb dieses Zwillingspaar
+    /// statt einer Codeangabe.)
+    ///
+    /// Zuweisung ans Feld — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// fn f(session: &mut Session) {
+    ///     session.sftp = Default::default();
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::Session;
+    /// fn f(session: &mut Session) {
+    ///     session.tags = Default::default();
+    /// }
+    /// ```
+    ///
+    /// `std::mem::replace` am Feld — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// fn f(session: &mut Session) {
+    ///     let _old = std::mem::replace(&mut session.sftp, Default::default());
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::Session;
+    /// fn f(session: &mut Session) {
+    ///     let _old = std::mem::replace(&mut session.tags, Default::default());
+    /// }
+    /// ```
+    ///
+    /// `std::mem::swap` zwischen zwei Sitzungen — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// fn f(a: &mut Session, b: &mut Session) {
+    ///     std::mem::swap(&mut a.sftp, &mut b.sftp);
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::Session;
+    /// fn f(a: &mut Session, b: &mut Session) {
+    ///     std::mem::swap(&mut a.tags, &mut b.tags);
+    /// }
+    /// ```
+    ///
+    /// `std::mem::take` am Feld — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// fn f(session: &mut Session) {
+    ///     let _taken = std::mem::take(&mut session.sftp);
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::Session;
+    /// fn f(session: &mut Session) {
+    ///     let _taken = std::mem::take(&mut session.tags);
+    /// }
+    /// ```
+    ///
+    /// Und über die **erhaltene Referenz**: `&mut dyn SftpSession` ist nicht
+    /// `Sized`, `mem::swap` scheitert schon an der Signatur — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::NormalSftpGuard;
+    /// fn f(a: &mut NormalSftpGuard<'_>, b: &mut NormalSftpGuard<'_>) {
+    ///     std::mem::swap(a.sftp().unwrap(), b.sftp().unwrap());
+    /// }
+    /// ```
+    /// Zwilling (benutzt beide Kanäle, tauscht sie nur nicht):
+    /// ```
+    /// # use app_logic::session::NormalSftpGuard;
+    /// async fn f(a: &mut NormalSftpGuard<'_>, b: &mut NormalSftpGuard<'_>) {
+    ///     let _ = a.sftp().unwrap().stat("/x").await;
+    ///     let _ = b.sftp().unwrap().stat("/x").await;
+    /// }
+    /// ```
+    pub async fn lock_sftp(&self) -> NormalSftpGuard<'_> {
+        NormalSftpGuard(self.sftp.inner.lock().await)
+    }
+
+    /// Spec 0085, A3.3: Setzt einen Test-Kanal ein. Hinter dem Feature
+    /// `test-support` (Spec 0084, A5) statt hinter reinem `#[cfg(test)]`,
+    /// weil `app-shell`s Tests ihn ebenfalls brauchen; Produktivbauten
+    /// aktivieren das Feature nicht.
+    #[cfg(any(test, feature = "test-support"))]
+    pub async fn set_sftp_for_tests(&self, sftp: Box<dyn SftpSession>) {
+        *self.sftp.inner.lock().await = Some(sftp);
+    }
+
     /// Spec 0066, §2: entnimmt alle eingereihten Nutzer-Nachrichten.
     pub(crate) fn take_queued_user_messages(&self) -> Vec<String> {
         std::mem::take(&mut self.chat_turn.lock().unwrap().queued)
@@ -643,7 +835,7 @@ mod tests {
     }
 
     fn dummy_session(server_id: ServerId) -> Session {
-        Session {
+        Session::new(SessionParts {
             transport: AsyncMutex::new(Box::new(UnusedTransport)),
             ai_provider: Box::new(UnusedAiProvider),
             ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
@@ -671,7 +863,6 @@ mod tests {
             sudo_password: None,
             status: StdMutex::new(ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
-            sftp: AsyncMutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
             chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
@@ -687,7 +878,7 @@ mod tests {
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
             ai_request_paced_at: AsyncMutex::new(None),
-        }
+        })
     }
 
     // --- Spec 0039, Abschnitt 5: history_contains_untrusted_content -------

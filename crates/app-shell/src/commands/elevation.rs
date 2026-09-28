@@ -14,7 +14,7 @@ use crate::elevated_sftp::{
     ElevatedSftp, ElevatedSftpRegistry, ElevatedSftpSlot, ElevationContext,
 };
 use app_logic::error::{CommandError, CommandResult};
-use app_logic::session::Session;
+use app_logic::session::{NormalSftpGuard, Session};
 use app_logic::state::{AppState, SessionId};
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser -------------------------
@@ -301,7 +301,10 @@ async fn elevated_operation(
 /// **erhöhte** wird hier nicht gesperrt; das passiert je Operation in
 /// [`elevated_operation`].
 pub(super) enum BrowserSftpGuard<'a> {
-    Normal(tokio::sync::MutexGuard<'a, Option<Box<dyn SftpSession>>>),
+    /// Spec 0085, A3.1: `app-shell` bekommt den normalen Kanal nur noch als
+    /// [`NormalSftpGuard`] — daraus lässt sich kein Kanal herausnehmen oder
+    /// einsetzen, nur einer benutzen.
+    Normal(NormalSftpGuard<'a>),
     Elevated {
         /// Spec 0084, §4: eine *eigene* Sperre je Sitzung, unabhängig von
         /// der Sperre der Zuordnung — ein laufender Vorgang hier hält das
@@ -331,7 +334,7 @@ impl BrowserSftpGuard<'_> {
         match self {
             Self::Normal(guard) => Ok(BrowserSftp::Normal(
                 guard
-                    .as_deref_mut()
+                    .sftp()
                     .expect("browser_session öffnet den normalen Kanal vorab"),
             )),
             Self::ElevatedInactive => Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE)),
@@ -543,7 +546,7 @@ pub(super) async fn lock_browser_sftp<'a>(
     channel: &BrowserChannel,
 ) -> BrowserSftpGuard<'a> {
     match &channel.kind {
-        BrowserChannelKind::Normal => BrowserSftpGuard::Normal(session.sftp.lock().await),
+        BrowserChannelKind::Normal => BrowserSftpGuard::Normal(session.lock_sftp().await),
         BrowserChannelKind::Elevated {
             expected_user,
             slot: Some(slot),
@@ -796,8 +799,9 @@ mod browser_channel_tests {
     #[tokio::test]
     async fn test_elevated_request_without_active_channel_fails_instead_of_falling_back() {
         let session = app_logic::test_support::session_with_transport(Box::new(NoTransport));
-        *session.sftp.lock().await =
-            Some(Box::new(ssh_manager_core::ssh::mock::MockSftpSession::new()));
+        session
+            .set_sftp_for_tests(Box::new(ssh_manager_core::ssh::mock::MockSftpSession::new()))
+            .await;
         let registry = ElevatedSftpRegistry::default();
         let session_id = SessionId::new_v4();
 
@@ -840,7 +844,7 @@ mod browser_channel_tests {
         let session = app_logic::test_support::session_with_transport(Box::new(NoTransport));
         let normal = ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "USER");
         let elevated = ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "ROOT");
-        *session.sftp.lock().await = Some(Box::new(normal));
+        session.set_sftp_for_tests(Box::new(normal)).await;
         let session_id = SessionId::new_v4();
         let registry = registry_with_channel(session_id, "root", elevated);
 
@@ -870,9 +874,11 @@ mod browser_channel_tests {
         let mut session_b = app_logic::test_support::session_with_transport(Box::new(NoTransport));
         session_a.server_id = server_id;
         session_b.server_id = server_id;
-        *session_b.sftp.lock().await = Some(Box::new(
-            ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "USER-B"),
-        ));
+        session_b
+            .set_sftp_for_tests(Box::new(
+                ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "USER-B"),
+            ))
+            .await;
 
         let id_a = SessionId::new_v4();
         let id_b = SessionId::new_v4();
@@ -1253,7 +1259,7 @@ mod browser_channel_tests {
                 MockSftpSession::new().with_file("/etc/secret.conf", b"USER-VIEW".to_vec());
             let elevated =
                 MockSftpSession::new().with_file("/etc/secret.conf", b"ROOT-VIEW".to_vec());
-            *session.sftp.lock().await = Some(Box::new(normal.clone()));
+            session.set_sftp_for_tests(Box::new(normal.clone())).await;
             // Spec 0084, A1: Der erhöhte Kanal hängt nicht mehr an der
             // `Session`, sondern an der Zuordnung in `app-shell`. Er wird
             // hier trotzdem aufgebaut — genau darum geht es: er ist aktiv,
@@ -1359,7 +1365,7 @@ mod browser_channel_tests {
         ));
         let normal = MockSftpSession::new().with_file("/etc/secret.conf", b"USER-VIEW".to_vec());
         let elevated = MockSftpSession::new().with_file("/etc/secret.conf", b"ROOT-VIEW".to_vec());
-        *session.sftp.lock().await = Some(Box::new(normal.clone()));
+        session.set_sftp_for_tests(Box::new(normal.clone())).await;
 
         let session_id = SessionId::new_v4();
         let elevated_registry = registry_with_channel(session_id, "root", elevated.clone());

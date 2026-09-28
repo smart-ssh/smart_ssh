@@ -445,7 +445,7 @@ async fn setup(elevated: Box<dyn SftpSession>) -> Setup {
         NoTransport,
     )));
     let normal = MockSftpSession::new().with_file("/t/a.txt", b"USER-INHALT".to_vec());
-    *session.sftp.lock().await = Some(Box::new(normal.clone()));
+    session.set_sftp_for_tests(Box::new(normal.clone())).await;
 
     let sessions = Arc::new(SessionManager::new());
     let session_id = SessionId::new_v4();
@@ -784,7 +784,7 @@ async fn test_t4_reactivating_for_another_user_during_a_recursive_delete_stops_i
         Box::new(CountingSftp(new_channel_calls.clone())),
     ]);
     let normal = MockSftpSession::new();
-    *f.session.sftp.lock().await = Some(Box::new(normal.clone()));
+    f.session.set_sftp_for_tests(Box::new(normal.clone())).await;
     crate::elevated_sftp::enable(
         &f.ctx(),
         "deploy",

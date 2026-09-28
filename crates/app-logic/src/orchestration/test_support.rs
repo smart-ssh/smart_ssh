@@ -25,7 +25,7 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::TestEmitter;
 use crate::policy::NoRulesPolicyStore;
-use crate::session::Session;
+use crate::session::{Session, SessionParts};
 use crate::state::ActionId;
 
 use super::action_exec::handle_action_proposed;
@@ -287,7 +287,7 @@ pub(crate) fn session_with_ai_provider(
     ai_provider: impl AiProvider + 'static,
     transport: MockSshTransport,
 ) -> Session {
-    Session {
+    Session::new(SessionParts {
         transport: AsyncMutex::new(Box::new(transport)),
         ai_provider: Box::new(ai_provider),
         ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
@@ -311,7 +311,6 @@ pub(crate) fn session_with_ai_provider(
         sudo_password: None,
         status: StdMutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: StdMutex::new(None),
-        sftp: AsyncMutex::new(None),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         auto_continue_stop_notify: tokio::sync::Notify::new(),
         chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
@@ -331,7 +330,7 @@ pub(crate) fn session_with_ai_provider(
         ledger_store: None,
         chat_session_id: AsyncMutex::new(None),
         ai_request_paced_at: AsyncMutex::new(None),
-    }
+    })
 }
 
 /// Wie [`session_with_ai_provider`], aber mit einem konfigurierten
@@ -342,11 +341,12 @@ pub(crate) fn session_with_second_opinion(
     transport: MockSshTransport,
     second_opinion_provider: impl AiProvider + 'static,
 ) -> Session {
-    Session {
-        risk_second_opinion_provider: Some(Box::new(second_opinion_provider)),
-        risk_second_opinion_budget: Some(Arc::new(ai_providers::ProviderBudgetGuard::new())),
-        ..session_with_ai_provider(MockAiProvider::new(ai_events), transport)
-    }
+    // Spec 0085, A3: `Session` hat ein privates Feld, also kein Struct-Update
+    // („`..base`") mehr — die beiden Felder werden nach dem Bau gesetzt.
+    let mut session = session_with_ai_provider(MockAiProvider::new(ai_events), transport);
+    session.risk_second_opinion_provider = Some(Box::new(second_opinion_provider));
+    session.risk_second_opinion_budget = Some(Arc::new(ai_providers::ProviderBudgetGuard::new()));
+    session
 }
 
 pub(crate) fn output(stdout: &str) -> CommandOutput {

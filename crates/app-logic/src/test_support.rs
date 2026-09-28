@@ -419,7 +419,7 @@ pub fn session_with_ai_and_transport(
     use std::sync::Arc;
     use tokio::sync::Mutex as AsyncMutex;
 
-    crate::session::Session {
+    crate::session::Session::new(crate::session::SessionParts {
         transport: AsyncMutex::new(transport),
         ai_provider: Box::new(ai_provider),
         ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
@@ -445,7 +445,6 @@ pub fn session_with_ai_and_transport(
         sudo_password: None,
         status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
-        sftp: AsyncMutex::new(None),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         auto_continue_stop_notify: tokio::sync::Notify::new(),
         chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
@@ -461,7 +460,7 @@ pub fn session_with_ai_and_transport(
         ledger_store: None,
         chat_session_id: AsyncMutex::new(None),
         ai_request_paced_at: AsyncMutex::new(None),
-    }
+    })
 }
 
 /// Aufzeichnung der `tracing`-Ereignisse dieses Testbinaries.

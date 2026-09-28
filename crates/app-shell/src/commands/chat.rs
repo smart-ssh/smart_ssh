@@ -564,13 +564,12 @@ mod send_chat_message_persistence_tests {
     use ssh_manager_core::filter::FilterEngine;
     use ssh_manager_core::profiles::Server;
     use ssh_manager_core::shared::ServerId;
-    use ssh_manager_core::ssh::{
-        CommandOutput, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
-    };
+    use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize, SshError, SshTransport};
 
     use crate::first_run_notice::test_support::test_app;
     use app_logic::confirmation::ConfirmationRegistry;
     use app_logic::events::TestEmitter;
+    use app_logic::session::SessionParts;
     use app_logic::test_support::InMemoryProfileStore;
 
     use super::*;
@@ -605,7 +604,7 @@ mod send_chat_message_persistence_tests {
     }
 
     fn test_session(server_id: ServerId) -> Session {
-        Session {
+        Session::new(SessionParts {
             transport: AsyncMutex::new(Box::new(UnusedTransport)),
             ai_provider: Box::new(NoopAiProvider),
             ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
@@ -631,7 +630,6 @@ mod send_chat_message_persistence_tests {
             sudo_password: None,
             status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),
-            sftp: AsyncMutex::new(None::<Box<dyn SftpSession>>),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
             chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),
@@ -647,7 +645,7 @@ mod send_chat_message_persistence_tests {
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
             ai_request_paced_at: AsyncMutex::new(None),
-        }
+        })
     }
 
     /// Baut eine echte, migrierte temporäre SQLite-DB samt `servers`-Zeile

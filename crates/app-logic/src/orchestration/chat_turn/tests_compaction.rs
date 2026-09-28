@@ -1285,7 +1285,7 @@ async fn test_mcp_action_on_shared_human_session_writes_no_persisted_history() {
         "/home/deploy/app.conf",
         b"host=localhost\npassword=hunter2\n".to_vec(),
     );
-    session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp)));
+    session.set_sftp_for_tests(Box::new(mock_sftp)).await;
 
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -1926,7 +1926,9 @@ async fn test_read_remote_file_then_send_with_retroactive_greedy_pattern_keeps_f
         "/home/deploy/legacy_secret.pem",
         b"-----BEGIN LEGACY SECRET-----\nunbekanntesFormatOhneEndemarker...".to_vec(),
     );
-    session.sftp = AsyncMutex::new(Some(Box::new(mock_sftp.clone())));
+    session
+        .set_sftp_for_tests(Box::new(mock_sftp.clone()))
+        .await;
 
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();

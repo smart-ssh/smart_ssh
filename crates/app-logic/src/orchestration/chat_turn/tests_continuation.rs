@@ -9,8 +9,6 @@ use std::sync::Mutex as StdMutex;
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use tokio::sync::Mutex as AsyncMutex;
-
 use ssh_manager_core::ai::{AiProvider, RejectionReason, SessionContext};
 use ssh_manager_core::filter::{Decision, EffectiveScope, FilterEngine, PolicyStore, Rule};
 use ssh_manager_core::profiles::{CredentialStore, PostIngestPolicy};
@@ -1639,7 +1637,9 @@ async fn test_write_confirmation_announces_possible_sudo_fallback() {
 
     let mut with_password = test_session(vec![AiEvent::Done], MockSshTransport::default());
     with_password.sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
-    with_password.sftp = AsyncMutex::new(Some(Box::new(MockSftpSession::new())));
+    with_password
+        .set_sftp_for_tests(Box::new(MockSftpSession::new()))
+        .await;
     let (decision, payload) = tokio::time::timeout(
         std::time::Duration::from_secs(5),
         proposed_decision_code(&with_password, write.clone()),
@@ -1649,8 +1649,10 @@ async fn test_write_confirmation_announces_possible_sudo_fallback() {
     assert!(matches!(decision, Decision::Confirm { .. }), "{payload}");
     assert_eq!(payload["usesStoredSudoPassword"], true, "{payload}");
 
-    let mut without = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    without.sftp = AsyncMutex::new(Some(Box::new(MockSftpSession::new())));
+    let without = test_session(vec![AiEvent::Done], MockSshTransport::default());
+    without
+        .set_sftp_for_tests(Box::new(MockSftpSession::new()))
+        .await;
     let (_, payload) = tokio::time::timeout(
         std::time::Duration::from_secs(5),
         proposed_decision_code(&without, write),
@@ -1665,7 +1667,9 @@ async fn test_write_confirmation_announces_possible_sudo_fallback() {
 async fn test_mcp_write_confirmation_announces_possible_sudo_fallback() {
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
     session.sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
-    session.sftp = AsyncMutex::new(Some(Box::new(MockSftpSession::new())));
+    session
+        .set_sftp_for_tests(Box::new(MockSftpSession::new()))
+        .await;
     let (decision, payload) = tokio::time::timeout(
         std::time::Duration::from_secs(5),
         proposed_decision_code_with_origin(

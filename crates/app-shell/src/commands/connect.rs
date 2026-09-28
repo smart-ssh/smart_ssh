@@ -27,7 +27,7 @@ use app_logic::events::{
     HostKeyKind,
 };
 use app_logic::server_credentials::sudo_password_credential_ref;
-use app_logic::session::{history_contains_untrusted_content, Session};
+use app_logic::session::{history_contains_untrusted_content, Session, SessionParts};
 use app_logic::state::{AppState, SessionId};
 // Spec 0084, §4 (Schnitt `test_connection` → `commands::SSH_CONNECT_TIMEOUT`):
 // die Konstante liegt jetzt in `app_logic::test_connection` (s. dortiger
@@ -619,7 +619,7 @@ pub(crate) async fn connect_session(
     // durchweg `false`, unabhängig vom Resume-/Frisch-Fall.
     let initial_mcp_origin_flags = vec![false; initial_history.len()];
 
-    let session = Arc::new(Session {
+    let session = Arc::new(Session::new(SessionParts {
         transport: tokio::sync::Mutex::new(transport),
         ai_provider,
         ai_provider_budget,
@@ -643,7 +643,6 @@ pub(crate) async fn connect_session(
         sudo_password,
         status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
-        sftp: tokio::sync::Mutex::new(None),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         auto_continue_stop_notify: tokio::sync::Notify::new(),
         chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),
@@ -672,7 +671,7 @@ pub(crate) async fn connect_session(
         },
         chat_session_id: tokio::sync::Mutex::new(chat_session_id),
         ai_request_paced_at: tokio::sync::Mutex::new(None),
-    });
+    }));
     state.sessions.insert(session_id, session);
 
     tracing::info!(session_id = %session_id, server_id = %server_id.0, "session connected");
