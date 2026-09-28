@@ -289,9 +289,8 @@ fn is_path_shaped_pattern(pattern: &str) -> bool {
 /// Der bestehende SFTP-Traversal-Normalizer
 /// (`app_logic::orchestration::action_exec::normalize_remote_path`)
 /// normalisiert genau EIN Feld (den SFTP-Pfad) VOR der Filter-Auswertung —
-/// für die beiden
-/// SFTP-Pseudo-Kommandos ist `cmd` an dieser Stelle also bereits
-/// `.`/`..`-frei, diese Funktion hier ist für diesen Fall ein
+/// für die beiden SFTP-Pseudo-Kommandos ist `cmd` an dieser Stelle also
+/// bereits `.`/`..`-frei, diese Funktion hier ist für diesen Fall ein
 /// (idempotenter) No-op, kein Widerspruch.
 ///
 /// Für JEDE andere Shell-Kommandozeile (die nie durch den SFTP-Normalizer
@@ -357,12 +356,12 @@ fn path_shaped_tokens_contain_shell_metacharacters(cmd: &str) -> bool {
 /// `/` — bewusst dieselbe Semantik wie
 /// `app_logic::orchestration::action_exec::normalize_remote_path`
 /// (Spec 0020, SFTP-Traversal-Entschärfung), hier unabhängig dupliziert:
-/// `core` darf laut
-/// Architektur-Regel nicht von `app-shell` abhängen (`app-shell` hängt von
-/// `core` ab, nie umgekehrt), ein Teilen des Codes ist also nur in dieser
-/// Richtung (app-shell → core) möglich, nicht andersherum — nicht Teil
-/// dieser Spec (Spec 0060, „Nicht Teil dieser Spec"), hier nur als
-/// eigenständige, für die Filter-Engine unabhängig getestete Kopie.
+/// `core` darf laut Architektur-Regel nicht von `app-shell` abhängen
+/// (`app-shell` hängt von `core` ab, nie umgekehrt), ein Teilen des Codes
+/// ist also nur in dieser Richtung (app-shell → core) möglich, nicht
+/// andersherum — nicht Teil dieser Spec (Spec 0060, „Nicht Teil dieser
+/// Spec"), hier nur als eigenständige, für die Filter-Engine unabhängig
+/// getestete Kopie.
 fn normalize_lexical_path(path: &str) -> String {
     let is_absolute = path.starts_with('/');
     let mut stack: Vec<&str> = Vec::new();
