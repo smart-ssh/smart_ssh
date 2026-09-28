@@ -239,7 +239,17 @@ impl OpenAiCompatibleProvider {
             system_text.push_str(&fallback_system_prompt_addition(&context.available_actions));
         }
 
-        let mut messages = vec![json!({"role": "system", "content": system_text})];
+        // Spec 0087, A3.1 (BL-0264): analog zu
+        // `AnthropicProvider::build_request_body`s gleichnamiger Regel (Spec
+        // 0081) — ist der System-Text (nach dem optionalen Fallback-Zusatz)
+        // leer oder reiner Leerraum, entfällt die System-Nachricht ganz,
+        // statt mit leerem `content` gesendet zu werden. Der Fallback-Zusatz
+        // (`!self.supports_native_tool_calling`-Zweig oben) ist nie leer, der
+        // Fallback-Modus behält seine System-Nachricht also immer.
+        let mut messages = Vec::new();
+        if !system_text.trim().is_empty() {
+            messages.push(json!({"role": "system", "content": system_text}));
+        }
         for message in &context.history {
             messages.push(json!({
                 "role": role_str(message.role),
@@ -992,6 +1002,80 @@ mod tests {
     //! für den OpenAI-kompatiblen Provider gespiegelt.
 
     use super::*;
+    use ssh_manager_core::ai::default_action_schemas;
+
+    fn context_with_system(system_context: &str, actions: Vec<ActionSchema>) -> SessionContext {
+        SessionContext {
+            system_context: system_context.to_string(),
+            history: vec![ssh_manager_core::ai::ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("hi".to_string()),
+            }],
+            available_actions: actions,
+            max_tokens_hint: None,
+        }
+    }
+
+    /// Spec 0087, T15 (A3.1, BL-0264): natives Tool-Calling, ein leerer bzw.
+    /// reiner Leerraum-System-Prompt — `messages[0]` muss die Nutzernachricht
+    /// sein, keine System-Nachricht vorangestellt. Analog zu Anthropics
+    /// `test_no_system_field_when_system_text_is_empty_with_native_tool_calling`
+    /// (Spec 0081). *Gegenbeweis (s. Bericht):* vor diesem Fix stand hier
+    /// immer `{"role":"system","content":""}` als erstes Element.
+    #[test]
+    fn test_no_system_message_when_system_text_is_empty_with_native_tool_calling() {
+        let provider = OpenAiCompatibleProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-test",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+            None,
+        );
+
+        for system_context in ["", "  \n"] {
+            let context = context_with_system(system_context, default_action_schemas());
+            let body = provider.build_request_body(&context);
+            let messages = body["messages"]
+                .as_array()
+                .expect("messages muss ein Array sein");
+            assert_eq!(
+                messages[0]["role"], "user",
+                "bei system_context {system_context:?} darf keine System-Nachricht vor \
+                 der Nutzernachricht stehen: {body}"
+            );
+        }
+    }
+
+    /// Spec 0087, T16 (A3.1, BL-0264, Gegenprobe): Fallback-Modus (kein
+    /// natives Tool-Calling) — der Fallback-Zusatz ist nie leer, die
+    /// System-Nachricht mit dem Fallback-Zusatz bleibt also auch bei leerem
+    /// `system_context` erhalten.
+    #[test]
+    fn test_fallback_mode_keeps_system_message_even_with_empty_system_context() {
+        let provider = OpenAiCompatibleProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-test",
+            "key",
+            false,
+            Vec::new(),
+            test_budget(),
+            None,
+        );
+        let context = context_with_system("", default_action_schemas());
+
+        let body = provider.build_request_body(&context);
+
+        let messages = body["messages"]
+            .as_array()
+            .expect("messages muss ein Array sein");
+        assert_eq!(messages[0]["role"], "system");
+        assert!(
+            !messages[0]["content"].as_str().unwrap().trim().is_empty(),
+            "Fallback-Zusatz muss nicht-leeren Text liefern: {messages:?}"
+        );
+    }
 
     #[tokio::test(start_paused = true)]
     async fn test_inactivity_timeout_yields_network_error_instead_of_hanging_forever() {
