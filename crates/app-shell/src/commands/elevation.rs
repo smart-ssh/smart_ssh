@@ -1304,14 +1304,22 @@ mod browser_channel_tests {
             let profile_store = InMemoryProfileStore::default();
             let confirmations = ConfirmationRegistry::new();
             if origin == "ai" {
-                run_chat_turn(
-                    &session,
-                    session_id,
-                    &emitter,
-                    &profile_store,
-                    &confirmations,
+                // Spec 0085, A5: derselbe Timeout wie im MCP-Zweig unten —
+                // ohne ihn würde ein künftig auf Bestätigung wartender
+                // KI-Zweig bis zu `PENDING_ACTION_CONFIRM_TIMEOUT` (3600 s)
+                // hängen, statt sichtbar zu scheitern.
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    run_chat_turn(
+                        &session,
+                        session_id,
+                        &emitter,
+                        &profile_store,
+                        &confirmations,
+                    ),
                 )
-                .await;
+                .await
+                .expect("KI-Zweig muss innerhalb der Frist enden");
             } else {
                 // MCP verlangt immer eine Bestätigung — hier genehmigt,
                 // damit die Aktion wirklich ausgeführt wird.
