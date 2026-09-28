@@ -6,7 +6,7 @@
 //! erfassen lässt").
 //!
 //! Das Lesen der Einstellungen (`tauri_plugin_store`) und das Bauen des
-//! konfigurierten `AiProvider` bleiben in `crate::risk_second_opinion`
+//! konfigurierten `AiProvider` bleiben in `app_shell::risk_second_opinion`
 //! (Tauri-gebunden, in `app-shell`) — dieses Modul bekommt den fertigen
 //! `&dyn AiProvider` als Wert übergeben (Spec 0084, §4) und ist selbst
 //! Tauri-frei, damit `orchestration` (die einzigen Aufrufer,

@@ -166,7 +166,7 @@ pub fn read_last_log_lines(dir: &Path, max_lines: usize) -> Vec<String> {
 ///
 /// Gibt den [`WorkerGuard`] des nicht-blockierenden Writers zurück — dieser
 /// muss so lange am Leben bleiben, wie geloggt werden soll (er flusht den
-/// internen Puffer beim `Drop`). Der Aufrufer (`crate::run`) hält ihn
+/// internen Puffer beim `Drop`). Der Aufrufer (`app_shell::run`) hält ihn
 /// deshalb als lokale Variable über die gesamte App-Laufzeit
 /// (`tauri::Builder::run` blockiert bis zum Beenden der App, danach ist ein
 /// finaler Flush ohnehin nicht mehr relevant).

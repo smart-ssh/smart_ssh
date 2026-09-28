@@ -291,7 +291,7 @@ pub(crate) async fn wait_for_rate_limit_budget(
 
 /// Die Nutzer-Nachricht muss bereits vom Aufrufer in
 /// `session.context.history` eingetragen worden sein (s.
-/// `crate::commands::send_chat_message`). Läuft so lange in Folgerunden
+/// `app_shell::commands::send_chat_message`). Läuft so lange in Folgerunden
 /// weiter, wie die jeweils letzte Runde zu einem der vier Ausgänge aus Spec
 /// 0021, Abschnitt 3 geführt hat (s. Moduldoc), höchstens aber
 /// [`MAX_AUTO_FOLLOWUP_ROUNDS`] Runden, und bricht sofort ab, sobald
@@ -313,7 +313,7 @@ pub async fn run_chat_turn(
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> bool {
     // Das Stopp-Flag wird NICHT hier zurückgesetzt, sondern in
-    // `crate::commands::send_chat_message_impl` atomar mit dem Start des
+    // `app_shell::commands::send_chat_message_impl` atomar mit dem Start des
     // Turns (Spec 0066, spec-reviewer-Fund: ein Reset erst hier, nach
     // mehreren DB-Zugriffen, verschluckte einen früh gedrückten Stopp).
     for round in 1..=MAX_AUTO_FOLLOWUP_ROUNDS {
@@ -769,7 +769,7 @@ async fn flush_text_buffer(session: &Session, buffer: &mut String) {
     // `LedgerSource::Ai` — dieser Text ist buchstäblich die vom
     // `AiProvider` gestreamte Antwort, unabhängig davon, ob die auslösende
     // Aktion über den internen Chat oder MCP kam (Letzteres läuft ohnehin
-    // nie über `run_one_round`, s. `crate::mcp_backend`).
+    // nie über `run_one_round`, s. `app_shell::mcp_backend`).
     write_ledger_entry(
         session,
         LedgerSource::Ai,

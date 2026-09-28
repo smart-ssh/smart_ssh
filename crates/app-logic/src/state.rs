@@ -129,7 +129,7 @@ pub struct AppState {
     pub entitlements: Arc<dyn EntitlementProvider>,
 
     /// Wartende `connect()`-Aufrufe, die auf `confirm_host_key` warten (s.
-    /// `crate::commands::connect`). Schlüssel ist die `SessionId`, die
+    /// `app_shell::commands::connect`). Schlüssel ist die `SessionId`, die
     /// `connect()` bereits vor dem eigentlichen Verbindungsaufbau vergibt
     /// (s. dortiger Kommentar) — pro `SessionId` kann zu jedem Zeitpunkt
     /// höchstens ein `connect()`-Versuch aktiv sein, ein flacher Schlüssel
@@ -151,7 +151,7 @@ pub struct AppState {
     pub running_command_cancellations: Arc<ConfirmationRegistry<ActionId, ()>>,
     /// Spec 0028: Zustand des lokalen MCP-Servers — getrennt von den
     /// übrigen, rein persistenten Einstellungen (`tauri-plugin-store`,
-    /// s. `crate::mcp_settings`), weil Token/Allow-Liste/laufender Server
+    /// s. `app_shell::mcp_settings`), weil Token/Allow-Liste/laufender Server
     /// **live** sein müssen (ein "Neu generieren" muss das alte Token
     /// sofort invalidieren, kein Neustart der App nötig).
     pub mcp: McpState,
@@ -183,18 +183,18 @@ pub struct McpState {
     pub token: mcp_server::SharedToken,
     /// Spec 0028, Abschnitt 6: welche Server über MCP ansprechbar sind —
     /// im Speicher gehalten (nicht bei jedem Tool-Call aus dem Store
-    /// gelesen), damit `crate::mcp_backend` sie synchron ohne zusätzliche
-    /// Async-I/O prüfen kann; `crate::mcp_settings` hält diesen Cache und
+    /// gelesen), damit `app_shell::mcp_backend` sie synchron ohne zusätzliche
+    /// Async-I/O prüfen kann; `app_shell::mcp_settings` hält diesen Cache und
     /// den persistierten Store synchron.
     pub allowed_servers: std::sync::Mutex<std::collections::HashSet<ServerId>>,
-    /// `Some`, während der HTTP-Server läuft — `crate::mcp_settings`
+    /// `Some`, während der HTTP-Server läuft — `app_shell::mcp_settings`
     /// startet/stoppt ihn und ersetzt diesen Wert entsprechend.
     pub runtime: tokio::sync::Mutex<Option<mcp_server::McpServerHandle>>,
 }
 
 impl Default for McpState {
     /// Der `SharedToken`-Startwert ist irrelevant, solange kein Server
-    /// läuft (`runtime` startet als `None`) — `crate::mcp_settings::
+    /// läuft (`runtime` startet als `None`) — `app_shell::mcp_settings::
     /// get_mcp_server_settings` synchronisiert ihn beim ersten Aufruf mit
     /// dem persistierten (oder frisch generierten) Token.
     fn default() -> Self {

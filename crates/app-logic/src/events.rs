@@ -14,7 +14,7 @@
 //! generisch `impl Serialize`), damit der Trait dyn-kompatibel bleibt.
 //!
 //! Spec 0084, §4: Die `EventEmitter`-Impl für `tauri::AppHandle` liegt
-//! bewusst NICHT hier, sondern in `crate::event_emitter::TauriEventEmitter`
+//! bewusst NICHT hier, sondern in `app_shell::event_emitter::TauriEventEmitter`
 //! (ein Newtype) — dieses Modul selbst ist bis auf diese eine Impl
 //! Tauri-frei und zieht als Ganzes nach `app-logic`; die Orphan-Rule
 //! verbietet dort eine Impl für den fremden Typ `tauri::AppHandle`.
@@ -50,7 +50,7 @@ pub enum ConnectionStatus {
     /// `connect()`-Aufruf, der gerade auf `confirm_host_key` wartet — diese
     /// Session existiert noch nicht in `SessionManager.sessions` (sie wird
     /// erst nach erfolgreichem Verbindungsaufbau eingefügt, s.
-    /// `crate::commands::connect`), taucht aber über
+    /// `app_shell::commands::connect`), taucht aber über
     /// `SessionManager.pending_connections` trotzdem in der Momentaufnahme
     /// auf. Wird **nie** über `connection-status-changed` gesendet (dieses
     /// Event kennt nur den Übergang Connected/Disconnected) — nur als

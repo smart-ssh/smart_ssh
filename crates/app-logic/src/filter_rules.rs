@@ -1,5 +1,5 @@
 //! Reine, testbare Logik rund um Filter-Regeln (Spec 0009) — die
-//! `#[tauri::command]`-Wrapper in `crate::commands` bleiben dünn, analog zu
+//! `#[tauri::command]`-Wrapper in `app_shell::commands` bleiben dünn, analog zu
 //! `crate::groups`/`crate::server_credentials` (Spec 0008).
 
 use chrono::Utc;

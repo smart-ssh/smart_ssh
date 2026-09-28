@@ -1,5 +1,5 @@
 //! Regel-Schnellvorschlag im Bestätigungsdialog (Spec 0011) — reine,
-//! testbare Logik; die `#[tauri::command]`-Wrapper in `crate::commands`
+//! testbare Logik; die `#[tauri::command]`-Wrapper in `app_shell::commands`
 //! bleiben dünn, analog zu `crate::groups`/`crate::filter_rules`.
 
 use persistence_sqlite::SqlitePolicyStore;

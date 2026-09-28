@@ -611,7 +611,7 @@ async fn test_auto_continuation_cap_resets_for_each_new_user_message() {
 /// Bestätigungsdialog unangetastet — hier simuliert durch direktes
 /// Setzen von `session.auto_continue_stop`, während der Dialog der
 /// zweiten (automatischen) Runde noch offen ist, genau der in
-/// `crate::commands::stop_auto_continuation` gesetzte Zustand.
+/// `app_shell::commands::stop_auto_continuation` gesetzte Zustand.
 #[tokio::test]
 async fn test_stop_auto_continuation_prevents_further_rounds_but_leaves_open_dialog_intact() {
     let provider = MockAiProvider::with_rounds(vec![
@@ -747,7 +747,7 @@ async fn test_sudo_password_credential_store_not_read_again_across_multiple_comm
     let store =
         crate::test_support::InMemoryCredentialStore::new().with_secret(&credential_ref, "hunter2");
 
-    // Exakt der Ablauf aus `crate::commands::connect` (Spec 0018,
+    // Exakt der Ablauf aus `app_shell::commands::connect` (Spec 0018,
     // Abschnitt 6): einmal lesen, danach in `Session.sudo_password`
     // cachen — kein Store-Zugriff mehr für den Rest der Session-Laufzeit.
     let resolved_password = store.get(&credential_ref).ok();

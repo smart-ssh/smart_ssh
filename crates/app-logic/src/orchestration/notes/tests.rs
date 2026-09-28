@@ -1328,7 +1328,7 @@ async fn test_generate_document_emits_event_without_filter_engine_or_confirmatio
 /// Spec 0011, Abschnitt 3: "legt die Regel an ... löst danach die
 /// wartende Confirm-Entscheidung ... auf, exakt wie ein
 /// `respond_to_action`-Aufruf mit `Approve`". Der eigentliche
-/// `accept_and_create_rule`-Tauri-Command (`crate::commands`) ist ein
+/// `accept_and_create_rule`-Tauri-Command (`app_shell::commands`) ist ein
 /// dünner Wrapper genau um diese zwei Aufrufe
 /// (`crate::rule_suggestions::create_quick_rule` +
 /// `ConfirmationRegistry::resolve(..., Approve)`) — dieser Test bildet

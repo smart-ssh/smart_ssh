@@ -203,7 +203,7 @@ pub struct SessionParts {
     /// `crate::compaction::SystemContextParts`-Doc-Kommentar zur
     /// Begründung, warum das getrennt statt nur aus dem fertigen String
     /// gehalten wird. Aktualisiert an denselben zwei Stellen wie `context`:
-    /// `crate::commands::connect_session` (initial) und
+    /// `app_shell::commands::connect_session` (initial) und
     /// `send_chat_message_impl` (bei jeder Nutzer-Nachricht neu gebaut).
     pub system_context_parts: AsyncMutex<crate::compaction::SystemContextParts>,
     /// Spec 0057, §3.1: geschätztes Kontextfenster (Token) des bei
@@ -251,7 +251,7 @@ pub struct SessionParts {
     pub sudo_password: Option<secrecy::SecretString>,
     /// Spec 0017, Abschnitt 2: `list_sessions()`-Statusfeld. Startet bei
     /// `Connected` (`Session` wird erst nach erfolgreichem Verbindungsaufbau
-    /// konstruiert, s. `crate::commands::connect`) und wird von
+    /// konstruiert, s. `app_shell::commands::connect`) und wird von
     /// `spawn_terminal_actor` auf `Disconnected` gesetzt, sobald der
     /// Terminal-Aktor unerwartet endet (Netzwerkfehler/Verbindungsabbruch) —
     /// ein expliziter `disconnect()`-Aufruf entfernt die Session ohnehin
@@ -276,17 +276,17 @@ pub struct SessionParts {
     // weder setzen noch ersetzen noch herausnehmen, sondern nur benutzen.
     // Spec 0067, Teil A: Der erhöhte SFTP-Kanal (`sudo -n <sftp-server>`)
     // war bis Spec 0084 ein Feld dieser Struktur. Er liegt jetzt in
-    // `crate::elevated_sftp::ElevatedSftpRegistry`, einem eigenen, von Tauri
+    // `app_shell::elevated_sftp::ElevatedSftpRegistry`, einem eigenen, von Tauri
     // verwalteten Zustand von `app-shell` (Spec 0084, A1): so führt von
     // einer `Session` aus kein Weg mehr zu ihm, auch nicht für Code, der
     // eine `Session` in der Hand hat.
     /// Spec 0021, Abschnitt 5 / Spec 0066, §1: gesetzt über
-    /// [`Session::request_auto_continue_stop`] (`crate::commands::
+    /// [`Session::request_auto_continue_stop`] (`app_shell::commands::
     /// stop_auto_continuation`). Beendet die Fortsetzungskette und bricht
     /// einen laufenden KI-Stream bzw. die Wartezeit vor dem Send sofort ab
     /// (`crate::orchestration::run_one_round`); ein offener
     /// Bestätigungsdialog und ein bereits laufendes Kommando bleiben
-    /// unangetastet. Zurückgesetzt in `crate::commands::
+    /// unangetastet. Zurückgesetzt in `app_shell::commands::
     /// send_chat_message_impl` beim Start eines Turns, atomar mit
     /// `chat_turn.running`.
     pub auto_continue_stop: std::sync::atomic::AtomicBool,
@@ -375,7 +375,7 @@ pub struct SessionParts {
     /// Sitzungen, die bewusst keine `chat_sessions`-Zeile bekommen sollen
     /// (Tests; s. Abschnitt 10 zu MCP — MCP-ausgelöste Aktionen laufen
     /// ohnehin nie über `run_chat_turn`/eine eigene `Session`, s.
-    /// `crate::mcp_backend`, insofern betrifft dieses Feld sie gar nicht
+    /// `app_shell::mcp_backend`, insofern betrifft dieses Feld sie gar nicht
     /// erst). Konkreter Store-Typ statt Trait-Abstraktion — derselbe
     /// Präzedenzfall wie `SqlitePromptHistoryStore` in `AppState` (Spec
     /// 0015): kein `core`-Trait für diese Art Hilfs-Store, anders als
@@ -389,7 +389,7 @@ pub struct SessionParts {
     /// (Tests; fehlender Verschlüsselungsschlüssel beim App-Start).
     pub ledger_store: Option<persistence_sqlite::SqliteLedgerStore>,
     /// Die `chat_sessions.id`-Zeile dieser laufenden Sitzung — `None`, bis
-    /// `crate::commands::connect_session` sie anlegt (bzw. bei
+    /// `app_shell::commands::connect_session` sie anlegt (bzw. bei
     /// `resume_chat_session`, Teil 2, auf die wiederverwendete Zeile
     /// gesetzt wird). `AsyncMutex` statt `StdMutex`, weil
     /// `history_push_and_persist` sie über einen `.await`-Punkt hinweg
@@ -562,7 +562,7 @@ impl Session {
 /// Spec 0039, Abschnitt 5: "Bei Session Resume mit vorbelasteter Historie
 /// startet die Sitzung mit `true`." Es gibt aktuell **keinen** Resume-Pfad
 /// (`docs/specs/0034-chat-session-persistence.md` ist noch Entwurf,
-/// `SessionContext.history` startet in `crate::commands::connect` immer
+/// `SessionContext.history` startet in `app_shell::commands::connect` immer
 /// mit `Vec::new()`) — diese Funktion ist die dafür vorbereitete Prüfung,
 /// heute aber faktisch immer mit einer leeren Historie aufgerufen.
 ///
@@ -614,7 +614,7 @@ pub fn spawn_terminal_actor(
     tokio::spawn(async move {
         // `Some(reason)` löst am Ende ein `connection-status-changed`-Event
         // aus, `None` unterdrückt es bewusst — das passiert nur, wenn der
-        // Sender absichtlich gedroppt wurde (`crate::commands::disconnect`
+        // Sender absichtlich gedroppt wurde (`app_shell::commands::disconnect`
         // hat `session.terminal` auf `None` gesetzt), und dieser Befehl hat
         // das Event dafür bereits selbst gesendet. Ohne diese Unterscheidung
         // gäbe es bei jedem expliziten `disconnect()` zwei Events statt
@@ -676,7 +676,7 @@ pub fn spawn_terminal_actor(
 /// `ProfileStore`, den `SessionManager` absichtlich nicht kennt (reines
 /// Session-Bookkeeping, keine Persistenz-Abhängigkeit). Die Auflösung auf
 /// `SessionSummaryDto` (inkl. Servername) übernimmt der Aufrufer
-/// (`crate::commands::list_sessions`).
+/// (`app_shell::commands::list_sessions`).
 #[derive(Debug, Clone, Copy)]
 pub struct SessionSnapshotEntry {
     pub session_id: SessionId,
@@ -692,7 +692,7 @@ pub struct SessionSnapshotEntry {
 pub struct SessionManager {
     sessions: StdMutex<HashMap<SessionId, Arc<Session>>>,
     /// Spec 0017, Abschnitt 2: Verbindungsversuche, die aktuell auf
-    /// `confirm_host_key` warten (`crate::commands::connect`) — diese
+    /// `confirm_host_key` warten (`app_shell::commands::connect`) — diese
     /// Sessions existieren noch nicht in `sessions` (s. dortiger
     /// Kommentar zur Reihenfolge: `Session` wird erst nach erfolgreichem
     /// Aufbau eingefügt), sollen aber trotzdem in `list_sessions()`

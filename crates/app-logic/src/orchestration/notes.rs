@@ -404,7 +404,7 @@ const DISCONNECT_COMPLETION_INSTRUCTION: &str = "Die Sitzung wird jetzt beendet.
      Entscheidungen)? Schlage eine Notiz-Aktualisierung nur bei echtem Mehrwert vor — keine \
      Wiederholung bereits bestehender Notizinhalte.";
 
-/// Spec 0010: nach `disconnect()` aufgerufen (`crate::commands::disconnect`,
+/// Spec 0010: nach `disconnect()` aufgerufen (`app_shell::commands::disconnect`,
 /// als eigener `tokio::spawn`-Task — läuft nicht blockierend für den
 /// eigentlichen Trennvorgang, der zu diesem Zeitpunkt bereits abgeschlossen
 /// ist). `session` ist zu diesem Zeitpunkt bereits aus `AppState.sessions`

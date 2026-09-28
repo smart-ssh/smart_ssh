@@ -34,7 +34,7 @@
 //! ausgeführt werden (Spec 0021, Abschnitt 2). Begrenzt auf
 //! [`chat_turn::MAX_AUTO_FOLLOWUP_ROUNDS`] Runden (Spec 0021, Abschnitt 4)
 //! sowie jederzeit manuell abbrechbar über `Session::auto_continue_stop`
-//! (Spec 0021, Abschnitt 5, `crate::commands::stop_auto_continuation`). Seit
+//! (Spec 0021, Abschnitt 5, `app_shell::commands::stop_auto_continuation`). Seit
 //! Spec 0066 bricht der Stopp auch einen laufenden KI-Stream und die
 //! Wartezeit vor dem Send sofort ab (`run_one_round`); ein bereits offener
 //! Bestätigungsdialog und ein bereits laufendes Kommando bleiben

@@ -29,7 +29,7 @@ pub(crate) const MAX_READ_FILE_BYTES: u64 = 256 * 1024;
 /// (`session.sftp` bleibt `Some`, bis die Session selbst endet). Ein
 /// erneuter Aufruf, während bereits eine offene Session vorliegt, ist ein
 /// No-op. `pub(crate)`, nicht privat: der manuelle Dateibrowser (Spec 0020,
-/// Abschnitt 5, `crate::commands::sftp_*`) braucht dieselbe Lazy-Open-Logik,
+/// Abschnitt 5, `app_shell::commands::sftp_*`) braucht dieselbe Lazy-Open-Logik,
 /// läuft aber komplett außerhalb der KI-Kernschleife dieser Datei.
 pub async fn ensure_sftp_open(session: &Session) -> Result<(), SshError> {
     let mut guard = session.lock_sftp().await;

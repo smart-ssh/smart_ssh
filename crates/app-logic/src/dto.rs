@@ -95,7 +95,7 @@ pub struct ServerDto {
     /// statt eine Aussage zu treffen.
     pub sudo_password_unknown: bool,
     /// Spec 0032, Abschnitt 3: `true` genau für den lokalen Pseudo-Server
-    /// (`crate::local_server::LOCAL_SERVER_ID`) — steuert im Frontend, ob
+    /// (`app_shell::local_server::LOCAL_SERVER_ID`) — steuert im Frontend, ob
     /// Host/Port/Nutzername/Auth/Jump-Host/Löschen/Verbindungstest
     /// ausgeblendet werden.
     pub is_local: bool,
@@ -312,7 +312,7 @@ impl From<&AiProviderConfig> for AiProviderConfigDto {
 /// Spec 0007, Abschnitt 8.2. `api_key` wird nie persistiert, nur an den
 /// `CredentialStore` weitergereicht (`add_ai_provider`) bzw. bei
 /// `update_ai_provider` interpretiert: leer = Credential unverändert
-/// lassen (s. `crate::commands::update_ai_provider`-Doc-Kommentar).
+/// lassen (s. `app_shell::commands::update_ai_provider`-Doc-Kommentar).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiProviderConfigInput {
@@ -1133,7 +1133,7 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
 /// Spec 0054, Teil 3: Vorschau vor dem Löschen eines Ordners — "X Dateien,
 /// Y Ordner werden gelöscht" statt einer inhaltslosen Ja/Nein-Frage, analog
 /// zum zweistufigen `delete_server`. `dir_count` zählt den Ordner selbst
-/// mit (s. `crate::commands::walk_dirs_and_count_files`).
+/// mit (s. `app_shell::commands::walk_dirs_and_count_files`).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeletePreviewDto {

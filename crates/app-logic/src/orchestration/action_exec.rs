@@ -513,7 +513,7 @@ pub(crate) async fn handle_action_proposed(
 }
 
 /// Öffentlicher Einstiegspunkt für Spec 0028 (MCP), von
-/// `crate::mcp_backend` genutzt — dieselbe Orchestrierungs-Funktion wie der
+/// `app_shell::mcp_backend` genutzt — dieselbe Orchestrierungs-Funktion wie der
 /// interne Chat-Flow oben, nur mit `origin` fest auf `ActionOrigin::Mcp`
 /// (erzwingt die Verschärfung aus Abschnitt 5) und `round` fest auf `1`
 /// (kein Auto-Continuation-Konzept für MCP-Aufrufe, s. Spec 0028,

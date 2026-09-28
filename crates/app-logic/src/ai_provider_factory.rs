@@ -106,7 +106,7 @@ mod tests {
     /// Spec 0022, Abschnitt 3, erster Punkt: der Provider-API-Key wird beim
     /// Aufbau der `AiProvider`-Instanz **einmalig** aus dem `CredentialStore`
     /// gelesen (hier über `store.get(...)` simuliert — exakt der Ablauf aus
-    /// `crate::commands::connect`, Zeile "let api_key = state.credential_
+    /// `app_shell::commands::connect`, Zeile "let api_key = state.credential_
     /// store.get(&active_config.credential_ref)?") und danach als reines
     /// `String`-Feld in die Provider-Instanz eingebettet (s.
     /// `OpenAiCompatibleProvider`/`AnthropicProvider`). Mehrere `send()`-

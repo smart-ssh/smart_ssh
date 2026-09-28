@@ -1,5 +1,5 @@
 //! Baut die Nutzer-sichtbaren Texte für die vier Startup-Fehlerfälle (Spec
-//! 0059) — bewusst getrennt von `crate::startup_dialog` (dem eigentlichen
+//! 0059) — bewusst getrennt von `app_shell::startup_dialog` (dem eigentlichen
 //! GUI-Aufruf): die "richtiger Text für den richtigen Fall"-Logik ist so
 //! ohne jede GUI-/`rfd`-Abhängigkeit unit-testbar (Spec 0059, Testbarkeit:
 //! "die Fehlererkennung + der Dialog-Aufruf mit richtigem Text unit-testbar
@@ -34,7 +34,7 @@ pub enum Language {
 /// Spec 0071, A11a/A11c: Sprachwahl des Startdialogs als **reine** Funktion
 /// über den bereits ausgewählten Umgebungswert — unit-testbar ohne
 /// Umgebungsmanipulation, dieselbe Parameter-Injection wie bei
-/// [`keychain_unavailable_text`]. Nur der Aufrufer in `crate::run` liest die
+/// [`keychain_unavailable_text`]. Nur der Aufrufer in `app_shell::run` liest die
 /// Variablen tatsächlich aus (s. [`preferred_locale_value`]).
 ///
 /// Ausgewertet wird nur das Sprach-Präfix vor `_`, `.` oder `@`
@@ -219,7 +219,7 @@ fn db_connect_failure_message_de(
 /// demselben kritischen Pfad und derselben Fehlerklasse wie Fall 4
 /// (Datenverzeichnis-Zugriffsproblem) — `FileHostKeyStore::load` teilt
 /// sich dasselbe Datenverzeichnis wie die SQLite-Datenbank (s.
-/// `crate::run`) und hatte vor diesem Schritt ein eigenes, unbehandeltes
+/// `app_shell::run`) und hatte vor diesem Schritt ein eigenes, unbehandeltes
 /// `.expect(...)`. Mit demselben Mechanismus geschlossen, statt eines
 /// bekannten, dokumentierten Panics direkt neben den vier behobenen
 /// Fällen.
@@ -264,7 +264,7 @@ pub fn host_key_store_failure_text(path: &Path, language: Language) -> DialogTex
 
 /// spec-reviewer-Fund: die Entscheidung "welcher `CipherError` löst die
 /// sichtbare Fall-3-Warnung aus" stand bisher nur als `matches!(...)` direkt
-/// in `crate::run` — ohne echte Keychain/DB ist dieser Aufrufort selbst
+/// in `app_shell::run` — ohne echte Keychain/DB ist dieser Aufrufort selbst
 /// nicht unit-testbar. Als eigene, reine Funktion hier lässt sich die
 /// Abgrenzung (nur `KeyStoreAccessFailed`, NICHT `InvalidKey` — s. Spec
 /// 0059, Fall 3 vs. Spec 0040 Abschnitt 7) unabhängig davon festnageln.
@@ -762,7 +762,7 @@ mod tests {
     /// spec-reviewer-Fund: die Fall-3-vs-Spec-0040-Abgrenzung (nur ein
     /// echter Zugriffsfehler ist sichtbar, ein korrupter Schlüsselwert
     /// bleibt beim stillen `tracing::warn!`) war zuvor nur an der
-    /// Aufrufstelle in `crate::run` geprüft, dort ohne echte
+    /// Aufrufstelle in `app_shell::run` geprüft, dort ohne echte
     /// Keychain/DB nicht testbar.
     #[test]
     fn test_should_warn_about_keychain_only_for_the_access_error_not_a_corrupt_key() {
