@@ -61,13 +61,51 @@ pub struct ElevatedSftpSlot {
     /// Zugriff prüft ihn — damit endet die Nutzbarkeit im selben Moment, in
     /// dem der Nutzer ausschaltet, umschaltet oder trennt.
     revoked: Arc<std::sync::atomic::AtomicBool>,
+    /// Nur für den Regressionstest T6c (Spec 0085, §6): ein Haltepunkt
+    /// **zwischen** dem Zugang zum erhöhten Kanal und der nächsten Operation
+    /// darüber. `sftp_exists` führt genau **eine** SFTP-Operation aus — ohne
+    /// diesen Haltepunkt gäbe es dort keinen Moment, in dem ein Test
+    /// widerrufen könnte, nachdem der Zugang schon stand und bevor die
+    /// Operation ihre eigene Prüfung macht; die Verschränkung wäre nur
+    /// zufällig zu treffen. Vorbild und Begründung wie bei
+    /// [`ElevatedSftpRegistry::interleave_hook`] (Spec 0084, T8b). Existiert
+    /// in keinem Produktivbau.
+    #[cfg(test)]
+    before_operation_hook: Arc<StdMutex<Option<BeforeOperationHook>>>,
 }
+
+/// s. [`ElevatedSftpSlot::before_operation_hook`].
+#[cfg(test)]
+type BeforeOperationHook = Box<dyn Fn() + Send>;
 
 impl ElevatedSftpSlot {
     fn with_channel(channel: ElevatedSftp) -> Self {
         Self {
             channel: Arc::new(AsyncMutex::new(Some(channel))),
             revoked: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            #[cfg(test)]
+            before_operation_hook: Arc::new(StdMutex::new(None)),
+        }
+    }
+
+    /// Nur für T6c — s. [`Self::before_operation_hook`]. Der Haltepunkt wird
+    /// beim ersten Durchlauf verbraucht. Wirkt auf **alle** Klone dieses
+    /// Slots (gemeinsamer `Arc`), also auch auf den, den ein laufender
+    /// Befehl gerade festhält.
+    #[cfg(test)]
+    pub(crate) fn set_before_operation_hook(&self, hook: BeforeOperationHook) {
+        *self.before_operation_hook.lock().unwrap() = Some(hook);
+    }
+
+    /// Ruft den Haltepunkt aus [`Self::before_operation_hook`], falls einer
+    /// gesetzt ist. Im Produktivbau ein leerer Rumpf.
+    pub(crate) fn run_before_operation_hook(&self) {
+        #[cfg(test)]
+        {
+            let hook = self.before_operation_hook.lock().unwrap().take();
+            if let Some(hook) = hook {
+                hook();
+            }
         }
     }
 

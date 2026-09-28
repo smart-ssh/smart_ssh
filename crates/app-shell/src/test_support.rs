@@ -83,6 +83,13 @@ pub(crate) mod elevation {
         /// Spec 0084, T8/T8b: hält das Öffnen dort an, bis der Test
         /// freigibt.
         pub(crate) open_gate: Option<Arc<tokio::sync::Notify>>,
+        /// Spec 0085, T4: die Kanäle, die dieser Transport der Reihe nach
+        /// herausgibt — nötig, wenn ein Test ein **Neu-Aktivieren** über den
+        /// echten Weg fahren will und dabei den ersten Kanal weiter
+        /// beobachtet (er darf danach keine Operation mehr sehen) und den
+        /// zweiten ebenfalls (er darf gar keine sehen). Ist die Reihe leer,
+        /// kommt wie bisher ein frisches `MockSftpSession`.
+        prepared_channels: Arc<StdMutex<std::collections::VecDeque<Box<dyn SftpSession>>>>,
     }
 
     pub(crate) fn output(exit: i32, stdout: &str, stderr: &str) -> CommandOutput {
@@ -129,7 +136,10 @@ pub(crate) mod elevation {
                     "SFTP-Init fehlgeschlagen".to_string(),
                 ))
             } else {
-                Ok(Box::new(MockSftpSession::new()))
+                match self.prepared_channels.lock().unwrap().pop_front() {
+                    Some(channel) => Ok(channel),
+                    None => Ok(Box::new(MockSftpSession::new())),
+                }
             }
         }
         async fn disconnect(&mut self) -> Result<(), SshError> {
@@ -150,6 +160,7 @@ pub(crate) mod elevation {
                 log: log.clone(),
                 open_reached: None,
                 open_gate: None,
+                prepared_channels: Arc::new(StdMutex::new(std::collections::VecDeque::new())),
             },
             log,
         )
@@ -192,6 +203,14 @@ pub(crate) mod elevation {
             session_id,
             session,
         }
+    }
+
+    /// Spec 0085, T4: wie [`fixture`], aber jede Aktivierung gelingt und gibt
+    /// der Reihe nach die übergebenen Kanäle heraus.
+    pub(crate) fn fixture_with_channels(channels: Vec<Box<dyn SftpSession>>) -> ElevationFixture {
+        let mut transport = working_transport();
+        transport.prepared_channels = Arc::new(StdMutex::new(channels.into()));
+        fixture(Box::new(transport))
     }
 
     impl ElevationFixture {

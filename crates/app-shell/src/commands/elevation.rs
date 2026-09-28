@@ -2,13 +2,17 @@
 //! Kanalwahl, Ein-/Ausschalten) — Teil der Spec-0083-Aufteilung von
 //! `commands.rs`.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use tauri::State;
 
-use ssh_manager_core::ssh::SftpSession;
+use ssh_manager_core::ssh::{RemoteEntry, SftpSession, SshError};
 
-use crate::elevated_sftp::{ElevatedSftpRegistry, ElevatedSftpSlot, ElevationContext};
+use crate::elevated_sftp::{
+    ElevatedSftp, ElevatedSftpRegistry, ElevatedSftpSlot, ElevationContext,
+};
 use app_logic::error::{CommandError, CommandResult};
 use app_logic::session::Session;
 use app_logic::state::{AppState, SessionId};
@@ -61,7 +65,30 @@ impl BrowserAccess {
 /// Übersetzen der Frontend-Anfrage — einmal nachgeschlagen und mitgeführt;
 /// `slot: None` heißt „für diese Sitzung ist kein erhöhter Kanal aktiv“ und
 /// lässt jede Aktion scheitern, nie zurückfallen.
-pub(super) enum BrowserChannel {
+///
+/// Spec 0085, A1: Der Wert gilt für **einen** Browser-Befehl und trägt
+/// dessen Abbruch-Vermerk ([`Self::revoked_mid_command`]). Er ist außerhalb
+/// dieses Moduls nicht konstruierbar — der einzige Weg zu ihm führt über
+/// [`run_browser_command`], und genau dort sitzt die zentrale Übersetzung des
+/// Befehlsergebnisses (A1.2). Ein neuer Browser-Befehl kann die Übersetzung
+/// damit nicht versehentlich weglassen.
+pub(super) struct BrowserChannel {
+    kind: BrowserChannelKind,
+    /// Spec 0085, A1.2: `true`, sobald **irgendeine** Operation dieses
+    /// Befehls wegen eines Widerrufs abgebrochen wurde. Von
+    /// [`with_browser_channel`] am Ende ausgewertet und in
+    /// `ELEVATED_CHANNEL_INACTIVE` übersetzt — auch dann, wenn der Befehl den
+    /// SFTP-Fehler selbst abgefangen hat (`sftp_exists` → `Ok(false)`,
+    /// `sftp_download`s Größen-Vorablauf → `.ok()`, `sftp_read_text`s
+    /// `if let Ok`). Ohne diese Übersetzung endete ein Widerruf dort mit `Ok`
+    /// und behauptete damit einen Erfolg, den es nicht gab.
+    ///
+    /// `Arc`, weil eine laufende Operation ihn setzen muss, während der
+    /// Befehl selbst den Kanal noch hält.
+    revoked_mid_command: Arc<AtomicBool>,
+}
+
+enum BrowserChannelKind {
     Normal,
     Elevated {
         /// Erwarteter Ziel-Nutzer des erhöhten Kanals.
@@ -71,18 +98,51 @@ pub(super) enum BrowserChannel {
 }
 
 impl BrowserChannel {
-    pub(super) fn from_request(
+    fn from_request(
         registry: &ElevatedSftpRegistry,
         session_id: SessionId,
         elevated_user: Option<String>,
     ) -> Self {
-        match elevated_user {
-            Some(expected_user) => Self::Elevated {
+        let kind = match elevated_user {
+            Some(expected_user) => BrowserChannelKind::Elevated {
                 expected_user,
                 slot: registry.slot(session_id, &BrowserAccess(())),
             },
-            None => Self::Normal,
+            None => BrowserChannelKind::Normal,
+        };
+        Self {
+            kind,
+            revoked_mid_command: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Läuft dieser Befehl über den erhöhten Kanal? (Nicht: ob dieser noch
+    /// aktiv ist.) `sftp_download` leitet daraus ab, dass eine lokale Kopie
+    /// nur für den eigenen Nutzer lesbar angelegt wird.
+    pub(super) fn is_elevated(&self) -> bool {
+        matches!(self.kind, BrowserChannelKind::Elevated { .. })
+    }
+
+    /// Nur für Tests: Ist für diesen (erhöhten) Befehl überhaupt ein Kanal
+    /// eingetragen? `false` heißt „nie eingeschaltet oder Sitzung getrennt" —
+    /// dann scheitert jede Aktion, statt zurückzufallen.
+    #[cfg(test)]
+    fn has_elevated_slot(&self) -> bool {
+        matches!(
+            &self.kind,
+            BrowserChannelKind::Elevated { slot: Some(_), .. }
+        )
+    }
+
+    /// Nur für Tests: dieselbe Übersetzung der Frontend-Anfrage wie im
+    /// Produktivpfad, aber ohne `AppState` (s. [`run_browser_command`]).
+    #[cfg(test)]
+    pub(super) fn for_tests(
+        registry: &ElevatedSftpRegistry,
+        session_id: SessionId,
+        elevated_user: Option<String>,
+    ) -> Self {
+        Self::from_request(registry, session_id, elevated_user)
     }
 }
 
@@ -90,21 +150,165 @@ const ELEVATED_CHANNEL_INACTIVE: &str =
     "Der erhöhte Modus ist nicht mehr aktiv (Verbindung getrennt oder ausgeschaltet) — \
      die Aktion wurde nicht ausgeführt. Bitte den erhöhten Modus erneut einschalten.";
 
-/// Gesperrter SFTP-Kanal einer Browser-Aktion — normal oder erhöht.
+/// Spec 0085, A1.2: **die eine** Stelle, an der das Ergebnis eines
+/// Browser-Befehls in `ELEVATED_CHANNEL_INACTIVE` übersetzt wird, wenn
+/// während des Befehls widerrufen wurde. Keine Regel je Befehl — der
+/// Abschluss ist für alle derselbe, und ein Befehl kann ihn nicht umgehen,
+/// weil er ohne diese Funktion keinen [`BrowserChannel`] bekommt.
+///
+/// Eigene Funktion neben [`run_browser_command`], damit Tests denselben
+/// Abschluss fahren wie der Produktivpfad, ohne einen `AppState` bauen zu
+/// müssen (der Unterschied ist nur das Auflösen von Sitzung und Kanal).
+pub(super) async fn with_browser_channel<T, F, Fut>(
+    session: Arc<Session>,
+    channel: BrowserChannel,
+    body: F,
+) -> CommandResult<T>
+where
+    F: FnOnce(Arc<Session>, BrowserChannel) -> Fut,
+    Fut: std::future::Future<Output = CommandResult<T>>,
+{
+    let revoked = channel.revoked_mid_command.clone();
+    let result = body(session, channel).await;
+    if revoked.load(Ordering::SeqCst) {
+        // Spec 0085, A1.2: wörtlich dieselbe Meldung wie bei einem Widerruf
+        // vor dem ersten Zugriff — der Aufrufer soll den Abbruchgrund nicht
+        // daran unterscheiden müssen, wie weit der Befehl gekommen war.
+        // Schon geänderte Einträge bleiben geändert (§2, Nicht-Ziel).
+        return Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE));
+    }
+    result
+}
+
+/// Gemeinsamer Rahmen **jedes** `sftp_*`-Browser-Befehls: Kanal aus der
+/// Frontend-Anfrage auflösen, Sitzung holen (und den normalen Kanal bei
+/// Bedarf öffnen), Rumpf ausführen, Ergebnis zentral abschließen.
+pub(super) async fn run_browser_command<T, F, Fut>(
+    state: &AppState,
+    registry: &ElevatedSftpRegistry,
+    session_id: SessionId,
+    elevated_user: Option<String>,
+    body: F,
+) -> CommandResult<T>
+where
+    F: FnOnce(Arc<Session>, BrowserChannel) -> Fut,
+    Fut: std::future::Future<Output = CommandResult<T>>,
+{
+    let channel = BrowserChannel::from_request(registry, session_id, elevated_user);
+    let session = browser_session(state, session_id, &channel).await?;
+    with_browser_channel(session, channel, body).await
+}
+
+/// Warum ein Zugriff auf den erhöhten Kanal nicht zustande kam.
+enum ElevatedAccessError {
+    /// Widerrufen: ausgeschaltet, Sitzung entfernt oder für einen anderen
+    /// Nutzer neu aktiviert. Wird zentral in `ELEVATED_CHANNEL_INACTIVE`
+    /// übersetzt (A1.2) und setzt deshalb den Abbruch-Vermerk.
+    Revoked,
+    /// Der Kanal läuft als ein anderer Nutzer als der, für den das Frontend
+    /// diese Aktion angefragt hat (Spec 0067, A5). Kein Widerruf: die
+    /// Meldung nennt beide Nutzer und bleibt deshalb erhalten.
+    UserChanged { active: String, expected: String },
+}
+
+impl ElevatedAccessError {
+    fn message(&self) -> String {
+        match self {
+            Self::Revoked => ELEVATED_CHANNEL_INACTIVE.to_string(),
+            Self::UserChanged { active, expected } => format!(
+                "Der erhöhte Modus läuft inzwischen als „{active}“, nicht als „{expected}“ — die \
+                 Aktion wurde nicht ausgeführt."
+            ),
+        }
+    }
+}
+
+/// Der erhöhte Kanal, gesperrt für **eine** SFTP-Operation.
+///
+/// Spec 0085, A1.3: Die Sperre wird je Operation genommen und danach wieder
+/// freigegeben, nicht über den ganzen Befehl gehalten. Nur so wartet das
+/// Ausschalten höchstens auf die gerade laufende einzelne Operation und nicht
+/// auf den Rest einer Rekursion (Spec 0084 §9 spricht von einem „laufenden
+/// Vorgang"; damit ist ab Spec 0085 eine einzelne SFTP-Operation gemeint).
+struct ElevatedOperation(tokio::sync::OwnedMutexGuard<Option<ElevatedSftp>>);
+
+impl ElevatedOperation {
+    fn sftp(&mut self) -> &mut (dyn SftpSession + 'static) {
+        &mut *self
+            .0
+            .as_mut()
+            .expect("elevated_access hat den Kanalwert unter dieser Sperre schon geprüft")
+            .sftp
+    }
+}
+
+/// Spec 0084, §9 / Spec 0085, A1.1: **die eine** Prüfung, die zwischen einem
+/// Browser-Befehl und dem erhöhten Kanal steht. Jeder Zugriff läuft hier
+/// durch — der erste ebenso wie jeder weitere innerhalb einer Rekursion.
+///
+/// Der Widerruf wird **zweimal** geprüft: vor dem Warten auf die Sperre (dann
+/// wartet ein schon widerrufener Zugriff gar nicht erst) und noch einmal
+/// danach, weil `tokio::sync::Mutex` fair ist — ein bereits wartender Zugriff
+/// käme sonst noch vor dem Widerruf an die Reihe und liefe mit den alten
+/// Rechten weiter.
+async fn elevated_access(
+    slot: &ElevatedSftpSlot,
+    expected_user: &str,
+) -> Result<ElevatedOperation, ElevatedAccessError> {
+    if slot.is_revoked() {
+        return Err(ElevatedAccessError::Revoked);
+    }
+    let guard = slot.lock_owned(&BrowserAccess(())).await;
+    if slot.is_revoked() {
+        return Err(ElevatedAccessError::Revoked);
+    }
+    match guard.as_ref() {
+        // Kanalwert herausgenommen (`ElevatedSftpSlot::revoke`) — dasselbe
+        // wie widerrufen, nur ist der Merker hier schon gesetzt gewesen.
+        None => Err(ElevatedAccessError::Revoked),
+        Some(elevated) if elevated.target_user != expected_user => {
+            Err(ElevatedAccessError::UserChanged {
+                active: elevated.target_user.clone(),
+                expected: expected_user.to_string(),
+            })
+        }
+        Some(_) => Ok(ElevatedOperation(guard)),
+    }
+}
+
+/// Zugang für eine **einzelne** Operation eines laufenden Befehls. Setzt bei
+/// einem Widerruf den Abbruch-Vermerk des Befehls, damit
+/// [`with_browser_channel`] das Ergebnis danach übersetzt — auch wenn der
+/// Befehl den Fehler selbst abfängt.
+async fn elevated_operation(
+    slot: &ElevatedSftpSlot,
+    expected_user: &str,
+    revoked_mid_command: &AtomicBool,
+) -> Result<ElevatedOperation, SshError> {
+    slot.run_before_operation_hook();
+    elevated_access(slot, expected_user).await.map_err(|err| {
+        if matches!(err, ElevatedAccessError::Revoked) {
+            revoked_mid_command.store(true, Ordering::SeqCst);
+        }
+        SshError::ChannelError(err.message())
+    })
+}
+
+/// Der für diesen Befehl gewählte SFTP-Kanal — normal oder erhöht.
+///
+/// Spec 0085, A1.3: Der **normale** Kanal wird wie bisher für die Dauer des
+/// Befehls gesperrt (A1.5: „über den normalen Kanal ändert sich nichts"). Der
+/// **erhöhte** wird hier nicht gesperrt; das passiert je Operation in
+/// [`elevated_operation`].
 pub(super) enum BrowserSftpGuard<'a> {
     Normal(tokio::sync::MutexGuard<'a, Option<Box<dyn SftpSession>>>),
     Elevated {
         /// Spec 0084, §4: eine *eigene* Sperre je Sitzung, unabhängig von
         /// der Sperre der Zuordnung — ein laufender Vorgang hier hält das
-        /// Trennen einer anderen Sitzung nicht auf. `Owned`, weil der Kanal
-        /// nicht mehr an der `Session` hängt, sondern an einem Eintrag, der
-        /// währenddessen aus der Zuordnung verschwinden darf.
-        guard: tokio::sync::OwnedMutexGuard<Option<crate::elevated_sftp::ElevatedSftp>>,
-        /// Spec 0084, §9: Derselbe Slot, um beim Zugriff den Widerruf zu
-        /// prüfen — der wirkt sofort, auch während ein anderer Vorgang die
-        /// Sperre oben noch hält.
+        /// Trennen einer anderen Sitzung nicht auf.
         slot: ElevatedSftpSlot,
         expected_user: String,
+        revoked_mid_command: Arc<AtomicBool>,
     },
     /// Spec 0084, A1/A2: Für diese Sitzung ist kein erhöhter Kanal
     /// eingetragen (nie eingeschaltet, oder die Sitzung wurde getrennt).
@@ -114,41 +318,54 @@ pub(super) enum BrowserSftpGuard<'a> {
 }
 
 impl BrowserSftpGuard<'_> {
-    pub(super) fn sftp(&mut self) -> CommandResult<&mut Box<dyn SftpSession>> {
+    /// Der Kanal, über den dieser Befehl seine SFTP-Operationen ausführt.
+    ///
+    /// Prüft beim **ersten** Zugriff genau das, was schon Spec 0084 §9 hier
+    /// prüfte (Widerruf, herausgenommener Kanalwert, umgeschalteter
+    /// Ziel-Nutzer) und scheitert wie bisher mit der jeweiligen Meldung. Die
+    /// Prüfung bleibt danach nicht stehen: Der zurückgegebene Wert führt sie
+    /// vor **jeder** einzelnen Operation erneut aus (Spec 0085, A1.1), auch
+    /// in Befehlen, die es noch nicht gibt — ein Befehl kann keine Operation
+    /// über den erhöhten Kanal ausführen, ohne durch ihn zu gehen.
+    pub(super) async fn sftp(&mut self) -> CommandResult<BrowserSftp<'_>> {
         match self {
-            Self::Normal(guard) => Ok(guard
-                .as_mut()
-                .expect("browser_session öffnet den normalen Kanal vorab")),
+            Self::Normal(guard) => Ok(BrowserSftp::Normal(
+                guard
+                    .as_deref_mut()
+                    .expect("browser_session öffnet den normalen Kanal vorab"),
+            )),
             Self::ElevatedInactive => Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE)),
-            // Spec 0084, §9: Der Widerruf wird **hier** geprüft, im Moment
-            // der Nutzung — nicht beim Befehlsbeginn. Der Merker geht dem
-            // Herausnehmen des Kanalwerts voraus und wirkt deshalb auch für
-            // einen Befehl, der schon auf der Sperre wartete, als der
-            // Nutzer ausgeschaltet oder umgeschaltet hat.
-            Self::Elevated { slot, .. } if slot.is_revoked() => {
-                Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE))
-            }
             Self::Elevated {
-                guard,
+                slot,
                 expected_user,
-                ..
-            } => match guard.as_mut() {
-                None => Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE)),
-                Some(elevated) if elevated.target_user != *expected_user => {
-                    Err(CommandError::from(format!(
-                        "Der erhöhte Modus läuft inzwischen als „{}“, nicht als „{}“ — die \
-                         Aktion wurde nicht ausgeführt.",
-                        elevated.target_user, expected_user
-                    )))
+                revoked_mid_command,
+            } => {
+                // Erstzugang: dieselben Prüfungen wie bisher, dieselben
+                // Meldungen. Die Sperre wird sofort wieder freigegeben —
+                // gehalten wird sie nur um eine einzelne Operation herum.
+                match elevated_access(slot, expected_user).await {
+                    Ok(_) => Ok(BrowserSftp::Elevated {
+                        slot,
+                        expected_user,
+                        revoked_mid_command,
+                    }),
+                    Err(err) => {
+                        if matches!(err, ElevatedAccessError::Revoked) {
+                            revoked_mid_command.store(true, Ordering::SeqCst);
+                        }
+                        Err(CommandError::from(err.message()))
+                    }
                 }
-                Some(elevated) => Ok(&mut elevated.sftp),
-            },
+            }
         }
     }
-}
 
-impl BrowserSftpGuard<'_> {
     /// Ziel-Nutzer, wenn diese Aktion über den erhöhten Kanal läuft.
+    ///
+    /// Spec 0085, A1.4: **Vor** den Operationen abfragen. Ein abgebrochener
+    /// erhöhter `delete`/`chmod` soll seine Audit-Zeile mit dem Nutzer
+    /// bekommen, unter dem die schon ausgeführten Operationen liefen — nach
+    /// dem Widerruf abgefragt, läge hier `None` und die Zeile fehlte ganz.
     pub(super) fn elevated_user(&self) -> Option<String> {
         match self {
             Self::Normal(_) | Self::ElevatedInactive => None,
@@ -156,8 +373,118 @@ impl BrowserSftpGuard<'_> {
             // ihn läuft ohnehin keine Aktion mehr (s. `sftp`), und die
             // Audit-Zeile soll keine Erhöhung behaupten, die es nicht gab.
             Self::Elevated { slot, .. } if slot.is_revoked() => None,
-            Self::Elevated { guard, .. } => guard.as_ref().map(|e| e.target_user.clone()),
+            // Der Ziel-Nutzer des Kanals, nicht bloß der angefragte: `sftp()`
+            // lässt keine Operation zu, solange beide auseinanderliegen
+            // (`UserChanged`), beide sind hier also gleich.
+            Self::Elevated { expected_user, .. } => Some(expected_user.clone()),
         }
+    }
+}
+
+/// Der gewählte Kanal, bereit für SFTP-Operationen — selbst eine
+/// [`SftpSession`], damit die Rekursionen (`delete_recursive`,
+/// `chmod_recursive`, `walk_dirs_and_count_files`, `download_recursive`)
+/// unverändert gegen `&mut dyn SftpSession` arbeiten und die Prüfung aus
+/// Spec 0085 A1.1 trotzdem **jede einzelne** Operation abdeckt.
+pub(super) enum BrowserSftp<'a> {
+    /// Der normale Kanal, für die Dauer des Befehls gesperrt (A1.5).
+    /// `&mut dyn SftpSession` statt `&mut Box<dyn SftpSession>`: eine
+    /// Referenz auf das Trait-Objekt lässt sich nicht ersetzen (Spec 0085,
+    /// A3.1).
+    Normal(&'a mut (dyn SftpSession + 'static)),
+    Elevated {
+        slot: &'a ElevatedSftpSlot,
+        expected_user: &'a str,
+        revoked_mid_command: &'a AtomicBool,
+    },
+}
+
+impl BrowserSftp<'_> {
+    /// Zugang für die nächste einzelne Operation — beim erhöhten Kanal mit
+    /// Widerrufsprüfung und eigener Sperre, beim normalen der schon
+    /// gesperrte Kanal selbst.
+    async fn operation(&mut self) -> Result<BrowserSftpOperation<'_>, SshError> {
+        match self {
+            Self::Normal(sftp) => Ok(BrowserSftpOperation::Normal(*sftp)),
+            Self::Elevated {
+                slot,
+                expected_user,
+                revoked_mid_command,
+            } => Ok(BrowserSftpOperation::Elevated(
+                elevated_operation(slot, expected_user, revoked_mid_command).await?,
+            )),
+        }
+    }
+}
+
+enum BrowserSftpOperation<'a> {
+    Normal(&'a mut (dyn SftpSession + 'static)),
+    Elevated(ElevatedOperation),
+}
+
+impl BrowserSftpOperation<'_> {
+    fn sftp(&mut self) -> &mut (dyn SftpSession + 'static) {
+        match self {
+            Self::Normal(sftp) => *sftp,
+            Self::Elevated(operation) => operation.sftp(),
+        }
+    }
+}
+
+// Jede Trait-Methode ist derselbe Dreischritt: Zugang für diese Operation
+// holen (dabei Widerruf prüfen), delegieren, Sperre freigeben. Bewusst
+// ausgeschrieben statt per Makro erzeugt: `#[async_trait]` expandiert vor
+// `macro_rules!`, und an dieser Stelle soll ohnehin jede einzelne Operation
+// im Quelltext sichtbar sein. Eine neue Trait-Methode in `SftpSession`
+// erzwingt hier einen Eintrag, sonst kompiliert die Kiste nicht.
+#[async_trait]
+impl SftpSession for BrowserSftp<'_> {
+    async fn list_dir(&mut self, path: &str) -> Result<Vec<RemoteEntry>, SshError> {
+        self.operation().await?.sftp().list_dir(path).await
+    }
+
+    async fn read_file(&mut self, path: &str) -> Result<Vec<u8>, SshError> {
+        self.operation().await?.sftp().read_file(path).await
+    }
+
+    async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError> {
+        self.operation()
+            .await?
+            .sftp()
+            .write_file(path, content)
+            .await
+    }
+
+    async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
+        self.operation().await?.sftp().stat(path).await
+    }
+
+    async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
+        self.operation().await?.sftp().lstat(path).await
+    }
+
+    async fn remove(&mut self, path: &str) -> Result<(), SshError> {
+        self.operation().await?.sftp().remove(path).await
+    }
+
+    async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError> {
+        self.operation().await?.sftp().rename(from, to).await
+    }
+
+    async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {
+        self.operation().await?.sftp().create_dir(path).await
+    }
+
+    async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
+        self.operation().await?.sftp().remove_dir(path).await
+    }
+
+    async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
+        self.operation()
+            .await?
+            .sftp()
+            .set_permissions(path, mode)
+            .await
     }
 }
 
@@ -215,17 +542,17 @@ pub(super) async fn lock_browser_sftp<'a>(
     session: &'a Session,
     channel: &BrowserChannel,
 ) -> BrowserSftpGuard<'a> {
-    match channel {
-        BrowserChannel::Normal => BrowserSftpGuard::Normal(session.sftp.lock().await),
-        BrowserChannel::Elevated {
+    match &channel.kind {
+        BrowserChannelKind::Normal => BrowserSftpGuard::Normal(session.sftp.lock().await),
+        BrowserChannelKind::Elevated {
             expected_user,
             slot: Some(slot),
         } => BrowserSftpGuard::Elevated {
-            guard: slot.lock_owned(&BrowserAccess(())).await,
             slot: slot.clone(),
             expected_user: expected_user.clone(),
+            revoked_mid_command: channel.revoked_mid_command.clone(),
         },
-        BrowserChannel::Elevated { slot: None, .. } => BrowserSftpGuard::ElevatedInactive,
+        BrowserChannelKind::Elevated { slot: None, .. } => BrowserSftpGuard::ElevatedInactive,
     }
 }
 
@@ -233,7 +560,7 @@ pub(super) async fn lock_browser_sftp<'a>(
 /// Vorbedingung aller `sftp_*`-Befehle unten. Normal: öffnet die
 /// SFTP-Verbindung bei Bedarf (Spec 0020, Abschnitt 3). Erhöht: nur, wenn
 /// der erhöhte Kanal bereits aktiv ist; er wird hier nie implizit geöffnet.
-pub(super) async fn browser_session(
+async fn browser_session(
     state: &AppState,
     session_id: SessionId,
     channel: &BrowserChannel,
@@ -242,9 +569,9 @@ pub(super) async fn browser_session(
         .sessions
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
-    match channel {
-        BrowserChannel::Normal => app_logic::orchestration::ensure_sftp_open(&session).await?,
-        BrowserChannel::Elevated { slot, .. } => {
+    match &channel.kind {
+        BrowserChannelKind::Normal => app_logic::orchestration::ensure_sftp_open(&session).await?,
+        BrowserChannelKind::Elevated { slot, .. } => {
             if slot.is_none() {
                 return Err(ELEVATED_CHANNEL_INACTIVE.into());
             }
@@ -478,6 +805,7 @@ mod browser_channel_tests {
         let mut guard = lock_browser_sftp(&session, &channel).await;
         let err = guard
             .sftp()
+            .await
             .err()
             .expect("ohne aktiven erhöhten Kanal muss es scheitern");
         assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
@@ -501,6 +829,7 @@ mod browser_channel_tests {
         let mut guard = lock_browser_sftp(&session, &channel).await;
         let err = guard
             .sftp()
+            .await
             .err()
             .expect("anderer Nutzer als erwartet muss scheitern");
         assert!(err.message.contains("www-data"), "{}", err.message);
@@ -518,14 +847,14 @@ mod browser_channel_tests {
         let channel = BrowserChannel::from_request(&registry, session_id, Some("root".to_string()));
         let mut guard = lock_browser_sftp(&session, &channel).await;
         assert_eq!(
-            guard.sftp().unwrap().read_file("/x").await.unwrap(),
+            guard.sftp().await.unwrap().read_file("/x").await.unwrap(),
             b"ROOT"
         );
         drop(guard);
         let channel = BrowserChannel::from_request(&registry, session_id, None);
         let mut guard = lock_browser_sftp(&session, &channel).await;
         assert_eq!(
-            guard.sftp().unwrap().read_file("/x").await.unwrap(),
+            guard.sftp().await.unwrap().read_file("/x").await.unwrap(),
             b"USER"
         );
     }
@@ -561,12 +890,12 @@ mod browser_channel_tests {
         // B fragt den erhöhten Kanal an: es gibt keinen für B.
         let channel_b = BrowserChannel::from_request(&registry, id_b, Some("root".to_string()));
         assert!(
-            matches!(channel_b, BrowserChannel::Elevated { slot: None, .. }),
+            channel_b.is_elevated() && !channel_b.has_elevated_slot(),
             "B darf den erhöhten Kanal von A nicht sehen"
         );
         let mut guard = lock_browser_sftp(&session_b, &channel_b).await;
         assert!(
-            guard.sftp().is_err(),
+            guard.sftp().await.is_err(),
             "eine erhöhte Aktion in B muss scheitern statt A's Kanal zu benutzen"
         );
         drop(guard);
@@ -575,7 +904,7 @@ mod browser_channel_tests {
         let channel_b = BrowserChannel::from_request(&registry, id_b, None);
         let mut guard = lock_browser_sftp(&session_b, &channel_b).await;
         assert_eq!(
-            guard.sftp().unwrap().read_file("/x").await.unwrap(),
+            guard.sftp().await.unwrap().read_file("/x").await.unwrap(),
             b"USER-B"
         );
         drop(guard);
@@ -587,7 +916,7 @@ mod browser_channel_tests {
         let channel_a = BrowserChannel::from_request(&registry, id_a, Some("root".to_string()));
         let mut guard = lock_browser_sftp(&session_a, &channel_a).await;
         assert_eq!(
-            guard.sftp().unwrap().read_file("/x").await.unwrap(),
+            guard.sftp().await.unwrap().read_file("/x").await.unwrap(),
             b"ROOT-A",
             "Ausschalten in B darf den Kanal von A nicht entfernen"
         );
@@ -624,6 +953,7 @@ mod browser_channel_tests {
         assert_eq!(
             guard
                 .sftp()
+                .await
                 .expect("Vorbedingung: die erste Nutzung gelingt")
                 .read_file("/x")
                 .await
@@ -658,6 +988,7 @@ mod browser_channel_tests {
         let mut guard = lock_browser_sftp(&session, &channel).await;
         let err = guard
             .sftp()
+            .await
             .err()
             .expect("nach dem Ausschalten darf der festgehaltene Kanal nicht mehr tragen");
         assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
@@ -679,7 +1010,7 @@ mod browser_channel_tests {
             BrowserChannel::from_request(&f.registry, f.session_id, Some("root".to_string()));
         let mut guard = lock_browser_sftp(&f.session, &channel).await;
         assert!(
-            guard.sftp().is_ok(),
+            guard.sftp().await.is_ok(),
             "Vorbedingung: die erste Nutzung gelingt"
         );
         drop(guard);
@@ -697,6 +1028,7 @@ mod browser_channel_tests {
         let mut guard = lock_browser_sftp(&f.session, &channel).await;
         let err = guard
             .sftp()
+            .await
             .err()
             .expect("der festgehaltene root-Kanal darf nach dem Umschalten nicht mehr tragen");
         assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
@@ -727,6 +1059,7 @@ mod browser_channel_tests {
         let mut guard = lock_browser_sftp(&session, &channel).await;
         let err = guard
             .sftp()
+            .await
             .err()
             .expect("nach dem Trennen darf der festgehaltene Kanal nicht mehr tragen");
         assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
@@ -784,7 +1117,7 @@ mod browser_channel_tests {
         drop(transfer_guard);
         let channel = BrowserChannel::from_request(&registry, session_id, Some("root".to_string()));
         let mut guard = lock_browser_sftp(&session, &channel).await;
-        assert!(guard.sftp().is_err());
+        assert!(guard.sftp().await.is_err());
     }
 
     /// spec-reviewer-Fund (Runde 2): Ein Browser-Befehl, der beim
@@ -842,6 +1175,7 @@ mod browser_channel_tests {
         let mut guard = lock_browser_sftp(&f_for_switch.session, &channel_b).await;
         let err = guard
             .sftp()
+            .await
             .err()
             .expect("B darf nach dem Nutzerwechsel nicht mehr als root arbeiten");
         assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
