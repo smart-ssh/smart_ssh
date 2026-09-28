@@ -65,6 +65,26 @@ jobs:
       - name: cargo build
         run: cargo build --workspace
 
+      # Spec 0084, A3/T4: `app-logic` (die Tauri-freie Anwendungslogik) darf
+      # `tauri`/`tauri-*`/`wry`/`tao`/`rfd` in ihrem gesamten
+      # Abhängigkeitsbaum nicht enthalten — weder direkt noch transitiv,
+      # weder normal noch als Build- oder Dev-Abhängigkeit, unter keinem
+      # Feature. `-p app-logic` (nicht an der Workspace-Wurzel, s. Spec 0084
+      # §6 T4): der Baum von `app-shell` selbst enthält `tauri` natürlich
+      # weiterhin. `--prefix none` liefert eine Paketzeile je Zeile
+      # (`name vX.Y.Z`) ohne die Baum-Zeichnung, damit der Regex-Anker `^`
+      # exakt den Paketnamen trifft, nicht irgendeine Teilzeichenkette davon
+      # (z. B. dürfte ein fiktives `not-tauri`-Paket hier nicht mit
+      # anschlagen).
+      - name: Grenzprüfung app-logic ist Tauri-frei (Spec 0084, A3)
+        run: |
+          set -o pipefail
+          if cargo tree -p app-logic -e normal,build,dev --all-features --prefix none \
+              | grep -E '^(tauri|tauri-[a-zA-Z0-9_-]*|wry|tao|rfd)( |$)'; then
+            echo "::error::app-logic haengt von tauri/tauri-*/wry/tao/rfd ab (Spec 0084, A3) - siehe Zeile(n) oben"
+            exit 1
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

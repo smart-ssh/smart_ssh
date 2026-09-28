@@ -67,7 +67,12 @@ crates/
 ├── credentials-keyring/ # concrete CredentialStore impl (OS keychain)
 ├── ai-providers/        # concrete AiProvider impls (Anthropic, OpenAI-compatible, ...)
 ├── mcp-server/           # MCP server exposing sessions to external clients
-└── app-shell/            # thin wrapper: Tauri commands/events <-> core APIs,
+├── app-logic/            # Tauri-free application logic: chat-turn orchestration,
+│                         # compaction, confirmation registry, connection test,
+│                         # server/group/credential management, DTOs, AppState
+│                         # (Spec 0084; see docs/architecture.md for the app-logic/
+│                         # app-shell boundary and its one deliberate exception)
+└── app-shell/            # thin wrapper: Tauri commands/events <-> app-logic/core APIs,
                            # edition-parametrized via `Wiring` (Spec 0038)
 apps/
 └── smart-ssh-community/  # thin binary: app_shell::run(Wiring::community())
@@ -175,14 +180,14 @@ not by hand-editing, so the lockfile stays consistent).
 - Rust: tests live in `#[cfg(test)] mod tests` next to the code, using
   trait mocks (`MockAiProvider` in `crates/core/src/ai/tests.rs`, the
   in-memory `ProfileStore`/`CredentialStore` in
-  `crates/app-shell/src/test_support.rs`) — no real network/SSH/keychain
+  `crates/app-logic/src/test_support.rs`) — no real network/SSH/keychain
   access in unit tests. `crates/ssh-transport/tests/integration.rs` is the
   one place real (test-fixture) SSH connections are exercised.
 - Frontend: pure logic (`groupTree.ts`, `remotePath.ts`, `errorCodes.ts`, …)
   gets its own `*.test.ts` via Vitest; component tests exist for the
   trickier interactive pieces, not for every component.
 - When a bug is fixed, add the regression test that would have caught it,
-  not just the fix — see `crates/app-shell/src/dto.rs`'s
+  not just the fix — see `crates/app-logic/src/dto.rs`'s
   `rename_all_fields` regression tests for the pattern.
 - **Prove a regression test is real: it must fail against the un-fixed
   code.** Before accepting a regression test as green, verify it actually
