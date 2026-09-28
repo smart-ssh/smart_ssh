@@ -25,8 +25,10 @@ außen kein Feld einer `SessionParts` schreibbar, und `mem::swap(&mut **a,
 **Gewählt:** `DerefMut` wird **unbedingt** entfernt. Tests bekommen den
 Schreibzugang über `Session::parts_mut_for_tests` hinter
 `cfg(any(test, feature = "test-support"))` (A3.3 erlaubt das ausdrücklich,
-Muster wie `set_sftp_for_tests`). 169 Teststellen wurden von
-`session.feld = x` auf `session.parts_mut_for_tests().feld = x` umgestellt.
+Muster wie `set_sftp_for_tests`). 168 Teststellen wurden von
+`session.feld = x` auf `session.parts_mut_for_tests().feld = x` umgestellt —
+dieselbe Zahl, die Spec §1 gemessen hat. (`grep` findet 169 Nennungen; die
+169. steht im Doc-Kommentar von `parts_mut_for_tests` als Beispiel.)
 
 **Verworfen:** `DerefMut` hinter `cfg(any(test, feature = "test-support"))`
 stehen zu lassen. Das hätte die Testumstellung erspart, wäre aber eine Falle:
@@ -114,7 +116,7 @@ Aufruf im Produktivcode einem Menschen sofort auffällig.
 **Verworfen:** Ein Satz feldweiser Setter (`set_server_id_for_tests`, …),
 wie der spec-reviewer es als Härtung vorschlägt. Er wäre enger, ist aber
 nicht Teil von Spec 0086 — A3.3 nennt genau diesen Weg als zulässig — und
-träfe 169 Aufrufstellen. Eine Scope-Erweiterung dieser Größe in einem Lauf,
+träfe 168 Aufrufstellen. Eine Scope-Erweiterung dieser Größe in einem Lauf,
 der eine Sicherheits-Invariante umbaut, erhöht das Risiko mehr, als sie es
 senkt. **Bleibt offen** und gehört in den Backlog.
 
@@ -200,11 +202,33 @@ ohnehin benutzt.
   der Verweis ist jetzt richtig statt, wie vorher, auf ein nicht existierendes
   Modul zu zeigen. Keine Änderung.
 - **Der Kreis `ai_providers::test_support` ↔ `ssh_manager_core::filter::tests`**
-  (spec-reviewer, Runde 1) wurde entschärft, aber nicht aufgelöst: Die
-  ausführliche Begründung steht jetzt vollständig in
-  `ai_providers::test_support`, der Verweis von dort auf `filter::tests` ist
-  ausdrücklich nur als zweites Beispiel gekennzeichnet. Wer die Begründung
-  sucht, muss keinem Verweis mehr folgen.
+  (spec-reviewer, Runde 1) ist aufgelöst: Die `set_global_default`/`Once`-
+  Begründung steht vollständig in `ai_providers::test_support`, der Verweis
+  von dort auf `filter::tests` ist nur noch als weiteres Beispiel
+  gekennzeichnet.
+
+  **Korrektur (spec-reviewer, Runde 2):** Die erste Fassung dieses ADR
+  behauptete, damit stünde die Begründung dort vollständig. Das war falsch —
+  die **zweite**, unabhängige Begründung („warum global statt `with_default`":
+  `tracing-core` cacht das Callsite-Interesse prozessweit) war beim Entfernen
+  des Verweises verlorengegangen und stand nur noch in
+  `app_logic::test_support::log_capture`. A4.2 verlangt, einen Verweis mit
+  existierendem Ziel **umzuschreiben** statt zu löschen; das Ziel existiert
+  (`crates/app-logic/src/test_support.rs`, `mod log_capture`). Der Verweis
+  zeigt jetzt dorthin und nennt den Kern der Begründung mit, damit sie auch
+  ohne Sprung lesbar ist. Behoben.
+
+- **Zwei Doctest-Signaturen in `crates/app-logic/src/session.rs` sind 101
+  Spalten breit** (spec-reviewer, Runde 2; `cargo fmt` formatiert
+  Doc-Codeblöcke nicht). Nicht umgebrochen — und zwar nicht aus Bequemlichkeit:
+  Die Beweiskraft der Zwillinge (Entscheidung 3) hängt daran, dass verbotener
+  Fall und Zwilling **identische** `use`-Zeile und identische Signatur haben.
+  Nur deshalb kann ein `compile_fail`-Fall nicht aus einem anderen Grund als
+  dem Feldzugriff scheitern: jeder Import- oder Typfehler macht den
+  kompilierenden Zwilling rot, statt den verbotenen Fall leer bestehen zu
+  lassen. Einen der beiden Blöcke umzubrechen, hieße diese Parität für eine
+  Spaltenbreite aufzugeben. Zwei Zeichen zu breit, dafür eine tragende Zusage
+  — die Wahl ist eindeutig.
 
 ## Konsequenzen
 
