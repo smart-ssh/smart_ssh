@@ -115,6 +115,10 @@ Nicht-Ziele:
   trifft, färbt die CI rot. „Befund" heißt: was `cargo audit` ohne
   Ausnahmen meldet, Lücken **und** Hinweise (so wie der Abgleich in §1).
   Die Ausnahmeliste bleibt in `.cargo/audit.toml`, an einer Stelle.
+  Der Aufruf ohne Ausnahmen endet erwartungsgemäß mit Exit 1 (0071);
+  ausgewertet wird seine JSON-Ausgabe. Fehlt sie oder lässt sie sich nicht
+  lesen, ist die Prüfung rot. Das Verbot aus A2 gilt für die beiden
+  bestehenden Schritte, nicht für diesen Zwischenaufruf.
 - **A5 MUSS:** Der Test-Job führt im Frontend nach `npm ci` auch
   `npm run lint` und `npm test` aus; ein Fehler in einem der beiden färbt
   den Job rot. Warnungen von oxlint bleiben Warnungen. Ein fehlendes
@@ -128,8 +132,9 @@ Nicht-Ziele:
 - **A7 MUSS:** Die Repo-`CLAUDE.md` beschreibt, was die CI nach dieser
   Spec prüft (Frontend-Lint und -Tests laufen dort; Audit und Lizenzen
   blockieren). Kommentare in Workflow, `.cargo/audit.toml` und `deny.toml`,
-  die den Berichtsmodus als Zustand oder offenen Folgeschritt beschreiben,
-  sind entfernt oder berichtigt.
+  die den Berichtsmodus als Zustand oder offenen Folgeschritt beschreiben
+  oder nach A5 nicht mehr stimmen (etwa der Kopfkommentar des Workflows
+  zum Frontend-Build), sind entfernt oder berichtigt.
 
 ## 5. Design
 
@@ -145,7 +150,9 @@ der Verbindungen bleiben unverändert.
 
 Kein neuer Produkttest. Nachweise, jeweils mit Befehl und Rückgabewert im
 Bericht; die Negativproben laufen auf einer Wegwerf-Änderung, die **nicht**
-committet wird:
+committet wird. Sie fahren lokal genau den Befehl aus dem Workflow; einen
+roten CI-Lauf als Gegenprobe gibt es nicht, weil jeder CI-Lauf einen Push
+voraussetzt. Die CI-Seite belegt der Workflow-Diff.
 
 - **N1 (A1):** `cargo audit` → Exit 0; `cargo tree -i rustls` zeigt
   ≥ 0.23.45; `git diff` am Lockfile ändert nur `rustls` (Version und
@@ -169,11 +176,14 @@ committet wird:
   fehlschlagender vitest-Fall → `npm test` Exit ≠ 0; ein Verstoß gegen
   eine oxlint-Regel der Stufe „error" (etwa ein Hook-Aufruf in einer
   Bedingung, `react/rules-of-hooks`) → `npm run lint` Exit ≠ 0.
-- **N7 (A6):** `npm run build` Exit 0 mit dem Eintrag. Gegenprobe, die den
-  Eintrag unterscheidet: vorübergehend `"strict": false` und eine implizit
-  `any`-typisierte Parameterzeile → Build grün; dieselbe Zeile mit dem
-  Eintrag → Build rot.
+- **N7 (A6):** Diff zeigt `"strict": true` in beiden Dateien; `npm run
+  build` Exit 0. Gegenprobe: eine exportierte Funktion, deren Parameter
+  implizit `any` ist und benutzt wird → mit vorübergehend `"strict": false`
+  Build grün, mit dem Eintrag Build rot.
 - **N8:** Gate der Repo-`CLAUDE.md` vollständig grün.
+- **N9 (A3, A7):** Diff von `.cargo/audit.toml` zeigt je verbleibender
+  Ausnahme Crate, Version und Ablaufbedingung; Diff von `CLAUDE.md`,
+  Workflow und Konfigurationsdateien zeigt die berichtigten Stellen.
 
 ## 8. Offene Punkte
 
@@ -187,8 +197,9 @@ erledigt, wenn der Workflow `Community` auf dem Endstand in allen Jobs
 ist.
 
 **R2 (bewusst offen):** Ab A2 kann ein neu veröffentlichtes Advisory einen
-Lauf rot färben, ohne dass sich am Code etwas geändert hat. Das ist der
-Zweck der Änderung.
+Lauf rot färben, ohne dass sich am Code etwas geändert hat — ebenso ein
+zurückgezogenes Advisory, dessen Ausnahme dann ins Leere zeigt (A4;
+Abhilfe: Ausnahme entfernen). Das ist der Zweck der Änderung.
 
 ## 9. Klarstellungen
 
@@ -211,10 +222,11 @@ Zweck der Änderung.
 **Aufteilung:** ein Lauf, Sonnet. Kleine Änderungen an Konfiguration und
 Workflow, kein Produktcode außer dem Lockfile.
 
-**Berührte Dateien:** `Cargo.lock`, `.cargo/audit.toml` bzw. `deny.toml`,
+**Berührte Dateien:** `Cargo.lock`, `.cargo/audit.toml`, `deny.toml` (nur
+Kommentare, falls betroffen),
 `.github/workflows/community.yml`,
 `apps/smart-ssh-community/frontend/tsconfig.app.json`,
 `apps/smart-ssh-community/frontend/tsconfig.node.json`, `CLAUDE.md`.
 
-**Melde zurück:** N1–N8 je mit Befehl und Exit-Code; den gewählten Weg
-für A4.
+**Melde zurück:** N1–N9 je mit Befehl und Exit-Code; den Befehl
+der Prüfung aus A4.
