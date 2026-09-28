@@ -271,7 +271,7 @@ impl SqliteChatSessionStore {
     }
 
     /// Spec 0057, §2.3: speichert die aktuelle rollierende Zusammenfassung
-    /// (`app_shell::compaction::RollingSummary`, hier bewusst nur als
+    /// (`app_logic::compaction::RollingSummary`, hier bewusst nur als
     /// primitives `(&str, i64)`-Paar entgegengenommen statt des
     /// app-shell-eigenen Typs — `persistence-sqlite` hängt nicht von
     /// `app-shell` ab, s. Crate-Grenzen in CLAUDE.md). `text` wird wie

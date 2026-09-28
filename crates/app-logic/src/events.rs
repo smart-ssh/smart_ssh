@@ -675,7 +675,7 @@ struct ChatResponseEmptyPayload {
 /// Export-/Notiz-Leiste (es gibt nichts zu exportieren).
 ///
 /// Klarstellung Q-BL-0259-01 (Stefan, 2026-09-24, Variante b): der Aufrufer
-/// (`app_shell::orchestration::run_one_round`) ruft diese Funktion nur für
+/// (`crate::orchestration::chat_turn::run_one_round`) ruft diese Funktion nur für
 /// eine Runde, die eine Nutzer-Nachricht beantwortet — nicht für eine
 /// automatische Folgerunde nach einer ausgeführten/geblockten Aktion, s.
 /// dortiger `check_for_empty_response`-Doc-Kommentar.

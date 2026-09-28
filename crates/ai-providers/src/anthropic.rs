@@ -204,8 +204,8 @@ impl AnthropicProvider {
         // Content-Blöcken, nicht auf dem String-Kurzformat. Der Cache-
         // Breakpoint markiert alles bis einschließlich dieses Blocks
         // (System-Prompt + Werkzeug-Anweisungen + Server-Notiz, alle schon
-        // in `context.system_context` zusammengefasst, s. `app_shell::
-        // compaction::SystemContextParts`) als cachefähig. Unbedingt
+        // in `context.system_context` zusammengefasst, s.
+        // `app_logic::compaction::SystemContextParts`) als cachefähig. Unbedingt
         // gesetzt, auch wenn `system_text` unter der modellabhängigen
         // Mindestlänge liegt (niedriger drei- bis vierstelliger
         // Token-Bereich, je nach Modell): Anthropic verarbeitet einen zu
@@ -230,7 +230,7 @@ impl AnthropicProvider {
         };
 
         // Spec 0065, Teil 1+4: `max_tokens_hint` (Nebenaufrufe, s.
-        // `app_shell::orchestration::SIDE_CALL_MAX_TOKENS`) hat Vorrang vor
+        // `app_logic::orchestration::SIDE_CALL_MAX_TOKENS`) hat Vorrang vor
         // dem Nutzer-Override (Teil 4), der wiederum Vorrang vor dem
         // modellabhängigen Haupt-Chat-Default hat — s. `SessionContext::
         // max_tokens_hint`-Doc-Kommentar (core) und `Self::max_tokens_
@@ -1696,7 +1696,7 @@ mod tests {
     }
 
     /// Spec 0065, Teil 1: ein Nebenaufruf (`max_tokens_hint` gesetzt, s.
-    /// `app_shell::orchestration::SIDE_CALL_MAX_TOKENS`) überschreibt den
+    /// `app_logic::orchestration::SIDE_CALL_MAX_TOKENS`) überschreibt den
     /// modellabhängigen Default, obwohl dasselbe (potenziell 128K-fähige)
     /// Modell konfiguriert ist — sonst würde z. B. die
     /// Verlaufs-Zusammenfassung versehentlich mit hochgezogen.

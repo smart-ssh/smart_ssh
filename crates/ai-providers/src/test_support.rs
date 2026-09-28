@@ -9,11 +9,15 @@
 //! beim ersten Aufruf im Prozess, jeder weitere schlägt still fehl
 //! (`let _ =`), und je nachdem, welches Testmodul zuerst dran ist, schreiben
 //! die *anderen* Tests dann in den falschen Thread-lokalen Puffer und sehen
-//! nie ihre eigenen Log-Zeilen. Dasselbe Grundmuster wie
-//! `app_shell::orchestration`s `install_test_subscriber_once` (dortiger
-//! Kommentar erklärt außerdem, warum ein globaler statt eines
-//! thread-lokal-scopenden `with_default` nötig ist) — hier als eine
-//! einzige, von allen Testmodulen dieser Crate geteilte Instanz.
+//! nie ihre eigenen Log-Zeilen. Dasselbe Grundmuster wie der
+//! ERROR-Mitschnitt in `ssh_manager_core::filter::tests` (Spec 0077, T-A10)
+//! — hier als eine einzige, von allen Testmodulen dieser Crate geteilte
+//! Instanz.
+//!
+//! (Spec 0086, A4.2: Dieser Kommentar verwies zuvor auf ein
+//! `install_test_subscriber_once` in einem Modul von `app-shell`, das es nicht
+//! gibt — die Funktion liegt unten in dieser Datei. Der Verweis ist deshalb
+//! entfernt statt umgeschrieben.)
 
 thread_local! {
     static TEST_LOG_BUFFER: std::cell::RefCell<Vec<u8>> =

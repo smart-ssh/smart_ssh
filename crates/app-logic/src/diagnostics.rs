@@ -42,7 +42,8 @@ use ssh_manager_core::ai::OutputRedactor;
 /// `log_tool_call_fragment`/`log_tool_call_parsed` (rohe Tool-Argumente,
 /// i. d. R. das vorgeschlagene Kommando im Klartext),
 /// `ssh_manager_core::filter::engine` ("filter engine decision" — voller
-/// Kommandotext), `app_shell::orchestration::log_command_execution`(_failed)
+/// Kommandotext),
+/// `crate::orchestration::action_exec::log_command_execution`(_failed)
 /// ("ssh command executed"/"ssh command execution failed" — stdout/stderr),
 /// `app_shell::commands` ("host key trusted", "connection attempt failed",
 /// "resolving the connection target (jump host chain) failed" — alle drei
@@ -59,7 +60,7 @@ use ssh_manager_core::ai::OutputRedactor;
 /// Kontext) sind hier bewusst in Kauf genommen gegen die Kosten eines
 /// fälschlich eingeschlossenen, sensiblen (ein öffentlicher Leak).
 const SAFE_LOG_MESSAGES: &[&str] = &[
-    // app_shell::lib / Startup-Lifecycle
+    // app_shell::run / Startup-Lifecycle
     "Smart SSH startet",
     "connecting to SQLite database",
     "running database migrations",

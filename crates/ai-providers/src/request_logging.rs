@@ -127,7 +127,7 @@ pub(crate) fn log_stop_reason(request_id: Uuid, provider: &str, stop_reason: &st
 
 /// Spec 0064, Teil 5: macht die Prompt-Cache-Trefferquote sichtbar — ohne
 /// dieses Logging weiß niemand, ob die Cache-Disziplin (Reihenfolge +
-/// stabiles Präfix, s. Modul-Doc von `app_shell::compaction`) tatsächlich
+/// stabiles Präfix, s. Modul-Doc von `app_logic::compaction`) tatsächlich
 /// greift oder ob irgendetwas das Präfix bricht. `usage` ist Anthropics
 /// rohes `message.usage`-Objekt aus dem `message_start`-Event
 /// (`cache_creation_input_tokens`/`cache_read_input_tokens`/
@@ -214,7 +214,8 @@ pub(crate) fn log_tool_call_parse_error(
 /// landen in der Praxis zusätzliche Auth-Token, die ein Gateway/Proxy in
 /// einer Fehlermeldung spiegeln könnte) wörtlich in `body` vorkommt und in
 /// diesem Fall ersetzt — dieselbe "Logs sind kein Schlupfloch für
-/// Secrets"-Regel wie bei `app_shell::orchestration::log_command_execution`.
+/// Secrets"-Regel wie bei
+/// `app_logic::orchestration::action_exec::log_command_execution`.
 ///
 /// Spec-Reviewer-Fund (Spec 0049, Review dieses Schritts): ursprünglich
 /// nahm diese Funktion nur den API-Key entgegen — `extra_headers`-Werte

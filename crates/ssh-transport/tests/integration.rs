@@ -444,7 +444,7 @@ async fn test_connect_to_closed_local_port_yields_connection_refused() {
 /// die Härtungen aus A-3/A-4 (`O_NONBLOCK`, `fstat` auf dem Handle,
 /// Rechte-, Größen- und Pfadformprüfung).
 ///
-/// Die gehärtete Umsetzung ist `app_shell::key_files::OsKeyFileReader`, und
+/// Die gehärtete Umsetzung ist `app_logic::key_files::OsKeyFileReader`, und
 /// `app-shell` hängt von dieser Crate ab — andersherum geht es nicht, sie
 /// steht hier also nicht zur Verfügung. Für §6.3.7/§6.3.8 ist das auch
 /// nicht die Frage: Geprüft wird die **Anmeldehälfte** — löst
