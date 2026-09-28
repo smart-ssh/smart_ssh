@@ -9,11 +9,33 @@ use ssh_manager_core::profiles::{CredentialStore, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 
 use crate::dto::{DeleteServerResult, ServerDto, ServerInput};
-use crate::error::CommandResult;
+use crate::error::{CommandError, CommandResult};
 use crate::server_credentials::{
     delete_all_possible_server_secrets, delete_auth_method_secrets,
     delete_sudo_password_on_server_delete, resolve_auth_method, resolve_sudo_password,
 };
+
+/// Spec 0032, Abschnitt 6: der lokale Pseudo-Server ist explizit als
+/// Jump-Host ausgeschlossen — vor dieser Prüfung fiel das erst implizit,
+/// tief in `resolve_connection_target`, mit einer generischen "nicht
+/// auflösbar"-Meldung auf (unabhängiger Review-Pass, s. docs/adr/0026).
+///
+/// Spec 0082, A6/A7: lag bis dahin als private Funktion im
+/// `app-shell`-Command-Modul. Sie zieht hierher, weil [`update_server`]
+/// sie **innerhalb** der Tauri-freien Fassung aufrufen muss — die
+/// Ablehnung gehört vor jedes Lesen und Schreiben im Schlüsselbund und
+/// darf deshalb nicht in einer Schicht sitzen, die kein Unit-Test
+/// erreicht. `commands::create_server` ruft unverändert dieselbe Prüfung,
+/// nur über diesen Pfad.
+pub fn reject_local_jump_host(jump_host: Option<ServerId>) -> CommandResult<()> {
+    if jump_host.is_some_and(crate::dto::is_local) {
+        return Err(CommandError::with_code(
+            "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
+            "SERVER_JUMP_HOST_LOCAL",
+        ));
+    }
+    Ok(())
+}
 
 /// Der volle `create_server`-Ablauf (Spec 0047, Fund A2), losgelöst von
 /// `tauri::State` — analog zu [`delete_server`] unten (das schon dem
@@ -77,6 +99,68 @@ pub async fn create_server(
         return Err(err.into());
     }
     Ok(id)
+}
+
+/// Der volle `update_server`-Ablauf (Spec 0082, A7), losgelöst von
+/// `tauri::State` — `commands::update_server` reicht nur noch durch.
+///
+/// Vor dieser Extraktion lief der gesamte Ablauf im `#[tauri::command]`-
+/// Handler und war damit in keinem Unit-Test aufrufbar: Getestet werden
+/// konnten nur seine Einzelteile (`resolve_auth_method`,
+/// `resolve_sudo_password`), nie ihr Zusammenspiel — und genau dort liegt
+/// die Zusage, um die es in Spec 0082 geht (was bleibt im Schlüsselbund
+/// stehen, wenn ein späterer Schritt scheitert).
+///
+/// Reihenfolge der Prüfungen (Spec 0082, A6): die Ablehnung des lokalen
+/// Pseudo-Servers und eines lokalen Jump-Hosts steht **vor** jedem Lesen
+/// aus Profil- oder Credential-Store. Anders als bei [`create_server`],
+/// wo beides im Tauri-Command bleibt, gehören sie hier in die Tauri-freie
+/// Fassung: Nur so lässt sich die Reihenfolge testen.
+pub async fn update_server(
+    store: &dyn ProfileStore,
+    credential_store: &(dyn CredentialStore + Send + Sync),
+    keychain: credentials_keyring::KeychainAvailability,
+    id: ServerId,
+    input: ServerInput,
+) -> CommandResult<()> {
+    if crate::dto::is_local(id) {
+        // Spec 0032, Abschnitt 3: existiert nicht als `servers`-Zeile — nur
+        // Notizen/Tags sind editierbar, über die dedizierten
+        // `update_local_server_notes`/`update_local_server_tags`-Befehle.
+        return Err("Der lokale Pseudo-Server kann nicht auf diesem Weg bearbeitet werden".into());
+    }
+    reject_local_jump_host(input.jump_host)?;
+    let sftp_server_path = crate::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
+
+    let existing = store.get_server(&id).await?;
+    let auth = resolve_auth_method(
+        credential_store,
+        keychain,
+        id,
+        input.auth,
+        Some(&existing.auth),
+    )?;
+    resolve_sudo_password(credential_store, keychain, id, input.sudo_password)?;
+
+    let server = Server {
+        id,
+        name: input.name,
+        host: input.host,
+        port: input.port,
+        username: input.username,
+        group_id: input.group_id,
+        tags: input.tags,
+        auth,
+        notes: existing.notes,
+        jump_host: input.jump_host,
+        post_ingest_policy: input.post_ingest_policy,
+        ai_injection_check_enabled: input.ai_injection_check_enabled,
+        sftp_server_path,
+        created_at: existing.created_at,
+        updated_at: Utc::now(),
+    };
+    store.update_server(&server).await?;
+    Ok(())
 }
 
 /// Baut die Vorschau/das Ergebnis von `delete_server` (Spec 0046, Fund 1):

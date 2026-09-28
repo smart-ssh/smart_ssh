@@ -1,17 +1,15 @@
 //! Spec 0008: Server-Verwaltung (Liste, CRUD, Verbindungstest, Host-Key-
 //! Vertrauen) — Teil der Spec-0083-Aufteilung von `commands.rs`.
 
-use chrono::Utc;
 use tauri::{AppHandle, State};
 
 use ssh_manager_core::profiles::{GroupId, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 
 use app_logic::dto::{DeleteServerResult, ServerDto, ServerInput, TestConnectionResult};
-use app_logic::error::{CommandError, CommandResult};
-use app_logic::server_credentials::{
-    clear_sudo_password, resolve_auth_method, resolve_sudo_password,
-};
+use app_logic::error::CommandResult;
+use app_logic::server_credentials::clear_sudo_password;
+use app_logic::servers::reject_local_jump_host;
 use app_logic::state::AppState;
 
 /// `group_id` erweitert die Spec-0007-Signatur um den in Spec 0008
@@ -101,20 +99,6 @@ pub async fn get_server(
     ))
 }
 
-/// Spec 0032, Abschnitt 6: der lokale Pseudo-Server ist explizit als
-/// Jump-Host ausgeschlossen — vor dieser Prüfung fiel das erst implizit,
-/// tief in `resolve_connection_target`, mit einer generischen "nicht
-/// auflösbar"-Meldung auf (unabhängiger Review-Pass, s. docs/adr/0026).
-fn reject_local_jump_host(jump_host: Option<ServerId>) -> CommandResult<()> {
-    if jump_host.is_some_and(app_logic::dto::is_local) {
-        return Err(CommandError::with_code(
-            "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
-            "SERVER_JUMP_HOST_LOCAL",
-        ));
-    }
-    Ok(())
-}
-
 /// Spec 0008, Abschnitt 4: `CredentialStore` zuerst, dann die DB-Zeile —
 /// dieselbe Reihenfolge/Begründung wie `add_ai_provider` (Spec 0007,
 /// Abschnitt 8.2). Spec 0047, Fund A2: die eigentliche Logik samt
@@ -135,55 +119,23 @@ pub async fn create_server(
     .await
 }
 
+/// Spec 0082, A7: die eigentliche Logik — samt der Reihenfolge, in der
+/// Ablehnungen, Schlüsselbund und Datenbank drankommen — lebt in
+/// `app_logic::servers::update_server`, testbar ohne `tauri::State`.
 #[tauri::command]
 pub async fn update_server(
     state: State<'_, AppState>,
     id: ServerId,
     input: ServerInput,
 ) -> CommandResult<()> {
-    if app_logic::dto::is_local(id) {
-        // Spec 0032, Abschnitt 3: existiert nicht als `servers`-Zeile — nur
-        // Notizen/Tags sind editierbar, über die dedizierten
-        // `update_local_server_notes`/`update_local_server_tags`-Befehle.
-        return Err("Der lokale Pseudo-Server kann nicht auf diesem Weg bearbeitet werden".into());
-    }
-    reject_local_jump_host(input.jump_host)?;
-    let sftp_server_path =
-        app_logic::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
-    let existing = state.profile_store.get_server(&id).await?;
-    let auth = resolve_auth_method(
+    app_logic::servers::update_server(
+        state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         state.keychain,
         id,
-        input.auth,
-        Some(&existing.auth),
-    )?;
-    resolve_sudo_password(
-        state.credential_store.as_ref(),
-        state.keychain,
-        id,
-        input.sudo_password,
-    )?;
-
-    let server = Server {
-        id,
-        name: input.name,
-        host: input.host,
-        port: input.port,
-        username: input.username,
-        group_id: input.group_id,
-        tags: input.tags,
-        auth,
-        notes: existing.notes,
-        jump_host: input.jump_host,
-        post_ingest_policy: input.post_ingest_policy,
-        ai_injection_check_enabled: input.ai_injection_check_enabled,
-        sftp_server_path,
-        created_at: existing.created_at,
-        updated_at: Utc::now(),
-    };
-    state.profile_store.update_server(&server).await?;
-    Ok(())
+        input,
+    )
+    .await
 }
 
 /// Spec 0046, Fund 1: `confirm: false` liefert nur die Vorschau (nichts
