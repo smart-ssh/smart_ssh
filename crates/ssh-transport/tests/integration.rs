@@ -1170,6 +1170,67 @@ async fn test_sftp_via_exec_runs_sftp_over_the_exec_channel() {
     assert!(!normal_names.contains(&"nur-erhoeht.txt".to_string()));
 }
 
+/// Spec 0085, A2.1 (T14): Wird eine über `open_sftp_via_exec` geöffnete
+/// SFTP-Sitzung **verworfen**, schließt der zugehörige SSH-Kanal — und zwar
+/// bei stehender Verbindung, innerhalb einer festen Frist.
+///
+/// Warum das ein eigener Test ist: Der erhöhte Dateibrowser-Kanal läuft als
+/// `sudo -n <sftp-server>` auf dem Zielserver. Dass dieser Prozess endet,
+/// sobald die App den Kanal fallenlässt (Ausschalten, Trennen), ist die
+/// Grundlage dafür, dass „erhöhter Modus aus" auch auf der Server-Seite
+/// wirklich aus heißt. Gesichert war das allein durch das `Drop` von
+/// `russh`/`russh-sftp` — ein Versions-Update hätte das ändern können, ohne
+/// dass es irgendwo aufgefallen wäre.
+///
+/// Gegenbeweis (belegt): Wird die Sitzung stattdessen **gehalten** (`let
+/// _elevated = elevated;` statt `drop`), sieht der Server das Schließen
+/// innerhalb der Frist nicht und der Test scheitert.
+#[tokio::test]
+async fn test_dropping_an_exec_sftp_session_closes_its_channel_while_connected() {
+    let server = RunningTestServer::start().await;
+    std::fs::create_dir(sftp_local_path(&server, "/elevated")).unwrap();
+    std::fs::write(
+        sftp_local_path(&server, "/elevated/nur-erhoeht.txt"),
+        b"root",
+    )
+    .unwrap();
+
+    let mut transport = connect_trusted(&server).await;
+    let mut elevated = transport
+        .open_sftp_via_exec("sudo -n /usr/lib/openssh/sftp-server")
+        .await
+        .expect("SFTP über den Exec-Kanal sollte starten");
+    // Erst benutzen: ein Kanal, der nie etwas getan hat, würde auch dann
+    // „geschlossen" melden, wenn er gar nie richtig offen war.
+    assert_eq!(
+        elevated.read_file("/nur-erhoeht.txt").await.unwrap(),
+        b"root"
+    );
+    assert_eq!(
+        server.exec_channel.closed_count(),
+        0,
+        "solange der Client die Sitzung hält, bleibt der Kanal offen"
+    );
+
+    drop(elevated);
+
+    assert!(
+        server
+            .exec_channel
+            .closed_within(std::time::Duration::from_secs(10))
+            .await,
+        "das Verwerfen der Sitzung muss den Exec-Kanal schließen — sonst läuft \
+         `sudo -n <sftp-server>` auf dem Server weiter"
+    );
+
+    // Und die Verbindung selbst steht weiter: ein weiterer Befehl geht durch.
+    let output = transport
+        .execute("noch da")
+        .await
+        .expect("die Verbindung darf durch das Schließen des Kanals nicht enden");
+    assert_eq!(output.stdout, b"echo:noch da\n");
+}
+
 /// Spec 0067, A1/A3: verweigert sudo (Passwort verlangt), scheitert der
 /// Start sofort mit einem Fehler — er hängt nie.
 #[tokio::test]

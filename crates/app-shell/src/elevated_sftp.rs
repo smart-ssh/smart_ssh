@@ -854,6 +854,129 @@ mod tests {
         );
     }
 
+    // --- Spec 0085, A2.2: Ausschalten verwirft den Kanal wirklich ----------
+
+    /// Meldet sein eigenes Verworfenwerden. Alle Trait-Methoden sind
+    /// `unreachable!` — T15 benutzt den Kanal nie, ein versehentlicher
+    /// Zugriff soll sofort auffallen statt still zu gelingen.
+    struct DropReportingSftp(Arc<std::sync::atomic::AtomicBool>);
+
+    impl Drop for DropReportingSftp {
+        fn drop(&mut self) {
+            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl SftpSession for DropReportingSftp {
+        async fn list_dir(
+            &mut self,
+            _path: &str,
+        ) -> Result<Vec<ssh_manager_core::ssh::RemoteEntry>, ssh_manager_core::ssh::SshError>
+        {
+            unreachable!("T15 benutzt den Kanal nie")
+        }
+        async fn read_file(
+            &mut self,
+            _path: &str,
+        ) -> Result<Vec<u8>, ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
+        async fn write_file(
+            &mut self,
+            _path: &str,
+            _content: &[u8],
+        ) -> Result<(), ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
+        async fn stat(
+            &mut self,
+            _path: &str,
+        ) -> Result<ssh_manager_core::ssh::RemoteEntry, ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
+        async fn lstat(
+            &mut self,
+            _path: &str,
+        ) -> Result<ssh_manager_core::ssh::RemoteEntry, ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
+        async fn remove(&mut self, _path: &str) -> Result<(), ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
+        async fn rename(
+            &mut self,
+            _from: &str,
+            _to: &str,
+        ) -> Result<(), ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
+        async fn create_dir(&mut self, _path: &str) -> Result<(), ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
+        async fn remove_dir(&mut self, _path: &str) -> Result<(), ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
+        async fn set_permissions(
+            &mut self,
+            _path: &str,
+            _mode: u32,
+        ) -> Result<(), ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
+    }
+
+    /// Spec 0085, T15 (A2.2): Nach dem Ausschalten hält **kein** Zustand den
+    /// Kanalwert mehr — auch dann nicht, wenn noch eine Kopie des Slots lebt,
+    /// wie sie ein wartender Browser-Befehl mitführt
+    /// (`BrowserChannel::from_request` klont den Slot).
+    ///
+    /// Der Merker allein genügt dafür nicht: Solange der Kanalwert irgendwo
+    /// weiterlebt, bleibt auf dem Server `sudo -n <sftp-server>` am Leben
+    /// (T14 zeigt, dass erst das Verwerfen ihn beendet). „Ausgeschaltet" wäre
+    /// dann nur eine Behauptung der App.
+    ///
+    /// Gegenbeweis (belegt): Verwirft `revoke` den Kanalwert nicht, sondern
+    /// setzt nur den Merker, scheitert dieser Test.
+    #[tokio::test]
+    async fn test_t15_disabling_drops_the_channel_even_while_a_command_holds_the_slot() {
+        let dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (probe, check) = working_probes();
+        let (t, _log) = transport(probe, check);
+        let f = fixture(Box::new(t));
+        f.registry.insert_for_tests(
+            f.session_id,
+            ElevatedSftp {
+                target_user: "root".to_string(),
+                sftp: Box::new(DropReportingSftp(dropped.clone())),
+            },
+        );
+
+        // Die Kopie, die ein laufender oder wartender Befehl festhält.
+        let held = f
+            .registry
+            .slot(f.session_id, &access())
+            .expect("Vorbedingung: Kanal aktiv");
+
+        disable(&f.sessions, &f.registry, f.session_id, &access())
+            .await
+            .expect("Ausschalten gelingt");
+
+        assert!(
+            dropped.load(std::sync::atomic::Ordering::SeqCst),
+            "A2.2: der Kanalwert muss beim Ausschalten verworfen werden, nicht nur als \
+             widerrufen markiert — sonst lebt der sudo-Prozess auf dem Server weiter"
+        );
+        assert!(
+            held.is_revoked(),
+            "und die festgehaltene Kopie ist widerrufen"
+        );
+        assert!(
+            held.lock_owned(&access()).await.is_none(),
+            "der Slot ist leer, obwohl diese Kopie noch lebt"
+        );
+    }
+
     /// Spec 0084, T9 (mit der Klarstellung vom 2026-09-28): Ausschalten ohne
     /// aktiven Kanal ist ein harmloses `Ok`; für eine **unbekannte**
     /// Sitzungskennung bleibt es wie bisher bei `Err("Session nicht

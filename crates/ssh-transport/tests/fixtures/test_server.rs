@@ -34,6 +34,51 @@ use tokio::task::JoinHandle;
 pub const TEST_USERNAME: &str = "testuser";
 pub const TEST_PASSWORD: &str = "testpass";
 
+/// Spec 0085, A2.1: Beobachtet **server-seitig**, ob ein über `exec`
+/// geöffneter SFTP-Kanal geschlossen wurde.
+///
+/// Dass das Verwerfen der Client-Sitzung den Kanal (und damit `sudo` und
+/// `sftp-server` auf der Gegenseite) wirklich beendet, hängt allein am `Drop`
+/// von `russh`/`russh-sftp` — ein Versions-Update könnte das ändern, ohne
+/// dass es irgendwo auffiele. Deshalb hier ein Beobachter: Wenn der Client
+/// seine Sitzung fallenlässt, endet der Kanal-Datenstrom, die
+/// `russh_sftp::server`-Schleife dieses Kanals endet, und mit ihr wird ihr
+/// Handler verworfen — genau das wird gezählt.
+#[derive(Default)]
+pub struct ExecChannelWatch {
+    closed: tokio::sync::Notify,
+    closed_count: std::sync::atomic::AtomicUsize,
+}
+
+impl ExecChannelWatch {
+    pub fn closed_count(&self) -> usize {
+        self.closed_count.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// `true`, wenn der Server das Schließen innerhalb von `within` sieht.
+    /// `notified()` wird **vor** der Zählerprüfung angelegt, sonst ginge ein
+    /// Signal zwischen Prüfung und `await` verloren.
+    pub async fn closed_within(&self, within: std::time::Duration) -> bool {
+        tokio::time::timeout(within, async {
+            loop {
+                let notified = self.closed.notified();
+                if self.closed_count() > 0 {
+                    return;
+                }
+                notified.await;
+            }
+        })
+        .await
+        .is_ok()
+    }
+
+    fn mark_closed(&self) {
+        self.closed_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.closed.notify_waiters();
+    }
+}
+
 /// Läuft ein `RunningTestServer` und stoppt ihn beim Droppen (best effort —
 /// der Shutdown-Kanal wird geschlossen, der Accept-Loop-Task beendet sich
 /// dadurch spätestens beim nächsten `select!`-Durchlauf).
@@ -52,6 +97,8 @@ pub struct RunningTestServer {
     /// automatisch aufgeräumt wird, sobald der Server (und mit ihm dieser
     /// Wert) gedroppt wird.
     pub sftp_root: TempDir,
+    /// Spec 0085, A2.1/T14 — s. [`ExecChannelWatch`].
+    pub exec_channel: Arc<ExecChannelWatch>,
     shutdown: Option<oneshot::Sender<()>>,
     accept_task: JoinHandle<()>,
 }
@@ -92,6 +139,8 @@ impl RunningTestServer {
             .expect("local_addr sollte immer verfügbar sein");
 
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
+        let exec_channel = Arc::new(ExecChannelWatch::default());
+        let exec_channel_for_loop = exec_channel.clone();
 
         let accept_task = tokio::spawn(async move {
             loop {
@@ -106,10 +155,12 @@ impl RunningTestServer {
                         let _ = stream.set_nodelay(true);
                         let config = config.clone();
                         let sftp_root = sftp_root_path.clone();
+                        let exec_channel = exec_channel_for_loop.clone();
                         tokio::spawn(async move {
                             let handler = TestHandler {
                                 channels: HashMap::new(),
                                 sftp_root,
+                                exec_channel,
                             };
                             let _ = russh::server::run_stream(config, stream, handler).await;
                         });
@@ -122,6 +173,7 @@ impl RunningTestServer {
             addr,
             host_public_key,
             sftp_root,
+            exec_channel,
             shutdown: Some(shutdown_tx),
             accept_task,
         }
@@ -145,6 +197,10 @@ struct TestHandler {
     /// späteren Zeitpunkt nicht mehr erreichbar (nur noch die `ChannelId`).
     channels: HashMap<ChannelId, Channel<Msg>>,
     sftp_root: PathBuf,
+    /// Spec 0085, A2.1/T14: bekommt nur das SFTP-Subsystem des über `exec`
+    /// geöffneten Kanals mit — das normale `sftp`-Subsystem soll den Zähler
+    /// nicht mitbewegen.
+    exec_channel: Arc<ExecChannelWatch>,
 }
 
 impl Handler for TestHandler {
@@ -224,6 +280,7 @@ impl Handler for TestHandler {
                 open_files: HashMap::new(),
                 open_dirs: HashMap::new(),
                 next_handle: 0,
+                closed: Some(self.exec_channel.clone()),
             };
             russh_sftp::server::run(chan.into_stream(), handler).await;
             return Ok(());
@@ -394,6 +451,8 @@ impl Handler for TestHandler {
             open_files: HashMap::new(),
             open_dirs: HashMap::new(),
             next_handle: 0,
+            // Das normale Subsystem bewegt den Zähler aus T14 nicht.
+            closed: None,
         };
         russh_sftp::server::run(channel.into_stream(), handler).await;
         Ok(())
@@ -410,6 +469,20 @@ struct SftpTestHandler {
     open_files: HashMap<String, fs::File>,
     open_dirs: HashMap<String, VecDeque<PathBuf>>,
     next_handle: u64,
+    /// Spec 0085, A2.1/T14: `Some` für das SFTP-Subsystem eines über `exec`
+    /// geöffneten Kanals. Das `Drop` dieses Handlers ist der Moment, in dem
+    /// der Server das Ende dieses Kanals sieht: `russh_sftp::server::run`
+    /// besitzt ihn, und seine Schleife endet, wenn der Kanal-Datenstrom
+    /// endet.
+    closed: Option<Arc<ExecChannelWatch>>,
+}
+
+impl Drop for SftpTestHandler {
+    fn drop(&mut self) {
+        if let Some(watch) = &self.closed {
+            watch.mark_closed();
+        }
+    }
 }
 
 impl SftpTestHandler {
