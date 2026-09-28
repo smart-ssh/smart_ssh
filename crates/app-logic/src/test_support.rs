@@ -420,7 +420,7 @@ pub fn session_with_ai_and_transport(
     use tokio::sync::Mutex as AsyncMutex;
 
     crate::session::Session::new(crate::session::SessionParts {
-        transport: AsyncMutex::new(transport),
+        transport: crate::session::SessionTransport::new(transport),
         ai_provider: Box::new(ai_provider),
         ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
         context: AsyncMutex::new(ssh_manager_core::ai::SessionContext {

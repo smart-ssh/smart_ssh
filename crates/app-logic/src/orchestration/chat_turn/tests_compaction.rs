@@ -49,7 +49,7 @@ async fn test_compaction_shrinks_sent_copy_but_ledger_keeps_full_output() {
     // ein waschechter Mehr-Runden-Provider gebraucht (Runde 1: Kommando
     // vorschlagen, Runde 2: nur noch Text antworten).
     let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
-    session.ai_provider = Box::new(MockAiProvider {
+    session.parts_mut().ai_provider = Box::new(MockAiProvider {
         rounds: StdMutex::new(
             vec![
                 vec![
@@ -64,11 +64,11 @@ async fn test_compaction_shrinks_sent_copy_but_ledger_keeps_full_output() {
         ),
         received_contexts: received_contexts.clone(),
     });
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     // Winzig: erzwingt, dass die 100.000-Byte-Ausgabe beim ZWEITEN
     // `send()` (der die erste Runde bereits in der Historie trägt)
     // gekürzt werden MUSS.
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
 
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -166,7 +166,7 @@ async fn test_compaction_does_not_bypass_redaction_for_truncated_output() {
         )
         .await;
     let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
-    session.ai_provider = Box::new(MockAiProvider {
+    session.parts_mut().ai_provider = Box::new(MockAiProvider {
         rounds: StdMutex::new(
             vec![
                 vec![
@@ -181,8 +181,8 @@ async fn test_compaction_does_not_bypass_redaction_for_truncated_output() {
         ),
         received_contexts: received_contexts.clone(),
     });
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().model_context_window_tokens = 2_000;
 
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -256,11 +256,11 @@ async fn test_immich_case_large_note_and_long_history_stays_under_budget() {
         },
         MockSshTransport::default(),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     // Wie `GenericOpenAiCompatible`/`Ollama` ohne erkannten Modellnamen
     // (Spec 0057 §3.1: konservativer Default), s.
     // `compaction::DEFAULT_CONTEXT_WINDOW_TOKENS`.
-    session.model_context_window_tokens = 32_000;
+    session.parts_mut().model_context_window_tokens = 32_000;
 
     // Große, über drei Scopes verteilte Notiz (~200.000 Byte) — analog
     // zum Immich-Fall aus Spec 0057 §8.
@@ -304,7 +304,7 @@ async fn test_immich_case_large_note_and_long_history_stays_under_budget() {
         ctx.system_context = parts.assemble();
         ctx.history = history;
     }
-    session.system_context_parts = AsyncMutex::new(parts);
+    session.parts_mut().system_context_parts = AsyncMutex::new(parts);
 
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -499,7 +499,7 @@ async fn test_compact_for_send_uses_summary_when_the_call_succeeds() {
         ]),
         MockSshTransport::default(),
     );
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     push_synthetic_rounds(&session, 6, 5_000).await;
 
     let request_context = session.context.lock().await.clone();
@@ -550,7 +550,7 @@ async fn test_compact_for_send_reuses_existing_summary_without_a_new_ai_call() {
         },
         MockSshTransport::default(),
     );
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     push_synthetic_rounds(&session, 6, 5_000).await;
     *session.summary.lock().await = Some(crate::compaction::RollingSummary {
         text: "Bereits vorhandene Zusammenfassung.".to_string(),
@@ -607,7 +607,7 @@ async fn test_compact_for_send_folds_only_newly_cut_rounds_into_existing_summary
         },
         MockSshTransport::default(),
     );
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     // 8 Runden, `rounds_covered: 2` -> die bereits abgedeckten Runden
     // 0/1 dürfen im KI-Aufruf NICHT im Rohformat auftauchen.
     push_synthetic_rounds(&session, 8, 5_000).await;
@@ -668,7 +668,7 @@ async fn test_compact_for_send_falls_back_to_plain_truncation_on_summary_error()
         MockAiProvider::new(vec![AiEvent::Error(AiError::RateLimited)]),
         MockSshTransport::default(),
     );
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     push_synthetic_rounds(&session, 6, 5_000).await;
 
     let request_context = session.context.lock().await.clone();
@@ -709,7 +709,7 @@ async fn test_compact_for_send_falls_back_to_plain_truncation_on_empty_summary_r
         ]),
         MockSshTransport::default(),
     );
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     push_synthetic_rounds(&session, 6, 5_000).await;
 
     let request_context = session.context.lock().await.clone();
@@ -749,7 +749,7 @@ async fn test_compact_for_send_falls_back_when_stream_ends_without_done_or_error
         )]),
         MockSshTransport::default(),
     );
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     push_synthetic_rounds(&session, 6, 5_000).await;
 
     let request_context = session.context.lock().await.clone();
@@ -799,7 +799,7 @@ impl AiProvider for NeverRespondingProvider {
 async fn test_compact_for_send_falls_back_when_summary_call_never_responds() {
     let mut session =
         session_with_ai_provider(NeverRespondingProvider, MockSshTransport::default());
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     push_synthetic_rounds(&session, 6, 5_000).await;
 
     let request_context = session.context.lock().await.clone();
@@ -862,7 +862,7 @@ async fn test_generate_rolling_summary_redacts_secrets_outgoing_and_incoming() {
         },
         MockSshTransport::default(),
     );
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     {
         let mut ctx = session.context.lock().await;
         let mut flags = session.mcp_origin_flags.lock().unwrap();
@@ -977,7 +977,7 @@ async fn test_generate_rolling_summary_reredacts_a_stale_previous_summary() {
         },
         MockSshTransport::default(),
     );
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     *session.summary.lock().await = Some(crate::compaction::RollingSummary {
         text: "Alte Zusammenfassung mit password=altesecretgeheim.".to_string(),
         rounds_covered: 1,
@@ -1042,7 +1042,7 @@ async fn test_summary_round_trips_through_persistence() {
             MockSshTransport::default(),
         )
         .await;
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     push_synthetic_rounds(&session, 6, 5_000).await;
 
     let request_context = session.context.lock().await.clone();
@@ -1082,7 +1082,7 @@ async fn test_summarization_leaves_ledger_and_stored_note_untouched() {
     // verbraucht (die 6 synthetischen Runden unten lösen vor dem
     // eigentlichen Chat-Aufruf eine Zusammenfassung aus), erst die
     // ZWEITE ist der tatsächliche Chat-Turn.
-    session.ai_provider = Box::new(MockAiProvider::with_rounds(vec![
+    session.parts_mut().ai_provider = Box::new(MockAiProvider::with_rounds(vec![
         vec![
             AiEvent::TextDelta("Zusammenfassung der alten Runden.".to_string()),
             AiEvent::Done,
@@ -1094,8 +1094,8 @@ async fn test_summarization_leaves_ledger_and_stored_note_untouched() {
             AiEvent::Done,
         ],
     ]));
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().model_context_window_tokens = 2_000;
     let parts = crate::compaction::SystemContextParts {
         base: "Basis".to_string(),
         note_sections: vec![(
@@ -1107,7 +1107,7 @@ async fn test_summarization_leaves_ledger_and_stored_note_untouched() {
         let mut ctx = session.context.lock().await;
         ctx.system_context = parts.assemble();
     }
-    session.system_context_parts = AsyncMutex::new(parts.clone());
+    session.parts_mut().system_context_parts = AsyncMutex::new(parts.clone());
     push_synthetic_rounds(&session, 6, 5_000).await;
 
     let emitter = TestEmitter::default();
@@ -1189,9 +1189,9 @@ async fn test_untrusted_content_escalation_survives_round_summarization() {
         ]),
         MockSshTransport::default(),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.post_ingest_policy = PostIngestPolicy::Strict;
-    session.model_context_window_tokens = 500; // winzig, erzwingt Kompaktierung schnell
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().post_ingest_policy = PostIngestPolicy::Strict;
+    session.parts_mut().model_context_window_tokens = 500; // winzig, erzwingt Kompaktierung schnell
 
     // Runde 0: der ursprüngliche untrusted-Content-Ingest (wie
     // `execute_suggested_command` es täte — dort wird der Flag exakt
@@ -1280,7 +1280,7 @@ async fn test_mcp_action_on_shared_human_session_writes_no_persisted_history() {
     // trotzdem `Confirm` (s. `test_mcp_origin_downgrades_autoexec_to_
     // confirm_despite_allow_rule` oben), der Test simuliert daher die
     // menschliche Genehmigung über `approve_first_proposed_action`.
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let mock_sftp = MockSftpSession::new().with_file(
         "/home/deploy/app.conf",
         b"host=localhost\npassword=hunter2\n".to_vec(),
@@ -1363,8 +1363,8 @@ async fn test_mcp_rounds_excluded_from_persisted_summary_but_retained_in_ledger(
                 .with_response("cat mcp_secret.log", output("MCP_GEHEIM_KENNUNG_42")),
         )
         .await;
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().model_context_window_tokens = 2_000;
     // `received_contexts` erfasst den TATSÄCHLICH an den Provider
     // gesendeten Request der Zusammenfassungs-KI-Anfrage — die einzige
     // Stelle, an der sich beweisen lässt, dass MCP-Content NICHT in die
@@ -1372,7 +1372,7 @@ async fn test_mcp_rounds_excluded_from_persisted_summary_but_retained_in_ledger(
     // unabhängig vom tatsächlichen Input immer derselbe und würde die
     // Aussage nicht beweisen).
     let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
-    session.ai_provider = Box::new(MockAiProvider {
+    session.parts_mut().ai_provider = Box::new(MockAiProvider {
         rounds: StdMutex::new(
             vec![vec![
                 AiEvent::TextDelta("Zusammenfassung der Chat-Runden.".to_string()),
@@ -1510,7 +1510,7 @@ async fn test_compaction_skips_ai_call_when_all_newly_cut_rounds_are_mcp() {
         },
         MockSshTransport::default(),
     );
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     {
         let mut ctx = session.context.lock().await;
         let mut flags = session.mcp_origin_flags.lock().unwrap();
@@ -1591,10 +1591,10 @@ async fn test_mcp_action_within_existing_chat_round_only_excludes_the_mcp_messag
         MockSshTransport::default()
             .with_response("cat mcp_secret.log", output("MCP_GEHEIM_KENNUNG_77")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().model_context_window_tokens = 2_000;
     let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
-    session.ai_provider = Box::new(MockAiProvider {
+    session.parts_mut().ai_provider = Box::new(MockAiProvider {
         rounds: StdMutex::new(
             vec![vec![
                 AiEvent::TextDelta("Zusammenfassung.".to_string()),
@@ -1918,7 +1918,7 @@ async fn test_read_remote_file_then_send_with_retroactive_greedy_pattern_keeps_f
         ],
         MockSshTransport::default(),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     // Beim Lesen/Fencen noch unbekanntes Secret-Format — kein Muster
     // im (Standard-)Redactor dieser Session erkennt es, es landet
     // deshalb unredigiert im gefencten `MessageContent::Text`.
@@ -2013,7 +2013,7 @@ async fn test_send_to_ai_provider_is_redacted_without_altering_persisted_context
     let ai_provider = MockAiProvider::new(vec![AiEvent::Done]);
     let received_contexts = ai_provider.received_contexts_handle();
     let mut session = session_with_ai_provider(ai_provider, MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     // Simuliert eine Nachricht, die (aus welchem Grund auch immer, z. B.
     // eine ältere Redactor-Version) unredigiert in der Historie
     // gelandet ist — direkt in den In-Memory-Kontext geschrieben, ohne
@@ -2083,8 +2083,8 @@ async fn test_send_to_ai_provider_is_redacted_without_altering_persisted_context
 async fn test_context_truncation_for_provider_request_does_not_affect_persisted_history() {
     let (mut session, chat_store, chat_session_id, _tmp_dir) =
         session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.model_context_window_tokens = 1_000;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().model_context_window_tokens = 1_000;
 
     // Zwei Nachrichten weit über dem winzigen Kontextfenster oben,
     // direkt über `push_history` (nicht über einen echten Turn) —

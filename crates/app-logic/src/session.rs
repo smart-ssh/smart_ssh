@@ -9,7 +9,8 @@
 //!    `.await`-Punkt hinweg gehaltene Zeigervorgänge (Einfügen/Nachschlagen/
 //!    Entfernen) gesperrt — dafür ist eine synchrone Std-Mutex leichter und
 //!    genügt völlig; `tokio::sync::Mutex` wäre hier nur unnötiger Overhead.
-//! 2. `Session.transport`/`Session.context` nutzen dagegen
+//! 2. `Session.transport` (seit Spec 0086 gekapselt in [`SessionTransport`])
+//!    und `Session.context` nutzen dagegen
 //!    `tokio::sync::Mutex`: beide werden über `.await`-Punkte hinweg
 //!    gehalten (`SshTransport::execute()`, `AiProvider::send()`-Stream
 //!    konsumieren) — eine `std::sync::MutexGuard` über einen Await-Punkt
@@ -134,14 +135,206 @@ impl NormalSftpGuard<'_> {
     }
 }
 
+/// Spec 0086, A3: der Transport einer Sitzung — ihre eine SSH-Verbindung.
+///
+/// **Eigener Typ mit privatem Inneren** statt eines nackten
+/// `AsyncMutex<Box<dyn SshTransport>>`: Der normale SFTP-Kanal einer Sitzung
+/// (s. [`NormalSftpChannel`]) wird aus **diesem** Transport geöffnet
+/// (`ensure_sftp_open`) und danach für die Dauer der Sitzung offengehalten.
+/// Ließe sich der Transport danach von außen ersetzen oder mit dem einer
+/// anderen Sitzung tauschen, gehörte der schon offene Kanal zu einer
+/// anderen Verbindung als die Sitzung — die Paarung „ein Transport, sein
+/// Kanal" wäre gebrochen, und damit die Grundlage von Spec 0067 A (KI und
+/// MCP laufen nie über den erhöhten Kanal) und Spec 0085 A3.
+///
+/// Nach außen gibt [`SessionTransport::lock`] deshalb nur eine Referenz auf
+/// das **Trait-Objekt** heraus (`dyn SshTransport`, nicht `Sized`) — die
+/// lässt sich benutzen, aber nicht ersetzen, tauschen oder entnehmen. Und
+/// [`Session`] hat kein `DerefMut`, also ist auch das Feld selbst von außen
+/// nur lesbar.
+pub struct SessionTransport {
+    inner: AsyncMutex<Box<dyn SshTransport>>,
+}
+
+impl SessionTransport {
+    /// Spec 0086, A3.2: Das Bauen einer Sitzung aus allen Bestandteilen
+    /// bleibt erlaubt — `connect()` in `app-shell` legt den frisch
+    /// aufgebauten Transport hier ab, bevor die [`Session`] entsteht.
+    pub fn new(transport: Box<dyn SshTransport>) -> Self {
+        Self {
+            inner: AsyncMutex::new(transport),
+        }
+    }
+
+    /// Der Transport, gesperrt — **zum Benutzen**.
+    ///
+    /// Spec 0086, A3.1/T11: Weder über diese Sperre noch über das Feld lässt
+    /// sich der Transport einer bestehenden Sitzung ersetzen, entnehmen oder
+    /// mit dem einer anderen Sitzung tauschen. Die folgenden Beispiele
+    /// belegen das aus der Sicht eines **anderen** Crates (ein Doctest wird
+    /// als eigene Kiste gegen `app_logic` gebaut); zu jedem verbotenen Fall
+    /// steht der kompilierende Zwilling daneben, der sich nur in der
+    /// verbotenen Zeile unterscheidet — so scheitert der Fall nachweislich an
+    /// ihr und nicht an einem Tippfehler. (Der Fehlercode selbst wird von
+    /// `rustdoc` nicht geprüft, deshalb dieses Zwillingspaar statt einer
+    /// Codeangabe.)
+    ///
+    /// **Diese Fälle hängen bewusst an keinem `cfg`/Feature.** Der
+    /// Test-Zugang [`Session::parts_mut`] steht hinter
+    /// `feature = "test-support"`, und dieses Feature ist im Doctest-Lauf von
+    /// `cargo test --workspace` **aktiv** (Feature-Unification über
+    /// `app-shell`s dev-dependency). Ein `DerefMut` hinter demselben Feature
+    /// hätte die Fälle (a)–(d) unten also im Gate-Lauf leer bestehen lassen —
+    /// gemessen, s. ADR 0080. Deshalb ist `DerefMut` ganz entfallen, statt
+    /// nur für Tests zu bestehen.
+    ///
+    /// **(a)** `mem::swap` der Transporte zweier Sitzungen — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// fn f(a: &mut Session, b: &mut Session) {
+    ///     std::mem::swap(&mut a.transport, &mut b.transport);
+    /// }
+    /// ```
+    /// Zwilling (tauscht zwei **ganze** Sitzungen, Transport und Kanal
+    /// wandern zusammen — A3.2):
+    /// ```
+    /// # use app_logic::session::Session;
+    /// fn f(a: &mut Session, b: &mut Session) {
+    ///     std::mem::swap(a, b);
+    /// }
+    /// ```
+    ///
+    /// **(b)** `mem::replace` des Transports — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::{Session, SessionTransport};
+    /// fn f(session: &mut Session, replacement: SessionTransport) {
+    ///     let _old = std::mem::replace(&mut session.transport, replacement);
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::{Session, SessionTransport};
+    /// fn f(session: &mut Session, replacement: SessionTransport) {
+    ///     let _old = replacement;
+    /// }
+    /// ```
+    ///
+    /// **(c)** Tausch **aller mitgegebenen Bestandteile** zweier Sitzungen —
+    /// verboten (nimmt den Transport mit, ließe aber den privaten SFTP-Kanal
+    /// zurück):
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// fn f(a: &mut Session, b: &mut Session) {
+    ///     std::mem::swap(&mut **a, &mut **b);
+    /// }
+    /// ```
+    /// Zwilling (ein `*` weniger je Seite: zwei ganze `Session`-Werte):
+    /// ```
+    /// # use app_logic::session::Session;
+    /// fn f(a: &mut Session, b: &mut Session) {
+    ///     std::mem::swap(&mut *a, &mut *b);
+    /// }
+    /// ```
+    ///
+    /// **(d)** Zuweisung eines neuen Transports — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::{Session, SessionTransport};
+    /// fn f(session: &mut Session, replacement: SessionTransport) {
+    ///     session.transport = replacement;
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::{Session, SessionTransport};
+    /// fn f(session: &mut Session, replacement: SessionTransport) {
+    ///     drop(replacement);
+    /// }
+    /// ```
+    ///
+    /// **(e1)** Schon mit **nur `&Session`** (also auch hinter dem `Arc` in
+    /// der Registry): Ersetzen des Transport-Werts über die Sperre —
+    /// verboten, `dyn SshTransport` ist nicht `Sized`:
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// # use ssh_manager_core::ssh::SshTransport;
+    /// async fn f(session: &Session, replacement: Box<dyn SshTransport>) {
+    ///     let mut guard = session.transport.lock().await;
+    ///     let _old = std::mem::replace(&mut *guard, replacement);
+    /// }
+    /// ```
+    /// Zwilling (benutzt den Transport über die Sperre — A3.2):
+    /// ```
+    /// # use app_logic::session::Session;
+    /// # use ssh_manager_core::ssh::SshTransport;
+    /// async fn f(session: &Session, replacement: Box<dyn SshTransport>) {
+    ///     let mut guard = session.transport.lock().await;
+    ///     let _old = guard.execute("true").await;
+    /// }
+    /// ```
+    ///
+    /// **(e2)** Mit nur `&Session`: `mem::swap` der Inhalte zweier gesperrter
+    /// Transporte — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// async fn f(a: &Session, b: &Session) {
+    ///     let mut ga = a.transport.lock().await;
+    ///     let mut gb = b.transport.lock().await;
+    ///     std::mem::swap(&mut *ga, &mut *gb);
+    /// }
+    /// ```
+    /// Zwilling (benutzt beide Transporte, tauscht sie nur nicht):
+    /// ```
+    /// # use app_logic::session::Session;
+    /// async fn f(a: &Session, b: &Session) {
+    ///     let mut ga = a.transport.lock().await;
+    ///     let mut gb = b.transport.lock().await;
+    ///     let _ = (ga.execute("true").await, gb.execute("true").await);
+    /// }
+    /// ```
+    pub async fn lock(&self) -> TransportGuard<'_> {
+        TransportGuard(self.inner.lock().await)
+    }
+}
+
+/// Der gesperrte Transport einer Sitzung — s. [`SessionTransport::lock`].
+///
+/// Spec 0086, A3.2: `Deref`/`DerefMut` auf `dyn SshTransport` (nicht auf
+/// `Box<dyn SshTransport>`). Alle Methoden von [`SshTransport`] bleiben
+/// dadurch unverändert über die Sperre erreichbar (`guard.execute(…)`),
+/// aber `mem::replace`/`swap`/`take` scheitern an der Größe des
+/// Trait-Objekts — dasselbe Muster wie [`NormalSftpGuard::sftp`].
+pub struct TransportGuard<'a>(tokio::sync::MutexGuard<'a, Box<dyn SshTransport>>);
+
+impl std::ops::Deref for TransportGuard<'_> {
+    type Target = dyn SshTransport + 'static;
+    fn deref(&self) -> &Self::Target {
+        &**self.0
+    }
+}
+
+impl std::ops::DerefMut for TransportGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut **self.0
+    }
+}
+
 /// Eine laufende Server-Session.
 ///
 /// Spec 0085, A3: Die Struktur ist in zwei Teile getrennt. Alles, was der
 /// Aufrufer beim Verbinden mitgibt, steht in [`SessionParts`] und ist über
-/// `Deref`/`DerefMut` unverändert als `session.<feld>` erreichbar. Der
-/// normale SFTP-Kanal dagegen ist ein **privates** Feld: er wird nie
-/// übergeben, sondern startet leer und wird nur hier befüllt (s.
+/// `Deref` unverändert als `session.<feld>` **lesbar**. Der normale
+/// SFTP-Kanal dagegen ist ein **privates** Feld: er wird nie übergeben,
+/// sondern startet leer und wird nur hier befüllt (s.
 /// [`NormalSftpChannel`]).
+///
+/// Spec 0086, A3: **kein `DerefMut`.** Mit einem `DerefMut` ließe sich von
+/// außen jedes mitgegebene Feld überschreiben — auch der Transport
+/// (`session.transport = …`), und über `mem::swap(&mut **a, &mut **b)` sogar
+/// alle mitgegebenen Bestandteile zweier Sitzungen auf einmal, während der
+/// private SFTP-Kanal zurückbliebe. Ohne `DerefMut` ist von außen kein Feld
+/// einer bestehenden Sitzung schreibbar; Tests bekommen den Zugang über
+/// [`Session::parts_mut`] hinter `cfg(test)`/`feature = "test-support"`
+/// (A3.3, Muster wie [`Session::set_sftp_for_tests`]).
 pub struct Session {
     parts: SessionParts,
     sftp: NormalSftpChannel,
@@ -154,18 +347,14 @@ impl std::ops::Deref for Session {
     }
 }
 
-impl std::ops::DerefMut for Session {
-    fn deref_mut(&mut self) -> &mut SessionParts {
-        &mut self.parts
-    }
-}
-
 /// Alle Bestandteile einer [`Session`], die beim Verbinden mitgegeben werden
 /// — der normale SFTP-Kanal gehört bewusst **nicht** dazu (Spec 0085, A3:
 /// „Der Konstruktor nimmt keinen Kanal an", ein neu erzeugter Kanal ist
 /// immer leer).
 pub struct SessionParts {
-    pub transport: AsyncMutex<Box<dyn SshTransport>>,
+    /// Spec 0086, A3: eigener Typ statt `AsyncMutex<Box<dyn SshTransport>>`
+    /// — s. [`SessionTransport`] zur Begründung.
+    pub transport: SessionTransport,
     pub ai_provider: Box<dyn AiProvider>,
     /// Spec 0061: der Rate-Limit-Budget-Wächter für `ai_provider` (aus
     /// `AppState.rate_limit_registry` bei `connect()` aufgelöst, s.
@@ -438,6 +627,15 @@ impl Session {
     /// selbst wird von `rustdoc` nicht geprüft, deshalb dieses Zwillingspaar
     /// statt einer Codeangabe.)
     ///
+    /// **Spec 0086, A3.4:** Die verbotenen Fälle sind unverändert
+    /// `compile_fail`. Ihre kompilierenden Zwillinge schrieben bisher ein
+    /// anderes, öffentliches Feld (`session.tags = …`) — das ging nur über
+    /// `DerefMut`, und das ist mit Spec 0086 A3 entfallen. Die Zwillinge
+    /// benutzen die Sitzung jetzt stattdessen (`lock_sftp`), unterscheiden
+    /// sich also weiter nur in der verbotenen Zeile. Dass von außen gar kein
+    /// Feld mehr schreibbar ist, ist genau der Punkt von A3 und wird von den
+    /// Fällen an [`SessionTransport::lock`] belegt.
+    ///
     /// Zuweisung ans Feld — verboten:
     /// ```compile_fail
     /// # use app_logic::session::Session;
@@ -449,7 +647,7 @@ impl Session {
     /// ```
     /// # use app_logic::session::Session;
     /// fn f(session: &mut Session) {
-    ///     session.tags = Default::default();
+    ///     let _ = session.lock_sftp();
     /// }
     /// ```
     ///
@@ -464,7 +662,7 @@ impl Session {
     /// ```
     /// # use app_logic::session::Session;
     /// fn f(session: &mut Session) {
-    ///     let _old = std::mem::replace(&mut session.tags, Default::default());
+    ///     let _old = session.lock_sftp();
     /// }
     /// ```
     ///
@@ -479,7 +677,7 @@ impl Session {
     /// ```
     /// # use app_logic::session::Session;
     /// fn f(a: &mut Session, b: &mut Session) {
-    ///     std::mem::swap(&mut a.tags, &mut b.tags);
+    ///     let _ = (a.lock_sftp(), b.lock_sftp());
     /// }
     /// ```
     ///
@@ -494,7 +692,7 @@ impl Session {
     /// ```
     /// # use app_logic::session::Session;
     /// fn f(session: &mut Session) {
-    ///     let _taken = std::mem::take(&mut session.tags);
+    ///     let _taken = session.lock_sftp();
     /// }
     /// ```
     ///
@@ -516,6 +714,24 @@ impl Session {
     /// ```
     pub async fn lock_sftp(&self) -> NormalSftpGuard<'_> {
         NormalSftpGuard(self.sftp.inner.lock().await)
+    }
+
+    /// Spec 0086, A3.3: Schreibzugang auf die mitgegebenen Bestandteile —
+    /// **nur für Tests**, die eine Sitzung mit gezielt gesetzten Feldern
+    /// brauchen (`session.parts_mut().server_id = …`). Hinter dem Feature
+    /// `test-support` wie [`Session::set_sftp_for_tests`]: Produktivbauten
+    /// aktivieren es nicht, also gibt es für Produktivcode außerhalb von
+    /// `app-logic` keinen Weg, ein Feld einer bestehenden Sitzung zu
+    /// überschreiben.
+    ///
+    /// Dass dieses Feature im Doctest-Lauf von `cargo test --workspace`
+    /// aktiv ist, macht die `compile_fail`-Fälle an
+    /// [`SessionTransport::lock`] **nicht** wirkungslos: die rühren diesen
+    /// Zugang nicht an, sondern das Fehlen von `DerefMut` — und das gilt
+    /// unabhängig von jedem Feature (s. dortiger Kommentar, ADR 0080).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn parts_mut(&mut self) -> &mut SessionParts {
+        &mut self.parts
     }
 
     /// Spec 0085, A3.3: Setzt einen Test-Kanal ein. Hinter dem Feature
@@ -836,7 +1052,7 @@ mod tests {
 
     fn dummy_session(server_id: ServerId) -> Session {
         Session::new(SessionParts {
-            transport: AsyncMutex::new(Box::new(UnusedTransport)),
+            transport: SessionTransport::new(Box::new(UnusedTransport)),
             ai_provider: Box::new(UnusedAiProvider),
             ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
             context: AsyncMutex::new(SessionContext {
@@ -1061,7 +1277,7 @@ mod tests {
         let manager = SessionManager::new();
         let chat_session_id = Uuid::new_v4();
         let mut session = dummy_session(ServerId::new());
-        session.chat_session_id = AsyncMutex::new(Some(chat_session_id));
+        session.parts_mut().chat_session_id = AsyncMutex::new(Some(chat_session_id));
         manager.insert(Uuid::new_v4(), Arc::new(session));
 
         assert!(manager.is_chat_session_active(chat_session_id).await);
@@ -1071,7 +1287,7 @@ mod tests {
     async fn test_is_chat_session_active_false_for_an_unrelated_chat_session_id() {
         let manager = SessionManager::new();
         let mut session = dummy_session(ServerId::new());
-        session.chat_session_id = AsyncMutex::new(Some(Uuid::new_v4()));
+        session.parts_mut().chat_session_id = AsyncMutex::new(Some(Uuid::new_v4()));
         manager.insert(Uuid::new_v4(), Arc::new(session));
 
         assert!(!manager.is_chat_session_active(Uuid::new_v4()).await);

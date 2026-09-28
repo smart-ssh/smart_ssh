@@ -126,7 +126,7 @@ async fn test_disconnect_suggestion_skipped_when_compaction_shortens_the_note() 
         .history
         .push(command_result_message());
     // Winziges Fenster + große Notiz erzwingt Schritt 3 (Notiz-Kürzung).
-    session.model_context_window_tokens = 2_000;
+    session.parts_mut().model_context_window_tokens = 2_000;
     let parts = crate::compaction::SystemContextParts {
         base: "Basis".to_string(),
         note_sections: vec![("Server \"web-01\"".to_string(), "n".repeat(50_000))],
@@ -135,7 +135,7 @@ async fn test_disconnect_suggestion_skipped_when_compaction_shortens_the_note() 
         let mut ctx = session.context.lock().await;
         ctx.system_context = parts.assemble();
     }
-    session.system_context_parts = AsyncMutex::new(parts);
+    session.parts_mut().system_context_parts = AsyncMutex::new(parts);
 
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -1607,7 +1607,7 @@ async fn test_propose_note_update_current_server_resolves_to_session_server_id()
         ],
         MockSshTransport::default(),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let expected_server_id = session.server_id;
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();

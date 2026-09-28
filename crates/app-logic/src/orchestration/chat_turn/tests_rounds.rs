@@ -59,8 +59,8 @@ async fn test_runaway_followup_rounds_are_bounded() {
         MockAiProvider::new(Vec::new()),
         MockSshTransport::default().with_response("echo again", output("again")),
     );
-    session.ai_provider = Box::new(RepeatingAiProvider);
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().ai_provider = Box::new(RepeatingAiProvider);
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let confirmations = ConfirmationRegistry::new();
     let emitter = AutoApprovingEmitter {
         inner: TestEmitter::default(),
@@ -143,8 +143,8 @@ async fn test_run_chat_turn_paces_consecutive_main_round_requests() {
         MockAiProvider::new(Vec::new()),
         MockSshTransport::default().with_response("echo again", output("again")),
     );
-    session.ai_provider = Box::new(RepeatingAiProvider);
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().ai_provider = Box::new(RepeatingAiProvider);
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let confirmations = ConfirmationRegistry::new();
     let emitter = AutoApprovingEmitter {
         inner: TestEmitter::default(),
@@ -230,8 +230,8 @@ async fn test_server_output_ingestion_escalates_followup_action_under_strict_pol
         ]),
         MockSshTransport::default().with_response("uptime", output("up 3 days")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.post_ingest_policy = PostIngestPolicy::Strict;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().post_ingest_policy = PostIngestPolicy::Strict;
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();

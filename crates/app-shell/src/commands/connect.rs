@@ -620,7 +620,7 @@ pub(crate) async fn connect_session(
     let initial_mcp_origin_flags = vec![false; initial_history.len()];
 
     let session = Arc::new(Session::new(SessionParts {
-        transport: tokio::sync::Mutex::new(transport),
+        transport: app_logic::session::SessionTransport::new(transport),
         ai_provider,
         ai_provider_budget,
         context: tokio::sync::Mutex::new(SessionContext {

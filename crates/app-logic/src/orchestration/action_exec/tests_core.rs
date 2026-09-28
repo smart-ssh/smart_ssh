@@ -26,7 +26,7 @@ async fn test_autoexec_path_runs_command_and_records_result() {
         ],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -195,7 +195,7 @@ async fn test_action_proposed_without_text_in_the_same_round_does_not_emit_chat_
         ],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -264,8 +264,8 @@ async fn test_silent_followup_round_after_executed_action_does_not_emit_chat_res
         ],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.ai_provider = Box::new(MockAiProvider::with_rounds(vec![
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().ai_provider = Box::new(MockAiProvider::with_rounds(vec![
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "ls -la".to_string(),
@@ -313,8 +313,8 @@ async fn test_followup_round_answering_a_queued_message_emits_chat_response_empt
         vec![AiEvent::Done],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.ai_provider = Box::new(MockAiProvider::with_rounds(vec![
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().ai_provider = Box::new(MockAiProvider::with_rounds(vec![
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "ls -la".to_string(),
@@ -373,7 +373,7 @@ async fn test_mcp_origin_downgrades_autoexec_to_confirm_despite_allow_rule() {
         vec![AiEvent::Done],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -653,7 +653,7 @@ async fn test_second_opinion_escalates_none_to_yellow_end_to_end() {
             AiEvent::Done,
         ]),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -696,7 +696,7 @@ async fn test_second_opinion_cannot_downgrade_rule_based_red_end_to_end() {
             AiEvent::Done,
         ]),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -746,7 +746,7 @@ async fn test_disabled_second_opinion_yields_no_update_event() {
         ],
         MockSshTransport::default().with_response("cat ~/.ssh/id_rsa", output("")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     assert!(session.risk_second_opinion_provider.is_none());
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -854,8 +854,8 @@ async fn test_sudo_command_with_stored_password_uses_stdin_and_rewritten_command
         ],
         transport,
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
 
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -922,7 +922,7 @@ async fn test_sudo_command_without_stored_password_runs_unchanged_via_plain_exec
         ],
         MockSshTransport::default().with_response("sudo systemctl restart nginx", output("done")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -955,8 +955,8 @@ async fn test_chat_action_proposed_flags_uses_stored_sudo_password() {
         ],
         MockSshTransport::default().with_response("sudo -S apt update", output("")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -992,8 +992,8 @@ async fn test_uses_stored_sudo_password_downgrades_autoexec_to_confirm() {
         vec![AiEvent::Done],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().sudo_password = Some(secrecy::SecretString::from("hunter2".to_string()));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -1037,8 +1037,8 @@ async fn test_uses_stored_sudo_password_downgrades_autoexec_to_confirm() {
 #[tokio::test]
 async fn test_post_ingest_policy_strict_escalates_even_a_pure_read_action() {
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.post_ingest_policy = PostIngestPolicy::Strict;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().post_ingest_policy = PostIngestPolicy::Strict;
     session
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1066,8 +1066,8 @@ async fn test_post_ingest_policy_strict_escalates_even_a_pure_read_action() {
 #[tokio::test]
 async fn test_post_ingest_policy_balanced_leaves_pure_read_action_autoexec() {
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.post_ingest_policy = PostIngestPolicy::Balanced;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().post_ingest_policy = PostIngestPolicy::Balanced;
     session
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1091,8 +1091,8 @@ async fn test_post_ingest_policy_balanced_leaves_pure_read_action_autoexec() {
 #[tokio::test]
 async fn test_post_ingest_policy_balanced_escalates_modifying_action() {
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.post_ingest_policy = PostIngestPolicy::Balanced;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().post_ingest_policy = PostIngestPolicy::Balanced;
     session
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1127,8 +1127,8 @@ async fn test_post_ingest_policy_balanced_escalates_modifying_action() {
 #[tokio::test]
 async fn test_post_ingest_policy_standard_does_not_escalate() {
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.post_ingest_policy = PostIngestPolicy::Standard;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().post_ingest_policy = PostIngestPolicy::Standard;
     session
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1173,8 +1173,8 @@ async fn test_post_ingest_policy_never_downgrades_a_deny_decision() {
     }
 
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
-    session.post_ingest_policy = PostIngestPolicy::Strict;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
+    session.parts_mut().post_ingest_policy = PostIngestPolicy::Strict;
     session
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1201,8 +1201,8 @@ async fn test_post_ingest_policy_never_downgrades_a_deny_decision() {
 #[tokio::test]
 async fn test_injection_check_yes_escalates_followup_action_to_confirm() {
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.injection_check_provider = Some(Box::new(MockAiProvider::new(vec![
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().injection_check_provider = Some(Box::new(MockAiProvider::new(vec![
         AiEvent::TextDelta("ja - enthält eine eingeschleuste Anweisung".to_string()),
         AiEvent::Done,
     ])));
@@ -1253,8 +1253,8 @@ async fn test_injection_check_yes_escalates_followup_action_to_confirm() {
 #[tokio::test]
 async fn test_injection_check_no_does_not_change_followup_decision() {
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.injection_check_provider = Some(Box::new(MockAiProvider::new(vec![
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().injection_check_provider = Some(Box::new(MockAiProvider::new(vec![
         AiEvent::TextDelta("nein, wirkt wie eine gewöhnliche Log-Zeile".to_string()),
         AiEvent::Done,
     ])));
@@ -1295,10 +1295,11 @@ async fn test_injection_check_no_does_not_change_followup_decision() {
 #[tokio::test]
 async fn test_injection_check_provider_error_does_not_panic_or_set_suspected_flag() {
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.injection_check_provider = Some(Box::new(MockAiProvider::new(vec![AiEvent::Error(
-        AiError::NetworkError("boom".to_string()),
-    )])));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().injection_check_provider =
+        Some(Box::new(MockAiProvider::new(vec![AiEvent::Error(
+            AiError::NetworkError("boom".to_string()),
+        )])));
 
     // Muss ohne Panik zurückkehren.
     let emitter = TestEmitter::default();
@@ -1332,8 +1333,8 @@ async fn test_injection_check_provider_error_does_not_panic_or_set_suspected_fla
 #[tokio::test(start_paused = true)]
 async fn test_injection_check_gate_estimates_on_truncated_content_not_raw_content() {
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.injection_check_provider = Some(Box::new(MockAiProvider::new(vec![
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().injection_check_provider = Some(Box::new(MockAiProvider::new(vec![
         AiEvent::TextDelta("nein".to_string()),
         AiEvent::Done,
     ])));
@@ -1346,7 +1347,7 @@ async fn test_injection_check_gate_estimates_on_truncated_content_not_raw_conten
         },
         ..Default::default()
     });
-    session.injection_check_budget = Some(budget);
+    session.parts_mut().injection_check_budget = Some(budget);
 
     // Deutlich über dem 16-KB-Kürzungslimit (~4096 geschätzte Tokens),
     // aber deutlich unter den 50.000 verbleibenden Tokens des Budgets —
@@ -1392,7 +1393,7 @@ async fn test_injection_suspected_never_downgrades_a_deny_decision() {
     }
 
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
     session
         .injection_suspected
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1437,7 +1438,7 @@ async fn test_injection_suspected_survives_an_unrelated_denied_action() {
     }
 
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
     session
         .injection_suspected
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1464,7 +1465,7 @@ async fn test_injection_suspected_survives_an_unrelated_denied_action() {
     // eskaliert werden, und zwar sichtbar über den
     // Injection-spezifischen Code, nicht zufällig über
     // `FILTER_NO_RULE_MATCHED` o. ä.
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let (second_decision, payload) = proposed_decision_code(
         &session,
         AiAction::SuggestCommand {
@@ -1493,8 +1494,8 @@ async fn test_untrusted_content_ingested_flag_is_monotonic_across_actions() {
         vec![AiEvent::Done],
         MockSshTransport::default().with_response("uptime", output("up 3 days")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.post_ingest_policy = PostIngestPolicy::Strict;
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().post_ingest_policy = PostIngestPolicy::Strict;
     assert!(!session
         .untrusted_content_ingested
         .load(std::sync::atomic::Ordering::SeqCst));
@@ -1542,7 +1543,7 @@ async fn test_chat_action_proposed_does_not_flag_sudo_usage_without_stored_passw
         ],
         MockSshTransport::default().with_response("sudo apt update", output("")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -1662,7 +1663,7 @@ async fn test_edited_command_that_hits_deny_rule_is_blocked_not_executed() {
         ],
         MockSshTransport::default().with_response("echo hi-edited", output("hi-edited")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(DenyEditedPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(DenyEditedPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -1762,7 +1763,7 @@ async fn test_deny_path_executes_nothing_and_does_not_block_further_events() {
         }
     }
     let mut session = session;
-    session.filter_engine = Box::new(FilterEngine::new(DenyCurlPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(DenyCurlPolicyStore));
 
     run_chat_turn(
         &session,
@@ -1832,7 +1833,7 @@ async fn test_propose_note_update_always_waits_for_confirmation_and_persists() {
     // Spec 0016, Abschnitt 6: die KI liefert keine ID mehr — das Backend
     // löst `CurrentServer` selbst auf `session.server_id` auf.
     let expected_server_id = session.server_id;
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -1918,7 +1919,7 @@ async fn test_executed_action_triggers_automatic_followup_round_with_final_answe
         ]),
         MockSshTransport::default().with_response("uptime", output("up 3 days")),
     );
-    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
