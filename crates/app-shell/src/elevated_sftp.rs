@@ -61,13 +61,20 @@ pub struct ElevatedSftpSlot {
     /// Zugriff prüft ihn — damit endet die Nutzbarkeit im selben Moment, in
     /// dem der Nutzer ausschaltet, umschaltet oder trennt.
     revoked: Arc<std::sync::atomic::AtomicBool>,
-    /// Nur für den Regressionstest T6c (Spec 0085, §6): ein Haltepunkt
-    /// **zwischen** dem Zugang zum erhöhten Kanal und der nächsten Operation
-    /// darüber. `sftp_exists` führt genau **eine** SFTP-Operation aus — ohne
-    /// diesen Haltepunkt gäbe es dort keinen Moment, in dem ein Test
-    /// widerrufen könnte, nachdem der Zugang schon stand und bevor die
-    /// Operation ihre eigene Prüfung macht; die Verschränkung wäre nur
-    /// zufällig zu treffen. Vorbild und Begründung wie bei
+    /// Nur für Tests (Spec 0085, §6): ein Haltepunkt **zwischen** der
+    /// Vorprüfung einer Operation und dem Warten auf die Kanal-Sperre — s.
+    /// `commands::elevation::elevated_operation`.
+    ///
+    /// Das ist genau das Fenster, das die zweite Widerrufsprüfung in
+    /// `elevated_access` absichert (Vorprüfung durch, Sperre noch nicht
+    /// bekommen). Ohne diesen Haltepunkt wäre es nur zufällig zu treffen: es
+    /// bräuchte einen zweiten Browser-Befehl, der in der Warteschlange der
+    /// Sperre hängt, während widerrufen wird. Zwei Tests hängen daran — T6c
+    /// (`sftp_exists` hat nur **eine** Operation, es gibt also keinen zweiten
+    /// Zugriff, an dem ein Widerruf von selbst sichtbar würde) und der
+    /// Regressionstest zur zweiten Prüfung (spec-reviewer, Runde 1).
+    ///
+    /// Vorbild und Begründung wie bei
     /// [`ElevatedSftpRegistry::interleave_hook`] (Spec 0084, T8b). Existiert
     /// in keinem Produktivbau.
     #[cfg(test)]

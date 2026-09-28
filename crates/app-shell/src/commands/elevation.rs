@@ -246,18 +246,17 @@ impl ElevatedOperation {
 /// Browser-Befehl und dem erhöhten Kanal steht. Jeder Zugriff läuft hier
 /// durch — der erste ebenso wie jeder weitere innerhalb einer Rekursion.
 ///
-/// Der Widerruf wird **zweimal** geprüft: vor dem Warten auf die Sperre (dann
-/// wartet ein schon widerrufener Zugriff gar nicht erst) und noch einmal
-/// danach, weil `tokio::sync::Mutex` fair ist — ein bereits wartender Zugriff
-/// käme sonst noch vor dem Widerruf an die Reihe und liefe mit den alten
-/// Rechten weiter.
+/// Der Widerruf wird **nach** dem Erhalt der Kanal-Sperre geprüft, nicht
+/// davor. Das ist der Punkt: `tokio::sync::Mutex` ist fair, ein Zugriff, der
+/// beim Widerruf schon in der Warteschlange stand, käme sonst noch vor ihm an
+/// die Reihe und liefe mit den alten Rechten weiter. Prüfen und Benutzen
+/// liegen so unter derselben Sperre — eine zusätzliche Prüfung davor wäre nur
+/// eine Abkürzung, die nichts sichert und einen zweiten Weg zu warten hätte
+/// (spec-reviewer, Runde 1: eine Prüfung, eine Stelle).
 async fn elevated_access(
     slot: &ElevatedSftpSlot,
     expected_user: &str,
 ) -> Result<ElevatedOperation, ElevatedAccessError> {
-    if slot.is_revoked() {
-        return Err(ElevatedAccessError::Revoked);
-    }
     let guard = slot.lock_owned(&BrowserAccess(())).await;
     if slot.is_revoked() {
         return Err(ElevatedAccessError::Revoked);
@@ -285,6 +284,9 @@ async fn elevated_operation(
     expected_user: &str,
     revoked_mid_command: &AtomicBool,
 ) -> Result<ElevatedOperation, SshError> {
+    // Haltepunkt nur für Tests, genau vor dem Anfordern der Sperre (s.
+    // `ElevatedSftpSlot::before_operation_hook`) — im Produktivbau ein leerer
+    // Rumpf.
     slot.run_before_operation_hook();
     elevated_access(slot, expected_user).await.map_err(|err| {
         if matches!(err, ElevatedAccessError::Revoked) {

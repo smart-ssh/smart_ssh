@@ -1031,6 +1031,58 @@ async fn test_t6c_exists_reports_the_revocation_instead_of_a_plain_false() {
     );
 }
 
+/// spec-reviewer-Fund (Runde 1): Der Zugang zum erhöhten Kanal prüft den
+/// Widerruf **zweimal** — vor dem Warten auf die Kanal-Sperre und noch einmal,
+/// nachdem er sie bekommen hat. Die zweite Prüfung ist die, die zählt, wenn
+/// ein Zugriff die erste schon passiert hat und dann wartet: `tokio::sync::
+/// Mutex` ist fair, ein bereits wartender Zugriff kommt also **vor** dem
+/// Widerruf an die Reihe. Durch die Sperre je Operation (A1.3) ist dieses
+/// Fenster häufiger als vorher.
+///
+/// Der Haltepunkt am Slot sitzt genau darin. Der Widerruf läuft hier bewusst
+/// über `remove_session`: das setzt nur den Merker und lässt den Kanalwert
+/// stehen. Nur so hängt der Abbruch wirklich an der zweiten Prüfung — wäre
+/// der Wert herausgenommen, scheiterte der Zugriff schon daran.
+///
+/// Gegenbeweis (belegt): Ohne die zweite Prüfung läuft die Operation über den
+/// widerrufenen Kanal, und der ganze Baum wird gelöscht.
+#[tokio::test]
+async fn test_a_revocation_while_an_access_waits_for_the_lock_still_stops_it() {
+    let elevated = GatedSftp::small_tree(0);
+    let s = setup(Box::new(elevated.clone())).await;
+    let slot = s.slot();
+
+    let sessions = s.sessions.clone();
+    let registry = s.registry.clone();
+    let session_id = s.session_id;
+    slot.set_before_operation_hook(Box::new(move || {
+        registry.remove_session(&sessions, session_id);
+    }));
+
+    let result = with_browser_channel(
+        s.session.clone(),
+        s.elevated_channel(),
+        |session, channel| async move { delete_impl(&session, &channel, "/t").await },
+    )
+    .await;
+
+    assert!(
+        slot.is_revoked(),
+        "Vorbedingung: der Haltepunkt hat nach der Vorprüfung widerrufen"
+    );
+    assert_inactive(result);
+    assert!(
+        elevated.ops().is_empty(),
+        "keine einzige Operation darf über den widerrufenen Kanal laufen, war: {:?}",
+        elevated.ops()
+    );
+    assert!(
+        elevated.exists("/t") && elevated.exists("/t/sub/c.txt"),
+        "und der Baum ist unberührt"
+    );
+    assert!(s.normal.calls().is_empty(), "kein Rückfall");
+}
+
 // --- T7: Audit --------------------------------------------------------------
 
 /// Spec 0085, T7 (A1.4): Ein abgebrochener erhöhter `delete`/`chmod`, bei dem
@@ -1184,4 +1236,55 @@ async fn test_t9_the_normal_channel_is_unaffected_by_the_revocation_machinery() 
     .await
     .expect("der Widerruf des erhöhten Kanals betrifft den normalen nicht");
     assert_eq!(text, "USER-INHALT");
+}
+
+/// Spec 0085, T9 (Ergänzung nach dem spec-reviewer-Fund aus Runde 1):
+/// **rekursives** Löschen und chmod über den normalen Kanal, und zwar durch
+/// denselben neuen Wrapper-Pfad (`BrowserSftp::Normal`), den die Befehle zur
+/// Laufzeit nehmen.
+///
+/// Die bestehenden `sftp_mutation_tests` rufen `delete_recursive`/
+/// `chmod_recursive` direkt mit einem `&mut dyn SftpSession` auf und gehen am
+/// Wrapper vorbei — für den normalen Kanal war er damit nirgends von Befehl
+/// bis Kanal abgedeckt.
+#[tokio::test]
+async fn test_t9_recursive_delete_and_chmod_over_the_normal_channel_behave_as_before() {
+    let normal_tree = GatedSftp::small_tree(0);
+    let elevated = GatedSftp::small_tree(0);
+    let s = setup(Box::new(elevated.clone())).await;
+    // Der normale Kanal bekommt denselben Baum wie der erhöhte — so ist am
+    // Protokoll ablesbar, dass wirklich der normale benutzt wurde.
+    s.session
+        .set_sftp_for_tests(Box::new(normal_tree.clone()))
+        .await;
+
+    let changed = with_browser_channel(
+        s.session.clone(),
+        s.normal_channel(),
+        |session, channel| async move { chmod_impl(&session, &channel, "/t", 0o700, true).await },
+    )
+    .await
+    .expect("rekursives chmod über den normalen Kanal muss gelingen");
+    assert_eq!(changed, 5);
+    assert_eq!(normal_tree.permissions("/t"), Some(0o700));
+    assert_eq!(normal_tree.permissions("/t/sub/c.txt"), Some(0o700));
+
+    with_browser_channel(
+        s.session.clone(),
+        s.normal_channel(),
+        |session, channel| async move { delete_impl(&session, &channel, "/t").await },
+    )
+    .await
+    .expect("rekursives Löschen über den normalen Kanal muss gelingen");
+    assert!(
+        !normal_tree.exists("/t") && !normal_tree.exists("/t/sub/c.txt"),
+        "der ganze Baum ist weg, war: {:?}",
+        normal_tree.ops()
+    );
+
+    assert!(
+        elevated.ops().is_empty(),
+        "der erhöhte Kanal darf dabei nie berührt werden, war: {:?}",
+        elevated.ops()
+    );
 }
