@@ -614,3 +614,37 @@ event: message_stop\ndata: {}\n\n";
     // der Mock nur einmal, und wiremock ließe den Server-Drop fehlschlagen.
     assert_eq!(events, vec![AiEvent::Error(AiError::ResponseTruncated)]);
 }
+
+/// Spec 0087, T11b (A1.1, Negativ): dieselbe 400-Antwort mit dem
+/// OpenAI-kompatiblen Kontextgrenzen-Text ("maximum context length is …"),
+/// aber gegen den Anthropic-Provider — die Kontext-Erkennung aus BL-0262
+/// wirkt nur im OpenAI-kompatiblen Provider, nicht in der geteilten
+/// `crate::error::map_http_status`. Genau EINE Anfrage, weiterhin
+/// `ProviderUnavailable`. *Scheitert, wenn die Erkennung in der geteilten
+/// Abbildungsfunktion liegt statt nur in `openai_compatible.rs`.*
+#[tokio::test]
+async fn test_context_length_wording_at_anthropic_provider_stays_provider_unavailable() {
+    let server = MockServer::start().await;
+    let error_body = r#"{"error":{"message":"This model's maximum context length is 4096 tokens. However, you requested 8192 tokens.","type":"invalid_request_error"}}"#;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = AnthropicProvider::new(
+        server.uri(),
+        "claude-test",
+        "test-key",
+        true,
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert!(matches!(
+        events.as_slice(),
+        [AiEvent::Error(AiError::ProviderUnavailable(_))]
+    ));
+}

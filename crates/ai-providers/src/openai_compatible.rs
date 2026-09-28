@@ -150,11 +150,45 @@ fn openai_max_tokens_field_name(base_url: &str, model: &str) -> &'static str {
     }
 }
 
-/// s. `crate::anthropic::RawEvent`-Doc-Kommentar — identisches Muster.
+/// Spec 0087, A1.2: fest gewähltes Retry-Budget statt aus dem Fehlertext
+/// gerechneter Zahlen (§5: drei Textformate mit Zahlen in Prosa wären
+/// fragil, Halbieren scheitert bei genau 4k-Kontext weiterhin). Neben den
+/// übrigen Budget-Konstanten dieses Providers.
+const OPENAI_COMPATIBLE_CONTEXT_LIMIT_RETRY_MAX_TOKENS: u32 = 2048;
+
+/// Spec 0087, A1.1: Textbausteine (case-insensitive), die auf einen HTTP-400
+/// wegen Überschreiten der Kontextgrenze hindeuten — belegt gegen vLLM
+/// (Quellcode) und OpenRouter (zitierter Fehlerbericht), s. Spec Abschnitt 1.
+/// Bewusst NICHT llama.cpps `"exceeds the available context size"` (Spec
+/// Abschnitt 1, Nicht-Ziele: llama.cpp prüft nur die Eingabe, ein kleineres
+/// Budget hilft dort nicht — T3 ist der Negativ-Test dafür).
+const CONTEXT_LENGTH_ERROR_MARKERS: &[&str] = &[
+    "maximum context length is",
+    "cannot be greater than max_model_len",
+];
+
+/// Spec 0087, A1.1: wirkt NUR hier (OpenAI-kompatibler Provider), nicht in
+/// der mit `AnthropicProvider` geteilten `crate::error::map_http_status` —
+/// T11b belegt, dass ein identischer Anthropic-400-Body unverändert
+/// `ProviderUnavailable` bleibt.
+fn is_context_length_error(body: &str) -> bool {
+    let lower = body.to_lowercase();
+    CONTEXT_LENGTH_ERROR_MARKERS
+        .iter()
+        .any(|marker| lower.contains(marker))
+}
+
+/// s. `crate::anthropic::RawEvent`-Doc-Kommentar — identisches Muster, um
+/// `RetryWithHigherMaxTokens` (Spec 0065, Teil 3) ergänzt um
+/// `ContextLimitError` (Spec 0087, A1.2): ein 400, den
+/// [`is_context_length_error`] als Kontextgrenzen-Fehler erkannt hat — die
+/// Entscheidung, ob (und mit welchem Budget) ein Retry stattfindet, liegt
+/// beim äußeren Retry-Zustand in `send()`, nicht hier.
 #[derive(Debug, Clone, PartialEq)]
 enum RawEvent {
     Public(AiEvent),
     RetryWithHigherMaxTokens,
+    ContextLimitError,
 }
 
 fn to_raw_stream(
@@ -163,13 +197,21 @@ fn to_raw_stream(
     Box::pin(inner.map(RawEvent::Public))
 }
 
+/// Ein einzelnes internes `RawEvent` als fertiger Stream — Gegenstück zu
+/// `crate::error::error_stream` für den `ContextLimitError`-Fall, der (anders
+/// als jeder `AiEvent::Error`) nicht öffentlich sichtbar wird, sondern vom
+/// äußeren Retry-Zustand in `send()` konsumiert wird.
+fn raw_event_stream(event: RawEvent) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
+    Box::pin(futures::stream::once(async move { event }))
+}
+
 use crate::action::{action_from_tool_arguments, parameters_json_schema};
 use crate::error::{error_stream, map_http_status, map_transport_error, timeout_error};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
-    log_openai_round_summary, log_outgoing_context, log_provider_error_response,
-    log_provider_transport_error, log_stop_reason, log_tool_call_fragment,
-    log_tool_call_parse_error, log_tool_call_parsed,
+    log_context_limit_retry, log_openai_round_summary, log_outgoing_context,
+    log_provider_error_response, log_provider_transport_error, log_stop_reason,
+    log_tool_call_fragment, log_tool_call_parse_error, log_tool_call_parsed,
 };
 use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
@@ -497,7 +539,24 @@ async fn connect_and_stream(
             // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
             // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
             // Varianten) verlieren Status/Body ab hier unwiederbringlich.
+            // Spec 0087, A1.6: der ursprüngliche 400-Körper wird über
+            // denselben redigierenden Logpfad geloggt wie jeder andere
+            // Providerfehler — auch dann, wenn der Zweig unten
+            // `ContextLimitError` statt `error_stream(mapped)` zurückgibt.
             log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &secrets);
+            // Spec 0087, A1.1: ein 400, der NICHT schon als „Modell nicht
+            // gefunden" erkannt wurde (`mapped` bliebe dann `ModelNotFound`,
+            // s. T4), und dessen Körper einen der Kontextgrenzen-Marker
+            // enthält — nur für diesen Provider (T11b: die geteilte
+            // `map_http_status` bleibt unverändert, Anthropic ist nicht
+            // betroffen). Andere Statuscodes (T5) bleiben unverändert
+            // `ProviderUnavailable`.
+            if status.as_u16() == 400
+                && matches!(mapped, AiError::ProviderUnavailable(_))
+                && is_context_length_error(&text)
+            {
+                return raw_event_stream(RawEvent::ContextLimitError);
+            }
             return to_raw_stream(error_stream(mapped));
         }
 
@@ -509,6 +568,19 @@ async fn connect_and_stream(
             extra_headers,
         );
     }
+}
+
+/// Spec 0087, A1.4: je Aufruf von `send()` läuft höchstens EINER der beiden
+/// Retrys (Kontext-Retry nach A1.2 oder Abschneide-Retry
+/// `RetryWithHigherMaxTokens`) — dieser Zustand hält fest, welcher (falls
+/// einer) bereits verbraucht wurde, damit beide Ereigniszweige unten
+/// darauf prüfen können, statt je ein eigenes, unabhängiges Bool zu führen
+/// (das könnte sonst beide Retrys im selben `send()`-Aufruf zulassen).
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum RetryKind {
+    None,
+    Truncation,
+    Context,
 }
 
 /// Zustand des äußeren Retry-Streams aus `send()` (Spec 0065, Teil 3) — s.
@@ -530,7 +602,13 @@ struct RetryState {
     /// `openai_max_tokens_field_name`) — für den Retry-Schritt unten
     /// wiederverwendet, statt ihn erneut zu bestimmen.
     max_tokens_field: &'static str,
-    retried: bool,
+    /// Spec 0087, A1.2a: `true` genau dann, wenn das ANFANGS-Budget aus
+    /// `max_tokens_override` stammt (kein `max_tokens_hint` gesetzt UND ein
+    /// Override konfiguriert) — ein Nebenaufruf-Hint gilt nie als
+    /// Nutzereinstellung. Berechnet in `send()`, bevor `context` durch
+    /// `build_request_body` verbraucht wird.
+    max_tokens_is_user_override: bool,
+    retry_used: RetryKind,
     inner: Option<Pin<Box<dyn Stream<Item = RawEvent> + Send>>>,
     finished: bool,
 }
@@ -547,6 +625,12 @@ impl AiProvider for OpenAiCompatibleProvider {
         let api_key = self.api_key.clone();
         let native_tool_calling = self.supports_native_tool_calling;
         let extra_headers = self.extra_headers.clone();
+        // Spec 0087, A1.2a: MUSS vor `build_request_body` berechnet werden —
+        // dieselbe Vorrang-Reihenfolge wie dort (`max_tokens_hint.or(self.
+        // max_tokens_override)`). `context` wird von `build_request_body`
+        // nur per Referenz gelesen, ist danach also noch verfügbar.
+        let max_tokens_is_user_override =
+            context.max_tokens_hint.is_none() && self.max_tokens_override.is_some();
         let body = self.build_request_body(&context);
         let model_max_tokens =
             openai_compatible_model_max_output_tokens(&self.base_url, &self.model);
@@ -569,7 +653,8 @@ impl AiProvider for OpenAiCompatibleProvider {
             max_tokens,
             model_max_tokens,
             max_tokens_field,
-            retried: false,
+            max_tokens_is_user_override,
+            retry_used: RetryKind::None,
             inner: None,
             finished: false,
         };
@@ -597,14 +682,19 @@ impl AiProvider for OpenAiCompatibleProvider {
                 match state.inner.as_mut().expect("gerade gesetzt").next().await {
                     Some(RawEvent::Public(event)) => return Some((event, state)),
                     Some(RawEvent::RetryWithHigherMaxTokens) => {
-                        if state.retried {
+                        // Spec 0087, A1.4, erster Punkt: lief bereits IRGEND-
+                        // EIN Retry (Kontext- oder Abschneide-Retry) in
+                        // diesem `send()`-Aufruf, endet ein Ereignis, das
+                        // sonst den Abschneide-Retry auslösen würde, direkt
+                        // mit `ResponseTruncated` — keine dritte Anfrage.
+                        if state.retry_used != RetryKind::None {
                             #[allow(unused_assignments)]
                             {
                                 state.finished = true;
                             }
                             return Some((AiEvent::Error(AiError::ResponseTruncated), state));
                         }
-                        state.retried = true;
+                        state.retry_used = RetryKind::Truncation;
                         let doubled_and_capped = state
                             .max_tokens
                             .saturating_mul(2)
@@ -626,6 +716,61 @@ impl AiProvider for OpenAiCompatibleProvider {
                         state.body[state.max_tokens_field] = json!(state.max_tokens);
                         state.inner = None;
                     }
+                    Some(RawEvent::ContextLimitError) => match state.retry_used {
+                        // Spec 0087, A1.4, zweiter Punkt: nach einem bereits
+                        // verbrauchten Abschneide-Retry endet ein
+                        // Kontextgrenzen-Fehler direkt mit
+                        // `ResponseTruncated` — der `ContextTooLarge`-Hinweis
+                        // (niedrigeres Budget einstellen) wäre hier der
+                        // falsche Rat, das gesendete Budget ist bereits das
+                        // verdoppelte.
+                        RetryKind::Truncation => {
+                            #[allow(unused_assignments)]
+                            {
+                                state.finished = true;
+                            }
+                            return Some((AiEvent::Error(AiError::ResponseTruncated), state));
+                        }
+                        // Spec 0087, A1.3: scheitert auch der Kontext-Retry
+                        // mit einem Kontextgrenzen-Fehler, endet die Runde
+                        // mit `ContextTooLarge` — kein dritter Versuch.
+                        RetryKind::Context => {
+                            #[allow(unused_assignments)]
+                            {
+                                state.finished = true;
+                            }
+                            return Some((AiEvent::Error(AiError::ContextTooLarge), state));
+                        }
+                        RetryKind::None => {
+                            // Spec 0087, A1.2: (a) Budget stammt nicht aus
+                            // einem Nutzer-Override, UND (b) das neue Budget
+                            // (2048) ist tatsächlich kleiner als das gesendete
+                            // — (c) "noch kein Abschneide-Retry gelaufen" ist
+                            // hier durch `RetryKind::None` bereits erfüllt.
+                            let eligible = !state.max_tokens_is_user_override
+                                && OPENAI_COMPATIBLE_CONTEXT_LIMIT_RETRY_MAX_TOKENS
+                                    < state.max_tokens;
+                            if !eligible {
+                                #[allow(unused_assignments)]
+                                {
+                                    state.finished = true;
+                                }
+                                return Some((AiEvent::Error(AiError::ContextTooLarge), state));
+                            }
+                            // Spec 0087, A1.6: Debug-Zeile mit altem und
+                            // neuem Budget, ohne Körper — VOR dem
+                            // eigentlichen Retry-Request.
+                            log_context_limit_retry(
+                                state.request_id,
+                                state.max_tokens,
+                                OPENAI_COMPATIBLE_CONTEXT_LIMIT_RETRY_MAX_TOKENS,
+                            );
+                            state.retry_used = RetryKind::Context;
+                            state.max_tokens = OPENAI_COMPATIBLE_CONTEXT_LIMIT_RETRY_MAX_TOKENS;
+                            state.body[state.max_tokens_field] = json!(state.max_tokens);
+                            state.inner = None;
+                        }
+                    },
                     None => return None,
                 }
             }
@@ -1003,6 +1148,21 @@ mod tests {
 
     use super::*;
     use ssh_manager_core::ai::default_action_schemas;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, Request, ResponseTemplate};
+
+    /// Spec 0087, T11 (A1.6): s. identischer Kommentar in
+    /// `tests/openai_compatible.rs::BodyContains` — hier lokal, weil dieser
+    /// Test (anders als die übrigen T1–T10, T15/T16) auf den Log-Puffer aus
+    /// `crate::test_support` zugreifen muss, der `pub(crate)` und damit für
+    /// die externe Integrationstest-Crate nicht erreichbar ist.
+    struct BodyContainsForTest(String);
+
+    impl wiremock::Match for BodyContainsForTest {
+        fn matches(&self, request: &Request) -> bool {
+            String::from_utf8_lossy(&request.body).contains(self.0.as_str())
+        }
+    }
 
     fn context_with_system(system_context: &str, actions: Vec<ActionSchema>) -> SessionContext {
         SessionContext {
@@ -1724,5 +1884,85 @@ mod tests {
 
         assert!(body.get("max_completion_tokens").is_none());
         assert!(body.get("max_tokens").is_some());
+    }
+
+    /// Spec 0087, T11 (A1.6): vor dem Kontext-Retry existiert eine
+    /// Fehler-Logzeile mit Status 400, der eingebettete API-Key erscheint
+    /// darin nur redigiert; nach dem erfolgreichen Retry existiert eine
+    /// Debug-Zeile, die das alte (8192) und das neue (2048) Budget enthält.
+    /// *Scheitert, wenn der Retry-Pfad das Loggen überspringt* — als
+    /// Wiremock-Test statt Direktaufruf, weil beide Log-Aufrufe im echten
+    /// `send()`-Retry-Pfad liegen (`connect_and_stream`/das `unfold` in
+    /// `send()`), nicht in einer isoliert testbaren Hilfsfunktion.
+    #[tokio::test]
+    async fn test_context_limit_retry_logs_error_then_debug_line_with_old_and_new_budget() {
+        crate::test_support::install_test_subscriber_once();
+        crate::test_support::clear_log_buffer();
+
+        let server = MockServer::start().await;
+        let api_key = "sk-test-secret-key-123";
+        let error_body = format!(
+            "{{\"error\":{{\"message\":\"max_tokens=8192 cannot be greater than max_model_len=4096 (key {api_key})\"}}}}"
+        );
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .and(BodyContainsForTest("\"max_tokens\":8192".to_string()))
+            .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let success_body =
+            "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .and(BodyContainsForTest("\"max_tokens\":2048".to_string()))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(success_body),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let provider = OpenAiCompatibleProvider::new(
+            server.uri(),
+            "some-unknown-model",
+            api_key,
+            true,
+            Vec::new(),
+            test_budget(),
+            None,
+        );
+
+        let events: Vec<AiEvent> = provider
+            .send(context_with_system("Testkontext", Vec::new()))
+            .collect()
+            .await;
+        assert_eq!(
+            events,
+            vec![AiEvent::TextDelta("ok".to_string()), AiEvent::Done]
+        );
+
+        let log_text = crate::test_support::log_buffer_text();
+        assert!(
+            log_text.contains("400"),
+            "Fehler-Logzeile mit Status 400 fehlt: {log_text}"
+        );
+        assert!(
+            !log_text.contains(api_key),
+            "der API-Key darf nicht im Log stehen: {log_text}"
+        );
+        assert!(
+            log_text.contains("REDACTED"),
+            "Redaction-Platzhalter fehlt: {log_text}"
+        );
+        assert!(
+            log_text.contains("8192"),
+            "altes Budget fehlt in der Debug-Zeile: {log_text}"
+        );
+        assert!(
+            log_text.contains("2048"),
+            "neues Budget fehlt in der Debug-Zeile: {log_text}"
+        );
     }
 }

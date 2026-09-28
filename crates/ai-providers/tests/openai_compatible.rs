@@ -454,3 +454,527 @@ async fn test_empty_length_retry_never_sends_less_than_an_explicit_max_tokens_ov
     // wiremock ließe den Server-Drop fehlschlagen.
     assert_eq!(events, vec![AiEvent::Error(AiError::ResponseTruncated)]);
 }
+
+/// Ein leerer `SessionContext` mit `max_tokens_hint` — für T7/T7b (Spec
+/// 0087, A1.2b), die einen Nebenaufruf simulieren.
+fn context_with_max_tokens_hint(hint: u32) -> SessionContext {
+    let mut context = empty_context();
+    context.max_tokens_hint = Some(hint);
+    context
+}
+
+const SUCCESS_SSE_BODY: &str = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n\
+data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
+
+/// Spec 0087, T1 (A1.2): der vLLM-Fehlertext aus §1
+/// (`max_tokens=8192 cannot be greater than max_model_len=4096. ...`) —
+/// unbekanntes Modell an einem Nicht-OpenAI-Endpunkt, Default 8192 (Spec
+/// 0080 §8). Der Nutzer erhält am Ende die Antwort statt eines Fehlers; die
+/// zweite Anfrage trägt `max_tokens: 2048`, die erste 8192. *Gegenbeweis
+/// (s. Bericht):* vor diesem Fix landete die erste 400-Antwort unverändert
+/// als `AiEvent::Error(ProviderUnavailable(_))`, keine zweite Anfrage.
+#[tokio::test]
+async fn test_vllm_max_tokens_over_context_error_retries_with_smaller_budget_then_succeeds() {
+    let server = MockServer::start().await;
+    let error_body = r#"{"error":{"message":"max_tokens=8192 cannot be greater than max_model_len=4096. Please request fewer output tokens.","type":"BadRequestError"}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":8192".to_string()))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":2048".to_string()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(SUCCESS_SSE_BODY),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(
+        events,
+        vec![AiEvent::TextDelta("ok".to_string()), AiEvent::Done]
+    );
+}
+
+/// Spec 0087, T2 (A1.1): der OpenAI-Prosa-Text „This model's maximum
+/// context length is …“ — derselbe Retry wie T1, anderer Fehlertext.
+#[tokio::test]
+async fn test_openai_style_context_length_error_retries_with_smaller_budget_then_succeeds() {
+    let server = MockServer::start().await;
+    let error_body = r#"{"error":{"message":"This model's maximum context length is 4096 tokens. However, you requested 8192 tokens.","type":"invalid_request_error"}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":8192".to_string()))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":2048".to_string()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(SUCCESS_SSE_BODY),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(
+        events,
+        vec![AiEvent::TextDelta("ok".to_string()), AiEvent::Done]
+    );
+}
+
+/// Spec 0087, T2b (A1.1): derselbe Fehlertyp wie T2, aber komplett
+/// klein geschrieben (OpenRouter-Stil) — belegt, dass die Erkennung
+/// case-insensitive arbeitet.
+#[tokio::test]
+async fn test_lowercase_openrouter_style_context_length_error_retries_then_succeeds() {
+    let server = MockServer::start().await;
+    let error_body = r#"{"error":{"message":"this endpoint's maximum context length is 4096 tokens. however, you requested about 8192 tokens (100 of text input, 8092 in the output)."}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":8192".to_string()))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":2048".to_string()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(SUCCESS_SSE_BODY),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(
+        events,
+        vec![AiEvent::TextDelta("ok".to_string()), AiEvent::Done]
+    );
+}
+
+/// Spec 0087, T3 (A1.1, Negativ): llama.cpps Fehlertext aus §1
+/// (`exceed_context_size_error`) — llama.cpp prüft nur die Eingabe, ein
+/// kleineres Budget hilft dort nicht (Nicht-Ziel dieser Spec). Genau EINE
+/// Anfrage, `ProviderUnavailable`. *Scheitert, wenn die Erkennung auf
+/// „context“ allein oder den Status allein reagiert.*
+#[tokio::test]
+async fn test_llama_cpp_exceed_context_size_error_does_not_retry() {
+    let server = MockServer::start().await;
+    let error_body = r#"{"error":{"code":400,"message":"request (931 tokens) exceeds the available context size (512 tokens), try increasing it","type":"exceed_context_size_error"}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert!(matches!(
+        events.as_slice(),
+        [AiEvent::Error(AiError::ProviderUnavailable(_))]
+    ));
+}
+
+/// Spec 0087, T4 (A1.1, Negativ): ein 400, dessen Körper strukturell als
+/// „Modell nicht gefunden“ erkennbar ist (`error.code == "model_not_found"`)
+/// UND zusätzlich den Kontextgrenzen-Marker enthält — bleibt
+/// `ModelNotFound`, eine Anfrage. Die Modell-nicht-gefunden-Prüfung geht
+/// der Kontext-Erkennung vor (s. `crate::error::map_http_status`).
+#[tokio::test]
+async fn test_400_recognized_as_model_not_found_stays_model_not_found_even_with_context_marker() {
+    let server = MockServer::start().await;
+    let error_body = r#"{"error":{"code":"model_not_found","message":"maximum context length is 4096 tokens. However, you requested 8192."}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert!(matches!(
+        events.as_slice(),
+        [AiEvent::Error(AiError::ModelNotFound(_))]
+    ));
+}
+
+/// Spec 0087, T5 (A1.1, Negativ): derselbe vLLM-Kontexttext, aber mit
+/// Status 413 statt 400 — die Erkennung wirkt nur für 400, andere
+/// Statuscodes bleiben unverändert `ProviderUnavailable`, keine zweite
+/// Anfrage.
+#[tokio::test]
+async fn test_413_with_context_length_wording_does_not_retry() {
+    let server = MockServer::start().await;
+    let error_body =
+        r#"{"error":{"message":"max_tokens=8192 cannot be greater than max_model_len=4096."}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(413).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert!(matches!(
+        events.as_slice(),
+        [AiEvent::Error(AiError::ProviderUnavailable(_))]
+    ));
+}
+
+/// Spec 0087, T6 (A1.2a): ein explizit gesetzter `max_tokens_override`
+/// (8192) darf der Kontext-Retry nie unterlaufen — genau EINE Anfrage,
+/// `ContextTooLarge`. *Scheitert, wenn der Retry den Override unterläuft.*
+#[tokio::test]
+async fn test_context_error_with_explicit_override_does_not_retry() {
+    let server = MockServer::start().await;
+    let error_body =
+        r#"{"error":{"message":"max_tokens=8192 cannot be greater than max_model_len=4096."}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        Some(8192),
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(events, vec![AiEvent::Error(AiError::ContextTooLarge)]);
+}
+
+/// Spec 0087, T7 (A1.2b): ein Nebenaufruf mit `max_tokens_hint` ≤ 2048 —
+/// das neue Budget (2048) wäre nicht kleiner als das gesendete, also kein
+/// Retry: genau EINE Anfrage, `ContextTooLarge`.
+#[tokio::test]
+async fn test_context_error_with_side_call_hint_at_or_below_2048_does_not_retry() {
+    let server = MockServer::start().await;
+    let error_body =
+        r#"{"error":{"message":"max_tokens=8192 cannot be greater than max_model_len=4096."}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider
+        .send(context_with_max_tokens_hint(1024))
+        .collect()
+        .await;
+
+    assert_eq!(events, vec![AiEvent::Error(AiError::ContextTooLarge)]);
+}
+
+/// Spec 0087, T7b (A1.2a): `max_tokens_hint` (4096) UND `max_tokens_override`
+/// (8192) sind beide gesetzt — der Hint hat Vorrang (s. `build_request_body`),
+/// das Budget stammt damit NICHT aus dem Override: Retry mit 2048, die
+/// Antwort kommt an. *Scheitert, wenn der Hint fälschlich als
+/// Nutzereinstellung behandelt wird.*
+#[tokio::test]
+async fn test_context_error_with_hint_and_override_both_set_still_retries() {
+    let server = MockServer::start().await;
+    let error_body =
+        r#"{"error":{"message":"max_tokens=8192 cannot be greater than max_model_len=4096."}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":4096".to_string()))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":2048".to_string()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(SUCCESS_SSE_BODY),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        Some(8192),
+    );
+
+    let events: Vec<AiEvent> = provider
+        .send(context_with_max_tokens_hint(4096))
+        .collect()
+        .await;
+
+    assert_eq!(
+        events,
+        vec![AiEvent::TextDelta("ok".to_string()), AiEvent::Done]
+    );
+}
+
+/// Spec 0087, T8 (A1.3): zwei aufeinanderfolgende Kontextgrenzen-Fehler —
+/// genau ZWEI Anfragen (der Kontext-Retry mit 2048, dann kein dritter
+/// Versuch mehr), `ContextTooLarge`, Stream endet.
+#[tokio::test]
+async fn test_two_consecutive_context_errors_end_with_context_too_large_after_exactly_two_requests()
+{
+    let server = MockServer::start().await;
+    let error_body =
+        r#"{"error":{"message":"max_tokens=8192 cannot be greater than max_model_len=4096."}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(events, vec![AiEvent::Error(AiError::ContextTooLarge)]);
+}
+
+/// Spec 0087, T9 (A1.4, erster Punkt): 400 Kontextfehler (Retry mit 2048),
+/// danach 200 mit `finish_reason: length` ohne Inhalt (die leere,
+/// abgeschnittene Runde aus Spec 0080) — genau ZWEI Anfragen,
+/// `ResponseTruncated`, kein dritter Request mit `max_tokens > 2048`.
+#[tokio::test]
+async fn test_context_error_then_empty_length_round_ends_response_truncated_no_third_request() {
+    let server = MockServer::start().await;
+    let error_body =
+        r#"{"error":{"message":"max_tokens=8192 cannot be greater than max_model_len=4096."}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":8192".to_string()))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let empty_length_body =
+        "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n";
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":2048".to_string()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(empty_length_body),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    // `.expect(1)` auf beiden Mocks beweist bereits die Request-Anzahl (2,
+    // kein dritter Request mit `max_tokens: 4096` — der wäre auf keinem der
+    // beiden Mocks gebunden und ließe wiremock beim Server-Drop mangels
+    // Treffer fehlschlagen).
+    assert_eq!(events, vec![AiEvent::Error(AiError::ResponseTruncated)]);
+}
+
+/// Spec 0087, T9b (A1.4, zweiter Punkt): umgekehrte Reihenfolge — zuerst
+/// die leere `length`-Runde (Abschneide-Retry auf das verdoppelte Budget
+/// 16384), danach ein Kontextfehler auf dieser zweiten Anfrage — genau ZWEI
+/// Anfragen, `ResponseTruncated`, keine Anfrage mit `max_tokens: 2048` (der
+/// `ContextTooLarge`-Hinweis wäre hier der falsche Rat).
+#[tokio::test]
+async fn test_empty_length_round_then_context_error_ends_response_truncated_no_2048_request() {
+    let server = MockServer::start().await;
+    let empty_length_body =
+        "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n";
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":8192".to_string()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(empty_length_body),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let error_body =
+        r#"{"error":{"message":"max_tokens=16384 cannot be greater than max_model_len=8192."}}"#;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("\"max_tokens\":16384".to_string()))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        "some-unknown-model",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(events, vec![AiEvent::Error(AiError::ResponseTruncated)]);
+}
+
+/// Spec 0087, T10 (A1.2): ein Reasoning-Modell (`o1-mini`, offizielle
+/// OpenAI-API) verlangt `max_completion_tokens` statt `max_tokens` — der
+/// Kontext-Retry muss dasselbe Feld erneut setzen, nicht das klassische.
+#[tokio::test]
+async fn test_reasoning_model_context_retry_uses_max_completion_tokens_field() {
+    let server = MockServer::start().await;
+    let error_body = r#"{"error":{"message":"This model's maximum context length is 4096 tokens. However, you requested 32768 tokens.","type":"invalid_request_error"}}"#;
+    // Die Feldnamen-Umschaltung auf `max_completion_tokens` (Spec 0065, Teil
+    // 1) greift nur für `base_url.contains("api.openai.com")` — ein
+    // literaler Pfadanteil mit diesem Substring macht das wahr, während der
+    // Request trotzdem an den lokalen Mock-Server geht (kein echter
+    // Netzwerkzugriff auf die offizielle API).
+    let base_url = format!("{}/api.openai.com", server.uri());
+    Mock::given(method("POST"))
+        .and(path("/api.openai.com/chat/completions"))
+        .and(BodyContains("\"max_completion_tokens\":32768".to_string()))
+        .respond_with(ResponseTemplate::new(400).set_body_string(error_body))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api.openai.com/chat/completions"))
+        .and(BodyContains("\"max_completion_tokens\":2048".to_string()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(SUCCESS_SSE_BODY),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        base_url,
+        "o1-mini",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(
+        events,
+        vec![AiEvent::TextDelta("ok".to_string()), AiEvent::Done]
+    );
+}

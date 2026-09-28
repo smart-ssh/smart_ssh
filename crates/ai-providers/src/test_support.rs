@@ -60,6 +60,7 @@ pub(crate) fn install_test_subscriber_once() {
     INIT.call_once(|| {
         let subscriber = tracing_subscriber::fmt()
             .json()
+            .with_max_level(tracing::level_filters::LevelFilter::TRACE)
             .with_writer(ThreadLocalTestWriter)
             .finish();
         // `let _ =`: schlägt nur fehl, wenn bereits ein globaler Default

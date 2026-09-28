@@ -282,6 +282,21 @@ pub(crate) fn log_provider_transport_error(request_id: Uuid, error: &AiError, se
     );
 }
 
+/// Spec 0087, A1.6: eine erkannte Kontextgrenzen-400-Antwort wurde bereits
+/// über [`log_provider_error_response`] mit Status + redigiertem Körper
+/// geloggt (Spec 0049, Fund 2 — derselbe Pfad wie jeder andere
+/// Providerfehler) — diese Funktion ergänzt nur die Debug-Zeile für den
+/// tatsächlichen Retry-Schritt: altes und neues Budget, kein Körper (nichts
+/// zu redigieren, reine Zahlen).
+pub(crate) fn log_context_limit_retry(request_id: Uuid, old_max_tokens: u32, new_max_tokens: u32) {
+    tracing::debug!(
+        request_id = %request_id,
+        old_max_tokens,
+        new_max_tokens,
+        "retrying with a smaller budget after a context-length error",
+    );
+}
+
 /// Ersetzt jedes wörtliche Vorkommen jedes nicht-leeren Eintrags aus
 /// `secrets` in `text` durch `[REDACTED]` (ein leerer Eintrag würde sonst
 /// via `str::replace` jedes Zeichen "ersetzen").
