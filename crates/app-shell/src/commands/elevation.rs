@@ -100,6 +100,10 @@ pub(super) enum BrowserSftpGuard<'a> {
         /// nicht mehr an der `Session` hängt, sondern an einem Eintrag, der
         /// währenddessen aus der Zuordnung verschwinden darf.
         guard: tokio::sync::OwnedMutexGuard<Option<crate::elevated_sftp::ElevatedSftp>>,
+        /// Spec 0084, §9: Derselbe Slot, um beim Zugriff den Widerruf zu
+        /// prüfen — der wirkt sofort, auch während ein anderer Vorgang die
+        /// Sperre oben noch hält.
+        slot: ElevatedSftpSlot,
         expected_user: String,
     },
     /// Spec 0084, A1/A2: Für diese Sitzung ist kein erhöhter Kanal
@@ -116,9 +120,18 @@ impl BrowserSftpGuard<'_> {
                 .as_mut()
                 .expect("browser_session öffnet den normalen Kanal vorab")),
             Self::ElevatedInactive => Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE)),
+            // Spec 0084, §9: Der Widerruf wird **hier** geprüft, im Moment
+            // der Nutzung — nicht beim Befehlsbeginn. Der Merker geht dem
+            // Herausnehmen des Kanalwerts voraus und wirkt deshalb auch für
+            // einen Befehl, der schon auf der Sperre wartete, als der
+            // Nutzer ausgeschaltet oder umgeschaltet hat.
+            Self::Elevated { slot, .. } if slot.is_revoked() => {
+                Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE))
+            }
             Self::Elevated {
                 guard,
                 expected_user,
+                ..
             } => match guard.as_mut() {
                 None => Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE)),
                 Some(elevated) if elevated.target_user != *expected_user => {
@@ -139,6 +152,10 @@ impl BrowserSftpGuard<'_> {
     pub(super) fn elevated_user(&self) -> Option<String> {
         match self {
             Self::Normal(_) | Self::ElevatedInactive => None,
+            // Ein widerrufener Kanal meldet keinen Ziel-Nutzer mehr: über
+            // ihn läuft ohnehin keine Aktion mehr (s. `sftp`), und die
+            // Audit-Zeile soll keine Erhöhung behaupten, die es nicht gab.
+            Self::Elevated { slot, .. } if slot.is_revoked() => None,
             Self::Elevated { guard, .. } => guard.as_ref().map(|e| e.target_user.clone()),
         }
     }
@@ -205,6 +222,7 @@ pub(super) async fn lock_browser_sftp<'a>(
             slot: Some(slot),
         } => BrowserSftpGuard::Elevated {
             guard: slot.lock_owned(&BrowserAccess(())).await,
+            slot: slot.clone(),
             expected_user: expected_user.clone(),
         },
         BrowserChannel::Elevated { slot: None, .. } => BrowserSftpGuard::ElevatedInactive,
@@ -698,7 +716,6 @@ mod browser_channel_tests {
 
         registry
             .remove_session(&sessions, session_id)
-            .await
             .expect("die Sitzung war eingetragen");
 
         let mut guard = lock_browser_sftp(&session, &channel).await;
@@ -707,5 +724,127 @@ mod browser_channel_tests {
             .err()
             .expect("nach dem Trennen darf der festgehaltene Kanal nicht mehr tragen");
         assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
+    }
+
+    /// spec-reviewer-Fund (Runde 2): Das Trennen darf nicht hinter einem
+    /// laufenden erhöhten Transfer stehenbleiben. Der Widerruf beim
+    /// Entfernen einer Sitzung ist deshalb der sofort wirksame Merker, kein
+    /// Warten auf die Kanal-Sperre — sonst reagierte ein Klick auf
+    /// „Trennen" während eines hängenden Uploads sichtbar gar nicht.
+    ///
+    /// Scheitert (mit Zeitüberschreitung) gegen die Variante, die beim
+    /// Entfernen auf die Kanal-Sperre wartet.
+    #[tokio::test]
+    async fn test_removing_a_session_does_not_wait_for_a_running_elevated_transfer() {
+        let session = std::sync::Arc::new(crate::test_support::session_with_transport(Box::new(
+            NoTransport,
+        )));
+        let session_id = SessionId::new_v4();
+        let sessions = std::sync::Arc::new(crate::session::SessionManager::new());
+        sessions.insert(session_id, session.clone());
+        let registry = std::sync::Arc::new(registry_with_channel(
+            session_id,
+            "root",
+            ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "ROOT"),
+        ));
+
+        // Ein laufender Transfer hält die Kanal-Sperre über seine ganze
+        // Dauer — genau das tun `sftp_upload`/`download_one_file`.
+        let held = registry
+            .slot(session_id, &BrowserAccess(()))
+            .expect("Vorbedingung: Kanal aktiv");
+        let transfer_guard = held.lock_owned(&BrowserAccess(())).await;
+
+        // In einem eigenen Thread, damit eine Variante, die doch auf die
+        // Kanal-Sperre wartet, als Zeitüberschreitung sichtbar wird, statt
+        // den ganzen Testlauf hängen zu lassen.
+        let registry_for_removal = registry.clone();
+        let sessions_for_removal = sessions.clone();
+        let removal = tokio::task::spawn_blocking(move || {
+            registry_for_removal.remove_session(&sessions_for_removal, session_id)
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(5), removal)
+            .await
+            .expect("Trennen darf nicht auf den laufenden Transfer warten")
+            .expect("der Entfernen-Task darf nicht panisch enden")
+            .expect("die Sitzung war eingetragen");
+
+        assert!(
+            held.is_revoked(),
+            "der Widerruf muss schon wirken, während der Transfer die Sperre noch hält"
+        );
+
+        // Und der Transfer selbst ist ab sofort nicht mehr erhöht nutzbar.
+        drop(transfer_guard);
+        let channel = BrowserChannel::from_request(&registry, session_id, Some("root".to_string()));
+        let mut guard = lock_browser_sftp(&session, &channel).await;
+        assert!(guard.sftp().is_err());
+    }
+
+    /// spec-reviewer-Fund (Runde 2): Ein Browser-Befehl, der beim
+    /// Umschalten des Ziel-Nutzers **bereits auf der Kanal-Sperre wartet**,
+    /// bekommt sie vor dem Widerruf (die Sperre ist fair) — er darf den
+    /// alten Kanal danach trotzdem nicht mehr benutzen.
+    ///
+    /// Scheitert gegen die Variante, die den Widerruf erst am Ende der
+    /// Warteschlange wirken lässt (Widerruf nur per `take()` unter der
+    /// Sperre, ohne sofort wirksamen Merker).
+    #[tokio::test]
+    async fn test_a_command_already_waiting_on_the_channel_fails_after_the_user_switched() {
+        let f = crate::test_support::elevation::fixture(Box::new(
+            crate::test_support::elevation::working_transport(),
+        ));
+        crate::elevated_sftp::enable(&f.ctx(), "deploy", None, None, &BrowserAccess(()))
+            .await
+            .expect("Vorbedingung: Aktivieren als root gelingt");
+
+        // Befehl B hat den Kanal schon nachgeschlagen und wartet auf die
+        // Sperre, die Befehl A gerade hält.
+        let channel_b =
+            BrowserChannel::from_request(&f.registry, f.session_id, Some("root".to_string()));
+        let held = f
+            .registry
+            .slot(f.session_id, &BrowserAccess(()))
+            .expect("Vorbedingung: Kanal aktiv");
+        let guard_a = held.lock_owned(&BrowserAccess(())).await;
+
+        // Der Nutzer schaltet auf www-data um. Das Aktivieren wartet
+        // seinerseits auf A, der Widerruf des alten Kanals muss aber schon
+        // vorher greifen.
+        let f_for_switch = std::sync::Arc::new(f);
+        let f_for_task = f_for_switch.clone();
+        let switch = tokio::spawn(async move {
+            crate::elevated_sftp::enable(
+                &f_for_task.ctx(),
+                "deploy",
+                None,
+                Some("www-data"),
+                &BrowserAccess(()),
+            )
+            .await
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while !held.is_revoked() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("der Widerruf muss wirken, bevor die Sperre frei wird");
+
+        // Jetzt gibt A die Sperre frei, B kommt dran — und scheitert.
+        drop(guard_a);
+        let mut guard = lock_browser_sftp(&f_for_switch.session, &channel_b).await;
+        let err = guard
+            .sftp()
+            .err()
+            .expect("B darf nach dem Nutzerwechsel nicht mehr als root arbeiten");
+        assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
+        drop(guard);
+
+        tokio::time::timeout(std::time::Duration::from_secs(5), switch)
+            .await
+            .expect("das Umschalten muss enden")
+            .expect("der Umschalt-Task darf nicht panisch enden")
+            .expect("das Umschalten selbst gelingt");
     }
 }

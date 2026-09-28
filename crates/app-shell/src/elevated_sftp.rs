@@ -46,38 +46,80 @@ pub struct ElevatedSftp {
 /// gerade nutzt, hält seinen eigenen Zeiger, während die Zuordnung schon
 /// wieder frei ist.
 #[derive(Clone, Default)]
-pub struct ElevatedSftpSlot(Arc<AsyncMutex<Option<ElevatedSftp>>>);
+pub struct ElevatedSftpSlot {
+    channel: Arc<AsyncMutex<Option<ElevatedSftp>>>,
+    /// Spec 0084, §9 (Klarstellung 2026-09-28): der **sofort** wirksame
+    /// Teil des Widerrufs.
+    ///
+    /// Er steht neben der Kanal-Sperre, nicht in ihr, und das ist der
+    /// Punkt: Ein Widerruf, der nur den Kanal unter der Sperre herausnimmt,
+    /// wirkt erst, wenn er in der Warteschlange dieser Sperre an der Reihe
+    /// ist — `tokio::sync::Mutex` ist fair, ein bereits wartender
+    /// Browser-Befehl käme also noch **vor** dem Widerruf dran und liefe
+    /// mit den alten Rechten weiter (spec-reviewer, Runde 2). Der Merker
+    /// wird gesetzt, bevor irgendjemand die Sperre bekommen kann, und jeder
+    /// Zugriff prüft ihn — damit endet die Nutzbarkeit im selben Moment, in
+    /// dem der Nutzer ausschaltet, umschaltet oder trennt.
+    revoked: Arc<std::sync::atomic::AtomicBool>,
+}
 
 impl ElevatedSftpSlot {
     fn with_channel(channel: ElevatedSftp) -> Self {
-        Self(Arc::new(AsyncMutex::new(Some(channel))))
+        Self {
+            channel: Arc::new(AsyncMutex::new(Some(channel))),
+            revoked: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
     }
 
     pub(crate) async fn lock_owned(
         &self,
         _access: &BrowserAccess,
     ) -> OwnedMutexGuard<Option<ElevatedSftp>> {
-        self.0.clone().lock_owned().await
+        self.channel.clone().lock_owned().await
+    }
+
+    /// Ist dieser Kanal widerrufen? Jeder Zugriff prüft das (s.
+    /// `commands::elevation::BrowserSftpGuard::sftp`) — auch dann, wenn der
+    /// Kanalwert selbst noch dasteht, weil ein Halter die Sperre gerade
+    /// belegt.
+    pub(crate) fn is_revoked(&self) -> bool {
+        self.revoked.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Spec 0084, §9 (Klarstellung 2026-09-28): **Widerruf wirkt beim
-    /// Zugriff, nicht beim Befehlsbeginn.** Nimmt den Kanal unter seiner
-    /// eigenen Sperre heraus und schließt ihn (`Drop`). Wer diesen Slot
-    /// noch aus einem laufenden Befehl hält, findet beim nächsten Zugriff
-    /// `None` und scheitert mit `ELEVATED_CHANNEL_INACTIVE` — statt nach
-    /// dem Ausschalten, dem Umschalten auf einen anderen Nutzer oder dem
-    /// Trennen der Sitzung weiter mit erhöhten Rechten zu arbeiten.
-    ///
-    /// Wartet dabei, bis ein gerade laufender Vorgang auf dem Kanal fertig
-    /// ist (die Sperre wird während einer Übertragung gehalten) — dasselbe
-    /// Verhalten wie vor Spec 0084, als der Kanal noch an der `Session`
-    /// hing.
+    /// Zugriff, nicht beim Befehlsbeginn.** Wirkt sofort und ohne auf
+    /// irgendeine Sperre zu warten — wer den Slot noch aus einem laufenden
+    /// Befehl hält, scheitert ab hier mit `ELEVATED_CHANNEL_INACTIVE`,
+    /// statt nach dem Ausschalten, dem Umschalten auf einen anderen Nutzer
+    /// oder dem Trennen der Sitzung weiter mit erhöhten Rechten zu
+    /// arbeiten.
     ///
     /// Bewusst **ohne** `BrowserAccess`: Widerrufen ist kein Zugriff, es
     /// nimmt nur weg. Sonst könnte `remove_session` (A2.1) den Kanal einer
-    /// getrennten Sitzung gar nicht schließen.
+    /// getrennten Sitzung gar nicht widerrufen.
+    fn mark_revoked(&self) {
+        self.revoked
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Widerruft (sofort, s. [`Self::mark_revoked`]) und nimmt den Kanal
+    /// danach unter seiner eigenen Sperre heraus, damit er auch wirklich
+    /// fallengelassen wird statt bis zum Ende des Programms zu leben.
+    ///
+    /// Das Herausnehmen **wartet**, bis ein gerade laufender Vorgang auf
+    /// dem Kanal fertig ist — §9: „Deaktivieren wartet wie bisher". Für die
+    /// Sicherheit ist das nicht mehr nötig (der Merker wirkt schon), nur
+    /// für das saubere Schließen. Deshalb ruft der Trennpfad (A2.1)
+    /// bewusst nur [`Self::mark_revoked`] und wartet nicht: ein „Trennen"
+    /// darf nicht hinter einem hängenden Transfer stehenbleiben
+    /// (spec-reviewer, Runde 2).
+    ///
+    /// Darf nie unter der Zuordnungs-Sperre und nie unter der
+    /// Transport-Sperre einer Sitzung aufgerufen werden — sonst entsteht
+    /// mit `commands::disconnect` (Kanal → Transport) ein Sperrzyklus.
     async fn revoke(&self) -> bool {
-        self.0.lock().await.take().is_some()
+        self.mark_revoked();
+        self.channel.lock().await.take().is_some()
     }
 }
 
@@ -113,11 +155,9 @@ pub struct ElevatedSftpRegistry {
     interleave_hook: StdMutex<Option<InterleaveHook>>,
 }
 
-/// s. [`ElevatedSftpRegistry::interleave_hook`]. Liefert eine Future, damit
-/// der Haltepunkt warten kann, ohne einen Scheduler-Thread zu blockieren.
+/// s. [`ElevatedSftpRegistry::interleave_hook`].
 #[cfg(test)]
-type InterleaveHook =
-    Box<dyn Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send>;
+type InterleaveHook = Box<dyn Fn() + Send>;
 
 impl ElevatedSftpRegistry {
     /// Der erhöhte Kanal dieser Sitzung, sofern aktiv.
@@ -151,15 +191,27 @@ impl ElevatedSftpRegistry {
         if sessions.get(session_id).is_none() {
             return Err(());
         }
-        Ok(slots.insert(session_id, ElevatedSftpSlot::with_channel(channel)))
+        let previous = slots.insert(session_id, ElevatedSftpSlot::with_channel(channel));
+        // Sofort, noch unter der Zuordnungs-Sperre: ab hier kann kein
+        // Befehl den alten Kanal mehr benutzen — auch keiner, der schon auf
+        // dessen Sperre wartet.
+        if let Some(previous) = &previous {
+            previous.mark_revoked();
+        }
+        Ok(previous)
     }
 
-    /// Nimmt den Eintrag einer Sitzung aus der Zuordnung heraus. Der
-    /// Widerruf des Kanals selbst geschieht **danach** über
-    /// [`ElevatedSftpSlot::revoke`] — er wartet auf einen laufenden Vorgang
-    /// und darf deshalb nicht unter der Zuordnungs-Sperre laufen.
+    /// Nimmt den Eintrag einer Sitzung aus der Zuordnung heraus und
+    /// widerruft ihn sofort. Das Herausnehmen des Kanalwerts geschieht
+    /// **danach** über [`ElevatedSftpSlot::revoke`] — es wartet auf einen
+    /// laufenden Vorgang und darf deshalb nicht unter der
+    /// Zuordnungs-Sperre laufen.
     fn take(&self, session_id: SessionId, _access: &BrowserAccess) -> Option<ElevatedSftpSlot> {
-        self.slots.lock().unwrap().remove(&session_id)
+        let slot = self.slots.lock().unwrap().remove(&session_id);
+        if let Some(slot) = &slot {
+            slot.mark_revoked();
+        }
+        slot
     }
 
     /// Spec 0084, A2.1: **die eine** Funktion, die eine Sitzung samt ihrem
@@ -173,10 +225,16 @@ impl ElevatedSftpRegistry {
     ///
     /// Spec 0084, §9 (Klarstellung 2026-09-28): Der Kanal wird zum Schluss
     /// auch **widerrufen**, nicht nur ausgehängt — ein Befehl, der ihn beim
-    /// Trennen noch festhält, darf ihn danach nicht weiter benutzen. Der
-    /// Widerruf wartet auf einen gerade laufenden Vorgang; er läuft nach
-    /// der Zuordnungs-Sperre, nie unter ihr.
-    pub(crate) async fn remove_session(
+    /// Trennen noch festhält, darf ihn danach nicht weiter benutzen.
+    ///
+    /// Der Widerruf ist hier bewusst nur der sofort wirksame Merker, ohne
+    /// auf die Kanal-Sperre zu warten: Diese Funktion steht im
+    /// `disconnect`-Pfad, und „Trennen" darf nicht hinter einem hängenden
+    /// Transfer stehenbleiben (spec-reviewer, Runde 2 — sonst schließt sich
+    /// der Tab nach einem Klick auf „Trennen" sichtbar nicht mehr). Der
+    /// Kanalwert selbst verschwindet, sobald der letzte Halter ihn
+    /// fallenlässt; nutzbar ist er ab sofort nicht mehr.
+    pub(crate) fn remove_session(
         &self,
         sessions: &SessionManager,
         session_id: SessionId,
@@ -186,12 +244,12 @@ impl ElevatedSftpRegistry {
         {
             let hook = self.interleave_hook.lock().unwrap().take();
             if let Some(hook) = hook {
-                hook().await;
+                hook();
             }
         }
         let slot = self.slots.lock().unwrap().remove(&session_id);
         if let Some(slot) = slot {
-            slot.revoke().await;
+            slot.mark_revoked();
         }
         session
     }
@@ -282,6 +340,12 @@ async fn run_probe(
 /// Spec 0084, A2.2: Der geöffnete Kanal wird nur eingetragen, solange die
 /// Sitzung noch steht — sonst `Err("Session nicht gefunden")` und der Kanal
 /// wird verworfen.
+///
+/// **Sperr-Reihenfolge:** Der Widerruf des verdrängten Vorgängers steht
+/// bewusst außerhalb des Blocks, der `session.transport` sperrt. Läge er
+/// darin, entstünde mit `commands::disconnect` (das die Kanal-Sperre
+/// freigibt und dann den Transport nimmt) ein Sperrzyklus
+/// (spec-reviewer, Runde 2).
 pub(crate) async fn enable(
     ctx: &ElevationContext<'_>,
     login: &str,
@@ -479,7 +543,7 @@ pub(crate) async fn disable(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex as StdMutex};
+    use std::sync::Arc;
 
     use super::*;
     use crate::test_support::elevation::{
@@ -634,7 +698,7 @@ mod tests {
             .expect("Vorbedingung: Aktivieren gelingt");
         assert!(f.is_active().await, "Vorbedingung: Kanal ist aktiv");
 
-        let removed = f.registry.remove_session(&f.sessions, f.session_id).await;
+        let removed = f.registry.remove_session(&f.sessions, f.session_id);
 
         assert!(removed.is_some(), "die Sitzung selbst muss entfernt sein");
         assert!(
@@ -669,7 +733,7 @@ mod tests {
             .await
             .expect("das Aktivieren muss den Öffnen-Schritt erreichen");
 
-        f.registry.remove_session(&f.sessions, f.session_id).await;
+        f.registry.remove_session(&f.sessions, f.session_id);
         gate.notify_one();
 
         let result = tokio::time::timeout(std::time::Duration::from_secs(5), activation)
@@ -713,29 +777,23 @@ mod tests {
         // Der Haltepunkt läuft mitten in A2.1: er gibt das Aktivieren frei
         // und wartet, bis es ganz durch ist, bevor A2.1 seinen zweiten
         // Schritt macht.
-        let (done_tx, done_rx) = tokio::sync::oneshot::channel::<()>();
-        let done_rx = StdMutex::new(Some(done_rx));
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
         let gate_for_hook = gate.clone();
         f.registry.set_interleave_hook(Box::new(move || {
-            let gate = gate_for_hook.clone();
-            let done_rx = done_rx.lock().unwrap().take();
-            Box::pin(async move {
-                gate.notify_one();
-                if let Some(done_rx) = done_rx {
-                    tokio::time::timeout(std::time::Duration::from_secs(5), done_rx)
-                        .await
-                        .expect("das Aktivieren muss innerhalb des Haltepunkts enden")
-                        .expect("der Haltepunkt darf nicht vorzeitig gelöst werden");
-                }
-            })
+            gate_for_hook.notify_one();
+            done_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .expect("das Aktivieren muss innerhalb des Haltepunkts enden");
         }));
 
+        // `spawn_blocking`: Der Haltepunkt blockiert seinen Thread, bis das
+        // Aktivieren durch ist — auf einem Scheduler-Thread käme das
+        // Aktivieren dann nie zum Zug.
         let f_for_removal = f.clone();
-        let removal = tokio::spawn(async move {
+        let removal = tokio::task::spawn_blocking(move || {
             f_for_removal
                 .registry
                 .remove_session(&f_for_removal.sessions, f_for_removal.session_id)
-                .await
         });
 
         let result = tokio::time::timeout(std::time::Duration::from_secs(5), activation)

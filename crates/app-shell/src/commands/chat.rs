@@ -390,7 +390,6 @@ pub async fn disconnect(
     // bleibt unten in diesem Befehl.
     let session = elevated
         .remove_session(&state.sessions, session_id)
-        .await
         .ok_or("Session nicht gefunden")?;
 
     // Best-effort: ein Fehler beim Trennen selbst (z. B. Verbindung bereits
