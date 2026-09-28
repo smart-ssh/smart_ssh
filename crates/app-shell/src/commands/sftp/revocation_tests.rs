@@ -959,9 +959,18 @@ async fn test_t6b_a_revocation_between_stat_and_read_leaves_the_file_unread() {
                         .await
                         .map(|_| ())
                 } else {
-                    open_for_editing_impl(&session, &channel, session_id, "/t/a.txt")
-                        .await
-                        .map(|_| ())
+                    // Spec 0086, A1.2: die Grenze ist hier ohne Belang (der
+                    // Baum hält winzige Dateien) — die echte Konstante, wie
+                    // im Produktivpfad.
+                    open_for_editing_impl(
+                        &session,
+                        &channel,
+                        session_id,
+                        "/t/a.txt",
+                        MAX_EDIT_OPEN_BYTES,
+                    )
+                    .await
+                    .map(|_| ())
                 }
             },
         );

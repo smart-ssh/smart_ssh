@@ -43,6 +43,14 @@ use super::elevation::{
 #[cfg(test)]
 mod revocation_tests;
 
+/// Spec 0086, A1 (T1–T7): die Größengrenzen von „Dateiinhalt kopieren" und
+/// „Lokal öffnen" halten auch bei einer zwischen `stat` und `read_file`
+/// gewachsenen Datei. Eigene Datei, weil der Aufbau (Kanal-Double, bei dem
+/// `stat` und `read_file` sich widersprechen) für sich genommen umfangreich
+/// ist.
+#[cfg(test)]
+mod size_limit_tests;
+
 #[tauri::command]
 pub async fn sftp_list(
     state: State<'_, AppState>,
@@ -902,6 +910,18 @@ pub async fn sftp_mkdir(
 /// geteilte Definition.
 const MAX_TEXT_PREVIEW_BYTES: u64 = 256 * 1024;
 
+/// Spec 0086, A1.1: die Ablehnungs-Meldung für „Dateiinhalt kopieren" —
+/// **wörtlich dieselbe** vor und nach dem Lesen. An einer Stelle gebildet
+/// statt an zwei formatiert: der Nutzer soll nicht daran ablesen können, an
+/// welcher der beiden Prüfungen es lag (und zwei Formatierungen wären
+/// auseinandergelaufen).
+fn too_large_for_clipboard() -> CommandError {
+    CommandError::from(format!(
+        "Datei ist größer als {} KB — zu groß zum Kopieren in die Zwischenablage",
+        MAX_TEXT_PREVIEW_BYTES / 1024
+    ))
+}
+
 /// Spec 0054, Teil 2: "Dateiinhalt kopieren" — liest eine Remote-Datei als
 /// Text für die Zwischenablage (der eigentliche `writeText`-Aufruf passiert
 /// im Frontend, s. `navigator.clipboard` dort). Kein Filter-Engine-/KI-Gate
@@ -945,14 +965,21 @@ async fn read_text_impl(
     // A1.1/T6b).
     if let Ok(entry) = sftp.stat(path).await {
         if entry.size > MAX_TEXT_PREVIEW_BYTES {
-            return Err(CommandError::from(format!(
-                "Datei ist größer als {} KB — zu groß zum Kopieren in die Zwischenablage",
-                MAX_TEXT_PREVIEW_BYTES / 1024
-            )));
+            return Err(too_large_for_clipboard());
         }
     }
 
     let bytes = sftp.read_file(path).await?;
+    // Spec 0086, A1.1: Die `stat`-Prüfung oben ist eine Vorabprüfung, keine
+    // Zusage. Die Kanal-Sperre wird je Operation genommen (Spec 0085, A1.3;
+    // ADR 0078 §1), zwischen `stat` und `read_file` kann also ein anderer
+    // Befehl laufen und die Datei wachsen — und ein gescheitertes `stat`
+    // lässt sie bewusst ganz ungeprüft (s. Doc-Kommentar oben). Maßgeblich
+    // ist deshalb diese Prüfung am tatsächlich gelesenen Inhalt: nur sie
+    // kann die Grenze halten, die der Nutzer zugesagt bekommt.
+    if bytes.len() as u64 > MAX_TEXT_PREVIEW_BYTES {
+        return Err(too_large_for_clipboard());
+    }
     String::from_utf8(bytes)
         .map_err(|_| CommandError::from("Datei ist keine Textdatei (kein gültiges UTF-8)"))
 }
@@ -1020,12 +1047,31 @@ pub(super) fn edit_session_dir(session_id: SessionId) -> CommandResult<std::path
         .join(session_id.to_string()))
 }
 
+/// Spec 0086, A1.2: Obergrenze für „Lokal öffnen". Bewusst eine **eigene**
+/// Konstante ohne gemeinsamen Code mit [`MAX_TEXT_PREVIEW_BYTES`] oder dem
+/// KI-Lesepfad (A1.4) — die Begründung am Doc-Kommentar von
+/// `MAX_TEXT_PREVIEW_BYTES` gilt hier genauso, und inhaltlich sind es zwei
+/// verschiedene Fragen: was sinnvoll in die Zwischenablage passt, und was
+/// sinnvoll in einen lokalen Editor geladen wird.
+const MAX_EDIT_OPEN_BYTES: u64 = 50 * 1024 * 1024;
+
+/// Spec 0086, A1.2: der Wortlaut der Ablehnung, wörtlich aus der Spec.
+/// Fester Text statt aus [`MAX_EDIT_OPEN_BYTES`] formatiert, weil der Wert
+/// in Tests als Parameter kleiner gesetzt wird (s.
+/// [`open_for_editing_impl`]) — ein formatierter Text würde dort eine
+/// Grenze nennen, die es im Produktivbetrieb nicht gibt.
+const TOO_LARGE_FOR_EDITING: &str =
+    "Datei ist größer als 50 MB — zu groß zum lokalen Öffnen. Bitte stattdessen herunterladen.";
+
 /// Spec 0054, Teil 4, Punkt 1: Download in das kontrollierte
 /// Editier-Temp-Verzeichnis dieser Session. Ein erneutes Öffnen derselben
 /// Remote-Datei überschreibt die lokale Kopie einfach mit dem aktuellen
 /// Remote-Inhalt (keine zweite, veraltete Kopie unter neuem Namen) — wer
 /// eine bereits laufende Bearbeitung fortsetzen will, nutzt die
 /// weiterhin geöffnete Anwendung, nicht einen erneuten "Lokal öffnen"-Klick.
+///
+/// Spec 0086, A1.2: Dateien über [`MAX_EDIT_OPEN_BYTES`] werden abgelehnt —
+/// vor dem Lesen, wenn `stat` die Größe schon zeigt, sonst nach dem Lesen.
 #[tauri::command]
 pub async fn sftp_open_for_editing(
     state: State<'_, AppState>,
@@ -1040,17 +1086,30 @@ pub async fn sftp_open_for_editing(
         session_id,
         elevated_user,
         |session, channel| async move {
-            open_for_editing_impl(&session, &channel, session_id, &remote_path).await
+            open_for_editing_impl(
+                &session,
+                &channel,
+                session_id,
+                &remote_path,
+                MAX_EDIT_OPEN_BYTES,
+            )
+            .await
         },
     )
     .await
 }
 
+/// `max_bytes` ist ein Parameter statt direkt [`MAX_EDIT_OPEN_BYTES`]
+/// (Spec 0086, T5): die Prüfung **nach** dem Lesen ließe sich sonst nur mit
+/// einem echten 50-MB-Puffer je Testfall abdecken. Der Produktivpfad
+/// (`sftp_open_for_editing` oben) gibt immer die echte Konstante mit, es
+/// gibt keinen zweiten Aufrufer — s. ADR 0080.
 async fn open_for_editing_impl(
     session: &Session,
     channel: &BrowserChannel,
     session_id: SessionId,
     remote_path: &str,
+    max_bytes: u64,
 ) -> CommandResult<EditSessionDto> {
     let file_name = file_name_of(remote_path);
     // Zip-Slip-Schutz (s. `safe_local_segment`-Doc-Kommentar) — auch hier
@@ -1064,9 +1123,25 @@ async fn open_for_editing_impl(
         // Zwei Operationen: ein Widerruf dazwischen lässt die Datei
         // ungelesen (Spec 0085, A1.1/T6b).
         let entry = sftp.stat(remote_path).await?;
+        // Spec 0086, A1.2: vor dem Lesen, wenn `stat` die Größe schon zeigt —
+        // dann wird eine zu große Datei nicht erst komplett übertragen.
+        if entry.size > max_bytes {
+            return Err(CommandError::from(TOO_LARGE_FOR_EDITING));
+        }
         let bytes = sftp.read_file(remote_path).await?;
         (bytes, entry.modified.map(|dt| dt.to_rfc3339()))
     };
+
+    // Spec 0086, A1.2/A1.3: und nach dem Lesen, denn die `stat`-Größe oben
+    // ist keine Zusage — die Kanal-Sperre wird je Operation genommen (Spec
+    // 0085, A1.3; ADR 0078 §1), die Datei kann zwischen `stat` und
+    // `read_file` gewachsen sein. Die Prüfung steht **vor** jedem
+    // Schreibzugriff ins Temp-Verzeichnis: bei einer Ablehnung entsteht dort
+    // weder Datei noch Verzeichnis, und eine aus einem früheren „Lokal
+    // öffnen" schon liegende Kopie bleibt unverändert (A1.3).
+    if bytes.len() as u64 > max_bytes {
+        return Err(CommandError::from(TOO_LARGE_FOR_EDITING));
+    }
 
     let dir = edit_session_dir(session_id)?;
     let local_path = dir.join(&file_name);
