@@ -662,11 +662,21 @@ impl russh_sftp::server::Handler for SftpTestHandler {
         path: String,
         attrs: FileAttributes,
     ) -> Result<Status, Self::Error> {
-        if let Some(mode) = attrs.permissions {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(self.resolve(&path), std::fs::Permissions::from_mode(mode))
-                .await
-                .map_err(map_io_err)?;
+        // Windows kennt keine Unix-`mode`-Bits; `path`/`attrs` blieben dort
+        // sonst unbenutzt (Spec 0089, W4) — der Testserver wendet dort
+        // schlicht keine Rechte an, unverändert für Unix (Spec 0054, Teil 3).
+        #[cfg(unix)]
+        {
+            if let Some(mode) = attrs.permissions {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(self.resolve(&path), std::fs::Permissions::from_mode(mode))
+                    .await
+                    .map_err(map_io_err)?;
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (&path, &attrs);
         }
         Ok(ok_status(id))
     }
