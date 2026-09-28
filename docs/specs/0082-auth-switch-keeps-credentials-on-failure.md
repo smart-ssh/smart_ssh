@@ -247,7 +247,21 @@ Formular; MCP kann es nicht.
 
 ## 9. Klarstellungen
 
-(leer)
+**K1 — `sudo_password` ist auch beim Aufräumen nach Erfolg ausgenommen**
+(Coder, 2026-09-28, auf einen Fund des spec-reviewers). A3 nennt den Slot
+ausdrücklich für den Rückweg; A2/A5 nennen ihn nicht, weil sie ihn
+stillschweigend als nicht zur `AuthMethod` gehörig voraussetzen — unter
+dieser Annahme sind die Mengen ohnehin disjunkt und die Ausnahme ein
+No-op. Der Code führt sie trotzdem auf beiden Wegen, damit die Annahme
+nicht bloß gilt, sondern geprüft wird: Verweist eine gespeicherte
+`AuthMethod` doch einmal auf `server:{id}:sudo_password` (von Hand
+veränderte Zeile, künftige Variante mit demselben Slot-Namen), löschte der
+Erfolgsweg sonst das Sudo-Passwort, das derselbe Aufruf gerade geschrieben
+hat. Die Kehrseite — in eben diesem Zustand bleibt ohne neues
+Sudo-Passwort ein verwaister Eintrag stehen — ist der gewollte Tausch:
+ein Eintrag zu viel statt ein Credential zu wenig. Produktiv unerreichbar,
+`resolve_auth_method` vergibt nur `password`, `private_key`, `passphrase`,
+`certificate`, `certificate_key`. S. `docs/adr/0081`.
 
 ## Umsetzung
 
