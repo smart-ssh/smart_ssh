@@ -8,6 +8,11 @@
 //! weiter mit den alten Rechten — und das Ausschalten wartete, bis die ganze
 //! Rekursion durch war.
 //!
+//! Spec 0086, A2 (T8/T9, am Ende der Datei): derselbe Aufbau für die Frage,
+//! welchen Text die **Transferliste** bei einem Widerruf zeigt — sie zeigte
+//! den Fehler mit dem Präfix `Channel-Fehler: `, während der Befehl denselben
+//! Grund ohne Präfix meldete.
+//!
 //! Alle Tests hier fahren den **echten** Befehlsrumpf (`delete_impl`,
 //! `chmod_impl`, …) durch den **echten** gemeinsamen Rahmen
 //! (`with_browser_channel`, dieselbe Funktion, die `run_browser_command` im
@@ -520,14 +525,19 @@ async fn join<T>(handle: tokio::task::JoinHandle<CommandResult<T>>) -> CommandRe
         .expect("der Befehls-Task darf nicht panisch enden")
 }
 
+/// Der Wortlaut von `ELEVATED_CHANNEL_INACTIVE` (dort `pub(super)`-los, also
+/// hier nachgeschrieben statt importiert — genau deshalb prüft
+/// [`assert_inactive`] auf Gleichheit: eine Abweichung fällt auf).
+const ELEVATED_CHANNEL_INACTIVE_TEXT: &str =
+    "Der erhöhte Modus ist nicht mehr aktiv (Verbindung getrennt oder ausgeschaltet) — \
+     die Aktion wurde nicht ausgeführt. Bitte den erhöhten Modus erneut einschalten.";
+
 /// Spec 0085, A1.2: **gleich**, nicht „enthält". Ein Abbruch wegen Widerrufs
 /// darf nicht als SFTP-Fehler oder Channel-Fehler beim Aufrufer ankommen.
 fn assert_inactive<T: std::fmt::Debug>(result: CommandResult<T>) {
     let err = result.expect_err("nach dem Widerruf darf der Befehl nicht gelingen");
     assert_eq!(
-        err.message,
-        "Der erhöhte Modus ist nicht mehr aktiv (Verbindung getrennt oder ausgeschaltet) — \
-         die Aktion wurde nicht ausgeführt. Bitte den erhöhten Modus erneut einschalten.",
+        err.message, ELEVATED_CHANNEL_INACTIVE_TEXT,
         "der Abbruchgrund muss wörtlich ELEVATED_CHANNEL_INACTIVE sein"
     );
 }
@@ -1297,5 +1307,265 @@ async fn test_t9_recursive_delete_and_chmod_over_the_normal_channel_behave_as_be
         elevated.ops().is_empty(),
         "der erhöhte Kanal darf dabei nie berührt werden, war: {:?}",
         elevated.ops()
+    );
+}
+
+// --- Spec 0086, A2 (T8/T9): die Meldung in der Transferliste ----------------
+//
+// Ein Widerruf, der erst bei der einzelnen Operation greift, kam im Rumpf von
+// `download_one_file`/`upload_impl` als `SshError::ChannelError(<Text>)` an,
+// dessen `Display` das Präfix `Channel-Fehler: ` vorsetzt. Das
+// `sftp-transfer-finished`-Ereignis trug diesen Text, das Befehlsergebnis
+// danach den ohne Präfix (zentral in `with_browser_channel` übersetzt) — die
+// Transferliste zeigte also etwas anderes als der Befehl.
+//
+// Beide Transfer-Kerne bekommen den Emitter seit Spec 0086 als Parameter
+// (T8); vorher bauten sie ihn aus einem `AppHandle` selbst und kein Test
+// erreichte sie.
+
+/// Die `error`-Felder aller mitgeschnittenen `sftp-transfer-finished`-
+/// Ereignisse, in Reihenfolge.
+fn transfer_finished_errors(emitter: &app_logic::events::TestEmitter) -> Vec<Option<String>> {
+    emitter
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(name, _)| name == "sftp-transfer-finished")
+        .map(|(_, payload)| {
+            payload
+                .get("error")
+                .and_then(|value| value.as_str())
+                .map(|text| text.to_string())
+        })
+        .collect()
+}
+
+/// Widerruft am Haltepunkt vor der ersten Operation dieses Befehls — also
+/// nach dem Erstzugang (das `sftp-transfer-started`-Ereignis ist schon
+/// draußen), aber vor dem Lesen bzw. Schreiben. Der Haltepunkt wird beim
+/// ersten Durchlauf verbraucht (s. `set_before_operation_hook`), er trifft
+/// also genau diese eine Operation.
+fn revoke_before_next_operation(s: &Setup, slot: &ElevatedSftpSlot) {
+    let sessions = s.sessions.clone();
+    let registry = s.registry.clone();
+    let session_id = s.session_id;
+    slot.set_before_operation_hook(Box::new(move || {
+        registry.remove_session(&sessions, session_id);
+    }));
+}
+
+/// Spec 0086, T8 (A2.1), Download: `error` im Ereignis ist **wörtlich** das
+/// Befehlsergebnis — `ELEVATED_CHANNEL_INACTIVE`, ohne `Channel-Fehler: `.
+///
+/// Scheitert vor dem Fix am Präfix.
+#[tokio::test]
+async fn test_t8_a_revoked_download_reports_the_same_text_in_its_event_as_in_its_result() {
+    let elevated = GatedSftp::small_tree(0);
+    let s = setup(Box::new(elevated.clone())).await;
+    let slot = s.slot();
+    revoke_before_next_operation(&s, &slot);
+
+    let emitter = Arc::new(app_logic::events::TestEmitter::default());
+    let local_dir = tempfile::tempdir().unwrap();
+    let local_path = local_dir.path().join("a.txt");
+    let session_id = s.session_id;
+    let em = emitter.clone();
+
+    let result = with_browser_channel(
+        s.session.clone(),
+        s.elevated_channel(),
+        move |session, channel| async move {
+            download_one_file(
+                em.as_ref(),
+                &session,
+                &channel,
+                session_id,
+                "/t/a.txt",
+                local_path,
+                None,
+            )
+            .await
+        },
+    )
+    .await;
+
+    assert!(
+        slot.is_revoked(),
+        "Vorbedingung: der Haltepunkt hat widerrufen"
+    );
+    let command_error = result
+        .expect_err("nach dem Widerruf darf der Download nicht gelingen")
+        .message;
+    assert_eq!(
+        transfer_finished_errors(&emitter),
+        vec![Some(command_error.clone())],
+        "die Transferliste muss denselben Text zeigen wie das Befehlsergebnis"
+    );
+    assert_eq!(
+        command_error, ELEVATED_CHANNEL_INACTIVE_TEXT,
+        "und dieser Text ist wörtlich ELEVATED_CHANNEL_INACTIVE, ohne Präfix"
+    );
+    assert!(
+        elevated.ops().is_empty(),
+        "gelesen wurde nach dem Widerruf nichts, war: {:?}",
+        elevated.ops()
+    );
+}
+
+/// Spec 0086, T8 (A2.1), Upload: dasselbe für die andere Richtung.
+#[tokio::test]
+async fn test_t8_a_revoked_upload_reports_the_same_text_in_its_event_as_in_its_result() {
+    let elevated = GatedSftp::small_tree(0);
+    let s = setup(Box::new(elevated.clone())).await;
+    let slot = s.slot();
+    revoke_before_next_operation(&s, &slot);
+
+    let emitter = Arc::new(app_logic::events::TestEmitter::default());
+    let local_dir = tempfile::tempdir().unwrap();
+    let local_file = local_dir.path().join("upload.txt");
+    std::fs::write(&local_file, b"NEUER-INHALT").unwrap();
+    let local_path = local_file.to_string_lossy().into_owned();
+    let session_id = s.session_id;
+    let em = emitter.clone();
+
+    let result = with_browser_channel(
+        s.session.clone(),
+        s.elevated_channel(),
+        move |session, channel| async move {
+            upload_impl(
+                em.as_ref(),
+                &session,
+                &channel,
+                session_id,
+                &local_path,
+                "/t/a.txt",
+            )
+            .await
+        },
+    )
+    .await;
+
+    assert!(
+        slot.is_revoked(),
+        "Vorbedingung: der Haltepunkt hat widerrufen"
+    );
+    let command_error = result
+        .expect_err("nach dem Widerruf darf der Upload nicht gelingen")
+        .message;
+    assert_eq!(
+        transfer_finished_errors(&emitter),
+        vec![Some(command_error.clone())],
+        "die Transferliste muss denselben Text zeigen wie das Befehlsergebnis"
+    );
+    assert_eq!(command_error, ELEVATED_CHANNEL_INACTIVE_TEXT);
+    assert!(
+        !elevated.ops().iter().any(|op| op.starts_with("write_file")),
+        "geschrieben wurde nach dem Widerruf nichts, war: {:?}",
+        elevated.ops()
+    );
+}
+
+/// Spec 0086, T9 (A2.2): Absicherung gegen eine zu breite Umstellung. Ein
+/// gewöhnlicher `ChannelError` **ohne** Widerruf behält seinen Text im
+/// Ereignis, Präfix inklusive — nur der Widerrufsfall wird übersetzt.
+#[tokio::test]
+async fn test_t9_an_ordinary_channel_error_keeps_its_text_in_the_event() {
+    let elevated = GatedSftp::small_tree(0);
+    let s = setup(Box::new(elevated.clone())).await;
+
+    let emitter = Arc::new(app_logic::events::TestEmitter::default());
+    let local_dir = tempfile::tempdir().unwrap();
+    let local_path = local_dir.path().join("missing.txt");
+    let session_id = s.session_id;
+    let em = emitter.clone();
+
+    let result = with_browser_channel(
+        s.session.clone(),
+        s.elevated_channel(),
+        move |session, channel| async move {
+            download_one_file(
+                em.as_ref(),
+                &session,
+                &channel,
+                session_id,
+                // Im Baum nicht vorhanden — `GatedSftp::read_file` liefert
+                // dafür einen gewöhnlichen `ChannelError`, keinen Widerruf.
+                "/t/nicht-da.txt",
+                local_path,
+                None,
+            )
+            .await
+        },
+    )
+    .await;
+
+    let command_error = result
+        .expect_err("ein fehlender Pfad muss scheitern")
+        .message;
+    assert_eq!(
+        command_error, "Channel-Fehler: Datei nicht gefunden: /t/nicht-da.txt",
+        "ohne Widerruf bleibt der Fehler, wie er ist — Präfix inklusive"
+    );
+    assert_eq!(
+        transfer_finished_errors(&emitter),
+        vec![Some(command_error)],
+        "und das Ereignis trägt genau diesen Text"
+    );
+}
+
+/// Spec 0086, A2.2, zweiter Satz: Ein Transfer, der **vor** dem Widerruf
+/// fertig war, meldet weiter Erfolg (`error: None`).
+///
+/// Geprüft am rekursiven Download, der mehrere Transfer-Paare erzeugt:
+/// Operation 1 ist das `list_dir` auf `/t`, Operation 2 liest `/t/a.txt`.
+/// Genau dort hält der Mock an (`pause_after = 2`), der Test entfernt die
+/// Sitzung und gibt frei — `/t/a.txt` läuft also zu Ende, jede weitere
+/// Operation scheitert am Widerruf. Der Haltepunkt am Slot taugt hier nicht:
+/// er wird beim ersten Durchlauf verbraucht und träfe das `list_dir`.
+#[tokio::test]
+async fn test_t9_a_transfer_finished_before_the_revocation_still_reports_success() {
+    let elevated = GatedSftp::small_tree(2);
+    let s = setup(Box::new(elevated.clone())).await;
+    let slot = s.slot();
+
+    let emitter = Arc::new(app_logic::events::TestEmitter::default());
+    let local_dir = tempfile::tempdir().unwrap();
+    let local_root = local_dir.path().join("t");
+    let session_id = s.session_id;
+    let em = emitter.clone();
+
+    let command = spawn_command(
+        s.session.clone(),
+        s.elevated_channel(),
+        move |session, channel| async move {
+            download_recursive(
+                em.as_ref(),
+                &session,
+                &channel,
+                session_id,
+                "/t",
+                &local_root,
+            )
+            .await
+        },
+    );
+
+    elevated.wait_until_paused().await;
+    assert_eq!(
+        elevated.ops(),
+        vec!["list_dir /t".to_string(), "read_file /t/a.txt".to_string()],
+        "Vorbedingung: der Mock hält im ersten Datei-Transfer"
+    );
+    s.registry.remove_session(&s.sessions, s.session_id);
+    s.wait_until_revoked(&slot).await;
+    elevated.release();
+
+    assert_inactive(join(command).await);
+    assert_eq!(
+        transfer_finished_errors(&emitter),
+        vec![None, Some(ELEVATED_CHANNEL_INACTIVE_TEXT.to_string()),],
+        "der erste Transfer war vor dem Widerruf fertig und meldet weiter \
+         Erfolg; erst der zweite trägt die Widerrufs-Meldung"
     );
 }

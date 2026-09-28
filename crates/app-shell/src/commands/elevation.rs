@@ -123,6 +123,29 @@ impl BrowserChannel {
         matches!(self.kind, BrowserChannelKind::Elevated { .. })
     }
 
+    /// Spec 0086, A2.1: Der Text, den ein Transfer-Ereignis
+    /// (`sftp-transfer-finished`) für ein **gescheitertes** Teilergebnis
+    /// tragen muss.
+    ///
+    /// Ein Widerruf, der erst bei der einzelnen Operation greift, kommt im
+    /// Rumpf als `SshError::ChannelError(…)` an, dessen `Display` das Präfix
+    /// `Channel-Fehler: ` vorsetzt. Das Befehlsergebnis wird danach zentral
+    /// in [`with_browser_channel`] auf `ELEVATED_CHANNEL_INACTIVE` gesetzt —
+    /// das Ereignis war da aber längst gesendet. Die Transferliste zeigte
+    /// deshalb einen anderen Text als der Befehl.
+    ///
+    /// Bewusst **hier** und nicht im jeweiligen Transfer-Kern: dieselbe
+    /// Übersetzung, aus demselben Widerrufs-Vermerk, den
+    /// [`with_browser_channel`] liest — keine zweite, eigene Regel je Befehl
+    /// (ADR 0078 §4). Alle anderen Fehler bleiben, wie sie sind (A2.2).
+    pub(super) fn transfer_error_message(&self, err: &CommandError) -> String {
+        if self.revoked_mid_command.load(Ordering::SeqCst) {
+            ELEVATED_CHANNEL_INACTIVE.to_string()
+        } else {
+            err.message.clone()
+        }
+    }
+
     /// Nur für Tests: Ist für diesen (erhöhten) Befehl überhaupt ein Kanal
     /// eingetragen? `false` heißt „nie eingeschaltet oder Sitzung getrennt" —
     /// dann scheitert jede Aktion, statt zurückzufallen.

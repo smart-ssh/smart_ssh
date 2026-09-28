@@ -27,7 +27,7 @@ use app_logic::dto::{sort_remote_entries, EditSessionDto, RemoteEntryDto};
 use app_logic::error::CommandError;
 use app_logic::error::CommandResult;
 use app_logic::events::{
-    emit_sftp_transfer_finished, emit_sftp_transfer_started, SftpTransferKind,
+    emit_sftp_transfer_finished, emit_sftp_transfer_started, EventEmitter, SftpTransferKind,
 };
 use app_logic::session::Session;
 use app_logic::state::{AppState, SessionId};
@@ -92,8 +92,13 @@ async fn list_impl(
 /// Lesen per SFTP + lokales Schreiben via `spawn_blocking` (Downloads können
 /// beliebig groß sein, Spec 0020 Abschnitt 5 verlangt ausdrücklich, dass
 /// Transfers die Session nicht blockieren).
+/// Spec 0086, T8: `emitter` statt eines `AppHandle` — der Transfer-Kern baute
+/// den Emitter bisher selbst, damit war er für keinen Test erreichbar und die
+/// Meldung im Ereignis nirgends abgedeckt. `app_logic::events::EventEmitter`
+/// ist dieselbe Abstraktion, die der Produktivpfad benutzt
+/// (`TauriEventEmitter`), also keine Testsonderbahn.
 async fn download_one_file(
-    app: &AppHandle,
+    emitter: &dyn EventEmitter,
     session: &Session,
     channel: &BrowserChannel,
     session_id: SessionId,
@@ -103,9 +108,8 @@ async fn download_one_file(
 ) -> CommandResult<()> {
     let file_name = file_name_of(remote_path);
     let transfer_id = Uuid::new_v4();
-    let emitter = TauriEventEmitter(app.clone());
     emit_sftp_transfer_started(
-        &emitter,
+        emitter,
         session_id,
         transfer_id,
         SftpTransferKind::Download,
@@ -131,10 +135,16 @@ async fn download_one_file(
     .await;
 
     emit_sftp_transfer_finished(
-        &emitter,
+        emitter,
         session_id,
         transfer_id,
-        result.as_ref().err().map(|e| e.message.clone()),
+        // Spec 0086, A2.1: derselbe Text wie im Befehlsergebnis, wenn der
+        // erhöhte Modus mitten im Transfer widerrufen wurde — s.
+        // `BrowserChannel::transfer_error_message`.
+        result
+            .as_ref()
+            .err()
+            .map(|e| channel.transfer_error_message(e)),
     );
     result
 }
@@ -202,7 +212,7 @@ async fn download_impl(
     let local_path = local_path.into_path()?;
 
     download_one_file(
-        app,
+        &TauriEventEmitter(app.clone()),
         session,
         channel,
         session_id,
@@ -238,7 +248,7 @@ fn default_downloads_dir() -> CommandResult<std::path::PathBuf> {
 /// Transfer-Liste im Frontend zeigt also automatisch den Fortschritt über
 /// den ganzen Baum, ohne einen zweiten Fortschritts-Mechanismus.
 async fn download_recursive(
-    app: &AppHandle,
+    emitter: &dyn EventEmitter,
     session: &Session,
     channel: &BrowserChannel,
     session_id: SessionId,
@@ -262,7 +272,7 @@ async fn download_recursive(
                 queue.push((entry.path, local_entry_path));
             } else {
                 download_one_file(
-                    app,
+                    emitter,
                     session,
                     channel,
                     session_id,
@@ -285,7 +295,7 @@ async fn download_recursive(
 /// Inhalte eines Ordners direkt lose in `local_base_dir` verstreut, das
 /// bliebe sonst nicht als "der heruntergeladene Ordner" wiedererkennbar.
 async fn download_entry_to(
-    app: &AppHandle,
+    emitter: &dyn EventEmitter,
     session: &Session,
     channel: &BrowserChannel,
     session_id: SessionId,
@@ -305,10 +315,18 @@ async fn download_entry_to(
     };
     let local_path = local_base_dir.join(&root_name);
     let file_count = if root_entry.is_dir {
-        download_recursive(app, session, channel, session_id, remote_path, &local_path).await?
+        download_recursive(
+            emitter,
+            session,
+            channel,
+            session_id,
+            remote_path,
+            &local_path,
+        )
+        .await?
     } else {
         download_one_file(
-            app,
+            emitter,
             session,
             channel,
             session_id,
@@ -345,7 +363,7 @@ pub async fn sftp_download_default(
         |session, channel| async move {
             let downloads_dir = default_downloads_dir()?;
             download_entry_to(
-                &app,
+                &TauriEventEmitter(app.clone()),
                 &session,
                 &channel,
                 session_id,
@@ -392,7 +410,7 @@ pub async fn sftp_download_dir(
             let local_dir = local_dir.into_path()?;
 
             download_entry_to(
-                &app,
+                &TauriEventEmitter(app.clone()),
                 &session,
                 &channel,
                 session_id,
@@ -431,7 +449,7 @@ pub async fn sftp_upload(
         elevated_user,
         |session, channel| async move {
             upload_impl(
-                &app,
+                &TauriEventEmitter(app.clone()),
                 &session,
                 &channel,
                 session_id,
@@ -444,8 +462,10 @@ pub async fn sftp_upload(
     .await
 }
 
+/// Spec 0086, T8: `emitter` statt eines `AppHandle` — s.
+/// [`download_one_file`].
 async fn upload_impl(
-    app: &AppHandle,
+    emitter: &dyn EventEmitter,
     session: &Session,
     channel: &BrowserChannel,
     session_id: SessionId,
@@ -464,9 +484,8 @@ async fn upload_impl(
     .unwrap_or(None);
 
     let transfer_id = Uuid::new_v4();
-    let emitter = TauriEventEmitter(app.clone());
     emit_sftp_transfer_started(
-        &emitter,
+        emitter,
         session_id,
         transfer_id,
         SftpTransferKind::Upload,
@@ -495,10 +514,14 @@ async fn upload_impl(
     .await;
 
     emit_sftp_transfer_finished(
-        &emitter,
+        emitter,
         session_id,
         transfer_id,
-        result.as_ref().err().map(|e| e.message.clone()),
+        // Spec 0086, A2.1 — s. `download_one_file`.
+        result
+            .as_ref()
+            .err()
+            .map(|e| channel.transfer_error_message(e)),
     );
     result
 }
