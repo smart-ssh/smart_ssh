@@ -287,16 +287,24 @@ pub async fn sftp_elevation_enable(
 /// auch beim Öffnen des Browsers auf, damit ein evtl. noch offener Kanal nie
 /// unbemerkt aktiv bleibt.
 ///
-/// Spec 0084, T9: braucht die Sitzung nicht mehr nachzuschlagen — der Kanal
-/// hängt an der Zuordnung, nicht an der Sitzung. Für eine unbekannte
-/// Kennung passiert deshalb schlicht nichts, statt einen Fehler zu melden.
+/// Spec 0084, §9 (Klarstellung 2026-09-28): Der Kanal wird nicht nur
+/// ausgehängt, sondern widerrufen — ein Befehl, der ihn gerade festhält,
+/// kann ihn danach nicht mehr benutzen; der Widerruf wartet auf einen
+/// laufenden Vorgang. Eine unbekannte Sitzungskennung liefert wie bisher
+/// `Err("Session nicht gefunden")` (T9).
 #[tauri::command]
 pub async fn sftp_elevation_disable(
+    state: State<'_, AppState>,
     elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
 ) -> CommandResult<()> {
-    crate::elevated_sftp::disable(elevated.inner(), session_id, &BrowserAccess(()));
-    Ok(())
+    crate::elevated_sftp::disable(
+        &state.sessions,
+        elevated.inner(),
+        session_id,
+        &BrowserAccess(()),
+    )
+    .await
 }
 
 /// Spec 0067, A5: Ziel-Nutzer des aktiven erhöhten Kanals, `None` = aus.
@@ -521,6 +529,11 @@ mod browser_channel_tests {
 
         let id_a = SessionId::new_v4();
         let id_b = SessionId::new_v4();
+        let sessions = crate::session::SessionManager::new();
+        let session_a = std::sync::Arc::new(session_a);
+        let session_b = std::sync::Arc::new(session_b);
+        sessions.insert(id_a, session_a.clone());
+        sessions.insert(id_b, session_b.clone());
         let registry = registry_with_channel(
             id_a,
             "root",
@@ -550,7 +563,9 @@ mod browser_channel_tests {
         drop(guard);
 
         // Ausschalten in B lässt A unberührt.
-        crate::elevated_sftp::disable(&registry, id_b, &BrowserAccess(()));
+        crate::elevated_sftp::disable(&sessions, &registry, id_b, &BrowserAccess(()))
+            .await
+            .expect("B ist bekannt, hat aber keinen Kanal — kein Fehler");
         let channel_a = BrowserChannel::from_request(&registry, id_a, Some("root".to_string()));
         let mut guard = lock_browser_sftp(&session_a, &channel_a).await;
         assert_eq!(
@@ -558,5 +573,139 @@ mod browser_channel_tests {
             b"ROOT-A",
             "Ausschalten in B darf den Kanal von A nicht entfernen"
         );
+    }
+
+    // --- Spec 0084, §9 (Klarstellung 2026-09-28): Widerruf wirkt beim
+    // Zugriff, nicht beim Befehlsbeginn ----------------------------------
+    //
+    // Angriffsbild aus dem Review: `sftp_download` schlägt den erhöhten
+    // Kanal zu Befehlsbeginn nach und öffnet danach den Speichern-Dialog.
+    // Schaltet der Nutzer währenddessen die erhöhten Rechte aus (oder auf
+    // einen anderen Nutzer um, oder trennt die Sitzung), darf der bereits
+    // festgehaltene Kanal danach nicht mehr benutzt werden.
+    //
+    // Alle drei Tests scheitern gegen die Variante „Kanal bei Befehlsbeginn
+    // festhalten“, also gegen ein Widerrufen, das nur den Eintrag in der
+    // Zuordnung entfernt, ohne den Kanal selbst herauszunehmen.
+
+    /// Fängt genau den Ablauf ein, den ein Befehl durchläuft: Kanal zu
+    /// Beginn nachschlagen, erste Nutzung, Wartezeit, zweite Nutzung.
+    async fn held_channel(
+        session_id: SessionId,
+        registry: &ElevatedSftpRegistry,
+        session: &Session,
+    ) -> BrowserChannel {
+        let channel = BrowserChannel::from_request(registry, session_id, Some("root".to_string()));
+        let mut guard = lock_browser_sftp(session, &channel).await;
+        assert_eq!(
+            guard
+                .sftp()
+                .expect("Vorbedingung: die erste Nutzung gelingt")
+                .read_file("/x")
+                .await
+                .unwrap(),
+            b"ROOT"
+        );
+        channel
+    }
+
+    /// Spec 0084, T10: Kanal von einem Befehl festgehalten, Nutzer schaltet
+    /// die erhöhten Rechte aus — die nächste Nutzung scheitert.
+    #[tokio::test]
+    async fn test_t10_a_held_channel_cannot_be_used_after_disabling() {
+        let session = std::sync::Arc::new(crate::test_support::session_with_transport(Box::new(
+            NoTransport,
+        )));
+        let session_id = SessionId::new_v4();
+        let sessions = crate::session::SessionManager::new();
+        sessions.insert(session_id, session.clone());
+        let registry = registry_with_channel(
+            session_id,
+            "root",
+            ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "ROOT"),
+        );
+
+        let channel = held_channel(session_id, &registry, &session).await;
+
+        crate::elevated_sftp::disable(&sessions, &registry, session_id, &BrowserAccess(()))
+            .await
+            .expect("Ausschalten gelingt");
+
+        let mut guard = lock_browser_sftp(&session, &channel).await;
+        let err = guard
+            .sftp()
+            .err()
+            .expect("nach dem Ausschalten darf der festgehaltene Kanal nicht mehr tragen");
+        assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
+    }
+
+    /// Spec 0084, T10b: dasselbe, aber der Kanal wird zwischendurch für
+    /// einen **anderen** Nutzer neu aktiviert. Der festgehaltene root-Kanal
+    /// darf danach nicht weiterlaufen.
+    #[tokio::test]
+    async fn test_t10b_a_held_channel_cannot_be_used_after_reactivating_for_another_user() {
+        let f = crate::test_support::elevation::fixture(Box::new(
+            crate::test_support::elevation::working_transport(),
+        ));
+        // Ausgangslage über den echten Weg: erhöhte Rechte als root aktiv.
+        crate::elevated_sftp::enable(&f.ctx(), "deploy", None, None, &BrowserAccess(()))
+            .await
+            .expect("Vorbedingung: Aktivieren als root gelingt");
+        let channel =
+            BrowserChannel::from_request(&f.registry, f.session_id, Some("root".to_string()));
+        let mut guard = lock_browser_sftp(&f.session, &channel).await;
+        assert!(
+            guard.sftp().is_ok(),
+            "Vorbedingung: die erste Nutzung gelingt"
+        );
+        drop(guard);
+
+        crate::elevated_sftp::enable(
+            &f.ctx(),
+            "deploy",
+            None,
+            Some("www-data"),
+            &BrowserAccess(()),
+        )
+        .await
+        .expect("Neu-Aktivieren als www-data gelingt");
+
+        let mut guard = lock_browser_sftp(&f.session, &channel).await;
+        let err = guard
+            .sftp()
+            .err()
+            .expect("der festgehaltene root-Kanal darf nach dem Umschalten nicht mehr tragen");
+        assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
+    }
+
+    /// Spec 0084, T10c: dasselbe, aber die Sitzung wird über A2.1 entfernt
+    /// (Trennen). Auch dann darf der festgehaltene Kanal nicht mehr tragen.
+    #[tokio::test]
+    async fn test_t10c_a_held_channel_cannot_be_used_after_the_session_was_removed() {
+        let session = std::sync::Arc::new(crate::test_support::session_with_transport(Box::new(
+            NoTransport,
+        )));
+        let session_id = SessionId::new_v4();
+        let sessions = crate::session::SessionManager::new();
+        sessions.insert(session_id, session.clone());
+        let registry = registry_with_channel(
+            session_id,
+            "root",
+            ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "ROOT"),
+        );
+
+        let channel = held_channel(session_id, &registry, &session).await;
+
+        registry
+            .remove_session(&sessions, session_id)
+            .await
+            .expect("die Sitzung war eingetragen");
+
+        let mut guard = lock_browser_sftp(&session, &channel).await;
+        let err = guard
+            .sftp()
+            .err()
+            .expect("nach dem Trennen darf der festgehaltene Kanal nicht mehr tragen");
+        assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
     }
 }

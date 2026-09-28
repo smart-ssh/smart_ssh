@@ -59,6 +59,26 @@ impl ElevatedSftpSlot {
     ) -> OwnedMutexGuard<Option<ElevatedSftp>> {
         self.0.clone().lock_owned().await
     }
+
+    /// Spec 0084, §9 (Klarstellung 2026-09-28): **Widerruf wirkt beim
+    /// Zugriff, nicht beim Befehlsbeginn.** Nimmt den Kanal unter seiner
+    /// eigenen Sperre heraus und schließt ihn (`Drop`). Wer diesen Slot
+    /// noch aus einem laufenden Befehl hält, findet beim nächsten Zugriff
+    /// `None` und scheitert mit `ELEVATED_CHANNEL_INACTIVE` — statt nach
+    /// dem Ausschalten, dem Umschalten auf einen anderen Nutzer oder dem
+    /// Trennen der Sitzung weiter mit erhöhten Rechten zu arbeiten.
+    ///
+    /// Wartet dabei, bis ein gerade laufender Vorgang auf dem Kanal fertig
+    /// ist (die Sperre wird während einer Übertragung gehalten) — dasselbe
+    /// Verhalten wie vor Spec 0084, als der Kanal noch an der `Session`
+    /// hing.
+    ///
+    /// Bewusst **ohne** `BrowserAccess`: Widerrufen ist kein Zugriff, es
+    /// nimmt nur weg. Sonst könnte `remove_session` (A2.1) den Kanal einer
+    /// getrennten Sitzung gar nicht schließen.
+    async fn revoke(&self) -> bool {
+        self.0.lock().await.take().is_some()
+    }
 }
 
 /// Spec 0084, A1/A2: Zuordnung Sitzungskennung → erhöhter Kanal.
@@ -69,7 +89,7 @@ impl ElevatedSftpSlot {
 ///
 /// **Sperrdisziplin (A2).** Die `slots`-Sperre ist die eine Sperre, unter der
 /// ein Eintrag entsteht ([`Self::insert_if_session_alive`]) und verschwindet
-/// ([`Self::remove`], [`Self::remove_session`]). Das Eintragen prüft unter
+/// ([`Self::take`], [`Self::remove_session`]). Das Eintragen prüft unter
 /// dieser Sperre, dass die Sitzung noch im [`SessionManager`] steht; das
 /// Entfernen einer Sitzung nimmt sie **nach** `SessionManager::remove`. Aus
 /// beidem folgt, dass kein Eintrag seine Sitzung überleben kann:
@@ -93,9 +113,11 @@ pub struct ElevatedSftpRegistry {
     interleave_hook: StdMutex<Option<InterleaveHook>>,
 }
 
-/// s. [`ElevatedSftpRegistry::interleave_hook`].
+/// s. [`ElevatedSftpRegistry::interleave_hook`]. Liefert eine Future, damit
+/// der Haltepunkt warten kann, ohne einen Scheduler-Thread zu blockieren.
 #[cfg(test)]
-type InterleaveHook = Box<dyn Fn() + Send>;
+type InterleaveHook =
+    Box<dyn Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send>;
 
 impl ElevatedSftpRegistry {
     /// Der erhöhte Kanal dieser Sitzung, sofern aktiv.
@@ -112,26 +134,32 @@ impl ElevatedSftpRegistry {
     /// geschehen unter der `slots`-Sperre — derselben, unter der
     /// [`Self::remove_session`] den Eintrag löscht.
     ///
-    /// `false` heißt: nichts eingetragen, `channel` wird hier verworfen (sein
-    /// `Drop` schließt den Exec-Kanal).
+    /// `Err(())` heißt: nichts eingetragen, `channel` wird hier verworfen
+    /// (sein `Drop` schließt den Exec-Kanal). `Ok(Some(slot))` liefert den
+    /// **bisherigen** Eintrag zurück — der Aufrufer muss ihn widerrufen
+    /// ([`ElevatedSftpSlot::revoke`]), sonst arbeitete ein Befehl, der ihn
+    /// noch festhält, über das Neu-Aktivieren hinaus mit dem alten Kanal
+    /// weiter (Spec 0084 §9, Klarstellung 2026-09-28).
     fn insert_if_session_alive(
         &self,
         sessions: &SessionManager,
         session_id: SessionId,
         channel: ElevatedSftp,
         _access: &BrowserAccess,
-    ) -> bool {
+    ) -> Result<Option<ElevatedSftpSlot>, ()> {
         let mut slots = self.slots.lock().unwrap();
         if sessions.get(session_id).is_none() {
-            return false;
+            return Err(());
         }
-        slots.insert(session_id, ElevatedSftpSlot::with_channel(channel));
-        true
+        Ok(slots.insert(session_id, ElevatedSftpSlot::with_channel(channel)))
     }
 
-    /// Entfernt den Kanal einer Sitzung; `true`, wenn einer aktiv war.
-    fn remove(&self, session_id: SessionId, _access: &BrowserAccess) -> bool {
-        self.slots.lock().unwrap().remove(&session_id).is_some()
+    /// Nimmt den Eintrag einer Sitzung aus der Zuordnung heraus. Der
+    /// Widerruf des Kanals selbst geschieht **danach** über
+    /// [`ElevatedSftpSlot::revoke`] — er wartet auf einen laufenden Vorgang
+    /// und darf deshalb nicht unter der Zuordnungs-Sperre laufen.
+    fn take(&self, session_id: SessionId, _access: &BrowserAccess) -> Option<ElevatedSftpSlot> {
+        self.slots.lock().unwrap().remove(&session_id)
     }
 
     /// Spec 0084, A2.1: **die eine** Funktion, die eine Sitzung samt ihrem
@@ -142,7 +170,13 @@ impl ElevatedSftpRegistry {
     /// **vor** dem Löschen des Zuordnungs-Eintrags (s. Sperrdisziplin am
     /// Typ). Der Transport der Sitzung wird hier nicht gesperrt — das
     /// Trennen bleibt danach in `commands::disconnect`.
-    pub(crate) fn remove_session(
+    ///
+    /// Spec 0084, §9 (Klarstellung 2026-09-28): Der Kanal wird zum Schluss
+    /// auch **widerrufen**, nicht nur ausgehängt — ein Befehl, der ihn beim
+    /// Trennen noch festhält, darf ihn danach nicht weiter benutzen. Der
+    /// Widerruf wartet auf einen gerade laufenden Vorgang; er läuft nach
+    /// der Zuordnungs-Sperre, nie unter ihr.
+    pub(crate) async fn remove_session(
         &self,
         sessions: &SessionManager,
         session_id: SessionId,
@@ -152,10 +186,13 @@ impl ElevatedSftpRegistry {
         {
             let hook = self.interleave_hook.lock().unwrap().take();
             if let Some(hook) = hook {
-                hook();
+                hook().await;
             }
         }
-        self.slots.lock().unwrap().remove(&session_id);
+        let slot = self.slots.lock().unwrap().remove(&session_id);
+        if let Some(slot) = slot {
+            slot.revoke().await;
+        }
         session
     }
 
@@ -378,11 +415,17 @@ pub(crate) async fn enable(
                 target_user: target_user.clone(),
                 sftp,
             };
-            if !ctx
+            let previous = ctx
                 .registry
                 .insert_if_session_alive(ctx.sessions, ctx.session_id, channel, access)
-            {
-                return Err(CommandError::from("Session nicht gefunden"));
+                .map_err(|()| CommandError::from("Session nicht gefunden"))?;
+            // Spec 0084, §9 (Klarstellung 2026-09-28): Wer den bisherigen
+            // Kanal noch aus einem laufenden Befehl hält, darf ihn über das
+            // Neu-Aktivieren hinaus nicht weiter benutzen — sonst liefe ein
+            // Download, der als „root“ begonnen hat, nach dem Umschalten auf
+            // `www-data` weiter als root.
+            if let Some(previous) = previous {
+                previous.revoke().await;
             }
             tracing::info!(
                 target_user = %target_user,
@@ -407,174 +450,41 @@ pub(crate) async fn enable(
     }
 }
 
-/// Schaltet den erhöhten Kanal einer Sitzung aus (verwirft ihn).
+/// Schaltet den erhöhten Kanal einer Sitzung aus und **widerruft** ihn.
 ///
-/// Spec 0084, T9: braucht die Sitzung selbst nicht — für eine unbekannte
-/// Sitzungskennung und für eine Sitzung ohne aktiven Kanal ist das Ergebnis
-/// dasselbe wie bisher bei „nicht aktiv“: nichts passiert.
-pub(crate) fn disable(
+/// Spec 0084, §9 (Klarstellungen 2026-09-28):
+/// * Der Widerruf wartet, bis ein gerade laufender Vorgang auf dem Kanal
+///   fertig ist, und nimmt den Kanal dann heraus — ein Befehl, der ihn noch
+///   festhält, scheitert danach beim Zugriff, statt weiter erhöht zu
+///   arbeiten.
+/// * Eine **unbekannte** Sitzungskennung liefert wie bisher
+///   `Err("Session nicht gefunden")`; „nicht aktiv“ (also `Ok`, ohne dass
+///   etwas passiert) gilt nur für eine bekannte Sitzung ohne Kanal (T9).
+pub(crate) async fn disable(
+    sessions: &SessionManager,
     registry: &ElevatedSftpRegistry,
     session_id: SessionId,
     access: &BrowserAccess,
-) {
-    if registry.remove(session_id, access) {
-        tracing::info!(source = "manual", "file browser elevated rights disabled");
+) -> CommandResult<()> {
+    if sessions.get(session_id).is_none() {
+        return Err(CommandError::from("Session nicht gefunden"));
     }
+    if let Some(slot) = registry.take(session_id, access) {
+        if slot.revoke().await {
+            tracing::info!(source = "manual", "file browser elevated rights disabled");
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex as StdMutex};
 
-    use async_trait::async_trait;
-    use ssh_manager_core::ssh::mock::MockSftpSession;
-    use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize, SshError, SshTransport};
-
     use super::*;
-    use crate::commands::BrowserAccess;
-    use crate::test_support::session_with_transport;
-
-    /// Beantwortet die Probe-Kommandos nach Präfix und zeichnet alle
-    /// Kommandos sowie Exec-SFTP-Starts auf.
-    struct ProbeTransport {
-        probe: CommandOutput,
-        sudo_check: CommandOutput,
-        start_fails: bool,
-        log: Arc<StdMutex<Vec<String>>>,
-        /// Spec 0084, T8/T8b: meldet, dass das Öffnen des erhöhten Kanals
-        /// erreicht ist — also alle Proben durch sind und nur noch der
-        /// Eintrag in die Zuordnung fehlt.
-        open_reached: Option<Arc<tokio::sync::Notify>>,
-        /// Spec 0084, T8/T8b: hält das Öffnen dort an, bis der Test
-        /// freigibt.
-        open_gate: Option<Arc<tokio::sync::Notify>>,
-    }
-
-    fn output(exit: i32, stdout: &str, stderr: &str) -> CommandOutput {
-        CommandOutput {
-            stdout: stdout.as_bytes().to_vec(),
-            stderr: stderr.as_bytes().to_vec(),
-            exit_code: Some(exit),
-            truncated: false,
-        }
-    }
-
-    #[async_trait]
-    impl SshTransport for ProbeTransport {
-        async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
-            self.log.lock().unwrap().push(format!("exec:{command}"));
-            if command.contains("sudo -n") && command.contains(" -l ") {
-                Ok(self.sudo_check.clone())
-            } else {
-                Ok(self.probe.clone())
-            }
-        }
-        async fn open_shell(
-            &mut self,
-            _size: PtySize,
-        ) -> Result<Box<dyn InteractiveShell>, SshError> {
-            unreachable!()
-        }
-        async fn open_sftp_via_exec(
-            &mut self,
-            command: &str,
-        ) -> Result<Box<dyn ssh_manager_core::ssh::SftpSession>, SshError> {
-            self.log
-                .lock()
-                .unwrap()
-                .push(format!("sftp-exec:{command}"));
-            if let Some(reached) = &self.open_reached {
-                reached.notify_one();
-            }
-            if let Some(gate) = &self.open_gate {
-                gate.notified().await;
-            }
-            if self.start_fails {
-                Err(SshError::ChannelError(
-                    "SFTP-Init fehlgeschlagen".to_string(),
-                ))
-            } else {
-                Ok(Box::new(MockSftpSession::new()))
-            }
-        }
-        async fn disconnect(&mut self) -> Result<(), SshError> {
-            Ok(())
-        }
-    }
-
-    fn transport(
-        probe: CommandOutput,
-        sudo_check: CommandOutput,
-    ) -> (ProbeTransport, Arc<StdMutex<Vec<String>>>) {
-        let log = Arc::new(StdMutex::new(Vec::new()));
-        (
-            ProbeTransport {
-                probe,
-                sudo_check,
-                start_fails: false,
-                log: log.clone(),
-                open_reached: None,
-                open_gate: None,
-            },
-            log,
-        )
-    }
-
-    const PATH: &str = "/usr/lib/openssh/sftp-server";
-
-    fn access() -> BrowserAccess {
-        BrowserAccess::for_tests()
-    }
-
-    /// Spec 0084, A1: Sitzung, `SessionManager` und Zuordnung gehören seit
-    /// diesem Schritt zusammen — der erhöhte Kanal hängt nicht mehr am
-    /// `Session`-Wert.
-    struct Fixture {
-        sessions: SessionManager,
-        registry: ElevatedSftpRegistry,
-        session_id: SessionId,
-        session: Arc<Session>,
-    }
-
-    fn fixture(transport: Box<dyn SshTransport>) -> Fixture {
-        let sessions = SessionManager::new();
-        let session = Arc::new(session_with_transport(transport));
-        let session_id = SessionId::new_v4();
-        sessions.insert(session_id, session.clone());
-        Fixture {
-            sessions,
-            registry: ElevatedSftpRegistry::default(),
-            session_id,
-            session,
-        }
-    }
-
-    impl Fixture {
-        fn ctx(&self) -> ElevationContext<'_> {
-            ElevationContext {
-                sessions: &self.sessions,
-                registry: &self.registry,
-                session_id: self.session_id,
-                session: &self.session,
-            }
-        }
-
-        /// Ist für diese Sitzung ein erhöhter Kanal eingetragen und belegt?
-        async fn is_active(&self) -> bool {
-            match self.registry.slot(self.session_id, &access()) {
-                Some(slot) => slot.lock_owned(&access()).await.is_some(),
-                None => false,
-            }
-        }
-    }
-
-    /// Eine geglückte Probe plus geglückte sudo-Prüfung.
-    fn working_probes() -> (CommandOutput, CommandOutput) {
-        (
-            output(0, "/usr/lib/openssh/sftp-server\n", ""),
-            output(0, PATH, ""),
-        )
-    }
+    use crate::test_support::elevation::{
+        access, fixture, output, transport, working_probes, PATH,
+    };
 
     #[tokio::test]
     async fn test_enable_probes_path_checks_sudo_and_opens_exec_channel() {
@@ -724,7 +634,7 @@ mod tests {
             .expect("Vorbedingung: Aktivieren gelingt");
         assert!(f.is_active().await, "Vorbedingung: Kanal ist aktiv");
 
-        let removed = f.registry.remove_session(&f.sessions, f.session_id);
+        let removed = f.registry.remove_session(&f.sessions, f.session_id).await;
 
         assert!(removed.is_some(), "die Sitzung selbst muss entfernt sein");
         assert!(
@@ -759,7 +669,7 @@ mod tests {
             .await
             .expect("das Aktivieren muss den Öffnen-Schritt erreichen");
 
-        f.registry.remove_session(&f.sessions, f.session_id);
+        f.registry.remove_session(&f.sessions, f.session_id).await;
         gate.notify_one();
 
         let result = tokio::time::timeout(std::time::Duration::from_secs(5), activation)
@@ -803,20 +713,29 @@ mod tests {
         // Der Haltepunkt läuft mitten in A2.1: er gibt das Aktivieren frei
         // und wartet, bis es ganz durch ist, bevor A2.1 seinen zweiten
         // Schritt macht.
-        let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel::<()>();
+        let done_rx = StdMutex::new(Some(done_rx));
         let gate_for_hook = gate.clone();
         f.registry.set_interleave_hook(Box::new(move || {
-            gate_for_hook.notify_one();
-            done_rx
-                .recv_timeout(std::time::Duration::from_secs(5))
-                .expect("das Aktivieren muss innerhalb des Haltepunkts enden");
+            let gate = gate_for_hook.clone();
+            let done_rx = done_rx.lock().unwrap().take();
+            Box::pin(async move {
+                gate.notify_one();
+                if let Some(done_rx) = done_rx {
+                    tokio::time::timeout(std::time::Duration::from_secs(5), done_rx)
+                        .await
+                        .expect("das Aktivieren muss innerhalb des Haltepunkts enden")
+                        .expect("der Haltepunkt darf nicht vorzeitig gelöst werden");
+                }
+            })
         }));
 
         let f_for_removal = f.clone();
-        let removal = tokio::task::spawn_blocking(move || {
+        let removal = tokio::spawn(async move {
             f_for_removal
                 .registry
                 .remove_session(&f_for_removal.sessions, f_for_removal.session_id)
+                .await
         });
 
         let result = tokio::time::timeout(std::time::Duration::from_secs(5), activation)
@@ -839,18 +758,25 @@ mod tests {
         );
     }
 
-    /// Spec 0084, T9: Ausschalten ohne aktiven Kanal und für eine unbekannte
-    /// Sitzungskennung — kein Absturz, Ergebnis wie bisher bei „nicht aktiv“.
+    /// Spec 0084, T9 (mit der Klarstellung vom 2026-09-28): Ausschalten ohne
+    /// aktiven Kanal ist ein harmloses `Ok`; für eine **unbekannte**
+    /// Sitzungskennung bleibt es wie bisher bei `Err("Session nicht
+    /// gefunden")`. In keinem Fall ein Absturz.
     #[tokio::test]
     async fn test_t9_disabling_an_inactive_or_unknown_session_channel_is_harmless() {
         let (probe, check) = working_probes();
         let (t, _log) = transport(probe, check);
         let f = fixture(Box::new(t));
 
-        disable(&f.registry, f.session_id, &access());
+        disable(&f.sessions, &f.registry, f.session_id, &access())
+            .await
+            .expect("bekannte Sitzung ohne Kanal: „nicht aktiv“ ist kein Fehler");
         assert!(!f.is_active().await);
 
-        disable(&f.registry, SessionId::new_v4(), &access());
+        let err = disable(&f.sessions, &f.registry, SessionId::new_v4(), &access())
+            .await
+            .expect_err("unbekannte Sitzungskennung meldet wie bisher einen Fehler");
+        assert_eq!(err.message, "Session nicht gefunden");
         assert!(!f.is_active().await);
     }
 }

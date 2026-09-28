@@ -461,6 +461,175 @@ pub fn session_with_transport(
     }
 }
 
+/// Spec 0067/0084: geteilte Test-Bausteine für den erhöhten
+/// Dateibrowser-Kanal — Sitzung, `SessionManager` und Zuordnung gehören
+/// dafür zusammen (Spec 0084, A1: der Kanal hängt nicht mehr am
+/// `Session`-Wert). Geteilt statt je Testmodul neu, weil sowohl
+/// `crate::elevated_sftp` (Ein-/Ausschalten, A2) als auch
+/// `crate::commands::elevation` (Kanalwahl, Widerruf beim Zugriff) denselben
+/// Aufbau brauchen — dieselbe Begründung wie beim Moduldoc oben.
+pub(crate) mod elevation {
+    use std::sync::{Arc, Mutex as StdMutex};
+
+    use async_trait::async_trait;
+    use ssh_manager_core::ssh::mock::MockSftpSession;
+    use ssh_manager_core::ssh::{
+        CommandOutput, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
+    };
+
+    use crate::commands::BrowserAccess;
+    use crate::elevated_sftp::{ElevatedSftpRegistry, ElevationContext};
+    use crate::session::{Session, SessionManager};
+    use crate::state::SessionId;
+
+    pub(crate) const PATH: &str = "/usr/lib/openssh/sftp-server";
+
+    pub(crate) fn access() -> BrowserAccess {
+        BrowserAccess::for_tests()
+    }
+
+    /// Beantwortet die Probe-Kommandos nach Präfix und zeichnet alle
+    /// Kommandos sowie Exec-SFTP-Starts auf.
+    pub(crate) struct ProbeTransport {
+        probe: CommandOutput,
+        sudo_check: CommandOutput,
+        pub(crate) start_fails: bool,
+        log: Arc<StdMutex<Vec<String>>>,
+        /// Spec 0084, T8/T8b: meldet, dass das Öffnen des erhöhten Kanals
+        /// erreicht ist — also alle Proben durch sind und nur noch der
+        /// Eintrag in die Zuordnung fehlt.
+        pub(crate) open_reached: Option<Arc<tokio::sync::Notify>>,
+        /// Spec 0084, T8/T8b: hält das Öffnen dort an, bis der Test
+        /// freigibt.
+        pub(crate) open_gate: Option<Arc<tokio::sync::Notify>>,
+    }
+
+    pub(crate) fn output(exit: i32, stdout: &str, stderr: &str) -> CommandOutput {
+        CommandOutput {
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: stderr.as_bytes().to_vec(),
+            exit_code: Some(exit),
+            truncated: false,
+        }
+    }
+
+    #[async_trait]
+    impl SshTransport for ProbeTransport {
+        async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
+            self.log.lock().unwrap().push(format!("exec:{command}"));
+            if command.contains("sudo -n") && command.contains(" -l ") {
+                Ok(self.sudo_check.clone())
+            } else {
+                Ok(self.probe.clone())
+            }
+        }
+        async fn open_shell(
+            &mut self,
+            _size: PtySize,
+        ) -> Result<Box<dyn InteractiveShell>, SshError> {
+            unreachable!()
+        }
+        async fn open_sftp_via_exec(
+            &mut self,
+            command: &str,
+        ) -> Result<Box<dyn SftpSession>, SshError> {
+            self.log
+                .lock()
+                .unwrap()
+                .push(format!("sftp-exec:{command}"));
+            if let Some(reached) = &self.open_reached {
+                reached.notify_one();
+            }
+            if let Some(gate) = &self.open_gate {
+                gate.notified().await;
+            }
+            if self.start_fails {
+                Err(SshError::ChannelError(
+                    "SFTP-Init fehlgeschlagen".to_string(),
+                ))
+            } else {
+                Ok(Box::new(MockSftpSession::new()))
+            }
+        }
+        async fn disconnect(&mut self) -> Result<(), SshError> {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn transport(
+        probe: CommandOutput,
+        sudo_check: CommandOutput,
+    ) -> (ProbeTransport, Arc<StdMutex<Vec<String>>>) {
+        let log = Arc::new(StdMutex::new(Vec::new()));
+        (
+            ProbeTransport {
+                probe,
+                sudo_check,
+                start_fails: false,
+                log: log.clone(),
+                open_reached: None,
+                open_gate: None,
+            },
+            log,
+        )
+    }
+
+    /// Eine geglückte Probe plus geglückte sudo-Prüfung.
+    pub(crate) fn working_probes() -> (CommandOutput, CommandOutput) {
+        (
+            output(0, "/usr/lib/openssh/sftp-server\n", ""),
+            output(0, PATH, ""),
+        )
+    }
+
+    /// Ein Transport, der jede Aktivierung gelingen lässt.
+    pub(crate) fn working_transport() -> ProbeTransport {
+        let (probe, check) = working_probes();
+        transport(probe, check).0
+    }
+
+    /// Sitzung + `SessionManager` + Zuordnung, wie die Tauri-Befehle sie zur
+    /// Laufzeit vorfinden.
+    pub(crate) struct ElevationFixture {
+        pub(crate) sessions: SessionManager,
+        pub(crate) registry: ElevatedSftpRegistry,
+        pub(crate) session_id: SessionId,
+        pub(crate) session: Arc<Session>,
+    }
+
+    pub(crate) fn fixture(transport: Box<dyn SshTransport>) -> ElevationFixture {
+        let sessions = SessionManager::new();
+        let session = Arc::new(super::session_with_transport(transport));
+        let session_id = SessionId::new_v4();
+        sessions.insert(session_id, session.clone());
+        ElevationFixture {
+            sessions,
+            registry: ElevatedSftpRegistry::default(),
+            session_id,
+            session,
+        }
+    }
+
+    impl ElevationFixture {
+        pub(crate) fn ctx(&self) -> ElevationContext<'_> {
+            ElevationContext {
+                sessions: &self.sessions,
+                registry: &self.registry,
+                session_id: self.session_id,
+                session: &self.session,
+            }
+        }
+
+        /// Ist für diese Sitzung ein erhöhter Kanal eingetragen und belegt?
+        pub(crate) async fn is_active(&self) -> bool {
+            match self.registry.slot(self.session_id, &access()) {
+                Some(slot) => slot.lock_owned(&access()).await.is_some(),
+                None => false,
+            }
+        }
+    }
+}
+
 /// Aufzeichnung der `tracing`-Ereignisse dieses Testbinaries.
 ///
 /// **Warum geteilt und nicht je Testmodul eigen** (Spec 0077, T-6c): Ein
