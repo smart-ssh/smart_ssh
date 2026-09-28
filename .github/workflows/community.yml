@@ -77,6 +77,7 @@ jobs:
       # (z. B. dürfte ein fiktives `not-tauri`-Paket hier nicht mit
       # anschlagen).
       - name: Grenzprüfung app-logic ist Tauri-frei (Spec 0084, A3)
+        shell: bash
         run: |
           # spec-reviewer-Fund (Teil 2): `cargo tree | grep` in einem
           # `if`-Pipeline liesse den Schritt bei einem Fehlschlag von
