@@ -426,7 +426,7 @@
     "AI_RATE_LIMITED": "Der KI-Anbieter drosselt gerade die Anfragen (Rate-Limit) – die App hat es automatisch mehrfach erneut versucht. Bitte kurz warten und die Nachricht erneut senden.",
     "AI_NETWORK_ERROR": "Keine Verbindung zum KI-Provider. Internetverbindung und – bei eigenem Endpunkt – die Base-URL prüfen, dann erneut senden.",
     "AI_INVALID_RESPONSE": "Unerwartete Antwort des KI-Providers",
-    "AI_CONTEXT_TOO_LARGE": "Kontext zu groß für den KI-Provider",
+    "AI_CONTEXT_TOO_LARGE": "Kontext zu groß für den KI-Provider. „Max. Antwortlänge (Tokens)“ niedriger einstellen oder einen neuen Chat beginnen.",
     "AI_PROVIDER_UNAVAILABLE": "Der KI-Provider meldet einen Fehler (z. B. Wartung oder Überlastung). Später erneut versuchen; hält es an, Provider-Einstellungen prüfen.",
     "AI_RESPONSE_TRUNCATED": "Die KI-Antwort war zu lang für einen vollständigen Befehl",
     "AI_MODEL_NOT_FOUND": "Der KI-Provider kennt dieses Modell nicht. Modellnamen in den Einstellungen prüfen („Modelle laden“ zeigt die verfügbaren); bei Ollama das Modell zuerst mit `ollama pull <name>` laden.",

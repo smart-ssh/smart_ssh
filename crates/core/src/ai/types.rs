@@ -465,7 +465,19 @@ impl fmt::Display for AiError {
             AiError::InvalidResponse(msg) => {
                 write!(f, "Unerwartete Antwort des KI-Providers: {msg}")
             }
-            AiError::ContextTooLarge => write!(f, "Kontext zu groß für den KI-Provider"),
+            // Spec 0087, A1.5: nennt die Abhilfe (die bestehende Einstellung
+            // niedriger setzen oder einen neuen Chat beginnen), nicht nur den
+            // Zustand — analog zu den übrigen handlungsanleitenden
+            // `AiError`-Texten (s. `AI_RATE_LIMITED`s DE/EN-Text in
+            // `common.json`). „Max. Antwortlänge (Tokens)" ist wörtlich das
+            // Label `aiProvider.maxTokensOverrideLabel` (geprüft von T12/T12b
+            // gegen die tatsächlichen Locale-Werte, kein unabhängig
+            // gepflegtes Duplikat).
+            AiError::ContextTooLarge => write!(
+                f,
+                "Kontext zu groß für den KI-Provider. „Max. Antwortlänge (Tokens)“ niedriger \
+                 einstellen oder einen neuen Chat beginnen."
+            ),
             AiError::ProviderUnavailable(msg) => write!(f, "KI-Provider nicht erreichbar: {msg}"),
             AiError::ResponseTruncated => {
                 write!(
@@ -560,5 +572,15 @@ mod ai_error_code_tests {
             AiError::Timeout { secs: 90 }.to_string(),
             "Keine Antwort vom KI-Provider seit über 90 Sekunden"
         );
+    }
+
+    /// Spec 0087, T12b (A1.5): der `Display`-Text von `ContextTooLarge`
+    /// nennt die Abhilfe (die Einstellung „Max. Antwortlänge (Tokens)"
+    /// niedriger setzen) statt nur den Zustand zu beschreiben.
+    #[test]
+    fn test_context_too_large_display_names_the_max_tokens_override_setting() {
+        assert!(AiError::ContextTooLarge
+            .to_string()
+            .contains("Max. Antwortlänge"));
     }
 }

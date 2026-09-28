@@ -110,6 +110,25 @@ describe("FIVE_MINUTE_PATH_ERROR_CODES", () => {
 // zeigte das Regel-Formular den rohen Bibliothekstext der `regex`/
 // `globset`-Crate ("... unclosed group") statt eines Satzes, der sagt, was
 // zu tun ist.
+// Spec 0087, T12 (A1.5): der DE- und EN-Text von AI_CONTEXT_TOO_LARGE muss
+// das jeweilige Label von aiProvider.maxTokensOverrideLabel enthalten —
+// gelesen aus den echten Locale-Ressourcen (testI18n), kein hier
+// kopiertes/erwartetes Textstück, damit ein künftig geändertes Label nicht
+// unbemerkt aus dem Fehlertext herausfällt.
+describe("AI_CONTEXT_TOO_LARGE (Spec 0087)", () => {
+  it.each(["de", "en"] as const)(
+    "(%s) nennt das Label der Max.-Antwortlänge-Einstellung",
+    (language) => {
+      const t = testI18n.getFixedT(language);
+      const label = t("aiProvider.maxTokensOverrideLabel");
+      const text = translateErrorCode(t, "AI_CONTEXT_TOO_LARGE", "fallback");
+
+      expect(text).not.toBe("fallback");
+      expect(text).toContain(label);
+    },
+  );
+});
+
 describe("FILTER_RULE_PATTERN_INVALID (Spec 0077)", () => {
   const RAW = "regex parse error: unclosed group";
 
