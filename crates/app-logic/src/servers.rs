@@ -1,7 +1,21 @@
-//! Reine Orchestrierungs-Logik für den `delete_server`-Command (Spec 0046,
-//! Fund 1) — als eigene, von `tauri::State` unabhängige Funktion gehalten,
+//! Reine Orchestrierungs-Logik für die Server-Befehle — Anlegen (Spec
+//! 0047, Fund A2), Bearbeiten (Spec 0082) und Löschen (Spec 0046, Fund 1),
+//! jeweils als eigene, von `tauri::State` unabhängige Funktion gehalten,
 //! analog zu `crate::groups::compute_delete_group_result`, damit sie sich
-//! isoliert gegen einen `ProfileStore`/`CredentialStore` testen lässt.
+//! isoliert gegen einen `ProfileStore`/`CredentialStore` testen lassen.
+//!
+//! Alle drei haben dieselbe heikle Stelle: Zwischen Schlüsselbund und
+//! Datenbank liegt ein Moment, in dem eines von beiden schon geändert ist
+//! und das andere noch nicht. Was dort bei einem Fehler passieren muss,
+//! ist je Befehl verschieden und steht bei der jeweiligen Funktion:
+//!
+//! - [`create_server`] räumt **alle** Slots der frischen `ServerId` ab —
+//!   unter ihr kann nichts Legitimes stehen.
+//! - [`update_server`] darf das gerade **nicht**: Der Server existiert
+//!   weiter, mit seiner bisherigen Anmeldeart. Die Reihenfolge und ihre
+//!   Begründung stehen im Moduldoc von [`crate::server_credentials`].
+//! - [`delete_server`] läuft durch und meldet, was im Schlüsselbund
+//!   zurückblieb (Spec 0071, A17).
 
 use chrono::Utc;
 

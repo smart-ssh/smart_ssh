@@ -6,6 +6,38 @@
 //! Dieselbe Konvention wie beim AI-Provider (Spec 0007, Abschnitt 8.2),
 //! hier aber über bis zu zwei Secret-Slots pro Methode (Key+Passphrase,
 //! Zertifikat+Key) statt nur einem.
+//!
+//! ## Reihenfolge beim Bearbeiten eines Servers (Spec 0082)
+//!
+//! Geschrieben wird Schlüsselbund → Datenbank; **gelöscht wird umgekehrt**.
+//! Der ganze Ablauf steht in [`crate::servers::update_server`] und liest
+//! sich so:
+//!
+//! 1. Ablehnungen (lokaler Pseudo-Server, lokaler Jump-Host) — vor jedem
+//!    Lesen und Schreiben, A6.
+//! 2. [`resolve_auth_method`] und [`resolve_sudo_password`] schreiben die
+//!    Secrets der **neuen** Anmeldeart. Gelöscht wird hier nichts.
+//! 3. Die Datenbank bekommt die neue Anmeldeart.
+//! 4. Erst danach [`cleanup_replaced_auth_method_secrets`]: die Einträge
+//!    der bisherigen Art abzüglich derer, die die neue weiterbenutzt.
+//!
+//! Scheitert einer der Schritte 2–3, nimmt [`roll_back_failed_edit`] die
+//! Einträge zurück, die **dieser Aufruf** geschrieben hat und die zu
+//! keinem Eintrag der bisherigen Art gehören — woher er das weiß, steht
+//! bei [`RecordingCredentialStore`].
+//!
+//! Die Reihenfolge ist der ganze Punkt. Bis Spec 0082 räumte Schritt 2 als
+//! Erstes die Slots der bisherigen Art ab. Scheiterte danach irgendetwas —
+//! ein leeres Pflichtfeld genügte —, trug die Datenbank weiter die alte
+//! Anmeldeart, deren Secrets es nicht mehr gab. Der Server ließ sich nicht
+//! mehr verbinden, und zu sehen war nur die Fehlermeldung des Speicherns.
+//!
+//! Zwei Grenzen gelten dabei ausdrücklich (§8): Ein Slot, den alte und
+//! neue Art teilen, wird überschrieben und **nie** zurückgesetzt (R1) —
+//! das hieße, bei jedem Speichern erst den alten Wert auszulesen. Und
+//! zwei gleichzeitige Speichervorgänge desselben Servers rechnen je mit
+//! ihrem Anfangsstand (R2); die Anmeldeart ändern nur dieses Formular und
+//! `convert_identity_file_to_keychain`.
 
 use std::sync::Mutex;
 
