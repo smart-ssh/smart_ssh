@@ -643,10 +643,21 @@ impl AiProvider for AnthropicProvider {
                             return Some((AiEvent::Error(AiError::ResponseTruncated), state));
                         }
                         state.retried = true;
-                        state.max_tokens = state
+                        // Spec 0087, A2.1 (BL-0265): identisches Muster zu
+                        // `openai_compatible::send`s `doubled_and_capped.max(...)`
+                        // — ohne dieses `.max(...)` konnte `min(verdoppelt,
+                        // Modell-Maximum)` unter einen expliziten, über dem
+                        // Modell-Maximum liegenden `max_tokens_override` fallen
+                        // (Ist-Befund vor diesem Fix, s. Spec Abschnitt 1: Override
+                        // 32 000, Modell-Maximum 16 384 → der Retry sendete 16 384,
+                        // WENIGER als eingestellt). Der Retry wird für diesen Fall
+                        // wirkungslos (derselbe Wert nochmal), statt die explizite
+                        // Nutzereinstellung zu unterlaufen.
+                        let doubled_and_capped = state
                             .max_tokens
                             .saturating_mul(2)
                             .min(state.model_max_tokens);
+                        state.max_tokens = doubled_and_capped.max(state.max_tokens);
                         state.body["max_tokens"] = json!(state.max_tokens);
                         state.inner = None;
                         // Schleife läuft weiter, verbindet oben neu.
@@ -1785,5 +1796,23 @@ mod tests {
             // das Maximum herankommen, nicht sofort wieder daran anstoßen.
             assert!(default.saturating_mul(2).min(max) > default);
         }
+    }
+
+    /// Spec 0087, T14 (A2.1, Gegenprobe): ohne Override bleibt die
+    /// bestehende Verdopplung-bis-zum-Modell-Maximum unverändert — dieser
+    /// Fix darf den Normalfall nicht anfassen. `model_max_tokens` für
+    /// `claude-sonnet-4-5-...` ist 64_000 (s.
+    /// `anthropic_model_max_output_tokens`), der Default 16_384 — eine
+    /// Verdopplung bleibt darunter, `.max(...)` greift also nicht ein.
+    #[test]
+    fn test_send_retry_doubles_max_tokens_without_override() {
+        let default = anthropic_default_max_tokens("claude-sonnet-4-5-20250929");
+        let model_max = anthropic_model_max_output_tokens("claude-sonnet-4-5-20250929");
+        let doubled_and_capped = default.saturating_mul(2).min(model_max);
+        // Ohne Override ist `state.max_tokens` (== default) niemals größer
+        // als die verdoppelte, gedeckelte Zahl — `.max(...)` ändert also am
+        // Ergebnis nichts gegenüber der reinen Verdopplung.
+        assert_eq!(doubled_and_capped.max(default), doubled_and_capped);
+        assert!(doubled_and_capped > default);
     }
 }

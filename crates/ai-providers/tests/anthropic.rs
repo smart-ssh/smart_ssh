@@ -8,7 +8,19 @@ use futures::StreamExt;
 use ssh_manager_core::ai::{default_action_schemas, AiError, AiEvent, AiProvider, SessionContext};
 use ssh_manager_core::profiles::AiAction;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, MockServer, Request, ResponseTemplate};
+
+/// Spec 0087, T13: s. identischer Kommentar in
+/// `crates/ai-providers/tests/openai_compatible.rs::BodyContains` — der
+/// tatsächlich gesendete `max_tokens`-Wert muss belegt werden, nicht nur
+/// die Zahl der Requests.
+struct BodyContains(String);
+
+impl wiremock::Match for BodyContains {
+    fn matches(&self, request: &Request) -> bool {
+        String::from_utf8_lossy(&request.body).contains(self.0.as_str())
+    }
+}
 
 /// Spec 0061: jeder Test baut seinen eigenen, unabhängigen Wächter — kein
 /// geteilter Zustand zwischen Tests nötig, die Identität/Registry-Logik
@@ -555,4 +567,50 @@ event: message_stop\ndata: {}\n\n";
             AiEvent::Done,
         ]
     );
+}
+
+/// Spec 0087, T13 (A2.1, BL-0265): ein `max_tokens_override` (100 000), der
+/// über dem Modell-Maximum von `claude-sonnet-4-5-...` (64 000) liegt, darf
+/// der Abschneide-Retry NICHT unterschreiten. *Gegenbeweis (s. Bericht):*
+/// vor diesem Fix sendete der Retry `min(200000, 64000) == 64000` — WENIGER
+/// als der Override —, hier hätte der zweite Mock also nie getroffen und
+/// wiremock beim Server-Drop wegen der `.expect(2)`-Zusage auf dem
+/// einzigen (mit `max_tokens=100000` gebundenen) Mock einen fehlenden
+/// zweiten Treffer moniert.
+#[tokio::test]
+async fn test_truncation_retry_never_sends_less_than_an_explicit_max_tokens_override() {
+    let server = MockServer::start().await;
+    let truncated_body = "\
+event: content_block_start\ndata: {\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"suggest_command\"}}\n\n\
+event: content_block_delta\ndata: {\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\": \\\"rm -rf /var/log/app\\\"}\"}}\n\n\
+event: content_block_stop\ndata: {\"index\":0}\n\n\
+event: message_delta\ndata: {\"delta\":{\"stop_reason\":\"max_tokens\"}}\n\n\
+event: message_stop\ndata: {}\n\n";
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .and(BodyContains("\"max_tokens\":100000".to_string()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(truncated_body.to_string()),
+        )
+        .expect(2)
+        .mount(&server)
+        .await;
+    let provider = AnthropicProvider::new(
+        server.uri(),
+        "claude-sonnet-4-5-20250929",
+        "test-key",
+        true,
+        test_budget(),
+        Some(100_000),
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    // `.expect(2)` oben ist der eigentliche Beweis: BEIDE Requests trugen
+    // `"max_tokens":100000` — würde der zweite Retry stattdessen 64000
+    // (auf das Modell-Maximum gedeckelt statt beibehalten) schicken, träfe
+    // der Mock nur einmal, und wiremock ließe den Server-Drop fehlschlagen.
+    assert_eq!(events, vec![AiEvent::Error(AiError::ResponseTruncated)]);
 }
