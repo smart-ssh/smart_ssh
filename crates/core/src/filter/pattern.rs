@@ -288,8 +288,8 @@ fn is_path_shaped_pattern(pattern: &str) -> bool {
 ///
 /// Der bestehende SFTP-Traversal-Normalizer
 /// (`app_logic::orchestration::action_exec::normalize_remote_path`)
-/// normalisiert genau
-/// EIN Feld (den SFTP-Pfad) VOR der Filter-Auswertung — für die beiden
+/// normalisiert genau EIN Feld (den SFTP-Pfad) VOR der Filter-Auswertung —
+/// für die beiden
 /// SFTP-Pseudo-Kommandos ist `cmd` an dieser Stelle also bereits
 /// `.`/`..`-frei, diese Funktion hier ist für diesen Fall ein
 /// (idempotenter) No-op, kein Widerspruch.
@@ -355,8 +355,9 @@ fn path_shaped_tokens_contain_shell_metacharacters(cmd: &str) -> bool {
 
 /// Löst `.`/`..`-Segmente rein lexikalisch auf und kollabiert wiederholte
 /// `/` — bewusst dieselbe Semantik wie
-/// `app_logic::orchestration::action_exec::normalize_remote_path` (Spec 0020, SFTP-
-/// Traversal-Entschärfung), hier unabhängig dupliziert: `core` darf laut
+/// `app_logic::orchestration::action_exec::normalize_remote_path`
+/// (Spec 0020, SFTP-Traversal-Entschärfung), hier unabhängig dupliziert:
+/// `core` darf laut
 /// Architektur-Regel nicht von `app-shell` abhängen (`app-shell` hängt von
 /// `core` ab, nie umgekehrt), ein Teilen des Codes ist also nur in dieser
 /// Richtung (app-shell → core) möglich, nicht andersherum — nicht Teil

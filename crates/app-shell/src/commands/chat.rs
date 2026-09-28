@@ -695,8 +695,8 @@ mod send_chat_message_persistence_tests {
         let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
 
         let mut session = test_session(server_id);
-        session.parts_mut().chat_session_store = Some(chat_store.clone());
-        session.parts_mut().chat_session_id = AsyncMutex::new(Some(chat_session_id));
+        session.parts_mut_for_tests().chat_session_store = Some(chat_store.clone());
+        session.parts_mut_for_tests().chat_session_id = AsyncMutex::new(Some(chat_session_id));
 
         (session, profile_store, chat_store, tmp_dir)
     }
@@ -831,7 +831,7 @@ mod send_chat_message_persistence_tests {
         let gate = Arc::new(tokio::sync::Notify::new());
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut().ai_provider = Box::new(GatedRecordingProvider {
+        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
         });
@@ -1005,10 +1005,11 @@ mod send_chat_message_persistence_tests {
         let gate = Arc::new(tokio::sync::Notify::new());
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut().transport =
+        session.parts_mut_for_tests().transport =
             app_logic::session::SessionTransport::new(Box::new(EchoTransport));
-        session.parts_mut().filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-        session.parts_mut().ai_provider = Box::new(GatedActionProvider {
+        session.parts_mut_for_tests().filter_engine =
+            Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session.parts_mut_for_tests().ai_provider = Box::new(GatedActionProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
         });
@@ -1092,7 +1093,7 @@ mod send_chat_message_persistence_tests {
     async fn test_run_chat_turn_does_not_swallow_an_early_stop() {
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut().ai_provider = Box::new(GatedRecordingProvider {
+        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
             gate: Arc::new(tokio::sync::Notify::new()),
             contexts: contexts.clone(),
         });
@@ -1127,7 +1128,7 @@ mod send_chat_message_persistence_tests {
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
         let gate = Arc::new(tokio::sync::Notify::new());
-        session.parts_mut().ai_provider = Box::new(GatedRecordingProvider {
+        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
         });

@@ -205,8 +205,8 @@ impl AnthropicProvider {
         // Breakpoint markiert alles bis einschließlich dieses Blocks
         // (System-Prompt + Werkzeug-Anweisungen + Server-Notiz, alle schon
         // in `context.system_context` zusammengefasst, s.
-        // `app_logic::compaction::SystemContextParts`) als cachefähig. Unbedingt
-        // gesetzt, auch wenn `system_text` unter der modellabhängigen
+        // `app_logic::compaction::SystemContextParts`) als cachefähig.
+        // Unbedingt gesetzt, auch wenn `system_text` unter der modellabhängigen
         // Mindestlänge liegt (niedriger drei- bis vierstelliger
         // Token-Bereich, je nach Modell): Anthropic verarbeitet einen zu
         // kurzen Block dann einfach ohne Caching, ohne Fehler — eine

@@ -223,6 +223,20 @@ fn assert_too_large_for_clipboard(result: CommandResult<String>) {
     );
 }
 
+/// Spec 0086, A1.2 / spec-reviewer Runde 1: `TOO_LARGE_FOR_EDITING` nennt
+/// „50 MB" als festen Text, unabhängig von [`MAX_EDIT_OPEN_BYTES`] (die
+/// Grenze ist in Tests ein Parameter, s. dortiger Doc-Kommentar). Ohne diesen
+/// Test könnte eine künftige Änderung der Konstante still eine falsche Zahl
+/// anzeigen lassen.
+#[test]
+fn test_the_rejection_message_names_the_actual_limit() {
+    assert_eq!(MAX_EDIT_OPEN_BYTES, 50 * 1024 * 1024);
+    assert!(
+        TOO_LARGE_FOR_EDITING.contains("50 MB"),
+        "Meldung und Konstante müssen dieselbe Grenze nennen, war: {TOO_LARGE_FOR_EDITING}"
+    );
+}
+
 fn assert_too_large_for_editing(result: CommandResult<EditSessionDto>) {
     let err = result.expect_err("eine zu große Datei darf nicht lokal geöffnet werden");
     assert_eq!(

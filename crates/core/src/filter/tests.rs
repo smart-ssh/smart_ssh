@@ -1407,9 +1407,10 @@ fn test_spec_0077_t7_hard_blacklist_patterns_all_compile() {
 
 /// Aufzeichnung der ERROR-Ereignisse aus 3.2.2 (Spec 0077, T-A10).
 ///
-/// Dasselbe Muster wie `ai_providers::test_support`
-/// (Spec 0086, A4.2: hier stand zusätzlich ein Verweis auf ein Modul von
-/// `app-shell`, das es nicht gibt): **ein** globaler Subscriber pro Testprozess
+/// Dasselbe Muster wie `ai_providers::test_support` (dort steht die
+/// ausführliche Begründung; Spec 0086, A4.2: hier stand zusätzlich der Name
+/// eines `app-shell`-Moduls, das es nicht gibt): **ein** globaler Subscriber
+/// pro Testprozess
 /// (`Once`), der in einen thread-lokalen Puffer schreibt — mehrere
 /// `set_global_default`-Aufrufe im selben Testbinary gewinnen sonst nur beim
 /// ersten, und die übrigen Tests sähen nie ihre eigenen Zeilen.

@@ -180,7 +180,7 @@ impl SessionTransport {
     /// Codeangabe.)
     ///
     /// **Diese Fälle hängen bewusst an keinem `cfg`/Feature.** Der
-    /// Test-Zugang [`Session::parts_mut`] steht hinter
+    /// Test-Zugang [`Session::parts_mut_for_tests`] steht hinter
     /// `feature = "test-support"`, und dieses Feature ist im Doctest-Lauf von
     /// `cargo test --workspace` **aktiv** (Feature-Unification über
     /// `app-shell`s dev-dependency). Ein `DerefMut` hinter demselben Feature
@@ -333,7 +333,7 @@ impl std::ops::DerefMut for TransportGuard<'_> {
 /// alle mitgegebenen Bestandteile zweier Sitzungen auf einmal, während der
 /// private SFTP-Kanal zurückbliebe. Ohne `DerefMut` ist von außen kein Feld
 /// einer bestehenden Sitzung schreibbar; Tests bekommen den Zugang über
-/// [`Session::parts_mut`] hinter `cfg(test)`/`feature = "test-support"`
+/// [`Session::parts_mut_for_tests`] hinter `cfg(test)`/`feature = "test-support"`
 /// (A3.3, Muster wie [`Session::set_sftp_for_tests`]).
 pub struct Session {
     parts: SessionParts,
@@ -630,69 +630,73 @@ impl Session {
     /// **Spec 0086, A3.4:** Die verbotenen Fälle sind unverändert
     /// `compile_fail`. Ihre kompilierenden Zwillinge schrieben bisher ein
     /// anderes, öffentliches Feld (`session.tags = …`) — das ging nur über
-    /// `DerefMut`, und das ist mit Spec 0086 A3 entfallen. Die Zwillinge
-    /// benutzen die Sitzung jetzt stattdessen (`lock_sftp`), unterscheiden
-    /// sich also weiter nur in der verbotenen Zeile. Dass von außen gar kein
-    /// Feld mehr schreibbar ist, ist genau der Punkt von A3 und wird von den
-    /// Fällen an [`SessionTransport::lock`] belegt.
+    /// `DerefMut`, und das ist mit Spec 0086 A3 entfallen. Sie führen die
+    /// jeweilige Mechanik jetzt an einem **lokalen** [`NormalSftpChannel`]
+    /// vor: Der Zwilling belegt damit weiter, dass `Default`, `replace`,
+    /// `swap` und `take` für diesen Typ sehr wohl übersetzen, und der
+    /// verbotene Fall kann nur noch daran scheitern, dass `Session::sftp` ein
+    /// privates Feld ist. Ein Zwilling, der bloß `lock_sftp()` aufruft, hätte
+    /// das nicht mehr gezeigt: fiele eines Tages `#[derive(Default)]` an
+    /// `NormalSftpChannel` weg, bestünden die Fälle still aus dem falschen
+    /// Grund (spec-reviewer, Runde 1).
     ///
     /// Zuweisung ans Feld — verboten:
     /// ```compile_fail
-    /// # use app_logic::session::Session;
-    /// fn f(session: &mut Session) {
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, mut local: NormalSftpChannel) {
     ///     session.sftp = Default::default();
     /// }
     /// ```
     /// Zwilling:
     /// ```
-    /// # use app_logic::session::Session;
-    /// fn f(session: &mut Session) {
-    ///     let _ = session.lock_sftp();
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, mut local: NormalSftpChannel) {
+    ///     local = Default::default();
     /// }
     /// ```
     ///
     /// `std::mem::replace` am Feld — verboten:
     /// ```compile_fail
-    /// # use app_logic::session::Session;
-    /// fn f(session: &mut Session) {
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, mut local: NormalSftpChannel) {
     ///     let _old = std::mem::replace(&mut session.sftp, Default::default());
     /// }
     /// ```
     /// Zwilling:
     /// ```
-    /// # use app_logic::session::Session;
-    /// fn f(session: &mut Session) {
-    ///     let _old = session.lock_sftp();
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, mut local: NormalSftpChannel) {
+    ///     let _old = std::mem::replace(&mut local, Default::default());
     /// }
     /// ```
     ///
     /// `std::mem::swap` zwischen zwei Sitzungen — verboten:
     /// ```compile_fail
-    /// # use app_logic::session::Session;
-    /// fn f(a: &mut Session, b: &mut Session) {
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(a: &mut Session, b: &mut Session, x: &mut NormalSftpChannel, y: &mut NormalSftpChannel) {
     ///     std::mem::swap(&mut a.sftp, &mut b.sftp);
     /// }
     /// ```
     /// Zwilling:
     /// ```
-    /// # use app_logic::session::Session;
-    /// fn f(a: &mut Session, b: &mut Session) {
-    ///     let _ = (a.lock_sftp(), b.lock_sftp());
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(a: &mut Session, b: &mut Session, x: &mut NormalSftpChannel, y: &mut NormalSftpChannel) {
+    ///     std::mem::swap(x, y);
     /// }
     /// ```
     ///
     /// `std::mem::take` am Feld — verboten:
     /// ```compile_fail
-    /// # use app_logic::session::Session;
-    /// fn f(session: &mut Session) {
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, local: &mut NormalSftpChannel) {
     ///     let _taken = std::mem::take(&mut session.sftp);
     /// }
     /// ```
     /// Zwilling:
     /// ```
-    /// # use app_logic::session::Session;
-    /// fn f(session: &mut Session) {
-    ///     let _taken = session.lock_sftp();
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, local: &mut NormalSftpChannel) {
+    ///     let _taken = std::mem::take(local);
     /// }
     /// ```
     ///
@@ -718,7 +722,7 @@ impl Session {
 
     /// Spec 0086, A3.3: Schreibzugang auf die mitgegebenen Bestandteile —
     /// **nur für Tests**, die eine Sitzung mit gezielt gesetzten Feldern
-    /// brauchen (`session.parts_mut().server_id = …`). Hinter dem Feature
+    /// brauchen (`session.parts_mut_for_tests().server_id = …`). Hinter dem Feature
     /// `test-support` wie [`Session::set_sftp_for_tests`]: Produktivbauten
     /// aktivieren es nicht, also gibt es für Produktivcode außerhalb von
     /// `app-logic` keinen Weg, ein Feld einer bestehenden Sitzung zu
@@ -729,8 +733,20 @@ impl Session {
     /// [`SessionTransport::lock`] **nicht** wirkungslos: die rühren diesen
     /// Zugang nicht an, sondern das Fehlen von `DerefMut` — und das gilt
     /// unabhängig von jedem Feature (s. dortiger Kommentar, ADR 0080).
+    ///
+    /// **Der Zugang ist breit**, und der Name sagt das (spec-reviewer,
+    /// Runde 1): Er reicht `&mut SessionParts` heraus, also Schreibrechte auf
+    /// **alle** mitgegebenen Bestandteile — auch auf `filter_engine`,
+    /// `ai_provider` und `sudo_password`. Ein Aufruf aus Produktivcode wäre
+    /// damit ein vollständiger Filter-Bypass. Er ist dort unmöglich, weil kein
+    /// Produktivbau `test-support` aktiviert; das `_for_tests` im Namen ist
+    /// die zweite Schranke, damit ein solcher Aufruf einem Menschen auffällt,
+    /// bevor `cargo build --workspace` ihn ablehnt (`cargo clippy
+    /// --all-targets`/`cargo test` haben das Feature an und würden ihn
+    /// durchlassen). Ein feldweiser Satz Setter wäre enger — s. ADR 0080,
+    /// warum er hier nicht kommt.
     #[cfg(any(test, feature = "test-support"))]
-    pub fn parts_mut(&mut self) -> &mut SessionParts {
+    pub fn parts_mut_for_tests(&mut self) -> &mut SessionParts {
         &mut self.parts
     }
 
@@ -1277,7 +1293,7 @@ mod tests {
         let manager = SessionManager::new();
         let chat_session_id = Uuid::new_v4();
         let mut session = dummy_session(ServerId::new());
-        session.parts_mut().chat_session_id = AsyncMutex::new(Some(chat_session_id));
+        session.parts_mut_for_tests().chat_session_id = AsyncMutex::new(Some(chat_session_id));
         manager.insert(Uuid::new_v4(), Arc::new(session));
 
         assert!(manager.is_chat_session_active(chat_session_id).await);
@@ -1287,7 +1303,7 @@ mod tests {
     async fn test_is_chat_session_active_false_for_an_unrelated_chat_session_id() {
         let manager = SessionManager::new();
         let mut session = dummy_session(ServerId::new());
-        session.parts_mut().chat_session_id = AsyncMutex::new(Some(Uuid::new_v4()));
+        session.parts_mut_for_tests().chat_session_id = AsyncMutex::new(Some(Uuid::new_v4()));
         manager.insert(Uuid::new_v4(), Arc::new(session));
 
         assert!(!manager.is_chat_session_active(Uuid::new_v4()).await);

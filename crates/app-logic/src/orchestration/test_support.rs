@@ -344,8 +344,9 @@ pub(crate) fn session_with_second_opinion(
     // Spec 0085, A3: `Session` hat ein privates Feld, also kein Struct-Update
     // („`..base`") mehr — die beiden Felder werden nach dem Bau gesetzt.
     let mut session = session_with_ai_provider(MockAiProvider::new(ai_events), transport);
-    session.parts_mut().risk_second_opinion_provider = Some(Box::new(second_opinion_provider));
-    session.parts_mut().risk_second_opinion_budget =
+    session.parts_mut_for_tests().risk_second_opinion_provider =
+        Some(Box::new(second_opinion_provider));
+    session.parts_mut_for_tests().risk_second_opinion_budget =
         Some(Arc::new(ai_providers::ProviderBudgetGuard::new()));
     session
 }
@@ -606,10 +607,10 @@ pub(crate) async fn session_with_real_chat_and_ledger_persistence(
     let ledger_store = profile_store.ledger_store(test_cipher);
 
     let mut session = session_with_ai_provider(MockAiProvider::new(ai_events), transport);
-    session.parts_mut().server_id = server_id;
-    session.parts_mut().chat_session_store = Some(chat_store.clone());
-    session.parts_mut().ledger_store = Some(ledger_store.clone());
-    session.parts_mut().chat_session_id = AsyncMutex::new(Some(chat_session_id));
+    session.parts_mut_for_tests().server_id = server_id;
+    session.parts_mut_for_tests().chat_session_store = Some(chat_store.clone());
+    session.parts_mut_for_tests().ledger_store = Some(ledger_store.clone());
+    session.parts_mut_for_tests().chat_session_id = AsyncMutex::new(Some(chat_session_id));
 
     (session, chat_store, chat_session_id, tmp_dir, ledger_store)
 }
