@@ -30,6 +30,20 @@ Commit-Messages englisch (Conventional Commits).
 
 ## Auftragsformat
 
+Specs enthalten einen Abschnitt **„Ist-Stand"** und am Ende einen Abschnitt
+**„Umsetzung"** (Teil 0, Reihenfolge mit wörtlichen Commit-Messages,
+Priorität, Angriffsrichtungen, Aufteilung, berührte Module, „Melde
+zurück"). Der Abschnitt „Umsetzung" ist dein Auftrag; „Melde zurück" legt
+fest, was in `summary.md`/`report.md` stehen muss.
+
+**Ist-Stand prüfen, Widerspruch melden.** Sieht der Code anders aus als im
+Ist-Stand beschrieben (eine Funktion fehlt, ein Verhalten ist schon
+behoben, eine Zählung stimmt nicht), hältst du an und meldest das als
+Rückfrage (Ablauf „Rückfragen" im Agenten) — du passt die Umsetzung
+**nicht** stillschweigend an. Der Widerspruch ist erwünscht: Er zeigt, dass
+die Spec auf einer falschen Annahme steht. Aussagen mit „(gelesen, nicht
+ausgeführt)" prüfst du zuerst.
+
 - **Teil 0 — zuerst klären und berichten:** Ist-Stand im Code verifizieren
   (nicht aus Erinnerung), die Frage beantworten, *vor* dem Bauen der
   betroffenen Teile berichten. Unabhängige Teile dürfen weiterlaufen.

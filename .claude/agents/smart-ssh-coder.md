@@ -124,15 +124,20 @@ lesen, dann an der unterbrochenen Stelle weitermachen.
      erreicht niemanden und bleibt liegen.
 5. **Fertig implementiert:** Test-Gate selbst ausführen — `cargo fmt --all --
    --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-   `cargo test --workspace`, bei Frontend-Änderungen zusätzlich Tests und
-   Build des Frontends.
+   `cargo test --workspace`, `cargo build --workspace` (nur dieser Bau läuft
+   ohne das Feature `test-support` und fängt einen Produktiv-Aufruf eines
+   Test-Zugangs ab), bei Frontend-Änderungen zusätzlich Tests und Build des
+   Frontends.
 6. **Review:** Spec-Commit ermitteln
    (`git log --diff-filter=A --format=%H -- <specdatei>`), dann den
    `spec-reviewer`-Subagent starten: „invoke for spec <pfad>, commit range
    <spec-commit>..HEAD, Priorität <normal|ERHÖHT>" (ERHÖHT bei Filter-Engine,
    Risiko-Klassifizierer, Redactor, Credential-Handling, Ausführungspfad,
-   Verschlüsselung, Migration; dann mit
-   ausformulierten Angriffswegen). **Den Bericht jeder Runde legst du
+   Verschlüsselung, Migration, Sitzungs- und Kanalaufbau; dann mit den
+   ausformulierten Angriffsrichtungen aus dem Abschnitt „Umsetzung" der
+   Spec). **Modell nach Priorität:** bei NORMAL den Subagenten mit
+   `model: sonnet` starten (Parameter des Agent-Werkzeugs), bei ERHÖHT
+   ohne Angabe (Voreinstellung Opus). Das gilt für jede Runde. **Den Bericht jeder Runde legst du
    wörtlich unter `.agent/<BL-ID>/review-NN.md` ab, bevor du triagierst** —
    so ist nachprüfbar, welcher Fund behoben und welcher bewusst stehen
    gelassen wurde. Funde triagieren wie im Skill beschrieben
