@@ -80,7 +80,19 @@ lesen, dann an der unterbrochenen Stelle weitermachen.
    keine Tests, die nur den Ist-Zustand spiegeln.
 4. **Rückfragen** — Klasse bestimmen (Skill `escalation-policy`, falls
    verfügbar; sonst die Kurzfassung unten), im Zweifel die höhere:
-   - Mit HQ: Frage-Datei `questions/Q-<Item-ID>-NN.md` im HQ nach dieser
+   - **Architekt direkt erreichbar** (der Startprompt nennt `Architekt:
+     <Name>`, und `ListAgents` führt diese Sitzung): K1/K2-Fragen schickst
+     du per `SendMessage` an diesen Namen — erste Zeile mit Frage-Kennung
+     `Q-<Item-ID>-NN` und der Frage, darunter Kontext und Optionen wie in der
+     Vorlage unten. Dann **wartest** du auf die Antwort, statt die Sitzung zu
+     beenden, und arbeitest an Unabhängigem weiter, falls es das gibt. Keine
+     Frage-Datei; den Wortlaut von Frage und Antwort hältst du in
+     `.agent/<BL-ID>/decision.md` fest. K3 läuft weiter über die Datei
+     (nächster Punkt), weil die Entscheidung einen Abbruch überdauern muss;
+     die Nachricht an den Architekten sagt dann nur, dass sie dort liegt.
+     Bist du fertig (Status `review`, `blocked` oder `needs-stefan`), schickst
+     du dem Architekten eine Zeile mit dem Status.
+   - Mit HQ, Architekt nicht erreichbar: Frage-Datei `questions/Q-<Item-ID>-NN.md` im HQ nach dieser
      Vorlage anlegen und den `architect`-Subagent mit „Frage beantworten:
      <absoluter Pfad>" starten. K1/K2 → Antwort übernehmen, weiterarbeiten.
 
