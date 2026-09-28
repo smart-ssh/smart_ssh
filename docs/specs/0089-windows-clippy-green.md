@@ -1,6 +1,6 @@
 # Spec 0089 — Clippy green on Windows
 
-Status: Vorschlag (Architekt) · Backlog: BL-0281 · Gate: —
+Status: freigegeben (Stefan, 2026-09-28) · Backlog: BL-0281 · Gate: —
 Zweck: Der CI-Job `Test (windows-latest)` kommt wieder über `cargo clippy`
 und die Grenzprüfung hinaus, ohne das Verhalten oder die Testabdeckung auf
 Unix zu ändern.
