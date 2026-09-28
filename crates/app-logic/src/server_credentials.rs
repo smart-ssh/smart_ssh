@@ -346,6 +346,13 @@ fn remove_obsolete_secret(
 /// hier das Sudo-Passwort, das derselbe Aufruf gerade geschrieben hat. Die
 /// Ausnahme kostet einen Vergleich; sie nicht zu haben kostet im
 /// Zweifelsfall ein Credential. Beide Aufräumwege kennen sie jetzt.
+///
+/// Ihre Kehrseite, der Vollständigkeit halber: In genau diesem verbogenen
+/// Zustand bleibt, wenn **kein** neues Sudo-Passwort angegeben war, der
+/// alte Wert unter dem Sudo-Slot stehen, statt geleert zu werden — ein
+/// verwaister Eintrag, der ab da als Sudo-Passwort gälte. Das ist der
+/// gewollte Tausch: ein Eintrag zu viel statt ein Credential zu wenig. S.
+/// Spec 0082 §9 (K1) und `docs/adr/0081`.
 pub(crate) fn cleanup_replaced_auth_method_secrets(
     credential_store: &dyn CredentialStore,
     server_id: ServerId,
