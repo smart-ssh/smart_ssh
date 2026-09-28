@@ -466,21 +466,6 @@ impl KeyFileSource for DiskKeyFiles<'_> {
 
 // ------------------------------------------------------ Tauri-Kommandos
 
-/// Der Plan der letzten Vorschau, wie er im `AppState` liegt (§5.1).
-///
-/// Er wird **hier** gehalten und nicht im Frontend, damit beim Bestätigen
-/// nur Indizes zurückkommen. Was die Vorschau nicht genannt hat, kann
-/// dadurch nicht geöffnet werden — auch nicht, wenn sich die
-/// Konfigurationsdatei zwischenzeitlich geändert hat.
-///
-/// Trägt bewusst **nur** den Plan: Die Dateiliste ist mit der Vorschau
-/// schon beim Frontend und wird beim Bestätigen nicht mehr gebraucht — was
-/// hier nicht liegt, kann auch nicht versehentlich erneut geöffnet werden.
-#[derive(Debug, Clone)]
-pub struct PendingImport {
-    pub plan: ImportPlan,
-}
-
 /// Die Vorschau für das Frontend (§3.1.7). Trägt Pfade und Felder, aber
 /// **keinen** Dateiinhalt (§5.4).
 #[derive(Debug, Clone, serde::Serialize)]
@@ -856,7 +841,7 @@ pub async fn preview_ssh_config_import(
             servers: &servers,
             groups: &groups,
             rules: &rules,
-            local_server_id: crate::local_server::LOCAL_SERVER_ID,
+            local_server_id: crate::dto::LOCAL_SERVER_ID,
         },
     );
 
@@ -868,7 +853,7 @@ pub async fn preview_ssh_config_import(
     *state
         .pending_ssh_config_import
         .lock()
-        .expect("pending import lock") = Some(PendingImport { plan });
+        .expect("pending import lock") = Some(crate::state::PendingImport { plan });
     Ok(Some(dto))
 }
 

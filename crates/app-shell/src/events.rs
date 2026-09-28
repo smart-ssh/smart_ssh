@@ -12,6 +12,12 @@
 //!
 //! Payload-Serialisierung liegt bewusst in Value-Form im Trait (statt
 //! generisch `impl Serialize`), damit der Trait dyn-kompatibel bleibt.
+//!
+//! Spec 0084, §4: Die `EventEmitter`-Impl für `tauri::AppHandle` liegt
+//! bewusst NICHT hier, sondern in `crate::event_emitter::TauriEventEmitter`
+//! (ein Newtype) — dieses Modul selbst ist bis auf diese eine Impl
+//! Tauri-frei und zieht als Ganzes nach `app-logic`; die Orphan-Rule
+//! verbietet dort eine Impl für den fremden Typ `tauri::AppHandle`.
 
 use serde::Serialize;
 use uuid::Uuid;
@@ -26,19 +32,6 @@ use crate::state::{ActionId, SessionId};
 
 pub trait EventEmitter: Send + Sync {
     fn emit_event(&self, event: &str, payload: serde_json::Value);
-}
-
-impl EventEmitter for tauri::AppHandle {
-    fn emit_event(&self, event: &str, payload: serde_json::Value) {
-        // Ein Event kann höchstens dann nicht gesendet werden, wenn die App
-        // gerade herunterfährt — kein Fall, den die aufrufende
-        // Orchestrierungslogik als harten Fehler behandeln sollte (sie
-        // würde sonst z. B. eine laufende Kommando-Ausführung abbrechen,
-        // nur weil das *Benachrichtigen* des UI fehlschlug). Nur geloggt.
-        if let Err(err) = tauri::Emitter::emit(self, event, payload) {
-            eprintln!("Event '{event}' konnte nicht gesendet werden: {err}");
-        }
-    }
 }
 
 fn emit<T: Serialize>(emitter: &dyn EventEmitter, event: &str, payload: &T) {

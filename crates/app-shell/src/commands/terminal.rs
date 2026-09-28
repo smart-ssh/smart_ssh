@@ -9,6 +9,7 @@ use tokio::sync::mpsc;
 use ssh_manager_core::ssh::PtySize;
 
 use crate::error::CommandResult;
+use crate::event_emitter::TauriEventEmitter;
 use crate::events::EventEmitter;
 use crate::session::{spawn_terminal_actor, Session, TerminalCommand};
 use crate::state::{AppState, SessionId};
@@ -39,7 +40,7 @@ pub async fn open_terminal(
         Arc::clone(&session),
         shell,
         rx,
-        Arc::new(app) as Arc<dyn EventEmitter>,
+        Arc::new(TauriEventEmitter(app)) as Arc<dyn EventEmitter>,
     );
     Ok(())
 }

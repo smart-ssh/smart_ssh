@@ -18,12 +18,29 @@ use ssh_manager_core::ssh::{
 };
 use ssh_transport::ConnectOutcome;
 
-use crate::commands::SSH_CONNECT_TIMEOUT;
 use crate::dto::{AuthMethodInput, ServerInput, TestConnectionResult};
 use crate::ephemeral_credentials::EphemeralCredentialStore;
 use credentials_keyring::KeychainAvailability;
 
 use crate::error::{keychain_aware_credential_error, CommandError, CommandResult};
+
+/// Spec 0084, §4 (Schnitt `test_connection` → `commands::SSH_CONNECT_TIMEOUT`):
+/// hierher verschoben, weil `test_connection` (Tauri-frei, zieht nach
+/// `app-logic`) diese Konstante braucht, `commands::connect` (Tauri-gebunden,
+/// bleibt in `app-shell`) sie aber ebenfalls nutzt — die umgekehrte
+/// Abhängigkeitsrichtung wäre nach dem Umzug nicht mehr erfüllbar.
+///
+/// Spec 0069, Teil A3: die bestehende 10-Sekunden-Grenze (ursprünglich
+/// `TEST_CONNECTION_TIMEOUT` allein hier) — **keine zweite Konstante**.
+/// Umschließt in `connect_session` (`commands::connect`) jeden einzelnen
+/// Aufruf von `ssh_transport::connect` (über
+/// `ssh_transport::connect_with_timeout`), NIE das Warten auf eine
+/// Host-Key-Entscheidung (das bleibt bei `crate::orchestration::
+/// PENDING_ACTION_CONFIRM_TIMEOUT`, Spec 0068 Teil 5b) — s.
+/// `ssh_transport::connect_with_timeout`s Doc-Kommentar zur
+/// Sicherheits-Invariante ("liefert immer einen Fehler, nie `Connected`,
+/// nie `trust()`").
+pub(crate) const SSH_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Kapselt `ssh_transport::connect()` hinter einem Trait, rein damit
 /// `test_connection`s Logik (Ephemeral-Credential-Aufbau, Hop-Kette,

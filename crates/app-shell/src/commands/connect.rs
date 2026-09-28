@@ -3,7 +3,6 @@
 //! von `commands.rs`.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use secrecy::ExposeSecret;
 use tauri::{AppHandle, State};
@@ -30,9 +29,14 @@ use crate::events::{
 use crate::server_credentials::sudo_password_credential_ref;
 use crate::session::{history_contains_untrusted_content, Session};
 use crate::state::{AppState, SessionId};
+// Spec 0084, §4 (Schnitt `test_connection` → `commands::SSH_CONNECT_TIMEOUT`):
+// die Konstante liegt jetzt in `crate::test_connection` (s. dortiger
+// Kommentar) — `test_connection` ist Tauri-frei und zieht nach `app-logic`,
+// `commands::connect` bleibt Tauri-gebunden in `app-shell`.
+use crate::test_connection::SSH_CONNECT_TIMEOUT;
 
 use super::ai_providers::active_ai_provider_config;
-use super::diagnostics_export::{build_os_banner_message, sanitize_uname_output};
+use super::diagnostics_export::build_os_banner_message;
 
 /// Spec 0007, Abschnitt 4/6. `session_id` wird **vor** dem eigentlichen
 /// Verbindungsaufbau vergeben (nicht erst bei Erfolg): Abschnitt 4 sieht
@@ -123,18 +127,6 @@ fn map_connect_result(
     result.map_err(|err| CommandError::with_code(err.to_string(), err.code()))
 }
 
-/// Spec 0069, Teil A3: die bestehende 10-Sekunden-Grenze aus
-/// `test_connection.rs` (dort vorher `TEST_CONNECTION_TIMEOUT`), an diese
-/// gemeinsame Stelle verschoben und umbenannt — **keine zweite Konstante**.
-/// Umschließt in `connect_session` unten jeden einzelnen Aufruf von
-/// `ssh_transport::connect` (über `ssh_transport::connect_with_timeout`),
-/// NIE das Warten auf eine Host-Key-Entscheidung (das bleibt bei
-/// `crate::orchestration::PENDING_ACTION_CONFIRM_TIMEOUT`, Spec 0068 Teil
-/// 5b) — s. `ssh_transport::connect_with_timeout`s Doc-Kommentar zur
-/// Sicherheits-Invariante ("liefert immer einen Fehler, nie `Connected`,
-/// nie `trust()`").
-pub(crate) const SSH_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-
 pub(crate) async fn connect_session(
     app: &AppHandle,
     state: &AppState,
@@ -153,7 +145,7 @@ pub(crate) async fn connect_session(
     // verdient strengere Behandlung"-Logik wie dort.
     ensure_first_run_notice_acknowledged(app)?;
 
-    let is_local = crate::local_server::is_local(server_id);
+    let is_local = crate::dto::is_local(server_id);
     let server = if is_local {
         crate::local_server::synthetic_server(app)
     } else {
@@ -297,7 +289,7 @@ pub(crate) async fn connect_session(
                         .sessions
                         .register_pending_connection(session_id, server_id);
                     emit_host_key_verification_needed(
-                        app,
+                        &crate::event_emitter::TauriEventEmitter(app.clone()),
                         session_id,
                         host.clone(),
                         port,
@@ -380,7 +372,7 @@ pub(crate) async fn connect_session(
 
     let sanitized_os = if let Ok(uname_output) = transport.execute("uname -a").await {
         let uname_text = String::from_utf8_lossy(&uname_output.stdout);
-        sanitize_uname_output(&uname_text)
+        crate::orchestration::sanitize_uname_output(&uname_text)
     } else {
         None
     };
@@ -684,7 +676,12 @@ pub(crate) async fn connect_session(
     state.sessions.insert(session_id, session);
 
     tracing::info!(session_id = %session_id, server_id = %server_id.0, "session connected");
-    emit_connection_status_changed(app, session_id, ConnectionStatus::Connected, None);
+    emit_connection_status_changed(
+        &crate::event_emitter::TauriEventEmitter(app.clone()),
+        session_id,
+        ConnectionStatus::Connected,
+        None,
+    );
     Ok(session_id)
 }
 
@@ -992,7 +989,7 @@ pub(super) async fn build_session_system_context<R: tauri::Runtime>(
     // eingebettet wird (der schwerwiegendste der vier in Spec 0039
     // genannten Befunde: Notizen persistieren über Sitzungen hinweg, eine
     // einmal eingeschleuste Anweisung wirkt also nicht nur einmalig).
-    let note_sections: Vec<(String, String)> = if crate::local_server::is_local(*server_id) {
+    let note_sections: Vec<(String, String)> = if crate::dto::is_local(*server_id) {
         let local_notes = crate::local_server::synthetic_server(app).notes;
         if local_notes.trim().is_empty() {
             Vec::new()

@@ -9,6 +9,7 @@ use ssh_manager_core::profiles::ProfileStore;
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionUserDecision, SessionSummaryDto};
 use crate::error::CommandResult;
+use crate::event_emitter::TauriEventEmitter;
 use crate::events::{
     emit_chat_queued_messages_sent, emit_connection_status_changed, ConnectionStatus, EventEmitter,
 };
@@ -33,7 +34,7 @@ pub async fn send_chat_message(
         .ok_or("Session nicht gefunden")?;
     send_chat_message_impl(
         &app,
-        &app,
+        &TauriEventEmitter(app.clone()),
         &session,
         session_id,
         text,
@@ -71,7 +72,7 @@ pub async fn continue_truncated_response(
         .ok_or("Session nicht gefunden")?;
     send_chat_message_impl(
         &app,
-        &app,
+        &TauriEventEmitter(app.clone()),
         &session,
         session_id,
         CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION.to_string(),
@@ -154,7 +155,7 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
         // Pseudo-Server nie (keine `servers`-Zeile) — ohne diesen Zweig würde
         // der Servername in JEDER Chat-Nachricht auf das generische "Server"
         // degradieren (unabhängiger Review-Pass, s. docs/adr/0026).
-        let (server_name, current_tags) = if crate::local_server::is_local(session.server_id) {
+        let (server_name, current_tags) = if crate::dto::is_local(session.server_id) {
             let local = crate::local_server::synthetic_server(app);
             (local.name, local.tags)
         } else {
@@ -300,7 +301,7 @@ pub async fn take_chat_content_into_note(
         &session,
         session_id,
         content,
-        &app,
+        &TauriEventEmitter(app.clone()),
         state.profile_store.as_ref(),
         &state.pending_action_confirmations,
     )
@@ -402,7 +403,12 @@ pub async fn disconnect(
     *session.terminal.lock().unwrap() = None;
 
     tracing::info!(session_id = %session_id, "session disconnected");
-    emit_connection_status_changed(&app, session_id, ConnectionStatus::Disconnected, None);
+    emit_connection_status_changed(
+        &TauriEventEmitter(app.clone()),
+        session_id,
+        ConnectionStatus::Disconnected,
+        None,
+    );
 
     // Spec 0054, Teil 4, Punkt 6: "Temp aufräumen (bei Session-Ende
     // spätestens)" — Fallback-Netz für einen "Lokal öffnen"-Flow, den der
@@ -449,13 +455,13 @@ pub async fn disconnect(
         crate::orchestration::generate_session_title_on_disconnect(
             &session,
             session_id,
-            &app_for_suggestion,
+            &TauriEventEmitter(app_for_suggestion.clone()),
         )
         .await;
         let note_update_suggested = crate::orchestration::suggest_note_update_on_disconnect(
             &session,
             session_id,
-            &app_for_suggestion,
+            &TauriEventEmitter(app_for_suggestion.clone()),
             state.profile_store.as_ref(),
             &state.pending_action_confirmations,
         )
@@ -474,7 +480,7 @@ pub async fn disconnect(
             .await;
             if let Some(server) = server {
                 crate::orchestration::suggest_note_shrink_on_disconnect(
-                    &app_for_suggestion,
+                    &TauriEventEmitter(app_for_suggestion.clone()),
                     server.id,
                     server.name,
                     &server.notes,

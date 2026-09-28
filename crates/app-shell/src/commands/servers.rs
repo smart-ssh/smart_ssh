@@ -71,7 +71,7 @@ pub(super) async fn resolve_server_for_note_shrink<R: tauri::Runtime>(
     profile_store: &dyn ProfileStore,
     server_id: ServerId,
 ) -> Option<Server> {
-    if crate::local_server::is_local(server_id) {
+    if crate::dto::is_local(server_id) {
         Some(crate::local_server::synthetic_server(app))
     } else {
         profile_store.get_server(&server_id).await.ok()
@@ -86,7 +86,7 @@ pub async fn get_server(
     state: State<'_, AppState>,
     id: ServerId,
 ) -> CommandResult<ServerDto> {
-    if crate::local_server::is_local(id) {
+    if crate::dto::is_local(id) {
         return Ok(ServerDto::from_server(
             &crate::local_server::synthetic_server(&app),
             state.credential_store.as_ref(),
@@ -104,7 +104,7 @@ pub async fn get_server(
 /// tief in `resolve_connection_target`, mit einer generischen "nicht
 /// auflösbar"-Meldung auf (unabhängiger Review-Pass, s. docs/adr/0026).
 fn reject_local_jump_host(jump_host: Option<ServerId>) -> CommandResult<()> {
-    if jump_host.is_some_and(crate::local_server::is_local) {
+    if jump_host.is_some_and(crate::dto::is_local) {
         return Err(CommandError::with_code(
             "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
             "SERVER_JUMP_HOST_LOCAL",
@@ -139,7 +139,7 @@ pub async fn update_server(
     id: ServerId,
     input: ServerInput,
 ) -> CommandResult<()> {
-    if crate::local_server::is_local(id) {
+    if crate::dto::is_local(id) {
         // Spec 0032, Abschnitt 3: existiert nicht als `servers`-Zeile — nur
         // Notizen/Tags sind editierbar, über die dedizierten
         // `update_local_server_notes`/`update_local_server_tags`-Befehle.
@@ -195,7 +195,7 @@ pub async fn delete_server(
     id: ServerId,
     confirm: bool,
 ) -> CommandResult<DeleteServerResult> {
-    if crate::local_server::is_local(id) {
+    if crate::dto::is_local(id) {
         // Spec 0032, Abschnitt 3: existiert nicht als löschbare Zeile.
         return Err("Der lokale Pseudo-Server kann nicht gelöscht werden".into());
     }
@@ -270,7 +270,7 @@ pub async fn test_connection(
     input: ServerInput,
     existing_server_id: Option<ServerId>,
 ) -> CommandResult<TestConnectionResult> {
-    if existing_server_id.is_some_and(crate::local_server::is_local) {
+    if existing_server_id.is_some_and(crate::dto::is_local) {
         // Spec 0032, Abschnitt 5: kein Verbindungstest-Button für den
         // lokalen Pseudo-Server (er hat gar keine Verbindung, die getestet
         // werden könnte).
@@ -317,8 +317,8 @@ mod local_server_tests {
     use ssh_manager_core::profiles::GroupId;
     use ssh_manager_core::shared::ServerId;
 
+    use crate::dto::LOCAL_SERVER_ID;
     use crate::first_run_notice::test_support::{lock_async, test_app};
-    use crate::local_server::LOCAL_SERVER_ID;
     use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
 
     use super::super::connect::build_session_system_context;

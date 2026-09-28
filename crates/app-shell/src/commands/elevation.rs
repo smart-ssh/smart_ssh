@@ -271,7 +271,7 @@ pub async fn sftp_elevation_enable(
     // Transport-Grenze statt Sonderfall in der Logik: der lokale
     // Pseudo-Server hat kein sudo/sftp-server (CLAUDE.md, "No
     // special-casing ... in the core loop").
-    if crate::local_server::is_local(session.server_id) {
+    if crate::dto::is_local(session.server_id) {
         return Ok(crate::dto::ElevationResultDto {
             active: false,
             target_user: target_user.unwrap_or_else(|| {

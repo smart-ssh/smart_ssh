@@ -70,3 +70,35 @@ pub use notes::{
 pub(crate) use notes::{propose_note_from_chat_content, LARGE_NOTE_DIALOG_THRESHOLD_CHARS};
 
 pub(crate) use remote_files::ensure_sftp_open;
+
+/// Spec 0084, §4 (Schnitt `orchestration` → `commands::sanitize_uname_output`):
+/// hierher verschoben, weil `orchestration` (Tauri-frei, zieht nach
+/// `app-logic`) diese Funktion in Tests braucht (Spec 0013, SEC-02, T5) und
+/// die Funktion selbst Tauri-frei ist — sie gehörte vorher zu
+/// `commands::diagnostics_export` (Tauri-gebunden, bleibt in `app-shell`),
+/// das `commands::connect` weiterhin über diesen Pfad aufruft.
+///
+/// Validiert und bereinigt `uname -a` Output vor der Aufnahme in den
+/// privilegierten System-Prompt: max 256 Zeichen, nur erlaubte Zeichen
+/// (alphanumerisch, . _ - # : space tab), keine Steuerzeichen oder
+/// Zeilenumbrüche.
+pub(crate) fn sanitize_uname_output(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > 256 {
+        return None;
+    }
+    if trimmed.chars().all(|c| {
+        c.is_ascii_alphanumeric()
+            || c == '.'
+            || c == '_'
+            || c == '-'
+            || c == ' '
+            || c == '\t'
+            || c == '#'
+            || c == ':'
+    }) {
+        Some(trimmed.to_string())
+    } else {
+        None
+    }
+}

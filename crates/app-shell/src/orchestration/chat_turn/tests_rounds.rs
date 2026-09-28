@@ -174,7 +174,7 @@ async fn test_run_chat_turn_paces_consecutive_main_round_requests() {
 /// T5: uname -a Sanitization verwirft Prompt-Injections und Kontrollzeichen.
 #[test]
 fn test_t5_uname_prompt_injection_sanitized() {
-    use crate::commands::sanitize_uname_output;
+    use crate::orchestration::sanitize_uname_output;
 
     assert_eq!(
         sanitize_uname_output("Linux srv1 5.10.0 #1 SMP Debian 5.10.103-1 x86_64"),

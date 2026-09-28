@@ -212,7 +212,7 @@ pub async fn export_ssh_config(
 
     let servers = state.profile_store.list_servers().await?;
     let groups = state.profile_store.list_groups().await?;
-    let plan = build_export(&servers, &groups, crate::local_server::LOCAL_SERVER_ID);
+    let plan = build_export(&servers, &groups, crate::dto::LOCAL_SERVER_ID);
 
     // `std::fs::write` statt `tokio::fs`: derselbe, durch eine explizite
     // Nutzeraktion ausgelöste Einzelschreibvorgang wie bei

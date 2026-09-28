@@ -25,6 +25,7 @@ use crate::dto::{sort_remote_entries, EditSessionDto, RemoteEntryDto};
 use crate::elevated_sftp::ElevatedSftpRegistry;
 use crate::error::CommandError;
 use crate::error::CommandResult;
+use crate::event_emitter::TauriEventEmitter;
 use crate::events::{emit_sftp_transfer_finished, emit_sftp_transfer_started, SftpTransferKind};
 use crate::session::Session;
 use crate::state::{AppState, SessionId};
@@ -73,8 +74,9 @@ async fn download_one_file(
 ) -> CommandResult<()> {
     let file_name = file_name_of(remote_path);
     let transfer_id = Uuid::new_v4();
+    let emitter = TauriEventEmitter(app.clone());
     emit_sftp_transfer_started(
-        app,
+        &emitter,
         session_id,
         transfer_id,
         SftpTransferKind::Download,
@@ -100,7 +102,7 @@ async fn download_one_file(
     .await;
 
     emit_sftp_transfer_finished(
-        app,
+        &emitter,
         session_id,
         transfer_id,
         result.as_ref().err().map(|e| e.message.clone()),
@@ -375,8 +377,9 @@ pub async fn sftp_upload(
     .unwrap_or(None);
 
     let transfer_id = Uuid::new_v4();
+    let emitter = TauriEventEmitter(app.clone());
     emit_sftp_transfer_started(
-        &app,
+        &emitter,
         session_id,
         transfer_id,
         SftpTransferKind::Upload,
@@ -405,7 +408,7 @@ pub async fn sftp_upload(
     .await;
 
     emit_sftp_transfer_finished(
-        &app,
+        &emitter,
         session_id,
         transfer_id,
         result.as_ref().err().map(|e| e.message.clone()),

@@ -21,6 +21,9 @@ mod dto;
 mod elevated_sftp;
 mod ephemeral_credentials;
 mod error;
+/// Spec 0084, §4: der Newtype, der die `EventEmitter`-Impl für
+/// `tauri::AppHandle` trägt (s. dortiger Moduldoc-Kommentar).
+mod event_emitter;
 mod events;
 mod filter_rules;
 mod first_run_notice;
@@ -37,6 +40,9 @@ mod orchestration;
 mod policy;
 mod risk_second_opinion;
 mod rule_suggestions;
+/// Spec 0084, §4: der Tauri-freie Abruf-Teil, aus `risk_second_opinion`
+/// herausgeschnitten (s. dortiger Moduldoc-Kommentar).
+mod second_opinion;
 mod server_credentials;
 mod servers;
 mod session;

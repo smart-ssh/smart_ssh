@@ -15,25 +15,19 @@
 
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
-use uuid::Uuid;
 
 use ssh_manager_core::profiles::AuthMethod;
 use ssh_manager_core::profiles::PostIngestPolicy;
 use ssh_manager_core::profiles::Server;
-use ssh_manager_core::shared::ServerId;
 
-/// Spec 0032, Abschnitt 3: fest reservierte, konstante `ServerId` — die
-/// Nil-UUID kann nie von `ServerId::new()` (UUID v4) erzeugt werden, daher
-/// als Reservierung kollisionsfrei.
-pub const LOCAL_SERVER_ID: ServerId = ServerId(Uuid::nil());
+// Spec 0084, §4: `LOCAL_SERVER_ID`/`is_local` liegen jetzt in `crate::dto`
+// (s. dortiger Kommentar) — `dto` ist Tauri-frei und zieht nach `app-logic`,
+// dieses Modul bleibt wegen `AppHandle`/`tauri-plugin-store` in `app-shell`.
+use crate::dto::LOCAL_SERVER_ID;
 
 const SETTINGS_STORE_FILE: &str = "settings.json";
 const NOTES_KEY: &str = "localServerNotes";
 const TAGS_KEY: &str = "localServerTags";
-
-pub fn is_local(id: ServerId) -> bool {
-    id == LOCAL_SERVER_ID
-}
 
 fn load_notes<R: Runtime>(app: &AppHandle<R>) -> String {
     app.store(SETTINGS_STORE_FILE)
@@ -133,11 +127,13 @@ fn whoami_fallback() -> String {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
+    use uuid::Uuid;
 
     use ssh_manager_core::filter::{
         EffectiveScope, EvalContext, FilterEngine, Pattern, PolicyStore, Rule, RuleAction, RuleId,
         RuleOrigin, Scope,
     };
+    use ssh_manager_core::shared::ServerId;
 
     use crate::first_run_notice::test_support::{lock, lock_async, test_app};
 

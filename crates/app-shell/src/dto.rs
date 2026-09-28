@@ -26,6 +26,22 @@ use crate::events::ConnectionStatus;
 use crate::server_credentials::sudo_password_credential_ref;
 use crate::state::SessionId;
 
+/// Spec 0084, §4 (Schnitt `dto` → `local_server::is_local`): hierher
+/// verschoben, weil `dto` (Tauri-frei, zieht nach `app-logic`) diese
+/// reine Funktion braucht, `local_server` selbst aber Tauri-gebunden
+/// bleibt (`AppHandle`/`tauri-plugin-store` für Notizen/Tags des lokalen
+/// Pseudo-Servers). `local_server` verwendet diese Konstante/Funktion
+/// weiterhin, jetzt über diesen Pfad.
+///
+/// Spec 0032, Abschnitt 3: fest reservierte, konstante `ServerId` — die
+/// Nil-UUID kann nie von `ServerId::new()` (UUID v4) erzeugt werden, daher
+/// als Reservierung kollisionsfrei.
+pub const LOCAL_SERVER_ID: ServerId = ServerId(uuid::Uuid::nil());
+
+pub fn is_local(id: ServerId) -> bool {
+    id == LOCAL_SERVER_ID
+}
+
 /// Sicht auf einen [`Server`] für Liste und Bearbeiten-Formular (Spec
 /// 0007 Abschnitt 7 zunächst nur für die Liste eingeführt, Spec 0008
 /// Abschnitt 4 erweitert sie um die für das Formular nötigen Felder,
@@ -122,7 +138,7 @@ impl ServerDto {
             notes: server.notes.clone(),
             has_sudo_password,
             sudo_password_unknown,
-            is_local: crate::local_server::is_local(server.id),
+            is_local: is_local(server.id),
             post_ingest_policy: server.post_ingest_policy,
             ai_injection_check_enabled: server.ai_injection_check_enabled,
             sftp_server_path: server.sftp_server_path.clone(),

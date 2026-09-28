@@ -14,6 +14,7 @@ use ssh_manager_core::shared::ServerId;
 use crate::ai_provider_factory::build_ai_provider;
 use crate::dto::NoteRevisionDto;
 use crate::error::{keychain_aware_credential_error, CommandResult};
+use crate::event_emitter::TauriEventEmitter;
 use crate::orchestration::execute_note_shrink_request;
 use crate::server_credentials::sudo_password_credential_ref;
 use crate::state::{AppState, SessionId};
@@ -131,7 +132,7 @@ pub async fn request_note_shrink(
         // eine grundsätzlich andere Persistenz (`local_server::save_notes`
         // statt `ProfileStore::record_note_revision`, s. `orchestration::
         // NoteShrinkTarget`-Doc-Kommentar).
-        if crate::local_server::is_local(server_id) {
+        if crate::dto::is_local(server_id) {
             let target = crate::local_server::LocalNoteShrinkTarget { app: app.clone() };
             execute_note_shrink_request(
                 session_id,
@@ -139,7 +140,7 @@ pub async fn request_note_shrink(
                 ai_provider.as_ref(),
                 &ai_provider_budget,
                 redactor.as_ref(),
-                &app,
+                &TauriEventEmitter(app.clone()),
                 &target,
                 &state.pending_action_confirmations,
             )
@@ -157,7 +158,7 @@ pub async fn request_note_shrink(
                 ai_provider.as_ref(),
                 &ai_provider_budget,
                 redactor.as_ref(),
-                &app,
+                &TauriEventEmitter(app.clone()),
                 &target,
                 &state.pending_action_confirmations,
             )

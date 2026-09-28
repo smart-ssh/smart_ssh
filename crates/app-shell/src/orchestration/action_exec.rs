@@ -354,7 +354,7 @@ pub(crate) async fn handle_action_proposed(
                 .await;
             }
             let second_opinion =
-                crate::risk_second_opinion::fetch_second_opinion(provider, &pseudo_command).await;
+                crate::second_opinion::fetch_second_opinion(provider, &pseudo_command).await;
             let (data_risk, reason) = escalate_data_risk(
                 assessment.data_risk,
                 assessment.data_risk_reason,
@@ -1519,7 +1519,7 @@ pub(crate) async fn check_for_injected_instructions(
         .await;
     }
     if let Some((true, _reason)) =
-        crate::risk_second_opinion::fetch_injection_check(provider, content).await
+        crate::second_opinion::fetch_injection_check(provider, content).await
     {
         session
             .injection_suspected

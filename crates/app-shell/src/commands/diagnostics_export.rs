@@ -289,31 +289,6 @@ pub async fn save_diagnostics_bundle(app: AppHandle, content: String) -> Command
     Ok(())
 }
 
-/// Validiert und bereinigt `uname -a` Output (Spec 0013, SEC-02) vor der
-/// Aufnahme in den privilegierten System-Prompt: max 256 Zeichen, nur
-/// erlaubte Zeichen (alphanumerisch, . _ - # : space tab), keine Steuerzeichen
-/// oder Zeilenumbrüche.
-pub(crate) fn sanitize_uname_output(raw: &str) -> Option<String> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed.chars().count() > 256 {
-        return None;
-    }
-    if trimmed.chars().all(|c| {
-        c.is_ascii_alphanumeric()
-            || c == '.'
-            || c == '_'
-            || c == '-'
-            || c == ' '
-            || c == '\t'
-            || c == '#'
-            || c == ':'
-    }) {
-        Some(trimmed.to_string())
-    } else {
-        None
-    }
-}
-
 /// Spec 0064 (Prompt-Caching): baut die gefencte Verlaufs-Nachricht für den
 /// bereits sanitisierten `uname`-Banner (s. Aufrufstelle in
 /// `connect_session`) — als eigene, pure Funktion extrahiert, damit sich

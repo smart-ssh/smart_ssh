@@ -18,6 +18,29 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionUserDecision, HostKeyUserDecision};
 use crate::session::SessionManager;
 
+/// Spec 0084, §4 (Schnitt `state` → `ssh_config_apply::PendingImport`):
+/// hierher verschoben, weil `AppState` (Tauri-frei, zieht mit `state.rs` nach
+/// `app-logic`) diesen Typ als Feld trägt, während `ssh_config_apply` selbst
+/// Tauri-gebunden bleibt — die entgegengesetzte Abhängigkeitsrichtung (ein
+/// Tauri-freies Modul, das einen Typ aus einem Tauri-gebundenen Modul
+/// importiert) wäre nach dem Umzug in `app-logic` nicht mehr erfüllbar.
+///
+/// Der Plan der letzten Vorschau, wie er im `AppState` liegt (Spec 0075,
+/// §5.1).
+///
+/// Er wird **hier** gehalten und nicht im Frontend, damit beim Bestätigen
+/// nur Indizes zurückkommen. Was die Vorschau nicht genannt hat, kann
+/// dadurch nicht geöffnet werden — auch nicht, wenn sich die
+/// Konfigurationsdatei zwischenzeitlich geändert hat.
+///
+/// Trägt bewusst **nur** den Plan: Die Dateiliste ist mit der Vorschau
+/// schon beim Frontend und wird beim Bestätigen nicht mehr gebraucht — was
+/// hier nicht liegt, kann auch nicht versehentlich erneut geöffnet werden.
+#[derive(Debug, Clone)]
+pub struct PendingImport {
+    pub plan: ssh_manager_core::profiles::ssh_config::ImportPlan,
+}
+
 pub type SessionId = Uuid;
 /// Kennung eines einzelnen `chat-action-proposed`-Vorschlags innerhalb
 /// einer Session — global eindeutig (nicht nur pro Session), damit
@@ -150,7 +173,7 @@ pub struct AppState {
     /// genannt hat — und §5.1 verlangt ausdrücklich, dass **nur** die
     /// angekündigten Dateien geöffnet werden, „auch dann nicht, wenn sich
     /// die Konfigurationsdatei zwischenzeitlich geändert hat".
-    pub pending_ssh_config_import: std::sync::Mutex<Option<crate::ssh_config_apply::PendingImport>>,
+    pub pending_ssh_config_import: std::sync::Mutex<Option<PendingImport>>,
 }
 
 pub struct McpState {

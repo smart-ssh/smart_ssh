@@ -15,6 +15,7 @@ use ssh_manager_core::profiles::AiAction;
 use ssh_manager_core::shared::ServerId;
 
 use crate::commands::connect_session;
+use crate::event_emitter::TauriEventEmitter;
 use crate::events::{emit_mcp_action_tab_requested, ConnectionStatus, EventEmitter};
 use crate::orchestration::handle_mcp_action_proposed;
 use crate::session::Session;
@@ -63,7 +64,11 @@ impl AppMcpBackend {
         });
 
         if let Some(entry) = existing {
-            emit_mcp_action_tab_requested(&self.app, entry.session_id, server_id);
+            emit_mcp_action_tab_requested(
+                &TauriEventEmitter(self.app.clone()),
+                entry.session_id,
+                server_id,
+            );
             let session = state
                 .sessions
                 .get(entry.session_id)
@@ -72,7 +77,7 @@ impl AppMcpBackend {
         }
 
         let session_id: SessionId = uuid::Uuid::new_v4();
-        emit_mcp_action_tab_requested(&self.app, session_id, server_id);
+        emit_mcp_action_tab_requested(&TauriEventEmitter(self.app.clone()), session_id, server_id);
 
         // Spec 0040, Abschnitt 4: `persist_chat_session: false` — eine rein
         // MCP-ausgelöste Verbindung erzeugt keine `chat_sessions`-Zeile
@@ -179,7 +184,8 @@ impl McpBackend for AppMcpBackend {
 
         self.notify_pending_confirmation(&server_name, client_name.as_deref());
 
-        let capture = CaptureEmitter::new(&self.app);
+        let app_emitter = TauriEventEmitter(self.app.clone());
+        let capture = CaptureEmitter::new(&app_emitter);
 
         handle_mcp_action_proposed(
             &session,
