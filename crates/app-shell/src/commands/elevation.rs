@@ -603,8 +603,14 @@ mod browser_channel_tests {
     // festgehaltene Kanal danach nicht mehr benutzt werden.
     //
     // Alle drei Tests scheitern gegen die Variante „Kanal bei Befehlsbeginn
-    // festhalten“, also gegen ein Widerrufen, das nur den Eintrag in der
-    // Zuordnung entfernt, ohne den Kanal selbst herauszunehmen.
+    // festhalten“, also gegen ein Widerrufen, das den Kanal weder
+    // herausnimmt noch als widerrufen markiert.
+    //
+    // T10 und T10b laufen über `disable`/`enable`, die den Kanalwert
+    // zusätzlich herausnehmen; T10c läuft über `remove_session`, das nur
+    // markiert (damit das Trennen auf keinen Transfer wartet) — dort kann
+    // der Fehler deshalb ausschließlich aus der Widerrufs-Prüfung in
+    // `sftp()` stammen.
 
     /// Fängt genau den Ablauf ein, den ein Befehl durchläuft: Kanal zu
     /// Beginn nachschlagen, erste Nutzung, Wartezeit, zweite Nutzung.
