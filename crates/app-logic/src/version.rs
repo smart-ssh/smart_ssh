@@ -11,7 +11,7 @@ pub const BUILD_COMMIT_HASH: &str = env!("SMART_SSH_BUILD_HASH");
 
 /// Das eine, überall geteilte Anzeigeformat aus Spec 0052, Abschnitt 1:
 /// `"0.4.1 (a5b3e01)"`. Genutzt von der Startup-Logzeile, dem
-/// Diagnosepaket und [`crate::commands::get_app_info`] (dessen
+/// Diagnosepaket und `app_shell::commands::get_app_info` (dessen
 /// `AppInfoDto::version_display`-Feld). Titelzeile (`AppHeader.tsx`) und
 /// Über-Dialog (`AboutSettings.tsx`) übernehmen diesen Teil unverändert und
 /// hängen nur Edition und Build-Typ ([`BuildType`]) mit ` · ` an — den

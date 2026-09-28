@@ -80,7 +80,7 @@ pub(crate) const SIDE_CALL_MAX_TOKENS: u32 = 4096;
 /// UX-Grenze gegen "lange". Läuft es ab, gilt die Aktion als **abgelehnt**
 /// (fail-safe, s. `handle_action_proposed`/`handle_note_update_suggested`),
 /// nie als genehmigt.
-pub(crate) const PENDING_ACTION_CONFIRM_TIMEOUT: std::time::Duration =
+pub const PENDING_ACTION_CONFIRM_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(3600);
 
 /// Spec 0034, Abschnitt 4: "Jede Nachricht ... wird fortlaufend
@@ -102,7 +102,7 @@ pub(crate) const PENDING_ACTION_CONFIRM_TIMEOUT: std::time::Duration =
 /// harten Turn-Abbruch zu zeigen wäre unverhältnismäßig; die Nachricht
 /// bleibt im In-Memory-`SessionContext` in jedem Fall korrekt sichtbar,
 /// nur ihre Persistenz fehlt dann für diesen einen Eintrag.
-pub(crate) async fn push_history(session: &Session, message: ChatMessage) {
+pub async fn push_history(session: &Session, message: ChatMessage) {
     push_history_scoped(session, message, true).await;
 }
 

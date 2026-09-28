@@ -18,9 +18,9 @@ use tauri_plugin_store::StoreExt;
 
 use ssh_manager_core::shared::ServerId;
 
-use crate::error::CommandResult;
 use crate::mcp_backend::AppMcpBackend;
-use crate::state::AppState;
+use app_logic::error::CommandResult;
+use app_logic::state::AppState;
 
 const SETTINGS_STORE_FILE: &str = "settings.json";
 const ENABLED_KEY: &str = "mcpServerEnabled";

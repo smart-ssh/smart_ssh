@@ -11,16 +11,16 @@ use ssh_manager_core::ai::{
 };
 use ssh_manager_core::shared::ServerId;
 
-use crate::dto::DocumentFormat;
-use crate::dto::KeychainStatusDto;
-use crate::error::CommandResult;
-use crate::state::AppState;
+use app_logic::dto::DocumentFormat;
+use app_logic::dto::KeychainStatusDto;
+use app_logic::error::CommandResult;
+use app_logic::state::AppState;
 
 // --- Spec 0012: KI-generierte Dokumente -------------------------------
 
 /// Spec 0012, Abschnitt 3: öffnet einen nativen Speichern-unter-Dialog
 /// (vorbelegt mit einem aus `title` abgeleiteten Dateinamen, s.
-/// [`crate::document_export::default_export_file_name`]) und schreibt
+/// [`app_logic::document_export::default_export_file_name`]) und schreibt
 /// **erst nach dessen Bestätigung** — bricht der Nutzer den Dialog ab,
 /// liefert der Callback `None`, der Command kehrt dann ohne jeden
 /// Seiteneffekt zurück (kein Fehler: Abbrechen ist kein Fehlerfall).
@@ -40,7 +40,7 @@ pub async fn export_document(
 ) -> CommandResult<()> {
     use tauri_plugin_dialog::DialogExt;
 
-    let file_name = crate::document_export::default_export_file_name(&title, format);
+    let file_name = app_logic::document_export::default_export_file_name(&title, format);
     let (filter_name, extension): (&str, &str) = match format {
         DocumentFormat::Markdown => ("Markdown", "md"),
     };
@@ -109,7 +109,7 @@ pub async fn get_keychain_status(state: State<'_, AppState>) -> CommandResult<Ke
 pub async fn open_log_directory(app: AppHandle) -> CommandResult<()> {
     use tauri_plugin_opener::OpenerExt;
 
-    let dir = crate::logging::default_log_dir();
+    let dir = app_logic::logging::default_log_dir();
     std::fs::create_dir_all(&dir)?;
     app.opener()
         .open_path(dir.to_string_lossy().into_owned(), None::<&str>)?;
@@ -178,7 +178,7 @@ pub async fn generate_diagnostics_bundle<R: tauri::Runtime>(
     edition: tauri::State<'_, crate::wiring::Edition>,
 ) -> CommandResult<String> {
     let db_path = persistence_sqlite::default_db_path();
-    let log_dir = crate::logging::default_log_dir();
+    let log_dir = app_logic::logging::default_log_dir();
     let host_key_path = db_path
         .parent()
         .expect("db_path hat immer ein Elternverzeichnis (s. default_db_path)")
@@ -229,9 +229,11 @@ pub async fn generate_diagnostics_bundle<R: tauri::Runtime>(
         .ok()
         .map(|servers| servers.len());
 
-    let input = crate::diagnostics::DiagnosticsInput {
-        version_display: crate::version::version_with_hash(&app.package_info().version.to_string()),
-        build_type: crate::version::BuildType::current().as_str(),
+    let input = app_logic::diagnostics::DiagnosticsInput {
+        version_display: app_logic::version::version_with_hash(
+            &app.package_info().version.to_string(),
+        ),
+        build_type: app_logic::version::BuildType::current().as_str(),
         edition: match *edition {
             crate::wiring::Edition::Community => "Community".to_string(),
             crate::wiring::Edition::Official => "Official".to_string(),
@@ -246,9 +248,9 @@ pub async fn generate_diagnostics_bundle<R: tauri::Runtime>(
         server_count,
     };
     let log_lines =
-        crate::logging::read_last_log_lines(&log_dir, crate::diagnostics::MAX_LOG_LINES);
+        app_logic::logging::read_last_log_lines(&log_dir, app_logic::diagnostics::MAX_LOG_LINES);
 
-    Ok(crate::diagnostics::build_diagnostics_bundle(
+    Ok(app_logic::diagnostics::build_diagnostics_bundle(
         &input,
         &log_lines,
         // Spec 0063 §3: zusätzlich zur Redaction, die die Log-Zeilen beim

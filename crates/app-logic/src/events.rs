@@ -863,12 +863,16 @@ pub fn emit_mcp_action_tab_requested(
     );
 }
 
-#[cfg(test)]
+// Spec 0084, A5: auch von `app-shell`s Tests gebraucht (`commands::chat`,
+// `mcp_backend`), deshalb hinter `test-support` statt reinem
+// `#[cfg(test)]` — sonst wäre `TestEmitter` außerhalb dieser Crate nicht
+// sichtbar.
+#[cfg(any(test, feature = "test-support"))]
 pub struct TestEmitter {
     pub events: std::sync::Mutex<Vec<(String, serde_json::Value)>>,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl Default for TestEmitter {
     fn default() -> Self {
         Self {
@@ -877,7 +881,7 @@ impl Default for TestEmitter {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl EventEmitter for TestEmitter {
     fn emit_event(&self, event: &str, payload: serde_json::Value) {
         self.events

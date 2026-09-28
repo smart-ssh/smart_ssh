@@ -11,10 +11,10 @@ use ssh_manager_core::ai::{
     AiError, AiEvent, AiProvider, ChatMessage, MessageContent, ProviderId, Role, SessionContext,
 };
 
-use crate::ai_provider_factory::build_ai_provider;
-use crate::dto::{credential_ref_for, AiProviderConfigDto, AiProviderConfigInput};
-use crate::error::{keychain_aware_credential_error, CommandError, CommandResult};
-use crate::state::AppState;
+use app_logic::ai_provider_factory::build_ai_provider;
+use app_logic::dto::{credential_ref_for, AiProviderConfigDto, AiProviderConfigInput};
+use app_logic::error::{keychain_aware_credential_error, CommandError, CommandResult};
+use app_logic::state::AppState;
 
 #[tauri::command]
 pub async fn list_ai_providers(
@@ -219,9 +219,9 @@ pub async fn discover_models(
     // `api.openai.com`.
     let default_base_url = match config.provider_type {
         ssh_manager_core::ai::ProviderType::Anthropic => {
-            crate::ai_provider_factory::DEFAULT_ANTHROPIC_BASE_URL
+            app_logic::ai_provider_factory::DEFAULT_ANTHROPIC_BASE_URL
         }
-        _ => crate::ai_provider_factory::DEFAULT_OPENAI_BASE_URL,
+        _ => app_logic::ai_provider_factory::DEFAULT_OPENAI_BASE_URL,
     };
     let base_url = config.base_url.as_deref().unwrap_or(default_base_url);
 
@@ -243,14 +243,14 @@ pub async fn discover_models(
 /// Spec 0050, Teil 3: Ergebnis von [`test_ai_provider_credentials`] — genau
 /// die drei von der Spec verlangten, unterscheidbaren Fälle ("gültig" /
 /// "Authentifizierung fehlgeschlagen" / "nicht erreichbar"), analog zu
-/// [`crate::dto::TestConnectionResult`] (Spec 0008) für Server.
+/// [`app_logic::dto::TestConnectionResult`] (Spec 0008) für Server.
 ///
 /// Mapping-Entscheidung (nicht von der Spec explizit vorgegeben, hier
 /// festgehalten statt stillschweigend getroffen): `AiError::
 /// AuthenticationFailed` wird zu `AuthenticationFailed`, **jeder andere**
 /// `AiError` (`RateLimited`, `NetworkError`, `InvalidResponse`,
 /// `ContextTooLarge`, `ProviderUnavailable` — letzteres deckt laut
-/// `crate::error::map_http_status`s eigenem Design-Kommentar auch einen
+/// `app_logic::error::map_http_status`s eigenem Design-Kommentar auch einen
 /// falschen Modellnamen ab, s. Spec 0049s Nachbericht) fällt in
 /// `Unreachable`. Für einen dreiwertigen Test-Button ist das die
 /// pragmatischste Aufteilung — ein `RateLimited` z. B. heißt zwar
@@ -526,7 +526,7 @@ mod credential_test_tests {
         }
     }
 
-    /// Spec 0006, Abschnitt 6 / `crate::error::map_http_status`s eigener
+    /// Spec 0006, Abschnitt 6 / `app_logic::error::map_http_status`s eigener
     /// Design-Kommentar: ein falscher Modellname landet nicht in einem
     /// eigenen Fall, sondern kollabiert auf `ProviderUnavailable` — dieser
     /// Test hält fest, dass das hier bewusst ebenfalls als `Unreachable`

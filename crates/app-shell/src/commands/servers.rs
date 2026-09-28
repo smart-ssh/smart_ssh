@@ -7,10 +7,12 @@ use tauri::{AppHandle, State};
 use ssh_manager_core::profiles::{GroupId, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 
-use crate::dto::{DeleteServerResult, ServerDto, ServerInput, TestConnectionResult};
-use crate::error::{CommandError, CommandResult};
-use crate::server_credentials::{clear_sudo_password, resolve_auth_method, resolve_sudo_password};
-use crate::state::AppState;
+use app_logic::dto::{DeleteServerResult, ServerDto, ServerInput, TestConnectionResult};
+use app_logic::error::{CommandError, CommandResult};
+use app_logic::server_credentials::{
+    clear_sudo_password, resolve_auth_method, resolve_sudo_password,
+};
+use app_logic::state::AppState;
 
 /// `group_id` erweitert die Spec-0007-Signatur um den in Spec 0008
 /// Abschnitt 4 vorgesehenen Filter (`None` = alle Server, wie bisher für
@@ -71,7 +73,7 @@ pub(super) async fn resolve_server_for_note_shrink<R: tauri::Runtime>(
     profile_store: &dyn ProfileStore,
     server_id: ServerId,
 ) -> Option<Server> {
-    if crate::dto::is_local(server_id) {
+    if app_logic::dto::is_local(server_id) {
         Some(crate::local_server::synthetic_server(app))
     } else {
         profile_store.get_server(&server_id).await.ok()
@@ -86,7 +88,7 @@ pub async fn get_server(
     state: State<'_, AppState>,
     id: ServerId,
 ) -> CommandResult<ServerDto> {
-    if crate::dto::is_local(id) {
+    if app_logic::dto::is_local(id) {
         return Ok(ServerDto::from_server(
             &crate::local_server::synthetic_server(&app),
             state.credential_store.as_ref(),
@@ -104,7 +106,7 @@ pub async fn get_server(
 /// tief in `resolve_connection_target`, mit einer generischen "nicht
 /// auflösbar"-Meldung auf (unabhängiger Review-Pass, s. docs/adr/0026).
 fn reject_local_jump_host(jump_host: Option<ServerId>) -> CommandResult<()> {
-    if jump_host.is_some_and(crate::dto::is_local) {
+    if jump_host.is_some_and(app_logic::dto::is_local) {
         return Err(CommandError::with_code(
             "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
             "SERVER_JUMP_HOST_LOCAL",
@@ -117,14 +119,14 @@ fn reject_local_jump_host(jump_host: Option<ServerId>) -> CommandResult<()> {
 /// dieselbe Reihenfolge/Begründung wie `add_ai_provider` (Spec 0007,
 /// Abschnitt 8.2). Spec 0047, Fund A2: die eigentliche Logik samt
 /// vollständigem Keychain-Rollback bei jedem Fehler lebt in
-/// `crate::servers::create_server`, testbar ohne `tauri::State`.
+/// `app_logic::servers::create_server`, testbar ohne `tauri::State`.
 #[tauri::command]
 pub async fn create_server(
     state: State<'_, AppState>,
     input: ServerInput,
 ) -> CommandResult<ServerId> {
     reject_local_jump_host(input.jump_host)?;
-    crate::servers::create_server(
+    app_logic::servers::create_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         state.keychain,
@@ -139,14 +141,15 @@ pub async fn update_server(
     id: ServerId,
     input: ServerInput,
 ) -> CommandResult<()> {
-    if crate::dto::is_local(id) {
+    if app_logic::dto::is_local(id) {
         // Spec 0032, Abschnitt 3: existiert nicht als `servers`-Zeile — nur
         // Notizen/Tags sind editierbar, über die dedizierten
         // `update_local_server_notes`/`update_local_server_tags`-Befehle.
         return Err("Der lokale Pseudo-Server kann nicht auf diesem Weg bearbeitet werden".into());
     }
     reject_local_jump_host(input.jump_host)?;
-    let sftp_server_path = crate::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
+    let sftp_server_path =
+        app_logic::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
     let existing = state.profile_store.get_server(&id).await?;
     let auth = resolve_auth_method(
         state.credential_store.as_ref(),
@@ -195,11 +198,11 @@ pub async fn delete_server(
     id: ServerId,
     confirm: bool,
 ) -> CommandResult<DeleteServerResult> {
-    if crate::dto::is_local(id) {
+    if app_logic::dto::is_local(id) {
         // Spec 0032, Abschnitt 3: existiert nicht als löschbare Zeile.
         return Err("Der lokale Pseudo-Server kann nicht gelöscht werden".into());
     }
-    crate::servers::delete_server(
+    app_logic::servers::delete_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         id,
@@ -210,7 +213,7 @@ pub async fn delete_server(
 
 /// Spec 0018, Abschnitt 4: expliziter "Entfernen"-Weg — ein leeres
 /// `sudo_password`-Feld in `update_server` bedeutet bereits "unverändert",
-/// s. `crate::server_credentials::resolve_sudo_password`.
+/// s. `app_logic::server_credentials::resolve_sudo_password`.
 #[tauri::command]
 pub async fn clear_server_sudo_password(
     state: State<'_, AppState>,
@@ -234,8 +237,8 @@ pub async fn clear_server_sudo_password(
 pub async fn inspect_key_file(
     state: State<'_, AppState>,
     path: String,
-) -> CommandResult<crate::dto::KeyFileFactsDto> {
-    Ok(crate::identity_file::inspect_key_file(
+) -> CommandResult<app_logic::dto::KeyFileFactsDto> {
+    Ok(app_logic::identity_file::inspect_key_file(
         state.key_file_reader.as_ref(),
         &path,
     ))
@@ -251,7 +254,7 @@ pub async fn convert_identity_file_to_keychain(
     state: State<'_, AppState>,
     id: ServerId,
 ) -> CommandResult<ServerDto> {
-    crate::identity_file::convert_identity_file_to_keychain(
+    app_logic::identity_file::convert_identity_file_to_keychain(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         state.keychain,
@@ -263,26 +266,26 @@ pub async fn convert_identity_file_to_keychain(
 
 /// Spec 0008, Abschnitt 7. `existing_server_id` ist eine gegenüber der
 /// Spec-Skizze notwendige Ergänzung — s. Doc-Kommentar an
-/// `crate::test_connection::test_connection`.
+/// `app_logic::test_connection::test_connection`.
 #[tauri::command]
 pub async fn test_connection(
     state: State<'_, AppState>,
     input: ServerInput,
     existing_server_id: Option<ServerId>,
 ) -> CommandResult<TestConnectionResult> {
-    if existing_server_id.is_some_and(crate::dto::is_local) {
+    if existing_server_id.is_some_and(app_logic::dto::is_local) {
         // Spec 0032, Abschnitt 5: kein Verbindungstest-Button für den
         // lokalen Pseudo-Server (er hat gar keine Verbindung, die getestet
         // werden könnte).
         return Err("Für den lokalen Pseudo-Server gibt es keinen Verbindungstest".into());
     }
-    crate::test_connection::test_connection(
+    app_logic::test_connection::test_connection(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         state.key_file_reader.as_ref(),
         state.keychain,
         state.host_key_store.clone(),
-        &crate::test_connection::RealConnector,
+        &app_logic::test_connection::RealConnector,
         input,
         existing_server_id,
     )
@@ -317,9 +320,9 @@ mod local_server_tests {
     use ssh_manager_core::profiles::GroupId;
     use ssh_manager_core::shared::ServerId;
 
-    use crate::dto::LOCAL_SERVER_ID;
     use crate::first_run_notice::test_support::{lock_async, test_app};
-    use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+    use app_logic::dto::LOCAL_SERVER_ID;
+    use app_logic::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
 
     use super::super::connect::build_session_system_context;
     use super::super::test_support::dummy_server;

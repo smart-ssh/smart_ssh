@@ -15,8 +15,8 @@ use ssh_manager_core::profiles::{CredentialStore, Group, GroupId, ProfileStore};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{KeyFileError, KeyFileReader};
 
-use crate::dto::{AuthMethodInput, ServerInput};
-use crate::error::{CommandError, CommandResult};
+use app_logic::dto::{AuthMethodInput, ServerInput};
+use app_logic::error::{CommandError, CommandResult};
 
 /// Was mit `IdentityFile` geschehen soll (§3.1.9). Gilt für den ganzen
 /// Import und ist je Eintrag umstellbar; Vorgabe ist [`Self::KeepAsFile`],
@@ -353,7 +353,7 @@ pub async fn apply_import(
             sftp_server_path: None,
         };
 
-        match crate::servers::create_server(store, credential_store, keychain, input).await {
+        match app_logic::servers::create_server(store, credential_store, keychain, input).await {
             Ok(id) => {
                 server_ids[i] = Some(id);
                 made_servers.push(id);
@@ -395,7 +395,7 @@ async fn rollback(
         // seinen eigenen Fehlerpfad ausdruecklich zusichert. Eine erste
         // Fassung dieses Rollbacks tat das (Review-Runde 1); der
         // Rollback-Test fuhr Weg (a) und konnte es nicht sehen.
-        crate::server_credentials::delete_all_possible_server_secrets(credential_store, *id);
+        app_logic::server_credentials::delete_all_possible_server_secrets(credential_store, *id);
         // Ein Fehler beim Aufräumen darf den ursprünglichen Fehler nicht
         // verdecken — er wird vermerkt, nicht weitergeworfen.
         if let Err(err) = store.delete_server(id).await {
@@ -681,7 +681,7 @@ fn reason_key(r: &ssh_manager_core::profiles::ssh_config::SkipReason) -> String 
 /// stand dort der Platzhaltertext `"(Bestand)"`.
 pub fn build_preview_dto(
     plan: &ImportPlan,
-    files: &[crate::ssh_config_import::FileReport],
+    files: &[app_logic::ssh_config_import::FileReport],
     servers: &[ssh_manager_core::profiles::Server],
 ) -> ImportPreviewDto {
     use ssh_manager_core::profiles::ssh_config::SkippedKind;
@@ -766,10 +766,10 @@ pub fn build_preview_dto(
                 path: f.path.clone(),
                 depth: f.depth,
                 status: match f.status {
-                    crate::ssh_config_import::FileStatus::Read => "read",
-                    crate::ssh_config_import::FileStatus::NotSshConfig => "notSshConfig",
-                    crate::ssh_config_import::FileStatus::Unreadable => "unreadable",
-                    crate::ssh_config_import::FileStatus::AlreadyRead => "alreadyRead",
+                    app_logic::ssh_config_import::FileStatus::Read => "read",
+                    app_logic::ssh_config_import::FileStatus::NotSshConfig => "notSshConfig",
+                    app_logic::ssh_config_import::FileStatus::Unreadable => "unreadable",
+                    app_logic::ssh_config_import::FileStatus::AlreadyRead => "alreadyRead",
                 }
                 .to_string(),
             })
@@ -801,7 +801,7 @@ pub fn build_preview_dto(
 #[tauri::command]
 pub async fn preview_ssh_config_import(
     app: tauri::AppHandle,
-    state: tauri::State<'_, crate::state::AppState>,
+    state: tauri::State<'_, app_logic::state::AppState>,
     title: String,
 ) -> CommandResult<Option<ImportPreviewDto>> {
     use tauri_plugin_dialog::DialogExt;
@@ -818,7 +818,7 @@ pub async fn preview_ssh_config_import(
     };
     let path = picked.into_path()?;
 
-    let read = crate::ssh_config_import::read_import(&path)
+    let read = app_logic::ssh_config_import::read_import(&path)
         .map_err(|abort| CommandError::from(abort.to_string()))?;
 
     // §4.1: Ohne den Bestand sind weder Konflikte noch `ProxyJump`-Ziele im
@@ -841,7 +841,7 @@ pub async fn preview_ssh_config_import(
             servers: &servers,
             groups: &groups,
             rules: &rules,
-            local_server_id: crate::dto::LOCAL_SERVER_ID,
+            local_server_id: app_logic::dto::LOCAL_SERVER_ID,
         },
     );
 
@@ -853,7 +853,7 @@ pub async fn preview_ssh_config_import(
     *state
         .pending_ssh_config_import
         .lock()
-        .expect("pending import lock") = Some(crate::state::PendingImport { plan });
+        .expect("pending import lock") = Some(app_logic::state::PendingImport { plan });
     Ok(Some(dto))
 }
 
@@ -861,7 +861,7 @@ pub async fn preview_ssh_config_import(
 /// Plan selbst kommt aus dem `AppState`, nicht vom Frontend (§5.1).
 #[tauri::command]
 pub async fn apply_ssh_config_import(
-    state: tauri::State<'_, crate::state::AppState>,
+    state: tauri::State<'_, app_logic::state::AppState>,
     choices: Vec<EntryChoice>,
 ) -> CommandResult<ApplyOutcome> {
     // **Nehmen und leeren in einem Zug**, unter derselben Sperre: Vorher

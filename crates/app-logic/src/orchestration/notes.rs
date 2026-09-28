@@ -656,7 +656,7 @@ pub fn should_suggest_note_shrink(note_update_was_suggested: bool) -> bool {
 /// Notiz-Editor (`commands::large_note_dialog_threshold_chars`, von dort ans
 /// Frontend gereicht) — eine Quelle der Wahrheit statt einer zweiten,
 /// hartkodierten Zahl im Frontend.
-pub(crate) const LARGE_NOTE_DIALOG_THRESHOLD_CHARS: usize = 10_000;
+pub const LARGE_NOTE_DIALOG_THRESHOLD_CHARS: usize = 10_000;
 
 /// Spec 0057, §4.2 (Etappe 4): beim Verbindungsende geprüft, im selben
 /// Hintergrund-Task wie `suggest_note_update_on_disconnect`
@@ -1087,7 +1087,7 @@ pub async fn execute_note_shrink_request(
 /// Text, nicht nur ein Diff", s. `AiAction::ProposeNoteUpdate`-Doc) — die
 /// Diff-Vorschau im bestehenden Dialog zeigt dem Nutzer genau diese
 /// Ergänzung, bevor er bestätigt.
-pub(crate) async fn propose_note_from_chat_content(
+pub async fn propose_note_from_chat_content(
     session: &Session,
     session_id: SessionId,
     content: String,

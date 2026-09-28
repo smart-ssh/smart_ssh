@@ -522,7 +522,7 @@ pub(crate) async fn handle_action_proposed(
 /// `handle_action_proposed` selbst `pub(crate)` zu machen: die
 /// internen Parameter `round`/`origin` sollen von außerhalb dieses Moduls
 /// nicht frei wählbar sein.
-pub(crate) async fn handle_mcp_action_proposed(
+pub async fn handle_mcp_action_proposed(
     session: &Session,
     session_id: SessionId,
     action: AiAction,

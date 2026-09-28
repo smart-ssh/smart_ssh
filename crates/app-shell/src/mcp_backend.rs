@@ -16,10 +16,10 @@ use ssh_manager_core::shared::ServerId;
 
 use crate::commands::connect_session;
 use crate::event_emitter::TauriEventEmitter;
-use crate::events::{emit_mcp_action_tab_requested, ConnectionStatus, EventEmitter};
-use crate::orchestration::handle_mcp_action_proposed;
-use crate::session::Session;
-use crate::state::{AppState, SessionId};
+use app_logic::events::{emit_mcp_action_tab_requested, ConnectionStatus, EventEmitter};
+use app_logic::orchestration::handle_mcp_action_proposed;
+use app_logic::session::Session;
+use app_logic::state::{AppState, SessionId};
 
 pub struct AppMcpBackend {
     app: AppHandle,
@@ -285,7 +285,7 @@ impl EventEmitter for CaptureEmitter<'_> {
 
 /// Wandelt den `result`-Wert eines `chat-action-result`-Events
 /// (`ActionResultPayload`, intern per `kind` getaggt — s.
-/// `crate::events`-Moduldoc) in einen für den MCP-Client lesbaren Text um.
+/// `app_logic::events`-Moduldoc) in einen für den MCP-Client lesbaren Text um.
 fn format_action_result(result: &serde_json::Value) -> String {
     match result["kind"].as_str() {
         Some("command") => {
@@ -327,7 +327,7 @@ fn format_action_result(result: &serde_json::Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::TestEmitter;
+    use app_logic::events::TestEmitter;
 
     #[test]
     fn test_format_action_result_command_success() {

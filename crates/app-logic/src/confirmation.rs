@@ -127,8 +127,10 @@ impl<K: Eq + Hash, T> ConfirmationRegistry<K, T> {
     /// unterscheidet "aktiv abgeräumt" (`cancel`) von "der `Receiver` wurde
     /// nur beiläufig gedroppt" (beides lässt ein späteres `resolve()`
     /// gleich fehlschlagen, s. Spec 0046 Fund 4, aber nur Ersteres räumt
-    /// den Eintrag selbst aus der Map).
-    #[cfg(test)]
+    /// den Eintrag selbst aus der Map). Spec 0084, A5: auch von
+    /// `app-shell`s Tests gebraucht (`commands::connect`), deshalb hinter
+    /// `test-support` statt reinem `#[cfg(test)]`.
+    #[cfg(any(test, feature = "test-support"))]
     pub fn contains(&self, key: &K) -> bool {
         self.pending.lock().unwrap().contains_key(key)
     }

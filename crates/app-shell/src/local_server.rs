@@ -20,10 +20,10 @@ use ssh_manager_core::profiles::AuthMethod;
 use ssh_manager_core::profiles::PostIngestPolicy;
 use ssh_manager_core::profiles::Server;
 
-// Spec 0084, §4: `LOCAL_SERVER_ID`/`is_local` liegen jetzt in `crate::dto`
+// Spec 0084, §4: `LOCAL_SERVER_ID`/`is_local` liegen jetzt in `app_logic::dto`
 // (s. dortiger Kommentar) — `dto` ist Tauri-frei und zieht nach `app-logic`,
 // dieses Modul bleibt wegen `AppHandle`/`tauri-plugin-store` in `app-shell`.
-use crate::dto::LOCAL_SERVER_ID;
+use app_logic::dto::LOCAL_SERVER_ID;
 
 const SETTINGS_STORE_FILE: &str = "settings.json";
 const NOTES_KEY: &str = "localServerNotes";
@@ -107,7 +107,7 @@ pub struct LocalNoteShrinkTarget<R: Runtime> {
 }
 
 #[async_trait::async_trait]
-impl<R: Runtime + 'static> crate::orchestration::NoteShrinkTarget for LocalNoteShrinkTarget<R> {
+impl<R: Runtime + 'static> app_logic::orchestration::NoteShrinkTarget for LocalNoteShrinkTarget<R> {
     async fn read(&self) -> Option<(String, String)> {
         let server = synthetic_server(&self.app);
         Some((server.name, server.notes))
@@ -197,7 +197,7 @@ mod tests {
     /// Bestätigungsdialog) Maschinerie aufzubauen.
     #[tokio::test]
     async fn test_local_note_shrink_target_reads_and_writes_through_the_settings_store() {
-        use crate::orchestration::NoteShrinkTarget;
+        use app_logic::orchestration::NoteShrinkTarget;
 
         let _guard = lock_async().await;
         let app = test_app();

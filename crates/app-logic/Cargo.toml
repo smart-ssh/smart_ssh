@@ -1,0 +1,62 @@
+[package]
+name = "app-logic"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "app_logic"
+path = "src/lib.rs"
+
+[features]
+# Spec 0084, A5: Testhilfen, die sowohl `app-logic`s eigene Tests als auch
+# `app-shell`s Tests brauchen (u. a. `InMemoryProfileStore`/
+# `InMemoryCredentialStore`, `session_with_transport`, `policy::
+# NoRulesPolicyStore`), liegen hinter diesem Feature statt hinter reinem
+# `#[cfg(test)]` — sonst wären sie außerhalb dieser Crate nicht sichtbar.
+# `app-shell` aktiviert es nur unter `[dev-dependencies]` (Muster: die
+# Dev-Abhängigkeit auf `ssh-manager-core` in `app-shell/Cargo.toml`, dort
+# ebenfalls `test-support`). Kein Produktivbau aktiviert es.
+test-support = []
+
+[dependencies]
+ai-providers = { version = "0.5.1", path = "../ai-providers" }
+async-trait = "0.1.92"
+base64 = "0.23.1"
+chrono = { version = "0.4.45", features = ["serde"] }
+credentials-keyring = { version = "0.5.1", path = "../credentials-keyring" }
+directories = "6.0.0"
+futures = "0.3.34"
+# Spec 0075, §9 Q-1 Punkt 1 (übernommen aus app-shell/Cargo.toml, s. dort
+# für die volle Begründung): löst `Include`-Pfad-Platzhalter auf
+# (`ssh_config_import`).
+globset = "0.4.20"
+# Spec 0076, §9 K-3 (übernommen aus app-shell/Cargo.toml): `O_NONBLOCK` für
+# `key_files.rs`.
+libc = "0.2.189"
+mcp-server = { version = "0.5.1", path = "../mcp-server" }
+persistence-sqlite = { version = "0.5.1", path = "../persistence-sqlite" }
+regex = "1.13.1"
+secrecy = "0.10.3"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+ssh-manager-core = { version = "0.5.1", path = "../core" }
+ssh-transport = { version = "0.5.1", path = "../ssh-transport" }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tracing = "0.1.44"
+tracing-appender = "0.2.5"
+# `logging.rs` (Aufbau des globalen `tracing`-Subscribers) — normale
+# Abhängigkeit, nicht nur `[dev-dependencies]`, weil das Produktivlogging
+# selbst hier liegt (nicht nur Test-Infrastruktur).
+tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
+uuid = { version = "1.26.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+# Spec 0020, Abschnitt 6 (Muster wie app-shell/Cargo.toml).
+ssh-manager-core = { path = "../core", features = ["test-support"] }
+# Spec 0076, §6.2 (Muster wie app-shell/Cargo.toml).
+ssh-transport = { path = "../ssh-transport", features = ["test-support"] }
+tokio = { version = "1.53.1", features = ["test-util"] }

@@ -6,16 +6,16 @@ use tauri::{AppHandle, Manager, State};
 use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
 use ssh_manager_core::profiles::ProfileStore;
 
-use crate::confirmation::ConfirmationRegistry;
-use crate::dto::{ActionUserDecision, SessionSummaryDto};
-use crate::error::CommandResult;
 use crate::event_emitter::TauriEventEmitter;
-use crate::events::{
+use app_logic::confirmation::ConfirmationRegistry;
+use app_logic::dto::{ActionUserDecision, SessionSummaryDto};
+use app_logic::error::CommandResult;
+use app_logic::events::{
     emit_chat_queued_messages_sent, emit_connection_status_changed, ConnectionStatus, EventEmitter,
 };
-use crate::orchestration::run_chat_turn;
-use crate::session::Session;
-use crate::state::{ActionId, AppState, SessionId};
+use app_logic::orchestration::run_chat_turn;
+use app_logic::session::Session;
+use app_logic::state::{ActionId, AppState, SessionId};
 
 use super::connect::build_session_system_context;
 use super::servers::resolve_server_for_note_shrink;
@@ -155,7 +155,7 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
         // Pseudo-Server nie (keine `servers`-Zeile) — ohne diesen Zweig würde
         // der Servername in JEDER Chat-Nachricht auf das generische "Server"
         // degradieren (unabhängiger Review-Pass, s. docs/adr/0026).
-        let (server_name, current_tags) = if crate::dto::is_local(session.server_id) {
+        let (server_name, current_tags) = if app_logic::dto::is_local(session.server_id) {
             let local = crate::local_server::synthetic_server(app);
             (local.name, local.tags)
         } else {
@@ -202,7 +202,7 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
         // Spec 0036). Muss VOR `run_chat_turn` passieren, damit die Nachricht
         // in der DB steht, bevor der KI-Aufruf überhaupt startet.
         for text in texts {
-            crate::orchestration::push_history(
+            app_logic::orchestration::push_history(
                 session,
                 ChatMessage {
                     role: Role::User,
@@ -281,7 +281,7 @@ impl Drop for ChatTurnRunningGuard<'_> {
 /// Spec 0040, Abschnitt 6: "In Notiz übernehmen" — startet denselben
 /// `ProposeNoteUpdate`-Bestätigungsablauf wie ein KI-Vorschlag, nur mit dem
 /// Inhalt einer bestehenden Chat-/Ergebnis-Zeile vorbefüllt (s.
-/// `crate::orchestration::propose_note_from_chat_content`-Doc-Kommentar).
+/// `app_logic::orchestration::propose_note_from_chat_content`-Doc-Kommentar).
 /// Wie `send_chat_message` löst dieses Promise erst auf, wenn die Aktion
 /// abgeschlossen ist (Bestätigen/Ablehnen über `respond_to_action`) — kein
 /// Problem für die Tauri-IPC (nicht blockierend für den Rest der App), das
@@ -297,7 +297,7 @@ pub async fn take_chat_content_into_note(
         .sessions
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
-    crate::orchestration::propose_note_from_chat_content(
+    app_logic::orchestration::propose_note_from_chat_content(
         &session,
         session_id,
         content,
@@ -328,7 +328,7 @@ pub async fn respond_to_action(
 
     // Spec 0010: dieser Command wird jetzt auch für die Bestätigung eines
     // Notiz-Vorschlags nach `disconnect()` verwendet (s.
-    // `crate::orchestration::suggest_note_update_on_disconnect`) — zu
+    // `app_logic::orchestration::suggest_note_update_on_disconnect`) — zu
     // diesem Zeitpunkt ist die Session per Design bereits aus
     // `state.sessions` entfernt. Der frühere `state.sessions.get(session_id)`-
     // Check hätte diesen (gültigen) Aufruf fälschlich mit "Session nicht
@@ -452,13 +452,13 @@ pub async fn disconnect(
         // `AiProvider::send()`-Anfrage auf demselben Provider) — beide
         // sind unabhängige, optionale "beim Trennen"-Extras, s. jeweilige
         // Doc-Kommentare zur genauen Auslösebedingung.
-        crate::orchestration::generate_session_title_on_disconnect(
+        app_logic::orchestration::generate_session_title_on_disconnect(
             &session,
             session_id,
             &TauriEventEmitter(app_for_suggestion.clone()),
         )
         .await;
-        let note_update_suggested = crate::orchestration::suggest_note_update_on_disconnect(
+        let note_update_suggested = app_logic::orchestration::suggest_note_update_on_disconnect(
             &session,
             session_id,
             &TauriEventEmitter(app_for_suggestion.clone()),
@@ -471,7 +471,7 @@ pub async fn disconnect(
         // should_suggest_note_shrink`-Doc-Kommentar für das
         // Zusammenspiel-Design (nie zwei konkurrierende Notiz-Dialoge am
         // selben Verbindungsende).
-        if crate::orchestration::should_suggest_note_shrink(note_update_suggested) {
+        if app_logic::orchestration::should_suggest_note_shrink(note_update_suggested) {
             let server = resolve_server_for_note_shrink(
                 &app_for_suggestion,
                 state.profile_store.as_ref(),
@@ -479,7 +479,7 @@ pub async fn disconnect(
             )
             .await;
             if let Some(server) = server {
-                crate::orchestration::suggest_note_shrink_on_disconnect(
+                app_logic::orchestration::suggest_note_shrink_on_disconnect(
                     &TauriEventEmitter(app_for_suggestion.clone()),
                     server.id,
                     server.name,
@@ -536,7 +536,7 @@ pub async fn list_sessions(state: State<'_, AppState>) -> CommandResult<Vec<Sess
 pub async fn get_chat_history(
     state: State<'_, AppState>,
     session_id: SessionId,
-) -> CommandResult<Vec<crate::dto::ChatHistoryEntryDto>> {
+) -> CommandResult<Vec<app_logic::dto::ChatHistoryEntryDto>> {
     let session = state
         .sessions
         .get(session_id)
@@ -544,7 +544,7 @@ pub async fn get_chat_history(
     let history = session.context.lock().await.history.clone();
     Ok(history
         .into_iter()
-        .map(crate::dto::ChatHistoryEntryDto::from)
+        .map(app_logic::dto::ChatHistoryEntryDto::from)
         .collect())
 }
 
@@ -568,10 +568,10 @@ mod send_chat_message_persistence_tests {
         CommandOutput, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
     };
 
-    use crate::confirmation::ConfirmationRegistry;
-    use crate::events::TestEmitter;
     use crate::first_run_notice::test_support::test_app;
-    use crate::test_support::InMemoryProfileStore;
+    use app_logic::confirmation::ConfirmationRegistry;
+    use app_logic::events::TestEmitter;
+    use app_logic::test_support::InMemoryProfileStore;
 
     use super::*;
 
@@ -615,24 +615,26 @@ mod send_chat_message_persistence_tests {
                 available_actions: default_action_schemas(),
                 max_tokens_hint: None,
             }),
-            filter_engine: Box::new(FilterEngine::new(crate::policy::NoRulesPolicyStore)),
+            filter_engine: Box::new(FilterEngine::new(app_logic::policy::NoRulesPolicyStore)),
             server_id,
             tags: Vec::new(),
             terminal: std::sync::Mutex::new(None),
             redactor: Box::new(DefaultOutputRedactor::new()),
             ai_provider_label: "test-provider".to_string(),
             ai_model: "test-model".to_string(),
-            system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
+            system_context_parts: AsyncMutex::new(
+                app_logic::compaction::SystemContextParts::default(),
+            ),
             model_context_window_tokens: usize::MAX / 1_000,
             summary: AsyncMutex::new(None),
             mcp_origin_flags: std::sync::Mutex::new(Vec::new()),
             sudo_password: None,
-            status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
+            status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),
             sftp: AsyncMutex::new(None::<Box<dyn SftpSession>>),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
-            chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
+            chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),
             risk_second_opinion_provider: None,
             risk_second_opinion_budget: None,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),

@@ -18,22 +18,22 @@ use ssh_manager_core::profiles::ProfileStore;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, SshError};
 
-use crate::ai_provider_factory::build_ai_provider;
-use crate::confirmation::{ConfirmationRegistry, RegistrationGeneration};
-use crate::dto::HostKeyUserDecision;
-use crate::error::{keychain_aware_credential_error, CommandError, CommandResult};
-use crate::events::{
+use app_logic::ai_provider_factory::build_ai_provider;
+use app_logic::confirmation::{ConfirmationRegistry, RegistrationGeneration};
+use app_logic::dto::HostKeyUserDecision;
+use app_logic::error::{keychain_aware_credential_error, CommandError, CommandResult};
+use app_logic::events::{
     emit_connection_status_changed, emit_host_key_verification_needed, ConnectionStatus,
     HostKeyKind,
 };
-use crate::server_credentials::sudo_password_credential_ref;
-use crate::session::{history_contains_untrusted_content, Session};
-use crate::state::{AppState, SessionId};
+use app_logic::server_credentials::sudo_password_credential_ref;
+use app_logic::session::{history_contains_untrusted_content, Session};
+use app_logic::state::{AppState, SessionId};
 // Spec 0084, §4 (Schnitt `test_connection` → `commands::SSH_CONNECT_TIMEOUT`):
-// die Konstante liegt jetzt in `crate::test_connection` (s. dortiger
+// die Konstante liegt jetzt in `app_logic::test_connection` (s. dortiger
 // Kommentar) — `test_connection` ist Tauri-frei und zieht nach `app-logic`,
 // `commands::connect` bleibt Tauri-gebunden in `app-shell`.
-use crate::test_connection::SSH_CONNECT_TIMEOUT;
+use app_logic::test_connection::SSH_CONNECT_TIMEOUT;
 
 use super::ai_providers::active_ai_provider_config;
 use super::diagnostics_export::build_os_banner_message;
@@ -145,7 +145,7 @@ pub(crate) async fn connect_session(
     // verdient strengere Behandlung"-Logik wie dort.
     ensure_first_run_notice_acknowledged(app)?;
 
-    let is_local = crate::dto::is_local(server_id);
+    let is_local = app_logic::dto::is_local(server_id);
     let server = if is_local {
         crate::local_server::synthetic_server(app)
     } else {
@@ -303,7 +303,7 @@ pub(crate) async fn connect_session(
                         session_id,
                         generation,
                         rx,
-                        crate::orchestration::PENDING_ACTION_CONFIRM_TIMEOUT,
+                        app_logic::orchestration::PENDING_ACTION_CONFIRM_TIMEOUT,
                     )
                     .await;
                     state.sessions.clear_pending_connection(session_id);
@@ -372,7 +372,7 @@ pub(crate) async fn connect_session(
 
     let sanitized_os = if let Ok(uname_output) = transport.execute("uname -a").await {
         let uname_text = String::from_utf8_lossy(&uname_output.stdout);
-        crate::orchestration::sanitize_uname_output(&uname_text)
+        app_logic::orchestration::sanitize_uname_output(&uname_text)
     } else {
         None
     };
@@ -409,7 +409,7 @@ pub(crate) async fn connect_session(
     // Spec 0057, §3.1: einmalig bei `connect()` aufgelöst, wie
     // `ai_provider_label`/`ai_model` unten — s. `Session::
     // model_context_window_tokens`-Doc-Kommentar.
-    let model_context_window_tokens = crate::compaction::model_context_window_tokens(
+    let model_context_window_tokens = app_logic::compaction::model_context_window_tokens(
         active_config.provider_type,
         &active_config.model,
     );
@@ -527,7 +527,7 @@ pub(crate) async fn connect_session(
         // fällt die nächste Kompaktierung einfach auf einen frischen
         // Zusammenfassungs-Versuch (oder den Etappe-2-Platzhalter) zurück.
         let initial_summary = match store.load_summary(existing_id).await {
-            Ok(Some((text, rounds_covered))) => Some(crate::compaction::RollingSummary {
+            Ok(Some((text, rounds_covered))) => Some(app_logic::compaction::RollingSummary {
                 text,
                 // spec-reviewer-Fund (Review dieses Schritts): auf die
                 // tatsächlich geladene Rundenzahl geklemmt — ohne das
@@ -538,7 +538,7 @@ pub(crate) async fn connect_session(
                 // Runden als "bereits abgedeckt" behandeln, als überhaupt
                 // vorhanden sind.
                 rounds_covered: (rounds_covered.max(0) as usize)
-                    .min(crate::compaction::round_count(&loaded)),
+                    .min(app_logic::compaction::round_count(&loaded)),
             }),
             Ok(None) => None,
             Err(err) => {
@@ -641,12 +641,12 @@ pub(crate) async fn connect_session(
         summary: tokio::sync::Mutex::new(initial_summary),
         mcp_origin_flags: std::sync::Mutex::new(initial_mcp_origin_flags),
         sudo_password,
-        status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
+        status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
         sftp: tokio::sync::Mutex::new(None),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         auto_continue_stop_notify: tokio::sync::Notify::new(),
-        chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
+        chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),
         risk_second_opinion_provider,
         risk_second_opinion_budget,
         running_command_cancellations: state.running_command_cancellations.clone(),
@@ -693,7 +693,7 @@ pub(crate) async fn connect_session(
 pub async fn list_chat_sessions(
     state: State<'_, AppState>,
     server_id: ServerId,
-) -> CommandResult<Vec<crate::dto::ChatSessionSummaryDto>> {
+) -> CommandResult<Vec<app_logic::dto::ChatSessionSummaryDto>> {
     // Spec 0040, Abschnitt 7: kein Verschlüsselungsschlüssel verfügbar ->
     // es existiert keine Chat-Persistenz für diesen App-Lauf, also eine
     // leere Liste statt eines Fehlers (derselbe "degradiert statt
@@ -705,7 +705,7 @@ pub async fn list_chat_sessions(
         .list_sessions_for_server(&server_id)
         .await?
         .into_iter()
-        .map(crate::dto::ChatSessionSummaryDto::from)
+        .map(app_logic::dto::ChatSessionSummaryDto::from)
         .collect())
 }
 
@@ -953,7 +953,7 @@ mod map_connect_result_tests {
 }
 
 /// Gibt die Rohbestandteile des System-Prompts (Spec 0057, §4.1:
-/// [`crate::compaction::SystemContextParts`] — getrennt gehalten statt
+/// [`app_logic::compaction::SystemContextParts`] — getrennt gehalten statt
 /// direkt zusammengefügt, damit die Kompaktierung Notiz-Sektionen einzeln
 /// nach Scope priorisiert kürzen kann) zurück, zusammen mit der Info, ob
 /// die Notizen nicht-leer sind (Spec 0039, Abschnitt 5) — der System-Prompt
@@ -970,7 +970,7 @@ pub(super) async fn build_session_system_context<R: tauri::Runtime>(
     tags: &[String],
     profile_store: &dyn ProfileStore,
     policy_store: &persistence_sqlite::SqlitePolicyStore,
-) -> (crate::compaction::SystemContextParts, bool) {
+) -> (app_logic::compaction::SystemContextParts, bool) {
     // Spec 0032: der lokale Pseudo-Server hat keine `servers`-Zeile —
     // `profile_store.get_server` schlägt für ihn immer fehl, wodurch diese
     // Funktion sonst dauerhaft mit leeren Notizen liefe, obwohl über
@@ -989,7 +989,7 @@ pub(super) async fn build_session_system_context<R: tauri::Runtime>(
     // eingebettet wird (der schwerwiegendste der vier in Spec 0039
     // genannten Befunde: Notizen persistieren über Sitzungen hinweg, eine
     // einmal eingeschleuste Anweisung wirkt also nicht nur einmalig).
-    let note_sections: Vec<(String, String)> = if crate::dto::is_local(*server_id) {
+    let note_sections: Vec<(String, String)> = if app_logic::dto::is_local(*server_id) {
         let local_notes = crate::local_server::synthetic_server(app).notes;
         if local_notes.trim().is_empty() {
             Vec::new()
@@ -1054,7 +1054,7 @@ pub(super) async fn build_session_system_context<R: tauri::Runtime>(
         context.push_str(&allow_rules.join("\n"));
     }
 
-    let parts = crate::compaction::SystemContextParts {
+    let parts = app_logic::compaction::SystemContextParts {
         base: context,
         note_sections,
     };

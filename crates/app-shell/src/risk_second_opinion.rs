@@ -5,7 +5,7 @@
 //! erfassen lässt").
 //!
 //! Spec 0084, §4 (Schnitt): Der eigentliche Abruf (`fetch_second_opinion`/
-//! `fetch_injection_check`, Prompts, Parser) liegt in `crate::second_opinion`
+//! `fetch_injection_check`, Prompts, Parser) liegt in `app_logic::second_opinion`
 //! (Tauri-frei, zieht nach `app-logic`) — dieses Modul liest nur die
 //! Einstellungen (`tauri_plugin_store`) und baut daraus den konfigurierten
 //! `AiProvider`, den `commands::connect` einmalig bei `connect()` auflöst
@@ -21,8 +21,8 @@ use tauri_plugin_store::StoreExt;
 
 use ssh_manager_core::ai::AiProvider;
 
-use crate::ai_provider_factory::build_ai_provider;
-use crate::state::AppState;
+use app_logic::ai_provider_factory::build_ai_provider;
+use app_logic::state::AppState;
 
 /// Spec 0024, Abschnitt 4: derselbe `tauri-plugin-store`-Ablageort wie die
 /// UI-Sprache (`frontend/src/i18n.ts`s `STORE_FILE`) — beide sind reine
@@ -67,7 +67,7 @@ pub async fn resolve_second_opinion_provider(
         config.supports_native_tool_calling,
         config.extra_headers.clone(),
         // Spec 0065, Teil 4: greift hier ohnehin nie — `build_second_
-        // opinion_context` (in `crate::second_opinion`) setzt
+        // opinion_context` (in `app_logic::second_opinion`) setzt
         // `max_tokens_hint` immer explizit (`SIDE_CALL_MAX_TOKENS`), der
         // laut Rangfolge Vorrang hat.
         // Trotzdem korrekt durchgereicht statt hart `None`, für den Fall,

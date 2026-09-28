@@ -10,42 +10,17 @@
 //! zurückgeben, keine fachliche Logik hier (Spec 0007, Abschnitt 3) — diese
 //! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
-mod ai_provider_factory;
 mod chat_retention;
 mod commands;
-mod compaction;
-mod confirmation;
-mod diagnostics;
-mod document_export;
-mod dto;
 mod elevated_sftp;
-mod ephemeral_credentials;
-mod error;
 /// Spec 0084, §4: der Newtype, der die `EventEmitter`-Impl für
 /// `tauri::AppHandle` trägt (s. dortiger Moduldoc-Kommentar).
 mod event_emitter;
-mod events;
-mod filter_rules;
 mod first_run_notice;
-mod groups;
-mod host_key_store;
-mod identity_file;
-mod key_files;
 mod local_server;
-mod logging;
 mod mcp_backend;
 mod mcp_settings;
-mod orchestration;
-#[cfg(test)]
-mod policy;
 mod risk_second_opinion;
-mod rule_suggestions;
-/// Spec 0084, §4: der Tauri-freie Abruf-Teil, aus `risk_second_opinion`
-/// herausgeschnitten (s. dortiger Moduldoc-Kommentar).
-mod second_opinion;
-mod server_credentials;
-mod servers;
-mod session;
 /// Spec 0075, §7.3: den bestätigten Importplan ausführen — der einzige
 /// Schritt, in dem überhaupt eine Schlüsseldatei geöffnet wird (§5.1).
 mod ssh_config_apply;
@@ -53,17 +28,9 @@ mod ssh_config_apply;
 /// `~/.ssh/config`-Ablehnung, Schreiben. Die Abbildung selbst liegt in
 /// `ssh_manager_core::profiles::ssh_config::export`.
 mod ssh_config_export;
-/// Spec 0075, §7.2: Dateizugriff und `Include`-Auflösung für den
-/// `ssh_config`-Import — der einzige Teil, der dabei das Dateisystem
-/// anfasst.
-mod ssh_config_import;
 mod startup_dialog;
-mod startup_error_messages;
-mod state;
-mod test_connection;
 #[cfg(test)]
 mod test_support;
-mod version;
 mod wiring;
 
 pub use wiring::{Edition, Wiring};
@@ -73,10 +40,10 @@ use std::sync::Arc;
 use credentials_keyring::KeyringCredentialStore;
 use persistence_sqlite::{default_db_path, SqliteProfileStore};
 
-use crate::confirmation::ConfirmationRegistry;
-use crate::host_key_store::FileHostKeyStore;
-use crate::session::SessionManager;
-use crate::state::AppState;
+use app_logic::confirmation::ConfirmationRegistry;
+use app_logic::host_key_store::FileHostKeyStore;
+use app_logic::session::SessionManager;
+use app_logic::state::AppState;
 
 /// Baut den `AppState` einmalig beim App-Start auf. Synchron nach außen
 /// (`run()` wird von `main.rs` ohne `#[tokio::main]` aufgerufen, wie im
@@ -97,8 +64,8 @@ fn build_app_state(
     let lc_all = std::env::var("LC_ALL").ok();
     let lc_messages = std::env::var("LC_MESSAGES").ok();
     let lang = std::env::var("LANG").ok();
-    let language = crate::startup_error_messages::startup_language(
-        crate::startup_error_messages::preferred_locale_value(
+    let language = app_logic::startup_error_messages::startup_language(
+        app_logic::startup_error_messages::preferred_locale_value(
             lc_all.as_deref(),
             lc_messages.as_deref(),
             lang.as_deref(),
@@ -120,8 +87,8 @@ fn build_app_state(
         Ok(store) => store,
         Err(err) => {
             let kind = err.classify();
-            let log_dir = crate::logging::default_log_dir();
-            let text = crate::startup_error_messages::db_connect_failure_text(
+            let log_dir = app_logic::logging::default_log_dir();
+            let text = app_logic::startup_error_messages::db_connect_failure_text(
                 &kind, &db_path, &log_dir, language,
             );
             tracing::error!(error = %err, ?kind, "fatal: SQLite database connect/migrate failed");
@@ -237,7 +204,7 @@ fn build_app_state(
                 // Probieren noch erreichbar schien, `resolve_or_generate_key`
                 // aber trotzdem scheitert: A4 verlangt auch dann einen
                 // vollständigen Text, nie gar keine Meldung.
-                if crate::startup_error_messages::should_warn_about_keychain(&err) {
+                if app_logic::startup_error_messages::should_warn_about_keychain(&err) {
                     // spec-reviewer-Fund: `store_status()` kann `Ok(())`
                     // melden (der Anbieter antwortet auf den
                     // Verbindungsaufbau) und der erste echte Zugriff
@@ -256,7 +223,7 @@ fn build_app_state(
                     let reason = keychain
                         .unavailable_reason()
                         .unwrap_or(credentials_keyring::KeychainUnavailableReason::Unknown);
-                    let text = crate::startup_error_messages::keychain_unavailable_text(
+                    let text = app_logic::startup_error_messages::keychain_unavailable_text(
                         reason,
                         std::env::consts::OS,
                         language,
@@ -268,7 +235,7 @@ fn build_app_state(
         };
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
-    // `crate::host_key_store`-Modul-Kommentar zur Begründung (der
+    // `app_logic::host_key_store`-Modul-Kommentar zur Begründung (der
     // `HostKeyStore`-Trait ist absichtlich synchron, `sqlx` ist es nicht).
     let host_key_path = db_path
         .parent()
@@ -284,7 +251,7 @@ fn build_app_state(
     let host_key_store = match FileHostKeyStore::load(host_key_path.clone()) {
         Ok(store) => store,
         Err(err) => {
-            let text = crate::startup_error_messages::host_key_store_failure_text(
+            let text = app_logic::startup_error_messages::host_key_store_failure_text(
                 &host_key_path,
                 language,
             );
@@ -303,7 +270,7 @@ fn build_app_state(
         credential_store: Arc::new(credential_store),
         // Spec 0076, §4.2: zustandslos — sie hält nichts fest, weil bei
         // jedem Verbindungsaufbau neu gelesen wird (E-5, §4.3).
-        key_file_reader: Arc::new(crate::key_files::OsKeyFileReader::new()),
+        key_file_reader: Arc::new(app_logic::key_files::OsKeyFileReader::new()),
         keychain,
         ai_provider_store: Arc::new(ai_provider_store),
         host_key_store: Arc::new(host_key_store),
@@ -318,7 +285,7 @@ fn build_app_state(
         pending_host_key_confirmations: ConfirmationRegistry::new(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
-        mcp: crate::state::McpState::default(),
+        mcp: app_logic::state::McpState::default(),
         rate_limit_registry: ai_providers::RateLimitRegistry::new(),
         // Spec 0075, §5.1: leer, bis eine Vorschau gelaufen ist.
         pending_ssh_config_import: std::sync::Mutex::new(None),
@@ -340,10 +307,10 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Spec 0016, Abschnitt 2/3: so früh wie möglich, damit auch Fehler beim
     // App-Setup selbst (z. B. `build_app_state()`s DB-Verbindungsaufbau)
     // bereits strukturiert geloggt würden. `_log_guard` muss über die
-    // gesamte App-Laufzeit am Leben bleiben (s. `crate::logging::
+    // gesamte App-Laufzeit am Leben bleiben (s. `app_logic::logging::
     // init_logging`-Doc-Kommentar) — `run()` unten blockiert bis zum
     // Beenden der App, danach ist ein finaler Flush ohnehin irrelevant.
-    let _log_guard = crate::logging::init_logging();
+    let _log_guard = app_logic::logging::init_logging();
 
     // Spec-Reviewer-Fund (Spec 0047, Review dieses Schritts): muss VOR dem
     // ersten Aufruf installiert sein, der selbst panicken kann —
@@ -376,16 +343,16 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // nicht eindeutig (mehrere Builds können dieselbe Version tragen) —
     // `commit_hash` (strukturiertes Feld, für ein grep/Log-Tool-Filtering)
     // ergänzt um `version_display` im überall geteilten Anzeigeformat
-    // (`crate::version::version_with_hash`, s. dortiger Doc-Kommentar),
+    // (`app_logic::version::version_with_hash`, s. dortiger Doc-Kommentar),
     // damit ein an einen Bug-Report angehängtes Log auch beim bloßen
     // Überfliegen sofort die exakte Build-Kennung zeigt.
     let db_path = default_db_path();
     let version = context.package_info().version.to_string();
     tracing::info!(
         version = %version,
-        commit_hash = crate::version::BUILD_COMMIT_HASH,
-        version_display = %crate::version::version_with_hash(&version),
-        build_type = crate::version::BuildType::current().as_str(),
+        commit_hash = app_logic::version::BUILD_COMMIT_HASH,
+        version_display = %app_logic::version::version_with_hash(&version),
+        build_type = app_logic::version::BuildType::current().as_str(),
         os = std::env::consts::OS,
         arch = std::env::consts::ARCH,
         data_path = %db_path.display(),

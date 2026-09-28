@@ -384,7 +384,7 @@ impl Session {
 /// weitere Fälle) wird dagegen bereits VOR dem Push in die Historie
 /// gefenced (s. `orchestration::execute_read_remote_file`), erkennbar am
 /// literalen Tag-Text.
-pub(crate) fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
+pub fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
     // Spec 0064 Nachtrag: aus `fence_markers()` abgeleitet statt einer
     // separat hier gepflegten Tag-Liste — ein hartcodiertes Array hätte
     // bei der Einführung von `UntrustedKind::RemoteOsInfo` in diesem

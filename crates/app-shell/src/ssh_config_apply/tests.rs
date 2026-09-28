@@ -8,7 +8,7 @@ use ssh_manager_core::profiles::{AuthMethod, ProfileStore};
 use uuid::Uuid;
 
 use super::*;
-use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+use app_logic::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
 
 const MARKER_KEY: &str =
     "-----BEGIN OPENSSH PRIVATE KEY-----\nGEHEIMER_SCHLUESSEL_4711\n-----END OPENSSH PRIVATE KEY-----";
@@ -312,7 +312,7 @@ async fn t_6_4_1b_die_vorschau_oeffnet_nichts() {
     std::fs::write(&cfg, &text).unwrap();
 
     // Der **echte** Vorschau-Pfad.
-    let read = crate::ssh_config_import::read_import(&cfg).expect("Vorschau");
+    let read = app_logic::ssh_config_import::read_import(&cfg).expect("Vorschau");
     let plan = build_plan(
         &read.sources,
         Inventory {
@@ -807,13 +807,13 @@ async fn t_6_3_16_unverschluesselter_schluessel_erscheint_nicht_im_ergebnis() {
 // ------------------------------------------- DiskKeyFiles
 
 /// §5.5: Weg (b) benutzt **denselben** Leser wie die Handstelle, also den
-/// echten [`crate::key_files::OsKeyFileReader`] mit allen Prüfungen aus
+/// echten [`app_logic::key_files::OsKeyFileReader`] mit allen Prüfungen aus
 /// Spec 0076 — nicht eine eigene, schwächere Fassung.
 fn disk() -> DiskKeyFiles<'static> {
     // `Box::leak`: Der Leser ist zustandslos und lebt im Betrieb ohnehin so
     // lange wie der `AppState`; im Test spart das eine Hilfsstruktur.
-    let reader: &'static crate::key_files::OsKeyFileReader =
-        Box::leak(Box::new(crate::key_files::OsKeyFileReader::new()));
+    let reader: &'static app_logic::key_files::OsKeyFileReader =
+        Box::leak(Box::new(app_logic::key_files::OsKeyFileReader::new()));
     DiskKeyFiles { reader }
 }
 

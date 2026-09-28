@@ -3,7 +3,7 @@
 //! von `commands.rs`.
 //!
 //! Bewusst OHNE Filter-Engine-Prüfung — anders als `ReadRemoteFile`/
-//! `WriteRemoteFile` (Spec 0020, Abschnitt 4, `crate::orchestration`) laufen
+//! `WriteRemoteFile` (Spec 0020, Abschnitt 4, `app_logic::orchestration`) laufen
 //! diese Befehle nie über den KI-Chat, sondern sind direkte Nutzeraktionen im
 //! Dateibrowser-Panel, analog zum interaktiven Terminal (Spec 0005, Abschnitt
 //! 1: auch dort läuft rohe Tastatureingabe ungefiltert durch).
@@ -21,14 +21,16 @@ use uuid::Uuid;
 
 use ssh_manager_core::ssh::{SftpSession, SshError};
 
-use crate::dto::{sort_remote_entries, EditSessionDto, RemoteEntryDto};
 use crate::elevated_sftp::ElevatedSftpRegistry;
-use crate::error::CommandError;
-use crate::error::CommandResult;
 use crate::event_emitter::TauriEventEmitter;
-use crate::events::{emit_sftp_transfer_finished, emit_sftp_transfer_started, SftpTransferKind};
-use crate::session::Session;
-use crate::state::{AppState, SessionId};
+use app_logic::dto::{sort_remote_entries, EditSessionDto, RemoteEntryDto};
+use app_logic::error::CommandError;
+use app_logic::error::CommandResult;
+use app_logic::events::{
+    emit_sftp_transfer_finished, emit_sftp_transfer_started, SftpTransferKind,
+};
+use app_logic::session::Session;
+use app_logic::state::{AppState, SessionId};
 
 use super::elevation::{
     audit_elevated_change, browser_session, file_name_of, lock_browser_sftp, safe_local_segment,
@@ -59,7 +61,7 @@ pub async fn sftp_list(
 /// eigentliche Transfer-Kern hinter `sftp_download`, `sftp_download_default`
 /// und `sftp_download_dir` (Ordner-Rekursion, s. `download_recursive`
 /// unten): jeweils ein `sftp-transfer-started`/`-finished`-Ereignispaar (s.
-/// `crate::events`-Moduldoc zur Fortschritts-Design-Entscheidung), dann
+/// `app_logic::events`-Moduldoc zur Fortschritts-Design-Entscheidung), dann
 /// Lesen per SFTP + lokales Schreiben via `spawn_blocking` (Downloads können
 /// beliebig groß sein, Spec 0020 Abschnitt 5 verlangt ausdrücklich, dass
 /// Transfers die Session nicht blockieren).
@@ -124,7 +126,7 @@ pub async fn sftp_download(
     session_id: SessionId,
     remote_path: String,
     elevated_user: Option<String>,
-) -> CommandResult<Option<crate::dto::DownloadResultDto>> {
+) -> CommandResult<Option<app_logic::dto::DownloadResultDto>> {
     let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     use tauri_plugin_dialog::DialogExt;
 
@@ -163,7 +165,7 @@ pub async fn sftp_download(
         total_bytes,
     )
     .await?;
-    Ok(Some(crate::dto::DownloadResultDto {
+    Ok(Some(app_logic::dto::DownloadResultDto {
         local_path: local_path.to_string_lossy().into_owned(),
         is_dir: false,
         file_count: 1,
@@ -243,7 +245,7 @@ async fn download_entry_to(
     session_id: SessionId,
     remote_path: &str,
     local_base_dir: &std::path::Path,
-) -> CommandResult<crate::dto::DownloadResultDto> {
+) -> CommandResult<app_logic::dto::DownloadResultDto> {
     let root_name = file_name_of(remote_path);
     // `remote_path` kommt vom Frontend, letztlich aber aus einem früheren
     // `sftp_list`-Ergebnis (`RemoteEntryDto.path`) — also transitiv
@@ -271,7 +273,7 @@ async fn download_entry_to(
         .await?;
         1
     };
-    Ok(crate::dto::DownloadResultDto {
+    Ok(app_logic::dto::DownloadResultDto {
         local_path: local_path.to_string_lossy().into_owned(),
         is_dir: root_entry.is_dir,
         file_count,
@@ -288,7 +290,7 @@ pub async fn sftp_download_default(
     session_id: SessionId,
     remote_path: String,
     elevated_user: Option<String>,
-) -> CommandResult<crate::dto::DownloadResultDto> {
+) -> CommandResult<app_logic::dto::DownloadResultDto> {
     let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let downloads_dir = default_downloads_dir()?;
@@ -315,7 +317,7 @@ pub async fn sftp_download_dir(
     session_id: SessionId,
     remote_path: String,
     elevated_user: Option<String>,
-) -> CommandResult<Option<crate::dto::DownloadResultDto>> {
+) -> CommandResult<Option<app_logic::dto::DownloadResultDto>> {
     let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     use tauri_plugin_dialog::DialogExt;
 
@@ -461,9 +463,9 @@ pub async fn sftp_delete_preview(
     session_id: SessionId,
     path: String,
     elevated_user: Option<String>,
-) -> CommandResult<crate::dto::DeletePreviewDto> {
+) -> CommandResult<app_logic::dto::DeletePreviewDto> {
     let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
-    use crate::dto::DeletePreviewDto;
+    use app_logic::dto::DeletePreviewDto;
 
     let session = browser_session(&state, session_id, &channel).await?;
     let mut guard = lock_browser_sftp(&session, &channel).await;
@@ -795,8 +797,8 @@ pub async fn sftp_read_text(
 #[tauri::command]
 pub async fn read_local_text_preview(
     local_path: String,
-) -> CommandResult<crate::dto::LocalFilePreviewDto> {
-    use crate::dto::LocalFilePreviewDto;
+) -> CommandResult<app_logic::dto::LocalFilePreviewDto> {
+    use app_logic::dto::LocalFilePreviewDto;
 
     let bytes = tokio::task::spawn_blocking(move || std::fs::read(&local_path))
         .await

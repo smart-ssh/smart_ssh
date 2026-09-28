@@ -183,7 +183,7 @@ const DEFAULT_CONTEXT_WINDOW_TOKENS: usize = 32_000;
 /// `Ollama`), deren tatsächliches Kontextfenster von der lokalen
 /// Konfiguration abhängt und von hier aus prinzipiell nicht bekannt sein
 /// kann.
-pub(crate) fn model_context_window_tokens(provider_type: ProviderType, model: &str) -> usize {
+pub fn model_context_window_tokens(provider_type: ProviderType, model: &str) -> usize {
     let model = model.to_lowercase();
     match provider_type {
         // Alle aktuellen Claude-Modelle (Stand dieser Implementierung)
@@ -312,7 +312,7 @@ fn group_mcp_flags_by_round(history: &[ChatMessage], mcp_flags: &[bool]) -> Vec<
 /// message`-Aufruf best-effort fehlschlug) — der Aufrufer klemmt `rounds_
 /// covered` auf diesen Wert, damit die Kompaktierung nie versucht, mehr
 /// Runden als vorhanden als "bereits abgedeckt" zu behandeln.
-pub(crate) fn round_count(history: &[ChatMessage]) -> usize {
+pub fn round_count(history: &[ChatMessage]) -> usize {
     split_into_rounds(history.to_vec()).len()
 }
 
@@ -435,7 +435,7 @@ fn build_round_result(
 /// Spec 0057 §2.1: "die bisherige Summary + die jetzt zu komprimierenden
 /// Runden").
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct RollingSummary {
+pub struct RollingSummary {
     pub text: String,
     pub rounds_covered: usize,
 }
@@ -930,7 +930,7 @@ fn compact_oversized_outputs_for_budget(context: &mut SessionContext, budget_tok
 /// einziger der vier Untrusted-Content-Fälle ungefenct direkt in den
 /// System-Prompt).
 #[derive(Debug, Clone, PartialEq, Default)]
-pub(crate) struct SystemContextParts {
+pub struct SystemContextParts {
     /// Einleitung + Werkzeug-Anweisungen + Freigegebene-Befehle-Block —
     /// stabil, wird von der Kompaktierung nie verändert.
     pub base: String,

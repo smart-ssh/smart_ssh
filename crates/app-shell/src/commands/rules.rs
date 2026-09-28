@@ -5,23 +5,23 @@ use tauri::State;
 
 use ssh_manager_core::filter::{hard_blacklist_patterns, RuleId, Scope};
 
-use crate::dto::{
+use app_logic::dto::{
     ActionUserDecision, EvalContextInput, EvaluationTraceDto, PatternDto, PatternSuggestionDto,
     PatternType, RuleDto, RuleInput,
 };
-use crate::error::CommandResult;
-use crate::state::{ActionId, AppState, SessionId};
+use app_logic::error::CommandResult;
+use app_logic::state::{ActionId, AppState, SessionId};
 
 // --- Spec 0009: Filter-Regel-Verwaltung ------------------------------------
 
-/// `scope_filter: None` liefert alle Regeln (s. `crate::filter_rules::list_rules`-
+/// `scope_filter: None` liefert alle Regeln (s. `app_logic::filter_rules::list_rules`-
 /// Doc-Kommentar zur `ScopeFilter::All`-Vereinfachung).
 #[tauri::command]
 pub async fn list_rules(
     state: State<'_, AppState>,
     scope_filter: Option<Scope>,
 ) -> CommandResult<Vec<RuleDto>> {
-    crate::filter_rules::list_rules(&state.policy_store, scope_filter)
+    app_logic::filter_rules::list_rules(&state.policy_store, scope_filter)
         .await
         .map_err(Into::into)
 }
@@ -30,9 +30,9 @@ pub async fn list_rules(
 pub async fn create_rule(state: State<'_, AppState>, input: RuleInput) -> CommandResult<RuleId> {
     // Spec 0077, 3.1.3: ausdrücklich umwandeln, nie `.map_err(Into::into)` —
     // der blanket `From<E: Display>` würde den Code still verschlucken.
-    crate::filter_rules::create_rule(&state.policy_store, input)
+    app_logic::filter_rules::create_rule(&state.policy_store, input)
         .await
-        .map_err(crate::error::rule_write_error)
+        .map_err(app_logic::error::rule_write_error)
 }
 
 #[tauri::command]
@@ -42,9 +42,9 @@ pub async fn update_rule(
     input: RuleInput,
 ) -> CommandResult<()> {
     // Spec 0077, 3.1.3: s. `create_rule`.
-    crate::filter_rules::update_rule(&state.policy_store, id, input)
+    app_logic::filter_rules::update_rule(&state.policy_store, id, input)
         .await
-        .map_err(crate::error::rule_write_error)
+        .map_err(app_logic::error::rule_write_error)
 }
 
 #[tauri::command]
@@ -77,7 +77,7 @@ pub async fn evaluate_explained(
     command: String,
     ctx: EvalContextInput,
 ) -> CommandResult<EvaluationTraceDto> {
-    Ok(crate::filter_rules::evaluate_explained(state.policy_store.clone(), command, ctx).await)
+    Ok(app_logic::filter_rules::evaluate_explained(state.policy_store.clone(), command, ctx).await)
 }
 
 // --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog ---------------
@@ -86,12 +86,12 @@ pub async fn evaluate_explained(
 /// Datenbankzugriff (Spec 0011, Abschnitt 2).
 #[tauri::command]
 pub async fn suggest_rule_patterns(command: String) -> CommandResult<Vec<PatternSuggestionDto>> {
-    Ok(crate::rule_suggestions::suggest_rule_patterns(&command))
+    Ok(app_logic::rule_suggestions::suggest_rule_patterns(&command))
 }
 
 /// Spec 0011, Abschnitt 3: versucht zuerst, die Regel anzulegen (Schritt 1,
-/// delegiert an [`crate::filter_rules::create_rule`] über
-/// [`crate::rule_suggestions::create_quick_rule`]), löst **danach** die
+/// delegiert an [`app_logic::filter_rules::create_rule`] über
+/// [`app_logic::rule_suggestions::create_quick_rule`]), löst **danach** die
 /// wartende `Confirm`-Entscheidung für `action_id` auf (Schritt 2).
 ///
 /// Schlägt Schritt 1 fehl, wird Schritt 2 trotzdem erreicht: Das Ergebnis
@@ -115,7 +115,7 @@ pub async fn suggest_rule_patterns(command: String) -> CommandResult<Vec<Pattern
 /// sich vom ursprünglich vorgeschlagenen Kommando) löst deshalb jetzt mit
 /// `EditThenApprove { command: cmd }` auf — dieselbe erneute
 /// Filter-Engine-Prüfung wie beim regulären "Ausführen"-Button
-/// (`crate::orchestration::handle_user_decision`). `None` (Text
+/// (`app_logic::orchestration::handle_user_decision`). `None` (Text
 /// unverändert) verhält sich wie zuvor.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -134,7 +134,7 @@ pub async fn accept_and_create_rule(
     edited_command: Option<String>,
 ) -> CommandResult<RuleId> {
     let _ = session_id;
-    let rule_result = crate::rule_suggestions::create_quick_rule(
+    let rule_result = app_logic::rule_suggestions::create_quick_rule(
         &state.policy_store,
         pattern_type,
         pattern_value,
@@ -168,5 +168,5 @@ pub async fn accept_and_create_rule(
     // Schnellregel denselben Code liefert wie das Formular. Der Fehlerweg
     // bleibt wie bisher: Die Bestätigung ist oben schon aufgelöst, der
     // Fehler der Regel-Erstellung kommt getrennt zurück (3.1.2).
-    rule_result.map_err(crate::error::rule_write_error)
+    rule_result.map_err(app_logic::error::rule_write_error)
 }

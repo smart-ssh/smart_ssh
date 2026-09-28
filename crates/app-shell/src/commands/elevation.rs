@@ -9,14 +9,14 @@ use tauri::State;
 use ssh_manager_core::ssh::SftpSession;
 
 use crate::elevated_sftp::{ElevatedSftpRegistry, ElevatedSftpSlot, ElevationContext};
-use crate::error::{CommandError, CommandResult};
-use crate::session::Session;
-use crate::state::{AppState, SessionId};
+use app_logic::error::{CommandError, CommandResult};
+use app_logic::session::Session;
+use app_logic::state::{AppState, SessionId};
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser -------------------------
 //
 // Bewusst OHNE Filter-Engine-Prüfung — anders als `ReadRemoteFile`/
-// `WriteRemoteFile` (Spec 0020, Abschnitt 4, `crate::orchestration`) laufen
+// `WriteRemoteFile` (Spec 0020, Abschnitt 4, `app_logic::orchestration`) laufen
 // diese Befehle nie über den KI-Chat, sondern sind direkte Nutzeraktionen im
 // Dateibrowser-Panel, analog zum interaktiven Terminal (Spec 0005, Abschnitt
 // 1: auch dort läuft rohe Tastatureingabe ungefiltert durch).
@@ -243,7 +243,7 @@ pub(super) async fn browser_session(
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
     match channel {
-        BrowserChannel::Normal => crate::orchestration::ensure_sftp_open(&session).await?,
+        BrowserChannel::Normal => app_logic::orchestration::ensure_sftp_open(&session).await?,
         BrowserChannel::Elevated { slot, .. } => {
             if slot.is_none() {
                 return Err(ELEVATED_CHANNEL_INACTIVE.into());
@@ -263,7 +263,7 @@ pub async fn sftp_elevation_enable(
     elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     target_user: Option<String>,
-) -> CommandResult<crate::dto::ElevationResultDto> {
+) -> CommandResult<app_logic::dto::ElevationResultDto> {
     let session = state
         .sessions
         .get(session_id)
@@ -271,15 +271,15 @@ pub async fn sftp_elevation_enable(
     // Transport-Grenze statt Sonderfall in der Logik: der lokale
     // Pseudo-Server hat kein sudo/sftp-server (CLAUDE.md, "No
     // special-casing ... in the core loop").
-    if crate::dto::is_local(session.server_id) {
-        return Ok(crate::dto::ElevationResultDto {
+    if app_logic::dto::is_local(session.server_id) {
+        return Ok(app_logic::dto::ElevationResultDto {
             active: false,
             target_user: target_user.unwrap_or_else(|| {
                 ssh_manager_core::ssh::elevated::DEFAULT_ELEVATION_USER.to_string()
             }),
             sftp_server_path: None,
-            failure: Some(crate::dto::ElevationFailureDto {
-                kind: crate::dto::ElevationFailureKind::Unsupported,
+            failure: Some(app_logic::dto::ElevationFailureDto {
+                kind: app_logic::dto::ElevationFailureKind::Unsupported,
                 sudoers_line: None,
                 detail: None,
             }),
@@ -468,7 +468,7 @@ mod browser_channel_tests {
 
     #[tokio::test]
     async fn test_elevated_request_without_active_channel_fails_instead_of_falling_back() {
-        let session = crate::test_support::session_with_transport(Box::new(NoTransport));
+        let session = app_logic::test_support::session_with_transport(Box::new(NoTransport));
         *session.sftp.lock().await =
             Some(Box::new(ssh_manager_core::ssh::mock::MockSftpSession::new()));
         let registry = ElevatedSftpRegistry::default();
@@ -488,7 +488,7 @@ mod browser_channel_tests {
     /// geöffnet, danach als root neu eingeschaltet), scheitert die Aktion.
     #[tokio::test]
     async fn test_elevated_request_for_another_user_than_active_fails() {
-        let session = crate::test_support::session_with_transport(Box::new(NoTransport));
+        let session = app_logic::test_support::session_with_transport(Box::new(NoTransport));
         let session_id = SessionId::new_v4();
         let registry = registry_with_channel(
             session_id,
@@ -508,7 +508,7 @@ mod browser_channel_tests {
 
     #[tokio::test]
     async fn test_elevated_request_uses_the_elevated_channel_not_the_normal_one() {
-        let session = crate::test_support::session_with_transport(Box::new(NoTransport));
+        let session = app_logic::test_support::session_with_transport(Box::new(NoTransport));
         let normal = ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "USER");
         let elevated = ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "ROOT");
         *session.sftp.lock().await = Some(Box::new(normal));
@@ -537,8 +537,8 @@ mod browser_channel_tests {
     #[tokio::test]
     async fn test_t7_an_elevated_channel_belongs_to_its_session_not_to_the_server() {
         let server_id = ssh_manager_core::shared::ServerId::new();
-        let mut session_a = crate::test_support::session_with_transport(Box::new(NoTransport));
-        let mut session_b = crate::test_support::session_with_transport(Box::new(NoTransport));
+        let mut session_a = app_logic::test_support::session_with_transport(Box::new(NoTransport));
+        let mut session_b = app_logic::test_support::session_with_transport(Box::new(NoTransport));
         session_a.server_id = server_id;
         session_b.server_id = server_id;
         *session_b.sftp.lock().await = Some(Box::new(
@@ -547,7 +547,7 @@ mod browser_channel_tests {
 
         let id_a = SessionId::new_v4();
         let id_b = SessionId::new_v4();
-        let sessions = crate::session::SessionManager::new();
+        let sessions = app_logic::session::SessionManager::new();
         let session_a = std::sync::Arc::new(session_a);
         let session_b = std::sync::Arc::new(session_b);
         sessions.insert(id_a, session_a.clone());
@@ -637,11 +637,11 @@ mod browser_channel_tests {
     /// die erhöhten Rechte aus — die nächste Nutzung scheitert.
     #[tokio::test]
     async fn test_t10_a_held_channel_cannot_be_used_after_disabling() {
-        let session = std::sync::Arc::new(crate::test_support::session_with_transport(Box::new(
-            NoTransport,
-        )));
+        let session = std::sync::Arc::new(app_logic::test_support::session_with_transport(
+            Box::new(NoTransport),
+        ));
         let session_id = SessionId::new_v4();
-        let sessions = crate::session::SessionManager::new();
+        let sessions = app_logic::session::SessionManager::new();
         sessions.insert(session_id, session.clone());
         let registry = registry_with_channel(
             session_id,
@@ -706,11 +706,11 @@ mod browser_channel_tests {
     /// (Trennen). Auch dann darf der festgehaltene Kanal nicht mehr tragen.
     #[tokio::test]
     async fn test_t10c_a_held_channel_cannot_be_used_after_the_session_was_removed() {
-        let session = std::sync::Arc::new(crate::test_support::session_with_transport(Box::new(
-            NoTransport,
-        )));
+        let session = std::sync::Arc::new(app_logic::test_support::session_with_transport(
+            Box::new(NoTransport),
+        ));
         let session_id = SessionId::new_v4();
-        let sessions = crate::session::SessionManager::new();
+        let sessions = app_logic::session::SessionManager::new();
         sessions.insert(session_id, session.clone());
         let registry = registry_with_channel(
             session_id,
@@ -742,11 +742,11 @@ mod browser_channel_tests {
     /// Entfernen auf die Kanal-Sperre wartet.
     #[tokio::test]
     async fn test_removing_a_session_does_not_wait_for_a_running_elevated_transfer() {
-        let session = std::sync::Arc::new(crate::test_support::session_with_transport(Box::new(
-            NoTransport,
-        )));
+        let session = std::sync::Arc::new(app_logic::test_support::session_with_transport(
+            Box::new(NoTransport),
+        ));
         let session_id = SessionId::new_v4();
-        let sessions = std::sync::Arc::new(crate::session::SessionManager::new());
+        let sessions = std::sync::Arc::new(app_logic::session::SessionManager::new());
         sessions.insert(session_id, session.clone());
         let registry = std::sync::Arc::new(registry_with_channel(
             session_id,
@@ -852,5 +852,239 @@ mod browser_channel_tests {
             .expect("das Umschalten muss enden")
             .expect("der Umschalt-Task darf nicht panisch enden")
             .expect("das Umschalten selbst gelingt");
+    }
+
+    // --- Spec 0084, T5/T5b -------------------------------------------------
+    //
+    // Reine `orchestration`-Tests, aber sie müssen den erhöhten Kanal
+    // aufbauen können (`ElevatedSftpRegistry`, `BrowserAccess`) — beides
+    // bleibt nach Spec 0084 A1 unerreichbar für `app-logic`. Deshalb leben
+    // sie hier statt in `app_logic::orchestration::chat_turn` (Modulpfad
+    // darf sich ändern, A6.3 — die Testnamen bleiben wörtlich erhalten).
+
+    /// Lässt jedes Kommando zu — für Tests, die die Filter-Engine nicht
+    /// prüfen wollen, nur die Kanalwahl.
+    struct AllowEverythingPolicyStore;
+    #[async_trait::async_trait]
+    impl ssh_manager_core::filter::PolicyStore for AllowEverythingPolicyStore {
+        async fn rules_for(
+            &self,
+            _scope: &ssh_manager_core::filter::EffectiveScope,
+        ) -> Vec<ssh_manager_core::filter::Rule> {
+            vec![ssh_manager_core::filter::Rule {
+                id: ssh_manager_core::filter::RuleId("allow-all".to_string()),
+                pattern: ssh_manager_core::filter::Pattern::Glob("*".to_string()),
+                action: ssh_manager_core::filter::RuleAction::Allow,
+                scope: ssh_manager_core::filter::Scope::Global,
+                priority: 0,
+                origin: ssh_manager_core::filter::RuleOrigin::User,
+            }]
+        }
+    }
+
+    /// Spec 0067, A5 (Regressionstest): ist der erhöhte Dateibrowser-Kanal
+    /// aktiv, lesen und schreiben KI- und MCP-Aktionen trotzdem über den
+    /// NORMALEN Kanal — der erhöhte ist nur für Browser-Commands da.
+    #[tokio::test]
+    async fn test_ai_and_mcp_file_actions_never_use_the_elevated_channel() {
+        use ssh_manager_core::ai::AiEvent;
+        use ssh_manager_core::profiles::AiAction;
+        use ssh_manager_core::ssh::mock::MockSftpSession;
+
+        use app_logic::confirmation::ConfirmationRegistry;
+        use app_logic::dto::ActionUserDecision;
+        use app_logic::events::TestEmitter;
+        use app_logic::orchestration::{handle_mcp_action_proposed, run_chat_turn};
+        use app_logic::test_support::InMemoryProfileStore;
+
+        for origin in ["ai", "mcp"] {
+            let ai_events = if origin == "ai" {
+                vec![
+                    AiEvent::ActionProposed(AiAction::ReadRemoteFile {
+                        path: "/etc/secret.conf".to_string(),
+                    }),
+                    AiEvent::Done,
+                ]
+            } else {
+                vec![AiEvent::Done]
+            };
+            let mut session = app_logic::test_support::session_with_ai_and_transport(
+                crate::test_support::MockAiProvider::new(ai_events),
+                Box::new(NoTransport),
+            );
+            session.filter_engine = Box::new(ssh_manager_core::filter::FilterEngine::new(
+                AllowEverythingPolicyStore,
+            ));
+            let normal =
+                MockSftpSession::new().with_file("/etc/secret.conf", b"USER-VIEW".to_vec());
+            let elevated =
+                MockSftpSession::new().with_file("/etc/secret.conf", b"ROOT-VIEW".to_vec());
+            *session.sftp.lock().await = Some(Box::new(normal.clone()));
+            // Spec 0084, A1: Der erhöhte Kanal hängt nicht mehr an der
+            // `Session`, sondern an der Zuordnung in `app-shell`. Er wird
+            // hier trotzdem aufgebaut — genau darum geht es: er ist aktiv,
+            // und KI und MCP kommen trotzdem nicht an ihn heran.
+            let session_id = SessionId::new_v4();
+            let elevated_registry = registry_with_channel(session_id, "root", elevated.clone());
+
+            let emitter = TestEmitter::default();
+            let profile_store = InMemoryProfileStore::default();
+            let confirmations = ConfirmationRegistry::new();
+            if origin == "ai" {
+                run_chat_turn(
+                    &session,
+                    session_id,
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                )
+                .await;
+            } else {
+                // MCP verlangt immer eine Bestätigung — hier genehmigt,
+                // damit die Aktion wirklich ausgeführt wird.
+                let action = handle_mcp_action_proposed(
+                    &session,
+                    session_id,
+                    AiAction::ReadRemoteFile {
+                        path: "/etc/secret.conf".to_string(),
+                    },
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                    Some("test-client".to_string()),
+                );
+                let responder = async {
+                    loop {
+                        let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
+                            (n == "chat-action-proposed")
+                                .then(|| p["actionId"].as_str().unwrap().to_string())
+                        });
+                        if let Some(id) = pending {
+                            let _ = confirmations
+                                .resolve(&id.parse().unwrap(), ActionUserDecision::Approve);
+                            break;
+                        }
+                        tokio::task::yield_now().await;
+                    }
+                };
+                tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                    tokio::join!(action, responder)
+                })
+                .await
+                .expect("MCP-Aktion muss nach der Bestätigung enden");
+            }
+
+            let events = emitter.events.lock().unwrap().clone();
+            let result = events
+                .iter()
+                .find(|(name, _)| name == "chat-action-result")
+                .unwrap_or_else(|| panic!("{origin}: kein Ergebnis-Event"));
+            let content = result.1["result"]["content"].as_str().unwrap();
+            assert!(content.contains("USER-VIEW"), "{origin}: {content}");
+            assert!(!content.contains("ROOT-VIEW"), "{origin}: {content}");
+            assert!(
+                elevated.calls().is_empty(),
+                "{origin}: der erhöhte Kanal darf nie berührt werden, war: {:?}",
+                elevated.calls()
+            );
+            assert!(
+                !normal.calls().is_empty(),
+                "{origin}: normaler Kanal wurde benutzt"
+            );
+            assert!(
+                elevated_registry
+                    .slot(session_id, &BrowserAccess(()))
+                    .is_some(),
+                "{origin}: Vorbedingung — der erhöhte Kanal war die ganze Zeit aktiv"
+            );
+        }
+    }
+
+    /// Spec 0084, T5b (Gegenstück zu T5 für eine **Schreib**aktion): Auch
+    /// eine MCP-Schreibaktion läuft bei aktivem erhöhtem Kanal über den
+    /// NORMALEN Kanal — sie darf die Datei nie mit den Rechten des erhöhten
+    /// Kanals schreiben.
+    #[tokio::test]
+    async fn test_mcp_write_actions_never_use_the_elevated_channel() {
+        use ssh_manager_core::ai::AiEvent;
+        use ssh_manager_core::profiles::AiAction;
+        use ssh_manager_core::ssh::mock::MockSftpSession;
+
+        use app_logic::confirmation::ConfirmationRegistry;
+        use app_logic::dto::ActionUserDecision;
+        use app_logic::events::TestEmitter;
+        use app_logic::orchestration::handle_mcp_action_proposed;
+        use app_logic::test_support::InMemoryProfileStore;
+
+        let mut session = app_logic::test_support::session_with_ai_and_transport(
+            crate::test_support::MockAiProvider::new(vec![AiEvent::Done]),
+            Box::new(NoTransport),
+        );
+        session.filter_engine = Box::new(ssh_manager_core::filter::FilterEngine::new(
+            AllowEverythingPolicyStore,
+        ));
+        let normal = MockSftpSession::new().with_file("/etc/secret.conf", b"USER-VIEW".to_vec());
+        let elevated = MockSftpSession::new().with_file("/etc/secret.conf", b"ROOT-VIEW".to_vec());
+        *session.sftp.lock().await = Some(Box::new(normal.clone()));
+
+        let session_id = SessionId::new_v4();
+        let elevated_registry = registry_with_channel(session_id, "root", elevated.clone());
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let action = handle_mcp_action_proposed(
+            &session,
+            session_id,
+            AiAction::WriteRemoteFile {
+                path: "/etc/secret.conf".to_string(),
+                content: "MCP-WRITE".to_string(),
+            },
+            &emitter,
+            &profile_store,
+            &confirmations,
+            Some("test-client".to_string()),
+        );
+        let responder = async {
+            loop {
+                let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
+                    (n == "chat-action-proposed")
+                        .then(|| p["actionId"].as_str().unwrap().to_string())
+                });
+                if let Some(id) = pending {
+                    let _ =
+                        confirmations.resolve(&id.parse().unwrap(), ActionUserDecision::Approve);
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(action, responder)
+        })
+        .await
+        .expect("MCP-Schreibaktion muss nach der Bestätigung enden");
+
+        assert!(
+            elevated.calls().is_empty(),
+            "der erhöhte Kanal darf beim Schreiben nie berührt werden, war: {:?}",
+            elevated.calls()
+        );
+        assert_eq!(
+            normal.file_content("/etc/secret.conf").as_deref(),
+            Some(b"MCP-WRITE".as_slice()),
+            "geschrieben wurde über den normalen Kanal"
+        );
+        assert_eq!(
+            elevated.file_content("/etc/secret.conf").as_deref(),
+            Some(b"ROOT-VIEW".as_slice()),
+            "die Datei hinter dem erhöhten Kanal bleibt unverändert"
+        );
+        assert!(
+            elevated_registry
+                .slot(session_id, &BrowserAccess(()))
+                .is_some(),
+            "Vorbedingung — der erhöhte Kanal war die ganze Zeit aktiv"
+        );
     }
 }

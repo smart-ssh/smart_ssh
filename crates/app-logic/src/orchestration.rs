@@ -55,21 +55,28 @@ mod remote_files;
 mod test_support;
 
 pub use chat_turn::run_chat_turn;
+// `push_history`/`PENDING_ACTION_CONFIRM_TIMEOUT`: auch von `app-shell`
+// gebraucht (`commands::chat`/`commands::connect`), deshalb `pub` statt
+// `pub(crate)` (Spec 0084, A6.4).
+pub use chat_turn::{push_history, PENDING_ACTION_CONFIRM_TIMEOUT};
 pub(crate) use chat_turn::{
-    push_history, reapply_redaction_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
-    PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
+    reapply_redaction_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
+    SIDE_CALL_MAX_TOKENS,
 };
 
-pub(crate) use action_exec::handle_mcp_action_proposed;
+// `app-shell::mcp_backend` ruft dies direkt auf.
+pub use action_exec::handle_mcp_action_proposed;
 
 pub use notes::{
     execute_note_shrink_request, generate_session_title_on_disconnect, should_suggest_note_shrink,
     suggest_note_shrink_on_disconnect, suggest_note_update_on_disconnect, NoteShrinkTarget,
     ProfileStoreNoteShrinkTarget,
 };
-pub(crate) use notes::{propose_note_from_chat_content, LARGE_NOTE_DIALOG_THRESHOLD_CHARS};
+// `app-shell::commands::{chat, notes}` brauchen beide direkt.
+pub use notes::{propose_note_from_chat_content, LARGE_NOTE_DIALOG_THRESHOLD_CHARS};
 
-pub(crate) use remote_files::ensure_sftp_open;
+// `app-shell::commands::elevation` ruft dies direkt auf.
+pub use remote_files::ensure_sftp_open;
 
 /// Spec 0084, §4 (Schnitt `orchestration` → `commands::sanitize_uname_output`):
 /// hierher verschoben, weil `orchestration` (Tauri-frei, zieht nach
@@ -82,7 +89,7 @@ pub(crate) use remote_files::ensure_sftp_open;
 /// privilegierten System-Prompt: max 256 Zeichen, nur erlaubte Zeichen
 /// (alphanumerisch, . _ - # : space tab), keine Steuerzeichen oder
 /// Zeilenumbrüche.
-pub(crate) fn sanitize_uname_output(raw: &str) -> Option<String> {
+pub fn sanitize_uname_output(raw: &str) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed.chars().count() > 256 {
         return None;

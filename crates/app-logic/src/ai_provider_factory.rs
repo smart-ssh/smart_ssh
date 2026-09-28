@@ -16,7 +16,7 @@ pub const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 /// (dort kein Pflichtfeld, s. Spec 0007 Abschnitt 8.3) gegen den richtigen
 /// Endpunkt zu discovern, statt fälschlich auf [`DEFAULT_OPENAI_BASE_URL`]
 /// zurückzufallen.
-pub(crate) const DEFAULT_ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
+pub const DEFAULT_ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
 
 /// `base_url` ist in der Persistenz nur für `generic_openai_compatible`/
 /// `ollama` als Pflichtfeld vorgesehen (Spec 0007, Abschnitt 8.3); für

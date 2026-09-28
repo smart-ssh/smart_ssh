@@ -8,8 +8,8 @@
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
 
-use crate::error::CommandResult;
-use crate::state::AppState;
+use app_logic::error::CommandResult;
+use app_logic::state::AppState;
 
 const SETTINGS_STORE_FILE: &str = "settings.json";
 const RETENTION_DAYS_KEY: &str = "chatSessionRetentionDays";

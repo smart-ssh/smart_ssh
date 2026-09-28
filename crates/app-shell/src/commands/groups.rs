@@ -6,10 +6,10 @@ use tauri::State;
 
 use ssh_manager_core::profiles::{Group, GroupId};
 
-use crate::dto::{DeleteGroupResult, GroupDto};
-use crate::error::CommandResult;
-use crate::groups::{compute_delete_group_result, validate_no_cycle};
-use crate::state::AppState;
+use app_logic::dto::{DeleteGroupResult, GroupDto};
+use app_logic::error::CommandResult;
+use app_logic::groups::{compute_delete_group_result, validate_no_cycle};
+use app_logic::state::AppState;
 
 // --- Spec 0008: Gruppen --------------------------------------------------
 

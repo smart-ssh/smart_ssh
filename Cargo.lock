@@ -130,7 +130,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
-name = "app-shell"
+name = "app-logic"
 version = "0.5.1"
 dependencies = [
  "ai-providers",
@@ -145,11 +145,40 @@ dependencies = [
  "mcp-server",
  "persistence-sqlite",
  "regex",
- "rfd",
  "secrecy",
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "ssh-manager-core",
+ "ssh-transport",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "app-shell"
+version = "0.5.1"
+dependencies = [
+ "ai-providers",
+ "app-logic",
+ "async-trait",
+ "base64 0.23.1",
+ "chrono",
+ "credentials-keyring",
+ "directories",
+ "futures",
+ "libc",
+ "mcp-server",
+ "persistence-sqlite",
+ "regex",
+ "rfd",
+ "secrecy",
+ "serde",
+ "serde_json",
  "ssh-manager-core",
  "ssh-transport",
  "tauri",
@@ -163,7 +192,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-appender",
- "tracing-subscriber",
  "uuid",
 ]
 

@@ -40,7 +40,7 @@ use crate::error::{keychain_aware_credential_error, CommandError, CommandResult}
 /// `ssh_transport::connect_with_timeout`s Doc-Kommentar zur
 /// Sicherheits-Invariante ("liefert immer einen Fehler, nie `Connected`,
 /// nie `trust()`").
-pub(crate) const SSH_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+pub const SSH_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Kapselt `ssh_transport::connect()` hinter einem Trait, rein damit
 /// `test_connection`s Logik (Ephemeral-Credential-Aufbau, Hop-Kette,

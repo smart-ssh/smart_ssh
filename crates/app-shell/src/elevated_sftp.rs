@@ -24,8 +24,8 @@ use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 use ssh_manager_core::ssh::SftpSession;
 
 use crate::commands::BrowserAccess;
-use crate::session::{Session, SessionManager};
-use crate::state::SessionId;
+use app_logic::session::{Session, SessionManager};
+use app_logic::state::SessionId;
 
 pub struct ElevatedSftp {
     /// Ziel-Nutzer der Rechteerhöhung (Default `root`).
@@ -280,8 +280,8 @@ use ssh_manager_core::ssh::elevated::{
     sudoers_line, SudoCheck, DEFAULT_ELEVATION_USER,
 };
 
-use crate::dto::{ElevationFailureDto, ElevationFailureKind, ElevationResultDto};
-use crate::error::{CommandError, CommandResult};
+use app_logic::dto::{ElevationFailureDto, ElevationFailureKind, ElevationResultDto};
+use app_logic::error::{CommandError, CommandResult};
 
 /// Spec 0084, A1/A2: alles, was das Einschalten des erhöhten Kanals über die
 /// Sitzungsgrenze hinweg braucht — gebündelt, weil `enable` sonst über die

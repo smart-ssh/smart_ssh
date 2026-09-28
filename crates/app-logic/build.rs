@@ -1,6 +1,7 @@
 //! Bettet den kurzen Git-Commit-Hash des gebauten Stands als Compile-Zeit-
 //! Konstante ein (Spec 0052, Abschnitt 2) — `crate::version::
-//! BUILD_COMMIT_HASH` liest ihn über `env!("SMART_SSH_BUILD_HASH")`. Die
+//! BUILD_COMMIT_HASH` (`app-logic`, s. Spec 0084) liest ihn über
+//! `env!("SMART_SSH_BUILD_HASH")`. Die
 //! Version selbst wird **nicht** hier eingebettet, sondern bleibt bei ihrer
 //! bestehenden Quelle (`tauri.conf.json` über `context.package_info()`,
 //! Spec 0048) — nur der Hash kommt neu dazu.
@@ -58,7 +59,7 @@
 // zusätzliche Struktur; tatsächlich getestet ist stattdessen das *Format*,
 // in dem der eingebettete Hash weiterverwendet wird
 // (`crate::version::version_with_hash`, `src/version.rs`, läuft unter
-// `cargo test -p app-shell`). Das reale build.rs-Verhalten selbst (Hash
+// `cargo test -p app-logic`). Das reale build.rs-Verhalten selbst (Hash
 // mit Git, `"unknown"` ohne, Override gesetzt/leer/mehrzeilig) wurde
 // manuell verifiziert — s. Commit-Text.
 
@@ -75,7 +76,7 @@ fn main() {
 
 /// Additiver Override-Hook: Cargo isoliert `cargo:rustc-env` strikt auf die
 /// eigene Crate, ein konsumierender Build (ein anderer Workspace, der
-/// `app-shell` als Pfad-/Submodule-Dependency nutzt) kann diesem
+/// `app-logic` als Pfad-/Submodule-Dependency nutzt) kann diesem
 /// Build-Script sonst keinen anderen Hash unterschieben und bettet immer
 /// den Hash *dieses* Repos ein statt seines eigenen.
 /// `SMART_SSH_BUILD_HASH_OVERRIDE` (gesetzt, nicht-leer nach dem Trimmen)

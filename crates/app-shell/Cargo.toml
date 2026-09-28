@@ -11,28 +11,19 @@ path = "src/lib.rs"
 
 [dependencies]
 ai-providers = { version = "0.5.1", path = "../ai-providers" }
+# Spec 0084: die Tauri-freie Anwendungslogik — `app-shell` hängt von ihr ab,
+# nie umgekehrt (A3, s. `docs/architecture.md`).
+app-logic = { version = "0.5.1", path = "../app-logic" }
 async-trait = "0.1.92"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 credentials-keyring = { version = "0.5.1", path = "../credentials-keyring" }
 directories = "6.0.0"
 futures = "0.3.34"
-# Spec 0075, §9 Q-1 Punkt 1: löst die Platzhalter in einem `Include`-Pfad
-# auf (§3.1.4, z. B. `Include conf.d/*.conf`). **Kein neues Paket** — schon
-# direkte Abhängigkeit von `core` (`crates/core/Cargo.toml`) und damit
-# ohnehin in `Cargo.lock`; hier wird nur aus einer transitiven Kante eine
-# direkte, nach demselben Muster wie `libc` (Spec 0076 K-3).
-#
-# Ausdrücklich **nicht** für `Host`-Muster (Q-1 Punkt 2): Dort kennt
-# OpenSSH nur `*`, `?` und `!`, während `globset` zusätzlich `[…]`/`{…}`
-# mitbringt und die Verneinung nicht kennt. Für einen **Pfad** ist
-# `globset`s Grammatik dagegen die richtige — `glob(3)` kann dort dasselbe.
-globset = "0.4.20"
-# Spec 0076, §9 K-3: liefert `O_NONBLOCK` für `key_files.rs` (A-3) — vorher
-# eine handgepflegte `#[cfg(target_os/target_arch)]`-Tabelle in dieser
-# Crate. `libc` lag schon transitiv im Baum (`Cargo.lock`, u. a. über
-# `tauri`), diese Zeile macht daraus nur eine direkte Abhängigkeit statt
-# eines neuen Pakets in der Lieferkette.
+# Spec 0076, §9 K-3: `libc::mkfifo` im Testaufbau von
+# `ssh_config_apply/tests.rs`. `libc` lag schon transitiv im Baum
+# (`Cargo.lock`, u. a. über `tauri`), diese Zeile macht daraus nur eine
+# direkte Abhängigkeit statt eines neuen Pakets in der Lieferkette.
 libc = "0.2.189"
 mcp-server = { version = "0.5.1", path = "../mcp-server" }
 persistence-sqlite = { version = "0.5.1", path = "../persistence-sqlite" }
@@ -60,7 +51,6 @@ rfd = { version = "0.16.0", default-features = false, features = [
 secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
-sha2 = "0.11.0"
 ssh-manager-core = { version = "0.5.1", path = "../core" }
 ssh-transport = { version = "0.5.1", path = "../ssh-transport" }
 tauri = { version = "2", features = [] }
@@ -72,12 +62,20 @@ tauri-plugin-os = "2"
 tauri-plugin-store = "2"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1.44"
+# Nur der `WorkerGuard`-Typ (Rückgabewert von `app_logic::logging::
+# init_logging`, den `build_app_state`/`run` durchreichen) — der Aufbau
+# des Subscribers selbst liegt seit Spec 0084 in `app-logic`.
 tracing-appender = "0.2.5"
-tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
 uuid = { version = "1.26.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
+# Spec 0084, A5: aktiviert `app_logic::test_support`/`app_logic::policy`
+# (dort hinter `#[cfg(any(test, feature = "test-support"))]`) für diese
+# Crates eigene Tests — nur unter `[dev-dependencies]`, landet also nie in
+# einem Release-Build. Dasselbe Muster wie bei `ssh-manager-core` direkt
+# darunter.
+app-logic = { path = "../app-logic", features = ["test-support"] }
 # Spec 0020, Abschnitt 6: aktiviert `ssh_manager_core::ssh::mock` (dort
 # hinter `#[cfg(any(test, feature = "test-support"))]`) für diese Crates
 # eigene Tests — nur unter `[dev-dependencies]`, landet also nie in einem

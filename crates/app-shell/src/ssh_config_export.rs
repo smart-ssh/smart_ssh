@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use ssh_manager_core::profiles::ssh_config::{build_export, quote_value, ExportPlan};
 
-use crate::error::{CommandError, CommandResult};
+use app_logic::error::{CommandError, CommandResult};
 
 const DEFAULT_EXPORT_FILE_NAME: &str = "smart-ssh-export.conf";
 
@@ -186,7 +186,7 @@ fn filenames_match_case_insensitive(a: &Path, b: &Path) -> bool {
 #[tauri::command]
 pub async fn export_ssh_config(
     app: tauri::AppHandle,
-    state: tauri::State<'_, crate::state::AppState>,
+    state: tauri::State<'_, app_logic::state::AppState>,
     title: String,
 ) -> CommandResult<Option<ExportResultDto>> {
     use tauri_plugin_dialog::DialogExt;
@@ -212,7 +212,7 @@ pub async fn export_ssh_config(
 
     let servers = state.profile_store.list_servers().await?;
     let groups = state.profile_store.list_groups().await?;
-    let plan = build_export(&servers, &groups, crate::dto::LOCAL_SERVER_ID);
+    let plan = build_export(&servers, &groups, app_logic::dto::LOCAL_SERVER_ID);
 
     // `std::fs::write` statt `tokio::fs`: derselbe, durch eine explizite
     // Nutzeraktion ausgelöste Einzelschreibvorgang wie bei

@@ -8,11 +8,11 @@ use tokio::sync::mpsc;
 
 use ssh_manager_core::ssh::PtySize;
 
-use crate::error::CommandResult;
 use crate::event_emitter::TauriEventEmitter;
-use crate::events::EventEmitter;
-use crate::session::{spawn_terminal_actor, Session, TerminalCommand};
-use crate::state::{AppState, SessionId};
+use app_logic::error::CommandResult;
+use app_logic::events::EventEmitter;
+use app_logic::session::{spawn_terminal_actor, Session, TerminalCommand};
+use app_logic::state::{AppState, SessionId};
 
 #[tauri::command]
 pub async fn open_terminal(

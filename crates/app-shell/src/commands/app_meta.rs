@@ -3,9 +3,9 @@
 
 use tauri::State;
 
-use crate::dto::AppInfoDto;
-use crate::error::CommandResult;
-use crate::state::AppState;
+use app_logic::dto::AppInfoDto;
+use app_logic::error::CommandResult;
+use app_logic::state::AppState;
 
 /// Liefert das aktuelle Betriebssystem ("macos", "windows", "linux", "unknown")
 /// zur plattformspezifischen Anpassung des UI-Paddings im Frontend (Spec 0014, Abschnitt 4).
@@ -50,7 +50,7 @@ pub fn get_app_info<R: tauri::Runtime>(
     build_app_info(
         &app.package_info().version.to_string(),
         *edition,
-        crate::version::BuildType::current(),
+        app_logic::version::BuildType::current(),
     )
 }
 
@@ -61,12 +61,12 @@ pub fn get_app_info<R: tauri::Runtime>(
 fn build_app_info(
     version: &str,
     edition: crate::wiring::Edition,
-    build_type: crate::version::BuildType,
+    build_type: app_logic::version::BuildType,
 ) -> AppInfoDto {
     AppInfoDto {
         version: version.to_string(),
-        commit_hash: crate::version::BUILD_COMMIT_HASH.to_string(),
-        version_display: crate::version::version_with_hash(version),
+        commit_hash: app_logic::version::BUILD_COMMIT_HASH.to_string(),
+        version_display: app_logic::version::version_with_hash(version),
         edition: match edition {
             crate::wiring::Edition::Community => "Community".to_string(),
             crate::wiring::Edition::Official => "Official".to_string(),
@@ -86,15 +86,15 @@ mod app_info_tests {
         let info = build_app_info(
             "0.4.1",
             crate::wiring::Edition::Community,
-            crate::version::BuildType::Release,
+            app_logic::version::BuildType::Release,
         );
 
         assert_eq!(info.version, "0.4.1");
         assert_eq!(
             info.version_display,
-            format!("0.4.1 ({})", crate::version::BUILD_COMMIT_HASH)
+            format!("0.4.1 ({})", app_logic::version::BUILD_COMMIT_HASH)
         );
-        assert_eq!(info.commit_hash, crate::version::BUILD_COMMIT_HASH);
+        assert_eq!(info.commit_hash, app_logic::version::BUILD_COMMIT_HASH);
         assert_eq!(info.edition, "Community");
     }
 
@@ -103,12 +103,12 @@ mod app_info_tests {
         let dev = build_app_info(
             "0.4.1",
             crate::wiring::Edition::Community,
-            crate::version::BuildType::Dev,
+            app_logic::version::BuildType::Dev,
         );
         let release = build_app_info(
             "0.4.1",
             crate::wiring::Edition::Community,
-            crate::version::BuildType::Release,
+            app_logic::version::BuildType::Release,
         );
 
         // Das Frontend liest `buildType` mit exakt diesen Werten
@@ -126,7 +126,7 @@ mod app_info_tests {
         let info = build_app_info(
             "0.4.1",
             crate::wiring::Edition::Official,
-            crate::version::BuildType::Release,
+            app_logic::version::BuildType::Release,
         );
 
         assert_eq!(info.edition, "Official");
@@ -167,7 +167,7 @@ mod app_info_tests {
 /// Liefert den aktuellen Entitlement-Stand (Spec 0038, Abschnitt 4). Das
 /// Frontend liest ihn per `useEntitlements()`-Hook einmalig über diesen
 /// Command und hält ihn danach über das `entitlements:changed`-Event (s.
-/// `crate::events`) aktuell, statt wiederholt zu pollen.
+/// `app_logic::events`) aktuell, statt wiederholt zu pollen.
 #[tauri::command]
 pub fn get_entitlements(
     state: State<'_, AppState>,

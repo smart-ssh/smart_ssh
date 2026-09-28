@@ -8,7 +8,7 @@
 //! unverändert gegenüber der vorherigen Impl (nur verschoben, s. Spec 0084
 //! A7).
 
-use crate::events::EventEmitter;
+use app_logic::events::EventEmitter;
 
 pub struct TauriEventEmitter<R: tauri::Runtime = tauri::Wry>(pub tauri::AppHandle<R>);
 

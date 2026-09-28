@@ -11,13 +11,13 @@ use ssh_manager_core::profiles::{
 };
 use ssh_manager_core::shared::ServerId;
 
-use crate::ai_provider_factory::build_ai_provider;
-use crate::dto::NoteRevisionDto;
-use crate::error::{keychain_aware_credential_error, CommandResult};
 use crate::event_emitter::TauriEventEmitter;
-use crate::orchestration::execute_note_shrink_request;
-use crate::server_credentials::sudo_password_credential_ref;
-use crate::state::{AppState, SessionId};
+use app_logic::ai_provider_factory::build_ai_provider;
+use app_logic::dto::NoteRevisionDto;
+use app_logic::error::{keychain_aware_credential_error, CommandResult};
+use app_logic::orchestration::execute_note_shrink_request;
+use app_logic::server_credentials::sudo_password_credential_ref;
+use app_logic::state::{AppState, SessionId};
 
 use super::ai_providers::active_ai_provider_config;
 
@@ -55,7 +55,7 @@ pub async fn update_server_notes(
 /// basiertes `invoke()` auf).
 #[tauri::command]
 pub async fn large_note_dialog_threshold_chars() -> CommandResult<u32> {
-    Ok(crate::orchestration::LARGE_NOTE_DIALOG_THRESHOLD_CHARS as u32)
+    Ok(app_logic::orchestration::LARGE_NOTE_DIALOG_THRESHOLD_CHARS as u32)
 }
 
 /// Spec 0057, §4.2 (Etappe 4): "Ja, zusammenfassen" — ausgelöst vom
@@ -132,7 +132,7 @@ pub async fn request_note_shrink(
         // eine grundsätzlich andere Persistenz (`local_server::save_notes`
         // statt `ProfileStore::record_note_revision`, s. `orchestration::
         // NoteShrinkTarget`-Doc-Kommentar).
-        if crate::dto::is_local(server_id) {
+        if app_logic::dto::is_local(server_id) {
             let target = crate::local_server::LocalNoteShrinkTarget { app: app.clone() };
             execute_note_shrink_request(
                 session_id,
@@ -146,7 +146,7 @@ pub async fn request_note_shrink(
             )
             .await;
         } else {
-            let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+            let target = app_logic::orchestration::ProfileStoreNoteShrinkTarget {
                 profile_store: state.profile_store.as_ref(),
                 server_id,
                 provider_label,
