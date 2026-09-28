@@ -95,7 +95,7 @@ pub struct ServerDto {
     /// statt eine Aussage zu treffen.
     pub sudo_password_unknown: bool,
     /// Spec 0032, Abschnitt 3: `true` genau für den lokalen Pseudo-Server
-    /// (`app_shell::local_server::LOCAL_SERVER_ID`) — steuert im Frontend, ob
+    /// ([`LOCAL_SERVER_ID`]) — steuert im Frontend, ob
     /// Host/Port/Nutzername/Auth/Jump-Host/Löschen/Verbindungstest
     /// ausgeblendet werden.
     pub is_local: bool,
