@@ -40,23 +40,43 @@ Ziel-Nutzer, den der Nutzer eingeschaltet hat. Ein fremder Prozess auf dem
 Server konnte dieselben Rennen immer schon auslösen. Nicht behoben, weil ein
 Fix Verhalten ändern würde, das die Spec nicht beschreibt (s. §4).
 
-## 2. Eine Widerrufsprüfung, unter der Sperre — nicht zwei
+## 2. Eine maßgebliche Widerrufsprüfung unter der Sperre, davor ein
+   Schnellabbruch, der nur ablehnen kann
 
-Zuerst standen zwei Prüfungen da: eine vor dem Warten auf die Kanal-Sperre
-(damit ein schon widerrufener Zugriff nicht erst wartet) und eine danach. Der
-spec-reviewer zeigte, dass die zweite — die sachlich entscheidende, weil
-`tokio::sync::Mutex` fair ist und ein wartender Zugriff sonst noch **vor** dem
-Widerruf an die Reihe käme — von keinem Test erreichbar war: die erste fing
-jeden Fall vorher ab.
+Die Prüfung, die trägt, sitzt **nach** dem Erhalt der Kanal-Sperre
+(`elevated_access`). Nur dort liegen Prüfen und Benutzen in derselben
+kritischen Sektion, und nur dort greift sie auch für einen Zugriff, der beim
+Widerruf schon in der Warteschlange stand: `tokio::sync::Mutex` ist fair, ein
+Wartender käme sonst noch vor dem Widerruf an die Reihe.
 
-Entschieden: die Vorprüfung entfällt. Sie sicherte nichts, was die Prüfung
-unter der Sperre nicht sichert (dort liegen Prüfen und Benutzen in derselben
-kritischen Sektion), sie sparte nur Wartezeit — und sie verdeckte die
-eigentliche Prüfung vor jedem Test. Verworfen wurde die Alternative, die
-Vorprüfung zu behalten und für das verbleibende Fenster einen Test mit zwei
-gleichzeitigen Befehlen zu bauen: dafür hätte es einen zweiten test-only
-Haltepunkt gebraucht, und eine Prüfung, die nur unter sehr eng gestellten
-Umständen greift, bleibt schwer prüfbar.
+Der Weg dorthin ging über zwei Runden des spec-reviewers und ist es wert,
+festgehalten zu werden:
+
+- **Runde 1** zeigte, dass diese Prüfung von keinem Test erreichbar war: eine
+  zweite Prüfung **vor** dem Warten auf die Sperre fing jeden Fall vorher ab.
+  Eine Prüfung, die kein Test erreicht, ist keine Prüfung, auf die man sich
+  verlassen kann.
+- Erste Antwort darauf: die Vorprüfung entfernen. Damit war die maßgebliche
+  Prüfung erreichbar (Gegenbeweis: sechs Tests laufen ohne sie in ein `Ok`).
+- **Runde 2** fand den Preis: ohne Vorprüfung wartet ein bereits widerrufener
+  Zugriff erst auf die Sperre. Eine einzelne Operation kann lange dauern —
+  `read_file`/`write_file` überträgt eine ganze Datei in einem Aufruf. Der Rest
+  einer abgebrochenen Rekursion hing damit hinter einem laufenden Transfer,
+  statt sofort mit `ELEVATED_CHANNEL_INACTIVE` zurückzukommen. Kein
+  Rechteproblem, aber ein Befehl, der ohne sichtbare Meldung stehenbleibt.
+- **Jetziger Stand:** Der Schnellabbruch ist wieder da, aber ausdrücklich als
+  Abkürzung deklariert — er kann einen Zugriff nur **ablehnen**, nie zulassen.
+  Damit er die maßgebliche Prüfung nicht wieder vor den Tests verdeckt, sitzt
+  der test-only Haltepunkt **hinter** ihm: die beiden Tests, die die
+  maßgebliche Prüfung nachweisen (T6c und
+  `test_a_revocation_that_slipped_past_the_shortcut_still_stops_the_operation`),
+  widerrufen genau dort. Der Gegenbeweis (Prüfung entfernen) lässt beide
+  scheitern.
+
+Daraus die Regel für künftige Änderungen, die im Code am
+`elevated_access`-Kommentar steht: Zusätzliche Prüfungen vor der Sperre sind
+erlaubt, solange sie nur ablehnen können — die Prüfung unter der Sperre darf
+keine davon ersetzen.
 
 ## 3. Wie die Lückenlosigkeit hergestellt ist (A1.1)
 
@@ -93,10 +113,13 @@ eingestuft.
   `sftp_open_for_editing` gar keine Grenze hat.
 - **Das Ereignis `sftp-transfer-finished` trägt beim Widerruf den Wortlaut mit
   `Channel-Fehler: `-Präfix**, das Befehlsergebnis dagegen wörtlich
-  `ELEVATED_CHANNEL_INACTIVE`. A1.2 bindet nur das Befehlsergebnis; die
-  Meldung in der Transferliste ist nicht falsch, nur länger. Ein Angleichen
-  wäre neuer Nutzertext an einer Stelle, die die Spec nicht nennt
-  (§2, Nicht-Ziel „kein neuer Nutzertext").
+  `ELEVATED_CHANNEL_INACTIVE`. A1.2 bindet nur das Befehlsergebnis; die Meldung
+  in der Transferliste ist nicht falsch, nur länger — sie behauptet keinen
+  Erfolg und verschweigt den Grund nicht. Das trägt als Begründung; das
+  Argument „wäre neuer Nutzertext" trägt dagegen **nicht**, ein Präfix zu
+  entfernen erzeugt keinen neuen Text (spec-reviewer, Runde 2). Zurückgestellt,
+  weil A1.2 die Stelle nicht nennt und der Weg dorthin am Ereignispfad hängt,
+  den diese Spec nicht anfasst.
 - **Kein Doctest-Zwillingspaar für den Tausch ganzer `Session`- oder
   `SessionParts`-Werte.** Der Tausch zweier ganzer `Session`-Werte ist für
   jeden Rust-Typ möglich und in sich schlüssig (A wird vollständig B, kein
@@ -159,11 +182,13 @@ Testlauf, langsam, und `app-shell` zu prüfen kostet Minuten).
 
 `ElevatedSftpSlot::before_operation_hook` (`#[cfg(test)]`) gibt es, weil zwei
 Verschränkungen sonst nicht deterministisch zu treffen sind: `sftp_exists`
-führt genau **eine** SFTP-Operation aus (T6c), und das Fenster „Zugang
-angefordert, Sperre noch nicht bekommen" bräuchte sonst einen zweiten
-gleichzeitigen Befehl. Vorbild ist `ElevatedSftpRegistry::interleave_hook` aus
-Spec 0084 (T8b), dieselbe Begründung. Im Produktivbau existiert das Feld
-nicht; `run_before_operation_hook` bleibt dort als leerer Rumpf.
+führt genau **eine** SFTP-Operation aus (T6c), und für den Nachweis der
+maßgeblichen Prüfung braucht es einen Widerruf, der **hinter** dem
+Schnellabbruch liegt (s. §2) — sonst bräuchte es einen zweiten gleichzeitigen
+Befehl, der in der Warteschlange der Sperre hängt. Vorbild ist
+`ElevatedSftpRegistry::interleave_hook` aus Spec 0084 (T8b), dieselbe
+Begründung. Im Produktivbau existiert das Feld nicht;
+`run_before_operation_hook` bleibt dort als leerer Rumpf.
 
 ## 8. Audit-Mitschnitt in T7 ohne neue Abhängigkeit
 
@@ -186,7 +211,12 @@ SFTP-Operation** gemeint, nicht ein ganzer Befehl (Spec 0085, A1.3). Der Test
 `test_a_command_already_waiting_on_the_channel_fails_after_the_user_switched`
 aus 0084 bleibt wörtlich erhalten und weiter wirksam, prüft aber seit dieser
 Umstellung einen kürzeren Weg: `lock_browser_sftp` nimmt die Kanal-Sperre
-nicht mehr, das Warten passiert je Operation. Der Fall „Zugriff wartet, dann
-wird widerrufen" ist seither vom neuen Regressionstest
-`test_a_revocation_while_an_access_waits_for_the_lock_still_stops_it`
-abgedeckt.
+nicht mehr, das Warten passiert je Operation.
+
+Genau genommen fährt **kein** Test die Verschränkung „Zugriff steht beim
+Widerruf schon in der Warteschlange der Sperre" (spec-reviewer, Runde 2). Was
+abgedeckt ist und wirkungsgleich trägt: „Merker gesetzt, danach bekommt der
+Zugriff die Sperre" — der Merker wird ohne Sperre gesetzt, und der Wartende
+prüft ihn, sobald er die Sperre hat. Beide Abläufe enden in derselben Zeile.
+Dafür stehen T6c und
+`test_a_revocation_that_slipped_past_the_shortcut_still_stops_the_operation`.

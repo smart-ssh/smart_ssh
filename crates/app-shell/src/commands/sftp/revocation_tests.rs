@@ -1031,23 +1031,25 @@ async fn test_t6c_exists_reports_the_revocation_instead_of_a_plain_false() {
     );
 }
 
-/// spec-reviewer-Fund (Runde 1): Der Zugang zum erhöhten Kanal prüft den
-/// Widerruf **zweimal** — vor dem Warten auf die Kanal-Sperre und noch einmal,
-/// nachdem er sie bekommen hat. Die zweite Prüfung ist die, die zählt, wenn
-/// ein Zugriff die erste schon passiert hat und dann wartet: `tokio::sync::
-/// Mutex` ist fair, ein bereits wartender Zugriff kommt also **vor** dem
-/// Widerruf an die Reihe. Durch die Sperre je Operation (A1.3) ist dieses
-/// Fenster häufiger als vorher.
+/// spec-reviewer-Fund (Runde 1/2): Erreicht **die maßgebliche** Prüfung — die
+/// unter der Kanal-Sperre in `elevated_access`.
 ///
-/// Der Haltepunkt am Slot sitzt genau darin. Der Widerruf läuft hier bewusst
-/// über `remove_session`: das setzt nur den Merker und lässt den Kanalwert
-/// stehen. Nur so hängt der Abbruch wirklich an der zweiten Prüfung — wäre
-/// der Wert herausgenommen, scheiterte der Zugriff schon daran.
+/// Vor ihr sitzt ein Schnellabbruch, der einen schon widerrufenen Zugriff gar
+/// nicht erst warten lässt. Der kann nur ablehnen, nie zulassen, und ersetzt
+/// die Prüfung unter der Sperre deshalb nicht — er verdeckt sie aber in jedem
+/// anderen Test: dort ist der Widerruf beim Start der nächsten Operation
+/// schon gesetzt, und der Schnellabbruch greift zuerst.
 ///
-/// Gegenbeweis (belegt): Ohne die zweite Prüfung läuft die Operation über den
+/// Dieser Test führt den Widerruf deshalb über den Haltepunkt am Slot, der
+/// **hinter** dem Schnellabbruch sitzt: der Zugriff ist an der Abkürzung
+/// vorbei, wenn widerrufen wird. Über `remove_session`, weil das nur den
+/// Merker setzt und den Kanalwert stehen lässt — sonst scheiterte der Zugriff
+/// schon am fehlenden Wert und nicht an der Prüfung.
+///
+/// Gegenbeweis (belegt): Ohne diese Prüfung läuft die Operation über den
 /// widerrufenen Kanal, und der ganze Baum wird gelöscht.
 #[tokio::test]
-async fn test_a_revocation_while_an_access_waits_for_the_lock_still_stops_it() {
+async fn test_a_revocation_that_slipped_past_the_shortcut_still_stops_the_operation() {
     let elevated = GatedSftp::small_tree(0);
     let s = setup(Box::new(elevated.clone())).await;
     let slot = s.slot();
@@ -1068,7 +1070,7 @@ async fn test_a_revocation_while_an_access_waits_for_the_lock_still_stops_it() {
 
     assert!(
         slot.is_revoked(),
-        "Vorbedingung: der Haltepunkt hat nach der Vorprüfung widerrufen"
+        "Vorbedingung: der Haltepunkt hat hinter dem Schnellabbruch widerrufen"
     );
     assert_inactive(result);
     assert!(

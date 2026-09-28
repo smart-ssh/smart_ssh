@@ -242,17 +242,30 @@ impl ElevatedOperation {
     }
 }
 
-/// Spec 0084, §9 / Spec 0085, A1.1: **die eine** Prüfung, die zwischen einem
-/// Browser-Befehl und dem erhöhten Kanal steht. Jeder Zugriff läuft hier
-/// durch — der erste ebenso wie jeder weitere innerhalb einer Rekursion.
+/// Spec 0084, §9 / Spec 0085, A1.1: **die maßgebliche** Prüfung zwischen einem
+/// Browser-Befehl und dem erhöhten Kanal. Jeder Zugriff läuft hier durch — der
+/// erste ([`BrowserSftpGuard::sftp`]) ebenso wie jeder weitere innerhalb einer
+/// Rekursion ([`elevated_operation`]).
 ///
-/// Der Widerruf wird **nach** dem Erhalt der Kanal-Sperre geprüft, nicht
-/// davor. Das ist der Punkt: `tokio::sync::Mutex` ist fair, ein Zugriff, der
-/// beim Widerruf schon in der Warteschlange stand, käme sonst noch vor ihm an
-/// die Reihe und liefe mit den alten Rechten weiter. Prüfen und Benutzen
-/// liegen so unter derselben Sperre — eine zusätzliche Prüfung davor wäre nur
-/// eine Abkürzung, die nichts sichert und einen zweiten Weg zu warten hätte
-/// (spec-reviewer, Runde 1: eine Prüfung, eine Stelle).
+/// **Der Widerruf wird geprüft, nachdem die Kanal-Sperre da ist, nicht davor.**
+/// Darauf kommt es an: `tokio::sync::Mutex` ist fair, ein Zugriff, der beim
+/// Widerruf schon in der Warteschlange stand, käme sonst noch vor ihm an die
+/// Reihe und liefe mit den alten Rechten weiter. Prüfen und Benutzen liegen so
+/// in derselben kritischen Sektion, und der Kanalwert kann auch nur unter
+/// dieser Sperre herausgenommen werden.
+///
+/// Zwei Stellen prüfen **zusätzlich** früher, und keine von beiden ersetzt
+/// diese Prüfung — beide können einen Zugriff nur **ablehnen**, nie zulassen
+/// (spec-reviewer, Runde 1/2):
+/// * der Schnellabbruch in [`elevated_operation`], damit ein schon
+///   widerrufener Zugriff nicht erst auf die Sperre wartet;
+/// * [`BrowserSftpGuard::sftp`], das zu Befehlsbeginn einmal hier durchgeht
+///   und das Ergebnis gleich wieder fallenlässt — dort hat die
+///   `UserChanged`-Meldung ihren Platz, bevor der Befehl irgendetwas tut.
+///
+/// Wer hier etwas umbaut: **diese** Prüfung ist die, die trägt. „Wir haben
+/// doch beim Erstzugang schon geprüft" gilt nicht — zwischen Erstzugang und
+/// Operation liegt beliebig viel Zeit.
 async fn elevated_access(
     slot: &ElevatedSftpSlot,
     expected_user: &str,
@@ -284,9 +297,27 @@ async fn elevated_operation(
     expected_user: &str,
     revoked_mid_command: &AtomicBool,
 ) -> Result<ElevatedOperation, SshError> {
-    // Haltepunkt nur für Tests, genau vor dem Anfordern der Sperre (s.
-    // `ElevatedSftpSlot::before_operation_hook`) — im Produktivbau ein leerer
-    // Rumpf.
+    // Schnellabbruch: Ist schon widerrufen, wartet dieser Zugriff nicht erst
+    // auf die Kanal-Sperre. Das ist keine zweite Absicherung, sondern eine
+    // Abkürzung, die nur **ablehnen** kann — die Prüfung, die trägt, sitzt in
+    // `elevated_access` unter der Sperre.
+    //
+    // Sie steht hier, weil eine einzelne Operation lange dauern kann
+    // (`read_file`/`write_file` überträgt eine ganze Datei in einem Aufruf):
+    // ohne sie hinge der Rest einer abgebrochenen Rekursion hinter einem
+    // laufenden Transfer, statt sofort mit `ELEVATED_CHANNEL_INACTIVE`
+    // zurückzukommen (spec-reviewer, Runde 2).
+    if slot.is_revoked() {
+        revoked_mid_command.store(true, Ordering::SeqCst);
+        return Err(SshError::ChannelError(
+            ElevatedAccessError::Revoked.message(),
+        ));
+    }
+    // Haltepunkt nur für Tests, zwischen dem Schnellabbruch und dem Anfordern
+    // der Sperre (s. `ElevatedSftpSlot::before_operation_hook`) — im
+    // Produktivbau ein leerer Rumpf. Genau dort widerrufen die Tests, die die
+    // maßgebliche Prüfung erreichen wollen: an der Abkürzung sind sie schon
+    // vorbei.
     slot.run_before_operation_hook();
     elevated_access(slot, expected_user).await.map_err(|err| {
         if matches!(err, ElevatedAccessError::Revoked) {

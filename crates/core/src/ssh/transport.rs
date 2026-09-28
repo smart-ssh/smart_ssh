@@ -120,17 +120,20 @@ pub trait SshTransport: Send + Sync {
 /// angesprochen) — kein `Sync`-Bedarf, anders als `SshTransport` selbst
 /// (das als `Arc<Mutex<..>>` zwischen Kommando-Ausführung und Terminal-Aktor
 /// geteilt wird).
-#[async_trait]
+///
 /// **Keine Default-Rümpfe in diesem Trait** (Spec 0085, A1.1, spec-reviewer
-/// Runde 1): Der erhöhte Dateibrowser-Kanal wird über einen Wrapper benutzt,
-/// der vor **jeder einzelnen** Operation prüft, ob der erhöhte Modus noch
-/// gilt (`app_shell::commands::elevation::BrowserSftp`). Dass diese Prüfung
-/// lückenlos bleibt, hängt allein daran, dass jede Methode hier ohne
-/// Default-Rumpf deklariert ist — dann erzwingt der Compiler beim Wrapper
-/// einen Eintrag. Eine Methode mit Default-Rumpf (wie sie `SshTransport`
-/// oben durchaus hat) würde dort stillschweigend durchgereicht und die
-/// Prüfung umgehen. Wer hier eine Methode ergänzt, deklariert sie also ohne
-/// Rumpf und trägt sie beim Wrapper nach.
+/// Runde 1/2): Der erhöhte Dateibrowser-Kanal wird über einen Wrapper benutzt,
+/// der vor **jeder einzelnen** Operation prüft, ob der erhöhte Modus noch gilt
+/// (`app_shell::commands::elevation::BrowserSftp`). Dass jede Operation dort
+/// einzeln auftaucht und einzeln geprüft wird, erzwingt der Compiler — aber
+/// nur, solange jede Methode hier **ohne** Rumpf deklariert ist. Eine Methode
+/// mit Default-Rumpf (wie sie `SshTransport` oben durchaus hat) käme beim
+/// Wrapper ohne Eintrag durch; niemand müsste ihn beim Ergänzen noch ansehen.
+/// Die Prüfung selbst wäre damit nicht umgangen (ein Default-Rumpf erreicht
+/// den inneren Kanal nicht, er kann nur andere — geprüfte — Trait-Methoden
+/// aufrufen), aber das Geländer wäre weg. Wer hier eine Methode ergänzt,
+/// deklariert sie also ohne Rumpf und trägt sie beim Wrapper nach.
+#[async_trait]
 pub trait SftpSession: Send {
     async fn list_dir(&mut self, path: &str) -> Result<Vec<RemoteEntry>, SshError>;
     async fn read_file(&mut self, path: &str) -> Result<Vec<u8>, SshError>;
