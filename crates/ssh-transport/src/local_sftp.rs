@@ -42,6 +42,7 @@ fn owner_ids(metadata: &std::fs::Metadata) -> (Option<u32>, Option<u32>) {
     }
     #[cfg(not(unix))]
     {
+        let _ = metadata;
         (None, None)
     }
 }
