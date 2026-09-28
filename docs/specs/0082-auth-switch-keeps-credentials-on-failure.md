@@ -1,6 +1,6 @@
 # Spec 0082 — Anmeldeart wechseln: kein Credential-Verlust bei gescheitertem Speichern
 
-Status: Vorschlag (Architekt) · Backlog: BL-0252 · Gate: release-1.0/D
+Status: freigegeben (Stefan, 2026-09-28) · Backlog: BL-0252 · Gate: release-1.0/D
 Zweck: Scheitert das Speichern eines bearbeiteten Servers, bleiben die
 Zugangsdaten der bisherigen Anmeldeart vollständig erhalten.
 Review-Priorität: ERHÖHT (Credential-Handling)
