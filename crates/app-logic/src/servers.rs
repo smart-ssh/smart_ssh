@@ -19,7 +19,7 @@
 
 use chrono::Utc;
 
-use ssh_manager_core::profiles::{CredentialStore, ProfileStore, Server};
+use ssh_manager_core::profiles::{AuthMethod, CredentialStore, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 
 use crate::dto::{DeleteServerResult, ServerDto, ServerInput};
@@ -131,6 +131,18 @@ pub async fn create_server(
 /// aus Profil- oder Credential-Store. Anders als bei [`create_server`],
 /// wo beides im Tauri-Command bleibt, gehören sie hier in die Tauri-freie
 /// Fassung: Nur so lässt sich die Reihenfolge testen.
+///
+/// **Warum der schreibende Teil in einer eigenen Funktion steckt**
+/// (spec-reviewer-Fund, Runde 1): Der Rückweg aus A3 war zuvor dreimal von
+/// Hand hingeschrieben, einmal je fehlbarem Schritt. Das hält, solange
+/// niemand etwas ergänzt — ein künftiges `?` zwischen Schlüsselbund und
+/// Datenbank (etwa eine neue Prüfung) umginge ihn lautlos, und kein Test
+/// fiele darauf. Jetzt gibt es genau **einen** Rückweg, am Ergebnis von
+/// [`write_edited_server`]: Jeder Fehler darin, auch ein künftig
+/// hinzukommender, läuft über ihn. Das ist dieselbe Absicherung, die
+/// [`RecordingCredentialStore`] für die Schreibseite leistet — der Rückweg
+/// war die letzte Stelle des Entwurfs, die noch von Aufmerksamkeit abhing
+/// statt von der Struktur.
 pub async fn update_server(
     store: &dyn ProfileStore,
     credential_store: &(dyn CredentialStore + Send + Sync),
@@ -145,8 +157,10 @@ pub async fn update_server(
         return Err("Der lokale Pseudo-Server kann nicht auf diesem Weg bearbeitet werden".into());
     }
     reject_local_jump_host(input.jump_host)?;
+    // Bis hierher hat der Aufruf nichts geschrieben, ein `?` ist also
+    // gefahrlos: Es gibt noch nichts zurückzunehmen. Ab der Hülle unten
+    // gilt das nicht mehr — deshalb hört das `?` hier auf.
     let sftp_server_path = crate::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
-
     let existing = store.get_server(&id).await?;
     let previous_auth = existing.auth.clone();
 
@@ -156,18 +170,63 @@ pub async fn update_server(
     // soll das Schreiben dieses Aufrufs festhalten, nicht sein Aufräumen.
     let recording = RecordingCredentialStore::new(credential_store);
 
-    let saved_auth =
-        match resolve_auth_method(&recording, keychain, id, input.auth, Some(&previous_auth)) {
-            Ok(auth) => auth,
-            Err(err) => {
-                roll_back_failed_edit(credential_store, id, &previous_auth, &recording.written());
-                return Err(err);
-            }
-        };
-    if let Err(err) = resolve_sudo_password(&recording, keychain, id, input.sudo_password) {
-        roll_back_failed_edit(credential_store, id, &previous_auth, &recording.written());
-        return Err(err);
+    match write_edited_server(
+        store,
+        &recording,
+        keychain,
+        id,
+        input,
+        existing,
+        sftp_server_path,
+    )
+    .await
+    {
+        Ok(saved_auth) => {
+            // **Erst hier** (A2): Die Datenbank trägt jetzt die neue
+            // Anmeldeart — was von der bisherigen übrig ist und die neue
+            // nicht weiterbenutzt, verweist auf nichts mehr und darf weg.
+            // Jede frühere Stelle wäre genau der Fehler, den diese Spec
+            // behebt.
+            cleanup_replaced_auth_method_secrets(credential_store, id, &previous_auth, &saved_auth);
+            Ok(())
+        }
+        Err(err) => {
+            roll_back_failed_edit(credential_store, id, &previous_auth, &recording.written());
+            Err(err)
+        }
     }
+}
+
+/// Der schreibende Teil von [`update_server`]: Schlüsselbund, dann
+/// Datenbank. Gibt die gespeicherte [`AuthMethod`] zurück, damit der
+/// Aufrufer weiß, welche Einträge die neue Art weiterbenutzt.
+///
+/// Diese Funktion räumt selbst **nichts** auf — weder nach Erfolg noch
+/// nach einem Fehler. Genau das ist ihr Zweck: Sie darf `?` benutzen, weil
+/// jeder Ausgang über den Aufrufer läuft und dort behandelt wird. Wer sie
+/// erweitert, braucht an den Rückweg nicht zu denken.
+async fn write_edited_server(
+    store: &dyn ProfileStore,
+    // `+ Send + Sync` ist hier nicht Schmuck: Die Referenz wird über das
+    // `.await` des DB-Schreibens hinweg gehalten, und ohne die beiden
+    // Auto-Traits ist die entstehende Future nicht `Send` — was Tauri für
+    // einen Command verlangt. Derselbe Grund wie bei
+    // `compute_delete_server_result`.
+    credential_store: &(dyn CredentialStore + Send + Sync),
+    keychain: credentials_keyring::KeychainAvailability,
+    id: ServerId,
+    input: ServerInput,
+    existing: Server,
+    sftp_server_path: Option<String>,
+) -> CommandResult<AuthMethod> {
+    let auth = resolve_auth_method(
+        credential_store,
+        keychain,
+        id,
+        input.auth,
+        Some(&existing.auth),
+    )?;
+    resolve_sudo_password(credential_store, keychain, id, input.sudo_password)?;
 
     let server = Server {
         id,
@@ -177,7 +236,7 @@ pub async fn update_server(
         username: input.username,
         group_id: input.group_id,
         tags: input.tags,
-        auth: saved_auth.clone(),
+        auth: auth.clone(),
         notes: existing.notes,
         jump_host: input.jump_host,
         post_ingest_policy: input.post_ingest_policy,
@@ -186,17 +245,8 @@ pub async fn update_server(
         created_at: existing.created_at,
         updated_at: Utc::now(),
     };
-    if let Err(err) = store.update_server(&server).await {
-        roll_back_failed_edit(credential_store, id, &previous_auth, &recording.written());
-        return Err(err.into());
-    }
-
-    // **Erst hier** (A2): Die Datenbank trägt jetzt die neue Anmeldeart —
-    // was von der bisherigen übrig ist und die neue nicht weiterbenutzt,
-    // verweist auf nichts mehr und darf weg. Jede frühere Stelle wäre
-    // genau der Fehler, den diese Spec behebt.
-    cleanup_replaced_auth_method_secrets(credential_store, &previous_auth, &saved_auth);
-    Ok(())
+    store.update_server(&server).await?;
+    Ok(auth)
 }
 
 /// Baut die Vorschau/das Ergebnis von `delete_server` (Spec 0046, Fund 1):
@@ -1238,6 +1288,44 @@ mod tests {
         );
     }
 
+    /// spec-reviewer-Fund, Runde 1: Das Aufräumen **nach Erfolg** schloss
+    /// den Sudo-Slot nicht aus, der Rückweg schon (T13). Diese Asymmetrie
+    /// ist geschlossen.
+    ///
+    /// Der Testaufbau ist bewusst ein Zustand, den der Produktivcode nicht
+    /// erzeugt: eine gespeicherte `AuthMethod::Password`, deren Ref auf
+    /// `…:sudo_password` zeigt. Genau dafür ist die Ausnahme da — für eine
+    /// von Hand veränderte Datenbankzeile oder eine künftige Variante, die
+    /// den Slot-Namen wiederverwendet. Ohne sie löschte der Wechsel auf den
+    /// Agenten das Sudo-Passwort, das derselbe Aufruf gerade geschrieben
+    /// hat.
+    #[tokio::test]
+    async fn test_cleanup_after_success_never_removes_the_sudo_password_slot() {
+        let id = ServerId::new();
+        let sudo_ref = sudo_password_credential_ref(id);
+        // Die verbogene Zeile: die Anmeldeart verweist auf den Sudo-Slot.
+        let store = InMemoryProfileStore::new().with_server(stored_server(
+            id,
+            AuthMethod::Password {
+                credential_ref: sudo_ref.clone(),
+            },
+        ));
+        let credentials = InMemoryCredentialStore::new().with_secret(&sudo_ref, "old-sudo");
+        let mut input = edit_input(AuthMethodInput::Agent);
+        input.sudo_password = Some("new-sudo".to_string());
+
+        update_server(&store, &credentials, AVAILABLE, id, input)
+            .await
+            .expect("der Wechsel auf den Agenten muss gelingen");
+
+        assert_eq!(
+            stored_secret(&credentials, &sudo_ref).as_deref(),
+            Some("new-sudo"),
+            "das Sudo-Passwort gehört keiner Anmeldeart — auch der Erfolgsweg fasst es \
+             nicht an"
+        );
+    }
+
     /// T14 (A4 auf dem Rückweg): wie T5, zusätzlich klemmt jedes
     /// Entfernen. Der gemeldete Fehler bleibt der **ursprüngliche** —
     /// ein per `?` durchgereichter Löschfehler würde dem Nutzer die
@@ -1308,6 +1396,14 @@ mod tests {
         // **Vor** allen weiteren Zusicherungen abgegriffen: `stored_secret`
         // liest selbst über den Store und würde den Zähler sonst hochtreiben,
         // bis die Aussage nichts mehr über den Produktivcode sagt.
+        //
+        // Was dieser Zähler beweist und was nicht (spec-reviewer-Fund,
+        // Runde 1): `update_server` liest heute auf **keinem** Pfad aus dem
+        // Credential-Store, der Zähler wäre also auch bei einer ganz ans
+        // Ende gerutschten Ablehnung 0. Er ist ein Wächter für künftige
+        // Schritte, die selbst lesen (etwa eine Prüfung „ist überhaupt ein
+        // Secret hinterlegt"), kein Nachweis für den heutigen Stand. Den
+        // führen die Schreib-Zusicherungen darunter.
         let reads_during_the_call = credentials.get_calls();
 
         assert_eq!(err.code, Some("SERVER_JUMP_HOST_LOCAL"));
@@ -1340,13 +1436,27 @@ mod tests {
         });
         input.sudo_password = Some("new-sudo".to_string());
 
-        update_server(&store, &credentials, AVAILABLE, id, input)
+        let err = update_server(&store, &credentials, AVAILABLE, id, input)
             .await
             .expect_err("der lokale Pseudo-Server wird nicht auf diesem Weg bearbeitet");
 
-        // S. T15: der Zähler wird vor den lesenden Zusicherungen abgegriffen.
+        // S. T15: der Zähler wird vor den lesenden Zusicherungen abgegriffen,
+        // und was er belegt, steht dort.
         let reads_during_the_call = credentials.get_calls();
 
+        // spec-reviewer-Fund, Runde 1: Ohne diese Zusicherung wäre der Test
+        // auch dann grün, wenn die `is_local`-Ablehnung ersatzlos entfiele —
+        // der Profil-Store ist leer, der Aufruf scheiterte dann eben an
+        // `get_server` mit „Server nicht gefunden", und alles Weitere sähe
+        // gleich aus. Geprüft wird deshalb, dass die Ablehnung selbst
+        // gesprochen hat.
+        assert!(
+            err.message
+                .contains("kann nicht auf diesem Weg bearbeitet werden"),
+            "der Fehler muss aus der Ablehnung stammen, nicht aus einem späteren \
+             Schritt, war: {}",
+            err.message
+        );
         assert_eq!(
             reads_during_the_call, 0,
             "vor der Ablehnung darf nicht einmal gelesen werden"

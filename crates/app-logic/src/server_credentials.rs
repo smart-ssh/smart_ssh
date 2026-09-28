@@ -335,14 +335,27 @@ fn remove_obsolete_secret(
 ///
 /// Ein Ref, auf den die **neue** Art verweist, kann hier nicht getroffen
 /// werden (s. [`auth_method_credential_refs`]).
-pub fn cleanup_replaced_auth_method_secrets(
+///
+/// Das Sudo-Passwort ist ausgenommen, genau wie bei
+/// [`roll_back_failed_edit`] (spec-reviewer-Fund, Runde 1). Produktiv kann
+/// keine gespeicherte `AuthMethod` auf diesen Slot zeigen —
+/// [`resolve_auth_method`] vergibt nur `password`, `private_key`,
+/// `passphrase`, `certificate` und `certificate_key`. Täte sie es doch
+/// einmal (eine von Hand veränderte Datenbankzeile, eine künftige
+/// Variante, die den Namen wiederverwendet), löschte ein Methodenwechsel
+/// hier das Sudo-Passwort, das derselbe Aufruf gerade geschrieben hat. Die
+/// Ausnahme kostet einen Vergleich; sie nicht zu haben kostet im
+/// Zweifelsfall ein Credential. Beide Aufräumwege kennen sie jetzt.
+pub(crate) fn cleanup_replaced_auth_method_secrets(
     credential_store: &dyn CredentialStore,
+    server_id: ServerId,
     previous: &AuthMethod,
     saved: &AuthMethod,
 ) {
     let kept = auth_method_credential_refs(saved);
+    let sudo_ref = sudo_password_credential_ref(server_id);
     for r in auth_method_credential_refs(previous) {
-        if kept.contains(&r) {
+        if kept.contains(&r) || r == &sudo_ref {
             continue;
         }
         remove_obsolete_secret(credential_store, r, "aufraeumen-nach-erfolg");
@@ -369,7 +382,7 @@ pub fn cleanup_replaced_auth_method_secrets(
 ///   Slot und einen eigenen Entfernen-Weg. Anders als beim Anlegen, wo die
 ///   `ServerId` frisch ist und unter ihr nichts Legitimes stehen kann,
 ///   darf der Rückweg hier **nicht** alle Slots des Servers abräumen.
-pub fn roll_back_failed_edit(
+pub(crate) fn roll_back_failed_edit(
     credential_store: &dyn CredentialStore,
     server_id: ServerId,
     previous: &AuthMethod,
@@ -396,13 +409,19 @@ pub fn roll_back_failed_edit(
 /// Konstruktion nicht hinter dem Code zurückbleiben. Das ist der
 /// Unterschied, der zählt: Eine übersehene Schreibstelle hieße ein
 /// verwaister Eintrag, von dem niemand erfährt.
-pub struct RecordingCredentialStore<'a> {
+///
+/// **Sie gehört in genau einen Aufruf** (spec-reviewer-Fund, Runde 1) und
+/// ist deshalb `pub(crate)`: Würde sie länger leben — etwa im `AppState` —,
+/// wüchse `written` über alle Speichervorgänge hinweg, und ein späterer
+/// Rückweg löschte Einträge eines früheren, längst erfolgreichen Aufrufs.
+/// Einzige Konstruktionsstelle ist [`crate::servers::update_server`].
+pub(crate) struct RecordingCredentialStore<'a> {
     inner: &'a (dyn CredentialStore + Send + Sync),
     written: Mutex<Vec<CredentialRef>>,
 }
 
 impl<'a> RecordingCredentialStore<'a> {
-    pub fn new(inner: &'a (dyn CredentialStore + Send + Sync)) -> Self {
+    pub(crate) fn new(inner: &'a (dyn CredentialStore + Send + Sync)) -> Self {
         Self {
             inner,
             written: Mutex::new(Vec::new()),
@@ -410,7 +429,7 @@ impl<'a> RecordingCredentialStore<'a> {
     }
 
     /// Die aufgezeichneten Refs in Schreibreihenfolge, ohne Dubletten.
-    pub fn written(&self) -> Vec<CredentialRef> {
+    pub(crate) fn written(&self) -> Vec<CredentialRef> {
         let mut unique: Vec<CredentialRef> = Vec::new();
         for r in self.written.lock().unwrap().iter() {
             if !unique.contains(r) {
