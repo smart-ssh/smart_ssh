@@ -11,8 +11,9 @@ use ssh_manager_core::shared::ServerId;
 use crate::dto::{DeleteServerResult, ServerDto, ServerInput};
 use crate::error::{CommandError, CommandResult};
 use crate::server_credentials::{
-    delete_all_possible_server_secrets, delete_auth_method_secrets,
-    delete_sudo_password_on_server_delete, resolve_auth_method, resolve_sudo_password,
+    cleanup_replaced_auth_method_secrets, delete_all_possible_server_secrets,
+    delete_auth_method_secrets, delete_sudo_password_on_server_delete, resolve_auth_method,
+    resolve_sudo_password, roll_back_failed_edit, RecordingCredentialStore,
 };
 
 /// Spec 0032, Abschnitt 6: der lokale Pseudo-Server ist explizit als
@@ -133,14 +134,26 @@ pub async fn update_server(
     let sftp_server_path = crate::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
 
     let existing = store.get_server(&id).await?;
-    let auth = resolve_auth_method(
-        credential_store,
-        keychain,
-        id,
-        input.auth,
-        Some(&existing.auth),
-    )?;
-    resolve_sudo_password(credential_store, keychain, id, input.sudo_password)?;
+    let previous_auth = existing.auth.clone();
+
+    // Jedes Schreiben läuft über die aufzeichnende Hülle — nur so weiß der
+    // Rückweg, welche Einträge dieser Aufruf angelegt hat (A3). Gelöscht
+    // wird bewusst am echten Store, nicht über die Hülle: Die Aufzeichnung
+    // soll das Schreiben dieses Aufrufs festhalten, nicht sein Aufräumen.
+    let recording = RecordingCredentialStore::new(credential_store);
+
+    let saved_auth =
+        match resolve_auth_method(&recording, keychain, id, input.auth, Some(&previous_auth)) {
+            Ok(auth) => auth,
+            Err(err) => {
+                roll_back_failed_edit(credential_store, id, &previous_auth, &recording.written());
+                return Err(err);
+            }
+        };
+    if let Err(err) = resolve_sudo_password(&recording, keychain, id, input.sudo_password) {
+        roll_back_failed_edit(credential_store, id, &previous_auth, &recording.written());
+        return Err(err);
+    }
 
     let server = Server {
         id,
@@ -150,7 +163,7 @@ pub async fn update_server(
         username: input.username,
         group_id: input.group_id,
         tags: input.tags,
-        auth,
+        auth: saved_auth.clone(),
         notes: existing.notes,
         jump_host: input.jump_host,
         post_ingest_policy: input.post_ingest_policy,
@@ -159,7 +172,16 @@ pub async fn update_server(
         created_at: existing.created_at,
         updated_at: Utc::now(),
     };
-    store.update_server(&server).await?;
+    if let Err(err) = store.update_server(&server).await {
+        roll_back_failed_edit(credential_store, id, &previous_auth, &recording.written());
+        return Err(err.into());
+    }
+
+    // **Erst hier** (A2): Die Datenbank trägt jetzt die neue Anmeldeart —
+    // was von der bisherigen übrig ist und die neue nicht weiterbenutzt,
+    // verweist auf nichts mehr und darf weg. Jede frühere Stelle wäre
+    // genau der Fehler, den diese Spec behebt.
+    cleanup_replaced_auth_method_secrets(credential_store, &previous_auth, &saved_auth);
     Ok(())
 }
 

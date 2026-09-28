@@ -7,10 +7,13 @@
 //! hier aber über bis zu zwei Secret-Slots pro Methode (Key+Passphrase,
 //! Zertifikat+Key) statt nur einem.
 
+use std::sync::Mutex;
+
 use secrecy::SecretString;
 
 use ssh_manager_core::profiles::{
-    trim_credential_value, AuthMethod, CredentialError, CredentialRef, CredentialStore,
+    trim_credential_value, AuthMethod, CredentialError, CredentialRef, CredentialResult,
+    CredentialStore,
 };
 use ssh_manager_core::shared::ServerId;
 
@@ -220,52 +223,27 @@ fn write_or_reuse_secret(
     }
 }
 
-/// Räumt Secret-Slots einer **anderen** Auth-Methode auf, wenn `input`
-/// eine andere Art als `existing` wählt — sonst blieben z. B. beim
-/// Wechsel von `PrivateKey` zu `Agent` ein verwaistes
-/// `server:{id}:private_key`/`server:{id}:passphrase` im Keychain zurück,
-/// auf das kein `AuthMethod` mehr verweist. Best-effort (Fehler beim
-/// Aufräumen sind nicht kritisch genug, den ganzen `update_server`-Aufruf
-/// scheitern zu lassen).
-fn cleanup_abandoned_slots(
-    credential_store: &dyn CredentialStore,
-    existing: Option<&AuthMethod>,
-    input: &AuthMethodInput,
-) {
-    let Some(existing) = existing else { return };
-    // **Achtung, stille Bruchstelle.** Dieses `matches!` hat einen
-    // impliziten `false`-Zweig: Fehlt hier das Paar für eine
-    // `AuthMethod`-Variante, gilt beim Bearbeiten eines solchen Servers
-    // `same_kind == false` — und `update_server` löscht dann dessen
-    // Secret-Slots aus dem Schlüsselbund, obwohl sich die Anmeldeart gar
-    // nicht geändert hat. Das wäre ein Credential-Verlust **ohne**
-    // Fehlermeldung, den kein Test der Spec 0076 §6 fände. Wer `AuthMethod`
-    // um eine Variante erweitert, erweitert diese Liste mit.
-    let same_kind = matches!(
-        (existing, input),
-        (
-            AuthMethod::Password { .. },
-            AuthMethodInput::Password { .. }
-        ) | (
-            AuthMethod::PrivateKey { .. },
-            AuthMethodInput::PrivateKey { .. }
-        ) | (AuthMethod::Agent, AuthMethodInput::Agent)
-            | (
-                AuthMethod::Certificate { .. },
-                AuthMethodInput::Certificate { .. }
-            )
-            // Spec 0076, §7.1: das Paar, dessen Fehlen die hinterlegte
-            // Passphrase einer Schlüsseldatei beim Bearbeiten gelöscht
-            // hätte.
-            | (
-                AuthMethod::IdentityFile { .. },
-                AuthMethodInput::IdentityFile { .. }
-            )
-    );
-    if same_kind {
-        return;
-    }
-    let abandoned: Vec<&CredentialRef> = match existing {
+/// Welche Schlüsselbund-Einträge zu einer [`AuthMethod`] gehören — die
+/// **eine** Stelle, an der diese Zuordnung steht (Spec 0082, §5).
+///
+/// Vorher gab es sie zweimal: als Paarliste in einem `cleanup_abandoned_
+/// slots` („ist die neue Art dieselbe wie die alte?") und in
+/// [`delete_auth_method_secrets`]. Die Paarliste hatte einen impliziten
+/// `false`-Zweig — fehlte dort das Paar für eine `AuthMethod`-Variante,
+/// galt schon das bloße **Bearbeiten** eines solchen Servers als Wechsel,
+/// und seine Secrets wurden gelöscht (Spec 0076, §7.1: genau das war
+/// einmal passiert). Dieses `match` hat keinen solchen Zweig: Eine neue
+/// Variante erzwingt hier einen Compilerfehler.
+///
+/// Aufgeräumt wird seither über die Differenz zweier solcher Mengen (s.
+/// [`cleanup_replaced_auth_method_secrets`]) statt über einen
+/// Gleichheitstest. Damit ist „gleiche Art" nur noch der Sonderfall
+/// „leere Differenz", und ein Slot, den zwei Arten teilen
+/// (`PrivateKey` und `IdentityFile` legen ihre Passphrase unter
+/// demselben Ref ab), kann per Konstruktion nicht wegfallen — er steht
+/// auf beiden Seiten der Differenz.
+fn auth_method_credential_refs(auth: &AuthMethod) -> Vec<&CredentialRef> {
+    match auth {
         AuthMethod::Password { credential_ref } => vec![credential_ref],
         AuthMethod::PrivateKey {
             credential_ref,
@@ -278,19 +256,174 @@ fn cleanup_abandoned_slots(
         AuthMethod::Agent => Vec::new(),
         AuthMethod::Certificate { cert_ref, key_ref } => vec![cert_ref, key_ref],
         // Spec 0076: Der Pfad steht in der DB, nicht im Schlüsselbund —
-        // aufzuräumen ist hier nur die optionale Passphrase.
+        // im Schlüsselbund liegt hier nur die optionale Passphrase. Die
+        // Schlüsseldatei selbst wird nie angefasst (C-5): Wir haben sie
+        // nie angelegt, wir löschen sie nicht.
         AuthMethod::IdentityFile { passphrase_ref, .. } => passphrase_ref.iter().collect(),
-    };
-    for r in abandoned {
-        let _ = credential_store.delete(r);
+    }
+}
+
+/// Spec 0082, A4: einen überflüssig gewordenen Eintrag entfernen, ohne den
+/// Ablauf davon abhängig zu machen — aber auch ohne ihn verschwinden zu
+/// lassen.
+///
+/// Beide Aufrufer ([`cleanup_replaced_auth_method_secrets`] und
+/// [`roll_back_failed_edit`]) laufen an einer Stelle, an der das Ergebnis
+/// schon feststeht: Das Speichern ist gelungen, oder es ist an einer
+/// anderen Ursache gescheitert. Ein Löschfehler darf beides nicht
+/// umdeuten — sonst stünde im Formular „Schlüsselbund nicht verfügbar",
+/// wo in Wahrheit ein Pflichtfeld fehlt. Er bleibt deshalb im Log, mit
+/// dem Ref und **ohne** Secret-Inhalt (dieselbe Grenze wie in
+/// [`delete_user_requested_secret`]).
+fn remove_obsolete_secret(
+    credential_store: &dyn CredentialStore,
+    r: &CredentialRef,
+    phase: &'static str,
+) {
+    match credential_store.delete(r) {
+        Ok(()) | Err(CredentialError::NotFound(_)) => {}
+        Err(err) => tracing::warn!(
+            credential_ref = %r.as_str(),
+            phase,
+            error = %err,
+            "Eintrag konnte beim Bearbeiten des Servers nicht aus dem Schlüsselbund \
+             entfernt werden — er bleibt dort stehen"
+        ),
+    }
+}
+
+/// Spec 0082, A2: Aufgeräumt wird **nach** erfolgreichem Speichern.
+///
+/// Entfernt genau die Differenz „Einträge der bisherigen Anmeldeart minus
+/// Einträge der gespeicherten". Solange die Datenbank noch die alte Art
+/// trägt, wird nichts entfernt — vorher aufzuräumen war die Ursache des
+/// Fehlers, den diese Spec behebt: Scheiterte danach irgendein Schritt,
+/// stand in der Datenbank weiter die alte Anmeldeart, deren Secrets es
+/// nicht mehr gab.
+///
+/// Ein Ref, auf den die **neue** Art verweist, kann hier nicht getroffen
+/// werden (s. [`auth_method_credential_refs`]).
+pub fn cleanup_replaced_auth_method_secrets(
+    credential_store: &dyn CredentialStore,
+    previous: &AuthMethod,
+    saved: &AuthMethod,
+) {
+    let kept = auth_method_credential_refs(saved);
+    for r in auth_method_credential_refs(previous) {
+        if kept.contains(&r) {
+            continue;
+        }
+        remove_obsolete_secret(credential_store, r, "aufraeumen-nach-erfolg");
+    }
+}
+
+/// Spec 0082, A3: der Rückweg, wenn das Bearbeiten scheitert, nachdem
+/// schon etwas im Schlüsselbund stand.
+///
+/// `written` sind die Refs, unter denen **dieser Aufruf** geschrieben hat
+/// (s. [`RecordingCredentialStore`]). Entfernt wird davon nur, was zu
+/// keinem Eintrag der bisherigen Anmeldeart gehört und nicht das
+/// Sudo-Passwort ist.
+///
+/// Die beiden Ausnahmen sind keine Bequemlichkeit, sondern der Kern:
+/// - **Refs der bisherigen Art.** Nutzen alte und neue Art denselben Slot
+///   (gleiche Art mit neuem Wert; die geteilte `passphrase` von
+///   `PrivateKey` und `IdentityFile`), hat der Aufruf den alten Wert
+///   überschrieben. Ihn jetzt zu löschen nähme dem Server die Anmeldung,
+///   die er laut Datenbank weiterhin hat — genau der Verlust, den diese
+///   Spec verhindert. Der neue Wert bleibt stehen (R1); ihn
+///   zurückzusetzen hieße, bei jedem Speichern erst den alten auszulesen.
+/// - **Das Sudo-Passwort.** Es gehört keiner Anmeldeart, hat einen eigenen
+///   Slot und einen eigenen Entfernen-Weg. Anders als beim Anlegen, wo die
+///   `ServerId` frisch ist und unter ihr nichts Legitimes stehen kann,
+///   darf der Rückweg hier **nicht** alle Slots des Servers abräumen.
+pub fn roll_back_failed_edit(
+    credential_store: &dyn CredentialStore,
+    server_id: ServerId,
+    previous: &AuthMethod,
+    written: &[CredentialRef],
+) {
+    let keep = auth_method_credential_refs(previous);
+    let sudo_ref = sudo_password_credential_ref(server_id);
+    for r in written {
+        if keep.contains(&r) || r == &sudo_ref {
+            continue;
+        }
+        remove_obsolete_secret(credential_store, r, "rueckweg-nach-fehler");
+    }
+}
+
+/// Spec 0082, A3: Hülle um den Schlüsselbund, die mitschreibt, unter
+/// welchen Refs **dieser eine Aufruf** etwas gespeichert hat.
+///
+/// Warum eine Hülle und keine zusätzliche Rückgabe aus
+/// [`resolve_auth_method`]: So hängt die Aufzeichnung am `set` selbst und
+/// nicht an einer Stelle, die jemand beim Erweitern übersehen kann. Ein
+/// künftiger Zweig, der einen neuen Slot schreibt, ist damit automatisch
+/// erfasst — die Liste „was dieser Aufruf angefasst hat" kann per
+/// Konstruktion nicht hinter dem Code zurückbleiben. Das ist der
+/// Unterschied, der zählt: Eine übersehene Schreibstelle hieße ein
+/// verwaister Eintrag, von dem niemand erfährt.
+pub struct RecordingCredentialStore<'a> {
+    inner: &'a (dyn CredentialStore + Send + Sync),
+    written: Mutex<Vec<CredentialRef>>,
+}
+
+impl<'a> RecordingCredentialStore<'a> {
+    pub fn new(inner: &'a (dyn CredentialStore + Send + Sync)) -> Self {
+        Self {
+            inner,
+            written: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Die aufgezeichneten Refs in Schreibreihenfolge, ohne Dubletten.
+    pub fn written(&self) -> Vec<CredentialRef> {
+        let mut unique: Vec<CredentialRef> = Vec::new();
+        for r in self.written.lock().unwrap().iter() {
+            if !unique.contains(r) {
+                unique.push(r.clone());
+            }
+        }
+        unique
+    }
+}
+
+impl CredentialStore for RecordingCredentialStore<'_> {
+    fn get(&self, r: &CredentialRef) -> CredentialResult<SecretString> {
+        self.inner.get(r)
+    }
+
+    fn set(&self, r: &CredentialRef, value: SecretString) -> CredentialResult<()> {
+        // Vermerkt wird **vor** dem Weiterreichen, also auch ein
+        // gescheitertes `set`. Der Rückweg darf sich nicht darauf
+        // verlassen, dass ein Schlüsselbund im Fehlerfall garantiert
+        // nichts hinterlassen hat. Ein Ref zu viel kostet höchstens ein
+        // Löschen ins Leere (`NotFound` gilt als Erfolg); ein Ref zu
+        // wenig hieße, einen verwaisten Eintrag stehen zu lassen (A3).
+        self.written.lock().unwrap().push(r.clone());
+        self.inner.set(r, value)
+    }
+
+    fn delete(&self, r: &CredentialRef) -> CredentialResult<()> {
+        self.inner.delete(r)
     }
 }
 
 /// Baut ein [`AuthMethod`] aus `input`, schreibt dabei benötigte Secrets
 /// in `credential_store`. `existing` ist `Some(&AuthMethod)` bei
-/// `update_server` (für "leer = unverändert" + Aufräumen bei
-/// Methodenwechsel), `None` bei `create_server` (dort ist jeder
-/// benötigte Slot zwingend, s. [`write_or_reuse_secret`]).
+/// `update_server` (für "leer = unverändert"), `None` bei `create_server`
+/// (dort ist jeder benötigte Slot zwingend, s. [`write_or_reuse_secret`]).
+///
+/// **Diese Funktion löscht nichts** (Spec 0082, A2). Bis dahin räumte sie
+/// als Erstes die Slots der bisherigen Anmeldeart ab — also **bevor** die
+/// neue geprüft oder geschrieben war. Scheiterte danach irgendetwas (ein
+/// leeres Pflichtfeld, der Schlüsselbund, das Sudo-Passwort, die
+/// Datenbank), trug die Datenbank weiter die alte Anmeldeart, deren
+/// Secrets es nicht mehr gab: Der Server ließ sich nicht mehr verbinden,
+/// und zu sehen war nur die Fehlermeldung des Speicherns. Aufgeräumt wird
+/// seither erst nach erfolgreichem Speichern, durch
+/// [`cleanup_replaced_auth_method_secrets`] beim Aufrufer.
 ///
 /// Spec 0071, A13: `keychain` wird nur für die Fehlerkennzeichnung
 /// durchgereicht (s. [`resolve_sudo_password`]).
@@ -301,8 +434,6 @@ pub fn resolve_auth_method(
     input: AuthMethodInput,
     existing: Option<&AuthMethod>,
 ) -> Result<AuthMethod, CommandError> {
-    cleanup_abandoned_slots(credential_store, existing, &input);
-
     match input {
         AuthMethodInput::Password { value } => {
             let ref_ = credential_ref(server_id, "password");
@@ -459,25 +590,10 @@ pub fn delete_auth_method_secrets(
     credential_store: &dyn CredentialStore,
     auth: &AuthMethod,
 ) -> Vec<CredentialRef> {
-    let refs: Vec<&CredentialRef> = match auth {
-        AuthMethod::Password { credential_ref } => vec![credential_ref],
-        AuthMethod::PrivateKey {
-            credential_ref,
-            passphrase_ref,
-        } => {
-            let mut refs = vec![credential_ref];
-            refs.extend(passphrase_ref.iter());
-            refs
-        }
-        AuthMethod::Agent => Vec::new(),
-        AuthMethod::Certificate { cert_ref, key_ref } => vec![cert_ref, key_ref],
-        // Spec 0076: nur die Passphrase liegt im Schlüsselbund. Die
-        // Schlüsseldatei selbst wird **nicht** angefasst (C-5 gilt
-        // erst recht beim Löschen eines Servers): Wir haben sie nie
-        // angelegt, wir löschen sie nicht.
-        AuthMethod::IdentityFile { passphrase_ref, .. } => passphrase_ref.iter().collect(),
-    };
-    refs.into_iter()
+    // Spec 0082, §5: dieselbe Zuordnung, die auch das Aufräumen nach einem
+    // Methodenwechsel benutzt — sie steht nur noch an einer Stelle.
+    auth_method_credential_refs(auth)
+        .into_iter()
         .filter_map(|r| delete_user_requested_secret(credential_store, r))
         .collect()
 }
@@ -723,8 +839,15 @@ mod tests {
         );
     }
 
+    /// Spec 0082, A2: Das Auflösen der Anmeldeart **löscht nichts** — das
+    /// Aufräumen des verlassenen Slots ist nach hinten gewandert, hinter
+    /// das erfolgreiche Schreiben der Datenbank. Der Nachweis, dass es
+    /// überhaupt noch stattfindet, liegt jetzt am ganzen Ablauf:
+    /// `servers::tests::test_t8_successful_switch_to_agent_removes_the_
+    /// abandoned_password_slot` (Nachfolger von
+    /// `test_update_kind_change_cleans_up_abandoned_slot`).
     #[test]
-    fn test_update_kind_change_cleans_up_abandoned_slot() {
+    fn test_resolving_a_kind_change_does_not_delete_the_previous_slot_yet() {
         let id = ServerId::new();
         let old_ref = credential_ref(id, "password");
         let store = InMemoryCredentialStore::new().with_secret(&old_ref, "old-password");
@@ -742,9 +865,11 @@ mod tests {
         .unwrap();
 
         assert!(matches!(auth, AuthMethod::Agent));
-        assert!(
-            secret_value(&store, &old_ref).is_none(),
-            "verwaister Password-Slot muss aufgeräumt werden"
+        assert_eq!(
+            secret_value(&store, &old_ref).as_deref(),
+            Some("old-password"),
+            "solange die Datenbank noch die alte Anmeldeart trägt, darf deren Eintrag \
+             nicht verschwinden"
         );
     }
 
@@ -782,20 +907,30 @@ mod tests {
         }
     }
 
-    /// **Spec 0076, §7.1 — die Stelle, die still bricht.**
+    /// **Spec 0076, §7.1 — die Stelle, die still brach.**
     ///
-    /// Das `matches!` in [`cleanup_abandoned_slots`] zählt Paare auf und hat
-    /// einen impliziten `false`-Zweig. Fehlt das Paar
-    /// `(IdentityFile, IdentityFile)`, gilt beim bloßen **Bearbeiten** eines
-    /// solchen Servers `same_kind == false` — und der `passphrase`-Slot wird
-    /// aus dem Schlüsselbund gelöscht, obwohl sich die Anmeldeart gar nicht
-    /// geändert hat.
+    /// Damals zählte ein `cleanup_abandoned_slots` Paare von Anmeldearten
+    /// auf, um „ist das dieselbe Art?" zu beantworten, mit einem impliziten
+    /// `false`-Zweig: Fehlte das Paar `(IdentityFile, IdentityFile)`, galt
+    /// das bloße **Bearbeiten** eines solchen Servers als Wechsel — und der
+    /// `passphrase`-Slot verschwand aus dem Schlüsselbund, obwohl sich die
+    /// Anmeldeart gar nicht geändert hatte.
     ///
-    /// Das Tückische daran: Das zurückgegebene `AuthMethod` sieht danach
+    /// Das Tückische daran: Das zurückgegebene `AuthMethod` sah danach
     /// **richtig** aus (`passphrase_ref` kommt aus `existing`, nicht aus dem
-    /// Store) — nur der Schlüsselbund ist leer. Der Nutzer erfährt davon
-    /// erst beim nächsten Verbindungsversuch. Dieser Test prüft deshalb den
-    /// **Store-Inhalt**, nicht nur den Rückgabewert; nur so wird er rot.
+    /// Store) — nur der Schlüsselbund war leer. Der Nutzer erfuhr davon erst
+    /// beim nächsten Verbindungsversuch. Dieser Test prüft deshalb den
+    /// **Store-Inhalt**, nicht nur den Rückgabewert.
+    ///
+    /// Seit Spec 0082 löscht diese Funktion gar nichts mehr, und die
+    /// Paarliste ist einer Differenz zweier Ref-Mengen gewichen (s.
+    /// [`auth_method_credential_refs`]) — der Fall kann strukturell nicht
+    /// wiederkommen. Die Gegenprobe „bei einem echten Wechsel wird sehr
+    /// wohl aufgeräumt" steht jetzt am ganzen Ablauf:
+    /// `servers::tests::test_t12_switching_away_from_an_identity_file_
+    /// removes_the_passphrase_slot` (Nachfolger von
+    /// `test_switching_away_from_an_identity_file_cleans_up_the_passphrase_
+    /// slot`), zusammen mit ihrem Gegenstück T9b.
     #[test]
     fn test_editing_an_identity_file_server_does_not_wipe_its_stored_passphrase() {
         let id = ServerId::new();
@@ -831,39 +966,6 @@ mod tests {
             Some("old-passphrase"),
             "die hinterlegte Passphrase darf beim Bearbeiten nicht aus dem Schlüsselbund \
              verschwinden — das wäre ein Credential-Verlust ohne Fehlermeldung"
-        );
-    }
-
-    /// Gegenprobe zum Test darüber: Bei einem **echten** Wechsel der
-    /// Anmeldeart wird der Passphrase-Slot sehr wohl aufgeräumt — sonst
-    /// bliebe ein verwaister Eintrag im Schlüsselbund zurück, auf den kein
-    /// `AuthMethod` mehr zeigt.
-    ///
-    /// Ohne diese Gegenprobe ließe sich der Test darüber auch dadurch grün
-    /// bekommen, dass man das Aufräumen ganz abschaltet.
-    #[test]
-    fn test_switching_away_from_an_identity_file_cleans_up_the_passphrase_slot() {
-        let id = ServerId::new();
-        let passphrase_ref = credential_ref(id, "passphrase");
-        let store = InMemoryCredentialStore::new().with_secret(&passphrase_ref, "old-passphrase");
-        let existing = AuthMethod::IdentityFile {
-            path: IDENTITY_PATH.to_string(),
-            passphrase_ref: Some(passphrase_ref.clone()),
-        };
-
-        let auth = resolve_auth_method(
-            &store,
-            AVAILABLE,
-            id,
-            AuthMethodInput::Agent,
-            Some(&existing),
-        )
-        .unwrap();
-
-        assert!(matches!(auth, AuthMethod::Agent));
-        assert!(
-            secret_value(&store, &passphrase_ref).is_none(),
-            "verwaister Passphrase-Slot muss aufgeräumt werden"
         );
     }
 
