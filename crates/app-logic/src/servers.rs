@@ -658,4 +658,808 @@ mod tests {
             "bei einem Fehler vor dem DB-Insert darf keine Server-Zeile entstehen"
         );
     }
+
+    // --- Spec 0082: Bearbeiten darf keine Zugangsdaten kosten -------------
+    //
+    // Jeder Test hier fährt den **ganzen** Bearbeiten-Ablauf
+    // ([`update_server`]) — Auflösen der Anmeldeart, Sudo-Passwort,
+    // Schreiben der Datenbank. Genau darin liegt die Zusage: Die
+    // Einzelteile für sich waren immer schon getestet, kaputt war ihr
+    // Zusammenspiel (ein Schritt räumte auf, ein späterer scheiterte, und
+    // niemand nahm das Aufgeräumte zurück).
+    //
+    // Ausgangszustand, wo nicht anders genannt: ein gespeicherter Server
+    // mit `Password` und hinterlegtem Passwort.
+
+    use crate::dto::{AuthMethodInput, LOCAL_SERVER_ID};
+    use crate::server_credentials::{credential_ref, sudo_password_credential_ref};
+    use crate::test_support::log_capture;
+    use secrecy::ExposeSecret;
+
+    const IDENTITY_PATH: &str = "/home/deploy/.ssh/id_ed25519";
+
+    fn stored_server(id: ServerId, auth: AuthMethod) -> Server {
+        let mut s = server("target", None);
+        s.id = id;
+        s.auth = auth;
+        s
+    }
+
+    fn edit_input(auth: AuthMethodInput) -> ServerInput {
+        ServerInput {
+            name: "target".to_string(),
+            host: "example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth,
+            jump_host: None,
+            sudo_password: None,
+            post_ingest_policy: Default::default(),
+            ai_injection_check_enabled: false,
+            sftp_server_path: None,
+        }
+    }
+
+    fn stored_secret(store: &InMemoryCredentialStore, r: &CredentialRef) -> Option<String> {
+        store.get(r).ok().map(|s| s.expose_secret().to_string())
+    }
+
+    /// Die DB-Zeile des Ausgangszustands „Server mit Passwort".
+    fn password_store(id: ServerId, password_ref: &CredentialRef) -> InMemoryProfileStore {
+        InMemoryProfileStore::new().with_server(stored_server(
+            id,
+            AuthMethod::Password {
+                credential_ref: password_ref.clone(),
+            },
+        ))
+    }
+
+    /// Ausgangszustand „Server mit Passwort": DB-Zeile plus passender Ref,
+    /// beides unter derselben ID.
+    fn password_server() -> (ServerId, InMemoryProfileStore, CredentialRef) {
+        let id = ServerId::new();
+        let password_ref = credential_ref(id, "password");
+        let store = password_store(id, &password_ref);
+        (id, store, password_ref)
+    }
+
+    fn auth_of(store: &InMemoryProfileStore, id: &ServerId) -> AuthMethod {
+        store
+            .servers
+            .lock()
+            .unwrap()
+            .get(id)
+            .expect("die Server-Zeile muss noch da sein")
+            .auth
+            .clone()
+    }
+
+    /// T1 (Messung M1): Wechsel auf „Zertifikat" mit beiden Feldern leer.
+    /// Der Fehler ist richtig — der Preis dafür darf nicht das bisherige
+    /// Passwort sein.
+    #[tokio::test]
+    async fn test_t1_failed_switch_to_certificate_keeps_the_previous_password() {
+        let (id, store, password_ref) = password_server();
+        let credentials = InMemoryCredentialStore::new().with_secret(&password_ref, "old-password");
+
+        let err = update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::Certificate {
+                cert_content: None,
+                key_content: None,
+            }),
+        )
+        .await
+        .expect_err("ohne Zertifikat darf nicht gespeichert werden");
+
+        assert_eq!(err.code, Some("SERVER_CERTIFICATE_REQUIRED"));
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password"),
+            "das Passwort der bisherigen Anmeldeart muss den gescheiterten Wechsel überleben"
+        );
+        assert!(matches!(auth_of(&store, &id), AuthMethod::Password { .. }));
+    }
+
+    /// T2 (M2): Der Schlüsselbund verweigert das Schreiben des neuen
+    /// Private Keys.
+    #[tokio::test]
+    async fn test_t2_failed_private_key_write_keeps_the_previous_password() {
+        let (id, store, password_ref) = password_server();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&password_ref, "old-password")
+            .with_failing_set_for_slot("private_key");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::PrivateKey {
+                key_content: Some("-----BEGIN KEY-----".to_string()),
+                passphrase: None,
+            }),
+        )
+        .await
+        .expect_err("ein fehlgeschlagener Schlüsselbund-Write darf nicht als Erfolg gelten");
+
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password")
+        );
+    }
+
+    /// T3 (M3): Der Wechsel selbst gelingt, erst das Sudo-Passwort
+    /// scheitert.
+    #[tokio::test]
+    async fn test_t3_failed_sudo_password_write_keeps_the_previous_password() {
+        let (id, store, password_ref) = password_server();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&password_ref, "old-password")
+            .with_failing_set_for_slot("sudo_password");
+        let mut input = edit_input(AuthMethodInput::Agent);
+        input.sudo_password = Some("sudo-secret".to_string());
+
+        update_server(&store, &credentials, AVAILABLE, id, input)
+            .await
+            .expect_err("ein fehlgeschlagener Sudo-Write darf nicht als Erfolg gelten");
+
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password")
+        );
+        assert!(matches!(auth_of(&store, &id), AuthMethod::Password { .. }));
+    }
+
+    /// T4: Alles im Schlüsselbund gelingt, das Schreiben der Datenbank
+    /// scheitert.
+    #[tokio::test]
+    async fn test_t4_failed_database_write_keeps_the_previous_password() {
+        let id = ServerId::new();
+        let password_ref = credential_ref(id, "password");
+        let store = password_store(id, &password_ref).with_failing_update_server();
+        let credentials = InMemoryCredentialStore::new().with_secret(&password_ref, "old-password");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::Agent),
+        )
+        .await
+        .expect_err("ein fehlgeschlagener DB-Write darf nicht als Erfolg gelten");
+
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password")
+        );
+    }
+
+    /// T5 (M4): Zertifikat angegeben, Zertifikats-Key vergessen. Der
+    /// Aufruf hat den `certificate`-Slot schon geschrieben, bevor die
+    /// zweite Pflichtfeld-Prüfung zuschlägt — beides muss zurück: das
+    /// Passwort bleibt, der halb geschriebene neue Slot verschwindet.
+    #[tokio::test]
+    async fn test_t5_failed_certificate_switch_keeps_password_and_leaves_no_orphan() {
+        let (id, store, password_ref) = password_server();
+        let credentials = InMemoryCredentialStore::new().with_secret(&password_ref, "old-password");
+
+        let err = update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::Certificate {
+                cert_content: Some("cert-pem".to_string()),
+                key_content: None,
+            }),
+        )
+        .await
+        .expect_err("ohne Zertifikats-Key darf nicht gespeichert werden");
+
+        assert_eq!(err.code, Some("SERVER_CERTIFICATE_KEY_REQUIRED"));
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password")
+        );
+        assert!(
+            stored_secret(&credentials, &credential_ref(id, "certificate")).is_none(),
+            "der bereits geschriebene Zertifikat-Slot darf nicht verwaist zurückbleiben"
+        );
+    }
+
+    /// T6 (M5): Private Key → Schlüsseldatei **mit neuer Passphrase**.
+    /// Beide Anmeldearten legen ihre Passphrase unter demselben Ref ab —
+    /// wer die Slots der alten Art pauschal abräumt, löscht hier die
+    /// gerade gespeicherte Passphrase.
+    #[tokio::test]
+    async fn test_t6_switch_to_identity_file_with_a_new_passphrase_keeps_the_shared_slot() {
+        let id = ServerId::new();
+        let key_ref = credential_ref(id, "private_key");
+        let passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryProfileStore::new().with_server(stored_server(
+            id,
+            AuthMethod::PrivateKey {
+                credential_ref: key_ref.clone(),
+                passphrase_ref: Some(passphrase_ref.clone()),
+            },
+        ));
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&key_ref, "old-key")
+            .with_secret(&passphrase_ref, "old-passphrase");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::IdentityFile {
+                path: IDENTITY_PATH.to_string(),
+                passphrase: Some("new-passphrase".to_string()),
+            }),
+        )
+        .await
+        .expect("der Wechsel ist vollständig angegeben und muss gelingen");
+
+        assert_eq!(
+            stored_secret(&credentials, &passphrase_ref).as_deref(),
+            Some("new-passphrase"),
+            "die Passphrase der NEUEN Anmeldeart darf das Aufräumen nicht treffen"
+        );
+        assert!(
+            stored_secret(&credentials, &key_ref).is_none(),
+            "der Private-Key-Slot gehört zur alten Art und wird aufgeräumt"
+        );
+        let AuthMethod::IdentityFile {
+            passphrase_ref: saved,
+            path,
+        } = auth_of(&store, &id)
+        else {
+            panic!("die DB muss die neue Anmeldeart tragen");
+        };
+        assert_eq!(path, IDENTITY_PATH);
+        assert_eq!(saved.as_ref(), Some(&passphrase_ref));
+    }
+
+    /// T7: derselbe Wechsel **ohne** neue Passphrase — dann verweist die
+    /// neue Anmeldeart auf gar keinen Slot, und beide alten fallen weg.
+    #[tokio::test]
+    async fn test_t7_switch_to_identity_file_without_a_passphrase_clears_both_old_slots() {
+        let id = ServerId::new();
+        let key_ref = credential_ref(id, "private_key");
+        let passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryProfileStore::new().with_server(stored_server(
+            id,
+            AuthMethod::PrivateKey {
+                credential_ref: key_ref.clone(),
+                passphrase_ref: Some(passphrase_ref.clone()),
+            },
+        ));
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&key_ref, "old-key")
+            .with_secret(&passphrase_ref, "old-passphrase");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::IdentityFile {
+                path: IDENTITY_PATH.to_string(),
+                passphrase: None,
+            }),
+        )
+        .await
+        .expect("eine Schlüsseldatei ohne Passphrase ist vollständig angegeben");
+
+        assert!(stored_secret(&credentials, &key_ref).is_none());
+        assert!(stored_secret(&credentials, &passphrase_ref).is_none());
+        let AuthMethod::IdentityFile {
+            passphrase_ref: saved,
+            ..
+        } = auth_of(&store, &id)
+        else {
+            panic!("die DB muss die neue Anmeldeart tragen");
+        };
+        assert!(saved.is_none());
+    }
+
+    /// T8 (A5): Nachfolger von `test_update_kind_change_cleans_up_
+    /// abandoned_slot` — beim **erfolgreichen** Wechsel wird der Slot der
+    /// alten Art sehr wohl entfernt. Ohne diesen Test ließe sich jeder
+    /// Test darüber auch dadurch grün bekommen, dass man das Aufräumen
+    /// ganz abschaltet.
+    #[tokio::test]
+    async fn test_t8_successful_switch_to_agent_removes_the_abandoned_password_slot() {
+        let (id, store, password_ref) = password_server();
+        let credentials = InMemoryCredentialStore::new().with_secret(&password_ref, "old-password");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::Agent),
+        )
+        .await
+        .expect("der Wechsel auf den Agenten braucht keine Eingabe und muss gelingen");
+
+        assert!(
+            stored_secret(&credentials, &password_ref).is_none(),
+            "nach erfolgreichem Wechsel darf kein verwaister Passwort-Slot zurückbleiben"
+        );
+        assert!(matches!(auth_of(&store, &id), AuthMethod::Agent));
+    }
+
+    /// T9 (A5): gleiche Anmeldeart, leeres Feld — „leer = unverändert"
+    /// gilt weiter.
+    #[tokio::test]
+    async fn test_t9_editing_without_changing_the_method_keeps_the_stored_password() {
+        let (id, store, password_ref) = password_server();
+        let credentials = InMemoryCredentialStore::new().with_secret(&password_ref, "old-password");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::Password { value: None }),
+        )
+        .await
+        .expect("ein leeres Passwortfeld beim Bearbeiten bedeutet unverändert");
+
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password")
+        );
+    }
+
+    /// T9b: derselbe Fall für die Schlüsseldatei — der Fund aus Spec 0076,
+    /// §7.1, jetzt am **ganzen** Ablauf statt nur an `resolve_auth_method`.
+    /// Dort prüfte ihn eine Paarliste; hier kann er per Konstruktion nicht
+    /// mehr auftreten (gleiche Art ⇒ leere Differenzmenge). Der Test hält
+    /// das fest, statt sich darauf zu verlassen.
+    #[tokio::test]
+    async fn test_t9b_editing_an_identity_file_server_keeps_its_stored_passphrase() {
+        let id = ServerId::new();
+        let passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryProfileStore::new().with_server(stored_server(
+            id,
+            AuthMethod::IdentityFile {
+                path: IDENTITY_PATH.to_string(),
+                passphrase_ref: Some(passphrase_ref.clone()),
+            },
+        ));
+        let credentials =
+            InMemoryCredentialStore::new().with_secret(&passphrase_ref, "old-passphrase");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::IdentityFile {
+                path: IDENTITY_PATH.to_string(),
+                passphrase: None,
+            }),
+        )
+        .await
+        .expect("das bloße Bearbeiten einer Schlüsseldatei muss gelingen");
+
+        assert_eq!(
+            stored_secret(&credentials, &passphrase_ref).as_deref(),
+            Some("old-passphrase")
+        );
+    }
+
+    /// T10 (A4): Das Speichern gelingt, nur das Aufräumen des alten Slots
+    /// scheitert. Das Ergebnis bleibt Erfolg — aber der Rückstand darf
+    /// nicht spurlos verschwinden. Im Log steht der Ref, **nicht** das
+    /// Passwort.
+    #[tokio::test]
+    async fn test_t10_a_failed_cleanup_still_succeeds_but_warns_with_the_ref_only() {
+        log_capture::start_recording();
+        let (id, store, password_ref) = password_server();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&password_ref, "old-password")
+            .with_failing_delete();
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::Agent),
+        )
+        .await
+        .expect("ein klemmender Schlüsselbund darf das Speichern nicht scheitern lassen");
+
+        assert!(matches!(auth_of(&store, &id), AuthMethod::Agent));
+        let log = log_capture::recorded_text();
+        assert!(
+            log.contains(password_ref.as_str()),
+            "der nicht entfernte Eintrag muss mit seinem Ref im Log auftauchen, war: {log}"
+        );
+        assert!(
+            !log.contains("old-password"),
+            "der Secret-Inhalt darf nie im Log stehen, war: {log}"
+        );
+    }
+
+    /// T11 (M5, Gegenrichtung): Schlüsseldatei → Private Key, beides neu.
+    /// Auch hier trägt die neue Art den Ref, den die alte als
+    /// „aufzuräumen" führt.
+    #[tokio::test]
+    async fn test_t11_switch_from_identity_file_to_private_key_keeps_the_new_passphrase() {
+        let id = ServerId::new();
+        let passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryProfileStore::new().with_server(stored_server(
+            id,
+            AuthMethod::IdentityFile {
+                path: IDENTITY_PATH.to_string(),
+                passphrase_ref: Some(passphrase_ref.clone()),
+            },
+        ));
+        let credentials =
+            InMemoryCredentialStore::new().with_secret(&passphrase_ref, "old-passphrase");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::PrivateKey {
+                key_content: Some("-----BEGIN KEY-----".to_string()),
+                passphrase: Some("new-passphrase".to_string()),
+            }),
+        )
+        .await
+        .expect("der Wechsel ist vollständig angegeben und muss gelingen");
+
+        assert_eq!(
+            stored_secret(&credentials, &passphrase_ref).as_deref(),
+            Some("new-passphrase")
+        );
+        let AuthMethod::PrivateKey {
+            passphrase_ref: saved,
+            ..
+        } = auth_of(&store, &id)
+        else {
+            panic!("die DB muss die neue Anmeldeart tragen");
+        };
+        assert_eq!(saved.as_ref(), Some(&passphrase_ref));
+    }
+
+    /// T12 (A5): Nachfolger von `test_switching_away_from_an_identity_
+    /// file_cleans_up_the_passphrase_slot` — die Gegenprobe zu T9b.
+    #[tokio::test]
+    async fn test_t12_switching_away_from_an_identity_file_removes_the_passphrase_slot() {
+        let id = ServerId::new();
+        let passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryProfileStore::new().with_server(stored_server(
+            id,
+            AuthMethod::IdentityFile {
+                path: IDENTITY_PATH.to_string(),
+                passphrase_ref: Some(passphrase_ref.clone()),
+            },
+        ));
+        let credentials =
+            InMemoryCredentialStore::new().with_secret(&passphrase_ref, "old-passphrase");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::Agent),
+        )
+        .await
+        .expect("der Wechsel auf den Agenten muss gelingen");
+
+        assert!(
+            stored_secret(&credentials, &passphrase_ref).is_none(),
+            "verwaister Passphrase-Slot muss nach erfolgreichem Wechsel weg sein"
+        );
+    }
+
+    /// T13 (A3, Sudo): Der Rückweg darf **nicht** wie beim Anlegen alle
+    /// Slots des Servers abräumen. Das Sudo-Passwort ist ein eigener Slot,
+    /// unabhängig von der Anmeldeart — es gehört weder der alten noch der
+    /// neuen Art und wird deshalb nie angefasst (R1: der neue Wert bleibt
+    /// stehen).
+    #[tokio::test]
+    async fn test_t13_rollback_never_touches_the_sudo_password_slot() {
+        let id = ServerId::new();
+        let password_ref = credential_ref(id, "password");
+        let sudo_ref = sudo_password_credential_ref(id);
+        let store = password_store(id, &password_ref).with_failing_update_server();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&password_ref, "old-password")
+            .with_secret(&sudo_ref, "old-sudo");
+        let mut input = edit_input(AuthMethodInput::Agent);
+        input.sudo_password = Some("new-sudo".to_string());
+
+        update_server(&store, &credentials, AVAILABLE, id, input)
+            .await
+            .expect_err("ein fehlgeschlagener DB-Write darf nicht als Erfolg gelten");
+
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password"),
+            "die bisherige Anmeldeart bleibt verbindbar"
+        );
+        assert_eq!(
+            stored_secret(&credentials, &sudo_ref).as_deref(),
+            Some("new-sudo"),
+            "das Sudo-Passwort gehört keiner Anmeldeart und darf vom Rückweg nicht \
+             abgeräumt werden (R1)"
+        );
+    }
+
+    /// T14 (A4 auf dem Rückweg): wie T5, zusätzlich klemmt jedes
+    /// Entfernen. Der gemeldete Fehler bleibt der **ursprüngliche** —
+    /// ein per `?` durchgereichter Löschfehler würde dem Nutzer die
+    /// falsche Ursache nennen.
+    #[tokio::test]
+    async fn test_t14_a_failed_rollback_keeps_the_original_error_and_warns() {
+        log_capture::start_recording();
+        let (id, store, password_ref) = password_server();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&password_ref, "old-password")
+            .with_failing_delete();
+
+        let err = update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::Certificate {
+                cert_content: Some("cert-pem".to_string()),
+                key_content: None,
+            }),
+        )
+        .await
+        .expect_err("ohne Zertifikats-Key darf nicht gespeichert werden");
+
+        assert_eq!(
+            err.code,
+            Some("SERVER_CERTIFICATE_KEY_REQUIRED"),
+            "der Löschfehler des Rückwegs darf den gemeldeten Fehler nicht verdrängen"
+        );
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password")
+        );
+        let log = log_capture::recorded_text();
+        let certificate_ref = credential_ref(id, "certificate");
+        assert!(
+            log.contains(certificate_ref.as_str()),
+            "der nicht entfernte Eintrag muss mit seinem Ref im Log auftauchen, war: {log}"
+        );
+        assert!(
+            !log.contains("cert-pem"),
+            "der Secret-Inhalt darf nie im Log stehen, war: {log}"
+        );
+    }
+
+    /// T15 (A6): Ein lokaler Jump-Host wird abgelehnt, **bevor** irgendein
+    /// Schlüsselbund-Zugriff passiert. Der Store lehnt jedes Löschen ab —
+    /// so kann ein zu früh geschriebener Eintrag nicht vom Rückweg
+    /// verwischt werden und fällt auf.
+    #[tokio::test]
+    async fn test_t15_a_local_jump_host_is_rejected_before_any_keychain_access() {
+        let (id, store, password_ref) = password_server();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&password_ref, "old-password")
+            .with_failing_delete();
+        let mut input = edit_input(AuthMethodInput::PrivateKey {
+            key_content: Some("-----BEGIN KEY-----".to_string()),
+            passphrase: None,
+        });
+        input.jump_host = Some(LOCAL_SERVER_ID);
+        input.sudo_password = Some("new-sudo".to_string());
+
+        let err = update_server(&store, &credentials, AVAILABLE, id, input)
+            .await
+            .expect_err("der lokale Pseudo-Server ist als Jump-Host ausgeschlossen");
+
+        // **Vor** allen weiteren Zusicherungen abgegriffen: `stored_secret`
+        // liest selbst über den Store und würde den Zähler sonst hochtreiben,
+        // bis die Aussage nichts mehr über den Produktivcode sagt.
+        let reads_during_the_call = credentials.get_calls();
+
+        assert_eq!(err.code, Some("SERVER_JUMP_HOST_LOCAL"));
+        assert_eq!(
+            reads_during_the_call, 0,
+            "vor der Ablehnung darf nicht einmal gelesen werden"
+        );
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password")
+        );
+        assert!(stored_secret(&credentials, &credential_ref(id, "private_key")).is_none());
+        assert!(stored_secret(&credentials, &sudo_password_credential_ref(id)).is_none());
+    }
+
+    /// T15b: dasselbe für den lokalen Pseudo-Server selbst — er hat keine
+    /// `servers`-Zeile, die Ablehnung muss also vor dem Profil-Lesen
+    /// greifen.
+    #[tokio::test]
+    async fn test_t15b_the_local_pseudo_server_is_rejected_before_any_keychain_access() {
+        let id = LOCAL_SERVER_ID;
+        let password_ref = credential_ref(id, "password");
+        let store = InMemoryProfileStore::new();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&password_ref, "old-password")
+            .with_failing_delete();
+        let mut input = edit_input(AuthMethodInput::PrivateKey {
+            key_content: Some("-----BEGIN KEY-----".to_string()),
+            passphrase: None,
+        });
+        input.sudo_password = Some("new-sudo".to_string());
+
+        update_server(&store, &credentials, AVAILABLE, id, input)
+            .await
+            .expect_err("der lokale Pseudo-Server wird nicht auf diesem Weg bearbeitet");
+
+        // S. T15: der Zähler wird vor den lesenden Zusicherungen abgegriffen.
+        let reads_during_the_call = credentials.get_calls();
+
+        assert_eq!(
+            reads_during_the_call, 0,
+            "vor der Ablehnung darf nicht einmal gelesen werden"
+        );
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password")
+        );
+        assert!(stored_secret(&credentials, &credential_ref(id, "private_key")).is_none());
+        assert!(stored_secret(&credentials, &sudo_password_credential_ref(id)).is_none());
+    }
+
+    /// T16 (R1 festhalten): gleiche Anmeldeart mit **neuem** Wert, danach
+    /// scheitert die Datenbank. Der neue Wert bleibt stehen — er gehört
+    /// demselben Ref wie der alte, ein Rückweg, der ihn als „in diesem
+    /// Aufruf geschrieben" entfernt, nähme dem Server seine Anmeldung.
+    #[tokio::test]
+    async fn test_t16_an_overwritten_shared_slot_is_never_removed_by_the_rollback() {
+        let id = ServerId::new();
+        let password_ref = credential_ref(id, "password");
+        let store = password_store(id, &password_ref).with_failing_update_server();
+        let credentials = InMemoryCredentialStore::new().with_secret(&password_ref, "old-password");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::Password {
+                value: Some("new-password".to_string()),
+            }),
+        )
+        .await
+        .expect_err("ein fehlgeschlagener DB-Write darf nicht als Erfolg gelten");
+
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("new-password"),
+            "R1: der überschriebene Wert bleibt stehen — gelöscht wird er nie"
+        );
+    }
+
+    /// T17 (A3): Der neue Slot steht schon im Schlüsselbund, als die
+    /// Datenbank scheitert. Er gehört zu keiner gespeicherten Anmeldeart
+    /// und muss weg.
+    #[tokio::test]
+    async fn test_t17_a_database_failure_removes_the_newly_written_private_key() {
+        let id = ServerId::new();
+        let password_ref = credential_ref(id, "password");
+        let store = password_store(id, &password_ref).with_failing_update_server();
+        let credentials = InMemoryCredentialStore::new().with_secret(&password_ref, "old-password");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::PrivateKey {
+                key_content: Some("-----BEGIN KEY-----".to_string()),
+                passphrase: None,
+            }),
+        )
+        .await
+        .expect_err("ein fehlgeschlagener DB-Write darf nicht als Erfolg gelten");
+
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password")
+        );
+        assert!(
+            stored_secret(&credentials, &credential_ref(id, "private_key")).is_none(),
+            "der Rückweg muss auch außerhalb der Credential-Auflösung greifen"
+        );
+    }
+
+    /// T17b: derselbe Rückweg, nur scheitert diesmal das Sudo-Passwort —
+    /// ein Schritt, der gar nicht in `resolve_auth_method` liegt.
+    #[tokio::test]
+    async fn test_t17b_a_failed_sudo_write_removes_the_newly_written_private_key() {
+        let (id, store, password_ref) = password_server();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&password_ref, "old-password")
+            .with_failing_set_for_slot("sudo_password");
+        let mut input = edit_input(AuthMethodInput::PrivateKey {
+            key_content: Some("-----BEGIN KEY-----".to_string()),
+            passphrase: None,
+        });
+        input.sudo_password = Some("new-sudo".to_string());
+
+        update_server(&store, &credentials, AVAILABLE, id, input)
+            .await
+            .expect_err("ein fehlgeschlagener Sudo-Write darf nicht als Erfolg gelten");
+
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("old-password")
+        );
+        assert!(stored_secret(&credentials, &credential_ref(id, "private_key")).is_none());
+    }
+
+    /// T18 (M5 auf dem Fehlerweg): Der Rückweg darf „in diesem Aufruf
+    /// geschrieben" nicht ohne Abgleich mit den Refs der bisherigen Art
+    /// lesen — sonst löscht er hier die Passphrase, auf die die **alte**,
+    /// weiterhin gespeicherte Anmeldeart verweist.
+    #[tokio::test]
+    async fn test_t18_a_rollback_never_removes_a_slot_the_previous_method_still_uses() {
+        let id = ServerId::new();
+        let key_ref = credential_ref(id, "private_key");
+        let passphrase_ref = credential_ref(id, "passphrase");
+        let store = InMemoryProfileStore::new()
+            .with_server(stored_server(
+                id,
+                AuthMethod::PrivateKey {
+                    credential_ref: key_ref.clone(),
+                    passphrase_ref: Some(passphrase_ref.clone()),
+                },
+            ))
+            .with_failing_update_server();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&key_ref, "old-key")
+            .with_secret(&passphrase_ref, "old-passphrase");
+
+        update_server(
+            &store,
+            &credentials,
+            AVAILABLE,
+            id,
+            edit_input(AuthMethodInput::IdentityFile {
+                path: IDENTITY_PATH.to_string(),
+                passphrase: Some("new-passphrase".to_string()),
+            }),
+        )
+        .await
+        .expect_err("ein fehlgeschlagener DB-Write darf nicht als Erfolg gelten");
+
+        assert_eq!(
+            stored_secret(&credentials, &key_ref).as_deref(),
+            Some("old-key"),
+            "der Schlüssel der bisherigen Anmeldeart bleibt"
+        );
+        assert_eq!(
+            stored_secret(&credentials, &passphrase_ref).as_deref(),
+            Some("new-passphrase"),
+            "der gemeinsame Slot bleibt stehen (R1) — gelöscht wäre die alte Anmeldung \
+             nicht mehr zu entsperren"
+        );
+        assert!(
+            matches!(auth_of(&store, &id), AuthMethod::PrivateKey { .. }),
+            "die Datenbank ist unverändert"
+        );
+    }
 }

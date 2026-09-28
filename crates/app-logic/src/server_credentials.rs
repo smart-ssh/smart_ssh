@@ -22,7 +22,13 @@ use crate::error::{keychain_aware_credential_error, CommandError};
 /// Deterministischer `CredentialRef` pro `(server_id, slot)` — kein
 /// zusätzlicher Zustand nötig, um sich "den Ref von vorhin" zu merken; bei
 /// `update_server` wird derselbe String einfach erneut berechnet.
-fn credential_ref(server_id: ServerId, slot: &str) -> CredentialRef {
+///
+/// `pub(crate)` seit Spec 0082, damit die Tests des Bearbeiten-Ablaufs in
+/// [`crate::servers`] dieselbe Berechnung benutzen wie der Produktivcode,
+/// statt das Format `server:{id}:{slot}` ein zweites Mal hinzuschreiben —
+/// eine Kopie würde bei einer Änderung hier still danebenliegen und die
+/// Tests gegen Slots prüfen lassen, die es gar nicht gibt.
+pub(crate) fn credential_ref(server_id: ServerId, slot: &str) -> CredentialRef {
     CredentialRef::new(format!("server:{}:{slot}", server_id.0))
 }
 
