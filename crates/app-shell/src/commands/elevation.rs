@@ -8,6 +8,7 @@ use tauri::State;
 
 use ssh_manager_core::ssh::SftpSession;
 
+use crate::elevated_sftp::{ElevatedSftpRegistry, ElevatedSftpSlot, ElevationContext};
 use crate::error::{CommandError, CommandResult};
 use crate::session::Session;
 use crate::state::{AppState, SessionId};
@@ -29,9 +30,14 @@ use crate::state::{AppState, SessionId};
 // `RENAME`, für beide Eintragstypen) war davon nie betroffen.
 
 /// Spec 0067, Teil A: Zugangsnachweis für den erhöhten SFTP-Kanal
-/// (`crate::elevated_sftp::ElevatedSftpSlot::lock`). Das private Feld macht
-/// ihn außerhalb dieses Moduls unkonstruierbar — KI (`orchestration`) und
-/// MCP (`mcp_backend`) kommen so nie an den erhöhten Kanal.
+/// (`crate::elevated_sftp::ElevatedSftpSlot::lock_owned` und jedes
+/// Nachschlagen in der `ElevatedSftpRegistry`). Das private Feld macht ihn
+/// außerhalb dieses Moduls unkonstruierbar — KI (`orchestration`) und MCP
+/// (`mcp_backend`) kommen so nie an den erhöhten Kanal.
+///
+/// Spec 0084, A1: Seit der Kanal nicht mehr an der `Session` hängt, kommt
+/// eine zweite Hürde dazu — wer ihn erreichen will, braucht zusätzlich die
+/// Zuordnung, und die bekommt nur, wer sie als Tauri-Zustand anfordert.
 pub(crate) struct BrowserAccess(());
 
 #[cfg(test)]
@@ -49,17 +55,32 @@ impl BrowserAccess {
 /// Nutzer (Spec 0067, A5: "kein stiller Upload als normaler Nutzer";
 /// spec-reviewer-Fund: Edit-Flow darf nicht unter einem inzwischen
 /// umgeschalteten Nutzer hochladen).
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Spec 0084, A1: Der erhöhte Kanal hängt nicht mehr an der `Session`,
+/// sondern an der [`ElevatedSftpRegistry`]. Er wird deshalb hier — beim
+/// Übersetzen der Frontend-Anfrage — einmal nachgeschlagen und mitgeführt;
+/// `slot: None` heißt „für diese Sitzung ist kein erhöhter Kanal aktiv“ und
+/// lässt jede Aktion scheitern, nie zurückfallen.
 pub(super) enum BrowserChannel {
     Normal,
-    /// Erwarteter Ziel-Nutzer des erhöhten Kanals.
-    Elevated(String),
+    Elevated {
+        /// Erwarteter Ziel-Nutzer des erhöhten Kanals.
+        expected_user: String,
+        slot: Option<ElevatedSftpSlot>,
+    },
 }
 
 impl BrowserChannel {
-    pub(super) fn from_request(elevated_user: Option<String>) -> Self {
+    pub(super) fn from_request(
+        registry: &ElevatedSftpRegistry,
+        session_id: SessionId,
+        elevated_user: Option<String>,
+    ) -> Self {
         match elevated_user {
-            Some(user) => Self::Elevated(user),
+            Some(expected_user) => Self::Elevated {
+                expected_user,
+                slot: registry.slot(session_id, &BrowserAccess(())),
+            },
             None => Self::Normal,
         }
     }
@@ -73,9 +94,19 @@ const ELEVATED_CHANNEL_INACTIVE: &str =
 pub(super) enum BrowserSftpGuard<'a> {
     Normal(tokio::sync::MutexGuard<'a, Option<Box<dyn SftpSession>>>),
     Elevated {
-        guard: tokio::sync::MutexGuard<'a, Option<crate::elevated_sftp::ElevatedSftp>>,
+        /// Spec 0084, §4: eine *eigene* Sperre je Sitzung, unabhängig von
+        /// der Sperre der Zuordnung — ein laufender Vorgang hier hält das
+        /// Trennen einer anderen Sitzung nicht auf. `Owned`, weil der Kanal
+        /// nicht mehr an der `Session` hängt, sondern an einem Eintrag, der
+        /// währenddessen aus der Zuordnung verschwinden darf.
+        guard: tokio::sync::OwnedMutexGuard<Option<crate::elevated_sftp::ElevatedSftp>>,
         expected_user: String,
     },
+    /// Spec 0084, A1/A2: Für diese Sitzung ist kein erhöhter Kanal
+    /// eingetragen (nie eingeschaltet, oder die Sitzung wurde getrennt).
+    /// Jede Aktion scheitert — nie ein stiller Rückfall auf den normalen
+    /// Kanal (Spec 0067, A5).
+    ElevatedInactive,
 }
 
 impl BrowserSftpGuard<'_> {
@@ -84,6 +115,7 @@ impl BrowserSftpGuard<'_> {
             Self::Normal(guard) => Ok(guard
                 .as_mut()
                 .expect("browser_session öffnet den normalen Kanal vorab")),
+            Self::ElevatedInactive => Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE)),
             Self::Elevated {
                 guard,
                 expected_user,
@@ -106,7 +138,7 @@ impl BrowserSftpGuard<'_> {
     /// Ziel-Nutzer, wenn diese Aktion über den erhöhten Kanal läuft.
     pub(super) fn elevated_user(&self) -> Option<String> {
         match self {
-            Self::Normal(_) => None,
+            Self::Normal(_) | Self::ElevatedInactive => None,
             Self::Elevated { guard, .. } => guard.as_ref().map(|e| e.target_user.clone()),
         }
     }
@@ -168,10 +200,14 @@ pub(super) async fn lock_browser_sftp<'a>(
 ) -> BrowserSftpGuard<'a> {
     match channel {
         BrowserChannel::Normal => BrowserSftpGuard::Normal(session.sftp.lock().await),
-        BrowserChannel::Elevated(expected_user) => BrowserSftpGuard::Elevated {
-            guard: session.elevated_sftp.lock(&BrowserAccess(())).await,
+        BrowserChannel::Elevated {
+            expected_user,
+            slot: Some(slot),
+        } => BrowserSftpGuard::Elevated {
+            guard: slot.lock_owned(&BrowserAccess(())).await,
             expected_user: expected_user.clone(),
         },
+        BrowserChannel::Elevated { slot: None, .. } => BrowserSftpGuard::ElevatedInactive,
     }
 }
 
@@ -190,13 +226,8 @@ pub(super) async fn browser_session(
         .ok_or("Session nicht gefunden")?;
     match channel {
         BrowserChannel::Normal => crate::orchestration::ensure_sftp_open(&session).await?,
-        BrowserChannel::Elevated(_) => {
-            if session
-                .elevated_sftp
-                .lock(&BrowserAccess(()))
-                .await
-                .is_none()
-            {
+        BrowserChannel::Elevated { slot, .. } => {
+            if slot.is_none() {
                 return Err(ELEVATED_CHANNEL_INACTIVE.into());
             }
         }
@@ -211,6 +242,7 @@ pub(super) async fn browser_session(
 #[tauri::command]
 pub async fn sftp_elevation_enable(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     target_user: Option<String>,
 ) -> CommandResult<crate::dto::ElevationResultDto> {
@@ -236,29 +268,34 @@ pub async fn sftp_elevation_enable(
         });
     }
     let server = state.profile_store.get_server(&session.server_id).await?;
-    Ok(crate::elevated_sftp::enable(
-        &session,
+    crate::elevated_sftp::enable(
+        &ElevationContext {
+            sessions: &state.sessions,
+            registry: elevated.inner(),
+            session_id,
+            session: &session,
+        },
         &server.username,
         server.sftp_server_path.as_deref(),
         target_user.as_deref(),
         &BrowserAccess(()),
     )
-    .await)
+    .await
 }
 
 /// Spec 0067, A5: schaltet den erhöhten Kanal aus. Das Frontend ruft das
 /// auch beim Öffnen des Browsers auf, damit ein evtl. noch offener Kanal nie
 /// unbemerkt aktiv bleibt.
+///
+/// Spec 0084, T9: braucht die Sitzung nicht mehr nachzuschlagen — der Kanal
+/// hängt an der Zuordnung, nicht an der Sitzung. Für eine unbekannte
+/// Kennung passiert deshalb schlicht nichts, statt einen Fehler zu melden.
 #[tauri::command]
 pub async fn sftp_elevation_disable(
-    state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
-    crate::elevated_sftp::disable(&session, &BrowserAccess(())).await;
+    crate::elevated_sftp::disable(elevated.inner(), session_id, &BrowserAccess(()));
     Ok(())
 }
 
@@ -266,13 +303,17 @@ pub async fn sftp_elevation_disable(
 #[tauri::command]
 pub async fn sftp_elevation_status(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
 ) -> CommandResult<Option<String>> {
-    let session = state
+    state
         .sessions
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
-    let guard = session.elevated_sftp.lock(&BrowserAccess(())).await;
+    let Some(slot) = elevated.slot(session_id, &BrowserAccess(())) else {
+        return Ok(None);
+    };
+    let guard = slot.lock_owned(&BrowserAccess(())).await;
     Ok(guard.as_ref().map(|elevated| elevated.target_user.clone()))
 }
 
@@ -381,14 +422,34 @@ mod browser_channel_tests {
         }
     }
 
+    /// Spec 0084, A1: der erhöhte Kanal liegt in der Zuordnung, nicht an der
+    /// `Session` — Tests bauen ihre Ausgangslage deshalb hier auf.
+    fn registry_with_channel(
+        session_id: SessionId,
+        target_user: &str,
+        sftp: ssh_manager_core::ssh::mock::MockSftpSession,
+    ) -> ElevatedSftpRegistry {
+        let registry = ElevatedSftpRegistry::default();
+        registry.insert_for_tests(
+            session_id,
+            crate::elevated_sftp::ElevatedSftp {
+                target_user: target_user.to_string(),
+                sftp: Box::new(sftp),
+            },
+        );
+        registry
+    }
+
     #[tokio::test]
     async fn test_elevated_request_without_active_channel_fails_instead_of_falling_back() {
         let session = crate::test_support::session_with_transport(Box::new(NoTransport));
         *session.sftp.lock().await =
             Some(Box::new(ssh_manager_core::ssh::mock::MockSftpSession::new()));
+        let registry = ElevatedSftpRegistry::default();
+        let session_id = SessionId::new_v4();
 
-        let mut guard =
-            lock_browser_sftp(&session, &BrowserChannel::Elevated("root".to_string())).await;
+        let channel = BrowserChannel::from_request(&registry, session_id, Some("root".to_string()));
+        let mut guard = lock_browser_sftp(&session, &channel).await;
         let err = guard
             .sftp()
             .err()
@@ -402,14 +463,16 @@ mod browser_channel_tests {
     #[tokio::test]
     async fn test_elevated_request_for_another_user_than_active_fails() {
         let session = crate::test_support::session_with_transport(Box::new(NoTransport));
-        *session.elevated_sftp.lock(&BrowserAccess(())).await =
-            Some(crate::elevated_sftp::ElevatedSftp {
-                target_user: "root".to_string(),
-                sftp: Box::new(ssh_manager_core::ssh::mock::MockSftpSession::new()),
-            });
+        let session_id = SessionId::new_v4();
+        let registry = registry_with_channel(
+            session_id,
+            "root",
+            ssh_manager_core::ssh::mock::MockSftpSession::new(),
+        );
 
-        let mut guard =
-            lock_browser_sftp(&session, &BrowserChannel::Elevated("www-data".to_string())).await;
+        let channel =
+            BrowserChannel::from_request(&registry, session_id, Some("www-data".to_string()));
+        let mut guard = lock_browser_sftp(&session, &channel).await;
         let err = guard
             .sftp()
             .err()
@@ -423,23 +486,77 @@ mod browser_channel_tests {
         let normal = ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "USER");
         let elevated = ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "ROOT");
         *session.sftp.lock().await = Some(Box::new(normal));
-        *session.elevated_sftp.lock(&BrowserAccess(())).await =
-            Some(crate::elevated_sftp::ElevatedSftp {
-                target_user: "root".to_string(),
-                sftp: Box::new(elevated),
-            });
+        let session_id = SessionId::new_v4();
+        let registry = registry_with_channel(session_id, "root", elevated);
 
-        let mut guard =
-            lock_browser_sftp(&session, &BrowserChannel::Elevated("root".to_string())).await;
+        let channel = BrowserChannel::from_request(&registry, session_id, Some("root".to_string()));
+        let mut guard = lock_browser_sftp(&session, &channel).await;
         assert_eq!(
             guard.sftp().unwrap().read_file("/x").await.unwrap(),
             b"ROOT"
         );
         drop(guard);
-        let mut guard = lock_browser_sftp(&session, &BrowserChannel::Normal).await;
+        let channel = BrowserChannel::from_request(&registry, session_id, None);
+        let mut guard = lock_browser_sftp(&session, &channel).await;
         assert_eq!(
             guard.sftp().unwrap().read_file("/x").await.unwrap(),
             b"USER"
+        );
+    }
+
+    /// Spec 0084, T7: Zwei gleichzeitige Sitzungen zum **selben** Server,
+    /// der erhöhte Kanal ist nur in A aktiv. B muss über den normalen Kanal
+    /// laufen, und Ausschalten in B darf A nicht berühren. Scheitert, wenn
+    /// die Zuordnung nicht an der Sitzung hängt (z. B. am Server).
+    #[tokio::test]
+    async fn test_t7_an_elevated_channel_belongs_to_its_session_not_to_the_server() {
+        let server_id = ssh_manager_core::shared::ServerId::new();
+        let mut session_a = crate::test_support::session_with_transport(Box::new(NoTransport));
+        let mut session_b = crate::test_support::session_with_transport(Box::new(NoTransport));
+        session_a.server_id = server_id;
+        session_b.server_id = server_id;
+        *session_b.sftp.lock().await = Some(Box::new(
+            ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "USER-B"),
+        ));
+
+        let id_a = SessionId::new_v4();
+        let id_b = SessionId::new_v4();
+        let registry = registry_with_channel(
+            id_a,
+            "root",
+            ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "ROOT-A"),
+        );
+
+        // B fragt den erhöhten Kanal an: es gibt keinen für B.
+        let channel_b = BrowserChannel::from_request(&registry, id_b, Some("root".to_string()));
+        assert!(
+            matches!(channel_b, BrowserChannel::Elevated { slot: None, .. }),
+            "B darf den erhöhten Kanal von A nicht sehen"
+        );
+        let mut guard = lock_browser_sftp(&session_b, &channel_b).await;
+        assert!(
+            guard.sftp().is_err(),
+            "eine erhöhte Aktion in B muss scheitern statt A's Kanal zu benutzen"
+        );
+        drop(guard);
+
+        // B über den normalen Kanal: liest B's eigene Daten.
+        let channel_b = BrowserChannel::from_request(&registry, id_b, None);
+        let mut guard = lock_browser_sftp(&session_b, &channel_b).await;
+        assert_eq!(
+            guard.sftp().unwrap().read_file("/x").await.unwrap(),
+            b"USER-B"
+        );
+        drop(guard);
+
+        // Ausschalten in B lässt A unberührt.
+        crate::elevated_sftp::disable(&registry, id_b, &BrowserAccess(()));
+        let channel_a = BrowserChannel::from_request(&registry, id_a, Some("root".to_string()));
+        let mut guard = lock_browser_sftp(&session_a, &channel_a).await;
+        assert_eq!(
+            guard.sftp().unwrap().read_file("/x").await.unwrap(),
+            b"ROOT-A",
+            "Ausschalten in B darf den Kanal von A nicht entfernen"
         );
     }
 }

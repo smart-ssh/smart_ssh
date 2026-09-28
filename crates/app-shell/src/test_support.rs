@@ -443,7 +443,6 @@ pub fn session_with_transport(
         status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
         sftp: AsyncMutex::new(None),
-        elevated_sftp: crate::elevated_sftp::ElevatedSftpSlot::new(),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         auto_continue_stop_notify: tokio::sync::Notify::new(),
         chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),

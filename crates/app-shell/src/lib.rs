@@ -534,6 +534,11 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             Ok(())
         })
         .manage(app_state)
+        // Spec 0084, A1: die Zuordnung Sitzung → erhöhter SFTP-Kanal ist
+        // eigener, von Tauri verwalteter Zustand von `app-shell` — bewusst
+        // kein Feld von `AppState`, damit der Kanal auch dann hier bleibt,
+        // wenn die übrige Anwendungslogik in einen Tauri-freien Crate zieht.
+        .manage(crate::elevated_sftp::ElevatedSftpRegistry::default())
         .manage(edition)
         .invoke_handler(tauri::generate_handler![
             commands::list_servers,

@@ -1387,13 +1387,19 @@ async fn test_ai_and_mcp_file_actions_never_use_the_elevated_channel() {
         let normal = MockSftpSession::new().with_file("/etc/secret.conf", b"USER-VIEW".to_vec());
         let elevated = MockSftpSession::new().with_file("/etc/secret.conf", b"ROOT-VIEW".to_vec());
         session.sftp = AsyncMutex::new(Some(Box::new(normal.clone())));
-        *session
-            .elevated_sftp
-            .lock(&crate::commands::BrowserAccess::for_tests())
-            .await = Some(crate::elevated_sftp::ElevatedSftp {
-            target_user: "root".to_string(),
-            sftp: Box::new(elevated.clone()),
-        });
+        // Spec 0084, A1: Der erhöhte Kanal hängt nicht mehr an der
+        // `Session`, sondern an der Zuordnung in `app-shell`. Er wird hier
+        // trotzdem aufgebaut — genau darum geht es: er ist aktiv, und KI
+        // und MCP kommen trotzdem nicht an ihn heran.
+        let elevated_registry = crate::elevated_sftp::ElevatedSftpRegistry::default();
+        let session_id = Uuid::new_v4();
+        elevated_registry.insert_for_tests(
+            session_id,
+            crate::elevated_sftp::ElevatedSftp {
+                target_user: "root".to_string(),
+                sftp: Box::new(elevated.clone()),
+            },
+        );
 
         let emitter = TestEmitter::default();
         let profile_store = InMemoryProfileStore::default();
@@ -1401,7 +1407,7 @@ async fn test_ai_and_mcp_file_actions_never_use_the_elevated_channel() {
         if origin == "ai" {
             run_chat_turn(
                 &session,
-                Uuid::new_v4(),
+                session_id,
                 &emitter,
                 &profile_store,
                 &confirmations,
@@ -1412,7 +1418,7 @@ async fn test_ai_and_mcp_file_actions_never_use_the_elevated_channel() {
             // die Aktion wirklich ausgeführt wird.
             let action = handle_mcp_action_proposed(
                 &session,
-                Uuid::new_v4(),
+                session_id,
                 AiAction::ReadRemoteFile {
                     path: "/etc/secret.conf".to_string(),
                 },
@@ -1459,7 +1465,91 @@ async fn test_ai_and_mcp_file_actions_never_use_the_elevated_channel() {
             !normal.calls().is_empty(),
             "{origin}: normaler Kanal wurde benutzt"
         );
+        assert!(
+            elevated_registry
+                .slot(session_id, &crate::commands::BrowserAccess::for_tests())
+                .is_some(),
+            "{origin}: Vorbedingung — der erhöhte Kanal war die ganze Zeit aktiv"
+        );
     }
+}
+
+/// Spec 0084, T5b (Gegenstück zu T5 für eine **Schreib**aktion): Auch eine
+/// MCP-Schreibaktion läuft bei aktivem erhöhtem Kanal über den NORMALEN
+/// Kanal — sie darf die Datei nie mit den Rechten des erhöhten Kanals
+/// schreiben.
+#[tokio::test]
+async fn test_mcp_write_actions_never_use_the_elevated_channel() {
+    let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+    session.filter_engine = Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    let normal = MockSftpSession::new().with_file("/etc/secret.conf", b"USER-VIEW".to_vec());
+    let elevated = MockSftpSession::new().with_file("/etc/secret.conf", b"ROOT-VIEW".to_vec());
+    session.sftp = AsyncMutex::new(Some(Box::new(normal.clone())));
+
+    let elevated_registry = crate::elevated_sftp::ElevatedSftpRegistry::default();
+    let session_id = Uuid::new_v4();
+    elevated_registry.insert_for_tests(
+        session_id,
+        crate::elevated_sftp::ElevatedSftp {
+            target_user: "root".to_string(),
+            sftp: Box::new(elevated.clone()),
+        },
+    );
+
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+    let action = handle_mcp_action_proposed(
+        &session,
+        session_id,
+        AiAction::WriteRemoteFile {
+            path: "/etc/secret.conf".to_string(),
+            content: "MCP-WRITE".to_string(),
+        },
+        &emitter,
+        &profile_store,
+        &confirmations,
+        Some("test-client".to_string()),
+    );
+    let responder = async {
+        loop {
+            let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
+                (n == "chat-action-proposed").then(|| p["actionId"].as_str().unwrap().to_string())
+            });
+            if let Some(id) = pending {
+                let _ = confirmations.resolve(&id.parse().unwrap(), ActionUserDecision::Approve);
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::join!(action, responder)
+    })
+    .await
+    .expect("MCP-Schreibaktion muss nach der Bestätigung enden");
+
+    assert!(
+        elevated.calls().is_empty(),
+        "der erhöhte Kanal darf beim Schreiben nie berührt werden, war: {:?}",
+        elevated.calls()
+    );
+    assert_eq!(
+        normal.file_content("/etc/secret.conf").as_deref(),
+        Some(b"MCP-WRITE".as_slice()),
+        "geschrieben wurde über den normalen Kanal"
+    );
+    assert_eq!(
+        elevated.file_content("/etc/secret.conf").as_deref(),
+        Some(b"ROOT-VIEW".as_slice()),
+        "die Datei hinter dem erhöhten Kanal bleibt unverändert"
+    );
+    assert!(
+        elevated_registry
+            .slot(session_id, &crate::commands::BrowserAccess::for_tests())
+            .is_some(),
+        "Vorbedingung — der erhöhte Kanal war die ganze Zeit aktiv"
+    );
 }
 
 /// ADR 0058 §8: ein `sftp-server`-Aufruf wird trotz Allow-Regel nie

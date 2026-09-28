@@ -193,10 +193,12 @@ pub struct Session {
     /// Session offengehalten statt pro Zugriff neu aufgebaut. `AsyncMutex`
     /// wie `transport`/`context` (über `.await`-Punkte hinweg gehalten).
     pub sftp: AsyncMutex<Option<Box<dyn SftpSession>>>,
-    /// Spec 0067, Teil A: der erhöhte SFTP-Kanal (`sudo -n <sftp-server>`),
-    /// nur für den manuellen Dateibrowser — s. `crate::elevated_sftp`.
-    /// Bewusst ein eigenes Feld: `sftp` oben nutzen auch KI-Aktionen.
-    pub elevated_sftp: crate::elevated_sftp::ElevatedSftpSlot,
+    // Spec 0067, Teil A: Der erhöhte SFTP-Kanal (`sudo -n <sftp-server>`)
+    // war bis Spec 0084 ein Feld dieser Struktur. Er liegt jetzt in
+    // `crate::elevated_sftp::ElevatedSftpRegistry`, einem eigenen, von Tauri
+    // verwalteten Zustand von `app-shell` (Spec 0084, A1): so führt von
+    // einer `Session` aus kein Weg mehr zu ihm, auch nicht für Code, der
+    // eine `Session` in der Hand hat.
     /// Spec 0021, Abschnitt 5 / Spec 0066, §1: gesetzt über
     /// [`Session::request_auto_continue_stop`] (`crate::commands::
     /// stop_auto_continuation`). Beendet die Fortsetzungskette und bricht
@@ -670,7 +672,6 @@ mod tests {
             status: StdMutex::new(ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
             sftp: AsyncMutex::new(None),
-            elevated_sftp: crate::elevated_sftp::ElevatedSftpSlot::new(),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
             chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),

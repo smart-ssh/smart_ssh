@@ -22,6 +22,7 @@ use uuid::Uuid;
 use ssh_manager_core::ssh::{SftpSession, SshError};
 
 use crate::dto::{sort_remote_entries, EditSessionDto, RemoteEntryDto};
+use crate::elevated_sftp::ElevatedSftpRegistry;
 use crate::error::CommandError;
 use crate::error::CommandResult;
 use crate::events::{emit_sftp_transfer_finished, emit_sftp_transfer_started, SftpTransferKind};
@@ -36,11 +37,12 @@ use super::elevation::{
 #[tauri::command]
 pub async fn sftp_list(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<Vec<RemoteEntryDto>> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let entries = {
         let mut guard = lock_browser_sftp(&session, &channel).await;
@@ -89,7 +91,7 @@ async fn download_one_file(
         // Spec 0067, spec-reviewer-Fund: im erhöhten Modus können das
         // Root-Dateien sein (z. B. /etc/shadow) — lokal nur für den eigenen
         // Nutzer lesbar anlegen statt mit der Standard-umask.
-        let restrict = matches!(channel, BrowserChannel::Elevated(_));
+        let restrict = matches!(channel, BrowserChannel::Elevated { .. });
         tokio::task::spawn_blocking(move || write_local_download(&local_path, &bytes, restrict))
             .await
             .map_err(|e| format!("Hintergrund-Task für Download fehlgeschlagen: {e}"))??;
@@ -116,11 +118,12 @@ async fn download_one_file(
 pub async fn sftp_download(
     app: AppHandle,
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     remote_path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<Option<crate::dto::DownloadResultDto>> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     use tauri_plugin_dialog::DialogExt;
 
     let session = browser_session(&state, session_id, &channel).await?;
@@ -279,11 +282,12 @@ async fn download_entry_to(
 pub async fn sftp_download_default(
     app: AppHandle,
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     remote_path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<crate::dto::DownloadResultDto> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let downloads_dir = default_downloads_dir()?;
     download_entry_to(
@@ -305,11 +309,12 @@ pub async fn sftp_download_default(
 pub async fn sftp_download_dir(
     app: AppHandle,
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     remote_path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<Option<crate::dto::DownloadResultDto>> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     use tauri_plugin_dialog::DialogExt;
 
     let session = browser_session(&state, session_id, &channel).await?;
@@ -350,12 +355,13 @@ pub async fn sftp_download_dir(
 pub async fn sftp_upload(
     app: AppHandle,
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     local_path: String,
     remote_path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<()> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let file_name = file_name_of(&remote_path);
 
@@ -448,11 +454,12 @@ async fn walk_dirs_and_count_files(
 #[tauri::command]
 pub async fn sftp_delete_preview(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<crate::dto::DeletePreviewDto> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     use crate::dto::DeletePreviewDto;
 
     let session = browser_session(&state, session_id, &channel).await?;
@@ -489,11 +496,12 @@ pub async fn sftp_delete_preview(
 #[tauri::command]
 pub async fn sftp_delete(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<()> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let mut guard = lock_browser_sftp(&session, &channel).await;
     let elevated_user = guard.elevated_user();
@@ -557,11 +565,12 @@ async fn delete_recursive(sftp: &mut dyn SftpSession, path: &str) -> Result<(), 
 #[tauri::command]
 pub async fn sftp_exists(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<bool> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let mut guard = lock_browser_sftp(&session, &channel).await;
     let sftp = guard.sftp()?;
@@ -578,11 +587,12 @@ pub async fn sftp_exists(
 #[tauri::command]
 pub async fn sftp_stat(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<RemoteEntryDto> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let mut guard = lock_browser_sftp(&session, &channel).await;
     let sftp = guard.sftp()?;
@@ -598,13 +608,14 @@ pub async fn sftp_stat(
 #[tauri::command]
 pub async fn sftp_chmod(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     path: String,
     mode: u32,
     recursive: bool,
     elevated_user: Option<String>,
 ) -> CommandResult<u64> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let mut guard = lock_browser_sftp(&session, &channel).await;
     let elevated_user = guard.elevated_user();
@@ -674,12 +685,13 @@ async fn chmod_recursive(
 #[tauri::command]
 pub async fn sftp_rename(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     from: String,
     to: String,
     elevated_user: Option<String>,
 ) -> CommandResult<()> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let mut guard = lock_browser_sftp(&session, &channel).await;
     let elevated_user = guard.elevated_user();
@@ -698,11 +710,12 @@ pub async fn sftp_rename(
 #[tauri::command]
 pub async fn sftp_mkdir(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<()> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let mut guard = lock_browser_sftp(&session, &channel).await;
     let elevated_user = guard.elevated_user();
@@ -739,11 +752,12 @@ const MAX_TEXT_PREVIEW_BYTES: u64 = 256 * 1024;
 #[tauri::command]
 pub async fn sftp_read_text(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<String> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let mut guard = lock_browser_sftp(&session, &channel).await;
     let sftp = guard.sftp()?;
@@ -834,11 +848,12 @@ pub(super) fn edit_session_dir(session_id: SessionId) -> CommandResult<std::path
 #[tauri::command]
 pub async fn sftp_open_for_editing(
     state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     remote_path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<EditSessionDto> {
-    let channel = BrowserChannel::from_request(elevated_user);
+    let channel = BrowserChannel::from_request(elevated.inner(), session_id, elevated_user);
     let session = browser_session(&state, session_id, &channel).await?;
     let file_name = file_name_of(&remote_path);
     // Zip-Slip-Schutz (s. `safe_local_segment`-Doc-Kommentar) — auch hier

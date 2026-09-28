@@ -381,11 +381,15 @@ pub async fn stop_auto_continuation(
 pub async fn disconnect(
     app: AppHandle,
     state: State<'_, AppState>,
+    elevated: State<'_, crate::elevated_sftp::ElevatedSftpRegistry>,
     session_id: SessionId,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .remove(session_id)
+    // Spec 0084, A2.1: Sitzung UND erhöhter Kanal gehen in einer einzigen
+    // Funktion weg — `SessionManager::remove` wird außer dort und in Tests
+    // nirgends aufgerufen. Sie sperrt den Transport nicht; das Trennen
+    // bleibt unten in diesem Befehl.
+    let session = elevated
+        .remove_session(&state.sessions, session_id)
         .ok_or("Session nicht gefunden")?;
 
     // Best-effort: ein Fehler beim Trennen selbst (z. B. Verbindung bereits
@@ -620,7 +624,6 @@ mod send_chat_message_persistence_tests {
             status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),
             sftp: AsyncMutex::new(None::<Box<dyn SftpSession>>),
-            elevated_sftp: crate::elevated_sftp::ElevatedSftpSlot::new(),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
             chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
