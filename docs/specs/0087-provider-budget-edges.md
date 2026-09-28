@@ -1,6 +1,6 @@
 # Spec 0087 — Budget and request edges of the AI providers
 
-Status: Vorschlag (Architekt) · Backlog: BL-0262, BL-0264, BL-0265 · Gate: —
+Status: freigegeben (Stefan, 2026-09-28) · Backlog: BL-0262, BL-0264, BL-0265 · Gate: —
 Zweck: Ein OpenAI-kompatibler Server mit kleinem Kontext liefert eine Antwort
 statt HTTP 400; kein Retry unterschreitet eine explizite Nutzereinstellung;
 eine leere System-Nachricht geht nicht mehr hinaus.
