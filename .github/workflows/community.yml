@@ -78,9 +78,18 @@ jobs:
       # anschlagen).
       - name: Grenzprüfung app-logic ist Tauri-frei (Spec 0084, A3)
         run: |
-          set -o pipefail
-          if cargo tree -p app-logic -e normal,build,dev --all-features --prefix none \
-              | grep -E '^(tauri|tauri-[a-zA-Z0-9_-]*|wry|tao|rfd)( |$)'; then
+          # spec-reviewer-Fund (Teil 2): `cargo tree | grep` in einem
+          # `if`-Pipeline liesse den Schritt bei einem Fehlschlag von
+          # `cargo tree` selbst (kaputtes Lockfile, Feature-Konflikt) still
+          # gruen durchlaufen, weil `grep` (kein Treffer -> Exit 1) den
+          # Pipeline-Status dominiert. Deshalb: Baum zuerst in eine Variable,
+          # mit eigenem, explizitem Fehlerpfad.
+          tree_output="$(cargo tree -p app-logic -e normal,build,dev --all-features --prefix none)"
+          if [ $? -ne 0 ]; then
+            echo "::error::cargo tree -p app-logic ist fehlgeschlagen - Grenzpruefung (Spec 0084 A3) konnte nicht laufen"
+            exit 1
+          fi
+          if echo "$tree_output" | grep -E '^(tauri|tauri-[a-zA-Z0-9_-]*|wry|tao|rfd)( |$)'; then
             echo "::error::app-logic haengt von tauri/tauri-*/wry/tao/rfd ab (Spec 0084, A3) - siehe Zeile(n) oben"
             exit 1
           fi

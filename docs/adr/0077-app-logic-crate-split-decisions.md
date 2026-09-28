@@ -129,12 +129,30 @@ von `AllowEverythingPolicyStore` (zehn Zeilen, kein Delegieren an
 `orchestration::test_support`s `pub(crate)`-Variante) hält den
 Cross-Crate-Sichtbarkeitszuwachs auf das Nötigste beschränkt.
 
-## 7. `app-logic`s Cargo-Abhängigkeiten
+## 7. A2.1 bleibt nur per Suche gesichert (Spec §4, letzter Satz dieses Punkts)
+
+`SessionManager::remove` (`app-logic/src/session.rs`) ist jetzt `pub`,
+nicht mehr `pub(crate)` — nötig, weil `app-shell::elevated_sftp::
+remove_session` (A2.1) es crate-übergreifend aufrufen muss. Die Garantie
+"außer dieser einen Funktion ruft niemand `remove` auf" hängt seither
+nicht mehr am Compiler, sondern nur noch an einer Suche (`grep -rn
+"SessionManager::remove"`, zuletzt: genau ein Produktivaufrufer,
+`elevated_sftp.rs:242`, plus Tests) — exakt wie Spec 0084 §4 es für diesen
+einen Fall ausdrücklich zulässt. Ruft künftig ein zweiter Ort in
+`app-shell` `remove` direkt auf, setzt das den Widerrufs-Merker aus §9
+nicht und lässt einen offenen erhöhten Kanal in der Registry zurück, ohne
+dass ein Kompilierfehler das anzeigt.
+
+## 8. `app-logic`s Cargo-Abhängigkeiten
 
 Übernommen aus `app-shell/Cargo.toml`, abzüglich `tauri`/`tauri-plugin-*`/
-`rfd` (A3) und `directories`/`libc`/`regex`/`sha2`/`tracing-subscriber`
-(in `app-shell` nach der Verschiebung ungenutzt geblieben, dort entfernt —
-`tracing-appender` bleibt dort für den `WorkerGuard`-Rückgabetyp).
+`rfd` (A3). In `app-shell` nach der Verschiebung ungenutzt geblieben und
+dort entfernt: `globset`, `sha2`, `tracing-subscriber`.
+`directories`/`libc`/`regex` bleiben in `app-shell` — sie werden dort
+weiterhin direkt gebraucht (`commands::sftp`/`ssh_config_export`s
+Dateidialoge, `ssh_config_apply/tests.rs`s `mkfifo`-Testaufbau,
+`commands::{connect, notes}`s Redactor-Muster) — `tracing-appender`
+bleibt dort ebenfalls, für den `WorkerGuard`-Rückgabetyp.
 `tracing-subscriber` zieht komplett nach `app-logic` und in die normalen
 (nicht Dev-)Abhängigkeiten, weil `logging.rs`s Produktiv-Subscriber-Aufbau
 mitzieht — anders als bei `ssh-manager-core`/`ssh-transport`, deren

@@ -20,11 +20,6 @@ chrono = { version = "0.4.45", features = ["serde"] }
 credentials-keyring = { version = "0.5.1", path = "../credentials-keyring" }
 directories = "6.0.0"
 futures = "0.3.34"
-# Spec 0076, §9 K-3: `libc::mkfifo` im Testaufbau von
-# `ssh_config_apply/tests.rs`. `libc` lag schon transitiv im Baum
-# (`Cargo.lock`, u. a. über `tauri`), diese Zeile macht daraus nur eine
-# direkte Abhängigkeit statt eines neuen Pakets in der Lieferkette.
-libc = "0.2.189"
 mcp-server = { version = "0.5.1", path = "../mcp-server" }
 persistence-sqlite = { version = "0.5.1", path = "../persistence-sqlite" }
 regex = "1.13.1"
@@ -70,6 +65,10 @@ uuid = { version = "1.26.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
+# Spec 0076, §9 K-3: `libc::mkfifo` im Testaufbau von
+# `ssh_config_apply/tests.rs` — nach Spec 0084 der einzige verbliebene
+# Gebrauch in dieser Crate, deshalb nur noch `[dev-dependencies]`.
+libc = "0.2.189"
 # Spec 0084, A5: aktiviert `app_logic::test_support`/`app_logic::policy`
 # (dort hinter `#[cfg(any(test, feature = "test-support"))]`) für diese
 # Crates eigene Tests — nur unter `[dev-dependencies]`, landet also nie in

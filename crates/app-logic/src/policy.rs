@@ -5,8 +5,10 @@
 //! Implementierung überhaupt, mangels einer Regel-Verwaltungs-UI — seit
 //! Spec 0009 (`persistence_sqlite::SqlitePolicyStore`, s.
 //! `crate::state::AppState::policy_store`) übernimmt die echte
-//! Verbindungen (`crate::commands::connect`). Deshalb jetzt `#[cfg(test)]`
-//! (s. `crate::lib`): `NoRulesPolicyStore` lebt nur noch als expliziter,
+//! Verbindungen (`app_shell::commands::connect`). Deshalb jetzt hinter
+//! `#[cfg(any(test, feature = "test-support"))]` (Spec 0084, A5 — auch
+//! `app-shell`s Tests brauchen ihn cross-crate):
+//! `NoRulesPolicyStore` lebt nur noch als expliziter,
 //! klar benannter Testdouble überall dort (v. a. `crate::orchestration`-
 //! Tests), wo ein `PolicyStore` gebraucht wird, dessen konkretes Verhalten
 //! für den jeweiligen Test irrelevant ist — [`FilterEngine::evaluate`]

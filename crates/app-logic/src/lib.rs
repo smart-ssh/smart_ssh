@@ -12,12 +12,11 @@
 //!
 //! Der erhöhte SFTP-Kanal (Spec 0067 A) ist die eine bewusste Ausnahme in
 //! die andere Richtung: Obwohl er keine Tauri-Abhängigkeit hat, bleibt er in
-//! `app-shell` (`crate::elevated_sftp`, `crate::event_emitter`,
-//! `crate::risk_second_opinion`, `crate::local_server`, `crate::commands`,
-//! `crate::mcp_backend`, `crate::mcp_settings`, `crate::first_run_notice`,
-//! `crate::chat_retention`, `crate::ssh_config_apply`, `crate::
-//! ssh_config_export`, `crate::startup_dialog`, `crate::wiring` dort) —
-//! diese Crate enthält keinen Typ, keine Funktion und kein Feld, über das
+//! `app-shell` (dort: `elevated_sftp`, `event_emitter`,
+//! `risk_second_opinion`, `local_server`, `commands`, `mcp_backend`,
+//! `mcp_settings`, `first_run_notice`, `chat_retention`, `ssh_config_apply`,
+//! `ssh_config_export`, `startup_dialog`, `wiring`) — diese Crate
+//! (`app-logic`) enthält keinen Typ, keine Funktion und kein Feld, über das
 //! er erreichbar ist (A1).
 
 pub mod ai_provider_factory;
