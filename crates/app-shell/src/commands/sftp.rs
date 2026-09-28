@@ -1269,8 +1269,6 @@ pub async fn close_edit_session(session_id: SessionId, local_path: String) -> Co
 
 #[cfg(test)]
 mod sftp_mutation_tests {
-    use std::os::unix::fs::PermissionsExt;
-
     use ssh_transport::LocalFileSession;
 
     use super::*;
@@ -1312,6 +1310,10 @@ mod sftp_mutation_tests {
     /// entfernt. Verifiziert gegen den un-gefixten Stand: mit `stat` statt
     /// `lstat` als Root-Prüfung (der Zustand vor diesem Fix) schlägt dieser
     /// Test fehl, weil `outside/victim.txt` dann mitgelöscht würde.
+    // Windows kennt weder Symlinks noch Unix-Rechtebits über diese API
+    // (Spec 0089, W2) — der Test bleibt auf Unix unverändert aktiv (Spec
+    // 0054, Review des Gesamtpakets, ERHÖHTE Priorität).
+    #[cfg(unix)]
     #[tokio::test]
     async fn test_delete_recursive_does_not_follow_a_symlink_at_the_root() {
         let dir = tempfile::tempdir().unwrap();
@@ -1334,8 +1336,12 @@ mod sftp_mutation_tests {
     }
 
     /// Gegenstück für rekursives chmod — dieselbe Symlink-Begründung.
+    /// Unix-only wie oben (Spec 0089, W2).
+    #[cfg(unix)]
     #[tokio::test]
     async fn test_chmod_recursive_does_not_follow_a_symlink_at_the_root() {
+        use std::os::unix::fs::PermissionsExt;
+
         let dir = tempfile::tempdir().unwrap();
         let outside = dir.path().join("outside");
         std::fs::create_dir_all(&outside).unwrap();

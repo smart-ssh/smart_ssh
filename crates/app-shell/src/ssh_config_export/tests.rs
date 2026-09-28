@@ -230,6 +230,9 @@ fn t_6_3_14_anderer_pfad_wird_nicht_abgelehnt() {
     assert!(!super::resolves_to_ssh_config_under(&other, home.path()));
 }
 
+// Windows kennt Symlinks über diese API nicht (Spec 0089, W3) — der Test
+// bleibt auf Unix unverändert aktiv.
+#[cfg(unix)]
 #[test]
 fn t_6_3_14_symlink_auf_ssh_verzeichnis_wird_erkannt() {
     let home = tempfile::tempdir().unwrap();
@@ -237,14 +240,11 @@ fn t_6_3_14_symlink_auf_ssh_verzeichnis_wird_erkannt() {
     std::fs::create_dir_all(&real_ssh).unwrap();
     let target_dir = tempfile::tempdir().unwrap();
     let link = target_dir.path().join("ssh-link");
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink(&real_ssh, &link).unwrap();
-        assert!(super::resolves_to_ssh_config_under(
-            &link.join("config"),
-            home.path()
-        ));
-    }
+    std::os::unix::fs::symlink(&real_ssh, &link).unwrap();
+    assert!(super::resolves_to_ssh_config_under(
+        &link.join("config"),
+        home.path()
+    ));
 }
 
 /// spec-reviewer-Fund, Runde 1: `~/.ssh/Config`/`~/.ssh/CONFIG` wichen dem
