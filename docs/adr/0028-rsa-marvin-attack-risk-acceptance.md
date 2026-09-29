@@ -68,10 +68,9 @@ Diese Ausnahme ist **nicht dauerhaft unbeobachtet** gemeint:
   ein `russh`-Update, das eine gefixte `rsa`-Version zieht), ist der
   `Cargo.lock`-Stand zu aktualisieren und der `ignore`-Eintrag in
   `audit.toml` zu entfernen.
-- Bis dahin bleibt der CI-Job im Berichtsmodus (`continue-on-error`, s.
-  Spec 0035 Abschnitt 5) — sobald er auf blockierend umgestellt wird
-  (separater, späterer Schritt), bleibt dieser eine dokumentierte
-  `ignore`-Eintrag weiterhin nötig, bis der Fix tatsächlich vorliegt.
+- Der CI-Job ist seit Spec 0090 (s. ADR 0083) blockierend, nicht mehr im
+  Berichtsmodus — dieser eine dokumentierte `ignore`-Eintrag bleibt
+  weiterhin nötig, bis der Fix tatsächlich vorliegt.
 - Diese ADR ist der maßgebliche Ort für den aktuellen Stand dieser
   Entscheidung — der Kommentar in `audit.toml` verweist hierher, statt die
   vollständige Begründung an zwei Stellen zu duplizieren.
