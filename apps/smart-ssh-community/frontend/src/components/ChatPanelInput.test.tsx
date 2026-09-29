@@ -4,17 +4,25 @@
 // bewusst nur `ChatItemView` isoliert (kein API-Mocking nötig), das
 // Eingabefeld lebt aber in `ChatPanel` selbst, das für einen sinnvollen
 // Render deutlich mehr Abhängigkeiten mocken muss.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { continueTruncatedResponse, sendChatMessage, stopAutoContinuation } from "../api";
 import {
+  continueTruncatedResponse,
+  respondToAction,
+  sendChatMessage,
+  stopAutoContinuation,
+} from "../api";
+import {
+  onActionDecisionEscalated,
+  onChatActionProposed,
   onChatQueuedMessagesSent,
   onChatResponseCancelled,
   onChatResponseEmpty,
   onChatResponseTruncated,
   onChatTextDelta,
 } from "../events";
+import type { ActionDecisionEscalatedEvent, ChatActionProposedEvent } from "../types";
 import { testI18n } from "../testI18n";
 import { ChatPanel } from "./ChatPanel";
 
@@ -48,7 +56,7 @@ vi.mock("../api", () => ({
     ]),
   ),
   listPromptHistory: vi.fn(() => Promise.resolve([])),
-  respondToAction: vi.fn(),
+  respondToAction: vi.fn(() => Promise.resolve()),
   sendChatMessage: vi.fn(() => Promise.resolve()),
   stopAutoContinuation: vi.fn(() => Promise.resolve()),
   suggestRulePatterns: vi.fn(),
@@ -56,6 +64,7 @@ vi.mock("../api", () => ({
 }));
 
 vi.mock("../events", () => ({
+  onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
   onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
   onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
   onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
@@ -340,5 +349,116 @@ describe("ChatPanel empty/truncated response notices (Spec 0080, A3)", () => {
       await screen.findByText("✂ Antwort wurde abgeschnitten (Längenlimit erreicht)."),
     ).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Weiter" })).toBeInTheDocument();
+  });
+});
+
+// Spec 0092, §5/A3.2, U1: der volle Ereignis-Pfad — eine Aktion, die als
+// `AutoExec` vorgeschlagen wurde, bekommt NACHTRÄGLICH per
+// `action-decision-escalated` einen Bestätigungsdialog, weil die
+// KI-Zweitmeinung das Daten-Risiko auf Rot gehoben hat. *Gegenbeweis*
+// (im Bericht dokumentiert): ohne den `onActionDecisionEscalated`-Handler in
+// `ChatPanel.tsx` bleibt `item.decision` auf `"AutoExec"` stehen — dieser
+// Test schlägt dann fehl, weil weder der Text noch der „Ausführen"-Knopf
+// erscheinen.
+describe("ChatPanel red-risk escalation (Spec 0092, A3.2/U1)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function baseProposedEvent(): ChatActionProposedEvent {
+    return {
+      sessionId: "session-1",
+      actionId: "action-1",
+      action: { SuggestCommand: { command: "printenv" } },
+      decision: "AutoExec",
+      previousNoteContent: null,
+      usesStoredSudoPassword: false,
+      previousFileContent: null,
+      previousFileSize: null,
+      targetName: null,
+      riskAssessment: {
+        serverRisk: "none",
+        serverRiskReason: null,
+        dataRisk: "none",
+        dataRiskReason: null,
+        aiReviewed: false,
+      },
+      origin: { kind: "internal" },
+    };
+  }
+
+  it("replaces the auto-exec card with a confirm dialog once the escalation event arrives, and Ausführen responds via respond_to_action", async () => {
+    let proposedHandler: ((event: ChatActionProposedEvent) => void) | null = null;
+    let escalatedHandler: ((event: ActionDecisionEscalatedEvent) => void) | null = null;
+    vi.mocked(onChatActionProposed).mockImplementation((h) => {
+      proposedHandler = h;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(onActionDecisionEscalated).mockImplementation((h) => {
+      escalatedHandler = h;
+      return Promise.resolve(() => {});
+    });
+
+    renderChatPanel();
+    await waitFor(() => expect(proposedHandler).not.toBeNull());
+
+    act(() => {
+      proposedHandler!(baseProposedEvent());
+    });
+
+    // Noch AutoExec: kein Bestätigungsdialog.
+    expect(screen.queryByRole("button", { name: "Ausführen" })).not.toBeInTheDocument();
+
+    await waitFor(() => expect(escalatedHandler).not.toBeNull());
+    act(() => {
+      escalatedHandler!({
+        sessionId: "session-1",
+        actionId: "action-1",
+        reason: "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung",
+        code: "FILTER_RED_RISK_REQUIRES_CONFIRM",
+      });
+    });
+
+    expect(await screen.findByRole("button", { name: "Ausführen" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ablehnen" })).toBeInTheDocument();
+    // Der feste, übersetzte Text zum Code (Spec 0092, §5 „Anzeige des
+    // Grunds"), nicht der rohe `reason`-String aus dem Event.
+    expect(
+      screen.getByText(/Risiko rot eingestuft oder nicht sicher einschätzbar/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ausführen" }));
+    expect(respondToAction).toHaveBeenCalledWith("session-1", "action-1", { decision: "approve" });
+  });
+
+  it("ignores an escalation event for a different actionId", async () => {
+    let proposedHandler: ((event: ChatActionProposedEvent) => void) | null = null;
+    let escalatedHandler: ((event: ActionDecisionEscalatedEvent) => void) | null = null;
+    vi.mocked(onChatActionProposed).mockImplementation((h) => {
+      proposedHandler = h;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(onActionDecisionEscalated).mockImplementation((h) => {
+      escalatedHandler = h;
+      return Promise.resolve(() => {});
+    });
+
+    renderChatPanel();
+    await waitFor(() => expect(proposedHandler).not.toBeNull());
+    act(() => {
+      proposedHandler!(baseProposedEvent());
+    });
+    await waitFor(() => expect(escalatedHandler).not.toBeNull());
+
+    act(() => {
+      escalatedHandler!({
+        sessionId: "session-1",
+        actionId: "some-other-action",
+        reason: "irrelevant",
+        code: "FILTER_RED_RISK_REQUIRES_CONFIRM",
+      });
+    });
+
+    expect(screen.queryByRole("button", { name: "Ausführen" })).not.toBeInTheDocument();
   });
 });

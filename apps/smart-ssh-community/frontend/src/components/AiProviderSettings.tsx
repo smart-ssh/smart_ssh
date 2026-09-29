@@ -14,7 +14,12 @@ import {
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
 import { effectiveApiKey, OLLAMA_BASE_URL, OLLAMA_PLACEHOLDER_API_KEY } from "../ollama";
-import { loadRiskClassifierSettings, saveRiskClassifierSettings } from "../riskSettings";
+import {
+  loadRedRiskAlwaysConfirm,
+  loadRiskClassifierSettings,
+  saveRedRiskAlwaysConfirm,
+  saveRiskClassifierSettings,
+} from "../riskSettings";
 import {
   type AiProviderConfigDto,
   type AiProviderConfigInput,
@@ -151,6 +156,11 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   const [riskClassifierEnabled, setRiskClassifierEnabled] = useState(false);
   const [riskClassifierProviderId, setRiskClassifierProviderId] = useState<string | null>(null);
   const [riskSettingsSaving, setRiskSettingsSaving] = useState(false);
+  /** Spec 0092, A1.4: unabhängig von `riskClassifierEnabled` bedienbar —
+   * eigener State, eigene Ladung, eigener Speicherpfad. Fail-safe-Default
+   * `true`, bis geladen (deckt sich mit A1.2, s. `riskSettings.ts`). */
+  const [redRiskAlwaysConfirm, setRedRiskAlwaysConfirm] = useState(true);
+  const [redRiskSettingSaving, setRedRiskSettingSaving] = useState(false);
   // Spec 0069, Teil B: Ollama-Erkennung. `providersLoaded` gate für B1
   // ("... UND die Provider-Liste geladen ist") — ohne dieses Flag würde
   // die Probe schon vor dem ersten `listAiProviders()`-Ergebnis über eine
@@ -187,6 +197,30 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
       setRiskSettingsSaving(false);
+    }
+  };
+
+  // Spec 0092, A1.4: eigener Lade-Effekt, unabhängig vom Zweitmeinungs-Block
+  // oben — der Schalter ist bedienbar, auch wenn die Zweitmeinung nie
+  // geladen/aktiviert wird.
+  useEffect(() => {
+    loadRedRiskAlwaysConfirm()
+      .then(setRedRiskAlwaysConfirm)
+      .catch((err) => setError(translateErrorCode(tRef.current, commandErrorCode(err), commandErrorMessage(err))));
+  }, []);
+
+  /** Spec 0092, A1.3: erst bei der nächsten `connect()` wirksam — trotzdem
+   * sofort gespeichert (dasselbe Muster wie `handleRiskClassifierChange`
+   * oben). */
+  const handleRedRiskAlwaysConfirmChange = async (value: boolean) => {
+    setRedRiskAlwaysConfirm(value);
+    setRedRiskSettingSaving(true);
+    try {
+      await saveRedRiskAlwaysConfirm(value);
+    } catch (err) {
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+    } finally {
+      setRedRiskSettingSaving(false);
     }
   };
 
@@ -561,6 +595,27 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             </select>
           </label>
         )}
+      </section>
+
+      {/* Spec 0092, A1.4: eigener Abschnitt, unabhängig von der
+       * KI-Zweitmeinung oben bedienbar — bewusst eine eigene Karte statt
+       * eines weiteren Feldes in der Zweitmeinungs-Karte, weil die
+       * Einstellung ohne aktivierte Zweitmeinung genauso wirkt
+       * (regelbasiertes Rot). */}
+      <section className={`mb-6 ${CARD_CLASS}`}>
+        <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
+          {t("aiProvider.redRiskAlwaysConfirmTitle")}
+        </h3>
+        <p className="mb-2 text-xs text-slate-500">{t("aiProvider.redRiskAlwaysConfirmHint")}</p>
+        <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={redRiskAlwaysConfirm}
+            disabled={redRiskSettingSaving}
+            onChange={(e) => handleRedRiskAlwaysConfirmChange(e.target.checked)}
+          />
+          {t("aiProvider.redRiskAlwaysConfirmEnable")}
+        </label>
       </section>
 
       {/* Spec 0069, Teil B3: eine Karte oberhalb von "Provider

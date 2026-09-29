@@ -63,6 +63,8 @@ vi.mock("../api", () => ({
 vi.mock("../riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
   saveRiskClassifierSettings: vi.fn(),
+  loadRedRiskAlwaysConfirm: vi.fn(() => Promise.resolve(true)),
+  saveRedRiskAlwaysConfirm: vi.fn(),
 }));
 
 function TestSection() {

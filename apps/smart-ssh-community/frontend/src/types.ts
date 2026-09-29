@@ -268,6 +268,20 @@ export interface RiskAssessmentUpdatedEvent {
   reason: string | null;
 }
 
+/** Spec 0092, §5/A3.2: Die Entscheidung zu `actionId` hat sich NACH
+ * `chat-action-proposed` von `AutoExec` zu `Confirm` verschärft — die
+ * KI-Zweitmeinung hat das Daten-Risiko auf Rot gehoben. Kommt immer NACH
+ * `RiskAssessmentUpdatedEvent` für dieselbe `actionId` (s. `events.ts`).
+ * `reason`/`code` bauen sich die Karte und die Tab-Leiste selbst zu einem
+ * `Decision.Confirm` zusammen, weil dieses Event (anders als
+ * `chat-action-proposed`) nicht den ganzen `Decision`-Enum überträgt. */
+export interface ActionDecisionEscalatedEvent {
+  sessionId: string;
+  actionId: string;
+  reason: string;
+  code: string;
+}
+
 /** Spec 0010 — `action` ist hier immer `{ ProposeNoteUpdate: {...} }`, nie
  * `SuggestCommand` (s. `crate::events::NoteUpdateSuggestedPayload`). Kein
  * `decision`-Feld (anders als `ChatActionProposedEvent`): wäre für

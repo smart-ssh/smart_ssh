@@ -49,6 +49,8 @@ vi.mock("../api", () => ({
 vi.mock("../riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
   saveRiskClassifierSettings: vi.fn(),
+  loadRedRiskAlwaysConfirm: vi.fn(() => Promise.resolve(true)),
+  saveRedRiskAlwaysConfirm: vi.fn(),
 }));
 
 // Spec 0069, Teil B, Tests 21/24/25: ohne diesen Reset würden sich
@@ -565,5 +567,38 @@ describe("AiProviderSettings — Schlüsselbund nicht verfügbar (Spec 0071, A13
     expect(error).toHaveTextContent("Passphrase");
     expect(error).toHaveTextContent("Diagnose");
     expect(error).not.toHaveTextContent("No default store");
+  });
+});
+
+// Spec 0092, A1.4: der Schalter „Bei rotem Risiko immer nachfragen" steht im
+// Einstellungsbereich des Risiko-Klassifizierers und ist unabhängig davon
+// bedienbar, ob die KI-Zweitmeinung (der Block direkt darüber) aktiv ist.
+// *Gegenbeweis* (im Bericht dokumentiert): ohne den eigenen `useEffect`/
+// State in `AiProviderSettings.tsx` bliebe die Checkbox entweder ungesetzt
+// (kein `checked`-Wert) oder an `riskClassifierEnabled` gekoppelt — dieser
+// Test schlägt dann fehl, weil er die Checkbox unabhängig von der
+// Zweitmeinung anklickt.
+describe("AiProviderSettings red-risk-always-confirm toggle (Spec 0092, A1.4)", () => {
+  it("loads the fail-safe default (on) and is bedienbar without the second opinion enabled", async () => {
+    renderForm();
+
+    const toggle = await screen.findByLabelText("Bei rotem Risiko immer nachfragen");
+    await waitFor(() => expect(toggle).toBeChecked());
+    // Die KI-Zweitmeinung ist per Mock aus (`enabled: false`) — der Provider-
+    // Auswahl-Bereich der Zweitmeinung ist deshalb nicht sichtbar, der neue
+    // Schalter trotzdem.
+    expect(screen.queryByLabelText("Provider für die Zweitmeinung")).not.toBeInTheDocument();
+  });
+
+  it("saves the new value via saveRedRiskAlwaysConfirm when toggled off", async () => {
+    renderForm();
+    const toggle = await screen.findByLabelText("Bei rotem Risiko immer nachfragen");
+    await waitFor(() => expect(toggle).toBeChecked());
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    const { saveRedRiskAlwaysConfirm } = await import("../riskSettings");
+    expect(saveRedRiskAlwaysConfirm).toHaveBeenCalledWith(false);
   });
 });

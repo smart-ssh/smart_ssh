@@ -1,5 +1,6 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  ActionDecisionEscalatedEvent,
   AiBudgetWaitingEvent,
   ChatActionProposedEvent,
   ChatActionResultEvent,
@@ -61,6 +62,13 @@ export const onRiskAssessmentUpdated = (
   handler: (event: RiskAssessmentUpdatedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<RiskAssessmentUpdatedEvent>("risk-assessment-updated", (e) => handler(e.payload));
+
+/** Spec 0092, §5/A3.2 — s. `ActionDecisionEscalatedEvent`-Doc-Kommentar.
+ * Kommt nach `onRiskAssessmentUpdated` für dieselbe `actionId`. */
+export const onActionDecisionEscalated = (
+  handler: (event: ActionDecisionEscalatedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ActionDecisionEscalatedEvent>("action-decision-escalated", (e) => handler(e.payload));
 
 export const onChatActionResult = (
   handler: (event: ChatActionResultEvent) => void,

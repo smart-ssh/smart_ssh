@@ -19,6 +19,7 @@ import {
   takeChatContentIntoNote,
 } from "../api";
 import {
+  onActionDecisionEscalated,
   onAiBudgetWaiting,
   onChatActionProposed,
   onChatActionResult,
@@ -439,6 +440,54 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
                     aiReviewed: true,
                   },
                   riskSecondOpinionPending: false,
+                }
+              : item,
+          ),
+        );
+      }),
+      // Spec 0092, §5/A3.2: die Entscheidung zu `actionId` wurde NACH
+      // `chat-action-proposed` von `AutoExec` auf `Confirm` verschärft (die
+      // KI-Zweitmeinung hat das Daten-Risiko auf Rot gehoben) — die Karte
+      // baut sich daraus selbst ein `Confirm{reason, code}`, weil dieses
+      // Event (anders als `chat-action-proposed`) nicht den ganzen
+      // `Decision`-Enum überträgt. `needsConfirmation` (s. `ChatItemView`)
+      // greift danach automatisch, der Bestätigungsdialog erscheint also
+      // ohne weiteres Zutun.
+      //
+      // `startedAt` MUSS auf `null` zurückgesetzt werden: Beim ursprünglichen
+      // `chat-action-proposed` stand die Entscheidung noch auf `AutoExec`,
+      // also wurde `startedAt` optimistisch auf `Date.now()` gesetzt (s.
+      // unten) — ohne diesen Reset zeigte die Karte fälschlich gleichzeitig
+      // den Lauf-Indikator (`RunningCommandIndicator`, „läuft bereits") UND
+      // den Bestätigungsdialog, obwohl die Aktion nie automatisch
+      // angelaufen ist (A3.1: sie wird wie jedes andere `Confirm`
+      // behandelt).
+      // Spec 0092, §5/A3.2: die Entscheidung zu `actionId` wurde NACH
+      // `chat-action-proposed` von `AutoExec` auf `Confirm` verschärft (die
+      // KI-Zweitmeinung hat das Daten-Risiko auf Rot gehoben) — die Karte
+      // baut sich daraus selbst ein `Confirm{reason, code}`, weil dieses
+      // Event (anders als `chat-action-proposed`) nicht den ganzen
+      // `Decision`-Enum überträgt. `needsConfirmation` (s. `ChatItemView`)
+      // greift danach automatisch, der Bestätigungsdialog erscheint also
+      // ohne weiteres Zutun.
+      //
+      // `startedAt` MUSS auf `null` zurückgesetzt werden: Beim ursprünglichen
+      // `chat-action-proposed` stand die Entscheidung noch auf `AutoExec`,
+      // also wurde `startedAt` optimistisch auf `Date.now()` gesetzt (s.
+      // unten) — ohne diesen Reset zeigte die Karte fälschlich gleichzeitig
+      // den Lauf-Indikator (`RunningCommandIndicator`, „läuft bereits") UND
+      // den Bestätigungsdialog, obwohl die Aktion nie automatisch
+      // angelaufen ist (A3.1: sie wird wie jedes andere `Confirm`
+      // behandelt).
+      onActionDecisionEscalated((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) =>
+          prev.map((item) =>
+            item.type === "action" && item.actionId === event.actionId
+              ? {
+                  ...item,
+                  decision: { Confirm: { reason: event.reason, code: event.code } },
+                  startedAt: null,
                 }
               : item,
           ),
