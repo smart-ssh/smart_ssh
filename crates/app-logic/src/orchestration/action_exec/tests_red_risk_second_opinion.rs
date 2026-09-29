@@ -141,12 +141,26 @@ async fn test_t10_second_opinion_raising_to_red_turns_autoexec_into_confirmation
     let events = emitter.events.lock().unwrap().clone();
     let escalated = escalated_event(&events).expect("action-decision-escalated muss kommen");
     assert_eq!(escalated["code"], "FILTER_RED_RISK_REQUIRES_CONFIRM");
+    // spec-reviewer-Fund (Runde 1), Spec 0092 §6: Der Grund nennt die rote
+    // Achse und ihre Herkunft, übernimmt aber NICHT den freien Text der
+    // Zweitmeinung — der landete sonst unredigiert im persistierten Ledger.
+    let escalated_reason = escalated["reason"].as_str().unwrap_or_default();
     assert!(
-        escalated["reason"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("gibt Zugangsdaten des Dienstes aus"),
-        "der Grund nennt die Begründung der Zweitmeinung: {escalated}"
+        escalated_reason.contains("Daten-Risiko rot") && escalated_reason.contains("Zweitmeinung"),
+        "{escalated}"
+    );
+    assert!(
+        !escalated_reason.contains("Zugangsdaten des Dienstes"),
+        "der Wortlaut der Zweitmeinung darf nicht in den Grund wandern: {escalated}"
+    );
+    // Am Badge steht er weiterhin — sichtbar, aber nicht persistiert.
+    assert_eq!(
+        events
+            .iter()
+            .find(|(name, _)| name == "risk-assessment-updated")
+            .expect("Badge-Update muss kommen")
+            .1["reason"],
+        serde_json::json!("gibt Zugangsdaten des Dienstes aus")
     );
     assert_eq!(escalated["actionId"], events[0].1["actionId"]);
 
@@ -178,6 +192,78 @@ async fn test_t10_second_opinion_raising_to_red_turns_autoexec_into_confirmation
         decision.1.as_deref(),
         Some("FILTER_RED_RISK_REQUIRES_CONFIRM"),
         "der Ledger-Eintrag trägt den Eskalationsgrund, wie bei jedem anderen Confirm"
+    );
+}
+
+/// **Regressionstest zum spec-reviewer-Fund (Runde 1).** Die Zweitmeinung
+/// zitiert in ihrer Begründung ein Passwort aus dem Kommando. Landet ihr
+/// Wortlaut im `Decision.reason`, steht das Passwort danach **im Klartext**
+/// in der SQLite-Datei: `redact_ledger_entry_content` lässt
+/// `LedgerEntryContent::Decision` bewusst unredigiert durch (Doc-Kommentar
+/// dort: „nur von der Filter-Engine selbst erzeugte Texte"), und der
+/// Redactor würde ein Ad-hoc-Passwort ohnehin nicht als Muster erkennen.
+///
+/// Geprüft wird gegen den **gesamten** geladenen Ledger, nicht nur gegen den
+/// `Decision`-Eintrag — damit der Test auch greift, wenn der Text künftig an
+/// einer anderen Stelle einsickert.
+#[tokio::test]
+async fn test_second_opinion_wording_never_reaches_the_persisted_ledger() {
+    const SECRET: &str = "S3cretPassw0rd";
+    // Das Kommando selbst enthält den Wert **nicht** — so kann ein Treffer im
+    // Ledger nur aus dem Urteilstext stammen. (Stünde er auch im Kommando,
+    // prüfte der Test zusätzlich den Redactor auf dem `CommandProposed`-
+    // Eintrag, und ein Ad-hoc-Passwort ist kein Muster, das er kennt.)
+    let command = "mysql -e 'select 1'".to_string();
+    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
+        session_with_real_chat_and_ledger_persistence(
+            vec![AiEvent::Done],
+            MockSshTransport::default().with_response(&command, output("ok")),
+        )
+        .await;
+    session.parts_mut_for_tests().filter_engine =
+        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    attach_second_opinion(
+        &mut session,
+        VerdictProvider("red: das Kommando enthält das Passwort S3cretPassw0rd"),
+    );
+
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let handled = handle_action_proposed(
+        &session,
+        Uuid::new_v4(),
+        AiAction::SuggestCommand {
+            command: command.clone(),
+        },
+        &emitter,
+        &profile_store,
+        &confirmations,
+        ActionOrigin::Internal,
+        test_fresh_rejection_flag(),
+    );
+    let responder =
+        resolve_first_escalated_action(&emitter, &confirmations, ActionUserDecision::Deny);
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::join!(handled, responder)
+    })
+    .await
+    .expect("Dialog muss enden");
+
+    // Vorbedingung: es wurde tatsächlich eskaliert — sonst prüft der Test
+    // nichts.
+    assert!(escalated_event(&emitter.events.lock().unwrap().clone()).is_some());
+
+    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    assert!(
+        !entries.is_empty(),
+        "Vorbedingung: das Ledger hat tatsächlich geschrieben"
+    );
+    let dump = format!("{entries:?}");
+    assert!(
+        !dump.contains(SECRET),
+        "das von der Zweitmeinung zitierte Passwort darf nirgends im Ledger stehen: {dump}"
     );
 }
 

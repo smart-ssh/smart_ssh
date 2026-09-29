@@ -622,6 +622,83 @@ async fn test_t17_multiline_script_with_one_red_line_is_escalated() {
     );
 }
 
+// --- Überlänge: Fail-safe statt „kein Risiko" --------------------------
+
+/// Ein Kommando mit Mehrbyte-Zeichen, das **über** der Byte-Schranke des
+/// Klassifizierers, aber **unter** der Zeichen-Schranke der Filter-Engine
+/// liegt — genau das Fenster, in dem der Klassifizierer aussteigt und die
+/// Engine mit Allow-Regel `AutoExec` liefert.
+fn overlong_multibyte_red_command() -> String {
+    // „€" sind 3 Bytes, 1 Zeichen.
+    format!("iptables -F -m comment --comment \"{}\"", "€".repeat(1400))
+}
+
+/// spec-reviewer-Fund (Runde 1), adversarialer Fall 7: Der Klassifizierer
+/// liefert für Überlänge `None`/`None` — „nicht geprüft", nicht „unauffällig".
+/// Das Glied muss das selbst als rot behandeln, statt sich darauf zu
+/// verlassen, dass ein Nachbarglied zufällig ebenfalls eskaliert.
+#[test]
+fn test_overlong_pseudo_command_is_treated_as_red() {
+    let command = overlong_multibyte_red_command();
+    assert!(
+        command.len() > ssh_manager_core::filter::DEFAULT_MAX_COMMAND_LENGTH,
+        "Vorbedingung: über der Byte-Schranke ({} Bytes)",
+        command.len()
+    );
+    assert!(
+        command.chars().count() <= ssh_manager_core::filter::DEFAULT_MAX_COMMAND_LENGTH,
+        "Vorbedingung: unter der Zeichen-Schranke ({} Zeichen)",
+        command.chars().count()
+    );
+    let action = AiAction::SuggestCommand {
+        command: command.clone(),
+    };
+    let assessment = RuleBasedRiskClassifier.classify(&command);
+    assert_eq!(
+        assessment.server_risk,
+        RiskLevel::None,
+        "Vorbedingung: der Klassifizierer steigt aus und meldet nichts"
+    );
+    assert!(
+        red_risk_reason(Some(&assessment)).is_none(),
+        "Vorbedingung: über die Einschätzung allein wäre nichts zu eskalieren"
+    );
+    let reason = red_risk_confirm_reason(&action, Some(&assessment))
+        .expect("Überlänge muss trotzdem eskalieren (fail-safe)");
+    assert!(reason.contains("zu lang"), "{reason}");
+}
+
+/// Und dasselbe Ende zu Ende: so ein Kommando erreicht mit Allow-Regel
+/// niemals `AutoExec`.
+///
+/// **Ehrlich zum Beweiswert**: Dieser Test bleibt auch ohne den Fail-safe
+/// oben grün — `secret_path_read_reason` eskaliert für Überlänge selbst und
+/// steht in der Kette davor. Er sichert also nicht den Fail-safe (das tut der
+/// Unit-Test darüber), sondern die Gesamtzusage: sollte der Überlängen-Zweig
+/// des Nachbarglieds je auf lesende Kommandos eingeengt werden, wird dieser
+/// Test rot statt die Eskalation still zu verschwinden.
+#[tokio::test]
+async fn test_overlong_command_never_reaches_autoexec() {
+    let command = overlong_multibyte_red_command();
+    let session = red_risk_session(MockSshTransport::default().with_response(&command, output("")));
+    let (decision, payload) = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        proposed_decision_code(
+            &session,
+            AiAction::SuggestCommand {
+                command: command.clone(),
+            },
+        ),
+    )
+    .await
+    .expect("Dialog muss enden");
+    assert!(
+        !matches!(decision, Decision::AutoExec),
+        "ein nicht einschätzbares Kommando darf nie automatisch laufen: {}",
+        payload["decision"]
+    );
+}
+
 // --- reine Funktion `red_risk_reason` ---------------------------------
 
 fn assessment(server: RiskLevel, data: RiskLevel) -> RiskAssessment {

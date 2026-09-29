@@ -1496,8 +1496,8 @@ async fn test_mcp_secret_path_read_shows_the_secret_reason() {
 /// automatisch ausgeführt — Chat-Kommando, `read_remote_file` und
 /// MCP-Herkunft (s. auch den MCP-Test oben). Ein öffentlicher Schlüssel bleibt automatisch.
 ///
-/// Spec 0092: Die **negativen** Fälle laufen jetzt mit ausgeschalteter
-/// Rot-Risiko-Einstellung. Grund: `cat ~/.ssh/id_rsa.pub` ist kein
+/// Spec 0092: Für **einen** Fall (`cat ~/.ssh/id_rsa.pub`) ist die
+/// Rot-Risiko-Einstellung ausgeschaltet. Grund: Er ist kein
 /// Secret-Pfad (die Aussage dieses Tests), der Risiko-Klassifizierer stuft
 /// es auf der Daten-Achse aber rot ein (Muster `id_rsa`, ohne
 /// `.pub`-Ausnahme) — mit eingeschalteter Einstellung eskaliert es deshalb
@@ -1507,11 +1507,18 @@ async fn test_mcp_secret_path_read_shows_the_secret_reason() {
 /// (`test_red_risk_escalates_a_public_key_read_that_is_no_secret_path`).
 #[tokio::test]
 async fn test_secret_path_read_always_requires_confirm_even_with_allow_rule() {
-    let cases: Vec<(AiAction, bool)> = vec![
+    // Drittes Feld (Spec 0092): die Rot-Risiko-Einstellung für diesen Fall.
+    // Sie steht überall auf `true` — nur für `id_rsa.pub` nicht, weil der
+    // Klassifizierer genau dieses Kommando auf der Daten-Achse rot einstuft
+    // (Muster `id_rsa`, ohne `.pub`-Ausnahme) und das neue Glied es deshalb
+    // eskalieren würde. Nur dieser eine Fall wird ausgenommen, nicht alle
+    // negativen (spec-reviewer-Fund, Runde 1).
+    let cases: Vec<(AiAction, bool, bool)> = vec![
         (
             AiAction::SuggestCommand {
                 command: "cat ~/.ssh/id_rsa".to_string(),
             },
+            true,
             true,
         ),
         (
@@ -1519,11 +1526,13 @@ async fn test_secret_path_read_always_requires_confirm_even_with_allow_rule() {
                 command: "echo ok; sudo tail /srv/app/.env".to_string(),
             },
             true,
+            true,
         ),
         (
             AiAction::ReadRemoteFile {
                 path: "/root/.ssh/id_ed25519".to_string(),
             },
+            true,
             true,
         ),
         (
@@ -1531,20 +1540,21 @@ async fn test_secret_path_read_always_requires_confirm_even_with_allow_rule() {
                 command: "cat ~/.ssh/id_rsa.pub".to_string(),
             },
             false,
+            false,
         ),
         (
             AiAction::SuggestCommand {
                 command: "cp ~/.ssh/id_rsa /backup/id_rsa".to_string(),
             },
             false,
+            true,
         ),
     ];
-    for (action, expect_confirm) in cases {
+    for (action, expect_confirm, red_risk_always_confirm) in cases {
         let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
         session.parts_mut_for_tests().filter_engine =
             Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-        // Spec 0092: s. Doc-Kommentar oben — nur für die negativen Fälle.
-        session.parts_mut_for_tests().red_risk_always_confirm = expect_confirm;
+        session.parts_mut_for_tests().red_risk_always_confirm = red_risk_always_confirm;
         let emitter = TestEmitter::default();
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();

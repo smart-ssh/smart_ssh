@@ -45,7 +45,7 @@ const RED_RISK_ALWAYS_CONFIRM_KEY: &str = "redRiskAlwaysConfirm";
 /// eine Rückfrage zu viel statt eines unbestätigten roten Kommandos). Ein
 /// nicht öffenbarer Store, ein fehlender Schlüssel und ein nicht-boolescher
 /// Wert führen deshalb alle auf `true`.
-pub fn red_risk_always_confirm<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> bool {
+pub(crate) fn red_risk_always_confirm<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> bool {
     let Ok(store) = app.store(SETTINGS_STORE_FILE) else {
         return true;
     };

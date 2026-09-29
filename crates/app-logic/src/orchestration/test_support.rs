@@ -318,8 +318,9 @@ pub(crate) fn session_with_ai_provider(
         risk_second_opinion_budget: None,
         // Spec 0092, §5: standardmäßig „an", damit ein Test mit rotem
         // Kommando und Allow-Regel sichtbar bricht statt still auf „aus" zu
-        // laufen. Tests, die das heutige Verhalten prüfen, setzen es
-        // ausdrücklich auf `false` (s. `session_without_red_risk_confirm`).
+        // laufen. Tests, die das Verhalten bei ausgeschalteter Einstellung
+        // prüfen, setzen es ausdrücklich über
+        // `parts_mut_for_tests().red_risk_always_confirm = false`.
         red_risk_always_confirm: true,
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),

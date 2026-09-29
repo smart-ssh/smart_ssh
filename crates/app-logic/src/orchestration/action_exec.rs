@@ -10,7 +10,9 @@ use ssh_manager_core::ai::{
     DEFAULT_SECOND_OPINION_MAX_LEN,
 };
 use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent, LedgerSource};
-use ssh_manager_core::filter::{Decision, EvalContext, EvaluationTrace, RuleId, RuleOrigin};
+use ssh_manager_core::filter::{
+    Decision, EvalContext, EvaluationTrace, RuleId, RuleOrigin, DEFAULT_MAX_COMMAND_LENGTH,
+};
 use ssh_manager_core::profiles::{AiAction, NoteTargetSelector, PostIngestPolicy, ProfileStore};
 use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
 use ssh_manager_core::ssh::{CommandOutput, ExecOutcome, SshError};
@@ -229,7 +231,7 @@ pub(crate) async fn handle_action_proposed(
     // Spec 0092 §5) bleibt dadurch ebenfalls unberührt, ein `Deny` erst
     // recht.
     if session.red_risk_always_confirm && matches!(decision, Decision::AutoExec) {
-        if let Some(reason) = red_risk_reason(risk_assessment.as_ref()) {
+        if let Some(reason) = red_risk_confirm_reason(&action, risk_assessment.as_ref()) {
             decision = if session
                 .injection_suspected
                 .load(std::sync::atomic::Ordering::SeqCst)
@@ -429,7 +431,7 @@ pub(crate) async fn handle_action_proposed(
     // Spec 0092, A3: Das Ergebnis wird zusätzlich festgehalten — hebt die
     // Zweitmeinung das Daten-Risiko auf Rot, darf die Aktion nicht mehr
     // automatisch laufen (s. direkt darunter).
-    let mut second_opinion_data_risk: Option<(RiskLevel, Option<String>)> = None;
+    let mut second_opinion_data_risk: Option<RiskLevel> = None;
     if let (Some(provider), Some(assessment)) = (
         session.risk_second_opinion_provider.as_deref(),
         risk_assessment,
@@ -452,10 +454,10 @@ pub(crate) async fn handle_action_proposed(
                 assessment.data_risk_reason,
                 second_opinion,
             );
-            emit_risk_assessment_updated(emitter, session_id, action_id, data_risk, reason.clone());
-            // Spec 0092, A3: Ergebnis festhalten — s. Kommentar direkt unter
-            // diesem Block.
-            second_opinion_data_risk = Some((data_risk, reason));
+            emit_risk_assessment_updated(emitter, session_id, action_id, data_risk, reason);
+            // Spec 0092, A3: nur die STUFE festhalten, nicht den Text der
+            // Zweitmeinung — s. Kommentar unten am Grundtext.
+            second_opinion_data_risk = Some(data_risk);
         }
     }
 
@@ -482,11 +484,18 @@ pub(crate) async fn handle_action_proposed(
     // `match` — ein während der Zweitmeinung eingetroffener Stopp soll die
     // Aktion überspringen lassen, nicht einen Dialog zeigen. Ohne diese
     // Prüfung eskalierte die Aktion und der `AutoExec`-Stopp-Zweig unten
-    // käme nie dran. Ein Stopp, der NACH dieser Zeile eintrifft, trifft
-    // dieselbe (unvermeidbare) Lücke wie heute schon jeder Stopp zwischen
-    // Prüfung und Ausführung.
+    // käme nie dran.
+    //
+    // Restlücke, ehrlich benannt (spec-reviewer-Fund, Runde 1): Ein Stopp,
+    // der NACH dieser Zeile eintrifft, sieht einen Dialog für eine gerade
+    // gestoppte Aktion — A3.3 verlangt „bekommt keinen Dialog". Das ist eine
+    // EIGENE, neue Lücke, nicht die bekannte „Kommando läuft trotz Stopp":
+    // Sie ist die sichere Richtung (eine Rückfrage zu viel, nie eine
+    // Ausführung zu viel) und lässt sich nicht schließen, solange das
+    // Ereignis überhaupt gesendet werden muss, bevor der Nutzer klicken
+    // kann. Ausgeführt wird in diesem Rennen nichts ohne Klick.
     let mut prepared = prepared;
-    let raised_to_red = matches!(second_opinion_data_risk, Some((RiskLevel::Red, _)));
+    let raised_to_red = second_opinion_data_risk == Some(RiskLevel::Red);
     if session.red_risk_always_confirm
         && matches!(prepared, PreparedDecision::AutoExec)
         && raised_to_red
@@ -495,12 +504,25 @@ pub(crate) async fn handle_action_proposed(
                 .auto_continue_stop
                 .load(std::sync::atomic::Ordering::SeqCst))
     {
-        let reason = match second_opinion_data_risk.and_then(|(_, reason)| reason) {
-            Some(detail) => format!(
-                "Daten-Risiko rot (KI-Zweitmeinung): {detail} – erfordert immer Bestätigung"
-            ),
-            None => "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung".to_string(),
-        };
+        // spec-reviewer-Fund (Runde 1), Spec 0092, §6 („Keine neue
+        // Datensenke … die Musterbegründung des Klassifizierers"): Der Text
+        // nennt die rote Achse und ihre Herkunft, aber **nicht** die
+        // Formulierung des Zweitmeinungs-Modells. Grund: `reason` landet
+        // über `handle_user_decision` im persistierten Ledger, und
+        // `redact_ledger_entry_content` lässt `LedgerEntryContent::Decision`
+        // bewusst unredigiert durch — mit der ausdrücklichen Begründung, dort
+        // stünden nur „von der Filter-Engine selbst erzeugte Texte". Ein
+        // freier Modelltext kann dagegen zitieren, was er gerade beurteilt
+        // (z. B. ein Passwort aus dem Kommando), und ist über
+        // Prompt-Injection mittelbar fremdgesteuert. Den Text vorher durch
+        // den Redactor zu schicken wäre Scheinsicherheit: der erkennt
+        // bekannte Secret-FORMEN (API-Keys, Private Keys, Hashes), nicht ein
+        // beliebiges Ad-hoc-Passwort.
+        //
+        // Die Begründung der Zweitmeinung geht dem Nutzer nicht verloren —
+        // sie steht im `risk-assessment-updated`-Ereignis am Badge (Spec
+        // 0092, §5) und ist damit sichtbar, ohne persistiert zu werden.
+        let reason = "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung".to_string();
         let code = "FILTER_RED_RISK_REQUIRES_CONFIRM".to_string();
         let pending = PendingConfirmation::register(session, action_confirmations, action_id);
         emit_action_decision_escalated(
@@ -798,6 +820,36 @@ fn pseudo_command_for_risk_classification(action: &AiAction) -> Option<String> {
 fn risk_assessment_for_action(action: &AiAction) -> Option<RiskAssessment> {
     let pseudo_command = pseudo_command_for_risk_classification(action)?;
     Some(RuleBasedRiskClassifier.classify(&pseudo_command))
+}
+
+/// Spec 0092, A2: der Grund, mit dem das neue Glied eskaliert — `None`, wenn
+/// es nicht greifen soll.
+///
+/// **Fail-safe bei Überlänge** (spec-reviewer-Fund, Runde 1, adversarialer
+/// Fall 7): Der Klassifizierer bricht ab, sobald das Pseudokommando länger
+/// als [`DEFAULT_MAX_COMMAND_LENGTH`] **Bytes** ist, und liefert dann
+/// `None`/`None` — „kein Risiko erkannt" heißt dort „nicht geprüft". Die
+/// Filter-Engine dagegen zählt **Zeichen**; ein Kommando mit Mehrbyte-Zeichen
+/// kann deshalb unter ihrer Schranke liegen (also mit Allow-Regel `AutoExec`
+/// werden), während der Klassifizierer schon aufgegeben hat. Ohne diesen
+/// Zweig griffe das Glied genau dann nicht — und A2 hinge daran, dass
+/// `secret_path_read_reason` für Überlänge zufällig selbst eskaliert (mit
+/// einem sachlich falschen Code). Dieselbe Schranke und dasselbe `.len()`
+/// wie im Klassifizierer, damit genau das Fenster abgedeckt ist, in dem er
+/// aussteigt.
+fn red_risk_confirm_reason(
+    action: &AiAction,
+    assessment: Option<&RiskAssessment>,
+) -> Option<String> {
+    if let Some(pseudo_command) = pseudo_command_for_risk_classification(action) {
+        if pseudo_command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+            return Some(
+                "Kommando zu lang für eine Risiko-Einschätzung – wird wie rot behandelt"
+                    .to_string(),
+            );
+        }
+    }
+    red_risk_reason(assessment)
 }
 
 /// Spec 0092, A2.1: `Some`, wenn **eine** der beiden Achsen `Red` ist — mit
