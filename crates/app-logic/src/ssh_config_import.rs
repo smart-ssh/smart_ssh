@@ -357,8 +357,14 @@ fn resolve_include(raw: &str, including_dir: &Path) -> Result<Vec<PathBuf>, ()> 
         including_dir.join(raw)
     };
 
-    let text = expanded.to_string_lossy().to_string();
-    if !has_wildcard(&text) {
+    // A1 (Spec 0091, F1): Ob der Wert ein Muster ist, entscheidet allein
+    // der geschriebene Wert `raw` — nicht der aufgelöste Pfad `expanded`.
+    // Der ist um `including_dir` erweitert, und dessen kanonische Form
+    // trägt unter Windows das Präfix `\\?\` (`std::fs::canonicalize`);
+    // dessen `?` ist kein Platzhalter im Include-Wert und darf den Include
+    // nicht zum Muster machen. Dieselbe Verwechslung träfe auf jeder
+    // Plattform ein Verzeichnis, dessen Name `*`, `?` oder `[` enthält.
+    if !has_wildcard(raw) {
         return Ok(vec![expanded]);
     }
 
@@ -369,8 +375,15 @@ fn resolve_include(raw: &str, including_dir: &Path) -> Result<Vec<PathBuf>, ()> 
         ),
         None => return Err(()),
     };
-    // Platzhalter nur in der letzten Komponente (A-2).
-    if has_wildcard(&dir.to_string_lossy()) {
+    // Platzhalter nur in der letzten Komponente **des Werts** (A-2):
+    // geprüft an `raw`, nicht an `dir` — der enthält (wie `expanded` oben)
+    // das Verzeichnis der einbindenden Datei und würde sonst jeden Include
+    // aus einem Verzeichnis mit `*`/`?`/`[` im Namen ablehnen, unabhängig
+    // vom eigentlichen Wert.
+    let value_dir_has_wildcard = Path::new(raw)
+        .parent()
+        .is_some_and(|p| !p.as_os_str().is_empty() && has_wildcard(&p.to_string_lossy()));
+    if value_dir_has_wildcard {
         return Err(());
     }
 
