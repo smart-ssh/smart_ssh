@@ -25,7 +25,7 @@ pub struct ConfirmationRegistry<K, T> {
     /// Spec 0088, A2.2: Alle Zugriffe laufen über
     /// [`lock_tolerating_poison`] statt `lock().unwrap()`. Grund: Das
     /// Abräumen eines aufgegebenen Wartens passiert im `Drop` von
-    /// `orchestration::pending_confirmation::PendingConfirmation` — und ein
+    /// `orchestration::pending_confirmation::ConfirmationCleanup` — und ein
     /// Panic in einem `Drop` während des Abwickelns eines anderen Panics
     /// bricht den Prozess ab. Der geschützte Wert ist eine `HashMap`, jede
     /// einzelne Operation darauf ist in sich abgeschlossen; eine Vergiftung

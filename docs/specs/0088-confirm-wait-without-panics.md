@@ -266,7 +266,23 @@ Keine.
 
 ## 9. Klarstellungen
 
-(wird während der Umsetzung nachgetragen)
+**K1 — Clippy nimmt Testmodule nicht von selbst aus (zu A4.2).** Die
+Formulierung „Testcode (`#[cfg(test)]`) ist ausgenommen" beschreibt das Ziel,
+nicht das Verhalten von clippy. Gemessen bei der Umsetzung: Mit
+`#![deny(clippy::unwrap_used, clippy::expect_used)]` am Modul `orchestration`
+meldet `cargo clippy --workspace --all-targets` **366** Treffer, sämtlich in
+den per `#[cfg(test)] mod …;` eingebundenen Testdateien. Die Ausnahme muss
+also ausdrücklich gesetzt werden — entweder workspaceweit über
+`allow-unwrap-in-tests`/`allow-expect-in-tests` in einer `clippy.toml` oder
+lokal als `#[allow(…)]` an den Testmodul-Deklarationen. Umgesetzt wurde die
+lokale Variante, damit die Ausnahme denselben Radius hat wie der Lint
+(Nicht-Ziel „kein Lint außerhalb von `orchestration/`"); Begründung in
+ADR 0082, Abschnitt 5.
+
+**K2 — Ist-Stand bestätigt.** Die Zählung aus §1 stimmt mit dem Code zum
+Zeitpunkt der Umsetzung überein: genau 10 `unwrap`/`expect` im Produktivcode
+von `orchestration/` (3 in `action_exec.rs`, 6 in `remote_files.rs`, 1 in
+`chat_turn.rs`). Kein Widerspruch zum Ist-Stand gefunden.
 
 ## Umsetzung
 

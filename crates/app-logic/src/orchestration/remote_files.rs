@@ -76,10 +76,19 @@ pub(crate) async fn previous_file_content_for_action(
 }
 
 /// Spec 0088, A3.2: Ein leerer normaler SFTP-Kanal wird an genau einer
-/// Stelle zum Fehler ([`crate::session::NormalSftpGuard::sftp_or_err`]) —
-/// hier wird daraus ein sichtbarer Aktionsfehler im Chat, mit Fehlercode und
-/// ohne Panic. Die beiden Schreib-Hilfsfunktionen brauchen ihn nicht: Sie
-/// liefern bereits `Result<_, SshError>` und reichen ihn per `?` weiter.
+/// Stelle zum Fehler ([`crate::session::NormalSftpGuard::sftp_or_err`]).
+/// Diese Funktion macht daraus einen sichtbaren Aktionsfehler im Chat, mit
+/// Fehlercode und ohne Panic — für die beiden `stat`-Aufrufe, deren Ergebnis
+/// sonst keinen Fehlerkanal hätte.
+///
+/// Nicht jeder Aufrufer braucht sie (spec-reviewer-Nachtrag, Runde 2): Die
+/// beiden Schreib-Hilfsfunktionen liefern bereits `Result<_, SshError>` und
+/// reichen den Fehler per `?` weiter, und am Lesepfad fällt er in den
+/// bestehenden `Err`-Zweig von `read_file` (dieselbe Behandlung, nur mit
+/// dessen Wortlaut). Gemeinsam ist allen: Der Fehler wird gemeldet,
+/// **nachdem** die SFTP-Sperre gefallen ist — `emit_action_error` nimmt
+/// `session.context`, und die Reihenfolge sftp→context soll hier gar nicht
+/// erst entstehen.
 async fn emit_sftp_channel_error(
     session: &Session,
     emitter: &dyn EventEmitter,
