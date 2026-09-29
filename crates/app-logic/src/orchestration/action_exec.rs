@@ -18,8 +18,8 @@ use ssh_manager_core::ssh::{CommandOutput, ExecOutcome, SshError};
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
-    emit_chat_action_proposed, emit_chat_action_result, emit_chat_error,
-    emit_risk_assessment_updated, ActionResultPayload, EventEmitter,
+    emit_action_decision_escalated, emit_chat_action_proposed, emit_chat_action_result,
+    emit_chat_error, emit_risk_assessment_updated, ActionResultPayload, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -50,6 +50,10 @@ mod tests_pending_confirmation;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_red_risk;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_red_risk_second_opinion;
 
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das
 /// bereits registrierte Warten.
@@ -421,6 +425,11 @@ pub(crate) async fn handle_action_proposed(
     // ein bereits registrierter `confirm_rx` (unten) wird trotzdem nicht
     // "verpasst", falls der Nutzer währenddessen schon klickt — der Wert
     // liegt im Kanal bereit, sobald `rx.await` weiter unten drankommt.
+    //
+    // Spec 0092, A3: Das Ergebnis wird zusätzlich festgehalten — hebt die
+    // Zweitmeinung das Daten-Risiko auf Rot, darf die Aktion nicht mehr
+    // automatisch laufen (s. direkt darunter).
+    let mut second_opinion_data_risk: Option<(RiskLevel, Option<String>)> = None;
     if let (Some(provider), Some(assessment)) = (
         session.risk_second_opinion_provider.as_deref(),
         risk_assessment,
@@ -443,8 +452,69 @@ pub(crate) async fn handle_action_proposed(
                 assessment.data_risk_reason,
                 second_opinion,
             );
-            emit_risk_assessment_updated(emitter, session_id, action_id, data_risk, reason);
+            emit_risk_assessment_updated(emitter, session_id, action_id, data_risk, reason.clone());
+            // Spec 0092, A3: Ergebnis festhalten — s. Kommentar direkt unter
+            // diesem Block.
+            second_opinion_data_risk = Some((data_risk, reason));
         }
+    }
+
+    // Spec 0092, A3: Die Zweitmeinung hat das Daten-Risiko auf Rot gehoben,
+    // nachdem `chat-action-proposed` mit `AutoExec` längst draußen ist. Die
+    // Aktion wird ab hier wie jedes andere `Confirm` behandelt — dieselbe
+    // Wartezeit, dieselbe Abbruchlogik, derselbe Tab-Indikator, dieselben
+    // Ledger-Einträge (A3.1), weil es buchstäblich derselbe
+    // `PreparedDecision::Confirm`-Zweig unten ist.
+    //
+    // Dass `prepared` hier noch `AutoExec` ist, heißt zugleich: Das
+    // regelbasierte Rot hat NICHT gegriffen (sonst hätte das Glied oben
+    // schon eskaliert) — die Anhebung kommt also tatsächlich von der
+    // Zweitmeinung. Nur Eskalation, wie überall: aus `Deny`/`Confirm` wird
+    // hier nichts.
+    //
+    // **Reihenfolge**: `register` VOR dem Ereignis (A3.2) — das Frontend
+    // erfährt erst von der wartenden Bestätigung, wenn der Empfänger schon
+    // steht, ein sehr schneller Klick geht also nicht ins Leere. Und das
+    // Ereignis NACH `risk-assessment-updated` (§5), damit das Badge rot ist,
+    // bevor der Dialog erscheint.
+    //
+    // **A3.3, Stopp hat Vorrang**: hier geprüft, nicht erst unten im
+    // `match` — ein während der Zweitmeinung eingetroffener Stopp soll die
+    // Aktion überspringen lassen, nicht einen Dialog zeigen. Ohne diese
+    // Prüfung eskalierte die Aktion und der `AutoExec`-Stopp-Zweig unten
+    // käme nie dran. Ein Stopp, der NACH dieser Zeile eintrifft, trifft
+    // dieselbe (unvermeidbare) Lücke wie heute schon jeder Stopp zwischen
+    // Prüfung und Ausführung.
+    let mut prepared = prepared;
+    let raised_to_red = matches!(second_opinion_data_risk, Some((RiskLevel::Red, _)));
+    if session.red_risk_always_confirm
+        && matches!(prepared, PreparedDecision::AutoExec)
+        && raised_to_red
+        && !(matches!(origin, ActionOrigin::Internal)
+            && session
+                .auto_continue_stop
+                .load(std::sync::atomic::Ordering::SeqCst))
+    {
+        let reason = match second_opinion_data_risk.and_then(|(_, reason)| reason) {
+            Some(detail) => format!(
+                "Daten-Risiko rot (KI-Zweitmeinung): {detail} – erfordert immer Bestätigung"
+            ),
+            None => "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung".to_string(),
+        };
+        let code = "FILTER_RED_RISK_REQUIRES_CONFIRM".to_string();
+        let pending = PendingConfirmation::register(session, action_confirmations, action_id);
+        emit_action_decision_escalated(
+            emitter,
+            session_id,
+            action_id,
+            reason.clone(),
+            code.clone(),
+        );
+        prepared = PreparedDecision::Confirm {
+            reason,
+            code,
+            pending,
+        };
     }
 
     match prepared {

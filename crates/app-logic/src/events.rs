@@ -350,6 +350,49 @@ pub fn emit_risk_assessment_updated(
     );
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ActionDecisionEscalatedPayload {
+    session_id: SessionId,
+    action_id: ActionId,
+    reason: String,
+    code: String,
+}
+
+/// Spec 0092, §5/A3.2: Die Entscheidung zu einer bereits vorgeschlagenen
+/// Aktion hat sich **nach** `chat-action-proposed` verschärft — aus
+/// `AutoExec` wurde `Confirm`, weil die KI-Zweitmeinung das Daten-Risiko auf
+/// Rot gehoben hat. Die Karte behandelt das wie eine `Confirm`-Entscheidung
+/// aus `chat-action-proposed`; der Tab-Zustand ebenso (A3.6).
+///
+/// **Ein eigenes Ereignis statt einer Erweiterung von
+/// `risk-assessment-updated`**: Letzteres kommt auch ohne Eskalation (jedes
+/// Badge-Update, auch `none`/`yellow`), es trüge die Eskalation also nur als
+/// Sonderfall mit. Wird immer **nach** `risk-assessment-updated` gesendet,
+/// damit das Badge schon rot ist, wenn der Dialog erscheint.
+///
+/// Die Registrierung der wartenden Bestätigung liegt **vor** diesem Aufruf
+/// (s. `orchestration::action_exec`) — sonst könnte ein sehr schneller Klick
+/// ins Leere gehen.
+pub fn emit_action_decision_escalated(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    action_id: ActionId,
+    reason: String,
+    code: String,
+) {
+    emit(
+        emitter,
+        "action-decision-escalated",
+        &ActionDecisionEscalatedPayload {
+            session_id,
+            action_id,
+            reason,
+            code,
+        },
+    );
+}
+
 /// Spec 0010, Abschnitt 2, Punkt 5: derselbe Vorschlags-Anlass wie
 /// `chat-action-proposed` (`action` ist hier immer
 /// `AiAction::ProposeNoteUpdate`, nie `SuggestCommand` — s.
