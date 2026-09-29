@@ -683,6 +683,12 @@ mod tests {
     // --- §6.2.7/§6.4.6: keine regulären Dateien ------------------------
 
     /// §6.2.7: Ein Verzeichnis ist keine reguläre Datei.
+    ///
+    /// A3 (Spec 0091, F2): Unter Windows scheitert schon das Öffnen des
+    /// Verzeichnis-Handles oder das Lesen seiner Metadaten — `probe` ordnet
+    /// das als `NotReadable` ein, die Prüfung auf eine reguläre Datei
+    /// (`NotARegularFile`) läuft dort nie. Plattformverhalten, kein
+    /// Produktcode geändert (Klarstellung §9 der Spec).
     #[test]
     fn test_directory_is_rejected() {
         let dir = TempDir::new().unwrap();
@@ -692,10 +698,17 @@ mod tests {
             .err()
             .expect("ein Verzeichnis ist kein Schlüssel");
 
-        assert!(
-            matches!(err, KeyFileError::NotARegularFile { .. }),
-            "erwartet NotARegularFile, bekam {err:?}"
-        );
+        if cfg!(windows) {
+            assert!(
+                matches!(err, KeyFileError::NotReadable { .. }),
+                "erwartet NotReadable unter Windows, bekam {err:?}"
+            );
+        } else {
+            assert!(
+                matches!(err, KeyFileError::NotARegularFile { .. }),
+                "erwartet NotARegularFile, bekam {err:?}"
+            );
+        }
     }
 
     /// §6.2.7/§6.4.6: Ein Zeichengerät meldet Größe 0 und käme durch jede
@@ -957,10 +970,19 @@ mod tests {
 
     /// §6.4.6: Ein Pfad mit NUL-Byte ergibt einen sauberen Fehler — kein
     /// Panic, kein Hänger.
+    ///
+    /// A3 (Spec 0091, F3): Der Pfad muss auf der jeweiligen Plattform
+    /// absolut sein — `/tmp/…` ist das unter Windows nicht, dort schlüge
+    /// der Test nur `PathNotAbsolute` fehl, statt den Lesefehler zu prüfen.
     #[test]
     fn test_path_containing_a_nul_byte_fails_cleanly() {
+        let path = if cfg!(windows) {
+            "C:\\key\0extra"
+        } else {
+            "/tmp/key\0extra"
+        };
         let err = reader()
-            .read("/tmp/key\0extra", true)
+            .read(path, true)
             .err()
             .expect("ein Pfad mit NUL-Byte lässt sich nicht öffnen");
 

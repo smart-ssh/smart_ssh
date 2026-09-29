@@ -254,7 +254,15 @@ fn t_6_2_4_relativer_include_relativ_zur_einbindenden_datei() {
         .map(|f| f.path.as_str())
         .collect();
     assert_eq!(names.len(), 2, "beide Dateien gelesen: {names:?}");
-    assert!(names[1].ends_with("unten/tief.conf"), "war: {}", names[1]);
+    // A3a (Spec 0091, F4): Pfadbestandteile vergleichen, nicht die
+    // Zeichenkette mit einem bestimmten Trenner — unter Windows trennt der
+    // kanonische Pfad mit `\`, nicht mit `/`. `Path::ends_with` vergleicht
+    // Komponenten und ist damit auf jeder Plattform richtig.
+    assert!(
+        Path::new(names[1]).ends_with(Path::new("unten").join("tief.conf")),
+        "war: {}",
+        names[1]
+    );
     let plan = plan_of(&read);
     assert!(plan.entries.iter().any(|e| e.name == "tief"));
 }
