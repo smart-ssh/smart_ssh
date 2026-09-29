@@ -587,7 +587,14 @@ impl russh_sftp::server::Handler for SftpTestHandler {
     }
 
     async fn close(&mut self, id: u32, handle: String) -> Result<Status, Self::Error> {
-        self.open_files.remove(&handle);
+        // Spec 0093, A7: erst bestätigen, wenn zuvor gepufferte Schreiben
+        // wirklich abgeschlossen sind — sonst kann ein direkt danach vom
+        // Client gelesenes `on_disk` (außerhalb von SFTP, s.
+        // `sftp_local_path`) auf noch nicht geschriebene Daten treffen (s.
+        // `write` unten).
+        if let Some(mut file) = self.open_files.remove(&handle) {
+            file.flush().await.map_err(map_io_err)?;
+        }
         self.open_dirs.remove(&handle);
         Ok(ok_status(id))
     }
@@ -630,6 +637,11 @@ impl russh_sftp::server::Handler for SftpTestHandler {
             .await
             .map_err(map_io_err)?;
         file.write_all(&data).await.map_err(map_io_err)?;
+        // Spec 0093, A7: erst bestätigen, wenn die Daten tatsächlich
+        // geschrieben sind — `tokio::fs::File` puffert sonst intern, ein
+        // `write`/`close` ohne `flush` kann zurückkehren, bevor der Inhalt
+        // für einen direkt danach lesenden Beobachter sichtbar ist.
+        file.flush().await.map_err(map_io_err)?;
         Ok(ok_status(id))
     }
 
