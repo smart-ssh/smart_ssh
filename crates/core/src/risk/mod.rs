@@ -1,7 +1,15 @@
-//! Risiko-Indikatoren für KI-vorgeschlagene Aktionen (Spec 0026) — rein
-//! informativ, beeinflusst nie die Filter-Engine-`Decision`
-//! (`crate::filter`). Zwei unabhängige Achsen (Server-Risiko/Daten-Risiko),
-//! s. `types::RiskAssessment`.
+//! Risiko-Indikatoren für KI-vorgeschlagene Aktionen (Spec 0026) — beeinflusst
+//! innerhalb DIESES Crates nie die Filter-Engine-`Decision` (`crate::filter`):
+//! die Einschätzung wird hier nur berechnet, nicht ausgewertet. Zwei
+//! unabhängige Achsen (Server-Risiko/Daten-Risiko), s.
+//! `types::RiskAssessment`.
+//!
+//! **Seit Spec 0092 kein rein informativer Wert mehr auf App-Ebene:**
+//! `app-logic::orchestration::action_exec` liest die hier berechnete
+//! Einschätzung und macht bei `Red` auf einer der beiden Achsen (Einstellung
+//! „Bei rotem Risiko immer nachfragen" vorausgesetzt) aus einer sonst
+//! automatisch laufenden Aktion eine bestätigungspflichtige — auch gegen
+//! eine Allow-Regel. S. `docs/adr/0084-red-risk-requires-confirm.md`.
 //!
 //! `ReadRemoteFile`/`WriteRemoteFile` (Spec 0020) laufen NICHT durch dieses
 //! Modul in Form eines eigenen Pfad-Parameters — der Aufrufer (Kernschleife

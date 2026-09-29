@@ -32,6 +32,7 @@
   - `Confirm`: Manuelle Bestätigung durch den Nutzer (mit Live-Kommando-Editor)
   - `Deny`: Harte Blockierung gefährlicher Befehle
 - **Präzedenz:** `Hard-Blacklist > Deny > Confirm > Allow > Default (Confirm)`.
+- **Rotes Risiko verlangt Bestätigung (Standard: an):** Stuft der Risiko-Indikator einen Vorschlag auf der Server- oder der Daten-Achse als rot ein, erzwingt die Einstellung „Bei rotem Risiko immer nachfragen“ eine Bestätigung — auch gegen eine sonst greifende Allow-Regel. Das gilt auch, wenn erst die optionale KI-Zweitmeinung nachträglich auf Rot hebt. Ausschalten ist möglich; dann bleibt Rot wieder nur eine Anzeige (Spec 0092, ADR 0084).
 - **Evasionsschutz:** Parser zerlegt Operatoren (`&&`, `||`, `;`, `|`, `&`, `\n`, `\r`) und Command-Substitutionen (`$(...)`, Backticks, `<(...)`), um Filterumgehungen zuverlässig zu verhindern.
 - **Prompt-Isolation:** Verhindert Indirect Prompt Injections (IPI) durch strukturierte Kapselung von Server-Outputs und Validierung von System-Metadaten.
 - **Automatische Secret-Redaction:** Erkennt und maskiert Passwörter, Private Keys, Bearer-Tokens, GitHub-PATs und AWS-Keys im Terminal-Output, bevor Daten an die KI-API gesendet werden.

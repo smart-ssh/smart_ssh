@@ -4,9 +4,20 @@
 //! **Startpunkte, kein Anspruch auf Vollständigkeit** (Spec, Abschnitt 2,
 //! letzter Absatz vor "Für ReadRemoteFile/WriteRemoteFile"): anders als die
 //! Hard-Blacklist der Filter-Engine (`crate::filter::hard_blacklist_patterns`)
-//! sind diese Listen bewusst nicht sicherheitskritisch — sie blockieren
-//! nichts, eine Lücke ist eine unvollständige Warnung, kein Sicherheitsloch.
-//! Nutzer-Erweiterbarkeit ist explizit nicht Teil dieser Spec (Abschnitt 5).
+//! blockieren diese Listen selbst nichts — eine Lücke hier ist kein Loch in
+//! einer bestehenden Blockade. Nutzer-Erweiterbarkeit ist explizit nicht Teil
+//! dieser Spec (Abschnitt 5).
+//!
+//! **Seit Spec 0092 aber sicherheitsrelevant für die dortige Eskalation:**
+//! Die Einstellung „Bei rotem Risiko immer nachfragen"
+//! (`app-logic::orchestration::action_exec`) verlangt eine Bestätigung nur
+//! für ein Kommando, das eine dieser Listen tatsächlich trifft und deshalb
+//! `Red` klassifiziert wird — ein hier fehlendes Muster lässt ein
+//! inhaltlich rotes Kommando ohne diese zusätzliche Rückfrage automatisch
+//! laufen (bei passender Allow-Regel). Das ist keine Lockerung der
+//! Filter-Engine selbst (die Hard-Blacklist/Regel-Auswertung bleibt
+//! unverändert davon), aber eine reale Grenze dieser zusätzlichen
+//! Sicherheitsschicht. S. `docs/adr/0084-red-risk-requires-confirm.md`.
 //!
 //! Wie bei der Hard-Blacklist (s. `filter::blacklist`-Modul-Kommentar)
 //! werden Kommandos vor dem Matching lowercased (`classifier::best_match`),

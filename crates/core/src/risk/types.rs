@@ -16,9 +16,19 @@ pub enum RiskLevel {
     Red,
 }
 
-/// Rein informative Risiko-Einschätzung einer KI-vorgeschlagenen Aktion
-/// (Spec 0026, Abschnitt 1/2) — beeinflusst nie die `Decision` der
-/// Filter-Engine (`core::filter`), blockiert nichts, führt nichts aus.
+/// Risiko-Einschätzung einer KI-vorgeschlagenen Aktion (Spec 0026, Abschnitt
+/// 1/2) — beeinflusst innerhalb dieses Crates nie die `Decision` der
+/// Filter-Engine (`core::filter`): `evaluate_action` liest sie nicht,
+/// blockiert nichts, führt nichts aus.
+///
+/// **Auf App-Ebene nicht mehr rein informativ (Spec 0092):**
+/// `app-logic::orchestration::action_exec` liest dieses `RiskAssessment` nach
+/// der Filter-Engine-Auswertung und macht bei `Red` auf `server_risk` ODER
+/// `data_risk` — Einstellung „Bei rotem Risiko immer nachfragen" vorausgesetzt
+/// — aus `AutoExec` ein `Confirm`, auch gegen eine Allow-Regel; dieselbe
+/// Eskalation greift nachträglich, falls die optionale KI-Zweitmeinung
+/// `data_risk` erst nach der Auswertung auf `Red` hebt. S.
+/// `docs/adr/0084-red-risk-requires-confirm.md`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RiskAssessment {
