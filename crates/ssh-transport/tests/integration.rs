@@ -1019,8 +1019,22 @@ async fn test_sftp_set_permissions() {
         .await
         .expect("set_permissions() sollte gelingen");
 
-    let entry = sftp.stat("/chmod-me.txt").await.unwrap();
-    assert_eq!(entry.permissions, 0o640);
+    // Spec 0093, A1: auf allen Plattformen prüfen, dass der Client den
+    // Modus tatsächlich per `setstat` überträgt — unabhängig davon, ob der
+    // Testserver ihn anwendet (das tut er nur unter Unix, s. unten).
+    assert_eq!(
+        server.setstat_mode.last_mode(),
+        Some(0o640),
+        "Client sollte den Modus 0o640 per setstat senden"
+    );
+
+    // Unter Unix zusätzlich: der Testserver hat die Rechte wirklich gesetzt
+    // (unverändert seit Spec 0054, Teil 3).
+    #[cfg(unix)]
+    {
+        let entry = sftp.stat("/chmod-me.txt").await.unwrap();
+        assert_eq!(entry.permissions, 0o640);
+    }
 }
 
 /// Stat: Größe und Verzeichnis-Flag einer existierenden Datei korrekt

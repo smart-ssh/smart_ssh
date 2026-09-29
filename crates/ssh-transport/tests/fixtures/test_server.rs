@@ -79,6 +79,29 @@ impl ExecChannelWatch {
     }
 }
 
+/// Spec 0093, A1: Hält fest, welchen `permissions`-Wert der Client zuletzt
+/// per SFTP-`setstat` gesendet hat — unabhängig davon, ob dieser Testserver
+/// ihn überhaupt anwendet. Der Testserver wendet Unix-Mode-Bits nur unter
+/// `#[cfg(unix)]` an (s. `SftpTestHandler::setstat`); unter Windows bliebe
+/// `test_sftp_set_permissions` sonst ganz ohne Prüfung, ob der Client den
+/// Modus überhaupt überträgt.
+#[derive(Default)]
+pub struct SetstatModeWatch {
+    last_mode: std::sync::Mutex<Option<u32>>,
+}
+
+impl SetstatModeWatch {
+    pub fn last_mode(&self) -> Option<u32> {
+        *self.last_mode.lock().expect("Mutex nicht vergiftet")
+    }
+
+    fn record(&self, mode: Option<u32>) {
+        if let Some(mode) = mode {
+            *self.last_mode.lock().expect("Mutex nicht vergiftet") = Some(mode);
+        }
+    }
+}
+
 /// Läuft ein `RunningTestServer` und stoppt ihn beim Droppen (best effort —
 /// der Shutdown-Kanal wird geschlossen, der Accept-Loop-Task beendet sich
 /// dadurch spätestens beim nächsten `select!`-Durchlauf).
@@ -99,6 +122,8 @@ pub struct RunningTestServer {
     pub sftp_root: TempDir,
     /// Spec 0085, A2.1/T14 — s. [`ExecChannelWatch`].
     pub exec_channel: Arc<ExecChannelWatch>,
+    /// Spec 0093, A1 — s. [`SetstatModeWatch`].
+    pub setstat_mode: Arc<SetstatModeWatch>,
     shutdown: Option<oneshot::Sender<()>>,
     accept_task: JoinHandle<()>,
 }
@@ -141,6 +166,8 @@ impl RunningTestServer {
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
         let exec_channel = Arc::new(ExecChannelWatch::default());
         let exec_channel_for_loop = exec_channel.clone();
+        let setstat_mode = Arc::new(SetstatModeWatch::default());
+        let setstat_mode_for_loop = setstat_mode.clone();
 
         let accept_task = tokio::spawn(async move {
             loop {
@@ -156,11 +183,13 @@ impl RunningTestServer {
                         let config = config.clone();
                         let sftp_root = sftp_root_path.clone();
                         let exec_channel = exec_channel_for_loop.clone();
+                        let setstat_mode = setstat_mode_for_loop.clone();
                         tokio::spawn(async move {
                             let handler = TestHandler {
                                 channels: HashMap::new(),
                                 sftp_root,
                                 exec_channel,
+                                setstat_mode,
                             };
                             let _ = russh::server::run_stream(config, stream, handler).await;
                         });
@@ -174,6 +203,7 @@ impl RunningTestServer {
             host_public_key,
             sftp_root,
             exec_channel,
+            setstat_mode,
             shutdown: Some(shutdown_tx),
             accept_task,
         }
@@ -201,6 +231,9 @@ struct TestHandler {
     /// geöffneten Kanals mit — das normale `sftp`-Subsystem soll den Zähler
     /// nicht mitbewegen.
     exec_channel: Arc<ExecChannelWatch>,
+    /// Spec 0093, A1 — beide SFTP-Subsysteme (normal und über `exec`)
+    /// bewegen hier denselben Beobachter, s. `SftpTestHandler::setstat`.
+    setstat_mode: Arc<SetstatModeWatch>,
 }
 
 impl Handler for TestHandler {
@@ -281,6 +314,7 @@ impl Handler for TestHandler {
                 open_dirs: HashMap::new(),
                 next_handle: 0,
                 closed: Some(self.exec_channel.clone()),
+                setstat_mode: self.setstat_mode.clone(),
             };
             russh_sftp::server::run(chan.into_stream(), handler).await;
             return Ok(());
@@ -453,6 +487,7 @@ impl Handler for TestHandler {
             next_handle: 0,
             // Das normale Subsystem bewegt den Zähler aus T14 nicht.
             closed: None,
+            setstat_mode: self.setstat_mode.clone(),
         };
         russh_sftp::server::run(channel.into_stream(), handler).await;
         Ok(())
@@ -475,6 +510,8 @@ struct SftpTestHandler {
     /// besitzt ihn, und seine Schleife endet, wenn der Kanal-Datenstrom
     /// endet.
     closed: Option<Arc<ExecChannelWatch>>,
+    /// Spec 0093, A1 — s. [`SetstatModeWatch`].
+    setstat_mode: Arc<SetstatModeWatch>,
 }
 
 impl Drop for SftpTestHandler {
@@ -662,9 +699,13 @@ impl russh_sftp::server::Handler for SftpTestHandler {
         path: String,
         attrs: FileAttributes,
     ) -> Result<Status, Self::Error> {
-        // Windows kennt keine Unix-`mode`-Bits; `path`/`attrs` blieben dort
-        // sonst unbenutzt (Spec 0089, W4) — der Testserver wendet dort
-        // schlicht keine Rechte an, unverändert für Unix (Spec 0054, Teil 3).
+        // Spec 0093, A1: für den Test auf allen Plattformen sichtbar machen,
+        // was der Client tatsächlich sendet — unabhängig davon, ob dieser
+        // Testserver es anwendet.
+        self.setstat_mode.record(attrs.permissions);
+        // Windows kennt keine Unix-`mode`-Bits; `path` bliebe dort sonst
+        // unbenutzt (Spec 0089, W4) — der Testserver wendet dort schlicht
+        // keine Rechte an, unverändert für Unix (Spec 0054, Teil 3).
         #[cfg(unix)]
         {
             if let Some(mode) = attrs.permissions {
@@ -676,7 +717,7 @@ impl russh_sftp::server::Handler for SftpTestHandler {
         }
         #[cfg(not(unix))]
         {
-            let _ = (&path, &attrs);
+            let _ = &path;
         }
         Ok(ok_status(id))
     }
