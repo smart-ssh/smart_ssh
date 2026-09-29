@@ -164,12 +164,54 @@ jobs:
       # Praxis bewährt hat — NICHT Teil dieses Schritts.
       - name: cargo deny check (licenses, sources, bans)
         run: cargo deny check licenses sources bans
-        continue-on-error: true
 
       # Konfiguration: `.cargo/audit.toml` (der von cargo-audit selbst
       # automatisch erkannte Pfad, s. dortiger Kommentar zum Schema/zur
-      # Pfad-Konvention). Ebenfalls Berichtsmodus, gleiche Begründung wie
-      # beim `cargo deny`-Schritt oben.
+      # Pfad-Konvention).
       - name: cargo audit
         run: cargo audit
-        continue-on-error: true
+
+      # Spec 0090, A4: eine Ausnahme in `.cargo/audit.toml`, die auf keinen
+      # Befund im aktuellen Lockfile mehr trifft (weil ein Advisory
+      # zurückgezogen wurde oder das betroffene Crate nicht mehr im Baum
+      # steht), soll auffallen statt unbemerkt stehen zu bleiben. Dazu läuft
+      # `cargo audit` hier ein zweites Mal, in einem frischen Verzeichnis
+      # ohne `.cargo/audit.toml` (also ohne die Ausnahmeliste), gegen
+      # dasselbe Lockfile — die JSON-Ausgabe zeigt dann jeden Befund, Lücken
+      # UND Hinweise (Spec 0090 §1, derselbe Abgleich wie dort von Hand
+      # gemacht). Jede in `.cargo/audit.toml` eingetragene ID, die darin
+      # nicht mehr vorkommt, ist eine überholte Ausnahme. Das Verbot aus A2
+      # (kein `continue-on-error`) gilt nur für die beiden Schritte oben,
+      # nicht für diesen Zwischenaufruf: `cargo audit` endet hier
+      # erwartungsgemäß mit Exit != 0 (RUSTSEC-2023-0071 hat keinen Fix) —
+      # das ist kein Fehler dieses Schritts, ausgewertet wird ausschließlich
+      # seine JSON-Ausgabe. Fehlt sie oder lässt sie sich nicht lesen, ist
+      # dieser Schritt rot.
+      - name: Audit-Ausnahmen gegen aktuelle Funde abgleichen (Spec 0090, A4)
+        shell: bash
+        run: |
+          scratch="$(mktemp -d)"
+          cp Cargo.lock "$scratch/Cargo.lock"
+          json_output="$(cd "$scratch" && cargo audit --json -f Cargo.lock)"
+          if [ -z "$json_output" ]; then
+            echo "::error::cargo audit ohne Ausnahmeliste lieferte keine Ausgabe - Abgleich (Spec 0090 A4) konnte nicht laufen"
+            exit 1
+          fi
+          found_ids="$(echo "$json_output" | jq -r '
+            [ (.vulnerabilities.list[]?.advisory.id),
+              (.warnings[]?[]?.advisory.id // empty) ]
+            | unique[]
+          ')"
+          if [ $? -ne 0 ]; then
+            echo "::error::JSON-Ausgabe von cargo audit liess sich nicht lesen - Abgleich (Spec 0090 A4) konnte nicht laufen"
+            exit 1
+          fi
+          stale=0
+          while IFS= read -r id; do
+            [ -z "$id" ] && continue
+            if ! grep -qx "$id" <<< "$found_ids"; then
+              echo "::error::Ausnahme $id in .cargo/audit.toml trifft auf keinen aktuellen Befund mehr (Spec 0090, A4) - entfernen"
+              stale=1
+            fi
+          done < <(grep -oE '"RUSTSEC-[0-9]{4}-[0-9]+"' .cargo/audit.toml | tr -d '"' | sort -u)
+          exit "$stale"

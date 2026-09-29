@@ -28,6 +28,17 @@
 # bestehen (im Berichtsmodus ohnehin ohne Auswirkung auf den CI-Status).
 
 [advisories]
+# Spec 0090, A3/A4: jede Ausnahme unten nennt das betroffene Crate, die
+# Version im Lockfile, gegen die entschieden wurde, und die Bedingung, an
+# der man erkennt, dass sie überholt ist ("Entschieden gegen" /
+# "Überholt, wenn"). Eine CI-Prüfung (Workflow `Community`, Job
+# `dependency-audit`) gleicht diese Liste bei jedem Lauf gegen einen
+# `cargo audit`-Aufruf ohne Ausnahmeliste ab: trifft eine hier eingetragene
+# ID auf keinen aktuellen Befund mehr, wird der Lauf rot (s. Kommentar beim
+# entsprechenden Workflow-Schritt). Die 10 Ausnahmen für die zurückgezogene
+# GTK3-Advisory-Reihe RUSTSEC-2024-0411 bis -0420 sind deshalb entfernt,
+# nicht nur veraltet kommentiert — ihre Advisories tragen `withdrawn` in der
+# RustSec-Datenbank und träfen auf keinen Befund mehr.
 ignore = [
     # --- Echte Sicherheitslücke: dokumentiertes Risk-Acceptance ---------
     #
@@ -49,6 +60,11 @@ ignore = [
     # Ersetzen der SSH-Kernbibliothek wäre ein deutlich größerer Eingriff
     # und selbst riskanter als das verbleibende Risiko dieser Advisory.
     #
+    # Entschieden gegen: `rsa` 0.10.0-rc.18 (Cargo.lock). Überholt, sobald
+    # eines zutrifft: ein Fix für `rsa` erscheint (die Advisory selbst
+    # nennt aktuell keinen), oder `russh`/`rsa` wird aktualisiert
+    # (Re-Evaluierungs-Auftrag unten).
+    #
     # Offener Punkt, NICHT nur hier vermerkt: s.
     # docs/adr/0028-rsa-marvin-attack-risk-acceptance.md für das Tracking
     # und den Re-Evaluierungs-Auftrag (bei `russh`/`rsa`-Update erneut
@@ -58,25 +74,18 @@ ignore = [
 
     # --- GTK3-Kette: ausschließlich Tauris Linux-Webview-Backend --------
     #
-    # Alle folgenden sind "unmaintained"-Warnungen für gtk-rs' GTK3-
-    # Bindings (verifiziert via `cargo tree --target all`: ausschließlich
-    # unter Linux kompiliert, für macOS/Windows-Builds nie in der
+    # proc-macro-error ist "unmaintained" — transitiv über glib-macros,
+    # Teil derselben gtk-rs/GTK3-Kette wie RUSTSEC-2024-0429 unten
+    # (verifiziert via `cargo tree --target all`: ausschließlich unter
+    # Linux kompiliert, für macOS/Windows-Builds nie in der
     # Abhängigkeitsmenge). Transitiv, Linux-only, kein Fix verfügbar,
     # ökosystemweit bekanntes GTK3→GTK4-Migrationsthema (betrifft jede
     # Tauri-2-App unter Linux gleichermaßen, nicht spezifisch für dieses
     # Projekt) — ohne Verzicht auf Linux-Support nicht behebbar.
-    "RUSTSEC-2024-0413", # atk — s. GTK3-Begründung oben
-    "RUSTSEC-2024-0416", # atk-sys — s. GTK3-Begründung oben
-    "RUSTSEC-2024-0412", # gdk — s. GTK3-Begründung oben
-    "RUSTSEC-2024-0418", # gdk-sys — s. GTK3-Begründung oben
-    "RUSTSEC-2024-0411", # gdkwayland-sys — s. GTK3-Begründung oben
-    "RUSTSEC-2024-0417", # gdkx11 — s. GTK3-Begründung oben
-    "RUSTSEC-2024-0414", # gdkx11-sys — s. GTK3-Begründung oben
-    "RUSTSEC-2024-0415", # gtk — s. GTK3-Begründung oben
-    "RUSTSEC-2024-0420", # gtk-sys — s. GTK3-Begründung oben
-    "RUSTSEC-2024-0419", # gtk3-macros — s. GTK3-Begründung oben
-    # proc-macro-error — transitiv über glib-macros, Teil derselben
-    # GTK3-Kette (Linux-only), gleiche Begründung wie oben.
+    #
+    # Entschieden gegen: `proc-macro-error` 1.0.4 (Cargo.lock). Überholt,
+    # wenn `cargo audit` diese ID nicht mehr meldet (Crate ersetzt/
+    # aktualisiert) oder die GTK3-Kette entfällt.
     "RUSTSEC-2024-0370",
 
     # --- unic-char-*-Kette: transitive Tauri-Abhängigkeit ---------------
@@ -84,11 +93,15 @@ ignore = [
     # Cross-Plattform (nicht Linux-only, verifiziert via
     # `cargo tree --target all`), transitiv über `urlpattern` →
     # `tauri-utils` → `tauri`. Kein Fix verfügbar.
-    "RUSTSEC-2025-0081", # unic-char-property — s. Begründung oben
-    "RUSTSEC-2025-0075", # unic-char-range — s. Begründung oben
-    "RUSTSEC-2025-0080", # unic-common — s. Begründung oben
-    "RUSTSEC-2025-0100", # unic-ucd-ident — s. Begründung oben
-    "RUSTSEC-2025-0098", # unic-ucd-version — s. Begründung oben
+    #
+    # Entschieden gegen: je 0.9.0 (Cargo.lock, s. Version je Zeile unten).
+    # Überholt, wenn `cargo audit` eine dieser IDs nicht mehr meldet (Crate
+    # ersetzt/aktualisiert) oder `tauri` `urlpattern` nicht mehr zieht.
+    "RUSTSEC-2025-0081", # unic-char-property 0.9.0 — s. Begründung oben
+    "RUSTSEC-2025-0075", # unic-char-range 0.9.0 — s. Begründung oben
+    "RUSTSEC-2025-0080", # unic-common 0.9.0 — s. Begründung oben
+    "RUSTSEC-2025-0100", # unic-ucd-ident 0.9.0 — s. Begründung oben
+    "RUSTSEC-2025-0098", # unic-ucd-version 0.9.0 — s. Begründung oben
 
     # --- RUSTSEC-2024-0429: bewusst ANDERS behandelt als "unmaintained" -
     #
@@ -101,7 +114,11 @@ ignore = [
     # sondern als aktiv zu beobachten: bei jedem gtk-rs-Versions-Update
     # (glib/gtk/atk/gdk*) erneut prüfen, ob ein Fix vorliegt, bevor diese
     # Ausnahme unverändert stehen bleibt.
-    "RUSTSEC-2024-0429", # glib::VariantStrIter — AKTIV BEOBACHTEN bei gtk-rs-Updates, s. Begründung oben
+    #
+    # Entschieden gegen: `glib` 0.18.5 (Cargo.lock). Überholt: AKTIV
+    # BEOBACHTEN bei jedem gtk-rs-Versions-Update (glib/gtk/atk/gdk*) — s.
+    # Begründung oben.
+    "RUSTSEC-2024-0429", # glib::VariantStrIter 0.18.5 — AKTIV BEOBACHTEN bei gtk-rs-Updates, s. Begründung oben
 ]
 
 # `wnaf 0.14.0` (transitiv über primeorder ← p256/p384/p521 ← russh) ist
