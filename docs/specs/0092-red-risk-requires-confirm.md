@@ -1,6 +1,6 @@
 # Spec 0092 — Rotes Risiko verlangt Bestätigung (Einstellung, Standard an)
 
-Status: Vorschlag (Architekt) · Backlog: BL-0074 · Gate: —
+Status: freigegeben · Backlog: BL-0074 · Gate: —
 Zweck: Ein rot eingestufter Vorschlag läuft nie ohne Rückfrage, solange die
 neue App-Einstellung an ist — auch gegen eine Allow-Regel.
 Review-Priorität: ERHÖHT
