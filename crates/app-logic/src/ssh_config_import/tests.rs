@@ -157,6 +157,85 @@ fn t_a2_platzhalter_vor_letzter_pfadkomponente_wird_gemeldet_nicht_aufgeloest() 
     );
 }
 
+// --------------------------- Spec 0091 F1/A1 (Windows: `\\?\`-Präfix)
+
+// Unter Windows liefert `std::fs::canonicalize` einen Pfad mit dem Präfix
+// `\\?\`; sein `?` darf den Include nicht zum Muster machen, obwohl der
+// geschriebene Wert keinen Platzhalter enthält. Auf Unix ist derselbe
+// Fehler mit einem Verzeichnis nachstellbar, dessen Name `?`/`[` enthält —
+// gültige Zeichen dort, ungültig unter Windows (wie beim `*`-Verzeichnis
+// der ANNAHME-A-2-Tests oben), deshalb `#[cfg(unix)]`.
+#[cfg(unix)]
+#[test]
+fn t1_include_ohne_platzhalter_unter_verzeichnis_mit_fragezeichen() {
+    let d = tempfile::tempdir().unwrap();
+    write(d.path(), "ein?ordner/team.conf", "Host b\n");
+    let c = write(d.path(), "ein?ordner/config", "Include team.conf\nHost a\n");
+
+    let read = read_ok(&c);
+    let plan = plan_of(&read);
+    let names: Vec<&str> = plan.entries.iter().map(|e| e.name.as_str()).collect();
+    assert!(
+        names.contains(&"b"),
+        "eingebundene Datei nicht gelesen: {names:?}"
+    );
+    assert!(
+        read.files
+            .iter()
+            .any(|f| f.status == FileStatus::Read && f.path.ends_with("team.conf")),
+        "team.conf nicht als gelesen gemeldet: {:?}",
+        read.files
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn t2_include_mit_platzhalter_unter_verzeichnis_mit_eckiger_klammer() {
+    let d = tempfile::tempdir().unwrap();
+    write(d.path(), "ein[ordner/eins.conf", "Host eins\n");
+    write(d.path(), "ein[ordner/zwei.conf", "Host zwei\n");
+    let c = write(d.path(), "ein[ordner/config", "Include *.conf\nHost a\n");
+
+    let read = read_ok(&c);
+    let plan = plan_of(&read);
+    let names: Vec<&str> = plan.entries.iter().map(|e| e.name.as_str()).collect();
+    assert!(names.contains(&"eins"), "{names:?}");
+    assert!(names.contains(&"zwei"), "{names:?}");
+}
+
+// Wächter: Ein Fix für T1/T2 darf ANNAHME A-2 nicht aufweichen — der
+// Platzhalter steht hier *im Include-Wert* vor der letzten Komponente
+// (`sub*/x.conf`), zusätzlich liegt die einbindende Datei wie in T1 unter
+// einem Verzeichnis mit `?` im Namen. Ein Fix, der die Wildcard-Prüfung an
+// den passenden Wert bindet, aber die Prüfung auf den Verzeichnisteil
+// vergisst, ließe diesen Test durchgehen.
+#[cfg(unix)]
+#[test]
+fn t3_platzhalter_vor_letzter_komponente_bleibt_trotz_fragezeichen_im_verzeichnis_abgelehnt() {
+    let d = tempfile::tempdir().unwrap();
+    write(d.path(), "ein?ordner/sub*/x.conf", "Host getroffen\n");
+    let c = write(
+        d.path(),
+        "ein?ordner/config",
+        "Include sub*/x.conf\nHost a\n",
+    );
+
+    let read = read_ok(&c);
+    let plan = plan_of(&read);
+    let names: Vec<&str> = plan.entries.iter().map(|e| e.name.as_str()).collect();
+    assert!(
+        !names.contains(&"getroffen"),
+        "Platzhalter vor der letzten Pfadkomponente wurde aufgelöst: {names:?}"
+    );
+    assert!(
+        read.include_issues
+            .iter()
+            .any(|i| i.reason == SkipReason::IncludeNoMatch),
+        "nicht gemeldet: {:?}",
+        read.include_issues
+    );
+}
+
 #[test]
 fn t_6_2_4_relativer_include_relativ_zur_einbindenden_datei() {
     // Der Messbefund gegen `ssh2-config` (§9/M-1) als Test: Sie löst
