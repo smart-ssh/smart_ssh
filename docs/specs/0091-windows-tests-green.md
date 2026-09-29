@@ -1,6 +1,6 @@
 # Spec 0091 — Tests green on Windows
 
-Status: Vorschlag (Architekt) · Backlog: BL-0285, BL-0281 · Gate: —
+Status: freigegeben (Stefan, 2026-09-29) · Backlog: BL-0285, BL-0281 · Gate: —
 Zweck: `cargo test` kommt im CI-Job `Test (windows-latest)` durch
 `app-logic` hindurch (weitere Crates: R1); dabei
 wird ein echter Fehler behoben: Der ssh_config-Import folgt unter Windows
