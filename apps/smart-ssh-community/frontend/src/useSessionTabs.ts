@@ -95,12 +95,6 @@ export function useSessionTabs() {
       // Zweitmeinung auf Rot gehoben). Ohne diesen Handler bliebe der
       // Tab-Hinweis aus, und "Tab schließen" würde weiterhin nichts
       // ablehnen, obwohl eine Bestätigung wartet.
-      // Spec 0092, A3.6: dieselbe Reaktion wie beim `Confirm`-Zweig von
-      // `onChatActionProposed` oben — nur kommt die Verschärfung hier ERST
-      // nach `chat-action-proposed` (ursprünglich `AutoExec`, dann per KI-
-      // Zweitmeinung auf Rot gehoben). Ohne diesen Handler bliebe der
-      // Tab-Hinweis aus, und "Tab schließen" würde weiterhin nichts
-      // ablehnen, obwohl eine Bestätigung wartet.
       onActionDecisionEscalated((event) => {
         setTabs((prev) =>
           prev.map((t) =>
