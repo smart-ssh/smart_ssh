@@ -34,11 +34,35 @@ use super::remote_files::{
     execute_read_remote_file, execute_write_remote_file, previous_file_content_for_action,
 };
 
+// Spec 0088, A4.2: Testcode ist vom `deny` oben ausgenommen. Clippy tut
+// das NICHT von selbst — ein `#[cfg(test)]` am `mod` reicht ihm ohne
+// `allow-unwrap-in-tests` nicht (nachgemessen: 366 Treffer). Die
+// Ausnahme steht bewusst hier an der Moduldeklaration statt in einer
+// workspaceweiten `clippy.toml`: So bleiben Lint und Ausnahme
+// vollständig in `orchestration/` und ändern an keiner anderen Crate
+// etwas (Spec 0088, Nicht-Ziel „kein Lint außerhalb von orchestration“).
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_core;
+// Spec 0088, A4.2: Testcode ist vom `deny` oben ausgenommen. Clippy tut
+// das NICHT von selbst — ein `#[cfg(test)]` am `mod` reicht ihm ohne
+// `allow-unwrap-in-tests` nicht (nachgemessen: 366 Treffer). Die
+// Ausnahme steht bewusst hier an der Moduldeklaration statt in einer
+// workspaceweiten `clippy.toml`: So bleiben Lint und Ausnahme
+// vollständig in `orchestration/` und ändern an keiner anderen Crate
+// etwas (Spec 0088, Nicht-Ziel „kein Lint außerhalb von orchestration“).
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_files_and_ledger;
+// Spec 0088, A4.2: Testcode ist vom `deny` oben ausgenommen. Clippy tut
+// das NICHT von selbst — ein `#[cfg(test)]` am `mod` reicht ihm ohne
+// `allow-unwrap-in-tests` nicht (nachgemessen: 366 Treffer). Die
+// Ausnahme steht bewusst hier an der Moduldeklaration statt in einer
+// workspaceweiten `clippy.toml`: So bleiben Lint und Ausnahme
+// vollständig in `orchestration/` und ändern an keiner anderen Crate
+// etwas (Spec 0088, Nicht-Ziel „kein Lint außerhalb von orchestration“).
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_pending_confirmation;
 
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das

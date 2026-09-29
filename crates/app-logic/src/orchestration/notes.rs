@@ -34,7 +34,15 @@ use super::chat_turn::{
     SIDE_CALL_MAX_TOKENS,
 };
 
+// Spec 0088, A4.2: Testcode ist vom `deny` oben ausgenommen. Clippy tut
+// das NICHT von selbst — ein `#[cfg(test)]` am `mod` reicht ihm ohne
+// `allow-unwrap-in-tests` nicht (nachgemessen: 366 Treffer). Die
+// Ausnahme steht bewusst hier an der Moduldeklaration statt in einer
+// workspaceweiten `clippy.toml`: So bleiben Lint und Ausnahme
+// vollständig in `orchestration/` und ändern an keiner anderen Crate
+// etwas (Spec 0088, Nicht-Ziel „kein Lint außerhalb von orchestration“).
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests;
 
 /// Spec 0016, Abschnitt 6: löst den von der KI gewählten
