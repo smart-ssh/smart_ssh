@@ -109,6 +109,18 @@ jobs:
         working-directory: apps/smart-ssh-community/frontend
         run: npm ci
 
+      # Spec 0090, A5: oxlint-Verstöße der Stufe "error" färben den Job rot;
+      # Warnungen (aktuell 4, s. Spec 0090 §1) bleiben Warnungen — oxlints
+      # eigener Exit-Code unterscheidet das bereits.
+      - name: Frontend lint
+        working-directory: apps/smart-ssh-community/frontend
+        run: npm run lint
+
+      # Spec 0090, A5: ein fehlschlagender vitest-Fall färbt den Job rot.
+      - name: Frontend tests
+        working-directory: apps/smart-ssh-community/frontend
+        run: npm test
+
       - name: Frontend build
         working-directory: apps/smart-ssh-community/frontend
         run: npm run build

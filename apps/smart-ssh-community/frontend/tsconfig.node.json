@@ -14,6 +14,11 @@
     "noEmit": true,
 
     /* Linting */
+    /* Spec 0090, A6: schreibt den heute schon geltenden Compiler-Default
+       fest (TypeScript 6.0.3 aktiviert `strict`, wenn der Eintrag fehlt),
+       damit ein künftiger Default-Wechsel den Zustand nicht stillschweigend
+       ändert. */
+    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
