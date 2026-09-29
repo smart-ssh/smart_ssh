@@ -701,6 +701,30 @@ fn test_third_round_checks_leave_ordinary_commands_alone() {
 
 /// Lange, verschachtelte Eingaben an der Längengrenze bleiben schnell
 /// (Rekursion in Code-Strings ist tiefenbegrenzt, `cd`-Präfixe gedeckelt).
+///
+/// Spec 0093, A6: Limit 3s riss unter `windows-latest` bei 3,01s (derselbe
+/// Debug-Build, nur ein langsamerer Runner) — kein echter Rückfall. Neues
+/// Limit 10s, hergeleitet aus zwei Messungen auf dem eigenen Rechner
+/// (macOS, Debug-Build): alle vier Eingaben zusammen liefen in ~0,57s, die
+/// langsamste einzeln (Eingabe 1, 3608 Zeichen) in ~0,45s — 10s lässt >20x
+/// Marge zu diesem lokalen Wert und >3x zum gemessenen Windows-Wert.
+///
+/// Abstand zu einer echten exponentiellen Explosion (Gegenprobe, Spec
+/// 0093 T7): Rekursionstiefen- (`depth > 3`) und Budget-Schranke
+/// (`MAX_NESTED_CHECKS`) in `extended_secret_read_reason_in` testweise
+/// stark gelockert (`depth > 30`, Budget `1_000_000`) und dieselben vier
+/// Muster bei 25/50/75/100% ihrer Wiederholungszahl erneut gemessen:
+/// Eingabe 1 (rekursiv über `watch`) wuchs dabei nur linear (908 Zeichen
+/// 133ms → 3608 Zeichen 454ms), die anderen drei blieben im
+/// einstelligen-Millisekundenbereich. Grund: das `seen`-Set dedupliziert
+/// exakt wiederholte Teilstrings, und der Längen-Cutoff
+/// (`DEFAULT_MAX_COMMAND_LENGTH`, gilt in jedem rekursiven Aufruf erneut)
+/// deckelt jeden Zweig unabhängig von Tiefe/Budget zusätzlich — mit den
+/// hier verwendeten (identisch wiederholten) Mustern lässt sich eine
+/// echte kombinatorische Explosion also nicht auslösen, selbst mit
+/// stark gelockerten Schranken nicht. Dieser Zeittest bleibt trotzdem ein
+/// unabhängiges zweites Netz: Ein Rückfall, der Dedup oder Längen-Cutoff
+/// selbst aufhebt, bliebe an dieser Schranke weiterhin hängen.
 #[test]
 fn test_secret_check_stays_fast_on_adversarial_long_input() {
     let inputs = [
@@ -714,7 +738,7 @@ fn test_secret_check_stays_fast_on_adversarial_long_input() {
         let started = std::time::Instant::now();
         let _ = secret_path_read_reason(&input);
         assert!(
-            started.elapsed() < std::time::Duration::from_secs(3),
+            started.elapsed() < std::time::Duration::from_secs(10),
             "zu langsam ({:?}) für Eingabe der Länge {}",
             started.elapsed(),
             input.len()
