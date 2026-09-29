@@ -2143,3 +2143,50 @@ async fn test_context_truncation_for_provider_request_does_not_affect_persisted_
         "beide 30.000-Zeichen-Nachrichten müssen weiterhin vollständig in der DB stehen: {text_lengths:?}"
     );
 }
+
+/// Spec 0088, T7 (A4.1, gegen `33d0501` rot): Ist die Sperre von
+/// `mcp_origin_flags` vergiftet, panicken weder das Schreiben in
+/// `push_history_scoped` noch das Lesen in der Kompaktierung.
+///
+/// Das Lesen ist die teurere Stelle: Es passiert **nach** dem `mem::take`
+/// des Verlaufs aus dem Kontext (`compact_rounds_with_summary`). Ein Panic
+/// dort liesse den Verlauf der Sitzung leer zurueck — der Chat waere weg.
+#[tokio::test]
+async fn test_a_poisoned_mcp_origin_flags_lock_breaks_neither_push_nor_compaction() {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Done]),
+        MockSshTransport::default(),
+    );
+    crate::poison::poison_for_test(&session.mcp_origin_flags);
+
+    // Ein Verlauf, der die Kompaktierung sicher ausloest.
+    for round in 0..6 {
+        let text = format!("Runde {round}: {}", "x".repeat(4_000));
+        push_history_scoped(&session, user_msg(&text), false).await;
+    }
+
+    let history_len = session.context.lock().await.history.len();
+    let flags_len = crate::poison::lock_tolerating_poison(&session.mcp_origin_flags).len();
+    assert_eq!(
+        history_len, flags_len,
+        "Verlauf und Flags muessen trotz vergifteter Sperre gleich lang bleiben"
+    );
+    assert_eq!(history_len, 6);
+
+    let context = session.context.lock().await.clone();
+    let parts = crate::compaction::SystemContextParts::default();
+    let result = crate::compaction::compact_for_send(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        context,
+        &parts,
+        1_000,
+    )
+    .await;
+
+    assert!(
+        !result.history.is_empty(),
+        "die Kompaktierung darf den Verlauf nicht leer zuruecklassen"
+    );
+}

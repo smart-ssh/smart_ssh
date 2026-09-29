@@ -75,6 +75,31 @@ pub(crate) async fn previous_file_content_for_action(
     }
 }
 
+/// Spec 0088, A3.2: Ein leerer normaler SFTP-Kanal wird an genau einer
+/// Stelle zum Fehler ([`crate::session::NormalSftpGuard::sftp_or_err`]) —
+/// hier wird daraus ein sichtbarer Aktionsfehler im Chat, mit Fehlercode und
+/// ohne Panic. Die beiden Schreib-Hilfsfunktionen brauchen ihn nicht: Sie
+/// liefern bereits `Result<_, SshError>` und reichen ihn per `?` weiter.
+async fn emit_sftp_channel_error(
+    session: &Session,
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    path: &str,
+    err: SshError,
+    persist: bool,
+) -> bool {
+    let code = err.code();
+    emit_action_error(
+        session,
+        emitter,
+        session_id,
+        format!("SFTP-Zugriff auf '{path}' nicht möglich: {err}"),
+        Some(code),
+        persist,
+    )
+    .await
+}
+
 /// Spec 0020, Abschnitt 4.1: liest die Datei per SFTP, lehnt sie über
 /// `MAX_READ_FILE_BYTES` mit klarer Meldung ab statt sie zu laden, läuft
 /// sonst durch denselben `OutputRedactor` wie Kommando-Output (Spec 0006,
@@ -108,10 +133,16 @@ pub(crate) async fn execute_read_remote_file(
     // schlicht übersprungen statt den ganzen Aufruf scheitern zu lassen.
     let size = {
         let mut guard = session.lock_sftp().await;
-        let sftp = guard
-            .sftp()
-            .expect("ensure_sftp_open lief erfolgreich durch");
-        sftp.stat(&path).await.map(|entry| entry.size).ok()
+        // Spec 0088, A3.2: `sftp_or_err` statt `expect` — waere der Kanal
+        // wider Erwarten leer, endet die Aktion mit einem Fehler im Chat
+        // statt mit einem Panic mitten im Chat-Turn.
+        match guard.sftp_or_err() {
+            Ok(sftp) => sftp.stat(&path).await.map(|entry| entry.size).ok(),
+            Err(err) => {
+                return emit_sftp_channel_error(session, emitter, session_id, &path, err, persist)
+                    .await
+            }
+        }
     };
     if let Some(size) = size {
         if size > MAX_READ_FILE_BYTES {
@@ -132,10 +163,13 @@ pub(crate) async fn execute_read_remote_file(
 
     let raw = {
         let mut guard = session.lock_sftp().await;
-        let sftp = guard
-            .sftp()
-            .expect("ensure_sftp_open lief erfolgreich durch");
-        sftp.read_file(&path).await
+        match guard.sftp_or_err() {
+            Ok(sftp) => sftp.read_file(&path).await,
+            Err(err) => {
+                return emit_sftp_channel_error(session, emitter, session_id, &path, err, persist)
+                    .await
+            }
+        }
     };
 
     match raw {
@@ -232,17 +266,13 @@ async fn write_via_sftp_with_backup(
 
     if let Some(backup) = &backup_path {
         let mut guard = session.lock_sftp().await;
-        let sftp = guard
-            .sftp()
-            .expect("ensure_sftp_open lief erfolgreich durch");
+        let sftp = guard.sftp_or_err()?;
         let old_content = sftp.read_file(path).await?;
         sftp.write_file(backup, &old_content).await?;
     }
 
     let mut guard = session.lock_sftp().await;
-    let sftp = guard
-        .sftp()
-        .expect("ensure_sftp_open lief erfolgreich durch");
+    let sftp = guard.sftp_or_err()?;
     sftp.write_file(path, content.as_bytes()).await?;
 
     Ok(backup_path)
@@ -318,9 +348,7 @@ async fn write_via_sudo_fallback(
     let temp_name = format!(".smartssh-tmp-{}", Uuid::new_v4());
     {
         let mut guard = session.lock_sftp().await;
-        let sftp = guard
-            .sftp()
-            .expect("ensure_sftp_open lief erfolgreich durch");
+        let sftp = guard.sftp_or_err()?;
         sftp.write_file(&temp_name, content.as_bytes())
             .await
             .map_err(|e| {
@@ -378,9 +406,13 @@ pub(crate) async fn execute_write_remote_file(
 
     let (existed, old_mode) = {
         let mut guard = session.lock_sftp().await;
-        let sftp = guard
-            .sftp()
-            .expect("ensure_sftp_open lief erfolgreich durch");
+        let sftp = match guard.sftp_or_err() {
+            Ok(sftp) => sftp,
+            Err(err) => {
+                return emit_sftp_channel_error(session, emitter, session_id, &path, err, persist)
+                    .await
+            }
+        };
         match sftp.stat(&path).await {
             Ok(entry) => (true, Some(entry.permissions)),
             Err(_) => (false, None),

@@ -2031,3 +2031,70 @@ async fn test_ledger_stays_empty_for_read_remote_file_in_this_stage() {
         "Etappe 1 deckt nur SuggestCommand ab (ADR 0047 Punkt 3): {entries:?}"
     );
 }
+
+/// Spec 0088, T13 (A3.2, Regression): Scheitert das Oeffnen des SFTP-Kanals,
+/// endet die Dateiaktion als sichtbarer Fehler im Chat — mit Fehlercode, und
+/// ohne Panic.
+///
+/// `MockSshTransport` unterstuetzt `open_sftp` nicht (Default-Impl des
+/// Traits), die Sitzung bekommt hier also bewusst keinen Kanal gesetzt.
+/// Deckt beide Aktionstypen ab: Vor Spec 0088 fuehrte jeder von ihnen im
+/// Anschluss durch `expect`-Stellen, die den Kanal fuer garantiert offen
+/// hielten.
+#[tokio::test]
+async fn test_file_actions_report_a_chat_error_when_sftp_cannot_be_opened() {
+    for action in [
+        AiAction::ReadRemoteFile {
+            path: "/etc/motd".to_string(),
+        },
+        AiAction::WriteRemoteFile {
+            path: "/etc/motd".to_string(),
+            content: "neu".to_string(),
+        },
+    ] {
+        // Ohne passende Regel landen beide Aktionen bei `Confirm`
+        // (`NoRulesPolicyStore` ist der `test_session`-Standard) — der
+        // Fehler soll sich also gerade NACH einer Genehmigung zeigen.
+        let session = test_session(
+            vec![AiEvent::ActionProposed(action.clone()), AiEvent::Done],
+            MockSshTransport::default(),
+        );
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let turn = run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        );
+        let responder = approve_first_proposed_action(&emitter, &confirmations);
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(turn, responder);
+        })
+        .await
+        .expect("der Turn darf weder haengen noch panicken");
+
+        let errors: Vec<_> = emitter
+            .events
+            .lock()
+            .expect("Emitter-Sperre ist nicht vergiftet")
+            .iter()
+            .filter(|(name, _)| name == "chat-error")
+            .map(|(_, payload)| payload.clone())
+            .collect();
+        assert_eq!(
+            errors.len(),
+            1,
+            "erwartet genau ein chat-error fuer {action:?}, bekommen: {errors:?}"
+        );
+        assert!(
+            errors[0]["code"].is_string(),
+            "der Fehler muss einen Fehlercode tragen: {:?}",
+            errors[0]
+        );
+    }
+}

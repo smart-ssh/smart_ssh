@@ -40,7 +40,7 @@ use ssh_manager_core::ai::{
 };
 use ssh_manager_core::filter::{EvalContext, EvaluationTrace, FilterEngine, PolicyStore};
 use ssh_manager_core::shared::ServerId;
-use ssh_manager_core::ssh::{PtySize, SftpSession, SshTransport};
+use ssh_manager_core::ssh::{PtySize, SftpSession, SshError, SshTransport};
 
 use crate::confirmation::ConfirmationRegistry;
 use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
@@ -120,6 +120,31 @@ impl NormalSftpGuard<'_> {
     /// `None`, solange niemand `ensure_sftp_open` aufgerufen hat.
     pub fn sftp(&mut self) -> Option<&mut (dyn SftpSession + 'static)> {
         self.0.as_deref_mut()
+    }
+
+    /// Wie [`Self::sftp`], aber mit einem Fehler statt `None` — für alle
+    /// Aufrufer, die den Kanal **benutzen wollen** statt nur nachzusehen, ob
+    /// er offen ist (Spec 0088, A3.2).
+    ///
+    /// Das ist die **eine** Stelle, an der ein leerer Kanal zu einem Fehler
+    /// wird. Vorher stand an jedem der sechs Aufrufer in
+    /// `orchestration::remote_files` ein
+    /// `expect("ensure_sftp_open lief erfolgreich durch")` — sechs Kopien
+    /// derselben Invariante, die keiner der Aufrufer selbst garantieren
+    /// kann. Garantieren kann sie nur dieser Typ: Befüllt wird der Kanal
+    /// ausschließlich über [`Self::install`], und keine Operation leert ihn
+    /// wieder (s. [`NormalSftpChannel`]). Genau deshalb steht der Hinweis
+    /// hier am Typ und nicht am Aufrufer — und genau deshalb endet ein
+    /// künftiger Umbau, der den Kanal doch einmal leert, in einem sichtbaren
+    /// Aktionsfehler im Chat statt in einem Panic mitten im Chat-Turn.
+    ///
+    /// Der `SshError` ist bewusst ein gewöhnlicher Kanalfehler mit Code: Die
+    /// Aufrufer reichen ihn über ihren bestehenden Fehlerpfad weiter, ohne
+    /// dafür einen zweiten Mechanismus zu brauchen.
+    pub fn sftp_or_err(&mut self) -> Result<&mut (dyn SftpSession + 'static), SshError> {
+        self.0.as_deref_mut().ok_or_else(|| {
+            SshError::ChannelError("der SFTP-Kanal dieser Sitzung ist nicht geöffnet".to_string())
+        })
     }
 
     /// Ist der Kanal schon geöffnet?
@@ -1292,6 +1317,31 @@ mod tests {
     }
 
     // --- Spec 0040, Abschnitt 7: is_chat_session_active ---------------------
+
+    /// Spec 0088, T15 (A3.2): Die EINE Stelle, die einen leeren normalen
+    /// SFTP-Kanal in einen Fehler umwandelt, tut das an einer frischen
+    /// Sitzung auch tatsächlich — statt zu panicken.
+    ///
+    /// Frisch heisst hier: `ensure_sftp_open` lief nie. Genau dieser Zustand
+    /// stand vorher hinter sechs
+    /// `expect("ensure_sftp_open lief erfolgreich durch")` in
+    /// `orchestration::remote_files`.
+    #[tokio::test]
+    async fn test_sftp_or_err_reports_an_error_on_a_session_whose_channel_was_never_opened() {
+        let session = dummy_session(ServerId::new());
+        let mut guard = session.lock_sftp().await;
+        assert!(!guard.is_open(), "frische Sitzung: Kanal ist zu");
+
+        let err = guard
+            .sftp_or_err()
+            .err()
+            .expect("ein nicht geöffneter Kanal muss ein Fehler sein, kein Erfolg");
+        assert_eq!(err.code(), "SSH_CHANNEL_ERROR");
+        assert!(
+            guard.sftp().is_none(),
+            "und `sftp()` meldet weiterhin schlicht None"
+        );
+    }
 
     #[tokio::test]
     async fn test_is_chat_session_active_true_for_a_live_session_bound_to_it() {

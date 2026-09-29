@@ -528,7 +528,10 @@ async fn compact_rounds_with_summary(
     // MCP-Flag-Array pflegt — s. `Session::mcp_origin_flags`-Doc-
     // Kommentar. Muss VOR `split_into_rounds` gelesen werden, das
     // `history` konsumiert.
-    let mcp_flags = session.mcp_origin_flags.lock().unwrap().clone();
+    // Spec 0088, A4.1: vergiftungstolerant — `history` ist oben bereits per
+    // `mem::take` aus dem Kontext genommen; ein Panic ab hier liesse den
+    // Verlauf der Sitzung leer zurück.
+    let mcp_flags = crate::poison::lock_tolerating_poison(&session.mcp_origin_flags).clone();
     let mcp_flags_by_round = group_mcp_flags_by_round(&history, &mcp_flags);
     let rounds = split_into_rounds(history);
     if rounds.len() <= min_preserved_rounds {

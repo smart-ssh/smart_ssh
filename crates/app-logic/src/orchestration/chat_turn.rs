@@ -128,7 +128,11 @@ pub(crate) async fn push_history_scoped(session: &Session, message: ChatMessage,
         // dieselbe Quelle der Wahrheit, kein zweiter Mechanismus.
         let mut ctx = session.context.lock().await;
         ctx.history.push(message.clone());
-        session.mcp_origin_flags.lock().unwrap().push(!persist);
+        // Spec 0088, A4.1: vergiftungstolerant — ein Panic hier liesse
+        // `history` und `mcp_origin_flags` dauerhaft verschieden lang
+        // zurück, und die Kompaktierung müsste jede Nachricht defensiv als
+        // MCP-originiert behandeln (s. `group_mcp_flags_by_round`).
+        crate::poison::lock_tolerating_poison(&session.mcp_origin_flags).push(!persist);
     }
     if !persist {
         return;
