@@ -43,7 +43,7 @@ Nur Code, der zwischen einer Eingabe und etwas Unumkehrbarem steht:
 | Filter-Engine | `crates/core/src/filter/` |
 | Risiko-Klassifizierer | `crates/core/src/risk/` |
 | Redaction | `crates/core/src/ai/` (Redactor und seine Muster) |
-| Credential-Handling | `crates/core/src/profiles/credentials.rs`, `crates/credentials-keyring/`, `crates/app-shell/src/server_credentials.rs` |
+| Credential-Handling | `crates/core/src/profiles/credentials.rs`, `crates/credentials-keyring/`, `crates/app-logic/src/server_credentials.rs` |
 | Ausführungspfad | Confirm/AutoExec, Transport, Schreibzugriffe, Zweitmeinung, Rate-Limit-Wächter |
 
 Berührt die Range keinen dieser Bereiche, sag das in einem Satz und hör

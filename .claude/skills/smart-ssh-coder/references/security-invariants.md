@@ -7,7 +7,7 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
 
 1. **Jede KI-Aktion läuft durch Filter-Engine + Bestätigung.** Kein Pfad
    von einem KI-Vorschlag zur Ausführung ohne `handle_action_proposed` →
-   `evaluate_action` (`crates/app-shell/src/orchestration.rs`).
+   `evaluate_action` (`crates/app-logic/src/orchestration/action_exec.rs`).
 2. **Eskalation nur in eine Richtung.** Regelbasiertes `Deny`/Risiko-`Red`
    wird nie durch KI-Meinung oder neuen Code aufgeweicht
    (ADR 0024, CLAUDE.md).

@@ -14,14 +14,15 @@ Namen können sich ändern.
 | `crates/core/src/profiles/types.rs` | `Server`, `AiAction`, `AuthMethod` … |
 | `crates/ai-providers/src/` | `anthropic.rs`, `openai_compatible.rs` (Stream-Parsing, Tool-Call-Zurückhalten, Retry-Wrapper), `retry.rs` (429), Rate-Limit-Budget |
 | `crates/ai-providers/tests/` | wiremock-Integrationstests pro Provider |
-| `crates/app-shell/src/orchestration.rs` | `run_chat_turn`, `run_one_round` (→ `RoundOutcome`), `handle_action_proposed`, `execute_*`, `push_history`, großer Testblock am Ende |
-| `crates/app-shell/src/commands.rs` | alle Tauri-Commands: `send_chat_message_impl` (Warteschlange, Turn-Start), `build_session_system_context` (System-Prompt), `stop_auto_continuation`, `sftp_*` (Browser, `BrowserChannel`, `BrowserAccess`), `sftp_elevation_*`, `get_app_info` |
-| `crates/app-shell/src/session.rs` | `Session` (alle Session-Felder), `ChatTurnState`, Stopp-Hilfen |
-| `crates/app-shell/src/events.rs` | `emit_*`-Funktionen (Event-Namen kebab-case) |
-| `crates/app-shell/src/dto.rs` | DTOs zum Frontend (`#[serde(rename_all = "camelCase")]`) |
+| `crates/app-logic/src/` | Tauri-freie Anwendungslogik: `AppState` (`state.rs`), `CommandError` (`error.rs`), Credentials (`server_credentials.rs`), Orchestrierung; `crates/app-shell/` ist nur noch die Tauri-Hülle (`run`, `Wiring`, Commands) |
+| `crates/app-logic/src/orchestration/` | `chat_turn.rs`: `run_chat_turn`, `run_one_round` (→ `RoundOutcome`), `push_history`; `action_exec.rs`: `handle_action_proposed`, `evaluate_action`, `execute_*`; Tests je Modul in `*/tests_*.rs` |
+| `crates/app-shell/src/commands/` | alle Tauri-Commands, je Thema eine Datei: `chat.rs` (`send_chat_message_impl`, `stop_auto_continuation`), `connect.rs` (`build_session_system_context`), `sftp.rs` (`sftp_*`, `BrowserChannel`), `elevation.rs` (`sftp_elevation_*`), `app_meta.rs` (`get_app_info`); `BrowserAccess` in `commands.rs` |
+| `crates/app-logic/src/session.rs` | `Session` (alle Session-Felder), `ChatTurnState`, Stopp-Hilfen |
+| `crates/app-logic/src/events.rs` | `emit_*`-Funktionen (Event-Namen kebab-case) |
+| `crates/app-logic/src/dto.rs` | DTOs zum Frontend (`#[serde(rename_all = "camelCase")]`) |
 | `crates/app-shell/src/elevated_sftp.rs` | erhöhter SFTP-Kanal (Slot, enable/disable) |
-| `crates/app-shell/src/test_support.rs` | In-Memory-Stores, `session_with_transport(...)` |
-| `crates/app-shell/src/version.rs` | Build-Hash, `BuildType` (Dev/Release) |
+| `crates/app-logic/src/test_support.rs` | In-Memory-Stores, `session_with_transport(...)` |
+| `crates/app-logic/src/version.rs` | Build-Hash, `BuildType` (Dev/Release) |
 | `crates/persistence-sqlite/migrations/` | `NNNN_*.sql`, fortlaufend |
 | `crates/ssh-transport/src/transport.rs` | russh-Transport (`open_sftp`, `open_sftp_via_exec`) |
 | `crates/ssh-transport/tests/` | echte SSH-Tests gegen einen In-Prozess-russh-Server (`fixtures/test_server.rs`) |

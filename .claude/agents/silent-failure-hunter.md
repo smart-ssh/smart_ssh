@@ -58,10 +58,10 @@ Kleinigkeit — nenn es nur, wenn es auffällt.
 Filter-Engine (`crates/core/src/filter/`), Risiko (`crates/core/src/risk/`),
 Redaction (`crates/core/src/ai/`), Credentials
 (`crates/core/src/profiles/credentials.rs`, `crates/credentials-keyring/`,
-`crates/app-shell/src/server_credentials.rs`), Zweitmeinung
+`crates/app-logic/src/server_credentials.rs`), Zweitmeinung
 (`crates/app-shell/src/risk_second_opinion.rs`), Orchestrierung und
-Ausführungspfad (`crates/app-shell/src/orchestration.rs`), Keychain-Start
-(`crates/app-shell/src/lib.rs`, `state.rs`).
+Ausführungspfad (`crates/app-logic/src/orchestration/`), Keychain-Start
+(`crates/app-shell/src/lib.rs`, `crates/app-logic/src/state.rs`).
 
 ## Zwei Modi
 
