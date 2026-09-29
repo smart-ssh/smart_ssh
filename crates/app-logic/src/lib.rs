@@ -35,6 +35,9 @@ pub mod identity_file;
 pub mod key_files;
 pub mod logging;
 pub mod orchestration;
+/// Spec 0088, A2.1/A2.2: crate-intern, weil es eine Implementierungs-
+/// Entscheidung über die Sperren dieser Crate ist und keine Schnittstelle.
+mod poison;
 /// Spec 0084, A5: `NoRulesPolicyStore` ist ein Testdouble, das sowohl
 /// innerhalb dieser Crate (`session.rs`, `orchestration::test_support`) als
 /// auch von `app-shell`s Tests (`commands::chat`) gebraucht wird — deshalb

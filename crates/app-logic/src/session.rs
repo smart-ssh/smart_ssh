@@ -1000,7 +1000,12 @@ impl SessionManager {
                 session_id: *id,
                 server_id: session.server_id,
                 status: *session.status.lock().unwrap(),
-                has_pending_action: session.pending_action.lock().unwrap().is_some(),
+                // Spec 0088, A2.1: Der Tab-Indikator darf nicht daran
+                // scheitern, dass irgendwo unter dieser Sperre einmal ein
+                // Panic lief — sonst reißt eine einzelne vergiftete
+                // Sitzung die Sitzungsliste aller Tabs mit.
+                has_pending_action: crate::poison::lock_tolerating_poison(&session.pending_action)
+                    .is_some(),
             })
             .collect();
 

@@ -50,6 +50,8 @@
 mod action_exec;
 mod chat_turn;
 mod notes;
+/// Spec 0088, A1: das Warten auf eine Bestätigung als Wert mit `Drop`.
+mod pending_confirmation;
 mod remote_files;
 #[cfg(test)]
 mod test_support;

@@ -11,6 +11,8 @@ use std::sync::Mutex;
 
 use tokio::sync::oneshot;
 
+use crate::poison::lock_tolerating_poison;
+
 /// Spec 0068, Teil 5b: Identität EINER Registrierung. Derselbe Schlüssel
 /// kann neu registriert werden (Host-Key: `connect()`-Retry unter derselben
 /// `SessionId`); wer aufgibt, räumt über [`ConfirmationRegistry::
@@ -20,6 +22,15 @@ use tokio::sync::oneshot;
 pub struct RegistrationGeneration(u64);
 
 pub struct ConfirmationRegistry<K, T> {
+    /// Spec 0088, A2.2: Alle Zugriffe laufen über
+    /// [`lock_tolerating_poison`] statt `lock().unwrap()`. Grund: Das
+    /// Abräumen eines aufgegebenen Wartens passiert im `Drop` von
+    /// `orchestration::pending_confirmation::PendingConfirmation` — und ein
+    /// Panic in einem `Drop` während des Abwickelns eines anderen Panics
+    /// bricht den Prozess ab. Der geschützte Wert ist eine `HashMap`, jede
+    /// einzelne Operation darauf ist in sich abgeschlossen; eine Vergiftung
+    /// sagt hier nichts über einen halbfertigen Zwischenzustand aus. Die
+    /// öffentliche API bleibt davon unberührt.
     pending: Mutex<HashMap<K, (RegistrationGeneration, oneshot::Sender<T>)>>,
     next_generation: AtomicU64,
 }
@@ -54,7 +65,7 @@ impl<K: Eq + Hash, T> ConfirmationRegistry<K, T> {
         let (tx, rx) = oneshot::channel();
         let generation =
             RegistrationGeneration(self.next_generation.fetch_add(1, Ordering::Relaxed));
-        self.pending.lock().unwrap().insert(key, (generation, tx));
+        lock_tolerating_poison(&self.pending).insert(key, (generation, tx));
         (generation, rx)
     }
 
@@ -63,10 +74,7 @@ impl<K: Eq + Hash, T> ConfirmationRegistry<K, T> {
     /// Aufruf für dieselbe `action_id`, oder der wartende Vorgang wurde
     /// bereits anderweitig beendet (Session getrennt, App beendet).
     pub fn resolve(&self, key: &K, value: T) -> Result<(), String> {
-        let sender = self
-            .pending
-            .lock()
-            .unwrap()
+        let sender = lock_tolerating_poison(&self.pending)
             .remove(key)
             .map(|(_, sender)| sender)
             .ok_or_else(|| "keine wartende Bestätigung für diese ID gefunden".to_string())?;
@@ -103,7 +111,7 @@ impl<K: Eq + Hash, T> ConfirmationRegistry<K, T> {
     /// wird. → Genau das ist [`Self::cancel_if_current`] (Spec 0068,
     /// Teil 5b); die Host-Key-Registry nutzt nur diese Variante.
     pub fn cancel(&self, key: &K) {
-        self.pending.lock().unwrap().remove(key);
+        lock_tolerating_poison(&self.pending).remove(key);
     }
 
     /// Spec 0068, Teil 5b: entfernt `key` nur, wenn der Eintrag noch aus
@@ -111,7 +119,7 @@ impl<K: Eq + Hash, T> ConfirmationRegistry<K, T> {
     /// einen `connect()`-Retry) neu registrierter Eintrag bleibt unberührt.
     /// Liefert, ob etwas entfernt wurde.
     pub fn cancel_if_current(&self, key: &K, generation: RegistrationGeneration) -> bool {
-        let mut pending = self.pending.lock().unwrap();
+        let mut pending = lock_tolerating_poison(&self.pending);
         if pending
             .get(key)
             .is_some_and(|(current, _)| *current == generation)
@@ -132,7 +140,7 @@ impl<K: Eq + Hash, T> ConfirmationRegistry<K, T> {
     /// `test-support` statt reinem `#[cfg(test)]`.
     #[cfg(any(test, feature = "test-support"))]
     pub fn contains(&self, key: &K) -> bool {
-        self.pending.lock().unwrap().contains_key(key)
+        lock_tolerating_poison(&self.pending).contains_key(key)
     }
 }
 
@@ -161,6 +169,47 @@ mod tests {
             .expect("darf nicht hängen")
             .expect("Sender darf nicht gedroppt sein");
         assert_eq!(value, "trust");
+    }
+
+    /// Spec 0088, T6c (A2.2, gegen `33d0501` rot): Ist die interne Sperre
+    /// vergiftet, verhält sich die Registry wie ohne Vergiftung.
+    ///
+    /// Heute panickte vor allem `cancel` — und genau das läuft seit Spec
+    /// 0088 im `Drop` des Wartenden. Ein Panic dort, während bereits ein
+    /// anderer Panic abgewickelt wird, bräche den Prozess ab.
+    #[tokio::test]
+    async fn test_a_poisoned_registry_lock_makes_no_method_panic() {
+        let registry: ConfirmationRegistry<u32, &'static str> = ConfirmationRegistry::new();
+        crate::poison::poison_for_test(&registry.pending);
+
+        // register: liefert weiterhin einen benutzbaren Empfänger.
+        let (generation, rx) = registry.register_tracked(1);
+        assert!(registry.contains(&1));
+
+        // resolve: erreicht den Wartenden.
+        registry
+            .resolve(&1, "ja")
+            .expect("resolve muss über eine vergiftete Sperre hinweg zustellen");
+        let value = tokio::time::timeout(std::time::Duration::from_secs(5), rx)
+            .await
+            .expect("darf nicht hängen")
+            .expect("Sender darf nicht gedroppt sein");
+        assert_eq!(value, "ja");
+        assert!(!registry.contains(&1));
+
+        // cancel_if_current: greift nur für die eigene Generation.
+        let (own, _rx2) = registry.register_tracked(2);
+        assert_ne!(generation, own);
+        assert!(!registry.cancel_if_current(&2, generation));
+        assert!(registry.contains(&2));
+        assert!(registry.cancel_if_current(&2, own));
+        assert!(!registry.contains(&2));
+
+        // cancel: entfernt den Eintrag, ein späteres resolve scheitert.
+        let _rx3 = registry.register(3);
+        registry.cancel(&3);
+        assert!(!registry.contains(&3));
+        assert!(registry.resolve(&3, "zu spät").is_err());
     }
 
     #[test]

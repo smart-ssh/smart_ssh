@@ -29,6 +29,7 @@ use super::chat_turn::{
     wait_for_rate_limit_budget, write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT,
 };
 use super::notes::{execute_note_update, note_target_preview_for_action};
+use super::pending_confirmation::PendingConfirmation;
 use super::remote_files::{
     execute_read_remote_file, execute_write_remote_file, previous_file_content_for_action,
 };
@@ -37,6 +38,30 @@ use super::remote_files::{
 mod tests_core;
 #[cfg(test)]
 mod tests_files_and_ledger;
+#[cfg(test)]
+mod tests_pending_confirmation;
+
+/// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das
+/// bereits registrierte Warten.
+///
+/// Spiegelt [`Decision`] Variante für Variante, trägt im `Confirm`-Zweig aber
+/// zusätzlich den [`PendingConfirmation`]-Guard. Vorher lag der Empfänger
+/// daneben in einem `Option<oneshot::Receiver<…>>`, das der `Confirm`-Zweig
+/// per `expect("confirm_rx muss registriert sein")` auspackte — eine
+/// Invariante, die nur im Text stand. Jetzt trägt sie der Typ: Ein
+/// `Confirm`-Zweig ohne Empfänger lässt sich nicht konstruieren.
+enum PreparedDecision<'a> {
+    AutoExec,
+    Deny {
+        reason: String,
+        code: String,
+    },
+    Confirm {
+        reason: String,
+        code: String,
+        pending: PendingConfirmation<'a>,
+    },
+}
 
 /// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde.
 ///
@@ -300,10 +325,21 @@ pub(crate) async fn handle_action_proposed(
         };
     }
 
-    let confirm_rx = if matches!(decision, Decision::Confirm { .. }) {
-        Some(action_confirmations.register(action_id))
-    } else {
-        None
+    // Spec 0088, A1.2/A1.4: Die Registrierung liegt weiterhin VOR den
+    // `await`s für Vorschau und Zweitmeinung (s. Kommentar weiter unten:
+    // ein Klick währenddessen darf nicht verloren gehen) — aber der
+    // Empfänger hängt jetzt am `Confirm`-Zweig des Ergebnistyps statt in
+    // einer getrennten `Option`, die der Zweig unten per `expect` hätte
+    // auspacken müssen. Dass im `Confirm`-Zweig ein Empfänger vorliegt,
+    // garantiert damit der Typ und nicht eine Laufzeitprüfung.
+    let prepared = match decision.clone() {
+        Decision::AutoExec => PreparedDecision::AutoExec,
+        Decision::Deny { reason, code } => PreparedDecision::Deny { reason, code },
+        Decision::Confirm { reason, code } => PreparedDecision::Confirm {
+            reason,
+            code,
+            pending: PendingConfirmation::register(session, action_confirmations, action_id),
+        },
     };
 
     let (previous_note_content, target_name) =
@@ -316,7 +352,7 @@ pub(crate) async fn handle_action_proposed(
         session_id,
         action_id,
         action.clone(),
-        decision.clone(),
+        decision,
         previous_note_content,
         uses_password,
         previous_file_content,
@@ -364,14 +400,14 @@ pub(crate) async fn handle_action_proposed(
         }
     }
 
-    match decision {
+    match prepared {
         // spec-reviewer-Fund (Spec 0066): ein Stopp, der eintrifft, nachdem
         // der Vorschlag schon aus dem Stream geholt war (z. B. während der
         // Zweitmeinung oben), verhindert eine noch NICHT gestartete
         // Auto-Ausführung. Nur für den eigenen Chat — der Stopp gilt dem
         // Chat-Turn, nicht MCP-Clients. Ein bereits laufendes Kommando
         // bleibt davon unberührt (Entscheidung 2).
-        Decision::AutoExec
+        PreparedDecision::AutoExec
             if matches!(origin, ActionOrigin::Internal)
                 && session
                     .auto_continue_stop
@@ -380,7 +416,7 @@ pub(crate) async fn handle_action_proposed(
             skip_auto_exec_after_stop(session, session_id, action_id, &action, emitter, persist)
                 .await
         }
-        Decision::AutoExec => {
+        PreparedDecision::AutoExec => {
             if let AiAction::SuggestCommand { .. } = &action {
                 write_ledger_entry(
                     session,
@@ -408,7 +444,7 @@ pub(crate) async fn handle_action_proposed(
             )
             .await
         }
-        Decision::Deny { reason, code } => {
+        PreparedDecision::Deny { reason, code } => {
             earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
             if let AiAction::SuggestCommand { .. } = &action {
                 write_ledger_entry(
@@ -444,18 +480,24 @@ pub(crate) async fn handle_action_proposed(
             .await;
             true
         }
-        Decision::Confirm {
+        PreparedDecision::Confirm {
             reason: confirm_reason,
             code: confirm_code,
+            mut pending,
         } => {
             // Spec 0017, Abschnitt 5: Grundlage für den Hintergrund-Tab-
             // Indikator (`SessionSummaryDto.has_pending_action`) — gesetzt,
-            // solange auf `rx` gewartet wird, in jedem Fall (Erfolg wie
-            // Abbruch) direkt danach wieder gelöscht.
-            *session.pending_action.lock().unwrap() = Some(action_id);
-            let rx = confirm_rx.expect("confirm_rx muss registriert sein");
-            let timeout_result = tokio::time::timeout(PENDING_ACTION_CONFIRM_TIMEOUT, rx).await;
-            *session.pending_action.lock().unwrap() = None;
+            // solange auf die Antwort gewartet wird.
+            //
+            // Spec 0088, A1.1: Das Zurücksetzen hängt nicht mehr an einer
+            // zweiten Anweisung hinter dem `await`, sondern am `Drop` von
+            // `pending` (s. `pending_confirmation.rs`). Es läuft damit auch
+            // auf den Wegen, die dieser Code selbst nicht nimmt: Abbruch
+            // der wartenden Task und Panic im Wartepfad. Dasselbe `Drop`
+            // räumt den Registry-Eintrag ab (A1.2).
+            let timeout_result = pending
+                .wait_for_decision(PENDING_ACTION_CONFIRM_TIMEOUT)
+                .await;
             let (user_decision, deny_reason) = match timeout_result {
                 Ok(Ok(decision)) => (decision, RejectionReason::User),
                 Ok(Err(_)) => {
@@ -478,7 +520,11 @@ pub(crate) async fn handle_action_proposed(
                     // tatsächlich entschieden, die KI (und ein Mensch, der
                     // die Historie später liest) soll das nicht fälschlich
                     // als bewusste Ablehnung lesen.
-                    action_confirmations.cancel(&action_id);
+                    //
+                    // Spec 0088: Das frühere `action_confirmations.cancel(
+                    // &action_id)` steht hier nicht mehr — es erledigt das
+                    // `Drop` von `pending` unten, und zwar für jeden
+                    // Ausgang statt nur für diesen einen.
                     tracing::warn!(
                         ?action_id,
                         timeout_secs = PENDING_ACTION_CONFIRM_TIMEOUT.as_secs(),
@@ -487,6 +533,12 @@ pub(crate) async fn handle_action_proposed(
                     (ActionUserDecision::Deny, RejectionReason::Timeout)
                 }
             };
+            // Erst hier fällt der Guard: Indikator und Registry-Eintrag
+            // sind abgeräumt, BEVOR die Entscheidung ausgeführt wird —
+            // dasselbe Verhalten wie zuvor das `= None` direkt hinter dem
+            // `await`. Explizit statt am Blockende, damit es nicht von der
+            // Länge des folgenden Aufrufs abhängt.
+            drop(pending);
             if matches!(user_decision, ActionUserDecision::Deny) {
                 earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
             }
