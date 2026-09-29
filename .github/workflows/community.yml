@@ -194,22 +194,42 @@ jobs:
       - name: Audit-Ausnahmen gegen aktuelle Funde abgleichen (Spec 0090, A4)
         shell: bash
         run: |
+          # spec-reviewer-Fund (Runde 1): `shell: bash` läuft in GitHub
+          # Actions mit `-eo pipefail` (errexit). Ein einfaches
+          # `var=$(cmd)` reicht den Exit-Code von `cmd` an die Zuweisung
+          # weiter - und `cargo audit` OHNE Ausnahmeliste endet hier bei
+          # JEDEM Lauf mit Exit != 0 (RUSTSEC-2023-0071 hat keinen Fix,
+          # s. Kommentar oben). Ohne den `if !`-Kontext unten würde
+          # errexit die Shell an dieser Stelle sofort beenden, bevor die
+          # eigentliche Stale-Prüfung je läuft - der Schritt wäre dann
+          # immer rot, unabhängig vom Zustand der Ausnahmeliste. Ein
+          # `if`/`if !`-Kontext ist von errexit ausgenommen (POSIX/bash),
+          # deshalb dort geprüft, nie per separatem `$?` danach.
           scratch="$(mktemp -d)"
           cp Cargo.lock "$scratch/Cargo.lock"
-          json_output="$(cd "$scratch" && cargo audit --json -f Cargo.lock)"
+          json_output=""
+          if ! json_output="$(cd "$scratch" && cargo audit --json -f Cargo.lock)"; then
+            : # erwarteter Exit != 0, s. Kommentar oben - kein Fehler dieses Schritts
+          fi
           if [ -z "$json_output" ]; then
             echo "::error::cargo audit ohne Ausnahmeliste lieferte keine Ausgabe - Abgleich (Spec 0090 A4) konnte nicht laufen"
             exit 1
           fi
-          found_ids="$(echo "$json_output" | jq -r '
+          found_ids=""
+          if ! found_ids="$(printf '%s' "$json_output" | jq -r '
             [ (.vulnerabilities.list[]?.advisory.id),
               (.warnings[]?[]?.advisory.id // empty) ]
             | unique[]
-          ')"
-          if [ $? -ne 0 ]; then
+          ')"; then
             echo "::error::JSON-Ausgabe von cargo audit liess sich nicht lesen - Abgleich (Spec 0090 A4) konnte nicht laufen"
             exit 1
           fi
+          # spec-reviewer-Fund (Runde 1, zurückgestellt->jetzt mitbehoben):
+          # nur der `ignore = [ ... ]`-Block wird durchsucht, nicht die
+          # gesamte Datei - ein künftiger Kommentar, der eine ID in
+          # Anführungszeichen zitiert (z. B. beim Dokumentieren einer
+          # entfernten Ausnahme), würde sonst fälschlich als aktive
+          # Ausnahme gezählt.
           stale=0
           while IFS= read -r id; do
             [ -z "$id" ] && continue
@@ -217,5 +237,5 @@ jobs:
               echo "::error::Ausnahme $id in .cargo/audit.toml trifft auf keinen aktuellen Befund mehr (Spec 0090, A4) - entfernen"
               stale=1
             fi
-          done < <(grep -oE '"RUSTSEC-[0-9]{4}-[0-9]+"' .cargo/audit.toml | tr -d '"' | sort -u)
+          done < <(sed -n '/^ignore = \[/,/^\]/p' .cargo/audit.toml | grep -oE '"RUSTSEC-[0-9]{4}-[0-9]+"' | tr -d '"' | sort -u)
           exit "$stale"
