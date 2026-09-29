@@ -114,7 +114,7 @@ nicht bloß ergänzt.
 
 **Während du arbeitest, startest du keine sichtbare Instanz der App.**
 Bauen, Testen und Linten brauchen kein Fenster. Jede Instanz, die du
-zwischendurch hochziehst, nimmt Stefan den Bildschirm und hinterlässt
+zwischendurch hochziehst, nimmt dem Menschen am Rechner den Bildschirm und hinterlässt
 Fenster, die niemand zuordnen kann.
 
 **Ausnahme, und die gilt wirklich:** Lässt sich etwas anders nicht prüfen —
@@ -123,9 +123,9 @@ starte sie, sieh nach, und **schließe sie danach wieder**. Sag im Bericht,
 warum es nötig war.
 
 **Genau eine Instanz am Ende**, wenn das Gate grün ist und du fertig
-meldest, damit Stefan prüfen kann. Schreib in den Bericht dazu, **was er
-sich ansehen soll** — welcher Ablauf, welcher Bildschirm, worauf zu achten
-ist. Eine laufende App ohne diesen Hinweis nützt ihm nichts.
+meldest, damit sie geprüft werden kann. Schreib in den Bericht dazu, **was
+man sich ansehen soll** — welcher Ablauf, welcher Bildschirm, worauf zu achten
+ist. Eine laufende App ohne diesen Hinweis nützt niemandem.
 
 Auf macOS immer `./scripts/tauri-dev.sh`, nie `cargo tauri dev` direkt
 (Signatur-Eigenheit, s. `docs/adr/0022-stable-dev-code-signature.md`).
@@ -158,6 +158,13 @@ Drei Regeln dazu:
 Scheitert ein Schritt, ist das **kein** Grund, ihn zu wiederholen, bis er
 durchgeht. Ein Test, der mal scheitert und mal nicht, ist ein eigener Fund
 und gehört in den Bericht — mit der Zahl der Versuche.
+
+## Keine Personennamen
+
+In Specs, ADRs, Code-Kommentaren, Changelog und Commit-Messages steht kein
+Personenname. Eine Freigabe heißt nur „freigegeben“, eine Entscheidung nur
+„entschieden“ — ohne Namen und ohne Datum. Ausgenommen ist nur ein
+Lizenz- oder Copyright-Text, der wörtlich zitiert wird.
 
 ## Abschluss
 
