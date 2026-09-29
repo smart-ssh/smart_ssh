@@ -184,6 +184,18 @@ Keine.
 
 ## 9. Klarstellungen
 
+- 2026-09-29 · Q-BL-0281-01 · entschieden: A5 wird ersetzt. Ein gebundener
+  Socket ohne `listen` liefert unter macOS einen Timeout, kein
+  `ConnectionRefused` (gemessen, 20×). Stattdessen gilt eine begrenzte
+  Wiederholung: Nimmt der gewählte Port unerwartet eine Verbindung an (weil
+  ein fremder Testserver ihn belegt), wiederholt der Test mit frischem Port,
+  höchstens 5 Versuche. Scheitert er, dann erst, wenn alle Versuche an einen
+  Dienst geraten; die Meldung nennt das. Jeder Versuch, der keine Verbindung
+  erhält, muss `ConnectionRefused` liefern. Ein anderer Fehler lässt den
+  Test sofort scheitern, ohne Wiederholung. T6 prüft das statt der
+  Socket-Lebensdauer. Gegenprobe: Lauscht auf jedem Versuch ein Dienst, wird
+  der Test rot.
+
 ## Umsetzung
 
 **Teil 0:** s. §2. Der Architekt klärt ihn nach dem Lauf, er blockiert den Coder nicht.
