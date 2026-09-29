@@ -60,7 +60,10 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: cargo test
-        run: cargo test --workspace
+        # A4 (Spec 0091): ohne `--no-fail-fast` bricht der Schritt beim
+        # ersten scheiternden Test-Binary ab und ein einzelner Lauf zeigt
+        # nie alle betroffenen Crates auf einmal (R1 aus Spec 0089).
+        run: cargo test --workspace --no-fail-fast
 
       - name: cargo build
         run: cargo build --workspace
