@@ -196,6 +196,22 @@ Keine.
   Socket-Lebensdauer. Gegenprobe: Lauscht auf jedem Versuch ein Dienst, wird
   der Test rot.
 
+- 2026-09-29 · Nachtrag A8 (nach dem CI-Lauf auf `00ffca2`): Seit A2
+  startet das `app-shell`-Test-Binary unter Windows, und zwei bisher
+  verdeckte Tests scheitern dort:
+  `test_chmod_recursive_without_recursive_flag_only_touches_the_root` und
+  `test_chmod_recursive_with_recursive_flag_touches_every_entry`.
+  `LocalFileSession::set_permissions` liefert unter Windows absichtlich
+  `Unsupported`, beide Tests erwarten Erfolg.
+  **A8 MUSS:** Beide Tests laufen nur noch unter Unix, nach demselben Muster
+  wie ihre Nachbarn `test_chmod_recursive_does_not_follow_a_symlink_at_the_root`
+  (Spec 0089, W2), mit kurzem Kommentar zum Grund. Unter Unix bleiben sie
+  unverändert. Kein `#[ignore]`, keine Rechte-Emulation, keine Änderung an
+  `LocalFileSession` oder `chmod_recursive`.
+  **T9:** Unter macOS laufen beide Tests weiterhin und sind grün
+  (`cargo test -p app-shell --lib chmod_recursive` zeigt sie als `ok`).
+  T5 gilt weiter: Nach dem Push ist `Test (windows-latest)` grün.
+
 ## Umsetzung
 
 **Teil 0:** s. §2. Der Architekt klärt ihn nach dem Lauf, er blockiert den Coder nicht.
@@ -206,6 +222,7 @@ Keine.
 3. `test(ssh-transport): keep the closed-port test from racing other test servers [BL-0281]` — A5, T6.
 4. `test(core): base the risk timing limit on measured runtime [BL-0281]` — A6, T7.
 5. `test(ssh-transport): make the SFTP roundtrip deterministic [BL-0281]` — A7, T8 (entfällt, wenn A7 auf den Client zeigt; dann melden).
+6. `test(app-shell): run the recursive chmod tests on Unix only [BL-0281]` — A8, T9 (Nachtrag, eigener Lauf).
 
 **Priorität:** NORMAL. Das gilt bewusst auch für Schritt 4: Dort ändert
 sich nur das Limit eines Tests, nicht der Code des Klassifizierers. Das
