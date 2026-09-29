@@ -6,7 +6,8 @@ Zweck: `cargo test` kommt im CI-Job `Test (windows-latest)` durch
 wird ein echter Fehler behoben: Der ssh_config-Import folgt unter Windows
 keinem `Include`.
 Review-Priorität: NORMAL (in `key_files` ändern sich nur Tests, kein
-Produktpfad; §9)
+Produktpfad, §9; die Import-Grenzen bleiben und sind durch T3 und
+bestehende Tests abgesichert, §6)
 
 ## 1. Ist-Stand (Stand `fe539eb`)
 
@@ -17,7 +18,7 @@ unter Windows nicht.
 
 **F1 — Include wird nie gefolgt (12 Tests in `ssh_config_import::tests`).**
 Aus dem Code hergeleitet, zum Protokoll passend, nicht unter Windows
-ausgeführt: `Walker::visit` kanonisiert jeden Pfad; unter Windows liefert
+ausgeführt (`crates/app-logic/src/ssh_config_import.rs`): `Walker::visit` kanonisiert jeden Pfad; unter Windows liefert
 `std::fs::canonicalize` Pfade mit dem Präfix `\\?\` (im Protokoll:
 `\\?\C:\Users\runneradmin\…\unten\config`). `resolve_include` setzt den
 Include-Wert mit diesem Verzeichnis zusammen und prüft `has_wildcard`
@@ -48,7 +49,7 @@ Test prüft damit unter Windows nicht, was er prüfen soll.
 ## 2. Teil 0
 
 Teil 0: entfällt. F1 ist hergeleitet; auf Unix belegen T1 und T2 die
-Ursache (sie scheitern heute). Unter Windows ist nichts gemessen: Ein
+Ursache (sie würden heute scheitern, hergeleitet aus `resolve_include`). Unter Windows ist nichts gemessen: Ein
 Testlauf unter wine ließ sich in dieser Umgebung nicht aufsetzen (zwei
 Versuche, wine startete nicht). Unbelegt bleibt damit, ob nach A1 und A3a
 unter Windows noch Tests aus F1 scheitern, etwa weil ein Include-Wert mit
@@ -103,7 +104,11 @@ Nichts vorzugeben.
 Die Grenzen des Imports gegen große oder zyklische Konfigurationen
 (Tiefe, Besuchtmenge über kanonische Pfade, Größen- und Zeilengrenzen)
 bleiben unverändert und greifen jetzt auch unter Windows für eingebundene
-Dateien. Schlüsseldateien: kein Produktcode geändert.
+Dateien. Die Regel, dass Platzhalter nur im letzten Teil des Include-Werts
+stehen dürfen (Annahme A-2 aus Spec 0075, Schutz gegen das Ablaufen fremder
+Verzeichnisbäume), bleibt; A1 verschiebt nur, **worauf** sie geprüft wird.
+Abgesichert durch T3 und den bestehenden Test zu A-2. Schlüsseldateien:
+kein Produktcode geändert.
 
 ## 7. Tests
 
@@ -113,9 +118,10 @@ Dateien. Schlüsseldateien: kein Produktcode geändert.
 - **T2 (A1, Unix, scheitert heute):** dasselbe mit `[` im
   Verzeichnisnamen und einem `Include *.conf` → alle passenden Dateien
   werden gelesen.
-- **T3 (A1, Wächter, heute grün):** Die einbindende Datei liegt in einem
-  Verzeichnis mit `?` im Namen; daneben existiert ein Verzeichnis, das
-  wörtlich `sub*` heißt, mit `x.conf` darin. `Include sub*/x.conf` →
+- **T3 (A1, Unix, Wächter, heute grün):** Die einbindende Datei liegt in
+  einem Verzeichnis mit `?` im Namen; im selben Verzeichnis wie die
+  einbindende Datei existiert ein Verzeichnis, das wörtlich `sub*` heißt,
+  mit `x.conf` darin. `Include sub*/x.conf` →
   `IncludeNoMatch`, `x.conf` wird nicht gelesen. Fängt einen Fix, der
   Platzhalter nur noch im letzten Teil prüft.
 - **T4 (A1, A2, A3a):** Die 12 Tests aus F1 laufen unter Unix grün wie
@@ -159,7 +165,7 @@ A5 gehört in den Commit von Schritt 2.
 
 **Berührte Module:** `crates/app-logic/src/ssh_config_import.rs` samt
 Tests, `crates/app-logic/src/key_files.rs` (nur Tests),
-`.github/workflows/community.yml`.
+`.github/workflows/community.yml`, `changelog.d/0091-windows-include.md`.
 
 **Melde zurück:** Nachweis, dass T1/T2 vorher scheitern; `passed`/`ignored`
 vor/nach.
