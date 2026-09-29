@@ -218,6 +218,25 @@ bestätigt, die Einstellung gilt app-weit.
 
 ## 9. Klarstellungen
 
+- 2026-09-29 · Review Lauf 1 · K2: Im A3-Pfad nennt `reason` nur die rote
+  Achse, nicht die Begründung der KI-Zweitmeinung. `Decision.reason` wird
+  unredigiert im Ledger gespeichert, und der Modelltext kann Teile des
+  Kommandos zitieren, etwa ein Passwort. Das hat Vorrang vor der
+  Formulierung in §5 „samt Begründung“ (§6: keine neue Datensenke).
+- 2026-09-29 · Review Lauf 1 · K1: Ein Kommando, das länger ist als die
+  Längengrenze des Filters, gilt bei eingeschalteter Einstellung als rot.
+  Seine Einstufung ist nicht belastbar. Nur Eskalation, deckt sich mit §6.
+- 2026-09-29 · Übergabe an Lauf 2: Den Text zu
+  `FILTER_RED_RISK_REQUIRES_CONFIRM` so formulieren, dass er auch den Fall
+  „nicht einschätzbar“ (Überlänge) deckt. `risk-assessment-updated.reason`
+  (Text aus dem Modell) nur anzeigen: nicht speichern, nicht als HTML
+  rendern. ADR 0084 nennt zusätzlich: den Weg über „Bearbeiten und
+  ausführen“, der nicht durch die Risiko-Kette läuft; die Grenze des
+  Klassifizierers; Rückfragen bei harmlosen, aber rot eingestuften Lesern
+  wie `cat ~/.ssh/id_rsa.pub`; den Punkt zum Ledger oben; eine Allow-Regel
+  auf ein rotes Kommando wirkt bei eingeschalteter Einstellung nie. A4.4
+  umfasst auch den Moduldoc von `core::risk::patterns`.
+
 ## Umsetzung
 
 **Teil 0:** entfällt.
