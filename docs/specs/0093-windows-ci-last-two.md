@@ -1,6 +1,6 @@
 # Spec 0093 — Windows-CI grün: zwei rote Ziele, drei wackelige Tests
 
-Status: Vorschlag (Architekt) · Backlog: BL-0281 · Gate: —
+Status: freigegeben · Backlog: BL-0281 · Gate: —
 Zweck: `cargo test --workspace --no-fail-fast` wird unter `windows-latest` grün und bleibt es.
 Review-Priorität: NORMAL
 
