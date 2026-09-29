@@ -8,7 +8,8 @@ name: Community
 # statt eines komplett neuen, parallelen Workflows: identische Matrix,
 # identische Rust-Schritte — ein zweiter, redundanter Workflow hätte beide
 # bei jeder künftigen Änderung synchron halten müssen, ohne echten Vorteil.
-# Einzige inhaltliche Ergänzung ist der Frontend-Build (Abschnitt 6, unten).
+# Inhaltliche Ergänzung gegenüber `ci.yml`: der Frontend-Teil (Abschnitt 6,
+# unten) baut nicht nur, sondern lintet und testet auch (Spec 0090, A5).
 
 on:
   push:
@@ -130,17 +131,12 @@ jobs:
   # Eigenständiger, nicht-Matrix-Job auf `ubuntu-latest` (Spec 0035,
   # Abschnitt 4: nicht plattformspezifisch, ein einzelner Lauf reicht).
   #
-  # Spec 0038, Abschnitt 5: macht aus `cargo deny check licenses` hier einen
-  # PFLICHTSCHRITT (ohne `continue-on-error`), sofern Spec 0035 inzwischen
-  # bereinigt und auf blockierend umgestellt wurde. Das ist zum Zeitpunkt
-  # dieses Commits noch NICHT der Fall — `deny.toml`s eigener Kommentar und
-  # der bisherige `ci.yml`-Job-Kommentar (unverändert unten übernommen)
-  # sagen ausdrücklich, dass der Umstieg auf blockierend ein bewusster,
-  # separater Folge-Schritt ist. Dieser Job bleibt deshalb unverändert im
-  # Berichtsmodus (`continue-on-error: true`) — sobald Spec 0035 auf
-  # blockierend umgestellt wird, muss dieser Kommentar (und die
-  # `continue-on-error`-Zeile bei `cargo deny check licenses`) hier
-  # nachgezogen werden.
+  # Spec 0090, A2: beide Schritte unten (`cargo deny check licenses sources
+  # bans` und `cargo audit`) sind Pflichtschritte ohne `continue-on-error` —
+  # ein Lizenz-, Herkunfts- oder Bann-Verstoß sowie jede nicht ausgenommene
+  # Sicherheitslücke färben diesen Job rot. Hinweise (unmaintained/unsound)
+  # und yanked-Crates bleiben sichtbare, nicht blockierende Warnungen (s.
+  # Kommentare bei den einzelnen Schritten und in `.cargo/audit.toml`).
   dependency-audit:
     name: Dependency Audit (cargo-deny / cargo-audit)
     runs-on: ubuntu-latest
@@ -164,16 +160,12 @@ jobs:
       # und Herkunft (keine doppelte Konfiguration derselben Prüfung an
       # zwei Stellen). Konfiguration: `deny.toml` im Repo-Root.
       #
-      # Spec 0035, Abschnitt 5 ("zweistufiges Vorgehen"): der aktuelle
-      # Bestand wurde per lokalem Lauf einmalig durchgesehen und die dabei
-      # gefundenen, bewusst freigegebenen Fälle sind bereits in
-      # `deny.toml` eingetragen (s. dortige Kommentare) — trotzdem läuft
-      # dieser Schritt hier noch im BERICHTSMODUS: `continue-on-error:
-      # true`, damit ein künftiger, bislang unbedachter Fund die Pipeline
-      # NICHT sofort rot färbt, sondern zunächst nur sichtbar wird. Der
-      # Umstieg auf blockierend (Entfernen von `continue-on-error`) ist
-      # ein bewusster, separater Folge-Schritt, sobald sich das in der
-      # Praxis bewährt hat — NICHT Teil dieses Schritts.
+      # Spec 0035, Abschnitt 5 ("zweistufiges Vorgehen"): der Bestand wurde
+      # per lokalem Lauf durchgesehen und die dabei gefundenen, bewusst
+      # freigegebenen Fälle sind in `deny.toml` eingetragen (s. dortige
+      # Kommentare). Spec 0090, A2: dieser Schritt ist blockierend, kein
+      # `continue-on-error` — ein Lizenz-, Herkunfts- oder Bann-Verstoß
+      # färbt den Job rot.
       - name: cargo deny check (licenses, sources, bans)
         run: cargo deny check licenses sources bans
 

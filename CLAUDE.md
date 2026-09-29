@@ -10,10 +10,17 @@ rules here exist to protect that promise, not as bureaucracy.
 ## Before every commit
 
 Run the full gate and make sure it's green — this mirrors CI
-(`.github/workflows/community.yml`, Spec 0038) plus the frontend lint/test
-checks CI does *not* yet run (it does run a frontend build, i.e. `tsc -b &&
-vite build`, since Spec 0038), so don't rely on CI alone to catch oxlint/
-vitest regressions:
+(`.github/workflows/community.yml`). The `test` job (matrix: Ubuntu,
+Windows, macOS) runs `cargo fmt --check`/clippy/test/build plus, in the
+frontend, `npm run lint`, `npm test`, and `npm run build` (Spec 0090, A5) —
+a lint or test failure there fails the job. The separate `dependency-audit`
+job (`ubuntu-latest` only) runs `cargo deny check licenses sources bans`
+and `cargo audit` as blocking steps (Spec 0090, A2): a license/origin/ban
+violation or a non-exempted vulnerability fails the job; unmaintained/
+unsound advisories and yanked crates stay visible warnings. A third step
+there checks that every exemption in `.cargo/audit.toml` still matches a
+current finding (Spec 0090, A4) — a stale exemption (e.g. for a withdrawn
+advisory) fails the job too.
 
 ```bash
 cargo fmt --all --check

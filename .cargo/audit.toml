@@ -25,7 +25,8 @@
 # was die Yanked-Prüfung *komplett* abschalten würde (auch für künftige,
 # tatsächlich relevante Funde). Bewusst NICHT gemacht — der `wnaf`-Hinweis
 # bleibt daher als sichtbare, nicht blockierende Warnung in jedem Lauf
-# bestehen (im Berichtsmodus ohnehin ohne Auswirkung auf den CI-Status).
+# bestehen — cargo-audit behandelt Yanked-Funde unabhängig vom Blockier-
+# Status (Spec 0090, A2) als nicht blockierende Warnung.
 
 [advisories]
 # Spec 0090, A3/A4: jede Ausnahme unten nennt das betroffene Crate, die
