@@ -38,16 +38,14 @@ use crate::state::ActionId;
 /// damit abräumen, bevor der Nutzer überhaupt antworten kann (Spec 0088,
 /// T14 sichert das ab).
 pub(crate) struct PendingConfirmation<'a> {
-    session: &'a Session,
-    registry: &'a ConfirmationRegistry<ActionId, ActionUserDecision>,
-    action_id: ActionId,
-    /// Spec 0068, Teil 5b: Nur der Eintrag DIESER Registrierung wird
-    /// abgeräumt. `action_id`s werden heute nicht wiederverwendet, aber die
-    /// Prüfung kostet nichts und macht den Guard unabhängig von dieser
-    /// Zusage.
-    generation: RegistrationGeneration,
+    cleanup: ConfirmationCleanup<'a>,
     receiver: oneshot::Receiver<ActionUserDecision>,
 }
+
+/// Ausgang eines Wartens: äußeres `Err` = Zeitgrenze erreicht, inneres
+/// `Err` = der Sender wurde gedroppt.
+pub(crate) type ConfirmationWaitOutcome =
+    Result<Result<ActionUserDecision, oneshot::error::RecvError>, tokio::time::error::Elapsed>;
 
 impl<'a> PendingConfirmation<'a> {
     /// Registriert `action_id` als wartend. Ab hier räumt [`Drop`] auf.
@@ -58,10 +56,12 @@ impl<'a> PendingConfirmation<'a> {
     ) -> Self {
         let (generation, receiver) = registry.register_tracked(action_id);
         Self {
-            session,
-            registry,
-            action_id,
-            generation,
+            cleanup: ConfirmationCleanup {
+                session,
+                registry,
+                action_id,
+                generation,
+            },
             receiver,
         }
     }
@@ -75,20 +75,42 @@ impl<'a> PendingConfirmation<'a> {
     /// nicht mehr an einer zweiten Anweisung hängt, die ein späterer
     /// Fehlerpfad überspringen könnte.
     ///
-    /// `&mut self.receiver` statt eines Moves: Der Empfänger bleibt im
-    /// Guard, damit dessen `Drop` unverändert laufen kann.
+    /// **Verbraucht `self` und gibt das Aufräumen zurück**
+    /// (spec-reviewer-Fund, Runde 1): Ein `oneshot::Receiver` darf nach
+    /// seiner Auflösung nicht erneut gepollt werden — tokio panickt dann.
+    /// Nähme diese Funktion `&mut self`, wäre ein zweites Warten möglich und
+    /// die Zusage „genau einmal" stünde wieder nur im Text. So kann der
+    /// Aufrufer sie per Konstruktion nur einmal aufrufen; das Aufräumen lebt
+    /// im zurückgegebenen [`ConfirmationCleanup`] weiter, bis er es fallen
+    /// lässt. Wird der Future dieses Aufrufs währenddessen fallen gelassen,
+    /// fällt das `ConfirmationCleanup` mit ihm und räumt ab (A1.1/A1.2).
     pub(crate) async fn wait_for_decision(
-        &mut self,
+        self,
         timeout: std::time::Duration,
-    ) -> Result<Result<ActionUserDecision, oneshot::error::RecvError>, tokio::time::error::Elapsed>
-    {
+    ) -> (ConfirmationWaitOutcome, ConfirmationCleanup<'a>) {
+        let Self { cleanup, receiver } = self;
         // A2.1: auch bei vergifteter Sperre setzen statt panicken.
-        *lock_tolerating_poison(&self.session.pending_action) = Some(self.action_id);
-        tokio::time::timeout(timeout, &mut self.receiver).await
+        *lock_tolerating_poison(&cleanup.session.pending_action) = Some(cleanup.action_id);
+        let outcome = tokio::time::timeout(timeout, receiver).await;
+        (outcome, cleanup)
     }
 }
 
-impl Drop for PendingConfirmation<'_> {
+/// Die aufräumende Hälfte einer [`PendingConfirmation`] — lebt weiter,
+/// nachdem der Empfänger verbraucht ist, und räumt beim Fallen Tab-Indikator
+/// und Registry-Eintrag ab.
+pub(crate) struct ConfirmationCleanup<'a> {
+    session: &'a Session,
+    registry: &'a ConfirmationRegistry<ActionId, ActionUserDecision>,
+    action_id: ActionId,
+    /// Spec 0068, Teil 5b: Nur der Eintrag DIESER Registrierung wird
+    /// abgeräumt. `action_id`s werden heute nicht wiederverwendet, aber die
+    /// Prüfung kostet nichts und macht den Guard unabhängig von dieser
+    /// Zusage.
+    generation: RegistrationGeneration,
+}
+
+impl Drop for ConfirmationCleanup<'_> {
     fn drop(&mut self) {
         {
             // Spec 0088, §5: nur den EIGENEN Indikator löschen. MCP und Chat

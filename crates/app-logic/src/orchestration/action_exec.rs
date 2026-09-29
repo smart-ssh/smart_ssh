@@ -34,33 +34,15 @@ use super::remote_files::{
     execute_read_remote_file, execute_write_remote_file, previous_file_content_for_action,
 };
 
-// Spec 0088, A4.2: Testcode ist vom `deny` oben ausgenommen. Clippy tut
-// das NICHT von selbst — ein `#[cfg(test)]` am `mod` reicht ihm ohne
-// `allow-unwrap-in-tests` nicht (nachgemessen: 366 Treffer). Die
-// Ausnahme steht bewusst hier an der Moduldeklaration statt in einer
-// workspaceweiten `clippy.toml`: So bleiben Lint und Ausnahme
-// vollständig in `orchestration/` und ändern an keiner anderen Crate
-// etwas (Spec 0088, Nicht-Ziel „kein Lint außerhalb von orchestration“).
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_core;
-// Spec 0088, A4.2: Testcode ist vom `deny` oben ausgenommen. Clippy tut
-// das NICHT von selbst — ein `#[cfg(test)]` am `mod` reicht ihm ohne
-// `allow-unwrap-in-tests` nicht (nachgemessen: 366 Treffer). Die
-// Ausnahme steht bewusst hier an der Moduldeklaration statt in einer
-// workspaceweiten `clippy.toml`: So bleiben Lint und Ausnahme
-// vollständig in `orchestration/` und ändern an keiner anderen Crate
-// etwas (Spec 0088, Nicht-Ziel „kein Lint außerhalb von orchestration“).
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_files_and_ledger;
-// Spec 0088, A4.2: Testcode ist vom `deny` oben ausgenommen. Clippy tut
-// das NICHT von selbst — ein `#[cfg(test)]` am `mod` reicht ihm ohne
-// `allow-unwrap-in-tests` nicht (nachgemessen: 366 Treffer). Die
-// Ausnahme steht bewusst hier an der Moduldeklaration statt in einer
-// workspaceweiten `clippy.toml`: So bleiben Lint und Ausnahme
-// vollständig in `orchestration/` und ändern an keiner anderen Crate
-// etwas (Spec 0088, Nicht-Ziel „kein Lint außerhalb von orchestration“).
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_pending_confirmation;
@@ -507,7 +489,7 @@ pub(crate) async fn handle_action_proposed(
         PreparedDecision::Confirm {
             reason: confirm_reason,
             code: confirm_code,
-            mut pending,
+            pending,
         } => {
             // Spec 0017, Abschnitt 5: Grundlage für den Hintergrund-Tab-
             // Indikator (`SessionSummaryDto.has_pending_action`) — gesetzt,
@@ -519,7 +501,7 @@ pub(crate) async fn handle_action_proposed(
             // auf den Wegen, die dieser Code selbst nicht nimmt: Abbruch
             // der wartenden Task und Panic im Wartepfad. Dasselbe `Drop`
             // räumt den Registry-Eintrag ab (A1.2).
-            let timeout_result = pending
+            let (timeout_result, cleanup) = pending
                 .wait_for_decision(PENDING_ACTION_CONFIRM_TIMEOUT)
                 .await;
             let (user_decision, deny_reason) = match timeout_result {
@@ -547,7 +529,7 @@ pub(crate) async fn handle_action_proposed(
                     //
                     // Spec 0088: Das frühere `action_confirmations.cancel(
                     // &action_id)` steht hier nicht mehr — es erledigt das
-                    // `Drop` von `pending` unten, und zwar für jeden
+                    // `Drop` von `cleanup` unten, und zwar für jeden
                     // Ausgang statt nur für diesen einen.
                     tracing::warn!(
                         ?action_id,
@@ -562,7 +544,7 @@ pub(crate) async fn handle_action_proposed(
             // dasselbe Verhalten wie zuvor das `= None` direkt hinter dem
             // `await`. Explizit statt am Blockende, damit es nicht von der
             // Länge des folgenden Aufrufs abhängt.
-            drop(pending);
+            drop(cleanup);
             if matches!(user_decision, ActionUserDecision::Deny) {
                 earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
             }

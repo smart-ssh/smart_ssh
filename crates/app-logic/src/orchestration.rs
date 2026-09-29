@@ -47,6 +47,23 @@
 //! unter `orchestration::…` erreicht haben, damit deren Aufrufstellen
 //! unverändert bleiben.
 
+//! **Kein `unwrap`/`expect` im Produktivcode dieses Modulbaums** (Spec
+//! 0088, A4.2). Das `#![deny]` unten gilt für alles, was hier lexikalisch
+//! darunter hängt — auch für die Untermodule in eigenen Dateien.
+//!
+//! Testcode ist ausgenommen, aber **nicht von allein**: Ohne
+//! `allow-unwrap-in-tests` in einer `clippy.toml` meldet clippy auch jede
+//! Stelle in den per `#[cfg(test)] mod …;` eingebundenen Testdateien
+//! (nachgemessen: 366 Treffer). Die Ausnahme steht deshalb als `#[allow]`
+//! an jeder Testmodul-Deklaration — lokal, statt workspaceweit, damit Lint
+//! und Ausnahme vollständig in `orchestration/` bleiben (Spec 0088,
+//! Nicht-Ziel „kein Lint außerhalb von `orchestration/`").
+//!
+//! **Wer hier ein neues Modul anlegt:** Die Ausnahme gehört an die
+//! `#[cfg(test)] mod …`-Deklaration, nie als datei-weites `#![allow]` oben
+//! in einer Datei — das schaltete den Schutz stillschweigend auch für den
+//! Produktivcode derselben Datei ab (spec-reviewer-Fund, Runde 1).
+
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
 mod action_exec;
@@ -55,13 +72,7 @@ mod notes;
 /// Spec 0088, A1: das Warten auf eine Bestätigung als Wert mit `Drop`.
 mod pending_confirmation;
 mod remote_files;
-// Spec 0088, A4.2: Testcode ist vom `deny` oben ausgenommen. Clippy tut
-// das NICHT von selbst — ein `#[cfg(test)]` am `mod` reicht ihm ohne
-// `allow-unwrap-in-tests` nicht (nachgemessen: 366 Treffer). Die
-// Ausnahme steht bewusst hier an der Moduldeklaration statt in einer
-// workspaceweiten `clippy.toml`: So bleiben Lint und Ausnahme
-// vollständig in `orchestration/` und ändern an keiner anderen Crate
-// etwas (Spec 0088, Nicht-Ziel „kein Lint außerhalb von orchestration“).
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod test_support;

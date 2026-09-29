@@ -133,15 +133,24 @@ pub(crate) async fn execute_read_remote_file(
     // schlicht übersprungen statt den ganzen Aufruf scheitern zu lassen.
     let size = {
         let mut guard = session.lock_sftp().await;
-        // Spec 0088, A3.2: `sftp_or_err` statt `expect` — waere der Kanal
+        // Spec 0088, A3.2: `sftp_or_err` statt `expect` — wäre der Kanal
         // wider Erwarten leer, endet die Aktion mit einem Fehler im Chat
         // statt mit einem Panic mitten im Chat-Turn.
+        //
+        // spec-reviewer-Fund (Runde 1): Der Fehler wird hier nur
+        // herausgereicht und erst NACH diesem Block gemeldet. Sonst liefe
+        // `emit_action_error` (nimmt `session.context`) unter der noch
+        // gehaltenen SFTP-Sperre — eine Sperrreihenfolge sftp→context, die
+        // es an dieser Stelle vorher nicht gab.
         match guard.sftp_or_err() {
-            Ok(sftp) => sftp.stat(&path).await.map(|entry| entry.size).ok(),
-            Err(err) => {
-                return emit_sftp_channel_error(session, emitter, session_id, &path, err, persist)
-                    .await
-            }
+            Ok(sftp) => Ok(sftp.stat(&path).await.map(|entry| entry.size).ok()),
+            Err(err) => Err(err),
+        }
+    };
+    let size = match size {
+        Ok(size) => size,
+        Err(err) => {
+            return emit_sftp_channel_error(session, emitter, session_id, &path, err, persist).await
         }
     };
     if let Some(size) = size {
@@ -165,10 +174,10 @@ pub(crate) async fn execute_read_remote_file(
         let mut guard = session.lock_sftp().await;
         match guard.sftp_or_err() {
             Ok(sftp) => sftp.read_file(&path).await,
-            Err(err) => {
-                return emit_sftp_channel_error(session, emitter, session_id, &path, err, persist)
-                    .await
-            }
+            // Derselbe Fehlertyp wie `read_file` — der leere Kanal läuft
+            // damit durch den bestehenden `Err`-Zweig unten, ohne dass hier
+            // unter gehaltener SFTP-Sperre etwas emittiert wird.
+            Err(err) => Err(err),
         }
     };
 
@@ -404,18 +413,21 @@ pub(crate) async fn execute_write_remote_file(
         .await;
     }
 
-    let (existed, old_mode) = {
+    let stat_result = {
         let mut guard = session.lock_sftp().await;
-        let sftp = match guard.sftp_or_err() {
-            Ok(sftp) => sftp,
-            Err(err) => {
-                return emit_sftp_channel_error(session, emitter, session_id, &path, err, persist)
-                    .await
-            }
-        };
-        match sftp.stat(&path).await {
-            Ok(entry) => (true, Some(entry.permissions)),
-            Err(_) => (false, None),
+        match guard.sftp_or_err() {
+            Ok(sftp) => Ok(match sftp.stat(&path).await {
+                Ok(entry) => (true, Some(entry.permissions)),
+                Err(_) => (false, None),
+            }),
+            // s. `execute_read_remote_file`: melden erst nach dem Block.
+            Err(err) => Err(err),
+        }
+    };
+    let (existed, old_mode) = match stat_result {
+        Ok(found) => found,
+        Err(err) => {
+            return emit_sftp_channel_error(session, emitter, session_id, &path, err, persist).await
         }
     };
 

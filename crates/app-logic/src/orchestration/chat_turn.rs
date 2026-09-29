@@ -21,33 +21,15 @@ use crate::state::{ActionId, SessionId};
 use super::action_exec::handle_action_proposed;
 use super::notes::handle_document_generated;
 
-// Spec 0088, A4.2: Testcode ist vom `deny` oben ausgenommen. Clippy tut
-// das NICHT von selbst — ein `#[cfg(test)]` am `mod` reicht ihm ohne
-// `allow-unwrap-in-tests` nicht (nachgemessen: 366 Treffer). Die
-// Ausnahme steht bewusst hier an der Moduldeklaration statt in einer
-// workspaceweiten `clippy.toml`: So bleiben Lint und Ausnahme
-// vollständig in `orchestration/` und ändern an keiner anderen Crate
-// etwas (Spec 0088, Nicht-Ziel „kein Lint außerhalb von orchestration“).
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_compaction;
-// Spec 0088, A4.2: Testcode ist vom `deny` oben ausgenommen. Clippy tut
-// das NICHT von selbst — ein `#[cfg(test)]` am `mod` reicht ihm ohne
-// `allow-unwrap-in-tests` nicht (nachgemessen: 366 Treffer). Die
-// Ausnahme steht bewusst hier an der Moduldeklaration statt in einer
-// workspaceweiten `clippy.toml`: So bleiben Lint und Ausnahme
-// vollständig in `orchestration/` und ändern an keiner anderen Crate
-// etwas (Spec 0088, Nicht-Ziel „kein Lint außerhalb von orchestration“).
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_continuation;
-// Spec 0088, A4.2: Testcode ist vom `deny` oben ausgenommen. Clippy tut
-// das NICHT von selbst — ein `#[cfg(test)]` am `mod` reicht ihm ohne
-// `allow-unwrap-in-tests` nicht (nachgemessen: 366 Treffer). Die
-// Ausnahme steht bewusst hier an der Moduldeklaration statt in einer
-// workspaceweiten `clippy.toml`: So bleiben Lint und Ausnahme
-// vollständig in `orchestration/` und ändern an keiner anderen Crate
-// etwas (Spec 0088, Nicht-Ziel „kein Lint außerhalb von orchestration“).
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_rounds;
