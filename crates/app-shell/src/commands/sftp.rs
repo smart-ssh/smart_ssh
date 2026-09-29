@@ -1384,6 +1384,11 @@ mod sftp_mutation_tests {
         assert_eq!(file_count, 3);
     }
 
+    // `LocalFileSession::set_permissions` liefert unter Windows absichtlich
+    // `Unsupported` (keine Unix-Rechtebits über diese API, Spec 0089, W2) —
+    // dieser Test erwartet Erfolg und bleibt deshalb wie sein Nachbar oben
+    // auf Unix beschränkt (Spec 0093, A8).
+    #[cfg(unix)]
     #[tokio::test]
     async fn test_chmod_recursive_without_recursive_flag_only_touches_the_root() {
         let dir = tempfile::tempdir().unwrap();
@@ -1403,6 +1408,9 @@ mod sftp_mutation_tests {
         assert_ne!(child_entry.permissions, 0o700);
     }
 
+    // Dasselbe wie oben: `set_permissions` liefert unter Windows
+    // `Unsupported`, der Test bleibt auf Unix beschränkt (Spec 0093, A8).
+    #[cfg(unix)]
     #[tokio::test]
     async fn test_chmod_recursive_with_recursive_flag_touches_every_entry() {
         let dir = tempfile::tempdir().unwrap();
