@@ -1,6 +1,6 @@
 # Spec 0072 — Anthropic richtig behandeln: Fehler erkennen, Modelle laden
 
-Status: freigegeben (Stefan, 2026-09-23) · Backlog: BL-0200, BL-0215, BL-0202 ·
+Status: freigegeben · Backlog: BL-0200, BL-0215, BL-0202 ·
 Gate: Release-Gate 1.0, B
 Repo: **öffentlich** `smart-ssh` — `crates/ai-providers/src/{error,discovery}.rs`,
 `crates/ai-providers/tests/fixtures/model_not_found/`, Frontend
@@ -17,7 +17,7 @@ trotzdem in §6.3)
 > fehlt ganz (Teil 2). Teil 3 ist eine einzeilige Übersetzung, die
 > mitläuft, weil sie keinen eigenen Lauf rechtfertigt.
 
-## Getroffene Entscheidungen (Stefan, 2026-09-23)
+## Getroffene Entscheidungen (2026-09-23)
 
 - **Teil 1:** Erkennung **anhand der Antwortstruktur**, nicht durch einen
   weiteren Textmarker. Die Markerliste bleibt als Auffangnetz bestehen.
@@ -279,7 +279,7 @@ Teil 2 fasst ohnehin dieselben Sprachdateien an.
 
 ---
 
-## 8. Offene Punkte (Entscheidung Stefan)
+## 8. Offene Punkte (zu entscheiden)
 
 ### OP-1 — Die drei ungemessenen Anbieter
 
@@ -294,7 +294,7 @@ Markerliste — beides unbelegt.
 - **(b) Warten, bis alle vier gemessen sind.** Vollständiger, hält aber
   eine belegte Korrektur auf.
 
-> **Entscheidung (Stefan, 2026-09-23): (a).** BL-0200 bleibt offen, bis
+> **Entscheidung (2026-09-23): (a).** BL-0200 bleibt offen, bis
 > OpenAI, OpenRouter und Ollama gemessen sind; diese Spec schließt den
 > belegten Teil.
 

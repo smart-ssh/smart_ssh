@@ -148,8 +148,8 @@ nicht stillschweigend fallen gelassen):
   nicht-fatale `rfd`-Pfad, der APP-lauf danach fortsetzt)** und ein
   analoges, geringeres Risiko für `NSAlert`/AppKit unter macOS (Case 3 vor
   Keychain-Ablehnung) — technisch nur auf einem echten Gerät prüfbar, kein
-  Code-Fix möglich ohne dieses Risiko zu verifizieren. Teil des von Stefan
-  ohnehin geforderten manuellen Testablaufs.
+  Code-Fix möglich ohne dieses Risiko zu verifizieren. Teil des ohnehin
+  geforderten manuellen Testablaufs.
 - **`logging.rs`s `tracing_appender::rolling::daily(...)`-Panic** und
   **`lib.rs`s `.run(context).expect(...)`** (z. B. fehlendes WebKitGTK
   unter Linux) bleiben unbehandelte, undiagnostizierbare Absturzpfade —
@@ -175,7 +175,7 @@ nicht stillschweigend fallen gelassen):
   macOS-`/var/folders`). Die neuen Tests decken den Probe-Mechanismus
   stattdessen über einen zuverlässig reproduzierbaren Fehlerfall
   (nicht-existierendes Verzeichnis) ab — **der eigentliche
-  `PermissionDenied`-Fall muss von Stefan manuell auf einem echten Gerät
+  `PermissionDenied`-Fall muss manuell auf einem echten Gerät
   verifiziert werden**, ohnehin Teil des geforderten Testablaufs.
 
 ## Konsequenzen

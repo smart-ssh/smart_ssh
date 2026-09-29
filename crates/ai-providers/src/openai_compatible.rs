@@ -36,7 +36,7 @@ use ssh_manager_core::ssh::CommandOutput;
 /// ein selbstgehostetes/lokales Modell hat oft nur ein kleines
 /// Output-Limit).
 ///
-/// **Spec 0080, §8, Klarstellung (Stefan, 2026-09-24, P1 Variante b):** vor
+/// **Spec 0080, §8, Klarstellung (2026-09-24, P1 Variante b):** vor
 /// diesem Wert galt hier 4096 (Default 2048) — beobachtet zu knapp für
 /// Reasoning-Modelle an einem Nicht-OpenAI-Endpunkt, deren Denk-Tokens das
 /// Budget aufbrauchen, bevor überhaupt Text entsteht (Spec 0080 §1). Jetzt

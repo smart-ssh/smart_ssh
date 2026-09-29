@@ -399,7 +399,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // der gemessenen Fassung aus Spec 0078 §9 (Q-BL-0248-02) ist; ihn
         // zu entfernen bräuchte eine eigene Messrunde.
         //
-        // BEKANNTER RESTFALL, bewusst entschieden (Stefan, 2026-09-24,
+        // BEKANNTER RESTFALL, bewusst entschieden (2026-09-24,
         // Q-BL-0248-01; Spec 0078 §5, Test
         // `…_known_remaining_case_password_with_a_query_parameter_prefix`):
         // Enthält das PASSWORT einer Verbindungs-URL wörtlich

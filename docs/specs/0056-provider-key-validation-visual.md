@@ -65,7 +65,7 @@ Der Provider-/Options-Bereich wirkt aktuell **kontrastlos** — Felder,
 Gruppen und Aktionen heben sich zu wenig voneinander ab, Rahmen/Struktur
 fehlen.
 
-**Stoßrichtung (Stefan):** mehr Kontrast, klarere Rahmen/Gruppierung,
+**Stoßrichtung:** mehr Kontrast, klarere Rahmen/Gruppierung,
 Layout aufräumen. **Nutze den frontend-design-Skill** (Design-Tokens,
 Kontrast-/Abstands-Regeln) — nicht Ad-hoc-Styles erfinden.
 
@@ -82,10 +82,10 @@ Konkret angehen:
   sich sauber ins neue Layout einfügen (Inline-Hinweis-Stil, nicht
   aufpoppende Fremd-Elemente).
 
-**Wichtig:** Design ist am Ende visuell zu beurteilen (Stefan am echten
+**Wichtig:** Design ist am Ende visuell zu beurteilen (am echten
 Fenster). Der Coder soll **beschreiben, was er geändert hat** (welche
-Elemente Rahmen/Kontrast/Gruppierung bekamen), damit Stefan gezielt
-gegenschauen kann. Keine funktionale Änderung an der Provider-Logik — nur
+Elemente Rahmen/Kontrast/Gruppierung bekamen), damit gezielt
+gegengeschaut werden kann. Keine funktionale Änderung an der Provider-Logik — nur
 Darstellung.
 
 ## Nicht Teil dieser Spec
@@ -99,7 +99,7 @@ Darstellung.
   unerreichbar → „nicht erreichbar"; ohne Base-URL kein Token an
   api.openai.com (Guard).
 - Teil 3: schwer automatisiert (visuell) — Komponententests für die Präsenz
-  der neuen Struktur-Elemente; visuelle Abnahme durch Stefan.
+  der neuen Struktur-Elemente; visuelle Abnahme.
 
 ## Reihenfolge
 1. Ist-Stand Testen-Button prüfen (existiert er aus 0050?) — melden.

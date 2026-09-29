@@ -1,6 +1,6 @@
 # Spec 0081 — Anthropic: kein leerer System-Block mit `cache_control`
 
-Status: **freigegeben** (Stefan, 2026-09-24) · Backlog: BL-0261 · Gate: —
+Status: **freigegeben** · Backlog: BL-0261 · Gate: —
 Repo: **öffentlich** `smart-ssh` — `crates/ai-providers/src/anthropic.rs`
 (Code und Tests)
 Review-Priorität: **NORMAL**

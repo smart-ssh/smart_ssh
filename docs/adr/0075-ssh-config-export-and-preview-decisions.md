@@ -177,7 +177,7 @@ im Abschlussbericht dieses Laufs.
 ADR 0074, Punkt 5 (§5.2a) und Punkt 10.1 hatten die Richtung offen
 gelassen, in die die Vorgabe für ein buchstäbliches Schlagwort
 (`PlannedTag::is_literal`) zeigen soll, das eine bestehende Tag-Regel
-trifft — vorgelegt als `Q-BL-0216-02`. Stefan hat entschieden (2026-09-25,
+trifft — vorgelegt als `Q-BL-0216-02`. Entschieden (2026-09-25,
 eingearbeitet in Spec §9):
 
 - Trifft das Schlagwort eine bestehende Tag-**`Allow`**-Regel, ist es in
@@ -248,7 +248,7 @@ Passphrase-Hinweis in der Vorschau ergänzt (Punkt 8).
    nur `"success"`/`"error"`, eine dritte Stufe („warning") wäre eine
    eigene, über diesen Schritt hinausgehende Änderung.
 
-**Vorbestehend, nicht Gegenstand dieses Laufs, aber vor Stefan zu
+**Vorbestehend, nicht Gegenstand dieses Laufs, aber vor den Menschen zu
 bringen:** ANNAHME A-1/A-2/A-3 aus ADR 0074 (unbestätigt seit Schritten
 0–3) und die offene Entscheidung Q-BL-0216-02 (§5.2a, Vorgabe für ein
 buchstäbliches Schlagwort, das eine Allow-Regel trifft) — beide blieben
@@ -322,8 +322,8 @@ Gegenbeweise scharf) hielt.
    Code ist damit spec-konform, aber der Zielkonflikt aus Punkt 10.1
    („Verengung in der einen Richtung ist hier eine Lockerung in der
    anderen") gilt für diesen Fall unverändert. Eine Produktentscheidung,
-   keine, die ein Coder-Lauf an der Spec vornimmt — vor Stefan zu bringen
-   (Abschlussbericht).
+   keine, die ein Coder-Lauf an der Spec vornimmt — vor den Menschen zu
+   bringen (Abschlussbericht).
 3. **Testfall 3 aus dem Review — Muster-Schlagwort mit exaktem
    Regel-Scope.** Trifft ein **Muster**-Schlagwort (z. B. `*.prod.de`) eine
    Tag-`Allow`-Regel mit demselben Scope (`Scope::Tag("*.prod.de")` — genau
@@ -332,7 +332,7 @@ Gegenbeweise scharf) hielt.
    Q-BL-0216-02 nur den buchstäblichen Fall (`isLiteral`) entscheidet.
    Spec-konform (§6.4.3a verlangt für diesen Fall nur Kennzeichnung +
    Abwählbarkeit, nicht die Vorgabe „abgewählt"), aber dieselbe Begründung
-   trägt hier ebenso. Folgefrage, vor Stefan zu bringen.
+   trägt hier ebenso. Folgefrage, vor den Menschen zu bringen.
 4. **K-2 — `SkipReason` für A-2 nicht eigens unterscheidbar.** Der
    A-2-Fall trägt `SkipReason::IncludeNoMatch`, dieselbe Variante wie „kein
    Treffer" und „Verzeichnis nicht lesbar" — in der Meldung an den Nutzer

@@ -191,7 +191,7 @@ fn build_app_state(
                 // `tracing::warn!` oben. Dasselbe, bereits nicht-fatale
                 // Degradieren wie zuvor (Spec 0040, Abschnitt 7) — NEU ist
                 // nur, dass der Zugriffsfehler jetzt zusätzlich sichtbar
-                // wird. Stefans ausdrückliche Entscheidung (Review des
+                // wird. Ausdrückliche Entscheidung (Review des
                 // Teil-0-Plans dieses Schritts): kein Abbruch, App startet
                 // unverändert degradiert weiter — s. `startup_dialog::
                 // show_warning`-Doc-Kommentar.

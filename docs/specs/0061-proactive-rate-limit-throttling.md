@@ -20,7 +20,7 @@ Recherche (Anthropic-Doku + SRE-Best-Practices)
 > zeigt das Warten. **Priorität ERHÖHT** (KI-Request-Pfad, den 0051/
 > Body-Timeout/0057 schon härteten — Invarianten beachten).
 
-## Getroffene Entscheidungen (Stefan)
+## Getroffene Entscheidungen
 
 1. **Konservativ drosseln**: schon bei **~15% Restbudget** bremsen (Puffer
    gegen Bursts — Anthropics Limiter reißt selbst hohe Limits bei Bursts
@@ -48,7 +48,7 @@ Header lesen und im Budget-Wächter (§2) ablegen:
 
 ## 2. Geteiltes Budget pro PROVIDER-IDENTITÄT (der Kern)
 
-**Die zentrale Design-Entscheidung** (Stefan): Das Budget ist **pro Provider-
+**Die zentrale Design-Entscheidung**: Das Budget ist **pro Provider-
 Identität**, nicht pro Aufruf-Zweck. Wenn derselbe Key als Haupt- UND
 Zweitmeinungs-Provider dient, teilen sich beide **ein** Budget (Anthropic
 limitiert **pro Organisation**, nicht pro logischem Provider in der App —

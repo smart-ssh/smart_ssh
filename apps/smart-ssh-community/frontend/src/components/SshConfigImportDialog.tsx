@@ -19,7 +19,7 @@ interface SshConfigImportDialogProps {
 }
 
 /** Spec 0075, §5.2a — ob ein Schlagwort standardmäßig angewählt bleibt.
- * Q-BL-0216-02 (Stefan, 2026-09-25, §9 der Spec): Ein buchstäbliches
+ * Q-BL-0216-02 (2026-09-25, §9 der Spec): Ein buchstäbliches
  * Schlagwort (`isLiteral`), das eine bestehende Tag-**Allow**-Regel trifft,
  * ist standardmäßig **abgewählt** — es hebt sonst ein importiertes Profil
  * unbemerkt von `Confirm` auf `Allow`. Trifft es nur `Deny`/`Confirm` oder

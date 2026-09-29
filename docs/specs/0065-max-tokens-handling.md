@@ -24,7 +24,7 @@ Provider-Formular (0056)
 > **Priorität ERHÖHT** — wegen §3: ein abgeschnittener Tool-Call darf NIE
 > ausgeführt werden (Sicherheitsinvariante).
 
-## Getroffene Entscheidungen (Stefan)
+## Getroffene Entscheidungen
 
 Keine reine Einstellung, kein pauschales adaptives Hochdrehen, sondern:
 1. **Hoher, modellabhängiger Default** — Abschneiden wird zur Ausnahme.
@@ -156,4 +156,4 @@ syntaktisch gültiges** Kommando (`rm -rf /var/log/app` statt
   sich fortsetzen; abgeschnittene Befehle werden nie ausgeführt."
 - Melde mir: den Ist-Befund zu §3 (wurden abgeschnittene Tool-Calls bisher
   verarbeitet?), die Modell-Maximum-Tabelle, die Nebenaufruf-Werte, und je
-  Teil einen manuellen Testablauf für Stefan.
+  Teil einen manuellen Testablauf.

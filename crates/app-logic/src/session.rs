@@ -438,7 +438,7 @@ pub struct SessionParts {
     /// s. `persistence_sqlite::SqliteChatSessionStore::save_summary`.
     pub summary: AsyncMutex<Option<crate::compaction::RollingSummary>>,
     /// MCP-Ausschluss aus der rollierenden Summary (Nachtrag zu Spec 0057
-    /// §2.1, Stefans Entscheidung: die Summary bildet Chat-Kontinuität ab,
+    /// §2.1, Entscheidung: die Summary bildet Chat-Kontinuität ab,
     /// MCP-Verkehr ist kein Chat — Audit bleibt vollständig im Ledger,
     /// Etappe 1, unabhängig davon). Parallel zu `context.history` geführt
     /// (Index `i` sagt, ob `context.history[i]` MCP-originiert ist,

@@ -177,7 +177,7 @@ pub(crate) async fn connect_session(
         let target = match resolve_connection_target(&server, state.profile_store.as_ref()).await {
             Ok(target) => target,
             Err(err) => {
-                // Stefans Fund (2026-09): ein fehlgeschlagener Verbindungs-
+                // Fund (2026-09): ein fehlgeschlagener Verbindungs-
                 // aufbau (hier: schon das Auflösen der Jump-Host-Kette,
                 // unten der eigentliche `ssh_transport::connect`) landete
                 // bislang NIRGENDS im Log — das `?` reichte den Fehler nur

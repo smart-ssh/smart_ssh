@@ -98,7 +98,7 @@ Abhängigkeit nur deshalb nicht auf, weil die Regel „keine neuen
 Abhängigkeiten ohne Freigabe" gilt — nicht, weil `libc` hier sachlich
 falsch wäre.
 
-**Nachtrag (Spec 0076 §9 K-3, 2026-09-24):** Stefan hat die Aufnahme
+**Nachtrag (Spec 0076 §9 K-3, 2026-09-24):** Die Aufnahme wurde
 freigegeben. `libc = "0.2.189"` ist jetzt direkte Abhängigkeit von
 `app-shell` (`crates/app-shell/Cargo.toml`); dieselbe Version, die vorher
 schon transitiv im `Cargo.lock` stand — kein neues Paket in der

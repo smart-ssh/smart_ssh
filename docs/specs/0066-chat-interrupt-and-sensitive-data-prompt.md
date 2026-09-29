@@ -8,7 +8,7 @@ Abhängigkeiten: Auto-Fortsetzung (0021), max_tokens-Handling (0065, Invariante
 "abgeschnittener Tool-Call wird nie ausgeführt"), Filter-Engine/Confirm (0002),
 Remote-Datei lesen (0020)
 
-> **Das Problem (von Stefan im echten Einsatz beobachtet):** Nach Klick auf
+> **Das Problem (im echten Einsatz beobachtet):** Nach Klick auf
 > „Automatik stoppen" arbeitete die KI weiter, und das Eingabefeld blieb
 > gesperrt — eine Korrektur war erst möglich, als die ganze Runde fertig war.
 >
@@ -33,7 +33,7 @@ Remote-Datei lesen (0020)
 > Ausführung ein (ein abgebrochener Stream darf keinen Tool-Call
 > freigeben), §3 ist eine Sicherheitsanweisung an die KI.
 
-## Getroffene Entscheidungen (Stefan)
+## Getroffene Entscheidungen
 
 1. **Senden während die KI arbeitet → Einreihen, als Text mitsenden.** Die
    Nachricht unterbricht nichts, sondern wird dem **nächsten Request an die

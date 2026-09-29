@@ -19,7 +19,7 @@ Server-Profile
 > **Priorität ERHÖHT** (Teil A: ein Root-Dateibrowser ist das mächtigste
 > Werkzeug der App).
 
-## Entscheidung (Stefan)
+## Entscheidung
 
 Nur **Weg A** (SFTP-Server per `sudo -n` starten). **Kein** Weg B
 (sudo-Kommandos mit Passwort) — erfordert eine `NOPASSWD`-Regel für
@@ -169,5 +169,5 @@ Meldungen.
   MCP-Agent auf irgendeinem Weg den erhöhten Kanal erreichen? Kann der
   erhöhte Modus unbemerkt aktiv bleiben?
 - CHANGELOG.
-- Manuelle Testabläufe für Stefan (Teil A braucht einen Server mit
+- Manuelle Testabläufe (Teil A braucht einen Server mit
   eingerichteter sudoers-Regel).

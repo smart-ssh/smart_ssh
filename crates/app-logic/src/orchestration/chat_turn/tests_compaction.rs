@@ -1352,7 +1352,7 @@ async fn test_mcp_action_on_shared_human_session_writes_no_persisted_history() {
 }
 
 /// Spec 0057, Nachtrag (MCP-Ausschluss aus der rollierenden Summary,
-/// Stefans Entscheidung s. ADR 0049): MCP- und Chat-Runden mischen sich
+/// Entscheidung s. ADR 0049): MCP- und Chat-Runden mischen sich
 /// in EINER Session (Teil 0 der Aufgabenstellung — bestätigt über
 /// `mcp_backend::AppMcpBackend::ensure_session`, das dieselbe `Session`
 /// eines bereits offenen Menschen-Tabs wiederverwendet). Nach

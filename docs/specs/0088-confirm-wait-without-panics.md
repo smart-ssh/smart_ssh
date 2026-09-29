@@ -1,6 +1,6 @@
 # Spec 0088 — Confirm wait and file actions without panic paths
 
-Status: freigegeben (Stefan, 2026-09-28) · Backlog: BL-0231 · Gate: release-1.0/C
+Status: freigegeben · Backlog: BL-0231 · Gate: release-1.0/C
 Zweck: Der Tab-Indikator „wartet auf Bestätigung" und der Bestätigungseintrag
 werden auf jedem Weg aus dem Warten abgeräumt, und der Orchestrierungscode
 enthält keinen `unwrap`/`expect` mehr, den ein neuer Aufrufer unbemerkt erreichen kann.

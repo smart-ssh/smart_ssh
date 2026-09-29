@@ -1,6 +1,6 @@
 # Spec 0073 — Ein geteilter Trim für Zugangsdaten, inklusive unsichtbarer Zeichen
 
-Status: freigegeben (Stefan, 2026-09-23) · Backlog: BL-0149, BL-0148 · Gate: —
+Status: freigegeben · Backlog: BL-0149, BL-0148 · Gate: —
 Repo: **öffentlich** `smart-ssh` — `crates/core/src/profiles/credentials.rs`
 (neuer Helfer), `crates/app-shell/src/{dto,server_credentials}.rs`
 Review-Priorität: **ERHÖHT** (Credential-Handling; adversariale Fälle in §6.3)
@@ -203,7 +203,7 @@ Coder nicht erweitern soll, ohne es zu melden.
 *(wird während der Umsetzung nachgetragen: Datum · Frage-ID · Antwort)*
 
 **2026-09-24 · Q-BL-0149-01 · `normalize_sftp_server_path` benutzt den
-Helfer.** Stefan: Option 1. §1 listet `dto.rs:514`, A3 verlangt „alle in
+Helfer.** Entschieden: Option 1. §1 listet `dto.rs:514`, A3 verlangt „alle in
 §1 genannten Stellen" — damit gilt der Helfer auch dort, obwohl
 `sftp_server_path` kein Zugangsdaten-Wert ist. Die Sicherheitsprüfung
 `is_plausible_sftp_server_path` bleibt unverändert und läuft weiterhin auf
@@ -223,7 +223,7 @@ Passphrase mit Rand-Leerraum, BOM und Zero-Width-Space führt in beiden
 Wegen zum selben Ergebnis, je Anmeldeart mit Passphrase.
 
 **2026-09-24 · Q-BL-0149-02 · Verbindungstest und Speichern behandeln alle
-Zugangsdaten gleich.** Stefan: Option 2b. `resolve_secret` im
+Zugangsdaten gleich.** Entschieden: Option 2b. `resolve_secret` im
 Verbindungstest trimmt über den geteilten Helfer und wendet dieselbe
 Leer-Regel an wie das Speichern: nicht leer → dieser Wert; leer oder
 nicht angegeben → das gespeicherte Credential des bestehenden Servers,
@@ -236,7 +236,7 @@ Credential; dasselbe bei Neuanlage → Fehler (scheitert am heutigen Stand).
 
 
 **2026-09-24 · Q-BL-0149-03 · Der Verbindungstest meldet ein fehlendes
-Pflichtfeld mit denselben Codes wie das Speichern.** Stefan: Option 1.
+Pflichtfeld mit denselben Codes wie das Speichern.** Entschieden: Option 1.
 `resolve_secret` in `test_connection.rs` bekommt einen Parameter
 `code: &'static str`, so wie `write_or_reuse_secret` ihn schon hat. Die
 vier Aufrufe übergeben die Codes des Speicherns:

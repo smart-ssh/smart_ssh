@@ -396,7 +396,7 @@ async fn connect_and_stream(
     budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
     body: Value,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    // Diagnose "KI antwortet nicht" (2026-09, Stefan-Report): ob dieser
+    // Diagnose "KI antwortet nicht" (2026-09, Nutzerbericht): ob dieser
     // Aufruf überhaupt jemals gepollt wird, war bislang nicht separat
     // sichtbar — `log_outgoing_context` in `send()` feuert synchron beim
     // `send()`-Aufruf, unabhängig davon, ob der zurückgegebene Stream danach
@@ -1311,7 +1311,7 @@ mod tests {
 
     /// Gegenprobe: eine zweite Antwort mit `cache_read_input_tokens > 0`
     /// (der eigentliche Cache-TREFFER) muss ebenso sichtbar werden — das
-    /// ist der Wert, den Stefans manueller Verifikationsablauf im Log
+    /// ist der Wert, den der manuelle Verifikationsablauf im Log
     /// nachschlägt.
     #[tokio::test]
     async fn test_message_start_cache_read_hit_is_logged() {

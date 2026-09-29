@@ -573,7 +573,7 @@ async fn compact_rounds_with_summary(
             // an, eine rundenweise Verdichtung würde also auch echten
             // Chat-Inhalt derselben Runde mit ausschließen). Sie gehen nie
             // in den Zusammenfassungs-Aufruf und landen damit nie in der
-            // persistierten Summary (Stefans Entscheidung: die Summary
+            // persistierten Summary (Entscheidung: die Summary
             // bildet Chat-Kontinuität ab, MCP-Verkehr ist kein Chat; Audit
             // bleibt vollständig im Ledger, Etappe 1, unabhängig davon).
             // Die RUNDE als Ganzes wird trotzdem wie jede andere gekürzte

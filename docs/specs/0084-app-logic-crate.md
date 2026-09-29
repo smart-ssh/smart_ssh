@@ -1,6 +1,6 @@
 # Spec 0084 — Tauri-freie Anwendungslogik in eigenen Crate `app-logic`
 
-Status: **freigegeben** (Stefan, 2026-09-28) · Backlog: BL-0269 · Gate: release-1.0/E
+Status: **freigegeben** · Backlog: BL-0269 · Gate: release-1.0/E
 Repo: **öffentlich** `smart-ssh` — `crates/app-shell/`, neu `crates/app-logic/`,
 `.github/workflows/community.yml`, `docs/architecture.md`, `CLAUDE.md`
 Review-Priorität: **ERHÖHT** (Teil 1 ändert, wie der erhöhte SFTP-Kanal

@@ -170,9 +170,9 @@ workspace fails to build, since Cargo's default caret requirement on a
 X.Y.Z --no-git-tag-version` from `apps/smart-ssh-community/frontend/`,
 not by hand-editing, so the lockfile stays consistent).
 
-- **The version is bumped deliberately by Stefan, never automatically by
-  the coder and never per-feature.** SemVer: a feature bump is minor, a
-  fix bump is patch.
+- **The version is bumped deliberately, never automatically by the coder
+  and never per-feature.** SemVer: a feature bump is minor, a fix bump is
+  patch.
 - **At a bump:** change the version everywhere it's pinned (see above),
   move `CHANGELOG.md`'s `[Unreleased]` section to `[X.Y.Z] — <date>`, open
   a fresh empty `[Unreleased]` above it, tag the release.

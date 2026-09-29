@@ -151,7 +151,7 @@ Query-Parameter-Fällen). Fund des `spec-reviewer`, erste Runde.
 
 ## 6. Bewusst hingenommen: Passwort mit einem Query-Präfix
 
-**Entschieden (Stefan, 2026-09-24, Q-BL-0248-01, Option 1):** Der Fall
+**Entschieden (2026-09-24, Q-BL-0248-01, Option 1):** Der Fall
 bleibt als bekannter Restfall stehen. Spec §2 ist entsprechend präzisiert
 („außer den in §5 genannten Restfällen"), §5 um den Fall erweitert, §6.3
 um Test T-R3.

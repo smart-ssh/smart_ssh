@@ -1,6 +1,6 @@
 # Spec 0085 — Erhöhter Kanal: Widerruf innerhalb laufender Befehle, Kanal-Ende, Schutz des normalen Kanals
 
-Status: **freigegeben** (Stefan, 2026-09-28) · Backlog: BL-0270, BL-0271, BL-0272, BL-0273 · Gate: —
+Status: **freigegeben** · Backlog: BL-0270, BL-0271, BL-0272, BL-0273 · Gate: —
 Repo: **öffentlich** `smart-ssh` — `crates/app-shell/`, `crates/app-logic/`,
 `crates/ssh-transport/` (nur Tests)
 Review-Priorität: **ERHÖHT** (Teil 1: Schreibzugriffe über den erhöhten
@@ -67,8 +67,8 @@ normalen SFTP-Kanal einer Sitzung schieben.
 
 Ziel: A1–A5.
 
-Nicht-Ziele: kein Zähler „x von y erledigt“ bei Abbruch (Entscheidung
-Stefan, §8). Kein neuer Nutzertext. Kein Rückgängigmachen schon geänderter
+Nicht-Ziele: kein Zähler „x von y erledigt“ bei Abbruch (Entscheidung §8).
+Kein neuer Nutzertext. Kein Rückgängigmachen schon geänderter
 Einträge. Keine Änderung an `download_recursive`, am Aufbau des erhöhten
 Kanals, an russh/russh-sftp-Versionen oder an KI- und MCP-Pfaden.
 Der Bestätigungs-Timeout bleibt unverändert.
@@ -168,7 +168,7 @@ Einzelheiten zur früheren Lücke.
   `#[allow(clippy::too_many_arguments)]` (A6), z. B. mit einem
   Parameter-Struct. Ein neu erzeugter normaler Kanal ist immer leer. Der
   Konstruktor nimmt keinen Kanal an.
-- Verworfen: Abbruch mit Zähler (Entscheidung Stefan).
+- Verworfen: Abbruch mit Zähler (Entscheidung).
   Aufräumen/Rückgängigmachen bei Abbruch: unvollständig und selbst ein
   erhöhter Schreibvorgang nach dem Widerruf.
 
@@ -288,7 +288,7 @@ Teil 2 (A4/A5):
 
 ## 8. Offene Punkte
 
-Keine. Entschieden (Stefan, 2026-09-28): Abbruch bei Widerruf ohne
+Keine. Entschieden (2026-09-28): Abbruch bei Widerruf ohne
 Zähler und ohne neuen Nutzertext (A1.2).
 
 ## 9. Klarstellungen

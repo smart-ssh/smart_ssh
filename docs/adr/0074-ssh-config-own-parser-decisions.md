@@ -187,8 +187,8 @@ einer Sperre entnommen.
    nur in eine Richtung" (ADR 0024) ist der `Deny`-Verlust die teurere
    Hälfte; es bleibt deshalb beim geprüften Verhalten, ergänzt um
    `PlannedTag::is_literal` zur Kennzeichnung. **Welche Richtung die Vorgabe
-   trägt, war die Produktentscheidung `Q-BL-0216-02` — entschieden** (Stefan,
-   2026-09-25, §9 der Spec): Trifft das Schlagwort eine `Allow`-Regel, ist
+   trägt, war die Produktentscheidung `Q-BL-0216-02` — entschieden** (2026-09-25,
+   §9 der Spec): Trifft das Schlagwort eine `Allow`-Regel, ist
    es in der Vorschau standardmäßig abgewählt; trifft es nur `Deny`/
    `Confirm` oder keine Regel, bleibt es angewählt. Details in ADR 0075 §9.
 2. **Die Vorschau-DTOs tragen die Herkunft der Werte noch nicht**

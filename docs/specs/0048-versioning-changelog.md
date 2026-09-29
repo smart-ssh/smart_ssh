@@ -31,7 +31,7 @@ als Produktversion nutzt: `tauri.conf.json` → `version`, ggf. Workspace-
 für jeden Build des Produkts.
 
 ### A.2 Konvention (gehört in die CLAUDE.md)
-- Version wird **bewusst von Stefan** gebumpt, nicht vom Coder automatisch,
+- Version wird **bewusst** gebumpt, nicht vom Coder automatisch,
   nicht pro Feature. SemVer: Feature → Minor, Fix → Patch.
 - Beim Bump: Version ändern, Changelog `[Unreleased]` → `[X.Y.Z]`, taggen.
 

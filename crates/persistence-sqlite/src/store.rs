@@ -687,7 +687,7 @@ mod write_probe_tests {
     /// beweist, dass der Probe-Mechanismus selbst echte E/A-Fehler
     /// tatsächlich durchreicht (kein No-op), nicht spezifisch den
     /// `PermissionDenied`-Fall. **Der `PermissionDenied`-Fall selbst muss
-    /// von Stefan manuell auf einem echten Gerät verifiziert werden** (Teil
+    /// manuell auf einem echten Gerät verifiziert werden** (Teil
     /// des ohnehin geforderten manuellen Testablaufs für Fall 4).
     #[test]
     fn test_probe_fails_with_a_real_io_error_for_a_nonexistent_directory() {

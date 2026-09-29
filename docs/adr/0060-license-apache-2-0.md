@@ -36,7 +36,7 @@ deklarieren durchgängig `Apache-2.0`.
 
 Das Release-Gate nennt „Dateikopfzeilen" als Prüfpunkt. Im Repo gab es vor
 diesem Wechsel keine einzige Datei mit Lizenz-, SPDX- oder Copyright-Kopf
-(geprüft). Entscheidung (Stefan, 2026-09-22, Tor 1): keine Kopfzeilen
+(geprüft). Entscheidung (2026-09-22, Tor 1): keine Kopfzeilen
 einführen. Apache 2.0 verlangt keine Dateiköpfe (der Appendix ist eine
 Empfehlung, kein Pflichtteil der Lizenzerteilung); eine zentrale, eindeutige
 `LICENSE`/`NOTICE` im Wurzelverzeichnis genügt rechtlich. Ein einzeiliger
@@ -45,19 +45,19 @@ angefasst und wäre ein Merge-Konfliktrisiko mit jedem parallel laufenden
 Worktree gewesen, ohne rechtlichen Mehrwert. Der Gate-Unterpunkt
 „Dateikopfzeilen" gilt damit als geprüft (keine vorhanden) und bewusst
 nicht eingeführt — das erfüllt den Wortlaut des Gates nicht buchstäblich,
-ist aber eine bewusste, von Stefan getroffene Entscheidung. Bleibt jederzeit
+ist aber eine bewusst getroffene Entscheidung. Bleibt jederzeit
 nachrüstbar, ohne etwas zu brechen.
 
 ### OP-2 — minimale `NOTICE`
 
-Entscheidung (Stefan, 2026-09-22, Tor 1): eine minimale `NOTICE` mit nur
+Entscheidung (2026-09-22, Tor 1): eine minimale `NOTICE` mit nur
 Projektname und Copyright-Zeile, kein Sammelort für Drittlizenzen (das
 bleibt ein eigenes Artefakt von BL-0054 — Apache-Konvention: jede Zeile in
 `NOTICE` wird für Weiterverteiler zur Pflicht).
 
 ### OP-3 — rückwirkende Aussage im CHANGELOG
 
-Entscheidung (Stefan, 2026-09-22, Tor 1): Der CHANGELOG-Eintrag erklärt
+Entscheidung (2026-09-22, Tor 1): Der CHANGELOG-Eintrag erklärt
 zusätzlich zum Wechsel ab jetzt, dass auch alle bereits veröffentlichten
 Versionen unter Apache 2.0 genutzt werden dürfen — als alleiniger
 Rechteinhaber möglich, aber unwiderruflich. Das README nennt frühere

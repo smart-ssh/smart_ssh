@@ -101,7 +101,7 @@ wahrscheinlich.
 - Fund 2: Ein simulierter Provider-401 landet redigiert im Log (Key nicht).
 - Fund 3/4: schwer automatisiert (natives Fenster) — Komponententest für die
   Button-Präsenz/Drag-Attribute je Plattform, plus manuelle Windows-
-  Verifikation durch Stefan.
+  Verifikation.
 
 ## Offene Zuordnung
 

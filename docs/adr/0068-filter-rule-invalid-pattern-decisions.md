@@ -92,7 +92,7 @@ Stelle nicht: Sie sitzt im Weg der KI-Ausgaben, nicht an diesem
 Protokolleintrag. Ein solches Muster hätte also bei jeder Auswertung erneut
 im Klartext in der Protokolldatei gestanden.
 
-**Entschieden (Stefan, Q-BL-0249-03, Spec §9):** Dieser Fund wurde nicht
+**Entschieden (Q-BL-0249-03, Spec §9):** Dieser Fund wurde nicht
 hingenommen, sondern behoben. Der Eintrag trägt seither **nie** den
 Fehlertext der Bibliothek, sondern einen von drei festen, textfreien
 Kurztexten (`Pattern::compile_failure_reason`, `pattern.rs`): „regex does

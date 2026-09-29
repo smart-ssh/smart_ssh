@@ -158,4 +158,4 @@ keinen** Timeout, kann nach Frontend-Verlust ewig warten.
   Eskalation zwischen Aktionen; Teil 5: falscher Eintrag gelöscht, Host-Key
   durch Timeout akzeptiert).
 - CHANGELOG (Security-Kategorie).
-- Manuelle Testabläufe für Stefan.
+- Manuelle Testabläufe.

@@ -85,7 +85,7 @@ Ohne Messung weiß niemand, ob es greift:
 - Die Antwort-Felder `cache_read_input_tokens` /
   `cache_creation_input_tokens` / `input_tokens` **loggen** (sie stehen in der
   `usage`-Sektion jeder Anthropic-Antwort).
-- Damit ist die **Trefferquote sichtbar** — und Stefan kann prüfen, ob die
+- Damit ist die **Trefferquote sichtbar** — und es lässt sich prüfen, ob die
   Cache-Disziplin wirkt oder ob etwas das Präfix bricht.
 - Passt zum frisch gebauten `stop_reason`-Logging (0063) und den
   Rate-Limit-Headern (0061) — dieselbe „mach das Unsichtbare sichtbar"-Linie.
@@ -126,4 +126,4 @@ Tools + Notiz) **gecacht**. Genau deshalb ist die Reihenfolge so wichtig.
   (gecachte Tokens zählen bei den meisten Modellen nicht gegen ITPM)."
 - Melde mir: den Ist-Aufbau des Requests + was umgestellt wurde, alle
   gefundenen Cache-Killer (§2), das Zusammenspiel mit der Notiz-Kürzung (§6 —
-  der potenzielle Konflikt), und wie Stefan die Trefferquote im Log abliest.
+  der potenzielle Konflikt), und wie die Trefferquote im Log abzulesen ist.

@@ -8,7 +8,7 @@
   Fehlermeldungen warten.
   - Frontend-Änderungen laden per Vite-HMR ohne Neustart.
   - **Rust-Änderungen lösen Rebuild + Fensterneustart aus** — nicht
-    während Stefan testet; stattdessen sammeln und nach seinem OK machen.
+    während getestet wird; stattdessen sammeln und nach dem OK machen.
   - Nur einmal am Ende einer Aufgabe starten, nicht wiederholt.
 - **Release (lokal)**: `cargo tauri build` in `apps/smart-ssh-community`
   → `target/release/bundle/macos/Smart SSH.app` (+ `.dmg`).
@@ -16,7 +16,7 @@
   `tauri-dev-stable-signing-runner`, `cargo-tauri tauri dev`, `vite`
   (Exit 143 danach ist erwartet).
 
-## Toolchain-Stolpersteine (Stefans Mac, Apple Silicon)
+## Toolchain-Stolpersteine (Apple Silicon Mac)
 
 - `cargo-tauri` **muss nativ arm64 sein** (`file ~/.cargo/bin/cargo-tauri`).
   Eine x86_64-Version läuft ohne Rosetta nicht ("Bad CPU type") und hat

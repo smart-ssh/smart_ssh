@@ -207,7 +207,7 @@ struct AiBudgetWaitingPayload {
 /// zu warten (Restbudget aus den zuletzt gelesenen `anthropic-ratelimit-*`-
 /// Headern unter der Schwelle, oder der geschätzte Request größer als das
 /// bekannte Rest-Token-Budget) — rein informativ, kein Abbrechen-/
-/// Trotzdem-Button (Stefans Entscheidung 2), der Request geht nach
+/// Trotzdem-Button (Entscheidung 2), der Request geht nach
 /// `wait_seconds` automatisch raus. Deckt zusätzlich den Backlog-Punkt
 /// "kein UI-Feedback bei langer Provider-Stille" mit ab: dasselbe
 /// Event-Muster eignet sich für jede Art "die App wartet gerade auf den
@@ -674,7 +674,7 @@ struct ChatResponseEmptyPayload {
 /// eine abgeschnittene Antwort, das passt hier nicht) und keine
 /// Export-/Notiz-Leiste (es gibt nichts zu exportieren).
 ///
-/// Klarstellung Q-BL-0259-01 (Stefan, 2026-09-24, Variante b): der Aufrufer
+/// Klarstellung Q-BL-0259-01 (2026-09-24, Variante b): der Aufrufer
 /// (`crate::orchestration::chat_turn::run_one_round`) ruft diese Funktion nur
 /// für eine Runde, die eine Nutzer-Nachricht beantwortet — nicht für eine
 /// automatische Folgerunde nach einer ausgeführten/geblockten Aktion, s.

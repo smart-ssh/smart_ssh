@@ -505,7 +505,7 @@ pub fn build_plan(sources: &[ImportSource], inv: Inventory<'_>) -> ImportPlan {
                         // dort geschlossen, wo §5.2a ihn ohnehin schließen
                         // will: Es wird gekennzeichnet (`is_literal`) und ist
                         // in der Vorschau einzeln abwählbar. Q-BL-0216-02
-                        // (Stefan, 2026-09-25, §9 der Spec) hat entschieden,
+                        // (2026-09-25, §9 der Spec) wurde entschieden,
                         // welche der beiden Richtungen die Vorgabe trägt:
                         // Trifft das buchstäbliche Schlagwort eine
                         // Allow-Regel, ist es in der Vorschau standardmäßig

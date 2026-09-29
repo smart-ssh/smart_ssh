@@ -6,7 +6,7 @@ Bezug: docs/specs/0066-chat-interrupt-and-sensitive-data-prompt.md, Commits
 
 ## Kontext
 
-Stefan hat zwei Entscheidungen getroffen (Einreihen statt Unterbrechen;
+Es wurden zwei Entscheidungen getroffen (Einreihen statt Unterbrechen;
 laufendes Kommando läuft beim Stopp weiter). Weitere Punkte ließ die Spec
 offen, und ein `spec-reviewer`-Review (ERHÖHT, adversarial) fand Lücken, die
 vor Abschluss behoben wurden. Diese ADR hält beides fest.

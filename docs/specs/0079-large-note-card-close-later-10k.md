@@ -1,6 +1,6 @@
 # Spec 0079 — Karte „Notiz ist sehr groß“: Schließen, Später, 10 000 Zeichen
 
-Status: **freigegeben** (Stefan, 2026-09-24, Direktauftrag „setz das sofort um“) · Backlog: BL-0260 · Gate: —
+Status: **freigegeben** (2026-09-24, Direktauftrag „setz das sofort um“) · Backlog: BL-0260 · Gate: —
 Repo: **öffentlich** `smart-ssh` —
 `apps/smart-ssh-community/frontend/src/components/NoteShrinkSuggestionToast.tsx`,
 `…/components/NotesPanel.tsx`, `…/components/ServerForm.tsx`, `…/api.ts`,

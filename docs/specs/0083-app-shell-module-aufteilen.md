@@ -1,6 +1,6 @@
 # Spec 0083 — app-shell: `orchestration.rs` und `commands.rs` in Module aufteilen
 
-Status: **freigegeben** (Stefan, 2026-09-27, Auftrag „geht in die Umsetzung“) · Backlog: BL-0268 · Gate: release-1.0/E
+Status: **freigegeben** (2026-09-27, Auftrag „geht in die Umsetzung“) · Backlog: BL-0268 · Gate: release-1.0/E
 Repo: **öffentlich** `smart-ssh` — `crates/app-shell/src/` (nur Umstrukturierung)
 Review-Priorität: **NORMAL** (reine Verschiebung; die elementweise
 Verschiebungs-Prüfung §6 T2 sichert den Ausführungspfad ab)

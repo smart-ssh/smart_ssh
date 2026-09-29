@@ -13,7 +13,7 @@ use tracing_appender::non_blocking::WorkerGuard;
 /// Spec 0016, Abschnitt 3: "Aufbewahrung der letzten 14 Tage".
 const MAX_LOG_AGE: Duration = Duration::from_secs(14 * 24 * 60 * 60);
 
-/// Stefans Fund (2026-09): mit `tracing_appender::rolling::daily`s alter
+/// Fund (2026-09): mit `tracing_appender::rolling::daily`s alter
 /// Kurzform (`daily(dir, "smart-ssh.log")`) landete das Datum ans Ende des
 /// Dateinamens (`smart-ssh.log.2026-09-19`) — das `.log` in der Mitte
 /// bricht die dateityp-basierte Programm-/Icon-Zuordnung des
@@ -253,7 +253,7 @@ mod tests {
 
     use super::*;
 
-    /// Stefans Fund: `.log` muss am Ende des Dateinamens stehen (Datei-
+    /// Fund: `.log` muss am Ende des Dateinamens stehen (Datei-
     /// zuordnung im Betriebssystem hängt daran), nicht in der Mitte vor
     /// dem Datum. Baut denselben `Builder`-Aufruf wie `init_logging`
     /// direkt (statt `init_logging()` selbst aufzurufen — das würde den

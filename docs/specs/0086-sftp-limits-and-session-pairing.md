@@ -1,6 +1,6 @@
 # Spec 0086 — Dateibrowser: Größengrenzen nach dem Lesen, Transfer-Meldung beim Widerruf, Transport-Kanal-Paarung, Doku-Verweise
 
-Status: **freigegeben** (Stefan, 2026-09-28) · Backlog: BL-0274, BL-0275, BL-0276, BL-0277 · Gate: —
+Status: **freigegeben** · Backlog: BL-0274, BL-0275, BL-0276, BL-0277 · Gate: —
 Repo: **öffentlich** `smart-ssh` — `crates/app-shell/`, `crates/app-logic/`,
 Kommentare in weiteren Crates (A4)
 Review-Priorität: **ERHÖHT** für A3 (Session-Aufbau, normaler SFTP-Kanal,
@@ -69,7 +69,7 @@ Ziel: A1–A4 wie in §3.
 Nicht-Ziele:
 - Kein begrenztes Lesen: `read_file` und das Trait `SftpSession` bleiben
   unverändert. Die Datei darf kurz ganz im Speicher liegen, sie wird nur
-  nicht weitergegeben (Entscheidung Stefan, §9).
+  nicht weitergegeben (Entscheidung, §9).
 - Keine Grenze für Download, Upload oder die KI-Lesepfade.
 - `SshError`s `Display` bleibt unverändert, auch das Präfix
   `Channel-Fehler: ` an anderen Stellen.
@@ -267,6 +267,6 @@ Keine. Die K3-Frage zu A1 ist entschieden (§9).
 
 ## 9. Klarstellungen
 
-- 2026-09-28 · Tor 1 · Stefan: Vorschau nach dem Lesen erneut prüfen, kein
+- 2026-09-28 · Tor 1: Vorschau nach dem Lesen erneut prüfen, kein
   begrenztes Lesen. „Lokal öffnen" bekommt eine Grenze von 50 MB, geprüft
   vor und nach dem Lesen.

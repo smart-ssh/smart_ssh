@@ -1,6 +1,6 @@
 # Spec 0090 — CI gates that actually block
 
-Status: freigegeben (Stefan, 2026-09-29) · Backlog: BL-0229, BL-0228, BL-0056, BL-0094, BL-0284, BL-0047 · Gate: release-1.0/E, G, K
+Status: freigegeben · Backlog: BL-0229, BL-0228, BL-0056, BL-0094, BL-0284, BL-0047 · Gate: release-1.0/E, G, K
 Zweck: Was die CI prüft, färbt sie auch rot — Dependency-Audit,
 Lizenzprüfung, Frontend-Lint und -Tests. Dazu der offene RustSec-Fund, den
 der Berichtsmodus bisher verdeckt.

@@ -1,6 +1,6 @@
 # Spec 0074 — Im Urteils-Parser gewinnt die Eskalation, nicht das erste Wort
 
-Status: freigegeben (Stefan, 2026-09-23) · Backlog: BL-0121 · Gate: —
+Status: freigegeben · Backlog: BL-0121 · Gate: —
 Repo: **öffentlich** `smart-ssh` — `crates/app-shell/src/risk_second_opinion.rs`
 Review-Priorität: **ERHÖHT** (Risiko-Einstufung und
 Prompt-Injektions-Erkennung; adversariale Fälle in §6.3)

@@ -1,6 +1,6 @@
 # Spec 0070 — Lizenzwechsel FSL-1.1-MIT → Apache License 2.0
 
-Status: freigegeben (Stefan, 2026-09-22) · Backlog: BL-0055 · Gate: Release-Gate 1.0, G
+Status: freigegeben · Backlog: BL-0055 · Gate: Release-Gate 1.0, G
 Repo: **öffentlich** `smart_ssh` — Repo-Wurzel (`LICENSE*`, `NOTICE`,
 `README.md`, `CHANGELOG.md`, `Cargo.toml`, `deny.toml`), Frontend-Manifest
 (`apps/smart-ssh-community/frontend/package.json`, `package-lock.json`),
@@ -14,7 +14,7 @@ Review-Priorität: normal (kein Code-Pfad, keine Sicherheits-Invariante berührt
 > unter Apache 2.0 veröffentlichter Code bleibt unter Apache 2.0 nutzbar) —
 > deshalb genau und vollständig, aber ohne Nebenbaustellen.
 
-## Getroffene Entscheidungen (Stefan, 2026-09-22)
+## Getroffene Entscheidungen (2026-09-22)
 
 - Ziel-Lizenz des gesamten öffentlichen Repos: **Apache License 2.0**,
   SPDX-Kennung `Apache-2.0`.
@@ -23,7 +23,7 @@ Review-Priorität: normal (kein Code-Pfad, keine Sicherheits-Invariante berührt
 - Umsetzung jetzt, vor dem Launch.
 
 Alles Weitere in dieser Spec ist Vorschlag des Architekten; die Punkte, die
-Stefan entscheiden muss, stehen in §8.
+noch entschieden werden müssen, stehen in §8.
 
 ---
 
@@ -278,7 +278,7 @@ Prüfungen, deren Ausgabe der Coder in seinen Bericht übernimmt:
 - **T8 Vollständiges Gate** aus `CLAUDE.md` (cargo fmt/clippy/test, tsc,
   oxlint, vitest) grün — Absicherung gegen versehentliche
   Manifest-Syntaxfehler.
-- **Manuell (Stefan, nach dem Push):** GitHub zeigt in der Repo-Seitenleiste
+- **Manuell (nach dem Push):** GitHub zeigt in der Repo-Seitenleiste
   „Apache-2.0 license"; README-Badge und Lizenz-Link funktionieren.
 
 ## 7. Umsetzungsreihenfolge
@@ -296,9 +296,9 @@ Tor 1 zusammen).
 3. Diese Spec mit dem ADR committen (Spec-first-Regel in `CLAUDE.md`).
 
 Pfade einzeln stagen, kein `git add -A`. Kein Push — die Veröffentlichung
-(und damit das Wirksamwerden) liegt bei Stefan.
+(und damit das Wirksamwerden) liegt beim Menschen.
 
-## 8. Offene Punkte (Entscheidung Stefan)
+## 8. Offene Punkte (zu entscheiden)
 
 **OP-1 — Dateikopfzeilen (K3).** Das Release-Gate nennt „Dateikopfzeilen";
 es gibt aber keine (§1). Optionen:
@@ -318,7 +318,7 @@ bleibt jederzeit später nachrüstbar, ohne etwas zu brechen. Der
 Gate-Unterpunkt „Dateikopfzeilen" gilt damit als „geprüft, keine
 vorhanden, bewusst nicht eingeführt" — da das den Wortlaut des Gates
 nicht wörtlich erfüllt, ist das als mögliche Scope-Reduktion
-dokumentiert und braucht Stefans Entscheidung.
+dokumentiert und braucht eine Entscheidung.
 
 **OP-2 — `NOTICE`-Datei (K3, rechtliche Wirkung).** Optionen:
 1. *Minimale `NOTICE`* mit Projektname und Copyright-Vermerk (§4.3).
@@ -347,7 +347,7 @@ Wirkung).** Optionen:
 die nicht verlangt sind; Option 2 lässt sich jederzeit nachholen, aber
 nicht zurücknehmen.
 
-**Alle drei Punkte am 2026-09-22 von Stefan entschieden, siehe §9.**
+**Alle drei Punkte am 2026-09-22 entschieden, siehe §9.**
 
 Solange OP-1 bis OP-3 offen sind, ist die Spec **nicht umsetzbar** (sie
 bestimmen, welche Dateien entstehen und welcher Wortlaut öffentlich wird).

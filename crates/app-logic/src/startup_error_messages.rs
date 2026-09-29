@@ -3,7 +3,7 @@
 //! GUI-Aufruf): die "richtiger Text für den richtigen Fall"-Logik ist so
 //! ohne jede GUI-/`rfd`-Abhängigkeit unit-testbar (Spec 0059, Testbarkeit:
 //! "die Fehlererkennung + der Dialog-Aufruf mit richtigem Text unit-testbar
-//! machen — die visuelle Bestätigung macht Stefan pro Plattform").
+//! machen — die visuelle Bestätigung erfolgt pro Plattform").
 //!
 //! **Invariante (Spec 0059)**: kein Secret/kein DB-Inhalt in einem dieser
 //! Texte — nur Fehlerart, Datenpfad, nächster Schritt. Jede Funktion hier

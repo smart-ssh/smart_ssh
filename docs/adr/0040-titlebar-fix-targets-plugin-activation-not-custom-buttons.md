@@ -38,7 +38,7 @@ spurlos verschluckt wurde.
 **Wichtige Einschränkung**: Ich kann diese Hypothese nicht auf echter
 Windows-/Linux-Hardware verifizieren (Entwicklungsumgebung ist macOS). Die
 Spec selbst sieht das vor ("Fund 3/4 sind schwer automatisiert testbar ...
-plus manuelle Windows-Verifikation durch Stefan").
+plus manuelle Windows-Verifikation").
 
 ## Entscheidung
 
@@ -70,7 +70,7 @@ Der Fix zielt auf die **Aktivierungs-Logik**, nicht auf eigene React-Buttons:
 ## Konsequenzen
 
 - Der eigentliche Root Cause auf Windows bleibt bis zur manuellen
-  Verifikation durch Stefan unbestätigt. Sollte `activate_decoration()`
+  Verifikation unbestätigt. Sollte `activate_decoration()`
   dort tatsächlich fehlschlagen, sorgt dieser Fix jetzt wenigstens für einen
   sauberen, funktionierenden Fallback (volle native Titelleiste) statt des
   vorherigen kaputten Zwischenzustands — und für eine Logzeile, die beim

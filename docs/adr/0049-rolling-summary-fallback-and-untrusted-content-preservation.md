@@ -235,7 +235,7 @@ Bewusst NICHT behoben, dem Nutzer explizit gemeldet:
 
 Punkt 9 oben ließ bewusst offen, ob verdichteter MCP-Inhalt in der
 persistierten Summary eine echte Verletzung von Spec 0034 §10 ist — eine
-Produktentscheidung, keine rein technische. Stefans Entscheidung: MCP-
+Produktentscheidung, keine rein technische. Entschieden: MCP-
 Content gehört NICHT in die Summary, aus demselben Grund wie der
 bestehende `chat_messages`-Ausschluss — die Summary bildet die
 **Chat**-Kontinuität ab, MCP-Agent-Verkehr ist kein Chat. Ausdrücklich

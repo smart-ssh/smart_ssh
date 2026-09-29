@@ -19,7 +19,7 @@ Persistenz (0034), Notizen + Scope (ADR 0003/0004), KI-Provider + Redaction
 > **Priorität ERHÖHT** (Kern-Datenmodell, Redaction-relevant, Migration).
 > Großer Umbau — in Etappen umzusetzen (siehe Reihenfolge am Ende).
 
-## Getroffene Design-Entscheidungen (Stefan)
+## Getroffene Design-Entscheidungen
 
 1. **Kompaktierungs-Auslöser**: Token-Grenze (proaktiv, ~70–80 % des
    Modell-Kontextfensters, **Post-Fencing gerechnet**) + **N letzte Runden

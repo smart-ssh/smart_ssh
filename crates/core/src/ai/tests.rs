@@ -1555,7 +1555,7 @@ fn test_redactor_redacts_a_key_block_behind_an_at_sign_in_a_query_parameter() {
 /// redigiert, danach stand der Passwort-Präfix im Klartext.
 ///
 /// Behoben, indem die Regel `&` nur noch nach einem `?` im selben Token
-/// akzeptiert. Der von Stefan entschiedene Restfall (§5) bleibt dadurch
+/// akzeptiert. Der entschiedene Restfall (§5) bleibt dadurch
 /// auf die `?`-Form beschränkt, so wie §5 ihn beschreibt.
 #[test]
 fn test_redactor_does_not_treat_an_ampersand_without_a_question_mark_as_a_query_string() {
@@ -1713,7 +1713,7 @@ fn test_redactor_known_over_redaction_across_a_pipe_separated_second_at_sign() {
 }
 
 /// Spec 0078, §6.3 (T-R3): bekannter Restfall, Spec 0078 §5 —
-/// Entscheidung Stefan vom 2026-09-24 (Q-BL-0248-01).
+/// Entscheidung vom 2026-09-24 (Q-BL-0248-01).
 ///
 /// Dies ist die **einzige** Stelle, an der Spec 0078 weniger redigiert
 /// als der Stand davor: Enthält das Passwort einer Verbindungs-URL

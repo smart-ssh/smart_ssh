@@ -74,7 +74,7 @@ Frontend-UI-Strings, kein KI-Prompt). Nur die eine Stelle angepasst.
   prüft sowohl die neue Anweisung als auch, dass der "kurz erklären bleibt
   erlaubt"-Satz erhalten bleibt).
 - **Nicht automatisiert testbar**: ob die Prompt-Ergänzung das reale
-  Verhalten ändert (das zeigt nur echte Nutzung) — Stefan beobachtet, ob das
+  Verhalten ändert (das zeigt nur echte Nutzung) — beobachtet wird, ob das
   „ankündigen ohne handeln"-Muster seltener wird.
 
 ## Abschluss

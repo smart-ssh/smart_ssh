@@ -61,7 +61,7 @@ markierbarer Text). Natürlicher Ort: die "Über"-Kategorie der neuen
 zweispaltigen Settings (Spec 0050), wo auch NOTICE/Drittlizenzen hingehören
 (Release-Gate F).
 
-### 3.3 Titelzeile (nur 0.x-Phase, für Stefans Multi-Build-Komfort)
+### 3.3 Titelzeile (nur 0.x-Phase, für den Multi-Build-Komfort)
 Die Fenstertitelzeile zeigt zusätzlich Version (+ ggf. Hash), z. B.
 `Smart SSH 0.4.1 (a5b3e01) — Early Access`. Nutzen: Wer mehrere Builds
 parallel testet (Cross-Plattform), sieht sofort welcher läuft.

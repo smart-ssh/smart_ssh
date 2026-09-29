@@ -30,7 +30,7 @@ use futures::{Stream, StreamExt};
 /// abgebrochen wird, solange der Provider weiterhin Daten schickt.
 pub(crate) const SSE_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(90);
 
-/// Bug-Diagnose "KI antwortet nicht" (2026-09, Stefan-Report): ein
+/// Bug-Diagnose "KI antwortet nicht" (2026-09, Nutzerbericht): ein
 /// Live-Repro zeigte einen Fall, in dem [`SSE_INACTIVITY_TIMEOUT`] (oben)
 /// NICHT griff — ein 90s-`tokio::time::timeout` ist rein anwendungsseitig
 /// und unabhängig von TCP, sollte also unabhängig vom Verbindungszustand

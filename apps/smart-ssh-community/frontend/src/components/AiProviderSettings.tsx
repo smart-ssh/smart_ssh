@@ -64,7 +64,7 @@ type OllamaProbeState =
  * (`slate`/`indigo`/`emerald`/`red`) sind bereits projektweite Tokens
  * (`index.css`s `@theme`), hier nur konsistent auf Formularfelder/
  * Sekundäraktionen angewandt. `bg-slate-950` für Felder INNERHALB einer
- * `bg-slate-900/40`-Karte erzeugt die vom Reviewer/Stefan gewünschte
+ * `bg-slate-900/40`-Karte erzeugt die vom Reviewer gewünschte
  * Kontraststufung (Modal-Grund `slate-800` → Karte `slate-900/40` → Feld
  * `slate-950`), `focus:ring-indigo-500` ist der bislang fehlende sichtbare
  * Fokus-Zustand.

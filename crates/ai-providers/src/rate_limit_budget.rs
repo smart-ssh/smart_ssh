@@ -31,7 +31,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// Spec 0061, Entscheidung 1 (Stefan): konservativ ab ~15% Restbudget
+/// Spec 0061, Entscheidung 1: konservativ ab ~15% Restbudget
 /// bremsen (Puffer gegen Bursts — Anthropics Limiter reißt selbst bei noch
 /// vorhandenem Budget kurzzeitig, wenn zu viele Anfragen gleichzeitig
 /// eintreffen).

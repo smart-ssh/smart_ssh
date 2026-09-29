@@ -1,6 +1,6 @@
 # Spec: Fünf-Minuten-Pfad — Einstieg und verständliche Fehler
 
-Status: freigegeben (Stefan, 2026-09-22)
+Status: freigegeben
 Backlog: BL-0013 (führend), BL-0153, BL-0036, BL-0082, BL-0110
 Gate: pre-release-0x/D (BL-0013, BL-0082), release-1.0/B (BL-0036, BL-0082,
 Messlatte für BL-0013), release-1.0/C (BL-0110, SOLL)
@@ -31,7 +31,7 @@ Verbindungsaufbau samt Host-Key-Schleife in `connect_session`)
 
 ---
 
-## Getroffene Entscheidungen (Stefan, 2026-09-22)
+## Getroffene Entscheidungen (2026-09-22)
 
 - **E1 — Ollama-Probe nur auf Nutzeraktion.** Die Anfrage an
   `127.0.0.1:11434` läuft nur, wenn der Nutzer die Provider-Einstellungen
@@ -575,7 +575,7 @@ im Bericht bestätigen.
 29. Server-Formular, Anmeldeart „Private Key" → Ed25519-Hinweis sichtbar;
     andere Anmeldearten → nicht sichtbar.
 
-**Manuelle Testabläufe (für Stefan, am echten Gerät)** — der Coder liefert
+**Manuelle Testabläufe (am echten Gerät)** — der Coder liefert
 sie ausformuliert mit:
 - Falscher Anthropic-/OpenAI-Key: Testen-Button und Chat.
 - Falscher Modellname bei Anthropic, OpenAI, OpenRouter, Ollama.
@@ -628,7 +628,7 @@ Loopback-Regel und die nachträgliche DNS-Diagnose.
 
 ## 8. Offene Punkte
 
-Beide Punkte am 2026-09-22 von Stefan entschieden, siehe Klarstellungen (§ 9).
+Beide Punkte wurden am 2026-09-22 entschieden, siehe Klarstellungen (§ 9).
 
 1. **Reichweite von E3 — `code`-Feld in zwei Ergebnis-DTOs (K3,
    Schnittstelle).** `TestConnectionResult::NetworkError` und

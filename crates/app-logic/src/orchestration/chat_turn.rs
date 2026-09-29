@@ -361,7 +361,7 @@ pub async fn run_chat_turn(
             emit_chat_auto_continuation_started(emitter, session_id, round);
         }
 
-        // Spec 0080, A2, Klarstellung Q-BL-0259-01 (Stefan, 2026-09-24,
+        // Spec 0080, A2, Klarstellung Q-BL-0259-01 (2026-09-24,
         // Variante b): "leere Runde" gilt nur für eine Runde, die eine
         // Nutzer-Nachricht beantwortet — Runde 1 dieses Turns (neue
         // Nachricht oder „Weiter") sowie jede spätere Runde, in die
@@ -644,7 +644,7 @@ async fn run_one_round(
     // ohne Rückfrage (s. `handle_action_proposed`).
     let response_had_rejection = std::sync::atomic::AtomicBool::new(false);
 
-    // Diagnose "KI antwortet nicht" (2026-09, Stefan-Report): grenzt ein,
+    // Diagnose "KI antwortet nicht" (2026-09, Nutzerbericht): grenzt ein,
     // ob dieser `run_one_round`-Task hier überhaupt zum ersten Poll des
     // Streams kommt (ein Live-Repro zeigte: `log_outgoing_context` in
     // `ai-providers` feuerte, aber laut `lsof` nie eine Verbindung zum

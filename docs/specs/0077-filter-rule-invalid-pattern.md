@@ -1,6 +1,6 @@
 # Spec 0077 — Filter-Regeln mit ungültigem Muster
 
-Status: **freigegeben** (Stefan, 2026-09-24) · Backlog: BL-0249 · Gate: release-1.0/C
+Status: **freigegeben** · Backlog: BL-0249 · Gate: release-1.0/C
 Repo: **öffentlich** `smart-ssh` — `crates/core/src/filter/` (Muster, Auswertung),
 `crates/app-shell/src/filter_rules.rs` und `error.rs` (Anlegen/Ändern),
 Frontend (`errorCodes.ts`, `locales/{de,en}/common.json`)
@@ -87,7 +87,7 @@ Eine Regel, die in einem Zweig nicht übersetzt, kann also heute trotzdem
 greifen — über den jeweils anderen Zweig. Schicht 2 darf ihr das nicht
 wegnehmen (3.2.1).
 
-**Entscheidung (Stefan, 2026-09-24):** Eine Regel mit ungültigem Muster
+**Entscheidung (2026-09-24):** Eine Regel mit ungültigem Muster
 wird bei der Auswertung behandelt, **als würde sie nicht existieren**.
 Keine Ersatz-Eskalation auf Confirm oder Deny. Die Lücke schließt damit
 Schicht 1 für jede neu angelegte oder geänderte Regel. Eine schon
@@ -112,9 +112,9 @@ sichtbar gemacht (3.2).
   Priorität, original/stripped/resolved oder an Spec 0060.
 - Muster werden nicht zwischengespeichert oder vorab übersetzt (das wäre
   eine Performance-Frage und hat mit diesem Fund nichts zu tun).
-- Kein eigenes Größenlimit für Regex (Entscheidung Stefan, §8).
+- Kein eigenes Größenlimit für Regex (Entscheidung, §8).
 - Keine Ersatz-Eskalation (Confirm oder Deny) für ungültige Regeln bei
-  der Auswertung (Entscheidung Stefan, §1).
+  der Auswertung (Entscheidung, §1).
 - Keine Migration, die alte ungültige Regeln löscht oder umschreibt.
 
 ## 3. Anforderungen
@@ -231,7 +231,7 @@ sichtbar gemacht (3.2).
 - **Warum Schicht 1 die Lücke schließt:** Der gemessene Fund entsteht, wenn
   jemand eine Deny-Regel mit Tippfehler speichert. Schicht 1 verhindert
   genau das, beim Formular und bei der Schnellregel.
-- **Was bleibt (bewusst, Entscheidung Stefan):** Eine Regel, die vor
+- **Was bleibt (bewusst, Entscheidung):** Eine Regel, die vor
   diesem Fix gespeichert wurde oder aus einer künftigen
   Organisations-Quelle kommt, kann weiter ein ungültiges Muster haben. Sie
   ist dann wirkungslos, wie heute. Eine Deny-Regel dieser Art neben einer
@@ -424,7 +424,7 @@ und der Fix gehen in **einem** Push hinaus. Vorher MUSS der ungepushte
 Stand anderer Items gepusht sein, damit kein anderer Push sie vorzeitig
 mitnimmt.
 
-## 8. Offene Punkte (K3, Stefan)
+## 8. Offene Punkte (K3)
 
 Keine mehr. Entschieden am 2026-09-24:
 1. Ungültige Regel bei der Auswertung wie nicht vorhanden (§1).
@@ -457,7 +457,7 @@ Keine mehr. Entschieden am 2026-09-24:
   bleibt wörtlich: Jeder Schreibweg prüft. Test: Komponente mit einer
   markierten Regel. Die Pfeile sind deaktiviert, und `updateRule` wird
   nicht aufgerufen, auch nicht für die Nachbarregel.
-- **2026-09-24 · Q-BL-0249-03 · Stefan:** Der Log-Eintrag aus 3.2.2
+- **2026-09-24 · Q-BL-0249-03:** Der Log-Eintrag aus 3.2.2
   enthält **weder das Muster noch einen Fehlertext, der es zitiert**. Die
   Fehlertexte von `regex` und `globset` zitieren das Muster wörtlich,
   deshalb stehen im Eintrag Regel-ID, Aktion und ein fester Kurztext je

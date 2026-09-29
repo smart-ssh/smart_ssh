@@ -1,6 +1,6 @@
 # Spec 0075 — Server-Profile aus `ssh_config` importieren und dorthin exportieren
 
-Status: **freigegeben** (Stefan, 2026-09-23) · Backlog: BL-0216, BL-0218 · Gate: release-1.0/D
+Status: **freigegeben** · Backlog: BL-0216, BL-0218 · Gate: release-1.0/D
 Repo: **öffentlich** `smart-ssh` — `crates/core/src/profiles/` (Abbildung),
 `crates/app-shell/src/` (Kommandos, Dateizugriff, DTOs), Frontend
 (Vorschau-Dialog)
@@ -1023,14 +1023,14 @@ BL-0081.
 
 ## 9. Klarstellungen
 
-**2026-09-23 · E-1 · Parser.** Stefan: `ssh2-config` (MIT, 0.7.2) wird
+**2026-09-23 · E-1 · Parser.** Entschieden: `ssh2-config` (MIT, 0.7.2) wird
 als Abhängigkeit aufgenommen, statt einen eigenen Parser zu schreiben —
 mit der Bedingung, dass Schritt 7.0 ihr Verhalten bei `Include`, `Match`
 und Platzhalterblöcken **misst**, bevor die Abhängigkeit steht.
 Eingearbeitet in §4.2 und §7.0.
 
 **2026-09-23 · E-2 · `IdentityFile`** *(ersetzt eine frühere Fassung
-desselben Punktes)*. Stefan: Eine Schlüsseldatei wird **als solche
+desselben Punktes)*. Entschieden: Eine Schlüsseldatei wird **als solche
 übernommen** und von der Platte gelesen — das ist eine **weitere
 Anmeldeart**, nicht ein Merkposten. Sie ist in der Oberfläche wählbar
 („Privater Schlüssel" / „Schlüsseldatei"), sonst ließe sie sich nur durch
@@ -1038,7 +1038,7 @@ einen Import erzeugen. Dazu kommt ein Knopf, der eine Schlüsseldatei mit
 einem Druck in einen gespeicherten Schlüssel überführt. Beim Import wird
 gefragt, was der Nutzer will.
 
-Daraus wurden **zwei Specs** (Stefan: „mach daraus mehrere specs wenn du
+Daraus wurden **zwei Specs** („mach daraus mehrere specs wenn du
 willst"): **0076** führt die Anmeldeart, ihre Oberfläche und den
 Überführungsknopf ein; **0075** benutzt sie und stellt die Frage beim
 Import. 0076 wird zuerst umgesetzt (§7, Vorbedingung).
@@ -1048,14 +1048,14 @@ ist damit hinfällig. Sie hätte denselben Wert doppelt geführt (§4.6).
 Eingearbeitet in Kopf, §1.2, §2 (Nicht-Ziele 4 und 5), §3.1.2, §3.1.9,
 §3.2.1, §3.2.3, §4.6, §5.1, §5.5, §6.3.2–3a, §6.4.1/1a/1b und §7.
 
-**2026-09-23 · E-3 · Gruppen und Schlagworte.** Stefan: eine Gruppe je
+**2026-09-23 · E-3 · Gruppen und Schlagworte.** Entschieden: eine Gruppe je
 Import, darin je eine Untergruppe pro eingebundener Datei; die
 Zugehörigkeit zu einem Platzhalterblock wird ein **Schlagwort**, nicht
 eine Gruppe. Damit ist die Zuordnung eindeutig (jede Zeile stammt aus
 genau einer Datei) und überlappende Muster lösen sich von selbst, statt
 dass der Import raten muss. Eingearbeitet in §3.1.3, §4.5 und §6.1.7–10.
 
-**2026-09-23 · E-4 · `Include`.** Stefan: `Include` wird **gefolgt**.
+**2026-09-23 · E-4 · `Include`.** Entschieden: `Include` wird **gefolgt**.
 Pfade werden nicht eingeschränkt (absolut, `~` und `..` zulässig), Tiefe
 höchstens 3, keine Schleifen, **keine Anzahlgrenze** für Dateien, und
 jede eingebundene Datei wird ein Ordner in Smart SSH. Eingearbeitet in
@@ -1071,7 +1071,7 @@ Schlüsselbund legt und die Anmeldeart auf `PrivateKey` umstellt. Die
 Datei bleibt dabei unberührt; was sich ändert, ist nur, woher Smart SSH
 den Schlüssel nimmt.
 
-**2026-09-23 · E-6 · Wahl beim Import.** Stefan: „beim import können wir
+**2026-09-23 · E-6 · Wahl beim Import.** Entschieden: „beim import können wir
 fragen, wie die es wollen." Umgesetzt als die drei Wege in §3.1.9, mit
 (a) als Vorgabe — es ist der einzige, der keine zusätzliche Datei
 öffnet, und der Nutzer kann jeden Server später einzeln mit dem Knopf
@@ -1079,7 +1079,7 @@ aus 0076 umstellen. Die Wahl gilt für den ganzen Import und ist je
 Eintrag umstellbar.
 
 **2026-09-23 · E-7 · Der Parser filtert, statt dass Regeln es auffangen.**
-Stefan, zu E-4: „warum ist das mit den includes so gefährlich? sollte das
+Frage zu E-4: „warum ist das mit den includes so gefährlich? sollte das
 der parser nicht filtern? also wenn die kein ssh format haben, ignoriert
 der die?" — Berechtigt, und die frühere Fassung von §5.4 hat die Gefahr
 überzeichnet und die Abhilfe an der falschen Stelle gesucht. Es gibt
@@ -1205,11 +1205,11 @@ bezieht sich auf die **Anzahl**. Die Gesamtgrenzen aus §3.3 (Bytes,
 Zeilen, `Host`-Blöcke) gelten weiterhin — aber ausdrücklich **über alle
 Dateien zusammen** statt je Datei, weil eine Grenze je Datei durch eine
 Kette von `Include`-Dateien umgangen würde. Ohne irgendeine
-Gesamtgrenze wäre §5.6 nicht haltbar. Stefan am 2026-09-23 vorgelegt,
+Gesamtgrenze wäre §5.6 nicht haltbar. Am 2026-09-23 vorgelegt,
 kein Widerspruch — die Grenzen aus §3.3 gelten damit als entschieden,
 §8 bleibt bei „keine offenen Punkte".
 
-**Q-BL-0216-02 entschieden (Stefan, 2026-09-25).** Ein buchstäbliches
+**Q-BL-0216-02 entschieden (2026-09-25).** Ein buchstäbliches
 importiertes Schlagwort (aus einem gemischten Block wie `Host prod *`)
 entsteht wie jedes andere, damit bestehende Tag-`Deny`-Regeln weiter
 greifen. **Trifft es eine bestehende Tag-`Allow`-Regel, ist es in der

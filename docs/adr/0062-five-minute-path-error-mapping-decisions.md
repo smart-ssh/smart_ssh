@@ -112,7 +112,7 @@ SOLLTE-Funde wurden geprüft und bewusst **nicht** verändert:
   `SSH_TIMEOUT` ab, wo vorher (ohne jeden Timeout) gewartet wurde. Fail
   sichtbar im UI, keine Invariante verletzt. Falls das in der Praxis
   stört, ist das eine Produktentscheidung (höherer Timeout, oder
-  Ausklammern der Auth-Phase) — gehört Stefan.
+  Ausklammern der Auth-Phase) — gehört an den Menschen.
 - **IPv6-/Trailing-Dot-Sonderfälle bei der Loopback-Erkennung** (s.
   Abschnitt 1 oben) — bewusst nicht erweitert, reine Label-Ungenauigkeit
   ohne Sicherheitswirkung, außerhalb des von der Spec vorgegebenen
@@ -159,7 +159,7 @@ Spec in diesem öffentlichen Repo mit einer solchen Zeile. Sie stammt aus
 dem Spec-Commit selbst (vor dem Implementierungs-Schritt dieser ADR),
 wird hier vom Coder nur zur Kenntnis gebracht, nicht verändert — Umfang
 und Entscheidung, ob interne Gate-Kennungen künftig aus öffentlichen
-Specs herausgehalten werden, liegen beim Architekten/Stefan.
+Specs herausgehalten werden, liegen beim Architekten oder beim Menschen.
 
 ## Verworfene Test-Abdeckung (dokumentiert statt stillschweigend fehlend)
 

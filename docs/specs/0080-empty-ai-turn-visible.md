@@ -1,6 +1,6 @@
 # Spec 0080 — Leere KI-Runde: nie mehr still verschwinden
 
-Status: **freigegeben** (Stefan, 2026-09-24) · Backlog: BL-0259 · Gate: —
+Status: **freigegeben** · Backlog: BL-0259 · Gate: —
 Repo: **öffentlich** `smart-ssh` — OpenAI-kompatibler Provider,
 Orchestrierung, Chat-Oberfläche
 Review-Priorität: **ERHÖHT** (berührt den Retry-Pfad, der abgeschnittene
@@ -144,7 +144,7 @@ verschwinden nicht mehr still“. Manueller Test: Denkmodell,
 `max_tokens_override` klein (z. B. 300), längere Frage → Antwort nach dem
 Retry oder sichtbarer Hinweis, nie nichts.
 
-## 7. Offene Punkte (K3, Stefan)
+## 7. Offene Punkte (K3)
 
 **P1 — Budget für unbekannte Modelle** (heute Maximum 4096, Default 2048).
 - (a) So lassen. A1 verdoppelt einmal auf 4096, der Hinweis verweist auf
@@ -157,7 +157,7 @@ löst den Einzelfall ohne Risiko für andere Endpunkte.
 
 ## 8. Klarstellungen
 
-- **P1 entschieden (Stefan, 2026-09-24): Variante (b), entgegen der ursprünglichen Empfehlung (a).** Für unbekannte
+- **P1 entschieden (2026-09-24): Variante (b), entgegen der ursprünglichen Empfehlung (a).** Für unbekannte
   Modelle an Endpunkten außer der offiziellen OpenAI-API gilt künftig ein
   Maximum von **16 384** und ein Default von **8192**. Der Retry aus A1
   verdoppelt also auf 16 384. Grundlage ist eine Recherche der
@@ -175,7 +175,7 @@ löst den Einzelfall ohne Risiko für andere Endpunkte.
 - Neue Log-Einträge aus A4 kommen in die Allowlist des Diagnose-Exports,
   falls sie dort erscheinen sollen.
 
-- **Q-BL-0259-01 entschieden (Stefan, 2026-09-24): Variante (b).** A2
+- **Q-BL-0259-01 entschieden (2026-09-24): Variante (b).** A2
   gilt nur für eine Runde, die eine Nutzer-Nachricht beantwortet: Runde 1
   eines Turns (neue Nachricht oder „Weiter“) sowie jede spätere Runde, in
   die eingereihte Nutzer-Nachrichten eingespeist wurden. Eine automatische

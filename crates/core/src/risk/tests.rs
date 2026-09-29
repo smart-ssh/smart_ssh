@@ -722,7 +722,7 @@ fn test_secret_check_stays_fast_on_adversarial_long_input() {
     }
 }
 
-/// Spec 0067 / ADR 0058 §8 (Entscheidung Stefan): Aufrufe von
+/// Spec 0067 / ADR 0058 §8 (Entscheidung): Aufrufe von
 /// `sftp-server` sind fest Server-Risiko Rot — Erwähnungen nicht.
 #[test]
 fn test_server_risk_red_sftp_server_invocation() {
@@ -804,7 +804,7 @@ fn test_fourth_round_checks_leave_ordinary_pipelines_alone() {
     }
 }
 
-/// ADR 0058 §8 (Entscheidung Stefan): jeder Aufruf von `sftp-server`
+/// ADR 0058 §8 (Entscheidung): jeder Aufruf von `sftp-server`
 /// verlangt eine Bestätigung — auch hinter Wrappern, in Code-Strings und per
 /// Pipe an eine Shell; bloße Erwähnungen nicht.
 #[test]

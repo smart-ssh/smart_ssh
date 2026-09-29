@@ -1,6 +1,6 @@
 # Spec 0071 — Linux ohne Secret Service: klare Meldung statt englischem Backend-Text
 
-Status: freigegeben (Stefan, 2026-09-22) · Backlog: BL-0031 · Gate: Release-Gate 1.0, A
+Status: freigegeben · Backlog: BL-0031 · Gate: Release-Gate 1.0, A
 Repo: **öffentlich** `smart_ssh` — `crates/credentials-keyring`,
 `crates/app-shell` (`startup_error_messages.rs`, `lib.rs`, `error.rs`,
 `dto.rs`, `server_credentials.rs` — dabei **alle** Startdialog-Texte,
@@ -27,7 +27,7 @@ Review-Priorität: **ERHÖHT** (Credential-Handling; adversariale Fälle in §6.
 - Zielumgebungen: Server, minimaler Desktop, headless-nahe Umgebungen.
 - Prüfung des Gates: frische Debian-Minimal-VM ohne Keyring.
 
-Die drei offenen Punkte in §8 sind entschieden (Stefan, 2026-09-22); die
+Die drei offenen Punkte in §8 sind entschieden (2026-09-22); die
 Entscheidungen stehen dort und in §9 und sind in §2/§3 eingearbeitet.
 
 ---
@@ -550,7 +550,7 @@ Nach dem Muster der bestehenden Tests (`:286–309`):
 - M3 `gnome-keyring` nach A0.3 installieren, neu anmelden → Provider
   anlegen gelingt, kein Dialog mehr, Diagnose-Zeile „verfügbar".
 - M4 KDE-VM mit gesperrtem KWallet → Text nach A7, kein `apt`-Befehl.
-- **M1–M4 zusätzlich (Q-BL-0031-01, Stefan 2026-09-22):** In jeder Lage
+- **M1–M4 zusätzlich (Q-BL-0031-01, 2026-09-22):** In jeder Lage
   wird geprüft, ob der angezeigte Text **das Paket nennt, das die Lage
   tatsächlich behebt** — also: den genannten Befehl ausführen, neu
   anmelden, Provider anlegen. Gelingt das nicht, ist der Paketname falsch
@@ -596,7 +596,7 @@ mit einem Konflikt in genau diesen zwei Dateien rechnen.
 
 ---
 
-## 8. Offene Punkte — **alle drei entschieden (Stefan, 2026-09-22)**
+## 8. Offene Punkte — **alle drei entschieden (2026-09-22)**
 
 Die Optionen bleiben als Begründung stehen; die getroffene Entscheidung
 steht jeweils darunter und ist oben in §2/§3 eingearbeitet.
@@ -619,7 +619,7 @@ eben eine gute Erklärung statt einer schlechten.
   kann die App ohne Zusatzinstallation nicht nutzen. Das gehört dann
   in README und Website unter Systemvoraussetzungen (eigenes Item).
 
-> **Entscheidung (Stefan, 2026-09-22): (a)** — vorerst passiert nichts.
+> **Entscheidung (2026-09-22): (a)** — vorerst passiert nichts.
 > Der verschlüsselte Datei-Store kommt „irgendwann" und ist als
 > **BL-0203** weiterverfolgt. Diese Spec bleibt bei
 > Nicht-Ziel 1.
@@ -642,7 +642,7 @@ zu schützen wäre. Das trifft direkt den Fünf-Minuten-Pfad (BL-0035).
   die Sorte Lockerung, die laut Architektur-Checkliste einen eigenen,
   adversarialen Review verdient.
 
-> **Entscheidung (Stefan, 2026-09-22): (a)** — eigenes Item. Angelegt als
+> **Entscheidung (2026-09-22): (a)** — eigenes Item. Angelegt als
 > **BL-0204**. Diese Spec bleibt bei
 > Nicht-Ziel 6.
 
@@ -663,7 +663,7 @@ bekanntes, offenes Muster ist.
   Sauberste Lösung, gehört aber zu einem eigenen Item für alle
   Startdialoge.
 
-> **Entscheidung (Stefan, 2026-09-22): (c)** — Sprachwahl aus
+> **Entscheidung (2026-09-22): (c)** — Sprachwahl aus
 > `LC_ALL`/`LC_MESSAGES`/`LANG`, Vorgabe Deutsch. Eingearbeitet als
 > A11a–A11c, T11a–T11c, §7 Schritte 3/4 und M6.
 >
@@ -680,12 +680,12 @@ bekanntes, offenes Muster ist.
 
 ## 9. Klarstellungen
 
-- **2026-09-22 · OP-1 · Stefan:** Kein Ersatzspeicher. Secrets bleiben
+- **2026-09-22 · OP-1:** Kein Ersatzspeicher. Secrets bleiben
   ausschließlich im OS-Schlüsselbund; der verschlüsselte Datei-Store wird
   als BL-0203 verfolgt.
-- **2026-09-22 · OP-2 · Stefan:** „Leerer API-Key schreibt kein
+- **2026-09-22 · OP-2:** „Leerer API-Key schreibt kein
   Credential" wird nicht hier miterledigt, sondern als BL-0204 geführt.
-- **2026-09-22 · OP-3 · Stefan:** Der Startdialog wählt seine Sprache aus
+- **2026-09-22 · OP-3:** Der Startdialog wählt seine Sprache aus
   `LC_ALL`/`LC_MESSAGES`/`LANG` (Vorgabe Deutsch); die Wahl gilt für alle
   Startdialog-Texte, auch die bestehenden aus Spec 0059.
 
@@ -705,7 +705,7 @@ bekanntes, offenes Muster ist.
   `kwallet-pam` ebenso wenig. Fällt ein Messwert gegen die Spec aus, gilt
   §3 A0: der Messwert gewinnt, die Spec wird nachgezogen.
 
-- **2026-09-22 · Review-Fund · Stefan:** „Entfernen" meldete Erfolg,
+- **2026-09-22 · Review-Fund:** „Entfernen" meldete Erfolg,
   obwohl das Secret im Schlüsselbund blieb — §6.3 X6 hatte die beiden
   Nutzer-Pfade fälschlich als Aufräumpfade geführt. Entschieden: ehrlich
   melden, aber nicht blockieren. Eingearbeitet als **A17** und als

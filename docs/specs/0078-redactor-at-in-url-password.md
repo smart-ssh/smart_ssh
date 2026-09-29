@@ -1,6 +1,6 @@
 # Spec 0078 — Redactor: `@` in Zugangsdaten einer URL
 
-Status: **freigegeben** (Stefan, 2026-09-24) · Backlog: BL-0248 · Gate: release-1.0/C
+Status: **freigegeben** · Backlog: BL-0248 · Gate: release-1.0/C
 Repo: **öffentlich** `smart-ssh` — `crates/core/src/ai/redactor.rs`,
 `crates/core/src/ai/tests.rs`, `crates/app-shell/src/orchestration.rs`
 (nur Test, T-A13)
@@ -181,7 +181,7 @@ Anforderung und durch Tests gebunden (§6.2, T-A11/T-A12).
   `/ ? #` enthält, wird weiter nur teilweise redigiert. Gemessen:
   `postgres://app:a@b?c@db/x` → `postgres://app:[REDACTED]@b?c@db/x`.
   Dasselbe gilt wie bisher für `,` `;` `"`. Test T-R1 hält das fest.
-- **Restfall, neu durch N1 (Entscheidung Stefan, 2026-09-24,
+- **Restfall, neu durch N1 (Entscheidung, 2026-09-24,
   Q-BL-0248-01):** Enthält das Passwort einer Verbindungs-URL wörtlich
   `?<schlüsselwort>=` mit einem der Schlüsselwörter aus §3.1 und danach
   ein `@`, so redigiert N1 ab dem Schlüsselwort, und der Passwort-Präfix
@@ -337,9 +337,9 @@ vor dem Coder-Lauf in `docs/specs/` committet. Spec und Fix gehen in
 **einem** Push hinaus. Vorher ist der ungepushte Stand anderer Items
 gepusht.
 
-## 8. Offene Punkte (K3, Stefan)
+## 8. Offene Punkte (K3)
 
-Keine mehr. **Q-BL-0248-03 ist entschieden** (Stefan, 2026-09-24):
+Keine mehr. **Q-BL-0248-03 ist entschieden** (2026-09-24):
 Die feste zweite Anwendung von N1 bleibt (§3.1). Der Restfall ab dem
 dritten Parameter steht in §5. Die Ursache wird gesondert behandelt.
 
@@ -350,14 +350,14 @@ verlangt eine Produktentscheidung.
 
 ## 9. Klarstellungen
 
-- **2026-09-24 · Q-BL-0248-01 · Entscheidung Stefan, Option 1.** Der
+- **2026-09-24 · Q-BL-0248-01 · Entscheidung, Option 1.** Der
   Restfall „Passwort mit Query-Präfix" (`postgres://u:a?password=b@h/x`)
   wird als bekannter Restfall aufgenommen statt behoben. §2 ist
   entsprechend präzisiert („außer den in §5 genannten Restfällen"), §5 um
   den Fall erweitert, §6.3 um Test T-R3. Grund: Die Zeichenkette ist echt
   zweideutig; sie zu lösen hieße, N1s Position aufzugeben und damit Fall
   C wieder zu öffnen.
-- **2026-09-24 · Q-BL-0248-01 · Entscheidung Stefan.** Die Wertklasse von
+- **2026-09-24 · Q-BL-0248-01 · Entscheidung.** Die Wertklasse von
   N1 in §3.1 verlangt in **allen drei** Zweigen ein `@` im Wert. Die
   ursprünglich vorgeschriebene Fassung (`[^&#\s,;"']+` ohne `@`-Pflicht,
   Quote-Zweige ohne Einschränkung) zerschnitt den Anker der

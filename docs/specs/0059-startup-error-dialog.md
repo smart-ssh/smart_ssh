@@ -94,12 +94,12 @@ zeigt und dann sauber beendet.
 - Automatisierbar, soweit möglich (der Dialog selbst ist schwer im
   Headless-Test — mind. die *Fehlererkennung* + dass der richtige
   Dialog-Aufruf mit dem richtigen Text erfolgt, unit-testbar machen; die
-  visuelle Bestätigung macht Stefan pro Plattform).
+  visuelle Bestätigung erfolgt pro Plattform).
 
 ## Abschluss
 - Melde mir: den Diagnose-Befund (Teil 0 — wo/wie früh, welcher Mechanismus),
   ob eine plattformübergreifende Crate reicht oder es plattformspezifisch
-  wird, und je Fall einen manuellen Testablauf für Stefan (pro Plattform, weil
+  wird, und je Fall einen manuellen Testablauf (pro Plattform, weil
   der native Dialog nur echt sichtbar ist).
 - Volle Gates grün. `spec-reviewer` ERHÖHT (Startphase, Panic-Entfernung,
   plattformspezifischer Code).

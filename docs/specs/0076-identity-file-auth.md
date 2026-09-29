@@ -1,6 +1,6 @@
 # Spec 0076 — Anmeldung mit einer Schlüsseldatei
 
-Status: **freigegeben** (Stefan, 2026-09-23) · Backlog: BL-0221, BL-0222 · Gate: release-1.0/D
+Status: **freigegeben** · Backlog: BL-0221, BL-0222 · Gate: release-1.0/D
 Repo: **öffentlich** `smart-ssh` — `crates/core/src/ssh/auth.rs` und
 `crates/core/src/profiles/types.rs` (Anmeldeart und Auflösung),
 `crates/ssh-transport/` (Aufrufkette), `crates/app-shell/` (Dateizugriff,
@@ -718,7 +718,7 @@ Schritt 3 bzw. 5 nicht.
 
 ## 8. Offene Punkte
 
-Keine. Vier Punkte sind Stefan zur Entscheidung vorgelegt worden (E-1
+Keine. Vier Punkte sind zur Entscheidung vorgelegt worden (E-1
 bis E-4), einer zur Kenntnis (E-5, K2); alle fünf stehen in §9, und der
 Text oben ist bereits die entschiedene Fassung. Ein Punkt wurde aus
 dieser Spec **herausgelöst** statt entschieden: die Fehlertoleranz beim
@@ -727,7 +727,7 @@ Laden unbekannter Anmeldearten (früher A-9), jetzt **BL-0223** — siehe
 
 ## 9. Klarstellungen
 
-**2026-09-23 · E-1 · Dateirechte** (→ A-4). Stefan: **genauso ablehnen
+**2026-09-23 · E-1 · Dateirechte** (→ A-4). Entschieden: **genauso ablehnen
 wie `ssh`**. Ist die Datei auf einem Unix-System für Gruppe oder Welt
 lesbar, wird die Anmeldung abgelehnt; die Meldung nennt den
 `chmod`-Befehl. Auf Windows entfällt die Prüfung, wie bei OpenSSH selbst.
@@ -735,19 +735,19 @@ Begründung: Es ist die einzige Fassung, die in `THREAT-MODEL.md`
 (BL-0049) ohne Einschränkung aufschreibbar ist — „wir sind laxer als
 `ssh`“ wäre bei diesem Produkt schwer zu vertreten.
 
-**2026-09-23 · E-2 · Symbolische Links** (→ A-3). Stefan: **folgen**, wie
+**2026-09-23 · E-2 · Symbolische Links** (→ A-3). Entschieden: **folgen**, wie
 `ssh`. Ein Link auf einen Schlüssel auf einem verschlüsselten
 Datenträger ist ein verbreitetes Muster. Wichtig für die Umsetzung: Die
 Rechteprüfung aus E-1 greift auf der Datei, die **tatsächlich gelesen
 wird**, nicht auf dem Link — deshalb Prüfung und Lesen auf demselben
 offenen Dateihandle (§4.2, Test §6.4.7).
 
-**2026-09-23 · E-3 · Passphrase** (→ A-5). Stefan: **optional im
+**2026-09-23 · E-3 · Passphrase** (→ A-5). Entschieden: **optional im
 Schlüsselbund, wie heute bei `PrivateKey`**. Gleiches Verhalten für beide
 Schlüsselarten; die Wahl, sie nicht zu hinterlegen, hat der Nutzer
 bereits.
 
-**2026-09-23 · E-4 · Kein Löschangebot** (→ C-5). Stefan: Nach der
+**2026-09-23 · E-4 · Kein Löschangebot** (→ C-5). Entschieden: Nach der
 Überführung wird **nicht** angeboten, die Ursprungsdatei zu löschen. Der
 Nutzer löscht selbst. Zeigt sich, dass die Datei regelmäßig vergessen
 wird, ist das ein eigenes Item — nicht ein Knopf, der in seiner ersten
@@ -777,7 +777,7 @@ aber nur mit der Leseumsetzung aus Schritt 2. Abweichung vom Schnitt,
 nicht vom Inhalt — dasselbe Muster wie der Grund, warum Schritt 1 schon
 die Kette mitnimmt (ADR 0065 §1).
 
-**2026-09-24 · K-3 · `libc` als direkte Abhängigkeit.** Stefan: ja. `libc`
+**2026-09-24 · K-3 · `libc` als direkte Abhängigkeit.** Entschieden: ja. `libc`
 liegt bereits transitiv im `Cargo.lock` (0.2.189, von 73 Paketen gezogen),
 die Aufnahme bringt also kein neues Paket in die Lieferkette. Die von Hand
 gepflegte `O_NONBLOCK`-Tabelle in `crates/app-shell/src/key_files.rs`

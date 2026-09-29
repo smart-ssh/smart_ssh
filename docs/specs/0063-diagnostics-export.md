@@ -92,5 +92,5 @@ und beschreibe es mir.
 - Melde mir: das gewählte Format, was genau ins Paket kommt (die finale
   Feldliste), und dass ein Fake-Secret im Log redigiert + ein Fake-Key gar
   nicht im Paket landet.
-- **Nicht visuell testbar** — beschreibe mir einen manuellen Testablauf für
-  Stefan (Paket erzeugen, reinschauen, prüfen dass nichts Sensibles drin ist).
+- **Nicht visuell testbar** — beschreibe mir einen manuellen Testablauf
+  (Paket erzeugen, reinschauen, prüfen dass nichts Sensibles drin ist).
