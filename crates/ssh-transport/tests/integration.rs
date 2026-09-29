@@ -405,37 +405,65 @@ async fn test_unknown_host_key_pauses_then_trust_continues() {
 /// unterschiedslos `ConnectionFailed` (jeder `io::Error` fiel in denselben
 /// Zweig) — dieser Test schlug vor dem Fix fehl (der `matches!` traf nicht
 /// zu), s. Bericht.
+///
+/// Spec 0093, §9 (Q-BL-0281-01): Der Port wird gebunden und sofort wieder
+/// freigegeben, dann verbindet dieser Test dorthin. Zwischen `drop()` und
+/// `connect()` kann in seltenen Fällen ein fremder Testserver (aus einem
+/// parallel laufenden Testbinary) genau diesen Port belegen — dann liefert
+/// der Verbindungsversuch `Ok(_)` statt `ConnectionRefused`, ohne dass der
+/// Produktcode etwas falsch macht. Ein gebundener, aber nicht lauschender
+/// Socket (`bind()` ohne `listen()`) wurde als Alternative gemessen: Er
+/// liefert unter macOS einen Timeout statt `ConnectionRefused` (20/20
+/// Versuchen) und scheidet damit aus, s. `docs/adr/0085-…`, Abschnitt 4.
+/// Stattdessen wiederholt dieser Test mit frischem Port, höchstens
+/// `MAX_ATTEMPTS`-mal. Jeder Fehler außer `ConnectionRefused` lässt ihn
+/// sofort scheitern, ohne Wiederholung — nur ein unerwartetes `Ok(_)` löst
+/// einen neuen Versuch aus.
 #[tokio::test]
 async fn test_connect_to_closed_local_port_yields_connection_refused() {
-    // Port binden, dann sofort wieder freigeben — verlässlich "zu" (kein
-    // Dienst dahinter), ohne einen Port fest zu verdrahten.
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    drop(listener);
+    const MAX_ATTEMPTS: u32 = 5;
 
-    let target = ConnectionTarget {
-        hops: vec![password_hop("127.0.0.1", port)],
-    };
-    let credentials = TestCredentialStore::default();
-    let host_keys: std::sync::Arc<dyn HostKeyStore> =
-        std::sync::Arc::new(TestHostKeyStore::default());
+    for attempt in 1..=MAX_ATTEMPTS {
+        // Port binden, dann sofort wieder freigeben — verlässlich "zu" (kein
+        // Dienst dahinter), ohne einen Port fest zu verdrahten.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
 
-    let result = tokio::time::timeout(
-        std::time::Duration::from_secs(15),
-        ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys),
-    )
-    .await
-    .expect("darf nicht hängen");
-    let err = match result {
-        Err(err) => err,
-        Ok(_) => panic!("ein geschlossener Port darf keine Verbindung liefern"),
-    };
+        let target = ConnectionTarget {
+            hops: vec![password_hop("127.0.0.1", port)],
+        };
+        let credentials = TestCredentialStore::default();
+        let host_keys: std::sync::Arc<dyn HostKeyStore> =
+            std::sync::Arc::new(TestHostKeyStore::default());
 
-    assert!(
-        matches!(err, SshError::ConnectionRefused(_)),
-        "erwartet ConnectionRefused, bekam {err:?}"
-    );
-    assert_eq!(err.code(), "SSH_CONNECTION_REFUSED");
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys),
+        )
+        .await
+        .expect("darf nicht hängen");
+
+        let err = match result {
+            Err(err) => err,
+            Ok(_) if attempt < MAX_ATTEMPTS => {
+                // Ein fremder Dienst hat den Port zwischen drop() und
+                // connect() belegt — mit frischem Port erneut versuchen.
+                continue;
+            }
+            Ok(_) => panic!(
+                "geschlossener Port nicht erreichbar: alle {MAX_ATTEMPTS} \
+                 Versuche gerieten an einen fremden Dienst"
+            ),
+        };
+
+        assert!(
+            matches!(err, SshError::ConnectionRefused(_)),
+            "erwartet ConnectionRefused, bekam {err:?}"
+        );
+        assert_eq!(err.code(), "SSH_CONNECTION_REFUSED");
+        return;
+    }
 }
 
 // --- Spec 0076: Anmeldung mit einer Schlüsseldatei ---------------------
