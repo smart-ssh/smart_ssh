@@ -535,6 +535,19 @@ pub struct SessionParts {
     /// das dieses Feld VOR dem jeweiligen `send()`-Aufruf konsultiert).
     /// `Some` genau dann, wenn `risk_second_opinion_provider` `Some` ist.
     pub risk_second_opinion_budget: Option<Arc<ai_providers::ProviderBudgetGuard>>,
+    /// Spec 0092, A1.3: ob ein rot eingestufter Vorschlag immer eine
+    /// Bestätigung verlangt — app-weite Einstellung (`redRiskAlwaysConfirm`
+    /// in `settings.json`), einmalig bei `connect()` aufgelöst, genau wie
+    /// `risk_second_opinion_provider` oben. Eine Änderung greift deshalb
+    /// erst bei der nächsten Verbindung; der Hinweistext am Schalter sagt
+    /// das.
+    ///
+    /// **Fail-safe `true`** (A1.2): fehlender Schlüssel, kein boolescher
+    /// Wert oder ein nicht öffenbarer Store gelten als „an". In
+    /// Test-Fixtures ebenfalls `true` (Spec 0092, §5) — damit ein
+    /// bestehender Test mit rotem Kommando und Allow-Regel sichtbar bricht,
+    /// statt still auf „aus" zu laufen.
+    pub red_risk_always_confirm: bool,
     /// Spec 0027: derselbe `Arc` wie `AppState.running_command_
     /// cancellations` — ein billiger Klon bei `connect()`, damit
     /// `orchestration::execute_suggested_command` (die nur `&Session`
@@ -1130,6 +1143,9 @@ mod tests {
             chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
             risk_second_opinion_provider: None,
             risk_second_opinion_budget: None,
+            // Spec 0092, §5: in Test-Fixtures wie in der App standardmäßig
+            // „an".
+            red_risk_always_confirm: true,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),

@@ -450,6 +450,8 @@ pub fn session_with_ai_and_transport(
         chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
         risk_second_opinion_provider: None,
         risk_second_opinion_budget: None,
+        // Spec 0092, §5: standardmäßig „an", wie in der App.
+        red_risk_always_confirm: true,
         running_command_cancellations: Arc::new(crate::confirmation::ConfirmationRegistry::new()),
         untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
         post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),

@@ -451,6 +451,11 @@ pub(crate) async fn connect_session(
             None => (None, None),
         };
 
+    // Spec 0092, A1.3: einmalig gelesen, wie die Zweitmeinung oben — eine
+    // Änderung greift erst bei der nächsten Verbindung. Fail-safe „an",
+    // auch bei fehlendem Schlüssel oder fehlerhaftem Wert (A1.2).
+    let red_risk_always_confirm = crate::risk_second_opinion::red_risk_always_confirm(app);
+
     // Spec 0039, Abschnitt 5.1: einmalig übernommen, wie `risk_second_
     // opinion_provider` oben.
     let post_ingest_policy = server.post_ingest_policy;
@@ -648,6 +653,7 @@ pub(crate) async fn connect_session(
         chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),
         risk_second_opinion_provider,
         risk_second_opinion_budget,
+        red_risk_always_confirm,
         running_command_cancellations: state.running_command_cancellations.clone(),
         untrusted_content_ingested: std::sync::atomic::AtomicBool::new(
             starts_with_untrusted_content,

@@ -46,6 +46,10 @@ mod tests_files_and_ledger;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_pending_confirmation;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_red_risk;
 
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das
 /// bereits registrierte Warten.
@@ -200,6 +204,43 @@ pub(crate) async fn handle_action_proposed(
                 Decision::Confirm {
                     reason: format!("{reason} – erfordert immer Bestätigung"),
                     code: "FILTER_SFTP_SERVER_REQUIRES_CONFIRM".to_string(),
+                }
+            };
+        }
+    }
+
+    // Spec 0092, A2: Ist die app-weite Einstellung „Bei rotem Risiko immer
+    // nachfragen" an, verlangt ein auf EINER der beiden Achsen rot
+    // eingestufter Vorschlag immer eine Bestätigung — auch gegen eine
+    // Allow-Regel. Reine Eskalation (`AutoExec` → `Confirm`), für Chat UND
+    // MCP, weil beide durch diese Funktion laufen.
+    //
+    // Stelle in der Kette (Spec 0092, §5): NACH Secret-Pfad und
+    // `sftp-server`, damit deren genauerer Code erhalten bleibt (A2.4 — die
+    // beiden Glieder oben haben `decision` dann schon auf `Confirm` gesetzt,
+    // die Bedingung hier greift nicht mehr), und VOR der Injection-Prüfung,
+    // damit das Verdachts-Flag hier nur GELESEN und nicht verbraucht wird
+    // (A2.3, dasselbe Muster und derselbe Grund wie bei den beiden oben).
+    // Ein bereits vorliegendes `Confirm` (z. B. `FILTER_HARD_BLACKLIST`,
+    // Spec 0092 §5) bleibt dadurch ebenfalls unberührt, ein `Deny` erst
+    // recht.
+    if session.red_risk_always_confirm && matches!(decision, Decision::AutoExec) {
+        if let Some(reason) = red_risk_reason(risk_assessment.as_ref()) {
+            decision = if session
+                .injection_suspected
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                Decision::Confirm {
+                    reason: format!(
+                        "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
+                         erkannt; außerdem: {reason} – erfordert Bestätigung"
+                    ),
+                    code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
+                }
+            } else {
+                Decision::Confirm {
+                    reason: format!("{reason} – erfordert immer Bestätigung"),
+                    code: "FILTER_RED_RISK_REQUIRES_CONFIRM".to_string(),
                 }
             };
         }
@@ -687,6 +728,44 @@ fn pseudo_command_for_risk_classification(action: &AiAction) -> Option<String> {
 fn risk_assessment_for_action(action: &AiAction) -> Option<RiskAssessment> {
     let pseudo_command = pseudo_command_for_risk_classification(action)?;
     Some(RuleBasedRiskClassifier.classify(&pseudo_command))
+}
+
+/// Spec 0092, A2.1: `Some`, wenn **eine** der beiden Achsen `Red` ist — mit
+/// einem Grund, der die rote Achse und deren Begründung nennt (beide, falls
+/// beide rot sind). `None` für „keine Einschätzung vorhanden" (`ProposeNote
+/// Update`/`GenerateDocument`, s. `pseudo_command_for_risk_classification`)
+/// und für alles unter `Red`.
+///
+/// Der Text landet in Ledger und KI-Kontext; im Dialog sieht der Nutzer den
+/// festen übersetzten Text zum Code und die rote Achse am Badge (Spec 0092,
+/// §5, „Anzeige des Grunds").
+fn red_risk_reason(assessment: Option<&RiskAssessment>) -> Option<String> {
+    let assessment = assessment?;
+    let axis = |level: RiskLevel, label: &str, reason: Option<&String>| {
+        (level == RiskLevel::Red).then(|| match reason {
+            Some(reason) => format!("{label}: {reason}"),
+            // Der Klassifizierer liefert zu einem `Red` immer eine
+            // Begründung; fehlt sie doch, wird trotzdem eskaliert statt die
+            // Eskalation an einem fehlenden Text scheitern zu lassen.
+            None => format!("{label}: rot eingestuft"),
+        })
+    };
+    let parts: Vec<String> = [
+        axis(
+            assessment.server_risk,
+            "Server-Risiko rot",
+            assessment.server_risk_reason.as_ref(),
+        ),
+        axis(
+            assessment.data_risk,
+            "Daten-Risiko rot",
+            assessment.data_risk_reason.as_ref(),
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    (!parts.is_empty()).then(|| parts.join("; "))
 }
 
 /// Spec 0026, Abschnitt 3: "Nur Eskalation, nie Abschwächung" — als reine

@@ -1495,6 +1495,16 @@ async fn test_mcp_secret_path_read_shows_the_secret_reason() {
 /// Spec 0068, Teil 2: Secret-Pfad-Lesen wird trotz Allow-Regel nie
 /// automatisch ausgeführt — Chat-Kommando, `read_remote_file` und
 /// MCP-Herkunft (s. auch den MCP-Test oben). Ein öffentlicher Schlüssel bleibt automatisch.
+///
+/// Spec 0092: Die **negativen** Fälle laufen jetzt mit ausgeschalteter
+/// Rot-Risiko-Einstellung. Grund: `cat ~/.ssh/id_rsa.pub` ist kein
+/// Secret-Pfad (die Aussage dieses Tests), der Risiko-Klassifizierer stuft
+/// es auf der Daten-Achse aber rot ein (Muster `id_rsa`, ohne
+/// `.pub`-Ausnahme) — mit eingeschalteter Einstellung eskaliert es deshalb
+/// über das neue Glied, mit dessen eigenem Code. Die Aussage hier bleibt
+/// dadurch unverändert scharf („das SECRET-Glied greift nicht"), und das
+/// neue Verhalten hat seinen eigenen Test
+/// (`test_red_risk_escalates_a_public_key_read_that_is_no_secret_path`).
 #[tokio::test]
 async fn test_secret_path_read_always_requires_confirm_even_with_allow_rule() {
     let cases: Vec<(AiAction, bool)> = vec![
@@ -1533,6 +1543,8 @@ async fn test_secret_path_read_always_requires_confirm_even_with_allow_rule() {
         let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
         session.parts_mut_for_tests().filter_engine =
             Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        // Spec 0092: s. Doc-Kommentar oben — nur für die negativen Fälle.
+        session.parts_mut_for_tests().red_risk_always_confirm = expect_confirm;
         let emitter = TestEmitter::default();
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
