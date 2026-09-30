@@ -2163,7 +2163,8 @@ fn test_redactor_handles_a_one_megabyte_input_without_matches() {
     let redactor = DefaultOutputRedactor::new();
     // Bewusst mit den Anker-Wörtern der neuen Regeln, aber ohne je ein
     // Passwort-Argument: so muss jede Regel wirklich suchen.
-    let chunk = "mysql curl sshpass htpasswd redis-cli openssl smbclient -x -q ok 12345 ";
+    let chunk = "mysql curl sshpass htpasswd redis-cli openssl smbclient -x -q ok 12345 \
+                 SK0123456789 SG.abc eyJhbGciOi $argon2id $P$ AccountName=x ";
     let input = chunk.repeat(1_000_000 / chunk.len() + 1);
     assert!(input.len() > 1_000_000);
 
@@ -2176,4 +2177,203 @@ fn test_redactor_handles_a_one_megabyte_input_without_matches() {
         "redact_text auf {} Bytes ohne Treffer: {elapsed:?}",
         input.len()
     );
+}
+
+// --- Spec 0095, A2: weitere Token- und Hash-Formen -----------------------
+//
+// Gegenbeweis: T7–T9 sind gegen den Stand vor Spec 0095 gelaufen und dort
+// alle rot (Messung im Bericht des Laufs).
+
+/// Spec 0095, T7 (A2.1–A2.3): Twilio-API-Key-SID, SendGrid-Key und die
+/// Schlüssel aus Azure-Connection-Strings. Der Kontext eines
+/// Connection-Strings (`AccountName=`, `SharedAccessKeyName=`,
+/// `EndpointSuffix=`) muss lesbar bleiben — sonst ist die Diagnose weg,
+/// welche Ressource gemeint war.
+#[test]
+fn test_t7_0095_redacts_twilio_sendgrid_and_azure_keys() {
+    let redactor = DefaultOutputRedactor::new();
+
+    // A2.1 Twilio API-Key-SID: `SK` + 32 Hex.
+    assert_password_redacted(
+        "TWILIO_API_KEY SK0123456789abcdef0123456789abcdef aktiv",
+        &["SK0123456789abcdef0123456789abcdef"],
+        &["TWILIO_API_KEY", "aktiv"],
+    );
+
+    // A2.2 SendGrid: `SG.` + 22 + `.` + 43 Zeichen.
+    let sendgrid = "SG.ngeVfQFYQlKU0ufo8x5d1A.abcdefghijabcdefghijabcdefghijabcdefghijklm";
+    assert_password_redacted(
+        &format!("gesetzt: {sendgrid}"),
+        &[sendgrid, "ngeVfQFYQlKU0ufo8x5d1A"],
+        &["gesetzt:"],
+    );
+
+    // A2.3 Azure Storage: `AccountKey=` bis zum nächsten `;`.
+    let azure_key = "Z2VoZWltZ2VoZWltZ2VoZWltZ2VoZWltZ2VoZWltZ2VoZWltQQ==";
+    let conn = format!(
+        "DefaultEndpointsProtocol=https;AccountName=mystore;AccountKey={azure_key};\
+         EndpointSuffix=core.windows.net"
+    );
+    let redacted = redactor.redact_text(&conn);
+    assert!(
+        !redacted.contains(azure_key),
+        "der AccountKey muss weg sein: {redacted}"
+    );
+    for keep in [
+        "AccountName=mystore",
+        "AccountKey=",
+        "EndpointSuffix=core.windows.net",
+    ] {
+        assert!(
+            redacted.contains(keep),
+            "{keep} muss lesbar bleiben: {redacted}"
+        );
+    }
+
+    // A2.3 Service Bus: `SharedAccessKey=` — `SharedAccessKeyName=` ist ein
+    // anderer Schlüssel und bleibt stehen (kein `=` direkt nach `…Key`).
+    let sas = "Z2VoZWltMDA5NWdlaGVpbTAwOTVnZWhlaW0=";
+    let bus = format!(
+        "Endpoint=sb://ns.servicebus.windows.net/;SharedAccessKeyName=root;\
+         SharedAccessKey={sas}"
+    );
+    let redacted = redactor.redact_text(&bus);
+    assert!(
+        !redacted.contains(sas),
+        "der SharedAccessKey muss weg sein: {redacted}"
+    );
+    assert!(
+        redacted.contains("SharedAccessKeyName=root"),
+        "der Name der Regel ist kein Geheimnis und bleibt: {redacted}"
+    );
+}
+
+/// Spec 0095, T8 (A2.4): Argon2 und phpass — bisher im Redactor ausdrücklich
+/// als „bewusst NICHT abgedeckt" geführt. In einer `/etc/shadow`-artigen
+/// Zeile darf nur der Hash verschwinden, Benutzername und Aging-Felder
+/// bleiben stehen (dieselbe Leitlinie wie bei den übrigen Crypt-Hashes).
+#[test]
+fn test_t8_0095_redacts_argon2_and_phpass_hashes() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for hash in [
+        "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG",
+        "$argon2i$v=19$m=4096,t=3,p=1$c29tZXNhbHQ$iWh06vD8Fy27wf9npn6FXWiCX4K6pW6Ue1A",
+        "$argon2d$m=65536,t=2,p=1$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG",
+        "$P$B9S4z1rI9R6ON6tOeGZ8bL8kKWd8Yl0",
+        "$H$9aaaaaSXBjgypwqm.JsMssPLiS8YQ00",
+    ] {
+        let line = format!("admin:{hash}:19000:0:99999:7:::");
+        let redacted = redactor.redact_text(&line);
+        assert!(
+            !redacted.contains(hash),
+            "der Hash muss ersetzt sein: {line} -> {redacted}"
+        );
+        assert!(
+            redacted.starts_with("admin:"),
+            "der Benutzername bleibt lesbar: {redacted}"
+        );
+        assert!(
+            redacted.ends_with(":19000:0:99999:7:::"),
+            "die Aging-Felder bleiben lesbar: {redacted}"
+        );
+    }
+}
+
+/// Spec 0095, T9 (A2.5): ein JWT ohne `Bearer`-Präfix und ohne Schlüsselwort
+/// davor — in einer Textzeile und als JSON-Wert.
+#[test]
+fn test_t9_0095_redacts_bare_jwts() {
+    let redactor = DefaultOutputRedactor::new();
+    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.\
+               eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ.\
+               SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+
+    for input in [
+        format!("Antwort enthielt {jwt} als Kopf"),
+        format!("{{\"auth\":\"{jwt}\"}}"),
+        format!("curl -H 'X-Custom: {jwt}' https://x"),
+    ] {
+        let redacted = redactor.redact_text(&input);
+        assert!(
+            !redacted.contains("SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"),
+            "der JWT muss ersetzt sein: {input} -> {redacted}"
+        );
+        assert!(
+            redacted.contains("[REDACTED]"),
+            "der Platzhalter muss dort stehen: {input} -> {redacted}"
+        );
+    }
+}
+
+/// Spec 0095, T11 für A2: die neuen Token- und Hash-Regeln treffen auf die
+/// bestehenden. Ein JWT direkt hinter `Authorization: Bearer ` ist der Fall,
+/// den der Auftrag ausdrücklich nennt — egal welche der beiden Regeln zuerst
+/// greift, danach darf kein Teil des Tokens mehr im Klartext stehen.
+#[test]
+fn test_t11_0095_token_rules_do_not_steal_existing_anchors() {
+    let redactor = DefaultOutputRedactor::new();
+    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.\
+               eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ.\
+               SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+
+    for input in [
+        format!("Authorization: Bearer {jwt}"),
+        format!("x-api-key: {jwt}"),
+        format!("token={jwt}"),
+        // Hash und Passwortargument in derselben Zeile.
+        "admin:$P$B9S4z1rI9R6ON6tOeGZ8bL8kKWd8Yl0:x && mysql -pGeheim-0095".to_string(),
+        // Azure-Connection-String als Passwortwert eines Kommandos.
+        "mysql -p'AccountKey=Z2VoZWltZ2VoZWltZ2VoZWltZ2VoZWltQQ==' -u root".to_string(),
+    ] {
+        let redacted = redactor.redact_text(&input);
+        for secret in [
+            "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+            "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ",
+            "B9S4z1rI9R6ON6tOeGZ8bL8kKWd8Yl0",
+            "Geheim-0095",
+            "Z2VoZWltZ2VoZWltZ2VoZWltZ2VoZWltQQ==",
+        ] {
+            assert!(
+                !redacted.contains(secret),
+                "{secret} darf nicht im Klartext übrig bleiben: {input} -> {redacted}"
+            );
+        }
+        assert!(
+            redacted.contains("[REDACTED]"),
+            "der Platzhalter muss dort stehen: {input} -> {redacted}"
+        );
+    }
+}
+
+/// Spec 0095, T12 für A2 (A5): keine Fehlalarme auf Zeichenketten, die den
+/// neuen Mustern nur ähnlich sehen. Wächter — muss gegen den Stand vor
+/// Spec 0095 **nicht** scheitern.
+#[test]
+fn test_t12_0095_token_rules_leave_lookalikes_unchanged() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for harmless in [
+        // Twilio braucht 32 Hex, nicht 16, und kein `U` hinter `SK`.
+        "SK0123456789abcdef",
+        "SKU-12345 auf Lager",
+        // SendGrid braucht 22 + 43 Zeichen.
+        "SG.abcdefghij.abcdefghij",
+        // Azure-Felder ohne Schlüssel.
+        "AccountName=mystore;EndpointSuffix=core.windows.net",
+        // Unvollständige Hash-Präfixe.
+        "$argon2id$v=19",
+        "$P$kurz",
+        "$1$2$3",
+        // Ein JWT braucht drei Abschnitte, die ersten beiden mit `eyJ`.
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.kurz",
+        "abc.def.ghi",
+    ] {
+        assert_eq!(
+            redactor.redact_text(harmless),
+            harmless,
+            "harmlose Eingabe darf nicht angetastet werden: {harmless}"
+        );
+    }
 }

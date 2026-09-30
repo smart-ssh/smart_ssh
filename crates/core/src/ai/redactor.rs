@@ -28,7 +28,9 @@ const REDACTED_PLACEHOLDER: &str = "[REDACTED]";
 /// Spec 0078), nackte Provider-Keys
 /// (Anthropic, OpenAI, OpenRouter, GitLab, Hugging Face), `x-api-key`-/
 /// `Authorization: Basic`-Header (Spec 0068), Unix-Crypt-/Shadow-Passwort-Hashes
-/// (`$1$`/`$5$`/`$6$`/`$y$`/`$2b$`/`$7$`/`$apr1$` & verwandte Varianten)
+/// (`$1$`/`$5$`/`$6$`/`$y$`/`$2b$`/`$7$`/`$apr1$` & verwandte Varianten, dazu
+/// Argon2 und phpass seit Spec 0095), Twilio-/SendGrid-Keys,
+/// Azure-`AccountKey=`/`SharedAccessKey=` und JWTs ohne Präfix (Spec 0095)
 /// sowie Passwörter, die als **Argument eines Kommandozeilenprogramms**
 /// übergeben werden (Spec 0095: `mysql`/`mariadb`/`mysqldump`/`mysqladmin`
 /// `-p<wert>`, `sshpass -p`, `curl -u user:wert`, `htpasswd -b`,
@@ -279,13 +281,14 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // aus einem 64er-Alphabet" und würde reihenweise harmlose kurze
         // Tokens/IDs/Git-Kurz-Hashes fälschlich redigieren; DES-Crypt ist
         // zudem seit Jahrzehnten kein Standard-Ausgabeformat mehr. Ebenso
-        // nicht abgedeckt: Argon2 (`$argon2id$...`, deutlich komplexeres
-        // Mehrsegment-Format mit `,`-getrennten Parametern), phpass
-        // (`$P$`/`$H$`, WordPress/Drupal-DB-Dumps) und BSD/Solaris-Exoten
-        // (`$sha1$`, Solaris-`$md5$`) — real vorkommend, aber seltener als
-        // `/etc/shadow`/`.htpasswd`; als bewusste Scope-Grenze für diesen
-        // Fix offengelegt statt stillschweigend fallengelassen, nicht
-        // sicherheitskritisch verschwiegen.
+        // nicht abgedeckt: BSD/Solaris-Exoten (`$sha1$`, Solaris-`$md5$`) —
+        // real vorkommend, aber seltener als `/etc/shadow`/`.htpasswd`; als
+        // bewusste Scope-Grenze offengelegt statt stillschweigend
+        // fallengelassen, nicht sicherheitskritisch verschwiegen.
+        //
+        // Argon2 (`$argon2id$…`) und phpass (`$P$`/`$H$`) standen bis
+        // Spec 0095 ebenfalls hier — sie sind jetzt abgedeckt, s. die zwei
+        // Muster direkt unter dem bcrypt-Muster.
         simple(
             r"\$(?:1|5|6|7|y|gy|apr1)\$(?:[A-Za-z0-9./=]{1,40}\$)?[A-Za-z0-9./=]{1,64}\$[A-Za-z0-9./=]{10,150}",
             "eingebautes Unix-Crypt-Hash-Muster ist gültig",
@@ -299,6 +302,40 @@ fn built_in_patterns() -> Vec<PatternRule> {
         simple(
             r"\$2[abxy]\$\d{2}\$[A-Za-z0-9./]{53}",
             "eingebautes bcrypt-Hash-Muster ist gültig",
+        ),
+        // Spec 0095, A2.4: Argon2 in der PHC-Kodierung
+        // (`$argon2id$v=19$m=65536,t=3,p=4$<salt>$<hash>`, dazu `argon2i`
+        // und `argon2d`; die `v=`-Angabe ist optional, weil ältere
+        // Bibliotheken sie weglassen). Das Parameter-Segment ist über
+        // `m=`/`t=`/`p=` verankert statt über eine freie Zeichenklasse —
+        // sonst hätte schon `$argon2id$x$y$z` gematcht. Salt und Hash in
+        // Standard-Base64 ohne Padding (`+` und `/` möglich, `:` bewusst
+        // nicht: so bleibt in einer `/etc/shadow`-Zeile das Feldtrennzeichen
+        // unberührt, genau wie beim glibc-Muster oben).
+        //
+        // **Position: mit den übrigen Hash-Mustern ganz vorn**, aus deren
+        // Grund: Ein Zufallstreffer eines späteren Musters (`AKIA[0-9A-Z]{16}`
+        // kann rein zufällig in einem Base64-Salt liegen) würde die
+        // `$`-Struktur zerschneiden, auf die dieses Muster angewiesen ist —
+        // danach bliebe der Rest des Hashes im Klartext. Umgekehrt kann
+        // dieses Muster keinem späteren etwas nehmen: es matcht eine
+        // zusammenhängende Zeichenkette ohne Leerraum und ohne `:`, kann
+        // also keinen mehrteiligen Anker (PEM, `Bearer …`, netrc) zerteilen.
+        simple(
+            r"\$argon2(?:id|i|d)\$(?:v=\d+\$)?m=\d+,t=\d+,p=\d+(?:,[a-z]+=[A-Za-z0-9+/]*)*\$[A-Za-z0-9+/=]{8,}\$[A-Za-z0-9+/=]{10,}",
+            "eingebautes Argon2-Hash-Muster ist gültig",
+        ),
+        // Spec 0095, A2.4: phpass (`$P$`/`$H$` + 31 Zeichen aus dem
+        // crypt-Base64-Alphabet) — das Format von WordPress-/Drupal-
+        // Datenbankauszügen.
+        //
+        // `{31,}` statt `{31}`: Ein echter phpass-Hash ist exakt 34 Zeichen
+        // lang, aber `{31}` hätte bei einer längeren Zeichenkette nur die
+        // ersten 31 ersetzt und den Rest im Klartext stehen lassen. Lieber
+        // ein Zeichen zu viel schwärzen als einen Hash-Schwanz freilegen.
+        simple(
+            r"\$[PH]\$[A-Za-z0-9./]{31,}",
+            "eingebautes phpass-Hash-Muster ist gültig",
         ),
         // --- Spec 0068, Teil 1: nackte Provider-Keys und Auth-Header ---
         //
@@ -374,6 +411,56 @@ fn built_in_patterns() -> Vec<PatternRule> {
         simple(
             r"\bxai-[A-Za-z0-9]{40,}\b",
             "eingebautes xAI-Key-Muster ist gültig",
+        ),
+        // --- Spec 0095, A2.1/A2.2/A2.5: weitere nackte Token-Formen -------
+        //
+        // **Position: in diesem Block, also VOR `AKIA…`/`AIza…`/Slack/
+        // Stripe** — aus genau dem Grund, den der Kommentar zu den Keys
+        // oben nennt: Diese drei Muster verlangen eine zusammenhängende
+        // Zeichenkette aus einem Base64-artigen Alphabet. Ein Zufallstreffer
+        // eines kürzeren Musters mitten darin (`AIza` + 35 Zeichen kann in
+        // einer langen Base64-Nutzlast rein zufällig vorkommen) würde sie
+        // zerschneiden und den Rest im Klartext lassen.
+        //
+        // Umgekehrt können sie keinem späteren Muster einen mehrteiligen
+        // Anker nehmen: ihre Zeichenklassen enthalten keinen Leerraum, und
+        // jeder mehrteilige Anker im Redactor (`-----BEGIN … PRIVATE KEY`,
+        // `Bearer <wert>`, `Authorization: Basic <wert>`,
+        // `machine … password <wert>`) ist durch Leerraum getrennt. Ein
+        // JWT, der einem `Bearer`-Anker vorausgeht, wird deshalb vollständig
+        // ersetzt, bevor die Bearer-Regel ihn sieht — geschwärzt ist er
+        // danach so oder so (Test
+        // `test_t11_0095_token_rules_do_not_steal_existing_anchors`).
+        //
+        // A2.1 Twilio API-Key-SID: `SK` + 32 Hex als ganzes Wort. Die
+        // Wortgrenzen halten `SKU-12345` und einen längeren Hex-Block
+        // heraus.
+        simple(
+            r"\bSK[0-9a-fA-F]{32}\b",
+            "eingebautes Twilio-API-Key-Muster ist gültig",
+        ),
+        // A2.2 SendGrid: `SG.` + 22 + `.` + 43 Zeichen. Exakte Längen (wie
+        // beim Google- und bcrypt-Muster) statt Mindestlängen — das Format
+        // ist fest, und `SG.` allein ist als Anker zu schwach.
+        simple(
+            r"\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}\b",
+            "eingebautes SendGrid-Key-Muster ist gültig",
+        ),
+        // A2.5 JWT ohne Präfix: drei base64url-Abschnitte, die ersten beiden
+        // beginnen mit `eyJ` — das ist Base64 für `{"`, also der Anfang
+        // eines JSON-Objekts, und damit der einzige Anker, der ein JWT
+        // zuverlässig von beliebigem Base64 unterscheidet. Ohne diese
+        // Forderung wäre das Muster ein Hoch-Entropie-Fallback, und genau
+        // das ist für BL-0118 verworfen.
+        //
+        // Mindestlängen konservativ niedrig (10 statt der real ~24/~43
+        // Zeichen), damit ein kurzer, aber echter Token nicht durchrutscht;
+        // `eyJ` hält die Falsch-Positiv-Rate trotzdem praktisch bei null
+        // (Spec 0095, T12: `eyJ…` allein und `abc.def.ghi` bleiben
+        // unberührt).
+        simple(
+            r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
+            "eingebautes JWT-Muster ist gültig",
         ),
         // Die Header-Muster zusätzlich an ihrer ursprünglichen Stelle (dritte
         // Review-Runde) — in der ERWEITERTEN Form (vierte Runde): die
@@ -801,6 +888,27 @@ fn built_in_patterns() -> Vec<PatternRule> {
             r#"(?i)\b(?:proxy-)?authorization['"]?\s*[:=]\s*['"]?(?:basic|token)\s+(?:bearer\s+)?(?:[a-z_]+=)?(?:"[^"\r\n]*"|[A-Za-z0-9+/._~-]+=*)"#,
             "eingebautes Authorization-Basic-Muster ist gültig",
         ),
+        // Spec 0095, A2.3: Azure-Connection-Strings. `AccountKey=` (Storage)
+        // und `SharedAccessKey=` (Service Bus / Event Hubs) tragen den
+        // eigentlichen Schlüssel; keines der Schlüsselwort-Muster oben kennt
+        // diese Namen.
+        //
+        // Der Wert endet am nächsten `;`, an Leerraum oder an einem
+        // Anführungszeichen — die Zeichenklasse ist deshalb exakt das
+        // Base64-Alphabet mit Padding, nichts darüber hinaus.
+        //
+        // **Position: bei den übrigen Mustern mit Schlüsselnamen am Ende der
+        // Liste.** Weiter vorn könnte diese Regel einem älteren Muster den
+        // Anker nehmen (`AccountKey=Bearer abc…` würde `Bearer` verbrauchen
+        // und den Token freilegen) — derselbe Fehler, den die Header-Muster
+        // hier schon einmal gemacht haben. Der Schlüsselname bleibt über
+        // `${key}` stehen: `AccountName=` daneben soll lesbar bleiben, sonst
+        // ist nicht mehr erkennbar, welche Ressource gemeint war.
+        PatternRule {
+            regex: Regex::new(r"(?i)(?P<key>\b(?:Account|SharedAccess)Key=)[A-Za-z0-9+/=]+")
+                .expect("eingebautes Azure-Connection-String-Muster ist gültig"),
+            replacement: "${key}[REDACTED]",
+        },
         // spec-reviewer-Fund (Spec 0068, ERHÖHT): die Formate genau der
         // Dateien, deren Lesen Teil 2 bestätigungspflichtig macht — nach
         // einem bestätigten Lesen sollen sie trotzdem nicht im Klartext an
