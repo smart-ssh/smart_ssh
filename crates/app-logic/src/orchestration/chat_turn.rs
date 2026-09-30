@@ -704,6 +704,28 @@ async fn run_one_round(
                 // Ausführung für die Auto-Folgerunden-Logik zählt).
                 round_had_content = true;
                 flush_text_buffer(session, &mut text_buffer).await;
+                // Spec 0096, A2: der erste der drei KI-Wege — der
+                // Notizvorschlag aus einer Chat-Runde. Geschwärzt HIER und
+                // nicht in `handle_action_proposed`: dort läuft auch „In
+                // Notiz übernehmen" durch, mit derselben
+                // `ActionOrigin::Internal`, und eine vom Nutzer selbst
+                // ausgewählte Chatzeile bleibt unverändert (Spec 0096, E3).
+                // Andere Aktionstypen reicht `redact_note_proposal`
+                // unverändert durch.
+                let Some(action) =
+                    super::notes::redact_note_proposal(action, session.redactor.as_ref())
+                else {
+                    super::action_exec::emit_action_error(
+                        session,
+                        emitter,
+                        session_id,
+                        super::notes::NOTE_PROPOSAL_FULLY_REDACTED_MESSAGE.to_string(),
+                        None,
+                        true,
+                    )
+                    .await;
+                    continue;
+                };
                 if handle_action_proposed(
                     session,
                     session_id,

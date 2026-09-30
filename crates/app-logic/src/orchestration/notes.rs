@@ -116,6 +116,61 @@ pub(crate) async fn note_target_preview_for_action(
     }
 }
 
+/// Meldung an den Nutzer, wenn ein Notizvorschlag der KI nach dem Schwärzen
+/// nichts als Platzhalter übrig lässt (Spec 0096, A2, letzter Satz: „Ist sie
+/// leer, entsteht kein Vorschlag"). Bewusst **nicht** still verworfen: die
+/// Aktionskarte einfach ausfallen zu lassen sähe für den Nutzer (und für
+/// einen MCP-Client) wie ein Fehler der App aus. Auf den Weg beim Trennen
+/// der Sitzung trifft das nicht zu — dort gibt es keinen sichtbaren Chat
+/// mehr (Spec 0010, Abschnitt 2, Punkt 4), deshalb nur ein Log-Eintrag.
+pub(crate) const NOTE_PROPOSAL_FULLY_REDACTED_MESSAGE: &str =
+    "Der Notizvorschlag der KI bestand vollständig aus Inhalten, die als Zugangsdaten erkannt \
+     wurden, und wurde deshalb verworfen. Die gespeicherte Notiz ist unverändert.";
+
+/// Spec 0096, A2: schwärzt den Inhalt eines KI-Notizvorschlags, **bevor** er
+/// dem Nutzer gezeigt wird — `note_revisions.content` und `servers.notes`/
+/// `groups.notes` sind Klartext-Spalten (Spec 0096 §1), und ein bestätigter
+/// Vorschlag landet dort unverändert.
+///
+/// **Warum an den Einstiegen und nicht im gemeinsamen Pfad** (Spec 0096, A2):
+/// `handle_action_proposed` bedient sowohl den KI-Vorschlag aus dem Chat als
+/// auch „In Notiz übernehmen" (`propose_note_from_chat_content`), beide mit
+/// [`ActionOrigin::Internal`] — an der Herkunft sind sie dort nicht mehr zu
+/// unterscheiden. Bei „In Notiz übernehmen" wählt der Nutzer die Zeile aber
+/// selbst aus, und was er selbst schreibt oder auswählt, bleibt unverändert
+/// (Entscheidung E3). Deshalb schwärzt jeder der drei KI-Wege selbst:
+/// Chat-Runde (`chat_turn`), Verbindungsende
+/// ([`suggest_note_update_on_disconnect`]) und MCP
+/// ([`super::action_exec::handle_mcp_action_proposed`]).
+///
+/// Nicht-`ProposeNoteUpdate`-Aktionen gehen unverändert durch — für sie gilt
+/// die bestehende Behandlung (Filter-Engine, Risiko, Bestätigung), an der
+/// diese Spec nichts ändert.
+///
+/// `None` bedeutet: Der Vorschlag bestand nach dem Schwärzen nur noch aus
+/// Platzhaltern und Leerraum — es entsteht gar kein Vorschlag (Test T10).
+pub(crate) fn redact_note_proposal(
+    action: AiAction,
+    redactor: &dyn OutputRedactor,
+) -> Option<AiAction> {
+    match action {
+        AiAction::ProposeNoteUpdate {
+            target,
+            new_content,
+        } => {
+            let redacted = redactor.redact_text(&new_content);
+            if redacted.replace(REDACTED_PLACEHOLDER, "").trim().is_empty() {
+                return None;
+            }
+            Some(AiAction::ProposeNoteUpdate {
+                target,
+                new_content: redacted,
+            })
+        }
+        other => Some(other),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn execute_note_update(
     session: &Session,
@@ -569,19 +624,36 @@ pub async fn suggest_note_update_on_disconnect(
         }
     }
 
-    let Some(AiAction::ProposeNoteUpdate {
+    let Some(proposed) = proposed else {
+        return false;
+    };
+    // Spec 0096, A2: der zweite der drei KI-Wege — geschwärzt, BEVOR der
+    // Vorschlag den Nutzer erreicht (`emit_note_update_suggested` unten).
+    // Angezeigt und gespeichert wird ab hier dieselbe geschwärzte Fassung:
+    // `new_content` wird aus `proposed_action` zurückgelesen, statt die
+    // ungeschwärzte Fassung weiterzureichen.
+    let Some(proposed_action) = redact_note_proposal(proposed, session.redactor.as_ref()) else {
+        // Anders als im Chat gibt es hier keinen sichtbaren Chat mehr, an den
+        // eine Meldung gehen könnte (Spec 0010, Abschnitt 2, Punkt 4:
+        // "kommentarlos beenden, kein `chat-error`") — und für den
+        // Rückgabewert zählt das wie "kein Vorschlag gemacht", damit der
+        // Kürzungs-Vorschlag noch laufen darf.
+        tracing::info!(
+            "skipping note-update suggestion on disconnect: the proposal was fully redacted"
+        );
+        return false;
+    };
+    let AiAction::ProposeNoteUpdate {
         target,
         new_content,
-    }) = proposed
+    } = proposed_action.clone()
     else {
+        // `redact_note_proposal` reicht andere Aktionstypen unverändert
+        // durch; oben ist aber bereits auf `ProposeNoteUpdate` gefiltert.
         return false;
     };
 
     let action_id: ActionId = Uuid::new_v4();
-    let proposed_action = AiAction::ProposeNoteUpdate {
-        target,
-        new_content: new_content.clone(),
-    };
     // Spec 0019, Abschnitt 3 / Spec 0023, Abschnitt 3: dieselbe Diff-/
     // Ziel-Grundlage wie beim regulären In-Chat-Vorschlag
     // (`handle_action_proposed`) — hier besonders wichtig, da diese

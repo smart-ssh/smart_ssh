@@ -1798,3 +1798,311 @@ fn test_spec_0096_secret_form_is_fully_replaced_by_the_placeholder() {
     let redacted = DefaultOutputRedactor::new().redact_text("password=Geheim-0096");
     assert_eq!(redacted, "[REDACTED]");
 }
+
+/// Das Geheimnis aus Spec 0096, Abschnitt 7 — reiner Wert, ohne die
+/// `password=`-Umgebung, die der Redactor erkennt. Genau dieser Wert darf in
+/// keiner Klartext-Spalte auftauchen.
+const SECRET_0096: &str = "Geheim-0096";
+
+/// Der Notizvorschlag, den die KI in den A2-Tests liefert: echter Notiztext
+/// **und** ein Geheimnis. Nach dem Schwärzen muss der Notiztext erhalten
+/// bleiben (sonst wäre der Vorschlag wertlos) und das Geheimnis weg sein.
+const NOTE_PROPOSAL_WITH_SECRET: &str =
+    "Deployment laeuft ueber /srv/app. Zugang: password=Geheim-0096";
+
+fn note_proposal(new_content: &str) -> AiEvent {
+    AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
+        target: NoteTargetSelector::CurrentServer,
+        new_content: new_content.to_string(),
+    })
+}
+
+/// Prüft eine Fassung des Notizvorschlags: Geheimnis weg, Platzhalter da,
+/// Notiztext erhalten.
+fn assert_secret_redacted_but_note_kept(what: &str, content: &str) {
+    assert!(
+        !content.contains(SECRET_0096),
+        "{what} enthaelt das Geheimnis: {content:?}"
+    );
+    assert!(
+        content.contains("[REDACTED]"),
+        "{what}: der Treffer muss durch den Platzhalter ersetzt sein, nicht stumm entfernt: \
+         {content:?}"
+    );
+    assert!(
+        content.contains("/srv/app"),
+        "{what}: der eigentliche Notizinhalt muss erhalten bleiben: {content:?}"
+    );
+}
+
+/// T8 (Spec 0096, A2): Die KI schlaegt **im Chat** eine Notiz mit einem
+/// Geheimnis vor. Geprueft wird beides — das Ereignis, das der Nutzer im
+/// Vergleichsdialog sieht, **und** die nach seiner Bestaetigung gespeicherte
+/// Revision (`note_revisions.content` ist eine Klartext-Spalte). Angezeigte
+/// und gespeicherte Fassung muessen dieselbe sein; ein Vorschlag, der
+/// geschwaerzt angezeigt, aber im Original gespeichert wird, waere der
+/// eigentliche Fehler. Scheitert gegen den Stand vor Spec 0096.
+#[tokio::test]
+async fn test_t8_spec_0096_note_proposal_from_chat_is_redacted_in_event_and_revision() {
+    let session = test_session(
+        vec![note_proposal(NOTE_PROPOSAL_WITH_SECRET), AiEvent::Done],
+        MockSshTransport::default(),
+    );
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let turn = run_chat_turn(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &profile_store,
+        &confirmations,
+    );
+    tokio::join!(
+        turn,
+        approve_first_proposed_action(&emitter, &confirmations)
+    );
+
+    let events = emitter.events.lock().unwrap().clone();
+    let (_, proposed) = events
+        .iter()
+        .find(|(name, _)| name == "chat-action-proposed")
+        .expect("chat-action-proposed muss gesendet worden sein");
+    let shown = proposed["action"]["ProposeNoteUpdate"]["new_content"]
+        .as_str()
+        .expect("new_content muss ein String sein");
+    assert_secret_redacted_but_note_kept("das Ereignis an die Oberflaeche", shown);
+
+    let revisions = profile_store.note_revisions.lock().unwrap().clone();
+    assert_eq!(
+        revisions.len(),
+        1,
+        "Bestaetigung muss eine Revision anlegen"
+    );
+    assert_secret_redacted_but_note_kept("die gespeicherte Revision", &revisions[0].content);
+    assert_eq!(
+        revisions[0].content, shown,
+        "gespeichert werden muss genau das, was der Nutzer bestaetigt hat"
+    );
+}
+
+/// T9 (Spec 0096, A2): derselbe Fall ueber den Weg **beim Trennen der
+/// Sitzung** — ein eigener KI-Aufruf mit eigenem Emissionspfad
+/// (`note-update-suggested` statt `chat-action-proposed`), der die
+/// Schwaerzung deshalb eigenstaendig braucht. Scheitert gegen den Stand vor
+/// Spec 0096.
+#[tokio::test]
+async fn test_t9_spec_0096_note_proposal_on_disconnect_is_redacted_in_event_and_revision() {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![
+            note_proposal(NOTE_PROPOSAL_WITH_SECRET),
+            AiEvent::Done,
+        ]),
+        MockSshTransport::default(),
+    );
+    session
+        .context
+        .lock()
+        .await
+        .history
+        .push(command_result_message());
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let flow = suggest_note_update_on_disconnect(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &profile_store,
+        &confirmations,
+    );
+    let responder = async {
+        loop {
+            let action_id = {
+                let events = emitter.events.lock().unwrap();
+                events.iter().find_map(|(name, payload)| {
+                    (name == "note-update-suggested")
+                        .then(|| payload["actionId"].as_str().unwrap().to_string())
+                })
+            };
+            if let Some(action_id) = action_id {
+                let action_id: ActionId = action_id.parse().unwrap();
+                confirmations
+                    .resolve(&action_id, ActionUserDecision::Approve)
+                    .unwrap();
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    };
+    let (suggested, ()) = tokio::join!(flow, responder);
+    assert!(suggested, "ein Vorschlag muss emittiert worden sein");
+
+    let events = emitter.events.lock().unwrap().clone();
+    let (_, payload) = events
+        .iter()
+        .find(|(name, _)| name == "note-update-suggested")
+        .expect("note-update-suggested muss gesendet worden sein");
+    let shown = payload["action"]["ProposeNoteUpdate"]["new_content"]
+        .as_str()
+        .expect("new_content muss ein String sein");
+    assert_secret_redacted_but_note_kept("das Ereignis beim Trennen", shown);
+
+    let revisions = profile_store.note_revisions.lock().unwrap().clone();
+    assert_eq!(
+        revisions.len(),
+        1,
+        "Bestaetigung muss eine Revision anlegen"
+    );
+    assert_secret_redacted_but_note_kept("die gespeicherte Revision", &revisions[0].content);
+    assert_eq!(
+        revisions[0].content, shown,
+        "gespeichert werden muss genau das, was der Nutzer bestaetigt hat"
+    );
+}
+
+/// T11 (Spec 0096, A2): derselbe Fall ueber einen **MCP-Aufruf** eines
+/// externen Agenten. Geprueft werden das Ereignis (aus dem
+/// `app_shell::mcp_backend` das Ergebnis fuer den Client ableitet — deshalb
+/// deckt diese Zusicherung auch den Rueckweg zum Client ab) und die
+/// gespeicherte Revision. Scheitert gegen den Stand vor Spec 0096.
+#[tokio::test]
+async fn test_t11_spec_0096_note_proposal_via_mcp_is_redacted_in_event_and_revision() {
+    let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let flow = crate::orchestration::handle_mcp_action_proposed(
+        &session,
+        Uuid::new_v4(),
+        AiAction::ProposeNoteUpdate {
+            target: NoteTargetSelector::CurrentServer,
+            new_content: NOTE_PROPOSAL_WITH_SECRET.to_string(),
+        },
+        &emitter,
+        &profile_store,
+        &confirmations,
+        Some("externer-agent".to_string()),
+    );
+    tokio::join!(
+        flow,
+        approve_first_proposed_action(&emitter, &confirmations)
+    );
+
+    let events = emitter.events.lock().unwrap().clone();
+    let (_, proposed) = events
+        .iter()
+        .find(|(name, _)| name == "chat-action-proposed")
+        .expect("chat-action-proposed muss gesendet worden sein");
+    let shown = proposed["action"]["ProposeNoteUpdate"]["new_content"]
+        .as_str()
+        .expect("new_content muss ein String sein");
+    assert_secret_redacted_but_note_kept("das Ereignis aus dem MCP-Aufruf", shown);
+
+    let revisions = profile_store.note_revisions.lock().unwrap().clone();
+    assert_eq!(
+        revisions.len(),
+        1,
+        "Bestaetigung muss eine Revision anlegen"
+    );
+    assert_secret_redacted_but_note_kept("die gespeicherte Revision", &revisions[0].content);
+}
+
+/// T10 (Spec 0096, A2, letzter Satz): Besteht der Vorschlag nur aus dem
+/// Muster, bleibt nach dem Schwaerzen nichts Sinnvolles uebrig — dann
+/// entsteht gar kein Vorschlag. Der Nutzer erfaehrt aber, dass etwas
+/// verworfen wurde, statt eine stumm ausbleibende Karte zu sehen.
+///
+/// Der `tokio::time::timeout` ist kein Beiwerk: entsteht (entgegen der
+/// Anforderung) doch eine Aktionskarte, wartet `run_chat_turn` auf eine
+/// Bestaetigung, die dieser Test bewusst nie gibt — ohne den Rahmen haengt
+/// der Gegenbeweis eine Stunde (`PENDING_ACTION_CONFIRM_TIMEOUT`), statt
+/// sauber zu scheitern.
+#[tokio::test]
+async fn test_t10_spec_0096_fully_redacted_note_proposal_produces_no_proposal() {
+    let session = test_session(
+        vec![note_proposal("password=Geheim-0096"), AiEvent::Done],
+        MockSshTransport::default(),
+    );
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let finished = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &profile_store,
+            &confirmations,
+        ),
+    )
+    .await;
+    assert!(
+        finished.is_ok(),
+        "ohne Vorschlag darf der Turn auf gar keine Bestaetigung warten"
+    );
+
+    let events = emitter.events.lock().unwrap().clone();
+    assert!(
+        !events
+            .iter()
+            .any(|(name, _)| name == "chat-action-proposed"),
+        "ein vollstaendig geschwaerzter Vorschlag darf gar keine Aktionskarte erzeugen: {events:?}"
+    );
+    assert!(
+        events.iter().any(|(name, payload)| name == "chat-error"
+            && payload["message"]
+                .as_str()
+                .is_some_and(|m| m.contains("Zugangsdaten"))),
+        "der Nutzer muss erfahren, dass der Vorschlag verworfen wurde: {events:?}"
+    );
+    assert!(
+        profile_store.note_revisions.lock().unwrap().is_empty(),
+        "ohne Vorschlag darf auch nichts gespeichert werden"
+    );
+}
+
+/// T12 (Spec 0096, A2, Gegenfall zu E3): „In Notiz uebernehmen" ist **keine**
+/// KI-Erzeugung — der Nutzer waehlt die Chatzeile selbst aus. Was er selbst
+/// auswaehlt, bleibt unveraendert; sonst koennte er ein Passwort, das er
+/// bewusst in seiner Notiz festhalten will, dort gar nicht mehr ablegen.
+///
+/// Dieser Test ist der Waechter dafuer, dass die Schwaerzung aus A2 **nicht**
+/// in den gemeinsamen Pfad (`handle_action_proposed`) wandert: dort liefe
+/// dieser Weg mit derselben `ActionOrigin::Internal` mit durch.
+#[tokio::test]
+async fn test_t12_spec_0096_take_into_note_keeps_user_selected_content_unchanged() {
+    let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+    let server_id = session.server_id;
+    let emitter = TestEmitter::default();
+    let profile_store = crate::test_support::InMemoryProfileStore::new()
+        .with_server(server_with_notes(server_id, ""));
+    let confirmations = ConfirmationRegistry::new();
+
+    let flow = propose_note_from_chat_content(
+        &session,
+        Uuid::new_v4(),
+        "password=Geheim-0096".to_string(),
+        &emitter,
+        &profile_store,
+        &confirmations,
+    );
+    tokio::join!(
+        async {
+            flow.await;
+        },
+        approve_first_proposed_action(&emitter, &confirmations)
+    );
+
+    let revisions = profile_store.note_revisions.lock().unwrap().clone();
+    assert_eq!(revisions.len(), 1, "die Revision muss angelegt werden");
+    assert_eq!(
+        revisions[0].content, "password=Geheim-0096",
+        "vom Nutzer selbst ausgewaehlter Inhalt bleibt unveraendert (Spec 0096, E3)"
+    );
+}

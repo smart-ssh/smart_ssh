@@ -722,6 +722,24 @@ pub async fn handle_mcp_action_proposed(
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
     client_name: Option<String>,
 ) -> bool {
+    // Spec 0096, A2: der dritte der drei KI-Wege — ein externer Agent über
+    // MCP. Geschwärzt wird hier, vor `handle_action_proposed`, damit sowohl
+    // der Bestätigungsdialog in der App als auch das daraus abgeleitete
+    // Ergebnis an den MCP-Client (s. `app_shell::mcp_backend::CaptureEmitter`)
+    // dieselbe geschwärzte Fassung sehen wie die gespeicherte Revision.
+    let Some(action) = super::notes::redact_note_proposal(action, session.redactor.as_ref()) else {
+        return emit_action_error(
+            session,
+            emitter,
+            session_id,
+            super::notes::NOTE_PROPOSAL_FULLY_REDACTED_MESSAGE.to_string(),
+            None,
+            // MCP-Herkunft schreibt nie in die persistierte Historie — s.
+            // `handle_action_proposed`s `persist`-Ableitung.
+            false,
+        )
+        .await;
+    };
     handle_action_proposed(
         session,
         session_id,
