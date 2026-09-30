@@ -207,7 +207,24 @@ const CMD_ARGS: &str = r"(?:(?:[ \t]|\\\r?\n)+[^\s;|&<>]+){0,12}?";
 /// Spec 0095 war das keine Verschlechterung, aber schlechter als nichts zu
 /// tun: ein irreführender Platzhalter ist gefährlicher als ein sichtbares
 /// Geheimnis.
-const CMD_VALUE: &str = r#"(?:\\\r?\n|\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^ \t\r\n;|&<>'"\\]+)+"#;
+/// `\s` steht bewusst **nicht** in der freien Klasse: in der `regex`-Crate ist
+/// das Unicode-`White_Space` und enthält U+00A0 & Co. Für die Shell ist ein
+/// geschütztes Leerzeichen kein Trenner, es gehört zum Wort — der Wert endete
+/// dort trotzdem und `mysql -pSEC<U+00A0>RET` wurde zu
+/// `mysql [REDACTED]<U+00A0>RET` (spec-reviewer-Fund, Runde 2, gemessen).
+/// Ausgeschlossen sind deshalb genau die vier Zeichen, die für die Shell
+/// wirklich trennen.
+///
+/// **Mindestens ein echter Abschnitt** ist Pflicht (die Mitte des Ausdrucks):
+/// Ein Wert, der nur aus einer Zeilenfortsetzung besteht, erzeugte sonst einen
+/// Platzhalter, wo nichts redigiert wurde — `mysql -p\` + Umbruch + `   mydb`
+/// wurde zu `mysql [REDACTED]   mydb`, obwohl `mydb` laut §1.4 der
+/// Datenbankname ist (Fund des `regression-guard`, gemessen).
+const CMD_VALUE: &str = concat!(
+    r"(?:\\\r?\n)*",
+    r#"(?:\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^ \t\r\n;|&<>'"\\]+)"#,
+    r#"(?:\\\r?\n|\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^ \t\r\n;|&<>'"\\]+)*"#,
+);
 
 /// Trenner zwischen Programmname, Schalter und Wert: Leerraum **oder** die
 /// Shell-Zeilenfortsetzung `\` + Zeilenumbruch. `CMD_SEP` verlangt mindestens
@@ -220,6 +237,23 @@ const CMD_VALUE: &str = r#"(?:\\\r?\n|\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^ \t\r\
 /// das Passwort in der Folgezeile im Klartext stehen (spec-reviewer-Fund 2,
 /// Runde 1, gemessen). Ein gewöhnlicher Zeilenumbruch bleibt weiterhin eine
 /// Grenze.
+/// Derselbe Wert wie [`CMD_VALUE`], aber der **erste** Abschnitt darf nicht mit
+/// `[` beginnen — er darf also nicht auf einem schon geschriebenen
+/// `[REDACTED]` aufsetzen.
+///
+/// Nur für die ZWEITE Anwendung der Kommandozeilen-Regeln (s.
+/// [`built_in_patterns`]). Ohne diese Einschränkung reproduzierte der zweite
+/// Durchlauf denselben Treffer wie der erste — `replace_all` nimmt den
+/// linkesten, und `[REDACTED]` ist selbst ein gültiger Wert —, setzte danach
+/// an derselben Stelle wieder auf und kam nie beim zweiten Geheimnis an
+/// (gemessen). Die erste Anwendung benutzt weiter [`CMD_VALUE`] ohne diese
+/// Einschränkung, es geht also keine Abdeckung verloren.
+const CMD_VALUE_AFTER_PLACEHOLDER: &str = concat!(
+    r"(?:\\\r?\n)*",
+    r#"(?:\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^ \t\r\n;|&<>'"\\\[]+)"#,
+    r#"(?:\\\r?\n|\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^ \t\r\n;|&<>'"\\]+)*"#,
+);
+
 const CMD_SEP: &str = r"(?:[ \t]|\\\r?\n)+";
 const CMD_GAP: &str = r"(?:[ \t]|\\\r?\n)*";
 
@@ -236,7 +270,7 @@ const CMD_CONT: &str = r"(?:\\\r?\n)*";
 const HT_OPT: &str = r"(?:(?:[ \t]|\\\r?\n)+-[A-Za-z]+(?:(?:[ \t]|\\\r?\n)+\d+)?)";
 
 fn built_in_patterns() -> Vec<PatternRule> {
-    vec![
+    let mut patterns: Vec<PatternRule> = vec![
         // Spec 0078 §9 (Q-BL-0248-02, Fund des regression-guard, gemessen):
         // KOPIEN der vier Schlüsselmuster ganz am Anfang der Liste. Die
         // Originale bleiben wörtlich an ihrer Stelle weiter unten; hier
@@ -1069,6 +1103,40 @@ fn built_in_patterns() -> Vec<PatternRule> {
             .expect("eingebautes URL-Muster mit @ in den Zugangsdaten ist gültig"),
             replacement: "${scheme}://${user}:[REDACTED]@",
         },
+    ];
+    // Spec 0095, A1: die Kommandozeilen-Regeln **zweimal** anhängen, wörtlich
+    // gleich. Dasselbe Mittel, mit dem schon die Query-Parameter-Regel zweimal
+    // läuft (s. dort) und aus demselben Grund.
+    //
+    // `replace_all` sucht nicht überlappend und setzt hinter einem Treffer
+    // wieder auf. Verschluckt ein Wert den **Anker des nächsten Treffers**,
+    // entfällt dieser — das zweite Geheimnis bleibt im Klartext neben dem
+    // Platzhalter stehen. Gemessen (Fund des `regression-guard`):
+    // `mysql -pA<U+00A0>mysql -pGeheim` wurde zu
+    // `mysql [REDACTED] -pGeheim`, weil das zweite `mysql` Teil des ersten
+    // Werts war (U+00A0 ist für die Shell kein Trenner, der Wert reicht also
+    // zu Recht darüber hinweg).
+    //
+    // Dieselbe Lücke gab es unabhängig davon bei **zwei Passwort-Schaltern in
+    // einem Aufruf** (`mysql -pA -pGeheim`): der zweite hat keinen
+    // Programmnamen mehr vor sich. Auch das schließt der zweite Durchlauf, er
+    // ist also nicht bloß eine Reparatur, sondern zusätzliche Abdeckung.
+    //
+    // Nach dem ersten Durchlauf steht an der Stelle des ersten Werts
+    // `[REDACTED]`, und der zweite Durchlauf findet den freigelegten Anker.
+    // Drei und mehr Vorkommen in einer Kette brauchten je einen weiteren
+    // Durchlauf — dieselbe bewusste Grenze wie bei der Query-Parameter-Regel.
+    patterns.extend(command_line_password_patterns(CMD_VALUE));
+    patterns.extend(htpasswd_patterns(CMD_VALUE));
+    patterns.extend(command_line_password_patterns(CMD_VALUE_AFTER_PLACEHOLDER));
+    patterns
+}
+
+/// Die Regeln aus Spec 0095, A1 — Passwörter als Argument eines
+/// Kommandozeilenprogramms. Eigene Funktion, weil
+/// [`built_in_patterns`] sie **zweimal** anhängt (s. dort).
+fn command_line_password_patterns(value: &str) -> Vec<PatternRule> {
+    vec![
         // --- Spec 0095, A1: Passwörter als Argument eines
         // Kommandozeilenprogramms -------------------------------------------
         //
@@ -1111,7 +1179,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // `mysql -P3306 -h db` den Port geschwärzt (Spec 0095, T12).
         keep_head(
             &format!(
-                r"(?P<head>\b(?i:mysqldump|mysqladmin|mysql|mariadb)\b{CMD_ARGS}{CMD_SEP}-p{CMD_CONT})(?:{CMD_VALUE})"
+                r"(?P<head>\b(?i:mysqldump|mysqladmin|mysql|mariadb)\b{CMD_ARGS}{CMD_SEP}-p{CMD_CONT})(?:{value})"
             ),
             "eingebautes mysql-Passwortargument-Muster ist gültig",
         ),
@@ -1125,7 +1193,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // `sshpass` stehen ohnehin alle vor dem auszuführenden Kommando.
         keep_head(
             &format!(
-                r"(?P<head>\b(?i:sshpass)\b(?:{CMD_SEP}-[A-Za-z][^\s;|&<>]*){{0,6}}?{CMD_SEP}-p{CMD_GAP})(?:{CMD_VALUE})"
+                r"(?P<head>\b(?i:sshpass)\b(?:{CMD_SEP}-[A-Za-z][^\s;|&<>]*){{0,6}}?{CMD_SEP}-p{CMD_GAP})(?:{value})"
             ),
             "eingebautes sshpass-Passwortargument-Muster ist gültig",
         ),
@@ -1160,10 +1228,87 @@ fn built_in_patterns() -> Vec<PatternRule> {
         ),
         keep_head(
             &format!(
-                r#"(?P<head>\b(?i:curl)\b{CMD_ARGS}{CMD_SEP}(?:-[A-Za-z]*u|--user)=?{CMD_GAP}[^\s:;|&<>'"]*:)(?:{CMD_VALUE})"#
+                r#"(?P<head>\b(?i:curl)\b{CMD_ARGS}{CMD_SEP}(?:-[A-Za-z]*u|--user)=?{CMD_GAP}[^\s:;|&<>'"]*:)(?:{value})"#
             ),
             "eingebautes curl-Basic-Auth-Muster ist gültig",
         ),
+        // A1.5 `redis-cli -a <wert>` / `--pass <wert>` (auch angehängt).
+        keep_head(
+            &format!(
+                r"(?P<head>\b(?i:redis-cli)\b{CMD_ARGS}{CMD_SEP}(?:-a|--pass(?:=|{CMD_SEP}))=?{CMD_GAP})(?:{value})"
+            ),
+            "eingebautes redis-cli-Passwortargument-Muster ist gültig",
+        ),
+        // A1.6 `smbclient`/`rpcclient`: `-U user%passwort`. Das `%` ist der
+        // Trenner, es bleibt (wie das `:` bei curl) im `head` stehen.
+        keep_head_quoted(
+            &format!(
+                r"(?P<head>\b(?i:smbclient|rpcclient)\b{CMD_ARGS}{CMD_SEP}(?:-U|--user)=?{CMD_GAP}'[^'%\r\n]*%)[^'\r\n]*'"
+            ),
+            "${head}[REDACTED]'",
+            "eingebautes smbclient-Muster (einfache Quotes) ist gültig",
+        ),
+        keep_head_quoted(
+            &format!(
+                r#"(?P<head>\b(?i:smbclient|rpcclient)\b{CMD_ARGS}{CMD_SEP}(?:-U|--user)=?{CMD_GAP}"[^"%\r\n]*%)[^"\r\n]*""#
+            ),
+            "${head}[REDACTED]\"",
+            "eingebautes smbclient-Muster (doppelte Quotes) ist gültig",
+        ),
+        keep_head(
+            &format!(
+                r#"(?P<head>\b(?i:smbclient|rpcclient)\b{CMD_ARGS}{CMD_SEP}(?:-U|--user)=?{CMD_GAP}[^\s%;|&<>'"]*%)(?:{value})"#
+            ),
+            "eingebautes smbclient-Muster ist gültig",
+        ),
+        // A1.7 `openssl`: bei `-pass`/`-passin`/`-passout` ist nur die Form
+        // `pass:<wert>` das Passwort selbst — `env:`, `file:`, `fd:` und
+        // `stdin` benennen eine QUELLE und bleiben lesbar (Spec 0095, T12).
+        // Deshalb ist `pass:` hier Pflicht.
+        keep_head_quoted(
+            &format!(
+                r"(?P<head>\b(?i:openssl)\b{CMD_ARGS}{CMD_SEP}-pass(?:in|out)?=?{CMD_GAP}'pass:)[^'\r\n]*'"
+            ),
+            "${head}[REDACTED]'",
+            "eingebautes openssl-pass-Muster (einfache Quotes) ist gültig",
+        ),
+        keep_head_quoted(
+            &format!(
+                r#"(?P<head>\b(?i:openssl)\b{CMD_ARGS}{CMD_SEP}-pass(?:in|out)?=?{CMD_GAP}"pass:)[^"\r\n]*""#
+            ),
+            "${head}[REDACTED]\"",
+            "eingebautes openssl-pass-Muster (doppelte Quotes) ist gültig",
+        ),
+        keep_head(
+            &format!(
+                r#"(?P<head>\b(?i:openssl)\b{CMD_ARGS}{CMD_SEP}-pass(?:in|out)?=?{CMD_GAP}pass:)(?:{value})"#
+            ),
+            "eingebautes openssl-pass-Muster ist gültig",
+        ),
+        // `openssl … -k <wert>`: hier ist der Wert die Passphrase selbst
+        // (`openssl enc -help`: „-k val  Passphrase", gemessen mit
+        // OpenSSL 3.6.3). Der hinter `-k` verlangte [`CMD_SEP`] (Leerraum
+        // oder Zeilenfortsetzung, mindestens einer) hält `-keyform`/`-key`
+        // heraus — beides benennt eine Datei.
+        keep_head(
+            &format!(r"(?P<head>\b(?i:openssl)\b{CMD_ARGS}{CMD_SEP}-k{CMD_SEP})(?:{value})"),
+            "eingebautes openssl-k-Muster ist gültig",
+        ),
+    ]
+}
+
+/// Die beiden `htpasswd`-Regeln aus Spec 0095, A1.4 — getrennt von
+/// [`command_line_password_patterns`], weil sie **nur einmal** laufen dürfen.
+///
+/// Sie zählen Positionsargumente, und ein zweiter Durchlauf verschiebt diese
+/// Zählung: Nach der ersten Redaktion fand die Dreipositionsregel bei
+/// `htpasswd -bB -C 12 f user [REDACTED]` eine andere, ebenfalls gültige
+/// Lesart (`-C` ohne Zahlenwert, `12` als erstes Positionsargument) und
+/// schwärzte `user` mit (gemessen). Der Grund für den zweiten Durchlauf —
+/// zwei Passwort-Schalter in einem Aufruf — gibt es bei `htpasswd` ohnehin
+/// nicht: es nimmt genau ein Passwort.
+fn htpasswd_patterns(value: &str) -> Vec<PatternRule> {
+    vec![
         // A1.4 `htpasswd` mit einem Schalterblock, der `b` enthält (nur dann
         // steht das Passwort überhaupt auf der Kommandozeile; ohne `-b` fragt
         // `htpasswd` interaktiv). Gemessen an der Usage-Ausgabe (Spec 0095
@@ -1194,77 +1339,15 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // Trennzeichen sind aus allen Zeichenklassen ausgeschlossen.
         keep_head(
             &format!(
-                r"(?P<head>\b(?i:htpasswd)\b{HT_OPT}*?(?:{CMD_SEP}-(?:[A-Za-z]*b[A-Za-z]*n[A-Za-z]*|[A-Za-z]*n[A-Za-z]*b[A-Za-z]*)|{CMD_SEP}-[A-Za-z]*n[A-Za-z]*{HT_OPT}*?{CMD_SEP}-[A-Za-z]*b[A-Za-z]*|{CMD_SEP}-[A-Za-z]*b[A-Za-z]*{HT_OPT}*?{CMD_SEP}-[A-Za-z]*n[A-Za-z]*){HT_OPT}*{CMD_SEP}[^\s;|&<>]+{CMD_SEP})(?:{CMD_VALUE})"
+                r"(?P<head>\b(?i:htpasswd)\b{HT_OPT}*?(?:{CMD_SEP}-(?:[A-Za-z]*b[A-Za-z]*n[A-Za-z]*|[A-Za-z]*n[A-Za-z]*b[A-Za-z]*)|{CMD_SEP}-[A-Za-z]*n[A-Za-z]*{HT_OPT}*?{CMD_SEP}-[A-Za-z]*b[A-Za-z]*|{CMD_SEP}-[A-Za-z]*b[A-Za-z]*{HT_OPT}*?{CMD_SEP}-[A-Za-z]*n[A-Za-z]*){HT_OPT}*{CMD_SEP}[^\s;|&<>]+{CMD_SEP})(?:{value})"
             ),
             "eingebautes htpasswd-Muster (mit -n) ist gültig",
         ),
         keep_head(
             &format!(
-                r"(?P<head>\b(?i:htpasswd)\b{HT_OPT}*?{CMD_SEP}-[A-Za-z]*b[A-Za-z]*{HT_OPT}*{CMD_SEP}[^\s;|&<>]+{CMD_SEP}[^\s;|&<>]+{CMD_SEP})(?:{CMD_VALUE})"
+                r"(?P<head>\b(?i:htpasswd)\b{HT_OPT}*?{CMD_SEP}-[A-Za-z]*b[A-Za-z]*{HT_OPT}*{CMD_SEP}[^\s;|&<>]+{CMD_SEP}[^\s;|&<>]+{CMD_SEP})(?:{value})"
             ),
             "eingebautes htpasswd-Muster ist gültig",
-        ),
-        // A1.5 `redis-cli -a <wert>` / `--pass <wert>` (auch angehängt).
-        keep_head(
-            &format!(
-                r"(?P<head>\b(?i:redis-cli)\b{CMD_ARGS}{CMD_SEP}(?:-a{CMD_GAP}|--pass(?:=|{CMD_SEP})))(?:{CMD_VALUE})"
-            ),
-            "eingebautes redis-cli-Passwortargument-Muster ist gültig",
-        ),
-        // A1.6 `smbclient`/`rpcclient`: `-U user%passwort`. Das `%` ist der
-        // Trenner, es bleibt (wie das `:` bei curl) im `head` stehen.
-        keep_head_quoted(
-            &format!(
-                r"(?P<head>\b(?i:smbclient|rpcclient)\b{CMD_ARGS}{CMD_SEP}(?:-U|--user)=?{CMD_GAP}'[^'%\r\n]*%)[^'\r\n]*'"
-            ),
-            "${head}[REDACTED]'",
-            "eingebautes smbclient-Muster (einfache Quotes) ist gültig",
-        ),
-        keep_head_quoted(
-            &format!(
-                r#"(?P<head>\b(?i:smbclient|rpcclient)\b{CMD_ARGS}{CMD_SEP}(?:-U|--user)=?{CMD_GAP}"[^"%\r\n]*%)[^"\r\n]*""#
-            ),
-            "${head}[REDACTED]\"",
-            "eingebautes smbclient-Muster (doppelte Quotes) ist gültig",
-        ),
-        keep_head(
-            &format!(
-                r#"(?P<head>\b(?i:smbclient|rpcclient)\b{CMD_ARGS}{CMD_SEP}(?:-U|--user)=?{CMD_GAP}[^\s%;|&<>'"]*%)(?:{CMD_VALUE})"#
-            ),
-            "eingebautes smbclient-Muster ist gültig",
-        ),
-        // A1.7 `openssl`: bei `-pass`/`-passin`/`-passout` ist nur die Form
-        // `pass:<wert>` das Passwort selbst — `env:`, `file:`, `fd:` und
-        // `stdin` benennen eine QUELLE und bleiben lesbar (Spec 0095, T12).
-        // Deshalb ist `pass:` hier Pflicht.
-        keep_head_quoted(
-            &format!(
-                r"(?P<head>\b(?i:openssl)\b{CMD_ARGS}{CMD_SEP}-pass(?:in|out)?=?{CMD_GAP}'pass:)[^'\r\n]*'"
-            ),
-            "${head}[REDACTED]'",
-            "eingebautes openssl-pass-Muster (einfache Quotes) ist gültig",
-        ),
-        keep_head_quoted(
-            &format!(
-                r#"(?P<head>\b(?i:openssl)\b{CMD_ARGS}{CMD_SEP}-pass(?:in|out)?=?{CMD_GAP}"pass:)[^"\r\n]*""#
-            ),
-            "${head}[REDACTED]\"",
-            "eingebautes openssl-pass-Muster (doppelte Quotes) ist gültig",
-        ),
-        keep_head(
-            &format!(
-                r#"(?P<head>\b(?i:openssl)\b{CMD_ARGS}{CMD_SEP}-pass(?:in|out)?=?{CMD_GAP}pass:)(?:{CMD_VALUE})"#
-            ),
-            "eingebautes openssl-pass-Muster ist gültig",
-        ),
-        // `openssl … -k <wert>`: hier ist der Wert die Passphrase selbst
-        // (`openssl enc -help`: „-k val  Passphrase", gemessen mit
-        // OpenSSL 3.6.3). Der hinter `-k` verlangte [`CMD_SEP`] (Leerraum
-        // oder Zeilenfortsetzung, mindestens einer) hält `-keyform`/`-key`
-        // heraus — beides benennt eine Datei.
-        keep_head(
-            &format!(r"(?P<head>\b(?i:openssl)\b{CMD_ARGS}{CMD_SEP}-k{CMD_SEP})(?:{CMD_VALUE})"),
-            "eingebautes openssl-k-Muster ist gültig",
         ),
     ]
 }

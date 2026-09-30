@@ -2606,3 +2606,93 @@ fn test_redactor_known_over_redaction_of_a_fourth_htpasswd_argument() {
         "bei der Mischform darf kein Geheimnis übrig bleiben: {mixed}"
     );
 }
+
+/// regression-guard-Fund (nach Runde 2, gemessen): Der verbreiterte Wert
+/// konnte den **Programmnamen des nächsten Treffers** mitschlucken.
+/// `replace_all` setzt hinter einem Treffer wieder auf — ist der Anker der
+/// nächsten Regel innerhalb des Treffers gelandet, entfällt sie, und das
+/// zweite Geheimnis bleibt im Klartext neben dem Platzhalter stehen.
+///
+/// Dieselbe Lücke gab es unabhängig davon schon bei **zwei `-p`-Schaltern in
+/// einem Aufruf** (`mysql -pA -pSECRET`): der zweite hat keinen Programmnamen
+/// mehr vor sich. Beides schließt die zweite Anwendung derselben Regeln
+/// (dasselbe Mittel wie bei der Query-Parameter-Regel, s. `redactor.rs`).
+///
+/// Gegenbeweis: gegen den Stand vor dieser Nachbesserung rot.
+#[test]
+fn test_t11_0095_a_second_password_keeps_its_anchor() {
+    for input in [
+        "mysql -pA\u{a0}mysql -pGeheim-0095",
+        "mysql -pA\\\nmysql -pGeheim-0095",
+        "mysql -pA -pGeheim-0095",
+        "sshpass -pA ssh h; sshpass -p Geheim-0095 ssh h2",
+        "curl -u a:A https://x && curl -u b:Geheim-0095 https://y",
+    ] {
+        assert_password_redacted(input, &[SECRET_0095], &[]);
+    }
+}
+
+/// Grenze des zweiten Durchlaufs, bewusst so (Fund des `regression-guard`,
+/// gemessen): Verschluckt ein Wert den Anker einer **anderen** Regel, hilft
+/// der zweite Durchlauf nicht — der Anker ist ersetzt, nicht übersprungen.
+///
+/// Dass das hinnehmbar ist, liegt an der Shell-Lesart: U+00A0 und die
+/// Zeilenfortsetzung trennen keine Wörter. In
+/// `mysql -pA<U+00A0>redis-cli -a X` ist `A<U+00A0>redis-cli` **das
+/// Passwort** von `mysql`, und `-a X` sind weitere Argumente desselben
+/// Aufrufs — `-a` ist bei `mysql` kein Passwort-Schalter. Es steht dort also
+/// kein zweites Geheimnis, das übersehen würde. Der Stand vor dem zweiten
+/// Durchlauf hat `X` mitgeschwärzt, weil er `redis-cli` für einen
+/// Programmnamen hielt; das war eine Über-Redaktion, die zufällig richtig
+/// aussah.
+///
+/// Festgehalten, damit die Stelle bei einer späteren Änderung nicht für einen
+/// Fehler gehalten wird.
+#[test]
+fn test_redactor_known_limit_when_a_value_swallows_another_rules_anchor() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("mysql -pA\u{a0}redis-cli -a Geheim-0095"),
+        "mysql [REDACTED] -a Geheim-0095"
+    );
+}
+
+/// regression-guard-Fund (nach Runde 2, gemessen): Die Verengung des
+/// `redis-cli`-Schalters auf ein vollständiges Token hat die Form `-a=<wert>`
+/// mit Leerzeichen hinter dem `=` verloren.
+#[test]
+fn test_t5_0095_redis_accepts_an_equals_sign_with_and_without_space() {
+    for input in [
+        "redis-cli -a=Geheim-0095",
+        "redis-cli -a= Geheim-0095",
+        "redis-cli --pass= Geheim-0095",
+        "redis-cli --pass 'Geheim-0095'",
+    ] {
+        assert_password_redacted(input, &[SECRET_0095], &["redis-cli"]);
+    }
+}
+
+/// regression-guard-Vermutung (nach Runde 2, gemessen): Ein Wert, der **nur**
+/// aus einer Zeilenfortsetzung besteht, erzeugte einen Platzhalter, wo nichts
+/// redigiert wurde: `mysql -p\` ⏎ `   Geheim` wurde zu
+/// `mysql [REDACTED]   Geheim`. Bei `mysql -p` + Leerraum ist das Folgewort
+/// laut Spec 0095 §1.4 der Datenbankname, es leakt also kein Geheimnis — aber
+/// die Zeile behauptet eine Redaction, die nicht stattfand. Der Wert verlangt
+/// jetzt mindestens einen echten Abschnitt.
+#[test]
+fn test_t12_0095_a_value_made_only_of_a_line_continuation_is_not_a_value() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for harmless in [
+        "mysql -p\\\n   mydb",
+        "sshpass -p \\\n",
+        "redis-cli -a \\\n",
+    ] {
+        assert_eq!(
+            redactor.redact_text(harmless),
+            harmless,
+            "kein Platzhalter ohne redigierten Wert: {harmless:?}"
+        );
+    }
+}

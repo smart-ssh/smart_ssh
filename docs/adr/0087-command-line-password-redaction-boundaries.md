@@ -90,7 +90,44 @@ Als Leitlinie für künftige Muster: Eine Regel, die einen Wert nur bis zu
 einem Zeichen erfassen kann, das für die Shell **kein** Wortende ist, ist
 schlechter als keine Regel.
 
-### 4. Offen gelassen, mit Grund
+### 4. Die Kommandozeilen-Regeln laufen zweimal
+
+`replace_all` sucht nicht überlappend und setzt hinter einem Treffer wieder
+auf. Daraus folgen zwei Lücken, die ein einzelner Durchlauf nicht schließen
+kann:
+
+- **Zwei Passwort-Schalter in einem Aufruf.** `mysql -pA -pGeheim` — der
+  zweite `-p` hat keinen Programmnamen mehr vor sich.
+- **Ein Wert, der den Anker des nächsten Treffers verschluckt.** Weil U+00A0
+  und die Zeilenfortsetzung für die Shell keine Wortgrenzen sind, reicht ein
+  Wert zu Recht darüber hinweg — und nimmt dabei ein folgendes `mysql` mit.
+
+Beide schließt eine zweite, wörtlich gleiche Anwendung derselben Regeln —
+dasselbe Mittel, mit dem im Redactor schon die Query-Parameter-Regel zweimal
+läuft, und aus demselben Grund. Zwei Einschränkungen gehören dazu:
+
+- Die zweite Anwendung darf ihren Wert **nicht mit `[` beginnen** lassen.
+  Sonst reproduziert sie den Treffer der ersten (`[REDACTED]` ist selbst ein
+  gültiger Wert), setzt an derselben Stelle wieder auf und kommt nie beim
+  zweiten Geheimnis an. Die erste Anwendung bleibt uneingeschränkt, es geht
+  also keine Abdeckung verloren.
+- Die beiden `htpasswd`-Regeln laufen **nur einmal**. Sie zählen
+  Positionsargumente, und nach der ersten Redaktion findet die
+  Dreipositionsregel eine andere, ebenfalls gültige Lesart und schwärzt das
+  Benutzerkonto mit. Der Grund für den zweiten Durchlauf gibt es dort
+  ohnehin nicht: `htpasswd` nimmt genau ein Passwort.
+
+**Grenze, bewusst:** Verschluckt ein Wert den Anker einer **anderen** Regel,
+hilft der zweite Durchlauf nicht — der Anker ist ersetzt, nicht übersprungen.
+Hinnehmbar, weil die Shell-Lesart dort kein zweites Geheimnis sieht: in
+`mysql -pA<U+00A0>redis-cli -a X` ist `A<U+00A0>redis-cli` das Passwort von
+`mysql`, und `-a X` sind weitere Argumente desselben Aufrufs. Test
+`test_redactor_known_limit_when_a_value_swallows_another_rules_anchor`.
+
+Drei und mehr Vorkommen in einer Kette bräuchten je einen weiteren Durchlauf
+— dieselbe bewusste Grenze wie bei der Query-Parameter-Regel.
+
+### 5. Offen gelassen, mit Grund
 
 - **`mysql -p <wert>` / `--password <wert>` mit Leerzeichen** und
   `ssh -p <port>` — dort ist im Text gar kein Passwort erkennbar: ohne
@@ -109,13 +146,13 @@ schlechter als keine Regel.
 - **Kein generisches Hoch-Entropie-Fallback.** Jedes neue Muster ist über
   einen eindeutigen Präfix, Schlüsselnamen oder Programmnamen verankert.
 
-### 5. Die Spec-0094-Log-Tests wechseln die Geheimnis-Form, nicht ihre Aussage
+### 6. Die Spec-0094-Log-Tests wechseln die Geheimnis-Form, nicht ihre Aussage
 
 Neun Tests in vier Crates belegen, dass ein Kommandotext ab `info` nicht
 mehr im Log steht. Sie trugen das Geheimnis bewusst in einer Form, die der
 Redactor nicht kannte — sonst wäre ihr Grün auch durch die Redaction
 erklärbar. Spec 0095 bringt genau diese Formen bei, also wechseln die Tests
-auf `mysql -u root -p <wert>` (Entscheidung 4, erster Punkt). Ihre Aussage
+auf `mysql -u root -p <wert>` (Entscheidung 5, erster Punkt). Ihre Aussage
 bleibt: gemessen scheitern alle neun weiter gegen einen Stand, der den
 Kommandotext wieder auf `info` schreibt.
 
@@ -133,6 +170,10 @@ Coder-Entscheidung — hier nur vermerkt.
   Geheimnis stand (Entscheidung 2). Filter-Engine und Risiko-Einstufung
   sehen weiter das Original.
 - Laufzeit von `redact_text` auf 1 MB ohne einen einzigen Treffer, gemessen
-  mit einer Eingabe, die alle neuen Ankerwörter trägt: 7,6 ms → 28,1 ms
-  (Release), 269 ms → 584 ms (Debug). Linear, kein Backtracking; die
-  `regex`-Crate sucht alle Muster ohne Rückverfolgung.
+  mit einer Eingabe, die alle neuen Ankerwörter trägt: 7,6 ms → 43,5 ms
+  (Release), 269 ms → 842 ms (Debug). Der größte Einzelposten ist die zweite
+  Anwendung aus Entscheidung 4: sie verdoppelt die Suchläufe der
+  Kommandozeilen-Regeln. Linear, kein Backtracking; die `regex`-Crate sucht
+  ohne Rückverfolgung. Der Redactor läuft auf Kommandoausgaben bis 2 MB, das
+  sind also ~87 ms je Ausgabe im Release-Bau — spürbar, aber nicht auf dem
+  Eingabepfad der Oberfläche.
