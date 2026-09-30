@@ -83,11 +83,20 @@ impl Default for DefaultOutputRedactor {
 /// Spec 0094, A2: der Redactor für die `debug`-Zeilen, die den Inhalt
 /// tragen, den A1 aus `info`/`warn`/`error` entfernt — an den Stellen, an
 /// denen kein Session-Redactor erreichbar ist (`filter::engine`,
-/// `ai_providers::request_logging`, `mcp_server::tool_server`). Derselbe
-/// Musterstand wie `Session::redactor`, weil es dieselbe Konstruktion ist
-/// ([`DefaultOutputRedactor::new`]); nutzerdefinierte Zusatzmuster
-/// ([`DefaultOutputRedactor::with_extra_patterns`]) kennt dieser Weg nicht,
-/// die gibt es bislang an keiner Stelle.
+/// `ai_providers::request_logging`, `mcp_server::tool_server`).
+///
+/// **Schwächer als der Redactor einer Sitzung, und das ist zu wissen
+/// wichtig** (spec-reviewer-Fund, Runde 1 zu Spec 0094): Hier laufen nur
+/// die eingebauten Muster ([`DefaultOutputRedactor::new`]). Der
+/// Session-Redactor wird dagegen mit
+/// [`DefaultOutputRedactor::with_extra_patterns`] gebaut und kennt
+/// zusätzlich das **Sudo-Passwort dieses Servers**
+/// (`app_shell::commands::connect`, `app_shell::commands::notes`). Ein
+/// Kommando, das genau dieses Passwort enthält, bleibt auf einer
+/// `debug`-Zeile, die über diesen Weg redigiert wird, im Klartext stehen.
+/// Gegenüber dem Stand vor Spec 0094 ist das trotzdem eine Verbesserung —
+/// dort stand derselbe Text roh auf `info` —, aber wer eine neue
+/// Inhaltszeile ergänzt, nimmt den Session-Redactor, wo er erreichbar ist.
 ///
 /// **Genau eine Instanz pro Prozess**, weil A2 es verlangt und weil der
 /// Grund dafür handfest ist: `new()` übersetzt bei jedem Aufruf sämtliche

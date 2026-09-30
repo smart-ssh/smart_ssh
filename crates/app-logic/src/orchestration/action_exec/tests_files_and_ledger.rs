@@ -1277,6 +1277,16 @@ fn test_t9_0094_execution_content_moves_to_a_redacted_debug_line() {
         "ein dem Redactor bekanntes Geheimnis darf auch auf debug nicht im Klartext stehen: \
          {content_line}"
     );
+    // spec-reviewer-Fund (Runde 1): Ohne diese positive Zusicherung wäre der
+    // Test auch dann grün, wenn die debug-Zeile `stdout` gar nicht mehr
+    // führte — die Aussage „auf debug steht der Inhalt, dort redigiert" wäre
+    // damit halbiert. Die Parallel-Tests in `core` und `mcp-server` haben
+    // sie, hier fehlte sie.
+    assert!(
+        content_line.contains("REDACTED"),
+        "der Redaction-Platzhalter muss auf der debug-Zeile stehen, also muss sie die \
+         Ausgabe überhaupt tragen: {content_line}"
+    );
 }
 
 /// Spec 0034, Abschnitt 4 ("jede Nachricht ... wird fortlaufend

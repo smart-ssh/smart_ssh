@@ -32,9 +32,24 @@ fn truncate_logged_body(redacted: &str) -> String {
     if redacted.chars().count() <= MAX_LOGGED_BODY_LEN {
         return redacted.to_string();
     }
-    let head: String = redacted.chars().take(MAX_LOGGED_BODY_LEN).collect();
-    format!("{head}… (gekürzt, vollständig nur auf debug)")
+    // Der Hinweis zählt zu den 512 Zeichen, statt sie zu überschreiten:
+    // A1.5 sagt „auf höchstens 512 Zeichen gekürzt" über das, was im Log
+    // steht. spec-reviewer-Fund (Runde 1): vorher wurde er angehängt, das
+    // Feld war damit ~549 Zeichen lang und der Test las die Grenze
+    // stillschweigend als „512 Zeichen des Körpers" statt als „512 Zeichen
+    // im Feld". Lieber etwas weniger Körper als eine Grenze, die nicht die
+    // ist, die in der Spec steht.
+    let head: String = redacted
+        .chars()
+        .take(MAX_LOGGED_BODY_LEN - TRUNCATION_MARKER.chars().count())
+        .collect();
+    format!("{head}{TRUNCATION_MARKER}")
 }
+
+/// Ersetzt den abgeschnittenen Rest in [`truncate_logged_body`]. Muss kürzer
+/// als [`MAX_LOGGED_BODY_LEN`] sein — dafür sorgt
+/// `test_truncation_marker_fits_into_the_limit`.
+const TRUNCATION_MARKER: &str = "… (gekürzt, vollständig nur auf debug)";
 
 /// Spec 0094, A2: Muster-basierte Redaction für die `debug`-Zeilen, die den
 /// Inhalt tragen, den A1 aus den Zeilen ab `info` entfernt. In dieser Crate
@@ -848,15 +863,28 @@ mod error_logging_tests {
         let logged_body = parsed["fields"]["body"]
             .as_str()
             .expect("body-Feld muss ein String sein");
-        let a_count = logged_body.chars().filter(|c| *c == 'A').count();
-        assert_eq!(
-            a_count, MAX_LOGGED_BODY_LEN,
-            "A1.5: höchstens {MAX_LOGGED_BODY_LEN} Zeichen des body, war {a_count}"
+        assert!(
+            logged_body.chars().count() <= MAX_LOGGED_BODY_LEN,
+            "A1.5: höchstens {MAX_LOGGED_BODY_LEN} Zeichen, war {}: {logged_body}",
+            logged_body.chars().count()
+        );
+        assert!(
+            logged_body.contains("AAAA"),
+            "der Anfang des body muss erhalten bleiben, sonst ist die Zeile wertlos: \
+             {logged_body}"
         );
         assert!(
             debug_log_lines().iter().any(|l| l.contains("(full body)")),
             "A2: was die Kürzung wegnimmt, muss auf debug stehen"
         );
+    }
+
+    /// Der Hinweistext muss in die Grenze passen, sonst würde
+    /// `truncate_logged_body`s Subtraktion überlaufen (Panik im Debug-Build,
+    /// Wrap im Release) — das wäre ein Absturz auf einem Fehlerpfad.
+    #[test]
+    fn test_truncation_marker_fits_into_the_limit() {
+        assert!(TRUNCATION_MARKER.chars().count() < MAX_LOGGED_BODY_LEN);
     }
 
     /// Spec 0094, T8c: `AiError::ModelNotFound` trägt den vollen Antworttext

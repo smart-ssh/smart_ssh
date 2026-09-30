@@ -1634,6 +1634,15 @@ async fn test_t2_0094_chained_command_logs_no_command_text_at_info() {
         !lines.iter().any(|l| l.contains("mysql")),
         "kein Teilkommando darf ab info im Klartext stehen: {lines:?}"
     );
+    // spec-reviewer-Fund (Runde 1): Ohne diesen Anker bestand der Test nur
+    // aus Abwesenheits-Aussagen und wäre auch dann grün, wenn überhaupt
+    // keine Zeile aufgezeichnet würde — etwa weil jemand den Mitschnitt
+    // wieder auf ERROR herunterdreht.
+    assert!(
+        lines.iter().any(|l| l.contains("filter engine decision")
+            && l.contains(&format!("\"command_len\":{}", command.chars().count()))),
+        "die Entscheidungszeile muss ab info entstehen und die Kommandolänge tragen: {lines:?}"
+    );
 }
 
 /// Spec 0094, T3: mehrzeilig. `§7` gibt für diesen Fall ausdrücklich ein
@@ -1657,6 +1666,13 @@ async fn test_t3_0094_multiline_heredoc_logs_no_command_text_at_info() {
     assert!(
         !lines.iter().any(|l| l.contains("set password")),
         "auch der übrige Kommandotext darf nicht ab info stehen: {lines:?}"
+    );
+    // s. T2: Anker gegen ein trivial wahres Grün (spec-reviewer-Fund,
+    // Runde 1).
+    assert!(
+        lines.iter().any(|l| l.contains("filter engine decision")
+            && l.contains(&format!("\"command_len\":{}", command.chars().count()))),
+        "die Entscheidungszeile muss ab info entstehen und die Kommandolänge tragen: {lines:?}"
     );
 }
 

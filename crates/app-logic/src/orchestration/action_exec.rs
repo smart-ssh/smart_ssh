@@ -1731,13 +1731,27 @@ fn log_command_execution(session_id: SessionId, command: &str, redacted_output: 
     // einer Bedingung hängt, die ein künftiger zweiter Aufrufer übersehen
     // kann — Redaction ist idempotent, der Preis also nur Rechenzeit, und
     // die fällt nur an, wenn `debug` überhaupt aufgezeichnet wird.
-    let redactor = ssh_manager_core::ai::default_log_redactor();
+    //
+    // **Reihenfolge**: redigieren, dann kürzen — nie umgekehrt.
+    // spec-reviewer-Fund (Runde 1): hier stand `redact_text(&truncate_for_
+    // log(...))`. Genau die Reihenfolge, die die Spec unter
+    // „Angriffsrichtungen" als Fehler benennt: die Kürzung bei Zeichen 4096
+    // kann ein Secret-Muster entzweischneiden, sodass danach kein Muster
+    // mehr greift und der Anfang des Geheimnisses im Klartext stehen bleibt.
+    // Am heutigen Aufrufer folgenlos (der redigiert den vollen Text schon
+    // vorher) — aber der zweite Durchlauf hier existiert gerade für den
+    // Fall, dass ein künftiger Aufrufer das nicht tut, und für den war die
+    // alte Reihenfolge falsch.
     tracing::debug!(
         session_id = %session_id,
         exit_code = ?redacted_output.exit_code,
-        command = %redactor.redact_text(command),
-        stdout = %redactor.redact_text(&truncate_for_log(&stdout)),
-        stderr = %redactor.redact_text(&truncate_for_log(&stderr)),
+        command = %ssh_manager_core::ai::default_log_redactor().redact_text(command),
+        stdout = %truncate_for_log(
+            &ssh_manager_core::ai::default_log_redactor().redact_text(&stdout),
+        ),
+        stderr = %truncate_for_log(
+            &ssh_manager_core::ai::default_log_redactor().redact_text(&stderr),
+        ),
         "ssh command executed (command and output)",
     );
 }
@@ -1754,12 +1768,15 @@ fn log_command_execution_failed(session_id: SessionId, command: &str, err: &SshE
         code = err.code(),
         "ssh command execution failed",
     );
-    let redactor = ssh_manager_core::ai::default_log_redactor();
+    // `default_log_redactor()` im Feldausdruck, nicht davor: so wird der
+    // `OnceLock` (und damit das Übersetzen aller eingebauten Muster) im
+    // Standardbetrieb ohne `debug` gar nicht erst angefasst
+    // (spec-reviewer-Fund, Runde 1).
     tracing::debug!(
         session_id = %session_id,
         code = err.code(),
-        command = %redactor.redact_text(command),
-        error = %redactor.redact_text(&err.to_string()),
+        command = %ssh_manager_core::ai::default_log_redactor().redact_text(command),
+        error = %ssh_manager_core::ai::default_log_redactor().redact_text(&err.to_string()),
         "ssh command execution failed (command and error)",
     );
 }
