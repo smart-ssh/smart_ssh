@@ -2229,3 +2229,139 @@ async fn test_stop_between_two_tool_calls_prevents_the_second() {
         vec!["systemctl reload nginx".to_string()]
     );
 }
+
+// --- Spec 0096, A1: generierter Sitzungstitel wird geschwärzt ----------
+
+/// Das Geheimnis, mit dem Spec 0096 arbeitet. Die Form, in der der
+/// Session-Redactor es erkennt (`password=Geheim-0096` → `[REDACTED]`),
+/// ist gemessen in `orchestration::notes::tests` festgehalten.
+const SECRET_0096: &str = "Geheim-0096";
+
+/// Erzeugt einen Titel aus `ai_title`, nachdem eine Nutzer-Nachricht in der
+/// Historie liegt (Auslösebedingung von
+/// `generate_session_title_on_disconnect`), und liefert den tatsächlich in
+/// `chat_sessions.title` gespeicherten Titel zurück.
+async fn generated_title_for(ai_title: &str) -> Option<String> {
+    let (session, chat_store, _chat_session_id, _tmp_dir) = session_with_real_chat_persistence(
+        vec![AiEvent::TextDelta(ai_title.to_string()), AiEvent::Done],
+        MockSshTransport::default(),
+    )
+    .await;
+    push_history(
+        &session,
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("was war hier los?".to_string()),
+        },
+    )
+    .await;
+
+    generate_session_title_on_disconnect(&session, Uuid::new_v4(), &TestEmitter::default()).await;
+
+    chat_store
+        .list_sessions_for_server(&session.server_id)
+        .await
+        .unwrap()[0]
+        .title
+        .clone()
+}
+
+/// Prüft, dass im Titel **kein Bruchstück** des Geheimnisses steht — nicht
+/// nur die vollständige Zeichenfolge. Ein durch das Kürzen auf 60 Zeichen
+/// angeschnittenes Muster hinterließe genau so ein Bruchstück (Spec 0096,
+/// Angriffsrichtung zu T6), und `!contains(SECRET_0096)` allein würde das
+/// durchgehen lassen.
+fn assert_no_fragment_of_secret(title: &str) {
+    for len in 1..=SECRET_0096.chars().count() {
+        let prefix: String = SECRET_0096.chars().take(len).collect();
+        assert!(
+            !title.contains(&prefix),
+            "Titel {title:?} enthält das Geheimnis-Bruchstück {prefix:?}"
+        );
+    }
+}
+
+/// T1 (Spec 0096, A1): Die KI übernimmt ein Geheimnis in den Titel — der
+/// Titel ist eine **Klartext**-Spalte (`chat_sessions.title`, Spec §1),
+/// also darf dort nichts davon ankommen. Scheitert gegen den Stand vor
+/// Spec 0096 (dort wurde `text_buffer` ungeschwärzt gespeichert).
+#[tokio::test]
+async fn test_t1_spec_0096_generated_title_is_redacted_before_storing() {
+    let title = generated_title_for("Login mit password=Geheim-0096 geprueft")
+        .await
+        .expect("Rest-Text neben dem Platzhalter -> Titel wird gespeichert");
+
+    assert_no_fragment_of_secret(&title);
+    assert!(
+        title.contains("[REDACTED]"),
+        "der Platzhalter muss den Treffer ersetzen, statt ihn stumm zu entfernen: {title:?}"
+    );
+}
+
+/// T2 (Spec 0096, A1, letzter Satz): Besteht der Titel nach dem Schwärzen
+/// nur noch aus Platzhalter und Leerraum, wird gar kein Titel gespeichert —
+/// ein Titel `[REDACTED]` wäre für den Nutzer wertlos.
+#[tokio::test]
+async fn test_t2_spec_0096_title_of_only_placeholders_is_not_stored() {
+    assert_eq!(generated_title_for("password=Geheim-0096").await, None);
+    // Auch mit Leerraum und den von der KI trotz Instruktion gern
+    // hinzugefügten Anführungszeichen drumherum.
+    assert_eq!(
+        generated_title_for("  \"password=Geheim-0096\"  ").await,
+        None
+    );
+}
+
+/// T6 (Spec 0096, A1, Angriffsrichtung „Titel wird vor dem Redactor gekürzt
+/// und schneidet ein Muster an"): Das Muster reicht über Position 60
+/// (`MAX_GENERATED_TITLE_LENGTH`) hinaus, **der Anfang des Geheimniswerts
+/// liegt aber noch davor**. Würde erst gekürzt und dann geschwärzt, sähe der
+/// Redactor nur `password=Gehei` — kein vollständiges Muster mehr, der
+/// Anfang des Geheimnisses bliebe im Klartext im Titel stehen.
+///
+/// **Klarstellung zu Spec 0096 §7, T6 (Coder):** Die Spec nennt 55 Zeichen
+/// Fülltext. Damit beginnt `password=` erst an Position 55, und das Kürzen
+/// bei 60 schneidet schon im Schlüsselwort (`…passw`) — der Wert selbst
+/// erreicht den Titel gar nicht, der Test könnte also auch mit vertauschter
+/// Reihenfolge nicht scheitern (gemessen). Geprüft werden deshalb **beide**
+/// Längen: die aus der Spec als Grenzfall und eine, bei der der Wert
+/// tatsächlich über die Grenze läuft (45 Zeichen → Wert ab Position 55).
+/// Nur Letztere trägt den Gegenbeweis.
+#[tokio::test]
+async fn test_t6_spec_0096_title_truncation_cannot_cut_a_pattern_open() {
+    for filler_len in [45, 55] {
+        let filler = "a".repeat(filler_len);
+        let title = generated_title_for(&format!("{filler} password=Geheim-0096"))
+            .await
+            .expect("der Fuelltext bleibt als Titel uebrig");
+
+        assert_no_fragment_of_secret(&title);
+        assert!(
+            title.chars().count() <= 60,
+            "die 60-Zeichen-Grenze gilt weiterhin: {title:?}"
+        );
+        assert!(title.starts_with(&filler), "Fuelltext bleibt erhalten");
+    }
+
+    // Das Muster mit **nachlaufendem Anker**: die URL-Zugangsdaten-Regel
+    // braucht das `@host` hinter dem Passwort. Liegt der Anker jenseits von
+    // Position 60, erkennt der Redactor nach einem vorgezogenen Kürzen gar
+    // nichts mehr — und das Geheimnis stünde vollständig im Titel. Dieser
+    // Fall trägt den Gegenbeweis (s. Doc-Kommentar).
+    let filler = "a".repeat(40);
+    let title = generated_title_for(&format!("{filler} https://u:Geheim-0096@example.invalid/x"))
+        .await
+        .expect("der Fuelltext bleibt als Titel uebrig");
+    assert_no_fragment_of_secret(&title);
+}
+
+/// T7 (Spec 0096, A1): mehrere Muster in einem Titel, das Geheimnis
+/// zusätzlich in Anführungszeichen — kein Treffer bleibt stehen.
+#[tokio::test]
+async fn test_t7_spec_0096_title_with_several_patterns_keeps_no_secret() {
+    let title = generated_title_for("Setup token=Geheim-0096 und password=\"Geheim-0096\" ok")
+        .await
+        .expect("Rest-Text neben den Platzhaltern -> Titel wird gespeichert");
+
+    assert_no_fragment_of_secret(&title);
+}

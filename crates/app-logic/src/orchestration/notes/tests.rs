@@ -1784,3 +1784,17 @@ async fn test_propose_note_from_chat_content_with_empty_existing_note_uses_conte
         serde_json::json!("Erster Inhalt"),
     );
 }
+
+// --- Spec 0096: Geheimnisse in der Datenbank -------------------------
+
+/// Spec 0096, Abschnitt 7: hält die Form fest, auf der alle Tests dieser
+/// Spec aufbauen — `password=Geheim-0096` wird vom Session-Redactor
+/// vollständig durch den Platzhalter ersetzt, es bleibt kein Rest des
+/// Schlüsselworts stehen. Bricht diese Annahme (z. B. weil eine Regel
+/// künftig nur den Wert ersetzt), müssen die Erwartungen in T2/T10
+/// („nur Platzhalter → kein Titel/kein Vorschlag") nachgezogen werden.
+#[test]
+fn test_spec_0096_secret_form_is_fully_replaced_by_the_placeholder() {
+    let redacted = DefaultOutputRedactor::new().redact_text("password=Geheim-0096");
+    assert_eq!(redacted, "[REDACTED]");
+}

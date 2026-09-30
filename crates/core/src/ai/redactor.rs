@@ -17,7 +17,14 @@ pub trait OutputRedactor: Send + Sync {
 }
 
 /// Platzhalter, der einen erkannten Treffer ersetzt.
-const REDACTED_PLACEHOLDER: &str = "[REDACTED]";
+///
+/// `pub` seit Spec 0096, A1: Aufrufer, die einen redigierten Text darauf
+/// prüfen müssen, ob davon **nur noch Platzhalter und Leerraum** übrig sind
+/// (der generierte Sitzungstitel, der KI-Notizvorschlag), brauchen genau
+/// diese Zeichenfolge — eine zweite, hartkodierte Kopie an der Aufrufstelle
+/// würde stillschweigend auseinanderlaufen, sobald der Platzhalter sich
+/// hier ändert.
+pub const REDACTED_PLACEHOLDER: &str = "[REDACTED]";
 
 /// Default-Implementierung (Spec 0006, Abschnitt 5): erkennt
 /// Private-Key-Blöcke, `password=`/`token=`/`api_key=`-artige Zeilen

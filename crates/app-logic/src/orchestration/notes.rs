@@ -9,7 +9,7 @@ use futures::StreamExt;
 
 use ssh_manager_core::ai::{
     fence_untrusted, ActionSchema, AiEvent, AiProvider, ChatMessage, MessageContent,
-    OutputRedactor, Role, SessionContext, UntrustedKind,
+    OutputRedactor, Role, SessionContext, UntrustedKind, REDACTED_PLACEHOLDER,
 };
 use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::profiles::{
@@ -379,7 +379,7 @@ pub async fn generate_session_title_on_disconnect(
         }
     }
 
-    let Some(title) = sanitize_generated_title(&text_buffer) else {
+    let Some(title) = sanitize_generated_title(&text_buffer, session.redactor.as_ref()) else {
         return;
     };
     if let Err(err) = store.set_title_if_absent(chat_session_id, &title).await {
@@ -387,14 +387,43 @@ pub async fn generate_session_title_on_disconnect(
     }
 }
 
-/// Trimmt Whitespace und ein ggf. von der KI trotz Instruktion hinzugefügtes
-/// umschließendes Anführungszeichen-Paar, kürzt defensiv auf
-/// [`MAX_GENERATED_TITLE_LENGTH`] Zeichen, und liefert `None` für einen
-/// (nach dem Trimmen) leeren Text — kein leerer/bedeutungsloser Titel wird
-/// gespeichert.
-fn sanitize_generated_title(raw: &str) -> Option<String> {
-    let trimmed = raw.trim().trim_matches('"').trim();
+/// Schwärzt den von der KI gelieferten Text, trimmt Whitespace und ein ggf.
+/// trotz Instruktion hinzugefügtes umschließendes Anführungszeichen-Paar,
+/// kürzt defensiv auf [`MAX_GENERATED_TITLE_LENGTH`] Zeichen, und liefert
+/// `None` für einen (nach dem Trimmen) leeren Text — kein leerer/
+/// bedeutungsloser Titel wird gespeichert.
+///
+/// Spec 0096, A1: Der Titel ist eine der wenigen **Klartext**-Spalten
+/// (`chat_sessions.title`, s. Spec §1) mit von der KI abgeleitetem Inhalt.
+/// Der Chatverlauf selbst ist verschlüsselt; der Titel ist es nicht. Die KI
+/// bekommt zwar nur die per `reapply_redaction_for_send` redigierte Historie
+/// zu sehen, kann darin aber ein Geheimnis finden, das der Redactor beim
+/// Senden nicht erkannt hat, oder es aus dem Zusammenhang rekonstruieren —
+/// deshalb läuft **ihre Antwort** hier noch einmal durch denselben Redactor,
+/// bevor irgendetwas gespeichert wird.
+///
+/// **Reihenfolge ist sicherheitsrelevant (Spec 0096, A1, Test T6):** erst
+/// schwärzen, dann kürzen. Andersherum könnte das Kürzen auf 60 Zeichen ein
+/// Muster mitten im Wert durchschneiden — der Redactor sähe danach nur noch
+/// ein Bruchstück wie `password=Gehei`, erkennte es je nach Regel nicht mehr
+/// als Treffer, und der Rest des Geheimnisses stünde im Klartext im Titel.
+/// Nach dem Schwärzen kann das Kürzen höchstens noch den Platzhalter selbst
+/// anschneiden (`…[RED`), nie einen Geheimnis-Rest.
+///
+/// Bleiben nach dem Schwärzen nur noch Platzhalter und Leerraum übrig, war
+/// der ganze Titel ein Geheimnis — dann wird gar kein Titel gespeichert
+/// (Spec 0096, A1, letzter Satz; Test T2), genau wie bei leerem Text. Ein
+/// Titel `[REDACTED]` wäre für den Nutzer ohnehin wertlos.
+fn sanitize_generated_title(raw: &str, redactor: &dyn OutputRedactor) -> Option<String> {
+    let redacted = redactor.redact_text(raw);
+    let trimmed = redacted.trim().trim_matches('"').trim();
     if trimmed.is_empty() {
+        return None;
+    }
+    // Die Prüfung läuft bewusst auf dem UNGEKÜRZTEN Text: ein durch das
+    // Kürzen angeschnittener Platzhalter (`[RED`) würde hier sonst nicht
+    // mehr als Platzhalter erkannt.
+    if trimmed.replace(REDACTED_PLACEHOLDER, "").trim().is_empty() {
         return None;
     }
     Some(trimmed.chars().take(MAX_GENERATED_TITLE_LENGTH).collect())
