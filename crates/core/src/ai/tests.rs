@@ -141,6 +141,49 @@ fn test_redactor_detects_aws_access_key() {
     assert!(redacted.contains("[REDACTED]"));
 }
 
+/// Spec 0094, §1.3 (gemessen, Q-BL-0029-01): Prämisse der Tests T1–T3.
+///
+/// Diese Tests behaupten „das Geheimnis steht ab `info` nicht im Log" und
+/// wählen dafür absichtlich eine Schreibweise, die der Redactor **nicht**
+/// kennt — sonst wäre ihr Grün auch dann erklärbar, wenn A1 gar nicht
+/// umgesetzt wäre, weil schon die Redaction gegriffen hätte. Genau diese
+/// Prämisse ist hier festgenagelt: Lernt der Redactor eines dieser Muster
+/// (BL-0118 will das), wird dieser Test rot und zwingt dazu, die
+/// Geheimnis-Form in `filter::tests` (Spec 0094, T1–T3) auf eine weiterhin
+/// unerkannte umzustellen. Ohne diesen Wächter würden T1–T3 stillschweigend
+/// zu Redaction-Tests und prüften A1 nicht mehr.
+///
+/// **Kein Auftrag, diese Lücken zu schließen** (Spec 0094 §3, Nicht-Ziel
+/// „Neue Redactor-Muster"). Der Test beschreibt den Ist-Stand, er fordert
+/// ihn nicht.
+#[test]
+fn test_redactor_does_not_yet_know_command_line_password_arguments() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for unrecognized in [
+        "mysql -p'geheim-0094' -e 'select 1'",
+        "sshpass -p geheim-0094 ssh host",
+        "mysql -pgeheim-0094",
+        "curl -u user:geheim-0094 https://example.invalid",
+    ] {
+        assert_eq!(
+            redactor.redact_text(unrecognized),
+            unrecognized,
+            "Prämisse von Spec 0094 T1–T3 gebrochen: der Redactor erkennt dieses Muster jetzt. \
+             Das ist keine Verschlechterung, aber T1–T3 brauchen dann eine andere \
+             Geheimnis-Form, sonst prüfen sie die Redaction statt A1."
+        );
+    }
+
+    for recognized in ["--password=geheim-0094", "PGPASSWORD=geheim-0094 psql"] {
+        assert!(
+            !redactor.redact_text(recognized).contains("geheim-0094"),
+            "dieses Muster muss der Redactor weiterhin erkennen (Spec 0094 T9 baut darauf): \
+             {recognized}"
+        );
+    }
+}
+
 #[test]
 fn test_redactor_leaves_unsuspicious_text_unchanged() {
     let redactor = DefaultOutputRedactor::new();

@@ -80,6 +80,25 @@ impl Default for DefaultOutputRedactor {
     }
 }
 
+/// Spec 0094, A2: der Redactor für die `debug`-Zeilen, die den Inhalt
+/// tragen, den A1 aus `info`/`warn`/`error` entfernt — an den Stellen, an
+/// denen kein Session-Redactor erreichbar ist (`filter::engine`,
+/// `ai_providers::request_logging`, `mcp_server::tool_server`). Derselbe
+/// Musterstand wie `Session::redactor`, weil es dieselbe Konstruktion ist
+/// ([`DefaultOutputRedactor::new`]); nutzerdefinierte Zusatzmuster
+/// ([`DefaultOutputRedactor::with_extra_patterns`]) kennt dieser Weg nicht,
+/// die gibt es bislang an keiner Stelle.
+///
+/// **Genau eine Instanz pro Prozess**, weil A2 es verlangt und weil der
+/// Grund dafür handfest ist: `new()` übersetzt bei jedem Aufruf sämtliche
+/// eingebauten Muster (`built_in_patterns`, mehrere Dutzend `Regex`).
+/// Einmal je Filter-Entscheidung wäre das ein spürbarer Aufwand auf dem
+/// heißesten Pfad der Anwendung.
+pub fn default_log_redactor() -> &'static DefaultOutputRedactor {
+    static REDACTOR: std::sync::OnceLock<DefaultOutputRedactor> = std::sync::OnceLock::new();
+    REDACTOR.get_or_init(DefaultOutputRedactor::new)
+}
+
 /// Baut ein [`PatternRule`], dessen kompletter Treffer durch
 /// [`REDACTED_PLACEHOLDER`] ersetzt wird — der weit überwiegende Fall
 /// (alle eingebauten Muster außer dem DB-Connection-String-Muster unten,

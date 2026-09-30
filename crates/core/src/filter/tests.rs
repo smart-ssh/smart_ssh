@@ -1561,6 +1561,145 @@ fn test_log_capture_records_debug_and_info_separately() {
     );
 }
 
+// --- Spec 0094: kein Kommandotext ab `info` ---------------------------------
+
+/// Das Geheimnis aus Spec 0094, §7 — bewusst in einer Form, die der
+/// `DefaultOutputRedactor` **nicht** erkennt. Sonst prüfte der Test die
+/// Redaction und nicht, was A1 verlangt: dass der Text gar nicht erst auf
+/// `info` geschrieben wird. Gemessen (Q-BL-0029-01): `-p'…'`, `-p …` und
+/// `-p…` bleiben unverändert, `--password=…` wird ersetzt.
+const SECRET_0094: &str = "geheim-0094";
+
+/// Führt `command` durch `evaluate_explained` und gibt die aufgezeichneten
+/// Zeilen ab `info` zurück.
+async fn evaluate_and_capture_info_lines(command: &str) -> Vec<String> {
+    log_capture::start_recording();
+    let eng = engine(Vec::new());
+    let _trace = eng.evaluate_explained(command, &ctx("srv", &[])).await;
+    log_capture::lines_at_info_or_above()
+}
+
+/// Spec 0094, T1: die Filter-Entscheidung zu `mysql -p'geheim-0094' …` darf
+/// das Passwort ab `info` nicht mehr tragen; `decision` und die
+/// Kommandolänge müssen dort weiterhin stehen.
+#[tokio::test]
+async fn test_t1_0094_filter_decision_logs_no_command_text_at_info() {
+    let command = format!("mysql -p'{SECRET_0094}' -e 'select 1'");
+
+    let lines = evaluate_and_capture_info_lines(&command).await;
+
+    let decision_lines: Vec<&String> = lines
+        .iter()
+        .filter(|l| l.contains("filter engine decision"))
+        .collect();
+    assert_eq!(
+        decision_lines.len(),
+        1,
+        "genau eine Entscheidungszeile ab info erwartet: {lines:?}"
+    );
+    let line = decision_lines[0];
+    assert!(
+        !line.contains(SECRET_0094),
+        "das Passwort darf ab info in keiner Form auftauchen: {line}"
+    );
+    assert!(
+        !line.contains("mysql"),
+        "auch der Programmname ist Teil des Kommandos und darf nicht ab info stehen \
+         (Spec 0094, §5): {line}"
+    );
+    assert!(
+        line.contains(&format!("\"command_len\":{}", command.chars().count())),
+        "die Kommandolänge muss erhalten bleiben (A1.1): {line}"
+    );
+    assert!(
+        line.contains("\"decision\""),
+        "die Entscheidung muss erhalten bleiben (A1.1): {line}"
+    );
+}
+
+/// Spec 0094, T2: Verkettung. Die Engine wertet jedes Teilkommando eigenständig
+/// aus — wenn eines davon (oder ein zusätzlicher Trace je Teilkommando) den
+/// Text zurück ins Log brächte, würde T1 das nicht bemerken.
+#[tokio::test]
+async fn test_t2_0094_chained_command_logs_no_command_text_at_info() {
+    let command = format!("true && mysql -p{SECRET_0094}; echo ok");
+
+    let lines = evaluate_and_capture_info_lines(&command).await;
+
+    assert!(
+        !lines.iter().any(|l| l.contains(SECRET_0094)),
+        "kein Teilkommando darf das Passwort ab info tragen: {lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|l| l.contains("mysql")),
+        "kein Teilkommando darf ab info im Klartext stehen: {lines:?}"
+    );
+}
+
+/// Spec 0094, T3: mehrzeilig. `§7` gibt für diesen Fall ausdrücklich ein
+/// Muster vor, das der Redactor **kennt** (`set password='…'`) — das prüft,
+/// dass A1 nicht bloß „der Redactor greift schon" bedeutet, sondern dass der
+/// Text ab `info` wirklich fehlt. Zusätzlich steht ein vom Redactor
+/// **nicht** erkanntes Vorkommen in derselben Eingabe, damit der Test nicht
+/// stillschweigend zur Redaction-Prüfung verkommt, falls sich der
+/// Musterstand einmal ändert.
+#[tokio::test]
+async fn test_t3_0094_multiline_heredoc_logs_no_command_text_at_info() {
+    let command =
+        format!("mysql -p'{SECRET_0094}' <<'SQL'\nset password='{SECRET_0094}';\nselect 1;\nSQL");
+
+    let lines = evaluate_and_capture_info_lines(&command).await;
+
+    assert!(
+        !lines.iter().any(|l| l.contains(SECRET_0094)),
+        "in keiner Zeile ab info darf das Passwort stehen: {lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|l| l.contains("set password")),
+        "auch der übrige Kommandotext darf nicht ab info stehen: {lines:?}"
+    );
+}
+
+/// Spec 0094, T9 (`core`): auf `debug` steht der Inhalt weiterhin — und dort
+/// durch den Redactor gelaufen. Zwei Aussagen in einem Test, weil sie nur
+/// gemeinsam etwas belegen: dass die `debug`-Zeile überhaupt entsteht (sonst
+/// wäre die Diagnosefähigkeit weg, die A2 erhalten will) und dass sie
+/// redigiert ist.
+#[tokio::test]
+async fn test_t9_0094_command_text_moves_to_a_redacted_debug_line() {
+    log_capture::start_recording();
+    let eng = engine(Vec::new());
+    // `--password=` ist ein Muster, das der Redactor kennt — hier ist das
+    // Absicht (§7, T9): geprüft wird die Redaction auf der debug-Zeile.
+    let command = format!("mysql --password={SECRET_0094} -e 'select 1'");
+
+    let _trace = eng.evaluate_explained(&command, &ctx("srv", &[])).await;
+
+    let debug_lines = log_capture::debug_lines();
+    let content_lines: Vec<&String> = debug_lines
+        .iter()
+        .filter(|l| l.contains("filter engine decision (command text)"))
+        .collect();
+    assert_eq!(
+        content_lines.len(),
+        1,
+        "A2 verlangt genau eine debug-Zeile mit dem Inhalt: {debug_lines:?}"
+    );
+    let line = content_lines[0];
+    assert!(
+        line.contains("mysql"),
+        "die debug-Zeile muss den Kommandotext tragen, sonst ist die Diagnose weg: {line}"
+    );
+    assert!(
+        !line.contains(SECRET_0094),
+        "ein dem Redactor bekanntes Geheimnis muss auf der debug-Zeile ersetzt sein: {line}"
+    );
+    assert!(
+        line.contains("REDACTED"),
+        "der Redaction-Platzhalter muss stattdessen dort stehen: {line}"
+    );
+}
+
 /// Belegt, dass genau für `rule_id` ein ERROR-Ereignis aus 3.2.2 vorliegt.
 fn assert_pattern_error_logged(rule_id: &str) {
     let events = log_capture::recorded_error_events();

@@ -2,6 +2,8 @@ use std::cmp::Ordering;
 
 use async_trait::async_trait;
 
+use crate::ai::{default_log_redactor, OutputRedactor};
+
 use super::blacklist;
 use super::parser::{self, ParseResult};
 use super::types::{
@@ -146,12 +148,45 @@ impl<S: PolicyStore> FilterEngine<S> {
     /// "Testen"-Ansicht.
     pub async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace {
         let trace = self.evaluate_explained_inner(command, ctx).await;
+        // Spec 0094, A1.1: `command` stand hier bis dahin **roh** auf `info`
+        // — die schwerste der von BL-0029 gemeldeten Stellen, denn diese
+        // Zeile entsteht für jedes Kommando, das überhaupt ausgewertet wird
+        // (auch für abgelehnte und für die aus der „Testen"-Ansicht). Statt
+        // des Textes nur noch seine Länge.
+        //
+        // `decision`/`matched_rule`/`matched_hard_blacklist_entry` bleiben:
+        // A1.1 nennt sie ausdrücklich, und keines der drei trägt
+        // Kommandotext. Nachgesehen statt angenommen — jede `reason`, die
+        // `evaluate_explained_inner` erzeugt, ist entweder ein fester Text,
+        // enthält das Längenlimit (`self.max_command_length`) oder eine
+        // `RuleId`; `matched_rule` ist eine `RuleId`, nicht die `Rule` samt
+        // `pattern`; `matched_hard_blacklist_entry` ist der Anzeigetext
+        // eines eingebauten Musters. `sub_command_traces` wird bewusst
+        // weiterhin nicht geloggt.
+        //
+        // Nur die Gesamtlänge in Zeichen, nicht je Teilkommando oder je
+        // Wort: eine Längenreihe verrät die Struktur des Kommandos und damit
+        // mittelbar seinen Inhalt. `chars().count()` wie in der
+        // Längenprüfung von `evaluate_explained_inner`, damit beide Zahlen
+        // dieselbe Einheit haben.
         tracing::info!(
-            command,
+            command_len = command.chars().count(),
             decision = ?trace.decision,
             matched_rule = ?trace.matched_rule,
             matched_hard_blacklist_entry = ?trace.matched_hard_blacklist_entry,
             "filter engine decision",
+        );
+        // Spec 0094, A2: derselbe Inhalt wie vorher, aber auf `debug` und
+        // durch den Redactor. `debug` ist ohne `RUST_LOG` aus (A3).
+        //
+        // Die Redaction läuft nur, wenn diese Zeile tatsächlich
+        // aufgezeichnet wird: `tracing`s Ereignis-Makros werten ihre
+        // Feldausdrücke erst innerhalb des `if enabled`-Zweigs aus, den sie
+        // selbst erzeugen. Der `redact_text`-Aufruf kostet im Standardfall
+        // (kein `debug`) also nichts — genau das verlangt A2.
+        tracing::debug!(
+            command = %default_log_redactor().redact_text(command),
+            "filter engine decision (command text)",
         );
         trace
     }
