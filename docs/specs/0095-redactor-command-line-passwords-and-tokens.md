@@ -1,6 +1,6 @@
 # Spec 0095 — Redactor: Passwort-Argumente von Kommandozeilenprogrammen und weitere Token-Formen
 
-Status: Vorschlag · Backlog: BL-0118 · Gate: —
+Status: freigegeben · Backlog: BL-0118 · Gate: —
 Zweck: Der Redactor erkennt Passwörter, die als Argument gängiger Kommandozeilenprogramme übergeben werden, sowie die offenen Token- und Hash-Formen aus BL-0118 — ohne dass eine heute redigierte Eingabe weniger redigiert wird.
 Review-Priorität: ERHÖHT (Redactor)
 
