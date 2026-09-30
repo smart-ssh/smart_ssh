@@ -246,6 +246,8 @@ ablehnen, einmal über MCP ausführen; danach im Log-Verzeichnis nach
 
 ## 9. Klarstellungen
 
+- Q-BL-0029-02: A1.5 bleibt unverändert; die zwei Provider-Fehlerzeilen bleiben in `SAFE_LOG_MESSAGES` und damit im Diagnosepaket (redigiert, höchstens 512 Zeichen).
+
 - §8.1 alte Logdateien: Option (a) — nicht anfassen. Nichts umzusetzen.
 - §1.2/§1.4 (Q-BL-0029-01): Zählung und Aussage zum Diagnose-Export
   korrigiert. An den Anforderungen ändert sich nichts; A1.7 gilt funktional,
