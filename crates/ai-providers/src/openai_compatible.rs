@@ -1022,7 +1022,7 @@ fn finalize_tool_call(request_id: Uuid, name: &str, arguments: &str) -> AiEvent 
                 AiEvent::ActionProposed(action)
             }
             Err(err) => {
-                log_tool_call_parse_error(request_id, name, arguments, &err);
+                log_tool_call_parse_error(request_id, name, arguments, err.code(), &err);
                 AiEvent::Error(err)
             }
         },
@@ -1032,10 +1032,13 @@ fn finalize_tool_call(request_id: Uuid, name: &str, arguments: &str) -> AiEvent 
         // `AiError` statt stillschweigendem Text-Fallback (anders als
         // `parse_fallback_response`, s. `fallback.rs`).
         Err(err) => {
-            log_tool_call_parse_error(request_id, name, arguments, &err);
-            AiEvent::Error(AiError::InvalidResponse(format!(
+            // Spec 0094, A1.3: s. `anthropic::finalize_tool_use` — der Code
+            // stammt vom `AiError`, der aus diesem Fehlschlag entsteht.
+            let ai_error = AiError::InvalidResponse(format!(
                 "Tool-Call-Argumente sind kein gültiges JSON: {err}"
-            )))
+            ));
+            log_tool_call_parse_error(request_id, name, arguments, ai_error.code(), &err);
+            AiEvent::Error(ai_error)
         }
     }
 }

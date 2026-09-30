@@ -231,6 +231,31 @@ pub enum AiAction {
     },
 }
 
+impl AiAction {
+    /// Die **Art** der Aktion als fester Bezeichner, ohne jedes Feld.
+    ///
+    /// Spec 0094, A1.3 („Art der Aktion"): Jede Variante trägt Inhalt —
+    /// `command`, `new_content`, `content_markdown`, `path`, `content` —,
+    /// weshalb das `Debug` eines `AiAction` ab `info` nicht geloggt werden
+    /// darf. Diese Methode ist das, was dort stattdessen steht: ein
+    /// Bezeichner, der ohne jedes Feld auskommt, also per Konstruktion
+    /// nichts vom Vorschlag verrät außer seiner Art.
+    ///
+    /// Bewusst `&'static str` mit ausgeschriebenem `match` statt
+    /// `std::mem::discriminant` oder eines abgeschnittenen `Debug`: eine neue
+    /// Variante erzwingt so eine Entscheidung an dieser Stelle, statt
+    /// stillschweigend einen Feldwert mitzunehmen.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            AiAction::SuggestCommand { .. } => "suggest_command",
+            AiAction::ProposeNoteUpdate { .. } => "propose_note_update",
+            AiAction::GenerateDocument { .. } => "generate_document",
+            AiAction::ReadRemoteFile { .. } => "read_remote_file",
+            AiAction::WriteRemoteFile { .. } => "write_remote_file",
+        }
+    }
+}
+
 /// Wer eine [`NoteRevision`] erzeugt hat (Spec 0003, Abschnitt 5.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum NoteEditor {

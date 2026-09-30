@@ -9,57 +9,166 @@
 //! ein `SessionContext`-Feld zu sein).
 
 use serde_json::Value;
-use ssh_manager_core::ai::{AiError, MessageContent, RejectionReason, SessionContext};
+use ssh_manager_core::ai::{
+    default_log_redactor, AiError, MessageContent, OutputRedactor, RejectionReason, SessionContext,
+};
 use ssh_manager_core::profiles::AiAction;
 use uuid::Uuid;
+
+/// Spec 0094, A1.5: Höchstlänge des Provider-`body`, der als **Ausnahme**
+/// weiterhin auf `warn` stehen bleibt. Spiegelt ein Provider Teile der
+/// Anfrage in seiner Fehlermeldung, bleibt der Schaden auf diese Länge
+/// begrenzt (Restrisiko, in der Spec benannt).
+const MAX_LOGGED_BODY_LEN: usize = 512;
+
+/// Kürzt auf `MAX_LOGGED_BODY_LEN` Zeichen.
+///
+/// **Reihenfolge ist sicherheitsrelevant**: Diese Funktion wird
+/// ausschließlich auf schon redigierten Text angewandt. Umgekehrt — erst
+/// kürzen, dann redigieren — würde die Kürzung ein Secret-Muster mitten
+/// entzweischneiden, sodass kein Muster mehr greift und der Anfang des
+/// Geheimnisses im Klartext stehen bliebe.
+fn truncate_logged_body(redacted: &str) -> String {
+    if redacted.chars().count() <= MAX_LOGGED_BODY_LEN {
+        return redacted.to_string();
+    }
+    let head: String = redacted.chars().take(MAX_LOGGED_BODY_LEN).collect();
+    format!("{head}… (gekürzt, vollständig nur auf debug)")
+}
+
+/// Spec 0094, A2: Muster-basierte Redaction für die `debug`-Zeilen, die den
+/// Inhalt tragen, den A1 aus den Zeilen ab `info` entfernt. In dieser Crate
+/// gibt es keinen Session-Redactor, deshalb der prozessweite
+/// [`default_log_redactor`] (eine Instanz, nicht je Aufruf neu gebaut).
+///
+/// Zusätzlich zu, nicht anstelle von [`redact_secrets`]: Letzteres ersetzt
+/// die wörtlich bekannten eigenen Geheimnisse (API-Key,
+/// `extra_headers`-Werte), der Redactor die allgemeinen Muster. Beide
+/// Richtungen bleiben nötig — der Redactor kennt den konkreten Key nicht,
+/// und `redact_secrets` kennt kein Muster.
+fn redact_for_debug(text: &str, secrets: &[&str]) -> String {
+    default_log_redactor().redact_text(&redact_secrets(text, secrets))
+}
+
+/// Spec 0094, A1.2: Was von der Historie ab `info` stehen bleibt, ist
+/// ausschließlich Art und Länge je Eintrag — der Text selbst
+/// (Chat-Nachrichten, Notizen, Kommandotexte) steht nur noch auf `debug`,
+/// s. [`history_contents`].
+fn history_shapes(context: &SessionContext) -> Vec<String> {
+    context
+        .history
+        .iter()
+        .map(|m| match &m.content {
+            MessageContent::Text(t) => {
+                format!("[text] len={}", t.chars().count())
+            }
+            MessageContent::CommandResult {
+                command,
+                output,
+                cancelled,
+            } => format!(
+                "[command_result] command_len={} exit={:?} stdout_len={} stderr_len={} \
+                 cancelled={cancelled}",
+                command.chars().count(),
+                output.exit_code,
+                output.stdout.len(),
+                output.stderr.len()
+            ),
+            // Nur die Art der Ablehnung, nicht der Text von
+            // `RejectionReason::Blocked` — A1.2 lässt „Art und Länge" zu.
+            // Der Text stammt heute aus der Filter-Entscheidung (Regel-ID
+            // bzw. fester Grund) und trüge damit kein Kommando; ihn hier
+            // trotzdem weglassen kostet nichts und hält die Zeile
+            // unabhängig davon, woraus dieser Grund künftig gebaut wird.
+            MessageContent::ActionRejected { command, reason } => format!(
+                "[action_rejected] command_len={} reason={}",
+                command.chars().count(),
+                match reason {
+                    RejectionReason::User => "user",
+                    RejectionReason::Blocked(_) => "blocked",
+                    RejectionReason::Timeout => "timeout",
+                }
+            ),
+        })
+        .collect()
+}
+
+/// Der volle Inhalt je History-Eintrag — nur für die `debug`-Zeile (A2),
+/// dort durch den Redactor gelaufen. Entspricht dem, was bis Spec 0094 auf
+/// `info` stand.
+fn history_contents(context: &SessionContext) -> Vec<String> {
+    let redactor = default_log_redactor();
+    context
+        .history
+        .iter()
+        .map(|m| match &m.content {
+            MessageContent::Text(t) => redactor.redact_text(t),
+            MessageContent::CommandResult { command, output, cancelled } => format!(
+                "[command_result] {} (exit={:?}, stdout_len={}, stderr_len={}, cancelled={cancelled})",
+                redactor.redact_text(command),
+                output.exit_code,
+                output.stdout.len(),
+                output.stderr.len()
+            ),
+            MessageContent::ActionRejected { command, reason } => format!(
+                "[action_rejected] {} ({})",
+                redactor.redact_text(command),
+                match reason {
+                    RejectionReason::User => "user".to_string(),
+                    RejectionReason::Blocked(reason) => {
+                        format!("blocked: {}", redactor.redact_text(reason))
+                    }
+                    RejectionReason::Timeout => "timeout".to_string(),
+                }
+            ),
+        })
+        .collect()
+}
 
 /// Spec 0016, Abschnitt 4, Punkt 1: der tatsächlich an den Provider
 /// gesendete `SessionContext` — **nach** Redaction. Der hier ankommende
 /// `context` wurde bereits in `app-shell::orchestration` redigiert, bevor
 /// ein Kommando-Ergebnis überhaupt in `context.history` landete (s.
 /// `OutputRedactor`, Spec 0006 Abschnitt 5) — diese Funktion loggt also nie
-/// rohen, unredigierten Kommando-Output. `CommandResult`-Einträge werden
-/// hier bewusst nur als Kommando + Längen zusammengefasst (nicht der volle
-/// Text): der volle, redigierte Output steht bereits in einem eigenen
-/// Log-Eintrag pro Ausführung (Spec 0016, Abschnitt 4, Punkt 5, s.
-/// `app-shell::orchestration::log_command_execution`) — ihn hier zusätzlich
-/// vollständig zu wiederholen würde Logs nur unnötig aufblähen, ohne neue
-/// Information zu liefern.
+/// rohen, unredigierten Kommando-Output.
+///
+/// Spec 0094, A1.2/A2: Der frühere Aufbau — `system_context` und die volle
+/// `history` auf `info` — ist aufgeteilt. Ab `info` steht nur noch die Form
+/// (s. [`history_shapes`]), der Inhalt auf einer eigenen `debug`-Zeile
+/// (s. [`history_contents`]). Die Begründung von Spec 0016, warum
+/// `CommandResult` hier nur als Kommando + Längen erscheint und nicht als
+/// voller Output (der steht pro Ausführung in
+/// `app_logic::orchestration::action_exec`), gilt auf der `debug`-Zeile
+/// unverändert weiter.
 pub(crate) fn log_outgoing_context(request_id: Uuid, context: &SessionContext) {
-    let history: Vec<String> = context
-        .history
-        .iter()
-        .map(|m| match &m.content {
-            MessageContent::Text(t) => t.clone(),
-            MessageContent::CommandResult { command, output, cancelled } => format!(
-                "[command_result] {command} (exit={:?}, stdout_len={}, stderr_len={}, cancelled={cancelled})",
-                output.exit_code,
-                output.stdout.len(),
-                output.stderr.len()
-            ),
-            MessageContent::ActionRejected { command, reason } => format!(
-                "[action_rejected] {command} ({})",
-                match reason {
-                    RejectionReason::User => "user".to_string(),
-                    RejectionReason::Blocked(reason) => format!("blocked: {reason}"),
-                    RejectionReason::Timeout => "timeout".to_string(),
-                }
-            ),
-        })
-        .collect();
     let action_names: Vec<&str> = context
         .available_actions
         .iter()
         .map(|a| a.name.as_str())
         .collect();
 
+    // Spec 0094, A1.2: `system_context` (Systemprompt samt Servernotizen)
+    // und `history` (der volle Chatverlauf, Notiztexte, Kommandotexte)
+    // standen hier roh auf `info` — die umfangreichste Inhaltsquelle im
+    // ganzen Log. Ab `info` bleiben `request_id`, die Anzahl der Einträge,
+    // die Namen der Aktionen und je Eintrag nur Art und Länge.
     tracing::info!(
         request_id = %request_id,
-        system_context = %context.system_context,
-        history_len = history.len(),
-        history = ?history,
+        history_len = context.history.len(),
+        history_shapes = ?history_shapes(context),
         available_actions = ?action_names,
         "outgoing session context to AI provider",
+    );
+    // Spec 0094, A2: derselbe Inhalt wie vorher, auf `debug` und redigiert.
+    // `history_contents`/`redact_text` laufen nur, wenn diese Zeile
+    // tatsächlich aufgezeichnet wird — `tracing`s Ereignis-Makros werten
+    // ihre Feldausdrücke erst innerhalb des `if enabled`-Zweigs aus, den sie
+    // selbst erzeugen.
+    tracing::debug!(
+        request_id = %request_id,
+        system_context = %default_log_redactor().redact_text(&context.system_context),
+        history = ?history_contents(context),
+        "outgoing session context to AI provider (content)",
     );
 }
 
@@ -154,21 +263,41 @@ pub(crate) fn log_cache_usage(request_id: Uuid, provider: &str, usage: &Value) {
 /// bezieht sich auf den fertigen Block, nicht auf jedes einzelne
 /// Zwischen-Chunk (die läppern sich oft zu keinem gültigen JSON für sich
 /// genommen).
+/// Spec 0094, A1.3: `raw_arguments` sind die Argumente des Werkzeugaufrufs
+/// — in der Praxis der vorgeschlagene Kommandotext bzw. ein Notiz- oder
+/// Dateiinhalt. Ab `info` bleibt davon nur die Länge.
 pub(crate) fn log_tool_call_fragment(request_id: Uuid, tool_name: &str, raw_arguments: &str) {
     tracing::info!(
         request_id = %request_id,
         tool_name,
-        raw_arguments,
+        raw_arguments_len = raw_arguments.chars().count(),
         "received tool call fragment",
+    );
+    tracing::debug!(
+        request_id = %request_id,
+        tool_name,
+        raw_arguments = %default_log_redactor().redact_text(raw_arguments),
+        "received tool call fragment (arguments)",
     );
 }
 
 /// Spec 0016, Abschnitt 4, Punkt 3, Erfolgsfall.
+///
+/// Spec 0094, A1.3: `action = ?action` trug hier das volle `AiAction` — bei
+/// `SuggestCommand` das Kommando, bei `ProposeNoteUpdate`/`WriteRemoteFile`
+/// den kompletten neuen Inhalt. Ab `info` bleibt nur
+/// [`AiAction::kind`] („Art der Aktion").
 pub(crate) fn log_tool_call_parsed(request_id: Uuid, action: &AiAction) {
     tracing::info!(
         request_id = %request_id,
-        action = ?action,
+        action_kind = action.kind(),
         "tool call parsed successfully",
+    );
+    tracing::debug!(
+        request_id = %request_id,
+        action_kind = action.kind(),
+        action = %default_log_redactor().redact_text(&format!("{action:?}")),
+        "tool call parsed successfully (action)",
     );
 }
 
@@ -177,18 +306,40 @@ pub(crate) fn log_tool_call_parsed(request_id: Uuid, action: &AiAction) {
 /// beobachteten `target_id ist keine gültige UUID`-Bugfall (Spec 0016,
 /// Abschnitt 1/6) gefehlt hätte, um sofort zu sehen, was die KI tatsächlich
 /// geschickt hat.
+///
+/// Spec 0094, A1.3: Genau diese „vollständige Rohantwort" ist der Inhalt,
+/// den A1 ab `error` verbietet — und der Fehlertext daneben ist es
+/// ebenfalls. Er gibt bei einem `serde_json::Error` einen Ausschnitt der
+/// Eingabe wieder und bei `AiError::InvalidResponse` den Argumentwert, der
+/// die Validierung nicht bestand (z. B. „`target_id` ist keine gültige
+/// UUID: <wert>"). Ab `error` bleiben deshalb nur Werkzeugname,
+/// Argumentlänge und `error_code`; beides Rohe steht auf `debug`.
+///
+/// `error_code` kommt von der Aufrufstelle, weil sie den `AiError` kennt,
+/// der aus diesem Fehlschlag tatsächlich entsteht — `error` selbst ist hier
+/// nur `dyn Display` (bei kaputtem JSON ein `serde_json::Error`, das keinen
+/// Code hat).
 pub(crate) fn log_tool_call_parse_error(
     request_id: Uuid,
     tool_name: &str,
     raw_arguments: &str,
+    error_code: &str,
     error: &dyn std::fmt::Display,
 ) {
     tracing::error!(
         request_id = %request_id,
         tool_name,
-        raw_arguments,
-        error = %error,
+        raw_arguments_len = raw_arguments.chars().count(),
+        code = error_code,
         "tool call parsing/validation failed",
+    );
+    tracing::debug!(
+        request_id = %request_id,
+        tool_name,
+        code = error_code,
+        raw_arguments = %default_log_redactor().redact_text(raw_arguments),
+        error = %default_log_redactor().redact_text(&error.to_string()),
+        "tool call parsing/validation failed (arguments and error text)",
     );
 }
 
@@ -227,13 +378,33 @@ pub(crate) fn log_provider_error_response(
     error: &AiError,
     secrets: &[&str],
 ) {
+    // Spec 0094, A1.5 — die **einzige** Ausnahme von A1: `body` bleibt auf
+    // `warn`, weil eine Fehlkonfiguration (falsches Modell, falscher
+    // Gateway-Pfad, abgelehnter Key) sich ohne die Antwort des Providers
+    // nicht diagnostizieren lässt. Neu ist die Reihenfolge: **erst**
+    // redigieren (wörtliche Secrets **und** Muster), **dann** kürzen — nie
+    // umgekehrt, sonst schneidet die Kürzung ein Muster an und der Anfang
+    // eines Geheimnisses bleibt stehen.
+    let redacted = redact_for_debug(body, secrets);
     tracing::warn!(
         request_id = %request_id,
         status,
         code = error.code(),
-        body = %redact_secrets(body, secrets),
+        body = %truncate_logged_body(&redacted),
         "AI provider returned an error response",
     );
+    // Spec 0094, A2: Was die Kürzung wegnimmt, steht auf `debug` — sonst
+    // wäre bei einer langen Provider-Antwort genau die Information verloren,
+    // für die diese Zeile existiert (Spec 0049, Fund 2).
+    if redacted.chars().count() > MAX_LOGGED_BODY_LEN {
+        tracing::debug!(
+            request_id = %request_id,
+            status,
+            code = error.code(),
+            body = %redacted,
+            "AI provider returned an error response (full body)",
+        );
+    }
 }
 
 /// Spec 0051, Teil 1: ein HTTP 429, das automatisch mit Backoff
@@ -250,13 +421,25 @@ pub(crate) fn log_provider_rate_limited_retry(
     delay: std::time::Duration,
     secrets: &[&str],
 ) {
+    // Spec 0094, A1.5: dieselbe Behandlung wie bei
+    // [`log_provider_error_response`] — dieselbe Art Inhalt (Antwortkörper
+    // des Providers), dieselbe Reihenfolge (redigieren, dann kürzen).
+    let redacted = redact_for_debug(body, secrets);
     tracing::warn!(
         request_id = %request_id,
         attempt,
         delay_ms = delay.as_millis() as u64,
-        body = %redact_secrets(body, secrets),
+        body = %truncate_logged_body(&redacted),
         "AI provider rate-limited the request (429) — retrying with backoff",
     );
+    if redacted.chars().count() > MAX_LOGGED_BODY_LEN {
+        tracing::debug!(
+            request_id = %request_id,
+            attempt,
+            body = %redacted,
+            "AI provider rate-limited the request (429) — retrying with backoff (full body)",
+        );
+    }
 }
 
 /// Gegenstück zu [`log_provider_error_response`] für einen Transport-
@@ -272,13 +455,23 @@ pub(crate) fn log_provider_rate_limited_retry(
 /// könnte dort z. B. `https://user:token@proxy.intern/v1` eintragen, dessen
 /// Userinfo dann unredigiert im Log gelandet wäre. Dieselben `secrets` wie
 /// bei [`log_provider_error_response`] werden deshalb auch hier angewendet.
+///
+/// Spec 0094, A1.7: Das `Display` eines `AiError` kann Inhalt tragen
+/// (`ModelNotFound` den vollen Antworttext des Providers, `InvalidResponse`
+/// Argumentwerte) und stand hier über `message` auf `warn`. Ab `warn` bleibt
+/// nur `code()` — das stand schon vorher daneben, das `error`-Feld fällt
+/// also weg, statt ersetzt zu werden. Der Text steht auf `debug`.
 pub(crate) fn log_provider_transport_error(request_id: Uuid, error: &AiError, secrets: &[&str]) {
-    let message = redact_secrets(&error.to_string(), secrets);
     tracing::warn!(
         request_id = %request_id,
         code = error.code(),
-        error = %message,
         "AI provider transport/connection error",
+    );
+    tracing::debug!(
+        request_id = %request_id,
+        code = error.code(),
+        error = %redact_for_debug(&error.to_string(), secrets),
+        "AI provider transport/connection error (message)",
     );
 }
 
@@ -313,7 +506,10 @@ fn redact_secrets(text: &str, secrets: &[&str]) -> String {
 #[cfg(test)]
 mod error_logging_tests {
     use super::*;
-    use crate::test_support::{clear_log_buffer, install_test_subscriber_once, log_buffer_text};
+    use crate::test_support::{
+        clear_log_buffer, debug_log_lines, install_test_subscriber_once, log_buffer_text,
+        log_lines_at_info_or_above,
+    };
 
     #[test]
     fn test_provider_error_response_logs_status_and_code_redacted() {
@@ -397,17 +593,301 @@ mod error_logging_tests {
         );
     }
 
+    /// Spec 0094, A1.7: Der Code bleibt ab `warn`, die Fehlermeldung wandert
+    /// auf `debug`. Vor Spec 0094 stand beides auf `warn`; dieser Test prüfte
+    /// nur, dass beides *irgendwo* im Mitschnitt vorkommt, und hätte die
+    /// Verschiebung nicht bemerkt — deshalb jetzt je Level getrennt.
     #[test]
-    fn test_provider_transport_error_logs_code_and_message() {
+    fn test_provider_transport_error_logs_code_at_warn_and_the_message_only_at_debug() {
         install_test_subscriber_once();
         clear_log_buffer();
 
         let error = AiError::NetworkError("connection refused".to_string());
         log_provider_transport_error(Uuid::new_v4(), &error, &[]);
 
-        let log_text = log_buffer_text();
-        assert!(log_text.contains("AI_NETWORK_ERROR"));
-        assert!(log_text.contains("connection refused"));
+        let info_or_above = log_lines_at_info_or_above();
+        assert!(
+            info_or_above.iter().any(|l| l.contains("AI_NETWORK_ERROR")),
+            "der Fehlercode muss ab warn sichtbar bleiben: {info_or_above:?}"
+        );
+        assert!(
+            !info_or_above
+                .iter()
+                .any(|l| l.contains("connection refused")),
+            "die Fehlermeldung darf ab warn nicht mehr stehen (A1.7): {info_or_above:?}"
+        );
+        let debug_lines = debug_log_lines();
+        assert!(
+            debug_lines.iter().any(|l| l.contains("connection refused")),
+            "auf debug muss die Meldung erhalten bleiben (A2): {debug_lines:?}"
+        );
+    }
+
+    // --- Spec 0094: T4, T5, T8 ---------------------------------------------
+
+    /// s. `ssh_manager_core::filter::tests::SECRET_0094` — bewusst eine Form,
+    /// die der Redactor **nicht** erkennt, damit die Tests A1 prüfen und
+    /// nicht die Redaction.
+    const SECRET_0094: &str = "geheim-0094";
+
+    fn secret_command() -> String {
+        format!("mysql -p'{SECRET_0094}' -e 'select 1'")
+    }
+
+    /// Spec 0094, T4: Der ausgehende Kontext ist die umfangreichste
+    /// Inhaltsquelle im Log — Systemprompt, Chatverlauf, Kommandotexte,
+    /// Kommandoausgaben. Alle vier Sorten in einem Kontext, jede mit dem
+    /// Geheimnis.
+    #[test]
+    fn test_t4_0094_outgoing_context_logs_no_content_at_info() {
+        use ssh_manager_core::ai::{ActionSchema, ChatMessage, Role};
+        use ssh_manager_core::ssh::CommandOutput;
+
+        install_test_subscriber_once();
+        clear_log_buffer();
+
+        let context = SessionContext {
+            system_context: format!("Serverhinweis: das Passwort ist {SECRET_0094}"),
+            history: vec![
+                ChatMessage {
+                    role: Role::User,
+                    content: MessageContent::Text(format!("bitte {} ausführen", secret_command())),
+                },
+                ChatMessage {
+                    role: Role::ActionResult,
+                    content: MessageContent::CommandResult {
+                        command: secret_command(),
+                        output: CommandOutput {
+                            stdout: format!("ok, {SECRET_0094}\n").into_bytes(),
+                            stderr: Vec::new(),
+                            exit_code: Some(0),
+                            truncated: false,
+                        },
+                        cancelled: false,
+                    },
+                },
+                ChatMessage {
+                    role: Role::ActionResult,
+                    content: MessageContent::ActionRejected {
+                        command: secret_command(),
+                        reason: RejectionReason::Blocked(format!("Regel greift auf {SECRET_0094}")),
+                    },
+                },
+            ],
+            available_actions: vec![ActionSchema {
+                name: "execute_command".to_string(),
+                description: "führt ein Kommando aus".to_string(),
+                parameters: Vec::new(),
+            }],
+            max_tokens_hint: None,
+        };
+
+        log_outgoing_context(Uuid::new_v4(), &context);
+
+        let info_or_above = log_lines_at_info_or_above();
+        assert!(
+            !info_or_above.iter().any(|l| l.contains(SECRET_0094)),
+            "weder system_context noch ein History-Eintrag darf ab info Inhalt tragen: \
+             {info_or_above:?}"
+        );
+        assert!(
+            !info_or_above.iter().any(|l| l.contains("mysql")),
+            "auch der Kommandotext selbst darf ab info nicht stehen: {info_or_above:?}"
+        );
+        let line = info_or_above
+            .iter()
+            .find(|l| l.contains("outgoing session context to AI provider"))
+            .expect("die Kontext-Zeile muss weiterhin ab info entstehen");
+        assert!(
+            line.contains("\"history_len\":3"),
+            "die Anzahl der History-Einträge muss erhalten bleiben (A1.2): {line}"
+        );
+        assert!(
+            line.contains("execute_command"),
+            "die Namen der Aktionen müssen erhalten bleiben (A1.2): {line}"
+        );
+        for shape in [
+            "[text] len=",
+            "[command_result] command_len=",
+            "exit=Some(0)",
+        ] {
+            assert!(
+                line.contains(shape),
+                "Art und Länge je Eintrag müssen erhalten bleiben (A1.2), fehlt {shape:?}: {line}"
+            );
+        }
+        assert!(
+            line.contains("[action_rejected] command_len=") && line.contains("reason=blocked"),
+            "auch die abgelehnte Aktion braucht Art und Länge (A1.2): {line}"
+        );
+
+        // A2: auf debug steht der Inhalt weiterhin.
+        let debug_lines = debug_log_lines();
+        assert!(
+            debug_lines.iter().any(|l| l
+                .contains("outgoing session context to AI provider (content)")
+                && l.contains("mysql")),
+            "A2 verlangt eine debug-Zeile mit dem bisherigen Inhalt: {debug_lines:?}"
+        );
+    }
+
+    /// Spec 0094, T5: Werkzeugaufruf in allen drei Formen — rohes Fragment,
+    /// geparste Aktion, Parse-Fehler. Beim Parse-Fehler trägt der
+    /// **Fehlertext** das Geheimnis (so wie `AiError::InvalidResponse` einen
+    /// beanstandeten Argumentwert wiedergibt); ab `error` darf nur der Code
+    /// bleiben.
+    #[test]
+    fn test_t5_0094_tool_call_logs_no_arguments_or_error_text_at_info() {
+        install_test_subscriber_once();
+        clear_log_buffer();
+
+        let raw = format!(r#"{{"command":"{}"}}"#, secret_command());
+        let request_id = Uuid::new_v4();
+        log_tool_call_fragment(request_id, "execute_command", &raw);
+        log_tool_call_parsed(
+            request_id,
+            &AiAction::SuggestCommand {
+                command: secret_command(),
+            },
+        );
+        let parse_error =
+            AiError::InvalidResponse(format!("target ist kein bekannter Wert: {SECRET_0094}"));
+        log_tool_call_parse_error(
+            request_id,
+            "execute_command",
+            &raw,
+            parse_error.code(),
+            &parse_error,
+        );
+
+        let info_or_above = log_lines_at_info_or_above();
+        assert!(
+            !info_or_above.iter().any(|l| l.contains(SECRET_0094)),
+            "weder Argumente noch Aktion noch Fehlertext dürfen ab info Inhalt tragen: \
+             {info_or_above:?}"
+        );
+        assert!(
+            !info_or_above.iter().any(|l| l.contains("mysql")),
+            "der Kommandotext darf ab info nicht stehen: {info_or_above:?}"
+        );
+        assert!(
+            info_or_above
+                .iter()
+                .any(|l| l.contains("\"code\":\"AI_INVALID_RESPONSE\"")),
+            "beim Parse-Fehler muss der Fehlercode ab error stehen (A1.3): {info_or_above:?}"
+        );
+        assert!(
+            info_or_above
+                .iter()
+                .any(|l| l.contains("\"action_kind\":\"suggest_command\"")),
+            "die Art der Aktion muss erhalten bleiben (A1.3): {info_or_above:?}"
+        );
+        assert!(
+            info_or_above
+                .iter()
+                .any(|l| l.contains("\"raw_arguments_len\":")),
+            "die Länge der Argumente muss erhalten bleiben (A1.3): {info_or_above:?}"
+        );
+
+        let debug_lines = debug_log_lines();
+        assert!(
+            debug_lines.iter().any(|l| l.contains(SECRET_0094)),
+            "A2 verlangt den bisherigen Inhalt auf debug: {debug_lines:?}"
+        );
+    }
+
+    /// Spec 0094, T8a: A1.5 lässt den `body` auf `warn` stehen — dann muss
+    /// aber der Redactor greifen. Das Geheimnis steht hier in einer Form, die
+    /// er **kennt** (`--password=`), und bewusst in den ersten 100 Zeichen,
+    /// also weit vor der Kürzungsgrenze: geprüft wird die Redaction, nicht
+    /// dass die Kürzung das Geheimnis zufällig abschneidet.
+    #[test]
+    fn test_t8a_0094_provider_error_body_is_redacted_before_it_reaches_warn() {
+        install_test_subscriber_once();
+        clear_log_buffer();
+
+        let body = format!(r#"{{"error":{{"message":"rejected --password={SECRET_0094}"}}}}"#);
+        assert!(
+            body.chars().count() < 100,
+            "der Treffer muss vor der Kürzungsgrenze liegen"
+        );
+        let error = AiError::AuthenticationFailed;
+
+        log_provider_error_response(Uuid::new_v4(), 401, &body, &error, &[]);
+
+        let info_or_above = log_lines_at_info_or_above();
+        assert!(
+            !info_or_above.iter().any(|l| l.contains(SECRET_0094)),
+            "der Redactor muss den body vor der warn-Zeile säubern: {info_or_above:?}"
+        );
+        assert!(
+            info_or_above.iter().any(|l| l.contains("REDACTED")),
+            "der Platzhalter muss stattdessen dort stehen: {info_or_above:?}"
+        );
+    }
+
+    /// Spec 0094, T8b: Kürzung auf 512 Zeichen. Geprüft wird das `body`-Feld
+    /// selbst, nicht die Zeilenlänge — die trägt noch Zeitstempel, Level und
+    /// die übrigen Felder.
+    #[test]
+    fn test_t8b_0094_provider_error_body_is_truncated_to_512_characters_at_warn() {
+        install_test_subscriber_once();
+        clear_log_buffer();
+
+        let body = "A".repeat(2000);
+        let error = AiError::RateLimited;
+
+        log_provider_error_response(Uuid::new_v4(), 429, &body, &error, &[]);
+
+        let info_or_above = log_lines_at_info_or_above();
+        let line = info_or_above
+            .iter()
+            .find(|l| l.contains("AI provider returned an error response"))
+            .expect("die warn-Zeile muss entstehen");
+        let parsed: Value = serde_json::from_str(line).expect("Log-Zeile ist JSON");
+        let logged_body = parsed["fields"]["body"]
+            .as_str()
+            .expect("body-Feld muss ein String sein");
+        let a_count = logged_body.chars().filter(|c| *c == 'A').count();
+        assert_eq!(
+            a_count, MAX_LOGGED_BODY_LEN,
+            "A1.5: höchstens {MAX_LOGGED_BODY_LEN} Zeichen des body, war {a_count}"
+        );
+        assert!(
+            debug_log_lines().iter().any(|l| l.contains("(full body)")),
+            "A2: was die Kürzung wegnimmt, muss auf debug stehen"
+        );
+    }
+
+    /// Spec 0094, T8c: `AiError::ModelNotFound` trägt den vollen Antworttext
+    /// des Providers in seinem `Display` — geloggt über
+    /// `log_provider_transport_error`, die A1.7-Stelle dieser Crate. Das
+    /// Geheimnis steht hier in einer Form, die der Redactor **nicht** kennt,
+    /// und es ist kein bekanntes `secrets`-Element: Nur weil A1.7 das Feld
+    /// ganz entfernt, taucht es ab `warn` nicht auf.
+    #[test]
+    fn test_t8c_0094_model_not_found_display_never_reaches_warn() {
+        install_test_subscriber_once();
+        clear_log_buffer();
+
+        let error = AiError::ModelNotFound(format!(
+            r#"{{"error":{{"message":"unknown model, try sshpass -p {SECRET_0094}"}}}}"#
+        ));
+
+        log_provider_transport_error(Uuid::new_v4(), &error, &[]);
+
+        let info_or_above = log_lines_at_info_or_above();
+        assert!(
+            !info_or_above.iter().any(|l| l.contains(SECRET_0094)),
+            "das Display eines AiError darf ab warn nicht mehr geloggt werden (A1.7): \
+             {info_or_above:?}"
+        );
+        assert!(
+            info_or_above
+                .iter()
+                .any(|l| l.contains("AI_MODEL_NOT_FOUND")),
+            "der Fehlercode muss ab warn bleiben (A1.7): {info_or_above:?}"
+        );
     }
 
     /// Spec-Reviewer-Fund (Spec 0049, Review dieses Schritts): `reqwest`s

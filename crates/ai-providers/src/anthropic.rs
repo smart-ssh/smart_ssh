@@ -929,15 +929,20 @@ fn finalize_tool_use(request_id: Uuid, name: &str, json_acc: &str) -> AiEvent {
                 AiEvent::ActionProposed(action)
             }
             Err(err) => {
-                log_tool_call_parse_error(request_id, name, json_acc, &err);
+                log_tool_call_parse_error(request_id, name, json_acc, err.code(), &err);
                 AiEvent::Error(err)
             }
         },
         Err(err) => {
-            log_tool_call_parse_error(request_id, name, json_acc, &err);
-            AiEvent::Error(AiError::InvalidResponse(format!(
-                "Tool-Use-Input ist kein gültiges JSON: {err}"
-            )))
+            // Spec 0094, A1.3: Der `error_code` ist der des `AiError`, der
+            // aus diesem Fehlschlag entsteht — er wird deshalb hier gebaut,
+            // bevor geloggt wird, statt einen zweiten, nur fürs Log
+            // erfundenen Code zu vergeben. `serde_json::Error` selbst hat
+            // keinen.
+            let ai_error =
+                AiError::InvalidResponse(format!("Tool-Use-Input ist kein gültiges JSON: {err}"));
+            log_tool_call_parse_error(request_id, name, json_acc, ai_error.code(), &err);
+            AiEvent::Error(ai_error)
         }
     }
 }
