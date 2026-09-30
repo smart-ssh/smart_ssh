@@ -181,7 +181,13 @@ fn keep_head_quoted(pattern: &str, replacement: &'static str, expect_msg: &str) 
 /// Ausdruck kann `/usr/bin/mysql` (Programm) nicht von `/var/lib/mysql`
 /// (Argument) unterscheiden. Von beiden Fehlern ist Über-Redaktion der
 /// harmlose: sie kostet Lesbarkeit, kein Geheimnis (dieselbe Abwägung wie
-/// beim Stripe-`pk_`-Muster oben). ADR 0055.
+/// beim Stripe-`pk_`-Muster oben). ADR 0087.
+///
+/// Mit der Zeilenfortsetzung als Trenner (s. [`CMD_SEP`]) reicht dieselbe
+/// Über-Redaktion bis in die Folgezeile, wenn eine Zeile aus anderem Grund
+/// auf `\` endet (Windows-Pfad, umgebrochener String) und dort ein
+/// `-p<wort>` steht — wieder nur die harmlose Richtung
+/// (spec-reviewer-Fund, Runde 2).
 const CMD_ARGS: &str = r"(?:(?:[ \t]|\\\r?\n)+[^\s;|&<>]+){0,12}?";
 
 /// Ein Passwortwert als Argument: ein Shell-Escape (`\;`, `\'`, `\ `), ein
@@ -201,7 +207,7 @@ const CMD_ARGS: &str = r"(?:(?:[ \t]|\\\r?\n)+[^\s;|&<>]+){0,12}?";
 /// Spec 0095 war das keine Verschlechterung, aber schlechter als nichts zu
 /// tun: ein irreführender Platzhalter ist gefährlicher als ein sichtbares
 /// Geheimnis.
-const CMD_VALUE: &str = r#"(?:\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^\s;|&<>'"\\]+)+"#;
+const CMD_VALUE: &str = r#"(?:\\\r?\n|\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^ \t\r\n;|&<>'"\\]+)+"#;
 
 /// Trenner zwischen Programmname, Schalter und Wert: Leerraum **oder** die
 /// Shell-Zeilenfortsetzung `\` + Zeilenumbruch. `CMD_SEP` verlangt mindestens
@@ -380,8 +386,11 @@ fn built_in_patterns() -> Vec<PatternRule> {
             "eingebautes Argon2-Hash-Muster ist gültig",
         ),
         // Spec 0095, A2.4: phpass (`$P$`/`$H$` + 31 Zeichen aus dem
-        // crypt-Base64-Alphabet) — das Format von WordPress-/Drupal-
-        // Datenbankauszügen.
+        // crypt-Base64-Alphabet) — das Format von WordPress- und
+        // Drupal-6-Datenbankauszügen. Ab Drupal 7 ist es `$S$` (SHA-512,
+        // 52 Zeichen); das deckt dieses Muster NICHT ab und Spec 0095
+        // verlangt es nicht — offen wie die `$sha1$`/`$md5$`-Exoten aus
+        // §3 (spec-reviewer-Fund, Runde 2).
         //
         // `{31,}` statt `{31}`: Ein echter phpass-Hash ist exakt 34 Zeichen
         // lang, aber `{31}` hätte bei einer längeren Zeichenkette nur die
@@ -1198,7 +1207,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // A1.5 `redis-cli -a <wert>` / `--pass <wert>` (auch angehängt).
         keep_head(
             &format!(
-                r"(?P<head>\b(?i:redis-cli)\b{CMD_ARGS}{CMD_SEP}(?:-a|--pass)=?{CMD_GAP})(?:{CMD_VALUE})"
+                r"(?P<head>\b(?i:redis-cli)\b{CMD_ARGS}{CMD_SEP}(?:-a{CMD_GAP}|--pass(?:=|{CMD_SEP})))(?:{CMD_VALUE})"
             ),
             "eingebautes redis-cli-Passwortargument-Muster ist gültig",
         ),
@@ -1250,8 +1259,9 @@ fn built_in_patterns() -> Vec<PatternRule> {
         ),
         // `openssl … -k <wert>`: hier ist der Wert die Passphrase selbst
         // (`openssl enc -help`: „-k val  Passphrase", gemessen mit
-        // OpenSSL 3.6.3). Das verlangte `[ \t]+` hinter `-k` hält
-        // `-keyform`/`-key` heraus — beides benennt eine Datei.
+        // OpenSSL 3.6.3). Der hinter `-k` verlangte [`CMD_SEP`] (Leerraum
+        // oder Zeilenfortsetzung, mindestens einer) hält `-keyform`/`-key`
+        // heraus — beides benennt eine Datei.
         keep_head(
             &format!(r"(?P<head>\b(?i:openssl)\b{CMD_ARGS}{CMD_SEP}-k{CMD_SEP})(?:{CMD_VALUE})"),
             "eingebautes openssl-k-Muster ist gültig",

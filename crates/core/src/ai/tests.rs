@@ -2519,3 +2519,90 @@ fn test_t8_0095_redacts_argon2_hashes_with_optional_parameters() {
         "der Benutzername bleibt lesbar: {redacted}"
     );
 }
+
+/// spec-reviewer-Fund §1 (Runde 2): Die Zeilenfortsetzung **mitten im Wert**
+/// war noch offen. Der Trenner-Fall (`-p \` ⏎ ` wert`) war in Runde 1
+/// geschlossen worden, aber `mysql -pSecret\` ⏎ `Rest` (für die Shell das
+/// Passwort `SecretRest`) endete am Backslash: `mysql [REDACTED]\` ⏎ `Rest`
+/// — wieder ein Platzhalter mit dem Rest des Geheimnisses daneben.
+///
+/// Gegenbeweis: gegen den Stand vor dieser Nachbesserung rot.
+#[test]
+fn test_t11_0095_redacts_values_with_a_line_continuation_inside_the_value() {
+    for (input, secret) in [
+        ("mysql -pSecret\\\nRest", "Rest"),
+        ("sshpass -p Sec\\\nret ssh h", "ret ssh"),
+        ("redis-cli -a Ge\\\nheim", "heim"),
+        ("curl -u admin:Ge\\\nheim https://x", "heim"),
+        ("openssl enc -k Ge\\\nheim", "heim"),
+    ] {
+        assert_password_redacted(input, &[secret], &[]);
+    }
+}
+
+/// spec-reviewer-Fund §2 (Runde 2): `\s` ist in der `regex`-Crate
+/// **Unicode**-Leerraum und enthält damit U+00A0 (geschütztes Leerzeichen)
+/// und Verwandte. Für die Shell ist U+00A0 kein Trenner — es gehört zum
+/// Wort. Die Wertklasse endete trotzdem dort und ließ den Rest des Passworts
+/// neben dem Platzhalter stehen.
+///
+/// Gegenbeweis: gegen den Stand vor dieser Nachbesserung rot.
+#[test]
+fn test_t11_0095_redacts_values_containing_non_breaking_whitespace() {
+    assert_password_redacted("mysql -pSEC\u{a0}RET", &["RET"], &[]);
+    assert_password_redacted("sshpass -p SEC\u{2007}RET ssh h", &["RET ssh"], &[]);
+}
+
+/// spec-reviewer-Fund §14 (Runde 2): `redis-cli --password <wert>` — kein
+/// echter redis-cli-Schalter, aber der `--pass`-Präfix traf, verbrauchte das
+/// `word` als Wert und ließ das echte Geheimnis dahinter stehen. Nach dem
+/// Absorb-Schritt sah die Zeile aus wie `redis-cli [REDACTED] Geheim-0095`:
+/// ein Platzhalter direkt neben dem Klartext-Geheimnis. Der Schalter muss
+/// deshalb ein vollständiges Token sein.
+#[test]
+fn test_t12_0095_redis_pass_switch_must_be_a_complete_token() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for harmless in ["redis-cli --password Geheim-0095", "redis-cli --passthru x"] {
+        assert_eq!(
+            redactor.redact_text(harmless),
+            harmless,
+            "kein halb erfasster Schalter, kein irreführender Platzhalter: {harmless}"
+        );
+    }
+    // Die echten Formen bleiben abgedeckt.
+    for input in [
+        "redis-cli --pass Geheim-0095",
+        "redis-cli --pass=Geheim-0095",
+        "redis-cli -aGeheim-0095",
+    ] {
+        assert_password_redacted(input, &[SECRET_0095], &["redis-cli"]);
+    }
+}
+
+/// Zweite bekannte, bewusst akzeptierte Über-Redaktion (spec-reviewer-Fund §5,
+/// Runde 2) — hier festgehalten, damit sie denselben Rang wie die
+/// `find`-Variante hat und nicht unbemerkt kippt.
+///
+/// Bei `htpasswd` redigiert die `-n`-Regel das zweite und die allgemeine Regel
+/// das dritte Positionsargument. Bei einer Mischform bleibt dadurch kein
+/// Geheimnis übrig (das ist der Zweck), aber ein viertes Wort hinter dem
+/// Passwort wird mitgeschwärzt. Die Gegenrichtung — die allgemeine Regel
+/// wieder auf „kein `n` im Schalter" verengen — hat messbar ein echtes
+/// Passwort freigelegt (`htpasswd -bn f user pw` ließ `pw` im Klartext).
+#[test]
+fn test_redactor_known_over_redaction_of_a_fourth_htpasswd_argument() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("htpasswd -nbB user Geheim-0095 extra"),
+        "htpasswd -nbB user [REDACTED] [REDACTED]"
+    );
+    // Der Grund, warum die Verengung nicht zurückkommt: hier bleibt sonst
+    // das Passwort stehen.
+    let mixed = redactor.redact_text("htpasswd -bn f user Geheim-0095");
+    assert!(
+        !mixed.contains(SECRET_0095),
+        "bei der Mischform darf kein Geheimnis übrig bleiben: {mixed}"
+    );
+}
