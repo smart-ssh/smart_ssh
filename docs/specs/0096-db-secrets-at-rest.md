@@ -177,7 +177,33 @@ Keine.
 
 ## 9. Klarstellungen
 
-(leer)
+- **K1 — T6 prüft andere Längen als in §7 genannt.** Mit 55 Zeichen Fülltext
+  beginnt `password=` an Position 55; das Kürzen auf 60 Zeichen schneidet
+  bereits im Schlüsselwort, der Geheimniswert erreicht den Titel nie. Der
+  Test könnte in dieser Form auch dann nicht scheitern, wenn man Schwärzen
+  und Kürzen vertauscht — also genau bei dem Fehler, den er finden soll
+  (gemessen). T6 prüft den Spec-Fall weiterhin als Grenzfall, zusätzlich 45
+  Zeichen und einen Fall mit **nachlaufendem Anker**
+  (`https://u:<wert>@host`, die URL-Regel braucht das `@host` hinter dem
+  Wert). Nur der letzte trägt den Gegenbeweis. Verschärfung des Tests, keine
+  Änderung an A1. Einzelheiten in ADR 0088, Abschnitt 4.
+- **K2 — A3 wird um einen Fall bei offener Datenbank ergänzt.** Ein sauber
+  geschlossener Pool hinterlässt keine `-wal`-Datei (gemessen); T3
+  durchsucht deshalb faktisch nur die Hauptdatei, und die in „Umsetzung"
+  genannte Angriffsrichtung „Rohdatei-Suche, die nur die Hauptdatei liest
+  (WAL)" bliebe unbelegt. Ein dritter Test sucht vor dem Schließen, wo
+  `-wal` und `-shm` existieren. ADR 0088, Abschnitt 5.
+- **K3 — Ein vollständig geschwärzter Notizvorschlag wird gemeldet.** A2
+  verlangt nur „kein Vorschlag". Im Chat- und im MCP-Weg wird zusätzlich
+  eine feste Meldung ausgegeben (ohne Inhalt der KI); beim Verbindungsende
+  bleibt es bei einem Log-Eintrag, weil Spec 0010 §2 Punkt 4 dort
+  ausdrücklich „kommentarlos beenden" festlegt. ADR 0088, Abschnitt 2.
+- **K4 — §3 („Ziel") ist durch den Redactor begrenzt.** Der Satz „enthält
+  keine Datei des Datenbank-Verzeichnisses das Geheimnis im Klartext" gilt,
+  soweit die Muster des Redactors greifen — §1 Punkt 5 sagt das bereits für
+  den Titel. Ein grüner `strings`-Lauf bei der Handabnahme belegt den
+  geprüften Fall, nicht die Aussage in voller Allgemeinheit. ADR 0088,
+  Abschnitt 6.
 
 ## Umsetzung
 
