@@ -49,10 +49,14 @@ Kommando, Kontext und Rohantwort stehen dort künftig auf `debug`.
      (`action_exec`: „Kommando '{command}' konnte nicht ausgeführt werden …",
      übernommen in `app_shell::mcp_backend`).
    - Fehlerwerte vom Typ `AiError` und `SshError` als `error = %err` auf
-     `warn`/`error` an rund zwei Dutzend Stellen (u. a. `compaction.rs`,
-     `notes.rs`, `app_shell::commands::connect`; dazu
-     `request_logging::log_provider_transport_error`, das den Text über einen
-     String loggt). Ihr `Display` kann Inhalt tragen: `AiError::ModelNotFound`
+     `warn`/`error` an sieben Stellen (gezählt, Q-BL-0029-01; maßgeblich
+     bleibt das funktionale Kriterium A1.7): `compaction.rs`, `notes.rs`,
+     zwei in `app_shell::commands::connect` (eine davon über `CommandError`,
+     dessen `message` aus `SshError` stammt),
+     `action_exec::log_command_execution_failed`,
+     `request_logging::log_provider_transport_error` (über einen String) und
+     `log_tool_call_parse_error` (als `dyn Display`, dort auch
+     `serde_json::Error`). Ihr `Display` kann Inhalt tragen: `AiError::ModelNotFound`
      enthält den vollen Antworttext des Providers, `AiError::InvalidResponse`
      gibt Argumentwerte wieder, `SshError`-Varianten tragen freien Text.
      Beide Typen haben `code()`.
@@ -62,8 +66,12 @@ Kommando, Kontext und Rohantwort stehen dort künftig auf `debug`.
    Die schon redigierten Stellen aus Punkt 2 sind deshalb ebenfalls
    betroffen. Die Session nutzt denselben Redactor (`Session::redactor`).
 4. **Diagnose-Export:** `build_diagnostics_bundle` übernimmt nur Zeilen,
-   deren Nachricht in `SAFE_LOG_MESSAGES` steht; keine Zeile aus Punkt 2
-   steht darin.
+   deren Nachricht in `SAFE_LOG_MESSAGES` steht, und lässt sie zusätzlich
+   durch den `OutputRedactor`. Drei Nachrichten aus Punkt 2 stehen darin
+   (`log_provider_error_response`, `log_provider_rate_limited_retry`,
+   `log_provider_transport_error`) — genau die Gruppe, für die A1.5 die
+   Ausnahme macht (gemessen, Q-BL-0029-01; §8.2). Keine andere Zeile aus
+   Punkt 2 steht darin.
 5. **Test-Aufzeichnung ist je Crate verschieden** (gelesen): je Testbinary
    ein globaler Subscriber, einmal gesetzt.
    - `core` (`filter/tests.rs`, Mitschnitt für T-A10): nur `ERROR`.
@@ -227,10 +235,21 @@ ablehnen, einmal über MCP ausführen; danach im Log-Verzeichnis nach
    Optionen: (a) nicht anfassen — sie werden nach 14 Tagen beim Start
    gelöscht (`MAX_LOG_AGE`); (b) beim ersten Start der neuen Version alle
    älteren Logdateien löschen. Empfehlung: (a).
+2. **Provider-`body` auch im Diagnosepaket** (Q-BL-0029-02, nicht
+   blockierend). Über §1.4 erreicht der `body` aus A1.5 nicht nur die
+   Logdatei, sondern auch das Diagnosepaket. Optionen: (a) unverändert —
+   nach A1.5/A1.7 trägt die Gruppe weniger als heute, und der Export
+   redigiert ein zweites Mal; (b) `body` im Export weglassen; (c) A1.5
+   fallen lassen. Empfehlung: (a). Bis zur Entscheidung gilt A1.5 wie
+   geschrieben; `SAFE_LOG_MESSAGES` wird in keinem Fall in diesem Schritt
+   angefasst (§3).
 
 ## 9. Klarstellungen
 
 - §8.1 alte Logdateien: Option (a) — nicht anfassen. Nichts umzusetzen.
+- §1.2/§1.4 (Q-BL-0029-01): Zählung und Aussage zum Diagnose-Export
+  korrigiert. An den Anforderungen ändert sich nichts; A1.7 gilt funktional,
+  nicht über eine Anzahl.
 
 ## Umsetzung
 
