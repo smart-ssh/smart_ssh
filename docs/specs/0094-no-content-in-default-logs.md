@@ -1,6 +1,6 @@
 # Spec 0094 — Keine Inhalte in der Logdatei auf dem Standard-Level
 
-Status: Vorschlag · Backlog: BL-0029 · Gate: release-1.0/C
+Status: freigegeben · Backlog: BL-0029 · Gate: release-1.0/C
 Zweck: Die Logdatei enthält auf dem Standard-Level (`info`) keinen Kommandotext, keine Kommando-Ausgabe, keinen Chat-, Notiz- oder Prompt-Inhalt und keine Werkzeug-Argumente mehr — unabhängig davon, welche Muster der Redactor kennt.
 Review-Priorität: ERHÖHT (Redactor, Log als Datensenke)
 
@@ -230,7 +230,7 @@ ablehnen, einmal über MCP ausführen; danach im Log-Verzeichnis nach
 
 ## 9. Klarstellungen
 
-(leer)
+- §8.1 alte Logdateien: Option (a) — nicht anfassen. Nichts umzusetzen.
 
 ## Umsetzung
 
