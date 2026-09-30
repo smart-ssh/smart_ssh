@@ -1854,3 +1854,326 @@ fn test_redactor_keeps_covering_the_already_recognized_forms_from_spec_0095() {
         );
     }
 }
+
+// --- Spec 0095, A1: Passwort-Argumente von Kommandozeilenprogrammen ------
+//
+// Gegenbeweis (Skill "Regressionstests mit Gegenbeweis"): T1–T6 und T10/T11
+// sind gegen den Stand vor Spec 0095 gelaufen und dort alle rot — die
+// gemessenen Fehlschläge stehen im Bericht des Laufs. T12 (Fehlalarme) und
+// T13/T15 (Wächter) müssen gegen den alten Stand NICHT scheitern; das ist
+// ihr Zweck.
+
+/// Geheimnis aller Spec-0095-Tests (§7).
+const SECRET_0095: &str = "Geheim-0095";
+
+/// Prüft, dass `input` nach der Redaction kein Geheimnis mehr enthält und
+/// dass die lesbaren Teile (`must_keep`) stehen bleiben — A1 verlangt
+/// ausdrücklich, dass nur der Wert verschwindet.
+#[track_caller]
+fn assert_password_redacted(input: &str, secrets: &[&str], must_keep: &[&str]) {
+    let redacted = DefaultOutputRedactor::new().redact_text(input);
+    for secret in secrets {
+        assert!(
+            !redacted.contains(secret),
+            "das Geheimnis {secret:?} muss verschwunden sein: {input:?} -> {redacted:?}"
+        );
+    }
+    assert!(
+        redacted.contains("[REDACTED]"),
+        "der Platzhalter muss dort stehen: {input:?} -> {redacted:?}"
+    );
+    for keep in must_keep {
+        assert!(
+            redacted.contains(keep),
+            "{keep:?} ist kein Geheimnis und muss lesbar bleiben: {input:?} -> {redacted:?}"
+        );
+    }
+}
+
+/// Spec 0095, T1 (A1.1): Passwort als angehängter Wert von `-p` bei der
+/// mysql-Familie — auch in Anführungszeichen, auch bei aneinandergehängten
+/// Quote-Abschnitten, auch über einen absoluten Pfad, `sudo`, `command`,
+/// `\mysql` oder in Großschreibung aufgerufen.
+#[test]
+fn test_t1_0095_redacts_attached_mysql_password_arguments() {
+    for (input, keep) in [
+        ("mysql -pGeheim-0095 -u root", vec!["mysql", "-u root"]),
+        ("mysql -p'Geheim-0095'", vec!["mysql"]),
+        (
+            "mysqldump -u r -pGeheim-0095 db",
+            vec!["mysqldump", "-u r", "db"],
+        ),
+        ("mariadb -pGeheim-0095", vec!["mariadb"]),
+        (
+            "mysqladmin -pGeheim-0095 status",
+            vec!["mysqladmin", "status"],
+        ),
+        ("/usr/bin/mysql -pGeheim-0095", vec!["/usr/bin/mysql"]),
+        ("sudo -u x mysql -pGeheim-0095", vec!["sudo", "mysql"]),
+        ("command mysql -pGeheim-0095", vec!["command", "mysql"]),
+        (r"\mysql -pGeheim-0095", vec![r"\mysql"]),
+        ("MYSQL -pGeheim-0095", vec!["MYSQL"]),
+    ] {
+        assert_password_redacted(input, &[SECRET_0095], &keep);
+    }
+
+    // Wert mit Leerzeichen in doppelten Anführungszeichen und die
+    // aneinandergehängte Quote-Form aus §7 — beides eigene Zeilen, weil das
+    // Geheimnis dort anders lautet.
+    assert_password_redacted("mysql -p\"Geheim 0095\"", &["Geheim 0095"], &["mysql"]);
+    assert_password_redacted("mysql -p'a'\"Geheim-0095\"", &[SECRET_0095], &["mysql"]);
+}
+
+/// Spec 0095, T2 (A1.2): `sshpass -p` mit und ohne Leerzeichen.
+#[test]
+fn test_t2_0095_redacts_sshpass_password_arguments() {
+    assert_password_redacted(
+        "sshpass -p Geheim-0095 ssh host",
+        &[SECRET_0095],
+        &["sshpass", "ssh host"],
+    );
+    assert_password_redacted(
+        "sshpass -pGeheim-0095 ssh host",
+        &[SECRET_0095],
+        &["sshpass", "ssh host"],
+    );
+}
+
+/// Spec 0095, T3 (A1.3): `curl -u`/`--user` in allen Schreibweisen — auch
+/// als letzter Buchstabe eines Kurzschalterblocks. Redigiert wird nur der
+/// Teil nach dem ersten `:`, der Benutzername bleibt lesbar.
+#[test]
+fn test_t3_0095_redacts_curl_basic_auth_passwords() {
+    for input in [
+        "curl -u admin:Geheim-0095 https://x",
+        "curl --user admin:Geheim-0095 https://x",
+        "curl -sSu admin:Geheim-0095 https://x",
+        "curl -uadmin:Geheim-0095 https://x",
+        "curl -sSuadmin:Geheim-0095 https://x",
+        "curl --user=admin:Geheim-0095 https://x",
+    ] {
+        assert_password_redacted(input, &[SECRET_0095], &["curl", "admin"]);
+    }
+    assert_password_redacted(
+        "curl -u 'admin:Geheim 0095' https://x",
+        &["Geheim 0095"],
+        &["curl", "admin"],
+    );
+}
+
+/// Spec 0095, T4 (A1.4): `htpasswd` mit einem Schalterblock, der `b`
+/// enthält. Mit `n` im Block ist das Passwort das zweite, sonst das dritte
+/// Positionsargument; Schalterwerte (`-C 12`) und alles nach dem Kommando
+/// (`> out`) bleiben stehen.
+#[test]
+fn test_t4_0095_redacts_htpasswd_passwords() {
+    assert_password_redacted(
+        "htpasswd -b f user Geheim-0095",
+        &[SECRET_0095],
+        &["htpasswd", "f", "user"],
+    );
+    assert_password_redacted(
+        "htpasswd -nbB user Geheim-0095 > out",
+        &[SECRET_0095],
+        &["htpasswd", "user", "> out"],
+    );
+    assert_password_redacted(
+        "htpasswd -bB -C 12 f user Geheim-0095",
+        &[SECRET_0095],
+        &["htpasswd", "12", "user"],
+    );
+}
+
+/// Spec 0095, T5 (A1.5–A1.7): redis-cli, smbclient/rpcclient und openssl.
+#[test]
+fn test_t5_0095_redacts_redis_smb_and_openssl_passwords() {
+    for (input, keep) in [
+        ("redis-cli -a Geheim-0095", vec!["redis-cli"]),
+        ("redis-cli -h db -a Geheim-0095 ping", vec!["-h db", "ping"]),
+        ("redis-cli --pass Geheim-0095", vec!["redis-cli"]),
+        ("smbclient -U user%Geheim-0095 //h/s", vec!["user", "//h/s"]),
+        (
+            "smbclient --user=user%Geheim-0095 //h/s",
+            vec!["user", "//h/s"],
+        ),
+        ("rpcclient -U user%Geheim-0095 h", vec!["user"]),
+        ("openssl enc -pass pass:Geheim-0095", vec!["openssl enc"]),
+        ("openssl rsa -passin pass:Geheim-0095", vec!["openssl rsa"]),
+        ("openssl req -passout pass:Geheim-0095", vec!["openssl req"]),
+        ("openssl enc -k Geheim-0095", vec!["openssl enc"]),
+    ] {
+        assert_password_redacted(input, &[SECRET_0095], &keep);
+    }
+
+    assert_password_redacted(
+        "openssl enc -pass \"pass:Geheim 0095\"",
+        &["Geheim 0095"],
+        &["openssl enc"],
+    );
+    assert_password_redacted(
+        "sshpass -p 'Geheim 0095' ssh h",
+        &["Geheim 0095"],
+        &["sshpass", "ssh h"],
+    );
+}
+
+/// Spec 0095, T6 (A1.8): dieselben Regeln mitten in Verkettungen, in
+/// Kommandosubstitution, hinter `env VAR=x`, mit Tabulator und mit mehreren
+/// Leerzeichen zwischen Schalter und Wert.
+#[test]
+fn test_t6_0095_redacts_passwords_inside_chains_and_odd_whitespace() {
+    for (input, keep) in [
+        (
+            "cd /x && mysql -pGeheim-0095; echo ok",
+            vec!["cd /x", "echo ok"],
+        ),
+        (
+            "echo $(sshpass -p Geheim-0095 ssh h cat f)",
+            vec!["sshpass", "ssh h cat f"],
+        ),
+        (
+            "env LANG=C curl -u a:Geheim-0095 x | jq .",
+            vec!["LANG=C", "jq ."],
+        ),
+        ("sshpass\t-p\tGeheim-0095 ssh h", vec!["sshpass", "ssh h"]),
+        ("curl  -u   a:Geheim-0095 x", vec!["curl", "a:"]),
+    ] {
+        assert_password_redacted(input, &[SECRET_0095], &keep);
+    }
+}
+
+/// Spec 0095, T10: dieselben Formen in `stdout` und `stderr` eines
+/// `CommandOutput` über [`OutputRedactor::redact`] — und mehrzeilig, damit
+/// eine Regel nicht versehentlich über das Zeilenende hinweg greift.
+#[test]
+fn test_t10_0095_redacts_command_line_passwords_in_command_output() {
+    let redactor = DefaultOutputRedactor::new();
+    let text = "mysql -pGeheim-0095 -u root\n\
+                sshpass -p Geheim-0095 ssh host\n\
+                curl -u admin:Geheim-0095 https://x\n\
+                htpasswd -b f user Geheim-0095\n\
+                redis-cli -a Geheim-0095\n\
+                openssl enc -pass pass:Geheim-0095\n";
+    let input = CommandOutput {
+        stdout: text.as_bytes().to_vec(),
+        stderr: text.as_bytes().to_vec(),
+        exit_code: Some(0),
+        truncated: false,
+    };
+
+    let redacted = redactor.redact(&input);
+
+    for stream in [&redacted.stdout, &redacted.stderr] {
+        let out = String::from_utf8(stream.clone()).expect("gültiges UTF-8");
+        assert!(
+            !out.contains(SECRET_0095),
+            "kein Geheimnis darf übrig bleiben: {out}"
+        );
+        assert_eq!(
+            out.lines().count(),
+            6,
+            "keine Regel darf Zeilen verschmelzen: {out}"
+        );
+        for keep in ["mysql", "ssh host", "admin", "user", "redis-cli", "openssl"] {
+            assert!(out.contains(keep), "{keep} muss lesbar bleiben: {out}");
+        }
+    }
+}
+
+/// Spec 0095, T11 (adversarial, Anker-Diebstahl): Stellen, an denen eine
+/// neue und eine bestehende Regel sich berühren. Keine der beiden darf der
+/// anderen den Anker nehmen — am Ende darf **kein** Geheimnis mehr stehen.
+#[test]
+fn test_t11_0095_new_and_existing_rules_do_not_steal_each_others_anchors() {
+    assert_password_redacted(
+        "mysql -p'Geheim-0095' --host=db://u:Zwei-0095@h",
+        &[SECRET_0095, "Zwei-0095"],
+        &["mysql"],
+    );
+    assert_password_redacted(
+        "curl -u a:Geheim-0095 https://u:Zwei-0095@h/?password=Drei-0095",
+        &[SECRET_0095, "Zwei-0095", "Drei-0095"],
+        &["curl"],
+    );
+    assert_password_redacted(
+        "sshpass -p Geheim-0095 ssh h 'cat <<EOF\n\
+         -----BEGIN PRIVATE KEY-----\n\
+         MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ\n\
+         -----END PRIVATE KEY-----'",
+        &[
+            SECRET_0095,
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ",
+        ],
+        &["sshpass"],
+    );
+    // Ein Passwort, das selbst wie ein Schlüsselwort-Parameter aussieht:
+    // beide Regeln müssen greifen, keine darf den Rest freilegen.
+    assert_password_redacted(
+        "mysql -pGeheim-0095 --host=h && curl -u a:Zwei-0095 https://h/?token=Drei-0095@x",
+        &[SECRET_0095, "Zwei-0095", "Drei-0095"],
+        &["mysql", "curl"],
+    );
+}
+
+/// Spec 0095, T12 (A5): keine Fehlalarme. Diese Eingaben müssen **wörtlich
+/// unverändert** durchlaufen — ein `-p` ist je nach Programm ein Port, eine
+/// Passwortdatei, ein Patch-Schalter oder der Datenbankname.
+#[test]
+fn test_t12_0095_leaves_harmless_switches_and_identifiers_unchanged() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for harmless in [
+        "ssh -p 2222 host",
+        "mysql -u root -p mydb",
+        "mysql -P 3306 -h db",
+        "mysql -P3306 -h db",
+        "mysql --password mydb",
+        "curl -u admin https://x",
+        "curl -k https://x",
+        "sshpass -f pwfile ssh -p 2222 h",
+        "openssl enc -pass env:PW",
+        "openssl enc -pass file:/k",
+        "htpasswd -D f user",
+        "scp user@host:/path .",
+        "git log -p",
+        "grep -p foo",
+        "9e107d9d-372b-b682-6bd8-1d0f6d2c1cd4",
+        "0123456789abcdef0123456789abcdef01234567",
+        "SKU-12345",
+        "eyJ",
+        "redis-cli -h db ping",
+        "smbclient -L //h/s",
+        "mysqldump --single-transaction db > dump.sql",
+    ] {
+        assert_eq!(
+            redactor.redact_text(harmless),
+            harmless,
+            "harmlose Eingabe darf nicht angetastet werden: {harmless}"
+        );
+    }
+}
+
+/// Angriffsrichtung „Laufzeit bei langen Eingaben" aus dem Auftrag: eine
+/// Eingabe von 1 MB ohne einen einzigen Treffer läuft linear durch und kommt
+/// unverändert heraus. Kein Zeitlimit als Zusicherung — ein Zeitwert wäre auf
+/// fremder Hardware wertlos —, aber ein Test, der bei katastrophalem
+/// Backtracking gar nicht mehr fertig würde.
+#[test]
+fn test_redactor_handles_a_one_megabyte_input_without_matches() {
+    let redactor = DefaultOutputRedactor::new();
+    // Bewusst mit den Anker-Wörtern der neuen Regeln, aber ohne je ein
+    // Passwort-Argument: so muss jede Regel wirklich suchen.
+    let chunk = "mysql curl sshpass htpasswd redis-cli openssl smbclient -x -q ok 12345 ";
+    let input = chunk.repeat(1_000_000 / chunk.len() + 1);
+    assert!(input.len() > 1_000_000);
+
+    let started = std::time::Instant::now();
+    let redacted = redactor.redact_text(&input);
+    let elapsed = started.elapsed();
+
+    assert_eq!(redacted, input, "ohne Treffer darf sich nichts ändern");
+    eprintln!(
+        "redact_text auf {} Bytes ohne Treffer: {elapsed:?}",
+        input.len()
+    );
+}

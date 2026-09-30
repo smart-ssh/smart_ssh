@@ -27,9 +27,13 @@ const REDACTED_PLACEHOLDER: &str = "[REDACTED]";
 /// in Benutzer oder Passwort und als Passwort-Parameter im Query-String,
 /// Spec 0078), nackte Provider-Keys
 /// (Anthropic, OpenAI, OpenRouter, GitLab, Hugging Face), `x-api-key`-/
-/// `Authorization: Basic`-Header (Spec 0068) und Unix-Crypt-/Shadow-Passwort-Hashes
-/// (`$1$`/`$5$`/`$6$`/`$y$`/`$2b$`/`$7$`/`$apr1$` & verwandte Varianten,
-/// s. `built_in_patterns()`).
+/// `Authorization: Basic`-Header (Spec 0068), Unix-Crypt-/Shadow-Passwort-Hashes
+/// (`$1$`/`$5$`/`$6$`/`$y$`/`$2b$`/`$7$`/`$apr1$` & verwandte Varianten)
+/// sowie Passwörter, die als **Argument eines Kommandozeilenprogramms**
+/// übergeben werden (Spec 0095: `mysql`/`mariadb`/`mysqldump`/`mysqladmin`
+/// `-p<wert>`, `sshpass -p`, `curl -u user:wert`, `htpasswd -b`,
+/// `redis-cli -a`, `smbclient -U user%wert`, `openssl -pass pass:<wert>`
+/// und `-k <wert>`) — s. `built_in_patterns()`.
 ///
 /// Um "leicht um nutzerdefinierte Muster erweiterbar" zu sein (Aufgabe
 /// Teil 1, Punkt 2 — die Speicherung dieser Muster ist explizit noch nicht
@@ -120,6 +124,54 @@ fn simple(pattern: &str, expect_msg: &str) -> PatternRule {
         replacement: REDACTED_PLACEHOLDER,
     }
 }
+
+/// Wie [`simple`], ersetzt aber nur den Teil des Treffers **hinter** der
+/// benannten Gruppe `head`; `head` selbst wird wörtlich zurückgeschrieben
+/// (Spec 0095, A1: „nur der Wert, der Rest bleibt stehen" — Programmname,
+/// Schalter und Benutzername bleiben lesbar).
+fn keep_head(pattern: &str, expect_msg: &str) -> PatternRule {
+    PatternRule {
+        regex: Regex::new(pattern).expect(expect_msg),
+        replacement: "${head}[REDACTED]",
+    }
+}
+
+/// Wie [`keep_head`], schreibt zusätzlich ein `replacement` mit dem
+/// schließenden Anführungszeichen zurück — für Werte, die in Quotes stehen
+/// und deshalb Leerraum enthalten dürfen (`-p"a b"`, `-u 'user:a b'`). Ohne
+/// das zurückgeschriebene Quote bliebe eine unpaarige Anführung stehen.
+fn keep_head_quoted(pattern: &str, replacement: &'static str, expect_msg: &str) -> PatternRule {
+    PatternRule {
+        regex: Regex::new(pattern).expect(expect_msg),
+        replacement,
+    }
+}
+
+/// Argumente zwischen Programmname und Passwort-Schalter (Spec 0095, A1.8:
+/// `mysqldump -u r -pX db`, `sudo -u x mysql -pX`, `env LANG=C curl -u …`).
+///
+/// Bewusst **lazy und beschränkt** (`{0,12}?`): Ein Kommando hat vor dem
+/// Passwort-Schalter keine zwölf Argumente, und eine unbeschränkte Folge
+/// würde jede noch so weit entfernte Stelle mit dem Programmnamen verbinden.
+/// Die ausgeschlossenen Zeichen `;`, `|`, `&`, `<`, `>` und jeder Zeilenumbruch
+/// (`[ \t]` statt `\s`) sind die Grenzen zwischen zwei Kommandos: so kann
+/// keine Regel den Programmnamen des einen mit dem Schalter eines anderen
+/// verbinden (`mysql -e 'select 1' && grep -p x` bleibt unangetastet).
+///
+/// Der Preis ist Über-Redaktion, wenn ein Programmname in freiem Text steht
+/// und auf derselben Zeile später ein `-p<wort>` folgt (`… mysql … tar -pxf a`
+/// würde `xf` schwärzen). Das ist die bewusst gewählte Richtung: ein zu viel
+/// geschwärzter, harmloser Wert ist kein Schaden, ein zu wenig geschwärztes
+/// Passwort ist einer (dieselbe Abwägung wie beim Stripe-`pk_`-Muster oben).
+const CMD_ARGS: &str = r"(?:[ \t]+[^\s;|&<>]+){0,12}?";
+
+/// Ein Passwortwert als Argument: entweder in einfachen oder doppelten
+/// Anführungszeichen (dann darf er Leerraum enthalten) oder frei bis zum
+/// nächsten Leerraum bzw. Kommandotrenner. **Eine Folge** davon (`+`), weil
+/// die Shell aneinandergehängte Abschnitte zu einem Wort verbindet:
+/// `-p'a'"Geheim"` ist ein Passwort, nicht zwei (Spec 0095, T1). Ohne das
+/// `+` bliebe der zweite Abschnitt im Klartext stehen.
+const CMD_VALUE: &str = r#"(?:'[^'\r\n]*'|"[^"\r\n]*"|[^\s;|&<>'"]+)+"#;
 
 fn built_in_patterns() -> Vec<PatternRule> {
     vec![
@@ -846,6 +898,193 @@ fn built_in_patterns() -> Vec<PatternRule> {
             .expect("eingebautes URL-Muster mit @ in den Zugangsdaten ist gültig"),
             replacement: "${scheme}://${user}:[REDACTED]@",
         },
+        // --- Spec 0095, A1: Passwörter als Argument eines
+        // Kommandozeilenprogramms -------------------------------------------
+        //
+        // **Position: ganz am Ende der Liste, und zwar aus einem Grund, der
+        // sich beweisen lässt.** Jede dieser Regeln verbraucht einen
+        // Programmnamen, einen Schalter und einen Wert, der am nächsten
+        // Leerraum endet — genau die Bauart, die im Redactor schon dreimal
+        // einem späteren Muster den mehrteiligen Anker zerschnitten hat
+        // (`api-key: -----BEGIN …`, zweimal die Query-String-Regel von
+        // Spec 0078, s. den Kommentar am Listenanfang). Hinter allen
+        // bestehenden Mustern angewendet, sehen diese den Originaltext
+        // zuerst: **keine bestehende Regel kann durch die neuen etwas
+        // verlieren.** Das ist dieselbe Begründung, mit der schon die
+        // Muster mit Header-/Schlüsselnamen weiter oben ans Ende gewandert
+        // sind — nur hier per Konstruktion vollständig, weil nichts mehr
+        // folgt.
+        //
+        // Die umgekehrte Richtung (eine bestehende Regel nimmt einer neuen
+        // den Anker) ist möglich und bewusst hingenommen: Steht z. B.
+        // `password=mysql -pGeheim` im Text, ersetzt das Schlüsselwort-Muster
+        // `password=mysql`, und die mysql-Regel findet ihren Programmnamen
+        // nicht mehr. Der Wert bliebe im Klartext — aber genau wie vor
+        // dieser Spec, also ohne Verschlechterung. Es ist keine Lockerung,
+        // nur eine Grenze der Abdeckung.
+        //
+        // Der bestehende Absorb-Schritt schluckt bei angehängten Werten den
+        // Schalter mit (`-p[REDACTED]` → `[REDACTED]`, s. dort). Spec 0095
+        // §5 nimmt das ausdrücklich hin; der Absorb-Schritt bleibt
+        // unverändert.
+        //
+        // A1.1 mysql-Familie: NUR der angehängte Wert (`-pX`, `-p'X'`).
+        // `mysql -p <wert>` mit Leerzeichen ist kein Passwort, sondern der
+        // Datenbankname — ohne angehängten Wert fragt der Client interaktiv
+        // (MySQL-Client-Dokumentation zu `--password[=password], -p[password]`,
+        // Spec 0095 §1.4). `--password=<wert>` deckt das
+        // Schlüsselwort-Muster oben schon ab.
+        //
+        // **Kein `(?i)` für das ganze Muster**, nur für den Programmnamen:
+        // `-P` ist bei mysql der Port. Global case-insensitive hätte
+        // `mysql -P3306 -h db` den Port geschwärzt (Spec 0095, T12).
+        keep_head(
+            &format!(
+                r"(?P<head>\b(?i:mysqldump|mysqladmin|mysql|mariadb)\b{CMD_ARGS}[ \t]+-p)(?:{CMD_VALUE})"
+            ),
+            "eingebautes mysql-Passwortargument-Muster ist gültig",
+        ),
+        // A1.2 `sshpass -p`, mit und ohne Leerzeichen.
+        //
+        // Die Argumente zwischen `sshpass` und `-p` sind hier auf eigene
+        // Schalter (`-`-Präfix) beschränkt statt auf [`CMD_ARGS`]: sonst
+        // reichte die Regel über `sshpass -f pwfile ssh` hinweg bis zum
+        // `-p 2222` des `ssh`-Aufrufs und schwärzte den Port (Spec 0095,
+        // T12 — mit `CMD_ARGS` gemessen fehlgeschlagen). Die Optionen von
+        // `sshpass` stehen ohnehin alle vor dem auszuführenden Kommando.
+        keep_head(
+            &format!(
+                r"(?P<head>\b(?i:sshpass)\b(?:[ \t]+-[A-Za-z]\S*){{0,6}}?[ \t]+-p[ \t]*)(?:{CMD_VALUE})"
+            ),
+            "eingebautes sshpass-Passwortargument-Muster ist gültig",
+        ),
+        // A1.3 `curl -u user:passwort` / `--user`. Redigiert wird nur der
+        // Teil nach dem ERSTEN `:` — der Benutzername bleibt lesbar, und
+        // `curl -u admin` ohne `:` bleibt unangetastet (das `:` ist in
+        // dieser Regel Pflicht).
+        //
+        // `-[A-Za-z]*u` deckt den Kurzschalterblock ab, in dem `u` der
+        // letzte Buchstabe ist (`-sSu`, `-sSuadmin:pw`) — gemessen senden
+        // `curl -uadmin:pw`, `curl -sSuadmin:pw` und `curl -u admin:pw`
+        // alle denselben `Authorization: Basic`-Header (Spec 0095 §1.4).
+        //
+        // Drei Varianten, weil die Quote-Form nicht in einer Alternative
+        // mitgehen kann: ohne Backreferenz kann kein Muster verlangen, dass
+        // der schließende Quote zum öffnenden passt. Ein gemeinsames Muster
+        // mit optionalem Quote hätte bei `curl -u a:pw -H 'X: y'` den Text
+        // bis zum ERSTEN Quote irgendwo dahinter geschluckt.
+        keep_head_quoted(
+            &format!(
+                r"(?P<head>\b(?i:curl)\b{CMD_ARGS}[ \t]+(?:-[A-Za-z]*u|--user)(?:[ \t]+|=)?'[^':\r\n]*:)[^'\r\n]*'"
+            ),
+            "${head}[REDACTED]'",
+            "eingebautes curl-Basic-Auth-Muster (einfache Quotes) ist gültig",
+        ),
+        keep_head_quoted(
+            &format!(
+                r#"(?P<head>\b(?i:curl)\b{CMD_ARGS}[ \t]+(?:-[A-Za-z]*u|--user)(?:[ \t]+|=)?"[^":\r\n]*:)[^"\r\n]*""#
+            ),
+            "${head}[REDACTED]\"",
+            "eingebautes curl-Basic-Auth-Muster (doppelte Quotes) ist gültig",
+        ),
+        keep_head(
+            &format!(
+                r#"(?P<head>\b(?i:curl)\b{CMD_ARGS}[ \t]+(?:-[A-Za-z]*u|--user)(?:[ \t]+|=)?[^\s:;|&<>'"]*:)[^\s;|&<>'"]+"#
+            ),
+            "eingebautes curl-Basic-Auth-Muster ist gültig",
+        ),
+        // A1.4 `htpasswd` mit einem Schalterblock, der `b` enthält (nur dann
+        // steht das Passwort überhaupt auf der Kommandozeile; ohne `-b` fragt
+        // `htpasswd` interaktiv). Gemessen an der Usage-Ausgabe (Spec 0095
+        // §1.4): `-b[…] [-C cost] [-r rounds] file user password` und
+        // `-nb[…] [-C cost] [-r rounds] user password` — mit `n` im Block
+        // entfällt die Datei, das Passwort ist dann das ZWEITE statt dritte
+        // Positionsargument. Deshalb zwei Regeln.
+        //
+        // Die `n`-Regel steht zuerst, und die zweite schließt `n` in ihrer
+        // Buchstabenklasse aus (`[A-Za-mo-z]`, also ohne kleines `n`).
+        // Andernfalls hätte sie bei `htpasswd -nbB user pw morestuff`
+        // zusätzlich `morestuff` geschwärzt, nachdem die erste Regel das
+        // Passwort schon ersetzt hatte.
+        //
+        // `-[A-Za-z]+(?:[ \t]+\d+)?` fängt die Schalter mit Zahlenwert
+        // (`-C 12`, `-r 4096`) ein, damit deren Wert nicht als
+        // Positionsargument zählt. Was nach dem Passwort kommt (`> out`,
+        // `| tee`), bleibt unberührt — die Trennzeichen sind aus allen
+        // Zeichenklassen ausgeschlossen.
+        keep_head(
+            &format!(
+                r"(?P<head>\b(?i:htpasswd)\b(?:[ \t]+-[A-Za-z]+(?:[ \t]+\d+)?)*?[ \t]+-(?:[A-Za-z]*b[A-Za-z]*n[A-Za-z]*|[A-Za-z]*n[A-Za-z]*b[A-Za-z]*)(?:[ \t]+-[A-Za-z]+(?:[ \t]+\d+)?)*[ \t]+[^\s;|&<>]+[ \t]+)(?:{CMD_VALUE})"
+            ),
+            "eingebautes htpasswd-Muster (mit -n) ist gültig",
+        ),
+        keep_head(
+            &format!(
+                r"(?P<head>\b(?i:htpasswd)\b(?:[ \t]+-[A-Za-z]+(?:[ \t]+\d+)?)*?[ \t]+-[A-Za-mo-z]*b[A-Za-mo-z]*(?:[ \t]+-[A-Za-z]+(?:[ \t]+\d+)?)*[ \t]+[^\s;|&<>]+[ \t]+[^\s;|&<>]+[ \t]+)(?:{CMD_VALUE})"
+            ),
+            "eingebautes htpasswd-Muster ist gültig",
+        ),
+        // A1.5 `redis-cli -a <wert>` / `--pass <wert>` (auch angehängt).
+        keep_head(
+            &format!(
+                r"(?P<head>\b(?i:redis-cli)\b{CMD_ARGS}[ \t]+(?:-a|--pass)(?:[ \t]+|=)?)(?:{CMD_VALUE})"
+            ),
+            "eingebautes redis-cli-Passwortargument-Muster ist gültig",
+        ),
+        // A1.6 `smbclient`/`rpcclient`: `-U user%passwort`. Das `%` ist der
+        // Trenner, es bleibt (wie das `:` bei curl) im `head` stehen.
+        keep_head_quoted(
+            &format!(
+                r"(?P<head>\b(?i:smbclient|rpcclient)\b{CMD_ARGS}[ \t]+(?:-U|--user)(?:[ \t]+|=)?'[^'%\r\n]*%)[^'\r\n]*'"
+            ),
+            "${head}[REDACTED]'",
+            "eingebautes smbclient-Muster (einfache Quotes) ist gültig",
+        ),
+        keep_head_quoted(
+            &format!(
+                r#"(?P<head>\b(?i:smbclient|rpcclient)\b{CMD_ARGS}[ \t]+(?:-U|--user)(?:[ \t]+|=)?"[^"%\r\n]*%)[^"\r\n]*""#
+            ),
+            "${head}[REDACTED]\"",
+            "eingebautes smbclient-Muster (doppelte Quotes) ist gültig",
+        ),
+        keep_head(
+            &format!(
+                r#"(?P<head>\b(?i:smbclient|rpcclient)\b{CMD_ARGS}[ \t]+(?:-U|--user)(?:[ \t]+|=)?[^\s%;|&<>'"]*%)[^\s;|&<>'"]+"#
+            ),
+            "eingebautes smbclient-Muster ist gültig",
+        ),
+        // A1.7 `openssl`: bei `-pass`/`-passin`/`-passout` ist nur die Form
+        // `pass:<wert>` das Passwort selbst — `env:`, `file:`, `fd:` und
+        // `stdin` benennen eine QUELLE und bleiben lesbar (Spec 0095, T12).
+        // Deshalb ist `pass:` hier Pflicht.
+        keep_head_quoted(
+            &format!(
+                r"(?P<head>\b(?i:openssl)\b{CMD_ARGS}[ \t]+-pass(?:in|out)?(?:[ \t]+|=)?'pass:)[^'\r\n]*'"
+            ),
+            "${head}[REDACTED]'",
+            "eingebautes openssl-pass-Muster (einfache Quotes) ist gültig",
+        ),
+        keep_head_quoted(
+            &format!(
+                r#"(?P<head>\b(?i:openssl)\b{CMD_ARGS}[ \t]+-pass(?:in|out)?(?:[ \t]+|=)?"pass:)[^"\r\n]*""#
+            ),
+            "${head}[REDACTED]\"",
+            "eingebautes openssl-pass-Muster (doppelte Quotes) ist gültig",
+        ),
+        keep_head(
+            &format!(
+                r#"(?P<head>\b(?i:openssl)\b{CMD_ARGS}[ \t]+-pass(?:in|out)?(?:[ \t]+|=)?pass:)[^\s;|&<>'"]+"#
+            ),
+            "eingebautes openssl-pass-Muster ist gültig",
+        ),
+        // `openssl … -k <wert>`: hier ist der Wert die Passphrase selbst
+        // (`openssl enc -help`: „-k val  Passphrase", gemessen mit
+        // OpenSSL 3.6.3). Das verlangte `[ \t]+` hinter `-k` hält
+        // `-keyform`/`-key` heraus — beides benennt eine Datei.
+        keep_head(
+            &format!(r"(?P<head>\b(?i:openssl)\b{CMD_ARGS}[ \t]+-k[ \t]+)(?:{CMD_VALUE})"),
+            "eingebautes openssl-k-Muster ist gültig",
+        ),
     ]
 }
 
