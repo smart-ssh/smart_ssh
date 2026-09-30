@@ -141,37 +141,46 @@ fn test_redactor_detects_aws_access_key() {
     assert!(redacted.contains("[REDACTED]"));
 }
 
-/// Spec 0094, §1.3 (gemessen, Q-BL-0029-01): Prämisse der Tests T1–T3.
+/// Spec 0094, §1.3, nachgezogen durch Spec 0095, A4: Prämisse der
+/// Spec-0094-Log-Tests (T1–T3 in `filter::tests`, T4/T5/T8c in
+/// `ai-providers`, T6 in `app-logic`, T7 in `mcp-server`).
 ///
 /// Diese Tests behaupten „das Geheimnis steht ab `info` nicht im Log" und
 /// wählen dafür absichtlich eine Schreibweise, die der Redactor **nicht**
 /// kennt — sonst wäre ihr Grün auch dann erklärbar, wenn A1 gar nicht
 /// umgesetzt wäre, weil schon die Redaction gegriffen hätte. Genau diese
-/// Prämisse ist hier festgenagelt: Lernt der Redactor eines dieser Muster
-/// (BL-0118 will das), wird dieser Test rot und zwingt dazu, die
-/// Geheimnis-Form in `filter::tests` (Spec 0094, T1–T3) auf eine weiterhin
-/// unerkannte umzustellen. Ohne diesen Wächter würden T1–T3 stillschweigend
-/// zu Redaction-Tests und prüften A1 nicht mehr.
+/// Prämisse ist hier festgenagelt: Lernt der Redactor eines dieser Muster,
+/// wird dieser Test rot und zwingt dazu, die Geheimnis-Form dort auf eine
+/// weiterhin unerkannte umzustellen. Ohne diesen Wächter würden die
+/// Log-Tests stillschweigend zu Redaction-Tests und prüften A1 nicht mehr.
 ///
-/// **Kein Auftrag, diese Lücken zu schließen** (Spec 0094 §3, Nicht-Ziel
-/// „Neue Redactor-Muster"). Der Test beschreibt den Ist-Stand, er fordert
-/// ihn nicht.
+/// Die ursprünglich gewählten Formen (`mysql -p'…'`, `mysql -p…`,
+/// `sshpass -p …`, `curl -u user:…`) **erkennt** der Redactor seit
+/// Spec 0095 — der Wächter hat damit genau das getan, wofür er da war. Was
+/// bleibt, ist die Form mit Leerzeichen: `mysql -u root -p <wert>`. Sie ist
+/// in Spec 0095 §3 als Nicht-Ziel begründet, nicht als Lücke übersehen —
+/// ohne angehängten Wert fragt der MySQL-Client interaktiv nach dem
+/// Passwort, und der folgende Wert ist der Datenbankname. Im Text ist dort
+/// also gar kein Passwort erkennbar, und ein Muster dafür würde
+/// `mysql -u root -p mydb` schwärzen (Spec 0095, T12).
 #[test]
-fn test_redactor_does_not_yet_know_command_line_password_arguments() {
+fn test_redactor_keeps_the_spec_0094_secret_form_unrecognized() {
     let redactor = DefaultOutputRedactor::new();
 
     for unrecognized in [
-        "mysql -p'geheim-0094' -e 'select 1'",
-        "sshpass -p geheim-0094 ssh host",
-        "mysql -pgeheim-0094",
-        "curl -u user:geheim-0094 https://example.invalid",
+        "mysql -u root -p geheim-0094",
+        "mysql -u root -p geheim-0094 -e 'select 1'",
+        "mysql -u root -p geheim-0094 -h host",
+        "true && mysql -u root -p geheim-0094; echo ok",
+        "unknown model, try mysql -u root -p geheim-0094",
+        "handshake abgebrochen bei 'mysql -u root -p geheim-0094 -h host'",
     ] {
         assert_eq!(
             redactor.redact_text(unrecognized),
             unrecognized,
-            "Prämisse von Spec 0094 T1–T3 gebrochen: der Redactor erkennt dieses Muster jetzt. \
-             Das ist keine Verschlechterung, aber T1–T3 brauchen dann eine andere \
-             Geheimnis-Form, sonst prüfen sie die Redaction statt A1."
+            "Prämisse der Spec-0094-Log-Tests gebrochen: der Redactor erkennt dieses Muster \
+             jetzt. Das ist keine Verschlechterung, aber die Log-Tests brauchen dann eine \
+             andere Geheimnis-Form, sonst prüfen sie die Redaction statt A1."
         );
     }
 
@@ -1790,4 +1799,58 @@ fn test_redactor_known_remaining_case_password_with_a_query_parameter_prefix() {
         redactor.redact_text("postgres://u:SuperSecret123?password=pl/ain&x=y@h/db"),
         "postgres://u:SuperSecret123?[REDACTED]"
     );
+}
+
+// --- Spec 0095, A6 / T15: schon erkannte Formen festschreiben -------------
+
+/// Spec 0095, A6 (T15): Die in Spec 0095 §1.2 gemessenen Formen erkennt der
+/// Redactor **heute schon**, obwohl BL-0118 sie als offen führte — sie hatten
+/// aber keinen einzigen Test. Dieser Wächter muss gegen den heutigen Stand
+/// **nicht** scheitern; sein Zweck ist, dass keine spätere Änderung an der
+/// Musterliste sie unbemerkt wieder durchlässt.
+///
+/// Je Fall wird nur geprüft, dass das Geheimnis verschwunden und der
+/// Platzhalter da ist — nicht die genaue Ausgabe. Welche Regel greift und wie
+/// viel Kontext sie mitnimmt, ist über mehrere Review-Runden verschoben
+/// worden (s. die Kommentare in `built_in_patterns`); festgeschrieben wird
+/// die Abdeckung, nicht die Formatierung.
+#[test]
+fn test_redactor_keeps_covering_the_already_recognized_forms_from_spec_0095() {
+    let redactor = DefaultOutputRedactor::new();
+    let secret = "Geheim-0095";
+
+    for input in [
+        // Weitere DB-Schemata mit Zugangsdaten im Userinfo-Teil.
+        "mssql://sa:Geheim-0095@db.internal/app",
+        "sqlserver://sa:Geheim-0095@db.internal:1433",
+        "oracle://scott:Geheim-0095@ora.internal:1521/XE",
+        "jdbc:postgresql://u:Geheim-0095@db.internal:5432/app",
+        // JDBC mit dem Passwort als Parameter statt im Userinfo-Teil.
+        "jdbc:sqlserver://db.internal:1433;user=sa;password=Geheim-0095",
+        // ADO-/ODBC-Verbindungszeichenkette.
+        "Server=db.internal;Database=app;User Id=sa;Password=Geheim-0095;",
+        // Nackte Provider-Keys ohne umgebendes Schlüsselwort.
+        "glpat-Geheim-0095abcdefghijklmnop",
+        "sk-ant-api03-Geheim-0095abcdefghijklmnopqrstuvwx",
+        "sk-proj-Geheim-0095abcdefghijklmnopqrstuvwx",
+        // Header.
+        "x-api-key: Geheim-0095",
+        "Authorization: Basic Z2VoZWltGeheim-0095",
+        // Zugangsdaten in gewöhnlichen URLs.
+        "https://admin:Geheim-0095@intern.example/pfad",
+        "ftp://admin:Geheim-0095@files.example/",
+        // Passwort als langes Argument eines Kommandozeilenprogramms.
+        "wget --password=Geheim-0095 https://intern.example/datei",
+    ] {
+        let redacted = redactor.redact_text(input);
+        assert!(
+            !redacted.contains(secret),
+            "diese Form war schon vor Spec 0095 abgedeckt und muss es bleiben: \
+             {input} -> {redacted}"
+        );
+        assert!(
+            redacted.contains("[REDACTED]"),
+            "der Platzhalter muss stattdessen dort stehen: {input} -> {redacted}"
+        );
+    }
 }

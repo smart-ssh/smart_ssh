@@ -706,6 +706,14 @@ mod tests {
     /// Redaction.
     const SECRET_0094: &str = "geheim-0094";
 
+    /// Spec 0095, A4: `sshpass -p <wert>` erkennt der Redactor seit Spec 0095.
+    /// Stattdessen `mysql -u root -p <wert>` — die Form mit Leerzeichen, die
+    /// Spec 0095 §3 als Nicht-Ziel führt (der Wert hinter `-p ` ist für den
+    /// MySQL-Client der Datenbankname, also kein erkennbares Passwort).
+    fn secret_command_0094() -> String {
+        format!("mysql -u root -p {SECRET_0094} -h host")
+    }
+
     /// Spec 0094, T7, Erfolgsfall: `ActionOutcome::Approved::summary` trägt
     /// die Kommando-Ausgabe.
     #[tokio::test(flavor = "multi_thread")]
@@ -728,7 +736,7 @@ mod tests {
                 "propose_command",
                 &id,
                 AiAction::SuggestCommand {
-                    command: format!("sshpass -p {SECRET_0094} ssh host uptime"),
+                    command: secret_command_0094(),
                 },
                 None,
             )
@@ -760,8 +768,8 @@ mod tests {
 
         let backend = MockBackend::new(ActionOutcome::Failed {
             message: format!(
-                "Kommando 'sshpass -p {SECRET_0094} ssh host uptime' konnte nicht ausgeführt \
-                 werden: Verbindung abgebrochen"
+                "Kommando '{}' konnte nicht ausgeführt werden: Verbindung abgebrochen",
+                secret_command_0094()
             ),
         });
         let (server, _) = server(backend, Duration::from_secs(5));
@@ -773,7 +781,7 @@ mod tests {
                 "propose_command",
                 &id,
                 AiAction::SuggestCommand {
-                    command: format!("sshpass -p {SECRET_0094} ssh host uptime"),
+                    command: secret_command_0094(),
                 },
                 None,
             )

@@ -1182,6 +1182,14 @@ fn test_log_command_execution_never_logs_unredacted_secret() {
 /// Redaction.
 const SECRET_0094: &str = "geheim-0094";
 
+/// Spec 0095, A4: `sshpass -p <wert>` erkennt der Redactor seit Spec 0095.
+/// Stattdessen `mysql -u root -p <wert>` — die Form mit Leerzeichen, die
+/// Spec 0095 §3 als Nicht-Ziel führt (dort ist der Wert hinter `-p ` für den
+/// MySQL-Client der Datenbankname, also kein erkennbares Passwort).
+fn secret_command_0094() -> String {
+    format!("mysql -u root -p {SECRET_0094} -h host")
+}
+
 /// Spec 0094, T6: Ausführung. Kommandotext **und** Ausgabe tragen das
 /// Geheimnis in einer Form, die der Redactor nicht kennt — der Grund, warum
 /// „läuft ohnehin durch den Redactor" als Schutz nicht reicht (§1.3).
@@ -1189,7 +1197,7 @@ const SECRET_0094: &str = "geheim-0094";
 fn test_t6_0094_command_execution_logs_no_content_at_info() {
     log_capture::start_recording();
 
-    let command = format!("sshpass -p {SECRET_0094} ssh host uptime");
+    let command = secret_command_0094();
     // Wie im Produktionspfad: der Output ist schon redigiert, wenn er hier
     // ankommt — an diesem Geheimnis greift der Redactor aber nicht.
     let output = CommandOutput {
@@ -1228,9 +1236,10 @@ fn test_t6_0094_command_execution_logs_no_content_at_info() {
 fn test_t6_0094_failed_command_execution_logs_no_error_text_at_warn() {
     log_capture::start_recording();
 
-    let command = format!("sshpass -p {SECRET_0094} ssh host uptime");
+    let command = secret_command_0094();
     let err = SshError::ConnectionFailed(format!(
-        "handshake abgebrochen bei 'sshpass -p {SECRET_0094}'"
+        "handshake abgebrochen bei '{}'",
+        secret_command_0094()
     ));
 
     log_command_execution_failed(Uuid::new_v4(), &command, &err);

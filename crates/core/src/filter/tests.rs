@@ -1566,9 +1566,23 @@ fn test_log_capture_records_debug_and_info_separately() {
 /// Das Geheimnis aus Spec 0094, §7 — bewusst in einer Form, die der
 /// `DefaultOutputRedactor` **nicht** erkennt. Sonst prüfte der Test die
 /// Redaction und nicht, was A1 verlangt: dass der Text gar nicht erst auf
-/// `info` geschrieben wird. Gemessen (Q-BL-0029-01): `-p'…'`, `-p …` und
-/// `-p…` bleiben unverändert, `--password=…` wird ersetzt.
+/// `info` geschrieben wird.
+///
+/// Spec 0095, A4: Die ursprünglich gewählten Formen `-p'…'` und `-p…`
+/// (angehängter Wert) **erkennt** der Redactor seit Spec 0095. Die Tests
+/// unten benutzen deshalb `mysql -u root -p <geheimnis>` — die Form mit
+/// Leerzeichen, die Spec 0095 §3 ausdrücklich als Nicht-Ziel führt: ohne
+/// angehängten Wert fragt der MySQL-Client interaktiv, der folgende Wert
+/// ist der Datenbankname, also ist dort gar kein Passwort zu erkennen.
+/// `--password=…` wird weiter ersetzt (T9 baut darauf). Festgenagelt in
+/// `ssh_manager_core::ai::tests::test_redactor_keeps_the_spec_0094_secret_form_unrecognized`.
 const SECRET_0094: &str = "geheim-0094";
+
+/// Das Kommando der Tests T1–T3: trägt [`SECRET_0094`] in der Form, die der
+/// Redactor **nicht** erkennt (s. dort).
+fn secret_command_0094() -> String {
+    format!("mysql -u root -p {SECRET_0094}")
+}
 
 /// Führt `command` durch `evaluate_explained` und gibt die aufgezeichneten
 /// Zeilen ab `info` zurück.
@@ -1579,12 +1593,12 @@ async fn evaluate_and_capture_info_lines(command: &str) -> Vec<String> {
     log_capture::lines_at_info_or_above()
 }
 
-/// Spec 0094, T1: die Filter-Entscheidung zu `mysql -p'geheim-0094' …` darf
-/// das Passwort ab `info` nicht mehr tragen; `decision` und die
+/// Spec 0094, T1: die Filter-Entscheidung zu `mysql -u root -p geheim-0094 …`
+/// darf das Passwort ab `info` nicht mehr tragen; `decision` und die
 /// Kommandolänge müssen dort weiterhin stehen.
 #[tokio::test]
 async fn test_t1_0094_filter_decision_logs_no_command_text_at_info() {
-    let command = format!("mysql -p'{SECRET_0094}' -e 'select 1'");
+    let command = format!("{} -e 'select 1'", secret_command_0094());
 
     let lines = evaluate_and_capture_info_lines(&command).await;
 
@@ -1622,7 +1636,7 @@ async fn test_t1_0094_filter_decision_logs_no_command_text_at_info() {
 /// Text zurück ins Log brächte, würde T1 das nicht bemerken.
 #[tokio::test]
 async fn test_t2_0094_chained_command_logs_no_command_text_at_info() {
-    let command = format!("true && mysql -p{SECRET_0094}; echo ok");
+    let command = format!("true && {}; echo ok", secret_command_0094());
 
     let lines = evaluate_and_capture_info_lines(&command).await;
 
@@ -1654,8 +1668,10 @@ async fn test_t2_0094_chained_command_logs_no_command_text_at_info() {
 /// Musterstand einmal ändert.
 #[tokio::test]
 async fn test_t3_0094_multiline_heredoc_logs_no_command_text_at_info() {
-    let command =
-        format!("mysql -p'{SECRET_0094}' <<'SQL'\nset password='{SECRET_0094}';\nselect 1;\nSQL");
+    let command = format!(
+        "{} <<'SQL'\nset password='{SECRET_0094}';\nselect 1;\nSQL",
+        secret_command_0094()
+    );
 
     let lines = evaluate_and_capture_info_lines(&command).await;
 

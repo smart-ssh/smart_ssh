@@ -651,8 +651,12 @@ mod error_logging_tests {
     /// nicht die Redaction.
     const SECRET_0094: &str = "geheim-0094";
 
+    /// Spec 0095, A4: `-p'…'` (angehängter Wert) erkennt der Redactor seit
+    /// Spec 0095. Stattdessen die Form mit Leerzeichen, die Spec 0095 §3 als
+    /// Nicht-Ziel führt — dort ist im Text kein Passwort erkennbar, der Wert
+    /// hinter `-p ` ist für den MySQL-Client der Datenbankname.
     fn secret_command() -> String {
-        format!("mysql -p'{SECRET_0094}' -e 'select 1'")
+        format!("mysql -u root -p {SECRET_0094} -e 'select 1'")
     }
 
     /// Spec 0094, T4: Der ausgehende Kontext ist die umfangreichste
@@ -906,7 +910,7 @@ mod error_logging_tests {
         clear_log_buffer();
 
         let error = AiError::ModelNotFound(format!(
-            r#"{{"error":{{"message":"unknown model, try sshpass -p {SECRET_0094}"}}}}"#
+            r#"{{"error":{{"message":"unknown model, try mysql -u root -p {SECRET_0094}"}}}}"#
         ));
 
         log_provider_transport_error(Uuid::new_v4(), &error, &[]);
