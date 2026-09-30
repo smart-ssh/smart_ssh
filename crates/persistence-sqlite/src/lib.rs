@@ -18,6 +18,11 @@ mod store;
 
 #[cfg(test)]
 mod tests;
+/// Spec 0096, A3/A4 — eigene Datei statt in `tests`: der Nachweis liest die
+/// Datenbankdateien roh, an SQLite vorbei, und teilt mit der
+/// `SqliteProfileStore`-Testsuite dort weder Helfer noch Aufbaumuster.
+#[cfg(test)]
+mod tests_raw_file;
 
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
