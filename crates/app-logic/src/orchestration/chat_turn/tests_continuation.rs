@@ -2365,3 +2365,69 @@ async fn test_t7_spec_0096_title_with_several_patterns_keeps_no_secret() {
 
     assert_no_fragment_of_secret(&title);
 }
+
+/// spec-reviewer-Fund (Runde 1, Spec 0096 A2): Ein vollständig geschwärzter
+/// Notizvorschlag wird verworfen, ohne `handle_action_proposed` zu
+/// durchlaufen — und damit auch ohne die Stelle, die sonst
+/// `earlier_rejection` setzt (Spec 0068, Teil 4). Ohne die Nachbesserung
+/// liefe eine per Allow-Regel freigegebene Aktion **derselben KI-Antwort**
+/// danach automatisch durch.
+///
+/// Dass die KI gerade einen Vorschlag geliefert hat, der komplett aus
+/// erkannten Zugangsdaten bestand, ist mindestens so verdächtig wie eine
+/// Ablehnung durch den Nutzer — die Antwort muss dieselbe sein: eigener
+/// Dialog statt stiller Ausführung.
+#[tokio::test]
+async fn test_spec_0096_discarded_note_proposal_escalates_allowed_later_action() {
+    let mut session = test_session(
+        vec![
+            AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
+                target: ssh_manager_core::profiles::NoteTargetSelector::CurrentServer,
+                new_content: "password=Geheim-0096".to_string(),
+            }),
+            AiEvent::ActionProposed(AiAction::SuggestCommand {
+                command: "ls -la".to_string(),
+            }),
+            AiEvent::Done,
+        ],
+        MockSshTransport::default().with_response("ls -la", output("a")),
+    );
+    // `AllowLsOnly` gibt `ls *` per Regel frei — ohne den vorangegangenen
+    // verworfenen Vorschlag liefe `ls -la` als `AutoExec` durch.
+    session.parts_mut_for_tests().filter_engine = Box::new(FilterEngine::new(AllowLsOnly));
+    let emitter = TestEmitter::default();
+    let confirmations = ConfirmationRegistry::new();
+    let profile_store = InMemoryProfileStore::default();
+
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::join!(
+            run_chat_turn(
+                &session,
+                Uuid::new_v4(),
+                &emitter,
+                &profile_store,
+                &confirmations,
+            ),
+            answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
+        )
+    })
+    .await
+    .expect("Turn muss enden");
+
+    let decisions = proposed_decisions(&emitter);
+    assert_eq!(
+        decisions.len(),
+        1,
+        "der verworfene Notizvorschlag erzeugt keine Karte, `ls -la` schon: {decisions:?}"
+    );
+    assert_eq!(decisions[0].0, "ls -la");
+    assert_eq!(
+        decisions[0].1["Confirm"]["code"], "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM",
+        "die erlaubte Folgeaktion muss eskaliert werden: {decisions:?}"
+    );
+    let history = session.context.lock().await.history.clone();
+    assert!(
+        executed_commands(&history).is_empty(),
+        "nichts darf automatisch gelaufen sein: {history:?}"
+    );
+}

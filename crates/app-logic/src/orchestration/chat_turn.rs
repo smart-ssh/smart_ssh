@@ -715,6 +715,17 @@ async fn run_one_round(
                 let Some(action) =
                     super::notes::redact_note_proposal(action, session.redactor.as_ref())
                 else {
+                    // spec-reviewer-Fund (Runde 1, Spec 0096): Dieser
+                    // Frühausstieg umgeht `handle_action_proposed` und damit
+                    // auch die Stelle, die sonst `earlier_rejection` setzt
+                    // (Spec 0068, Teil 4). Ohne diese Zeile könnte auf einen
+                    // verworfenen Vorschlag in DERSELBEN KI-Antwort ein
+                    // `SuggestCommand` mit Allow-Regel ohne Rückfrage folgen —
+                    // obwohl die KI gerade einen Vorschlag geliefert hat, der
+                    // vollständig aus erkannten Zugangsdaten bestand. Das ist
+                    // mindestens so verdächtig wie eine Ablehnung durch den
+                    // Nutzer, die genau diese Eskalation auslöst.
+                    response_had_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
                     super::action_exec::emit_action_error(
                         session,
                         emitter,
