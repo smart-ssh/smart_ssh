@@ -2377,3 +2377,145 @@ fn test_t12_0095_token_rules_leave_lookalikes_unchanged() {
         );
     }
 }
+
+// --- Spec 0095, Review-Runde 1: Nachbesserungen ---------------------------
+
+/// spec-reviewer-Fund 1 (Runde 1, gemessen): Ein Wert mit einem
+/// **Shell-Escape** (`\;`, `\'`, `\ `) wurde nur bis zum `\` erfasst — die
+/// Regel setzte ein `[REDACTED]` und ließ den Rest des Passworts direkt
+/// daneben im Klartext stehen. Keine Verschlechterung gegenüber dem Stand
+/// vor Spec 0095 (dort stand alles im Klartext), aber schlimmer als nichts
+/// zu tun: Wer die Zeile liest, hält das Geheimnis für geschwärzt.
+///
+/// Gegenbeweis: gegen den Stand vor dieser Nachbesserung rot (gemessene
+/// Ausgaben im Bericht).
+#[test]
+fn test_t11_0095_redacts_values_containing_shell_escapes() {
+    for (input, secret) in [
+        (r"mysql -p\'SuperSecret", "SuperSecret"),
+        (r"mysql -pa\;b", r"a\;b"),
+        (r"sshpass -p Super\;secret ssh h", "secret"),
+        (r"curl -u admin:Super\&secret https://x", "secret"),
+        (r"redis-cli -a Super\|secret", "secret"),
+        (r"mysql -pa\ b", r"a\ b"),
+    ] {
+        assert_password_redacted(input, &[secret], &[]);
+    }
+}
+
+/// spec-reviewer-Fund 2 (Runde 1, gemessen): Steht zwischen Schalter und Wert
+/// eine **Zeilenfortsetzung** (`\` + Zeilenumbruch — für die Shell ein
+/// einziges Kommando), erfasste die Regel nur den Backslash. Das Passwort
+/// stand in der Folgezeile im Klartext, die erste Zeile trug ein
+/// `[REDACTED]`.
+///
+/// Gegenbeweis: gegen den Stand vor dieser Nachbesserung rot.
+#[test]
+fn test_t11_0095_redacts_values_after_a_shell_line_continuation() {
+    for input in [
+        "sshpass -p \\\n  Geheim-0095 ssh host",
+        "mysql -p\\\nGeheim-0095 -u root",
+        "redis-cli -a \\\n  Geheim-0095",
+        "openssl enc -k \\\n  Geheim-0095",
+        "htpasswd -b f user \\\n  Geheim-0095",
+        "curl -u \\\n  admin:Geheim-0095 https://x",
+        "smbclient -U \\\n  user%Geheim-0095 //h/s",
+        "openssl enc -pass \\\n  pass:Geheim-0095",
+    ] {
+        assert_password_redacted(input, &[SECRET_0095], &[]);
+    }
+}
+
+/// spec-reviewer-Fund (Runde 1, gemessen): `htpasswd -n -b user pw` — `-n`
+/// und `-b` als **getrennte** Schalter — fiel durch beide Regeln, weil die
+/// eine `n` und `b` im selben Block verlangte und die andere drei
+/// Positionsargumente erwartete. Gültige Aufrufform, Passwort blieb im
+/// Klartext.
+///
+/// Gegenbeweis: gegen den Stand vor dieser Nachbesserung rot.
+#[test]
+fn test_t4_0095_redacts_htpasswd_password_with_separate_switches() {
+    for (input, keep) in [
+        ("htpasswd -n -b user Geheim-0095", vec!["user"]),
+        ("htpasswd -b -n user Geheim-0095", vec!["user"]),
+        ("htpasswd -n -bB user Geheim-0095", vec!["user"]),
+        ("htpasswd -n -b -C 12 user Geheim-0095", vec!["user", "12"]),
+    ] {
+        assert_password_redacted(input, &[SECRET_0095], &keep);
+    }
+}
+
+/// spec-reviewer-Fund 4 (Runde 1, gemessen): Die Schalterkette der
+/// `sshpass`-Regel benutzte `\S*`, und das enthält `;`, `|`, `&`, `<`, `>`.
+/// Damit reichte sie über eine Kommandogrenze hinweg
+/// (`sshpass -e;mysql -p mydb` schwärzte `mydb`) — genau das, was der
+/// Kommentar an [`CMD_ARGS`] als ausgeschlossen behauptete.
+#[test]
+fn test_t12_0095_switch_chains_do_not_cross_a_command_separator() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for harmless in [
+        "sshpass -e;mysql -p mydb",
+        "sshpass -e|mysql -p mydb",
+        "sshpass -e && mysql -p mydb",
+    ] {
+        assert_eq!(
+            redactor.redact_text(harmless),
+            harmless,
+            "die Schalterkette darf keine Kommandogrenze überschreiten: {harmless}"
+        );
+    }
+}
+
+/// Bekannte, bewusst akzeptierte Über-Redaktion (spec-reviewer-Fund 3,
+/// Runde 1, gemessen) — hier festgehalten, damit sie nicht unbemerkt kippt
+/// und nicht für einen Fehler gehalten wird.
+///
+/// Taucht ein Programmname irgendwo in einer Zeile auf (auch als
+/// Pfadbestandteil) und folgt in derselben Kommandostufe ein `-p<wort>`,
+/// greift die Regel — auch wenn das `-p` einem anderen Programm gehört.
+/// `find /var/lib/mysql -type f -print` verliert dadurch sein `-print`.
+///
+/// Nicht behoben, und das ist eine Entscheidung mit Begründung: Der Redactor
+/// läuft auf **freiem Text**, in dem Kommandos eingebettet vorkommen
+/// („Kommando 'mysql -pX' konnte nicht ausgeführt werden", „bitte
+/// mysql -pX ausführen" — beides reale Log- und Kontextzeilen dieses
+/// Projekts). Eine Bedingung „der Programmname muss in Kommandoposition
+/// stehen" würde genau diese Zeilen nicht mehr erfassen, und dort steht ein
+/// echtes Passwort. Ein regulärer Ausdruck kann `/usr/bin/mysql` (Programm)
+/// nicht von `/var/lib/mysql` (Argument) unterscheiden. Von beiden Fehlern
+/// ist Über-Redaktion der harmlose: sie kostet Lesbarkeit, kein Geheimnis.
+#[test]
+fn test_redactor_known_over_redaction_when_a_program_name_appears_in_a_path() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("find /var/lib/mysql -type f -print"),
+        "find /var/lib/mysql -type f [REDACTED]"
+    );
+    assert_eq!(
+        redactor.redact_text("find /etc/mysql -type f -perm 0644 -ls"),
+        "find /etc/mysql -type f [REDACTED] 0644 -ls"
+    );
+}
+
+/// spec-reviewer-Hinweis (Runde 1): Ein Argon2-Hash mit `data=`- oder
+/// `keyid=`-Parameter trägt dort Base64 **mit** `=`-Padding; die
+/// Parameterklasse ließ das nicht zu und das Muster griff gar nicht.
+#[test]
+fn test_t8_0095_redacts_argon2_hashes_with_optional_parameters() {
+    let redactor = DefaultOutputRedactor::new();
+    let hash = "$argon2id$v=19$m=65536,t=3,p=4,keyid=Zm9v,data=YmFyYQ==$c29tZXNhbHQ\
+                $RdescudvJCsgt3ub+b+dWRWJTmaaJObG";
+
+    let redacted = redactor.redact_text(&format!("admin:{hash}:19000"));
+
+    assert!(
+        !redacted.contains("RdescudvJCsgt3ub+b+dWRWJTmaaJObG"),
+        "der Hash muss ersetzt sein: {redacted}"
+    );
+    assert!(
+        redacted.starts_with("admin:"),
+        "der Benutzername bleibt lesbar: {redacted}"
+    );
+}
