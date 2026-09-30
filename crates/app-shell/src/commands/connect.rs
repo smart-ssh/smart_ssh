@@ -191,12 +191,29 @@ pub(crate) async fn connect_session(
                 // Passwort/Schlüssel — derselbe Text geht ohnehin schon
                 // unverändert ans Frontend (`CommandError::with_code`
                 // unten), hier also keine neue Offenlegung.
+                // Spec 0094, A1.7: Der obige Kommentar begründete, warum das
+                // `Display` eines `SshError` hier vertretbar sei — keine der
+                // `String`-Varianten baue ihren Text aus einem Passwort. Das
+                // stimmt für die Varianten selbst, sagt aber nichts über den
+                // freien Text der darunter liegenden Bibliothek, der in
+                // `ConnectionFailed`/`ChannelError` landet. A1.7 schneidet
+                // diese Abwägung ab: ab `warn` nur noch `code()`. Ans
+                // Frontend geht der volle Text unverändert weiter — die
+                // Transparenz gegenüber dem Nutzer bleibt, nur die Datei
+                // nicht mehr die Senke.
                 tracing::warn!(
                     session_id = %session_id,
                     server_id = %server_id.0,
                     code = err.code(),
-                    error = %err,
                     "resolving the connection target (jump host chain) failed",
+                );
+                tracing::debug!(
+                    session_id = %session_id,
+                    server_id = %server_id.0,
+                    code = err.code(),
+                    error = %ssh_manager_core::ai::default_log_redactor()
+                        .redact_text(&err.to_string()),
+                    "resolving the connection target (jump host chain) failed (error text)",
                 );
                 return Err(CommandError::with_code(err.to_string(), err.code()));
             }
@@ -226,6 +243,10 @@ pub(crate) async fn connect_session(
                 Ok(outcome) => outcome,
                 Err(err) => {
                     let last_hop = target.hops.last();
+                    // Spec 0094, A1.7: `err.message` stammt aus
+                    // `SshError::to_string()` (s. `map_connect_result`) und
+                    // fällt damit unter dieselbe Regel wie ein direkt
+                    // geloggtes `SshError` — ab `warn` nur noch der Code.
                     tracing::warn!(
                         session_id = %session_id,
                         server_id = %server_id.0,
@@ -233,8 +254,15 @@ pub(crate) async fn connect_session(
                         port = last_hop.map(|h| h.port),
                         hop_count = target.hops.len(),
                         code = err.code.unwrap_or("UNKNOWN"),
-                        error = %err.message,
                         "connection attempt failed",
+                    );
+                    tracing::debug!(
+                        session_id = %session_id,
+                        server_id = %server_id.0,
+                        code = err.code.unwrap_or("UNKNOWN"),
+                        error = %ssh_manager_core::ai::default_log_redactor()
+                            .redact_text(&err.message),
+                        "connection attempt failed (error text)",
                     );
                     return Err(err);
                 }

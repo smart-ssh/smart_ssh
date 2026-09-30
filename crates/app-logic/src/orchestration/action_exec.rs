@@ -6,8 +6,8 @@
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{
-    truncate_for_second_opinion, ChatMessage, MessageContent, RejectionReason, Role,
-    DEFAULT_SECOND_OPINION_MAX_LEN,
+    truncate_for_second_opinion, ChatMessage, MessageContent, OutputRedactor, RejectionReason,
+    Role, DEFAULT_SECOND_OPINION_MAX_LEN,
 };
 use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent, LedgerSource};
 use ssh_manager_core::filter::{
@@ -1705,27 +1705,62 @@ fn truncate_for_log(text: &str) -> String {
 /// rohen — Logs sind kein Schlupfloch für Secrets, die die Redaction sonst
 /// unterdrückt (Spec 0016, Abschnitt 4, Punkt 1 — "dieselbe Redaction-Regel
 /// gilt für Logs wie für den tatsächlichen API-Request").
+///
+/// Spec 0094, A1.4/A2: Redigiert reicht nicht — der Redactor kennt nicht
+/// jede Schreibweise eines Passwort-Arguments (gemessen, §1.3), und
+/// `stdout`/`stderr` können beliebigen Server-Inhalt tragen. Ab `info`
+/// bleiben deshalb nur Zahlen: `session_id`, Exit-Code, Ausgabelängen,
+/// Kommandolänge. Kommando und Ausgaben stehen auf `debug`, dort
+/// unverändert redigiert und auf `MAX_LOGGED_OUTPUT_LEN` gekürzt.
 fn log_command_execution(session_id: SessionId, command: &str, redacted_output: &CommandOutput) {
     let stdout = String::from_utf8_lossy(&redacted_output.stdout);
     let stderr = String::from_utf8_lossy(&redacted_output.stderr);
     tracing::info!(
         session_id = %session_id,
-        command,
+        command_len = command.chars().count(),
         exit_code = ?redacted_output.exit_code,
         stdout_len = stdout.len(),
         stderr_len = stderr.len(),
-        stdout = %truncate_for_log(&stdout),
-        stderr = %truncate_for_log(&stderr),
         "ssh command executed",
+    );
+    // A2 verlangt, dass der Inhalt dieser Zeile „vorher durch den Redactor
+    // läuft". Beides ist an der einzigen Aufrufstelle bereits redigiert
+    // (`session.redactor`); hier läuft trotzdem noch einmal der
+    // prozessweite Redactor darüber. Nicht, weil die Aufrufstelle
+    // unzuverlässig wäre, sondern damit die Zusage dieser Funktion nicht an
+    // einer Bedingung hängt, die ein künftiger zweiter Aufrufer übersehen
+    // kann — Redaction ist idempotent, der Preis also nur Rechenzeit, und
+    // die fällt nur an, wenn `debug` überhaupt aufgezeichnet wird.
+    let redactor = ssh_manager_core::ai::default_log_redactor();
+    tracing::debug!(
+        session_id = %session_id,
+        exit_code = ?redacted_output.exit_code,
+        command = %redactor.redact_text(command),
+        stdout = %redactor.redact_text(&truncate_for_log(&stdout)),
+        stderr = %redactor.redact_text(&truncate_for_log(&stderr)),
+        "ssh command executed (command and output)",
     );
 }
 
+/// Spec 0094, A1.4/A1.7: `command` war hier schon redigiert, `error = %err`
+/// nicht — und `SshError`s `Display` gibt bei `ConnectionFailed`/
+/// `ChannelError`/`CredentialResolutionFailed` freien Text der darunter
+/// liegenden Bibliothek wieder, der das Kommando enthalten kann. Ab `warn`
+/// bleiben Kommandolänge und `code()`.
 fn log_command_execution_failed(session_id: SessionId, command: &str, err: &SshError) {
     tracing::warn!(
         session_id = %session_id,
-        command,
-        error = %err,
+        command_len = command.chars().count(),
+        code = err.code(),
         "ssh command execution failed",
+    );
+    let redactor = ssh_manager_core::ai::default_log_redactor();
+    tracing::debug!(
+        session_id = %session_id,
+        code = err.code(),
+        command = %redactor.redact_text(command),
+        error = %redactor.redact_text(&err.to_string()),
+        "ssh command execution failed (command and error)",
     );
 }
 

@@ -30,8 +30,8 @@
 use futures::StreamExt;
 
 use ssh_manager_core::ai::{
-    fence_untrusted, ActionSchema, AiEvent, ChatMessage, MessageContent, ProviderType,
-    RejectionReason, Role, SessionContext, UntrustedKind,
+    fence_untrusted, ActionSchema, AiEvent, ChatMessage, MessageContent, OutputRedactor,
+    ProviderType, RejectionReason, Role, SessionContext, UntrustedKind,
 };
 
 use crate::events::EventEmitter;
@@ -758,10 +758,21 @@ async fn generate_rolling_summary(
                 // immer noch besser als gar keine.
                 AiEvent::Done | AiEvent::TextTruncated => return Some(text),
                 AiEvent::Error(err) => {
+                    // Spec 0094, A1.7: `AiError`s `Display` kann Inhalt
+                    // tragen (`ModelNotFound` den vollen Antworttext des
+                    // Providers, `InvalidResponse` Argumentwerte). Ab `warn`
+                    // nur der Code, der Text auf `debug`.
                     tracing::warn!(
-                        error = %err,
+                        code = err.code(),
                         "session summary generation failed, falling back to plain round \
                          truncation"
+                    );
+                    tracing::debug!(
+                        code = err.code(),
+                        error = %ssh_manager_core::ai::default_log_redactor()
+                            .redact_text(&err.to_string()),
+                        "session summary generation failed, falling back to plain round \
+                         truncation (error text)"
                     );
                     return None;
                 }

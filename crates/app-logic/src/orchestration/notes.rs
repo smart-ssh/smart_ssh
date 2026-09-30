@@ -813,7 +813,15 @@ async fn summarize_note_for_shrink(
                 // zurückgeben als gar keine).
                 AiEvent::Done | AiEvent::TextTruncated => return Some(text),
                 AiEvent::Error(err) => {
-                    tracing::warn!(error = %err, "note shrink summarization failed");
+                    // Spec 0094, A1.7: s. `compaction::generate_rolling_summary`
+                    // — ab `warn` nur der Code, der Text auf `debug`.
+                    tracing::warn!(code = err.code(), "note shrink summarization failed");
+                    tracing::debug!(
+                        code = err.code(),
+                        error = %ssh_manager_core::ai::default_log_redactor()
+                            .redact_text(&err.to_string()),
+                        "note shrink summarization failed (error text)"
+                    );
                     return None;
                 }
             }

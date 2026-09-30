@@ -1133,6 +1133,11 @@ async fn test_chat_action_proposed_omits_previous_note_content_for_suggest_comma
 /// String exakt über den Pfad, den `execute_suggested_command` auch
 /// nimmt (erst `OutputRedactor::redact`, dann `log_command_execution`
 /// mit dem Ergebnis) und prüft die tatsächliche JSON-Log-Zeile.
+///
+/// Spec 0094, §7: Der Platzhalter „REDACTED" wird jetzt auf der
+/// `debug`-Zeile gesucht — dort steht der Inhalt seit A2. Zusätzlich muss
+/// die `info`-Zeile **gar keinen** Inhalt tragen (A1.4); die Redaction bleibt
+/// auf `debug` die zweite Schicht.
 #[test]
 fn test_log_command_execution_never_logs_unredacted_secret() {
     log_capture::start_recording();
@@ -1153,9 +1158,124 @@ fn test_log_command_execution_never_logs_unredacted_secret() {
         !log_text.contains("hunter2geheim"),
         "das Secret darf unter keinen Umständen im Log-Output auftauchen: {log_text}"
     );
+    let debug_lines = log_capture::recorded_debug_lines();
     assert!(
-        log_text.contains("REDACTED"),
-        "der Redaction-Platzhalter muss stattdessen im Log stehen: {log_text}"
+        debug_lines.iter().any(|l| l.contains("REDACTED")),
+        "der Redaction-Platzhalter muss auf der debug-Zeile stehen (A2): {debug_lines:?}"
+    );
+    let info_or_above = log_capture::recorded_lines_at_info_or_above();
+    assert!(
+        !info_or_above.iter().any(|l| l.contains("Verbindung ok")),
+        "die info-Zeile darf keine Ausgabe tragen, auch nicht die harmlosen Teile (A1.4): \
+         {info_or_above:?}"
+    );
+    assert!(
+        !info_or_above.iter().any(|l| l.contains("connect-check")),
+        "die info-Zeile darf das Kommando nicht tragen (A1.4): {info_or_above:?}"
+    );
+}
+
+// --- Spec 0094: T6, T9 (app-logic) --------------------------------------
+
+/// s. `ssh_manager_core::filter::tests::SECRET_0094` — eine Form, die der
+/// Redactor **nicht** erkennt, damit der Test A1 prüft und nicht die
+/// Redaction.
+const SECRET_0094: &str = "geheim-0094";
+
+/// Spec 0094, T6: Ausführung. Kommandotext **und** Ausgabe tragen das
+/// Geheimnis in einer Form, die der Redactor nicht kennt — der Grund, warum
+/// „läuft ohnehin durch den Redactor" als Schutz nicht reicht (§1.3).
+#[test]
+fn test_t6_0094_command_execution_logs_no_content_at_info() {
+    log_capture::start_recording();
+
+    let command = format!("sshpass -p {SECRET_0094} ssh host uptime");
+    // Wie im Produktionspfad: der Output ist schon redigiert, wenn er hier
+    // ankommt — an diesem Geheimnis greift der Redactor aber nicht.
+    let output = CommandOutput {
+        stdout: format!("verbunden als {SECRET_0094}\n").into_bytes(),
+        stderr: format!("warn: {SECRET_0094}\n").into_bytes(),
+        exit_code: Some(0),
+        truncated: false,
+    };
+    let session_id = Uuid::new_v4();
+
+    log_command_execution(session_id, &command, &output);
+
+    let info_or_above = log_capture::recorded_lines_at_info_or_above();
+    assert!(
+        !info_or_above.iter().any(|l| l.contains(SECRET_0094)),
+        "weder Kommando noch stdout noch stderr dürfen ab info stehen: {info_or_above:?}"
+    );
+    let line = info_or_above
+        .iter()
+        .find(|l| l.contains("ssh command executed"))
+        .expect("die info-Zeile muss weiterhin entstehen");
+    assert!(
+        line.contains(&format!("\"command_len\":{}", command.chars().count()))
+            && line.contains("\"exit_code\":\"Some(0)\"")
+            && line.contains("\"stdout_len\":")
+            && line.contains("\"stderr_len\":"),
+        "Exit-Code, Ausgabelängen und Kommandolänge müssen erhalten bleiben (A1.4): {line}"
+    );
+}
+
+/// Spec 0094, T6, zweiter Teil: Fehlschlag. Der `SshError` trägt das
+/// Geheimnis in seinem `Display` (`ConnectionFailed` gibt freien Text der
+/// darunter liegenden Bibliothek wieder) — ab `warn` darf nur `code()`
+/// bleiben.
+#[test]
+fn test_t6_0094_failed_command_execution_logs_no_error_text_at_warn() {
+    log_capture::start_recording();
+
+    let command = format!("sshpass -p {SECRET_0094} ssh host uptime");
+    let err = SshError::ConnectionFailed(format!(
+        "handshake abgebrochen bei 'sshpass -p {SECRET_0094}'"
+    ));
+
+    log_command_execution_failed(Uuid::new_v4(), &command, &err);
+
+    let info_or_above = log_capture::recorded_lines_at_info_or_above();
+    assert!(
+        !info_or_above.iter().any(|l| l.contains(SECRET_0094)),
+        "weder Kommando noch Fehlertext dürfen ab warn stehen (A1.4/A1.7): {info_or_above:?}"
+    );
+    assert!(
+        info_or_above
+            .iter()
+            .any(|l| l.contains("\"code\":\"SSH_CONNECTION_FAILED\"")),
+        "der Fehlercode muss ab warn stehen (A1.4): {info_or_above:?}"
+    );
+}
+
+/// Spec 0094, T9 (`app-logic`): Auf `debug` steht der Inhalt weiterhin, und
+/// dort greift der Redactor — hier mit einem Muster, das er **kennt**.
+#[test]
+fn test_t9_0094_execution_content_moves_to_a_redacted_debug_line() {
+    log_capture::start_recording();
+
+    let output = CommandOutput {
+        stdout: format!("token --password={SECRET_0094}\n").into_bytes(),
+        stderr: Vec::new(),
+        exit_code: Some(0),
+        truncated: false,
+    };
+
+    log_command_execution(Uuid::new_v4(), "cat /etc/app.conf", &output);
+
+    let debug_lines = log_capture::recorded_debug_lines();
+    let content_line = debug_lines
+        .iter()
+        .find(|l| l.contains("ssh command executed (command and output)"))
+        .expect("A2 verlangt eine debug-Zeile mit Kommando und Ausgabe");
+    assert!(
+        content_line.contains("cat /etc/app.conf"),
+        "die debug-Zeile muss den Kommandotext tragen, sonst ist die Diagnose weg: {content_line}"
+    );
+    assert!(
+        !content_line.contains(SECRET_0094),
+        "ein dem Redactor bekanntes Geheimnis darf auch auf debug nicht im Klartext stehen: \
+         {content_line}"
     );
 }
 

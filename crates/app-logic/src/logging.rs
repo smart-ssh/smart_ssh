@@ -159,6 +159,23 @@ pub fn read_last_log_lines(dir: &Path, max_lines: usize) -> Vec<String> {
     lines[start..].iter().map(|s| s.to_string()).collect()
 }
 
+/// Die Filter-Direktiven, die ohne `RUST_LOG` gelten.
+///
+/// Spec 0094, A3: Der Standard **muss** `info` bleiben. Ab `info` tragen die
+/// Log-Zeilen laut A1 keinen Inhalt mehr; der Inhalt steht auf `debug`
+/// (A2). Stünde hier `debug` — oder auch nur ein einzelnes
+/// `<crate>=debug` —, wäre genau der Zustand wieder da, den diese Spec
+/// beseitigt: Kommandotexte, Chatverlauf und Prompts in der Logdatei, ohne
+/// dass jemand `RUST_LOG` gesetzt hätte.
+const DEFAULT_FILTER_DIRECTIVES: &str = "info";
+
+/// Der Filter, der ohne `RUST_LOG` greift — als eigene Funktion, damit T10
+/// ihn prüfen kann, ohne [`init_logging`] aufzurufen (das setzt den
+/// **globalen** Subscriber und legt eine echte Log-Datei an).
+pub fn default_filter() -> tracing_subscriber::EnvFilter {
+    tracing_subscriber::EnvFilter::new(DEFAULT_FILTER_DIRECTIVES)
+}
+
 /// Richtet den globalen `tracing`-Subscriber ein: JSON-Lines in eine
 /// täglich rotierende Datei im plattformspezifischen Log-Ordner (Spec
 /// 0016, Abschnitt 2/3). Räumt vor dem Öffnen der aktuellen Datei alte
@@ -210,8 +227,8 @@ pub fn init_logging() -> WorkerGuard {
     // 0600) statt der OS-Standardrechte (typ. 0755/0644, weltlesbar).
     harden_log_permissions(&dir);
 
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    let filter =
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| default_filter());
 
     tracing_subscriber::fmt()
         .json()
@@ -338,6 +355,49 @@ mod tests {
         assert_eq!(dir_mode & 0o777, 0o700);
         let file_mode = fs::metadata(&file_path).unwrap().permissions().mode();
         assert_eq!(file_mode & 0o777, 0o600);
+    }
+
+    /// Spec 0094, T10: Ohne `RUST_LOG` darf `debug` für **kein** Target
+    /// durchkommen, `info` schon.
+    ///
+    /// Geprüft am Filter selbst, nicht über einen Subscriber: `EnvFilter`
+    /// beantwortet mit `max_level_hint()` genau diese Frage — die höchste
+    /// Ausführlichkeit, die irgendein Callsite unter diesem Filter erreichen
+    /// kann. Sagt sie `INFO`, kann kein Target `debug` bekommen, auch kein
+    /// crate-spezifisches. Das ist eine stärkere Aussage als eine Stichprobe
+    /// über vier Targets und braucht keinen globalen Subscriber, der mit dem
+    /// Mitschnitt der übrigen Tests kollidieren würde.
+    ///
+    /// Die Schleife darunter prüft dieselbe Aussage von der anderen Seite:
+    /// im **geparsten** Filter (`Display`, nicht in der Konstante) steht
+    /// keine Direktive für eines der vier Crates — auch keine, die `info`
+    /// nur zufällig nicht überschreitet.
+    #[test]
+    fn test_t10_default_filter_lets_no_target_reach_debug() {
+        use tracing::level_filters::LevelFilter;
+
+        let filter = default_filter();
+
+        assert_eq!(
+            filter.max_level_hint(),
+            Some(LevelFilter::INFO),
+            "der Standardfilter muss bei info enden — jede höhere Ausführlichkeit brächte den \
+             Inhalt zurück in die Logdatei (Spec 0094, A3). War: {filter}"
+        );
+
+        let rendered = filter.to_string();
+        for target in [
+            "ssh_manager_core",
+            "ai_providers",
+            "app_logic",
+            "mcp_server",
+        ] {
+            assert!(
+                !rendered.contains(target),
+                "der Standardfilter darf keine eigene Direktive für {target} tragen, \
+                 war: {rendered}"
+            );
+        }
     }
 
     #[test]
