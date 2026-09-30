@@ -67,6 +67,38 @@ pub enum ActionOutcome {
     Failed { message: String },
 }
 
+impl ActionOutcome {
+    /// Die **Art** des Ergebnisses als fester Bezeichner, ohne den Text.
+    ///
+    /// Spec 0094, A1.6 („Art des Ergebnisses"): Jede Variante trägt Inhalt —
+    /// `summary` die Kommando-Ausgabe bzw. den Dateiinhalt, `reason` den
+    /// Ablehnungsgrund, `message` die Chat-Fehlermeldung, die das Kommando
+    /// wörtlich enthält. Das `Debug` eines `ActionOutcome` darf deshalb ab
+    /// `info` nicht mehr geloggt werden; das hier steht stattdessen dort.
+    ///
+    /// Ausgeschriebenes `match` mit `&'static str`, damit eine neue Variante
+    /// eine Entscheidung erzwingt, statt stillschweigend ihren Text
+    /// mitzunehmen.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            ActionOutcome::Approved { .. } => "approved",
+            ActionOutcome::Rejected { .. } => "rejected",
+            ActionOutcome::Failed { .. } => "failed",
+        }
+    }
+
+    /// Länge des Textes, den diese Variante trägt — Spec 0094, A1.6
+    /// („Länge der Zusammenfassung bzw. Meldung"). In Zeichen, nicht Bytes,
+    /// wie an den übrigen Stellen dieser Spec.
+    pub fn text_len(&self) -> usize {
+        match self {
+            ActionOutcome::Approved { summary } => summary.chars().count(),
+            ActionOutcome::Rejected { reason } => reason.chars().count(),
+            ActionOutcome::Failed { message } => message.chars().count(),
+        }
+    }
+}
+
 /// Schnittstelle, die `crates/app-shell` implementiert, um MCP-Tool-Calls an
 /// die reale App-Logik anzubinden (Session-Verwaltung, Filter-Engine,
 /// Bestätigungsdialog). Jede Methode entspricht einer Gruppe von Tools aus

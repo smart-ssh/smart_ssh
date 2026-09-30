@@ -15,6 +15,7 @@ use rmcp::model::{
 use rmcp::service::RequestContext;
 use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError, RoleServer, ServerHandler};
 use serde::Deserialize;
+use ssh_manager_core::ai::OutputRedactor;
 use ssh_manager_core::profiles::{AiAction, NoteTargetSelector};
 use ssh_manager_core::shared::ServerId;
 use uuid::Uuid;
@@ -156,9 +157,27 @@ impl SmartSshMcpServer {
             joined = &mut join_handle => {
                 match joined {
                     Ok(Ok(outcome)) => {
+                        // Spec 0094, A1.6: `outcome = ?outcome` trug bei
+                        // Erfolg die Kommando-Ausgabe bzw. den Dateiinhalt
+                        // und im Fehlerfall die Chat-Meldung, die das
+                        // Kommando **unredigiert** enthält
+                        // („Kommando '{command}' konnte nicht ausgeführt
+                        // werden …"). Ab `info` bleiben Art und Textlänge.
+                        // Das `ActionOutcome` selbst und damit das, was der
+                        // MCP-Client zurückbekommt, ändert sich nicht — nur
+                        // die Log-Zeile.
                         tracing::info!(
                             origin = "mcp", tool = tool_name, server_id = %server_id_raw,
-                            outcome = ?outcome, "mcp tool call completed"
+                            outcome_kind = outcome.kind(),
+                            outcome_len = outcome.text_len(),
+                            "mcp tool call completed"
+                        );
+                        tracing::debug!(
+                            origin = "mcp", tool = tool_name, server_id = %server_id_raw,
+                            outcome_kind = outcome.kind(),
+                            outcome = %ssh_manager_core::ai::default_log_redactor()
+                                .redact_text(&format!("{outcome:?}")),
+                            "mcp tool call completed (outcome)"
                         );
                         outcome_to_tool_result(outcome)
                     }
@@ -678,6 +697,144 @@ mod tests {
     fn test_invalid_server_id_is_rejected_as_invalid_params() {
         let err = parse_server_id("not-a-uuid").unwrap_err();
         assert!(err.message.contains("UUID"));
+    }
+
+    // --- Spec 0094: T7, T9 (mcp-server) ---------------------------------
+
+    /// s. `ssh_manager_core::filter::tests::SECRET_0094` — eine Form, die der
+    /// Redactor **nicht** erkennt, damit der Test A1 prüft und nicht die
+    /// Redaction.
+    const SECRET_0094: &str = "geheim-0094";
+
+    /// Spec 0094, T7, Erfolgsfall: `ActionOutcome::Approved::summary` trägt
+    /// die Kommando-Ausgabe.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_t7_0094_successful_mcp_call_logs_no_output_at_info() {
+        let _guard = crate::test_support::start_recording();
+
+        let backend = MockBackend::new(ActionOutcome::Approved {
+            summary: format!("verbunden als {SECRET_0094}"),
+        });
+        let (server, _) = server(backend, Duration::from_secs(5));
+        // Der Mitschnitt ist prozessweit (s. `test_support`) und enthält auch
+        // die Zeilen der gleichzeitig laufenden Mapping-Tests. Die eigene
+        // Zeile wird deshalb über die in diesem Test erzeugte `server_id`
+        // herausgesucht, nicht über die Nachricht allein — sonst prüfte der
+        // Test unter Umständen die Zeile eines fremden Aufrufs.
+        let id = some_id();
+
+        server
+            .run_confirmable(
+                "propose_command",
+                &id,
+                AiAction::SuggestCommand {
+                    command: format!("sshpass -p {SECRET_0094} ssh host uptime"),
+                },
+                None,
+            )
+            .await
+            .unwrap();
+
+        let info_or_above = crate::test_support::recorded_lines_at_info_or_above();
+        assert!(
+            !info_or_above.iter().any(|l| l.contains(SECRET_0094)),
+            "die Kommando-Ausgabe darf ab info nicht im Log stehen: {info_or_above:?}"
+        );
+        let line = info_or_above
+            .iter()
+            .find(|l| l.contains("mcp tool call completed") && l.contains(&id))
+            .expect("die Abschlusszeile muss weiterhin ab info entstehen");
+        assert!(
+            line.contains("\"outcome_kind\":\"approved\"") && line.contains("\"outcome_len\":"),
+            "Art des Ergebnisses und Textlänge müssen erhalten bleiben (A1.6): {line}"
+        );
+    }
+
+    /// Spec 0094, T7, Fehlerfall: `ActionOutcome::Failed::message` ist die
+    /// Chat-Fehlermeldung, die das Kommando wörtlich und **unredigiert**
+    /// enthält (`app_logic::orchestration::action_exec`, übernommen in
+    /// `app_shell::mcp_backend`) — der schwerste Teil dieser Stelle.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_t7_0094_failed_mcp_call_logs_no_command_text_at_info() {
+        let _guard = crate::test_support::start_recording();
+
+        let backend = MockBackend::new(ActionOutcome::Failed {
+            message: format!(
+                "Kommando 'sshpass -p {SECRET_0094} ssh host uptime' konnte nicht ausgeführt \
+                 werden: Verbindung abgebrochen"
+            ),
+        });
+        let (server, _) = server(backend, Duration::from_secs(5));
+        // s. T7-Erfolgsfall: eigene Zeile über die `server_id` finden.
+        let id = some_id();
+
+        server
+            .run_confirmable(
+                "propose_command",
+                &id,
+                AiAction::SuggestCommand {
+                    command: format!("sshpass -p {SECRET_0094} ssh host uptime"),
+                },
+                None,
+            )
+            .await
+            .unwrap();
+
+        let info_or_above = crate::test_support::recorded_lines_at_info_or_above();
+        assert!(
+            !info_or_above.iter().any(|l| l.contains(SECRET_0094)),
+            "die Fehlermeldung mit dem Kommandotext darf ab info nicht im Log stehen: \
+             {info_or_above:?}"
+        );
+        let line = info_or_above
+            .iter()
+            .find(|l| l.contains("mcp tool call completed") && l.contains(&id))
+            .expect("die Abschlusszeile muss weiterhin ab info entstehen");
+        assert!(
+            line.contains("\"outcome_kind\":\"failed\""),
+            "die Art des Ergebnisses muss erhalten bleiben (A1.6): {line}"
+        );
+    }
+
+    /// Spec 0094, T9 (`mcp-server`): Auf `debug` steht das Ergebnis weiterhin,
+    /// und dort greift der Redactor — hier mit einem Muster, das er
+    /// **kennt**.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_t9_0094_outcome_moves_to_a_redacted_debug_line() {
+        let _guard = crate::test_support::start_recording();
+
+        let backend = MockBackend::new(ActionOutcome::Approved {
+            summary: format!("connect --password={SECRET_0094} ok"),
+        });
+        let (server, _) = server(backend, Duration::from_secs(5));
+        // s. T7-Erfolgsfall: eigene Zeile über die `server_id` finden.
+        let id = some_id();
+
+        server
+            .run_confirmable(
+                "propose_command",
+                &id,
+                AiAction::SuggestCommand {
+                    command: "uptime".to_string(),
+                },
+                None,
+            )
+            .await
+            .unwrap();
+
+        let debug_lines = crate::test_support::recorded_debug_lines();
+        let line = debug_lines
+            .iter()
+            .find(|l| l.contains("mcp tool call completed (outcome)") && l.contains(&id))
+            .expect("A2 verlangt eine debug-Zeile mit dem Ergebnis");
+        assert!(
+            line.contains("Approved"),
+            "die debug-Zeile muss das Ergebnis tragen, sonst ist die Diagnose weg: {line}"
+        );
+        assert!(
+            !line.contains(SECRET_0094) && line.contains("REDACTED"),
+            "ein dem Redactor bekanntes Geheimnis muss auf der debug-Zeile ersetzt sein: {line}"
+        );
     }
 
     fn tool_result_text(result: &CallToolResult) -> String {
