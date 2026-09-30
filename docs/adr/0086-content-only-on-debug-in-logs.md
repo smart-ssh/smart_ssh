@@ -107,21 +107,28 @@ das erste Wort kann selbst ein Geheimnis sein (`PGPASSWORD=… psql`).
 
 ## Bewusst nicht behoben
 
-Alle drei sind Funde des Reviews, die **außerhalb** von §1.2 der Spec
-liegen. Die Spec sagt dazu: „jede weitere Log-Stelle mit Inhalt, die nicht
-in §1.2 steht — melden, nicht mitreparieren."
+Die ersten zwei sind Funde des Reviews außerhalb von §1.2 der Spec. Die
+Spec sagt dazu: „jede weitere Log-Stelle mit Inhalt, die nicht in §1.2
+steht — melden, nicht mitreparieren."
 
 1. **Remote-Pfade auf `info`.** `app_shell::commands::elevation` (Zeile
    „file browser change with elevated rights") und
    `app_shell::elevated_sftp` (Zeile „file browser elevated rights
    enabled") loggen einen Pfad auf dem Server und den Zielnutzer. Ein Pfad
    ist keine der Kategorien aus A1, und beide Zeilen sind
-   Audit-Einträge manueller Aktionen (ADR 0045). Eigener Backlog-Punkt.
+   Audit-Einträge manueller Aktionen (Spec 0067, A5, aufbauend auf Spec
+   0054). Eigener Backlog-Punkt.
 2. **`log_stop_reason`** loggt den vom Provider gelieferten
    `stop_reason`-String roh auf `info`, und die Zeile steht in
    `SAFE_LOG_MESSAGES`. Provider-kontrolliert, in der Praxis ein Enum-Wert
    (`end_turn`, `max_tokens`), kein Nutzerinhalt. Eigener Backlog-Punkt.
-3. **`CHANGELOG.md`** bleibt unverändert. Nicht weil der Eintrag fehlen
+3. **Gemischte Einheiten bei den Längenfeldern.** `command_len` und die
+   Längen in `history_shapes` zählen Zeichen, `stdout_len`/`stderr_len`
+   zählen Bytes. Letzteres stand schon vor dieser Spec so da
+   (`output.stdout.len()`); die Bedeutung eines bestehenden Feldes ungefragt
+   zu ändern wäre eine eigene Änderung, nicht Teil von A1.4. Eigener
+   Backlog-Punkt.
+4. **`CHANGELOG.md`** bleibt unverändert. Nicht weil der Eintrag fehlen
    soll, sondern weil dieses Repo Changelog-Einträge als Fragment unter
    `changelog.d/` sammelt und erst beim Versionssprung zusammenführt. Das
    Fragment zu dieser Spec liegt als `changelog.d/0094-log-ohne-inhalt.md`.
