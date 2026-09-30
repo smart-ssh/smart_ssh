@@ -11,6 +11,10 @@
 mod auth;
 mod backend;
 mod config;
+/// Spec 0094, §7: Mitschnitt der `tracing`-Ereignisse für T7/T9. Bis dahin
+/// gab es in dieser Crate keine Aufzeichnung.
+#[cfg(test)]
+mod test_support;
 mod tool_server;
 
 pub use auth::SharedToken;

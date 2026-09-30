@@ -483,9 +483,15 @@ pub fn session_with_ai_and_transport(
 /// Wettrennen nicht zuverlässig zurück (beobachtet in `orchestration`:
 /// etwa jeder dritte Lauf verlor den Eintrag).
 ///
-/// Kein Level-Filter: `orchestration` prüft INFO-Ereignisse, Spec 0077
-/// ERROR-Ereignisse. Gefiltert wird deshalb beim Lesen
-/// ([`recorded_error_lines`]), nicht beim Aufzeichnen.
+/// **Aufzeichnung auf `TRACE`, Filter beim Lesen** (Spec 0094, §7): Hier
+/// stand „Kein Level-Filter" — das war falsch. Ohne `with_max_level` gilt der
+/// Standard von `tracing-subscriber`, und der ist `INFO`; `debug`- und
+/// `trace`-Ereignisse landeten also nie im Puffer. Spec 0094 braucht beide
+/// Richtungen: „auf `info` steht der Inhalt nicht" **und** „auf `debug` steht
+/// er". Deshalb jetzt ausdrücklich `TRACE` beim Aufzeichnen und ein Filter
+/// beim Lesen — [`recorded_error_lines`] für Spec 0077,
+/// [`recorded_lines_at_info_or_above`] und [`recorded_debug_lines`] für
+/// Spec 0094.
 pub mod log_capture {
     thread_local! {
         /// Je Thread ein eigener Puffer — sicher unter paralleler
@@ -522,6 +528,7 @@ pub mod log_capture {
         INIT.call_once(|| {
             let subscriber = tracing_subscriber::fmt()
                 .json()
+                .with_max_level(tracing::level_filters::LevelFilter::TRACE)
                 .with_writer(ThreadLocalTestWriter)
                 .finish();
             // `let _ =`: schlägt nur fehl, wenn schon ein globaler Default
@@ -540,10 +547,82 @@ pub mod log_capture {
     /// (Spec 0077, T-6c/T-A10: Aussagen über das ERROR-Log dürfen nicht
     /// versehentlich ein INFO-Ereignis mitlesen).
     pub fn recorded_error_lines() -> Vec<String> {
-        recorded_text()
-            .lines()
-            .filter(|line| line.contains("\"level\":\"ERROR\""))
+        lines_at_levels(&["ERROR"])
+    }
+
+    /// Spec 0094, A1: die Zeilen, über die A1 eine Aussage macht — `info`,
+    /// `warn`, `error`. `debug`/`trace` bleiben draußen, denn dort ist
+    /// Inhalt laut A2 ausdrücklich erlaubt.
+    pub fn recorded_lines_at_info_or_above() -> Vec<String> {
+        lines_at_levels(&["INFO", "WARN", "ERROR"])
+    }
+
+    /// Spec 0094, A2: die `debug`-Zeilen, die den Inhalt tragen.
+    pub fn recorded_debug_lines() -> Vec<String> {
+        lines_at_levels(&["DEBUG"])
+    }
+
+    /// Filtert nach dem `level`-Feld der JSON-Zeile. Bewusst wörtlich
+    /// gesucht statt die Zeile zu parsen — und mit einer Zusicherung davor,
+    /// dass jede aufgezeichnete Zeile ein erkennbares Level trägt: eine
+    /// Zeile, die der Filter nicht einordnen kann, würde bei einer
+    /// Abwesenheits-Aussage („steht nicht auf `info`") sonst stillschweigend
+    /// zu einem falschen Grün führen.
+    fn lines_at_levels(levels: &[&str]) -> Vec<String> {
+        let text = recorded_text();
+        let lines: Vec<&str> = text.lines().collect();
+        for line in &lines {
+            assert!(
+                ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
+                    .iter()
+                    .any(|l| line.contains(&format!("\"level\":\"{l}\""))),
+                "Log-Zeile ohne erkennbares level-Feld — der Filter würde sie \
+                 stillschweigend übergehen: {line}"
+            );
+        }
+        lines
+            .into_iter()
+            .filter(|line| {
+                levels
+                    .iter()
+                    .any(|l| line.contains(&format!("\"level\":\"{l}\"")))
+            })
             .map(str::to_string)
             .collect()
+    }
+
+    #[cfg(test)]
+    mod capture_self_check {
+        /// Spec 0094, §7: dieselbe Selbstprüfung wie in
+        /// `ssh_manager_core::filter::tests` — die Aussagen von T6/T9/T10
+        /// sind nur belastbar, wenn der Mitschnitt `debug` und `info`
+        /// wirklich sieht und beim Lesen auseinanderhält. Vor Spec 0094
+        /// hätte dieser Test die `debug`-Hälfte nicht bestanden.
+        #[test]
+        fn test_log_capture_records_debug_and_info_separately() {
+            super::start_recording();
+
+            tracing::debug!(marker = "nur-debug-0094", "capture self-check (debug)");
+            tracing::info!(marker = "nur-info-0094", "capture self-check (info)");
+
+            let debug_lines = super::recorded_debug_lines();
+            let info_or_above = super::recorded_lines_at_info_or_above();
+            assert!(
+                debug_lines.iter().any(|l| l.contains("nur-debug-0094")),
+                "debug-Ereignis muss aufgezeichnet werden: {debug_lines:?}"
+            );
+            assert!(
+                !debug_lines.iter().any(|l| l.contains("nur-info-0094")),
+                "info-Ereignis darf nicht als debug-Zeile gelesen werden: {debug_lines:?}"
+            );
+            assert!(
+                info_or_above.iter().any(|l| l.contains("nur-info-0094")),
+                "info-Ereignis muss aufgezeichnet werden: {info_or_above:?}"
+            );
+            assert!(
+                !info_or_above.iter().any(|l| l.contains("nur-debug-0094")),
+                "debug-Ereignis darf nicht als info-Zeile gelesen werden: {info_or_above:?}"
+            );
+        }
     }
 }

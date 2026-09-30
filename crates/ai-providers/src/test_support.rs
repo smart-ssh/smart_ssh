@@ -77,3 +77,82 @@ pub(crate) fn clear_log_buffer() {
 pub(crate) fn log_buffer_text() -> String {
     TEST_LOG_BUFFER.with(|b| String::from_utf8(b.borrow().clone()).unwrap())
 }
+
+/// Spec 0094, A1: die Zeilen, über die A1 eine Aussage macht — `info`,
+/// `warn`, `error`. `debug`/`trace` bleiben draußen, denn dort ist Inhalt
+/// laut A2 ausdrücklich erlaubt. Der Subscriber oben zeichnet bereits auf
+/// `TRACE` auf; gefiltert wird deshalb hier beim Lesen.
+pub(crate) fn log_lines_at_info_or_above() -> Vec<String> {
+    log_lines_at_levels(&["INFO", "WARN", "ERROR"])
+}
+
+/// Spec 0094, A2: die `debug`-Zeilen, die den Inhalt tragen.
+pub(crate) fn debug_log_lines() -> Vec<String> {
+    log_lines_at_levels(&["DEBUG"])
+}
+
+/// Filtert nach dem `level`-Feld der JSON-Zeile. Bewusst wörtlich gesucht
+/// statt die Zeile zu parsen — und mit einer Zusicherung davor, dass jede
+/// aufgezeichnete Zeile ein erkennbares Level trägt: eine Zeile, die der
+/// Filter nicht einordnen kann, würde bei einer Abwesenheits-Aussage
+/// („steht nicht auf `info`") sonst stillschweigend zu einem falschen Grün
+/// führen.
+fn log_lines_at_levels(levels: &[&str]) -> Vec<String> {
+    let text = log_buffer_text();
+    let lines: Vec<&str> = text.lines().collect();
+    for line in &lines {
+        assert!(
+            ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
+                .iter()
+                .any(|l| line.contains(&format!("\"level\":\"{l}\""))),
+            "Log-Zeile ohne erkennbares level-Feld — der Filter würde sie \
+             stillschweigend übergehen: {line}"
+        );
+    }
+    lines
+        .into_iter()
+        .filter(|line| {
+            levels
+                .iter()
+                .any(|l| line.contains(&format!("\"level\":\"{l}\"")))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+#[cfg(test)]
+mod capture_self_check {
+    use super::*;
+
+    /// Spec 0094, §7: dieselbe Selbstprüfung wie in
+    /// `ssh_manager_core::filter::tests` — die Aussagen von T4/T5/T8/T9 sind
+    /// nur belastbar, wenn der Mitschnitt `debug` und `info` wirklich sieht
+    /// und beim Lesen auseinanderhält.
+    #[test]
+    fn test_log_capture_records_debug_and_info_separately() {
+        install_test_subscriber_once();
+        clear_log_buffer();
+
+        tracing::debug!(marker = "nur-debug-0094", "capture self-check (debug)");
+        tracing::info!(marker = "nur-info-0094", "capture self-check (info)");
+
+        let debug_lines = debug_log_lines();
+        let info_or_above = log_lines_at_info_or_above();
+        assert!(
+            debug_lines.iter().any(|l| l.contains("nur-debug-0094")),
+            "debug-Ereignis muss aufgezeichnet werden: {debug_lines:?}"
+        );
+        assert!(
+            !debug_lines.iter().any(|l| l.contains("nur-info-0094")),
+            "info-Ereignis darf nicht als debug-Zeile gelesen werden: {debug_lines:?}"
+        );
+        assert!(
+            info_or_above.iter().any(|l| l.contains("nur-info-0094")),
+            "info-Ereignis muss aufgezeichnet werden: {info_or_above:?}"
+        );
+        assert!(
+            !info_or_above.iter().any(|l| l.contains("nur-debug-0094")),
+            "debug-Ereignis darf nicht als info-Zeile gelesen werden: {info_or_above:?}"
+        );
+    }
+}

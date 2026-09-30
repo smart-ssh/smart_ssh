@@ -23,3 +23,7 @@ reqwest = { version = "0.13.2", default-features = false, features = ["rustls"] 
 rmcp = { version = "3.2.0", features = ["client", "transport-streamable-http-client-reqwest"] }
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 tower = { version = "0.5.3", features = ["util"] }
+# Spec 0094, §7: Mitschnitt der `tracing`-Ereignisse in `test_support.rs`.
+# Nur für Tests — dieselbe Fassung und dasselbe Muster wie in `core`/
+# `ai-providers`.
+tracing-subscriber = { version = "0.3.23", features = ["json"] }

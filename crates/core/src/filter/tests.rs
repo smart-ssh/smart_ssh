@@ -1405,7 +1405,7 @@ fn test_spec_0077_t7_hard_blacklist_patterns_all_compile() {
 
 // --- Spec 0077, 3.2.2/6.3: Auswertung mit ungültigen Mustern ---------------
 
-/// Aufzeichnung der ERROR-Ereignisse aus 3.2.2 (Spec 0077, T-A10).
+/// Aufzeichnung der `tracing`-Ereignisse dieser Testsuite.
 ///
 /// Dasselbe Muster wie `ai_providers::test_support` (dort steht die
 /// ausführliche Begründung; Spec 0086, A4.2: hier stand zusätzlich der Name
@@ -1415,12 +1415,16 @@ fn test_spec_0077_t7_hard_blacklist_patterns_all_compile() {
 /// `set_global_default`-Aufrufe im selben Testbinary gewinnen sonst nur beim
 /// ersten, und die übrigen Tests sähen nie ihre eigenen Zeilen.
 ///
-/// Bewusst auf `Level::ERROR` begrenzt: 3.2.2 ist eine Aussage über
-/// ERROR-Ereignisse, und `evaluate_explained` loggt das Kommando schon
-/// heute auf INFO (`engine.rs`, Spec 0016). Ohne diese Grenze würde T-A10
-/// dieses INFO-Ereignis mitlesen und über etwas urteilen, das nicht
-/// Gegenstand dieser Spec ist.
-mod pattern_error_log {
+/// **Spec 0094, §7:** Aufgezeichnet wird auf `TRACE`, nicht mehr nur auf
+/// `ERROR`. Vorher begrenzte `with_max_level(Level::ERROR)` die Aufnahme,
+/// damit T-A10 (eine Aussage über ERROR-Ereignisse) nicht versehentlich das
+/// INFO-Ereignis von `evaluate_explained` mitlas. Spec 0094 braucht
+/// genau die andere Richtung: Aussagen darüber, was auf `info` **nicht** und
+/// auf `debug` **doch** steht, sind nur möglich, wenn beide Level im Puffer
+/// landen. Gefiltert wird deshalb beim Lesen —
+/// [`recorded_error_events`] für T-A10, [`lines_at_info_or_above`] und
+/// [`debug_lines`] für T1–T3.
+mod log_capture {
     thread_local! {
         static BUFFER: std::cell::RefCell<Vec<u8>> =
             const { std::cell::RefCell::new(Vec::new()) };
@@ -1453,7 +1457,7 @@ mod pattern_error_log {
         INIT.call_once(|| {
             let subscriber = tracing_subscriber::fmt()
                 .json()
-                .with_max_level(tracing::Level::ERROR)
+                .with_max_level(tracing::Level::TRACE)
                 .with_writer(Writer)
                 .finish();
             // `let _ =`: schlägt nur fehl, wenn schon ein globaler Default
@@ -1463,9 +1467,9 @@ mod pattern_error_log {
         BUFFER.with(|b| b.borrow_mut().clear());
     }
 
-    /// Die aufgezeichneten Ereignisse, eine JSON-Zeile je Ereignis. Alle
-    /// sind ERROR-Ereignisse (s. `with_max_level` oben).
-    pub(super) fn recorded_error_events() -> Vec<String> {
+    /// Alle aufgezeichneten Ereignisse, eine JSON-Zeile je Ereignis, über
+    /// **alle** Level (s. `with_max_level(TRACE)` oben).
+    pub(super) fn recorded_lines() -> Vec<String> {
         BUFFER.with(|b| {
             String::from_utf8(b.borrow().clone())
                 .expect("Log ist kein UTF-8")
@@ -1474,11 +1478,92 @@ mod pattern_error_log {
                 .collect()
         })
     }
+
+    /// Nur die ERROR-Ereignisse (Spec 0077, T-A10). Vor Spec 0094 ergab sich
+    /// das aus `with_max_level(ERROR)`; jetzt wird beim Lesen gefiltert,
+    /// damit dieselbe Aussage gilt, obwohl der Puffer alle Level trägt.
+    pub(super) fn recorded_error_events() -> Vec<String> {
+        lines_at_levels(&["ERROR"])
+    }
+
+    /// Spec 0094, A1: die Zeilen, über die A1 eine Aussage macht — `info`,
+    /// `warn`, `error`. `debug`/`trace` bleiben draußen, denn dort ist
+    /// Inhalt laut A2 ausdrücklich erlaubt.
+    pub(super) fn lines_at_info_or_above() -> Vec<String> {
+        lines_at_levels(&["INFO", "WARN", "ERROR"])
+    }
+
+    /// Spec 0094, A2: die `debug`-Zeilen, die den Inhalt tragen.
+    pub(super) fn debug_lines() -> Vec<String> {
+        lines_at_levels(&["DEBUG"])
+    }
+
+    /// Filtert nach dem `level`-Feld der JSON-Zeile. Das Feld steht im
+    /// JSON-Format von `tracing-subscriber` immer als `"level":"INFO"` o. Ä.
+    /// da — bewusst wörtlich gesucht statt die Zeile zu parsen: ein
+    /// Parse-Fehler dürfte hier nie stillschweigend zu „keine Zeile, also
+    /// kein Treffer" führen, denn das wäre bei einer Abwesenheits-Aussage
+    /// ein falsches Grün.
+    fn lines_at_levels(levels: &[&str]) -> Vec<String> {
+        let lines = recorded_lines();
+        for line in &lines {
+            assert!(
+                ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
+                    .iter()
+                    .any(|l| line.contains(&format!("\"level\":\"{l}\""))),
+                "Log-Zeile ohne erkennbares level-Feld — der Filter würde sie \
+                 stillschweigend übergehen: {line}"
+            );
+        }
+        lines
+            .into_iter()
+            .filter(|line| {
+                levels
+                    .iter()
+                    .any(|l| line.contains(&format!("\"level\":\"{l}\"")))
+            })
+            .collect()
+    }
+}
+
+/// Spec 0094, §7: Selbstprüfung der Aufzeichnung. Die Aussagen von T1–T3
+/// („auf `info` kein Treffer, auf `debug` schon") sind nur belastbar, wenn
+/// der Mitschnitt beide Level wirklich sieht und sie beim Lesen auch
+/// auseinanderhält. Stünde der Subscriber wieder auf `ERROR` (oder auf
+/// `INFO`, wie vor dieser Spec in `app-logic`), wären alle
+/// Abwesenheits-Aussagen über `info` trivial wahr und die
+/// Anwesenheits-Aussagen über `debug` würden scheitern — dieser Test macht
+/// den Unterschied sichtbar, statt ihn den eigentlichen Tests zu überlassen.
+#[test]
+fn test_log_capture_records_debug_and_info_separately() {
+    log_capture::start_recording();
+
+    tracing::debug!(marker = "nur-debug-0094", "capture self-check (debug)");
+    tracing::info!(marker = "nur-info-0094", "capture self-check (info)");
+
+    let debug_lines = log_capture::debug_lines();
+    let info_or_above = log_capture::lines_at_info_or_above();
+    assert!(
+        debug_lines.iter().any(|l| l.contains("nur-debug-0094")),
+        "debug-Ereignis muss aufgezeichnet werden: {debug_lines:?}"
+    );
+    assert!(
+        !debug_lines.iter().any(|l| l.contains("nur-info-0094")),
+        "info-Ereignis darf nicht als debug-Zeile gelesen werden: {debug_lines:?}"
+    );
+    assert!(
+        info_or_above.iter().any(|l| l.contains("nur-info-0094")),
+        "info-Ereignis muss aufgezeichnet werden: {info_or_above:?}"
+    );
+    assert!(
+        !info_or_above.iter().any(|l| l.contains("nur-debug-0094")),
+        "debug-Ereignis darf nicht als info-Zeile gelesen werden: {info_or_above:?}"
+    );
 }
 
 /// Belegt, dass genau für `rule_id` ein ERROR-Ereignis aus 3.2.2 vorliegt.
 fn assert_pattern_error_logged(rule_id: &str) {
-    let events = pattern_error_log::recorded_error_events();
+    let events = log_capture::recorded_error_events();
     let hits: Vec<&String> = events
         .iter()
         .filter(|line| {
@@ -1497,7 +1582,7 @@ fn assert_pattern_error_logged(rule_id: &str) {
 /// Belegt, dass für `rule_id` **kein** ERROR-Ereignis aus 3.2.2 vorliegt —
 /// eine gültige Regel wird nicht gemeldet.
 fn assert_no_pattern_error_logged(rule_id: &str) {
-    let events = pattern_error_log::recorded_error_events();
+    let events = log_capture::recorded_error_events();
     assert!(
         !events
             .iter()
@@ -1525,7 +1610,7 @@ fn regex_rule(id: &str, regex: &str, action: RuleAction, priority: i32) -> Rule 
 /// (3.2.1, Entscheidung in §1) oder wenn das Log aus 3.2.2 fehlt.
 #[tokio::test]
 async fn test_spec_0077_ta1_invalid_deny_regex_leaves_decision_at_auto_exec_and_is_logged() {
-    pattern_error_log::start_recording();
+    log_capture::start_recording();
     let eng = engine(vec![
         glob_rule(
             "allow-systemctl",
@@ -1549,7 +1634,7 @@ async fn test_spec_0077_ta1_invalid_deny_regex_leaves_decision_at_auto_exec_and_
 /// Spec 0077, T-A2: wie T-A1, aber mit einem Glob, der nicht übersetzt.
 #[tokio::test]
 async fn test_spec_0077_ta2_invalid_deny_glob_leaves_decision_at_auto_exec_and_is_logged() {
-    pattern_error_log::start_recording();
+    log_capture::start_recording();
     let eng = engine(vec![
         glob_rule(
             "allow-systemctl",
@@ -1579,7 +1664,7 @@ async fn test_spec_0077_ta2_invalid_deny_glob_leaves_decision_at_auto_exec_and_i
 /// nicht durch eine Ersatz-Eskalation aufgewertet.
 #[tokio::test]
 async fn test_spec_0077_ta3_invalid_confirm_rule_leaves_decision_at_auto_exec_and_is_logged() {
-    pattern_error_log::start_recording();
+    log_capture::start_recording();
     let eng = engine(vec![
         glob_rule(
             "allow-systemctl",
@@ -1614,7 +1699,7 @@ async fn test_spec_0077_ta3_invalid_confirm_rule_leaves_decision_at_auto_exec_an
 /// Treffer zurück und käme an `deny-broken` nie vorbei.
 #[tokio::test]
 async fn test_spec_0077_ta4_valid_deny_still_bites_and_lower_priority_invalid_rule_is_logged() {
-    pattern_error_log::start_recording();
+    log_capture::start_recording();
     let eng = engine(vec![
         glob_rule(
             "allow-systemctl",
@@ -1650,7 +1735,7 @@ async fn test_spec_0077_ta4_valid_deny_still_bites_and_lower_priority_invalid_ru
 /// zu AutoExec — es bleibt beim Confirm „keine Regel", wie ohne die Regel.
 #[tokio::test]
 async fn test_spec_0077_ta5_invalid_allow_rule_alone_never_grants_auto_exec() {
-    pattern_error_log::start_recording();
+    log_capture::start_recording();
     let eng = engine(vec![glob_rule(
         "allow-broken",
         "ls [la",
@@ -1670,7 +1755,7 @@ async fn test_spec_0077_ta5_invalid_allow_rule_alone_never_grants_auto_exec() {
 /// §8 Punkt 3).
 #[tokio::test]
 async fn test_spec_0077_ta9_regex_over_size_limit_behaves_like_a_syntax_error() {
-    pattern_error_log::start_recording();
+    log_capture::start_recording();
     let eng = engine(vec![
         glob_rule(
             "allow-systemctl",
@@ -1700,7 +1785,7 @@ async fn test_spec_0077_ta9_regex_over_size_limit_behaves_like_a_syntax_error() 
 /// ist nicht Gegenstand dieser Spec (§6.3, T-A10).
 #[tokio::test]
 async fn test_spec_0077_ta10_pattern_error_log_names_the_rule_but_never_the_command() {
-    pattern_error_log::start_recording();
+    log_capture::start_recording();
     let eng = engine(vec![
         glob_rule(
             "allow-systemctl",
@@ -1719,7 +1804,7 @@ async fn test_spec_0077_ta10_pattern_error_log_names_the_rule_but_never_the_comm
     assert_auto_exec(&decision);
     assert_pattern_error_logged("deny-broken");
 
-    let events = pattern_error_log::recorded_error_events();
+    let events = log_capture::recorded_error_events();
     assert!(!events.is_empty(), "kein ERROR-Ereignis aufgezeichnet");
     for line in &events {
         assert!(
@@ -1741,7 +1826,7 @@ async fn test_spec_0077_ta10_pattern_error_log_names_the_rule_but_never_the_comm
 /// Fehlertext von `regex`, der das Geheimnis aus dem Muster zitiert.
 #[tokio::test]
 async fn test_spec_0077_q_bl_0249_03_pattern_error_log_never_quotes_the_pattern() {
-    pattern_error_log::start_recording();
+    log_capture::start_recording();
     const SECRET: &str = "geheimwert-9f3a1c";
     let eng = engine(vec![regex_rule(
         "deny-broken-with-secret",
@@ -1760,7 +1845,7 @@ async fn test_spec_0077_q_bl_0249_03_pattern_error_log_never_quotes_the_pattern(
     assert_confirm(&decision);
     assert_pattern_error_logged("deny-broken-with-secret");
 
-    let events = pattern_error_log::recorded_error_events();
+    let events = log_capture::recorded_error_events();
     assert!(!events.is_empty(), "kein ERROR-Ereignis aufgezeichnet");
     for line in &events {
         assert!(
@@ -1797,7 +1882,7 @@ async fn test_spec_0077_q_bl_0249_03_pattern_error_log_never_quotes_the_pattern(
 /// mit ungültigem Muster vor der Auswertung verwirft.
 #[tokio::test]
 async fn test_spec_0077_ta12_single_branch_invalid_deny_still_bites_via_strict_branch() {
-    pattern_error_log::start_recording();
+    log_capture::start_recording();
     let eng = engine(vec![
         glob_rule("allow-rm", "rm *", RuleAction::Allow, Scope::Global, 0),
         glob_rule(
@@ -1829,7 +1914,7 @@ async fn test_spec_0077_ta12_single_branch_invalid_deny_still_bites_via_strict_b
 /// Zweig scheitert an `rm /x/[a/c`). Gegenbeweis geführt.
 #[tokio::test]
 async fn test_spec_0077_ta12_single_branch_invalid_deny_still_bites_via_permissive_branch() {
-    pattern_error_log::start_recording();
+    log_capture::start_recording();
     let eng = engine(vec![
         glob_rule("allow-rm", "rm *", RuleAction::Allow, Scope::Global, 0),
         glob_rule(
@@ -1864,7 +1949,7 @@ async fn test_spec_0077_ta12_single_branch_invalid_deny_still_bites_via_permissi
 /// Scheitert, wenn eine Ersatz-Eskalation eingebaut wird oder das Log fehlt.
 #[tokio::test]
 async fn test_spec_0077_ta12_single_branch_invalid_deny_does_not_escalate_when_nothing_matches() {
-    pattern_error_log::start_recording();
+    log_capture::start_recording();
     let eng = engine(vec![
         glob_rule("allow-rm", "rm *", RuleAction::Allow, Scope::Global, 0),
         glob_rule(
