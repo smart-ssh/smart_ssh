@@ -162,9 +162,9 @@ Bericht belegt, aber **nicht committet**:
 - **T8 (A6):** Ein probeweise eingefügter Aufruf eines Test-Zugangs aus
   Produktivcode (etwa `parts_mut_for_tests`) lässt `cargo build --workspace`
   scheitern, während `cargo test --workspace` grün bleibt. Nicht committen.
-- **Rauchprobe:** Das volle Gate fünfmal nacheinander grün, davon zweimal
-  parallel zu einem `cargo build --workspace --release` in einem getrennten
-  `CARGO_TARGET_DIR`.
+- **Rauchprobe:** Das volle Gate zweimal nacheinander grün, ohne zusätzliche
+  Last. Gezielte Lastläufe gibt es nicht: Die Verzögerungsproben belegen den
+  Zeitbezug, und die Maschine ist ein Arbeitsrechner.
 
 ## 8. Offene Punkte
 
@@ -200,4 +200,4 @@ die Fälle sind unabhängig voneinander, aber klein.
 
 **Melde zurück:** je Fall die Verzögerungsprobe und die Gegenprobe mit
 Ergebnis (alt rot / neu grün / Gegenprobe rot), die Liste der in A4
-durchgesehenen Stellen mit Einordnung, die fünf Gate-Läufe der Rauchprobe.
+durchgesehenen Stellen mit Einordnung, die zwei Gate-Läufe der Rauchprobe.
