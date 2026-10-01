@@ -59,6 +59,42 @@ jobs:
         working-directory: apps/smart-ssh-community/frontend
         run: npm ci
 
+      # Spec 0099 (BL-0054), A2.1: jeder Release-Build der Matrix erzeugt
+      # die Drittlizenz-Liste selbst (statt eines vorgelagerten Jobs) — der
+      # Inhalt hängt nicht von der Bauplattform ab (Spec, Abschnitt 5), ein
+      # eigener Job hätte hier nur plattformübergreifenden Artefakt-Transfer
+      # ohne Nutzen hinzugefügt. Dieselbe feste cargo-about-Version wie in
+      # der Community-CI und im Skript selbst (A1.6).
+      - name: Install cargo-about
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about@0.9.2
+
+      # A2.2: kein `continue-on-error` — scheitert die Erzeugung (fehlende
+      # Lizenz, fehlendes Werkzeug), scheitert dieser Schritt und damit der
+      # gesamte Release-Build für diese Plattform; `tauri-action` unten
+      # läuft dann gar nicht erst, es entsteht kein Artefakt ohne Lizenzen.
+      - name: Generate third-party license notices
+        working-directory: apps/smart-ssh-community/frontend
+        run: npm run generate-notices
+
+      # A2.2, zweite Linie: unabhängig davon, warum eine Ausgabe fehlerhaft
+      # wäre, prüft dieser eigene Schritt die Kennzeile (A1.8) explizit statt
+      # sich allein auf den Rückgabewert des Skripts zu verlassen. `shell:
+      # bash`, weil der Windows-Runner sonst PowerShell nähme.
+      - name: Verify third-party license notices marker
+        shell: bash
+        run: |
+          file="apps/smart-ssh-community/frontend/public/third-party-notices.txt"
+          if [ ! -s "$file" ]; then
+            echo "::error::$file fehlt oder ist leer - kein Release ohne Lizenzen (Spec 0099, A2.2)"
+            exit 1
+          fi
+          if ! head -c 64 "$file" | grep -q "^SMART-SSH-THIRD-PARTY-NOTICES-V1"; then
+            echo "::error::$file beginnt nicht mit der Kennzeile (Spec 0099, A1.8/A2.2)"
+            exit 1
+          fi
+
       - name: Build Tauri App and publish Release
         uses: tauri-apps/tauri-action@v0
         env:

@@ -110,6 +110,28 @@ jobs:
         working-directory: apps/smart-ssh-community/frontend
         run: npm ci
 
+      # Spec 0099, A3.1: das Drittlizenz-Skript läuft bei jedem CI-Lauf
+      # mindestens einmal und macht den Job rot, wenn es scheitert — eine
+      # Plattform genügt (die Ausgabe hängt nicht vom Betriebssystem ab,
+      # s. Spec, Abschnitt 5), deshalb nur hier auf ubuntu-latest. Dieselbe
+      # feste Version wie in `scripts/generate-third-party-notices.mjs`
+      # (`EXPECTED_CARGO_ABOUT_VERSION`, A1.6) — ein Auseinanderlaufen fällt
+      # dort als Abbruch auf, nicht erst als stiller Unterschied.
+      - name: Install cargo-about
+        if: matrix.os == 'ubuntu-latest'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about@0.9.2
+
+      # Erzeugt `public/third-party-notices.txt`, damit die anschließenden
+      # Frontend-Tests (Spec 0099, T1/T2/T5) gegen eine echte Ausgabe statt
+      # nur gegen ihren eigenen Skip-Zweig laufen. Kein `continue-on-error`:
+      # ein Lizenz-/Werkzeug-Fehler hier färbt den Job rot (A1.3, A3.1).
+      - name: Generate third-party license notices
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: apps/smart-ssh-community/frontend
+        run: npm run generate-notices
+
       # Spec 0090, A5: oxlint-Verstöße der Stufe "error" färben den Job rot;
       # Warnungen (aktuell 4, s. Spec 0090 §1) bleiben Warnungen — oxlints
       # eigener Exit-Code unterscheidet das bereits.
