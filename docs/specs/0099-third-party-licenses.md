@@ -44,7 +44,8 @@ Barlow Condensed, JetBrains Mono), eingebunden per `@font-face` in
 - `cargo-about` 0.9.2, `cargo about generate --format json --all-features`
   mit der `allow`-Liste aus `deny.toml` als `accepted`: Rückgabewert 0,
   33 s, keine Fehler. 705 Pakete (696 fremde, 9 aus dem eigenen Workspace),
-  296 Lizenztexte; MIT 657, Apache-2.0 26,
+  296 Lizenztexte; Übersicht laut `cargo-about` (Summe 739, Zählweise nicht
+  geprüft): MIT 657, Apache-2.0 26,
   ISC 21, Unicode-3.0 19, BSD-3-Clause 8, MPL-2.0 5, CDLA-Permissive-2.0 2,
   Zlib 1. Der Lauf auf macOS enthält auch `windows-sys`, `webview2-com`
   und `gtk`.
@@ -64,8 +65,9 @@ Barlow Condensed, JetBrains Mono), eingebunden per `@font-face` in
   Authors (https://github.com/jpt/barlow)“ für alle Barlow-Dateien,
   „Copyright 2020 The JetBrains Mono Project Authors
   (https://github.com/JetBrains/JetBrainsMono)“ für JetBrains Mono. Der
-  SPDX-Text `OFL-1.1` liegt offline im Crate `spdx` (Abhängigkeit der
-  Lizenzwerkzeuge) unter `src/text/licenses/OFL-1.1`.
+  SPDX-Text `OFL-1.1` liegt offline im lokalen Cargo-Cache unter
+  `~/.cargo/registry/src/*/spdx-0.13.4/src/text/licenses/OFL-1.1` (nicht
+  Teil des Workspace; kam mit den Lizenzwerkzeugen).
 
 ## 2. Teil 0
 
@@ -148,7 +150,9 @@ Nicht-Ziele:
 **A6 Schriften** — MUSS: Neben den Schriftdateien liegt eine Lizenzdatei
 mit den beiden Copyright-Zeilen aus §1 und dem vollständigen Text der SIL
 Open Font License 1.1 (SPDX-Text `OFL-1.1`, offline verfügbar, s. §1). Ihr
-Inhalt steht in der erzeugten Ausgabe.
+Inhalt steht in der erzeugten Ausgabe. Die Schriftlizenz wird **nicht**
+gegen die erlaubte Liste geprüft (Lizenz fest OFL-1.1, Quelle ist diese
+Datei); `deny.toml` bleibt unverändert.
 
 ## 5. Design
 
@@ -178,8 +182,9 @@ Inhalt steht in der erzeugten Ausgabe.
 
 - **T1 Erzeugung auf dem heutigen Stand** (A1.1, A1.8): Skript läuft mit
   Rückgabewert 0; die Ausgabe beginnt mit der Kennzeile und enthält
-  mindestens die Texte zu MIT, Apache-2.0, MPL-2.0 und OFL-1.1 sowie die
-  Pakete `tauri`, `react`, `tailwindcss` und `vite`. Scheitert, wenn eine
+  mindestens die Texte zu MIT, Apache-2.0, MPL-2.0 und OFL-1.1, die
+  Copyright-Zeilen von Barlow und JetBrains Mono sowie die Pakete `tauri`,
+  `react`, `tailwindcss` und `vite`. Scheitert, wenn eine
   der vier Quellen aus A1.1 fehlt.
 - **T2 Hinweisdatei** (A1.2): Der Inhalt von `NOTICES.md` aus `cfg_aliases`
   steht in der Ausgabe. Scheitert, wenn Hinweisdateien übergangen werden.
@@ -197,8 +202,10 @@ Inhalt steht in der erzeugten Ausgabe.
   Gegenbeweis mit verfälschter Kopie in den Bericht.
 - **T5 npm vollständig** (A1.1): Der Test zählt zur Laufzeit per
   `npm ls --omit=dev --all --json`, dedupliziert nach (Name, Version),
-  **unabhängig vom Code des Skripts**, und vergleicht mit den npm-Paketen
-  der Ausgabe (heute 107 als Referenz, nicht fest eingetragen).
+  **unabhängig vom Code des Skripts**, nimmt die devDependencies aus
+  A1.1(c) hinzu und verlangt **Gleichheit** mit den npm-Paketen der Ausgabe
+  (heute 107 + 2 als Referenz, nicht fest eingetragen). Scheitert bei
+  fehlenden wie bei überzähligen Paketen.
 - **T6 Anzeige mit Datei** (A4.1): Oberflächentest — Klick auf den Eintrag
   öffnet die Ansicht mit dem Text.
 - **T7 Anzeige ohne gültige Datei** (A4.3): (a) Laden scheitert, (b) Laden
@@ -235,7 +242,7 @@ Keine. Entschieden: Erzeugung beim Release-Bau statt eingecheckter Datei.
 **Teil 0:** entfällt.
 
 **Reihenfolge:**
-1. `docs(frontend): add the font license next to the bundled fonts [BL-0054]` — A6.
+1. `docs(frontend): add the font license next to the bundled fonts [BL-0054]` — A6 (geprüft über T1).
 2. `build: generate third-party license notices from the dependency tree [BL-0054]` — A1, T1–T5.
 3. `ci: generate the license notices in every release build and in CI [BL-0054]` — A2, A3, T10.
 4. `feat(frontend): show third-party licenses in the about settings [BL-0054]` — A4, T6–T9, T11, T12.
