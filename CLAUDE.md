@@ -26,7 +26,14 @@ advisory) fails the job too.
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo build --workspace
 ```
+
+The last step builds without the `test-support` feature, which `cargo
+test`/`clippy --all-targets` both enable — it's the only one of the four
+that catches a production-code call into a test-only access point (e.g.
+`parts_mut_for_tests`, gated on `cfg(any(test, feature = "test-support"))`),
+since that call compiles fine as long as `test-support` is on.
 
 ```bash
 cd apps/smart-ssh-community/frontend
