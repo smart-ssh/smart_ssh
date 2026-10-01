@@ -268,4 +268,34 @@ describe("HostKeyDialog — Zweig- und Ereigniswechsel", () => {
       window.removeEventListener("keydown", windowHandler);
     }
   });
+
+  // Review-Fund (Spec 0100, Runde 2, behoben mit 981dc3d): Der
+  // `document`-Escape-Listener entsteht nur einmal (Effekt mit `[]`) und
+  // schloss vor dem Fix über das `onEscape` des ersten Renders. Bleibt der
+  // Dialog gemountet und ersetzt ein zweites, überlappendes Host-Key-
+  // Ereignis das erste (zwei Verbindungen fragen gleichzeitig), lehnte
+  // Escape das alte statt das aktuell angezeigte Ereignis ab. Scheitert am
+  // Stand vor 981dc3d (Beleg im Bericht: Fix lokal entfernt, Lauf
+  // beobachtet, Fix wiederhergestellt).
+  it("T12: Escape nach überlappendem Ereigniswechsel entscheidet über das neue Ereignis, nie über das alte", () => {
+    const onDecision1 = vi.fn();
+    const onDecision2 = vi.fn();
+    const { rerender } = render(
+      <I18nextProvider i18n={testI18n}>
+        <HostKeyDialog event={unknownEvent} onDecision={onDecision1} />
+      </I18nextProvider>,
+    );
+
+    rerender(
+      <I18nextProvider i18n={testI18n}>
+        <HostKeyDialog event={mismatchEvent} onDecision={onDecision2} />
+      </I18nextProvider>,
+    );
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onDecision2).toHaveBeenCalledTimes(1);
+    expect(onDecision2).toHaveBeenCalledWith({ decision: "reject" });
+    expect(onDecision1).not.toHaveBeenCalled();
+  });
 });
