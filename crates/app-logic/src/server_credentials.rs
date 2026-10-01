@@ -1388,8 +1388,12 @@ mod tests {
     ///
     /// Scheitert, wenn ein Laufzeitfehler „nicht verfügbar" meldet (erste
     /// Zusicherung; am Stand vor dieser Spec kam dort `KEYCHAIN_UNAVAILABLE`)
-    /// oder wenn ein Fehler den Zustand eskalieren würde (letzte
-    /// Zusicherung).
+    /// oder wenn der zweite Durchlauf das Secret nicht wirklich entfernt
+    /// (letzte Zusicherung) — ein bloßes `Ok` genügt dafür nicht.
+    ///
+    /// Dass kein Laufzeitfehler den Zustand **eskaliert**, prüft dieser Test
+    /// **nicht** mehr und kann es auch nicht: Die Garantie hängt an der
+    /// Signatur, nicht an einer Zusicherung (s. Kommentar am Ende des Tests).
     #[test]
     fn test_spec_0098_t4_a_single_rejection_does_not_make_the_keychain_unavailable() {
         let id = ServerId::new();

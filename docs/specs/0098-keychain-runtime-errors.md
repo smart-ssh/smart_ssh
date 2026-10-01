@@ -217,7 +217,8 @@ gegen den Testserver nicht erreichbar):
   `KEYCHAIN_UNAVAILABLE` (Akzeptanz BL-0206). In beiden Fällen ist
   `message` ohne Marker. Scheitert am heutigen Stand
   (`SSH_CREDENTIAL_RESOLUTION_FAILED`, Marker in `message`).
-- **T6 (A4, Ziel-Hop und Aufbau):** Ebene V1 für den Ziel-Hop. Ebene V2 für
+- **T6 (A4, Ziel-Hop und Aufbau):** Ebene V1 für den Ziel-Hop — **für diesen
+  nicht herstellbar, s. §9.3**. Ebene V2 für
   den ersten Hop über `ssh_transport::connect`. Die Abbildung auf den Code
   beim Verbindungsaufbau (`connect.rs`) wird auf Funktionsebene geprüft. Der
   Bericht nennt, was davon ohne echte Verbindung nicht abgedeckt ist.
