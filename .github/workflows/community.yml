@@ -133,8 +133,9 @@ jobs:
         run: npm run generate-notices
 
       # Spec 0090, A5: oxlint-Verstöße der Stufe "error" färben den Job rot;
-      # Warnungen (aktuell 4, s. Spec 0090 §1) bleiben Warnungen — oxlints
-      # eigener Exit-Code unterscheidet das bereits.
+      # Warnungen (aktuell 19, seit Spec 0100/A6.1 inkl. `jsx-a11y`, s. dort
+      # §1/A6.2 für die Liste) bleiben Warnungen — oxlints eigener
+      # Exit-Code unterscheidet das bereits.
       - name: Frontend lint
         working-directory: apps/smart-ssh-community/frontend
         run: npm run lint
