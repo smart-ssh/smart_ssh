@@ -66,6 +66,19 @@ fokussierten Knoten direkt aus dem DOM (das löst in `jsdom` kein `focusout`
 aus, wie oben gemessen) und prüft, dass Escape trotzdem ablehnt und keinen
 `window`-Handler erreicht. Scheitert am Stand vor diesem Fund.
 
+Zweiter Review-Fund (Runde 2): Der `document`-Listener oben entsteht nur
+einmal (Effekt mit `[]`) und schloss deshalb über das `onEscape` des ersten
+Renders — bei zwei überlappenden Host-Key-Ereignissen (Dialog bleibt
+gemountet, `resetKey` wechselt) lehnte Escape das alte statt das aktuell
+angezeigte Ereignis ab. Behoben über einen `onEscapeRef`, der den
+Handler-Verweis aktuell hält und in `onDocumentKeyDown` statt des direkten
+`onEscape`-Zugriffs gelesen wird; die Zuweisung selbst steht in einem
+eigenen Effekt ohne Dependency-Array (nicht im Render-Körper, wo React 19
+Ref-Schreibzugriffe untersagt) und läuft damit nach jedem Commit synchron
+zu dem, was gerade angezeigt wird. Behoben mit Test: `HostKeyDialog.test.tsx`,
+„T12: Escape nach überlappendem Ereigniswechsel entscheidet über das neue
+Ereignis, nie über das alte" — scheitert am Stand vor diesem Fund.
+
 ## 4. Reihenfolge der Effekte in `useDialogFocusTrap`
 
 Die Erfassung des vorher fokussierten Elements (A7) und die Registrierung
