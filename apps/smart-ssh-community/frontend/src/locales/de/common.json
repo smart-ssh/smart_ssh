@@ -55,7 +55,13 @@
     "copyFailed": "Kopieren fehlgeschlagen — Text lässt sich markieren.",
     "loadFailed": "Versions-/Build-Information konnte nicht geladen werden.",
     "buildDev": "Dev-Build",
-    "buildRelease": "Release-Build"
+    "buildRelease": "Release-Build",
+    "thirdPartyLicenses": {
+      "openButton": "Drittanbieter-Lizenzen",
+      "title": "Drittanbieter-Lizenzen",
+      "loading": "Wird geladen …",
+      "unavailable": "Drittanbieter-Lizenzen sind nur in Release-Builds enthalten."
+    }
   },
   "diagnostics": {
     "generateBundle": "Diagnosepaket erzeugen",

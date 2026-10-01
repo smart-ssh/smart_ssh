@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getAppInfo } from "../api";
 import type { AppInfoDto } from "../types";
+import { ThirdPartyLicensesDialog } from "./ThirdPartyLicensesDialog";
 
 /** Spec 0052, Abschnitt 3.2: "Über"-Kategorie der zweispaltigen Settings
  * (Spec 0050) — Version + Commit-Hash **sichtbar und kopierbar**, damit ein
@@ -24,6 +25,7 @@ export function AboutSettings() {
   const [info, setInfo] = useState<AppInfoDto | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const [showLicenses, setShowLicenses] = useState(false);
 
   useEffect(() => {
     getAppInfo()
@@ -94,6 +96,18 @@ export function AboutSettings() {
           </div>
         </div>
       )}
+      <div>
+        {/* Spec 0099, A4.1: eigener Eintrag, der die Liste in einer
+         * scrollbaren Ansicht innerhalb der App öffnet. */}
+        <button
+          type="button"
+          onClick={() => setShowLicenses(true)}
+          className="text-sm text-indigo-400 underline hover:text-indigo-300"
+        >
+          {t("about.thirdPartyLicenses.openButton")}
+        </button>
+      </div>
+      {showLicenses && <ThirdPartyLicensesDialog onClose={() => setShowLicenses(false)} />}
     </div>
   );
 }

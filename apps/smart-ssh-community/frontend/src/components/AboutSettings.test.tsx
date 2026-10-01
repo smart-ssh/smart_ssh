@@ -129,4 +129,27 @@ describe("AboutSettings (Spec 0052)", () => {
       await screen.findByText("Versions-/Build-Information konnte nicht geladen werden."),
     ).toBeInTheDocument();
   });
+
+  // Spec 0099, T6: Klick auf den Eintrag öffnet die Drittlizenz-Ansicht.
+  it("opens the third-party licenses dialog when its entry is clicked", async () => {
+    vi.mocked(getAppInfo).mockResolvedValue({
+      version: "0.5.0",
+      commitHash: "abf7a22",
+      versionDisplay: "0.5.0 (abf7a22)",
+      edition: "Community",
+      buildType: "Release",
+    });
+    const content = "SMART-SSH-THIRD-PARTY-NOTICES-V1\n\nMIT License";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve(content) }),
+    );
+
+    renderAbout();
+    const openButton = await screen.findByRole("button", { name: "Drittanbieter-Lizenzen" });
+    fireEvent.click(openButton);
+
+    expect(await screen.findByText(/MIT License/)).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
 });

@@ -55,7 +55,13 @@
     "copyFailed": "Copy failed — text can be selected instead.",
     "loadFailed": "Could not load version/build information.",
     "buildDev": "Dev build",
-    "buildRelease": "Release build"
+    "buildRelease": "Release build",
+    "thirdPartyLicenses": {
+      "openButton": "Third-party licenses",
+      "title": "Third-party licenses",
+      "loading": "Loading …",
+      "unavailable": "Third-party licenses are only included in release builds."
+    }
   },
   "diagnostics": {
     "generateBundle": "Generate diagnostics bundle",
