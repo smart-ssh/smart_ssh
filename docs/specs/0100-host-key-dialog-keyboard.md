@@ -41,7 +41,8 @@ davon in `HostKeyDialog.tsx`. Der Kommentar in `community.yml` am Schritt
 **`jsdom` (gemessen, Version 27.0.1, direkt in Node):** Ein Enter-`keydown`/
 `keyup` auf einer fokussierten Schaltfläche löst **keinen** Klick aus; ein
 Tab-`keydown` bewegt den Fokus **nicht**; `KeyboardEvent.repeat` wird
-übernommen; `blur()` setzt den Fokus auf `body`. `@testing-library/user-event`
+übernommen; `blur()` setzt den Fokus auf `body` und feuert ein `focusout`
+mit `relatedTarget` `null`. `@testing-library/user-event`
 ist nicht installiert. Der einzige globale Tastatur-Handler ist ein
 `keydown`-Listener auf `window` in `App.tsx` (Kürzel, kein Escape)
 (gelesen, nicht ausgeführt).
@@ -148,6 +149,10 @@ Alle als Komponententests in `jsdom`, je für beide Zweige
 - **T2 Anfangsfokus** (A2): Nach dem Rendern ist `document.activeElement`
   die `reject`-Schaltfläche. Scheitert, wenn der Fokus auf `trust`, dem
   Body oder dem Overlay liegt.
+  Zusätzlich (adversarial): `rerender` mit einem neuen `event` und mit
+  gewechseltem `kind` (unbekannt → geändert) — der Fokus liegt danach auf
+  der `reject`-Schaltfläche des aktuellen Zweigs, nie auf `trust` oder
+  `body`.
 - **T3 Frisches Enter** (A2, A5, adversarial): Direkt nach dem Öffnen ein
   Enter-`keydown` ohne `repeat` auf das fokussierte Element: Das Ereignis
   ist **nicht** `defaultPrevented`, der Fokus liegt auf `reject`, und
@@ -176,8 +181,11 @@ Alle als Komponententests in `jsdom`, je für beide Zweige
   `jsx-a11y`; ein absichtlich eingefügtes `<div onClick>` ohne Tastatur in
   einer Testkopie erzeugt einen `jsx-a11y`-Fund (Gegenbeweis von Hand, in
   den Bericht).
-- **T10 Fokus zurück** (A7): Vor dem Öffnen fokussierte Schaltfläche hat
-  nach der Entscheidung wieder den Fokus.
+- **T10 Fokus zurück** (A7): Eine Schaltfläche außerhalb hat vor dem Öffnen
+  den Fokus; nach dem Öffnen setzt der Test ihn per `focus()` auf `reject`
+  (so liegt er nach A2 ohnehin); Klick auf
+  `reject`, danach Unmount durch den Test-Wrapper → die äußere Schaltfläche
+  hat wieder den Fokus. Am alten Stand liegt er dann auf `body`.
 
 Jeder Test außer T8 muss am heutigen Stand scheitern; Beleg im Bericht.
 
@@ -200,13 +208,14 @@ Keine.
 - Enter aus einem vorherigen Dialog (Auto-Repeat) trifft die erst gerade
   fokussierte Schaltfläche (T6).
 - Der Anfangsfokus landet nach einem Re-Render oder bei einem zweiten
-  Ereignis doch auf `trust` oder dem Body (T2, Zweigwechsel).
+  Ereignis doch auf `trust` oder dem Body (T2, Zusatzfall `rerender`).
 - Escape wird in einem Handler behandelt, der in einer Lage `trust` ruft,
   oder erreicht dahinterliegende Handler (T5).
 - Shift+Tab, Klick auf das Overlay oder programmatischer Fokus führen aus
   dem Dialog heraus (T4, T7).
 - Der Fokus-Fang greift nicht, weil der Dialog per Portal außerhalb des
-  Teilbaums hängt, in dem der Fang lauscht.
+  Teilbaums hängt, in dem der Fang lauscht (T4, T5, T7 mit der echten
+  Komponente samt Portal).
 
 **Aufteilung:** ein Lauf auf Sonnet. Reine Frontend-Arbeit an einer
 Komponente; der spec-reviewer prüft mit Priorität ERHÖHT.
