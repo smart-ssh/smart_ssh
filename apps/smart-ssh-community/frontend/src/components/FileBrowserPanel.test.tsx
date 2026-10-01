@@ -1086,28 +1086,53 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     });
     await enableElevation();
 
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
-    fireEvent.click(screen.getByText("Lokal öffnen…"));
-    await waitFor(() =>
-      expect(sftpOpenForEditing).toHaveBeenCalledWith("session-1", "a.txt", "root"),
-    );
-    expect(await screen.findByText(/als root geöffnet/)).toBeVisible();
+    // Spec 0097, A1 (F1): "wurde lokal geändert" hängt an einem echten
+    // Produktcode-Intervall (`POLL_INTERVAL_MS` in `useLocalEditSession`,
+    // 2000ms) — ab hier Fake-Timer, damit der Poll-Tick steuerbar ist, statt
+    // sich auf ein festes 4s-Timeout über zwei Ticks hinweg zu verlassen
+    // (das unter Last reißen kann, s. Spec 0097 §1). Testing-Library
+    // erkennt vitests Fake-Timer hier nicht (kein globales `jest`, s.
+    // `@testing-library/dom`s `jestFakeTimersAreEnabled`) — `waitFor`/
+    // `findBy*` würden also hängen bleiben; ab hier deshalb per
+    // `advanceTimersByTimeAsync` flushen und synchron (`getBy*`) prüfen.
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+      fireEvent.click(screen.getByText("Lokal öffnen…"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(sftpOpenForEditing).toHaveBeenCalledWith("session-1", "a.txt", "root");
+      expect(screen.getByText(/als root geöffnet/)).toBeVisible();
 
-    // Modus ausschalten, danach die lokale Änderung hochladen.
-    fireEvent.click(screen.getByRole("button", { name: "Erhöhte Rechte beenden" }));
-    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
-    vi.mocked(localFileMtime).mockResolvedValue("2026-01-01T00:00:09Z");
-    const changed = await screen.findByText(/wurde lokal geändert/, undefined, { timeout: 4000 });
-    fireEvent.click(within(changed.parentElement!).getByRole("button", { name: "Hochladen" }));
-    const dialog = (await screen.findByText(/Lokale Änderungen als root hochladen\?/)).closest(
-      ".fixed",
-    ) as HTMLElement;
-    fireEvent.click(within(dialog).getByRole("button", { name: "Hochladen" }));
+      // Modus ausschalten, danach die lokale Änderung hochladen.
+      fireEvent.click(screen.getByRole("button", { name: "Erhöhte Rechte beenden" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      vi.mocked(localFileMtime).mockResolvedValue("2026-01-01T00:00:09Z");
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+      const changed = screen.getByText(/wurde lokal geändert/);
+      fireEvent.click(within(changed.parentElement!).getByRole("button", { name: "Hochladen" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const dialog = screen
+        .getByText(/Lokale Änderungen als root hochladen\?/)
+        .closest(".fixed") as HTMLElement;
+      fireEvent.click(within(dialog).getByRole("button", { name: "Hochladen" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
 
-    await waitFor(() =>
-      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt", "a.txt", "root"),
-    );
-    expect(sftpUpload).not.toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt", "a.txt", null);
+      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt", "a.txt", "root");
+      expect(sftpUpload).not.toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt", "a.txt", null);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -28,5 +28,10 @@ export default {
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
+    // Spec 0097, A4: deutlich über dem `asyncUtilTimeout` (`test-setup.ts`,
+    // 5000ms) — sonst liefe ein hängender `waitFor` zeitgleich mit dem Test
+    // selbst aus, und ein Wackler erschiene als nichtssagendes "Test timed
+    // out" statt als die fehlgeschlagene Erwartung mit Inhalt.
+    testTimeout: 15000,
   },
 }

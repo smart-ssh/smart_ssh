@@ -13,7 +13,7 @@
 // - **A17**: Das Löschen läuft durch, auch wenn ein Secret im
 //   Schlüsselbund bleibt — der Nutzer erfährt aber davon, statt ein
 //   stilles „erledigt" zu sehen.
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -318,31 +318,38 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
   // Regressionstest mit Gegenbeweis: mit der Bedingung `auth.kind !==
   // "identityFile"` durch `true` ersetzt (Effekt ruft `inspectKeyFile` nie
   // auf) schlägt dieser Test fehl — verifiziert, danach wiederhergestellt.
+  // Spec 0097, A1: wartet auf den echten 400-ms-Debounce vor `inspectKeyFile`
+  // (`ServerForm.tsx`, Spec 0076 B-3) — Fake-Timer steuern diese Zeit
+  // selbst, statt auf eine geschätzte Dauer zu hoffen.
   it("fragt nach einer Pause den Vorab-Befund ab und zeigt die übersetzte Meldung (B-3)", async () => {
-    vi.mocked(inspectKeyFile).mockResolvedValue({
-      exists: false,
-      permissionsTooOpen: false,
-      validKey: false,
-      encrypted: false,
-      problem: { code: "KEY_FILE_NOT_FOUND", message: "Datei nicht gefunden: /tmp/nope" },
-    });
-    renderNewServerForm();
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
-    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
-      target: { value: "/tmp/nope" },
-    });
+    vi.useFakeTimers();
+    try {
+      vi.mocked(inspectKeyFile).mockResolvedValue({
+        exists: false,
+        permissionsTooOpen: false,
+        validKey: false,
+        encrypted: false,
+        problem: { code: "KEY_FILE_NOT_FOUND", message: "Datei nicht gefunden: /tmp/nope" },
+      });
+      renderNewServerForm();
+      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
+        target: { value: "/tmp/nope" },
+      });
 
-    await waitFor(() => expect(inspectKeyFile).toHaveBeenCalledWith("/tmp/nope"), {
-      timeout: 2000,
-    });
-    // Der übersetzte, generische Text — NICHT der deutsche Backend-Fallback
-    // mit dem konkreten Pfad — belegt, dass der Code (nicht nur die
-    // Nachricht) durchgereicht wird (Spec 0024, Abschnitt 5).
-    expect(
-      await screen.findByText(
-        "Die Schlüsseldatei wurde unter dem angegebenen Pfad nicht gefunden.",
-      ),
-    ).toBeInTheDocument();
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+      expect(inspectKeyFile).toHaveBeenCalledWith("/tmp/nope");
+      // Der übersetzte, generische Text — NICHT der deutsche Backend-Fallback
+      // mit dem konkreten Pfad — belegt, dass der Code (nicht nur die
+      // Nachricht) durchgereicht wird (Spec 0024, Abschnitt 5).
+      expect(
+        screen.getByText("Die Schlüsseldatei wurde unter dem angegebenen Pfad nicht gefunden."),
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // spec-reviewer-Fund (Review dieses Schritts): ein gescheiterter
@@ -354,54 +361,66 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
   // fehl, weil der Fehlertext nie erscheint. Verifiziert, danach
   // wiederhergestellt.
   it("zeigt einen Hinweis, wenn der Vorab-Befund selbst nicht abgefragt werden konnte", async () => {
-    vi.mocked(inspectKeyFile).mockRejectedValue(new Error("IPC kaputt"));
-    renderNewServerForm();
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
-    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
-      target: { value: IDENTITY_PATH },
-    });
+    vi.useFakeTimers();
+    try {
+      vi.mocked(inspectKeyFile).mockRejectedValue(new Error("IPC kaputt"));
+      renderNewServerForm();
+      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
+        target: { value: IDENTITY_PATH },
+      });
 
-    expect(
-      await screen.findByText(
-        "Der Vorab-Befund konnte nicht abgefragt werden. Das hindert das Speichern nicht — beim Verbinden wird die Datei ohnehin neu geprüft.",
-        {},
-        { timeout: 2000 },
-      ),
-    ).toBeInTheDocument();
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+      expect(
+        screen.getByText(
+          "Der Vorab-Befund konnte nicht abgefragt werden. Das hindert das Speichern nicht — beim Verbinden wird die Datei ohnehin neu geprüft.",
+        ),
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // §6.3.2, restliche Fälle: zu weite Rechte und "verschlüsselt" werden
   // gemeldet, UND das Speichern bleibt möglich (B-3, letzter Satz — der
   // Submit-Knopf hängt an `saving`, nicht an den Vorab-Befund-Fakten).
   it("meldet zu weite Rechte und Verschlüsselung, hindert das Speichern aber nicht (§6.3.2)", async () => {
-    vi.mocked(inspectKeyFile).mockResolvedValue({
-      exists: true,
-      permissionsTooOpen: true,
-      validKey: true,
-      encrypted: true,
-      problem: null,
-    });
-    renderNewServerForm();
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
-    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
-      target: { value: IDENTITY_PATH },
-    });
+    vi.useFakeTimers();
+    try {
+      vi.mocked(inspectKeyFile).mockResolvedValue({
+        exists: true,
+        permissionsTooOpen: true,
+        validKey: true,
+        encrypted: true,
+        problem: null,
+      });
+      renderNewServerForm();
+      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
+        target: { value: IDENTITY_PATH },
+      });
 
-    await waitFor(() => expect(inspectKeyFile).toHaveBeenCalledWith(IDENTITY_PATH), {
-      timeout: 2000,
-    });
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+      expect(inspectKeyFile).toHaveBeenCalledWith(IDENTITY_PATH);
 
-    expect(
-      await screen.findByText(
-        "Die Dateirechte sind zu offen (für Gruppe oder Welt lesbar oder beschreibbar). Beim Verbinden wird die Anmeldung deshalb abgelehnt — z. B. mit „chmod 600“ auf die Datei beheben.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Der Schlüssel ist verschlüsselt — beim Verbinden ist die hinterlegte Passphrase nötig.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Anlegen" })).not.toBeDisabled();
+      expect(
+        screen.getByText(
+          "Die Dateirechte sind zu offen (für Gruppe oder Welt lesbar oder beschreibbar). Beim Verbinden wird die Anmeldung deshalb abgelehnt — z. B. mit „chmod 600“ auf die Datei beheben.",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Der Schlüssel ist verschlüsselt — beim Verbinden ist die hinterlegte Passphrase nötig.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Anlegen" })).not.toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // spec-reviewer-Fund (Review Runde 2): Die erste Fassung des B-3-Fixes
@@ -413,30 +432,40 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
   // gesetzt" trotz `KEY_FILE_TOO_LARGE" — dieser Test schlägt dann fehl.
   // Verifiziert, danach wiederhergestellt.
   it("behauptet bei KEY_FILE_TOO_LARGE keine nie gemessenen Rechte (spec-reviewer-Fund, Runde 2)", async () => {
-    vi.mocked(inspectKeyFile).mockResolvedValue({
-      exists: true,
-      permissionsTooOpen: false,
-      validKey: false,
-      encrypted: false,
-      problem: { code: "KEY_FILE_TOO_LARGE", message: "zu groß" },
-    });
-    renderNewServerForm();
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
-    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
-      target: { value: IDENTITY_PATH },
-    });
+    vi.useFakeTimers();
+    try {
+      vi.mocked(inspectKeyFile).mockResolvedValue({
+        exists: true,
+        permissionsTooOpen: false,
+        validKey: false,
+        encrypted: false,
+        problem: { code: "KEY_FILE_TOO_LARGE", message: "zu groß" },
+      });
+      renderNewServerForm();
+      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
+        target: { value: IDENTITY_PATH },
+      });
 
-    await waitFor(() => expect(inspectKeyFile).toHaveBeenCalledWith(IDENTITY_PATH), {
-      timeout: 2000,
-    });
-    await screen.findByText("Die Schlüsseldatei überschreitet die zulässige Größe von 1 MiB.");
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+      expect(inspectKeyFile).toHaveBeenCalledWith(IDENTITY_PATH);
+      expect(
+        screen.getByText("Die Schlüsseldatei überschreitet die zulässige Größe von 1 MiB."),
+      ).toBeInTheDocument();
 
-    expect(screen.queryByText("Die Dateirechte sind eng genug gesetzt.")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        "Die Dateirechte sind zu offen (für Gruppe oder Welt lesbar oder beschreibbar). Beim Verbinden wird die Anmeldung deshalb abgelehnt — z. B. mit „chmod 600“ auf die Datei beheben.",
-      ),
-    ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Die Dateirechte sind eng genug gesetzt."),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(
+          "Die Dateirechte sind zu offen (für Gruppe oder Welt lesbar oder beschreibbar). Beim Verbinden wird die Anmeldung deshalb abgelehnt — z. B. mit „chmod 600“ auf die Datei beheben.",
+        ),
+      ).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // Gegenstück: Bei `KEY_FILE_INVALID_KEY` SIND die Rechte verlässlich
@@ -444,24 +473,32 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
   // Rechteprüfung entstehen kann) — B-3 verlangt diese Zeile hier
   // ausdrücklich.
   it("zeigt Rechte-Warnung bei KEY_FILE_INVALID_KEY, weil sie dort verlässlich ermittelt ist", async () => {
-    vi.mocked(inspectKeyFile).mockResolvedValue({
-      exists: true,
-      permissionsTooOpen: true,
-      validKey: false,
-      encrypted: false,
-      problem: { code: "KEY_FILE_INVALID_KEY", message: "kein gültiger Schlüssel" },
-    });
-    renderNewServerForm();
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
-    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
-      target: { value: IDENTITY_PATH },
-    });
+    vi.useFakeTimers();
+    try {
+      vi.mocked(inspectKeyFile).mockResolvedValue({
+        exists: true,
+        permissionsTooOpen: true,
+        validKey: false,
+        encrypted: false,
+        problem: { code: "KEY_FILE_INVALID_KEY", message: "kein gültiger Schlüssel" },
+      });
+      renderNewServerForm();
+      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
+        target: { value: IDENTITY_PATH },
+      });
 
-    expect(
-      await screen.findByText(
-        "Die Dateirechte sind zu offen (für Gruppe oder Welt lesbar oder beschreibbar). Beim Verbinden wird die Anmeldung deshalb abgelehnt — z. B. mit „chmod 600“ auf die Datei beheben.",
-      ),
-    ).toBeInTheDocument();
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+      expect(
+        screen.getByText(
+          "Die Dateirechte sind zu offen (für Gruppe oder Welt lesbar oder beschreibbar). Beim Verbinden wird die Anmeldung deshalb abgelehnt — z. B. mit „chmod 600“ auf die Datei beheben.",
+        ),
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // Regressionstest mit Gegenbeweis: den sofortigen `setIdentityFacts(null)`
@@ -471,20 +508,32 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
   // den neuen, noch ungeprüften Pfad angezeigt würde. Verifiziert, danach
   // wiederhergestellt.
   it("zeigt beim Pfadwechsel sofort 'wird geprüft', nicht den Befund des alten Pfads (Fix 7)", async () => {
-    vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
-    renderNewServerForm();
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
-    const input = screen.getByPlaceholderText("~/.ssh/id_ed25519");
-    fireEvent.change(input, { target: { value: IDENTITY_PATH } });
+    vi.useFakeTimers();
+    try {
+      vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
+      renderNewServerForm();
+      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      const input = screen.getByPlaceholderText("~/.ssh/id_ed25519");
+      fireEvent.change(input, { target: { value: IDENTITY_PATH } });
 
-    await screen.findByText("Sieht aus wie ein gültiger OpenSSH-Schlüssel.");
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+      expect(
+        screen.getByText("Sieht aus wie ein gültiger OpenSSH-Schlüssel."),
+      ).toBeInTheDocument();
 
-    fireEvent.change(input, { target: { value: "/tmp/anderer-pfad" } });
+      fireEvent.change(input, { target: { value: "/tmp/anderer-pfad" } });
 
-    // Sofort nach dem Tippen (noch innerhalb der 400-ms-Verzögerung) darf
-    // der alte, jetzt nicht mehr zutreffende Befund nicht mehr stehen.
-    expect(screen.queryByText("Sieht aus wie ein gültiger OpenSSH-Schlüssel.")).not.toBeInTheDocument();
-    expect(screen.getByText("Wird geprüft …")).toBeInTheDocument();
+      // Sofort nach dem Tippen (noch innerhalb der 400-ms-Verzögerung) darf
+      // der alte, jetzt nicht mehr zutreffende Befund nicht mehr stehen.
+      expect(
+        screen.queryByText("Sieht aus wie ein gültiger OpenSSH-Schlüssel."),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText("Wird geprüft …")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // Regressionstest mit Gegenbeweis: die drei `setConvertConfirmOpen(false)`/
