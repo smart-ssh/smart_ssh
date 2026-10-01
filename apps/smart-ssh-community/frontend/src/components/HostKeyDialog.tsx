@@ -1,6 +1,8 @@
+import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { HostKeyInfo, HostKeyUserDecision } from "../types";
+import { useDialogFocusTrap } from "../useDialogFocusTrap";
 
 interface HostKeyDialogProps {
   event: HostKeyInfo;
@@ -13,10 +15,45 @@ interface HostKeyDialogProps {
  * Dialog (rot, Warnsymbol, expliziter MITM-Hinweis, andere Button-
  * Beschriftung) statt derselben Optik wie `Unknown` — ein geänderter
  * Host-Key ist ein deutlich ernsteres Signal als ein neuer, unbekannter.
+ *
+ * Spec 0100: Der Dialog ist allein mit der Tastatur sicher bedienbar und
+ * wird von Screenreadern als modal angesagt — der Fokus-Fang/Escape-Teil
+ * steckt im Hook `useDialogFocusTrap`, hier bleibt nur, was spezifisch zu
+ * dieser Entscheidung gehört: welche Schaltfläche den Anfangsfokus trägt
+ * und was Escape bedeutet (immer `reject`, nie `trust`).
  */
 export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   const { t } = useTranslation();
   const isMismatch = event.kind === "mismatch";
+  const dialogRole = isMismatch ? "alertdialog" : "dialog";
+  const headingId = useId();
+  const descriptionId = useId();
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const rejectButtonRef = useRef<HTMLButtonElement>(null);
+  // A4/A5-Invariante: `onDecision` wird für dieses Ereignis höchstens
+  // einmal gerufen — schützt vor doppeltem Escape (T5) und vor
+  // Klick-nach-Escape in derselben Lebensdauer, bevor der Aufrufer den
+  // Dialog aus dem Baum entfernt. Bei einem neuen Ereignis (neue
+  // Verbindungsanfrage) wird die Sperre zurückgesetzt.
+  const decidedRef = useRef(false);
+  useEffect(() => {
+    decidedRef.current = false;
+  }, [event]);
+
+  function decide(decision: HostKeyUserDecision["decision"]) {
+    if (decidedRef.current) return;
+    decidedRef.current = true;
+    onDecision({ decision });
+  }
+
+  const { onKeyDown } = useDialogFocusTrap({
+    containerRef,
+    initialFocusRef: rejectButtonRef,
+    // A4: Escape lehnt ab, nie `trust`.
+    onEscape: () => decide("reject"),
+    resetKey: event,
+  });
 
   // Unabhängiger Review-Pass (Spec 0014/0017): dieser Dialog kann von
   // `ServerList` ausgelöst werden, während gerade ein Session-Tab aktiv ist
@@ -30,7 +67,25 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   // zu müssen.
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      {/* A6.3: begründete `jsx-a11y`-Ausnahme, zeilengenau statt global —
+       * `role` ist hier zweigabhängig (`alertdialog`/`dialog`, A1) und
+       * damit kein String-Literal; die statische Analyse von
+       * `no-static-element-interactions` erkennt nur Literale und verlangt
+       * deshalb eine Rolle, die längst da ist (gemessen: ein Literal löst
+       * stattdessen `no-noninteractive-element-interactions` aus — das
+       * Zweig-Rendern über zwei fast identische Teilbäume nur für ein
+       * statisches `role`-Literal würde die Komponente ohne Nutzen
+       * duplizieren). */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
+        ref={containerRef}
+        // A1: `alertdialog` im geänderten Zweig (höheres Dringlichkeits-
+        // signal für Screenreader), `dialog` im unbekannten Zweig.
+        role={dialogRole}
+        aria-modal="true"
+        aria-labelledby={headingId}
+        aria-describedby={descriptionId}
+        onKeyDown={onKeyDown}
         className={`w-full max-w-md border p-0 shadow-xl ${
           isMismatch ? "border-red-600 bg-red-950/95" : "border-slate-600 bg-slate-800"
         }`}
@@ -51,10 +106,10 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
               <div className="font-mono text-[11px] tracking-[0.18em] text-red-400 uppercase">
                 {t("hostKeyDialog.mismatchLabel")}
               </div>
-              <h2 className="font-heading mt-1 mb-2 text-2xl leading-tight font-bold text-red-100">
+              <h2 id={headingId} className="font-heading mt-1 mb-2 text-2xl leading-tight font-bold text-red-100">
                 {t("hostKeyDialog.mismatchHeading")}
               </h2>
-              <p className="mb-4 text-sm text-red-200/90">
+              <p id={descriptionId} className="mb-4 text-sm text-red-200/90">
                 {t("hostKeyDialog.mismatchBodyBeforeHost")}
                 <strong>{event.host}:{event.port}</strong>
                 {t("hostKeyDialog.mismatchBodyAfterHost")}
@@ -80,15 +135,16 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
 
               <div className="flex gap-2 border-t border-red-700/30 pt-4">
                 <button
+                  ref={rejectButtonRef}
                   type="button"
-                  onClick={() => onDecision({ decision: "reject" })}
+                  onClick={() => decide("reject")}
                   className="font-heading flex-1 bg-red-600 px-3 py-2 text-sm font-bold tracking-wide text-red-50 hover:bg-red-500"
                 >
                   {t("hostKeyDialog.cancelConnection")}
                 </button>
                 <button
                   type="button"
-                  onClick={() => onDecision({ decision: "trust" })}
+                  onClick={() => decide("trust")}
                   className="font-heading flex-1 border border-white/15 px-3 py-2 text-sm font-semibold tracking-wide text-red-200 hover:bg-white/6"
                 >
                   {t("hostKeyDialog.trustAnyway")}
@@ -98,10 +154,10 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
           </>
         ) : (
           <div className="p-6">
-            <h2 className="font-heading mb-2 text-lg font-semibold text-slate-100">
+            <h2 id={headingId} className="font-heading mb-2 text-lg font-semibold text-slate-100">
               {t("hostKeyDialog.unknownHeading")}
             </h2>
-            <p className="mb-4 text-sm text-slate-300">
+            <p id={descriptionId} className="mb-4 text-sm text-slate-300">
               {t("hostKeyDialog.unknownBodyBeforeHost")}
               <strong>{event.host}:{event.port}</strong>
               {t("hostKeyDialog.unknownBodyAfterHost")}
@@ -112,15 +168,16 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
 
             <div className="flex gap-2">
               <button
+                ref={rejectButtonRef}
                 type="button"
-                onClick={() => onDecision({ decision: "reject" })}
+                onClick={() => decide("reject")}
                 className="font-heading flex-1 border border-slate-600 px-3 py-2 text-sm font-semibold tracking-wide text-slate-100 hover:bg-slate-700"
               >
                 {t("hostKeyDialog.reject")}
               </button>
               <button
                 type="button"
-                onClick={() => onDecision({ decision: "trust" })}
+                onClick={() => decide("trust")}
                 className="font-heading flex-1 bg-indigo-600 px-3 py-2 text-sm font-semibold tracking-wide text-slate-950 hover:bg-indigo-500"
               >
                 {t("hostKeyDialog.trust")}
