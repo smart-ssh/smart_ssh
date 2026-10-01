@@ -230,9 +230,21 @@ async fn test_unknown_server_over_real_http() {
 /// Spec 0097, K1/A3 (F6): Das Backend wartet auf eine Freigabe durch den
 /// Test statt auf eine feste Verzögerung — ein enges Zeitfenster würde
 /// unter Last (längerer HTTP-Rundlauf) fälschlich grün bleiben, weil das
-/// Backend dann doch schon fertig wäre, bevor der Test hinschaut. Der Test
-/// gibt das Backend erst frei, *nachdem* er geprüft hat, dass die Antwort
-/// schon da ist — das beweist die Reihenfolge, nicht eine Zeitspanne.
+/// Backend dann doch schon fertig wäre, bevor der Test hinschaut.
+/// `propose_action` kann grundsätzlich erst zurückkehren, *nachdem* dieser
+/// Test `release.notify_one()` gerufen hat — und das tut er erst, nachdem
+/// er die Zeitüberschreitungs-Antwort schon geprüft hat. Dass `call_tool`
+/// hier überhaupt zurückkehrt, ist deshalb selbst der Beweis, dass die
+/// Antwort über den `select!`-Timeout-Zweig kam, nicht über das (noch
+/// blockierte) Backend — eine eigene Prüfung des `completed`-Flags würde an
+/// dieser Stelle nichts zusätzlich zeigen, da es bis zur Freigabe unter
+/// jeder Implementierung `false` bleibt (spec-reviewer, Runde 1).
+///
+/// Die 5s-Obergrenze um `call_tool` fängt den Fall ab, dass der
+/// Timeout-Zweig komplett ausfällt (z. B. `select!` durch ein direktes
+/// `.await` auf den Hintergrund-Task ersetzt) — ohne sie würde der Test in
+/// diesem Fall unbegrenzt hängen statt rot zu werden (spec-reviewer, Runde
+/// 1; Richtwert A2).
 #[tokio::test]
 async fn test_confirm_timeout_over_real_http() {
     let known_server = ServerId::new();
@@ -242,7 +254,7 @@ async fn test_confirm_timeout_over_real_http() {
         TestBackend {
             known_server,
             release: Some(release.clone()),
-            completed: completed.clone(),
+            completed,
         },
         "correct-token",
         Duration::from_millis(50),
@@ -256,21 +268,23 @@ async fn test_confirm_timeout_over_real_http() {
         "server_id": known_server.0.to_string(),
         "command": "long-running-thing",
     });
-    let result = client
-        .call_tool(
+    let result = tokio::time::timeout(
+        Duration::from_secs(5),
+        client.call_tool(
             CallToolRequestParams::new("propose_command")
                 .with_arguments(args.as_object().unwrap().clone()),
-        )
-        .await
-        .unwrap();
+        ),
+    )
+    .await
+    .expect(
+        "propose_command darf nicht hängen bleiben — der Timeout-Zweig \
+         der Bestätigung muss unabhängig vom (hier dauerhaft blockierten) \
+         Backend zurückkehren",
+    )
+    .unwrap();
 
     assert_eq!(result.is_error, Some(true));
     assert!(tool_result_text(&result).contains("Zeitüberschreitung"));
-    assert!(
-        !completed.load(Ordering::SeqCst),
-        "Backend-Aufruf ist schon abgeschlossen, bevor die Zeitüberschreitungs-Antwort beim Client ankam — \
-         das Timeout hat nicht wirklich zuerst entschieden"
-    );
 
     // Gibt den im Hintergrund weiterlaufenden Backend-Aufruf frei
     // (`run_confirmable` spawnt ihn separat und lässt ihn trotz Timeout
