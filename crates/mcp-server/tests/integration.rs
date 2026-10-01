@@ -23,7 +23,10 @@ use uuid::Uuid;
 
 struct TestBackend {
     known_server: ServerId,
-    delay: Option<Duration>,
+    /// Spec 0097, K1 (F6): Ist das gesetzt, wartet `propose_action` auf
+    /// dieses Signal statt auf eine feste Dauer — der Test gibt es erst
+    /// frei, nachdem er geprüft hat, dass die Antwort schon da ist.
+    release: Option<Arc<tokio::sync::Notify>>,
     completed: Arc<AtomicBool>,
 }
 
@@ -53,8 +56,8 @@ impl McpBackend for TestBackend {
         if server_id != self.known_server {
             return Err(LookupError::UnknownServer);
         }
-        if let Some(delay) = self.delay {
-            tokio::time::sleep(delay).await;
+        if let Some(release) = &self.release {
+            release.notified().await;
         }
         self.completed.store(true, Ordering::SeqCst);
         Ok(ActionOutcome::Approved {
@@ -114,7 +117,7 @@ async fn test_wrong_token_is_rejected_over_real_http() {
     let (handle, addr) = start_server(
         TestBackend {
             known_server,
-            delay: None,
+            release: None,
             completed: Arc::new(AtomicBool::new(false)),
         },
         "correct-token",
@@ -138,7 +141,7 @@ async fn test_propose_command_round_trip_over_real_http() {
     let (handle, addr) = start_server(
         TestBackend {
             known_server,
-            delay: None,
+            release: None,
             completed: Arc::new(AtomicBool::new(false)),
         },
         "correct-token",
@@ -192,7 +195,7 @@ async fn test_unknown_server_over_real_http() {
     let (handle, addr) = start_server(
         TestBackend {
             known_server,
-            delay: None,
+            release: None,
             completed: Arc::new(AtomicBool::new(false)),
         },
         "correct-token",
@@ -223,14 +226,22 @@ async fn test_unknown_server_over_real_http() {
 /// bevor die Bestätigung entschieden ist, liefert der Tool-Call die
 /// Zeitüberschreitungs-Antwort — geprüft über den echten HTTP-Roundtrip,
 /// nicht nur die interne `run_confirmable`-Logik.
+///
+/// Spec 0097, K1/A3 (F6): Das Backend wartet auf eine Freigabe durch den
+/// Test statt auf eine feste Verzögerung — ein enges Zeitfenster würde
+/// unter Last (längerer HTTP-Rundlauf) fälschlich grün bleiben, weil das
+/// Backend dann doch schon fertig wäre, bevor der Test hinschaut. Der Test
+/// gibt das Backend erst frei, *nachdem* er geprüft hat, dass die Antwort
+/// schon da ist — das beweist die Reihenfolge, nicht eine Zeitspanne.
 #[tokio::test]
 async fn test_confirm_timeout_over_real_http() {
     let known_server = ServerId::new();
     let completed = Arc::new(AtomicBool::new(false));
+    let release = Arc::new(tokio::sync::Notify::new());
     let (handle, addr) = start_server(
         TestBackend {
             known_server,
-            delay: Some(Duration::from_millis(300)),
+            release: Some(release.clone()),
             completed: completed.clone(),
         },
         "correct-token",
@@ -245,7 +256,6 @@ async fn test_confirm_timeout_over_real_http() {
         "server_id": known_server.0.to_string(),
         "command": "long-running-thing",
     });
-    let started = std::time::Instant::now();
     let result = client
         .call_tool(
             CallToolRequestParams::new("propose_command")
@@ -253,14 +263,20 @@ async fn test_confirm_timeout_over_real_http() {
         )
         .await
         .unwrap();
-    let elapsed = started.elapsed();
 
     assert_eq!(result.is_error, Some(true));
     assert!(tool_result_text(&result).contains("Zeitüberschreitung"));
     assert!(
-        elapsed < Duration::from_millis(300),
-        "Antwort kam nach {elapsed:?} — sollte durch das 50ms-Timeout kommen, nicht erst nach der 300ms-Verzögerung"
+        !completed.load(Ordering::SeqCst),
+        "Backend-Aufruf ist schon abgeschlossen, bevor die Zeitüberschreitungs-Antwort beim Client ankam — \
+         das Timeout hat nicht wirklich zuerst entschieden"
     );
+
+    // Gibt den im Hintergrund weiterlaufenden Backend-Aufruf frei
+    // (`run_confirmable` spawnt ihn separat und lässt ihn trotz Timeout
+    // weiterlaufen, s. `tool_server.rs`), statt ihn als hängende Task
+    // zurückzulassen.
+    release.notify_one();
 
     client.cancel().await.ok();
     handle.shutdown().await;
