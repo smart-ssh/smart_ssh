@@ -51,6 +51,20 @@ function fail(message) {
   throw new GenerationError(message);
 }
 
+// Klarstellung Spec 0099 Abschnitt 9 (2026-10-01, Windows): Unter PowerShell
+// bricht ein Kindprozess ab, dessen Ausgabe per `encoding: "utf8"`
+// mitgeschnitten (nicht per `-o`/`--output-file` umgeleitet) wird, wenn das
+// übergeordnete Programm selbst unter PowerShell läuft. Für `cargo about
+// generate` lösen wir das über dessen eigene `-o`-Option (s.
+// `runCargoAbout`); diese Hilfsfunktion sorgt zusätzlich dafür, dass
+// `spawnSync("npm", ...)` unter Windows `npm.cmd` über die Shell findet,
+// statt am fehlenden `.exe`/`.cmd`-Suffix zu scheitern. Die Argumentliste
+// bleibt in jedem Fall fest (keine Nutzereingabe erreicht die Shell).
+function spawnCommand(command, args, options) {
+  const useShell = process.platform === "win32";
+  return spawnSync(command, args, useShell ? { ...options, shell: true } : options);
+}
+
 function parseArgs(argv) {
   const defaults = {
     output: path.join(
@@ -153,7 +167,7 @@ function writeGeneratedAboutToml(allowList, tmpDir) {
 
 // --- Rust-Seite (cargo-about) ------------------------------------------
 
-function runCargoAbout(workspaceManifest, aboutTomlPath) {
+function runCargoAbout(workspaceManifest, aboutTomlPath, tmpDir) {
   const versionResult = spawnSync("cargo", ["about", "--version"], { encoding: "utf8" });
   if (versionResult.error) {
     fail(`cargo-about ist nicht verfügbar (PATH prüfen): ${versionResult.error.message}`);
@@ -170,6 +184,13 @@ function runCargoAbout(workspaceManifest, aboutTomlPath) {
     );
   }
 
+  // Klarstellung Spec 0099 Abschnitt 9: Unter PowerShell bricht
+  // `cargo about generate` ab, wenn seine Ausgabe über die mitgeschnittene
+  // `stdout` des Kindprozesses abgegriffen wird ("should not redirect its
+  // output in powershell"). Die Ausgabe geht deshalb plattformunabhängig
+  // über `-o`/`--output-file` in eine Datei im ohnehin vorhandenen
+  // temporären Verzeichnis, von dort wird sie gelesen.
+  const aboutOutputPath = path.join(tmpDir, "cargo-about-output.json");
   const result = spawnSync(
     "cargo",
     [
@@ -183,6 +204,8 @@ function runCargoAbout(workspaceManifest, aboutTomlPath) {
       workspaceManifest,
       "-c",
       aboutTomlPath,
+      "-o",
+      aboutOutputPath,
     ],
     { encoding: "utf8", maxBuffer: 1024 * 1024 * 128 },
   );
@@ -194,8 +217,14 @@ function runCargoAbout(workspaceManifest, aboutTomlPath) {
       `"cargo about generate" ist fehlgeschlagen (Rückgabewert ${result.status}):\n${result.stderr}`,
     );
   }
+  let outputText;
   try {
-    return JSON.parse(result.stdout);
+    outputText = fs.readFileSync(aboutOutputPath, "utf8");
+  } catch (err) {
+    fail(`Ausgabedatei von "cargo about generate" (${aboutOutputPath}) ließ sich nicht lesen: ${err.message}`);
+  }
+  try {
+    return JSON.parse(outputText);
   } catch (err) {
     fail(`Ausgabe von "cargo about generate --format json" ließ sich nicht lesen: ${err.message}`);
   }
@@ -226,7 +255,7 @@ function collectRustNotices(aboutJson) {
 // --- npm-Seite -----------------------------------------------------------
 
 function runNpmLs(frontendDir) {
-  const result = spawnSync("npm", ["ls", "--omit=dev", "--all", "--json"], {
+  const result = spawnCommand("npm", ["ls", "--omit=dev", "--all", "--json"], {
     cwd: frontendDir,
     encoding: "utf8",
     maxBuffer: 1024 * 1024 * 64,
@@ -427,7 +456,7 @@ function generate(args) {
   let aboutJson;
   try {
     const aboutTomlPath = writeGeneratedAboutToml(allowList, tmpDir);
-    aboutJson = runCargoAbout(args.workspace, aboutTomlPath);
+    aboutJson = runCargoAbout(args.workspace, aboutTomlPath, tmpDir);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

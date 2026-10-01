@@ -24,12 +24,19 @@ const NOTICES_PATH = path.join(FRONTEND_DIR, "public/third-party-notices.txt");
 // s. Kommentar oben.
 const BUNDLED_DEV_DEPS = ["tailwindcss", "vite"];
 
+// Klarstellung Spec 0099 Abschnitt 9 (2026-10-01, Windows): `npm` ist unter
+// Windows `npm.cmd`, kein `.exe` — `execFileSync` findet es ohne Shell
+// nicht. Die Argumentliste bleibt fest (keine Nutzereingabe), nur unter
+// `win32` kommt `shell: true` dazu, analog zu `spawnCommand` im
+// Generierungs-Skript.
 function runNpmLsJson(): string {
+  const useShell = process.platform === "win32";
   try {
     return execFileSync("npm", ["ls", "--omit=dev", "--all", "--json"], {
       cwd: FRONTEND_DIR,
       encoding: "utf8",
       maxBuffer: 1024 * 1024 * 64,
+      ...(useShell ? { shell: true } : {}),
     });
   } catch (err) {
     const stdout = (err as { stdout?: string }).stdout;
