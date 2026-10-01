@@ -79,6 +79,39 @@ impl ExecChannelWatch {
     }
 }
 
+/// Spec 0097, A3 (F5): Beobachtet, ob der Server für das `"never-ending"`-
+/// Testkommando die erste Ausgabezeile schon gesendet hat — ein Test, der
+/// danach abbrechen will, wartet auf dieses Signal statt auf eine
+/// geschätzte Übertragungszeit über localhost.
+#[derive(Default)]
+pub struct FirstLineSentWatch {
+    sent: tokio::sync::Notify,
+    sent_flag: std::sync::atomic::AtomicBool,
+}
+
+impl FirstLineSentWatch {
+    fn mark_sent(&self) {
+        self.sent_flag
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.sent.notify_waiters();
+    }
+
+    /// `true`, wenn die erste Zeile innerhalb von `within` gesendet wurde.
+    pub async fn sent_within(&self, within: std::time::Duration) -> bool {
+        tokio::time::timeout(within, async {
+            loop {
+                let notified = self.sent.notified();
+                if self.sent_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                    return;
+                }
+                notified.await;
+            }
+        })
+        .await
+        .is_ok()
+    }
+}
+
 /// Spec 0093, A1: Hält fest, welchen `permissions`-Wert der Client zuletzt
 /// per SFTP-`setstat` gesendet hat — unabhängig davon, ob dieser Testserver
 /// ihn überhaupt anwendet. Der Testserver wendet Unix-Mode-Bits nur unter
@@ -124,6 +157,8 @@ pub struct RunningTestServer {
     pub exec_channel: Arc<ExecChannelWatch>,
     /// Spec 0093, A1 — s. [`SetstatModeWatch`].
     pub setstat_mode: Arc<SetstatModeWatch>,
+    /// Spec 0097, A3 (F5) — s. [`FirstLineSentWatch`].
+    pub first_line_sent: Arc<FirstLineSentWatch>,
     shutdown: Option<oneshot::Sender<()>>,
     accept_task: JoinHandle<()>,
 }
@@ -168,6 +203,8 @@ impl RunningTestServer {
         let exec_channel_for_loop = exec_channel.clone();
         let setstat_mode = Arc::new(SetstatModeWatch::default());
         let setstat_mode_for_loop = setstat_mode.clone();
+        let first_line_sent = Arc::new(FirstLineSentWatch::default());
+        let first_line_sent_for_loop = first_line_sent.clone();
 
         let accept_task = tokio::spawn(async move {
             loop {
@@ -184,12 +221,14 @@ impl RunningTestServer {
                         let sftp_root = sftp_root_path.clone();
                         let exec_channel = exec_channel_for_loop.clone();
                         let setstat_mode = setstat_mode_for_loop.clone();
+                        let first_line_sent = first_line_sent_for_loop.clone();
                         tokio::spawn(async move {
                             let handler = TestHandler {
                                 channels: HashMap::new(),
                                 sftp_root,
                                 exec_channel,
                                 setstat_mode,
+                                first_line_sent,
                             };
                             let _ = russh::server::run_stream(config, stream, handler).await;
                         });
@@ -204,6 +243,7 @@ impl RunningTestServer {
             sftp_root,
             exec_channel,
             setstat_mode,
+            first_line_sent,
             shutdown: Some(shutdown_tx),
             accept_task,
         }
@@ -234,6 +274,8 @@ struct TestHandler {
     /// Spec 0093, A1 — beide SFTP-Subsysteme (normal und über `exec`)
     /// bewegen hier denselben Beobachter, s. `SftpTestHandler::setstat`.
     setstat_mode: Arc<SetstatModeWatch>,
+    /// Spec 0097, A3 (F5) — s. [`FirstLineSentWatch`].
+    first_line_sent: Arc<FirstLineSentWatch>,
 }
 
 impl Handler for TestHandler {
@@ -335,6 +377,7 @@ impl Handler for TestHandler {
         // Verhalten, das `drain_channel_cancellable` testet).
         if command == "never-ending" {
             session.data(channel, b"first line\n".to_vec())?;
+            self.first_line_sent.mark_sent();
             return Ok(());
         }
         // Spec 0043, Fund A: simuliert einen feindlichen/fehlerhaften

@@ -1095,14 +1095,28 @@ async fn test_sftp_stat() {
 /// muss zurückkehren, sobald `cancel` auflöst, statt für immer auf das
 /// reguläre Kanal-Ende zu warten, und dabei die bereits eingetroffene
 /// erste Ausgabezeile mitliefern.
+///
+/// Der Abbruch wartet erst auf das Signal des Testservers, dass die erste
+/// Zeile gesendet ist (Spec 0097, A3/F5: ein `tokio::select!` ohne `biased`
+/// entscheidet sonst zufällig zwischen Abbruch und Kanaldaten, wenn beide
+/// gleichzeitig anliegen) und danach fest 1s, bevor er abbricht — die
+/// Zustellung über localhost liegt weit darunter, die 5s-Obergrenze
+/// darüber (Richtwert A2).
 #[tokio::test]
 async fn test_execute_cancellable_returns_partial_output_on_cancel() {
     let server = RunningTestServer::start().await;
     let mut transport = connect_trusted(&server).await;
     let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+    let first_line_sent = server.first_line_sent.clone();
 
     tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(
+            first_line_sent
+                .sent_within(std::time::Duration::from_secs(5))
+                .await,
+            "Testserver hat die erste Zeile nicht innerhalb von 5s gesendet"
+        );
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         let _ = cancel_tx.send(());
     });
 
