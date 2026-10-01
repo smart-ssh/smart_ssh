@@ -335,6 +335,12 @@ werden konnte:
   schlägt sichtbar fehl. Es ist sonst nichts geschehen, das sich melden
   ließe — ein Erfolgssignal wäre schlicht unwahr. Der Fehler nutzt
   denselben Weg wie A13 (`KEYCHAIN_UNAVAILABLE`, übersetzt).
+
+  > **Geändert durch Spec 0098, A1:** Der Code ist nur noch dann
+  > `KEYCHAIN_UNAVAILABLE`, wenn der Schlüsselbund **schon beim Start**
+  > fehlte. War er da und hat bloß diesen einen Zugriff abgelehnt, meldet
+  > der Weg `KEYCHAIN_ACCESS_FAILED`. Dass er **sichtbar** fehlschlägt —
+  > der Kern von A17 — bleibt unverändert.
 - **Server löschen** (`delete_auth_method_secrets`) läuft **durch**: Das
   Profil wird gelöscht, auch wenn das Secret bleibt. Ein Nutzer darf nicht
   auf einem unlöschbaren Server sitzen bleiben, nur weil der Schlüsselbund

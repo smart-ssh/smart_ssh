@@ -252,7 +252,32 @@ Keine.
 
 ## 9. Klarstellungen
 
-(wird während der Umsetzung nachgetragen)
+Während der Umsetzung nachgetragen. Keine davon ändert eine Anforderung;
+alle drei korrigieren eine Annahme über den Ist-Stand bzw. die Testebene.
+
+1. **Zu §1, „Ein bestehender Test sichert das alte Verhalten":** Es sind
+   **zwei**. Neben `test_backend_error_keeps_its_message_when_the_keychain_
+   is_available` (`error.rs`) verlangte auch
+   `test_failed_write_with_an_available_keychain_keeps_its_ordinary_error`
+   (`server_credentials.rs`) `code == None`. Beide sind nach §7 durch
+   T1-Tests ersetzt, nicht gelockert.
+2. **Zu §7 T2:** Der lesende Weg liegt im Verbindungstest, nicht in
+   `resolve_auth_method`. Die Funktion **liest nie** — ein leeres
+   Formularfeld behält dort nur den bestehenden `CredentialRef`. §7 nennt den
+   Verbindungstest als Alternative, diese gilt.
+3. **Zu §7 T6, „Ebene V1 für den Ziel-Hop":** Für den Ziel-Hop ist diese
+   Ebene strukturell nicht herstellbar, weil er sein Secret **vor** der Kette
+   auflöst:
+   - Ist das Formularfeld gefüllt, liegt das Secret im
+     `EphemeralCredentialStore`; der scheitert nie, ein Schlüsselbund-Fehler
+     kann dort nicht entstehen.
+   - Ist es leer, liest `resolve_final_hop_auth` das gespeicherte Secret vor
+     dem Verbindungsversuch. Der Fehler kommt dann als `CommandError` — der
+     Weg, den T2 prüft —, nicht als `TestConnectionResult`.
+
+   Ebene V1 bleibt damit für die **Jump-Hosts** zuständig (T5, T12, T13).
+   `test_spec_0098_t6_the_target_hop_secret_is_resolved_before_the_chain`
+   hält beide Hälften des Befunds fest.
 
 ## Umsetzung
 
