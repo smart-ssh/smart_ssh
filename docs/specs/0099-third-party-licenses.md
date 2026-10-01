@@ -1,6 +1,6 @@
 # Spec 0099 — Drittlizenzen im Release-Build und im Über-Bereich
 
-Status: Vorschlag (Architekt) · Backlog: BL-0054 · Gate: release-1.0/F
+Status: freigegeben · Backlog: BL-0054 · Gate: release-1.0/F
 Zweck: Jeder Release-Build enthält die Lizenztexte aller ausgelieferten Rust- und npm-Abhängigkeiten und der mitgelieferten Schriften, und die App zeigt sie offline im Über-Bereich der Einstellungen an.
 Review-Priorität: NORMAL
 
