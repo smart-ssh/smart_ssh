@@ -172,7 +172,11 @@ Keine.
 
 ## 9. Klarstellungen
 
-(wird während der Umsetzung nachgetragen)
+- **K1 (F6):** Es genügt nicht, nach der Antwort zu prüfen, dass das Backend noch
+  nicht fertig ist, solange das Backend nur eine feste echte Zeit wartet: Unter
+  Last kann der Rundlauf länger dauern, dann ist es doch fertig. Das Backend
+  wartet deshalb auf eine Freigabe durch den Test, die erst nach dem Eintreffen
+  der Antwort kommt, wie bei F4.
 
 ## Umsetzung
 
