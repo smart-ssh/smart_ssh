@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 
 const FOCUSABLE_SELECTOR =
   'a[href], area[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -44,53 +44,33 @@ export function useDialogFocusTrap({
 }: UseDialogFocusTrapOptions) {
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
-  // A7: Fokus vor dem Öffnen merken, beim Unmount zurückgeben (sofern das
-  // Element noch existiert — ein zwischenzeitlich entferntes Element lässt
-  // sich nicht mehr fokussieren).
+  // A3/A4/A7, alle in einem Effekt mit `[]`-Abhängigkeiten, bewusst nicht
+  // getrennt (Review-Fund, Spec 0100): Getrennte Effekte hätten keine
+  // erzwungene Reihenfolge zwischen „Fang abmelden" und „Fokus zurückgeben"
+  // — und der Fang (`onFocusIn` unten) würde einen Fokus, der durch A7s
+  // Rückgabe auf ein Element außerhalb des Containers wandert, grundsätzlich
+  // als Fokusverlust werten und sofort zurückholen. In einem Effekt ist die
+  // Reihenfolge erzwungen: zuerst die Listener abmelden, erst danach den
+  // Fokus zurückgeben, sodass der Fang die Rückgabe nicht mehr sehen kann.
+  //
+  // Muss außerdem **vor** dem A2-Effekt (Anfangsfokus, unten) deklariert
+  // sein: Effekte laufen beim Mount in Deklarationsreihenfolge, und die
+  // Erfassung von `previouslyFocusedRef` hier liest `document.activeElement`
+  // — liefe A2 schon vorher, wäre das bereits die eigene `reject`-
+  // Schaltfläche statt des Elements, das vor dem Öffnen den Fokus trug, und
+  // A7 gäbe am Ende den Fokus nicht an den richtigen Ort zurück (gemessen:
+  // mit vertauschter Reihenfolge scheitert T10 zuverlässig).
   useEffect(() => {
     previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    return () => {
-      const previous = previouslyFocusedRef.current;
-      if (previous && document.contains(previous)) {
-        previous.focus();
-      }
-    };
-    // Bewusst nur beim Mount/Unmount — `previouslyFocusedRef` soll den
-    // Fokus vor dem allerersten Öffnen festhalten, nicht bei jedem
-    // Re-Render neu einlesen.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  // A2: Anfangsfokus beim Mount und bei jedem `resetKey`-Wechsel.
-  useEffect(() => {
-    initialFocusRef.current?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetKey]);
-
-  // A3: Fokus, der den Dialog auf andere Weise als Tab verlässt (Klick auf
-  // den Hintergrund, `blur()`, programmatischer Fokus auf ein Element
-  // außerhalb), wird zurückgeholt. Zwei Fälle, **gemessen** in `jsdom`
-  // (Spec 0100 §1) und deshalb bewusst zwei Mechanismen statt einem:
-  //
-  // - Ein `blur()` ohne nächstes Ziel fällt auf `body` zurück und feuert
-  //   **nur** ein `focusout` (mit `relatedTarget` `null`) — kein `focusin`
-  //   folgt. Dafür reicht ein synchroner Re-Fokus in `focusout`.
-  // - Ein direkter `.focus()` auf ein Element außerhalb ist eine zweite,
-  //   konkurrierende Fokus-Operation: ein synchroner Re-Fokus **innerhalb**
-  //   des dazu gehörenden `focusout` wird von dieser noch laufenden
-  //   Operation überschrieben (in `jsdom` wie im echten Browser derselbe
-  //   Mechanismus) — der Re-Fokus muss im nachfolgenden `focusin` auf dem
-  //   neuen (externen) Ziel passieren, wenn die konkurrierende Operation
-  //   bereits abgeschlossen ist.
-  //
-  // Auf `document` statt auf dem Container gehängt, weil ein nach
-  // `document.body` geportalter Dialog Events nur über dessen natives
-  // Bubbling empfängt, nicht über den React-Baum, in dem der Container-Ref
-  // hängt — und weil die Rückgabe so **jeden** Fokusverlust abfängt, nicht
-  // nur einen, der innerhalb des portalten Teilbaums auftritt.
-  useEffect(() => {
     function isOutside(target: EventTarget | null): boolean {
       const container = containerRef.current;
+      // `false` bei fehlendem Container (z. B. kurz vor dem eigenen
+      // Unmount) ist Absicht, nicht Nachlässigkeit: Andernfalls würde ein
+      // nach dem Entfernen des Containers noch eintreffendes Fokus-Ereignis
+      // fälschlich als „außerhalb" gelten und erneut `initialFocusRef`
+      // fokussieren — ein Fokus-Pingpong, der genau die A7-Rückgabe direkt
+      // darunter wieder zunichtemachen würde.
       if (!container) return false;
       return !(target instanceof Node) || !container.contains(target);
     }
@@ -103,24 +83,45 @@ export function useDialogFocusTrap({
         initialFocusRef.current?.focus();
       }
     }
+    // A4: Escape auf `document` statt nur im Container-`onKeyDown` unten,
+    // damit es auch dann ablehnt und nicht durchgereicht wird, wenn der
+    // Fokus gerade *nicht* im Dialog liegt — etwa weil das fokussierte
+    // Element entfernt wurde und der Fokus (ohne eigenes Ereignis, je nach
+    // Engine) auf `document.body` zurückgefallen ist (Review-Fund, Spec
+    // 0100). Auf `document` registriert läuft dieser Handler vor jedem
+    // Listener auf `window` (z. B. die Kürzel in `App.tsx`), `document`
+    // liegt in der Bubble-Kette näher am Ursprung.
+    function onDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onEscape();
+    }
     document.addEventListener("focusout", onFocusOut);
     document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("keydown", onDocumentKeyDown);
     return () => {
       document.removeEventListener("focusout", onFocusOut);
       document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("keydown", onDocumentKeyDown);
+      // A7: erst nachdem der Fang abgemeldet ist (s. Kommentar oben) —
+      // sonst holt er sich den Fokus sofort zurück.
+      const previous = previouslyFocusedRef.current;
+      if (previous && document.contains(previous)) {
+        previous.focus();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function onKeyDown(event: KeyboardEvent<HTMLElement>) {
-    if (event.key === "Escape") {
-      // A4: nicht an dahinterliegende Handler weiterreichen (z. B. die
-      // globalen Kürzel in `App.tsx`).
-      event.preventDefault();
-      event.stopPropagation();
-      onEscape();
-      return;
-    }
+  // A2: Anfangsfokus beim Mount und bei jedem `resetKey`-Wechsel. Muss
+  // **nach** dem Effekt oben deklariert sein, s. dessen Kommentar.
+  useEffect(() => {
+    initialFocusRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
+
+  function onKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
     if (event.key === "Enter" && event.repeat) {
       // A5: eine aus einem vorherigen Dialog gehaltene Enter-Taste darf die
       // gerade erst fokussierte Schaltfläche nicht auslösen.

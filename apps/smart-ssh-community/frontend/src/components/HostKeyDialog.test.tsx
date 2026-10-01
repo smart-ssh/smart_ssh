@@ -4,6 +4,7 @@
 // Screenreadern als modal angesagt werden. Jeder Test außer T8 scheitert am
 // Stand vor dieser Spec (Beleg im Bericht, nicht hier: Fix lokal entfernt,
 // Lauf beobachtet, Fix wiederhergestellt).
+import { StrictMode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
@@ -209,5 +210,62 @@ describe("HostKeyDialog — Zweig- und Ereigniswechsel", () => {
 
     expect(document.activeElement).toBe(outside);
     document.body.removeChild(outside);
+  });
+
+  // `main.tsx` rendert die App in `<StrictMode>`, das dort einmalig einen
+  // zusätzlichen Mount→Cleanup→Mount-Zyklus simuliert — A7 muss auch danach
+  // noch auf das richtige Element zeigen. Keine eigenständige
+  // Regression zum alten Stand (der bestand diesen Lauf ebenfalls), aber
+  // ein Gegenbeweis zu einer konkreten Zwischenfassung dieses Hooks: mit
+  // dem Anfangsfokus-Effekt (A2) vor der Vorher-Fokus-Erfassung deklariert
+  // scheitert dieser Test (und auch T10 ohne StrictMode), weil
+  // `previouslyFocusedRef` dann die eigene `reject`-Schaltfläche statt
+  // `outside` festhält.
+  it("T10 unter React StrictMode: Fokus-Rückgabe bleibt korrekt", () => {
+    const outside = document.createElement("button");
+    outside.textContent = "außerhalb";
+    document.body.appendChild(outside);
+    outside.focus();
+
+    const onDecision = vi.fn();
+    const { unmount } = render(
+      <StrictMode>
+        <I18nextProvider i18n={testI18n}>
+          <HostKeyDialog event={unknownEvent} onDecision={onDecision} />
+        </I18nextProvider>
+      </StrictMode>,
+    );
+    const reject = screen.getByRole("button", { name: "Ablehnen" });
+    reject.focus();
+    fireEvent.click(reject);
+    unmount();
+
+    expect(document.activeElement).toBe(outside);
+    document.body.removeChild(outside);
+  });
+
+  // Review-Fund (Spec 0100, Runde 1): Entfernt sich der fokussierte Knoten
+  // aus dem DOM, ohne dass ein `focusout` feuert (gemessen in `jsdom`,
+  // entspricht Chrome/WebKit laut Review), fällt der Fokus klammheimlich
+  // auf `document.body` zurück — außerhalb jedes React-Teilbaums. A4
+  // verlangt, dass Escape *trotzdem* ablehnt und nicht an `window`
+  // durchgereicht wird.
+  it("A4 (Gegenbeweis): Escape lehnt auch dann ab, wenn der Fokus auf document.body gefallen ist", () => {
+    const onDecision = vi.fn();
+    const windowHandler = vi.fn();
+    window.addEventListener("keydown", windowHandler);
+    try {
+      renderDialog(unknownEvent, onDecision);
+      const reject = screen.getByRole("button", { name: "Ablehnen" });
+      reject.remove(); // kein `focusout` dafür in jsdom — Fokus fällt auf body.
+      expect(document.activeElement).toBe(document.body);
+
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(onDecision).toHaveBeenCalledTimes(1);
+      expect(onDecision).toHaveBeenCalledWith({ decision: "reject" });
+      expect(windowHandler).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("keydown", windowHandler);
+    }
   });
 });
