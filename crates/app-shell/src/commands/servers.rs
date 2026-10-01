@@ -173,7 +173,11 @@ pub async fn clear_server_sudo_password(
 ) -> CommandResult<()> {
     // Spec 0071, A17: schlägt sichtbar fehl, statt Erfolg zu melden,
     // während das Passwort im Schlüsselbund stehen bleibt.
-    clear_sudo_password(state.credential_store.as_ref(), id)
+    //
+    // Spec 0098, A1/A2: `state.keychain` ist der beim Start ermittelte
+    // Zustand (A16, nie hier neu geprüft) und entscheidet nur, **welcher**
+    // der beiden stabilen Codes es wird.
+    clear_sudo_password(state.credential_store.as_ref(), state.keychain, id)
 }
 
 /// Spec 0076, B-3/C-7: Was an einer Schlüsseldatei auffällt, **bevor**

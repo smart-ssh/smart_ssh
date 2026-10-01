@@ -287,6 +287,26 @@ pub struct InMemoryCredentialStore {
     /// absichtlich gespeichert, damit ein Test nachweisen kann, dass das
     /// Secret tatsächlich zurückbleibt.
     fail_delete_with_backend: bool,
+    /// Spec 0098, §7: einstellbare Nutzlast für **jeden** der
+    /// `Backend`-Fehler dieses Stores. Tests setzen sie auf den Marker
+    /// `LIBTEXT-0098 Geheim-0098` und suchen danach in allem, was ans
+    /// Frontend geht — fest verdrahtete Texte je Methode taugen dafür
+    /// nicht, weil der Test dann drei verschiedene Nadeln bräuchte.
+    backend_payload: Option<String>,
+    /// Spec 0098, T4 (A3): lässt `get()`/`set()`/`delete()` nur so oft
+    /// scheitern, wie hier eingetragen ist, und danach normal
+    /// weiterarbeiten — der Fall „ein einzelner Zugriff ging schief, der
+    /// Schlüsselbund ist deswegen nicht kaputt".
+    ///
+    /// `Mutex`, nicht `Cell`: Der Store wird als `&dyn CredentialStore`
+    /// benutzt, also über eine geteilte Referenz.
+    remaining_failures: Mutex<Option<usize>>,
+    /// Spec 0098, §7: lässt `get()` nur für Refs mit diesem Slot-Suffix
+    /// scheitern — das Gegenstück zu [`Self::with_failing_set_for_slot`]
+    /// für die lesenden Wege. Ohne das trifft `with_failing_get` auch
+    /// Lesezugriffe, die der Test gar nicht prüfen will (etwa die
+    /// Passphrase, während es um das Passwort geht).
+    fail_get_for_slot_suffix: Option<String>,
 }
 
 impl InMemoryCredentialStore {
@@ -319,6 +339,16 @@ impl InMemoryCredentialStore {
         self
     }
 
+    /// Spec 0098, §7: wie [`Self::with_failing_get`], aber nur für den
+    /// genannten Slot (z. B. `"password"`). `slot` matcht das letzte
+    /// `:`-getrennte Segment, genau wie bei
+    /// [`Self::with_failing_set_for_slot`].
+    pub fn with_failing_get_for_slot(mut self, slot: &str) -> Self {
+        self.fail_get_with_backend = true;
+        self.fail_get_for_slot_suffix = Some(format!(":{slot}"));
+        self
+    }
+
     /// Spec 0071, A17: simuliert einen nicht erreichbaren Schlüsselbund
     /// beim **Löschen**.
     pub fn with_failing_delete(mut self) -> Self {
@@ -326,18 +356,64 @@ impl InMemoryCredentialStore {
         self
     }
 
+    /// Spec 0098, §7: die Nutzlast, mit der jeder `Backend`-Fehler dieses
+    /// Stores scheitert. Tests setzen hier den Marker, nach dem sie
+    /// anschließend in `message`, `code` und allem anderen suchen, was ans
+    /// Frontend geht.
+    pub fn with_backend_payload(mut self, payload: &str) -> Self {
+        self.backend_payload = Some(payload.to_string());
+        self
+    }
+
+    /// Spec 0098, T4 (A3): scheitert genau `times` Mal und arbeitet danach
+    /// normal weiter. Nur sinnvoll zusammen mit einem der
+    /// `with_failing_*`-Schalter — dieser hier begrenzt, **wie lange** der
+    /// eingeschaltete Fehler anhält.
+    pub fn failing_only_times(self, times: usize) -> Self {
+        *self.remaining_failures.lock().unwrap() = Some(times);
+        self
+    }
+
     pub fn get_calls(&self) -> usize {
         *self.get_calls.lock().unwrap()
+    }
+
+    /// Spec 0098, §7: der Fehler, mit dem dieser Store scheitert — mit der
+    /// eingestellten Nutzlast, sonst mit `fallback`.
+    fn backend_error(&self, fallback: &str) -> CredentialError {
+        CredentialError::Backend(
+            self.backend_payload
+                .clone()
+                .unwrap_or_else(|| fallback.to_string()),
+        )
+    }
+
+    /// Spec 0098, T4: `true`, solange der eingeschaltete Fehler noch
+    /// auftreten darf. Zählt dabei herunter — ohne
+    /// [`Self::failing_only_times`] (also `None`) gilt er unbegrenzt, wie
+    /// bisher.
+    fn may_fail_now(&self) -> bool {
+        let mut remaining = self.remaining_failures.lock().unwrap();
+        match remaining.as_mut() {
+            None => true,
+            Some(0) => false,
+            Some(left) => {
+                *left -= 1;
+                true
+            }
+        }
     }
 }
 
 impl CredentialStore for InMemoryCredentialStore {
     fn get(&self, r: &CredentialRef) -> CredentialResult<SecretString> {
         *self.get_calls.lock().unwrap() += 1;
-        if self.fail_get_with_backend {
-            return Err(CredentialError::Backend(
-                "simulierter Keychain-Lesefehler (Test)".to_string(),
-            ));
+        let slot_matches = self
+            .fail_get_for_slot_suffix
+            .as_deref()
+            .is_none_or(|suffix| r.as_str().ends_with(suffix));
+        if self.fail_get_with_backend && slot_matches && self.may_fail_now() {
+            return Err(self.backend_error("simulierter Keychain-Lesefehler (Test)"));
         }
         self.secrets
             .lock()
@@ -352,10 +428,9 @@ impl CredentialStore for InMemoryCredentialStore {
             .fail_set_for_slot_suffix
             .as_deref()
             .is_some_and(|suffix| r.as_str().ends_with(suffix))
+            && self.may_fail_now()
         {
-            return Err(CredentialError::Backend(
-                "simulierter Keychain-Fehler (Test)".to_string(),
-            ));
+            return Err(self.backend_error("simulierter Keychain-Fehler (Test)"));
         }
         self.secrets
             .lock()
@@ -365,13 +440,11 @@ impl CredentialStore for InMemoryCredentialStore {
     }
 
     fn delete(&self, r: &CredentialRef) -> CredentialResult<()> {
-        if self.fail_delete_with_backend {
+        if self.fail_delete_with_backend && self.may_fail_now() {
             // Absichtlich **ohne** `remove`: Das Secret bleibt stehen, so
             // wie es ein echter Schlüsselbund täte, der den Löschauftrag
             // nicht ausführen konnte.
-            return Err(CredentialError::Backend(
-                "simulierter Keychain-Löschfehler (Test)".to_string(),
-            ));
+            return Err(self.backend_error("simulierter Keychain-Löschfehler (Test)"));
         }
         self.secrets.lock().unwrap().remove(r.as_str());
         Ok(())

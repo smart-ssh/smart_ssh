@@ -795,6 +795,81 @@ mod tests {
         assert!(matches!(result, TestConnectionResult::Success));
     }
 
+    /// Spec 0098, T2 (A1, Lesen): Dasselbe wie der Test darüber, nur
+    /// scheitert der Schlüsselbund beim Lesen des gespeicherten Passworts.
+    /// Das ist der lesende Weg aus BL-0205 — ein nach dem Start gesperrter
+    /// Schlüsselbund —, und er ging bislang als codeloser Bibliothekstext
+    /// ins Server-Formular.
+    ///
+    /// Scheitert am Stand vor dieser Spec (`code: None`, Marker in
+    /// `message`).
+    ///
+    /// Der Verbindungstest kommt hier gar nicht bis zum `Connector`: Das
+    /// Secret des Ziel-Hops wird **vor** dem Verbindungsversuch aufgelöst.
+    /// Deshalb ein `CommandError`, kein `TestConnectionResult` — den Weg
+    /// über die Verbindungskette prüfen T5/T6/T12.
+    #[tokio::test]
+    async fn test_spec_0098_t2_failed_read_of_a_stored_secret_reports_the_access_code() {
+        use chrono::Utc;
+        use ssh_manager_core::profiles::{CredentialRef, Server};
+
+        let existing_id = ServerId::new();
+        let password_ref = CredentialRef::new("server:existing:password");
+        let now = Utc::now();
+        let existing_server = Server {
+            id: existing_id,
+            name: "existing".to_string(),
+            host: "example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: AuthMethod::Password {
+                credential_ref: password_ref.clone(),
+            },
+            notes: String::new(),
+            jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
+            sftp_server_path: None,
+            created_at: now,
+            updated_at: now,
+        };
+        let profile_store = InMemoryProfileStore::new().with_server(existing_server);
+        // Der Wert **ist** hinterlegt — der Store kann es nur nicht sagen.
+        // Genau der Fall, der sich von „kein Eintrag" unterscheiden muss.
+        let credential_store = InMemoryCredentialStore::new()
+            .with_secret(&password_ref, "stored-secret")
+            .with_failing_get_for_slot("password")
+            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
+
+        let input = ServerInput {
+            auth: AuthMethodInput::Password { value: None },
+            ..password_input()
+        };
+
+        let err = test_connection_with_timeout(
+            &profile_store,
+            &credential_store,
+            &MockKeyFileReader::new(),
+            AVAILABLE,
+            Arc::new(NoOpHostKeyStore),
+            &MockConnector(MockOutcome::Success),
+            input,
+            Some(existing_id),
+            Duration::from_millis(200),
+        )
+        .await
+        .expect_err("ein nicht lesbares Secret darf keinen Verbindungstest auslösen");
+
+        assert_eq!(err.code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert!(
+            !err.message.contains("LIBTEXT-0098") && !err.message.contains("Geheim-0098"),
+            "die Nutzlast der Bibliothek darf das Frontend nicht erreichen: {}",
+            err.message
+        );
+    }
+
     /// T8: Test-Connection über Jump-Host löst Jump-Host-Credentials aus dem realen Store auf
     /// und Ziel-Hop-Credentials aus dem Ephemeral-Store.
     #[tokio::test]

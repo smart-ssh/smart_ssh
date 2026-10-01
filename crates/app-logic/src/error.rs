@@ -21,6 +21,49 @@ use ssh_manager_core::profiles::CredentialError;
 /// `Display`-Text der `keyring`-Crate durchzureichen.
 pub const KEYCHAIN_UNAVAILABLE: &str = "KEYCHAIN_UNAVAILABLE";
 
+/// Spec 0098, A1: „der Schlüsselbund war beim Start da, dieser Zugriff ist
+/// trotzdem gescheitert". Die Konstante wohnt in `core`
+/// ([`ssh_manager_core::profiles::KEYCHAIN_ACCESS_FAILED`]), weil
+/// [`ssh_manager_core::ssh::SshError::code`] sie für die Verbindungskette
+/// (A4) ebenfalls vergibt — ein zweites Literal hier könnte abdriften.
+pub use ssh_manager_core::profiles::KEYCHAIN_ACCESS_FAILED;
+
+/// Spec 0098, A1/A2/A7: der eine Ort, an dem ein
+/// [`CredentialError::Backend`] zu Code und Meldung wird.
+///
+/// **Die Nutzlast bleibt hier liegen** (A5, Ausweitung von Spec 0071 X2).
+/// Sie geht nur noch in eine `debug`-Zeile (A7) — Spec 0094 nimmt
+/// Schlüsselbund-Fehlerwerte ausdrücklich aus (§3, Nicht-Ziele), und die
+/// bestehenden `warn`-Zeilen der Aufrufer bleiben unverändert. `debug` ist
+/// ohne `RUST_LOG` aus (Spec 0094, A3).
+///
+/// **Die Code-Wahl hängt an Variante und Startzustand, nie am Text** (A1,
+/// Angriffsrichtung T10): Eine Nutzlast, die selbst wie ein Code aussieht,
+/// fließt nicht in diese Entscheidung ein — sie wird gar nicht gelesen.
+fn backend_failure_to_command_error(payload: &str, keychain: KeychainAvailability) -> CommandError {
+    tracing::debug!(
+        keychain_available = keychain.is_available(),
+        error = %payload,
+        "credential store backend failure (Spec 0098, A7)"
+    );
+    if keychain.is_available() {
+        // A6: kein „nicht verfügbar", kein Paket- oder Installationshinweis
+        // — der Schlüsselbund ist da, dieser eine Zugriff ging schief. Den
+        // ausführlichen Text liefert das Frontend über den Code; diese
+        // Meldung ist der Fallback für einen Aufrufer, der ihn nicht kennt.
+        CommandError::with_code(
+            "Der Zugriff auf den Systemschlüsselbund ist fehlgeschlagen. \
+             Möglicherweise ist er gesperrt oder der Zugriff wurde abgelehnt.",
+            KEYCHAIN_ACCESS_FAILED,
+        )
+    } else {
+        CommandError::with_code(
+            "Der Systemschlüsselbund ist nicht verfügbar.",
+            KEYCHAIN_UNAVAILABLE,
+        )
+    }
+}
+
 /// Spec 0076, C-6: Die Überführung einer Schlüsseldatei in den
 /// Schlüsselbund ist gescheitert, **und** der eben geschriebene Schlüssel
 /// ließ sich nicht wieder entfernen — es liegt jetzt ein privater Schlüssel
@@ -71,31 +114,41 @@ pub fn rule_write_error(err: crate::filter_rules::RuleWriteError) -> CommandErro
     }
 }
 
-/// Spec 0071, A13/X2: Wandelt einen [`CredentialError`] in einen
-/// [`CommandError`] und hängt genau dann den Code
-/// [`KEYCHAIN_UNAVAILABLE`] an, wenn der Schlüsselbund bei diesem
-/// Programmstart ohnehin schon als nicht verfügbar erkannt wurde (A16 —
-/// `keychain` kommt aus dem `AppState`, es wird hier **nicht** erneut
-/// probiert).
+/// Spec 0071 A13/X2, erweitert durch Spec 0098 A1/A2: Wandelt einen
+/// [`CredentialError`] in einen [`CommandError`] und hängt **jedem**
+/// [`CredentialError::Backend`] einen stabilen Code an —
+/// [`KEYCHAIN_UNAVAILABLE`], wenn der Schlüsselbund bei diesem
+/// Programmstart schon als nicht verfügbar erkannt wurde (A16 — `keychain`
+/// kommt aus dem `AppState`, es wird hier **nicht** erneut probiert),
+/// sonst [`KEYCHAIN_ACCESS_FAILED`].
 ///
-/// **X2 — der Code ersetzt den Text, er ergänzt ihn nicht:** Die Nutzlast
-/// von [`CredentialError::Backend`] wird verworfen, nicht in die `message`
-/// übernommen. Enthielte ein Backend-Fehler jemals einen Secret-artigen
-/// Wert, käme er über diesen Pfad nicht ins Frontend.
+/// **Was Spec 0098 ändert:** Vorher fiel der Fall „Schlüsselbund verfügbar,
+/// Zugriff trotzdem gescheitert" durch auf den pauschalen
+/// `From<E: Display>` und lieferte `code: None` mit „Credential-Backend-
+/// Fehler: <Text der Bibliothek>". Genau dieser Weg ist der häufige: ein
+/// nach dem Start gesperrter Schlüsselbund, ein abgelehnter Dialog.
+///
+/// **X2, ausgeweitet (A5) — der Code ersetzt den Text, er ergänzt ihn
+/// nicht:** Die Nutzlast von [`CredentialError::Backend`] erreicht das
+/// Frontend auf **keinem** Zustand mehr, auch nicht im Feld `message`.
+/// Enthielte ein Backend-Fehler jemals einen Secret-artigen Wert, käme er
+/// über diesen Pfad nicht ins Frontend. Zur Diagnose bleibt er auf `debug`
+/// (A7, s. [`backend_failure_to_command_error`]).
+///
+/// **Der Zustand bleibt unberührt (A3):** `keychain` kommt als Wert herein
+/// und wird nur gelesen. Ein einzelner fehlgeschlagener Zugriff eskaliert
+/// nichts — der nächste Zugriff gelingt, sobald der Store wieder antwortet.
 ///
 /// [`CredentialError::NotFound`] bleibt bewusst unverändert: "kein Eintrag
 /// vorhanden" ist eine fachliche Aussage und hat mit der Verfügbarkeit des
-/// Schlüsselbunds nichts zu tun — sie mit `KEYCHAIN_UNAVAILABLE` zu
+/// Schlüsselbunds nichts zu tun — sie mit einem der beiden Codes zu
 /// überschreiben wäre genau die Verwechslung, die A14/I4 verbietet.
 pub fn keychain_aware_credential_error(
     err: CredentialError,
     keychain: KeychainAvailability,
 ) -> CommandError {
     match err {
-        CredentialError::Backend(_) if !keychain.is_available() => CommandError::with_code(
-            "Der Systemschlüsselbund ist nicht verfügbar.",
-            KEYCHAIN_UNAVAILABLE,
-        ),
+        CredentialError::Backend(payload) => backend_failure_to_command_error(&payload, keychain),
         other => CommandError::from(other),
     }
 }
@@ -195,6 +248,11 @@ mod code_tests {
             "SSH_CONNECTION_ABANDONED",
             // Spec 0071, A13.
             super::KEYCHAIN_UNAVAILABLE,
+            // Spec 0098, A1/A6 (BL-0244/BL-0205/BL-0206). Kommt sowohl aus
+            // `keychain_aware_credential_error` als auch aus
+            // `ssh_manager_core::ssh::SshError::code` — derselbe Wert,
+            // deshalb nur ein Eintrag.
+            super::KEYCHAIN_ACCESS_FAILED,
             // Spec 0076 (BL-0221/BL-0222). Die `KEY_FILE_*`-Codes kommen
             // aus `ssh_manager_core::ssh::KeyFileError::code()` und werden
             // über `identity_file::identity_file_error_to_command_error`
@@ -308,18 +366,147 @@ mod keychain_code_tests {
         );
     }
 
-    /// Gegenprobe: Ist der Schlüsselbund verfügbar, ist ein `Backend`-Fehler
-    /// etwas anderes (z. B. ein einzelner verweigerter Eintrag) und bekommt
-    /// den Code nicht — sonst schickte die Oberfläche den Nutzer wegen eines
-    /// beliebigen Keychain-Fehlers zu `apt install`.
+    /// Die Nutzlast, die laut Spec §7 in jedem Test dieses Laufs steht.
+    /// Enthält absichtlich **beide** Teile — den „Bibliothekstext" und ein
+    /// „Geheimnis" —, damit ein Test, der nur einen davon sucht, nicht aus
+    /// Versehen grün ist.
+    const MARKER: &str = "LIBTEXT-0098 Geheim-0098";
+
+    /// Spec 0098, T1/T2 (A1) — **ersetzt**
+    /// `test_backend_error_keeps_its_message_when_the_keychain_is_available`,
+    /// der genau das Gegenteil verlangte (`code == None`, Bibliothekstext in
+    /// `message`). Das war das Verhalten aus BL-0244: Ein Schreib- oder
+    /// Lesefehler bei verfügbarem Schlüsselbund reichte den rohen englischen
+    /// `keyring`-Text ins Frontend durch.
+    ///
+    /// Scheitert am Stand vor dieser Spec in **beiden** Zusicherungen.
     #[test]
-    fn test_backend_error_keeps_its_message_when_the_keychain_is_available() {
+    fn test_spec_0098_t1_backend_error_gets_the_access_code_when_the_keychain_is_available() {
         let err = keychain_aware_credential_error(
-            CredentialError::Backend("user denied access".to_string()),
+            CredentialError::Backend(MARKER.to_string()),
             KeychainAvailability::Available,
         );
-        assert_eq!(err.code, None);
-        assert!(err.message.contains("user denied access"));
+
+        assert_eq!(err.code, Some(KEYCHAIN_ACCESS_FAILED));
+        assert!(
+            !err.message.contains("LIBTEXT-0098") && !err.message.contains("Geheim-0098"),
+            "die Nutzlast der Bibliothek darf das Frontend nicht erreichen: {}",
+            err.message
+        );
+    }
+
+    /// Spec 0098, A6: Die Meldung dieses Codes behauptet **nicht** „nicht
+    /// verfügbar" und schickt niemanden zu einer Paketinstallation — der
+    /// Schlüsselbund ist ja da. Ein Test gegen den Wortlaut wäre brüchig;
+    /// geprüft wird nur, was nicht drinstehen darf.
+    #[test]
+    fn test_spec_0098_a6_access_failure_does_not_claim_an_unavailable_keychain() {
+        let err = keychain_aware_credential_error(
+            CredentialError::Backend(MARKER.to_string()),
+            KeychainAvailability::Available,
+        );
+
+        let message = err.message.to_lowercase();
+        assert!(
+            !message.contains("nicht verfügbar"),
+            "„nicht verfügbar\" ist genau die falsche Auskunft: {}",
+            err.message
+        );
+        assert!(
+            !message.contains("apt ") && !message.contains("install"),
+            "kein Paket- oder Installationshinweis: {}",
+            err.message
+        );
+    }
+
+    /// Spec 0098, T3 (A2): Der Fall „schon beim Start nicht verfügbar"
+    /// bleibt **unverändert** bei `KEYCHAIN_UNAVAILABLE`. Gegenprobe zu T1 —
+    /// die neue Code-Vergabe darf den alten Fall nicht überschreiben, sonst
+    /// verlöre der Nutzer den Hinweis auf die Diagnose-Ansicht.
+    #[test]
+    fn test_spec_0098_t3_unavailable_keychain_still_reports_unavailable() {
+        let err = keychain_aware_credential_error(
+            CredentialError::Backend(MARKER.to_string()),
+            UNAVAILABLE,
+        );
+
+        assert_eq!(err.code, Some(KEYCHAIN_UNAVAILABLE));
+        assert!(
+            !err.message.contains("LIBTEXT-0098") && !err.message.contains("Geheim-0098"),
+            "auch hier bleibt die Nutzlast draußen: {}",
+            err.message
+        );
+    }
+
+    /// Spec 0098, T10 (adversarial): Die Code-Wahl hängt an **Variante und
+    /// Startzustand**, nie am Text der Nutzlast. Eine Nutzlast, die selbst
+    /// wie der andere Code aussieht, ändert daran nichts — und landet
+    /// insbesondere nicht in der `message`, wo sie wie eine Aussage der App
+    /// über ihren eigenen Zustand gelesen würde.
+    #[test]
+    fn test_spec_0098_t10_payload_that_looks_like_a_code_does_not_pick_the_code() {
+        let err = keychain_aware_credential_error(
+            CredentialError::Backend(KEYCHAIN_UNAVAILABLE.to_string()),
+            KeychainAvailability::Available,
+        );
+
+        assert_eq!(
+            err.code,
+            Some(KEYCHAIN_ACCESS_FAILED),
+            "der Startzustand entscheidet, nicht die Nutzlast"
+        );
+        assert!(
+            !err.message.contains(KEYCHAIN_UNAVAILABLE),
+            "die Nutzlast darf auch dann nicht durchkommen, wenn sie wie ein Code aussieht: {}",
+            err.message
+        );
+    }
+
+    /// Spec 0098, T9 (adversarial): Eine Nutzlast mit Zeilenumbruch und
+    /// Anführungszeichen — die Form, in der ein Bibliothekstext ein
+    /// mitgeliefertes Geheimnis wie ein eigenes Feld aussehen lässt — kommt
+    /// in **keinem** Feld ans Frontend.
+    #[test]
+    fn test_spec_0098_t9_multiline_payload_reaches_no_field() {
+        let payload = "x\nPasswort: Geheim-0098\"";
+
+        for keychain in [KeychainAvailability::Available, UNAVAILABLE] {
+            let err = keychain_aware_credential_error(
+                CredentialError::Backend(payload.to_string()),
+                keychain,
+            );
+
+            // Nicht nur `message`: Das ganze serialisierte `CommandError`,
+            // also exakt das, was über die IPC-Grenze geht.
+            let serialised = serde_json::to_string(&err).expect("CommandError ist serialisierbar");
+            assert!(
+                !serialised.contains("Geheim-0098"),
+                "die Nutzlast darf in keinem Feld des DTO stehen: {serialised}"
+            );
+        }
+    }
+
+    /// Spec 0098, T4 (A3): Ein einzelner fehlgeschlagener Zugriff ist kein
+    /// „nicht verfügbar" und verändert den Zustand nicht. Der Zustand reist
+    /// als `Copy`-Wert herein — die Funktion kann ihn nicht umschreiben, und
+    /// dieser Test hält genau das fest, damit ein späterer Umbau auf eine
+    /// veränderliche Quelle hier auffällt.
+    #[test]
+    fn test_spec_0098_t4_a_single_failure_neither_claims_nor_causes_unavailability() {
+        let keychain = KeychainAvailability::Available;
+
+        let err =
+            keychain_aware_credential_error(CredentialError::Backend(MARKER.to_string()), keychain);
+
+        assert_ne!(
+            err.code,
+            Some(KEYCHAIN_UNAVAILABLE),
+            "ein Laufzeitfehler darf nicht „nicht verfügbar\" behaupten"
+        );
+        assert!(
+            keychain.is_available(),
+            "der Zustand aus dem Start bleibt unberührt (A3/A16)"
+        );
     }
 
     /// Spec 0071, A14/I4: "nicht vorhanden" ist keine Schlüsselbund-Störung.

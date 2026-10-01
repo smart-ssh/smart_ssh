@@ -52,6 +52,24 @@ pub fn trim_credential_value(value: &str) -> String {
         .to_string()
 }
 
+/// Spec 0098, A1/A6: stabiler Code für „der Zugriff auf den Schlüsselbund
+/// ist fehlgeschlagen, obwohl er bei diesem Programmstart erreichbar war" —
+/// gesperrt, abgelehnt oder von der Plattform zurückgewiesen. Das Frontend
+/// übersetzt ihn über `errorCodes.ts`, statt den englischen `Display`-Text
+/// der `keyring`-Crate durchzureichen.
+///
+/// **Hier und nicht in `app-logic`**, obwohl die übrigen Frontend-Codes dort
+/// als Konstanten liegen: Diesen Code vergeben **zwei** Schichten —
+/// `app-logic` für die Wege über `keychain_aware_credential_error` (A1) und
+/// `ssh::SshError::code` für die Verbindungskette (A4). Ein zweites
+/// Zeichenketten-Literal in `core` könnte vom ersten abdriften, ohne dass
+/// irgendwo etwas scheitert; der Code ist aber genau dann wertlos, wenn er
+/// sich unterscheidet. `app-logic` re-exportiert ihn.
+///
+/// **Nicht [`CredentialError::Backend`]s Nutzlast anhängen** (Spec 0098 A5):
+/// Der Code *ersetzt* den Bibliothekstext, er ergänzt ihn nicht.
+pub const KEYCHAIN_ACCESS_FAILED: &str = "KEYCHAIN_ACCESS_FAILED";
+
 /// Fehler eines [`CredentialStore`]-Zugriffs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CredentialError {

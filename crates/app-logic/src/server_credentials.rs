@@ -169,43 +169,42 @@ fn delete_user_requested_secret(
 /// Sudo-Passwort hinterlegt", während das Passwort weiter im
 /// Schlüsselbund liegt und beim nächsten `sudo` wieder eingespeist würde.
 ///
-/// Der Fehlerweg ist derselbe wie überall sonst (A13): bei nicht
-/// verfügbarem Schlüsselbund der stabile Code `KEYCHAIN_UNAVAILABLE`,
+/// Der Fehlerweg ist derselbe wie überall sonst (A13): ein stabiler Code,
 /// vom Frontend übersetzt.
+///
+/// **Spec 0098, A1 ändert Spec 0071 A17 für den Fall „verfügbar".** Dieser
+/// Weg vergab bislang **unbedingt** `KEYCHAIN_UNAVAILABLE`, unabhängig vom
+/// Startzustand — ein bewusster Griff, weil `keychain_aware_credential_error`
+/// damals für den Fall „verfügbar" den rohen Bibliothekstext durchließ und
+/// das hier besonders weh getan hätte. Diese Lücke ist jetzt an der Quelle
+/// geschlossen (A1): Der Weg wertet den Startzustand aus wie jeder andere
+/// und meldet bei verfügbarem Schlüsselbund `KEYCHAIN_ACCESS_FAILED`.
+///
+/// **Das ist keine Lockerung, sondern eine Korrektur:** Der Nutzer sah
+/// „Der Systemschlüsselbund ist nicht verfügbar" für einen Schlüsselbund,
+/// der sehr wohl da war und nur diesen einen Löschauftrag verweigert hat.
+/// Der neue Code sagt genau das, und — wie vorher — bleibt die Nutzlast der
+/// Bibliothek draußen (A5). In beiden Fällen schlägt der Weg weiterhin
+/// **sichtbar** fehl; daran ändert sich nichts.
 pub fn clear_sudo_password(
     credential_store: &dyn CredentialStore,
+    keychain: KeychainAvailability,
     server_id: ServerId,
 ) -> Result<(), CommandError> {
     let r = sudo_password_credential_ref(server_id);
     match credential_store.delete(&r) {
         Ok(()) | Err(CredentialError::NotFound(_)) => Ok(()),
         Err(err) => {
+            // A7: bleibt unverändert auf `warn` mit dem vollen
+            // `CredentialError` — Spec 0098 ergänzt nur `debug`-Zeilen, es
+            // entfernt keine bestehende.
             tracing::warn!(
                 server_id = %server_id.0,
                 slot = "sudo_password",
                 error = %err,
                 "Sudo-Passwort konnte nicht entfernt werden — der Eintrag bleibt im Schlüsselbund"
             );
-            // A17: „Der Fehler nutzt denselben Weg wie A13
-            // (`KEYCHAIN_UNAVAILABLE`, übersetzt)" — hier **unbedingt**,
-            // nicht abhängig vom Startzustand aus dem `AppState`.
-            //
-            // spec-reviewer-Fund: `keychain_aware_credential_error` hängt
-            // den Code nur an, wenn der Schlüsselbund schon beim Start als
-            // nicht verfügbar erkannt wurde. Klemmt er erst danach (der
-            // Anbieter sperrt sich während der Sitzung, ein Entsperr-Prompt
-            // wird abgebrochen), stünde auf diesem — durch A17 überhaupt
-            // erst entstandenen — Fehlerpfad der rohe englische
-            // Bibliothekstext im UI. Genau das schließt §2 aus.
-            //
-            // Hier ist die unbedingte Zuordnung auch sachlich richtig: Ein
-            // `Backend`-Fehler auf einem `delete` hat keine andere Ursache
-            // als einen Schlüsselbund, der nicht tut, was er soll. Der
-            // Code ersetzt den Text, er ergänzt ihn nicht (X2).
-            Err(CommandError::with_code(
-                "Der Systemschlüsselbund ist nicht verfügbar.",
-                crate::error::KEYCHAIN_UNAVAILABLE,
-            ))
+            Err(keychain_aware_credential_error(err, keychain))
         }
     }
 }
@@ -1161,7 +1160,7 @@ mod tests {
         let store = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(id), "hunter2");
 
-        clear_sudo_password(&store, id).unwrap();
+        clear_sudo_password(&store, KeychainAvailability::Available, id).unwrap();
 
         assert!(secret_value(&store, &sudo_password_credential_ref(id)).is_none());
     }
@@ -1171,7 +1170,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        clear_sudo_password(&store, id).unwrap();
+        clear_sudo_password(&store, KeychainAvailability::Available, id).unwrap();
     }
 
     // --- Spec 0049, Fund 1: Rand-Trimmen (Windows-Copy-Paste-`\r\n`) -------
@@ -1309,27 +1308,65 @@ mod tests {
     /// Schlüsselbund lag und beim nächsten `sudo` wieder eingespeist
     /// worden wäre.
     ///
-    /// Der Code hängt hier **unbedingt** am Fehler, nicht abhängig vom
-    /// Schlüsselbund-Zustand beim Start (A17: „denselben Weg wie A13") —
-    /// sonst stünde der rohe englische Bibliothekstext im Formular, sobald
-    /// der Schlüsselbund erst während der Sitzung klemmt. Der Store in
-    /// diesem Test bildet genau das nach: Er ist nicht als „nicht
-    /// verfügbar" bekannt, sondern scheitert erst beim `delete`.
+    /// Spec 0098, T3a (A1), **ersetzt** die Fassung dieses Tests, die
+    /// `KEYCHAIN_UNAVAILABLE` unbedingt verlangte: Der Weg wertet jetzt den
+    /// Startzustand aus wie jeder andere. Bei verfügbarem Schlüsselbund ist
+    /// das `KEYCHAIN_ACCESS_FAILED` — die wahre Auskunft für einen
+    /// Schlüsselbund, der da ist und nur diesen Löschauftrag verweigert.
+    ///
+    /// Scheitert am Stand vor dieser Spec (dort kam `KEYCHAIN_UNAVAILABLE`).
+    ///
+    /// Was **nicht** gelockert wird: Der Weg schlägt weiterhin sichtbar
+    /// fehl, und die Nutzlast bleibt draußen — beides wird hier mitgeprüft.
     #[test]
-    fn test_clearing_a_sudo_password_fails_visibly_when_nothing_was_removed() {
+    fn test_spec_0098_t3a_clearing_a_sudo_password_reports_an_access_failure() {
         let id = ServerId::new();
         let store = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(id), "sudo-secret")
-            .with_failing_delete();
+            .with_failing_delete()
+            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
 
-        let err = clear_sudo_password(&store, id)
+        let err = clear_sudo_password(&store, KeychainAvailability::Available, id)
             .expect_err("ein fehlgeschlagenes Entfernen darf nicht als Erfolg gelten");
 
-        assert_eq!(err.code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
+        assert_eq!(err.code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert!(
+            !err.message.contains("LIBTEXT-0098") && !err.message.contains("Geheim-0098"),
+            "die Nutzlast der Bibliothek darf das Frontend nicht erreichen: {}",
+            err.message
+        );
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
             Some("sudo-secret"),
             "der Test taugt nur, wenn das Secret tatsächlich stehen bleibt"
+        );
+    }
+
+    /// Spec 0098, T3a (A2): derselbe Fall bei einem Schlüsselbund, der schon
+    /// beim Start fehlte — dann bleibt es bei `KEYCHAIN_UNAVAILABLE`, wie
+    /// vor dieser Spec. Belegt, dass A1 den alten Fall nicht verdrängt.
+    #[test]
+    fn test_spec_0098_t3a_clearing_a_sudo_password_still_reports_unavailable_at_startup() {
+        let id = ServerId::new();
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(id), "sudo-secret")
+            .with_failing_delete()
+            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
+
+        let err = clear_sudo_password(
+            &store,
+            KeychainAvailability::Unavailable(
+                credentials_keyring::KeychainUnavailableReason::NoSecretServiceProvider,
+            ),
+            id,
+        )
+        .expect_err("ein fehlgeschlagenes Entfernen darf nicht als Erfolg gelten");
+
+        assert_eq!(err.code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
+        assert!(
+            !err.message.contains("Geheim-0098"),
+            "die Nutzlast bleibt auch hier draußen: {}",
+            err.message
         );
     }
 
@@ -1338,8 +1375,48 @@ mod tests {
     #[test]
     fn test_clearing_an_absent_sudo_password_still_succeeds() {
         let store = InMemoryCredentialStore::new();
-        clear_sudo_password(&store, ServerId::new())
+        clear_sudo_password(&store, KeychainAvailability::Available, ServerId::new())
             .expect("kein Eintrag vorhanden ist kein Fehler");
+    }
+
+    /// Spec 0098, T4 (A3): Erst scheitert der Store, dann gelingt er. Der
+    /// erste Fehler trägt **nicht** `KEYCHAIN_UNAVAILABLE`, und der zweite
+    /// Aufruf geht durch — der Schlüsselbund gilt nach einer einzelnen
+    /// Ablehnung nicht als kaputt.
+    ///
+    /// Scheitert, wenn ein Laufzeitfehler „nicht verfügbar" meldet (erste
+    /// Zusicherung; am Stand vor dieser Spec kam dort `KEYCHAIN_UNAVAILABLE`)
+    /// oder wenn ein Fehler den Zustand eskalieren würde (letzte
+    /// Zusicherung).
+    #[test]
+    fn test_spec_0098_t4_a_single_rejection_does_not_make_the_keychain_unavailable() {
+        let id = ServerId::new();
+        let keychain = KeychainAvailability::Available;
+        let store = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(id), "sudo-secret")
+            .with_failing_delete()
+            .with_backend_payload("LIBTEXT-0098 Geheim-0098")
+            .failing_only_times(1);
+
+        let err = clear_sudo_password(&store, keychain, id)
+            .expect_err("der erste Zugriff scheitert noch");
+        assert_eq!(
+            err.code,
+            Some(crate::error::KEYCHAIN_ACCESS_FAILED),
+            "ein einzelner abgelehnter Zugriff ist kein „nicht verfügbar\""
+        );
+
+        clear_sudo_password(&store, keychain, id)
+            .expect("sobald der Store wieder antwortet, gelingt der nächste Zugriff");
+        assert_eq!(
+            secret_value(&store, &sudo_password_credential_ref(id)),
+            None,
+            "der zweite Durchlauf muss das Secret tatsächlich entfernt haben"
+        );
+        assert!(
+            keychain.is_available(),
+            "kein Laufzeitfehler eskaliert den Startzustand (A3/A16)"
+        );
     }
 
     /// Spec 0071, A17 (zweiter Punkt): Das Löschen eines Servers läuft
@@ -1419,20 +1496,42 @@ mod tests {
         );
     }
 
-    /// Gegenprobe zu oben: Derselbe Schreibfehler bei **verfügbarem**
-    /// Schlüsselbund ist ein gewöhnlicher Fehler ohne diesen Code — sonst
-    /// schickte die Oberfläche den Nutzer wegen eines einzelnen
-    /// verweigerten Eintrags zu einer Paketinstallation.
+    /// Spec 0098, T1 (A1, Schreiben) — **ersetzt**
+    /// `test_failed_write_with_an_available_keychain_keeps_its_ordinary_error`,
+    /// der hier `code == None` verlangte und damit genau das Verhalten aus
+    /// BL-0244 festschrieb: Der rohe `keyring`-Text landete im Formular.
+    ///
+    /// Scheitert am Stand vor dieser Spec in beiden Zusicherungen
+    /// (`code: None`, Marker in `message`).
+    ///
+    /// Zweiter Test zu derselben Stelle wie der vorige, weil **beide**
+    /// Zustände geprüft sein müssen: A1 darf A2 nicht verdrängen.
     #[test]
-    fn test_failed_write_with_an_available_keychain_keeps_its_ordinary_error() {
-        let store = InMemoryCredentialStore::new().with_failing_set_for_slot("sudo_password");
+    fn test_spec_0098_t1_failed_write_with_an_available_keychain_reports_the_access_code() {
+        let store = InMemoryCredentialStore::new()
+            .with_failing_set_for_slot("sudo_password")
+            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
         let id = ServerId::new();
 
         let err = resolve_sudo_password(&store, AVAILABLE, id, Some("sudo-secret".to_string()))
             .expect_err("ein fehlgeschlagener Schreibzugriff darf nicht als Erfolg gelten");
 
-        assert_eq!(err.code, None);
+        assert_eq!(err.code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert!(
+            !err.message.contains("LIBTEXT-0098") && !err.message.contains("Geheim-0098"),
+            "die Nutzlast der Bibliothek darf das Frontend nicht erreichen: {}",
+            err.message
+        );
+        assert!(
+            secret_value(&store, &sudo_password_credential_ref(id)).is_none(),
+            "nichts darf gespeichert worden sein"
+        );
     }
+
+    // Spec 0098, T2 (A1, Lesen): `resolve_auth_method` liest **nie** — ein
+    // leeres Feld behält hier nur den bestehenden `CredentialRef`, ohne das
+    // Secret anzufassen. Der lesende Weg sitzt im Verbindungstest
+    // (`test_connection::resolve_secret`); T2 steht deshalb dort.
 
     #[test]
     fn test_passphrase_with_trailing_crlf_is_stored_trimmed() {
