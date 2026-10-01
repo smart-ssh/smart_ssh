@@ -1,6 +1,6 @@
 # Spec 0097 — Tests ohne Wanduhr
 
-Status: Vorschlag (Architekt) · Backlog: BL-0219, BL-0253, BL-0278 · Gate: release-1.0/K
+Status: freigegeben · Backlog: BL-0219, BL-0253, BL-0278 · Gate: release-1.0/K
 Zweck: Tests, die unter Last scheitern, weil sie auf echte Zeit statt auf ein Ereignis warten, deterministisch machen und das lokale Gate um den Build ohne Test-Features ergänzen.
 Review-Priorität: NORMAL
 
