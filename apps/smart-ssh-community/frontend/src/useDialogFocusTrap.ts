@@ -43,6 +43,14 @@ export function useDialogFocusTrap({
   resetKey,
 }: UseDialogFocusTrapOptions) {
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  // Review-Fund Runde 2: Der `document`-Escape-Listener unten entsteht nur
+  // einmal (Effekt mit `[]`). Ohne diesen Ref schlösse er über das
+  // `onEscape` des ersten Renders — bleibt der Dialog gemountet und
+  // bekommt per `resetKey` ein neues Ereignis (zwei sich überlappende
+  // Host-Key-Abfragen), riefe Escape die Entscheidung für das alte statt
+  // das aktuell angezeigte Ereignis. Immer aktuell halten, pro Render.
+  const onEscapeRef = useRef(onEscape);
+  onEscapeRef.current = onEscape;
 
   // A3/A4/A7, alle in einem Effekt mit `[]`-Abhängigkeiten, bewusst nicht
   // getrennt (Review-Fund, Spec 0100): Getrennte Effekte hätten keine
@@ -95,7 +103,7 @@ export function useDialogFocusTrap({
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      onEscape();
+      onEscapeRef.current();
     }
     document.addEventListener("focusout", onFocusOut);
     document.addEventListener("focusin", onFocusIn);
