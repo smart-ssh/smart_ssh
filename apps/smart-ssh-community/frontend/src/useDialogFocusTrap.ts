@@ -49,8 +49,16 @@ export function useDialogFocusTrap({
   // bekommt per `resetKey` ein neues Ereignis (zwei sich überlappende
   // Host-Key-Abfragen), riefe Escape die Entscheidung für das alte statt
   // das aktuell angezeigte Ereignis. Immer aktuell halten, pro Render.
+  // Die Zuweisung selbst steht in einem eigenen Effekt ohne
+  // Dependency-Array (Review-Fund Runde 3, Spec 0100): React 19 untersagt
+  // das Schreiben eines Refs während des Renders, und ein Effekt ohne
+  // Deps läuft nach jedem Commit, also genauso oft wie die vorherige
+  // Zuweisung im Render-Körper — nur synchron zu dem, was tatsächlich auf
+  // dem Schirm steht, statt dem Render voraus.
   const onEscapeRef = useRef(onEscape);
-  onEscapeRef.current = onEscape;
+  useEffect(() => {
+    onEscapeRef.current = onEscape;
+  });
 
   // A3/A4/A7, alle in einem Effekt mit `[]`-Abhängigkeiten, bewusst nicht
   // getrennt (Review-Fund, Spec 0100): Getrennte Effekte hätten keine
