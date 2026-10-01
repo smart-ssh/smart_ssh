@@ -4,7 +4,7 @@ use russh::client;
 use russh::keys::{Certificate, PrivateKey, PrivateKeyWithHashAlg};
 use secrecy::{ExposeSecret, SecretString};
 use ssh_manager_core::profiles::CredentialStore;
-use ssh_manager_core::ssh::{resolve_auth, Hop, HopLabel, KeyFileReader, ResolvedAuth, SshError};
+use ssh_manager_core::ssh::{resolve_auth, Hop, KeyFileReader, ResolvedAuth, SshError};
 
 use crate::error::map_russh_error;
 use crate::handler::ClientHandler;
@@ -68,46 +68,15 @@ pub(crate) async fn authenticate(
 }
 
 /// Spec 0076, A-8: **Die Meldung muss sagen, welcher Hop gescheitert ist.**
+/// `authenticate` läuft je Hop der Verbindungskette (`connect::connect`).
 ///
-/// `authenticate` läuft je Hop der Verbindungskette
-/// (`connect::connect`), und ein Jump-Host mit Schlüsseldatei ist damit
-/// ohne Zusatzarbeit möglich — aber eine Meldung wie „Die Schlüsseldatei
-/// … wurde nicht gefunden" ist wertlos, wenn die Kette drei Rechner lang
-/// ist und offenbleibt, welcher gemeint war.
-///
-/// Angereichert werden **nur** [`SshError::CredentialResolutionFailed`] und
-/// (seit Spec 0098, A4) [`SshError::CredentialStoreFailed`]: Jede andere
-/// Variante entsteht entweder gar nicht je Hop oder trägt keine Stelle, in
-/// die etwas passte. Der stabile `code()` bleibt dabei unverändert — das
-/// Frontend-Mapping hängt nicht am Text (Spec 0024, Abschnitt 5).
-///
-/// Benutzername, Host und Port sind keine Geheimnisse; Dateiinhalt oder
-/// Schlüsselmaterial kommen hier ohnehin nicht vorbei (5.2).
+/// Die Benennung selbst steht in [`SshError::named_for_hop`] (`core`), damit
+/// der Verbindungstest für Hops ab dem zweiten — gegen einen echten Server
+/// nicht erreichbar, ADR 0008 — **dieselbe** Funktion aufruft statt eines
+/// Nachbaus (Spec 0098 §7 Ebene V1; spec-reviewer Runde 1). Hier bleibt nur
+/// die Übersetzung von [`Hop`] auf deren Argumente.
 fn name_hop(error: SshError, hop: &Hop) -> SshError {
-    match error {
-        SshError::CredentialResolutionFailed(message) => SshError::CredentialResolutionFailed(
-            format!("{}@{}:{}: {message}", hop.username, hop.host, hop.port),
-        ),
-        // Spec 0098, A4/T12a: dieselbe Benennung für den
-        // Schlüsselbund-Fehler — strukturiert, weil die Variante keinen
-        // freien Meldungstext hat, in den sich ein Präfix schreiben ließe
-        // (A5). `resolve_auth` liefert sie immer mit `hop: None`.
-        //
-        // **Ein schon benannter Hop bleibt stehen:** Der innerste Hop ist
-        // der, der gescheitert ist. `name_hop` läuft je Hop (s.
-        // `authenticate`) und der Fehler wandert sofort nach oben, der Fall
-        // tritt also heute nicht ein — überschreiben wäre aber genau die
-        // Art stiller Falschaussage, die hier nichts zu suchen hat.
-        SshError::CredentialStoreFailed { secret, hop: None } => SshError::CredentialStoreFailed {
-            secret,
-            hop: Some(HopLabel {
-                username: hop.username.clone(),
-                host: hop.host.clone(),
-                port: hop.port,
-            }),
-        },
-        other => other,
-    }
+    error.named_for_hop(&hop.username, &hop.host, hop.port)
 }
 
 /// Was die Prüfung einer Schlüsseldatei auf Gültigkeit ergibt (Spec 0076,

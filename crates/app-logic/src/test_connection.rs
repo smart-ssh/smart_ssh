@@ -399,7 +399,18 @@ impl<'a> CredentialStore for TieredCredentialStore<'a> {
     ) -> Result<SecretString, ssh_manager_core::profiles::CredentialError> {
         match self.ephemeral.get(reference) {
             Ok(secret) => Ok(secret),
-            Err(_) => self.real.get(reference),
+            // **Nur „kein Eintrag" führt zum nächsten Store** (Spec 0098,
+            // spec-reviewer Runde 1): Ein `Backend`-Fehler ist die Störung
+            // eines Stores, keine Aussage über den Inhalt. Ihn weiterzugeben
+            // hieße, aus einer Störung ein „nicht vorhanden" zu machen — die
+            // Rückrichtung von T7, und damit genau die Verwechslung, die
+            // Spec 0071 A14/I4 verbietet. Der `EphemeralCredentialStore`
+            // liefert heute nur `NotFound`, der Zweig ändert also nichts am
+            // Verhalten; er hält den Weg geschlossen.
+            Err(ssh_manager_core::profiles::CredentialError::NotFound(_)) => {
+                self.real.get(reference)
+            }
+            Err(backend) => Err(backend),
         }
     }
 
@@ -596,10 +607,16 @@ mod tests {
     // zuverlässig erreichbar (`resolve_auth` läuft je Hop erst nach TCP,
     // Handshake und Host-Key-Prüfung). Dieser `Connector` schließt die Lücke:
     // Er ruft für **jeden** Hop die echte Auflösung `resolve_auth` mit dem
-    // Test-Store auf — dieselbe Funktion, die `ssh-transport` aufruft —, und
-    // benennt den Hop wie `ssh_transport::auth::name_hop`. Geprüft wird
+    // Test-Store auf — dieselbe Funktion, die `ssh-transport` aufruft — und
+    // benennt den Hop über `SshError::named_for_hop`, also über **dieselbe**
+    // Funktion, die `ssh_transport::auth::name_hop` aufruft. Geprüft wird
     // damit die Kette `CredentialStore` → `resolve_auth` → `SshError` →
     // `TestConnectionResult`, ohne eine echte Verbindung.
+    //
+    // Die Hop-Benennung war hier zunächst **nachgebaut**. Ein Nachbau prüft
+    // sich selbst: Hörte `name_hop` auf, die neue Variante zu benennen,
+    // blieben T5/T12/T13 grün (spec-reviewer Runde 1). Deshalb liegt die
+    // Benennung jetzt in `core` und beide Seiten rufen sie auf.
     struct ResolvingConnector;
 
     #[async_trait]
@@ -612,30 +629,10 @@ mod tests {
             _host_keys: Arc<dyn HostKeyStore>,
         ) -> Result<ConnectOutcome, SshError> {
             for hop in &target.hops {
-                ssh_manager_core::ssh::resolve_auth(&hop.auth, credentials, key_files).map_err(
-                    |err| match err {
-                        // Dieselbe Benennung wie in
-                        // `ssh_transport::auth::name_hop` — der Prüfpunkt aus
-                        // Spec 0076, A-8 gilt auch hier.
-                        SshError::CredentialStoreFailed { secret, hop: None } => {
-                            SshError::CredentialStoreFailed {
-                                secret,
-                                hop: Some(ssh_manager_core::ssh::HopLabel {
-                                    username: hop.username.clone(),
-                                    host: hop.host.clone(),
-                                    port: hop.port,
-                                }),
-                            }
-                        }
-                        SshError::CredentialResolutionFailed(message) => {
-                            SshError::CredentialResolutionFailed(format!(
-                                "{}@{}:{}: {message}",
-                                hop.username, hop.host, hop.port
-                            ))
-                        }
-                        other => other,
-                    },
-                )?;
+                ssh_manager_core::ssh::resolve_auth(&hop.auth, credentials, key_files)
+                    // Genau der Aufruf, den `ssh_transport::auth::name_hop`
+                    // macht — der Prüfpunkt aus Spec 0076, A-8 gilt auch hier.
+                    .map_err(|err| err.named_for_hop(&hop.username, &hop.host, hop.port))?;
             }
             Ok(ConnectOutcome::Connected(Box::new(StubSshTransport)))
         }
@@ -934,6 +931,77 @@ mod tests {
         assert!(
             message.contains("Passphrase"),
             "die Art des Secrets gehört in die Meldung: {message}"
+        );
+        assert!(
+            !message.contains("Geheim-0098"),
+            "die Nutzlast bleibt draußen: {message}"
+        );
+    }
+
+    /// Spec 0098, T13 / spec-reviewer Runde 1 (adversarialer Fall 6): Der
+    /// **Zertifikats**-Zweig von `resolve_auth` liest zwei Secrets. Hier
+    /// gelingt das erste (das Zertifikat) und erst das zweite (der Key)
+    /// scheitert.
+    ///
+    /// Der Fall prüft zweierlei, was mit einem einzigen `get` nicht zu
+    /// trennen wäre: dass auch der **zweite** Lesefehler eines Zweigs den
+    /// Schlüsselbund-Code trägt (nicht nur der erste), und dass die
+    /// mitgeführte Secret-Art die des gescheiterten Aufrufs ist („Key",
+    /// nicht „Zertifikat").
+    #[tokio::test]
+    async fn test_spec_0098_t13_a_failing_certificate_key_names_the_key_not_the_certificate() {
+        let jump_id = ServerId::new();
+        let cert_ref = ssh_manager_core::profiles::CredentialRef::new("server:jump:certificate");
+        let key_ref = ssh_manager_core::profiles::CredentialRef::new("server:jump:certkey");
+
+        let now = chrono::Utc::now();
+        let jump_server = ssh_manager_core::profiles::Server {
+            auth: AuthMethod::Certificate {
+                cert_ref: cert_ref.clone(),
+                key_ref: key_ref.clone(),
+            },
+            created_at: now,
+            updated_at: now,
+            ..stored_server(jump_id, "jump", &cert_ref, None)
+        };
+        let profile_store = InMemoryProfileStore::new().with_server(jump_server);
+        let real_store = InMemoryCredentialStore::new()
+            .with_secret(&cert_ref, "cert-material")
+            .with_secret(&key_ref, "key-material")
+            // Nur der Key scheitert; das Zertifikat davor wird gelesen.
+            .with_failing_get_for_slot("certkey")
+            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
+
+        let input = ServerInput {
+            jump_host: Some(jump_id),
+            ..password_input()
+        };
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &real_store,
+            &MockKeyFileReader::new(),
+            AVAILABLE,
+            Arc::new(NoOpHostKeyStore),
+            &ResolvingConnector,
+            input,
+            None,
+            Duration::from_millis(200),
+        )
+        .await
+        .expect("der Verbindungstest liefert ein Ergebnis, keinen CommandError");
+
+        let TestConnectionResult::NetworkError { message, code } = &result else {
+            panic!("erwartet NetworkError, bekam {result:?}");
+        };
+        assert_eq!(*code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert!(
+            message.contains("Key"),
+            "die Art des gescheiterten Secrets gehört in die Meldung: {message}"
+        );
+        assert!(
+            !message.contains("Zertifikat"),
+            "und nicht die des Secrets, das gelesen werden konnte: {message}"
         );
         assert!(
             !message.contains("Geheim-0098"),

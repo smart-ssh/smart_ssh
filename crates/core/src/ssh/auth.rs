@@ -24,17 +24,34 @@ use super::error::{SecretKind, SshError};
 fn credential_lookup_error(err: CredentialError, secret: SecretKind) -> SshError {
     match err {
         CredentialError::Backend(payload) => {
+            // Durch den Redactor, obwohl A7 Schlüsselbund-Fehlerwerte von
+            // Spec 0094 ausnimmt und die vermessenen Stores (§1) ihre
+            // Nutzlast nicht aus dem abgelehnten Wert bilden
+            // (spec-reviewer Runde 1). Begründung: A5 erklärt genau diese
+            // Nutzlast für unzustellbar, und ein Log ist eine Datensenke.
+            // Spiegelt ein künftiger Store den Wert doch in seiner Meldung,
+            // steht er sonst bei `RUST_LOG=debug` im Klartext in der Datei.
+            // Die Zeile kostet nichts und ist die sichere Standardform.
             tracing::debug!(
                 secret = secret.label(),
-                error = %payload,
+                error = %{
+                    use crate::ai::OutputRedactor;
+                    crate::ai::default_log_redactor().redact_text(&payload)
+                },
                 "credential store backend failure while resolving auth (Spec 0098, A7)"
             );
             SshError::CredentialStoreFailed { secret, hop: None }
         }
+        // **Ausdrücklich `NotFound`, kein Catch-all** (spec-reviewer Runde 1):
+        // Käme eine dritte `CredentialError`-Variante hinzu, reichte ein
+        // Catch-all ihre Nutzlast stillschweigend in die Meldung und damit
+        // ans Frontend — genau der Zustand, den A5 abschafft. So scheitert
+        // stattdessen die Übersetzung und jemand muss hinsehen.
+        //
         // Weiterhin `{e}`, nicht nur die Variante: Die Meldung nennt die
         // `CredentialRef`, und genau die braucht man, um einen von außen
         // gelöschten Schlüsselbund-Eintrag zu finden.
-        not_found => {
+        not_found @ CredentialError::NotFound(_) => {
             SshError::CredentialResolutionFailed(format!("{}: {not_found}", secret.label()))
         }
     }

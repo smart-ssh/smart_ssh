@@ -93,12 +93,14 @@ pub fn sudo_password_credential_ref(server_id: ServerId) -> CredentialRef {
 /// überschreiben, statt (wie ein echtes Leerfeld) als "unverändert" zu
 /// gelten.
 ///
-/// Spec 0071, A13: `keychain` wird nur durchgereicht, um einem
-/// Schreibfehler bei nicht verfügbarem Schlüsselbund den stabilen Code
-/// `KEYCHAIN_UNAVAILABLE` zu geben (s. `error::keychain_aware_credential_
-/// error`). Der Zustand kommt aus dem `AppState` (A16) — hier wird nichts
-/// zusätzlich abgefragt, und am Schreibverhalten selbst ändert sich nichts:
-/// Der Fehler wird unverändert weitergereicht, nie verschluckt (X6).
+/// Spec 0071, A13 / Spec 0098, A1+A2: `keychain` wird nur durchgereicht, um
+/// einem Schreibfehler den passenden stabilen Code zu geben (s.
+/// `error::keychain_aware_credential_error`) — seit Spec 0098 in **beiden**
+/// Zuständen: `KEYCHAIN_UNAVAILABLE`, wenn der Schlüsselbund schon beim Start
+/// fehlte, sonst `KEYCHAIN_ACCESS_FAILED`. Der Zustand kommt aus dem
+/// `AppState` (A16) — hier wird nichts zusätzlich abgefragt, und am
+/// Schreibverhalten selbst ändert sich nichts: Der Fehler wird unverändert
+/// weitergereicht, nie verschluckt (X6).
 ///
 /// Spec 0073, A3: getrimmt wird über den geteilten
 /// [`trim_credential_value`] — dieselbe Semantik wie bisher, zusätzlich
@@ -1413,10 +1415,16 @@ mod tests {
             None,
             "der zweite Durchlauf muss das Secret tatsächlich entfernt haben"
         );
-        assert!(
-            keychain.is_available(),
-            "kein Laufzeitfehler eskaliert den Startzustand (A3/A16)"
-        );
+        // Dass kein Laufzeitfehler den Startzustand eskaliert (A3/A16), stand
+        // hier als `assert!(keychain.is_available())` — eine Zusicherung, die
+        // nicht scheitern **kann**: `keychain` ist eine lokale `Copy`-Variable,
+        // die die geprüfte Funktion per Wert bekommt (spec-reviewer Runde 1).
+        // Die Garantie ist echt, aber sie hängt an der Signatur, nicht an
+        // einer Zusicherung: `clear_sudo_password` nimmt
+        // `KeychainAvailability` als Wert und hat damit keinen Weg, den
+        // Zustand im `AppState` zu verändern. Was dieser Test **belegen**
+        // kann, steht oben: Der erste Fehler meldet nicht „nicht verfügbar",
+        // und der zweite Aufruf gelingt wirklich.
     }
 
     /// Spec 0071, A17 (zweiter Punkt): Das Löschen eines Servers läuft

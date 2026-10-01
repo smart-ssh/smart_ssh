@@ -42,9 +42,15 @@ pub use ssh_manager_core::profiles::KEYCHAIN_ACCESS_FAILED;
 /// Angriffsrichtung T10): Eine Nutzlast, die selbst wie ein Code aussieht,
 /// fließt nicht in diese Entscheidung ein — sie wird gar nicht gelesen.
 fn backend_failure_to_command_error(payload: &str, keychain: KeychainAvailability) -> CommandError {
+    // Durch den Redactor, wie die Zeile in `core`s `credential_lookup_error`
+    // — Begründung dort (spec-reviewer Runde 1): A5 erklärt diese Nutzlast
+    // für unzustellbar, und ein Log ist eine Datensenke.
     tracing::debug!(
         keychain_available = keychain.is_available(),
-        error = %payload,
+        error = %{
+            use ssh_manager_core::ai::OutputRedactor;
+            ssh_manager_core::ai::default_log_redactor().redact_text(payload)
+        },
         "credential store backend failure (Spec 0098, A7)"
     );
     if keychain.is_available() {
@@ -150,7 +156,12 @@ pub fn keychain_aware_credential_error(
 ) -> CommandError {
     match err {
         CredentialError::Backend(payload) => backend_failure_to_command_error(&payload, keychain),
-        other => CommandError::from(other),
+        // **Ausdrücklich `NotFound`, kein Catch-all** (spec-reviewer Runde 1):
+        // `CommandError::from` setzt `code: None` und nimmt den `Display`-Text
+        // als Meldung. Für eine dritte `CredentialError`-Variante wäre das
+        // genau der Zustand, den diese Spec abschafft — roher Text, kein
+        // stabiler Code. So scheitert stattdessen die Übersetzung.
+        not_found @ CredentialError::NotFound(_) => CommandError::from(not_found),
     }
 }
 
@@ -527,27 +538,43 @@ mod keychain_code_tests {
         }
     }
 
-    /// Spec 0098, T4 (A3): Ein einzelner fehlgeschlagener Zugriff ist kein
-    /// „nicht verfügbar" und verändert den Zustand nicht. Der Zustand reist
-    /// als `Copy`-Wert herein — die Funktion kann ihn nicht umschreiben, und
-    /// dieser Test hält genau das fest, damit ein späterer Umbau auf eine
-    /// veränderliche Quelle hier auffällt.
+    /// Spec 0098, T4 (A3), Hälfte „keine falsche Behauptung": Ein einzelner
+    /// fehlgeschlagener Zugriff meldet nicht „nicht verfügbar" — und zwar
+    /// beliebig oft hintereinander, es gibt keinen Zähler, der irgendwann
+    /// umkippt.
+    ///
+    /// Die zweite Hälfte („der nächste Zugriff gelingt wirklich") braucht
+    /// einen Store, der nur einmal scheitert, und steht deshalb in
+    /// `server_credentials.rs`
+    /// (`test_spec_0098_t4_a_single_rejection_does_not_make_the_keychain_unavailable`).
+    ///
+    /// **Dass der Zustand unberührt bleibt, ist hier nicht prüfbar** und
+    /// stand früher als `assert!(keychain.is_available())` da — eine
+    /// Zusicherung, die nicht scheitern kann, weil `keychain` eine lokale
+    /// `Copy`-Variable ist (spec-reviewer Runde 1). Die Garantie hängt an der
+    /// Signatur: Die Funktion bekommt den Zustand als Wert und hat keinen Weg
+    /// zum `AppState`.
     #[test]
-    fn test_spec_0098_t4_a_single_failure_neither_claims_nor_causes_unavailability() {
+    fn test_spec_0098_t4_a_single_failure_never_claims_unavailability() {
         let keychain = KeychainAvailability::Available;
 
-        let err =
-            keychain_aware_credential_error(CredentialError::Backend(MARKER.to_string()), keychain);
+        for attempt in 1..=3 {
+            let err = keychain_aware_credential_error(
+                CredentialError::Backend(MARKER.to_string()),
+                keychain,
+            );
 
-        assert_ne!(
-            err.code,
-            Some(KEYCHAIN_UNAVAILABLE),
-            "ein Laufzeitfehler darf nicht „nicht verfügbar\" behaupten"
-        );
-        assert!(
-            keychain.is_available(),
-            "der Zustand aus dem Start bleibt unberührt (A3/A16)"
-        );
+            assert_ne!(
+                err.code,
+                Some(KEYCHAIN_UNAVAILABLE),
+                "Versuch {attempt}: ein Laufzeitfehler darf nicht „nicht verfügbar\" behaupten"
+            );
+            assert_eq!(
+                err.code,
+                Some(KEYCHAIN_ACCESS_FAILED),
+                "Versuch {attempt}: und er bleibt bei demselben Code"
+            );
+        }
     }
 
     /// Spec 0071, A14/I4: "nicht vorhanden" ist keine Schlüsselbund-Störung.

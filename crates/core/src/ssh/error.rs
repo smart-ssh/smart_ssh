@@ -194,6 +194,54 @@ impl SshError {
             SshError::CredentialStoreFailed { .. } => KEYCHAIN_ACCESS_FAILED,
         }
     }
+
+    /// Spec 0076, A-8: **Die Meldung muss sagen, welcher Hop gescheitert
+    /// ist.** Ein Fehler wie „Die Schlüsseldatei … wurde nicht gefunden" ist
+    /// wertlos, wenn die Kette drei Rechner lang ist und offenbleibt, welcher
+    /// gemeint war.
+    ///
+    /// Angereichert werden **nur** [`Self::CredentialResolutionFailed`] und
+    /// (seit Spec 0098, A4) [`Self::CredentialStoreFailed`]: Jede andere
+    /// Variante entsteht entweder gar nicht je Hop oder trägt keine Stelle,
+    /// in die etwas passte. Der stabile [`Self::code`] bleibt unverändert —
+    /// das Frontend-Mapping hängt nicht am Text (Spec 0024, Abschnitt 5).
+    ///
+    /// Benutzername, Host und Port sind keine Geheimnisse; Dateiinhalt oder
+    /// Schlüsselmaterial kommen hier ohnehin nicht vorbei (Spec 0076, 5.2).
+    ///
+    /// **Wohnt in `core`, obwohl nur `ssh-transport` sie produktiv aufruft**
+    /// (`auth::name_hop`): Der Verbindungstest braucht dieselbe Benennung für
+    /// Hops ab dem zweiten, die gegen einen echten Server nicht erreichbar
+    /// sind (ADR 0008, Spec 0098 §7 Ebene V1). Vorher war das dort
+    /// nachgebaut — und ein Nachbau prüft sich selbst, nicht die Produktion
+    /// (spec-reviewer Runde 1).
+    pub fn named_for_hop(self, username: &str, host: &str, port: u16) -> SshError {
+        match self {
+            SshError::CredentialResolutionFailed(message) => {
+                SshError::CredentialResolutionFailed(format!("{username}@{host}:{port}: {message}"))
+            }
+            // Strukturiert, weil die Variante keinen freien Meldungstext hat,
+            // in den sich ein Präfix schreiben ließe (Spec 0098, A5).
+            // `resolve_auth` liefert sie immer mit `hop: None`.
+            //
+            // **Ein schon benannter Hop bleibt stehen:** Der innerste Hop ist
+            // der, der gescheitert ist. Die Benennung läuft je Hop und der
+            // Fehler wandert sofort nach oben, der Fall tritt also heute nicht
+            // ein — überschreiben wäre aber genau die Art stiller
+            // Falschaussage, die hier nichts zu suchen hat.
+            SshError::CredentialStoreFailed { secret, hop: None } => {
+                SshError::CredentialStoreFailed {
+                    secret,
+                    hop: Some(HopLabel {
+                        username: username.to_string(),
+                        host: host.to_string(),
+                        port,
+                    }),
+                }
+            }
+            other => other,
+        }
+    }
 }
 
 impl std::error::Error for SshError {}
