@@ -1,5 +1,62 @@
 use std::fmt;
 
+use crate::profiles::KEYCHAIN_ACCESS_FAILED;
+
+/// Welches Secret ein [`SshError::CredentialStoreFailed`] betrifft (Spec
+/// 0098, A5). Eine Variante je `credentials.get(...)`-Aufruf in
+/// [`super::resolve_auth`].
+///
+/// **Ein Enum und kein `&str`**, damit die erlaubten Angaben aus A5 („die
+/// Art des Secrets, feste Texte und die Hop-Angabe") an der Signatur
+/// ablesbar sind: In diese Variante lässt sich kein freier Text und damit
+/// auch nicht die Nutzlast der Bibliothek einsetzen. Eine Umgehung wäre kein
+/// Versehen mehr, sondern eine neue Variante.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecretKind {
+    Password,
+    PrivateKey,
+    Passphrase,
+    Certificate,
+    CertificateKey,
+}
+
+impl SecretKind {
+    /// Die Benennung, die schon vor Spec 0098 in der Meldung stand — wörtlich
+    /// dieselben Wörter wie in den `format!("Passwort: {e}")`-Zeilen von
+    /// [`super::resolve_auth`], damit die `NotFound`-Meldungen (die
+    /// unverändert bleiben, A4 letzter Satz) Zeichen für Zeichen gleich
+    /// aussehen.
+    pub fn label(&self) -> &'static str {
+        match self {
+            SecretKind::Password => "Passwort",
+            SecretKind::PrivateKey => "Private Key",
+            SecretKind::Passphrase => "Passphrase",
+            SecretKind::Certificate => "Zertifikat",
+            SecretKind::CertificateKey => "Key",
+        }
+    }
+}
+
+/// Welcher Hop einer Verbindungskette gemeint ist (Spec 0076, A-8).
+///
+/// Strukturiert statt als vorangestellter Text, weil
+/// [`SshError::CredentialStoreFailed`] keinen freien Meldungstext hat, in den
+/// sich ein Präfix schreiben ließe (A5). Benutzername, Host und Port sind
+/// keine Geheimnisse; Schlüsselmaterial kommt hier nicht vorbei (Spec 0076,
+/// 5.2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HopLabel {
+    pub username: String,
+    pub host: String,
+    pub port: u16,
+}
+
+impl fmt::Display for HopLabel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}@{}:{}", self.username, self.host, self.port)
+    }
+}
+
 /// Fehler rund um Aufbau und Nutzung einer SSH-Verbindung (Spec 0005,
 /// Abschnitt 7).
 #[derive(Debug, Clone, PartialEq)]
@@ -34,6 +91,33 @@ pub enum SshError {
     /// `russh::Error::Disconnect`) — z. B. ein Nicht-SSH-Dienst auf dem
     /// Port, oder ein Server, der zu viele Versuche abwehrt.
     ConnectionClosed(String),
+    /// Spec 0098, A4: Das Lesen eines Secrets aus dem [`CredentialStore`]
+    /// ist mit [`crate::profiles::CredentialError::Backend`] gescheitert —
+    /// der Schlüsselbund hat nicht geantwortet, gesperrt, abgelehnt. Eigene
+    /// Variante statt in [`Self::CredentialResolutionFailed`] verpackt, aus
+    /// zwei Gründen:
+    ///
+    /// 1. **Der Aufrufer muss unterscheiden können** (A4), ohne den
+    ///    Fehlertext zu lesen — dasselbe Argument wie bei
+    ///    [`Self::SftpPermissionDenied`]. Nur die Schicht, die
+    ///    `AppState.keychain` kennt, kann entscheiden, ob daraus
+    ///    `KEYCHAIN_ACCESS_FAILED` oder `KEYCHAIN_UNAVAILABLE` wird; `core`
+    ///    bleibt ohne Abhängigkeit vom `AppState` (§5).
+    /// 2. **Die Variante trägt keinen freien Text** (A5). Die Nutzlast der
+    ///    Bibliothek bleibt dort liegen, wo sie entsteht
+    ///    ([`super::resolve_auth`]); hierher kommt nur, welches Secret es war
+    ///    und — sobald `ssh-transport` sie setzt — welcher Hop.
+    ///
+    /// Ein fehlender Eintrag (`NotFound`) führt **nicht** hierher: Er bleibt
+    /// [`Self::CredentialResolutionFailed`], weil „kein Eintrag" eine
+    /// fachliche Aussage ist und keine Störung des Schlüsselbunds (Spec 0071
+    /// A14/I4).
+    CredentialStoreFailed {
+        secret: SecretKind,
+        /// `None`, solange niemand den Hop benannt hat — gesetzt von
+        /// `ssh_transport::auth::name_hop` (Spec 0076, A-8).
+        hop: Option<HopLabel>,
+    },
 }
 
 impl fmt::Display for SshError {
@@ -54,6 +138,21 @@ impl fmt::Display for SshError {
             SshError::HostUnreachable(msg) => write!(f, "Host nicht erreichbar: {msg}"),
             SshError::ConnectionClosed(msg) => {
                 write!(f, "Verbindung während des Aufbaus beendet: {msg}")
+            }
+            // Spec 0098, A5: feste Texte, die Art des Secrets und die
+            // Hop-Angabe — nichts sonst. Der Hop steht **vorn**, wie bei
+            // jeder anderen benannten Meldung (Spec 0076, A-8), damit in
+            // einer dreigliedrigen Kette als Erstes sichtbar ist, welcher
+            // Rechner gemeint war.
+            SshError::CredentialStoreFailed { secret, hop } => {
+                if let Some(hop) = hop {
+                    write!(f, "{hop}: ")?;
+                }
+                write!(
+                    f,
+                    "Zugriff auf den Schlüsselbund fehlgeschlagen ({})",
+                    secret.label()
+                )
             }
         }
     }
@@ -79,6 +178,20 @@ impl SshError {
             SshError::HostNotFound(_) => "SSH_HOST_NOT_FOUND",
             SshError::HostUnreachable(_) => "SSH_HOST_UNREACHABLE",
             SshError::ConnectionClosed(_) => "SSH_CONNECTION_CLOSED",
+            // Spec 0098, A4: **nicht** `SSH_`-präfigiert, weil es kein
+            // SSH-Problem ist — der Nutzer soll den Schlüsselbund als
+            // Ursache sehen, nicht „Netzwerkfehler" und nicht „Zugangsdaten
+            // konnten nicht aufgelöst werden".
+            //
+            // Dies ist die Fassung für „Schlüsselbund verfügbar". `core`
+            // kennt den Startzustand nicht (§5) und vergibt deshalb bewusst
+            // die Fassung, die **nie** fälschlich „nicht verfügbar"
+            // behauptet (A3). Wo der Zustand bekannt ist, wird daraus
+            // `KEYCHAIN_UNAVAILABLE` — s.
+            // `app_logic::error::keychain_aware_ssh_error_code` (A2). Vergisst
+            // ein Aufrufer diesen Schritt, ist das Ergebnis also zu
+            // vorsichtig, nicht zu dreist.
+            SshError::CredentialStoreFailed { .. } => KEYCHAIN_ACCESS_FAILED,
         }
     }
 }
@@ -106,6 +219,11 @@ mod code_tests {
             SshError::HostNotFound("x".to_string()),
             SshError::HostUnreachable("x".to_string()),
             SshError::ConnectionClosed("x".to_string()),
+            // Spec 0098, A4.
+            SshError::CredentialStoreFailed {
+                secret: SecretKind::Password,
+                hop: None,
+            },
         ];
         let codes: Vec<&'static str> = samples.iter().map(SshError::code).collect();
         let mut unique = codes.clone();
@@ -124,5 +242,66 @@ mod code_tests {
             SshError::ConnectionFailed("a".to_string()).code(),
             SshError::ConnectionFailed("b".to_string()).code(),
         );
+    }
+
+    /// Spec 0098, A5: Der `Display`-Text dieser Variante besteht
+    /// ausschließlich aus festem Text, der Secret-Art und der Hop-Angabe.
+    /// Hier festgehalten, weil die Variante die einzige ist, deren Meldung
+    /// eine Sicherheits-Invariante trägt: Hätte sie je ein freies
+    /// Textfeld, stünde dort der Text der `keyring`-Bibliothek.
+    #[test]
+    fn test_spec_0098_a5_credential_store_failure_names_only_secret_kind_and_hop() {
+        let named = SshError::CredentialStoreFailed {
+            secret: SecretKind::Passphrase,
+            hop: Some(HopLabel {
+                username: "deploy".to_string(),
+                host: "127.0.0.1".to_string(),
+                port: 2222,
+            }),
+        };
+
+        let message = named.to_string();
+        assert!(
+            message.starts_with("deploy@127.0.0.1:2222: "),
+            "die Hop-Angabe gehört nach vorn (Spec 0076, A-8): {message}"
+        );
+        assert!(
+            message.contains("Passphrase"),
+            "die Art des Secrets gehört in die Meldung: {message}"
+        );
+        assert!(
+            !message.contains("Netzwerk"),
+            "es ist kein Netzwerkfehler (A4): {message}"
+        );
+
+        // Ohne Hop bleibt derselbe Satz, nur ohne Präfix — kein leeres
+        // „: " und kein Platzhalter.
+        let unnamed = SshError::CredentialStoreFailed {
+            secret: SecretKind::Passphrase,
+            hop: None,
+        };
+        assert_eq!(
+            unnamed.to_string(),
+            "Zugriff auf den Schlüsselbund fehlgeschlagen (Passphrase)"
+        );
+    }
+
+    /// Spec 0098, A4: Der Code hängt an der Variante, nicht an Secret-Art
+    /// oder Hop — sonst müsste das Frontend für jede Secret-Art eine eigene
+    /// Übersetzung führen.
+    #[test]
+    fn test_spec_0098_credential_store_failure_code_is_the_same_for_every_secret_kind() {
+        for secret in [
+            SecretKind::Password,
+            SecretKind::PrivateKey,
+            SecretKind::Passphrase,
+            SecretKind::Certificate,
+            SecretKind::CertificateKey,
+        ] {
+            assert_eq!(
+                SshError::CredentialStoreFailed { secret, hop: None }.code(),
+                crate::profiles::KEYCHAIN_ACCESS_FAILED,
+            );
+        }
     }
 }

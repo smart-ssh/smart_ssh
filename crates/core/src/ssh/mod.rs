@@ -24,7 +24,7 @@ pub use auth::{
     resolve_auth, KeyFileContent, KeyFileError, KeyFileFacts, KeyFileReader, ResolvedAuth,
     MAX_KEY_FILE_BYTES,
 };
-pub use error::SshError;
+pub use error::{HopLabel, SecretKind, SshError};
 pub use host_key::HostKeyStore;
 pub use jump_host::resolve_connection_target;
 pub use transport::{InteractiveShell, SftpSession, SshTransport};

@@ -14,6 +14,7 @@ use serde::Serialize;
 use credentials_keyring::KeychainAvailability;
 use ssh_manager_core::entitlements::FeatureLocked;
 use ssh_manager_core::profiles::CredentialError;
+use ssh_manager_core::ssh::SshError;
 
 /// Spec 0071, A13: stabiler Code für "der OS-Schlüsselbund ist bei diesem
 /// Programmlauf nicht erreichbar". Das Frontend übersetzt ihn über
@@ -151,6 +152,46 @@ pub fn keychain_aware_credential_error(
         CredentialError::Backend(payload) => backend_failure_to_command_error(&payload, keychain),
         other => CommandError::from(other),
     }
+}
+
+/// Spec 0098, A4: dieselbe Entscheidung wie in
+/// [`keychain_aware_credential_error`], nur für einen Fehler, der die
+/// Verbindungskette durchlaufen hat.
+///
+/// `core` kennt den `AppState` nicht (§5) und vergibt über
+/// [`SshError::code`] deshalb [`KEYCHAIN_ACCESS_FAILED`] — die Fassung, die
+/// **nie** fälschlich „nicht verfügbar" behauptet. Hier, wo der Startzustand
+/// bekannt ist, wird daraus [`KEYCHAIN_UNAVAILABLE`], wenn der Schlüsselbund
+/// schon beim Start fehlte (A2).
+///
+/// **Nur [`SshError::CredentialStoreFailed`] wird umgedeutet.** Jede andere
+/// Variante behält ihren Code unverändert — insbesondere
+/// [`SshError::CredentialResolutionFailed`], unter der ein fehlender Eintrag
+/// (`NotFound`) weiterhin als `SSH_CREDENTIAL_RESOLUTION_FAILED` ankommt (A4
+/// letzter Satz, Spec 0071 I4).
+pub fn keychain_aware_ssh_error_code(
+    err: &SshError,
+    keychain: KeychainAvailability,
+) -> &'static str {
+    match err {
+        SshError::CredentialStoreFailed { .. } if !keychain.is_available() => KEYCHAIN_UNAVAILABLE,
+        other => other.code(),
+    }
+}
+
+/// Spec 0098, A4/A5: ein [`SshError`] als [`CommandError`], mit dem
+/// schlüsselbund-bewussten Code aus [`keychain_aware_ssh_error_code`].
+///
+/// Die `message` bleibt `SshError`s `Display`. Für
+/// [`SshError::CredentialStoreFailed`] ist das per Konstruktion fester Text
+/// plus Secret-Art plus Hop-Angabe (Spec 0076, A-8) — die Nutzlast der
+/// Bibliothek hat dort kein Feld (A5). Für jede andere Variante ändert sich
+/// gegenüber `CommandError::with_code(err.to_string(), err.code())` nichts.
+pub fn keychain_aware_ssh_error(err: &SshError, keychain: KeychainAvailability) -> CommandError {
+    CommandError::with_code(
+        err.to_string(),
+        keychain_aware_ssh_error_code(err, keychain),
+    )
 }
 
 #[derive(Debug, Serialize)]

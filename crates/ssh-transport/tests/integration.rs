@@ -18,7 +18,7 @@ use ssh_manager_core::profiles::{
 };
 use ssh_manager_core::ssh::{
     ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, KeyFileContent, KeyFileError,
-    KeyFileFacts, KeyFileReader, PtySize, SshError,
+    KeyFileFacts, KeyFileReader, PtySize, SecretKind, SshError,
 };
 use ssh_transport::ConnectOutcome;
 
@@ -725,6 +725,91 @@ async fn test_t6_3_6_a_failing_identity_file_names_the_hop() {
     );
     // Der stabile Code darf sich durch die Hop-Angabe nicht ändern.
     assert_eq!(err.code(), "SSH_CREDENTIAL_RESOLUTION_FAILED");
+}
+
+/// Ein `CredentialStore`, dessen `get` mit `CredentialError::Backend`
+/// scheitert — der Fall „der Schlüsselbund kann nicht antworten" (Spec 0098,
+/// Ebene V2).
+///
+/// Eigene Fassung hier statt `app_logic::test_support::InMemoryCredentialStore`:
+/// `ssh-transport` hängt nicht von `app-logic` ab (§7), und dieser
+/// Testbaustein soll keine neue Abhängigkeit in diese Richtung schaffen.
+struct KeychainFailingStore;
+
+const SPEC_0098_MARKER: &str = "LIBTEXT-0098 Geheim-0098";
+
+impl CredentialStore for KeychainFailingStore {
+    fn get(&self, _r: &CredentialRef) -> CredentialResult<SecretString> {
+        Err(CredentialError::Backend(SPEC_0098_MARKER.to_string()))
+    }
+    fn set(&self, _r: &CredentialRef, _value: SecretString) -> CredentialResult<()> {
+        Ok(())
+    }
+    fn delete(&self, _r: &CredentialRef) -> CredentialResult<()> {
+        Ok(())
+    }
+}
+
+/// Spec 0098, T6/T12a (A4/A5, **Ebene V2**): Der Fehler verlässt die
+/// Transport-Schicht als Schlüsselbund-Fehler erkennbar, ohne die Nutzlast
+/// der Bibliothek — und mit der Hop-Angabe aus Spec 0076, A-8.
+///
+/// Geprüft am **ersten** Hop, aus demselben Grund wie bei
+/// `test_t6_3_6_a_failing_identity_file_names_the_hop`: Der verschachtelte
+/// SSH-über-SSH-Handshake trägt in russh 0.63.1 nicht (ADR 0008), ein Fehler
+/// am zweiten Hop wäre nicht zuverlässig erreichbar. `name_hop` läuft für
+/// jeden Hop gleich, deshalb genügt der erste (§7, T12a).
+///
+/// Dies ist die einzige Ebene, die den Weg durch `ssh_transport::connect`
+/// **mit echter Verbindung** belegt: TCP, Handshake und Host-Key-Prüfung
+/// laufen vorher durch, und erst danach scheitert das Lesen des Secrets.
+///
+/// Scheitert am Stand vor dieser Spec: Dort gab es `CredentialStoreFailed`
+/// nicht, der Fehler kam als `CredentialResolutionFailed` mit
+/// „Passwort: Credential-Backend-Fehler: <Marker>" in der Meldung.
+#[tokio::test]
+async fn test_spec_0098_t12a_a_keychain_failure_leaves_the_transport_recognisable() {
+    let server = RunningTestServer::start().await;
+    let port = server.addr.port();
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", port)],
+    };
+
+    let err = connect_expecting_failure(
+        &target,
+        &KeychainFailingStore,
+        &PlainFileKeyReader,
+        trusted_host_keys(&server),
+        "ein nicht lesbares Secret darf keine Verbindung liefern",
+    )
+    .await;
+
+    let SshError::CredentialStoreFailed { secret, hop } = &err else {
+        panic!("erwartet CredentialStoreFailed, bekam {err:?}");
+    };
+    assert_eq!(*secret, SecretKind::Password);
+
+    // T12a: die Hop-Angabe bleibt, auch wenn der Fehler jetzt als
+    // Schlüsselbund-Fehler erkennbar ist.
+    let hop = hop.as_ref().expect("A-8: der Hop muss benannt sein");
+    assert_eq!(hop.to_string(), format!("{TEST_USERNAME}@127.0.0.1:{port}"));
+    assert!(
+        err.to_string()
+            .contains(&format!("{TEST_USERNAME}@127.0.0.1:{port}")),
+        "A-8: die Meldung muss den Hop nennen — {err}"
+    );
+
+    // A5: in keiner Darstellung des Fehlers — auch nicht im `Debug`, den eine
+    // Logzeile oder ein `panic!` abdrucken würde.
+    assert!(
+        !err.to_string().contains("LIBTEXT-0098")
+            && !err.to_string().contains("Geheim-0098")
+            && !format!("{err:?}").contains("Geheim-0098"),
+        "die Nutzlast der Bibliothek darf die Transport-Schicht nicht verlassen: {err:?}"
+    );
+
+    // A4: als Schlüsselbund-Fehler erkennbar, nicht als Auflösungsfehler.
+    assert_eq!(err.code(), "KEYCHAIN_ACCESS_FAILED");
 }
 
 /// Test 7: Verbindung zu einem nicht auflösbaren Hostnamen → `HostNotFound`

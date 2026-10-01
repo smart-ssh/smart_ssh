@@ -4,7 +4,7 @@ use russh::client;
 use russh::keys::{Certificate, PrivateKey, PrivateKeyWithHashAlg};
 use secrecy::{ExposeSecret, SecretString};
 use ssh_manager_core::profiles::CredentialStore;
-use ssh_manager_core::ssh::{resolve_auth, Hop, KeyFileReader, ResolvedAuth, SshError};
+use ssh_manager_core::ssh::{resolve_auth, Hop, HopLabel, KeyFileReader, ResolvedAuth, SshError};
 
 use crate::error::map_russh_error;
 use crate::handler::ClientHandler;
@@ -75,11 +75,11 @@ pub(crate) async fn authenticate(
 /// … wurde nicht gefunden" ist wertlos, wenn die Kette drei Rechner lang
 /// ist und offenbleibt, welcher gemeint war.
 ///
-/// Angereichert wird **nur** [`SshError::CredentialResolutionFailed`]:
-/// Jede andere Variante entsteht entweder gar nicht je Hop oder trägt
-/// keinen Text, in den etwas passte. Der stabile `code()` bleibt dabei
-/// unverändert — das Frontend-Mapping hängt nicht am Text (Spec 0024,
-/// Abschnitt 5).
+/// Angereichert werden **nur** [`SshError::CredentialResolutionFailed`] und
+/// (seit Spec 0098, A4) [`SshError::CredentialStoreFailed`]: Jede andere
+/// Variante entsteht entweder gar nicht je Hop oder trägt keine Stelle, in
+/// die etwas passte. Der stabile `code()` bleibt dabei unverändert — das
+/// Frontend-Mapping hängt nicht am Text (Spec 0024, Abschnitt 5).
 ///
 /// Benutzername, Host und Port sind keine Geheimnisse; Dateiinhalt oder
 /// Schlüsselmaterial kommen hier ohnehin nicht vorbei (5.2).
@@ -88,6 +88,24 @@ fn name_hop(error: SshError, hop: &Hop) -> SshError {
         SshError::CredentialResolutionFailed(message) => SshError::CredentialResolutionFailed(
             format!("{}@{}:{}: {message}", hop.username, hop.host, hop.port),
         ),
+        // Spec 0098, A4/T12a: dieselbe Benennung für den
+        // Schlüsselbund-Fehler — strukturiert, weil die Variante keinen
+        // freien Meldungstext hat, in den sich ein Präfix schreiben ließe
+        // (A5). `resolve_auth` liefert sie immer mit `hop: None`.
+        //
+        // **Ein schon benannter Hop bleibt stehen:** Der innerste Hop ist
+        // der, der gescheitert ist. `name_hop` läuft je Hop (s.
+        // `authenticate`) und der Fehler wandert sofort nach oben, der Fall
+        // tritt also heute nicht ein — überschreiben wäre aber genau die
+        // Art stiller Falschaussage, die hier nichts zu suchen hat.
+        SshError::CredentialStoreFailed { secret, hop: None } => SshError::CredentialStoreFailed {
+            secret,
+            hop: Some(HopLabel {
+                username: hop.username.clone(),
+                host: hop.host.clone(),
+                port: hop.port,
+            }),
+        },
         other => other,
     }
 }

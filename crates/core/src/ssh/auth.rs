@@ -2,9 +2,43 @@ use std::fmt;
 
 use secrecy::SecretString;
 
-use crate::profiles::{AuthMethod, CredentialStore};
+use crate::profiles::{AuthMethod, CredentialError, CredentialStore};
 
-use super::error::SshError;
+use super::error::{SecretKind, SshError};
+
+/// Spec 0098, A4/A5/A7: Was aus einem gescheiterten
+/// `credentials.get(...)` wird — der eine Ort in `core`, an dem diese
+/// Entscheidung fällt.
+///
+/// **Die Nutzlast von [`CredentialError::Backend`] endet hier.** Sie geht
+/// nur in eine `debug`-Zeile (A7; Spec 0094 nimmt Schlüsselbund-Fehlerwerte
+/// aus) und **nicht** in den `SshError` — dessen
+/// [`SshError::CredentialStoreFailed`] hat dafür gar kein Feld. Vorher stand
+/// sie über `format!("Passwort: {e}")` in der Meldung und reiste von dort
+/// unverändert bis ins Frontend (BL-0206).
+///
+/// **`NotFound` bleibt, wie es war** (A4 letzter Satz, Spec 0071 A14/I4):
+/// dieselbe Variante, dieselbe Meldung Zeichen für Zeichen, derselbe Code
+/// `SSH_CREDENTIAL_RESOLUTION_FAILED`. „Kein Eintrag" ist eine fachliche
+/// Aussage und keine Störung des Schlüsselbunds.
+fn credential_lookup_error(err: CredentialError, secret: SecretKind) -> SshError {
+    match err {
+        CredentialError::Backend(payload) => {
+            tracing::debug!(
+                secret = secret.label(),
+                error = %payload,
+                "credential store backend failure while resolving auth (Spec 0098, A7)"
+            );
+            SshError::CredentialStoreFailed { secret, hop: None }
+        }
+        // Weiterhin `{e}`, nicht nur die Variante: Die Meldung nennt die
+        // `CredentialRef`, und genau die braucht man, um einen von außen
+        // gelöschten Schlüsselbund-Eintrag zu finden.
+        not_found => {
+            SshError::CredentialResolutionFailed(format!("{}: {not_found}", secret.label()))
+        }
+    }
+}
 
 /// Obergrenze für eine Schlüsseldatei (Spec 0076, A-3): 1 MiB. Sie wird an
 /// **zwei** Stellen geprüft — am `fstat` des offenen Handles (die schnelle
@@ -210,7 +244,7 @@ pub fn resolve_auth(
         AuthMethod::Password { credential_ref } => {
             let secret = credentials
                 .get(credential_ref)
-                .map_err(|e| SshError::CredentialResolutionFailed(format!("Passwort: {e}")))?;
+                .map_err(|e| credential_lookup_error(e, SecretKind::Password))?;
             Ok(ResolvedAuth::Password(secret))
         }
         AuthMethod::PrivateKey {
@@ -219,22 +253,22 @@ pub fn resolve_auth(
         } => {
             let key = credentials
                 .get(credential_ref)
-                .map_err(|e| SshError::CredentialResolutionFailed(format!("Private Key: {e}")))?;
+                .map_err(|e| credential_lookup_error(e, SecretKind::PrivateKey))?;
             let passphrase = passphrase_ref
                 .as_ref()
                 .map(|r| credentials.get(r))
                 .transpose()
-                .map_err(|e| SshError::CredentialResolutionFailed(format!("Passphrase: {e}")))?;
+                .map_err(|e| credential_lookup_error(e, SecretKind::Passphrase))?;
             Ok(ResolvedAuth::PrivateKey { key, passphrase })
         }
         AuthMethod::Agent => Ok(ResolvedAuth::Agent),
         AuthMethod::Certificate { cert_ref, key_ref } => {
             let cert = credentials
                 .get(cert_ref)
-                .map_err(|e| SshError::CredentialResolutionFailed(format!("Zertifikat: {e}")))?;
+                .map_err(|e| credential_lookup_error(e, SecretKind::Certificate))?;
             let key = credentials
                 .get(key_ref)
-                .map_err(|e| SshError::CredentialResolutionFailed(format!("Key: {e}")))?;
+                .map_err(|e| credential_lookup_error(e, SecretKind::CertificateKey))?;
             Ok(ResolvedAuth::Certificate { cert, key })
         }
         // Spec 0076, A-2: bildet auf **dieselbe** Variante ab wie ein
@@ -256,7 +290,7 @@ pub fn resolve_auth(
                 .as_ref()
                 .map(|r| credentials.get(r))
                 .transpose()
-                .map_err(|e| SshError::CredentialResolutionFailed(format!("Passphrase: {e}")))?;
+                .map_err(|e| credential_lookup_error(e, SecretKind::Passphrase))?;
 
             // A-5: **Hier** fällt die Entscheidung, nicht beim Lesen. Die
             // Datei weiß nichts von `passphrase_ref`; läge die Prüfung im

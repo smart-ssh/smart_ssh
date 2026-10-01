@@ -22,7 +22,9 @@ use crate::dto::{AuthMethodInput, ServerInput, TestConnectionResult};
 use crate::ephemeral_credentials::EphemeralCredentialStore;
 use credentials_keyring::KeychainAvailability;
 
-use crate::error::{keychain_aware_credential_error, CommandError, CommandResult};
+use crate::error::{
+    keychain_aware_credential_error, keychain_aware_ssh_error_code, CommandError, CommandResult,
+};
 
 /// Spec 0084, §4 (Schnitt `test_connection` → `commands::SSH_CONNECT_TIMEOUT`):
 /// hierher verschoben, weil `test_connection` (Tauri-frei, zieht nach
@@ -216,9 +218,19 @@ async fn test_connection_with_timeout(
         },
         Err(SshError::AuthenticationFailed) => TestConnectionResult::AuthenticationFailed,
         Err(SshError::Timeout) => TestConnectionResult::Timeout,
+        // Spec 0098, A4: Die Variante des Ergebnisses bleibt `NetworkError`
+        // (§5: die Form von `TestConnectionResult` ändert sich nicht, es
+        // kommt nur ein Code-Wert hinzu) — der **Code** sagt jetzt aber den
+        // Schlüsselbund als Ursache, und das Frontend zeigt dafür weder
+        // „Netzwerkfehler" noch „Zugangsdaten konnten nicht aufgelöst
+        // werden".
+        //
+        // `message` kommt unverändert aus `SshError`s `Display`; für
+        // `CredentialStoreFailed` ist das per Konstruktion frei von der
+        // Nutzlast der Bibliothek (A5).
         Err(other) => TestConnectionResult::NetworkError {
             message: other.to_string(),
-            code: Some(other.code()),
+            code: Some(keychain_aware_ssh_error_code(&other, keychain)),
         },
     })
 }
@@ -576,6 +588,442 @@ mod tests {
             ai_injection_check_enabled: false,
             sftp_server_path: None,
         }
+    }
+
+    // --- Spec 0098, Ebene V1 (A4) ------------------------------------------
+    //
+    // §7: Ein Fehler ab dem zweiten Hop ist gegen den Testserver nicht
+    // zuverlässig erreichbar (`resolve_auth` läuft je Hop erst nach TCP,
+    // Handshake und Host-Key-Prüfung). Dieser `Connector` schließt die Lücke:
+    // Er ruft für **jeden** Hop die echte Auflösung `resolve_auth` mit dem
+    // Test-Store auf — dieselbe Funktion, die `ssh-transport` aufruft —, und
+    // benennt den Hop wie `ssh_transport::auth::name_hop`. Geprüft wird
+    // damit die Kette `CredentialStore` → `resolve_auth` → `SshError` →
+    // `TestConnectionResult`, ohne eine echte Verbindung.
+    struct ResolvingConnector;
+
+    #[async_trait]
+    impl Connector for ResolvingConnector {
+        async fn connect(
+            &self,
+            target: &ConnectionTarget,
+            credentials: &(dyn CredentialStore + Send + Sync),
+            key_files: &(dyn KeyFileReader + Send + Sync),
+            _host_keys: Arc<dyn HostKeyStore>,
+        ) -> Result<ConnectOutcome, SshError> {
+            for hop in &target.hops {
+                ssh_manager_core::ssh::resolve_auth(&hop.auth, credentials, key_files).map_err(
+                    |err| match err {
+                        // Dieselbe Benennung wie in
+                        // `ssh_transport::auth::name_hop` — der Prüfpunkt aus
+                        // Spec 0076, A-8 gilt auch hier.
+                        SshError::CredentialStoreFailed { secret, hop: None } => {
+                            SshError::CredentialStoreFailed {
+                                secret,
+                                hop: Some(ssh_manager_core::ssh::HopLabel {
+                                    username: hop.username.clone(),
+                                    host: hop.host.clone(),
+                                    port: hop.port,
+                                }),
+                            }
+                        }
+                        SshError::CredentialResolutionFailed(message) => {
+                            SshError::CredentialResolutionFailed(format!(
+                                "{}@{}:{}: {message}",
+                                hop.username, hop.host, hop.port
+                            ))
+                        }
+                        other => other,
+                    },
+                )?;
+            }
+            Ok(ConnectOutcome::Connected(Box::new(StubSshTransport)))
+        }
+    }
+
+    /// Ein gespeicherter Server mit Passwort-Anmeldung, optional hinter einem
+    /// weiteren Jump-Host.
+    fn stored_server(
+        id: ServerId,
+        name: &str,
+        password_ref: &ssh_manager_core::profiles::CredentialRef,
+        jump_host: Option<ServerId>,
+    ) -> ssh_manager_core::profiles::Server {
+        let now = chrono::Utc::now();
+        ssh_manager_core::profiles::Server {
+            id,
+            name: name.to_string(),
+            host: format!("{name}.invalid"),
+            port: 22,
+            username: format!("{name}user"),
+            group_id: None,
+            tags: Vec::new(),
+            auth: AuthMethod::Password {
+                credential_ref: password_ref.clone(),
+            },
+            notes: String::new(),
+            jump_host,
+            post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
+            sftp_server_path: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// Spec 0098, T5 (A4, Jump-Host, Ebene V1) — die Akzeptanz aus BL-0206.
+    /// Das Passwort-Lesen des Jump-Hosts scheitert mit einem Backend-Fehler;
+    /// das Ergebnis trägt `KEYCHAIN_ACCESS_FAILED` und keine Nutzlast.
+    ///
+    /// Scheitert am Stand vor dieser Spec: dort `SSH_CREDENTIAL_RESOLUTION_
+    /// FAILED` mit dem Marker in `message` („✗ Netzwerkfehler: Passwort:
+    /// …").
+    #[tokio::test]
+    async fn test_spec_0098_t5_a_failing_jump_host_secret_reports_the_keychain() {
+        let jump_id = ServerId::new();
+        let jump_ref = ssh_manager_core::profiles::CredentialRef::new("server:jump:password");
+        let profile_store = InMemoryProfileStore::new()
+            .with_server(stored_server(jump_id, "jump", &jump_ref, None));
+        let real_store = InMemoryCredentialStore::new()
+            .with_secret(&jump_ref, "jump-stored-secret")
+            .with_failing_get_for_slot("password")
+            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
+
+        let input = ServerInput {
+            jump_host: Some(jump_id),
+            ..password_input()
+        };
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &real_store,
+            &MockKeyFileReader::new(),
+            AVAILABLE,
+            Arc::new(NoOpHostKeyStore),
+            &ResolvingConnector,
+            input,
+            None,
+            Duration::from_millis(200),
+        )
+        .await
+        .expect("der Verbindungstest liefert ein Ergebnis, keinen CommandError");
+
+        let TestConnectionResult::NetworkError { message, code } = &result else {
+            panic!("erwartet NetworkError, bekam {result:?}");
+        };
+        assert_eq!(*code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert!(
+            !message.contains("LIBTEXT-0098") && !message.contains("Geheim-0098"),
+            "die Nutzlast der Bibliothek darf nicht im DTO stehen: {message}"
+        );
+        // Spec 0076, A-8: Welcher Hop es war, bleibt sichtbar.
+        assert!(
+            message.contains("jumpuser@jump.invalid:22"),
+            "die Hop-Angabe gehört in die Meldung: {message}"
+        );
+    }
+
+    /// Spec 0098, T5 (A2-Hälfte): derselbe Fall bei einem Schlüsselbund, der
+    /// schon beim Start fehlte → `KEYCHAIN_UNAVAILABLE`, weiterhin ohne
+    /// Nutzlast.
+    #[tokio::test]
+    async fn test_spec_0098_t5_a_failing_jump_host_secret_reports_unavailable_at_startup() {
+        let jump_id = ServerId::new();
+        let jump_ref = ssh_manager_core::profiles::CredentialRef::new("server:jump:password");
+        let profile_store = InMemoryProfileStore::new()
+            .with_server(stored_server(jump_id, "jump", &jump_ref, None));
+        let real_store = InMemoryCredentialStore::new()
+            .with_secret(&jump_ref, "jump-stored-secret")
+            .with_failing_get_for_slot("password")
+            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
+
+        let input = ServerInput {
+            jump_host: Some(jump_id),
+            ..password_input()
+        };
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &real_store,
+            &MockKeyFileReader::new(),
+            KeychainAvailability::Unavailable(
+                credentials_keyring::KeychainUnavailableReason::NoSecretServiceProvider,
+            ),
+            Arc::new(NoOpHostKeyStore),
+            &ResolvingConnector,
+            input,
+            None,
+            Duration::from_millis(200),
+        )
+        .await
+        .expect("der Verbindungstest liefert ein Ergebnis, keinen CommandError");
+
+        let TestConnectionResult::NetworkError { message, code } = &result else {
+            panic!("erwartet NetworkError, bekam {result:?}");
+        };
+        assert_eq!(*code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
+        assert!(
+            !message.contains("Geheim-0098"),
+            "die Nutzlast bleibt auch hier draußen: {message}"
+        );
+    }
+
+    /// Spec 0098, T7 (A4, `NotFound`): Fehlt der Eintrag des Jump-Hosts
+    /// ganz, bleibt es bei `SSH_CREDENTIAL_RESOLUTION_FAILED` — „kein
+    /// Eintrag" ist keine Störung des Schlüsselbunds (Spec 0071 A14/I4).
+    ///
+    /// Die Gegenprobe zu T5: Ohne sie könnte die Umstellung alle
+    /// Credential-Fehler als Schlüsselbund-Fehler melden und T5 wäre
+    /// trotzdem grün.
+    #[tokio::test]
+    async fn test_spec_0098_t7_a_missing_jump_host_entry_is_not_a_keychain_failure() {
+        let jump_id = ServerId::new();
+        let jump_ref = ssh_manager_core::profiles::CredentialRef::new("server:jump:password");
+        let profile_store = InMemoryProfileStore::new()
+            .with_server(stored_server(jump_id, "jump", &jump_ref, None));
+        // Kein `with_secret` und kein Fehler-Schalter: der Store antwortet,
+        // es gibt bloß nichts.
+        let real_store = InMemoryCredentialStore::new();
+
+        let input = ServerInput {
+            jump_host: Some(jump_id),
+            ..password_input()
+        };
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &real_store,
+            &MockKeyFileReader::new(),
+            AVAILABLE,
+            Arc::new(NoOpHostKeyStore),
+            &ResolvingConnector,
+            input,
+            None,
+            Duration::from_millis(200),
+        )
+        .await
+        .expect("der Verbindungstest liefert ein Ergebnis, keinen CommandError");
+
+        let TestConnectionResult::NetworkError { code, .. } = &result else {
+            panic!("erwartet NetworkError, bekam {result:?}");
+        };
+        assert_eq!(*code, Some("SSH_CREDENTIAL_RESOLUTION_FAILED"));
+    }
+
+    /// Spec 0098, T12 (adversarial, Ebene V1): Kette mit drei Hops, der
+    /// Fehler sitzt am **mittleren**. Der Code folgt A4 und die Meldung nennt
+    /// den mittleren Hop — nicht den ersten und nicht den letzten.
+    ///
+    /// Die Hops der Kette heißen unterschiedlich benannte Slots, damit der
+    /// Store gezielt nur einen davon verweigern kann; ein Test mit drei
+    /// gleichen Slots könnte nicht zeigen, **welcher** Hop gescheitert ist.
+    #[tokio::test]
+    async fn test_spec_0098_t12_a_three_hop_chain_names_the_middle_hop() {
+        let first_id = ServerId::new();
+        let middle_id = ServerId::new();
+        let first_ref = ssh_manager_core::profiles::CredentialRef::new("server:first:password");
+        let middle_ref = ssh_manager_core::profiles::CredentialRef::new("server:middle:middlepwd");
+
+        // `middle` hängt hinter `first`: resolve_connection_target baut
+        // daraus die Kette first → middle, der Formular-Hop kommt dahinter.
+        let profile_store = InMemoryProfileStore::new()
+            .with_server(stored_server(first_id, "first", &first_ref, None))
+            .with_server(stored_server(
+                middle_id,
+                "middle",
+                &middle_ref,
+                Some(first_id),
+            ));
+        let real_store = InMemoryCredentialStore::new()
+            .with_secret(&first_ref, "first-secret")
+            .with_secret(&middle_ref, "middle-secret")
+            .with_failing_get_for_slot("middlepwd")
+            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
+
+        let input = ServerInput {
+            jump_host: Some(middle_id),
+            ..password_input()
+        };
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &real_store,
+            &MockKeyFileReader::new(),
+            AVAILABLE,
+            Arc::new(NoOpHostKeyStore),
+            &ResolvingConnector,
+            input,
+            None,
+            Duration::from_millis(200),
+        )
+        .await
+        .expect("der Verbindungstest liefert ein Ergebnis, keinen CommandError");
+
+        let TestConnectionResult::NetworkError { message, code } = &result else {
+            panic!("erwartet NetworkError, bekam {result:?}");
+        };
+        assert_eq!(*code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert!(
+            message.contains("middleuser@middle.invalid:22"),
+            "der mittlere Hop muss benannt sein: {message}"
+        );
+        assert!(
+            !message.contains("firstuser@") && !message.contains("deploy@"),
+            "und zwar nur er: {message}"
+        );
+        assert!(
+            !message.contains("Geheim-0098"),
+            "die Nutzlast bleibt draußen: {message}"
+        );
+    }
+
+    /// Spec 0098, T13 (A4 für jede Secret-Art): Nicht nur „Passwort" — die
+    /// **Passphrase** eines Private Keys auf dem Jump-Host scheitert. A4
+    /// gilt für alle Arten aus `resolve_auth`; ohne diesen Test wäre nur der
+    /// Passwort-Zweig belegt.
+    #[tokio::test]
+    async fn test_spec_0098_t13_a_failing_jump_host_passphrase_reports_the_keychain() {
+        let jump_id = ServerId::new();
+        let key_ref = ssh_manager_core::profiles::CredentialRef::new("server:jump:private_key");
+        let passphrase_ref =
+            ssh_manager_core::profiles::CredentialRef::new("server:jump:passphrase");
+
+        let now = chrono::Utc::now();
+        let jump_server = ssh_manager_core::profiles::Server {
+            auth: AuthMethod::PrivateKey {
+                credential_ref: key_ref.clone(),
+                passphrase_ref: Some(passphrase_ref.clone()),
+            },
+            created_at: now,
+            updated_at: now,
+            ..stored_server(jump_id, "jump", &key_ref, None)
+        };
+        let profile_store = InMemoryProfileStore::new().with_server(jump_server);
+        let real_store = InMemoryCredentialStore::new()
+            .with_secret(&key_ref, "key-material")
+            .with_secret(&passphrase_ref, "phrase")
+            // Nur die Passphrase scheitert — der Key selbst wird gelesen.
+            // Das belegt, dass die Secret-Art mitgeführt wird und nicht
+            // pauschal der erste Lesefehler gemeldet wird.
+            .with_failing_get_for_slot("passphrase")
+            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
+
+        let input = ServerInput {
+            jump_host: Some(jump_id),
+            ..password_input()
+        };
+
+        let result = test_connection_with_timeout(
+            &profile_store,
+            &real_store,
+            &MockKeyFileReader::new(),
+            AVAILABLE,
+            Arc::new(NoOpHostKeyStore),
+            &ResolvingConnector,
+            input,
+            None,
+            Duration::from_millis(200),
+        )
+        .await
+        .expect("der Verbindungstest liefert ein Ergebnis, keinen CommandError");
+
+        let TestConnectionResult::NetworkError { message, code } = &result else {
+            panic!("erwartet NetworkError, bekam {result:?}");
+        };
+        assert_eq!(*code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert!(
+            message.contains("Passphrase"),
+            "die Art des Secrets gehört in die Meldung: {message}"
+        );
+        assert!(
+            !message.contains("Geheim-0098"),
+            "die Nutzlast bleibt draußen: {message}"
+        );
+    }
+
+    /// Spec 0098, T6 (A4, Ziel-Hop): **Der Ziel-Hop liest sein Secret nicht
+    /// in der Kette, sondern davor.** Das ist ein Befund zur Spec, die für
+    /// den Ziel-Hop „Ebene V1" vorsieht:
+    ///
+    /// - Ist das Formularfeld gefüllt, liegt das Secret im
+    ///   `EphemeralCredentialStore` — der scheitert nie, ein
+    ///   Schlüsselbund-Fehler kann dort gar nicht entstehen.
+    /// - Ist es leer, liest `resolve_final_hop_auth` das gespeicherte Secret
+    ///   **vor** dem Verbindungsversuch (`resolve_secret`). Der Fehler kommt
+    ///   dann als `CommandError`, nicht als `TestConnectionResult` — das ist
+    ///   der Weg, den T2 prüft.
+    ///
+    /// Dieser Test hält beide Hälften zusammen fest, damit der Befund nicht
+    /// als Lücke gelesen wird: Mit **demselben** auflösenden Connector wie
+    /// T5/T12/T13 kommt der Fehler des Ziel-Hops vorab und mit dem richtigen
+    /// Code — und mit gefülltem Feld läuft die Kette durch, obwohl der reale
+    /// Store für denselben Slot scheitert.
+    #[tokio::test]
+    async fn test_spec_0098_t6_the_target_hop_secret_is_resolved_before_the_chain() {
+        let existing_id = ServerId::new();
+        let password_ref = ssh_manager_core::profiles::CredentialRef::new("server:target:password");
+        let failing_real_store = || {
+            InMemoryCredentialStore::new()
+                .with_secret(&password_ref, "stored-secret")
+                .with_failing_get_for_slot("password")
+                .with_backend_payload("LIBTEXT-0098 Geheim-0098")
+        };
+        let profile_store = || {
+            InMemoryProfileStore::new().with_server(stored_server(
+                existing_id,
+                "target",
+                &password_ref,
+                None,
+            ))
+        };
+
+        // Hälfte 1 — leeres Feld: das gespeicherte Secret wird vorab gelesen,
+        // und genau das scheitert.
+        let err = test_connection_with_timeout(
+            &profile_store(),
+            &failing_real_store(),
+            &MockKeyFileReader::new(),
+            AVAILABLE,
+            Arc::new(NoOpHostKeyStore),
+            &ResolvingConnector,
+            ServerInput {
+                auth: AuthMethodInput::Password { value: None },
+                ..password_input()
+            },
+            Some(existing_id),
+            Duration::from_millis(200),
+        )
+        .await
+        .expect_err("ein nicht lesbares Ziel-Secret darf keinen Verbindungstest auslösen");
+
+        assert_eq!(err.code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert!(
+            !err.message.contains("Geheim-0098"),
+            "die Nutzlast bleibt draußen: {}",
+            err.message
+        );
+
+        // Hälfte 2 — gefülltes Feld: derselbe scheiternde Store, die Kette
+        // läuft trotzdem durch. Belegt, dass der Ziel-Hop in der Kette aus
+        // dem Ephemeral-Store liest und dort kein Schlüsselbund im Spiel ist.
+        let result = test_connection_with_timeout(
+            &profile_store(),
+            &failing_real_store(),
+            &MockKeyFileReader::new(),
+            AVAILABLE,
+            Arc::new(NoOpHostKeyStore),
+            &ResolvingConnector,
+            password_input(),
+            Some(existing_id),
+            Duration::from_millis(200),
+        )
+        .await
+        .expect("der Verbindungstest liefert ein Ergebnis, keinen CommandError");
+
+        assert!(
+            matches!(result, TestConnectionResult::Success),
+            "mit gefülltem Feld berührt der Ziel-Hop den Schlüsselbund nicht: {result:?}"
+        );
     }
 
     #[tokio::test]
