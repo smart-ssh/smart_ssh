@@ -9,7 +9,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generate-notices": "node ../../../scripts/generate-third-party-notices.mjs"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.20",

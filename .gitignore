@@ -57,3 +57,8 @@ Thumbs.db
 
 # lokaler Arbeitsstand der Coding-Agenten
 .agent/
+
+# Spec 0099, A1.7: beim Bau erzeugte Drittlizenz-Liste (Rust- und
+# npm-Abhängigkeiten, Schriften) — kein Quelltext, entsteht über
+# `npm run generate-notices` im Frontend.
+/apps/smart-ssh-community/frontend/public/third-party-notices.txt
