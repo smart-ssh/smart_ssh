@@ -9,6 +9,171 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-10-01
+
+### Added
+- Server-Profile lassen sich nach OpenSSH-`ssh_config` exportieren — für den
+  Umstieg auf ein anderes Werkzeug oder einfach als lesbares Backup. Die
+  erzeugte Datei wird von `ssh` selbst akzeptiert (geprüft mit `ssh -G`).
+  Nach dem Export zeigt eine Meldung den Pfad, umbenannte Servernamen (falls
+  ein Name keinen gültigen `Host`-Alias ergab) und die Zeile, mit der sich
+  die Datei in die eigene `~/.ssh/config` einbinden lässt.
+- Was sich nicht abbilden lässt — Gruppen, Schlagworte, Notizen,
+  Filterregeln, Sicherheitseinstellungen und die Art der Anmeldung —
+  verschwindet nicht stillschweigend: Für jeden betroffenen Server steht ein
+  Kommentar direkt über seinem Eintrag in der Datei.
+- Server-Profile lassen sich aus einer OpenSSH-`ssh_config` einlesen. Eine
+  Vorschau zeigt vorher vollständig, was entstehen würde — Felder samt
+  Herkunft, die gelesenen Dateien mit vollem Pfad, die entstehende
+  Ordnerstruktur, Namenskonflikte und jede Zeile, die **nicht** übernommen
+  wird. Einzelne Einträge lassen sich abwählen; wer abbricht, legt nichts
+  an. Ein zweiter Import derselben Datei erzeugt nichts doppelt.
+- `Include` wird mitgelesen, und jede eingebundene Datei wird ein
+  Unterordner. `ProxyJump` wird auf die Jump-Host-Verkettung abgebildet;
+  eine Kette, die sich im Kreis dreht, wird beim Import abgelehnt statt
+  erst beim Verbinden aufzufallen.
+- Bei einer `IdentityFile`-Zeile entscheidet der Nutzer, was geschehen
+  soll: den Pfad als Schlüsseldatei übernehmen (Vorgabe — die Datei wird
+  dabei nicht geöffnet), den Schlüssel einlesen und im Schlüsselbund
+  ablegen, oder die Zeile weglassen. Zeigt ein Pfad ins Leere, fällt nur
+  dieser eine Eintrag zurück; der Import läuft weiter und sagt, warum.
+- Neue Einstellung „Bei rotem Risiko immer nachfragen“ im
+  Risiko-Klassifizierer-Bereich, **standardmäßig an**. Ist sie an, verlangt
+  jeder KI-Vorschlag, den der Risiko-Indikator auf der Server- oder der
+  Daten-Achse als rot einstuft, immer eine Bestätigung — auch gegen eine
+  Allow-Regel. Wirkt erst ab der nächsten Verbindung.
+- Der Über-Bereich der Einstellungen hat jetzt einen Eintrag
+  „Drittanbieter-Lizenzen", der die Lizenztexte aller Rust- und
+  npm-Abhängigkeiten, der Build-Werkzeuge mit ausgeliefertem Code und der
+  mitgelieferten Schriften in einer scrollbaren Ansicht zeigt. Die Liste
+  wird bei jedem Release-Build neu erzeugt und ist offline lesbar; ein
+  Entwicklungs-Build zeigt stattdessen einen Hinweis, dass sie nur in
+  Release-Builds enthalten ist.
+
+### Changed
+- „Lokal öffnen" im Dateibrowser lehnt Dateien über 50 MB ab und weist auf
+  „Herunterladen" hin. Es entsteht dabei keine lokale Kopie.
+- Der automatisch erzeugte Titel einer Chat-Sitzung wird geschwärzt, bevor er
+  gespeichert wird. Der Titel steht als Einziges der Sitzung im Klartext in
+  der Datenbank — hatte die KI ein Passwort aus dem Gespräch in den Titel
+  übernommen, stand es dort bisher lesbar. Besteht der Titel danach nur noch
+  aus Platzhaltern, wird gar kein Titel gespeichert.
+- Schlägt die KI eine Notiz vor, wird ihr Vorschlag geschwärzt, **bevor** er
+  im Vergleichsdialog erscheint — im Chat, beim Trennen der Verbindung und
+  bei einem Vorschlag über MCP. Angezeigt, bestätigt und gespeichert wird
+  dieselbe Fassung. Bestand der Vorschlag ausschließlich aus erkannten
+  Zugangsdaten, entsteht kein Vorschlag, und die App sagt das.
+- Unverändert bleibt „In Notiz übernehmen": Was Sie selbst aus dem Chat in
+  eine Notiz übernehmen, wird nicht angetastet.
+
+### Fixed
+- Beim Wechsel der Anmeldeart gingen die bisherigen Zugangsdaten verloren,
+  wenn das Speichern scheiterte. Wer einen Server mit Passwort auf
+  „Zertifikat" umstellte und die Felder leer ließ, bekam zwar richtig eine
+  Fehlermeldung — das Passwort war danach aber aus dem Schlüsselbund
+  entfernt, während der Server weiter als Passwort-Anmeldung gespeichert
+  war. Er ließ sich nicht mehr verbinden, und nichts deutete darauf hin,
+  warum. Dasselbe galt, wenn der Schlüsselbund, das Sudo-Passwort oder das
+  Speichern selbst scheiterte. Zugangsdaten der bisherigen Anmeldeart
+  werden jetzt erst entfernt, nachdem die neue erfolgreich gespeichert ist.
+- Ein selbstgehosteter KI-Server mit kleinem Kontextfenster lieferte bei zu
+  großem Antwortbudget bisher einen Fehler statt einer Antwort. Die App
+  erkennt diesen Fall jetzt an der Fehlermeldung des Servers und wiederholt
+  die Anfrage einmal mit einem kleineren Budget.
+- Die Fehlermeldung „Kontext zu groß für den KI-Provider“ nennt jetzt die
+  Abhilfe: die Einstellung „Max. Antwortlänge (Tokens)“ niedriger setzen
+  oder einen neuen Chat beginnen.
+- Bei Anthropic unterschreitet der automatische Wiederholungsversuch nach
+  einer abgeschnittenen Antwort nicht mehr eine selbst eingestellte „Max.
+  Antwortlänge“.
+- Der `ssh_config`-Import folgt unter Windows jetzt jedem `Include`. Vorher
+  wurde jede eingebundene Datei stillschweigend übersprungen, weil das
+  Präfix, das Windows kanonischen Pfaden voranstellt, mit einem
+  Platzhalterzeichen verwechselt wurde.
+- Schlägt ein Zugriff auf den Systemschlüsselbund fehl, obwohl er beim Start
+  erreichbar war — weil er gesperrt ist oder der Zugriff abgelehnt wurde —,
+  dann erscheint jetzt eine erklärende Meldung in der Sprache der App statt
+  des rohen englischen Texts der Schlüsselbund-Bibliothek („No default store
+  has been set …"). Das betrifft das Speichern und Lesen von API-Keys,
+  Server-Passwörtern, Passphrasen und Sudo-Passwörtern.
+- Beim Verbindungsaufbau und beim Verbindungstest wird ein solcher Fehler
+  nicht mehr als „Netzwerkfehler" oder „Zugangsdaten konnten nicht aufgelöst
+  werden" angezeigt, sondern nennt den Schlüsselbund als Ursache. Das gilt
+  auch für eine Kette über Jump-Hosts.
+- Ein einzelner fehlgeschlagener Zugriff gilt nicht länger als „Schlüsselbund
+  nicht verfügbar". Die Meldung behauptet das nicht mehr, und der nächste
+  Zugriff gelingt wieder, sobald der Schlüsselbund antwortet. Fehlt der
+  Eintrag im Schlüsselbund schlicht, bleibt es weiterhin bei der bisherigen
+  Meldung „kein Eintrag gefunden" — das ist kein Fehler des Schlüsselbunds.
+
+### Security
+- Kein Export schreibt je ein Passwort, eine Passphrase oder Schlüsselinhalt
+  — nur, bei entsprechender Anmeldeart, den Pfad zu einer Schlüsseldatei.
+  Ein Server, dessen Schlüssel im Schlüsselbund liegt, verliert dabei keine
+  Information stillschweigend: Der Kommentar über seinem Eintrag sagt, dass
+  der Schlüssel fehlt und warum.
+- Der Export lehnt die eigene `~/.ssh/config` als Ziel ab — auch wenn sie im
+  Speichern-Dialog ausdrücklich gewählt und ein Überschreiben bestätigt
+  wird. Diese Datei wird nie angerührt.
+- Der lokale Pseudo-Server erscheint nie in der exportierten Datei.
+- Der Import öffnet von sich aus ausschließlich `ssh_config`-Dateien. Eine
+  Schlüsseldatei wird nur gelesen, wenn man das ausdrücklich verlangt, erst
+  beim Bestätigen, und nur die Dateien, die die Vorschau vorher namentlich
+  genannt hat.
+- Aus einer eingelesenen Datei gelangt kein Inhalt auf den Bildschirm: Eine
+  eingebundene Datei, die keine `ssh_config` ist, wird mit ihrem Pfad
+  gemeldet und übersprungen; von einer nicht übernommenen Zeile erscheint
+  nur der Name der Direktive mit Zeilennummer, nie ihr Wert.
+- Eine importierte Datei kann keine Sicherheitseinstellung eines Profils
+  setzen — Eskalation nach Serverinhalt und KI-Prüfung stehen immer auf den
+  Vorgaben des Produkts.
+- Übermäßig große, tief verschachtelte oder sich selbst einbindende
+  Konfigurationen führen zu einer verständlichen Meldung statt zu einem
+  hängenden oder abstürzenden Programm.
+- Schaltet man den erhöhten Dateibrowser-Modus während einer laufenden
+  Aktion (z. B. rekursives Löschen oder Rechte-Ändern) aus, bricht diese
+  Aktion jetzt sofort ab.
+- Die 256-KB-Grenze von „Dateiinhalt kopieren" im Dateibrowser hält jetzt
+  auch, wenn die Datei zwischen Größenprüfung und Lesen wächst oder sich ihre
+  Größe nicht ermitteln lässt.
+- Die TLS-Bibliothek für die Verbindungen zu KI-Anbietern (`rustls`) ist auf
+  0.23.45 aktualisiert und behebt damit RUSTSEC-2026-0285 (TLS-1.3-Handshake-
+  Nachrichten wurden über Verschlüsselungsebenen hinweg akzeptiert).
+- Hebt die optionale KI-Zweitmeinung das Daten-Risiko nachträglich auf Rot —
+  also erst, nachdem ein Vorschlag bereits als „läuft automatisch“
+  angekündigt war —, läuft die Aktion nicht mehr automatisch, sondern
+  verlangt wie jede andere Bestätigung einen Klick.
+- Die Logdatei enthält auf dem Standard-Level keine Inhalte mehr: kein
+  Kommando, keine Kommando-Ausgabe, keinen Chat-, Notiz- oder Prompt-Text,
+  keine Werkzeug-Argumente und keine Fehlermeldung einer KI- oder
+  SSH-Verbindung. Dort stehen nur noch inhaltsfreie Angaben — IDs,
+  Entscheidung, gegriffene Regel, Längen, Exit-Code, Fehlercodes. Das gilt
+  unabhängig davon, ob ein Passwort in einer Form geschrieben ist, die die
+  automatische Unterdrückung erkennt. Wer die Inhalte zur Fehlersuche
+  braucht, startet die App mit `RUST_LOG=debug`; dort laufen sie weiter
+  durch die Unterdrückung. Einzige Ausnahme bleibt die Antwort eines
+  KI-Anbieters auf einen Fehler — sie wird gebraucht, um eine
+  Fehlkonfiguration zu erkennen, und steht unterdrückt und auf 512 Zeichen
+  gekürzt im Log.
+- Passwörter, die als Argument eines Kommandozeilenprogramms übergeben
+  werden, werden jetzt geschwärzt, bevor ein Kommando oder seine Ausgabe in
+  den KI-Kontext, ins Protokoll, in den Chat oder zu einem MCP-Client geht:
+  `mysql`/`mariadb`/`mysqldump`/`mysqladmin` mit angehängtem `-p`, `sshpass -p`,
+  `curl -u benutzer:passwort`, `htpasswd -b`, `redis-cli -a`,
+  `smbclient -U benutzer%passwort` sowie `openssl -pass pass:…` und
+  `openssl -k`. Programm, Schalter und Benutzername bleiben lesbar — nur der
+  Wert verschwindet.
+- Zusätzlich erkannt: Twilio-API-Schlüssel, SendGrid-Schlüssel, die
+  Schlüssel in Azure-Verbindungszeichenketten (`AccountKey=`,
+  `SharedAccessKey=`), Argon2- und phpass-Passwort-Hashes sowie JSON-Web-Token
+  ohne `Bearer`-Präfix.
+- Die Abfrage bei einem unbekannten oder geänderten Host-Schlüssel lässt sich
+  jetzt vollständig mit der Tastatur bedienen: Beim Öffnen liegt der Fokus
+  auf der ablehnenden Schaltfläche, Tab verlässt den Dialog nicht mehr, und
+  Escape lehnt die Verbindung ab (nie „vertrauen“). Eine aus einem vorherigen
+  Dialog gehaltene Eingabetaste entscheidet nichts mehr automatisch.
+  Screenreader sagen den Dialog jetzt als modal an.
+
 ## [0.5.1] — 2026-09-25
 
 ### Added
