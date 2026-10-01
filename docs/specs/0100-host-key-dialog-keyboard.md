@@ -1,6 +1,6 @@
 # Spec 0100 — Host-Key-Dialog: modal angesagt, Fokus gefangen, Escape lehnt ab
 
-Status: Vorschlag (Architekt) · Backlog: BL-0232 · Gate: release-1.0/A
+Status: freigegeben · Backlog: BL-0232 · Gate: release-1.0/A
 Zweck: Die Host-Key-Abfrage (unbekannt und geändert) ist allein mit der Tastatur sicher bedienbar — beim Öffnen liegt der Fokus auf der ablehnenden Schaltfläche, Tab verlässt den Dialog nicht, Escape lehnt ab, und Screenreader sagen ihn als modalen Dialog an.
 Review-Priorität: ERHÖHT (Ausführungspfad: Bestätigung einer Verbindung)
 
