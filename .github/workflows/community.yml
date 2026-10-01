@@ -110,15 +110,16 @@ jobs:
         working-directory: apps/smart-ssh-community/frontend
         run: npm ci
 
-      # Spec 0099, A3.1: das Drittlizenz-Skript läuft bei jedem CI-Lauf
-      # mindestens einmal und macht den Job rot, wenn es scheitert — eine
-      # Plattform genügt (die Ausgabe hängt nicht vom Betriebssystem ab,
-      # s. Spec, Abschnitt 5), deshalb nur hier auf ubuntu-latest. Dieselbe
-      # feste Version wie in `scripts/generate-third-party-notices.mjs`
+      # Spec 0099, A3.1 (erweitert durch Klarstellung Abschnitt 9,
+      # 2026-10-01): das Drittlizenz-Skript läuft bei jedem CI-Lauf auf
+      # **allen drei** Matrix-Plattformen, nicht nur auf einer — ein
+      # Release-Lauf unter Windows war an einem PowerShell-spezifischen
+      # Encoding-Problem gescheitert, das auf Linux/macOS unsichtbar blieb.
+      # Dieselbe feste Version wie in
+      # `scripts/generate-third-party-notices.mjs`
       # (`EXPECTED_CARGO_ABOUT_VERSION`, A1.6) — ein Auseinanderlaufen fällt
       # dort als Abbruch auf, nicht erst als stiller Unterschied.
       - name: Install cargo-about
-        if: matrix.os == 'ubuntu-latest'
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-about@0.9.2
@@ -128,7 +129,6 @@ jobs:
       # nur gegen ihren eigenen Skip-Zweig laufen. Kein `continue-on-error`:
       # ein Lizenz-/Werkzeug-Fehler hier färbt den Job rot (A1.3, A3.1).
       - name: Generate third-party license notices
-        if: matrix.os == 'ubuntu-latest'
         working-directory: apps/smart-ssh-community/frontend
         run: npm run generate-notices
 
