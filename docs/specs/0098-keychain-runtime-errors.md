@@ -1,6 +1,6 @@
 # Spec 0098 — Schlüsselbund-Fehler zur Laufzeit ohne Bibliothekstext
 
-Status: Vorschlag (Architekt) · Backlog: BL-0244, BL-0205, BL-0206 · Gate: release-1.0/A
+Status: freigegeben · Backlog: BL-0244, BL-0205, BL-0206 · Gate: release-1.0/A
 Zweck: Jeder Fehler des Schlüsselbunds, der nach dem Start auftritt, erreicht das Frontend als übersetzte Meldung mit stabilem Code und ohne den Text der `keyring`-Bibliothek, und eine einzelne Ablehnung ändert den Verfügbarkeitszustand nicht.
 Review-Priorität: ERHÖHT
 
