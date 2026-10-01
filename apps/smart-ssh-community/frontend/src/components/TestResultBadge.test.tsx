@@ -42,6 +42,32 @@ describe("TestResultBadge (Spec 0069, Teil A5)", () => {
     expect(screen.getByText("✗ Netzwerkfehler: some raw backend text")).toBeInTheDocument();
   });
 
+  // Spec 0098, T8 (A4/A5/A6): Der Verbindungstest meldet einen
+  // Schlüsselbund-Fehler als `networkError` mit `KEYCHAIN_ACCESS_FAILED` —
+  // die Variante des Ergebnisses bleibt (§5), der Code trägt die Aussage.
+  // Die Anzeige darf deshalb weder „Netzwerkfehler" sagen (es ist keiner)
+  // noch den rohen Backend-Text zeigen. `message` enthält hier den
+  // `Display`-Text aus `core`; die Nutzlast der Bibliothek steht seit
+  // Commit 2 nicht mehr darin, aber angezeigt werden darf auch dieser Text
+  // nicht.
+  //
+  // *Gegenbeweis:* ohne den Eintrag in `KNOWN_ERROR_CODES` greift
+  // `translateErrorCode` auf den Fallback zurück und die Zeile lautet
+  // „✗ Netzwerkfehler: deploy@jump.example:22: Zugriff auf den
+  // Schlüsselbund fehlgeschlagen (Passwort)" — beide Erwartungen unten
+  // schlagen dann fehl.
+  it("shows the keychain reason for a networkError, not a network error text", () => {
+    renderBadge({
+      kind: "networkError",
+      message: "deploy@jump.example:22: Zugriff auf den Schlüsselbund fehlgeschlagen (Passwort)",
+      code: "KEYCHAIN_ACCESS_FAILED",
+    });
+
+    expect(screen.getByText(/gesperrt/)).toBeInTheDocument();
+    expect(screen.queryByText(/Netzwerkfehler/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/deploy@jump\.example:22/)).not.toBeInTheDocument();
+  });
+
   it("still shows the plain success text unaffected by the code change", () => {
     renderBadge({ kind: "success" });
 

@@ -77,6 +77,43 @@ describe("translateErrorCode", () => {
       expect(text).toMatch(/passphrase/i);
     },
   );
+
+  // Spec 0098, T8 (A6): Derselbe Weg für den neuen Code. Der Fallback wäre
+  // hier der `Display`-Text aus `core` — der ist zwar seit Spec 0098 frei von
+  // der Nutzlast der Bibliothek, aber deutsch und technisch („Zugriff auf den
+  // Schlüsselbund fehlgeschlagen (Passphrase)"). Ohne den Eintrag in
+  // `KNOWN_ERROR_CODES` sähe ein Nutzer mit englischer UI genau den.
+  it.each(["de", "en"] as const)(
+    "übersetzt KEYCHAIN_ACCESS_FAILED (%s) statt den Backend-Text zu zeigen",
+    (language) => {
+      const raw = "Zugriff auf den Schlüsselbund fehlgeschlagen (Passphrase)";
+      const text = translateErrorCode(testI18n.getFixedT(language), "KEYCHAIN_ACCESS_FAILED", raw);
+
+      expect(text).not.toBe(raw);
+      // A6: sagt, was zu tun ist, und nennt die wahrscheinlichen Ursachen.
+      expect(text).toMatch(language === "de" ? /erneut/i : /again/i);
+      expect(text).toMatch(language === "de" ? /gesperrt|abgelehnt/i : /locked|denied/i);
+      // A6: **nicht** „nicht verfügbar" — der Schlüsselbund ist da, dieser
+      // eine Zugriff ist gescheitert (A3). Und keine Paket- oder
+      // Installationshinweise.
+      expect(text).not.toMatch(language === "de" ? /nicht verfügbar/i : /unavailable/i);
+      expect(text).not.toMatch(/installier|install|paket|package|apt|brew/i);
+    },
+  );
+
+  // Spec 0098, T8/A6: Die beiden Schlüsselbund-Codes sind unterschiedliche
+  // Aussagen und dürfen nicht denselben Text bekommen — sonst wäre der
+  // ganze Unterschied zwischen A1 und A2 für den Nutzer unsichtbar.
+  it.each(["de", "en"] as const)(
+    "unterscheidet KEYCHAIN_ACCESS_FAILED von KEYCHAIN_UNAVAILABLE (%s)",
+    (language) => {
+      const t = testI18n.getFixedT(language);
+
+      expect(translateErrorCode(t, "KEYCHAIN_ACCESS_FAILED", "fallback")).not.toBe(
+        translateErrorCode(t, "KEYCHAIN_UNAVAILABLE", "fallback"),
+      );
+    },
+  );
 });
 
 // Spec 0069, Teil A, Test 18: jeder Code des Fünf-Minuten-Pfads ist in

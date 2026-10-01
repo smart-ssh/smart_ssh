@@ -133,6 +133,15 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // been set, so cannot search or create entries") — genau der Fehler, den
   // BL-0031 beanstandet.
   "KEYCHAIN_UNAVAILABLE",
+  // Spec 0098, A6: der Gegenstück-Code zu `KEYCHAIN_UNAVAILABLE` für den
+  // Fall, dass der Schlüsselbund beim Start **da** war und erst jetzt nicht
+  // antwortet — gesperrt, Dialog abgelehnt, Plattformfehler. Ohne diesen
+  // Eintrag zeigte das Frontend den rohen Text der `keyring`-Bibliothek
+  // (BL-0244) bzw. „✗ Netzwerkfehler: Passwort: No default store …"
+  // (BL-0206). Der Text sagt bewusst **nicht** „nicht verfügbar": Der
+  // Schlüsselbund ist vorhanden, dieser eine Zugriff ist gescheitert, und
+  // der nächste kann gelingen (A3).
+  "KEYCHAIN_ACCESS_FAILED",
   // Spec 0077, 3.1.4/3.1.6: Das Muster einer Filterregel lässt sich nicht
   // übersetzen. Im Regel-Formular steht unter dem übersetzten Satz
   // zusätzlich der Fehlertext der Bibliothek (er nennt die Stelle im

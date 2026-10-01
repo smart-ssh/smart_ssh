@@ -475,7 +475,8 @@
     "SERVER_NOT_AN_IDENTITY_FILE": "This server does not log in with a key file",
     "IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND": "The key was already written to the keychain but could not be removed again after a failure — the entry stayed behind and must be removed by hand.",
     "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "The first-run notice must be acknowledged first",
-    "KEYCHAIN_UNAVAILABLE": "The system keyring is unavailable. While this is the case, no API key, no server password, no passphrase and no sudo password can be saved or read. The diagnostics view in the settings shows the exact reason and the next step."
+    "KEYCHAIN_UNAVAILABLE": "The system keyring is unavailable. While this is the case, no API key, no server password, no passphrase and no sudo password can be saved or read. The diagnostics view in the settings shows the exact reason and the next step.",
+    "KEYCHAIN_ACCESS_FAILED": "Access to the system keyring failed. It may be locked, or access was denied. Please try again — the exact reason is in the log."
   },
   "mcpServer": {
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",
