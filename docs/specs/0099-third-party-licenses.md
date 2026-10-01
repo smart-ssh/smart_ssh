@@ -237,6 +237,16 @@ Keine. Entschieden: Erzeugung beim Release-Bau statt eingecheckter Datei.
 
 ## 9. Klarstellungen
 
+- **2026-10-01 · Release-Lauf v0.5.2, Windows rot** · Unter PowerShell
+  bricht `cargo about generate` ab, wenn seine Ausgabe nicht per
+  `-o`/`--output-file` in eine Datei geht („should not redirect its output
+  in powershell“). Das Skript schreibt die Ausgabe von `cargo-about` deshalb
+  in eine Datei und liest sie von dort. Ebenso startet es `npm` unter
+  Windows so, dass `npm.cmd` gefunden wird. **A3.1 wird erweitert:** Die
+  Community-CI fährt das Skript auf **allen drei** Plattformen ihrer Matrix,
+  nicht nur auf einer, damit ein Plattformfehler vor dem Release-Lauf
+  auffällt.
+
 ## Umsetzung
 
 **Teil 0:** entfällt.
