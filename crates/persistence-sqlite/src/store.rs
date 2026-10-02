@@ -12,7 +12,7 @@ use ssh_manager_core::profiles::{
 };
 use ssh_manager_core::shared::ServerId;
 
-use crate::error::PersistenceResult;
+use crate::error::{PersistenceError, PersistenceResult};
 use crate::mapping::{
     auth_method_from_json, auth_method_to_json, parse_timestamp, parse_uuid,
     post_ingest_policy_from_text, post_ingest_policy_to_text,
@@ -63,7 +63,65 @@ impl SqliteProfileStore {
     /// `PRAGMA foreign_keys`. Legt fehlende Elternverzeichnisse von
     /// `db_path` an, damit ein frischer App-Datenordner (erster Start) nicht
     /// manuell vorbereitet werden muss.
-    pub async fn connect(db_path: &Path) -> PersistenceResult<Self> {
+    /// **Unverschlüsselt** — seit Spec 0101 (A1/A2) nicht mehr der Weg, den
+    /// die App beim Start nimmt; der ist
+    /// [`Self::connect_encrypted`]. Diese Fassung bleibt für Tests, für das
+    /// Beispiel `add_test_server` und als Baustein der Umwandlung (A6)
+    /// bestehen.
+    ///
+    /// **Der Name sagt es absichtlich:** Ein Aufruf dieser Funktion im
+    /// Startpfad wäre „Weiterlauf im Klartext" und damit genau das, was §6
+    /// („Keine stillen Rückfälle") verbietet. `connect` hieß sie bis Spec
+    /// 0101 — ein Aufrufer, der den alten Namen benutzt, scheitert jetzt an
+    /// der Kompilierung statt still eine Klartext-Datenbank anzulegen.
+    pub async fn connect_plaintext(db_path: &Path) -> PersistenceResult<Self> {
+        let options = SqliteConnectOptions::new()
+            .filename(db_path)
+            .create_if_missing(true);
+        Self::connect_prepared(db_path, options, false).await
+    }
+
+    /// Spec 0101, A2/A4/A8: öffnet die Datei mit dem aus dem Wurzelschlüssel
+    /// abgeleiteten Datenbankschlüssel.
+    ///
+    /// **A4 — die Lesbarkeit wird vor `migrate!` geprüft.** Ohne diese
+    /// Prüfung käme für einen Schlüssel-Fall der Fehler aus dem
+    /// Migrationslauf zurück: gemessen `code 7 „out of memory"` (s. Spec
+    /// 0101 §1). Das ist für einen Nutzer eine Falschauskunft und für den
+    /// Startdialog nicht von „Datenbank beschädigt" zu unterscheiden.
+    /// Deshalb zuerst eine billige Leseabfrage, deren Fehlschlag als
+    /// [`PersistenceError::NotReadableWithKey`] zurückkommt — die Grundlage
+    /// für Dialog D2.
+    ///
+    /// Der Aufrufer hat zu diesem Zeitpunkt bereits entschieden, dass die
+    /// Datei entweder fehlt oder verschlüsselt ist (Tabelle A3); eine
+    /// Klartext-Datei muss **vor** diesem Aufruf umgewandelt sein
+    /// ([`crate::convert_plaintext_database`]), sonst ist sie hier
+    /// schlicht nicht lesbar.
+    pub async fn connect_encrypted(
+        db_path: &Path,
+        key: &ssh_manager_core::crypto::DatabaseKey,
+    ) -> PersistenceResult<Self> {
+        let options = crate::encryption::encrypted_connect_options(db_path, key);
+        // A2: Ein Fehler aus diesem Aufruf kann die Anweisung zitieren, die
+        // ihn ausgelöst hat — und das ist auf diesem Weg die Anweisung mit
+        // dem Schlüssel (gemessen, s. `encryption::contains_key_material`).
+        // Deshalb läuft **jeder** Fehler dieses Wegs durch die Prüfung, nicht
+        // nur die, bei denen es naheliegt.
+        Self::connect_prepared(db_path, options, true)
+            .await
+            .map_err(|err| crate::encryption::redact_if_key_bearing(err, key))
+    }
+
+    /// Der gemeinsame Rumpf von [`Self::connect_plaintext`] und
+    /// [`Self::connect_encrypted`]: Verzeichnis- und Datei-Proben (Spec
+    /// 0059, Fall 4), Pool aufbauen, bei `probe_readable` die Lesbarkeit
+    /// prüfen (A4), migrieren, Rechte setzen.
+    async fn connect_prepared(
+        db_path: &Path,
+        options: SqliteConnectOptions,
+        probe_readable: bool,
+    ) -> PersistenceResult<Self> {
         if let Some(parent) = db_path.parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent).map_err(sqlx::Error::Io)?;
@@ -104,10 +162,7 @@ impl SqliteProfileStore {
                 .map_err(sqlx::Error::Io)?;
         }
 
-        let options = SqliteConnectOptions::new()
-            .filename(db_path)
-            .create_if_missing(true);
-        let store = Self::connect_with(options).await?;
+        let store = Self::connect_with_probe(options, probe_readable).await?;
         #[cfg(unix)]
         {
             if db_path.exists() {
@@ -133,7 +188,23 @@ impl SqliteProfileStore {
     /// eigene, isolierte Datenbank, sodass ein Pool mit mehr als einer
     /// Verbindung Schreib-/Lesezugriffe zwischen verschiedenen Connections
     /// unsichtbar zueinander machen würde.
+    ///
+    /// Seit Spec 0101 `#[cfg(test)]`: Der Produktivpfad geht über
+    /// [`Self::connect_encrypted`], und `connect_with` lässt den Schlüssel
+    /// frei — ein Aufruf aus Produktivcode wäre genau der „Weiterlauf im
+    /// Klartext", den §6 verbietet. `cargo build --workspace` (ohne
+    /// `test-support`) fängt ihn jetzt ab.
+    #[cfg(test)]
     pub(crate) async fn connect_with(options: SqliteConnectOptions) -> PersistenceResult<Self> {
+        Self::connect_with_probe(options, false).await
+    }
+
+    /// Wie [`Self::connect_with`], zusätzlich mit der Lesbarkeitsprüfung aus
+    /// A4 (s. [`Self::connect_encrypted`]).
+    pub(crate) async fn connect_with_probe(
+        options: SqliteConnectOptions,
+        probe_readable: bool,
+    ) -> PersistenceResult<Self> {
         // `foreign_keys` ist eine PRO-VERBINDUNG-Pragma, kein Pool-weiter
         // Zustand — ein `PRAGMA foreign_keys = ON` einmalig gegen den Pool
         // ausgeführt (die vorherige Fassung) wirkt nur auf die eine
@@ -152,6 +223,35 @@ impl SqliteProfileStore {
             .max_connections(1)
             .connect_with(options)
             .await?;
+
+        // Spec 0101, A4: die Lesbarkeit **vor** der Migration prüfen. Eine
+        // Abfrage auf `sqlite_master` ist der billigste Zugriff, der den
+        // Dateikopf tatsächlich entschlüsseln muss — `connect_with` selbst
+        // öffnet die Datei nur und liest ihren Inhalt noch nicht (derselbe
+        // gemessene Mechanismus wie in `error.rs`, s. dortiger Kommentar zu
+        // `code 26`).
+        //
+        // Der Fehler wird **nicht** weitergegeben: Sein Text käme aus
+        // SQLite („file is not a database") und wäre im Startdialog nicht
+        // von einer beschädigten Datei zu unterscheiden. Stattdessen ein
+        // eigener Fehler ohne Nutzlast — kein Schlüsselmaterial, kein
+        // Bibliothekstext (A2).
+        if probe_readable {
+            if let Err(err) = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM sqlite_master")
+                .fetch_one(&pool)
+                .await
+            {
+                tracing::warn!(
+                    // `err` ist der Fehler der Leseabfrage, nicht des
+                    // Verbindungsaufbaus — er kann den `PRAGMA key`-Wert
+                    // nicht zitieren (die Abfrage enthält ihn nicht).
+                    error = %err,
+                    "database is not readable with the derived key"
+                );
+                pool.close().await;
+                return Err(PersistenceError::NotReadableWithKey);
+            }
+        }
 
         // Spec 0047, Fund B1: eigene Log-Zeilen für Start/Ende der
         // Migration — ein von hier aus für einen Tester nicht

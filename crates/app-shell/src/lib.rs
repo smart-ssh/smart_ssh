@@ -82,8 +82,9 @@ fn build_app_state(
     // nächster Schritt, s. `startup_error_messages::db_connect_failure_
     // text`), dann sauberes Beenden — kein Weiterlaufen in einen kaputten
     // Zustand (Spec 0059, Invarianten).
-    let profile_store = match tauri::async_runtime::block_on(SqliteProfileStore::connect(&db_path))
-    {
+    let profile_store = match tauri::async_runtime::block_on(SqliteProfileStore::connect_plaintext(
+        &db_path,
+    )) {
         Ok(store) => store,
         Err(err) => {
             let kind = err.classify();

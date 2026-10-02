@@ -860,7 +860,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let db_path = dir.path().join("t641.db");
-        let store = persistence_sqlite::SqliteProfileStore::connect(&db_path)
+        let store = persistence_sqlite::SqliteProfileStore::connect_plaintext(&db_path)
             .await
             .expect("temporäre SQLite-Datenbank muss sich öffnen lassen");
 

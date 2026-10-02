@@ -14,6 +14,15 @@
 //! ```text
 //! cargo run -p persistence-sqlite --example add_test_server -- <name> <host> <port> <username>
 //! ```
+//!
+//! **Seit Spec 0101 nur noch für eine unverschlüsselte Datenbank**: Die App
+//! verschlüsselt ihre Datei (A1/A2), und der Schlüssel liegt im
+//! OS-Schlüsselbund — den dieses Beispiel bewusst nicht anfasst, weil es
+//! sonst einen Wurzelschlüssel erzeugen könnte, den es gar nicht erzeugen
+//! soll (A3: „Ein neuer K entsteht nur …"). Gegen eine verschlüsselte Datei
+//! scheitert der Aufruf deshalb mit einem Verbindungsfehler. Nutzbar bleibt
+//! es gegen ein eigenes Verzeichnis (`SMART_SSH_DATA_DIR`) mit einer
+//! unverschlüsselten Datei.
 
 use chrono::Utc;
 
@@ -33,7 +42,7 @@ async fn main() {
         .expect("port muss eine Zahl zwischen 0 und 65535 sein");
 
     let db_path = default_db_path();
-    let store = SqliteProfileStore::connect(&db_path)
+    let store = SqliteProfileStore::connect_plaintext(&db_path)
         .await
         .expect("Verbindung zur App-Datenbank fehlgeschlagen");
 

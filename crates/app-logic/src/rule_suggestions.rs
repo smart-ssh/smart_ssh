@@ -191,10 +191,11 @@ mod tests {
     #[tokio::test]
     async fn test_spec_0077_t6a_quick_rule_rejects_an_invalid_glob_and_stores_nothing() {
         let dir = tempfile::tempdir().unwrap();
-        let store = persistence_sqlite::SqliteProfileStore::connect(&dir.path().join("test.db"))
-            .await
-            .unwrap()
-            .policy_store();
+        let store =
+            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("test.db"))
+                .await
+                .unwrap()
+                .policy_store();
 
         let err = create_quick_rule(
             &store,
@@ -313,7 +314,7 @@ mod tests {
     async fn test_create_quick_rule_defaults_priority_and_uses_allow_action() {
         let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
         let db_path = dir.path().join("test.db");
-        let store = persistence_sqlite::SqliteProfileStore::connect(&db_path)
+        let store = persistence_sqlite::SqliteProfileStore::connect_plaintext(&db_path)
             .await
             .expect(
                 "frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein",

@@ -95,7 +95,7 @@ async fn write_secret_through_all_stores(
     db_path: &Path,
     cipher: Arc<dyn ContentCipher>,
 ) -> SqliteProfileStore {
-    let profile_store = SqliteProfileStore::connect(db_path)
+    let profile_store = SqliteProfileStore::connect_plaintext(db_path)
         .await
         .expect("frische DB mit angewendeten Migrationen sollte immer aufbaubar sein");
 

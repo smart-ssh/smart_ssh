@@ -159,6 +159,36 @@ pub fn db_connect_failure_text(
              can be contacted.\n\n\
              Data path: {db_path}"
         ),
+        // Spec 0101, D2: **kein** „Backup einspielen" als erste Wahl — ein
+        // Backup wäre mit demselben Schlüssel genauso unlesbar.
+        (Language::En, ConnectFailureKind::KeyMismatch) => format!(
+            "Smart SSH's database cannot be read with the available key. The file is \
+             either damaged or belongs to a different key.\n\n\
+             Next step: if this installation's key is gone, the database cannot be \
+             recovered — not even from a backup, because a backup needs the same key. \
+             Details on the exact cause are in the log under {log_dir}.\n\n\
+             Data path: {db_path}"
+        ),
+        // Spec 0101, A6: Die Umwandlung ist gescheitert; das Original ist
+        // unverändert. Der Text sagt das ausdrücklich — sonst muss ein
+        // Nutzer von einem Datenverlust ausgehen, den es nicht gibt.
+        (Language::En, ConnectFailureKind::ConversionFailed) => format!(
+            "Smart SSH could not encrypt its existing database. Your data has not been \
+             changed — the original database is intact.\n\n\
+             Next step: make sure there is enough free disk space and that the data \
+             directory is writable, then start Smart SSH again. Details on the exact \
+             cause are in the log under {log_dir}.\n\n\
+             Data path: {db_path}"
+        ),
+        // Spec 0101, A6 (letzter Satz) / T20.
+        (Language::En, ConnectFailureKind::SymlinkedDatabase) => format!(
+            "Smart SSH's database file is a symbolic link. It is not encrypted \
+             automatically, because that would replace the link and leave the target \
+             file unencrypted.\n\n\
+             Next step: replace the link with the actual database file, then start \
+             Smart SSH again. Nothing has been changed.\n\n\
+             Data path: {db_path}"
+        ),
         (Language::De, kind) => db_connect_failure_message_de(kind, &db_path, &log_dir),
     };
     DialogText {
@@ -210,6 +240,40 @@ fn db_connect_failure_message_de(
              beende sie; Details zur genauen Ursache stehen im Log unter {log_dir}. \
              Hilft das nicht weiter, kann ein vorhandenes Backup der Datenbank eingespielt \
              oder der Smart-SSH-Support kontaktiert werden.\n\n\
+             Datenpfad: {db_path}"
+        ),
+        // Spec 0101, D2: ausdrücklich **kein** „Backup einspielen" als
+        // erste Wahl. Ein Backup der verschlüsselten Datei wäre mit
+        // demselben Schlüssel genauso unlesbar — der Rat aus `Other` wäre
+        // hier eine Irreführung.
+        ConnectFailureKind::KeyMismatch => format!(
+            "Die Datenbank von Smart SSH lässt sich mit dem vorhandenen Schlüssel nicht \
+             lesen. Entweder ist die Datei beschädigt, oder sie gehört zu einem anderen \
+             Schlüssel.\n\n\
+             Nächster Schritt: Ist der Schlüssel dieser Installation verloren, lässt sich \
+             die Datenbank nicht wiederherstellen — auch nicht aus einem Backup, denn ein \
+             Backup braucht denselben Schlüssel. Details zur genauen Ursache stehen im Log \
+             unter {log_dir}.\n\n\
+             Datenpfad: {db_path}"
+        ),
+        // Spec 0101, A6: Das Original ist unverändert. Das steht
+        // ausdrücklich im Text — ohne diesen Satz muss ein Nutzer von einem
+        // Datenverlust ausgehen, den es nicht gibt.
+        ConnectFailureKind::ConversionFailed => format!(
+            "Smart SSH konnte die vorhandene Datenbank nicht verschlüsseln. Deine Daten \
+             sind unverändert — die ursprüngliche Datenbank ist unberührt.\n\n\
+             Nächster Schritt: Prüfe, ob genug freier Platz auf dem Datenträger ist und ob \
+             das Datenverzeichnis beschreibbar ist, und starte Smart SSH erneut. Details \
+             zur genauen Ursache stehen im Log unter {log_dir}.\n\n\
+             Datenpfad: {db_path}"
+        ),
+        // Spec 0101, A6 (letzter Satz) / T20.
+        ConnectFailureKind::SymlinkedDatabase => format!(
+            "Die Datenbankdatei von Smart SSH ist eine symbolische Verknüpfung. Sie wird \
+             nicht automatisch verschlüsselt, weil das die Verknüpfung ersetzen und die \
+             Zieldatei unverschlüsselt liegen lassen würde.\n\n\
+             Nächster Schritt: Ersetze die Verknüpfung durch die eigentliche \
+             Datenbankdatei und starte Smart SSH erneut. Es wurde nichts verändert.\n\n\
              Datenpfad: {db_path}"
         ),
     }

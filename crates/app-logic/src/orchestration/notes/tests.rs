@@ -1356,10 +1356,13 @@ async fn test_accept_and_create_rule_creates_rule_and_resolves_confirm_like_appr
     let session_id = Uuid::new_v4();
 
     let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-    let policy_store = persistence_sqlite::SqliteProfileStore::connect(&dir.path().join("test.db"))
-        .await
-        .expect("frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein")
-        .policy_store();
+    let policy_store =
+        persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("test.db"))
+            .await
+            .expect(
+                "frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein",
+            )
+            .policy_store();
 
     let turn = run_chat_turn(
         &session,
@@ -1460,10 +1463,13 @@ async fn test_accept_and_create_rule_with_edited_command_executes_the_edited_com
     let session_id = Uuid::new_v4();
 
     let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-    let policy_store = persistence_sqlite::SqliteProfileStore::connect(&dir.path().join("test.db"))
-        .await
-        .expect("frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein")
-        .policy_store();
+    let policy_store =
+        persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("test.db"))
+            .await
+            .expect(
+                "frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein",
+            )
+            .policy_store();
 
     let turn = run_chat_turn(
         &session,

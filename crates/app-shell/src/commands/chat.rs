@@ -663,7 +663,7 @@ mod send_chat_message_persistence_tests {
     ) {
         let tmp_dir = tempfile::tempdir().expect("TempDir konnte nicht angelegt werden");
         let db_path = tmp_dir.path().join("test.sqlite3");
-        let profile_store = persistence_sqlite::SqliteProfileStore::connect(&db_path)
+        let profile_store = persistence_sqlite::SqliteProfileStore::connect_plaintext(&db_path)
             .await
             .expect("frische DB sollte immer aufbaubar sein");
 
@@ -839,7 +839,7 @@ mod send_chat_message_persistence_tests {
         });
         let dir = tempfile::tempdir().unwrap();
         let policy_store =
-            persistence_sqlite::SqliteProfileStore::connect(&dir.path().join("t.db"))
+            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
                 .await
                 .unwrap()
                 .policy_store();
@@ -1017,7 +1017,7 @@ mod send_chat_message_persistence_tests {
         });
         let dir = tempfile::tempdir().unwrap();
         let policy_store =
-            persistence_sqlite::SqliteProfileStore::connect(&dir.path().join("t.db"))
+            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
                 .await
                 .unwrap()
                 .policy_store();
@@ -1137,7 +1137,7 @@ mod send_chat_message_persistence_tests {
         session.request_auto_continue_stop();
         let dir = tempfile::tempdir().unwrap();
         let policy_store =
-            persistence_sqlite::SqliteProfileStore::connect(&dir.path().join("t.db"))
+            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
                 .await
                 .unwrap()
                 .policy_store();

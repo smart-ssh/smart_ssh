@@ -8,6 +8,9 @@
 
 mod ai_provider_store;
 mod chat_session_store;
+/// Spec 0101, A4/A6–A8: Dateizustand erkennen, mit Schlüssel öffnen,
+/// Klartext-Datei umwandeln.
+mod encryption;
 mod error;
 mod ledger_store;
 mod mapping;
@@ -18,6 +21,10 @@ mod store;
 
 #[cfg(test)]
 mod tests;
+/// Spec 0101, Commit 4 — eigene Datei: A4, A6–A8 und die Tests T1 (Teil),
+/// T4–T6, T19, T20.
+#[cfg(test)]
+mod tests_encryption;
 /// Spec 0101, T0 — eigene Datei: erzeugt (einmalig, von Hand) und prüft die
 /// eingecheckte Datenbank-Fixture `tests/fixtures/t0-pre-sqlcipher.sqlite3`,
 /// Grundlage für T4–T6 (Commit 4).
@@ -33,6 +40,10 @@ pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
 };
 pub use chat_session_store::{ChatSessionStoreError, ChatSessionSummary, SqliteChatSessionStore};
+pub use encryption::{
+    convert_plaintext_database, detect_database_file_state, intermediate_path, ConversionFailure,
+    DatabaseFileState, SQLITE_PLAINTEXT_HEADER,
+};
 pub use error::{ConnectFailureKind, PersistenceError, PersistenceResult};
 pub use ledger_store::{LedgerEntry, LedgerStoreError, SqliteLedgerStore};
 pub use paths::default_db_path;

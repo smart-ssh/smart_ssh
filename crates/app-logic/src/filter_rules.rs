@@ -161,7 +161,7 @@ mod tests {
     async fn in_memory_store() -> (tempfile::TempDir, SqlitePolicyStore) {
         let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
         let db_path = dir.path().join("test.db");
-        let store = persistence_sqlite::SqliteProfileStore::connect(&db_path)
+        let store = persistence_sqlite::SqliteProfileStore::connect_plaintext(&db_path)
             .await
             .expect(
                 "frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein",

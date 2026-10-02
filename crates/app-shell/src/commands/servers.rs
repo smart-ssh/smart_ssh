@@ -394,7 +394,7 @@ mod local_server_tests {
 
         let profile_store = InMemoryProfileStore::new();
         let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-        let policy_store = persistence_sqlite::SqliteProfileStore::connect(
+        let policy_store = persistence_sqlite::SqliteProfileStore::connect_plaintext(
             &dir.path().join("test.db"),
         )
         .await
@@ -446,7 +446,7 @@ mod local_server_tests {
 
         let profile_store = InMemoryProfileStore::new();
         let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-        let policy_store = persistence_sqlite::SqliteProfileStore::connect(
+        let policy_store = persistence_sqlite::SqliteProfileStore::connect_plaintext(
             &dir.path().join("test.db"),
         )
         .await
@@ -493,7 +493,7 @@ mod local_server_tests {
 
         let profile_store = InMemoryProfileStore::new();
         let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-        let policy_store = persistence_sqlite::SqliteProfileStore::connect(
+        let policy_store = persistence_sqlite::SqliteProfileStore::connect_plaintext(
             &dir.path().join("test.db"),
         )
         .await
@@ -542,7 +542,7 @@ mod local_server_tests {
 
         let profile_store = InMemoryProfileStore::new();
         let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-        let policy_store = persistence_sqlite::SqliteProfileStore::connect(
+        let policy_store = persistence_sqlite::SqliteProfileStore::connect_plaintext(
             &dir.path().join("test.db"),
         )
         .await
@@ -580,7 +580,7 @@ mod local_server_tests {
 
         let profile_store = InMemoryProfileStore::new();
         let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-        let policy_store = persistence_sqlite::SqliteProfileStore::connect(
+        let policy_store = persistence_sqlite::SqliteProfileStore::connect_plaintext(
             &dir.path().join("test.db"),
         )
         .await
@@ -628,7 +628,7 @@ mod local_server_tests {
         let profile_store = InMemoryProfileStore::new().with_server(server);
 
         let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-        let policy_store = persistence_sqlite::SqliteProfileStore::connect(
+        let policy_store = persistence_sqlite::SqliteProfileStore::connect_plaintext(
             &dir.path().join("test.db"),
         )
         .await

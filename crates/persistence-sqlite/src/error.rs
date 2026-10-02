@@ -15,6 +15,33 @@ use std::fmt;
 pub enum PersistenceError {
     Connect(sqlx::Error),
     Migrate(sqlx::migrate::MigrateError),
+    /// Spec 0101, A4: Die Datei ließ sich mit dem übergebenen
+    /// Datenbankschlüssel nicht lesen — Grundlage für Dialog D2.
+    ///
+    /// **Ohne Nutzlast, und das ist der Punkt:** SQLite liefert hier je nach
+    /// Zeitpunkt `code 26 „file is not a database"` oder (wenn die Migration
+    /// zuerst läuft) `code 7 „out of memory"`; beide Texte sagen einem
+    /// Nutzer das Falsche, und beide sind von „Datei beschädigt" nicht zu
+    /// unterscheiden (gemessen, Spec 0101 §1). Der Fehler trägt deshalb
+    /// keinen Bibliothekstext — und damit auch keinen, in dem je ein
+    /// `PRAGMA key`-Wert stehen könnte (A2).
+    NotReadableWithKey,
+    /// Spec 0101, A6: Die Umwandlung der Klartext-Datei ist gescheitert. Das
+    /// Original ist inhaltsgleich, es liegt keine Zwischendatei mehr, und es
+    /// wurde nichts umbenannt — es gibt also **keinen** Weiterlauf im
+    /// Klartext, nur einen Startfehler.
+    Conversion(crate::encryption::ConversionFailure),
+    /// Spec 0101, A2: Ein Fehler aus dem Verbindungsaufbau **mit
+    /// Schlüssel** enthielt den Schlüssel in seinem Text und wurde deshalb
+    /// vollständig verworfen.
+    ///
+    /// Gemessen und kein theoretischer Fall: `sqlx` zitiert in einem
+    /// Syntaxfehler die Anweisung, die ihn ausgelöst hat — und das ist bei
+    /// einem falsch gesetzten Schlüssel-Pragma die Anweisung mit dem
+    /// Schlüssel darin (s. `encryption::contains_key_material`). Ein
+    /// Fehlertext ohne Schlüssel behält seine Variante; nur dieser Fall
+    /// verliert sie.
+    RedactedConnect,
 }
 
 impl fmt::Display for PersistenceError {
@@ -22,6 +49,18 @@ impl fmt::Display for PersistenceError {
         match self {
             PersistenceError::Connect(e) => write!(f, "Datenbankverbindung fehlgeschlagen: {e}"),
             PersistenceError::Migrate(e) => write!(f, "Migration fehlgeschlagen: {e}"),
+            PersistenceError::NotReadableWithKey => write!(
+                f,
+                "die Datenbankdatei ist mit dem vorhandenen Schlüssel nicht lesbar"
+            ),
+            PersistenceError::Conversion(e) => {
+                write!(f, "Umwandlung der Datenbank fehlgeschlagen: {e}")
+            }
+            PersistenceError::RedactedConnect => write!(
+                f,
+                "Datenbankverbindung fehlgeschlagen (Details ausgelassen, weil sie \
+                 Schlüsselmaterial enthielten)"
+            ),
         }
     }
 }
@@ -31,7 +70,15 @@ impl std::error::Error for PersistenceError {
         match self {
             PersistenceError::Connect(e) => Some(e),
             PersistenceError::Migrate(e) => Some(e),
+            PersistenceError::NotReadableWithKey | PersistenceError::RedactedConnect => None,
+            PersistenceError::Conversion(e) => Some(e),
         }
+    }
+}
+
+impl From<crate::encryption::ConversionFailure> for PersistenceError {
+    fn from(e: crate::encryption::ConversionFailure) -> Self {
+        PersistenceError::Conversion(e)
     }
 }
 
@@ -77,6 +124,24 @@ pub enum ConnectFailureKind {
     /// "irgendetwas beim Öffnen/Migrieren ist schiefgegangen", passt also
     /// auch als Rückfalloption.
     Other,
+    /// Spec 0101, D2: Die Datei ist mit dem vorhandenen Schlüssel nicht
+    /// lesbar (oder es gibt keinen Schlüssel zu einer verschlüsselten
+    /// Datei).
+    ///
+    /// **Eigener Fall und nicht [`Self::Other`]**, obwohl „beschädigt" auch
+    /// hier zutreffen könnte: Der `Other`-Text rät als Erstes zu einer
+    /// Backup-Wiederherstellung (s. `app_logic::startup_error_messages`).
+    /// Genau das ist bei einem Schlüsselproblem der falsche Rat — das Backup
+    /// wäre mit demselben Schlüssel genauso unlesbar. D2 verlangt deshalb
+    /// ausdrücklich „**kein** Hinweis auf ‚Backup einspielen‘ als erste
+    /// Wahl".
+    KeyMismatch,
+    /// Spec 0101, A6: Die Umwandlung ist gescheitert; nichts wurde
+    /// verändert.
+    ConversionFailed,
+    /// Spec 0101, A6 (letzter Satz): `smart-ssh.db` ist eine symbolische
+    /// Verknüpfung — es wird nicht umgewandelt (T20).
+    SymlinkedDatabase,
 }
 
 impl PersistenceError {
@@ -94,6 +159,16 @@ impl PersistenceError {
             {
                 ConnectFailureKind::PermissionDenied
             }
+            PersistenceError::NotReadableWithKey => ConnectFailureKind::KeyMismatch,
+            PersistenceError::Conversion(crate::encryption::ConversionFailure::Symlink) => {
+                ConnectFailureKind::SymlinkedDatabase
+            }
+            PersistenceError::Conversion(crate::encryption::ConversionFailure::Io(io_err))
+                if io_err.kind() == std::io::ErrorKind::PermissionDenied =>
+            {
+                ConnectFailureKind::PermissionDenied
+            }
+            PersistenceError::Conversion(_) => ConnectFailureKind::ConversionFailed,
             _ => ConnectFailureKind::Other,
         }
     }

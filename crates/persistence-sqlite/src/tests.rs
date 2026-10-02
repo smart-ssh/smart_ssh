@@ -340,7 +340,7 @@ async fn test_migrations_are_idempotent_for_same_db_file() {
     let dir = tempfile::tempdir().expect("temp dir sollte anlegbar sein");
     let db_path = dir.path().join("idempotent-test.db");
 
-    let store1 = SqliteProfileStore::connect(&db_path)
+    let store1 = SqliteProfileStore::connect_plaintext(&db_path)
         .await
         .expect("erster connect() sollte klappen");
     let group = make_group("persistiert über einen Reconnect hinweg", None);
@@ -351,7 +351,7 @@ async fn test_migrations_are_idempotent_for_same_db_file() {
     // Aufräumen im Hintergrund).
     store1.pool.close().await;
 
-    let store2 = SqliteProfileStore::connect(&db_path)
+    let store2 = SqliteProfileStore::connect_plaintext(&db_path)
         .await
         .expect("zweiter connect() auf derselben Datei darf nicht brechen");
     let fetched = store2.get_group(&group.id).await.unwrap();
@@ -408,7 +408,7 @@ async fn test_foreign_keys_pragma_is_enabled_on_the_connection() {
 /// dieselbe Absicherung für die Provider-Konfiguration (nur die
 /// `credential_ref`-Referenz, nie ein Klartext-Secret).
 ///
-/// Danach öffnet ein regulärer `SqliteProfileStore::connect()` (der volle,
+/// Danach öffnet ein regulärer `SqliteProfileStore::connect_plaintext()` (der volle,
 /// zur Compile-Zeit eingebettete `sqlx::migrate!()`-Satz) dieselbe Datei
 /// erneut — das wendet `0009`/`0010` auf die bereits vorhandenen Daten an
 /// — und der Test verifiziert, dass jede zuvor geschriebene Zeile
@@ -601,7 +601,7 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
 
     // 3. Regulärer `connect()` mit dem vollen, aktuellen Migrationssatz —
     // wendet 0009/0010 auf die vorhandenen Zeilen an.
-    let upgraded = SqliteProfileStore::connect(&db_path)
+    let upgraded = SqliteProfileStore::connect_plaintext(&db_path)
         .await
         .expect("der Aufstieg auf den aktuellen Schema-Stand darf nicht fehlschlagen");
 

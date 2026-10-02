@@ -579,7 +579,7 @@ pub(crate) async fn session_with_real_chat_and_ledger_persistence(
     // damit die Datei gelöscht) wird.
     let tmp_dir = tempfile::tempdir().expect("TempDir konnte nicht angelegt werden");
     let db_path = tmp_dir.path().join("test.sqlite3");
-    let profile_store = persistence_sqlite::SqliteProfileStore::connect(&db_path)
+    let profile_store = persistence_sqlite::SqliteProfileStore::connect_plaintext(&db_path)
         .await
         .expect("frische DB sollte immer aufbaubar sein");
     let server_id = ServerId::new();

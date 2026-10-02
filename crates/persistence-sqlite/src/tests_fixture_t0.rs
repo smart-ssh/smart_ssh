@@ -95,7 +95,7 @@ async fn generate_fixture_once() {
     )
     .expect("Fixture-Verzeichnis anlegbar");
 
-    let store = SqliteProfileStore::connect(&path)
+    let store = SqliteProfileStore::connect_plaintext(&path)
         .await
         .expect("frische DB mit 14 Migrationen sollte anlegbar sein");
 
@@ -238,7 +238,7 @@ async fn test_t0_fixture_has_14_migrations_all_markers_and_decryptable_chat_cont
     // unten für den Beleg.
     align_migration_checksums_to_current_build(&copy_path).await;
 
-    let store = SqliteProfileStore::connect(&copy_path)
+    let store = SqliteProfileStore::connect_plaintext(&copy_path)
         .await
         .expect("T0-Fixture sollte mit dem aktuellen Build weiter öffenbar sein");
 
@@ -330,7 +330,7 @@ async fn test_align_migration_checksums_recovers_opening_from_a_deliberate_misma
     let without_fix = tmp_dir.path().join("t0-mismatch-without-fix.sqlite3");
     std::fs::copy(&fixture, &without_fix).expect("Fixture kopierbar");
     corrupt_first_migration_checksum(&without_fix).await;
-    match SqliteProfileStore::connect(&without_fix).await {
+    match SqliteProfileStore::connect_plaintext(&without_fix).await {
         Err(PersistenceError::Migrate(sqlx::migrate::MigrateError::VersionMismatch(version))) => {
             assert_eq!(version, 1);
         }
@@ -349,7 +349,7 @@ async fn test_align_migration_checksums_recovers_opening_from_a_deliberate_misma
     std::fs::copy(&fixture, &with_fix).expect("Fixture kopierbar");
     corrupt_first_migration_checksum(&with_fix).await;
     align_migration_checksums_to_current_build(&with_fix).await;
-    let store = SqliteProfileStore::connect(&with_fix)
+    let store = SqliteProfileStore::connect_plaintext(&with_fix)
         .await
         .expect("nach dem Abgleich sollte die Kopie trotz vorheriger Verfälschung öffenbar sein");
     store.pool.close().await;
