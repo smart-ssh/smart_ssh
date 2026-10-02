@@ -112,8 +112,23 @@ impl app_logic::mcp_token::LegacyMcpTokenFile for SettingsJsonToken<'_> {
 
     fn remove_token(&self) -> CommandResult<()> {
         let store = self.app.store(SETTINGS_STORE_FILE)?;
+        let previous = store.get(TOKEN_KEY);
         store.delete(TOKEN_KEY);
-        store.save()?;
+        if let Err(err) = store.save() {
+            // **Bei gescheitertem Schreiben den Schlüssel zurücksetzen**
+            // (spec-reviewer Runde 3): Der Store ist im Prozess
+            // zwischengespeichert — `delete` wirkt sofort im Speicher, nur
+            // `save` kann scheitern. Ohne das Zurücksetzen stünde das
+            // Token weiter im Klartext in der Datei, während jeder
+            // folgende `read_token` `None` liefert; die App hielte die
+            // Kopie für den Rest der Prozesslaufzeit für entfernt, und
+            // genau das Klartext-Vorkommen, das A12 beseitigen soll,
+            // überlebte still.
+            if let Some(previous) = previous {
+                store.set(TOKEN_KEY, previous);
+            }
+            return Err(err.into());
+        }
         harden_settings_store_permissions(self.app);
         Ok(())
     }
@@ -127,6 +142,14 @@ impl app_logic::mcp_token::LegacyMcpTokenFile for SettingsJsonToken<'_> {
 /// Seit Spec 0101 A12 liegt das Token in der verschlüsselten Datenbank; ein
 /// Token aus `settings.json` wird beim ersten Aufruf übernommen.
 fn load_or_init_token(app: &AppHandle, state: &AppState) -> CommandResult<String> {
+    // **Die Härtung bleibt an diesem Weg** (spec-reviewer Runde 3): Vorher
+    // schrieb das erstmalige Öffnen des Einstellungsschirms das Token in
+    // die Datei und härtete sie dabei. Dieser Weg schreibt nicht mehr —
+    // ohne diesen Aufruf bliebe `settings.json` bei den Umask-Rechten
+    // stehen, mit denen ein anderes Modul sie angelegt hat. Das wäre
+    // gegenüber vorher ein Rückschritt, auch wenn das Geheimnis jetzt
+    // nicht mehr darin steht.
+    harden_settings_store_permissions(app);
     app_logic::mcp_token::load_or_init_token(
         state.credential_store.as_ref(),
         &SettingsJsonToken { app },

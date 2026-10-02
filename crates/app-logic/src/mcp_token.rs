@@ -132,7 +132,14 @@ pub fn load_or_init_token(
             Ok(token.expose_secret().to_string())
         }
         Err(CredentialError::NotFound(_)) => {
-            if let Some(token) = legacy.read_token()? {
+            // **Ein leeres Token ist kein Token** (spec-reviewer Runde 3):
+            // In `settings.json` kann `"mcpServerToken": ""` stehen. „Mit
+            // gleichem Wert übernehmen" würde den Leerstring dauerhaft in
+            // die Datenbank schreiben — und ein leeres erwartetes Token
+            // heißt MCP ohne Geheimnis. Also nicht übernehmen, sondern ein
+            // richtiges erzeugen; der leere Alt-Eintrag wird unten
+            // mitentfernt.
+            if let Some(token) = legacy.read_token()?.filter(|t| !t.trim().is_empty()) {
                 write_and_verify(credentials, &token)?;
                 // Erst jetzt — der neue Ort hat den Wert nachweislich
                 // hergegeben.
@@ -144,6 +151,7 @@ pub fn load_or_init_token(
             }
             let token = generate();
             write_and_verify(credentials, &token)?;
+            remove_legacy_token_best_effort(legacy);
             Ok(token)
         }
         Err(err @ CredentialError::Backend(_)) => Err(secret_store_error(err)),
