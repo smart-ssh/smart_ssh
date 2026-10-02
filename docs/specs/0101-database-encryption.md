@@ -435,6 +435,15 @@ Keine.
    deines Betriebssystems oder – wenn du es einrichtest – dein
    Master-Passwort. Wer Zugriff auf dein entsperrtes Benutzerkonto hat, kann
    die Daten lesen.“ EN sinngemäß, gleicher Inhalt.
+2. **T0-Fixture unter Windows (Teil 0 Frage 1, K2):** Windows-Builds checken
+   die Migrationen mit CRLF aus (`.gitattributes`), die Prüfsummen in
+   `_sqlx_migrations` sind dort andere als in der unter LF geschriebenen
+   Fixture (`Migrate(VersionMismatch(1))` in der CI). Tests, die die Fixture
+   öffnen (T0, T4–T6), setzen in ihrer **Kopie** vor dem Öffnen die
+   Prüfsummen auf die des laufenden Builds, je Version, nur für die 14
+   vorhandenen Einträge; die eingecheckte Datei bleibt unverändert. Im Feld
+   tritt der Fall nicht auf (Datenbank und Build stammen von derselben
+   Plattform). Der Produktivcode bekommt dafür keine Sonderbehandlung.
 
 ## Umsetzung
 
