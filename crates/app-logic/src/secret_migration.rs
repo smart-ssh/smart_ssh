@@ -80,7 +80,13 @@ async fn refs_in_database(store: &SqliteProfileStore) -> Result<Vec<CredentialRe
         .list_servers()
         .await
         .map_err(|err| StartupAbort::Fatal {
-            kind: ConnectFailureKind::SecretMigrationFailed,
+            // **`Other`, nicht `SecretMigrationFailed`** (spec-reviewer
+            // Runde 3): Die realistische Ursache ist hier eine nicht
+            // dekodierbare Zeile (`auth_method`-JSON, Spaltentyp), also
+            // beschädigter Inhalt. Der Umzugstext sagt „es ist keine Datei
+            // beschädigt" und „starte erneut" — das führte endlos in
+            // denselben Fehler. Hier ist der Backup-Rat der richtige.
+            kind: ConnectFailureKind::Other,
             detail: format!("Server für den Secret-Umzug nicht lesbar: {err}"),
         })?;
     let providers = store
@@ -88,7 +94,8 @@ async fn refs_in_database(store: &SqliteProfileStore) -> Result<Vec<CredentialRe
         .list()
         .await
         .map_err(|err| StartupAbort::Fatal {
-            kind: ConnectFailureKind::SecretMigrationFailed,
+            // `Other` aus demselben Grund wie eine Zeile höher.
+            kind: ConnectFailureKind::Other,
             detail: format!("Provider für den Secret-Umzug nicht lesbar: {err}"),
         })?;
 
@@ -182,9 +189,13 @@ pub async fn migrate_secrets_into_database(
             STATE_OPEN => {}
             other => {
                 return Err(StartupAbort::Fatal {
-                    kind: ConnectFailureKind::SecretMigrationFailed,
+                    // `Other`: Ein Zustand, den dieser Code nicht kennt,
+                    // steht so in der Datenbank — das ist beschädigter
+                    // Inhalt, nicht ein gescheiterter Umzug. „Starte
+                    // erneut" hilft hier nicht (spec-reviewer Runde 3).
+                    kind: ConnectFailureKind::Other,
                     detail: format!("unbekannter Umzugszustand: {other}"),
-                })
+                });
             }
         }
 

@@ -138,12 +138,16 @@ fn test_t12_a_token_in_settings_json_moves_into_the_database_unchanged() {
 ///
 /// Dass gar nicht nach `settings.json` geschrieben werden *kann*, ist
 /// strukturell: [`LegacyMcpTokenFile`] hat keine Schreibmethode, nur Lesen
-/// und Entfernen. Dieser Test hält das Verhalten fest, das daran hängt —
-/// neuer Wert in der Datenbank, Datei bleibt leer.
+/// und Entfernen.
+///
+/// Die Datei trägt hier absichtlich ein altes Token (spec-reviewer Runde 3:
+/// mit leerer Datei wäre „bleibt leer" eine leere Aussage). Nach dem
+/// Erneuern muss sie **entleert** sein — das alte Token ist jetzt wertlos,
+/// aber es ist eine Klartext-Kopie eines Geheimnisses und gehört weg.
 #[test]
 fn test_t12_regenerating_writes_only_into_the_database() {
     let credentials = InMemoryCredentialStore::new().with_secret(&reference(), TOKEN_MARKER);
-    let legacy = FakeSettingsFile::empty();
+    let legacy = FakeSettingsFile::with_token("Token-0101-alt");
     let fresh = format!("{TOKEN_MARKER}-neu");
 
     let token = regenerate_token(&credentials, &legacy, &|| fresh.clone())
@@ -161,7 +165,44 @@ fn test_t12_regenerating_writes_only_into_the_database() {
     assert_eq!(
         legacy.current(),
         None,
-        "nach settings.json wird nichts geschrieben"
+        "nach settings.json wird nichts geschrieben, und die alte Kopie muss weg"
+    );
+    assert_eq!(legacy.removes(), 1);
+}
+
+/// **Ein leeres Token wird nicht übernommen** (spec-reviewer Runde 3).
+///
+/// Steht in `settings.json` `"mcpServerToken": ""`, würde „mit gleichem
+/// Wert übernehmen" den Leerstring dauerhaft in die Datenbank schreiben.
+/// Ein leeres erwartetes Token heißt MCP ohne Geheimnis — die gesamte
+/// Angriffsfläche offen. Stattdessen: ein richtiges Token erzeugen und den
+/// leeren Eintrag entfernen.
+///
+/// **Gegenbeweis geführt:** Ohne den Filter liefert der Aufruf den
+/// Leerstring zurück und die erste Zusicherung scheitert.
+#[test]
+fn test_a12_an_empty_legacy_token_is_never_adopted() {
+    let credentials = InMemoryCredentialStore::new();
+    let legacy = FakeSettingsFile::with_token("   ");
+
+    let token = load_or_init_token(&credentials, &legacy, &|| TOKEN_MARKER.to_string())
+        .expect("muss gelingen");
+
+    assert_eq!(
+        token, TOKEN_MARKER,
+        "statt des leeren Werts muss ein neues Token erzeugt werden"
+    );
+    assert_eq!(
+        credentials
+            .get(&reference())
+            .expect("das neue Token muss in der Datenbank liegen")
+            .expose_secret(),
+        TOKEN_MARKER
+    );
+    assert_eq!(
+        legacy.current(),
+        None,
+        "der leere Eintrag gehört trotzdem aus der Datei"
     );
 }
 

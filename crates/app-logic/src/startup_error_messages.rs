@@ -207,8 +207,9 @@ pub fn db_connect_failure_text(
             "Smart SSH could not finish moving your saved secrets into the encrypted \
              database. The database itself opened fine — this is not a damaged file.\n\n\
              Next step: check whether the data directory is writable and has free space, \
-             then start Smart SSH again; the move continues where it stopped. Details on \
-             the exact cause are in the log under {log_dir}.\n\n\
+             then start Smart SSH again; the move continues where it stopped. If the same \
+             error comes back, the database content may be damaged after all — the log \
+             under {log_dir} names the exact cause.\n\n\
              Data path: {db_path}"
         ),
         (Language::De, kind) => db_connect_failure_message_de(kind, &db_path, &log_dir),
@@ -325,7 +326,8 @@ fn db_connect_failure_message_de(
              ließ sich öffnen — es ist keine Datei beschädigt.\n\n\
              Nächster Schritt: Prüfe, ob das Datenverzeichnis beschreibbar ist und noch \
              Platz hat, und starte Smart SSH erneut; der Umzug macht dort weiter, wo er \
-             aufgehört hat. Details zur genauen Ursache stehen im Log unter {log_dir}.\n\n\
+             aufgehört hat. Kommt derselbe Fehler wieder, kann der Datenbankinhalt doch \
+             beschädigt sein — das Log unter {log_dir} nennt die genaue Ursache.\n\n\
              Datenpfad: {db_path}"
         ),
     }
