@@ -203,6 +203,27 @@ pub(crate) async fn align_migration_checksums_to_current_build(copy_path: &Path)
         .expect("Verbindung nach Abgleich schließbar");
 }
 
+/// Liest `_sqlx_migrations` einer Datei, **ohne** zu migrieren — Anzahl
+/// und höchste Version. Genau dafür nötig: Sobald der laufende Build mehr
+/// Migrationen kennt als die Datei, verändert jedes Öffnen über
+/// `connect_plaintext` das Ergebnis.
+pub(crate) async fn migrations_in_file(path: &Path) -> (i64, i64) {
+    let options = sqlx::sqlite::SqliteConnectOptions::new().filename(path);
+    let mut conn = sqlx::SqliteConnection::connect_with(&options)
+        .await
+        .expect("Datei für die Migrationszählung öffenbar");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations")
+        .fetch_one(&mut conn)
+        .await
+        .expect("_sqlx_migrations lesbar");
+    let max: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(version), 0) FROM _sqlx_migrations")
+        .fetch_one(&mut conn)
+        .await
+        .expect("_sqlx_migrations lesbar");
+    conn.close().await.expect("Verbindung schließbar");
+    (count, max)
+}
+
 /// T0 (Spec 0101, §7): Nachweis, dass die eingecheckte Fixture tatsächlich
 /// das ist, was T4–T6 (Commit 4) brauchen. Geprüft an einer **Kopie** —
 /// das Öffnen mit SQLite legt ggf. `-wal`/`-shm` neben die Datei an, und
@@ -238,21 +259,32 @@ async fn test_t0_fixture_has_14_migrations_all_markers_and_decryptable_chat_cont
     // unten für den Beleg.
     align_migration_checksums_to_current_build(&copy_path).await;
 
+    // **Vor** dem Öffnen gezählt: `connect_plaintext` migriert, und seit
+    // Spec 0101 A9 kennt der Build eine fünfzehnte Migration
+    // (`0015_secrets.sql`). Die Aussage von T0 gilt der eingecheckten
+    // Fixture — „vom damaligen Build mit 14 Migrationen geschrieben" —,
+    // nicht dem Stand nach dem Migrieren. Gemessen würde sonst der Build,
+    // nicht die Fixture, und die Zahl müsste bei jeder neuen Migration
+    // nachgezogen werden, ohne dass sie noch etwas belegte.
+    let (applied, max_version) = migrations_in_file(&copy_path).await;
+    assert_eq!(applied, 14, "T0-Fixture muss alle 14 Migrationen tragen");
+    assert_eq!(max_version, 14);
+
     let store = SqliteProfileStore::connect_plaintext(&copy_path)
         .await
         .expect("T0-Fixture sollte mit dem aktuellen Build weiter öffenbar sein");
 
-    let applied: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations")
+    // Und nach dem Öffnen trägt die Kopie genau die Migrationen dieses
+    // Builds — die 14 aus der Fixture plus jede seither hinzugekommene.
+    let after: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
         .fetch_one(&store.pool)
         .await
         .expect("_sqlx_migrations lesbar");
-    assert_eq!(applied, 14, "T0-Fixture muss alle 14 Migrationen tragen");
-
-    let max_version: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
-        .fetch_one(&store.pool)
-        .await
-        .expect("_sqlx_migrations lesbar");
-    assert_eq!(max_version, 14);
+    assert_eq!(
+        after,
+        SqliteProfileStore::max_known_migration_version(),
+        "nach dem Öffnen muss die Kopie auf dem Stand dieses Builds sein"
+    );
 
     let servers = store.list_servers().await.expect("Server lesbar");
     assert_eq!(servers.len(), 1, "genau ein Beispiel-Server erwartet");

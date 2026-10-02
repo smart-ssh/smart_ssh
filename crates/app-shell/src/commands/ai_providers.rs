@@ -13,7 +13,7 @@ use ssh_manager_core::ai::{
 
 use app_logic::ai_provider_factory::build_ai_provider;
 use app_logic::dto::{credential_ref_for, AiProviderConfigDto, AiProviderConfigInput};
-use app_logic::error::{keychain_aware_credential_error, CommandError, CommandResult};
+use app_logic::error::{secret_store_error, CommandError, CommandResult};
 use app_logic::state::AppState;
 
 #[tauri::command]
@@ -53,7 +53,7 @@ pub async fn add_ai_provider(
     state
         .credential_store
         .set(&credential_ref, SecretString::from(config.api_key.clone()))
-        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
+        .map_err(secret_store_error)?;
 
     let new_config = config.into_new_config(id);
     if let Err(err) = state.ai_provider_store.create(&new_config).await {
@@ -99,7 +99,7 @@ pub async fn update_ai_provider(
         state
             .credential_store
             .set(&credential_ref_for(id), SecretString::from(api_key))
-            .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
+            .map_err(secret_store_error)?;
     }
     Ok(())
 }
@@ -122,7 +122,7 @@ pub async fn delete_ai_provider(state: State<'_, AppState>, id: ProviderId) -> C
     state
         .credential_store
         .delete(&existing.credential_ref)
-        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
+        .map_err(secret_store_error)?;
     state.ai_provider_store.delete(&id).await?;
     Ok(())
 }
@@ -206,7 +206,7 @@ pub async fn discover_models(
         state
             .credential_store
             .get(&existing.credential_ref)
-            .map_err(|err| keychain_aware_credential_error(err, state.keychain))?
+            .map_err(secret_store_error)?
             .expose_secret()
             .to_string()
     } else {
@@ -393,7 +393,7 @@ pub async fn test_ai_provider_credentials(
         state
             .credential_store
             .get(&existing.credential_ref)
-            .map_err(|err| keychain_aware_credential_error(err, state.keychain))?
+            .map_err(secret_store_error)?
             .expose_secret()
             .to_string()
     } else {

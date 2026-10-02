@@ -808,8 +808,16 @@ async fn test_spec_0098_t12a_a_keychain_failure_leaves_the_transport_recognisabl
         "die Nutzlast der Bibliothek darf die Transport-Schicht nicht verlassen: {err:?}"
     );
 
-    // A4: als Schlüsselbund-Fehler erkennbar, nicht als Auflösungsfehler.
-    assert_eq!(err.code(), "KEYCHAIN_ACCESS_FAILED");
+    // Spec 0098 A4 / Spec 0101 A9.1: als Störung des Secret-Speichers
+    // erkennbar, nicht als Auflösungsfehler — und **nicht** mehr als
+    // Schlüsselbund-Fehler: seit Spec 0101 A9 liegen die Secrets in der
+    // verschlüsselten Datenbank, der Schlüsselbund trägt nur noch K.
+    assert_eq!(err.code(), "SECRET_STORE_FAILED");
+    let message = err.to_string().to_lowercase();
+    assert!(
+        !message.contains("schlüsselbund") && !message.contains("keychain"),
+        "A9.1: kein Verweis auf den Schlüsselbund — {err}"
+    );
 }
 
 /// Test 7: Verbindung zu einem nicht auflösbaren Hostnamen → `HostNotFound`

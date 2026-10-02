@@ -70,7 +70,6 @@ pub fn reject_local_jump_host(jump_host: Option<ServerId>) -> CommandResult<()> 
 pub async fn create_server(
     store: &dyn ProfileStore,
     credential_store: &(dyn CredentialStore + Send + Sync),
-    keychain: credentials_keyring::KeychainAvailability,
     input: ServerInput,
 ) -> CommandResult<ServerId> {
     // Vor jedem Schlüsselbund-Zugriff prüfen — ein ungültiger Pfad soll
@@ -78,14 +77,14 @@ pub async fn create_server(
     let sftp_server_path = crate::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
     let id = ServerId::new();
 
-    let auth = match resolve_auth_method(credential_store, keychain, id, input.auth, None) {
+    let auth = match resolve_auth_method(credential_store, id, input.auth, None) {
         Ok(auth) => auth,
         Err(err) => {
             delete_all_possible_server_secrets(credential_store, id);
             return Err(err);
         }
     };
-    if let Err(err) = resolve_sudo_password(credential_store, keychain, id, input.sudo_password) {
+    if let Err(err) = resolve_sudo_password(credential_store, id, input.sudo_password) {
         delete_all_possible_server_secrets(credential_store, id);
         return Err(err);
     }
@@ -146,7 +145,6 @@ pub async fn create_server(
 pub async fn update_server(
     store: &dyn ProfileStore,
     credential_store: &(dyn CredentialStore + Send + Sync),
-    keychain: credentials_keyring::KeychainAvailability,
     id: ServerId,
     input: ServerInput,
 ) -> CommandResult<()> {
@@ -170,17 +168,7 @@ pub async fn update_server(
     // soll das Schreiben dieses Aufrufs festhalten, nicht sein Aufräumen.
     let recording = RecordingCredentialStore::new(credential_store);
 
-    match write_edited_server(
-        store,
-        &recording,
-        keychain,
-        id,
-        input,
-        existing,
-        sftp_server_path,
-    )
-    .await
-    {
+    match write_edited_server(store, &recording, id, input, existing, sftp_server_path).await {
         Ok(saved_auth) => {
             // **Erst hier** (A2): Die Datenbank trägt jetzt die neue
             // Anmeldeart — was von der bisherigen übrig ist und die neue
@@ -213,20 +201,13 @@ async fn write_edited_server(
     // einen Command verlangt. Derselbe Grund wie bei
     // `compute_delete_server_result`.
     credential_store: &(dyn CredentialStore + Send + Sync),
-    keychain: credentials_keyring::KeychainAvailability,
     id: ServerId,
     input: ServerInput,
     existing: Server,
     sftp_server_path: Option<String>,
 ) -> CommandResult<AuthMethod> {
-    let auth = resolve_auth_method(
-        credential_store,
-        keychain,
-        id,
-        input.auth,
-        Some(&existing.auth),
-    )?;
-    resolve_sudo_password(credential_store, keychain, id, input.sudo_password)?;
+    let auth = resolve_auth_method(credential_store, id, input.auth, Some(&existing.auth))?;
+    resolve_sudo_password(credential_store, id, input.sudo_password)?;
 
     let server = Server {
         id,
@@ -330,12 +311,6 @@ mod tests {
 
     use super::*;
     use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
-
-    /// Spec 0071: Der In-Memory-Store dieser Tests ist per Definition
-    /// verfügbar — hier geht es um das Rollback-Verhalten, nicht um die
-    /// Schlüsselbund-Verfügbarkeit.
-    const AVAILABLE: credentials_keyring::KeychainAvailability =
-        credentials_keyring::KeychainAvailability::Available;
 
     fn server(name: &str, jump_host: Option<ServerId>) -> Server {
         let now = Utc::now();
@@ -569,13 +544,7 @@ mod tests {
         let store = InMemoryProfileStore::new().with_failing_create_server();
         let credentials = InMemoryCredentialStore::new();
 
-        let result = create_server(
-            &store,
-            &credentials,
-            AVAILABLE,
-            password_input("secret", "hunter2"),
-        )
-        .await;
+        let result = create_server(&store, &credentials, password_input("secret", "hunter2")).await;
 
         assert!(result.is_err());
         assert!(
@@ -603,13 +572,7 @@ mod tests {
         let store = InMemoryProfileStore::new();
         let credentials = InMemoryCredentialStore::new().with_failing_set_for_slot("sudo_password");
 
-        let result = create_server(
-            &store,
-            &credentials,
-            AVAILABLE,
-            password_input("secret", "hunter2"),
-        )
-        .await;
+        let result = create_server(&store, &credentials, password_input("secret", "hunter2")).await;
 
         assert!(result.is_err());
         assert!(
@@ -682,7 +645,6 @@ mod tests {
         let result = create_server(
             &store,
             &credentials,
-            AVAILABLE,
             private_key_input("key-pem", "hunter2"),
         )
         .await;
@@ -722,7 +684,6 @@ mod tests {
         let result = create_server(
             &store,
             &credentials,
-            AVAILABLE,
             certificate_input("cert-pem", "key-pem"),
         )
         .await;
@@ -833,7 +794,6 @@ mod tests {
         let err = update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::Certificate {
                 cert_content: None,
@@ -864,7 +824,6 @@ mod tests {
         update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::PrivateKey {
                 key_content: Some("-----BEGIN KEY-----".to_string()),
@@ -891,7 +850,7 @@ mod tests {
         let mut input = edit_input(AuthMethodInput::Agent);
         input.sudo_password = Some("sudo-secret".to_string());
 
-        update_server(&store, &credentials, AVAILABLE, id, input)
+        update_server(&store, &credentials, id, input)
             .await
             .expect_err("ein fehlgeschlagener Sudo-Write darf nicht als Erfolg gelten");
 
@@ -911,15 +870,9 @@ mod tests {
         let store = password_store(id, &password_ref).with_failing_update_server();
         let credentials = InMemoryCredentialStore::new().with_secret(&password_ref, "old-password");
 
-        update_server(
-            &store,
-            &credentials,
-            AVAILABLE,
-            id,
-            edit_input(AuthMethodInput::Agent),
-        )
-        .await
-        .expect_err("ein fehlgeschlagener DB-Write darf nicht als Erfolg gelten");
+        update_server(&store, &credentials, id, edit_input(AuthMethodInput::Agent))
+            .await
+            .expect_err("ein fehlgeschlagener DB-Write darf nicht als Erfolg gelten");
 
         assert_eq!(
             stored_secret(&credentials, &password_ref).as_deref(),
@@ -939,7 +892,6 @@ mod tests {
         let err = update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::Certificate {
                 cert_content: Some("cert-pem".to_string()),
@@ -983,7 +935,6 @@ mod tests {
         update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::IdentityFile {
                 path: IDENTITY_PATH.to_string(),
@@ -1034,7 +985,6 @@ mod tests {
         update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::IdentityFile {
                 path: IDENTITY_PATH.to_string(),
@@ -1066,15 +1016,9 @@ mod tests {
         let (id, store, password_ref) = password_server();
         let credentials = InMemoryCredentialStore::new().with_secret(&password_ref, "old-password");
 
-        update_server(
-            &store,
-            &credentials,
-            AVAILABLE,
-            id,
-            edit_input(AuthMethodInput::Agent),
-        )
-        .await
-        .expect("der Wechsel auf den Agenten braucht keine Eingabe und muss gelingen");
+        update_server(&store, &credentials, id, edit_input(AuthMethodInput::Agent))
+            .await
+            .expect("der Wechsel auf den Agenten braucht keine Eingabe und muss gelingen");
 
         assert!(
             stored_secret(&credentials, &password_ref).is_none(),
@@ -1093,7 +1037,6 @@ mod tests {
         update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::Password { value: None }),
         )
@@ -1128,7 +1071,6 @@ mod tests {
         update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::IdentityFile {
                 path: IDENTITY_PATH.to_string(),
@@ -1156,15 +1098,9 @@ mod tests {
             .with_secret(&password_ref, "old-password")
             .with_failing_delete();
 
-        update_server(
-            &store,
-            &credentials,
-            AVAILABLE,
-            id,
-            edit_input(AuthMethodInput::Agent),
-        )
-        .await
-        .expect("ein klemmender Schlüsselbund darf das Speichern nicht scheitern lassen");
+        update_server(&store, &credentials, id, edit_input(AuthMethodInput::Agent))
+            .await
+            .expect("ein klemmender Schlüsselbund darf das Speichern nicht scheitern lassen");
 
         assert!(matches!(auth_of(&store, &id), AuthMethod::Agent));
         let log = log_capture::recorded_text();
@@ -1198,7 +1134,6 @@ mod tests {
         update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::PrivateKey {
                 key_content: Some("-----BEGIN KEY-----".to_string()),
@@ -1238,15 +1173,9 @@ mod tests {
         let credentials =
             InMemoryCredentialStore::new().with_secret(&passphrase_ref, "old-passphrase");
 
-        update_server(
-            &store,
-            &credentials,
-            AVAILABLE,
-            id,
-            edit_input(AuthMethodInput::Agent),
-        )
-        .await
-        .expect("der Wechsel auf den Agenten muss gelingen");
+        update_server(&store, &credentials, id, edit_input(AuthMethodInput::Agent))
+            .await
+            .expect("der Wechsel auf den Agenten muss gelingen");
 
         assert!(
             stored_secret(&credentials, &passphrase_ref).is_none(),
@@ -1271,7 +1200,7 @@ mod tests {
         let mut input = edit_input(AuthMethodInput::Agent);
         input.sudo_password = Some("new-sudo".to_string());
 
-        update_server(&store, &credentials, AVAILABLE, id, input)
+        update_server(&store, &credentials, id, input)
             .await
             .expect_err("ein fehlgeschlagener DB-Write darf nicht als Erfolg gelten");
 
@@ -1314,7 +1243,7 @@ mod tests {
         let mut input = edit_input(AuthMethodInput::Agent);
         input.sudo_password = Some("new-sudo".to_string());
 
-        update_server(&store, &credentials, AVAILABLE, id, input)
+        update_server(&store, &credentials, id, input)
             .await
             .expect("der Wechsel auf den Agenten muss gelingen");
 
@@ -1341,7 +1270,6 @@ mod tests {
         let err = update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::Certificate {
                 cert_content: Some("cert-pem".to_string()),
@@ -1389,7 +1317,7 @@ mod tests {
         input.jump_host = Some(LOCAL_SERVER_ID);
         input.sudo_password = Some("new-sudo".to_string());
 
-        let err = update_server(&store, &credentials, AVAILABLE, id, input)
+        let err = update_server(&store, &credentials, id, input)
             .await
             .expect_err("der lokale Pseudo-Server ist als Jump-Host ausgeschlossen");
 
@@ -1436,7 +1364,7 @@ mod tests {
         });
         input.sudo_password = Some("new-sudo".to_string());
 
-        let err = update_server(&store, &credentials, AVAILABLE, id, input)
+        let err = update_server(&store, &credentials, id, input)
             .await
             .expect_err("der lokale Pseudo-Server wird nicht auf diesem Weg bearbeitet");
 
@@ -1483,7 +1411,6 @@ mod tests {
         update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::Password {
                 value: Some("new-password".to_string()),
@@ -1512,7 +1439,6 @@ mod tests {
         update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::PrivateKey {
                 key_content: Some("-----BEGIN KEY-----".to_string()),
@@ -1546,7 +1472,7 @@ mod tests {
         });
         input.sudo_password = Some("new-sudo".to_string());
 
-        update_server(&store, &credentials, AVAILABLE, id, input)
+        update_server(&store, &credentials, id, input)
             .await
             .expect_err("ein fehlgeschlagener Sudo-Write darf nicht als Erfolg gelten");
 
@@ -1582,7 +1508,6 @@ mod tests {
         update_server(
             &store,
             &credentials,
-            AVAILABLE,
             id,
             edit_input(AuthMethodInput::IdentityFile {
                 path: IDENTITY_PATH.to_string(),

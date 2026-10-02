@@ -14,7 +14,7 @@ use ssh_manager_core::shared::ServerId;
 use crate::event_emitter::TauriEventEmitter;
 use app_logic::ai_provider_factory::build_ai_provider;
 use app_logic::dto::NoteRevisionDto;
-use app_logic::error::{keychain_aware_credential_error, CommandResult};
+use app_logic::error::{secret_store_error, CommandResult};
 use app_logic::orchestration::execute_note_shrink_request;
 use app_logic::server_credentials::sudo_password_credential_ref;
 use app_logic::state::{AppState, SessionId};
@@ -90,7 +90,7 @@ pub async fn request_note_shrink(
     let api_key = state
         .credential_store
         .get(&active_config.credential_ref)
-        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
+        .map_err(secret_store_error)?;
     let (ai_provider, ai_provider_budget) = build_ai_provider(
         &state.rate_limit_registry,
         active_config.provider_type,

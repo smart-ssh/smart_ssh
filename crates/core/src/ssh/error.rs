@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::profiles::KEYCHAIN_ACCESS_FAILED;
+use crate::profiles::SECRET_STORE_FAILED;
 
 /// Welches Secret ein [`SshError::CredentialStoreFailed`] betrifft (Spec
 /// 0098, A5). Eine Variante je `credentials.get(...)`-Aufruf in
@@ -93,16 +93,17 @@ pub enum SshError {
     ConnectionClosed(String),
     /// Spec 0098, A4: Das Lesen eines Secrets aus dem [`CredentialStore`]
     /// ist mit [`crate::profiles::CredentialError::Backend`] gescheitert —
-    /// der Schlüsselbund hat nicht geantwortet, gesperrt, abgelehnt. Eigene
+    /// der Secret-Speicher hat nicht geantwortet oder abgelehnt. Eigene
     /// Variante statt in [`Self::CredentialResolutionFailed`] verpackt, aus
     /// zwei Gründen:
     ///
     /// 1. **Der Aufrufer muss unterscheiden können** (A4), ohne den
     ///    Fehlertext zu lesen — dasselbe Argument wie bei
-    ///    [`Self::SftpPermissionDenied`]. Nur die Schicht, die
-    ///    `AppState.keychain` kennt, kann entscheiden, ob daraus
-    ///    `KEYCHAIN_ACCESS_FAILED` oder `KEYCHAIN_UNAVAILABLE` wird; `core`
-    ///    bleibt ohne Abhängigkeit vom `AppState` (§5).
+    ///    [`Self::SftpPermissionDenied`]. Seit Spec 0101 A9.1 entscheidet
+    ///    `core` den Code allerdings endgültig
+    ///    ([`crate::profiles::SECRET_STORE_FAILED`]): Er hängt nicht mehr
+    ///    am Zustand des Schlüsselbunds, weil der Speicher hinter dieser
+    ///    Variante die verschlüsselte Datenbank ist.
     /// 2. **Die Variante trägt keinen freien Text** (A5). Die Nutzlast der
     ///    Bibliothek bleibt dort liegen, wo sie entsteht
     ///    ([`super::resolve_auth`]); hierher kommt nur, welches Secret es war
@@ -144,13 +145,18 @@ impl fmt::Display for SshError {
             // jeder anderen benannten Meldung (Spec 0076, A-8), damit in
             // einer dreigliedrigen Kette als Erstes sichtbar ist, welcher
             // Rechner gemeint war.
+            //
+            // **Seit Spec 0101 A9.1 ohne das Wort „Schlüsselbund".** Die
+            // Secrets liegen in der verschlüsselten Datenbank; der
+            // Schlüsselbund trägt nur noch K. Der alte Text schickte einen
+            // Nutzer bei einem Datenbankfehler in die Systemeinstellungen.
             SshError::CredentialStoreFailed { secret, hop } => {
                 if let Some(hop) = hop {
                     write!(f, "{hop}: ")?;
                 }
                 write!(
                     f,
-                    "Zugriff auf den Schlüsselbund fehlgeschlagen ({})",
+                    "Zugriff auf den Secret-Speicher fehlgeschlagen ({})",
                     secret.label()
                 )
             }
@@ -179,19 +185,20 @@ impl SshError {
             SshError::HostUnreachable(_) => "SSH_HOST_UNREACHABLE",
             SshError::ConnectionClosed(_) => "SSH_CONNECTION_CLOSED",
             // Spec 0098, A4: **nicht** `SSH_`-präfigiert, weil es kein
-            // SSH-Problem ist — der Nutzer soll den Schlüsselbund als
+            // SSH-Problem ist — der Nutzer soll den Secret-Speicher als
             // Ursache sehen, nicht „Netzwerkfehler" und nicht „Zugangsdaten
             // konnten nicht aufgelöst werden".
             //
-            // Dies ist die Fassung für „Schlüsselbund verfügbar". `core`
-            // kennt den Startzustand nicht (§5) und vergibt deshalb bewusst
-            // die Fassung, die **nie** fälschlich „nicht verfügbar"
-            // behauptet (A3). Wo der Zustand bekannt ist, wird daraus
-            // `KEYCHAIN_UNAVAILABLE` — s.
-            // `app_logic::error::keychain_aware_ssh_error_code` (A2). Vergisst
-            // ein Aufrufer diesen Schritt, ist das Ergebnis also zu
-            // vorsichtig, nicht zu dreist.
-            SshError::CredentialStoreFailed { .. } => KEYCHAIN_ACCESS_FAILED,
+            // **Spec 0101, A9.1: `SECRET_STORE_FAILED` statt
+            // `KEYCHAIN_ACCESS_FAILED`.** Seit A9 liegen die Secrets in der
+            // verschlüsselten Datenbank, der Schlüsselbund trägt nur noch K.
+            // Damit entfällt auch die zweite Fassung: Es gibt kein
+            // `KEYCHAIN_UNAVAILABLE` mehr für diesen Fehler, weil der
+            // Zustand des Schlüsselbunds für ihn ohne Bedeutung ist — die
+            // Umdeutung in `app-logic` (Spec 0098, A2) ist ersatzlos
+            // entfallen. `core` vergibt den Code damit endgültig, und keine
+            // Schicht darüber kann ihn noch verändern.
+            SshError::CredentialStoreFailed { .. } => SECRET_STORE_FAILED,
         }
     }
 
@@ -330,8 +337,19 @@ mod code_tests {
         };
         assert_eq!(
             unnamed.to_string(),
-            "Zugriff auf den Schlüsselbund fehlgeschlagen (Passphrase)"
+            "Zugriff auf den Secret-Speicher fehlgeschlagen (Passphrase)"
         );
+
+        // Spec 0101, A9.1: und das Wort „Schlüsselbund" steht auf diesem
+        // Weg nicht mehr im Text — der Speicher hinter dieser Variante ist
+        // seit A9 die verschlüsselte Datenbank.
+        for message in [named.to_string(), unnamed.to_string()] {
+            let lower = message.to_lowercase();
+            assert!(
+                !lower.contains("schlüsselbund") && !lower.contains("keychain"),
+                "A9.1: kein Verweis auf den Schlüsselbund: {message}"
+            );
+        }
     }
 
     /// Spec 0098, A4: Der Code hängt an der Variante, nicht an Secret-Art
@@ -348,7 +366,7 @@ mod code_tests {
         ] {
             assert_eq!(
                 SshError::CredentialStoreFailed { secret, hop: None }.code(),
-                crate::profiles::KEYCHAIN_ACCESS_FAILED,
+                crate::profiles::SECRET_STORE_FAILED,
             );
         }
     }

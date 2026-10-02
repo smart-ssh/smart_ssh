@@ -20,11 +20,8 @@ use ssh_transport::ConnectOutcome;
 
 use crate::dto::{AuthMethodInput, ServerInput, TestConnectionResult};
 use crate::ephemeral_credentials::EphemeralCredentialStore;
-use credentials_keyring::KeychainAvailability;
 
-use crate::error::{
-    keychain_aware_credential_error, keychain_aware_ssh_error_code, CommandError, CommandResult,
-};
+use crate::error::{secret_store_error, CommandError, CommandResult};
 
 /// Spec 0084, §4 (Schnitt `test_connection` → `commands::SSH_CONNECT_TIMEOUT`):
 /// hierher verschoben, weil `test_connection` (Tauri-frei, zieht nach
@@ -87,7 +84,6 @@ impl Connector for RealConnector {
 /// Spec selbst verlangt aber genau dieses Verhalten ("wird für den Test
 /// das bereits gespeicherte Credential des existierenden Servers
 /// herangezogen"). Siehe ADR-Vorschlag am Ende der Aufgabe.
-#[allow(clippy::too_many_arguments)]
 pub async fn test_connection(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
@@ -95,12 +91,6 @@ pub async fn test_connection(
     // Verbindungstest gegen einen Server mit Schlüsseldatei muss dieselbe
     // Datei lesen wie der echte Verbindungsaufbau.
     key_files: &(dyn KeyFileReader + Send + Sync),
-    // Spec 0071, A13: nur für die Fehlerkennzeichnung durchgereicht (s.
-    // `error::keychain_aware_credential_error`) — dieser Pfad liest bei
-    // leerem Formularfeld das bereits gespeicherte Secret, und ohne
-    // Schlüsselbund stünde sonst der englische Bibliothekstext im
-    // Server-Formular.
-    keychain: KeychainAvailability,
     host_key_store: Arc<dyn HostKeyStore>,
     connector: &dyn Connector,
     input: ServerInput,
@@ -110,7 +100,6 @@ pub async fn test_connection(
         profile_store,
         real_credential_store,
         key_files,
-        keychain,
         host_key_store,
         connector,
         input,
@@ -122,17 +111,11 @@ pub async fn test_connection(
 
 /// Testbare Variante mit injizierbarem Timeout — die echten 10 Sekunden
 /// aus der Spec wären in einem Unit-Test schlicht zu langsam.
-/// `#[allow(clippy::too_many_arguments)]`: Spec 0071 ergänzt einen achten
-/// Parameter (`keychain`). Ihn in eine Struct zu bündeln hieße, die
-/// Signatur der öffentlichen [`test_connection`] mitzuziehen, ohne dass
-/// diese Spec daran etwas fachlich ändert — dasselbe Muster wie an den
-/// übrigen Stellen in dieser Crate.
 #[allow(clippy::too_many_arguments)]
 async fn test_connection_with_timeout(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
-    keychain: KeychainAvailability,
     host_key_store: Arc<dyn HostKeyStore>,
     connector: &dyn Connector,
     input: ServerInput,
@@ -148,7 +131,6 @@ async fn test_connection_with_timeout(
     let final_auth = resolve_final_hop_auth(
         &ephemeral,
         real_credential_store,
-        keychain,
         input.auth,
         existing_auth.as_ref(),
     )?;
@@ -221,7 +203,7 @@ async fn test_connection_with_timeout(
         // Spec 0098, A4: Die Variante des Ergebnisses bleibt `NetworkError`
         // (§5: die Form von `TestConnectionResult` ändert sich nicht, es
         // kommt nur ein Code-Wert hinzu) — der **Code** sagt jetzt aber den
-        // Schlüsselbund als Ursache, und das Frontend zeigt dafür weder
+        // Secret-Speicher als Ursache, und das Frontend zeigt dafür weder
         // „Netzwerkfehler" noch „Zugangsdaten konnten nicht aufgelöst
         // werden".
         //
@@ -230,7 +212,7 @@ async fn test_connection_with_timeout(
         // Nutzlast der Bibliothek (A5).
         Err(other) => TestConnectionResult::NetworkError {
             message: other.to_string(),
-            code: Some(keychain_aware_ssh_error_code(&other, keychain)),
+            code: Some(other.code()),
         },
     })
 }
@@ -242,7 +224,6 @@ async fn test_connection_with_timeout(
 fn resolve_final_hop_auth(
     ephemeral: &EphemeralCredentialStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
-    keychain: KeychainAvailability,
     input: AuthMethodInput,
     existing: Option<&AuthMethod>,
 ) -> CommandResult<AuthMethod> {
@@ -252,7 +233,6 @@ fn resolve_final_hop_auth(
                 value,
                 existing,
                 real_credential_store,
-                keychain,
                 "SERVER_PASSWORD_REQUIRED",
                 |a| match a {
                     AuthMethod::Password { credential_ref } => Some(credential_ref),
@@ -271,7 +251,6 @@ fn resolve_final_hop_auth(
                 key_content,
                 existing,
                 real_credential_store,
-                keychain,
                 "SERVER_PRIVATE_KEY_REQUIRED",
                 |a| match a {
                     AuthMethod::PrivateKey { credential_ref, .. } => Some(credential_ref),
@@ -300,7 +279,7 @@ fn resolve_final_hop_auth(
                     }) => {
                         let secret = real_credential_store
                             .get(existing_ref)
-                            .map_err(|err| keychain_aware_credential_error(err, keychain))?;
+                            .map_err(secret_store_error)?;
                         let r = CredentialRef::new("test:passphrase");
                         ephemeral.insert(&r, secret);
                         Some(r)
@@ -322,7 +301,6 @@ fn resolve_final_hop_auth(
                 cert_content,
                 existing,
                 real_credential_store,
-                keychain,
                 "SERVER_CERTIFICATE_REQUIRED",
                 |a| match a {
                     AuthMethod::Certificate { cert_ref, .. } => Some(cert_ref),
@@ -336,7 +314,6 @@ fn resolve_final_hop_auth(
                 key_content,
                 existing,
                 real_credential_store,
-                keychain,
                 "SERVER_CERTIFICATE_KEY_REQUIRED",
                 |a| match a {
                     AuthMethod::Certificate { key_ref, .. } => Some(key_ref),
@@ -371,7 +348,7 @@ fn resolve_final_hop_auth(
                     }) => {
                         let secret = real_credential_store
                             .get(existing_ref)
-                            .map_err(|err| keychain_aware_credential_error(err, keychain))?;
+                            .map_err(secret_store_error)?;
                         let r = CredentialRef::new("test:passphrase");
                         ephemeral.insert(&r, secret);
                         Some(r)
@@ -453,7 +430,6 @@ fn resolve_secret(
     provided: Option<String>,
     existing: Option<&AuthMethod>,
     real_store: &(dyn CredentialStore + Send + Sync),
-    keychain: KeychainAvailability,
     code: &'static str,
     extract_ref: impl Fn(&AuthMethod) -> Option<&CredentialRef>,
 ) -> CommandResult<SecretString> {
@@ -480,20 +456,13 @@ fn resolve_secret(
                     code,
                 )
             })?;
-            real_store
-                .get(existing_ref)
-                .map_err(|err| keychain_aware_credential_error(err, keychain))
+            real_store.get(existing_ref).map_err(secret_store_error)
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    /// Spec 0071: Diese Tests prüfen den Verbindungstest, nicht die
-    /// Schlüsselbund-Verfügbarkeit — der In-Memory-Store ist per Definition
-    /// verfügbar.
-    const AVAILABLE: KeychainAvailability = KeychainAvailability::Available;
-
     use ssh_manager_core::profiles::PostIngestPolicy;
     use ssh_manager_core::ssh::mock::MockKeyFileReader;
     use ssh_manager_core::ssh::{CommandOutput, HostKeyDecision, InteractiveShell, PtySize};
@@ -670,13 +639,19 @@ mod tests {
 
     /// Spec 0098, T5 (A4, Jump-Host, Ebene V1) — die Akzeptanz aus BL-0206.
     /// Das Passwort-Lesen des Jump-Hosts scheitert mit einem Backend-Fehler;
-    /// das Ergebnis trägt `KEYCHAIN_ACCESS_FAILED` und keine Nutzlast.
+    /// das Ergebnis trägt den stabilen `SECRET_STORE_FAILED`-Code (Spec
+    /// 0101, A9.1) und keine Nutzlast.
     ///
     /// Scheitert am Stand vor dieser Spec: dort `SSH_CREDENTIAL_RESOLUTION_
     /// FAILED` mit dem Marker in `message` („✗ Netzwerkfehler: Passwort:
     /// …").
+    ///
+    /// Ersetzt die frühere Zweiteilung in „Schlüsselbund verfügbar"/„beim
+    /// Start schon weg" (Spec 0098, T5/A2-Hälfte): Diese Unterscheidung gibt
+    /// es mit A9.1 nicht mehr, der zweite Test dieses Paars ist ersatzlos
+    /// entfallen.
     #[tokio::test]
-    async fn test_spec_0098_t5_a_failing_jump_host_secret_reports_the_keychain() {
+    async fn test_spec_0098_t5_a_failing_jump_host_secret_reports_a_secret_store_failure() {
         let jump_id = ServerId::new();
         let jump_ref = ssh_manager_core::profiles::CredentialRef::new("server:jump:password");
         let profile_store = InMemoryProfileStore::new()
@@ -695,7 +670,6 @@ mod tests {
             &profile_store,
             &real_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &ResolvingConnector,
             input,
@@ -708,7 +682,7 @@ mod tests {
         let TestConnectionResult::NetworkError { message, code } = &result else {
             panic!("erwartet NetworkError, bekam {result:?}");
         };
-        assert_eq!(*code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert_eq!(*code, Some(crate::error::SECRET_STORE_FAILED));
         assert!(
             !message.contains("LIBTEXT-0098") && !message.contains("Geheim-0098"),
             "die Nutzlast der Bibliothek darf nicht im DTO stehen: {message}"
@@ -720,51 +694,6 @@ mod tests {
         );
     }
 
-    /// Spec 0098, T5 (A2-Hälfte): derselbe Fall bei einem Schlüsselbund, der
-    /// schon beim Start fehlte → `KEYCHAIN_UNAVAILABLE`, weiterhin ohne
-    /// Nutzlast.
-    #[tokio::test]
-    async fn test_spec_0098_t5_a_failing_jump_host_secret_reports_unavailable_at_startup() {
-        let jump_id = ServerId::new();
-        let jump_ref = ssh_manager_core::profiles::CredentialRef::new("server:jump:password");
-        let profile_store = InMemoryProfileStore::new()
-            .with_server(stored_server(jump_id, "jump", &jump_ref, None));
-        let real_store = InMemoryCredentialStore::new()
-            .with_secret(&jump_ref, "jump-stored-secret")
-            .with_failing_get_for_slot("password")
-            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
-
-        let input = ServerInput {
-            jump_host: Some(jump_id),
-            ..password_input()
-        };
-
-        let result = test_connection_with_timeout(
-            &profile_store,
-            &real_store,
-            &MockKeyFileReader::new(),
-            KeychainAvailability::Unavailable(
-                credentials_keyring::KeychainUnavailableReason::NoSecretServiceProvider,
-            ),
-            Arc::new(NoOpHostKeyStore),
-            &ResolvingConnector,
-            input,
-            None,
-            Duration::from_millis(200),
-        )
-        .await
-        .expect("der Verbindungstest liefert ein Ergebnis, keinen CommandError");
-
-        let TestConnectionResult::NetworkError { message, code } = &result else {
-            panic!("erwartet NetworkError, bekam {result:?}");
-        };
-        assert_eq!(*code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
-        assert!(
-            !message.contains("Geheim-0098"),
-            "die Nutzlast bleibt auch hier draußen: {message}"
-        );
-    }
-
     /// Spec 0098, T7 (A4, `NotFound`): Fehlt der Eintrag des Jump-Hosts
     /// ganz, bleibt es bei `SSH_CREDENTIAL_RESOLUTION_FAILED` — „kein
     /// Eintrag" ist keine Störung des Schlüsselbunds (Spec 0071 A14/I4).
@@ -773,7 +702,7 @@ mod tests {
     /// Credential-Fehler als Schlüsselbund-Fehler melden und T5 wäre
     /// trotzdem grün.
     #[tokio::test]
-    async fn test_spec_0098_t7_a_missing_jump_host_entry_is_not_a_keychain_failure() {
+    async fn test_spec_0098_t7_a_missing_jump_host_entry_is_not_a_secret_store_failure() {
         let jump_id = ServerId::new();
         let jump_ref = ssh_manager_core::profiles::CredentialRef::new("server:jump:password");
         let profile_store = InMemoryProfileStore::new()
@@ -791,7 +720,6 @@ mod tests {
             &profile_store,
             &real_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &ResolvingConnector,
             input,
@@ -846,7 +774,6 @@ mod tests {
             &profile_store,
             &real_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &ResolvingConnector,
             input,
@@ -859,7 +786,7 @@ mod tests {
         let TestConnectionResult::NetworkError { message, code } = &result else {
             panic!("erwartet NetworkError, bekam {result:?}");
         };
-        assert_eq!(*code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert_eq!(*code, Some(crate::error::SECRET_STORE_FAILED));
         assert!(
             message.contains("middleuser@middle.invalid:22"),
             "der mittlere Hop muss benannt sein: {message}"
@@ -879,7 +806,7 @@ mod tests {
     /// gilt für alle Arten aus `resolve_auth`; ohne diesen Test wäre nur der
     /// Passwort-Zweig belegt.
     #[tokio::test]
-    async fn test_spec_0098_t13_a_failing_jump_host_passphrase_reports_the_keychain() {
+    async fn test_spec_0098_t13_a_failing_jump_host_passphrase_reports_a_secret_store_failure() {
         let jump_id = ServerId::new();
         let key_ref = ssh_manager_core::profiles::CredentialRef::new("server:jump:private_key");
         let passphrase_ref =
@@ -914,7 +841,6 @@ mod tests {
             &profile_store,
             &real_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &ResolvingConnector,
             input,
@@ -927,7 +853,7 @@ mod tests {
         let TestConnectionResult::NetworkError { message, code } = &result else {
             panic!("erwartet NetworkError, bekam {result:?}");
         };
-        assert_eq!(*code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert_eq!(*code, Some(crate::error::SECRET_STORE_FAILED));
         assert!(
             message.contains("Passphrase"),
             "die Art des Secrets gehört in die Meldung: {message}"
@@ -981,7 +907,6 @@ mod tests {
             &profile_store,
             &real_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &ResolvingConnector,
             input,
@@ -994,7 +919,7 @@ mod tests {
         let TestConnectionResult::NetworkError { message, code } = &result else {
             panic!("erwartet NetworkError, bekam {result:?}");
         };
-        assert_eq!(*code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert_eq!(*code, Some(crate::error::SECRET_STORE_FAILED));
         assert!(
             message.contains("Key"),
             "die Art des gescheiterten Secrets gehört in die Meldung: {message}"
@@ -1051,7 +976,6 @@ mod tests {
             &profile_store(),
             &failing_real_store(),
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &ResolvingConnector,
             ServerInput {
@@ -1064,7 +988,7 @@ mod tests {
         .await
         .expect_err("ein nicht lesbares Ziel-Secret darf keinen Verbindungstest auslösen");
 
-        assert_eq!(err.code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert_eq!(err.code, Some(crate::error::SECRET_STORE_FAILED));
         assert!(
             !err.message.contains("Geheim-0098"),
             "die Nutzlast bleibt draußen: {}",
@@ -1078,7 +1002,6 @@ mod tests {
             &profile_store(),
             &failing_real_store(),
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &ResolvingConnector,
             password_input(),
@@ -1103,7 +1026,6 @@ mod tests {
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Success),
             password_input(),
@@ -1125,7 +1047,6 @@ mod tests {
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::UnknownHostKey),
             password_input(),
@@ -1150,7 +1071,6 @@ mod tests {
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::MismatchHostKey),
             password_input(),
@@ -1175,7 +1095,6 @@ mod tests {
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::AuthenticationFailed),
             password_input(),
@@ -1197,7 +1116,6 @@ mod tests {
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::NetworkError),
             password_input(),
@@ -1219,7 +1137,6 @@ mod tests {
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Timeout),
             password_input(),
@@ -1246,7 +1163,6 @@ mod tests {
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Success),
             input,
@@ -1298,7 +1214,6 @@ mod tests {
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Success),
             input,
@@ -1368,7 +1283,6 @@ mod tests {
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &MockConnector(MockOutcome::Success),
             input,
@@ -1378,7 +1292,7 @@ mod tests {
         .await
         .expect_err("ein nicht lesbares Secret darf keinen Verbindungstest auslösen");
 
-        assert_eq!(err.code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert_eq!(err.code, Some(crate::error::SECRET_STORE_FAILED));
         assert!(
             !err.message.contains("LIBTEXT-0098") && !err.message.contains("Geheim-0098"),
             "die Nutzlast der Bibliothek darf das Frontend nicht erreichen: {}",
@@ -1487,7 +1401,6 @@ mod tests {
             &profile_store,
             &real_credential_store,
             &MockKeyFileReader::new(),
-            AVAILABLE,
             Arc::new(NoOpHostKeyStore),
             &InspectingConnector,
             input,
@@ -1596,7 +1509,6 @@ mod tests {
         let test_auth = resolve_final_hop_auth(
             &ephemeral,
             &real_store,
-            AVAILABLE,
             kind.input(pasted),
             existing_auth.as_ref(),
         )
@@ -1608,7 +1520,6 @@ mod tests {
         let save_store = seed();
         let save_auth = crate::server_credentials::resolve_auth_method(
             &save_store,
-            AVAILABLE,
             ServerId::new(),
             kind.input(pasted),
             existing_auth.as_ref(),
@@ -1826,10 +1737,8 @@ mod tests {
         let seed = || {
             let store = InMemoryCredentialStore::new();
             let existing = existing_input().map(|input| {
-                crate::server_credentials::resolve_auth_method(
-                    &store, AVAILABLE, server_id, input, None,
-                )
-                .expect("Ausgangszustand des bestehenden Servers muss speicherbar sein")
+                crate::server_credentials::resolve_auth_method(&store, server_id, input, None)
+                    .expect("Ausgangszustand des bestehenden Servers muss speicherbar sein")
             });
             (store, existing)
         };
@@ -1845,7 +1754,6 @@ mod tests {
         let via_test = resolve_final_hop_auth(
             &ephemeral,
             &real_store,
-            AVAILABLE,
             slot.input(pasted),
             existing.as_ref(),
         )
@@ -1876,7 +1784,6 @@ mod tests {
         let (save_store, existing) = seed();
         let via_save = crate::server_credentials::resolve_auth_method(
             &save_store,
-            AVAILABLE,
             server_id,
             slot.input(pasted),
             existing.as_ref(),

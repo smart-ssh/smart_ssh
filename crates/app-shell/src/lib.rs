@@ -21,6 +21,10 @@ mod local_server;
 mod mcp_backend;
 mod mcp_settings;
 mod risk_second_opinion;
+/// Spec 0101, Teil 0 Frage 2: die gemessene Annahme über Tauris
+/// Async-Runtime, auf der der synchrone Secret-Speicher steht.
+#[cfg(test)]
+mod runtime_assumptions;
 /// Spec 0075, §7.3: den bestätigten Importplan ausführen — der einzige
 /// Schritt, in dem überhaupt eine Schlüsseldatei geöffnet wird (§5.1).
 mod ssh_config_apply;
@@ -112,7 +116,11 @@ fn build_app_state(
     }
     tracing::info!(?keychain, "probed OS keychain availability");
 
-    let credential_store = KeyringCredentialStore::new();
+    // **Nur noch für K** (Spec 0101, E2/A9): Der Schlüsselbund des
+    // Betriebssystems trägt ab Etappe 2 ausschließlich den Wurzelschlüssel.
+    // Die Secrets selbst liegen in der verschlüsselten Datenbank, hinter
+    // `AppState.credential_store` (s. unten).
+    let keyring_store = KeyringCredentialStore::new();
 
     // Spec 0101, A3/A5/A6: Der Start entscheidet nach Dateizustand und
     // Schlüsselzustand, **bevor** eine Migration läuft — und fasst in keinem
@@ -135,7 +143,7 @@ fn build_app_state(
     let opened =
         match tauri::async_runtime::block_on(app_logic::database_startup::open_or_prepare_database(
             &db_path,
-            &credential_store,
+            &keyring_store,
             keychain,
             &prompt,
         )) {
@@ -177,6 +185,20 @@ fn build_app_state(
     let chat_content_key = opened.root_key;
     let ai_provider_store = profile_store.ai_provider_store();
     let policy_store = profile_store.policy_store();
+
+    // Spec 0101, A9: Der produktive `CredentialStore` ist ab hier die
+    // verschlüsselte Datenbank, nicht mehr der Schlüsselbund.
+    //
+    // **Der Griff auf die Runtime** (Teil 0, Frage 2): `build_app_state`
+    // läuft **außerhalb** jeder Async-Runtime (`run()` wird ohne
+    // `#[tokio::main]` aufgerufen, s. Doc-Kommentar oben) — `Handle::
+    // current()` würde hier panicken. Deshalb wird er innerhalb eines
+    // `block_on` geholt, also im Kontext von Tauris Runtime, und dem Store
+    // mitgegeben. Welchen Weg der Store damit nimmt und warum, steht im
+    // Modul-Kommentar von `persistence_sqlite::credential_store`.
+    let runtime_handle =
+        tauri::async_runtime::block_on(async { tokio::runtime::Handle::current() });
+    let credential_store = profile_store.credential_store(runtime_handle);
 
     // Spec 0036/0040/0057: derselbe Cipher (und damit derselbe Schlüssel)
     // für alle drei Stores — kein weiterer Verschlüsselungsmechanismus für
