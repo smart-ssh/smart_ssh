@@ -17,7 +17,7 @@ directories = "6.0.0"
 # `sqlite-bundled`-Feature (plain SQLite) zu laufen. `sqlx-sqlite` zieht
 # `libsqlite3-sys` ohnehin schon (mit Feature `bundled`); diese explizite
 # Abhängigkeit auf dieselbe Version unifiziert ihr Feature-Set per Cargo
-# (gemessen, s. Beilage BL-0314: `bundled-sqlcipher-vendored-openssl` →
+# (gemessen, s. Spec 0101 Abschnitt 1 „Messungen“: `bundled-sqlcipher-vendored-openssl` →
 # `bundled-sqlcipher` → `bundled`, deckungsgleich mit `sqlx-sqlite/bundled`)
 # statt eine zweite, konkurrierende SQLite-Kopie zu bauen.
 libsqlite3-sys = { version = "=0.37.0", features = ["bundled-sqlcipher-vendored-openssl"] }

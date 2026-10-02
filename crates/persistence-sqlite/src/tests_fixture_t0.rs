@@ -24,6 +24,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use sqlx::Connection;
+
 use ssh_manager_core::ai::{ChatMessage, MessageContent, ProviderId, ProviderType, Role};
 use ssh_manager_core::crypto::{ChaCha20Poly1305Cipher, ContentCipher};
 use ssh_manager_core::profiles::{
@@ -31,7 +33,7 @@ use ssh_manager_core::profiles::{
 };
 use ssh_manager_core::shared::ServerId;
 
-use crate::{AiProviderConfig, SqliteProfileStore};
+use crate::{AiProviderConfig, PersistenceError, SqliteProfileStore};
 
 const HOST_MARKER: &str = "host-0101.example";
 const USER_MARKER: &str = "user-0101";
@@ -169,6 +171,38 @@ async fn generate_fixture_once() {
     println!("T0-Fixture erzeugt: {}", path.display());
 }
 
+/// Richtet die Prüfsummen in `_sqlx_migrations` der übergebenen **Kopie**
+/// auf die des laufenden Builds aus (Spec 0101 §9 Klarstellung 2): Windows
+/// checkt die Migrations-`.sql`-Dateien mit CRLF aus (`.gitattributes`),
+/// wodurch die vom `sqlx::migrate!()`-Makro zur Compile-Zeit aus dem
+/// Dateiinhalt berechnete Prüfsumme von der in der (unter LF geschriebenen)
+/// Fixture gespeicherten abweicht — `sqlx` lehnt das Öffnen sonst mit
+/// `Migrate(VersionMismatch(_))` ab, obwohl der SQL-Inhalt bis auf die
+/// Zeilenenden identisch ist. Ändert nur die Prüfsumme der (bis zu 14)
+/// bereits vorhandenen Einträge — `WHERE version = ?` trifft nie eine
+/// Version, die die Kopie noch nicht kennt —, fügt keine neue Zeile hinzu
+/// und führt keine Migration aus. Die eingecheckte Fixture-Datei selbst
+/// bleibt unangetastet, weil immer nur die vom Aufrufer übergebene Kopie
+/// geöffnet wird. `pub(crate)`, nicht nur für diesen Test: T4–T6 (Commit 4
+/// dieser Spec) öffnen dieselbe Fixture und brauchen denselben Abgleich.
+pub(crate) async fn align_migration_checksums_to_current_build(copy_path: &Path) {
+    let options = sqlx::sqlite::SqliteConnectOptions::new().filename(copy_path);
+    let mut conn = sqlx::SqliteConnection::connect_with(&options)
+        .await
+        .expect("Kopie für Prüfsummen-Abgleich öffenbar");
+    for migration in sqlx::migrate!().iter() {
+        sqlx::query("UPDATE _sqlx_migrations SET checksum = ? WHERE version = ?")
+            .bind(migration.checksum.as_ref())
+            .bind(migration.version)
+            .execute(&mut conn)
+            .await
+            .expect("Prüfsumme in _sqlx_migrations aktualisierbar");
+    }
+    conn.close()
+        .await
+        .expect("Verbindung nach Abgleich schließbar");
+}
+
 /// T0 (Spec 0101, §7): Nachweis, dass die eingecheckte Fixture tatsächlich
 /// das ist, was T4–T6 (Commit 4) brauchen. Geprüft an einer **Kopie** —
 /// das Öffnen mit SQLite legt ggf. `-wal`/`-shm` neben die Datei an, und
@@ -196,6 +230,13 @@ async fn test_t0_fixture_has_14_migrations_all_markers_and_decryptable_chat_cont
     let tmp_dir = tempfile::tempdir().expect("Temp-Verzeichnis anlegbar");
     let copy_path = tmp_dir.path().join("t0-copy.sqlite3");
     std::fs::copy(&fixture, &copy_path).expect("Fixture kopierbar");
+    // Spec 0101, §9 Klarstellung 2: Prüfsummen in der Kopie auf die des
+    // laufenden Builds ausrichten, bevor `connect` migriert — sonst scheitert
+    // das auf Windows (CRLF-Checkout der `.sql`-Dateien) mit
+    // `Migrate(VersionMismatch(1))`, s.
+    // `test_align_migration_checksums_recovers_opening_from_a_deliberate_mismatch`
+    // unten für den Beleg.
+    align_migration_checksums_to_current_build(&copy_path).await;
 
     let store = SqliteProfileStore::connect(&copy_path)
         .await
@@ -253,5 +294,63 @@ async fn test_t0_fixture_has_14_migrations_all_markers_and_decryptable_chat_cont
         "Chat-Marker nach Entschlüsselung mit T0_TEST_KEY nicht gefunden: {messages:?}"
     );
 
+    store.pool.close().await;
+}
+
+/// Beleg zu `align_migration_checksums_to_current_build` (Spec 0101, §9
+/// Klarstellung 2): verfälscht in zwei **Kopien** der Fixture gezielt die
+/// Prüfsumme der ersten Migration (steht hier für eine CRLF-bedingte
+/// Abweichung, wie sie unter Windows am echten Build entsteht) und zeigt,
+/// dass das Öffnen ohne die Hilfsfunktion mit `Migrate(VersionMismatch(1))`
+/// scheitert, mit ihr aber gelingt — der Gegenbeweis, dass die
+/// Hilfsfunktion tatsächlich greift, nicht nur zufällig keinen Unterschied
+/// macht.
+#[tokio::test]
+async fn test_align_migration_checksums_recovers_opening_from_a_deliberate_mismatch() {
+    let fixture = fixture_path();
+    assert!(
+        fixture.exists(),
+        "T0-Fixture fehlt unter {fixture:?} — s. Moduldoku `generate_fixture_once`"
+    );
+    let tmp_dir = tempfile::tempdir().expect("Temp-Verzeichnis anlegbar");
+
+    async fn corrupt_first_migration_checksum(copy_path: &Path) {
+        let options = sqlx::sqlite::SqliteConnectOptions::new().filename(copy_path);
+        let mut conn = sqlx::SqliteConnection::connect_with(&options)
+            .await
+            .expect("Kopie zum Verfälschen öffenbar");
+        sqlx::query("UPDATE _sqlx_migrations SET checksum = X'00' WHERE version = 1")
+            .execute(&mut conn)
+            .await
+            .expect("Prüfsumme verfälschbar");
+        conn.close().await.expect("Verbindung schließbar");
+    }
+
+    // Ohne Hilfsfunktion: das Öffnen muss mit genau diesem Fehler scheitern.
+    let without_fix = tmp_dir.path().join("t0-mismatch-without-fix.sqlite3");
+    std::fs::copy(&fixture, &without_fix).expect("Fixture kopierbar");
+    corrupt_first_migration_checksum(&without_fix).await;
+    match SqliteProfileStore::connect(&without_fix).await {
+        Err(PersistenceError::Migrate(sqlx::migrate::MigrateError::VersionMismatch(version))) => {
+            assert_eq!(version, 1);
+        }
+        Err(other) => panic!(
+            "erwartet: Migrate(VersionMismatch(1)) bei verfälschter Prüfsumme ohne Abgleich; \
+             erhalten: {other}"
+        ),
+        Ok(_) => panic!(
+            "erwartet: Öffnen scheitert an der verfälschten Prüfsumme ohne Abgleich, \
+             ist aber geglückt"
+        ),
+    }
+
+    // Mit Hilfsfunktion, auf derselben Verfälschung: das Öffnen muss gelingen.
+    let with_fix = tmp_dir.path().join("t0-mismatch-with-fix.sqlite3");
+    std::fs::copy(&fixture, &with_fix).expect("Fixture kopierbar");
+    corrupt_first_migration_checksum(&with_fix).await;
+    align_migration_checksums_to_current_build(&with_fix).await;
+    let store = SqliteProfileStore::connect(&with_fix)
+        .await
+        .expect("nach dem Abgleich sollte die Kopie trotz vorheriger Verfälschung öffenbar sein");
     store.pool.close().await;
 }
