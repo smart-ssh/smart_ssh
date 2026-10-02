@@ -193,8 +193,10 @@ pub trait StartupPrompt {
 
     /// A5: zweite Bestätigung für „Neu anfangen“. `renamed_to` ist der Name,
     /// den die bisherige Datei bekommt — er gehört in den Text, damit der
-    /// Nutzer sie wiederfindet. `false` heißt: es passiert nichts.
-    fn confirm_start_over(&self, renamed_to: &str) -> bool;
+    /// Nutzer sie wiederfindet. `None`, wenn es keine Datei umzubenennen
+    /// gibt (Feld *fehlt* × *ungültig*): Dann darf der Text auch keine
+    /// nennen. `false` heißt: es passiert nichts.
+    fn confirm_start_over(&self, renamed_to: Option<&str>) -> bool;
 
     /// D4: zweite Bestätigung für „Neuen Schlüssel erzeugen“ (A5,
     /// „Zweite Bestätigung wie A5“). Die Datenbank wird dabei **nicht**
@@ -244,6 +246,24 @@ pub async fn open_or_prepare_database(
     keychain: KeychainAvailability,
     prompt: &dyn StartupPrompt,
 ) -> Result<OpenedDatabase, StartupAbort> {
+    // spec-reviewer Runde 1: A6 verweigert die Umwandlung eines Symlinks
+    // (T20), aber `detect_database_file_state` folgt ihm — eine
+    // Verknuepfung auf ein **nicht vorhandenes** Ziel ergab damit *fehlt*,
+    // und `create_if_missing` legte die neue, verschluesselte Datenbank am
+    // Ziel der Verknuepfung an. Diese Asymmetrie war unbeabsichtigt. Jetzt
+    // gilt die Regel aus A6 fuer **jeden** Weg: Ist `smart-ssh.db` eine
+    // Verknuepfung, endet der Start mit derselben Meldung, und es wird
+    // nichts angelegt, geoeffnet oder veraendert.
+    if std::fs::symlink_metadata(db_path)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        return Err(StartupAbort::Fatal {
+            kind: ConnectFailureKind::SymlinkedDatabase,
+            detail: "die Datenbankdatei ist eine symbolische Verknuepfung".to_string(),
+        });
+    }
+
     loop {
         let file = match detect_database_file_state(db_path) {
             Ok(state) => state,
@@ -274,7 +294,16 @@ pub async fn open_or_prepare_database(
         // Umbenennen weiter bei einem unbrauchbaren Schlüssel).
         match plan {
             StartupPlan::CreateFresh | StartupPlan::OpenExisting => {
-                let key = root_key.expect("Present liefert immer einen Schlüssel");
+                // spec-reviewer Runde 1: kein `expect` im Startpfad. Die
+                // Zusicherung haelt (nur `KeyState::Present` fuehrt
+                // hierher, und `read_key_state` liefert Zustand und
+                // Schluessel als Paar), aber ein Panic an dieser Stelle
+                // laeuft vor jedem Fenster — also genau das
+                // undiagnostizierbare Aufblitzen, das Spec 0059 beseitigt
+                // hat. Lieber ein sichtbarer Startfehler.
+                let Some(key) = root_key else {
+                    return Err(missing_key_despite_present());
+                };
                 match open_encrypted(db_path, &key).await {
                     Ok(opened) => return Ok(opened),
                     // D2: Die Datei ist mit dem vorhandenen Schlüssel nicht
@@ -295,7 +324,9 @@ pub async fn open_or_prepare_database(
                     .map_err(fatal_after_start_over);
             }
             StartupPlan::Convert => {
-                let key = root_key.expect("Present liefert immer einen Schlüssel");
+                let Some(key) = root_key else {
+                    return Err(missing_key_despite_present());
+                };
                 return convert_then_open(db_path, &key).await;
             }
             StartupPlan::GenerateKeyThenConvert => {
@@ -357,6 +388,15 @@ enum Abort {
     Fatal(StartupAbort),
 }
 
+/// Kann nach heutigem Code nicht vorkommen (s. Aufrufstellen) — und endet
+/// deshalb sichtbar statt in einem Panic vor dem ersten Fenster.
+fn missing_key_despite_present() -> StartupAbort {
+    StartupAbort::Fatal {
+        kind: ConnectFailureKind::Other,
+        detail: "Schluesselzustand Present, aber kein Schluessel geliefert".to_string(),
+    }
+}
+
 /// Nach „Neu anfangen“ bzw. nach dem Anlegen eines neuen K darf die Datei
 /// nicht mehr unlesbar sein. Passiert es doch (jemand hat zwischenzeitlich
 /// eine Datei untergeschoben), endet der Start sichtbar statt in einer
@@ -387,16 +427,23 @@ fn start_over(
     }
     // Der Name steht **vor** der Bestätigung fest, damit der Dialog ihn
     // nennen kann (A5: „nennt im Dialog den neuen Dateinamen“).
+    //
+    // `None`, wenn es gar keine Datei zum Umbenennen gibt — das Feld
+    // *fehlt* × *ungültig* der Tabelle A3 führt ebenfalls über D3 hierher
+    // (spec-reviewer Runde 1). Vorher nannten Bestätigung und Meldung dort
+    // einen Dateinamen, den es nicht gab.
     let plan = plan_start_over_renames(db_path);
     let renamed_to = plan.main_target_name();
-    if !prompt.confirm_start_over(&renamed_to) {
+    if !prompt.confirm_start_over(renamed_to.as_deref()) {
         return Err(StartupAbort::UserQuit);
     }
     plan.execute().map_err(|err| StartupAbort::Fatal {
         kind: ConnectFailureKind::Other,
         detail: format!("Umbenennen fehlgeschlagen: {err}"),
     })?;
-    prompt.notify_started_over(&renamed_to);
+    if let Some(renamed_to) = renamed_to {
+        prompt.notify_started_over(&renamed_to);
+    }
     Ok(())
 }
 
@@ -469,19 +516,35 @@ pub struct StartOverPlan {
 
 impl StartOverPlan {
     /// Der Dateiname (ohne Verzeichnis), den die bisherige Datenbank
-    /// bekommt.
-    pub fn main_target_name(&self) -> String {
+    /// bekommt — `None`, wenn es keine Datenbankdatei gibt.
+    pub fn main_target_name(&self) -> Option<String> {
+        if self.renames.is_empty() {
+            return None;
+        }
         self.main_target
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default()
     }
 
-    /// Benennt um — **löscht nichts** (A5). Ein bereits vorhandener
-    /// Zielname wird nicht überschrieben, sondern durch einen Zähler
-    /// umgangen (s. [`plan_start_over_renames`]).
+    /// Benennt um — **löscht nichts** (A5).
+    ///
+    /// Die Prüfung direkt vor jedem `rename` ist der eigentliche Beweis
+    /// dafür (spec-reviewer Runde 1): Der Zähler in
+    /// [`plan_start_over_renames`] kann theoretisch auslaufen, und zwischen
+    /// Planen und Ausführen liegt die zweite Bestätigung des Nutzers, also
+    /// beliebig viel Zeit. `fs::rename` würde ein vorhandenes Ziel
+    /// stillschweigend überschreiben; hier bricht es stattdessen ab.
     pub fn execute(&self) -> std::io::Result<()> {
         for (from, to) in &self.renames {
+            if std::fs::symlink_metadata(to).is_ok() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    format!(
+                        "{} existiert bereits — es wird nichts überschrieben",
+                        to.display()
+                    ),
+                ));
+            }
             std::fs::rename(from, to)?;
         }
         Ok(())
@@ -507,10 +570,16 @@ pub fn plan_start_over_renames(db_path: &Path) -> StartOverPlan {
 
     let mut renames = Vec::new();
     let main_target = with_suffix(db_path, &suffix);
+    // `-journal` mit (spec-reviewer Runde 1): A5 nennt wörtlich nur Datei,
+    // `-wal` und `-shm`, aber A6 Schritt 4 entfernt `-journal` „aus
+    // demselben Grund mit" — ein altes Rollback-Journal neben einer neuen,
+    // leeren Datenbank gehört zu einer anderen Datei. Strenger als der
+    // Wortlaut, nie nachlässiger.
     for candidate in [
         db_path.to_path_buf(),
         sibling(db_path, "-wal"),
         sibling(db_path, "-shm"),
+        sibling(db_path, "-journal"),
     ] {
         // `symlink_metadata`, nicht `exists`: Eine Verknüpfung ins Leere
         // soll ebenfalls umbenannt werden, statt liegen zu bleiben.
@@ -531,6 +600,7 @@ fn any_target_exists(db_path: &Path, suffix: &str) -> bool {
         db_path.to_path_buf(),
         sibling(db_path, "-wal"),
         sibling(db_path, "-shm"),
+        sibling(db_path, "-journal"),
     ]
     .iter()
     .any(|p| std::fs::symlink_metadata(with_suffix(p, suffix)).is_ok())

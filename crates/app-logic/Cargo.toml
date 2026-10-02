@@ -54,6 +54,11 @@ tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
 uuid = { version = "1.26.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
+# Spec 0101 (spec-reviewer Runde 1): Die Tests dieser Crate legen
+# Klartext-Datenbanken an (Ausgangszustand einer bestehenden
+# Installation) und brauchen dafuer `connect_plaintext`. Nur hier, nie
+# unter `[dependencies]`.
+persistence-sqlite = { version = "0.5.2", path = "../persistence-sqlite", features = ["test-support"] }
 tempfile = "3.27.0"
 # Spec 0020, Abschnitt 6 (Muster wie app-shell/Cargo.toml).
 ssh-manager-core = { path = "../core", features = ["test-support"] }

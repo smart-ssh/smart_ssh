@@ -309,6 +309,45 @@ async fn test_a2_a_connect_error_quoting_the_key_is_redacted() {
     );
 }
 
+/// A2 (spec-reviewer Runde 1): Die Erkennung greift auch bei einem
+/// **gekürzten** Zitat des Schlüssels — der Fall, der vorher durchgegangen
+/// wäre. Und sie schlägt nicht bei beliebigem Text an.
+#[test]
+fn test_a2_key_material_is_detected_even_in_a_truncated_quote() {
+    let key = test_key();
+    let pragma = key.pragma_value();
+    let hex = secrecy::ExposeSecret::expose_secret(&pragma)
+        .trim_start_matches("x'")
+        .trim_end_matches('\'')
+        .to_string();
+
+    assert!(crate::encryption::contains_key_material(&hex, &key));
+    // Nur die ersten 16 Hex-Zeichen (so zitiert ein gekürzter Fehlertext).
+    assert!(crate::encryption::contains_key_material(
+        &format!("near \"x'{}…\": syntax error", &hex[..16]),
+        &key
+    ));
+    // Ein Fenster aus der Mitte.
+    assert!(crate::encryption::contains_key_material(
+        &format!("irgendwas {} irgendwas", &hex[20..40]),
+        &key
+    ));
+    // Großschreibung.
+    assert!(crate::encryption::contains_key_material(
+        &hex[..32].to_uppercase(),
+        &key
+    ));
+
+    // Und keine Falschmeldung: 15 Zeichen sind unter der Fenstergröße,
+    // gewöhnlicher Text enthält nichts.
+    assert!(!crate::encryption::contains_key_material(&hex[..15], &key));
+    assert!(!crate::encryption::contains_key_material(
+        "Datenbankverbindung fehlgeschlagen: file is not a database",
+        &key
+    ));
+    assert!(!crate::encryption::contains_key_material("", &key));
+}
+
 /// A2: Ein Fehler **ohne** Schlüsselmaterial behält seine Variante — sonst
 /// verlöre der Startdialog die Unterscheidung aus Spec 0059 (Fall 4,
 /// `PermissionDenied`) und riete beim falschen Problem zum Backup.
@@ -320,6 +359,117 @@ fn test_a2_redaction_keeps_a_key_free_error_intact() {
 
     let kept = crate::encryption::redact_if_key_bearing(err, &key);
     assert_eq!(kept.classify(), crate::ConnectFailureKind::PermissionDenied);
+}
+
+/// A2 und §6 „Log/Redaction", mit Gegenbeweis in demselben Test
+/// (spec-reviewer Runde 1, blockierender Fund): Der Datenbankschlüssel
+/// darf in **keinem** `tracing`-Ereignis auftauchen.
+///
+/// `sqlx` fasst alle Pragmas zu einer Anweisung zusammen und führt sie
+/// durch seinen `QueryLogger` — Vorgabe `DEBUG` für jede Anweisung und
+/// `WARN` für eine, die länger als eine Sekunde braucht. Damit stand der
+/// vollständige Schlüssel mit `RUST_LOG=debug` bei jedem Verbindungsaufbau
+/// und beim Standard-Loglevel `info` auf dem Slow-Statement-Pfad in der
+/// Logdatei. `encrypted_connect_options` schaltet das Statement-Log
+/// deshalb ab.
+///
+/// Der Test schneidet den Ereignisstrom auf `TRACE` mit und prüft **beide**
+/// Richtungen:
+/// 1. mit den produktiven Optionen: kein Schlüsselmaterial im Strom;
+/// 2. mit derselben Fassung **ohne** `disable_statement_logging`: der
+///    Schlüssel steht darin. Ohne diesen zweiten Teil könnte der Test grün
+///    sein, weil der Mitschnitt nichts auffängt.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_a2_the_database_key_never_appears_in_a_tracing_event() {
+    use std::io::Write;
+    use std::sync::{Arc, Mutex, OnceLock};
+
+    /// Sammelt alle formatierten Ereignisse in einem Puffer.
+    #[derive(Clone, Default)]
+    struct SharedBuffer(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for SharedBuffer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().expect("Puffer").extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for SharedBuffer {
+        type Writer = SharedBuffer;
+        fn make_writer(&'a self) -> Self::Writer {
+            self.clone()
+        }
+    }
+
+    // Der Mitschnitt muss **global** sein: `sqlx`s SQLite-Treiber loggt aus
+    // einem eigenen Hintergrund-Thread, ein thread-lokaler Subscriber
+    // (`with_default`) würde ihn nicht sehen. Ein globaler Default lässt
+    // sich nur einmal je Prozess setzen — daher `OnceLock`.
+    static BUFFER: OnceLock<SharedBuffer> = OnceLock::new();
+    let buffer = BUFFER
+        .get_or_init(|| {
+            let buffer = SharedBuffer::default();
+            let subscriber = tracing_subscriber::fmt()
+                .with_writer(buffer.clone())
+                .with_max_level(tracing::Level::TRACE)
+                .with_ansi(false)
+                .finish();
+            tracing::subscriber::set_global_default(subscriber)
+                .expect("kein anderer globaler Subscriber in dieser Testsuite");
+            buffer
+        })
+        .clone();
+
+    let dir = tempfile::tempdir().expect("Temp-Verzeichnis");
+    let key = test_key();
+    let pragma = key.pragma_value();
+    let hex = secrecy::ExposeSecret::expose_secret(&pragma)
+        .trim_start_matches("x'")
+        .trim_end_matches('\'')
+        .to_string();
+
+    // --- 1. Produktiver Weg.
+    buffer.0.lock().unwrap().clear();
+    let store = SqliteProfileStore::connect_encrypted(&dir.path().join("mit-fix.db"), &key)
+        .await
+        .expect("anlegbar");
+    populate_markers(&store).await;
+    store.pool.close().await;
+    let captured = String::from_utf8_lossy(&buffer.0.lock().unwrap().clone()).to_string();
+    assert!(
+        !captured.to_ascii_lowercase().contains(&hex),
+        "der Datenbankschlüssel steht in einem tracing-Ereignis:\n{captured}"
+    );
+    assert!(
+        !crate::encryption::contains_key_material(&captured, &key),
+        "Schlüsselmaterial im tracing-Strom:\n{captured}"
+    );
+
+    // --- 2. Gegenbeweis: dieselbe Fassung ohne das Abschalten.
+    buffer.0.lock().unwrap().clear();
+    let leaking = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(dir.path().join("ohne-fix.db"))
+        .create_if_missing(true)
+        .foreign_keys(true)
+        .pragma(
+            "key",
+            format!("\"{}\"", secrecy::ExposeSecret::expose_secret(&pragma)),
+        )
+        .pragma("cipher_log_level", "NONE");
+    let leaking_store = SqliteProfileStore::connect_with_probe(leaking, true)
+        .await
+        .expect("auch ohne das Abschalten öffenbar");
+    leaking_store.pool.close().await;
+    let captured = String::from_utf8_lossy(&buffer.0.lock().unwrap().clone()).to_string();
+    assert!(
+        crate::encryption::contains_key_material(&captured, &key),
+        "der Gegenbeweis greift nicht — ohne `disable_statement_logging` müsste der \
+         Schlüssel im Mitschnitt stehen. Dann prüft Teil 1 nichts:\n{captured}"
+    );
 }
 
 /// A8: `cipher_log_level` kommt tatsächlich auf der Verbindung an — und der

@@ -9,6 +9,16 @@ publish.workspace = true
 name = "persistence_sqlite"
 path = "src/lib.rs"
 
+[features]
+# Spec 0101 (spec-reviewer Runde 1): macht `SqliteProfileStore::
+# connect_plaintext` ausserhalb dieser Crate sichtbar -- den Weg, der eine
+# **unverschluesselte** Datenbank oeffnet. Nur Tests duerfen ihn gehen;
+# `app-logic`/`app-shell` aktivieren das Feature deshalb ausschliesslich
+# unter `[dev-dependencies]` (dasselbe Muster wie `app-logic/test-support`).
+# Kein Produktivbau aktiviert es, und damit faengt der
+# `cargo build --workspace`-Schritt des Gates einen Produktivaufruf ab.
+test-support = []
+
 [dependencies]
 async-trait = "0.1.92"
 chrono = { version = "0.4.45", features = ["serde"] }
@@ -34,3 +44,17 @@ uuid = { version = "1.26.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
+# Spec 0101, A2 (spec-reviewer Runde 1): Der Nachweis, dass der
+# Datenbankschluessel in keinem `tracing`-Ereignis auftaucht, schneidet den
+# Ereignisstrom mit. Dieselbe Fassung und dasselbe Muster wie in
+# `core`/`ai-providers`/`app-shell`.
+tracing-subscriber = { version = "0.3.23", features = ["json"] }
+
+# Spec 0101 (spec-reviewer Runde 1): Das Beispiel oeffnet die Datenbank
+# **unverschluesselt** und braucht dafuer `connect_plaintext`, das hinter
+# `test-support` liegt. Mit `required-features` scheitert es nicht an einem
+# unerklaerlichen Compilerfehler, sondern wird ohne das Feature gar nicht
+# gebaut -- und ein `cargo clippy --all-targets` des Gates bleibt gruen.
+[[example]]
+name = "add_test_server"
+required-features = ["test-support"]

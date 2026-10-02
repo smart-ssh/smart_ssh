@@ -237,10 +237,16 @@ pub fn d4_new_key_for_plaintext_text(db_path: &Path, language: Language) -> Choi
 
 /// Spec 0101, A5: die **zweite** Bestätigung für „Neu anfangen“ — mit dem
 /// Namen, den die bisherige Datei bekommt.
-pub fn start_over_confirmation_text(renamed_to: &str, language: Language) -> ChoiceDialogText {
-    let renamed_to = sanitize_text_for_display(renamed_to);
-    let (title, message, confirm) = match language {
-        Language::De => (
+pub fn start_over_confirmation_text(
+    renamed_to: Option<&str>,
+    language: Language,
+) -> ChoiceDialogText {
+    // `None`: Es gibt keine Datenbankdatei (Feld *fehlt* × *ungültig* der
+    // Tabelle A3). Dann darf der Text auch keine nennen — vorher stand dort
+    // ein Dateiname, den es nicht gab (spec-reviewer Runde 1).
+    let renamed_to = renamed_to.map(sanitize_text_for_display);
+    let (title, message, confirm) = match (language, renamed_to.as_deref()) {
+        (Language::De, Some(renamed_to)) => (
             "Wirklich neu anfangen?",
             format!(
                 "Smart SSH startet danach mit einer leeren Datenbank. Server, Gruppen, \
@@ -250,7 +256,16 @@ pub fn start_over_confirmation_text(renamed_to: &str, language: Language) -> Cho
             ),
             "Ja, neu anfangen",
         ),
-        Language::En => (
+        (Language::De, None) => (
+            "Wirklich neu anfangen?",
+            "Es gibt noch keine Datenbank — Smart SSH legt eine neue an und erzeugt dafür \
+             einen neuen Schlüssel. Der bisher hinterlegte, unbrauchbare Schlüssel wird \
+             dabei ersetzt; ein mit ihm verschlüsselter Chatverlauf wäre damit endgültig \
+             unlesbar."
+                .to_string(),
+            "Ja, neu anfangen",
+        ),
+        (Language::En, Some(renamed_to)) => (
             "Really start over?",
             format!(
                 "Smart SSH will then start with an empty database. Servers, groups, rules, \
@@ -258,6 +273,14 @@ pub fn start_over_confirmation_text(renamed_to: &str, language: Language) -> Cho
                  Nothing is deleted: the existing file is kept as \"{renamed_to}\" in the \
                  data directory."
             ),
+            "Yes, start over",
+        ),
+        (Language::En, None) => (
+            "Really start over?",
+            "There is no database yet — Smart SSH will create one and generate a new key \
+             for it. The unusable key stored so far is replaced in the process; a chat \
+             history encrypted with it would be permanently unreadable."
+                .to_string(),
             "Yes, start over",
         ),
     };
@@ -355,7 +378,11 @@ mod tests {
                 d2_not_readable_text(path, language),
                 d3_unusable_key_text(path, language),
                 d4_new_key_for_plaintext_text(path, language),
-                start_over_confirmation_text("smart-ssh.db.unreadable-20261002T120000Z", language),
+                start_over_confirmation_text(
+                    Some("smart-ssh.db.unreadable-20261002T120000Z"),
+                    language,
+                ),
+                start_over_confirmation_text(None, language),
                 new_key_confirmation_text(language),
             ];
             for dialog in dialogs {
@@ -430,7 +457,7 @@ mod tests {
     #[test]
     fn test_control_characters_in_a_file_name_cannot_continue_the_text() {
         let text = start_over_confirmation_text(
-            "smart-ssh.db.unreadable-x\n\nAlles gelöscht!",
+            Some("smart-ssh.db.unreadable-x\n\nAlles gelöscht!"),
             Language::De,
         );
         assert!(

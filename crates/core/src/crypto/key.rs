@@ -26,7 +26,6 @@ const KEY_LEN: usize = 32; // 256 Bit
 /// gemeinsamer Fehlerfall wäre genau die Verwechslung, die die
 /// Angriffsrichtung „Fehlerart verwechselt (`Backend` als `NotFound`)"
 /// beschreibt.
-#[derive(Debug)]
 pub enum RootKeyState {
     /// K liegt vor.
     Present([u8; KEY_LEN]),
@@ -41,6 +40,24 @@ pub enum RootKeyState {
     Unreachable(String),
     /// Der Eintrag ist da, aber kein gültiger 256-Bit-Schlüssel.
     Invalid,
+}
+
+/// Zeigt **nie** den Schlüssel (spec-reviewer Runde 1, A2/A19). Mit einem
+/// `#[derive(Debug)]` stand K als Byte-Liste in jeder `{:?}`-Ausgabe und
+/// wäre ein einzelnes `?state` in einem `tracing`-Makro vom Logfile
+/// entfernt gewesen — dieselbe Lücke, gegen die `DatabaseKey` eigens
+/// gebaut ist. Der Zustand bleibt sichtbar, der Schlüssel nicht.
+impl std::fmt::Debug for RootKeyState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RootKeyState::Present(_) => f.write_str("Present(<nicht anzeigbar>)"),
+            RootKeyState::NotFound => f.write_str("NotFound"),
+            // Auch der Grund nicht: Er ist die Nutzlast der
+            // `keyring`-Bibliothek (Spec 0098, A5).
+            RootKeyState::Unreachable(_) => f.write_str("Unreachable(<nicht anzeigbar>)"),
+            RootKeyState::Invalid => f.write_str("Invalid"),
+        }
+    }
 }
 
 /// Liest den 256-Bit-Wurzelschlüssel K aus `store` — und **erzeugt dabei

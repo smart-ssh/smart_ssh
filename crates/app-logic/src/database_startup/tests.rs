@@ -134,7 +134,7 @@ struct ScriptedPrompt {
     confirm_start_over: bool,
     confirm_new_key: bool,
     asked: Mutex<Vec<StartupDialog>>,
-    confirm_texts: Mutex<Vec<String>>,
+    confirm_texts: Mutex<Vec<Option<String>>>,
     notified: Mutex<Vec<String>>,
 }
 
@@ -172,11 +172,11 @@ impl StartupPrompt for ScriptedPrompt {
         }
     }
 
-    fn confirm_start_over(&self, renamed_to: &str) -> bool {
+    fn confirm_start_over(&self, renamed_to: Option<&str>) -> bool {
         self.confirm_texts
             .lock()
             .unwrap()
-            .push(renamed_to.to_string());
+            .push(renamed_to.map(str::to_string));
         self.confirm_start_over
     }
 
@@ -197,7 +197,7 @@ impl StartupPrompt for NoDialogExpected {
     fn ask(&self, dialog: StartupDialog) -> StartupChoice {
         panic!("in diesem Feld der Tabelle A3 darf kein Dialog erscheinen: {dialog:?}");
     }
-    fn confirm_start_over(&self, _renamed_to: &str) -> bool {
+    fn confirm_start_over(&self, _renamed_to: Option<&str>) -> bool {
         panic!("in diesem Feld darf keine Bestätigung erscheinen");
     }
     fn confirm_generate_new_key(&self) -> bool {
@@ -440,7 +440,17 @@ async fn test_t3_a_key_is_written_without_a_user_choice_only_in_the_two_generate
 }
 
 /// T3: In **jedem** Dialogfall bleibt die Datei byte-gleich, solange nichts
-/// gewählt ist — und es gibt nie einen Migrationsfehler („nie Code 7“).
+/// gewählt ist — kein `set` auf K, keine zweite Bestätigung, keine
+/// Umwandlung.
+///
+/// Den zweiten Teil von T3 („nie Code 7") trägt **nicht** dieser Test,
+/// sondern `persistence_sqlite::tests_encryption::
+/// test_a4_opening_a_plaintext_file_with_a_key_reports_the_key_case`: Dort
+/// wird geprüft, dass ein Schlüssel-Fall als `NotReadableWithKey`
+/// zurückkommt und nicht als Migrationsfehler. Hier wird die Datenbank in
+/// den geprüften Fällen gar nicht geöffnet, es könnte also auch kein
+/// Migrationsfehler entstehen (spec-reviewer Runde 1: der Kommentar
+/// behauptete vorher mehr, als der Rumpf prüft).
 #[tokio::test(flavor = "multi_thread")]
 async fn test_t3_in_every_dialog_case_the_file_stays_byte_identical_until_a_choice_is_made() {
     struct Case {
@@ -448,6 +458,10 @@ async fn test_t3_in_every_dialog_case_the_file_stays_byte_identical_until_a_choi
         behaviour: GetBehaviour,
         keychain: KeychainAvailability,
         expected_dialog: StartupDialog,
+        /// `true`: der Fall wird an einer **Klartext**-Datei geprüft (die
+        /// gefährlichere Variante — dort stehen echte Daten im Klartext,
+        /// und eine Umwandlung wäre unumkehrbar).
+        plaintext: bool,
     }
 
     let cases = [
@@ -456,6 +470,7 @@ async fn test_t3_in_every_dialog_case_the_file_stays_byte_identical_until_a_choi
             behaviour: GetBehaviour::Missing,
             keychain: available(),
             expected_dialog: StartupDialog::D2,
+            plaintext: false,
         },
         Case {
             name: "sonst × nicht erreichbar → D1 ohne Einrichten",
@@ -464,18 +479,47 @@ async fn test_t3_in_every_dialog_case_the_file_stays_byte_identical_until_a_choi
             expected_dialog: StartupDialog::D1 {
                 offers_password_setup: false,
             },
+            plaintext: false,
         },
         Case {
             name: "sonst × ungültig → D3",
             behaviour: GetBehaviour::Corrupt,
             keychain: available(),
             expected_dialog: StartupDialog::D3,
+            plaintext: false,
+        },
+        // spec-reviewer Runde 1: Dieser Fall fehlte — und er ist der
+        // wichtigste der Dialogfälle, weil hier eine vorhandene
+        // Klartext-Datenbank mit echten Daten auf dem Spiel steht.
+        Case {
+            name: "Klartext × nicht erreichbar → D1, Datei unangetastet",
+            behaviour: GetBehaviour::Failing,
+            keychain: available(),
+            expected_dialog: StartupDialog::D1 {
+                offers_password_setup: false,
+            },
+            plaintext: true,
+        },
+        // Und derselbe Fall mit bekanntem Grund: D1 **mit** Einrichten
+        // (A3, D1) — angeboten wird es erst in Etappe 3, entschieden hier.
+        Case {
+            name: "Klartext × kein Session-Bus → D1 mit Einrichten",
+            behaviour: GetBehaviour::Present,
+            keychain: unavailable(KeychainUnavailableReason::NoSessionBus),
+            expected_dialog: StartupDialog::D1 {
+                offers_password_setup: true,
+            },
+            plaintext: true,
         },
     ];
 
     for case in cases {
         let dir = tempfile::tempdir().unwrap();
-        let db_path = encrypted_database(dir.path()).await;
+        let db_path = if case.plaintext {
+            plaintext_database(dir.path()).await
+        } else {
+            encrypted_database(dir.path()).await
+        };
         let before = std::fs::read(&db_path).unwrap();
         let mtime_before = std::fs::metadata(&db_path).unwrap().modified().unwrap();
 
@@ -509,6 +553,14 @@ async fn test_t3_in_every_dialog_case_the_file_stays_byte_identical_until_a_choi
             case.name
         );
         assert_eq!(store.sets(), 0, "{}: kein set auf K", case.name);
+        if case.plaintext {
+            assert_eq!(
+                detect_database_file_state(&db_path).unwrap(),
+                DatabaseFileState::Plaintext,
+                "{}: die Klartext-Datei darf nicht umgewandelt worden sein",
+                case.name
+            );
+        }
         assert!(
             prompt.confirm_texts.lock().unwrap().is_empty(),
             "{}: ohne Wahl darf keine zweite Bestätigung kommen",
@@ -574,7 +626,9 @@ async fn test_t7_start_over_from_d2_renames_byte_identically_and_starts_fresh() 
         1,
         "genau eine zweite Bestätigung erwartet"
     );
-    let renamed_to = renamed_to[0].clone();
+    let renamed_to = renamed_to[0]
+        .clone()
+        .expect("mit vorhandener Datei muss der Dialog einen Namen nennen");
     assert!(
         renamed_to.starts_with("smart-ssh.db.unreadable-"),
         "der Dialogtext muss den neuen Namen nennen, war: {renamed_to}"
@@ -758,7 +812,7 @@ async fn test_t8_an_unreachable_key_does_not_open_the_database_and_retry_works()
                 self.store.set_behaviour(GetBehaviour::Present);
                 StartupChoice::Retry
             }
-            fn confirm_start_over(&self, _renamed_to: &str) -> bool {
+            fn confirm_start_over(&self, _renamed_to: Option<&str>) -> bool {
                 panic!("D1 führt nicht zu „Neu anfangen“")
             }
             fn confirm_generate_new_key(&self) -> bool {
@@ -800,7 +854,7 @@ fn test_a5_the_rename_plan_covers_all_three_files_and_overwrites_nothing() {
     std::fs::write(dir.path().join("smart-ssh.db-shm"), b"shm").unwrap();
 
     let plan = plan_start_over_renames(&db_path);
-    let main_name = plan.main_target_name();
+    let main_name = plan.main_target_name().expect("es gibt eine Datei");
     plan.execute().unwrap();
 
     assert!(!db_path.exists(), "das Original muss weg sein");
@@ -829,7 +883,7 @@ fn test_a5_the_rename_plan_covers_all_three_files_and_overwrites_nothing() {
     // Sicherung nicht überschreiben.
     std::fs::write(&db_path, b"zweiter").unwrap();
     let second = plan_start_over_renames(&db_path);
-    let second_name = second.main_target_name();
+    let second_name = second.main_target_name().expect("es gibt eine Datei");
     assert_ne!(second_name, main_name);
     second.execute().unwrap();
     assert_eq!(

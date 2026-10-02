@@ -74,6 +74,13 @@ impl SqliteProfileStore {
     /// („Keine stillen Rückfälle") verbietet. `connect` hieß sie bis Spec
     /// 0101 — ein Aufrufer, der den alten Namen benutzt, scheitert jetzt an
     /// der Kompilierung statt still eine Klartext-Datenbank anzulegen.
+    ///
+    /// **Hinter `test-support`** (spec-reviewer Runde 1): Der Name allein
+    /// war der ganze Schutz -- jede Crate des Workspace haette sie
+    /// aufrufen koennen. Jetzt faengt `cargo build --workspace` (ohne das
+    /// Feature, s. `CLAUDE.md`) einen Rueckfall in den Klartext-Pfad ab,
+    /// genau wie bei `connect_with`.
+    #[cfg(any(test, feature = "test-support"))]
     pub async fn connect_plaintext(db_path: &Path) -> PersistenceResult<Self> {
         let options = SqliteConnectOptions::new()
             .filename(db_path)
@@ -221,6 +228,20 @@ impl SqliteProfileStore {
         let options = options.foreign_keys(true);
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
+            // spec-reviewer Runde 1 (Spec 0101, A2): **kein** Neuaufbau der
+            // Verbindung zur Laufzeit. `sqlx` ersetzt eine Verbindung sonst
+            // nach `idle_timeout`/`max_lifetime`, und dabei laeuft der
+            // `PRAGMA key`-Block erneut -- aber nicht mehr innerhalb von
+            // `connect_encrypted`, sondern mitten in einer beliebigen
+            // Abfrage. Ein Fehler daraus kaeme als
+            // `ProfileError::Backend(err.to_string())` ins Frontend und ins
+            // Log, ohne die Redaktion aus `redact_if_key_bearing` zu
+            // durchlaufen. Mit einer einzigen, dauerhaft gehaltenen
+            // Verbindung auf eine lokale Datei gibt es diesen Weg nicht --
+            // und zu gewinnen war dabei ohnehin nichts: Es gibt nur einen
+            // Nutzer, einen Prozess und eine Verbindung.
+            .idle_timeout(None)
+            .max_lifetime(None)
             .connect_with(options)
             .await?;
 

@@ -64,6 +64,11 @@ tracing-appender = "0.2.5"
 uuid = { version = "1.26.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
+# Spec 0101 (spec-reviewer Runde 1): Die Tests dieser Crate legen
+# Klartext-Datenbanken an (Ausgangszustand einer bestehenden
+# Installation) und brauchen dafuer `connect_plaintext`. Nur hier, nie
+# unter `[dependencies]`.
+persistence-sqlite = { version = "0.5.2", path = "../persistence-sqlite", features = ["test-support"] }
 tempfile = "3.27.0"
 # Spec 0076, §9 K-3: `libc::mkfifo` im Testaufbau von
 # `ssh_config_apply/tests.rs` — nach Spec 0084 der einzige verbliebene

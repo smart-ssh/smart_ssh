@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 use secrecy::ExposeSecret;
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{Connection, Row, SqliteConnection};
+use sqlx::{ConnectOptions, Connection, Row, SqliteConnection};
 
 use ssh_manager_core::crypto::DatabaseKey;
 
@@ -169,7 +169,19 @@ pub(crate) fn contains_key_material(text: &str, key: &DatabaseKey) -> bool {
         .strip_prefix("x'")
         .and_then(|rest| rest.strip_suffix('\''))
         .unwrap_or(pragma);
-    text.contains(hex) || text.contains(&hex.to_uppercase())
+    // spec-reviewer Runde 1: Vorher wurde nur die **vollstaendige**
+    // 64-Zeichen-Folge gesucht. Ein Fehlertext, der die Anweisung gekuerzt
+    // zitiert (`near "x'7c83c8e1..."`) oder einen Umbruch einfuegt, waere
+    // damit durchgegangen -- mit einem Schluesselpraefix darin. Geprueft
+    // wird deshalb **jedes** Fenster von 16 Hex-Zeichen (64 Bit
+    // Schluesselmaterial): So viel preiszugeben verkleinert den Suchraum
+    // schon unzulaessig, und 16 Zeichen sind lang genug, dass ein
+    // zufaelliger Treffer in einem Fehlertext ausgeschlossen ist.
+    const WINDOW: usize = 16;
+    let lower = text.to_ascii_lowercase();
+    hex.as_bytes()
+        .windows(WINDOW)
+        .any(|w| lower.contains(std::str::from_utf8(w).expect("Hex ist ASCII")))
 }
 
 /// A2: Nimmt einem [`crate::PersistenceError`] seine Variante, wenn sein
@@ -225,7 +237,15 @@ pub fn intermediate_path(db_path: &Path) -> PathBuf {
 /// Fällen ist es kein Ergebnis, dem zu trauen wäre.
 fn discard_intermediate(db_path: &Path) {
     let tmp = intermediate_path(db_path);
-    for path in [tmp.clone(), sibling(&tmp, "-wal"), sibling(&tmp, "-shm")] {
+    // spec-reviewer Runde 1: `-journal` mit -- ein fremdes
+    // `...sqlcipher-new-journal` waere sonst liegen geblieben und koennte
+    // beim Oeffnen der Zwischendatei angewandt werden.
+    for path in [
+        tmp.clone(),
+        sibling(&tmp, "-wal"),
+        sibling(&tmp, "-shm"),
+        sibling(&tmp, "-journal"),
+    ] {
         // `remove_file` auf einem Symlink entfernt die Verknüpfung, nicht
         // ihr Ziel — eine fremde Verknüpfung an dieser Stelle kann also
         // nicht dazu führen, dass irgendwo anders etwas gelöscht wird.
@@ -359,10 +379,24 @@ async fn convert_steps(
         let mut conn = open_plaintext(db_path, false)
             .await
             .map_err(ConversionFailure::Database)?;
-        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
-            .execute(&mut conn)
+        // spec-reviewer Runde 1: Das Ergebnis **auslesen**, nicht
+        // wegwerfen. `wal_checkpoint` meldet "busy" als Ergebniszeile
+        // (erste Spalte 1), nicht als Fehler. Lief der Checkpoint nicht
+        // durch, ist die alte `-wal` nicht leer -- und Schritt 4 entfernt
+        // sie trotzdem. Scheitert dann das `rename`, stuende das Original
+        // ohne ein WAL da, das noch committete Frames enthielt. Lieber
+        // hier sichtbar abbrechen, als "die -wal ist leer" anzunehmen.
+        let checkpoint: (i64, i64, i64) = sqlx::query_as("PRAGMA wal_checkpoint(TRUNCATE)")
+            .fetch_one(&mut conn)
             .await
             .map_err(ConversionFailure::Database)?;
+        if checkpoint.0 != 0 {
+            return Err(ConversionFailure::Verification(format!(
+                "wal_checkpoint(TRUNCATE) meldete busy ({}) - das WAL des Originals ist \
+                 nicht eingespielt",
+                checkpoint.0
+            )));
+        }
         let fingerprint = fingerprint(&mut conn)
             .await
             .map_err(ConversionFailure::Database)?;
@@ -401,6 +435,21 @@ async fn convert_steps(
         export?;
         detach?;
         close?;
+    }
+
+    // Abschnitt 5: Die Zwischendatei traegt denselben Schutz wie die
+    // Datenbank, und zwar **bevor** sie geprueft und umbenannt wird --
+    // vorher entstand sie mit den umask-Rechten (typ. 0644) und enthielt
+    // bereits die vollstaendige Kopie (spec-reviewer Runde 1).
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for suffix in ["", "-wal", "-shm"] {
+            let path = sibling(tmp, suffix);
+            if path.exists() {
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+            }
+        }
     }
 
     // `user_version` und `journal_mode` überträgt der Export nicht (gemessen,
@@ -516,10 +565,17 @@ async fn convert_steps(
 /// `code 14 „unable to open database"`. Dass das Original dann existiert,
 /// ist zu diesem Zeitpunkt bereits bewiesen: Schritt 1 hat es geöffnet.
 async fn open_plaintext(path: &Path, allow_create: bool) -> Result<SqliteConnection, sqlx::Error> {
+    // spec-reviewer Runde 1: `cipher_log_level` und das Abschalten des
+    // Statement-Logs gehoeren **auch** hierher. Diese Verbindung ist zwar
+    // auf eine Klartext-Datei geoeffnet, aber genau auf ihr laeuft das
+    // `ATTACH ... KEY ?` der Umwandlung -- sie arbeitet also mit
+    // Schluesselmaterial, und A8 gilt fuer sie wie fuer jede andere.
     let options = SqliteConnectOptions::new()
         .filename(path)
         .create_if_missing(allow_create)
-        .foreign_keys(true);
+        .foreign_keys(true)
+        .pragma("cipher_log_level", "NONE")
+        .disable_statement_logging();
     SqliteConnection::connect_with(&options).await
 }
 
@@ -564,4 +620,21 @@ pub(crate) fn encrypted_connect_options(path: &Path, key: &DatabaseKey) -> Sqlit
         .foreign_keys(true)
         .pragma("key", format!("\"{}\"", pragma.expose_secret()))
         .pragma("cipher_log_level", "NONE")
+        // **Das Wichtigste an diesen Optionen** (spec-reviewer Runde 1, A2
+        // und Abschnitt 6 "Log/Redaction"): `sqlx` fasst alle Pragmas zu
+        // **einer** Anweisung zusammen und fuehrt sie durch seinen normalen
+        // `QueryLogger`. Dessen Vorgaben sind `DEBUG` fuer jede Anweisung
+        // und `WARN` fuer eine, die laenger als eine Sekunde braucht --
+        // also stand der vollstaendige Datenbankschluessel mit
+        // `RUST_LOG=debug` bei jedem Verbindungsaufbau und beim
+        // Standard-Loglevel `info` auf dem Slow-Statement-Pfad in der
+        // Logdatei. Die Redaktion auf dem Fehlerweg
+        // (`redact_if_key_bearing`) greift dort nicht: Das ist kein Fehler,
+        // sondern eine Erfolgsmeldung.
+        //
+        // `disable_statement_logging` schaltet beides ab. Dass es wirkt,
+        // prueft `tests_encryption::
+        // test_a2_the_database_key_never_appears_in_a_tracing_event` an
+        // einem mitgeschnittenen `tracing`-Strom.
+        .disable_statement_logging()
 }

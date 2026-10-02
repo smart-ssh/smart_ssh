@@ -96,7 +96,7 @@ impl StartupPrompt for NativeStartupPrompt {
         }
     }
 
-    fn confirm_start_over(&self, renamed_to: &str) -> bool {
+    fn confirm_start_over(&self, renamed_to: Option<&str>) -> bool {
         let text = texts::start_over_confirmation_text(renamed_to, self.language);
         startup_dialog::ask(
             &text.title,
