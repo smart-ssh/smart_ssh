@@ -238,3 +238,71 @@ async fn test_t1_a_stored_secret_never_appears_in_the_raw_file() {
         "es wurde keine einzige Datei geprüft — der Test läuft ins Leere"
     );
 }
+
+/// **Die betretene Runtime entscheidet, nicht die eigene** — der Nachweis
+/// zu Fund 2 aus `review-01.md` (spec-reviewer Runde 2 hat ihn als fehlend
+/// benannt).
+///
+/// `block_in_place` panickt an der Runtime, in deren **Kontext** der Aufruf
+/// steht, nicht an der, deren Handle der Store hält. Hier steht genau diese
+/// Kombination: Der Store trägt Tauris Multi-Thread-Handle, der Aufruf kommt
+/// aber aus einer `current_thread`-Runtime (das ist auch die Lage in jedem
+/// `#[tokio::test]` ohne `flavor`). Die Zusicherung aus dem Modul-Kommentar
+/// lautet „sichtbar scheitern, nicht abstürzen".
+///
+/// **Gegenbeweis geführt:** Prüft `block_on` wieder `self.handle` statt
+/// `Handle::try_current()`, passiert der Aufruf die Schranke, trifft
+/// `block_in_place` auf der `current_thread`-Runtime und panickt („can call
+/// blocking only when running on the multi-threaded runtime") — der Panic
+/// schlägt durch `block_on` nach oben und der Test scheitert.
+#[test]
+fn test_a9_a_current_thread_caller_fails_visibly_instead_of_panicking() {
+    let multi = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    // Der Store bekommt das Multi-Thread-Handle — wie im Betrieb von Tauri.
+    let (profile_store, credentials) = multi.block_on(async { store_in(dir.path()).await });
+
+    let current_thread = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let result = current_thread.block_on(async {
+        assert_eq!(
+            tokio::runtime::Handle::try_current()
+                .expect("hier muss eine Runtime laufen")
+                .runtime_flavor(),
+            tokio::runtime::RuntimeFlavor::CurrentThread,
+            "der Test prüft nichts, wenn der Aufruf nicht aus einer current_thread-Runtime kommt"
+        );
+        credentials.get(&r("server:4:password"))
+    });
+
+    let err = result.err().unwrap_or_else(|| {
+        panic!("der Aufruf darf nicht gelingen — die Laufzeitumgebung erlaubt kein Blockieren")
+    });
+    match err {
+        CredentialError::Backend(payload) => {
+            assert!(
+                payload.contains("Laufzeitumgebung"),
+                "die Meldung muss die Ursache nennen: {payload}"
+            );
+            assert!(
+                !payload.contains(MARKER) && !payload.contains("server:4:password"),
+                "weder Secret noch Referenz gehören in die Meldung: {payload}"
+            );
+        }
+        // Ohne die Schranke käme der Aufruf bis zur Abfrage durch; der
+        // Eintrag existiert nicht, das Ergebnis wäre also `NotFound`.
+        // Genau daran lässt sich „Schranke hat gegriffen" von „Abfrage ist
+        // normal gelaufen" unterscheiden.
+        CredentialError::NotFound(_) => {
+            panic!("eine Störung der Laufzeitumgebung darf nicht wie „kein Eintrag\" aussehen")
+        }
+    }
+
+    multi.block_on(async { profile_store.close().await });
+}

@@ -29,8 +29,10 @@
 //!
 //! **Zur Verklemmung mit dem Pool der Größe 1** (gemessen): Hielte ein
 //! Aufrufer die einzige Verbindung, während er hier hereinkommt, hängt
-//! nichts — `sqlx` bricht nach seinem `acquire_timeout` mit „pool timed out
-//! while waiting for an open connection" ab, also sichtbar statt stumm. Der
+//! nichts — `sqlx` bricht nach seinem `acquire_timeout` ab, also sichtbar
+//! statt stumm. Im Log erscheint das als `kind = "pool_timed_out"`; der
+//! Fehlertext der Bibliothek selbst geht nie dorthin, weil er die
+//! auslösende Anweisung zitieren kann (s. `backend_error`). Der
 //! Fall kann heute nicht eintreten: Der Pool verlässt diese Crate nicht, und
 //! jede Methode der Stores gibt ihre Verbindung innerhalb desselben `await`
 //! wieder frei. Die Transaktionen in `store.rs`/`ai_provider_store.rs` rufen
@@ -84,7 +86,11 @@ impl SqliteCredentialStore {
         // abstürzen" wäre damit nicht erfüllt, und jeder `#[tokio::test]`
         // in der Standard-Variante stürzte ab statt zu scheitern.
         if entered.runtime_flavor() != RuntimeFlavor::MultiThread {
-            // Kann heute nicht eintreten (Test in `app-shell`). Falls doch:
+            // Kann im Betrieb nicht eintreten (Test in `app-shell` nagelt
+            // Tauris Variante fest); dass dieser Zweig trotzdem greift und
+            // **nicht** panickt, hält
+            // `tests_credential_store::test_a9_a_current_thread_caller_fails_visibly_instead_of_panicking`
+            // fest. Falls doch:
             // ein sichtbarer Fehler statt eines Panics vor dem ersten
             // Fenster. Ohne Nutzlast aus der Bibliothek, ohne Referenz.
             return Err(CredentialError::Backend(
@@ -93,6 +99,29 @@ impl SqliteCredentialStore {
             ));
         }
         Ok(tokio::task::block_in_place(|| self.handle.block_on(fut)))
+    }
+
+    /// Die Fehlerart als feste Zeichenkette — **ohne** den Fehlertext.
+    ///
+    /// Der Variantenname steht wörtlich hier im Modul; er kann weder den
+    /// Schlüssel noch ein Secret noch die auslösende Anweisung tragen. Das
+    /// ist der Unterschied zu `err.to_string()`: Diagnose ja, Nutzlast
+    /// nein. `sqlx::Error` ist `#[non_exhaustive]`, deshalb der
+    /// Sammelzweig — eine neue Variante der Bibliothek darf nicht
+    /// versehentlich als etwas anderes erscheinen.
+    fn error_kind(err: &sqlx::Error) -> &'static str {
+        match err {
+            sqlx::Error::Database(_) => "database",
+            sqlx::Error::PoolTimedOut => "pool_timed_out",
+            sqlx::Error::PoolClosed => "pool_closed",
+            sqlx::Error::WorkerCrashed => "worker_crashed",
+            sqlx::Error::Io(_) => "io",
+            sqlx::Error::RowNotFound => "row_not_found",
+            sqlx::Error::ColumnDecode { .. } => "column_decode",
+            sqlx::Error::Decode(_) => "decode",
+            sqlx::Error::Protocol(_) => "protocol",
+            _ => "other",
+        }
     }
 
     /// Spec 0101, A9: „`Backend` ohne Secret im Text".
@@ -110,12 +139,22 @@ impl SqliteCredentialStore {
         // auf dem geschlüsselten Weg den `PRAGMA key`-Wert bedeuten kann,
         // ist in `crate::encryption::redact_if_key_bearing` gemessen. Hier
         // steht kein Schlüssel zur Verfügung, mit dem sich redigieren
-        // ließe; also geht nur die Fehlerart ins Log, nie ihr Text. Der
-        // Verlust ist klein (`context` sagt, welche der drei Anweisungen es
-        // war), die Zusicherung aus A2 hängt dafür nicht an einer
-        // Pool-Einstellung zwei Module entfernt.
+        // ließe; also geht nur die Fehlerart ins Log, nie ihr Text. Die
+        // Zusicherung aus A2 hängt damit nicht an einer Pool-Einstellung
+        // zwei Module entfernt.
+        //
+        // **Fehlerart statt nur „aus der Datenbank"** (spec-reviewer
+        // Runde 2): Mit einem einzigen Bit wären „Pool-Timeout", „Pool
+        // geschlossen", „I/O-Fehler" und „Decode" nicht mehr
+        // unterscheidbar — der Modul-Kommentar verspricht aber genau, dass
+        // eine Verklemmung erkennbar bleibt. [`Self::error_kind`] gibt den
+        // Variantennamen, `code()` den SQLite-Fehlercode. Beides kann den
+        // `PRAGMA key`-Wert nicht tragen, weil es die Anweisung nicht
+        // zitiert: Der Variantenname ist eine feste Zeichenkette aus
+        // diesem Modul, der Code eine Zahl aus SQLite.
         tracing::warn!(
-            from_database = err.as_database_error().is_some(),
+            kind = Self::error_kind(err),
+            sqlite_code = err.as_database_error().and_then(|e| e.code()).as_deref(),
             context,
             "secret store query failed (Spec 0101, A9)"
         );
