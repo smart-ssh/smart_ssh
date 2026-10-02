@@ -929,10 +929,22 @@ async fn test_t5_an_aborted_conversion_leaves_the_original_usable() {
 /// T6 (A6, WAL): Eine Zeile, die nur im WAL des Originals steht, muss nach
 /// der Umwandlung vorhanden sein — und neben der neuen Datei darf keine
 /// alte `-wal` liegen bleiben (sie gehörte zu einer anderen Datenbank).
+///
+/// **Umgewandelt wird eine Kopie** (Spec 0101, Klarstellung 7): Damit der
+/// Inhalt im WAL stehen bleibt, darf die Klartext-Verbindung nicht
+/// geschlossen werden — ein `close()` checkt den WAL in die Datei ein, und
+/// der Test prüfte dann nichts mehr. Eine offene Verbindung sperrt unter
+/// Windows aber das Umbenennen der Datei (`os error 32`), woran die
+/// Umwandlung scheitert. Deshalb wandern Datei, `-wal` und `-shm` nach dem
+/// Schreiben in ein zweites Verzeichnis; umgewandelt wird die Kopie, auf
+/// die kein Handle offen ist, und an ihr wird auch die Voraussetzung
+/// „nichtleeres `-wal` daneben" geprüft. Der Produktivcode bleibt
+/// unverändert — eine zweite laufende Instanz bricht die Umwandlung
+/// weiterhin ab (T20).
 #[tokio::test(flavor = "multi_thread")]
 async fn test_t6_a_row_only_in_the_original_wal_survives_the_conversion() {
-    let dir = tempfile::tempdir().expect("Temp-Verzeichnis");
-    let db_path = fixture_copy(dir.path()).await;
+    let origin = tempfile::tempdir().expect("Temp-Verzeichnis");
+    let origin_db = fixture_copy(origin.path()).await;
     let key = test_key();
 
     // Eine zweite Zeile schreiben und die Verbindung hart fallen lassen,
@@ -940,7 +952,7 @@ async fn test_t6_a_row_only_in_the_original_wal_survives_the_conversion() {
     // gemessene Mechanik wie in `tests_raw_file`).
     let wal_only_host = "host-0101-wal.example";
     {
-        let store = SqliteProfileStore::connect_plaintext(&db_path)
+        let store = SqliteProfileStore::connect_plaintext(&origin_db)
             .await
             .expect("Fixture-Kopie öffenbar");
         let now = chrono::Utc::now();
@@ -966,16 +978,48 @@ async fn test_t6_a_row_only_in_the_original_wal_survives_the_conversion() {
             .expect("zweiten Server anlegen");
         std::mem::forget(store);
     }
-    let wal = {
-        let mut name = db_path.as_os_str().to_os_string();
-        name.push("-wal");
+
+    // Die Kopie, auf die kein Handle offen ist (Klarstellung 7). Der
+    // Dateiname bleibt `smart-ssh.db`, damit die Beinamen weiter passen.
+    let sidecar = |base: &Path, suffix: &str| -> PathBuf {
+        let mut name = base.as_os_str().to_os_string();
+        name.push(suffix);
         PathBuf::from(name)
     };
+    let dir = tempfile::tempdir().expect("zweites Temp-Verzeichnis");
+    let db_path = dir.path().join("smart-ssh.db");
+    std::fs::copy(&origin_db, &db_path).expect("Datenbankdatei kopierbar");
+    let wal = sidecar(&db_path, "-wal");
+    std::fs::copy(sidecar(&origin_db, "-wal"), &wal).expect("-wal kopierbar");
+    // `-shm` gehört dazu, existiert aber nicht auf jeder Plattform.
+    let origin_shm = sidecar(&origin_db, "-shm");
+    if origin_shm.exists() {
+        std::fs::copy(&origin_shm, sidecar(&db_path, "-shm")).expect("-shm kopierbar");
+    }
+
     assert!(
         std::fs::metadata(&wal)
             .map(|m| m.len() > 0)
             .unwrap_or(false),
-        "Voraussetzung von T6: es muss ein nichtleeres -wal neben dem Original liegen"
+        "Voraussetzung von T6: es muss ein nichtleeres -wal neben der Kopie liegen"
+    );
+
+    // Und die Zeile muss wirklich **nur** im WAL stehen. Läge sie schon in
+    // der Datenbankdatei (eingecheckt), wäre der Test tautologisch: Er
+    // prüfte dann nicht, dass die Umwandlung den WAL mitnimmt.
+    let contains_marker = |path: &Path| {
+        let needle = wal_only_host.as_bytes();
+        std::fs::read(path)
+            .map(|bytes| bytes.windows(needle.len()).any(|w| w == needle))
+            .unwrap_or(false)
+    };
+    assert!(
+        !contains_marker(&db_path),
+        "Voraussetzung von T6: die Zeile darf noch nicht in der Datenbankdatei stehen"
+    );
+    assert!(
+        contains_marker(&wal),
+        "Voraussetzung von T6: die Zeile muss im kopierten -wal stehen"
     );
 
     crate::convert_plaintext_database(&db_path, &key)
