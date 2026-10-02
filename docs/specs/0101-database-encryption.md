@@ -461,6 +461,16 @@ Keine.
    folgen in einem eigenen Opus-Lauf; 6 und 7 gehören in denselben Lauf,
    weil Commit 6 allein bestehenden Installationen den Zugriff auf
    gespeicherte Secrets nähme. Danach Commits 9–11 (Opus), dann 12 (Sonnet).
+   Commit 8 folgt in einem eigenen kurzen Opus-Lauf nach 6 und 7, zusammen
+   mit Klarstellung 7 und der Nacharbeit aus dem Review von 6 und 7.
+7. **T6 unter Windows (K1):** Hält der Test die Klartext-Verbindung im
+   selben Prozess offen (um den WAL-Inhalt zu erhalten), sperrt Windows das
+   Umbenennen der Datei (`os error 32`). T6 kopiert deshalb nach dem
+   Schreiben Datenbank, `-wal` und `-shm` in ein zweites Verzeichnis und
+   wandelt die **Kopie** um, auf die kein Handle offen ist. Die Bedingung
+   „nichtleeres `-wal` neben der Datei“ wird an der Kopie geprüft. Der
+   Produktivcode bleibt unverändert; eine zweite laufende Instanz bricht die
+   Umwandlung weiterhin ab.
 
 ## Umsetzung
 
