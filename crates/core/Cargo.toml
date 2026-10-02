@@ -23,14 +23,25 @@ chacha20poly1305 = "0.10.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 futures = "0.3.34"
 globset = "0.4.20"
+# Spec 0101, A2: HKDF-SHA256 für die Ableitung des Datenbankschlüssels aus
+# dem Wurzelschlüssel. Beide Crates liegen bereits im Abhängigkeitsbaum
+# dieses Workspace (`sha2` als direkte Abhängigkeit von `app-logic`, `hkdf`
+# über `elliptic-curve`/`russh`) — hier nur zu einer direkten Abhängigkeit
+# von `core` hochgestuft, kein neuer Eintrag in `Cargo.lock` und keine neue
+# Lizenz.
+hkdf = "0.13.0"
 regex = "1.13.1"
 secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
+sha2 = "0.11.0"
 shell-words = "1.1.1"
 thiserror = "2.0"
 tokio = { version = "1.53.1", features = ["sync"] }
 tracing = "0.1.44"
 uuid = { version = "1.26.0", features = ["v4", "serde"] }
+# Spec 0101, A19: Schlüsselmaterial wird beim Freigeben überschrieben
+# (`DatabaseKey`). Ebenfalls schon im Baum (über `chacha20poly1305`).
+zeroize = "1.9.0"
 
 [dev-dependencies]
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }

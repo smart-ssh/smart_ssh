@@ -9,9 +9,15 @@
 //! für die Wahl dieser Crate).
 
 mod chacha;
+/// Spec 0101, A2: Ableitung des SQLCipher-Schlüssels aus dem Wurzelschlüssel
+/// K — hier und nicht in `persistence-sqlite`, weil es reine Logik ohne I/O
+/// ist und `app-shell` denselben Typ braucht, um die Entscheidungstabelle
+/// A3 zu fahren.
+mod db_key;
 mod key;
 
 pub use chacha::ChaCha20Poly1305Cipher;
+pub use db_key::{DatabaseKey, DATABASE_KEY_HKDF_INFO, DATABASE_KEY_LEN};
 pub use key::{resolve_or_generate_key, CHAT_CONTENT_ENCRYPTION_KEY_REF};
 
 /// Fehler bei einem [`ContentCipher`]-Zugriff oder der Schlüsselverwaltung
