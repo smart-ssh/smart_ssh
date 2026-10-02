@@ -1,6 +1,6 @@
 # Spec 0101 — Ganze Datenbank verschlüsseln, Secrets in die Datenbank, Master-Passwort
 
-Status: Vorschlag (Architekt) · Backlog: BL-0314, BL-0297, BL-0117, BL-0203 · Gate: release-1.0/C
+Status: freigegeben · Backlog: BL-0314, BL-0297, BL-0117, BL-0203 · Gate: release-1.0/C
 Zweck: Die Datenbankdatei ist vollständig verschlüsselt (SQLCipher), alle Secrets liegen darin, und ihr Schlüssel kommt entweder aus dem OS-Schlüsselbund oder aus einem Master-Passwort.
 Review-Priorität: ERHÖHT (Verschlüsselung, Credentials, Migration, Start)
 
@@ -27,7 +27,8 @@ Review-Priorität: ERHÖHT (Verschlüsselung, Credentials, Migration, Start)
 - **E10** Keine Wiederherstellung bei vergessenem Passwort; Warnung und
   Bestätigung beim Einrichten.
 - **E11** Feldweise Verschlüsselung (Chat, Ledger, Historie,
-  Zusammenfassungen) bleibt vorerst.
+  Zusammenfassungen) bleibt in dieser Spec; der Rückbau folgt als eigenes
+  Item (BL-0318).
 
 ## 1. Ist-Stand (Stand `4d1c307`)
 
@@ -299,7 +300,7 @@ Nicht-Ziele:
   `KNOWN_ERROR_CODES`. Bestehende Texte, die Secrets im Schlüsselbund
   verorten, sagen künftig „in der verschlüsselten Datenbank“; die Liste der
   geänderten Schlüssel steht im Bericht.
-- **A21 MUSS** Erststart-Hinweis nach §8 Punkt 1; Test auf den neuen Satz.
+- **A21 MUSS** Erststart-Hinweis nach §9 Punkt 1; Test auf den neuen Satz.
 - **A22 MUSS** Changelog-Fragment: Datei verschlüsselt; ältere Versionen
   melden danach „möglicherweise beschädigt … Backup einspielen“ — **das
   stimmt dann nicht, kein Backup einspielen**, sondern die neue Version
@@ -425,15 +426,15 @@ Adversarial (ERHÖHT):
 
 ## 8. Offene Punkte
 
-1. **Erststart-Hinweis (rechtliche Wirkung).** Vorschlag DE: „Die lokale
-   Datenbank ist verschlüsselt. Den Schlüssel verwahrt der Schlüsselbund
-   deines Betriebssystems oder – wenn du es einrichtest – dein
-   Master-Passwort. Wer Zugriff auf dein entsperrtes Benutzerkonto hat, kann
-   die Daten lesen.“ EN sinngemäß. Empfehlung: übernehmen.
+Keine.
 
 ## 9. Klarstellungen
 
-(wird während der Umsetzung nachgetragen)
+1. **Erststart-Hinweis (A21), entschieden:** DE wörtlich: „Die lokale
+   Datenbank ist verschlüsselt. Den Schlüssel verwahrt der Schlüsselbund
+   deines Betriebssystems oder – wenn du es einrichtest – dein
+   Master-Passwort. Wer Zugriff auf dein entsperrtes Benutzerkonto hat, kann
+   die Daten lesen.“ EN sinngemäß, gleicher Inhalt.
 
 ## Umsetzung
 
