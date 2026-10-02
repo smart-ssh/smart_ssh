@@ -23,7 +23,7 @@ Installation prüfen). Ab Commit 2 dieser Spec baut dieselbe Crate
 dauerhaft gegen SQLCipher — danach gibt es keinen "heutigen,
 nicht-SQLCipher"-Build mehr, gegen den sich diese Datei zur Laufzeit neu
 erzeugen ließe (die mitgebaute SQLite-Version sinkt dabei zusätzlich von
-3.51.3 auf 3.50.4, gemessen in der Beilage zu BL-0314). Der einzige
+3.51.3 auf 3.50.4, siehe Spec 0101 §1). Der einzige
 Zeitpunkt, an dem diese Datei ehrlich entstehen kann, ist **vor** Commit
 2 — danach bleibt nur noch, sie aufzuheben.
 
