@@ -841,17 +841,108 @@ async fn test_t8_an_unreachable_key_does_not_open_the_database_and_retry_works()
     }
 }
 
+// === A6/T20: Symlink auf jedem Weg, nicht nur in der Umwandlung =========
+
+/// A6 (letzter Satz) / T20, auf den Startablauf ausgeweitet (spec-reviewer
+/// Runde 1): Eine Verknüpfung ins **Leere** las sich vorher als *fehlt*,
+/// und `create_if_missing` legte die neue, verschlüsselte Datenbank am Ziel
+/// der Verknüpfung an — außerhalb des 0700-Datenverzeichnisses. Jetzt endet
+/// der Start, und am Ziel entsteht nichts.
+///
+/// Der Gegenbeweis steckt in der zweiten Hälfte: Eine Verknüpfung auf eine
+/// bereits **verschlüsselte** Datenbank wird weiter geöffnet. Dort wird
+/// nichts angelegt und nichts umbenannt; sie abzulehnen wäre eine
+/// Verschärfung ohne Anlass (spec-reviewer Runde 2).
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn test_a6_a_symlinked_database_aborts_the_start_only_where_a_file_would_be_written() {
+    // --- Verknüpfung ins Leere: Abbruch, am Ziel entsteht nichts.
+    {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("ziel-gibt-es-nicht.db");
+        let link = dir.path().join("smart-ssh.db");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let credentials = CountingCredentialStore::new(GetBehaviour::Present);
+        let result =
+            open_or_prepare_database(&link, &credentials, available(), &NoDialogExpected).await;
+
+        match result {
+            Err(StartupAbort::Fatal { kind, .. }) => assert_eq!(
+                kind,
+                persistence_sqlite::ConnectFailureKind::SymlinkedDatabase
+            ),
+            Err(other) => panic!("erwartet: Fatal(SymlinkedDatabase), erhalten: {other:?}"),
+            Ok(_) => panic!("eine Verknüpfung ins Leere darf nicht zu einer Datenbank führen"),
+        }
+        assert!(
+            !target.exists(),
+            "am Ziel der Verknüpfung darf keine Datenbank entstanden sein"
+        );
+        assert_eq!(credentials.sets(), 0);
+    }
+
+    // --- Verknüpfung auf eine Klartext-Datenbank: Abbruch, Ziel unverändert.
+    {
+        let dir = tempfile::tempdir().unwrap();
+        let target = plaintext_database(dir.path()).await;
+        let renamed = dir.path().join("echte-datenbank.db");
+        std::fs::rename(&target, &renamed).unwrap();
+        let link = dir.path().join("smart-ssh.db");
+        std::os::unix::fs::symlink(&renamed, &link).unwrap();
+        let before = std::fs::read(&renamed).unwrap();
+
+        let credentials = CountingCredentialStore::new(GetBehaviour::Present);
+        let result =
+            open_or_prepare_database(&link, &credentials, available(), &NoDialogExpected).await;
+
+        assert!(matches!(
+            result,
+            Err(StartupAbort::Fatal {
+                kind: persistence_sqlite::ConnectFailureKind::SymlinkedDatabase,
+                ..
+            })
+        ));
+        assert_eq!(std::fs::read(&renamed).unwrap(), before);
+        assert_eq!(
+            detect_database_file_state(&renamed).unwrap(),
+            DatabaseFileState::Plaintext,
+            "das Ziel darf nicht umgewandelt worden sein"
+        );
+    }
+
+    // --- Gegenprobe: Verknüpfung auf eine verschlüsselte Datenbank öffnet.
+    {
+        let dir = tempfile::tempdir().unwrap();
+        let target = encrypted_database(dir.path()).await;
+        let renamed = dir.path().join("echte-datenbank.db");
+        std::fs::rename(&target, &renamed).unwrap();
+        let link = dir.path().join("smart-ssh.db");
+        std::os::unix::fs::symlink(&renamed, &link).unwrap();
+
+        let credentials = CountingCredentialStore::new(GetBehaviour::Present);
+        let opened = open_or_prepare_database(&link, &credentials, available(), &NoDialogExpected)
+            .await
+            .expect("eine Verknüpfung auf eine verschlüsselte Datenbank muss weiter öffnen");
+        assert_eq!(credentials.sets(), 0);
+        opened.store.close().await;
+    }
+}
+
 // === A5: der Umbenennungsplan ===========================================
 
 /// A5: Der Plan benennt Datei, `-wal` und `-shm` um, löscht nichts und
 /// überschreibt keinen bereits vorhandenen Zielnamen.
 #[test]
-fn test_a5_the_rename_plan_covers_all_three_files_and_overwrites_nothing() {
+fn test_a5_the_rename_plan_covers_all_four_files_and_overwrites_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("smart-ssh.db");
     std::fs::write(&db_path, b"haupt").unwrap();
     std::fs::write(dir.path().join("smart-ssh.db-wal"), b"wal").unwrap();
     std::fs::write(dir.path().join("smart-ssh.db-shm"), b"shm").unwrap();
+    // `-journal` mit (spec-reviewer Runde 1): ein altes Rollback-Journal
+    // neben einer neuen, leeren Datenbank gehört zu einer anderen Datei.
+    std::fs::write(dir.path().join("smart-ssh.db-journal"), b"journal").unwrap();
 
     let plan = plan_start_over_renames(&db_path);
     let main_name = plan.main_target_name().expect("es gibt eine Datei");
@@ -878,6 +969,14 @@ fn test_a5_the_rename_plan_covers_all_three_files_and_overwrites_nothing() {
         .unwrap(),
         b"shm"
     );
+    assert_eq!(
+        std::fs::read(
+            dir.path()
+                .join(format!("smart-ssh.db-journal{}", suffix_of(&main_name)))
+        )
+        .unwrap(),
+        b"journal"
+    );
 
     // Zweiter Durchlauf in derselben Sekunde: der Zielname darf die erste
     // Sicherung nicht überschreiben.
@@ -894,6 +993,60 @@ fn test_a5_the_rename_plan_covers_all_three_files_and_overwrites_nothing() {
         std::fs::read(dir.path().join(&second_name)).unwrap(),
         b"zweiter"
     );
+}
+
+/// A5, „löscht nichts" — **alles oder nichts** (spec-reviewer Runde 2).
+///
+/// Belegt beide Hälften der Nachbesserung: Existiert das Ziel **einer**
+/// Datei schon, wird **keine** umbenannt (vorher war die Hauptdatei danach
+/// schon verschoben, und der nächste Start hätte eine frische Datenbank
+/// neben das fremde `-wal` der alten gelegt — die Angriffsrichtung „alte
+/// `-wal` wird auf die neue Datei angewandt"). Und ohne Hauptdatei nennt
+/// der Plan keinen Namen.
+#[test]
+fn test_a5_a_colliding_target_renames_nothing_at_all() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("smart-ssh.db");
+    std::fs::write(&db_path, b"haupt").unwrap();
+    std::fs::write(dir.path().join("smart-ssh.db-wal"), b"wal").unwrap();
+
+    let plan = plan_start_over_renames(&db_path);
+    let main_name = plan.main_target_name().expect("es gibt eine Datei");
+    // Genau das Ziel der `-wal` von Hand besetzen — zwischen Planen und
+    // Ausführen liegt im Ablauf die zweite Bestätigung des Nutzers.
+    let wal_target = dir
+        .path()
+        .join(format!("smart-ssh.db-wal{}", suffix_of(&main_name)));
+    std::fs::write(&wal_target, b"fremd").unwrap();
+
+    let err = plan
+        .execute()
+        .expect_err("eine Kollision muss den Satz abbrechen");
+    assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+
+    // Nichts wurde angefasst — insbesondere liegt die Hauptdatei noch da.
+    assert_eq!(std::fs::read(&db_path).unwrap(), b"haupt");
+    assert_eq!(
+        std::fs::read(dir.path().join("smart-ssh.db-wal")).unwrap(),
+        b"wal"
+    );
+    assert!(!dir.path().join(&main_name).exists());
+    assert_eq!(std::fs::read(&wal_target).unwrap(), b"fremd");
+}
+
+/// A5: Eine verwaiste `-wal` **ohne** Hauptdatei ergibt zwar einen Plan,
+/// aber keinen Namen für den Dialog — vorher nannte er eine Datei, die nie
+/// entsteht (spec-reviewer Runde 2).
+#[test]
+fn test_a5_an_orphaned_wal_without_a_database_names_no_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("smart-ssh.db");
+    std::fs::write(dir.path().join("smart-ssh.db-wal"), b"wal").unwrap();
+
+    let plan = plan_start_over_renames(&db_path);
+    assert_eq!(plan.main_target_name(), None);
+    plan.execute().unwrap();
+    assert!(!dir.path().join("smart-ssh.db-wal").exists());
 }
 
 fn suffix_of(main_name: &str) -> String {

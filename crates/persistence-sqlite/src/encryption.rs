@@ -169,15 +169,20 @@ pub(crate) fn contains_key_material(text: &str, key: &DatabaseKey) -> bool {
         .strip_prefix("x'")
         .and_then(|rest| rest.strip_suffix('\''))
         .unwrap_or(pragma);
-    // spec-reviewer Runde 1: Vorher wurde nur die **vollstaendige**
-    // 64-Zeichen-Folge gesucht. Ein Fehlertext, der die Anweisung gekuerzt
-    // zitiert (`near "x'7c83c8e1..."`) oder einen Umbruch einfuegt, waere
-    // damit durchgegangen -- mit einem Schluesselpraefix darin. Geprueft
+    // spec-reviewer Runde 1: Vorher wurde nur die **vollständige**
+    // 64-Zeichen-Folge gesucht. Ein Fehlertext, der die Anweisung gekürzt
+    // zitiert (`near "x'7c83c8e1..."`) oder einen Umbruch einfügt, wäre
+    // damit durchgegangen -- mit einem Schlüsselpräfix darin. Geprüft
     // wird deshalb **jedes** Fenster von 16 Hex-Zeichen (64 Bit
-    // Schluesselmaterial): So viel preiszugeben verkleinert den Suchraum
-    // schon unzulaessig, und 16 Zeichen sind lang genug, dass ein
-    // zufaelliger Treffer in einem Fehlertext ausgeschlossen ist.
-    const WINDOW: usize = 16;
+    // Schlüsselmaterial): So viel preiszugeben verkleinert den Suchraum
+    // schon unzulässig, und 16 Zeichen sind lang genug, dass ein
+    // zufälliger Treffer in einem Fehlertext ausgeschlossen ist.
+    // 8 statt 16 Hex-Zeichen (spec-reviewer Runde 2): Das halbiert den
+    // Teil-Austritt, den die Prüfung durchlässt, auf 32 Bit — und die
+    // Wahrscheinlichkeit, dass ein gewöhnlicher Fehlertext zufällig acht
+    // bestimmte Hex-Zeichen in Folge enthält, liegt bei ~10^-8. Ein
+    // Fehler verliert dadurch praktisch nie seine diagnostische Variante.
+    const WINDOW: usize = 8;
     let lower = text.to_ascii_lowercase();
     hex.as_bytes()
         .windows(WINDOW)
@@ -238,8 +243,8 @@ pub fn intermediate_path(db_path: &Path) -> PathBuf {
 fn discard_intermediate(db_path: &Path) {
     let tmp = intermediate_path(db_path);
     // spec-reviewer Runde 1: `-journal` mit -- ein fremdes
-    // `...sqlcipher-new-journal` waere sonst liegen geblieben und koennte
-    // beim Oeffnen der Zwischendatei angewandt werden.
+    // `...sqlcipher-new-journal` wäre sonst liegen geblieben und könnte
+    // beim Öffnen der Zwischendatei angewandt werden.
     for path in [
         tmp.clone(),
         sibling(&tmp, "-wal"),
@@ -383,7 +388,7 @@ async fn convert_steps(
         // wegwerfen. `wal_checkpoint` meldet "busy" als Ergebniszeile
         // (erste Spalte 1), nicht als Fehler. Lief der Checkpoint nicht
         // durch, ist die alte `-wal` nicht leer -- und Schritt 4 entfernt
-        // sie trotzdem. Scheitert dann das `rename`, stuende das Original
+        // sie trotzdem. Scheitert dann das `rename`, stünde das Original
         // ohne ein WAL da, das noch committete Frames enthielt. Lieber
         // hier sichtbar abbrechen, als "die -wal ist leer" anzunehmen.
         let checkpoint: (i64, i64, i64) = sqlx::query_as("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -437,14 +442,14 @@ async fn convert_steps(
         close?;
     }
 
-    // Abschnitt 5: Die Zwischendatei traegt denselben Schutz wie die
-    // Datenbank, und zwar **bevor** sie geprueft und umbenannt wird --
+    // §5: Die Zwischendatei trägt denselben Schutz wie die
+    // Datenbank, und zwar **bevor** sie geprüft und umbenannt wird --
     // vorher entstand sie mit den umask-Rechten (typ. 0644) und enthielt
-    // bereits die vollstaendige Kopie (spec-reviewer Runde 1).
+    // bereits die vollständige Kopie (spec-reviewer Runde 1).
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        for suffix in ["", "-wal", "-shm"] {
+        for suffix in ["", "-wal", "-shm", "-journal"] {
             let path = sibling(tmp, suffix);
             if path.exists() {
                 let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
@@ -566,10 +571,10 @@ async fn convert_steps(
 /// ist zu diesem Zeitpunkt bereits bewiesen: Schritt 1 hat es geöffnet.
 async fn open_plaintext(path: &Path, allow_create: bool) -> Result<SqliteConnection, sqlx::Error> {
     // spec-reviewer Runde 1: `cipher_log_level` und das Abschalten des
-    // Statement-Logs gehoeren **auch** hierher. Diese Verbindung ist zwar
-    // auf eine Klartext-Datei geoeffnet, aber genau auf ihr laeuft das
+    // Statement-Logs gehören **auch** hierher. Diese Verbindung ist zwar
+    // auf eine Klartext-Datei geöffnet, aber genau auf ihr läuft das
     // `ATTACH ... KEY ?` der Umwandlung -- sie arbeitet also mit
-    // Schluesselmaterial, und A8 gilt fuer sie wie fuer jede andere.
+    // Schlüsselmaterial, und A8 gilt für sie wie für jede andere.
     let options = SqliteConnectOptions::new()
         .filename(path)
         .create_if_missing(allow_create)
@@ -621,11 +626,11 @@ pub(crate) fn encrypted_connect_options(path: &Path, key: &DatabaseKey) -> Sqlit
         .pragma("key", format!("\"{}\"", pragma.expose_secret()))
         .pragma("cipher_log_level", "NONE")
         // **Das Wichtigste an diesen Optionen** (spec-reviewer Runde 1, A2
-        // und Abschnitt 6 "Log/Redaction"): `sqlx` fasst alle Pragmas zu
-        // **einer** Anweisung zusammen und fuehrt sie durch seinen normalen
-        // `QueryLogger`. Dessen Vorgaben sind `DEBUG` fuer jede Anweisung
-        // und `WARN` fuer eine, die laenger als eine Sekunde braucht --
-        // also stand der vollstaendige Datenbankschluessel mit
+        // und §6 „Log/Redaction“): `sqlx` fasst alle Pragmas zu
+        // **einer** Anweisung zusammen und führt sie durch seinen normalen
+        // `QueryLogger`. Dessen Vorgaben sind `DEBUG` für jede Anweisung
+        // und `WARN` für eine, die länger als eine Sekunde braucht --
+        // also stand der vollständige Datenbankschlüssel mit
         // `RUST_LOG=debug` bei jedem Verbindungsaufbau und beim
         // Standard-Loglevel `info` auf dem Slow-Statement-Pfad in der
         // Logdatei. Die Redaktion auf dem Fehlerweg
@@ -633,7 +638,7 @@ pub(crate) fn encrypted_connect_options(path: &Path, key: &DatabaseKey) -> Sqlit
         // sondern eine Erfolgsmeldung.
         //
         // `disable_statement_logging` schaltet beides ab. Dass es wirkt,
-        // prueft `tests_encryption::
+        // prüft `tests_encryption::
         // test_a2_the_database_key_never_appears_in_a_tracing_event` an
         // einem mitgeschnittenen `tracing`-Strom.
         .disable_statement_logging()

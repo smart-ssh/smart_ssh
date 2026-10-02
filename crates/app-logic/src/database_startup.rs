@@ -246,24 +246,6 @@ pub async fn open_or_prepare_database(
     keychain: KeychainAvailability,
     prompt: &dyn StartupPrompt,
 ) -> Result<OpenedDatabase, StartupAbort> {
-    // spec-reviewer Runde 1: A6 verweigert die Umwandlung eines Symlinks
-    // (T20), aber `detect_database_file_state` folgt ihm — eine
-    // Verknuepfung auf ein **nicht vorhandenes** Ziel ergab damit *fehlt*,
-    // und `create_if_missing` legte die neue, verschluesselte Datenbank am
-    // Ziel der Verknuepfung an. Diese Asymmetrie war unbeabsichtigt. Jetzt
-    // gilt die Regel aus A6 fuer **jeden** Weg: Ist `smart-ssh.db` eine
-    // Verknuepfung, endet der Start mit derselben Meldung, und es wird
-    // nichts angelegt, geoeffnet oder veraendert.
-    if std::fs::symlink_metadata(db_path)
-        .map(|meta| meta.file_type().is_symlink())
-        .unwrap_or(false)
-    {
-        return Err(StartupAbort::Fatal {
-            kind: ConnectFailureKind::SymlinkedDatabase,
-            detail: "die Datenbankdatei ist eine symbolische Verknuepfung".to_string(),
-        });
-    }
-
     loop {
         let file = match detect_database_file_state(db_path) {
             Ok(state) => state,
@@ -278,6 +260,33 @@ pub async fn open_or_prepare_database(
                 })
             }
         };
+        // A6 verweigert die Umwandlung eines Symlinks (T20), aber
+        // `detect_database_file_state` folgt ihm: Eine Verknüpfung auf ein
+        // **nicht vorhandenes** Ziel ergab *fehlt*, und
+        // `create_if_missing` legte die neue, verschlüsselte Datenbank am
+        // Ziel der Verknüpfung an (spec-reviewer Runde 1). Dieselbe Regel
+        // gilt deshalb für jeden Weg, auf dem eine Datei **angelegt oder
+        // umbenannt** wird — also für *fehlt* und *Klartext*.
+        //
+        // **Nicht** für *sonst* (spec-reviewer Runde 2): Eine bewusst
+        // gesetzte Verknüpfung auf eine bereits verschlüsselte Datenbank
+        // wird nur geöffnet; es entsteht keine Datei und es wird nichts
+        // umbenannt. Sie weiter abzulehnen wäre eine Verschärfung ohne
+        // Anlass — und der Dialogtext („wird nicht automatisch
+        // verschlüsselt") wäre für diesen Fall auch die falsche Begründung.
+        if matches!(
+            file,
+            DatabaseFileState::Missing | DatabaseFileState::Plaintext
+        ) && std::fs::symlink_metadata(db_path)
+            .map(|meta| meta.file_type().is_symlink())
+            .unwrap_or(false)
+        {
+            return Err(StartupAbort::Fatal {
+                kind: ConnectFailureKind::SymlinkedDatabase,
+                detail: "die Datenbankdatei ist eine symbolische Verknüpfung".to_string(),
+            });
+        }
+
         let (key_state, root_key) = read_key_state(credential_store, keychain);
         let plan = decide_startup(file, &key_state);
         tracing::info!(
@@ -393,7 +402,7 @@ enum Abort {
 fn missing_key_despite_present() -> StartupAbort {
     StartupAbort::Fatal {
         kind: ConnectFailureKind::Other,
-        detail: "Schluesselzustand Present, aber kein Schluessel geliefert".to_string(),
+        detail: "Schlüsselzustand Present, aber kein Schlüssel geliefert".to_string(),
     }
 }
 
@@ -512,13 +521,18 @@ async fn convert_then_open(
 pub struct StartOverPlan {
     renames: Vec<(PathBuf, PathBuf)>,
     main_target: PathBuf,
+    /// Gibt es überhaupt eine Datenbank**datei**? Eine verwaiste `-wal`
+    /// ohne sie ergibt ebenfalls einen nicht leeren Plan — dann darf der
+    /// Dialog aber keinen Namen für die Hauptdatei nennen (spec-reviewer
+    /// Runde 2).
+    main_present: bool,
 }
 
 impl StartOverPlan {
     /// Der Dateiname (ohne Verzeichnis), den die bisherige Datenbank
     /// bekommt — `None`, wenn es keine Datenbankdatei gibt.
     pub fn main_target_name(&self) -> Option<String> {
-        if self.renames.is_empty() {
+        if !self.main_present {
             return None;
         }
         self.main_target
@@ -526,16 +540,22 @@ impl StartOverPlan {
             .map(|n| n.to_string_lossy().to_string())
     }
 
-    /// Benennt um — **löscht nichts** (A5).
+    /// Benennt alle vier möglichen Dateien um — **löscht nichts** (A5).
     ///
-    /// Die Prüfung direkt vor jedem `rename` ist der eigentliche Beweis
+    /// Die Prüfung vor dem ersten `rename` ist der eigentliche Beweis
     /// dafür (spec-reviewer Runde 1): Der Zähler in
     /// [`plan_start_over_renames`] kann theoretisch auslaufen, und zwischen
     /// Planen und Ausführen liegt die zweite Bestätigung des Nutzers, also
     /// beliebig viel Zeit. `fs::rename` würde ein vorhandenes Ziel
     /// stillschweigend überschreiben; hier bricht es stattdessen ab.
     pub fn execute(&self) -> std::io::Result<()> {
-        for (from, to) in &self.renames {
+        // **Erst alle Ziele prüfen, dann umbenennen** (spec-reviewer
+        // Runde 2): Prüfen und Umbenennen in einer Schleife konnte den Satz
+        // zur Hälfte ausführen — Hauptdatei umbenannt, `-wal` nicht. Der
+        // nächste Start hätte dann *fehlt* gesehen und eine neue Datenbank
+        // direkt neben das fremde `-wal` der alten gelegt. Genau die
+        // Angriffsrichtung „alte `-wal` wird auf die neue Datei angewandt".
+        for (_, to) in &self.renames {
             if std::fs::symlink_metadata(to).is_ok() {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::AlreadyExists,
@@ -545,13 +565,20 @@ impl StartOverPlan {
                     ),
                 ));
             }
+        }
+        // **Die Hauptdatei zuletzt.** Scheitert ein `rename` trotz der
+        // Prüfung (Rechte, Sperre), liegt sie noch an ihrem Platz — der
+        // nächste Start erkennt sie wieder und legt keine neue Datenbank
+        // neben halb verschobene Journaldateien. Der Plan führt sie als
+        // erstes Element (s. `plan_start_over_renames`), deshalb `rev()`.
+        for (from, to) in self.renames.iter().rev() {
             std::fs::rename(from, to)?;
         }
         Ok(())
     }
 }
 
-/// A5: baut den Plan. Benennt Datei, `-wal` und `-shm` um (die
+/// A5: baut den Plan. Benennt Datei, `-wal`, `-shm` und `-journal` um (die
 /// Verpackungsdatei kommt in Etappe 3 dazu); vorhandene Dateien nur, denn
 /// `rename` auf eine fehlende Datei wäre ein Fehler, der den ganzen Vorgang
 /// abbräche.
@@ -589,9 +616,12 @@ pub fn plan_start_over_renames(db_path: &Path) -> StartOverPlan {
         }
     }
 
+    let main_present = std::fs::symlink_metadata(db_path).is_ok();
+
     StartOverPlan {
         renames,
         main_target,
+        main_present,
     }
 }
 

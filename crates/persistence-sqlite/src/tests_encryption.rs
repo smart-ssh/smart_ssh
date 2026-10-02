@@ -338,9 +338,9 @@ fn test_a2_key_material_is_detected_even_in_a_truncated_quote() {
         &key
     ));
 
-    // Und keine Falschmeldung: 15 Zeichen sind unter der Fenstergröße,
+    // Und keine Falschmeldung: 7 Zeichen sind unter der Fenstergröße,
     // gewöhnlicher Text enthält nichts.
-    assert!(!crate::encryption::contains_key_material(&hex[..15], &key));
+    assert!(!crate::encryption::contains_key_material(&hex[..7], &key));
     assert!(!crate::encryption::contains_key_material(
         "Datenbankverbindung fehlgeschlagen: file is not a database",
         &key
@@ -425,7 +425,14 @@ async fn test_a2_the_database_key_never_appears_in_a_tracing_event() {
         .clone();
 
     let dir = tempfile::tempdir().expect("Temp-Verzeichnis");
-    let key = test_key();
+    // **Ein eigener Schlüssel, nicht `test_key()`** (spec-reviewer
+    // Runde 2): Der Puffer ist prozessweit, und
+    // `test_a2_a_connect_error_quoting_the_key_is_redacted` loggt
+    // absichtlich eine schlüsseltragende Anweisung mit `test_key()`. Liefen
+    // beide gleichzeitig, wäre dieser Test grundlos rot — und eine
+    // sporadisch rote Sicherheitszusicherung wird später beruhigt statt
+    // untersucht.
+    let key = DatabaseKey::from_root_key(&[0x5a; 32]);
     let pragma = key.pragma_value();
     let hex = secrecy::ExposeSecret::expose_secret(&pragma)
         .trim_start_matches("x'")
@@ -748,6 +755,67 @@ async fn test_t4_converting_the_pre_sqlcipher_fixture_keeps_everything() {
             "Marker {marker} steht nach der Umwandlung noch im Klartext in: {hits:?}"
         );
     }
+}
+
+/// A6, Schritt 1 — **gemessen statt angenommen** (spec-reviewer Runde 2):
+/// Die Umwandlung liest das Ergebnis von `PRAGMA wal_checkpoint(TRUNCATE)`
+/// als Zeile mit drei Spalten und bricht bei „busy" ab. Dieser Test prüft,
+/// dass eine Datei in `journal_mode = delete` (eine fremde oder sehr alte
+/// Datenbank) dabei nicht hängen bleibt — sonst würde die App für genau
+/// diese Dateien nicht mehr starten, obwohl sie vorher umgewandelt wurden.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_a6_a_database_in_delete_journal_mode_still_converts() {
+    let dir = tempfile::tempdir().expect("Temp-Verzeichnis");
+    let db_path = dir.path().join("smart-ssh.db");
+
+    // Eine vollständige Klartext-Datenbank (mit Migrationen) anlegen und
+    // danach auf `journal_mode = delete` umstellen — so, wie eine sehr alte
+    // oder von Hand kopierte Datei aussehen kann.
+    let store = SqliteProfileStore::connect_plaintext(&db_path)
+        .await
+        .expect("Klartext-Datenbank anlegbar");
+    populate_markers(&store).await;
+    store.pool.close().await;
+    {
+        let options = sqlx::sqlite::SqliteConnectOptions::new()
+            .filename(&db_path)
+            .journal_mode(sqlx::sqlite::SqliteJournalMode::Delete);
+        let mut conn = sqlx::SqliteConnection::connect_with(&options)
+            .await
+            .expect("öffenbar");
+        let mode: String = sqlx::query_scalar("PRAGMA journal_mode")
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
+        assert!(
+            mode.eq_ignore_ascii_case("delete"),
+            "Voraussetzung dieses Tests: journal_mode = delete, war {mode}"
+        );
+        conn.close().await.unwrap();
+    }
+
+    let key = test_key();
+    crate::convert_plaintext_database(&db_path, &key)
+        .await
+        .expect("eine Datei in journal_mode = delete muss umwandelbar sein");
+
+    let options = crate::encryption::encrypted_connect_options(&db_path, &key);
+    let mut conn = sqlx::SqliteConnection::connect_with(&options)
+        .await
+        .expect("umgewandelte Datei öffenbar");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM servers")
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+    assert_eq!(count, 1, "die Zeile muss die Umwandlung überlebt haben");
+    let mode: String = sqlx::query_scalar("PRAGMA journal_mode")
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+    assert!(mode.eq_ignore_ascii_case("wal"), "journal_mode war {mode}");
+    conn.close().await.unwrap();
+
+    assert!(files_containing(dir.path(), "host-0101.example").is_empty());
 }
 
 /// T5 (A6, Abbruch): Fehlerinjektion nach Schritt 2 und nach Schritt 3.

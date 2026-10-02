@@ -75,11 +75,12 @@ impl SqliteProfileStore {
     /// 0101 — ein Aufrufer, der den alten Namen benutzt, scheitert jetzt an
     /// der Kompilierung statt still eine Klartext-Datenbank anzulegen.
     ///
-    /// **Hinter `test-support`** (spec-reviewer Runde 1): Der Name allein
-    /// war der ganze Schutz -- jede Crate des Workspace haette sie
-    /// aufrufen koennen. Jetzt faengt `cargo build --workspace` (ohne das
-    /// Feature, s. `CLAUDE.md`) einen Rueckfall in den Klartext-Pfad ab,
-    /// genau wie bei `connect_with`.
+    /// **Hinter `test-support`:** Der Name allein war der ganze Schutz —
+    /// jede Crate des Workspace hätte sie aufrufen können. Jetzt fängt
+    /// `cargo build --workspace` (ohne das Feature, s. `CLAUDE.md`) einen
+    /// Rückfall in den Klartext-Pfad ab, genau wie bei `connect_with`.
+    /// `cargo test` und `cargo clippy --all-targets` haben das Feature
+    /// dagegen **an** — der Schutz hängt am letzten Schritt des Gates.
     #[cfg(any(test, feature = "test-support"))]
     pub async fn connect_plaintext(db_path: &Path) -> PersistenceResult<Self> {
         let options = SqliteConnectOptions::new()
@@ -242,6 +243,15 @@ impl SqliteProfileStore {
             // Nutzer, einen Prozess und eine Verbindung.
             .idle_timeout(None)
             .max_lifetime(None)
+            // Und kein Austausch wegen eines fehlgeschlagenen `ping`
+            // (spec-reviewer Runde 2): `test_before_acquire` ist bei `sqlx`
+            // voreingestellt, und scheitert der Ping, wird die Verbindung
+            // hart geschlossen und beim nächsten `acquire` **neu**
+            // aufgebaut — wieder mit dem `PRAGMA key`-Block, aber nicht mehr
+            // innerhalb von `connect_encrypted` und damit außerhalb der
+            // Redaktion. Unbedenklich abzuschalten: eine lokale Datei, ein
+            // Prozess, `min_connections` steht auf 0.
+            .test_before_acquire(false)
             .connect_with(options)
             .await?;
 
