@@ -49,10 +49,8 @@ use ssh_manager_core::profiles::{
 };
 use ssh_manager_core::shared::ServerId;
 
-use credentials_keyring::KeychainAvailability;
-
 use crate::dto::AuthMethodInput;
-use crate::error::{keychain_aware_credential_error, CommandError};
+use crate::error::{secret_store_error, CommandError};
 
 /// Deterministischer `CredentialRef` pro `(server_id, slot)` — kein
 /// zusätzlicher Zustand nötig, um sich "den Ref von vorhin" zu merken; bei
@@ -93,14 +91,10 @@ pub fn sudo_password_credential_ref(server_id: ServerId) -> CredentialRef {
 /// überschreiben, statt (wie ein echtes Leerfeld) als "unverändert" zu
 /// gelten.
 ///
-/// Spec 0071, A13 / Spec 0098, A1+A2: `keychain` wird nur durchgereicht, um
-/// einem Schreibfehler den passenden stabilen Code zu geben (s.
-/// `error::keychain_aware_credential_error`) — seit Spec 0098 in **beiden**
-/// Zuständen: `KEYCHAIN_UNAVAILABLE`, wenn der Schlüsselbund schon beim Start
-/// fehlte, sonst `KEYCHAIN_ACCESS_FAILED`. Der Zustand kommt aus dem
-/// `AppState` (A16) — hier wird nichts zusätzlich abgefragt, und am
-/// Schreibverhalten selbst ändert sich nichts: Der Fehler wird unverändert
-/// weitergereicht, nie verschluckt (X6).
+/// Ein Schreibfehler bekommt den stabilen Code aus
+/// `error::secret_store_error` — der Code hängt nicht mehr am Zustand eines
+/// Schlüsselbunds (Spec 0101, A9.1). Am Schreibverhalten selbst ändert sich
+/// nichts: Der Fehler wird unverändert weitergereicht, nie verschluckt (X6).
 ///
 /// Spec 0073, A3: getrimmt wird über den geteilten
 /// [`trim_credential_value`] — dieselbe Semantik wie bisher, zusätzlich
@@ -110,7 +104,6 @@ pub fn sudo_password_credential_ref(server_id: ServerId) -> CredentialRef {
 /// Leerfeld als „unverändert" (I4).
 pub fn resolve_sudo_password(
     credential_store: &dyn CredentialStore,
-    keychain: KeychainAvailability,
     server_id: ServerId,
     provided: Option<String>,
 ) -> Result<(), CommandError> {
@@ -121,7 +114,7 @@ pub fn resolve_sudo_password(
                     &sudo_password_credential_ref(server_id),
                     SecretString::from(value),
                 )
-                .map_err(|err| keychain_aware_credential_error(err, keychain))?;
+                .map_err(secret_store_error)?;
         }
         _ => {}
     }
@@ -172,25 +165,10 @@ fn delete_user_requested_secret(
 /// Schlüsselbund liegt und beim nächsten `sudo` wieder eingespeist würde.
 ///
 /// Der Fehlerweg ist derselbe wie überall sonst (A13): ein stabiler Code,
-/// vom Frontend übersetzt.
-///
-/// **Spec 0098, A1 ändert Spec 0071 A17 für den Fall „verfügbar".** Dieser
-/// Weg vergab bislang **unbedingt** `KEYCHAIN_UNAVAILABLE`, unabhängig vom
-/// Startzustand — ein bewusster Griff, weil `keychain_aware_credential_error`
-/// damals für den Fall „verfügbar" den rohen Bibliothekstext durchließ und
-/// das hier besonders weh getan hätte. Diese Lücke ist jetzt an der Quelle
-/// geschlossen (A1): Der Weg wertet den Startzustand aus wie jeder andere
-/// und meldet bei verfügbarem Schlüsselbund `KEYCHAIN_ACCESS_FAILED`.
-///
-/// **Das ist keine Lockerung, sondern eine Korrektur:** Der Nutzer sah
-/// „Der Systemschlüsselbund ist nicht verfügbar" für einen Schlüsselbund,
-/// der sehr wohl da war und nur diesen einen Löschauftrag verweigert hat.
-/// Der neue Code sagt genau das, und — wie vorher — bleibt die Nutzlast der
-/// Bibliothek draußen (A5). In beiden Fällen schlägt der Weg weiterhin
-/// **sichtbar** fehl; daran ändert sich nichts.
+/// vom Frontend übersetzt — seit Spec 0101, A9.1 hängt er nicht mehr am
+/// Zustand eines Schlüsselbunds.
 pub fn clear_sudo_password(
     credential_store: &dyn CredentialStore,
-    keychain: KeychainAvailability,
     server_id: ServerId,
 ) -> Result<(), CommandError> {
     let r = sudo_password_credential_ref(server_id);
@@ -206,7 +184,7 @@ pub fn clear_sudo_password(
                 error = %err,
                 "Sudo-Passwort konnte nicht entfernt werden — der Eintrag bleibt im Schlüsselbund"
             );
-            Err(keychain_aware_credential_error(err, keychain))
+            Err(secret_store_error(err))
         }
     }
 }
@@ -234,7 +212,6 @@ pub fn clear_sudo_password(
 /// solchen Zeichen besteht.
 fn write_or_reuse_secret(
     credential_store: &dyn CredentialStore,
-    keychain: KeychainAvailability,
     ref_: &CredentialRef,
     provided: Option<String>,
     previously_existed: bool,
@@ -245,7 +222,7 @@ fn write_or_reuse_secret(
         Some(value) if !value.is_empty() => {
             credential_store
                 .set(ref_, SecretString::from(value))
-                .map_err(|err| keychain_aware_credential_error(err, keychain))?;
+                .map_err(secret_store_error)?;
             Ok(())
         }
         _ if previously_existed => Ok(()),
@@ -484,11 +461,8 @@ impl CredentialStore for RecordingCredentialStore<'_> {
 /// seither erst nach erfolgreichem Speichern, durch
 /// [`cleanup_replaced_auth_method_secrets`] beim Aufrufer.
 ///
-/// Spec 0071, A13: `keychain` wird nur für die Fehlerkennzeichnung
-/// durchgereicht (s. [`resolve_sudo_password`]).
 pub fn resolve_auth_method(
     credential_store: &dyn CredentialStore,
-    keychain: KeychainAvailability,
     server_id: ServerId,
     input: AuthMethodInput,
     existing: Option<&AuthMethod>,
@@ -499,7 +473,6 @@ pub fn resolve_auth_method(
             let existed = matches!(existing, Some(AuthMethod::Password { .. }));
             write_or_reuse_secret(
                 credential_store,
-                keychain,
                 &ref_,
                 value,
                 existed,
@@ -518,7 +491,6 @@ pub fn resolve_auth_method(
             let existed_key = matches!(existing, Some(AuthMethod::PrivateKey { .. }));
             write_or_reuse_secret(
                 credential_store,
-                keychain,
                 &key_ref,
                 key_content,
                 existed_key,
@@ -548,7 +520,7 @@ pub fn resolve_auth_method(
                     let r = credential_ref(server_id, "passphrase");
                     credential_store
                         .set(&r, SecretString::from(p))
-                        .map_err(|err| keychain_aware_credential_error(err, keychain))?;
+                        .map_err(secret_store_error)?;
                     Some(r)
                 }
                 _ => existing_passphrase_ref,
@@ -568,7 +540,6 @@ pub fn resolve_auth_method(
             let existed = matches!(existing, Some(AuthMethod::Certificate { .. }));
             write_or_reuse_secret(
                 credential_store,
-                keychain,
                 &cert_ref,
                 cert_content,
                 existed,
@@ -577,7 +548,6 @@ pub fn resolve_auth_method(
             )?;
             write_or_reuse_secret(
                 credential_store,
-                keychain,
                 &key_ref,
                 key_content,
                 existed,
@@ -613,7 +583,7 @@ pub fn resolve_auth_method(
                     let r = credential_ref(server_id, "passphrase");
                     credential_store
                         .set(&r, SecretString::from(p))
-                        .map_err(|err| keychain_aware_credential_error(err, keychain))?;
+                        .map_err(secret_store_error)?;
                     Some(r)
                 }
                 _ => existing_passphrase_ref,
@@ -722,10 +692,6 @@ pub fn delete_all_possible_server_secrets(
 mod tests {
     use super::*;
 
-    /// Spec 0071: In diesen Tests geht es nicht um die Verfügbarkeit des
-    /// Schlüsselbunds, sondern um das Schreibverhalten — der In-Memory-Store
-    /// ist per Definition verfügbar.
-    const AVAILABLE: KeychainAvailability = KeychainAvailability::Available;
     use crate::test_support::InMemoryCredentialStore;
 
     fn secret_value(store: &InMemoryCredentialStore, r: &CredentialRef) -> Option<String> {
@@ -738,13 +704,8 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        let result = resolve_auth_method(
-            &store,
-            AVAILABLE,
-            id,
-            AuthMethodInput::Password { value: None },
-            None,
-        );
+        let result =
+            resolve_auth_method(&store, id, AuthMethodInput::Password { value: None }, None);
 
         let err = result.expect_err("erwartet: Fehler bei fehlendem Passwort");
         // Spec 0024, Abschnitt 5: stabiler Code fürs Frontend-Mapping.
@@ -758,7 +719,6 @@ mod tests {
 
         let result = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::PrivateKey {
                 key_content: None,
@@ -778,7 +738,6 @@ mod tests {
 
         let result = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::Certificate {
                 cert_content: None,
@@ -798,7 +757,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some("hunter2".to_string()),
@@ -823,7 +781,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::PrivateKey {
                 key_content: Some("-----BEGIN KEY-----".to_string()),
@@ -846,7 +803,6 @@ mod tests {
 
         let result = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::Certificate {
                 cert_content: Some("cert".to_string()),
@@ -864,8 +820,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        let auth =
-            resolve_auth_method(&store, AVAILABLE, id, AuthMethodInput::Agent, None).unwrap();
+        let auth = resolve_auth_method(&store, id, AuthMethodInput::Agent, None).unwrap();
 
         assert!(matches!(auth, AuthMethod::Agent));
     }
@@ -881,7 +836,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::Password { value: None },
             Some(&existing),
@@ -914,14 +868,8 @@ mod tests {
             credential_ref: old_ref.clone(),
         };
 
-        let auth = resolve_auth_method(
-            &store,
-            AVAILABLE,
-            id,
-            AuthMethodInput::Agent,
-            Some(&existing),
-        )
-        .unwrap();
+        let auth =
+            resolve_auth_method(&store, id, AuthMethodInput::Agent, Some(&existing)).unwrap();
 
         assert!(matches!(auth, AuthMethod::Agent));
         assert_eq!(
@@ -1002,7 +950,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             // Leeres Passphrase-Feld = unverändert lassen; genau der Fall,
             // der beim Bearbeiten eines Servers entsteht.
@@ -1035,7 +982,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        resolve_auth_method(&store, AVAILABLE, id, identity_file_input(None), None).unwrap();
+        resolve_auth_method(&store, id, identity_file_input(None), None).unwrap();
 
         for slot in ["private_key", "password", "passphrase", "certificate"] {
             assert!(
@@ -1055,7 +1002,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             identity_file_input(Some("passphrase-secret\r\n")),
             None,
@@ -1082,7 +1028,6 @@ mod tests {
 
         let result = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::IdentityFile {
                 path: "   ".to_string(),
@@ -1121,7 +1066,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        resolve_sudo_password(&store, AVAILABLE, id, Some("hunter2".to_string())).unwrap();
+        resolve_sudo_password(&store, id, Some("hunter2".to_string())).unwrap();
 
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
@@ -1134,8 +1079,8 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        resolve_sudo_password(&store, AVAILABLE, id, None).unwrap();
-        resolve_sudo_password(&store, AVAILABLE, id, Some(String::new())).unwrap();
+        resolve_sudo_password(&store, id, None).unwrap();
+        resolve_sudo_password(&store, id, Some(String::new())).unwrap();
 
         assert!(secret_value(&store, &sudo_password_credential_ref(id)).is_none());
     }
@@ -1148,7 +1093,7 @@ mod tests {
 
         // Leeres Feld bei "update" bedeutet unverändert (Spec 0018,
         // Abschnitt 4) — kein Löschen, kein Überschreiben.
-        resolve_sudo_password(&store, AVAILABLE, id, Some(String::new())).unwrap();
+        resolve_sudo_password(&store, id, Some(String::new())).unwrap();
 
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
@@ -1162,7 +1107,7 @@ mod tests {
         let store = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(id), "hunter2");
 
-        clear_sudo_password(&store, KeychainAvailability::Available, id).unwrap();
+        clear_sudo_password(&store, id).unwrap();
 
         assert!(secret_value(&store, &sudo_password_credential_ref(id)).is_none());
     }
@@ -1172,7 +1117,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        clear_sudo_password(&store, KeychainAvailability::Available, id).unwrap();
+        clear_sudo_password(&store, id).unwrap();
     }
 
     // --- Spec 0049, Fund 1: Rand-Trimmen (Windows-Copy-Paste-`\r\n`) -------
@@ -1184,7 +1129,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some("hunter2\r\n".to_string()),
@@ -1210,7 +1154,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some("  hunter two \t".to_string()),
@@ -1236,7 +1179,6 @@ mod tests {
 
         let result = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some("  \r\n\t ".to_string()),
@@ -1259,7 +1201,6 @@ mod tests {
 
         resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some(" \r\n ".to_string()),
@@ -1280,7 +1221,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        resolve_sudo_password(&store, AVAILABLE, id, Some("sudo-secret\r\n".to_string())).unwrap();
+        resolve_sudo_password(&store, id, Some("sudo-secret\r\n".to_string())).unwrap();
 
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
@@ -1294,7 +1235,7 @@ mod tests {
         let store = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(id), "old-sudo-password");
 
-        resolve_sudo_password(&store, AVAILABLE, id, Some("\r\n".to_string())).unwrap();
+        resolve_sudo_password(&store, id, Some("\r\n".to_string())).unwrap();
 
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
@@ -1310,28 +1251,29 @@ mod tests {
     /// Schlüsselbund lag und beim nächsten `sudo` wieder eingespeist
     /// worden wäre.
     ///
-    /// Spec 0098, T3a (A1), **ersetzt** die Fassung dieses Tests, die
-    /// `KEYCHAIN_UNAVAILABLE` unbedingt verlangte: Der Weg wertet jetzt den
-    /// Startzustand aus wie jeder andere. Bei verfügbarem Schlüsselbund ist
-    /// das `KEYCHAIN_ACCESS_FAILED` — die wahre Auskunft für einen
-    /// Schlüsselbund, der da ist und nur diesen Löschauftrag verweigert.
+    /// Spec 0101, A9.1: Ein fehlgeschlagenes Entfernen meldet den stabilen
+    /// `SECRET_STORE_FAILED`-Code — unabhängig von einem Schlüsselbund-
+    /// Zustand, den dieser Weg seit A9 gar nicht mehr kennt.
     ///
-    /// Scheitert am Stand vor dieser Spec (dort kam `KEYCHAIN_UNAVAILABLE`).
+    /// Was dabei **nicht** gelockert wird: Der Weg schlägt weiterhin
+    /// sichtbar fehl, und die Nutzlast bleibt draußen — beides wird hier
+    /// mitgeprüft.
     ///
-    /// Was **nicht** gelockert wird: Der Weg schlägt weiterhin sichtbar
-    /// fehl, und die Nutzlast bleibt draußen — beides wird hier mitgeprüft.
+    /// Ersetzt die frühere Zweiteilung in „Schlüsselbund verfügbar"/„beim
+    /// Start schon weg" (Spec 0098, T3a): Diese Unterscheidung gibt es mit
+    /// A9.1 nicht mehr, der zweite Test dieses Paars ist ersatzlos entfallen.
     #[test]
-    fn test_spec_0098_t3a_clearing_a_sudo_password_reports_an_access_failure() {
+    fn test_clearing_a_sudo_password_reports_a_secret_store_failure() {
         let id = ServerId::new();
         let store = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(id), "sudo-secret")
             .with_failing_delete()
             .with_backend_payload("LIBTEXT-0098 Geheim-0098");
 
-        let err = clear_sudo_password(&store, KeychainAvailability::Available, id)
+        let err = clear_sudo_password(&store, id)
             .expect_err("ein fehlgeschlagenes Entfernen darf nicht als Erfolg gelten");
 
-        assert_eq!(err.code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
+        assert_eq!(err.code, Some(crate::error::SECRET_STORE_FAILED));
         assert!(
             !err.message.contains("LIBTEXT-0098") && !err.message.contains("Geheim-0098"),
             "die Nutzlast der Bibliothek darf das Frontend nicht erreichen: {}",
@@ -1344,91 +1286,37 @@ mod tests {
         );
     }
 
-    /// Spec 0098, T3a (A2): derselbe Fall bei einem Schlüsselbund, der schon
-    /// beim Start fehlte — dann bleibt es bei `KEYCHAIN_UNAVAILABLE`, wie
-    /// vor dieser Spec. Belegt, dass A1 den alten Fall nicht verdrängt.
-    #[test]
-    fn test_spec_0098_t3a_clearing_a_sudo_password_still_reports_unavailable_at_startup() {
-        let id = ServerId::new();
-        let store = InMemoryCredentialStore::new()
-            .with_secret(&sudo_password_credential_ref(id), "sudo-secret")
-            .with_failing_delete()
-            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
-
-        let err = clear_sudo_password(
-            &store,
-            KeychainAvailability::Unavailable(
-                credentials_keyring::KeychainUnavailableReason::NoSecretServiceProvider,
-            ),
-            id,
-        )
-        .expect_err("ein fehlgeschlagenes Entfernen darf nicht als Erfolg gelten");
-
-        assert_eq!(err.code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
-        assert!(
-            !err.message.contains("Geheim-0098"),
-            "die Nutzlast bleibt auch hier draußen: {}",
-            err.message
-        );
-    }
-
     /// Gegenprobe: Ohne hinterlegtes Passwort ist „entfernen" weiterhin
     /// erfolgreich — `NotFound` ist kein Fehler (Idempotenz, Spec 0018).
     #[test]
     fn test_clearing_an_absent_sudo_password_still_succeeds() {
         let store = InMemoryCredentialStore::new();
-        clear_sudo_password(&store, KeychainAvailability::Available, ServerId::new())
+        clear_sudo_password(&store, ServerId::new())
             .expect("kein Eintrag vorhanden ist kein Fehler");
     }
 
-    /// Spec 0098, T4 (A3): Erst scheitert der Store, dann gelingt er. Der
-    /// erste Fehler trägt **nicht** `KEYCHAIN_UNAVAILABLE`, und der zweite
-    /// Aufruf geht durch — der Schlüsselbund gilt nach einer einzelnen
-    /// Ablehnung nicht als kaputt.
-    ///
-    /// Scheitert, wenn ein Laufzeitfehler „nicht verfügbar" meldet (erste
-    /// Zusicherung; am Stand vor dieser Spec kam dort `KEYCHAIN_UNAVAILABLE`)
-    /// oder wenn der zweite Durchlauf das Secret nicht wirklich entfernt
-    /// (letzte Zusicherung) — ein bloßes `Ok` genügt dafür nicht.
-    ///
-    /// Dass kein Laufzeitfehler den Zustand **eskaliert**, prüft dieser Test
-    /// **nicht** mehr und kann es auch nicht: Die Garantie hängt an der
-    /// Signatur, nicht an einer Zusicherung (s. Kommentar am Ende des Tests).
+    /// Ein einzelner abgelehnter Zugriff ist keine Dauerstörung: Der erste
+    /// Aufruf scheitert mit dem stabilen `SECRET_STORE_FAILED`-Code, der
+    /// zweite geht durch, sobald der Store wieder antwortet.
     #[test]
-    fn test_spec_0098_t4_a_single_rejection_does_not_make_the_keychain_unavailable() {
+    fn test_a_single_rejection_does_not_change_the_secret_store_error_code() {
         let id = ServerId::new();
-        let keychain = KeychainAvailability::Available;
         let store = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(id), "sudo-secret")
             .with_failing_delete()
             .with_backend_payload("LIBTEXT-0098 Geheim-0098")
             .failing_only_times(1);
 
-        let err = clear_sudo_password(&store, keychain, id)
-            .expect_err("der erste Zugriff scheitert noch");
-        assert_eq!(
-            err.code,
-            Some(crate::error::KEYCHAIN_ACCESS_FAILED),
-            "ein einzelner abgelehnter Zugriff ist kein „nicht verfügbar\""
-        );
+        let err = clear_sudo_password(&store, id).expect_err("der erste Zugriff scheitert noch");
+        assert_eq!(err.code, Some(crate::error::SECRET_STORE_FAILED));
 
-        clear_sudo_password(&store, keychain, id)
+        clear_sudo_password(&store, id)
             .expect("sobald der Store wieder antwortet, gelingt der nächste Zugriff");
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)),
             None,
             "der zweite Durchlauf muss das Secret tatsächlich entfernt haben"
         );
-        // Dass kein Laufzeitfehler den Startzustand eskaliert (A3/A16), stand
-        // hier als `assert!(keychain.is_available())` — eine Zusicherung, die
-        // nicht scheitern **kann**: `keychain` ist eine lokale `Copy`-Variable,
-        // die die geprüfte Funktion per Wert bekommt (spec-reviewer Runde 1).
-        // Die Garantie ist echt, aber sie hängt an der Signatur, nicht an
-        // einer Zusicherung: `clear_sudo_password` nimmt
-        // `KeychainAvailability` als Wert und hat damit keinen Weg, den
-        // Zustand im `AppState` zu verändern. Was dieser Test **belegen**
-        // kann, steht oben: Der erste Fehler meldet nicht „nicht verfügbar",
-        // und der zweite Aufruf gelingt wirklich.
     }
 
     /// Spec 0071, A17 (zweiter Punkt): Das Löschen eines Servers läuft
@@ -1480,58 +1368,26 @@ mod tests {
         );
     }
 
-    /// Spec 0071, A13/X6: Schlägt ein Schreibzugriff fehl, während der
-    /// Schlüsselbund als nicht verfügbar bekannt ist, geht der Fehler
-    /// weiter (nie ein stiller Erfolg) — und zwar mit dem stabilen Code,
-    /// damit das Frontend den übersetzten Text zeigt statt des englischen
-    /// Bibliothekstexts.
+    /// Spec 0101, A9.1 (zuvor Spec 0071, A13/X6): Schlägt ein Schreibzugriff
+    /// auf den Secret-Speicher fehl, geht der Fehler weiter (nie ein
+    /// stiller Erfolg) — und zwar mit dem stabilen Code, damit das Frontend
+    /// den übersetzten Text zeigt statt des englischen Bibliothekstexts.
+    ///
+    /// Ersetzt die frühere Zweiteilung in „Schlüsselbund verfügbar"/„beim
+    /// Start schon weg" (Spec 0098, T1): Diese Unterscheidung gibt es mit
+    /// A9.1 nicht mehr, der zweite Test dieses Paars ist ersatzlos entfallen.
     #[test]
-    fn test_failed_write_reports_the_keychain_code_and_never_silently_succeeds() {
-        let unavailable = KeychainAvailability::Unavailable(
-            credentials_keyring::KeychainUnavailableReason::NoSecretServiceProvider,
-        );
+    fn test_failed_write_reports_a_stable_code_and_never_silently_succeeds() {
         let store = InMemoryCredentialStore::new().with_failing_set_for_slot("sudo_password");
         let id = ServerId::new();
 
-        let err = resolve_sudo_password(&store, unavailable, id, Some("sudo-secret".to_string()))
+        let err = resolve_sudo_password(&store, id, Some("sudo-secret".to_string()))
             .expect_err("ein fehlgeschlagener Schreibzugriff darf nicht als Erfolg gelten");
 
-        assert_eq!(err.code, Some(crate::error::KEYCHAIN_UNAVAILABLE));
+        assert_eq!(err.code, Some(crate::error::SECRET_STORE_FAILED));
         assert!(
             !err.message.contains("simulierter Keychain-Fehler"),
             "der rohe Backend-Text darf nicht mitgereicht werden: {}",
-            err.message
-        );
-        assert!(
-            secret_value(&store, &sudo_password_credential_ref(id)).is_none(),
-            "nichts darf gespeichert worden sein"
-        );
-    }
-
-    /// Spec 0098, T1 (A1, Schreiben) — **ersetzt**
-    /// `test_failed_write_with_an_available_keychain_keeps_its_ordinary_error`,
-    /// der hier `code == None` verlangte und damit genau das Verhalten aus
-    /// BL-0244 festschrieb: Der rohe `keyring`-Text landete im Formular.
-    ///
-    /// Scheitert am Stand vor dieser Spec in beiden Zusicherungen
-    /// (`code: None`, Marker in `message`).
-    ///
-    /// Zweiter Test zu derselben Stelle wie der vorige, weil **beide**
-    /// Zustände geprüft sein müssen: A1 darf A2 nicht verdrängen.
-    #[test]
-    fn test_spec_0098_t1_failed_write_with_an_available_keychain_reports_the_access_code() {
-        let store = InMemoryCredentialStore::new()
-            .with_failing_set_for_slot("sudo_password")
-            .with_backend_payload("LIBTEXT-0098 Geheim-0098");
-        let id = ServerId::new();
-
-        let err = resolve_sudo_password(&store, AVAILABLE, id, Some("sudo-secret".to_string()))
-            .expect_err("ein fehlgeschlagener Schreibzugriff darf nicht als Erfolg gelten");
-
-        assert_eq!(err.code, Some(crate::error::KEYCHAIN_ACCESS_FAILED));
-        assert!(
-            !err.message.contains("LIBTEXT-0098") && !err.message.contains("Geheim-0098"),
-            "die Nutzlast der Bibliothek darf das Frontend nicht erreichen: {}",
             err.message
         );
         assert!(
@@ -1552,7 +1408,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::PrivateKey {
                 key_content: Some("-----BEGIN KEY-----".to_string()),
@@ -1587,7 +1442,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::PrivateKey {
                 key_content: None,
@@ -1622,7 +1476,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some("\u{FEFF}hunter2\u{200B}".to_string()),
@@ -1650,7 +1503,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some(" hunter\u{200B}2 ".to_string()),
@@ -1680,7 +1532,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::Password {
                 value: Some("\u{FEFF}\u{200B}\u{2060}".to_string()),
@@ -1708,7 +1559,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::PrivateKey {
                 key_content: Some("-----BEGIN KEY-----".to_string()),
@@ -1743,7 +1593,6 @@ mod tests {
 
         let auth = resolve_auth_method(
             &store,
-            AVAILABLE,
             id,
             AuthMethodInput::PrivateKey {
                 key_content: None,
@@ -1768,13 +1617,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        resolve_sudo_password(
-            &store,
-            AVAILABLE,
-            id,
-            Some("\u{200B}sudo-secret\u{FEFF}".to_string()),
-        )
-        .unwrap();
+        resolve_sudo_password(&store, id, Some("\u{200B}sudo-secret\u{FEFF}".to_string())).unwrap();
 
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),
@@ -1788,7 +1631,7 @@ mod tests {
         let store = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(id), "old-sudo-password");
 
-        resolve_sudo_password(&store, AVAILABLE, id, Some("\u{FEFF}\u{200D}".to_string())).unwrap();
+        resolve_sudo_password(&store, id, Some("\u{FEFF}\u{200D}".to_string())).unwrap();
 
         assert_eq!(
             secret_value(&store, &sudo_password_credential_ref(id)).as_deref(),

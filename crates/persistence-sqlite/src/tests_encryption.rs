@@ -647,6 +647,45 @@ async fn plaintext_snapshot(path: &Path) -> (i64, Vec<(String, i64)>) {
     (user_version, rows)
 }
 
+/// Wie [`plaintext_snapshot`], aber für die **verschlüsselte** Datei — und
+/// vor allem: **ohne zu migrieren**.
+///
+/// Nötig seit Spec 0101 A9 (`0015_secrets.sql`): `connect_encrypted` führt
+/// die Migrationen aus, also wächst `_sqlx_migrations` beim Öffnen. Wer die
+/// Umwandlung (A6) daran misst, was **nach** dem Öffnen in der Datei steht,
+/// misst den Build mit — und müsste bei jeder neuen Migration eine Zahl
+/// nachziehen, die dann nichts mehr belegt. Diese Fassung sieht die Datei
+/// so, wie die Umwandlung sie hinterlassen hat.
+async fn encrypted_snapshot(path: &Path, key: &DatabaseKey) -> (i64, Vec<(String, i64)>) {
+    let options = crate::encryption::encrypted_connect_options(path, key);
+    let mut conn = sqlx::SqliteConnection::connect_with(&options)
+        .await
+        .expect("verschlüsselte Datei mit dem Schlüssel öffenbar");
+    let user_version: i64 = sqlx::query_scalar("PRAGMA user_version")
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+    let names: Vec<String> = sqlx::query_scalar(
+        "SELECT name FROM sqlite_master WHERE type = 'table' \
+         AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    )
+    .fetch_all(&mut conn)
+    .await
+    .unwrap();
+    let mut rows = Vec::new();
+    for name in names {
+        let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT COUNT(*) FROM \"{name}\""
+        )))
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+        rows.push((name, count));
+    }
+    conn.close().await.unwrap();
+    (user_version, rows)
+}
+
 /// T4 (A6, A7): Die eingecheckte Fixture — geschrieben vom Build **vor**
 /// SQLCipher (SQLite 3.51.3) — wird umgewandelt. Danach: gleiche
 /// Zeilenzahlen je Tabelle, gleiche `user_version`, `journal_mode = wal`,
@@ -683,6 +722,17 @@ async fn test_t4_converting_the_pre_sqlcipher_fixture_keeps_everything() {
         "die Zwischendatei muss nach dem Umbenennen verschwunden sein"
     );
 
+    // **So, wie die Umwandlung die Datei hinterlassen hat** — ohne das
+    // Migrieren, das `connect_encrypted` gleich darunter auslöst: gleiche
+    // `user_version`, Zeile für Zeile dieselben Tabellen, einschließlich
+    // der 14 Einträge in `_sqlx_migrations`.
+    let (converted_user_version, converted_rows) = encrypted_snapshot(&db_path, &key).await;
+    assert_eq!(converted_user_version, expected_user_version);
+    assert_eq!(
+        converted_rows, expected_rows,
+        "die Umwandlung muss jede Tabelle Zeile für Zeile erhalten"
+    );
+
     let store = SqliteProfileStore::connect_encrypted(&db_path, &key)
         .await
         .expect("umgewandelte Datei mit dem Schlüssel öffenbar");
@@ -702,24 +752,19 @@ async fn test_t4_converting_the_pre_sqlcipher_fixture_keeps_everything() {
         "journal_mode war {journal_mode}"
     );
 
+    // Nach dem Öffnen trägt die Datei die Migrationen **dieses** Builds:
+    // die 14 aus der Fixture plus jede seither hinzugekommene. Die Zahl
+    // steht nicht fest im Test — sonst müsste sie bei jeder neuen Migration
+    // nachgezogen werden und belegte dann nichts mehr.
     let applied: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations")
         .fetch_one(&store.pool)
         .await
         .unwrap();
-    assert_eq!(applied, 14, "alle 14 Migrationen müssen erhalten sein");
-
-    for (name, expected_count) in &expected_rows {
-        let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-            "SELECT COUNT(*) FROM \"{name}\""
-        )))
-        .fetch_one(&store.pool)
-        .await
-        .unwrap();
-        assert_eq!(
-            count, *expected_count,
-            "Zeilenzahl von {name} weicht nach der Umwandlung ab"
-        );
-    }
+    assert_eq!(
+        applied,
+        sqlx::migrate!().iter().count() as i64,
+        "nach dem Öffnen müssen alle Migrationen dieses Builds angewandt sein"
+    );
 
     let servers = store.list_servers().await.expect("Server lesbar");
     assert_eq!(servers.len(), 1);
@@ -866,18 +911,17 @@ async fn test_t5_an_aborted_conversion_leaves_the_original_usable() {
         crate::convert_plaintext_database(&db_path, &key)
             .await
             .unwrap_or_else(|e| panic!("{abort_after:?}: zweiter Versuch muss gelingen: {e}"));
+        // Gemessen **vor** dem Migrieren (s. `encrypted_snapshot`): Hier
+        // geht es um das Ergebnis der Umwandlung, nicht um den
+        // Migrationsstand dieses Builds.
+        assert_eq!(
+            encrypted_snapshot(&db_path, &key).await.1,
+            expected_rows,
+            "{abort_after:?}: der zweite Versuch muss jede Zeile erhalten"
+        );
         let store = SqliteProfileStore::connect_encrypted(&db_path, &key)
             .await
             .expect("nach dem zweiten Versuch öffenbar");
-        for (name, expected_count) in &expected_rows {
-            let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-                "SELECT COUNT(*) FROM \"{name}\""
-            )))
-            .fetch_one(&store.pool)
-            .await
-            .unwrap();
-            assert_eq!(count, *expected_count, "{abort_after:?}: {name}");
-        }
         store.pool.close().await;
     }
 }
@@ -990,18 +1034,16 @@ async fn test_t19_a_foreign_intermediate_file_is_discarded_not_adopted() {
         .expect("die fremde Zwischendatei darf die Umwandlung nicht aufhalten");
 
     assert!(!tmp.exists(), "die Zwischendatei muss verschwunden sein");
+    // Vor dem Migrieren gemessen (s. `encrypted_snapshot`) — die Frage ist,
+    // was die Umwandlung hinterlassen hat.
+    assert_eq!(
+        encrypted_snapshot(&db_path, &key).await.1,
+        expected_rows,
+        "das Ergebnis muss die umgewandelte Datenbank sein, nicht die fremde Datei"
+    );
     let store = SqliteProfileStore::connect_encrypted(&db_path, &key)
         .await
         .expect("das Ergebnis muss die umgewandelte Datenbank sein, nicht die fremde Datei");
-    for (name, expected_count) in &expected_rows {
-        let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-            "SELECT COUNT(*) FROM \"{name}\""
-        )))
-        .fetch_one(&store.pool)
-        .await
-        .unwrap();
-        assert_eq!(count, *expected_count, "{name}");
-    }
     store.pool.close().await;
 
     assert!(

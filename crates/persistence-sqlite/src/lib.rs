@@ -8,6 +8,9 @@
 
 mod ai_provider_store;
 mod chat_session_store;
+/// Spec 0101, A9: der produktive `CredentialStore` — Secrets in der
+/// verschlüsselten Datenbank statt im Schlüsselbund.
+mod credential_store;
 /// Spec 0101, A4/A6–A8: Dateizustand erkennen, mit Schlüssel öffnen,
 /// Klartext-Datei umwandeln.
 mod encryption;
@@ -21,6 +24,10 @@ mod store;
 
 #[cfg(test)]
 mod tests;
+/// Spec 0101, Commit 6 — eigene Datei: T10 (Vertrag des
+/// Datenbank-`CredentialStore`) und die drei Aufruforte aus Teil 0 Frage 2.
+#[cfg(test)]
+mod tests_credential_store;
 /// Spec 0101, Commit 4 — eigene Datei: A4, A6–A8 und die Tests T1 (Teil),
 /// T4–T6, T19, T20.
 #[cfg(test)]
@@ -40,6 +47,7 @@ pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
 };
 pub use chat_session_store::{ChatSessionStoreError, ChatSessionSummary, SqliteChatSessionStore};
+pub use credential_store::SqliteCredentialStore;
 pub use encryption::{
     convert_plaintext_database, detect_database_file_state, intermediate_path, ConversionFailure,
     DatabaseFileState, SQLITE_PLAINTEXT_HEADER,

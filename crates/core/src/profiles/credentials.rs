@@ -70,6 +70,28 @@ pub fn trim_credential_value(value: &str) -> String {
 /// Der Code *ersetzt* den Bibliothekstext, er ergänzt ihn nicht.
 pub const KEYCHAIN_ACCESS_FAILED: &str = "KEYCHAIN_ACCESS_FAILED";
 
+/// Spec 0101, A9.1: stabiler Code für „der Secret-Speicher hat den Zugriff
+/// nicht ausgeführt" — seit A9 ist das die verschlüsselte Datenbank, nicht
+/// mehr der Schlüsselbund des Betriebssystems.
+///
+/// **Warum nicht weiter [`KEYCHAIN_ACCESS_FAILED`]:** Der Schlüsselbund
+/// trägt nach A9 nur noch den Wurzelschlüssel K. Ein gescheiterter
+/// Secret-Zugriff hat mit ihm nichts mehr zu tun — die Meldung „Schlüsselbund
+/// gesperrt oder Zugriff abgelehnt" schickte den Nutzer in die Systemein-
+/// stellungen, wo es nichts zu reparieren gibt, während die eigentliche
+/// Ursache (Datenbank nicht schreibbar, Platte voll) ungenannt bliebe.
+///
+/// **Hier und nicht in `app-logic`**, aus demselben Grund wie bei
+/// [`KEYCHAIN_ACCESS_FAILED`]: Zwei Schichten vergeben ihn — `app-logic`
+/// für die Kommandowege und [`crate::ssh::SshError::code`] für die
+/// Verbindungskette (§1, „Zweiter Weg zum Frontend"). Ein zweites Literal
+/// könnte abdriften, ohne dass irgendwo etwas scheitert.
+///
+/// Der Code **hängt nicht am Zustand des Schlüsselbunds** (A9.1): Es gibt
+/// keine Fassung „nicht verfügbar" davon, weil der Schlüsselbund auf diesem
+/// Weg gar nicht mehr befragt wird.
+pub const SECRET_STORE_FAILED: &str = "SECRET_STORE_FAILED";
+
 /// Fehler eines [`CredentialStore`]-Zugriffs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CredentialError {

@@ -16,11 +16,10 @@ use ssh_manager_core::profiles::{
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{KeyFileError, KeyFileReader};
 
-use credentials_keyring::KeychainAvailability;
 use secrecy::SecretString;
 
 use crate::dto::{KeyFileFactsDto, ServerDto};
-use crate::error::{keychain_aware_credential_error, CommandError, CommandResult};
+use crate::error::{secret_store_error, CommandError, CommandResult};
 
 /// Stabiler Code für den Fall, dass der Server gar keine Schlüsseldatei
 /// benutzt — das Frontend bietet den Knopf dann erst gar nicht an, aber ein
@@ -65,7 +64,6 @@ pub fn inspect_key_file(
 pub async fn convert_identity_file_to_keychain(
     store: &dyn ProfileStore,
     credential_store: &(dyn CredentialStore + Send + Sync),
-    keychain: KeychainAvailability,
     key_files: &(dyn KeyFileReader + Send + Sync),
     server_id: ServerId,
 ) -> CommandResult<ServerDto> {
@@ -105,7 +103,7 @@ pub async fn convert_identity_file_to_keychain(
     let previous = match credential_store.get(&key_ref) {
         Ok(value) => Some(value),
         Err(CredentialError::NotFound(_)) => None,
-        Err(err) => return Err(keychain_aware_credential_error(err, keychain)),
+        Err(err) => return Err(secret_store_error(err)),
     };
 
     // Schritt 2 (C-4): byte-gleich, ohne Trimmen. `write_or_reuse_secret`
@@ -113,7 +111,7 @@ pub async fn convert_identity_file_to_keychain(
     // mit der Datei.
     credential_store
         .set(&key_ref, content.key)
-        .map_err(|err| keychain_aware_credential_error(err, keychain))?;
+        .map_err(secret_store_error)?;
 
     // Schritt 3 (C-3): die Passphrase-Referenz wandert unverändert mit.
     server.auth = AuthMethod::PrivateKey {
@@ -214,7 +212,6 @@ mod tests {
     use ssh_manager_core::profiles::{PostIngestPolicy, Server};
     use ssh_manager_core::ssh::mock::{MockKeyFile, MockKeyFileReader};
 
-    const AVAILABLE: KeychainAvailability = KeychainAvailability::Available;
     const PATH: &str = "/home/deploy/.ssh/id_ed25519";
 
     /// Steht stellvertretend für einen verschlüsselten Schlüssel. Was hier
@@ -273,15 +270,10 @@ mod tests {
         let credential_store = InMemoryCredentialStore::new();
         let key_files = MockKeyFileReader::new().with_key(PATH, "the-key-bytes");
 
-        let dto = convert_identity_file_to_keychain(
-            &profile_store,
-            &credential_store,
-            AVAILABLE,
-            &key_files,
-            id,
-        )
-        .await
-        .expect("eine lesbare, gültige Schlüsseldatei muss sich übernehmen lassen");
+        let dto =
+            convert_identity_file_to_keychain(&profile_store, &credential_store, &key_files, id)
+                .await
+                .expect("eine lesbare, gültige Schlüsseldatei muss sich übernehmen lassen");
 
         assert_eq!(dto.auth_kind, AuthMethodKind::PrivateKey);
         assert_eq!(
@@ -335,15 +327,9 @@ mod tests {
             },
         );
 
-        convert_identity_file_to_keychain(
-            &profile_store,
-            &credential_store,
-            AVAILABLE,
-            &key_files,
-            id,
-        )
-        .await
-        .unwrap();
+        convert_identity_file_to_keychain(&profile_store, &credential_store, &key_files, id)
+            .await
+            .unwrap();
 
         let reloaded = profile_store.get_server(&id).await.unwrap();
         let AuthMethod::PrivateKey {
@@ -398,15 +384,9 @@ mod tests {
             },
         );
 
-        convert_identity_file_to_keychain(
-            &profile_store,
-            &credential_store,
-            AVAILABLE,
-            &key_files,
-            id,
-        )
-        .await
-        .expect("C-1: der Knopf behebt den Rechte-Mangel, er darf nicht an ihm scheitern");
+        convert_identity_file_to_keychain(&profile_store, &credential_store, &key_files, id)
+            .await
+            .expect("C-1: der Knopf behebt den Rechte-Mangel, er darf nicht an ihm scheitern");
 
         assert_eq!(
             key_files.calls(),
@@ -425,15 +405,9 @@ mod tests {
             InMemoryCredentialStore::new().with_failing_set_for_slot("private_key");
         let key_files = MockKeyFileReader::new().with_key(PATH, "the-key-bytes");
 
-        convert_identity_file_to_keychain(
-            &profile_store,
-            &credential_store,
-            AVAILABLE,
-            &key_files,
-            id,
-        )
-        .await
-        .expect_err("ein fehlgeschlagener Schreibzugriff darf nicht als Erfolg gelten");
+        convert_identity_file_to_keychain(&profile_store, &credential_store, &key_files, id)
+            .await
+            .expect_err("ein fehlgeschlagener Schreibzugriff darf nicht als Erfolg gelten");
 
         let reloaded = profile_store.get_server(&id).await.unwrap();
         assert!(
@@ -460,15 +434,9 @@ mod tests {
         let credential_store = InMemoryCredentialStore::new();
         let key_files = MockKeyFileReader::new().with_key(PATH, "the-key-bytes");
 
-        convert_identity_file_to_keychain(
-            &profile_store,
-            &credential_store,
-            AVAILABLE,
-            &key_files,
-            id,
-        )
-        .await
-        .expect_err("ein fehlgeschlagenes Speichern darf nicht als Erfolg gelten");
+        convert_identity_file_to_keychain(&profile_store, &credential_store, &key_files, id)
+            .await
+            .expect_err("ein fehlgeschlagenes Speichern darf nicht als Erfolg gelten");
 
         assert_eq!(
             stored(&credential_store, &key_slot(id)),
@@ -492,14 +460,9 @@ mod tests {
             InMemoryCredentialStore::new().with_secret(&key_slot(id), "etwas-das-schon-da-war");
         let key_files = MockKeyFileReader::new().with_key(PATH, "the-key-bytes");
 
-        let _ = convert_identity_file_to_keychain(
-            &profile_store,
-            &credential_store,
-            AVAILABLE,
-            &key_files,
-            id,
-        )
-        .await;
+        let _ =
+            convert_identity_file_to_keychain(&profile_store, &credential_store, &key_files, id)
+                .await;
 
         assert_eq!(
             stored(&credential_store, &key_slot(id)).as_deref(),
@@ -523,15 +486,9 @@ mod tests {
             .with_failing_get();
         let key_files = MockKeyFileReader::new().with_key(PATH, "the-key-bytes");
 
-        convert_identity_file_to_keychain(
-            &profile_store,
-            &credential_store,
-            AVAILABLE,
-            &key_files,
-            id,
-        )
-        .await
-        .expect_err("ein nicht antwortender Schlüsselbund ist kein „Slot ist leer“");
+        convert_identity_file_to_keychain(&profile_store, &credential_store, &key_files, id)
+            .await
+            .expect_err("ein nicht antwortender Schlüsselbund ist kein „Slot ist leer“");
 
         assert!(
             matches!(
@@ -558,15 +515,10 @@ mod tests {
         let credential_store = InMemoryCredentialStore::new().with_failing_delete();
         let key_files = MockKeyFileReader::new().with_key(PATH, "the-key-bytes");
 
-        let err = convert_identity_file_to_keychain(
-            &profile_store,
-            &credential_store,
-            AVAILABLE,
-            &key_files,
-            id,
-        )
-        .await
-        .expect_err("das Speichern schlägt fehl");
+        let err =
+            convert_identity_file_to_keychain(&profile_store, &credential_store, &key_files, id)
+                .await
+                .expect_err("das Speichern schlägt fehl");
 
         assert!(
             err.message.contains(key_slot(id).as_str()),
@@ -606,15 +558,10 @@ mod tests {
         // Die Attrappe kennt den Pfad nicht — also „nicht gefunden“.
         let key_files = MockKeyFileReader::new();
 
-        let err = convert_identity_file_to_keychain(
-            &profile_store,
-            &credential_store,
-            AVAILABLE,
-            &key_files,
-            id,
-        )
-        .await
-        .expect_err("eine fehlende Datei lässt sich nicht übernehmen");
+        let err =
+            convert_identity_file_to_keychain(&profile_store, &credential_store, &key_files, id)
+                .await
+                .expect_err("eine fehlende Datei lässt sich nicht übernehmen");
 
         assert_eq!(err.code, Some("KEY_FILE_NOT_FOUND"));
         assert!(err.message.contains(PATH), "{}", err.message);
@@ -636,15 +583,10 @@ mod tests {
         let credential_store = InMemoryCredentialStore::new();
         let key_files = MockKeyFileReader::new().with_key(PATH, "the-key-bytes");
 
-        let err = convert_identity_file_to_keychain(
-            &profile_store,
-            &credential_store,
-            AVAILABLE,
-            &key_files,
-            id,
-        )
-        .await
-        .expect_err("ohne Schlüsseldatei gibt es nichts zu übernehmen");
+        let err =
+            convert_identity_file_to_keychain(&profile_store, &credential_store, &key_files, id)
+                .await
+                .expect_err("ohne Schlüsseldatei gibt es nichts zu übernehmen");
 
         assert_eq!(err.code, Some(NOT_AN_IDENTITY_FILE));
         assert!(
@@ -719,7 +661,6 @@ mod tests {
         convert_identity_file_to_keychain(
             &profile_store,
             &credential_store,
-            AVAILABLE,
             &crate::key_files::OsKeyFileReader::new(),
             id,
         )
@@ -892,7 +833,7 @@ mod tests {
 
         // Weg 2: Überführung — liest den Marker UND schreibt danach in
         // dieselbe (echte) Datenbank.
-        convert_identity_file_to_keychain(&store, &credential_store, AVAILABLE, &key_files, id)
+        convert_identity_file_to_keychain(&store, &credential_store, &key_files, id)
             .await
             .expect("ein gültiger, unverschlüsselter Schlüssel muss sich überführen lassen");
 

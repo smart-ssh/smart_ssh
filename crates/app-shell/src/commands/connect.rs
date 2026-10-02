@@ -21,9 +21,7 @@ use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, SshError
 use app_logic::ai_provider_factory::build_ai_provider;
 use app_logic::confirmation::{ConfirmationRegistry, RegistrationGeneration};
 use app_logic::dto::HostKeyUserDecision;
-use app_logic::error::{
-    keychain_aware_credential_error, keychain_aware_ssh_error, CommandError, CommandResult,
-};
+use app_logic::error::{secret_store_error, ssh_command_error, CommandError, CommandResult};
 use app_logic::events::{
     emit_connection_status_changed, emit_host_key_verification_needed, ConnectionStatus,
     HostKeyKind,
@@ -36,8 +34,6 @@ use app_logic::state::{AppState, SessionId};
 // Kommentar) — `test_connection` ist Tauri-frei und zieht nach `app-logic`,
 // `commands::connect` bleibt Tauri-gebunden in `app-shell`.
 use app_logic::test_connection::SSH_CONNECT_TIMEOUT;
-
-use credentials_keyring::KeychainAvailability;
 
 use super::ai_providers::active_ai_provider_config;
 use super::diagnostics_export::build_os_banner_message;
@@ -125,15 +121,14 @@ fn should_create_chat_session(is_local: bool, persist_chat_session: bool) -> boo
 /// in `connect_session`, damit dieser eine Mapping-Schritt (anders als
 /// `connect_session` als Ganzes, s. Doc-Kommentar oben) isoliert testbar
 /// ist, ohne einen echten SSH-Verbindungsaufbau zu brauchen.
-/// Spec 0098, A4: `keychain` entscheidet nur, **welcher** der beiden
-/// stabilen Schlüsselbund-Codes es wird — der Startzustand aus dem
-/// `AppState` (A16), hier nie neu geprüft. Für jede andere `SshError`-
-/// Variante ändert sich nichts.
+/// Spec 0101, A9.1: Der Code kommt vollständig aus [`SshError::code`] —
+/// der Zustand des Schlüsselbunds spielt für ihn keine Rolle mehr (seit A9
+/// liegen die Secrets in der Datenbank, s.
+/// `app_logic::error::ssh_command_error`).
 fn map_connect_result(
     result: Result<ssh_transport::ConnectOutcome, SshError>,
-    keychain: KeychainAvailability,
 ) -> CommandResult<ssh_transport::ConnectOutcome> {
-    result.map_err(|err| keychain_aware_ssh_error(&err, keychain))
+    result.map_err(|err| ssh_command_error(&err))
 }
 
 pub(crate) async fn connect_session(
@@ -164,7 +159,7 @@ pub(crate) async fn connect_session(
     let api_key = state
         .credential_store
         .get(&active_config.credential_ref)
-        .map_err(|err| keychain_aware_credential_error(err, state.keychain))?;
+        .map_err(secret_store_error)?;
     let (ai_provider, ai_provider_budget) = build_ai_provider(
         &state.rate_limit_registry,
         active_config.provider_type,
@@ -224,13 +219,12 @@ pub(crate) async fn connect_session(
                         .redact_text(&err.to_string()),
                     "resolving the connection target (jump host chain) failed (error text)",
                 );
-                // Spec 0098, A4: derselbe schlüsselbund-bewusste Weg wie
-                // unten. `resolve_connection_target` liest heute keine
-                // Credentials, dieser Zweig kann also gar keinen
-                // Schlüsselbund-Fehler tragen — die einheitliche Abbildung
-                // kostet nichts und hält den Weg geschlossen, falls sich das
-                // einmal ändert.
-                return Err(keychain_aware_ssh_error(&err, state.keychain));
+                // Spec 0098 A4 / Spec 0101 A9.1: derselbe Weg wie unten.
+                // `resolve_connection_target` liest heute keine Credentials,
+                // dieser Zweig kann also gar keinen Secret-Speicher-Fehler
+                // tragen — die einheitliche Abbildung kostet nichts und hält
+                // den Weg geschlossen, falls sich das einmal ändert.
+                return Err(ssh_command_error(&err));
             }
         };
         loop {
@@ -254,7 +248,6 @@ pub(crate) async fn connect_session(
                     SSH_CONNECT_TIMEOUT,
                 )
                 .await,
-                state.keychain,
             ) {
                 Ok(outcome) => outcome,
                 Err(err) => {
@@ -971,11 +964,6 @@ mod map_connect_result_tests {
     use super::*;
     use ssh_manager_core::ssh::{HopLabel, SecretKind};
 
-    const AVAILABLE: KeychainAvailability = KeychainAvailability::Available;
-    const UNAVAILABLE: KeychainAvailability = KeychainAvailability::Unavailable(
-        credentials_keyring::KeychainUnavailableReason::NoSecretServiceProvider,
-    );
-
     /// `ConnectOutcome` hat kein `Debug` (es trägt ein Trait-Objekt), also
     /// kein `expect_err` — der Fehlerfall wird von Hand ausgepackt.
     fn expect_error(
@@ -994,7 +982,7 @@ mod map_connect_result_tests {
         let expected_code = err.code();
         let expected_message = err.to_string();
 
-        let result = map_connect_result(Err(err), AVAILABLE);
+        let result = map_connect_result(Err(err));
 
         let command_error = match result {
             Ok(_) => panic!("erwarteter Fehler wurde nicht als Err geliefert"),
@@ -1010,7 +998,7 @@ mod map_connect_result_tests {
             Box::new(ssh_transport::LocalTransport::new());
         let outcome = ssh_transport::ConnectOutcome::Connected(transport);
 
-        let result = map_connect_result(Ok(outcome), AVAILABLE);
+        let result = map_connect_result(Ok(outcome));
 
         assert!(matches!(
             result,
@@ -1018,17 +1006,17 @@ mod map_connect_result_tests {
         ));
     }
 
-    /// Spec 0098, T6 (A4, Verbindungs**aufbau**): Die Abbildung auf den Code
-    /// — der Teil des Aufbaus, der ohne echte Verbindung prüfbar ist (§7).
-    /// Ein Schlüsselbund-Fehler auf einem Hop erreicht das Frontend als
-    /// `KEYCHAIN_ACCESS_FAILED`, nicht als
-    /// `SSH_CREDENTIAL_RESOLUTION_FAILED`.
+    /// Spec 0098 T6 (A4, Verbindungs**aufbau**), seit Spec 0101 A9.1 mit
+    /// dem neuen Code: Die Abbildung auf den Code — der Teil des Aufbaus,
+    /// der ohne echte Verbindung prüfbar ist (§7). Ein Fehler des
+    /// Secret-Speichers auf einem Hop erreicht das Frontend als
+    /// `SECRET_STORE_FAILED`, nicht als `SSH_CREDENTIAL_RESOLUTION_FAILED`
+    /// und **nicht** als `KEYCHAIN_*`.
     ///
-    /// Scheitert am Stand vor dieser Spec: Dort gab es die Variante nicht,
-    /// der Fehler kam als `CredentialResolutionFailed` mit dem
-    /// Bibliothekstext in der Meldung.
+    /// **Gegen den Stand vor Spec 0101 scheitert das:** dort kam
+    /// `KEYCHAIN_ACCESS_FAILED` und die Meldung nannte den Schlüsselbund.
     #[test]
-    fn test_spec_0098_t6_a_keychain_failure_during_setup_names_the_keychain() {
+    fn test_spec_0101_a9_1_a_secret_store_failure_during_setup_names_the_store() {
         let err = SshError::CredentialStoreFailed {
             secret: SecretKind::Password,
             hop: Some(HopLabel {
@@ -1039,15 +1027,29 @@ mod map_connect_result_tests {
         };
 
         let command_error = expect_error(
-            map_connect_result(Err(err), AVAILABLE),
-            "ein Schlüsselbund-Fehler darf keinen Verbindungsaufbau liefern",
+            map_connect_result(Err(err)),
+            "ein Fehler des Secret-Speichers darf keinen Verbindungsaufbau liefern",
         );
 
         assert_eq!(
             command_error.code,
-            Some(app_logic::error::KEYCHAIN_ACCESS_FAILED)
+            Some(app_logic::error::SECRET_STORE_FAILED)
         );
         assert_ne!(command_error.code, Some("SSH_CREDENTIAL_RESOLUTION_FAILED"));
+        assert_ne!(
+            command_error.code,
+            Some(app_logic::error::KEYCHAIN_ACCESS_FAILED)
+        );
+        assert_ne!(
+            command_error.code,
+            Some(app_logic::error::KEYCHAIN_UNAVAILABLE)
+        );
+        let lower = command_error.message.to_lowercase();
+        assert!(
+            !lower.contains("schlüsselbund") && !lower.contains("keychain"),
+            "A9.1: kein „Schlüsselbund\" in der Meldung: {}",
+            command_error.message
+        );
         // Spec 0076, A-8: Welcher Hop es war, bleibt sichtbar.
         assert!(
             command_error.message.contains("deploy@jump.invalid:22"),
@@ -1056,48 +1058,25 @@ mod map_connect_result_tests {
         );
     }
 
-    /// Spec 0098, A2 im Verbindungsaufbau: War der Schlüsselbund schon beim
-    /// Start weg, bleibt es auch hier bei `KEYCHAIN_UNAVAILABLE`.
+    /// Spec 0098, T7 (A4, `NotFound`): Ein fehlender Eintrag ist **keine**
+    /// Störung des Speichers und behält `SSH_CREDENTIAL_RESOLUTION_FAILED`
+    /// (Spec 0071 A14/I4: „unbekannt" ist nicht „nein").
     #[test]
-    fn test_spec_0098_a2_keychain_failure_during_setup_reports_unavailable_at_startup() {
-        let err = SshError::CredentialStoreFailed {
-            secret: SecretKind::Password,
-            hop: None,
-        };
+    fn test_spec_0098_t7_a_missing_entry_is_not_reported_as_a_store_failure() {
+        let err = SshError::CredentialResolutionFailed(
+            "Passwort: kein Credential für Referenz 'server:1:password' gefunden".to_string(),
+        );
 
         let command_error = expect_error(
-            map_connect_result(Err(err), UNAVAILABLE),
-            "ein Schlüsselbund-Fehler darf keinen Verbindungsaufbau liefern",
+            map_connect_result(Err(err)),
+            "ein fehlender Eintrag bleibt ein Fehler",
         );
 
         assert_eq!(
             command_error.code,
-            Some(app_logic::error::KEYCHAIN_UNAVAILABLE)
+            Some("SSH_CREDENTIAL_RESOLUTION_FAILED"),
+            "ein fehlender Eintrag darf nicht als Störung des Speichers gelten"
         );
-    }
-
-    /// Spec 0098, T7 (A4, `NotFound`): Ein fehlender Eintrag ist **kein**
-    /// Schlüsselbund-Fehler und behält
-    /// `SSH_CREDENTIAL_RESOLUTION_FAILED` — auch bei nicht verfügbarem
-    /// Schlüsselbund (Spec 0071 A14/I4: „unbekannt" ist nicht „nein").
-    #[test]
-    fn test_spec_0098_t7_a_missing_entry_is_not_reported_as_a_keychain_failure() {
-        for keychain in [AVAILABLE, UNAVAILABLE] {
-            let err = SshError::CredentialResolutionFailed(
-                "Passwort: kein Credential für Referenz 'server:1:password' gefunden".to_string(),
-            );
-
-            let command_error = expect_error(
-                map_connect_result(Err(err), keychain),
-                "ein fehlender Eintrag bleibt ein Fehler",
-            );
-
-            assert_eq!(
-                command_error.code,
-                Some("SSH_CREDENTIAL_RESOLUTION_FAILED"),
-                "ein fehlender Eintrag darf nicht als Schlüsselbund-Störung gelten"
-            );
-        }
     }
 }
 

@@ -113,7 +113,6 @@ pub async fn create_server(
     app_logic::servers::create_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
-        state.keychain,
         input,
     )
     .await
@@ -131,7 +130,6 @@ pub async fn update_server(
     app_logic::servers::update_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
-        state.keychain,
         id,
         input,
     )
@@ -172,12 +170,10 @@ pub async fn clear_server_sudo_password(
     id: ServerId,
 ) -> CommandResult<()> {
     // Spec 0071, A17: schlägt sichtbar fehl, statt Erfolg zu melden,
-    // während das Passwort im Schlüsselbund stehen bleibt.
-    //
-    // Spec 0098, A1/A2: `state.keychain` ist der beim Start ermittelte
-    // Zustand (A16, nie hier neu geprüft) und entscheidet nur, **welcher**
-    // der beiden stabilen Codes es wird.
-    clear_sudo_password(state.credential_store.as_ref(), state.keychain, id)
+    // während das Passwort im Schlüsselbund stehen bleibt — seit Spec 0101
+    // A9.1 mit dem stabilen `SECRET_STORE_FAILED`-Code, unabhängig von
+    // einem Schlüsselbund-Zustand.
+    clear_sudo_password(state.credential_store.as_ref(), id)
 }
 
 /// Spec 0076, B-3/C-7: Was an einer Schlüsseldatei auffällt, **bevor**
@@ -213,7 +209,6 @@ pub async fn convert_identity_file_to_keychain(
     app_logic::identity_file::convert_identity_file_to_keychain(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
-        state.keychain,
         state.key_file_reader.as_ref(),
         id,
     )
@@ -239,7 +234,6 @@ pub async fn test_connection(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         state.key_file_reader.as_ref(),
-        state.keychain,
         state.host_key_store.clone(),
         &app_logic::test_connection::RealConnector,
         input,

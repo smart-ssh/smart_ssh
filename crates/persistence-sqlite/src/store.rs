@@ -333,6 +333,21 @@ impl SqliteProfileStore {
         crate::SqliteAiProviderStore::new(self.pool.clone())
     }
 
+    /// Spec 0101, A9: der produktive [`CredentialStore`] auf **demselben**
+    /// Pool — kein zweiter Pool und keine zweite Verbindung auf dieselbe
+    /// SQLCipher-Datei (die hieße ein zweiter `PRAGMA key`-Block außerhalb
+    /// von [`Self::connect_encrypted`] und damit außerhalb der Redaktion,
+    /// A2).
+    ///
+    /// `handle`: Der Trait ist synchron, `sqlx` ist es nicht — s.
+    /// Modul-Kommentar von [`crate::credential_store`] zur gemessenen
+    /// Brücke und warum der Griff hereingereicht statt hier geholt wird.
+    ///
+    /// [`CredentialStore`]: ssh_manager_core::profiles::CredentialStore
+    pub fn credential_store(&self, handle: tokio::runtime::Handle) -> crate::SqliteCredentialStore {
+        crate::SqliteCredentialStore::new(self.pool.clone(), handle)
+    }
+
     /// Wie [`Self::ai_provider_store`], für Filter-Regeln (Spec 0009).
     pub fn policy_store(&self) -> crate::SqlitePolicyStore {
         crate::SqlitePolicyStore::new(self.pool.clone())

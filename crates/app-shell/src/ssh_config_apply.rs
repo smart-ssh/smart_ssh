@@ -161,7 +161,6 @@ pub async fn apply_import(
     choices: &[EntryChoice],
     store: &dyn ProfileStore,
     credential_store: &(dyn CredentialStore + Send + Sync),
-    keychain: credentials_keyring::KeychainAvailability,
     keys: &dyn KeyFileSource,
 ) -> CommandResult<ApplyOutcome> {
     let choice_of = |i: usize| -> EntryChoice {
@@ -353,7 +352,7 @@ pub async fn apply_import(
             sftp_server_path: None,
         };
 
-        match app_logic::servers::create_server(store, credential_store, keychain, input).await {
+        match app_logic::servers::create_server(store, credential_store, input).await {
             Ok(id) => {
                 server_ids[i] = Some(id);
                 made_servers.push(id);
@@ -884,7 +883,6 @@ pub async fn apply_ssh_config_import(
         &choices,
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
-        state.keychain,
         &DiskKeyFiles {
             reader: state.key_file_reader.as_ref(),
         },

@@ -37,10 +37,6 @@ impl KeyFileSource for SpyKeyFiles {
     }
 }
 
-fn keychain() -> credentials_keyring::KeychainAvailability {
-    credentials_keyring::KeychainAvailability::Available
-}
-
 fn plan_from(text: &str) -> ssh_manager_core::profiles::ssh_config::ImportPlan {
     plan_from_inv(text, &[], &[])
 }
@@ -90,7 +86,7 @@ impl Fixture {
         choices: &[EntryChoice],
         keys: &dyn KeyFileSource,
     ) -> CommandResult<ApplyOutcome> {
-        apply_import(plan, choices, &self.store, &self.creds, keychain(), keys).await
+        apply_import(plan, choices, &self.store, &self.creds, keys).await
     }
 
     async fn servers(&self) -> Vec<ssh_manager_core::profiles::Server> {
