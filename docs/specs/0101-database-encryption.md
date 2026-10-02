@@ -444,6 +444,12 @@ Keine.
    vorhandenen Einträge; die eingecheckte Datei bleibt unverändert. Im Feld
    tritt der Fall nicht auf (Datenbank und Build stammen von derselben
    Plattform). Der Produktivcode bekommt dafür keine Sonderbehandlung.
+3. **Teil 0 Frage 1 beantwortet:** Die CI baut und testet mit SQLCipher
+   (vendored OpenSSL) auf Ubuntu, Windows und macOS grün, einschließlich
+   `cargo build`, Drittlizenzen und Frontend (Stand `3417819`). Kein
+   Workflow-Schritt nötig. Ungemessen bleiben die Release-Ziele
+   `universal-apple-darwin` und `ubuntu-22.04`; sie sind vor dem nächsten
+   Release zu prüfen.
 
 ## Umsetzung
 
