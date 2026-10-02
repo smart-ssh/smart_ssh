@@ -450,6 +450,17 @@ Keine.
    Workflow-Schritt nötig. Ungemessen bleiben die Release-Ziele
    `universal-apple-darwin` und `ubuntu-22.04`; sie sind vor dem nächsten
    Release zu prüfen.
+4. **A2, Schreibweise (K1):** Der rohe Schlüssel steht in der
+   Pragma-Anweisung in doppelten Anführungszeichen, `"x'<64 Hex>'"`, wie in
+   §1 gemessen; ohne sie scheitert SQLite mit `code 1`.
+5. **A3 D1, Verlusthinweis (K1):** Der Hinweis auf den Verlust des
+   bisherigen Verlaufs gehört zum Knopf „Master-Passwort einrichten“, denn
+   nur diese Wahl erzeugt einen neuen K. D1 ohne diesen Knopf zeigt ihn
+   nicht (ADR 0093 §4).
+6. **Zuschnitt (Budget):** Lauf 2 hat Commits 3–5 umgesetzt. Commits 6–8
+   folgen in einem eigenen Opus-Lauf; 6 und 7 gehören in denselben Lauf,
+   weil Commit 6 allein bestehenden Installationen den Zugriff auf
+   gespeicherte Secrets nähme. Danach Commits 9–11 (Opus), dann 12 (Sonnet).
 
 ## Umsetzung
 
