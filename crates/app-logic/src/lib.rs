@@ -22,6 +22,10 @@
 pub mod ai_provider_factory;
 pub mod compaction;
 pub mod confirmation;
+/// Spec 0101, A3/A5: Die Entscheidungstabelle für den Datenbankstart und
+/// „Neu anfangen" — Tauri-frei und vollständig testbar; `app-shell` liefert
+/// nur die nativen Dialoge.
+pub mod database_startup;
 pub mod diagnostics;
 pub mod document_export;
 pub mod dto;
@@ -51,6 +55,9 @@ pub mod server_credentials;
 pub mod servers;
 pub mod session;
 pub mod ssh_config_import;
+/// Spec 0101, A3/A5: Texte der Startdialoge mit Wahl (D1–D4 und die
+/// zweiten Bestätigungen).
+pub mod startup_choice_dialogs;
 pub mod startup_error_messages;
 pub mod state;
 pub mod test_connection;

@@ -29,6 +29,9 @@ mod ssh_config_apply;
 /// `ssh_manager_core::profiles::ssh_config::export`.
 mod ssh_config_export;
 mod startup_dialog;
+/// Spec 0101, A3/A5: die nativen Startdialoge zu den Fällen D1–D4 —
+/// Zuordnung von Fall zu Text und Knöpfen, ohne eigene Logik.
+mod startup_prompt;
 #[cfg(test)]
 mod test_support;
 mod wiring;
@@ -38,7 +41,7 @@ pub use wiring::{Edition, Wiring};
 use std::sync::Arc;
 
 use credentials_keyring::KeyringCredentialStore;
-use persistence_sqlite::{default_db_path, SqliteProfileStore};
+use persistence_sqlite::default_db_path;
 
 use app_logic::confirmation::ConfirmationRegistry;
 use app_logic::host_key_store::FileHostKeyStore;
@@ -73,55 +76,6 @@ fn build_app_state(
     );
 
     let db_path = default_db_path();
-    tracing::info!(data_path = %db_path.display(), "connecting to SQLite database");
-    // Spec 0059, Fälle 1/2/4 (Release-Gate A): vorher ein `.expect(...)` —
-    // ein Panic an dieser Stelle (VOR `tauri::Builder::default()`, s.
-    // `crate::run`) führte für einen Doppelklick-Nutzer nur zu kurzem
-    // Aufblitzen ohne jedes Fenster, völlig undiagnostizierbar. Jetzt: ein
-    // nativer Fehlerdialog mit verständlichem Text (Fehlerart + Datenpfad +
-    // nächster Schritt, s. `startup_error_messages::db_connect_failure_
-    // text`), dann sauberes Beenden — kein Weiterlaufen in einen kaputten
-    // Zustand (Spec 0059, Invarianten).
-    let profile_store = match tauri::async_runtime::block_on(SqliteProfileStore::connect_plaintext(
-        &db_path,
-    )) {
-        Ok(store) => store,
-        Err(err) => {
-            let kind = err.classify();
-            let log_dir = app_logic::logging::default_log_dir();
-            let text = app_logic::startup_error_messages::db_connect_failure_text(
-                &kind, &db_path, &log_dir, language,
-            );
-            tracing::error!(error = %err, ?kind, "fatal: SQLite database connect/migrate failed");
-            // spec-reviewer-Fund: `std::process::exit` in `show_fatal_error_
-            // and_exit` führt keine Destruktoren aus — ohne dieses explizite
-            // `drop` würde der `WorkerGuard` (der den nicht-blockierenden
-            // Log-Writer beim Drop synchron flusht, s. `logging::init_
-            // logging`-Doc-Kommentar) nie laufen, und ausgerechnet die
-            // `tracing::error!`-Zeile zum fatalen Fehler könnte im Puffer
-            // verloren gehen.
-            drop(log_guard);
-            crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
-        }
-    };
-    tracing::info!("SQLite database connected");
-    let ai_provider_store = profile_store.ai_provider_store();
-    let policy_store = profile_store.policy_store();
-
-    // Spec 0036, Abschnitt 4: einmalig bei App-Start aufgelöst (kein
-    // "erster Schreibzugriff" im wörtlichen Sinn, aber dieselbe Wirkung:
-    // der Schlüssel existiert garantiert, bevor irgendein Schreibzugriff
-    // stattfinden kann — s. Kommentar unten).
-    //
-    // Spec 0040, Abschnitt 7: KEIN `.expect(...)` mehr — ein gesperrter
-    // oder vom Nutzer verweigerter OS-Schlüsselbund (z. B. macOS-Keychain-
-    // Dialog abgebrochen) darf den App-Start nicht verhindern. Anders als
-    // die DB-Verbindung/den Host-Key-Speicher oben/unten ist ein
-    // funktionierender Verschlüsselungsschlüssel keine Voraussetzung für
-    // die App selbst, nur für EINE optionale Komfortfunktion (Chat-
-    // Persistenz/Prompt-Historie) — degradiert bei einem Fehler zu `None`
-    // für beide betroffenen Stores (s. `AppState::prompt_history_store`/
-    // `chat_session_store`-Doc-Kommentare) statt die ganze App abzubrechen.
 
     // Spec 0071, A3/A16: Das Session-Bus-Indiz und der Schlüsselbund-Zustand
     // werden hier EINMAL pro Programmlauf ermittelt und danach im `AppState`
@@ -134,14 +88,15 @@ fn build_app_state(
     // `DBUS_SESSION_BUS_ADDRESS` wird dabei zu einem `bool` verdichtet und
     // nirgends weitergereicht — ein Steuerzeichen darin kann deshalb keinen
     // Dialogtext fortsetzen (X1).
+    //
+    // **Seit Spec 0101 vor dem Öffnen der Datenbank** (A3): Der
+    // Schlüsselbund-Zustand ist eine Eingabe der Entscheidungstabelle, nicht
+    // mehr eine Nachbemerkung zu einer schon offenen Datenbank.
     let dbus_address = std::env::var("DBUS_SESSION_BUS_ADDRESS").ok();
     let xdg_runtime_bus_exists = std::env::var("XDG_RUNTIME_DIR")
         .ok()
         .is_some_and(|dir| std::path::Path::new(&dir).join("bus").exists());
-    //
-    // `mut`: spec-reviewer-Fund — der Schnappschuss kann sich unten noch
-    // **verschärfen** (nie abschwächen, s. `escalate_to_unavailable`).
-    let mut keychain = credentials_keyring::probe_keychain_availability(
+    let keychain = credentials_keyring::probe_keychain_availability(
         std::env::consts::OS,
         credentials_keyring::session_bus_present(dbus_address.as_deref(), xdg_runtime_bus_exists),
     );
@@ -157,83 +112,89 @@ fn build_app_state(
     }
     tracing::info!(?keychain, "probed OS keychain availability");
 
-    tracing::info!("resolving chat-content encryption key from OS keychain");
     let credential_store = KeyringCredentialStore::new();
-    let (prompt_history_store, chat_session_store, ledger_store) =
-        match ssh_manager_core::crypto::resolve_or_generate_key(&credential_store) {
-            Ok(chat_content_key) => {
-                tracing::info!("chat-content encryption key resolved");
-                let chat_content_cipher: Arc<dyn ssh_manager_core::crypto::ContentCipher> =
-                    Arc::new(ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(
-                        &chat_content_key,
-                    ));
-                // Spec 0040, Abschnitt 3 (ausgeweitet per Spec 0057, §1.3
-                // auf einen dritten Store): derselbe Cipher (und damit
-                // derselbe Schlüssel) für alle drei Stores — kein weiterer
-                // Verschlüsselungsmechanismus für `prompt_history`/`ledger`.
-                (
-                    Some(profile_store.prompt_history_store(chat_content_cipher.clone())),
-                    Some(profile_store.chat_session_store(chat_content_cipher.clone())),
-                    Some(profile_store.ledger_store(chat_content_cipher)),
-                )
+
+    // Spec 0101, A3/A5/A6: Der Start entscheidet nach Dateizustand und
+    // Schlüsselzustand, **bevor** eine Migration läuft — und fasst in keinem
+    // Dialogfall etwas an, solange der Nutzer nicht gewählt hat. Die
+    // Entscheidung selbst liegt Tauri-frei in `app_logic::database_startup`
+    // (dort auch die Begründung, warum); hier wird nur der native Dialog
+    // beigesteuert.
+    //
+    // **Ersetzt den vorherigen `connect` + `resolve_or_generate_key`.** Die
+    // alte Reihenfolge öffnete und migrierte die Datenbank zuerst und holte
+    // den Schlüssel danach — mit SQLCipher geht das nicht mehr, denn ohne
+    // Schlüssel ist schon das Öffnen nicht möglich (A4: nie „out of memory"
+    // aus dem Migrationslauf für einen Schlüssel-Fall).
+    tracing::info!(data_path = %db_path.display(), "opening the encrypted SQLite database");
+    let prompt = crate::startup_prompt::NativeStartupPrompt {
+        db_path: db_path.clone(),
+        language,
+        keychain,
+    };
+    let opened =
+        match tauri::async_runtime::block_on(app_logic::database_startup::open_or_prepare_database(
+            &db_path,
+            &credential_store,
+            keychain,
+            &prompt,
+        )) {
+            Ok(opened) => opened,
+            // Der Nutzer hat „Beenden" gewählt. Es ist bereits alles gesagt —
+            // ein zweiter Dialog wäre nur Lärm. Rückgabewert 0, weil ein
+            // bewusstes Beenden kein Fehler ist (anders als bei
+            // `show_fatal_error_and_exit`).
+            Err(app_logic::database_startup::StartupAbort::UserQuit) => {
+                tracing::info!("startup aborted by the user");
+                // s. Kommentar zum `drop(log_guard)` unten — `process::exit`
+                // führt keine Destruktoren aus, der Log-Puffer würde sonst
+                // verloren gehen.
+                drop(log_guard);
+                std::process::exit(0);
             }
-            Err(err) => {
-                tracing::warn!(
-                    error = %err,
-                    "encryption key for chat content unavailable — chat persistence, \
-                     prompt history and the session ledger are disabled for this app run",
+            Err(app_logic::database_startup::StartupAbort::Fatal { kind, detail }) => {
+                let log_dir = app_logic::logging::default_log_dir();
+                let text = app_logic::startup_error_messages::db_connect_failure_text(
+                    &kind, &db_path, &log_dir, language,
                 );
-                // Spec 0059, Fall 3: nur für den eigentlichen Zugriffsfehler
-                // (gesperrter/fehlender Keychain — `KeyStoreAccessFailed`)
-                // eine SICHTBARE Warnung; ein `InvalidKey` (ein bereits
-                // hinterlegter, aber korrupter Schlüsselwert — ein anderes,
-                // selteneres Problem, nicht Teil der vier in Spec 0059
-                // benannten Fälle) bleibt beim bisherigen, rein internen
-                // `tracing::warn!` oben. Dasselbe, bereits nicht-fatale
-                // Degradieren wie zuvor (Spec 0040, Abschnitt 7) — NEU ist
-                // nur, dass der Zugriffsfehler jetzt zusätzlich sichtbar
-                // wird. Ausdrückliche Entscheidung (Review des
-                // Teil-0-Plans dieses Schritts): kein Abbruch, App startet
-                // unverändert degradiert weiter — s. `startup_dialog::
-                // show_warning`-Doc-Kommentar.
-                //
-                // Spec 0071, A12: statt des bisherigen pauschalen
-                // `keychain_unavailable_text(OS)` jetzt mit dem oben
-                // klassifizierten Grund — der Text nennt damit den
-                // tatsächlichen Zustand und das Paket, das ihn behebt.
-                // `Unknown` als Rückfall, falls der Schlüsselbund beim
-                // Probieren noch erreichbar schien, `resolve_or_generate_key`
-                // aber trotzdem scheitert: A4 verlangt auch dann einen
-                // vollständigen Text, nie gar keine Meldung.
-                if app_logic::startup_error_messages::should_warn_about_keychain(&err) {
-                    // spec-reviewer-Fund: `store_status()` kann `Ok(())`
-                    // melden (der Anbieter antwortet auf den
-                    // Verbindungsaufbau) und der erste echte Zugriff
-                    // trotzdem scheitern — typischerweise bei einem
-                    // vorhandenen, aber gesperrten Schlüsselbund. Ohne diese
-                    // Eskalation bliebe `keychain` auf `Available`, und
-                    // weder der Fehlercode (A13) noch die Diagnose-Zeile
-                    // (A15) bekämen davon etwas mit: Die Oberfläche meldete
-                    // "verfügbar", während jeder Credential-Zugriff
-                    // scheitert — also wieder der englische Rohtext im UI.
-                    // Nur Verschärfung, nie Abschwächung.
-                    keychain = credentials_keyring::escalate_to_unavailable(
-                        keychain,
-                        credentials_keyring::KeychainUnavailableReason::Unknown,
-                    );
-                    let reason = keychain
-                        .unavailable_reason()
-                        .unwrap_or(credentials_keyring::KeychainUnavailableReason::Unknown);
-                    let text = app_logic::startup_error_messages::keychain_unavailable_text(
-                        reason,
-                        std::env::consts::OS,
-                        language,
-                    );
-                    crate::startup_dialog::show_warning(&text.title, &text.message);
-                }
-                (None, None, None)
+                // `detail` **nur** ins Log: Er kann einen Bibliothekstext
+                // enthalten, der Dialog nennt stattdessen Ursache, Datenpfad und
+                // nächsten Schritt (Spec 0059, Invarianten).
+                tracing::error!(detail, ?kind, "fatal: database startup failed");
+                // spec-reviewer-Fund: `std::process::exit` in `show_fatal_error_
+                // and_exit` führt keine Destruktoren aus — ohne dieses explizite
+                // `drop` würde der `WorkerGuard` (der den nicht-blockierenden
+                // Log-Writer beim Drop synchron flusht, s. `logging::init_
+                // logging`-Doc-Kommentar) nie laufen, und ausgerechnet die
+                // `tracing::error!`-Zeile zum fatalen Fehler könnte im Puffer
+                // verloren gehen.
+                drop(log_guard);
+                crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
             }
         };
+    tracing::info!("SQLite database connected");
+    let profile_store = opened.store;
+    let chat_content_key = opened.root_key;
+    let ai_provider_store = profile_store.ai_provider_store();
+    let policy_store = profile_store.policy_store();
+
+    // Spec 0036/0040/0057: derselbe Cipher (und damit derselbe Schlüssel)
+    // für alle drei Stores — kein weiterer Verschlüsselungsmechanismus für
+    // `prompt_history`/`ledger`.
+    //
+    // **Seit Spec 0101 nie mehr `None`** (E11, A3): Die Datenbank ist
+    // überhaupt nur offen, wenn K vorlag — der frühere Zustand „App läuft,
+    // aber Chat, Historie und Ledger sind abgeschaltet" (Spec 0040,
+    // Abschnitt 7) kann auf diesem Weg nicht mehr entstehen. Ohne K endet
+    // der Start in D1/D2/D3, nicht in einer halb benutzbaren App.
+    let chat_content_cipher: Arc<dyn ssh_manager_core::crypto::ContentCipher> = Arc::new(
+        ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&chat_content_key),
+    );
+    let (prompt_history_store, chat_session_store, ledger_store) = (
+        Some(profile_store.prompt_history_store(chat_content_cipher.clone())),
+        Some(profile_store.chat_session_store(chat_content_cipher.clone())),
+        Some(profile_store.ledger_store(chat_content_cipher)),
+    );
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
     // `app_logic::host_key_store`-Modul-Kommentar zur Begründung (der

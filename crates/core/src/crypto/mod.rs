@@ -18,7 +18,9 @@ mod key;
 
 pub use chacha::ChaCha20Poly1305Cipher;
 pub use db_key::{DatabaseKey, DATABASE_KEY_HKDF_INFO, DATABASE_KEY_LEN};
-pub use key::{resolve_or_generate_key, CHAT_CONTENT_ENCRYPTION_KEY_REF};
+pub use key::{
+    generate_and_store_root_key, read_root_key, RootKeyState, CHAT_CONTENT_ENCRYPTION_KEY_REF,
+};
 
 /// Fehler bei einem [`ContentCipher`]-Zugriff oder der Schlüsselverwaltung
 /// (s. [`resolve_or_generate_key`]). Nie ein Panic — ein fehlender/

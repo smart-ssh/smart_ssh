@@ -281,6 +281,17 @@ impl SqliteProfileStore {
             .unwrap_or(0)
     }
 
+    /// Schließt den Pool und wartet, bis alle Verbindungen zu sind.
+    ///
+    /// Spec 0101: Nötig, sobald eine Datei nach dem Öffnen noch umbenannt
+    /// oder roh gelesen wird — unter Windows lässt sich eine offene Datei
+    /// nicht umbenennen, und ein noch nicht geschlossenes WAL macht einen
+    /// Rohdatei-Vergleich wertlos. Vorher kamen nur die Tests dieser Crate
+    /// über `self.pool` daran.
+    pub async fn close(&self) {
+        self.pool.close().await;
+    }
+
     /// Baut einen [`crate::SqliteAiProviderStore`], der sich denselben
     /// Connection-Pool (und damit dieselbe bereits migrierte Datenbank)
     /// teilt, statt eine zweite, unabhängige Verbindung zu öffnen — s.

@@ -89,7 +89,7 @@ pub fn preferred_locale_value<'a>(
 /// Spec 0071, A11b: Die Sprachwahl gilt für **alle** Startdialog-Texte, also
 /// auch für die Titelzeile — ein englischsprachiges System darf nicht einen
 /// deutschen Titel über einer englischen Meldung zeigen.
-fn cannot_start_title(language: Language) -> &'static str {
+pub(crate) fn cannot_start_title(language: Language) -> &'static str {
     match language {
         Language::De => "Smart SSH kann nicht starten",
         Language::En => "Smart SSH cannot start",
@@ -102,7 +102,7 @@ fn cannot_start_title(language: Language) -> &'static str {
 /// Ersetzt Steuerzeichen durch ein sichtbares `?`-Platzhalterzeichen statt
 /// den Pfad stillschweigend zu kürzen (der volle Pfad bleibt für die
 /// Fehlerdiagnose wichtig).
-fn sanitize_path_for_display(path: &Path) -> String {
+pub(crate) fn sanitize_path_for_display(path: &Path) -> String {
     path.display()
         .to_string()
         .chars()
