@@ -51,6 +51,9 @@ mod poison;
 pub mod policy;
 pub mod rule_suggestions;
 pub mod second_opinion;
+/// Spec 0101, A10/A11: der einmalige Umzug der Secrets aus dem
+/// Schlüsselbund in die verschlüsselte Datenbank.
+pub mod secret_migration;
 pub mod server_credentials;
 pub mod servers;
 pub mod session;

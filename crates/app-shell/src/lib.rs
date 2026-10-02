@@ -200,6 +200,41 @@ fn build_app_state(
         tauri::async_runtime::block_on(async { tokio::runtime::Handle::current() });
     let credential_store = profile_store.credential_store(runtime_handle);
 
+    // Spec 0101, A10/A11 (§5, Schritt 7): der einmalige Umzug der Secrets
+    // aus dem Schlüsselbund in die Datenbank — **vor** dem übrigen Zustand
+    // und damit vor jedem Kommando, das ein Secret lesen könnte. Die
+    // Entscheidungen liegen Tauri-frei in `app_logic::secret_migration`;
+    // hier wird nur derselbe native Dialog beigesteuert wie bei A3.
+    //
+    // Ein Lesefehler endet in D1 ohne Einrichten (A11) und damit entweder
+    // in einem erneuten Versuch oder im Beenden — nie in einer laufenden
+    // App, die gespeicherte Passwörter nicht mehr findet.
+    if let Err(abort) =
+        tauri::async_runtime::block_on(app_logic::secret_migration::migrate_secrets_into_database(
+            &profile_store,
+            &keyring_store,
+            &credential_store,
+            &prompt,
+        ))
+    {
+        match abort {
+            app_logic::database_startup::StartupAbort::UserQuit => {
+                tracing::info!("startup aborted by the user during the secret migration");
+                drop(log_guard);
+                std::process::exit(0);
+            }
+            app_logic::database_startup::StartupAbort::Fatal { kind, detail } => {
+                let log_dir = app_logic::logging::default_log_dir();
+                let text = app_logic::startup_error_messages::db_connect_failure_text(
+                    &kind, &db_path, &log_dir, language,
+                );
+                tracing::error!(detail, ?kind, "fatal: the secret migration failed");
+                drop(log_guard);
+                crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
+            }
+        }
+    }
+
     // Spec 0036/0040/0057: derselbe Cipher (und damit derselbe Schlüssel)
     // für alle drei Stores — kein weiterer Verschlüsselungsmechanismus für
     // `prompt_history`/`ledger`.

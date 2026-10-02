@@ -348,6 +348,43 @@ impl SqliteProfileStore {
         crate::SqliteCredentialStore::new(self.pool.clone(), handle)
     }
 
+    /// Spec 0101, A10: der festgehaltene Zustand des Secret-Umzugs —
+    /// `(state, pending_refs)` aus `secret_migration_state`.
+    ///
+    /// Die Entscheidungen darüber liegen in `app_logic::secret_migration`;
+    /// diese Crate liest und schreibt nur.
+    pub async fn secret_migration_state(&self) -> PersistenceResult<(String, Vec<String>)> {
+        let row =
+            sqlx::query("SELECT state, pending_refs FROM secret_migration_state WHERE id = 1")
+                .fetch_one(&self.pool)
+                .await?;
+        let state: String = row.get("state");
+        let pending: String = row.get("pending_refs");
+        // Eine unlesbare Liste wird **nicht** als „leer" behandelt: leer
+        // heißt „nichts mehr zu löschen", und das wäre genau die falsche
+        // Auskunft. Stattdessen ein Fehler, den der Aufrufer sieht.
+        let pending: Vec<String> = serde_json::from_str(&pending)
+            .map_err(|err| PersistenceError::Connect(sqlx::Error::Decode(Box::new(err))))?;
+        Ok((state, pending))
+    }
+
+    /// Spec 0101, A10: setzt Zustand und Löschliste in einem Schritt — die
+    /// beiden gehören zusammen (ein Zustand `moved` ohne seine Liste wäre
+    /// ein Zustand, aus dem niemand mehr weiß, was zu löschen ist).
+    pub async fn set_secret_migration_state(
+        &self,
+        state: &str,
+        pending_refs: &[String],
+    ) -> PersistenceResult<()> {
+        let pending = serde_json::to_string(pending_refs).unwrap_or_else(|_| "[]".to_string());
+        sqlx::query("UPDATE secret_migration_state SET state = ?, pending_refs = ? WHERE id = 1")
+            .bind(state)
+            .bind(pending)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     /// Wie [`Self::ai_provider_store`], für Filter-Regeln (Spec 0009).
     pub fn policy_store(&self) -> crate::SqlitePolicyStore {
         crate::SqlitePolicyStore::new(self.pool.clone())
