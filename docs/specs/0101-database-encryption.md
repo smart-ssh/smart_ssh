@@ -69,7 +69,11 @@ Datenbank: `ai_provider_configs.credential_ref` und im `auth_method`-JSON der
 Server. `keychain_aware_credential_error` (`app-logic/src/error.rs`) macht aus
 jedem `Backend` die Codes `KEYCHAIN_ACCESS_FAILED`/`KEYCHAIN_UNAVAILABLE`
 (Spec 0098). Rund 18 DE-Texte sagen, Secrets lägen im Schlüsselbund (z. B.
-`serverForm.convertToKeychain.*`, `secretWillBeDeleted`).
+`serverForm.convertToKeychain.*`, `secretWillBeDeleted`). Zweiter Weg zum
+Frontend: `SshError::CredentialStoreFailed` (`core/src/ssh/error.rs`) trägt
+fest `KEYCHAIN_ACCESS_FAILED` und den Text „Zugriff auf den Schlüsselbund
+fehlgeschlagen“; `keychain_aware_ssh_error_code` und `test_connection.rs`
+bauen darauf auf.
 
 **Klartext in der Datei heute:** `servers` (Host, Benutzer), Notizen,
 Filterregeln, Sitzungstitel, `ai_provider_configs.extra_headers` (JSON).
@@ -114,15 +118,17 @@ Log umgeleitet. Diagnosepaket mit Allowlist `SAFE_LOG_MESSAGES`.
 1. **Baut die Abhängigkeit auf Windows in der CI?** Nur nach einem Push
    messbar. Lauf 1 endet nach Commit 2. Weiter erst, wenn die CI auf allen
    drei Plattformen grün ist; sonst Log-Auszug melden, Klarstellung folgt.
-2. **Synchroner Store auf asynchronem Pool** (vor Commit 6 melden): Wie der
+2. **Synchroner Store auf asynchronem Pool** (vor Commit 6): Wie der
    synchrone `CredentialStore` aus asynchronen Kommandos die Datenbank
    erreicht, ohne `block_on` in der Laufzeit und ohne Deadlock mit dem Pool
-   der Größe 1. Blockiert A9–A12, nicht Commit 3–5.
+   der Größe 1. Der Coder klärt das selbst und hält es im Bericht fest; er
+   hält nur an und fragt, wenn dafür ein zweiter Pool, eine zweite Verbindung
+   oder eine Änderung am Trait nötig wäre.
 3. **Startablauf im Passwort-Modus** (zu Beginn von Lauf 3 melden): wie die
    App bis zur Entsperrung ohne `AppState` läuft (A16); wo Einrichten aus dem
-   Startdialog (A13) und der Dialog aus A11 im Passwort-Modus erscheinen
+   Startdialog (A13) und der Dialog aus A11/A11.1 im Passwort-Modus erscheinen
    (rfd hat keine Texteingabe); ob Tauri 2 ein Kommando mit nicht verwaltetem
-   `State` mit Fehler oder Panic beantwortet. Blockiert A13–A17.
+   `State` mit Fehler oder Panic beantwortet. Blockiert A11.1, A13–A17.
 
 ## 3. Ziel und Nicht-Ziele
 
@@ -137,7 +143,8 @@ Nicht-Ziele:
   oder Schnappschüssen (Changelog).
 - **Eine verständliche Meldung in älteren Versionen** (Akzeptanz des Items):
   entfällt wegen E6, alte Versionen sind nicht änderbar. Ersatz: A22.
-- Maskierte Anzeige der Provider-Header in der Oberfläche (Rest von BL-0297).
+- Maskierte Anzeige der Provider-Header in der Oberfläche: Das ist eine Frage
+  der Anzeige, nicht der Ablage; sie bleibt als Rest von BL-0297 offen.
 - Export/Import, Sperren nach Leerlauf, Biometrie, `license.key`,
   Threat-Model-Dokument.
 
@@ -156,18 +163,25 @@ Nicht-Ziele:
   Migration läuft. Dateizustand wird am Header erkannt, ohne die Datei zu
   ändern: *fehlt* (keine Datei, oder 0 Byte ohne nichtleere `-wal`),
   *Klartext* (`SQLite format 3\0`), *sonst*. K-Zustand: *da*, *NotFound*,
-  *nicht erreichbar* (Backend-Fehler oder `Unavailable`), *ungültig*
-  (`InvalidKey`, unlesbare Verpackungsdatei).
+  *nicht erreichbar*, *ungültig* (`InvalidKey`; Verpackungsdatei, deren
+  Format oder Version nicht lesbar ist). Maßgeblich ist das Ergebnis des
+  Lesens von K, nicht die Probe beim Start: *nicht erreichbar* heißt, das
+  `get` scheitert mit `Backend` oder wird wegen `Unavailable` gar nicht
+  versucht. Im Passwort-Modus ist K erst nach der Entsperrung (A16) *da*;
+  falsches Passwort ist kein Tabellenfall.
 
   | Datei \ K | da | NotFound | nicht erreichbar | ungültig |
   |---|---|---|---|---|
   | fehlt | neu anlegen | K erzeugen, neu anlegen | Dialog D1 | Dialog D3 |
-  | Klartext | umwandeln (A6) | K erzeugen, umwandeln | Dialog D1 | Dialog D3 |
+  | Klartext | umwandeln (A6) | K erzeugen, umwandeln | Dialog D1 | Dialog D4 |
   | sonst | öffnen; nicht lesbar → Dialog D2 | Dialog D2 | Dialog D1 ohne Einrichten | Dialog D3 |
 
   - **D1** „Erneut versuchen“ / „Beenden“; ab Etappe 3 zusätzlich
     „Master-Passwort einrichten“ — **nur** bei Datei *fehlt* oder
-    *Klartext* (A13). Ursache bei `Unavailable` wie Spec 0071 A12.
+    *Klartext* **und** Grund `NoSecretServiceProvider` oder `NoSessionBus`
+    (dort kann kein erreichbarer K existieren; bei `Locked`, `Unknown` oder
+    einem Backend-Fehler würde ein neuer K den feldweise verschlüsselten
+    Verlauf unlesbar machen). Ursache bei `Unavailable` wie Spec 0071 A12.
     „Erneut versuchen“ prüft ohne Neustart erneut.
   - **D2** eigener Code (z. B. `DB_KEY_MISMATCH`): Datei mit dem vorhandenen
     Schlüssel nicht lesbar bzw. kein Schlüssel zur verschlüsselten Datei.
@@ -176,22 +190,31 @@ Nicht-Ziele:
     „Neu anfangen“ (A5).
   - **D3** „Schlüssel unbrauchbar“: „Beenden“ / „Neu anfangen“ (A5).
     Der vorhandene Eintrag bzw. die Datei wird erst nach dieser Wahl ersetzt.
+  - **D4** wie D3, aber statt „Neu anfangen“ „Neuen Schlüssel erzeugen“: Die
+    Klartext-Datei bleibt lesbar und wird mit neuem K umgewandelt (A6); nur
+    der feldweise verschlüsselte Verlauf geht verloren, das sagt der Text.
+    Zweite Bestätigung wie A5.
 
   In keinem Dialog-Fall wird die Datenbank geöffnet, verändert oder
-  umbenannt, solange der Nutzer nicht gewählt hat. K wird ausschließlich in
-  den beiden Feldern „K erzeugen“ erzeugt.
+  umbenannt, solange der Nutzer nicht gewählt hat. **Ein neuer K entsteht
+  nur** in den beiden Feldern „K erzeugen“ und nach einer ausdrücklichen Wahl
+  „Neu anfangen“ (D2, D3, A16), „Neuen Schlüssel erzeugen“ (D4) oder
+  „Master-Passwort einrichten“ (D1).
 - **A4 MUSS** Nie „out of memory“ oder ein Migrationsfehler für einen
   Schlüssel-Fall: Die Lesbarkeit wird vor `migrate!` geprüft.
 - **A5 MUSS** „Neu anfangen“ verlangt eine zweite Bestätigung, benennt Datei,
   `-wal`, `-shm` und (Passwort-Modus) die Verpackungsdatei um in
   `<name>.unreadable-<UTC-Zeitstempel>`, löscht nichts, startet frisch und
-  nennt im Dialog den neuen Dateinamen.
+  nennt im Dialog den neuen Dateinamen. Im Passwort-Modus bleibt der Modus:
+  Der frische Start führt in das Einrichten eines neuen Master-Passworts
+  (A13), nicht still in den Schlüsselbund.
 - **A6 MUSS** Umwandlung einer Klartext-Datei, vor den Migrationen:
   1. Original öffnen, WAL vollständig einspielen, schließen;
-  2. verschlüsselte Kopie in eine Zwischendatei schreiben; `user_version`
-     übernehmen und `journal_mode=WAL` setzen (beides überträgt der Export
-     nicht, §1);
-  3. Zwischendatei mit dem Schlüssel öffnen und prüfen: `integrity_check` =
+  2. verschlüsselte Kopie in eine Zwischendatei schreiben; die Zwischendatei
+     mit dem Schlüssel öffnen, `user_version` übernehmen und
+     `journal_mode=WAL` setzen (der Export überträgt beides nicht; auf der
+     geöffneten Datei gesetzt, bleibt beides erhalten — gemessen), schließen;
+  3. Zwischendatei neu öffnen und prüfen: `integrity_check` =
      `ok`, je Tabelle gleiche Zeilenzahl, `_sqlx_migrations` gleich,
      `user_version` gleich, `journal_mode` = `wal`; schließen;
   4. alte `-wal`/`-shm` entfernen, dann Zwischendatei atomar an die Stelle des
@@ -215,20 +238,25 @@ Nicht-Ziele:
   idempotent, `Backend` ohne Secret im Text. Der Schlüsselbund dient danach
   nur noch K.
 - **A9.1 MUSS** Fehler dieses Stores erreichen das Frontend mit einem eigenen
-  Code (z. B. `SECRET_STORE_FAILED`), nicht mit `KEYCHAIN_*`, und hängen nicht
-  von `AppState.keychain` ab. Für das Lesen und Schreiben von K gilt Spec 0098
+  Code (z. B. `SECRET_STORE_FAILED`) und ohne „Schlüsselbund“ im Text, nicht
+  mit `KEYCHAIN_*`, und hängen nicht von `AppState.keychain` ab — auf beiden
+  Wegen aus §1, auch beim Verbindungsaufbau und im Verbindungstest auf jedem
+  Hop. Für das Lesen und Schreiben von K gilt Spec 0098
   unverändert.
 - **A10 MUSS** Umzug beim ersten Start mit dem neuen Store: Referenzen aus der
   Datenbank (`credential_ref`, `auth_method`, plus die festen Sudo-Slots), je
   Referenz das Secret aus dem Schlüsselbund lesen, schreiben, zurücklesen,
-  vergleichen; `NotFound` → übersprungen. Zustand in der Datenbank:
+  vergleichen; `NotFound` → ausgelassen. Zustand in der Datenbank:
   *offen* → *umgezogen, Löschen ausstehend* (erst wenn **alle** Referenzen
-  gleich sind) → *erledigt* (alle Einträge gelöscht oder `NotFound`).
+  gleich sind) → *erledigt* (alle Einträge gelöscht oder `NotFound`). Beim
+  Übergang nach *umgezogen* wird die Liste der zu löschenden Referenzen
+  festgehalten; gelöscht wird nach dieser Liste, nicht nach dem späteren
+  Datenbankstand.
 - **A11 MUSS** Lesefehler (Backend) beim Umzug: Dialog D1, nichts gelöscht,
   Zustand bleibt *offen*. Löschfehler im Zustand *umgezogen*: Warnung ins Log
   ohne Secret, App startet, Löschen bei jedem Start erneut.
-- **A11.1 MUSS** Zustand *offen*, Schlüsselbund `Unavailable`, K aus dem
-  Master-Passwort: Der Dialog bietet zusätzlich „Ohne Übernahme fortfahren“
+- **A11.1 MUSS** Zustand *offen*, K aus dem Master-Passwort, Lesen beim
+  Umzug scheitert (`Backend` oder `Unavailable`): Der Dialog bietet zusätzlich „Ohne Übernahme fortfahren“
   (Hinweis: gespeicherte Passwörter usw. neu eingeben). Diese Wahl setzt den
   Zustand *übersprungen*. In *übersprungen* wird **nie** ein
   Schlüsselbund-Eintrag gelöscht, auch wenn der Schlüsselbund später
@@ -245,6 +273,7 @@ Nicht-Ziele:
   ausdrücklicher Bestätigung (E10). Schreibreihenfolge: K (vorhanden oder
   neu nach A3) verpacken, Verpackungsdatei atomar schreiben, entpacken und mit
   K vergleichen, dann erst K aus dem Schlüsselbund löschen bzw. umwandeln.
+  Aus D1 gibt es keinen K im Schlüsselbund; dort wird K neu erzeugt (A3).
 - **A14 MUSS** Verpackungsdatei: versioniert; KDF `argon2id` mit Parametern,
   Salt ≥ 16 Byte zufällig je Verpacken, Nonce, Chiffrat von K mit
   ChaCha20-Poly1305 unter Argon2id(Passwort, Salt), Kopf als AAD.
@@ -262,6 +291,9 @@ Nicht-Ziele:
 - **A17 MUSS** Verpackungsdatei **und** Schlüsselbund-Eintrag (abgebrochener
   Wechsel): Die Verpackungsdatei gilt. Nach Entsperrung wird der Eintrag
   gelöscht, wenn er gleich K ist; sonst nichts gelöscht, Warnung ins Log.
+  Ist der Schlüsselbund nicht erreichbar: nichts tun, Warnung ins Log.
+  Scheitert die Authentifizierung der Verpackung, lautet die Meldung
+  „Passwort falsch oder Datei beschädigt“ — beides ist nicht unterscheidbar.
 - **A18 MUSS** Die Einstellungen zeigen den aktiven Modus.
 - **A19 SOLL** Passwort, K und abgeleitete Schlüssel liegen in Typen, die beim
   Freigeben überschrieben werden, und verlassen das Backend nicht.
@@ -305,7 +337,7 @@ Zustand, dann MCP-Server.
 - **Fehlerpfade im UI** (Spec 0059): jeder Fall aus A3, A6, A11, A16 hat einen
   Dialog oder eine Meldung, keiner endet still.
 - **Keine stillen Rückfälle:** kein Weiterlauf im Klartext, kein neuer K außer
-  in den zwei Tabellenfeldern, kein Wechsel des Modus ohne Nutzerhandlung.
+  in den Fällen aus A3 („Ein neuer K entsteht nur …“), kein Wechsel des Modus ohne Nutzerhandlung.
 - **Log/Redaction** (Spec 0094): keine Schlüssel, Passwörter, Secrets, kein
   Token in Log, Diagnosepaket oder DTO; neue Log-Zeilen mit festen Texten.
 - **Neue Datensenken:** Secrets-Tabelle (nur in der verschlüsselten Datei),
@@ -330,8 +362,10 @@ Marker je Test eindeutig: `host-0101.example`, `user-0101`, `Header-0101`,
   Hex-Schlüssel; dazu verschiedene K → verschiedene Schlüssel, Schlüssel ≠ K.
   Scheitert bei jeder Änderung an `info` oder Verfahren.
 - **T3 (A3/A4, Tabelle):** je Feld der Tabelle ein Fall mit Test-Store, der
-  Aufrufe zählt: erwarteter Ausgang, `set` auf K nur in den zwei
-  „K erzeugen“-Feldern, Datei in allen Dialog-Fällen byte-gleich, nie Code 7.
+  Aufrufe zählt: erwarteter Ausgang, `set` auf K ohne Nutzerwahl nur in den
+  zwei „K erzeugen“-Feldern, Datei in allen Dialog-Fällen byte-gleich, solange
+  nichts gewählt ist, nie Code 7. D1 bei `Locked`/`Unknown`/Backend bietet
+  kein Einrichten an.
   Scheitert heute (`resolve_or_generate_key` erzeugt bei verschlüsselter Datei).
 - **T4 (A6, A7):** Fixture umwandeln → Zeilen je Tabelle gleich,
   `user_version` gleich, `journal_mode=wal`, Migrationen vollständig, kein
@@ -340,19 +374,26 @@ Marker je Test eindeutig: `host-0101.example`, `user-0101`, `Header-0101`,
   Original inhaltsgleich, keine Zwischendatei, nächster Start wandelt um.
 - **T6 (A6, WAL):** Zeile nur im WAL des Originals → nach der Umwandlung
   vorhanden; keine alte `-wal` neben der neuen Datei.
-- **T7 (A5):** „Neu anfangen“ aus D2 und D3 → Dateien umbenannt,
+- **T7 (A5, D4):** „Neu anfangen“ aus D2 und D3 → Dateien umbenannt,
   byte-gleich, Dialogtext nennt den Namen, neue leere Datenbank; ohne zweite
-  Bestätigung passiert nichts.
+  Bestätigung passiert nichts. D4 → Klartext-Datei mit neuem K umgewandelt,
+  Zeilen erhalten. Variante Passwort-Modus (Commit 10): Verpackungsdatei mit
+  umbenannt, danach Einrichten eines neuen Passworts, kein `set` auf den
+  Schlüsselbund.
 - **T8 (D1):** K nicht erreichbar → Datenbank nicht geöffnet (Inhalt und
   mtime gleich); „Erneut versuchen“ mit danach funktionierendem Store startet.
 - **T9 (A1):** Drittlizenz-Ausgabe enthält SQLCipher und OpenSSL.
 - **T10 (A9, A9.1):** Vertragstests des neuen Stores (`get` nach `set`,
   `NotFound`, idempotentes `delete`, Überschreiben); Fehler ergibt
   `SECRET_STORE_FAILED` ohne Secret, auch bei `KeychainAvailability::Unavailable`.
+  Dazu Verbindungstest mit Jump-Host, dessen Secret-Lesen am neuen Store
+  scheitert → `SECRET_STORE_FAILED`, kein `KEYCHAIN_*`, kein „Schlüsselbund“.
 - **T11 (A10–A11.1):** Test-Schlüsselbund mit zwei Servern (alle Slots) und
   einem Provider, ein Slot fehlt → alles umgezogen, Slot bleibt `NotFound`,
   alle Einträge gelöscht. Varianten: ein `get` scheitert → nichts gelöscht,
   Zustand *offen*; `delete` scheitert → Start, nächster Start löscht;
+  Server gelöscht, während Löschen aussteht → seine Einträge werden trotzdem
+  gelöscht;
   *übersprungen* (nach Commit 10), danach Schlüsselbund erreichbar → kein
   einziges `delete`.
 - **T12 (A12):** `settings.json` mit Token → Token in der Datenbank, gleicher
@@ -363,8 +404,10 @@ Marker je Test eindeutig: `host-0101.example`, `user-0101`, `Header-0101`,
   richtigem Passwort öffnet; Passwort ändern → altes scheitert, neues gelingt,
   Datenbank byte-gleich; zurück auf Schlüsselbund → Verpackungsdatei weg.
   Einrichten aus D1 bei Klartext-Datei → umgewandelt, K nur verpackt.
+  Verpackungsdatei unter Unix mit Rechten 0600.
 - **T14 (A16, A18, A20):** Frontend: Entsperrmaske, falsches Passwort zeigt
-  Meldung, Modusanzeige, Einrichten mit Bestätigung, alle Codes übersetzt.
+  Meldung, Modusanzeige, Einrichten mit Bestätigung, die Codes der Etappe 3
+  übersetzt (übrige Codes in Commit 12).
 
 Adversarial (ERHÖHT):
 - **T15 Verpackung manipuliert:** ein Byte in Chiffrat, Salt oder Kopf
@@ -412,9 +455,9 @@ Schlüsselbund nicht mehr; den Ausweg bringt erst Etappe 3.
 7. `feat(app-shell): move secrets from the OS keychain into the database [BL-0314]` — A10, A11, T11 (ohne *übersprungen*)
 8. `feat(app-shell): keep the MCP server token in the database [BL-0117]` — A12, T12, T1 (Rest)
 9. `feat(core): wrap the root key with a master password [BL-0203]` — A14, A19, T15
-10. `feat(app-shell): unlock with a master password at startup [BL-0203]` — A13, A15–A17, A11.1, D1-Einrichten, T11 (*übersprungen*), T13, T16–T18
-11. `feat(frontend): unlock screen and master password settings [BL-0203]` — Oberfläche zu A13, A15, A16, A18, T14
-12. `docs: describe database encryption in the first-run notice, README and changelog [BL-0314]` — A20–A22
+10. `feat(app-shell): unlock with a master password at startup [BL-0203]` — A13, A15–A17, A11.1, D1-Einrichten, A5 im Passwort-Modus, T7 (Variante), T11 (*übersprungen*), T13, T16–T18
+11. `feat(frontend): unlock screen and master password settings [BL-0203]` — Oberfläche zu A13, A15, A16, A18, Texte und Codes dieser Etappe (A20 Teil), T14
+12. `docs: describe database encryption in the first-run notice, README and changelog [BL-0314]` — A20 (Rest: Codes aus Etappe 1–2, geänderte Schlüsselbund-Texte), A21, A22
 
 **Priorität:** ERHÖHT. Angriffsrichtungen für den Review:
 - Ein Weg, der doch einen neuen K erzeugt: Fehlerart verwechselt (`Backend`
@@ -433,10 +476,12 @@ Schlüsselbund nicht mehr; den Ausweg bringt erst Etappe 3.
 **Aufteilung:**
 - Lauf 1, **Sonnet**: Commits 1–2. Danach Push und CI (Teil 0 Frage 1).
 - Lauf 2, **Opus**: Commits 3–8 (Kern; gemeinsame Module Start und Store).
+  Teil 0 Frage 2 klärt der Coder selbst (§2).
 - Lauf 3, **Opus**: Commits 9–11, beginnt mit Teil 0 Frage 3.
 - Lauf 4, **Sonnet**: Commit 12; „Kern ist fertig und geprüft“.
 
 **Berührte Module:** `crates/persistence-sqlite`, `crates/core/src/crypto`,
+`crates/core/src/ssh` (`error.rs`, Fehlercode),
 `crates/credentials-keyring`, `crates/app-logic` (`error.rs`,
 Startfehler-Texte, `server_credentials.rs`, `identity_file.rs`,
 Log-Allowlist), `crates/app-shell` (`lib.rs`, `startup_dialog.rs`,
