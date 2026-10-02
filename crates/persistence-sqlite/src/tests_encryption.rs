@@ -1,4 +1,5 @@
-//! Spec 0101, Commit 4: A4, A6–A8 und die Tests T1 (Teil), T4–T6, T19, T20.
+//! Spec 0101, Commit 4: A4, A6–A8 und die Tests T1, T4–T6, T19, T20.
+//! T1 ist seit Commit 8 vollständig (Secret- und Token-Marker).
 //!
 //! **Eigene Datei, wie `tests_raw_file`:** Diese Tests arbeiten auf echten
 //! Dateien in Temp-Verzeichnissen, lesen sie teils roh an SQLite vorbei und
@@ -19,10 +20,13 @@ use std::sync::Arc;
 
 use sqlx::Connection;
 
+use secrecy::SecretString;
 use ssh_manager_core::ai::{MessageContent, ProviderId, ProviderType};
 use ssh_manager_core::crypto::{ChaCha20Poly1305Cipher, ContentCipher, DatabaseKey};
+
 use ssh_manager_core::profiles::{
-    AuthMethod, CredentialRef, PostIngestPolicy, ProfileStore, Server,
+    AuthMethod, CredentialRef, CredentialStore, PostIngestPolicy, ProfileStore, Server,
+    MCP_SERVER_TOKEN_REF,
 };
 use ssh_manager_core::shared::ServerId;
 
@@ -33,13 +37,25 @@ use crate::encryption::{
 use crate::tests_fixture_t0::{align_migration_checksums_to_current_build, fixture_path};
 use crate::{AiProviderConfig, PersistenceError, SqliteProfileStore};
 
-/// Die Marker aus Spec 0101 §7. `Secret-0101`/`Token-0101` kommen erst mit
-/// den Commits 6–8 dazu (es gibt noch keine Tabelle dafür) — T1 ist
-/// deshalb hier nur zum Teil erfüllt, wie die Umsetzungsreihenfolge es
-/// vorsieht („T1 (Teil)").
+/// Die Marker aus Spec 0101 §7. Mit Commit 8 ist T1 **vollständig**:
+/// `Secret-0101` (A9, Secrets in der Datenbank) und `Token-0101` (A12,
+/// MCP-Token in der Datenbank) sind seit den Commits 6–8 wirklich
+/// Datenbankinhalt und damit prüfbar.
 const HOST_MARKER: &str = "host-0101.example";
 const USER_MARKER: &str = "user-0101";
 const HEADER_MARKER: &str = "Header-0101";
+const SECRET_MARKER: &str = "Secret-0101";
+const TOKEN_MARKER: &str = "Token-0101";
+
+/// Alle fünf Marker — dieselbe Liste für die Prüfung und für die
+/// Gegenprobe, damit keine Variante einen Marker vergisst.
+const ALL_MARKERS: [&str; 5] = [
+    HOST_MARKER,
+    USER_MARKER,
+    HEADER_MARKER,
+    SECRET_MARKER,
+    TOKEN_MARKER,
+];
 
 /// Derselbe feste Wurzelschlüssel wie in der T0-Fixture — kein Geheimnis.
 const TEST_ROOT_KEY: [u8; 32] = [
@@ -131,13 +147,33 @@ async fn populate_markers(store: &SqliteProfileStore) {
         })
         .await
         .expect("Provider anlegen");
+
+    // T1 (Rest, Commit 8): Secret und MCP-Token liegen seit A9/A12 in
+    // dieser Datenbank — also gehören ihre Marker in die Rohdatei-Prüfung.
+    // Über den produktiven `CredentialStore`, nicht per rohem SQL: Was der
+    // Test sucht, soll genau auf dem Weg hineingekommen sein, den die App
+    // benutzt.
+    let credentials = store.credential_store(tokio::runtime::Handle::current());
+    credentials
+        .set(
+            &CredentialRef::new("server:marker:password".to_string()),
+            SecretString::from(SECRET_MARKER.to_string()),
+        )
+        .expect("Secret ablegen");
+    credentials
+        .set(
+            &CredentialRef::new(MCP_SERVER_TOKEN_REF.to_string()),
+            SecretString::from(TOKEN_MARKER.to_string()),
+        )
+        .expect("MCP-Token ablegen");
 }
 
 // --- A4/A2: Öffnen mit Schlüssel ------------------------------------------
 
-/// T1 (Teil, Spec 0101 §7): Eine neue Installation mit
-/// `connect_encrypted` — Server, Provider mit Header — enthält keinen der
-/// Marker im Klartext, in **keiner** Datei des Datenverzeichnisses.
+/// T1 (vollständig seit Commit 8, Spec 0101 §7): Eine neue Installation mit
+/// `connect_encrypted` — Server, Provider mit Header, Secret und
+/// MCP-Token — enthält keinen der fünf Marker im Klartext, in **keiner**
+/// Datei des Datenverzeichnisses.
 ///
 /// **Mit eingebauter Gegenprobe.** Derselbe Inhalt wird zusätzlich über
 /// `connect_plaintext` in ein zweites Verzeichnis geschrieben; dort müssen
@@ -164,7 +200,7 @@ async fn test_t1_a_fresh_encrypted_database_contains_no_marker_in_plaintext() {
         "die verschlüsselte Datei darf nicht den Klartext-SQLite-Header tragen"
     );
 
-    for marker in [HOST_MARKER, USER_MARKER, HEADER_MARKER] {
+    for marker in ALL_MARKERS {
         let hits = files_containing(dir.path(), marker);
         assert!(
             hits.is_empty(),
@@ -180,7 +216,7 @@ async fn test_t1_a_fresh_encrypted_database_contains_no_marker_in_plaintext() {
         .expect("Klartext-Datenbank anlegbar");
     populate_markers(&plain).await;
     plain.pool.close().await;
-    for marker in [HOST_MARKER, USER_MARKER, HEADER_MARKER] {
+    for marker in ALL_MARKERS {
         assert!(
             !files_containing(plain_dir.path(), marker).is_empty(),
             "die Gegenprobe findet {marker} im Klartext-Fall nicht — dann prüft der \

@@ -92,6 +92,23 @@ pub const KEYCHAIN_ACCESS_FAILED: &str = "KEYCHAIN_ACCESS_FAILED";
 /// Weg gar nicht mehr befragt wird.
 pub const SECRET_STORE_FAILED: &str = "SECRET_STORE_FAILED";
 
+/// Spec 0101, A12: der Platz des MCP-Server-Tokens im Secret-Speicher.
+///
+/// Ein eigener Namensraum (`mcp:`), nicht `server:` oder `ai-provider:` —
+/// das Token gehört zu keinem Server und zu keinem Provider.
+///
+/// **Es fällt damit absichtlich aus der Positivliste des Secret-Umzugs**
+/// (A10, `app_logic::secret_migration`): Das Token hat nie im Schlüsselbund
+/// des Betriebssystems gelegen, sondern in `settings.json`. Es gibt dort
+/// also nichts zu lesen und erst recht nichts zu löschen; seinen eigenen
+/// Umzug erledigt A12.
+///
+/// **Hier und nicht in `app-logic`:** Den Namen brauchen zwei Schichten —
+/// `app-logic` zum Lesen und Schreiben und die Rohdatei-Prüfung aus T1 in
+/// `persistence-sqlite`, die nicht auf `app-logic` zeigen darf. Ein
+/// zweites Literal könnte abdriften, ohne dass irgendwo etwas scheitert.
+pub const MCP_SERVER_TOKEN_REF: &str = "mcp:server-token";
+
 /// Fehler eines [`CredentialStore`]-Zugriffs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CredentialError {

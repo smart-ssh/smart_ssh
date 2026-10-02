@@ -38,6 +38,8 @@ pub mod host_key_store;
 pub mod identity_file;
 pub mod key_files;
 pub mod logging;
+/// Spec 0101, A12: das MCP-Server-Token im Secret-Speicher.
+pub mod mcp_token;
 pub mod orchestration;
 /// Spec 0088, A2.1/A2.2: crate-intern, weil es eine Implementierungs-
 /// Entscheidung über die Sperren dieser Crate ist und keine Schnittstelle.

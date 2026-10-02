@@ -65,12 +65,16 @@ fn generate_token() -> String {
 /// SQLite-DB und `host_keys.json` bereits konsequent auf 0600/0700 härtet
 /// und API-Keys in den OS-Keychain statt in den Store legt. Jeder
 /// mitlaufende Prozess desselben Nutzerkontos, der die Datei lesen darf,
-/// wird damit zu einem vollwertigen MCP-Client. Härtet die Datei nach jedem
-/// Token-Schreibzugriff best-effort auf 0600 — löst NICHT das größere,
-/// hier bewusst nicht angegangene Problem (Klartext auf der Platte bleibt,
-/// root/derselbe Nutzer kann weiterhin lesen; die vollständige Lösung wäre
-/// das Token in den `CredentialStore` zu verschieben und nur ein Handle in
-/// `settings.json` zu halten — größere Änderung, siehe Abschlussbericht).
+/// wird damit zu einem vollwertigen MCP-Client. Härtet die Datei
+/// best-effort auf 0600.
+///
+/// **Die damals genannte vollständige Lösung ist mit Spec 0101 A12
+/// umgesetzt:** Das Token liegt in der verschlüsselten Datenbank, nicht
+/// mehr in dieser Datei. Die Härtung bleibt trotzdem — die Datei hält
+/// weiter Einstellungen (erlaubte Server, Zeitschranke, Ein/Aus), und sie
+/// hatte diese Rechte bisher; ein Umzug ist kein Grund, sie
+/// zurückzunehmen. Nach jedem Schreibzugriff dieses Moduls aufgerufen,
+/// weil es den bisherigen Auslöser (das Token-Schreiben) nicht mehr gibt.
 fn harden_settings_store_permissions(app: &AppHandle) {
     #[cfg(unix)]
     {
@@ -87,28 +91,47 @@ fn harden_settings_store_permissions(app: &AppHandle) {
     }
 }
 
-/// `None`, falls noch nie eines generiert wurde (erster Aufruf überhaupt).
-fn stored_token(app: &AppHandle) -> CommandResult<Option<String>> {
-    let store = app.store(SETTINGS_STORE_FILE)?;
-    Ok(store
-        .get(TOKEN_KEY)
-        .and_then(|v| v.as_str().map(str::to_string)))
+/// Spec 0101, A12: `settings.json` als **alter** Ablageort des Tokens.
+///
+/// Nur noch Lesen und Entfernen — geschrieben wird dorthin nicht mehr. Die
+/// Reihenfolge des Umzugs (schreiben, zurücklesen, vergleichen, dann
+/// entfernen) steckt in `app_logic::mcp_token`, damit T12 ohne Fenster
+/// läuft; hier bleibt nur der Zugriff auf die Datei, der ohne Tauri nicht
+/// geht.
+struct SettingsJsonToken<'a> {
+    app: &'a AppHandle,
 }
 
-/// Liefert das persistierte Token, generiert und speichert bei Bedarf eins
-/// — so gibt es immer einen Wert zum Anzeigen, sobald der Einstellungen-
-/// Screen einmal geöffnet wurde, unabhängig davon, ob MCP bereits aktiviert
-/// wurde (Spec 0028, Abschnitt 9: Token wird immer angezeigt).
-fn load_or_init_token(app: &AppHandle) -> CommandResult<String> {
-    if let Some(token) = stored_token(app)? {
-        return Ok(token);
+impl app_logic::mcp_token::LegacyMcpTokenFile for SettingsJsonToken<'_> {
+    fn read_token(&self) -> CommandResult<Option<String>> {
+        let store = self.app.store(SETTINGS_STORE_FILE)?;
+        Ok(store
+            .get(TOKEN_KEY)
+            .and_then(|v| v.as_str().map(str::to_string)))
     }
-    let token = generate_token();
-    let store = app.store(SETTINGS_STORE_FILE)?;
-    store.set(TOKEN_KEY, serde_json::json!(token));
-    store.save()?;
-    harden_settings_store_permissions(app);
-    Ok(token)
+
+    fn remove_token(&self) -> CommandResult<()> {
+        let store = self.app.store(SETTINGS_STORE_FILE)?;
+        store.delete(TOKEN_KEY);
+        store.save()?;
+        harden_settings_store_permissions(self.app);
+        Ok(())
+    }
+}
+
+/// Liefert das persistierte Token, generiert bei Bedarf eins — so gibt es
+/// immer einen Wert zum Anzeigen, sobald der Einstellungen-Screen einmal
+/// geöffnet wurde, unabhängig davon, ob MCP bereits aktiviert wurde
+/// (Spec 0028, Abschnitt 9: Token wird immer angezeigt).
+///
+/// Seit Spec 0101 A12 liegt das Token in der verschlüsselten Datenbank; ein
+/// Token aus `settings.json` wird beim ersten Aufruf übernommen.
+fn load_or_init_token(app: &AppHandle, state: &AppState) -> CommandResult<String> {
+    app_logic::mcp_token::load_or_init_token(
+        state.credential_store.as_ref(),
+        &SettingsJsonToken { app },
+        &generate_token,
+    )
 }
 
 fn load_allowed_servers(app: &AppHandle) -> CommandResult<HashSet<ServerId>> {
@@ -132,6 +155,7 @@ fn store_allowed_servers(app: &AppHandle, ids: &HashSet<ServerId>) -> CommandRes
     let ids_json: Vec<String> = ids.iter().map(|id| id.0.to_string()).collect();
     store.set(ALLOWED_SERVERS_KEY, serde_json::json!(ids_json));
     store.save()?;
+    harden_settings_store_permissions(app);
     Ok(())
 }
 
@@ -157,7 +181,7 @@ fn is_enabled_setting(app: &AppHandle) -> CommandResult<bool> {
 /// jeder Command hier ruft das zuerst auf, damit die Live-Werte auch nach
 /// einem Neustart wieder mit dem zuletzt gespeicherten Stand übereinstimmen.
 fn sync_live_state_from_store(app: &AppHandle, state: &AppState) -> CommandResult<()> {
-    let token = load_or_init_token(app)?;
+    let token = load_or_init_token(app, state)?;
     state.mcp.token.set(token);
     let allowed = load_allowed_servers(app)?;
     *state.mcp.allowed_servers.lock().expect("Mutex vergiftet") = allowed;
@@ -166,7 +190,7 @@ fn sync_live_state_from_store(app: &AppHandle, state: &AppState) -> CommandResul
 
 async fn build_dto(app: &AppHandle, state: &AppState) -> CommandResult<McpServerSettingsDto> {
     let enabled = state.mcp.runtime.lock().await.is_some();
-    let token = load_or_init_token(app)?;
+    let token = load_or_init_token(app, state)?;
     let allowed_server_ids = state
         .mcp
         .allowed_servers
@@ -237,6 +261,7 @@ pub async fn set_mcp_server_enabled(
     let store = app.store(SETTINGS_STORE_FILE)?;
     store.set(ENABLED_KEY, serde_json::json!(enabled));
     store.save()?;
+    harden_settings_store_permissions(&app);
 
     if enabled {
         start_server_if_not_running(&app, &state).await?;
@@ -251,11 +276,15 @@ pub async fn regenerate_mcp_server_token(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> CommandResult<McpServerSettingsDto> {
-    let new_token = generate_token();
-    let store = app.store(SETTINGS_STORE_FILE)?;
-    store.set(TOKEN_KEY, serde_json::json!(new_token));
-    store.save()?;
-    harden_settings_store_permissions(&app);
+    // Spec 0101, A12: „Erzeugen und Erneuern schreiben nur in die
+    // Datenbank." Das neue Token wird dort auch zurückgelesen — ein
+    // Erneuern, das nicht ankommt, ließe den Nutzer mit einem Token
+    // dastehen, mit dem sich kein Client anmelden kann.
+    let new_token = app_logic::mcp_token::regenerate_token(
+        state.credential_store.as_ref(),
+        &SettingsJsonToken { app: &app },
+        &generate_token,
+    )?;
     // Live-Effekt sofort, unabhängig davon, ob der Server gerade läuft
     // (Spec 0028, Abschnitt 9: "invalidiert das alte Token sofort") — ein
     // laufender Server prüft bei jedem Tool-Call gegen `state.mcp.token`,
@@ -282,6 +311,7 @@ pub async fn set_mcp_server_confirm_timeout_secs(
     let store = app.store(SETTINGS_STORE_FILE)?;
     store.set(CONFIRM_TIMEOUT_SECS_KEY, serde_json::json!(secs));
     store.save()?;
+    harden_settings_store_permissions(&app);
 
     let was_running = state.mcp.runtime.lock().await.is_some();
     if was_running {
