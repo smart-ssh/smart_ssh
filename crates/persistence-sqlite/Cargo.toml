@@ -13,6 +13,14 @@ path = "src/lib.rs"
 async-trait = "0.1.92"
 chrono = { version = "0.4.45", features = ["serde"] }
 directories = "6.0.0"
+# Spec 0101, A1: SQLite wird mit SQLCipher gebaut, statt per `sqlx`s eigenem
+# `sqlite-bundled`-Feature (plain SQLite) zu laufen. `sqlx-sqlite` zieht
+# `libsqlite3-sys` ohnehin schon (mit Feature `bundled`); diese explizite
+# Abhängigkeit auf dieselbe Version unifiziert ihr Feature-Set per Cargo
+# (gemessen, s. Beilage BL-0314: `bundled-sqlcipher-vendored-openssl` →
+# `bundled-sqlcipher` → `bundled`, deckungsgleich mit `sqlx-sqlite/bundled`)
+# statt eine zweite, konkurrierende SQLite-Kopie zu bauen.
+libsqlite3-sys = { version = "=0.37.0", features = ["bundled-sqlcipher-vendored-openssl"] }
 serde_json = "1.0.151"
 sqlx = { version = "0.9.0", features = ["sqlite", "runtime-tokio", "tls-rustls", "migrate", "chrono", "uuid", "sqlite-bundled"] }
 ssh-manager-core = { version = "0.5.2", path = "../core" }

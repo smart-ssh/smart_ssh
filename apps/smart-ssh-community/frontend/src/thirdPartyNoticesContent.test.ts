@@ -41,6 +41,23 @@ describe("Drittlizenzen: Inhalt auf dem aktuellen Stand (Spec 0099, T1)", () => 
     expect(content).toContain("Copyright 2017 The Barlow Project Authors");
     expect(content).toContain("Copyright 2020 The JetBrains Mono Project Authors");
   });
+
+  // T9 (Spec 0101, A1): `libsqlite3-sys`s SQLCipher-Feature und die
+  // vendorte OpenSSL-Quelle (`openssl-src`) liegen beide tiefer
+  // verschachtelt im jeweiligen Crate, als der generische Rust-Lizenz-Scan
+  // greift — ohne die explizite Zuordnung in
+  // `collectVendoredLicenseNotices` (generate-third-party-notices.mjs)
+  // bleibt das unsichtbar (gemessen: weder "Zetetic"/"SQLCipher" noch der
+  // OpenSSL-Lizenztext selbst tauchten vor diesem Fix in der generierten
+  // Ausgabe auf).
+  it.skipIf(!hasOutput)(
+    "enthält die Lizenztexte von SQLCipher und der vendorten OpenSSL-Quelle (Spec 0101, T9)",
+    () => {
+      expect(content).toContain("SQLCipher (gebündelt in libsqlite3-sys, Spec 0101 A1)");
+      expect(content).toContain("Zetetic LLC");
+      expect(content).toContain("OpenSSL (vendorte Quelle in openssl-src, Spec 0101 A1)");
+    },
+  );
 });
 
 describe("Drittlizenzen: Hinweisdateien (Spec 0099, T2)", () => {

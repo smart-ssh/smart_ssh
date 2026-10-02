@@ -252,6 +252,66 @@ function collectRustNotices(aboutJson) {
   return notices;
 }
 
+// Spec 0101 (BL-0314), A1: `libsqlite3-sys`s Feature
+// `bundled-sqlcipher-vendored-openssl` baut SQLCipher und eine vendorte
+// OpenSSL-Quelle (`openssl-src`) mit ein — beider Lizenztext liegt aber
+// NICHT im Wurzelverzeichnis des jeweiligen Crates (wo der `/^notice/i`-Scan
+// oben greift), sondern tiefer verschachtelt. Gemessen: ohne diese
+// explizite Zuordnung taucht weder "Zetetic"/"SQLCipher" noch der
+// OpenSSL-Lizenztext irgendwo in der generierten Ausgabe auf. Eine feste
+// Liste statt eines Auto-Scans, weil es hier nicht um ein Namensmuster
+// geht, sondern um je eine konkrete, bekannte Datei in einem konkreten
+// Crate.
+const VENDORED_LICENSE_FILES = [
+  {
+    crateName: "libsqlite3-sys",
+    relativePath: "sqlcipher/LICENSE",
+    label: "SQLCipher (gebündelt in libsqlite3-sys, Spec 0101 A1)",
+  },
+  {
+    crateName: "openssl-src",
+    relativePath: "openssl/LICENSE.txt",
+    label: "OpenSSL (vendorte Quelle in openssl-src, Spec 0101 A1)",
+  },
+];
+
+function collectVendoredLicenseNotices(aboutJson) {
+  const notices = [];
+  const matchedCrateNames = new Set();
+  for (const crate of aboutJson.crates) {
+    const dir = path.dirname(crate.package.manifest_path);
+    for (const entry of VENDORED_LICENSE_FILES) {
+      if (crate.package.name !== entry.crateName) continue;
+      const filePath = path.join(dir, entry.relativePath);
+      if (!fs.existsSync(filePath)) {
+        fail(
+          `Erwartete gebündelte Lizenzdatei fehlt: ${filePath} (Crate ${crate.package.name} ` +
+            `${crate.package.version}, Spec 0101 A1) — Pfad oder Version im Abhängigkeitsbaum ` +
+            "geändert?",
+        );
+      }
+      matchedCrateNames.add(entry.crateName);
+      notices.push({
+        label: `${entry.label} — ${crate.package.name} ${crate.package.version}`,
+        content: fs.readFileSync(filePath, "utf8"),
+      });
+    }
+  }
+  // Fehlt eines der beiden Crates ganz (z. B. eine künftige Abhängigkeits-
+  // Umstellung), bliebe der Lizenztext sonst stillschweigend weg, statt den
+  // Lauf rot zu färben (Spec 0101 A1 verlangt beide Texte in jeder
+  // Ausgabe).
+  for (const entry of VENDORED_LICENSE_FILES) {
+    if (!matchedCrateNames.has(entry.crateName)) {
+      fail(
+        `Crate "${entry.crateName}" nicht im Abhängigkeitsbaum gefunden — sein Lizenztext ` +
+          "(Spec 0101 A1) kann nicht eingebettet werden.",
+      );
+    }
+  }
+  return notices;
+}
+
 // --- npm-Seite -----------------------------------------------------------
 
 function runNpmLs(frontendDir) {
@@ -466,6 +526,7 @@ function generate(args) {
     labels: lic.used_by.map((u) => `${u.crate.name} ${u.crate.version}`).sort(),
   }));
   const rustNotices = collectRustNotices(aboutJson);
+  const vendoredLicenseNotices = collectVendoredLicenseNotices(aboutJson);
 
   const npmTree = runNpmLs(args.frontend);
   const prodPackages = collectProdPackages(npmTree);
@@ -505,7 +566,7 @@ function generate(args) {
     renderLicenseSection("npm-Produktionsabhaengigkeiten", npmGroups),
     renderLicenseSection("Build-Werkzeuge mit ausgeliefertem Code (devDependencies)", devGroups),
     renderFontSection(args.fontLicense),
-    renderNoticesSection([...rustNotices, ...npmNotices, ...devNotices]),
+    renderNoticesSection([...rustNotices, ...vendoredLicenseNotices, ...npmNotices, ...devNotices]),
   ].join("\n");
 
   return { sections, stats: { rust: rustGroups.length, npm: npmResults.length, dev: devResults.length } };
