@@ -1120,3 +1120,106 @@ async fn insert_marker_server(store: &SqliteProfileStore) {
         .await
         .unwrap();
 }
+
+/// Spec 0101, A5 — die Namenskollision bekommt eine **eigene** Meldung.
+///
+/// Vorher endete sie in [`ConnectFailureKind::Other`], und dessen Text rät
+/// als letzten Schritt dazu, ein Backup einzuspielen. Das ist hier doppelt
+/// falsch: `StartOverPlan::execute` ist alles-oder-nichts, die bisherige
+/// Datenbank liegt also unberührt an ihrem Platz — es ist nichts verloren,
+/// was ein Backup ersetzen könnte —, und die belegte Zieldatei im
+/// Datenverzeichnis bliebe auch nach einem eingespielten Backup liegen.
+///
+/// **Gegenbeweis geführt:** Gegen den Stand vor dieser Änderung liefert
+/// derselbe Ablauf `ConnectFailureKind::Other`, und die Zusicherung auf
+/// `StartOverFailed` scheitert.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_a5_a_rename_collision_gets_its_own_message_without_backup_advice() {
+    /// Besetzt den Zielnamen genau zwischen Planen und Ausführen — also in
+    /// der zweiten Bestätigung, an der im Ablauf der Nutzer sitzt.
+    struct CollidingPrompt {
+        dir: std::path::PathBuf,
+        asked: Mutex<Vec<StartupDialog>>,
+    }
+    impl StartupPrompt for CollidingPrompt {
+        fn ask(&self, dialog: StartupDialog) -> StartupChoice {
+            self.asked.lock().unwrap().push(dialog);
+            StartupChoice::StartOver
+        }
+        fn confirm_start_over(&self, renamed_to: Option<&str>) -> bool {
+            let name = renamed_to.expect("mit vorhandener Datei muss ein Name genannt werden");
+            std::fs::write(self.dir.join(name), b"fremd").unwrap();
+            true
+        }
+        fn confirm_generate_new_key(&self) -> bool {
+            true
+        }
+        fn notify_started_over(&self, renamed_to: &str) {
+            panic!("es darf nichts umbenannt worden sein, gemeldet wurde aber {renamed_to}");
+        }
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("smart-ssh.db");
+    // Verschlüsselt mit einem **anderen** Schlüssel → D2 → „Neu anfangen“.
+    let mut foreign_root = TEST_ROOT_KEY;
+    foreign_root[0] ^= 0xff;
+    let store =
+        SqliteProfileStore::connect_encrypted(&db_path, &DatabaseKey::from_root_key(&foreign_root))
+            .await
+            .unwrap();
+    store.close().await;
+    let before = std::fs::read(&db_path).unwrap();
+
+    let credentials = CountingCredentialStore::new(GetBehaviour::Present);
+    let prompt = CollidingPrompt {
+        dir: dir.path().to_path_buf(),
+        asked: Mutex::new(Vec::new()),
+    };
+
+    let err = open_or_prepare_database(&db_path, &credentials, available(), &prompt)
+        .await
+        .err()
+        .expect("eine Kollision darf nicht als Erfolg durchgehen");
+
+    match err {
+        StartupAbort::Fatal { kind, .. } => assert_eq!(
+            kind,
+            ConnectFailureKind::StartOverFailed,
+            "die Kollision braucht ihren eigenen Fall — `Other` rät zum Backup"
+        ),
+        other => panic!("erwartet war ein fataler Startfehler, kam: {other:?}"),
+    }
+
+    // Nichts angefasst: die ursprüngliche Datei liegt byte-gleich da.
+    assert_eq!(std::fs::read(&db_path).unwrap(), before);
+    assert_eq!(
+        prompt.asked.lock().unwrap().clone(),
+        vec![StartupDialog::D2]
+    );
+
+    // Und der Text rät in keiner Sprache zu einem Backup, sagt aber in
+    // beiden, dass nichts verändert wurde.
+    for language in [
+        crate::startup_error_messages::Language::De,
+        crate::startup_error_messages::Language::En,
+    ] {
+        let text = crate::startup_error_messages::db_connect_failure_text(
+            &ConnectFailureKind::StartOverFailed,
+            &db_path,
+            std::path::Path::new("/tmp/logs"),
+            language,
+        );
+        let lower = text.message.to_lowercase();
+        assert!(
+            !lower.contains("backup"),
+            "der Text zu StartOverFailed darf kein Backup empfehlen ({language:?}): {}",
+            text.message
+        );
+        assert!(
+            lower.contains("nichts verändert") || lower.contains("nothing has been changed"),
+            "der Text muss sagen, dass nichts verändert wurde ({language:?}): {}",
+            text.message
+        );
+    }
+}

@@ -446,8 +446,13 @@ fn start_over(
     if !prompt.confirm_start_over(renamed_to.as_deref()) {
         return Err(StartupAbort::UserQuit);
     }
+    // Spec 0101, A5: **eigener Fall**, nicht `Other`. Der `Other`-Text rät
+    // dazu, ein Backup einzuspielen — hier ist das falsch: `execute()` ist
+    // alles-oder-nichts, die bisherige Datenbank liegt also unberührt an
+    // ihrem Platz, und eine Namenskollision im Datenverzeichnis löst ein
+    // Backup ohnehin nicht auf.
     plan.execute().map_err(|err| StartupAbort::Fatal {
-        kind: ConnectFailureKind::Other,
+        kind: ConnectFailureKind::StartOverFailed,
         detail: format!("Umbenennen fehlgeschlagen: {err}"),
     })?;
     if let Some(renamed_to) = renamed_to {
