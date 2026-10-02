@@ -80,7 +80,7 @@ async fn refs_in_database(store: &SqliteProfileStore) -> Result<Vec<CredentialRe
         .list_servers()
         .await
         .map_err(|err| StartupAbort::Fatal {
-            kind: ConnectFailureKind::Other,
+            kind: ConnectFailureKind::SecretMigrationFailed,
             detail: format!("Server für den Secret-Umzug nicht lesbar: {err}"),
         })?;
     let providers = store
@@ -88,7 +88,7 @@ async fn refs_in_database(store: &SqliteProfileStore) -> Result<Vec<CredentialRe
         .list()
         .await
         .map_err(|err| StartupAbort::Fatal {
-            kind: ConnectFailureKind::Other,
+            kind: ConnectFailureKind::SecretMigrationFailed,
             detail: format!("Provider für den Secret-Umzug nicht lesbar: {err}"),
         })?;
 
@@ -161,7 +161,7 @@ pub async fn migrate_secrets_into_database(
                 .secret_migration_state()
                 .await
                 .map_err(|err| StartupAbort::Fatal {
-                    kind: ConnectFailureKind::Other,
+                    kind: ConnectFailureKind::SecretMigrationFailed,
                     detail: format!("Umzugszustand nicht lesbar: {err}"),
                 })?;
 
@@ -182,7 +182,7 @@ pub async fn migrate_secrets_into_database(
             STATE_OPEN => {}
             other => {
                 return Err(StartupAbort::Fatal {
-                    kind: ConnectFailureKind::Other,
+                    kind: ConnectFailureKind::SecretMigrationFailed,
                     detail: format!("unbekannter Umzugszustand: {other}"),
                 })
             }
@@ -228,7 +228,7 @@ pub async fn migrate_secrets_into_database(
                 // Umzug für gelungen zu erklären und danach den
                 // Schlüsselbund-Eintrag zu löschen.
                 return Err(StartupAbort::Fatal {
-                    kind: ConnectFailureKind::Other,
+                    kind: ConnectFailureKind::SecretMigrationFailed,
                     detail: format!("zurückgelesenes Secret weicht ab: {}", reference.as_str()),
                 });
             }
@@ -246,7 +246,25 @@ pub async fn migrate_secrets_into_database(
                 // bei D1 in A3. Der Zustand ist noch *offen*, also beginnt
                 // der nächste Durchlauf von vorn.
                 StartupChoice::Retry => continue,
-                _ => return Err(StartupAbort::UserQuit),
+                // **Erschöpfend, kein `_`-Zweig** (spec-reviewer Runde 1):
+                // A11.1 fügt in Etappe 3 genau hier eine dritte Wahl hinzu
+                // („Ohne Übernahme fortfahren", Zustand *übersprungen*).
+                // Als Catch-all gälte sie stillschweigend als „Beenden" —
+                // der Compiler würde nichts sagen, und der Fehler fiele
+                // erst im Betrieb auf. So scheitert der Bau, bis die neue
+                // Wahl hier bewusst behandelt ist.
+                StartupChoice::Quit => return Err(StartupAbort::UserQuit),
+                // D1 bietet diese beiden nicht an (`offers_password_setup:
+                // false`, kein „Neu anfangen" in diesem Dialog). Käme eine
+                // davon trotzdem zurück, wäre die Lage unklar — dann nichts
+                // anfassen und beenden, statt zu raten.
+                StartupChoice::StartOver | StartupChoice::GenerateNewKey => {
+                    tracing::warn!(
+                        "the migration dialog returned a choice it does not offer; quitting \
+                         without touching anything (Spec 0101, A11)"
+                    );
+                    return Err(StartupAbort::UserQuit);
+                }
             }
         }
 
@@ -256,7 +274,7 @@ pub async fn migrate_secrets_into_database(
             .set_secret_migration_state(STATE_MOVED, &moved)
             .await
             .map_err(|err| StartupAbort::Fatal {
-                kind: ConnectFailureKind::Other,
+                kind: ConnectFailureKind::SecretMigrationFailed,
                 detail: format!("Umzugszustand nicht schreibbar: {err}"),
             })?;
         tracing::info!(
@@ -312,7 +330,7 @@ async fn delete_moved_entries(
         .set_secret_migration_state(state, &pending_now)
         .await
         .map_err(|err| StartupAbort::Fatal {
-            kind: ConnectFailureKind::Other,
+            kind: ConnectFailureKind::SecretMigrationFailed,
             detail: format!("Umzugszustand nicht schreibbar: {err}"),
         })?;
     Ok(())
@@ -329,7 +347,7 @@ fn store_write_failed(reference: &CredentialRef, err: &CredentialError) -> Start
         "writing a migrated secret into the database failed (Spec 0101, A10)"
     );
     StartupAbort::Fatal {
-        kind: ConnectFailureKind::Other,
+        kind: ConnectFailureKind::SecretMigrationFailed,
         detail: format!("Secret-Umzug: {} ({err})", reference.as_str()),
     }
 }

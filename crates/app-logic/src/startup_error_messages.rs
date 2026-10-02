@@ -201,6 +201,16 @@ pub fn db_connect_failure_text(
              {log_dir}.\n\n\
              Data path: {db_path}"
         ),
+        // Spec 0101, A10/A11: die Datenbank ist offen — also ausdrücklich
+        // **kein** „Backup einspielen".
+        (Language::En, ConnectFailureKind::SecretMigrationFailed) => format!(
+            "Smart SSH could not finish moving your saved secrets into the encrypted \
+             database. The database itself opened fine — this is not a damaged file.\n\n\
+             Next step: check whether the data directory is writable and has free space, \
+             then start Smart SSH again; the move continues where it stopped. Details on \
+             the exact cause are in the log under {log_dir}.\n\n\
+             Data path: {db_path}"
+        ),
         (Language::De, kind) => db_connect_failure_message_de(kind, &db_path, &log_dir),
     };
     DialogText {
@@ -302,6 +312,20 @@ fn db_connect_failure_message_de(
              bereits eine Datei mit dem vorgeschlagenen Namen liegt; räume sie weg und \
              starte Smart SSH erneut. Details zur genauen Ursache stehen im Log unter \
              {log_dir}.\n\n\
+             Datenpfad: {db_path}"
+        ),
+        // Spec 0101, A10/A11: Der Umzug der Secrets ist gescheitert, die
+        // Datenbank selbst ist aber offen. Ausdrücklich **kein** „Backup
+        // einspielen": Es gibt keine beschädigte Datei, und ein Backup
+        // würde den Umzug nur erneut auslösen — im schlechtesten Fall,
+        // nachdem die Schlüsselbund-Einträge schon gelöscht sind.
+        ConnectFailureKind::SecretMigrationFailed => format!(
+            "Smart SSH konnte deine gespeicherten Passwörter und Schlüssel nicht \
+             vollständig in die verschlüsselte Datenbank übernehmen. Die Datenbank selbst \
+             ließ sich öffnen — es ist keine Datei beschädigt.\n\n\
+             Nächster Schritt: Prüfe, ob das Datenverzeichnis beschreibbar ist und noch \
+             Platz hat, und starte Smart SSH erneut; der Umzug macht dort weiter, wo er \
+             aufgehört hat. Details zur genauen Ursache stehen im Log unter {log_dir}.\n\n\
              Datenpfad: {db_path}"
         ),
     }

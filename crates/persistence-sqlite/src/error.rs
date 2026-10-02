@@ -154,6 +154,20 @@ pub enum ConnectFailureKind {
     /// wiederherzustellen, und ein eingespieltes Backup würde die
     /// Namenskollision im Datenverzeichnis nicht auflösen.
     StartOverFailed,
+    /// Spec 0101, A10/A11: Der Secret-Umzug ist an etwas gescheitert, das
+    /// kein Schlüsselbund-Problem ist — der Umzugszustand ließ sich nicht
+    /// lesen oder schreiben, die Server-/Provider-Liste nicht lesen, oder
+    /// der Secret-Speicher hat einen Wert nicht angenommen.
+    ///
+    /// **Eigener Fall und nicht [`Self::Other`]**, aus demselben Grund wie
+    /// [`Self::KeyMismatch`] und [`Self::StartOverFailed`]: Der
+    /// `Other`-Text rät als Erstes zu einer Backup-Wiederherstellung. Hier
+    /// ist das falsch und im schlimmsten Fall schädlich — die Datenbank ist
+    /// gerade **erfolgreich geöffnet** worden, ist also weder beschädigt
+    /// noch unlesbar. Im Fall „Zustand nicht schreibbar, Einträge schon
+    /// gelöscht" würde ein eingespieltes Backup den Umzug sogar erneut
+    /// auslösen, während die Secrets im Schlüsselbund schon weg sind.
+    SecretMigrationFailed,
 }
 
 impl PersistenceError {

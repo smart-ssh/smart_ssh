@@ -11,7 +11,8 @@ use std::sync::Mutex;
 
 use secrecy::{ExposeSecret, SecretString};
 
-use persistence_sqlite::{SqliteCredentialStore, SqliteProfileStore};
+use persistence_sqlite::{AiProviderConfig, SqliteCredentialStore, SqliteProfileStore};
+use ssh_manager_core::ai::{ProviderId, ProviderType};
 use ssh_manager_core::crypto::DatabaseKey;
 use ssh_manager_core::profiles::{
     AuthMethod, CredentialError, CredentialRef, CredentialResult, CredentialStore,
@@ -136,8 +137,15 @@ struct Fixture {
     servers: Vec<ServerId>,
 }
 
-/// Zwei Server (alle Slots belegt bis auf einen) und ein Provider — der
-/// Aufbau aus T11.
+/// Zwei Server mit `PrivateKey`-Anmeldung, alle Slots belegt bis auf einen
+/// (der fehlende wird je Test gewählt) — der Aufbau aus T11.
+///
+/// **Ohne Provider und ohne die übrigen Anmeldearten**, absichtlich: Die
+/// Zählungen mehrerer Tests hängen an genau diesen sechs Slots. Den
+/// Provider-Zweig und die anderen Anmeldearten deckt
+/// `test_t11_the_provider_branch_and_the_other_auth_kinds_move_too` mit
+/// eigenem Aufbau ab (spec-reviewer Runde 1: sonst bliebe die Suite grün,
+/// wenn jemand den Provider-Zweig in `refs_in_database` vergisst).
 async fn fixture() -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let store = SqliteProfileStore::connect_encrypted(
@@ -206,6 +214,165 @@ fn keyring_for(fixture: &Fixture, leave_out: Option<&str>) -> TestKeyring {
             .unwrap();
     }
     keyring
+}
+
+/// **T11, Provider-Zweig und die übrigen Anmeldearten** (spec-reviewer
+/// Runde 1: „hätte jemand Provider in `refs_in_database` vergessen, bliebe
+/// die Suite grün").
+///
+/// Der Hauptfall oben benutzt nur `PrivateKey`. Hier steht je eine
+/// `Password`-, `Certificate`-, `IdentityFile`- und `Agent`-Anmeldung und
+/// ein KI-Provider — also jeder Arm von `refs_of_server` **und** die
+/// Provider-Schleife.
+///
+/// **Gegenbeweis geführt:** Ohne die Provider-Schleife in
+/// `refs_in_database` bleibt das Provider-Secret im Schlüsselbund und
+/// fehlt in der Datenbank; ohne einen der `match`-Arme fehlt der jeweilige
+/// Slot. Beides scheitert hier sichtbar.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t11_the_provider_branch_and_the_other_auth_kinds_move_too() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = SqliteProfileStore::connect_encrypted(
+        &dir.path().join("smart-ssh.db"),
+        &DatabaseKey::from_root_key(&TEST_ROOT_KEY),
+    )
+    .await
+    .unwrap();
+    let database = store.credential_store(tokio::runtime::Handle::current());
+
+    // Je Anmeldeart ein Server, dazu die Referenzen, die dabei entstehen.
+    let mut expected: Vec<String> = Vec::new();
+    for (index, auth_for) in [0usize, 1, 2, 3].into_iter().zip(
+        [
+            (|id: ServerId| AuthMethod::Password {
+                credential_ref: CredentialRef::new(format!("server:{}:password", id.0)),
+            }) as fn(ServerId) -> AuthMethod,
+            |id: ServerId| AuthMethod::Certificate {
+                cert_ref: CredentialRef::new(format!("server:{}:certificate", id.0)),
+                key_ref: CredentialRef::new(format!("server:{}:cert_key", id.0)),
+            },
+            |id: ServerId| AuthMethod::IdentityFile {
+                path: "~/.ssh/id_ed25519".to_string(),
+                passphrase_ref: Some(CredentialRef::new(format!(
+                    "server:{}:identity_passphrase",
+                    id.0
+                ))),
+            },
+            |_id: ServerId| AuthMethod::Agent,
+        ]
+        .into_iter(),
+    ) {
+        let id = ServerId::new();
+        let auth = auth_for(id);
+        // Der feste Sudo-Slot gehört zu **jeder** Anmeldeart (A10).
+        expected.push(format!("server:{}:sudo_password", id.0));
+        match &auth {
+            AuthMethod::Password { credential_ref } => {
+                expected.push(credential_ref.as_str().to_string())
+            }
+            AuthMethod::Certificate { cert_ref, key_ref } => {
+                expected.push(cert_ref.as_str().to_string());
+                expected.push(key_ref.as_str().to_string());
+            }
+            AuthMethod::IdentityFile { passphrase_ref, .. } => {
+                expected.push(passphrase_ref.as_ref().unwrap().as_str().to_string())
+            }
+            AuthMethod::Agent => {}
+            AuthMethod::PrivateKey { .. } => unreachable!("in diesem Test nicht benutzt"),
+        }
+        let now = chrono::Utc::now();
+        store
+            .create_server(&Server {
+                id,
+                name: format!("T11-auth-{index}"),
+                host: "host-0101.example".to_string(),
+                port: 22,
+                username: "user-0101".to_string(),
+                group_id: None,
+                tags: Vec::new(),
+                auth,
+                notes: String::new(),
+                jump_host: None,
+                post_ingest_policy: PostIngestPolicy::default(),
+                ai_injection_check_enabled: false,
+                sftp_server_path: None,
+                created_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+    }
+
+    // Der Provider-Zweig.
+    let provider_id = ProviderId::new();
+    let provider_ref = format!("ai-provider:{}", provider_id.0);
+    expected.push(provider_ref.clone());
+    let now = chrono::Utc::now();
+    store
+        .ai_provider_store()
+        .create(&AiProviderConfig {
+            id: provider_id,
+            provider_type: ProviderType::Anthropic,
+            display_name: "T11-Provider".to_string(),
+            base_url: None,
+            model: "claude-sonnet-5".to_string(),
+            supports_native_tool_calling: true,
+            credential_ref: CredentialRef::new(provider_ref.clone()),
+            is_active: false,
+            extra_headers: Vec::new(),
+            attestation_url: None,
+            max_tokens_override: None,
+            created_at: now,
+            updated_at: now,
+        })
+        .await
+        .unwrap();
+
+    let keyring = TestKeyring::default();
+    for reference in &expected {
+        keyring
+            .set(
+                &CredentialRef::new(reference.clone()),
+                SecretString::from(format!("{MARKER}-{reference}")),
+            )
+            .unwrap();
+    }
+    assert_eq!(
+        keyring.count(),
+        expected.len(),
+        "der Aufbau muss jeden erwarteten Slot belegen"
+    );
+
+    let prompt = ScriptedPrompt::new(Vec::new());
+    migrate_secrets_into_database(&store, &keyring, &database, &prompt)
+        .await
+        .expect("der Umzug muss gelingen");
+
+    for reference in &expected {
+        assert_eq!(
+            database
+                .get(&CredentialRef::new(reference.clone()))
+                .unwrap_or_else(|err| panic!("{reference} muss umgezogen sein, war aber {err:?}"))
+                .expose_secret(),
+            format!("{MARKER}-{reference}"),
+            "{reference} muss unverändert umgezogen sein"
+        );
+    }
+    assert_eq!(
+        keyring.count(),
+        0,
+        "auch das Provider-Secret muss aus dem Schlüsselbund verschwinden"
+    );
+    let (state, pending) = store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_DONE);
+    assert!(pending.is_empty());
+
+    // Den Pool ausdrücklich schließen, nicht nur fallen lassen: Dieser Test
+    // benutzt zusätzlich den `ai_provider_store`, und ein beim
+    // Runtime-Abbau noch offener Pool beendete den Testprozess hier
+    // reproduzierbar mit SIGSEGV — der Test war dabei schon grün, der
+    // Prozess-Rückgabewert aber rot. Siehe Bericht.
+    store.close().await;
 }
 
 /// T11, Hauptfall: alles umgezogen, der fehlende Slot bleibt `NotFound`,
@@ -561,4 +728,64 @@ async fn test_a10_a_fresh_installation_touches_nothing() {
     let (state, _) = store.secret_migration_state().await.unwrap();
     assert_eq!(state, STATE_DONE);
     store.close().await;
+}
+
+/// **Ein gescheiterter Umzug rät nicht zum Backup** (spec-reviewer Runde 1:
+/// jeder fatale Umzugsfehler benutzte `ConnectFailureKind::Other`, dessen
+/// Text zum Backup rät — an einer Stelle, an der die Datenbank gerade
+/// erfolgreich geöffnet wurde).
+///
+/// Der Rat ist hier nicht nur nutzlos, sondern im Fall „Zustand nicht
+/// schreibbar, Einträge schon gelöscht" aktiv schädlich: Ein eingespieltes
+/// Backup löste den Umzug erneut aus, während die Secrets im Schlüsselbund
+/// schon weg sind.
+///
+/// **Gegenbeweis geführt:** Gegen den Stand vor dieser Änderung liefert
+/// derselbe Ablauf `ConnectFailureKind::Other`, und die Zusicherung auf
+/// `SecretMigrationFailed` scheitert; der zugehörige Text enthält dann
+/// „Backup" bzw. „backup".
+#[tokio::test(flavor = "multi_thread")]
+async fn test_a11_a_failed_migration_gets_its_own_kind_without_backup_advice() {
+    let fixture = fixture().await;
+    let keyring = keyring_for(&fixture, None);
+    let prompt = ScriptedPrompt::new(Vec::new());
+    // Die Datenbank war offen und fällt mitten im Umzug weg — genau die
+    // Lage, in der „Datei beschädigt, spiel ein Backup ein" falsch ist.
+    fixture.store.close().await;
+
+    let err = migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+        .await
+        .expect_err("ein nicht erreichbarer Store darf den Start nicht stillschweigend fortsetzen");
+
+    match err {
+        StartupAbort::Fatal { kind, .. } => assert_eq!(
+            kind,
+            ConnectFailureKind::SecretMigrationFailed,
+            "der Umzug braucht seinen eigenen Fall — `Other` rät zum Backup"
+        ),
+        other => panic!("erwartet war ein fataler Startfehler, kam: {other:?}"),
+    }
+    assert_eq!(
+        keyring.deletes(),
+        0,
+        "ein gescheiterter Umzug löscht keinen Schlüsselbund-Eintrag"
+    );
+
+    for language in [
+        crate::startup_error_messages::Language::De,
+        crate::startup_error_messages::Language::En,
+    ] {
+        let text = crate::startup_error_messages::db_connect_failure_text(
+            &ConnectFailureKind::SecretMigrationFailed,
+            std::path::Path::new("/tmp/smart-ssh.db"),
+            std::path::Path::new("/tmp/logs"),
+            language,
+        );
+        let lower = text.message.to_lowercase();
+        assert!(
+            !lower.contains("backup"),
+            "der Text zum gescheiterten Umzug darf kein Backup empfehlen ({language:?}): {}",
+            text.message
+        );
+    }
 }

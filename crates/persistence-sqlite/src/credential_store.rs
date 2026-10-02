@@ -226,9 +226,16 @@ impl CredentialStore for SqliteCredentialStore {
     }
 }
 
-/// Nur für Tests und den Umzug (A10): wie viele Secrets liegen in der
-/// Datenbank. Kein Wert, nur die Anzahl.
+/// Nur für Tests: wie viele Secrets liegen in der Datenbank. Kein Wert, nur
+/// die Anzahl.
 impl SqliteCredentialStore {
+    /// **Test-gated** (spec-reviewer Runde 1): Der Doc-Kommentar nannte
+    /// früher auch „den Umzug", der die Funktion nie benutzt hat — und sie
+    /// gibt den rohen `sqlx::Error` nach außen. Ein künftiger produktiver
+    /// Aufrufer mit `{err}` im Log hätte damit den Weg wieder geöffnet, den
+    /// `backend_error` gerade geschlossen hat. Also dieselbe Schranke wie
+    /// bei [`Self::close`]: Im Produktivbau existiert die Funktion nicht.
+    #[cfg(any(test, feature = "test-support"))]
     pub async fn count(&self) -> Result<i64, sqlx::Error> {
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM secrets")
             .fetch_one(&self.pool)

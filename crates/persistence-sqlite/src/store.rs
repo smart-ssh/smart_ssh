@@ -376,7 +376,15 @@ impl SqliteProfileStore {
         state: &str,
         pending_refs: &[String],
     ) -> PersistenceResult<()> {
-        let pending = serde_json::to_string(pending_refs).unwrap_or_else(|_| "[]".to_string());
+        // **Kein `unwrap_or_else(|| "[]")`** (spec-reviewer Runde 1): Die
+        // Leseseite oben behandelt eine unlesbare Liste ausdrücklich nicht
+        // als „leer", weil leer „nichts mehr zu löschen" heißt. Auf der
+        // Schreibseite stillschweigend `[]` einzusetzen wäre genau diese
+        // falsche Auskunft, nur eine Schicht früher. Praktisch
+        // unerreichbar (eine `Vec<String>` serialisiert immer), aber die
+        // Begründung muss auf beiden Seiten dieselbe sein.
+        let pending = serde_json::to_string(pending_refs)
+            .map_err(|err| PersistenceError::Connect(sqlx::Error::Encode(Box::new(err))))?;
         sqlx::query("UPDATE secret_migration_state SET state = ?, pending_refs = ? WHERE id = 1")
             .bind(state)
             .bind(pending)
