@@ -18,6 +18,11 @@ mod store;
 
 #[cfg(test)]
 mod tests;
+/// Spec 0101, T0 — eigene Datei: erzeugt (einmalig, von Hand) und prüft die
+/// eingecheckte Datenbank-Fixture `tests/fixtures/t0-pre-sqlcipher.sqlite3`,
+/// Grundlage für T4–T6 (Commit 4).
+#[cfg(test)]
+mod tests_fixture_t0;
 /// Spec 0096, A3/A4 — eigene Datei statt in `tests`: der Nachweis liest die
 /// Datenbankdateien roh, an SQLite vorbei, und teilt mit der
 /// `SqliteProfileStore`-Testsuite dort weder Helfer noch Aufbaumuster.
