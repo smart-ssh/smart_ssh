@@ -6,33 +6,28 @@ Review-Priorität: ERHÖHT (Verschlüsselung, Credentials, Migration, Start)
 
 ## Getroffene Entscheidungen
 
-- **E1** Der Datenbankschlüssel wird aus dem vorhandenen Zufallsschlüssel
-  `app:chat_content_encryption_key` abgeleitet (im Folgenden **Wurzelschlüssel K**).
-  Kein zusätzlicher Schlüsselbund-Eintrag.
-- **E2** Alle Secrets ziehen in die verschlüsselte Datenbank: Server-Passwörter,
-  Private Keys, Passphrasen, Zertifikate, Sudo-Passwörter, API-Keys, das
-  MCP-Bearer-Token. Im Schlüsselbund bleibt höchstens K.
-- **E3** Schlüsselbund beim Start nicht erreichbar → Startdialog mit
-  „Erneut versuchen“ / „Beenden“; nichts wird angefasst.
-- **E4** Datenbank verschlüsselt, K nicht auffindbar → nie still ein neuer
-  Schlüssel. „Neu anfangen“ nur als bewusste Wahl; die alte Datei wird
-  umbenannt, nicht gelöscht.
-- **E5** Eine bestehende Klartext-Datenbank wird beim ersten Start automatisch
-  umgewandelt; das Klartext-Original wird nach erfolgreicher Prüfung entfernt.
-- **E6** Ältere Versionen können die Datei danach nicht mehr öffnen
-  (akzeptiert, Changelog).
-- **E7** Alte Schlüsselbund-Einträge der Secrets werden gelöscht, sobald jedes
-  Secret aus der Datenbank zurückgelesen und gleich ist.
-- **E8** Master-Passwort für alle wählbar. Standard bleibt der Schlüsselbund;
-  Wechsel in beide Richtungen in den Einstellungen. Fehlt beim Start ein
-  Schlüsselbund, bietet der Startdialog das Einrichten an.
-- **E9** Im Passwort-Modus liegt K mit einem aus dem Passwort abgeleiteten
-  Schlüssel verpackt in einer Datei neben der Datenbank. Moduswechsel und
-  Passwortänderung verpacken K neu; die Datenbank bleibt unberührt.
-- **E10** Passwort vergessen: keine Wiederherstellung. Beim Einrichten wird
-  das deutlich gesagt und muss bestätigt werden.
-- **E11** Feldweise Verschlüsselung (Chat, Ledger, Eingabe-Historie,
-  Zusammenfassungen) bleibt vorerst bestehen.
+- **E1** DB-Schlüssel aus dem vorhandenen Zufallsschlüssel
+  `app:chat_content_encryption_key` (**Wurzelschlüssel K**), kein neuer Eintrag.
+- **E2** Alle Secrets (Server-Passwörter, Private Keys, Passphrasen,
+  Zertifikate, Sudo-Passwörter, API-Keys, MCP-Token) in die Datenbank; im
+  Schlüsselbund bleibt höchstens K.
+- **E3** Schlüsselbund beim Start nicht erreichbar → „Erneut versuchen“ /
+  „Beenden“, nichts wird angefasst.
+- **E4** Datei verschlüsselt, K fehlt → nie still ein neuer K; „Neu anfangen“
+  nur bewusst, alte Datei umbenannt.
+- **E5** Klartext-Datenbank beim ersten Start automatisch umwandeln, Original
+  nach erfolgreicher Prüfung entfernen.
+- **E6** Ältere Versionen können die Datei nicht mehr öffnen (Changelog).
+- **E7** Alte Schlüsselbund-Einträge löschen, sobald jedes Secret aus der
+  Datenbank zurückgelesen und gleich ist.
+- **E8** Master-Passwort für alle wählbar, Standard Schlüsselbund, Wechsel in
+  beide Richtungen; ohne Schlüsselbund bietet der Startdialog es an.
+- **E9** Passwort-Modus: K mit Argon2id(Passwort) verpackt in einer Datei
+  neben der Datenbank; Wechsel und Passwortänderung verpacken nur neu.
+- **E10** Keine Wiederherstellung bei vergessenem Passwort; Warnung und
+  Bestätigung beim Einrichten.
+- **E11** Feldweise Verschlüsselung (Chat, Ledger, Historie,
+  Zusammenfassungen) bleibt vorerst.
 
 ## 1. Ist-Stand (Stand `4d1c307`)
 
@@ -82,10 +77,8 @@ Filterregeln, Sitzungstitel, `ai_provider_configs.extra_headers` (JSON).
 Tauri-Store `settings.json` im **Konfigurationsverzeichnis** (Schlüssel
 `mcpServerToken`), Rechte 0600 nur unter Unix.
 
-**Startdialoge.** `startup_dialog::show_fatal_error_and_exit` und
-`show_warning` nutzen rfd 0.16 nur mit „OK“. rfd kann bis zu drei eigene
-Knöpfe (`MessageButtons::YesNoCancelCustom`; Feature `common-controls-v6` ist
-in `app-shell` schon an), aber keine Texteingabe. DB-Fehlerarten
+**Startdialoge.** `startup_dialog` nutzt rfd 0.16 nur mit „OK“; rfd kann bis
+zu drei eigene Knöpfe (`common-controls-v6` ist an), keine Texteingabe. DB-Fehlerarten
 `ConnectFailureKind::{SchemaTooNew, PermissionDenied, Other}`; der `Other`-Text
 empfiehlt, ein Backup einzuspielen.
 
@@ -97,21 +90,19 @@ Datenbank ist nicht zusätzlich verschlüsselt …“, geprüft in
 Log umgeleitet. Diagnosepaket mit Allowlist `SAFE_LOG_MESSAGES`.
 
 **Messungen** (Protokoll in der Beilage, macOS; Linux wo genannt):
-- `libsqlite3-sys = "=0.37.0"`, Feature `bundled-sqlcipher-vendored-openssl`,
-  vereinigt sich mit `sqlx` 0.9; SQLCipher 4.10.0 (macOS, Linux). Mit dem echten
-  Code: 14 Migrationen, WAL mitverschlüsselt, 78/78 Tests grün. `cargo audit`
-  auf diesem Baum: keine Funde. **Windows nicht gemessen.**
+- `libsqlite3-sys = "=0.37.0"` mit `bundled-sqlcipher-vendored-openssl` neben
+  `sqlx` 0.9: SQLCipher 4.10.0, 14 Migrationen, WAL mitverschlüsselt, 78/78
+  Tests, `cargo audit` ohne Funde (macOS, Linux). **Windows nicht gemessen.**
 - Roher Schlüssel `"x'<64 Hex>'"` über `pragma("key", …)` funktioniert.
 - Falscher oder fehlender Schlüssel: Pool öffnet, erste Abfrage `code 26 „file
   is not a database“`; läuft zuerst `migrate!`, kommt `code 7 „out of memory“`.
   Falscher Schlüssel und beschädigte Datei sind so nicht unterscheidbar.
-- `cipher_log_level` Standard `WARN`, `NONE` angenommen; unter Linux schreibt
-  SQLCipher bei falschem Schlüssel auf stderr.
+- `cipher_log_level` Standard `WARN`, `NONE` angenommen (Linux schreibt sonst
+  auf stderr).
 - `ATTACH … KEY "x'…'"` + `sqlcipher_export` wandelt um, **überträgt aber
   weder `journal_mode` (danach `delete`) noch `user_version` (danach 0)**.
 - SQLite sinkt von 3.51.3 auf 3.50.4.
-- Im Abhängigkeitsbaum: `hkdf` 0.13, `sha2` 0.11, `argon2` 0.6,
-  `chacha20poly1305` 0.10, `zeroize`.
+- Vorhanden: `hkdf` 0.13, `sha2` 0.11, `argon2` 0.6, `chacha20poly1305`, `zeroize`.
 
 ## 2. Teil 0
 
@@ -181,7 +172,8 @@ Nicht-Ziele:
     *Klartext* **und** Grund `NoSecretServiceProvider` oder `NoSessionBus`
     (dort kann kein erreichbarer K existieren; bei `Locked`, `Unknown` oder
     einem Backend-Fehler würde ein neuer K den feldweise verschlüsselten
-    Verlauf unlesbar machen). Ursache bei `Unavailable` wie Spec 0071 A12.
+    Verlauf unlesbar machen). Bei *Klartext* nennt der Text den Verlust des
+    bisherigen Verlaufs wie D4. Ursache bei `Unavailable` wie Spec 0071 A12.
     „Erneut versuchen“ prüft ohne Neustart erneut.
   - **D2** eigener Code (z. B. `DB_KEY_MISMATCH`): Datei mit dem vorhandenen
     Schlüssel nicht lesbar bzw. kein Schlüssel zur verschlüsselten Datei.
@@ -193,7 +185,8 @@ Nicht-Ziele:
   - **D4** wie D3, aber statt „Neu anfangen“ „Neuen Schlüssel erzeugen“: Die
     Klartext-Datei bleibt lesbar und wird mit neuem K umgewandelt (A6); nur
     der feldweise verschlüsselte Verlauf geht verloren, das sagt der Text.
-    Zweite Bestätigung wie A5.
+    Zweite Bestätigung wie A5; im Passwort-Modus Reihenfolge wie A5 (neues
+    Passwort zuerst, alte Verpackungsdatei umbenennen, nie überschreiben).
 
   In keinem Dialog-Fall wird die Datenbank geöffnet, verändert oder
   umbenannt, solange der Nutzer nicht gewählt hat. **Ein neuer K entsteht
@@ -206,8 +199,9 @@ Nicht-Ziele:
   `-wal`, `-shm` und (Passwort-Modus) die Verpackungsdatei um in
   `<name>.unreadable-<UTC-Zeitstempel>`, löscht nichts, startet frisch und
   nennt im Dialog den neuen Dateinamen. Im Passwort-Modus bleibt der Modus:
-  Der frische Start führt in das Einrichten eines neuen Master-Passworts
-  (A13), nicht still in den Schlüsselbund.
+  das neue Master-Passwort wird **zuerst** eingerichtet (A13), die neue
+  Verpackungsdatei geschrieben, erst dann werden die alten Dateien umbenannt.
+  Bricht der Nutzer das Einrichten ab, bleibt alles unverändert.
 - **A6 MUSS** Umwandlung einer Klartext-Datei, vor den Migrationen:
   1. Original öffnen, WAL vollständig einspielen, schließen;
   2. verschlüsselte Kopie in eine Zwischendatei schreiben; die Zwischendatei
@@ -252,7 +246,8 @@ Nicht-Ziele:
   Übergang nach *umgezogen* wird die Liste der zu löschenden Referenzen
   festgehalten; gelöscht wird nach dieser Liste, nicht nach dem späteren
   Datenbankstand.
-- **A11 MUSS** Lesefehler (Backend) beim Umzug: Dialog D1, nichts gelöscht,
+- **A11 MUSS** Lesefehler (Backend) beim Umzug: Dialog D1 ohne Einrichten
+  (im Passwort-Modus plus A11.1), nichts gelöscht,
   Zustand bleibt *offen*. Löschfehler im Zustand *umgezogen*: Warnung ins Log
   ohne Secret, App startet, Löschen bei jedem Start erneut.
 - **A11.1 MUSS** Zustand *offen*, K aus dem Master-Passwort, Lesen beim
@@ -267,8 +262,8 @@ Nicht-Ziele:
 
 ### Etappe 3 — Master-Passwort
 
-- **A13 MUSS** Einrichten — aus den Einstellungen oder aus D1 (nur Datei
-  *fehlt*/*Klartext*): Passwort zweimal, mindestens 12 Zeichen, Warnung „ohne
+- **A13 MUSS** Einrichten — aus den Einstellungen, aus D1 (nur Datei
+  *fehlt*/*Klartext*) oder im Passwort-Modus aus A5/D4: Passwort zweimal, mindestens 12 Zeichen, Warnung „ohne
   Passwort sind alle Daten verloren, keine Wiederherstellung“ mit
   ausdrücklicher Bestätigung (E10). Schreibreihenfolge: K (vorhanden oder
   neu nach A3) verpacken, Verpackungsdatei atomar schreiben, entpacken und mit
@@ -334,7 +329,7 @@ Zustand, dann MCP-Server.
 
 - **`CredentialStore`:** neue Implementierung, gleiche Semantik (A9);
   Spec 0071 A14/I4 gilt für beide Stores; Spec 0098 für den Zugriff auf K.
-- **Fehlerpfade im UI** (Spec 0059): jeder Fall aus A3, A6, A11, A16 hat einen
+- **Fehlerpfade im UI** (Spec 0059): jeder Fall aus A3, A6, A11, A11.1, A16, A17 hat einen
   Dialog oder eine Meldung, keiner endet still.
 - **Keine stillen Rückfälle:** kein Weiterlauf im Klartext, kein neuer K außer
   in den Fällen aus A3 („Ein neuer K entsteht nur …“), kein Wechsel des Modus ohne Nutzerhandlung.
@@ -364,8 +359,7 @@ Marker je Test eindeutig: `host-0101.example`, `user-0101`, `Header-0101`,
 - **T3 (A3/A4, Tabelle):** je Feld der Tabelle ein Fall mit Test-Store, der
   Aufrufe zählt: erwarteter Ausgang, `set` auf K ohne Nutzerwahl nur in den
   zwei „K erzeugen“-Feldern, Datei in allen Dialog-Fällen byte-gleich, solange
-  nichts gewählt ist, nie Code 7. D1 bei `Locked`/`Unknown`/Backend bietet
-  kein Einrichten an.
+  nichts gewählt ist, nie Code 7.
   Scheitert heute (`resolve_or_generate_key` erzeugt bei verschlüsselter Datei).
 - **T4 (A6, A7):** Fixture umwandeln → Zeilen je Tabelle gleich,
   `user_version` gleich, `journal_mode=wal`, Migrationen vollständig, kein
@@ -377,8 +371,9 @@ Marker je Test eindeutig: `host-0101.example`, `user-0101`, `Header-0101`,
 - **T7 (A5, D4):** „Neu anfangen“ aus D2 und D3 → Dateien umbenannt,
   byte-gleich, Dialogtext nennt den Namen, neue leere Datenbank; ohne zweite
   Bestätigung passiert nichts. D4 → Klartext-Datei mit neuem K umgewandelt,
-  Zeilen erhalten. Variante Passwort-Modus (Commit 10): Verpackungsdatei mit
-  umbenannt, danach Einrichten eines neuen Passworts, kein `set` auf den
+  Zeilen erhalten. Variante Passwort-Modus (Commit 10) für A5 und D4: Einrichten
+  abgebrochen → alle Dateien unverändert; durchgeführt → alte
+  Verpackungsdatei umbenannt (nicht überschrieben), kein `set` auf den
   Schlüsselbund.
 - **T8 (D1):** K nicht erreichbar → Datenbank nicht geöffnet (Inhalt und
   mtime gleich); „Erneut versuchen“ mit danach funktionierendem Store startet.
@@ -395,7 +390,8 @@ Marker je Test eindeutig: `host-0101.example`, `user-0101`, `Header-0101`,
   Server gelöscht, während Löschen aussteht → seine Einträge werden trotzdem
   gelöscht;
   *übersprungen* (nach Commit 10), danach Schlüsselbund erreichbar → kein
-  einziges `delete`.
+  einziges `delete`; Schlüsselbund-Modus mit scheiterndem `get` → keine
+  Option „Ohne Übernahme“.
 - **T12 (A12):** `settings.json` mit Token → Token in der Datenbank, gleicher
   Wert, Schlüssel aus `settings.json` entfernt; Erneuern schreibt nicht dorthin.
 - **T13 (A13–A15):** Einrichten → Schlüsselbund ohne K, Verpackungsdatei da;
@@ -404,7 +400,9 @@ Marker je Test eindeutig: `host-0101.example`, `user-0101`, `Header-0101`,
   richtigem Passwort öffnet; Passwort ändern → altes scheitert, neues gelingt,
   Datenbank byte-gleich; zurück auf Schlüsselbund → Verpackungsdatei weg.
   Einrichten aus D1 bei Klartext-Datei → umgewandelt, K nur verpackt.
-  Verpackungsdatei unter Unix mit Rechten 0600.
+  Verpackungsdatei unter Unix mit Rechten 0600. D1 bietet **kein** Einrichten
+  bei `Locked`/`Unknown`/Backend-Fehler und bei Datei *sonst* ×
+  `NoSecretServiceProvider`/`NoSessionBus`; Umzugs-Dialog (A11) nie.
 - **T14 (A16, A18, A20):** Frontend: Entsperrmaske, falsches Passwort zeigt
   Meldung, Modusanzeige, Einrichten mit Bestätigung, die Codes der Etappe 3
   übersetzt (übrige Codes in Commit 12).
