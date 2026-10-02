@@ -478,6 +478,62 @@ async fn test_a10_a_reference_pointing_at_the_root_key_is_never_migrated() {
     );
 }
 
+/// **Auch die festgehaltene Löschliste wird geprüft, nicht nur das
+/// Aufsammeln** — der Nachweis für die zweite Schranke (spec-reviewer
+/// Runde 2: der Test oben deckt nur die erste ab, weil die Filterung beim
+/// Aufsammeln den Löschweg nie erreicht).
+///
+/// Die Liste in der Datenbank ist selbst eine Datenquelle. Zwei Wege führen
+/// zu einer Liste, die K nennt, obwohl das Aufsammeln ihn heute aussperrt:
+/// Jemand verändert die Zeile von Hand — oder die Installation hat die
+/// Liste noch mit dem ungefixten Stand (`05b277c`) geschrieben und wird
+/// jetzt aktualisiert. Genau dieser Upgrade-Fall ist der Grund, dass die
+/// Prüfung an **beiden** Stellen steht.
+///
+/// **Gegenbeweis geführt:** Ohne die Schranke in `delete_moved_entries`
+/// wird K aus dem Test-Schlüsselbund gelöscht — `deletes()` ist dann 1 und
+/// `has(K)` falsch, beide letzten Zusicherungen scheitern. Die Schranke
+/// beim Aufsammeln hilft hier nicht: Der Zustand *moved* kehrt vor ihr
+/// zurück.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_a10_a_tampered_pending_list_never_deletes_the_root_key() {
+    let fixture = fixture().await;
+    let keyring = TestKeyring::with(&[(
+        ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF,
+        "Wurzelschlüssel-0101",
+    )]);
+
+    fixture
+        .store
+        .set_secret_migration_state(
+            STATE_MOVED,
+            &[ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF.to_string()],
+        )
+        .await
+        .unwrap();
+
+    let prompt = ScriptedPrompt::new(Vec::new());
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+        .await
+        .expect("eine fremde Referenz in der Liste darf den Start nicht aufhalten");
+
+    assert_eq!(
+        keyring.deletes(),
+        0,
+        "an K wird kein delete versucht, auch nicht aus der festgehaltenen Liste"
+    );
+    assert!(
+        keyring.has(ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF),
+        "K muss im Schlüsselbund liegen bleiben — sonst ist die Datenbank verloren"
+    );
+    let (state, pending) = fixture.store.secret_migration_state().await.unwrap();
+    assert_eq!(
+        (state.as_str(), pending.as_slice()),
+        (STATE_DONE, &[] as &[String]),
+        "die übersprungene Referenz darf die Liste nicht dauerhaft offen halten"
+    );
+}
+
 /// A10: Eine frische Installation hat nichts umzuziehen und fasst den
 /// Schlüsselbund **nicht** an — kein `get`, kein `delete`.
 #[tokio::test(flavor = "multi_thread")]

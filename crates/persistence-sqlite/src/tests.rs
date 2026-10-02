@@ -527,6 +527,13 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
     // auf diesem älteren Schema-Stand abbilden sollen. `credential_ref`
     // ist bewusst nur eine Referenz-Zeichenkette, kein Klartext-Secret
     // (das echte Secret läge im Keychain, nicht in dieser DB).
+    //
+    // Die Referenz folgt dem produktiven Schema `ai-provider:{id}`
+    // (spec-reviewer Runde 2 zu Spec 0101: hier stand vorher
+    // `app:ai_provider:…:api_key`, ein Format, das es produktiv nie gab —
+    // und das die Positivliste des Secret-Umzugs, Spec 0101 A10,
+    // absichtlich aussperrt. Ein späterer Leser hätte daraus eine
+    // Migrationspflicht für ein erfundenes Altformat abgeleitet).
     let rule_id = "test-rule-deny-rm-rf";
     sqlx::query(
         "INSERT INTO filter_rules \
@@ -542,7 +549,7 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
     .unwrap();
 
     let provider_id = "test-provider-anthropic";
-    let provider_credential_ref = "app:ai_provider:test-provider-anthropic:api_key";
+    let provider_credential_ref = "ai-provider:test-provider-anthropic";
     sqlx::query(
         "INSERT INTO ai_provider_configs \
          (id, provider_type, display_name, base_url, model, \
