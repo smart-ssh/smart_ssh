@@ -72,11 +72,18 @@ impl SqliteCredentialStore {
     /// Die Brücke aus dem Modul-Kommentar — der **einzige** Ort dieser
     /// Crate, an dem synchroner Code auf asynchronen trifft.
     fn block_on<F: std::future::Future>(&self, fut: F) -> CredentialResult<F::Output> {
-        if Handle::try_current().is_err() {
+        let Ok(entered) = Handle::try_current() else {
             // Kein Runtime-Kontext (Startablauf): direkt blockieren.
             return Ok(self.handle.block_on(fut));
-        }
-        if self.handle.runtime_flavor() != RuntimeFlavor::MultiThread {
+        };
+        // **Die betretene Runtime entscheidet, nicht die eigene**
+        // (spec-reviewer Runde 1): `block_in_place` panickt an der Runtime,
+        // in deren Kontext der Aufruf steht. Hier `self.handle` zu prüfen
+        // hieße, Tauris Variante zu messen und dann an einer anderen zu
+        // panicken — genau die Zusicherung „sichtbar scheitern, nicht
+        // abstürzen" wäre damit nicht erfüllt, und jeder `#[tokio::test]`
+        // in der Standard-Variante stürzte ab statt zu scheitern.
+        if entered.runtime_flavor() != RuntimeFlavor::MultiThread {
             // Kann heute nicht eintreten (Test in `app-shell`). Falls doch:
             // ein sichtbarer Fehler statt eines Panics vor dem ersten
             // Fenster. Ohne Nutzlast aus der Bibliothek, ohne Referenz.
@@ -98,8 +105,17 @@ impl SqliteCredentialStore {
     /// wirklich gesagt hat, geht nur ins Log (A9.1 lässt den Code den Text
     /// ersetzen, dasselbe Muster wie Spec 0098 A5).
     fn backend_error(context: &'static str, err: &sqlx::Error) -> CredentialError {
+        // **Nicht `%err`** (spec-reviewer Runde 1): Ein `sqlx`-Fehlertext
+        // kann die Anweisung zitieren, die ihn ausgelöst hat — und dass das
+        // auf dem geschlüsselten Weg den `PRAGMA key`-Wert bedeuten kann,
+        // ist in `crate::encryption::redact_if_key_bearing` gemessen. Hier
+        // steht kein Schlüssel zur Verfügung, mit dem sich redigieren
+        // ließe; also geht nur die Fehlerart ins Log, nie ihr Text. Der
+        // Verlust ist klein (`context` sagt, welche der drei Anweisungen es
+        // war), die Zusicherung aus A2 hängt dafür nicht an einer
+        // Pool-Einstellung zwei Module entfernt.
         tracing::warn!(
-            error = %err,
+            from_database = err.as_database_error().is_some(),
             context,
             "secret store query failed (Spec 0101, A9)"
         );

@@ -427,6 +427,57 @@ async fn test_t11_the_keychain_mode_offers_no_skip_option() {
     );
 }
 
+/// **Der Umzug darf K nie anfassen** (spec-reviewer Runde 1, Spec 0101
+/// Angriffsrichtung „Abgebrochener Moduswechsel löscht die einzige Kopie
+/// von K").
+///
+/// Die Referenzen kommen wörtlich aus der Datenbank. Steht im
+/// `auth_method`-JSON eines Servers — das bis zur Umwandlung im Klartext
+/// auf der Platte liegt — die Referenz des Wurzelschlüssels, dann würde ein
+/// Umzug ohne Schema-Prüfung K in die Secrets-Tabelle kopieren und danach
+/// aus dem Schlüsselbund löschen. Beim nächsten Start wäre die Datei
+/// verschlüsselt und der Schlüssel weg.
+///
+/// **Gegenbeweis geführt:** Ohne `is_migratable` ist K nach diesem Test aus
+/// dem Test-Schlüsselbund verschwunden und die letzte Zusicherung scheitert.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_a10_a_reference_pointing_at_the_root_key_is_never_migrated() {
+    let fixture = fixture().await;
+    let id = fixture.servers[0];
+    let mut server = fixture.store.get_server(&id).await.unwrap();
+    server.auth = AuthMethod::Password {
+        credential_ref: CredentialRef::new(
+            ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF.to_string(),
+        ),
+    };
+    fixture.store.update_server(&server).await.unwrap();
+
+    let keyring = TestKeyring::with(&[(
+        ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF,
+        "Wurzelschlüssel-0101",
+    )]);
+    let prompt = ScriptedPrompt::new(Vec::new());
+
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+        .await
+        .expect("eine fremde Referenz darf den Start nicht aufhalten");
+
+    assert!(
+        matches!(
+            fixture.database.get(&CredentialRef::new(
+                ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF.to_string()
+            )),
+            Err(CredentialError::NotFound(_))
+        ),
+        "K darf nicht in die Secrets-Tabelle kopiert werden"
+    );
+    assert_eq!(keyring.deletes(), 0, "an K wird kein delete versucht");
+    assert!(
+        keyring.has(ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF),
+        "K muss im Schlüsselbund liegen bleiben — sonst ist die Datenbank verloren"
+    );
+}
+
 /// A10: Eine frische Installation hat nichts umzuziehen und fasst den
 /// Schlüsselbund **nicht** an — kein `get`, kein `delete`.
 #[tokio::test(flavor = "multi_thread")]
