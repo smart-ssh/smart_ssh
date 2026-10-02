@@ -95,17 +95,50 @@ async fn refs_in_database(store: &SqliteProfileStore) -> Result<Vec<CredentialRe
     let mut refs: Vec<CredentialRef> = Vec::new();
     for server in &servers {
         for reference in refs_of_server(server.id, &server.auth) {
-            if !refs.contains(&reference) {
+            if is_migratable(&reference) && !refs.contains(&reference) {
                 refs.push(reference);
             }
         }
     }
     for provider in &providers {
-        if !refs.contains(&provider.credential_ref) {
+        if is_migratable(&provider.credential_ref) && !refs.contains(&provider.credential_ref) {
             refs.push(provider.credential_ref.clone());
         }
     }
     Ok(refs)
+}
+
+/// **Die Liste wird gegen das erwartete Schema geprüft, bevor irgendetwas
+/// gelesen oder gelöscht wird** (spec-reviewer, Runde 1 — Angriffsrichtung
+/// „Abgebrochener Moduswechsel löscht die einzige Kopie von K").
+///
+/// Die Referenzen kommen **aus der Datenbank**, wörtlich wie sie dort
+/// stehen (`ai_provider_configs.credential_ref`, das `auth_method`-JSON der
+/// Server) — sie werden nicht aus der Server-ID neu berechnet. Bis A6 die
+/// Datei umwandelt, liegt dieses JSON im Klartext auf der Platte. Stünde
+/// dort `app:chat_content_encryption_key`, zöge der Umzug **K** in die
+/// Secrets-Tabelle, vergliche erfolgreich und löschte ihn danach aus dem
+/// Schlüsselbund. Beim nächsten Start wäre die Datei verschlüsselt und der
+/// Schlüssel weg: D2, und die ganze Datenbank verloren.
+///
+/// Deshalb: Nur die beiden Präfixe aus §1 werden angefasst, und K
+/// ausdrücklich nie — die Prüfung ist eine Positivliste, keine Ausnahme von
+/// einer, damit ein künftiger dritter `app:`-Eintrag ebenfalls nicht
+/// hineinfällt. Eine Abweichung wird **übersprungen und geloggt**, nicht
+/// zum Startfehler: Sie heißt nicht, dass etwas kaputt ist, sondern dass
+/// etwas nicht hierher gehört.
+fn is_migratable(reference: &CredentialRef) -> bool {
+    let raw = reference.as_str();
+    let ok = (raw.starts_with("server:") || raw.starts_with("ai-provider:"))
+        && raw != ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF;
+    if !ok {
+        tracing::warn!(
+            reference = raw,
+            "a credential reference outside the expected schema is not migrated and never \
+             deleted (Spec 0101, A10)"
+        );
+    }
+    ok
 }
 
 /// Der Startschritt. `keyring` ist der Schlüsselbund des Betriebssystems,
@@ -246,6 +279,15 @@ async fn delete_moved_entries(
     let mut still_pending: Vec<String> = Vec::new();
     for raw in pending {
         let reference = CredentialRef::new(raw.clone());
+        // Zweite Schranke, an der Stelle, die tatsächlich löscht
+        // (spec-reviewer Runde 1): Die Liste in der Datenbank ist selbst
+        // eine Datenquelle — eine Zeile, die jemand dort verändert, darf
+        // kein `delete` auf einen fremden Schlüsselbund-Eintrag auslösen.
+        // Dieselbe Prüfung wie beim Aufsammeln, damit sie nicht an einer
+        // einzigen Stelle hängt.
+        if !is_migratable(&reference) {
+            continue;
+        }
         match keyring.delete(&reference) {
             // `delete` ist idempotent (A9): „war schon weg" ist Erfolg.
             Ok(()) => {}
