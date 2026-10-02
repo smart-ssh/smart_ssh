@@ -189,6 +189,18 @@ pub fn db_connect_failure_text(
              Smart SSH again. Nothing has been changed.\n\n\
              Data path: {db_path}"
         ),
+        // Spec 0101, A5: nichts wurde verändert — und deshalb ausdrücklich
+        // **kein** „Backup einspielen".
+        (Language::En, ConnectFailureKind::StartOverFailed) => format!(
+            "Smart SSH could not start over: the existing files could not be renamed. \
+             Nothing has been changed — the existing database is still in place, \
+             untouched.\n\n\
+             Next step: check whether the data directory is writable and whether a file \
+             with the proposed name already exists there; move it out of the way, then \
+             start Smart SSH again. Details on the exact cause are in the log under \
+             {log_dir}.\n\n\
+             Data path: {db_path}"
+        ),
         (Language::De, kind) => db_connect_failure_message_de(kind, &db_path, &log_dir),
     };
     DialogText {
@@ -274,6 +286,22 @@ fn db_connect_failure_message_de(
              Zieldatei unverschlüsselt liegen lassen würde.\n\n\
              Nächster Schritt: Ersetze die Verknüpfung durch die eigentliche \
              Datenbankdatei und starte Smart SSH erneut. Es wurde nichts verändert.\n\n\
+             Datenpfad: {db_path}"
+        ),
+        // Spec 0101, A5: „Neu anfangen" ist am Umbenennen gescheitert.
+        // Ausdrücklich **kein** „Backup einspielen" — es ist nichts
+        // verloren, was wiederherzustellen wäre, und die Kollision im
+        // Datenverzeichnis bliebe auch danach bestehen. Stattdessen der
+        // einzige Schritt, der hier wirklich hilft: den belegten Namen
+        // freimachen.
+        ConnectFailureKind::StartOverFailed => format!(
+            "Smart SSH konnte nicht neu anfangen: Die vorhandenen Dateien ließen sich \
+             nicht umbenennen. Es wurde nichts verändert — die bisherige Datenbank liegt \
+             unberührt an ihrem Platz.\n\n\
+             Nächster Schritt: Prüfe, ob das Datenverzeichnis beschreibbar ist und ob dort \
+             bereits eine Datei mit dem vorgeschlagenen Namen liegt; räume sie weg und \
+             starte Smart SSH erneut. Details zur genauen Ursache stehen im Log unter \
+             {log_dir}.\n\n\
              Datenpfad: {db_path}"
         ),
     }

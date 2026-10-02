@@ -142,6 +142,18 @@ pub enum ConnectFailureKind {
     /// Spec 0101, A6 (letzter Satz): `smart-ssh.db` ist eine symbolische
     /// Verknüpfung — es wird nicht umgewandelt (T20).
     SymlinkedDatabase,
+    /// Spec 0101, A5: „Neu anfangen" ist am Umbenennen gescheitert — in der
+    /// Regel, weil ein Zielname schon belegt war (`AlreadyExists`), sonst
+    /// wegen Rechten oder einer Dateisperre. **Es wurde nichts verändert**:
+    /// der Satz ist alles-oder-nichts (s. `StartOverPlan::execute`).
+    ///
+    /// **Eigener Fall und nicht [`Self::Other`]**, aus demselben Grund wie
+    /// [`Self::KeyMismatch`]: Der `Other`-Text rät, ein Backup einzuspielen.
+    /// Hier ist das der falsche Rat gleich zweifach — die vorhandene
+    /// Datenbank liegt unberührt an ihrem Platz, es ist also nichts
+    /// wiederherzustellen, und ein eingespieltes Backup würde die
+    /// Namenskollision im Datenverzeichnis nicht auflösen.
+    StartOverFailed,
 }
 
 impl PersistenceError {
