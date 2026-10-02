@@ -1,0 +1,457 @@
+//! Spec 0101, T11 (A10/A11) — ohne die Variante *übersprungen*, die erst
+//! mit A11.1 in Etappe 3 entsteht.
+//!
+//! **Multi-Thread-Runtime** wie in `crate::database_startup::tests`: Der
+//! Datenbank-`CredentialStore` blockiert seinen Arbeitsthread
+//! (`block_in_place`, s. `persistence_sqlite::credential_store`).
+
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+
+use secrecy::{ExposeSecret, SecretString};
+
+use persistence_sqlite::{SqliteCredentialStore, SqliteProfileStore};
+use ssh_manager_core::crypto::DatabaseKey;
+use ssh_manager_core::profiles::{
+    AuthMethod, CredentialError, CredentialRef, CredentialResult, CredentialStore,
+    PostIngestPolicy, ProfileStore, Server,
+};
+use ssh_manager_core::shared::ServerId;
+
+use super::*;
+
+const TEST_ROOT_KEY: [u8; 32] = [9; 32];
+const MARKER: &str = "Secret-0101";
+
+/// Test-Schlüsselbund mit abschaltbaren Fehlern — er **zählt** `delete`,
+/// weil mehrere Zusicherungen von T11 lauten „kein einziges `delete`".
+#[derive(Default)]
+struct TestKeyring {
+    entries: Mutex<HashMap<String, String>>,
+    /// Referenz, deren `get` scheitert.
+    failing_get: Mutex<Option<String>>,
+    /// Referenz, deren `delete` scheitert.
+    failing_delete: Mutex<Option<String>>,
+    deletes: AtomicUsize,
+}
+
+impl TestKeyring {
+    fn with(entries: &[(&str, &str)]) -> Self {
+        let store = Self::default();
+        for (reference, value) in entries {
+            store
+                .entries
+                .lock()
+                .unwrap()
+                .insert((*reference).to_string(), (*value).to_string());
+        }
+        store
+    }
+
+    fn deletes(&self) -> usize {
+        self.deletes.load(Ordering::SeqCst)
+    }
+
+    fn has(&self, reference: &str) -> bool {
+        self.entries.lock().unwrap().contains_key(reference)
+    }
+
+    fn count(&self) -> usize {
+        self.entries.lock().unwrap().len()
+    }
+}
+
+impl CredentialStore for TestKeyring {
+    fn get(&self, r: &CredentialRef) -> CredentialResult<SecretString> {
+        if self.failing_get.lock().unwrap().as_deref() == Some(r.as_str()) {
+            return Err(CredentialError::Backend("LIBTEXT Geheim-0101".into()));
+        }
+        self.entries
+            .lock()
+            .unwrap()
+            .get(r.as_str())
+            .map(|v| SecretString::from(v.clone()))
+            .ok_or_else(|| CredentialError::NotFound(r.clone()))
+    }
+
+    fn set(&self, r: &CredentialRef, value: SecretString) -> CredentialResult<()> {
+        self.entries
+            .lock()
+            .unwrap()
+            .insert(r.as_str().to_string(), value.expose_secret().to_string());
+        Ok(())
+    }
+
+    fn delete(&self, r: &CredentialRef) -> CredentialResult<()> {
+        self.deletes.fetch_add(1, Ordering::SeqCst);
+        if self.failing_delete.lock().unwrap().as_deref() == Some(r.as_str()) {
+            return Err(CredentialError::Backend("LIBTEXT Geheim-0101".into()));
+        }
+        self.entries.lock().unwrap().remove(r.as_str());
+        Ok(())
+    }
+}
+
+/// Dialog-Doppel: zeichnet auf, was gefragt wurde, und antwortet nach Skript.
+struct ScriptedPrompt {
+    answers: Mutex<Vec<StartupChoice>>,
+    asked: Mutex<Vec<StartupDialog>>,
+}
+
+impl ScriptedPrompt {
+    fn new(answers: Vec<StartupChoice>) -> Self {
+        Self {
+            answers: Mutex::new(answers),
+            asked: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl StartupPrompt for ScriptedPrompt {
+    fn ask(&self, dialog: StartupDialog) -> StartupChoice {
+        self.asked.lock().unwrap().push(dialog);
+        let mut answers = self.answers.lock().unwrap();
+        if answers.is_empty() {
+            StartupChoice::Quit
+        } else {
+            answers.remove(0)
+        }
+    }
+    fn confirm_start_over(&self, _renamed_to: Option<&str>) -> bool {
+        panic!("beim Secret-Umzug darf keine „Neu anfangen“-Bestätigung erscheinen");
+    }
+    fn confirm_generate_new_key(&self) -> bool {
+        panic!("beim Secret-Umzug darf keine Schlüssel-Bestätigung erscheinen");
+    }
+    fn notify_started_over(&self, _renamed_to: &str) {
+        panic!("beim Secret-Umzug darf nichts umbenannt werden");
+    }
+}
+
+struct Fixture {
+    _dir: tempfile::TempDir,
+    store: SqliteProfileStore,
+    database: SqliteCredentialStore,
+    servers: Vec<ServerId>,
+}
+
+/// Zwei Server (alle Slots belegt bis auf einen) und ein Provider — der
+/// Aufbau aus T11.
+async fn fixture() -> Fixture {
+    let dir = tempfile::tempdir().unwrap();
+    let store = SqliteProfileStore::connect_encrypted(
+        &dir.path().join("smart-ssh.db"),
+        &DatabaseKey::from_root_key(&TEST_ROOT_KEY),
+    )
+    .await
+    .unwrap();
+    let database = store.credential_store(tokio::runtime::Handle::current());
+
+    let mut servers = Vec::new();
+    for index in 0..2 {
+        let id = ServerId::new();
+        servers.push(id);
+        let now = chrono::Utc::now();
+        store
+            .create_server(&Server {
+                id,
+                name: format!("T11-{index}"),
+                host: "host-0101.example".to_string(),
+                port: 22,
+                username: "user-0101".to_string(),
+                group_id: None,
+                tags: Vec::new(),
+                auth: AuthMethod::PrivateKey {
+                    credential_ref: CredentialRef::new(format!("server:{}:private_key", id.0)),
+                    passphrase_ref: Some(CredentialRef::new(format!("server:{}:passphrase", id.0))),
+                },
+                notes: String::new(),
+                jump_host: None,
+                post_ingest_policy: PostIngestPolicy::default(),
+                ai_injection_check_enabled: false,
+                sftp_server_path: None,
+                created_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+    }
+
+    Fixture {
+        _dir: dir,
+        store,
+        database,
+        servers,
+    }
+}
+
+fn keyring_for(fixture: &Fixture, leave_out: Option<&str>) -> TestKeyring {
+    let mut entries: Vec<(String, String)> = Vec::new();
+    for id in &fixture.servers {
+        for slot in ["private_key", "passphrase", "sudo_password"] {
+            entries.push((
+                format!("server:{}:{slot}", id.0),
+                format!("{MARKER}-{slot}"),
+            ));
+        }
+    }
+    let keyring = TestKeyring::default();
+    for (reference, value) in entries {
+        if Some(reference.as_str()) == leave_out {
+            continue;
+        }
+        keyring
+            .set(&CredentialRef::new(reference), SecretString::from(value))
+            .unwrap();
+    }
+    keyring
+}
+
+/// T11, Hauptfall: alles umgezogen, der fehlende Slot bleibt `NotFound`,
+/// alle Einträge gelöscht, Zustand *erledigt*.
+///
+/// **Gegenbeweis:** Ohne den Aufruf von `migrate_secrets_into_database`
+/// bleibt der Datenbank-Store leer — der Test prüft genau das, was der
+/// Schritt tut, und scheitert ohne ihn in der ersten Zusicherung.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t11_every_secret_moves_and_every_entry_is_deleted() {
+    let fixture = fixture().await;
+    let missing = format!("server:{}:sudo_password", fixture.servers[1].0);
+    let keyring = keyring_for(&fixture, Some(&missing));
+    let before = keyring.count();
+    assert_eq!(before, 5, "zwei Server, ein Slot fehlt");
+    let prompt = ScriptedPrompt::new(Vec::new());
+
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+        .await
+        .expect("der Umzug muss gelingen");
+
+    assert!(
+        prompt.asked.lock().unwrap().is_empty(),
+        "ohne Fehler darf kein Dialog erscheinen"
+    );
+    // Jeder vorhandene Wert steht jetzt in der Datenbank.
+    for id in &fixture.servers {
+        for slot in ["private_key", "passphrase", "sudo_password"] {
+            let reference = CredentialRef::new(format!("server:{}:{slot}", id.0));
+            if reference.as_str() == missing {
+                assert!(
+                    matches!(
+                        fixture.database.get(&reference),
+                        Err(CredentialError::NotFound(_))
+                    ),
+                    "ein fehlender Slot bleibt NotFound, er wird nicht erfunden"
+                );
+                continue;
+            }
+            assert_eq!(
+                fixture.database.get(&reference).unwrap().expose_secret(),
+                format!("{MARKER}-{slot}"),
+                "{reference:?} muss umgezogen sein"
+            );
+        }
+    }
+    // Und im Schlüsselbund liegt nichts mehr (E7).
+    assert_eq!(keyring.count(), 0, "alle Einträge müssen gelöscht sein");
+    let (state, pending) = fixture.store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_DONE);
+    assert!(pending.is_empty());
+
+    // Ein zweiter Start fasst den Schlüsselbund nicht mehr an.
+    let deletes_after_first = keyring.deletes();
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+        .await
+        .unwrap();
+    assert_eq!(
+        keyring.deletes(),
+        deletes_after_first,
+        "im Zustand *erledigt* darf kein weiteres delete laufen"
+    );
+}
+
+/// T11, Variante: ein `get` scheitert → **nichts** gelöscht, Zustand bleibt
+/// *offen*, und es erscheint D1 **ohne** Einrichten (A11).
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t11_a_failing_read_deletes_nothing_and_keeps_the_state_open() {
+    let fixture = fixture().await;
+    let keyring = keyring_for(&fixture, None);
+    let failing = format!("server:{}:private_key", fixture.servers[0].0);
+    *keyring.failing_get.lock().unwrap() = Some(failing.clone());
+    let before = keyring.count();
+    let prompt = ScriptedPrompt::new(vec![StartupChoice::Quit]);
+
+    let err = migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+        .await
+        .expect_err("ein Lesefehler darf den Start nicht stillschweigend fortsetzen");
+    assert!(matches!(err, StartupAbort::UserQuit));
+
+    assert_eq!(
+        prompt.asked.lock().unwrap().clone(),
+        vec![StartupDialog::D1 {
+            offers_password_setup: false
+        }],
+        "A11: D1 ohne „Master-Passwort einrichten“"
+    );
+    assert_eq!(keyring.deletes(), 0, "es darf nichts gelöscht werden");
+    assert_eq!(keyring.count(), before);
+    let (state, pending) = fixture.store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_OPEN, "der Zustand bleibt *offen*");
+    assert!(pending.is_empty());
+
+    // „Erneut versuchen“ mit danach antwortendem Schlüsselbund startet.
+    *keyring.failing_get.lock().unwrap() = None;
+    let prompt = ScriptedPrompt::new(vec![StartupChoice::Retry]);
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+        .await
+        .expect("nach „Erneut versuchen“ muss der Umzug gelingen");
+    assert_eq!(keyring.count(), 0);
+}
+
+/// T11, Variante: `delete` scheitert → die App **startet**, und der nächste
+/// Start löscht erneut (A11, zweite Hälfte).
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t11_a_failing_delete_still_starts_and_is_retried() {
+    let fixture = fixture().await;
+    let keyring = keyring_for(&fixture, None);
+    let stubborn = format!("server:{}:passphrase", fixture.servers[0].0);
+    *keyring.failing_delete.lock().unwrap() = Some(stubborn.clone());
+    let prompt = ScriptedPrompt::new(Vec::new());
+
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+        .await
+        .expect("ein Löschfehler darf den Start nicht aufhalten");
+
+    let (state, pending) = fixture.store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_MOVED, "noch nicht erledigt");
+    assert_eq!(pending, vec![stubborn.clone()], "nur der eine bleibt übrig");
+    assert!(keyring.has(&stubborn));
+    assert_eq!(keyring.count(), 1, "alles andere ist weg");
+
+    // Nächster Start: nur noch dieser eine Versuch, und diesmal gelingt er.
+    *keyring.failing_delete.lock().unwrap() = None;
+    let deletes_before = keyring.deletes();
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+        .await
+        .unwrap();
+    assert_eq!(
+        keyring.deletes() - deletes_before,
+        1,
+        "der nächste Start löscht genau die Liste, nicht alles erneut"
+    );
+    let (state, pending) = fixture.store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_DONE);
+    assert!(pending.is_empty());
+    assert_eq!(keyring.count(), 0);
+}
+
+/// T11, Variante: Ein Server wird gelöscht, **während** das Löschen
+/// aussteht — seine Einträge werden trotzdem gelöscht.
+///
+/// Das ist die Zusicherung, für die die Liste überhaupt festgehalten wird
+/// (A10). **Gegenbeweis:** Würde nach dem Datenbankstand gelöscht, blieben
+/// die drei Einträge des gelöschten Servers für immer im Schlüsselbund —
+/// die letzte Zusicherung dieses Tests scheitert dann.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t11_entries_of_a_server_deleted_while_pending_are_still_removed() {
+    let fixture = fixture().await;
+    let keyring = keyring_for(&fixture, None);
+    let doomed = fixture.servers[0];
+    // Jedes `delete` scheitert einmal, damit der Zustand auf *umgezogen*
+    // stehen bleibt und die Liste erhalten ist.
+    let stubborn = format!("server:{}:private_key", doomed.0);
+    *keyring.failing_delete.lock().unwrap() = Some(stubborn.clone());
+    let prompt = ScriptedPrompt::new(Vec::new());
+
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+        .await
+        .unwrap();
+    let (state, pending) = fixture.store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_MOVED);
+    assert_eq!(pending, vec![stubborn.clone()]);
+
+    // Jetzt verschwindet der Server aus der Datenbank.
+    fixture.store.delete_server(&doomed).await.unwrap();
+    assert!(fixture
+        .store
+        .list_servers()
+        .await
+        .unwrap()
+        .iter()
+        .all(|s| s.id != doomed));
+
+    *keyring.failing_delete.lock().unwrap() = None;
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+        .await
+        .unwrap();
+
+    assert!(
+        !keyring.has(&stubborn),
+        "der Eintrag des gelöschten Servers muss trotzdem verschwinden — \
+         gelöscht wird nach der festgehaltenen Liste, nicht nach dem \
+         Datenbankstand"
+    );
+    assert_eq!(keyring.count(), 0);
+    let (state, _) = fixture.store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_DONE);
+}
+
+/// T11, Variante „Schlüsselbund-Modus mit scheiterndem `get`": **keine**
+/// Option „Ohne Übernahme fortfahren". Die gehört zu A11.1 und damit zum
+/// Passwort-Modus (Etappe 3).
+///
+/// Heute gibt es die Option in `StartupChoice` noch gar nicht; der Test
+/// hält deshalb fest, was stattdessen gilt — der Dialog ist genau D1 ohne
+/// Einrichten, und der Zustand *übersprungen* entsteht auf keinem Weg.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t11_the_keychain_mode_offers_no_skip_option() {
+    let fixture = fixture().await;
+    let keyring = keyring_for(&fixture, None);
+    *keyring.failing_get.lock().unwrap() =
+        Some(format!("server:{}:private_key", fixture.servers[0].0));
+    let prompt = ScriptedPrompt::new(vec![StartupChoice::Quit]);
+
+    let _ =
+        migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt).await;
+
+    assert_eq!(
+        prompt.asked.lock().unwrap().clone(),
+        vec![StartupDialog::D1 {
+            offers_password_setup: false
+        }]
+    );
+    let (state, _) = fixture.store.secret_migration_state().await.unwrap();
+    assert_ne!(
+        state, STATE_SKIPPED,
+        "der Zustand *übersprungen* darf im Schlüsselbund-Modus nicht entstehen"
+    );
+}
+
+/// A10: Eine frische Installation hat nichts umzuziehen und fasst den
+/// Schlüsselbund **nicht** an — kein `get`, kein `delete`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_a10_a_fresh_installation_touches_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = SqliteProfileStore::connect_encrypted(
+        &dir.path().join("smart-ssh.db"),
+        &DatabaseKey::from_root_key(&TEST_ROOT_KEY),
+    )
+    .await
+    .unwrap();
+    let database = store.credential_store(tokio::runtime::Handle::current());
+    let keyring = TestKeyring::with(&[("server:fremd:password", "nicht meins")]);
+    let prompt = ScriptedPrompt::new(Vec::new());
+
+    migrate_secrets_into_database(&store, &keyring, &database, &prompt)
+        .await
+        .unwrap();
+
+    assert_eq!(keyring.deletes(), 0);
+    assert!(
+        keyring.has("server:fremd:password"),
+        "ein Eintrag, auf den keine Referenz zeigt, wird nicht angefasst"
+    );
+    let (state, _) = store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_DONE);
+    store.close().await;
+}
