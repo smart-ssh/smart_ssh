@@ -17,7 +17,8 @@ mod tests;
 
 pub use credentials::{
     trim_credential_value, CredentialError, CredentialResult, CredentialStore,
-    INVISIBLE_CREDENTIAL_EDGE_CHARS, KEYCHAIN_ACCESS_FAILED, SECRET_STORE_FAILED,
+    INVISIBLE_CREDENTIAL_EDGE_CHARS, KEYCHAIN_ACCESS_FAILED, MCP_SERVER_TOKEN_REF,
+    SECRET_STORE_FAILED,
 };
 pub use notes::{effective_notes, effective_notes_sections, record_revision};
 pub use store::{ProfileError, ProfileResult, ProfileStore};
