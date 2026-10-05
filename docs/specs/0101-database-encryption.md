@@ -535,6 +535,11 @@ Keine.
     Ist die Verpackungsdatei *nicht erreichbar*, zeigt die Maske „Erneut
     versuchen“ mit einem Hinweis auf die Datei und kein „Neu anfangen“.
 
+12. **Bestätigung aus A13/E10 im Backend (K3, entschieden; Q-BL-0314-02):**
+    Wie Länge und Wiederholung prüft auch das Backend, dass die Warnung
+    ausdrücklich bestätigt wurde. Jeder Weg, der ein Master-Passwort
+    einrichtet, lehnt ohne diese Bestätigung ab und verändert nichts.
+
 ## Umsetzung
 
 **Teil 0** — §2. Lauf 1 endet nach Commit 2. Frage 2 vor Commit 6, Frage 3
