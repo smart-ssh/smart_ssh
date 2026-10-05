@@ -41,6 +41,14 @@ pub const WRONG_MASTER_PASSWORD_CODE: &str = "WRONG_MASTER_PASSWORD";
 pub const MASTER_PASSWORD_FILE_FAILED_CODE: &str = "MASTER_PASSWORD_FILE_FAILED";
 pub const MASTER_PASSWORD_REJECTED_CODE: &str = "MASTER_PASSWORD_REJECTED";
 pub const STARTUP_FAILED_CODE: &str = "STARTUP_FAILED";
+/// Klarstellung 10b: Der Wechsel auf den Schlüsselbund würde einen fremden
+/// Schlüssel ersetzen und wartet auf eine ausdrückliche Bestätigung.
+///
+/// **Ein eigener Code, kein Dateifehler:** Die Oberfläche muss diesen Fall
+/// an der Antwort erkennen können, denn nur er hat einen zweiten,
+/// bestätigenden Aufruf als Fortsetzung — alles andere ist „erneut
+/// versuchen". Der Text dazu entsteht mit dem Dialog in Commit 11.
+pub const KEYCHAIN_HOLDS_ANOTHER_KEY_CODE: &str = "KEYCHAIN_HOLDS_ANOTHER_KEY";
 
 /// Was zum Nachbauen des Zustands nach der Entsperrung gebraucht wird.
 ///
@@ -511,9 +519,17 @@ pub fn change_master_password(
 }
 
 /// A15: zurück auf den Schlüsselbund.
+///
+/// `replace_another_key` ist die Bestätigung aus Klarstellung 10b. Die
+/// Oberfläche ruft das Kommando zuerst **ohne** sie; kommt
+/// `KEYCHAIN_HOLDS_ANOTHER_KEY` zurück, stellt sie die Frage und ruft
+/// erneut. Der Dialog selbst entsteht in Commit 11 — bis dahin ist der
+/// Rückweg der Fehlercode, und das ist der sichere Ausgang: ohne Antwort
+/// bleibt alles, wie es war.
 #[tauri::command]
 pub fn switch_to_os_keychain(
     current: String,
+    replace_another_key: bool,
     state: tauri::State<'_, AppState>,
 ) -> CommandResult<&'static str> {
     let _ = &state;
@@ -521,6 +537,11 @@ pub fn switch_to_os_keychain(
         &persistence_sqlite::default_db_path(),
         &SecretString::from(current),
         &credentials_keyring::KeyringCredentialStore::new(),
+        if replace_another_key {
+            master_password::KeychainOverwrite::ConfirmedByTheUser
+        } else {
+            master_password::KeychainOverwrite::OnlyAfterConfirmation
+        },
     )
     .map_err(to_command_error)?;
     Ok("keychain")
@@ -543,6 +564,7 @@ fn to_command_error(err: master_password::MasterPasswordError) -> CommandError {
     let code = match err {
         E::WrongPasswordOrDamagedFile => WRONG_MASTER_PASSWORD_CODE,
         E::PasswordRejected(_) => MASTER_PASSWORD_REJECTED_CODE,
+        E::KeychainHoldsAnotherKey => KEYCHAIN_HOLDS_ANOTHER_KEY_CODE,
         E::UnusableWrappingFile
         | E::FileFailed { .. }
         // Klarstellung 10a: **derselbe** Code wie die übrigen Dateifehler.

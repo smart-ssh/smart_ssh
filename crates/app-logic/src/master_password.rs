@@ -69,6 +69,14 @@ pub enum MasterPasswordError {
     /// Der Schlüsselbund hat nicht geantwortet (A15: dann wird die
     /// Verpackungsdatei **nicht** entfernt).
     KeychainFailed { detail: String },
+    /// A15/Klarstellung 10b: Im Schlüsselbund liegt schon ein Schlüssel,
+    /// und es ist **nicht** der, der gerade gilt.
+    ///
+    /// Der Wechsel bricht hier ab, ohne irgendetwas anzufassen. Erst eine
+    /// ausdrückliche Bestätigung
+    /// ([`KeychainOverwrite::ConfirmedByTheUser`]) ersetzt den fremden
+    /// Eintrag.
+    KeychainHoldsAnotherKey,
     /// Es gibt keine Verpackungsdatei — der Vorgang passt nicht zum Modus.
     NotInPasswordMode,
     /// Es gibt schon eine Verpackungsdatei.
@@ -94,6 +102,14 @@ impl std::fmt::Display for MasterPasswordError {
             Self::KeychainFailed { .. } => {
                 write!(f, "der Schlüsselbund hat nicht geantwortet")
             }
+            // Der Wortlaut aus Klarstellung 10b. Die Frage selbst stellt
+            // die Oberfläche (Commit 11); bis dahin ist dies der Text zum
+            // Code.
+            Self::KeychainHoldsAnotherKey => write!(
+                f,
+                "im Schlüsselbund liegt ein anderer Schlüssel. Backups, die mit diesem \
+                 Schlüssel verschlüsselt sind, werden danach unlesbar. Es ist nichts verändert"
+            ),
             Self::NotInPasswordMode => write!(f, "es ist kein Master-Passwort eingerichtet"),
             Self::AlreadyInPasswordMode => {
                 write!(f, "es ist schon ein Master-Passwort eingerichtet")
@@ -385,18 +401,72 @@ pub fn change_master_password(
     Ok(())
 }
 
+/// Darf [`switch_to_keychain`] einen **fremden** Schlüssel im Schlüsselbund
+/// ersetzen? (A15/Klarstellung 10b)
+///
+/// Ein eigener Typ und kein `bool`: Am Aufruf soll stehen, *was* bestätigt
+/// wurde. `switch_to_keychain(…, true)` wäre an der Aufrufstelle nicht
+/// lesbar, und die Voreinstellung muss die vorsichtige sein.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeychainOverwrite {
+    /// Standard: Liegt dort ein anderer Schlüssel, bricht der Wechsel ab
+    /// und es wird nichts verändert.
+    OnlyAfterConfirmation,
+    /// Der Nutzer hat das Ersetzen ausdrücklich bestätigt, nachdem ihm die
+    /// Folge genannt wurde.
+    ConfirmedByTheUser,
+}
+
 /// A15, erste Hälfte: zurück auf den Schlüsselbund — „aktuelles Passwort, K
 /// in den Schlüsselbund schreiben, zurücklesen, vergleichen, dann
 /// Verpackungsdatei entfernen".
 ///
 /// Scheitert eine der drei ersten Stufen, bleibt die Verpackungsdatei
 /// liegen und der Modus damit unverändert.
+///
+/// **Vorher wird gelesen** (Klarstellung 10b): Es gibt genau einen Platz je
+/// Benutzer für K im Schlüsselbund. Liegt dort schon ein **anderer**
+/// Schlüssel, gehört er zu irgendetwas anderem — einer zweiten
+/// Installation, einem Backup, einem Verlauf, der sonst unlesbar wird. Ihn
+/// zu überschreiben ist unwiderruflich und braucht deshalb eine
+/// ausdrückliche Bestätigung. `tidy_up_keychain_after_unlock` schützt genau
+/// diesen fremden Eintrag beim Entsperren byteweise (A17); der Wechsel darf
+/// nicht das Gegenteil tun.
 pub fn switch_to_keychain(
     db_path: &Path,
     current: &SecretString,
     keyring: &dyn CredentialStore,
+    overwrite: KeychainOverwrite,
 ) -> Result<(), MasterPasswordError> {
     let root_key = unlock(db_path, current)?;
+
+    if overwrite == KeychainOverwrite::OnlyAfterConfirmation {
+        match crypto::read_root_key(keyring) {
+            // Gleich K: „Ist der Eintrag gleich K, entfällt die Frage."
+            crypto::RootKeyState::Present(existing) if &existing == root_key.expose() => {}
+            crypto::RootKeyState::NotFound => {}
+            // Ein anderer Schlüssel — und ein unbrauchbarer Eintrag ist
+            // auch „nicht gleich K". Beides fragt nach, statt zu raten,
+            // wessen Eintrag dort liegt.
+            crypto::RootKeyState::Present(_) | crypto::RootKeyState::Invalid => {
+                tracing::warn!(
+                    "refusing to switch back to the OS keychain: it already holds a different \
+                     root key, and replacing it would make anything encrypted with that key \
+                     unreadable; nothing was changed (Spec 0101, A15, Klarstellung 10b)"
+                );
+                return Err(MasterPasswordError::KeychainHoldsAnotherKey);
+            }
+            // Nicht erreichbar: Dann ist **unbekannt**, ob dort etwas
+            // liegt — und unbekannt ist kein Grund zu schreiben. Der
+            // Wechsel scheiterte ohnehin am Zurücklesen; jetzt scheitert er
+            // davor, also ohne `set`.
+            crypto::RootKeyState::Unreachable(reason) => {
+                return Err(MasterPasswordError::KeychainFailed {
+                    detail: format!("Schlüsselbund vor dem Wechsel nicht lesbar: {reason:?}"),
+                })
+            }
+        }
+    }
 
     store_root_key(keyring, root_key.expose())?;
     // Zurücklesen und vergleichen, bevor die einzige andere Kopie von K

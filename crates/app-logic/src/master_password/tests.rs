@@ -280,8 +280,15 @@ fn test_t13_change_password_and_switch_back() {
     assert!(unlock(&dir.db(), &good()).is_err());
     assert_eq!(unlock(&dir.db(), &new).unwrap().expose(), &ROOT_KEY);
 
-    // A15, zurück auf den Schlüsselbund.
-    switch_to_keychain(&dir.db(), &new, &keyring).unwrap();
+    // A15, zurück auf den Schlüsselbund. Der Eintrag ist hier weg (das
+    // Einrichten hat ihn gelöscht), also fragt Klarstellung 10b nicht.
+    switch_to_keychain(
+        &dir.db(),
+        &new,
+        &keyring,
+        KeychainOverwrite::OnlyAfterConfirmation,
+    )
+    .unwrap();
     assert_eq!(key_mode(&dir.db()), KeyMode::Keychain);
     assert!(
         std::fs::symlink_metadata(wrapping_file_path(&dir.db())).is_err(),
@@ -309,7 +316,12 @@ fn test_a15_switch_back_keeps_the_wrapping_when_the_keychain_cannot_be_read() {
         ..Default::default()
     };
     assert!(matches!(
-        switch_to_keychain(&dir.db(), &good(), &keyring),
+        switch_to_keychain(
+            &dir.db(),
+            &good(),
+            &keyring,
+            KeychainOverwrite::OnlyAfterConfirmation
+        ),
         Err(MasterPasswordError::KeychainFailed { .. })
     ));
 
@@ -317,6 +329,12 @@ fn test_a15_switch_back_keeps_the_wrapping_when_the_keychain_cannot_be_read() {
         key_mode(&dir.db()),
         KeyMode::Password,
         "der Modus darf nicht gewechselt sein"
+    );
+    assert_eq!(
+        *keyring.sets.lock().unwrap(),
+        0,
+        "Klarstellung 10b: Ist unbekannt, was im Schlüsselbund liegt, wird gar nicht erst \
+         geschrieben — vorher scheiterte der Wechsel erst beim Zurücklesen, also nach dem `set`"
     );
     assert_eq!(
         unlock(&dir.db(), &good()).unwrap().expose(),
@@ -506,6 +524,149 @@ fn test_no_half_written_wrapping_is_left_behind() {
     // Der Wechsel ist dabei wirklich vollzogen.
     assert_eq!(unlock(&db, &new_password).unwrap().expose(), &ROOT_KEY);
     assert!(unlock(&db, &good()).is_err());
+}
+
+/// Klarstellung 10b: Der Wechsel auf den Schlüsselbund **ersetzt keinen
+/// fremden Schlüssel**, solange es niemand bestätigt hat.
+///
+/// Der Fall, der dahintersteht: Installation A liegt im
+/// Schlüsselbund-Modus, ihr K_A liegt im einzigen Platz, den es je Benutzer
+/// gibt. Datenverzeichnis B läuft im Passwort-Modus und wechselt zurück.
+/// Ohne diese Prüfung ist K_A unwiederbringlich mit K_B überschrieben, und
+/// As Datenbank ist beim nächsten Start nicht mehr zu öffnen (D2).
+///
+/// `tidy_up_keychain_after_unlock` schützt genau denselben Eintrag beim
+/// Entsperren byteweise (A17) — die beiden Wege dürfen nicht
+/// Verschiedenes tun.
+#[test]
+fn test_switching_back_does_not_replace_a_foreign_keychain_entry_without_confirmation() {
+    let dir = Dir::new("switch-foreign");
+    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    let wrapping_before = std::fs::read(wrapping_file_path(&dir.db())).unwrap();
+
+    // Im Schlüsselbund liegt der Schlüssel einer **anderen** Installation.
+    let keyring = CountingKeychain::with_root_key(&OTHER_KEY);
+
+    assert!(
+        matches!(
+            switch_to_keychain(
+                &dir.db(),
+                &good(),
+                &keyring,
+                KeychainOverwrite::OnlyAfterConfirmation
+            ),
+            Err(MasterPasswordError::KeychainHoldsAnotherKey)
+        ),
+        "ohne Bestätigung muss der Wechsel mit einem eigenen Fehler abbrechen"
+    );
+
+    // „Ohne ausdrückliche Bestätigung bleibt alles, wie es war" — und zwar
+    // auf allen vier Seiten.
+    assert_eq!(
+        *keyring.sets.lock().unwrap(),
+        0,
+        "kein `set`: der fremde Schlüssel darf nicht einmal kurz überschrieben werden"
+    );
+    assert_eq!(
+        *keyring.deletes.lock().unwrap(),
+        0,
+        "und gelöscht wird auch nichts"
+    );
+    match ssh_manager_core::crypto::read_root_key(&keyring) {
+        ssh_manager_core::crypto::RootKeyState::Present(key) => assert_eq!(
+            key, OTHER_KEY,
+            "der fremde Schlüssel muss unverändert im Schlüsselbund liegen"
+        ),
+        other => panic!("der fremde Eintrag ist weg, war {other:?}"),
+    }
+    assert_eq!(key_mode(&dir.db()), KeyMode::Password);
+    assert_eq!(
+        std::fs::read(wrapping_file_path(&dir.db())).unwrap(),
+        wrapping_before,
+        "die Verpackung bleibt und gibt weiter K her"
+    );
+
+    // Mit Bestätigung geht derselbe Wechsel durch — sonst wäre die Prüfung
+    // eine Sperre ohne Ausweg.
+    switch_to_keychain(
+        &dir.db(),
+        &good(),
+        &keyring,
+        KeychainOverwrite::ConfirmedByTheUser,
+    )
+    .expect("mit Bestätigung muss der Wechsel gelingen");
+    assert_eq!(key_mode(&dir.db()), KeyMode::Keychain);
+    match ssh_manager_core::crypto::read_root_key(&keyring) {
+        ssh_manager_core::crypto::RootKeyState::Present(key) => assert_eq!(key, ROOT_KEY),
+        other => panic!("nach der Bestätigung muss K dort liegen, war {other:?}"),
+    }
+}
+
+/// Klarstellung 10b, die beiden Fälle **ohne** Frage: ein leerer
+/// Schlüsselbund und einer, in dem schon genau K liegt („Ist der Eintrag
+/// gleich K, entfällt die Frage").
+///
+/// Ohne diese Gegenprobe wäre „immer fragen" eine bestehende Umsetzung —
+/// und der gewöhnliche Wechsel bräuchte einen Dialog, der nichts zu
+/// entscheiden hat.
+#[test]
+fn test_switching_back_asks_nothing_when_the_keychain_is_empty_or_already_holds_k() {
+    // Leer: der Normalfall nach `set_up_master_password`.
+    let empty_dir = Dir::new("switch-empty");
+    set_up_master_password(&empty_dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    let empty = CountingKeychain::default();
+    switch_to_keychain(
+        &empty_dir.db(),
+        &good(),
+        &empty,
+        KeychainOverwrite::OnlyAfterConfirmation,
+    )
+    .expect("ein leerer Schlüsselbund hat nichts, wonach zu fragen wäre");
+    assert_eq!(key_mode(&empty_dir.db()), KeyMode::Keychain);
+
+    // Gleich K: der abgebrochene Wechsel aus A17, der beide Hälften liegen
+    // ließ. Ihn zu „überschreiben" ändert nichts, also wird nicht gefragt.
+    let same_dir = Dir::new("switch-same");
+    set_up_master_password(&same_dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    let same = CountingKeychain::with_root_key(&ROOT_KEY);
+    switch_to_keychain(
+        &same_dir.db(),
+        &good(),
+        &same,
+        KeychainOverwrite::OnlyAfterConfirmation,
+    )
+    .expect("derselbe Schlüssel ist kein fremder");
+    assert_eq!(key_mode(&same_dir.db()), KeyMode::Keychain);
+}
+
+/// Klarstellung 10b, der Fall *ungültig*: Im Schlüsselbund liegt etwas, das
+/// kein brauchbarer Schlüssel ist.
+///
+/// Auch das ist „nicht gleich K" — und wessen Eintrag dort liegt, ist von
+/// hier aus nicht zu erkennen. Gefragt wird deshalb, statt zu raten; A17
+/// behandelt denselben Zustand beim Entsperren genauso (nichts gelöscht).
+#[test]
+fn test_switching_back_asks_before_replacing_an_unusable_keychain_entry() {
+    let dir = Dir::new("switch-invalid");
+    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+
+    let keyring = CountingKeychain::default();
+    keyring.entries.lock().unwrap().insert(
+        CHAT_CONTENT_ENCRYPTION_KEY_REF.to_string(),
+        pw("kein-base64-und-kein-schluessel!!"),
+    );
+
+    assert!(matches!(
+        switch_to_keychain(
+            &dir.db(),
+            &good(),
+            &keyring,
+            KeychainOverwrite::OnlyAfterConfirmation
+        ),
+        Err(MasterPasswordError::KeychainHoldsAnotherKey)
+    ));
+    assert_eq!(*keyring.sets.lock().unwrap(), 0);
+    assert_eq!(key_mode(&dir.db()), KeyMode::Password);
 }
 
 /// Klarstellung 9: Die Urteilsfrage „kann diese Datei überhaupt K
@@ -816,7 +977,13 @@ fn test_t17_no_key_password_or_secret_in_the_log_or_the_diagnostics_bundle() {
         fail_read: true,
         ..Default::default()
     };
-    let failed = switch_to_keychain(&db, &new_password, &unreadable).unwrap_err();
+    let failed = switch_to_keychain(
+        &db,
+        &new_password,
+        &unreadable,
+        KeychainOverwrite::OnlyAfterConfirmation,
+    )
+    .unwrap_err();
     if let Some(detail) = failed.detail_for_log() {
         tracing::warn!(detail, "nachgebildete Aufrufstelle: to_command_error");
     }
