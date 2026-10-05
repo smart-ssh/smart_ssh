@@ -979,6 +979,12 @@ mod tests {
     /// Insofern war nur der Pfad ein echter Fehler.)
     #[test]
     fn test_the_host_key_store_failure_names_its_own_file_in_both_languages() {
+        // Der Pfad im Text ist ein echter Plattformpfad (`host_key_store_path`
+        // hängt mit `Path::join` an, auf Windows also mit `\\`). Die
+        // Erwartung wird deshalb genauso gebaut — auf Linux/macOS ergibt das
+        // wörtlich `/tmp/test/host_keys.json` wie bisher (Issue #4).
+        let expected_host_keys = Path::new("/tmp/test").join("host_keys.json");
+        let expected_display = expected_host_keys.display().to_string();
         for language in [Language::De, Language::En] {
             let text = db_connect_failure_text(
                 &ConnectFailureKind::HostKeyStoreFailed,
@@ -987,7 +993,7 @@ mod tests {
                 language,
             );
             assert!(
-                text.message.contains("/tmp/test/host_keys.json"),
+                text.message.contains(&expected_display),
                 "{language:?}: der Text muss die Datei nennen, die nicht zu laden war: {}",
                 text.message
             );
@@ -997,8 +1003,7 @@ mod tests {
                  Datenbank nennen: {}",
                 text.message
             );
-            let direct =
-                host_key_store_failure_text(Path::new("/tmp/test/host_keys.json"), language);
+            let direct = host_key_store_failure_text(&expected_host_keys, language);
             assert_eq!(text.title, direct.title, "{language:?}");
             assert_eq!(
                 text.message, direct.message,

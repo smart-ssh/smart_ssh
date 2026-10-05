@@ -51,6 +51,22 @@ const COMMANDS_UNDER_TEST: &[&str] = &[
     "get_startup_state",
 ];
 
+/// Der Ursprung, den Tauri auf **dieser** Plattform als lokal behandelt —
+/// nur für ihn greift die oben erteilte Erlaubnis
+/// (`ExecutionContext::Local`). Tauri vergleicht mit seiner eigenen
+/// Protokoll-URL (`tauri_protocol_url`): auf Windows und Android
+/// `http://tauri.localhost`, sonst `tauri://localhost`. Ein fester
+/// `tauri://localhost` lief auf Windows deshalb in die ACL („not allowed
+/// on … URL: local") statt ins Tor (Issue #4). Dieselbe Auswahl steht in
+/// Tauris Doku zu `tauri::test::assert_ipc_response`.
+fn local_app_origin() -> &'static str {
+    if cfg!(any(windows, target_os = "android")) {
+        "http://tauri.localhost"
+    } else {
+        "tauri://localhost"
+    }
+}
+
 struct GatedApp {
     app: tauri::App<MockRuntime>,
     reached: Arc<AtomicUsize>,
@@ -105,11 +121,7 @@ impl GatedApp {
                 cmd: command.to_string(),
                 callback: tauri::ipc::CallbackFn(0),
                 error: tauri::ipc::CallbackFn(1),
-                // `tauri://localhost` und nicht `http://tauri.localhost`:
-                // Nur die erste Form gilt Tauri als **lokaler** Ursprung,
-                // und nur dafür greift die oben erteilte Erlaubnis
-                // (`ExecutionContext::Local`) — gemessen.
-                url: "tauri://localhost".parse().expect("feste URL"),
+                url: local_app_origin().parse().expect("feste URL"),
                 body: tauri::ipc::InvokeBody::default(),
                 headers: Default::default(),
                 invoke_key: tauri::test::INVOKE_KEY.to_string(),
