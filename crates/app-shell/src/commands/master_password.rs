@@ -258,14 +258,29 @@ pub async fn start_over_from_unlock_screen(
     if !health.allows_starting_over() {
         tracing::warn!(
             ?health,
-            "refusing to start over: the wrapping file next to the database may still open with \
-             the right password (Spec 0101, A5/A16)"
+            "refusing to start over: the wrapping file next to the database may still yield the \
+             root key (Spec 0101, A5/A16, Klarstellung 10a)"
         );
-        return Err(CommandError::with_code(
-            "Deine Schlüsseldatei ist in Ordnung — nur das Passwort passt nicht. Versuche es \
-             erneut; es wird nichts verändert.",
-            WRONG_MASTER_PASSWORD_CODE,
-        ));
+        // **Zwei Gründe, zwei Texte** (Klarstellung 10a): Eine Datei, die
+        // sich gerade nicht *lesen* lässt, ist nicht dasselbe wie eine, die
+        // in Ordnung ist und nur ein anderes Passwort braucht. Beides endet
+        // in „nichts verändert, versuche es erneut" (D1) — aber einem
+        // Nutzer zu sagen, seine Datei sei in Ordnung, während ein
+        // Rechte- oder E/A-Fehler vorliegt, führt ihn in die falsche
+        // Fehlersuche.
+        return Err(match health {
+            master_password::WrappingHealth::Unreachable => CommandError::with_code(
+                "Die Schlüsseldatei neben deiner Datenbank liegt an ihrem Platz, ist aber \
+                 gerade nicht lesbar — vielleicht hält sie ein anderes Programm offen oder \
+                 die Rechte stimmen nicht. Es wurde nichts verändert. Versuche es erneut.",
+                MASTER_PASSWORD_FILE_FAILED_CODE,
+            ),
+            _ => CommandError::with_code(
+                "Deine Schlüsseldatei ist in Ordnung — nur das Passwort passt nicht. Versuche \
+                 es erneut; es wird nichts verändert.",
+                WRONG_MASTER_PASSWORD_CODE,
+            ),
+        });
     }
 
     // `UnusableWrapping` führt die Tabelle A3 nach *ungültig* und damit nach
@@ -530,6 +545,12 @@ fn to_command_error(err: master_password::MasterPasswordError) -> CommandError {
         E::PasswordRejected(_) => MASTER_PASSWORD_REJECTED_CODE,
         E::UnusableWrappingFile
         | E::FileFailed { .. }
+        // Klarstellung 10a: **derselbe** Code wie die übrigen Dateifehler.
+        // Ein eigener Code wäre ein Orakel darüber, ob die Datei existiert
+        // und nur gerade gesperrt ist — und die Oberfläche tut in beiden
+        // Fällen dasselbe („Erneut versuchen"). Der Unterschied steht im
+        // Text und im Log.
+        | E::WrappingFileUnreachable { .. }
         | E::KeychainFailed { .. }
         | E::NotInPasswordMode
         | E::AlreadyInPasswordMode => MASTER_PASSWORD_FILE_FAILED_CODE,

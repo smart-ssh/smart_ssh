@@ -55,8 +55,17 @@ pub enum MasterPasswordError {
     UnusableWrappingFile,
     /// Das Passwort ist zu kurz (A13) oder die Wiederholung weicht ab.
     PasswordRejected(&'static str),
-    /// Die Datei ließ sich nicht lesen, schreiben oder ersetzen.
+    /// Die Datei ließ sich nicht schreiben oder ersetzen.
     FileFailed { detail: String },
+    /// Die Verpackungsdatei liegt an ihrem Platz, ließ sich aber nicht
+    /// **lesen** — in der Tabelle A3 der Zustand *nicht erreichbar* (D1,
+    /// Klarstellung 10a).
+    ///
+    /// Ein eigener Fehler und nicht [`Self::FileFailed`]: Der Text für den
+    /// Nutzer ist ein anderer („nicht lesbar, versuche es erneut“ statt
+    /// „ließ sich nicht schreiben“), und es ist der Fall, in dem **nichts**
+    /// verändert wurde.
+    WrappingFileUnreachable { detail: String },
     /// Der Schlüsselbund hat nicht geantwortet (A15: dann wird die
     /// Verpackungsdatei **nicht** entfernt).
     KeychainFailed { detail: String },
@@ -77,6 +86,11 @@ impl std::fmt::Display for MasterPasswordError {
             }
             Self::PasswordRejected(why) => write!(f, "{why}"),
             Self::FileFailed { .. } => write!(f, "die Schlüsseldatei ließ sich nicht schreiben"),
+            Self::WrappingFileUnreachable { .. } => write!(
+                f,
+                "die Schlüsseldatei neben der Datenbank ist gerade nicht lesbar — es wurde \
+                 nichts verändert; versuche es erneut"
+            ),
             Self::KeychainFailed { .. } => {
                 write!(f, "der Schlüsselbund hat nicht geantwortet")
             }
@@ -95,7 +109,9 @@ impl MasterPasswordError {
     /// DTO (§6, Spec 0098 A5).
     pub fn detail_for_log(&self) -> Option<&str> {
         match self {
-            Self::FileFailed { detail } | Self::KeychainFailed { detail } => Some(detail),
+            Self::FileFailed { detail }
+            | Self::WrappingFileUnreachable { detail }
+            | Self::KeychainFailed { detail } => Some(detail),
             _ => None,
         }
     }
@@ -144,33 +160,43 @@ pub enum WrappingHealth {
     /// das Passwort (oder eine Veränderung am Chiffrat, A17: nicht
     /// unterscheidbar) — **kein** Grund für „Neu anfangen".
     Usable,
-    /// Marke, Formatversion, KDF-Kennung, Parameter oder die Länge des
-    /// Chiffrats sind unbrauchbar. In der Tabelle A3 der Zustand *ungültig*
-    /// (D3).
+    /// Die Datei **wurde gelesen**, und Marke, Formatversion, KDF-Kennung,
+    /// Parameter oder die Länge des Chiffrats sind unbrauchbar. In der
+    /// Tabelle A3 der Zustand *ungültig* (D3).
     Unusable,
-    /// Die Datei liegt an ihrem Platz, ihr Inhalt ist aber nicht zu lesen
-    /// (Rechte, hängende Verknüpfung). Auch das ist *ungültig*: Mit dem,
-    /// was nicht lesbar ist, lässt sich kein K entpacken, und A5 benennt
-    /// die Datei um statt sie zu löschen — sie bleibt also greifbar, wenn
-    /// sich die Ursache später behebt.
-    Unreadable,
+    /// Die Datei liegt an ihrem Platz, ihr Inhalt ließ sich aber **nicht
+    /// lesen** — Rechte, E/A-Fehler, von einem anderen Programm gesperrt,
+    /// eine hängende Verknüpfung.
+    ///
+    /// In der Tabelle A3 der Zustand *nicht erreichbar* (D1): „Erneut
+    /// versuchen“ / „Beenden“, **nichts verändern** (Klarstellung 10a).
+    /// Über den Inhalt ist damit nichts gesagt — die Datei kann vollkommen
+    /// in Ordnung sein und morgen wieder lesbar. Sie als *ungültig* zu
+    /// behandeln hieße, einen Rechte- oder E/A-Fehler mit dem Aufgeben von
+    /// K zu beantworten.
+    Unreachable,
 }
 
 impl WrappingHealth {
     /// Darf „Neu anfangen" (D3/D4) im gesperrten Zustand angeboten werden?
     ///
-    /// **Nur** [`Self::Unusable`] und [`Self::Unreadable`]. Die
-    /// Positivliste-Richtung ist hier Absicht: Ein künftiger Zustand, den
-    /// niemand bedacht hat, führt **nicht** zu einem neuen K.
+    /// **Nur** [`Self::Unusable`] — also nur, wenn die Datei gelesen wurde
+    /// und ihr Inhalt kein K hergibt. Die Positivliste-Richtung ist hier
+    /// Absicht: Ein künftiger Zustand, den niemand bedacht hat, führt
+    /// **nicht** zu einem neuen K.
     pub fn allows_starting_over(self) -> bool {
-        matches!(self, Self::Unusable | Self::Unreadable)
+        matches!(self, Self::Unusable)
     }
 }
 
-/// Spec 0101, Klarstellung 9: liest die Verpackungsdatei und urteilt über
-/// sie, **ohne** ein Passwort zu brauchen.
+/// Spec 0101, Klarstellung 9/10a: liest die Verpackungsdatei und urteilt
+/// über sie, **ohne** ein Passwort zu brauchen.
 ///
 /// Rührt nichts an: nur `symlink_metadata` und `read`.
+///
+/// **Die Fehlerart entscheidet** (Klarstellung 10a, A3): Ein gescheitertes
+/// `read` sagt nichts über den Inhalt der Datei und führt deshalb nach D1,
+/// nicht nach D3. Nur ein *gelesener* Inhalt kann *ungültig* sein.
 pub fn wrapping_health(db_path: &Path) -> WrappingHealth {
     let path = wrapping_file_path(db_path);
     if std::fs::symlink_metadata(&path).is_err() {
@@ -189,14 +215,19 @@ pub fn wrapping_health(db_path: &Path) -> WrappingHealth {
             }
         },
         // Die Datei ist über `symlink_metadata` da, lässt sich aber nicht
-        // lesen — eine hängende Verknüpfung ergibt hier `NotFound`.
+        // lesen — eine hängende Verknüpfung ergibt hier `NotFound`, ein
+        // entzogenes Leserecht `PermissionDenied`, ein von einem anderen
+        // Programm gehaltenes Handle unter Windows `PermissionDenied`
+        // (os error 32), ein Verzeichnis an diesem Ort `IsADirectory`.
+        // **Keiner dieser Fälle** ist ein Urteil über den Inhalt.
         Err(err) => {
             tracing::warn!(
                 detail = %err,
-                "the wrapping file next to the database exists but cannot be read \
-                 (Spec 0101, A3 „ungültig“)"
+                "the wrapping file next to the database exists but cannot be read; nothing is \
+                 changed and the user may retry (Spec 0101, A3 „nicht erreichbar“, \
+                 Klarstellung 10a)"
             );
-            WrappingHealth::Unreadable
+            WrappingHealth::Unreachable
         }
     }
 }
@@ -604,15 +635,27 @@ fn sync_directory_of(path: &Path) {
 
 fn read_wrapping_file(db_path: &Path) -> Result<Vec<u8>, MasterPasswordError> {
     let path = wrapping_file_path(db_path);
-    std::fs::read(&path).map_err(|err| {
-        if err.kind() == std::io::ErrorKind::NotFound {
-            MasterPasswordError::NotInPasswordMode
-        } else {
-            MasterPasswordError::FileFailed {
-                detail: format!("Verpackungsdatei nicht lesbar: {err}"),
-            }
+    match std::fs::read(&path) {
+        Ok(bytes) => Ok(bytes),
+        // **An diesem Ort liegt nichts** — dann, und nur dann, passt der
+        // Vorgang nicht zum Modus. Gefragt wird dasselbe wie in
+        // [`key_mode`] (`symlink_metadata`), damit beide Funktionen nie
+        // Verschiedenes über denselben Zustand sagen: Eine hängende
+        // Verknüpfung ist für `key_mode` der Passwort-Modus, und ihr
+        // `NotFound` beim Lesen darf deshalb nicht als „kein Master-Passwort
+        // eingerichtet" herauskommen (Klarstellung 10a).
+        Err(err)
+            if err.kind() == std::io::ErrorKind::NotFound
+                && std::fs::symlink_metadata(&path).is_err() =>
+        {
+            Err(MasterPasswordError::NotInPasswordMode)
         }
-    })
+        // Alles andere ist A3 *nicht erreichbar* (D1): Es wurde nichts
+        // verändert, und ein erneuter Versuch kann gelingen.
+        Err(err) => Err(MasterPasswordError::WrappingFileUnreachable {
+            detail: format!("Verpackungsdatei nicht lesbar: {err}"),
+        }),
+    }
 }
 
 /// Von Anfang an mit 0600, und mit `sync_all`, bevor der Aufrufer die Datei
