@@ -311,7 +311,7 @@ async fn assemble_and_open_the_gate(
         offers_skip,
     )
     .await
-    .map_err(|abort| startup_abort_to_command_error(&pending.inputs, abort))?;
+    .map_err(|abort| startup_abort_to_command_error(&pending.inputs, prompt.as_ref(), abort))?;
 
     // **Die Reihenfolge ist wichtig:** erst der Zustand, dann das Tor.
     // Andersherum gäbe es ein Fenster, in dem ein Kommando durchkäme, für
@@ -368,6 +368,21 @@ pub fn answer_startup_prompt(
 #[tauri::command]
 pub fn quit_application(app: tauri::AppHandle) {
     tracing::info!("the user quit from the unlock screen (Spec 0101, A16)");
+    // **Puffer schreiben, bevor beendet wird** (spec-reviewer Lauf 4,
+    // Fund 8). `app.exit(0)` führt keine Destruktoren aus — die
+    // Ereignisschleife kommt auf manchen Plattformen nicht zurück. Ohne das
+    // hier ginge gerade die Zeile darüber verloren, also die, die erklärt,
+    // warum die Sitzung endete. An den beiden `process::exit`-Stellen in
+    // `run()` ist dasselbe ausdrücklich behandelt; hier fehlte es.
+    match app.try_state::<app_logic::logging::LogFlushOnDemand>() {
+        Some(flush) => {
+            flush.flush_now();
+        }
+        // Darf nicht vorkommen (`run` verwaltet ihn immer). Sichtbar
+        // machen statt stillschweigend ohne Flush zu beenden — auch wenn
+        // diese Zeile dann selbst die ist, die verloren geht.
+        None => tracing::warn!("no log flush guard is managed; the last lines may be lost"),
+    }
     app.exit(0);
 }
 
@@ -492,9 +507,21 @@ fn to_command_error(err: master_password::MasterPasswordError) -> CommandError {
 /// Entsperrmaske kann den Grund zeigen (A16: „sichtbare Meldung").
 fn startup_abort_to_command_error(
     inputs: &crate::StartupInputs,
+    prompt: &WindowStartupPrompt,
     abort: StartupAbort,
 ) -> CommandError {
     match abort {
+        // Klarstellung 9: „Der Start wurde abgebrochen" wäre hier eine
+        // falsche Aussage, wenn die Frage nie im Fenster ankam — der Nutzer
+        // hat nichts abgebrochen, er hat vermutlich nichts gesehen. Der
+        // Startablauf kann die beiden Fälle nicht unterscheiden (er sieht
+        // nur „nicht bestätigt"), der Fragesteller schon.
+        StartupAbort::UserQuit if prompt.timed_out() => CommandError::with_code(
+            "Smart SSH hat auf eine Rückfrage gewartet, aber keine Antwort erhalten. Es ist \
+             nichts verändert. Starte Smart SSH erneut; bleibt es dabei, nennt das Log die \
+             Ursache.",
+            STARTUP_FAILED_CODE,
+        ),
         StartupAbort::UserQuit => CommandError::with_code(
             "Der Start wurde abgebrochen. Es ist nichts verändert.",
             STARTUP_FAILED_CODE,

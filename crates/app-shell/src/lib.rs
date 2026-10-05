@@ -555,6 +555,12 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // wenn die Plugins aufgeschoben wurden — `register_unlocked_plugins`
         // hängt daran, ob es etwas nachzuholen gibt.
         .manage(UnlockedPluginsPendingSlot(defer_plugins))
+        // Spec 0101, Klarstellung 9 (Fund 8): Ab hier gehört der
+        // Flush-Wächter dem verwalteten Zustand, damit `quit_application`
+        // den Puffer schreiben kann — `AppHandle::exit` führt keine
+        // Destruktoren aus. Die beiden `process::exit`-Stellen oben liegen
+        // vor dieser Zeile und geben ihn weiter selbst frei.
+        .manage(app_logic::logging::LogFlushOnDemand::new(_log_guard))
         // Spec 0084, A1: die Zuordnung Sitzung → erhöhter SFTP-Kanal ist
         // eigener, von Tauri verwalteter Zustand von `app-shell` — bewusst
         // kein Feld von `AppState`, damit der Kanal auch dann hier bleibt,

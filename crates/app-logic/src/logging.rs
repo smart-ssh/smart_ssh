@@ -193,6 +193,50 @@ pub fn default_filter() -> tracing_subscriber::EnvFilter {
 /// 0016 Abschnitt 4 (Kontext/Chunks/Parsing/Filter-Entscheidung/SSH/
 /// Lifecycle sind alle `info`, nicht `debug`), ohne die Log-Dateien mit
 /// `trace`-Rauschen aus Bibliotheks-Crates aufzublähen.
+/// Hält den Flush-Wächter so, dass ihn auch ein Kommando auslösen kann
+/// (Spec 0101, Klarstellung 9; spec-reviewer Lauf 4, Fund 8).
+///
+/// **Warum es das braucht:** Der [`WorkerGuard`] schreibt den Puffer beim
+/// Freigeben. `run()` hält ihn über die ganze Laufzeit, und an den beiden
+/// `process::exit`-Stellen dort wird er ausdrücklich vorher freigegeben —
+/// `process::exit` führt keine Destruktoren aus. `AppHandle::exit` aus
+/// einem Kommando heraus hat dasselbe Problem: Die Ereignisschleife von
+/// `tao` kommt auf manchen Plattformen nicht zurück, der Wächter wird also
+/// nie freigegeben, und die letzten Zeilen vor dem bewussten Beenden gehen
+/// verloren — gerade die, die erklären, **warum** der Nutzer aus der
+/// Entsperrmaske heraus beendet hat.
+///
+/// Als verwalteter Zustand kann das Kommando ihn herausnehmen und damit den
+/// Puffer schreiben, ohne ihn selbst besitzen zu müssen.
+pub struct LogFlushOnDemand(std::sync::Mutex<Option<WorkerGuard>>);
+
+impl LogFlushOnDemand {
+    pub fn new(guard: WorkerGuard) -> Self {
+        Self(std::sync::Mutex::new(Some(guard)))
+    }
+
+    /// Schreibt den Puffer jetzt. `true`, wenn dieser Aufruf es getan hat.
+    ///
+    /// Ein zweiter Aufruf ist harmlos und liefert `false` — ein Kommando
+    /// darf doppelt kommen, und ein Panic beim Beenden wäre die schlechteste
+    /// Antwort darauf.
+    pub fn flush_now(&self) -> bool {
+        let taken = match self.0.lock() {
+            Ok(mut slot) => slot.take(),
+            // Eine vergiftete Sperre heißt, dass jemand mit ihr in der Hand
+            // gepanickt ist. Dann ist der Puffer nicht sicher zu schreiben,
+            // aber das Beenden soll trotzdem laufen.
+            Err(_) => None,
+        };
+        // Das Freigeben **hier**, außerhalb der Sperre: Der Wächter wartet
+        // beim Freigeben auf den Schreib-Thread, und das mit einer gehaltenen
+        // Sperre zu tun wäre eine Einladung an den nächsten Fehler.
+        let flushed = taken.is_some();
+        drop(taken);
+        flushed
+    }
+}
+
 pub fn init_logging() -> WorkerGuard {
     let dir = default_log_dir();
     if let Err(err) = fs::create_dir_all(&dir) {
@@ -551,5 +595,37 @@ mod tests {
         let result = read_last_log_lines(dir.path(), 10);
 
         assert_eq!(result, vec!["actual log content"]);
+    }
+
+    /// Spec 0101, Klarstellung 9 (spec-reviewer Lauf 4, Fund 8): Der
+    /// Flush-Wächter lässt sich aus einem Kommando heraus auslösen — genau
+    /// einmal, und ein zweiter Aufruf ist harmlos.
+    ///
+    /// Warum nicht der Dateiinhalt geprüft wird: Der Puffer landet im
+    /// Prozess-weiten `tracing`-Abonnenten, den `init_logging` global
+    /// setzt; ein zweites Mal geht das in derselben Testbinärdatei nicht.
+    /// Geprüft ist deshalb die Zusage, auf die es ankommt — dass genau ein
+    /// Aufruf den Wächter freigibt und das Beenden daran nicht scheitert.
+    #[test]
+    fn test_the_log_guard_can_be_flushed_from_a_command_exactly_once() {
+        let dir = std::env::temp_dir().join(format!("smart-ssh-0101-flush-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let writer = tracing_appender::rolling::Builder::new()
+            .filename_prefix("flush-test")
+            .build(&dir)
+            .unwrap();
+        let (_writer, guard) = tracing_appender::non_blocking(writer);
+
+        let flush = LogFlushOnDemand::new(guard);
+        assert!(
+            flush.flush_now(),
+            "der erste Aufruf muss den Puffer schreiben"
+        );
+        assert!(
+            !flush.flush_now(),
+            "ein zweiter Aufruf darf nicht panicken — ein Kommando darf doppelt kommen"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
