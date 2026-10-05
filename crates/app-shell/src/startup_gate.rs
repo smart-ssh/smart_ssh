@@ -18,6 +18,18 @@
 //! Die ACL von Tauri liegt noch davor (gemessen: ohne Freigabe erreicht ein
 //! Aufruf dieses Tor nicht). Sie ist eine zweite, unabhängige Schranke, kein
 //! Ersatz.
+//!
+//! **Was dieses Tor nicht kann, und wie A16 dort erfüllt wird**
+//! (Klarstellung 9): Es sitzt am `invoke_handler` der App und sieht deshalb
+//! **nur die eigenen Kommandos**. Plugin-Kommandos (`plugin:store|get`,
+//! `plugin:os|locale`, …) dispatcht Tauri an einer anderen Stelle und
+//! erreichen diese Prüfung nie — gemessen (M7, `decision.md`): Ein Tor, das
+//! jedes eigene Kommando sah, sah `plugin:…|…` nicht, und der Aufruf lief
+//! durch. A16 („kein Kommando") ist für Plugins deshalb mit einem zweiten
+//! Mechanismus geschlossen: Im Passwort-Modus werden die Plugins, die
+//! Dateien, Einstellungen oder das Betriebssystem berühren, **erst nach der
+//! Entsperrung registriert** (`crate::register_unlocked_plugins`, gemessen
+//! M9). Wer hier eine Zeile hinzufügt, denkt also an zwei Stellen.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -35,6 +47,13 @@ const ALLOWED_WHILE_LOCKED: &[&str] = &[
     "unlock_with_master_password",
     "answer_startup_prompt",
     "quit_application",
+    // A16, „Neu anfangen" (Klarstellung 9): der Ausweg aus einer
+    // Verpackungsdatei, die kein Passwort mehr öffnet. Das Kommando
+    // erzeugt zwar einen neuen K — aber nur, wenn die vorhandene Datei
+    // nachweislich keinen hergibt, und nur hinter der zweiten Bestätigung
+    // aus A5. Ohne diese Zeile hätte A16 drei Wahlmöglichkeiten genannt und
+    // zwei angeboten.
+    "start_over_from_unlock_screen",
     // Spec 0024: die Sprachwahl der Oberfläche. Die Entsperrmaske muss
     // übersetzt sein, und `get_platform` liefert nur Betriebssystem und
     // Architektur — keine Daten aus der Datenbank.
@@ -105,6 +124,32 @@ mod tests {
         }
     }
 
+    /// A16 nennt drei Wahlmöglichkeiten: **Entsperren, Beenden und „Neu
+    /// anfangen"** (Klarstellung 9). Alle drei müssen im gesperrten Zustand
+    /// ein erreichbares Kommando haben.
+    ///
+    /// Vorher fehlte die dritte: Der Modulkommentar behauptete, jede Zeile
+    /// der Positivliste entspreche einer A16-Wahl, einschließlich „Neu
+    /// anfangen" — es gab dafür aber kein Kommando. Wer eine unbrauchbare
+    /// Verpackungsdatei hatte, kam damit nur noch über „Beenden" aus der
+    /// App heraus, nie wieder hinein.
+    #[test]
+    fn test_a16_every_named_choice_has_a_command_that_is_reachable_while_locked() {
+        let gate = StartupGate::new(false);
+
+        for (choice, command) in [
+            ("Entsperren", "unlock_with_master_password"),
+            ("Beenden", "quit_application"),
+            ("Neu anfangen", "start_over_from_unlock_screen"),
+        ] {
+            assert!(
+                gate.allows(command),
+                "A16 bietet „{choice}“ an — dafür muss {command} vor der Entsperrung \
+                 erreichbar sein"
+            );
+        }
+    }
+
     /// Nach der Entsperrung ist alles erreichbar — sonst wäre das Tor eine
     /// dauerhafte Sperre und der Test oben bewiese nichts über den
     /// Normalbetrieb.
@@ -139,6 +184,7 @@ mod tests {
                 "unlock_with_master_password",
                 "answer_startup_prompt",
                 "quit_application",
+                "start_over_from_unlock_screen",
                 "get_platform",
             ],
             "A16 nennt Entsperren, Beenden und „Neu anfangen“ — jede weitere \

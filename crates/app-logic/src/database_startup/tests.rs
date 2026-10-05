@@ -203,6 +203,103 @@ impl StartupPrompt for ScriptedPrompt {
     }
 }
 
+/// Der Fragesteller für den **Passwort-Modus** (Klarstellung 9, T7-Variante
+/// und T13).
+///
+/// Unterschied zu [`ScriptedPrompt`]: Er kann nach einem Master-Passwort
+/// fragen (`can_ask_for_a_password() == true`, wie der Fragesteller im
+/// Fenster) und zählt, **wie oft** gefragt wurde. Die Zählung ist der Punkt:
+/// A5 verlangt, dass die Eingabe vor jedem `rename` liegt, und ein Abbruch
+/// dort nichts verändert.
+struct PasswordModePrompt {
+    answers: Mutex<Vec<StartupChoice>>,
+    confirm_start_over: bool,
+    confirm_new_key: bool,
+    /// `None` heißt „der Nutzer hat die Maske abgebrochen".
+    password: Option<&'static str>,
+    asked: Mutex<Vec<StartupDialog>>,
+    confirm_texts: Mutex<Vec<Option<String>>>,
+    notified: Mutex<Vec<String>>,
+    password_asked: Mutex<usize>,
+}
+
+impl PasswordModePrompt {
+    fn new(answers: Vec<StartupChoice>) -> Self {
+        Self {
+            answers: Mutex::new(answers),
+            confirm_start_over: true,
+            confirm_new_key: true,
+            password: Some("mein-neues-master-passwort"),
+            asked: Mutex::new(Vec::new()),
+            confirm_texts: Mutex::new(Vec::new()),
+            notified: Mutex::new(Vec::new()),
+            password_asked: Mutex::new(0),
+        }
+    }
+
+    fn without_second_confirmation(mut self) -> Self {
+        self.confirm_start_over = false;
+        self.confirm_new_key = false;
+        self
+    }
+
+    /// Der Nutzer bricht die Passwortmaske ab (A5: „dann ist nichts
+    /// verändert").
+    fn cancelling_the_password(mut self) -> Self {
+        self.password = None;
+        self
+    }
+
+    fn asked(&self) -> Vec<StartupDialog> {
+        self.asked.lock().unwrap().clone()
+    }
+
+    fn password_asked(&self) -> usize {
+        *self.password_asked.lock().unwrap()
+    }
+}
+
+impl StartupPrompt for PasswordModePrompt {
+    fn ask(&self, dialog: StartupDialog) -> StartupChoice {
+        self.asked.lock().unwrap().push(dialog);
+        let mut answers = self.answers.lock().unwrap();
+        if answers.is_empty() {
+            StartupChoice::Quit
+        } else {
+            answers.remove(0)
+        }
+    }
+
+    fn confirm_start_over(&self, renamed_to: Option<&str>) -> bool {
+        self.confirm_texts
+            .lock()
+            .unwrap()
+            .push(renamed_to.map(str::to_string));
+        self.confirm_start_over
+    }
+
+    fn confirm_generate_new_key(&self) -> bool {
+        self.confirm_new_key
+    }
+
+    fn notify_started_over(&self, renamed_to: &str) {
+        self.notified.lock().unwrap().push(renamed_to.to_string());
+    }
+
+    fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
+        *self.password_asked.lock().unwrap() += 1;
+        let text = self.password?;
+        Some(NewMasterPassword {
+            password: secrecy::SecretString::from(text.to_string()),
+            repeated: secrecy::SecretString::from(text.to_string()),
+        })
+    }
+
+    fn can_ask_for_a_password(&self) -> bool {
+        true
+    }
+}
+
 /// Ein Dialog-Doppel, das **jede** Frage mit einem Panic beantwortet — für
 /// die Felder der Tabelle, in denen überhaupt kein Dialog erscheinen darf.
 struct NoDialogExpected;
@@ -796,6 +893,219 @@ async fn test_t7_without_the_second_confirmation_no_file_is_renamed() {
         prompt.notified.lock().unwrap().is_empty(),
         "ohne Bestätigung darf nichts gemeldet werden"
     );
+}
+
+/// **T7, Variante Passwort-Modus** (Klarstellung 9, A5): „Neu anfangen" aus
+/// D3, während K in einer unbrauchbaren Verpackungsdatei steckt.
+///
+/// Das ist der Weg, den Lauf 4 gebaut und nicht erreicht hat: Ohne ein
+/// `RootKeyAccess::UnusableWrapping` im Produktivcode war diese ganze Logik
+/// toter Code. Geprüft wird, was A5 für den Passwort-Modus zusagt:
+/// - die alte Verpackungsdatei wird **umbenannt**, nicht überschrieben,
+/// - eine **neue** Verpackung entsteht, mit dem neuen Passwort öffenbar,
+/// - **kein `set` auf den Schlüsselbund** — der Modus bleibt, was er war,
+/// - die alte Datenbank liegt byte-gleich unter ihrem neuen Namen.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t7_variant_start_over_in_password_mode_renames_the_wrapping_and_writes_a_new_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = encrypted_database(dir.path()).await;
+    let db_before = std::fs::read(&db_path).unwrap();
+
+    // Eine fremde Datei am Ort der Verpackung: genau der Zustand, in dem
+    // kein Passwort mehr hilft (Klarstellung 9).
+    let wrapping = crate::master_password::wrapping_file_path(&db_path);
+    std::fs::write(&wrapping, [0xAB; 40]).unwrap();
+    let wrapping_before = std::fs::read(&wrapping).unwrap();
+    assert!(
+        crate::master_password::wrapping_health(&db_path).allows_starting_over(),
+        "Vorbedingung: nur eine unbrauchbare Datei führt hierher"
+    );
+
+    // Der Schlüsselbund ist dabei, um beweisen zu können, dass er **nicht**
+    // angefasst wird.
+    let credentials = CountingCredentialStore::new(GetBehaviour::Missing);
+    let prompt = PasswordModePrompt::new(vec![StartupChoice::StartOver]);
+
+    let opened = open_or_prepare_database(
+        &db_path,
+        RootKeyAccess::UnusableWrapping,
+        available(),
+        &prompt,
+    )
+    .await
+    .expect("„Neu anfangen“ muss im Passwort-Modus eine frische Datenbank ergeben");
+
+    assert_eq!(prompt.asked(), vec![StartupDialog::D3]);
+    assert_eq!(
+        prompt.password_asked(),
+        1,
+        "A5 im Passwort-Modus fragt genau einmal nach dem neuen Passwort"
+    );
+    assert_eq!(
+        credentials.sets(),
+        0,
+        "A5/T7 wörtlich: kein `set` auf den Schlüsselbund — der Modus bleibt der Passwort-Modus"
+    );
+
+    // Die alte Datenbank liegt byte-gleich unter ihrem neuen Namen.
+    let renamed_to = prompt.notified.lock().unwrap()[0].clone();
+    assert_eq!(
+        std::fs::read(dir.path().join(&renamed_to)).unwrap(),
+        db_before
+    );
+    assert!(opened.store.list_servers().await.unwrap().is_empty());
+
+    // Die alte Verpackung ist umbenannt, nicht gelöscht und nicht
+    // überschrieben.
+    let suffix = suffix_of(&renamed_to);
+    let moved_wrapping = {
+        let mut name = wrapping.as_os_str().to_os_string();
+        name.push(&suffix);
+        std::path::PathBuf::from(name)
+    };
+    assert_eq!(
+        std::fs::read(&moved_wrapping).unwrap(),
+        wrapping_before,
+        "die unbrauchbare Verpackung muss unverändert zur Seite gelegt werden (A5)"
+    );
+
+    // Und an ihrem Platz steht eine neue, die mit dem neuen Passwort
+    // genau den K hergibt, mit dem die Datenbank jetzt offen ist.
+    assert_eq!(
+        crate::master_password::wrapping_health(&db_path),
+        crate::master_password::WrappingHealth::Usable
+    );
+    let unlocked = crate::master_password::unlock(
+        &db_path,
+        &secrecy::SecretString::from("mein-neues-master-passwort".to_string()),
+    )
+    .expect("die neue Verpackung muss mit dem neuen Passwort aufgehen");
+    assert_eq!(
+        unlocked.expose(),
+        &opened.root_key,
+        "die Verpackung muss genau den K tragen, mit dem die Datenbank offen ist"
+    );
+    opened.store.close().await;
+}
+
+/// **T7, Variante Passwort-Modus, Abbruch** (A5, wörtlich: „Bricht der
+/// Nutzer das Einrichten ab, bleibt alles unverändert").
+///
+/// Zwei Abbruchstellen, beide geprüft: die zweite Bestätigung und die
+/// Passwortmaske. Nach keiner von beiden darf eine Datei umbenannt, gelöscht
+/// oder angelegt sein.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t7_variant_an_aborted_start_over_in_password_mode_changes_no_file() {
+    for (label, prompt) in [
+        (
+            "ohne zweite Bestätigung",
+            PasswordModePrompt::new(vec![StartupChoice::StartOver]).without_second_confirmation(),
+        ),
+        (
+            "Passwortmaske abgebrochen",
+            PasswordModePrompt::new(vec![StartupChoice::StartOver]).cancelling_the_password(),
+        ),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = encrypted_database(dir.path()).await;
+        let wrapping = crate::master_password::wrapping_file_path(&db_path);
+        std::fs::write(&wrapping, [0xAB; 40]).unwrap();
+
+        let db_before = std::fs::read(&db_path).unwrap();
+        let wrapping_before = std::fs::read(&wrapping).unwrap();
+        let files_before = file_names(dir.path());
+
+        let credentials = CountingCredentialStore::new(GetBehaviour::Missing);
+        let result = open_or_prepare_database(
+            &db_path,
+            RootKeyAccess::UnusableWrapping,
+            available(),
+            &prompt,
+        )
+        .await;
+
+        assert!(
+            matches!(result, Err(StartupAbort::UserQuit)),
+            "{label}: der Abbruch muss ein Abbruch bleiben"
+        );
+        assert_eq!(std::fs::read(&db_path).unwrap(), db_before, "{label}");
+        assert_eq!(
+            std::fs::read(&wrapping).unwrap(),
+            wrapping_before,
+            "{label}: die unbrauchbare Verpackung bleibt, wo sie ist"
+        );
+        assert_eq!(
+            file_names(dir.path()),
+            files_before,
+            "{label}: keine Datei kommt hinzu und keine verschwindet"
+        );
+        assert_eq!(credentials.sets(), 0, "{label}");
+        assert!(
+            prompt.notified.lock().unwrap().is_empty(),
+            "{label}: ohne Vollzug darf nichts gemeldet werden"
+        );
+    }
+}
+
+/// **T13 / D4 im Passwort-Modus** (Klarstellung 9): Klartext-Datenbank und
+/// eine unbrauchbare Verpackung → „Neuen Schlüssel erzeugen".
+///
+/// Die Datenbank wird **umgewandelt, nicht umbenannt** (D4), und die
+/// Verpackung wird durch eine neue ersetzt — wieder über ein `rename` der
+/// alten, nie durch Überschreiben. Auch dieser Zweig war vor Klarstellung 9
+/// unerreichbar.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t13_d4_in_password_mode_converts_the_file_and_rewraps_the_new_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = plaintext_database(dir.path()).await;
+
+    let wrapping = crate::master_password::wrapping_file_path(&db_path);
+    std::fs::write(&wrapping, [0xCD; 40]).unwrap();
+    let wrapping_before = std::fs::read(&wrapping).unwrap();
+
+    let credentials = CountingCredentialStore::new(GetBehaviour::Missing);
+    let prompt = PasswordModePrompt::new(vec![StartupChoice::GenerateNewKey]);
+
+    let opened = open_or_prepare_database(
+        &db_path,
+        RootKeyAccess::UnusableWrapping,
+        available(),
+        &prompt,
+    )
+    .await
+    .expect("D4 muss die Klartext-Datei mit einem neuen K umwandeln");
+
+    assert_eq!(prompt.asked(), vec![StartupDialog::D4]);
+    assert_eq!(prompt.password_asked(), 1);
+    assert_eq!(
+        credentials.sets(),
+        0,
+        "im Passwort-Modus entsteht der neue K in der Verpackung, nicht im Schlüsselbund"
+    );
+    assert!(
+        prompt.notified.lock().unwrap().is_empty(),
+        "D4 benennt die Datenbank nicht um — es gibt keinen neuen Namen zu melden"
+    );
+
+    // Die neue Verpackung gibt genau den K her, mit dem die umgewandelte
+    // Datenbank offen ist.
+    let unlocked = crate::master_password::unlock(
+        &db_path,
+        &secrecy::SecretString::from("mein-neues-master-passwort".to_string()),
+    )
+    .expect("die neue Verpackung muss aufgehen");
+    assert_eq!(unlocked.expose(), &opened.root_key);
+
+    // Die alte, unbrauchbare Verpackung liegt unverändert daneben.
+    let moved = file_names(dir.path())
+        .into_iter()
+        .find(|name| name.contains(".master-key.unreadable-"))
+        .expect("die alte Verpackung muss umbenannt daneben liegen (A5)");
+    assert_eq!(
+        std::fs::read(dir.path().join(&moved)).unwrap(),
+        wrapping_before
+    );
+    opened.store.close().await;
 }
 
 /// T7 (D4): Klartext-Datei, unbrauchbarer Schlüssel, bestätigt → die Datei

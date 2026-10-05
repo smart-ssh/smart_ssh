@@ -54,6 +54,19 @@ pub struct PendingStartup {
     /// Der Fragesteller im Fenster. Entsteht beim ersten Entsperrversuch,
     /// weil er den `AppHandle` braucht.
     prompt: std::sync::Mutex<Option<Arc<WindowStartupPrompt>>>,
+    /// Serialisiert jeden Weg, der den Zustand aufbaut (spec-reviewer
+    /// Lauf 4, Fund 6).
+    ///
+    /// **Ein `tokio::sync::Mutex`, nicht der aus `std`:** Der kritische
+    /// Abschnitt enthält `await`-Punkte (Datenbank öffnen, Secret-Umzug,
+    /// Startdialoge). Eine `std`-Sperre über ein `await` zu halten blockiert
+    /// einen Laufzeit-Thread und ist in einem `Send`-Future nicht einmal
+    /// erlaubt.
+    ///
+    /// Die Sperre deckt **beide** Wege: Entsperren und „Neu anfangen". Das
+    /// ist der Punkt — der zweite benennt Dateien um, und zwei davon
+    /// gleichzeitig wäre der schlechteste Augenblick für ein Rennen.
+    unlock_lock: tokio::sync::Mutex<()>,
 }
 
 impl PendingStartup {
@@ -65,6 +78,7 @@ impl PendingStartup {
             inputs,
             entitlements,
             prompt: std::sync::Mutex::new(None),
+            unlock_lock: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -95,6 +109,23 @@ pub struct StartupStateDto {
     pub needs_unlock: bool,
     /// A18: der aktive Modus, `"password"` oder `"keychain"`.
     pub mode: &'static str,
+    /// Klarstellung 9: `true`, wenn die Verpackungsdatei mit **keinem**
+    /// Passwort zu öffnen ist (A3 *ungültig*). Dann zeigt die Maske kein
+    /// Passwortfeld, sondern den Ausweg „Neu anfangen" (A16) — und nur
+    /// dann nimmt
+    /// [`start_over_from_unlock_screen`] ihn an.
+    pub wrapping_unusable: bool,
+    /// Die Sprache der Startmasken, `"de"` oder `"en"`.
+    ///
+    /// **Warum aus dem Backend und nicht aus der Einstellungsdatei:**
+    /// Klarstellung 9 verlangt, dass Einstellungsdateien vor der
+    /// Entsperrung nicht lesbar sind — das `store`-Plugin ist dort noch
+    /// nicht registriert (s. `crate::run`). Die Sprache ist deshalb die,
+    /// die der Start einmal aus der Umgebung bestimmt hat (Spec 0071,
+    /// A11a/A11b: **eine** Sprachwahl für alle Startdialoge eines
+    /// Programmlaufs). Nach der Entsperrung gilt wieder die gespeicherte
+    /// Wahl aus Spec 0024.
+    pub language: &'static str,
 }
 
 fn mode_name(mode: KeyMode) -> &'static str {
@@ -111,11 +142,33 @@ pub fn get_startup_state(
     gate: tauri::State<'_, Arc<StartupGate>>,
     pending: tauri::State<'_, PendingStartup>,
 ) -> StartupStateDto {
-    let mode = master_password::key_mode(&pending.inputs.db_path);
+    startup_state(&gate, &pending)
+}
+
+/// Derselbe Inhalt wie [`get_startup_state`], aber ohne `tauri::State` —
+/// damit die Kommandos unten ihn nach dem Entsperren noch bilden können,
+/// ohne die Zustandsgriffe weiterzugeben.
+fn startup_state(gate: &StartupGate, pending: &PendingStartup) -> StartupStateDto {
+    let db_path = &pending.inputs.db_path;
+    let mode = master_password::key_mode(db_path);
+    let unlocked = gate.is_unlocked();
+    // Die Datei wird nur im gesperrten Passwort-Modus geprüft: Danach ist
+    // der Zustand schon gebaut, und ein Lesefehler wäre bloß Lärm.
+    let wrapping_unusable = !unlocked
+        && mode == KeyMode::Password
+        && master_password::wrapping_health(db_path).allows_starting_over();
     StartupStateDto {
-        unlocked: gate.is_unlocked(),
-        needs_unlock: !gate.is_unlocked() && mode == KeyMode::Password,
+        unlocked,
+        // Klarstellung 9: Bei unbrauchbarer Datei gibt es nichts zu
+        // entsperren — die Maske soll nicht nach einem Passwort fragen, das
+        // nie passen kann.
+        needs_unlock: !unlocked && mode == KeyMode::Password && !wrapping_unusable,
         mode: mode_name(mode),
+        wrapping_unusable,
+        language: match pending.inputs.language {
+            app_logic::startup_error_messages::Language::De => "de",
+            app_logic::startup_error_messages::Language::En => "en",
+        },
     }
 }
 
@@ -132,11 +185,18 @@ pub async fn unlock_with_master_password(
     gate: tauri::State<'_, Arc<StartupGate>>,
     pending: tauri::State<'_, PendingStartup>,
 ) -> CommandResult<StartupStateDto> {
+    // **Ein Entsperrvorgang zur Zeit** (spec-reviewer Lauf 4, Fund 6).
+    // Die `is_unlocked()`-Prüfung allein genügt nicht: Zwei gleichzeitige
+    // Aufrufe kämen beide daran vorbei und bauten beide einen vollständigen
+    // Zustand auf — zwei Verbindungspools, zwei Secret-Umzüge, zwei
+    // Aufräumläufe auf dem Schlüsselbund. Das Schloss wird **vor** der
+    // Prüfung genommen, damit der zweite Aufruf den fertigen Zustand sieht.
+    let _serialized = pending.unlock_lock.lock().await;
     if gate.is_unlocked() {
         // Schon entsperrt — ein zweiter Aufruf darf den Zustand nicht
         // ersetzen (gemessen M3: `manage` würde ihn ohnehin nicht
         // ersetzen, aber der ganze Aufbau liefe erneut).
-        return Ok(get_startup_state(gate, pending));
+        return Ok(startup_state(&gate, &pending));
     }
 
     let password = SecretString::from(password);
@@ -149,7 +209,6 @@ pub async fn unlock_with_master_password(
     // `Keychain` weiter und läuft erneut in D1, diesmal mit der Maske im
     // Fenster.
     let access_owner;
-    let prompt = pending.prompt_for(&app);
     let keyring = credentials_keyring::KeyringCredentialStore::new();
     let access = match mode {
         KeyMode::Password => {
@@ -165,6 +224,85 @@ pub async fn unlock_with_master_password(
 
     // A11.1 gilt nur im Passwort-Modus.
     let offers_skip = mode == KeyMode::Password;
+    assemble_and_open_the_gate(&app, &gate, &pending, access, offers_skip).await
+}
+
+/// Spec 0101, Klarstellung 9 + A16 („Neu anfangen"): der Ausweg aus einer
+/// Verpackungsdatei, die **kein** Passwort mehr öffnet.
+///
+/// **Warum ein eigenes Kommando und nicht ein Zweig von
+/// [`unlock_with_master_password`]:** Entsperren und Neuanfangen sind
+/// gegensätzliche Vorgänge — das eine holt K, das andere gibt ihn auf. Sie
+/// in einen Aufruf zu legen hieße, dass ein Tippfehler im Passwortfeld in
+/// der Nähe eines Codepfads landet, der Daten aufgibt. Getrennt ist
+/// „Daten aufgeben" eine eigene, ausdrückliche Nutzerwahl, wie A5 sie
+/// verlangt — mit der zweiten Bestätigung aus dem Startablauf dahinter.
+///
+/// **Der Riegel:** Der Aufruf wird abgelehnt, solange die Datei brauchbar
+/// ist. Die Oberfläche entscheidet das nicht; sie kann es nur anfragen.
+/// Sonst wäre dieses Kommando bei bloß vergessenem Passwort ein Knopf, der
+/// den Verlauf wegwirft, obwohl K noch zu holen wäre.
+#[tauri::command]
+pub async fn start_over_from_unlock_screen(
+    app: tauri::AppHandle,
+    gate: tauri::State<'_, Arc<StartupGate>>,
+    pending: tauri::State<'_, PendingStartup>,
+) -> CommandResult<StartupStateDto> {
+    let _serialized = pending.unlock_lock.lock().await;
+    if gate.is_unlocked() {
+        return Ok(startup_state(&gate, &pending));
+    }
+
+    let db_path = pending.inputs.db_path.clone();
+    let health = master_password::wrapping_health(&db_path);
+    if !health.allows_starting_over() {
+        tracing::warn!(
+            ?health,
+            "refusing to start over: the wrapping file next to the database may still open with \
+             the right password (Spec 0101, A5/A16)"
+        );
+        return Err(CommandError::with_code(
+            "Deine Schlüsseldatei ist in Ordnung — nur das Passwort passt nicht. Versuche es \
+             erneut; es wird nichts verändert.",
+            WRONG_MASTER_PASSWORD_CODE,
+        ));
+    }
+
+    // `UnusableWrapping` führt die Tabelle A3 nach *ungültig* und damit nach
+    // D3 bzw. D4. Der Dialog, die zweite Bestätigung und die Abfrage des
+    // neuen Master-Passworts laufen über den Fragesteller im Fenster und
+    // werden mit `answer_startup_prompt` beantwortet — beides steht in der
+    // Positivliste des Tors.
+    tracing::info!(
+        ?health,
+        "starting over from the unlock screen because the wrapping file cannot yield the root \
+         key (Spec 0101, A3 „ungültig“, A16)"
+    );
+    assemble_and_open_the_gate(
+        &app,
+        &gate,
+        &pending,
+        RootKeyAccess::UnusableWrapping,
+        // A11.1 gilt im Passwort-Modus.
+        true,
+    )
+    .await
+}
+
+/// Der gemeinsame Rest von [`unlock_with_master_password`] und
+/// [`start_over_from_unlock_screen`]: Zustand bauen, verwalten, Tor öffnen.
+///
+/// Als eigene Funktion, damit die **Reihenfolge** (Zustand, dann Tor) an
+/// genau einer Stelle steht. Zwei Kopien davon wären zwei Gelegenheiten,
+/// sie zu vertauschen.
+async fn assemble_and_open_the_gate(
+    app: &tauri::AppHandle,
+    gate: &StartupGate,
+    pending: &PendingStartup,
+    access: RootKeyAccess<'_>,
+    offers_skip: bool,
+) -> CommandResult<StartupStateDto> {
+    let prompt = pending.prompt_for(app);
     let state = crate::open_and_assemble(
         &pending.entitlements,
         &pending.inputs,
@@ -179,16 +317,21 @@ pub async fn unlock_with_master_password(
     // Andersherum gäbe es ein Fenster, in dem ein Kommando durchkäme, für
     // das `State<AppState>` noch nicht verwaltet ist.
     if !app.manage(state) {
-        // Gemessen (M3): Ein zweites `manage` ersetzt nichts. Dass es
-        // überhaupt dazu kommt, heißt, dass zwei Entsperrungen gleichzeitig
-        // liefen — dann gilt die erste, und diese hier hat nichts getan.
+        // Gemessen (M3): Ein zweites `manage` ersetzt nichts. Mit dem
+        // Schloss um beide Kommandos kann es dazu nur kommen, wenn der
+        // Zustand aus einer früheren Entsperrung desselben Programmlaufs
+        // schon steht — dann gilt die erste, und diese hier hat nichts
+        // getan.
         tracing::warn!("the application state was already managed; this unlock changed nothing");
     }
     gate.unlock();
+    // Klarstellung 9: Erst jetzt dürfen die Plugins da sein, die Dateien,
+    // Einstellungen oder das Betriebssystem berühren (A16).
+    crate::register_unlocked_plugins(app);
     tracing::info!("unlocked and assembled the application state (Spec 0101, A16)");
     let _ = app.emit(UNLOCKED_EVENT, ());
 
-    Ok(get_startup_state(gate, pending))
+    Ok(startup_state(gate, pending))
 }
 
 /// Die Antwort auf einen Startdialog im Fenster (Teil 0 Frage 3).

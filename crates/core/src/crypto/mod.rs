@@ -27,9 +27,9 @@ pub use key::{
     CHAT_CONTENT_ENCRYPTION_KEY_REF,
 };
 pub use key_wrapping::{
-    check_password_length, unwrap_root_key, wrap_root_key, KeyWrapError, RootKey,
-    MIN_PASSWORD_CHARS, WRAPPING_FORMAT_VERSION, WRAPPING_MAGIC, WRITE_M_COST_KIB, WRITE_P_COST,
-    WRITE_T_COST,
+    check_password_length, inspect_wrapped_key, unwrap_root_key, wrap_root_key, KeyWrapError,
+    RootKey, MIN_PASSWORD_CHARS, WRAPPING_FORMAT_VERSION, WRAPPING_MAGIC, WRITE_M_COST_KIB,
+    WRITE_P_COST, WRITE_T_COST,
 };
 
 /// Fehler bei einem [`ContentCipher`]-Zugriff oder der Schlüsselverwaltung
