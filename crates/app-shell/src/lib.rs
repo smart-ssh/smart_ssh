@@ -240,10 +240,10 @@ pub(crate) async fn open_and_assemble(
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
     // `app_logic::host_key_store`-Modul-Kommentar zur Begründung (der
     // `HostKeyStore`-Trait ist absichtlich synchron, `sqlx` ist es nicht).
-    let host_key_path = db_path
-        .parent()
-        .expect("db_path hat immer ein Elternverzeichnis (s. default_db_path)")
-        .join("host_keys.json");
+    // Eine Stelle für die Regel „`host_keys.json` neben der Datenbank",
+    // damit der Fehlertext denselben Pfad nennt, den diese Zeile lädt
+    // (spec-reviewer Lauf 4, Fund 9).
+    let host_key_path = app_logic::startup_error_messages::host_key_store_path(db_path);
     tracing::info!(path = %host_key_path.display(), "loading host-key store");
     // Spec 0059: kein eigener, benannter Fall, aber auf demselben
     // Datenverzeichnis wie Fall 4 und derselben Fehlerklasse (Zugriffs-/

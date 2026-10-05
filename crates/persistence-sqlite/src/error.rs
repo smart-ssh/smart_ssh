@@ -178,6 +178,20 @@ pub enum ConnectFailureKind {
     /// „dann erst K aus dem Schlüsselbund löschen"), und der nächste Start
     /// findet denselben Zustand vor.
     MasterPasswordSetupFailed,
+    /// Spec 0101, A5/A13 (Klarstellung 9): Dasselbe Scheitern wie
+    /// [`Self::MasterPasswordSetupFailed`], aber auf dem Weg über „Neu
+    /// anfangen" bzw. „Neuen Schlüssel erzeugen" — **nachdem** die alten
+    /// Dateien umbenannt wurden.
+    ///
+    /// **Warum ein zweiter Fall und nicht derselbe Text:** Der Text zu
+    /// [`Self::MasterPasswordSetupFailed`] sagt „Es ist nichts verändert —
+    /// dein Schlüssel liegt weiter dort, wo er lag". Für das Einrichten aus
+    /// den Einstellungen und aus D1 stimmt das. Hier nicht: Datenbank und
+    /// alte Verpackung sind schon zur Seite gelegt (A5 verlangt genau diese
+    /// Reihenfolge, s. ADR 0095 §4). Denselben Text zu zeigen wäre eine
+    /// falsche Tatsachenbehauptung an der Stelle, an der der Nutzer
+    /// entscheiden muss, ob er die weggeschobenen Dateien noch braucht.
+    MasterPasswordSetupFailedAfterRename,
     /// Spec 0059 (ohne eigene Nummer) / Spec 0101 Etappe 3: Der
     /// Host-Key-Speicher neben der Datenbank ließ sich nicht laden.
     ///
