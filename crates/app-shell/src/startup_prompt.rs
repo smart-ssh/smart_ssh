@@ -72,33 +72,40 @@ impl StartupPrompt for NativeStartupPrompt {
             StartupDialog::D1 {
                 offers_password_setup,
             } => {
-                // **Der dritte Knopf bleibt aus, bis die Masken im Fenster
-                // stehen** (Commit 11 der Spec). Der Weg dahinter ist
-                // fertig — `open_or_prepare_database` antwortet auf diese
-                // Wahl mit `StartupAbort::NeedsWindow`, und das
-                // Entsperr-Kommando wiederholt den Ablauf mit der Maske im
-                // Fenster. Nur die Maske selbst fehlt noch. Würde der Knopf
-                // jetzt schon erscheinen, stünde der Nutzer vor einem
-                // Fenster ohne Eingabefeld und einer App, deren Kommandos
-                // alle mit `APP_LOCKED` antworten.
-                //
-                // Der berechnete Wert wird geloggt, damit nachvollziehbar
-                // ist, dass die Entscheidung ihn schon trifft.
+                // **Der dritte Knopf** (A3, D1: „Master-Passwort
+                // einrichten"). Er war zurückgestellt, solange es die Maske
+                // im Fenster nicht gab — ohne sie stünde der Nutzer nach dem
+                // Druck vor einem Fenster ohne Eingabefeld. Mit Commit 11
+                // gibt es sie: `open_or_prepare_database` antwortet auf diese
+                // Wahl mit `StartupAbort::NeedsWindow`, die App startet ohne
+                // Zustand, und die Startmaske setzt den Ablauf im Fenster
+                // fort (`StartupScreen::SetUpMasterPassword`).
                 tracing::info!(
                     offers_password_setup,
-                    "D1: the master-password setup button needs the in-window form \
-                     (Spec 0101, Commit 11)"
+                    "D1: offering the master-password setup button; the form itself is in the \
+                     window (Spec 0101, A13, Teil 0 Frage 3)"
                 );
                 let text = texts::d1_keychain_unreachable_text(
                     self.keychain
                         .unavailable_reason()
                         .unwrap_or(KeychainUnavailableReason::Unknown),
                     std::env::consts::OS,
-                    false,
+                    offers_password_setup,
                     self.database_is_plaintext(),
                     self.language,
                 );
-                self.ask_choice(text, StartupChoice::Retry)
+                // `extra` im Text entscheidet, ob der Knopf erscheint: Ist
+                // `offers_password_setup` falsch, ist er `None`, und
+                // `DialogAnswer::Extra` kann nicht zurückkommen (s.
+                // `ask_choice_with_extra`). Die Einschränkung aus A3/D1
+                // („**nur** bei Datei *fehlt* oder *Klartext* und Grund
+                // `NoSecretServiceProvider`/`NoSessionBus`") liegt damit
+                // unverändert in `database_startup`, nicht hier.
+                self.ask_choice_with_extra(
+                    text,
+                    StartupChoice::Retry,
+                    StartupChoice::SetUpMasterPassword,
+                )
             }
             // A11: „Dialog D1 ohne Einrichten“. Der dritte Knopf aus A11.1
             // gehört zum Passwort-Modus und erscheint dort im Fenster —
