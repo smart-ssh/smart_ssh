@@ -38,6 +38,10 @@ pub mod host_key_store;
 pub mod identity_file;
 pub mod key_files;
 pub mod logging;
+/// Spec 0101, A13–A17 (E9): die Verpackungsdatei des Master-Passworts und
+/// die Vorgänge auf ihr — einrichten, entsperren, ändern, zurück auf den
+/// Schlüsselbund.
+pub mod master_password;
 /// Spec 0101, A12: das MCP-Server-Token im Secret-Speicher.
 pub mod mcp_token;
 pub mod orchestration;

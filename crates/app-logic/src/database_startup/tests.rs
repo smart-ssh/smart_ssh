@@ -187,6 +187,20 @@ impl StartupPrompt for ScriptedPrompt {
     fn notify_started_over(&self, renamed_to: &str) {
         self.notified.lock().unwrap().push(renamed_to.to_string());
     }
+
+    /// Spec 0101, A13: Im Schlüsselbund-Modus fragt der Startablauf nie
+    /// nach einem Master-Passwort — hier also ein Panic statt eines
+    /// stillen `None`. Die Varianten des Passwort-Modus benutzen
+    /// `PasswordModePrompt`.
+    fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
+        panic!("in diesem Feld der Tabelle A3 darf kein Master-Passwort erfragt werden");
+    }
+
+    /// Wie der native Fragesteller: keine Texteingabe. Dadurch prüfen diese
+    /// Tests den Schlüsselbund-Modus, in dem genau das gilt.
+    fn can_ask_for_a_password(&self) -> bool {
+        false
+    }
 }
 
 /// Ein Dialog-Doppel, das **jede** Frage mit einem Panic beantwortet — für
@@ -205,6 +219,12 @@ impl StartupPrompt for NoDialogExpected {
     }
     fn notify_started_over(&self, _renamed_to: &str) {
         panic!("in diesem Feld darf nichts umbenannt werden");
+    }
+    fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
+        panic!("in diesem Feld darf kein Master-Passwort erfragt werden");
+    }
+    fn can_ask_for_a_password(&self) -> bool {
+        false
     }
 }
 
@@ -374,9 +394,14 @@ async fn test_t3_a_key_is_written_without_a_user_choice_only_in_the_two_generate
         let dir = tempfile::tempdir().unwrap();
         let db_path = dir.path().join("smart-ssh.db");
         let store = CountingCredentialStore::new(GetBehaviour::Missing);
-        let opened = open_or_prepare_database(&db_path, &store, available(), &NoDialogExpected)
-            .await
-            .expect("Datei fehlt, kein K: anlegen muss gelingen");
+        let opened = open_or_prepare_database(
+            &db_path,
+            RootKeyAccess::Keychain(&store),
+            available(),
+            &NoDialogExpected,
+        )
+        .await
+        .expect("Datei fehlt, kein K: anlegen muss gelingen");
         assert_eq!(store.sets(), 1, "genau ein set auf K erwartet");
         assert_eq!(
             detect_database_file_state(&db_path).unwrap(),
@@ -391,9 +416,14 @@ async fn test_t3_a_key_is_written_without_a_user_choice_only_in_the_two_generate
         let dir = tempfile::tempdir().unwrap();
         let db_path = plaintext_database(dir.path()).await;
         let store = CountingCredentialStore::new(GetBehaviour::Missing);
-        let opened = open_or_prepare_database(&db_path, &store, available(), &NoDialogExpected)
-            .await
-            .expect("Klartext, kein K: umwandeln muss gelingen");
+        let opened = open_or_prepare_database(
+            &db_path,
+            RootKeyAccess::Keychain(&store),
+            available(),
+            &NoDialogExpected,
+        )
+        .await
+        .expect("Klartext, kein K: umwandeln muss gelingen");
         assert_eq!(store.sets(), 1, "genau ein set auf K erwartet");
         assert_eq!(
             detect_database_file_state(&db_path).unwrap(),
@@ -407,9 +437,14 @@ async fn test_t3_a_key_is_written_without_a_user_choice_only_in_the_two_generate
         let dir = tempfile::tempdir().unwrap();
         let db_path = dir.path().join("smart-ssh.db");
         let store = CountingCredentialStore::new(GetBehaviour::Present);
-        let opened = open_or_prepare_database(&db_path, &store, available(), &NoDialogExpected)
-            .await
-            .expect("Datei fehlt, K da");
+        let opened = open_or_prepare_database(
+            &db_path,
+            RootKeyAccess::Keychain(&store),
+            available(),
+            &NoDialogExpected,
+        )
+        .await
+        .expect("Datei fehlt, K da");
         assert_eq!(store.sets(), 0);
         opened.store.close().await;
     }
@@ -419,9 +454,14 @@ async fn test_t3_a_key_is_written_without_a_user_choice_only_in_the_two_generate
         let dir = tempfile::tempdir().unwrap();
         let db_path = plaintext_database(dir.path()).await;
         let store = CountingCredentialStore::new(GetBehaviour::Present);
-        let opened = open_or_prepare_database(&db_path, &store, available(), &NoDialogExpected)
-            .await
-            .expect("Klartext, K da");
+        let opened = open_or_prepare_database(
+            &db_path,
+            RootKeyAccess::Keychain(&store),
+            available(),
+            &NoDialogExpected,
+        )
+        .await
+        .expect("Klartext, K da");
         assert_eq!(store.sets(), 0);
         opened.store.close().await;
     }
@@ -431,9 +471,14 @@ async fn test_t3_a_key_is_written_without_a_user_choice_only_in_the_two_generate
         let dir = tempfile::tempdir().unwrap();
         let db_path = encrypted_database(dir.path()).await;
         let store = CountingCredentialStore::new(GetBehaviour::Present);
-        let opened = open_or_prepare_database(&db_path, &store, available(), &NoDialogExpected)
-            .await
-            .expect("verschlüsselt, K da");
+        let opened = open_or_prepare_database(
+            &db_path,
+            RootKeyAccess::Keychain(&store),
+            available(),
+            &NoDialogExpected,
+        )
+        .await
+        .expect("verschlüsselt, K da");
         assert_eq!(store.sets(), 0);
         opened.store.close().await;
     }
@@ -527,7 +572,13 @@ async fn test_t3_in_every_dialog_case_the_file_stays_byte_identical_until_a_choi
         // Keine Antwort im Skript → der Dialog wird mit „Beenden“
         // beantwortet, es wird also nichts gewählt.
         let prompt = ScriptedPrompt::new(vec![]);
-        let result = open_or_prepare_database(&db_path, &store, case.keychain, &prompt).await;
+        let result = open_or_prepare_database(
+            &db_path,
+            RootKeyAccess::Keychain(&store),
+            case.keychain,
+            &prompt,
+        )
+        .await;
 
         assert!(
             matches!(result, Err(StartupAbort::UserQuit)),
@@ -582,7 +633,13 @@ async fn test_t3_d4_without_the_second_confirmation_nothing_happens() {
     let prompt =
         ScriptedPrompt::new(vec![StartupChoice::GenerateNewKey]).without_second_confirmation();
 
-    let result = open_or_prepare_database(&db_path, &store, available(), &prompt).await;
+    let result = open_or_prepare_database(
+        &db_path,
+        RootKeyAccess::Keychain(&store),
+        available(),
+        &prompt,
+    )
+    .await;
 
     assert!(matches!(result, Err(StartupAbort::UserQuit)));
     assert_eq!(prompt.asked(), vec![StartupDialog::D4]);
@@ -615,9 +672,14 @@ async fn test_t7_start_over_from_d2_renames_byte_identically_and_starts_fresh() 
     let credentials = CountingCredentialStore::new(GetBehaviour::Present);
     let prompt = ScriptedPrompt::new(vec![StartupChoice::StartOver]);
 
-    let opened = open_or_prepare_database(&db_path, &credentials, available(), &prompt)
-        .await
-        .expect("nach „Neu anfangen“ muss eine frische Datenbank entstehen");
+    let opened = open_or_prepare_database(
+        &db_path,
+        RootKeyAccess::Keychain(&credentials),
+        available(),
+        &prompt,
+    )
+    .await
+    .expect("nach „Neu anfangen“ muss eine frische Datenbank entstehen");
 
     assert_eq!(prompt.asked(), vec![StartupDialog::D2]);
     let renamed_to = prompt.confirm_texts.lock().unwrap().clone();
@@ -672,9 +734,14 @@ async fn test_t7_start_over_from_d3_also_replaces_the_unusable_key() {
     let credentials = CountingCredentialStore::new(GetBehaviour::Corrupt);
     let prompt = ScriptedPrompt::new(vec![StartupChoice::StartOver]);
 
-    let opened = open_or_prepare_database(&db_path, &credentials, available(), &prompt)
-        .await
-        .expect("nach „Neu anfangen“ aus D3 muss eine frische Datenbank entstehen");
+    let opened = open_or_prepare_database(
+        &db_path,
+        RootKeyAccess::Keychain(&credentials),
+        available(),
+        &prompt,
+    )
+    .await
+    .expect("nach „Neu anfangen“ aus D3 muss eine frische Datenbank entstehen");
 
     assert_eq!(prompt.asked(), vec![StartupDialog::D3]);
     assert_eq!(credentials.sets(), 1, "der unbrauchbare K wird ersetzt");
@@ -690,9 +757,14 @@ async fn test_t7_start_over_from_d3_also_replaces_the_unusable_key() {
     // Der Zustand ist danach auflösbar: ein zweiter Start öffnet dieselbe
     // Datei ohne Dialog.
     opened.store.close().await;
-    let second = open_or_prepare_database(&db_path, &credentials, available(), &NoDialogExpected)
-        .await
-        .expect("der zweite Start darf keinen Dialog mehr brauchen");
+    let second = open_or_prepare_database(
+        &db_path,
+        RootKeyAccess::Keychain(&credentials),
+        available(),
+        &NoDialogExpected,
+    )
+    .await
+    .expect("der zweite Start darf keinen Dialog mehr brauchen");
     second.store.close().await;
 }
 
@@ -708,7 +780,13 @@ async fn test_t7_without_the_second_confirmation_no_file_is_renamed() {
     let credentials = CountingCredentialStore::new(GetBehaviour::Corrupt);
     let prompt = ScriptedPrompt::new(vec![StartupChoice::StartOver]).without_second_confirmation();
 
-    let result = open_or_prepare_database(&db_path, &credentials, available(), &prompt).await;
+    let result = open_or_prepare_database(
+        &db_path,
+        RootKeyAccess::Keychain(&credentials),
+        available(),
+        &prompt,
+    )
+    .await;
 
     assert!(matches!(result, Err(StartupAbort::UserQuit)));
     assert_eq!(std::fs::read(&db_path).unwrap(), before);
@@ -732,9 +810,14 @@ async fn test_t7_d4_converts_the_plaintext_file_with_a_new_key_and_keeps_the_row
     let credentials = CountingCredentialStore::new(GetBehaviour::Corrupt);
     let prompt = ScriptedPrompt::new(vec![StartupChoice::GenerateNewKey]);
 
-    let opened = open_or_prepare_database(&db_path, &credentials, available(), &prompt)
-        .await
-        .expect("D4 mit Bestätigung muss umwandeln");
+    let opened = open_or_prepare_database(
+        &db_path,
+        RootKeyAccess::Keychain(&credentials),
+        available(),
+        &prompt,
+    )
+    .await
+    .expect("D4 mit Bestätigung muss umwandeln");
 
     assert_eq!(prompt.asked(), vec![StartupDialog::D4]);
     assert_eq!(credentials.sets(), 1, "genau ein neuer K");
@@ -780,7 +863,13 @@ async fn test_t8_an_unreachable_key_does_not_open_the_database_and_retry_works()
     // --- Erster Teil: „Beenden“ — nichts angefasst.
     {
         let prompt = ScriptedPrompt::new(vec![StartupChoice::Quit]);
-        let result = open_or_prepare_database(&db_path, &credentials, available(), &prompt).await;
+        let result = open_or_prepare_database(
+            &db_path,
+            RootKeyAccess::Keychain(&credentials),
+            available(),
+            &prompt,
+        )
+        .await;
         assert!(matches!(result, Err(StartupAbort::UserQuit)));
         assert_eq!(
             prompt.asked(),
@@ -805,6 +894,13 @@ async fn test_t8_an_unreachable_key_does_not_open_the_database_and_retry_works()
             asked: Mutex<Vec<StartupDialog>>,
         }
         impl StartupPrompt for RetryThenWork<'_> {
+            fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
+                panic!("kein Master-Passwort in diesem Fall");
+            }
+            fn can_ask_for_a_password(&self) -> bool {
+                false
+            }
+
             fn ask(&self, dialog: StartupDialog) -> StartupChoice {
                 self.asked.lock().unwrap().push(dialog);
                 // Genau das, was ein Nutzer tut: den Schlüsselbund
@@ -827,9 +923,14 @@ async fn test_t8_an_unreachable_key_does_not_open_the_database_and_retry_works()
             store: &credentials,
             asked: Mutex::new(Vec::new()),
         };
-        let opened = open_or_prepare_database(&db_path, &credentials, available(), &prompt)
-            .await
-            .expect("„Erneut versuchen“ mit funktionierendem Store muss starten");
+        let opened = open_or_prepare_database(
+            &db_path,
+            RootKeyAccess::Keychain(&credentials),
+            available(),
+            &prompt,
+        )
+        .await
+        .expect("„Erneut versuchen“ mit funktionierendem Store muss starten");
         assert_eq!(
             prompt.asked.lock().unwrap().len(),
             1,
@@ -864,8 +965,13 @@ async fn test_a6_a_symlinked_database_aborts_the_start_only_where_a_file_would_b
         std::os::unix::fs::symlink(&target, &link).unwrap();
 
         let credentials = CountingCredentialStore::new(GetBehaviour::Present);
-        let result =
-            open_or_prepare_database(&link, &credentials, available(), &NoDialogExpected).await;
+        let result = open_or_prepare_database(
+            &link,
+            RootKeyAccess::Keychain(&credentials),
+            available(),
+            &NoDialogExpected,
+        )
+        .await;
 
         match result {
             Err(StartupAbort::Fatal { kind, .. }) => assert_eq!(
@@ -893,8 +999,13 @@ async fn test_a6_a_symlinked_database_aborts_the_start_only_where_a_file_would_b
         let before = std::fs::read(&renamed).unwrap();
 
         let credentials = CountingCredentialStore::new(GetBehaviour::Present);
-        let result =
-            open_or_prepare_database(&link, &credentials, available(), &NoDialogExpected).await;
+        let result = open_or_prepare_database(
+            &link,
+            RootKeyAccess::Keychain(&credentials),
+            available(),
+            &NoDialogExpected,
+        )
+        .await;
 
         assert!(matches!(
             result,
@@ -921,9 +1032,14 @@ async fn test_a6_a_symlinked_database_aborts_the_start_only_where_a_file_would_b
         std::os::unix::fs::symlink(&renamed, &link).unwrap();
 
         let credentials = CountingCredentialStore::new(GetBehaviour::Present);
-        let opened = open_or_prepare_database(&link, &credentials, available(), &NoDialogExpected)
-            .await
-            .expect("eine Verknüpfung auf eine verschlüsselte Datenbank muss weiter öffnen");
+        let opened = open_or_prepare_database(
+            &link,
+            RootKeyAccess::Keychain(&credentials),
+            available(),
+            &NoDialogExpected,
+        )
+        .await
+        .expect("eine Verknüpfung auf eine verschlüsselte Datenbank muss weiter öffnen");
         assert_eq!(credentials.sets(), 0);
         opened.store.close().await;
     }
@@ -944,7 +1060,7 @@ fn test_a5_the_rename_plan_covers_all_four_files_and_overwrites_nothing() {
     // neben einer neuen, leeren Datenbank gehört zu einer anderen Datei.
     std::fs::write(dir.path().join("smart-ssh.db-journal"), b"journal").unwrap();
 
-    let plan = plan_start_over_renames(&db_path);
+    let plan = plan_start_over_renames(&db_path, false);
     let main_name = plan.main_target_name().expect("es gibt eine Datei");
     plan.execute().unwrap();
 
@@ -981,7 +1097,7 @@ fn test_a5_the_rename_plan_covers_all_four_files_and_overwrites_nothing() {
     // Zweiter Durchlauf in derselben Sekunde: der Zielname darf die erste
     // Sicherung nicht überschreiben.
     std::fs::write(&db_path, b"zweiter").unwrap();
-    let second = plan_start_over_renames(&db_path);
+    let second = plan_start_over_renames(&db_path, false);
     let second_name = second.main_target_name().expect("es gibt eine Datei");
     assert_ne!(second_name, main_name);
     second.execute().unwrap();
@@ -1010,7 +1126,7 @@ fn test_a5_a_colliding_target_renames_nothing_at_all() {
     std::fs::write(&db_path, b"haupt").unwrap();
     std::fs::write(dir.path().join("smart-ssh.db-wal"), b"wal").unwrap();
 
-    let plan = plan_start_over_renames(&db_path);
+    let plan = plan_start_over_renames(&db_path, false);
     let main_name = plan.main_target_name().expect("es gibt eine Datei");
     // Genau das Ziel der `-wal` von Hand besetzen — zwischen Planen und
     // Ausführen liegt im Ablauf die zweite Bestätigung des Nutzers.
@@ -1043,7 +1159,7 @@ fn test_a5_an_orphaned_wal_without_a_database_names_no_file() {
     let db_path = dir.path().join("smart-ssh.db");
     std::fs::write(dir.path().join("smart-ssh.db-wal"), b"wal").unwrap();
 
-    let plan = plan_start_over_renames(&db_path);
+    let plan = plan_start_over_renames(&db_path, false);
     assert_eq!(plan.main_target_name(), None);
     plan.execute().unwrap();
     assert!(!dir.path().join("smart-ssh.db-wal").exists());
@@ -1142,6 +1258,13 @@ async fn test_a5_a_rename_collision_gets_its_own_message_without_backup_advice()
         asked: Mutex<Vec<StartupDialog>>,
     }
     impl StartupPrompt for CollidingPrompt {
+        fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
+            panic!("kein Master-Passwort in diesem Fall");
+        }
+        fn can_ask_for_a_password(&self) -> bool {
+            false
+        }
+
         fn ask(&self, dialog: StartupDialog) -> StartupChoice {
             self.asked.lock().unwrap().push(dialog);
             StartupChoice::StartOver
@@ -1177,10 +1300,15 @@ async fn test_a5_a_rename_collision_gets_its_own_message_without_backup_advice()
         asked: Mutex::new(Vec::new()),
     };
 
-    let err = open_or_prepare_database(&db_path, &credentials, available(), &prompt)
-        .await
-        .err()
-        .expect("eine Kollision darf nicht als Erfolg durchgehen");
+    let err = open_or_prepare_database(
+        &db_path,
+        RootKeyAccess::Keychain(&credentials),
+        available(),
+        &prompt,
+    )
+    .await
+    .err()
+    .expect("eine Kollision darf nicht als Erfolg durchgehen");
 
     match err {
         StartupAbort::Fatal { kind, .. } => assert_eq!(

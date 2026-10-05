@@ -110,6 +110,16 @@ impl ScriptedPrompt {
 }
 
 impl StartupPrompt for ScriptedPrompt {
+    /// A11/A11.1: Der Umzugs-Dialog fragt nie nach einem Master-Passwort.
+    fn ask_for_new_master_password(&self) -> Option<crate::database_startup::NewMasterPassword> {
+        panic!("der Umzug fragt nie nach einem Master-Passwort");
+    }
+    /// A11.1 hängt nicht daran, ob eine Texteingabe möglich ist, sondern am
+    /// Modus — `offers_skip` wird dem Umzug eigens übergeben.
+    fn can_ask_for_a_password(&self) -> bool {
+        false
+    }
+
     fn ask(&self, dialog: StartupDialog) -> StartupChoice {
         self.asked.lock().unwrap().push(dialog);
         let mut answers = self.answers.lock().unwrap();
@@ -344,7 +354,7 @@ async fn test_t11_the_provider_branch_and_the_other_auth_kinds_move_too() {
     );
 
     let prompt = ScriptedPrompt::new(Vec::new());
-    migrate_secrets_into_database(&store, &keyring, &database, &prompt)
+    migrate_secrets_into_database(&store, &keyring, &database, &prompt, false)
         .await
         .expect("der Umzug muss gelingen");
 
@@ -390,7 +400,7 @@ async fn test_t11_every_secret_moves_and_every_entry_is_deleted() {
     assert_eq!(before, 5, "zwei Server, ein Slot fehlt");
     let prompt = ScriptedPrompt::new(Vec::new());
 
-    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
         .await
         .expect("der Umzug muss gelingen");
 
@@ -427,7 +437,7 @@ async fn test_t11_every_secret_moves_and_every_entry_is_deleted() {
 
     // Ein zweiter Start fasst den Schlüsselbund nicht mehr an.
     let deletes_after_first = keyring.deletes();
-    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
         .await
         .unwrap();
     assert_eq!(
@@ -448,17 +458,19 @@ async fn test_t11_a_failing_read_deletes_nothing_and_keeps_the_state_open() {
     let before = keyring.count();
     let prompt = ScriptedPrompt::new(vec![StartupChoice::Quit]);
 
-    let err = migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
-        .await
-        .expect_err("ein Lesefehler darf den Start nicht stillschweigend fortsetzen");
+    let err =
+        migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
+            .await
+            .expect_err("ein Lesefehler darf den Start nicht stillschweigend fortsetzen");
     assert!(matches!(err, StartupAbort::UserQuit));
 
     assert_eq!(
         prompt.asked.lock().unwrap().clone(),
-        vec![StartupDialog::D1 {
-            offers_password_setup: false
+        vec![StartupDialog::MigrationUnreadable {
+            offers_skip_migration: false
         }],
-        "A11: D1 ohne „Master-Passwort einrichten“"
+        "A11: der Umzugs-Dialog, der das Einrichten per Konstruktion nicht \
+         anbieten kann — und im Schlüsselbund-Modus auch kein Überspringen"
     );
     assert_eq!(keyring.deletes(), 0, "es darf nichts gelöscht werden");
     assert_eq!(keyring.count(), before);
@@ -469,7 +481,7 @@ async fn test_t11_a_failing_read_deletes_nothing_and_keeps_the_state_open() {
     // „Erneut versuchen“ mit danach antwortendem Schlüsselbund startet.
     *keyring.failing_get.lock().unwrap() = None;
     let prompt = ScriptedPrompt::new(vec![StartupChoice::Retry]);
-    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
         .await
         .expect("nach „Erneut versuchen“ muss der Umzug gelingen");
     assert_eq!(keyring.count(), 0);
@@ -485,7 +497,7 @@ async fn test_t11_a_failing_delete_still_starts_and_is_retried() {
     *keyring.failing_delete.lock().unwrap() = Some(stubborn.clone());
     let prompt = ScriptedPrompt::new(Vec::new());
 
-    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
         .await
         .expect("ein Löschfehler darf den Start nicht aufhalten");
 
@@ -498,7 +510,7 @@ async fn test_t11_a_failing_delete_still_starts_and_is_retried() {
     // Nächster Start: nur noch dieser eine Versuch, und diesmal gelingt er.
     *keyring.failing_delete.lock().unwrap() = None;
     let deletes_before = keyring.deletes();
-    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
         .await
         .unwrap();
     assert_eq!(
@@ -530,7 +542,7 @@ async fn test_t11_entries_of_a_server_deleted_while_pending_are_still_removed() 
     *keyring.failing_delete.lock().unwrap() = Some(stubborn.clone());
     let prompt = ScriptedPrompt::new(Vec::new());
 
-    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
         .await
         .unwrap();
     let (state, pending) = fixture.store.secret_migration_state().await.unwrap();
@@ -548,7 +560,7 @@ async fn test_t11_entries_of_a_server_deleted_while_pending_are_still_removed() 
         .all(|s| s.id != doomed));
 
     *keyring.failing_delete.lock().unwrap() = None;
-    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
         .await
         .unwrap();
 
@@ -567,9 +579,9 @@ async fn test_t11_entries_of_a_server_deleted_while_pending_are_still_removed() 
 /// Option „Ohne Übernahme fortfahren". Die gehört zu A11.1 und damit zum
 /// Passwort-Modus (Etappe 3).
 ///
-/// Heute gibt es die Option in `StartupChoice` noch gar nicht; der Test
-/// hält deshalb fest, was stattdessen gilt — der Dialog ist genau D1 ohne
-/// Einrichten, und der Zustand *übersprungen* entsteht auf keinem Weg.
+/// Seit Etappe 3 gibt es `StartupChoice::ContinueWithoutMigration` — der
+/// Test hält fest, dass sie im Schlüsselbund-Modus nicht angeboten wird und
+/// der Zustand *übersprungen* dort auf keinem Weg entsteht.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_t11_the_keychain_mode_offers_no_skip_option() {
     let fixture = fixture().await;
@@ -579,12 +591,13 @@ async fn test_t11_the_keychain_mode_offers_no_skip_option() {
     let prompt = ScriptedPrompt::new(vec![StartupChoice::Quit]);
 
     let _ =
-        migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt).await;
+        migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
+            .await;
 
     assert_eq!(
         prompt.asked.lock().unwrap().clone(),
-        vec![StartupDialog::D1 {
-            offers_password_setup: false
+        vec![StartupDialog::MigrationUnreadable {
+            offers_skip_migration: false
         }]
     );
     let (state, _) = fixture.store.secret_migration_state().await.unwrap();
@@ -592,6 +605,93 @@ async fn test_t11_the_keychain_mode_offers_no_skip_option() {
         state, STATE_SKIPPED,
         "der Zustand *übersprungen* darf im Schlüsselbund-Modus nicht entstehen"
     );
+}
+
+/// T11, Variante *übersprungen* (A11.1): Im Passwort-Modus bietet der
+/// Dialog „Ohne Übernahme fortfahren" an; danach wird **nie** ein
+/// Schlüsselbund-Eintrag gelöscht, auch wenn der Schlüsselbund später
+/// wieder antwortet.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t11_skipped_never_deletes_anything_even_once_the_keychain_works() {
+    let fixture = fixture().await;
+    let keyring = keyring_for(&fixture, None);
+    *keyring.failing_get.lock().unwrap() =
+        Some(format!("server:{}:private_key", fixture.servers[0].0));
+    let before = keyring.count();
+    let prompt = ScriptedPrompt::new(vec![StartupChoice::ContinueWithoutMigration]);
+
+    migrate_secrets_into_database(
+        &fixture.store,
+        &keyring,
+        &fixture.database,
+        &prompt,
+        // A11.1: nur im Passwort-Modus.
+        true,
+    )
+    .await
+    .expect("„Ohne Übernahme fortfahren“ lässt den Start weiterlaufen");
+
+    assert_eq!(
+        prompt.asked.lock().unwrap().clone(),
+        vec![StartupDialog::MigrationUnreadable {
+            offers_skip_migration: true
+        }]
+    );
+    let (state, pending) = fixture.store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_SKIPPED);
+    assert!(pending.is_empty(), "es ist nichts zum Löschen vorgemerkt");
+    assert_eq!(keyring.deletes(), 0);
+    assert_eq!(keyring.count(), before, "kein Eintrag angefasst");
+
+    // **Der eigentliche Punkt von A11.1:** Der Schlüsselbund antwortet
+    // wieder — und trotzdem wird nichts gelöscht. Ohne den eigenen
+    // `skipped`-Zweig (etwa mit einem `moved` und leerer Liste) würde
+    // dieser zweite Start die Einträge nach dem Datenbankstand einsammeln
+    // und löschen.
+    *keyring.failing_get.lock().unwrap() = None;
+    let prompt = ScriptedPrompt::new(vec![]);
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, true)
+        .await
+        .expect("ein zweiter Start darf nicht scheitern");
+
+    assert!(
+        prompt.asked.lock().unwrap().is_empty(),
+        "im Zustand *übersprungen* wird nicht erneut gefragt"
+    );
+    assert_eq!(
+        keyring.deletes(),
+        0,
+        "A11.1: in *übersprungen* wird nie ein Eintrag gelöscht"
+    );
+    assert_eq!(keyring.count(), before);
+    let (state, _) = fixture.store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_SKIPPED, "der Zustand bleibt *übersprungen*");
+}
+
+/// A11.1, Gegenprobe zur Schranke: Die Wahl „Ohne Übernahme fortfahren"
+/// wird **auch dann** abgewiesen, wenn sie aus einer Oberfläche kommt, die
+/// sie nicht angeboten bekam.
+///
+/// Die Prüfung steht deshalb zweimal im Code — beim Anbieten und beim
+/// Auswerten. Im Schlüsselbund-Modus würde *übersprungen* Secrets dauerhaft
+/// unerreichbar machen, obwohl sie im erreichbaren Schlüsselbund liegen.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_a11_1_skip_is_refused_when_it_was_not_offered() {
+    let fixture = fixture().await;
+    let keyring = keyring_for(&fixture, None);
+    *keyring.failing_get.lock().unwrap() =
+        Some(format!("server:{}:private_key", fixture.servers[0].0));
+    let prompt = ScriptedPrompt::new(vec![StartupChoice::ContinueWithoutMigration]);
+
+    let err =
+        migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
+            .await
+            .expect_err("eine nicht angebotene Wahl darf nicht wirken");
+    assert!(matches!(err, StartupAbort::UserQuit));
+
+    let (state, _) = fixture.store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_OPEN, "der Zustand bleibt *offen*");
+    assert_eq!(keyring.deletes(), 0);
 }
 
 /// **Der Umzug darf K nie anfassen** (spec-reviewer Runde 1, Spec 0101
@@ -625,7 +725,7 @@ async fn test_a10_a_reference_pointing_at_the_root_key_is_never_migrated() {
     )]);
     let prompt = ScriptedPrompt::new(Vec::new());
 
-    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
         .await
         .expect("eine fremde Referenz darf den Start nicht aufhalten");
 
@@ -680,7 +780,7 @@ async fn test_a10_a_tampered_pending_list_never_deletes_the_root_key() {
         .unwrap();
 
     let prompt = ScriptedPrompt::new(Vec::new());
-    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
         .await
         .expect("eine fremde Referenz in der Liste darf den Start nicht aufhalten");
 
@@ -716,7 +816,7 @@ async fn test_a10_a_fresh_installation_touches_nothing() {
     let keyring = TestKeyring::with(&[("server:fremd:password", "nicht meins")]);
     let prompt = ScriptedPrompt::new(Vec::new());
 
-    migrate_secrets_into_database(&store, &keyring, &database, &prompt)
+    migrate_secrets_into_database(&store, &keyring, &database, &prompt, false)
         .await
         .unwrap();
 
@@ -753,9 +853,12 @@ async fn test_a11_a_failed_migration_gets_its_own_kind_without_backup_advice() {
     // Lage, in der „Datei beschädigt, spiel ein Backup ein" falsch ist.
     fixture.store.close().await;
 
-    let err = migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt)
-        .await
-        .expect_err("ein nicht erreichbarer Store darf den Start nicht stillschweigend fortsetzen");
+    let err =
+        migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
+            .await
+            .expect_err(
+                "ein nicht erreichbarer Store darf den Start nicht stillschweigend fortsetzen",
+            );
 
     match err {
         StartupAbort::Fatal { kind, .. } => assert_eq!(

@@ -39,6 +39,18 @@ impl NativeStartupPrompt {
     }
 
     fn ask_choice(&self, text: texts::ChoiceDialogText, confirm: StartupChoice) -> StartupChoice {
+        self.ask_choice_with_extra(text, confirm, StartupChoice::Quit)
+    }
+
+    /// Mit drittem Knopf (A3, D1: „Master-Passwort einrichten“). `extra` im
+    /// Text entscheidet, ob er überhaupt erscheint — ist er `None`, kann
+    /// `DialogAnswer::Extra` nicht zurückkommen.
+    fn ask_choice_with_extra(
+        &self,
+        text: texts::ChoiceDialogText,
+        confirm: StartupChoice,
+        extra: StartupChoice,
+    ) -> StartupChoice {
         match startup_dialog::ask(
             &text.title,
             &text.message,
@@ -47,10 +59,8 @@ impl NativeStartupPrompt {
             text.extra.as_deref(),
         ) {
             DialogAnswer::Confirm => confirm,
-            // Der dritte Knopf gibt es in Etappe 1/2 nicht (`extra` ist
-            // `None`), also kann `Extra` hier nicht vorkommen. Käme er doch,
-            // wäre „beenden" die sichere Antwort — nicht die Handlung.
-            DialogAnswer::Extra | DialogAnswer::Cancel => StartupChoice::Quit,
+            DialogAnswer::Extra => extra,
+            DialogAnswer::Cancel => StartupChoice::Quit,
         }
     }
 }
@@ -62,14 +72,29 @@ impl StartupPrompt for NativeStartupPrompt {
             StartupDialog::D1 {
                 offers_password_setup,
             } => {
-                // Etappe 3 bringt das Einrichten; bis dahin wird der dritte
-                // Knopf **nicht** gezeigt. Der Wert wird trotzdem geloggt,
-                // damit nachvollziehbar ist, dass die Entscheidung ihn schon
-                // berechnet.
-                tracing::info!(
+                let text = texts::d1_keychain_unreachable_text(
+                    self.keychain
+                        .unavailable_reason()
+                        .unwrap_or(KeychainUnavailableReason::Unknown),
+                    std::env::consts::OS,
                     offers_password_setup,
-                    "D1: master-password setup arrives with stage 3 (Spec 0101, A13)"
+                    self.database_is_plaintext(),
+                    self.language,
                 );
+                // Der dritte Knopf (A13) führt nicht hier zur Maske — rfd
+                // hat keine Texteingabe (§1). Die Wahl wird zurückgegeben,
+                // und `open_or_prepare_database` antwortet mit
+                // `StartupAbort::NeedsWindow`, ohne etwas anzufassen.
+                self.ask_choice_with_extra(
+                    text,
+                    StartupChoice::Retry,
+                    StartupChoice::SetUpMasterPassword,
+                )
+            }
+            // A11: „Dialog D1 ohne Einrichten“. Der dritte Knopf aus A11.1
+            // gehört zum Passwort-Modus und erscheint dort im Fenster —
+            // nativ gibt es ihn nicht.
+            StartupDialog::MigrationUnreadable { .. } => {
                 let text = texts::d1_keychain_unreachable_text(
                     self.keychain
                         .unavailable_reason()
@@ -121,5 +146,22 @@ impl StartupPrompt for NativeStartupPrompt {
     fn notify_started_over(&self, renamed_to: &str) {
         let text = texts::started_over_notice_text(renamed_to, self.language);
         startup_dialog::show_info(&text.title, &text.message);
+    }
+
+    /// §1: rfd hat keine Texteingabe. Die Maske erscheint im Fenster
+    /// (`crate::window_prompt`); dieser Fragesteller kommt nie dorthin, weil
+    /// [`Self::can_ask_for_a_password`] `false` liefert.
+    fn ask_for_new_master_password(
+        &self,
+    ) -> Option<app_logic::database_startup::NewMasterPassword> {
+        tracing::error!(
+            "the native startup dialog cannot ask for a password; this should have been \
+             deferred to the window (Spec 0101, Teil 0 Frage 3)"
+        );
+        None
+    }
+
+    fn can_ask_for_a_password(&self) -> bool {
+        false
     }
 }

@@ -33,11 +33,17 @@ mod ssh_config_apply;
 /// `ssh_manager_core::profiles::ssh_config::export`.
 mod ssh_config_export;
 mod startup_dialog;
+/// Spec 0101, A16: das Tor, das vor der Entsperrung jedes Kommando außer
+/// Entsperren, Beenden und Neu-anfangen abweist.
+mod startup_gate;
 /// Spec 0101, A3/A5: die nativen Startdialoge zu den Fällen D1–D4 —
 /// Zuordnung von Fall zu Text und Knöpfen, ohne eigene Logik.
 mod startup_prompt;
 #[cfg(test)]
 mod test_support;
+/// Spec 0101, Teil 0 Frage 3: die Startdialoge im Fenster, fuer den
+/// Passwort-Modus.
+mod window_prompt;
 mod wiring;
 
 pub use wiring::{Edition, Wiring};
@@ -52,16 +58,22 @@ use app_logic::host_key_store::FileHostKeyStore;
 use app_logic::session::SessionManager;
 use app_logic::state::AppState;
 
-/// Baut den `AppState` einmalig beim App-Start auf. Synchron nach außen
-/// (`run()` wird von `main.rs` ohne `#[tokio::main]` aufgerufen, wie im
-/// Standard-Tauri-Bootstrap üblich) — `tauri::async_runtime::block_on`
-/// überbrückt den einen async `SqliteProfileStore::connect`-Aufruf beim
-/// Start; danach läuft alles über Tauris eigene, bereits laufende
-/// Async-Runtime (jedes `#[tauri::command]` ist selbst `async fn`).
-fn build_app_state(
-    wiring: &Wiring,
-    log_guard: tracing_appender::non_blocking::WorkerGuard,
-) -> (AppState, tracing_appender::non_blocking::WorkerGuard) {
+/// Die Angaben, die der Startablauf einmal pro Programmlauf aus der
+/// Umgebung liest (Spec 0071 A11a/A3) — vor jeder Entscheidung darüber, wie
+/// K beschafft wird.
+///
+/// **Eigener Typ seit Spec 0101 Etappe 3:** Im Passwort-Modus wird der
+/// Startablauf in zwei Hälften geteilt (Teil 0 Frage 3). Die erste läuft in
+/// [`run`] vor dem Fenster, die zweite im Entsperr-Kommando. Beide brauchen
+/// dieselben Angaben, und sie dürfen sich nicht unterscheiden — die
+/// Umgebung wird deshalb genau einmal gelesen.
+pub(crate) struct StartupInputs {
+    pub(crate) db_path: std::path::PathBuf,
+    pub(crate) language: app_logic::startup_error_messages::Language,
+    pub(crate) keychain: credentials_keyring::KeychainAvailability,
+}
+
+fn startup_inputs() -> StartupInputs {
     // Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
     // Programmlaufs — hier, an der einzigen Stelle, die tatsächlich die
     // Umgebung liest. Die Entscheidungslogik selbst ist rein und liegt in
@@ -116,6 +128,33 @@ fn build_app_state(
     }
     tracing::info!(?keychain, "probed OS keychain availability");
 
+    StartupInputs {
+        db_path,
+        language,
+        keychain,
+    }
+}
+
+/// Spec 0101, §5 Schritte 4–9: ab dem Öffnen der Datenbank bis zum fertigen
+/// `AppState`.
+///
+/// `async`, nicht synchron mit `block_on` (wie bis Etappe 2): Im
+/// Passwort-Modus läuft diese Hälfte **innerhalb** von Tauris Laufzeit, aus
+/// dem Entsperr-Kommando heraus — ein `tauri::async_runtime::block_on`
+/// würde dort panicken („cannot start a runtime from within a runtime“).
+/// [`run`] ruft sie außerhalb der Laufzeit über ein `block_on` auf.
+///
+/// `offers_skip` ist A11.1 und gilt nur im Passwort-Modus.
+pub(crate) async fn open_and_assemble(
+    entitlements: &Arc<dyn ssh_manager_core::entitlements::EntitlementProvider>,
+    inputs: &StartupInputs,
+    access: app_logic::database_startup::RootKeyAccess<'_>,
+    prompt: &dyn app_logic::database_startup::StartupPrompt,
+    offers_skip: bool,
+) -> Result<AppState, app_logic::database_startup::StartupAbort> {
+    let db_path = inputs.db_path.clone();
+    let keychain = inputs.keychain;
+
     // **Nur noch für K** (Spec 0101, E2/A9): Der Schlüsselbund des
     // Betriebssystems trägt ab Etappe 2 ausschließlich den Wurzelschlüssel.
     // Die Secrets selbst liegen in der verschlüsselten Datenbank, hinter
@@ -135,51 +174,15 @@ fn build_app_state(
     // Schlüssel ist schon das Öffnen nicht möglich (A4: nie „out of memory"
     // aus dem Migrationslauf für einen Schlüssel-Fall).
     tracing::info!(data_path = %db_path.display(), "opening the encrypted SQLite database");
-    let prompt = crate::startup_prompt::NativeStartupPrompt {
-        db_path: db_path.clone(),
-        language,
-        keychain,
-    };
+    // **Die Fehlerbehandlung liegt jetzt beim Aufrufer**, nicht hier: Im
+    // Schlüsselbund-Modus endet ein fataler Startfehler in einem nativen
+    // Dialog und `process::exit` (`run`), im Passwort-Modus als Meldung in
+    // der Entsperrmaske (A16: „sichtbare Meldung"). Ein `process::exit` aus
+    // einem Kommando heraus würde dort das Fenster wegreißen, bevor der
+    // Nutzer den Grund gelesen hat.
     let opened =
-        match tauri::async_runtime::block_on(app_logic::database_startup::open_or_prepare_database(
-            &db_path,
-            &keyring_store,
-            keychain,
-            &prompt,
-        )) {
-            Ok(opened) => opened,
-            // Der Nutzer hat „Beenden" gewählt. Es ist bereits alles gesagt —
-            // ein zweiter Dialog wäre nur Lärm. Rückgabewert 0, weil ein
-            // bewusstes Beenden kein Fehler ist (anders als bei
-            // `show_fatal_error_and_exit`).
-            Err(app_logic::database_startup::StartupAbort::UserQuit) => {
-                tracing::info!("startup aborted by the user");
-                // s. Kommentar zum `drop(log_guard)` unten — `process::exit`
-                // führt keine Destruktoren aus, der Log-Puffer würde sonst
-                // verloren gehen.
-                drop(log_guard);
-                std::process::exit(0);
-            }
-            Err(app_logic::database_startup::StartupAbort::Fatal { kind, detail }) => {
-                let log_dir = app_logic::logging::default_log_dir();
-                let text = app_logic::startup_error_messages::db_connect_failure_text(
-                    &kind, &db_path, &log_dir, language,
-                );
-                // `detail` **nur** ins Log: Er kann einen Bibliothekstext
-                // enthalten, der Dialog nennt stattdessen Ursache, Datenpfad und
-                // nächsten Schritt (Spec 0059, Invarianten).
-                tracing::error!(detail, ?kind, "fatal: database startup failed");
-                // spec-reviewer-Fund: `std::process::exit` in `show_fatal_error_
-                // and_exit` führt keine Destruktoren aus — ohne dieses explizite
-                // `drop` würde der `WorkerGuard` (der den nicht-blockierenden
-                // Log-Writer beim Drop synchron flusht, s. `logging::init_
-                // logging`-Doc-Kommentar) nie laufen, und ausgerechnet die
-                // `tracing::error!`-Zeile zum fatalen Fehler könnte im Puffer
-                // verloren gehen.
-                drop(log_guard);
-                crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
-            }
-        };
+        app_logic::database_startup::open_or_prepare_database(&db_path, access, keychain, prompt)
+            .await?;
     tracing::info!("SQLite database connected");
     let profile_store = opened.store;
     let chat_content_key = opened.root_key;
@@ -189,15 +192,13 @@ fn build_app_state(
     // Spec 0101, A9: Der produktive `CredentialStore` ist ab hier die
     // verschlüsselte Datenbank, nicht mehr der Schlüsselbund.
     //
-    // **Der Griff auf die Runtime** (Teil 0, Frage 2): `build_app_state`
-    // läuft **außerhalb** jeder Async-Runtime (`run()` wird ohne
-    // `#[tokio::main]` aufgerufen, s. Doc-Kommentar oben) — `Handle::
-    // current()` würde hier panicken. Deshalb wird er innerhalb eines
-    // `block_on` geholt, also im Kontext von Tauris Runtime, und dem Store
-    // mitgegeben. Welchen Weg der Store damit nimmt und warum, steht im
+    // **Der Griff auf die Runtime** (Teil 0, Frage 2): Diese Funktion ist
+    // `async`, läuft also immer **innerhalb** der Laufzeit — `Handle::
+    // current()` ist hier gültig (bis Etappe 2 stand hier ein eigenes
+    // `block_on`, weil der Aufbau synchron außerhalb der Laufzeit lief).
+    // Welchen Weg der Store mit dem Griff nimmt und warum, steht im
     // Modul-Kommentar von `persistence_sqlite::credential_store`.
-    let runtime_handle =
-        tauri::async_runtime::block_on(async { tokio::runtime::Handle::current() });
+    let runtime_handle = tokio::runtime::Handle::current();
     let credential_store = profile_store.credential_store(runtime_handle);
 
     // Spec 0101, A10/A11 (§5, Schritt 7): der einmalige Umzug der Secrets
@@ -209,31 +210,14 @@ fn build_app_state(
     // Ein Lesefehler endet in D1 ohne Einrichten (A11) und damit entweder
     // in einem erneuten Versuch oder im Beenden — nie in einer laufenden
     // App, die gespeicherte Passwörter nicht mehr findet.
-    if let Err(abort) =
-        tauri::async_runtime::block_on(app_logic::secret_migration::migrate_secrets_into_database(
-            &profile_store,
-            &keyring_store,
-            &credential_store,
-            &prompt,
-        ))
-    {
-        match abort {
-            app_logic::database_startup::StartupAbort::UserQuit => {
-                tracing::info!("startup aborted by the user during the secret migration");
-                drop(log_guard);
-                std::process::exit(0);
-            }
-            app_logic::database_startup::StartupAbort::Fatal { kind, detail } => {
-                let log_dir = app_logic::logging::default_log_dir();
-                let text = app_logic::startup_error_messages::db_connect_failure_text(
-                    &kind, &db_path, &log_dir, language,
-                );
-                tracing::error!(detail, ?kind, "fatal: the secret migration failed");
-                drop(log_guard);
-                crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
-            }
-        }
-    }
+    app_logic::secret_migration::migrate_secrets_into_database(
+        &profile_store,
+        &keyring_store,
+        &credential_store,
+        prompt,
+        offers_skip,
+    )
+    .await?;
 
     // Spec 0036/0040/0057: derselbe Cipher (und damit derselbe Schlüssel)
     // für alle drei Stores — kein weiterer Verschlüsselungsmechanismus für
@@ -272,13 +256,20 @@ fn build_app_state(
         Err(err) => {
             let text = app_logic::startup_error_messages::host_key_store_failure_text(
                 &host_key_path,
-                language,
+                inputs.language,
             );
             tracing::error!(error = %err, "fatal: host-key store failed to load");
-            // s. Kommentar bei der DB-Verbindung oben — dieselbe explizite
-            // Log-Flush-Notwendigkeit vor `process::exit`.
-            drop(log_guard);
-            crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
+            // Seit Etappe 3 ein regulärer Abbruch statt `process::exit`
+            // hier: Der Aufrufer entscheidet, ob daraus ein nativer Dialog
+            // oder eine Meldung im Fenster wird (s. Kommentar beim Öffnen
+            // der Datenbank). Der Text steht schon fest, deshalb reist er
+            // als `detail` mit — `kind` bleibt `Other`, weil
+            // `host_key_store_failure_text` seinen eigenen Text hat und der
+            // Aufrufer ihn über `host_key_store_failure` erneut bildet.
+            return Err(app_logic::database_startup::StartupAbort::Fatal {
+                kind: persistence_sqlite::ConnectFailureKind::HostKeyStoreFailed,
+                detail: format!("{}: {err}", text.title),
+            });
         }
     };
     tracing::info!("host-key store loaded");
@@ -300,7 +291,7 @@ fn build_app_state(
         // Spec 0038, Abschnitt 2: aus dem übergebenen `Wiring` gelesen statt
         // hier fest verdrahtet (s. `Wiring::community`-Doc-Kommentar zum
         // Scope dieses Refactorings).
-        entitlements: wiring.entitlements.clone(),
+        entitlements: entitlements.clone(),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
@@ -309,7 +300,7 @@ fn build_app_state(
         // Spec 0075, §5.1: leer, bis eine Vorschau gelaufen ist.
         pending_ssh_config_import: std::sync::Mutex::new(None),
     };
-    (app_state, log_guard)
+    Ok(app_state)
 }
 
 /// Startet die App mit der übergebenen [`Wiring`]/[`tauri::Context`].
@@ -384,14 +375,93 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // `get_app_info` braucht sie als `State<Edition>`, `Wiring` selbst
     // wird nirgends als Tauri-`State` verwaltet.
     let edition = wiring.edition;
-    // spec-reviewer-Fund (Spec 0059): `_log_guard` wird hier zur
-    // Weiterreichung an `build_app_state` per Wert übergeben (das
-    // ansonsten fatale `.expect()`-freie Verhalten dort kann den Guard bei
-    // einem der drei fatalen Fehlerfälle explizit droppen, um den
-    // Log-Writer VOR `std::process::exit` blockierend zu flushen — s.
-    // Kommentare in `build_app_state`) und danach für die restliche
-    // App-Laufzeit zurückgegeben.
-    let (app_state, _log_guard) = build_app_state(&wiring, _log_guard);
+
+    // Spec 0101, Etappe 3 (Teil 0 Frage 3): Der Startablauf hat seit dem
+    // Master-Passwort zwei Formen.
+    //
+    // **Schlüsselbund-Modus** (Standard, E8): unverändert — der `AppState`
+    // entsteht hier, vor dem Fenster, mit den nativen Dialogen.
+    //
+    // **Passwort-Modus** (Verpackungsdatei vorhanden, §5): Hier gibt es vor
+    // der Entsperrung kein K und damit keine offene Datenbank. Die App
+    // startet ohne `AppState` (gemessen, M5), zeigt die Entsperrmaske, und
+    // `unlock_with_master_password` baut den Zustand danach nach
+    // (`AppHandle::manage`, gemessen M2). Bis dahin hält der
+    // [`StartupGate`](crate::startup_gate::StartupGate) jedes Kommando auf
+    // (A16).
+    //
+    // `_log_guard` bleibt hier und wandert **nicht** mehr in den Aufbau:
+    // Der Aufbau meldet Fehler jetzt als Rückgabewert, und nur die beiden
+    // `process::exit`-Stellen unten brauchen den Guard zum Flushen.
+    let inputs = startup_inputs();
+    let mode = app_logic::master_password::key_mode(&inputs.db_path);
+    tracing::info!(?mode, "determined how the root key is kept (Spec 0101, §5)");
+
+    let app_state = match mode {
+        app_logic::master_password::KeyMode::Password => None,
+        app_logic::master_password::KeyMode::Keychain => {
+            let keyring = KeyringCredentialStore::new();
+            let prompt = crate::startup_prompt::NativeStartupPrompt {
+                db_path: inputs.db_path.clone(),
+                language: inputs.language,
+                keychain: inputs.keychain,
+            };
+            // `block_on`: `run()` läuft ohne `#[tokio::main]`, also außerhalb
+            // jeder Laufzeit (s. `runtime_assumptions`).
+            match tauri::async_runtime::block_on(open_and_assemble(
+                &wiring.entitlements,
+                &inputs,
+                app_logic::database_startup::RootKeyAccess::Keychain(&keyring),
+                &prompt,
+                // A11.1 gilt nur im Passwort-Modus.
+                false,
+            )) {
+                Ok(state) => Some(state),
+                // Der Nutzer hat „Beenden" gewählt. Es ist bereits alles
+                // gesagt — ein zweiter Dialog wäre nur Lärm. Rückgabewert 0,
+                // weil ein bewusstes Beenden kein Fehler ist.
+                Err(app_logic::database_startup::StartupAbort::UserQuit) => {
+                    tracing::info!("startup aborted by the user");
+                    // `process::exit` führt keine Destruktoren aus — ohne
+                    // dieses `drop` ginge der Log-Puffer verloren.
+                    drop(_log_guard);
+                    std::process::exit(0);
+                }
+                // Teil 0 Frage 3: „Master-Passwort einrichten" aus D1
+                // braucht eine Texteingabe, die rfd nicht hat. Es ist
+                // nichts verändert; die App startet ohne Zustand und
+                // wiederholt den Ablauf aus dem Fenster.
+                Err(app_logic::database_startup::StartupAbort::NeedsWindow) => {
+                    tracing::info!(
+                        "continuing the startup in the window so a master password can be \
+                         entered (Spec 0101, A13)"
+                    );
+                    None
+                }
+                Err(app_logic::database_startup::StartupAbort::Fatal { kind, detail }) => {
+                    let log_dir = app_logic::logging::default_log_dir();
+                    let text = app_logic::startup_error_messages::db_connect_failure_text(
+                        &kind,
+                        &inputs.db_path,
+                        &log_dir,
+                        inputs.language,
+                    );
+                    // `detail` **nur** ins Log: Er kann einen
+                    // Bibliothekstext enthalten; der Dialog nennt Ursache,
+                    // Datenpfad und nächsten Schritt (Spec 0059).
+                    tracing::error!(detail, ?kind, "fatal: database startup failed");
+                    drop(_log_guard);
+                    crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
+                }
+            }
+        }
+    };
+
+    // A16: offen, wenn der Zustand schon steht — sonst zu, bis entsperrt
+    // ist.
+    let gate = std::sync::Arc::new(crate::startup_gate::StartupGate::new(app_state.is_some()));
+    let pending =
+        crate::commands::master_password::PendingStartup::new(inputs, wiring.entitlements.clone());
     let plugins = wiring.plugins;
 
     let builder = tauri::Builder::default();
@@ -452,87 +522,36 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 });
             }
 
-            // Spec 0028, Abschnitt 9: ein beim letzten Beenden aktivierter
-            // MCP-Server bleibt über einen Neustart hinweg aktiv, ohne
-            // manuelles erneutes Anschalten.
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                crate::mcp_settings::autostart_if_enabled(&handle).await;
-            });
-
-            // Spec 0034, Abschnitt 5: Aufbewahrungs-Aufräum-Job beim
-            // App-Start — No-op, solange keine Aufbewahrungsdauer
-            // konfiguriert ist (Default).
-            let handle_for_retention = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let state = handle_for_retention.state::<AppState>();
-                crate::chat_retention::cleanup_old_chat_sessions_on_startup(
-                    &handle_for_retention,
-                    &state,
-                )
-                .await;
-            });
-
-            // Spec 0040, Abschnitt 3: einmalige, idempotente Migration
-            // bestehender Klartext-Zeilen in `prompt_history` — No-op,
-            // sobald alle Zeilen bereits verschlüsselt sind (jeder Start
-            // danach prüft erneut, findet aber nichts mehr zu tun).
-            let handle_for_prompt_history_migration = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let state = handle_for_prompt_history_migration.state::<AppState>();
-                // Spec 0040, Abschnitt 7: `None`, wenn der Verschlüsselungs-
-                // schlüssel beim Start nicht aufgelöst werden konnte (s.
-                // `build_app_state`) — dann gibt es nichts zu migrieren.
-                let Some(store) = &state.prompt_history_store else {
-                    return;
-                };
-                match store.migrate_legacy_plaintext_content().await {
-                    Ok(count) if count > 0 => {
-                        tracing::info!(count, "legacy plaintext prompt_history rows encrypted");
-                    }
-                    Ok(_) => {}
-                    Err(err) => {
-                        tracing::warn!(error = %err, "prompt_history encryption migration failed");
-                    }
-                }
-            });
-
-            // Spec 0038, Abschnitt 4: hält das Frontend über
-            // `entitlements:changed` aktuell, sobald `EntitlementProvider::
-            // watch()` einen neuen Stand liefert. Unabhängiger Review-Pass:
-            // bei `FixedEntitlements` (Community Edition) beendet sich
-            // dieser Task bereits beim Start — `FixedEntitlements::watch()`
-            // droppt ihren `Sender` sofort (s. dortiger Kommentar), also
-            // liefert bereits das erste `changed().await` hier ein `Err`,
-            // die `while`-Schleife läuft kein einziges Mal. Kein aktiver
-            // Leerlauf-Task für die gesamte App-Laufzeit, wie ein früherer
-            // Kommentar hier fälschlich behauptete — die Infrastruktur
-            // (Command + Event) steht trotzdem, s. Spec-Text; ein
-            // künftiger `EntitlementProvider`, der seinen `Sender` am Leben
-            // hält, würde diesen Task tatsächlich laufen lassen.
-            let handle_for_entitlements = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let mut receiver = {
-                    let state = handle_for_entitlements.state::<AppState>();
-                    state.entitlements.watch()
-                };
-                while receiver.changed().await.is_ok() {
-                    let current = receiver.borrow_and_update().clone();
-                    tauri::Emitter::emit(&handle_for_entitlements, "entitlements:changed", current)
-                        .ok();
-                }
-            });
+            // Spec 0101, A16: **Nichts davon im gesperrten Zustand.** Alle
+            // Aufgaben unten brauchen den `AppState`, und A16 verlangt
+            // ausdrücklich, dass der MCP-Server vor der Entsperrung nicht
+            // läuft. Steht der Zustand noch nicht, übernimmt
+            // `unlock_with_master_password` diese Schritte nach dem
+            // `manage` — sie stehen deshalb in einer eigenen Funktion.
+            if app.try_state::<AppState>().is_some() {
+                crate::spawn_post_startup_tasks(app.handle());
+            } else {
+                tracing::info!(
+                    "the application is locked; no background task, and no MCP server, until \
+                     it is unlocked (Spec 0101, A16)"
+                );
+            }
 
             Ok(())
         })
-        .manage(app_state)
+        .manage(gate.clone())
+        .manage(pending)
         // Spec 0084, A1: die Zuordnung Sitzung → erhöhter SFTP-Kanal ist
         // eigener, von Tauri verwalteter Zustand von `app-shell` — bewusst
         // kein Feld von `AppState`, damit der Kanal auch dann hier bleibt,
         // wenn die übrige Anwendungslogik in einen Tauri-freien Crate zieht.
         .manage(crate::elevated_sftp::ElevatedSftpRegistry::default())
         .manage(edition)
-        .invoke_handler(tauri::generate_handler![
+        // Spec 0101, A16: Das Tor sitzt **vor** dem erzeugten Verteiler
+        // (gemessen, M4). Die Begründung, warum es nicht genügt, sich auf
+        // den fehlenden `AppState` zu verlassen, steht im Modulkommentar
+        // von `startup_gate`.
+        .invoke_handler(gated(gate, tauri::generate_handler![
             commands::list_servers,
             commands::list_ai_providers,
             commands::add_ai_provider,
@@ -639,7 +658,125 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             mcp_settings::regenerate_mcp_server_token,
             mcp_settings::set_mcp_server_allowed_servers,
             mcp_settings::set_mcp_server_confirm_timeout_secs,
-        ])
+            // Spec 0101, Etappe 3: Entsperren und Moduswechsel. Die ersten
+            // vier stehen in der Positivliste des Tors (A16).
+            commands::master_password::get_startup_state,
+            commands::master_password::unlock_with_master_password,
+            commands::master_password::answer_startup_prompt,
+            commands::master_password::quit_application,
+            commands::master_password::get_master_password_mode,
+            commands::master_password::set_up_master_password,
+            commands::master_password::change_master_password,
+            commands::master_password::switch_to_os_keychain,
+        ]))
         .run(context)
         .expect("Fehler beim Starten der Tauri-App");
+}
+
+/// Spec 0101, A16: die Hintergrundaufgaben, die einen fertigen `AppState`
+/// brauchen.
+///
+/// **Eigene Funktion und nicht mehr im `setup`-Block:** Im Passwort-Modus
+/// gibt es den Zustand dort noch nicht. Jede dieser Aufgaben holte ihn mit
+/// `state::<AppState>()`, was ohne `manage` panickt — und der MCP-Server
+/// darf vor der Entsperrung ausdrücklich nicht laufen (A16). Nach der
+/// Entsperrung ruft `unlock_with_master_password` dieselbe Funktion auf, es
+/// gibt also keinen zweiten Pfad, der auseinanderlaufen könnte.
+pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
+    use tauri::Manager;
+
+    // Spec 0028, Abschnitt 9: ein beim letzten Beenden aktivierter
+    // MCP-Server bleibt über einen Neustart hinweg aktiv, ohne manuelles
+    // erneutes Anschalten.
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        crate::mcp_settings::autostart_if_enabled(&handle).await;
+    });
+
+    let app = app.clone();
+    // Spec 0034, Abschnitt 5: Aufbewahrungs-Aufräum-Job beim
+    // App-Start — No-op, solange keine Aufbewahrungsdauer
+    // konfiguriert ist (Default).
+    let handle_for_retention = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let state = handle_for_retention.state::<AppState>();
+        crate::chat_retention::cleanup_old_chat_sessions_on_startup(&handle_for_retention, &state)
+            .await;
+    });
+
+    // Spec 0040, Abschnitt 3: einmalige, idempotente Migration
+    // bestehender Klartext-Zeilen in `prompt_history` — No-op,
+    // sobald alle Zeilen bereits verschlüsselt sind (jeder Start
+    // danach prüft erneut, findet aber nichts mehr zu tun).
+    let handle_for_prompt_history_migration = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let state = handle_for_prompt_history_migration.state::<AppState>();
+        // Spec 0040, Abschnitt 7: `None`, wenn der Verschlüsselungs-
+        // schlüssel beim Start nicht aufgelöst werden konnte (s.
+        // `build_app_state`) — dann gibt es nichts zu migrieren.
+        let Some(store) = &state.prompt_history_store else {
+            return;
+        };
+        match store.migrate_legacy_plaintext_content().await {
+            Ok(count) if count > 0 => {
+                tracing::info!(count, "legacy plaintext prompt_history rows encrypted");
+            }
+            Ok(_) => {}
+            Err(err) => {
+                tracing::warn!(error = %err, "prompt_history encryption migration failed");
+            }
+        }
+    });
+
+    // Spec 0038, Abschnitt 4: hält das Frontend über
+    // `entitlements:changed` aktuell, sobald `EntitlementProvider::
+    // watch()` einen neuen Stand liefert. Unabhängiger Review-Pass:
+    // bei `FixedEntitlements` (Community Edition) beendet sich
+    // dieser Task bereits beim Start — `FixedEntitlements::watch()`
+    // droppt ihren `Sender` sofort (s. dortiger Kommentar), also
+    // liefert bereits das erste `changed().await` hier ein `Err`,
+    // die `while`-Schleife läuft kein einziges Mal. Kein aktiver
+    // Leerlauf-Task für die gesamte App-Laufzeit, wie ein früherer
+    // Kommentar hier fälschlich behauptete — die Infrastruktur
+    // (Command + Event) steht trotzdem, s. Spec-Text; ein
+    // künftiger `EntitlementProvider`, der seinen `Sender` am Leben
+    // hält, würde diesen Task tatsächlich laufen lassen.
+    let handle_for_entitlements = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut receiver = {
+            let state = handle_for_entitlements.state::<AppState>();
+            state.entitlements.watch()
+        };
+        while receiver.changed().await.is_ok() {
+            let current = receiver.borrow_and_update().clone();
+            tauri::Emitter::emit(&handle_for_entitlements, "entitlements:changed", current).ok();
+        }
+    });
+}
+
+/// Spec 0101, A16: legt das Tor vor den von `generate_handler!` erzeugten
+/// Verteiler.
+///
+/// Als eigene Funktion, damit die Reihenfolge an einer Stelle steht und
+/// nicht in einem Schließungsausdruck mitten in der Builder-Kette
+/// verschwindet: **erst** prüfen, **dann** weiterleiten.
+fn gated<F>(
+    gate: std::sync::Arc<crate::startup_gate::StartupGate>,
+    inner: F,
+) -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static
+where
+    F: Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static,
+{
+    move |invoke| {
+        let command = invoke.message.command();
+        if !gate.allows(command) {
+            tracing::warn!(
+                command,
+                "a command was refused because the application is locked (Spec 0101, A16)"
+            );
+            invoke.resolver.reject(crate::startup_gate::APP_LOCKED_CODE);
+            return true;
+        }
+        inner(invoke)
+    }
 }

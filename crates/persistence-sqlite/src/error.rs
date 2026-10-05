@@ -168,6 +168,25 @@ pub enum ConnectFailureKind {
     /// gelöscht" würde ein eingespieltes Backup den Umzug sogar erneut
     /// auslösen, während die Secrets im Schlüsselbund schon weg sind.
     SecretMigrationFailed,
+    /// Spec 0101, A13: Das Einrichten eines Master-Passworts im
+    /// Startablauf ist gescheitert — die Verpackungsdatei ließ sich nicht
+    /// schreiben, oder der zurückgelesene Schlüssel wich ab.
+    ///
+    /// **Eigener Fall und nicht [`Self::Other`]**, aus demselben Grund wie
+    /// die drei darüber: Es ist nichts zu beschädigen und nichts
+    /// wiederherzustellen. Der Schlüssel liegt noch, wo er lag (A13:
+    /// „dann erst K aus dem Schlüsselbund löschen"), und der nächste Start
+    /// findet denselben Zustand vor.
+    MasterPasswordSetupFailed,
+    /// Spec 0059 (ohne eigene Nummer) / Spec 0101 Etappe 3: Der
+    /// Host-Key-Speicher neben der Datenbank ließ sich nicht laden.
+    ///
+    /// Eigener Fall, weil der Startablauf seit Etappe 3 auch aus einem
+    /// Kommando heraus laufen kann (Teil 0 Frage 3): Dort gibt es kein
+    /// `process::exit` mit nativem Dialog mehr, der Fall muss also als
+    /// Fehlerart durch die Rückgabe wandern. Der Text kommt weiter aus
+    /// `app_logic::startup_error_messages::host_key_store_failure_text`.
+    HostKeyStoreFailed,
 }
 
 impl PersistenceError {

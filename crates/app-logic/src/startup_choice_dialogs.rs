@@ -319,6 +319,44 @@ pub fn new_key_confirmation_text(language: Language) -> ChoiceDialogText {
     }
 }
 
+/// Spec 0101, A13/E10: die Warnung über der Eingabemaske für ein neues
+/// Master-Passwort.
+///
+/// **Der Satz über die fehlende Wiederherstellung ist die Anforderung**
+/// (E10, A13: „Warnung … mit ausdrücklicher Bestätigung“), nicht ein
+/// freundlicher Hinweis. Er steht deshalb hier bei den übrigen
+/// Startdialog-Texten und nicht in den Übersetzungsdateien der
+/// Oberfläche — die Maske erscheint auch vor dem ersten Fenster-Zustand,
+/// in dem die Oberfläche ihre Sprache schon gewählt hätte.
+pub fn master_password_setup_text(language: Language) -> ChoiceDialogText {
+    let (title, message, confirm) = match language {
+        Language::De => (
+            "Master-Passwort einrichten",
+            "Dieses Passwort verschlüsselt den Schlüssel zu deiner Datenbank. Es gibt \
+             **keine Wiederherstellung**: Ist das Passwort vergessen, sind alle Server, \
+             Zugangsdaten, Regeln und Verläufe endgültig verloren. Wähle ein Passwort mit \
+             mindestens 12 Zeichen und verwahre es dort, wo du auch einen Hausschlüssel \
+             verwahrst.",
+            "Master-Passwort einrichten",
+        ),
+        Language::En => (
+            "Set up a master password",
+            "This password encrypts the key to your database. There is **no recovery**: if \
+             you forget it, every server, credential, rule and history is lost for good. \
+             Choose a password of at least 12 characters and keep it where you would keep a \
+             house key.",
+            "Set up master password",
+        ),
+    };
+    ChoiceDialogText {
+        title: title.to_string(),
+        message: message.to_string(),
+        confirm: confirm.to_string(),
+        cancel: cancel_label(language),
+        extra: None,
+    }
+}
+
 /// Spec 0101, A5: „nennt im Dialog den neuen Dateinamen“ — nach dem
 /// Umbenennen, damit der Nutzer die Datei wiederfindet.
 pub fn started_over_notice_text(renamed_to: &str, language: Language) -> DialogText {

@@ -17,6 +17,9 @@ mod connect;
 mod diagnostics_export;
 mod elevation;
 mod groups;
+/// Spec 0101, A13/A15-A18: Entsperren beim Start und der Moduswechsel in
+/// den Einstellungen.
+pub mod master_password;
 mod notes;
 mod rules;
 mod servers;
