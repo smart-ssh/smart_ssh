@@ -892,3 +892,179 @@ async fn test_a11_a_failed_migration_gets_its_own_kind_without_backup_advice() {
         );
     }
 }
+
+/// **T17 für die Pfade T1 und T11** (Spec 0101 §7, Klarstellung 10d): Der
+/// Secret-Umzug schreibt weder K noch den Datenbankschlüssel noch ein
+/// umgezogenes Secret in das Log oder das Diagnosepaket.
+///
+/// §7 verlangt T17 „nach T1, T3, T11, T13". Dies ist der Pfad T11 — und der
+/// ist der einzige, an dem **fremde** Secrets in Klartext durch den Code
+/// laufen: Jeder Wert wird aus dem Schlüsselbund gelesen, in die Datenbank
+/// geschrieben und dort gelöscht, und jede dieser drei Stellen hat eine
+/// Log-Zeile mit der Referenz. Eine davon mit `?secret` statt
+/// `reference = …` zu schreiben, wäre eine Zeile Arbeit und würde jedes
+/// Server-Passwort der Installation auf die Platte legen.
+///
+/// **Der Pfad T1 steckt mit darin:** Der Aufbau ist eine frische,
+/// verschlüsselte Datenbank mit Server (Hostname, Benutzer), Provider,
+/// Secrets und offenem Pool — genau die Lage, die T1 beschreibt.
+///
+/// Geprüft wird mit derselben Liste von Suchbegriffen wie in den anderen
+/// T17-Tests (`key_leak_needles`), dazu die Fehlerwege: ein scheiterndes
+/// `get` und ein scheiterndes `delete`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t17_the_secret_migration_keeps_the_key_and_the_secrets_out_of_the_log() {
+    use crate::test_support::{key_leak_needles, log_capture};
+
+    /// Nicht `[9; 32]` wie der Rest dieser Datei: ein Schlüssel mit lauter
+    /// verschiedenen Bytes, damit auch ein **halb** durchgesickerter
+    /// Schlüssel auffällt.
+    const T17_KEY: [u8; 32] = [
+        0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae,
+        0xaf, 0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd,
+        0xbe, 0xbf,
+    ];
+    const T17_SECRET: &str = "Secret-0101-T17-Umzug";
+
+    log_capture::start_recording();
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = SqliteProfileStore::connect_encrypted(
+        &dir.path().join("smart-ssh.db"),
+        &DatabaseKey::from_root_key(&T17_KEY),
+    )
+    .await
+    .unwrap();
+    let database = store.credential_store(tokio::runtime::Handle::current());
+
+    // T1: Server mit Hostnamen und Anmeldung, Provider, Pool offen.
+    let server_id = ServerId::new();
+    let key_ref = format!("server:{}:private_key", server_id.0);
+    let sudo_ref = format!("server:{}:sudo_password", server_id.0);
+    let now = chrono::Utc::now();
+    store
+        .create_server(&Server {
+            id: server_id,
+            name: "T17".to_string(),
+            host: "host-0101.example".to_string(),
+            port: 22,
+            username: "user-0101".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: AuthMethod::PrivateKey {
+                credential_ref: CredentialRef::new(key_ref.clone()),
+                passphrase_ref: None,
+            },
+            notes: String::new(),
+            jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
+            sftp_server_path: None,
+            created_at: now,
+            updated_at: now,
+        })
+        .await
+        .unwrap();
+
+    let provider_id = ProviderId::new();
+    let provider_ref = format!("ai-provider:{}", provider_id.0);
+    store
+        .ai_provider_store()
+        .create(&AiProviderConfig {
+            id: provider_id,
+            provider_type: ProviderType::Anthropic,
+            display_name: "T17-Provider".to_string(),
+            base_url: None,
+            model: "claude-sonnet-5".to_string(),
+            supports_native_tool_calling: true,
+            credential_ref: CredentialRef::new(provider_ref.clone()),
+            is_active: false,
+            extra_headers: Vec::new(),
+            attestation_url: None,
+            max_tokens_override: None,
+            created_at: now,
+            updated_at: now,
+        })
+        .await
+        .unwrap();
+
+    let references = [key_ref, sudo_ref, provider_ref];
+
+    // --- Erst der Fehlerweg: ein `get`, das scheitert. Nichts wird
+    // gelöscht, und die Log-Zeile dazu trägt die Referenz.
+    let failing = TestKeyring::default();
+    for reference in &references {
+        failing
+            .set(
+                &CredentialRef::new(reference.clone()),
+                SecretString::from(format!("{T17_SECRET}-{reference}")),
+            )
+            .unwrap();
+    }
+    *failing.failing_get.lock().unwrap() = Some(references[0].clone());
+    let prompt = ScriptedPrompt::new(vec![StartupChoice::Quit]);
+    let _ = migrate_secrets_into_database(&store, &failing, &database, &prompt, false).await;
+
+    // --- Dann der gelungene Umzug, mit einem `delete`, das scheitert.
+    let keyring = TestKeyring::default();
+    for reference in &references {
+        keyring
+            .set(
+                &CredentialRef::new(reference.clone()),
+                SecretString::from(format!("{T17_SECRET}-{reference}")),
+            )
+            .unwrap();
+    }
+    *keyring.failing_delete.lock().unwrap() = Some(references[1].clone());
+    let prompt = ScriptedPrompt::new(Vec::new());
+    migrate_secrets_into_database(&store, &keyring, &database, &prompt, false)
+        .await
+        .expect("der Umzug muss gelingen");
+
+    // Der Umzug ist wirklich gelaufen — sonst prüfte der Rest nichts.
+    assert_eq!(
+        database
+            .get(&CredentialRef::new(references[2].clone()))
+            .unwrap()
+            .expose_secret(),
+        format!("{T17_SECRET}-{}", references[2])
+    );
+
+    let log = log_capture::recorded_text();
+    for expected in [
+        "reading a secret from the OS keychain failed during the migration",
+        "secrets moved into the encrypted database",
+        "deleting a migrated secret from the OS keychain failed",
+    ] {
+        assert!(
+            log.contains(expected),
+            "die Aufzeichnung hat „{expected}“ nicht gesehen — der Test prüfte nichts"
+        );
+    }
+
+    let log_lines: Vec<String> = log.lines().map(str::to_string).collect();
+    let bundle = crate::diagnostics::build_diagnostics_bundle(
+        &crate::diagnostics::DiagnosticsInput {
+            version_display: "0.5.2 (test)".to_string(),
+            build_type: "Dev",
+            edition: "Community".to_string(),
+            os: "macos",
+            arch: "aarch64",
+            os_version: Some("15.1".to_string()),
+            db_path: dir.path().join("smart-ssh.db").display().to_string(),
+            log_dir: dir.path().display().to_string(),
+            host_key_path: dir.path().join("host_keys.json").display().to_string(),
+            provider_types: Some(vec!["anthropic".to_string()]),
+            server_count: Some(1),
+        },
+        &log_lines,
+        &ssh_manager_core::ai::DefaultOutputRedactor::new(),
+    );
+
+    key_leak_needles::assert_absent(
+        &key_leak_needles::for_root_key(&T17_KEY, &[], &[T17_SECRET]),
+        &[("das Log", &log), ("das Diagnosepaket", &bundle)],
+    );
+
+    store.close().await;
+}
