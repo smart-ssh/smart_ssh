@@ -383,11 +383,13 @@ fn test_mode_follows_the_file_including_a_dangling_symlink() {
             KeyMode::Password,
             "eine Verknüpfung ins Leere ist eine vorhandene Datei an diesem Ort"
         );
-        // Und sie ist nicht lesbar → *ungültig*, nicht „Passwort falsch".
+        // Und sie ist nicht lesbar → A3 *nicht erreichbar*, nicht
+        // „Passwort falsch" und **nicht** „kein Master-Passwort
+        // eingerichtet" (Klarstellung 10a): Letzteres widersprach der Zeile
+        // darüber, die für denselben Zustand `Password` sagt.
         assert!(matches!(
             unlock(&dir.db(), &good()),
-            Err(MasterPasswordError::FileFailed { .. })
-                | Err(MasterPasswordError::NotInPasswordMode)
+            Err(MasterPasswordError::WrappingFileUnreachable { .. })
         ));
     }
 }
@@ -578,25 +580,132 @@ fn test_weak_parameters_count_as_unusable_not_as_a_wrong_password() {
     );
 }
 
-/// Klarstellung 9: Eine Datei, die an ihrem Platz liegt, aber nicht zu lesen
-/// ist (hängende Verknüpfung), ist ebenfalls *ungültig*.
+/// Klarstellung 10a, **Fehlerart „hängende Verknüpfung"**: Die Datei liegt
+/// an ihrem Platz, ihr Ziel gibt es nicht — *nicht erreichbar* (D1), nicht
+/// *ungültig*.
 ///
-/// Vor dieser Änderung endete derselbe Zustand in `NotInPasswordMode` bzw.
-/// `FileFailed` — und damit in einem Fehler ohne Ausweg, obwohl der Modus
-/// weiter `Password` war.
+/// Dass hier `NotFound` herauskommt, macht es nicht zu „es gibt keine
+/// Verpackung": `key_mode` sieht die Verknüpfung und sagt `Password`. Käme
+/// `NotInPasswordMode` heraus, widersprächen sich beide Funktionen über
+/// denselben Zustand.
 #[cfg(unix)]
 #[test]
-fn test_an_unreadable_wrapping_file_is_a_way_out_too() {
+fn test_a_dangling_symlink_at_the_wrapping_path_is_unreachable_not_invalid() {
     let dir = Dir::new("health-dangling");
     let db = dir.db();
     std::os::unix::fs::symlink(dir.path.join("gibt-es-nicht"), wrapping_file_path(&db)).unwrap();
 
     assert_eq!(key_mode(&db), KeyMode::Password);
-    assert_eq!(wrapping_health(&db), WrappingHealth::Unreadable);
+    assert_eq!(wrapping_health(&db), WrappingHealth::Unreachable);
     assert!(
-        wrapping_health(&db).allows_starting_over(),
-        "sonst sperrt eine hängende Verknüpfung die Installation dauerhaft aus"
+        !wrapping_health(&db).allows_starting_over(),
+        "A3 führt *nicht erreichbar* nach D1 — ein neuer K entsteht hier nicht \
+         (Klarstellung 10a)"
     );
+    assert!(
+        matches!(
+            unlock(&db, &good()),
+            Err(MasterPasswordError::WrappingFileUnreachable { .. })
+        ),
+        "die Fehlerart muss „nicht lesbar“ sein, nicht „kein Master-Passwort eingerichtet“"
+    );
+}
+
+/// Klarstellung 10a, **Fehlerart „Rechte"**: `chmod 000` auf eine
+/// vollkommen gültige Verpackung. Genau der Fall, den der Review-Lauf 6 als
+/// Abweichung gefunden hat.
+///
+/// Der Inhalt ist in Ordnung — nur das Leserecht fehlt. Früher führte das
+/// in „Neu anfangen" und damit dazu, dass Datenbank, `-wal`, `-shm` **und
+/// die intakte Verpackung** umbenannt wurden und ein neuer K entstand. A3
+/// verlangt für diese Spalte D1: erneut versuchen, nichts verändern.
+#[cfg(unix)]
+#[test]
+fn test_a_wrapping_file_without_read_permission_is_unreachable_not_invalid() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = Dir::new("health-perm");
+    let db = dir.db();
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), None).unwrap();
+    let path = wrapping_file_path(&db);
+    let intact = std::fs::read(&path).unwrap();
+
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+    // Als `root` greift `chmod` nicht — dann prüfte der Test nichts, und das
+    // soll man sehen, statt es für ein Grün zu nehmen.
+    if std::fs::read(&path).is_ok() {
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        eprintln!("übersprungen: dieser Benutzer darf die Datei trotz 0000 lesen (root?)");
+        return;
+    }
+
+    assert_eq!(key_mode(&db), KeyMode::Password);
+    assert_eq!(wrapping_health(&db), WrappingHealth::Unreachable);
+    assert!(
+        !wrapping_health(&db).allows_starting_over(),
+        "ein entzogenes Leserecht darf nicht in „Neu anfangen“ führen: der Inhalt ist in \
+         Ordnung, und ein neuer K machte den bisherigen Verlauf unlesbar (Klarstellung 10a)"
+    );
+    assert!(matches!(
+        unlock(&db, &good()),
+        Err(MasterPasswordError::WrappingFileUnreachable { .. })
+    ));
+
+    // „Nichts verändern" wörtlich: Die Datei ist nach dem Urteil dieselbe,
+    // und mit dem Leserecht gibt sie K wieder her.
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), intact);
+    assert_eq!(wrapping_health(&db), WrappingHealth::Usable);
+    assert_eq!(unlock(&db, &good()).unwrap().expose(), &ROOT_KEY);
+}
+
+/// Klarstellung 10a, **Fehlerart „etwas anderes als eine Datei"**: Ein
+/// Verzeichnis am Ort der Verpackung.
+///
+/// Der Fall steht für jeden Lesefehler, der kein `NotFound` und kein
+/// Rechtefehler ist (E/A-Fehler, ein von einem anderen Programm gehaltenes
+/// Handle unter Windows) — keiner davon ist ein Urteil über den Inhalt, und
+/// alle gehen durch denselben Zweig. Er läuft auf allen Plattformen.
+#[test]
+fn test_a_directory_at_the_wrapping_path_is_unreachable_not_invalid() {
+    let dir = Dir::new("health-dir");
+    let db = dir.db();
+    std::fs::create_dir(wrapping_file_path(&db)).unwrap();
+
+    assert_eq!(key_mode(&db), KeyMode::Password);
+    assert_eq!(wrapping_health(&db), WrappingHealth::Unreachable);
+    assert!(!wrapping_health(&db).allows_starting_over());
+    assert!(matches!(
+        unlock(&db, &good()),
+        Err(MasterPasswordError::WrappingFileUnreachable { .. })
+    ));
+}
+
+/// Klarstellung 10a, die **Gegenprobe zu den drei Tests darüber**: Ein
+/// *gelesener*, aber unbrauchbarer Inhalt bleibt *ungültig* und behält den
+/// Ausweg. Ohne diese Aussage wäre „alles ist *nicht erreichbar*" eine
+/// bestehende Umsetzung — und die Installation mit einer zerstörten
+/// Verpackung dauerhaft ausgesperrt.
+#[test]
+fn test_a_read_but_broken_wrapping_file_stays_invalid_and_keeps_the_way_out() {
+    let dir = Dir::new("health-kinds");
+    for (what, bytes) in [
+        ("fremder Inhalt", vec![0xAB; 40]),
+        ("leere Datei", Vec::new()),
+        ("abgeschnittener Kopf", vec![0x01; 8]),
+    ] {
+        let db = dir.path.join(format!("kind-{}.db", bytes.len()));
+        std::fs::write(wrapping_file_path(&db), &bytes).unwrap();
+        assert_eq!(
+            wrapping_health(&db),
+            WrappingHealth::Unusable,
+            "{what} wurde gelesen und gibt kein K her — das ist A3 *ungültig*"
+        );
+        assert!(
+            wrapping_health(&db).allows_starting_over(),
+            "{what}: ohne Ausweg wäre die Installation dauerhaft ausgesperrt"
+        );
+    }
 }
 
 /// T17 (Spec 0101 §7, ERHÖHT), Passwort-Modus: **Weder das Log noch das
