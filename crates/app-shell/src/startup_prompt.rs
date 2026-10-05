@@ -72,24 +72,33 @@ impl StartupPrompt for NativeStartupPrompt {
             StartupDialog::D1 {
                 offers_password_setup,
             } => {
+                // **Der dritte Knopf bleibt aus, bis die Masken im Fenster
+                // stehen** (Commit 11 der Spec). Der Weg dahinter ist
+                // fertig — `open_or_prepare_database` antwortet auf diese
+                // Wahl mit `StartupAbort::NeedsWindow`, und das
+                // Entsperr-Kommando wiederholt den Ablauf mit der Maske im
+                // Fenster. Nur die Maske selbst fehlt noch. Würde der Knopf
+                // jetzt schon erscheinen, stünde der Nutzer vor einem
+                // Fenster ohne Eingabefeld und einer App, deren Kommandos
+                // alle mit `APP_LOCKED` antworten.
+                //
+                // Der berechnete Wert wird geloggt, damit nachvollziehbar
+                // ist, dass die Entscheidung ihn schon trifft.
+                tracing::info!(
+                    offers_password_setup,
+                    "D1: the master-password setup button needs the in-window form \
+                     (Spec 0101, Commit 11)"
+                );
                 let text = texts::d1_keychain_unreachable_text(
                     self.keychain
                         .unavailable_reason()
                         .unwrap_or(KeychainUnavailableReason::Unknown),
                     std::env::consts::OS,
-                    offers_password_setup,
+                    false,
                     self.database_is_plaintext(),
                     self.language,
                 );
-                // Der dritte Knopf (A13) führt nicht hier zur Maske — rfd
-                // hat keine Texteingabe (§1). Die Wahl wird zurückgegeben,
-                // und `open_or_prepare_database` antwortet mit
-                // `StartupAbort::NeedsWindow`, ohne etwas anzufassen.
-                self.ask_choice_with_extra(
-                    text,
-                    StartupChoice::Retry,
-                    StartupChoice::SetUpMasterPassword,
-                )
+                self.ask_choice(text, StartupChoice::Retry)
             }
             // A11: „Dialog D1 ohne Einrichten“. Der dritte Knopf aus A11.1
             // gehört zum Passwort-Modus und erscheint dort im Fenster —
