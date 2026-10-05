@@ -72,6 +72,16 @@ const PROMPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5 * 6
 pub enum PromptKind {
     /// „Erneut versuchen“ / „Beenden“ (D1, A11).
     RetryOrQuit,
+    /// „Erneut versuchen“ / „Master-Passwort einrichten“ / „Beenden“ — D1
+    /// mit dem dritten Knopf ab Etappe 3 (A3, D1; A13).
+    ///
+    /// **Eine eigene Art und nicht ein Zusatzfeld an [`Self::RetryOrQuit`]:**
+    /// Die Zuordnung Antwort → Wahl unten ist je Art eingeschränkt. Hinge
+    /// der dritte Knopf an einem Wahrheitswert, könnte eine Oberfläche
+    /// „Einrichten" auf einen Dialog schicken, der es nicht anbietet — und
+    /// Einrichten ist der Weg, auf dem im Fall *fehlt* ein neuer K entsteht
+    /// (A3).
+    RetrySetUpOrQuit,
     /// „Erneut versuchen“ / „Ohne Übernahme fortfahren“ / „Beenden“ (A11.1).
     RetrySkipOrQuit,
     /// „Neu anfangen“ / „Beenden“ (D2, D3).
@@ -106,10 +116,87 @@ pub enum StartupPromptAnswer {
     StartOver,
     GenerateNewKey,
     ContinueWithoutMigration,
+    /// A3, D1, dritter Knopf: „Master-Passwort einrichten“ (A13).
+    SetUpMasterPassword,
     /// Zweite Bestätigung bejaht.
     Confirm,
     /// Zweite Bestätigung abgelehnt, Maske abgebrochen, Meldung quittiert.
     Cancel,
+}
+
+/// A3: Welche Knöpfe eine Dialogart zeigt — die Zuordnung Fall → Knöpfe.
+///
+/// Als freie Funktion neben [`choice_for`], weil die beiden zusammen die
+/// ganze Einschränkung tragen: Diese hier entscheidet, welche Wahlen ein
+/// Fall überhaupt anbietet, jene, welche Antwort er annimmt. Beide ohne
+/// Tauri und damit prüfbar.
+///
+/// **Die Zusage, auf die es ankommt** (A3, T13): Der Umzugs-Dialog aus A11
+/// bietet „Master-Passwort einrichten" nie an — er ist eine eigene Variante
+/// und nicht `D1 { offers_password_setup: false }`, also kann er es per
+/// Konstruktion nicht.
+fn kind_for(dialog: &StartupDialog) -> PromptKind {
+    match dialog {
+        // Der dritte Knopf erscheint **nur**, wenn der Startablauf ihn
+        // anbietet — die Bedingung dafür (`password_setup_is_safe`) liegt in
+        // `database_startup`, nicht hier.
+        StartupDialog::D1 {
+            offers_password_setup: true,
+        } => PromptKind::RetrySetUpOrQuit,
+        StartupDialog::D1 {
+            offers_password_setup: false,
+        } => PromptKind::RetryOrQuit,
+        StartupDialog::MigrationUnreadable {
+            offers_skip_migration: true,
+        } => PromptKind::RetrySkipOrQuit,
+        StartupDialog::MigrationUnreadable {
+            offers_skip_migration: false,
+        } => PromptKind::RetryOrQuit,
+        StartupDialog::D2 | StartupDialog::D3 => PromptKind::StartOverOrQuit,
+        StartupDialog::D4 => PromptKind::NewKeyOrQuit,
+    }
+}
+
+/// A3: Welche Antwort aus dem Fenster **darf** welche Wahl bedeuten.
+///
+/// **Je Dialogart eingeschränkt, nicht frei.** Eine Oberfläche, die „Neu
+/// anfangen" auf D1 schickt, bekommt „beenden". Dieselbe Regel wie im
+/// nativen Dialog, nur hier wichtiger: Dort wählt der Nutzer aus Knöpfen,
+/// die das Betriebssystem gezeichnet hat; hier kommt die Antwort über IPC
+/// und kann jeden Wert haben.
+///
+/// Als freie Funktion, damit die Tabelle unten ohne eine laufende Tauri-App
+/// prüfbar ist — die Einschränkung ist der sicherheitsrelevante Teil, nicht
+/// das Schicken des Ereignisses.
+fn choice_for(kind: PromptKind, answer: StartupPromptAnswer) -> StartupChoice {
+    match (kind, answer) {
+        (
+            PromptKind::RetryOrQuit | PromptKind::RetrySkipOrQuit | PromptKind::RetrySetUpOrQuit,
+            StartupPromptAnswer::Retry,
+        ) => StartupChoice::Retry,
+        // **Nur** von D1 mit drittem Knopf (A3, D1): Einrichten ist der Weg,
+        // auf dem im Fall *fehlt* ein neuer K entsteht.
+        (PromptKind::RetrySetUpOrQuit, StartupPromptAnswer::SetUpMasterPassword) => {
+            StartupChoice::SetUpMasterPassword
+        }
+        (PromptKind::RetrySkipOrQuit, StartupPromptAnswer::ContinueWithoutMigration) => {
+            StartupChoice::ContinueWithoutMigration
+        }
+        (PromptKind::StartOverOrQuit, StartupPromptAnswer::StartOver) => StartupChoice::StartOver,
+        (PromptKind::NewKeyOrQuit, StartupPromptAnswer::GenerateNewKey) => {
+            StartupChoice::GenerateNewKey
+        }
+        (_, other) => {
+            if other != StartupPromptAnswer::Quit && other != StartupPromptAnswer::Cancel {
+                tracing::warn!(
+                    ?kind,
+                    "the window answered a startup dialog with a choice it does not offer; \
+                     quitting without touching anything (Spec 0101, A3)"
+                );
+            }
+            StartupChoice::Quit
+        }
+    }
 }
 
 /// Das Warten auf eine Antwort aus dem Fenster — **ohne Tauri**.
@@ -341,53 +428,33 @@ impl WindowStartupPrompt {
 impl StartupPrompt for WindowStartupPrompt {
     fn ask(&self, dialog: StartupDialog) -> StartupChoice {
         let path = self.db_path.as_path();
-        let (kind, text) = match dialog {
+        let kind = kind_for(&dialog);
+        let text = match dialog {
             StartupDialog::D1 {
                 offers_password_setup,
-            } => (
-                PromptKind::RetryOrQuit,
-                texts::d1_keychain_unreachable_text(
-                    self.keychain
-                        .unavailable_reason()
-                        .unwrap_or(KeychainUnavailableReason::Unknown),
-                    std::env::consts::OS,
-                    offers_password_setup,
-                    self.database_is_plaintext(),
-                    self.language,
-                ),
+            } => texts::d1_keychain_unreachable_text(
+                self.keychain
+                    .unavailable_reason()
+                    .unwrap_or(KeychainUnavailableReason::Unknown),
+                std::env::consts::OS,
+                offers_password_setup,
+                self.database_is_plaintext(),
+                self.language,
             ),
             // A11: „Dialog D1 ohne Einrichten“ — derselbe Text, andere
             // Knöpfe (A11.1 kommt im Passwort-Modus dazu).
-            StartupDialog::MigrationUnreadable {
-                offers_skip_migration,
-            } => (
-                if offers_skip_migration {
-                    PromptKind::RetrySkipOrQuit
-                } else {
-                    PromptKind::RetryOrQuit
-                },
-                texts::d1_keychain_unreachable_text(
-                    self.keychain
-                        .unavailable_reason()
-                        .unwrap_or(KeychainUnavailableReason::Unknown),
-                    std::env::consts::OS,
-                    false,
-                    self.database_is_plaintext(),
-                    self.language,
-                ),
+            StartupDialog::MigrationUnreadable { .. } => texts::d1_keychain_unreachable_text(
+                self.keychain
+                    .unavailable_reason()
+                    .unwrap_or(KeychainUnavailableReason::Unknown),
+                std::env::consts::OS,
+                false,
+                self.database_is_plaintext(),
+                self.language,
             ),
-            StartupDialog::D2 => (
-                PromptKind::StartOverOrQuit,
-                texts::d2_not_readable_text(path, self.language),
-            ),
-            StartupDialog::D3 => (
-                PromptKind::StartOverOrQuit,
-                texts::d3_unusable_key_text(path, self.language),
-            ),
-            StartupDialog::D4 => (
-                PromptKind::NewKeyOrQuit,
-                texts::d4_new_key_for_plaintext_text(path, self.language),
-            ),
+            StartupDialog::D2 => texts::d2_not_readable_text(path, self.language),
+            StartupDialog::D3 => texts::d3_unusable_key_text(path, self.language),
+            StartupDialog::D4 => texts::d4_new_key_for_plaintext_text(path, self.language),
         };
 
         let answer = self.request(StartupPromptRequest {
@@ -395,34 +462,7 @@ impl StartupPrompt for WindowStartupPrompt {
             title: text.title,
             message: text.message,
         });
-        // **Die Abbildung ist je Dialogart eingeschränkt**, nicht frei: Eine
-        // Oberfläche, die „Neu anfangen“ auf D1 schickt, bekommt „beenden“.
-        // Dieselbe Regel wie im nativen Dialog, nur hier wichtiger, weil die
-        // Antwort über IPC kommt.
-        match (kind, answer) {
-            (PromptKind::RetryOrQuit | PromptKind::RetrySkipOrQuit, StartupPromptAnswer::Retry) => {
-                StartupChoice::Retry
-            }
-            (PromptKind::RetrySkipOrQuit, StartupPromptAnswer::ContinueWithoutMigration) => {
-                StartupChoice::ContinueWithoutMigration
-            }
-            (PromptKind::StartOverOrQuit, StartupPromptAnswer::StartOver) => {
-                StartupChoice::StartOver
-            }
-            (PromptKind::NewKeyOrQuit, StartupPromptAnswer::GenerateNewKey) => {
-                StartupChoice::GenerateNewKey
-            }
-            (_, other) => {
-                if other != StartupPromptAnswer::Quit && other != StartupPromptAnswer::Cancel {
-                    tracing::warn!(
-                        ?kind,
-                        "the window answered a startup dialog with a choice it does not offer; \
-                         quitting without touching anything (Spec 0101, A3)"
-                    );
-                }
-                StartupChoice::Quit
-            }
-        }
+        choice_for(kind, answer)
     }
 
     fn confirm_start_over(&self, renamed_to: Option<&str>) -> bool {
@@ -711,6 +751,165 @@ mod tests {
             !channel.timed_out(),
             "eine beantwortete Frage ist nicht in die Grenze gelaufen"
         );
+    }
+
+    /// A3: **Jede** Antwort, die eine Dialogart nicht anbietet, wird
+    /// „beenden" — die vollständige Tabelle, nicht nur die erlaubten Paare.
+    ///
+    /// Das ist die Prüfung, auf die es bei einer Antwort über IPC ankommt:
+    /// Die gefährlichen Wahlen (`StartOver`, `GenerateNewKey`,
+    /// `SetUpMasterPassword`, `ContinueWithoutMigration`) erzeugen einen
+    /// neuen K oder benennen Dateien um bzw. lassen Secrets liegen. Käme
+    /// eine davon an einem Dialog durch, der sie nicht anbietet, wäre das
+    /// ein Weg, A3 zu umgehen, ohne dass der Nutzer die Wahl gesehen hat.
+    #[test]
+    fn test_each_dialog_accepts_only_the_choices_it_offers() {
+        use PromptKind as K;
+        use StartupPromptAnswer as A;
+
+        const ALL_KINDS: &[K] = &[
+            K::RetryOrQuit,
+            K::RetrySkipOrQuit,
+            K::RetrySetUpOrQuit,
+            K::StartOverOrQuit,
+            K::NewKeyOrQuit,
+            K::ConfirmStartOver,
+            K::ConfirmNewKey,
+            K::NewMasterPassword,
+            K::Notice,
+        ];
+        const ALL_ANSWERS: &[A] = &[
+            A::Retry,
+            A::Quit,
+            A::StartOver,
+            A::GenerateNewKey,
+            A::ContinueWithoutMigration,
+            A::SetUpMasterPassword,
+            A::Confirm,
+            A::Cancel,
+        ];
+        /// Die erlaubten Paare — alles andere muss „beenden" werden.
+        const ALLOWED: &[(K, A, StartupChoice)] = &[
+            (K::RetryOrQuit, A::Retry, StartupChoice::Retry),
+            (K::RetrySkipOrQuit, A::Retry, StartupChoice::Retry),
+            (K::RetrySetUpOrQuit, A::Retry, StartupChoice::Retry),
+            (
+                K::RetrySkipOrQuit,
+                A::ContinueWithoutMigration,
+                StartupChoice::ContinueWithoutMigration,
+            ),
+            (
+                K::RetrySetUpOrQuit,
+                A::SetUpMasterPassword,
+                StartupChoice::SetUpMasterPassword,
+            ),
+            (K::StartOverOrQuit, A::StartOver, StartupChoice::StartOver),
+            (
+                K::NewKeyOrQuit,
+                A::GenerateNewKey,
+                StartupChoice::GenerateNewKey,
+            ),
+        ];
+
+        for kind in ALL_KINDS {
+            for answer in ALL_ANSWERS {
+                let expected = ALLOWED
+                    .iter()
+                    .find(|(k, a, _)| k == kind && a == answer)
+                    .map(|(_, _, choice)| *choice)
+                    .unwrap_or(StartupChoice::Quit);
+                assert_eq!(
+                    choice_for(*kind, *answer),
+                    expected,
+                    "A3: {kind:?} + {answer:?} muss {expected:?} ergeben — eine Wahl, die ein \
+                     Dialog nicht anbietet, darf nie durchkommen"
+                );
+            }
+        }
+    }
+
+    /// A3/A13: **Welcher Fall welche Knöpfe zeigt** — und dass der dritte
+    /// Knopf nur an D1 hängt, wenn der Startablauf ihn anbietet.
+    #[test]
+    fn test_each_startup_dialog_shows_the_buttons_its_case_allows() {
+        assert_eq!(
+            kind_for(&StartupDialog::D1 {
+                offers_password_setup: true
+            }),
+            PromptKind::RetrySetUpOrQuit,
+            "A3, D1 ab Etappe 3: mit dem dritten Knopf „Master-Passwort einrichten“ (A13)"
+        );
+        assert_eq!(
+            kind_for(&StartupDialog::D1 {
+                offers_password_setup: false
+            }),
+            PromptKind::RetryOrQuit,
+            "A3, D1 ohne Einrichten: Bei `Locked`/`Unknown`/Backend-Fehler würde ein neuer K den \
+             feldweise verschlüsselten Verlauf unlesbar machen"
+        );
+        // T13, wörtlich: „Umzugs-Dialog (A11) nie“.
+        assert_eq!(
+            kind_for(&StartupDialog::MigrationUnreadable {
+                offers_skip_migration: true
+            }),
+            PromptKind::RetrySkipOrQuit
+        );
+        assert_eq!(
+            kind_for(&StartupDialog::MigrationUnreadable {
+                offers_skip_migration: false
+            }),
+            PromptKind::RetryOrQuit
+        );
+        assert_eq!(kind_for(&StartupDialog::D2), PromptKind::StartOverOrQuit);
+        assert_eq!(kind_for(&StartupDialog::D3), PromptKind::StartOverOrQuit);
+        assert_eq!(kind_for(&StartupDialog::D4), PromptKind::NewKeyOrQuit);
+
+        // Und die Aussage über den Umzugs-Dialog zu Ende geführt: Keine
+        // seiner beiden Formen zeigt den dritten Knopf, egal was er sonst
+        // anbietet.
+        for offers_skip_migration in [true, false] {
+            assert_ne!(
+                kind_for(&StartupDialog::MigrationUnreadable {
+                    offers_skip_migration
+                }),
+                PromptKind::RetrySetUpOrQuit,
+                "A11/T13: Ein gescheiterter Secret-Umzug darf nie zum Einrichten eines \
+                 Master-Passworts führen — dabei entstünde im Fall *fehlt* ein neuer K"
+            );
+        }
+    }
+
+    /// A3, D1 (A13): Der dritte Knopf ist **nur** an der Dialogart mit
+    /// drittem Knopf zu haben.
+    ///
+    /// Eigens hervorgehoben, weil „Master-Passwort einrichten" im Fall
+    /// *fehlt* einen neuen K erzeugt (A3: „Ein neuer K entsteht nur …").
+    /// Würde der Umzugs-Dialog aus A11 ihn annehmen, entstünde ein neuer K
+    /// aus einem gescheiterten Secret-Umzug — T13 verlangt ausdrücklich das
+    /// Gegenteil („Umzugs-Dialog (A11) nie").
+    #[test]
+    fn test_only_d1_with_the_third_button_accepts_setting_up_a_master_password() {
+        assert_eq!(
+            choice_for(
+                PromptKind::RetrySetUpOrQuit,
+                StartupPromptAnswer::SetUpMasterPassword
+            ),
+            StartupChoice::SetUpMasterPassword
+        );
+        for kind in [
+            PromptKind::RetryOrQuit,
+            PromptKind::RetrySkipOrQuit,
+            PromptKind::StartOverOrQuit,
+            PromptKind::NewKeyOrQuit,
+            PromptKind::Notice,
+        ] {
+            assert_eq!(
+                choice_for(kind, StartupPromptAnswer::SetUpMasterPassword),
+                StartupChoice::Quit,
+                "{kind:?} bietet „Master-Passwort einrichten“ nicht an und darf es nicht \
+                 annehmen — im Fall *fehlt* entsteht dabei ein neuer K"
+            );
+        }
     }
 
     /// **Die Kennzeichnung gilt der Frage, nicht dem Programmlauf** (ADR
