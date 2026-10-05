@@ -20,7 +20,7 @@ use persistence_sqlite::{
     detect_database_file_state, ConnectFailureKind, DatabaseFileState, PersistenceError,
     SqliteProfileStore,
 };
-use ssh_manager_core::crypto::{DatabaseKey, RootKeyState};
+use ssh_manager_core::crypto::{DatabaseKey, RootKey, RootKeyState};
 use ssh_manager_core::profiles::CredentialStore;
 
 /// Spec 0101, A3: der Schlüsselzustand, wie ihn die Tabelle braucht.
@@ -217,7 +217,17 @@ pub enum RootKeyAccess<'a> {
     /// `+ Send + Sync` aus demselben Grund wie bei [`StartupPrompt`].
     Keychain(&'a (dyn CredentialStore + Send + Sync)),
     /// Passwort-Modus, entsperrt (A16): K liegt vor.
-    Unlocked([u8; 32]),
+    ///
+    /// **Als [`RootKey`] und nicht als `[u8; 32]`** (A19, spec-reviewer
+    /// Lauf 4, Fund 11): Der Typ überschreibt sich beim Freigeben und lässt
+    /// sich nicht ausgeben. Vorher kopierte die Aufrufstelle K in ein
+    /// gewöhnliches Array — der `RootKey` daneben wurde korrekt
+    /// überschrieben, die Kopie nicht.
+    ///
+    /// Besitzend: Der Startablauf hält K für seine Dauer und gibt ihn danach
+    /// frei — eine geliehene Fassung ginge nicht, weil der Moduswechsel aus
+    /// D1 (A13) mitten in der Schleife einen **neuen** K einsetzt.
+    Unlocked(RootKey),
     /// Passwort-Modus, aber die Verpackungsdatei ist nach Format oder
     /// Version nicht lesbar — in der Tabelle A3 der Zustand *ungültig*.
     UnusableWrapping,
@@ -371,7 +381,11 @@ pub async fn open_or_prepare_database(
         let (key_state, root_key) = match &access {
             RootKeyAccess::Keychain(store) => read_key_state(*store, keychain),
             // A3: „Im Passwort-Modus ist K erst nach der Entsperrung *da*.“
-            RootKeyAccess::Unlocked(key) => (KeyState::Present, Some(*key)),
+            // Die Kopie in das `Option<[u8; 32]>` bleibt: Der Bestand
+            // (`read_key_state`, `DatabaseKey::from_root_key`) arbeitet mit
+            // `[u8; 32]`, und das umzustellen wäre ein eigener Schritt
+            // (ADR 0095 §3).
+            RootKeyAccess::Unlocked(key) => (KeyState::Present, Some(*key.expose())),
             // A3: „*ungültig* (… Verpackungsdatei, deren Format oder
             // Version nicht lesbar ist)“.
             RootKeyAccess::UnusableWrapping => (KeyState::Invalid, None),
@@ -467,7 +481,7 @@ pub async fn open_or_prepare_database(
                     }
                     // „Aus D1 gibt es keinen K im Schlüsselbund; dort wird K
                     // neu erzeugt (A3).“
-                    let key = ssh_manager_core::crypto::generate_root_key();
+                    let mut key = ssh_manager_core::crypto::generate_root_key();
                     let Some(new_password) = prompt.ask_for_new_master_password() else {
                         // A5: Abbruch heißt, dass nichts verändert ist.
                         return Err(StartupAbort::UserQuit);
@@ -476,7 +490,9 @@ pub async fn open_or_prepare_database(
                     // Ab jetzt Passwort-Modus mit entpacktem K; der nächste
                     // Durchlauf fährt die Tabelle neu und landet in
                     // „neu anlegen“ bzw. „umwandeln“.
-                    access = RootKeyAccess::Unlocked(key);
+                    // A19: K wandert in den schützenden Typ, das Array
+                    // wird dabei überschrieben.
+                    access = RootKeyAccess::Unlocked(RootKey::take_from(&mut key));
                     continue;
                 }
                 StartupChoice::SetUpMasterPassword => {

@@ -21,7 +21,10 @@ mod key;
 mod key_wrapping;
 
 pub use chacha::ChaCha20Poly1305Cipher;
-pub use db_key::{DatabaseKey, DATABASE_KEY_HKDF_INFO, DATABASE_KEY_LEN};
+pub use db_key::{
+    root_key_fingerprint, DatabaseKey, DATABASE_KEY_HKDF_INFO, DATABASE_KEY_LEN,
+    ROOT_KEY_FINGERPRINT_HKDF_INFO,
+};
 pub use key::{
     generate_and_store_root_key, generate_root_key, read_root_key, RootKeyState,
     CHAT_CONTENT_ENCRYPTION_KEY_REF,

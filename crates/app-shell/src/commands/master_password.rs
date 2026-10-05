@@ -208,7 +208,6 @@ pub async fn unlock_with_master_password(
     // Frage 3) gibt es noch keine Verpackung — dort fährt der Ablauf mit
     // `Keychain` weiter und läuft erneut in D1, diesmal mit der Maske im
     // Fenster.
-    let access_owner;
     let keyring = credentials_keyring::KeyringCredentialStore::new();
     let access = match mode {
         KeyMode::Password => {
@@ -216,8 +215,9 @@ pub async fn unlock_with_master_password(
             // A17: Ein liegengebliebener Schlüsselbund-Eintrag wird
             // aufgeräumt — aber nur, wenn er gleich K ist.
             master_password::tidy_up_keychain_after_unlock(&keyring, &key);
-            access_owner = key;
-            RootKeyAccess::Unlocked(*access_owner.expose())
+            // A19 (Fund 11): K wird **verschoben**, nicht in ein
+            // gewöhnliches Array kopiert.
+            RootKeyAccess::Unlocked(key)
         }
         KeyMode::Keychain => RootKeyAccess::Keychain(&keyring),
     };
@@ -407,7 +407,6 @@ pub fn set_up_master_password(
     repeated: String,
     state: tauri::State<'_, AppState>,
 ) -> CommandResult<&'static str> {
-    let _ = &state;
     let db_path = persistence_sqlite::default_db_path();
     let keyring = credentials_keyring::KeyringCredentialStore::new();
 
@@ -416,7 +415,36 @@ pub fn set_up_master_password(
     // er nicht lesbar, dürfte hier auf keinen Fall ein neuer entstehen —
     // die Datenbank wäre damit verloren.
     let root_key = match ssh_manager_core::crypto::read_root_key(&keyring) {
-        ssh_manager_core::crypto::RootKeyState::Present(key) => key,
+        // **Und es muss der K sein, mit dem die Datenbank gerade offen ist**
+        // (spec-reviewer Lauf 4, Fund 10). Weicht der Eintrag seit dem Start
+        // ab — zweite Installation, manuelle Änderung, ein Rest aus A17 —,
+        // verpackte die App sonst einen Schlüssel, mit dem die offene
+        // Datenbank **nicht** zu öffnen ist: beim nächsten Start D2 und
+        // Totalverlust, ohne dass dazwischen irgendetwas auffiele.
+        //
+        // Verglichen wird über die Kennung aus dem `AppState`, nicht über K
+        // selbst — K für die ganze Sitzung aufzubewahren wäre das Gegenteil
+        // von A19 (s. `crypto::root_key_fingerprint`).
+        ssh_manager_core::crypto::RootKeyState::Present(key)
+            if ssh_manager_core::crypto::root_key_fingerprint(&key)
+                == state.root_key_fingerprint =>
+        {
+            key
+        }
+        ssh_manager_core::crypto::RootKeyState::Present(_) => {
+            tracing::error!(
+                "refusing to set up a master password: the root key in the OS keychain is not \
+                 the one this database is open with; wrapping it would make the database \
+                 unopenable (Spec 0101, A3/A13)"
+            );
+            return Err(CommandError::with_code(
+                "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Smart SSH \
+                 richtet das Master-Passwort deshalb nicht ein — es würde den falschen \
+                 Schlüssel sichern und die Datenbank beim nächsten Start unlesbar machen. \
+                 Es ist nichts verändert.",
+                MASTER_PASSWORD_FILE_FAILED_CODE,
+            ));
+        }
         other => {
             tracing::warn!(
                 ?other,
