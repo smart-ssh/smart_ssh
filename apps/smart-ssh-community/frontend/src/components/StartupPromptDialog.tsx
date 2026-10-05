@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { characterCount } from "../passwordLength";
 import type { StartupPromptAnswer, StartupPromptKind, StartupPromptRequest } from "../types";
 
 /** Spec 0101, A13: Mindestlänge des Master-Passworts.
@@ -87,7 +88,7 @@ export function StartupPromptDialog({
   const confirmIsDestructive =
     request.kind === "confirmStartOver" || request.kind === "confirmNewKey";
   const passwordIsUsable =
-    password.length >= MINIMUM_PASSWORD_LENGTH && password === repeated && acknowledged;
+    characterCount(password) >= MINIMUM_PASSWORD_LENGTH && password === repeated && acknowledged;
 
   const answer = (choice: StartupPromptAnswer) => {
     if (choice === "confirm" && wantsPassword) {
@@ -128,7 +129,7 @@ export function StartupPromptDialog({
                 className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
               />
             </label>
-            {password.length > 0 && password.length < MINIMUM_PASSWORD_LENGTH && (
+            {password.length > 0 && characterCount(password) < MINIMUM_PASSWORD_LENGTH && (
               <p className="text-sm text-amber-300">
                 {t("startup.passwordTooShort", { minimum: MINIMUM_PASSWORD_LENGTH })}
               </p>

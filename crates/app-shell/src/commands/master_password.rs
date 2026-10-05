@@ -49,6 +49,24 @@ pub const STARTUP_FAILED_CODE: &str = "STARTUP_FAILED";
 /// bestätigenden Aufruf als Fortsetzung — alles andere ist „erneut
 /// versuchen". Der Text dazu entsteht mit dem Dialog in Commit 11.
 pub const KEYCHAIN_HOLDS_ANOTHER_KEY_CODE: &str = "KEYCHAIN_HOLDS_ANOTHER_KEY";
+/// Klarstellung 9, Punkt 5 („Fehlertexte stimmen mit dem Zustand überein,
+/// den sie beschreiben"), Review-Fund Runde 1 zu Commit 11: Der Schlüssel im
+/// Schlüsselbund ist **nicht** der, mit dem diese Datenbank offen ist.
+///
+/// **Ein eigener Code, obwohl die Datei-Fehler bewusst einen gemeinsamen
+/// haben:** Die Oberfläche übersetzt den Code und zeigt den Text des
+/// Backends nicht (Spec 0024, Abschnitt 5 — sonst stünde im englischen
+/// Fenster ein deutscher Satz). Unter `MASTER_PASSWORD_FILE_FAILED` las der
+/// Nutzer deshalb „Die Schlüsseldatei neben deiner Datenbank ließ sich nicht
+/// lesen" — im Schlüsselbund-Modus gibt es gar keine, und die Ursache liegt
+/// woanders. Ein Orakel ist dieser Code nicht: Er sagt nichts über die
+/// Existenz einer Verpackungsdatei, nur etwas über den Schlüsselbund, dessen
+/// Modus die Oberfläche ohnehin anzeigt (A18).
+pub const KEYCHAIN_KEY_MISMATCH_CODE: &str = "KEYCHAIN_KEY_MISMATCH";
+/// Derselbe Grund: Der Vorgang passt nicht zum aktiven Modus (A18) —
+/// einrichten, obwohl schon ein Passwort gilt, oder wechseln, obwohl keines
+/// gilt. Das ist kein Dateifehler und soll nicht als einer gemeldet werden.
+pub const MASTER_PASSWORD_MODE_MISMATCH_CODE: &str = "MASTER_PASSWORD_MODE_MISMATCH";
 
 /// Klarstellung 11: Nach wie vielen gescheiterten Entsperrversuchen eines
 /// **Programmlaufs** die Maske „Neu anfangen" anbietet.
@@ -234,6 +252,20 @@ fn decide_startup_screen(
             offers_start_over: false,
         };
     };
+    // **Die alte Prüfung bleibt wörtlich stehen und wird mit der neuen
+    // ODER-verknüpft** (Klarstellung 11 lockert Klarstellung 9, und das ist
+    // die einzige Lockerung dieser Spec): `allows_starting_over` ist eine
+    // Positivliste über `WrappingHealth` — ein künftiger Zustand, den
+    // niemand bedacht hat, führt dort **nicht** zu einem neuen K. Diese
+    // Fassung kann damit per Konstruktion nicht weniger ablehnen als die
+    // alte; sie kommt nur in der einen, entschiedenen Lage dazu.
+    //
+    // Der Aufruf steht hier und nicht bloß in einem Test (Review-Fund Runde
+    // 1 zu Commit 11): Sonst wäre der dokumentierte Riegel Testcode, und
+    // wer ihn verschärft, härtete die falsche Funktion.
+    let after_three_failed_attempts =
+        health == H::Usable && failed_unlock_attempts >= ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED;
+    let offers_start_over = health.allows_starting_over() || after_three_failed_attempts;
     match health {
         // Keine Verpackungsdatei: Schlüsselbund-Modus. Dass der Zustand
         // trotzdem nicht steht, heißt, dass der Start in D1 gelandet ist
@@ -245,13 +277,13 @@ fn decide_startup_screen(
         // Klarstellung 11: der einzige Zustand, in dem Versuche zählen.
         H::Usable => StartupScreenDecision {
             screen: StartupScreen::Unlock,
-            offers_start_over: failed_unlock_attempts >= ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED,
+            offers_start_over,
         },
         // Klarstellung 9: Hier gibt es nichts zu entsperren — kein
         // Passwortfeld, und der Ausweg steht sofort offen.
         H::Unusable => StartupScreenDecision {
             screen: StartupScreen::UnusableWrapping,
-            offers_start_over: true,
+            offers_start_over,
         },
         // Klarstellung 11, letzter Satz: **nie** „Neu anfangen", auch nicht
         // nach beliebig vielen Versuchen. Ein Rechte- oder E/A-Fehler mit
@@ -687,7 +719,7 @@ pub fn set_up_master_password(
                  richtet das Master-Passwort deshalb nicht ein — es würde den falschen \
                  Schlüssel sichern und die Datenbank beim nächsten Start unlesbar machen. \
                  Es ist nichts verändert.",
-                MASTER_PASSWORD_FILE_FAILED_CODE,
+                KEYCHAIN_KEY_MISMATCH_CODE,
             ));
         }
         other => {
@@ -788,9 +820,10 @@ fn to_command_error(err: master_password::MasterPasswordError) -> CommandError {
         // Fällen dasselbe („Erneut versuchen"). Der Unterschied steht im
         // Text und im Log.
         | E::WrappingFileUnreachable { .. }
-        | E::KeychainFailed { .. }
-        | E::NotInPasswordMode
-        | E::AlreadyInPasswordMode => MASTER_PASSWORD_FILE_FAILED_CODE,
+        | E::KeychainFailed { .. } => MASTER_PASSWORD_FILE_FAILED_CODE,
+        // Kein Dateifehler, sondern ein Vorgang, der nicht zum aktiven
+        // Modus passt (Review-Fund Runde 1 zu Commit 11).
+        E::NotInPasswordMode | E::AlreadyInPasswordMode => MASTER_PASSWORD_MODE_MISMATCH_CODE,
     };
     CommandError::with_code(err.to_string(), code)
 }

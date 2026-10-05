@@ -230,6 +230,62 @@ describe("StartupGate", () => {
     );
   });
 
+  it("lässt auch die Einrichtemaske aus D1 einen Ausweg (A16, Spec 0059)", async () => {
+    // Review-Fund Runde 1: Wählt der Nutzer im Dialog D1 „Beenden", kommt
+    // der Startablauf als Fehler zurück, und dieser Bildschirm bleibt
+    // stehen. Ohne eigene Knöpfe hätte „Beenden" dann nicht beendet, und es
+    // gäbe keinen Weg mehr aus der App außer dem Fenstersystem.
+    vi.mocked(unlockWithMasterPassword).mockRejectedValue({
+      message: "Der Start wurde abgebrochen. Es ist nichts verändert.",
+      code: "STARTUP_FAILED",
+    });
+    vi.mocked(getStartupState).mockResolvedValue(
+      state({ screen: "setUpMasterPassword", mode: "keychain" }),
+    );
+    renderGate(state({ screen: "setUpMasterPassword", mode: "keychain" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Beenden" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Erneut versuchen" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Beenden" }));
+    expect(quitApplication).toHaveBeenCalledTimes(1);
+  });
+
+  it("setzt den Startablauf nach „Erneut versuchen“ erneut fort (A16)", async () => {
+    vi.mocked(unlockWithMasterPassword).mockRejectedValue({ message: "x", code: "STARTUP_FAILED" });
+    vi.mocked(getStartupState).mockResolvedValue(
+      state({ screen: "setUpMasterPassword", mode: "keychain" }),
+    );
+    renderGate(state({ screen: "setUpMasterPassword", mode: "keychain" }));
+
+    await waitFor(() => expect(unlockWithMasterPassword).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Erneut versuchen" }));
+    // Ohne das Zurücksetzen des Merkers **und** eine Abhängigkeit, die sich
+    // ändert, bliebe es bei einem Aufruf — der Knopf wäre dann wirkungslos.
+    await waitFor(() => expect(unlockWithMasterPassword).toHaveBeenCalledTimes(2));
+  });
+
+  it("zeigt den Hinweis aus A5 auch nach der Entsperrung (Klarstellung 10e)", async () => {
+    renderGate(state());
+    await waitFor(() => expect(onStartupPrompt).toHaveBeenCalled());
+
+    deliverPrompt({
+      kind: "notice",
+      title: "Umbenannt",
+      message: "Die Dateien heißen jetzt smart-ssh.db.unreadable-0101.",
+    });
+    // Der Startablauf läuft hinter dem Hinweis weiter und entsperrt.
+    vi.mocked(getStartupState).mockResolvedValue(state({ screen: "unlocked" }));
+    const unlockedHandler = vi.mocked(onStartupUnlocked).mock.calls.at(-1)?.[0];
+    unlockedHandler?.();
+
+    // Der neue Dateiname darf nicht mit dem Wechsel zur App verschwinden —
+    // sonst erfährt ihn der Nutzer nirgends.
+    await waitFor(() => expect(screen.getByText("DIE-APP-0101")).toBeTruthy());
+    expect(screen.getByText(/smart-ssh.db.unreadable-0101/)).toBeTruthy();
+  });
+
   it("zeigt eine Meldung statt der App, wenn der Startzustand nicht zu lesen war", async () => {
     vi.mocked(getStartupState).mockRejectedValue({ message: "kaputt", code: null });
     renderGate(null);

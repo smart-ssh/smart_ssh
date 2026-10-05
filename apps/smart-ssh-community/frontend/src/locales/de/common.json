@@ -486,11 +486,13 @@
     "KEYCHAIN_UNAVAILABLE": "Der Systemschlüsselbund ist nicht verfügbar. Solange das so ist, lassen sich kein API-Key, kein Server-Passwort, keine Passphrase und kein Sudo-Passwort speichern oder lesen. Den genauen Grund und den nächsten Schritt zeigt die Diagnose-Ansicht in den Einstellungen.",
     "KEYCHAIN_ACCESS_FAILED": "Der Zugriff auf den Systemschlüsselbund ist fehlgeschlagen. Möglicherweise ist er gesperrt, oder der Zugriff wurde abgelehnt. Bitte erneut versuchen — der genaue Grund steht im Log.",
     "WRONG_MASTER_PASSWORD": "Passwort falsch oder Datei beschädigt. Beides ist von außen nicht zu unterscheiden. Es wurde nichts verändert.",
-    "MASTER_PASSWORD_FILE_FAILED": "Die Schlüsseldatei neben deiner Datenbank ließ sich nicht lesen oder schreiben. Es wurde nichts verändert; das Log nennt die Ursache.",
+    "MASTER_PASSWORD_FILE_FAILED": "Der Schlüssel zu deiner Datenbank war gerade nicht zu lesen oder zu schreiben. Es wurde nichts verändert; die Ursache steht im Log.",
     "MASTER_PASSWORD_REJECTED": "Das Master-Passwort wurde abgelehnt: mindestens 12 Zeichen, und beide Eingaben müssen übereinstimmen.",
     "STARTUP_FAILED": "Der Start ist nicht durchgelaufen. Es wurde nichts verändert; das Log nennt die Ursache.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Im Schlüsselbund liegt ein anderer Schlüssel. Es wurde nichts verändert — bestätige das Ersetzen, wenn du es willst.",
-    "APP_LOCKED": "Smart SSH ist noch gesperrt. Entsperre es zuerst mit deinem Master-Passwort."
+    "APP_LOCKED": "Smart SSH ist noch gesperrt. Entsperre es zuerst mit deinem Master-Passwort.",
+    "MASTER_PASSWORD_MODE_MISMATCH": "Dieser Vorgang passt nicht dazu, wo der Schlüssel gerade liegt. Es wurde nichts verändert — öffne die Einstellungen erneut, dort steht der aktive Modus.",
+    "KEYCHAIN_KEY_MISMATCH": "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Es wurde nichts verändert — würde er gesichert, wäre die Datenbank beim nächsten Start unlesbar."
   },
   "mcpServer": {
     "hint": "Externe MCP-Clients können darüber Kommandos, Datei-Lese-/Schreibzugriffe und Notiz-Aktualisierungen auf freigegebenen Servern vorschlagen — jede Anfrage landet immer bei einer Bestätigung in der App, unabhängig von bestehenden Allow-Regeln.",
