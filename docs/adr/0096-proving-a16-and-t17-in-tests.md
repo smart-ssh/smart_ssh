@@ -167,3 +167,10 @@ Item:
    belegt ist der Passwort-Modus. Die Pfade aus T3 und T11 fehlen in der
    Aufzeichnung — hiermit als Verkürzung benannt, statt sie als erfüllt
    auszugeben.
+
+> **Nachtrag (Spec 0101, Klarstellung 10a–d):** Die Punkte 1, 5 und 7 dieses
+> Abschnitts sind erledigt, Punkt 3 zur Hälfte. Punkt 1 ist dabei **anders**
+> gelöst als hier vorgeschlagen: Nicht „nur ein `NotFound` am Ziel einer
+> Verknüpfung bleibt ein Ausweg", sondern **kein** Lesefehler bleibt einer —
+> so verlangt es der Wortlaut von 10a. Einzelheiten, und was dabei offen
+> geblieben ist, in ADR 0097.

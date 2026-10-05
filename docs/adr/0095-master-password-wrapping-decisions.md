@@ -115,7 +115,14 @@ läge ein Tippfehler im Passwortfeld neben einem Codepfad, der Daten aufgibt.
 **Der Riegel:** Angenommen wird der Aufruf nur, wenn
 `wrapping_health(..).allows_starting_over()` gilt, also bei *unbrauchbar*
 (Kopf, Version, KDF-Kennung, Parameter oder Chiffratlänge) oder *nicht
-lesbar* (Rechte, hängende Verknüpfung). Bei einer brauchbaren Datei wird
+lesbar* (Rechte, hängende Verknüpfung).
+
+> **Nachtrag (Spec 0101, Klarstellung 10a):** Der zweite Fall gilt nicht
+> mehr. *Nicht lesbar* ist seither A3 *nicht erreichbar* und führt nach D1
+> („Erneut versuchen", nichts verändern); der Riegel lässt nur noch
+> *unbrauchbar* durch. Begründung und Folgen in ADR 0097.
+
+Bei einer brauchbaren Datei wird
 abgelehnt: Sonst wäre der Ausweg bei bloß vergessenem Passwort ein Knopf,
 der den Verlauf wegwirft, obwohl K noch zu holen ist. Die Oberfläche darf
 fragen, nicht entscheiden.
