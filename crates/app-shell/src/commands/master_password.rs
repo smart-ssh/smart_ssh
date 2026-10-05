@@ -39,6 +39,16 @@ pub const UNLOCKED_EVENT: &str = "startup:unlocked";
 /// Fehlercodes dieser Etappe (A20).
 pub const WRONG_MASTER_PASSWORD_CODE: &str = "WRONG_MASTER_PASSWORD";
 pub const MASTER_PASSWORD_FILE_FAILED_CODE: &str = "MASTER_PASSWORD_FILE_FAILED";
+/// review-09 (Runde 2, Teil A, Fund 2 „Rest"): `refuse_to_start_over` meldete
+/// für `WrappingHealth::Unreachable` **und** `WrappingHealth::Absent`
+/// denselben Code und Text — „gerade nicht zu lesen oder zu schreiben".
+/// Stimmt für `Unreachable` (die Datei liegt da, ein I/O- oder Rechte-Fehler
+/// verhindert den Zugriff), aber nicht für `Absent`: Dort liegt **keine**
+/// Datei an diesem Ort, der Modus ist längst der Schlüsselbund-Modus
+/// ([`mode_for`]), und „war gerade nicht lesbar" behauptet
+/// einen Zustand, der nicht vorliegt — derselbe Fehlertyp wie bei
+/// `KEYCHAIN_KEY_MISMATCH_CODE` (Klarstellung 9, Punkt 5).
+pub const MASTER_PASSWORD_FILE_ABSENT_CODE: &str = "MASTER_PASSWORD_FILE_ABSENT";
 pub const MASTER_PASSWORD_REJECTED_CODE: &str = "MASTER_PASSWORD_REJECTED";
 pub const STARTUP_FAILED_CODE: &str = "STARTUP_FAILED";
 /// Klarstellung 10b: Der Wechsel auf den Schlüsselbund würde einen fremden
@@ -544,22 +554,30 @@ fn refuse_to_start_over(
         "refusing to start over: the wrapping file next to the database may still yield the \
          root key (Spec 0101, A5/A16, Klarstellung 10a/11)"
     );
-    // **Drei Gründe, zwei Texte.** Eine Datei, die sich gerade nicht
-    // *lesen* lässt, ist nicht dasselbe wie eine, die in Ordnung ist und nur
-    // ein anderes Passwort braucht (Klarstellung 10a). Beides endet in
+    // **Drei Gründe, drei Texte** (review-09, Runde 2 Teil A, Fund 2
+    // „Rest" — vorher zwei Texte, `Unreachable` und `Absent` teilten sich
+    // einen). Eine Datei, die sich gerade nicht *lesen* lässt, ist nicht
+    // dasselbe wie eine, die an diesem Ort gar nicht (mehr) existiert, und
+    // keines von beidem ist dasselbe wie eine, die in Ordnung ist und nur
+    // ein anderes Passwort braucht (Klarstellung 10a). Alle drei enden in
     // „nichts verändert, versuche es erneut" (D1) — aber einem Nutzer zu
-    // sagen, seine Datei sei in Ordnung, während ein Rechte- oder
-    // E/A-Fehler vorliegt, führt ihn in die falsche Fehlersuche.
+    // sagen, seine Datei sei lesbar oder vorhanden, während das Gegenteil
+    // zutrifft, führt ihn in die falsche Fehlersuche.
     Some(match health {
-        master_password::WrappingHealth::Unreachable
-        // Keine Datei an diesem Ort: Dann gibt es auch nichts umzubenennen,
-        // und der Modus ist inzwischen der Schlüsselbund-Modus. „Erneut
-        // versuchen" liest den Zustand neu und führt dorthin.
-        | master_password::WrappingHealth::Absent => CommandError::with_code(
+        master_password::WrappingHealth::Unreachable => CommandError::with_code(
             "Die Schlüsseldatei neben deiner Datenbank liegt an ihrem Platz, ist aber \
              gerade nicht lesbar — vielleicht hält sie ein anderes Programm offen oder \
              die Rechte stimmen nicht. Es wurde nichts verändert. Versuche es erneut.",
             MASTER_PASSWORD_FILE_FAILED_CODE,
+        ),
+        // Keine Datei an diesem Ort: Dann gibt es auch nichts umzubenennen,
+        // und der Modus ist inzwischen der Schlüsselbund-Modus. „Erneut
+        // versuchen" liest den Zustand neu und führt dorthin.
+        master_password::WrappingHealth::Absent => CommandError::with_code(
+            "An diesem Ort liegt keine Schlüsseldatei mehr — Smart SSH läuft für diese \
+             Datenbank jetzt im Schlüsselbund-Modus. Es wurde nichts verändert. Versuche \
+             es erneut.",
+            MASTER_PASSWORD_FILE_ABSENT_CODE,
         ),
         // Brauchbare Datei, noch zu wenige Fehlversuche (Klarstellung 11).
         _ => CommandError::with_code(
@@ -1030,8 +1048,10 @@ mod tests {
         assert!(refuse_to_start_over(H::Unusable, 0).is_none());
     }
 
-    /// Die beiden Texte der Ablehnung sagen die **Wahrheit über den
-    /// Zustand**, den sie beschreiben (Klarstellung 10a).
+    /// Die drei Texte der Ablehnung sagen die **Wahrheit über den
+    /// Zustand**, den sie beschreiben (Klarstellung 10a; `Absent` seit
+    /// review-09 Runde 2 Teil A, Fund 2 „Rest" mit eigenem Code/Text statt
+    /// unter `MASTER_PASSWORD_FILE_FAILED` mitzulaufen).
     #[test]
     fn test_the_refusal_names_the_right_reason() {
         let unreachable = refuse_to_start_over(H::Unreachable, 99).expect("abgelehnt");
@@ -1041,6 +1061,25 @@ mod tests {
             "eine Datei, die sich nicht lesen lässt, ist nicht „in Ordnung, nur das Passwort \
              passt nicht“ — das führte in die falsche Fehlersuche. Text: {}",
             unreachable.message
+        );
+
+        let absent = refuse_to_start_over(H::Absent, 99).expect("abgelehnt");
+        assert_eq!(
+            absent.code,
+            Some(MASTER_PASSWORD_FILE_ABSENT_CODE),
+            "keine Datei an diesem Ort ist ein anderer Zustand als eine, die da liegt und \
+             gerade nicht lesbar ist — beide unter demselben Code zu melden, behauptet im \
+             Absent-Fall einen I/O-/Rechte-Fehler, den es nicht gibt"
+        );
+        assert_ne!(
+            absent.code, unreachable.code,
+            "sonst wäre die Aufteilung nur eine Umbenennung, kein eigener Zustand"
+        );
+        assert!(
+            !absent.message.contains("nicht lesbar"),
+            "ohne Datei an diesem Ort gibt es nichts, das „nicht lesbar“ wäre — der Text \
+             behauptet sonst eine Datei, die nicht existiert. Text: {}",
+            absent.message
         );
 
         let wrong_password = refuse_to_start_over(H::Usable, 0).expect("abgelehnt");
