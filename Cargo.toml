@@ -11,3 +11,15 @@ license = "Apache-2.0"
 # wirksam, damit cargo-deny die eigene Projektlizenz nicht gegen die
 # Drittanbieter-Allow-Liste prüft.
 publish = false
+
+# Spec 0101, A14: Argon2id rechnet absichtlich teuer (m = 64 MiB, t = 3).
+# Unoptimiert dauert ein einzelner Durchlauf gut zwei Sekunden statt rund
+# 90 ms — das trifft `cargo test` (die Tests zu T13/T15 verpacken und
+# entpacken mehrfach) und ebenso jedes Entsperren in einem Entwicklungsbau.
+# Diese zwei Pakete werden deshalb auch im Debug-Profil optimiert gebaut;
+# der eigene Code bleibt unoptimiert und damit debugbar.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

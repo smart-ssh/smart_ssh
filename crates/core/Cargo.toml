@@ -17,6 +17,17 @@ path = "src/lib.rs"
 test-support = []
 
 [dependencies]
+# Spec 0101, A14: Argon2id leitet den Schlüssel ab, unter dem der
+# Wurzelschlüssel K im Passwort-Modus verpackt liegt. Wie `hkdf` und `sha2`
+# liegt die Crate bereits im Abhängigkeitsbaum dieses Workspace (s. Spec
+# 0101 §1 „Vorhanden") — hier nur zu einer direkten Abhängigkeit von `core`
+# hochgestuft, kein neuer Eintrag in `Cargo.lock` und keine neue Lizenz.
+#
+# `default-features = false` mit `alloc`: Die Standardausstattung zieht
+# `password-hash`s PHC-String-Kodierung mit; davon braucht A14 nichts (das
+# Format steht in `crypto::key_wrapping`), und was nicht eingebunden ist,
+# kann auch nicht versehentlich benutzt werden.
+argon2 = { version = "0.6.0", default-features = false, features = ["alloc"] }
 async-trait = "0.1.92"
 base64 = "0.23.1"
 chacha20poly1305 = "0.10.1"
