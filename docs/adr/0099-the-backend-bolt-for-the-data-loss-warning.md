@@ -18,7 +18,26 @@ A13 nennt drei Einrichtungswege: aus den Einstellungen, aus D1, und im
 Passwort-Modus aus A5/D4. Alle drei gehen durch **eine** Funktion,
 `app_logic::master_password::set_up_master_password` — dort sitzt der
 Riegel, als erste Anweisung, vor der Prüfung von Länge und Wiederholung und
-vor jedem Schreibzugriff.
+vor jedem Schreibzugriff **dieser Funktion**.
+
+Das genügt für zwei der drei Wege, aber nicht für den dritten: Auf den
+Wegen über A5 und D4 liegt zwischen der Passworteingabe und dem Einrichten
+ein `rename` — Datenbank und alte Verpackung werden zur Seite gelegt, weil
+die Reihenfolge das verlangt (ADR 0095 §4). Ein Riegel erst im Einrichten
+hätte dort abgelehnt, *nachdem* schon etwas verändert war, und zurück
+geblieben wäre ein Datenverzeichnis ohne Verpackungsdatei — beim nächsten
+Start also der Schlüsselbund-Modus, ein Moduswechsel, den niemand gewählt
+hat (spec-reviewer Runde 2).
+
+Deshalb gibt es `check_new_password_before_touching_files`: dieselben
+beiden Prüfungen, aufrufbar **vor** dem ersten `rename`, und an beiden
+Stellen aufgerufen (`database_startup::start_over` und
+`database_startup::generate_key`, direkt hinter
+`ask_for_new_master_password()`). Sie **ersetzt** den Riegel im Einrichten
+nicht, sie kommt davor; beide rufen dieselben beiden Funktionen auf
+(`check_loss_warning`, `check_new_password`), damit sie nicht
+auseinanderlaufen können. Eine doppelte Prüfung kann per Konstruktion nicht
+weniger erkennen als eine.
 
 Die Alternative wäre gewesen, jeden der drei Wege einzeln zu prüfen. Sie
 ist verworfen: Ein vierter Weg, der später entsteht, hätte dann einen
@@ -90,6 +109,14 @@ Signatur unverändert):
   → „ohne Bestätigung darf der Start nicht zu einer offenen Datenbank
   führen" scheitert.
 
+Der dritte Weg hat seinen eigenen Test,
+`database_startup::tests::test_k12_d4_setup_without_the_confirmed_warning_keeps_the_old_wrapping`.
+Er ist gegen den Stand **mit** Riegel, aber **ohne** die Vorab-Prüfung rot
+gesehen worden (beide Aufrufe von `check_new_password_upfront` entfernt):
+Dann ist die alte Verpackungsdatei nach dem Abbruch verschwunden und die
+Fehlerart `MasterPasswordSetupFailedAfterRename` statt
+`MasterPasswordSetupFailed`.
+
 Beide arbeiten mit einem **einwandfreien** Passwort (lang genug, beide
 Eingaben gleich). Das ist Absicht: Mit einem zu kurzen Passwort wären sie
 auch ohne Riegel grün und prüften dann eine der beiden alten Bedingungen.
@@ -113,3 +140,10 @@ sie, weil die Oberfläche dort nur zwei bzw. drei Parameter übergibt.
 2. **Die Oberfläche zeigt den neuen Code nie.** Das ist der gewollte
    Zustand, heißt aber auch: Seinen Text liest niemand nachträglich
    gegen. Er ist deshalb so geschrieben, dass er allein verständlich ist.
+3. **„Erneut versuchen" setzt die Zuhörer nicht neu auf.** Scheitert das
+   Anmelden der Start-Ereignisse, ist der Fehler jetzt sichtbar (das
+   fehlende `catch` an der Anmelde-IIFE in `StartupGate`, spec-reviewer
+   Runde 2) — aber der Knopf daneben hilft in dieser Lage nicht weiter,
+   weil `listening` falsch bleibt. Ein Neuaufsetzen bräuchte einen
+   eigenen Zähler in den Abhängigkeiten des Effekts; zurückgestellt, weil
+   die Lage sichtbar ist und ein Neustart der App sie löst.

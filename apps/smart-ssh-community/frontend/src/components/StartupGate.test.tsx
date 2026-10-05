@@ -176,6 +176,22 @@ describe("StartupGate", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "OK" })).toBeNull());
   });
 
+  it("meldet es sichtbar, wenn sich die Zuhörer nicht anmelden lassen (spec-reviewer Runde 2)", async () => {
+    // Scheitert `listen`, bleibt der Merker `listening` aus — und damit
+    // kehrt der Effekt, der den Start im Fenster fortsetzt, immer früh
+    // zurück. Ohne das `catch` an der Anmelde-IIFE stünde davon nur eine
+    // unbehandelte Ablehnung in der Konsole: Der Bildschirm zeigte endlos
+    // „wird fortgesetzt", und der Ausweg wäre wirkungslos **und** stumm.
+    //
+    // **Gegenbeweis geführt:** Ohne das `catch` erscheint keine Meldung,
+    // und diese Zusicherung läuft in die Zeitgrenze.
+    vi.mocked(onStartupPrompt).mockRejectedValueOnce(new Error("kein Zuhörer"));
+
+    renderGate(state({ screen: "setUpMasterPassword", mode: "keychain" }));
+
+    expect(await screen.findByText(/kein Zuhörer/)).toBeTruthy();
+  });
+
   it("zeigt bei einer echten Frage nur die Knöpfe, die ihre Art anbietet (A3)", async () => {
     renderGate(state());
     await waitFor(() => expect(onStartupPrompt).toHaveBeenCalled());
