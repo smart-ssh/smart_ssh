@@ -148,6 +148,29 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // Muster) — bei der Schnellregel bewusst nicht, dort wird ein Vorschlag
   // angelegt und kein selbstgeschriebenes Muster.
   "FILTER_RULE_PATTERN_INVALID",
+  // Spec 0101, A20 (Etappe 3): die Codes rund um das Master-Passwort.
+  // „Passwort falsch" und „Datei beschädigt" sind **derselbe** Code: Sie
+  // sind nach A17 nicht unterscheidbar, und ein zweiter Code wäre ein
+  // Orakel darüber, welcher der beiden Fälle vorliegt.
+  "WRONG_MASTER_PASSWORD",
+  // Jeder Fehler an der Verpackungsdatei — auch „liegt da, ist aber gerade
+  // nicht lesbar" (Klarstellung 10a). Ein eigener Code dafür wäre ein
+  // Orakel darüber, ob die Datei existiert und bloß gesperrt ist; die
+  // Oberfläche tut in beiden Fällen dasselbe. Der Unterschied steht im
+  // Text, den das Backend mitschickt.
+  "MASTER_PASSWORD_FILE_FAILED",
+  // A13: zu kurz, nicht wiederholt, oder im falschen Modus eingerichtet.
+  "MASTER_PASSWORD_REJECTED",
+  // A16: Der Start ist nach dem Entsperren gescheitert oder abgebrochen.
+  "STARTUP_FAILED",
+  // Klarstellung 10b: Im Schlüsselbund liegt ein **anderer** Schlüssel. Der
+  // einzige dieser Codes mit einer Fortsetzung — die Oberfläche stellt die
+  // Frage und ruft `switchToOsKeychain` mit `replaceAnotherKey` erneut.
+  "KEYCHAIN_HOLDS_ANOTHER_KEY",
+  // A16: Das Tor hat ein Kommando vor der Entsperrung abgewiesen. Sollte
+  // niemandem begegnen (die Oberfläche zeigt die App erst danach) —
+  // begegnet es doch, soll kein roher Text erscheinen.
+  "APP_LOCKED",
 ]);
 
 /** Übersetzt `code` über den `errors`-Namespace, fällt bei `null`/

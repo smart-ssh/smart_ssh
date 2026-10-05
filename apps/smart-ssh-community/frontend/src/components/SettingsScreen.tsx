@@ -8,6 +8,7 @@ import { AiProviderSettings } from "./AiProviderSettings";
 import { DiagnosticsSettings } from "./DiagnosticsSettings";
 import { FileTypeSettings } from "./FileTypeSettings";
 import { LanguageSettings } from "./LanguageSettings";
+import { MasterPasswordSettings } from "./MasterPasswordSettings";
 
 interface SettingsScreenProps {
   onClose: () => void;
@@ -18,6 +19,8 @@ const AI_PROVIDER_CATEGORY_ID = "ai-provider";
 const DISPLAY_LANGUAGE_CATEGORY_ID = "display-language";
 const DIAGNOSTICS_CATEGORY_ID = "diagnostics";
 const FILE_TYPES_CATEGORY_ID = "file-types";
+/** Spec 0101, A18: Wo der Schlüssel zur verschlüsselten Datenbank liegt. */
+const MASTER_PASSWORD_CATEGORY_ID = "master-password";
 const ABOUT_CATEGORY_ID = "about";
 
 interface NavCategory {
@@ -56,6 +59,9 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
     // 'Dateien'- oder 'Editor'-Sektion" — "Dateien" gewählt, näher am
     // Dateibrowser-Wortlaut ("Dateityp", nicht "Editor-Konfiguration").
     { id: FILE_TYPES_CATEGORY_ID, label: t("settings.categories.fileTypes") },
+    // Spec 0101, A18: „Die Einstellungen zeigen den aktiven Modus." Dazu
+    // der Wechsel in beide Richtungen (A13/A15).
+    { id: MASTER_PASSWORD_CATEGORY_ID, label: t("settings.categories.masterPassword") },
     // Spec 0050, Abschnitt 1.1 schlägt "Über" als letzten Eintrag vor,
     // nach einer möglichen (nur in der Official-Edition registrierten)
     // "Lizenz"-Kategorie — die kommt aber über `registeredCategories`
@@ -137,6 +143,7 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
             {active?.id === DISPLAY_LANGUAGE_CATEGORY_ID && <LanguageSettings />}
             {active?.id === DIAGNOSTICS_CATEGORY_ID && <DiagnosticsSettings />}
             {active?.id === FILE_TYPES_CATEGORY_ID && <FileTypeSettings />}
+            {active?.id === MASTER_PASSWORD_CATEGORY_ID && <MasterPasswordSettings />}
             {active?.id === ABOUT_CATEGORY_ID && <AboutSettings />}
             {registeredSections.map(
               ({ id, component: Section }) => active?.id === id && <Section key={id} />,

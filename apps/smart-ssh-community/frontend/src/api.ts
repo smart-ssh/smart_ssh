@@ -39,6 +39,8 @@ import type {
   SshConfigEntryChoice,
   SshConfigExportResultDto,
   SshConfigImportPreviewDto,
+  StartupPromptAnswer,
+  StartupStateDto,
   TestAiProviderCredentialsResult,
   TestConnectionResult,
 } from "./types";
@@ -549,3 +551,65 @@ export const applySshConfigImport = (choices: SshConfigEntryChoice[]) =>
  * Pseudo-Server). `null`, wenn der Nutzer den Dialog abbricht. */
 export const exportSshConfig = (title: string) =>
   invoke<SshConfigExportResultDto | null>("export_ssh_config", { title });
+
+// --- Spec 0101, Etappe 3: Master-Passwort ---------------------------------
+//
+// **Die ersten fünf stehen in der Positivliste des Tors** (A16,
+// `crate::startup_gate`): Sie sind die einzigen Kommandos, die vor der
+// Entsperrung durchkommen. Jedes andere `invoke()` dieser Datei antwortet
+// im gesperrten Zustand mit `APP_LOCKED` — deshalb rendert `StartupGate`
+// die App erst, wenn der Zustand steht.
+//
+// **Kein Passwort kommt zurück:** Die Kommandos nehmen es an, kein
+// Rückgabewert trägt eines (A19/§6).
+
+/** A16/A18: das erste Kommando, das die Oberfläche beim Start aufruft. */
+export const getStartupState = () => invoke<StartupStateDto>("get_startup_state");
+
+/** A16: entsperren und den Zustand nachbauen. Im Schlüsselbund-Modus
+ * (Startmaske `setUpMasterPassword`, Teil 0 Frage 3) wird das Passwort
+ * nicht gebraucht — dort setzt der Aufruf den Startablauf im Fenster fort,
+ * und die Entscheidung fällt im Dialog D1. */
+export const unlockWithMasterPassword = (password: string) =>
+  invoke<StartupStateDto>("unlock_with_master_password", { password });
+
+/** A16/A5, Klarstellung 9 + 11: „Neu anfangen" aus der Entsperrmaske. Wird
+ * abgelehnt, solange die Verpackungsdatei K noch hergeben könnte — die
+ * Oberfläche entscheidet das nicht, sie kann es nur anfragen. */
+export const startOverFromUnlockScreen = () =>
+  invoke<StartupStateDto>("start_over_from_unlock_screen");
+
+/** Teil 0 Frage 3: die Antwort auf eine Startfrage im Fenster. Das neue
+ * Master-Passwort kommt getrennt mit — es gehört nicht in das Ereignis, mit
+ * dem gefragt wurde (§6: kein Passwort in einem DTO). */
+export const answerStartupPrompt = (
+  answer: StartupPromptAnswer,
+  password?: string,
+  repeated?: string,
+) =>
+  invoke<void>("answer_startup_prompt", {
+    answer,
+    password: password ?? null,
+    repeated: repeated ?? null,
+  });
+
+/** A16: „Beenden" aus einer Startmaske. */
+export const quitApplication = () => invoke<void>("quit_application");
+
+/** A18: welcher Modus ist aktiv? Für die Einstellungen. */
+export const getMasterPasswordMode = () => invoke<"password" | "keychain">("get_master_password_mode");
+
+/** A13: Master-Passwort aus den Einstellungen einrichten. */
+export const setUpMasterPassword = (password: string, repeated: string) =>
+  invoke<"password" | "keychain">("set_up_master_password", { password, repeated });
+
+/** A15: Passwort ändern. Die Datenbank wird dabei nicht angefasst. */
+export const changeMasterPassword = (current: string, password: string, repeated: string) =>
+  invoke<void>("change_master_password", { current, password, repeated });
+
+/** A15: zurück auf den Schlüsselbund. `replaceAnotherKey` ist die
+ * Bestätigung aus Klarstellung 10b: Erst **ohne** sie aufrufen; kommt
+ * `KEYCHAIN_HOLDS_ANOTHER_KEY` zurück, die Frage stellen und erneut
+ * aufrufen. Ohne Bestätigung bleibt alles, wie es war. */
+export const switchToOsKeychain = (current: string, replaceAnotherKey: boolean) =>
+  invoke<"password" | "keychain">("switch_to_os_keychain", { current, replaceAnotherKey });
