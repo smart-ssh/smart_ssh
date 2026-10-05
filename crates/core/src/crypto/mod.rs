@@ -15,11 +15,20 @@ mod chacha;
 /// A3 zu fahren.
 mod db_key;
 mod key;
+/// Spec 0101, A14/A19 (E9): der Wurzelschlüssel K, verpackt unter einem
+/// Master-Passwort — Format, Argon2id-Ableitung und AEAD. Reine Logik; das
+/// Schreiben und Lesen der Datei liegt in `app-logic`.
+mod key_wrapping;
 
 pub use chacha::ChaCha20Poly1305Cipher;
 pub use db_key::{DatabaseKey, DATABASE_KEY_HKDF_INFO, DATABASE_KEY_LEN};
 pub use key::{
     generate_and_store_root_key, read_root_key, RootKeyState, CHAT_CONTENT_ENCRYPTION_KEY_REF,
+};
+pub use key_wrapping::{
+    check_password_length, unwrap_root_key, wrap_root_key, KeyWrapError, RootKey,
+    MIN_PASSWORD_CHARS, WRAPPING_FORMAT_VERSION, WRAPPING_MAGIC, WRITE_M_COST_KIB, WRITE_P_COST,
+    WRITE_T_COST,
 };
 
 /// Fehler bei einem [`ContentCipher`]-Zugriff oder der Schlüsselverwaltung
