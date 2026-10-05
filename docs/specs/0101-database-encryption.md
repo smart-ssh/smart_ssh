@@ -524,6 +524,17 @@ Keine.
     - e. Ein reiner Hinweis an den Nutzer wartet auf keine Antwort; ein
       geöffnetes Passwortfeld ist leer. Beides wird mit Commit 11 erfüllt.
 
+11. **„Neu anfangen“ bei dauerhaft gescheiterter Authentifizierung (K3,
+    entschieden; Q-BL-0314-01):** Nach drei gescheiterten Entsperrversuchen
+    im selben Programmlauf bietet die Entsperrmaske „Neu anfangen“ an, mit
+    dem Text aus A5 („Verlauf ist danach verloren, die Dateien werden nur
+    umbenannt“) und einer zweiten Bestätigung; im Passwort-Modus zuerst das
+    neue Passwort. Der Zähler liegt nur im Speicher und beginnt bei jedem
+    Start bei null; vor der Entsperrung wird nichts dafür geschrieben. Vor dem
+    dritten Fehlversuch bleibt der Riegel aus Klarstellung 9 unverändert.
+    Ist die Verpackungsdatei *nicht erreichbar*, zeigt die Maske „Erneut
+    versuchen“ mit einem Hinweis auf die Datei und kein „Neu anfangen“.
+
 ## Umsetzung
 
 **Teil 0** — §2. Lauf 1 endet nach Commit 2. Frage 2 vor Commit 6, Frage 3
