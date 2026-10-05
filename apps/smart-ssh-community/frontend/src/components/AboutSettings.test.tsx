@@ -5,6 +5,7 @@ import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { getAppInfo } from "../api";
 import { testI18n } from "../testI18n";
+import { THIRD_PARTY_NOTICES_MARKER } from "../thirdPartyNoticesMarker";
 import { AboutSettings } from "./AboutSettings";
 
 vi.mock("../api", () => ({
@@ -139,7 +140,7 @@ describe("AboutSettings (Spec 0052)", () => {
       edition: "Community",
       buildType: "Release",
     });
-    const content = "SMART-SSH-THIRD-PARTY-NOTICES-V1\n\nMIT License";
+    const content = `${THIRD_PARTY_NOTICES_MARKER}\n\nMIT License`;
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve(content) }),
