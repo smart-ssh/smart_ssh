@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-
-// Spec 0099, A1.8/A4.3: dieselbe Kennzeile wie in
-// scripts/generate-third-party-notices.mjs (dort `MARKER`) — bewusst hier
-// dupliziert statt importiert, damit diese Komponente keine Abhängigkeit
-// auf ein Build-Skript außerhalb des Frontends bekommt.
-const MARKER = "SMART-SSH-THIRD-PARTY-NOTICES-V1";
+// Spec 0099, A1.8/A4.3: die Kennzeile der erzeugten Datei — eine Kopie für
+// das ganze Frontend, gegen das Generierungs-Skript geprüft (Issue #7).
+import { THIRD_PARTY_NOTICES_MARKER } from "../thirdPartyNoticesMarker";
 
 // A4.4: eine relative Adresse — die Datei liegt im eigenen Bundle
 // (`public/third-party-notices.txt`, von Vite nach `dist/` kopiert), ein
@@ -39,7 +36,7 @@ export function ThirdPartyLicensesDialog({ onClose }: ThirdPartyLicensesDialogPr
       .catch(() => null)
       .then((text) => {
         if (cancelled) return;
-        if (text && text.startsWith(MARKER)) {
+        if (text && text.startsWith(THIRD_PARTY_NOTICES_MARKER)) {
           setState({ status: "available", text });
         } else {
           setState({ status: "unavailable" });

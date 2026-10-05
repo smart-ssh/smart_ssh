@@ -35,6 +35,10 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 // A1.8: feste Kennzeile, an der die App (A4.3) eine echte Ausgabe dieses
 // Skripts von einem Ladefehler oder einer zufällig getroffenen anderen
 // Antwort (z. B. der SPA-Startseite im Dev-Build) unterscheidet.
+// Maßgebliche Quelle der Kennzeile (Issue #7, ADR 0100): die Frontend-Kopie
+// (`src/thirdPartyNoticesMarker.ts`) und die Prüfung in
+// `.github/workflows/release.yml` werden von
+// `src/thirdPartyNoticesMarker.test.ts` gegen genau diese Zeile geprüft.
 export const MARKER = "SMART-SSH-THIRD-PARTY-NOTICES-V1";
 
 // A1.6: feste Werkzeugversion, lokal und in der CI identisch. Es gibt
