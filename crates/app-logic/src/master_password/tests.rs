@@ -895,11 +895,8 @@ fn test_a_read_but_broken_wrapping_file_stays_invalid_and_keeps_the_way_out() {
 /// `?health`), die aus diesem Crate nicht erreichbar sind.
 #[test]
 fn test_t17_no_key_password_or_secret_in_the_log_or_the_diagnostics_bundle() {
-    use base64::engine::general_purpose::STANDARD as BASE64;
-    use base64::Engine;
-
     use crate::diagnostics::{build_diagnostics_bundle, DiagnosticsInput};
-    use crate::test_support::log_capture;
+    use crate::test_support::{key_leak_needles, log_capture};
     use ssh_manager_core::ai::DefaultOutputRedactor;
     use ssh_manager_core::crypto::DatabaseKey;
 
@@ -914,10 +911,6 @@ fn test_t17_no_key_password_or_secret_in_the_log_or_the_diagnostics_bundle() {
     const T17_PASSWORD: &str = "Passwort-0101-Mondlicht";
     const T17_NEW_PASSWORD: &str = "Passwort-0101-Sonnenwind";
     const T17_SECRET: &str = "Secret-0101";
-
-    fn hex_of(bytes: &[u8]) -> String {
-        bytes.iter().map(|b| format!("{b:02x}")).collect()
-    }
 
     log_capture::start_recording();
 
@@ -1038,48 +1031,12 @@ fn test_t17_no_key_password_or_secret_in_the_log_or_the_diagnostics_bundle() {
         "die Positivliste des Diagnosepakets darf keine Zeile dieses Moduls durchlassen"
     );
 
-    let pragma = DatabaseKey::from_root_key(&T17_KEY).pragma_value();
-    let pragma_hex = pragma
-        .expose_secret()
-        .trim_start_matches("x'")
-        .trim_end_matches('\'')
-        .to_string();
-    let needles: Vec<(&str, String)> = vec![
-        ("das Master-Passwort", T17_PASSWORD.to_string()),
-        ("das neue Master-Passwort", T17_NEW_PASSWORD.to_string()),
-        ("K als Hex", hex_of(&T17_KEY)),
-        (
-            "K als Hex in Großschreibung",
-            hex_of(&T17_KEY).to_uppercase(),
-        ),
-        ("K als Base64", BASE64.encode(T17_KEY)),
-        ("K als Byte-Liste aus {:?}", format!("{T17_KEY:?}")),
-        (
-            "der Datenbankschlüssel als PRAGMA-Wert",
-            pragma.expose_secret().to_string(),
-        ),
-        ("der Datenbankschlüssel als Hex", pragma_hex.clone()),
-        (
-            "der Datenbankschlüssel als Hex in Großschreibung",
-            pragma_hex.to_uppercase(),
-        ),
-        ("ein Secret aus dem Schlüsselbund", T17_SECRET.to_string()),
-    ];
-
-    for (what, needle) in &needles {
-        assert!(
-            !needle.is_empty(),
-            "leerer Suchbegriff für {what} — der Test prüfte nichts"
-        );
-        assert!(
-            !log.contains(needle.as_str()),
-            "T17: {what} steht im Log (gesucht: {needle})"
-        );
-        assert!(
-            !bundle.contains(needle.as_str()),
-            "T17: {what} steht im Diagnosepaket (gesucht: {needle})"
-        );
-    }
+    // Die Suchbegriffe kommen aus `key_leak_needles` — dieselbe Liste, die
+    // die T17-Tests der Pfade T1, T3 und T11 verwenden (Klarstellung 10d).
+    key_leak_needles::assert_absent(
+        &key_leak_needles::for_root_key(&T17_KEY, &[T17_PASSWORD, T17_NEW_PASSWORD], &[T17_SECRET]),
+        &[("das Log", &log), ("das Diagnosepaket", &bundle)],
+    );
 
     // Und die beiden Typen, über die es am kürzesten gehen würde: ein
     // `{:?}` auf dem Schlüssel selbst.

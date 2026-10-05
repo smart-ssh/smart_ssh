@@ -1702,3 +1702,145 @@ async fn test_a5_a_rename_collision_gets_its_own_message_without_backup_advice()
         );
     }
 }
+
+/// **T17 für den Pfad T3** (Spec 0101 §7, Klarstellung 10d): Der ganze
+/// Startablauf — die Entscheidungstabelle, ihre Fehlerfälle und „Neu
+/// anfangen" — schreibt weder K noch den Datenbankschlüssel in das Log oder
+/// das Diagnosepaket.
+///
+/// §7 verlangt T17 „nach T1, T3, T11, T13". T13 (der Passwort-Modus) steht
+/// in `master_password::tests`; dies ist der Pfad T3, und er ist der mit den
+/// meisten Log-Zeilen über den Schlüssel: Er liest ihn, erzeugt ihn,
+/// erkennt ihn als unbrauchbar, scheitert am Schlüsselbund und gibt ihn in
+/// „Neu anfangen" auf. Jede dieser Stellen hat ein `tracing`-Feld, und
+/// mehrere tragen einen Wert aus dem Schlüsselbund oder einen
+/// Bibliothekstext.
+///
+/// **Der Pfad T1 steckt mit darin**: Ein Feld der Tabelle legt eine frische,
+/// verschlüsselte Datenbank an, ein anderes wandelt eine Klartext-Datei um,
+/// und in beiden wird danach ein Server mit Hostnamen geschrieben — mit
+/// offenem Pool, wie T1 es verlangt.
+///
+/// Die Suchbegriffe kommen aus `key_leak_needles`, derselben Liste wie in
+/// den übrigen T17-Tests.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t17_the_startup_decisions_keep_the_key_out_of_the_log_and_the_bundle() {
+    use crate::test_support::{key_leak_needles, log_capture};
+
+    const T17_SECRET: &str = "Secret-0101-im-Schluesselbund";
+
+    log_capture::start_recording();
+
+    // --- Feld „fehlt × da": K kommt aus dem Schlüsselbund, der daneben
+    // noch ein fremdes Secret hält.
+    let fresh = tempfile::tempdir().unwrap();
+    let fresh_db = fresh.path().join("smart-ssh.db");
+    let store = CountingCredentialStore::new(GetBehaviour::Present);
+    store.entries.lock().unwrap().insert(
+        "server/0101/password".to_string(),
+        SecretString::from(T17_SECRET.to_string()),
+    );
+    let opened = open_or_prepare_database(
+        &fresh_db,
+        RootKeyAccess::Keychain(&store),
+        available(),
+        &NoDialogExpected,
+    )
+    .await
+    .expect("Datei fehlt, K da");
+    // T1: Server mit Hostnamen anlegen, Pool offen.
+    insert_marker_server(&opened.store).await;
+    opened.store.close().await;
+
+    // --- Feld „Klartext × NotFound": K wird **erzeugt** und geschrieben.
+    let converted = tempfile::tempdir().unwrap();
+    let plaintext = plaintext_database(converted.path()).await;
+    let generating = CountingCredentialStore::new(GetBehaviour::Missing);
+    let opened = open_or_prepare_database(
+        &plaintext,
+        RootKeyAccess::Keychain(&generating),
+        available(),
+        &NoDialogExpected,
+    )
+    .await
+    .expect("Klartext, kein K");
+    insert_marker_server(&opened.store).await;
+    opened.store.close().await;
+
+    // --- Feld „sonst × nicht erreichbar" (D1) und „sonst × ungültig" (D3,
+    // ohne Wahl): die beiden Fehlerwege mit ihren Log-Zeilen.
+    let unreachable_dir = tempfile::tempdir().unwrap();
+    let unreachable_db = encrypted_database(unreachable_dir.path()).await;
+    let failing = CountingCredentialStore::new(GetBehaviour::Failing);
+    let quit = ScriptedPrompt::new(vec![StartupChoice::Quit]);
+    assert!(
+        open_or_prepare_database(
+            &unreachable_db,
+            RootKeyAccess::Keychain(&failing),
+            available(),
+            &quit,
+        )
+        .await
+        .is_err(),
+        "D1 mit „Beenden“ bricht ab"
+    );
+
+    let corrupt_dir = tempfile::tempdir().unwrap();
+    let corrupt_db = encrypted_database(corrupt_dir.path()).await;
+    let corrupt = CountingCredentialStore::new(GetBehaviour::Corrupt);
+    let start_over = ScriptedPrompt::new(vec![StartupChoice::StartOver]);
+    let opened = open_or_prepare_database(
+        &corrupt_db,
+        RootKeyAccess::Keychain(&corrupt),
+        available(),
+        &start_over,
+    )
+    .await
+    .expect("D3 mit „Neu anfangen“ muss eine frische Datenbank ergeben");
+    opened.store.close().await;
+
+    let log = log_capture::recorded_text();
+
+    // Zuerst der Beweis, dass aufgezeichnet wurde — sonst wäre jede
+    // Abwesenheits-Aussage unten wertlos.
+    for expected in [
+        // Die Zeile, die über K urteilt — mit `?key_state` und `?plan`.
+        "decided how to open the database",
+        "converting the plaintext database",
+        "plaintext database converted",
+        // Und die Belege, dass die beiden Fehlerfelder der Tabelle
+        // tatsächlich durchlaufen wurden: ihr Zustand steht als `Debug` im
+        // Log, und genau darüber macht T17 die Aussage.
+        "Unreachable",
+        "Invalid",
+    ] {
+        assert!(
+            log.contains(expected),
+            "die Aufzeichnung hat „{expected}“ nicht gesehen — der Test prüfte nichts"
+        );
+    }
+
+    let log_lines: Vec<String> = log.lines().map(str::to_string).collect();
+    let bundle = crate::diagnostics::build_diagnostics_bundle(
+        &crate::diagnostics::DiagnosticsInput {
+            version_display: "0.5.2 (test)".to_string(),
+            build_type: "Dev",
+            edition: "Community".to_string(),
+            os: "macos",
+            arch: "aarch64",
+            os_version: Some("15.1".to_string()),
+            db_path: fresh_db.display().to_string(),
+            log_dir: fresh.path().display().to_string(),
+            host_key_path: fresh.path().join("host_keys.json").display().to_string(),
+            provider_types: Some(vec!["anthropic".to_string()]),
+            server_count: Some(1),
+        },
+        &log_lines,
+        &ssh_manager_core::ai::DefaultOutputRedactor::new(),
+    );
+
+    key_leak_needles::assert_absent(
+        &key_leak_needles::for_root_key(&TEST_ROOT_KEY, &[], &[T17_SECRET]),
+        &[("das Log", &log), ("das Diagnosepaket", &bundle)],
+    );
+}

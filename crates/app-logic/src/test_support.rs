@@ -699,3 +699,123 @@ pub mod log_capture {
         }
     }
 }
+
+/// Spec 0101, T17: **was als „Schlüssel in einer Ausgabe" zählt** — an
+/// einer Stelle, für alle vier Pfade, die §7 nennt (T1, T3, T11, T13).
+///
+/// Der Grund für ein gemeinsames Modul: T17 ist eine Abwesenheits-Aussage,
+/// und die ist nur so gut wie ihre Liste von Suchbegriffen. Vier Kopien
+/// davon wären vier Gelegenheiten, in einem Pfad die Base64-Schreibweise
+/// oder den `PRAGMA`-Wert zu vergessen — und die Lücke sähe man nicht,
+/// weil der Test grün bliebe.
+pub mod key_leak_needles {
+    use secrecy::ExposeSecret;
+    use ssh_manager_core::crypto::DatabaseKey;
+
+    /// Ein Suchbegriff: seine Bezeichnung für die Fehlermeldung und der
+    /// Text, der nirgends vorkommen darf.
+    pub struct Needle {
+        pub what: String,
+        pub text: String,
+    }
+
+    fn hex_of(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    /// Jede Schreibweise, in der K oder der daraus abgeleitete
+    /// Datenbankschlüssel in eine Zeile geraten könnte, dazu die
+    /// Passwörter und Secrets, die der Pfad angefasst hat.
+    ///
+    /// **Hex in beiden Schreibweisen und Base64**, weil es drei Wege ins
+    /// Log gibt: ein `{:02x}`-Format, ein `{:X}`-Format und die Form, in
+    /// der K im Schlüsselbund liegt. **Die Byte-Liste aus `{:?}`** ist der
+    /// kürzeste Weg von allen: ein versehentliches `#[derive(Debug)]` auf
+    /// einem Typ, der K hält.
+    pub fn for_root_key(root_key: &[u8; 32], passwords: &[&str], secrets: &[&str]) -> Vec<Needle> {
+        use base64::engine::general_purpose::STANDARD as BASE64;
+        use base64::Engine;
+
+        let pragma = DatabaseKey::from_root_key(root_key).pragma_value();
+        let pragma_value = pragma.expose_secret().to_string();
+        let pragma_hex = pragma_value
+            .trim_start_matches("x'")
+            .trim_end_matches('\'')
+            .to_string();
+
+        let mut needles = vec![
+            Needle {
+                what: "K als Hex".to_string(),
+                text: hex_of(root_key),
+            },
+            Needle {
+                what: "K als Hex in Großschreibung".to_string(),
+                text: hex_of(root_key).to_uppercase(),
+            },
+            Needle {
+                what: "K als Base64".to_string(),
+                text: BASE64.encode(root_key),
+            },
+            Needle {
+                what: "K als Byte-Liste aus {:?}".to_string(),
+                text: format!("{root_key:?}"),
+            },
+            Needle {
+                what: "der Datenbankschlüssel als PRAGMA-Wert".to_string(),
+                text: pragma_value,
+            },
+            Needle {
+                what: "der Datenbankschlüssel als Hex".to_string(),
+                text: pragma_hex.clone(),
+            },
+            Needle {
+                what: "der Datenbankschlüssel als Hex in Großschreibung".to_string(),
+                text: pragma_hex.to_uppercase(),
+            },
+        ];
+        for password in passwords {
+            needles.push(Needle {
+                what: format!("das Passwort „{password}“"),
+                text: (*password).to_string(),
+            });
+        }
+        for secret in secrets {
+            needles.push(Needle {
+                what: format!("das Secret „{secret}“"),
+                text: (*secret).to_string(),
+            });
+        }
+        needles
+    }
+
+    /// Prüft jeden Suchbegriff gegen jeden benannten Heuhaufen (Log,
+    /// Diagnosepaket, …).
+    ///
+    /// **Mit einer Zusicherung über die Suchbegriffe selbst**: Ein leerer
+    /// Begriff wäre in jedem Text enthalten — fiele er versehentlich leer
+    /// aus, prüfte `!contains` ab da nichts mehr und wäre trotzdem rot.
+    /// Umgekehrt wäre ein Heuhaufen ohne Inhalt eine Abwesenheits-Aussage
+    /// über nichts.
+    pub fn assert_absent(needles: &[Needle], haystacks: &[(&str, &str)]) {
+        assert!(!needles.is_empty(), "keine Suchbegriffe — das prüft nichts");
+        for (name, haystack) in haystacks {
+            assert!(
+                !haystack.is_empty(),
+                "T17: „{name}“ ist leer — eine Aussage darüber prüft nichts"
+            );
+            for needle in needles {
+                assert!(
+                    !needle.text.is_empty(),
+                    "T17: leerer Suchbegriff für {} — der Test prüfte nichts",
+                    needle.what
+                );
+                assert!(
+                    !haystack.contains(needle.text.as_str()),
+                    "T17: {} steht in „{name}“ (gesucht: {})",
+                    needle.what,
+                    needle.text
+                );
+            }
+        }
+    }
+}
