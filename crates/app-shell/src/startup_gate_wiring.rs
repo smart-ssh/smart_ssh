@@ -234,6 +234,157 @@ fn test_t18_the_gate_is_wired_in_front_of_the_generated_dispatcher() {
     );
 }
 
+/// Die fünf Plugins, die laut Klarstellung 9 im Passwort-Modus **erst nach
+/// der Entsperrung** registriert werden: Sie berühren Dateien,
+/// Einstellungen oder das Betriebssystem. Über `store` ist die
+/// Einstellungsdatei lesbar, und ein altes `settings.json` kann noch den
+/// MCP-Token tragen (A12) — das ist der Grund, warum diese Liste existiert.
+const PLUGINS_DEFERRED_WHILE_LOCKED: &[&str] = &[
+    "tauri_plugin_dialog::init()",
+    "tauri_plugin_opener::init()",
+    "tauri_plugin_store::Builder::new().build()",
+    "tauri_plugin_os::init()",
+    "tauri_plugin_notification::init()",
+];
+
+/// Der Rumpf einer Funktion in `lib.rs` als **Bereich** — von ihrem Kopf
+/// bis zur ersten Zeile, die nur `}` enthält.
+///
+/// Ein Bereich und nicht der Text: Die Tests unten müssen fragen können, ob
+/// eine Fundstelle *innerhalb* einer der beiden Funktionen liegt, und dafür
+/// brauchen sie den Offset.
+fn body_range(source: &str, signature: &str) -> std::ops::Range<usize> {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("`{signature}` gibt es nicht mehr — s. Doc-Kommentar"));
+    let end = start
+        + source[start..]
+            .find("\n}\n")
+            .expect("Funktionsende nicht gefunden — s. Doc-Kommentar");
+    start..end
+}
+
+/// Klarstellung 10c: **Die Aufschiebung der Plugins hat einen eigenen
+/// Test** — nach demselben Maßstab wie
+/// [`test_t18_the_gate_is_wired_in_front_of_the_generated_dispatcher`].
+///
+/// Die Zusage aus Klarstellung 9 lautet: „A16 gilt für alle Kommandos, auch
+/// die der Plugins." Sie hängt an einer einzigen Eigenschaft der
+/// Builder-Kette — dass die fünf Plugins **nur** über
+/// `register_unlocked_plugins_on` (Bauzeit, Schlüsselbund-Modus) und
+/// `register_unlocked_plugins` (nach dem Entsperren) hineinkommen. Hinge
+/// eines davon wieder unbedingt in der Kette, wäre sein Kommando vor der
+/// Entsperrung erreichbar, und **kein** bestehender Test wäre rot geworden:
+/// Das Tor sieht Plugin-Kommandos per Konstruktion nicht (gemessen M7, s.
+/// `startup_gate`-Moduldoc).
+///
+/// Geprüft wird deshalb die Quelle, mit demselben bekannten Preis wie dort:
+/// Wird ein Plugin ersetzt oder umbenannt, scheitert dieser Test, obwohl
+/// nichts kaputt ist — dann gehört der neue Name in die Liste oben.
+#[test]
+fn test_the_deferred_plugins_are_registered_in_exactly_those_two_places() {
+    let source = include_str!("lib.rs");
+    let build_time_range = body_range(source, "fn register_unlocked_plugins_on(");
+    let after_unlock_range = body_range(source, "pub(crate) fn register_unlocked_plugins(");
+    let at_build_time = &source[build_time_range.clone()];
+    let after_unlocking = &source[after_unlock_range.clone()];
+
+    for plugin in PLUGINS_DEFERRED_WHILE_LOCKED {
+        assert_eq!(
+            source.matches(plugin).count(),
+            2,
+            "A16/Klarstellung 9+10c: `{plugin}` darf in `lib.rs` an genau zwei Stellen stehen — \
+             in `register_unlocked_plugins_on` und in `register_unlocked_plugins`. Eine dritte \
+             Stelle hängt es wieder unbedingt in die Kette und macht sein Kommando vor der \
+             Entsperrung erreichbar."
+        );
+        assert_eq!(
+            at_build_time.matches(plugin).count(),
+            1,
+            "`{plugin}` fehlt in `register_unlocked_plugins_on` — im Schlüsselbund-Modus wäre es \
+             damit gar nicht registriert"
+        );
+        assert_eq!(
+            after_unlocking.matches(plugin).count(),
+            1,
+            "`{plugin}` fehlt in `register_unlocked_plugins` — im Passwort-Modus bliebe es nach \
+             dem Entsperren für die ganze Sitzung aus"
+        );
+    }
+
+    // Und die Gegenrichtung: **jede** andere Registrierung in `lib.rs` ist
+    // die eine, die bewusst auch im gesperrten Zustand gilt. Ohne diese
+    // Aussage bliebe der Test grün, wenn jemand ein *neues* Plugin mit
+    // Datei- oder Einstellungszugriff unbedingt in die Kette hängt.
+    let elsewhere: Vec<&str> = source
+        .match_indices(".plugin(")
+        .filter(|(at, _)| !build_time_range.contains(at) && !after_unlock_range.contains(at))
+        .map(|(at, _)| {
+            let rest = &source[at..];
+            // Bis zum Ende der Zeile — das genügt, um die Registrierung zu
+            // benennen, und bleibt lesbar, wenn der Test scheitert.
+            &rest[..rest.find('\n').unwrap_or(rest.len())]
+        })
+        .collect();
+    assert_eq!(
+        elsewhere,
+        vec![".plugin(tauri_plugin_decoration::init())"],
+        "A16: Außerhalb der beiden Funktionen darf nur das Plugin registriert werden, das den \
+         Fensterrahmen gestaltet und keine Datei, Einstellung und keinen Zustand des \
+         Betriebssystems liest. Kommt hier eines dazu, gehört es in \
+         `register_unlocked_plugins_on`/`register_unlocked_plugins` — oder es braucht eine \
+         eigene Begründung, und dieser Test die zweite Stelle."
+    );
+}
+
+/// Klarstellung 10c, die **Richtung** der Aufschiebung: Aufgeschoben wird
+/// genau dann, wenn beim Start **kein** Zustand steht — also im
+/// Passwort-Modus vor der Entsperrung.
+///
+/// Eine umgekehrte Bedingung wäre das Gegenteil: Im Passwort-Modus hinge
+/// alles in der Kette, und im Schlüsselbund-Modus fehlte es für immer. Der
+/// Test oben würde das nicht sehen, weil beide Namen weiter genau einmal
+/// vorkämen.
+#[test]
+fn test_the_plugins_are_deferred_exactly_when_the_app_starts_locked() {
+    let source = include_str!("lib.rs");
+
+    assert!(
+        source.contains("let defer_plugins = app_state.is_none();"),
+        "A16/Klarstellung 10c: Aufgeschoben wird **beim Fehlen** des Zustands. Erwartet ist \
+         `let defer_plugins = app_state.is_none();`; eine andere Schreibweise kann dasselbe \
+         meinen — dann gehört sie hier herein, geprüft."
+    );
+
+    let decision = {
+        let start = source
+            .find("let defer_plugins")
+            .expect("die Entscheidung über die Aufschiebung gibt es nicht mehr");
+        let rest = &source[start..];
+        &rest[..rest
+            .find("\n    builder\n")
+            .expect("das Ende der Entscheidung ist nicht mehr zu finden")]
+    };
+    let defer_branch = {
+        let start = decision
+            .find("if defer_plugins {")
+            .expect("die Verzweigung auf `defer_plugins` gibt es nicht mehr");
+        let rest = &decision[start..];
+        &rest[..rest.find("} else {").expect("kein `else`-Zweig mehr")]
+    };
+
+    assert!(
+        !defer_branch.contains("register_unlocked_plugins"),
+        "A16: Im aufgeschobenen Zweig darf nichts registriert werden — sonst ist die \
+         Aufschiebung nur noch ein Log-Eintrag"
+    );
+    assert!(
+        decision.contains("register_unlocked_plugins_on(builder)"),
+        "A16: Im anderen Zweig müssen sie registriert werden, sonst fehlen sie im \
+         Schlüsselbund-Modus dauerhaft"
+    );
+}
+
 /// T18, der Teil über den **Server selbst**: Vor der Entsperrung startet er
 /// nicht. Das hängt an zwei Stellen, und beide sind eine Bedingung auf einen
 /// verwalteten `AppState` — die zweite ist die, auf die es ankommt:
