@@ -1062,7 +1062,13 @@ async fn test_t17_the_secret_migration_keeps_the_key_and_the_secrets_out_of_the_
     );
 
     key_leak_needles::assert_absent(
-        &key_leak_needles::for_root_key(&T17_KEY, &[], &[T17_SECRET]),
+        // „Marker" aus §7: dazu die Werte, die dieser Lauf absichtlich in
+        // die Datenbank geschrieben hat (spec-reviewer Runde 7).
+        &key_leak_needles::for_root_key(
+            &T17_KEY,
+            &[],
+            &[T17_SECRET, "host-0101.example", "user-0101"],
+        ),
         &[("das Log", &log), ("das Diagnosepaket", &bundle)],
     );
 

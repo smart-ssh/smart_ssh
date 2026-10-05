@@ -1839,8 +1839,53 @@ async fn test_t17_the_startup_decisions_keep_the_key_out_of_the_log_and_the_bund
         &ssh_manager_core::ai::DefaultOutputRedactor::new(),
     );
 
+    let haystacks = [
+        ("das Log", log.as_str()),
+        ("das Diagnosepaket", bundle.as_str()),
+    ];
     key_leak_needles::assert_absent(
-        &key_leak_needles::for_root_key(&TEST_ROOT_KEY, &[], &[T17_SECRET]),
-        &[("das Log", &log), ("das Diagnosepaket", &bundle)],
+        &key_leak_needles::for_root_key(
+            &TEST_ROOT_KEY,
+            &[],
+            // „Marker" aus §7: die Werte, die dieser Lauf absichtlich in
+            // die Datenbank geschrieben hat. Eine Log-Zeile mit dem
+            // Hostnamen eines Servers ist zwar kein Schlüssel, aber genau
+            // das, was T1 aus den Ausgaben heraushalten will.
+            &[T17_SECRET, "host-0101.example", "user-0101"],
+        ),
+        &haystacks,
     );
+
+    // **Und die beiden erzeugten Schlüssel** (spec-reviewer Runde 7): In den
+    // Feldern „Klartext × NotFound" und „Neu anfangen" entsteht ein
+    // Zufallsschlüssel. Nur nach `TEST_ROOT_KEY` zu suchen hieße, ein
+    // geloggtes `?key` genau an der Stelle zu übersehen, an der K **neu**
+    // ist — der heikelsten von allen, denn dort hat ihn noch niemand
+    // anderswo gesehen.
+    for (what, store) in [("umwandeln", &generating), ("Neu anfangen", &corrupt)] {
+        let written = store
+            .entries
+            .lock()
+            .unwrap()
+            .get(CHAT_CONTENT_ENCRYPTION_KEY_REF)
+            .map(|secret| secrecy::ExposeSecret::expose_secret(secret).to_string())
+            .unwrap_or_else(|| panic!("im Feld „{what}“ muss ein neuer K geschrieben worden sein"));
+        let decoded: [u8; 32] = {
+            use base64::Engine;
+            base64::engine::general_purpose::STANDARD
+                .decode(&written)
+                .expect("der geschriebene K muss Base64 sein")
+                .try_into()
+                .expect("der geschriebene K muss 32 Byte haben")
+        };
+        assert_ne!(
+            decoded, TEST_ROOT_KEY,
+            "im Feld „{what}“ muss ein **neuer** Schlüssel entstehen — sonst prüft der Abgleich \
+             unten nur denselben Wert noch einmal"
+        );
+        key_leak_needles::assert_absent(
+            &key_leak_needles::for_root_key(&decoded, &[], &[]),
+            &haystacks,
+        );
+    }
 }

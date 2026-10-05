@@ -602,6 +602,51 @@ fn test_switching_back_does_not_replace_a_foreign_keychain_entry_without_confirm
     }
 }
 
+/// Klarstellung 10b, nach dem Review (Runde 7): Wird ein fremder Schlüssel
+/// **mit** Bestätigung ersetzt, sagt das eine eigene Zeile im Log.
+///
+/// Es ist der einzige unumkehrbare Schritt des Vorgangs. Sah er im Log aus
+/// wie der Normalfall („switched back to the OS keychain"), ließe sich
+/// hinterher nicht mehr feststellen, dass ein Schlüssel verloren ging — und
+/// genau diese Frage stellt jemand, dessen zweite Installation plötzlich
+/// nicht mehr aufgeht.
+///
+/// **Der Schlüssel selbst darf dabei nicht ins Log** (T17): deshalb hier
+/// derselbe Abgleich wie dort.
+#[test]
+fn test_replacing_a_foreign_key_after_a_confirmation_is_visible_in_the_log() {
+    use crate::test_support::{key_leak_needles, log_capture};
+
+    log_capture::start_recording();
+
+    let dir = Dir::new("switch-confirmed-log");
+    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    let keyring = CountingKeychain::with_root_key(&OTHER_KEY);
+
+    switch_to_keychain(
+        &dir.db(),
+        &good(),
+        &keyring,
+        KeychainOverwrite::ConfirmedByTheUser,
+    )
+    .unwrap();
+
+    let log = log_capture::recorded_text();
+    assert!(
+        log.contains("replacing a different root key in the OS keychain after an explicit"),
+        "das Ersetzen eines fremden Wurzelschlüssels muss im Log stehen, nicht nur der \
+         gelungene Wechsel. Aufgezeichnet war: {log}"
+    );
+    key_leak_needles::assert_absent(
+        &key_leak_needles::for_root_key(&ROOT_KEY, &["mein-master-passwort"], &[]),
+        &[("das Log", &log)],
+    );
+    key_leak_needles::assert_absent(
+        &key_leak_needles::for_root_key(&OTHER_KEY, &[], &[]),
+        &[("das Log", &log)],
+    );
+}
+
 /// Klarstellung 10b, die beiden Fälle **ohne** Frage: ein leerer
 /// Schlüsselbund und einer, in dem schon genau K liegt („Ist der Eintrag
 /// gleich K, entfällt die Frage").
