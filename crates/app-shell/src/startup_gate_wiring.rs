@@ -449,3 +449,66 @@ fn test_t18_the_mcp_autostart_gives_up_before_it_can_start_a_server() {
          weiterlaufen"
     );
 }
+
+/// A16, **zweite Hälfte** (ADR 0097 §4.3, erster der beiden fehlenden
+/// Tests): Nach der Entsperrung gilt der Normalbetrieb — der Entsperrpfad
+/// startet die Aufgaben nach dem Start.
+///
+/// Der Fund, gegen den dieser Test steht, war genau umgekehrt zu dem oben:
+/// Dort darf der MCP-Server **nicht** laufen, solange die App gesperrt ist;
+/// hier muss er nach dem Entsperren laufen. Ohne den Aufruf blieben
+/// MCP-Autostart (Spec 0028 §9), das Aufräumen alter Sitzungen (0034) und
+/// die Migration der Klartext-Zeilen (0040) im Passwort-Modus für die ganze
+/// Sitzung aus — und kein Test wäre rot geworden: Der Doc-Kommentar von
+/// `spawn_post_startup_tasks` behauptete den Aufruf, und es gab ihn nicht.
+///
+/// **Die Aussage, auf die es ankommt**, ist nicht „irgendwo in der Datei
+/// steht der Aufruf", sondern: Er steht in derselben Funktion, die das Tor
+/// öffnet — und das Tor wird nur dort geöffnet. Damit kann kein
+/// Entsperrweg das Tor öffnen, ohne die Aufgaben zu starten.
+///
+/// Gelesen wird dafür die Quelle, mit demselben bekannten Preis wie bei den
+/// Tests oben: Der ganze Pfad hängt an `tauri::AppHandle<Wry>` und ist mit
+/// Tauris Test-Laufzeit nicht aufrufbar (ADR 0096 §3). Wird eine der beiden
+/// Funktionen umbenannt, scheitert dieser Test, obwohl nichts kaputt ist —
+/// dann gehört der neue Name hier herein.
+#[test]
+fn test_every_unlock_path_starts_the_post_startup_tasks() {
+    let source = include_str!("commands/master_password.rs");
+    let assembling = body_range(source, "async fn assemble_and_open_the_gate(");
+    let body = &source[assembling.clone()];
+
+    // Das Tor wird an genau einer Stelle geöffnet, und zwar hier. Ohne diese
+    // Aussage bewiese der Rest nichts: Ein zweiter `gate.unlock()` an
+    // anderer Stelle wäre ein Entsperrweg ohne Aufgaben.
+    let unlock_sites: Vec<usize> = source
+        .match_indices("gate.unlock()")
+        .map(|(at, _)| at)
+        .collect();
+    assert_eq!(
+        unlock_sites.len(),
+        1,
+        "A16: Das Tor darf in diesem Modul an genau einer Stelle geöffnet werden. Ist eine \
+         zweite dazugekommen, braucht sie dieselben Schritte nach dem Entsperren — und dieser \
+         Test die zweite Stelle."
+    );
+    assert!(
+        assembling.contains(&unlock_sites[0]),
+        "A16: Das Tor wird in `assemble_and_open_the_gate` geöffnet — dort stehen Zustand, Tor \
+         und die Aufgaben nach dem Start in der einen Reihenfolge, auf die es ankommt"
+    );
+
+    let opens_the_gate = body
+        .find("gate.unlock()")
+        .expect("soeben geprüft, dass die Stelle in diesem Rumpf liegt");
+    let starts_the_tasks = body.find("crate::spawn_post_startup_tasks(app)").expect(
+        "A16, zweite Hälfte: Der Entsperrpfad muss `spawn_post_startup_tasks` aufrufen — sonst \
+         laufen MCP-Autostart, Sitzungs-Aufräumen und die Migration der Klartext-Zeilen im \
+         Passwort-Modus für die ganze Sitzung nicht",
+    );
+    assert!(
+        opens_the_gate < starts_the_tasks,
+        "A16: Erst das Tor, dann die Aufgaben — die Aufgaben brauchen Kommandos, die das Tor \
+         vorher abweist"
+    );
+}

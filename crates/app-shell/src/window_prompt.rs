@@ -183,7 +183,8 @@ impl PromptChannel {
             // Lauf. Blieb die Kennzeichnung stehen, bekäme ein *bewusstes*
             // „Beenden" auf die zweite Frage die Meldung über die
             // ausgebliebene Antwort auf die erste — falsch gegenüber
-            // jemandem, der gerade selbst entschieden hat.
+            // jemandem, der gerade selbst entschieden hat. Belegt von
+            // `test_a_timed_out_marker_does_not_outlive_its_question`.
             self.timed_out.store(false, Ordering::SeqCst);
         }
 
@@ -559,6 +560,68 @@ mod tests {
         assert!(
             !channel.timed_out(),
             "eine beantwortete Frage ist nicht in die Grenze gelaufen"
+        );
+    }
+
+    /// **Die Kennzeichnung gilt der Frage, nicht dem Programmlauf** (ADR
+    /// 0097 §4.3, zweiter der beiden fehlenden Tests).
+    ///
+    /// Der Fragesteller lebt den ganzen Lauf. Blieb die Kennzeichnung nach
+    /// einer abgelaufenen Frage stehen, bekäme ein *bewusstes* „Beenden" auf
+    /// die **nächste** Frage die Meldung über die ausgebliebene Antwort auf
+    /// die erste („Smart SSH hat auf eine Rückfrage gewartet, aber keine
+    /// Antwort erhalten") — falsch gegenüber jemandem, der gerade selbst
+    /// entschieden hat, und irreführend bei der Fehlersuche.
+    ///
+    /// Geprüft wird deshalb der Übergang: erste Frage läuft in die Grenze,
+    /// zweite Frage auf **demselben** Kanal wird beantwortet.
+    #[test]
+    fn test_a_timed_out_marker_does_not_outlive_its_question() {
+        // Eine Sekunde: lang genug, dass die zweite Frage ohne Zeitrennen
+        // beantwortet werden kann, kurz genug für einen Test.
+        let channel = std::sync::Arc::new(PromptChannel::new(std::time::Duration::from_secs(1)));
+
+        let first = wait_on_its_own_thread(channel.clone(), std::time::Duration::from_secs(30))
+            .expect("die erste Frage hat nicht aufgehört zu warten");
+        assert_eq!(first, StartupPromptAnswer::Quit);
+        assert!(
+            channel.timed_out(),
+            "die erste Frage ist in die Grenze gelaufen — ohne diese Vorbedingung prüft der \
+             Rest nichts"
+        );
+
+        // Ein Antwortgeber, der wartet, bis die zweite Frage wirklich offen
+        // ist. Kein Schlaf: der wäre hier ein Zeitrennen.
+        let answering = {
+            let channel = channel.clone();
+            std::thread::spawn(move || {
+                loop {
+                    if channel.pending.lock().expect("Prompt-Sperre").is_some() {
+                        break;
+                    }
+                    std::thread::yield_now();
+                }
+                assert!(
+                    channel.answer(StartupPromptAnswer::Cancel),
+                    "die zweite Frage war offen und muss die Antwort annehmen"
+                );
+            })
+        };
+
+        let second = wait_on_its_own_thread(channel.clone(), std::time::Duration::from_secs(30))
+            .expect("die zweite Frage hat nicht aufgehört zu warten");
+        answering.join().expect("kein Panic im Antwortgeber");
+
+        assert_eq!(
+            second,
+            StartupPromptAnswer::Cancel,
+            "eine Antwort, die rechtzeitig kommt, gilt"
+        );
+        assert!(
+            !channel.timed_out(),
+            "die Kennzeichnung der ersten Frage darf die zweite nicht überdauern — sonst meldet \
+             der Aufrufer „keine Antwort erhalten“, obwohl der Nutzer gerade selbst entschieden \
+             hat"
         );
     }
 
