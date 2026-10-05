@@ -217,6 +217,8 @@ struct PasswordModePrompt {
     confirm_new_key: bool,
     /// `None` heißt „der Nutzer hat die Maske abgebrochen".
     password: Option<&'static str>,
+    /// Klarstellung 12: Hat der Nutzer die Warnung aus A13/E10 bestätigt?
+    warning_confirmed: bool,
     asked: Mutex<Vec<StartupDialog>>,
     confirm_texts: Mutex<Vec<Option<String>>>,
     notified: Mutex<Vec<String>>,
@@ -230,11 +232,20 @@ impl PasswordModePrompt {
             confirm_start_over: true,
             confirm_new_key: true,
             password: Some("mein-neues-master-passwort"),
+            warning_confirmed: true,
             asked: Mutex::new(Vec::new()),
             confirm_texts: Mutex::new(Vec::new()),
             notified: Mutex::new(Vec::new()),
             password_asked: Mutex::new(0),
         }
+    }
+
+    /// Klarstellung 12: Der Nutzer tippt ein einwandfreies Passwort, das
+    /// Häkchen an der Warnung fehlt aber — oder ein Aufrufer hat es
+    /// unterwegs verloren.
+    fn without_the_confirmed_warning(mut self) -> Self {
+        self.warning_confirmed = false;
+        self
     }
 
     fn without_second_confirmation(mut self) -> Self {
@@ -292,11 +303,13 @@ impl StartupPrompt for PasswordModePrompt {
         Some(NewMasterPassword {
             password: secrecy::SecretString::from(text.to_string()),
             repeated: secrecy::SecretString::from(text.to_string()),
-            // Klarstellung 12: Der Fragesteller, der ein Passwort liefert,
-            // hat die Warnung gezeigt und bestätigt bekommen. Der
-            // Gegenfall hat seinen eigenen Fragesteller (s.
-            // `UnconfirmedWarningPrompt`).
-            warning: crate::master_password::LossWarning::ConfirmedByTheUser,
+            // Klarstellung 12: voreingestellt bestätigt — der Gegenfall
+            // kommt über `without_the_confirmed_warning()`.
+            warning: if self.warning_confirmed {
+                crate::master_password::LossWarning::ConfirmedByTheUser
+            } else {
+                crate::master_password::LossWarning::NotConfirmed
+            },
         })
     }
 
@@ -1091,6 +1104,77 @@ async fn test_t7_variant_an_aborted_start_over_in_password_mode_changes_no_file(
             "{label}: ohne Vollzug darf nichts gemeldet werden"
         );
     }
+}
+
+/// **Klarstellung 12, dritter Einrichtungsweg (A5/D4 im Passwort-Modus):**
+/// ohne die bestätigte Warnung bleibt **auch die alte Verpackungsdatei**
+/// liegen.
+///
+/// Der Weg hier ist der gefährlichste der drei, und deshalb hat er seinen
+/// eigenen Test (spec-reviewer Runde 2): Zwischen der Passworteingabe und
+/// dem Einrichten liegt ein `rename` — die alte Verpackung wird zur Seite
+/// gelegt, weil die Reihenfolge das verlangt. Griffe der Riegel erst im
+/// Einrichten, stünde danach ein Datenverzeichnis **ohne**
+/// Verpackungsdatei: beim nächsten Start der Schlüsselbund-Modus, also ein
+/// Moduswechsel, den niemand gewählt hat.
+///
+/// Das Passwort ist einwandfrei; geprüft wird allein die Bestätigung.
+///
+/// **Gegenbeweis geführt:** Mit der Prüfung erst in
+/// `set_up_master_password` (also ohne `check_new_password_upfront`) ist die
+/// alte Verpackungsdatei nach dem Abbruch verschwunden und die Fehlerart
+/// `MasterPasswordSetupFailedAfterRename` — beide Zusicherungen unten
+/// scheitern.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_k12_d4_setup_without_the_confirmed_warning_keeps_the_old_wrapping() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = plaintext_database(dir.path()).await;
+    let db_before = std::fs::read(&db_path).unwrap();
+
+    let wrapping = crate::master_password::wrapping_file_path(&db_path);
+    std::fs::write(&wrapping, [0xCD; 40]).unwrap();
+    let wrapping_before = std::fs::read(&wrapping).unwrap();
+
+    let credentials = CountingCredentialStore::new(GetBehaviour::Missing);
+    let prompt = PasswordModePrompt::new(vec![StartupChoice::GenerateNewKey])
+        .without_the_confirmed_warning();
+
+    let result = open_or_prepare_database(
+        &db_path,
+        RootKeyAccess::UnusableWrapping,
+        available(),
+        &prompt,
+    )
+    .await;
+
+    assert!(
+        matches!(
+            result,
+            Err(StartupAbort::Fatal {
+                kind: ConnectFailureKind::MasterPasswordSetupFailed,
+                ..
+            })
+        ),
+        "ohne Bestätigung darf nichts eingerichtet werden — und die \
+         Fehlerart muss die sein, die „nichts verändert“ sagt"
+    );
+    assert_eq!(prompt.asked(), vec![StartupDialog::D4]);
+    assert_eq!(prompt.password_asked(), 1);
+    assert_eq!(
+        std::fs::read(&wrapping).unwrap(),
+        wrapping_before,
+        "die alte Verpackungsdatei muss an ihrem Platz und byte-gleich sein"
+    );
+    assert_eq!(
+        std::fs::read(&db_path).unwrap(),
+        db_before,
+        "die Klartext-Datenbank darf nicht umgewandelt worden sein"
+    );
+    assert_eq!(credentials.sets(), 0);
+    assert!(
+        prompt.notified.lock().unwrap().is_empty(),
+        "es ist nichts umbenannt — es gibt keinen neuen Namen zu melden"
+    );
 }
 
 /// **T13 / D4 im Passwort-Modus** (Klarstellung 9): Klartext-Datenbank und

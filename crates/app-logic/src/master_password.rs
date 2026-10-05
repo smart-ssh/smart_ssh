@@ -396,13 +396,7 @@ pub fn set_up_master_password(
     // Wege gehen (Einstellungen, D1, A5/D4 im Passwort-Modus) — kein
     // Aufrufer kann ihn überspringen, und der Typ zwingt jeden, die Frage
     // zu beantworten.
-    if warning != LossWarning::ConfirmedByTheUser {
-        tracing::warn!(
-            "refusing to set up a master password: the data-loss warning was not confirmed; \
-             nothing was changed (Spec 0101, A13/E10, Klarstellung 12)"
-        );
-        return Err(MasterPasswordError::LossWarningNotConfirmed);
-    }
+    check_loss_warning(warning)?;
     check_new_password(password, repeated)?;
     if key_mode(db_path) == KeyMode::Password {
         return Err(MasterPasswordError::AlreadyInPasswordMode);
@@ -847,6 +841,47 @@ fn store_root_key(
         .map_err(|err| MasterPasswordError::KeychainFailed {
             detail: format!("Wurzelschlüssel nicht schreibbar: {err}"),
         })
+}
+
+/// Klarstellung 12: der Riegel aus [`set_up_master_password`], einzeln.
+///
+/// Eigene Funktion, damit genau **eine** Stelle entscheidet, was als
+/// bestätigt gilt — der Vorab-Prüfer unten und das Einrichten selbst
+/// dürfen sich hier nicht auseinanderentwickeln.
+fn check_loss_warning(warning: LossWarning) -> Result<(), MasterPasswordError> {
+    if warning != LossWarning::ConfirmedByTheUser {
+        tracing::warn!(
+            "refusing to set up a master password: the data-loss warning was not confirmed; \
+             nothing was changed (Spec 0101, A13/E10, Klarstellung 12)"
+        );
+        return Err(MasterPasswordError::LossWarningNotConfirmed);
+    }
+    Ok(())
+}
+
+/// Dieselben beiden Prüfungen wie am Anfang von [`set_up_master_password`],
+/// aber aufrufbar, **bevor** der Aufrufer selbst etwas anfasst
+/// (spec-reviewer Runde 2 zu Klarstellung 12).
+///
+/// **Warum es das braucht:** Auf den Wegen über A5 und D4 liegt zwischen
+/// der Passworteingabe und dem Einrichten ein `rename` — die Datenbank und
+/// die alte Verpackung werden zur Seite gelegt, weil die Reihenfolge das
+/// verlangt (ADR 0095 §4). Der Riegel im Einrichten greift dort erst
+/// danach, und „lehnt ab und **verändert nichts**" (Klarstellung 12) wäre
+/// dann schon nicht mehr wahr: Zurück bliebe ein Datenverzeichnis ohne
+/// Verpackungsdatei, also beim nächsten Start der Schlüsselbund-Modus —
+/// ein Moduswechsel, den niemand gewählt hat.
+///
+/// **Sie ersetzt die Prüfung im Einrichten nicht**, sie kommt davor. Beide
+/// rufen dieselben beiden Funktionen auf; eine doppelte Prüfung kann nicht
+/// weniger erkennen als eine.
+pub fn check_new_password_before_touching_files(
+    password: &SecretString,
+    repeated: &SecretString,
+    warning: LossWarning,
+) -> Result<(), MasterPasswordError> {
+    check_loss_warning(warning)?;
+    check_new_password(password, repeated)
 }
 
 /// A13: „Passwort zweimal, mindestens 12 Zeichen".

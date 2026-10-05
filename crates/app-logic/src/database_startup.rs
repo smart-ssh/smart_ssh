@@ -665,7 +665,17 @@ fn start_over(
     // der zweiten Bestätigung und dem ersten `rename`.
     let new_password = if include_wrapping {
         match prompt.ask_for_new_master_password() {
-            Some(password) => Some(password),
+            Some(password) => {
+                // **Und geprüft, bevor das erste `rename` läuft**
+                // (Klarstellung 12, spec-reviewer Runde 2): Sonst stünde
+                // die Datenbank schon unter ihrem neuen Namen, wenn das
+                // Einrichten die fehlende Bestätigung ablehnt — „verändert
+                // nichts" wäre nicht mehr wahr, und zurück bliebe ein
+                // Verzeichnis ohne Verpackungsdatei, also beim nächsten
+                // Start der Schlüsselbund-Modus.
+                check_new_password_upfront(&password)?;
+                Some(password)
+            }
             None => return Err(StartupAbort::UserQuit),
         }
     } else {
@@ -730,6 +740,10 @@ fn generate_key(
             let Some(password) = prompt.ask_for_new_master_password() else {
                 return Err(StartupAbort::UserQuit);
             };
+            // Dasselbe wie in `start_over`: **vor** dem Umbenennen der
+            // alten Verpackung prüfen (Klarstellung 12, spec-reviewer
+            // Runde 2).
+            check_new_password_upfront(&password)?;
             let key = ssh_manager_core::crypto::generate_root_key();
             // Die alte Verpackung aus dem Weg räumen, bevor die neue
             // entsteht — und **umbenennen**, nicht löschen (A5).
@@ -784,6 +798,29 @@ fn store_new_key_in_keychain(store: &dyn CredentialStore) -> Result<[u8; 32], St
 enum FilesAlreadyMoved {
     No,
     Yes,
+}
+
+/// Klarstellung 12/A13 **vor** dem ersten `rename` (spec-reviewer Runde 2).
+///
+/// Die Fehlerart ist `MasterPasswordSetupFailed`, also die Variante „es ist
+/// nichts verändert" — und das stimmt hier per Konstruktion, denn der
+/// Aufrufer hat an dieser Stelle noch keine Datei angefasst.
+fn check_new_password_upfront(password: &NewMasterPassword) -> Result<(), StartupAbort> {
+    crate::master_password::check_new_password_before_touching_files(
+        &password.password,
+        &password.repeated,
+        password.warning,
+    )
+    .map_err(|err| {
+        tracing::warn!(
+            "the new master password was rejected before any file was touched \
+             (Spec 0101, A13, Klarstellung 12)"
+        );
+        StartupAbort::Fatal {
+            kind: ConnectFailureKind::MasterPasswordSetupFailed,
+            detail: format!("Master-Passwort nicht einrichtbar: {err}"),
+        }
+    })
 }
 
 fn set_up_password(

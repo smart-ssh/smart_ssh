@@ -128,7 +128,16 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       if (cancelled) return;
       setListening(true);
       if (!initialState) await refresh();
-    })();
+    })().catch((err: unknown) => {
+      // **Kein stiller Endzustand** (spec-reviewer Runde 2, Spec 0059/§6).
+      // Scheitert das Anmelden der Zuhörer, bleibt `listening` falsch — und
+      // damit kehrt der Effekt unten immer früh zurück, der Bildschirm
+      // zeigt endlos „wird fortgesetzt" und der Knopf „Erneut versuchen"
+      // ist wirkungslos. Ohne dieses `catch` stünde davon nur eine
+      // unbehandelte Ablehnung in der Konsole, die niemand sieht.
+      if (cancelled) return;
+      setError(messageFor(t, err));
+    });
 
     return () => {
       cancelled = true;
