@@ -469,34 +469,44 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         .into_iter()
         .fold(builder, |builder, plugin| plugin(builder));
 
+    // Spec 0101, A16 / Klarstellung 9: **Die Plugins, die Dateien,
+    // Einstellungen oder das Betriebssystem berühren, werden im
+    // Passwort-Modus erst nach der Entsperrung registriert.** Im
+    // Schlüsselbund-Modus bleibt es bei der Registrierung hier — dort gibt
+    // es nichts zu sperren, und der Normalpfad soll unverändert bleiben.
+    //
+    // Warum nicht über das Tor: Es sieht Plugin-Kommandos nicht (gemessen
+    // M7, s. `startup_gate`-Modulkommentar). Warum nicht über die ACL: Die
+    // Capability-Datei gilt für beide Modi; die Rechte dort zu entfernen und
+    // zur Laufzeit nachzureichen (`Manager::add_capability`, gemessen M8)
+    // hieße, im `setup()`-Haken gegen die nebenläufig ladende Webview zu
+    // rennen — und die Sprachwahl (Spec 0024) ruft `store` und `os` genau
+    // beim Start. Das Risiko läge dann auf dem Normalpfad. Gemessen M9: ein
+    // Plugin lässt sich nach `build()` nachregistrieren, und vorher ist sein
+    // Kommando unerreichbar („plugin store not found") — selbst wenn die ACL
+    // es erlaubt.
+    let defer_plugins = app_state.is_none();
+    let builder = if defer_plugins {
+        tracing::info!(
+            "the application starts locked; the plugins that touch files, settings or the \
+             operating system are registered only after unlocking (Spec 0101, A16)"
+        );
+        builder
+    } else {
+        register_unlocked_plugins_on(builder)
+    };
+
     builder
-        // Für die Key-/Zertifikat-Datei-Auswahl im Server-Formular (Spec
-        // 0008, Abschnitt 6): der native Dialog läuft im Backend
-        // (`commands::read_credential_file`, Spec 0013 SEC-06 — unabhängiger
-        // Review-Pass ersetzte hier den vorherigen `plugin-fs`-basierten
-        // Ansatz, bei dem das Webview die Datei clientseitig gelesen hätte),
-        // der Pfad selbst wird nie gespeichert (Spec 0008 Abschnitt 8). Kein
-        // `tauri_plugin_fs` mehr registriert — nichts nutzt es noch, und die
-        // `capabilities/default.json` gewährt ohnehin keine `fs:*`-Rechte;
-        // ein ungenutztes, geladenes Plugin ist unnötige Angriffsfläche.
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
-        // Spec 0024, Abschnitt 4: Speicherort für die gewählte UI-Sprache
-        // (und künftige reine UI-Einstellungen wie ein Theme) — bewusst kein
-        // sekundärer SQLite-Migrationspfad für eine einzelne, nicht
-        // sicherheitsrelevante Einstellung.
-        .plugin(tauri_plugin_store::Builder::new().build())
-        // Spec 0024, Abschnitt 4: liefert die System-Locale für die
-        // Sprachermittlung beim ersten Start (`frontend/src/i18n.ts`).
-        .plugin(tauri_plugin_os::init())
         // Entscheidung für tauri-plugin-decoration statt tauri-plugin-decorum:
         // tauri-plugin-decorum (v0.1.6) wird nicht mehr aktiv gepflegt und wirft Build-Fehler
         // bei modernen Rust-Toolchains/macOS-SDKs. tauri-plugin-decoration (v3.0.5) ist aktiv
         // gepflegt, unterstützt Tauri v2.10+ und verwaltet native macOS-Ampel-Insets sowie Windows Snap Layouts.
+        // **Bleibt auch im gesperrten Zustand registriert:** Das Plugin
+        // gestaltet den Fensterrahmen (Ampel-Insets, Snap-Layouts). Es liest
+        // keine Datei, keine Einstellung und keinen Zustand des
+        // Betriebssystems — und die Entsperrmaske braucht denselben Rahmen
+        // wie die App, sonst springt das Fenster beim Entsperren.
         .plugin(tauri_plugin_decoration::init())
-        // Spec 0028, Abschnitt 9a: native Toast-Benachrichtigung bei einer
-        // wartenden MCP-Bestätigung (s. `crate::mcp_backend`).
-        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             use tauri::Manager;
             use tauri_plugin_decoration::WebviewWindowExt;
@@ -541,6 +551,10 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         })
         .manage(gate.clone())
         .manage(pending)
+        // Spec 0101, A16 / Klarstellung 9: Der Merkzettel ist **nur** da,
+        // wenn die Plugins aufgeschoben wurden — `register_unlocked_plugins`
+        // hängt daran, ob es etwas nachzuholen gibt.
+        .manage(UnlockedPluginsPendingSlot(defer_plugins))
         // Spec 0084, A1: die Zuordnung Sitzung → erhöhter SFTP-Kanal ist
         // eigener, von Tauri verwalteter Zustand von `app-shell` — bewusst
         // kein Feld von `AppState`, damit der Kanal auch dann hier bleibt,
@@ -659,11 +673,12 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             mcp_settings::set_mcp_server_allowed_servers,
             mcp_settings::set_mcp_server_confirm_timeout_secs,
             // Spec 0101, Etappe 3: Entsperren und Moduswechsel. Die ersten
-            // vier stehen in der Positivliste des Tors (A16).
+            // fünf stehen in der Positivliste des Tors (A16).
             commands::master_password::get_startup_state,
             commands::master_password::unlock_with_master_password,
             commands::master_password::answer_startup_prompt,
             commands::master_password::quit_application,
+            commands::master_password::start_over_from_unlock_screen,
             commands::master_password::get_master_password_mode,
             commands::master_password::set_up_master_password,
             commands::master_password::change_master_password,
@@ -753,6 +768,96 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
         }
     });
 }
+
+/// Spec 0101, A16 / Klarstellung 9: die Plugins, die **nicht** vor der
+/// Entsperrung erreichbar sein dürfen — „kein Plugin-Kommando, das Dateien,
+/// Einstellungen oder das Betriebssystem berührt".
+///
+/// Eine Funktion, kein zweimal getippter Block: Beide Wege (Bauzeit im
+/// Schlüsselbund-Modus, nach dem Entsperren im Passwort-Modus) müssen
+/// dieselbe Liste registrieren. Zwei Listen wären zwei Gelegenheiten, dass
+/// eine davon ein Plugin behält oder verliert.
+fn register_unlocked_plugins_on(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    builder
+        // Für die Key-/Zertifikat-Datei-Auswahl im Server-Formular (Spec
+        // 0008, Abschnitt 6): der native Dialog läuft im Backend
+        // (`commands::read_credential_file`, Spec 0013 SEC-06 — unabhängiger
+        // Review-Pass ersetzte hier den vorherigen `plugin-fs`-basierten
+        // Ansatz, bei dem das Webview die Datei clientseitig gelesen hätte),
+        // der Pfad selbst wird nie gespeichert (Spec 0008 Abschnitt 8). Kein
+        // `tauri_plugin_fs` mehr registriert — nichts nutzt es noch, und die
+        // `capabilities/default.json` gewährt ohnehin keine `fs:*`-Rechte;
+        // ein ungenutztes, geladenes Plugin ist unnötige Angriffsfläche.
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        // Spec 0024, Abschnitt 4: Speicherort für die gewählte UI-Sprache
+        // (und künftige reine UI-Einstellungen wie ein Theme) — bewusst kein
+        // sekundärer SQLite-Migrationspfad für eine einzelne, nicht
+        // sicherheitsrelevante Einstellung.
+        //
+        // **Der Grund, warum diese Liste existiert** (Klarstellung 9):
+        // Hierüber ist die Einstellungsdatei lesbar, und ein altes
+        // `settings.json` aus der Zeit vor A12 kann noch den MCP-Token
+        // tragen. Vor der Entsperrung ist das Plugin deshalb nicht da.
+        .plugin(tauri_plugin_store::Builder::new().build())
+        // Spec 0024, Abschnitt 4: liefert die System-Locale für die
+        // Sprachermittlung beim ersten Start (`frontend/src/i18n.ts`).
+        .plugin(tauri_plugin_os::init())
+        // Spec 0028, Abschnitt 9a: native Toast-Benachrichtigung bei einer
+        // wartenden MCP-Bestätigung (s. `crate::mcp_backend`). Vor der
+        // Entsperrung gibt es nichts zu melden — der MCP-Server läuft dort
+        // ohnehin nicht (A16).
+        .plugin(tauri_plugin_notification::init())
+}
+
+/// Dasselbe wie [`register_unlocked_plugins_on`], nur nach `build()`
+/// (gemessen M9: `AppHandle::plugin` wirkt dort).
+///
+/// Wird aus dem Entsperrpfad gerufen, **nachdem** das Tor offen ist. Ein
+/// Fehler hier ist sichtbar statt still: Ohne diese Plugins fehlen der
+/// Oberfläche Sprachwahl, Dateiauswahl und Benachrichtigungen, und das soll
+/// im Log stehen statt als rätselhaft fehlende Funktion zu erscheinen.
+pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
+    use tauri::Manager;
+
+    // Im Schlüsselbund-Modus stehen sie schon seit der Bauzeit. Ein
+    // zweiter Versuch würde scheitern („plugin … already registered"),
+    // deshalb wird nur im aufgeschobenen Fall registriert.
+    match app.try_state::<UnlockedPluginsPendingSlot>() {
+        Some(slot) if slot.0 => {}
+        _ => return,
+    }
+    let results: Vec<Result<(), tauri::Error>> = vec![
+        app.plugin(tauri_plugin_dialog::init()),
+        app.plugin(tauri_plugin_opener::init()),
+        app.plugin(tauri_plugin_store::Builder::new().build()),
+        app.plugin(tauri_plugin_os::init()),
+        app.plugin(tauri_plugin_notification::init()),
+    ];
+    for result in results {
+        if let Err(err) = result {
+            tracing::error!(
+                error = %err,
+                "a plugin that is registered only after unlocking could not be registered \
+                 (Spec 0101, A16)"
+            );
+        }
+    }
+    tracing::info!(
+        "registered the plugins that touch files, settings or the operating system after \
+         unlocking (Spec 0101, A16)"
+    );
+}
+
+/// Merkzettel: Sind die Plugins aus [`register_unlocked_plugins_on`]
+/// aufgeschoben und nach dem Entsperren nachzuholen?
+///
+/// Ein eigener Typ statt eines `bool` im `PendingStartup`: So steht die
+/// Information dort, wo [`register_unlocked_plugins`] sie findet — ohne
+/// dass die Funktion den Startzustand kennen muss. **Immer** verwaltet,
+/// auch mit `false`: Ein nur manchmal vorhandener Zustand ist in Tauri eine
+/// Fehlerquelle (gemessen M1).
+pub(crate) struct UnlockedPluginsPendingSlot(pub bool);
 
 /// Spec 0101, A16: legt das Tor vor den von `generate_handler!` erzeugten
 /// Verteiler.

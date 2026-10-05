@@ -420,3 +420,96 @@ fn test_no_error_text_carries_secret_material() {
     assert!(errors[3].detail_for_log().unwrap().contains(secret));
     assert!(errors[0].detail_for_log().is_none());
 }
+
+/// Klarstellung 9: Die Urteilsfrage „kann diese Datei überhaupt K
+/// hergeben?" — und zwar in **beide** Richtungen.
+///
+/// Die zweite Hälfte ist die wichtigere: Eine brauchbare Verpackung darf
+/// **nie** „Neu anfangen" erlauben. Sonst wäre der Ausweg aus einer kaputten
+/// Datei zugleich ein Knopf, der bei bloß vergessenem Passwort den Verlauf
+/// wegwirft, obwohl K noch zu holen ist.
+#[test]
+fn test_wrapping_health_only_allows_starting_over_when_no_password_could_work() {
+    let dir = Dir::new("health");
+    let db = dir.db();
+
+    // Ohne Datei: Schlüsselbund-Modus, kein Neuanfang.
+    assert_eq!(wrapping_health(&db), WrappingHealth::Absent);
+    assert!(!wrapping_health(&db).allows_starting_over());
+
+    // Eine echte Verpackung: brauchbar — auch wenn das Passwort nicht passt.
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), None).unwrap();
+    assert_eq!(wrapping_health(&db), WrappingHealth::Usable);
+    assert!(
+        !wrapping_health(&db).allows_starting_over(),
+        "eine brauchbare Verpackung darf nie in „Neu anfangen“ führen — das wäre bei bloß \
+         vergessenem Passwort der Verlust von K"
+    );
+    assert!(matches!(
+        unlock(&db, &pw("ein-ganz-anderes-passwort")),
+        Err(MasterPasswordError::WrongPasswordOrDamagedFile)
+    ));
+    // Und sie bleibt brauchbar, nachdem jemand falsch geraten hat.
+    assert_eq!(wrapping_health(&db), WrappingHealth::Usable);
+
+    // Eine fremde Datei am Ort der Verpackung: unbrauchbar → Ausweg.
+    std::fs::write(wrapping_file_path(&db), [0xAB; 40]).unwrap();
+    assert_eq!(wrapping_health(&db), WrappingHealth::Unusable);
+    assert!(wrapping_health(&db).allows_starting_over());
+    // Der Modus hängt weiter an der Datei — ohne den Ausweg wäre die
+    // Installation damit dauerhaft ausgesperrt.
+    assert_eq!(key_mode(&db), KeyMode::Password);
+}
+
+/// Klarstellung 9: Eine Verpackung, die zwar ein gültiges Chiffrat trägt,
+/// deren **Parameter** aber unbrauchbar sind, ist *ungültig* — nicht
+/// „Passwort falsch".
+///
+/// Der Fall ist der, den jemand mit Schreibzugriff herstellt: `m_cost`
+/// senken, damit ein Offline-Angriff billig wird. Die App lehnt die Datei
+/// dann ab (T15) — und muss einen Ausweg anbieten, sonst ist die
+/// Installation damit lahmgelegt.
+#[test]
+fn test_weak_parameters_count_as_unusable_not_as_a_wrong_password() {
+    let dir = Dir::new("health-params");
+    let db = dir.db();
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), None).unwrap();
+
+    let path = wrapping_file_path(&db);
+    let mut bytes = std::fs::read(&path).unwrap();
+    // `m_cost` (u32 little endian) auf 8 KiB herunterschrauben — Offset 10
+    // laut Format (s. `key_wrapping`).
+    bytes[10..14].copy_from_slice(&8u32.to_le_bytes());
+    std::fs::write(&path, &bytes).unwrap();
+
+    assert_eq!(wrapping_health(&db), WrappingHealth::Unusable);
+    assert!(wrapping_health(&db).allows_starting_over());
+    assert!(
+        matches!(
+            unlock(&db, &good()),
+            Err(MasterPasswordError::UnusableWrappingFile)
+        ),
+        "geschwächte Parameter sind ein Formatfehler, nicht „Passwort falsch“ (A17)"
+    );
+}
+
+/// Klarstellung 9: Eine Datei, die an ihrem Platz liegt, aber nicht zu lesen
+/// ist (hängende Verknüpfung), ist ebenfalls *ungültig*.
+///
+/// Vor dieser Änderung endete derselbe Zustand in `NotInPasswordMode` bzw.
+/// `FileFailed` — und damit in einem Fehler ohne Ausweg, obwohl der Modus
+/// weiter `Password` war.
+#[cfg(unix)]
+#[test]
+fn test_an_unreadable_wrapping_file_is_a_way_out_too() {
+    let dir = Dir::new("health-dangling");
+    let db = dir.db();
+    std::os::unix::fs::symlink(dir.path.join("gibt-es-nicht"), wrapping_file_path(&db)).unwrap();
+
+    assert_eq!(key_mode(&db), KeyMode::Password);
+    assert_eq!(wrapping_health(&db), WrappingHealth::Unreadable);
+    assert!(
+        wrapping_health(&db).allows_starting_over(),
+        "sonst sperrt eine hängende Verknüpfung die Installation dauerhaft aus"
+    );
+}

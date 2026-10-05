@@ -368,6 +368,42 @@ pub fn wrap_root_key(
     Ok(out)
 }
 
+/// Spec 0101, Klarstellung 9: Kann diese Verpackung **überhaupt** K
+/// hergeben — unabhängig vom Passwort?
+///
+/// Prüft Marke, Formatversion, KDF-Kennung, die Argon2-Parameter und die
+/// Länge des Chiffrats. Das ist genau der Teil von [`unwrap_root_key`], der
+/// **vor** der Ableitung liegt und deshalb ohne Passwort entschieden werden
+/// kann. Was hier scheitert, scheitert dort mit jedem Passwort — und ist
+/// damit in der Tabelle A3 der Zustand *ungültig* (D3), nicht „Passwort
+/// falsch" (A17).
+///
+/// **Kein Orakel:** Die Funktion sagt nichts über das Passwort oder über
+/// das Chiffrat aus; sie liest nur die Felder, die in der Datei offen
+/// stehen und ohnehin als AAD authentifiziert werden.
+///
+pub fn inspect_wrapped_key(wrapped: &[u8]) -> Result<(), KeyWrapError> {
+    parse_and_check(wrapped).map(|_| ())
+}
+
+/// Der geteilte Rumpf von [`inspect_wrapped_key`] und [`unwrap_root_key`].
+///
+/// Privat, weil [`Header`] privat bleibt — nach außen sagt
+/// `inspect_wrapped_key` nur „brauchbar oder nicht", und genau das ist die
+/// Frage, die Klarstellung 9 stellt.
+fn parse_and_check(wrapped: &[u8]) -> Result<(Header, usize), KeyWrapError> {
+    let (header, header_len) = Header::parse(wrapped)?;
+    // **Reihenfolge:** Parameter prüfen, bevor gerechnet wird (T15:
+    // „Gültige Verpackung mit m = 8 KiB → abgelehnt"; und die Obergrenze
+    // wäre nach der Rechnung wirkungslos).
+    header.check_parameters()?;
+    let ciphertext = wrapped.get(header_len..).ok_or(KeyWrapError::Malformed)?;
+    if ciphertext.len() != DATABASE_KEY_LEN + TAG_LEN {
+        return Err(KeyWrapError::Malformed);
+    }
+    Ok((header, header_len))
+}
+
 /// A16/A17: Die Verpackung mit `password` öffnen.
 ///
 /// Scheitert die Authentifizierung, ist **nicht unterscheidbar**, ob das
@@ -378,15 +414,16 @@ pub fn wrap_root_key(
 /// [`RootKey`] (A19): K verlässt diese Funktion in einem Typ, der beim
 /// Freigeben überschrieben wird und sich nicht ausgeben lässt.
 pub fn unwrap_root_key(wrapped: &[u8], password: &SecretString) -> Result<RootKey, KeyWrapError> {
-    let (header, header_len) = Header::parse(wrapped)?;
-    // **Reihenfolge:** Parameter prüfen, bevor gerechnet wird (T15:
-    // „Gültige Verpackung mit m = 8 KiB → abgelehnt"; und die Obergrenze
-    // wäre nach der Rechnung wirkungslos).
-    header.check_parameters()?;
-    let ciphertext = wrapped.get(header_len..).ok_or(KeyWrapError::Malformed)?;
-    if ciphertext.len() != DATABASE_KEY_LEN + TAG_LEN {
-        return Err(KeyWrapError::Malformed);
-    }
+    // **Dieselbe Prüfung wie [`inspect_wrapped_key`], und zwar wörtlich
+    // dieselbe Funktion** (Spec 0101, Klarstellung 9): Die Entscheidung
+    // „unbrauchbar" führt in der Tabelle A3 nach *ungültig* und damit zu
+    // D3 — also zu einem neuen K. Liefe die Vorprüfung für diesen Weg
+    // getrennt von der hier, könnte eine Datei irgendwann für
+    // `inspect_wrapped_key` unbrauchbar und für `unwrap_root_key` brauchbar
+    // sein: Der Nutzer bekäme „Neu anfangen" angeboten, obwohl sein K noch
+    // zu holen ist. Ein geteilter Aufruf schließt das per Konstruktion aus.
+    let (header, header_len) = parse_and_check(wrapped)?;
+    let ciphertext = &wrapped[header_len..];
 
     // **Keine Längenprüfung am Passwort beim Entpacken.** Eine Verpackung,
     // die mit einem (nach heutiger Regel zu kurzen) Passwort entstanden

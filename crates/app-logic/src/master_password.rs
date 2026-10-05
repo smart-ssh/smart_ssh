@@ -128,6 +128,79 @@ pub fn key_mode(db_path: &Path) -> KeyMode {
     }
 }
 
+/// Spec 0101, Klarstellung 9: Kann die Verpackungsdatei **überhaupt** K
+/// hergeben?
+///
+/// Die Frage ist nötig, weil „Neu anfangen" im Passwort-Modus einen neuen K
+/// erzeugt und damit den bisherigen Verlauf aufgibt. Angeboten werden darf
+/// es deshalb **nur**, wenn kein Passwort der Welt die vorhandene Datei
+/// öffnen würde — sonst wäre der Knopf ein Weg, sich bei bloß vergessenem
+/// Passwort selbst die Daten zu löschen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WrappingHealth {
+    /// Es gibt keine Verpackungsdatei — Schlüsselbund-Modus.
+    Absent,
+    /// Kopf und Parameter sind brauchbar. Scheitert das Entsperren, war es
+    /// das Passwort (oder eine Veränderung am Chiffrat, A17: nicht
+    /// unterscheidbar) — **kein** Grund für „Neu anfangen".
+    Usable,
+    /// Marke, Formatversion, KDF-Kennung, Parameter oder die Länge des
+    /// Chiffrats sind unbrauchbar. In der Tabelle A3 der Zustand *ungültig*
+    /// (D3).
+    Unusable,
+    /// Die Datei liegt an ihrem Platz, ihr Inhalt ist aber nicht zu lesen
+    /// (Rechte, hängende Verknüpfung). Auch das ist *ungültig*: Mit dem,
+    /// was nicht lesbar ist, lässt sich kein K entpacken, und A5 benennt
+    /// die Datei um statt sie zu löschen — sie bleibt also greifbar, wenn
+    /// sich die Ursache später behebt.
+    Unreadable,
+}
+
+impl WrappingHealth {
+    /// Darf „Neu anfangen" (D3/D4) im gesperrten Zustand angeboten werden?
+    ///
+    /// **Nur** [`Self::Unusable`] und [`Self::Unreadable`]. Die
+    /// Positivliste-Richtung ist hier Absicht: Ein künftiger Zustand, den
+    /// niemand bedacht hat, führt **nicht** zu einem neuen K.
+    pub fn allows_starting_over(self) -> bool {
+        matches!(self, Self::Unusable | Self::Unreadable)
+    }
+}
+
+/// Spec 0101, Klarstellung 9: liest die Verpackungsdatei und urteilt über
+/// sie, **ohne** ein Passwort zu brauchen.
+///
+/// Rührt nichts an: nur `symlink_metadata` und `read`.
+pub fn wrapping_health(db_path: &Path) -> WrappingHealth {
+    let path = wrapping_file_path(db_path);
+    if std::fs::symlink_metadata(&path).is_err() {
+        return WrappingHealth::Absent;
+    }
+    match std::fs::read(&path) {
+        Ok(bytes) => match crypto::inspect_wrapped_key(&bytes) {
+            Ok(()) => WrappingHealth::Usable,
+            Err(err) => {
+                tracing::warn!(
+                    reason = %err,
+                    "the wrapping file next to the database cannot yield the root key with any \
+                     password (Spec 0101, A3 „ungültig“)"
+                );
+                WrappingHealth::Unusable
+            }
+        },
+        // Die Datei ist über `symlink_metadata` da, lässt sich aber nicht
+        // lesen — eine hängende Verknüpfung ergibt hier `NotFound`.
+        Err(err) => {
+            tracing::warn!(
+                detail = %err,
+                "the wrapping file next to the database exists but cannot be read \
+                 (Spec 0101, A3 „ungültig“)"
+            );
+            WrappingHealth::Unreadable
+        }
+    }
+}
+
 /// A16/A17: die Verpackungsdatei mit `password` öffnen.
 ///
 /// Rührt **nichts** an: kein Schlüsselbund, keine Datenbank, keine Datei.
