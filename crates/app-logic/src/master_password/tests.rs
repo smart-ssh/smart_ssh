@@ -12,6 +12,12 @@ use super::*;
 const ROOT_KEY: [u8; 32] = [0x11; 32];
 const OTHER_KEY: [u8; 32] = [0x22; 32];
 
+/// Klarstellung 12: die bestätigte Warnung aus A13/E10. Alle Tests, die
+/// das Einrichten als *gelungen* annehmen, reichen sie mit — der Fall ohne
+/// Bestätigung hat seinen eigenen Test
+/// (`test_k12_setting_up_without_the_confirmed_warning_changes_nothing`).
+const CONFIRMED: LossWarning = LossWarning::ConfirmedByTheUser;
+
 fn pw(text: &str) -> SecretString {
     SecretString::from(text.to_string())
 }
@@ -113,7 +119,15 @@ fn test_t13_setting_up_removes_the_key_from_the_keychain_and_unlocks_again() {
     let keyring = CountingKeychain::with_root_key(&ROOT_KEY);
     assert_eq!(key_mode(&dir.db()), KeyMode::Keychain);
 
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), Some(&keyring)).unwrap();
+    set_up_master_password(
+        &dir.db(),
+        &ROOT_KEY,
+        &good(),
+        &good(),
+        CONFIRMED,
+        Some(&keyring),
+    )
+    .unwrap();
 
     assert_eq!(
         key_mode(&dir.db()),
@@ -152,7 +166,14 @@ fn test_t13_short_or_mismatched_password_changes_nothing() {
 
     let eleven = pw("abcdefghijk");
     assert!(matches!(
-        set_up_master_password(&dir.db(), &ROOT_KEY, &eleven, &eleven, Some(&keyring)),
+        set_up_master_password(
+            &dir.db(),
+            &ROOT_KEY,
+            &eleven,
+            &eleven,
+            CONFIRMED,
+            Some(&keyring)
+        ),
         Err(MasterPasswordError::PasswordRejected(_))
     ));
 
@@ -162,6 +183,7 @@ fn test_t13_short_or_mismatched_password_changes_nothing() {
             &ROOT_KEY,
             &good(),
             &pw("ein-anderes-passwort"),
+            CONFIRMED,
             Some(&keyring)
         ),
         Err(MasterPasswordError::PasswordRejected(_))
@@ -170,6 +192,68 @@ fn test_t13_short_or_mismatched_password_changes_nothing() {
     assert_eq!(key_mode(&dir.db()), KeyMode::Keychain);
     assert!(keyring.has_root_key(), "K darf nicht angefasst worden sein");
     assert_eq!(*keyring.deletes.lock().unwrap(), 0);
+}
+
+/// Klarstellung 12 (A13/E10): **ohne die bestätigte Warnung wird nichts
+/// eingerichtet** — „Jeder Weg, der ein Master-Passwort einrichtet, lehnt
+/// ohne diese Bestätigung ab und verändert nichts."
+///
+/// Das Passwort ist hier **einwandfrei** (lang genug, beide Eingaben
+/// gleich). Nur so prüft der Test die neue Bedingung und nicht eine der
+/// beiden alten: Wäre er mit einem zu kurzen Passwort geschrieben, ginge er
+/// auch dann durch, wenn der Riegel aus Klarstellung 12 fehlt.
+///
+/// **Gegenbeweis geführt:** Mit herausgenommenem Riegel (die Prüfung in
+/// `set_up_master_password` entfernt, Signatur unverändert) richtet derselbe
+/// Aufruf das Passwort ein — die Zusicherung auf
+/// `LossWarningNotConfirmed` scheitert, und die drei Aussagen über Modus,
+/// Datei und Schlüsselbund scheitern mit.
+#[test]
+fn test_k12_setting_up_without_the_confirmed_warning_changes_nothing() {
+    let dir = Dir::new("unconfirmed");
+    let keyring = CountingKeychain::with_root_key(&ROOT_KEY);
+
+    let result = set_up_master_password(
+        &dir.db(),
+        &ROOT_KEY,
+        &good(),
+        &good(),
+        LossWarning::NotConfirmed,
+        Some(&keyring),
+    );
+
+    assert!(
+        matches!(result, Err(MasterPasswordError::LossWarningNotConfirmed)),
+        "ohne Bestätigung muss genau dieser Fehler kommen, nicht PasswordRejected"
+    );
+    assert_eq!(
+        key_mode(&dir.db()),
+        KeyMode::Keychain,
+        "der Modus darf nicht gewechselt haben"
+    );
+    assert!(
+        !wrapping_file_path(&dir.db()).exists(),
+        "es darf keine Verpackungsdatei entstanden sein"
+    );
+    assert!(
+        keyring.has_root_key(),
+        "K muss unverändert im Schlüsselbund liegen"
+    );
+    assert_eq!(*keyring.deletes.lock().unwrap(), 0, "nichts gelöscht");
+    assert_eq!(*keyring.sets.lock().unwrap(), 0, "nichts geschrieben");
+
+    // Und danach geht der richtige Weg weiter — der Riegel sperrt nicht
+    // dauerhaft, er verlangt nur die Zusage.
+    set_up_master_password(
+        &dir.db(),
+        &ROOT_KEY,
+        &good(),
+        &good(),
+        CONFIRMED,
+        Some(&keyring),
+    )
+    .expect("mit bestätigter Warnung muss derselbe Aufruf durchlaufen");
+    assert_eq!(key_mode(&dir.db()), KeyMode::Password);
 }
 
 /// T13: „Fehlerinjektion nach dem Schreiben der Verpackung → K bleibt im
@@ -186,7 +270,15 @@ fn test_t13_a_failing_delete_leaves_the_key_in_the_keychain() {
         ..CountingKeychain::with_root_key(&ROOT_KEY)
     };
 
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), Some(&keyring)).unwrap();
+    set_up_master_password(
+        &dir.db(),
+        &ROOT_KEY,
+        &good(),
+        &good(),
+        CONFIRMED,
+        Some(&keyring),
+    )
+    .unwrap();
 
     assert_eq!(key_mode(&dir.db()), KeyMode::Password);
     assert!(
@@ -210,7 +302,7 @@ fn test_t13_a_failing_delete_leaves_the_key_in_the_keychain() {
 fn test_t16_a_differing_keychain_entry_is_never_deleted() {
     let dir = Dir::new("tidy");
     let keyring = CountingKeychain::default();
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
     let key = unlock(&dir.db(), &good()).unwrap();
 
     // Verschieden → nichts gelöscht.
@@ -246,7 +338,7 @@ fn test_t16_a_differing_keychain_entry_is_never_deleted() {
 fn test_t13_change_password_and_switch_back() {
     let dir = Dir::new("change");
     let keyring = CountingKeychain::default();
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
 
     // Eine „Datenbank" daneben, die byte-gleich bleiben muss.
     std::fs::write(dir.db(), b"nicht wirklich eine Datenbank").unwrap();
@@ -309,7 +401,7 @@ fn test_t13_change_password_and_switch_back() {
 #[test]
 fn test_a15_switch_back_keeps_the_wrapping_when_the_keychain_cannot_be_read() {
     let dir = Dir::new("switch-fails");
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
 
     let keyring = CountingKeychain {
         fail_read: true,
@@ -349,7 +441,7 @@ fn test_a15_switch_back_keeps_the_wrapping_when_the_keychain_cannot_be_read() {
 #[test]
 fn test_a5_renaming_the_wrapping_never_overwrites() {
     let dir = Dir::new("rename");
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
     let original = std::fs::read(wrapping_file_path(&dir.db())).unwrap();
 
     let renamed = rename_wrapping_file(&dir.db(), ".unreadable-TEST")
@@ -368,7 +460,7 @@ fn test_a5_renaming_the_wrapping_never_overwrites() {
         .is_none());
 
     // Belegter Zielname → Fehler, und die neue Datei bleibt stehen.
-    set_up_master_password(&dir.db(), &OTHER_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&dir.db(), &OTHER_KEY, &good(), &good(), CONFIRMED, None).unwrap();
     let err = rename_wrapping_file(&dir.db(), ".unreadable-TEST").unwrap_err();
     assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
     assert_eq!(
@@ -459,7 +551,7 @@ fn test_no_error_text_carries_secret_material() {
 fn test_a_failing_check_of_the_new_wrapping_leaves_the_old_one_able_to_yield_the_key() {
     let dir = Dir::new("verify-before-replace");
     let db = dir.db();
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
 
     let path = wrapping_file_path(&db);
     let before = std::fs::read(&path).unwrap();
@@ -511,7 +603,7 @@ fn test_no_half_written_wrapping_is_left_behind() {
         std::path::PathBuf::from(name)
     };
 
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
     assert!(!tmp.exists(), "nach dem Einrichten liegt kein Rest");
 
     let new_password = pw("ein-ganz-neues-master-passwort");
@@ -541,7 +633,7 @@ fn test_no_half_written_wrapping_is_left_behind() {
 #[test]
 fn test_switching_back_does_not_replace_a_foreign_keychain_entry_without_confirmation() {
     let dir = Dir::new("switch-foreign");
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
     let wrapping_before = std::fs::read(wrapping_file_path(&dir.db())).unwrap();
 
     // Im Schlüsselbund liegt der Schlüssel einer **anderen** Installation.
@@ -620,7 +712,7 @@ fn test_replacing_a_foreign_key_after_a_confirmation_is_visible_in_the_log() {
     log_capture::start_recording();
 
     let dir = Dir::new("switch-confirmed-log");
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
     let keyring = CountingKeychain::with_root_key(&OTHER_KEY);
 
     switch_to_keychain(
@@ -658,7 +750,15 @@ fn test_replacing_a_foreign_key_after_a_confirmation_is_visible_in_the_log() {
 fn test_switching_back_asks_nothing_when_the_keychain_is_empty_or_already_holds_k() {
     // Leer: der Normalfall nach `set_up_master_password`.
     let empty_dir = Dir::new("switch-empty");
-    set_up_master_password(&empty_dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(
+        &empty_dir.db(),
+        &ROOT_KEY,
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     let empty = CountingKeychain::default();
     switch_to_keychain(
         &empty_dir.db(),
@@ -672,7 +772,7 @@ fn test_switching_back_asks_nothing_when_the_keychain_is_empty_or_already_holds_
     // Gleich K: der abgebrochene Wechsel aus A17, der beide Hälften liegen
     // ließ. Ihn zu „überschreiben" ändert nichts, also wird nicht gefragt.
     let same_dir = Dir::new("switch-same");
-    set_up_master_password(&same_dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&same_dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
     let same = CountingKeychain::with_root_key(&ROOT_KEY);
     switch_to_keychain(
         &same_dir.db(),
@@ -693,7 +793,7 @@ fn test_switching_back_asks_nothing_when_the_keychain_is_empty_or_already_holds_
 #[test]
 fn test_switching_back_asks_before_replacing_an_unusable_keychain_entry() {
     let dir = Dir::new("switch-invalid");
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
 
     let keyring = CountingKeychain::default();
     keyring.entries.lock().unwrap().insert(
@@ -731,7 +831,7 @@ fn test_wrapping_health_only_allows_starting_over_when_no_password_could_work() 
     assert!(!wrapping_health(&db).allows_starting_over());
 
     // Eine echte Verpackung: brauchbar — auch wenn das Passwort nicht passt.
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
     assert_eq!(wrapping_health(&db), WrappingHealth::Usable);
     assert!(
         !wrapping_health(&db).allows_starting_over(),
@@ -766,7 +866,7 @@ fn test_wrapping_health_only_allows_starting_over_when_no_password_could_work() 
 fn test_weak_parameters_count_as_unusable_not_as_a_wrong_password() {
     let dir = Dir::new("health-params");
     let db = dir.db();
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
 
     let path = wrapping_file_path(&db);
     let mut bytes = std::fs::read(&path).unwrap();
@@ -832,7 +932,7 @@ fn test_a_wrapping_file_without_read_permission_is_unreachable_not_invalid() {
 
     let dir = Dir::new("health-perm");
     let db = dir.db();
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), None).unwrap();
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
     let path = wrapping_file_path(&db);
     let intact = std::fs::read(&path).unwrap();
 
@@ -973,7 +1073,15 @@ fn test_t17_no_key_password_or_secret_in_the_log_or_the_diagnostics_bundle() {
     let new_password = pw(T17_NEW_PASSWORD);
 
     // T13: einrichten.
-    set_up_master_password(&db, &T17_KEY, &password, &password, Some(&keyring)).unwrap();
+    set_up_master_password(
+        &db,
+        &T17_KEY,
+        &password,
+        &password,
+        CONFIRMED,
+        Some(&keyring),
+    )
+    .unwrap();
 
     // A17: falsches Passwort — und die Fehler-Nutzlast so ins Log, wie
     // `to_command_error` es tut.

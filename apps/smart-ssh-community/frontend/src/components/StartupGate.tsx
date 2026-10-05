@@ -176,9 +176,14 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
     }
   }
 
-  const sendAnswer = (answer: StartupPromptAnswer, pw?: string, repeated?: string) => {
+  const sendAnswer = (
+    answer: StartupPromptAnswer,
+    pw?: string,
+    repeated?: string,
+    warningConfirmed?: boolean,
+  ) => {
     setQuestion(null);
-    void answerStartupPrompt(answer, pw, repeated).catch((err: unknown) => {
+    void answerStartupPrompt(answer, pw, repeated, warningConfirmed).catch((err: unknown) => {
       setError(messageFor(t, err));
     });
   };

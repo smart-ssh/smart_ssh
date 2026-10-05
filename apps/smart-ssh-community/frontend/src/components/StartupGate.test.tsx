@@ -188,7 +188,17 @@ describe("StartupGate", () => {
     expect(screen.queryByRole("button", { name: "Ohne Übernahme fortfahren" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Neu anfangen" }));
-    await waitFor(() => expect(answerStartupPrompt).toHaveBeenCalledWith("startOver", undefined, undefined));
+    // Klarstellung 12: Eine Antwort ohne Passwort trägt auch keine
+    // Bestätigung — das Backend liest sie dort ohnehin nicht, und ein
+    // `true` an dieser Stelle wäre eine Zusage, die niemand gegeben hat.
+    await waitFor(() =>
+      expect(answerStartupPrompt).toHaveBeenCalledWith(
+        "startOver",
+        undefined,
+        undefined,
+        undefined,
+      ),
+    );
   });
 
   it("fragt ein neues Master-Passwort mit leeren Feldern und ausdrücklicher Bestätigung ab (A13/E10, Klarstellung 10e)", async () => {
@@ -222,10 +232,13 @@ describe("StartupGate", () => {
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "Ja, fortfahren" }));
     await waitFor(() =>
+      // Klarstellung 12: dieselbe Zusage wie in den Einstellungen, hier
+      // über den Startdialog — sie reist als vierter Parameter mit.
       expect(answerStartupPrompt).toHaveBeenCalledWith(
         "confirm",
         "Passwort-0101-lang",
         "Passwort-0101-lang",
+        true,
       ),
     );
   });

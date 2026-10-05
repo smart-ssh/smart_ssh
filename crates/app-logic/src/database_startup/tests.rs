@@ -292,6 +292,11 @@ impl StartupPrompt for PasswordModePrompt {
         Some(NewMasterPassword {
             password: secrecy::SecretString::from(text.to_string()),
             repeated: secrecy::SecretString::from(text.to_string()),
+            // Klarstellung 12: Der Fragesteller, der ein Passwort liefert,
+            // hat die Warnung gezeigt und bestätigt bekommen. Der
+            // Gegenfall hat seinen eigenen Fragesteller (s.
+            // `UnconfirmedWarningPrompt`).
+            warning: crate::master_password::LossWarning::ConfirmedByTheUser,
         })
     }
 
@@ -1198,6 +1203,110 @@ async fn test_t7_d4_converts_the_plaintext_file_with_a_new_key_and_keeps_the_row
 }
 
 // === T8: D1 ==============================================================
+
+/// **Klarstellung 12 (A13/E10):** Einrichten aus D1 **ohne** die bestätigte
+/// Warnung — der Start bricht ab, und nichts ist verändert.
+///
+/// Dies ist der zweite der drei Einrichtungswege aus A13 (der erste sind
+/// die Einstellungen, geprüft in `master_password::tests`). Er läuft durch
+/// dieselbe Funktion, aber über ein eigenes DTO — und genau dort hätte eine
+/// Bestätigung verloren gehen können, ohne dass es auffiele.
+///
+/// Das Passwort ist einwandfrei (lang genug, beide Eingaben gleich): Der
+/// Test soll an der Bestätigung scheitern und an nichts anderem.
+///
+/// **Gegenbeweis geführt:** Ohne den Riegel in `set_up_master_password`
+/// läuft derselbe Ablauf durch, die Verpackungsdatei entsteht und die
+/// Klartext-Datenbank wird umgewandelt — die vier Zusicherungen unten
+/// scheitern dann.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_k12_d1_setup_without_the_confirmed_warning_changes_nothing() {
+    /// Beantwortet D1 mit „Master-Passwort einrichten“, liefert ein
+    /// einwandfreies Passwort — aber **ohne** bestätigte Warnung. Genau
+    /// das, was eine umgangene oder fehlerhafte Maske schicken würde.
+    struct UnconfirmedWarningPrompt {
+        asked: Mutex<Vec<StartupDialog>>,
+        password_asked: Mutex<usize>,
+    }
+    impl StartupPrompt for UnconfirmedWarningPrompt {
+        fn ask(&self, dialog: StartupDialog) -> StartupChoice {
+            self.asked.lock().unwrap().push(dialog);
+            StartupChoice::SetUpMasterPassword
+        }
+        fn confirm_start_over(&self, _renamed_to: Option<&str>) -> bool {
+            panic!("D1-Einrichten führt nicht zu „Neu anfangen“")
+        }
+        fn confirm_generate_new_key(&self) -> bool {
+            panic!("D1-Einrichten erzeugt keinen Schlüssel über D4")
+        }
+        fn notify_started_over(&self, renamed_to: &str) {
+            panic!("es darf nichts umbenannt worden sein, gemeldet wurde aber {renamed_to}");
+        }
+        fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
+            *self.password_asked.lock().unwrap() += 1;
+            Some(NewMasterPassword {
+                password: SecretString::from("mein-neues-master-passwort".to_string()),
+                repeated: SecretString::from("mein-neues-master-passwort".to_string()),
+                warning: crate::master_password::LossWarning::NotConfirmed,
+            })
+        }
+        fn can_ask_for_a_password(&self) -> bool {
+            true
+        }
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = plaintext_database(dir.path()).await;
+    let before = std::fs::read(&db_path).unwrap();
+
+    // Klartext × Schlüsselbund nicht nutzbar → D1 **mit** Einrichten
+    // (s. die Entscheidungstabelle in `test_t3_…`).
+    let credentials = CountingCredentialStore::new(GetBehaviour::Present);
+    let prompt = UnconfirmedWarningPrompt {
+        asked: Mutex::new(Vec::new()),
+        password_asked: Mutex::new(0),
+    };
+
+    let result = open_or_prepare_database(
+        &db_path,
+        RootKeyAccess::Keychain(&credentials),
+        unavailable(KeychainUnavailableReason::NoSessionBus),
+        &prompt,
+    )
+    .await;
+
+    assert!(
+        matches!(
+            result,
+            Err(StartupAbort::Fatal {
+                kind: ConnectFailureKind::MasterPasswordSetupFailed,
+                ..
+            })
+        ),
+        "ohne Bestätigung darf der Start nicht zu einer offenen Datenbank führen"
+    );
+    assert_eq!(
+        prompt.asked.lock().unwrap().clone(),
+        vec![StartupDialog::D1 {
+            offers_password_setup: true
+        }]
+    );
+    assert_eq!(*prompt.password_asked.lock().unwrap(), 1);
+    assert!(
+        !crate::master_password::wrapping_file_path(&db_path).exists(),
+        "es darf keine Verpackungsdatei entstanden sein"
+    );
+    assert_eq!(
+        std::fs::read(&db_path).unwrap(),
+        before,
+        "die Klartext-Datenbank muss byte-gleich geblieben sein"
+    );
+    assert_eq!(
+        credentials.sets(),
+        0,
+        "es darf kein neuer K im Schlüsselbund gelandet sein"
+    );
+}
 
 /// T8 (D1): Ist K nicht erreichbar, wird die Datenbank **nicht geöffnet**
 /// (Inhalt und mtime gleich) — und „Erneut versuchen“ mit einem danach

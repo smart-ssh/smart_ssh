@@ -241,6 +241,10 @@ pub enum RootKeyAccess<'a> {
 pub struct NewMasterPassword {
     pub password: secrecy::SecretString,
     pub repeated: secrecy::SecretString,
+    /// Klarstellung 12: dasselbe Argument wie für die Wiederholung — die
+    /// Bestätigung der Warnung aus A13/E10 reist mit, und das Backend prüft
+    /// sie, statt sie der Maske zu glauben.
+    pub warning: crate::master_password::LossWarning,
 }
 
 /// Was `app-shell` an nativen Dialogen beisteuert. Als Trait, damit T3/T7/T8
@@ -269,8 +273,11 @@ pub trait StartupPrompt: Send + Sync {
     fn notify_started_over(&self, renamed_to: &str);
 
     /// A13: fragt ein neues Master-Passwort ab — zweimal, mit Warnung und
-    /// ausdrücklicher Bestätigung (beides macht die Maske, s.
-    /// [`StartupDialog::D1`] und A5 im Passwort-Modus).
+    /// ausdrücklicher Bestätigung (die Maske zeigt beides, s.
+    /// [`StartupDialog::D1`] und A5 im Passwort-Modus; geprüft werden beide
+    /// im Backend, Klarstellung 12 — ein Fragesteller, der die Bestätigung
+    /// nicht einholt, liefert [`crate::master_password::LossWarning::
+    /// NotConfirmed`], und dann wird nichts eingerichtet).
     ///
     /// `None` heißt abgebrochen; dann bleibt **alles** unverändert (A5).
     fn ask_for_new_master_password(&self) -> Option<NewMasterPassword>;
@@ -791,6 +798,7 @@ fn set_up_password(
         key,
         &password.password,
         &password.repeated,
+        password.warning,
         keyring,
     )
     .map_err(|err| {

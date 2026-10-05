@@ -91,7 +91,16 @@ describe("StartupPromptDialog", () => {
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "Ja, fortfahren" }));
 
-    expect(onAnswer).toHaveBeenCalledWith("confirm", "Passwort-0101-lang", "Passwort-0101-lang");
+    // Klarstellung 12: Die Bestätigung der Warnung reist mit — sie wird im
+    // Backend geprüft, der ausgegraute Knopf ist nur die freundliche
+    // Hälfte. Bliebe sie hier liegen, lehnte das Backend jede Einrichtung
+    // aus dem Startdialog ab.
+    expect(onAnswer).toHaveBeenCalledWith(
+      "confirm",
+      "Passwort-0101-lang",
+      "Passwort-0101-lang",
+      true,
+    );
   });
 
   it("gibt beim Abbrechen kein Passwort mit (A5/A13: nichts verändert)", () => {

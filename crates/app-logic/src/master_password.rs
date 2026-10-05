@@ -81,6 +81,11 @@ pub enum MasterPasswordError {
     NotInPasswordMode,
     /// Es gibt schon eine Verpackungsdatei.
     AlreadyInPasswordMode,
+    /// Klarstellung 12 (A13/E10): Die Warnung „ohne Passwort sind alle Daten
+    /// verloren" ist nicht ausdrücklich bestätigt.
+    ///
+    /// Es wird nichts verändert — der Riegel sitzt vor jedem Schreibzugriff.
+    LossWarningNotConfirmed,
 }
 
 impl std::fmt::Display for MasterPasswordError {
@@ -114,6 +119,14 @@ impl std::fmt::Display for MasterPasswordError {
             Self::AlreadyInPasswordMode => {
                 write!(f, "es ist schon ein Master-Passwort eingerichtet")
             }
+            // Klarstellung 12: Der Wortlaut sagt beides — was fehlt und
+            // dass nichts passiert ist.
+            Self::LossWarningNotConfirmed => write!(
+                f,
+                "die Warnung zum Master-Passwort ist nicht bestätigt. Ohne dieses Passwort sind \
+                 alle Daten verloren, und es gibt keine Wiederherstellung — bestätige das \
+                 ausdrücklich. Es ist nichts verändert"
+            ),
         }
     }
 }
@@ -325,6 +338,32 @@ pub enum KeychainTidyResult {
     NothingThere,
 }
 
+/// Ist die Warnung aus A13/E10 ausdrücklich bestätigt? (Klarstellung 12)
+///
+/// **Ein eigener Typ und kein `bool`**, aus demselben Grund wie bei
+/// [`KeychainOverwrite`]: An der Aufrufstelle soll stehen, *was* bestätigt
+/// wurde, und die Voreinstellung muss die vorsichtige sein. Ein `bool`
+/// würde beim Durchreichen durch drei Schichten zu `false` verrutschen,
+/// ohne dass es jemand liest — und `true` wäre an der Aufrufstelle nicht
+/// zuzuordnen.
+///
+/// **Warum das Backend es überhaupt prüft** (Klarstellung 12,
+/// Q-BL-0314-02, K3 entschieden): Länge und Wiederholung prüft es längst
+/// doppelt, weil ein Kommandoaufruf die Maske umgeht. Für die Bestätigung
+/// galt das nicht — das Häkchen hielt allein die Oberfläche, und ein
+/// direkter Aufruf von `set_up_master_password` richtete ein
+/// Master-Passwort ein, ohne dass die Warnung je gelesen worden sein muss.
+/// Nach E10 gibt es danach keine Wiederherstellung; genau dieser Schritt
+/// braucht die Zusage am wenigsten umgehbaren Ort.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LossWarning {
+    /// Standard: Es wird kein Master-Passwort eingerichtet und nichts
+    /// verändert.
+    NotConfirmed,
+    /// Der Nutzer hat die Warnung gelesen und ausdrücklich bestätigt.
+    ConfirmedByTheUser,
+}
+
 /// A13: Master-Passwort einrichten.
 ///
 /// Die Reihenfolge steht wörtlich in A13 und ist der ganze Punkt dieser
@@ -348,8 +387,22 @@ pub fn set_up_master_password(
     root_key: &[u8; 32],
     password: &SecretString,
     repeated: &SecretString,
+    warning: LossWarning,
     delete_from_keychain: Option<&dyn CredentialStore>,
 ) -> Result<(), MasterPasswordError> {
+    // **Der erste Riegel, vor allem anderen** (Klarstellung 12): „Jeder
+    // Weg, der ein Master-Passwort einrichtet, lehnt ohne diese Bestätigung
+    // ab und verändert nichts." Hier ist der eine Ort, durch den alle drei
+    // Wege gehen (Einstellungen, D1, A5/D4 im Passwort-Modus) — kein
+    // Aufrufer kann ihn überspringen, und der Typ zwingt jeden, die Frage
+    // zu beantworten.
+    if warning != LossWarning::ConfirmedByTheUser {
+        tracing::warn!(
+            "refusing to set up a master password: the data-loss warning was not confirmed; \
+             nothing was changed (Spec 0101, A13/E10, Klarstellung 12)"
+        );
+        return Err(MasterPasswordError::LossWarningNotConfirmed);
+    }
     check_new_password(password, repeated)?;
     if key_mode(db_path) == KeyMode::Password {
         return Err(MasterPasswordError::AlreadyInPasswordMode);

@@ -492,6 +492,7 @@
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Im Schlüsselbund liegt ein anderer Schlüssel. Es wurde nichts verändert — bestätige das Ersetzen, wenn du es willst.",
     "APP_LOCKED": "Smart SSH ist noch gesperrt. Entsperre es zuerst mit deinem Master-Passwort.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Dieser Vorgang passt nicht dazu, wo der Schlüssel gerade liegt. Es wurde nichts verändert — öffne die Einstellungen erneut, dort steht der aktive Modus.",
+    "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Die Warnung zum Master-Passwort ist nicht bestätigt. Ohne dieses Passwort sind alle Daten verloren, und es gibt keine Wiederherstellung — setze das Häkchen und richte es erneut ein. Es wurde nichts verändert.",
     "KEYCHAIN_KEY_MISMATCH": "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Es wurde nichts verändert — würde er gesichert, wäre die Datenbank beim nächsten Start unlesbar."
   },
   "mcpServer": {

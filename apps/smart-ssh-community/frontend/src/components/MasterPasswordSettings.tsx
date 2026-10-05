@@ -140,8 +140,13 @@ export function MasterPasswordSettings() {
             e.preventDefault();
             const chosen = password;
             const confirmation = repeated;
+            // Klarstellung 12: Das Häkchen reist mit ans Backend — dort
+            // wird es geprüft, nicht hier. Der Knopf bleibt ohne es
+            // ohnehin aus (`newPasswordIsUsable`); beides zusammen heißt,
+            // dass ein umgangenes Formular nichts einrichtet.
+            const warningConfirmed = acknowledged;
             void run(
-              () => setUpMasterPassword(chosen, confirmation),
+              () => setUpMasterPassword(chosen, confirmation, warningConfirmed),
               () => {
                 setDone(t("masterPassword.setUpDone"));
                 clearSecrets();
