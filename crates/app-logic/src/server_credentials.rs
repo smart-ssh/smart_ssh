@@ -125,9 +125,10 @@ pub fn resolve_sudo_password(
 /// Entfernen-Pfad (Spec 0071, A17 und die X6-Korrektur vom 2026-09-22).
 ///
 /// Liefert den `CredentialRef` zurück, wenn das Secret **nicht** entfernt
-/// werden konnte und damit im Schlüsselbund stehen bleibt. `NotFound` gilt
-/// als Erfolg (es gab nichts zu löschen) — dieselbe Idempotenz wie in
-/// `KeyringCredentialStore::delete`.
+/// werden konnte und damit im `credential_store` (seit Spec 0101, A9.1 die
+/// verschlüsselte Datenbank, nicht mehr der Schlüsselbund) stehen bleibt.
+/// `NotFound` gilt als Erfolg (es gab nichts zu löschen) — dieselbe
+/// Idempotenz wie in `KeyringCredentialStore::delete`.
 ///
 /// In jedem Fehlerfall zusätzlich eine Logzeile: Der Zustand darf nicht
 /// spurlos verschwinden, auch wenn der Aufrufer ihn (bei `delete_server`,
@@ -143,7 +144,7 @@ fn delete_user_requested_secret(
                 credential_ref = %r.as_str(),
                 error = %err,
                 "vom Nutzer angefordertes Entfernen eines Secrets ist fehlgeschlagen — \
-                 der Eintrag bleibt im Schlüsselbund"
+                 der Eintrag bleibt in der verschlüsselten Datenbank"
             );
             Some(r.clone())
         }
@@ -162,7 +163,8 @@ fn delete_user_requested_secret(
 /// ist hier sonst *nichts* geschehen — es gibt keinen Teilerfolg, den man
 /// melden könnte. Ein `Ok(())` wäre schlicht unwahr: Der Nutzer sähe „kein
 /// Sudo-Passwort hinterlegt", während das Passwort weiter im
-/// Schlüsselbund liegt und beim nächsten `sudo` wieder eingespeist würde.
+/// `credential_store` (seit Spec 0101, A9.1 die verschlüsselte Datenbank)
+/// liegt und beim nächsten `sudo` wieder eingespeist würde.
 ///
 /// Der Fehlerweg ist derselbe wie überall sonst (A13): ein stabiler Code,
 /// vom Frontend übersetzt — seit Spec 0101, A9.1 hängt er nicht mehr am
@@ -182,7 +184,8 @@ pub fn clear_sudo_password(
                 server_id = %server_id.0,
                 slot = "sudo_password",
                 error = %err,
-                "Sudo-Passwort konnte nicht entfernt werden — der Eintrag bleibt im Schlüsselbund"
+                "Sudo-Passwort konnte nicht entfernt werden — der Eintrag bleibt in der \
+                 verschlüsselten Datenbank"
             );
             Err(secret_store_error(err))
         }
