@@ -895,6 +895,47 @@ async fn test_t7_without_the_second_confirmation_no_file_is_renamed() {
     );
 }
 
+/// Klarstellung 9 (spec-reviewer Lauf 4, Fund 10): Die Kennung erkennt
+/// **denselben** Schlüssel wieder und einen anderen nicht.
+///
+/// Darauf steht die Prüfung im Einrichten aus den Einstellungen: Es verpackt
+/// nur den K, mit dem die Datenbank wirklich offen ist. Verpackte es einen
+/// abweichenden Schlüsselbund-Eintrag, gäbe es beim nächsten Start D2 und
+/// Totalverlust — ohne dass dazwischen etwas auffiele.
+#[test]
+fn test_the_root_key_fingerprint_recognises_the_same_key_and_no_other() {
+    use ssh_manager_core::crypto::root_key_fingerprint;
+
+    let key = [0x11u8; 32];
+    let other = [0x12u8; 32];
+
+    assert_eq!(root_key_fingerprint(&key), root_key_fingerprint(&key));
+    assert_ne!(
+        root_key_fingerprint(&key),
+        root_key_fingerprint(&other),
+        "ein anderer Schlüssel muss eine andere Kennung ergeben — sonst taugt die Prüfung \
+         im Einrichten nichts"
+    );
+    // Die Kennung ist **nicht** der Schlüssel und auch nicht der
+    // Datenbankschlüssel (Domänentrennung, eigene `info`-Zeichenkette).
+    assert_ne!(
+        root_key_fingerprint(&key).as_slice(),
+        key.as_slice(),
+        "die Kennung darf K nicht einfach durchreichen"
+    );
+    let fingerprint_hex: String = root_key_fingerprint(&key)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    assert!(
+        !secrecy::ExposeSecret::expose_secret(
+            &ssh_manager_core::crypto::DatabaseKey::from_root_key(&key).pragma_value()
+        )
+        .contains(&fingerprint_hex),
+        "die Kennung darf nicht der Datenbankschlüssel sein (eigene `info`-Zeichenkette)"
+    );
+}
+
 /// **T7, Variante Passwort-Modus** (Klarstellung 9, A5): „Neu anfangen" aus
 /// D3, während K in einer unbrauchbaren Verpackungsdatei steckt.
 ///

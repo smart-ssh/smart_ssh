@@ -168,6 +168,19 @@ impl RootKey {
         Self { bytes }
     }
 
+    /// Nimmt einen frisch erzeugten K in den schützenden Typ (A19,
+    /// Klarstellung 9).
+    ///
+    /// **Das übergebene Array wird dabei überschrieben**, nicht nur
+    /// kopiert: Sonst bliebe genau die Kopie liegen, die dieser Typ
+    /// vermeiden soll. Der Aufrufer gibt K damit wirklich ab.
+    pub fn take_from(bytes: &mut [u8; DATABASE_KEY_LEN]) -> Self {
+        use zeroize::Zeroize;
+        let taken = Zeroizing::new(*bytes);
+        bytes.zeroize();
+        Self::new(taken)
+    }
+
     /// Die rohen Bytes — für den Chat-Cipher und die Ableitung des
     /// Datenbankschlüssels, die beide `[u8; 32]` brauchen.
     pub fn expose(&self) -> &[u8; DATABASE_KEY_LEN] {

@@ -276,6 +276,10 @@ pub(crate) async fn open_and_assemble(
 
     let app_state = AppState {
         sessions: SessionManager::new(),
+        // Klarstellung 9: die Kennung des K, mit dem diese Datenbank gerade
+        // geöffnet wurde — damit das Einrichten aus den Einstellungen
+        // prüfen kann, dass es denselben Schlüssel verpackt (Fund 10).
+        root_key_fingerprint: ssh_manager_core::crypto::root_key_fingerprint(&chat_content_key),
         profile_store: Arc::new(profile_store),
         credential_store: Arc::new(credential_store),
         // Spec 0076, §4.2: zustandslos — sie hält nichts fest, weil bei

@@ -36,6 +36,36 @@ pub const DATABASE_KEY_LEN: usize = 32;
 /// bei jeder Änderung daran.
 pub const DATABASE_KEY_HKDF_INFO: &[u8] = b"smart-ssh/db-key/v1";
 
+/// Spec 0101, Klarstellung 9: die Kennung, mit der ein K **wiedererkannt**
+/// wird, ohne ihn aufzubewahren.
+///
+/// Eigene `info`-Zeichenkette, also eine andere Ableitung als der
+/// Datenbankschlüssel — Domänentrennung: Wer die Kennung sieht, kann daraus
+/// nichts über den Datenbankschlüssel schließen, und umgekehrt.
+pub const ROOT_KEY_FINGERPRINT_HKDF_INFO: &[u8] = b"smart-ssh/root-key-fingerprint/v1";
+
+/// Eine Kennung von K, die man sich merken darf.
+///
+/// **Wofür** (spec-reviewer Lauf 4, Fund 10): Das Einrichten eines
+/// Master-Passworts aus den Einstellungen liest K aus dem Schlüsselbund.
+/// Weicht der Eintrag seit dem Start ab — zweite Installation, manuelle
+/// Änderung, ein Rest aus A17 —, verpackte die App einen Schlüssel, mit dem
+/// die offene Datenbank **nicht** zu öffnen ist: beim nächsten Start D2 und
+/// Totalverlust. Mit dieser Kennung lässt sich das vorher erkennen.
+///
+/// **Warum eine Kennung und nicht K selbst:** K im `AppState` zu halten
+/// hieße, ihn für die ganze Sitzung an einer weiteren Stelle liegen zu
+/// lassen — das Gegenteil von A19. Die Kennung ist eine Einwegableitung
+/// (HKDF-SHA256 mit eigener `info`); sie genügt, um „derselbe Schlüssel?"
+/// zu beantworten, und taugt zu nichts anderem.
+pub fn root_key_fingerprint(root_key: &[u8; DATABASE_KEY_LEN]) -> [u8; DATABASE_KEY_LEN] {
+    let hkdf = Hkdf::<Sha256>::new(None, root_key);
+    let mut bytes = [0u8; DATABASE_KEY_LEN];
+    hkdf.expand(ROOT_KEY_FINGERPRINT_HKDF_INFO, &mut bytes)
+        .expect("32 Byte sind eine gültige Länge für HKDF-SHA256");
+    bytes
+}
+
 /// Der abgeleitete Datenbankschlüssel.
 ///
 /// Eigener Typ statt `[u8; 32]`, damit A2 („erscheint nicht in Log,

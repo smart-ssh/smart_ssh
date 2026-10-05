@@ -50,6 +50,15 @@ pub type ActionId = Uuid;
 
 pub struct AppState {
     pub sessions: SessionManager,
+    /// Spec 0101, Klarstellung 9: die Kennung des K, mit dem die Datenbank
+    /// **tatsächlich** offen ist (s.
+    /// [`ssh_manager_core::crypto::root_key_fingerprint`]).
+    ///
+    /// Bewusst die Kennung und nicht K: Sie beantwortet „ist das derselbe
+    /// Schlüssel?" und taugt zu nichts anderem. K hier zu halten wäre eine
+    /// weitere Stelle, an der er die ganze Sitzung liegt — das Gegenteil von
+    /// A19.
+    pub root_key_fingerprint: [u8; 32],
     pub profile_store: Arc<dyn ProfileStore>,
     // `CredentialStore` deklariert (anders als `ProfileStore`) keinen
     // `Send + Sync`-Bound im Trait selbst (s. `core::profiles::credentials`)
