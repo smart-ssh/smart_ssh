@@ -598,3 +598,222 @@ fn test_an_unreadable_wrapping_file_is_a_way_out_too() {
         "sonst sperrt eine hängende Verknüpfung die Installation dauerhaft aus"
     );
 }
+
+/// T17 (Spec 0101 §7, ERHÖHT), Passwort-Modus: **Weder das Log noch das
+/// Diagnosepaket tragen K, den Datenbankschlüssel, das Master-Passwort oder
+/// ein Secret** — gefahren über den ganzen Modus (einrichten, falsches
+/// Passwort, entsperren, Schlüsselbund aufräumen, Passwort ändern, zurück
+/// auf den Schlüsselbund, unbrauchbare Datei).
+///
+/// **Warum echtes Log und nicht nur Fehlertexte:** `test_no_error_text_
+/// carries_secret_material` prüft die Texte, die der Nutzer sieht. T17 fragt
+/// nach dem, was auf die Platte geht. Aufgezeichnet wird deshalb der
+/// tatsächliche `tracing`-Strom dieses Threads im selben JSON-Format, das
+/// `logging::init_logging` schreibt, und genau dieser Strom geht danach in
+/// `build_diagnostics_bundle` — dieselbe Form, in der
+/// `logging::read_last_log_lines` ihn dem Diagnose-Kommando liefert.
+///
+/// **Zwei Aussagen über das Paket**, und beide sind nötig: Die Positivliste
+/// aus Spec 0063 kennt keine Zeile dieses Moduls, das Paket lässt sie also
+/// alle draußen (erste Aussage, fail-closed). Käme je eine davon auf die
+/// Liste, bliebe die zweite Aussage — keiner der Suchbegriffe im Paket —
+/// als Wächter übrig.
+///
+/// Die drei Zeilen, die der Test selbst schreibt, sind ausdrücklich
+/// gekennzeichnet: Sie bilden die Produktiv-Aufrufstellen in
+/// `app_shell::commands::master_password` nach (`detail_for_log`, `?state`,
+/// `?health`), die aus diesem Crate nicht erreichbar sind.
+#[test]
+fn test_t17_no_key_password_or_secret_in_the_log_or_the_diagnostics_bundle() {
+    use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine;
+
+    use crate::diagnostics::{build_diagnostics_bundle, DiagnosticsInput};
+    use crate::test_support::log_capture;
+    use ssh_manager_core::ai::DefaultOutputRedactor;
+    use ssh_manager_core::crypto::DatabaseKey;
+
+    /// Nicht `[0x11; 32]` wie oben: ein Schlüssel mit lauter verschiedenen
+    /// Bytes, damit auch ein **halb** durchgesickerter Schlüssel auffällt
+    /// (bei einem Wiederholungsmuster wäre jede Teilfolge dieselbe).
+    const T17_KEY: [u8; 32] = [
+        0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce,
+        0xcf, 0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd,
+        0xde, 0xdf,
+    ];
+    const T17_PASSWORD: &str = "Passwort-0101-Mondlicht";
+    const T17_NEW_PASSWORD: &str = "Passwort-0101-Sonnenwind";
+    const T17_SECRET: &str = "Secret-0101";
+
+    fn hex_of(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    log_capture::start_recording();
+
+    let dir = Dir::new("t17-log");
+    let db = dir.db();
+    let keyring = CountingKeychain::with_root_key(&T17_KEY);
+    // Ein Secret, das nichts mit K zu tun hat, im selben Speicher: Wer den
+    // Speicher oder ein `get`-Ergebnis als Ganzes loggte, nähme es mit.
+    keyring.entries.lock().unwrap().insert(
+        "server/0101/password".to_string(),
+        SecretString::from(T17_SECRET.to_string()),
+    );
+
+    let password = pw(T17_PASSWORD);
+    let new_password = pw(T17_NEW_PASSWORD);
+
+    // T13: einrichten.
+    set_up_master_password(&db, &T17_KEY, &password, &password, Some(&keyring)).unwrap();
+
+    // A17: falsches Passwort — und die Fehler-Nutzlast so ins Log, wie
+    // `to_command_error` es tut.
+    let wrong = unlock(&db, &pw("Passwort-0101-falsch-aber-lang")).unwrap_err();
+    if let Some(detail) = wrong.detail_for_log() {
+        tracing::warn!(detail, "nachgebildete Aufrufstelle: to_command_error");
+    }
+    tracing::warn!(error = %wrong, "nachgebildete Aufrufstelle: to_command_error");
+
+    // A16/A17: entsperren und den Schlüsselbund aufräumen. Dafür ein
+    // Schlüsselbund, in dem K noch liegt — der oben ist nach dem Einrichten
+    // leer; genau das ist der abgebrochene Wechsel aus T16.
+    let root_key = unlock(&db, &password).unwrap();
+    assert_eq!(root_key.expose(), &T17_KEY, "sonst prüft der Rest nichts");
+    let aborted_switch = CountingKeychain::with_root_key(&T17_KEY);
+    assert_eq!(
+        tidy_up_keychain_after_unlock(&aborted_switch, &root_key),
+        KeychainTidyResult::Deleted
+    );
+
+    // Die Stelle, an der ein `#[derive(Debug)]` auf `RootKeyState` K ins
+    // Log schriebe — `app_shell::commands::master_password` loggt `?other`
+    // genau so. Hier mit `Present`, also dem einzigen Fall, der K trägt.
+    let keyring_with_key = CountingKeychain::with_root_key(&T17_KEY);
+    let state = ssh_manager_core::crypto::read_root_key(&keyring_with_key);
+    tracing::warn!(?state, "nachgebildete Aufrufstelle: ?state im Kommando");
+
+    // T16: ein abweichender Eintrag wird nicht gelöscht (eigene Log-Zeile).
+    let other_keyring = CountingKeychain::with_root_key(&OTHER_KEY);
+    assert_eq!(
+        tidy_up_keychain_after_unlock(&other_keyring, &root_key),
+        KeychainTidyResult::LeftAlone
+    );
+
+    // A15: Passwort ändern und zurück auf einen Schlüsselbund, der nicht
+    // antwortet (`KeychainFailed` mit Nutzlast im `detail`).
+    change_master_password(&db, &password, &new_password, &new_password).unwrap();
+    let unreadable = CountingKeychain {
+        fail_read: true,
+        ..Default::default()
+    };
+    let failed = switch_to_keychain(&db, &new_password, &unreadable).unwrap_err();
+    if let Some(detail) = failed.detail_for_log() {
+        tracing::warn!(detail, "nachgebildete Aufrufstelle: to_command_error");
+    }
+
+    // Klarstellung 9: eine unbrauchbare Datei beurteilen (eigene Log-Zeile).
+    let junk_dir = Dir::new("t17-junk");
+    std::fs::write(wrapping_file_path(&junk_dir.db()), b"keine Verpackung").unwrap();
+    let health = wrapping_health(&junk_dir.db());
+    assert_eq!(health, WrappingHealth::Unusable);
+    tracing::warn!(?health, "nachgebildete Aufrufstelle: ?health im Kommando");
+
+    let log = log_capture::recorded_text();
+
+    // Zuerst der Beweis, dass überhaupt aufgezeichnet wurde: ohne ihn wäre
+    // jede Abwesenheits-Aussage unten wertlos.
+    for expected in [
+        "master password set up",
+        "removed the root key from the OS keychain after unlocking",
+        "differs from the unwrapped one",
+        "master password changed",
+        "cannot yield the root key with any password",
+        "nachgebildete Aufrufstelle",
+    ] {
+        assert!(
+            log.contains(expected),
+            "die Aufzeichnung hat „{expected}“ nicht gesehen — der Test prüfte nichts"
+        );
+    }
+
+    let log_lines: Vec<String> = log.lines().map(str::to_string).collect();
+    let bundle = build_diagnostics_bundle(
+        &DiagnosticsInput {
+            version_display: "0.5.1 (test)".to_string(),
+            build_type: "Dev",
+            edition: "Community".to_string(),
+            os: "macos",
+            arch: "aarch64",
+            os_version: Some("15.1".to_string()),
+            db_path: db.display().to_string(),
+            log_dir: dir.path.display().to_string(),
+            host_key_path: dir.path.join("host_keys.json").display().to_string(),
+            provider_types: Some(vec!["anthropic".to_string()]),
+            server_count: Some(1),
+        },
+        &log_lines,
+        &DefaultOutputRedactor::new(),
+    );
+
+    // Spec 0063, Positivliste: keine Zeile dieses Moduls gehört ins Paket.
+    assert!(
+        !bundle.contains("master password set up"),
+        "die Positivliste des Diagnosepakets darf keine Zeile dieses Moduls durchlassen"
+    );
+
+    let pragma = DatabaseKey::from_root_key(&T17_KEY).pragma_value();
+    let pragma_hex = pragma
+        .expose_secret()
+        .trim_start_matches("x'")
+        .trim_end_matches('\'')
+        .to_string();
+    let needles: Vec<(&str, String)> = vec![
+        ("das Master-Passwort", T17_PASSWORD.to_string()),
+        ("das neue Master-Passwort", T17_NEW_PASSWORD.to_string()),
+        ("K als Hex", hex_of(&T17_KEY)),
+        (
+            "K als Hex in Großschreibung",
+            hex_of(&T17_KEY).to_uppercase(),
+        ),
+        ("K als Base64", BASE64.encode(T17_KEY)),
+        ("K als Byte-Liste aus {:?}", format!("{T17_KEY:?}")),
+        (
+            "der Datenbankschlüssel als PRAGMA-Wert",
+            pragma.expose_secret().to_string(),
+        ),
+        ("der Datenbankschlüssel als Hex", pragma_hex.clone()),
+        (
+            "der Datenbankschlüssel als Hex in Großschreibung",
+            pragma_hex.to_uppercase(),
+        ),
+        ("ein Secret aus dem Schlüsselbund", T17_SECRET.to_string()),
+    ];
+
+    for (what, needle) in &needles {
+        assert!(
+            !needle.is_empty(),
+            "leerer Suchbegriff für {what} — der Test prüfte nichts"
+        );
+        assert!(
+            !log.contains(needle.as_str()),
+            "T17: {what} steht im Log (gesucht: {needle})"
+        );
+        assert!(
+            !bundle.contains(needle.as_str()),
+            "T17: {what} steht im Diagnosepaket (gesucht: {needle})"
+        );
+    }
+
+    // Und die beiden Typen, über die es am kürzesten gehen würde: ein
+    // `{:?}` auf dem Schlüssel selbst.
+    assert_eq!(
+        format!("{:?}", DatabaseKey::from_root_key(&T17_KEY)),
+        "DatabaseKey(<nicht anzeigbar>)"
+    );
+    assert_eq!(
+        format!("{root_key:?}"),
+        "RootKey(<nicht anzeigbar>)",
+        "RootKey darf K nicht über Debug zeigen"
+    );
+}
