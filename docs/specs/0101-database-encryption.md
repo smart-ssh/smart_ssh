@@ -334,8 +334,10 @@ Zustand, dann MCP-Server.
   Dialog oder eine Meldung, keiner endet still.
 - **Keine stillen Rückfälle:** kein Weiterlauf im Klartext, kein neuer K außer
   in den Fällen aus A3 („Ein neuer K entsteht nur …“), kein Wechsel des Modus ohne Nutzerhandlung.
-- **Log/Redaction** (Spec 0094): keine Schlüssel, Passwörter, Secrets, kein
-  Token in Log, Diagnosepaket oder DTO; neue Log-Zeilen mit festen Texten.
+- **Log/Redaction** (Spec 0094): keine Schlüssel, Passwörter, Secrets in Log,
+  Diagnosepaket oder DTO; das MCP-Token nicht in Log und Diagnosepaket und
+  persistiert nur in der verschlüsselten Datenbank (Klarstellung 8); neue
+  Log-Zeilen mit festen Texten.
 - **Neue Datensenken:** Secrets-Tabelle (nur in der verschlüsselten Datei),
   Verpackungsdatei (nur Chiffrat), Zwischendatei (verschlüsselt).
 - **MCP:** Token-Wert bleibt bei der Übernahme gleich; vor der Entsperrung
@@ -471,6 +473,13 @@ Keine.
    „nichtleeres `-wal` neben der Datei“ wird an der Kopie geprüft. Der
    Produktivcode bleibt unverändert; eine zweite laufende Instanz bricht die
    Umwandlung weiterhin ab.
+
+8. **MCP-Token in der Anzeige (§6, Spec 0028 §9):** Das Einstellungs-DTO
+   für den MCP-Server liefert das Token weiterhin an das Frontend, denn
+   Spec 0028 §9 verlangt seine Anzeige. §6 verbietet das Token in Log,
+   Diagnosepaket und in jeder Speicherung außerhalb der verschlüsselten
+   Datenbank, nicht in diesem DTO. Ein leeres erwartetes Token weist die
+   MCP-Middleware in dieser Spec nicht zurück; das folgt als eigener Schritt.
 
 ## Umsetzung
 
