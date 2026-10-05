@@ -486,11 +486,13 @@
     "KEYCHAIN_UNAVAILABLE": "The system keyring is unavailable. While this is the case, no API key, no server password, no passphrase and no sudo password can be saved or read. The diagnostics view in the settings shows the exact reason and the next step.",
     "KEYCHAIN_ACCESS_FAILED": "Access to the system keyring failed. It may be locked, or access was denied. Please try again — the exact reason is in the log.",
     "WRONG_MASTER_PASSWORD": "Wrong password, or the file is damaged. The two cannot be told apart from the outside. Nothing was changed.",
-    "MASTER_PASSWORD_FILE_FAILED": "The key file next to your database could not be read or written. Nothing was changed; the log names the cause.",
+    "MASTER_PASSWORD_FILE_FAILED": "The key to your database could not be read or written just now. Nothing was changed; the cause is in the log.",
     "MASTER_PASSWORD_REJECTED": "The master password was rejected: at least 12 characters, and both entries must match.",
     "STARTUP_FAILED": "The startup did not complete. Nothing was changed; the log names the cause.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "The keychain holds a different key. Nothing was changed — confirm the replacement if that is what you want.",
-    "APP_LOCKED": "Smart SSH is still locked. Unlock it with your master password first."
+    "APP_LOCKED": "Smart SSH is still locked. Unlock it with your master password first.",
+    "MASTER_PASSWORD_MODE_MISMATCH": "This operation does not match where the key is currently kept. Nothing was changed — reopen the settings, they show the active mode.",
+    "KEYCHAIN_KEY_MISMATCH": "The key in the keychain does not belong to this database. Nothing was changed — storing it would make the database unreadable at the next startup."
   },
   "mcpServer": {
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",

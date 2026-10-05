@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { characterCount } from "../passwordLength";
 import {
   changeMasterPassword,
   commandErrorCode,
@@ -91,7 +92,7 @@ export function MasterPasswordSettings() {
   }
 
   const newPasswordIsUsable =
-    password.length >= MINIMUM_PASSWORD_LENGTH && password === repeated && acknowledged;
+    characterCount(password) >= MINIMUM_PASSWORD_LENGTH && password === repeated && acknowledged;
 
   const switchToKeychain = (replaceAnotherKey: boolean) => {
     const currentPassword = switchCurrent;
@@ -162,7 +163,7 @@ export function MasterPasswordSettings() {
             value={repeated}
             onChange={setRepeated}
           />
-          {password.length > 0 && password.length < MINIMUM_PASSWORD_LENGTH && (
+          {password.length > 0 && characterCount(password) < MINIMUM_PASSWORD_LENGTH && (
             <p className="text-sm text-amber-300">
               {t("masterPassword.passwordTooShort", { minimum: MINIMUM_PASSWORD_LENGTH })}
             </p>
@@ -230,7 +231,7 @@ export function MasterPasswordSettings() {
               disabled={
                 busy ||
                 current.length === 0 ||
-                password.length < MINIMUM_PASSWORD_LENGTH ||
+                characterCount(password) < MINIMUM_PASSWORD_LENGTH ||
                 password !== repeated
               }
               className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"

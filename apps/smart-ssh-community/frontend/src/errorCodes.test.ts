@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { FIVE_MINUTE_PATH_ERROR_CODES, translateErrorCode } from "./errorCodes";
+import {
+  FIVE_MINUTE_PATH_ERROR_CODES,
+  MASTER_PASSWORD_ERROR_CODES,
+  translateErrorCode,
+} from "./errorCodes";
 import { testI18n } from "./testI18n";
 
 /** Testdouble für `useTranslation()`s `t` — löst bekannte Keys auf einen
@@ -140,6 +144,44 @@ describe("FIVE_MINUTE_PATH_ERROR_CODES", () => {
   it("enthält keine doppelten Codes", () => {
     const unique = new Set(FIVE_MINUTE_PATH_ERROR_CODES);
     expect(unique.size).toBe(FIVE_MINUTE_PATH_ERROR_CODES.length);
+  });
+});
+
+// Spec 0101, A20/T14 („die Codes der Etappe 3 übersetzt"): jeder Code des
+// Master-Passworts ist bekannt und hat einen nicht-leeren, eigenen DE- und
+// EN-Text. *Gegenbeweis:* Ein Code, der in `KNOWN_ERROR_CODES` steht und in
+// einer Locale-Datei fehlt, liefert `errors.<CODE>` als rohen Schlüssel —
+// dieser Test wird dann rot (geprüft, indem ein Schlüssel entfernt wurde).
+describe("MASTER_PASSWORD_ERROR_CODES", () => {
+  const FALLBACK = "__FALLBACK_SENTINEL__";
+
+  it.each(MASTER_PASSWORD_ERROR_CODES)("%s ist bekannt und DE/EN unterscheiden sich", (code) => {
+    const de = translateErrorCode(testI18n.getFixedT("de"), code, FALLBACK);
+    const en = translateErrorCode(testI18n.getFixedT("en"), code, FALLBACK);
+
+    expect(de).not.toBe(FALLBACK);
+    expect(en).not.toBe(FALLBACK);
+    // Ein fehlender Schlüssel käme als `errors.<CODE>` durch — das ist
+    // kein Text, den ein Nutzer lesen soll.
+    expect(de).not.toBe(`errors.${code}`);
+    expect(en).not.toBe(`errors.${code}`);
+    expect(de).not.toBe(en);
+  });
+
+  it("behauptet in keinem Text eine Schlüsseldatei, wo es keine geben muss", () => {
+    // Klarstellung 9, Punkt 5 (Review-Fund Runde 1 zu Commit 11): Diese
+    // beiden Fälle treten im **Schlüsselbund**-Modus auf, in dem es keine
+    // Verpackungsdatei gibt. Vorher fielen sie unter
+    // `MASTER_PASSWORD_FILE_FAILED`, und der Nutzer las „Die Schlüsseldatei
+    // neben deiner Datenbank ließ sich nicht lesen".
+    for (const code of ["KEYCHAIN_KEY_MISMATCH", "MASTER_PASSWORD_MODE_MISMATCH"]) {
+      expect(translateErrorCode(testI18n.getFixedT("de"), code, FALLBACK)).not.toMatch(
+        /Schlüsseldatei/,
+      );
+      expect(translateErrorCode(testI18n.getFixedT("en"), code, FALLBACK)).not.toMatch(
+        /key file/i,
+      );
+    }
   });
 });
 

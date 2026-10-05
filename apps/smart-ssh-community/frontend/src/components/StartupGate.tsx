@@ -66,6 +66,14 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
    * Aufruf, der im Backend auf der Entsperr-Sperre wartet, bis die erste
    * Frage beantwortet ist. */
   const continuedInTheWindow = useRef(false);
+  /** Zählt die ausdrücklichen „Erneut versuchen" auf dieser Maske. Nötig
+   * als Abhängigkeit des Effekts: Der Bildschirm bleibt derselbe, der
+   * Effekt liefe also nicht erneut, wenn nur der Merker zurückgesetzt
+   * würde. */
+  const [continueAttempt, setContinueAttempt] = useState(0);
+  /** Steht der Zuhörer für `startup:prompt`? Erst dann darf ein Kommando
+   * laufen, dessen Antwort eine Frage im Fenster ist. */
+  const [listening, setListening] = useState(false);
 
   /** Den Zustand neu holen. **Löscht die Meldung nicht** — sonst wischte
    * das Nachfragen nach einem Fehlversuch (s. [`run`]) genau die Meldung
@@ -85,35 +93,47 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
   }, [refresh]);
 
   useEffect(() => {
-    let unlistenPrompt: (() => void) | undefined;
-    let unlistenUnlocked: (() => void) | undefined;
     let cancelled = false;
-
-    const start = async () => {
-      unlistenPrompt = await onStartupPrompt((request) => {
-        if (request.kind === "notice") {
-          setNotice(request);
-          return;
-        }
-        setQuestion(request);
-        setQuestionSerial((serial) => serial + 1);
-      });
-      unlistenUnlocked = await onStartupUnlocked(() => {
-        // A16: Erst jetzt sind `store` und `os` registriert — die
-        // gespeicherte Sprachwahl aus Spec 0024 wird nachgeholt (ADR 0095
-        // §8). Ein Fehler dabei ist kein Grund, die App nicht zu zeigen.
-        void applyStoredLanguage().catch((err: unknown) => console.error(err));
-        void refresh();
-      });
+    // Die Versprechen, nicht die aufgelösten Funktionen: Läuft die
+    // Aufräumfunktion, **bevor** `listen` zurückgekommen ist, muss sie
+    // trotzdem abmelden können — sonst bleibt ein Zuhörer stehen, und beim
+    // nächsten Mounten (React im Entwicklungsmodus) gibt es zwei, die
+    // dieselbe Frage doppelt verarbeiten (Review-Fund Runde 1).
+    const prompt = onStartupPrompt((request) => {
       if (cancelled) return;
+      if (request.kind === "notice") {
+        setNotice(request);
+        return;
+      }
+      setQuestion(request);
+      setQuestionSerial((serial) => serial + 1);
+    });
+    const unlocked = onStartupUnlocked(() => {
+      if (cancelled) return;
+      // A16: Erst jetzt sind `store` und `os` registriert — die
+      // gespeicherte Sprachwahl aus Spec 0024 wird nachgeholt (ADR 0095
+      // §8). Ein Fehler dabei ist kein Grund, die App nicht zu zeigen.
+      void applyStoredLanguage().catch((err: unknown) => console.error(err));
+      void refresh();
+    });
+
+    void (async () => {
+      // **Erst der Zuhörer, dann alles andere.** `emit` im Backend liefert
+      // `Ok`, auch wenn niemand zuhört: Ginge die erste Frage verloren,
+      // liefe sie dort in die Zeitgrenze von fünf Minuten, und der Start
+      // bräche mit „keine Antwort erhalten" ab. Der Merker unten ist die
+      // Zusage, dass kein Kommando vorher läuft — vorher hing es allein an
+      // der Reihenfolge zweier IPC-Nachrichten (Review-Fund Runde 1).
+      await Promise.all([prompt, unlocked]);
+      if (cancelled) return;
+      setListening(true);
       if (!initialState) await refresh();
-    };
-    void start();
+    })();
 
     return () => {
       cancelled = true;
-      unlistenPrompt?.();
-      unlistenUnlocked?.();
+      void prompt.then((unlisten) => unlisten()).catch(() => {});
+      void unlocked.then((unlisten) => unlisten()).catch(() => {});
     };
   }, [initialState, refresh]);
 
@@ -121,15 +141,20 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
   // D1 gelandet und soll im Fenster weitergehen — dort gibt es das
   // Eingabefeld, das die nativen Dialoge nicht haben. Der Aufruf setzt den
   // Ablauf fort; die Wahl selbst fällt im Dialog D1, der daraufhin kommt.
+  //
+  // **Erst, wenn der Zuhörer steht** (`listening`): Der Dialog D1 kommt als
+  // Ereignis zurück, und ein verlorenes Ereignis wäre hier ein Hänger von
+  // fünf Minuten.
   useEffect(() => {
+    if (!listening) return;
     if (state?.screen !== "setUpMasterPassword") return;
     if (continuedInTheWindow.current) return;
     continuedInTheWindow.current = true;
     void run(() => unlockWithMasterPassword(""));
-    // Abhängigkeit ist allein der Bildschirm: `run` entsteht bei jedem
-    // Render neu, und der Merker oben stellt ohnehin sicher, dass es bei
-    // genau einem Aufruf bleibt.
-  }, [state?.screen]);
+    // Abhängigkeiten sind allein der Bildschirm und der Zuhörer: `run`
+    // entsteht bei jedem Render neu, und der Merker oben stellt ohnehin
+    // sicher, dass es bei genau einem Aufruf bleibt.
+  }, [listening, state?.screen, continueAttempt]);
 
   async function run(action: () => Promise<StartupStateDto>) {
     setBusy(true);
@@ -266,7 +291,34 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
             </Actions>
           </>
         ) : (
-          <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.continuingInTheWindow")}</p>
+          <>
+            <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.continuingInTheWindow")}</p>
+            {/* **Diese Maske braucht eigene Knöpfe** (Review-Fund Runde 1,
+              * A16/Spec 0059): Wählt der Nutzer im Dialog D1 „Beenden",
+              * kommt der Startablauf als Fehler zurück („Der Start wurde
+              * abgebrochen") — und der Bildschirm bleibt dieser. Ohne
+              * Knöpfe hätte „Beenden" dann nicht beendet, und es gäbe
+              * keinen Weg mehr aus der App außer dem Fenstersystem. */}
+            <Actions>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  // Noch einmal in den Startablauf: Der Merker wird
+                  // zurückgesetzt, damit der Dialog erneut erscheint.
+                  continuedInTheWindow.current = false;
+                  setContinueAttempt((attempt) => attempt + 1);
+                  setError(null);
+                }}
+                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {t("startup.answers.retry")}
+              </button>
+              <Secondary onClick={() => void quitApplication()}>
+                {t("startup.answers.quit")}
+              </Secondary>
+            </Actions>
+          </>
         )}
 
         {error && (

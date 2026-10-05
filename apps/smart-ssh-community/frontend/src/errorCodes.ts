@@ -13,6 +13,24 @@
  * statt implizit "alles in `KNOWN_ERROR_CODES`" — die größere Liste
  * enthält auch Filter-/Formular-Codes außerhalb dieses Pfads, für die die
  * "Ursache + nächster Schritt"-Anforderung nicht gilt. */
+/** Spec 0101, A20/T14: die Codes der Etappe 3 (Master-Passwort). Eigene,
+ * geprüfte Liste aus demselben Grund wie [`FIVE_MINUTE_PATH_ERROR_CODES`] —
+ * `errorCodes.test.ts` prüft für jeden davon, dass er bekannt ist und einen
+ * eigenen DE- **und** EN-Text hat. Ohne diese Liste wäre ein Code, der in
+ * `KNOWN_ERROR_CODES` steht und in einer Locale-Datei fehlt, als roher
+ * Schlüssel (`errors.APP_LOCKED`) sichtbar und von keinem Test gefangen
+ * (Review-Fund Runde 1 zu Commit 11). */
+export const MASTER_PASSWORD_ERROR_CODES = [
+  "WRONG_MASTER_PASSWORD",
+  "MASTER_PASSWORD_FILE_FAILED",
+  "MASTER_PASSWORD_REJECTED",
+  "MASTER_PASSWORD_MODE_MISMATCH",
+  "STARTUP_FAILED",
+  "KEYCHAIN_HOLDS_ANOTHER_KEY",
+  "KEYCHAIN_KEY_MISMATCH",
+  "APP_LOCKED",
+] as const;
+
 export const FIVE_MINUTE_PATH_ERROR_CODES = [
   "AI_AUTH_FAILED",
   "AI_MODEL_NOT_FOUND",
@@ -159,8 +177,16 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // Oberfläche tut in beiden Fällen dasselbe. Der Unterschied steht im
   // Text, den das Backend mitschickt.
   "MASTER_PASSWORD_FILE_FAILED",
-  // A13: zu kurz, nicht wiederholt, oder im falschen Modus eingerichtet.
+  // A13: zu kurz oder nicht wiederholt.
   "MASTER_PASSWORD_REJECTED",
+  // Review-Fund Runde 1 zu Commit 11: Der Vorgang passt nicht zum aktiven
+  // Modus (A18) — kein Dateifehler, und als einer gemeldet behauptete die
+  // Meldung einen Zustand, der nicht vorliegt (Klarstellung 9, Punkt 5).
+  "MASTER_PASSWORD_MODE_MISMATCH",
+  // Derselbe Fund: Der Schlüssel im Schlüsselbund gehört nicht zu dieser
+  // Datenbank. Im Schlüsselbund-Modus gibt es gar keine Schlüsseldatei —
+  // „ließ sich nicht lesen" führte dort in die falsche Fehlersuche.
+  "KEYCHAIN_KEY_MISMATCH",
   // A16: Der Start ist nach dem Entsperren gescheitert oder abgebrochen.
   "STARTUP_FAILED",
   // Klarstellung 10b: Im Schlüsselbund liegt ein **anderer** Schlüssel. Der
