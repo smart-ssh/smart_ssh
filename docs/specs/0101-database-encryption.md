@@ -503,6 +503,27 @@ Keine.
    - A19 auch für K im Entsperrergebnis.
    - Die Tests T7 (Variante Passwort-Modus), T13, T17 und T18 vollständig.
 
+10. **Vor Commit 11, zweiter Teil (K2, Punkt b K3 entschieden):**
+    - a. Die Verpackungsdatei wird nach Fehlerart eingeordnet wie der
+      Schlüsselbund in A3: Fehlt die Datei oder lässt sie sich nicht lesen
+      (Rechte, E/A-Fehler, von einem anderen Programm gesperrt), gilt sie als
+      *nicht erreichbar* (D1, nichts verändern). *Ungültig* ist sie nur, wenn
+      sie gelesen wurde und Format, Kopf oder Parameter nicht stimmen.
+      Dauerhaft gescheiterte Authentifizierung bleibt „Passwort falsch oder
+      Datei beschädigt“ (A17) mit „Neu anfangen“ als ausdrücklicher Wahl.
+    - b. Wechsel Passwort → Schlüsselbund (A15): Liegt im Schlüsselbund
+      bereits ein Eintrag, der nicht gleich K ist, fragt die App vor dem
+      Überschreiben: „Im Schlüsselbund liegt ein anderer Schlüssel. Backups,
+      die mit diesem Schlüssel verschlüsselt sind, werden danach unlesbar.
+      Ersetzen?“ (EN sinngemäß). Ohne ausdrückliche Bestätigung bleibt alles,
+      wie es war. Ist der Eintrag gleich K, entfällt die Frage.
+    - c. Die verzögerte Registrierung der Plugins im Passwort-Modus hat einen
+      eigenen Test.
+    - d. T17 deckt alle in §7 genannten Pfade ab, nicht nur den
+      Passwort-Modus.
+    - e. Ein reiner Hinweis an den Nutzer wartet auf keine Antwort; ein
+      geöffnetes Passwortfeld ist leer. Beides wird mit Commit 11 erfüllt.
+
 ## Umsetzung
 
 **Teil 0** — §2. Lauf 1 endet nach Commit 2. Frage 2 vor Commit 6, Frage 3
