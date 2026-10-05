@@ -429,10 +429,93 @@ fn write_and_verify_wrapping(
     root_key: &[u8; 32],
     password: &SecretString,
 ) -> Result<(), MasterPasswordError> {
+    let path = wrapping_file_path(db_path);
+    let tmp = temporary_path(&path);
     let wrapped = crypto::wrap_root_key(root_key, password).map_err(classify_unwrap_error)?;
-    write_file_atomically(&wrapping_file_path(db_path), &wrapped)?;
 
-    let read_back = read_wrapping_file(db_path)?;
+    // **Alles Prüfbare auf der `.new`-Datei, bevor die alte weicht**
+    // (spec-reviewer Lauf 4, Fund 3). Vorher lief der Vergleich auf der
+    // **Zieldatei** — also erst, nachdem das `rename` die einzige andere
+    // Kopie von K schon überschrieben hatte. Scheiterte er dann, war die
+    // alte Verpackung fort und die neue gab K nicht her: Totalverlust. Der
+    // Modulkommentar oben („neuen Zustand herstellen, zurücklesen und
+    // vergleichen, **erst dann** den alten entfernen") gilt mit dieser
+    // Reihenfolge auch für `change_master_password`.
+    let verified = write_and_read_back(&tmp, &wrapped, root_key, password);
+    if let Err(err) = verified {
+        // **Kein Rest** (Fund 4): Eine liegengebliebene `.new`-Datei ist
+        // eine vollständige, gültige Verpackung von K — nach einem
+        // Passwortwechsel unter dem *anderen* der beiden Passwörter. Wer
+        // das Dateisystem lesen kann, greift dann offline das schwächere
+        // von beiden an. Sie verschwindet deshalb auf **jedem** Fehlerweg,
+        // nicht nur wenn das `rename` scheitert.
+        remove_leftover(&tmp);
+        return Err(err);
+    }
+
+    // Eine vorhandene Datei wird hier **absichtlich** ersetzt: Das ist der
+    // Fall „Passwort ändern" (A15, „atomar ersetzen"). Das Umbenennen des
+    // alten Stands gehört zu A5, nicht hierher.
+    std::fs::rename(&tmp, &path).map_err(|err| {
+        remove_leftover(&tmp);
+        MasterPasswordError::FileFailed {
+            detail: format!("Verpackungsdatei ersetzen: {err}"),
+        }
+    })?;
+
+    #[cfg(unix)]
+    {
+        // Nach dem `rename` erneut, falls die Datei schon vorher existierte
+        // und laxere Rechte trug (Passwortwechsel auf einer alten Datei).
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+
+    // Fund 4, zweite Hälfte: Der Inhalt der neuen Datei ist durch
+    // `sync_all` auf der Platte, der **Verzeichniseintrag** aber noch
+    // nicht. Ein Stromausfall direkt danach könnte deshalb den alten Namen
+    // auf die alte Datei zeigen lassen — die Folge wäre „das alte Passwort
+    // gilt noch", kein Verlust, aber eine verwirrende Überraschung.
+    sync_directory_of(&path);
+    Ok(())
+}
+
+/// Der prüfbare Teil: schreiben, **dieselbe Datei** zurücklesen, entpacken
+/// und mit K vergleichen.
+///
+/// Der Vergleich ist nicht Zierde: Er ist der Beweis, dass die Datei auf der
+/// Platte K wirklich hergibt, **bevor** die andere Kopie entfernt wird.
+/// Ohne ihn wäre ein Schreibfehler, den das Dateisystem erst beim Lesen
+/// zeigt, ein Totalverlust.
+fn write_and_read_back(
+    tmp: &Path,
+    wrapped: &[u8],
+    root_key: &[u8; 32],
+    password: &SecretString,
+) -> Result<(), MasterPasswordError> {
+    write_file_with_owner_only_permissions(tmp, wrapped)?;
+
+    let read_back = std::fs::read(tmp).map_err(|err| MasterPasswordError::FileFailed {
+        detail: format!("neue Verpackungsdatei nicht zurücklesbar: {err}"),
+    })?;
+
+    // Prüfpunkt **nur** für Tests: Ob die alte Verpackung einen
+    // fehlgeschlagenen Vergleich übersteht, ist sonst nicht prüfbar — ein
+    // Schreibfehler, den das Dateisystem erst beim Lesen zeigt, lässt sich
+    // mit Dateien und Verknüpfungen allein nicht herstellen (eine
+    // Verknüpfung auf `/dev/null` scheitert schon am `sync_all`, also
+    // **vor** dem `rename`, und unterscheidet die beiden Reihenfolgen
+    // deshalb nicht). Derselbe Weg wie bei `CountingKeychain`s
+    // `fail_delete` in T13 — nur ohne Trait, weil es hier keinen gibt.
+    //
+    // `cargo build --workspace` läuft ohne `test-support` und fängt einen
+    // Produktiv-Aufruf dieses Punktes ab (s. CLAUDE.md).
+    #[cfg(any(test, feature = "test-support"))]
+    if fail_the_next_wrapping_check::is_armed() {
+        return Err(MasterPasswordError::FileFailed {
+            detail: "Vergleich der neuen Verpackung absichtlich fehlgeschlagen (Test)".to_string(),
+        });
+    }
     let unwrapped = crypto::unwrap_root_key(&read_back, password).map_err(classify_unwrap_error)?;
     if unwrapped.expose() != root_key {
         return Err(MasterPasswordError::FileFailed {
@@ -440,6 +523,83 @@ fn write_and_verify_wrapping(
         });
     }
     Ok(())
+}
+
+/// Fehlerinjektion für den Vergleich der neuen Verpackung — **nur** mit
+/// `test-support`.
+///
+/// Ein Schalter, der sich einmal auslöst und sich dann selbst zurücksetzt:
+/// So kann ein Test den Fehlerfall fahren und danach im selben Verzeichnis
+/// prüfen, dass das **alte** Passwort noch gilt, ohne den Schalter von Hand
+/// aufzuräumen.
+///
+/// **Thread-lokal, nicht global** (gemessen: ein `static AtomicBool` ließ den
+/// Schalter in einen nebenläufig laufenden Test überlaufen und machte dessen
+/// Verpacken grundlos rot). Jeder `#[test]` läuft auf seinem eigenen Thread,
+/// also wirkt der Schalter genau dort, wo er gesetzt wurde.
+#[cfg(any(test, feature = "test-support"))]
+pub mod fail_the_next_wrapping_check {
+    use std::cell::Cell;
+
+    thread_local! {
+        static ARMED: Cell<bool> = const { Cell::new(false) };
+    }
+
+    /// Der nächste Vergleich auf **diesem** Thread scheitert.
+    pub fn arm() {
+        ARMED.set(true);
+    }
+
+    pub(super) fn is_armed() -> bool {
+        ARMED.replace(false)
+    }
+}
+
+fn temporary_path(path: &Path) -> PathBuf {
+    let mut tmp = path.as_os_str().to_os_string();
+    tmp.push(".new");
+    PathBuf::from(tmp)
+}
+
+/// Eine halbe Verpackung wegräumen. Scheitert das, ist es eine Log-Zeile und
+/// kein Abbruch: Der Vorgang selbst ist schon gescheitert, und ein zweiter
+/// Fehler darüber würde die Ursache verdecken.
+fn remove_leftover(tmp: &Path) {
+    match std::fs::remove_file(tmp) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => tracing::warn!(
+            detail = %err,
+            "a half-written wrapping file could not be removed; it may still hold the root key \
+             under the other password (Spec 0101, A14)"
+        ),
+    }
+}
+
+/// `fsync` auf das Verzeichnis, damit der neue Verzeichniseintrag hält.
+///
+/// Best-effort und ohne Fehlerweg: Unter Windows lässt sich ein Verzeichnis
+/// nicht wie eine Datei öffnen, und die Folge eines fehlenden Syncs ist
+/// „das alte Passwort gilt noch" — unschön, aber kein Datenverlust. Den
+/// Vorgang daran scheitern zu lassen wäre die schlechtere Antwort.
+fn sync_directory_of(path: &Path) {
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    match std::fs::File::open(parent) {
+        Ok(dir) => {
+            if let Err(err) = dir.sync_all() {
+                tracing::debug!(
+                    detail = %err,
+                    "could not fsync the data directory after replacing the wrapping file"
+                );
+            }
+        }
+        Err(err) => tracing::debug!(
+            detail = %err,
+            "could not open the data directory to fsync it after replacing the wrapping file"
+        ),
+    }
 }
 
 fn read_wrapping_file(db_path: &Path) -> Result<Vec<u8>, MasterPasswordError> {
@@ -455,58 +615,39 @@ fn read_wrapping_file(db_path: &Path) -> Result<Vec<u8>, MasterPasswordError> {
     })
 }
 
-/// Atomar und von Anfang an mit 0600.
+/// Von Anfang an mit 0600, und mit `sync_all`, bevor der Aufrufer die Datei
+/// weiterverwendet.
 ///
 /// **Die Rechte werden beim Anlegen gesetzt, nicht danach** — anders als in
 /// `host_key_store`. Zwischen `write` und `set_permissions` läge die Datei
 /// mit den Rechten aus der `umask` auf der Platte; bei einem Chiffrat, das
 /// ein Offline-Rateangriff braucht, ist dieses Fenster eines zu viel.
-fn write_file_atomically(path: &Path, bytes: &[u8]) -> Result<(), MasterPasswordError> {
-    let mut tmp = path.as_os_str().to_os_string();
-    tmp.push(".new");
-    let tmp = PathBuf::from(tmp);
-
+fn write_file_with_owner_only_permissions(
+    path: &Path,
+    bytes: &[u8],
+) -> Result<(), MasterPasswordError> {
     let file_failed = |step: &str, err: std::io::Error| MasterPasswordError::FileFailed {
         detail: format!("{step}: {err}"),
     };
 
-    {
-        let mut options = std::fs::OpenOptions::new();
-        options.write(true).create(true).truncate(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let mut file = options
-            .open(&tmp)
-            .map_err(|err| file_failed("Verpackungsdatei anlegen", err))?;
-        use std::io::Write;
-        file.write_all(bytes)
-            .map_err(|err| file_failed("Verpackungsdatei schreiben", err))?;
-        // `sync_all`, bevor umbenannt wird: Sonst könnte das `rename`
-        // sichtbar sein, während der Inhalt noch im Puffer steht — ein
-        // Absturz dazwischen ließe eine leere Verpackungsdatei zurück, und
-        // K wäre weg.
-        file.sync_all()
-            .map_err(|err| file_failed("Verpackungsdatei sichern", err))?;
-    }
-
-    // Eine vorhandene Datei wird hier **absichtlich** ersetzt: Das ist der
-    // Fall „Passwort ändern" (A15, „atomar ersetzen"). Das Umbenennen des
-    // alten Stands gehört zu A5, nicht hierher.
-    std::fs::rename(&tmp, path).map_err(|err| {
-        let _ = std::fs::remove_file(&tmp);
-        file_failed("Verpackungsdatei ersetzen", err)
-    })?;
-
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
     #[cfg(unix)]
     {
-        // Nach dem `rename` erneut, falls die Datei schon vorher existierte
-        // und laxere Rechte trug (Passwortwechsel auf einer alten Datei).
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
     }
+    let mut file = options
+        .open(path)
+        .map_err(|err| file_failed("Verpackungsdatei anlegen", err))?;
+    use std::io::Write;
+    file.write_all(bytes)
+        .map_err(|err| file_failed("Verpackungsdatei schreiben", err))?;
+    // `sync_all`, bevor umbenannt wird: Sonst könnte das `rename` sichtbar
+    // sein, während der Inhalt noch im Puffer steht — ein Absturz dazwischen
+    // ließe eine leere Verpackungsdatei zurück, und K wäre weg.
+    file.sync_all()
+        .map_err(|err| file_failed("Verpackungsdatei sichern", err))?;
     Ok(())
 }
 

@@ -421,6 +421,91 @@ fn test_no_error_text_carries_secret_material() {
     assert!(errors[0].detail_for_log().is_none());
 }
 
+/// Klarstellung 9, dritter Punkt (spec-reviewer Lauf 4, Funde 3 und 4):
+/// **Scheitert die Prüfung der neuen Verpackung, ist die alte noch da.**
+///
+/// Der Fehler wird an genau der Stelle eingespeist, auf die es ankommt:
+/// **nach** einem erfolgreichen, synchronisierten Schreiben und **vor** dem
+/// `rename` (`fail_the_next_wrapping_check`). Mit Dateien allein ist dieser
+/// Punkt nicht zu treffen — eine Verknüpfung auf `/dev/null` scheitert schon
+/// am `sync_all` und damit in beiden Reihenfolgen gleich (gemessen).
+///
+/// Mit der alten Reihenfolge (schreiben → `rename` → **Zieldatei**
+/// zurücklesen → vergleichen) hätte das `rename` die einzige andere Kopie
+/// von K an diesem Punkt längst ersetzt: Die Prüfung hätte den Verlust nur
+/// noch gemeldet, nicht verhindert. Geprüft wird deshalb beides — dass der
+/// Vorgang scheitert **und** dass K danach noch zu holen ist.
+#[test]
+fn test_a_failing_check_of_the_new_wrapping_leaves_the_old_one_able_to_yield_the_key() {
+    let dir = Dir::new("verify-before-replace");
+    let db = dir.db();
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), None).unwrap();
+
+    let path = wrapping_file_path(&db);
+    let before = std::fs::read(&path).unwrap();
+    let tmp = {
+        let mut name = path.as_os_str().to_os_string();
+        name.push(".new");
+        std::path::PathBuf::from(name)
+    };
+
+    let new_password = pw("ein-ganz-neues-master-passwort");
+    fail_the_next_wrapping_check::arm();
+    let result = change_master_password(&db, &good(), &new_password, &new_password);
+
+    assert!(
+        result.is_err(),
+        "eine Verpackung, die K nicht zurückgibt, darf nie als Erfolg durchgehen"
+    );
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        before,
+        "die alte Verpackung muss unverändert an ihrem Platz liegen — sonst ist K weg"
+    );
+    assert!(
+        !tmp.exists(),
+        "die halbe Verpackung muss weg sein: sie trägt K unter dem neuen Passwort"
+    );
+    let recovered = unlock(&db, &good())
+        .expect("das alte Passwort muss K weiter hergeben: der Wechsel ist nicht vollzogen");
+    assert_eq!(recovered.expose(), &ROOT_KEY);
+    // Und das neue Passwort gilt gerade **nicht** — halb vollzogen gibt es
+    // nicht.
+    assert!(unlock(&db, &new_password).is_err());
+}
+
+/// Fund 4: Nach einem **erfolgreichen** Schreiben bleibt keine `.new`-Datei
+/// liegen.
+///
+/// Warum das zählt: Eine liegengebliebene `.new`-Datei ist eine
+/// vollständige, gültige Verpackung von K — nach einem Passwortwechsel unter
+/// dem jeweils anderen Passwort. Wer das Dateisystem lesen kann, greift dann
+/// offline das schwächere der beiden an, statt des aktuellen.
+#[test]
+fn test_no_half_written_wrapping_is_left_behind() {
+    let dir = Dir::new("no-leftovers");
+    let db = dir.db();
+    let tmp = {
+        let mut name = wrapping_file_path(&db).as_os_str().to_os_string();
+        name.push(".new");
+        std::path::PathBuf::from(name)
+    };
+
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), None).unwrap();
+    assert!(!tmp.exists(), "nach dem Einrichten liegt kein Rest");
+
+    let new_password = pw("ein-ganz-neues-master-passwort");
+    change_master_password(&db, &good(), &new_password, &new_password).unwrap();
+    assert!(
+        !tmp.exists(),
+        "nach dem Passwortwechsel liegt keine zweite, unter dem alten Passwort öffenbare \
+         Verpackung von K daneben"
+    );
+    // Der Wechsel ist dabei wirklich vollzogen.
+    assert_eq!(unlock(&db, &new_password).unwrap().expose(), &ROOT_KEY);
+    assert!(unlock(&db, &good()).is_err());
+}
+
 /// Klarstellung 9: Die Urteilsfrage „kann diese Datei überhaupt K
 /// hergeben?" — und zwar in **beide** Richtungen.
 ///
