@@ -162,6 +162,33 @@ impl PromptChannel {
         self.timed_out.load(Ordering::SeqCst)
     }
 
+    /// Klarstellung 10e: **Ein reiner Hinweis wartet auf keine Antwort.**
+    ///
+    /// Anzeigen und zurückkehren — ohne eine Frage offen zu halten, ohne
+    /// Zeitgrenze, ohne Kennzeichnung. Vorher lief der Hinweis aus A5 („die
+    /// Dateien heißen jetzt …") durch [`Self::show_and_wait`]: Er hielt den
+    /// ganzen Startablauf auf, bis jemand „OK" drückte, und lief nach fünf
+    /// Minuten in die Zeitgrenze — mit dem Ergebnis, dass der Start danach
+    /// als „keine Antwort erhalten" abbrach, **obwohl das Umbenennen schon
+    /// passiert war**. Ein Hinweis hat keine Antwort, auf die es ankommt;
+    /// er steht im Fenster, bis der Nutzer ihn wegklickt, und der Start
+    /// läuft weiter.
+    ///
+    /// Die Kennzeichnung wird hier **nicht** angefasst: Sie gehört der
+    /// letzten *Frage*, und ein Hinweis ist keine.
+    fn show_only<E: std::fmt::Display>(&self, show: impl FnOnce() -> Result<(), E>) {
+        if let Err(err) = show() {
+            // Kein Ausgang nötig: Es ist nichts zu entscheiden. Dass der
+            // Hinweis nicht ankam, darf aber nicht still bleiben — sonst
+            // erfährt der Nutzer den neuen Dateinamen aus A5 nirgends.
+            tracing::error!(error = %err, "could not show the startup notice in the window");
+        }
+        debug_assert!(
+            self.pending.lock().expect("Prompt-Sperre").is_none(),
+            "ein Hinweis darf keine Frage offen lassen (Klarstellung 10e)"
+        );
+    }
+
     /// Frage offen halten, `show` aufrufen, auf die Antwort warten.
     fn show_and_wait<E: std::fmt::Display>(
         &self,
@@ -416,16 +443,31 @@ impl StartupPrompt for WindowStartupPrompt {
         }) == StartupPromptAnswer::Confirm
     }
 
+    /// Klarstellung 10e: **wartet auf keine Antwort** — s.
+    /// [`PromptChannel::show_only`].
     fn notify_started_over(&self, renamed_to: &str) {
         let text = texts::started_over_notice_text(renamed_to, self.language);
-        let _ = self.request(StartupPromptRequest {
+        let request = StartupPromptRequest {
             kind: PromptKind::Notice,
             title: text.title,
             message: text.message,
+        };
+        self.channel.show_only(|| {
+            self.app
+                .emit(STARTUP_PROMPT_EVENT, &request)
+                .map_err(|err| err.to_string())
         });
     }
 
     fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
+        // Klarstellung 10e, zweite Hälfte: **ein geöffnetes Passwortfeld ist
+        // leer.** Die Maske im Fenster leert ihre Felder selbst; hier wird
+        // der Platz im Backend geleert, damit ein Passwort aus einem früheren,
+        // abgebrochenen Versuch nicht als Antwort auf diese Frage gilt. Ohne
+        // das genügte ein Aufruf von `answer_startup_prompt` mit `Confirm`
+        // und ohne Passwort, um das alte zu bestätigen — die Maske zeigte
+        // ein leeres Feld, und eingerichtet würde das Passwort von vorhin.
+        *self.new_password.lock().expect("Passwort-Sperre") = None;
         let text = texts::master_password_setup_text(self.language);
         let answer = self.request(StartupPromptRequest {
             kind: PromptKind::NewMasterPassword,
@@ -491,6 +533,114 @@ mod tests {
             let _ = done.send(answer);
         });
         finished.recv_timeout(limit)
+    }
+
+    /// Wie [`wait_on_its_own_thread`], nur für einen Hinweis — der nichts
+    /// zurückgibt.
+    ///
+    /// Auch hier ein eigener Thread mit eigener Laufzeit: Wartete der
+    /// Hinweis doch auf eine Antwort, soll der Test **scheitern** und nicht
+    /// die fünf Minuten der echten Zeitgrenze absitzen.
+    fn notify_on_its_own_thread(
+        channel: std::sync::Arc<PromptChannel>,
+        limit: std::time::Duration,
+    ) -> Result<(), std::sync::mpsc::RecvTimeoutError> {
+        let (done, finished) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("Laufzeit");
+            runtime.block_on(async { channel.show_only(sent) });
+            let _ = done.send(());
+        });
+        finished.recv_timeout(limit)
+    }
+
+    /// Der Rumpf einer Methode dieser Datei — vom Kopf bis zur ersten Zeile,
+    /// die nur aus vier Leerzeichen und `}` besteht.
+    fn method_body<'a>(source: &'a str, signature: &str) -> &'a str {
+        let start = source
+            .find(signature)
+            .unwrap_or_else(|| panic!("`{signature}` gibt es nicht mehr — s. Doc-Kommentar"));
+        let rest = &source[start..];
+        let end = rest
+            .find("\n    }\n")
+            .expect("Methodenende nicht gefunden — s. Doc-Kommentar");
+        &rest[..end]
+    }
+
+    /// Klarstellung 10e, erste Hälfte: **Ein reiner Hinweis wartet auf keine
+    /// Antwort.**
+    ///
+    /// Die Kanal-Grenze ist hier die **echte** ([`PROMPT_TIMEOUT`]): Wartete
+    /// der Hinweis, liefe dieser Test in seine eigene Grenze von fünf
+    /// Sekunden und scheiterte — er sitzt nicht die fünf Minuten ab.
+    #[test]
+    fn test_a_notice_does_not_wait_for_an_answer() {
+        let channel = std::sync::Arc::new(PromptChannel::new(PROMPT_TIMEOUT));
+
+        notify_on_its_own_thread(channel.clone(), std::time::Duration::from_secs(5)).expect(
+            "ein Hinweis hat keine Antwort, auf die es ankommt — er darf den Startablauf nicht \
+             aufhalten (Klarstellung 10e)",
+        );
+
+        assert!(
+            !channel.answer(StartupPromptAnswer::Cancel),
+            "ein Hinweis darf keine Frage offen lassen — sonst beantwortet sein „OK“ die \
+             nächste, echte Frage vorab"
+        );
+        assert!(
+            !channel.timed_out(),
+            "ein Hinweis kann nicht in die Zeitgrenze laufen; die Kennzeichnung gehört der \
+             letzten Frage, und ein Hinweis ist keine"
+        );
+    }
+
+    /// Klarstellung 10e im Produktivpfad: Der Hinweis aus A5 geht über
+    /// [`PromptChannel::show_only`], und eine neue Passwortfrage beginnt mit
+    /// leerem Platz.
+    ///
+    /// Gelesen wird die Quelle, weil [`WindowStartupPrompt`] an
+    /// `tauri::AppHandle` (also `Wry`) hängt und mit Tauris Test-Laufzeit
+    /// nicht zu bauen ist (ADR 0096 §3). Der Preis ist bekannt: Wird eine der
+    /// beiden Methoden umbenannt, scheitert dieser Test, obwohl nichts
+    /// kaputt ist — dann gehört die neue Form hier herein.
+    #[test]
+    fn test_the_notice_does_not_wait_and_a_new_password_question_starts_empty() {
+        let source = include_str!("window_prompt.rs");
+
+        let notice = method_body(source, "fn notify_started_over(&self, renamed_to: &str) {");
+        assert!(
+            notice.contains("self.channel.show_only("),
+            "Klarstellung 10e: Der Hinweis aus A5 muss über `show_only` gehen"
+        );
+        assert!(
+            !notice.contains("self.request("),
+            "Klarstellung 10e: `request` wartet auf eine Antwort und läuft in die Zeitgrenze — \
+             genau das darf ein Hinweis nicht. Vorher brach der Start danach als „keine Antwort \
+             erhalten“ ab, obwohl das Umbenennen schon passiert war."
+        );
+
+        let asking = method_body(
+            source,
+            "fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {",
+        );
+        let clears = asking
+            .find("*self.new_password.lock().expect(\"Passwort-Sperre\") = None;")
+            .expect(
+                "Klarstellung 10e: Der Platz für das neue Passwort muss geleert werden, bevor \
+                 gefragt wird — sonst gilt ein Passwort aus einem früheren, abgebrochenen \
+                 Versuch als Antwort auf diese Frage",
+            );
+        let asks = asking
+            .find("self.request(")
+            .expect("hier wird nicht mehr gefragt — s. Doc-Kommentar");
+        assert!(
+            clears < asks,
+            "Klarstellung 10e: geleert wird **vor** dem Fragen; danach wäre es die Antwort, die \
+             weggeworfen wird"
+        );
     }
 
     /// Klarstellung 9, vierter Punkt (spec-reviewer Lauf 4, Fund 7): Eine
