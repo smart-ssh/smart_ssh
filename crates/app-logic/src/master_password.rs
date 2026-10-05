@@ -440,15 +440,20 @@ pub fn switch_to_keychain(
 ) -> Result<(), MasterPasswordError> {
     let root_key = unlock(db_path, current)?;
 
-    if overwrite == KeychainOverwrite::OnlyAfterConfirmation {
-        match crypto::read_root_key(keyring) {
-            // Gleich K: „Ist der Eintrag gleich K, entfällt die Frage."
-            crypto::RootKeyState::Present(existing) if &existing == root_key.expose() => {}
-            crypto::RootKeyState::NotFound => {}
-            // Ein anderer Schlüssel — und ein unbrauchbarer Eintrag ist
-            // auch „nicht gleich K". Beides fragt nach, statt zu raten,
-            // wessen Eintrag dort liegt.
-            crypto::RootKeyState::Present(_) | crypto::RootKeyState::Invalid => {
+    // **Gelesen wird immer**, auch mit Bestätigung (spec-reviewer Runde 7):
+    // Das Ersetzen eines fremden Wurzelschlüssels ist der einzige
+    // unumkehrbare Schritt dieses Vorgangs, und er darf im Log nicht wie
+    // der Normalfall aussehen. Ohne die Lesung gäbe es keine Zeile, die ihn
+    // benennt.
+    match crypto::read_root_key(keyring) {
+        // Gleich K: „Ist der Eintrag gleich K, entfällt die Frage."
+        crypto::RootKeyState::Present(existing) if &existing == root_key.expose() => {}
+        crypto::RootKeyState::NotFound => {}
+        // Ein anderer Schlüssel — und ein unbrauchbarer Eintrag ist auch
+        // „nicht gleich K". Beides fragt nach, statt zu raten, wessen
+        // Eintrag dort liegt.
+        crypto::RootKeyState::Present(_) | crypto::RootKeyState::Invalid => {
+            if overwrite == KeychainOverwrite::OnlyAfterConfirmation {
                 tracing::warn!(
                     "refusing to switch back to the OS keychain: it already holds a different \
                      root key, and replacing it would make anything encrypted with that key \
@@ -456,15 +461,26 @@ pub fn switch_to_keychain(
                 );
                 return Err(MasterPasswordError::KeychainHoldsAnotherKey);
             }
-            // Nicht erreichbar: Dann ist **unbekannt**, ob dort etwas
-            // liegt — und unbekannt ist kein Grund zu schreiben. Der
-            // Wechsel scheiterte ohnehin am Zurücklesen; jetzt scheitert er
-            // davor, also ohne `set`.
-            crypto::RootKeyState::Unreachable(reason) => {
-                return Err(MasterPasswordError::KeychainFailed {
-                    detail: format!("Schlüsselbund vor dem Wechsel nicht lesbar: {reason:?}"),
-                })
-            }
+            tracing::warn!(
+                "replacing a different root key in the OS keychain after an explicit \
+                 confirmation; anything that was encrypted with the previous key stays \
+                 unreadable (Spec 0101, A15, Klarstellung 10b)"
+            );
+        }
+        // Nicht erreichbar: Dann ist **unbekannt**, ob dort etwas liegt —
+        // und unbekannt ist kein Grund zu schreiben. Der Wechsel scheiterte
+        // ohnehin am Zurücklesen; jetzt scheitert er davor, also ohne `set`.
+        // Auch mit Bestätigung: Bestätigt wurde das Ersetzen eines
+        // *bekannten* Eintrags, nicht das Schreiben ins Ungewisse.
+        //
+        // `{other:?}` und nicht `{reason:?}`: Die `Debug`-Ausgabe von
+        // `RootKeyState` verbirgt den Bibliothekstext absichtlich; den
+        // ausgepackten Grund roh zu formatieren umgeht genau diesen Schutz
+        // (spec-reviewer Runde 7).
+        other @ crypto::RootKeyState::Unreachable(_) => {
+            return Err(MasterPasswordError::KeychainFailed {
+                detail: format!("Schlüsselbund vor dem Wechsel nicht lesbar: {other:?}"),
+            })
         }
     }
 
