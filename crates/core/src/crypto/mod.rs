@@ -23,7 +23,8 @@ mod key_wrapping;
 pub use chacha::ChaCha20Poly1305Cipher;
 pub use db_key::{DatabaseKey, DATABASE_KEY_HKDF_INFO, DATABASE_KEY_LEN};
 pub use key::{
-    generate_and_store_root_key, read_root_key, RootKeyState, CHAT_CONTENT_ENCRYPTION_KEY_REF,
+    generate_and_store_root_key, generate_root_key, read_root_key, RootKeyState,
+    CHAT_CONTENT_ENCRYPTION_KEY_REF,
 };
 pub use key_wrapping::{
     check_password_length, unwrap_root_key, wrap_root_key, KeyWrapError, RootKey,

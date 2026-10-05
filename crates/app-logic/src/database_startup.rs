@@ -53,6 +53,16 @@ pub enum StartupDialog {
     /// Wie D3, aber die Klartext-Datei bleibt lesbar: „Beenden“ / „Neuen
     /// Schlüssel erzeugen".
     D4,
+    /// A11/A11.1: Beim Secret-Umzug ist ein Lesen aus dem Schlüsselbund
+    /// gescheitert. „Erneut versuchen“ / „Beenden“, im Passwort-Modus
+    /// zusätzlich „Ohne Übernahme fortfahren“.
+    ///
+    /// **Eine eigene Variante und nicht `D1 { offers_password_setup: false }`**
+    /// (T13: „Umzugs-Dialog (A11) nie“): So kann dieser Dialog das
+    /// Einrichten eines Master-Passworts per Konstruktion nicht anbieten —
+    /// es hinge sonst an einem `false`, das jemand später anders setzt. Die
+    /// Texte sind dieselben wie bei D1 (A11: „Dialog D1 ohne Einrichten“).
+    MigrationUnreadable { offers_skip_migration: bool },
 }
 
 /// Was der Start als Nächstes tun soll.
@@ -182,12 +192,54 @@ pub enum StartupChoice {
     StartOver,
     /// D4: „Neuen Schlüssel erzeugen“.
     GenerateNewKey,
+    /// D1, dritter Knopf ab Etappe 3 (A13): „Master-Passwort einrichten“ —
+    /// **nur**, wenn [`StartupDialog::D1::offers_password_setup`] gilt.
+    SetUpMasterPassword,
+    /// A11.1, dritte Wahl im Umzugs-Dialog: „Ohne Übernahme fortfahren“.
+    /// Nur im Passwort-Modus angeboten.
+    ContinueWithoutMigration,
+}
+
+/// Woher K beim Start kommt (A3/A16).
+///
+/// **Ein eigener Typ statt eines zweiten `CredentialStore`:** Im
+/// Passwort-Modus gibt es keinen Store, aus dem K zu lesen wäre — er kommt
+/// aus der Verpackungsdatei und liegt nach der Entsperrung schon vor. Ihn
+/// über einen In-Memory-Store einzuschmuggeln hätte funktioniert und wäre
+/// die gefährlichste Abkürzung dieser Spec gewesen: Die Fälle „K erzeugen“
+/// der Tabelle A3 hätten dann einen neuen Schlüssel in diesen
+/// Speicher-Store geschrieben, den niemand je in eine Verpackungsdatei
+/// übernimmt — ein neuer K, der still entsteht und beim nächsten Start weg
+/// ist (A3: „nie still ein neuer K“).
+pub enum RootKeyAccess<'a> {
+    /// Schlüsselbund-Modus (Standard, E8): K wird gelesen und darf in den
+    /// zwei Feldern „K erzeugen“ der Tabelle A3 entstehen.
+    /// `+ Send + Sync` aus demselben Grund wie bei [`StartupPrompt`].
+    Keychain(&'a (dyn CredentialStore + Send + Sync)),
+    /// Passwort-Modus, entsperrt (A16): K liegt vor.
+    Unlocked([u8; 32]),
+    /// Passwort-Modus, aber die Verpackungsdatei ist nach Format oder
+    /// Version nicht lesbar — in der Tabelle A3 der Zustand *ungültig*.
+    UnusableWrapping,
+}
+
+/// A13: ein neu eingegebenes Master-Passwort, zweimal.
+///
+/// Der Vergleich der beiden Eingaben passiert im Backend
+/// ([`crate::master_password`]), nicht in der Maske — eine Prüfung, die nur
+/// dort steht, umgeht ein Kommandoaufruf.
+pub struct NewMasterPassword {
+    pub password: secrecy::SecretString,
+    pub repeated: secrecy::SecretString,
 }
 
 /// Was `app-shell` an nativen Dialogen beisteuert. Als Trait, damit T3/T7/T8
 /// den gesamten Ablauf ohne Fenster prüfen können — und damit ein Test
 /// **zählen** kann, was gefragt wurde.
-pub trait StartupPrompt {
+/// `Send + Sync` seit Etappe 3: Der Startablauf läuft im Passwort-Modus aus
+/// einem `#[tauri::command]` heraus, und dessen Future muss `Send` sein
+/// (Teil 0 Frage 3). Beide Implementierungen erfüllen es ohnehin.
+pub trait StartupPrompt: Send + Sync {
     /// Zeigt D1–D4 und liefert die Wahl.
     fn ask(&self, dialog: StartupDialog) -> StartupChoice;
 
@@ -205,6 +257,22 @@ pub trait StartupPrompt {
 
     /// A5: nennt nach dem Umbenennen den neuen Dateinamen.
     fn notify_started_over(&self, renamed_to: &str);
+
+    /// A13: fragt ein neues Master-Passwort ab — zweimal, mit Warnung und
+    /// ausdrücklicher Bestätigung (beides macht die Maske, s.
+    /// [`StartupDialog::D1`] und A5 im Passwort-Modus).
+    ///
+    /// `None` heißt abgebrochen; dann bleibt **alles** unverändert (A5).
+    fn ask_for_new_master_password(&self) -> Option<NewMasterPassword>;
+
+    /// Kann dieser Fragesteller überhaupt eine Texteingabe zeigen?
+    ///
+    /// Die nativen Dialoge können es nicht (§1: rfd hat keine
+    /// Texteingabe). Statt dort ein `None` zurückzugeben, das sich von
+    /// „abgebrochen“ nicht unterscheiden ließe und den Start stillschweigend
+    /// beendete, sagt diese Frage es vorher — und der Startablauf antwortet
+    /// mit [`StartupAbort::NeedsWindow`], ohne etwas anzufassen.
+    fn can_ask_for_a_password(&self) -> bool;
 }
 
 /// Warum der Start nicht zu einer offenen Datenbank geführt hat.
@@ -213,6 +281,14 @@ pub enum StartupAbort {
     /// Der Nutzer hat „Beenden“ gewählt — kein Fehlerdialog mehr, es ist
     /// bereits alles gesagt.
     UserQuit,
+    /// Teil 0 Frage 3: Der Nutzer hat etwas gewählt, das eine Texteingabe
+    /// braucht (A13, „Master-Passwort einrichten“ aus D1) — und der
+    /// Startablauf läuft gerade mit den nativen Dialogen, die keine haben
+    /// (§1: „rfd … keine Texteingabe“).
+    ///
+    /// **Nichts ist verändert.** Der Aufrufer startet das Fenster und
+    /// wiederholt den Ablauf von vorn, dann mit der Maske im Fenster.
+    NeedsWindow,
     /// Ein Fehler, für den [`crate::startup_error_messages::
     /// db_connect_failure_text`] den Text liefert.
     Fatal {
@@ -242,10 +318,15 @@ pub struct OpenedDatabase {
 /// gewählt ist.
 pub async fn open_or_prepare_database(
     db_path: &Path,
-    credential_store: &dyn CredentialStore,
+    access: RootKeyAccess<'_>,
     keychain: KeychainAvailability,
     prompt: &dyn StartupPrompt,
 ) -> Result<OpenedDatabase, StartupAbort> {
+    // `mut`, weil genau ein Übergang vorkommt: D1 → „Master-Passwort
+    // einrichten“ wechselt den Modus mitten im Start (A13). Danach ist K
+    // entpackt, und der zweite Schleifendurchlauf fährt die Tabelle mit
+    // `Unlocked`.
+    let mut access = access;
     loop {
         let file = match detect_database_file_state(db_path) {
             Ok(state) => state,
@@ -287,12 +368,20 @@ pub async fn open_or_prepare_database(
             });
         }
 
-        let (key_state, root_key) = read_key_state(credential_store, keychain);
+        let (key_state, root_key) = match &access {
+            RootKeyAccess::Keychain(store) => read_key_state(*store, keychain),
+            // A3: „Im Passwort-Modus ist K erst nach der Entsperrung *da*.“
+            RootKeyAccess::Unlocked(key) => (KeyState::Present, Some(*key)),
+            // A3: „*ungültig* (… Verpackungsdatei, deren Format oder
+            // Version nicht lesbar ist)“.
+            RootKeyAccess::UnusableWrapping => (KeyState::Invalid, None),
+        };
         let plan = decide_startup(file, &key_state);
         tracing::info!(
             ?file,
             ?key_state,
             ?plan,
+            password_mode = !matches!(access, RootKeyAccess::Keychain(_)),
             "decided how to open the database (Spec 0101, A3)"
         );
 
@@ -318,7 +407,15 @@ pub async fn open_or_prepare_database(
                     // D2: Die Datei ist mit dem vorhandenen Schlüssel nicht
                     // lesbar.
                     Err(Abort::NotReadable) => {
-                        start_over(db_path, prompt, StartupDialog::D2)?;
+                        // `Keep`: Der Schlüssel ist brauchbar, nur die Datei
+                        // gehört nicht zu ihm — s. [`StartOverKey`].
+                        let key = start_over(
+                            db_path,
+                            &access,
+                            prompt,
+                            StartupDialog::D2,
+                            StartOverKey::Keep(key),
+                        )?;
                         return open_encrypted(db_path, &key)
                             .await
                             .map_err(fatal_after_start_over);
@@ -327,7 +424,7 @@ pub async fn open_or_prepare_database(
                 }
             }
             StartupPlan::GenerateKeyThenCreateFresh => {
-                let key = generate_key(credential_store)?;
+                let key = generate_key(db_path, &access, prompt)?;
                 return open_encrypted(db_path, &key)
                     .await
                     .map_err(fatal_after_start_over);
@@ -339,7 +436,7 @@ pub async fn open_or_prepare_database(
                 return convert_then_open(db_path, &key).await;
             }
             StartupPlan::GenerateKeyThenConvert => {
-                let key = generate_key(credential_store)?;
+                let key = generate_key(db_path, &access, prompt)?;
                 return convert_then_open(db_path, &key).await;
             }
             StartupPlan::Dialog(StartupDialog::D1 {
@@ -350,25 +447,77 @@ pub async fn open_or_prepare_database(
                 // „Erneut versuchen“ prüft ohne Neustart erneut (A3, D1) —
                 // der einzige Weg zurück an den Anfang der Schleife.
                 StartupChoice::Retry => continue,
-                _ => return Err(StartupAbort::UserQuit),
+                // A13, Einrichten aus D1. **Die Einschränkung aus A3 wird
+                // hier noch einmal geprüft**, nicht nur beim Anbieten: Der
+                // Knopf kommt aus einer Oberfläche, und ein Einrichten bei
+                // einem bloß gesperrten Schlüsselbund würde einen neuen K
+                // erzeugen und den vorhandenen Verlauf unlesbar machen
+                // (Angriffsrichtung „Einrichten bei verschlüsselter Datei“).
+                StartupChoice::SetUpMasterPassword if offers_password_setup => {
+                    // Teil 0 Frage 3: Die nativen Dialoge haben keine
+                    // Texteingabe. Hier endet der Ablauf **ohne etwas
+                    // anzufassen**; der Aufrufer wiederholt ihn mit dem
+                    // Fenster.
+                    if !prompt.can_ask_for_a_password() {
+                        tracing::info!(
+                            "the master-password setup needs a text field; restarting the \
+                             startup sequence with the in-window dialog (Spec 0101, A13)"
+                        );
+                        return Err(StartupAbort::NeedsWindow);
+                    }
+                    // „Aus D1 gibt es keinen K im Schlüsselbund; dort wird K
+                    // neu erzeugt (A3).“
+                    let key = ssh_manager_core::crypto::generate_root_key();
+                    let Some(new_password) = prompt.ask_for_new_master_password() else {
+                        // A5: Abbruch heißt, dass nichts verändert ist.
+                        return Err(StartupAbort::UserQuit);
+                    };
+                    set_up_password(db_path, &key, &new_password, None)?;
+                    // Ab jetzt Passwort-Modus mit entpacktem K; der nächste
+                    // Durchlauf fährt die Tabelle neu und landet in
+                    // „neu anlegen“ bzw. „umwandeln“.
+                    access = RootKeyAccess::Unlocked(key);
+                    continue;
+                }
+                StartupChoice::SetUpMasterPassword => {
+                    tracing::warn!(
+                        "a master-password setup was requested for a dialog that does not offer \
+                         it; nothing was touched (Spec 0101, A3 D1)"
+                    );
+                    return Err(StartupAbort::UserQuit);
+                }
+                StartupChoice::Quit
+                | StartupChoice::StartOver
+                | StartupChoice::GenerateNewKey
+                | StartupChoice::ContinueWithoutMigration => return Err(StartupAbort::UserQuit),
             },
             // Verschlüsselte Datei, kein K-Eintrag: dieselbe Frage wie
             // oben, nur schon vor dem Öffnen entschieden.
             StartupPlan::Dialog(StartupDialog::D2) => {
-                start_over(db_path, prompt, StartupDialog::D2)?;
-                let key = generate_key(credential_store)?;
+                let key = start_over(
+                    db_path,
+                    &access,
+                    prompt,
+                    StartupDialog::D2,
+                    StartOverKey::Issue,
+                )?;
                 return open_encrypted(db_path, &key)
                     .await
                     .map_err(fatal_after_start_over);
             }
             StartupPlan::Dialog(StartupDialog::D3) => {
-                start_over(db_path, prompt, StartupDialog::D3)?;
                 // D3: „Der vorhandene Eintrag bzw. die Datei wird **erst
-                // nach dieser Wahl** ersetzt." Der unbrauchbare Eintrag wird
-                // jetzt überschrieben — ohne das bliebe der Zustand
-                // *ungültig* und derselbe Dialog käme beim nächsten Start
-                // wieder.
-                let key = generate_key(credential_store)?;
+                // nach dieser Wahl** ersetzt." Der unbrauchbare Eintrag bzw.
+                // die unbrauchbare Verpackungsdatei wird jetzt ersetzt —
+                // ohne das bliebe der Zustand *ungültig* und derselbe Dialog
+                // käme beim nächsten Start wieder.
+                let key = start_over(
+                    db_path,
+                    &access,
+                    prompt,
+                    StartupDialog::D3,
+                    StartOverKey::Issue,
+                )?;
                 return open_encrypted(db_path, &key)
                     .await
                     .map_err(fatal_after_start_over);
@@ -384,9 +533,21 @@ pub async fn open_or_prepare_database(
                 }
                 // D4: Die Klartext-Datei bleibt lesbar und wird mit dem
                 // neuen K umgewandelt; allein der feldweise verschlüsselte
-                // Verlauf ist verloren.
-                let key = generate_key(credential_store)?;
+                // Verlauf ist verloren. Im Passwort-Modus heißt „neuer
+                // Schlüssel“ auch „neue Verpackung“ — mit derselben
+                // Reihenfolge wie in A5 (s. `generate_key`).
+                let key = generate_key(db_path, &access, prompt)?;
                 return convert_then_open(db_path, &key).await;
+            }
+            // [`decide_startup`] liefert diesen Dialog nie — er gehört zum
+            // Secret-Umzug (A11), der erst nach dem Öffnen läuft. Der Zweig
+            // steht hier, damit das Hinzufügen einer weiteren Dialogart den
+            // Bau anhält, statt in einem `_` zu verschwinden.
+            StartupPlan::Dialog(StartupDialog::MigrationUnreadable { .. }) => {
+                return Err(StartupAbort::Fatal {
+                    kind: ConnectFailureKind::Other,
+                    detail: "Umzugs-Dialog aus der Entscheidungstabelle A3".to_string(),
+                });
             }
         }
     }
@@ -426,14 +587,42 @@ fn fatal_after_start_over(err: Abort) -> StartupAbort {
 /// zweite Bestätigung, dann das Umbenennen. Bricht der Nutzer an einer der
 /// beiden Stellen ab, ist keine Datei angefasst — beides ergibt
 /// [`StartupAbort::UserQuit`], und `Ok(())` heißt: umbenannt.
+/// Was „Neu anfangen“ mit dem Schlüssel macht.
+///
+/// **Die Unterscheidung ist wichtig und nicht bloß Bequemlichkeit:** D2 aus
+/// dem Feld *sonst* × *da* heißt „die Datei passt nicht zu diesem
+/// Schlüssel“ — der Schlüssel selbst ist in Ordnung. Ihn dabei zu ersetzen
+/// würde den feldweise verschlüsselten Verlauf **und** jede Chance
+/// vernichten, die umbenannte Datei später doch noch zu öffnen. D3 dagegen
+/// heißt „der Schlüssel ist unbrauchbar“; dort muss ein neuer entstehen,
+/// sonst käme derselbe Dialog beim nächsten Start wieder.
+enum StartOverKey {
+    /// K bleibt, nur die Datei geht aus dem Weg.
+    Keep([u8; 32]),
+    /// Es gibt keinen brauchbaren K — ein neuer entsteht (Schlüsselbund
+    /// oder neue Verpackung, je nach Modus).
+    Issue,
+}
+
 fn start_over(
     db_path: &Path,
+    access: &RootKeyAccess<'_>,
     prompt: &dyn StartupPrompt,
     dialog: StartupDialog,
-) -> Result<(), StartupAbort> {
+    key: StartOverKey,
+) -> Result<[u8; 32], StartupAbort> {
     if prompt.ask(dialog) != StartupChoice::StartOver {
         return Err(StartupAbort::UserQuit);
     }
+    let in_password_mode = !matches!(access, RootKeyAccess::Keychain(_));
+    // A5 nennt die Verpackungsdatei im Umbenennungssatz — **aber nur, wenn
+    // sie selbst das Unbrauchbare ist** (D3, `UnusableWrapping`). Bei D2 mit
+    // brauchbarem K wäre ihr Umbenennen der Verlust von K: Die Datenbank
+    // wird neu angelegt, und ohne Verpackung gäbe es kein Passwort mehr, mit
+    // dem sie sich öffnen ließe. Strenger als der Wortlaut wäre hier also
+    // schädlich; die Regel bleibt „nie überschreiben“, nicht „immer
+    // umbenennen“.
+    let include_wrapping = in_password_mode && matches!(key, StartOverKey::Issue);
     // Der Name steht **vor** der Bestätigung fest, damit der Dialog ihn
     // nennen kann (A5: „nennt im Dialog den neuen Dateinamen“).
     //
@@ -441,11 +630,25 @@ fn start_over(
     // *fehlt* × *ungültig* der Tabelle A3 führt ebenfalls über D3 hierher
     // (spec-reviewer Runde 1). Vorher nannten Bestätigung und Meldung dort
     // einen Dateinamen, den es nicht gab.
-    let plan = plan_start_over_renames(db_path);
+    let plan = plan_start_over_renames(db_path, include_wrapping);
     let renamed_to = plan.main_target_name();
     if !prompt.confirm_start_over(renamed_to.as_deref()) {
         return Err(StartupAbort::UserQuit);
     }
+
+    // **A5 im Passwort-Modus:** Das neue Passwort wird eingegeben, *bevor*
+    // eine Datei angefasst wird — „Bricht der Nutzer das Einrichten ab,
+    // bleibt alles unverändert.“ Deshalb steht die Abfrage hier, zwischen
+    // der zweiten Bestätigung und dem ersten `rename`.
+    let new_password = if include_wrapping {
+        match prompt.ask_for_new_master_password() {
+            Some(password) => Some(password),
+            None => return Err(StartupAbort::UserQuit),
+        }
+    } else {
+        None
+    };
+
     // Spec 0101, A5: **eigener Fall**, nicht `Other`. Der `Other`-Text rät
     // dazu, ein Backup einzuspielen — hier ist das falsch: `execute()` ist
     // alles-oder-nichts, die bisherige Datenbank liegt also unberührt an
@@ -455,20 +658,117 @@ fn start_over(
         kind: ConnectFailureKind::StartOverFailed,
         detail: format!("Umbenennen fehlgeschlagen: {err}"),
     })?;
+
+    // Erst nach dem Umbenennen ist der Platz der Verpackungsdatei frei —
+    // A5: „alte Verpackungsdatei umbenannt (nicht überschrieben)“.
+    let key = match (key, new_password) {
+        (StartOverKey::Keep(key), _) => key,
+        (StartOverKey::Issue, Some(password)) => {
+            let key = ssh_manager_core::crypto::generate_root_key();
+            // **Kein `set` auf den Schlüsselbund** (T7, wörtlich): Der Modus
+            // bleibt, was er war (A5).
+            set_up_password(db_path, &key, &password, None)?;
+            key
+        }
+        (StartOverKey::Issue, None) => match access {
+            RootKeyAccess::Keychain(store) => store_new_key_in_keychain(*store)?,
+            // Kann nicht vorkommen: `include_wrapping` ist im
+            // Passwort-Modus bei `Issue` wahr, also liegt ein Passwort vor.
+            // Sichtbar scheitern statt einen Schlüssel irgendwohin zu
+            // schreiben, wo ihn niemand erwartet.
+            _ => {
+                return Err(StartupAbort::Fatal {
+                    kind: ConnectFailureKind::Other,
+                    detail: "Passwort-Modus ohne neues Passwort beim Neuanfang".to_string(),
+                })
+            }
+        },
+    };
+
     if let Some(renamed_to) = renamed_to {
         prompt.notify_started_over(&renamed_to);
     }
-    Ok(())
+    Ok(key)
 }
 
-fn generate_key(credential_store: &dyn CredentialStore) -> Result<[u8; 32], StartupAbort> {
-    ssh_manager_core::crypto::generate_and_store_root_key(credential_store).map_err(|err| {
+/// Die Felder „K erzeugen“ der Tabelle A3 und D4.
+///
+/// Im Passwort-Modus heißt das: neues Passwort abfragen, K erzeugen, die
+/// alte Verpackungsdatei umbenennen (nie überschreiben, A5), dann die neue
+/// schreiben. Bricht der Nutzer ab, ist nichts verändert.
+fn generate_key(
+    db_path: &Path,
+    access: &RootKeyAccess<'_>,
+    prompt: &dyn StartupPrompt,
+) -> Result<[u8; 32], StartupAbort> {
+    match access {
+        RootKeyAccess::Keychain(store) => store_new_key_in_keychain(*store),
+        RootKeyAccess::Unlocked(_) | RootKeyAccess::UnusableWrapping => {
+            let Some(password) = prompt.ask_for_new_master_password() else {
+                return Err(StartupAbort::UserQuit);
+            };
+            let key = ssh_manager_core::crypto::generate_root_key();
+            // Die alte Verpackung aus dem Weg räumen, bevor die neue
+            // entsteht — und **umbenennen**, nicht löschen (A5).
+            let renamed = crate::master_password::rename_wrapping_file(
+                db_path,
+                &format!(
+                    ".unreadable-{}",
+                    chrono::Utc::now().format("%Y%m%dT%H%M%SZ")
+                ),
+            )
+            .map_err(|err| StartupAbort::Fatal {
+                kind: ConnectFailureKind::StartOverFailed,
+                detail: format!("alte Verpackungsdatei nicht umbenennbar: {err}"),
+            })?;
+            if let Some(renamed) = &renamed {
+                tracing::info!(
+                    renamed_to = %renamed.display(),
+                    "the previous wrapping file was renamed, not overwritten (Spec 0101, A5)"
+                );
+            }
+            set_up_password(db_path, &key, &password, None)?;
+            Ok(key)
+        }
+    }
+}
+
+fn store_new_key_in_keychain(store: &dyn CredentialStore) -> Result<[u8; 32], StartupAbort> {
+    ssh_manager_core::crypto::generate_and_store_root_key(store).map_err(|err| {
         // Der Text von `CipherError::KeyStoreAccessFailed` trägt die
         // Bibliotheks-Nutzlast — die geht ins Log, nie in einen Dialog
         // (Spec 0098, A5).
         StartupAbort::Fatal {
             kind: ConnectFailureKind::Other,
             detail: format!("Wurzelschlüssel nicht anlegbar: {err}"),
+        }
+    })
+}
+
+/// A13 aus dem Startablauf heraus. Die Reihenfolge und der Vergleich liegen
+/// in [`crate::master_password::set_up_master_password`]; hier wird nur der
+/// Fehler in einen Startfehler übersetzt.
+fn set_up_password(
+    db_path: &Path,
+    key: &[u8; 32],
+    password: &NewMasterPassword,
+    keyring: Option<&dyn CredentialStore>,
+) -> Result<(), StartupAbort> {
+    crate::master_password::set_up_master_password(
+        db_path,
+        key,
+        &password.password,
+        &password.repeated,
+        keyring,
+    )
+    .map_err(|err| {
+        tracing::warn!(
+            detail = err.detail_for_log().unwrap_or("-"),
+            "setting up the master password during startup failed (Spec 0101, A13)"
+        );
+        StartupAbort::Fatal {
+            kind: ConnectFailureKind::MasterPasswordSetupFailed,
+            detail: format!("Master-Passwort nicht einrichtbar: {err}"),
         }
     })
 }
@@ -583,18 +883,28 @@ impl StartOverPlan {
     }
 }
 
-/// A5: baut den Plan. Benennt Datei, `-wal`, `-shm` und `-journal` um (die
-/// Verpackungsdatei kommt in Etappe 3 dazu); vorhandene Dateien nur, denn
-/// `rename` auf eine fehlende Datei wäre ein Fehler, der den ganzen Vorgang
-/// abbräche.
-pub fn plan_start_over_renames(db_path: &Path) -> StartOverPlan {
+/// A5: baut den Plan. Benennt Datei, `-wal`, `-shm` und `-journal` um;
+/// vorhandene Dateien nur, denn `rename` auf eine fehlende Datei wäre ein
+/// Fehler, der den ganzen Vorgang abbräche.
+///
+/// `include_wrapping` nimmt die Verpackungsdatei des Passwort-Modus mit
+/// (A5). **Nur, wenn sie selbst unbrauchbar ist** — die Begründung steht
+/// bei [`StartOverKey`].
+pub fn plan_start_over_renames(db_path: &Path, include_wrapping: bool) -> StartOverPlan {
     let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
     let mut suffix = format!(".unreadable-{stamp}");
     // „löscht nichts“: Trägt schon etwas diesen Namen (zwei Versuche in
     // derselben Sekunde, oder ein Rest eines früheren Versuchs), wird ein
     // Zähler angehängt, statt die vorhandene Datei zu überschreiben.
     for attempt in 1..1000 {
-        if !any_target_exists(db_path, &suffix) {
+        if !any_target_exists(db_path, &suffix)
+            && !(include_wrapping
+                && std::fs::symlink_metadata(with_suffix(
+                    &crate::master_password::wrapping_file_path(db_path),
+                    &suffix,
+                ))
+                .is_ok())
+        {
             break;
         }
         suffix = format!(".unreadable-{stamp}-{attempt}");
@@ -618,6 +928,19 @@ pub fn plan_start_over_renames(db_path: &Path) -> StartOverPlan {
         if std::fs::symlink_metadata(&candidate).is_ok() {
             let target = with_suffix(&candidate, &suffix);
             renames.push((candidate, target));
+        }
+    }
+
+    // A5: „… und (Passwort-Modus) die Verpackungsdatei“. Sie steht
+    // **hinter** den Journaldateien, wird also vor der Hauptdatei
+    // umbenannt (s. `execute`, `rev()`): Scheitert es dort, liegt die
+    // Datenbank noch an ihrem Platz und der nächste Start sieht denselben
+    // Zustand wieder, statt eine neue Datenbank ohne Verpackung anzulegen.
+    if include_wrapping {
+        let wrapping = crate::master_password::wrapping_file_path(db_path);
+        if std::fs::symlink_metadata(&wrapping).is_ok() {
+            let target = with_suffix(&wrapping, &suffix);
+            renames.push((wrapping, target));
         }
     }
 

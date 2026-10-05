@@ -212,6 +212,25 @@ pub fn db_connect_failure_text(
              under {log_dir} names the exact cause.\n\n\
              Data path: {db_path}"
         ),
+        // Spec 0101, A13: Der Schlüssel liegt noch, wo er lag — also
+        // ausdrücklich **kein** „Backup einspielen" und kein Hinweis auf
+        // Datenverlust.
+        (Language::En, ConnectFailureKind::MasterPasswordSetupFailed) => format!(
+            "Smart SSH could not set up the master password: the key file next to the \
+             database could not be written or did not read back correctly. Nothing has \
+             been changed — your key is still where it was, and the next start finds the \
+             same state.\n\n\
+             Next step: check whether the data directory is writable and has free space, \
+             then start Smart SSH again. The log under {log_dir} names the exact \
+             cause.\n\n\
+             Data path: {db_path}"
+        ),
+        // Spec 0101 Etappe 3: Der Host-Key-Speicher hat seinen eigenen Text
+        // (`host_key_store_failure_text`) — dieser Zweig wird nur erreicht,
+        // wenn der Fall über die Startfehler-Rückgabe kommt (Teil 0 Frage 3).
+        (Language::En, ConnectFailureKind::HostKeyStoreFailed) => {
+            return host_key_store_failure_text(&std::path::PathBuf::from(&db_path), language)
+        }
         (Language::De, kind) => db_connect_failure_message_de(kind, &db_path, &log_dir),
     };
     DialogText {
@@ -328,6 +347,24 @@ fn db_connect_failure_message_de(
              Platz hat, und starte Smart SSH erneut; der Umzug macht dort weiter, wo er \
              aufgehört hat. Kommt derselbe Fehler wieder, kann der Datenbankinhalt doch \
              beschädigt sein — das Log unter {log_dir} nennt die genaue Ursache.\n\n\
+             Datenpfad: {db_path}"
+        ),
+        // Spec 0101, A13: Die Reihenfolge in A13 sorgt dafür, dass der
+        // Schlüssel noch an seiner alten Stelle liegt. Also kein „Backup
+        // einspielen" und ausdrücklich der Satz, dass nichts verloren ist —
+        // sonst liest sich dieser Fehler wie der Verlust aller Daten.
+        // s. den englischen Zweig: eigener Text an anderer Stelle.
+        ConnectFailureKind::HostKeyStoreFailed => {
+            host_key_store_failure_text(&std::path::PathBuf::from(db_path), Language::De).message
+        }
+        ConnectFailureKind::MasterPasswordSetupFailed => format!(
+            "Smart SSH konnte das Master-Passwort nicht einrichten: Die Schlüsseldatei \
+             neben der Datenbank ließ sich nicht schreiben oder nicht korrekt \
+             zurücklesen. Es ist nichts verändert — dein Schlüssel liegt weiter dort, wo \
+             er lag, und der nächste Start findet denselben Zustand vor.\n\n\
+             Nächster Schritt: Prüfe, ob das Datenverzeichnis beschreibbar ist und noch \
+             Platz hat, und starte Smart SSH erneut. Das Log unter {log_dir} nennt die \
+             genaue Ursache.\n\n\
              Datenpfad: {db_path}"
         ),
     }

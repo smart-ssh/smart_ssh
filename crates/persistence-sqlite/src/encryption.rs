@@ -344,7 +344,11 @@ pub async fn convert_plaintext_database(
 pub(crate) async fn convert_plaintext_database_inner(
     db_path: &Path,
     key: &DatabaseKey,
-    after_step: &mut dyn FnMut(ConversionStep) -> Result<(), ConversionFailure>,
+    // `+ Send` (Spec 0101, Etappe 3): Die Umwandlung läuft seit dem
+    // Passwort-Modus auch aus einem `#[tauri::command]` heraus, und dessen
+    // Future muss `Send` sein. Ohne diese Schranke wäre der Hook der eine
+    // nicht-`Send`-Teil im ganzen Startablauf.
+    after_step: &mut (dyn FnMut(ConversionStep) -> Result<(), ConversionFailure> + Send),
 ) -> Result<(), ConversionFailure> {
     // A6, letzter Satz / T20: Symlink vor jedem anderen Schritt prüfen —
     // bevor irgendetwas geöffnet oder angelegt ist.
@@ -370,7 +374,11 @@ async fn convert_steps(
     db_path: &Path,
     tmp: &Path,
     key: &DatabaseKey,
-    after_step: &mut dyn FnMut(ConversionStep) -> Result<(), ConversionFailure>,
+    // `+ Send` (Spec 0101, Etappe 3): Die Umwandlung läuft seit dem
+    // Passwort-Modus auch aus einem `#[tauri::command]` heraus, und dessen
+    // Future muss `Send` sein. Ohne diese Schranke wäre der Hook der eine
+    // nicht-`Send`-Teil im ganzen Startablauf.
+    after_step: &mut (dyn FnMut(ConversionStep) -> Result<(), ConversionFailure> + Send),
 ) -> Result<(), ConversionFailure> {
     // --- Schritt 1: Original öffnen, WAL vollständig einspielen, schließen.
     //

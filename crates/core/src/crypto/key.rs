@@ -130,6 +130,18 @@ fn generate_and_store_key(
     Ok(key)
 }
 
+/// Erzeugt einen neuen Wurzelschlüssel K **ohne** ihn abzulegen.
+///
+/// Für den Passwort-Modus (Spec 0101, A13/A5): Dort gehört K nicht in den
+/// Schlüsselbund, sondern in die Verpackungsdatei — und die schreibt
+/// `app_logic::master_password`, nicht dieses Modul.
+///
+/// Derselbe Hinweis wie bei [`generate_and_store_root_key`]: Nur aus einem
+/// Fall aufrufen, den A3 dafür vorsieht.
+pub fn generate_root_key() -> [u8; KEY_LEN] {
+    generate_key()
+}
+
 fn generate_key() -> [u8; KEY_LEN] {
     use chacha20poly1305::aead::{rand_core::RngCore, OsRng};
     let mut key = [0u8; KEY_LEN];

@@ -156,11 +156,16 @@ fn is_migratable(reference: &CredentialRef) -> bool {
 /// Löschen bei jedem Start erneut). Ein **Lesefehler** dagegen hält den
 /// Start an und zeigt D1 ohne Einrichten, bis der Nutzer „Erneut versuchen"
 /// wählt und es gelingt, oder „Beenden".
+/// `offers_skip` ist A11.1: Nur im Passwort-Modus bietet der Dialog „Ohne
+/// Übernahme fortfahren“ an. Im Schlüsselbund-Modus wäre die Wahl sinnlos —
+/// K kommt von dort, der Schlüsselbund ist also erreichbar, und die Secrets
+/// liegen im Zweifel nur dort.
 pub async fn migrate_secrets_into_database(
     store: &SqliteProfileStore,
     keyring: &(dyn CredentialStore + Send + Sync),
     database: &(dyn CredentialStore + Send + Sync),
     prompt: &dyn StartupPrompt,
+    offers_skip: bool,
 ) -> Result<(), StartupAbort> {
     loop {
         let (state, pending) =
@@ -250,26 +255,42 @@ pub async fn migrate_secrets_into_database(
             // D1 **ohne** Einrichten (A11): Ein neuer K würde den feldweise
             // verschlüsselten Verlauf unlesbar machen, und das Problem ist
             // ohnehin ein anderes — der Schlüsselbund antwortet nicht.
-            match prompt.ask(StartupDialog::D1 {
-                offers_password_setup: false,
+            match prompt.ask(StartupDialog::MigrationUnreadable {
+                offers_skip_migration: offers_skip,
             }) {
                 // Erneut prüfen, ohne Neustart — dieselbe Zusicherung wie
                 // bei D1 in A3. Der Zustand ist noch *offen*, also beginnt
                 // der nächste Durchlauf von vorn.
                 StartupChoice::Retry => continue,
-                // **Erschöpfend, kein `_`-Zweig** (spec-reviewer Runde 1):
-                // A11.1 fügt in Etappe 3 genau hier eine dritte Wahl hinzu
-                // („Ohne Übernahme fortfahren", Zustand *übersprungen*).
-                // Als Catch-all gälte sie stillschweigend als „Beenden" —
-                // der Compiler würde nichts sagen, und der Fehler fiele
-                // erst im Betrieb auf. So scheitert der Bau, bis die neue
-                // Wahl hier bewusst behandelt ist.
+                // **Erschöpfend, kein `_`-Zweig** (spec-reviewer Runde 1).
                 StartupChoice::Quit => return Err(StartupAbort::UserQuit),
-                // D1 bietet diese beiden nicht an (`offers_password_setup:
-                // false`, kein „Neu anfangen" in diesem Dialog). Käme eine
+                // A11.1: „Ohne Übernahme fortfahren“ → Zustand
+                // *übersprungen*. **Die Prüfung auf `offers_skip` steht hier
+                // noch einmal**, nicht nur beim Anbieten: Der Knopf kommt
+                // aus einer Oberfläche, und im Schlüsselbund-Modus würde
+                // diese Wahl Secrets dauerhaft unerreichbar machen, obwohl
+                // sie noch im erreichbaren Schlüsselbund liegen.
+                StartupChoice::ContinueWithoutMigration if offers_skip => {
+                    store
+                        .set_secret_migration_state(STATE_SKIPPED, &[])
+                        .await
+                        .map_err(|err| StartupAbort::Fatal {
+                            kind: ConnectFailureKind::SecretMigrationFailed,
+                            detail: format!("Umzugszustand nicht schreibbar: {err}"),
+                        })?;
+                    tracing::warn!(
+                        "the user chose to continue without taking over the stored secrets; no \
+                         keychain entry will ever be deleted (Spec 0101, A11.1)"
+                    );
+                    return Ok(());
+                }
+                // Die Wahlen, die dieser Dialog nicht anbietet. Käme eine
                 // davon trotzdem zurück, wäre die Lage unklar — dann nichts
                 // anfassen und beenden, statt zu raten.
-                StartupChoice::StartOver | StartupChoice::GenerateNewKey => {
+                StartupChoice::ContinueWithoutMigration
+                | StartupChoice::StartOver
+                | StartupChoice::GenerateNewKey
+                | StartupChoice::SetUpMasterPassword => {
                     tracing::warn!(
                         "the migration dialog returned a choice it does not offer; quitting \
                          without touching anything (Spec 0101, A11)"
