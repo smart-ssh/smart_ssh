@@ -430,7 +430,18 @@ pub(crate) async fn proposed_decision_code_with_origin(
     action: AiAction,
     origin: ActionOrigin,
 ) -> (Decision, serde_json::Value) {
-    let emitter = TestEmitter::default();
+    proposed_decision_code_with_emitter(session, action, origin, &TestEmitter::default()).await
+}
+
+/// Wie [`proposed_decision_code_with_origin`], aber mit einem vom Aufrufer
+/// gehaltenen `emitter` — damit ein Warte-Helfer im Fehlerfall die bis
+/// dahin gesendeten Events auflisten kann (Issue #2).
+pub(crate) async fn proposed_decision_code_with_emitter(
+    session: &Session,
+    action: AiAction,
+    origin: ActionOrigin,
+    emitter: &TestEmitter,
+) -> (Decision, serde_json::Value) {
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
     let session_id = Uuid::new_v4();
@@ -439,7 +450,7 @@ pub(crate) async fn proposed_decision_code_with_origin(
         session,
         session_id,
         action,
-        &emitter,
+        emitter,
         &profile_store,
         &confirmations,
         origin,
