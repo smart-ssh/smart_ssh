@@ -225,11 +225,33 @@ pub fn db_connect_failure_text(
              cause.\n\n\
              Data path: {db_path}"
         ),
+        // Spec 0101, A5/A13 (Klarstellung 9): **nicht** „nichts verändert" —
+        // auf diesem Weg sind die alten Dateien schon zur Seite gelegt.
+        (Language::En, ConnectFailureKind::MasterPasswordSetupFailedAfterRename) => format!(
+            "Smart SSH moved your previous files aside as you asked, but then could not \
+             write the key file for the new master password. Your data is not lost: the \
+             previous database and the previous key file are still in the data directory \
+             under their new names, ending in .unreadable-<timestamp>.\n\n\
+             Next step: check whether the data directory is writable and has free space, \
+             then start Smart SSH again — it will offer to start over once more. Keep the \
+             renamed files until you are done. The log under {log_dir} names the exact \
+             cause.\n\n\
+             Data path: {db_path}"
+        ),
         // Spec 0101 Etappe 3: Der Host-Key-Speicher hat seinen eigenen Text
         // (`host_key_store_failure_text`) — dieser Zweig wird nur erreicht,
         // wenn der Fall über die Startfehler-Rückgabe kommt (Teil 0 Frage 3).
-        (Language::En, ConnectFailureKind::HostKeyStoreFailed) => {
-            return host_key_store_failure_text(&std::path::PathBuf::from(&db_path), language)
+        //
+        // **Mit dem Pfad des Host-Key-Speichers, nicht dem der Datenbank**
+        // (spec-reviewer Lauf 4, Fund 9): Der Text rät dazu, die Datei zu
+        // löschen, wenn sie beschädigt ist — er darf dabei nicht die
+        // Datenbank nennen.
+        //
+        // **Beide Sprachen über diesen Zweig:** Vorher nahm der deutsche Weg
+        // nur `.message` aus einer zweiten Aufrufstelle. Eine Stelle, ein
+        // Text.
+        (_, ConnectFailureKind::HostKeyStoreFailed) => {
+            return host_key_store_failure_text(&host_key_store_path(&db_path), language)
         }
         (Language::De, kind) => db_connect_failure_message_de(kind, &db_path, &log_dir),
     };
@@ -354,9 +376,27 @@ fn db_connect_failure_message_de(
         // einspielen" und ausdrücklich der Satz, dass nichts verloren ist —
         // sonst liest sich dieser Fehler wie der Verlust aller Daten.
         // s. den englischen Zweig: eigener Text an anderer Stelle.
+        // Über [`db_connect_failure_text`] nicht erreichbar: Dieser Fall
+        // kehrt dort für **beide** Sprachen früh zurück. Der Arm steht
+        // trotzdem hier, weil die Verzweigung vollständig sein muss — und er
+        // liefert denselben Text statt zu panicken: Ein Panic auf dem
+        // Startpfad ist genau das undiagnostizierbare Aufblitzen, das
+        // Spec 0059 beseitigt hat.
         ConnectFailureKind::HostKeyStoreFailed => {
-            host_key_store_failure_text(&std::path::PathBuf::from(db_path), Language::De).message
+            host_key_store_failure_text(&host_key_store_path(db_path), Language::De).message
         }
+        ConnectFailureKind::MasterPasswordSetupFailedAfterRename => format!(
+            "Smart SSH hat deine bisherigen Dateien wie gewünscht zur Seite gelegt, konnte \
+             danach aber die Schlüsseldatei für das neue Master-Passwort nicht schreiben. \
+             Deine Daten sind nicht verloren: Die bisherige Datenbank und die bisherige \
+             Schlüsseldatei liegen weiter im Datenverzeichnis, unter ihren neuen Namen mit \
+             der Endung .unreadable-<Zeitstempel>.\n\n\
+             Nächster Schritt: Prüfe, ob das Datenverzeichnis beschreibbar ist und noch \
+             Platz hat, und starte Smart SSH erneut — es bietet den Neuanfang dann wieder \
+             an. Behalte die umbenannten Dateien, bis du fertig bist. Das Log unter \
+             {log_dir} nennt die genaue Ursache.\n\n\
+             Datenpfad: {db_path}"
+        ),
         ConnectFailureKind::MasterPasswordSetupFailed => format!(
             "Smart SSH konnte das Master-Passwort nicht einrichten: Die Schlüsseldatei \
              neben der Datenbank ließ sich nicht schreiben oder nicht korrekt \
@@ -367,6 +407,23 @@ fn db_connect_failure_message_de(
              genaue Ursache.\n\n\
              Datenpfad: {db_path}"
         ),
+    }
+}
+
+/// Wo der Host-Key-Speicher liegt: `host_keys.json` **neben** der Datenbank.
+///
+/// Eine Funktion, damit `app_shell::run` (das die Datei lädt) und der
+/// Fehlertext hier denselben Pfad nennen. Vorher stand die Regel zweimal da,
+/// und der Text nannte am Ende den Pfad der Datenbank (spec-reviewer Lauf 4,
+/// Fund 9).
+pub fn host_key_store_path(db_path: impl AsRef<Path>) -> std::path::PathBuf {
+    let db_path = db_path.as_ref();
+    match db_path.parent() {
+        Some(dir) => dir.join("host_keys.json"),
+        // Ein Datenbankpfad ohne Elternverzeichnis kommt im Feld nicht vor
+        // (s. `default_db_path`). Der Fehlertext soll daran aber nicht
+        // scheitern — er nennt dann den Namen allein.
+        None => std::path::PathBuf::from("host_keys.json"),
     }
 }
 
@@ -847,6 +904,118 @@ mod tests {
                 text.message
             );
         }
+    }
+
+    /// Klarstellung 9 (spec-reviewer Lauf 4, Fund 2): Die beiden
+    /// Scheiternsfälle des Einrichtens dürfen **nicht** denselben Text
+    /// zeigen.
+    ///
+    /// Aus den Einstellungen und aus D1 ist wirklich nichts verändert. Auf
+    /// dem Weg über A5 („Neu anfangen", „Neuen Schlüssel erzeugen") sind die
+    /// alten Dateien dagegen schon umbenannt — dort wäre „Es ist nichts
+    /// verändert" eine falsche Tatsachenbehauptung, und zwar genau da, wo
+    /// der Nutzer entscheiden muss, ob er die weggeschobenen Dateien noch
+    /// braucht.
+    #[test]
+    fn test_the_two_master_password_setup_failures_do_not_claim_the_same_thing() {
+        for language in [Language::De, Language::En] {
+            let untouched = db_connect_failure_text(
+                &ConnectFailureKind::MasterPasswordSetupFailed,
+                Path::new("/tmp/test/smart-ssh.db"),
+                Path::new("/tmp/test/logs"),
+                language,
+            );
+            let moved = db_connect_failure_text(
+                &ConnectFailureKind::MasterPasswordSetupFailedAfterRename,
+                Path::new("/tmp/test/smart-ssh.db"),
+                Path::new("/tmp/test/logs"),
+                language,
+            );
+
+            assert_ne!(
+                untouched.message, moved.message,
+                "{language:?}: die beiden Fälle beschreiben verschiedene Zustände"
+            );
+
+            // Der eine sagt zu, dass nichts angefasst wurde …
+            let nothing_changed = match language {
+                Language::De => "nichts verändert",
+                Language::En => "Nothing has been changed",
+            };
+            assert!(
+                untouched.message.contains(nothing_changed),
+                "{language:?}: {}",
+                untouched.message
+            );
+
+            // … der andere darf das gerade nicht, und muss sagen, wo die
+            // Dateien jetzt liegen.
+            assert!(
+                !moved.message.contains(nothing_changed),
+                "{language:?}: nach dem Umbenennen ist sehr wohl etwas verändert: {}",
+                moved.message
+            );
+            assert!(
+                moved.message.contains(".unreadable-"),
+                "{language:?}: der Text muss die umbenannten Dateien wiederfindbar machen: {}",
+                moved.message
+            );
+            assert!(moved.message.contains("/tmp/test/logs"));
+        }
+    }
+
+    /// spec-reviewer Lauf 4, Fund 9: Der Fehler zum Host-Key-Speicher nennt
+    /// **dessen** Pfad, nicht den der Datenbank.
+    ///
+    /// Vorher nannte der Dialog den Datenbankpfad, obwohl er zum Löschen
+    /// einer **anderen** Datei rät — „Ist die Datei beschädigt, kann sie
+    /// gelöscht werden" hätte damit auf die Datenbank gezeigt.
+    ///
+    /// Geprüft wird außerdem, dass **beide** Sprachen durch dieselbe Stelle
+    /// gehen und denselben Text wie der direkte Aufruf liefern: Der deutsche
+    /// Weg nahm vorher nur `.message` aus einer zweiten Aufrufstelle. (Der
+    /// Titel war dabei schon in beiden Fällen derselbe —
+    /// `host_key_store_failure_text` nutzt selbst `cannot_start_title`.
+    /// Insofern war nur der Pfad ein echter Fehler.)
+    #[test]
+    fn test_the_host_key_store_failure_names_its_own_file_in_both_languages() {
+        for language in [Language::De, Language::En] {
+            let text = db_connect_failure_text(
+                &ConnectFailureKind::HostKeyStoreFailed,
+                Path::new("/tmp/test/smart-ssh.db"),
+                Path::new("/tmp/test/logs"),
+                language,
+            );
+            assert!(
+                text.message.contains("/tmp/test/host_keys.json"),
+                "{language:?}: der Text muss die Datei nennen, die nicht zu laden war: {}",
+                text.message
+            );
+            assert!(
+                !text.message.contains("smart-ssh.db"),
+                "{language:?}: der Dialog rät zum Löschen — er darf dabei nicht die \
+                 Datenbank nennen: {}",
+                text.message
+            );
+            let direct =
+                host_key_store_failure_text(Path::new("/tmp/test/host_keys.json"), language);
+            assert_eq!(text.title, direct.title, "{language:?}");
+            assert_eq!(
+                text.message, direct.message,
+                "{language:?}: beide Sprachen müssen durch dieselbe Stelle gehen"
+            );
+        }
+    }
+
+    /// Fund 9: Die Regel „`host_keys.json` neben der Datenbank" steht an
+    /// einer Stelle — `app_shell::run` lädt denselben Pfad, den der
+    /// Fehlertext nennt.
+    #[test]
+    fn test_the_host_key_store_lives_next_to_the_database() {
+        assert_eq!(
+            host_key_store_path(Path::new("/tmp/test/smart-ssh.db")),
+            Path::new("/tmp/test/host_keys.json")
+        );
     }
 
     #[test]

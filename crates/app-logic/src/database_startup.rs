@@ -472,7 +472,7 @@ pub async fn open_or_prepare_database(
                         // A5: Abbruch heißt, dass nichts verändert ist.
                         return Err(StartupAbort::UserQuit);
                     };
-                    set_up_password(db_path, &key, &new_password, None)?;
+                    set_up_password(db_path, &key, &new_password, None, FilesAlreadyMoved::No)?;
                     // Ab jetzt Passwort-Modus mit entpacktem K; der nächste
                     // Durchlauf fährt die Tabelle neu und landet in
                     // „neu anlegen“ bzw. „umwandeln“.
@@ -667,7 +667,7 @@ fn start_over(
             let key = ssh_manager_core::crypto::generate_root_key();
             // **Kein `set` auf den Schlüsselbund** (T7, wörtlich): Der Modus
             // bleibt, was er war (A5).
-            set_up_password(db_path, &key, &password, None)?;
+            set_up_password(db_path, &key, &password, None, FilesAlreadyMoved::Yes)?;
             key
         }
         (StartOverKey::Issue, None) => match access {
@@ -727,7 +727,7 @@ fn generate_key(
                     "the previous wrapping file was renamed, not overwritten (Spec 0101, A5)"
                 );
             }
-            set_up_password(db_path, &key, &password, None)?;
+            set_up_password(db_path, &key, &password, None, FilesAlreadyMoved::Yes)?;
             Ok(key)
         }
     }
@@ -748,11 +748,27 @@ fn store_new_key_in_keychain(store: &dyn CredentialStore) -> Result<[u8; 32], St
 /// A13 aus dem Startablauf heraus. Die Reihenfolge und der Vergleich liegen
 /// in [`crate::master_password::set_up_master_password`]; hier wird nur der
 /// Fehler in einen Startfehler übersetzt.
+/// Was beim Scheitern über den Zustand zu sagen ist (Klarstellung 9,
+/// spec-reviewer Lauf 4, Fund 2).
+///
+/// Der Fehlertext zu A13 sagt „Es ist nichts verändert — dein Schlüssel
+/// liegt weiter dort, wo er lag". Das stimmt für das Einrichten aus den
+/// Einstellungen und aus D1, aber **nicht** auf den Wegen über A5: Dort sind
+/// Datenbank und alte Verpackung beim Einrichten schon zur Seite gelegt (die
+/// Reihenfolge ist zwingend, s. ADR 0095 §4). Ein eigener Wert statt eines
+/// `bool`, damit an der Aufrufstelle lesbar steht, welcher der beiden Fälle
+/// gemeint ist.
+enum FilesAlreadyMoved {
+    No,
+    Yes,
+}
+
 fn set_up_password(
     db_path: &Path,
     key: &[u8; 32],
     password: &NewMasterPassword,
     keyring: Option<&dyn CredentialStore>,
+    moved: FilesAlreadyMoved,
 ) -> Result<(), StartupAbort> {
     crate::master_password::set_up_master_password(
         db_path,
@@ -767,7 +783,10 @@ fn set_up_password(
             "setting up the master password during startup failed (Spec 0101, A13)"
         );
         StartupAbort::Fatal {
-            kind: ConnectFailureKind::MasterPasswordSetupFailed,
+            kind: match moved {
+                FilesAlreadyMoved::No => ConnectFailureKind::MasterPasswordSetupFailed,
+                FilesAlreadyMoved::Yes => ConnectFailureKind::MasterPasswordSetupFailedAfterRename,
+            },
             detail: format!("Master-Passwort nicht einrichtbar: {err}"),
         }
     })
