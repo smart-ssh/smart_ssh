@@ -36,6 +36,10 @@ mod startup_dialog;
 /// Spec 0101, A16: das Tor, das vor der Entsperrung jedes Kommando außer
 /// Entsperren, Beenden und Neu-anfangen abweist.
 mod startup_gate;
+/// Spec 0101, A16/T18: die Verdrahtung des Tors — dass es vor dem Verteiler
+/// sitzt und der MCP-Server vor der Entsperrung nicht startet.
+#[cfg(test)]
+mod startup_gate_wiring;
 /// Spec 0101, A3/A5: die nativen Startdialoge zu den Fällen D1–D4 —
 /// Zuordnung von Fall zu Text und Knöpfen, ohne eigene Logik.
 mod startup_prompt;
@@ -875,12 +879,17 @@ pub(crate) struct UnlockedPluginsPendingSlot(pub bool);
 /// Als eigene Funktion, damit die Reihenfolge an einer Stelle steht und
 /// nicht in einem Schließungsausdruck mitten in der Builder-Kette
 /// verschwindet: **erst** prüfen, **dann** weiterleiten.
-fn gated<F>(
+///
+/// Über die Laufzeit `R` abstrahiert, damit `startup_gate_wiring` die
+/// Verdrahtung mit der Test-Laufzeit **durch den echten IPC-Weg** prüfen
+/// kann (T18): In `run()` wird `R` zu `tauri::Wry`, am Aufruf ändert sich
+/// nichts.
+fn gated<R: tauri::Runtime, F>(
     gate: std::sync::Arc<crate::startup_gate::StartupGate>,
     inner: F,
-) -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static
+) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static
 where
-    F: Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static,
+    F: Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static,
 {
     move |invoke| {
         let command = invoke.message.command();
