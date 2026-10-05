@@ -81,7 +81,7 @@
       "locked": "unavailable — present but locked. Next step: unlock it and restart Smart SSH. No package is missing.",
       "unknown": "unavailable — cause unknown. Next step: check whether a Secret Service provider is running and unlocked (gnome-keyring, or KWallet or KeePassXC with Secret Service integration switched on), then restart Smart SSH."
     },
-    "keychainBlocked": "While this is the case, no API key, no server password, no passphrase and no sudo password can be saved or read.",
+    "keychainBlocked": "This does not affect your secrets — API keys, server passwords, passphrases, and sudo passwords live in the encrypted database, not in the keychain.",
     "keychainLoadFailed": "Could not load the system keyring state."
   },
   "fileTypes": {
@@ -172,12 +172,12 @@
       "checkFailed": "The pre-check could not be requested. This does not block saving — the file is checked again when connecting."
     },
     "convertToKeychain": {
-      "legend": "Move into the keychain",
-      "hint": "Copies the key file's content into the system keychain once and switches the auth method to \"Private Key\". Protects against a file with permissions that are too open, or a directory someone else can read.",
-      "button": "Move into the keychain",
+      "legend": "Move into the encrypted database",
+      "hint": "Copies the key file's content into the encrypted database once and switches the auth method to \"Private Key\". Protects against a file with permissions that are too open, or a directory someone else can read.",
+      "button": "Move into the encrypted database",
       "checking": "Checking …",
       "checkFailed": "The pre-check could not be requested, so the button stays disabled. Try again, e.g. by switching to another server and back.",
-      "confirmWhatChanges": "The login will then depend on the system keychain, no longer on this file.",
+      "confirmWhatChanges": "The login will then depend on the encrypted database, no longer on this file.",
       "confirmWhatStays": "The file stays unchanged on disk — it is neither deleted nor modified:",
       "confirm": "Move",
       "converting": "Moving …"
@@ -187,11 +187,11 @@
     "sudoLabel": "Sudo Password",
     "sudoUnchanged": "(empty = unchanged)",
     "sudoUnchangedStored": "(empty = unchanged, currently stored)",
-    "sudoUnchangedUnknown": "(empty = unchanged; without a system keyring it cannot be determined whether one is stored)",
-    "deletedWithLeftoverSecretsTitle": "Server deleted — secrets remain in the keyring",
-    "deletedWithLeftoverSecretsHint": "The server is gone, but the system keyring could not delete these entries. They are now orphaned (the server no longer exists) and can be removed by hand in your keyring manager under the service \"Smart SSH\":",
+    "sudoUnchangedUnknown": "(empty = unchanged; without access to the encrypted database it cannot be determined whether one is stored)",
+    "deletedWithLeftoverSecretsTitle": "Server deleted — secrets remain in the database",
+    "deletedWithLeftoverSecretsHint": "The server is gone, but at least one secret could not be removed from the encrypted database. It is now orphaned (the server no longer exists). The exact cause is in the log:",
     "removeSudoPassword": "Remove stored sudo password",
-    "removeSudoPasswordFailed": "The sudo password could not be removed — it is still in the system keyring and will be fed in again on the next \"sudo\".",
+    "removeSudoPasswordFailed": "The sudo password could not be removed — it is still in the encrypted database and will be fed in again on the next \"sudo\".",
     "postIngestFieldset": "Confirmation After Server Access",
     "postIngestHint": "Controls whether and when extra confirmation is required after server content (command output, files, notes) has been read during this session. Regardless of this setting, such content is always clearly marked as data, never treated as an instruction.",
     "postIngest": {
@@ -217,10 +217,10 @@
     "noContext": "(no context)",
     "deleteServer": "Delete Server",
     "deleteImpactTitle": "Impact of deletion:",
-    "deleteNoKeychainImpact": "No secrets in the keychain, no other servers affected.",
-    "secretWillBeDeleted": "Will be removed from the keychain: {{label}}",
-    "secretMayBeDeleted": "Could not be checked (system keyring not readable), will be removed if possible: {{label}}",
-    "identityFilePassphraseMayBeDeleted": "If a passphrase is stored for this key file, it will be removed as well. The key file itself stays untouched on disk — it is never in the keychain.",
+    "deleteNoKeychainImpact": "No secrets in the database, no other servers affected.",
+    "secretWillBeDeleted": "Will be removed from the database: {{label}}",
+    "secretMayBeDeleted": "Could not be checked (database not readable), will be removed if possible: {{label}}",
+    "identityFilePassphraseMayBeDeleted": "If a passphrase is stored for this key file, it will be removed as well. The key file itself stays untouched on disk — it is never in the database.",
     "serverWillLoseJumpHost": "Loses the jump-host reference to this server: {{name}}",
     "deleteAlwaysRemovesHistory": "This also permanently deletes this server's chat history, notes, and tags.",
     "confirmDeleteServer": "Delete permanently",
@@ -481,12 +481,14 @@
     "KEY_FILE_INVALID_KEY": "The file's content is not a valid OpenSSH key.",
     "SERVER_IDENTITY_FILE_REQUIRED": "Path to the key file is required",
     "SERVER_NOT_AN_IDENTITY_FILE": "This server does not log in with a key file",
-    "IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND": "The key was already written to the keychain but could not be removed again after a failure — the entry stayed behind and must be removed by hand.",
+    "IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND": "The key was already written to the encrypted database but could not be removed again after a failure — the entry stayed behind. The exact cause is in the log.",
     "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "The first-run notice must be acknowledged first",
-    "KEYCHAIN_UNAVAILABLE": "The system keyring is unavailable. While this is the case, no API key, no server password, no passphrase and no sudo password can be saved or read. The diagnostics view in the settings shows the exact reason and the next step.",
+    "KEYCHAIN_UNAVAILABLE": "The system keyring is unavailable — this does not affect your secrets: API keys, server passwords, passphrases, and sudo passwords live in the encrypted database. The diagnostics view in the settings shows the exact reason and the next step.",
     "KEYCHAIN_ACCESS_FAILED": "Access to the system keyring failed. It may be locked, or access was denied. Please try again — the exact reason is in the log.",
+    "SECRET_STORE_FAILED": "Access to a stored secret (e.g. API key, server password, passphrase, sudo password, or token) in the encrypted database failed — for example because the database is not writable or out of space. Nothing was changed; the exact cause is in the log.",
     "WRONG_MASTER_PASSWORD": "Wrong password, or the file is damaged. The two cannot be told apart from the outside. Nothing was changed.",
     "MASTER_PASSWORD_FILE_FAILED": "The key to your database could not be read or written just now. Nothing was changed; the cause is in the log.",
+    "MASTER_PASSWORD_FILE_ABSENT": "There is no key file at this location anymore — Smart SSH now runs this database in keychain mode. Nothing was changed. Try again.",
     "MASTER_PASSWORD_REJECTED": "The master password was rejected: at least 12 characters, and both entries must match.",
     "STARTUP_FAILED": "The startup did not complete. Nothing was changed; the log names the cause.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "The keychain holds a different key. Nothing was changed — confirm the replacement if that is what you want.",
@@ -512,7 +514,7 @@
   "firstRunNotice": {
     "title": "Before you start",
     "responsibilityText": "Smart SSH proposes commands generated by an AI based on your requests. Nothing runs without your confirmation — unless you've explicitly set up a rule that allows it. You're responsible for every command you approve.",
-    "encryptionText": "The local database is not separately encrypted. We recommend enabling your operating system's disk encryption if you haven't already.",
+    "encryptionText": "The local database is encrypted. Your operating system's keychain holds the key — or, if you set one up, your master password does. Anyone with access to your unlocked user account can read the data.",
     "checkboxLabel": "I've read and understood this.",
     "continueButton": "Continue"
   },
@@ -646,7 +648,7 @@
       "modeHeading": "Key file (IdentityFile) — default for all entries",
       "mode": {
         "keepAsFile": "Keep as key file (opens nothing)",
-        "intoKeychain": "Read and store in the keychain",
+        "intoKeychain": "Read and store in the database",
         "drop": "Don't take over"
       },
       "notUsable": "not usable when connecting, needs an absolute path",

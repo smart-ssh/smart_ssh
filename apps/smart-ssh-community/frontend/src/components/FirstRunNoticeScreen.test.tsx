@@ -43,9 +43,23 @@ describe("first-run notice screen (Spec 0031)", () => {
     expect(onAcknowledge).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the exact responsibility and encryption text from spec 0031", () => {
+  it("shows the exact responsibility text from spec 0031", () => {
     renderScreen();
     expect(screen.getByText(/Verantwortung für jedes bestätigte Kommando liegt bei dir/)).toBeInTheDocument();
-    expect(screen.getByText(/nicht zusätzlich verschlüsselt/)).toBeInTheDocument();
+  });
+
+  // Spec 0101, A21/Klarstellung 1: Seit die Datenbank verschlüsselt ist
+  // (SQLCipher, Schlüsselbund oder Master-Passwort), stimmt der alte Satz
+  // „nicht zusätzlich verschlüsselt“ nicht mehr — er behauptete das
+  // Gegenteil des jetzigen Zustands. *Gegenbeweis:* Dieser Test scheitert
+  // gegen den alten Text in `locales/de/common.json`.
+  it("shows the exact wording of Klarstellung 1 (database is encrypted, key held by keychain or master password)", () => {
+    renderScreen();
+    expect(
+      screen.getByText(
+        "Die lokale Datenbank ist verschlüsselt. Den Schlüssel verwahrt der Schlüsselbund deines Betriebssystems oder – wenn du es einrichtest – dein Master-Passwort. Wer Zugriff auf dein entsperrtes Benutzerkonto hat, kann die Daten lesen.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/nicht zusätzlich verschlüsselt/)).not.toBeInTheDocument();
   });
 });

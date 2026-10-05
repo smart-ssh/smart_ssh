@@ -154,7 +154,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     // ganzen Import und einzeln je Eintrag"): jetzt erscheint die Warnbox
     // mit dem Pfad, *bevor* irgendetwas bestätigt wurde.
     const globalSection = screen.getByText("Schlüsseldatei (IdentityFile) — Vorgabe für alle Einträge").closest("section");
-    fireEvent.click(within(globalSection as HTMLElement).getByRole("radio", { name: "Einlesen und im Schlüsselbund ablegen" }));
+    fireEvent.click(within(globalSection as HTMLElement).getByRole("radio", { name: "Einlesen und in der Datenbank ablegen" }));
     const warnBox = await screen.findByText(/würden beim Bestätigen gelesen/);
     expect(warnBox.closest("div")).toHaveTextContent("/keys/id_ed25519");
   });

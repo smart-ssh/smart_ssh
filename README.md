@@ -16,8 +16,8 @@
 - **Hierarchische Gruppen & Tags:** Organisiere Server in verschachtelten Gruppen mit Vererbung von Tags und Kontextnotizen.
 - **Jump Hosts / Bastions:** Nahtlose Verkettung über Zwischen-Server (SSH-Bastion-Hosts).
 - **Flexible Authentifizierung:** Unterstützung für Passwörter, Private Keys (verschlüsselt mit Passphrase), SSH-Agent (`SSH_AUTH_SOCK`) und OpenSSH-Zertifikate.
-- **Sichere Secret-Verwaltung:** Zugangsdaten und API-Keys werden **ausschließlich im nativen OS-Schlüsselbund** gespeichert (macOS Keychain, Windows Credential Manager, Linux Secret Service).
-- **Integrierte SQLite-Datenbank:** Speicherung von Serverprofilen, Tags, Notizhistorien und Sicherheitsregeln mit automatischen Migrationen.
+- **Vollständig verschlüsselte Datenbank:** Die lokale SQLite-Datenbank ist komplett verschlüsselt (SQLCipher) — Serverprofile, Zugangsdaten, API-Keys, Notizen und Sicherheitsregeln liegen darin, nie im Klartext. Den Schlüssel verwahrt der native OS-Schlüsselbund (macOS Keychain, Windows Credential Manager, Linux Secret Service) oder, wenn du es einrichtest, dein eigenes Master-Passwort — unter Linux ohne laufenden Secret Service die einzige Möglichkeit, sonst optional.
+- **Serverprofile mit automatischen Migrationen:** Tags, Notizhistorien und Sicherheitsregeln je Server, versioniert über eingebaute Datenbank-Migrationen.
 - **Verbindungstest vorab:** Sofortige Validierung von Host, Port, Jump-Host und Zugangsdaten vor dem Speichern.
 
 ### 🤖 Sicherer KI-Assistent & Split-Screen UI

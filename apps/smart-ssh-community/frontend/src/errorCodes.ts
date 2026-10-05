@@ -23,6 +23,7 @@
 export const MASTER_PASSWORD_ERROR_CODES = [
   "WRONG_MASTER_PASSWORD",
   "MASTER_PASSWORD_FILE_FAILED",
+  "MASTER_PASSWORD_FILE_ABSENT",
   "MASTER_PASSWORD_REJECTED",
   "MASTER_PASSWORD_MODE_MISMATCH",
   "MASTER_PASSWORD_WARNING_NOT_CONFIRMED",
@@ -161,6 +162,14 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // Schlüsselbund ist vorhanden, dieser eine Zugriff ist gescheitert, und
   // der nächste kann gelingen (A3).
   "KEYCHAIN_ACCESS_FAILED",
+  // Spec 0101, A9/A9.1: Secrets (API-Keys, Server-Passwörter, Passphrasen,
+  // Sudo-Passwörter, Provider-Header, MCP-Token) liegen seit Etappe 2 in der
+  // verschlüsselten Datenbank, nicht mehr im Schlüsselbund — ein
+  // gescheiterter Zugriff ist deshalb kein Schlüsselbund-Fehler mehr.
+  // `KEYCHAIN_ACCESS_FAILED` schickte den Nutzer in die Systemeinstellungen,
+  // wo es nichts zu reparieren gibt, während die eigentliche Ursache
+  // (Datenbank nicht schreibbar, Platte voll) ungenannt blieb.
+  "SECRET_STORE_FAILED",
   // Spec 0077, 3.1.4/3.1.6: Das Muster einer Filterregel lässt sich nicht
   // übersetzen. Im Regel-Formular steht unter dem übersetzten Satz
   // zusätzlich der Fehlertext der Bibliothek (er nennt die Stelle im
@@ -172,12 +181,18 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // sind nach A17 nicht unterscheidbar, und ein zweiter Code wäre ein
   // Orakel darüber, welcher der beiden Fälle vorliegt.
   "WRONG_MASTER_PASSWORD",
-  // Jeder Fehler an der Verpackungsdatei — auch „liegt da, ist aber gerade
-  // nicht lesbar" (Klarstellung 10a). Ein eigener Code dafür wäre ein
-  // Orakel darüber, ob die Datei existiert und bloß gesperrt ist; die
-  // Oberfläche tut in beiden Fällen dasselbe. Der Unterschied steht im
-  // Text, den das Backend mitschickt.
+  // Jeder Fehler an der Verpackungsdatei, bei dem sie noch **da** ist, aber
+  // gerade nicht lesbar (Klarstellung 10a). Ein eigener Code für „liegt da,
+  // ist aber gesperrt" wäre ein Orakel darüber, ob sie bloß gesperrt oder
+  // beschädigt ist; die Oberfläche tut in beiden Fällen dasselbe. Der
+  // Unterschied steht im Text, den das Backend mitschickt.
   "MASTER_PASSWORD_FILE_FAILED",
+  // review-09 (Runde 2 Teil A, Fund 2 „Rest"): „Neu anfangen" auf eine
+  // Datenbank **ohne** Datei an diesem Ort — kein Dateifehler, sondern
+  // längst der Schlüsselbund-Modus. Vorher lief das unter
+  // `MASTER_PASSWORD_FILE_FAILED`, und der Text behauptete „gerade nicht
+  // lesbar", wo es gar keine Datei gibt.
+  "MASTER_PASSWORD_FILE_ABSENT",
   // A13: zu kurz oder nicht wiederholt.
   "MASTER_PASSWORD_REJECTED",
   // Review-Fund Runde 1 zu Commit 11: Der Vorgang passt nicht zum aktiven

@@ -191,7 +191,7 @@ describe("ServerForm — Sudo-Passwort-Zustand (Spec 0071, A14)", () => {
     renderForm();
 
     expect(
-      await screen.findByText(/lässt sich ohne Systemschlüsselbund nicht feststellen/),
+      await screen.findByText(/lässt sich ohne Zugriff auf die verschlüsselte Datenbank nicht feststellen/),
     ).toBeInTheDocument();
     // Der Ja-Text darf nicht zusätzlich erscheinen; der Nein-Text ist die
     // eigentliche Falschaussage aus X4 und muss weg sein.
@@ -274,7 +274,7 @@ describe("ServerForm — Sudo-Passwort entfernen schlägt fehl (Spec 0071, A17)"
     // dass das Passwort beim naechsten `sudo` wieder eingespeist wird, ist
     // die eigentliche Information auf diesem Pfad.
     const error = await screen.findByText(/konnte nicht entfernt werden/);
-    expect(error).toHaveTextContent("weiterhin im Systemschlüsselbund");
+    expect(error).toHaveTextContent("weiterhin in der verschlüsselten Datenbank");
     expect(error).toHaveTextContent("sudo");
     // Und die Maske darf nicht auf "kein Sudo-Passwort hinterlegt"
     // umschalten, obwohl nichts entfernt wurde.
@@ -571,7 +571,9 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       </I18nextProvider>,
     );
 
-    const button = await screen.findByRole("button", { name: "In den Schlüsselbund übernehmen" });
+    const button = await screen.findByRole("button", {
+      name: "In die verschlüsselte Datenbank übernehmen",
+    });
     await waitFor(() => expect(button).not.toBeDisabled());
     fireEvent.click(button);
     expect(await screen.findByText(IDENTITY_PATH)).toBeInTheDocument();
@@ -608,7 +610,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
   });
 });
 
-describe("ServerForm — Überführung in den Schlüsselbund (Spec 0076, C-1/C-2/C-7)", () => {
+describe("ServerForm — Überführung in die verschlüsselte Datenbank (Spec 0076, C-1/C-2/C-7; Spec 0101, A20)", () => {
   it("zeigt keinen Überführen-Knopf für andere Anmeldearten", async () => {
     vi.mocked(getServer).mockResolvedValue(serverDto({ authKind: "agent" }));
 
@@ -616,7 +618,7 @@ describe("ServerForm — Überführung in den Schlüsselbund (Spec 0076, C-1/C-2
 
     await screen.findByText(/web-01/);
     expect(
-      screen.queryByRole("button", { name: "In den Schlüsselbund übernehmen" }),
+      screen.queryByRole("button", { name: "In die verschlüsselte Datenbank übernehmen" }),
     ).not.toBeInTheDocument();
   });
 
@@ -637,7 +639,7 @@ describe("ServerForm — Überführung in den Schlüsselbund (Spec 0076, C-1/C-2
     renderForm();
 
     const button = await screen.findByRole("button", {
-      name: "In den Schlüsselbund übernehmen",
+      name: "In die verschlüsselte Datenbank übernehmen",
     });
     await waitFor(() => expect(inspectKeyFile).toHaveBeenCalledWith(IDENTITY_PATH));
     expect(button).toBeDisabled();
@@ -658,7 +660,7 @@ describe("ServerForm — Überführung in den Schlüsselbund (Spec 0076, C-1/C-2
 
     renderForm();
     const button = await screen.findByRole("button", {
-      name: "In den Schlüsselbund übernehmen",
+      name: "In die verschlüsselte Datenbank übernehmen",
     });
     await waitFor(() => expect(button).not.toBeDisabled());
     fireEvent.click(button);
