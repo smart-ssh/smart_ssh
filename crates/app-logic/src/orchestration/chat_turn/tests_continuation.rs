@@ -173,7 +173,14 @@ async fn test_auto_continuation_after_confirm_approve_triggers_second_send_call(
         &confirmations,
     );
     let responder = approve_first_proposed_action(&emitter, &confirmations);
-    tokio::join!(turn, responder);
+    expect_event_within(
+        &emitter,
+        "chat-action-proposed (Confirm) für \"systemctl restart nginx\", danach Turn-Ende nach Bestätigung",
+        async {
+            tokio::join!(turn, responder);
+        },
+    )
+    .await;
 
     let contexts = contexts.lock().unwrap().clone();
     assert_eq!(
@@ -217,7 +224,14 @@ async fn test_auto_continuation_after_user_deny_pushes_rejection_and_triggers_se
         &confirmations,
     );
     let responder = deny_first_proposed_action(&emitter, &confirmations);
-    tokio::join!(turn, responder);
+    expect_event_within(
+        &emitter,
+        "chat-action-proposed (Confirm) für \"rm -rf /data\", danach Turn-Ende nach Ablehnung",
+        async {
+            tokio::join!(turn, responder);
+        },
+    )
+    .await;
 
     let contexts = contexts.lock().unwrap().clone();
     assert_eq!(
@@ -700,7 +714,14 @@ async fn test_stop_auto_continuation_prevents_further_rounds_but_leaves_open_dia
             tokio::task::yield_now().await;
         }
     };
-    tokio::join!(turn, responder);
+    expect_event_within(
+        &emitter,
+        "chat-action-proposed (Confirm) für \"echo two\" in Runde 2, danach Turn-Ende nach Stopp der Automatik",
+        async {
+            tokio::join!(turn, responder);
+        },
+    )
+    .await;
 
     let contexts = contexts.lock().unwrap().clone();
     assert_eq!(
@@ -833,7 +854,14 @@ async fn test_sudo_password_credential_store_not_read_again_across_multiple_comm
             }
         }
     };
-    tokio::join!(turn, responder);
+    expect_event_within(
+        &emitter,
+        "zwei chat-action-proposed (Confirm) für beide sudo-Kommandos, danach Turn-Ende",
+        async {
+            tokio::join!(turn, responder);
+        },
+    )
+    .await;
 
     assert_eq!(
         store.get_calls(),
