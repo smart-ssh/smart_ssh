@@ -50,6 +50,25 @@ pub const STARTUP_FAILED_CODE: &str = "STARTUP_FAILED";
 /// versuchen". Der Text dazu entsteht mit dem Dialog in Commit 11.
 pub const KEYCHAIN_HOLDS_ANOTHER_KEY_CODE: &str = "KEYCHAIN_HOLDS_ANOTHER_KEY";
 
+/// Klarstellung 11: Nach wie vielen gescheiterten Entsperrversuchen eines
+/// **Programmlaufs** die Maske „Neu anfangen" anbietet.
+///
+/// **Warum es diese Zahl überhaupt gibt** (Q-BL-0314-01, K3 entschieden):
+/// Nach A17 sind „Passwort vergessen" und „ein Byte im Chiffrat gekippt"
+/// nicht unterscheidbar. Der Riegel aus Klarstellung 9 lehnt beide ab,
+/// solange die Datei einen brauchbaren Kopf hat — richtig gegen den
+/// Fehlgriff, aber damit hatte dauerhaft gescheiterte Authentifizierung in
+/// der App **keinen Ausweg**. Drei Versuche sind die Schwelle, ab der ein
+/// Tippfehler als Erklärung ausfällt.
+///
+/// **Was den Ausweg weiter eng hält:** Gezählt wird nur eine gescheiterte
+/// *Authentifizierung* (nicht ein Datei- oder Schlüsselbundfehler), der
+/// Zähler liegt nur im Speicher und beginnt bei jedem Start bei null, eine
+/// *nicht erreichbare* Verpackungsdatei bietet den Ausweg **nie**, und
+/// dahinter liegen unverändert die zweite Bestätigung aus A5 und — im
+/// Passwort-Modus — das Einrichten eines neuen Passworts.
+const ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED: u32 = 3;
+
 /// Was zum Nachbauen des Zustands nach der Entsperrung gebraucht wird.
 ///
 /// **Wird immer verwaltet**, auch im Schlüsselbund-Modus: Sonst wäre
@@ -75,6 +94,17 @@ pub struct PendingStartup {
     /// ist der Punkt — der zweite benennt Dateien um, und zwei davon
     /// gleichzeitig wäre der schlechteste Augenblick für ein Rennen.
     unlock_lock: tokio::sync::Mutex<()>,
+    /// Klarstellung 11: gescheiterte Entsperrversuche **dieses
+    /// Programmlaufs**.
+    ///
+    /// **Nur im Speicher, und das ist die Zusage:** Vor der Entsperrung
+    /// wird für diesen Zähler nichts geschrieben — keine Datei, keine
+    /// Einstellung, kein Datenbankeintrag (vor der Entsperrung gibt es
+    /// ohnehin keine offene Datenbank). Ein Neustart beginnt bei null. Ein
+    /// dauerhafter Zähler wäre eine neue Datensenke neben der Datenbank und
+    /// zugleich ein Weg, den Ausweg durch Warten statt durch Versuche
+    /// freizuschalten.
+    failed_unlock_attempts: std::sync::atomic::AtomicU32,
 }
 
 impl PendingStartup {
@@ -87,7 +117,33 @@ impl PendingStartup {
             entitlements,
             prompt: std::sync::Mutex::new(None),
             unlock_lock: tokio::sync::Mutex::new(()),
+            failed_unlock_attempts: std::sync::atomic::AtomicU32::new(0),
         }
+    }
+
+    fn failed_unlock_attempts(&self) -> u32 {
+        self.failed_unlock_attempts
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Klarstellung 11: **nur** eine gescheiterte Authentifizierung zählt.
+    ///
+    /// Ein Datei- oder Schlüsselbundfehler zählt nicht: Er sagt nichts
+    /// darüber, ob das Passwort passt, und würde den Ausweg öffnen, obwohl
+    /// die Verpackung vielleicht vollkommen in Ordnung ist (Klarstellung
+    /// 10a).
+    fn note_failed_unlock_attempt(&self) -> u32 {
+        let count = self
+            .failed_unlock_attempts
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
+        tracing::info!(
+            attempts = count,
+            threshold = ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED,
+            "a master-password unlock attempt failed to authenticate (Spec 0101, A17, \
+             Klarstellung 11)"
+        );
+        count
     }
 
     fn prompt_for(&self, app: &tauri::AppHandle) -> Arc<WindowStartupPrompt> {
@@ -106,23 +162,126 @@ impl PendingStartup {
     }
 }
 
+/// Welche Maske der Start zeigt — **ein** Feld, nicht mehrere Flaggen.
+///
+/// Vorher trug das DTO `unlocked`, `needs_unlock` und `wrapping_unusable`:
+/// drei Wahrheitswerte, aus denen die Oberfläche einen Zustand
+/// zusammensetzen musste — und einer der vier Zustände aus A3 war darin
+/// nicht abbildbar (ADR 0097 §4.2: *nicht erreichbar* führte zu
+/// `needs_unlock = true`, der Nutzer sah also ein Passwortfeld für eine
+/// Datei, die gar nicht gelesen werden konnte). Ein Feld mit vier Werten
+/// kann sich nicht selbst widersprechen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartupScreen {
+    /// Der Zustand steht; die Oberfläche zeigt die App.
+    Unlocked,
+    /// A16: Entsperrmaske mit Passwortfeld (A3-Spalte *da* nach dem
+    /// Entsperren).
+    Unlock,
+    /// A3 *ungültig* (D3/D4), Klarstellung 9/10a: Die Datei wurde gelesen
+    /// und gibt mit **keinem** Passwort K her. Kein Passwortfeld, sondern
+    /// der Ausweg „Neu anfangen".
+    UnusableWrapping,
+    /// A3 *nicht erreichbar* (D1), Klarstellung 10a/11: Die Datei liegt an
+    /// ihrem Platz, ließ sich aber nicht lesen. „Erneut versuchen" /
+    /// „Beenden", **kein** „Neu anfangen" — über den Inhalt ist nichts
+    /// gesagt, und morgen ist die Datei vielleicht wieder lesbar.
+    UnreachableWrapping,
+    /// Teil 0 Frage 3 / A13: Schlüsselbund-Modus, aber der Zustand steht
+    /// nicht — der Start ist in D1 gelandet und soll mit dem Einrichten
+    /// eines Master-Passworts im Fenster weitergehen.
+    SetUpMasterPassword,
+}
+
+impl StartupScreen {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Unlocked => "unlocked",
+            Self::Unlock => "unlock",
+            Self::UnusableWrapping => "unusableWrapping",
+            Self::UnreachableWrapping => "unreachableWrapping",
+            Self::SetUpMasterPassword => "setUpMasterPassword",
+        }
+    }
+}
+
+/// Die Entscheidung über die Startmaske — **eine** Stelle für zwei
+/// Verbraucher.
+///
+/// `offers_start_over` beantwortet dieselbe Frage für die Maske (darf der
+/// Knopf erscheinen?) und für [`start_over_from_unlock_screen`] (darf der
+/// Aufruf angenommen werden?). Zwei getrennte Fassungen davon wären zwei
+/// Gelegenheiten, sie auseinanderlaufen zu lassen — und die gefährliche
+/// Richtung ist die, in der der Aufruf mehr annimmt als die Maske anbietet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct StartupScreenDecision {
+    screen: StartupScreen,
+    offers_start_over: bool,
+}
+
+/// A3/A16, Klarstellung 9 + 11 — rein, damit die Tabelle unten prüfbar ist.
+///
+/// `health` ist `None`, solange der Zustand schon steht (entsperrt): Dann
+/// ist über die Datei nichts zu sagen, und ein Lesefehler wäre bloß Lärm.
+fn decide_startup_screen(
+    health: Option<master_password::WrappingHealth>,
+    failed_unlock_attempts: u32,
+) -> StartupScreenDecision {
+    use master_password::WrappingHealth as H;
+    let Some(health) = health else {
+        return StartupScreenDecision {
+            screen: StartupScreen::Unlocked,
+            offers_start_over: false,
+        };
+    };
+    match health {
+        // Keine Verpackungsdatei: Schlüsselbund-Modus. Dass der Zustand
+        // trotzdem nicht steht, heißt, dass der Start in D1 gelandet ist
+        // (Teil 0 Frage 3).
+        H::Absent => StartupScreenDecision {
+            screen: StartupScreen::SetUpMasterPassword,
+            offers_start_over: false,
+        },
+        // Klarstellung 11: der einzige Zustand, in dem Versuche zählen.
+        H::Usable => StartupScreenDecision {
+            screen: StartupScreen::Unlock,
+            offers_start_over: failed_unlock_attempts >= ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED,
+        },
+        // Klarstellung 9: Hier gibt es nichts zu entsperren — kein
+        // Passwortfeld, und der Ausweg steht sofort offen.
+        H::Unusable => StartupScreenDecision {
+            screen: StartupScreen::UnusableWrapping,
+            offers_start_over: true,
+        },
+        // Klarstellung 11, letzter Satz: **nie** „Neu anfangen", auch nicht
+        // nach beliebig vielen Versuchen. Ein Rechte- oder E/A-Fehler mit
+        // dem Aufgeben von K zu beantworten wäre der schlechteste Tausch
+        // dieser Spec.
+        H::Unreachable => StartupScreenDecision {
+            screen: StartupScreen::UnreachableWrapping,
+            offers_start_over: false,
+        },
+    }
+}
+
 /// Was die Oberfläche beim Start anzeigen soll (A16/A18).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartupStateDto {
-    /// `true`, sobald der Zustand steht — dann zeigt die Oberfläche die App.
-    pub unlocked: bool,
-    /// `true`: Entsperrmaske (A16). `false` und nicht entsperrt: die
-    /// Einrichtemaske aus D1 (A13).
-    pub needs_unlock: bool,
+    /// Welche Maske — s. [`StartupScreen`]. `"unlocked"` heißt: die App.
+    pub screen: &'static str,
     /// A18: der aktive Modus, `"password"` oder `"keychain"`.
     pub mode: &'static str,
-    /// Klarstellung 9: `true`, wenn die Verpackungsdatei mit **keinem**
-    /// Passwort zu öffnen ist (A3 *ungültig*). Dann zeigt die Maske kein
-    /// Passwortfeld, sondern den Ausweg „Neu anfangen" (A16) — und nur
-    /// dann nimmt
-    /// [`start_over_from_unlock_screen`] ihn an.
-    pub wrapping_unusable: bool,
+    /// Klarstellung 11: Darf die Maske „Neu anfangen" anbieten? Die
+    /// Oberfläche entscheidet das nicht selbst — sie fragt, und
+    /// [`start_over_from_unlock_screen`] prüft dieselbe Bedingung noch
+    /// einmal selbst.
+    pub offers_start_over: bool,
+    /// Klarstellung 11: gescheiterte Entsperrversuche dieses Programmlaufs.
+    /// Für den Hinweistext der Maske („nach drei Versuchen …"); die
+    /// Entscheidung hängt nicht an diesem Wert, sondern an
+    /// `offers_start_over`.
+    pub failed_unlock_attempts: u32,
     /// Die Sprache der Startmasken, `"de"` oder `"en"`.
     ///
     /// **Warum aus dem Backend und nicht aus der Einstellungsdatei:**
@@ -143,6 +302,17 @@ fn mode_name(mode: KeyMode) -> &'static str {
     }
 }
 
+/// Der Modus aus demselben Blick auf die Datei, aus dem auch ihr Zustand
+/// kommt (s. [`startup_state`]). Dasselbe Kriterium wie
+/// [`master_password::key_mode`]: Es gibt eine Verpackungsdatei an diesem
+/// Ort oder nicht.
+fn mode_for(health: master_password::WrappingHealth) -> KeyMode {
+    match health {
+        master_password::WrappingHealth::Absent => KeyMode::Keychain,
+        _ => KeyMode::Password,
+    }
+}
+
 /// A16/A18: Was ist zu zeigen? Das erste Kommando, das die Oberfläche beim
 /// Start aufruft.
 #[tauri::command]
@@ -158,21 +328,26 @@ pub fn get_startup_state(
 /// ohne die Zustandsgriffe weiterzugeben.
 fn startup_state(gate: &StartupGate, pending: &PendingStartup) -> StartupStateDto {
     let db_path = &pending.inputs.db_path;
-    let mode = master_password::key_mode(db_path);
     let unlocked = gate.is_unlocked();
-    // Die Datei wird nur im gesperrten Passwort-Modus geprüft: Danach ist
-    // der Zustand schon gebaut, und ein Lesefehler wäre bloß Lärm.
-    let wrapping_unusable = !unlocked
-        && mode == KeyMode::Password
-        && master_password::wrapping_health(db_path).allows_starting_over();
+    // **Eine Lesung entscheidet über Modus und Dateizustand**, solange der
+    // Zustand nicht steht. `key_mode` und `wrapping_health` stellen
+    // dieselbe Frage an dieselbe Datei (`symlink_metadata`); getrennt
+    // gefragt könnten sie sich widersprechen, wenn die Datei dazwischen
+    // verschwindet — und der Widerspruch landete in der Maske. Nach der
+    // Entsperrung wird die Datei nicht mehr gelesen: Der Zustand ist gebaut,
+    // ein Lesefehler wäre bloß Lärm.
+    let (mode, health) = if unlocked {
+        (master_password::key_mode(db_path), None)
+    } else {
+        let health = master_password::wrapping_health(db_path);
+        (mode_for(health), Some(health))
+    };
+    let decision = decide_startup_screen(health, pending.failed_unlock_attempts());
     StartupStateDto {
-        unlocked,
-        // Klarstellung 9: Bei unbrauchbarer Datei gibt es nichts zu
-        // entsperren — die Maske soll nicht nach einem Passwort fragen, das
-        // nie passen kann.
-        needs_unlock: !unlocked && mode == KeyMode::Password && !wrapping_unusable,
+        screen: decision.screen.name(),
         mode: mode_name(mode),
-        wrapping_unusable,
+        offers_start_over: decision.offers_start_over,
+        failed_unlock_attempts: pending.failed_unlock_attempts(),
         language: match pending.inputs.language {
             app_logic::startup_error_messages::Language::De => "de",
             app_logic::startup_error_messages::Language::En => "en",
@@ -219,7 +394,25 @@ pub async fn unlock_with_master_password(
     let keyring = credentials_keyring::KeyringCredentialStore::new();
     let access = match mode {
         KeyMode::Password => {
-            let key = master_password::unlock(&db_path, &password).map_err(to_command_error)?;
+            let key = match master_password::unlock(&db_path, &password) {
+                Ok(key) => key,
+                Err(err) => {
+                    // Klarstellung 11: Gezählt wird **nur** eine
+                    // gescheiterte Authentifizierung — „Passwort falsch
+                    // oder Datei beschädigt" (A17). Ein Datei- oder
+                    // Schlüsselbundfehler sagt nichts darüber, ob das
+                    // Passwort passt; ihn mitzuzählen hieße, den Ausweg
+                    // über eine dreimal nicht lesbare, vielleicht
+                    // vollkommen intakte Datei freizuschalten.
+                    if matches!(
+                        err,
+                        master_password::MasterPasswordError::WrongPasswordOrDamagedFile
+                    ) {
+                        pending.note_failed_unlock_attempt();
+                    }
+                    return Err(to_command_error(err));
+                }
+            };
             // A17: Ein liegengebliebener Schlüsselbund-Eintrag wird
             // aufgeräumt — aber nur, wenn er gleich K ist.
             master_password::tidy_up_keychain_after_unlock(&keyring, &key);
@@ -263,32 +456,8 @@ pub async fn start_over_from_unlock_screen(
 
     let db_path = pending.inputs.db_path.clone();
     let health = master_password::wrapping_health(&db_path);
-    if !health.allows_starting_over() {
-        tracing::warn!(
-            ?health,
-            "refusing to start over: the wrapping file next to the database may still yield the \
-             root key (Spec 0101, A5/A16, Klarstellung 10a)"
-        );
-        // **Zwei Gründe, zwei Texte** (Klarstellung 10a): Eine Datei, die
-        // sich gerade nicht *lesen* lässt, ist nicht dasselbe wie eine, die
-        // in Ordnung ist und nur ein anderes Passwort braucht. Beides endet
-        // in „nichts verändert, versuche es erneut" (D1) — aber einem
-        // Nutzer zu sagen, seine Datei sei in Ordnung, während ein
-        // Rechte- oder E/A-Fehler vorliegt, führt ihn in die falsche
-        // Fehlersuche.
-        return Err(match health {
-            master_password::WrappingHealth::Unreachable => CommandError::with_code(
-                "Die Schlüsseldatei neben deiner Datenbank liegt an ihrem Platz, ist aber \
-                 gerade nicht lesbar — vielleicht hält sie ein anderes Programm offen oder \
-                 die Rechte stimmen nicht. Es wurde nichts verändert. Versuche es erneut.",
-                MASTER_PASSWORD_FILE_FAILED_CODE,
-            ),
-            _ => CommandError::with_code(
-                "Deine Schlüsseldatei ist in Ordnung — nur das Passwort passt nicht. Versuche \
-                 es erneut; es wird nichts verändert.",
-                WRONG_MASTER_PASSWORD_CODE,
-            ),
-        });
+    if let Some(refusal) = refuse_to_start_over(health, pending.failed_unlock_attempts()) {
+        return Err(refusal);
     }
 
     // `UnusableWrapping` führt die Tabelle A3 nach *ungültig* und damit nach
@@ -310,6 +479,52 @@ pub async fn start_over_from_unlock_screen(
         true,
     )
     .await
+}
+
+/// Der Riegel vor „Neu anfangen" — `Some`, wenn der Aufruf abzulehnen ist.
+///
+/// **Dieselbe Bedingung wie die Maske** ([`decide_startup_screen`]): Was
+/// dort nicht angeboten wird, wird hier nicht angenommen. Die Oberfläche
+/// entscheidet es nicht; sie kann es nur anfragen. Sonst wäre dieses
+/// Kommando bei bloß vergessenem Passwort ein Knopf, der den Verlauf
+/// wegwirft, obwohl K noch zu holen wäre.
+fn refuse_to_start_over(
+    health: master_password::WrappingHealth,
+    failed_unlock_attempts: u32,
+) -> Option<CommandError> {
+    if decide_startup_screen(Some(health), failed_unlock_attempts).offers_start_over {
+        return None;
+    }
+    tracing::warn!(
+        ?health,
+        failed_unlock_attempts,
+        "refusing to start over: the wrapping file next to the database may still yield the \
+         root key (Spec 0101, A5/A16, Klarstellung 10a/11)"
+    );
+    // **Drei Gründe, zwei Texte.** Eine Datei, die sich gerade nicht
+    // *lesen* lässt, ist nicht dasselbe wie eine, die in Ordnung ist und nur
+    // ein anderes Passwort braucht (Klarstellung 10a). Beides endet in
+    // „nichts verändert, versuche es erneut" (D1) — aber einem Nutzer zu
+    // sagen, seine Datei sei in Ordnung, während ein Rechte- oder
+    // E/A-Fehler vorliegt, führt ihn in die falsche Fehlersuche.
+    Some(match health {
+        master_password::WrappingHealth::Unreachable
+        // Keine Datei an diesem Ort: Dann gibt es auch nichts umzubenennen,
+        // und der Modus ist inzwischen der Schlüsselbund-Modus. „Erneut
+        // versuchen" liest den Zustand neu und führt dorthin.
+        | master_password::WrappingHealth::Absent => CommandError::with_code(
+            "Die Schlüsseldatei neben deiner Datenbank liegt an ihrem Platz, ist aber \
+             gerade nicht lesbar — vielleicht hält sie ein anderes Programm offen oder \
+             die Rechte stimmen nicht. Es wurde nichts verändert. Versuche es erneut.",
+            MASTER_PASSWORD_FILE_FAILED_CODE,
+        ),
+        // Brauchbare Datei, noch zu wenige Fehlversuche (Klarstellung 11).
+        _ => CommandError::with_code(
+            "Deine Schlüsseldatei ist in Ordnung — nur das Passwort passt nicht. Versuche \
+             es erneut; es wird nichts verändert.",
+            WRONG_MASTER_PASSWORD_CODE,
+        ),
+    })
 }
 
 /// Der gemeinsame Rest von [`unlock_with_master_password`] und
@@ -623,5 +838,305 @@ fn startup_abort_to_command_error(
             tracing::error!(detail, ?kind, "the startup failed after unlocking");
             CommandError::with_code(text.message, STARTUP_FAILED_CODE)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use master_password::WrappingHealth as H;
+
+    /// A3/A16, Klarstellung 9 + 11: die **ganze** Entscheidungstabelle der
+    /// Startmaske, Zeile für Zeile.
+    ///
+    /// Der Fund, gegen den der dritte Zustand steht (ADR 0097 §4.2): *nicht
+    /// erreichbar* war im DTO nicht abbildbar und führte zum Passwortfeld —
+    /// der Nutzer tippte ein Passwort für eine Datei, die gar nicht gelesen
+    /// werden konnte. Die Zeile `Unreachable` unten ist genau das.
+    #[test]
+    fn test_the_startup_screen_follows_the_state_of_the_wrapping_file() {
+        // Entsperrt: über die Datei ist nichts zu sagen.
+        assert_eq!(
+            decide_startup_screen(None, 99),
+            StartupScreenDecision {
+                screen: StartupScreen::Unlocked,
+                offers_start_over: false,
+            },
+            "ist der Zustand gebaut, zeigt die Oberfläche die App — und „Neu anfangen“ hat dort \
+             nichts zu suchen"
+        );
+
+        assert_eq!(
+            decide_startup_screen(Some(H::Absent), 0).screen,
+            StartupScreen::SetUpMasterPassword,
+            "keine Verpackungsdatei und trotzdem kein Zustand: der Start ist in D1 gelandet \
+             (Teil 0 Frage 3)"
+        );
+        assert_eq!(
+            decide_startup_screen(Some(H::Usable), 0).screen,
+            StartupScreen::Unlock,
+            "brauchbare Datei: Passwortfeld (A16)"
+        );
+        assert_eq!(
+            decide_startup_screen(Some(H::Unusable), 0).screen,
+            StartupScreen::UnusableWrapping,
+            "A3 *ungültig*: kein Passwortfeld, sondern der Ausweg (Klarstellung 9)"
+        );
+        assert_eq!(
+            decide_startup_screen(Some(H::Unreachable), 0).screen,
+            StartupScreen::UnreachableWrapping,
+            "A3 *nicht erreichbar* (D1): weder Passwortfeld noch Ausweg — über den Inhalt der \
+             Datei ist nichts gesagt (Klarstellung 10a)"
+        );
+    }
+
+    /// Klarstellung 11: **Der Ausweg erscheint erst nach dem dritten
+    /// gescheiterten Versuch** — und bei einer nicht erreichbaren Datei nie.
+    #[test]
+    fn test_starting_over_is_offered_only_after_three_failed_attempts() {
+        for attempts in 0..ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED {
+            assert!(
+                !decide_startup_screen(Some(H::Usable), attempts).offers_start_over,
+                "nach {attempts} Fehlversuchen darf es den Ausweg noch nicht geben — der Riegel \
+                 aus Klarstellung 9 schützt genau hier vor dem vergessenen Passwort"
+            );
+            assert!(
+                refuse_to_start_over(H::Usable, attempts).is_some(),
+                "und das Kommando muss denselben Aufruf ablehnen; sonst bietet die Maske den \
+                 Knopf nicht an, aber ein erfundener Aufruf käme durch"
+            );
+        }
+        assert!(
+            decide_startup_screen(Some(H::Usable), ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED)
+                .offers_start_over,
+            "nach dem dritten Fehlversuch gibt es den Ausweg (Q-BL-0314-01, entschieden) — sonst \
+             ist ein vergessenes Passwort eine dauerhafte Aussperrung"
+        );
+        assert!(
+            refuse_to_start_over(H::Usable, ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED).is_none(),
+            "und das Kommando nimmt ihn dann an"
+        );
+
+        // Die Zeile, die auch nach beliebig vielen Versuchen stehen bleibt.
+        for attempts in [0, 3, 99] {
+            assert!(
+                !decide_startup_screen(Some(H::Unreachable), attempts).offers_start_over,
+                "Klarstellung 11, letzter Satz: eine *nicht erreichbare* Datei bietet „Neu \
+                 anfangen“ nie — ein Rechte- oder E/A-Fehler darf nicht mit dem Aufgeben von K \
+                 beantwortet werden"
+            );
+            assert!(
+                refuse_to_start_over(H::Unreachable, attempts).is_some(),
+                "und das Kommando lehnt ihn ab, egal wie oft gefragt wird"
+            );
+            assert!(
+                !decide_startup_screen(Some(H::Absent), attempts).offers_start_over,
+                "ohne Datei gibt es nichts umzubenennen"
+            );
+            assert!(
+                refuse_to_start_over(H::Absent, attempts).is_some(),
+                "und auch das lehnt das Kommando ab"
+            );
+        }
+
+        // Und die Gegenrichtung: Bei *ungültiger* Datei steht der Ausweg vom
+        // ersten Augenblick an offen (Klarstellung 9) — ohne diese Zeile käme
+        // eine Fassung durch, die ihn überall erst nach drei Versuchen
+        // anbietet.
+        assert!(decide_startup_screen(Some(H::Unusable), 0).offers_start_over);
+        assert!(refuse_to_start_over(H::Unusable, 0).is_none());
+    }
+
+    /// Die beiden Texte der Ablehnung sagen die **Wahrheit über den
+    /// Zustand**, den sie beschreiben (Klarstellung 10a).
+    #[test]
+    fn test_the_refusal_names_the_right_reason() {
+        let unreachable = refuse_to_start_over(H::Unreachable, 99).expect("abgelehnt");
+        assert_eq!(unreachable.code, Some(MASTER_PASSWORD_FILE_FAILED_CODE));
+        assert!(
+            unreachable.message.contains("nicht lesbar"),
+            "eine Datei, die sich nicht lesen lässt, ist nicht „in Ordnung, nur das Passwort \
+             passt nicht“ — das führte in die falsche Fehlersuche. Text: {}",
+            unreachable.message
+        );
+
+        let wrong_password = refuse_to_start_over(H::Usable, 0).expect("abgelehnt");
+        assert_eq!(wrong_password.code, Some(WRONG_MASTER_PASSWORD_CODE));
+        assert!(wrong_password.message.contains("in Ordnung"));
+    }
+
+    fn pending_for(db_path: std::path::PathBuf) -> PendingStartup {
+        PendingStartup::new(
+            crate::StartupInputs {
+                db_path,
+                language: app_logic::startup_error_messages::Language::De,
+                keychain: credentials_keyring::KeychainAvailability::Available,
+            },
+            Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
+                ssh_manager_core::entitlements::Entitlements::free(),
+            )),
+        )
+    }
+
+    /// Dasselbe am echten Dateisystem: Der Zustand im DTO kommt aus dem
+    /// Zustand der Datei — und `mode` widerspricht ihm nicht.
+    #[test]
+    fn test_the_startup_state_reports_the_state_of_the_file_next_to_the_database() {
+        let dir = tempfile::tempdir().expect("Temp-Verzeichnis");
+        let db_path = dir.path().join("smart-ssh.db");
+        let wrapping = master_password::wrapping_file_path(&db_path);
+        let gate = StartupGate::new(false);
+        let pending = pending_for(db_path.clone());
+
+        // Keine Datei: Schlüsselbund-Modus.
+        let state = startup_state(&gate, &pending);
+        assert_eq!(state.screen, "setUpMasterPassword");
+        assert_eq!(state.mode, "keychain");
+        assert!(!state.offers_start_over);
+
+        // Gelesen, aber unbrauchbar (A3 *ungültig*).
+        std::fs::write(&wrapping, b"kein Verpackungsformat-0101").expect("schreiben");
+        let state = startup_state(&gate, &pending);
+        assert_eq!(state.screen, "unusableWrapping");
+        assert_eq!(
+            state.mode, "password",
+            "eine Datei an diesem Ort heißt Passwort-Modus, auch wenn ihr Inhalt nichts hergibt \
+             — sonst entstünde im Schlüsselbund-Modus ein neuer K (A3)"
+        );
+        assert!(state.offers_start_over);
+
+        // Eine brauchbare Verpackung: Passwortfeld, kein Ausweg.
+        std::fs::remove_file(&wrapping).expect("entfernen");
+        master_password::set_up_master_password(
+            &db_path,
+            &[7u8; 32],
+            &SecretString::from("Passwort-0101-lang"),
+            &SecretString::from("Passwort-0101-lang"),
+            None,
+        )
+        .expect("einrichten");
+        let state = startup_state(&gate, &pending);
+        assert_eq!(state.screen, "unlock");
+        assert_eq!(state.mode, "password");
+        assert!(!state.offers_start_over);
+        assert_eq!(state.failed_unlock_attempts, 0);
+
+        // Klarstellung 11: drei gescheiterte Authentifizierungen, dann der
+        // Ausweg — an derselben, unveränderten Datei.
+        let before = std::fs::read(&wrapping).expect("lesen");
+        for _ in 0..ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED {
+            pending.note_failed_unlock_attempt();
+        }
+        let state = startup_state(&gate, &pending);
+        assert_eq!(
+            state.screen, "unlock",
+            "das Passwortfeld bleibt — der Ausweg kommt daneben, er ersetzt es nicht"
+        );
+        assert!(state.offers_start_over);
+        assert_eq!(state.failed_unlock_attempts, 3);
+        assert_eq!(
+            std::fs::read(&wrapping).expect("lesen"),
+            before,
+            "bis zur Nutzerwahl wird an der Datei nichts verändert (A3)"
+        );
+
+        // Und entsperrt ist der Schirm die App, ohne dass die Datei noch
+        // gelesen wird.
+        let open = StartupGate::new(true);
+        assert_eq!(startup_state(&open, &pending).screen, "unlocked");
+    }
+
+    /// A3 *nicht erreichbar* am echten Dateisystem (Klarstellung 10a): eine
+    /// **vollkommen gültige** Verpackung ohne Leserechte.
+    ///
+    /// Das ist der Fall, der vor Klarstellung 10a „Neu anfangen" anbot und
+    /// damit eine intakte Verpackung samt Datenbank umbenannte.
+    #[cfg(unix)]
+    #[test]
+    fn test_a_valid_wrapping_file_without_read_permission_is_unreachable_not_unusable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().expect("Temp-Verzeichnis");
+        let db_path = dir.path().join("smart-ssh.db");
+        master_password::set_up_master_password(
+            &db_path,
+            &[9u8; 32],
+            &SecretString::from("Passwort-0101-lang"),
+            &SecretString::from("Passwort-0101-lang"),
+            None,
+        )
+        .expect("einrichten");
+        let wrapping = master_password::wrapping_file_path(&db_path);
+        std::fs::set_permissions(&wrapping, std::fs::Permissions::from_mode(0o000))
+            .expect("Rechte setzen");
+
+        let gate = StartupGate::new(false);
+        let pending = pending_for(db_path);
+        // Auch nach beliebig vielen Fehlversuchen.
+        for _ in 0..10 {
+            pending.note_failed_unlock_attempt();
+        }
+        let state = startup_state(&gate, &pending);
+
+        // Vor dem Prüfen zurücksetzen: Ein scheiterndes `assert!` würde das
+        // Temp-Verzeichnis sonst mit einer unlesbaren Datei zurücklassen.
+        std::fs::set_permissions(&wrapping, std::fs::Permissions::from_mode(0o600))
+            .expect("Rechte zurücksetzen");
+
+        assert_eq!(
+            state.screen, "unreachableWrapping",
+            "eine Datei ohne Leserechte ist *nicht erreichbar*, nicht *ungültig* — ihr Inhalt \
+             kann vollkommen in Ordnung sein"
+        );
+        assert!(
+            !state.offers_start_over,
+            "und sie bietet „Neu anfangen“ nie an: sonst beantwortet ein Rechtefehler sich \
+             selbst mit dem Aufgeben von K"
+        );
+    }
+
+    /// Klarstellung 11: **Nur eine gescheiterte Authentifizierung zählt.**
+    ///
+    /// Quelltextlesend, weil `unlock_with_master_password` ein Tauri-Kommando
+    /// mit `State`-Griffen ist und außerhalb einer laufenden App nicht
+    /// aufrufbar (ADR 0096 §3). Die Aussage ist trotzdem falsifizierbar: Es
+    /// gibt genau eine Stelle, die zählt, sie liegt in diesem Kommando, und
+    /// die Prüfung auf die Fehlerart steht davor.
+    #[test]
+    fn test_only_a_failed_authentication_counts_towards_the_way_out() {
+        let source = include_str!("master_password.rs");
+        let production = &source[..source
+            .find("#[cfg(test)]")
+            .expect("das Testmodul ist nicht mehr zu finden")];
+
+        let counting = "pending.note_failed_unlock_attempt()";
+        assert_eq!(
+            production.matches(counting).count(),
+            1,
+            "Klarstellung 11: Gezählt wird an genau einer Stelle. Eine zweite braucht dieselbe \
+             Prüfung auf die Fehlerart — und dieser Test die zweite Stelle."
+        );
+
+        let unlocking = {
+            let start = production
+                .find("pub async fn unlock_with_master_password(")
+                .expect("das Entsperr-Kommando gibt es nicht mehr");
+            let rest = &production[start..];
+            &rest[..rest.find("\n}\n").expect("Funktionsende nicht gefunden")]
+        };
+        let guard = unlocking
+            .find("MasterPasswordError::WrongPasswordOrDamagedFile")
+            .expect(
+                "Klarstellung 11: Gezählt werden darf nur „Passwort falsch oder Datei \
+                 beschädigt“ (A17) — ohne diese Prüfung öffnete eine dreimal nicht lesbare, \
+                 vielleicht intakte Datei den Ausweg",
+            );
+        let counts = unlocking
+            .find(counting)
+            .expect("hier wird nicht mehr gezählt — s. Doc-Kommentar");
+        assert!(
+            guard < counts,
+            "die Prüfung auf die Fehlerart muss **vor** dem Zählen stehen"
+        );
     }
 }
