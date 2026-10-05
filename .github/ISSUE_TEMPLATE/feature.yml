@@ -1,0 +1,41 @@
+name: Feature
+description: New functionality or an enhancement.
+type: Feature
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: The desired user-visible or technical result.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Background needed to understand the work. Do not include credentials, hostnames or other private data.
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      value: |
+        - 
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      value: |
+        - [ ] 
+        - [ ] Relevant automated tests pass
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Technical Notes
+      description: Implementation hints, affected modules, constraints.
+  - type: textarea
+    id: related
+    attributes:
+      label: Related Work
+      description: Related issues or PRs, e.g. #123.

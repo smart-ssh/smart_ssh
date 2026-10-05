@@ -1,0 +1,53 @@
+name: Bug
+description: Something does not work as expected.
+type: Bug
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Do not include credentials, hostnames or other private data.
+      value: |
+        1. 
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behaviour
+  - type: input
+    id: version
+    attributes:
+      label: Version / Platform
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      value: |
+        - 
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      value: |
+        - [ ] 
+        - [ ] Relevant automated tests pass
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Technical Notes
+      description: Implementation hints, affected modules, constraints.
+  - type: textarea
+    id: related
+    attributes:
+      label: Related Work
+      description: Related issues or PRs, e.g. #123.
