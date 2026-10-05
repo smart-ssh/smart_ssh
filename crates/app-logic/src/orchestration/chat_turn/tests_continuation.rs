@@ -21,6 +21,7 @@ use crate::orchestration::generate_session_title_on_disconnect;
 use crate::state::ActionId;
 
 use super::super::test_support::*;
+use super::test_events::*;
 use super::*;
 
 /// Spec 0034, Abschnitt 7: automatische Titel-Generierung — nur bei
@@ -326,14 +327,15 @@ async fn test_regression_pending_action_cleared_and_turn_completes_after_deny() 
     );
     let responder = deny_first_proposed_action(&emitter, &confirmations);
 
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(turn, responder);
-    })
-    .await
-    .expect(
+    expect_event_within(
+        &emitter,
         "run_chat_turn ist nach einer Ablehnung nicht zurückgekehrt — \
          genau der gemeldete Bug (Spec 0021, Abschnitt 1)",
-    );
+        async {
+            tokio::join!(turn, responder);
+        },
+    )
+    .await;
 
     assert!(
         session.pending_action.lock().unwrap().is_none(),
@@ -1133,16 +1135,15 @@ async fn test_stop_aborts_in_flight_ai_stream_immediately() {
         &confirmations,
     );
     let stopper = async {
-        while !has_event(&emitter, "chat-text-delta") {
-            tokio::task::yield_now().await;
-        }
+        wait_for_event(&emitter, "chat-text-delta").await;
         session.request_auto_continue_stop();
     };
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(turn, stopper)
-    })
-    .await
-    .expect("Stopp muss den hängenden Stream beenden, nicht auf sein Ende warten");
+    expect_event_within(
+        &emitter,
+        "Stopp muss den hängenden Stream beenden, nicht auf sein Ende warten",
+        async { tokio::join!(turn, stopper) },
+    )
+    .await;
 
     assert!(
         dropped.load(std::sync::atomic::Ordering::SeqCst),
@@ -1189,19 +1190,16 @@ async fn test_stop_never_forwards_an_already_ready_tool_call() {
         &confirmations,
     );
     let stopper = async {
-        while !has_event(&emitter, "chat-text-delta") {
-            tokio::task::yield_now().await;
-        }
+        wait_for_event(&emitter, "chat-text-delta").await;
         // Beides gleichzeitig: Stopp setzen UND den Tool-Call sofort
         // verfügbar machen — der Stopp muss gewinnen.
         session.request_auto_continue_stop();
         gate.notify_waiters();
     };
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    expect_event_within(&emitter, "Turn muss nach Stopp enden", async {
         tokio::join!(turn, stopper)
     })
-    .await
-    .expect("Turn muss nach Stopp enden");
+    .await;
 
     assert!(
         !has_event(&emitter, "chat-action-proposed"),
@@ -1241,11 +1239,12 @@ async fn test_stop_during_pre_send_wait_prevents_the_request() {
         tokio::task::yield_now().await;
         session.request_auto_continue_stop();
     };
-    let (outcome, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(round, stopper)
-    })
-    .await
-    .expect("Stopp in der Wartezeit muss die Runde sofort beenden");
+    let (outcome, ()) = expect_event_within(
+        &emitter,
+        "Stopp in der Wartezeit muss die Runde sofort beenden",
+        async { tokio::join!(round, stopper) },
+    )
+    .await;
 
     assert_eq!(outcome, RoundOutcome::StoppedBeforeSend);
     assert_eq!(
@@ -1381,18 +1380,15 @@ async fn test_sftp_server_invocation_always_requires_confirm_even_with_allow_rul
         ActionOrigin::Internal,
         ActionOrigin::Mcp { client_name: None },
     ] {
-        let (decision, payload) = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            proposed_decision_code_with_origin(
-                &session,
-                AiAction::SuggestCommand {
-                    command: "sudo -n /usr/lib/openssh/sftp-server".to_string(),
-                },
-                origin,
-            ),
+        let (decision, payload) = expect_proposed_decision(
+            &session,
+            AiAction::SuggestCommand {
+                command: "sudo -n /usr/lib/openssh/sftp-server".to_string(),
+            },
+            origin,
+            "Dialog muss enden",
         )
-        .await
-        .expect("Dialog muss enden");
+        .await;
         assert!(
             matches!(&decision, Decision::Confirm { code, .. }
                 if code == "FILTER_SFTP_SERVER_REQUIRES_CONFIRM"),
@@ -1400,17 +1396,15 @@ async fn test_sftp_server_invocation_always_requires_confirm_even_with_allow_rul
         );
     }
 
-    let (decision, payload) = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        proposed_decision_code(
-            &session,
-            AiAction::SuggestCommand {
-                command: "ls -l /usr/lib/openssh/sftp-server".to_string(),
-            },
-        ),
+    let (decision, payload) = expect_proposed_decision(
+        &session,
+        AiAction::SuggestCommand {
+            command: "ls -l /usr/lib/openssh/sftp-server".to_string(),
+        },
+        ActionOrigin::Internal,
+        "Aktion muss enden",
     )
-    .await
-    .expect("Aktion muss enden");
+    .await;
     assert!(matches!(decision, Decision::AutoExec), "{payload}");
 }
 
@@ -1427,17 +1421,15 @@ async fn test_secret_read_does_not_consume_injection_suspicion() {
         .injection_suspected
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
-    let (first, payload) = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        proposed_decision_code(
-            &session,
-            AiAction::SuggestCommand {
-                command: "cat .env".to_string(),
-            },
-        ),
+    let (first, payload) = expect_proposed_decision(
+        &session,
+        AiAction::SuggestCommand {
+            command: "cat .env".to_string(),
+        },
+        ActionOrigin::Internal,
+        "Dialog muss enden",
     )
-    .await
-    .expect("Dialog muss enden");
+    .await;
     assert!(
         matches!(&first, Decision::Confirm { code, .. }
             if code == "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM"),
@@ -1447,17 +1439,15 @@ async fn test_secret_read_does_not_consume_injection_suspicion() {
         .injection_suspected
         .load(std::sync::atomic::Ordering::SeqCst));
 
-    let (second, payload) = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        proposed_decision_code(
-            &session,
-            AiAction::SuggestCommand {
-                command: "systemctl restart nginx".to_string(),
-            },
-        ),
+    let (second, payload) = expect_proposed_decision(
+        &session,
+        AiAction::SuggestCommand {
+            command: "systemctl restart nginx".to_string(),
+        },
+        ActionOrigin::Internal,
+        "Dialog muss enden",
     )
-    .await
-    .expect("Dialog muss enden");
+    .await;
     assert!(
         matches!(&second, Decision::Confirm { code, .. }
             if code == "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM"),
@@ -1473,18 +1463,15 @@ async fn test_mcp_secret_path_read_shows_the_secret_reason() {
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
     session.parts_mut_for_tests().filter_engine =
         Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    let (decision, payload) = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        proposed_decision_code_with_origin(
-            &session,
-            AiAction::SuggestCommand {
-                command: "cat /etc//shadow".to_string(),
-            },
-            ActionOrigin::Mcp { client_name: None },
-        ),
+    let (decision, payload) = expect_proposed_decision(
+        &session,
+        AiAction::SuggestCommand {
+            command: "cat /etc//shadow".to_string(),
+        },
+        ActionOrigin::Mcp { client_name: None },
+        "Dialog muss enden",
     )
-    .await
-    .expect("Dialog muss enden");
+    .await;
     assert!(
         matches!(&decision, Decision::Confirm { code, .. }
             if code == "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM"),
@@ -1592,11 +1579,10 @@ async fn test_secret_path_read_always_requires_confirm_even_with_allow_rule() {
                 tokio::task::yield_now().await;
             }
         };
-        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        expect_event_within(&emitter, "Aktion muss enden", async {
             tokio::join!(handled, responder)
         })
-        .await
-        .expect("Aktion muss enden");
+        .await;
 
         let events = emitter.events.lock().unwrap().clone();
         let proposed = &events
@@ -1640,17 +1626,15 @@ async fn test_secret_path_escalation_never_turns_deny_into_confirm() {
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
     session.parts_mut_for_tests().filter_engine = Box::new(FilterEngine::new(DenyCatPolicyStore));
 
-    let (decision, payload) = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        proposed_decision_code(
-            &session,
-            AiAction::SuggestCommand {
-                command: "cat ~/.ssh/id_rsa".to_string(),
-            },
-        ),
+    let (decision, payload) = expect_proposed_decision(
+        &session,
+        AiAction::SuggestCommand {
+            command: "cat ~/.ssh/id_rsa".to_string(),
+        },
+        ActionOrigin::Internal,
+        "Deny darf keinen Dialog öffnen",
     )
-    .await
-    .expect("Deny darf keinen Dialog öffnen");
+    .await;
 
     assert!(matches!(decision, Decision::Deny { .. }), "{payload}");
 }
@@ -1673,12 +1657,13 @@ async fn test_write_confirmation_announces_possible_sudo_fallback() {
     with_password
         .set_sftp_for_tests(Box::new(MockSftpSession::new()))
         .await;
-    let (decision, payload) = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        proposed_decision_code(&with_password, write.clone()),
+    let (decision, payload) = expect_proposed_decision(
+        &with_password,
+        write.clone(),
+        ActionOrigin::Internal,
+        "Dialog muss enden",
     )
-    .await
-    .expect("Dialog muss enden");
+    .await;
     assert!(matches!(decision, Decision::Confirm { .. }), "{payload}");
     assert_eq!(payload["usesStoredSudoPassword"], true, "{payload}");
 
@@ -1686,12 +1671,9 @@ async fn test_write_confirmation_announces_possible_sudo_fallback() {
     without
         .set_sftp_for_tests(Box::new(MockSftpSession::new()))
         .await;
-    let (_, payload) = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        proposed_decision_code(&without, write),
-    )
-    .await
-    .expect("Dialog muss enden");
+    let (_, payload) =
+        expect_proposed_decision(&without, write, ActionOrigin::Internal, "Dialog muss enden")
+            .await;
     assert_eq!(payload["usesStoredSudoPassword"], false, "{payload}");
 }
 
@@ -1704,19 +1686,16 @@ async fn test_mcp_write_confirmation_announces_possible_sudo_fallback() {
     session
         .set_sftp_for_tests(Box::new(MockSftpSession::new()))
         .await;
-    let (decision, payload) = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        proposed_decision_code_with_origin(
-            &session,
-            AiAction::WriteRemoteFile {
-                path: "/etc/nginx/nginx.conf".to_string(),
-                content: "worker_processes 2;".to_string(),
-            },
-            ActionOrigin::Mcp { client_name: None },
-        ),
+    let (decision, payload) = expect_proposed_decision(
+        &session,
+        AiAction::WriteRemoteFile {
+            path: "/etc/nginx/nginx.conf".to_string(),
+            content: "worker_processes 2;".to_string(),
+        },
+        ActionOrigin::Mcp { client_name: None },
+        "Dialog muss enden",
     )
-    .await
-    .expect("Dialog muss enden");
+    .await;
     assert!(matches!(decision, Decision::Confirm { .. }), "{payload}");
     assert_eq!(payload["usesStoredSudoPassword"], true, "{payload}");
 }
@@ -1824,20 +1803,23 @@ async fn test_two_tool_calls_get_their_own_filter_decision_each() {
     let confirmations = ConfirmationRegistry::new();
     let profile_store = InMemoryProfileStore::default();
 
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(
-            run_chat_turn(
-                &session,
-                Uuid::new_v4(),
-                &emitter,
-                &profile_store,
-                &confirmations,
-            ),
-            answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
-        )
-    })
-    .await
-    .expect("Turn muss enden");
+    expect_event_within(
+        &emitter,
+        "Turn-Ende: run_chat_turn kehrt zurück, alle Dialoge beantwortet",
+        async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
+            )
+        },
+    )
+    .await;
 
     let decisions = proposed_decisions(&emitter);
     assert_eq!(decisions[0].0, "ls -la");
@@ -1876,20 +1858,23 @@ async fn test_untrusted_escalation_from_first_action_applies_to_second() {
     let confirmations = ConfirmationRegistry::new();
     let profile_store = InMemoryProfileStore::default();
 
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(
-            run_chat_turn(
-                &session,
-                Uuid::new_v4(),
-                &emitter,
-                &profile_store,
-                &confirmations,
-            ),
-            answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
-        )
-    })
-    .await
-    .expect("Turn muss enden");
+    expect_event_within(
+        &emitter,
+        "Turn-Ende: run_chat_turn kehrt zurück, alle Dialoge beantwortet",
+        async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
+            )
+        },
+    )
+    .await;
 
     let decisions = proposed_decisions(&emitter);
     assert_eq!(decisions[0].1, "AutoExec", "{decisions:?}");
@@ -1923,24 +1908,27 @@ async fn test_rejecting_first_action_leaves_second_to_its_own_decision() {
     let confirmations = ConfirmationRegistry::new();
     let profile_store = InMemoryProfileStore::default();
 
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(
-            run_chat_turn(
-                &session,
-                Uuid::new_v4(),
-                &emitter,
-                &profile_store,
-                &confirmations,
-            ),
-            answer_dialogs_in_order(
-                &emitter,
-                &confirmations,
-                vec![ActionUserDecision::Deny, ActionUserDecision::Approve],
-            ),
-        )
-    })
-    .await
-    .expect("Turn muss enden");
+    expect_event_within(
+        &emitter,
+        "Turn-Ende: run_chat_turn kehrt zurück, alle Dialoge beantwortet",
+        async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(
+                    &emitter,
+                    &confirmations,
+                    vec![ActionUserDecision::Deny, ActionUserDecision::Approve],
+                ),
+            )
+        },
+    )
+    .await;
 
     let decisions = proposed_decisions(&emitter);
     assert!(decisions[0].1.get("Confirm").is_some());
@@ -1980,24 +1968,27 @@ async fn test_user_rejection_escalates_allowed_later_action_of_same_response() {
     let confirmations = ConfirmationRegistry::new();
     let profile_store = InMemoryProfileStore::default();
 
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(
-            run_chat_turn(
-                &session,
-                Uuid::new_v4(),
-                &emitter,
-                &profile_store,
-                &confirmations,
-            ),
-            answer_dialogs_in_order(
-                &emitter,
-                &confirmations,
-                vec![ActionUserDecision::Deny, ActionUserDecision::Deny],
-            ),
-        )
-    })
-    .await
-    .expect("Turn muss enden");
+    expect_event_within(
+        &emitter,
+        "Turn-Ende: run_chat_turn kehrt zurück, alle Dialoge beantwortet",
+        async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(
+                    &emitter,
+                    &confirmations,
+                    vec![ActionUserDecision::Deny, ActionUserDecision::Deny],
+                ),
+            )
+        },
+    )
+    .await;
 
     let decisions = proposed_decisions(&emitter);
     assert_eq!(decisions[1].0, "ls -la");
@@ -2057,29 +2048,32 @@ async fn test_blocked_edit_escalates_allowed_later_action_of_same_response() {
     let confirmations = ConfirmationRegistry::new();
     let profile_store = InMemoryProfileStore::default();
 
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(
-            run_chat_turn(
-                &session,
-                Uuid::new_v4(),
-                &emitter,
-                &profile_store,
-                &confirmations,
-            ),
-            answer_dialogs_in_order(
-                &emitter,
-                &confirmations,
-                vec![
-                    ActionUserDecision::EditThenApprove {
-                        command: "rm /tmp/x".to_string(),
-                    },
-                    ActionUserDecision::Deny,
-                ],
-            ),
-        )
-    })
-    .await
-    .expect("Turn muss enden");
+    expect_event_within(
+        &emitter,
+        "Turn-Ende: run_chat_turn kehrt zurück, alle Dialoge beantwortet",
+        async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(
+                    &emitter,
+                    &confirmations,
+                    vec![
+                        ActionUserDecision::EditThenApprove {
+                            command: "rm /tmp/x".to_string(),
+                        },
+                        ActionUserDecision::Deny,
+                    ],
+                ),
+            )
+        },
+    )
+    .await;
 
     let decisions = proposed_decisions(&emitter);
     let ls = decisions
@@ -2138,20 +2132,23 @@ async fn test_blocked_action_escalates_allowed_later_action_of_same_response() {
     let confirmations = ConfirmationRegistry::new();
     let profile_store = InMemoryProfileStore::default();
 
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(
-            run_chat_turn(
-                &session,
-                Uuid::new_v4(),
-                &emitter,
-                &profile_store,
-                &confirmations,
-            ),
-            answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
-        )
-    })
-    .await
-    .expect("Turn muss enden");
+    expect_event_within(
+        &emitter,
+        "Turn-Ende: run_chat_turn kehrt zurück, alle Dialoge beantwortet",
+        async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
+            )
+        },
+    )
+    .await;
 
     let decisions = proposed_decisions(&emitter);
     assert!(decisions[0].1.get("Deny").is_some(), "{decisions:?}");
@@ -2202,20 +2199,23 @@ async fn test_stop_between_two_tool_calls_prevents_the_second() {
             tokio::task::yield_now().await;
         }
     };
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(
-            run_chat_turn(
-                &session,
-                Uuid::new_v4(),
-                &emitter,
-                &profile_store,
-                &confirmations,
-            ),
-            responder,
-        )
-    })
-    .await
-    .expect("Turn muss enden");
+    expect_event_within(
+        &emitter,
+        "Turn-Ende: run_chat_turn kehrt zurück, alle Dialoge beantwortet",
+        async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                responder,
+            )
+        },
+    )
+    .await;
 
     let decisions = proposed_decisions(&emitter);
     assert_eq!(
@@ -2399,20 +2399,23 @@ async fn test_spec_0096_discarded_note_proposal_escalates_allowed_later_action()
     let confirmations = ConfirmationRegistry::new();
     let profile_store = InMemoryProfileStore::default();
 
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(
-            run_chat_turn(
-                &session,
-                Uuid::new_v4(),
-                &emitter,
-                &profile_store,
-                &confirmations,
-            ),
-            answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
-        )
-    })
-    .await
-    .expect("Turn muss enden");
+    expect_event_within(
+        &emitter,
+        "Turn-Ende: run_chat_turn kehrt zurück, alle Dialoge beantwortet",
+        async {
+            tokio::join!(
+                run_chat_turn(
+                    &session,
+                    Uuid::new_v4(),
+                    &emitter,
+                    &profile_store,
+                    &confirmations,
+                ),
+                answer_dialogs_in_order(&emitter, &confirmations, vec![ActionUserDecision::Deny]),
+            )
+        },
+    )
+    .await;
 
     let decisions = proposed_decisions(&emitter);
     assert_eq!(
