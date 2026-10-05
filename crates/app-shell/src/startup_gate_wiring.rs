@@ -267,6 +267,18 @@ fn test_t18_the_mcp_autostart_gives_up_before_it_can_start_a_server() {
         &rest[..end]
     };
 
+    // **Die Richtung mitprüfen** (spec-reviewer Runde 6): „irgendwo steht
+    // `try_state`, irgendwo danach `return`" bliebe auch bei einer
+    // umgekehrten Bedingung grün (`if … .is_some() { return; }`) — und die
+    // startete den Server genau dann, wenn die App gesperrt ist. Verlangt
+    // ist deshalb die Form, die nur im Fehlen des Zustands zurückkehrt.
+    assert!(
+        body.contains("let Some(state) = app.try_state::<AppState>() else {"),
+        "A16/T18: Der Wächter muss **beim Fehlen** des Zustands zurückkehren. Erwartet ist \
+         `let Some(state) = app.try_state::<AppState>() else {{ … return; }}`; eine andere \
+         Schreibweise kann dasselbe meinen — dann gehört sie hier herein, geprüft."
+    );
+
     let guard = body.find("try_state::<AppState>()").expect(
         "A16/T18: `autostart_if_enabled` muss ohne verwalteten `AppState` zurückkehren — \
          ohne diese Prüfung könnte der MCP-Server vor der Entsperrung starten",

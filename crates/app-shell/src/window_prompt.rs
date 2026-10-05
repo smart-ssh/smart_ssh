@@ -178,6 +178,13 @@ impl PromptChannel {
                 tracing::warn!("a second startup prompt replaced one that was still open");
             }
             *pending = Some(tx);
+            // **Die Kennzeichnung gilt der Frage, nicht dem Programmlauf**
+            // (spec-reviewer Runde 6): Der Fragesteller lebt den ganzen
+            // Lauf. Blieb die Kennzeichnung stehen, bekäme ein *bewusstes*
+            // „Beenden" auf die zweite Frage die Meldung über die
+            // ausgebliebene Antwort auf die erste — falsch gegenüber
+            // jemandem, der gerade selbst entschieden hat.
+            self.timed_out.store(false, Ordering::SeqCst);
         }
 
         if let Err(err) = show() {
