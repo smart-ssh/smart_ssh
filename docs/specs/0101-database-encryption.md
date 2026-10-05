@@ -481,6 +481,28 @@ Keine.
    Datenbank, nicht in diesem DTO. Ein leeres erwartetes Token weist die
    MCP-Middleware in dieser Spec nicht zurück; das folgt als eigener Schritt.
 
+9. **Vor Commit 11 (K2):** Folgende Punkte gehören zu Etappe 3 und werden
+   vor der Oberfläche erfüllt, nicht zurückgestellt:
+   - Eine unbrauchbare Verpackungsdatei (Authentifizierung scheitert dauerhaft,
+     Kopf oder Parameter ungültig) führt im Passwort-Modus in die Spalte
+     *ungültig* der Tabelle A3; „Neu anfangen“ ist vor der Entsperrung
+     erreichbar (A16). Falsches Passwort bleibt erneute Eingabe; „Neu
+     anfangen“ ist immer eine ausdrückliche Nutzerwahl.
+   - A16 gilt für **alle** Kommandos, auch die der Plugins: Vor der
+     Entsperrung ist kein Plugin-Kommando erreichbar, das Dateien,
+     Einstellungen oder das Betriebssystem berührt. Einstellungsdateien sind
+     vor der Entsperrung nicht lesbar.
+   - Passwort ändern und Einrichten prüfen die neue Verpackung, **bevor** sie
+     die alte ersetzt bzw. K aus dem Schlüsselbund entfernt; Reste einer
+     abgebrochenen Verpackung bleiben nicht liegen; nach dem Umbenennen wird
+     das Verzeichnis synchronisiert.
+   - Entsperren läuft höchstens einmal gleichzeitig; ein Startdialog, dessen
+     Antwort ausbleibt, scheitert sichtbar statt zu hängen (Spec 0059).
+   - Fehlertexte stimmen mit dem Zustand überein, den sie beschreiben;
+     Einrichten aus den Einstellungen nutzt den K des offenen Zustands.
+   - A19 auch für K im Entsperrergebnis.
+   - Die Tests T7 (Variante Passwort-Modus), T13, T17 und T18 vollständig.
+
 ## Umsetzung
 
 **Teil 0** — §2. Lauf 1 endet nach Commit 2. Frage 2 vor Commit 6, Frage 3
