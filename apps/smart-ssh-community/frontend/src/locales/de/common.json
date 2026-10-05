@@ -81,7 +81,7 @@
       "locked": "nicht verfügbar — vorhanden, aber gesperrt. Nächster Schritt: entsperren und Smart SSH neu starten. Es fehlt kein Paket.",
       "unknown": "nicht verfügbar — Ursache unbekannt. Nächster Schritt: prüfen, ob ein Secret-Service-Anbieter läuft und entsperrt ist (gnome-keyring, oder KWallet bzw. KeePassXC mit eingeschalteter Secret-Service-Integration), danach Smart SSH neu starten."
     },
-    "keychainBlocked": "Solange das so ist, lassen sich kein API-Key, kein Server-Passwort, keine Passphrase und kein Sudo-Passwort speichern oder lesen.",
+    "keychainBlocked": "Deine Secrets sind davon nicht betroffen — API-Keys, Server-Passwörter, Passphrasen und Sudo-Passwörter liegen in der verschlüsselten Datenbank, nicht im Schlüsselbund.",
     "keychainLoadFailed": "Zustand des Systemschlüsselbunds konnte nicht geladen werden."
   },
   "fileTypes": {
@@ -172,12 +172,12 @@
       "checkFailed": "Der Vorab-Befund konnte nicht abgefragt werden. Das hindert das Speichern nicht — beim Verbinden wird die Datei ohnehin neu geprüft."
     },
     "convertToKeychain": {
-      "legend": "In den Schlüsselbund übernehmen",
-      "hint": "Legt den Inhalt der Schlüsseldatei einmalig in den Systemschlüsselbund und stellt die Anmeldeart auf „Private Key“ um. Schützt vor einer Datei mit zu weiten Rechten oder einem Verzeichnis, das jemand anders mitlesen kann.",
-      "button": "In den Schlüsselbund übernehmen",
+      "legend": "In die verschlüsselte Datenbank übernehmen",
+      "hint": "Legt den Inhalt der Schlüsseldatei einmalig in der verschlüsselten Datenbank ab und stellt die Anmeldeart auf „Private Key“ um. Schützt vor einer Datei mit zu weiten Rechten oder einem Verzeichnis, das jemand anders mitlesen kann.",
+      "button": "In die verschlüsselte Datenbank übernehmen",
       "checking": "Wird geprüft …",
       "checkFailed": "Der Vorab-Befund konnte nicht abgefragt werden — der Knopf bleibt deshalb gesperrt. Erneut versuchen, z. B. durch einen Wechsel zu einem anderen Server und zurück.",
-      "confirmWhatChanges": "Die Anmeldung hängt danach am Systemschlüsselbund, nicht mehr an dieser Datei.",
+      "confirmWhatChanges": "Die Anmeldung hängt danach an der verschlüsselten Datenbank, nicht mehr an dieser Datei.",
       "confirmWhatStays": "Die Datei bleibt unverändert auf der Platte liegen — sie wird nicht gelöscht oder verändert:",
       "confirm": "Übernehmen",
       "converting": "Wird übernommen …"
@@ -187,11 +187,11 @@
     "sudoLabel": "Sudo-Passwort",
     "sudoUnchanged": "(leer = unverändert)",
     "sudoUnchangedStored": "(leer = unverändert, aktuell hinterlegt)",
-    "sudoUnchangedUnknown": "(leer = unverändert; ob eines hinterlegt ist, lässt sich ohne Systemschlüsselbund nicht feststellen)",
-    "deletedWithLeftoverSecretsTitle": "Server gelöscht — Secrets blieben im Schlüsselbund",
-    "deletedWithLeftoverSecretsHint": "Der Server ist entfernt, der Systemschlüsselbund konnte diese Einträge aber nicht löschen. Sie sind jetzt verwaist (der Server existiert nicht mehr) und lassen sich im Schlüsselbund-Verwaltungsprogramm unter dem Dienst \"Smart SSH\" von Hand entfernen:",
+    "sudoUnchangedUnknown": "(leer = unverändert; ob eines hinterlegt ist, lässt sich ohne Zugriff auf die verschlüsselte Datenbank nicht feststellen)",
+    "deletedWithLeftoverSecretsTitle": "Server gelöscht — Secrets blieben in der Datenbank zurück",
+    "deletedWithLeftoverSecretsHint": "Der Server ist entfernt, mindestens ein Secret ließ sich aber nicht aus der verschlüsselten Datenbank entfernen. Es ist jetzt verwaist (der Server existiert nicht mehr). Die genaue Ursache steht im Log:",
     "removeSudoPassword": "Hinterlegtes Sudo-Passwort entfernen",
-    "removeSudoPasswordFailed": "Das Sudo-Passwort konnte nicht entfernt werden — es liegt weiterhin im Systemschlüsselbund und wird beim nächsten „sudo“ erneut eingespeist.",
+    "removeSudoPasswordFailed": "Das Sudo-Passwort konnte nicht entfernt werden — es liegt weiterhin in der verschlüsselten Datenbank und wird beim nächsten „sudo“ erneut eingespeist.",
     "postIngestFieldset": "Bestätigung nach Serverzugriff",
     "postIngestHint": "Legt fest, ob und wann nach dem Einlesen von Serverinhalt (Kommando-Ausgabe, Dateien, Notizen) in dieser Sitzung zusätzlich nachgefragt wird. Unabhängig davon wird solcher Inhalt immer klar als Daten gekennzeichnet, nie als Anweisung behandelt.",
     "postIngest": {
@@ -217,10 +217,10 @@
     "noContext": "(kein Kontext)",
     "deleteServer": "Server löschen",
     "deleteImpactTitle": "Auswirkungen des Löschens:",
-    "deleteNoKeychainImpact": "Keine Secrets im Schlüsselbund, keine anderen Server betroffen.",
-    "secretWillBeDeleted": "Wird aus dem Schlüsselbund entfernt: {{label}}",
-    "secretMayBeDeleted": "Konnte nicht geprüft werden (Systemschlüsselbund nicht lesbar), wird nach Möglichkeit entfernt: {{label}}",
-    "identityFilePassphraseMayBeDeleted": "Falls für diese Schlüsseldatei eine Passphrase hinterlegt ist, wird sie mit entfernt. Die Schlüsseldatei selbst bleibt unangetastet auf der Platte liegen — sie liegt nie im Schlüsselbund.",
+    "deleteNoKeychainImpact": "Keine Secrets in der Datenbank, keine anderen Server betroffen.",
+    "secretWillBeDeleted": "Wird aus der Datenbank entfernt: {{label}}",
+    "secretMayBeDeleted": "Konnte nicht geprüft werden (Datenbank nicht lesbar), wird nach Möglichkeit entfernt: {{label}}",
+    "identityFilePassphraseMayBeDeleted": "Falls für diese Schlüsseldatei eine Passphrase hinterlegt ist, wird sie mit entfernt. Die Schlüsseldatei selbst bleibt unangetastet auf der Platte liegen — sie liegt nie in der Datenbank.",
     "serverWillLoseJumpHost": "Verliert die Jump-Host-Referenz auf diesen Server: {{name}}",
     "deleteAlwaysRemovesHistory": "Zusätzlich werden Chat-Historie, Notizen und Tags dieses Servers unwiderruflich gelöscht.",
     "confirmDeleteServer": "Endgültig löschen",
@@ -481,12 +481,14 @@
     "KEY_FILE_INVALID_KEY": "Der Inhalt der Datei ist kein gültiger OpenSSH-Schlüssel.",
     "SERVER_IDENTITY_FILE_REQUIRED": "Pfad zur Schlüsseldatei ist erforderlich",
     "SERVER_NOT_AN_IDENTITY_FILE": "Dieser Server meldet sich nicht mit einer Schlüsseldatei an",
-    "IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND": "Der Schlüssel wurde bereits in den Schlüsselbund geschrieben, konnte nach einem Fehler aber nicht wieder daraus entfernt werden — der Eintrag ist dort liegen geblieben und muss von Hand gelöscht werden.",
+    "IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND": "Der Schlüssel wurde bereits in die verschlüsselte Datenbank geschrieben, konnte nach einem Fehler aber nicht wieder daraus entfernt werden — der Eintrag ist dort liegen geblieben. Die genaue Ursache steht im Log.",
     "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "Erststart-Hinweis muss zuerst bestätigt werden",
-    "KEYCHAIN_UNAVAILABLE": "Der Systemschlüsselbund ist nicht verfügbar. Solange das so ist, lassen sich kein API-Key, kein Server-Passwort, keine Passphrase und kein Sudo-Passwort speichern oder lesen. Den genauen Grund und den nächsten Schritt zeigt die Diagnose-Ansicht in den Einstellungen.",
+    "KEYCHAIN_UNAVAILABLE": "Der Systemschlüsselbund ist nicht verfügbar — das betrifft deine Secrets nicht: API-Keys, Server-Passwörter, Passphrasen und Sudo-Passwörter liegen in der verschlüsselten Datenbank. Den genauen Grund und den nächsten Schritt zeigt die Diagnose-Ansicht in den Einstellungen.",
     "KEYCHAIN_ACCESS_FAILED": "Der Zugriff auf den Systemschlüsselbund ist fehlgeschlagen. Möglicherweise ist er gesperrt, oder der Zugriff wurde abgelehnt. Bitte erneut versuchen — der genaue Grund steht im Log.",
+    "SECRET_STORE_FAILED": "Der Zugriff auf ein gespeichertes Geheimnis (z. B. API-Key, Server-Passwort, Passphrase, Sudo-Passwort oder Token) in der verschlüsselten Datenbank ist fehlgeschlagen — etwa weil die Datenbank nicht schreibbar ist oder kein Platz mehr frei ist. Es wurde nichts verändert; die genaue Ursache steht im Log.",
     "WRONG_MASTER_PASSWORD": "Passwort falsch oder Datei beschädigt. Beides ist von außen nicht zu unterscheiden. Es wurde nichts verändert.",
     "MASTER_PASSWORD_FILE_FAILED": "Der Schlüssel zu deiner Datenbank war gerade nicht zu lesen oder zu schreiben. Es wurde nichts verändert; die Ursache steht im Log.",
+    "MASTER_PASSWORD_FILE_ABSENT": "An diesem Ort liegt keine Schlüsseldatei mehr — Smart SSH läuft für diese Datenbank jetzt im Schlüsselbund-Modus. Es wurde nichts verändert. Versuche es erneut.",
     "MASTER_PASSWORD_REJECTED": "Das Master-Passwort wurde abgelehnt: mindestens 12 Zeichen, und beide Eingaben müssen übereinstimmen.",
     "STARTUP_FAILED": "Der Start ist nicht durchgelaufen. Es wurde nichts verändert; das Log nennt die Ursache.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Im Schlüsselbund liegt ein anderer Schlüssel. Es wurde nichts verändert — bestätige das Ersetzen, wenn du es willst.",
@@ -512,7 +514,7 @@
   "firstRunNotice": {
     "title": "Bevor es losgeht",
     "responsibilityText": "Smart SSH schlägt dir Kommandos vor, die eine KI basierend auf deinen Anfragen generiert. Nichts wird ausgeführt, ohne dass du es bestätigst — außer du hast das über eigene Regeln bewusst anders eingestellt. Die Verantwortung für jedes bestätigte Kommando liegt bei dir.",
-    "encryptionText": "Die lokale Datenbank ist nicht zusätzlich verschlüsselt. Wir empfehlen, die Festplattenverschlüsselung deines Betriebssystems zu aktivieren, falls noch nicht geschehen.",
+    "encryptionText": "Die lokale Datenbank ist verschlüsselt. Den Schlüssel verwahrt der Schlüsselbund deines Betriebssystems oder – wenn du es einrichtest – dein Master-Passwort. Wer Zugriff auf dein entsperrtes Benutzerkonto hat, kann die Daten lesen.",
     "checkboxLabel": "Ich habe das gelesen und verstanden.",
     "continueButton": "Weiter"
   },
@@ -646,7 +648,7 @@
       "modeHeading": "Schlüsseldatei (IdentityFile) — Vorgabe für alle Einträge",
       "mode": {
         "keepAsFile": "Als Schlüsseldatei übernehmen (öffnet nichts)",
-        "intoKeychain": "Einlesen und im Schlüsselbund ablegen",
+        "intoKeychain": "Einlesen und in der Datenbank ablegen",
         "drop": "Nicht übernehmen"
       },
       "notUsable": "beim Verbinden nicht benutzbar, absoluter Pfad nötig",

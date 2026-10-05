@@ -118,6 +118,38 @@ describe("translateErrorCode", () => {
       );
     },
   );
+
+  // Spec 0101, A9/A9.1/A20 (Rest): Secrets liegen seit Etappe 2 in der
+  // verschlüsselten Datenbank, nicht mehr im Schlüsselbund. Ohne den
+  // Eintrag in `KNOWN_ERROR_CODES` wäre `SECRET_STORE_FAILED` unbekannt und
+  // der `message`-Fallback (ein technischer Backend-Text) erschiene statt
+  // eines übersetzten Satzes. *Gegenbeweis:* Entfernt man den Eintrag aus
+  // `KNOWN_ERROR_CODES`, liefert `translateErrorCode` den `raw`-Fallback,
+  // und dieser Test scheitert an der ersten Zusicherung.
+  it.each(["de", "en"] as const)(
+    "übersetzt SECRET_STORE_FAILED (%s) statt den rohen Backend-Text zu zeigen",
+    (language) => {
+      const raw = "credential store backend failure: disk I/O error";
+      const text = translateErrorCode(testI18n.getFixedT(language), "SECRET_STORE_FAILED", raw);
+
+      expect(text).not.toBe(raw);
+      // Muss sagen, dass es um ein Geheimnis in der Datenbank geht — nicht
+      // um den Schlüsselbund (der trägt seit A9 nur noch den Wurzelschlüssel).
+      expect(text).toMatch(language === "de" ? /Datenbank/i : /database/i);
+      expect(text).not.toMatch(language === "de" ? /Schlüsselbund/i : /keychain/i);
+    },
+  );
+
+  // Derselbe Grund wie bei den beiden Schlüsselbund-Codes oben: Ein
+  // gescheiterter Secret-Zugriff und ein gescheiterter Schlüsselbund-Zugriff
+  // sind unterschiedliche Ursachen mit unterschiedlichem nächsten Schritt.
+  it.each(["de", "en"] as const)("unterscheidet SECRET_STORE_FAILED von KEYCHAIN_ACCESS_FAILED (%s)", (language) => {
+    const t = testI18n.getFixedT(language);
+
+    expect(translateErrorCode(t, "SECRET_STORE_FAILED", "fallback")).not.toBe(
+      translateErrorCode(t, "KEYCHAIN_ACCESS_FAILED", "fallback"),
+    );
+  });
 });
 
 // Spec 0069, Teil A, Test 18: jeder Code des Fünf-Minuten-Pfads ist in
@@ -166,6 +198,24 @@ describe("MASTER_PASSWORD_ERROR_CODES", () => {
     expect(de).not.toBe(`errors.${code}`);
     expect(en).not.toBe(`errors.${code}`);
     expect(de).not.toBe(en);
+  });
+
+  it("MASTER_PASSWORD_FILE_ABSENT behauptet keine unlesbare Datei (review-09, Runde 2 Teil A, Fund 2 „Rest“)", () => {
+    // Vorher lief „keine Datei an diesem Ort“ unter demselben Code wie „Datei
+    // liegt da, ist aber gerade nicht lesbar“ (MASTER_PASSWORD_FILE_FAILED)
+    // — der gemeinsame Text behauptete dann eine unlesbare Datei, wo keine
+    // existiert. *Gegenbeweis:* Setzt man hier denselben Text wie bei
+    // MASTER_PASSWORD_FILE_FAILED ein, scheitert dieser Test.
+    const de = translateErrorCode(testI18n.getFixedT("de"), "MASTER_PASSWORD_FILE_ABSENT", FALLBACK);
+    const en = translateErrorCode(testI18n.getFixedT("en"), "MASTER_PASSWORD_FILE_ABSENT", FALLBACK);
+    expect(de).not.toMatch(/nicht (lesbar|zu lesen)/);
+    expect(en).not.toMatch(/could not be read/i);
+    expect(de).not.toBe(
+      translateErrorCode(testI18n.getFixedT("de"), "MASTER_PASSWORD_FILE_FAILED", FALLBACK),
+    );
+    expect(en).not.toBe(
+      translateErrorCode(testI18n.getFixedT("en"), "MASTER_PASSWORD_FILE_FAILED", FALLBACK),
+    );
   });
 
   it("behauptet in keinem Text eine Schlüsseldatei, wo es keine geben muss", () => {

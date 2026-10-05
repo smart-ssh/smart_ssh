@@ -11,6 +11,15 @@
   Datei. Scheitert ein Schritt, bleibt die bisherige Datenbank unverändert,
   und Smart SSH meldet das statt unverschlüsselt weiterzulaufen.
 
+- **Alle Zugangsdaten ziehen aus dem Schlüsselbund in die Datenbank um:**
+  Server-Passwörter, private Schlüssel, Passphrasen, Zertifikate,
+  Sudo-Passwörter, API-Keys und Provider-Header. Im Schlüsselbund des
+  Betriebssystems bleibt danach höchstens noch der eine Schlüssel zur
+  Datenbank selbst — bei einem eingerichteten Master-Passwort auch der
+  nicht mehr. Der Umzug läuft beim ersten Start automatisch; ein alter
+  Schlüsselbund-Eintrag wird erst gelöscht, nachdem das zugehörige Secret
+  aus der Datenbank zurückgelesen und als gleich geprüft wurde.
+
 ### Geändert
 
 - Den Schlüssel der Datenbank leitet Smart SSH aus dem Schlüssel ab, der
@@ -36,4 +45,6 @@
   aus einem Backup, denn ein Backup braucht denselben Schlüssel.
 - Die alte, unverschlüsselte Datei wird nach der Umwandlung entfernt. In
   Backups, Zeitmaschinen-Schnappschüssen oder auf dem Datenträger selbst
-  können ältere, unverschlüsselte Fassungen trotzdem weiter liegen.
+  können ältere, unverschlüsselte Fassungen trotzdem weiter liegen — das
+  gilt auch für Zugangsdaten, die vor dem Umzug im Schlüsselbund lagen:
+  ein Backup des Schlüsselbunds von vorher enthält sie weiterhin dort.
