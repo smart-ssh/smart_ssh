@@ -1038,3 +1038,72 @@ export interface SshConfigExportResultDto {
   /** §3.2.5: fertig formatierte `Include <pfad>`-Zeile. */
   includeHint: string;
 }
+
+// --- Spec 0101, Etappe 3: Master-Passwort und Entsperrmaske --------------
+
+/** Welche Maske der Start zeigt (`crate::commands::master_password::
+ * StartupScreen`). **Ein** Feld statt mehrerer Flaggen — die vier Zustände
+ * der Verpackungsdatei aus A3 schließen sich gegenseitig aus, und die
+ * Oberfläche soll sie nicht aus Wahrheitswerten zusammensetzen müssen. */
+export type StartupScreen =
+  | "unlocked"
+  | "unlock"
+  | "unusableWrapping"
+  | "unreachableWrapping"
+  | "setUpMasterPassword";
+
+/** Von `crate::commands::master_password::StartupStateDto` (A16/A18,
+ * Klarstellung 11). Trägt bewusst **kein** Passwort und keinen Schlüssel
+ * (A19/§6). */
+export interface StartupStateDto {
+  screen: StartupScreen;
+  /** A18: der aktive Modus. */
+  mode: "password" | "keychain";
+  /** Klarstellung 11: Darf die Maske „Neu anfangen" anbieten? Die
+   * Oberfläche entscheidet das **nicht** selbst — sie fragt, und das
+   * Kommando prüft dieselbe Bedingung noch einmal. */
+  offersStartOver: boolean;
+  /** Klarstellung 11: gescheiterte Entsperrversuche dieses Programmlaufs,
+   * für den Hinweistext. */
+  failedUnlockAttempts: number;
+  /** ADR 0095 §8: Vor der Entsperrung ist die gespeicherte Sprachwahl aus
+   * Spec 0024 nicht lesbar (das `store`-Plugin ist noch nicht
+   * registriert). Die Startmasken nehmen deshalb die Sprache, die das
+   * Backend einmal aus der Umgebung bestimmt hat (Spec 0071, A11a/A11b). */
+  language: "de" | "en";
+}
+
+/** Welche Knöpfe eine Startfrage anbietet (`crate::window_prompt::
+ * PromptKind`). Das Frontend bildet sie ab, es erfindet keine — jeder
+ * Knopf, der hier nicht steht, darf dort nicht erscheinen. */
+export type StartupPromptKind =
+  | "retryOrQuit"
+  | "retrySkipOrQuit"
+  | "retrySetUpOrQuit"
+  | "startOverOrQuit"
+  | "newKeyOrQuit"
+  | "confirmStartOver"
+  | "confirmNewKey"
+  | "newMasterPassword"
+  | "notice";
+
+/** Von `crate::window_prompt::StartupPromptRequest`. Titel und Text kommen
+ * **fertig übersetzt** aus dem Backend (`app_logic::
+ * startup_choice_dialogs`, Sprache aus [`StartupStateDto.language`]) — nur
+ * die Knopfbeschriftungen stehen in den Locale-Dateien. */
+export interface StartupPromptRequest {
+  kind: StartupPromptKind;
+  title: string;
+  message: string;
+}
+
+/** Von `crate::window_prompt::StartupPromptAnswer`. */
+export type StartupPromptAnswer =
+  | "retry"
+  | "quit"
+  | "startOver"
+  | "generateNewKey"
+  | "continueWithoutMigration"
+  | "setUpMasterPassword"
+  | "confirm"
+  | "cancel";

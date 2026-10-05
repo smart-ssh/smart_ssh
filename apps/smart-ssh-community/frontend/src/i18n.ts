@@ -35,7 +35,17 @@ let storePromise: Promise<Store> | null = null;
  * `load(STORE_FILE, ...)`-Aufrufe an verschiedenen Stellen entstehen. */
 export function settingsStore(): Promise<Store> {
   if (!storePromise) {
-    storePromise = load(STORE_FILE, { autoSave: false });
+    // Spec 0101, A16/Klarstellung 9: Im Passwort-Modus ist das
+    // `store`-Plugin vor der Entsperrung **nicht registriert** — `load()`
+    // scheitert dann mit „plugin store not found". Ein gescheitertes
+    // Versprechen hier zwischengespeichert zu lassen hieße, dass der Store
+    // für den ganzen Programmlauf kaputt bleibt: Nach dem Entsperren wären
+    // Sprachwahl (Spec 0024) und Risiko-Einstellungen (Spec 0026) dauerhaft
+    // nicht speicherbar, obwohl das Plugin längst da ist.
+    storePromise = load(STORE_FILE, { autoSave: false }).catch((err: unknown) => {
+      storePromise = null;
+      throw err;
+    });
   }
   return storePromise;
 }
@@ -78,9 +88,18 @@ async function resolveInitialLanguage(): Promise<SupportedLanguage> {
 
 /** Muss vor dem ersten Render abgeschlossen sein (s. `main.tsx`, awaitet
  * dies vor `createRoot(...).render(...)`) — vermeidet ein sichtbares
- * Umschalten der Sprache kurz nach dem Start. */
-export async function initI18n(): Promise<void> {
-  const language = await resolveInitialLanguage();
+ * Umschalten der Sprache kurz nach dem Start.
+ *
+ * `forced` setzt die Sprache **ohne** `store` und `os` zu fragen: Spec 0101,
+ * ADR 0095 §8 — im Passwort-Modus sind beide Plugins vor der Entsperrung
+ * nicht registriert, und Klarstellung 9 verlangt genau das
+ * („Einstellungsdateien sind vor der Entsperrung nicht lesbar"). Die
+ * Startmasken nehmen stattdessen die Sprache aus `StartupStateDto`, die das
+ * Backend einmal aus der Umgebung bestimmt hat (Spec 0071, A11a/A11b: EINE
+ * Sprachwahl für alle Startdialoge eines Programmlaufs). Nach der
+ * Entsperrung holt [`applyStoredLanguage`] die gespeicherte Wahl nach. */
+export async function initI18n(forced?: SupportedLanguage): Promise<void> {
+  const language = forced ?? (await resolveInitialLanguage());
   await i18next.use(initReactI18next).init({
     resources: {
       de: { common: de },
@@ -96,6 +115,20 @@ export async function initI18n(): Promise<void> {
 /** Spec 0024, Abschnitt 4: "Auswahl in den Einstellungen jederzeit
  * änderbar, Wirkung sofort ohne Neustart" — `i18next.changeLanguage`
  * löst automatisch ein Re-Render aller `useTranslation`-Verbraucher aus. */
+/** Spec 0101, ADR 0095 §8: **Nach** der Entsperrung gilt wieder die
+ * gespeicherte Wahl aus Spec 0024.
+ *
+ * Wird genau dann gebraucht, wenn [`initI18n`] mit `forced` gelaufen ist —
+ * dann steht die Sprache der Startmasken, aber nicht die des Nutzers. Ein
+ * Fehler hier ist kein Grund, die App nicht zu zeigen: Es bleibt bei der
+ * Sprache der Startmaske, und die ist aus derselben Umgebung bestimmt. */
+export async function applyStoredLanguage(): Promise<void> {
+  const language = await resolveInitialLanguage();
+  if (language !== i18next.language) {
+    await i18next.changeLanguage(language);
+  }
+}
+
 export async function setLanguage(language: SupportedLanguage): Promise<void> {
   await i18next.changeLanguage(language);
   const store = await settingsStore();

@@ -23,6 +23,7 @@ import type {
   RiskAssessmentUpdatedEvent,
   SftpTransferFinishedEvent,
   SftpTransferStartedEvent,
+  StartupPromptRequest,
   TerminalOutputEvent,
 } from "./types";
 
@@ -186,6 +187,25 @@ export const onMcpActionTabRequested = (
   handler: (event: McpActionTabRequestedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<McpActionTabRequestedEvent>("mcp-action-tab-requested", (e) => handler(e.payload));
+
+// --- Spec 0101, Etappe 3: Startfragen im Fenster -------------------------
+
+/** Teil 0 Frage 3: eine Startfrage (D1–D4, zweite Bestätigung, neues
+ * Master-Passwort, Hinweis) erscheint im Fenster.
+ *
+ * **Der Zuhörer muss stehen, bevor das erste Entsperr-Kommando läuft.**
+ * `emit` im Backend liefert `Ok`, auch wenn niemand zuhört: Geht das
+ * Ereignis verloren, läuft die Frage dort in die Zeitgrenze von fünf
+ * Minuten (s. `crate::window_prompt::PROMPT_TIMEOUT`) und der Start bricht
+ * mit „keine Antwort erhalten" ab. */
+export const onStartupPrompt = (
+  handler: (event: StartupPromptRequest) => void,
+): Promise<UnlistenFn> =>
+  listen<StartupPromptRequest>("startup:prompt", (e) => handler(e.payload));
+
+/** A16: Der Zustand steht jetzt — die Oberfläche darf die App zeigen. */
+export const onStartupUnlocked = (handler: () => void): Promise<UnlistenFn> =>
+  listen<null>("startup:unlocked", () => handler());
 
 /** Base64 → `Uint8Array`, für `TerminalOutputEvent.data` (s. `crate::events`). */
 export function base64ToBytes(base64: string): Uint8Array {

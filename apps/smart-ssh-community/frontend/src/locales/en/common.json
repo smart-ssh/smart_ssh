@@ -12,7 +12,8 @@
     "loading": "Loading…",
     "testing": "Testing…",
     "removing": "Removing…",
-    "notes": "Notes"
+    "notes": "Notes",
+    "ok": "OK"
   },
   "nav": {
     "connect": "Connect",
@@ -40,7 +41,8 @@
       "about": "About",
       "fileTypes": "Files",
       "chatRetention": "Sessions & Data",
-      "mcpServer": "MCP Server"
+      "mcpServer": "MCP Server",
+      "masterPassword": "Master password"
     },
     "language": {
       "de": "German",
@@ -482,7 +484,13 @@
     "IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND": "The key was already written to the keychain but could not be removed again after a failure — the entry stayed behind and must be removed by hand.",
     "FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED": "The first-run notice must be acknowledged first",
     "KEYCHAIN_UNAVAILABLE": "The system keyring is unavailable. While this is the case, no API key, no server password, no passphrase and no sudo password can be saved or read. The diagnostics view in the settings shows the exact reason and the next step.",
-    "KEYCHAIN_ACCESS_FAILED": "Access to the system keyring failed. It may be locked, or access was denied. Please try again — the exact reason is in the log."
+    "KEYCHAIN_ACCESS_FAILED": "Access to the system keyring failed. It may be locked, or access was denied. Please try again — the exact reason is in the log.",
+    "WRONG_MASTER_PASSWORD": "Wrong password, or the file is damaged. The two cannot be told apart from the outside. Nothing was changed.",
+    "MASTER_PASSWORD_FILE_FAILED": "The key file next to your database could not be read or written. Nothing was changed; the log names the cause.",
+    "MASTER_PASSWORD_REJECTED": "The master password was rejected: at least 12 characters, and both entries must match.",
+    "STARTUP_FAILED": "The startup did not complete. Nothing was changed; the log names the cause.",
+    "KEYCHAIN_HOLDS_ANOTHER_KEY": "The keychain holds a different key. Nothing was changed — confirm the replacement if that is what you want.",
+    "APP_LOCKED": "Smart SSH is still locked. Unlock it with your master password first."
   },
   "mcpServer": {
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",
@@ -702,5 +710,57 @@
       "copy": "Copy",
       "notRepresentedHint": "Groups, tags, notes, filter rules and security settings aren't in this file — what's missing for a given server is noted as a comment above its entry."
     }
+  },
+  "startup": {
+    "stateUnknown": "Smart SSH could not read its startup state. Nothing was changed. Try again; if it persists, the log names the cause.",
+    "unlockIntro": "Your local database is encrypted with a master password. Enter it to unlock Smart SSH.",
+    "passwordLabel": "Master password",
+    "unlockButton": "Unlock",
+    "failedAttempts": "Failed attempts in this program run so far: {{attempts}}.",
+    "wayOutHint": "You can start over if you no longer know your master password. Your existing data is lost in the process — the files are only renamed, not deleted. You will be asked once more before anything happens.",
+    "unusableWrapping": "The key file next to your database is unusable: its format or parameters are wrong, and no password can open it any more. You can start over — your existing data is lost in the process, the files are only renamed.",
+    "unreachableWrapping": "The key file next to your database is in its place but cannot be read right now — perhaps another program is holding it open, or the permissions are wrong. Nothing was changed. This says nothing about its contents: fix the cause and try again.",
+    "continuingInTheWindow": "Continuing the startup here …",
+    "newPasswordLabel": "New master password",
+    "repeatPasswordLabel": "Repeat master password",
+    "passwordTooShort": "At least {{minimum}} characters.",
+    "passwordsDiffer": "The two entries do not match.",
+    "noRecoveryWarning": "I understand: without this password all data is lost. There is no recovery.",
+    "answers": {
+      "retry": "Try again",
+      "quit": "Quit",
+      "startOver": "Start over",
+      "generateNewKey": "Generate a new key",
+      "continueWithoutMigration": "Continue without carrying them over",
+      "setUpMasterPassword": "Set up a master password",
+      "confirm": "Yes, continue",
+      "cancel": "Cancel"
+    }
+  },
+  "masterPassword": {
+    "modeHeading": "Where the key to your database is kept",
+    "modePassword": "In a key file next to the database, protected by your master password. Smart SSH asks for it at startup.",
+    "modeKeychain": "In your operating system's keychain. Smart SSH starts without asking.",
+    "setUpHeading": "Set up a master password",
+    "setUpIntro": "Afterwards Smart SSH asks for this password at startup, and the key leaves your operating system's keychain.",
+    "newPasswordLabel": "New master password",
+    "repeatPasswordLabel": "Repeat master password",
+    "currentPasswordLabel": "Current master password",
+    "passwordTooShort": "At least {{minimum}} characters.",
+    "passwordsDiffer": "The two entries do not match.",
+    "noRecoveryWarning": "I understand: without this password all data is lost. There is no recovery.",
+    "setUpButton": "Set up master password",
+    "setUpDone": "The master password is set up. Smart SSH will ask for it at the next startup.",
+    "changeHeading": "Change master password",
+    "changeButton": "Change password",
+    "changeDone": "The master password has been changed.",
+    "switchHeading": "Back to the keychain",
+    "switchIntro": "The key moves into your operating system's keychain; the key file is removed afterwards. Smart SSH then starts without asking.",
+    "switchButton": "Switch to the keychain",
+    "switchedToKeychain": "The key is now kept in your operating system's keychain.",
+    "anotherKeyTitle": "The keychain holds a different key",
+    "anotherKeyText": "The keychain holds a different key. Backups encrypted with that key will become unreadable. Replace it?",
+    "anotherKeyConfirm": "Yes, replace it",
+    "confirmPasswordLabel": "Master password, to confirm"
   }
 }
