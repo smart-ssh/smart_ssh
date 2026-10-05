@@ -114,3 +114,56 @@ genommen).
 Dieser Schritt fügt Tests hinzu und ändert kein Verhalten. Nach
 `CLAUDE.md` („Versioning & changelog") bleibt Test-Infrastruktur aus dem
 Changelog heraus.
+
+## 5. Triage der Review-Runde (ERHÖHT) zu dieser Range
+
+Der vollständige Bericht liegt als Laufzustand (`review-06.md`). Behoben in
+diesem Schritt:
+
+- **`spawn_post_startup_tasks` wurde nach dem Entsperren nie gerufen.** Der
+  Doc-Kommentar behauptete den Aufruf, es gab ihn nur im `setup`-Haken. Folge
+  im Passwort-Modus: MCP-Autostart, das Aufräumen alter Sitzungen und die
+  Migration der Klartext-Zeilen liefen für die ganze Sitzung nicht. A16
+  verlangt, dass der Server **vor** der Entsperrung nicht läuft — danach gilt
+  der Normalbetrieb.
+- **Die Timeout-Kennzeichnung des Fragestellers war klebend.** Sie lebt den
+  ganzen Programmlauf; nach einem Zeitablauf bekam ein *bewusstes* „Beenden"
+  auf die nächste Frage die Meldung über die ausgebliebene Antwort. Sie wird
+  jetzt beim Öffnen jeder Frage zurückgesetzt.
+- **Der Test zur MCP-Aufschiebung prüft jetzt die Richtung mit.** „Irgendwo
+  `try_state`, irgendwo danach `return`" wäre auch bei umgekehrter Bedingung
+  grün geblieben — und die startete den Server genau dann, wenn die App
+  gesperrt ist.
+
+**Bewusst nicht in diesem Schritt behoben** — jeder Punkt braucht mehr als
+eine Zeile und gehört vor die Oberfläche (Commit 11) bzw. in ein eigenes
+Item:
+
+1. **`WrappingHealth::Unreadable` führt bei *jedem* Lesefehler in den Ausweg
+   („Neu anfangen").** A3 trennt *nicht erreichbar* (D1, nichts anfassen) von
+   *ungültig* (D3/D4, neuer K); ein `EACCES`/`EIO`/„Datei von einem anderen
+   Programm offen" ist das erste, nicht das zweite. Richtig ist die
+   Aufteilung nach Fehlerart (nur ein `NotFound` am Ziel einer Verknüpfung
+   bleibt ein Ausweg). **Das ist der dringendste offene Punkt**; er ändert
+   die Entscheidungstabelle und braucht einen eigenen Test. Heute ist der
+   Weg nur über ein Kommando erreichbar, das die Oberfläche noch nicht
+   anbietet, und er benennt um statt zu löschen.
+2. **Ein reiner Hinweis wartet bis zu fünf Minuten.** `notify_started_over`
+   nutzt den Frageweg und verwirft die Antwort; die Oberfläche dazu entsteht
+   erst in Commit 11, zusammen mit der Entscheidung, ob ein Hinweis
+   überhaupt eine Antwort braucht.
+3. **`switch_to_keychain` überschreibt einen abweichenden Eintrag im
+   Schlüsselbund.** Die Gegenmaßnahme braucht einen Dialogtext, den A15 nicht
+   nennt — eine Produktentscheidung, kein Fix.
+4. **Der Passwortplatz wird beim Öffnen der Passwortfrage nicht geleert.**
+   Erreichbar nur über ein Kommando der Oberfläche in einer Reihenfolge, die
+   die Maske nicht erzeugt; gehört zu Commit 11, wo die Maske entsteht.
+5. **Die Plugin-Aufschiebung hat keinen Test.** Nach demselben Maßstab wie
+   `test_t18_the_gate_is_wired_…` wäre er zu haben.
+6. **`create_new` für die `.new`-Datei der Verpackung**, Argon2-Obergrenze
+   (ADR 0095 §2), ein Hinweis an `Wiring::plugins` und A19 im Bestand (ADR
+   0095 §3/§10) — Härtung, in der Spec nicht gefordert.
+7. **T17 ist schmaler als §7.** Der Wortlaut nennt „nach T1, T3, T11, T13";
+   belegt ist der Passwort-Modus. Die Pfade aus T3 und T11 fehlen in der
+   Aufzeichnung — hiermit als Verkürzung benannt, statt sie als erfüllt
+   auszugeben.

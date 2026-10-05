@@ -328,6 +328,13 @@ async fn assemble_and_open_the_gate(
     // Klarstellung 9: Erst jetzt dürfen die Plugins da sein, die Dateien,
     // Einstellungen oder das Betriebssystem berühren (A16).
     crate::register_unlocked_plugins(app);
+    // A16, zweite Hälfte: **nach** der Entsperrung gilt der Normalbetrieb
+    // (spec-reviewer Runde 6). Ohne diesen Aufruf liefen MCP-Autostart
+    // (Spec 0028 §9), das Aufräumen alter Sitzungen (0034) und die
+    // Migration der Klartext-Zeilen (0040) im Passwort-Modus für die ganze
+    // Sitzung nicht — der Doc-Kommentar von `spawn_post_startup_tasks`
+    // behauptete diesen Aufruf, und es gab ihn nicht.
+    crate::spawn_post_startup_tasks(app);
     tracing::info!("unlocked and assembled the application state (Spec 0101, A16)");
     let _ = app.emit(UNLOCKED_EVENT, ());
 
