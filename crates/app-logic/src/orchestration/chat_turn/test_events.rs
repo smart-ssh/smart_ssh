@@ -40,6 +40,12 @@ pub(super) async fn expect_event_within<F: Future>(
 /// Wartet, bis ein Event namens `name` gesendet wurde, und gibt dessen
 /// (erste) Payload zurück. Scheitert nach [`EVENT_WAIT_TIMEOUT`] mit der
 /// Liste der stattdessen empfangenen Events.
+///
+/// Steht dieser Aufruf (wie in den Stopp-Tests) innerhalb eines äußeren
+/// [`expect_event_within`] mit derselben Obergrenze, hängt es vom Timing
+/// ab, welche der beiden Meldungen erscheint. Beide nennen ein erwartetes
+/// Ereignis und listen alle empfangenen Events auf, die Diagnose ist also
+/// in beiden Fällen vollständig.
 pub(super) async fn wait_for_event(emitter: &TestEmitter, name: &str) -> serde_json::Value {
     expect_event_within(emitter, name, async {
         loop {
