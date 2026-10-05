@@ -117,16 +117,12 @@ zu halten, bleibt davon unberührt.
 
 ## 6. Was offen bleibt
 
-1. **Die ausdrückliche Bestätigung der Warnung aus A13/E10 liegt nur in der
-   Oberfläche.** Länge und Wiederholung prüft das Backend bewusst doppelt,
-   mit der Begründung „eine Prüfung, die nur dort steht, umgeht ein
-   Kommandoaufruf" — für das Häkchen gilt dieselbe Begründung, und es gibt
-   keinen Backend-Riegel. Ein erfundener IPC-Aufruf richtet damit ein
-   Master-Passwort ein, ohne dass die Warnung je angezeigt wurde. Das ist
-   **keine Schwächung des Schlüsselschutzes** (K bleibt derselbe, nichts
-   wird gelöscht), aber eine Zusage, die heute nur die Oberfläche hält. Ob
-   die Spec sie als Backend-Zusage versteht, ist eine Produktentscheidung
-   und bleibt offen.
+1. ~~**Die ausdrückliche Bestätigung der Warnung aus A13/E10 liegt nur in
+   der Oberfläche.**~~ **Erledigt** — entschieden als Klarstellung 12
+   (Q-BL-0314-02): Das Backend prüft die Bestätigung wie Länge und
+   Wiederholung, und jeder Einrichtungsweg lehnt ohne sie ab. Umgesetzt in
+   ADR 0099; die Begründung „eine Prüfung, die nur dort steht, umgeht ein
+   Kommandoaufruf" gilt damit für alle drei Zusagen aus A13.
 2. **Die Mindestlänge steht an drei Stellen.** `key_wrapping` ist
    maßgeblich, die beiden Masken wiederholen sie. Sie zählen jetzt
    gleich (Codepunkte, `characterCount`), aber die Zahl selbst ist dreimal
