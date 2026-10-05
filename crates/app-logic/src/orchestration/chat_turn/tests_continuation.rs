@@ -313,9 +313,10 @@ async fn test_auto_continuation_after_filter_deny_pushes_rejection_and_triggers_
 /// Warte-Zustand hängen — `session.pending_action` ist wieder `None`,
 /// und `run_chat_turn` (Stand-in für den synchron awaiteten
 /// `send_chat_message`-Befehl) kehrt tatsächlich zurück, statt ewig zu
-/// blockieren. `tokio::time::timeout` statt eines nackten `.await`:
+/// blockieren. `expect_event_within` statt eines nackten `.await`:
 /// schlägt der Fix fehl (Turn hängt tatsächlich), soll das als klarer
-/// Testfehler erscheinen, statt den gesamten Testlauf aufzuhängen.
+/// Testfehler mit der Liste der empfangenen Events erscheinen, statt den
+/// gesamten Testlauf aufzuhängen.
 #[tokio::test]
 async fn test_regression_pending_action_cleared_and_turn_completes_after_deny() {
     let session = test_session(
