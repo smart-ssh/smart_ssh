@@ -178,9 +178,10 @@ nichts gesehen hat.
   (Punkt 2). Härtung, kein Fehler; Klarstellung 9 nimmt den Punkt nicht auf.
 - **A19 bleibt im Bestand unerfüllt**, soweit `read_key_state` und
   `DatabaseKey::from_root_key` mit `[u8; 32]` arbeiten (Punkt 3).
-- **T17 und die zweite Hälfte von T18 sind nicht als eigene Tests belegt.**
-  T17 ist durch die vorhandenen Prüfungen auf Fehlertexte und die
+- **T17 und die zweite Hälfte von T18 waren nicht als eigene Tests belegt.**
+  T17 war durch die vorhandenen Prüfungen auf Fehlertexte und die
   Log-Positivliste abgedeckt, T18s zweite Hälfte (MCP-Anfrage im gesperrten
   Zustand) strukturell — der MCP-Server startet erst nach `manage`. Ein Test,
-  der das **zeigt**, fehlt; die erste Hälfte von T18 ist über das Tor
-  geprüft.
+  der das **zeigt**, fehlte. **Nachgezogen:** `master_password::tests::
+  test_t17_…` und das Modul `app_shell::startup_gate_wiring`; wie und mit
+  welchem Preis, steht in ADR 0096.
