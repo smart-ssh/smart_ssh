@@ -390,6 +390,12 @@ impl WindowStartupPrompt {
 
     /// A13: das neue Master-Passwort hinterlegen, bevor die Maske ihre
     /// Antwort schickt.
+    ///
+    /// Die Bestätigung der Warnung (A13/E10, Klarstellung 12) liegt **im
+    /// selben Wert** und nicht daneben. Das ist der Punkt: Sie wird mit dem
+    /// Passwort zusammen gesetzt, zusammen geleert und zusammen
+    /// entnommen — eine Bestätigung aus einem früheren Versuch kann so
+    /// nicht an ein neues Passwort geraten.
     pub fn provide_new_password(&self, password: NewMasterPassword) {
         *self.new_password.lock().expect("Passwort-Sperre") = Some(password);
     }

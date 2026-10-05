@@ -581,16 +581,22 @@ export const startOverFromUnlockScreen = () =>
 
 /** Teil 0 Frage 3: die Antwort auf eine Startfrage im Fenster. Das neue
  * Master-Passwort kommt getrennt mit — es gehört nicht in das Ereignis, mit
- * dem gefragt wurde (§6: kein Passwort in einem DTO). */
+ * dem gefragt wurde (§6: kein Passwort in einem DTO).
+ *
+ * `warningConfirmed` ist die Bestätigung aus A13/E10 (Klarstellung 12): Das
+ * Backend prüft sie selbst und richtet ohne sie nichts ein. Das Häkchen in
+ * der Maske ist die freundliche Hälfte, nicht die maßgebliche. */
 export const answerStartupPrompt = (
   answer: StartupPromptAnswer,
   password?: string,
   repeated?: string,
+  warningConfirmed?: boolean,
 ) =>
   invoke<void>("answer_startup_prompt", {
     answer,
     password: password ?? null,
     repeated: repeated ?? null,
+    warningConfirmed: warningConfirmed ?? null,
   });
 
 /** A16: „Beenden" aus einer Startmaske. */
@@ -599,9 +605,21 @@ export const quitApplication = () => invoke<void>("quit_application");
 /** A18: welcher Modus ist aktiv? Für die Einstellungen. */
 export const getMasterPasswordMode = () => invoke<"password" | "keychain">("get_master_password_mode");
 
-/** A13: Master-Passwort aus den Einstellungen einrichten. */
-export const setUpMasterPassword = (password: string, repeated: string) =>
-  invoke<"password" | "keychain">("set_up_master_password", { password, repeated });
+/** A13: Master-Passwort aus den Einstellungen einrichten.
+ *
+ * `warningConfirmed` ist die Bestätigung aus A13/E10 (Klarstellung 12) —
+ * ohne sie lehnt das Backend mit
+ * `MASTER_PASSWORD_WARNING_NOT_CONFIRMED` ab und verändert nichts. */
+export const setUpMasterPassword = (
+  password: string,
+  repeated: string,
+  warningConfirmed: boolean,
+) =>
+  invoke<"password" | "keychain">("set_up_master_password", {
+    password,
+    repeated,
+    warningConfirmed,
+  });
 
 /** A15: Passwort ändern. Die Datenbank wird dabei nicht angefasst. */
 export const changeMasterPassword = (current: string, password: string, repeated: string) =>

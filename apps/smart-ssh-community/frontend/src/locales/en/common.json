@@ -492,6 +492,7 @@
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "The keychain holds a different key. Nothing was changed — confirm the replacement if that is what you want.",
     "APP_LOCKED": "Smart SSH is still locked. Unlock it with your master password first.",
     "MASTER_PASSWORD_MODE_MISMATCH": "This operation does not match where the key is currently kept. Nothing was changed — reopen the settings, they show the active mode.",
+    "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "The master password warning has not been confirmed. Without that password all data is lost and there is no recovery — tick the box and set it up again. Nothing was changed.",
     "KEYCHAIN_KEY_MISMATCH": "The key in the keychain does not belong to this database. Nothing was changed — storing it would make the database unreadable at the next startup."
   },
   "mcpServer": {

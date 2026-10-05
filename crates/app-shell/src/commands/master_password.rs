@@ -67,6 +67,17 @@ pub const KEYCHAIN_KEY_MISMATCH_CODE: &str = "KEYCHAIN_KEY_MISMATCH";
 /// einrichten, obwohl schon ein Passwort gilt, oder wechseln, obwohl keines
 /// gilt. Das ist kein Dateifehler und soll nicht als einer gemeldet werden.
 pub const MASTER_PASSWORD_MODE_MISMATCH_CODE: &str = "MASTER_PASSWORD_MODE_MISMATCH";
+/// Klarstellung 12 (A13/E10): Die Warnung ist nicht ausdrücklich bestätigt.
+///
+/// **Nicht `MASTER_PASSWORD_REJECTED`**, obwohl die Prüfung neben Länge und
+/// Wiederholung steht: Dessen Text nennt die Mindestlänge und die
+/// Wiederholung — beide können hier in Ordnung sein, und ein Text, der vom
+/// falschen Zustand spricht, ist genau der Fehler aus Klarstellung 9,
+/// Punkt 5. Über die Oberfläche ist dieser Code unerreichbar (der Knopf
+/// bleibt ohne Häkchen aus); er beschreibt einen Aufruf, der die Maske
+/// umgangen hat, und soll deshalb auch so heißen.
+pub const MASTER_PASSWORD_WARNING_NOT_CONFIRMED_CODE: &str =
+    "MASTER_PASSWORD_WARNING_NOT_CONFIRMED";
 
 /// Klarstellung 11: Nach wie vielen gescheiterten Entsperrversuchen eines
 /// **Programmlaufs** die Maske „Neu anfangen" anbietet.
@@ -615,12 +626,18 @@ async fn assemble_and_open_the_gate(
 ///
 /// Das neue Master-Passwort kommt getrennt mit — es gehört nicht in das
 /// Ereignis, mit dem gefragt wurde (§6: kein Passwort in einem DTO).
+///
+/// `warning_confirmed` ist die Bestätigung aus A13/E10 (Klarstellung 12).
+/// Sie zählt nur zusammen mit einem Passwort und wird **nicht**
+/// vorausgesetzt: Fehlt sie, reist [`LossWarning::NotConfirmed`] mit, und
+/// der Startablauf richtet nichts ein.
 #[tauri::command]
 pub fn answer_startup_prompt(
     app: tauri::AppHandle,
     answer: StartupPromptAnswer,
     password: Option<String>,
     repeated: Option<String>,
+    warning_confirmed: Option<bool>,
     pending: tauri::State<'_, PendingStartup>,
 ) -> CommandResult<()> {
     let prompt = pending.prompt_for(&app);
@@ -628,6 +645,7 @@ pub fn answer_startup_prompt(
         prompt.provide_new_password(NewMasterPassword {
             password: SecretString::from(password),
             repeated: SecretString::from(repeated),
+            warning: loss_warning(warning_confirmed.unwrap_or(false)),
         });
     }
     if !prompt.answer(answer) {
@@ -672,18 +690,47 @@ pub fn get_master_password_mode(state: tauri::State<'_, AppState>) -> &'static s
     ))
 }
 
+/// Die Bestätigung aus A13/E10 vom IPC in den Typ, den `app-logic` verlangt
+/// (Klarstellung 12).
+///
+/// Ein `bool` ist alles, was über das IPC kommen kann; ab hier trägt der
+/// Typ die Bedeutung, und die vorsichtige Lesart ist die Voreinstellung.
+fn loss_warning(confirmed: bool) -> master_password::LossWarning {
+    if confirmed {
+        master_password::LossWarning::ConfirmedByTheUser
+    } else {
+        master_password::LossWarning::NotConfirmed
+    }
+}
+
 /// A13: Master-Passwort aus den Einstellungen einrichten.
 ///
 /// K kommt dabei aus dem Schlüsselbund — es ist dasselbe K, mit dem die
 /// Datenbank gerade offen ist, und es bleibt es (E9). Die Reihenfolge
 /// (verpacken, schreiben, zurücklesen, vergleichen, dann löschen) liegt in
 /// `app_logic::master_password`.
+///
+/// `warning_confirmed` ist die Bestätigung aus A13/E10 (Klarstellung 12).
+/// Ohne sie wird abgelehnt, bevor irgendetwas geschrieben wird — auch
+/// bevor der Schlüsselbund gelesen wird.
 #[tauri::command]
 pub fn set_up_master_password(
     password: String,
     repeated: String,
+    warning_confirmed: bool,
     state: tauri::State<'_, AppState>,
 ) -> CommandResult<&'static str> {
+    // **Vor dem Schlüsselbund** (Klarstellung 12): Der Riegel in
+    // `app_logic` greift ohnehin, aber ein Aufruf ohne Bestätigung soll
+    // nicht einmal einen Schlüssel lesen — „verändert nichts" fängt beim
+    // Nichtstun an, und die Fehlermeldung bliebe sonst von der
+    // Erreichbarkeit des Schlüsselbunds abhängig.
+    let warning = loss_warning(warning_confirmed);
+    if warning != master_password::LossWarning::ConfirmedByTheUser {
+        return Err(to_command_error(
+            master_password::MasterPasswordError::LossWarningNotConfirmed,
+        ));
+    }
     let db_path = persistence_sqlite::default_db_path();
     let keyring = credentials_keyring::KeyringCredentialStore::new();
 
@@ -741,6 +788,7 @@ pub fn set_up_master_password(
         &root_key,
         &SecretString::from(password),
         &SecretString::from(repeated),
+        warning,
         Some(&keyring),
     )
     .map_err(to_command_error)?;
@@ -824,6 +872,8 @@ fn to_command_error(err: master_password::MasterPasswordError) -> CommandError {
         // Kein Dateifehler, sondern ein Vorgang, der nicht zum aktiven
         // Modus passt (Review-Fund Runde 1 zu Commit 11).
         E::NotInPasswordMode | E::AlreadyInPasswordMode => MASTER_PASSWORD_MODE_MISMATCH_CODE,
+        // Klarstellung 12: eigener Code, s. dessen Konstante.
+        E::LossWarningNotConfirmed => MASTER_PASSWORD_WARNING_NOT_CONFIRMED_CODE,
     };
     CommandError::with_code(err.to_string(), code)
 }
@@ -1045,6 +1095,7 @@ mod tests {
             &[7u8; 32],
             &SecretString::from("Passwort-0101-lang"),
             &SecretString::from("Passwort-0101-lang"),
+            master_password::LossWarning::ConfirmedByTheUser,
             None,
         )
         .expect("einrichten");
@@ -1096,6 +1147,7 @@ mod tests {
             &[9u8; 32],
             &SecretString::from("Passwort-0101-lang"),
             &SecretString::from("Passwort-0101-lang"),
+            master_password::LossWarning::ConfirmedByTheUser,
             None,
         )
         .expect("einrichten");

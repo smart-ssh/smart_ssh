@@ -25,6 +25,7 @@ export const MASTER_PASSWORD_ERROR_CODES = [
   "MASTER_PASSWORD_FILE_FAILED",
   "MASTER_PASSWORD_REJECTED",
   "MASTER_PASSWORD_MODE_MISMATCH",
+  "MASTER_PASSWORD_WARNING_NOT_CONFIRMED",
   "STARTUP_FAILED",
   "KEYCHAIN_HOLDS_ANOTHER_KEY",
   "KEYCHAIN_KEY_MISMATCH",
@@ -183,6 +184,11 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // Modus (A18) — kein Dateifehler, und als einer gemeldet behauptete die
   // Meldung einen Zustand, der nicht vorliegt (Klarstellung 9, Punkt 5).
   "MASTER_PASSWORD_MODE_MISMATCH",
+  // Klarstellung 12 (A13/E10): Die Warnung ist nicht bestätigt. Über die
+  // Oberfläche unerreichbar (der Knopf bleibt ohne Häkchen aus) — der Code
+  // beschreibt einen Aufruf, der das Formular umgangen hat, und braucht
+  // trotzdem einen Text, damit er nicht als roher Schlüssel erscheint.
+  "MASTER_PASSWORD_WARNING_NOT_CONFIRMED",
   // Derselbe Fund: Der Schlüssel im Schlüsselbund gehört nicht zu dieser
   // Datenbank. Im Schlüsselbund-Modus gibt es gar keine Schlüsseldatei —
   // „ließ sich nicht lesen" führte dort in die falsche Fehlersuche.

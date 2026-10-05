@@ -13,9 +13,15 @@ const MINIMUM_PASSWORD_LENGTH = 12;
 
 interface StartupPromptDialogProps {
   request: StartupPromptRequest;
-  /** Schickt die Antwort ans Backend. `password`/`repeated` nur bei
+  /** Schickt die Antwort ans Backend. `password`/`repeated` und die
+   * Bestätigung der Warnung (A13/E10, Klarstellung 12) nur bei
    * `newMasterPassword`. */
-  onAnswer: (answer: StartupPromptAnswer, password?: string, repeated?: string) => void;
+  onAnswer: (
+    answer: StartupPromptAnswer,
+    password?: string,
+    repeated?: string,
+    warningConfirmed?: boolean,
+  ) => void;
   /** Nur für `notice`: wegklicken, **ohne** eine Antwort zu schicken
    * (Klarstellung 10e — das Backend wartet dort auf keine). */
   onDismiss: () => void;
@@ -92,7 +98,10 @@ export function StartupPromptDialog({
 
   const answer = (choice: StartupPromptAnswer) => {
     if (choice === "confirm" && wantsPassword) {
-      onAnswer(choice, password, repeated);
+      // Klarstellung 12: Das Häkchen reist mit — geprüft wird es im
+      // Backend (`LossWarning`), der ausgegraute Knopf ist nur die
+      // freundliche Hälfte.
+      onAnswer(choice, password, repeated, acknowledged);
       return;
     }
     onAnswer(choice);

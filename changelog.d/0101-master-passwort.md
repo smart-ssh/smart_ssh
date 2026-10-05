@@ -11,7 +11,8 @@
 - **Für ein vergessenes Master-Passwort gibt es keine Wiederherstellung.**
   Ohne das Passwort sind Server, Zugangsdaten, Regeln und Verläufe endgültig
   verloren. Beim Einrichten wird darauf hingewiesen und eine Bestätigung
-  verlangt.
+  verlangt — auf jedem Weg, der ein Master-Passwort einrichtet, und ohne
+  sie wird nichts eingerichtet.
 
 Die Oberfläche dazu (Entsperrmaske und Einstellungen) folgt im nächsten
 Schritt; bis dahin ist der Modus nicht einschaltbar und am

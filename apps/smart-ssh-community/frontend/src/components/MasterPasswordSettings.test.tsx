@@ -69,9 +69,14 @@ describe("MasterPasswordSettings", () => {
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "Master-Passwort einrichten" }));
     await waitFor(() =>
+      // Klarstellung 12: Das Häkchen reist als dritter Parameter mit —
+      // das Backend prüft es selbst und richtet ohne es nichts ein. Ein
+      // `false` oder ein fehlender Wert hier hieße: Die Oberfläche lässt
+      // den Nutzer bestätigen und schickt die Zusage nicht ab.
       expect(setUpMasterPassword).toHaveBeenCalledWith(
         "Passwort-0101-lang",
         "Passwort-0101-lang",
+        true,
       ),
     );
   });
