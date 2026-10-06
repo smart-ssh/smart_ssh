@@ -11,7 +11,7 @@
 //! funktionieren.
 
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -48,6 +48,16 @@ fn shell_command(command: &str) -> Command {
         cmd.arg("/C").arg(command);
         cmd
     }
+}
+
+/// Whether `path` is an existing directory (following symlinks, like
+/// `Path::is_dir`), checked without blocking the async runtime (issue #23).
+/// Any error (missing path, no permission, …) counts as "not a directory".
+async fn is_existing_dir(path: &Path) -> bool {
+    tokio::fs::metadata(path)
+        .await
+        .map(|meta| meta.is_dir())
+        .unwrap_or(false)
 }
 
 /// Standard-Shell des Nutzers für den interaktiven Modus (Spec 0032,
@@ -126,8 +136,13 @@ impl SshTransport for LocalTransport {
         // changes, the command string is untouched. A home that is not an
         // existing directory would make every spawn fail, so it falls back
         // to the process cwd (as before) instead of breaking the session.
-        if let Some(home) = self.home.as_deref().filter(|home| home.is_dir()) {
-            cmd.current_dir(home);
+        // Issue #23: checked via `tokio::fs` so a slow (e.g. network-mounted)
+        // home does not block a runtime worker thread; re-checked on every
+        // call, so a home that appears or disappears mid-session is handled.
+        if let Some(home) = self.home.as_deref() {
+            if is_existing_dir(home).await {
+                cmd.current_dir(home);
+            }
         }
         let mut child = cmd
             // spec-reviewer-Fund (Review dieses Schritts): `Command::
@@ -444,6 +459,40 @@ mod tests {
 
             assert!(String::from_utf8_lossy(&output.stdout).contains("Cargo.toml"));
         }
+    }
+
+    /// Issue #23: a home path that exists but is a regular file is not a
+    /// usable working directory — local exec keeps the process cwd instead
+    /// of failing the spawn.
+    #[tokio::test]
+    async fn test_execute_with_home_that_is_a_file_falls_back_to_cwd() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_home = dir.path().join("home-is-a-file");
+        std::fs::write(&file_home, b"x").unwrap();
+        let mut transport = LocalTransport::with_home(Some(file_home));
+        #[cfg(unix)]
+        let command = "ls";
+        #[cfg(windows)]
+        let command = "dir /b";
+
+        let output = transport.execute(command).await.unwrap();
+
+        assert_eq!(output.exit_code, Some(0));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("Cargo.toml"));
+    }
+
+    /// Issue #23: the non-blocking directory check matches `Path::is_dir`
+    /// for an existing directory, a regular file and a missing path.
+    #[tokio::test]
+    async fn test_is_existing_dir_matches_path_is_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("file.txt");
+        std::fs::write(&file, b"x").unwrap();
+        let missing = dir.path().join("missing");
+
+        assert!(is_existing_dir(dir.path()).await);
+        assert!(!is_existing_dir(&file).await);
+        assert!(!is_existing_dir(&missing).await);
     }
 
     /// Issue #10: the SFTP session from `open_sftp()` uses the same home.
