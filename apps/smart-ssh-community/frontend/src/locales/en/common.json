@@ -238,7 +238,14 @@
     "advanced": "Advanced",
     "sftpServerPathLabel": "Path to sftp-server (elevated file access)",
     "sftpServerPathPlaceholder": "Automatic",
-    "sftpServerPathHint": "Only needed if automatic detection fails for the file browser with elevated rights, e.g. /usr/lib/openssh/sftp-server. Leave empty = automatic."
+    "sftpServerPathHint": "Only needed if automatic detection fails for the file browser with elevated rights, e.g. /usr/lib/openssh/sftp-server. Leave empty = automatic.",
+    "startDirectoryLabel": "Start directory (terminal and file browser)",
+    "startDirectoryPlaceholder": "Home directory",
+    "startDirectoryHint": "Absolute path (/…) or a path starting with ~/. The terminal changes there with a visible cd, the file browser opens there. AI commands always run in the home directory. Leave empty = home directory.",
+    "startDirectoryInvalid": {
+      "notAbsolute": "The start directory must be an absolute path (/…) or start with ~/.",
+      "controlCharacter": "The start directory must not contain control characters."
+    }
   },
   "filterRules": {
     "title": "Rules",
@@ -767,5 +774,8 @@
     "anotherKeyText": "The keychain holds a different key. Backups encrypted with that key will become unreadable. Replace it?",
     "anotherKeyConfirm": "Yes, replace it",
     "confirmPasswordLabel": "Master password, to confirm"
+  },
+  "startDirectory": {
+    "notFound": "Start directory \"{{dir}}\" was not found or is not accessible. Terminal and file browser use the home directory instead."
   }
 }

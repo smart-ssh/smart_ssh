@@ -43,6 +43,8 @@ import type {
   StartupStateDto,
   TestAiProviderCredentialsResult,
   TestConnectionResult,
+  StartDirectoryDto,
+  TerminalStartDto,
 } from "./types";
 
 /** Von `crate::error::CommandError` (`crates/app-shell/src/error.rs`). */
@@ -180,7 +182,10 @@ export const getChatHistory = (sessionId: string) =>
 export const confirmHostKey = (sessionId: string, decision: HostKeyUserDecision) =>
   invoke<void>("confirm_host_key", { sessionId, decision });
 
-export const openTerminal = (sessionId: string) => invoke<void>("open_terminal", { sessionId });
+/** Spec 0102: das Ergebnis trägt ggf. den einmaligen Hinweis auf ein
+ * fehlendes Startverzeichnis. */
+export const openTerminal = (sessionId: string) =>
+  invoke<TerminalStartDto>("open_terminal", { sessionId });
 
 export const terminalInput = (sessionId: string, data: Uint8Array) =>
   invoke<void>("terminal_input", { sessionId, data: Array.from(data) });
@@ -403,6 +408,10 @@ export const saveDiagnosticsBundle = (content: string) =>
   invoke<void>("save_diagnostics_bundle", { content });
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
+
+/** Spec 0102: Startpfad des Dateibrowsers dieser Sitzung (`"."` = Home). */
+export const sftpStartDirectory = (sessionId: string) =>
+  invoke<StartDirectoryDto>("sftp_start_directory", { sessionId });
 
 export const sftpList = (sessionId: string, path: string, elevatedUser: string | null = null) =>
   invoke<RemoteEntryDto[]>("sftp_list", { sessionId, path, elevatedUser });
