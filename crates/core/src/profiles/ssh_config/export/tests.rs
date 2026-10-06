@@ -423,6 +423,55 @@ fn t_review2_sftp_server_path_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
     );
 }
 
+/// Spec 0102: das Startverzeichnis wird nicht abgebildet, nur als
+/// Kommentar benannt (Spec 0075, §3.2.3) — und der Rundlauf durch den
+/// Import bringt es nicht zurück.
+#[test]
+fn startverzeichnis_wird_nur_als_kommentar_benannt() {
+    let mut s = server("web1", "10.0.0.1", 22, "");
+    s.start_directory = Some("/srv/my app".to_string());
+
+    let plan = build_export(&[s], &[], LOCAL);
+
+    assert!(
+        plan.text
+            .contains("# smart-ssh: Startverzeichnis (/srv/my app) ist hier nicht abgebildet."),
+        "{}",
+        plan.text
+    );
+    assert!(
+        !plan
+            .text
+            .lines()
+            .any(|l| !l.trim_start().starts_with('#') && l.contains("/srv/my app")),
+        "das Startverzeichnis darf in keiner Direktive landen:\n{}",
+        plan.text
+    );
+}
+
+/// Ohne Startverzeichnis bleibt der Export wie bisher.
+#[test]
+fn ohne_startverzeichnis_kein_kommentar() {
+    let plan = build_export(&[server("web1", "10.0.0.1", 22, "")], &[], LOCAL);
+    assert!(!plan.text.contains("Startverzeichnis"));
+}
+
+/// Wie beim `sftp_server_path`: ein (am Formular vorbei) gespeicherter
+/// Zeilenumbruch bricht nicht aus dem Kommentar aus.
+#[test]
+fn startverzeichnis_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
+    let mut s = server("web1", "10.0.0.1", 22, "");
+    s.start_directory = Some("/srv\nProxyJump evil.example.com\n#".to_string());
+
+    let plan = build_export(&[s], &[], LOCAL);
+
+    assert!(
+        !plan.text.contains("\nProxyJump evil.example.com\n"),
+        "{}",
+        plan.text
+    );
+}
+
 /// §1.3: das Anlegen von Hand kennt keinen Pflichtfeld-Check — ein leerer
 /// `host` ist erreichbar. `HostName ""` ist gegenüber echtem `ssh`
 /// fragwürdig; die Zeile bleibt deshalb ganz weg (§3.2.1 setzt implizit
