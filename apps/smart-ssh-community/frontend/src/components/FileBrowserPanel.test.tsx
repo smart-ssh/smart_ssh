@@ -1025,15 +1025,43 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
 
   it("a drag-and-drop upload after switching uses the elevated channel (no stale closure)", async () => {
     vi.mocked(sftpExists).mockResolvedValue(false);
-    vi.mocked(sftpUpload).mockResolvedValue(undefined);
-    await enableElevation();
+    // Issue #5: resolve with the arguments of the first upload, so the test
+    // waits on the upload event itself instead of polling a spy until a
+    // deadline. An upload over the wrong channel fails at once, with content.
+    const firstUpload = new Promise<unknown[]>((resolve) => {
+      vi.mocked(sftpUpload).mockImplementation((...args) => {
+        resolve(args);
+        return Promise.resolve();
+      });
+    });
+    vi.mocked(sftpElevationEnable).mockResolvedValue({
+      active: true,
+      targetUser: "root",
+      sftpServerPath: "/usr/lib/openssh/sftp-server",
+      failure: null,
+    });
+    // The mock keeps the last listener across tests; start from none, so the
+    // listener seen below is this panel's own.
+    dragDrop.handler = null;
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    const normalModeHandler = dragDrop.handler;
+    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+    await screen.findByRole("alert");
+
+    // Issue #5: the banner (`role="alert"`) is committed before React runs the
+    // passive effect that re-registers the drop listener for the new channel
+    // (`useEffect` with `channelUser` in `FileBrowserPanel`). `findByRole`
+    // can resolve in that gap; a drop fired then went through the listener of
+    // the normal mode and uploaded with `null`. So wait for the event the
+    // drop depends on: a listener registered after the switch.
+    await waitFor(() => expect(dragDrop.handler).not.toBe(normalModeHandler));
 
     act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
 
-    await waitFor(() =>
-      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/x.conf", "x.conf", "root"),
-    );
-    expect(sftpUpload).not.toHaveBeenCalledWith("session-1", "/local/x.conf", "x.conf", null);
+    expect(await firstUpload).toEqual(["session-1", "/local/x.conf", "x.conf", "root"]);
+    expect(sftpUpload).toHaveBeenCalledTimes(1);
   });
 
   it("reports the elevated user upward so it stays visible when the browser is hidden", async () => {
