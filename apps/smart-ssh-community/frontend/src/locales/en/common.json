@@ -82,7 +82,24 @@
       "unknown": "unavailable — cause unknown. Next step: check whether a Secret Service provider is running and unlocked (gnome-keyring, or KWallet or KeePassXC with Secret Service integration switched on), then restart Smart SSH."
     },
     "keychainBlocked": "This does not affect your secrets — API keys, server passwords, passphrases, and sudo passwords live in the encrypted database, not in the keychain.",
-    "keychainLoadFailed": "Could not load the system keyring state."
+    "keychainLoadFailed": "Could not load the system keyring state.",
+    "dataPaths": {
+      "title": "Data paths",
+      "hint": "Where this instance stores its data. Display only — file contents are not shown.",
+      "database": "Database",
+      "logs": "Logs",
+      "hostKeys": "Host keys",
+      "wrappingFile": "Master password key file",
+      "mcpSettings": "MCP settings",
+      "sessions": "Sessions",
+      "sessionsInDatabase": "stored in the database",
+      "copy": "Copy",
+      "copied": "Path copied",
+      "copyFailed": "Copying failed:",
+      "openFolder": "Open folder",
+      "openFolderFailed": "Could not open the folder:",
+      "loadFailed": "Could not load the data paths."
+    }
   },
   "fileTypes": {
     "description": "Set a local application per file extension to use for \"Open locally\". Without an entry, the operating system default application is used.",

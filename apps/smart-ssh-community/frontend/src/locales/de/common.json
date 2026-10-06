@@ -82,7 +82,24 @@
       "unknown": "nicht verfügbar — Ursache unbekannt. Nächster Schritt: prüfen, ob ein Secret-Service-Anbieter läuft und entsperrt ist (gnome-keyring, oder KWallet bzw. KeePassXC mit eingeschalteter Secret-Service-Integration), danach Smart SSH neu starten."
     },
     "keychainBlocked": "Deine Secrets sind davon nicht betroffen — API-Keys, Server-Passwörter, Passphrasen und Sudo-Passwörter liegen in der verschlüsselten Datenbank, nicht im Schlüsselbund.",
-    "keychainLoadFailed": "Zustand des Systemschlüsselbunds konnte nicht geladen werden."
+    "keychainLoadFailed": "Zustand des Systemschlüsselbunds konnte nicht geladen werden.",
+    "dataPaths": {
+      "title": "Datenpfade",
+      "hint": "Hier legt diese Instanz ihre Daten ab. Nur zur Anzeige — Inhalte werden nicht gezeigt.",
+      "database": "Datenbank",
+      "logs": "Logs",
+      "hostKeys": "Host-Keys",
+      "wrappingFile": "Schlüsseldatei des Master-Passworts",
+      "mcpSettings": "MCP-Einstellungen",
+      "sessions": "Sitzungen",
+      "sessionsInDatabase": "in der Datenbank gespeichert",
+      "copy": "Kopieren",
+      "copied": "Pfad kopiert",
+      "copyFailed": "Kopieren fehlgeschlagen:",
+      "openFolder": "Ordner öffnen",
+      "openFolderFailed": "Ordner konnte nicht geöffnet werden:",
+      "loadFailed": "Datenpfade konnten nicht geladen werden."
+    }
   },
   "fileTypes": {
     "description": "Lege pro Dateiendung ein lokales Programm fest, das beim \"Lokal öffnen\" verwendet wird. Ohne Eintrag wird das Standardprogramm des Betriebssystems genutzt.",

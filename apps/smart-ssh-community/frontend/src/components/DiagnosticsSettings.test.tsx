@@ -9,6 +9,7 @@ import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   generateDiagnosticsBundle,
+  getDataPaths,
   getKeychainStatus,
   openLogDirectory,
   saveDiagnosticsBundle,
@@ -22,6 +23,8 @@ vi.mock("../api", () => ({
   generateDiagnosticsBundle: vi.fn(),
   saveDiagnosticsBundle: vi.fn(),
   getKeychainStatus: vi.fn(),
+  getDataPaths: vi.fn(),
+  openDataPathFolder: vi.fn(),
 }));
 
 // spec-reviewer-Fund: Die Voreinstellung hing zuvor an der Aufrufhistorie
@@ -32,6 +35,7 @@ vi.mock("../api", () => ({
 // überschreibt bei Bedarf.
 beforeEach(() => {
   vi.mocked(getKeychainStatus).mockResolvedValue({ available: true, reason: null });
+  vi.mocked(getDataPaths).mockResolvedValue([]);
 });
 
 function renderDiagnostics() {
@@ -182,5 +186,18 @@ describe("DiagnosticsSettings — Schlüsselbund-Zustand (Spec 0071, A15)", () =
     const row = await screen.findByTestId("keychain-status");
     await waitFor(() => expect(row).toHaveTextContent("nicht verfügbar"));
     expect(row).toHaveTextContent("Ursache unbekannt");
+  });
+});
+
+describe("DiagnosticsSettings — Datenpfade (Issue #16)", () => {
+  it("zeigt den Abschnitt Datenpfade im Diagnose-Bereich", async () => {
+    vi.mocked(getDataPaths).mockResolvedValue([
+      { id: "database", label: null, path: "/d/smart-ssh.db", isDirectory: false },
+    ]);
+
+    renderDiagnostics();
+
+    expect(await screen.findByText("/d/smart-ssh.db")).toBeInTheDocument();
+    expect(screen.getByTestId("data-paths")).toHaveTextContent("Datenpfade");
   });
 });

@@ -824,6 +824,19 @@ export interface KeychainStatusDto {
   reason: KeychainUnavailableReason | null;
 }
 
+/** Von `app_logic::data_paths::DataPathEntryDto` (Issue #16): ein
+ * wirksamer Datenpfad der laufenden Instanz. Nur der Pfad, nie Inhalt. */
+export interface DataPathEntryDto {
+  /** Stabiler Bezeichner (`database`, `logs`, `hostKeys`, `wrappingFile`,
+   * `mcpSettings` oder ein Eintrag einer Edition). */
+  id: string;
+  /** `null` für eingebaute Einträge (Beschriftung aus dem
+   * Übersetzungskatalog), sonst Anzeigetext der Edition. */
+  label: string | null;
+  path: string;
+  isDirectory: boolean;
+}
+
 // --- Spec 0076: Anmeldung mit einer Schlüsseldatei -----------------------
 
 /** Der Grund aus `KeyFileFactsDto.problem` (`crate::dto::

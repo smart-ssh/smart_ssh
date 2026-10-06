@@ -126,6 +126,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 📚 Dokumentation
 
+- [Datenpfade](docs/datenpfade.md) – Wo Smart SSH Datenbank, Logs, Host-Keys und Einstellungen je Plattform ablegt
 - [Entwickler- & Release-Guide](README_DEV.md) – Versionsverwaltung, Release-Workflow und GitHub Secrets
 - [Feature-Spezifikationen](docs/specs/README.md) – Detaillierte Spezifikationen (Specs 0001–0014)
 - [Architecture Decision Records (ADRs)](docs/adr/README.md) – Dokumentation aller Architekturentscheidungen (ADR 0001–0019)

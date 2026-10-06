@@ -9,6 +9,7 @@ import type {
   ChatHistoryEntryDto,
   ChatSessionSummaryDto,
   DeleteGroupResult,
+  DataPathEntryDto,
   DeletePreviewDto,
   DownloadResultDto,
   ElevationResultDto,
@@ -394,6 +395,13 @@ export const openLogDirectory = () => invoke<void>("open_log_directory");
  * er auch dann nachschlagbar bleibt, wenn der Startdialog weggeklickt
  * wurde. Fragt den Schlüsselbund nicht erneut ab (A16). */
 export const getKeychainStatus = () => invoke<KeychainStatusDto>("get_keychain_status");
+
+/** Issue #16: die wirksamen Datenpfade dieser Instanz (nur Pfade). */
+export const getDataPaths = () => invoke<DataPathEntryDto[]>("get_data_paths");
+
+/** Issue #16: öffnet den Ordner zum Eintrag `id` aus `getDataPaths` — das
+ * Backend löst den Pfad selbst auf, das Frontend übergibt keinen Pfad. */
+export const openDataPathFolder = (id: string) => invoke<void>("open_data_path_folder", { id });
 
 /**
  * Spec 0063: stellt das redigierte Diagnosepaket zusammen und liefert es als

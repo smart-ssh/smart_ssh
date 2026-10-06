@@ -8,6 +8,7 @@ import {
   saveDiagnosticsBundle,
 } from "../api";
 import type { KeychainStatusDto } from "../types";
+import { DataPathsSection } from "./DataPathsSection";
 
 /** Spec 0050, Teil 1: aus `AiProviderSettings` herausgelöst — eigene
  * Kategorie ("Diagnose") in der zweispaltigen Settings-Struktur. */
@@ -94,6 +95,7 @@ export function DiagnosticsSettings() {
           <p className="mt-1 text-xs text-slate-400">{t("diagnostics.keychainBlocked")}</p>
         )}
       </div>
+      <DataPathsSection />
       <button
         type="button"
         onClick={handleOpenLogDirectory}
