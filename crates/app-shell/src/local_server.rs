@@ -188,6 +188,19 @@ mod tests {
         assert!(server.tags.is_empty());
     }
 
+    /// Spec 0102 / Issue-Entscheidung 2: der lokale Pseudo-Server bietet kein
+    /// Startverzeichnis an — sein Profil trägt nie eines, die Sitzung startet
+    /// also unverändert.
+    #[test]
+    fn test_synthetic_server_never_has_a_start_directory() {
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle().clone();
+        reset_local_store(&handle);
+
+        assert_eq!(synthetic_server(&handle).start_directory, None);
+    }
+
     /// Spec 0058, Teil 2 (Etappe-4-Review-Fund): der lokale Pseudo-Server
     /// kann sehr wohl eine Notiz haben (s. Tests oben) — nicht nur der
     /// Sitzungsende-Vorschlag selbst (`orchestration::suggest_note_shrink_

@@ -363,6 +363,11 @@ impl std::ops::DerefMut for TransportGuard<'_> {
 pub struct Session {
     parts: SessionParts,
     sftp: NormalSftpChannel,
+    /// Spec 0102: konfiguriertes Startverzeichnis und das einmalige
+    /// Prüfergebnis dieser Sitzung (s. `crate::start_directory`). Privat
+    /// wie `sftp`: gesetzt nur über [`Session::with_start_directory`] beim
+    /// Bau, danach nur lesbar.
+    start_directory: crate::start_directory::SessionStartDirectory,
 }
 
 impl std::ops::Deref for Session {
@@ -650,7 +655,21 @@ impl Session {
         Self {
             parts,
             sftp: NormalSftpChannel::default(),
+            start_directory: Default::default(),
         }
+    }
+
+    /// Spec 0102: setzt das Startverzeichnis für Terminal und Dateibrowser
+    /// dieser Sitzung — nur beim Bau, bevor die Sitzung geteilt wird.
+    /// `None` = Home wie bisher. Der KI-Ausführungspfad liest diesen Wert
+    /// nie.
+    pub fn with_start_directory(mut self, configured: Option<String>) -> Self {
+        self.start_directory = crate::start_directory::SessionStartDirectory::new(configured);
+        self
+    }
+
+    pub(crate) fn start_directory_state(&self) -> &crate::start_directory::SessionStartDirectory {
+        &self.start_directory
     }
 
     /// Der normale SFTP-Kanal dieser Sitzung, gesperrt — **zum Benutzen**.

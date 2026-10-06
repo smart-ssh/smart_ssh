@@ -58,6 +58,56 @@ async fn test_autoexec_path_runs_command_and_records_result() {
     ));
 }
 
+/// Spec 0102 (Non-goal, ADR 0059): ein KI-Kommando läuft unabhängig vom
+/// Startverzeichnis des Servers im Home — das ausgeführte Kommando ist
+/// wörtlich der Vorschlag, ohne vorangestelltes `cd`. Geprüft mit und ohne
+/// Startverzeichnis, jeweils nachdem Terminal und Dateibrowser es bereits
+/// aufgelöst haben.
+#[tokio::test]
+async fn test_ai_command_is_unchanged_by_start_directory() {
+    for configured in [None, Some("/srv/app"), Some("~/projects")] {
+        let transport = MockSshTransport::default().with_response("ls -la", output("total 0"));
+        let executed = transport.executed_handle();
+        let mut session = test_session(
+            vec![
+                AiEvent::ActionProposed(AiAction::SuggestCommand {
+                    command: "ls -la".to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            transport,
+        )
+        .with_start_directory(configured.map(str::to_string));
+        session
+            .set_sftp_for_tests(Box::new(crate::start_directory::test_stubs::stub(
+                &["/srv/app", "./projects"],
+                &[],
+            )))
+            .await;
+        session.parts_mut_for_tests().filter_engine =
+            Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        let browser = crate::start_directory::file_browser_start(&session).await;
+        if configured.is_some() {
+            assert_ne!(browser.path, ".", "Startverzeichnis sollte gefunden sein");
+        }
+
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
+            &InMemoryProfileStore::default(),
+            &ConfirmationRegistry::new(),
+        )
+        .await;
+
+        assert_eq!(
+            *executed.lock().unwrap(),
+            vec!["ls -la".to_string()],
+            "start directory {configured:?}"
+        );
+    }
+}
+
 /// Spec 0065, Teil 2 (Regressionstest): eine Antwort, die mit
 /// `AiEvent::TextTruncated` statt `AiEvent::Done` endet, muss (a) den
 /// bis dahin gestreamten Text trotzdem in die Historie/den Ledger

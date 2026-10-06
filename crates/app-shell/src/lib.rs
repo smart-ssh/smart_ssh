@@ -662,6 +662,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::generate_diagnostics_bundle,
             commands::save_diagnostics_bundle,
             commands::sftp_list,
+            commands::sftp_start_directory,
             commands::sftp_download,
             commands::sftp_download_default,
             commands::sftp_download_dir,

@@ -93,7 +93,7 @@ pub fn start_directory_sftp_path(dir: &str) -> String {
 /// `\r` — dasselbe Byte, das das Terminal für die Eingabetaste sendet.
 pub fn start_directory_cd_command(dir: &str) -> String {
     let target = match dir.strip_prefix(HOME_PREFIX) {
-        Some(rest) if rest.is_empty() => "~".to_string(),
+        Some("") => "~".to_string(),
         Some(rest) => format!("~/{}", single_quote(rest)),
         None => single_quote(dir),
     };

@@ -496,6 +496,10 @@ pub(crate) async fn connect_session(
     // Spec 0039, Abschnitt 5.1: einmalig übernommen, wie `risk_second_
     // opinion_provider` oben.
     let post_ingest_policy = server.post_ingest_policy;
+    // Spec 0102: Startverzeichnis für Terminal und Dateibrowser dieser
+    // Sitzung. Der lokale Pseudo-Server bietet das Feld nicht an — sein
+    // synthetisches Profil trägt immer `None`.
+    let start_directory = server.start_directory.clone();
 
     // Spec 0039, Abschnitt 5.2: nur `Some`, wenn BEIDE Bedingungen
     // erfüllt sind — die serverspezifische Einstellung UND die app-weite
@@ -661,60 +665,63 @@ pub(crate) async fn connect_session(
     // durchweg `false`, unabhängig vom Resume-/Frisch-Fall.
     let initial_mcp_origin_flags = vec![false; initial_history.len()];
 
-    let session = Arc::new(Session::new(SessionParts {
-        transport: app_logic::session::SessionTransport::new(transport),
-        ai_provider,
-        ai_provider_budget,
-        context: tokio::sync::Mutex::new(SessionContext {
-            system_context,
-            history: initial_history,
-            available_actions: default_action_schemas(),
-            max_tokens_hint: None,
-        }),
-        filter_engine: Box::new(FilterEngine::new(state.policy_store.clone())),
-        server_id,
-        tags: server.tags,
-        terminal: std::sync::Mutex::new(None),
-        redactor,
-        ai_provider_label: active_config.display_name,
-        ai_model: active_config.model,
-        system_context_parts: tokio::sync::Mutex::new(system_context_parts),
-        model_context_window_tokens,
-        summary: tokio::sync::Mutex::new(initial_summary),
-        mcp_origin_flags: std::sync::Mutex::new(initial_mcp_origin_flags),
-        sudo_password,
-        status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
-        pending_action: std::sync::Mutex::new(None),
-        auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
-        auto_continue_stop_notify: tokio::sync::Notify::new(),
-        chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),
-        risk_second_opinion_provider,
-        risk_second_opinion_budget,
-        red_risk_always_confirm,
-        running_command_cancellations: state.running_command_cancellations.clone(),
-        untrusted_content_ingested: std::sync::atomic::AtomicBool::new(
-            starts_with_untrusted_content,
-        ),
-        post_ingest_policy,
-        injection_check_provider,
-        injection_check_budget,
-        injection_suspected: std::sync::atomic::AtomicBool::new(false),
-        chat_session_store: if chat_session_id.is_some() {
-            state.chat_session_store.clone()
-        } else {
-            None
-        },
-        // Spec 0057, §1: dieselbe Gating-Logik wie `chat_session_store`
-        // direkt darüber — das Ledger braucht dieselbe `chat_sessions.id`
-        // als FK (Migration 0011), kein unabhängiger Persistenz-Pfad.
-        ledger_store: if chat_session_id.is_some() {
-            state.ledger_store.clone()
-        } else {
-            None
-        },
-        chat_session_id: tokio::sync::Mutex::new(chat_session_id),
-        ai_request_paced_at: tokio::sync::Mutex::new(None),
-    }));
+    let session = Arc::new(
+        Session::new(SessionParts {
+            transport: app_logic::session::SessionTransport::new(transport),
+            ai_provider,
+            ai_provider_budget,
+            context: tokio::sync::Mutex::new(SessionContext {
+                system_context,
+                history: initial_history,
+                available_actions: default_action_schemas(),
+                max_tokens_hint: None,
+            }),
+            filter_engine: Box::new(FilterEngine::new(state.policy_store.clone())),
+            server_id,
+            tags: server.tags,
+            terminal: std::sync::Mutex::new(None),
+            redactor,
+            ai_provider_label: active_config.display_name,
+            ai_model: active_config.model,
+            system_context_parts: tokio::sync::Mutex::new(system_context_parts),
+            model_context_window_tokens,
+            summary: tokio::sync::Mutex::new(initial_summary),
+            mcp_origin_flags: std::sync::Mutex::new(initial_mcp_origin_flags),
+            sudo_password,
+            status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
+            pending_action: std::sync::Mutex::new(None),
+            auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+            auto_continue_stop_notify: tokio::sync::Notify::new(),
+            chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),
+            risk_second_opinion_provider,
+            risk_second_opinion_budget,
+            red_risk_always_confirm,
+            running_command_cancellations: state.running_command_cancellations.clone(),
+            untrusted_content_ingested: std::sync::atomic::AtomicBool::new(
+                starts_with_untrusted_content,
+            ),
+            post_ingest_policy,
+            injection_check_provider,
+            injection_check_budget,
+            injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            chat_session_store: if chat_session_id.is_some() {
+                state.chat_session_store.clone()
+            } else {
+                None
+            },
+            // Spec 0057, §1: dieselbe Gating-Logik wie `chat_session_store`
+            // direkt darüber — das Ledger braucht dieselbe `chat_sessions.id`
+            // als FK (Migration 0011), kein unabhängiger Persistenz-Pfad.
+            ledger_store: if chat_session_id.is_some() {
+                state.ledger_store.clone()
+            } else {
+                None
+            },
+            chat_session_id: tokio::sync::Mutex::new(chat_session_id),
+            ai_request_paced_at: tokio::sync::Mutex::new(None),
+        })
+        .with_start_directory(start_directory),
+    );
     state.sessions.insert(session_id, session);
 
     tracing::info!(session_id = %session_id, server_id = %server_id.0, "session connected");

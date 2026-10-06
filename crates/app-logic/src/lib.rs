@@ -64,6 +64,8 @@ pub mod server_credentials;
 pub mod servers;
 pub mod session;
 pub mod ssh_config_import;
+/// Spec 0102: Startverzeichnis für Terminal und Dateibrowser.
+pub mod start_directory;
 /// Spec 0101, A3/A5: Texte der Startdialoge mit Wahl (D1–D4 und die
 /// zweiten Bestätigungen).
 pub mod startup_choice_dialogs;
