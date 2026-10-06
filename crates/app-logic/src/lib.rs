@@ -22,6 +22,8 @@
 pub mod ai_provider_factory;
 pub mod compaction;
 pub mod confirmation;
+/// Issue #16: die wirksamen Datenpfade für die Anzeige in den Einstellungen.
+pub mod data_paths;
 /// Spec 0101, A3/A5: Die Entscheidungstabelle für den Datenbankstart und
 /// „Neu anfangen" — Tauri-frei und vollständig testbar; `app-shell` liefert
 /// nur die nativen Dialoge.
