@@ -123,6 +123,11 @@ vollständigen Gate, namentlich an seinem letzten Schritt.
   `_sqlx_migrations`, `user_version`, `journal_mode`). Spec 0101 §1 nimmt
   „Kein anderer Prozess öffnet die Datei" als gegeben an; ein Lockfile ist
   eine repo-weite Änderung und gehört nicht in diese Spec.
+  **Nachtrag (Issue #19, ADR 0106):** behoben. Vor jedem Datenbankzugriff
+  sperrt der Start das Datenverzeichnis exklusiv (`smart-ssh.lock`,
+  Betriebssystem-Sperre, gehalten bis zum Prozessende), und die Umwandlung
+  verlangt diese Sperre als Argument. Eine zweite Instanz kommt gar nicht
+  bis zur Umwandlung. Die Prüfung in Schritt 3 bleibt unverändert.
 - **A19 (Schlüsselmaterial in überschreibenden Typen) ist offen.**
   `OpenedDatabase.root_key` und der Pragma-Wert in den
   `SqliteConnectOptions` sind nicht überschreibende `String`/`[u8; 32]`.
