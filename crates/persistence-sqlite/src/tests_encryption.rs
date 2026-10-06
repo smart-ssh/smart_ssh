@@ -123,6 +123,7 @@ async fn populate_markers(store: &SqliteProfileStore) {
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
             created_at: now,
             updated_at: now,
         })
@@ -1007,6 +1008,7 @@ async fn test_t6_a_row_only_in_the_original_wal_survives_the_conversion() {
                 post_ingest_policy: PostIngestPolicy::default(),
                 ai_injection_check_enabled: false,
                 sftp_server_path: None,
+                start_directory: None,
                 created_at: now,
                 updated_at: now,
             })

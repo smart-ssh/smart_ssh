@@ -189,6 +189,7 @@ async fn fixture() -> Fixture {
                 post_ingest_policy: PostIngestPolicy::default(),
                 ai_injection_check_enabled: false,
                 sftp_server_path: None,
+                start_directory: None,
                 created_at: now,
                 updated_at: now,
             })
@@ -306,6 +307,7 @@ async fn test_t11_the_provider_branch_and_the_other_auth_kinds_move_too() {
                 post_ingest_policy: PostIngestPolicy::default(),
                 ai_injection_check_enabled: false,
                 sftp_server_path: None,
+                start_directory: None,
                 created_at: now,
                 updated_at: now,
             })
@@ -960,6 +962,7 @@ async fn test_t17_the_secret_migration_keeps_the_key_and_the_secrets_out_of_the_
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
             created_at: now,
             updated_at: now,
         })

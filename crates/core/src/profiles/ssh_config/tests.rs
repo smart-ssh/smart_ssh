@@ -66,6 +66,7 @@ fn server(name: &str, host: &str, port: u16, user: &str) -> Server {
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        start_directory: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     }

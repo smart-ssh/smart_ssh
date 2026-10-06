@@ -50,6 +50,7 @@ fn make_server(name: &str, group_id: Option<GroupId>, tags: Vec<String>) -> Serv
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        start_directory: None,
         created_at: now,
         updated_at: now,
     }
@@ -620,6 +621,8 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
     assert_eq!(fetched_server.name, server.name);
     assert_eq!(fetched_server.tags, vec!["prod".to_string()]);
     assert_eq!(fetched_server.notes, "Notiz vor dem Upgrade");
+    // Spec 0102: Bestandszeilen bekommen durch 0017 kein Startverzeichnis.
+    assert_eq!(fetched_server.start_directory, None);
 
     let revisions = upgraded
         .list_note_revisions(NoteTarget::Server(server.id))
@@ -707,6 +710,58 @@ async fn test_sftp_server_path_override_roundtrip() {
         store.list_servers().await.unwrap()[0].sftp_server_path,
         None
     );
+}
+
+/// Spec 0102: das optionale Startverzeichnis übersteht Anlegen, Ändern und
+/// Zurücksetzen (`None`), inklusive Leerzeichen und `'` im Pfad.
+#[tokio::test]
+async fn test_start_directory_roundtrip() {
+    let store = in_memory_store().await;
+    let mut server = make_server("mit-startverzeichnis", None, Vec::new());
+    server.start_directory = Some("/srv/it's my app".to_string());
+    store.create_server(&server).await.unwrap();
+    assert_eq!(
+        store
+            .get_server(&server.id)
+            .await
+            .unwrap()
+            .start_directory
+            .as_deref(),
+        Some("/srv/it's my app")
+    );
+
+    server.start_directory = Some("~/projects".to_string());
+    store.update_server(&server).await.unwrap();
+    assert_eq!(
+        store.list_servers().await.unwrap()[0]
+            .start_directory
+            .as_deref(),
+        Some("~/projects")
+    );
+
+    server.start_directory = None;
+    store.update_server(&server).await.unwrap();
+    assert_eq!(
+        store.get_server(&server.id).await.unwrap().start_directory,
+        None
+    );
+}
+
+/// Spec 0102: Migration 0017 legt `start_directory` als nullable Spalte an —
+/// NULL heißt „nicht gesetzt".
+#[tokio::test]
+async fn test_start_directory_column_is_nullable() {
+    let store = in_memory_store().await;
+    let rows: Vec<(String, i64)> =
+        sqlx::query_as("SELECT name, \"notnull\" FROM pragma_table_info('servers')")
+            .fetch_all(&store.pool)
+            .await
+            .unwrap();
+    let column = rows
+        .iter()
+        .find(|(name, _)| name == "start_directory")
+        .expect("servers.start_directory sollte existieren");
+    assert_eq!(column.1, 0, "start_directory muss NULL erlauben");
 }
 
 /// **Spec 0076, §6.3.1: Die Anmeldeart überlebt den Rundlauf durch die

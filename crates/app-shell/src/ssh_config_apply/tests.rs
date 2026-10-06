@@ -898,6 +898,7 @@ fn inventory_server(
         post_ingest_policy: Default::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        start_directory: None,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     }

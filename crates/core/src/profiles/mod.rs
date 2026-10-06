@@ -9,6 +9,8 @@ mod credentials;
 mod notes;
 /// Spec 0075: `ssh_config` lesen und auf Profile abbilden.
 pub mod ssh_config;
+/// Spec 0102: optionales Startverzeichnis je Server.
+mod start_directory;
 mod store;
 mod types;
 
@@ -21,6 +23,10 @@ pub use credentials::{
     SECRET_STORE_FAILED,
 };
 pub use notes::{effective_notes, effective_notes_sections, record_revision};
+pub use start_directory::{
+    normalize_start_directory, start_directory_cd_command, start_directory_sftp_path,
+    StartDirectoryError,
+};
 pub use store::{ProfileError, ProfileResult, ProfileStore};
 pub use types::{
     AiAction, AuthMethod, CredentialRef, Group, GroupId, NoteEditor, NoteRevision, NoteTarget,

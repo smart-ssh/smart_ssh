@@ -610,6 +610,7 @@ pub(crate) async fn session_with_real_chat_and_ledger_persistence(
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
             created_at: now,
             updated_at: now,
         })

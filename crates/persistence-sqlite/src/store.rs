@@ -474,6 +474,7 @@ fn row_to_server(row: &sqlx::sqlite::SqliteRow, tags: Vec<String>) -> ProfileRes
     let post_ingest_policy_raw: String = row.get("post_ingest_policy");
     let ai_injection_check_enabled: bool = row.get("ai_injection_check_enabled");
     let sftp_server_path: Option<String> = row.get("sftp_server_path");
+    let start_directory: Option<String> = row.get("start_directory");
     let created_at: String = row.get("created_at");
     let updated_at: String = row.get("updated_at");
 
@@ -498,6 +499,7 @@ fn row_to_server(row: &sqlx::sqlite::SqliteRow, tags: Vec<String>) -> ProfileRes
         post_ingest_policy: post_ingest_policy_from_text(&post_ingest_policy_raw),
         ai_injection_check_enabled,
         sftp_server_path,
+        start_directory,
         created_at: parse_timestamp(&created_at, "servers.created_at")?,
         updated_at: parse_timestamp(&updated_at, "servers.updated_at")?,
     })
@@ -527,7 +529,7 @@ impl ProfileStore for SqliteProfileStore {
         let row = sqlx::query(
             "SELECT id, name, host, port, username, group_id, auth_method, notes, \
              jump_host_id, post_ingest_policy, ai_injection_check_enabled, sftp_server_path, \
-             created_at, updated_at FROM servers WHERE id = ?",
+             start_directory, created_at, updated_at FROM servers WHERE id = ?",
         )
         .bind(&id_str)
         .fetch_optional(&self.pool)
@@ -543,7 +545,7 @@ impl ProfileStore for SqliteProfileStore {
         let rows = sqlx::query(
             "SELECT id, name, host, port, username, group_id, auth_method, notes, \
              jump_host_id, post_ingest_policy, ai_injection_check_enabled, sftp_server_path, \
-             created_at, updated_at FROM servers ORDER BY name",
+             start_directory, created_at, updated_at FROM servers ORDER BY name",
         )
         .fetch_all(&self.pool)
         .await
@@ -634,9 +636,9 @@ impl ProfileStore for SqliteProfileStore {
         sqlx::query(
             "INSERT INTO servers \
              (id, name, host, port, username, group_id, auth_method, notes, jump_host_id, \
-              post_ingest_policy, ai_injection_check_enabled, sftp_server_path, created_at, \
-              updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              post_ingest_policy, ai_injection_check_enabled, sftp_server_path, \
+              start_directory, created_at, updated_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(server.id.0.to_string())
         .bind(&server.name)
@@ -650,6 +652,7 @@ impl ProfileStore for SqliteProfileStore {
         .bind(post_ingest_policy_to_text(server.post_ingest_policy))
         .bind(server.ai_injection_check_enabled)
         .bind(&server.sftp_server_path)
+        .bind(&server.start_directory)
         .bind(server.created_at.to_rfc3339())
         .bind(server.updated_at.to_rfc3339())
         .execute(&mut *tx)
@@ -675,7 +678,8 @@ impl ProfileStore for SqliteProfileStore {
         let result = sqlx::query(
             "UPDATE servers SET name = ?, host = ?, port = ?, username = ?, group_id = ?, \
              auth_method = ?, notes = ?, jump_host_id = ?, post_ingest_policy = ?, \
-             ai_injection_check_enabled = ?, sftp_server_path = ?, updated_at = ? WHERE id = ?",
+             ai_injection_check_enabled = ?, sftp_server_path = ?, start_directory = ?, \
+             updated_at = ? WHERE id = ?",
         )
         .bind(&server.name)
         .bind(&server.host)
@@ -688,6 +692,7 @@ impl ProfileStore for SqliteProfileStore {
         .bind(post_ingest_policy_to_text(server.post_ingest_policy))
         .bind(server.ai_injection_check_enabled)
         .bind(&server.sftp_server_path)
+        .bind(&server.start_directory)
         .bind(server.updated_at.to_rfc3339())
         .bind(server.id.0.to_string())
         .execute(&mut *tx)

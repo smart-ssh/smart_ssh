@@ -87,6 +87,7 @@ pub fn synthetic_server<R: Runtime>(app: &AppHandle<R>) -> Server {
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        start_directory: None,
         created_at: now,
         updated_at: now,
     }
