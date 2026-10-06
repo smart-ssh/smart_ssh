@@ -51,3 +51,9 @@ geschieht, die eine eingetippte Zeile zerreißen.
   Shells, bash und zsh tritt das nicht auf. Hingenommen — solche Pfade sind
   selten, und das Ergebnis ist ein sichtbar fehlschlagendes `cd`, kein
   stilles anderes Verhalten.
+- In tcsh (und csh) nimmt das eingebaute `cd` die Option `--` womöglich
+  nicht an; je nach Version scheitert die Zeile dann mit einer
+  Fehlermeldung, und die Shell bleibt im Home. Hingenommen aus demselben
+  Grund wie bei fish: Das Ergebnis ist ein sichtbar fehlschlagendes `cd`,
+  kein stilles anderes Verhalten. Eine eigene Variante der Zeile je Shell
+  gibt es nicht, weil die Login-Shell des Servers vorab nicht bekannt ist.

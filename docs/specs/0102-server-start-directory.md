@@ -111,6 +111,23 @@ Verhalten.
 - **Erhöhter Dateibrowser-Modus (Spec 0067):** Das Startverzeichnis gilt
   für den Login-Nutzer; „Zum Startverzeichnis" lädt denselben Pfad auch im
   erhöhten Modus, eine eigene Prüfung für den Zielnutzer gibt es nicht.
+  Ein Startverzeichnis der Form `~/…` wird dabei als relativer Pfad `./…`
+  geladen (§4.1). Diesen löst der erhöhte `sftp-server` relativ zu seinem
+  eigenen Startverzeichnis auf, also aus Sicht des Zielnutzers, nicht
+  gegen das Home des Login-Nutzers. „Zum Startverzeichnis" kann im
+  erhöhten Modus deshalb in einem anderen Verzeichnis landen oder
+  scheitern. Das ist eine bekannte Grenze, kein Defekt. Wer im erhöhten
+  Modus verlässlich am selben Ort starten will, trägt einen absoluten Pfad
+  ein.
+- **Vorab-Eingabe im Terminal (Typeahead):** Die `cd`-Zeile (§4.2) wird
+  nach dem Login ins PTY geschrieben und wartet dort als Vorab-Eingabe,
+  bis die Shell sie liest. Login-Skripte, die anstehende Eingaben
+  verwerfen (z. B. per `tcflush` oder `read` in einer Schleife) oder per
+  `exec` einen Multiplexer starten (z. B. `exec tmux`), können die Zeile
+  verschlucken oder an den Multiplexer weiterreichen. Das Terminal bleibt
+  dann im Home bzw. das `cd` läuft in der falschen Umgebung. Hingenommen:
+  Die Zeile ist sichtbar, und die Shell-Anfrage bleibt bewusst
+  unverändert (§4.2, ADR 0101).
 
 ## 6. SSH-Config-Import/-Export (Spec 0075)
 
