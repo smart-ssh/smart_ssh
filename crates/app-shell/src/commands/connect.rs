@@ -4,12 +4,9 @@
 
 use std::sync::Arc;
 
-use secrecy::ExposeSecret;
 use tauri::{AppHandle, State};
 
-use ssh_manager_core::ai::{
-    default_action_schemas, ChatMessage, DefaultOutputRedactor, OutputRedactor, SessionContext,
-};
+use ssh_manager_core::ai::{default_action_schemas, ChatMessage, OutputRedactor, SessionContext};
 use ssh_manager_core::filter::{
     EffectiveScope, EvalContext, FilterEngine, PolicyStore, RuleAction,
 };
@@ -470,13 +467,8 @@ pub(crate) async fn connect_session(
     // es hätte in genau diesem Fall unredigiert den KI-Kontext und das
     // strukturierte Log erreicht. `regex::escape` neutralisiert
     // Regex-Sonderzeichen im Passwort selbst.
-    let redactor: Box<dyn OutputRedactor> = match &sudo_password {
-        Some(password) => match regex::Regex::new(&regex::escape(password.expose_secret())) {
-            Ok(pattern) => Box::new(DefaultOutputRedactor::with_extra_patterns(vec![pattern])),
-            Err(_) => Box::new(DefaultOutputRedactor::new()),
-        },
-        None => Box::new(DefaultOutputRedactor::new()),
-    };
+    let redactor: Box<dyn OutputRedactor> =
+        app_logic::server_redaction::redactor_with_sudo_password(sudo_password.as_ref());
 
     // Spec 0026, Abschnitt 3: einmalig bei `connect()` aufgelöst, s.
     // `Session::risk_second_opinion_provider`-Doc-Kommentar. Spec 0061:
