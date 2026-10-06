@@ -11,6 +11,7 @@
 //! funktionieren.
 
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -24,7 +25,7 @@ use ssh_manager_core::ssh::{
 };
 
 use crate::exec::{CappedOutput, MAX_STREAM_OUTPUT_BYTES};
-use crate::local_sftp::LocalFileSession;
+use crate::local_sftp::{user_home_dir, LocalFileSession};
 
 fn io_err(context: &str, err: std::io::Error) -> SshError {
     SshError::ChannelError(format!("{context}: {err}"))
@@ -78,12 +79,25 @@ pub struct LocalTransport {
     /// set_max_output_bytes`), ohne echte Mehrbyte-Nutzlasten erzeugen zu
     /// müssen.
     max_output_bytes: usize,
+    /// User's home directory (issue #10): working directory of `execute()`
+    /// and base for relative paths of the `LocalFileSession` from
+    /// `open_sftp()` — the counterpart of the login home a real SSH server
+    /// runs exec channels and SFTP in. `None` if it cannot be determined;
+    /// both then keep the process cwd as before.
+    home: Option<PathBuf>,
 }
 
 impl LocalTransport {
     pub fn new() -> Self {
+        Self::with_home(user_home_dir())
+    }
+
+    /// Explicit home directory — for tests, so they need not mutate the
+    /// process environment (`HOME`/`USERPROFILE`) in parallel test runs.
+    pub(crate) fn with_home(home: Option<PathBuf>) -> Self {
         Self {
             max_output_bytes: MAX_STREAM_OUTPUT_BYTES,
+            home,
         }
     }
 }
@@ -106,7 +120,16 @@ impl SshTransport for LocalTransport {
     /// Rest seiner Ausgabe wird verworfen, das Ergebnis als `truncated`
     /// markiert.
     async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
-        let mut child = shell_command(command)
+        let mut cmd = shell_command(command);
+        // Issue #10: run in the home directory like an SSH exec channel
+        // does (ADR 0059 assumes a home cwd). Only the working directory
+        // changes, the command string is untouched. A home that is not an
+        // existing directory would make every spawn fail, so it falls back
+        // to the process cwd (as before) instead of breaking the session.
+        if let Some(home) = self.home.as_deref().filter(|home| home.is_dir()) {
+            cmd.current_dir(home);
+        }
+        let mut child = cmd
             // spec-reviewer-Fund (Review dieses Schritts): `Command::
             // output()` (der bisherige Aufruf hier) erbt `stdin` vom
             // Elternprozess wie `spawn()` auch — ein Kommando, das auf
@@ -266,7 +289,7 @@ impl SshTransport for LocalTransport {
     }
 
     async fn open_sftp(&mut self) -> Result<Box<dyn SftpSession>, SshError> {
-        Ok(Box::new(LocalFileSession::new()))
+        Ok(Box::new(LocalFileSession::with_home(self.home.clone())))
     }
 
     async fn disconnect(&mut self) -> Result<(), SshError> {
@@ -366,6 +389,80 @@ mod tests {
         let mut transport = LocalTransport::new();
         let output = transport.execute("exit 1").await.unwrap();
         assert_eq!(output.exit_code, Some(1));
+    }
+
+    /// Issue #10: a local command runs in the home directory, not in the
+    /// process cwd (the crate directory under `cargo test`) — proven via a
+    /// marker file that exists only in the injected home.
+    #[tokio::test]
+    async fn test_execute_runs_in_home_directory() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(home.path().join("issue-10-marker.txt"), b"x").unwrap();
+        let mut transport = LocalTransport::with_home(Some(home.path().to_path_buf()));
+        #[cfg(unix)]
+        let command = "ls";
+        #[cfg(windows)]
+        let command = "dir /b";
+
+        let output = transport.execute(command).await.unwrap();
+
+        let listing = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            listing.contains("issue-10-marker.txt"),
+            "command did not run in home: {listing}"
+        );
+        assert!(!listing.contains("Cargo.toml"), "ran in the cwd: {listing}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_execute_pwd_prints_home_directory() {
+        let home = tempfile::tempdir().unwrap();
+        let mut transport = LocalTransport::with_home(Some(home.path().to_path_buf()));
+
+        let output = transport.execute("pwd -P").await.unwrap();
+
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            home.path().canonicalize().unwrap().to_string_lossy()
+        );
+    }
+
+    /// Issue #10: without a home, or with one that does not exist, local
+    /// exec keeps the process cwd instead of failing the session.
+    #[tokio::test]
+    async fn test_execute_without_usable_home_falls_back_to_cwd() {
+        let missing = tempfile::tempdir().unwrap().path().join("gone");
+        for home in [None, Some(missing)] {
+            let mut transport = LocalTransport::with_home(home);
+            #[cfg(unix)]
+            let command = "ls";
+            #[cfg(windows)]
+            let command = "dir /b";
+
+            let output = transport.execute(command).await.unwrap();
+
+            assert!(String::from_utf8_lossy(&output.stdout).contains("Cargo.toml"));
+        }
+    }
+
+    /// Issue #10: the SFTP session from `open_sftp()` uses the same home.
+    #[tokio::test]
+    async fn test_open_sftp_lists_home_for_dot() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(home.path().join("from-transport.txt"), b"x").unwrap();
+        let mut transport = LocalTransport::with_home(Some(home.path().to_path_buf()));
+
+        let mut sftp = transport.open_sftp().await.unwrap();
+        let entries = sftp.list_dir(".").await.unwrap();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "from-transport.txt");
+    }
+
+    #[test]
+    fn test_new_uses_the_user_home_directory() {
+        assert_eq!(LocalTransport::new().home, user_home_dir());
     }
 
     #[tokio::test]
