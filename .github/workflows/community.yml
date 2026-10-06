@@ -11,10 +11,19 @@ name: Community
 # Inhaltliche Ergänzung gegenüber `ci.yml`: der Frontend-Teil (Abschnitt 6,
 # unten) baut nicht nur, sondern lintet und testet auch (Spec 0090, A5).
 
+# `push` nur auf `main`: Commits eines PR-Branches laufen über
+# `pull_request`. Vorher lief jeder PR-Commit zweimal unter denselben
+# Check-Namen, und ein roter Lauf von beiden blockierte den Merge (#26).
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
+
+# Ein neuer Push auf denselben PR bricht den noch laufenden Lauf ab;
+# auf `main` läuft jeder Commit zu Ende.
+concurrency:
+  group: community-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
