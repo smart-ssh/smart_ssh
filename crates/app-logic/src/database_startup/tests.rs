@@ -20,6 +20,12 @@ use ssh_manager_core::profiles::{CredentialError, CredentialRef, CredentialResul
 
 use super::*;
 
+/// Issue #19: Der Startablauf verlangt die Sperre auf das Datenverzeichnis.
+/// Jeder Test liegt in seinem eigenen Temp-Verzeichnis und sperrt es hier.
+fn lock_for(db_path: &Path) -> DataDirLock {
+    lock_data_directory(db_path).expect("Temp-Verzeichnis sperren")
+}
+
 /// Fester Wurzelschlüssel für die Tests — kein Geheimnis.
 const TEST_ROOT_KEY: [u8; 32] = [
     0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
@@ -33,7 +39,7 @@ fn root_key_base64() -> String {
 
 /// Wie sich der Test-Schlüsselbund beim Lesen verhält.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum GetBehaviour {
+pub(super) enum GetBehaviour {
     /// Ein gültiger Schlüssel liegt vor.
     Present,
     /// Kein Eintrag.
@@ -47,7 +53,7 @@ enum GetBehaviour {
 /// Test-`CredentialStore`, der **zählt** (T3: „mit Test-Store, der Aufrufe
 /// zählt"). Nur so lässt sich die Zusicherung prüfen, dass ohne Nutzerwahl
 /// genau in zwei Feldern der Tabelle ein `set` auf K passiert.
-struct CountingCredentialStore {
+pub(super) struct CountingCredentialStore {
     behaviour: Mutex<GetBehaviour>,
     entries: Mutex<HashMap<String, SecretString>>,
     gets: AtomicUsize,
@@ -56,7 +62,7 @@ struct CountingCredentialStore {
 }
 
 impl CountingCredentialStore {
-    fn new(behaviour: GetBehaviour) -> Self {
+    pub(super) fn new(behaviour: GetBehaviour) -> Self {
         let entries = Mutex::new(HashMap::new());
         if behaviour == GetBehaviour::Present {
             entries.lock().unwrap().insert(
@@ -320,7 +326,7 @@ impl StartupPrompt for PasswordModePrompt {
 
 /// Ein Dialog-Doppel, das **jede** Frage mit einem Panic beantwortet — für
 /// die Felder der Tabelle, in denen überhaupt kein Dialog erscheinen darf.
-struct NoDialogExpected;
+pub(super) struct NoDialogExpected;
 
 impl StartupPrompt for NoDialogExpected {
     fn ask(&self, dialog: StartupDialog) -> StartupChoice {
@@ -343,7 +349,7 @@ impl StartupPrompt for NoDialogExpected {
     }
 }
 
-fn available() -> KeychainAvailability {
+pub(super) fn available() -> KeychainAvailability {
     KeychainAvailability::Available
 }
 
@@ -514,6 +520,7 @@ async fn test_t3_a_key_is_written_without_a_user_choice_only_in_the_two_generate
             RootKeyAccess::Keychain(&store),
             available(),
             &NoDialogExpected,
+            &lock_for(&db_path),
         )
         .await
         .expect("Datei fehlt, kein K: anlegen muss gelingen");
@@ -536,6 +543,7 @@ async fn test_t3_a_key_is_written_without_a_user_choice_only_in_the_two_generate
             RootKeyAccess::Keychain(&store),
             available(),
             &NoDialogExpected,
+            &lock_for(&db_path),
         )
         .await
         .expect("Klartext, kein K: umwandeln muss gelingen");
@@ -557,6 +565,7 @@ async fn test_t3_a_key_is_written_without_a_user_choice_only_in_the_two_generate
             RootKeyAccess::Keychain(&store),
             available(),
             &NoDialogExpected,
+            &lock_for(&db_path),
         )
         .await
         .expect("Datei fehlt, K da");
@@ -574,6 +583,7 @@ async fn test_t3_a_key_is_written_without_a_user_choice_only_in_the_two_generate
             RootKeyAccess::Keychain(&store),
             available(),
             &NoDialogExpected,
+            &lock_for(&db_path),
         )
         .await
         .expect("Klartext, K da");
@@ -591,6 +601,7 @@ async fn test_t3_a_key_is_written_without_a_user_choice_only_in_the_two_generate
             RootKeyAccess::Keychain(&store),
             available(),
             &NoDialogExpected,
+            &lock_for(&db_path),
         )
         .await
         .expect("verschlüsselt, K da");
@@ -692,6 +703,7 @@ async fn test_t3_in_every_dialog_case_the_file_stays_byte_identical_until_a_choi
             RootKeyAccess::Keychain(&store),
             case.keychain,
             &prompt,
+            &lock_for(&db_path),
         )
         .await;
 
@@ -753,6 +765,7 @@ async fn test_t3_d4_without_the_second_confirmation_nothing_happens() {
         RootKeyAccess::Keychain(&store),
         available(),
         &prompt,
+        &lock_for(&db_path),
     )
     .await;
 
@@ -792,6 +805,7 @@ async fn test_t7_start_over_from_d2_renames_byte_identically_and_starts_fresh() 
         RootKeyAccess::Keychain(&credentials),
         available(),
         &prompt,
+        &lock_for(&db_path),
     )
     .await
     .expect("nach „Neu anfangen“ muss eine frische Datenbank entstehen");
@@ -854,6 +868,7 @@ async fn test_t7_start_over_from_d3_also_replaces_the_unusable_key() {
         RootKeyAccess::Keychain(&credentials),
         available(),
         &prompt,
+        &lock_for(&db_path),
     )
     .await
     .expect("nach „Neu anfangen“ aus D3 muss eine frische Datenbank entstehen");
@@ -877,6 +892,7 @@ async fn test_t7_start_over_from_d3_also_replaces_the_unusable_key() {
         RootKeyAccess::Keychain(&credentials),
         available(),
         &NoDialogExpected,
+        &lock_for(&db_path),
     )
     .await
     .expect("der zweite Start darf keinen Dialog mehr brauchen");
@@ -900,6 +916,7 @@ async fn test_t7_without_the_second_confirmation_no_file_is_renamed() {
         RootKeyAccess::Keychain(&credentials),
         available(),
         &prompt,
+        &lock_for(&db_path),
     )
     .await;
 
@@ -990,6 +1007,7 @@ async fn test_t7_variant_start_over_in_password_mode_renames_the_wrapping_and_wr
         RootKeyAccess::UnusableWrapping,
         available(),
         &prompt,
+        &lock_for(&db_path),
     )
     .await
     .expect("„Neu anfangen“ muss im Passwort-Modus eine frische Datenbank ergeben");
@@ -1080,6 +1098,7 @@ async fn test_t7_variant_an_aborted_start_over_in_password_mode_changes_no_file(
             RootKeyAccess::UnusableWrapping,
             available(),
             &prompt,
+            &lock_for(&db_path),
         )
         .await;
 
@@ -1144,6 +1163,7 @@ async fn test_k12_d4_setup_without_the_confirmed_warning_keeps_the_old_wrapping(
         RootKeyAccess::UnusableWrapping,
         available(),
         &prompt,
+        &lock_for(&db_path),
     )
     .await;
 
@@ -1201,6 +1221,7 @@ async fn test_t13_d4_in_password_mode_converts_the_file_and_rewraps_the_new_key(
         RootKeyAccess::UnusableWrapping,
         available(),
         &prompt,
+        &lock_for(&db_path),
     )
     .await
     .expect("D4 muss die Klartext-Datei mit einem neuen K umwandeln");
@@ -1255,6 +1276,7 @@ async fn test_t7_d4_converts_the_plaintext_file_with_a_new_key_and_keeps_the_row
         RootKeyAccess::Keychain(&credentials),
         available(),
         &prompt,
+        &lock_for(&db_path),
     )
     .await
     .expect("D4 mit Bestätigung muss umwandeln");
@@ -1356,6 +1378,7 @@ async fn test_k12_d1_setup_without_the_confirmed_warning_changes_nothing() {
         RootKeyAccess::Keychain(&credentials),
         unavailable(KeychainUnavailableReason::NoSessionBus),
         &prompt,
+        &lock_for(&db_path),
     )
     .await;
 
@@ -1412,6 +1435,7 @@ async fn test_t8_an_unreachable_key_does_not_open_the_database_and_retry_works()
             RootKeyAccess::Keychain(&credentials),
             available(),
             &prompt,
+            &lock_for(&db_path),
         )
         .await;
         assert!(matches!(result, Err(StartupAbort::UserQuit)));
@@ -1472,6 +1496,7 @@ async fn test_t8_an_unreachable_key_does_not_open_the_database_and_retry_works()
             RootKeyAccess::Keychain(&credentials),
             available(),
             &prompt,
+            &lock_for(&db_path),
         )
         .await
         .expect("„Erneut versuchen“ mit funktionierendem Store muss starten");
@@ -1514,6 +1539,7 @@ async fn test_a6_a_symlinked_database_aborts_the_start_only_where_a_file_would_b
             RootKeyAccess::Keychain(&credentials),
             available(),
             &NoDialogExpected,
+            &lock_for(&link),
         )
         .await;
 
@@ -1548,6 +1574,7 @@ async fn test_a6_a_symlinked_database_aborts_the_start_only_where_a_file_would_b
             RootKeyAccess::Keychain(&credentials),
             available(),
             &NoDialogExpected,
+            &lock_for(&link),
         )
         .await;
 
@@ -1581,6 +1608,7 @@ async fn test_a6_a_symlinked_database_aborts_the_start_only_where_a_file_would_b
             RootKeyAccess::Keychain(&credentials),
             available(),
             &NoDialogExpected,
+            &lock_for(&link),
         )
         .await
         .expect("eine Verknüpfung auf eine verschlüsselte Datenbank muss weiter öffnen");
@@ -1718,11 +1746,16 @@ fn suffix_of(main_name: &str) -> String {
 
 // === Hilfen ==============================================================
 
+/// Die Datendateien im Verzeichnis. **Ohne die Sperrdatei** (Issue #19):
+/// Sie ist keine Datendatei, sondern entsteht beim Sperren, das im Test
+/// erst im Aufruf von `open_or_prepare_database` geschieht (in der App
+/// schon vor jedem Schnappschuss). Sie wird nie umbenannt oder gelöscht.
 fn file_names(dir: &std::path::Path) -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(dir)
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|name| name != persistence_sqlite::DATA_DIR_LOCK_FILE_NAME)
         .collect();
     names.sort();
     names
@@ -1730,7 +1763,7 @@ fn file_names(dir: &std::path::Path) -> Vec<String> {
 
 /// Eine unverschlüsselte Datenbank mit einer Zeile — der Zustand einer
 /// bestehenden Installation vor dieser Spec.
-async fn plaintext_database(dir: &std::path::Path) -> std::path::PathBuf {
+pub(super) async fn plaintext_database(dir: &std::path::Path) -> std::path::PathBuf {
     let db_path = dir.join("smart-ssh.db");
     let store = SqliteProfileStore::connect_plaintext(&db_path)
         .await
@@ -1850,6 +1883,7 @@ async fn test_a5_a_rename_collision_gets_its_own_message_without_backup_advice()
         RootKeyAccess::Keychain(&credentials),
         available(),
         &prompt,
+        &lock_for(&db_path),
     )
     .await
     .err()
@@ -1939,6 +1973,7 @@ async fn test_t17_the_startup_decisions_keep_the_key_out_of_the_log_and_the_bund
         RootKeyAccess::Keychain(&store),
         available(),
         &NoDialogExpected,
+        &lock_for(&fresh_db),
     )
     .await
     .expect("Datei fehlt, K da");
@@ -1955,6 +1990,7 @@ async fn test_t17_the_startup_decisions_keep_the_key_out_of_the_log_and_the_bund
         RootKeyAccess::Keychain(&generating),
         available(),
         &NoDialogExpected,
+        &lock_for(&plaintext),
     )
     .await
     .expect("Klartext, kein K");
@@ -1973,6 +2009,7 @@ async fn test_t17_the_startup_decisions_keep_the_key_out_of_the_log_and_the_bund
             RootKeyAccess::Keychain(&failing),
             available(),
             &quit,
+            &lock_for(&unreachable_db),
         )
         .await
         .is_err(),
@@ -1988,6 +2025,7 @@ async fn test_t17_the_startup_decisions_keep_the_key_out_of_the_log_and_the_bund
         RootKeyAccess::Keychain(&corrupt),
         available(),
         &start_over,
+        &lock_for(&corrupt_db),
     )
     .await
     .expect("D3 mit „Neu anfangen“ muss eine frische Datenbank ergeben");

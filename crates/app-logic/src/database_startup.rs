@@ -17,8 +17,8 @@ use std::path::{Path, PathBuf};
 
 use credentials_keyring::{KeychainAvailability, KeychainUnavailableReason};
 use persistence_sqlite::{
-    detect_database_file_state, ConnectFailureKind, DatabaseFileState, PersistenceError,
-    SqliteProfileStore,
+    detect_database_file_state, ConnectFailureKind, DataDirLock, DataDirLockError,
+    DatabaseFileState, PersistenceError, SqliteProfileStore,
 };
 use ssh_manager_core::crypto::{DatabaseKey, RootKey, RootKeyState};
 use ssh_manager_core::profiles::CredentialStore;
@@ -315,6 +315,31 @@ pub enum StartupAbort {
     },
 }
 
+/// Issue #19: sperrt das Datenverzeichnis von `db_path` exklusiv für diesen
+/// Prozess — der erste Schritt des Startablaufs, **vor** jedem Zugriff auf
+/// die Datenbank (Öffnen, Migrieren, Umwandeln) und vor der
+/// Verpackungsdatei.
+///
+/// Hält ein anderer Prozess die Sperre, endet der Start mit
+/// [`ConnectFailureKind::AlreadyRunning`]; die Datenbank bleibt unberührt.
+/// Jeder andere Fehler beim Sperren endet ebenfalls im Startfehler —
+/// **nie** in einem Start ohne Sperre.
+pub fn lock_data_directory(db_path: &Path) -> Result<DataDirLock, StartupAbort> {
+    DataDirLock::acquire_for_database(db_path).map_err(|err| {
+        let kind = match &err {
+            DataDirLockError::HeldByAnotherProcess => ConnectFailureKind::AlreadyRunning,
+            DataDirLockError::Io(io) if io.kind() == std::io::ErrorKind::PermissionDenied => {
+                ConnectFailureKind::PermissionDenied
+            }
+            DataDirLockError::Io(_) => ConnectFailureKind::Other,
+        };
+        StartupAbort::Fatal {
+            kind,
+            detail: err.to_string(),
+        }
+    })
+}
+
 /// Ergebnis eines erfolgreichen Starts.
 pub struct OpenedDatabase {
     pub store: SqliteProfileStore,
@@ -333,11 +358,17 @@ pub struct OpenedDatabase {
 /// „K erzeugen“-Feldern und nach einer ausdrücklichen Wahl; kein Öffnen,
 /// Umbenennen oder Verändern einer Datei in einem Dialogfall, solange nicht
 /// gewählt ist.
+///
+/// **Issue #19:** `lock` ist die Sperre auf das Datenverzeichnis aus
+/// [`lock_data_directory`]. Der Aufrufer nimmt sie **vor** diesem Aufruf
+/// und hält sie, solange der Prozess läuft; die Umwandlung (A6) verlangt
+/// sie ausdrücklich.
 pub async fn open_or_prepare_database(
     db_path: &Path,
     access: RootKeyAccess<'_>,
     keychain: KeychainAvailability,
     prompt: &dyn StartupPrompt,
+    lock: &DataDirLock,
 ) -> Result<OpenedDatabase, StartupAbort> {
     // `mut`, weil genau ein Übergang vorkommt: D1 → „Master-Passwort
     // einrichten“ wechselt den Modus mitten im Start (A13). Danach ist K
@@ -454,11 +485,11 @@ pub async fn open_or_prepare_database(
                 let Some(key) = root_key else {
                     return Err(missing_key_despite_present());
                 };
-                return convert_then_open(db_path, &key).await;
+                return convert_then_open(db_path, &key, lock).await;
             }
             StartupPlan::GenerateKeyThenConvert => {
                 let key = generate_key(db_path, &access, prompt)?;
-                return convert_then_open(db_path, &key).await;
+                return convert_then_open(db_path, &key, lock).await;
             }
             StartupPlan::Dialog(StartupDialog::D1 {
                 offers_password_setup,
@@ -560,7 +591,7 @@ pub async fn open_or_prepare_database(
                 // Schlüssel“ auch „neue Verpackung“ — mit derselben
                 // Reihenfolge wie in A5 (s. `generate_key`).
                 let key = generate_key(db_path, &access, prompt)?;
-                return convert_then_open(db_path, &key).await;
+                return convert_then_open(db_path, &key, lock).await;
             }
             // [`decide_startup`] liefert diesen Dialog nie — er gehört zum
             // Secret-Umzug (A11), der erst nach dem Öffnen läuft. Der Zweig
@@ -874,10 +905,11 @@ async fn open_encrypted(db_path: &Path, root_key: &[u8; 32]) -> Result<OpenedDat
 async fn convert_then_open(
     db_path: &Path,
     root_key: &[u8; 32],
+    lock: &DataDirLock,
 ) -> Result<OpenedDatabase, StartupAbort> {
     let db_key = DatabaseKey::from_root_key(root_key);
     tracing::info!("converting the plaintext database (Spec 0101, A6)");
-    if let Err(err) = persistence_sqlite::convert_plaintext_database(db_path, &db_key).await {
+    if let Err(err) = persistence_sqlite::convert_plaintext_database(db_path, &db_key, lock).await {
         let as_persistence = PersistenceError::Conversion(err);
         let kind = as_persistence.classify();
         // A6: Kein Weiterlauf im Klartext — der Start endet hier.
@@ -1054,5 +1086,9 @@ fn sibling(db_path: &Path, suffix: &str) -> PathBuf {
     with_suffix(db_path, suffix)
 }
 
+/// Issue #19: Sperre auf das Datenverzeichnis, mit einem echten zweiten
+/// Prozess.
+#[cfg(test)]
+mod instance_lock_tests;
 #[cfg(test)]
 mod tests;

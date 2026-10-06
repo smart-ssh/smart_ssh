@@ -250,6 +250,15 @@ pub fn db_connect_failure_text(
         // **Beide Sprachen über diesen Zweig:** Vorher nahm der deutsche Weg
         // nur `.message` aus einer zweiten Aufrufstelle. Eine Stelle, ein
         // Text.
+        // Issue #19: Ein anderer Prozess hält die Sperre auf das
+        // Datenverzeichnis. Die Datenbank ist unberührt — also kein
+        // „Backup einspielen", sondern die andere Instanz benutzen.
+        (Language::En, ConnectFailureKind::AlreadyRunning) => format!(
+            "Smart SSH is already running with this data directory.\n\n\
+             Next step: switch to the Smart SSH window that is already open, or quit that \
+             instance and start Smart SSH again. Nothing has been changed.\n\n\
+             Data path: {db_path}"
+        ),
         (_, ConnectFailureKind::HostKeyStoreFailed) => {
             return host_key_store_failure_text(&host_key_store_path(&db_path), language)
         }
@@ -395,6 +404,14 @@ fn db_connect_failure_message_de(
              Platz hat, und starte Smart SSH erneut — es bietet den Neuanfang dann wieder \
              an. Behalte die umbenannten Dateien, bis du fertig bist. Das Log unter \
              {log_dir} nennt die genaue Ursache.\n\n\
+             Datenpfad: {db_path}"
+        ),
+        // Issue #19, s. den englischen Zweig.
+        ConnectFailureKind::AlreadyRunning => format!(
+            "Smart SSH läuft bereits mit diesem Datenverzeichnis.\n\n\
+             Nächster Schritt: Wechsle in das Fenster der bereits geöffneten Instanz von \
+             Smart SSH, oder beende diese Instanz und starte Smart SSH erneut. Es wurde \
+             nichts verändert.\n\n\
              Datenpfad: {db_path}"
         ),
         ConnectFailureKind::MasterPasswordSetupFailed => format!(

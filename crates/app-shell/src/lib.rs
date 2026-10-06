@@ -25,6 +25,9 @@ mod risk_second_opinion;
 /// Async-Runtime, auf der der synchrone Secret-Speicher steht.
 #[cfg(test)]
 mod runtime_assumptions;
+/// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
+/// nach vorn.
+mod single_instance;
 /// Spec 0075, §7.3: den bestätigten Importplan ausführen — der einzige
 /// Schritt, in dem überhaupt eine Schlüsseldatei geöffnet wird (§5.1).
 mod ssh_config_apply;
@@ -73,30 +76,42 @@ use app_logic::state::AppState;
 /// Umgebung wird deshalb genau einmal gelesen.
 pub(crate) struct StartupInputs {
     pub(crate) db_path: std::path::PathBuf,
+    /// Issue #19: die Sperre auf das Datenverzeichnis von `db_path`,
+    /// genommen vor jedem Zugriff auf die Datenbank. Lebt in diesem Wert
+    /// und damit bis zum Prozessende — im Passwort-Modus über
+    /// `PendingStartup`, das die Angaben bis zur Entsperrung hält.
+    pub(crate) data_dir_lock: persistence_sqlite::DataDirLock,
     pub(crate) language: app_logic::startup_error_messages::Language,
     pub(crate) keychain: credentials_keyring::KeychainAvailability,
 }
 
-fn startup_inputs() -> StartupInputs {
-    // Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
-    // Programmlaufs — hier, an der einzigen Stelle, die tatsächlich die
-    // Umgebung liest. Die Entscheidungslogik selbst ist rein und liegt in
-    // `startup_error_messages` (A11c). Würde jeder Dialog seine Sprache
-    // selbst bestimmen, zeigte ein englischsprachiges System bei einem
-    // DB-Fehler Deutsch und bei einem Schlüsselbund-Fehler Englisch.
+/// Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
+/// Programmlaufs — hier, an der einzigen Stelle, die tatsächlich die
+/// Umgebung liest. Die Entscheidungslogik selbst ist rein und liegt in
+/// `startup_error_messages` (A11c). Würde jeder Dialog seine Sprache
+/// selbst bestimmen, zeigte ein englischsprachiges System bei einem
+/// DB-Fehler Deutsch und bei einem Schlüsselbund-Fehler Englisch.
+///
+/// Eigene Funktion seit Issue #19: Der Dialog „läuft bereits" erscheint vor
+/// [`startup_inputs`] und braucht dieselbe Sprache.
+fn startup_language() -> app_logic::startup_error_messages::Language {
     let lc_all = std::env::var("LC_ALL").ok();
     let lc_messages = std::env::var("LC_MESSAGES").ok();
     let lang = std::env::var("LANG").ok();
-    let language = app_logic::startup_error_messages::startup_language(
+    app_logic::startup_error_messages::startup_language(
         app_logic::startup_error_messages::preferred_locale_value(
             lc_all.as_deref(),
             lc_messages.as_deref(),
             lang.as_deref(),
         ),
-    );
+    )
+}
 
-    let db_path = default_db_path();
-
+fn startup_inputs(
+    db_path: std::path::PathBuf,
+    data_dir_lock: persistence_sqlite::DataDirLock,
+    language: app_logic::startup_error_messages::Language,
+) -> StartupInputs {
     // Spec 0071, A3/A16: Das Session-Bus-Indiz und der Schlüsselbund-Zustand
     // werden hier EINMAL pro Programmlauf ermittelt und danach im `AppState`
     // weitergereicht — kein Kommando probiert den Schlüsselbund zusätzlich
@@ -134,6 +149,7 @@ fn startup_inputs() -> StartupInputs {
 
     StartupInputs {
         db_path,
+        data_dir_lock,
         language,
         keychain,
     }
@@ -184,9 +200,14 @@ pub(crate) async fn open_and_assemble(
     // der Entsperrmaske (A16: „sichtbare Meldung"). Ein `process::exit` aus
     // einem Kommando heraus würde dort das Fenster wegreißen, bevor der
     // Nutzer den Grund gelesen hat.
-    let opened =
-        app_logic::database_startup::open_or_prepare_database(&db_path, access, keychain, prompt)
-            .await?;
+    let opened = app_logic::database_startup::open_or_prepare_database(
+        &db_path,
+        access,
+        keychain,
+        prompt,
+        &inputs.data_dir_lock,
+    )
+    .await?;
     tracing::info!("SQLite database connected");
     let profile_store = opened.store;
     let chat_content_key = opened.root_key;
@@ -404,7 +425,41 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // `_log_guard` bleibt hier und wandert **nicht** mehr in den Aufbau:
     // Der Aufbau meldet Fehler jetzt als Rückgabewert, und nur die beiden
     // `process::exit`-Stellen unten brauchen den Guard zum Flushen.
-    let inputs = startup_inputs();
+    // Issue #19: **Erster Schritt vor jedem Zugriff auf die Datenbank**
+    // (Öffnen, Migrieren, Umwandeln) und vor der Verpackungsdatei: das
+    // Datenverzeichnis exklusiv sperren. Gehalten wird die Sperre in
+    // `inputs` bis zum Prozessende. Hält sie ein anderer Prozess, wird
+    // nichts angefasst — entweder übernimmt die laufende Instanz desselben
+    // Builds (sie kommt nach vorn, dieser Prozess endet mit 0), oder es
+    // erscheint der Startfehler „läuft bereits".
+    let language = startup_language();
+    let data_dir_lock = match app_logic::database_startup::lock_data_directory(&db_path) {
+        Ok(lock) => {
+            tracing::info!("locked the data directory for this process (issue #19)");
+            lock
+        }
+        Err(abort) => {
+            let (kind, detail) = match abort {
+                app_logic::database_startup::StartupAbort::Fatal { kind, detail } => (kind, detail),
+                other => (
+                    persistence_sqlite::ConnectFailureKind::Other,
+                    format!("{other:?}"),
+                ),
+            };
+            tracing::error!(detail, ?kind, "fatal: could not lock the data directory");
+            if kind == persistence_sqlite::ConnectFailureKind::AlreadyRunning {
+                crate::single_instance::hand_over_to_running_instance(context);
+            }
+            let log_dir = app_logic::logging::default_log_dir();
+            let text = app_logic::startup_error_messages::db_connect_failure_text(
+                &kind, &db_path, &log_dir, language,
+            );
+            drop(_log_guard);
+            crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
+        }
+    };
+
+    let inputs = startup_inputs(db_path, data_dir_lock, language);
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
     tracing::info!(?mode, "determined how the root key is kept (Spec 0101, §5)");
 
@@ -475,7 +530,8 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         crate::commands::master_password::PendingStartup::new(inputs, wiring.entitlements.clone());
     let plugins = wiring.plugins;
 
-    let builder = tauri::Builder::default();
+    // Issue #19: als erstes Plugin, s. `single_instance::register_on`.
+    let builder = crate::single_instance::register_on(tauri::Builder::default());
     let builder = plugins
         .into_iter()
         .fold(builder, |builder, plugin| plugin(builder));

@@ -21,6 +21,8 @@ use sqlx::{ConnectOptions, Connection, Row, SqliteConnection};
 
 use ssh_manager_core::crypto::DatabaseKey;
 
+use crate::instance_lock::DataDirLock;
+
 /// Die 16 Kopfbytes einer **unverschlüsselten** SQLite-Datei. Eine
 /// SQLCipher-Datei beginnt stattdessen mit ihrem Zufalls-Salt, kann diese
 /// Folge also nur mit Wahrscheinlichkeit 2^-128 zufällig tragen.
@@ -118,6 +120,9 @@ pub enum ConversionFailure {
     /// vollständig verworfen (A2: der Schlüssel erscheint in keinem
     /// Fehlertext).
     RedactedDatabaseError,
+    /// Issue #19: Die übergebene Sperre deckt das Verzeichnis von `db_path`
+    /// nicht. Es wurde nichts geöffnet und nichts verändert.
+    DataDirectoryNotLocked,
 }
 
 impl std::fmt::Display for ConversionFailure {
@@ -135,6 +140,11 @@ impl std::fmt::Display for ConversionFailure {
             ConversionFailure::RedactedDatabaseError => write!(
                 f,
                 "SQLite-Fehler (Details ausgelassen, weil sie Schlüsselmaterial enthielten)"
+            ),
+            ConversionFailure::DataDirectoryNotLocked => write!(
+                f,
+                "das Datenverzeichnis ist nicht von diesem Prozess gesperrt; es wird nicht \
+                 umgewandelt"
             ),
         }
     }
@@ -334,22 +344,38 @@ async fn fingerprint(conn: &mut SqliteConnection) -> Result<DatabaseFingerprint,
 /// (sein WAL ist eingespielt, was den Inhalt nicht ändert), es liegt keine
 /// Zwischendatei mehr, und es wurde nichts umbenannt. Migrationen laufen
 /// danach wie gewohnt — nicht hier (Schritt 5).
+///
+/// **Issue #19:** `lock` ist der Nachweis, dass dieser Prozess das
+/// Datenverzeichnis exklusiv gesperrt hat ([`DataDirLock`]). Ohne ihn lässt
+/// sich die Umwandlung nicht aufrufen; deckt er das Verzeichnis von
+/// `db_path` nicht, endet sie mit [`ConversionFailure::
+/// DataDirectoryNotLocked`], bevor irgendetwas geöffnet ist. Damit kann
+/// keine zweite Instanz dieselbe Datei gleichzeitig umwandeln — die
+/// Prüfung aus Schritt 3 bleibt trotzdem unverändert bestehen.
 pub async fn convert_plaintext_database(
     db_path: &Path,
     key: &DatabaseKey,
+    lock: &DataDirLock,
 ) -> Result<(), ConversionFailure> {
-    convert_plaintext_database_inner(db_path, key, &mut |_| Ok(())).await
+    convert_plaintext_database_inner(db_path, key, lock, &mut |_| Ok(())).await
 }
 
 pub(crate) async fn convert_plaintext_database_inner(
     db_path: &Path,
     key: &DatabaseKey,
+    lock: &DataDirLock,
     // `+ Send` (Spec 0101, Etappe 3): Die Umwandlung läuft seit dem
     // Passwort-Modus auch aus einem `#[tauri::command]` heraus, und dessen
     // Future muss `Send` sein. Ohne diese Schranke wäre der Hook der eine
     // nicht-`Send`-Teil im ganzen Startablauf.
     after_step: &mut (dyn FnMut(ConversionStep) -> Result<(), ConversionFailure> + Send),
 ) -> Result<(), ConversionFailure> {
+    // Issue #19: Noch vor dem Symlink-Test — ohne Sperre auf genau diesem
+    // Verzeichnis wird nichts angefasst, auch nicht gelesen.
+    if !lock.covers_database(db_path) {
+        return Err(ConversionFailure::DataDirectoryNotLocked);
+    }
+
     // A6, letzter Satz / T20: Symlink vor jedem anderen Schritt prüfen —
     // bevor irgendetwas geöffnet oder angelegt ist.
     if std::fs::symlink_metadata(db_path)?.file_type().is_symlink() {
