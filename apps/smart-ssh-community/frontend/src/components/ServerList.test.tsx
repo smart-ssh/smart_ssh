@@ -3,13 +3,14 @@
 // dafür immer `port: 0` (s. `local_server::synthetic_server`), das darf im
 // UI nicht als echter Port `0` erscheinen. Ein normaler Server zeigt
 // seinen Port unverändert.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, HostKeyVerificationNeededEvent, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
-import { connect, listGroups, listServers } from "../api";
+import { confirmHostKey, connect, listGroups, listServers } from "../api";
+import { onHostKeyVerificationNeeded } from "../events";
 
 function localServer(): ServerDto {
   return {
@@ -208,5 +209,80 @@ describe("ServerList empty-state entry block (Spec 0069, Teil C1)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ersten Server anlegen" }));
 
     expect(onCreateFirstServer).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Issue #12: `ServerList` bleibt gemountet, wenn ein Session-Tab aktiv
+// wird — `App.tsx` blendet den ganzen `MainScreen`-Zweig dann nur per
+// `display:none` aus (hier per Inline-Style nachgebildet, `jsdom` kennt die
+// Tailwind-Klasse `hidden` nicht). Ein Host-Key-Ereignis, das genau dann
+// eintrifft (z. B. ein MCP-ausgelöster `connect()`, der zuerst einen neuen
+// Tab öffnet), muss trotzdem einen sichtbaren, fokussierten Dialog
+// außerhalb dieses Zweigs zeigen.
+describe("ServerList host key prompt while a session tab is active (Issue #12)", () => {
+  const sessionId = "22222222-2222-4222-8222-222222222222";
+  const events: HostKeyVerificationNeededEvent[] = [
+    {
+      sessionId,
+      host: "prod-1.internal",
+      port: 2222,
+      kind: "unknown",
+      fingerprint: "SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      expectedFingerprint: null,
+    },
+    {
+      sessionId,
+      host: "prod-1.internal",
+      port: 2222,
+      kind: "mismatch",
+      fingerprint: "SHA256:newnewnewnewnewnewnewnewnewnewnewnewnewn",
+      expectedFingerprint: "SHA256:oldoldoldoldoldoldoldoldoldoldoldoldold",
+    },
+  ];
+
+  it.each(events)("shows the $kind dialog visible and focused outside the hidden main screen", async (event) => {
+    let emit: ((e: HostKeyVerificationNeededEvent) => void) | null = null;
+    vi.mocked(onHostKeyVerificationNeeded).mockImplementation((handler) => {
+      emit = handler;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(confirmHostKey).mockResolvedValue(undefined);
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <div data-testid="session-tab">
+          <input aria-label="terminal" />
+        </div>
+        <div data-testid="main-screen" style={{ display: "none" }}>
+          <ServerList
+            onConnected={vi.fn()}
+            findExistingSessionId={() => undefined}
+            onSwitchToExistingTab={vi.fn()}
+            collapsedGroupIds={new Set()}
+            onToggleGroup={vi.fn()}
+            onCreateFirstServer={vi.fn()}
+          />
+        </div>
+      </I18nextProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+    const mainScreen = screen.getByTestId("main-screen");
+    expect(mainScreen).not.toBeVisible();
+    screen.getByLabelText("terminal").focus();
+
+    expect(emit).not.toBeNull();
+    act(() => emit?.(event));
+
+    const role = event.kind === "mismatch" ? "alertdialog" : "dialog";
+    const rejectLabel = event.kind === "mismatch" ? "Verbindung abbrechen" : "Ablehnen";
+    const dialog = screen.getByRole(role);
+    expect(mainScreen).not.toContainElement(dialog);
+    expect(dialog).toBeVisible();
+    const reject = screen.getByRole("button", { name: rejectLabel });
+    expect(document.activeElement).toBe(reject);
+
+    // Die Entscheidung erreicht weiterhin genau diese Sitzung.
+    fireEvent.click(reject);
+    await waitFor(() => expect(confirmHostKey).toHaveBeenCalledWith(sessionId, { decision: "reject" }));
   });
 });

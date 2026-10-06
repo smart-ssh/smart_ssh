@@ -22,10 +22,12 @@ import {
   deleteServer,
   getServer,
   inspectKeyFile,
+  testConnection,
+  trustHostKey,
 } from "../api";
 import { pickFilePath } from "../fileDialog";
 import { testI18n } from "../testI18n";
-import type { KeyFileFactsDto, ServerDto } from "../types";
+import type { KeyFileFactsDto, ServerDto, TestConnectionResult } from "../types";
 import { ServerForm } from "./ServerForm";
 
 vi.mock("../api", () => ({
@@ -672,5 +674,103 @@ describe("ServerForm — Überführung in die verschlüsselte Datenbank (Spec 00
     fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
 
     await waitFor(() => expect(convertIdentityFileToKeychain).toHaveBeenCalledWith(SERVER_ID));
+  });
+});
+
+// Issue #12: Der Host-Key-Dialog aus "Verbindung testen" muss sichtbar und
+// fokussiert sein — sowohl bei offenem Formular als auch dann, wenn der
+// Nutzer während des laufenden Tests in einen Session-Tab gewechselt hat
+// und `App.tsx` den Verwaltungszweig samt Formular per `display:none`
+// ausblendet (hier per Inline-Style nachgebildet, `jsdom` kennt die
+// Tailwind-Klasse `hidden` nicht).
+describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () => {
+  const results: TestConnectionResult[] = [
+    {
+      kind: "hostKeyUnknown",
+      host: "example.invalid",
+      port: 22,
+      rawKey: [1, 2, 3],
+      fingerprint: "SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    },
+    {
+      kind: "hostKeyMismatch",
+      host: "example.invalid",
+      port: 22,
+      rawKey: [1, 2, 3],
+      expectedFingerprint: "SHA256:oldoldoldoldoldoldoldoldoldoldoldoldold",
+      actualFingerprint: "SHA256:newnewnewnewnewnewnewnewnewnewnewnewnewn",
+    },
+  ];
+
+  function dialogFor(result: TestConnectionResult) {
+    const isMismatch = result.kind === "hostKeyMismatch";
+    return {
+      dialog: screen.getByRole(isMismatch ? "alertdialog" : "dialog"),
+      reject: screen.getByRole("button", { name: isMismatch ? "Verbindung abbrechen" : "Ablehnen" }),
+    };
+  }
+
+  function renderInTabs(formVisible: boolean) {
+    const tree = (visible: boolean) => (
+      <I18nextProvider i18n={testI18n}>
+        <div data-testid="session-tab" style={visible ? { display: "none" } : undefined}>
+          <input aria-label="terminal" />
+        </div>
+        <div data-testid="manage-tab" style={visible ? undefined : { display: "none" }}>
+          <ServerForm
+            serverId={SERVER_ID}
+            defaultGroupId={null}
+            allGroups={[]}
+            allServers={[]}
+            onSaved={vi.fn()}
+            onDeleted={vi.fn()}
+          />
+        </div>
+      </I18nextProvider>
+    );
+    const utils = render(tree(formVisible));
+    return { ...utils, switchTab: (visible: boolean) => utils.rerender(tree(visible)) };
+  }
+
+  it.each(results)("$kind: Dialog bei offenem Formular sichtbar, fokussiert und außerhalb des Formulars", async (result) => {
+    vi.mocked(testConnection).mockResolvedValue(result);
+    renderInTabs(true);
+    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
+
+    const { dialog, reject } = await waitFor(() => dialogFor(result));
+    expect(screen.getByTestId("manage-tab")).not.toContainElement(dialog);
+    expect(dialog).toBeVisible();
+    expect(document.activeElement).toBe(reject);
+
+    fireEvent.click(reject);
+    expect(trustHostKey).not.toHaveBeenCalled();
+  });
+
+  it.each(results)("$kind: Dialog bleibt sichtbar und fokussiert, wenn während des Tests ein anderer Tab aktiv wurde", async (result) => {
+    let resolveTest: (r: TestConnectionResult) => void = () => {};
+    vi.mocked(testConnection).mockImplementation(
+      () => new Promise<TestConnectionResult>((resolve) => {
+        resolveTest = resolve;
+      }),
+    );
+    const { switchTab } = renderInTabs(true);
+    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
+    await waitFor(() => expect(testConnection).toHaveBeenCalled());
+
+    // Nutzer wechselt in einen Session-Tab, bevor der Test antwortet.
+    switchTab(false);
+    const manageTab = screen.getByTestId("manage-tab");
+    expect(manageTab).not.toBeVisible();
+    screen.getByLabelText("terminal").focus();
+
+    await act(async () => resolveTest(result));
+
+    const { dialog, reject } = dialogFor(result);
+    expect(manageTab).not.toContainElement(dialog);
+    expect(dialog).toBeVisible();
+    expect(document.activeElement).toBe(reject);
   });
 });
