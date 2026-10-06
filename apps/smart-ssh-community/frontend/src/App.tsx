@@ -7,6 +7,7 @@ import type { Selection } from "./components/Sidebar";
 import { NoteShrinkSuggestionToast } from "./components/NoteShrinkSuggestionToast";
 import { NoteSuggestionToast } from "./components/NoteSuggestionToast";
 import { ToastHost } from "./components/ToastHost";
+import { HostKeyPromptHost } from "./components/HostKeyPromptHost";
 import { ServerList } from "./components/ServerList";
 import { SessionTabBar } from "./components/SessionTabBar";
 import { SessionView } from "./components/SessionView";
@@ -135,6 +136,10 @@ function App() {
       <NoteSuggestionToast />
       <NoteShrinkSuggestionToast />
       <ToastHost />
+      {/* Issue #12 / ADR 0104: Host-Key-Abfragen kommen auch für vom
+       * Backend ausgelöste Verbindungen (z. B. MCP) — daher hier, stets
+       * gemountet, statt in `ServerList`, das nur im "Verbinden"-Tab lebt. */}
+      <HostKeyPromptHost />
 
       {/* Spec 0017, Abschnitt 4: jede offene Session bleibt gemountet
        * (eigener Chat-Verlauf, eigene xterm.js-Instanz samt Scrollback,

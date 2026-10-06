@@ -299,3 +299,119 @@ describe("HostKeyDialog — Zweig- und Ereigniswechsel", () => {
     expect(onDecision1).not.toHaveBeenCalled();
   });
 });
+
+// Issue #12: Ein Host-Key-Dialog darf nie unsichtbar oder unerreichbar
+// sein, egal welcher Tab gerade aktiv ist. `App.tsx` blendet inaktive
+// Zweige (den `MainScreen` samt `ServerList`/`ServerForm`, und jeden
+// nicht aktiven Session-Tab) per `display:none` aus, statt sie zu
+// unmounten — ein `fixed`-Dialog *innerhalb* eines solchen Zweigs wäre
+// mit ausgeblendet. Die Tests bilden dieses Layout nach: der Dialog wird
+// im ausgeblendeten Zweig gerendert, während ein anderer Tab sichtbar ist
+// und ein Element darin den Fokus hält. `jsdom` kennt die Tailwind-Klasse
+// `hidden` nicht, deshalb hier `style="display:none"` — das wertet
+// `toBeVisible` aus. Gegenbeweis (lokal, nicht eingecheckt): ohne
+// `createPortal` (Dialog direkt im Zweig gerendert) scheitern "Portal",
+// "sichtbar und fokussiert" und "Fokus bleibt im Dialog" in beiden Zweigen.
+function renderInHiddenTab(event: HostKeyInfo, onDecision: (decision: HostKeyUserDecision) => void = vi.fn()) {
+  const utils = render(
+    <I18nextProvider i18n={testI18n}>
+      <div data-testid="active-tab">
+        <input aria-label="aktiver Tab" />
+      </div>
+      <div data-testid="hidden-tab" style={{ display: "none" }}>
+        <HostKeyDialog event={event} onDecision={onDecision} />
+      </div>
+    </I18nextProvider>,
+  );
+  return {
+    ...utils,
+    activeTab: screen.getByTestId("active-tab"),
+    hiddenTab: screen.getByTestId("hidden-tab"),
+  };
+}
+
+describe.each(branches)("HostKeyDialog in einem ausgeblendeten Tab ($name, Issue #12)", ({ event, role, rejectLabel }) => {
+  it("Portal: der Dialog hängt unter document.body, nicht im Teilbaum des Tabs", () => {
+    const { hiddenTab, container } = renderInHiddenTab(event);
+    const dialog = screen.getByRole(role);
+
+    expect(hiddenTab).not.toContainElement(dialog);
+    expect(container).not.toContainElement(dialog);
+    // Overlay ist ein direktes Kind von body — kein Vorfahre zwischen
+    // Dialog und body, der ihn per `display:none` ausblenden könnte.
+    const overlay = dialog.parentElement as HTMLElement;
+    expect(overlay.parentElement).toBe(document.body);
+  });
+
+  it("sichtbar und fokussiert, während ein anderer Tab aktiv ist", () => {
+    const { activeTab, hiddenTab } = renderInHiddenTab(event);
+    // Voraussetzung: der Testaufbau blendet den anfragenden Zweig wirklich aus.
+    expect(hiddenTab).not.toBeVisible();
+    expect(activeTab).toBeVisible();
+
+    const dialog = screen.getByRole(role);
+    expect(dialog).toBeVisible();
+    const reject = screen.getByRole("button", { name: rejectLabel });
+    expect(reject).toBeVisible();
+    expect(document.activeElement).toBe(reject);
+  });
+
+  it("Fokus bleibt im Dialog, auch wenn der aktive Tab ihn an sich ziehen will", () => {
+    renderInHiddenTab(event);
+    const reject = screen.getByRole("button", { name: rejectLabel });
+    const activeInput = screen.getByLabelText("aktiver Tab");
+
+    activeInput.focus();
+    expect(document.activeElement).toBe(reject);
+  });
+
+  it("Escape lehnt auch aus dem ausgeblendeten Tab heraus ab", () => {
+    const onDecision = vi.fn();
+    renderInHiddenTab(event, onDecision);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onDecision).toHaveBeenCalledTimes(1);
+    expect(onDecision).toHaveBeenCalledWith({ decision: "reject" });
+  });
+});
+
+describe("HostKeyDialog — unbekannt und geändert bleiben unterscheidbar (Issue #12)", () => {
+  function snapshot(event: HostKeyInfo) {
+    const { unmount } = renderDialog(event);
+    const dialog = screen.getByRole(event.kind === "mismatch" ? "alertdialog" : "dialog");
+    const result = {
+      role: dialog.getAttribute("role"),
+      heading: screen.getByRole("heading", { level: 2 }).textContent,
+      className: dialog.className,
+      buttons: screen.getAllByRole("button").map((b) => b.textContent),
+      text: dialog.textContent ?? "",
+    };
+    unmount();
+    return result;
+  }
+
+  it("unterscheiden sich in Rolle, Titel, Farbe und Schaltflächen", () => {
+    const unknown = snapshot(unknownEvent);
+    const mismatch = snapshot(mismatchEvent);
+
+    expect(unknown.role).toBe("dialog");
+    expect(mismatch.role).toBe("alertdialog");
+
+    expect(unknown.heading).toBe("Unbekannter Host");
+    expect(mismatch.heading).toBe("Der Schlüssel dieses Servers ist nicht mehr derselbe.");
+
+    expect(unknown.className).toContain("border-slate-600");
+    expect(unknown.className).not.toContain("red");
+    expect(mismatch.className).toContain("border-red-600");
+    expect(mismatch.className).toContain("bg-red-950/95");
+
+    expect(unknown.buttons).toEqual(["Ablehnen", "Vertrauen"]);
+    expect(mismatch.buttons).toEqual(["Verbindung abbrechen", "Trotzdem vertrauen"]);
+
+    // Nur der geänderte Schlüssel warnt vor einem Man-in-the-Middle und
+    // zeigt beide Fingerprints nebeneinander.
+    expect(mismatch.text).toContain("Man-in-the-Middle");
+    expect(unknown.text).not.toContain("Man-in-the-Middle");
+    expect(mismatch.text).toContain(mismatchEvent.expectedFingerprint as string);
+    expect(mismatch.text).toContain(mismatchEvent.fingerprint);
+  });
+});

@@ -3,13 +3,15 @@
 // dafür immer `port: 0` (s. `local_server::synthetic_server`), das darf im
 // UI nicht als echter Port `0` erscheinen. Ein normaler Server zeigt
 // seinen Port unverändert.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
 import { connect, listGroups, listServers } from "../api";
+import { subscribeHostKeyPromptClear } from "../hostKeyPromptBus";
+import { onHostKeyVerificationNeeded } from "../events";
 
 function localServer(): ServerDto {
   return {
@@ -66,7 +68,6 @@ vi.mock("../api", async () => {
     listGroups: vi.fn(() => Promise.resolve([] as GroupDto[])),
     listChatSessions: vi.fn(() => Promise.resolve([])),
     connect: vi.fn(),
-    confirmHostKey: vi.fn(),
     resumeChatSession: vi.fn(),
     commandErrorMessage: actual.commandErrorMessage,
     commandErrorCode: actual.commandErrorCode,
@@ -208,5 +209,48 @@ describe("ServerList empty-state entry block (Spec 0069, Teil C1)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ersten Server anlegen" }));
 
     expect(onCreateFirstServer).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Issue #12 / ADR 0104: die Host-Key-Abfrage gehört nicht mehr `ServerList`,
+// sondern dem stets gemounteten `HostKeyPromptHost` an der `App`-Wurzel
+// (Sichtbarkeit in jedem Tab-Zustand: `App.hostKeyPrompt.test.tsx`).
+// `ServerList` darf selbst keinen Listener mehr registrieren (sonst zwei
+// Dialoge) und signalisiert nur noch das Ende seines `connect()`.
+describe("ServerList host key prompt ownership (Issue #12)", () => {
+  it("does not subscribe to host-key-verification-needed itself", async () => {
+    renderList();
+    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+    expect(onHostKeyVerificationNeeded).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["succeeds", () => Promise.resolve("55555555-5555-4555-8555-555555555555")],
+    ["fails", () => Promise.reject({ code: null, message: "kaputt" })],
+  ])("clears the host key prompt when its connect() %s", async (_label, outcome) => {
+    let finish: (() => void) | null = null;
+    vi.mocked(connect).mockImplementation(
+      () =>
+        new Promise<string>((resolve, reject) => {
+          finish = () => outcome().then(resolve, reject);
+        }),
+    );
+    const cleared = vi.fn();
+    const unsubscribe = subscribeHostKeyPromptClear(cleared);
+    try {
+      renderList();
+      fireEvent.click(await screen.findByText("prod-1"));
+      await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1"));
+      expect(cleared).not.toHaveBeenCalled();
+
+      await act(async () => {
+        finish?.();
+      });
+
+      await waitFor(() => expect(cleared).toHaveBeenCalledTimes(1));
+    } finally {
+      unsubscribe();
+      vi.mocked(connect).mockReset();
+    }
   });
 });
