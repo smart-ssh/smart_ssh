@@ -112,8 +112,11 @@ pub trait McpBackend: Send + Sync + 'static {
     /// "unbekannt" behandeln.
     async fn list_servers(&self) -> Vec<ServerSummary>;
 
-    /// Entspricht `effective_notes()` (Spec 0003, Abschnitt 5.1) für den
-    /// angegebenen Server.
+    /// Die effektiven Notizen (Spec 0003, Abschnitt 5.1) des angegebenen
+    /// Servers, so wie sie auch die eingebaute KI sieht: je Abschnitt
+    /// redigiert und danach als `server_note` gefenct (Issue #18, ADR 0103).
+    /// Ein externer MCP-Client ist ein KI-Empfänger wie jeder andere —
+    /// Notizen sind nach Spec 0039 nicht vertrauenswürdiger Inhalt.
     async fn server_notes(&self, server_id: ServerId) -> Result<String, LookupError>;
 
     /// Übersetzt einen der vier aktionsauslösenden Tool-Calls in die

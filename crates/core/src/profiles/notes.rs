@@ -45,10 +45,11 @@ pub async fn effective_notes(server: &Server, store: &dyn ProfileStore) -> Profi
 /// zusammengefügten String — Grundlage für den KI-Kontext-Aufbau (Spec
 /// 0039): dort muss jeder Abschnitt einzeln über `ai::fence_untrusted`
 /// laufen, bevor er in den System-Prompt eingebettet wird, was mit einem
-/// bereits zusammengefügten String nicht mehr möglich wäre. `effective_notes`
-/// bleibt für die menschliche Vorschau (`preview_effective_notes`) und den
-/// MCP-Notizen-Zugriff unverändert bestehen — beide wollen lesbaren Text,
-/// kein Fencing.
+/// bereits zusammengefügten String nicht mehr möglich wäre. Dasselbe gilt
+/// für das MCP-Tool `get_server_notes` (Issue #18, ADR 0103: redigiert und
+/// gefenct über `app_logic::server_redaction`). `effective_notes` bleibt
+/// für die menschliche Vorschau (`preview_effective_notes`) bestehen — die
+/// will lesbaren Text, kein Fencing.
 pub async fn effective_notes_sections(
     server: &Server,
     store: &dyn ProfileStore,
