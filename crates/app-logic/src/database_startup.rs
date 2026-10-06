@@ -1056,3 +1056,6 @@ fn sibling(db_path: &Path, suffix: &str) -> PathBuf {
 
 #[cfg(test)]
 mod tests;
+/// Issue #15: repeated start and downgrade on real database files.
+#[cfg(test)]
+mod tests_release_upgrade;
