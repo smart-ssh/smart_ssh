@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import {
   commandErrorCode,
   commandErrorMessage,
-  confirmHostKey,
   connect,
   listChatSessions,
   listGroups,
@@ -11,13 +10,12 @@ import {
   resumeChatSession,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
-import { onHostKeyVerificationNeeded } from "../events";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
 import { buildGroupTree, type GroupTreeNode } from "../groupTree";
-import type { ChatSessionSummaryDto, GroupDto, HostKeyVerificationNeededEvent, ServerDto } from "../types";
+import { clearHostKeyPrompt } from "../hostKeyPromptBus";
+import type { ChatSessionSummaryDto, GroupDto, ServerDto } from "../types";
 import { ChatSessionPickerScreen } from "./ChatSessionPickerScreen";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
-import { HostKeyDialog } from "./HostKeyDialog";
 
 interface ServerListProps {
   onConnected: (sessionId: string, serverName: string, serverId: string) => void;
@@ -61,11 +59,11 @@ function describeError(
  * `connect()` aus. Server erscheinen jetzt nach Gruppen-Hierarchie
  * gegliedert (Spec 0033, Abschnitt 3) statt als flache Liste — der lokale
  * Pseudo-Server (Spec 0032) fix angeheftet oberhalb aller Gruppen.
- * Reagiert auf `host-key-verification-needed` mit `HostKeyDialog` — der
- * Event-Listener läuft, solange irgendein `connect()` dieser Liste
- * unterwegs ist (nicht dauerhaft), da die `session_id` im Event erst durch
- * den laufenden `connect()`-Aufruf entsteht (s. Backend-Kommentar zu
- * `commands::connect`).
+ * Die Host-Key-Abfrage (`host-key-verification-needed`) zeigt nicht diese
+ * Liste, sondern das stets gemountete `HostKeyPromptHost` an der
+ * `App`-Wurzel (Issue #12 / ADR 0104) — diese Liste ist bei aktivem
+ * "Verwalten"-/"Filter-Regeln"-Tab nicht gemountet. Endet ein `connect()`
+ * hier, schließt `clearHostKeyPrompt()` eine evtl. noch offene Abfrage.
  */
 export function ServerList({
   onConnected,
@@ -81,9 +79,6 @@ export function ServerList({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [connectingId, setConnectingId] = useState<string | null>(null);
-  const [pendingHostKey, setPendingHostKey] = useState<HostKeyVerificationNeededEvent | null>(
-    null,
-  );
   // Spec 0031, Abschnitt 4: `null` = noch nicht geladen (Laden ist ein
   // schneller lokaler Store-Zugriff, ein kurzes Zeitfenster ohne Sperre
   // wird bewusst hingenommen — die eigentliche Durchsetzung sitzt ohnehin
@@ -127,13 +122,6 @@ export function ServerList({
       .catch(() => setFirstRunAcknowledged(false));
   }, []);
 
-  useEffect(() => {
-    const unlisten = onHostKeyVerificationNeeded((event) => setPendingHostKey(event));
-    return () => {
-      unlisten.then((unlistenFn) => unlistenFn());
-    };
-  }, []);
-
   const performConnect = async (server: ServerDto) => {
     setError(null);
     setConnectingId(server.id);
@@ -144,7 +132,7 @@ export function ServerList({
       setError(describeError(t, err));
     } finally {
       setConnectingId(null);
-      setPendingHostKey(null);
+      clearHostKeyPrompt();
     }
   };
 
@@ -232,17 +220,6 @@ export function ServerList({
     }
     setFirstRunAcknowledged(true);
     if (server) await performConnect(server);
-  };
-
-  const handleHostKeyDecision = async (decision: Parameters<typeof confirmHostKey>[1]) => {
-    if (!pendingHostKey) return;
-    const sessionId = pendingHostKey.sessionId;
-    setPendingHostKey(null);
-    try {
-      await confirmHostKey(sessionId, decision);
-    } catch (err) {
-      setError(describeError(t, err));
-    }
   };
 
   const renderServerRow = (server: ServerDto, depth: number) => (
@@ -390,9 +367,6 @@ export function ServerList({
         </ul>
       )}
 
-      {pendingHostKey && (
-        <HostKeyDialog event={pendingHostKey} onDecision={handleHostKeyDecision} />
-      )}
       {pendingConnectServer && (
         <FirstRunNoticeScreen onAcknowledge={handleFirstRunNoticeAcknowledged} />
       )}

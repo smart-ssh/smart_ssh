@@ -7,9 +7,10 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { GroupDto, HostKeyVerificationNeededEvent, ServerDto } from "../types";
+import type { GroupDto, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
-import { confirmHostKey, connect, listGroups, listServers } from "../api";
+import { connect, listGroups, listServers } from "../api";
+import { subscribeHostKeyPromptClear } from "../hostKeyPromptBus";
 import { onHostKeyVerificationNeeded } from "../events";
 
 function localServer(): ServerDto {
@@ -67,7 +68,6 @@ vi.mock("../api", async () => {
     listGroups: vi.fn(() => Promise.resolve([] as GroupDto[])),
     listChatSessions: vi.fn(() => Promise.resolve([])),
     connect: vi.fn(),
-    confirmHostKey: vi.fn(),
     resumeChatSession: vi.fn(),
     commandErrorMessage: actual.commandErrorMessage,
     commandErrorCode: actual.commandErrorCode,
@@ -212,77 +212,45 @@ describe("ServerList empty-state entry block (Spec 0069, Teil C1)", () => {
   });
 });
 
-// Issue #12: `ServerList` bleibt gemountet, wenn ein Session-Tab aktiv
-// wird — `App.tsx` blendet den ganzen `MainScreen`-Zweig dann nur per
-// `display:none` aus (hier per Inline-Style nachgebildet, `jsdom` kennt die
-// Tailwind-Klasse `hidden` nicht). Ein Host-Key-Ereignis, das genau dann
-// eintrifft (z. B. ein MCP-ausgelöster `connect()`, der zuerst einen neuen
-// Tab öffnet), muss trotzdem einen sichtbaren, fokussierten Dialog
-// außerhalb dieses Zweigs zeigen.
-describe("ServerList host key prompt while a session tab is active (Issue #12)", () => {
-  const sessionId = "22222222-2222-4222-8222-222222222222";
-  const events: HostKeyVerificationNeededEvent[] = [
-    {
-      sessionId,
-      host: "prod-1.internal",
-      port: 2222,
-      kind: "unknown",
-      fingerprint: "SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      expectedFingerprint: null,
-    },
-    {
-      sessionId,
-      host: "prod-1.internal",
-      port: 2222,
-      kind: "mismatch",
-      fingerprint: "SHA256:newnewnewnewnewnewnewnewnewnewnewnewnewn",
-      expectedFingerprint: "SHA256:oldoldoldoldoldoldoldoldoldoldoldoldold",
-    },
-  ];
-
-  it.each(events)("shows the $kind dialog visible and focused outside the hidden main screen", async (event) => {
-    let emit: ((e: HostKeyVerificationNeededEvent) => void) | null = null;
-    vi.mocked(onHostKeyVerificationNeeded).mockImplementation((handler) => {
-      emit = handler;
-      return Promise.resolve(() => {});
-    });
-    vi.mocked(confirmHostKey).mockResolvedValue(undefined);
-
-    render(
-      <I18nextProvider i18n={testI18n}>
-        <div data-testid="session-tab">
-          <input aria-label="terminal" />
-        </div>
-        <div data-testid="main-screen" style={{ display: "none" }}>
-          <ServerList
-            onConnected={vi.fn()}
-            findExistingSessionId={() => undefined}
-            onSwitchToExistingTab={vi.fn()}
-            collapsedGroupIds={new Set()}
-            onToggleGroup={vi.fn()}
-            onCreateFirstServer={vi.fn()}
-          />
-        </div>
-      </I18nextProvider>,
-    );
+// Issue #12 / ADR 0104: die Host-Key-Abfrage gehört nicht mehr `ServerList`,
+// sondern dem stets gemounteten `HostKeyPromptHost` an der `App`-Wurzel
+// (Sichtbarkeit in jedem Tab-Zustand: `App.hostKeyPrompt.test.tsx`).
+// `ServerList` darf selbst keinen Listener mehr registrieren (sonst zwei
+// Dialoge) und signalisiert nur noch das Ende seines `connect()`.
+describe("ServerList host key prompt ownership (Issue #12)", () => {
+  it("does not subscribe to host-key-verification-needed itself", async () => {
+    renderList();
     await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
-    const mainScreen = screen.getByTestId("main-screen");
-    expect(mainScreen).not.toBeVisible();
-    screen.getByLabelText("terminal").focus();
+    expect(onHostKeyVerificationNeeded).not.toHaveBeenCalled();
+  });
 
-    expect(emit).not.toBeNull();
-    act(() => emit?.(event));
+  it.each([
+    ["succeeds", () => Promise.resolve("55555555-5555-4555-8555-555555555555")],
+    ["fails", () => Promise.reject({ code: null, message: "kaputt" })],
+  ])("clears the host key prompt when its connect() %s", async (_label, outcome) => {
+    let finish: (() => void) | null = null;
+    vi.mocked(connect).mockImplementation(
+      () =>
+        new Promise<string>((resolve, reject) => {
+          finish = () => outcome().then(resolve, reject);
+        }),
+    );
+    const cleared = vi.fn();
+    const unsubscribe = subscribeHostKeyPromptClear(cleared);
+    try {
+      renderList();
+      fireEvent.click(await screen.findByText("prod-1"));
+      await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1"));
+      expect(cleared).not.toHaveBeenCalled();
 
-    const role = event.kind === "mismatch" ? "alertdialog" : "dialog";
-    const rejectLabel = event.kind === "mismatch" ? "Verbindung abbrechen" : "Ablehnen";
-    const dialog = screen.getByRole(role);
-    expect(mainScreen).not.toContainElement(dialog);
-    expect(dialog).toBeVisible();
-    const reject = screen.getByRole("button", { name: rejectLabel });
-    expect(document.activeElement).toBe(reject);
+      await act(async () => {
+        finish?.();
+      });
 
-    // Die Entscheidung erreicht weiterhin genau diese Sitzung.
-    fireEvent.click(reject);
-    await waitFor(() => expect(confirmHostKey).toHaveBeenCalledWith(sessionId, { decision: "reject" }));
+      await waitFor(() => expect(cleared).toHaveBeenCalledTimes(1));
+    } finally {
+      unsubscribe();
+      vi.mocked(connect).mockReset();
+    }
   });
 });

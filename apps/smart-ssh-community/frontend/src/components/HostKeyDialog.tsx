@@ -65,6 +65,11 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   // der Verbindungsaufbau bliebe unbestätigt hängen. Ein Portal nach
   // `document.body` umgeht das, ohne `ServerList`s Zustand/Logik verschieben
   // zu müssen.
+  // Seit Issue #12 (ADR 0104) rendert das stets gemountete
+  // `HostKeyPromptHost` an der `App`-Wurzel den Verbindungs-Dialog statt
+  // `ServerList`; das Portal bleibt trotzdem nötig — `ServerForm` zeigt
+  // diesen Dialog für die Test-Verbindung aus seinem eigenen (ausblendbaren)
+  // Teilbaum heraus.
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       {/* A6.3: begründete `jsx-a11y`-Ausnahme, zeilengenau statt global —
