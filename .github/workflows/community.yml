@@ -19,11 +19,13 @@ on:
     branches: [main]
   pull_request:
 
-# Ein neuer Push auf denselben PR bricht den noch laufenden Lauf ab;
-# auf `main` läuft jeder Commit zu Ende.
+# Ein neuer Push auf denselben PR bricht den noch laufenden Lauf ab.
+# Jeder Lauf auf `main` bekommt eine eigene Gruppe (`run_id`): Eine
+# gemeinsame Gruppe würde einen wartenden `main`-Lauf verwerfen, sobald
+# ein weiterer ansteht, auch ohne `cancel-in-progress`.
 concurrency:
-  group: community-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: community-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
