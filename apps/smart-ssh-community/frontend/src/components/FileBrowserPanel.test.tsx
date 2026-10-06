@@ -91,13 +91,20 @@ vi.mock("../fileTypeSettings", () => ({
 
 const dragDrop = vi.hoisted(() => ({
   handler: null as null | ((event: { payload: { type: string; paths?: string[] } }) => void),
+  // Issue #29: how often a listener was registered / removed, so tests can
+  // assert that a channel switch or a navigation does not re-register it.
+  registrations: 0,
+  unlistens: 0,
 }));
 
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({
     onDragDropEvent: vi.fn((h) => {
       dragDrop.handler = h;
-      return Promise.resolve(() => {});
+      dragDrop.registrations += 1;
+      return Promise.resolve(() => {
+        dragDrop.unlistens += 1;
+      });
     }),
   }),
 }));
@@ -1050,18 +1057,127 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
     await screen.findByRole("alert");
 
-    // Issue #5: the banner (`role="alert"`) is committed before React runs the
-    // passive effect that re-registers the drop listener for the new channel
-    // (`useEffect` with `channelUser` in `FileBrowserPanel`). `findByRole`
-    // can resolve in that gap; a drop fired then went through the listener of
-    // the normal mode and uploaded with `null`. So wait for the event the
-    // drop depends on: a listener registered after the switch.
-    await waitFor(() => expect(dragDrop.handler).not.toBe(normalModeHandler));
+    // Issue #5 / #29: the banner (`role="alert"`) is committed before React
+    // runs passive effects. The drop listener is no longer re-registered on a
+    // channel switch (it reads the current channel when the drop is handled),
+    // so a drop right after the banner appears must already use the new
+    // channel — no waiting for a re-registered listener.
+    expect(dragDrop.handler).toBe(normalModeHandler);
 
     act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
 
     expect(await firstUpload).toEqual(["session-1", "/local/x.conf", "x.conf", "root"]);
     expect(sftpUpload).toHaveBeenCalledTimes(1);
+  });
+
+  // Issue #29: the drop listener registered before a switch may still be the
+  // one that receives the event (React commits the new UI before passive
+  // effects run). It must use the channel that is current when the drop is
+  // handled, in both directions.
+  it("a drop via the listener registered before switching elevated on uploads as root", async () => {
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    vi.mocked(sftpElevationEnable).mockResolvedValue({
+      active: true,
+      targetUser: "root",
+      sftpServerPath: "/usr/lib/openssh/sftp-server",
+      failure: null,
+    });
+    dragDrop.handler = null;
+    dragDrop.registrations = 0;
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    const handlerBeforeSwitch = dragDrop.handler!;
+
+    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+    await screen.findByRole("alert");
+    // Let every pending effect and listener registration settle, so a
+    // re-registration (the old behaviour) would have happened by now.
+    await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", "root"));
+
+    act(() => handlerBeforeSwitch({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+
+    await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
+    expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/x.conf", "x.conf", "root");
+    expect(sftpExists).toHaveBeenCalledWith("session-1", "x.conf", "root");
+    expect(dragDrop.registrations).toBe(1);
+  });
+
+  it("a drop via the listener registered in elevated mode uploads normally after switching off", async () => {
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    dragDrop.handler = null;
+    dragDrop.registrations = 0;
+    await enableElevation();
+    await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", "root"));
+    const handlerWhileElevated = dragDrop.handler!;
+    expect(handlerWhileElevated).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Erhöhte Rechte beenden" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", null));
+
+    act(() => handlerWhileElevated({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+
+    await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
+    expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/x.conf", "x.conf", null);
+    expect(sftpExists).toHaveBeenCalledWith("session-1", "x.conf", null);
+    expect(dragDrop.registrations).toBe(1);
+  });
+
+  it("a drop via the listener registered before navigating uploads into the new directory", async () => {
+    const dirEntry: RemoteEntryDto = { ...entry, name: "logs", path: "logs", isDir: true };
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    dragDrop.handler = null;
+    dragDrop.registrations = 0;
+    renderPanel();
+    const dirButton = await screen.findByText(/logs/);
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    const handlerBeforeNavigation = dragDrop.handler!;
+
+    fireEvent.click(dirButton);
+    await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", "logs", null));
+    await waitFor(() => expect(screen.getByDisplayValue("logs")).toBeInTheDocument());
+
+    act(() => handlerBeforeNavigation({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+
+    await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
+    expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/x.conf", "logs/x.conf", null);
+    expect(dragDrop.registrations).toBe(1);
+  });
+
+  it("a hidden panel registers no drop listener and removes it when hidden", async () => {
+    dragDrop.handler = null;
+    dragDrop.registrations = 0;
+    dragDrop.unlistens = 0;
+    const { rerender } = render(
+      <I18nextProvider i18n={testI18n}>
+        <FileBrowserPanel sessionId="session-1" isVisible={false} />
+      </I18nextProvider>,
+    );
+    await screen.findByText(/a\.txt/);
+    expect(dragDrop.registrations).toBe(0);
+    expect(dragDrop.handler).toBeNull();
+
+    rerender(
+      <I18nextProvider i18n={testI18n}>
+        <FileBrowserPanel sessionId="session-1" isVisible={true} />
+      </I18nextProvider>,
+    );
+    await waitFor(() => expect(dragDrop.registrations).toBe(1));
+    // Let the registration promise resolve, so hiding unlistens directly.
+    await act(async () => {});
+
+    rerender(
+      <I18nextProvider i18n={testI18n}>
+        <FileBrowserPanel sessionId="session-1" isVisible={false} />
+      </I18nextProvider>,
+    );
+    await waitFor(() => expect(dragDrop.unlistens).toBe(1));
+    expect(dragDrop.registrations).toBe(1);
   });
 
   it("reports the elevated user upward so it stays visible when the browser is hidden", async () => {

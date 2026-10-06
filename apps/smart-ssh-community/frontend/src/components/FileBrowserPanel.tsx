@@ -484,7 +484,10 @@ export function FileBrowserPanel({
           setDragOver(false);
         } else if (event.payload.type === "drop") {
           setDragOver(false);
-          uploadMany(event.payload.paths);
+          // Issue #29: always the `uploadMany` of the latest render — and
+          // with it the current `channelUser` and `path` — never the one of
+          // the render that registered this listener.
+          uploadManyRef.current(event.payload.paths);
         }
       })
       .then((fn) => {
@@ -495,10 +498,11 @@ export function FileBrowserPanel({
       cancelled = true;
       unlisten?.();
     };
-    // `channelUser`: nach dem Umschalten muss ein Drop über den neuen Kanal
-    // laufen (spec-reviewer-Fund, Spec 0067: veraltete Closure).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVisible, path, channelUser]);
+    // Issue #29: registered only per visibility. Channel and path are read
+    // through `uploadManyRef` when the drop is handled, so there is no window
+    // between a channel switch (banner already committed) and a re-registered
+    // listener in which a drop would still use the previous channel.
+  }, [isVisible]);
 
   /** Spec 0054, Teil 3: "Hochladen ... Überschreibt bestehende →
    * Diff-Vorschau (0020)". Kein Dialog für den unkritischen Normalfall
@@ -560,6 +564,11 @@ export function FileBrowserPanel({
       notifyFailed("fileToasts.uploadFailedMany", String(failures.length), failures[0].error);
     }
   };
+  // Issue #29: updated during render, so a drop handled after the commit
+  // of a channel switch or a navigation already sees the new `channelUser`
+  // and `path` — before any passive effect has run.
+  const uploadManyRef = useRef(uploadMany);
+  uploadManyRef.current = uploadMany;
 
   const handleConfirmUpload = () => {
     if (!uploadConflict) return;
