@@ -383,6 +383,9 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // `get_app_info` braucht sie als `State<Edition>`, `Wiring` selbst
     // wird nirgends als Tauri-`State` verwaltet.
     let edition = wiring.edition;
+    // Issue #16: ebenso vorab herausgezogen; `get_data_paths` liest sie als
+    // `State`.
+    let edition_data_paths = commands::EditionDataPaths(wiring.extra_data_paths);
 
     // Spec 0101, Etappe 3 (Teil 0 Frage 3): Der Startablauf hat seit dem
     // Master-Passwort zwei Formen.
@@ -575,6 +578,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // wenn die übrige Anwendungslogik in einen Tauri-freien Crate zieht.
         .manage(crate::elevated_sftp::ElevatedSftpRegistry::default())
         .manage(edition)
+        .manage(edition_data_paths)
         // Spec 0101, A16: Das Tor sitzt **vor** dem erzeugten Verteiler
         // (gemessen, M4). Die Begründung, warum es nicht genügt, sich auf
         // den fehlenden `AppState` zu verlassen, steht im Modulkommentar
@@ -661,6 +665,8 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::get_keychain_status,
             commands::generate_diagnostics_bundle,
             commands::save_diagnostics_bundle,
+            commands::get_data_paths,
+            commands::open_data_path_folder,
             commands::sftp_list,
             commands::sftp_start_directory,
             commands::sftp_download,

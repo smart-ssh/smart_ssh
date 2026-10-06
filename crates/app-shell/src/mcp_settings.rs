@@ -22,7 +22,7 @@ use crate::mcp_backend::AppMcpBackend;
 use app_logic::error::CommandResult;
 use app_logic::state::AppState;
 
-const SETTINGS_STORE_FILE: &str = "settings.json";
+pub(crate) const SETTINGS_STORE_FILE: &str = "settings.json";
 const ENABLED_KEY: &str = "mcpServerEnabled";
 const TOKEN_KEY: &str = "mcpServerToken";
 const ALLOWED_SERVERS_KEY: &str = "mcpServerAllowedServerIds";

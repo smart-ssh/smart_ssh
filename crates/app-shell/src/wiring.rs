@@ -35,6 +35,10 @@ pub struct Wiring {
     pub sync_backends: Vec<Arc<dyn SyncBackend>>,
     pub plugins: Vec<PluginHook>,
     pub edition: Edition,
+    /// Issue #16: zusätzliche Datenpfade einer Edition (z. B. eine
+    /// Lizenzdatei), die die Einstellungen neben den eingebauten Pfaden
+    /// anzeigen. Community liefert keine.
+    pub extra_data_paths: Vec<app_logic::data_paths::ExtraDataPath>,
 }
 
 impl Wiring {
@@ -63,6 +67,7 @@ impl Wiring {
             sync_backends: Vec::new(),
             plugins: Vec::new(),
             edition: Edition::Community,
+            extra_data_paths: Vec::new(),
         }
     }
 }

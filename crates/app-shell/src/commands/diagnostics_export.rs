@@ -116,6 +116,72 @@ pub async fn open_log_directory(app: AppHandle) -> CommandResult<()> {
     Ok(())
 }
 
+/// Issue #16: zusätzliche Datenpfade der Edition (aus `Wiring`), als
+/// Tauri-`State` verwaltet. Community: leer.
+pub(crate) struct EditionDataPaths(pub Vec<app_logic::data_paths::ExtraDataPath>);
+
+/// Issue #16: Wo liegen die MCP-Einstellungen (`settings.json`)?
+///
+/// Über `tauri_plugin_store::resolve_store_path` — dieselbe Auflösung, die
+/// der Store beim Lesen und Schreiben verwendet (`BaseDirectory::AppData`).
+/// Bewusst nicht `app_config_dir`: Auf Linux ist das ein anderes
+/// Verzeichnis (`~/.config` statt `~/.local/share`), die Anzeige nennte
+/// dann einen Ort, an dem die Datei nicht liegt (ADR 0105).
+fn mcp_settings_path<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> CommandResult<std::path::PathBuf> {
+    Ok(tauri_plugin_store::resolve_store_path(
+        app,
+        crate::mcp_settings::SETTINGS_STORE_FILE,
+    )?)
+}
+
+fn current_data_paths<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    extra: &EditionDataPaths,
+) -> CommandResult<Vec<app_logic::data_paths::DataPathEntry>> {
+    Ok(app_logic::data_paths::effective_data_paths(
+        &mcp_settings_path(app)?,
+        &extra.0,
+    ))
+}
+
+/// Issue #16: die wirksamen Datenpfade dieser Instanz für die Einstellungen
+/// — nur Pfade, keine Dateiinhalte.
+#[tauri::command]
+pub async fn get_data_paths<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    extra: State<'_, EditionDataPaths>,
+) -> CommandResult<Vec<app_logic::data_paths::DataPathEntryDto>> {
+    Ok(current_data_paths(&app, &extra)?
+        .iter()
+        .map(app_logic::data_paths::DataPathEntryDto::from)
+        .collect())
+}
+
+/// Issue #16: öffnet den Ordner zum Eintrag `id` im Dateimanager.
+///
+/// Das Frontend übergibt nur den Bezeichner aus `get_data_paths`, nie einen
+/// Pfad (s. `app_logic::data_paths::open_folder_target`). Legt nichts an:
+/// Fehlt der Ordner, ist das ein Fehler, keine Änderung am Datenbestand.
+#[tauri::command]
+pub async fn open_data_path_folder(
+    app: AppHandle,
+    extra: State<'_, EditionDataPaths>,
+    id: String,
+) -> CommandResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+
+    let entries = current_data_paths(&app, &extra)?;
+    let folder = app_logic::data_paths::open_folder_target(&entries, &id)?;
+    if !folder.is_dir() {
+        return Err(format!("folder does not exist: {}", folder.display()).into());
+    }
+    app.opener()
+        .open_path(folder.to_string_lossy().into_owned(), None::<&str>)?;
+    Ok(())
+}
+
 /// Spec 0063: Best-effort-Betriebssystemversion für den Diagnose-Export
 /// (§2: "OS/Plattform (Betriebssystem, Version, Architektur)") — bewusst
 /// KEIN neues Cargo-Dependency (z. B. `os_info`) für dieses eine, nicht
@@ -179,10 +245,10 @@ pub async fn generate_diagnostics_bundle<R: tauri::Runtime>(
 ) -> CommandResult<String> {
     let db_path = persistence_sqlite::default_db_path();
     let log_dir = app_logic::logging::default_log_dir();
-    let host_key_path = db_path
-        .parent()
-        .expect("db_path hat immer ein Elternverzeichnis (s. default_db_path)")
-        .join("host_keys.json");
+    // Issue #16: dieselbe Funktion wie beim Laden des Speichers und in den
+    // Einstellungen (`get_data_paths`), damit alle drei denselben Pfad
+    // nennen.
+    let host_key_path = app_logic::startup_error_messages::host_key_store_path(&db_path);
 
     // Spec-reviewer-Fund (Follow-up-Review): `None` nur bei einem echten
     // Lese-/DB-Fehler, NICHT bei "null konfiguriert" — ein `unwrap_or_default`
