@@ -107,6 +107,8 @@ pub struct ServerDto {
     pub ai_injection_check_enabled: bool,
     /// Spec 0067, A2: `None` = automatisch.
     pub sftp_server_path: Option<String>,
+    /// Spec 0102: `None` = Home des Login-Nutzers.
+    pub start_directory: Option<String>,
 }
 
 impl ServerDto {
@@ -142,6 +144,7 @@ impl ServerDto {
             post_ingest_policy: server.post_ingest_policy,
             ai_injection_check_enabled: server.ai_injection_check_enabled,
             sftp_server_path: server.sftp_server_path.clone(),
+            start_directory: server.start_directory.clone(),
         }
     }
 }
@@ -603,6 +606,10 @@ pub struct ServerInput {
     /// [`normalize_sftp_server_path`]).
     #[serde(default)]
     pub sftp_server_path: Option<String>,
+    /// Spec 0102: optionales Startverzeichnis. Leer/fehlend = nicht gesetzt
+    /// (s. [`normalize_start_directory_input`]).
+    #[serde(default)]
+    pub start_directory: Option<String>,
 }
 
 /// Spec 0067, A2: leerer Override = automatisch (`None`); sonst muss es ein
@@ -641,6 +648,17 @@ pub fn normalize_sftp_server_path(input: Option<String>) -> Result<Option<String
         ));
     }
     Ok(Some(trimmed))
+}
+
+/// Spec 0102: leer/fehlend = nicht gesetzt (`None`); sonst ein absoluter Pfad
+/// oder `~/…`, Randleerraum entfernt (s.
+/// [`ssh_manager_core::profiles::normalize_start_directory`]).
+pub fn normalize_start_directory_input(input: Option<String>) -> Result<Option<String>, String> {
+    let Some(raw) = input else {
+        return Ok(None);
+    };
+    ssh_manager_core::profiles::normalize_start_directory(&raw)
+        .map_err(|err| format!("Ungültiges Startverzeichnis „{}“ — {err}", raw.trim()))
 }
 
 /// Spec 0008, Abschnitt 4. `#[serde(tag = "kind", rename_all =
@@ -1610,6 +1628,7 @@ mod sudo_password_state_tests {
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
             created_at: now,
             updated_at: now,
         }
@@ -1826,6 +1845,7 @@ mod identity_file_dto_tests {
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
             created_at: now,
             updated_at: now,
         }
@@ -1896,5 +1916,99 @@ mod identity_file_dto_tests {
             json.contains("identityFilePath"),
             "camelCase fürs Frontend: {json}"
         );
+    }
+}
+
+#[cfg(test)]
+mod start_directory_tests {
+    use super::{normalize_start_directory_input, ServerDto, ServerInput};
+    use crate::test_support::InMemoryCredentialStore;
+    use chrono::Utc;
+    use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, Server};
+    use ssh_manager_core::shared::ServerId;
+
+    #[test]
+    fn missing_or_blank_means_not_set() {
+        assert_eq!(normalize_start_directory_input(None), Ok(None));
+        assert_eq!(
+            normalize_start_directory_input(Some("  ".to_string())),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn valid_values_are_trimmed() {
+        assert_eq!(
+            normalize_start_directory_input(Some(" /srv/my app ".to_string())),
+            Ok(Some("/srv/my app".to_string()))
+        );
+        assert_eq!(
+            normalize_start_directory_input(Some("~/work".to_string())),
+            Ok(Some("~/work".to_string()))
+        );
+    }
+
+    #[test]
+    fn relative_values_are_rejected() {
+        for bad in ["srv", "./srv", "~", "~root/x"] {
+            assert!(
+                normalize_start_directory_input(Some(bad.to_string())).is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn server_input_without_field_deserializes_as_not_set() {
+        // Ein älterer Frontend-Build schickt das Feld nicht mit.
+        let json = serde_json::json!({
+            "name": "web",
+            "host": "example.org",
+            "port": 22,
+            "username": "deploy",
+            "groupId": null,
+            "tags": [],
+            "auth": { "kind": "agent" },
+            "jumpHost": null,
+            "sudoPassword": null
+        });
+        let input: ServerInput = serde_json::from_value(json).unwrap();
+        assert_eq!(input.start_directory, None);
+    }
+
+    #[test]
+    fn server_dto_carries_start_directory_in_camel_case() {
+        let server = Server {
+            id: ServerId::new(),
+            name: "web".to_string(),
+            host: "example.org".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: Vec::new(),
+            auth: AuthMethod::Agent,
+            notes: String::new(),
+            jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
+            sftp_server_path: None,
+            start_directory: Some("/srv/app".to_string()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let dto = ServerDto::from_server(&server, &InMemoryCredentialStore::new());
+        let value = serde_json::to_value(&dto).unwrap();
+        assert_eq!(value["startDirectory"], "/srv/app");
+
+        let without = Server {
+            start_directory: None,
+            ..server
+        };
+        let value = serde_json::to_value(ServerDto::from_server(
+            &without,
+            &InMemoryCredentialStore::new(),
+        ))
+        .unwrap();
+        assert!(value["startDirectory"].is_null());
     }
 }

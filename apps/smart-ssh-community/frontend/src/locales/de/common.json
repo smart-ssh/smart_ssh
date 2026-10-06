@@ -238,7 +238,14 @@
     "advanced": "Erweitert",
     "sftpServerPathLabel": "Pfad zu sftp-server (erhöhter Dateizugriff)",
     "sftpServerPathPlaceholder": "Automatisch",
-    "sftpServerPathHint": "Nur nötig, wenn die automatische Erkennung für den Dateibrowser mit erhöhten Rechten scheitert, z. B. /usr/lib/openssh/sftp-server. Leer lassen = automatisch."
+    "sftpServerPathHint": "Nur nötig, wenn die automatische Erkennung für den Dateibrowser mit erhöhten Rechten scheitert, z. B. /usr/lib/openssh/sftp-server. Leer lassen = automatisch.",
+    "startDirectoryLabel": "Startverzeichnis (Terminal und Dateibrowser)",
+    "startDirectoryPlaceholder": "Home-Verzeichnis",
+    "startDirectoryHint": "Absoluter Pfad (/…) oder ein Pfad, der mit ~/ beginnt. Das Terminal wechselt mit einem sichtbaren cd dorthin, der Dateibrowser öffnet dort. KI-Befehle laufen immer im Home-Verzeichnis. Leer lassen = Home-Verzeichnis.",
+    "startDirectoryInvalid": {
+      "notAbsolute": "Das Startverzeichnis muss ein absoluter Pfad (/…) sein oder mit ~/ beginnen.",
+      "controlCharacter": "Das Startverzeichnis darf keine Steuerzeichen enthalten."
+    }
   },
   "filterRules": {
     "title": "Regeln",
@@ -767,5 +774,8 @@
     "anotherKeyText": "Im Schlüsselbund liegt ein anderer Schlüssel. Backups, die mit diesem Schlüssel verschlüsselt sind, werden danach unlesbar. Ersetzen?",
     "anotherKeyConfirm": "Ja, ersetzen",
     "confirmPasswordLabel": "Master-Passwort zur Bestätigung"
+  },
+  "startDirectory": {
+    "notFound": "Startverzeichnis „{{dir}}“ wurde nicht gefunden oder ist nicht zugänglich. Terminal und Dateibrowser verwenden stattdessen das Home-Verzeichnis."
   }
 }

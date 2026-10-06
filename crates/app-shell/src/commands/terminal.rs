@@ -12,26 +12,29 @@ use crate::event_emitter::TauriEventEmitter;
 use app_logic::error::CommandResult;
 use app_logic::events::EventEmitter;
 use app_logic::session::{spawn_terminal_actor, Session, TerminalCommand};
+use app_logic::start_directory::{open_shell_in_start_directory, TerminalStartDto};
 use app_logic::state::{AppState, SessionId};
 
+/// Spec 0102: öffnet die Shell und wechselt ggf. sichtbar ins
+/// Startverzeichnis des Servers (s. `app_logic::start_directory::
+/// open_shell_in_start_directory`). Das Ergebnis trägt den einmaligen
+/// Hinweis, falls das Verzeichnis fehlt.
 #[tauri::command]
 pub async fn open_terminal(
     app: AppHandle,
     state: State<'_, AppState>,
     session_id: SessionId,
-) -> CommandResult<()> {
+) -> CommandResult<TerminalStartDto> {
     let session = state
         .sessions
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
 
-    let shell = {
-        let mut transport = session.transport.lock().await;
-        // Standardgröße, bis das Frontend die tatsächliche Terminal-Größe
-        // per `terminal_resize` meldet (Spec 0007 Abschnitt 4 sieht für
-        // `open_terminal` selbst keinen Größen-Parameter vor).
-        transport.open_shell(PtySize { cols: 80, rows: 24 }).await?
-    };
+    // Standardgröße, bis das Frontend die tatsächliche Terminal-Größe
+    // per `terminal_resize` meldet (Spec 0007 Abschnitt 4 sieht für
+    // `open_terminal` selbst keinen Größen-Parameter vor).
+    let (shell, start) =
+        open_shell_in_start_directory(&session, PtySize { cols: 80, rows: 24 }).await?;
 
     let (tx, rx) = mpsc::unbounded_channel();
     *session.terminal.lock().unwrap() = Some(tx);
@@ -42,7 +45,7 @@ pub async fn open_terminal(
         rx,
         Arc::new(TauriEventEmitter(app)) as Arc<dyn EventEmitter>,
     );
-    Ok(())
+    Ok(start)
 }
 
 fn terminal_sender(session: &Session) -> CommandResult<mpsc::UnboundedSender<TerminalCommand>> {

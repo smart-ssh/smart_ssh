@@ -75,6 +75,8 @@ pub async fn create_server(
     // Vor jedem Schlüsselbund-Zugriff prüfen — ein ungültiger Pfad soll
     // keine Secrets anlegen, die danach wieder abgeräumt werden müssten.
     let sftp_server_path = crate::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
+    let start_directory =
+        crate::dto::normalize_start_directory_input(input.start_directory.clone())?;
     let id = ServerId::new();
 
     let auth = match resolve_auth_method(credential_store, id, input.auth, None) {
@@ -104,6 +106,7 @@ pub async fn create_server(
         post_ingest_policy: input.post_ingest_policy,
         ai_injection_check_enabled: input.ai_injection_check_enabled,
         sftp_server_path,
+        start_directory,
         created_at: now,
         updated_at: now,
     };
@@ -159,6 +162,10 @@ pub async fn update_server(
     // gefahrlos: Es gibt noch nichts zurückzunehmen. Ab der Hülle unten
     // gilt das nicht mehr — deshalb hört das `?` hier auf.
     let sftp_server_path = crate::dto::normalize_sftp_server_path(input.sftp_server_path.clone())?;
+    // Spec 0102: bereinigt zurück in die Eingabe, damit `write_edited_server`
+    // nur noch den geprüften Wert sieht.
+    let mut input = input;
+    input.start_directory = crate::dto::normalize_start_directory_input(input.start_directory)?;
     let existing = store.get_server(&id).await?;
     let previous_auth = existing.auth.clone();
 
@@ -223,6 +230,7 @@ async fn write_edited_server(
         post_ingest_policy: input.post_ingest_policy,
         ai_injection_check_enabled: input.ai_injection_check_enabled,
         sftp_server_path,
+        start_directory: input.start_directory,
         created_at: existing.created_at,
         updated_at: Utc::now(),
     };
@@ -328,6 +336,7 @@ mod tests {
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
             created_at: now,
             updated_at: now,
         }
@@ -530,6 +539,7 @@ mod tests {
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
         }
     }
 
@@ -609,6 +619,7 @@ mod tests {
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
         }
     }
 
@@ -629,6 +640,7 @@ mod tests {
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
         }
     }
 
@@ -746,7 +758,76 @@ mod tests {
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
         }
+    }
+
+    /// Spec 0102: Anlegen bereinigt das Startverzeichnis, Bearbeiten
+    /// übernimmt einen neuen Wert und kann ihn wieder entfernen.
+    #[tokio::test]
+    async fn test_start_directory_is_normalized_on_create_and_update() {
+        let store = InMemoryProfileStore::new();
+        let credentials = InMemoryCredentialStore::new();
+        let mut input = edit_input(AuthMethodInput::Agent);
+        input.start_directory = Some("  /srv/my app  ".to_string());
+        let id = create_server(&store, &credentials, input).await.unwrap();
+        let stored = |store: &InMemoryProfileStore| {
+            store
+                .servers
+                .lock()
+                .unwrap()
+                .get(&id)
+                .unwrap()
+                .start_directory
+                .clone()
+        };
+        assert_eq!(stored(&store).as_deref(), Some("/srv/my app"));
+
+        let mut input = edit_input(AuthMethodInput::Agent);
+        input.start_directory = Some("~/work".to_string());
+        update_server(&store, &credentials, id, input)
+            .await
+            .unwrap();
+        assert_eq!(stored(&store).as_deref(), Some("~/work"));
+
+        let mut input = edit_input(AuthMethodInput::Agent);
+        input.start_directory = Some("   ".to_string());
+        update_server(&store, &credentials, id, input)
+            .await
+            .unwrap();
+        assert_eq!(stored(&store), None);
+    }
+
+    /// Spec 0102: ein relativer Pfad wird abgelehnt, bevor irgendetwas
+    /// geschrieben wird — beim Anlegen wie beim Bearbeiten.
+    #[tokio::test]
+    async fn test_relative_start_directory_is_rejected() {
+        let store = InMemoryProfileStore::new();
+        let credentials = InMemoryCredentialStore::new();
+        let mut input = edit_input(AuthMethodInput::Agent);
+        input.start_directory = Some("srv/app".to_string());
+        assert!(create_server(&store, &credentials, input).await.is_err());
+        assert!(store.servers.lock().unwrap().is_empty());
+
+        let mut input = edit_input(AuthMethodInput::Agent);
+        input.start_directory = Some("/srv".to_string());
+        let id = create_server(&store, &credentials, input).await.unwrap();
+        let mut input = edit_input(AuthMethodInput::Agent);
+        input.start_directory = Some("app".to_string());
+        assert!(update_server(&store, &credentials, id, input)
+            .await
+            .is_err());
+        assert_eq!(
+            store
+                .servers
+                .lock()
+                .unwrap()
+                .get(&id)
+                .unwrap()
+                .start_directory
+                .as_deref(),
+            Some("/srv")
+        );
     }
 
     fn stored_secret(store: &InMemoryCredentialStore, r: &CredentialRef) -> Option<String> {

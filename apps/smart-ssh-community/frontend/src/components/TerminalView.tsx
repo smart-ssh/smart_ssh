@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { commandErrorMessage, openTerminal, terminalInput, terminalResize } from "../api";
 import { base64ToBytes, onTerminalOutput } from "../events";
+import { notifyMissingStartDirectory } from "../startDirectory";
 
 interface TerminalViewProps {
   sessionId: string;
@@ -17,6 +19,7 @@ interface TerminalViewProps {
  */
 export function TerminalView({ sessionId }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     // xterm.js liest weder CSS-Custom-Properties noch die `font-mono`-
@@ -71,7 +74,10 @@ export function TerminalView({ sessionId }: TerminalViewProps) {
     });
 
     openTerminal(sessionId)
-      .then(() => terminalResize(sessionId, term.cols, term.rows))
+      .then((start) => {
+        notifyMissingStartDirectory(t, start?.missingDirectory ?? null);
+        return terminalResize(sessionId, term.cols, term.rows);
+      })
       .catch((err) => {
         term.writeln(`\r\n[Terminal konnte nicht geöffnet werden: ${commandErrorMessage(err)}]`);
       });
@@ -105,6 +111,9 @@ export function TerminalView({ sessionId }: TerminalViewProps) {
       unlistenOutput?.();
       term.dispose();
     };
+    // `t` ist bewusst keine Abhängigkeit: ein Sprachwechsel soll das
+    // Terminal nicht neu öffnen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   return <div ref={containerRef} className="h-full w-full overflow-hidden" />;

@@ -20,6 +20,7 @@ import {
   sftpMkdir,
   sftpReadText,
   sftpRename,
+  sftpStartDirectory,
   sftpUpload,
 } from "../api";
 import {
@@ -34,6 +35,7 @@ import {
   type FileManagerColumnWidths,
 } from "../layoutSettings";
 import { displayPath, joinPath, localBaseName, parentPath } from "../remotePath";
+import { notifyMissingStartDirectory } from "../startDirectory";
 import { showToast } from "../toastBus";
 import type {
   DeletePreviewDto,
@@ -119,6 +121,9 @@ export function FileBrowserPanel({
 }: FileBrowserPanelProps) {
   const [path, setPath] = useState(".");
   const [pathInput, setPathInput] = useState(".");
+  // Spec 0102: Startpfad dieser Sitzung (`"."` = Home), Ziel von „Zum
+  // Startverzeichnis". Kommt einmalig vom Backend (`sftp_start_directory`).
+  const [startPath, setStartPath] = useState(".");
   const [entries, setEntries] = useState<RemoteEntryDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -385,7 +390,27 @@ export function FileBrowserPanel({
   }, [sessionId, channelUser]);
 
   useEffect(() => {
-    load(".");
+    // Spec 0102: erst den Startpfad erfragen (ein fehlendes oder nicht
+    // erreichbares Startverzeichnis liefert `"."` und ggf. den einmaligen
+    // Hinweis); scheitert schon die Abfrage, wie bisher im Home starten.
+    let cancelled = false;
+    const queryStart = async () => {
+      try {
+        return await sftpStartDirectory(sessionId);
+      } catch {
+        return null;
+      }
+    };
+    void queryStart().then((start) => {
+      if (cancelled) return;
+      const target = start?.path ?? ".";
+      notifyMissingStartDirectory(t, start?.missingDirectory ?? null);
+      setStartPath(target);
+      load(target);
+    });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
@@ -830,7 +855,7 @@ export function FileBrowserPanel({
       <div className="flex items-center gap-1.5 border-b border-slate-800 px-2 py-1.5">
         <button
           type="button"
-          onClick={() => load(".")}
+          onClick={() => load(startPath)}
           title="Zum Startverzeichnis"
           className="border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
         >

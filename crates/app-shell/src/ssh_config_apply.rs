@@ -350,6 +350,7 @@ pub async fn apply_import(
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
         };
 
         match app_logic::servers::create_server(store, credential_store, input).await {

@@ -69,6 +69,22 @@ pub async fn sftp_list(
     .await
 }
 
+/// Spec 0102: Startpfad des Dateibrowsers dieser Sitzung (`"."` = Home)
+/// und ggf. der einmalige Hinweis, dass das konfigurierte Startverzeichnis
+/// fehlt. Läuft über den normalen SFTP-Kanal der Sitzung — das
+/// Startverzeichnis gilt für den Login-Nutzer, nicht für den erhöhten Modus.
+#[tauri::command]
+pub async fn sftp_start_directory(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<app_logic::start_directory::StartDirectoryDto> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    Ok(app_logic::start_directory::file_browser_start(&session).await)
+}
+
 async fn list_impl(
     session: &Session,
     channel: &BrowserChannel,

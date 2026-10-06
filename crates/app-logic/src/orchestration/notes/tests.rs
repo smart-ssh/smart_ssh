@@ -319,6 +319,7 @@ async fn test_disconnect_suggestion_note_update_suggested_includes_target_name()
         post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        start_directory: None,
         created_at: now,
         updated_at: now,
     };
@@ -382,6 +383,7 @@ fn server_with_notes(id: ServerId, notes: &str) -> Server {
         post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        start_directory: None,
         created_at: now,
         updated_at: now,
     }
@@ -1683,6 +1685,7 @@ async fn test_propose_note_from_chat_content_appends_to_existing_note_and_persis
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
             created_at: now,
             updated_at: now,
         },
@@ -1757,6 +1760,7 @@ async fn test_propose_note_from_chat_content_with_empty_existing_note_uses_conte
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
             created_at: now,
             updated_at: now,
         },

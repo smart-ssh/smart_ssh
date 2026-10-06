@@ -22,6 +22,7 @@ import { translateErrorCode } from "../errorCodes";
 import { onNoteShrinkSucceeded } from "../events";
 import { pickAndReadTextFile, pickFilePath } from "../fileDialog";
 import { loadRiskClassifierSettings } from "../riskSettings";
+import { checkStartDirectory } from "../startDirectory";
 import type {
   AuthMethodInput,
   AuthMethodKind,
@@ -335,6 +336,8 @@ export function ServerForm({
   const [aiInjectionCheckEnabled, setAiInjectionCheckEnabled] = useState(false);
   // Spec 0067, A2: leer = automatisch erkennen.
   const [sftpServerPath, setSftpServerPath] = useState("");
+  // Spec 0102: leer = Home des Login-Nutzers.
+  const [startDirectory, setStartDirectory] = useState("");
   // Spec 0039, Abschnitt 5.2: die Checkbox ist nur bedienbar, wenn ein
   // Zweitmeinungs-Provider konfiguriert ist (dieselbe Voraussetzung wie
   // beim Backend-`Session::injection_check_provider`, s. dortiger
@@ -430,6 +433,7 @@ export function ServerForm({
         setPostIngestPolicy(server.postIngestPolicy);
         setAiInjectionCheckEnabled(server.aiInjectionCheckEnabled);
         setSftpServerPath(server.sftpServerPath ?? "");
+        setStartDirectory(server.startDirectory ?? "");
       })
       .catch((err) => setError(commandErrorMessage(err)));
   };
@@ -544,10 +548,21 @@ export function ServerForm({
     // nur bedienbar, nicht das gespeicherte Feld selbst gegated.
     aiInjectionCheckEnabled,
     sftpServerPath: sftpServerPath.trim() === "" ? null : sftpServerPath.trim(),
+    // Spec 0102: der lokale Pseudo-Server bietet das Feld nicht an.
+    startDirectory: isLocal || !startDirectoryCheck.ok ? null : startDirectoryCheck.value,
   });
+
+  const startDirectoryCheck = checkStartDirectory(startDirectory);
+  const startDirectoryError = startDirectoryCheck.ok
+    ? null
+    : t(`serverForm.startDirectoryInvalid.${startDirectoryCheck.reason}`);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!isLocal && startDirectoryError) {
+      setError(startDirectoryError);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -1276,6 +1291,26 @@ export function ServerForm({
               : t("serverForm.aiInjectionCheckUnavailableHint")}
           </p>
         </fieldset>
+
+        {!isLocal && (
+          <div>
+            <label className="block text-sm text-slate-300">
+              {t("serverForm.startDirectoryLabel")}
+              <input
+                value={startDirectory}
+                onChange={(e) => setStartDirectory(e.target.value)}
+                placeholder={t("serverForm.startDirectoryPlaceholder")}
+                aria-invalid={startDirectoryError !== null}
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-sm text-slate-100 focus:outline-none"
+              />
+            </label>
+            {startDirectoryError ? (
+              <p className="mt-1 text-xs text-red-400">{startDirectoryError}</p>
+            ) : (
+              <p className="mt-1 text-xs text-slate-500">{t("serverForm.startDirectoryHint")}</p>
+            )}
+          </div>
+        )}
 
         {!isLocal && (
           <details className="rounded border border-slate-700 p-3">

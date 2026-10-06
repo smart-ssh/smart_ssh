@@ -956,6 +956,7 @@ async fn test_chat_action_proposed_includes_previous_note_content_for_note_updat
         post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        start_directory: None,
         created_at: now,
         updated_at: now,
     };
@@ -1046,6 +1047,7 @@ async fn test_note_target_name_matches_actual_target_not_a_different_open_server
         post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        start_directory: None,
         created_at: now,
         updated_at: now,
     };
@@ -1063,6 +1065,7 @@ async fn test_note_target_name_matches_actual_target_not_a_different_open_server
         post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        start_directory: None,
         created_at: now,
         updated_at: now,
     };

@@ -171,6 +171,14 @@ fn block_comments(server: &Server, group_name: Option<&str>) -> Vec<String> {
             sanitize_comment_text(path)
         ));
     }
+    // Spec 0102: das Startverzeichnis hat in `ssh_config` kein Gegenstück
+    // (§3.2.3) — benannt, nicht abgebildet; der Import liest es nie zurück.
+    if let Some(dir) = &server.start_directory {
+        lines.push(format!(
+            "# smart-ssh: Startverzeichnis ({}) ist hier nicht abgebildet.",
+            sanitize_comment_text(dir)
+        ));
+    }
 
     // §3.2.2/§3.2.3: die Art der Anmeldung — außer `IdentityFile`, die wird
     // als eigene Zeile geschrieben und braucht keinen Kommentar.

@@ -114,6 +114,10 @@ pub(crate) struct MockSshTransport {
     /// wartet für sie ausschließlich auf `cancel`, statt sofort
     /// zurückzukehren.
     never_completing: std::collections::HashSet<String>,
+    /// Spec 0102: jedes an `execute` übergebene Kommando, wörtlich — damit
+    /// ein Test prüfen kann, dass der KI-Ausführungspfad das Kommando nicht
+    /// verändert (z. B. kein vorangestelltes `cd`).
+    executed: Arc<StdMutex<Vec<String>>>,
 }
 
 pub(crate) type StdinCalls = Arc<StdMutex<Vec<(String, Vec<u8>)>>>;
@@ -137,6 +141,10 @@ impl MockSshTransport {
         self
     }
 
+    pub(crate) fn executed_handle(&self) -> Arc<StdMutex<Vec<String>>> {
+        self.executed.clone()
+    }
+
     pub(crate) fn stdin_calls_handle(&self) -> StdinCalls {
         self.stdin_calls.clone()
     }
@@ -150,6 +158,7 @@ impl MockSshTransport {
 #[async_trait]
 impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
     async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
+        self.executed.lock().unwrap().push(command.to_string());
         if let Some(output) = self.responses.get(command).cloned() {
             return Ok(output);
         }
@@ -610,6 +619,7 @@ pub(crate) async fn session_with_real_chat_and_ledger_persistence(
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            start_directory: None,
             created_at: now,
             updated_at: now,
         })

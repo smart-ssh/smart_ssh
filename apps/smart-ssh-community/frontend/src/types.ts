@@ -52,6 +52,10 @@ export interface ServerDto {
   /** Spec 0067, A2: Override für den `sftp-server`-Pfad im erhöhten
    * Dateibrowser; `null` = automatisch erkennen. */
   sftpServerPath: string | null;
+  /** Spec 0102: Startverzeichnis für Terminal und Dateibrowser (`/…` oder
+   * `~/…`); `null` = Home des Login-Nutzers. Optional nur, damit ältere
+   * Test-Fixtures ohne das Feld gültig bleiben; das Backend sendet es immer. */
+  startDirectory?: string | null;
 }
 
 export interface AiProviderConfigDto {
@@ -475,6 +479,8 @@ export interface ServerInput {
   aiInjectionCheckEnabled: boolean;
   /** Spec 0067, A2: leer/`null` = automatisch. */
   sftpServerPath: string | null;
+  /** Spec 0102: leer/`null`/fehlend = nicht gesetzt. */
+  startDirectory?: string | null;
 }
 
 export type AuthMethodInput =
@@ -1107,3 +1113,16 @@ export type StartupPromptAnswer =
   | "setUpMasterPassword"
   | "confirm"
   | "cancel";
+
+/** Spec 0102: Ergebnis von `sftp_start_directory` — Startpfad des
+ * Dateibrowsers (`"."` = Home) und, genau einmal pro Sitzung, der
+ * konfigurierte Wert, falls das Startverzeichnis fehlt. */
+export interface StartDirectoryDto {
+  path: string;
+  missingDirectory: string | null;
+}
+
+/** Spec 0102: Ergebnis von `open_terminal`. */
+export interface TerminalStartDto {
+  missingDirectory: string | null;
+}

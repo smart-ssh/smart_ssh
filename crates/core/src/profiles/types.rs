@@ -74,6 +74,13 @@ pub struct Server {
     /// Spec 0067, A2: Override für den Pfad von `sftp-server` im erhöhten
     /// Dateibrowser-Modus. `None` = automatisch erkennen.
     pub sftp_server_path: Option<String>,
+    /// Spec 0102: optionales Startverzeichnis für das interaktive Terminal
+    /// und den SFTP-Dateibrowser (`/…` oder `~/…`, s.
+    /// [`crate::profiles::normalize_start_directory`]). `None` = Home des
+    /// Login-Nutzers wie bisher. KI-Kommandos laufen unabhängig davon immer
+    /// im Home.
+    #[serde(default)]
+    pub start_directory: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
