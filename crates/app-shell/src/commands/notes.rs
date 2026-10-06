@@ -1,11 +1,10 @@
 //! Spec 0008/0057/0058: Notizen (Server/Gruppe, Kürzungs-Vorschlag) — Teil
 //! der Spec-0083-Aufteilung von `commands.rs`.
 
-use secrecy::ExposeSecret;
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
-use ssh_manager_core::ai::{DefaultOutputRedactor, OutputRedactor};
+use ssh_manager_core::ai::OutputRedactor;
 use ssh_manager_core::profiles::{
     effective_notes, record_revision, GroupId, NoteEditor, NoteTarget,
 };
@@ -115,13 +114,8 @@ pub async fn request_note_shrink(
         .credential_store
         .get(&sudo_password_credential_ref(server_id))
         .ok();
-    let redactor: Box<dyn OutputRedactor> = match &sudo_password {
-        Some(password) => match regex::Regex::new(&regex::escape(password.expose_secret())) {
-            Ok(pattern) => Box::new(DefaultOutputRedactor::with_extra_patterns(vec![pattern])),
-            Err(_) => Box::new(DefaultOutputRedactor::new()),
-        },
-        None => Box::new(DefaultOutputRedactor::new()),
-    };
+    let redactor: Box<dyn OutputRedactor> =
+        app_logic::server_redaction::redactor_with_sudo_password(sudo_password.as_ref());
 
     tokio::spawn(async move {
         let state = app.state::<AppState>();

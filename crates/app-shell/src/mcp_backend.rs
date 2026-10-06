@@ -154,9 +154,21 @@ impl McpBackend for AppMcpBackend {
             .get_server(&server_id)
             .await
             .map_err(|_| LookupError::UnknownServer)?;
-        ssh_manager_core::profiles::effective_notes(&server, state.profile_store.as_ref())
-            .await
-            .map_err(|_| LookupError::UnknownServer)
+        // Issue #18: wie im Kontext der eingebauten KI erst redigiert
+        // (Session-Redactor dieses Servers, inkl. Sudo-Passwort), dann je
+        // Abschnitt als `ServerNote` gefenct — ein externer MCP-Client ist
+        // ebenso ein KI-Empfänger (Spec 0039, ADR 0034).
+        let redactor = app_logic::server_redaction::server_redactor(
+            state.credential_store.as_ref(),
+            server_id,
+        );
+        app_logic::server_redaction::redacted_fenced_effective_notes(
+            &server,
+            state.profile_store.as_ref(),
+            redactor.as_ref(),
+        )
+        .await
+        .map_err(|_| LookupError::UnknownServer)
     }
 
     async fn propose_action(
