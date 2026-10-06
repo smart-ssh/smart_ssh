@@ -46,7 +46,7 @@ geschieht, die eine eingetippte Zeile zerreißen.
 
 - Die Zeile ist im Terminal sichtbar und in der Shell-Historie, wie vom
   Issue gewollt.
-- In fish gilt `\\` auch innerhalb einfacher Anführungszeichen als Escape;
+- In fish gilt `\` auch innerhalb einfacher Anführungszeichen als Escape;
   ein Pfad mit Backslash kann dort abweichend interpretiert werden. In POSIX-
   Shells, bash und zsh tritt das nicht auf. Hingenommen — solche Pfade sind
   selten, und das Ergebnis ist ein sichtbar fehlschlagendes `cd`, kein
