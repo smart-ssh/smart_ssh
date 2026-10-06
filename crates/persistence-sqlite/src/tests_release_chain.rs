@@ -1,17 +1,18 @@
-//! Issue #15: the release chain. Every checked-in release fixture
-//! (`tests/fixtures/releases/`, written by the released build itself) is
-//! upgraded to this build **one migration at a time**, and after every
-//! step the test checks that no table, column or row the file held before
-//! has gone or changed. At the end the file is opened through
-//! `SqliteProfileStore::connect_encrypted` — the call the startup path
-//! makes — and the release's data is read back through the stores.
+//! Issue #15: die Release-Kette. Jede eingecheckte Release-Fixture
+//! (`tests/fixtures/releases/`, vom veröffentlichten Build selbst
+//! geschrieben) wird **Migration für Migration** auf diesen Build gehoben;
+//! nach jedem Schritt prüft der Test, dass keine Tabelle, Spalte oder Zeile,
+//! die die Datei vorher enthielt, fehlt oder sich verändert hat. Am Ende
+//! wird die Datei über `SqliteProfileStore::connect_encrypted` geöffnet —
+//! den Aufruf des Startablaufs — und die Daten des Release über die Stores
+//! zurückgelesen.
 //!
-//! The order follows a real upgrade: a plaintext release file is first
-//! converted to SQLCipher (`convert_plaintext_database`, Spec 0101 A6) and
-//! only then migrated, exactly as `app_logic::database_startup` does it.
+//! Die Reihenfolge folgt einem echten Update: Eine Klartext-Datei wird erst
+//! nach SQLCipher umgewandelt (`convert_plaintext_database`, Spec 0101 A6)
+//! und dann migriert — so wie `app_logic::database_startup` es tut.
 //!
-//! How to add the fixture of a new release: `tests/fixtures/releases/
-//! README.md`.
+//! Wie die Fixture eines neuen Release hinzukommt:
+//! `tests/fixtures/releases/README.md`.
 
 use std::sync::Arc;
 
@@ -29,10 +30,9 @@ use crate::test_support::{
 use crate::SqliteProfileStore;
 use crate::{convert_plaintext_database, detect_database_file_state, DatabaseFileState};
 
-/// The data every release fixture carries (see the generator next to each
-/// fixture). Rows a later release adds come with their own markers; these
-/// are the ones written by the oldest fixture and therefore present in
-/// every one.
+/// Die Daten, die jede Release-Fixture trägt (s. Generator neben jeder
+/// Fixture). Zeilen eines späteren Release bekommen eigene Marker; diese
+/// hier schreibt schon die älteste Fixture, sie stehen also in jeder.
 mod marker {
     pub const GROUP_NOTE: &str = "group-note-r052";
     pub const SERVER_A_HOST: &str = "host-a-r052.example";
@@ -59,10 +59,11 @@ fn fixture_cipher() -> Arc<dyn ContentCipher> {
     Arc::new(ChaCha20Poly1305Cipher::new(&RELEASE_FIXTURE_ROOT_KEY))
 }
 
-/// The registry itself: every registered fixture exists, is what it claims
-/// to be (plaintext or not, its schema version), and the list is ordered
-/// by release. Without this, a fixture registered with a wrong schema
-/// version would silently skip migration steps.
+/// Das Verzeichnis selbst: Jede eingetragene Fixture existiert, ist, was
+/// sie behauptet (Klartext oder nicht, ihre Schemaversion), und die Liste
+/// ist nach Release geordnet. Ohne diese Prüfung würde eine Fixture mit
+/// falsch eingetragener Schemaversion still Migrationsschritte
+/// überspringen.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_release_fixtures_are_registered_consistently() {
     assert!(
@@ -111,7 +112,7 @@ async fn test_release_fixtures_are_registered_consistently() {
     }
 }
 
-/// The chain itself, for every registered release.
+/// Die Kette selbst, für jedes eingetragene Release.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_every_release_fixture_upgrades_step_by_step_without_losing_data() {
     for fixture in RELEASE_FIXTURES {
@@ -126,7 +127,7 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
     std::fs::copy(fixture.path(), &path).expect("fixture can be copied");
     let key = fixture_key();
 
-    // --- Starting point: the file as the release left it.
+    // --- Ausgangspunkt: die Datei, wie das Release sie hinterlassen hat.
     let file_key = match fixture.encryption {
         FixtureEncryption::Plaintext => None,
         FixtureEncryption::Sqlcipher => Some(&key),
@@ -135,7 +136,7 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
     let mut previous = snapshot_database(&path, file_key).await;
     assert_release_rows_present(&previous, release);
 
-    // --- A plaintext release is converted first, as the startup does.
+    // --- Eine Klartext-Datei wird zuerst umgewandelt, wie beim Start.
     if fixture.encryption == FixtureEncryption::Plaintext {
         convert_plaintext_database(&path, &key)
             .await
@@ -153,7 +154,7 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
         previous = converted;
     }
 
-    // --- One migration at a time, up to this build.
+    // --- Eine Migration nach der anderen, bis zu diesem Build.
     let steps: Vec<i64> = crate::test_support::migration_files()
         .into_iter()
         .map(|(version, _)| version)
@@ -179,14 +180,15 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
         previous = current;
     }
 
-    // --- The startup's own open: nothing left to migrate, everything
-    // readable through the stores.
+    // --- Das Öffnen des Startablaufs: nichts mehr zu migrieren, alles über
+    // die Stores lesbar.
     let store = SqliteProfileStore::connect_encrypted(&path, &key)
         .await
         .unwrap_or_else(|err| panic!("{release}: the upgraded file does not open: {err}"));
     assert_release_data_readable(&store, release).await;
-    // Closed before the snapshot: `connect_encrypted` holds the only
-    // connection, and the snapshot must see what the open left on disk.
+    // Vor dem Abbild schließen: `connect_encrypted` hält die einzige
+    // Verbindung, und das Abbild soll sehen, was das Öffnen auf der Platte
+    // hinterlassen hat.
     store.close().await;
     let after_open = snapshot_database(&path, Some(&key)).await;
     assert_eq!(
@@ -195,9 +197,9 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
     );
 }
 
-/// Row counts of the release's data, checked on the raw snapshot — so it
-/// works on every intermediate schema, where the stores of this build
-/// cannot read yet.
+/// Zeilenzahlen der Release-Daten, geprüft am rohen Abbild — so geht es
+/// auf jedem Zwischenschema, auf dem die Stores dieses Builds noch nicht
+/// lesen können.
 fn assert_release_rows_present(snapshot: &crate::test_support::DatabaseSnapshot, step: &str) {
     for (table, at_least) in [
         ("groups", 2),
@@ -230,8 +232,9 @@ fn assert_release_rows_present(snapshot: &crate::test_support::DatabaseSnapshot,
     }
 }
 
-/// The release's data, read through this build's stores — field by field,
-/// including the field-encrypted chat, prompt history and ledger.
+/// Die Daten des Release, gelesen über die Stores dieses Builds — Feld für
+/// Feld, auch der feldweise verschlüsselte Chat, Prompt-Historie und
+/// Ledger.
 async fn assert_release_data_readable(store: &SqliteProfileStore, release: &str) {
     let groups = store.list_groups().await.expect("groups readable");
     let parent = groups

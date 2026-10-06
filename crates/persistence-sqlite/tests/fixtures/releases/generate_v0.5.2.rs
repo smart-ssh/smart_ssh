@@ -1,11 +1,11 @@
-//! Generator for the v0.5.2 release fixture (issue #15).
+//! Generator der Release-Fixture v0.5.2 (Issue #15).
 //!
-//! **Not compiled in this tree.** It is written against the API of the
-//! v0.5.2 tag and was run there, so `v0.5.2.sqlite3` is a file written by
-//! that release's own code (plaintext, migrations 1–14, the chat key is
-//! `RELEASE_FIXTURE_ROOT_KEY`). Kept here as the record of what the fixture
-//! contains and as the template for the next release's generator — see
-//! `README.md` in this directory.
+//! **In diesem Baum nicht kompiliert.** Geschrieben gegen die API des Tags
+//! v0.5.2 und dort ausgeführt — `v0.5.2.sqlite3` ist also eine Datei, die
+//! der Code dieses Release selbst geschrieben hat (Klartext, Migrationen
+//! 1–14, Chat-Schlüssel ist `RELEASE_FIXTURE_ROOT_KEY`). Liegt hier als
+//! Nachweis, was die Fixture enthält, und als Vorlage für den Generator des
+//! nächsten Release — s. `README.md` in diesem Verzeichnis.
 
 use std::sync::Arc;
 

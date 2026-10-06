@@ -1,18 +1,20 @@
-//! Issue #15: the startup path end to end, on a real database file.
+//! Issue #15: der Startablauf von Ende zu Ende, an einer echten
+//! Datenbankdatei.
 //!
-//! - **Repeated start:** a database from the current release (the newest
-//!   fixture in `persistence-sqlite/tests/fixtures/releases/`) goes through
-//!   the whole startup — conversion to SQLCipher (Spec 0101, A6), the
-//!   remaining migrations, the secret migration (A10) — and then starts a
-//!   second time. The second start must leave schema and data exactly as
-//!   the first one left them.
-//! - **Downgrade:** a database that carries a migration this build does not
-//!   know (what a newer release leaves behind) is opened through the same
-//!   startup path. It must end in `SchemaTooNew` with the dialog text from
-//!   Spec 0059, and the data directory must stay byte for byte as it was.
+//! - **Wiederholter Start:** Eine Datenbank des aktuellen Release (die
+//!   neueste Fixture in `persistence-sqlite/tests/fixtures/releases/`)
+//!   durchläuft den ganzen Start — Umwandlung nach SQLCipher (Spec 0101,
+//!   A6), die übrigen Migrationen, den Secret-Umzug (A10) — und startet
+//!   dann ein zweites Mal. Der zweite Start muss Schema und Daten genau so
+//!   lassen, wie der erste sie hinterlassen hat.
+//! - **Downgrade:** Eine Datenbank mit einer Migration, die dieser Build
+//!   nicht kennt (was ein neueres Release hinterlässt), geht durch
+//!   denselben Startablauf. Er muss mit `SchemaTooNew` und dem Dialogtext
+//!   aus Spec 0059 enden, und das Datenverzeichnis bleibt Byte für Byte,
+//!   wie es war.
 //!
-//! "Startup path" means what `app_shell::open_and_assemble` runs before the
-//! app state is assembled: [`open_or_prepare_database`] and
+//! „Startablauf“ heißt hier, was `app_shell::open_and_assemble` vor dem
+//! Zusammenbau des App-Zustands ausführt: [`open_or_prepare_database`] und
 //! [`crate::secret_migration::migrate_secrets_into_database`].
 
 use std::sync::Mutex;
@@ -33,9 +35,9 @@ use super::*;
 use crate::startup_error_messages::{db_connect_failure_text, Language};
 use crate::test_support::InMemoryCredentialStore;
 
-/// The secrets the release fixture's servers and provider refer to — in
-/// 0.5.2 they lived in the OS keychain (see `generate_v0.5.2.rs` for the
-/// IDs).
+/// Die Secrets, auf die Server und Provider der Release-Fixture verweisen —
+/// in 0.5.2 lagen sie im Schlüsselbund des Betriebssystems (IDs s.
+/// `generate_v0.5.2.rs`).
 fn release_secret_refs() -> Vec<(String, String)> {
     let server_a = Uuid::from_u128(0x0011);
     let server_b = Uuid::from_u128(0x0012);
@@ -57,7 +59,7 @@ fn release_secret_refs() -> Vec<(String, String)> {
     ]
 }
 
-/// The OS keychain of a user of the current release: K plus the secrets.
+/// Der Schlüsselbund eines Nutzers des aktuellen Release: K plus Secrets.
 fn release_keychain() -> InMemoryCredentialStore {
     use base64::Engine;
     let keychain = InMemoryCredentialStore::default();
@@ -92,9 +94,9 @@ fn database_key() -> DatabaseKey {
     DatabaseKey::from_root_key(&RELEASE_FIXTURE_ROOT_KEY)
 }
 
-/// A prompt for starts that must not ask anything: every dialog is
-/// recorded and answered with "Quit", so an unexpected dialog ends the
-/// start instead of changing something.
+/// Fragesteller für Starts, die nichts fragen dürfen: Jeder Dialog wird
+/// aufgezeichnet und mit „Beenden“ beantwortet — ein unerwarteter Dialog
+/// beendet den Start also, statt etwas zu verändern.
 #[derive(Default)]
 struct NoDialogExpected {
     asked: Mutex<Vec<StartupDialog>>,
@@ -128,9 +130,9 @@ impl StartupPrompt for NoDialogExpected {
     }
 }
 
-/// One start as the app runs it in keychain mode, up to the point where
-/// the app state is assembled. Closes the database afterwards, like the
-/// end of the app does.
+/// Ein Start, wie die App ihn im Schlüsselbund-Modus fährt, bis zum
+/// Zusammenbau des App-Zustands. Schließt die Datenbank danach, wie das
+/// Beenden der App.
 async fn start_app(
     db_path: &std::path::Path,
     keychain: &InMemoryCredentialStore,
@@ -158,7 +160,7 @@ async fn start_app(
     migrated
 }
 
-/// Copies the current release's fixture into `dir` as the app's database.
+/// Kopiert die Fixture des aktuellen Release als Datenbank der App nach `dir`.
 async fn release_database(dir: &std::path::Path) -> std::path::PathBuf {
     let fixture = current_release_fixture();
     let db_path = dir.join("smart-ssh.db");
@@ -167,16 +169,16 @@ async fn release_database(dir: &std::path::Path) -> std::path::PathBuf {
         FixtureEncryption::Plaintext => None,
         FixtureEncryption::Sqlcipher => Some(database_key()),
     };
-    // Windows checks the migrations out with CRLF (see the helper).
+    // Windows checkt die Migrationen mit CRLF aus (s. Helfer).
     align_migration_checksums(&db_path, file_key.as_ref()).await;
     db_path
 }
 
-/// Issue #15, repeated start: the first start converts the release's
-/// plaintext file, migrates it and moves the secrets; the second start on
-/// the same data directory changes nothing — not the schema, not a row
-/// (including `_sqlx_migrations` with its timestamps and the secret
-/// migration state), not the keychain.
+/// Issue #15, wiederholter Start: Der erste Start wandelt die
+/// Klartext-Datei des Release um, migriert sie und zieht die Secrets um;
+/// der zweite Start auf demselben Datenverzeichnis ändert nichts — nicht
+/// das Schema, keine Zeile (auch nicht `_sqlx_migrations` mit ihren
+/// Zeitstempeln und den Umzugszustand), nicht den Schlüsselbund.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_a_second_start_on_a_release_database_changes_neither_schema_nor_data() {
     let dir = tempfile::tempdir().unwrap();
@@ -202,7 +204,7 @@ async fn test_a_second_start_on_a_release_database_changes_neither_schema_nor_da
     let keychain = release_keychain();
     let prompt = NoDialogExpected::default();
 
-    // --- First start: conversion, migrations, secret migration.
+    // --- Erster Start: Umwandlung, Migrationen, Secret-Umzug.
     start_app(&db_path, &keychain, &prompt)
         .await
         .unwrap_or_else(|abort| panic!("first start failed: {abort:?}"));
@@ -233,7 +235,7 @@ async fn test_a_second_start_on_a_release_database_changes_neither_schema_nor_da
         "the secrets must have moved out of the keychain"
     );
 
-    // --- Second start on the same data directory.
+    // --- Zweiter Start auf demselben Datenverzeichnis.
     start_app(&db_path, &keychain, &prompt)
         .await
         .unwrap_or_else(|abort| panic!("second start failed: {abort:?}"));
@@ -249,8 +251,8 @@ async fn test_a_second_start_on_a_release_database_changes_neither_schema_nor_da
     );
     assert_eq!(keychain_entries(&keychain), keychain_after_first_start);
 
-    // And the data is still what the release wrote — secrets included,
-    // now read from the database.
+    // Und die Daten sind noch die des Release — samt Secrets, jetzt aus der
+    // Datenbank gelesen.
     let store = SqliteProfileStore::connect_encrypted(&db_path, &database_key())
         .await
         .unwrap();
@@ -275,9 +277,9 @@ async fn test_a_second_start_on_a_release_database_changes_neither_schema_nor_da
     store.close().await;
 }
 
-/// Issue #15, repeated start on a fresh installation: no database, K in
-/// the keychain. The first start creates the encrypted file, the second
-/// one opens it and changes nothing.
+/// Issue #15, wiederholter Start einer frischen Installation: keine
+/// Datenbank, K im Schlüsselbund. Der erste Start legt die verschlüsselte
+/// Datei an, der zweite öffnet sie und ändert nichts.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_a_second_start_on_a_fresh_installation_changes_neither_schema_nor_data() {
     let dir = tempfile::tempdir().unwrap();
@@ -303,11 +305,12 @@ async fn test_a_second_start_on_a_fresh_installation_changes_neither_schema_nor_
     assert_eq!(after_first_start, after_second_start);
 }
 
-/// Issue #15, downgrade: a database written by a newer release — a real
-/// `sqlx` migration this build does not know — goes through the normal
-/// startup path. Expected: `SchemaTooNew` with both version numbers, the
-/// Spec 0059 dialog text, no dialog, no keychain write, and every file in
-/// the data directory byte-identical afterwards.
+/// Issue #15, Downgrade: Eine Datenbank, die ein neueres Release
+/// geschrieben hat — mit einer echten `sqlx`-Migration, die dieser Build
+/// nicht kennt —, geht durch den normalen Startablauf. Erwartet:
+/// `SchemaTooNew` mit beiden Versionsnummern, der Dialogtext aus Spec 0059,
+/// kein Dialog, kein Schreiben in den Schlüsselbund, und jede Datei im
+/// Datenverzeichnis ist danach bytegleich.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_a_database_from_a_newer_release_stops_the_start_and_stays_byte_identical() {
     let dir = tempfile::tempdir().unwrap();
@@ -315,11 +318,11 @@ async fn test_a_database_from_a_newer_release_stops_the_start_and_stays_byte_ide
     let keychain = release_keychain();
     let prompt = NoDialogExpected::default();
 
-    // This build's user upgrades (first start) …
+    // Der Nutzer aktualisiert auf diesen Build (erster Start) …
     start_app(&db_path, &keychain, &prompt)
         .await
         .unwrap_or_else(|abort| panic!("upgrade start failed: {abort:?}"));
-    // … then a newer release adds its migration …
+    // … dann bringt ein neueres Release seine Migration mit …
     let max_known = max_known_migration_version();
     let future_version = max_known + 1;
     apply_future_migration(
@@ -331,7 +334,7 @@ async fn test_a_database_from_a_newer_release_stops_the_start_and_stays_byte_ide
          INSERT INTO future_release_table (note) VALUES ('written-by-a-newer-release');\n",
     )
     .await;
-    // … and the user goes back to this build.
+    // … und der Nutzer geht zurück auf diesen Build.
     let files_before = directory_contents(dir.path());
     assert!(
         files_before.keys().all(|name| name == "smart-ssh.db"),
@@ -350,8 +353,8 @@ async fn test_a_database_from_a_newer_release_stops_the_start_and_stays_byte_ide
     .await
     .err()
     .expect("a database from a newer release must not open");
-    // The database file itself, right after the start returned — before
-    // anything else had a chance to touch it.
+    // Die Datenbankdatei selbst, direkt nach dem Start — bevor irgendetwas
+    // anderes sie anfassen konnte.
     assert!(
         std::fs::read(&db_path).unwrap() == files_before["smart-ssh.db"],
         "the failed start modified the database file"
@@ -371,7 +374,7 @@ async fn test_a_database_from_a_newer_release_stops_the_start_and_stays_byte_ide
     assert!(prompt.asked().is_empty(), "asked {:?}", prompt.asked());
     assert_eq!(keychain_entries(&keychain), keychain_before);
 
-    // The dialog text the app shows for exactly this error.
+    // Der Dialogtext, den die App für genau diesen Fehler zeigt.
     let log_dir = dir.path().join("logs");
     let en = db_connect_failure_text(&kind, &db_path, &log_dir, Language::En);
     assert!(
@@ -395,11 +398,12 @@ async fn test_a_database_from_a_newer_release_stops_the_start_and_stays_byte_ide
         de.message
     );
 
-    // No file added or left behind, not a byte changed. The failed open
-    // drops its connection pool without awaiting the close, so SQLite's
-    // `-wal`/`-shm` of that connection can still exist for a moment after
-    // the start returned (observed). Wait — bounded — until the connection
-    // has released the file, then compare the whole directory.
+    // Keine Datei hinzugekommen oder liegen geblieben, kein Byte verändert.
+    // Das gescheiterte Öffnen lässt seinen Pool fallen, ohne das Schließen
+    // abzuwarten; `-wal`/`-shm` dieser Verbindung können deshalb kurz nach
+    // dem Start noch existieren (beobachtet). Begrenzt warten, bis die
+    // Verbindung die Datei freigegeben hat, dann das ganze Verzeichnis
+    // vergleichen.
     let released = async {
         while directory_contents(dir.path())
             .keys()

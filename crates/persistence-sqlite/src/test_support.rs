@@ -1,11 +1,13 @@
-//! Issue #15: test helpers for the end-to-end migration tests — the release
-//! fixtures, a schema-and-data snapshot of a database file, and a way to give
-//! a database a migration that this build does not know.
+//! Issue #15: Testhelfer für die End-zu-End-Migrationstests — die
+//! Release-Fixtures, ein Abbild von Schema und Inhalt einer Datenbankdatei
+//! und ein Weg, einer Datenbank eine Migration zu geben, die dieser Build
+//! nicht kennt.
 //!
-//! **Behind `test-support`**, like `SqliteProfileStore::connect_plaintext`:
-//! every helper here opens a database file directly, past the startup path.
-//! `app-logic` enables the feature only under `[dev-dependencies]`, so the
-//! `cargo build --workspace` step of the gate catches a production call.
+//! **Hinter `test-support`**, wie `SqliteProfileStore::connect_plaintext`:
+//! Jeder Helfer hier öffnet eine Datenbankdatei direkt, am Startablauf
+//! vorbei. `app-logic` schaltet das Feature nur unter `[dev-dependencies]`
+//! ein, und der Schritt `cargo build --workspace` des Gates fängt einen
+//! Produktivaufruf ab.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -15,33 +17,33 @@ use sqlx::Connection;
 
 use ssh_manager_core::crypto::DatabaseKey;
 
-/// The root key K under which every release fixture's field-encrypted
-/// content (chat, prompt history, ledger) is written — and, for releases
-/// from SQLCipher on, the K from which the fixture's database key is
-/// derived. Not a secret; it only exists in test fixtures.
+/// Der Wurzelschlüssel K, unter dem jede Release-Fixture ihren feldweise
+/// verschlüsselten Inhalt (Chat, Prompt-Historie, Ledger) schreibt — und ab
+/// den SQLCipher-Releases der K, aus dem der Datenbankschlüssel der Fixture
+/// abgeleitet ist. Kein Geheimnis; er existiert nur in Test-Fixtures.
 pub const RELEASE_FIXTURE_ROOT_KEY: [u8; 32] = [
     0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
     0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20,
 ];
 
-/// How a release wrote its database file.
+/// Wie ein Release seine Datenbankdatei geschrieben hat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FixtureEncryption {
-    /// Releases before SQLCipher (up to and including 0.5.2).
+    /// Releases vor SQLCipher (bis einschließlich 0.5.2).
     Plaintext,
-    /// Releases with SQLCipher: the database key is
+    /// Releases mit SQLCipher: Der Datenbankschlüssel ist
     /// `DatabaseKey::from_root_key(&RELEASE_FIXTURE_ROOT_KEY)`.
     Sqlcipher,
 }
 
-/// One checked-in database file, written by a released build.
+/// Eine eingecheckte Datenbankdatei, geschrieben vom veröffentlichten Build.
 #[derive(Debug, Clone, Copy)]
 pub struct ReleaseFixture {
-    /// The release that wrote the file, e.g. `"0.5.2"`.
+    /// Das Release, das die Datei geschrieben hat, z. B. `"0.5.2"`.
     pub release: &'static str,
-    /// File name under `tests/fixtures/releases/`.
+    /// Dateiname unter `tests/fixtures/releases/`.
     pub file_name: &'static str,
-    /// Highest migration version the release shipped.
+    /// Höchste Migrationsversion, die das Release mitbrachte.
     pub schema_version: i64,
     pub encryption: FixtureEncryption,
 }
@@ -52,9 +54,9 @@ impl ReleaseFixture {
     }
 }
 
-/// Every release fixture, oldest first. **One entry per release that
-/// changed the schema** — see `tests/fixtures/releases/README.md` for how
-/// to add one when a release is cut.
+/// Alle Release-Fixtures, älteste zuerst. **Ein Eintrag je Release, das
+/// das Schema geändert hat** — wie beim Release einer hinzukommt, steht in
+/// `tests/fixtures/releases/README.md`.
 pub const RELEASE_FIXTURES: &[ReleaseFixture] = &[ReleaseFixture {
     release: "0.5.2",
     file_name: "v0.5.2.sqlite3",
@@ -62,8 +64,8 @@ pub const RELEASE_FIXTURES: &[ReleaseFixture] = &[ReleaseFixture {
     encryption: FixtureEncryption::Plaintext,
 }];
 
-/// The newest release fixture — the database a user upgrading from the
-/// current release brings along.
+/// Die neueste Release-Fixture — die Datenbank, die ein Nutzer beim Update
+/// vom aktuellen Release mitbringt.
 pub fn current_release_fixture() -> &'static ReleaseFixture {
     RELEASE_FIXTURES
         .last()
@@ -74,23 +76,26 @@ pub fn release_fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/releases")
 }
 
-/// The highest migration version this build knows.
+/// Die höchste Migrationsversion, die dieser Build kennt.
 pub fn max_known_migration_version() -> i64 {
     crate::SqliteProfileStore::max_known_migration_version()
 }
 
-/// Every migration of this build, as `(version, file name)`, read from the
-/// crate's `migrations/` directory, sorted by version.
+/// Alle Migrationen dieses Builds als `(Version, Dateiname)`, gelesen aus
+/// `migrations/` dieser Crate, nach Version sortiert.
 pub fn migration_files() -> Vec<(i64, String)> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
     let mut files: Vec<(i64, String)> = std::fs::read_dir(&dir)
         .expect("migrations/ is readable")
         .map(|entry| {
-            let name = entry
+            entry
                 .expect("directory entry is readable")
                 .file_name()
                 .to_string_lossy()
-                .into_owned();
+                .into_owned()
+        })
+        .filter(|name| name.ends_with(".sql"))
+        .map(|name| {
             let version = name
                 .split('_')
                 .next()
@@ -103,7 +108,7 @@ pub fn migration_files() -> Vec<(i64, String)> {
     files
 }
 
-/// Opens `path` without migrating anything — encrypted if `key` is given.
+/// Öffnet `path`, ohne etwas zu migrieren — verschlüsselt, wenn `key` gesetzt ist.
 pub async fn open_raw(path: &Path, key: Option<&DatabaseKey>) -> SqliteConnection {
     let options = match key {
         Some(key) => crate::encryption::encrypted_connect_options(path, key),
@@ -115,11 +120,12 @@ pub async fn open_raw(path: &Path, key: Option<&DatabaseKey>) -> SqliteConnectio
         .unwrap_or_else(|err| panic!("{} cannot be opened: {err}", path.display()))
 }
 
-/// Windows checks the `.sql` migrations out with CRLF, so the checksums the
-/// build embeds differ from those in a fixture written under LF. Aligns the
-/// checksums of the given **copy** to this build — the same step as
-/// `tests_fixture_t0::align_migration_checksums_to_current_build`, for
-/// plaintext and encrypted copies. Touches only rows that already exist.
+/// Windows checkt die `.sql`-Migrationen mit CRLF aus; die Prüfsummen, die
+/// der Build einbettet, weichen dann von denen einer unter LF geschriebenen
+/// Fixture ab. Richtet die Prüfsummen der übergebenen **Kopie** auf diesen
+/// Build aus — derselbe Schritt wie
+/// `tests_fixture_t0::align_migration_checksums_to_current_build`, für
+/// Klartext- und verschlüsselte Kopien. Ändert nur vorhandene Zeilen.
 pub async fn align_migration_checksums(copy_path: &Path, key: Option<&DatabaseKey>) {
     let mut conn = open_raw(copy_path, key).await;
     for migration in sqlx::migrate!().iter() {
@@ -133,7 +139,7 @@ pub async fn align_migration_checksums(copy_path: &Path, key: Option<&DatabaseKe
     conn.close().await.expect("connection closes");
 }
 
-/// The applied migration versions of a file, ascending.
+/// Die angewandten Migrationsversionen einer Datei, aufsteigend.
 pub async fn applied_migrations(path: &Path, key: Option<&DatabaseKey>) -> Vec<i64> {
     let mut conn = open_raw(path, key).await;
     let versions: Vec<i64> =
@@ -145,9 +151,9 @@ pub async fn applied_migrations(path: &Path, key: Option<&DatabaseKey>) -> Vec<i
     versions
 }
 
-/// Applies this build's migrations up to and including `target_version` —
-/// exactly one release step at a time, instead of `sqlx::migrate!()`, which
-/// always runs to the newest one.
+/// Wendet die Migrationen dieses Builds bis einschließlich `target_version`
+/// an — so lässt sich Schritt für Schritt migrieren, anders als mit
+/// `sqlx::migrate!()`, das immer bis zur neuesten läuft.
 pub async fn migrate_up_to(path: &Path, key: Option<&DatabaseKey>, target_version: i64) {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
     let subset = tempfile_dir("migrations-subset");
@@ -168,11 +174,11 @@ pub async fn migrate_up_to(path: &Path, key: Option<&DatabaseKey>, target_versio
     let _ = std::fs::remove_dir_all(&subset);
 }
 
-/// Gives the database a migration with `version` that this build does not
-/// know — exactly what a newer release leaves behind. Applied through a
-/// real `sqlx` migrator (this build's migrations plus the extra one), so
-/// `_sqlx_migrations` carries a genuine row with checksum, not a hand-made
-/// one.
+/// Gibt der Datenbank eine Migration `version`, die dieser Build nicht
+/// kennt — genau das, was ein neueres Release hinterlässt. Angewandt über
+/// einen echten `sqlx`-Migrator (die Migrationen dieses Builds plus die
+/// zusätzliche), damit `_sqlx_migrations` eine echte Zeile mit Prüfsumme
+/// trägt und keine von Hand eingetragene.
 pub async fn apply_future_migration(
     path: &Path,
     key: Option<&DatabaseKey>,
@@ -206,8 +212,8 @@ pub async fn apply_future_migration(
     let _ = std::fs::remove_dir_all(&with_future);
 }
 
-/// A temporary directory without a `tempfile` dependency in this crate's
-/// `test-support` build (`tempfile` is a dev-dependency only).
+/// Ein temporäres Verzeichnis ohne `tempfile` — das ist nur
+/// Dev-Abhängigkeit und fehlt im `test-support`-Build für `app-logic`.
 fn tempfile_dir(label: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
         "smart-ssh-{label}-{}-{}",
@@ -218,30 +224,30 @@ fn tempfile_dir(label: &str) -> PathBuf {
     dir
 }
 
-/// Schema and content of a database file, independent of how the file is
-/// laid out on disk — two snapshots are equal exactly when every schema
-/// object, every row of every table (including `_sqlx_migrations` with its
-/// timestamps) and `user_version` are equal.
+/// Schema und Inhalt einer Datenbankdatei, unabhängig vom Layout auf der
+/// Platte — zwei Abbilder sind genau dann gleich, wenn jedes
+/// Schema-Objekt, jede Zeile jeder Tabelle (auch `_sqlx_migrations` mit
+/// ihren Zeitstempeln) und `user_version` gleich sind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DatabaseSnapshot {
-    /// `type name: sql` for every entry of `sqlite_master`, sorted.
+    /// `type name: sql` für jeden Eintrag in `sqlite_master`, sortiert.
     pub schema: Vec<String>,
     pub user_version: i64,
     pub tables: BTreeMap<String, TableSnapshot>,
 }
 
-/// One table: its columns in declaration order and every row as
-/// `quote()`d values per column.
+/// Eine Tabelle: ihre Spalten in Deklarationsreihenfolge und jede Zeile als
+/// `quote()`-Werte je Spalte.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableSnapshot {
     pub columns: Vec<String>,
-    /// Sorted, so the snapshot does not depend on row order.
+    /// Sortiert, damit das Abbild nicht von der Zeilenreihenfolge abhängt.
     pub rows: Vec<BTreeMap<String, String>>,
 }
 
 impl TableSnapshot {
-    /// The rows, reduced to `columns` and sorted — to compare a table
-    /// before and after a migration that added columns.
+    /// Die Zeilen, reduziert auf `columns` und sortiert — für den Vergleich
+    /// einer Tabelle vor und nach einer Migration, die Spalten hinzufügt.
     pub fn rows_projected(&self, columns: &[String]) -> Vec<Vec<String>> {
         let mut rows: Vec<Vec<String>> = self
             .rows
@@ -263,10 +269,10 @@ impl TableSnapshot {
 }
 
 impl DatabaseSnapshot {
-    /// Asserts that `later` still holds everything `self` held: every
-    /// table, every column, and every row with unchanged values in those
-    /// columns. New tables, new columns and new rows are allowed — that is
-    /// what a migration adds.
+    /// Prüft, dass `later` alles noch enthält, was `self` enthielt: jede
+    /// Tabelle, jede Spalte und jede Zeile mit unveränderten Werten in
+    /// diesen Spalten. Neue Tabellen, Spalten und Zeilen sind erlaubt — die
+    /// bringt eine Migration mit.
     pub fn assert_preserved_in(&self, later: &DatabaseSnapshot, step: &str) {
         for (name, before) in &self.tables {
             let after = later
@@ -283,8 +289,8 @@ impl DatabaseSnapshot {
                 "{step}: table {name} lost columns {missing:?}"
             );
             if name == "_sqlx_migrations" {
-                // A step adds rows here by design; the rows that were
-                // there must stay untouched.
+                // Hier fügt jeder Schritt absichtlich eine Zeile hinzu; die
+                // vorhandenen müssen unverändert bleiben.
                 let after_rows = after.rows_projected(&before.columns);
                 for row in before.rows_projected(&before.columns) {
                     assert!(
@@ -302,13 +308,13 @@ impl DatabaseSnapshot {
         }
     }
 
-    /// Number of rows in `table`, 0 if the table does not exist.
+    /// Anzahl der Zeilen in `table`, 0, wenn es die Tabelle nicht gibt.
     pub fn row_count(&self, table: &str) -> usize {
         self.tables.get(table).map_or(0, |t| t.rows.len())
     }
 }
 
-/// Reads the snapshot of `path`, without migrating or writing anything.
+/// Liest das Abbild von `path`, ohne zu migrieren oder zu schreiben.
 pub async fn snapshot_database(path: &Path, key: Option<&DatabaseKey>) -> DatabaseSnapshot {
     let mut conn = open_raw(path, key).await;
 
@@ -339,9 +345,10 @@ pub async fn snapshot_database(path: &Path, key: Option<&DatabaseKey>) -> Databa
                 .fetch_all(&mut conn)
                 .await
                 .expect("table info is readable");
-        // `quote()` renders every storage class unambiguously (text in
-        // quotes, blobs as X'..', NULL as NULL), so a type change shows up
-        // as a difference instead of being hidden by a conversion.
+        // `quote()` stellt jede Speicherklasse eindeutig dar (Text in
+        // Anführungszeichen, Blobs als X'..', NULL als NULL) — eine
+        // Typänderung erscheint so als Unterschied, statt in einer
+        // Umwandlung zu verschwinden.
         let select = columns
             .iter()
             .map(|c| format!("quote({})", quote_identifier(c)))
@@ -379,8 +386,9 @@ fn quote_identifier(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
-/// Every file in `dir` with its full content — to prove that a failed start
-/// left the data directory byte for byte as it was.
+/// Jede Datei in `dir` mit vollem Inhalt — für den Nachweis, dass ein
+/// gescheiterter Start das Datenverzeichnis Byte für Byte unverändert
+/// lässt.
 pub fn directory_contents(dir: &Path) -> BTreeMap<String, Vec<u8>> {
     std::fs::read_dir(dir)
         .expect("directory is readable")

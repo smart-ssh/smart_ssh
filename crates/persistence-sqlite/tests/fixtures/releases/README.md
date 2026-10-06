@@ -1,57 +1,62 @@
-# Release database fixtures
+# Release-Datenbank-Fixtures
 
-One database file per released schema, each **written by the released build
-itself**. `src/tests_release_chain.rs` upgrades every file here to the
-current build one migration at a time and checks after each step that no
-table, column or row the file held has gone or changed; at the end it opens
-the file through `SqliteProfileStore::connect_encrypted` and reads the data
-back through the stores. `app-logic` uses the newest fixture for the
-repeated-start test (`database_startup/tests_release_upgrade.rs`).
+Eine Datenbankdatei je veröffentlichtem Schema, jede **vom veröffentlichten
+Build selbst geschrieben**. `src/tests_release_chain.rs` hebt jede Datei hier
+Migration für Migration auf den aktuellen Build und prüft nach jedem
+Schritt, dass keine Tabelle, Spalte oder Zeile fehlt oder sich verändert
+hat; am Ende öffnet es die Datei über
+`SqliteProfileStore::connect_encrypted` und liest die Daten über die Stores
+zurück. `app-logic` nimmt die neueste Fixture für den Test des
+wiederholten Starts (`database_startup/tests_release_upgrade.rs`). ADR 0105
+begründet das Vorgehen.
 
-| File | Release | Schema (highest migration) | Encryption |
+| Datei | Release | Schema (höchste Migration) | Verschlüsselung |
 |---|---|---|---|
-| `v0.5.2.sqlite3` | 0.5.2 | 14 | plaintext (before SQLCipher) |
+| `v0.5.2.sqlite3` | 0.5.2 | 14 | Klartext (vor SQLCipher) |
 
-The registry is `RELEASE_FIXTURES` in `src/test_support.rs`;
-`test_release_fixtures_are_registered_consistently` checks that every entry
-matches its file.
+Das Verzeichnis der Fixtures ist `RELEASE_FIXTURES` in
+`src/test_support.rs`; `test_release_fixtures_are_registered_consistently`
+prüft, dass jeder Eintrag zu seiner Datei passt.
 
-Every fixture uses the same fixed, non-secret root key
-`RELEASE_FIXTURE_ROOT_KEY` (`src/test_support.rs`) for its field-encrypted
-content (chat, prompt history, ledger) and, from SQLCipher on, as the K its
-database key is derived from.
+Alle Fixtures nutzen denselben festen, nicht geheimen Wurzelschlüssel
+`RELEASE_FIXTURE_ROOT_KEY` (`src/test_support.rs`) für ihren feldweise
+verschlüsselten Inhalt (Chat, Prompt-Historie, Ledger) und ab SQLCipher als
+den K, aus dem ihr Datenbankschlüssel abgeleitet ist.
 
-## Adding a fixture when a release is cut
+## Beim Release eine Fixture hinzufügen
 
-Do this for every release whose schema differs from the newest fixture's
-(i.e. the release ships a migration that no fixture carries yet). Releases
-without a new migration need no fixture.
+Für jedes Release, dessen Schema von dem der neuesten Fixture abweicht (das
+also eine Migration mitbringt, die noch keine Fixture trägt). Releases ohne
+neue Migration brauchen keine Fixture.
 
-1. Check out the release tag in a separate worktree, e.g.
+1. Den Release-Tag in einem eigenen Worktree auschecken, z. B.
    `git worktree add --detach target/fixture-vX.Y.Z vX.Y.Z`.
-2. In that worktree, copy the newest `generate_v*.rs` from this directory to
-   `crates/persistence-sqlite/src/gen_release_fixture.rs` and register it in
-   `src/lib.rs` as `#[cfg(test)] mod gen_release_fixture;`.
-3. Adapt the generator to the release's API and **keep every existing
-   marker** (`*-r052` values, row counts) so the chain test's checks still
-   hold. For tables or columns the release added, write rows with new
-   markers of the form `*-rXYZ`.
-   - From SQLCipher on (0.6.0 and later), open the file the way the release
-     does: `SqliteProfileStore::connect_encrypted(&out,
-     &DatabaseKey::from_root_key(&RELEASE_FIXTURE_ROOT_KEY))` instead of
-     the plaintext `connect`.
-   - Secrets that the release keeps in the database (`secrets` table) get
-     marker values too.
-4. Run it once in the worktree:
-   `FIXTURE_OUT=<absolute path>/vX.Y.Z.sqlite3 cargo test -p persistence-sqlite --lib -- --ignored generate_release_fixture`
-5. Copy the file here as `vX.Y.Z.sqlite3` and the generator as
-   `generate_vX.Y.Z.rs` (add the "not compiled in this tree" header).
-6. Append an entry to `RELEASE_FIXTURES` in `src/test_support.rs` (release,
-   file name, highest migration of the release, `Plaintext`/`Sqlcipher`),
-   extend the table above, and add checks for the new markers to
-   `assert_release_data_readable` in `src/tests_release_chain.rs`.
-7. Run `cargo test -p persistence-sqlite --lib release` and remove the
-   worktree.
+2. Dort den neuesten `generate_v*.rs` aus diesem Verzeichnis nach
+   `crates/persistence-sqlite/src/gen_release_fixture.rs` kopieren und in
+   `src/lib.rs` als `#[cfg(test)] mod gen_release_fixture;` eintragen.
+3. Den Generator an die API des Release anpassen und **alle vorhandenen
+   Marker behalten** (`*-r052`-Werte, Zeilenzahlen), damit die Prüfungen
+   des Ketten-Tests weiter gelten. Für Tabellen oder Spalten, die das
+   Release neu hat, Zeilen mit neuen Markern der Form `*-rXYZ` schreiben.
+   - Ab SQLCipher (0.6.0 und später) die Datei so öffnen, wie das Release
+     es tut: `SqliteProfileStore::connect_encrypted(&out,
+     &DatabaseKey::from_root_key(&RELEASE_FIXTURE_ROOT_KEY))` statt des
+     Klartext-`connect`.
+   - Secrets, die das Release in der Datenbank hält (Tabelle `secrets`),
+     bekommen ebenfalls Marker-Werte.
+4. Einmal im Worktree ausführen:
+   `FIXTURE_OUT=<absoluter Pfad>/vX.Y.Z.sqlite3 cargo test -p persistence-sqlite --lib -- --ignored generate_release_fixture`
+5. Die Datei als `vX.Y.Z.sqlite3` hierher kopieren, den Generator als
+   `generate_vX.Y.Z.rs` (mit dem Kopf „in diesem Baum nicht kompiliert“).
+6. In `RELEASE_FIXTURES` (`src/test_support.rs`) einen Eintrag anhängen
+   (Release, Dateiname, höchste Migration des Release,
+   `Plaintext`/`Sqlcipher`), die Tabelle oben ergänzen und Prüfungen für
+   die neuen Marker in `assert_release_data_readable`
+   (`src/tests_release_chain.rs`) aufnehmen.
+7. `cargo test -p persistence-sqlite --lib release` laufen lassen, den
+   Worktree entfernen.
 
-Never regenerate an existing fixture from a later build: the point of the
-file is that the release wrote it.
+Eine vorhandene Fixture nie mit einem späteren Build neu erzeugen: Der Sinn
+der Datei ist, dass das Release sie geschrieben hat. Die Datei auch nicht
+direkt öffnen (z. B. mit `sqlite3`) — schon das Öffnen legt `-wal`/`-shm`
+daneben an; Tests arbeiten immer an einer Kopie.
