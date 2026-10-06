@@ -401,3 +401,16 @@ pub fn directory_contents(dir: &Path) -> BTreeMap<String, Vec<u8>> {
         })
         .collect()
 }
+
+/// Nur die Dateinamen in `dir`, sortiert — für das Warten darauf, dass
+/// SQLite seine Nebendateien entfernt hat. Liest keinen Inhalt, verträgt
+/// also eine Datei, die zwischen Auflisten und Lesen verschwindet.
+pub fn directory_file_names(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .expect("directory is readable")
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}

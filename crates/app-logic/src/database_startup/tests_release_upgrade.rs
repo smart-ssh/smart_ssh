@@ -24,7 +24,8 @@ use secrecy::{ExposeSecret, SecretString};
 use credentials_keyring::KeychainAvailability;
 use persistence_sqlite::test_support::{
     align_migration_checksums, apply_future_migration, current_release_fixture, directory_contents,
-    max_known_migration_version, snapshot_database, FixtureEncryption, RELEASE_FIXTURE_ROOT_KEY,
+    directory_file_names, max_known_migration_version, snapshot_database, FixtureEncryption,
+    RELEASE_FIXTURE_ROOT_KEY,
 };
 use persistence_sqlite::{detect_database_file_state, DatabaseFileState};
 use ssh_manager_core::crypto::{DatabaseKey, CHAT_CONTENT_ENCRYPTION_KEY_REF};
@@ -405,8 +406,11 @@ async fn test_a_database_from_a_newer_release_stops_the_start_and_stays_byte_ide
     // Verbindung die Datei freigegeben hat, dann das ganze Verzeichnis
     // vergleichen.
     let released = async {
-        while directory_contents(dir.path())
-            .keys()
+        // Nur die Namen: Den Inhalt zu lesen, während SQLite `-wal`/`-shm`
+        // gerade löscht, scheitert mit `NotFound` (unter Windows
+        // beobachtet).
+        while directory_file_names(dir.path())
+            .iter()
             .any(|name| name != "smart-ssh.db")
         {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
