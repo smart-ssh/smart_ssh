@@ -256,3 +256,102 @@ describe("useSessionTabs / MCP tabs (Spec 0104)", () => {
     expect(sessionTabLabel({ serverName: "web-01", mcp: null }, "Tool")).toBe("web-01");
   });
 });
+
+// Issue #69 / Spec 0104, §3: ein MCP-Tab wird nie von selbst aktiv — auch
+// nicht, wenn der aktive Tab geschlossen wird. Nachfolger ist der letzte
+// verbliebene Nutzer-Tab, sonst die Übersicht (`null`).
+describe("useSessionTabs / closing the active tab (Spec 0104, §3)", () => {
+  function userSession(sessionId: string) {
+    return {
+      sessionId,
+      serverId: `server-${sessionId}`,
+      serverName: sessionId,
+      status: "connected" as const,
+      hasPendingAction: false,
+      mcp: null,
+    };
+  }
+  function mcpSession(sessionId: string) {
+    return { ...userSession(sessionId), mcp: { clientName: "Claude Code" } };
+  }
+
+  async function close(result: { current: ReturnType<typeof useSessionTabs> }, sessionId: string) {
+    await act(async () => {
+      await result.current.requestCloseTab(sessionId);
+    });
+  }
+
+  it("falls back to the overview, not to a remaining MCP tab", async () => {
+    vi.mocked(listSessions).mockResolvedValue([userSession("A"), mcpSession("B")]);
+    const { result } = await renderWithOneTab();
+    expect(result.current.activeSessionId).toBe("A");
+
+    await close(result, "A");
+
+    expect(result.current.activeSessionId).toBeNull();
+    expect(result.current.tabs.map((t) => t.sessionId)).toEqual(["B"]);
+  });
+
+  it("selects the last remaining user tab, skipping a later MCP tab", async () => {
+    vi.mocked(listSessions).mockResolvedValue([userSession("A"), userSession("C"), mcpSession("B")]);
+    const { result } = await renderWithOneTab();
+    act(() => result.current.switchTo("C"));
+
+    await close(result, "C");
+
+    expect(result.current.activeSessionId).toBe("A");
+    expect(result.current.tabs.map((t) => t.sessionId)).toEqual(["A", "B"]);
+  });
+
+  it("selects a user tab after closing an MCP tab the user had activated", async () => {
+    vi.mocked(listSessions).mockResolvedValue([userSession("A"), mcpSession("B")]);
+    const { result } = await renderWithOneTab();
+    act(() => result.current.switchTo("B"));
+
+    await close(result, "B");
+
+    expect(result.current.activeSessionId).toBe("A");
+    expect(result.current.tabs.map((t) => t.sessionId)).toEqual(["A"]);
+  });
+
+  it("leaves the active tab unchanged when a non-active tab is closed", async () => {
+    vi.mocked(listSessions).mockResolvedValue([userSession("A"), userSession("C"), mcpSession("B")]);
+    const { result } = await renderWithOneTab();
+    expect(result.current.activeSessionId).toBe("A");
+
+    await close(result, "C");
+    expect(result.current.activeSessionId).toBe("A");
+
+    await close(result, "B");
+    expect(result.current.activeSessionId).toBe("A");
+    expect(result.current.tabs.map((t) => t.sessionId)).toEqual(["A"]);
+  });
+
+  it("computes the successor from current state, not from the tabs at close time", async () => {
+    vi.mocked(listSessions).mockResolvedValue([userSession("A"), userSession("C")]);
+    const { result } = await renderWithOneTab();
+    act(() => result.current.switchTo("C"));
+
+    // Schließen von C hängt in `disconnect`, währenddessen wird A
+    // geschlossen — der Nachfolger von C darf nicht das schon entfernte A
+    // aus dem Stand beim Aufruf sein.
+    let releaseC: () => void = () => {};
+    vi.mocked(disconnect).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (releaseC = resolve)),
+    );
+    let closingC: Promise<void> = Promise.resolve();
+    act(() => {
+      closingC = result.current.requestCloseTab("C");
+    });
+    await close(result, "A");
+    expect(result.current.tabs.map((t) => t.sessionId)).toEqual(["C"]);
+
+    await act(async () => {
+      releaseC();
+      await closingC;
+    });
+
+    expect(result.current.tabs).toEqual([]);
+    expect(result.current.activeSessionId).toBeNull();
+  });
+});
