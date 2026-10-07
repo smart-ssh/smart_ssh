@@ -23,6 +23,16 @@ use app_logic::orchestration::handle_mcp_action_proposed;
 use app_logic::session::Session;
 use app_logic::state::{AppState, SessionId};
 
+/// Warum `ensure_session` keine Sitzung liefern konnte.
+enum EnsureSessionError {
+    /// Die MCP-Sitzung wurde in der App geschlossen, während die Anfrage
+    /// lief (Spec 0103, §5).
+    Closed,
+    /// Verbindungsaufbau gescheitert — wie bisher als `UnknownServer` an den
+    /// Client gemeldet.
+    Unavailable,
+}
+
 pub struct AppMcpBackend {
     app: AppHandle,
 }
@@ -57,7 +67,7 @@ impl AppMcpBackend {
         &self,
         server_id: ServerId,
         client_name: Option<&str>,
-    ) -> Result<(SessionId, Arc<Session>), String> {
+    ) -> Result<(SessionId, Arc<Session>), EnsureSessionError> {
         let state = self.state();
         let registry = &state.mcp.sessions;
         let key = McpSessionKey::new(server_id, client_name);
@@ -70,7 +80,7 @@ impl AppMcpBackend {
             let session = state
                 .sessions
                 .get(session_id)
-                .ok_or_else(|| "MCP-Sitzung wurde während der Anfrage geschlossen".to_string())?;
+                .ok_or(EnsureSessionError::Closed)?;
             return Ok((session_id, session));
         }
 
@@ -89,16 +99,36 @@ impl AppMcpBackend {
         // Spec 0040, Abschnitt 4: `persist_chat_session: false` — eine rein
         // MCP-ausgelöste Verbindung erzeugt keine `chat_sessions`-Zeile
         // (s. `connect_session`-Doc-Kommentar).
-        if let Err(err) =
-            connect_session(&self.app, &state, server_id, session_id, None, false).await
+        if connect_session(&self.app, &state, server_id, session_id, None, false)
+            .await
+            .is_err()
         {
             registry.unregister(session_id);
-            return Err(err.message);
+            return Err(EnsureSessionError::Unavailable);
         }
 
-        let session = state.sessions.get(session_id).ok_or_else(|| {
-            "Session unmittelbar nach connect_session nicht auffindbar".to_string()
-        })?;
+        // Spec 0103, §5: Hat der Nutzer den MCP-Tab geschlossen, während der
+        // Aufbau noch lief (z. B. offener Host-Key-Dialog), ist die Sitzung
+        // schon ausgetragen. Dann wird die eben aufgebaute Verbindung wieder
+        // getrennt, statt eine Aktion in einer Sitzung ohne Tab laufen zu
+        // lassen.
+        if !registry.is_mcp_session(session_id) {
+            let elevated = self
+                .app
+                .state::<crate::elevated_sftp::ElevatedSftpRegistry>();
+            if let Some(orphan) = elevated.remove_session(&state.sessions, session_id) {
+                if let Err(err) = orphan.transport.lock().await.disconnect().await {
+                    tracing::debug!(error = %err, "disconnecting orphaned MCP session failed");
+                }
+                *orphan.terminal.lock().unwrap() = None;
+            }
+            return Err(EnsureSessionError::Closed);
+        }
+
+        let session = state
+            .sessions
+            .get(session_id)
+            .ok_or(EnsureSessionError::Closed)?;
         Ok((session_id, session))
     }
 
@@ -162,10 +192,19 @@ impl McpBackend for AppMcpBackend {
             .map(|s| s.name)
             .unwrap_or_else(|_| server_id.0.to_string());
 
-        let (session_id, session) = self
-            .ensure_session(server_id, client_name.as_deref())
-            .await
-            .map_err(|_| LookupError::UnknownServer)?;
+        let (session_id, session) =
+            match self.ensure_session(server_id, client_name.as_deref()).await {
+                Ok(found) => found,
+                // Spec 0103, §5: in der App geschlossen, bevor die Aktion
+                // überhaupt vorgeschlagen wurde — eindeutige Meldung an den
+                // Client, nichts wurde ausgeführt.
+                Err(EnsureSessionError::Closed) => {
+                    return Ok(ActionOutcome::Failed {
+                        message: MCP_SESSION_CLOSED_MESSAGE.to_string(),
+                    });
+                }
+                Err(EnsureSessionError::Unavailable) => return Err(LookupError::UnknownServer),
+            };
 
         self.notify_pending_confirmation(&server_name, client_name.as_deref());
 
