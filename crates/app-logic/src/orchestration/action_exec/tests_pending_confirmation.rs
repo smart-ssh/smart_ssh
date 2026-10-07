@@ -683,7 +683,7 @@ fn test_closing_a_session_missing_from_the_manager_behaves_as_before() {
         Some("Claude Code"),
     );
     let mcp_session_id: SessionId = uuid::Uuid::new_v4();
-    mcp_sessions.register(&key, mcp_session_id);
+    mcp_sessions.register(&key, mcp_session_id).unwrap();
     crate::session::reject_pending_confirmation_on_close(
         mcp_session_id,
         None,

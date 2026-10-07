@@ -386,7 +386,7 @@ async fn test_generic_close_keeps_the_mcp_session_behaviour() {
         let executed = transport.executed_handle();
         let session = Arc::new(session_on(server, transport));
         let session_id = Uuid::new_v4();
-        registry.register(&key, session_id);
+        registry.register(&key, session_id).unwrap();
         sessions.insert(session_id, Arc::clone(&session));
 
         let emitter = TestEmitter::default();
