@@ -47,6 +47,7 @@ pub mod master_password;
 /// Issue #35: Tauri-freier Kern der lesenden MCP-Tools (Allow-Liste,
 /// Redaction → Fencing der Notizen).
 pub mod mcp_lookup;
+pub mod mcp_sessions;
 /// Spec 0101, A12: das MCP-Server-Token im Secret-Speicher.
 pub mod mcp_token;
 pub mod orchestration;

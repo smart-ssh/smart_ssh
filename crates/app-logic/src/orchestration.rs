@@ -75,7 +75,7 @@ mod remote_files;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
-mod test_support;
+pub(crate) mod test_support;
 
 pub use chat_turn::run_chat_turn;
 // `push_history`/`PENDING_ACTION_CONFIRM_TIMEOUT`: auch von `app-shell`
