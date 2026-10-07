@@ -136,6 +136,19 @@ pub async fn update_server(
     .await
 }
 
+/// Issue #48: Drag-and-drop in der Server-Liste — ändert nur `group_id`
+/// (`None` = ohne Gruppe). Bewusst ohne `credential_store`: kein Weg über
+/// den vollständigen `ServerInput` von `update_server`, also auch keiner
+/// über den Schlüsselbund. Logik in `app_logic::servers::move_server_to_group`.
+#[tauri::command]
+pub async fn move_server_to_group(
+    state: State<'_, AppState>,
+    id: ServerId,
+    group_id: Option<GroupId>,
+) -> CommandResult<()> {
+    app_logic::servers::move_server_to_group(state.profile_store.as_ref(), id, group_id).await
+}
+
 /// Spec 0046, Fund 1: `confirm: false` liefert nur die Vorschau (nichts
 /// wird gelöscht), `confirm: true` löscht tatsächlich — ein zweiter,
 /// expliziter Aufruf, kein Query-Parameter, der versehentlich beim ersten

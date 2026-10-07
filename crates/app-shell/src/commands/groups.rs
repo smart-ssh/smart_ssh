@@ -8,7 +8,9 @@ use ssh_manager_core::profiles::{Group, GroupId};
 
 use app_logic::dto::{DeleteGroupResult, GroupDto};
 use app_logic::error::CommandResult;
-use app_logic::groups::{compute_delete_group_result, validate_no_cycle};
+use app_logic::groups::{
+    compute_delete_group_result, move_group as move_group_impl, validate_no_cycle,
+};
 use app_logic::state::AppState;
 
 // --- Spec 0008: Gruppen --------------------------------------------------
@@ -55,6 +57,18 @@ pub async fn update_group(
     group.updated_at = Utc::now();
     state.profile_store.update_group(&group).await?;
     Ok(())
+}
+
+/// Issue #48: Drag-and-drop in der Server-Liste — schmaler Befehl, der nur
+/// `parent_id` ändert (Name/Notizen bleiben), Zyklusprüfung wie
+/// `update_group`. Logik in `app_logic::groups::move_group`.
+#[tauri::command]
+pub async fn move_group(
+    state: State<'_, AppState>,
+    id: GroupId,
+    parent_id: Option<GroupId>,
+) -> CommandResult<()> {
+    move_group_impl(state.profile_store.as_ref(), id, parent_id).await
 }
 
 /// Spec 0008, Abschnitt 3: `confirm_cascade: false` liefert nur die
