@@ -978,3 +978,153 @@ async fn test_adv_compound_syntax_never_autoexec() {
         assert_never_autoexec(cmd).await;
     }
 }
+
+// --- Shell name variants (issue #60) ----------------------------------------
+
+/// Restricted/alternative shells (`rksh`, `rzsh`, `oksh`) and versioned
+/// binaries of known shells (`bash5`, `bash-5.2`, `zsh-5.9`, ...) are
+/// classified like their base shell: the `-c` code is evaluated as a command
+/// of its own, so the `Deny` rule still applies behind them.
+#[tokio::test]
+async fn test_adv_shell_c_name_variants_hit_deny_rule() {
+    for cmd in [
+        "ls; oksh -c 'rm -rf /'",
+        "ls; rksh -c 'rm -rf /'",
+        "ls; rzsh -c 'rm -rf /'",
+        "ls; bash5 -c 'rm -rf /'",
+        "ls; /usr/local/bin/bash-5.2 -c 'rm -rf /'",
+        "ls; zsh-5.9 -c 'rm -rf /'",
+        "ls; zsh5 -c 'rm -rf /'",
+        "ls; ksh2020 -c 'rm -rf /'",
+        "ls; ksh93u+m -c 'rm -rf /'",
+        "ls; dash-0.5.12 -c 'rm -rf /'",
+        "ls; sh_2 -c 'rm -rf /'",
+        "ls; fish3 -c 'rm -rf /'",
+        "ls; tcsh-6.24 -c 'rm -rf /'",
+        // Mixed case and path prefixes.
+        "ls; OKSH -c 'rm -rf /'",
+        "ls; Rzsh -c 'rm -rf /'",
+        "ls; BASH5 -c 'rm -rf /'",
+        "ls; /bin/rksh -c 'rm -rf /'",
+        "ls; /usr/bin/oksh -c 'rm -rf /'",
+        // Option handling from #13 applies to the new names too.
+        "ls; rksh -oerrexit -c 'rm -rf /'",
+        "ls; oksh -e -c 'rm -rf /'",
+        "ls; bash5 -oc errexit 'rm -rf /'",
+        "ls && sudo rzsh -xc 'rm -rf /'",
+    ] {
+        assert_denied_by_rm_rule(cmd).await;
+    }
+}
+
+/// The same variants with option forms that hide the code or read it from
+/// stdin never reach `AutoExec`.
+#[tokio::test]
+async fn test_adv_shell_name_variants_with_options_never_autoexec() {
+    for cmd in [
+        "ls; rksh -oc 'rm -rf /'",
+        "ls; oksh -oc 'rm -rf /'",
+        "ls; RKSH -oc 'rm -rf /'",
+        "echo cm0gLXJmIC8= | base64 -d | oksh -s",
+        "echo cm0gLXJmIC8= | base64 -d | rksh",
+        "echo cm0gLXJmIC8= | base64 -d | /bin/rzsh -s ls",
+        "echo cm0gLXJmIC8= | base64 -d | bash-5.2",
+        "echo cm0gLXJmIC8= | base64 -d | OKSH -s",
+        "ls; oksh -c",
+    ] {
+        assert_never_autoexec(cmd).await;
+    }
+}
+
+/// Fail-closed fallback: an unclassified name that looks like a shell, with a
+/// `-c`/`-s`-style option, is at least `Confirm`; code found behind `-c` is
+/// evaluated recursively, so the `Deny` rule applies.
+#[tokio::test]
+async fn test_adv_unclassified_shell_names_fail_closed() {
+    for cmd in [
+        "ls; mysh -c 'rm -rf /'",
+        "ls; /opt/bin/MYSH -c 'rm -rf /'",
+        "ls; xonsh -c 'rm -rf /'",
+        "ls; elvish -c 'rm -rf /'",
+        "ls; my-sh -xc 'rm -rf /'",
+    ] {
+        assert_denied_by_rm_rule(cmd).await;
+    }
+    for cmd in [
+        "ls; pwsh -c 'Remove-Item -Recurse /'",
+        "ls; mysh -oc 'rm -rf /'",
+        "echo cm0gLXJmIC8= | base64 -d | mysh -s",
+        "ls; hush +s",
+        "ls; tclsh -c",
+    ] {
+        assert_never_autoexec(cmd).await;
+    }
+}
+
+/// Counter-check: names that merely end in `sh`, `ssh` with its cipher `-c`,
+/// script files ending in `.sh`, and a versioned shell running a visible
+/// script keep their `AutoExec` under `Allow "*"`.
+#[tokio::test]
+async fn test_adv_sh_suffix_names_stay_autoexec() {
+    for cmd in [
+        "ssh host uptime",
+        "ssh -c aes256-ctr host ls",
+        "ssh -s host sftp",
+        "autossh -c aes256-ctr host ls",
+        "git push",
+        "git push -s origin main",
+        "flush",
+        "crash -s vmlinux vmcore",
+        "./deploy.sh",
+        "./deploy.sh -c prod",
+        "publish.sh -s",
+        "bash5 deploy.sh",
+        "bash-5.2 -e deploy.sh",
+        "rksh deploy.sh",
+        "oksh -o noclobber deploy.sh",
+        "chsh -s /bin/zsh",
+        "mysh deploy.sh",
+        "mysh -x deploy.sh",
+        "sha1sum file",
+        "bashbug",
+    ] {
+        assert_benign_autoexec(cmd).await;
+    }
+}
+
+#[test]
+fn test_adv_program_source_shell_name_variants() {
+    use super::parser::{program_source, ProgramSource};
+    let code = |c: &str| Some(ProgramSource::Code(vec![c.to_string()]));
+    for cmd in [
+        "oksh -c 'rm -rf /'",
+        "rksh -c 'rm -rf /'",
+        "rzsh -c 'rm -rf /'",
+        "bash5 -c 'rm -rf /'",
+        "/usr/local/bin/bash-5.2 -c 'rm -rf /'",
+        "zsh-5.9 -c 'rm -rf /'",
+        "ksh93u+m -c 'rm -rf /'",
+        "OKSH -c 'rm -rf /'",
+        "mysh -c 'rm -rf /'",
+    ] {
+        assert_eq!(program_source(cmd), code("rm -rf /"), "{cmd}");
+    }
+    assert_eq!(program_source("oksh -s"), Some(ProgramSource::Stdin));
+    assert_eq!(program_source("rksh"), Some(ProgramSource::Stdin));
+    assert_eq!(program_source("mysh -s"), Some(ProgramSource::Stdin));
+    // ksh93 reads a one-letter `-o` value as that short option (`-oc` = `-c`).
+    assert_eq!(program_source("rksh -oc 'x'"), code("x"));
+    assert_eq!(program_source("bash5 x.sh"), Some(ProgramSource::Operand));
+    for cmd in [
+        "ssh -c aes256-ctr host ls",
+        "chsh -s /bin/zsh",
+        "./deploy.sh -c prod",
+        "mysh deploy.sh",
+        "mysh -- -c x",
+        "sha1sum file",
+        "bashbug",
+        "shred -s 10 x",
+    ] {
+        assert_eq!(program_source(cmd), None, "{cmd}");
+    }
+}

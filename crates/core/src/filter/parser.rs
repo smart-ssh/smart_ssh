@@ -1143,8 +1143,12 @@ const PHP_OPTIONS: OptionSpec = OptionSpec {
 const BASH_LIKE_SHELLS: &[&str] = &["bash", "rbash", "dash", "ash"];
 
 /// Shells with [`KSH_LIKE_SHELL_OPTIONS`]: like [`BASH_LIKE_SHELLS`], but
-/// `-o`/`+o` take an attached value.
-const KSH_LIKE_SHELLS: &[&str] = &["zsh", "ksh", "ksh93", "mksh", "lksh", "pdksh"];
+/// `-o`/`+o` take an attached value. Issue #60 adds the restricted variants
+/// `rksh` (ksh93) and `rzsh` (zsh) and `oksh` (OpenBSD ksh, a pdksh
+/// descendant).
+const KSH_LIKE_SHELLS: &[&str] = &[
+    "zsh", "rzsh", "ksh", "ksh93", "rksh", "mksh", "lksh", "pdksh", "oksh",
+];
 
 /// POSIX shells whose `-o` syntax is not known for certain: `sh` can be any
 /// of the shells above, depending on the system. Both readings are
@@ -1163,6 +1167,48 @@ fn program_kind(program: &str) -> Option<ProgramKind> {
     let program = program.rsplit('/').next().unwrap_or(program);
     let program = program.to_ascii_lowercase();
     let program = program.as_str();
+    // Issue #60: a versioned binary of a known shell (`bash5`, `bash-5.2`,
+    // `zsh-5.9`, `ksh2020`, `ksh93u+m`) gets the family of its base name.
+    // Only the exact name and shell base names are looked up, so this can
+    // only classify more calls, never fewer.
+    exact_program_kind(program)
+        .or_else(|| versioned_shell_base(program).and_then(exact_program_kind))
+}
+
+/// Shell names whose versioned binaries (`<name><version>`) are recognised
+/// by [`versioned_shell_base`].
+fn known_shell_names() -> impl Iterator<Item = &'static str> {
+    BASH_LIKE_SHELLS
+        .iter()
+        .chain(KSH_LIKE_SHELLS)
+        .chain(UNKNOWN_POSIX_SHELLS)
+        .chain(&["fish", "csh", "tcsh"])
+        .copied()
+}
+
+/// The known shell `program` (lower-cased basename) is a versioned binary
+/// of: the shell name, optionally `-` or `_`, then a version that starts
+/// with a digit and contains only ASCII letters, digits, `.`, `+`, `-` and
+/// `_` (`bash5`, `bash-5.2`, `zsh-5.9`, `ksh2020`, `ksh93u+m`). Requiring a
+/// digit right after the name keeps unrelated names (`sha1sum`, `shred`,
+/// `bashbug`) out.
+fn versioned_shell_base(program: &str) -> Option<&'static str> {
+    known_shell_names().find(|&shell| {
+        program.strip_prefix(shell).is_some_and(|rest| {
+            let version = rest
+                .strip_prefix('-')
+                .or_else(|| rest.strip_prefix('_'))
+                .unwrap_or(rest);
+            version.starts_with(|c: char| c.is_ascii_digit())
+                && version
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '+' | '-' | '_'))
+        })
+    })
+}
+
+/// [`program_kind`] for an exact lower-cased basename.
+fn exact_program_kind(program: &str) -> Option<ProgramKind> {
     if BASH_LIKE_SHELLS.contains(&program) {
         return Some(ProgramKind::WithOptions(&BASH_LIKE_SHELL_OPTIONS, true));
     }
@@ -1214,7 +1260,9 @@ fn is_stdin_path(word: &str) -> bool {
 pub(super) fn program_source(literal: &str) -> Option<ProgramSource> {
     let resolved = resolve_effective_command(literal);
     let program = resolved.split_whitespace().next()?;
-    let kind = program_kind(program)?;
+    let Some(kind) = program_kind(program) else {
+        return unclassified_shell_source(program, &resolved);
+    };
     let Ok(words) = shell_words::split(&resolved) else {
         return Some(ProgramSource::Opaque);
     };
@@ -1233,6 +1281,68 @@ pub(super) fn program_source(literal: &str) -> Option<ProgramSource> {
             analyse_options(b, true, args),
         ),
     })
+}
+
+/// Basenames that end in `sh` but are not shells, so the fail-closed
+/// fallback in [`unclassified_shell_source`] leaves them alone. `ssh` and
+/// its relatives take a cipher with `-c`; `chsh -s` sets a login shell; the
+/// others are ordinary commands and shell builtins whose `-c`/`-s` (if any)
+/// has nothing to do with running code.
+const NON_SHELL_SH_NAMES: &[&str] = &[
+    "ssh", "autossh", "lsh", "chsh", "lchsh", "ypchsh", "flush", "fdflush", "crash", "push",
+    "publish", "refresh", "rehash", "hash", "finish",
+];
+
+/// Issue #60: fail-closed fallback for a command whose basename looks like a
+/// shell [`program_kind`] does not know (`mysh`, `pwsh`, `xonsh`, ...): it
+/// ends in `sh`, consists only of ASCII letters, digits, `-` and `_` (so
+/// `deploy.sh` and other script files are not covered), and is not in
+/// [`NON_SHELL_SH_NAMES`].
+///
+/// Such a call is only flagged when it carries a short option cluster with
+/// `c` or `s` (`-c`, `-s`, `-xc`, `+s`) before `--`. It is then read like
+/// `sh` (both option readings, merged fail closed): code found that way is
+/// returned as [`ProgramSource::Code`], so it is evaluated recursively and a
+/// `Deny` rule still applies; otherwise it is at least
+/// [`ProgramSource::Stdin`] or [`ProgramSource::Opaque`], i.e. `Confirm`.
+/// Any other call returns `None`, exactly as before.
+fn unclassified_shell_source(program: &str, resolved: &str) -> Option<ProgramSource> {
+    let name = program.rsplit('/').next().unwrap_or(program);
+    let name = name.to_ascii_lowercase();
+    let looks_like_shell = name.len() > 2
+        && name.ends_with("sh")
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+        && !NON_SHELL_SH_NAMES.contains(&name.as_str());
+    if !looks_like_shell {
+        return None;
+    }
+    let words = shell_words::split(resolved)
+        .unwrap_or_else(|_| resolved.split_whitespace().map(str::to_string).collect());
+    let args = words.get(1..).unwrap_or_default();
+    let has_code_or_stdin_option = args
+        .iter()
+        .take_while(|arg| arg.as_str() != "--")
+        .any(|arg| {
+            let cluster = arg
+                .strip_prefix('-')
+                .filter(|rest| !rest.starts_with('-'))
+                .or_else(|| arg.strip_prefix('+'));
+            cluster.is_some_and(|c| c.contains(['c', 's']))
+        });
+    if !has_code_or_stdin_option {
+        return None;
+    }
+    Some(
+        match merge_program_sources(
+            analyse_options(&BASH_LIKE_SHELL_OPTIONS, true, args),
+            analyse_options(&KSH_LIKE_SHELL_OPTIONS, true, args),
+        ) {
+            source @ (ProgramSource::Code(_) | ProgramSource::Stdin) => source,
+            ProgramSource::Operand | ProgramSource::Opaque => ProgramSource::Opaque,
+        },
+    )
 }
 
 /// Merges two readings of the same call into one that is at least as
