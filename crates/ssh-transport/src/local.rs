@@ -382,6 +382,20 @@ impl InteractiveShell for LocalShell {
 mod tests {
     use super::*;
 
+    /// Wall-clock budget for the "`execute()` does not hang" tests
+    /// (`test_t44_execute_caps_output_during_streaming`,
+    /// `test_t44_execute_does_not_hang_on_a_command_waiting_for_stdin`).
+    ///
+    /// These tests only have to tell "finishes" apart from "never finishes":
+    /// the regressions they guard against (inherited stdin, a flooding child
+    /// that is never killed at the cap) block *forever*, not a few seconds
+    /// longer. The budget still has to cover process spawn, shell start-up
+    /// and the pipe read loop, which on a heavily loaded machine or CI runner
+    /// (parallel `cargo test --workspace`, build load) has exceeded a tight
+    /// 5 s margin even though nothing hung (#73). A generous margin removes
+    /// those false failures without weakening what the tests prove.
+    const NO_HANG_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
     /// Spec 0032: `LocalTransport::execute()` liefert korrekten
     /// stdout/stderr/exit-code für ein einfaches Testkommando.
     #[tokio::test]
@@ -557,13 +571,10 @@ mod tests {
         // läuft damit endlos — die eigentlich gewollte Endlosschleife.
         let command = "for /L %i in (1,0,2) do @echo AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-        let output = tokio::time::timeout(
-            std::time::Duration::from_secs(10),
-            transport.execute(command),
-        )
-        .await
-        .expect("execute() darf bei einem flutenden lokalen Kommando nicht hängen bleiben")
-        .expect("execute() sollte trotz Abschneiden Ok liefern");
+        let output = tokio::time::timeout(NO_HANG_TIMEOUT, transport.execute(command))
+            .await
+            .expect("execute() darf bei einem flutenden lokalen Kommando nicht hängen bleiben")
+            .expect("execute() sollte trotz Abschneiden Ok liefern");
 
         assert!(
             output.stdout.len() <= SMALL_LIMIT + crate::exec::TRUNCATION_NOTICE.len(),
@@ -600,13 +611,10 @@ mod tests {
     async fn test_t44_execute_does_not_hang_on_a_command_waiting_for_stdin() {
         let mut transport = LocalTransport::new();
 
-        let output =
-            tokio::time::timeout(std::time::Duration::from_secs(5), transport.execute("cat"))
-                .await
-                .expect(
-                    "execute() darf bei einem auf stdin wartenden Kommando nicht hängen bleiben",
-                )
-                .expect("execute() sollte trotz sofortigem EOF auf stdin Ok liefern");
+        let output = tokio::time::timeout(NO_HANG_TIMEOUT, transport.execute("cat"))
+            .await
+            .expect("execute() darf bei einem auf stdin wartenden Kommando nicht hängen bleiben")
+            .expect("execute() sollte trotz sofortigem EOF auf stdin Ok liefern");
 
         assert!(output.stdout.is_empty());
         assert_eq!(output.exit_code, Some(0));
