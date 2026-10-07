@@ -351,13 +351,16 @@ fn resolve_or_pending<H>(
     }
 }
 
-/// Spec 0069, Teil A3, §4.2: DNS wird **nachträglich** diagnostiziert, nicht
-/// vorab aufgelöst. Der eigentliche Verbindungsversuch oben (`client::
-/// connect`) reicht `first_hop.host` unverändert an `russh` durch — dieser
+/// Spec 0069, Teil A3, §4.2: DNS wird nachträglich diagnostiziert. Dieser
 /// Helfer läuft komplett NACH einem bereits gescheiterten Versuch und
-/// ändert nichts an ihm (keine Vorab-Auflösung, kein Ersetzen des
-/// Hostnamens durch eine IP, der Erfolgs- und der Host-Key-Pfad bleiben
-/// dadurch byte-gleich zum bisherigen Verhalten). Nur `ConnectionFailed`
+/// ändert nichts an ihm.
+///
+/// Issue #51 (ADR 0109): Die Namensauflösung ist seitdem ein eigener,
+/// aufgezeichneter Schritt in [`open_tcp`] — derselbe Ablauf, den
+/// `russh::client::connect` intern hatte, nur ausgeschrieben. Ein Fehler
+/// dort wird direkt zu [`SshError::HostNotFound`]; dieser Helfer fängt
+/// weiter den Rest (`ConnectionFailed` aus TCP oder Handshake) ab. Der
+/// Hostname bleibt Schlüssel der Host-Key-Prüfung, nie die IP. Nur `ConnectionFailed`
 /// wird nachdiagnostiziert — die übrigen neuen `SshError`-Varianten (s.
 /// `crate::error::map_io_error`) sind bereits präziser zugeordnet und
 /// brauchen keine weitere Unterscheidung. Wird ausschließlich für den
