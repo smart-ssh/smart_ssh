@@ -27,8 +27,10 @@ Review-Priorität: ERHÖHT (Verschlüsselung, Credentials, Migration, Start)
 - **E10** Keine Wiederherstellung bei vergessenem Passwort; Warnung und
   Bestätigung beim Einrichten.
 - **E11** Feldweise Verschlüsselung (Chat, Ledger, Historie,
-  Zusammenfassungen) bleibt in dieser Spec; der Rückbau folgt als eigenes
-  Item (BL-0318).
+  Zusammenfassungen) blieb in dieser Spec; **zurückgebaut mit Issue #113**:
+  diese Inhalte liegen seitdem als Klartext in der verschlüsselten Datei,
+  vorhandene Einträge werden beim ersten Start einmal umgestellt (Spec 0036,
+  Abschnitt 3).
 
 ## 1. Ist-Stand (Stand `4d1c307`)
 
@@ -195,6 +197,8 @@ Nicht-Ziele:
   - **D4** wie D3, aber statt „Neu anfangen“ „Neuen Schlüssel erzeugen“: Die
     Klartext-Datei bleibt lesbar und wird mit neuem K umgewandelt (A6); nur
     der feldweise verschlüsselte Verlauf geht verloren, das sagt der Text.
+    Die nicht mehr lesbaren Einträge entfernt die anschließende Umstellung
+    (Spec 0036, U4) mit einem einmaligen Hinweis (U5).
     Zweite Bestätigung wie A5; im Passwort-Modus Reihenfolge wie A5 (neues
     Passwort zuerst, alte Verpackungsdatei umbenennen, nie überschreiben).
 
@@ -322,11 +326,13 @@ Nicht-Ziele:
 **Startablauf (Ziel):** 1. Log. 2. Dateizustand (A3). 3. K beschaffen:
 Verpackungsdatei vorhanden → Entsperren (A16), sonst Schlüsselbund.
 4. Tabelle A3. 5. Ggf. Umwandlung (A6). 6. Öffnen, Lesbarkeit,
-Migrationen. 7. Secrets-Umzug (A10–A11.1). 8. MCP-Token (A12). 9. Übriger
+Migrationen; danach einmalig die Umstellung der früher feldweise
+verschlüsselten Inhalte (Spec 0036, Abschnitt 3). 7. Secrets-Umzug (A10–A11.1). 8. MCP-Token (A12). 9. Übriger
 Zustand, dann MCP-Server.
 
-- Der Chat-Cipher nutzt K weiter direkt. Der Modus ergibt sich aus der
-  Existenz der Verpackungsdatei.
+- K ist die Wurzel des Datenbankschlüssels; eine eigene Verschlüsselung der
+  Chat-Inhalte mit K gibt es seit Issue #113 nicht mehr (E11). Der Modus
+  ergibt sich aus der Existenz der Verpackungsdatei.
 - Zwischen-, Verpackungs- und umbenannte Dateien im Datenverzeichnis,
   Unix-Rechte 0600; Namen im Bericht.
 - Secrets-Tabelle und Umzugszustand per neuer Migration; Secrets dort nicht

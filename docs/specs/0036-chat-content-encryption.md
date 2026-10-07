@@ -1,91 +1,71 @@
-# Spec: Feld-Verschlüsselung für persistierte Chat-Inhalte
+# Spec: Schutz persistierter Chat-Inhalte
 
-Status: Entwurf
-Modul: Erweiterung `persistence-sqlite`, `crates/app-tauri`
-Abhängigkeiten: Chat-Session-Persistenz (Spec 0034), Credential-Store (Spec
-0003), ursprüngliche Verschlüsselungs-Entscheidung (Spec 0004, Abschnitt 7)
+Status: umgesetzt (feldweise Verschlüsselung zurückgebaut, Issue #113)
+Abhängigkeiten: Chat-Session-Persistenz (Spec 0034), Datenbankverschlüsselung
+(Spec 0101), Rohdatei-Nachweis (Spec 0096)
 
-## 1. Ausgangslage
+## 1. Was geschützt ist
 
-Der Architektur-Brief (Business-/Lizenz-Entscheidungen, Abschnitt 12, Punkt
-5) fordert eine erneute Bewertung der DB-Verschlüsselung, ausgelöst durch
-die neu hinzugekommenen Session-Caches (Spec 0034) — mehr tatsächlich
-sensible Konversationsinhalte liegen jetzt persistent vor als zum Zeitpunkt
-der ursprünglichen Entscheidung in Spec 0004.
+Diese Inhalte liegen dauerhaft in der Datenbank:
 
-**Full-Database-SQLCipher ist mit unserem Stack nicht ohne Weiteres
-umsetzbar**: `sqlx` (Spec 0004, Begründung: Compile-Time-Query-Checking,
-natives Async) hat keine offizielle SQLCipher-Unterstützung — ein
-Community-Fork musste `sqlx-sqlite` patchen, um die Inkompatibilität
-(SQLCipher baut mit `SQLITE_OMIT_LOAD_EXTENSION`, kollidiert mit fest
-verdrahteten Funktionsimporten) zu umgehen. Ein Wechsel zu `rusqlite`
-(das SQLCipher nativ unterstützt) würde die ursprüngliche `sqlx`-Entscheidung
-rückgängig machen — kein akzeptabler Kompromiss für dieses Problem.
+- Chat-Nachrichten einer Sitzung (Spec 0034),
+- das Ausführungsprotokoll einer Sitzung (Spec 0057),
+- die Eingabe-Historie je Server (Spec 0015),
+- die rollierende Zusammenfassung einer Sitzung (Spec 0057).
 
-## 2. Entscheidung: gezielte Feld-Verschlüsselung statt Full-Database
+Sie sind durch die Verschlüsselung der **ganzen Datenbankdatei** geschützt
+(Spec 0101). Weder in der Datenbankdatei noch in ihren Begleitdateien steht
+einer dieser Inhalte im Klartext; ohne den Wurzelschlüssel K lässt sich die
+Datei nicht öffnen. Eine zusätzliche, eigene Verschlüsselung je Feld gibt es
+nicht mehr.
 
-Statt der gesamten Datenbank wird ausschließlich der **Inhalt persistierter
-Chat-Nachrichten** (Spec 0034, `chat_messages.content`) verschlüsselt.
-Metadaten (Servernamen, Zeitstempel, Gruppenstruktur, Regelkonfiguration
-etc.) bleiben wie in Spec 0004, Abschnitt 7 bewertet — nicht zusätzlich
-verschlüsselt, OS-Festplattenverschlüsselung wird weiterhin als
-Grundvoraussetzung angenommen.
+Metadaten (Servernamen, Zeitstempel, Sitzungstitel, Regelkonfiguration)
+liegen ebenso in der verschlüsselten Datei; für sie gilt dasselbe.
 
-## 3. Technologie
+## 2. Frühere feldweise Verschlüsselung
 
-**`chacha20poly1305`** (reine Rust-Implementierung, RustCrypto-Projekt,
-kein C-Linking, kein OpenSSL-Vendoring) für authentifizierte Verschlüsselung
-(AEAD). Bleibt vollständig innerhalb der bestehenden `sqlx`-Architektur —
-aus Sicht von `sqlx` ist die Spalte einfach ein Blob, keine
-Sonderbehandlung, keine Kompatibilitätsprobleme.
+Bis Issue #113 lagen die vier Inhalte aus Abschnitt 1 zusätzlich je Eintrag
+unter ChaCha20-Poly1305 mit K in der Datenbank. Diese Schicht ist
+zurückgebaut, weil die Datei seit Spec 0101 mit einem aus demselben K
+abgeleiteten Schlüssel verschlüsselt ist und die zweite Schicht nichts
+zusätzlich schützte. K bleibt die Wurzel des Datenbankschlüssels; an
+Schlüsselbund, Master-Passwort und Schlüsselableitung ändert sich nichts.
 
-```rust
-pub struct EncryptedContent {
-    pub ciphertext: Vec<u8>,
-    pub nonce: [u8; 12],
-}
+## 3. Umstellung vorhandener Daten
 
-pub trait ContentCipher: Send + Sync {
-    fn encrypt(&self, plaintext: &str) -> Result<EncryptedContent, CipherError>;
-    fn decrypt(&self, data: &EncryptedContent) -> Result<String, CipherError>;
-}
-```
+- **U1** Beim ersten Start einer Version mit dieser Änderung werden alle noch
+  feldweise verschlüsselten Einträge mit dem aktuellen K entschlüsselt und
+  als Klartext in der verschlüsselten Datei gespeichert. Danach liest und
+  schreibt die App diese Inhalte nur noch so. Im Verlauf sieht der Nutzer
+  dieselben Inhalte wie vorher.
+- **U2** Die Umstellung läuft genau einmal. Spätere Starts fassen nichts mehr
+  an.
+- **U3** Die Umstellung ist alles oder nichts. Wird sie unterbrochen
+  (Absturz, Plattenfehler), bleibt jeder Eintrag im alten Stand, und der
+  nächste Start führt sie vollständig durch. Es geht dabei nichts verloren.
+- **U4** Ein Eintrag, der sich mit dem aktuellen K nicht entschlüsseln lässt
+  (z. B. weil der Schlüssel nach Spec 0101 D4 neu erzeugt wurde), wird
+  entfernt: eine Chat-Nachricht, ein Protokolleintrag oder ein
+  Historie-Eintrag als Ganzes, bei einer Zusammenfassung nur die
+  Zusammenfassung — die Sitzung mit ihren lesbaren Nachrichten bleibt.
+  Nichts bleibt halb lesbar zurück. Für alle vier Inhalte gilt dieselbe
+  Regel.
+- **U5** Wurde mindestens ein Eintrag entfernt, sieht der Nutzer nach der
+  Umstellung **einmal** einen Hinweis mit der Anzahl der entfernten alten
+  Einträge und dem Satz, dass alles andere erhalten ist. Wurde nichts
+  entfernt, erscheint kein Hinweis.
+- **U6** Scheitert die Umstellung, startet die App nicht weiter, sondern
+  zeigt eine eigene Fehlermeldung: Die Datenbank ließ sich öffnen, es wurde
+  nichts verändert, nächster Schritt ist ein erneuter Start nach Prüfung von
+  Schreibrechten und Speicherplatz; die Meldung rät nicht zu einem Backup.
+- **U7** Einträge der Eingabe-Historie aus der Zeit vor ihrer Verschlüsselung
+  (Spec 0040), die nie verschlüsselt wurden, bleiben unverändert erhalten.
 
-Gespeichert wird `nonce || ciphertext` als ein zusammenhängender Blob pro
-Zeile (`chat_messages.content` wird von `TEXT` auf `BLOB` umgestellt).
+## 4. Grenzen
 
-## 4. Schlüsselverwaltung
-
-Ein einmalig generierter 256-Bit-Schlüssel, gespeichert über den
-bestehenden `CredentialStore` (Spec 0003) unter einem festen Slot
-(`app:chat_content_encryption_key`) — **kein neuer Speichermechanismus**,
-konsistent mit "Secrets ausschließlich im OS-Schlüsselbund". Wird bei
-Bedarf (erster Schreibzugriff auf `chat_messages`) automatisch generiert,
-falls noch nicht vorhanden.
-
-## 5. Migration bestehender Daten
-
-Da `chat_messages` erst mit Spec 0034 eingeführt wird, gibt es zum
-Zeitpunkt dieser Spec vermutlich noch keine unverschlüsselten Bestandsdaten
-zu migrieren — falls doch (z. B. wenn Spec 0034 bereits vor dieser Spec in
-Produktion war): einmaliges Migrations-Skript, das bestehende
-Klartext-Zeilen liest, verschlüsselt zurückschreibt, beim App-Start
-ausgeführt, idempotent (kein zweites Verschlüsseln bereits verschlüsselter
-Zeilen).
-
-## 6. Scope-Frage: weitere Tabellen?
-
-Offen, ob zusätzlich `prompt_history.content` (Spec 0015) — ebenfalls
-freier Nutzertext, potenziell sensibel — in denselben Mechanismus
-einbezogen werden soll. Technisch identischer Aufwand (dieselbe
-`ContentCipher`-Abstraktion), aber bewusst als offene Scope-Entscheidung
-markiert statt automatisch mit einzuschließen.
-
-## 7. Offene Punkte
-
-- Abschnitt 6 (Einbeziehung von `prompt_history`) — Entscheidung steht aus.
-- Sollte perspektivisch doch ein vollständiges Full-Database-SQLCipher
-  gewünscht sein (z. B. falls sich die `sqlx`-Kompatibilitätslage ändert
-  oder ein Wechsel zu `rusqlite` für die gesamte Persistenzschicht später
-  doch attraktiv wird): das wäre ein deutlich größerer, eigener
-  Architektur-Schritt, nicht Teil dieser Spec.
+- Ältere Versionen der App öffnen eine umgestellte Datenbank nicht; sie
+  melden, dass die Datenbank von einer neueren Version stammt (Spec 0059).
+  Ohnehin können Versionen vor Spec 0101 die verschlüsselte Datei nicht
+  öffnen.
+- Ein entfernter Eintrag (U4) lässt sich nicht wiederherstellen; er war
+  schon vor der Umstellung mit dem vorhandenen Schlüssel nicht mehr lesbar.
