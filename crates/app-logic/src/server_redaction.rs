@@ -23,7 +23,7 @@ use secrecy::{ExposeSecret, SecretString};
 
 use ssh_manager_core::ai::{fence_untrusted, DefaultOutputRedactor, OutputRedactor, UntrustedKind};
 use ssh_manager_core::profiles::{
-    effective_notes_sections, CredentialStore, ProfileResult, ProfileStore, Server,
+    effective_notes_sections, CredentialError, CredentialStore, ProfileResult, ProfileStore, Server,
 };
 use ssh_manager_core::shared::ServerId;
 
@@ -35,15 +35,50 @@ use crate::server_credentials::sudo_password_credential_ref;
 /// der Redactor das Passwort nicht, und ein `NOPASSWD`-Fall reicht es
 /// unredigiert durch). Kein hinterlegtes Passwort (oder ein Lesefehler des
 /// Schlüsselbunds) ist kein harter Fehler: dann nur die eingebauten Muster,
-/// wie bisher an beiden Aufrufstellen.
+/// wie bisher an allen Aufrufstellen. Ein Lesefehler (alles außer
+/// `NotFound`) wird dabei seit Issue #36 als `warn` protokolliert — s.
+/// [`read_sudo_password_for_redaction`].
 pub fn server_redactor(
     credential_store: &dyn CredentialStore,
     server_id: ServerId,
 ) -> Box<dyn OutputRedactor> {
-    let sudo_password = credential_store
-        .get(&sudo_password_credential_ref(server_id))
-        .ok();
+    let sudo_password = read_sudo_password_for_redaction(credential_store, server_id);
     redactor_with_sudo_password(sudo_password.as_ref())
+}
+
+/// Liest das Sudo-Passwort von `server_id` für den Bau eines Redactors —
+/// der eine Lesepfad für [`server_redactor`],
+/// `app_shell::commands::connect` (braucht den Wert auch für die Sitzung)
+/// und `app_shell::commands::notes` (Issue #36).
+///
+/// - `Ok`: das Passwort.
+/// - `NotFound`: `None`, still — kein Sudo-Passwort hinterlegt ist der
+///   Normalfall.
+/// - jeder andere Fehler (z. B. `Backend`, der Schlüsselbund verweigert den
+///   Zugriff): ebenfalls `None`, also nur die eingebauten Muster, aber mit
+///   einem `warn`-Ereignis. Sonst bliebe unsichtbar, dass ein hinterlegtes
+///   Passwort gerade **nicht** redigiert wird. Protokolliert werden nur die
+///   Server-ID und die Fehlerart, nie die Fehlermeldung des Backends — die
+///   ist fremder Text, und der Log ist kein Ort, an dem ein Secret landen
+///   darf.
+pub fn read_sudo_password_for_redaction(
+    credential_store: &dyn CredentialStore,
+    server_id: ServerId,
+) -> Option<SecretString> {
+    match credential_store.get(&sudo_password_credential_ref(server_id)) {
+        Ok(password) => Some(password),
+        Err(CredentialError::NotFound(_)) => None,
+        Err(CredentialError::Backend(_)) => {
+            tracing::warn!(
+                server_id = %server_id.0,
+                slot = "sudo_password",
+                error_kind = "backend",
+                "Sudo-Passwort konnte für den Redactor nicht gelesen werden — die Sitzung \
+                 redigiert nur die eingebauten Muster, nicht das Sudo-Passwort"
+            );
+            None
+        }
+    }
 }
 
 /// Wie [`server_redactor`], für Aufrufer, die das Sudo-Passwort ohnehin
@@ -99,7 +134,7 @@ mod tests {
     use ssh_manager_core::ai::REDACTED_PLACEHOLDER;
     use ssh_manager_core::profiles::{AuthMethod, Group, GroupId, PostIngestPolicy};
 
-    use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+    use crate::test_support::{log_capture, InMemoryCredentialStore, InMemoryProfileStore};
 
     fn server(notes: &str, group_id: Option<GroupId>) -> Server {
         let now = Utc::now();
@@ -183,6 +218,97 @@ mod tests {
 
         assert!(!out.contains(password), "Sudo-Passwort im Klartext: {out}");
         assert!(out.contains(REDACTED_PLACEHOLDER));
+    }
+
+    /// Issue #36: nur die `warn`-Zeilen des Mitschnitts dieses Threads.
+    fn recorded_warn_lines() -> Vec<String> {
+        log_capture::recorded_lines_at_info_or_above()
+            .into_iter()
+            .filter(|l| l.contains("\"level\":\"WARN\""))
+            .collect()
+    }
+
+    /// Issue #36, AC 1 + AC 4: Der Schlüsselbund kann das hinterlegte
+    /// Sudo-Passwort nicht liefern (`Backend`). Der Redactor entsteht
+    /// trotzdem, redigiert die eingebauten Muster, und es gibt genau ein
+    /// `warn`-Ereignis mit der Server-ID — ohne das Passwort und ohne die
+    /// (hier absichtlich passwortähnliche) Fehlermeldung des Backends.
+    #[test]
+    fn test_backend_error_on_sudo_password_warns_once_and_keeps_builtin_patterns() {
+        let password = "Zq9!unusual.sudo";
+        let backend_payload = "Keychain sagt: pw=Hx7#planted.secret";
+        let server_id = ServerId::new();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(server_id), password)
+            .with_failing_get_for_slot("sudo_password")
+            .with_backend_payload(backend_payload);
+
+        log_capture::start_recording();
+        let redactor = server_redactor(&credentials, server_id);
+
+        let warnings = recorded_warn_lines();
+        assert_eq!(
+            warnings.len(),
+            1,
+            "genau eine Warnung erwartet: {warnings:?}"
+        );
+        assert!(
+            warnings[0].contains(&server_id.0.to_string()),
+            "Warnung nennt die Server-ID nicht: {}",
+            warnings[0]
+        );
+        let all_logged = log_capture::recorded_text();
+        assert!(
+            !all_logged.contains(password),
+            "Passwort im Log: {all_logged}"
+        );
+        assert!(
+            !all_logged.contains("Hx7#planted.secret"),
+            "Backend-Meldung im Log: {all_logged}"
+        );
+
+        let token = "ghp_0123456789abcdefghijABCDEFGHIJ012345";
+        let out = redactor.redact_text(&format!("token={token}"));
+        assert!(
+            !out.contains(token),
+            "eingebautes Muster greift nicht: {out}"
+        );
+        assert!(out.contains(REDACTED_PLACEHOLDER));
+    }
+
+    /// Issue #36, AC 2: kein hinterlegtes Sudo-Passwort ist der Normalfall —
+    /// keine Warnung.
+    #[test]
+    fn test_missing_sudo_password_does_not_warn() {
+        let credentials = InMemoryCredentialStore::new();
+
+        log_capture::start_recording();
+        let redactor = server_redactor(&credentials, ServerId::new());
+
+        let warnings = recorded_warn_lines();
+        assert!(warnings.is_empty(), "keine Warnung erwartet: {warnings:?}");
+        let token = "ghp_0123456789abcdefghijABCDEFGHIJ012345";
+        assert!(!redactor.redact_text(token).contains(token));
+    }
+
+    /// Issue #36: der gemeinsame Lesepfad liefert ein hinterlegtes Passwort
+    /// unverändert und ohne Warnung (`connect` braucht den Wert selbst).
+    #[test]
+    fn test_read_sudo_password_for_redaction_returns_stored_value_silently() {
+        let server_id = ServerId::new();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(server_id), "s3cret-sudo");
+
+        log_capture::start_recording();
+        let read = read_sudo_password_for_redaction(&credentials, server_id);
+
+        assert_eq!(
+            read.as_ref()
+                .map(|p| p.expose_secret().to_string())
+                .as_deref(),
+            Some("s3cret-sudo")
+        );
+        assert!(recorded_warn_lines().is_empty());
     }
 
     /// Issue #18, AC 2: ein schließender Marker plus eingeschleuste
