@@ -132,6 +132,10 @@ keinen** Timeout, kann nach Frontend-Verlust ewig warten.
   wurde, würde den **falschen** Eintrag löschen. Lösung über eine
   **Generation/Identität pro Eintrag** — der Timeout darf nur *seinen*
   Eintrag entfernen. Regressionstest genau für diesen Fall.
+- Nachtrag (Issue #37, ADR 0108): jeder Ausgang des Wartens (Entscheidung,
+  Timeout, Abbruch) sendet `host-key-verification-ended { session_id,
+  prompt_id, reason }`; `prompt_id` ist diese Generation. Das Frontend
+  schließt damit die passende Abfrage. Timeout bleibt Ablehnung.
 
 ---
 

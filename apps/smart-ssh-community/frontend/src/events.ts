@@ -14,6 +14,7 @@ import type {
   ChatResponseTruncatedEvent,
   ChatTextDeltaEvent,
   ConnectionStatusChangedEvent,
+  HostKeyVerificationEndedEvent,
   HostKeyVerificationNeededEvent,
   McpActionTabRequestedEvent,
   NoteShrinkFailedEvent,
@@ -41,6 +42,15 @@ export const onHostKeyVerificationNeeded = (
   handler: (event: HostKeyVerificationNeededEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<HostKeyVerificationNeededEvent>("host-key-verification-needed", (e) =>
+    handler(e.payload),
+  );
+
+/** Issue #37: Ende einer Host-Key-Abfrage im Backend (Timeout, Abbruch oder
+ * Entscheidung) — s. `HostKeyVerificationEndedEvent`. */
+export const onHostKeyVerificationEnded = (
+  handler: (event: HostKeyVerificationEndedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<HostKeyVerificationEndedEvent>("host-key-verification-ended", (e) =>
     handler(e.payload),
   );
 

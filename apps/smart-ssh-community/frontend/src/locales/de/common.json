@@ -365,7 +365,8 @@
     "unknownBodyBeforeHost": "Du verbindest dich zum ersten Mal mit ",
     "unknownBodyAfterHost": ". Bitte den Fingerprint prüfen, bevor du vertraust.",
     "reject": "Ablehnen",
-    "trust": "Vertrauen"
+    "trust": "Vertrauen",
+    "expired": "Die Host-Key-Abfrage für {{host}}:{{port}} ist abgelaufen. Die Verbindung wurde nicht aufgebaut, dem Schlüssel wird nicht vertraut."
   },
   "sessionTabs": {
     "overview": "Übersicht",

@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorCode, commandErrorMessage, confirmHostKey } from "../api";
 import { translateErrorCode } from "../errorCodes";
-import { onHostKeyVerificationNeeded } from "../events";
+import { onHostKeyVerificationEnded, onHostKeyVerificationNeeded } from "../events";
 import { subscribeHostKeyPromptClear } from "../hostKeyPromptBus";
 import { showToast } from "../toastBus";
 import type { HostKeyVerificationNeededEvent } from "../types";
@@ -19,21 +19,59 @@ import { HostKeyDialog } from "./HostKeyDialog";
  *
  * Eine Abfrage zur Zeit: ein neueres Event ersetzt das angezeigte; das
  * ersetzte läuft im Backend in den Timeout und gilt dort als Ablehnung
- * (`HostKeyWait::TimedOut`). Schlägt `confirmHostKey` fehl (etwa weil das
- * Backend bereits per Timeout abgelehnt hat), erscheint ein Fehler-Toast.
+ * (`HostKeyWait::TimedOut`). Schlägt `confirmHostKey` fehl, erscheint ein
+ * Fehler-Toast.
+ *
+ * Issue #37 / ADR 0108: `host-key-verification-ended` schließt die Abfrage,
+ * sobald das Backend nicht mehr auf sie wartet — aber nur, wenn
+ * `sessionId` UND `promptId` zur angezeigten Abfrage passen. Ein älteres
+ * Ende-Ereignis (andere Session oder ältere Abfrage derselben Session)
+ * schließt nie eine neuere Abfrage. Bei Timeout erscheint ein Hinweis
+ * (kein Fehler); `confirmHostKey` wird dabei nicht aufgerufen.
  */
 export function HostKeyPromptHost() {
   const { t } = useTranslation();
-  const [pending, setPending] = useState<HostKeyVerificationNeededEvent | null>(null);
+  const [pending, setPendingState] = useState<HostKeyVerificationNeededEvent | null>(null);
+  // Spiegel des angezeigten Zustands für den Ende-Listener: der vergleicht
+  // synchron gegen die aktuell angezeigte Abfrage, ohne Seiteneffekte (Toast)
+  // in einen `setState`-Updater zu legen.
+  const pendingRef = useRef<HostKeyVerificationNeededEvent | null>(null);
+  const setPending = useCallback((event: HostKeyVerificationNeededEvent | null) => {
+    pendingRef.current = event;
+    setPendingState(event);
+  }, []);
 
   useEffect(() => {
     const unlisten = onHostKeyVerificationNeeded((event) => setPending(event));
     return () => {
       unlisten.then((unlistenFn) => unlistenFn());
     };
-  }, []);
+  }, [setPending]);
 
-  useEffect(() => subscribeHostKeyPromptClear(() => setPending(null)), []);
+  useEffect(() => {
+    const unlisten = onHostKeyVerificationEnded((event) => {
+      const current = pendingRef.current;
+      if (
+        !current ||
+        current.sessionId !== event.sessionId ||
+        current.promptId !== event.promptId
+      ) {
+        return;
+      }
+      setPending(null);
+      if (event.reason === "timed_out") {
+        showToast({
+          kind: "info",
+          message: t("hostKeyDialog.expired", { host: current.host, port: current.port }),
+        });
+      }
+    });
+    return () => {
+      unlisten.then((unlistenFn) => unlistenFn());
+    };
+  }, [setPending, t]);
+
+  useEffect(() => subscribeHostKeyPromptClear(() => setPending(null)), [setPending]);
 
   const handleDecision = async (decision: Parameters<typeof confirmHostKey>[1]) => {
     if (!pending) return;

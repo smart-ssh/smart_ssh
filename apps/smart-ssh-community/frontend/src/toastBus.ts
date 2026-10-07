@@ -8,7 +8,9 @@ export interface ToastAction {
 }
 
 export interface ToastInput {
-  kind: "success" | "error";
+  /** `info` (Issue #37): neutraler Hinweis, kein Fehler — bleibt wie ein
+   * Fehler stehen, bis der Nutzer ihn schließt. */
+  kind: "success" | "error" | "info";
   message: string;
   action?: ToastAction;
 }

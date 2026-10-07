@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { subscribeToasts, type Toast } from "../toastBus";
 
-/** Erfolgsmeldungen verschwinden von selbst, Fehler bleiben stehen, bis der
- * Nutzer sie schließt (Spec 0067, Teil B2). */
+/** Erfolgsmeldungen verschwinden von selbst, Fehler (und Hinweise, Issue
+ * #37) bleiben stehen, bis der Nutzer sie schließt (Spec 0067, Teil B2). */
 export const SUCCESS_TOAST_MS = 4000;
 
 /** Spec 0067, Teil B: zeigt Meldungen aus `toastBus`. Unten links, damit
@@ -42,7 +42,7 @@ export function ToastHost() {
           }`}
         >
           <p className="min-w-0 break-words">
-            {toast.kind === "success" ? "✓ " : "⚠ "}
+            {toast.kind === "success" ? "✓ " : toast.kind === "info" ? "ℹ " : "⚠ "}
             {toast.message}
           </p>
           <div className="flex shrink-0 gap-1">

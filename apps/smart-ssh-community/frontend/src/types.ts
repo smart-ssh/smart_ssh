@@ -212,6 +212,22 @@ export interface HostKeyInfo {
 
 export interface HostKeyVerificationNeededEvent extends HostKeyInfo {
   sessionId: string;
+  /** Issue #37: Kennung genau dieser Abfrage. Ein `connect()`-Retry kann
+   * unter derselben `sessionId` eine neue Abfrage anlegen; das passende
+   * `HostKeyVerificationEndedEvent` trägt dieselbe `promptId`. */
+  promptId: number;
+}
+
+/** Issue #37: warum das Backend nicht mehr auf eine Host-Key-Abfrage wartet. */
+export type HostKeyPromptEndReason = "decided" | "timed_out" | "abandoned";
+
+/** Issue #37: `host-key-verification-ended` — das Backend wartet nicht mehr
+ * auf die Abfrage (`sessionId`, `promptId`). Rein informativ: Timeout und
+ * Abbruch gelten im Backend bereits als Ablehnung. */
+export interface HostKeyVerificationEndedEvent {
+  sessionId: string;
+  promptId: number;
+  reason: HostKeyPromptEndReason;
 }
 
 export interface TerminalOutputEvent {
