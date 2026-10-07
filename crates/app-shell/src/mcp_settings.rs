@@ -75,7 +75,7 @@ fn generate_token() -> String {
 /// hatte diese Rechte bisher; ein Umzug ist kein Grund, sie
 /// zurückzunehmen. Nach jedem Schreibzugriff dieses Moduls aufgerufen,
 /// weil es den bisherigen Auslöser (das Token-Schreiben) nicht mehr gibt.
-fn harden_settings_store_permissions(app: &AppHandle) {
+fn harden_settings_store_permissions<R: Runtime>(app: &AppHandle<R>) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -429,5 +429,48 @@ mod tests {
 
         store.delete(CONFIRM_TIMEOUT_SECS_KEY);
         let _ = store.save();
+    }
+
+    /// Issue #40, regression: the hardening must hit the `settings.json`
+    /// the store actually reads and writes. It used to build the path from
+    /// `app_config_dir`, while `tauri-plugin-store` resolves against
+    /// `BaseDirectory::AppData`. On Linux those are different directories
+    /// (`~/.config/<id>` vs `~/.local/share/<id>`), so the real file kept
+    /// its umask mode (typically 0644). On macOS both directories coincide,
+    /// which is why this test only fails against the old code on Linux.
+    #[cfg(unix)]
+    #[test]
+    fn test_harden_settings_store_permissions_targets_the_store_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle();
+        let store = handle.store(SETTINGS_STORE_FILE).expect("Store");
+        store.set(CONFIRM_TIMEOUT_SECS_KEY, serde_json::json!(120u64));
+        store.save().expect("Store konnte nicht gespeichert werden");
+
+        let store_path = tauri_plugin_store::resolve_store_path(handle, SETTINGS_STORE_FILE)
+            .expect("store path must resolve");
+        std::fs::set_permissions(&store_path, std::fs::Permissions::from_mode(0o644))
+            .expect("store file must exist after save");
+
+        harden_settings_store_permissions(handle);
+
+        let mode = std::fs::metadata(&store_path)
+            .expect("store file must still exist")
+            .permissions()
+            .mode()
+            & 0o777;
+
+        store.delete(CONFIRM_TIMEOUT_SECS_KEY);
+        let _ = store.save();
+
+        assert_eq!(
+            mode,
+            0o600,
+            "settings.json at {} must be hardened to 0600, was {mode:o}",
+            store_path.display()
+        );
     }
 }
