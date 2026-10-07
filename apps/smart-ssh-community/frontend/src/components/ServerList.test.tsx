@@ -85,7 +85,11 @@ vi.mock("../firstRunNotice", () => ({
   saveFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve()),
 }));
 
-function renderList(onCreateFirstServer: () => void = vi.fn()) {
+function renderList(
+  onCreateFirstServer: () => void = vi.fn(),
+  onCreateServerInGroup: (groupId: string) => void = vi.fn(),
+  onToggleGroup: (groupId: string) => void = vi.fn(),
+) {
   return render(
     <I18nextProvider i18n={testI18n}>
       <ServerList
@@ -93,8 +97,9 @@ function renderList(onCreateFirstServer: () => void = vi.fn()) {
         findExistingSessionId={() => undefined}
         onSwitchToExistingTab={vi.fn()}
         collapsedGroupIds={new Set()}
-        onToggleGroup={vi.fn()}
+        onToggleGroup={onToggleGroup}
         onCreateFirstServer={onCreateFirstServer}
+        onCreateServerInGroup={onCreateServerInGroup}
       />
     </I18nextProvider>,
   );
@@ -197,7 +202,9 @@ describe("ServerList empty-state entry block (Spec 0069, Teil C1)", () => {
     renderList();
 
     await screen.findByText("Noch kein Server angelegt");
-    expect(screen.getByRole("button", { name: /Prod/ })).toBeInTheDocument();
+    // Issue #49: `/📁 Prod/` statt `/Prod/` — die Gruppenzeile hat jetzt
+    // zusätzlich einen „+"-Button, dessen Name den Gruppennamen enthält.
+    expect(screen.getByRole("button", { name: /📁 Prod/ })).toBeInTheDocument();
   });
 
   it('clicking "Ersten Server anlegen" invokes the callback', async () => {
@@ -315,5 +322,29 @@ describe("ServerList drag and drop (issue #48 / Spec 0103)", () => {
     expect(
       await screen.findByText(testI18n.t("errors.GROUP_CYCLE_DETECTED")),
     ).toBeInTheDocument();
+  });
+});
+
+describe("ServerList new server in a group (issue #49)", () => {
+  afterEach(() => {
+    vi.mocked(listGroups).mockImplementation(() => Promise.resolve([]));
+  });
+
+  it("the + action on a group row opens the form for that group without toggling it", async () => {
+    vi.mocked(listGroups).mockImplementation(() =>
+      Promise.resolve([group(), group({ id: "group-2", name: "Web", parentId: "group-1" })]),
+    );
+    vi.mocked(connect).mockClear();
+    const onCreateServerInGroup = vi.fn();
+    const onToggleGroup = vi.fn();
+    renderList(vi.fn(), onCreateServerInGroup, onToggleGroup);
+
+    fireEvent.click(await screen.findByRole("button", {
+        name: testI18n.t("mainScreen.newServerInGroup", { name: "Web" }),
+      }));
+
+    expect(onCreateServerInGroup).toHaveBeenCalledWith("group-2");
+    expect(onToggleGroup).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
   });
 });

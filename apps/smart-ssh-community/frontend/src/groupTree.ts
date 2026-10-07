@@ -47,3 +47,47 @@ export function buildGroupTree(groups: GroupDto[], servers: ServerDto[]): GroupT
   const ungroupedServers = servers.filter((s) => s.groupId === null && !s.isLocal);
   return { roots, ungroupedServers };
 }
+
+/** Issue #49: ein Eintrag der Gruppen-Auswahl in `ServerForm`/`GroupForm`. */
+export interface GroupOption {
+  group: GroupDto;
+  /** Verschachtelungstiefe, 0 = Wurzelebene. */
+  depth: number;
+  /** Voller Pfad von der Wurzel, z. B. `Prod / Web`. */
+  path: string;
+}
+
+/** Issue #49: die Gruppen-Dropdowns zeigten nur eine flache Liste der
+ * Namen — eine vorbelegte Untergruppe war darin nicht von einer
+ * gleichnamigen anderswo zu unterscheiden. Liefert die Gruppen in
+ * Baum-Reihenfolge (Tiefensuche, Geschwister in Eingabe-Reihenfolge) mit
+ * Tiefe und vollem Pfad. Anders als `buildGroupTree` geht hier keine
+ * Gruppe verloren: eine Gruppe, deren Elterngruppe fehlt, oder ein
+ * (eigentlich vom Backend verhinderter) Zyklus erscheint auf der
+ * Wurzelebene statt aus der Auswahl zu verschwinden. */
+export function flattenGroupOptions(groups: GroupDto[]): GroupOption[] {
+  const ids = new Set(groups.map((g) => g.id));
+  const visited = new Set<string>();
+  const result: GroupOption[] = [];
+  const visit = (group: GroupDto, depth: number, parentPath: string | null) => {
+    if (visited.has(group.id)) return;
+    visited.add(group.id);
+    const path = parentPath === null ? group.name : `${parentPath} / ${group.name}`;
+    result.push({ group, depth, path });
+    for (const child of groups) {
+      if (child.parentId === group.id) visit(child, depth + 1, path);
+    }
+  };
+  for (const g of groups) {
+    if (g.parentId === null || !ids.has(g.parentId)) visit(g, 0, null);
+  }
+  for (const g of groups) visit(g, 0, null);
+  return result;
+}
+
+/** Issue #49: Beschriftung einer Gruppen-Option — eingerückter voller
+ * Pfad. Geschützte Leerzeichen, weil normale in einem `<option>`
+ * zusammengefasst würden. */
+export function groupOptionLabel(option: GroupOption): string {
+  return `${"  ".repeat(option.depth)}${option.path}`;
+}

@@ -30,6 +30,7 @@
     "emptyStateTitle": "No server added yet",
     "emptyStateHint": "Add your first server to connect over SSH.",
     "emptyStateCreateFirstServer": "Add first server",
+    "newServerInGroup": "New server in group \"{{name}}\"",
     "emptyStateTryLocalhost": "Try it without a server: \"Localhost\" above opens a session on this machine — with the same confirmations as on a real server."
   },
   "settings": {

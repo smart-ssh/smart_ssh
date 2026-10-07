@@ -58,14 +58,23 @@ export function ManagementView({
     if (initialSelection) {
       setSelection(initialSelection);
       setFocusNotesOnOpen(true);
+      setNewFormRevision((n) => n + 1);
       onInitialSelectionConsumed?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSelection]);
 
+  // Issue #49: erhöht bei jeder Auswahl (auch einem erneuten Klick auf
+  // „+ Server"/„+ Gruppe" mit derselben Vorgabe) — Teil des `key` der
+  // Neu-Formulare. So beginnt jedes „+" ein frisches Formular, während ein
+  // offenes Formular sonst (z. B. beim Neuladen der Listen nach einem
+  // Verschieben) seine Eingaben behält.
+  const [newFormRevision, setNewFormRevision] = useState(0);
+
   const selectManually = (next: Selection | null) => {
     setFocusNotesOnOpen(false);
     setSelection(next);
+    setNewFormRevision((n) => n + 1);
   };
 
   const reload = () => {
@@ -159,7 +168,7 @@ export function ManagementView({
         )}
         {selection?.kind === "newGroup" && (
           <GroupForm
-            key={`new-${selection.parentId ?? "root"}`}
+            key={`new-group-${newFormRevision}`}
             groupId={null}
             defaultParentId={selection.parentId}
             allGroups={groups}
@@ -181,7 +190,7 @@ export function ManagementView({
         )}
         {selection?.kind === "newServer" && (
           <ServerForm
-            key={`new-${selection.groupId ?? "root"}`}
+            key={`new-server-${newFormRevision}`}
             serverId={null}
             defaultGroupId={selection.groupId}
             allGroups={groups}
