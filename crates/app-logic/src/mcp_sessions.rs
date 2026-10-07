@@ -397,5 +397,89 @@ impl McpSessionRegistry {
     }
 }
 
+/// Warum [`ensure_mcp_session`] keine Sitzung liefern konnte.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnsureMcpSessionError {
+    /// Die MCP-Sitzung wurde in der App geschlossen, während die Anfrage
+    /// lief (Spec 0104, §5).
+    Closed,
+    /// Verbindungsaufbau gescheitert — `app-shell` meldet das wie bisher
+    /// als `UnknownServer` an den Client.
+    Unavailable,
+    /// Issue #68: Für den Server sind schon so viele MCP-Sitzungen offen
+    /// wie erlaubt; weder Verbindung noch Tab wurden angelegt.
+    LimitReached,
+}
+
+/// Spec 0104 / Issue #50, Issue #67: liefert die eigene MCP-Sitzung für
+/// `key` — nie eine Nutzer-Sitzung, auch wenn für den Server ein
+/// verbundener Nutzer-Tab offen ist (die Zuordnung kommt ausschließlich
+/// aus `registry`, in der Nutzer-Sitzungen nie stehen).
+///
+/// Ablauf, alles unter dem Anlege-Lock von `key`:
+/// 1. [`McpSessionRegistry::acquire_session`]: verbundene Sitzung
+///    wiederverwenden (dann kein `connect`), sonst neue Sitzung eintragen
+///    und ihren Tab per `mcp-action-tab-requested` über `emitter`
+///    ankündigen — **vor** `connect`, damit der Tab vor einem eventuellen
+///    Host-Key-Dialog sichtbar ist (Spec 0104, §3). Bei erreichter
+///    Höchstzahl (Issue #68) weder Tab noch Verbindung.
+/// 2. `connect(session_id)` baut die Verbindung auf und trägt die Sitzung
+///    in `sessions` ein (in `app-shell` der `connect_session`-Pfad eines
+///    manuellen Sidebar-Klicks). Scheitert er, wird die Sitzung
+///    ausgetragen, damit die nächste Anfrage neu verbindet.
+/// 3. Wurde die Sitzung während `connect` ausgetragen (Tab geschlossen,
+///    Spec 0104, §5), wird die eben aufgebaute Verbindung über
+///    `disconnect_orphan(session_id)` wieder getrennt, statt eine Aktion in
+///    einer Sitzung ohne Tab laufen zu lassen.
+///
+/// Tauri-frei (Spec 0084), damit diese Zusammensetzung ohne `AppHandle`
+/// getestet ist; `app_shell::mcp_backend` liefert nur `connect`,
+/// `disconnect_orphan` und den Emitter.
+pub async fn ensure_mcp_session<C, CFut, CErr, D, DFut>(
+    registry: &McpSessionRegistry,
+    sessions: &SessionManager,
+    key: &McpSessionKey,
+    emitter: &dyn EventEmitter,
+    connect: C,
+    disconnect_orphan: D,
+) -> Result<(SessionId, Arc<Session>), EnsureMcpSessionError>
+where
+    C: FnOnce(SessionId) -> CFut,
+    CFut: std::future::Future<Output = Result<(), CErr>>,
+    D: FnOnce(SessionId) -> DFut,
+    DFut: std::future::Future<Output = ()>,
+{
+    // Hält gleichzeitige Anfragen desselben Clients an denselben Server an,
+    // bis die erste ihre Sitzung angelegt hat — sonst bauten beide eine
+    // eigene Verbindung auf.
+    let creation = registry.lock_creation(key).await;
+
+    let session_id = match registry.acquire_session(&creation, key, sessions, emitter) {
+        Ok(McpSessionSlot::Existing(session_id)) => {
+            let session = sessions
+                .get(session_id)
+                .ok_or(EnsureMcpSessionError::Closed)?;
+            return Ok((session_id, session));
+        }
+        Ok(McpSessionSlot::New(session_id)) => session_id,
+        Err(McpSessionLimitReached) => return Err(EnsureMcpSessionError::LimitReached),
+    };
+
+    if connect(session_id).await.is_err() {
+        registry.unregister(session_id);
+        return Err(EnsureMcpSessionError::Unavailable);
+    }
+
+    if !registry.is_mcp_session(session_id) {
+        disconnect_orphan(session_id).await;
+        return Err(EnsureMcpSessionError::Closed);
+    }
+
+    let session = sessions
+        .get(session_id)
+        .ok_or(EnsureMcpSessionError::Closed)?;
+    Ok((session_id, session))
+}
+
 #[cfg(test)]
 mod tests;

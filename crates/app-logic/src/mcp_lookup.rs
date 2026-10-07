@@ -10,7 +10,10 @@
 //! `AppState` durch.
 //!
 //! `propose_action`/`ensure_session` bleiben bewusst in `app-shell`: sie
-//! brauchen die Sitzungs- und Event-Maschinerie.
+//! brauchen die Sitzungs- und Event-Maschinerie. Die Entscheidung in
+//! `ensure_session` (welche Sitzung, wann verbinden, wann austragen oder
+//! trennen) liegt aber Tauri-frei in
+//! `crate::mcp_sessions::ensure_mcp_session` (Issue #67).
 
 use std::collections::HashSet;
 use std::sync::Mutex;
