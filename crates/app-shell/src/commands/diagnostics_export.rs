@@ -130,10 +130,7 @@ pub(crate) struct EditionDataPaths(pub Vec<app_logic::data_paths::ExtraDataPath>
 fn mcp_settings_path<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> CommandResult<std::path::PathBuf> {
-    Ok(tauri_plugin_store::resolve_store_path(
-        app,
-        crate::mcp_settings::SETTINGS_STORE_FILE,
-    )?)
+    Ok(crate::mcp_settings::settings_store_path(app)?)
 }
 
 fn current_data_paths<R: tauri::Runtime>(

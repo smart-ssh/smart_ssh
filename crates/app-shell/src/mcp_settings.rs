@@ -75,20 +75,41 @@ fn generate_token() -> String {
 /// hatte diese Rechte bisher; ein Umzug ist kein Grund, sie
 /// zurückzunehmen. Nach jedem Schreibzugriff dieses Moduls aufgerufen,
 /// weil es den bisherigen Auslöser (das Token-Schreiben) nicht mehr gibt.
-fn harden_settings_store_permissions(app: &AppHandle) {
+///
+/// **Issue #40:** The path comes from [`settings_store_path`], i.e. exactly
+/// the resolution the store uses itself. It used to be built from
+/// `app_config_dir`; on Linux that is a different directory than the
+/// store's `BaseDirectory::AppData`, so the hardening hit a file that does
+/// not exist and the real `settings.json` kept its umask mode.
+///
+/// Best-effort: a failed path resolution or `set_permissions` is ignored
+/// and never fails the calling command.
+fn harden_settings_store_permissions<R: Runtime>(app: &AppHandle<R>) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let Ok(config_dir) = app.path().app_config_dir() else {
+        let Ok(path) = settings_store_path(app) else {
             return;
         };
-        let path = config_dir.join(SETTINGS_STORE_FILE);
         let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     }
     #[cfg(not(unix))]
     {
         let _ = app;
     }
+}
+
+/// Where `settings.json` lives: via `tauri_plugin_store::resolve_store_path`,
+/// the same resolution the store uses when reading and writing
+/// (`BaseDirectory::AppData`). Deliberately not `app_config_dir`: on Linux
+/// that is a different directory (`~/.config` instead of `~/.local/share`),
+/// see ADR 0105. Single source of truth for this path — used by the
+/// permission hardening above and by the data paths display
+/// (`commands::diagnostics_export`).
+pub(crate) fn settings_store_path<R: Runtime>(
+    app: &AppHandle<R>,
+) -> tauri_plugin_store::Result<std::path::PathBuf> {
+    tauri_plugin_store::resolve_store_path(app, SETTINGS_STORE_FILE)
 }
 
 /// Spec 0101, A12: `settings.json` als **alter** Ablageort des Tokens.
@@ -429,5 +450,48 @@ mod tests {
 
         store.delete(CONFIRM_TIMEOUT_SECS_KEY);
         let _ = store.save();
+    }
+
+    /// Issue #40, regression: the hardening must hit the `settings.json`
+    /// the store actually reads and writes. It used to build the path from
+    /// `app_config_dir`, while `tauri-plugin-store` resolves against
+    /// `BaseDirectory::AppData`. On Linux those are different directories
+    /// (`~/.config/<id>` vs `~/.local/share/<id>`), so the real file kept
+    /// its umask mode (typically 0644). On macOS both directories coincide,
+    /// which is why this test only fails against the old code on Linux.
+    #[cfg(unix)]
+    #[test]
+    fn test_harden_settings_store_permissions_targets_the_store_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle();
+        let store = handle.store(SETTINGS_STORE_FILE).expect("Store");
+        store.set(CONFIRM_TIMEOUT_SECS_KEY, serde_json::json!(120u64));
+        store.save().expect("Store konnte nicht gespeichert werden");
+
+        let store_path = tauri_plugin_store::resolve_store_path(handle, SETTINGS_STORE_FILE)
+            .expect("store path must resolve");
+        std::fs::set_permissions(&store_path, std::fs::Permissions::from_mode(0o644))
+            .expect("store file must exist after save");
+
+        harden_settings_store_permissions(handle);
+
+        let mode = std::fs::metadata(&store_path)
+            .expect("store file must still exist")
+            .permissions()
+            .mode()
+            & 0o777;
+
+        store.delete(CONFIRM_TIMEOUT_SECS_KEY);
+        let _ = store.save();
+
+        assert_eq!(
+            mode,
+            0o600,
+            "settings.json at {} must be hardened to 0600, was {mode:o}",
+            store_path.display()
+        );
     }
 }
