@@ -72,9 +72,30 @@ wie weit die Engine sie auflösen soll.
      würde einen Optionswert als Skript-Operand durchgehen lassen
      (`| bash -o errexit`), deshalb fail-closed. Wo unklar ist, ob eine
      Kurzoption einen Wert hat, gilt „ja“: ein Wort zu viel zu verbrauchen
-     lässt höchstens den Operanden fehlen, und das eskaliert.
+     lässt höchstens den Operanden fehlen, und das eskaliert. Das gilt nur
+     für ganze Wörter, nicht für den Rest eines Options-Clusters: Dort
+     darf ein Wert keine spätere Code-Option verschlucken. Deshalb:
+     - `-o`/`-O` der POSIX-Shells nehmen immer das **nächste Wort** als
+       Wert, der Cluster wird weitergelesen (`bash -oc errexit CODE`
+       führt `CODE` aus).
+     - Optionen mit reinem Ziffernwert (`perl -l`/`-0`, `ruby -0`/`-T`/`-W`)
+       verbrauchen nur Ziffern, danach wird der Cluster weitergelesen
+       (`perl -lne CODE`, `ruby -W2e CODE`). Ein Hex-Wert (`perl -0x…`)
+       ist nicht auswertbar, weil Hex-Ziffern `e` enthalten.
+     - Bei Optionen, deren angehängter Wert kein erkennbares Ende hat
+       (`perl -M…`, `ruby -K…`), ist der Aufruf nicht auswertbar, sobald
+       der Rest des Clusters ein Zeichen einer Code-, Stdin- oder
+       Skript-Option enthält (`perl -Mlib=e x.pl` → `Confirm`).
+     - Jeder verbrauchte Optionswert (kurz/lang, angehängt/getrennt), der
+       die Standardeingabe benennt, macht den Aufruf zu „Programm von der
+       Standardeingabe“ (`php -f /dev/stdin`, `node -r /dev/stdin app.js`).
    - **Sichtbarer Skript-Operand** (`bash -e deploy.sh`, `python3 -m
      http.server`, `source ~/.bashrc`): keine neue Untergrenze.
+     Bewusst verändert gegenüber der ersten Fassung dieser Prüfung, die
+     jedes Argument `-` als Standardeingabe wertete: `bash - x.sh` (ein
+     einzelnes `-` beendet bei Shells die Optionen) und `bash x.sh -s`
+     (`-s` nach dem Operanden ist ein Skript-Argument) zählen als
+     sichtbarer Skript-Operand. Das entspricht dem Verhalten der Shell.
 
    Die Block-Erkennung für `bash -c` am Kommandoanfang (ADR 0001) wird
    dafür bewusst **nicht** erweitert. Würde etwa `ksh -c 'ls' && rm -rf /`
