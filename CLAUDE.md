@@ -142,25 +142,43 @@ irreversible happening on a real server. For changes here:
   or sent anywhere — verify with a test that plants a redaction-worthy
   secret and asserts it never appears in plaintext in the output/DB.
 
-## Spec-first workflow
+## Spec workflow
 
-Every domain module gets a numbered spec in `docs/specs/` (`NNNN-slug.md`)
-before code is written — check the next free number and read at least the
-specs it explicitly references before implementing. `docs/adr/` holds
-architecture decisions that cut across a single spec, or non-obvious
-implementation choices made while executing one (numbered independently,
-see `docs/adr/README.md`); write one whenever you make a call the spec
-left open, especially a scope reduction (e.g. "X works but without
-history/feature Y, because Z") — say so explicitly rather than silently
-narrowing what was asked for.
+**A spec describes behaviour.** Each numbered spec in `docs/specs/`
+(`NNNN-slug.md`) describes what a user sees and can do in one area of the
+product: rules, edge cases, error behaviour, security guarantees. It does
+not reference code locations, function names or file paths, and it is not
+a task list. Rationale for implementation choices belongs in an ADR, not
+in the spec. Before changing an area, read its spec and at least the specs
+it explicitly references.
 
-**When a spec (and its ADRs) get committed:** together, once the spec's
-implementation step is done and reviewed — not while still a draft (a
-committed draft goes stale as the implementation evolves) and not weeks
-later either (a review then checks the code against an unversioned spec).
-The rhythm: spec drafted (local, not yet committed) → implemented →
-reviewed → the final spec text and any ADRs written during that step are
-committed together as part of finishing the feature.
+**Every change has a spec impact** — one of:
+
+- `new` — behaviour in an area no spec covers yet; the new spec takes the
+  next free number in `docs/specs/`.
+- `update NNNN` — behaviour of an existing spec changes or is added.
+  Preferred over a new spec whenever an existing one covers the area.
+- `none` — a fix of already specified behaviour, refactoring, tests, CI.
+
+The issue forms carry an optional "Spec impact" field for this. If a
+change alters visible behaviour that no spec describes, or that a spec
+describes differently, the spec change belongs to it even if the issue
+said `none`.
+
+**The spec change ships in the same pull request as the code** and is
+reviewed with it. After merge, the spec describes the state of `main`,
+not a plan.
+
+**A bug fix touches a spec only when the spec was wrong or incomplete**,
+and then only the affected statement.
+
+**ADRs.** `docs/adr/` holds architecture decisions that cut across a
+single spec, or non-obvious implementation choices (numbered
+independently, see `docs/adr/README.md`); write one whenever you make a
+call the spec or issue left open, especially a scope reduction (e.g. "X
+works but without history/feature Y, because Z") — say so explicitly
+rather than silently narrowing what was asked for. An ADR ships in the
+same pull request as the change it documents.
 
 ## Versioning & changelog (Spec 0048)
 
@@ -214,7 +232,7 @@ not by hand-editing, so the lockfile stays consistent).
 
 ## Commits
 
-Conventional Commits, scoped to the crate/area, referencing the spec:
+Conventional Commits, scoped to the crate/area, referencing the spec if any:
 `feat(app-shell): add X per spec 0032`, `fix(ci): ...`,
 `docs(adr): propose design decisions for X (spec 0032)`. Keep the ADR as
 a separate commit after the feature commit it documents. Only commit when
