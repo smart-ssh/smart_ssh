@@ -81,7 +81,15 @@ wie weit die Engine sie auflösen soll.
        führt `CODE` aus). `zsh` und die ksh-Familie (`ksh ksh93 mksh lksh
        pdksh`) nehmen den **Rest des Clusters**, wenn er nicht leer ist
        (`zsh -oerrexit -c CODE`), und nur ein alleinstehendes `-o` nimmt
-       das nächste Wort. Bei `sh`, `yash` und `posh` ist nicht sicher,
+       das nächste Wort. Ein **einbuchstabiger** `-o`-Wert (angehängt oder
+       als nächstes Wort) ist in ksh93 die gleichnamige Kurzoption:
+       `ksh -oc CODE` und `ksh -o c CODE` laufen wie `ksh -c CODE`. Für
+       `zsh` und die ksh-Familie gilt deshalb `c` als Code- und `s` als
+       Stdin-Option; ein negierter (`+o c`, `-o noc`), nur in
+       Groß-/Kleinschreibung passender oder wertnehmender Buchstabe ist
+       nicht auswertbar (`Confirm`). Für mksh/lksh/pdksh ist das Verhalten
+       nicht nachgeprüft; sie bekommen dieselbe, nur verschärfende
+       Behandlung. Bei `sh`, `yash` und `posh` ist nicht sicher,
        welche Shell dahinter steht; der Aufruf wird deshalb nach beiden
        Lesarten ausgewertet und zusammengeführt (fail-closed): findet eine
        der beiden Code, wird der Code beider Lesarten rekursiv
