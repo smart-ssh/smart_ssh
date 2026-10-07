@@ -403,6 +403,17 @@ async fn test_adv_shell_c_other_shells_and_positions_hit_deny_rule() {
         "ls; bash -Oc extglob 'rm -rf /'",
         "ls && dash -oc errexit 'rm -rf /'",
         "ls; bash -eoc errexit 'rm -rf /'",
+        // zsh and the ksh family take an attached `-o` value instead, so
+        // `-c` after `-oerrexit` is still the code flag (review of PR #46).
+        "ls; zsh -oerrexit -c 'rm -rf /'",
+        "ls; ksh -oerrexit -c 'rm -rf /'",
+        "ls; mksh -oerrexit -c 'rm -rf /'",
+        "ls; zsh +oerrexit -c 'rm -rf /'",
+        "ls; zsh -o errexit -c 'rm -rf /'",
+        // `sh` may be either kind of shell: both readings are checked.
+        "ls; sh -oerrexit -c 'rm -rf /'",
+        "ls; sh -oc errexit 'rm -rf /'",
+        "ls; yash -oerrexit -c 'rm -rf /'",
     ] {
         assert_denied_by_rm_rule(cmd).await;
     }
@@ -479,6 +490,12 @@ async fn test_adv_piping_into_a_shell_with_options_never_autoexec() {
         "echo x | perl -I/dev/fd/0 app.pl",
         "echo x | bash --rcfile /dev/stdin x.sh",
         "echo x | bash --init-file=/proc/self/fd/0 x.sh",
+        // Attached `-o` values in zsh/ksh (and possibly `sh`) do not
+        // swallow a following `-s` (review of PR #46).
+        "echo cm0gLXJmIC8= | base64 -d | zsh -oerrexit -s ls",
+        "echo cm0gLXJmIC8= | base64 -d | ksh -oerrexit -s ls",
+        "echo cm0gLXJmIC8= | base64 -d | zsh +oerrexit -s ls",
+        "echo cm0gLXJmIC8= | base64 -d | sh -oerrexit -s ls",
     ] {
         assert_never_autoexec(cmd).await;
     }
@@ -580,6 +597,48 @@ fn test_adv_program_source_parses_options_per_program() {
     );
     assert_eq!(
         program_source("node --require=/dev/stdin app.js"),
+        Some(ProgramSource::Stdin)
+    );
+    // `-o` value: next word in bash/dash, attached in zsh/ksh; `sh` is
+    // read both ways and merged (review of PR #46).
+    assert_eq!(
+        program_source("zsh -oerrexit -c 'rm -rf /'"),
+        code("rm -rf /")
+    );
+    assert_eq!(
+        program_source("ksh -o errexit -c 'rm -rf /'"),
+        code("rm -rf /")
+    );
+    assert_eq!(
+        program_source("zsh -oerrexit -s ls"),
+        Some(ProgramSource::Stdin)
+    );
+    assert_eq!(
+        program_source("dash -oc errexit 'rm -rf /'"),
+        code("rm -rf /")
+    );
+    assert_eq!(
+        program_source("sh -oerrexit -c 'rm -rf /'"),
+        code("rm -rf /")
+    );
+    assert_eq!(
+        program_source("sh -oc errexit 'rm -rf /'"),
+        code("rm -rf /")
+    );
+    assert_eq!(
+        program_source("sh -oerrexit -s ls"),
+        Some(ProgramSource::Opaque)
+    );
+    assert_eq!(
+        program_source("sh -o errexit x.sh"),
+        Some(ProgramSource::Operand)
+    );
+    assert_eq!(
+        program_source("zsh -o errexit x.sh"),
+        Some(ProgramSource::Operand)
+    );
+    assert_eq!(
+        program_source("php -S localhost:8000 -t /dev/stdin"),
         Some(ProgramSource::Stdin)
     );
 }

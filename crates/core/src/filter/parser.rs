@@ -899,13 +899,48 @@ struct OptionSpec {
     long_flag: &'static [&'static str],
 }
 
-const POSIX_SHELL_OPTIONS: OptionSpec = OptionSpec {
+/// bash, dash and busybox ash: `-o`/`-O` always take the *next word* as
+/// the option name, and the rest of the cluster is still read as options
+/// (`bash -oc errexit CODE` runs `CODE`).
+const BASH_LIKE_SHELL_OPTIONS: OptionSpec = OptionSpec {
     code_operand: "c",
     stdin_flag: "s",
     code_value: "",
     script_value: "",
     value: "",
     next_word_value: "oO",
+    digit_value: "",
+    attached_value: "",
+    plus_options: true,
+    long_code: &[],
+    long_script: &[],
+    long_value: &["rcfile", "init-file"],
+    long_flag: &[
+        "norc",
+        "noprofile",
+        "login",
+        "posix",
+        "noediting",
+        "restricted",
+        "verbose",
+        "debugger",
+        "dump-strings",
+        "dump-po-strings",
+        "version",
+        "help",
+    ],
+};
+
+/// zsh and the ksh family: `-o`/`-O` take the *rest of the cluster* as the
+/// option name if it is non-empty (`zsh -oerrexit -c CODE`), and the next
+/// word only when they stand alone.
+const KSH_LIKE_SHELL_OPTIONS: OptionSpec = OptionSpec {
+    code_operand: "c",
+    stdin_flag: "s",
+    code_value: "",
+    script_value: "",
+    value: "oO",
+    next_word_value: "",
     digit_value: "",
     attached_value: "",
     plus_options: true,
@@ -1073,7 +1108,7 @@ const PHP_OPTIONS: OptionSpec = OptionSpec {
     stdin_flag: "",
     code_value: "BERr",
     script_value: "Ff",
-    value: "cdz",
+    value: "cdzSt",
     next_word_value: "",
     digit_value: "",
     attached_value: "",
@@ -1084,16 +1119,24 @@ const PHP_OPTIONS: OptionSpec = OptionSpec {
     long_flag: &["version", "help", "info", "ini"],
 };
 
-/// Shells whose option syntax follows [`POSIX_SHELL_OPTIONS`]: `-c` makes
-/// the first operand the code, `-s` reads stdin, `-o`/`+o` take a value.
-const POSIX_SHELLS: &[&str] = &[
-    "sh", "bash", "rbash", "zsh", "dash", "ksh", "ksh93", "mksh", "lksh", "pdksh", "ash", "yash",
-    "posh",
-];
+/// Shells with [`BASH_LIKE_SHELL_OPTIONS`]: `-c` makes the first operand
+/// the code, `-s` reads stdin, `-o`/`+o` take the next word.
+const BASH_LIKE_SHELLS: &[&str] = &["bash", "rbash", "dash", "ash"];
+
+/// Shells with [`KSH_LIKE_SHELL_OPTIONS`]: like [`BASH_LIKE_SHELLS`], but
+/// `-o`/`+o` take an attached value.
+const KSH_LIKE_SHELLS: &[&str] = &["zsh", "ksh", "ksh93", "mksh", "lksh", "pdksh"];
+
+/// POSIX shells whose `-o` syntax is not known for certain: `sh` can be any
+/// of the shells above, depending on the system. Both readings are
+/// analysed and merged by [`merge_program_sources`] (fail closed).
+const UNKNOWN_POSIX_SHELLS: &[&str] = &["sh", "yash", "posh"];
 
 /// What kind of program `program` (lower-cased basename) is.
 enum ProgramKind {
     WithOptions(&'static OptionSpec, bool),
+    /// A shell whose option syntax may be either of the two.
+    EitherShell(&'static OptionSpec, &'static OptionSpec),
     Source,
 }
 
@@ -1101,8 +1144,17 @@ fn program_kind(program: &str) -> Option<ProgramKind> {
     let program = program.rsplit('/').next().unwrap_or(program);
     let program = program.to_ascii_lowercase();
     let program = program.as_str();
-    if POSIX_SHELLS.contains(&program) {
-        return Some(ProgramKind::WithOptions(&POSIX_SHELL_OPTIONS, true));
+    if BASH_LIKE_SHELLS.contains(&program) {
+        return Some(ProgramKind::WithOptions(&BASH_LIKE_SHELL_OPTIONS, true));
+    }
+    if KSH_LIKE_SHELLS.contains(&program) {
+        return Some(ProgramKind::WithOptions(&KSH_LIKE_SHELL_OPTIONS, true));
+    }
+    if UNKNOWN_POSIX_SHELLS.contains(&program) {
+        return Some(ProgramKind::EitherShell(
+            &BASH_LIKE_SHELL_OPTIONS,
+            &KSH_LIKE_SHELL_OPTIONS,
+        ));
     }
     let interpreter = |spec| Some(ProgramKind::WithOptions(spec, false));
     match program {
@@ -1157,7 +1209,34 @@ pub(super) fn program_source(literal: &str) -> Option<ProgramSource> {
             }
         }
         ProgramKind::WithOptions(spec, is_shell) => analyse_options(spec, is_shell, args),
+        ProgramKind::EitherShell(a, b) => merge_program_sources(
+            analyse_options(a, true, args),
+            analyse_options(b, true, args),
+        ),
     })
+}
+
+/// Merges two readings of the same call into one that is at least as
+/// strict as each (fail closed): the code of both readings if either finds
+/// code (the engine adds a `Confirm` floor for code and evaluates each part,
+/// so a `Deny` behind either reading still applies), the common result if
+/// both agree, and [`ProgramSource::Opaque`] otherwise.
+fn merge_program_sources(a: ProgramSource, b: ProgramSource) -> ProgramSource {
+    match (a, b) {
+        (ProgramSource::Code(mut a), ProgramSource::Code(b)) => {
+            for code in b {
+                if !a.contains(&code) {
+                    a.push(code);
+                }
+            }
+            ProgramSource::Code(a)
+        }
+        (ProgramSource::Code(code), _) | (_, ProgramSource::Code(code)) => {
+            ProgramSource::Code(code)
+        }
+        (a, b) if a == b => a,
+        _ => ProgramSource::Opaque,
+    }
 }
 
 fn analyse_options(spec: &OptionSpec, is_shell: bool, args: &[String]) -> ProgramSource {
