@@ -1,0 +1,143 @@
+# Spec 0103 — Eigene Sitzung und eigener Tab für MCP-Anfragen
+
+Status: umgesetzt · Issue: #50
+Zweck: Aktionen, die ein externer MCP-Client (z. B. ein Coding-Agent)
+anfragt, laufen in einer eigenen Sitzung mit eigener SSH-Verbindung und
+eigenem Tab — getrennt vom Tab, in dem der Nutzer arbeitet. Terminal, Chat
+und Fokus des Nutzers bleiben von MCP-Aktivität unberührt.
+Review-Priorität: ERHÖHT (MCP-Vertrauensgrenze, Ausführungspfad,
+Sitzungsaufbau)
+
+Bezüge: Spec 0017 (Multi-Tab), Spec 0028 (MCP, Abschnitt 9a), Spec 0034/0040
+(Chat-Persistenz, MCP ohne `chat_sessions`-Zeile), Spec 0039 (Fencing),
+Spec 0057 (Kompaktierung, MCP-Ausschluss aus der Summary), ADR 0109.
+
+## 1. Ist-Stand (vor dieser Spec)
+
+- `AppMcpBackend::ensure_session` (`crates/app-shell/src/mcp_backend.rs`)
+  nahm eine bestehende, verbundene Sitzung des Servers, falls eine offen
+  war — MCP-Aktionen landeten dann im Tab des Nutzers. Sonst baute es eine
+  Sitzung auf und schickte `mcp-action-tab-requested`; das Frontend holte
+  den Tab dabei nach vorne (`useSessionTabs.ts`).
+- MCP-Ergebnisse gingen in den KI-Verlauf dieser Sitzung (markiert über
+  `mcp_origin_flags`, nicht persistiert). Die Chat-KI des Nutzers sah damit
+  MCP-Ausgaben.
+
+## 2. MCP-Sitzung
+
+- **Schlüssel:** (Server, MCP-Client). Der Client ist `clientInfo.name` aus
+  dem MCP-Handshake, getrimmt. Clients ohne Namen teilen sich je Server eine
+  Sitzung — die App kann sie nicht unterscheiden.
+- **Eigene SSH-Verbindung** über denselben `connect_session`-Pfad wie ein
+  Sidebar-Klick: gleiche gespeicherte Zugangsdaten, gleicher
+  Host-Key-Ablauf (unbekannter/geänderter Schlüssel → Abfrage wie bisher),
+  `persist_chat_session: false` (Spec 0040, Abschnitt 4). Dem MCP-Client wird
+  nichts Neues offengelegt.
+- **Zuordnung** in `app_logic::mcp_sessions::McpSessionRegistry`
+  (`AppState.mcp.sessions`). Sie kennt nur MCP-Sitzungen. Eine
+  Nutzer-Sitzung desselben Servers ist dort nie eingetragen und wird für MCP
+  deshalb nie verwendet, egal ob sie verbunden ist.
+- **Wiederverwendung:** Eine MCP-Anfrage nimmt die eingetragene Sitzung
+  ihres Schlüssels, solange sie verbunden ist. Ist die Verbindung
+  abgerissen oder die Sitzung weg, legt die nächste Anfrage eine neue an.
+  Ein noch offener alter Tab bleibt bis zum Schließen als MCP-Tab
+  gekennzeichnet.
+- **Gleichzeitige Anfragen** desselben Schlüssels warten auf ein
+  Anlege-Lock je Schlüssel, damit nicht zwei Verbindungen entstehen. Andere
+  Schlüssel (anderer Server oder Client) warten nicht, auch nicht auf einen
+  offenen Host-Key-Dialog.
+- Die Sitzung wird **vor** dem Verbindungsaufbau eingetragen. So
+  kennzeichnet `list_sessions()` den Tab schon während eines
+  Host-Key-Dialogs, und Nutzer-Eingaben sind von Anfang an gesperrt.
+  Scheitert der Aufbau, wird sie wieder ausgetragen.
+
+## 3. Tab und Fokus
+
+- `mcp-action-tab-requested` trägt zusätzlich `clientName`.
+  `SessionSummaryDto` trägt `mcp: { clientName } | null`, damit ein Reload
+  MCP-Tabs wieder als solche anzeigt.
+- **Beschriftung** "<Client> @ <Server>", ohne Namen
+  "Externes Tool @ <Server>", plus MCP-Abzeichen am Tab und im Kopf der
+  Ansicht.
+- **Kein Fokus-Wechsel:** Der MCP-Tab erscheint im Hintergrund. Der aktive
+  Tab des Nutzers bleibt aktiv, ebenso die Übersicht. Nach einem Reload
+  wird ein MCP-Tab nie automatisch aktiv. Ein Sidebar-Klick auf den Server
+  wechselt zum Nutzer-Tab bzw. öffnet einen neuen, nie zum MCP-Tab.
+- **Wartende Bestätigung:** Der MCP-Tab zeigt dann ein pulsierendes,
+  beschriftetes Abzeichen („Bestätigung nötig“) statt nur des Punkts der
+  Nutzer-Tabs. Dazu kommt wie bisher die OS-Benachrichtigung aus Spec 0028,
+  Abschnitt 9a. Der Bestätigungs-Timeout aus Spec 0028, Abschnitt 7 bleibt
+  unverändert.
+
+## 4. Inhalt des MCP-Tabs
+
+- Die Aktionskarten des Clients mit Bestätigen/Ablehnen und ihre Ergebnisse
+  (Ausgabe, Dateiinhalt, Notiz-Diff), wie im Chat-Panel.
+- **Kein interaktives Terminal, kein Dateibrowser, keine Chat-Eingabe.**
+  Eine nur-lesende Sicht auf das, was lief, genügt (Issue #50). An Stelle
+  der Eingabezeile steht ein Hinweis, dass die Sitzung einem externen Tool
+  gehört.
+- Das Backend setzt das zusätzlich durch: `send_chat_message`,
+  `continue_truncated_response` und `open_terminal` lehnen eine
+  MCP-Sitzung ab (`McpSessionRegistry::ensure_user_session`). So kommt kein
+  Nutzer-Kontext in die MCP-Sitzung.
+
+## 5. Schließen
+
+- Schließen des MCP-Tabs (`disconnect`) trägt die Sitzung aus und
+  **lehnt eine wartende Bestätigung ab** (fail closed), bevor die
+  Verbindung getrennt wird (`McpSessionRegistry::end_session`). Die Aktion
+  wird nicht ausgeführt und endet nicht erst am Timeout.
+- Der MCP-Client bekommt für diese Aktion eine eindeutige Fehlermeldung
+  („MCP-Sitzung wurde in der App geschlossen …“) statt „vom Nutzer
+  abgelehnt“. Ein Ergebnis oder ein Filter-`Deny`, das vorher schon
+  feststand, bleibt unverändert.
+- Die nächste Anfrage dieses Clients legt eine neue MCP-Sitzung samt Tab
+  an.
+- Wird der MCP-Tab geschlossen, während der Verbindungsaufbau noch läuft
+  (z. B. bei offenem Host-Key-Dialog), trennt `ensure_session` die danach
+  doch aufgebaute Verbindung sofort wieder. Die Anfrage scheitert dann mit
+  derselben Meldung.
+- Für Nutzer-Tabs bleibt das Schließen unverändert (Rückfrage, Ablehnung
+  über das Frontend, Spec 0017, Abschnitt 5).
+
+## 6. Unveränderte Invarianten
+
+- Jede MCP-Aktion läuft weiter über
+  `orchestration::handle_mcp_action_proposed`: erzwungenes `Confirm`
+  (`FILTER_MCP_ORIGIN_REQUIRES_CONFIRM`), Filter-Engine, Redaction und
+  Fencing (Spec 0039, ADR 0034) der MCP-Sitzung selbst.
+- Kein Weg zum erhöhten SFTP-Kanal (Spec 0067):
+  `test_ai_and_mcp_file_actions_never_use_the_elevated_channel` bleibt
+  grün.
+- `mcp_origin_flags` bleibt: Der Persistenz-Ausschluss (Spec 0040,
+  Abschnitt 4) und der Summary-Ausschluss (Spec 0057, Abschnitt 2.1) hängen
+  weiter daran. In einer MCP-Sitzung sind ohnehin alle Einträge MCP-Einträge.
+- Die Trennung der Kontexte ist eine Verschärfung: MCP-Ausgaben erreichen
+  die Chat-KI des Nutzers nicht mehr, und der Nutzer-Chat erreicht die
+  MCP-Sitzung nicht.
+
+## 7. Testbarkeit
+
+`crates/app-logic/src/mcp_sessions/tests.rs`:
+
+- Ein verbundener Nutzer-Tab auf Server X wird für MCP nie verwendet.
+- Zwei Clients auf demselben Server bekommen zwei Sitzungen. Derselbe
+  Client nimmt seine verbundene Sitzung wieder.
+- Eine MCP-Aktion läuft nur über Transport und Verlauf der MCP-Sitzung,
+  weiterhin als `Confirm` mit MCP-Code trotz Allow-Regel. Der Verlauf der
+  Nutzer-Sitzung bleibt unverändert, und der Nutzer-Verlauf kommt nicht in
+  die MCP-Sitzung.
+- Schließen lehnt die wartende Bestätigung ab, nichts wird ausgeführt, die
+  nächste Anfrage bekommt eine neue Sitzung.
+- Nutzer-Eingaben werden nur für MCP-Sitzungen abgelehnt.
+- Das Anlege-Lock serialisiert nur denselben Schlüssel.
+
+`crates/app-shell/src/mcp_backend.rs`: Rückmeldung an den Client bei
+geschlossener Sitzung. Frontend: `useSessionTabs.test.ts` (kein
+Fokus-Wechsel, Hinweis auf wartende Bestätigung, Reload,
+`findExistingSessionId`), `SessionTabBar.test.tsx`, `SessionView.test.tsx`.
+
+## 8. Offene Punkte
+
+- Keine.
