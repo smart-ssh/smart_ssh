@@ -39,6 +39,9 @@ Abfrage wird verpasst.
    Nutzer entscheidet; die Entscheidung scheitert dann mit einem
    Fehler-Toast. Das ist fail-closed. Ein Backend-Ereignis „Abfrage beendet"
    gehört nicht zu dieser Entscheidung.
+   **Überholt durch ADR 0107 (Issue #37):** das Backend meldet das Ende
+   jeder Abfrage über `host-key-verification-ended`, und
+   `HostKeyPromptHost` schließt die passende Abfrage von selbst.
 
 Unverändert: `connect.rs`, `confirm_host_key`, `trust_host_key`, der
 Timeout als Ablehnung (`HostKeyWait::TimedOut`) und der eigene Dialog der
