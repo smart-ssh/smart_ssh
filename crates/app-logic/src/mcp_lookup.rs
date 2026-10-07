@@ -23,11 +23,14 @@ use crate::server_redaction::{redacted_fenced_effective_notes, server_redactor};
 use crate::state::AppState;
 
 /// Die Abhängigkeiten der lesenden MCP-Tools, einzeln statt als ganzer
-/// `AppState`, damit Tests nur die nötigen Doubles bauen müssen.
+/// `AppState`, damit Tests nur die nötigen Doubles bauen müssen. Die Felder
+/// sind privat: `from_state` ist der einzige Produktiv-Einstieg, eine
+/// Allow-Liste lässt sich von außen nicht unterschieben. Die Tests unten
+/// bauen die Struktur als Kindmodul direkt.
 pub struct McpLookup<'a> {
-    pub allowed_servers: &'a Mutex<HashSet<ServerId>>,
-    pub profile_store: &'a dyn ProfileStore,
-    pub credential_store: &'a (dyn CredentialStore + Send + Sync),
+    allowed_servers: &'a Mutex<HashSet<ServerId>>,
+    profile_store: &'a dyn ProfileStore,
+    credential_store: &'a (dyn CredentialStore + Send + Sync),
 }
 
 impl<'a> McpLookup<'a> {
