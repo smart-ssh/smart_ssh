@@ -75,9 +75,20 @@ wie weit die Engine sie auflösen soll.
      lässt höchstens den Operanden fehlen, und das eskaliert. Das gilt nur
      für ganze Wörter, nicht für den Rest eines Options-Clusters: Dort
      darf ein Wert keine spätere Code-Option verschlucken. Deshalb:
-     - `-o`/`-O` der POSIX-Shells nehmen immer das **nächste Wort** als
+     - `-o`/`-O` (auch `+o`) verhalten sich je Shell verschieden:
+       `bash`/`rbash`/`dash`/`ash` nehmen immer das **nächste Wort** als
        Wert, der Cluster wird weitergelesen (`bash -oc errexit CODE`
-       führt `CODE` aus).
+       führt `CODE` aus). `zsh` und die ksh-Familie (`ksh ksh93 mksh lksh
+       pdksh`) nehmen den **Rest des Clusters**, wenn er nicht leer ist
+       (`zsh -oerrexit -c CODE`), und nur ein alleinstehendes `-o` nimmt
+       das nächste Wort. Bei `sh`, `yash` und `posh` ist nicht sicher,
+       welche Shell dahinter steht; der Aufruf wird deshalb nach beiden
+       Lesarten ausgewertet und zusammengeführt (fail-closed): findet eine
+       der beiden Code, wird der Code beider Lesarten rekursiv
+       ausgewertet; stimmen sie überein, gilt das gemeinsame Ergebnis;
+       sonst ist der Aufruf nicht auswertbar (`Confirm`). Eine einheitliche
+       Regel für alle POSIX-Shells hatte im Review die jeweils andere
+       Familie fail-open gemacht.
      - Optionen mit reinem Ziffernwert (`perl -l`/`-0`, `ruby -0`/`-T`/`-W`)
        verbrauchen nur Ziffern, danach wird der Cluster weitergelesen
        (`perl -lne CODE`, `ruby -W2e CODE`). Ein Hex-Wert (`perl -0x…`)
