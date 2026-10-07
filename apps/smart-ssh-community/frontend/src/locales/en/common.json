@@ -809,5 +809,47 @@
   },
   "startDirectory": {
     "notFound": "Start directory \"{{dir}}\" was not found or is not accessible. Terminal and file browser use the home directory instead."
+  },
+  "connectLog": {
+    "title": "Details",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Couldn't copy to the clipboard.",
+    "hop": "Hop {{index}}: {{hop}}",
+    "step": {
+      "dnsResolution": "DNS resolution",
+      "tcpConnect": "TCP connection",
+      "tunnelOpen": "Tunnel via previous hop",
+      "handshake": "SSH handshake",
+      "hostKeyCheck": "Host key check",
+      "authentication": "Authentication",
+      "sessionReady": "Session established"
+    },
+    "status": {
+      "ok": "OK",
+      "running": "in progress",
+      "failed": "failed ({{code}})"
+    },
+    "hostKeyResult": {
+      "known": "known",
+      "unknown": "unknown",
+      "changed": "changed"
+    },
+    "authMethod": {
+      "password": "Password",
+      "privateKey": "Private key",
+      "agent": "SSH agent",
+      "certificate": "Certificate",
+      "identityFile": "Key file"
+    },
+    "detail": {
+      "addresses": "Addresses: {{addresses}}",
+      "kex": "Key exchange: {{value}}",
+      "hostKeyAlgorithm": "Host key: {{value}}",
+      "cipher": "Cipher: {{value}}",
+      "mac": "MAC: {{value}}",
+      "partialSuccess": "partially accepted, further authentication required",
+      "remainingMethods": "Server also offers: {{methods}} (not tried)"
+    }
   }
 }

@@ -43,7 +43,8 @@ import type {
   StartupPromptAnswer,
   StartupStateDto,
   TestAiProviderCredentialsResult,
-  TestConnectionResult,
+  TestConnectionReport,
+  ConnectStepRecord,
   StartDirectoryDto,
   TerminalStartDto,
 } from "./types";
@@ -59,6 +60,18 @@ export interface CommandErrorPayload {
    * stammt (kein `camelCase`-Rename auf `CommandError`, anders als bei den
    * meisten anderen DTOs — s. `extensions/entitlements.ts`-Kommentar). */
   feature_locked?: FeatureLockedPayload | null;
+  /** Issue #51: Schritt-Protokoll eines gescheiterten `connect`. */
+  connect_log?: ConnectStepRecord[] | null;
+}
+
+/** Issue #51: das Schritt-Protokoll aus einem abgelehnten `connect()`,
+ * falls vorhanden. */
+export function commandErrorConnectLog(err: unknown): ConnectStepRecord[] | null {
+  if (typeof err === "object" && err !== null && "connect_log" in err) {
+    const log = (err as CommandErrorPayload).connect_log;
+    if (Array.isArray(log) && log.length > 0) return log;
+  }
+  return null;
 }
 
 /** Extrahiert `feature_locked` aus einem abgelehnten `invoke()`, falls
@@ -282,7 +295,7 @@ export const clearServerSudoPassword = (id: string) =>
   invoke<void>("clear_server_sudo_password", { id });
 
 export const testConnection = (input: ServerInput, existingServerId?: string) =>
-  invoke<TestConnectionResult>("test_connection", {
+  invoke<TestConnectionReport>("test_connection", {
     input,
     existingServerId: existingServerId ?? null,
   });

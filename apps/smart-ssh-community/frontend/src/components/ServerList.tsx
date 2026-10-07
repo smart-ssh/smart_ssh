@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   commandErrorCode,
+  commandErrorConnectLog,
   commandErrorMessage,
   connect,
   listChatSessions,
@@ -21,9 +22,10 @@ import {
   type DragItem,
   type DropTarget,
 } from "../treeDrag";
-import type { ChatSessionSummaryDto, GroupDto, ServerDto } from "../types";
+import type { ChatSessionSummaryDto, ConnectStepRecord, GroupDto, ServerDto } from "../types";
 import { useTreeDrag } from "../useTreeDrag";
 import { ChatSessionPickerScreen } from "./ChatSessionPickerScreen";
+import { ConnectStepLog } from "./ConnectStepLog";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { TreeDragGhost } from "./TreeDragGhost";
 
@@ -93,6 +95,10 @@ export function ServerList({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [connectFailure, setConnectFailure] = useState<{
+    message: string;
+    steps: ConnectStepRecord[];
+  } | null>(null);
   // Spec 0031, Abschnitt 4: `null` = noch nicht geladen (Laden ist ein
   // schneller lokaler Store-Zugriff, ein kurzes Zeitfenster ohne Sperre
   // wird bewusst hingenommen — die eigentliche Durchsetzung sitzt ohnehin
@@ -166,6 +172,17 @@ export function ServerList({
       .catch(() => setFirstRunAcknowledged(false));
   }, []);
 
+  /** Issue #51: ein gescheiterter Verbindungsaufbau zeigt unter der
+   * Meldung sein Schritt-Protokoll. Das Protokoll hängt an genau dieser
+   * Meldung — ersetzt ein anderer Fehler sie, verschwindet es mit ihr. Es
+   * lebt nur in diesem Zustand und wird nie gespeichert. */
+  const showConnectFailure = (err: unknown) => {
+    const message = describeError(t, err);
+    const steps = commandErrorConnectLog(err);
+    setError(message);
+    setConnectFailure(steps ? { message, steps } : null);
+  };
+
   const performConnect = async (server: ServerDto) => {
     setError(null);
     setConnectingId(server.id);
@@ -173,7 +190,7 @@ export function ServerList({
       const sessionId = await connect(server.id);
       onConnected(sessionId, server.name, server.id);
     } catch (err) {
-      setError(describeError(t, err));
+      showConnectFailure(err);
     } finally {
       setConnectingId(null);
       clearHostKeyPrompt();
@@ -229,7 +246,7 @@ export function ServerList({
       const tabSessionId = await resumeChatSession(server.id, sessionId);
       onConnected(tabSessionId, server.name, server.id);
     } catch (err) {
-      setError(describeError(t, err));
+      showConnectFailure(err);
     } finally {
       setConnectingId(null);
     }
@@ -386,6 +403,11 @@ export function ServerList({
   return (
     <>
       {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+      {error && connectFailure && connectFailure.message === error && (
+        <div className="mb-2">
+          <ConnectStepLog steps={connectFailure.steps} />
+        </div>
+      )}
 
       {/* Spec 0032, Abschnitt 5 / Spec 0033, Abschnitt 3: fix oberhalb aller
        * Gruppen-Bereiche, visuell durch die eigene Box + den Abstand zur

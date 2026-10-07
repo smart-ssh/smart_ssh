@@ -547,6 +547,51 @@ export type TestConnectionResult =
     }
   | { kind: "timeout" };
 
+/** Issue #51: ein Schritt eines Verbindungsversuchs — s.
+ * `ssh_manager_core::ssh::connect_log`. Nur Anzeige, flüchtig. */
+export type ConnectStep =
+  | { kind: "dnsResolution"; host: string; port: number; addresses: string[] }
+  | { kind: "tcpConnect"; address: string | null; port: number }
+  | { kind: "tunnelOpen"; host: string; port: number }
+  | {
+      kind: "handshake";
+      serverVersion: string | null;
+      kex: string | null;
+      hostKeyAlgorithm: string | null;
+      cipher: string | null;
+      mac: string | null;
+    }
+  | {
+      kind: "hostKeyCheck";
+      keyType: string | null;
+      fingerprint: string | null;
+      result: "known" | "unknown" | "changed" | null;
+    }
+  | {
+      kind: "authentication";
+      method: "password" | "privateKey" | "agent" | "certificate" | "identityFile";
+      remainingMethods: string[];
+      partialSuccess: boolean;
+    }
+  | { kind: "sessionReady" };
+
+export type ConnectStepStatus =
+  | { state: "running" }
+  | { state: "ok" }
+  | { state: "failed"; code: string };
+
+export interface ConnectStepRecord {
+  hopIndex: number;
+  /** `user@host:port` */
+  hop: string;
+  step: ConnectStep;
+  status: ConnectStepStatus;
+  durationMs: number | null;
+}
+
+/** Issue #51: `test_connection` liefert das Ergebnis flach plus `steps`. */
+export type TestConnectionReport = TestConnectionResult & { steps?: ConnectStepRecord[] };
+
 /** Spec 0050, Teil 3 — s. `crate::commands::TestAiProviderCredentialsResult`
  * Doc-Kommentar für die Mapping-Entscheidung (`RateLimited`/
  * `ProviderUnavailable`/etc. fallen alle unter `unreachable`, nicht nur
