@@ -739,7 +739,20 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
 
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
 
-    const { dialog, reject } = await waitFor(() => dialogFor(result));
+    // Issue #71: Auf den fokussierten Zustand warten, nicht nur auf den
+    // Dialog im DOM. Die Antwort von `testConnection` kommt außerhalb von
+    // `act` an; React committet den Dialog und führt den Fokus-Effekt
+    // (`useDialogFocusTrap`, A2: `useEffect` → `reject.focus()`) erst danach
+    // als eigene Scheduler-Aufgabe aus. Auf einem langsamen Runner gibt der
+    // Scheduler zwischen Commit und Effekt die Kontrolle ab (5-ms-Zeitscheibe)
+    // — der MutationObserver von `waitFor` meldet den Dialog dann schon,
+    // bevor er fokussiert ist. Die Fokus-Prüfung gehört deshalb in die
+    // Warte-Bedingung selbst.
+    const { dialog, reject } = await waitFor(() => {
+      const found = dialogFor(result);
+      expect(found.reject).toHaveFocus();
+      return found;
+    });
     expect(screen.getByTestId("manage-tab")).not.toContainElement(dialog);
     expect(dialog).toBeVisible();
     expect(document.activeElement).toBe(reject);
