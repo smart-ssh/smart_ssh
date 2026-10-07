@@ -392,14 +392,14 @@ pub fn unreadable_history_removed_notice_text(removed: u64, language: Language) 
         Language::De => (
             "Alte Verlaufseinträge entfernt",
             if removed == 1 {
-                "1 alter Eintrag aus Chat-Verlauf, Ausführungsprotokoll oder \
-                 Eingabe-Historie ließ sich mit dem aktuellen Schlüssel nicht lesen und \
+                "1 alter Eintrag aus Chat-Verlauf, Ausführungsprotokoll, \
+                 Eingabe-Historie oder Sitzungszusammenfassungen ließ sich mit dem aktuellen Schlüssel nicht lesen und \
                  wurde entfernt. Alles andere ist erhalten."
                     .to_string()
             } else {
                 format!(
-                    "{removed} alte Einträge aus Chat-Verlauf, Ausführungsprotokoll oder \
-                     Eingabe-Historie ließen sich mit dem aktuellen Schlüssel nicht lesen \
+                    "{removed} alte Einträge aus Chat-Verlauf, Ausführungsprotokoll, \
+                     Eingabe-Historie oder Sitzungszusammenfassungen ließen sich mit dem aktuellen Schlüssel nicht lesen \
                      und wurden entfernt. Alles andere ist erhalten."
                 )
             },
@@ -407,14 +407,14 @@ pub fn unreadable_history_removed_notice_text(removed: u64, language: Language) 
         Language::En => (
             "Old history entries removed",
             if removed == 1 {
-                "1 old entry from the chat history, command log or input history could not \
-                 be read with the current key and was removed. Everything else has been \
+                "1 old entry from the chat history, command log, input history or session \
+                 summaries could not be read with the current key and was removed. Everything else has been \
                  kept."
                     .to_string()
             } else {
                 format!(
-                    "{removed} old entries from the chat history, command log or input \
-                     history could not be read with the current key and were removed. \
+                    "{removed} old entries from the chat history, command log, input \
+                     history or session summaries could not be read with the current key and were removed. \
                      Everything else has been kept."
                 )
             },
@@ -483,6 +483,13 @@ mod tests {
                     "{}",
                     notice.message
                 );
+                // Spec 0036 U4/U5: auch eine entfernte Zusammenfassung zählt
+                // mit — der Hinweis muss sie deshalb auch nennen.
+                let summary_word = match language {
+                    Language::De => "Sitzungszusammenfassungen",
+                    Language::En => "session summaries",
+                };
+                assert!(notice.message.contains(summary_word), "{}", notice.message);
             }
         }
     }
