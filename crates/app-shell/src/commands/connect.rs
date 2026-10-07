@@ -20,8 +20,9 @@ use app_logic::confirmation::{ConfirmationRegistry, RegistrationGeneration};
 use app_logic::dto::HostKeyUserDecision;
 use app_logic::error::{secret_store_error, ssh_command_error, CommandError, CommandResult};
 use app_logic::events::{
-    emit_connection_status_changed, emit_host_key_verification_needed, ConnectionStatus,
-    HostKeyKind,
+    emit_connection_status_changed, emit_host_key_verification_ended,
+    emit_host_key_verification_needed, ConnectionStatus, EventEmitter, HostKeyKind,
+    HostKeyPromptEndReason,
 };
 use app_logic::session::{history_contains_untrusted_content, Session, SessionParts};
 use app_logic::state::{AppState, SessionId};
@@ -324,6 +325,7 @@ pub(crate) async fn connect_session(
                     emit_host_key_verification_needed(
                         &crate::event_emitter::TauriEventEmitter(app.clone()),
                         session_id,
+                        generation.as_u64(),
                         host.clone(),
                         port,
                         kind,
@@ -340,39 +342,18 @@ pub(crate) async fn connect_session(
                     )
                     .await;
                     state.sessions.clear_pending_connection(session_id);
-                    let user_decision = match wait {
-                        HostKeyWait::Decided(decision) => decision,
-                        HostKeyWait::Abandoned => {
-                            // Spec 0069, Teil A5 (spec-reviewer-Fund, Review
-                            // dieses Schritts): der dritte Ausgang derselben
-                            // Host-Key-Wartestelle (neben Reject/TimedOut,
-                            // die bereits einen Code tragen) zeigte bislang
-                            // rohen deutschen Text auch in der englischen
-                            // UI. Neuer, additiver Code (E3).
-                            return Err(CommandError::with_code(
-                                "Verbindungsaufbau abgebrochen",
-                                "SSH_CONNECTION_ABANDONED",
-                            ));
-                        }
-                        HostKeyWait::TimedOut => {
-                            tracing::warn!(
-                                session_id = %session_id,
-                                host = %host,
-                                port,
-                                "host key confirmation timed out, treating as rejected",
-                            );
-                            // Spec 0069, Teil A4: Code zusätzlich zur
-                            // bisherigen, host:port-tragenden Meldung
-                            // (Text unverändert).
-                            return Err(CommandError::with_code(
-                                format!(
-                                    "Verbindung zu {host}:{port} abgebrochen: Host-Key-Bestätigung \
-                                     nicht rechtzeitig beantwortet (nicht vertraut)"
-                                ),
-                                "SSH_HOST_KEY_CONFIRM_TIMEOUT",
-                            ));
-                        }
-                    };
+                    // Issue #37: jeder Ausgang des Wartens meldet dem
+                    // Frontend das Ende genau dieser Abfrage (`generation`),
+                    // damit ein offener Dialog nach Timeout/Abbruch von
+                    // selbst schließt. Timeout/Abbruch bleiben Ablehnung.
+                    let user_decision = finish_host_key_wait(
+                        &crate::event_emitter::TauriEventEmitter(app.clone()),
+                        session_id,
+                        generation,
+                        wait,
+                        &host,
+                        port,
+                    )?;
                     match user_decision {
                         HostKeyUserDecision::Trust => {
                             tracing::info!(session_id = %session_id, host = %host, port, "host key trusted");
@@ -1223,6 +1204,59 @@ pub(crate) async fn wait_for_host_key_decision(
     }
 }
 
+/// Issue #37: schließt ein Warten auf die Host-Key-Entscheidung ab. Meldet
+/// `host-key-verification-ended` für genau diese Registrierung
+/// (`generation`) — bei jedem Ausgang, damit das Frontend die passende
+/// Abfrage schließen kann — und bildet den Ausgang auf das Ergebnis von
+/// `connect()` ab. Timeout und Abbruch bleiben Fehler (nie Vertrauen,
+/// Spec 0068, Teil 5b); das Ereignis selbst entscheidet nichts.
+pub(crate) fn finish_host_key_wait(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    generation: RegistrationGeneration,
+    wait: HostKeyWait,
+    host: &str,
+    port: u16,
+) -> CommandResult<HostKeyUserDecision> {
+    let reason = match wait {
+        HostKeyWait::Decided(_) => HostKeyPromptEndReason::Decided,
+        HostKeyWait::Abandoned => HostKeyPromptEndReason::Abandoned,
+        HostKeyWait::TimedOut => HostKeyPromptEndReason::TimedOut,
+    };
+    emit_host_key_verification_ended(emitter, session_id, generation.as_u64(), reason);
+    match wait {
+        HostKeyWait::Decided(decision) => Ok(decision),
+        HostKeyWait::Abandoned => {
+            // Spec 0069, Teil A5 (spec-reviewer-Fund, Review dieses
+            // Schritts): der dritte Ausgang derselben Host-Key-Wartestelle
+            // (neben Reject/TimedOut, die bereits einen Code tragen) zeigte
+            // bislang rohen deutschen Text auch in der englischen UI. Neuer,
+            // additiver Code (E3).
+            Err(CommandError::with_code(
+                "Verbindungsaufbau abgebrochen",
+                "SSH_CONNECTION_ABANDONED",
+            ))
+        }
+        HostKeyWait::TimedOut => {
+            tracing::warn!(
+                session_id = %session_id,
+                host = %host,
+                port,
+                "host key confirmation timed out, treating as rejected",
+            );
+            // Spec 0069, Teil A4: Code zusätzlich zur bisherigen,
+            // host:port-tragenden Meldung (Text unverändert).
+            Err(CommandError::with_code(
+                format!(
+                    "Verbindung zu {host}:{port} abgebrochen: Host-Key-Bestätigung \
+                     nicht rechtzeitig beantwortet (nicht vertraut)"
+                ),
+                "SSH_HOST_KEY_CONFIRM_TIMEOUT",
+            ))
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn confirm_host_key(
     state: State<'_, AppState>,
@@ -1237,6 +1271,7 @@ pub async fn confirm_host_key(
 
 #[cfg(test)]
 mod host_key_wait_tests {
+    use app_logic::events::TestEmitter;
     use uuid::Uuid;
 
     use super::*;
@@ -1297,5 +1332,146 @@ mod host_key_wait_tests {
         .await
         .expect("darf nicht hängen");
         assert_eq!(wait, HostKeyWait::Decided(HostKeyUserDecision::Reject));
+    }
+
+    fn recorded_events(emitter: &TestEmitter) -> Vec<(String, serde_json::Value)> {
+        emitter.events.lock().unwrap().clone()
+    }
+
+    /// Issue #37: läuft das Warten in den Timeout, meldet das Backend das
+    /// Ende genau dieser Abfrage (`sessionId` + `promptId`), und `connect()`
+    /// scheitert weiterhin mit `SSH_HOST_KEY_CONFIRM_TIMEOUT` — vertraut
+    /// wird nichts.
+    #[tokio::test]
+    async fn test_host_key_timeout_emits_ended_event_and_still_rejects() {
+        let registry: ConfirmationRegistry<SessionId, HostKeyUserDecision> =
+            ConfirmationRegistry::new();
+        let emitter = TestEmitter::default();
+        let session_id = Uuid::new_v4();
+        let (generation, rx) = registry.register_tracked(session_id);
+
+        let wait = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            wait_for_host_key_decision(
+                &registry,
+                session_id,
+                generation,
+                rx,
+                std::time::Duration::from_millis(50),
+            ),
+        )
+        .await
+        .expect("darf nicht ewig warten");
+        let result = finish_host_key_wait(
+            &emitter,
+            session_id,
+            generation,
+            wait,
+            "prod-1.internal",
+            2222,
+        );
+
+        let err = result.expect_err("ein Timeout darf nie zu einer Entscheidung werden");
+        assert_eq!(err.code, Some("SSH_HOST_KEY_CONFIRM_TIMEOUT"));
+        assert_eq!(
+            recorded_events(&emitter),
+            vec![(
+                "host-key-verification-ended".to_string(),
+                serde_json::json!({
+                    "sessionId": session_id,
+                    "promptId": generation.as_u64(),
+                    "reason": "timed_out",
+                }),
+            )]
+        );
+        assert!(
+            registry
+                .resolve(&session_id, HostKeyUserDecision::Trust)
+                .is_err(),
+            "ein spätes Trust darf nach Ablauf niemanden mehr erreichen"
+        );
+    }
+
+    /// Issue #37: ein `connect()`-Retry registriert unter derselben
+    /// `SessionId` neu und droppt damit den Sender der alten Abfrage. Das
+    /// Ende-Ereignis der alten Abfrage trägt nur deren `promptId` — die neue
+    /// Abfrage bleibt offen und beantwortbar.
+    #[tokio::test]
+    async fn test_host_key_abandoned_wait_emits_ended_event_for_its_registration_only() {
+        let registry: ConfirmationRegistry<SessionId, HostKeyUserDecision> =
+            ConfirmationRegistry::new();
+        let emitter = TestEmitter::default();
+        let session_id = Uuid::new_v4();
+        let (old_generation, old_rx) = registry.register_tracked(session_id);
+        let (new_generation, new_rx) = registry.register_tracked(session_id);
+        assert_ne!(old_generation.as_u64(), new_generation.as_u64());
+
+        let wait = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            wait_for_host_key_decision(
+                &registry,
+                session_id,
+                old_generation,
+                old_rx,
+                std::time::Duration::from_secs(60),
+            ),
+        )
+        .await
+        .expect("darf nicht hängen");
+        assert_eq!(wait, HostKeyWait::Abandoned);
+        let result = finish_host_key_wait(
+            &emitter,
+            session_id,
+            old_generation,
+            wait,
+            "prod-1.internal",
+            2222,
+        );
+
+        let err = result.expect_err("ein Abbruch darf nie zu einer Entscheidung werden");
+        assert_eq!(err.code, Some("SSH_CONNECTION_ABANDONED"));
+        assert_eq!(
+            recorded_events(&emitter),
+            vec![(
+                "host-key-verification-ended".to_string(),
+                serde_json::json!({
+                    "sessionId": session_id,
+                    "promptId": old_generation.as_u64(),
+                    "reason": "abandoned",
+                }),
+            )]
+        );
+        // Die neue Abfrage ist unberührt und erreicht ihren Wartenden.
+        assert!(registry.contains(&session_id));
+        registry
+            .resolve(&session_id, HostKeyUserDecision::Reject)
+            .expect("die neue Abfrage muss noch beantwortbar sein");
+        assert_eq!(new_rx.await, Ok(HostKeyUserDecision::Reject));
+    }
+
+    /// Issue #37: auch nach einer Nutzerentscheidung kommt das
+    /// Ende-Ereignis; die Entscheidung selbst wird unverändert durchgereicht.
+    #[test]
+    fn test_host_key_decided_wait_emits_ended_event_and_passes_decision_through() {
+        let emitter = TestEmitter::default();
+        let registry: ConfirmationRegistry<SessionId, HostKeyUserDecision> =
+            ConfirmationRegistry::new();
+        let session_id = Uuid::new_v4();
+        let (generation, _rx) = registry.register_tracked(session_id);
+
+        let result = finish_host_key_wait(
+            &emitter,
+            session_id,
+            generation,
+            HostKeyWait::Decided(HostKeyUserDecision::Reject),
+            "prod-1.internal",
+            2222,
+        );
+
+        assert_eq!(result.ok(), Some(HostKeyUserDecision::Reject));
+        let events = recorded_events(&emitter);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].1["reason"], "decided");
+        assert_eq!(events[0].1["promptId"], generation.as_u64());
     }
 }

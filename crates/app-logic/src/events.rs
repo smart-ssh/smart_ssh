@@ -94,6 +94,12 @@ pub enum HostKeyKind {
 #[serde(rename_all = "camelCase")]
 struct HostKeyVerificationNeededPayload {
     session_id: SessionId,
+    /// Issue #37: Kennung genau dieser Abfrage (Generation der
+    /// Registrierung in `pending_host_key_confirmations`). Ein
+    /// `connect()`-Retry kann unter derselben `session_id` eine neue Abfrage
+    /// anlegen; `host-key-verification-ended` trägt dieselbe Kennung, damit
+    /// das Frontend nur die passende Abfrage schließt.
+    prompt_id: u64,
     host: String,
     port: u16,
     kind: HostKeyKind,
@@ -110,6 +116,7 @@ struct HostKeyVerificationNeededPayload {
 pub fn emit_host_key_verification_needed(
     emitter: &dyn EventEmitter,
     session_id: SessionId,
+    prompt_id: u64,
     host: String,
     port: u16,
     kind: HostKeyKind,
@@ -121,11 +128,53 @@ pub fn emit_host_key_verification_needed(
         "host-key-verification-needed",
         &HostKeyVerificationNeededPayload {
             session_id,
+            prompt_id,
             host,
             port,
             kind,
             fingerprint,
             expected_fingerprint,
+        },
+    );
+}
+
+/// Issue #37: warum eine Host-Key-Abfrage im Backend geendet hat.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostKeyPromptEndReason {
+    /// Der Nutzer hat über `confirm_host_key` entschieden.
+    Decided,
+    /// Frist abgelaufen — gilt als Ablehnung (Spec 0068, Teil 5b).
+    TimedOut,
+    /// Wartender aufgegeben (Neu-Registrierung, App-Ende) — Abbruch.
+    Abandoned,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HostKeyVerificationEndedPayload {
+    session_id: SessionId,
+    prompt_id: u64,
+    reason: HostKeyPromptEndReason,
+}
+
+/// Issue #37: das Backend wartet nicht mehr auf die Abfrage `prompt_id`
+/// (jeder Ausgang des Wartens, auch `Decided`). Rein informativ fürs
+/// Frontend — schließt dort die passende Abfrage; an der Vertrauens-
+/// entscheidung ändert das Ereignis nichts.
+pub fn emit_host_key_verification_ended(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    prompt_id: u64,
+    reason: HostKeyPromptEndReason,
+) {
+    emit(
+        emitter,
+        "host-key-verification-ended",
+        &HostKeyVerificationEndedPayload {
+            session_id,
+            prompt_id,
+            reason,
         },
     );
 }
@@ -943,6 +992,30 @@ mod tests {
     //! kam im Frontend als `undefined` an (`result.exitCode`).
 
     use super::*;
+
+    /// Issue #37: `host-key-verification-needed` trägt additiv die
+    /// `promptId`, an der das Frontend das passende Ende-Ereignis erkennt.
+    #[test]
+    fn test_host_key_verification_needed_carries_prompt_id() {
+        let emitter = TestEmitter::default();
+        let session_id = Uuid::new_v4();
+        emit_host_key_verification_needed(
+            &emitter,
+            session_id,
+            7,
+            "prod-1.internal".to_string(),
+            2222,
+            HostKeyKind::Unknown,
+            "SHA256:abc".to_string(),
+            None,
+        );
+        let events = emitter.events.lock().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].0, "host-key-verification-needed");
+        assert_eq!(events[0].1["sessionId"], session_id.to_string());
+        assert_eq!(events[0].1["promptId"], 7);
+        assert_eq!(events[0].1["fingerprint"], "SHA256:abc");
+    }
 
     #[test]
     fn test_action_result_payload_command_uses_camel_case_exit_code() {

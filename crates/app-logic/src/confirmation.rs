@@ -21,6 +21,16 @@ use crate::poison::lock_tolerating_poison;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RegistrationGeneration(u64);
 
+impl RegistrationGeneration {
+    /// Issue #37: der rohe Zählerwert — als `promptId` in
+    /// `host-key-verification-needed`/`-ended`, damit das Frontend zwei
+    /// Abfragen unter derselben `SessionId` (Retry) auseinanderhält. Reine
+    /// Kennung, keine Berechtigung: `confirm_host_key` prüft sie nicht.
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
 pub struct ConfirmationRegistry<K, T> {
     /// Spec 0088, A2.2: Alle Zugriffe laufen über
     /// [`lock_tolerating_poison`] statt `lock().unwrap()`. Grund: Das
