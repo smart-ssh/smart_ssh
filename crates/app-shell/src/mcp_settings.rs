@@ -75,20 +75,41 @@ fn generate_token() -> String {
 /// hatte diese Rechte bisher; ein Umzug ist kein Grund, sie
 /// zurückzunehmen. Nach jedem Schreibzugriff dieses Moduls aufgerufen,
 /// weil es den bisherigen Auslöser (das Token-Schreiben) nicht mehr gibt.
+///
+/// **Issue #40:** The path comes from [`settings_store_path`], i.e. exactly
+/// the resolution the store uses itself. It used to be built from
+/// `app_config_dir`; on Linux that is a different directory than the
+/// store's `BaseDirectory::AppData`, so the hardening hit a file that does
+/// not exist and the real `settings.json` kept its umask mode.
+///
+/// Best-effort: a failed path resolution or `set_permissions` is ignored
+/// and never fails the calling command.
 fn harden_settings_store_permissions<R: Runtime>(app: &AppHandle<R>) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let Ok(config_dir) = app.path().app_config_dir() else {
+        let Ok(path) = settings_store_path(app) else {
             return;
         };
-        let path = config_dir.join(SETTINGS_STORE_FILE);
         let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     }
     #[cfg(not(unix))]
     {
         let _ = app;
     }
+}
+
+/// Where `settings.json` lives: via `tauri_plugin_store::resolve_store_path`,
+/// the same resolution the store uses when reading and writing
+/// (`BaseDirectory::AppData`). Deliberately not `app_config_dir`: on Linux
+/// that is a different directory (`~/.config` instead of `~/.local/share`),
+/// see ADR 0105. Single source of truth for this path — used by the
+/// permission hardening above and by the data paths display
+/// (`commands::diagnostics_export`).
+pub(crate) fn settings_store_path<R: Runtime>(
+    app: &AppHandle<R>,
+) -> tauri_plugin_store::Result<std::path::PathBuf> {
+    tauri_plugin_store::resolve_store_path(app, SETTINGS_STORE_FILE)
 }
 
 /// Spec 0101, A12: `settings.json` als **alter** Ablageort des Tokens.
