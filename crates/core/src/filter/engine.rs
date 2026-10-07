@@ -229,7 +229,21 @@ impl<S: PolicyStore> FilterEngine<S> {
         let scope = EffectiveScope::from(ctx);
         let rules = self.store.rules_for(&scope).await;
         report_invalid_patterns(&rules);
-        self.evaluate_parsed_explained(command, &rules, 0)
+        let mut trace = self.evaluate_parsed_explained(command, &rules, 0);
+        // Issue #13: input whose encoding the engine cannot see through
+        // (Unicode tricks, ANSI-C escapes) is escalated to at least
+        // `Confirm`. The regular evaluation above still ran, so a `Deny`
+        // keeps winning; `combine` never lowers the decision.
+        if let Some(reason) = parser::opaque_encoding_reason(command) {
+            trace.decision = combine(
+                trace.decision,
+                Decision::Confirm {
+                    reason: reason.to_string(),
+                    code: FILTER_PARSE_AMBIGUOUS.to_string(),
+                },
+            );
+        }
+        trace
     }
 
     /// Zerlegt `command` in Teilkommandos und wertet sie aus. Bei genau
@@ -311,20 +325,31 @@ impl<S: PolicyStore> FilterEngine<S> {
                 // kombiniert wird nur zum jeweils strengeren Ergebnis, der
                 // Ambiguous-Baseline von mindestens `Confirm` wird also nie
                 // unterschritten, nur ggf. auf `Deny` verschärft.
-                match parser::extract_shell_c_style_code(command) {
-                    Some(code_arg) => {
-                        let inner_trace =
-                            self.evaluate_parsed_explained(&code_arg, rules, depth + 1);
-                        EvaluationTrace {
-                            decision: combine(baseline, inner_trace.decision.clone()),
-                            matched_rule: inner_trace.matched_rule.clone(),
-                            matched_rule_origin: inner_trace.matched_rule_origin,
-                            matched_hard_blacklist_entry: inner_trace
-                                .matched_hard_blacklist_entry
-                                .clone(),
-                            sub_command_traces: vec![inner_trace],
-                        }
-                    }
+                let inner_traces: Vec<EvaluationTrace> =
+                    parser::extract_shell_c_style_codes(command)
+                        .iter()
+                        .map(|code_arg| self.evaluate_parsed_explained(code_arg, rules, depth + 1))
+                        .collect();
+                let decision = inner_traces
+                    .iter()
+                    .map(|trace| trace.decision.clone())
+                    .fold(baseline.clone(), combine);
+                // The trace that decided the outcome supplies the matched
+                // rule (the first one with the strictest decision).
+                let deciding = inner_traces
+                    .iter()
+                    .find(|trace| trace.decision == decision)
+                    .or(inner_traces.first());
+                match deciding {
+                    Some(inner_trace) => EvaluationTrace {
+                        decision,
+                        matched_rule: inner_trace.matched_rule.clone(),
+                        matched_rule_origin: inner_trace.matched_rule_origin,
+                        matched_hard_blacklist_entry: inner_trace
+                            .matched_hard_blacklist_entry
+                            .clone(),
+                        sub_command_traces: inner_traces.to_vec(),
+                    },
                     None => EvaluationTrace {
                         decision: baseline,
                         matched_rule: None,
@@ -422,10 +447,70 @@ impl<S: PolicyStore> FilterEngine<S> {
             &resolved_literal,
         );
 
-        let sub_command_traces: Vec<EvaluationTrace> = inner_contents
+        let mut sub_command_traces: Vec<EvaluationTrace> = inner_contents
             .into_iter()
             .map(|inner| self.evaluate_parsed_explained(&inner, rules, depth + 1))
             .collect();
+
+        // Issue #13: fail closed on segments whose real command the engine
+        // cannot see — an opaque command word (expansion, glob/brace,
+        // non-ASCII, compound syntax), a shell/interpreter reading its
+        // program from stdin or running code from an argument, options of
+        // such a call that cannot be analysed, or `eval`. Code passed as an
+        // argument (`-c`, `-e`, `eval`) is also evaluated recursively. Each
+        // only adds a `Confirm` floor (or a stricter inner result) via
+        // `combine`; none of them can lower the decision.
+        let mut opaque_reasons: Vec<&'static str> = Vec::new();
+        let mut eval_trace: Option<EvaluationTrace> = None;
+        if let Some(reason) = parser::opaque_command_word_reason(&original_literal) {
+            opaque_reasons.push(reason);
+        }
+        let mut code_traces: Vec<EvaluationTrace> = Vec::new();
+        match parser::program_source(&original_literal) {
+            Some(parser::ProgramSource::Stdin) => opaque_reasons.push(
+                "Shell/Interpreter liest sein Programm von der Standardeingabe \
+                 (z. B. `... | sh`), der Inhalt ist nicht prüfbar",
+            ),
+            Some(parser::ProgramSource::Opaque) => opaque_reasons.push(
+                "Shell/Interpreter-Aufruf mit Optionen, die nicht sicher ausgewertet \
+                 werden konnten",
+            ),
+            Some(parser::ProgramSource::Code(codes)) => {
+                opaque_reasons.push(
+                    "Shell/Interpreter führt Code aus einem Argument aus \
+                     (`-c`, `-e`, ...)",
+                );
+                // Like the whole-command `bash -c "..."` path in
+                // `evaluate_parsed_explained`: the code is evaluated as a
+                // command of its own, so a `Deny` rule still bites behind
+                // `ls; ksh -c "..."` or `bash -e -c "..."`.
+                code_traces.extend(
+                    codes
+                        .iter()
+                        .filter(|code| !code.trim().is_empty())
+                        .map(|code| self.evaluate_parsed_explained(code, rules, depth + 1)),
+                );
+            }
+            Some(parser::ProgramSource::Operand) | None => {}
+        }
+        if let Some(code) = parser::eval_code(&original_literal) {
+            opaque_reasons.push("`eval` führt seine Argumente als Shell-Code aus");
+            // Like `bash -c "..."`: the code `eval` runs is evaluated as a
+            // command of its own, so a `Deny` rule or the hard blacklist
+            // still bites behind it.
+            if !code.trim().is_empty() {
+                eval_trace = Some(self.evaluate_parsed_explained(&code, rules, depth + 1));
+            }
+        }
+        let opaque_decision = opaque_reasons
+            .into_iter()
+            .map(|reason| Decision::Confirm {
+                reason: reason.to_string(),
+                code: FILTER_PARSE_AMBIGUOUS.to_string(),
+            })
+            .chain(eval_trace.iter().map(|trace| trace.decision.clone()))
+            .chain(code_traces.iter().map(|trace| trace.decision.clone()))
+            .fold(Decision::AutoExec, combine);
         let substitution_decision = if sub_command_traces.is_empty() {
             Decision::AutoExec
         } else {
@@ -444,11 +529,16 @@ impl<S: PolicyStore> FilterEngine<S> {
 
         let decision = combine(
             combine(
-                combine(rule_decision, substitution_decision),
-                blacklist_decision,
+                combine(
+                    combine(rule_decision, substitution_decision),
+                    blacklist_decision,
+                ),
+                redirection_decision,
             ),
-            redirection_decision,
+            opaque_decision,
         );
+        sub_command_traces.extend(eval_trace);
+        sub_command_traces.extend(code_traces);
 
         EvaluationTrace {
             decision,
