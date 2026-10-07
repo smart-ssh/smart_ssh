@@ -116,7 +116,12 @@ Stattdessen:
 - Der Dialog erscheint erst, wenn der Nutzer zu diesem Tab wechselt.
 - Wird ein Tab mit ausstehender Bestätigung geschlossen, gilt das als
   **Ablehnung** der wartenden Aktion (nicht als Zustimmung) — plus eine
-  Rückfrage vor dem Schließen, damit das nicht unbemerkt passiert.
+  Rückfrage vor dem Schließen, damit das nicht unbemerkt passiert. Die
+  Ablehnung erledigt das Backend in `disconnect` für jede Sitzung selbst
+  (`session::reject_pending_confirmation_on_close`, Issue #66), bevor die
+  Verbindung getrennt wird; das Frontend ist dafür nicht der einzige Weg
+  (nach einem Reload kennt es die `actionId` nicht). Seine eigene
+  Ablehnung beim Schließen ist redundant und harmlos.
 
 ## 6. Verbindungsabbau
 
