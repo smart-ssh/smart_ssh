@@ -281,7 +281,11 @@ const SCRIPT_INTERPRETER_CODE_FLAGS: &[(&str, &str)] = &[
 fn is_complex_shell_c_invocation(cmd: &str) -> bool {
     let mut words = cmd.split_whitespace();
     if let (Some(prog), Some(flag)) = (words.next(), words.next()) {
-        let prog = prog.rsplit('/').next().unwrap_or(prog);
+        // Case-insensitive (issue #13): on a case-insensitive file system
+        // `BASH -c "..."` runs bash. Only widens what counts as a script
+        // block, i.e. only escalates.
+        let prog = prog.rsplit('/').next().unwrap_or(prog).to_ascii_lowercase();
+        let prog = prog.as_str();
         if matches!(prog, "bash" | "sh" | "zsh" | "dash") {
             // Nicht nur das exakte "-c", sondern auch kombinierte
             // Kurz-Flags, die ein "c" enthalten (`-xc`, `-lc`, `-ec`, ...)
@@ -314,7 +318,7 @@ fn is_complex_shell_c_invocation(cmd: &str) -> bool {
 /// `flock`/`busybox`/`script` (unabhängiger Review-Pass, Spec 0013).
 const PASSTHROUGH_WRAPPERS: &[&str] = &[
     "env", "nice", "nohup", "time", "command", "timeout", "xargs", "setsid", "stdbuf", "ionice",
-    "chroot", "flock", "busybox", "script",
+    "chroot", "flock", "busybox", "script", "exec", "builtin",
 ];
 
 /// Wrapper, die vor dem eigentlichen Kommando genau EIN positionales (nicht
@@ -415,6 +419,14 @@ fn strip_one_elevation_wrapper_or_assignment(cmd: &str) -> String {
         return normalize_whitespace(&words[1..].join(" "));
     }
 
+    // Issue #13: wrappers are recognised by their lower-cased basename, so
+    // `/usr/bin/env rm`, `SUDO rm` or `Env rm` (case-insensitive file
+    // systems) are unwrapped like `env rm`. The result only feeds Deny/
+    // Confirm rules, the hard blacklist and the risk classifier (never an
+    // Allow rule, see `engine::evaluate_rules_explained`), so recognising
+    // more wrappers can only escalate.
+    let head_lower = head.rsplit('/').next().unwrap_or(head).to_ascii_lowercase();
+    let head = head_lower.as_str();
     let is_elevation = head == "sudo" || head == "doas";
     let is_wrapper = PASSTHROUGH_WRAPPERS.contains(&head);
     if !is_elevation && !is_wrapper {
@@ -655,4 +667,214 @@ fn push_segment(chars: &[char], start: usize, end: usize, segments: &mut Vec<Str
     if !trimmed.is_empty() {
         segments.push(trimmed);
     }
+}
+
+// --- Fail-closed checks for opaque input (issue #13) -----------------------
+//
+// Each check below answers "can the engine see what the shell will run?".
+// When the answer is no, the engine escalates the decision to at least
+// `Confirm` (code `FILTER_PARSE_AMBIGUOUS`) — it never lowers a decision and
+// it never replaces the regular evaluation, which still runs so a matching
+// `Deny` rule keeps winning.
+
+/// Unicode characters that make the displayed command differ from the
+/// executed one: C1 controls (U+0080–U+009F, the C0 range is already
+/// rejected in [`split_command`]), whitespace outside ASCII (a separator for
+/// [`normalize_whitespace`] but part of a word for the shell, so the engine
+/// would judge a different command than the one that runs), and invisible
+/// format characters (zero-width characters, bidi embeddings/overrides/
+/// isolates, word joiner, BOM, soft hyphen, variation selectors, tags).
+fn is_deceptive_unicode(c: char) -> bool {
+    if c.is_ascii() {
+        return false;
+    }
+    if c.is_whitespace() || c.is_control() {
+        return true;
+    }
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{034F}'
+            | '\u{061C}'
+            | '\u{115F}'
+            | '\u{1160}'
+            | '\u{17B4}'
+            | '\u{17B5}'
+            | '\u{180B}'..='\u{180F}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{206F}'
+            | '\u{3164}'
+            | '\u{FE00}'..='\u{FE0F}'
+            | '\u{FEFF}'
+            | '\u{FFA0}'
+            | '\u{FFF0}'..='\u{FFFB}'
+            | '\u{1D173}'..='\u{1D17A}'
+            | '\u{E0000}'..='\u{E0FFF}'
+    )
+}
+
+/// Whether `text` contains an ANSI-C quoted string (`$'...'`) with a
+/// backslash escape. The shell decodes those escapes (`$'\x72m'` is `rm`),
+/// the engine does not, so it cannot know which word results. An ANSI-C
+/// string without a backslash is a plain literal and handled by
+/// [`unquote_first_word`]. Scans without quote context on purpose: a `$'`
+/// inside double quotes is a false positive, which only costs a
+/// confirmation.
+fn contains_ansi_c_escape(text: &str) -> bool {
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0usize;
+    while i + 1 < chars.len() {
+        if chars[i] == '$' && chars[i + 1] == '\'' {
+            let mut j = i + 2;
+            while j < chars.len() && chars[j] != '\'' {
+                if chars[j] == '\\' {
+                    return true;
+                }
+                j += 1;
+            }
+            i = j + 1;
+            continue;
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Checks the whole raw command for encodings the engine cannot see through
+/// (Unicode tricks, ANSI-C escapes). Returns the reason, or `None`.
+pub(super) fn opaque_encoding_reason(cmd: &str) -> Option<&'static str> {
+    if cmd.chars().any(is_deceptive_unicode) {
+        return Some(
+            "Kommando enthält unsichtbare Unicode-Zeichen, Unicode-Leerraum oder \
+             C1-Steuerzeichen und konnte nicht sicher analysiert werden",
+        );
+    }
+    if contains_ansi_c_escape(cmd) {
+        return Some(
+            "Kommando enthält ANSI-C-Quoting mit Escape-Sequenzen ($'\\x..') und \
+             konnte nicht sicher analysiert werden",
+        );
+    }
+    None
+}
+
+/// Shell reserved words: a segment starting with one of them is part of a
+/// compound command (`if ...; then rm -rf /; fi`), whose real command the
+/// segment-wise view does not resolve.
+const SHELL_RESERVED_WORDS: &[&str] = &[
+    "if", "then", "else", "elif", "fi", "do", "done", "while", "until", "for", "in", "case",
+    "esac", "select", "function", "coproc",
+];
+
+/// The command word of `normalized` as the shell resolves it: after the
+/// same wrapper/elevation/assignment stripping and first-word unquoting as
+/// [`resolve_effective_command`], but before the path prefix is cut off, so
+/// glob characters in a directory part stay visible.
+fn effective_command_word(normalized: &str) -> String {
+    let mut current = normalized.to_string();
+    loop {
+        let stripped = strip_one_elevation_wrapper_or_assignment(&current);
+        if stripped == current {
+            break;
+        }
+        current = stripped;
+    }
+    unquote_first_word(&current)
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_string()
+}
+
+/// Checks whether the command word of one segment is a plain name the
+/// engine can match rules against. `literal` is the whitespace-normalised
+/// segment with command substitutions already removed. Opaque are:
+/// non-ASCII names (fullwidth forms, homoglyphs), parameter expansion
+/// (`$x`, `${IFS}`), glob and brace expansion (`/bin/r?`, `{rm,-rf,/}`),
+/// subshell/group/negation syntax (`(rm`, `{`, `!`) and shell reserved
+/// words. Returns the reason, or `None`.
+pub(super) fn opaque_command_word_reason(literal: &str) -> Option<&'static str> {
+    let word = effective_command_word(literal);
+    if word.is_empty() {
+        return None;
+    }
+    let plain = word.chars().all(|c| {
+        c.is_ascii_alphanumeric()
+            || matches!(
+                c,
+                '_' | '.' | '-' | '+' | ':' | '@' | '%' | ',' | '=' | '/' | '~' | '^'
+            )
+    });
+    if !plain {
+        return Some(
+            "Kommandoname enthält Expansion, Shell-Syntax oder Nicht-ASCII-Zeichen und \
+             konnte nicht sicher bestimmt werden",
+        );
+    }
+    if SHELL_RESERVED_WORDS.contains(&word.to_ascii_lowercase().as_str()) {
+        return Some("zusammengesetztes Shell-Konstrukt (if/for/while/case ...)");
+    }
+    None
+}
+
+/// Shells that read their program from stdin when started without a script
+/// operand or with `-s`.
+const STDIN_SHELLS: &[&str] = &[
+    "sh", "bash", "zsh", "dash", "ksh", "mksh", "ash", "fish", "csh", "tcsh",
+];
+
+/// Interpreters that read their program from stdin when started without a
+/// script operand or with the operand `-`.
+const STDIN_INTERPRETERS: &[&str] = &["python", "python3", "perl", "ruby", "node", "php"];
+
+/// Whether the segment starts a shell or interpreter that reads its program
+/// from stdin (`... | base64 -d | sh`, `curl ... | bash -s`, `... | python3`).
+/// The program text never appears in the command, so the engine cannot
+/// check it. `literal` as for [`opaque_command_word_reason`].
+pub(super) fn reads_program_from_stdin(literal: &str) -> bool {
+    let resolved = resolve_effective_command(literal);
+    let mut words = resolved.split_whitespace();
+    let Some(program) = words.next() else {
+        return false;
+    };
+    let program = program.to_ascii_lowercase();
+    let is_shell = STDIN_SHELLS.contains(&program.as_str());
+    let is_interpreter = STDIN_INTERPRETERS.contains(&program.as_str());
+    if !is_shell && !is_interpreter {
+        return false;
+    }
+    let mut has_operand = false;
+    for word in words {
+        if matches!(word, "-" | "/dev/stdin" | "/dev/fd/0" | "/proc/self/fd/0") {
+            return true;
+        }
+        if let Some(flags) = word.strip_prefix('-') {
+            if is_shell && !flags.starts_with('-') && flags.contains('s') {
+                return true;
+            }
+            continue;
+        }
+        has_operand = true;
+    }
+    !has_operand
+}
+
+/// If the segment is an `eval` call, returns the code `eval` runs: its
+/// arguments with quotes removed, joined by single spaces (what the shell
+/// passes to its parser). `literal` as for [`opaque_command_word_reason`].
+/// Falls back to the raw argument text when it cannot be tokenised.
+pub(super) fn eval_code(literal: &str) -> Option<String> {
+    let resolved = resolve_effective_command(literal);
+    let trimmed = resolved.trim_start();
+    let rest_start = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
+    let (program, rest) = trimmed.split_at(rest_start);
+    if !program.eq_ignore_ascii_case("eval") {
+        return None;
+    }
+    let code = match shell_words::split(rest) {
+        Ok(words) => words.join(" "),
+        Err(_) => rest.trim().to_string(),
+    };
+    Some(code)
 }

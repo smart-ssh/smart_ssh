@@ -229,7 +229,21 @@ impl<S: PolicyStore> FilterEngine<S> {
         let scope = EffectiveScope::from(ctx);
         let rules = self.store.rules_for(&scope).await;
         report_invalid_patterns(&rules);
-        self.evaluate_parsed_explained(command, &rules, 0)
+        let mut trace = self.evaluate_parsed_explained(command, &rules, 0);
+        // Issue #13: input whose encoding the engine cannot see through
+        // (Unicode tricks, ANSI-C escapes) is escalated to at least
+        // `Confirm`. The regular evaluation above still ran, so a `Deny`
+        // keeps winning; `combine` never lowers the decision.
+        if let Some(reason) = parser::opaque_encoding_reason(command) {
+            trace.decision = combine(
+                trace.decision,
+                Decision::Confirm {
+                    reason: reason.to_string(),
+                    code: FILTER_PARSE_AMBIGUOUS.to_string(),
+                },
+            );
+        }
+        trace
     }
 
     /// Zerlegt `command` in Teilkommandos und wertet sie aus. Bei genau
@@ -422,10 +436,44 @@ impl<S: PolicyStore> FilterEngine<S> {
             &resolved_literal,
         );
 
-        let sub_command_traces: Vec<EvaluationTrace> = inner_contents
+        let mut sub_command_traces: Vec<EvaluationTrace> = inner_contents
             .into_iter()
             .map(|inner| self.evaluate_parsed_explained(&inner, rules, depth + 1))
             .collect();
+
+        // Issue #13: fail closed on segments whose real command the engine
+        // cannot see — an opaque command word (expansion, glob/brace,
+        // non-ASCII, compound syntax), a shell/interpreter reading its
+        // program from stdin, or `eval`. Each only adds a `Confirm` floor via
+        // `combine`; none of them can lower the decision.
+        let mut opaque_reasons: Vec<&'static str> = Vec::new();
+        let mut eval_trace: Option<EvaluationTrace> = None;
+        if let Some(reason) = parser::opaque_command_word_reason(&original_literal) {
+            opaque_reasons.push(reason);
+        }
+        if parser::reads_program_from_stdin(&original_literal) {
+            opaque_reasons.push(
+                "Shell/Interpreter liest sein Programm von der Standardeingabe \
+                 (z. B. `... | sh`), der Inhalt ist nicht prüfbar",
+            );
+        }
+        if let Some(code) = parser::eval_code(&original_literal) {
+            opaque_reasons.push("`eval` führt seine Argumente als Shell-Code aus");
+            // Like `bash -c "..."`: the code `eval` runs is evaluated as a
+            // command of its own, so a `Deny` rule or the hard blacklist
+            // still bites behind it.
+            if !code.trim().is_empty() {
+                eval_trace = Some(self.evaluate_parsed_explained(&code, rules, depth + 1));
+            }
+        }
+        let opaque_decision = opaque_reasons
+            .into_iter()
+            .map(|reason| Decision::Confirm {
+                reason: reason.to_string(),
+                code: FILTER_PARSE_AMBIGUOUS.to_string(),
+            })
+            .chain(eval_trace.iter().map(|trace| trace.decision.clone()))
+            .fold(Decision::AutoExec, combine);
         let substitution_decision = if sub_command_traces.is_empty() {
             Decision::AutoExec
         } else {
@@ -444,11 +492,15 @@ impl<S: PolicyStore> FilterEngine<S> {
 
         let decision = combine(
             combine(
-                combine(rule_decision, substitution_decision),
-                blacklist_decision,
+                combine(
+                    combine(rule_decision, substitution_decision),
+                    blacklist_decision,
+                ),
+                redirection_decision,
             ),
-            redirection_decision,
+            opaque_decision,
         );
+        sub_command_traces.extend(eval_trace);
 
         EvaluationTrace {
             decision,

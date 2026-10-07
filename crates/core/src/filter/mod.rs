@@ -15,6 +15,9 @@ mod types;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod adversarial_tests;
+
 pub use engine::{
     scope_applies, CombinedPolicySource, FilterEngine, PolicySource, PolicySourceError,
     PolicySourceResult, PolicyStore, DEFAULT_MAX_COMMAND_LENGTH,
