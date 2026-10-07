@@ -1,7 +1,7 @@
 # ADR 0107 — Filter-Engine: fail-closed bei undurchsichtiger Eingabe
 
 Status: akzeptiert
-Betrifft: Issue #13, Spec 0002 (Abschnitte 3, 4.4, 4.6), ADR 0001, ADR 0036
+Betrifft: Issue #13, Issue #60, Spec 0002 (Abschnitte 3, 4.4, 4.6), ADR 0001, ADR 0036
 
 ## Problem
 
@@ -132,6 +132,35 @@ wie weit die Engine sie auflösen soll.
    eigene Segment `rm -rf /` fiele von `Deny` auf `Confirm` zurück. Im
    Block-Pfad wird zusätzlich zum dritten Token auch der Code aus
    `program_source` ausgewertet (`sh -c -- CODE`), beide über `combine`.
+
+   **Nachtrag Issue #60 — Shell-Namen außerhalb der Listen.** Vorher
+   galt jeder nicht gelistete Name als gewöhnliches Kommando
+   (`ls; oksh -c 'rm -rf /'` war unter `Allow "*"` `AutoExec`). Jetzt:
+   - `rksh` (ksh93), `rzsh` (zsh) und `oksh` (OpenBSD-ksh, ein
+     pdksh-Nachfahre) gehören zur ksh-Familie.
+   - Versionierte Binaries bekannter Shells bekommen die Familie ihres
+     Grundnamens: Grundname (POSIX-Shells, `fish`, `csh`, `tcsh`), optional
+     `-` oder `_`, dann eine Version, die mit einer Ziffer beginnt und nur
+     aus ASCII-Buchstaben, Ziffern, `.`, `+`, `-`, `_` besteht (`bash5`,
+     `bash-5.2`, `zsh-5.9`, `ksh2020`, `ksh93u+m`). Die Ziffer direkt nach
+     dem Namen hält `sha1sum`, `shred` oder `bashbug` heraus.
+   - **Fail-closed-Auffangregel** für nicht klassifizierte Namen, die wie
+     eine Shell aussehen: Basename endet auf `sh`, besteht nur aus
+     ASCII-Buchstaben, Ziffern, `-`, `_` (also keine Skriptdatei wie
+     `deploy.sh`) und steht nicht auf der Ausschlussliste `ssh autossh lsh
+     chsh lchsh ypchsh flush fdflush crash push publish refresh rehash
+     hash finish` (`ssh -c` ist eine Cipher, `chsh -s` setzt die
+     Login-Shell). Trägt der Aufruf vor `--` einen kurzen Options-Cluster
+     mit `c` oder `s` (`-c`, `-s`, `-xc`, `+s`), wird er wie `sh` nach
+     beiden Lesarten ausgewertet: gefundener Code wird rekursiv geprüft
+     (ein `Deny` greift also auch hinter `mysh -c`), sonst gilt er als
+     Standardeingabe bzw. nicht auswertbar (`Confirm`). Ohne einen solchen
+     Cluster bleibt alles wie vorher (`mysh deploy.sh`). Das kostet bei
+     einem Nicht-Shell-Werkzeug mit passendem Namen gelegentlich eine
+     Bestätigung, schließt aber die Klasse statt nur einzelner Namen.
+   - Die Block-Erkennung `is_complex_shell_c_invocation` bleibt aus dem
+     oben genannten Grund unverändert; alles läuft über `program_source`
+     je Segment und eskaliert nur.
 
 5. **`eval` wird wie `bash -c` behandelt:** Untergrenze `Confirm`, und der
    Code, den `eval` ausführt (Argumente entquotet, mit Leerzeichen
