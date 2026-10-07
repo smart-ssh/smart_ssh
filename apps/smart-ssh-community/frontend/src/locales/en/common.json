@@ -365,7 +365,8 @@
     "unknownBodyBeforeHost": "You are connecting to ",
     "unknownBodyAfterHost": " for the first time. Please check the fingerprint before trusting it.",
     "reject": "Reject",
-    "trust": "Trust"
+    "trust": "Trust",
+    "expired": "The host key request for {{host}}:{{port}} expired. The connection was not established and the key was not trusted."
   },
   "sessionTabs": {
     "overview": "Overview",

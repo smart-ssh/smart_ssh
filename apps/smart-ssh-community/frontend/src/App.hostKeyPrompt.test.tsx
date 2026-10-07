@@ -13,9 +13,13 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { confirmHostKey, connect, listServers, listSessions } from "./api";
-import { onHostKeyVerificationNeeded } from "./events";
+import { onHostKeyVerificationEnded, onHostKeyVerificationNeeded } from "./events";
 import { testI18n } from "./testI18n";
-import type { HostKeyVerificationNeededEvent, ServerDto } from "./types";
+import type {
+  HostKeyVerificationEndedEvent,
+  HostKeyVerificationNeededEvent,
+  ServerDto,
+} from "./types";
 
 vi.mock("./api", async () => {
   const actual = await vi.importActual<typeof import("./api")>("./api");
@@ -84,6 +88,7 @@ const sessionId = "33333333-3333-4333-8333-333333333333";
 const events: HostKeyVerificationNeededEvent[] = [
   {
     sessionId,
+    promptId: 1,
     host: "prod-1.internal",
     port: 2222,
     kind: "unknown",
@@ -92,6 +97,7 @@ const events: HostKeyVerificationNeededEvent[] = [
   },
   {
     sessionId,
+    promptId: 2,
     host: "prod-1.internal",
     port: 2222,
     kind: "mismatch",
@@ -128,6 +134,13 @@ function remoteServer(): ServerDto {
 }
 
 let subscribers: Set<(event: HostKeyVerificationNeededEvent) => void>;
+let endSubscribers: Set<(event: HostKeyVerificationEndedEvent) => void>;
+
+function emitHostKeyEnded(event: HostKeyVerificationEndedEvent) {
+  act(() => {
+    for (const handler of endSubscribers) handler(event);
+  });
+}
 
 function emitHostKey(event: HostKeyVerificationNeededEvent) {
   act(() => {
@@ -149,6 +162,13 @@ beforeEach(() => {
     subscribers.add(handler);
     return Promise.resolve(() => {
       subscribers.delete(handler);
+    });
+  });
+  endSubscribers = new Set();
+  vi.mocked(onHostKeyVerificationEnded).mockImplementation((handler) => {
+    endSubscribers.add(handler);
+    return Promise.resolve(() => {
+      endSubscribers.delete(handler);
     });
   });
   vi.mocked(confirmHostKey).mockResolvedValue(undefined);
@@ -318,5 +338,73 @@ describe("App host key prompt in every tab state (Issue #12)", () => {
 
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     expect(confirmHostKey).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #37: das Backend meldet über `host-key-verification-ended`, dass es
+// nicht mehr auf eine Abfrage wartet (Timeout, Abbruch). Die angezeigte
+// Abfrage schließt nur, wenn `sessionId` und `promptId` passen.
+describe("App host key prompt closes when the backend ends it (Issue #37)", () => {
+  async function renderOnManagementTab() {
+    renderApp();
+    fireEvent.click(screen.getByRole("button", { name: "Verwalten" }));
+    await screen.findByTestId("management-view");
+    await waitFor(() => expect(subscribers.size).toBe(1));
+    await waitFor(() => expect(endSubscribers.size).toBe(1));
+  }
+
+  it("closes the shown prompt when a matching end event arrives", async () => {
+    await renderOnManagementTab();
+    emitHostKey(events[0]);
+    await screen.findByRole("dialog");
+
+    emitHostKeyEnded({ sessionId, promptId: events[0].promptId, reason: "abandoned" });
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(confirmHostKey).not.toHaveBeenCalled();
+  });
+
+  it("shows an info toast, no error toast and never calls confirmHostKey after a timeout", async () => {
+    await renderOnManagementTab();
+    emitHostKey(events[1]);
+    await screen.findByRole("alertdialog");
+
+    emitHostKeyEnded({ sessionId, promptId: events[1].promptId, reason: "timed_out" });
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    const toast = await screen.findByText(/Host-Key-Abfrage für prod-1\.internal:2222 ist abgelaufen/);
+    expect(toast).toBeVisible();
+    expect(toast.textContent).toMatch(/^ℹ /);
+    const region = screen.getByRole("status");
+    expect(region).toContainElement(toast);
+    expect(region.textContent).not.toContain("⚠");
+    expect(region.querySelector(".bg-red-950")).toBeNull();
+    expect(confirmHostKey).not.toHaveBeenCalled();
+  });
+
+  it("keeps a newer prompt open for an end event of another session or an older prompt", async () => {
+    await renderOnManagementTab();
+    emitHostKey(events[1]);
+    await screen.findByRole("alertdialog");
+
+    // Andere Session, gleiche promptId.
+    emitHostKeyEnded({
+      sessionId: "55555555-5555-4555-8555-555555555555",
+      promptId: events[1].promptId,
+      reason: "timed_out",
+    });
+    // Ältere Abfrage derselben Session (z. B. vor einem Retry).
+    emitHostKeyEnded({ sessionId, promptId: events[0].promptId, reason: "abandoned" });
+    emitHostKeyEnded({ sessionId, promptId: events[0].promptId, reason: "timed_out" });
+
+    expect(screen.getByRole("alertdialog")).toBeVisible();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(confirmHostKey).not.toHaveBeenCalled();
+
+    // Die Abfrage bleibt bedienbar.
+    fireEvent.click(screen.getByRole("button", { name: rejectLabelFor(events[1]) }));
+    await waitFor(() =>
+      expect(confirmHostKey).toHaveBeenCalledWith(sessionId, { decision: "reject" }),
+    );
   });
 });
