@@ -5,12 +5,13 @@ use std::time::Duration;
 use russh::client;
 use ssh_manager_core::profiles::CredentialStore;
 use ssh_manager_core::ssh::{
-    ConnectionTarget, HostKeyDecision, HostKeyStore, KeyFileReader, SshError, SshTransport,
+    ConnectLog, ConnectStep, ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, KeyFileReader,
+    SshError, SshTransport,
 };
 
-use crate::auth::authenticate;
-use crate::error::{map_russh_error, map_transport_error, TransportError};
-use crate::handler::ClientHandler;
+use crate::auth::{authenticate, AuthSteps};
+use crate::error::{map_io_error, map_russh_error, map_transport_error, TransportError};
+use crate::handler::{ClientHandler, HopSteps};
 use crate::transport::RusshTransport;
 
 /// Ergebnis eines Verbindungsversuchs.
@@ -90,6 +91,41 @@ pub async fn connect(
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
 ) -> Result<ConnectOutcome, SshError> {
+    connect_with_log(target, credentials, key_files, host_keys, &ConnectLog::new()).await
+}
+
+/// Wie [`connect`], zeichnet dabei aber jeden Schritt je Hop in `log` auf
+/// (Issue #51): DNS, TCP bzw. Tunnel, Handshake, Host-Key-Prüfung,
+/// Anmeldung, fertige Sitzung. Ein Fehler schließt den gerade laufenden
+/// Schritt mit dem Code des Fehlers ([`SshError::code`]).
+///
+/// Bricht ein Timeout den Versuch von außen ab, bleibt der laufende Schritt
+/// offen — der Aufrufer schließt ihn mit [`ConnectLog::fail_running`].
+///
+/// Die Aufzeichnung ändert keine Entscheidung: Host-Key-Prüfung und
+/// Anmeldung laufen exakt wie in [`connect`], es wird keine zusätzliche
+/// Methode versucht und kein Schlüssel automatisch angenommen.
+pub async fn connect_with_log(
+    target: &ConnectionTarget,
+    credentials: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
+    host_keys: Arc<dyn HostKeyStore>,
+    log: &ConnectLog,
+) -> Result<ConnectOutcome, SshError> {
+    let result = connect_inner(target, credentials, key_files, host_keys, log).await;
+    if let Err(err) = &result {
+        log.fail_running(err.code());
+    }
+    result
+}
+
+async fn connect_inner(
+    target: &ConnectionTarget,
+    credentials: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
+    host_keys: Arc<dyn HostKeyStore>,
+    log: &ConnectLog,
+) -> Result<ConnectOutcome, SshError> {
     let Some((first_hop, remaining_hops)) = target.hops.split_first() else {
         return Err(SshError::ConnectionFailed(
             "ConnectionTarget ohne Hops kann nicht verbunden werden".to_string(),
@@ -107,24 +143,30 @@ pub async fn connect(
         ..Default::default()
     });
 
+    let first_label = hop_label(first_hop);
+    let socket = match open_tcp(log, &first_label, &first_hop.host, first_hop.port).await {
+        Ok(socket) => socket,
+        // Spec 0069, Teil A3: DNS-Diagnose nur für den ersten Hop, nur
+        // im Fehlerfall, nur nachträglich — s. `diagnose_connection_
+        // failed_dns`-Doc-Kommentar.
+        Err(err) => {
+            return Err(
+                diagnose_connection_failed_dns(err, &first_hop.host, first_hop.port).await,
+            )
+        }
+    };
+
     let handler = ClientHandler {
         host: first_hop.host.clone(),
         port: first_hop.port,
         host_keys: host_keys.clone(),
+        steps: HopSteps::start(log, 0, &first_label),
     };
-    let connect_result = client::connect(
-        config.clone(),
-        (first_hop.host.as_str(), first_hop.port),
-        handler,
-    )
-    .await;
+    let connect_result = client::connect_stream(config.clone(), socket, handler).await;
     let mut current_handle =
         match resolve_or_pending(connect_result, &first_hop.host, first_hop.port) {
             Ok(Ok(handle)) => handle,
             Ok(Err(outcome)) => return Ok(outcome),
-            // Spec 0069, Teil A3: DNS-Diagnose nur für den ersten Hop, nur
-            // im Fehlerfall, nur nachträglich — s. `diagnose_connection_
-            // failed_dns`-Doc-Kommentar.
             Err(err) => {
                 return Err(
                     diagnose_connection_failed_dns(err, &first_hop.host, first_hop.port).await,
@@ -132,11 +174,28 @@ pub async fn connect(
             }
         };
 
-    authenticate(&mut current_handle, first_hop, credentials, key_files).await?;
+    authenticate(
+        &mut current_handle,
+        first_hop,
+        credentials,
+        key_files,
+        &AuthSteps::new(log, 0, &first_label),
+    )
+    .await?;
 
     let mut intermediate_hops = Vec::new();
 
-    for hop in remaining_hops {
+    for (offset, hop) in remaining_hops.iter().enumerate() {
+        let hop_index = offset + 1;
+        let label = hop_label(hop);
+        let tunnel_step = log.start(
+            hop_index,
+            &label,
+            ConnectStep::TunnelOpen {
+                host: hop.host.clone(),
+                port: hop.port,
+            },
+        );
         let tunnel_channel = current_handle
             .channel_open_direct_tcpip(
                 hop.host.clone(),
@@ -146,12 +205,14 @@ pub async fn connect(
             )
             .await
             .map_err(map_russh_error)?;
+        log.succeed(tunnel_step);
         let stream = tunnel_channel.into_stream();
 
         let handler = ClientHandler {
             host: hop.host.clone(),
             port: hop.port,
             host_keys: host_keys.clone(),
+            steps: HopSteps::start(log, hop_index, &label),
         };
         let connect_result = client::connect_stream(config.clone(), stream, handler).await;
         let next_handle = match resolve_or_pending(connect_result, &hop.host, hop.port)? {
@@ -162,14 +223,103 @@ pub async fn connect(
         let previous_handle = std::mem::replace(&mut current_handle, next_handle);
         intermediate_hops.push(previous_handle);
 
-        authenticate(&mut current_handle, hop, credentials, key_files).await?;
+        authenticate(
+            &mut current_handle,
+            hop,
+            credentials,
+            key_files,
+            &AuthSteps::new(log, hop_index, &label),
+        )
+        .await?;
     }
+
+    let last_index = target.hops.len() - 1;
+    let ready = log.start(
+        last_index,
+        &hop_label(&target.hops[last_index]),
+        ConnectStep::SessionReady,
+    );
+    log.succeed(ready);
 
     Ok(ConnectOutcome::Connected(Box::new(RusshTransport {
         handle: current_handle,
         _intermediate_hops: intermediate_hops,
         max_output_bytes: crate::exec::MAX_STREAM_OUTPUT_BYTES,
     })))
+}
+
+/// `user@host:port` — dieselbe Form wie [`ssh_manager_core::ssh::HopLabel`].
+fn hop_label(hop: &Hop) -> String {
+    format!("{}@{}:{}", hop.username, hop.host, hop.port)
+}
+
+/// Issue #51: Namensauflösung und TCP-Verbindung des ersten Hops als zwei
+/// eigene, aufgezeichnete Schritte.
+///
+/// Vorher reichte `connect` `(host, port)` an `russh::client::connect`
+/// durch, das intern genau dasselbe tut: `TcpStream::connect` auf die
+/// aufgelösten Adressen (jede der Reihe nach, der letzte Fehler gewinnt),
+/// danach `set_nodelay` und `connect_stream`. Hier steht derselbe Ablauf
+/// ausgeschrieben, damit sich Auflösung und Verbindung getrennt messen
+/// lassen. Der Hostname bleibt der Schlüssel der Host-Key-Prüfung (der
+/// Handler bekommt `first_hop.host`, nicht die IP).
+///
+/// Fehler werden abgebildet wie bisher: ein Fehler der Auflösung wird zu
+/// [`SshError::HostNotFound`] mit demselben Text, den die nachträgliche
+/// DNS-Diagnose (Spec 0069, A3) gebaut hätte; ein Fehler der Verbindung
+/// läuft durch dieselbe `io::ErrorKind`-Tabelle wie zuvor.
+async fn open_tcp(
+    log: &ConnectLog,
+    label: &str,
+    host: &str,
+    port: u16,
+) -> Result<tokio::net::TcpStream, SshError> {
+    let dns_step = log.start(
+        0,
+        label,
+        ConnectStep::DnsResolution {
+            host: host.to_string(),
+            port,
+            addresses: Vec::new(),
+        },
+    );
+    let addrs: Vec<std::net::SocketAddr> = match tokio::net::lookup_host((host, port)).await {
+        Ok(addrs) => addrs.collect(),
+        Err(err) => {
+            return Err(SshError::HostNotFound(format!(
+                "Host '{host}' ist nicht auflösbar (ursprünglicher Fehler: {err})"
+            )))
+        }
+    };
+    log.update(dns_step, |step| {
+        if let ConnectStep::DnsResolution { addresses, .. } = step {
+            *addresses = addrs.iter().map(|a| a.ip().to_string()).collect();
+        }
+    });
+    log.succeed(dns_step);
+
+    let tcp_step = log.start(
+        0,
+        label,
+        ConnectStep::TcpConnect {
+            address: None,
+            port,
+        },
+    );
+    let socket = tokio::net::TcpStream::connect(addrs.as_slice())
+        .await
+        .map_err(map_io_error)?;
+    // Wie `russh::client::connect` bei `config.nodelay`: ein Fehlschlag
+    // ist dort nur eine Warnung und bricht nichts ab.
+    let _ = socket.set_nodelay(true);
+    let peer = socket.peer_addr().ok().map(|a| a.ip().to_string());
+    log.update(tcp_step, |step| {
+        if let ConnectStep::TcpConnect { address, .. } = step {
+            *address = peer;
+        }
+    });
+    log.succeed(tcp_step);
+    Ok(socket)
 }
 
 /// Übersetzt das Ergebnis von `client::connect`/`client::connect_stream`:
