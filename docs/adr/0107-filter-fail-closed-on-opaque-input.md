@@ -87,9 +87,19 @@ wie weit die Engine sie auflösen soll.
        `zsh` und die ksh-Familie gilt deshalb `c` als Code- und `s` als
        Stdin-Option; ein negierter (`+o c`, `-o noc`), nur in
        Groß-/Kleinschreibung passender oder wertnehmender Buchstabe ist
-       nicht auswertbar (`Confirm`). Für mksh/lksh/pdksh ist das Verhalten
-       nicht nachgeprüft; sie bekommen dieselbe, nur verschärfende
-       Behandlung. Bei `sh`, `yash` und `posh` ist nicht sicher,
+       nicht auswertbar (`Confirm`). ksh93 ignoriert `-`/`_` in
+       Optionsnamen (`-o c_`, `-o no-c` wirken wie `-c`), zsh zusätzlich
+       Groß-/Kleinschreibung. Der Wert wird deshalb vor dem Lesen
+       normalisiert (`-`/`_` entfernt, ein führendes `no` negiert). Statt
+       jede weitere Schreibweise einzeln nachzutragen, gilt eine
+       Positivliste: Ein mehrbuchstabiger Wert muss ein bekannter
+       ksh-/mksh-/zsh-Optionsname sein, sonst ist der Aufruf nicht
+       auswertbar (`Confirm`), auch ein leerer Wert. Die Namen, mit denen
+       die Shell ihr Programm von stdin liest (zsh `SHIN_STDIN`, mksh
+       `stdin`), zählen wie `-s`. Ein seltener, nicht gelisteter, aber
+       harmloser Optionsname kostet damit nur eine Bestätigung. Für
+       mksh/lksh/pdksh ist das Verhalten nicht nachgeprüft; sie bekommen
+       dieselbe, nur verschärfende Behandlung. Bei `sh`, `yash` und `posh` ist nicht sicher,
        welche Shell dahinter steht; der Aufruf wird deshalb nach beiden
        Lesarten ausgewertet und zusammengeführt (fail-closed): findet eine
        der beiden Code, wird der Code beider Lesarten rekursiv
