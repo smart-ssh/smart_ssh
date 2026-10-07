@@ -28,6 +28,22 @@ Spec 0057 (Kompaktierung, MCP-Ausschluss aus der Summary), ADR 0109.
 - **Schlüssel:** (Server, MCP-Client). Der Client ist `clientInfo.name` aus
   dem MCP-Handshake, getrimmt. Clients ohne Namen teilen sich je Server eine
   Sitzung — die App kann sie nicht unterscheiden.
+- **Länge des Client-Namens (Issue #68):** höchstens 64 Zeichen
+  (`MCP_CLIENT_NAME_MAX_CHARS`). Ein längerer Name wird an einer
+  Zeichengrenze gekürzt (nie mitten in einem Multi-Byte-Zeichen), danach
+  wird Leerraum am Ende entfernt. Der gekürzte Name gilt für den Schlüssel
+  und für jede Anzeige: Tab-Beschriftung, OS-Benachrichtigung,
+  Bestätigungsdialog. Zwei Namen, die sich erst hinter Zeichen 64
+  unterscheiden, sind derselbe Client.
+- **Höchstzahl je Server (Issue #68):** höchstens 4 offene MCP-Sitzungen je
+  Server (`MCP_MAX_SESSIONS_PER_SERVER`), fest, nicht einstellbar. Es zählt
+  jede eingetragene Sitzung, auch eine abgerissene, deren Tab noch offen
+  ist. Eine Anfrage, die eine weitere Sitzung bräuchte, bekommt einen
+  Fehler (`ActionOutcome::Failed` mit `MCP_SESSION_LIMIT_MESSAGE`). Es wird
+  weder eine Verbindung aufgebaut noch ein Tab angelegt. Prüfen und
+  Eintragen geschehen atomar, auch über verschiedene Clients hinweg. Die
+  Wiederverwendung einer verbundenen Sitzung desselben Schlüssels ist davon
+  nicht betroffen. Schließen eines MCP-Tabs gibt einen Platz frei.
 - **Eigene SSH-Verbindung** über denselben `connect_session`-Pfad wie ein
   Sidebar-Klick: gleiche gespeicherte Zugangsdaten, gleicher
   Host-Key-Ablauf (unbekannter/geänderter Schlüssel → Abfrage wie bisher),
@@ -45,7 +61,12 @@ Spec 0057 (Kompaktierung, MCP-Ausschluss aus der Summary), ADR 0109.
 - **Gleichzeitige Anfragen** desselben Schlüssels warten auf ein
   Anlege-Lock je Schlüssel, damit nicht zwei Verbindungen entstehen. Andere
   Schlüssel (anderer Server oder Client) warten nicht, auch nicht auf einen
-  offenen Host-Key-Dialog.
+  offenen Host-Key-Dialog. Ein Lock-Eintrag besteht nur, solange eine
+  Anfrage das Lock hält oder darauf wartet (auch ein abgebrochenes Warten
+  meldet sich ab). Danach wird er entfernt, damit die Tabelle nicht mit
+  jedem je gesehenen Client-Namen wächst (Issue #68). Das Eintragen der
+  Sitzung geschieht immer unter dem Lock, eine spätere Anfrage findet sie
+  deshalb auch mit einem neuen Lock.
 - Die Sitzung wird **vor** dem Verbindungsaufbau eingetragen. So
   kennzeichnet `list_sessions()` den Tab schon während eines
   Host-Key-Dialogs, und Nutzer-Eingaben sind von Anfang an gesperrt.
@@ -132,6 +153,13 @@ Spec 0057 (Kompaktierung, MCP-Ausschluss aus der Summary), ADR 0109.
   nächste Anfrage bekommt eine neue Sitzung.
 - Nutzer-Eingaben werden nur für MCP-Sitzungen abgelehnt.
 - Das Anlege-Lock serialisiert nur denselben Schlüssel.
+- Issue #68: Ein zu langer Name wird gekürzt, Namen mit gleichem Anfang bis
+  zur Grenze ergeben denselben Schlüssel, Multi-Byte-Namen ohne Panic. Bei
+  erreichter Höchstzahl: Fehler, kein Eintrag, kein Tab-Event; Schließen
+  gibt einen Platz frei; die eigene verbundene Sitzung wird weiter
+  verwendet; eine abgerissene, offene Sitzung zählt mit. Nach Öffnen und
+  Austragen hält `creation_locks` keine Einträge, auch nicht nach
+  abgebrochenem Warten.
 
 `crates/app-shell/src/mcp_backend.rs`: Rückmeldung an den Client bei
 geschlossener Sitzung. Frontend: `useSessionTabs.test.ts` (kein
