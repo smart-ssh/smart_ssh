@@ -192,9 +192,10 @@ fn test_unregister_frees_the_key_for_a_new_session() {
     assert!(registry.unregister(id).is_none());
 }
 
-/// Ein Nicht-MCP-Tab beim Schließen: `end_session` fasst seine wartende
-/// Bestätigung nicht an (dafür bleibt der bestehende Frontend-Fluss
-/// zuständig, Spec 0017, Abschnitt 5).
+/// Ein Nicht-MCP-Tab beim Schließen: `end_session` selbst fasst seine
+/// wartende Bestätigung nicht an — das macht für jede Sitzung
+/// `session::reject_pending_confirmation_on_close` (Issue #66, Tests in
+/// `orchestration::action_exec::tests_pending_confirmation`).
 #[test]
 fn test_end_session_ignores_non_mcp_sessions() {
     let registry = McpSessionRegistry::new();
@@ -360,6 +361,78 @@ async fn test_closing_the_mcp_session_rejects_its_pending_confirmation() {
             "Ablehnung fehlt im MCP-Verlauf: {history:?}"
         );
         assert!(!registry.is_mcp_session(session_id));
+        assert_eq!(registry.reusable_session(&key, &sessions), None);
+    })
+    .await
+    .expect("Test hing");
+}
+
+/// Issue #66, AC 2: Über den sitzungsunabhängigen Schließ-Schritt, den
+/// `disconnect` jetzt aufruft, verhält sich eine MCP-Sitzung wie bisher —
+/// abgelehnt, nichts ausgeführt, ausgetragen, und zwar ausgetragen, bevor
+/// die wartende Aktion ihr Ergebnis meldet (dafür prüft
+/// `app_shell::mcp_backend`, ob die Sitzung noch eingetragen ist).
+#[tokio::test]
+async fn test_generic_close_keeps_the_mcp_session_behaviour() {
+    tokio::time::timeout(TEST_TIMEOUT, async {
+        let server = ServerId::new();
+        let sessions = SessionManager::new();
+        let registry = McpSessionRegistry::new();
+        let key = McpSessionKey::new(server, Some("Claude Code"));
+
+        let transport = MockSshTransport::default().with_response("ls -la", output("total 0"));
+        let executed = transport.executed_handle();
+        let session = Arc::new(session_on(server, transport));
+        let session_id = Uuid::new_v4();
+        registry.register(&key, session_id);
+        sessions.insert(session_id, Arc::clone(&session));
+
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+
+        let close = async {
+            while session.pending_action.lock().unwrap().is_none() {
+                tokio::task::yield_now().await;
+            }
+            let removed = sessions.remove(session_id).expect("Sitzung fehlt");
+            crate::session::reject_pending_confirmation_on_close(
+                session_id,
+                Some(&removed),
+                &registry,
+                &confirmations,
+            );
+        };
+        let registered_when_action_returned = async {
+            handle_mcp_action_proposed(
+                &session,
+                session_id,
+                ls_action(),
+                &emitter,
+                &profile_store,
+                &confirmations,
+                Some("Claude Code".to_string()),
+            )
+            .await;
+            registry.is_mcp_session(session_id)
+        };
+        let (still_registered, ()) = tokio::join!(registered_when_action_returned, close);
+
+        assert!(
+            !still_registered,
+            "die MCP-Sitzung muss ausgetragen sein, wenn ihre Aktion zurückkehrt"
+        );
+        assert!(
+            executed.lock().unwrap().is_empty(),
+            "Aktion lief trotz Schließen"
+        );
+        let history = session.context.lock().await.history.clone();
+        assert!(
+            history
+                .iter()
+                .any(|m| matches!(m.content, MessageContent::ActionRejected { .. })),
+            "Ablehnung fehlt im MCP-Verlauf: {history:?}"
+        );
         assert_eq!(registry.reusable_session(&key, &sessions), None);
     })
     .await

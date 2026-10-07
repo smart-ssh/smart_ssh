@@ -207,6 +207,12 @@ impl McpSessionRegistry {
     /// am Bestätigungs-Timeout enden. Gibt zurück, ob es eine MCP-Sitzung
     /// war. `session` ist `None`, wenn sie beim Schließen nicht (mehr) im
     /// `SessionManager` stand (z. B. Schließen während des Host-Key-Dialogs).
+    ///
+    /// Das Ablehnen selbst ist [`Session::reject_pending_confirmation`] und
+    /// gilt für jede Sitzung; `disconnect` ruft beides über
+    /// [`crate::session::reject_pending_confirmation_on_close`] auf
+    /// (Issue #66). Hier bleibt es, damit die MCP-Sitzung schon ausgetragen
+    /// ist, wenn ihre Aktion aufwacht.
     pub fn end_session(
         &self,
         session_id: SessionId,
@@ -216,14 +222,8 @@ impl McpSessionRegistry {
         if self.unregister(session_id).is_none() {
             return false;
         }
-        let pending = session.and_then(|s| *lock_tolerating_poison(&s.pending_action));
-        if let Some(action_id) = pending {
-            // Kann nur scheitern, wenn die Bestätigung im selben Moment
-            // anderweitig aufgelöst wurde (Klick, Timeout) — dann gibt es
-            // nichts mehr abzulehnen.
-            if let Err(err) = confirmations.resolve(&action_id, ActionUserDecision::Deny) {
-                tracing::debug!(error = %err, "pending MCP confirmation already settled on close");
-            }
+        if let Some(session) = session {
+            session.reject_pending_confirmation(confirmations);
         }
         true
     }
