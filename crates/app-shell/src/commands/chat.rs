@@ -395,14 +395,17 @@ pub async fn disconnect(
     // bleibt unten in diesem Befehl.
     let session = elevated.remove_session(&state.sessions, session_id);
 
-    // Spec 0104, §5: Schließen einer MCP-Sitzung trägt sie aus und lehnt
-    // ihre wartende Bestätigung ab (fail closed) — vor dem Trennen, damit
-    // die Aktion nicht mehr genehmigt werden kann. Auch ohne gefundene
-    // `Session` (Schließen während des Host-Key-Dialogs), damit die nächste
+    // Spec 0017, §5 / Spec 0104, §5 (Issue #66): Schließen lehnt die
+    // wartende Bestätigung JEDER Sitzung ab (fail closed) — vor dem
+    // Trennen, damit die Aktion nicht mehr genehmigt werden kann, und ohne
+    // dass das Frontend die einzige Stelle dafür ist. Eine MCP-Sitzung wird
+    // dabei zusätzlich ausgetragen, auch ohne gefundene `Session`
+    // (Schließen während des Host-Key-Dialogs), damit die nächste
     // MCP-Anfrage eine neue Sitzung anlegt statt auf diese zu warten.
-    state.mcp.sessions.end_session(
+    app_logic::session::reject_pending_confirmation_on_close(
         session_id,
         session.as_deref(),
+        &state.mcp.sessions,
         &state.pending_action_confirmations,
     );
     let session = session.ok_or("Session nicht gefunden")?;

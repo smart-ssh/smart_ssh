@@ -829,6 +829,35 @@ impl Session {
         self.auto_continue_stop_notify.notify_waiters();
     }
 
+    /// Spec 0017, Abschnitt 5 / Spec 0104, Abschnitt 5 (Issue #66): Lehnt
+    /// eine noch wartende Bestätigung dieser Sitzung ab (fail closed). Gilt
+    /// für **jede** Sitzung, ohne Unterscheidung nach Herkunft — die Aktion
+    /// wird über denselben Kanal abgelehnt wie per Klick auf "Ablehnen", die
+    /// wartende Ausführungskette verbucht sie also genau wie eine
+    /// Nutzer-Ablehnung. Kann nie genehmigen.
+    ///
+    /// Ist nichts mehr offen (keine Aktion, oder schon per Klick, Timeout
+    /// oder Frontend-Ablehnung aufgelöst), ist der Aufruf ein No-op ohne
+    /// Fehler. Gibt zurück, ob dieser Aufruf die Bestätigung abgelehnt hat.
+    pub fn reject_pending_confirmation(
+        &self,
+        confirmations: &ConfirmationRegistry<ActionId, crate::dto::ActionUserDecision>,
+    ) -> bool {
+        let Some(action_id) = *crate::poison::lock_tolerating_poison(&self.pending_action) else {
+            return false;
+        };
+        // Kann nur scheitern, wenn die Bestätigung im selben Moment
+        // anderweitig aufgelöst wurde (Klick, Timeout, Frontend-Ablehnung)
+        // — dann gibt es nichts mehr abzulehnen.
+        match confirmations.resolve(&action_id, crate::dto::ActionUserDecision::Deny) {
+            Ok(()) => true,
+            Err(err) => {
+                tracing::debug!(error = %err, "pending confirmation already settled on close");
+                false
+            }
+        }
+    }
+
     /// Wird fertig, sobald `auto_continue_stop` gesetzt ist.
     pub(crate) async fn auto_continue_stop_requested(&self) {
         loop {
@@ -845,6 +874,31 @@ impl Session {
             }
             notified.await;
         }
+    }
+}
+
+/// Issue #66: Der Tauri-freie Teil von `disconnect` für **jede** Sitzung,
+/// aufgerufen, nachdem die Sitzung aus dem `SessionManager` genommen wurde
+/// und bevor ihr Transport getrennt wird. `session` ist `None`, wenn sie
+/// dort nicht (mehr) stand (z. B. Schließen während des Host-Key-Dialogs).
+///
+/// Reihenfolge ist Absicht: Erst die MCP-Buchhaltung
+/// ([`McpSessionRegistry::end_session`](crate::mcp_sessions::McpSessionRegistry::end_session)
+/// — Austragen, und bei MCP-Sitzungen schon dort das Ablehnen), danach das
+/// sitzungsunabhängige Ablehnen. So ist eine MCP-Sitzung bereits
+/// ausgetragen, wenn ihre wartende Aktion aufwacht, und der MCP-Client
+/// bekommt weiter "Sitzung geschlossen" statt "vom Nutzer abgelehnt"
+/// (Spec 0104, Abschnitt 5). Für eine MCP-Sitzung ist der zweite Schritt
+/// dann ein No-op; für eine Nutzer-Sitzung ist er der einzige.
+pub fn reject_pending_confirmation_on_close(
+    session_id: SessionId,
+    session: Option<&Session>,
+    mcp_sessions: &crate::mcp_sessions::McpSessionRegistry,
+    confirmations: &ConfirmationRegistry<ActionId, crate::dto::ActionUserDecision>,
+) {
+    mcp_sessions.end_session(session_id, session, confirmations);
+    if let Some(session) = session {
+        session.reject_pending_confirmation(confirmations);
     }
 }
 
