@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import {
+  claimDroppedPaths,
   commandErrorMessage,
+  pickUploadFiles,
   readLocalTextPreview,
   sftpChmod,
   sftpDelete,
@@ -486,8 +487,18 @@ export function FileBrowserPanel({
           setDragOver(false);
           // Issue #29: always the `uploadMany` of the latest render — and
           // with it the current `channelUser` and `path` — never the one of
-          // the render that registered this listener.
-          uploadManyRef.current(event.payload.paths);
+          // the render that registered this listener. Taken now, at the
+          // drop, not once the claim below returns.
+          const upload = uploadManyRef.current;
+          // Issue #89: the payload's paths are not trusted. The backend
+          // captured the same drop from the native window event; claiming it
+          // grants those paths to this session and returns them.
+          claimDroppedPaths(sessionId)
+            .then((paths) => {
+              if (paths.length > 0) upload(paths);
+            })
+            // Fails only if the session is already gone (tab closing).
+            .catch((err) => console.warn("Could not claim the dropped files:", err));
         }
       })
       .then((fn) => {
@@ -502,7 +513,8 @@ export function FileBrowserPanel({
     // through `uploadManyRef` when the drop is handled, so there is no window
     // between a channel switch (banner already committed) and a re-registered
     // listener in which a drop would still use the previous channel.
-  }, [isVisible]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVisible, sessionId]);
 
   /** Spec 0054, Teil 3: "Hochladen ... Überschreibt bestehende →
    * Diff-Vorschau (0020)". Kein Dialog für den unkritischen Normalfall
@@ -525,7 +537,7 @@ export function FileBrowserPanel({
         return "uploaded";
       }
       const [localPreview, remoteText] = await Promise.all([
-        readLocalTextPreview(localPath),
+        readLocalTextPreview(sessionId, localPath),
         sftpReadText(sessionId, remotePath, channelUser).catch(() => null),
       ]);
       const remoteSize = entries.find((e) => e.path === remotePath)?.size ?? 0;
@@ -583,9 +595,11 @@ export function FileBrowserPanel({
   };
 
   const handleUploadButton = async () => {
-    const picked = await open({ title: "Datei(en) hochladen", multiple: true, directory: false });
-    if (!picked) return;
-    uploadMany(Array.isArray(picked) ? picked : [picked]);
+    // Issue #89: the dialog runs in the backend, which grants the picked
+    // files to this session; the webview never names a path itself.
+    const picked = await pickUploadFiles(sessionId, "Datei(en) hochladen");
+    if (!picked || picked.length === 0) return;
+    uploadMany(picked);
   };
 
   /** Spec 0054, Teil 2: "Herunterladen" — direkt ins Standard-

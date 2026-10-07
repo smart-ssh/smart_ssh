@@ -16,8 +16,10 @@ if (!Element.prototype.setPointerCapture) {
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
+  claimDroppedPaths,
   closeEditSession,
   localFileMtime,
+  pickUploadFiles,
   readLocalTextPreview,
   sftpChmod,
   sftpDelete,
@@ -63,6 +65,10 @@ vi.mock("../api", () => ({
   sftpExists: vi.fn(),
   sftpChmod: vi.fn(),
   readLocalTextPreview: vi.fn(),
+  // Issue #89: the backend hands out the paths of the native drop it
+  // captured — here the paths of the last simulated drop event.
+  claimDroppedPaths: vi.fn(() => Promise.resolve(nativeDrop.paths)),
+  pickUploadFiles: vi.fn(),
   sftpStat: vi.fn(),
   sftpOpenForEditing: vi.fn(),
   localFileMtime: vi.fn(),
@@ -89,6 +95,10 @@ vi.mock("../fileTypeSettings", () => ({
   appForFileName: () => null,
 }));
 
+// Issue #89: what the backend saw in the native drop event. The webview's
+// event payload is not trusted; the panel claims these paths instead.
+const nativeDrop = vi.hoisted(() => ({ paths: [] as string[] }));
+
 const dragDrop = vi.hoisted(() => ({
   handler: null as null | ((event: { payload: { type: string; paths?: string[] } }) => void),
   // Issue #29: how often a listener was registered / removed, so tests can
@@ -100,7 +110,10 @@ const dragDrop = vi.hoisted(() => ({
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({
     onDragDropEvent: vi.fn((h) => {
-      dragDrop.handler = h;
+      dragDrop.handler = (event: { payload: { type: string; paths?: string[] } }) => {
+        if (event.payload.type === "drop") nativeDrop.paths = event.payload.paths ?? [];
+        h(event);
+      };
       dragDrop.registrations += 1;
       return Promise.resolve(() => {
         dragDrop.unlistens += 1;
@@ -713,7 +726,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     vi.mocked(readLocalTextPreview).mockResolvedValue({ text: "neu", size: 3 });
     vi.mocked(sftpReadText).mockResolvedValue("alt");
     vi.mocked(sftpUpload).mockResolvedValue(undefined);
-    vi.mocked(open).mockResolvedValue("/local/a.txt");
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/a.txt"]);
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -729,6 +742,41 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     await waitFor(() =>
       expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/a.txt", "a.txt", null),
     );
+    // Issue #89: the preview names its session, so the backend can check the
+    // path against that session's grants.
+    expect(readLocalTextPreview).toHaveBeenCalledWith("session-1", "/local/a.txt");
+  });
+
+  // Issue #89: the upload button asks the backend to show the dialog; the
+  // webview never opens a file dialog itself.
+  it("the upload button uses the backend dialog and uploads what it returns", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/picked.txt"]);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Hochladen"));
+
+    await waitFor(() =>
+      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/picked.txt", "picked.txt", null),
+    );
+    expect(pickUploadFiles).toHaveBeenCalledWith("session-1", "Datei(en) hochladen");
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("cancelling the backend dialog uploads nothing", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(pickUploadFiles).mockResolvedValue(null);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Hochladen"));
+
+    await waitFor(() => expect(pickUploadFiles).toHaveBeenCalledTimes(1));
+    expect(sftpExists).not.toHaveBeenCalled();
+    expect(sftpUpload).not.toHaveBeenCalled();
   });
 
   it("upload to a new path skips the conflict dialog entirely", async () => {
@@ -736,7 +784,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
     vi.mocked(sftpExists).mockResolvedValue(false);
     vi.mocked(sftpUpload).mockResolvedValue(undefined);
-    vi.mocked(open).mockResolvedValue("/local/new.txt");
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/new.txt"]);
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -880,7 +928,7 @@ describe("FileBrowserPanel result toasts (Spec 0067, Teil B)", () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(sftpExists).mockResolvedValue(false);
     vi.mocked(sftpUpload).mockResolvedValue(undefined);
-    vi.mocked(open).mockResolvedValue(["/local/x.txt", "/local/y.txt", "/local/z.txt"]);
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/x.txt", "/local/y.txt", "/local/z.txt"]);
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -1290,7 +1338,7 @@ describe("FileBrowserPanel upload failure summary (Spec 0067, B2)", () => {
   it("several failed uploads produce one error toast, not one per file", async () => {
     vi.mocked(sftpExists).mockResolvedValue(false);
     vi.mocked(sftpUpload).mockRejectedValue({ message: "Permission denied", code: null });
-    vi.mocked(open).mockResolvedValue(["/local/x", "/local/y", "/local/z"]);
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/x", "/local/y", "/local/z"]);
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -1303,5 +1351,66 @@ describe("FileBrowserPanel upload failure summary (Spec 0067, B2)", () => {
       }),
     );
     expect(showToast).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Issue #89: a drop uploads only the paths the backend captured from the
+// native drop event and granted to this session. The webview's own event
+// payload is not used as a path source.
+describe("FileBrowserPanel drop uses backend-granted paths (Issue #89)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpList).mockResolvedValue([{ ...entry, name: "a.txt", path: "a.txt" }]);
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    dragDrop.handler = null;
+  });
+
+  it("uploads the claimed paths, not the paths in the event payload", async () => {
+    vi.mocked(claimDroppedPaths).mockResolvedValueOnce(["/native/real.txt"]);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    act(() =>
+      dragDrop.handler!({ payload: { type: "drop", paths: ["/home/user/.ssh/id_ed25519"] } }),
+    );
+
+    await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
+    expect(claimDroppedPaths).toHaveBeenCalledWith("session-1");
+    expect(sftpUpload).toHaveBeenCalledWith("session-1", "/native/real.txt", "real.txt", null);
+    expect(sftpUpload).not.toHaveBeenCalledWith(
+      "session-1",
+      "/home/user/.ssh/id_ed25519",
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("a claim with nothing to hand out uploads nothing", async () => {
+    vi.mocked(claimDroppedPaths).mockResolvedValueOnce([]);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/x.txt"] } }));
+
+    await waitFor(() => expect(claimDroppedPaths).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(sftpExists).not.toHaveBeenCalled();
+    expect(sftpUpload).not.toHaveBeenCalled();
+  });
+
+  // ADR 0113: folder upload is not added here. A dropped folder is forwarded
+  // exactly like a file (and fails in the backend as before).
+  it("a dropped folder is forwarded the same way as a file", async () => {
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/project"] } }));
+
+    await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
+    expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/project", "project", null);
   });
 });
