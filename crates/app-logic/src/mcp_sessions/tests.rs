@@ -743,3 +743,233 @@ async fn test_cancelled_wait_leaves_no_creation_lock_entry() {
     drop(guard);
     assert_eq!(registry.creation_lock_entries(), 0);
 }
+
+// ---- Issue #67: Zusammensetzung in `ensure_mcp_session`
+
+/// Zählt `connect`-Aufrufe und trägt bei Erfolg — wie `connect_session` in
+/// `app-shell` — eine verbundene Sitzung für die übergebene Id ein.
+#[derive(Default)]
+struct FakeConnector {
+    calls: std::sync::Mutex<Vec<SessionId>>,
+}
+
+impl FakeConnector {
+    fn calls(&self) -> Vec<SessionId> {
+        self.calls.lock().unwrap().clone()
+    }
+
+    async fn connect_ok(
+        &self,
+        sessions: &SessionManager,
+        server: ServerId,
+        session_id: SessionId,
+    ) -> Result<(), ()> {
+        self.calls.lock().unwrap().push(session_id);
+        // Gibt anderen Aufgaben Gelegenheit, dazwischenzukommen — wie ein
+        // echter Verbindungsaufbau.
+        tokio::task::yield_now().await;
+        sessions.insert(
+            session_id,
+            Arc::new(session_on(server, MockSshTransport::default())),
+        );
+        Ok(())
+    }
+
+    async fn connect_err(&self, session_id: SessionId) -> Result<(), ()> {
+        self.calls.lock().unwrap().push(session_id);
+        Err(())
+    }
+}
+
+/// Ein `disconnect_orphan`, der nicht aufgerufen werden darf.
+async fn no_orphan(session_id: SessionId) {
+    panic!("unerwartetes Trennen von {session_id}");
+}
+
+/// Issue #67, AC 1: Mit einem verbundenen **Nutzer**-Tab auf Server X und
+/// ohne MCP-Sitzung wird verbunden und eine neue Sitzung geliefert — nie
+/// die Nutzer-Sitzung.
+#[tokio::test]
+async fn test_ensure_mcp_session_connects_a_new_session_next_to_a_user_tab() {
+    let server = ServerId::new();
+    let sessions = SessionManager::new();
+    let user_session_id = Uuid::new_v4();
+    sessions.insert(
+        user_session_id,
+        Arc::new(session_on(server, MockSshTransport::default())),
+    );
+    let registry = McpSessionRegistry::new();
+    let key = McpSessionKey::new(server, Some("Claude Code"));
+    let emitter = TestEmitter::default();
+    let connector = FakeConnector::default();
+
+    let (session_id, session) = tokio::time::timeout(
+        TEST_TIMEOUT,
+        ensure_mcp_session(
+            &registry,
+            &sessions,
+            &key,
+            &emitter,
+            |id| connector.connect_ok(&sessions, server, id),
+            no_orphan,
+        ),
+    )
+    .await
+    .expect("Test hing")
+    .expect("Sitzung erwartet");
+
+    assert_ne!(session_id, user_session_id);
+    assert_eq!(connector.calls(), vec![session_id]);
+    assert!(registry.is_mcp_session(session_id));
+    assert!(!registry.is_mcp_session(user_session_id));
+    assert!(Arc::ptr_eq(&session, &sessions.get(session_id).unwrap()));
+    assert_eq!(tab_requested_events(&emitter), 1);
+}
+
+/// Issue #67, AC 2: Eine verbundene MCP-Sitzung desselben Schlüssels wird
+/// ohne `connect` wiederverwendet.
+#[tokio::test]
+async fn test_ensure_mcp_session_reuses_the_connected_mcp_session() {
+    let server = ServerId::new();
+    let sessions = SessionManager::new();
+    let registry = McpSessionRegistry::new();
+    let key = McpSessionKey::new(server, Some("Claude Code"));
+    let existing = Uuid::new_v4();
+    registry.register(&key, existing).unwrap();
+    sessions.insert(
+        existing,
+        Arc::new(session_on(server, MockSshTransport::default())),
+    );
+    let emitter = TestEmitter::default();
+    let connector = FakeConnector::default();
+
+    let (session_id, _) = ensure_mcp_session(
+        &registry,
+        &sessions,
+        &key,
+        &emitter,
+        |id| connector.connect_ok(&sessions, server, id),
+        no_orphan,
+    )
+    .await
+    .expect("Sitzung erwartet");
+
+    assert_eq!(session_id, existing);
+    assert!(connector.calls().is_empty());
+    assert_eq!(tab_requested_events(&emitter), 0);
+}
+
+/// Issue #67, AC 3: Scheitert `connect`, ist die neue Sitzung wieder
+/// ausgetragen und der Fehler kommt zurück; die nächste Anfrage verbindet
+/// erneut.
+#[tokio::test]
+async fn test_ensure_mcp_session_unregisters_after_a_failed_connect() {
+    let server = ServerId::new();
+    let sessions = SessionManager::new();
+    let registry = McpSessionRegistry::new();
+    let key = McpSessionKey::new(server, None);
+    let emitter = TestEmitter::default();
+    let connector = FakeConnector::default();
+
+    let result = ensure_mcp_session(
+        &registry,
+        &sessions,
+        &key,
+        &emitter,
+        |id| connector.connect_err(id),
+        no_orphan,
+    )
+    .await;
+    assert!(matches!(result, Err(EnsureMcpSessionError::Unavailable)));
+    let failed = connector.calls();
+    assert_eq!(failed.len(), 1);
+    assert!(!registry.is_mcp_session(failed[0]));
+    assert_eq!(registry.reusable_session(&key, &sessions), None);
+
+    let (session_id, _) = ensure_mcp_session(
+        &registry,
+        &sessions,
+        &key,
+        &emitter,
+        |id| connector.connect_ok(&sessions, server, id),
+        no_orphan,
+    )
+    .await
+    .expect("zweiter Versuch verbindet");
+    assert_ne!(session_id, failed[0]);
+    assert_eq!(connector.calls(), vec![failed[0], session_id]);
+}
+
+/// Issue #67, AC 4 / Spec 0104, §5: Wird die Sitzung ausgetragen (Tab
+/// geschlossen), während `connect` noch läuft, kommt "geschlossen" zurück
+/// und die verwaiste Verbindung wird getrennt.
+#[tokio::test]
+async fn test_ensure_mcp_session_disconnects_an_orphan_closed_during_connect() {
+    let server = ServerId::new();
+    let sessions = SessionManager::new();
+    let registry = McpSessionRegistry::new();
+    let key = McpSessionKey::new(server, Some("Claude Code"));
+    let emitter = TestEmitter::default();
+    let connector = FakeConnector::default();
+    let disconnected = std::sync::Mutex::new(Vec::new());
+    let (registry_ref, sessions_ref, connector_ref) = (&registry, &sessions, &connector);
+
+    let result = ensure_mcp_session(
+        &registry,
+        &sessions,
+        &key,
+        &emitter,
+        |id| async move {
+            // Der Nutzer schließt den Tab während des Verbindungsaufbaus
+            // (z. B. bei offenem Host-Key-Dialog).
+            registry_ref.unregister(id);
+            connector_ref.connect_ok(sessions_ref, server, id).await
+        },
+        |id| {
+            let removed = sessions.remove(id).is_some();
+            disconnected.lock().unwrap().push((id, removed));
+            async {}
+        },
+    )
+    .await;
+
+    assert!(matches!(result, Err(EnsureMcpSessionError::Closed)));
+    let connected = connector.calls();
+    assert_eq!(connected.len(), 1);
+    assert_eq!(*disconnected.lock().unwrap(), vec![(connected[0], true)]);
+    assert!(sessions.get(connected[0]).is_none());
+    assert!(!registry.is_mcp_session(connected[0]));
+}
+
+/// Issue #67, AC 5: Zwei gleichzeitige Anfragen desselben Schlüssels
+/// bauen genau eine Verbindung auf und bekommen dieselbe Sitzung.
+#[tokio::test]
+async fn test_ensure_mcp_session_concurrent_calls_connect_once() {
+    let server = ServerId::new();
+    let sessions = SessionManager::new();
+    let registry = McpSessionRegistry::new();
+    let key = McpSessionKey::new(server, Some("Claude Code"));
+    let emitter = TestEmitter::default();
+    let connector = FakeConnector::default();
+
+    let call = || {
+        ensure_mcp_session(
+            &registry,
+            &sessions,
+            &key,
+            &emitter,
+            |id| connector.connect_ok(&sessions, server, id),
+            no_orphan,
+        )
+    };
+    let (first, second) =
+        tokio::time::timeout(TEST_TIMEOUT, async { tokio::join!(call(), call()) })
+            .await
+            .expect("Test hing");
+
+    let (first_id, _) = first.expect("erste Sitzung");
+    let (second_id, _) = second.expect("zweite Sitzung");
+    assert_eq!(first_id, second_id);
+    assert_eq!(connector.calls(), vec![first_id]);
+    assert_eq!(tab_requested_events(&emitter), 1);
+}
