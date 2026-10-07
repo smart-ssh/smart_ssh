@@ -1396,3 +1396,569 @@ async fn test_sftp_via_exec_fails_fast_when_sudo_refuses() {
 
     assert!(result.is_err());
 }
+
+// --- Issue #51: Schritt-Protokoll eines Verbindungsversuchs ----------------
+
+use ssh_manager_core::ssh::{
+    AuthMethodKind, ConnectLog, ConnectStep, ConnectStepRecord, HostKeyCheckResult, StepStatus,
+};
+
+/// Ein Versuch mit Protokoll; liefert das Ergebnis ohne `Debug`-Zwang
+/// (`ConnectOutcome` trägt ein `Box<dyn SshTransport>`) und die Schritte.
+async fn connect_logged(
+    target: &ConnectionTarget,
+    credentials: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
+    host_keys: std::sync::Arc<dyn HostKeyStore>,
+) -> (Result<ConnectOutcome, SshError>, Vec<ConnectStepRecord>) {
+    let log = ConnectLog::new();
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        ssh_transport::connect_with_log(target, credentials, key_files, host_keys, &log),
+    )
+    .await
+    .expect("darf nicht hängen");
+    (result, log.snapshot())
+}
+
+fn kinds(steps: &[ConnectStepRecord]) -> Vec<&'static str> {
+    steps
+        .iter()
+        .map(|s| match s.step {
+            ConnectStep::DnsResolution { .. } => "dns",
+            ConnectStep::TcpConnect { .. } => "tcp",
+            ConnectStep::TunnelOpen { .. } => "tunnel",
+            ConnectStep::Handshake { .. } => "handshake",
+            ConnectStep::HostKeyCheck { .. } => "hostKey",
+            ConnectStep::Authentication { .. } => "auth",
+            ConnectStep::SessionReady => "ready",
+        })
+        .collect()
+}
+
+fn failed(code: &str) -> StepStatus {
+    StepStatus::Failed {
+        code: code.to_string(),
+    }
+}
+
+/// Der genau eine gescheiterte Schritt des Protokolls.
+fn the_failed_step(steps: &[ConnectStepRecord]) -> &ConnectStepRecord {
+    let failed: Vec<_> = steps
+        .iter()
+        .filter(|s| matches!(s.status, StepStatus::Failed { .. }))
+        .collect();
+    assert_eq!(
+        failed.len(),
+        1,
+        "genau ein gescheiterter Schritt: {steps:#?}"
+    );
+    assert!(
+        steps.iter().all(|s| s.status != StepStatus::Running),
+        "nach dem Versuch läuft kein Schritt mehr: {steps:#?}"
+    );
+    failed[0]
+}
+
+/// Erfolg: alle Schritte, alle mit Dauer, mit den Daten des Handshakes.
+#[tokio::test]
+async fn test_issue_51_successful_connect_lists_every_step_with_duration() {
+    let server = RunningTestServer::start().await;
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", server.addr.port())],
+    };
+    let (result, steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        trusted_host_keys(&server),
+    )
+    .await;
+    assert!(matches!(result, Ok(ConnectOutcome::Connected(_))));
+
+    assert_eq!(
+        kinds(&steps),
+        ["dns", "tcp", "handshake", "hostKey", "auth", "ready"]
+    );
+    for step in &steps {
+        assert_eq!(step.status, StepStatus::Ok, "{step:#?}");
+        assert!(step.duration_ms.is_some(), "{step:#?}");
+        assert_eq!(step.hop_index, 0);
+        assert_eq!(
+            step.hop,
+            format!("{TEST_USERNAME}@127.0.0.1:{}", server.addr.port())
+        );
+    }
+    let ConnectStep::DnsResolution { addresses, .. } = &steps[0].step else {
+        unreachable!()
+    };
+    assert_eq!(addresses, &["127.0.0.1".to_string()]);
+    let ConnectStep::TcpConnect { address, port } = &steps[1].step else {
+        unreachable!()
+    };
+    assert_eq!(address.as_deref(), Some("127.0.0.1"));
+    assert_eq!(*port, server.addr.port());
+    let ConnectStep::Handshake {
+        server_version,
+        kex,
+        host_key_algorithm,
+        cipher,
+        mac,
+    } = &steps[2].step
+    else {
+        unreachable!()
+    };
+    assert!(
+        server_version
+            .as_deref()
+            .is_some_and(|v| v.starts_with("SSH-2.0-testfixture")),
+        "{server_version:?}"
+    );
+    for value in [kex, host_key_algorithm, cipher, mac] {
+        assert!(value.as_deref().is_some_and(|v| !v.is_empty()), "{value:?}");
+    }
+    let ConnectStep::HostKeyCheck {
+        key_type,
+        fingerprint,
+        result,
+    } = &steps[3].step
+    else {
+        unreachable!()
+    };
+    assert_eq!(key_type.as_deref(), Some("ssh-ed25519"));
+    assert!(fingerprint
+        .as_deref()
+        .is_some_and(|f| f.starts_with("SHA256:")));
+    assert_eq!(*result, Some(HostKeyCheckResult::Known));
+    let ConnectStep::Authentication { method, .. } = &steps[4].step else {
+        unreachable!()
+    };
+    assert_eq!(*method, AuthMethodKind::Password);
+}
+
+/// DNS-Fehler: der DNS-Schritt ist der gescheiterte, danach kommt nichts.
+#[tokio::test]
+async fn test_issue_51_dns_failure_marks_the_dns_step() {
+    let target = ConnectionTarget {
+        hops: vec![password_hop("this-host-does-not-exist.invalid", 22)],
+    };
+    let (result, steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        std::sync::Arc::new(TestHostKeyStore::default()),
+    )
+    .await;
+    assert!(matches!(result, Err(SshError::HostNotFound(_))));
+    assert_eq!(kinds(&steps), ["dns"]);
+    assert_eq!(the_failed_step(&steps).status, failed("SSH_HOST_NOT_FOUND"));
+}
+
+/// Abgelehnter Port: DNS gelingt, der TCP-Schritt scheitert.
+#[tokio::test]
+async fn test_issue_51_refused_port_marks_the_tcp_step() {
+    const MAX_ATTEMPTS: u32 = 5;
+    for attempt in 1..=MAX_ATTEMPTS {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+
+        let target = ConnectionTarget {
+            hops: vec![password_hop("127.0.0.1", port)],
+        };
+        let (result, steps) = connect_logged(
+            &target,
+            &TestCredentialStore::default(),
+            &NoKeyFiles,
+            std::sync::Arc::new(TestHostKeyStore::default()),
+        )
+        .await;
+        match result {
+            Err(SshError::ConnectionRefused(_)) => {
+                assert_eq!(kinds(&steps), ["dns", "tcp"]);
+                assert_eq!(steps[0].status, StepStatus::Ok);
+                assert_eq!(
+                    the_failed_step(&steps).status,
+                    failed("SSH_CONNECTION_REFUSED")
+                );
+                return;
+            }
+            // Ein fremder Dienst hat den Port zwischen drop() und connect
+            // belegt — wie im Test oben: neuer Port, neuer Versuch.
+            _ if attempt < MAX_ATTEMPTS => continue,
+            Err(other) => panic!("erwartet ConnectionRefused, bekam {other:?}"),
+            Ok(_) => panic!("der Port war in keinem Versuch geschlossen"),
+        }
+    }
+}
+
+/// Timeout: der Aufrufer bricht ab und schließt den laufenden Schritt —
+/// hier den Handshake, weil die Gegenstelle nie ein Banner schickt.
+#[tokio::test]
+async fn test_issue_51_timeout_marks_the_step_that_was_running() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        if let Ok((stream, _)) = listener.accept() {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            drop(stream);
+        }
+    });
+
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", port)],
+    };
+    let log = ConnectLog::new();
+    let host_keys = std::sync::Arc::new(TestHostKeyStore::default());
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        ssh_transport::connect_with_timeout(
+            ssh_transport::connect_with_log(
+                &target,
+                &TestCredentialStore::default(),
+                &NoKeyFiles,
+                host_keys.clone(),
+                &log,
+            ),
+            std::time::Duration::from_millis(300),
+        ),
+    )
+    .await
+    .expect("darf nicht hängen");
+    let Err(err) = result else {
+        panic!("ein hängender Handshake darf nie als verbunden gelten")
+    };
+    assert_eq!(err, SshError::Timeout);
+    log.fail_running(err.code());
+
+    let steps = log.snapshot();
+    assert_eq!(kinds(&steps), ["dns", "tcp", "handshake"]);
+    assert_eq!(the_failed_step(&steps).status, failed("SSH_TIMEOUT"));
+    assert_eq!(host_keys.trust_calls(), 0);
+}
+
+/// Unbekannter Host-Key: der Host-Key-Schritt ist markiert, mit Typ und
+/// Fingerprint — und es bleibt bei der Rückfrage, kein Vertrauen.
+#[tokio::test]
+async fn test_issue_51_unknown_host_key_marks_the_host_key_step() {
+    let server = RunningTestServer::start().await;
+    let host_keys = std::sync::Arc::new(TestHostKeyStore::default());
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", server.addr.port())],
+    };
+    let (result, steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        host_keys.clone(),
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Ok(ConnectOutcome::PendingHostKeyConfirmation {
+            decision: HostKeyDecision::Unknown { .. },
+            ..
+        })
+    ));
+    assert_eq!(host_keys.trust_calls(), 0);
+    assert_eq!(kinds(&steps), ["dns", "tcp", "handshake", "hostKey"]);
+    let step = the_failed_step(&steps);
+    assert_eq!(step.status, failed("HOST_KEY_UNKNOWN"));
+    let ConnectStep::HostKeyCheck {
+        key_type,
+        fingerprint,
+        result,
+    } = &step.step
+    else {
+        unreachable!()
+    };
+    assert_eq!(key_type.as_deref(), Some("ssh-ed25519"));
+    assert!(fingerprint.is_some());
+    assert_eq!(*result, Some(HostKeyCheckResult::Unknown));
+}
+
+/// Geänderter Host-Key: `changed`, nie ein Erfolg.
+#[tokio::test]
+async fn test_issue_51_changed_host_key_marks_the_host_key_step() {
+    let server = RunningTestServer::start().await;
+    let host_keys = TestHostKeyStore::default();
+    let mut wrong_key = server.host_public_key.clone();
+    wrong_key.push(0xFF);
+    host_keys
+        .trust("127.0.0.1", server.addr.port(), &wrong_key)
+        .unwrap();
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", server.addr.port())],
+    };
+    let (result, steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        std::sync::Arc::new(host_keys),
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Ok(ConnectOutcome::PendingHostKeyConfirmation {
+            decision: HostKeyDecision::Mismatch { .. },
+            ..
+        })
+    ));
+    let step = the_failed_step(&steps);
+    assert_eq!(step.status, failed("HOST_KEY_CHANGED"));
+    assert!(matches!(
+        step.step,
+        ConnectStep::HostKeyCheck {
+            result: Some(HostKeyCheckResult::Changed),
+            ..
+        }
+    ));
+}
+
+/// Ein `CredentialStore`, der für jede Referenz denselben Wert liefert.
+struct FixedSecretStore(String);
+
+impl CredentialStore for FixedSecretStore {
+    fn get(&self, _r: &CredentialRef) -> CredentialResult<SecretString> {
+        Ok(SecretString::from(self.0.clone()))
+    }
+    fn set(&self, _r: &CredentialRef, _value: SecretString) -> CredentialResult<()> {
+        Ok(())
+    }
+    fn delete(&self, _r: &CredentialRef) -> CredentialResult<()> {
+        Ok(())
+    }
+}
+
+/// Falsches Passwort: der Anmeldeschritt ist markiert, die verbleibenden
+/// Methoden des Servers stehen dabei — und es gibt genau **einen**
+/// Anmeldeschritt, also keinen zusätzlichen Versuch.
+#[tokio::test]
+async fn test_issue_51_wrong_password_marks_auth_and_shows_remaining_methods_only() {
+    let server = RunningTestServer::start().await;
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", server.addr.port())],
+    };
+    let (result, steps) = connect_logged(
+        &target,
+        &FixedSecretStore("definitely-wrong-password".into()),
+        &NoKeyFiles,
+        trusted_host_keys(&server),
+    )
+    .await;
+    assert_eq!(result.err(), Some(SshError::AuthenticationFailed));
+    assert_eq!(
+        kinds(&steps),
+        ["dns", "tcp", "handshake", "hostKey", "auth"]
+    );
+    let step = the_failed_step(&steps);
+    assert_eq!(step.status, failed("SSH_AUTH_FAILED"));
+    let ConnectStep::Authentication {
+        method,
+        remaining_methods,
+        ..
+    } = &step.step
+    else {
+        unreachable!()
+    };
+    assert_eq!(*method, AuthMethodKind::Password);
+    assert!(
+        !remaining_methods.is_empty(),
+        "der Server nennt verbleibende Methoden"
+    );
+}
+
+/// Abgelehnter Schlüssel: der Anmeldeschritt ist markiert, mit der Methode
+/// `identityFile`. Der Testserver nimmt jeden Schlüssel für `TEST_USERNAME`
+/// an; „falscher Schlüssel" heißt hier deshalb: ein anderer Benutzer, für
+/// den der Server die Signatur ablehnt — derselbe Weg wie ein unbekannter
+/// Schlüssel.
+#[tokio::test]
+async fn test_issue_51_rejected_key_marks_the_auth_step() {
+    let server = RunningTestServer::start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let key_path = dir.path().join("id_ed25519");
+    std::fs::write(&key_path, encrypted_test_key("issue51")).unwrap();
+    let mut hop = identity_file_hop(
+        "127.0.0.1",
+        server.addr.port(),
+        key_path.to_str().unwrap(),
+        true,
+    );
+    hop.username = "not-allowed-for-this-key".into();
+    let target = ConnectionTarget { hops: vec![hop] };
+    let (result, steps) = connect_logged(
+        &target,
+        &PassphraseStore("issue51"),
+        &PlainFileKeyReader,
+        trusted_host_keys(&server),
+    )
+    .await;
+    assert_eq!(result.err(), Some(SshError::AuthenticationFailed));
+    assert_eq!(
+        kinds(&steps),
+        ["dns", "tcp", "handshake", "hostKey", "auth"]
+    );
+    let step = the_failed_step(&steps);
+    assert_eq!(step.status, failed("SSH_AUTH_FAILED"));
+    let ConnectStep::Authentication { method, .. } = &step.step else {
+        unreachable!()
+    };
+    assert_eq!(*method, AuthMethodKind::IdentityFile);
+}
+
+/// Jump-Host: Schritte je Hop. Der zweite Hop öffnet seinen Tunnel über den
+/// ersten und hat keinen eigenen DNS-/TCP-Schritt. Ob der verschachtelte
+/// Handshake gegen russh 0.63.1 gelingt (ADR 0008), spielt hier keine
+/// Rolle — geprüft wird nur, dass beide Hops getrennt auftauchen.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_issue_51_jump_host_attempt_lists_steps_per_hop() {
+    let bastion = RunningTestServer::start().await;
+    let target_server = RunningTestServer::start().await;
+    let host_keys = TestHostKeyStore::default();
+    host_keys
+        .trust("127.0.0.1", bastion.addr.port(), &bastion.host_public_key)
+        .unwrap();
+    host_keys
+        .trust(
+            "127.0.0.1",
+            target_server.addr.port(),
+            &target_server.host_public_key,
+        )
+        .unwrap();
+    let target = ConnectionTarget {
+        hops: vec![
+            password_hop("127.0.0.1", bastion.addr.port()),
+            password_hop("127.0.0.1", target_server.addr.port()),
+        ],
+    };
+    let (_result, steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        std::sync::Arc::new(host_keys),
+    )
+    .await;
+
+    let hop0: Vec<_> = steps.iter().filter(|s| s.hop_index == 0).cloned().collect();
+    let hop1: Vec<_> = steps.iter().filter(|s| s.hop_index == 1).cloned().collect();
+    assert_eq!(
+        kinds(&hop0),
+        ["dns", "tcp", "handshake", "hostKey", "auth"],
+        "{steps:#?}"
+    );
+    assert!(hop0.iter().all(|s| s.status == StepStatus::Ok));
+    assert_eq!(
+        hop1[0].hop,
+        format!("{TEST_USERNAME}@127.0.0.1:{}", target_server.addr.port())
+    );
+    assert_eq!(kinds(&hop1)[..2], ["tunnel", "handshake"], "{steps:#?}");
+    assert_eq!(hop1[0].status, StepStatus::Ok);
+    assert!(steps.iter().all(|s| s.status != StepStatus::Running));
+}
+
+/// Kein Geheimnis im Protokoll — für jede Anmeldeart. Jedes Geheimnis ist
+/// ein eingepflanzter Marker; geprüft wird die vollständige
+/// `Debug`-Darstellung aller Schritte, die jedes Feld enthält.
+#[tokio::test]
+async fn test_issue_51_step_log_never_contains_secrets_for_any_auth_method() {
+    const PASSWORD: &str = "pw-marker-issue51";
+    const PASSPHRASE: &str = "passphrase-marker-issue51";
+    const CERT: &str = "cert-marker-issue51";
+    const SUDO: &str = "sudo-marker-issue51";
+
+    let server = RunningTestServer::start().await;
+    let port = server.addr.port();
+    let key_text = encrypted_test_key(PASSPHRASE);
+    let dir = tempfile::tempdir().unwrap();
+    let key_path = dir.path().join("id_ed25519");
+    std::fs::write(&key_path, &key_text).unwrap();
+
+    /// Liefert je Referenz das passende Geheimnis — einschließlich eines
+    /// Sudo-Passworts, das beim Verbinden nie gelesen werden darf.
+    struct Secrets(String);
+    impl CredentialStore for Secrets {
+        fn get(&self, r: &CredentialRef) -> CredentialResult<SecretString> {
+            let value = match r.as_str() {
+                "pw" => PASSWORD.to_string(),
+                "key" => self.0.clone(),
+                "passphrase" | "wrong-passphrase" => {
+                    if r.as_str() == "passphrase" {
+                        PASSPHRASE.to_string()
+                    } else {
+                        format!("{PASSPHRASE}-wrong")
+                    }
+                }
+                "cert" => CERT.to_string(),
+                "sudo" => SUDO.to_string(),
+                _ => return Err(CredentialError::NotFound(r.clone())),
+            };
+            Ok(SecretString::from(value))
+        }
+        fn set(&self, _r: &CredentialRef, _value: SecretString) -> CredentialResult<()> {
+            Ok(())
+        }
+        fn delete(&self, _r: &CredentialRef) -> CredentialResult<()> {
+            Ok(())
+        }
+    }
+    let store = Secrets(key_text.clone());
+
+    let methods = [
+        AuthMethod::Password {
+            credential_ref: CredentialRef::new("pw"),
+        },
+        AuthMethod::PrivateKey {
+            credential_ref: CredentialRef::new("key"),
+            passphrase_ref: Some(CredentialRef::new("passphrase")),
+        },
+        AuthMethod::PrivateKey {
+            credential_ref: CredentialRef::new("key"),
+            passphrase_ref: Some(CredentialRef::new("wrong-passphrase")),
+        },
+        AuthMethod::Certificate {
+            cert_ref: CredentialRef::new("cert"),
+            key_ref: CredentialRef::new("key"),
+        },
+        AuthMethod::IdentityFile {
+            path: key_path.to_str().unwrap().to_string(),
+            passphrase_ref: Some(CredentialRef::new("passphrase")),
+        },
+        AuthMethod::Agent,
+    ];
+
+    for auth in methods {
+        let target = ConnectionTarget {
+            hops: vec![Hop {
+                host: "127.0.0.1".into(),
+                port,
+                username: "wrong-user-so-auth-fails".into(),
+                auth: auth.clone(),
+            }],
+        };
+        let (_result, steps) = connect_logged(
+            &target,
+            &store,
+            &PlainFileKeyReader,
+            trusted_host_keys(&server),
+        )
+        .await;
+        assert!(
+            kinds(&steps).contains(&"auth"),
+            "{auth:?}: der Anmeldeschritt muss erreicht sein: {steps:#?}"
+        );
+        let rendered = format!("{steps:?}");
+        for secret in [PASSWORD, PASSPHRASE, CERT, SUDO] {
+            assert!(
+                !rendered.contains(secret),
+                "{auth:?}: Geheimnis im Protokoll: {rendered}"
+            );
+        }
+        for line in key_text.lines().filter(|l| l.len() > 16) {
+            assert!(
+                !rendered.contains(line),
+                "{auth:?}: Schlüsselmaterial im Protokoll"
+            );
+        }
+    }
+}

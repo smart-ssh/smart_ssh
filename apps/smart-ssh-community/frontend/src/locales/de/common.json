@@ -809,5 +809,47 @@
   },
   "startDirectory": {
     "notFound": "Startverzeichnis „{{dir}}“ wurde nicht gefunden oder ist nicht zugänglich. Terminal und Dateibrowser verwenden stattdessen das Home-Verzeichnis."
+  },
+  "connectLog": {
+    "title": "Details",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "copyFailed": "Kopieren in die Zwischenablage ist fehlgeschlagen.",
+    "hop": "Hop {{index}}: {{hop}}",
+    "step": {
+      "dnsResolution": "DNS-Auflösung",
+      "tcpConnect": "TCP-Verbindung",
+      "tunnelOpen": "Tunnel über vorherigen Hop",
+      "handshake": "SSH-Handshake",
+      "hostKeyCheck": "Host-Key-Prüfung",
+      "authentication": "Anmeldung",
+      "sessionReady": "Sitzung aufgebaut"
+    },
+    "status": {
+      "ok": "OK",
+      "running": "läuft",
+      "failed": "fehlgeschlagen ({{code}})"
+    },
+    "hostKeyResult": {
+      "known": "bekannt",
+      "unknown": "unbekannt",
+      "changed": "geändert"
+    },
+    "authMethod": {
+      "password": "Passwort",
+      "privateKey": "Privater Schlüssel",
+      "agent": "SSH-Agent",
+      "certificate": "Zertifikat",
+      "identityFile": "Schlüsseldatei"
+    },
+    "detail": {
+      "addresses": "Adressen: {{addresses}}",
+      "kex": "Schlüsselaustausch: {{value}}",
+      "hostKeyAlgorithm": "Host-Key: {{value}}",
+      "cipher": "Verschlüsselung: {{value}}",
+      "mac": "MAC: {{value}}",
+      "partialSuccess": "teilweise akzeptiert, weitere Anmeldung nötig",
+      "remainingMethods": "Server bietet außerdem an: {{methods}} (nicht versucht)"
+    }
   }
 }

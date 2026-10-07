@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use russh::client;
+use russh::client::{self, AuthResult};
 use russh::keys::{Certificate, PrivateKey, PrivateKeyWithHashAlg};
 use secrecy::{ExposeSecret, SecretString};
 use ssh_manager_core::profiles::CredentialStore;
-use ssh_manager_core::ssh::{resolve_auth, Hop, KeyFileReader, ResolvedAuth, SshError};
+use ssh_manager_core::ssh::{
+    resolve_auth, AuthMethodKind, ConnectLog, ConnectStep, Hop, KeyFileReader, ResolvedAuth,
+    SshError,
+};
 
 use crate::error::map_russh_error;
 use crate::handler::ClientHandler;
@@ -17,12 +20,27 @@ use crate::handler::ClientHandler;
 /// Spec 0076, §4.2: `key_files` reist neben `credentials` mit — die
 /// Anmeldelogik selbst bleibt dabei inhaltlich unverändert (§2, Nicht-Ziel
 /// 5: keine neue Verzweigung auf die Anmeldeart im Transport).
+///
+/// Issue #51: `steps` zeichnet den Versuch als einen Schritt auf — Art der
+/// Methode, Ergebnis und, bei Ablehnung, die Methoden, die der Server noch
+/// anbietet. Diese werden **nur angezeigt**: Es bleibt bei genau dem einen
+/// konfigurierten Versuch je Hop, der Ablauf unten ist unverändert.
 pub(crate) async fn authenticate(
     handle: &mut client::Handle<ClientHandler>,
     hop: &Hop,
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
+    steps: &AuthSteps<'_>,
 ) -> Result<(), SshError> {
+    let step = steps.log.start(
+        steps.hop_index,
+        steps.hop,
+        ConnectStep::Authentication {
+            method: AuthMethodKind::from(&hop.auth),
+            remaining_methods: Vec::new(),
+            partial_success: false,
+        },
+    );
     let resolved = resolve_auth(&hop.auth, credentials, key_files).map_err(|e| name_hop(e, hop))?;
 
     let result = match resolved {
@@ -60,10 +78,51 @@ pub(crate) async fn authenticate(
         }
     };
 
+    if let AuthResult::Failure {
+        remaining_methods: remaining,
+        partial_success: partial,
+    } = &result
+    {
+        steps.log.update(step, |s| {
+            if let ConnectStep::Authentication {
+                remaining_methods,
+                partial_success,
+                ..
+            } = s
+            {
+                *remaining_methods = remaining
+                    .iter()
+                    .map(|m| <&'static str>::from(m).to_string())
+                    .collect();
+                *partial_success = *partial;
+            }
+        });
+    }
+
     if result.success() {
+        steps.log.succeed(step);
         Ok(())
     } else {
+        // Der Schritt wird vom Aufrufer mit dem Code dieses Fehlers
+        // geschlossen (`connect_with_log`).
         Err(SshError::AuthenticationFailed)
+    }
+}
+
+/// Wohin [`authenticate`] seinen Schritt schreibt (Issue #51).
+pub(crate) struct AuthSteps<'a> {
+    log: &'a ConnectLog,
+    hop_index: usize,
+    hop: &'a str,
+}
+
+impl<'a> AuthSteps<'a> {
+    pub(crate) fn new(log: &'a ConnectLog, hop_index: usize, hop: &'a str) -> Self {
+        Self {
+            log,
+            hop_index,
+            hop,
+        }
     }
 }
 

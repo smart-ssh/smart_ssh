@@ -73,6 +73,7 @@ vi.mock("../api", async () => {
     moveGroup: vi.fn(() => Promise.resolve()),
     commandErrorMessage: actual.commandErrorMessage,
     commandErrorCode: actual.commandErrorCode,
+    commandErrorConnectLog: actual.commandErrorConnectLog,
   };
 });
 
@@ -169,6 +170,55 @@ describe("ServerList connect-error translation (Spec 0047, Fund D2)", () => {
     );
     expect(screen.queryByText(/os error 61/)).toBeNull();
     expect(screen.queryByText(/Verbindung fehlgeschlagen/)).toBeNull();
+  });
+});
+
+// Issue #51: ein gescheiterter Verbindungsaufbau zeigt unter der Meldung
+// das zugeklappte Schritt-Protokoll mit dem markierten Schritt.
+describe("ServerList connect step log (issue #51)", () => {
+  it("shows collapsed details with the failing step under a failed connect", async () => {
+    vi.mocked(connect).mockRejectedValue({
+      message: "Verbindung abgelehnt: Connection refused",
+      code: "SSH_CONNECTION_REFUSED",
+      connect_log: [
+        {
+          hopIndex: 0,
+          hop: "deploy@prod-1.example:22",
+          step: { kind: "dnsResolution", host: "prod-1.example", port: 22, addresses: ["192.0.2.10"] },
+          status: { state: "ok" },
+          durationMs: 4,
+        },
+        {
+          hopIndex: 0,
+          hop: "deploy@prod-1.example:22",
+          step: { kind: "tcpConnect", address: null, port: 22 },
+          status: { state: "failed", code: "SSH_CONNECTION_REFUSED" },
+          durationMs: 1,
+        },
+      ],
+    });
+
+    renderList();
+    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("prod-1"));
+
+    const details = await screen.findByTestId("connect-step-log");
+    expect(details).not.toHaveAttribute("open");
+    const failed = details.querySelectorAll("[data-failed='true']");
+    expect(failed).toHaveLength(1);
+    expect(failed[0].textContent).toContain("TCP-Verbindung");
+    expect(failed[0].textContent).toContain("SSH_CONNECTION_REFUSED");
+  });
+
+  it("shows no details when the error carries no step log", async () => {
+    vi.mocked(connect).mockRejectedValue({ message: "x", code: "SSH_CONNECTION_FAILED" });
+    renderList();
+    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("prod-1"));
+    await waitFor(() =>
+      expect(screen.getByText(/Verbindung fehlgeschlagen|Connection failed/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("connect-step-log")).toBeNull();
   });
 });
 

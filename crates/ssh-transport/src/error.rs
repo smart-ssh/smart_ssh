@@ -118,7 +118,7 @@ pub(crate) fn map_russh_error(e: russh::Error) -> SshError {
     }
 }
 
-fn map_io_error(io_err: std::io::Error) -> SshError {
+pub(crate) fn map_io_error(io_err: std::io::Error) -> SshError {
     use std::io::ErrorKind;
 
     match io_err.kind() {

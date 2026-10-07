@@ -13,7 +13,7 @@ use ssh_manager_core::filter::{
 use ssh_manager_core::profiles::effective_notes_sections;
 use ssh_manager_core::profiles::ProfileStore;
 use ssh_manager_core::shared::ServerId;
-use ssh_manager_core::ssh::{resolve_connection_target, HostKeyDecision, SshError};
+use ssh_manager_core::ssh::{resolve_connection_target, ConnectLog, HostKeyDecision, SshError};
 
 use app_logic::ai_provider_factory::build_ai_provider;
 use app_logic::confirmation::{ConfirmationRegistry, RegistrationGeneration};
@@ -225,27 +225,37 @@ pub(crate) async fn connect_session(
             }
         };
         loop {
-            let outcome = match map_connect_result(
-                // Spec 0069, Teil A3: jeder Verbindungsversuch (auch nach
-                // `Trust` erneut, s. Schleife) läuft unter
-                // `SSH_CONNECT_TIMEOUT` — umschließt bewusst NUR diesen
-                // Aufruf, nicht das Warten auf eine Host-Key-Entscheidung
-                // weiter unten.
-                ssh_transport::connect_with_timeout(
-                    ssh_transport::connect(
-                        &target,
-                        state.credential_store.as_ref(),
-                        // Spec 0076, §4.2: der echte Produktionspfad —
-                        // dieser Aufruf geht direkt an `ssh_transport`,
-                        // nicht über den `Connector`-Trait (das ist die
-                        // Testabstraktion daneben).
-                        state.key_file_reader.as_ref(),
-                        state.host_key_store.clone(),
-                    ),
-                    SSH_CONNECT_TIMEOUT,
-                )
-                .await,
-            ) {
+            // Issue #51: je Versuch ein frisches Schritt-Protokoll. Es geht
+            // nur ans Frontend (angehängt an den `CommandError`), nie ins
+            // Log — die `tracing`-Aufrufe unten nennen weiter nur Code und
+            // Meldung.
+            let attempt_log = ConnectLog::new();
+            // Spec 0069, Teil A3: jeder Verbindungsversuch (auch nach
+            // `Trust` erneut, s. Schleife) läuft unter
+            // `SSH_CONNECT_TIMEOUT` — umschließt bewusst NUR diesen
+            // Aufruf, nicht das Warten auf eine Host-Key-Entscheidung
+            // weiter unten.
+            let attempt = ssh_transport::connect_with_timeout(
+                ssh_transport::connect_with_log(
+                    &target,
+                    state.credential_store.as_ref(),
+                    // Spec 0076, §4.2: der echte Produktionspfad —
+                    // dieser Aufruf geht direkt an `ssh_transport`,
+                    // nicht über den `Connector`-Trait (das ist die
+                    // Testabstraktion daneben).
+                    state.key_file_reader.as_ref(),
+                    state.host_key_store.clone(),
+                    &attempt_log,
+                ),
+                SSH_CONNECT_TIMEOUT,
+            )
+            .await;
+            // Ein Timeout bricht den Versuch mitten im Schritt ab; den
+            // schließt hier niemand sonst.
+            if let Err(err) = &attempt {
+                attempt_log.fail_running(err.code());
+            }
+            let outcome = match map_connect_result(attempt) {
                 Ok(outcome) => outcome,
                 Err(err) => {
                     let last_hop = target.hops.last();
@@ -270,7 +280,7 @@ pub(crate) async fn connect_session(
                             .redact_text(&err.message),
                         "connection attempt failed (error text)",
                     );
-                    return Err(err);
+                    return Err(err.with_connect_log(attempt_log.snapshot()));
                 }
             };
 
@@ -353,7 +363,8 @@ pub(crate) async fn connect_session(
                         wait,
                         &host,
                         port,
-                    )?;
+                    )
+                    .map_err(|err| err.with_connect_log(attempt_log.snapshot()))?;
                     match user_decision {
                         HostKeyUserDecision::Trust => {
                             tracing::info!(session_id = %session_id, host = %host, port, "host key trusted");
@@ -376,7 +387,8 @@ pub(crate) async fn connect_session(
                                     "Verbindung zu {host}:{port} abgelehnt (Host-Key nicht vertraut)"
                                 ),
                                 "SSH_HOST_KEY_NOT_TRUSTED",
-                            ));
+                            )
+                            .with_connect_log(attempt_log.snapshot()));
                         }
                     }
                 }

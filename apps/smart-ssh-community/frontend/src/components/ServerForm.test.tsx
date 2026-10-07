@@ -787,3 +787,50 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
     expect(document.activeElement).toBe(reject);
   });
 });
+
+// Issue #51: auch ein erfolgreicher Test zeigt das zugeklappte
+// Schritt-Protokoll mit allen Schritten und ihrer Dauer.
+describe("ServerForm — step log of a test connection (issue #51)", () => {
+  it("shows the collapsed details with every step and its duration after a successful test", async () => {
+    vi.mocked(testConnection).mockResolvedValue({
+      kind: "success",
+      steps: [
+        {
+          hopIndex: 0,
+          hop: "deploy@example.invalid:22",
+          step: { kind: "tcpConnect", address: "192.0.2.5", port: 22 },
+          status: { state: "ok" },
+          durationMs: 8,
+        },
+        {
+          hopIndex: 0,
+          hop: "deploy@example.invalid:22",
+          step: { kind: "sessionReady" },
+          status: { state: "ok" },
+          durationMs: 0,
+        },
+      ],
+    });
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerForm
+          serverId={SERVER_ID}
+          defaultGroupId={null}
+          allGroups={[]}
+          allServers={[]}
+          onSaved={vi.fn()}
+          onDeleted={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
+
+    const details = await screen.findByTestId("connect-step-log");
+    expect(details).not.toHaveAttribute("open");
+    expect(details.querySelectorAll("li")).toHaveLength(2);
+    expect(details.querySelectorAll("[data-failed='true']")).toHaveLength(0);
+    expect(details.textContent).toContain("8 ms");
+    expect(details.textContent).toContain("Sitzung aufgebaut");
+  });
+});

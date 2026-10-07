@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ConnectStepLog } from "./ConnectStepLog";
 import {
   clearServerSudoPassword,
   commandErrorCode,
@@ -34,6 +35,7 @@ import type {
   PostIngestPolicy,
   ServerDto,
   ServerInput,
+  TestConnectionReport,
   TestConnectionResult,
 } from "../types";
 import { HostKeyDialog } from "./HostKeyDialog";
@@ -363,7 +365,7 @@ export function ServerForm({
   const [secretsLeftBehind, setSecretsLeftBehind] = useState<string[] | null>(null);
 
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
+  const [testResult, setTestResult] = useState<TestConnectionReport | null>(null);
   const [pendingHostKey, setPendingHostKey] = useState<HostKeyInfo | null>(null);
 
   const [preview, setPreview] = useState<string | null>(null);
@@ -1353,6 +1355,11 @@ export function ServerForm({
           </button>
           {testResult && <TestResultBadge result={testResult} />}
         </div>
+        {/* Issue #51: Schritt-Protokoll des letzten Tests, zugeklappt —
+         * bei Erfolg wie bei Fehlschlag. */}
+        {testResult?.steps && testResult.steps.length > 0 && (
+          <ConnectStepLog steps={testResult.steps} />
+        )}
       </form>
 
       {!isCreate && serverId && loaded && (

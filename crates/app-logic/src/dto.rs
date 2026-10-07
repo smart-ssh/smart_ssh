@@ -790,6 +790,23 @@ pub enum TestConnectionResult {
     Timeout,
 }
 
+/// Issue #51: Ergebnis von `test_connection` samt Schritt-Protokoll.
+///
+/// `result` wird flach eingebettet: Die JSON-Form bleibt die von
+/// [`TestConnectionResult`] (`{"kind": …, …}`), `steps` kommt als weiteres
+/// Feld hinzu — ein Frontend, das `steps` nicht kennt, liest das Ergebnis
+/// unverändert.
+///
+/// Die Schritte sind nur für die Anzeige bestimmt und werden nirgends
+/// geloggt oder exportiert.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestConnectionReport {
+    #[serde(flatten)]
+    pub result: TestConnectionResult,
+    pub steps: Vec<ssh_manager_core::ssh::ConnectStepRecord>,
+}
+
 // --- Spec 0009: Filter-Regel-Verwaltung ---------------------------------
 
 /// Getrennt von `pattern_value` statt eines verschachtelten `Pattern` (Spec
