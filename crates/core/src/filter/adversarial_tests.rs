@@ -396,6 +396,13 @@ async fn test_adv_shell_c_other_shells_and_positions_hit_deny_rule() {
         "ls; bash -c 'rm -rf /'",
         "ls && ksh -c 'rm -rf /'",
         "ls | sudo bash -e -c 'rm -rf /'",
+        // `-o`/`-O` inside a cluster take the next word; the shell keeps
+        // reading the cluster, so `c` still applies (review of PR #46).
+        "bash -oc errexit 'rm -rf /'",
+        "ls; bash -oc errexit 'rm -rf /'",
+        "ls; bash -Oc extglob 'rm -rf /'",
+        "ls && dash -oc errexit 'rm -rf /'",
+        "ls; bash -eoc errexit 'rm -rf /'",
     ] {
         assert_denied_by_rm_rule(cmd).await;
     }
@@ -413,6 +420,20 @@ async fn test_adv_interpreter_code_flags_after_options_never_autoexec() {
         "ls; ruby -r json -e '`rm -rf /`'",
         "ls; node --eval \"require('child_process').execSync('rm -rf /')\"",
         "ls; php -d x=1 -r 'system(\"rm -rf /\");'",
+        // Options with a digits-only or open-ended attached value inside a
+        // cluster must not hide a later code flag (review of PR #46).
+        "perl -le 'system \"rm -rf /\"'",
+        "ls; perl -le 'system \"rm -rf /\"'",
+        "ls; perl -lne 'system \"rm -rf /\"'",
+        "ls; perl -l0e 'system \"rm -rf /\"'",
+        "ls; perl -0e 'system \"rm -rf /\"'",
+        "ls; perl -0777e 'system \"rm -rf /\"'",
+        "ls; perl -0xffe 'system \"rm -rf /\"'",
+        "ls; perl -Mstrict,e 'system \"rm -rf /\"'",
+        "ls; ruby -We '`rm -rf /`'",
+        "ls; ruby -W2e '`rm -rf /`'",
+        "ls; ruby -0e '`rm -rf /`'",
+        "ls; ruby -Kue '`rm -rf /`'",
     ] {
         assert_never_autoexec(cmd).await;
     }
@@ -444,6 +465,20 @@ async fn test_adv_piping_into_a_shell_with_options_never_autoexec() {
         "echo cm0gLXJmIC8= | base64 -d | source /dev/fd/0",
         "echo cm0gLXJmIC8= | base64 -d | source /proc/self/fd/0",
         "echo cm0gLXJmIC8= | base64 -d | bash x.sh /dev/stdin",
+        // An option value naming stdin is a program read from stdin too
+        // (review of PR #46).
+        "echo PD9waHAgc3lzdGVtKCJybSAtcmYgLyIpOw== | base64 -d | php -f /dev/stdin",
+        "echo x | php -f/dev/stdin",
+        "echo x | php -F /dev/stdin",
+        "echo x | node -r /dev/stdin app.js",
+        "echo x | node --require /dev/stdin app.js",
+        "echo x | node --require=/dev/stdin app.js",
+        "echo x | node --import /dev/stdin app.js",
+        "echo x | python3 -m /dev/stdin",
+        "echo x | ruby -r /dev/stdin app.rb",
+        "echo x | perl -I/dev/fd/0 app.pl",
+        "echo x | bash --rcfile /dev/stdin x.sh",
+        "echo x | bash --init-file=/proc/self/fd/0 x.sh",
     ] {
         assert_never_autoexec(cmd).await;
     }
@@ -468,6 +503,9 @@ async fn test_adv_shell_and_interpreter_with_script_operand_stay_autoexec() {
         "ruby -r json script.rb",
         "node --require ts-node/register app.js",
         "php -f index.php",
+        "perl -l script.pl",
+        "perl -0777 script.pl",
+        "ruby -W0 script.rb",
         "source ~/.bashrc",
         ". ./env.sh",
     ] {
@@ -511,6 +549,39 @@ fn test_adv_program_source_parses_options_per_program() {
     );
     assert_eq!(program_source("bash -c"), Some(ProgramSource::Opaque));
     assert_eq!(program_source("ls -la"), None);
+    // Value options inside a cluster (review of PR #46).
+    assert_eq!(
+        program_source("bash -oc errexit 'rm -rf /'"),
+        code("rm -rf /")
+    );
+    assert_eq!(program_source("perl -le 'x'"), code("x"));
+    assert_eq!(program_source("perl -l0e 'x'"), code("x"));
+    assert_eq!(program_source("ruby -W2e 'x'"), code("x"));
+    assert_eq!(
+        program_source("perl -0x1ff x.pl"),
+        Some(ProgramSource::Opaque)
+    );
+    assert_eq!(
+        program_source("perl -Mlib=e x.pl"),
+        Some(ProgramSource::Opaque)
+    );
+    assert_eq!(
+        program_source("perl -Mstrict x.pl"),
+        Some(ProgramSource::Operand)
+    );
+    assert_eq!(
+        program_source("perl -0777 x.pl"),
+        Some(ProgramSource::Operand)
+    );
+    // Option values naming stdin.
+    assert_eq!(
+        program_source("php -f /dev/stdin"),
+        Some(ProgramSource::Stdin)
+    );
+    assert_eq!(
+        program_source("node --require=/dev/stdin app.js"),
+        Some(ProgramSource::Stdin)
+    );
 }
 
 /// Code piped into a shell or interpreter that reads its program from stdin.

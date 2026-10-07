@@ -871,12 +871,25 @@ struct OptionSpec {
     code_value: &'static str,
     /// Short options whose value is a script or module to run (`python3 -m`).
     script_value: &'static str,
-    /// Short options that take a value, attached or as the next word. When
-    /// unsure whether an option takes a value, it belongs here: swallowing
-    /// one word too many can only make a script operand look missing,
-    /// which reads as "stdin" and escalates.
+    /// Short options that take a value, attached (the rest of the cluster)
+    /// or as the next word. When unsure whether an option takes a value, it
+    /// belongs here: swallowing one word too many can only make a script
+    /// operand look missing, which reads as "stdin" and escalates.
     value: &'static str,
-    /// Short options whose value can only be attached (`perl -Mstrict`).
+    /// Short options that always take the *next word* as their value, even
+    /// inside a cluster, while the rest of the cluster is still read as
+    /// options (`bash -oc errexit CODE` runs `CODE`).
+    next_word_value: &'static str,
+    /// Short options followed by an optional run of digits, after which the
+    /// rest of the cluster is still read as options (`perl -l0e CODE`,
+    /// `ruby -W2e CODE`). A hexadecimal value (`perl -0x1ff`) makes the
+    /// call [`ProgramSource::Opaque`]: hex digits include `e`.
+    digit_value: &'static str,
+    /// Short options whose value can only be attached and whose end is not
+    /// known (`perl -Mstrict`, `ruby -Ku`). If the rest of the cluster
+    /// contains a code, stdin or script option character, the call is
+    /// [`ProgramSource::Opaque`] (fail closed): the program might read it
+    /// as that option.
     attached_value: &'static str,
     /// Whether `+x`-style options exist (`sh +x`, `bash +o history`).
     plus_options: bool,
@@ -891,7 +904,9 @@ const POSIX_SHELL_OPTIONS: OptionSpec = OptionSpec {
     stdin_flag: "s",
     code_value: "",
     script_value: "",
-    value: "oO",
+    value: "",
+    next_word_value: "oO",
+    digit_value: "",
     attached_value: "",
     plus_options: true,
     long_code: &[],
@@ -919,6 +934,8 @@ const FISH_OPTIONS: OptionSpec = OptionSpec {
     code_value: "cC",
     script_value: "",
     value: "dof",
+    next_word_value: "",
+    digit_value: "",
     attached_value: "",
     plus_options: false,
     long_code: &["command", "init-command"],
@@ -949,6 +966,8 @@ const CSH_OPTIONS: OptionSpec = OptionSpec {
     code_value: "",
     script_value: "",
     value: "",
+    next_word_value: "",
+    digit_value: "",
     attached_value: "",
     plus_options: false,
     long_code: &[],
@@ -963,6 +982,8 @@ const PYTHON_OPTIONS: OptionSpec = OptionSpec {
     code_value: "c",
     script_value: "m",
     value: "WXQ",
+    next_word_value: "",
+    digit_value: "",
     attached_value: "",
     plus_options: false,
     long_code: &[],
@@ -977,7 +998,9 @@ const PERL_OPTIONS: OptionSpec = OptionSpec {
     code_value: "eE",
     script_value: "",
     value: "I",
-    attached_value: "0CdDilmMVx",
+    next_word_value: "",
+    digit_value: "0l",
+    attached_value: "CdDimMVx",
     plus_options: false,
     long_code: &[],
     long_script: &[],
@@ -991,7 +1014,9 @@ const RUBY_OPTIONS: OptionSpec = OptionSpec {
     code_value: "e",
     script_value: "",
     value: "CEIr",
-    attached_value: "0FKTWx",
+    next_word_value: "",
+    digit_value: "0TW",
+    attached_value: "FKx",
     plus_options: false,
     long_code: &[],
     long_script: &[],
@@ -1015,6 +1040,8 @@ const NODE_OPTIONS: OptionSpec = OptionSpec {
     code_value: "ep",
     script_value: "",
     value: "Cr",
+    next_word_value: "",
+    digit_value: "",
     attached_value: "",
     plus_options: false,
     long_code: &["eval", "print"],
@@ -1047,6 +1074,8 @@ const PHP_OPTIONS: OptionSpec = OptionSpec {
     code_value: "BERr",
     script_value: "Ff",
     value: "cdz",
+    next_word_value: "",
+    digit_value: "",
     attached_value: "",
     plus_options: false,
     long_code: &[],
@@ -1178,9 +1207,8 @@ fn analyse_options(spec: &OptionSpec, is_shell: bool, args: &[String]) -> Progra
                 }
             } else if in_list(spec.long_script) || in_list(spec.long_value) {
                 script |= in_list(spec.long_script);
-                if inline.is_none() {
-                    take_value("", &mut i);
-                }
+                let value = inline.or_else(|| take_value("", &mut i));
+                stdin |= value.is_some_and(|v| is_stdin_path(&v));
             } else if !in_list(spec.long_flag) {
                 return ProgramSource::Opaque;
             }
@@ -1198,7 +1226,13 @@ fn analyse_options(spec: &OptionSpec, is_shell: bool, args: &[String]) -> Progra
             },
         };
         let minus = arg.starts_with('-');
+        // Bytes of the cluster already consumed as a digit value.
+        let mut skip = 0usize;
         for (pos, c) in cluster.char_indices() {
+            if skip > 0 {
+                skip -= c.len_utf8();
+                continue;
+            }
             let attached = &cluster[pos + c.len_utf8()..];
             if spec.code_operand.contains(c) {
                 code_operand = true;
@@ -1212,9 +1246,30 @@ fn analyse_options(spec: &OptionSpec, is_shell: bool, args: &[String]) -> Progra
                 break;
             } else if spec.script_value.contains(c) || spec.value.contains(c) {
                 script |= spec.script_value.contains(c);
-                take_value(attached, &mut i);
+                stdin |= take_value(attached, &mut i).is_some_and(|v| is_stdin_path(&v));
                 break;
+            } else if spec.next_word_value.contains(c) {
+                stdin |= take_value("", &mut i).is_some_and(|v| is_stdin_path(&v));
+            } else if spec.digit_value.contains(c) {
+                if c == '0' && attached.starts_with(['x', 'X']) {
+                    return ProgramSource::Opaque;
+                }
+                let digits = attached.len()
+                    - attached
+                        .trim_start_matches(|d: char| d.is_ascii_digit())
+                        .len();
+                skip = digits;
             } else if spec.attached_value.contains(c) {
+                let dangerous = |d: char| {
+                    spec.code_operand.contains(d)
+                        || spec.code_value.contains(d)
+                        || spec.stdin_flag.contains(d)
+                        || spec.script_value.contains(d)
+                };
+                if attached.contains(dangerous) {
+                    return ProgramSource::Opaque;
+                }
+                stdin |= is_stdin_path(attached);
                 break;
             }
         }
