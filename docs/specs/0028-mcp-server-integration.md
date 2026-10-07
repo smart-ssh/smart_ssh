@@ -155,8 +155,13 @@ ohne dass der Nutzer je die Chance zur Bestätigung hatte. Deshalb:
   `propose_note_update`) öffnet — falls noch nicht vorhanden — automatisch
   einen neuen Tab für den betroffenen Server (Spec 0017-Infrastruktur
   wiederverwendet), statt eine unsichtbare Hintergrundverbindung
-  aufzubauen. Existiert bereits ein Tab für diesen Server, wird dieser
-  verwendet. Der Bestätigungsdialog selbst zeigt den Servernamen wie jeder
+  aufzubauen. ~~Existiert bereits ein Tab für diesen Server, wird dieser
+  verwendet.~~ **Geändert durch Spec 0104:** Jede MCP-Anfrage läuft in einer
+  eigenen MCP-Sitzung je (Server, MCP-Client) mit eigener SSH-Verbindung
+  und eigenem Tab; ein Nutzer-Tab desselben Servers wird nie verwendet. Der
+  MCP-Tab erscheint, ohne den Fokus zu übernehmen — wartende Bestätigungen
+  signalisieren ein beschriftetes Abzeichen am Tab und die
+  OS-Benachrichtigung unten. Der Bestätigungsdialog selbst zeigt den Servernamen wie jeder
   andere Bestätigungsdialog auch — kein Sonderfall nötig, das ergibt sich
   automatisch daraus, dass er an eine konkrete, servergebundene Session
   hängt.

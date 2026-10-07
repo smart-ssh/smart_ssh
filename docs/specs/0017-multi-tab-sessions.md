@@ -64,6 +64,12 @@ pro Session statt einem über die ganze Map).
   **neuen** Tab, statt den bestehenden zu ersetzen — außer für diesen Server
   ist bereits ein Tab offen, dann wird zu diesem gewechselt (kein zweiter
   Tab zum selben Server im MVP, siehe offene Punkte).
+  **Ausnahme seit Spec 0104:** Die Regel "ein Tab pro Server" gilt nur für
+  Nutzer-Tabs. Ein externer MCP-Client bekommt je Server einen eigenen
+  MCP-Tab ("<Client> @ <Server>", MCP-Abzeichen) mit eigener Verbindung —
+  zusätzlich zu einem eventuell offenen Nutzer-Tab desselben Servers. Ein
+  Sidebar-Klick wechselt nie zu einem MCP-Tab, und ein MCP-Tab wird nie von
+  selbst aktiv.
 - **Tabs sind interaktive Elemente innerhalb der Drag-Region der
   Titelleiste** — sie müssen gemäß Spec 0014, Abschnitt 5 gezielt von der
   Drag-Region ausgenommen werden, sonst werden Tab-Klicks als

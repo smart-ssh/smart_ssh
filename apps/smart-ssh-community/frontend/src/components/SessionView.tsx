@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { onConnectionStatusChanged } from "../events";
+import type { McpSessionInfo } from "../types";
+import { sessionTabLabel } from "../useSessionTabs";
 import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
 import { useDragResize } from "../useDragResize";
 import { ChatPanel } from "./ChatPanel";
@@ -75,6 +78,10 @@ interface SessionViewProps {
    * 0017, Abschnitt 4), ohne dieses Flag würde ein Drop sonst gleichzeitig
    * mehrere Hintergrund-Tabs als Ziel treffen. */
   isActiveTab: boolean;
+  /** Spec 0104: `null` für eine Nutzer-Sitzung. Eine MCP-Sitzung zeigt nur
+   * die Aktionskarten des externen Clients (Bestätigen/Ablehnen) samt
+   * Ergebnis — ohne Chat-Eingabe, Terminal und Dateibrowser. */
+  mcp?: McpSessionInfo | null;
 }
 
 /**
@@ -89,7 +96,9 @@ export function SessionView({
   onRequestClose,
   onActionSettled,
   isActiveTab,
+  mcp = null,
 }: SessionViewProps) {
+  const { t } = useTranslation();
   const [statusNote, setStatusNote] = useState<string | null>(null);
   // Spec 0020, Abschnitt 5.1: "Terminal | Dateien"-Umschalter im rechten
   // Panel. Beide Ansichten bleiben gemountet (analog zum
@@ -175,6 +184,43 @@ export function SessionView({
       unlisten.then((unlistenFn) => unlistenFn());
     };
   }, [sessionId]);
+
+  // Spec 0104, §4: MCP-Sitzung — nur-lesende Sicht auf das, was der
+  // externe Client angefragt hat und was davon lief. Kein Terminal (das
+  // Backend lehnt `open_terminal` für MCP-Sitzungen ohnehin ab) und keine
+  // Chat-Eingabe (dito `send_chat_message`).
+  if (mcp) {
+    return (
+      <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
+        <header className="flex items-center justify-between border-b border-fuchsia-900/60 px-4 py-2">
+          <div className="flex items-center gap-3">
+            <span className="border border-fuchsia-500/60 px-1.5 text-xs text-fuchsia-300">
+              {t("sessionTabs.mcp.badge")}
+            </span>
+            <span className="font-heading font-semibold tracking-wide">
+              {sessionTabLabel({ serverName, mcp }, t("sessionTabs.mcp.unnamedClient"))}
+            </span>
+            {statusNote && <span className="font-mono text-xs text-amber-300">{statusNote}</span>}
+          </div>
+          <button
+            type="button"
+            onClick={onRequestClose}
+            className="font-heading border border-slate-700 px-3 py-1.5 text-sm font-semibold tracking-wide text-slate-200 hover:bg-slate-800"
+          >
+            Trennen
+          </button>
+        </header>
+        <div className="min-h-0 flex-1">
+          <ChatPanel
+            sessionId={sessionId}
+            serverId={serverId}
+            onActionSettled={onActionSettled}
+            readOnlyHint={t("sessionTabs.mcp.readOnlyHint")}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { SessionTab } from "../useSessionTabs";
+import { sessionTabLabel, type SessionTab } from "../useSessionTabs";
 
 const STATUS_DOT: Record<SessionTab["status"], string> = {
   connected: "bg-emerald-500",
@@ -16,6 +16,7 @@ interface SessionTabBarProps {
 
 /**
  * Spec 0017, Abschnitt 3: ein Tab pro offener Session (Servername,
+ * bei MCP-Tabs "<Client> @ <Server>" samt MCP-Abzeichen, Spec 0104,
  * Statuspunkt, Schließen-Button), plus eine feste "Übersicht"-Kachel, die zu
  * den Server-/Verwaltungs-Screens zurückführt, ohne die im Hintergrund
  * offenen Sessions zu schließen — nur sichtbar, sobald mindestens ein Tab
@@ -52,6 +53,11 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
 
       {tabs.map((tab) => {
         const active = tab.sessionId === activeSessionId;
+        // Spec 0104: MCP-Tabs heißen "<Client> @ <Server>", tragen ein
+        // MCP-Abzeichen und zeigen eine wartende Bestätigung als
+        // beschriftetes Abzeichen statt nur als Punkt — sie werden nie von
+        // selbst aktiv, der Hinweis muss also aus dem Hintergrund auffallen.
+        const label = sessionTabLabel(tab, t("sessionTabs.mcp.unnamedClient"));
         return (
           <div
             key={tab.sessionId}
@@ -66,21 +72,33 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
               type="button"
               onClick={() => onSwitch(tab.sessionId)}
               className="font-heading flex items-center gap-1.5 font-semibold tracking-wide"
-              title={tab.serverName}
+              title={tab.mcp ? `${label} — ${t("sessionTabs.mcp.tabHint")}` : tab.serverName}
             >
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[tab.status]}`} />
-              <span className="max-w-[12ch] truncate">{tab.serverName}</span>
-              {tab.hasPendingAction && (
-                <span
-                  className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400"
-                  title={t("sessionTabs.pendingAction")}
-                />
+              {tab.mcp && (
+                <span className="shrink-0 border border-fuchsia-500/60 px-1 text-[10px] leading-tight text-fuchsia-300">
+                  {t("sessionTabs.mcp.badge")}
+                </span>
               )}
+              <span className={tab.mcp ? "max-w-[24ch] truncate" : "max-w-[12ch] truncate"}>
+                {label}
+              </span>
+              {tab.hasPendingAction &&
+                (tab.mcp ? (
+                  <span className="shrink-0 animate-pulse bg-amber-400 px-1 text-[10px] leading-tight text-slate-950">
+                    {t("sessionTabs.mcp.pendingBadge")}
+                  </span>
+                ) : (
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400"
+                    title={t("sessionTabs.pendingAction")}
+                  />
+                ))}
             </button>
             <button
               type="button"
               onClick={() => onRequestClose(tab.sessionId)}
-              aria-label={t("sessionTabs.closeTab", { name: tab.serverName })}
+              aria-label={t("sessionTabs.closeTab", { name: label })}
               className="shrink-0 px-0.5 text-slate-500 hover:text-slate-200"
             >
               ✕

@@ -930,11 +930,15 @@ pub fn emit_sftp_transfer_finished(
 struct McpActionTabRequestedPayload {
     session_id: SessionId,
     server_id: ServerId,
+    /// Spec 0104: `clientInfo.name` des MCP-Clients (`None` ohne Namen) —
+    /// für die Tab-Beschriftung "<Client> @ <Server>".
+    client_name: Option<String>,
 }
 
-/// Spec 0028, Abschnitt 9a: signalisiert dem Frontend, für `server_id`
-/// einen Tab zu öffnen (falls noch keiner existiert) bzw. zu diesem zu
-/// wechseln, **bevor** der eigentliche Verbindungsaufbau/die
+/// Spec 0028, Abschnitt 9a / Spec 0104: signalisiert dem Frontend, für die
+/// MCP-Sitzung `session_id` einen Tab anzuzeigen (falls noch keiner
+/// existiert) — **ohne** zu ihm zu wechseln (Spec 0104, §3: kein
+/// Fokus-Wechsel), **bevor** der eigentliche Verbindungsaufbau/die
 /// Host-Key-Bestätigung/der Bestätigungsdialog sichtbar werden — sonst
 /// könnte eine MCP-Anfrage an einen neuen Server scheitern, ohne dass der
 /// Nutzer je die Chance zur Bestätigung bekommt (s. Spec-Text). Nur für die
@@ -944,6 +948,7 @@ pub fn emit_mcp_action_tab_requested(
     emitter: &dyn EventEmitter,
     session_id: SessionId,
     server_id: ServerId,
+    client_name: Option<String>,
 ) {
     emit(
         emitter,
@@ -951,6 +956,7 @@ pub fn emit_mcp_action_tab_requested(
         &McpActionTabRequestedPayload {
             session_id,
             server_id,
+            client_name,
         },
     );
 }

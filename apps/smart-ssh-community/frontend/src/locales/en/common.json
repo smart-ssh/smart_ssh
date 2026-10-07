@@ -378,7 +378,14 @@
   "sessionTabs": {
     "overview": "Overview",
     "pendingAction": "Waiting for confirmation",
-    "closeTab": "Close tab \"{{name}}\""
+    "closeTab": "Close tab \"{{name}}\"",
+    "mcp": {
+      "badge": "MCP",
+      "unnamedClient": "External tool",
+      "tabHint": "Session of an external tool (MCP) — its own connection, separate from your sessions.",
+      "pendingBadge": "Needs confirmation",
+      "readOnlyHint": "This session belongs to an external tool (MCP). It only shows the tool's actions to confirm or reject and their results; there is no chat input or terminal here. Closing it ends the MCP session and rejects pending confirmations."
+    }
   },
   "aiProvider": {
     "title": "AI Provider",
