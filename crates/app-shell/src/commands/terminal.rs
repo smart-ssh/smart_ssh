@@ -25,7 +25,7 @@ pub async fn open_terminal(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<TerminalStartDto> {
-    // Spec 0103, §4: Eine MCP-Sitzung hat kein interaktives Terminal.
+    // Spec 0104, §4: Eine MCP-Sitzung hat kein interaktives Terminal.
     state.mcp.sessions.ensure_user_session(session_id)?;
     let session = state
         .sessions

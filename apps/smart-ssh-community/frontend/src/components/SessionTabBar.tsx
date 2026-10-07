@@ -16,7 +16,7 @@ interface SessionTabBarProps {
 
 /**
  * Spec 0017, Abschnitt 3: ein Tab pro offener Session (Servername,
- * bei MCP-Tabs "<Client> @ <Server>" samt MCP-Abzeichen, Spec 0103,
+ * bei MCP-Tabs "<Client> @ <Server>" samt MCP-Abzeichen, Spec 0104,
  * Statuspunkt, Schließen-Button), plus eine feste "Übersicht"-Kachel, die zu
  * den Server-/Verwaltungs-Screens zurückführt, ohne die im Hintergrund
  * offenen Sessions zu schließen — nur sichtbar, sobald mindestens ein Tab
@@ -53,7 +53,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
 
       {tabs.map((tab) => {
         const active = tab.sessionId === activeSessionId;
-        // Spec 0103: MCP-Tabs heißen "<Client> @ <Server>", tragen ein
+        // Spec 0104: MCP-Tabs heißen "<Client> @ <Server>", tragen ein
         // MCP-Abzeichen und zeigen eine wartende Bestätigung als
         // beschriftetes Abzeichen statt nur als Punkt — sie werden nie von
         // selbst aktiv, der Hinweis muss also aus dem Hintergrund auffallen.

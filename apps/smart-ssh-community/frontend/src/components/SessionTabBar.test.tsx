@@ -77,7 +77,7 @@ describe("SessionTabBar drag region", () => {
   });
 });
 
-// Spec 0103: MCP-Tabs sind als solche erkennbar und signalisieren eine
+// Spec 0104: MCP-Tabs sind als solche erkennbar und signalisieren eine
 // wartende Bestätigung aus dem Hintergrund.
 describe("SessionTabBar MCP tabs", () => {
   it("labels an MCP tab with client and server, marks it and shows a pending badge", () => {

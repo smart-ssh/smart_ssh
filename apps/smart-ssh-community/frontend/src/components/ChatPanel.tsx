@@ -260,7 +260,7 @@ interface ChatPanelProps {
    * `chat-action-result`-Event auslöst und sonst den Hinweis-Indikator auf
    * dem Tab hängen ließe. */
   onActionSettled: (sessionId: string) => void;
-  /** Spec 0103: gesetzt für eine MCP-Sitzung — statt der Eingabezeile
+  /** Spec 0104: gesetzt für eine MCP-Sitzung — statt der Eingabezeile
    * erscheint dieser Hinweis. Die Aktionskarten (Bestätigen/Ablehnen) und
    * ihre Ergebnisse bleiben unverändert. */
   readOnlyHint?: string;

@@ -156,7 +156,7 @@ ohne dass der Nutzer je die Chance zur Bestätigung hatte. Deshalb:
   einen neuen Tab für den betroffenen Server (Spec 0017-Infrastruktur
   wiederverwendet), statt eine unsichtbare Hintergrundverbindung
   aufzubauen. ~~Existiert bereits ein Tab für diesen Server, wird dieser
-  verwendet.~~ **Geändert durch Spec 0103:** Jede MCP-Anfrage läuft in einer
+  verwendet.~~ **Geändert durch Spec 0104:** Jede MCP-Anfrage läuft in einer
   eigenen MCP-Sitzung je (Server, MCP-Client) mit eigener SSH-Verbindung
   und eigenem Tab; ein Nutzer-Tab desselben Servers wird nie verwendet. Der
   MCP-Tab erscheint, ohne den Fokus zu übernehmen — wartende Bestätigungen

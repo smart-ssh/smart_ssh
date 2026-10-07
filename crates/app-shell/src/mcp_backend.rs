@@ -26,7 +26,7 @@ use app_logic::state::{AppState, SessionId};
 /// Warum `ensure_session` keine Sitzung liefern konnte.
 enum EnsureSessionError {
     /// Die MCP-Sitzung wurde in der App geschlossen, während die Anfrage
-    /// lief (Spec 0103, §5).
+    /// lief (Spec 0104, §5).
     Closed,
     /// Verbindungsaufbau gescheitert — wie bisher als `UnknownServer` an den
     /// Client gemeldet.
@@ -50,7 +50,7 @@ impl AppMcpBackend {
         McpLookup::from_state(&self.state()).is_allowed(server_id)
     }
 
-    /// Spec 0103 / Issue #50: liefert die eigene MCP-Sitzung dieses
+    /// Spec 0104 / Issue #50: liefert die eigene MCP-Sitzung dieses
     /// MCP-Clients auf `server_id` — nie eine Nutzer-Sitzung, auch wenn für
     /// den Server ein verbundener Nutzer-Tab offen ist (die Zuordnung kommt
     /// ausschließlich aus `McpSessionRegistry`, in der Nutzer-Sitzungen nie
@@ -62,7 +62,7 @@ impl AppMcpBackend {
     /// Das `mcp-action-tab-requested`-Event geht **vor** einem eventuell
     /// wartenden Host-Key-Dialog raus, damit der Tab sichtbar ist, bevor ein
     /// Dialog für diese Sitzung erscheint. Das Frontend wechselt dabei
-    /// nicht zum Tab (Spec 0103, §3: kein Fokus-Wechsel).
+    /// nicht zum Tab (Spec 0104, §3: kein Fokus-Wechsel).
     async fn ensure_session(
         &self,
         server_id: ServerId,
@@ -107,7 +107,7 @@ impl AppMcpBackend {
             return Err(EnsureSessionError::Unavailable);
         }
 
-        // Spec 0103, §5: Hat der Nutzer den MCP-Tab geschlossen, während der
+        // Spec 0104, §5: Hat der Nutzer den MCP-Tab geschlossen, während der
         // Aufbau noch lief (z. B. offener Host-Key-Dialog), ist die Sitzung
         // schon ausgetragen. Dann wird die eben aufgebaute Verbindung wieder
         // getrennt, statt eine Aktion in einer Sitzung ohne Tab laufen zu
@@ -195,7 +195,7 @@ impl McpBackend for AppMcpBackend {
         let (session_id, session) =
             match self.ensure_session(server_id, client_name.as_deref()).await {
                 Ok(found) => found,
-                // Spec 0103, §5: in der App geschlossen, bevor die Aktion
+                // Spec 0104, §5: in der App geschlossen, bevor die Aktion
                 // überhaupt vorgeschlagen wurde — eindeutige Meldung an den
                 // Client, nichts wurde ausgeführt.
                 Err(EnsureSessionError::Closed) => {
@@ -222,7 +222,7 @@ impl McpBackend for AppMcpBackend {
         )
         .await;
 
-        // Spec 0103, §5: Wurde die MCP-Sitzung in der App geschlossen,
+        // Spec 0104, §5: Wurde die MCP-Sitzung in der App geschlossen,
         // während die Aktion lief, bekommt der Client eine eindeutige
         // Meldung statt "vom Nutzer abgelehnt" — ein bereits vorliegendes
         // Ergebnis oder ein Filter-`Deny` bleibt davon unberührt.
@@ -271,7 +271,7 @@ impl<'a> CaptureEmitter<'a> {
     }
 
     /// `session_closed`: die MCP-Sitzung wurde in der App geschlossen,
-    /// während die Aktion lief (Spec 0103, §5).
+    /// während die Aktion lief (Spec 0104, §5).
     fn into_outcome(self, session_closed: bool) -> ActionOutcome {
         if let Some(result) = self.result.into_inner().expect("Mutex vergiftet") {
             return ActionOutcome::Approved {
@@ -507,7 +507,7 @@ mod tests {
         }
     }
 
-    /// Spec 0103, §5: Schließt der Nutzer den MCP-Tab, während die Aktion
+    /// Spec 0104, §5: Schließt der Nutzer den MCP-Tab, während die Aktion
     /// auf Bestätigung wartet, bekommt der Client eine eindeutige Meldung
     /// statt "vom Nutzer abgelehnt".
     #[test]

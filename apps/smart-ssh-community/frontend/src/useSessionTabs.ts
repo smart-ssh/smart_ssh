@@ -1,4 +1,4 @@
-// Spec 0017: zentrale Buchführung über offene Session-Tabs. Seit Spec 0103
+// Spec 0017: zentrale Buchführung über offene Session-Tabs. Seit Spec 0104
 // gilt "ein Tab pro Server" nur für Nutzer-Tabs: MCP-Clients bekommen je
 // Server einen eigenen MCP-Tab (`SessionTab.mcp`). Bewusst
 // getrennt vom eigentlichen Chat-/Terminal-Zustand (der bleibt lokal in
@@ -39,13 +39,13 @@ export interface SessionTab {
    * mehr gezielt per `respondToAction` auflösen, informiert den Nutzer aber
    * weiterhin per Rückfrage. */
   pendingActionId: string | null;
-  /** Spec 0103: `null` für einen Nutzer-Tab, sonst die MCP-Sitzung eines
+  /** Spec 0104: `null` für einen Nutzer-Tab, sonst die MCP-Sitzung eines
    * externen Clients — eigener Tab je Server und Client, ohne Chat-Eingabe
    * und Terminal, nie Ziel von `findExistingSessionId`. */
   mcp: McpSessionInfo | null;
 }
 
-/** Spec 0103: Beschriftung "<Client> @ <Server>" für MCP-Tabs. */
+/** Spec 0104: Beschriftung "<Client> @ <Server>" für MCP-Tabs. */
 export function sessionTabLabel(
   tab: Pick<SessionTab, "serverName" | "mcp">,
   unnamedClientLabel: string,
@@ -82,7 +82,7 @@ export function useSessionTabs() {
             mcp: s.mcp ?? null,
           })),
         );
-        // Spec 0103, §3: ein MCP-Tab wird nie von selbst aktiv — gibt es
+        // Spec 0104, §3: ein MCP-Tab wird nie von selbst aktiv — gibt es
         // nur MCP-Tabs, bleibt die Übersicht aktiv.
         const firstUserTab = summaries.find((s) => !s.mcp);
         setActiveSessionId((prev) => prev ?? firstUserTab?.sessionId ?? null);
@@ -155,7 +155,7 @@ export function useSessionTabs() {
             },
           ];
         });
-        // Spec 0103, §3: kein Fokus-Wechsel — der Tab erscheint im
+        // Spec 0104, §3: kein Fokus-Wechsel — der Tab erscheint im
         // Hintergrund, der aktive Tab des Nutzers bleibt aktiv. Eine
         // wartende Bestätigung signalisieren der Tab-Indikator und die
         // OS-Benachrichtigung (`mcp_backend::notify_pending_confirmation`).
@@ -197,7 +197,7 @@ export function useSessionTabs() {
     setActiveSessionId(sessionId);
   };
 
-  /** Spec 0103: nur Nutzer-Tabs — ein MCP-Tab desselben Servers ist nie
+  /** Spec 0104: nur Nutzer-Tabs — ein MCP-Tab desselben Servers ist nie
    * der Tab des Nutzers für diesen Server. */
   const findExistingSessionId = (serverId: string): string | undefined =>
     tabs.find((t) => t.serverId === serverId && !t.mcp)?.sessionId;

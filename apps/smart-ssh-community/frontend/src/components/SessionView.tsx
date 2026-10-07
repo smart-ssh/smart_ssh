@@ -78,7 +78,7 @@ interface SessionViewProps {
    * 0017, Abschnitt 4), ohne dieses Flag würde ein Drop sonst gleichzeitig
    * mehrere Hintergrund-Tabs als Ziel treffen. */
   isActiveTab: boolean;
-  /** Spec 0103: `null` für eine Nutzer-Sitzung. Eine MCP-Sitzung zeigt nur
+  /** Spec 0104: `null` für eine Nutzer-Sitzung. Eine MCP-Sitzung zeigt nur
    * die Aktionskarten des externen Clients (Bestätigen/Ablehnen) samt
    * Ergebnis — ohne Chat-Eingabe, Terminal und Dateibrowser. */
   mcp?: McpSessionInfo | null;
@@ -185,7 +185,7 @@ export function SessionView({
     };
   }, [sessionId]);
 
-  // Spec 0103, §4: MCP-Sitzung — nur-lesende Sicht auf das, was der
+  // Spec 0104, §4: MCP-Sitzung — nur-lesende Sicht auf das, was der
   // externe Client angefragt hat und was davon lief. Kein Terminal (das
   // Backend lehnt `open_terminal` für MCP-Sitzungen ohnehin ab) und keine
   // Chat-Eingabe (dito `send_chat_message`).

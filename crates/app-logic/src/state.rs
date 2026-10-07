@@ -199,7 +199,7 @@ pub struct McpState {
     /// `Some`, während der HTTP-Server läuft — `app_shell::mcp_settings`
     /// startet/stoppt ihn und ersetzt diesen Wert entsprechend.
     pub runtime: tokio::sync::Mutex<Option<mcp_server::McpServerHandle>>,
-    /// Spec 0103 / Issue #50: welche offenen Sitzungen MCP-Sitzungen sind
+    /// Spec 0104 / Issue #50: welche offenen Sitzungen MCP-Sitzungen sind
     /// und welche je (Server, MCP-Client) aktuell zu verwenden ist.
     pub sessions: crate::mcp_sessions::McpSessionRegistry,
 }

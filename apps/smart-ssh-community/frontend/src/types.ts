@@ -654,11 +654,11 @@ export interface SessionSummaryDto {
   serverName: string;
   status: ConnectionStatus;
   hasPendingAction: boolean;
-  /** Spec 0103: gesetzt, wenn die Sitzung einem MCP-Client gehört. */
+  /** Spec 0104: gesetzt, wenn die Sitzung einem MCP-Client gehört. */
   mcp: McpSessionInfo | null;
 }
 
-/** Spec 0103: Kennzeichnung einer MCP-Sitzung (eigener Tab je Server und
+/** Spec 0104: Kennzeichnung einer MCP-Sitzung (eigener Tab je Server und
  * MCP-Client). */
 export interface McpSessionInfo {
   /** `clientInfo.name` aus dem MCP-Handshake, `null` ohne Namen. */
@@ -794,9 +794,9 @@ export interface SftpTransferFinishedEvent {
 
 // --- Spec 0028: MCP-Server-Integration -----------------------------------
 
-/** Spec 0028, Abschnitt 9a / Spec 0103: signalisiert, für die MCP-Sitzung
+/** Spec 0028, Abschnitt 9a / Spec 0104: signalisiert, für die MCP-Sitzung
  * `sessionId` einen Tab anzuzeigen (falls noch keiner existiert) — ohne zu
- * ihm zu wechseln (Spec 0103, §3). Nur für die vier aktionsauslösenden
+ * ihm zu wechseln (Spec 0104, §3). Nur für die vier aktionsauslösenden
  * MCP-Tools, nicht für `list_servers`/`get_server_notes`. */
 export interface McpActionTabRequestedEvent {
   sessionId: string;

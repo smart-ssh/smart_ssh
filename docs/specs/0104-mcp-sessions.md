@@ -1,4 +1,4 @@
-# Spec 0103 — Eigene Sitzung und eigener Tab für MCP-Anfragen
+# Spec 0104 — Eigene Sitzung und eigener Tab für MCP-Anfragen
 
 Status: umgesetzt · Issue: #50
 Zweck: Aktionen, die ein externer MCP-Client (z. B. ein Coding-Agent)

@@ -136,10 +136,10 @@ describe("useSessionTabs baseline listeners", () => {
   });
 });
 
-// Spec 0103 / Issue #50: MCP-Arbeit läuft in einem eigenen Tab je Server und
+// Spec 0104 / Issue #50: MCP-Arbeit läuft in einem eigenen Tab je Server und
 // MCP-Client — der Tab erscheint, ohne den Fokus zu stehlen, signalisiert
 // wartende Bestätigungen und ist nie der Tab des Nutzers für den Server.
-describe("useSessionTabs / MCP tabs (Spec 0103)", () => {
+describe("useSessionTabs / MCP tabs (Spec 0104)", () => {
   function captureMcpHandler() {
     let handler: ((event: McpActionTabRequestedEvent) => void) | null = null;
     vi.mocked(onMcpActionTabRequested).mockImplementation((h) => {

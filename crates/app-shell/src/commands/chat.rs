@@ -28,7 +28,7 @@ pub async fn send_chat_message(
     session_id: SessionId,
     text: String,
 ) -> CommandResult<()> {
-    // Spec 0103, §4: Der Nutzer-Chat kommt nie in eine MCP-Sitzung.
+    // Spec 0104, §4: Der Nutzer-Chat kommt nie in eine MCP-Sitzung.
     state.mcp.sessions.ensure_user_session(session_id)?;
     let session = state
         .sessions
@@ -68,7 +68,7 @@ pub async fn continue_truncated_response(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<()> {
-    // Spec 0103, §4: wie `send_chat_message`.
+    // Spec 0104, §4: wie `send_chat_message`.
     state.mcp.sessions.ensure_user_session(session_id)?;
     let session = state
         .sessions
@@ -395,7 +395,7 @@ pub async fn disconnect(
     // bleibt unten in diesem Befehl.
     let session = elevated.remove_session(&state.sessions, session_id);
 
-    // Spec 0103, §5: Schließen einer MCP-Sitzung trägt sie aus und lehnt
+    // Spec 0104, §5: Schließen einer MCP-Sitzung trägt sie aus und lehnt
     // ihre wartende Bestätigung ab (fail closed) — vor dem Trennen, damit
     // die Aktion nicht mehr genehmigt werden kann. Auch ohne gefundene
     // `Session` (Schließen während des Host-Key-Dialogs), damit die nächste

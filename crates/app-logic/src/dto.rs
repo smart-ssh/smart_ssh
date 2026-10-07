@@ -1022,13 +1022,13 @@ pub struct SessionSummaryDto {
     pub server_name: String,
     pub status: ConnectionStatus,
     pub has_pending_action: bool,
-    /// Spec 0103: `Some`, wenn die Sitzung einem MCP-Client gehört — das
+    /// Spec 0104: `Some`, wenn die Sitzung einem MCP-Client gehört — das
     /// Frontend beschriftet und kennzeichnet den Tab dann als MCP-Tab, auch
     /// nach einem Reload.
     pub mcp: Option<McpSessionDto>,
 }
 
-/// Spec 0103: Kennzeichnung einer MCP-Sitzung in [`SessionSummaryDto`].
+/// Spec 0104: Kennzeichnung einer MCP-Sitzung in [`SessionSummaryDto`].
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpSessionDto {

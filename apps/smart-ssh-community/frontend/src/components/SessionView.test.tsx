@@ -213,10 +213,10 @@ describe("SessionView AI/SSH split (Spec 0053, Teil 2)", () => {
   });
 });
 
-// Spec 0103 / Issue #50: Eine MCP-Sitzung zeigt nur die Aktionskarten des
+// Spec 0104 / Issue #50: Eine MCP-Sitzung zeigt nur die Aktionskarten des
 // externen Clients samt Ergebnis — ohne Chat-Eingabe, Terminal und
 // Dateibrowser.
-describe("SessionView MCP session (Spec 0103)", () => {
+describe("SessionView MCP session (Spec 0104)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

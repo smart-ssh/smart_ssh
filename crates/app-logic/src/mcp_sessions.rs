@@ -1,4 +1,4 @@
-//! Spec 0103 / Issue #50: eigene MCP-Sitzungen je (Server, MCP-Client).
+//! Spec 0104 / Issue #50: eigene MCP-Sitzungen je (Server, MCP-Client).
 //!
 //! Bis hierhin landete eine MCP-Anfrage in einer bereits offenen, verbundenen
 //! Nutzer-Sitzung desselben Servers (Spec 0028, Abschnitt 9a alt: "existiert
@@ -36,7 +36,7 @@ use crate::state::{ActionId, SessionId};
 
 /// Meldung an das Frontend, wenn ein Nutzer-Kommando (Chat, Terminal) eine
 /// MCP-Sitzung trifft. Die MCP-Sitzung hat keinen Nutzer-Chat und kein
-/// interaktives Terminal (Spec 0103, §4) — sonst liefe Nutzer-Kontext in die
+/// interaktives Terminal (Spec 0104, §4) — sonst liefe Nutzer-Kontext in die
 /// MCP-Sitzung, und genau das schließt Issue #50 aus.
 pub const MCP_SESSION_NOT_INTERACTIVE_MESSAGE: &str =
     "Diese Sitzung gehört einem externen Tool (MCP) und nimmt keine eigenen Eingaben an.";
