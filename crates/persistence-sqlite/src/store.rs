@@ -37,6 +37,18 @@ fn probe_directory_writable(dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Issue #42: Ist `result` ein Fehler, wird `pool` geschlossen und auf das
+/// Ende des Schließens **gewartet**, bevor der Fehler unverändert
+/// zurückgeht. Für jeden Fehlerweg in
+/// [`SqliteProfileStore::connect_with_probe`] nach dem Pool-Aufbau — ein
+/// bloßer `Drop` schließt die Verbindung erst im Hintergrund.
+async fn close_on_error<T, E>(pool: &SqlitePool, result: Result<T, E>) -> Result<T, E> {
+    if result.is_err() {
+        pool.close().await;
+    }
+    result
+}
+
 /// SQLite-gestützte Implementierung von [`ProfileStore`] (Spec 0004,
 /// Abschnitt 5).
 ///
@@ -290,7 +302,15 @@ impl SqliteProfileStore {
         // Verbindung selbst nie aufgebaut?) lässt sich sonst aus dem Log
         // nicht mehr auseinanderhalten.
         tracing::info!("running database migrations");
-        sqlx::migrate!().run(&pool).await?;
+        // Issue #42: Ab hier existiert der Pool. Jeder Fehlerweg schließt
+        // ihn und **wartet** darauf (`close_on_error`), statt ihn nur zu
+        // droppen — sonst schließt `sqlx` die Verbindung erst irgendwann
+        // im Hintergrund, `-wal`/`-shm` überleben den gescheiterten Start,
+        // und unter Windows lässt sich die Datei noch nicht umbenennen
+        // (s. [`Self::close`]). Der Fehler selbst bleibt unverändert, damit
+        // `classify` (z. B. `SchemaTooNew`) dasselbe Ergebnis liefert.
+        // Ein künftiger Fehlerweg nach dem Pool-Aufbau folgt derselben Regel.
+        close_on_error(&pool, sqlx::migrate!().run(&pool).await).await?;
         tracing::info!("database migrations complete");
 
         Ok(Self { pool })

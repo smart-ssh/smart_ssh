@@ -1264,3 +1264,89 @@ async fn test_issue_19_conversion_refuses_without_the_lock_on_its_directory() {
         crate::ConnectFailureKind::ConversionFailed
     );
 }
+
+/// Issue #42: Scheitert der Start an einer Migration, die dieser Build nicht
+/// kennt (`SchemaTooNew`, Spec 0059 Fall 1), ist der Pool geschlossen,
+/// **bevor** der Fehler beim Aufrufer ankommt — nicht erst irgendwann im
+/// Hintergrund, nachdem `Drop` gelaufen ist.
+///
+/// Geprüft wird direkt nach der Rückkehr, ohne `sleep` und ohne `yield`:
+///
+/// - **Keine `-wal`/`-shm`-Datei neben der Datenbank.** Die Datenbank läuft
+///   im WAL-Modus; schon der Lesezugriff des Migrators legt beide Dateien
+///   an, und erst das Schließen der letzten Verbindung räumt sie weg. Das
+///   ist auf jeder Plattform beobachtbar (SQLite löscht sie beim sauberen
+///   Schließen überall) und ist der Teil, der gegen den alten Stand
+///   scheitert: Dort schließt der Hintergrund-Thread von `sqlx` die
+///   Verbindung erst nach dem `Drop` des Pools.
+/// - **Die Datei lässt sich sofort umbenennen.** Unter Windows scheitert
+///   das an einer noch offenen Verbindung; auf Unix ist es nur eine
+///   zusätzliche Absicherung, dass der Aufrufer die Datei gleich weiter
+///   benutzen kann (z. B. für „Neu anfangen" aus Spec 0101).
+#[tokio::test(flavor = "multi_thread")]
+async fn test_issue_42_a_schema_too_new_failure_closes_the_pool_before_returning() {
+    let dir = tempfile::tempdir().expect("Temp-Verzeichnis");
+    let db_path = dir.path().join("smart-ssh.db");
+    let key = test_key();
+    SqliteProfileStore::connect_encrypted(&db_path, &key)
+        .await
+        .expect("anlegbar")
+        .close()
+        .await;
+    let max_known = crate::test_support::max_known_migration_version();
+    let future_version = max_known + 1;
+    crate::test_support::apply_future_migration(
+        &db_path,
+        Some(&key),
+        future_version,
+        "future_release",
+        "CREATE TABLE future_release_table (id INTEGER PRIMARY KEY);\n",
+    )
+    .await;
+    let side_files = |suffix: &str| {
+        let mut name = db_path.as_os_str().to_owned();
+        name.push(suffix);
+        PathBuf::from(name)
+    };
+    for suffix in ["-wal", "-shm"] {
+        assert!(
+            !side_files(suffix).exists(),
+            "Vorbedingung: vor dem Start liegt keine {suffix}-Datei da"
+        );
+    }
+
+    let err = SqliteProfileStore::connect_encrypted(&db_path, &key)
+        .await
+        .err()
+        .expect("eine Datenbank aus einem neueren Release darf sich nicht öffnen");
+
+    // Sofort, ohne `sleep`/`yield`: die Verbindung ist zu.
+    for suffix in ["-wal", "-shm"] {
+        assert!(
+            !side_files(suffix).exists(),
+            "{suffix}-Datei liegt nach dem gescheiterten Start noch da — der Pool ist \
+             nicht geschlossen"
+        );
+    }
+    let renamed = dir.path().join("smart-ssh.db.renamed");
+    std::fs::rename(&db_path, &renamed)
+        .expect("die Datenbankdatei lässt sich direkt nach dem Fehler umbenennen");
+    std::fs::rename(&renamed, &db_path).expect("und wieder zurück");
+
+    // Der Fehler selbst ist unverändert.
+    assert!(
+        matches!(
+            err,
+            PersistenceError::Migrate(sqlx::migrate::MigrateError::VersionMissing(v))
+                if v == future_version
+        ),
+        "erwartet: Migrate(VersionMissing({future_version})), erhalten: {err:?}"
+    );
+    assert_eq!(
+        err.classify(),
+        crate::ConnectFailureKind::SchemaTooNew {
+            applied_version: future_version,
+            max_known_version: max_known,
+        }
+    );
+}
