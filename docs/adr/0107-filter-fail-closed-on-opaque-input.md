@@ -51,11 +51,37 @@ wie weit die Engine sie auflösen soll.
    erkannt (keine neue Abhängigkeit), sondern über die einfachere,
    strengere Regel „Kommandoname nur ASCII“.
 
-4. **Programm von der Standardeingabe** (`reads_program_from_stdin`):
-   Eine Shell (`sh bash zsh dash ksh mksh ash fish csh tcsh`) ohne
-   Skript-Operand oder mit `-s`, ein Interpreter (`python python3 perl ruby
-   node php`) ohne Operand, oder einer von beiden mit `-`/`/dev/stdin` als
-   Operand, erzwingt `Confirm`. `bash script.sh` bleibt wie bisher.
+4. **Shell-, Interpreter- und `source`-Aufrufe mit Optionsparser**
+   (`program_source`): Für POSIX-Shells (`sh bash rbash zsh dash ksh ksh93
+   mksh lksh pdksh ash yash posh`), `fish`, `csh`/`tcsh`, `python*`,
+   `perl`, `ruby`, `node` und `php` werden die Optionen je Programm
+   ausgewertet (`OptionSpec`): Optionen mit Wert (`-o`/`+o`/`-O`,
+   `--rcfile`, `python3 -W`, `perl -I`, `ruby -r`, `node --require` …)
+   verbrauchen ihr Argument, `+`-Optionen gelten als Optionen. Ergebnis
+   je Teilkommando:
+   - **Code als Argument** (`-c` an beliebiger Stelle der Optionen, auch in
+     einem späteren Kettenglied wie `ls; ksh -c "..."`; `fish --command`,
+     `perl -e`, `php -r` …): Untergrenze `Confirm`, und der Code wird wie
+     bei `eval` rekursiv ausgewertet, ein `Deny` greift also dahinter.
+   - **Programm von der Standardeingabe** (kein Skript-Operand, `-s`, `-`,
+     `/dev/stdin`, `/dev/fd/*`, `/proc/*/fd/*`; auch `source`/`.` mit so
+     einem Pfad): `Confirm`.
+   - **Nicht auswertbar** (unbekannte Langoption, nicht tokenisierbar,
+     `-c` ohne Code): `Confirm`. Bei einer unbekannten Langoption weiß die
+     Engine nicht, ob sie das nächste Wort verbraucht. „Nein“ zu raten
+     würde einen Optionswert als Skript-Operand durchgehen lassen
+     (`| bash -o errexit`), deshalb fail-closed. Wo unklar ist, ob eine
+     Kurzoption einen Wert hat, gilt „ja“: ein Wort zu viel zu verbrauchen
+     lässt höchstens den Operanden fehlen, und das eskaliert.
+   - **Sichtbarer Skript-Operand** (`bash -e deploy.sh`, `python3 -m
+     http.server`, `source ~/.bashrc`): keine neue Untergrenze.
+
+   Die Block-Erkennung für `bash -c` am Kommandoanfang (ADR 0001) wird
+   dafür bewusst **nicht** erweitert. Würde etwa `ksh -c 'ls' && rm -rf /`
+   als ein Block gelten, würde nur `ls` rekursiv geprüft und das bisher
+   eigene Segment `rm -rf /` fiele von `Deny` auf `Confirm` zurück. Im
+   Block-Pfad wird zusätzlich zum dritten Token auch der Code aus
+   `program_source` ausgewertet (`sh -c -- CODE`), beide über `combine`.
 
 5. **`eval` wird wie `bash -c` behandelt:** Untergrenze `Confirm`, und der
    Code, den `eval` ausführt (Argumente entquotet, mit Leerzeichen
@@ -80,7 +106,9 @@ wie weit die Engine sie auflösen soll.
 - Einige bisher unter einer breiten Allow-Regel automatisch ausgeführte,
   harmlose Formen verlangen jetzt eine Bestätigung: Schleifen und
   `if`-Konstrukte, `[ ... ]`, Kommandos mit Variablen als Kommandoname,
-  `... | sh`, `eval`, Eingaben mit unsichtbaren Unicode-Zeichen oder
+  `... | sh`, `eval`, `sh -c`/`python3 -c` in späteren Kettengliedern,
+  Shell-/Interpreter-Aufrufe mit unbekannten Langoptionen oder ohne
+  Operand (auch `python3 --version`), Eingaben mit unsichtbaren Unicode-Zeichen oder
   geschützten Leerzeichen. Das ist die vom Issue verlangte fail-closed
   Richtung.
 - Der Risiko-Klassifizierer nutzt weiter `segment_command`; die neuen
