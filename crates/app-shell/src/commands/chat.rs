@@ -28,6 +28,8 @@ pub async fn send_chat_message(
     session_id: SessionId,
     text: String,
 ) -> CommandResult<()> {
+    // Spec 0104, §4: Der Nutzer-Chat kommt nie in eine MCP-Sitzung.
+    state.mcp.sessions.ensure_user_session(session_id)?;
     let session = state
         .sessions
         .get(session_id)
@@ -66,6 +68,8 @@ pub async fn continue_truncated_response(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<()> {
+    // Spec 0104, §4: wie `send_chat_message`.
+    state.mcp.sessions.ensure_user_session(session_id)?;
     let session = state
         .sessions
         .get(session_id)
@@ -389,9 +393,19 @@ pub async fn disconnect(
     // Funktion weg — `SessionManager::remove` wird außer dort und in Tests
     // nirgends aufgerufen. Sie sperrt den Transport nicht; das Trennen
     // bleibt unten in diesem Befehl.
-    let session = elevated
-        .remove_session(&state.sessions, session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = elevated.remove_session(&state.sessions, session_id);
+
+    // Spec 0104, §5: Schließen einer MCP-Sitzung trägt sie aus und lehnt
+    // ihre wartende Bestätigung ab (fail closed) — vor dem Trennen, damit
+    // die Aktion nicht mehr genehmigt werden kann. Auch ohne gefundene
+    // `Session` (Schließen während des Host-Key-Dialogs), damit die nächste
+    // MCP-Anfrage eine neue Sitzung anlegt statt auf diese zu warten.
+    state.mcp.sessions.end_session(
+        session_id,
+        session.as_deref(),
+        &state.pending_action_confirmations,
+    );
+    let session = session.ok_or("Session nicht gefunden")?;
 
     // Best-effort: ein Fehler beim Trennen selbst (z. B. Verbindung bereits
     // tot) soll `disconnect()` nicht scheitern lassen — die Session wird in
@@ -520,6 +534,11 @@ pub async fn list_sessions(state: State<'_, AppState>) -> CommandResult<Vec<Sess
             server_name,
             status: entry.status,
             has_pending_action: entry.has_pending_action,
+            mcp: state.mcp.sessions.info(entry.session_id).map(|info| {
+                app_logic::dto::McpSessionDto {
+                    client_name: info.client_name,
+                }
+            }),
         });
     }
     Ok(result)

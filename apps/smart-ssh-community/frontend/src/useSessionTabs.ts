@@ -1,4 +1,6 @@
-// Spec 0017: zentrale Buchführung über offene Session-Tabs. Bewusst
+// Spec 0017: zentrale Buchführung über offene Session-Tabs. Seit Spec 0104
+// gilt "ein Tab pro Server" nur für Nutzer-Tabs: MCP-Clients bekommen je
+// Server einen eigenen MCP-Tab (`SessionTab.mcp`). Bewusst
 // getrennt vom eigentlichen Chat-/Terminal-Zustand (der bleibt lokal in
 // `ChatPanel`/`TerminalView`, s. dortige Doc-Kommentare) — dieser Hook hält
 // nur, was die Tab-Leiste selbst zum Rendern braucht: welche Sessions
@@ -16,7 +18,7 @@ import {
   onConnectionStatusChanged,
   onMcpActionTabRequested,
 } from "./events";
-import type { ConnectionStatus } from "./types";
+import type { ConnectionStatus, McpSessionInfo } from "./types";
 
 export interface SessionTab {
   sessionId: string;
@@ -37,6 +39,19 @@ export interface SessionTab {
    * mehr gezielt per `respondToAction` auflösen, informiert den Nutzer aber
    * weiterhin per Rückfrage. */
   pendingActionId: string | null;
+  /** Spec 0104: `null` für einen Nutzer-Tab, sonst die MCP-Sitzung eines
+   * externen Clients — eigener Tab je Server und Client, ohne Chat-Eingabe
+   * und Terminal, nie Ziel von `findExistingSessionId`. */
+  mcp: McpSessionInfo | null;
+}
+
+/** Spec 0104: Beschriftung "<Client> @ <Server>" für MCP-Tabs. */
+export function sessionTabLabel(
+  tab: Pick<SessionTab, "serverName" | "mcp">,
+  unnamedClientLabel: string,
+): string {
+  if (!tab.mcp) return tab.serverName;
+  return `${tab.mcp.clientName ?? unnamedClientLabel} @ ${tab.serverName}`;
 }
 
 export function useSessionTabs() {
@@ -64,9 +79,13 @@ export function useSessionTabs() {
             // Frontend-Prozess (aus dem `chat-action-proposed`-Event selbst)
             // — nach einem Reload ist sie verloren, s. `SessionTab`-Doc.
             pendingActionId: null,
+            mcp: s.mcp ?? null,
           })),
         );
-        setActiveSessionId((prev) => prev ?? summaries[0].sessionId);
+        // Spec 0104, §3: ein MCP-Tab wird nie von selbst aktiv — gibt es
+        // nur MCP-Tabs, bleibt die Übersicht aktiv.
+        const firstUserTab = summaries.find((s) => !s.mcp);
+        setActiveSessionId((prev) => prev ?? firstUserTab?.sessionId ?? null);
       })
       .catch((err) => console.error(commandErrorMessage(err)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,10 +151,14 @@ export function useSessionTabs() {
               status: "disconnected",
               hasPendingAction: false,
               pendingActionId: null,
+              mcp: { clientName: event.clientName ?? null },
             },
           ];
         });
-        setActiveSessionId(event.sessionId);
+        // Spec 0104, §3: kein Fokus-Wechsel — der Tab erscheint im
+        // Hintergrund, der aktive Tab des Nutzers bleibt aktiv. Eine
+        // wartende Bestätigung signalisieren der Tab-Indikator und die
+        // OS-Benachrichtigung (`mcp_backend::notify_pending_confirmation`).
         getServer(event.serverId)
           .then((server) => {
             setTabs((prev) =>
@@ -167,14 +190,17 @@ export function useSessionTabs() {
           status: "connected",
           hasPendingAction: false,
           pendingActionId: null,
+          mcp: null,
         },
       ];
     });
     setActiveSessionId(sessionId);
   };
 
+  /** Spec 0104: nur Nutzer-Tabs — ein MCP-Tab desselben Servers ist nie
+   * der Tab des Nutzers für diesen Server. */
   const findExistingSessionId = (serverId: string): string | undefined =>
-    tabs.find((t) => t.serverId === serverId)?.sessionId;
+    tabs.find((t) => t.serverId === serverId && !t.mcp)?.sessionId;
 
   const switchTo = (sessionId: string | null) => setActiveSessionId(sessionId);
 

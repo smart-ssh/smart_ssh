@@ -243,6 +243,7 @@ describe("App host key prompt in every tab state (Issue #12)", () => {
         serverName: "prod-1",
         status: "connected",
         hasPendingAction: false,
+        mcp: null,
       },
     ] as Awaited<ReturnType<typeof listSessions>>);
     renderApp();

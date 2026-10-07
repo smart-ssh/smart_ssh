@@ -2,11 +2,17 @@
 // ändert sich, Mindestgrößen greifen, Wert überlebt Neustart" und "Kleines
 // Fenster -> Layout bleibt bedienbar (Mindestgrößen)."
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
+import { testI18n } from "../testI18n";
 import { SessionView } from "./SessionView";
 
-vi.mock("./ChatPanel", () => ({ ChatPanel: () => <div>chat-panel-stub</div> }));
+vi.mock("./ChatPanel", () => ({
+  ChatPanel: ({ readOnlyHint }: { readOnlyHint?: string }) => (
+    <div data-testid="chat-panel-stub">{readOnlyHint ?? "chat-panel-stub"}</div>
+  ),
+}));
 vi.mock("./TerminalView", () => ({ TerminalView: () => <div>terminal-stub</div> }));
 vi.mock("./FileBrowserPanel", () => ({ FileBrowserPanel: () => <div>file-browser-stub</div> }));
 
@@ -204,5 +210,48 @@ describe("SessionView AI/SSH split (Spec 0053, Teil 2)", () => {
     fireEvent.click(screen.getByText("Dateien"));
 
     expect(await screen.findByText("file-browser-stub")).toBeVisible();
+  });
+});
+
+// Spec 0104 / Issue #50: Eine MCP-Sitzung zeigt nur die Aktionskarten des
+// externen Clients samt Ergebnis — ohne Chat-Eingabe, Terminal und
+// Dateibrowser.
+describe("SessionView MCP session (Spec 0104)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function renderMcpView(clientName: string | null) {
+    return render(
+      <I18nextProvider i18n={testI18n}>
+        <SessionView
+          sessionId="session-1"
+          serverName="web-01"
+          serverId="server-1"
+          onRequestClose={vi.fn()}
+          onActionSettled={vi.fn()}
+          isActiveTab={false}
+          mcp={{ clientName }}
+        />
+      </I18nextProvider>,
+    );
+  }
+
+  it("renders an MCP session read-only: action cards, no terminal, no file browser", () => {
+    renderMcpView("Claude Code");
+
+    expect(screen.getByText("Claude Code @ web-01")).toBeInTheDocument();
+    expect(screen.getByTestId("chat-panel-stub")).toHaveTextContent(
+      testI18n.t("sessionTabs.mcp.readOnlyHint"),
+    );
+    expect(screen.queryByText("terminal-stub")).toBeNull();
+    expect(screen.queryByText("file-browser-stub")).toBeNull();
+  });
+
+  it("keeps the full layout with chat input for a user session", () => {
+    renderSessionView();
+
+    expect(screen.getByTestId("chat-panel-stub")).toHaveTextContent("chat-panel-stub");
+    expect(screen.getByText("terminal-stub")).toBeInTheDocument();
   });
 });
