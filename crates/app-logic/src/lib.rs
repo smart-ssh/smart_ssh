@@ -40,6 +40,9 @@ pub mod groups;
 pub mod host_key_store;
 pub mod identity_file;
 pub mod key_files;
+/// Issue #89: which local paths the file browser may read (upload,
+/// overwrite preview, edit-session polling).
+pub mod local_path_grants;
 pub mod logging;
 /// Spec 0101, A13–A17 (E9): die Verpackungsdatei des Master-Passworts und
 /// die Vorgänge auf ihr — einrichten, entsperren, ändern, zurück auf den

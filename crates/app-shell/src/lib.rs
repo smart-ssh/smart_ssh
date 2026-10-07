@@ -635,6 +635,21 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // kein Feld von `AppState`, damit der Kanal auch dann hier bleibt,
         // wenn die übrige Anwendungslogik in einen Tauri-freien Crate zieht.
         .manage(crate::elevated_sftp::ElevatedSftpRegistry::default())
+        // Issue #89: local paths the user granted to a session (native open
+        // dialog, native drop, own edit copy). The drop paths come from the
+        // window's native drag-and-drop event below, never from the webview.
+        .manage(app_logic::local_path_grants::LocalPathGrants::new())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
+            {
+                use tauri::Manager;
+                if let Some(grants) =
+                    window.try_state::<app_logic::local_path_grants::LocalPathGrants>()
+                {
+                    grants.record_drop(paths.clone());
+                }
+            }
+        })
         .manage(edition)
         .manage(edition_data_paths)
         // Spec 0101, A16: Das Tor sitzt **vor** dem erzeugten Verteiler
@@ -733,6 +748,8 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_download_default,
             commands::sftp_download_dir,
             commands::sftp_upload,
+            commands::pick_upload_files,
+            commands::claim_dropped_paths,
             commands::sftp_delete,
             commands::sftp_delete_preview,
             commands::sftp_rename,

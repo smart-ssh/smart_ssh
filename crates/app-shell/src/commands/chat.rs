@@ -386,6 +386,7 @@ pub async fn disconnect(
     app: AppHandle,
     state: State<'_, AppState>,
     elevated: State<'_, crate::elevated_sftp::ElevatedSftpRegistry>,
+    grants: State<'_, app_logic::local_path_grants::LocalPathGrants>,
     session_id: SessionId,
 ) -> CommandResult<()> {
     // Spec 0084, A2.1: Sitzung UND erhöhter Kanal gehen in einer einzigen
@@ -393,6 +394,10 @@ pub async fn disconnect(
     // nirgends aufgerufen. Sie sperrt den Transport nicht; das Trennen
     // bleibt unten in diesem Befehl.
     let session = elevated.remove_session(&state.sessions, session_id);
+    // Issue #89: picked and dropped local paths are granted per session and
+    // expire with it. Every reader also checks that the session still
+    // exists, so this is the explicit cleanup, not the only guard.
+    grants.remove_session(session_id);
 
     // Spec 0017, §5 / Spec 0104, §5 (Issue #66): Schließen lehnt die
     // wartende Bestätigung JEDER Sitzung ab (fail closed) — vor dem
