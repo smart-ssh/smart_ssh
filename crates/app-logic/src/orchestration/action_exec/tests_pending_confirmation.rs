@@ -518,3 +518,178 @@ async fn test_a_second_resolution_of_the_same_action_executes_nothing_again() {
     );
     assert_eq!(fixture.pending_action(), None);
 }
+
+// --- Issue #66: Schließen lehnt die wartende Bestätigung JEDER Sitzung ab ---
+
+/// Ein Nutzer-Vorschlag, der auf `Confirm` wartet, dessen Transport jeden
+/// ausgeführten Befehl mitschreibt.
+fn fixture_recording_execution() -> (Fixture, Arc<std::sync::Mutex<Vec<String>>>) {
+    let transport = MockSshTransport::default().with_response(TEST_COMMAND, output(""));
+    let executed = transport.executed_handle();
+    let fixture = Fixture::with_session(test_session(vec![AiEvent::Done], transport));
+    (fixture, executed)
+}
+
+/// Wie `app_shell::commands::disconnect`: erst aus dem `SessionManager`,
+/// dann der Tauri-freie Schließ-Schritt — ohne jeden
+/// `respond_to_action`-Aufruf aus dem Frontend.
+fn close_like_disconnect(
+    fixture: &Fixture,
+    manager: &SessionManager,
+    mcp_sessions: &crate::mcp_sessions::McpSessionRegistry,
+) {
+    let removed = manager.remove(fixture.session_id);
+    crate::session::reject_pending_confirmation_on_close(
+        fixture.session_id,
+        removed.as_deref(),
+        mcp_sessions,
+        fixture.confirmations.as_ref(),
+    );
+}
+
+/// Issue #66, AC 1 + AC 5 (Regression, gegen den Stand vor dem Fix rot:
+/// dort lehnte `disconnect` nur MCP-Sitzungen ab, die Aktion blieb bis zum
+/// Bestätigungs-Timeout offen und der Test lief in die Zeitgrenze):
+/// Schließen einer **Nutzer**-Sitzung mit wartender Bestätigung, ohne
+/// Frontend-Ablehnung, lehnt sie im Backend ab. Nichts läuft auf dem
+/// Transport, und die Ablehnung wird genau wie ein Klick auf "Ablehnen"
+/// verbucht (`RejectionReason::User` im Verlauf, Folgerunde angefordert).
+#[tokio::test]
+async fn test_closing_a_user_session_rejects_its_pending_confirmation_in_the_backend() {
+    let (fixture, executed) = fixture_recording_execution();
+    let manager = fixture.manager();
+    let mcp_sessions = crate::mcp_sessions::McpSessionRegistry::new();
+    let task = fixture.spawn_proposal();
+    let action_id = fixture.await_pending_indicator().await;
+    assert!(!mcp_sessions.is_mcp_session(fixture.session_id));
+
+    close_like_disconnect(&fixture, &manager, &mcp_sessions);
+
+    let needs_follow_up =
+        with_timeout("die Bestätigung wurde beim Schließen nicht abgelehnt", task)
+            .await
+            .expect("die Task endet regulär");
+    assert!(
+        needs_follow_up,
+        "eine Ablehnung fordert wie ein Klick auf \"Ablehnen\" die Folgerunde an"
+    );
+    assert!(
+        executed.lock().unwrap().is_empty(),
+        "Aktion lief trotz Schließen"
+    );
+    assert_eq!(fixture.event_count("chat-action-result"), 0);
+    assert_eq!(fixture.pending_action(), None);
+    assert!(!fixture.confirmations.contains(&action_id));
+    assert!(
+        fixture
+            .confirmations
+            .resolve(&action_id, ActionUserDecision::Approve)
+            .is_err(),
+        "nach dem Schließen darf sich die Aktion nicht mehr genehmigen lassen"
+    );
+
+    let history = fixture.session.context.lock().await.history.clone();
+    assert!(
+        history.iter().any(|m| matches!(
+            &m.content,
+            ssh_manager_core::ai::MessageContent::ActionRejected {
+                reason: ssh_manager_core::ai::RejectionReason::User,
+                ..
+            }
+        )),
+        "Ablehnung fehlt im Verlauf (oder nicht als Nutzer-Ablehnung): {history:?}"
+    );
+}
+
+/// Issue #66, AC 3: War die Bestätigung schon aufgelöst (hier: Klick auf
+/// "Ablehnen" aus dem Frontend, wie `requestCloseTab` ihn weiter sendet),
+/// ist das Schließen ein No-op ohne Fehler — und verbucht die Ablehnung
+/// nicht doppelt.
+#[tokio::test]
+async fn test_closing_after_the_confirmation_was_settled_is_a_no_op() {
+    let (fixture, executed) = fixture_recording_execution();
+    let manager = fixture.manager();
+    let mcp_sessions = crate::mcp_sessions::McpSessionRegistry::new();
+    let task = fixture.spawn_proposal();
+    let action_id = fixture.await_pending_indicator().await;
+
+    fixture
+        .confirmations
+        .resolve(&action_id, ActionUserDecision::Deny)
+        .expect("die Frontend-Ablehnung trifft die wartende Bestätigung");
+    // Absichtlich VOR dem Ende der Task: Der Indikator kann noch stehen,
+    // während der Registry-Eintrag schon weg ist.
+    assert!(!fixture
+        .session
+        .reject_pending_confirmation(fixture.confirmations.as_ref()));
+    close_like_disconnect(&fixture, &manager, &mcp_sessions);
+
+    with_timeout("die Task endete nicht", task)
+        .await
+        .expect("die Task endet regulär");
+    assert!(executed.lock().unwrap().is_empty());
+    let history = fixture.session.context.lock().await.history.clone();
+    let rejections = history
+        .iter()
+        .filter(|m| {
+            matches!(
+                m.content,
+                ssh_manager_core::ai::MessageContent::ActionRejected { .. }
+            )
+        })
+        .count();
+    assert_eq!(rejections, 1, "Ablehnung doppelt verbucht: {history:?}");
+}
+
+/// Issue #66, AC 3: Ohne wartende Aktion ist das Schließen ein No-op —
+/// auch ein bereits registrierter, fremder Eintrag bleibt unberührt.
+#[test]
+fn test_closing_a_session_without_pending_action_touches_nothing() {
+    let fixture = Fixture::new();
+    let manager = fixture.manager();
+    let mcp_sessions = crate::mcp_sessions::McpSessionRegistry::new();
+    let other_action: ActionId = uuid::Uuid::new_v4();
+    let _rx = fixture.confirmations.register(other_action);
+
+    assert!(!fixture
+        .session
+        .reject_pending_confirmation(fixture.confirmations.as_ref()));
+    close_like_disconnect(&fixture, &manager, &mcp_sessions);
+
+    assert!(fixture.confirmations.contains(&other_action));
+}
+
+/// Issue #66, AC 4: Stand die Sitzung nicht (mehr) im `SessionManager`
+/// (Schließen während des Host-Key-Dialogs), bleibt alles wie bisher — für
+/// eine Nutzer-Sitzung passiert nichts, eine MCP-Sitzung wird ausgetragen.
+#[test]
+fn test_closing_a_session_missing_from_the_manager_behaves_as_before() {
+    let confirmations = ConfirmationRegistry::new();
+    let mcp_sessions = crate::mcp_sessions::McpSessionRegistry::new();
+    let pending: ActionId = uuid::Uuid::new_v4();
+    let _rx = confirmations.register(pending);
+
+    let user_session_id: SessionId = uuid::Uuid::new_v4();
+    crate::session::reject_pending_confirmation_on_close(
+        user_session_id,
+        None,
+        &mcp_sessions,
+        &confirmations,
+    );
+    assert!(confirmations.contains(&pending));
+
+    let key = crate::mcp_sessions::McpSessionKey::new(
+        ssh_manager_core::shared::ServerId::new(),
+        Some("Claude Code"),
+    );
+    let mcp_session_id: SessionId = uuid::Uuid::new_v4();
+    mcp_sessions.register(&key, mcp_session_id);
+    crate::session::reject_pending_confirmation_on_close(
+        mcp_session_id,
+        None,
+        &mcp_sessions,
+        &confirmations,
+    );
+    assert!(!mcp_sessions.is_mcp_session(mcp_session_id));
+    assert!(confirmations.contains(&pending));
+}

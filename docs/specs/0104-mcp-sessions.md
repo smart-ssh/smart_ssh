@@ -98,8 +98,17 @@ Spec 0057 (Kompaktierung, MCP-Ausschluss aus der Summary), ADR 0109.
   (z. B. bei offenem Host-Key-Dialog), trennt `ensure_session` die danach
   doch aufgebaute Verbindung sofort wieder. Die Anfrage scheitert dann mit
   derselben Meldung.
-- Für Nutzer-Tabs bleibt das Schließen unverändert (Rückfrage, Ablehnung
-  über das Frontend, Spec 0017, Abschnitt 5).
+- Das Ablehnen einer wartenden Bestätigung gilt für **jede** geschlossene
+  Sitzung, nicht nur für MCP-Sitzungen (Issue #66): `disconnect` ruft
+  `session::reject_pending_confirmation_on_close` auf. Der Schritt trägt
+  zuerst eine MCP-Sitzung aus (`McpSessionRegistry::end_session`) und
+  lehnt danach die wartende Bestätigung der Sitzung ab
+  (`Session::reject_pending_confirmation`), ohne nach Herkunft der
+  Sitzung zu unterscheiden. Für Nutzer-Tabs bleibt die Rückfrage im
+  Frontend; dessen Ablehnung ist nur noch redundant, das Backend lehnt
+  auch ohne sie ab (z. B. nach einem Frontend-Reload, wenn die
+  `actionId` fehlt). War die Bestätigung schon aufgelöst, ist der Schritt
+  ein No-op.
 
 ## 6. Unveränderte Invarianten
 
@@ -129,7 +138,15 @@ Spec 0057 (Kompaktierung, MCP-Ausschluss aus der Summary), ADR 0109.
   Nutzer-Sitzung bleibt unverändert, und der Nutzer-Verlauf kommt nicht in
   die MCP-Sitzung.
 - Schließen lehnt die wartende Bestätigung ab, nichts wird ausgeführt, die
-  nächste Anfrage bekommt eine neue Sitzung.
+  nächste Anfrage bekommt eine neue Sitzung — auch über den
+  sitzungsunabhängigen Schließ-Schritt, und die Sitzung ist ausgetragen,
+  bevor die Aktion zurückkehrt.
+
+`crates/app-logic/src/orchestration/action_exec/tests_pending_confirmation.rs`
+(Issue #66): Schließen einer Nutzer-Sitzung lehnt ohne Frontend-Aufruf ab
+und verbucht das wie eine Nutzer-Ablehnung; bereits aufgelöste oder fehlende
+Bestätigungen und Sitzungen, die nicht im `SessionManager` stehen, sind
+No-ops.
 - Nutzer-Eingaben werden nur für MCP-Sitzungen abgelehnt.
 - Das Anlege-Lock serialisiert nur denselben Schlüssel.
 
