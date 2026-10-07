@@ -17,6 +17,7 @@ use ssh_manager_core::shared::ServerId;
 use crate::commands::connect_session;
 use crate::event_emitter::TauriEventEmitter;
 use app_logic::events::{emit_mcp_action_tab_requested, ConnectionStatus, EventEmitter};
+use app_logic::mcp_lookup::McpLookup;
 use app_logic::orchestration::handle_mcp_action_proposed;
 use app_logic::session::Session;
 use app_logic::state::{AppState, SessionId};
@@ -35,12 +36,7 @@ impl AppMcpBackend {
     }
 
     fn is_allowed(&self, server_id: &ServerId) -> bool {
-        self.state()
-            .mcp
-            .allowed_servers
-            .lock()
-            .expect("allowed_servers-Mutex vergiftet")
-            .contains(server_id)
+        McpLookup::from_state(&self.state()).is_allowed(server_id)
     }
 
     /// Liefert eine bestehende, verbundene Session für `server_id`, falls
@@ -123,52 +119,15 @@ impl AppMcpBackend {
 impl McpBackend for AppMcpBackend {
     async fn list_servers(&self) -> Vec<ServerSummary> {
         let state = self.state();
-        let allowed: Vec<ServerId> = state
-            .mcp
-            .allowed_servers
-            .lock()
-            .expect("allowed_servers-Mutex vergiftet")
-            .iter()
-            .copied()
-            .collect();
-
-        let mut summaries = Vec::with_capacity(allowed.len());
-        for id in allowed {
-            if let Ok(server) = state.profile_store.get_server(&id).await {
-                summaries.push(ServerSummary {
-                    id,
-                    name: server.name,
-                });
-            }
-        }
-        summaries
+        McpLookup::from_state(&state).list_servers().await
     }
 
+    /// Allow-Liste, Lookup und Redaction → Fencing liegen Tauri-frei in
+    /// `app_logic::mcp_lookup` (Issue #35), damit sie ohne `AppHandle`
+    /// getestet sind.
     async fn server_notes(&self, server_id: ServerId) -> Result<String, LookupError> {
-        if !self.is_allowed(&server_id) {
-            return Err(LookupError::UnknownServer);
-        }
         let state = self.state();
-        let server = state
-            .profile_store
-            .get_server(&server_id)
-            .await
-            .map_err(|_| LookupError::UnknownServer)?;
-        // Issue #18: wie im Kontext der eingebauten KI erst redigiert
-        // (Session-Redactor dieses Servers, inkl. Sudo-Passwort), dann je
-        // Abschnitt als `ServerNote` gefenct — ein externer MCP-Client ist
-        // ebenso ein KI-Empfänger (Spec 0039, ADR 0034).
-        let redactor = app_logic::server_redaction::server_redactor(
-            state.credential_store.as_ref(),
-            server_id,
-        );
-        app_logic::server_redaction::redacted_fenced_effective_notes(
-            &server,
-            state.profile_store.as_ref(),
-            redactor.as_ref(),
-        )
-        .await
-        .map_err(|_| LookupError::UnknownServer)
+        McpLookup::from_state(&state).server_notes(server_id).await
     }
 
     async fn propose_action(
