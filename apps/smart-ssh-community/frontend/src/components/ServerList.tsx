@@ -46,6 +46,9 @@ interface ServerListProps {
    * Einstiegs-Block — wechselt zum Tab "Verwalten" mit geöffnetem
    * Neu-Formular (`App.tsx`s `handleCreateFirstServer`). */
   onCreateFirstServer: () => void;
+  /** Issue #49: „+" an einer Gruppenzeile — wechselt zu „Verwalten" mit
+   * geöffnetem Neu-Formular, diese Gruppe vorbelegt. */
+  onCreateServerInGroup: (groupId: string) => void;
 }
 
 /** Spec 0047, Fund D2: bislang zeigte dieser Screen bei jedem Fehler nur
@@ -82,6 +85,7 @@ export function ServerList({
   collapsedGroupIds,
   onToggleGroup,
   onCreateFirstServer,
+  onCreateServerInGroup,
 }: ServerListProps) {
   const { t } = useTranslation();
   const [servers, setServers] = useState<ServerDto[]>([]);
@@ -328,16 +332,29 @@ export function ServerList({
         data-drop-target={groupDropTargetValue(node.group.id)}
         className={`border-b border-slate-700 last:border-b-0 ${highlightFor({ kind: "group", id: node.group.id })}`}
       >
-        <button
-          type="button"
-          {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
-          onClick={() => onToggleGroup(node.group.id)}
-          style={{ paddingLeft: `${depth * 16 + 16}px` }}
-          className="flex w-full select-none items-center gap-2 py-2 pr-4 text-left text-sm font-medium text-slate-200 hover:bg-slate-800"
-        >
-          <span className="w-3 text-slate-500">{collapsed ? "▸" : "▾"}</span>
-          📁 {node.group.name}
-        </button>
+        {/* Issue #49: Auf-/Zuklappen und „+" (neuer Server in dieser
+         * Gruppe) als Geschwister — ein Button im Button wäre ungültig. */}
+        <div className="flex items-center hover:bg-slate-800">
+          <button
+            type="button"
+            {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
+            onClick={() => onToggleGroup(node.group.id)}
+            style={{ paddingLeft: `${depth * 16 + 16}px` }}
+            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 pr-2 text-left text-sm font-medium text-slate-200"
+          >
+            <span className="w-3 text-slate-500">{collapsed ? "▸" : "▾"}</span>
+            <span className="truncate">📁 {node.group.name}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onCreateServerInGroup(node.group.id)}
+            title={t("mainScreen.newServerInGroup", { name: node.group.name })}
+            aria-label={t("mainScreen.newServerInGroup", { name: node.group.name })}
+            className="mr-3 rounded px-2 py-0.5 text-sm text-slate-400 hover:bg-slate-700 hover:text-slate-100"
+          >
+            +
+          </button>
+        </div>
         {!collapsed && (node.children.length > 0 || node.servers.length > 0) && (
           <ul className="divide-y divide-slate-800">
             {node.children.map((child) => renderGroupSection(child, depth + 1))}

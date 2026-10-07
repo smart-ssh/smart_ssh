@@ -6,7 +6,7 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../types";
-import { Sidebar } from "./Sidebar";
+import { Sidebar, type Selection } from "./Sidebar";
 
 function group(id: string, name: string, parentId: string | null): GroupDto {
   return { id, name, parentId, notes: "" };
@@ -41,7 +41,7 @@ const servers = [
   server("s-prod", "prod-1", "g-prod"),
 ];
 
-function renderSidebar() {
+function renderSidebar(selection: Selection | null = null) {
   const onMove = vi.fn();
   const onSelect = vi.fn();
   render(
@@ -49,7 +49,7 @@ function renderSidebar() {
       <Sidebar
         groups={groups}
         servers={servers}
-        selection={null}
+        selection={selection}
         onSelect={onSelect}
         onImportSshConfig={vi.fn()}
         onExportSshConfig={vi.fn()}
@@ -160,5 +160,34 @@ describe("Sidebar drag and drop (issue #48)", () => {
     fireEvent.pointerUp(source, { button: 0, buttons: 0, pointerId: 1, clientX: 40, clientY: 60 });
 
     expect(onMove).not.toHaveBeenCalled();
+  });
+});
+
+describe("Sidebar new items in the current folder (issue #49)", () => {
+  const addServer = () => fireEvent.click(screen.getByRole("button", { name: testI18n.t("sidebar.addServer") }));
+  const addGroup = () => fireEvent.click(screen.getByRole("button", { name: testI18n.t("sidebar.addGroup") }));
+
+  it("prefills the selected folder for a new server and a new folder", () => {
+    const { onSelect } = renderSidebar({ kind: "group", id: "g-web" });
+    addServer();
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "newServer", groupId: "g-web" });
+    addGroup();
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "newGroup", parentId: "g-web" });
+  });
+
+  it("prefills the folder of the selected server", () => {
+    const { onSelect } = renderSidebar({ kind: "server", id: "s-prod" });
+    addServer();
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "newServer", groupId: "g-prod" });
+    addGroup();
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "newGroup", parentId: "g-prod" });
+  });
+
+  it("prefills no folder with nothing selected or an ungrouped server selected", () => {
+    const { onSelect } = renderSidebar(null);
+    addServer();
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "newServer", groupId: null });
+    addGroup();
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "newGroup", parentId: null });
   });
 });

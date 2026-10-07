@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorCode, commandErrorMessage, createGroup, deleteGroup, updateGroup } from "../api";
 import { translateErrorCode } from "../errorCodes";
+import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
 import type { DeleteGroupResult, GroupDto } from "../types";
 import { NotesPanel } from "./NotesPanel";
 
@@ -55,7 +56,10 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
     return excluded;
   }, [groupId, allGroups]);
 
-  const availableParents = allGroups.filter((g) => !excludedIds.has(g.id));
+  // Issue #49: hierarchisch (eingerückter voller Pfad) statt flach.
+  const availableParents = flattenGroupOptions(allGroups).filter(
+    (option) => !excludedIds.has(option.group.id),
+  );
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -125,9 +129,9 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
             className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
           >
             <option value="">{t("groupForm.noParent")}</option>
-            {availableParents.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
+            {availableParents.map((option) => (
+              <option key={option.group.id} value={option.group.id}>
+                {groupOptionLabel(option)}
               </option>
             ))}
           </select>

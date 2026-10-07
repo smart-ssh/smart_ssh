@@ -30,6 +30,7 @@
     "emptyStateTitle": "Noch kein Server angelegt",
     "emptyStateHint": "Lege deinen ersten Server an, um dich per SSH zu verbinden.",
     "emptyStateCreateFirstServer": "Ersten Server anlegen",
+    "newServerInGroup": "Neuer Server in Gruppe „{{name}}“",
     "emptyStateTryLocalhost": "Ohne Server ausprobieren: „Localhost“ oben öffnet eine Sitzung auf diesem Rechner — mit denselben Bestätigungen wie auf einem Server."
   },
   "settings": {

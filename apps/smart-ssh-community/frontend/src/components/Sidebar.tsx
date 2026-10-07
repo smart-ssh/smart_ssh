@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { buildGroupTree, type GroupTreeNode } from "../groupTree";
+import { folderForNewItem } from "../newItemFolder";
 import {
   classifyDrop,
   dropHighlightClass,
@@ -65,6 +66,10 @@ export function Sidebar({
       ? dropHighlightClass(dropKind)
       : "";
 
+  // Issue #49: neue Elemente landen in der aktuellen Gruppe (ausgewählte
+  // Gruppe bzw. Gruppe des ausgewählten Servers), s. `folderForNewItem`.
+  const currentFolder = folderForNewItem(selection, servers);
+
   const isSelected = (kind: "group" | "server", id: string) =>
     selection?.kind === kind && selection.id === id;
 
@@ -115,14 +120,14 @@ export function Sidebar({
       <div className="flex gap-1 border-b border-slate-800 p-2">
         <button
           type="button"
-          onClick={() => onSelect({ kind: "newGroup", parentId: null })}
+          onClick={() => onSelect({ kind: "newGroup", parentId: currentFolder })}
           className="flex-1 rounded bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700"
         >
           {t("sidebar.addGroup")}
         </button>
         <button
           type="button"
-          onClick={() => onSelect({ kind: "newServer", groupId: null })}
+          onClick={() => onSelect({ kind: "newServer", groupId: currentFolder })}
           className="flex-1 rounded bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700"
         >
           {t("sidebar.addServer")}
