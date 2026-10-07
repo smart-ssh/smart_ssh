@@ -9,7 +9,7 @@
 // `event.sessionId` aus den jeweiligen Events, nie implizit über den
 // gerade aktiven Tab (Abschnitt 4, "das ist der wahrscheinlichste
 // Fehlerfall bei dieser Umstellung").
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { commandErrorMessage, disconnect, getServer, listSessions, respondToAction } from "./api";
 import {
   onActionDecisionEscalated,
@@ -54,12 +54,31 @@ export function sessionTabLabel(
   return `${tab.mcp.clientName ?? unnamedClientLabel} @ ${tab.serverName}`;
 }
 
+/** Spec 0104, §3: Nachfolger, wenn der aktive Tab `closedSessionId`
+ * geschlossen wird — der letzte verbliebene **Nutzer**-Tab, sonst die
+ * Übersicht (`null`). Ein MCP-Tab wird nie von selbst aktiv, auch nicht
+ * hier; nur ein expliziter Klick aktiviert ihn. */
+export function nextActiveAfterClose(
+  tabs: readonly Pick<SessionTab, "sessionId" | "mcp">[],
+  closedSessionId: string,
+): string | null {
+  const userTabs = tabs.filter((t) => t.sessionId !== closedSessionId && !t.mcp);
+  return userTabs.length > 0 ? userTabs[userTabs.length - 1].sessionId : null;
+}
+
 export function useSessionTabs() {
   const [tabs, setTabs] = useState<SessionTab[]>([]);
   // `null` heißt "Übersicht" (Server-/Verwaltungs-Screens) ist aktiv, nicht
   // "keine Tabs offen" — beides ist gleichzeitig möglich (Tabs bleiben im
   // Hintergrund offen, während der Nutzer einen weiteren Server sucht).
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  // Zuletzt gerenderter Tab-Stand für Callbacks, die erst nach einem `await`
+  // weiterlaufen (`requestCloseTab`) und sonst einen veralteten `tabs`-Wert
+  // aus ihrer Closure lesen würden.
+  const tabsRef = useRef(tabs);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
 
   // Spec 0017, Abschnitt 2: Backend ist die maßgebliche Quelle offener
   // Sessions — beim Start (bzw. Dev-Modus-Hot-Reload) wird die Tab-Leiste
@@ -221,8 +240,10 @@ export function useSessionTabs() {
     setTabs((prev) => prev.filter((t) => t.sessionId !== sessionId));
     setActiveSessionId((prevActive) => {
       if (prevActive !== sessionId) return prevActive;
-      const remaining = tabs.filter((t) => t.sessionId !== sessionId);
-      return remaining.length > 0 ? remaining[remaining.length - 1].sessionId : null;
+      // Aus dem aktuellen Stand (`tabsRef`), nicht aus `tabs` der Closure:
+      // `requestCloseTab` wartet vorher auf `disconnect`, in der Zwischenzeit
+      // können Tabs dazugekommen oder geschlossen worden sein.
+      return nextActiveAfterClose(tabsRef.current, sessionId);
     });
   };
 
