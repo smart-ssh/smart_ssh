@@ -28,7 +28,9 @@ use crate::test_support::{
     RELEASE_FIXTURE_ROOT_KEY,
 };
 use crate::SqliteProfileStore;
-use crate::{convert_plaintext_database, detect_database_file_state, DatabaseFileState};
+use crate::{
+    convert_plaintext_database, detect_database_file_state, DataDirLock, DatabaseFileState,
+};
 
 /// Die Daten, die jede Release-Fixture trägt (s. Generator neben jeder
 /// Fixture). Zeilen eines späteren Release bekommen eigene Marker; diese
@@ -138,7 +140,10 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
 
     // --- Eine Klartext-Datei wird zuerst umgewandelt, wie beim Start.
     if fixture.encryption == FixtureEncryption::Plaintext {
-        convert_plaintext_database(&path, &key)
+        // Issue #19: Die Umwandlung verlangt die Sperre auf das
+        // Datenverzeichnis — wie beim Start, der sie vorher nimmt.
+        let lock = DataDirLock::acquire_for_database(&path).expect("lock the temp directory");
+        convert_plaintext_database(&path, &key, &lock)
             .await
             .unwrap_or_else(|err| panic!("{release}: conversion failed: {err:?}"));
         assert_eq!(
