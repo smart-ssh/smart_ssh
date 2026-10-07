@@ -260,9 +260,13 @@ interface ChatPanelProps {
    * `chat-action-result`-Event auslöst und sonst den Hinweis-Indikator auf
    * dem Tab hängen ließe. */
   onActionSettled: (sessionId: string) => void;
+  /** Spec 0103: gesetzt für eine MCP-Sitzung — statt der Eingabezeile
+   * erscheint dieser Hinweis. Die Aktionskarten (Bestätigen/Ablehnen) und
+   * ihre Ergebnisse bleiben unverändert. */
+  readOnlyHint?: string;
 }
 
-export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelProps) {
+export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }: ChatPanelProps) {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -922,7 +926,11 @@ export function ChatPanel({ sessionId, serverId, onActionSettled }: ChatPanelPro
         )}
       </div>
 
-      {hasActiveProvider === false ? (
+      {readOnlyHint !== undefined ? (
+        <div className="border-t border-slate-700 bg-slate-800 p-3 text-xs text-slate-400">
+          {readOnlyHint}
+        </div>
+      ) : hasActiveProvider === false ? (
         <div className="border-t border-slate-700 p-4 text-sm text-amber-300">
           Kein aktiver AI-Provider konfiguriert. Bitte zuerst in den Einstellungen einrichten.
         </div>

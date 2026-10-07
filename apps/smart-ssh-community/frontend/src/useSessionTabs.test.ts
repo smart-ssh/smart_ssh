@@ -9,8 +9,15 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { disconnect, listSessions, respondToAction } from "./api";
-import { onActionDecisionEscalated, onChatActionResult, onConnectionStatusChanged } from "./events";
-import { useSessionTabs } from "./useSessionTabs";
+import {
+  onActionDecisionEscalated,
+  onChatActionProposed,
+  onChatActionResult,
+  onConnectionStatusChanged,
+  onMcpActionTabRequested,
+} from "./events";
+import type { ChatActionProposedEvent, McpActionTabRequestedEvent } from "./types";
+import { sessionTabLabel, useSessionTabs } from "./useSessionTabs";
 
 vi.mock("./api", () => ({
   commandErrorMessage: (err: unknown) => String(err),
@@ -39,6 +46,7 @@ beforeEach(() => {
       serverName: "prod-db",
       status: "connected",
       hasPendingAction: false,
+      mcp: null,
     },
   ]);
   window.confirm = vi.fn(() => true);
@@ -125,5 +133,126 @@ describe("useSessionTabs baseline listeners", () => {
     await renderWithOneTab();
     expect(onConnectionStatusChanged).toHaveBeenCalled();
     expect(onChatActionResult).toHaveBeenCalled();
+  });
+});
+
+// Spec 0103 / Issue #50: MCP-Arbeit läuft in einem eigenen Tab je Server und
+// MCP-Client — der Tab erscheint, ohne den Fokus zu stehlen, signalisiert
+// wartende Bestätigungen und ist nie der Tab des Nutzers für den Server.
+describe("useSessionTabs / MCP tabs (Spec 0103)", () => {
+  function captureMcpHandler() {
+    let handler: ((event: McpActionTabRequestedEvent) => void) | null = null;
+    vi.mocked(onMcpActionTabRequested).mockImplementation((h) => {
+      handler = h;
+      return Promise.resolve(() => {});
+    });
+    return () => handler!;
+  }
+
+  it("adds the MCP tab without switching away from the active user tab", async () => {
+    const mcpHandler = captureMcpHandler();
+    const { result } = await renderWithOneTab();
+    expect(result.current.activeSessionId).toBe("session-1");
+
+    act(() => {
+      mcpHandler()({ sessionId: "mcp-1", serverId: "server-1", clientName: "Claude Code" });
+    });
+
+    expect(result.current.activeSessionId).toBe("session-1");
+    expect(result.current.tabs).toHaveLength(2);
+    expect(result.current.tabs[1]).toMatchObject({
+      sessionId: "mcp-1",
+      serverId: "server-1",
+      mcp: { clientName: "Claude Code" },
+    });
+  });
+
+  it("keeps the overview active when an MCP tab appears with no tab open", async () => {
+    vi.mocked(listSessions).mockResolvedValue([]);
+    const mcpHandler = captureMcpHandler();
+    const { result } = await renderWithOneTab();
+
+    act(() => {
+      mcpHandler()({ sessionId: "mcp-1", serverId: "server-1", clientName: null });
+    });
+
+    expect(result.current.activeSessionId).toBeNull();
+    expect(result.current.tabs[0].mcp).toEqual({ clientName: null });
+  });
+
+  it("signals a pending confirmation on the background MCP tab", async () => {
+    const mcpHandler = captureMcpHandler();
+    let proposed: ((event: ChatActionProposedEvent) => void) | null = null;
+    vi.mocked(onChatActionProposed).mockImplementation((h) => {
+      proposed = h;
+      return Promise.resolve(() => {});
+    });
+    const { result } = await renderWithOneTab();
+    act(() => {
+      mcpHandler()({ sessionId: "mcp-1", serverId: "server-1", clientName: "Claude Code" });
+    });
+
+    act(() => {
+      proposed!({
+        sessionId: "mcp-1",
+        actionId: "action-9",
+        decision: { Confirm: { reason: "MCP", code: "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM" } },
+      } as unknown as ChatActionProposedEvent);
+    });
+
+    const mcpTab = result.current.tabs.find((t) => t.sessionId === "mcp-1")!;
+    expect(mcpTab.hasPendingAction).toBe(true);
+    expect(result.current.tabs.find((t) => t.sessionId === "session-1")!.hasPendingAction).toBe(false);
+    expect(result.current.activeSessionId).toBe("session-1");
+  });
+
+  it("never returns an MCP tab as the user's existing tab for a server", async () => {
+    vi.mocked(listSessions).mockResolvedValue([]);
+    const mcpHandler = captureMcpHandler();
+    const { result } = await renderWithOneTab();
+    act(() => {
+      mcpHandler()({ sessionId: "mcp-1", serverId: "server-1", clientName: "Claude Code" });
+    });
+
+    expect(result.current.findExistingSessionId("server-1")).toBeUndefined();
+
+    act(() => {
+      result.current.openTab("user-1", "server-1", "prod-db");
+    });
+    expect(result.current.findExistingSessionId("server-1")).toBe("user-1");
+  });
+
+  it("restores MCP tabs after a reload without making them active", async () => {
+    vi.mocked(listSessions).mockResolvedValue([
+      {
+        sessionId: "mcp-1",
+        serverId: "server-1",
+        serverName: "prod-db",
+        status: "connected",
+        hasPendingAction: true,
+        mcp: { clientName: "Claude Code" },
+      },
+      {
+        sessionId: "session-1",
+        serverId: "server-1",
+        serverName: "prod-db",
+        status: "connected",
+        hasPendingAction: false,
+        mcp: null,
+      },
+    ]);
+    const { result } = await renderWithOneTab();
+
+    expect(result.current.activeSessionId).toBe("session-1");
+    expect(result.current.tabs[0].mcp).toEqual({ clientName: "Claude Code" });
+    expect(result.current.tabs[0].hasPendingAction).toBe(true);
+  });
+
+  it("labels MCP tabs with client and server", () => {
+    expect(sessionTabLabel({ serverName: "web-01", mcp: { clientName: "Claude Code" } }, "Tool")).toBe(
+      "Claude Code @ web-01",
+    );
+    expect(sessionTabLabel({ serverName: "web-01", mcp: { clientName: null } }, "Tool")).toBe("Tool @ web-01");
+    expect(sessionTabLabel({ serverName: "web-01", mcp: null }, "Tool")).toBe("web-01");
   });
 });

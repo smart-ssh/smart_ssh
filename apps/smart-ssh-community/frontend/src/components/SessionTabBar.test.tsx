@@ -31,6 +31,7 @@ const tabs: SessionTab[] = [
     status: "connected",
     hasPendingAction: false,
     pendingActionId: null,
+    mcp: null,
   },
   {
     sessionId: "s2",
@@ -39,6 +40,7 @@ const tabs: SessionTab[] = [
     status: "disconnected",
     hasPendingAction: false,
     pendingActionId: null,
+    mcp: null,
   },
 ];
 
@@ -72,5 +74,35 @@ describe("SessionTabBar drag region", () => {
     for (const button of screen.getAllByRole("button")) {
       expect(button).not.toHaveAttribute("data-tauri-drag-region");
     }
+  });
+});
+
+// Spec 0103: MCP-Tabs sind als solche erkennbar und signalisieren eine
+// wartende Bestätigung aus dem Hintergrund.
+describe("SessionTabBar MCP tabs", () => {
+  it("labels an MCP tab with client and server, marks it and shows a pending badge", () => {
+    const mcpTabs: SessionTab[] = [
+      ...tabs,
+      {
+        sessionId: "s3",
+        serverId: "server-1",
+        serverName: "prod-db",
+        status: "connected",
+        hasPendingAction: true,
+        pendingActionId: "a1",
+        mcp: { clientName: "Claude Code" },
+      },
+    ];
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <SessionTabBar tabs={mcpTabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} />
+      </I18nextProvider>,
+    );
+
+    expect(screen.getByText("Claude Code @ prod-db")).toBeInTheDocument();
+    expect(screen.getByText("MCP")).toBeInTheDocument();
+    expect(screen.getByText(testI18n.t("sessionTabs.mcp.pendingBadge"))).toBeInTheDocument();
+    // Der Nutzer-Tab desselben Servers bleibt ein eigener Tab.
+    expect(screen.getByText("prod-db")).toBeInTheDocument();
   });
 });

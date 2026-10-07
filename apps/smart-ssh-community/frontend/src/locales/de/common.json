@@ -371,7 +371,14 @@
   "sessionTabs": {
     "overview": "Übersicht",
     "pendingAction": "Wartet auf Bestätigung",
-    "closeTab": "Tab „{{name}}“ schließen"
+    "closeTab": "Tab „{{name}}“ schließen",
+    "mcp": {
+      "badge": "MCP",
+      "unnamedClient": "Externes Tool",
+      "tabHint": "Sitzung eines externen Tools (MCP) — eigene Verbindung, getrennt von deinen Sitzungen.",
+      "pendingBadge": "Bestätigung nötig",
+      "readOnlyHint": "Diese Sitzung gehört einem externen Tool (MCP). Hier erscheinen nur seine Aktionen zum Bestätigen oder Ablehnen und deren Ergebnis; eigene Eingaben und Terminal gibt es hier nicht. Schließen beendet die MCP-Sitzung und lehnt offene Bestätigungen ab."
+    }
   },
   "aiProvider": {
     "title": "AI-Provider",
