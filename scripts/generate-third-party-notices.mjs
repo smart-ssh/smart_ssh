@@ -1,9 +1,13 @@
-#!/usr/bin/env node
 // Spec 0099 (BL-0054), A1: erzeugt eine einzelne Textdatei mit den Lizenzen
 // (a) aller Rust-Abhängigkeiten des Workspace (`cargo-about`), (b) aller
 // Produktionsabhängigkeiten des Frontends (`npm ls`), (c) der
 // devDependencies, deren Code ins Bundle gelangt, und (d) der mitgelieferten
 // Schriften (A6).
+//
+// Bewusst ohne Shebang-Zeile (Issue #118): Die Datei ist nicht ausführbar
+// und läuft immer über `node`. Ein Frontend-Test importiert sie; unter
+// Windows (CRLF-Checkout) erkennt Vites SSR-Transformation die Shebang-Zeile
+// nicht und setzt die gehobenen Importe davor — ein Syntaxfehler.
 //
 // Aufruf über `npm run generate-notices` im Frontend (package.json) — nicht
 // direkt `node scripts/generate-third-party-notices.mjs`: das macht den
