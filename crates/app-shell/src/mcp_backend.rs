@@ -16,8 +16,9 @@ use ssh_manager_core::shared::ServerId;
 
 use crate::commands::connect_session;
 use crate::event_emitter::TauriEventEmitter;
-use app_logic::events::{emit_mcp_action_tab_requested, ConnectionStatus, EventEmitter};
+use app_logic::events::{emit_mcp_action_tab_requested, EventEmitter};
 use app_logic::mcp_lookup::McpLookup;
+use app_logic::mcp_sessions::{McpSessionKey, MCP_SESSION_CLOSED_MESSAGE};
 use app_logic::orchestration::handle_mcp_action_proposed;
 use app_logic::session::Session;
 use app_logic::state::{AppState, SessionId};
@@ -39,48 +40,61 @@ impl AppMcpBackend {
         McpLookup::from_state(&self.state()).is_allowed(server_id)
     }
 
-    /// Liefert eine bestehende, verbundene Session für `server_id`, falls
-    /// bereits ein Tab offen ist (Spec 0028, Abschnitt 9a: "existiert
-    /// bereits ein Tab für diesen Server, wird dieser verwendet, kein
-    /// Duplikat"), sonst baut sie über denselben `connect_session`-Pfad wie
-    /// ein manueller Sidebar-Klick neu auf. In beiden Fällen wird **vor**
-    /// einem eventuell wartenden Host-Key-Dialog bereits das
-    /// `mcp-action-tab-requested`-Event gesendet, damit das Frontend den
-    /// Tab öffnet/wechselt, bevor irgendein Dialog für diese Session
-    /// erscheint — sonst liefe eine MCP-Anfrage an einen neuen Server auf
-    /// einen für den Nutzer unsichtbaren, ewig wartenden Dialog hinaus.
+    /// Spec 0103 / Issue #50: liefert die eigene MCP-Sitzung dieses
+    /// MCP-Clients auf `server_id` — nie eine Nutzer-Sitzung, auch wenn für
+    /// den Server ein verbundener Nutzer-Tab offen ist (die Zuordnung kommt
+    /// ausschließlich aus `McpSessionRegistry`, in der Nutzer-Sitzungen nie
+    /// stehen). Gibt es keine verbundene, wird über denselben
+    /// `connect_session`-Pfad wie ein manueller Sidebar-Klick eine neue
+    /// Verbindung aufgebaut (eigene SSH-Verbindung, gleiche gespeicherte
+    /// Zugangsdaten, gleicher Host-Key-Ablauf).
+    ///
+    /// Das `mcp-action-tab-requested`-Event geht **vor** einem eventuell
+    /// wartenden Host-Key-Dialog raus, damit der Tab sichtbar ist, bevor ein
+    /// Dialog für diese Sitzung erscheint. Das Frontend wechselt dabei
+    /// nicht zum Tab (Spec 0103, §3: kein Fokus-Wechsel).
     async fn ensure_session(
         &self,
         server_id: ServerId,
+        client_name: Option<&str>,
     ) -> Result<(SessionId, Arc<Session>), String> {
         let state = self.state();
+        let registry = &state.mcp.sessions;
+        let key = McpSessionKey::new(server_id, client_name);
+        // Hält gleichzeitige Anfragen desselben Clients an denselben Server
+        // an, bis die erste ihre Sitzung angelegt hat — sonst bauten beide
+        // eine eigene Verbindung auf.
+        let _creation = registry.lock_creation(&key).await;
 
-        let existing = state.sessions.snapshot().into_iter().find(|entry| {
-            entry.server_id == server_id && entry.status == ConnectionStatus::Connected
-        });
-
-        if let Some(entry) = existing {
-            emit_mcp_action_tab_requested(
-                &TauriEventEmitter(self.app.clone()),
-                entry.session_id,
-                server_id,
-            );
+        if let Some(session_id) = registry.reusable_session(&key, &state.sessions) {
             let session = state
                 .sessions
-                .get(entry.session_id)
-                .ok_or_else(|| "Session wurde während der Anfrage geschlossen".to_string())?;
-            return Ok((entry.session_id, session));
+                .get(session_id)
+                .ok_or_else(|| "MCP-Sitzung wurde während der Anfrage geschlossen".to_string())?;
+            return Ok((session_id, session));
         }
 
         let session_id: SessionId = uuid::Uuid::new_v4();
-        emit_mcp_action_tab_requested(&TauriEventEmitter(self.app.clone()), session_id, server_id);
+        // Vor dem Event und dem Verbindungsaufbau eintragen: `list_sessions()`
+        // kennzeichnet den Tab damit schon während eines Host-Key-Dialogs als
+        // MCP-Tab, und Nutzer-Eingaben sind von Anfang an gesperrt.
+        registry.register(&key, session_id);
+        emit_mcp_action_tab_requested(
+            &TauriEventEmitter(self.app.clone()),
+            session_id,
+            server_id,
+            key.client_name(),
+        );
 
         // Spec 0040, Abschnitt 4: `persist_chat_session: false` — eine rein
         // MCP-ausgelöste Verbindung erzeugt keine `chat_sessions`-Zeile
         // (s. `connect_session`-Doc-Kommentar).
-        connect_session(&self.app, &state, server_id, session_id, None, false)
-            .await
-            .map_err(|err| err.message)?;
+        if let Err(err) =
+            connect_session(&self.app, &state, server_id, session_id, None, false).await
+        {
+            registry.unregister(session_id);
+            return Err(err.message);
+        }
 
         let session = state.sessions.get(session_id).ok_or_else(|| {
             "Session unmittelbar nach connect_session nicht auffindbar".to_string()
@@ -149,7 +163,7 @@ impl McpBackend for AppMcpBackend {
             .unwrap_or_else(|_| server_id.0.to_string());
 
         let (session_id, session) = self
-            .ensure_session(server_id)
+            .ensure_session(server_id, client_name.as_deref())
             .await
             .map_err(|_| LookupError::UnknownServer)?;
 
@@ -169,7 +183,12 @@ impl McpBackend for AppMcpBackend {
         )
         .await;
 
-        Ok(capture.into_outcome())
+        // Spec 0103, §5: Wurde die MCP-Sitzung in der App geschlossen,
+        // während die Aktion lief, bekommt der Client eine eindeutige
+        // Meldung statt "vom Nutzer abgelehnt" — ein bereits vorliegendes
+        // Ergebnis oder ein Filter-`Deny` bleibt davon unberührt.
+        let session_closed = !state.mcp.sessions.is_mcp_session(session_id);
+        Ok(capture.into_outcome(session_closed))
     }
 }
 
@@ -212,7 +231,9 @@ impl<'a> CaptureEmitter<'a> {
         }
     }
 
-    fn into_outcome(self) -> ActionOutcome {
+    /// `session_closed`: die MCP-Sitzung wurde in der App geschlossen,
+    /// während die Aktion lief (Spec 0103, §5).
+    fn into_outcome(self, session_closed: bool) -> ActionOutcome {
         if let Some(result) = self.result.into_inner().expect("Mutex vergiftet") {
             return ActionOutcome::Approved {
                 summary: format_action_result(&result),
@@ -226,6 +247,11 @@ impl<'a> CaptureEmitter<'a> {
             let reason = deny_reason.as_str().unwrap_or("blockiert").to_string();
             return ActionOutcome::Rejected {
                 reason: format!("von der Filter-Engine blockiert: {reason}"),
+            };
+        }
+        if session_closed {
+            return ActionOutcome::Failed {
+                message: MCP_SESSION_CLOSED_MESSAGE.to_string(),
             };
         }
         ActionOutcome::Rejected {
@@ -389,7 +415,7 @@ mod tests {
             "chat-action-result",
             serde_json::json!({ "result": { "kind": "noteUpdate", "summary": "erledigt" } }),
         );
-        match capture.into_outcome() {
+        match capture.into_outcome(false) {
             ActionOutcome::Approved { summary } => assert_eq!(summary, "erledigt"),
             other => panic!("erwartete Approved, war: {other:?}"),
         }
@@ -403,7 +429,7 @@ mod tests {
             "chat-error",
             serde_json::json!({ "sessionId": "x", "message": "SFTP-Fehler: No such file" }),
         );
-        match capture.into_outcome() {
+        match capture.into_outcome(false) {
             ActionOutcome::Failed { message } => assert!(message.contains("No such file")),
             other => panic!("erwartete Failed, war: {other:?}"),
         }
@@ -417,7 +443,7 @@ mod tests {
             "chat-action-proposed",
             serde_json::json!({ "decision": { "Deny": { "reason": "auf der Blacklist", "code": "X" } } }),
         );
-        match capture.into_outcome() {
+        match capture.into_outcome(false) {
             ActionOutcome::Rejected { reason } => assert!(reason.contains("auf der Blacklist")),
             other => panic!("erwartete Rejected, war: {other:?}"),
         }
@@ -436,8 +462,53 @@ mod tests {
             "chat-action-proposed",
             serde_json::json!({ "decision": { "Confirm": { "reason": "r", "code": "c" } } }),
         );
-        match capture.into_outcome() {
+        match capture.into_outcome(false) {
             ActionOutcome::Rejected { reason } => assert!(reason.contains("Nutzer")),
+            other => panic!("erwartete Rejected, war: {other:?}"),
+        }
+    }
+
+    /// Spec 0103, §5: Schließt der Nutzer den MCP-Tab, während die Aktion
+    /// auf Bestätigung wartet, bekommt der Client eine eindeutige Meldung
+    /// statt "vom Nutzer abgelehnt".
+    #[test]
+    fn test_capture_emitter_reports_closed_mcp_session_as_failure() {
+        let inner = TestEmitter::default();
+        let capture = CaptureEmitter::new(&inner);
+        capture.emit_event(
+            "chat-action-proposed",
+            serde_json::json!({ "decision": { "Confirm": { "reason": "r", "code": "c" } } }),
+        );
+        match capture.into_outcome(true) {
+            ActionOutcome::Failed { message } => {
+                assert_eq!(message, MCP_SESSION_CLOSED_MESSAGE);
+            }
+            other => panic!("erwartete Failed, war: {other:?}"),
+        }
+    }
+
+    /// Ein Ergebnis oder ein Filter-`Deny`, das vor dem Schließen schon
+    /// feststand, wird durch das Schließen nicht umgedeutet.
+    #[test]
+    fn test_capture_emitter_keeps_result_and_filter_deny_when_session_closed() {
+        let inner = TestEmitter::default();
+        let capture = CaptureEmitter::new(&inner);
+        capture.emit_event(
+            "chat-action-result",
+            serde_json::json!({ "result": { "kind": "noteUpdate", "summary": "erledigt" } }),
+        );
+        assert!(matches!(
+            capture.into_outcome(true),
+            ActionOutcome::Approved { .. }
+        ));
+
+        let capture = CaptureEmitter::new(&inner);
+        capture.emit_event(
+            "chat-action-proposed",
+            serde_json::json!({ "decision": { "Deny": { "reason": "auf der Blacklist", "code": "X" } } }),
+        );
+        match capture.into_outcome(true) {
+            ActionOutcome::Rejected { reason } => assert!(reason.contains("auf der Blacklist")),
             other => panic!("erwartete Rejected, war: {other:?}"),
         }
     }
