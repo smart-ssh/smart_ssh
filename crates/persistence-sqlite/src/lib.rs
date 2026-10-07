@@ -21,6 +21,11 @@ mod paths;
 mod policy_store;
 mod prompt_history_store;
 mod store;
+/// Issue #15: Helfer für die End-zu-End-Migrationstests (Release-Fixtures,
+/// Abbild von Schema und Inhalt, eine Migration aus der Zukunft). Hinter
+/// `test-support`, wie `SqliteProfileStore::connect_plaintext`.
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 
 #[cfg(test)]
 mod tests;
@@ -42,6 +47,9 @@ mod tests_fixture_t0;
 /// `SqliteProfileStore`-Testsuite dort weder Helfer noch Aufbaumuster.
 #[cfg(test)]
 mod tests_raw_file;
+/// Issue #15: jede Release-Fixture, Migration für Migration aktualisiert.
+#[cfg(test)]
+mod tests_release_chain;
 
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
