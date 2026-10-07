@@ -8,6 +8,7 @@
 //! Mock-Implementierungen testbar.
 
 mod auth;
+pub mod connect_log;
 pub mod elevated;
 mod error;
 mod host_key;
@@ -23,6 +24,10 @@ mod tests;
 pub use auth::{
     resolve_auth, KeyFileContent, KeyFileError, KeyFileFacts, KeyFileReader, ResolvedAuth,
     MAX_KEY_FILE_BYTES,
+};
+pub use connect_log::{
+    AuthMethodKind, ConnectLog, ConnectStep, ConnectStepRecord, HostKeyCheckResult, StepId,
+    StepStatus,
 };
 pub use error::{HopLabel, SecretKind, SshError};
 pub use host_key::HostKeyStore;
