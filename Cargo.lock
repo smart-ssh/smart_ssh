@@ -5596,6 +5596,7 @@ name = "smart-ssh-community"
 version = "0.5.2"
 dependencies = [
  "app-shell",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-decoration",
