@@ -201,6 +201,15 @@ pub enum ConnectFailureKind {
     /// Fehlerart durch die Rückgabe wandern. Der Text kommt weiter aus
     /// `app_logic::startup_error_messages::host_key_store_failure_text`.
     HostKeyStoreFailed,
+    /// Issue #19: Ein anderer Prozess hält die Sperre auf das
+    /// Datenverzeichnis ([`crate::DataDirLock`]) — Smart SSH läuft bereits
+    /// mit diesem Datenverzeichnis. Die Datenbank wurde nicht angefasst.
+    ///
+    /// **Eigener Fall und nicht [`Self::Other`]:** Der `Other`-Text rät
+    /// unter anderem zu einem Backup. Hier ist nichts beschädigt; der
+    /// einzige richtige Schritt ist, die andere Instanz zu benutzen oder zu
+    /// beenden.
+    AlreadyRunning,
 }
 
 impl PersistenceError {

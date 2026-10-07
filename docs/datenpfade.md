@@ -24,6 +24,11 @@ Hinweise:
 - **Schlüsseldatei des Master-Passworts:** existiert nur, wenn ein
   Master-Passwort eingerichtet ist (Spec 0101). Ohne Master-Passwort liegt
   der Datenbankschlüssel im Schlüsselbund des Betriebssystems.
+- **Sperrdatei `smart-ssh.lock`** liegt neben der Datenbank. Solange Smart
+  SSH läuft, hält es darauf eine Sperre des Betriebssystems, damit kein
+  zweiter Prozess dieselben Daten öffnet (Issue #19). Die Datei selbst ist
+  leer und darf liegen bleiben. Eine übrig gebliebene Datei blockiert
+  keinen Start, nur ein laufender Prozess tut das.
 - **Sitzungen** (Chat-Verlauf, Prompt-Historie, Protokoll) haben keine
   eigene Datei, sie liegen verschlüsselt in der Datenbank.
 - `settings.json` enthält neben den MCP-Einstellungen auch weitere

@@ -54,6 +54,10 @@ tauri-plugin-dialog = "2.7.2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2.5.5"
 tauri-plugin-os = "2"
+# Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
+# nach vorn (s. `src/single_instance.rs`). Keine neue transitive
+# Abhaengigkeit: alles, was das Plugin braucht, ist schon im Baum.
+tauri-plugin-single-instance = "2.4.5"
 tauri-plugin-store = "2"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1.44"

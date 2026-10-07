@@ -43,6 +43,15 @@ danach `sqlx::migrate!`. Einziger Produktivaufruf: `build_app_state` in
 Migration `0001`. Kein anderer Prozess öffnet die Datei; `mcp-server` hängt
 nicht an `persistence-sqlite`.
 
+**Nachtrag (Issue #19, ADR 0106):** Die Annahme „kein anderer Prozess"
+ist seitdem durchgesetzt, nicht nur angenommen. Vor jedem Zugriff auf
+Datenbank und Verpackungsdatei sperrt `app_shell::run` das
+Datenverzeichnis exklusiv (`persistence_sqlite::DataDirLock`, Datei
+`smart-ssh.lock`, gehalten bis zum Prozessende). Hält ein anderer Prozess
+die Sperre, endet der Start mit dem Fehler „läuft bereits", ohne die
+Datenbank anzufassen. `convert_plaintext_database` (A6) verlangt die
+Sperre als Argument.
+
 **Startreihenfolge** (`build_app_state`): Log → Datenbank öffnen und migrieren
 → `probe_keychain_availability` → `resolve_or_generate_key` → Cipher und
 verschlüsselnde Stores → Host-Key-Store. Der Zustand entsteht **vor**

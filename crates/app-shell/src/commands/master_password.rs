@@ -1090,6 +1090,8 @@ mod tests {
     fn pending_for(db_path: std::path::PathBuf) -> PendingStartup {
         PendingStartup::new(
             crate::StartupInputs {
+                data_dir_lock: persistence_sqlite::DataDirLock::acquire_for_database(&db_path)
+                    .expect("lock the test data directory"),
                 db_path,
                 language: app_logic::startup_error_messages::Language::De,
                 keychain: credentials_keyring::KeychainAvailability::Available,

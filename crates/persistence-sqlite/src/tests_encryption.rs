@@ -35,7 +35,13 @@ use crate::encryption::{
     ConversionFailure, ConversionStep, DatabaseFileState, SQLITE_PLAINTEXT_HEADER,
 };
 use crate::tests_fixture_t0::{align_migration_checksums_to_current_build, fixture_path};
-use crate::{AiProviderConfig, PersistenceError, SqliteProfileStore};
+use crate::{AiProviderConfig, DataDirLock, PersistenceError, SqliteProfileStore};
+
+/// Issue #19: Die Umwandlung verlangt die Sperre auf das Datenverzeichnis.
+/// Jeder Test liegt in seinem eigenen Temp-Verzeichnis und sperrt es hier.
+fn lock_for(db_path: &std::path::Path) -> DataDirLock {
+    DataDirLock::acquire_for_database(db_path).expect("Temp-Verzeichnis sperren")
+}
 
 /// Die Marker aus Spec 0101 §7. Mit Commit 8 ist T1 **vollständig**:
 /// `Secret-0101` (A9, Secrets in der Datenbank) und `Token-0101` (A12,
@@ -745,7 +751,7 @@ async fn test_t4_converting_the_pre_sqlcipher_fixture_keeps_everything() {
         "die Fixture muss die Tabelle `servers` tragen: {expected_rows:?}"
     );
 
-    crate::convert_plaintext_database(&db_path, &key)
+    crate::convert_plaintext_database(&db_path, &key, &lock_for(&db_path))
         .await
         .expect("Umwandlung der Fixture muss gelingen (A7)");
 
@@ -877,7 +883,7 @@ async fn test_a6_a_database_in_delete_journal_mode_still_converts() {
     }
 
     let key = test_key();
-    crate::convert_plaintext_database(&db_path, &key)
+    crate::convert_plaintext_database(&db_path, &key, &lock_for(&db_path))
         .await
         .expect("eine Datei in journal_mode = delete muss umwandelbar sein");
 
@@ -915,18 +921,19 @@ async fn test_t5_an_aborted_conversion_leaves_the_original_usable() {
         let key = test_key();
         let (expected_user_version, expected_rows) = plaintext_snapshot(&db_path).await;
 
-        let err = convert_plaintext_database_inner(&db_path, &key, &mut |step| {
-            if step == abort_after {
-                Err(ConversionFailure::Verification(
-                    "Fehlerinjektion (T5)".to_string(),
-                ))
-            } else {
-                Ok(())
-            }
-        })
-        .await
-        .err()
-        .unwrap_or_else(|| panic!("{abort_after:?}: die Umwandlung musste scheitern"));
+        let err =
+            convert_plaintext_database_inner(&db_path, &key, &lock_for(&db_path), &mut |step| {
+                if step == abort_after {
+                    Err(ConversionFailure::Verification(
+                        "Fehlerinjektion (T5)".to_string(),
+                    ))
+                } else {
+                    Ok(())
+                }
+            })
+            .await
+            .err()
+            .unwrap_or_else(|| panic!("{abort_after:?}: die Umwandlung musste scheitern"));
         assert!(matches!(err, ConversionFailure::Verification(_)));
 
         assert!(
@@ -945,7 +952,7 @@ async fn test_t5_an_aborted_conversion_leaves_the_original_usable() {
         );
 
         // Der nächste Start wandelt um — ohne Spur des Abbruchs.
-        crate::convert_plaintext_database(&db_path, &key)
+        crate::convert_plaintext_database(&db_path, &key, &lock_for(&db_path))
             .await
             .unwrap_or_else(|e| panic!("{abort_after:?}: zweiter Versuch muss gelingen: {e}"));
         // Gemessen **vor** dem Migrieren (s. `encrypted_snapshot`): Hier
@@ -1060,7 +1067,7 @@ async fn test_t6_a_row_only_in_the_original_wal_survives_the_conversion() {
         "Voraussetzung von T6: die Zeile muss im kopierten -wal stehen"
     );
 
-    crate::convert_plaintext_database(&db_path, &key)
+    crate::convert_plaintext_database(&db_path, &key, &lock_for(&db_path))
         .await
         .expect("Umwandlung mit nichtleerem WAL muss gelingen");
 
@@ -1111,7 +1118,7 @@ async fn test_t19_a_foreign_intermediate_file_is_discarded_not_adopted() {
     tmp_wal.push("-wal");
     std::fs::write(PathBuf::from(&tmp_wal), b"fremdes WAL").unwrap();
 
-    crate::convert_plaintext_database(&db_path, &key)
+    crate::convert_plaintext_database(&db_path, &key, &lock_for(&db_path))
         .await
         .expect("die fremde Zwischendatei darf die Umwandlung nicht aufhalten");
 
@@ -1150,7 +1157,7 @@ async fn test_t20_a_symlinked_database_is_not_converted() {
     let target_before = std::fs::read(&renamed_target).unwrap();
     let key = test_key();
 
-    let err = crate::convert_plaintext_database(&link, &key)
+    let err = crate::convert_plaintext_database(&link, &key, &lock_for(&link))
         .await
         .expect_err("ein Symlink darf nicht umgewandelt werden");
     assert!(
@@ -1200,7 +1207,7 @@ async fn test_a6_converted_file_has_owner_only_permissions() {
     use std::os::unix::fs::PermissionsExt;
     let dir = tempfile::tempdir().expect("Temp-Verzeichnis");
     let db_path = fixture_copy(dir.path()).await;
-    crate::convert_plaintext_database(&db_path, &test_key())
+    crate::convert_plaintext_database(&db_path, &test_key(), &lock_for(&db_path))
         .await
         .expect("Umwandlung");
 
@@ -1217,10 +1224,43 @@ async fn test_a6_converting_a_missing_file_fails_without_creating_anything() {
     let dir = tempfile::tempdir().expect("Temp-Verzeichnis");
     let db_path = dir.path().join("gibt-es-nicht.db");
 
-    let err = crate::convert_plaintext_database(&db_path, &test_key())
+    let err = crate::convert_plaintext_database(&db_path, &test_key(), &lock_for(&db_path))
         .await
         .expect_err("ohne Original darf nichts umgewandelt werden");
     assert!(matches!(err, ConversionFailure::Io(_)), "erhalten: {err}");
     assert!(!db_path.exists());
     assert!(!intermediate_path(&db_path).exists());
+}
+
+/// Issue #19: Die Umwandlung läuft nur unter der Sperre auf **genau dem**
+/// Verzeichnis der Datei. Eine Sperre auf ein anderes Verzeichnis (etwa
+/// weil ein anderer Prozess das eigentliche hält und dieser hier nur ein
+/// fremdes sperren konnte) reicht nicht — und die Klartext-Datei bleibt
+/// bytegleich, ohne Zwischendatei.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_issue_19_conversion_refuses_without_the_lock_on_its_directory() {
+    let dir = tempfile::tempdir().expect("Temp-Verzeichnis");
+    let db_path = fixture_copy(dir.path()).await;
+    let before = std::fs::read(&db_path).unwrap();
+    let elsewhere = tempfile::tempdir().expect("zweites Temp-Verzeichnis");
+    let foreign_lock = DataDirLock::acquire(elsewhere.path()).unwrap();
+
+    let err = crate::convert_plaintext_database(&db_path, &test_key(), &foreign_lock)
+        .await
+        .expect_err("ohne Sperre auf das eigene Verzeichnis darf nichts umgewandelt werden");
+
+    assert!(
+        matches!(err, ConversionFailure::DataDirectoryNotLocked),
+        "erhalten: {err}"
+    );
+    assert_eq!(std::fs::read(&db_path).unwrap(), before, "Datei verändert");
+    assert!(!intermediate_path(&db_path).exists());
+    assert_eq!(
+        detect_database_file_state(&db_path).unwrap(),
+        DatabaseFileState::Plaintext
+    );
+    assert_eq!(
+        PersistenceError::Conversion(ConversionFailure::DataDirectoryNotLocked).classify(),
+        crate::ConnectFailureKind::ConversionFailed
+    );
 }
