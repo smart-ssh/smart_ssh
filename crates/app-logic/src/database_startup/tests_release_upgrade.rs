@@ -27,7 +27,7 @@ use persistence_sqlite::test_support::{
     directory_file_names, max_known_migration_version, snapshot_database, FixtureEncryption,
     RELEASE_FIXTURE_ROOT_KEY,
 };
-use persistence_sqlite::{detect_database_file_state, DatabaseFileState};
+use persistence_sqlite::{detect_database_file_state, DatabaseFileState, DATA_DIR_LOCK_FILE_NAME};
 use ssh_manager_core::crypto::{DatabaseKey, CHAT_CONTENT_ENCRYPTION_KEY_REF};
 use ssh_manager_core::profiles::{CredentialRef, CredentialStore, ProfileStore};
 use uuid::Uuid;
@@ -131,6 +131,12 @@ impl StartupPrompt for NoDialogExpected {
     }
 }
 
+/// Issue #19: Der Startablauf verlangt die Sperre auf das Datenverzeichnis.
+/// Jeder Test liegt in seinem eigenen Temp-Verzeichnis und sperrt es hier.
+fn lock_for(db_path: &std::path::Path) -> DataDirLock {
+    lock_data_directory(db_path).expect("lock the temp directory")
+}
+
 /// Ein Start, wie die App ihn im Schlüsselbund-Modus fährt, bis zum
 /// Zusammenbau des App-Zustands. Schließt die Datenbank danach, wie das
 /// Beenden der App.
@@ -139,11 +145,14 @@ async fn start_app(
     keychain: &InMemoryCredentialStore,
     prompt: &NoDialogExpected,
 ) -> Result<(), StartupAbort> {
+    // Wie die App: Sperre vor dem Öffnen, gehalten bis zum Beenden.
+    let lock = lock_for(db_path);
     let opened = open_or_prepare_database(
         db_path,
         RootKeyAccess::Keychain(keychain),
         KeychainAvailability::Available,
         prompt,
+        &lock,
     )
     .await?;
     let database_credentials = opened
@@ -336,24 +345,34 @@ async fn test_a_database_from_a_newer_release_stops_the_start_and_stays_byte_ide
     )
     .await;
     // … und der Nutzer geht zurück auf diesen Build.
+    // Die Sperrdatei (Issue #19) hat der erste Start angelegt; sie bleibt
+    // liegen und wird hier wie jede andere Datei mitverglichen.
     let files_before = directory_contents(dir.path());
     assert!(
-        files_before.keys().all(|name| name == "smart-ssh.db"),
-        "only the closed database file may be there before the start: {:?}",
+        files_before
+            .keys()
+            .all(|name| name == "smart-ssh.db" || name == DATA_DIR_LOCK_FILE_NAME),
+        "only the closed database file and the lock file may be there before the start: {:?}",
         files_before.keys()
     );
     let snapshot_before = snapshot_database(&db_path, Some(&database_key())).await;
     let keychain_before = keychain_entries(&keychain);
 
+    // Die Sperre gilt nur für diesen Start: Der gescheiterte Start beendet
+    // die App, und erst danach wird das Verzeichnis verglichen (eine
+    // gehaltene Sperrdatei ist unter Windows nicht lesbar).
+    let lock = lock_for(&db_path);
     let abort = open_or_prepare_database(
         &db_path,
         RootKeyAccess::Keychain(&keychain),
         KeychainAvailability::Available,
         &prompt,
+        &lock,
     )
     .await
     .err()
     .expect("a database from a newer release must not open");
+    drop(lock);
     // Die Datenbankdatei selbst, direkt nach dem Start — bevor irgendetwas
     // anderes sie anfassen konnte.
     assert!(
@@ -411,7 +430,7 @@ async fn test_a_database_from_a_newer_release_stops_the_start_and_stays_byte_ide
         // beobachtet).
         while directory_file_names(dir.path())
             .iter()
-            .any(|name| name != "smart-ssh.db")
+            .any(|name| name != "smart-ssh.db" && name != DATA_DIR_LOCK_FILE_NAME)
         {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
