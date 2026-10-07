@@ -272,6 +272,12 @@ pub trait StartupPrompt: Send + Sync {
     /// A5: nennt nach dem Umbenennen den neuen Dateinamen.
     fn notify_started_over(&self, renamed_to: &str);
 
+    /// Issue #113: einmaliger Hinweis nach der Umstellung der früher
+    /// feldweise verschlüsselten Spalten — `removed` alte Einträge waren mit
+    /// dem aktuellen K nicht lesbar und sind entfernt. Nur aufgerufen, wenn
+    /// `removed > 0`. Ein Hinweis, keine Frage: Er wartet auf keine Antwort.
+    fn notify_unreadable_history_removed(&self, removed: u64);
+
     /// A13: fragt ein neues Master-Passwort ab — zweimal, mit Warnung und
     /// ausdrücklicher Bestätigung (die Maske zeigt beides, s.
     /// [`StartupDialog::D1`] und A5 im Passwort-Modus; geprüft werden beide
@@ -343,7 +349,9 @@ pub fn lock_data_directory(db_path: &Path) -> Result<DataDirLock, StartupAbort> 
 /// Ergebnis eines erfolgreichen Starts.
 pub struct OpenedDatabase {
     pub store: SqliteProfileStore,
-    /// Der Wurzelschlüssel K — für den Chat-Cipher (Spec 0036, E11).
+    /// Der Wurzelschlüssel K — für die Kennung des Schlüssels (Klarstellung
+    /// 9) und die einmalige Umstellung der früher feldweise verschlüsselten
+    /// Spalten (Issue #113, [`crate::field_content_decryption`]).
     pub root_key: [u8; 32],
 }
 

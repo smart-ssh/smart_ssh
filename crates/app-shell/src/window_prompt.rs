@@ -505,6 +505,22 @@ impl StartupPrompt for WindowStartupPrompt {
         });
     }
 
+    /// Issue #113: ein Hinweis wie A5 — über `show_only`, nicht `request`
+    /// (Klarstellung 10e: ein Hinweis wartet auf keine Antwort).
+    fn notify_unreadable_history_removed(&self, removed: u64) {
+        let text = texts::unreadable_history_removed_notice_text(removed, self.language);
+        let request = StartupPromptRequest {
+            kind: PromptKind::Notice,
+            title: text.title,
+            message: text.message,
+        };
+        self.channel.show_only(|| {
+            self.app
+                .emit(STARTUP_PROMPT_EVENT, &request)
+                .map_err(|err| err.to_string())
+        });
+    }
+
     fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
         // Klarstellung 10e, zweite Hälfte: **ein geöffnetes Passwortfeld ist
         // leer.** Die Maske im Fenster leert ihre Felder selbst; hier wird
@@ -661,6 +677,13 @@ mod tests {
             notice.contains("self.channel.show_only("),
             "Klarstellung 10e: Der Hinweis aus A5 muss über `show_only` gehen"
         );
+        // Issue #113: derselbe Grund für den Hinweis nach der Umstellung.
+        let removed_notice = method_body(
+            source,
+            "fn notify_unreadable_history_removed(&self, removed: u64) {",
+        );
+        assert!(removed_notice.contains("self.channel.show_only("));
+        assert!(!removed_notice.contains("self.request("));
         assert!(
             !notice.contains("self.request("),
             "Klarstellung 10e: `request` wartet auf eine Antwort und läuft in die Zeitgrenze — \

@@ -209,8 +209,19 @@ pub(crate) async fn open_and_assemble(
     )
     .await?;
     tracing::info!("SQLite database connected");
+    // Issue #113: die früher feldweise verschlüsselten Spalten einmal auf
+    // Klartext in der verschlüsselten Datei umstellen — direkt nach dem
+    // Öffnen und vor allem, was einen der betroffenen Stores benutzt. Ein
+    // Fehler endet wie jeder andere Startfehler sichtbar (die Umstellung
+    // selbst rollt dann vollständig zurück).
+    app_logic::field_content_decryption::decrypt_field_encrypted_content(
+        &opened.store,
+        &opened.root_key,
+        prompt,
+    )
+    .await?;
     let profile_store = opened.store;
-    let chat_content_key = opened.root_key;
+    let root_key = opened.root_key;
     let ai_provider_store = profile_store.ai_provider_store();
     let policy_store = profile_store.policy_store();
 
@@ -244,22 +255,13 @@ pub(crate) async fn open_and_assemble(
     )
     .await?;
 
-    // Spec 0036/0040/0057: derselbe Cipher (und damit derselbe Schlüssel)
-    // für alle drei Stores — kein weiterer Verschlüsselungsmechanismus für
-    // `prompt_history`/`ledger`.
-    //
-    // **Seit Spec 0101 nie mehr `None`** (E11, A3): Die Datenbank ist
-    // überhaupt nur offen, wenn K vorlag — der frühere Zustand „App läuft,
-    // aber Chat, Historie und Ledger sind abgeschaltet" (Spec 0040,
-    // Abschnitt 7) kann auf diesem Weg nicht mehr entstehen. Ohne K endet
-    // der Start in D1/D2/D3, nicht in einer halb benutzbaren App.
-    let chat_content_cipher: Arc<dyn ssh_manager_core::crypto::ContentCipher> = Arc::new(
-        ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&chat_content_key),
-    );
+    // Issue #113: Chat, Historie und Ledger liegen als Klartext in der
+    // verschlüsselten Datei (Spec 0101) — kein eigener Schlüssel, kein
+    // `Option` mehr. Ohne K wäre die Datenbank gar nicht offen.
     let (prompt_history_store, chat_session_store, ledger_store) = (
-        Some(profile_store.prompt_history_store(chat_content_cipher.clone())),
-        Some(profile_store.chat_session_store(chat_content_cipher.clone())),
-        Some(profile_store.ledger_store(chat_content_cipher)),
+        profile_store.prompt_history_store(),
+        profile_store.chat_session_store(),
+        profile_store.ledger_store(),
     );
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
@@ -304,7 +306,7 @@ pub(crate) async fn open_and_assemble(
         // Klarstellung 9: die Kennung des K, mit dem diese Datenbank gerade
         // geöffnet wurde — damit das Einrichten aus den Einstellungen
         // prüfen kann, dass es denselben Schlüssel verpackt (Fund 10).
-        root_key_fingerprint: ssh_manager_core::crypto::root_key_fingerprint(&chat_content_key),
+        root_key_fingerprint: ssh_manager_core::crypto::root_key_fingerprint(&root_key),
         profile_store: Arc::new(profile_store),
         credential_store: Arc::new(credential_store),
         // Spec 0076, §4.2: zustandslos — sie hält nichts fest, weil bei
@@ -796,30 +798,6 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
         let state = handle_for_retention.state::<AppState>();
         crate::chat_retention::cleanup_old_chat_sessions_on_startup(&handle_for_retention, &state)
             .await;
-    });
-
-    // Spec 0040, Abschnitt 3: einmalige, idempotente Migration
-    // bestehender Klartext-Zeilen in `prompt_history` — No-op,
-    // sobald alle Zeilen bereits verschlüsselt sind (jeder Start
-    // danach prüft erneut, findet aber nichts mehr zu tun).
-    let handle_for_prompt_history_migration = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let state = handle_for_prompt_history_migration.state::<AppState>();
-        // Spec 0040, Abschnitt 7: `None`, wenn der Verschlüsselungs-
-        // schlüssel beim Start nicht aufgelöst werden konnte (s.
-        // `build_app_state`) — dann gibt es nichts zu migrieren.
-        let Some(store) = &state.prompt_history_store else {
-            return;
-        };
-        match store.migrate_legacy_plaintext_content().await {
-            Ok(count) if count > 0 => {
-                tracing::info!(count, "legacy plaintext prompt_history rows encrypted");
-            }
-            Ok(_) => {}
-            Err(err) => {
-                tracing::warn!(error = %err, "prompt_history encryption migration failed");
-            }
-        }
     });
 
     // Spec 0038, Abschnitt 4: hält das Frontend über

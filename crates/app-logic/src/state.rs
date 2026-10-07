@@ -100,24 +100,18 @@ pub struct AppState {
     pub policy_store: SqlitePolicyStore,
     /// Spec 0015: pro-Server-Prompt-Historie für die Pfeiltasten-Navigation
     /// im Chat-Eingabefeld — wie `policy_store` `Clone` statt `Arc<dyn ...>`
-    /// (kein eigener Trait, teilt sich nur den `SqlitePool`). Spec 0040,
-    /// Abschnitt 7: `None`, wenn der Verschlüsselungsschlüssel beim
-    /// Start nicht aufgelöst werden konnte (gesperrtes/verweigertes
-    /// OS-Schlüsselbund) — degradiert dann zu "keine Prompt-Historie
-    /// diese Sitzung", statt den App-Start ganz zu verhindern (s.
-    /// `lib::build_app_state`-Doc-Kommentar).
-    pub prompt_history_store: Option<SqlitePromptHistoryStore>,
+    /// (kein eigener Trait, teilt sich nur den `SqlitePool`).
+    ///
+    /// **Kein `Option` mehr** (Issue #113): Früher fehlte der Store, wenn
+    /// der Schlüssel der feldweisen Verschlüsselung nicht aufzulösen war.
+    /// Seit Spec 0101 ist die Datenbank nur offen, wenn K vorlag, und seit
+    /// Issue #113 braucht kein Store mehr einen eigenen Schlüssel.
+    pub prompt_history_store: SqlitePromptHistoryStore,
     /// Spec 0034: persistente Chat-Sitzungen/-Nachrichten — wie
     /// `policy_store`/`prompt_history_store` `Clone` statt `Arc<dyn ...>`.
-    /// Spec 0040, Abschnitt 7: `None` aus demselben Grund wie
-    /// `prompt_history_store` oben — degradiert zu "kein Chat-Verlauf wird
-    /// gespeichert/kann fortgesetzt werden" für die laufende App-Instanz.
-    pub chat_session_store: Option<SqliteChatSessionStore>,
-    /// Spec 0057, §1: das Session-Ledger — wie `chat_session_store`
-    /// `Option`, aus demselben Grund (`None`, wenn der
-    /// Verschlüsselungsschlüssel beim Start nicht aufgelöst werden konnte)
-    /// und mit demselben `chat_content_cipher` (s. `lib::build_app_state`).
-    pub ledger_store: Option<SqliteLedgerStore>,
+    pub chat_session_store: SqliteChatSessionStore,
+    /// Spec 0057, §1: das Session-Ledger.
+    pub ledger_store: SqliteLedgerStore,
     /// Spec 0037, Abschnitt 2/3 (D5): aktueller Entitlement-Stand — die
     /// Community Edition kennt aktuell nur den einen festen Zustand
     /// `FixedEntitlements(Entitlements::free())`, kein Lizenzschlüssel-

@@ -193,6 +193,9 @@ impl StartupPrompt for ScriptedPrompt {
     fn notify_started_over(&self, renamed_to: &str) {
         self.notified.lock().unwrap().push(renamed_to.to_string());
     }
+    fn notify_unreadable_history_removed(&self, removed: u64) {
+        panic!("no history removal notice expected, got {removed}");
+    }
 
     /// Spec 0101, A13: Im Schlüsselbund-Modus fragt der Startablauf nie
     /// nach einem Master-Passwort — hier also ein Panic statt eines
@@ -302,6 +305,9 @@ impl StartupPrompt for PasswordModePrompt {
     fn notify_started_over(&self, renamed_to: &str) {
         self.notified.lock().unwrap().push(renamed_to.to_string());
     }
+    fn notify_unreadable_history_removed(&self, removed: u64) {
+        panic!("no history removal notice expected, got {removed}");
+    }
 
     fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
         *self.password_asked.lock().unwrap() += 1;
@@ -340,6 +346,9 @@ impl StartupPrompt for NoDialogExpected {
     }
     fn notify_started_over(&self, _renamed_to: &str) {
         panic!("in diesem Feld darf nichts umbenannt werden");
+    }
+    fn notify_unreadable_history_removed(&self, removed: u64) {
+        panic!("no history removal notice expected, got {removed}");
     }
     fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
         panic!("in diesem Feld darf kein Master-Passwort erfragt werden");
@@ -1348,6 +1357,9 @@ async fn test_k12_d1_setup_without_the_confirmed_warning_changes_nothing() {
         fn notify_started_over(&self, renamed_to: &str) {
             panic!("es darf nichts umbenannt worden sein, gemeldet wurde aber {renamed_to}");
         }
+        fn notify_unreadable_history_removed(&self, removed: u64) {
+            panic!("no history removal notice expected, got {removed}");
+        }
         fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
             *self.password_asked.lock().unwrap() += 1;
             Some(NewMasterPassword {
@@ -1484,6 +1496,9 @@ async fn test_t8_an_unreachable_key_does_not_open_the_database_and_retry_works()
             }
             fn notify_started_over(&self, _renamed_to: &str) {
                 panic!("D1 benennt nichts um")
+            }
+            fn notify_unreadable_history_removed(&self, removed: u64) {
+                panic!("no history removal notice expected, got {removed}");
             }
         }
 
@@ -1857,6 +1872,9 @@ async fn test_a5_a_rename_collision_gets_its_own_message_without_backup_advice()
         }
         fn notify_started_over(&self, renamed_to: &str) {
             panic!("es darf nichts umbenannt worden sein, gemeldet wurde aber {renamed_to}");
+        }
+        fn notify_unreadable_history_removed(&self, removed: u64) {
+            panic!("no history removal notice expected, got {removed}");
         }
     }
 

@@ -164,6 +164,12 @@ impl StartupPrompt for NativeStartupPrompt {
         startup_dialog::show_info(&text.title, &text.message);
     }
 
+    /// Issue #113: einmaliger Hinweis nach der Umstellung, wie A5.
+    fn notify_unreadable_history_removed(&self, removed: u64) {
+        let text = texts::unreadable_history_removed_notice_text(removed, self.language);
+        startup_dialog::show_info(&text.title, &text.message);
+    }
+
     /// §1: rfd hat keine Texteingabe. Die Maske erscheint im Fenster
     /// (`crate::window_prompt`); dieser Fragesteller kommt nie dorthin, weil
     /// [`Self::can_ask_for_a_password`] `false` liefert.

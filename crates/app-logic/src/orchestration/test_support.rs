@@ -625,13 +625,9 @@ pub(crate) async fn session_with_real_chat_and_ledger_persistence(
         })
         .await
         .unwrap();
-    let test_cipher: std::sync::Arc<dyn ssh_manager_core::crypto::ContentCipher> =
-        std::sync::Arc::new(ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(
-            &[13u8; 32],
-        ));
-    let chat_store = profile_store.chat_session_store(test_cipher.clone());
+    let chat_store = profile_store.chat_session_store();
     let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
-    let ledger_store = profile_store.ledger_store(test_cipher);
+    let ledger_store = profile_store.ledger_store();
 
     let mut session = session_with_ai_provider(MockAiProvider::new(ai_events), transport);
     session.parts_mut_for_tests().server_id = server_id;

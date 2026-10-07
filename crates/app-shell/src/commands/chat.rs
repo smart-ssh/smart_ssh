@@ -40,7 +40,7 @@ pub async fn send_chat_message(
         &session,
         session_id,
         text,
-        state.prompt_history_store.as_ref(),
+        Some(&state.prompt_history_store),
         state.profile_store.as_ref(),
         &state.policy_store,
         &state.pending_action_confirmations,
@@ -80,7 +80,7 @@ pub async fn continue_truncated_response(
         &session,
         session_id,
         CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION.to_string(),
-        state.prompt_history_store.as_ref(),
+        Some(&state.prompt_history_store),
         state.profile_store.as_ref(),
         &state.policy_store,
         &state.pending_action_confirmations,
@@ -140,9 +140,8 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
     // Spec 0015, Abschnitt 3: Prompt-Historie ist eine Zusatzfunktion für
     // die Pfeiltasten-Navigation im Eingabefeld — ein Fehlschlag beim
     // Persistieren (z. B. kurzzeitig gesperrte DB) soll den eigentlichen
-    // Chat-Versand nicht verhindern, deshalb best-effort statt `?`. Spec
-    // 0040, Abschnitt 7: `None` (kein Verschlüsselungsschlüssel verfügbar,
-    // s. `lib::build_app_state`) ist derselbe Fall — einfach überspringen.
+    // Chat-Versand nicht verhindern, deshalb best-effort statt `?`. `None`
+    // gibt es nur in Tests ohne Datenbank; die App übergibt immer den Store.
     if let Some(store) = prompt_history_store {
         if let Err(err) = store.record(&session.server_id, &text).await {
             eprintln!("Prompt konnte nicht in der Historie gespeichert werden: {err}");
@@ -713,10 +712,7 @@ mod send_chat_message_persistence_tests {
             .await
             .unwrap();
 
-        let cipher: Arc<dyn ssh_manager_core::crypto::ContentCipher> = Arc::new(
-            ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&[21u8; 32]),
-        );
-        let chat_store = profile_store.chat_session_store(cipher);
+        let chat_store = profile_store.chat_session_store();
         let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
 
         let mut session = test_session(server_id);
@@ -748,9 +744,7 @@ mod send_chat_message_persistence_tests {
             &session,
             uuid::Uuid::new_v4(),
             "räum mal /tmp auf".to_string(),
-            Some(&profile_store.prompt_history_store(Arc::new(
-                ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&[21u8; 32]),
-            ))),
+            Some(&profile_store.prompt_history_store()),
             &in_memory_profile_store,
             &policy_store,
             &confirmations,
@@ -765,48 +759,6 @@ mod send_chat_message_persistence_tests {
                 MessageContent::Text(t) if t == "räum mal /tmp auf"
             ) && m.role == Role::User),
             "die Nutzer-Nachricht muss in chat_messages persistiert sein, geladen: {loaded:?}"
-        );
-    }
-
-    /// Spec 0040, Abschnitt 7: ein gesperrter/verweigerter OS-Schlüsselbund
-    /// beim App-Start lässt `AppState.prompt_history_store` `None` werden
-    /// (s. `lib::build_app_state`) — `send_chat_message_impl` darf dadurch
-    /// nicht scheitern, nur die Prompt-Historie bleibt für diesen App-Lauf
-    /// leer. Regressionstest für genau diesen degradierten Zustand, nicht
-    /// nur den Normalfall oben.
-    #[tokio::test]
-    async fn test_send_chat_message_without_prompt_history_store_still_succeeds() {
-        let (session, profile_store, chat_store, _tmp_dir) = session_with_real_persistence().await;
-        let chat_session_id = session.chat_session_id.lock().await.unwrap();
-        let app = test_app();
-        let handle = app.handle();
-        let emitter = TestEmitter::default();
-        let in_memory_profile_store = InMemoryProfileStore::default();
-        let policy_store = profile_store.policy_store();
-        let confirmations = ConfirmationRegistry::new();
-
-        send_chat_message_impl(
-            handle,
-            &emitter,
-            &session,
-            uuid::Uuid::new_v4(),
-            "ohne Prompt-Historie".to_string(),
-            None,
-            &in_memory_profile_store,
-            &policy_store,
-            &confirmations,
-        )
-        .await
-        .unwrap();
-
-        let loaded = chat_store.load_session(chat_session_id).await.unwrap();
-        assert!(
-            loaded.iter().any(|m| matches!(
-                &m.content,
-                MessageContent::Text(t) if t == "ohne Prompt-Historie"
-            ) && m.role == Role::User),
-            "die Chat-Persistenz selbst darf vom fehlenden Prompt-History-Store unbeeinflusst \
-             bleiben: {loaded:?}"
         );
     }
 

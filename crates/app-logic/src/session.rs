@@ -618,7 +618,7 @@ pub struct SessionParts {
     /// Herkunft von `chat_messages` ausschließt, Spec 0034/0040) — das
     /// Ledger soll MCP-Aktivität gerade erfassen (Spec 0057, §1.1: Quelle
     /// `mcp-agent`). Gleiches `None`-Verhalten wie `chat_session_store`
-    /// (Tests; fehlender Verschlüsselungsschlüssel beim App-Start).
+    /// (Tests; Sitzungen ohne eigene `chat_sessions`-Zeile).
     pub ledger_store: Option<persistence_sqlite::SqliteLedgerStore>,
     /// Die `chat_sessions.id`-Zeile dieser laufenden Sitzung — `None`, bis
     /// `app_shell::commands::connect_session` sie anlegt (bzw. bei

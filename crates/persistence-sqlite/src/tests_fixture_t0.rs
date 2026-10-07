@@ -21,13 +21,11 @@
 //! führen erst die Commits 6–8 dieser Spec ein (Secrets-Tabelle,
 //! MCP-Token-Spalte) — der heutige Build kennt sie nicht.
 
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-
 use sqlx::Connection;
+use std::path::{Path, PathBuf};
 
-use ssh_manager_core::ai::{ChatMessage, MessageContent, ProviderId, ProviderType, Role};
-use ssh_manager_core::crypto::{ChaCha20Poly1305Cipher, ContentCipher};
+use ssh_manager_core::ai::{MessageContent, ProviderId, ProviderType};
+use ssh_manager_core::crypto::legacy_field_content::encrypt_for_tests;
 use ssh_manager_core::profiles::{
     AuthMethod, CredentialRef, PostIngestPolicy, ProfileStore, Server,
 };
@@ -58,10 +56,6 @@ pub(crate) const T0_TEST_KEY: [u8; 32] = [
 /// testen.
 pub(crate) fn fixture_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/t0-pre-sqlcipher.sqlite3")
-}
-
-fn test_cipher() -> Arc<dyn ContentCipher> {
-    Arc::new(ChaCha20Poly1305Cipher::new(&T0_TEST_KEY))
 }
 
 /// Erzeugt die Fixture-Datei einmalig — bewusst **kein** Teil des
@@ -143,21 +137,30 @@ async fn generate_fixture_once() {
         .await
         .expect("Provider anlegen");
 
-    let chat_store = store.chat_session_store(test_cipher());
+    let chat_store = store.chat_session_store();
     let session_id = chat_store
         .create_session(&server_id, None)
         .await
         .expect("Chat-Sitzung anlegen");
-    chat_store
-        .append_message(
-            session_id,
-            &ChatMessage {
-                role: Role::User,
-                content: MessageContent::Text(format!("Testnachricht {CHAT_MARKER}")),
-            },
-        )
-        .await
-        .expect("Chat-Nachricht schreiben");
+    // Seit Issue #113 schreibt kein Store mehr feldweise verschlüsselt; die
+    // Zeile entsteht deshalb so, wie der damalige Store sie schrieb:
+    // `nonce || ciphertext` des JSON unter T0_TEST_KEY.
+    let content_json = serde_json::to_string(&MessageContent::Text(format!(
+        "Testnachricht {CHAT_MARKER}"
+    )))
+    .expect("MessageContent serialisierbar");
+    sqlx::query(
+        "INSERT INTO chat_messages \
+         (id, session_id, role, content_type, content, sequence, created_at) \
+         VALUES (?, ?, 'user', 'text', ?, 0, ?)",
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(session_id.to_string())
+    .bind(encrypt_for_tests(&T0_TEST_KEY, &content_json))
+    .bind(chrono::Utc::now().to_rfc3339())
+    .execute(&store.pool)
+    .await
+    .expect("Chat-Nachricht schreiben");
 
     // Schließen überträgt den Inhalt des WAL in die Hauptdatei (s.
     // `tests_raw_file`-Moduldoku, derselbe gemessene Mechanismus) — die
@@ -308,7 +311,22 @@ async fn test_t0_fixture_has_14_migrations_all_markers_and_decryptable_chat_cont
         providers[0].extra_headers
     );
 
-    let chat_store = store.chat_session_store(test_cipher());
+    // Issue #113: Der feldweise verschlüsselte Chatinhalt der Fixture wird
+    // beim Start mit K entschlüsselt und als Klartext zurückgeschrieben;
+    // erst danach liest der Store ihn.
+    let decryption = store
+        .decrypt_field_encrypted_content(&T0_TEST_KEY)
+        .await
+        .expect("Umstellung der Fixture gelingt");
+    assert!(
+        matches!(
+            decryption,
+            crate::FieldContentDecryption::Completed(report)
+                if report.chat_messages.decrypted == 1 && report.removed_total() == 0
+        ),
+        "die Chat-Nachricht der Fixture muss mit T0_TEST_KEY entschlüsselt werden: {decryption:?}"
+    );
+    let chat_store = store.chat_session_store();
     let sessions = chat_store
         .list_sessions_for_server(&server_id)
         .await

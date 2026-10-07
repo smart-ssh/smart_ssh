@@ -34,6 +34,7 @@ pub mod dto;
 pub mod ephemeral_credentials;
 pub mod error;
 pub mod events;
+pub mod field_content_decryption;
 pub mod filter_rules;
 pub mod groups;
 pub mod host_key_store;

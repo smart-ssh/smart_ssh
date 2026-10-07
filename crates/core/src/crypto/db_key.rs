@@ -3,8 +3,9 @@
 //! (`app:chat_content_encryption_key`, s. [`super::key`]), nicht neu
 //! erzeugt und nicht aus einem Passwort gerechnet.
 //!
-//! **Warum abgeleitet und nicht K selbst:** K ist bereits der Schlüssel der
-//! feldweisen Chat-Verschlüsselung (Spec 0036). Denselben Bytes zwei
+//! **Warum abgeleitet und nicht K selbst:** K war bis Issue #113 zugleich
+//! der Schlüssel der feldweisen Chat-Verschlüsselung (Spec 0036) und wird
+//! von der einmaligen Umstellung noch so gelesen. Denselben Bytes zwei
 //! Verwendungen zu geben, hieße, eine Schwäche in einem Verfahren auf das
 //! andere durchzureichen. HKDF mit einem festen, verwendungsspezifischen
 //! `info`-Wert trennt die beiden Verwendungen (Domain Separation), ohne

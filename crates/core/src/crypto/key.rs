@@ -1,5 +1,7 @@
-//! Schlüsselverwaltung für die Chat-Inhalts-Verschlüsselung (Spec 0036,
-//! Abschnitt 4).
+//! Schlüsselverwaltung für den Wurzelschlüssel K (Spec 0036, Abschnitt 4;
+//! seit Spec 0101 die Wurzel des Datenbankschlüssels). Der Slot-Name stammt
+//! aus der Zeit der feldweisen Chat-Verschlüsselung und bleibt, damit
+//! vorhandene Installationen ihren K wiederfinden.
 
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
