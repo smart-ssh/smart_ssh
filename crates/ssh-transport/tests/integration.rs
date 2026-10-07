@@ -1448,7 +1448,11 @@ fn the_failed_step(steps: &[ConnectStepRecord]) -> &ConnectStepRecord {
         .iter()
         .filter(|s| matches!(s.status, StepStatus::Failed { .. }))
         .collect();
-    assert_eq!(failed.len(), 1, "genau ein gescheiterter Schritt: {steps:#?}");
+    assert_eq!(
+        failed.len(),
+        1,
+        "genau ein gescheiterter Schritt: {steps:#?}"
+    );
     assert!(
         steps.iter().all(|s| s.status != StepStatus::Running),
         "nach dem Versuch läuft kein Schritt mehr: {steps:#?}"
@@ -1743,7 +1747,10 @@ async fn test_issue_51_wrong_password_marks_auth_and_shows_remaining_methods_onl
     )
     .await;
     assert_eq!(result.err(), Some(SshError::AuthenticationFailed));
-    assert_eq!(kinds(&steps), ["dns", "tcp", "handshake", "hostKey", "auth"]);
+    assert_eq!(
+        kinds(&steps),
+        ["dns", "tcp", "handshake", "hostKey", "auth"]
+    );
     let step = the_failed_step(&steps);
     assert_eq!(step.status, failed("SSH_AUTH_FAILED"));
     let ConnectStep::Authentication {
@@ -1890,8 +1897,13 @@ async fn test_issue_51_step_log_never_contains_secrets_for_any_auth_method() {
                 auth: auth.clone(),
             }],
         };
-        let (_result, steps) =
-            connect_logged(&target, &store, &PlainFileKeyReader, trusted_host_keys(&server)).await;
+        let (_result, steps) = connect_logged(
+            &target,
+            &store,
+            &PlainFileKeyReader,
+            trusted_host_keys(&server),
+        )
+        .await;
         assert!(
             kinds(&steps).contains(&"auth"),
             "{auth:?}: der Anmeldeschritt muss erreicht sein: {steps:#?}"

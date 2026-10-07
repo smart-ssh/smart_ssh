@@ -91,7 +91,14 @@ pub async fn connect(
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
 ) -> Result<ConnectOutcome, SshError> {
-    connect_with_log(target, credentials, key_files, host_keys, &ConnectLog::new()).await
+    connect_with_log(
+        target,
+        credentials,
+        key_files,
+        host_keys,
+        &ConnectLog::new(),
+    )
+    .await
 }
 
 /// Wie [`connect`], zeichnet dabei aber jeden Schritt je Hop in `log` auf
@@ -150,9 +157,7 @@ async fn connect_inner(
         // im Fehlerfall, nur nachträglich — s. `diagnose_connection_
         // failed_dns`-Doc-Kommentar.
         Err(err) => {
-            return Err(
-                diagnose_connection_failed_dns(err, &first_hop.host, first_hop.port).await,
-            )
+            return Err(diagnose_connection_failed_dns(err, &first_hop.host, first_hop.port).await)
         }
     };
 
