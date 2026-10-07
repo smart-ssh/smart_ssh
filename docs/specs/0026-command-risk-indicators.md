@@ -67,6 +67,21 @@ verschachtelte `$(...)` absteigen, wo die Filter-Engine das begrenzt (sonst
 Stack-Overflow-Absturz über einen Pfad, der die Filter-Engine gar nicht
 erreicht).
 
+**Code in Shell-`-c`-Aufrufen wird mitbewertet**: Steckt ein Kommando im
+Code-Argument eines Shell- oder Interpreter-Aufrufs (`bash -c 'shutdown
+now'`, `sh -c "cat /etc/shadow"`, auch hinter `sudo`/Wrappern wie `sudo bash
+-c '…'` oder `env bash -c '…'`), bewertet der Klassifizierer diesen Code
+zusätzlich wie ein direkt eingegebenes Kommando — mit derselben
+Segmentierung, Normalisierung und denselben Mustern und mit derselben
+Erkennung von `-c`-Code wie die Filter-Engine (Spec 0002, Abschnitt 4.6). Je
+Achse gilt das höchste Level aus äußerem Aufruf und innerem Code;
+`bash -c 'shutdown -h now'` ist also Server-Risiko Rot wie `shutdown -h now`
+selbst. Verschachtelte Aufrufe (`bash -c "sh -c 'reboot'"`) werden Ebene für
+Ebene ausgepackt, höchstens bis zur selben Verschachtelungsgrenze wie bei
+Command-Substitution; darüber hinaus wird nicht weiter ausgepackt (kein
+Absturz), die äußeren Ebenen bleiben bewertet. Die Bewertung kann dadurch
+nur strenger werden, nie niedriger.
+
 Beispielhafte Server-Risiko-Muster (Rot): `rm -rf *`, `dd if=* of=/dev/*`,
 `mkfs*`, Fork-Bomb-Muster, `shutdown*`/`reboot*`/`poweroff*`,
 `iptables -F*`, `chmod -R 777 /*`. (Gelb): `rm *` (ohne `-rf`),
