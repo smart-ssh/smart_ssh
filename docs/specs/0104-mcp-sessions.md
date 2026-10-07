@@ -116,7 +116,8 @@ Spec 0057 (Kompaktierung, MCP-Ausschluss aus der Summary), ADR 0109.
 - Die nächste Anfrage dieses Clients legt eine neue MCP-Sitzung samt Tab
   an.
 - Wird der MCP-Tab geschlossen, während der Verbindungsaufbau noch läuft
-  (z. B. bei offenem Host-Key-Dialog), trennt `ensure_session` die danach
+  (z. B. bei offenem Host-Key-Dialog), trennt `ensure_session` (Entscheidung
+  in `app_logic::mcp_sessions::ensure_mcp_session`, Issue #67) die danach
   doch aufgebaute Verbindung sofort wieder. Die Anfrage scheitert dann mit
   derselben Meldung.
 - Das Ablehnen einer wartenden Bestätigung gilt für **jede** geschlossene
@@ -162,6 +163,14 @@ Spec 0057 (Kompaktierung, MCP-Ausschluss aus der Summary), ADR 0109.
   nächste Anfrage bekommt eine neue Sitzung — auch über den
   sitzungsunabhängigen Schließ-Schritt, und die Sitzung ist ausgetragen,
   bevor die Aktion zurückkehrt.
+- Die Zusammensetzung aus `ensure_session` (Issue #67, Tauri-frei in
+  `mcp_sessions::ensure_mcp_session`): Neben einem verbundenen Nutzer-Tab
+  wird neu verbunden statt der Nutzer-Sitzung; eine verbundene MCP-Sitzung
+  desselben Schlüssels wird ohne Verbindungsaufbau wiederverwendet; ein
+  gescheiterter Aufbau trägt die Sitzung aus, die nächste Anfrage verbindet
+  neu; ein während des Aufbaus geschlossener Tab ergibt „geschlossen“ und
+  die verwaiste Verbindung wird getrennt; zwei gleichzeitige Anfragen
+  desselben Schlüssels bauen genau eine Verbindung auf.
 
 `crates/app-logic/src/orchestration/action_exec/tests_pending_confirmation.rs`
 (Issue #66): Schließen einer Nutzer-Sitzung lehnt ohne Frontend-Aufruf ab
