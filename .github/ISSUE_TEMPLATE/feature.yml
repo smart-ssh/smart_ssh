@@ -29,6 +29,12 @@ body:
         - [ ] Relevant automated tests pass
     validations:
       required: true
+  - type: input
+    id: spec-impact
+    attributes:
+      label: Spec impact
+      description: "`new` (area not covered by any spec), `update NNNN` (behaviour of spec NNNN changes or is added) or `none` (fix of specified behaviour, refactoring, tests, CI)."
+      placeholder: none
   - type: textarea
     id: notes
     attributes:
