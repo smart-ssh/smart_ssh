@@ -340,12 +340,47 @@ function runNpmLs(frontendDir) {
   }
 }
 
+// Issue #118: Ein Paket mit `file:`-Auflösung ist kein Drittpaket, sondern
+// ein lokales — ein Mitglied des npm-Workspace (läuft das Skript mit
+// `--frontend` auf dessen Wurzel, listet `npm ls` die Mitglieder selbst als
+// oberste Abhängigkeiten) oder ein per `file:` verlinktes Paket. Es wird
+// nicht gelistet und nicht gegen die erlaubten Lizenzen geprüft (ein
+// unveröffentlichtes Workspace-Mitglied hat oft gar kein `license`-Feld);
+// seine eigenen Produktionsabhängigkeiten sammelt `walk` trotzdem weiter.
+// Alle anderen Auflösungen (Registry, Git, Tarball-URL) bleiben Drittpakete
+// und laufen unverändert durch die Lizenzprüfung.
+function hasFileResolution(info) {
+  return typeof info.resolved === "string" && info.resolved.startsWith("file:");
+}
+
+// Hängt ein Mitglied von einem anderen ab, nennt `npm ls` es unter dem
+// abhängigen Mitglied noch einmal, dort aber ohne `resolved` (gemessen mit
+// npm 11). Deshalb zuerst alle `file:`-Pakete im ganzen Baum sammeln; ein
+// Eintrag OHNE `resolved` mit demselben Namen und derselben Version gilt
+// dann ebenfalls als lokal. Ein Eintrag mit anderer Auflösung bleibt ein
+// Drittpaket, auch bei gleichem Namen.
+function collectLocalPackageKeys(npmLsTree) {
+  const keys = new Set();
+  function walk(node) {
+    for (const [name, info] of Object.entries(node.dependencies ?? {})) {
+      if (info.version && hasFileResolution(info)) keys.add(`${name}@${info.version}`);
+      walk(info);
+    }
+  }
+  walk(npmLsTree);
+  return keys;
+}
+
 function collectProdPackages(npmLsTree) {
+  const localKeys = collectLocalPackageKeys(npmLsTree);
+  const isLocalPackage = (name, info) =>
+    hasFileResolution(info) ||
+    (info.resolved === undefined && localKeys.has(`${name}@${info.version}`));
   const seen = new Set();
   const out = [];
   function walk(node) {
     for (const [name, info] of Object.entries(node.dependencies ?? {})) {
-      if (info.version) {
+      if (info.version && !isLocalPackage(name, info)) {
         const key = `${name}@${info.version}`;
         if (!seen.has(key)) {
           seen.add(key);
@@ -370,20 +405,54 @@ function dirMatchesPackage(dir, name, version) {
   }
 }
 
-// Sucht das Installationsverzeichnis eines npm-Pakets. Der häufige Fall
-// (flaches `node_modules/<name>`) wird direkt getroffen; der rekursive Teil
-// fängt den selteneren Fall ab, dass zwei Versionen desselben Pakets
-// gleichzeitig installiert sind (verschachteltes `node_modules`).
+// Sucht das Installationsverzeichnis eines npm-Pakets unter dem
+// `node_modules` des per `--frontend` übergebenen Verzeichnisses — bei einer
+// Workspace-Wurzel ist das genau der Ort, an den npm die Pakete aller
+// Mitglieder hebt (Issue #118). Der häufige Fall (flaches
+// `node_modules/<name>`) wird direkt getroffen; der rekursive Teil fängt den
+// selteneren Fall ab, dass zwei Versionen desselben Pakets gleichzeitig
+// installiert sind (verschachteltes `node_modules`, auch im Verzeichnis
+// eines Workspace-Mitglieds, das npm als Verweis in `node_modules` ablegt).
 function resolvePackageDir(frontendDir, name, version) {
   const direct = path.join(frontendDir, "node_modules", ...name.split("/"));
   if (dirMatchesPackage(direct, name, version)) return direct;
-  const found = searchNodeModules(path.join(frontendDir, "node_modules"), name, version, 0);
+  const found = searchNodeModules(
+    path.join(frontendDir, "node_modules"),
+    name,
+    version,
+    0,
+    new Set(),
+  );
   if (found) return found;
   fail(`Installationsverzeichnis für npm-Paket ${name}@${version} nicht gefunden.`);
 }
 
-function searchNodeModules(root, name, version, depth) {
+// Ein Eintrag in `node_modules` ist ein Verzeichnis oder ein Verweis auf
+// eines (npm legt Workspace-Mitglieder und `file:`-Pakete als Symlink bzw.
+// unter Windows als Junction ab).
+function isDirectoryEntry(entry, full) {
+  if (entry.isDirectory()) return true;
+  if (!entry.isSymbolicLink()) return false;
+  try {
+    return fs.statSync(full).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function searchNodeModules(root, name, version, depth, visited) {
   if (depth > 6) return null;
+  // Verweise können im Kreis führen (ein Workspace-Mitglied, dessen
+  // `node_modules` wieder auf die Wurzel zeigt) — jedes echte Verzeichnis
+  // wird nur einmal durchsucht.
+  let realRoot;
+  try {
+    realRoot = fs.realpathSync(root);
+  } catch {
+    return null;
+  }
+  if (visited.has(realRoot)) return null;
+  visited.add(realRoot);
   let entries;
   try {
     entries = fs.readdirSync(root, { withFileTypes: true });
@@ -391,17 +460,18 @@ function searchNodeModules(root, name, version, depth) {
     return null;
   }
   for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === ".bin") continue;
+    if (entry.name === ".bin") continue;
     const full = path.join(root, entry.name);
+    if (!isDirectoryEntry(entry, full)) continue;
     if (entry.name.startsWith("@")) {
-      const found = searchNodeModules(full, name, version, depth + 1);
+      const found = searchNodeModules(full, name, version, depth + 1, visited);
       if (found) return found;
       continue;
     }
     if (dirMatchesPackage(full, name, version)) return full;
     const nested = path.join(full, "node_modules");
     if (fs.existsSync(nested)) {
-      const found = searchNodeModules(nested, name, version, depth + 1);
+      const found = searchNodeModules(nested, name, version, depth + 1, visited);
       if (found) return found;
     }
   }
@@ -452,6 +522,17 @@ function processNpmPackage(pkgDir, name, version, allowList) {
     licenseText: fs.readFileSync(licenseFile, "utf8"),
     notice: noticeFile ? fs.readFileSync(noticeFile, "utf8") : null,
   };
+}
+
+// npm-Seite (A1.1 b) für das per `--frontend` übergebene Verzeichnis —
+// ein einzelnes Frontend-Paket oder die Wurzel eines npm-Workspace, der es
+// als Mitglied enthält (Issue #118). Getrennt von `generate`, damit ein Test
+// sie ohne `cargo-about` an einem Workspace-Fixture fahren kann.
+function collectNpmProdPackages(frontendDir, allowList) {
+  const npmTree = runNpmLs(frontendDir);
+  return collectProdPackages(npmTree).map((p) =>
+    processNpmPackage(resolvePackageDir(frontendDir, p.name, p.version), p.name, p.version, allowList),
+  );
 }
 
 function processBundledDevDep(frontendDir, name, allowList) {
@@ -532,11 +613,7 @@ function generate(args) {
   const rustNotices = collectRustNotices(aboutJson);
   const vendoredLicenseNotices = collectVendoredLicenseNotices(aboutJson);
 
-  const npmTree = runNpmLs(args.frontend);
-  const prodPackages = collectProdPackages(npmTree);
-  const npmResults = prodPackages.map((p) =>
-    processNpmPackage(resolvePackageDir(args.frontend, p.name, p.version), p.name, p.version, allowList),
-  );
+  const npmResults = collectNpmProdPackages(args.frontend, allowList);
   const npmGroups = groupByText(
     npmResults,
     (p) => `${p.name}@${p.version}`,
@@ -610,6 +687,7 @@ export {
   parseAllowList,
   isLicenseAllowed,
   collectProdPackages,
+  collectNpmProdPackages,
   groupByText,
   generate,
 };
