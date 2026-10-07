@@ -1,10 +1,18 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorCode, commandErrorMessage, createGroup, deleteGroup, updateGroup } from "../api";
 import { translateErrorCode } from "../errorCodes";
 import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
 import type { DeleteGroupResult, GroupDto } from "../types";
 import { NotesPanel } from "./NotesPanel";
+
+/** Issue #63: neuer Ort des geöffneten Elements nach einem erfolgreichen
+ * Verschieben per Drag-and-drop — `groupId` ist die neue Gruppe (Server)
+ * bzw. Übergruppe (Gruppe), `null` = Wurzelebene. Ein neues Objekt je
+ * Verschieben; das Formular übernimmt daraus nur dieses eine Feld. */
+export interface MovedTo {
+  groupId: string | null;
+}
 
 interface GroupFormProps {
   /** `null` = Neuanlage. */
@@ -14,12 +22,21 @@ interface GroupFormProps {
   allGroups: GroupDto[];
   onSaved: () => void;
   onDeleted: () => void;
+  /** Issue #63: s. [`MovedTo`]. `null`/fehlend = nicht verschoben. */
+  movedTo?: MovedTo | null;
 }
 
 /** Spec 0008, Abschnitt 6: Name, Parent-Dropdown (schließt sich selbst und
  * eigene Nachfahren clientseitig aus), Notiz-Editor, Löschen mit
  * Cascade-Vorschau. */
-export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDeleted }: GroupFormProps) {
+export function GroupForm({
+  groupId,
+  defaultParentId,
+  allGroups,
+  onSaved,
+  onDeleted,
+  movedTo = null,
+}: GroupFormProps) {
   const { t } = useTranslation();
   const isCreate = groupId === null;
   const existing = useMemo(() => allGroups.find((g) => g.id === groupId) ?? null, [allGroups, groupId]);
@@ -31,12 +48,29 @@ export function GroupForm({ groupId, defaultParentId, allGroups, onSaved, onDele
   const [deletePreview, setDeletePreview] = useState<DeleteGroupResult | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Issue #63: Felder nur dann aus `existing`/`defaultParentId` füllen,
+  // wenn sich das bearbeitete Element selbst ändert (oder `existing` zum
+  // ersten Mal verfügbar wird) — NICHT bei jedem Neuladen von `allGroups`.
+  // `existing` ist nach jedem `reload()` ein neues Objekt; früher setzte
+  // das jede ungespeicherte Eingabe (z. B. den Namen) zurück, etwa nach
+  // dem Verschieben einer beliebigen Gruppe oder eines Servers.
+  const syncedFor = useRef<string | null>(null);
   useEffect(() => {
+    const identity = isCreate ? `new:${defaultParentId ?? ""}` : existing ? `group:${existing.id}` : null;
+    if (identity === null || identity === syncedFor.current) return;
+    syncedFor.current = identity;
     setName(existing?.name ?? "");
     setParentId(existing?.parentId ?? defaultParentId);
     setDeletePreview(null);
     setError(null);
-  }, [groupId, existing, defaultParentId]);
+  }, [isCreate, existing, defaultParentId]);
+
+  // Issue #63: nach einem erfolgreichen Verschieben dieser Gruppe nur die
+  // Übergruppe übernehmen — der Name und alles andere bleiben, wie der
+  // Nutzer sie gerade eingetippt hat.
+  useEffect(() => {
+    if (movedTo) setParentId(movedTo.groupId);
+  }, [movedTo]);
 
   // Spec 0008, Abschnitt 6: "schließt die Gruppe selbst und ihre
   // Nachfahren clientseitig aus der Auswahl aus".
