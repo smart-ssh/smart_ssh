@@ -13,12 +13,12 @@ use ssh_manager_core::profiles::{
 };
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{
-    resolve_connection_target, ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, KeyFileReader,
-    SshError,
+    resolve_connection_target, ConnectLog, ConnectionTarget, Hop, HostKeyDecision, HostKeyStore,
+    KeyFileReader, SshError,
 };
 use ssh_transport::ConnectOutcome;
 
-use crate::dto::{AuthMethodInput, ServerInput, TestConnectionResult};
+use crate::dto::{AuthMethodInput, ServerInput, TestConnectionReport, TestConnectionResult};
 use crate::ephemeral_credentials::EphemeralCredentialStore;
 
 use crate::error::{secret_store_error, CommandError, CommandResult};
@@ -59,6 +59,8 @@ pub trait Connector: Send + Sync {
         credentials: &(dyn CredentialStore + Send + Sync),
         key_files: &(dyn KeyFileReader + Send + Sync),
         host_keys: Arc<dyn HostKeyStore>,
+        // Issue #51: Schritt-Protokoll des Versuchs, nur für die Anzeige.
+        log: &ConnectLog,
     ) -> Result<ConnectOutcome, SshError>;
 }
 
@@ -72,8 +74,9 @@ impl Connector for RealConnector {
         credentials: &(dyn CredentialStore + Send + Sync),
         key_files: &(dyn KeyFileReader + Send + Sync),
         host_keys: Arc<dyn HostKeyStore>,
+        log: &ConnectLog,
     ) -> Result<ConnectOutcome, SshError> {
-        ssh_transport::connect(target, credentials, key_files, host_keys).await
+        ssh_transport::connect_with_log(target, credentials, key_files, host_keys, log).await
     }
 }
 
@@ -95,7 +98,7 @@ pub async fn test_connection(
     connector: &dyn Connector,
     input: ServerInput,
     existing_server_id: Option<ServerId>,
-) -> CommandResult<TestConnectionResult> {
+) -> CommandResult<TestConnectionReport> {
     test_connection_with_timeout(
         profile_store,
         real_credential_store,
@@ -111,6 +114,11 @@ pub async fn test_connection(
 
 /// Testbare Variante mit injizierbarem Timeout — die echten 10 Sekunden
 /// aus der Spec wären in einem Unit-Test schlicht zu langsam.
+///
+/// Issue #51: liefert neben dem Ergebnis das Schritt-Protokoll des
+/// Versuchs — bei Erfolg wie bei Fehlschlag. Bricht der Timeout den Versuch
+/// ab, wird der gerade laufende Schritt mit `SSH_TIMEOUT` geschlossen.
+/// Das Protokoll geht nur an die Oberfläche, nie ins Log.
 #[allow(clippy::too_many_arguments)]
 async fn test_connection_with_timeout(
     profile_store: &dyn ProfileStore,
@@ -121,6 +129,37 @@ async fn test_connection_with_timeout(
     input: ServerInput,
     existing_server_id: Option<ServerId>,
     timeout: Duration,
+) -> CommandResult<TestConnectionReport> {
+    let log = ConnectLog::new();
+    let result = run_test_connection(
+        profile_store,
+        real_credential_store,
+        key_files,
+        host_key_store,
+        connector,
+        input,
+        existing_server_id,
+        timeout,
+        &log,
+    )
+    .await?;
+    Ok(TestConnectionReport {
+        result,
+        steps: log.snapshot(),
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_test_connection(
+    profile_store: &dyn ProfileStore,
+    real_credential_store: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
+    host_key_store: Arc<dyn HostKeyStore>,
+    connector: &dyn Connector,
+    input: ServerInput,
+    existing_server_id: Option<ServerId>,
+    timeout: Duration,
+    log: &ConnectLog,
 ) -> CommandResult<TestConnectionResult> {
     let existing_auth = match existing_server_id {
         Some(id) => Some(profile_store.get_server(&id).await?.auth),
@@ -158,9 +197,12 @@ async fn test_connection_with_timeout(
         real: real_credential_store,
     };
 
-    let attempt = connector.connect(&target, &tiered, key_files, host_key_store);
+    let attempt = connector.connect(&target, &tiered, key_files, host_key_store, log);
     let outcome = match tokio::time::timeout(timeout, attempt).await {
-        Err(_elapsed) => return Ok(TestConnectionResult::Timeout),
+        Err(_elapsed) => {
+            log.fail_running(SshError::Timeout.code());
+            return Ok(TestConnectionResult::Timeout);
+        }
         Ok(result) => result,
     };
 
@@ -470,6 +512,34 @@ mod tests {
     use super::*;
     use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
 
+    /// Nur das Ergebnis — die bestehenden Tests prüfen die Abbildung
+    /// `SshError`/`ConnectOutcome` → `TestConnectionResult`; das
+    /// Schritt-Protokoll (Issue #51) prüfen eigene Tests unten.
+    #[allow(clippy::too_many_arguments)]
+    async fn test_connection_result(
+        profile_store: &dyn ProfileStore,
+        real_credential_store: &(dyn CredentialStore + Send + Sync),
+        key_files: &(dyn KeyFileReader + Send + Sync),
+        host_key_store: Arc<dyn HostKeyStore>,
+        connector: &dyn Connector,
+        input: ServerInput,
+        existing_server_id: Option<ServerId>,
+        timeout: Duration,
+    ) -> CommandResult<TestConnectionResult> {
+        test_connection_with_timeout(
+            profile_store,
+            real_credential_store,
+            key_files,
+            host_key_store,
+            connector,
+            input,
+            existing_server_id,
+            timeout,
+        )
+        .await
+        .map(|report| report.result)
+    }
+
     struct NoOpHostKeyStore;
     impl HostKeyStore for NoOpHostKeyStore {
         fn check(&self, _host: &str, _port: u16, _key: &[u8]) -> HostKeyDecision {
@@ -519,6 +589,7 @@ mod tests {
             _credentials: &(dyn CredentialStore + Send + Sync),
             _key_files: &(dyn KeyFileReader + Send + Sync),
             _host_keys: Arc<dyn HostKeyStore>,
+            _log: &ConnectLog,
         ) -> Result<ConnectOutcome, SshError> {
             match &self.0 {
                 MockOutcome::Success => Ok(ConnectOutcome::Connected(Box::new(StubSshTransport))),
@@ -597,6 +668,7 @@ mod tests {
             credentials: &(dyn CredentialStore + Send + Sync),
             key_files: &(dyn KeyFileReader + Send + Sync),
             _host_keys: Arc<dyn HostKeyStore>,
+            _log: &ConnectLog,
         ) -> Result<ConnectOutcome, SshError> {
             for hop in &target.hops {
                 ssh_manager_core::ssh::resolve_auth(&hop.auth, credentials, key_files)
@@ -668,7 +740,7 @@ mod tests {
             ..password_input()
         };
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &real_store,
             &MockKeyFileReader::new(),
@@ -718,7 +790,7 @@ mod tests {
             ..password_input()
         };
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &real_store,
             &MockKeyFileReader::new(),
@@ -772,7 +844,7 @@ mod tests {
             ..password_input()
         };
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &real_store,
             &MockKeyFileReader::new(),
@@ -839,7 +911,7 @@ mod tests {
             ..password_input()
         };
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &real_store,
             &MockKeyFileReader::new(),
@@ -905,7 +977,7 @@ mod tests {
             ..password_input()
         };
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &real_store,
             &MockKeyFileReader::new(),
@@ -974,7 +1046,7 @@ mod tests {
 
         // Hälfte 1 — leeres Feld: das gespeicherte Secret wird vorab gelesen,
         // und genau das scheitert.
-        let err = test_connection_with_timeout(
+        let err = test_connection_result(
             &profile_store(),
             &failing_real_store(),
             &MockKeyFileReader::new(),
@@ -1000,7 +1072,7 @@ mod tests {
         // Hälfte 2 — gefülltes Feld: derselbe scheiternde Store, die Kette
         // läuft trotzdem durch. Belegt, dass der Ziel-Hop in der Kette aus
         // dem Ephemeral-Store liest und dort kein Schlüsselbund im Spiel ist.
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store(),
             &failing_real_store(),
             &MockKeyFileReader::new(),
@@ -1024,7 +1096,7 @@ mod tests {
         let profile_store = InMemoryProfileStore::new();
         let credential_store = InMemoryCredentialStore::new();
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
@@ -1045,7 +1117,7 @@ mod tests {
         let profile_store = InMemoryProfileStore::new();
         let credential_store = InMemoryCredentialStore::new();
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
@@ -1069,7 +1141,7 @@ mod tests {
         let profile_store = InMemoryProfileStore::new();
         let credential_store = InMemoryCredentialStore::new();
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
@@ -1093,7 +1165,7 @@ mod tests {
         let profile_store = InMemoryProfileStore::new();
         let credential_store = InMemoryCredentialStore::new();
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
@@ -1114,7 +1186,7 @@ mod tests {
         let profile_store = InMemoryProfileStore::new();
         let credential_store = InMemoryCredentialStore::new();
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
@@ -1135,7 +1207,7 @@ mod tests {
         let profile_store = InMemoryProfileStore::new();
         let credential_store = InMemoryCredentialStore::new();
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
@@ -1161,7 +1233,7 @@ mod tests {
             ..password_input()
         };
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
@@ -1213,7 +1285,7 @@ mod tests {
             ..password_input()
         };
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
@@ -1283,7 +1355,7 @@ mod tests {
             ..password_input()
         };
 
-        let err = test_connection_with_timeout(
+        let err = test_connection_result(
             &profile_store,
             &credential_store,
             &MockKeyFileReader::new(),
@@ -1320,6 +1392,7 @@ mod tests {
                 credentials: &(dyn CredentialStore + Send + Sync),
                 _key_files: &(dyn KeyFileReader + Send + Sync),
                 _host_keys: Arc<dyn HostKeyStore>,
+                _log: &ConnectLog,
             ) -> Result<ConnectOutcome, SshError> {
                 assert_eq!(target.hops.len(), 2);
 
@@ -1403,7 +1476,7 @@ mod tests {
             start_directory: None,
         };
 
-        let result = test_connection_with_timeout(
+        let result = test_connection_result(
             &profile_store,
             &real_credential_store,
             &MockKeyFileReader::new(),
@@ -1938,6 +2011,154 @@ mod tests {
                 !refusal.message.contains("geheimer-nachbarwert"),
                 "{slot:?}: Meldung darf kein Secret enthalten: {refusal:?}"
             );
+        }
+    }
+
+    // --- Issue #51: Schritt-Protokoll ---------------------------------------
+
+    use ssh_manager_core::ssh::{ConnectStep, HostKeyCheckResult, StepStatus};
+
+    const FINGERPRINT_MARKER: &str = "SHA256:issue51-log-marker";
+    const VERSION_MARKER: &str = "SSH-2.0-issue51-version-marker";
+
+    /// Zeichnet DNS/TCP/Handshake/Host-Key auf wie der echte Transport und
+    /// endet dann je nach `hang` mit Hängen (Timeout) oder einem
+    /// Anmeldefehler.
+    struct RecordingConnector {
+        hang: bool,
+    }
+
+    #[async_trait]
+    impl Connector for RecordingConnector {
+        async fn connect(
+            &self,
+            _target: &ConnectionTarget,
+            _credentials: &(dyn CredentialStore + Send + Sync),
+            _key_files: &(dyn KeyFileReader + Send + Sync),
+            _host_keys: Arc<dyn HostKeyStore>,
+            log: &ConnectLog,
+        ) -> Result<ConnectOutcome, SshError> {
+            let hop = "deploy@example.invalid:22";
+            let dns = log.start(
+                0,
+                hop,
+                ConnectStep::DnsResolution {
+                    host: "example.invalid".into(),
+                    port: 22,
+                    addresses: vec!["192.0.2.7".into()],
+                },
+            );
+            log.succeed(dns);
+            let handshake = log.start(
+                0,
+                hop,
+                ConnectStep::Handshake {
+                    server_version: Some(VERSION_MARKER.into()),
+                    kex: Some("curve25519-sha256".into()),
+                    host_key_algorithm: Some("ssh-ed25519".into()),
+                    cipher: Some("chacha20-poly1305@openssh.com".into()),
+                    mac: Some("none".into()),
+                },
+            );
+            log.succeed(handshake);
+            let host_key = log.start(
+                0,
+                hop,
+                ConnectStep::HostKeyCheck {
+                    key_type: Some("ssh-ed25519".into()),
+                    fingerprint: Some(FINGERPRINT_MARKER.into()),
+                    result: Some(HostKeyCheckResult::Known),
+                },
+            );
+            log.succeed(host_key);
+            log.start(
+                0,
+                hop,
+                ConnectStep::Authentication {
+                    method: ssh_manager_core::ssh::AuthMethodKind::Password,
+                    remaining_methods: vec![],
+                    partial_success: false,
+                },
+            );
+            if self.hang {
+                std::future::pending::<()>().await;
+            }
+            log.fail_running(SshError::AuthenticationFailed.code());
+            Err(SshError::AuthenticationFailed)
+        }
+    }
+
+    async fn report_with(connector: &dyn Connector) -> TestConnectionReport {
+        test_connection_with_timeout(
+            &InMemoryProfileStore::new(),
+            &InMemoryCredentialStore::new(),
+            &MockKeyFileReader::new(),
+            Arc::new(NoOpHostKeyStore),
+            connector,
+            password_input(),
+            None,
+            Duration::from_millis(50),
+        )
+        .await
+        .unwrap()
+    }
+
+    /// Der Timeout schließt den Schritt, der gerade lief — sonst stünde er
+    /// in der Anzeige als „läuft" da, obwohl der Test längst vorbei ist.
+    #[tokio::test]
+    async fn test_issue_51_timeout_marks_the_running_step() {
+        let report = report_with(&RecordingConnector { hang: true }).await;
+        assert!(matches!(report.result, TestConnectionResult::Timeout));
+        let last = report.steps.last().expect("Schritte vorhanden");
+        assert!(matches!(last.step, ConnectStep::Authentication { .. }));
+        assert_eq!(
+            last.status,
+            StepStatus::Failed {
+                code: "SSH_TIMEOUT".into()
+            }
+        );
+        assert!(report.steps.iter().all(|s| s.status != StepStatus::Running));
+    }
+
+    /// Fehlschlag wie Erfolg tragen die Schritte; das JSON bleibt die flache
+    /// Form von `TestConnectionResult` plus `steps`.
+    #[tokio::test]
+    async fn test_issue_51_report_serializes_flat_with_steps() {
+        let report = report_with(&RecordingConnector { hang: false }).await;
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json["kind"], "authenticationFailed");
+        assert_eq!(json["steps"][0]["step"]["kind"], "dnsResolution");
+        assert_eq!(json["steps"][0]["hopIndex"], 0);
+        assert_eq!(json["steps"][3]["status"]["state"], "failed");
+        assert_eq!(json["steps"][3]["status"]["code"], "SSH_AUTH_FAILED");
+        assert_eq!(json["steps"][2]["step"]["fingerprint"], FINGERPRINT_MARKER);
+
+        let success = report_with(&MockConnector(MockOutcome::Success)).await;
+        let json = serde_json::to_value(&success).unwrap();
+        assert_eq!(json["kind"], "success");
+        assert!(json["steps"].is_array());
+    }
+
+    /// Nichts vom Schritt-Protokoll geht ins Log — auf keiner Stufe, auch
+    /// nicht auf `trace`. Was nicht im Log steht, kann auch der
+    /// Diagnose-Export (der die Log-Datei bündelt) nicht enthalten.
+    #[tokio::test]
+    async fn test_issue_51_step_log_never_reaches_the_log() {
+        use crate::test_support::log_capture;
+        log_capture::start_recording();
+
+        let failed = report_with(&RecordingConnector { hang: false }).await;
+        let timed_out = report_with(&RecordingConnector { hang: true }).await;
+        // Gegenprobe: die Marker stehen wirklich im Protokoll.
+        for report in [&failed, &timed_out] {
+            let shown = serde_json::to_string(report).unwrap();
+            assert!(shown.contains(FINGERPRINT_MARKER));
+            assert!(shown.contains(VERSION_MARKER));
+        }
+
+        let log = log_capture::recorded_text();
+        for marker in [FINGERPRINT_MARKER, VERSION_MARKER, "192.0.2.7"] {
+            assert!(!log.contains(marker), "{marker} im Log: {log}");
         }
     }
 }

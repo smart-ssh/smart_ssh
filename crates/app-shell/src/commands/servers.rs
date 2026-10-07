@@ -6,7 +6,7 @@ use tauri::{AppHandle, State};
 use ssh_manager_core::profiles::{GroupId, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 
-use app_logic::dto::{DeleteServerResult, ServerDto, ServerInput, TestConnectionResult};
+use app_logic::dto::{DeleteServerResult, ServerDto, ServerInput, TestConnectionReport};
 use app_logic::error::CommandResult;
 use app_logic::server_credentials::clear_sudo_password;
 use app_logic::servers::reject_local_jump_host;
@@ -236,7 +236,7 @@ pub async fn test_connection(
     state: State<'_, AppState>,
     input: ServerInput,
     existing_server_id: Option<ServerId>,
-) -> CommandResult<TestConnectionResult> {
+) -> CommandResult<TestConnectionReport> {
     if existing_server_id.is_some_and(app_logic::dto::is_local) {
         // Spec 0032, Abschnitt 5: kein Verbindungstest-Button für den
         // lokalen Pseudo-Server (er hat gar keine Verbindung, die getestet
