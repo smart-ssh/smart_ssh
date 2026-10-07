@@ -96,7 +96,11 @@ Nicht-Ziele:
   Produktionsabhängigkeiten des Frontends, (c) der devDependencies, deren
   Code ins Bundle gelangt — heute mindestens `tailwindcss` und `vite` —,
   (d) der Schriften (A6). Je Lizenztext stehen die Pakete (Name, Version),
-  die ihn verwenden; Pakete des eigenen Workspace dürfen fehlen.
+  die ihn verwenden; Pakete des eigenen Workspace dürfen fehlen. Lokale
+  npm-Pakete — Mitglieder eines npm-Workspace und per `file:` verlinkte
+  Pakete — sind keine Drittpakete: Sie stehen nicht in der Ausgabe und
+  werden nicht gegen die erlaubten Lizenzen geprüft; ihre
+  Produktionsabhängigkeiten stehen darin, jede genau einmal.
 - A1.2 MUSS: Hat ein Paket eine Hinweisdatei (`NOTICE*`, Groß/Klein egal),
   steht ihr Inhalt mit Paketname in der Ausgabe.
 - A1.3 MUSS: Das Skript löscht zu Beginn eine vorhandene Ausgabe. Es bricht
@@ -105,6 +109,10 @@ Nicht-Ziele:
   Paket kein Lizenztext gefunden wird, oder wenn ein Werkzeug fehlt.
 - A1.4 MUSS: Ausgabepfad, Workspace, Frontend und die Datei mit den
   erlaubten Lizenzen sind Parameter mit den heutigen Pfaden als Vorgabe.
+  Als Frontend darf auch die Wurzel eines npm-Workspace übergeben werden,
+  der das Frontend als Mitglied enthält; die Pakete werden dann dort
+  gefunden, wohin npm sie installiert hat (an der Wurzel gehoben oder
+  verschachtelt, auch unter einem Mitglied).
 - A1.5 MUSS: Die erlaubten Lizenzen haben **eine** Quelle. Entweder liest
   das Skript sie aus `deny.toml` (dann gilt sie auch für die npm-Seite),
   oder es gibt eine zweite Liste und ein Test in der CI scheitert, sobald
@@ -206,6 +214,14 @@ Datei); `deny.toml` bleibt unverändert.
   A1.1(c) hinzu und verlangt **Gleichheit** mit den npm-Paketen der Ausgabe
   (heute 107 + 2 als Referenz, nicht fest eingetragen). Scheitert bei
   fehlenden wie bei überzähligen Paketen.
+- **T5a npm-Workspace** (A1.1, A1.3, A1.4): Ein Workspace-Fixture mit
+  Mitgliedern ohne Lizenzfeld, von denen eines vom anderen abhängt, und
+  einer nicht an die Wurzel gehobenen Abhängigkeit. An der Wurzel gefahren,
+  listet die npm-Seite genau die Drittabhängigkeiten der Mitglieder, jede
+  einmal, und keines der Mitglieder. Hat ein Drittpaket darin eine nicht
+  erlaubte oder gar keine Lizenzangabe, bricht sie ab. Scheitert, wenn
+  Mitglieder als Drittpakete gelten oder `file:`-Pakete die Lizenzprüfung
+  für echte Drittpakete aushebeln.
 - **T6 Anzeige mit Datei** (A4.1): Oberflächentest — Klick auf den Eintrag
   öffnet die Ansicht mit dem Text.
 - **T7 Anzeige ohne gültige Datei** (A4.3): (a) Laden scheitert, (b) Laden
