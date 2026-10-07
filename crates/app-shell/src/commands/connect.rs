@@ -23,7 +23,6 @@ use app_logic::events::{
     emit_connection_status_changed, emit_host_key_verification_needed, ConnectionStatus,
     HostKeyKind,
 };
-use app_logic::server_credentials::sudo_password_credential_ref;
 use app_logic::session::{history_contains_untrusted_content, Session, SessionParts};
 use app_logic::state::{AppState, SessionId};
 // Spec 0084, §4 (Schnitt `test_connection` → `commands::SSH_CONNECT_TIMEOUT`):
@@ -451,10 +450,12 @@ pub(crate) async fn connect_session(
     // Spec 0018, Abschnitt 6: einmalig bei `connect()` gelesen, wie
     // `ai_provider_label`/`ai_model` — ein fehlender Eintrag (kein Sudo-
     // Passwort hinterlegt) wird zu `None`, kein harter Verbindungsfehler.
-    let sudo_password = state
-        .credential_store
-        .get(&sudo_password_credential_ref(server_id))
-        .ok();
+    // Issue #36: über den gemeinsamen Lesepfad, der einen Lesefehler des
+    // Schlüsselbunds (anders als `NotFound`) als `warn` protokolliert.
+    let sudo_password = app_logic::server_redaction::read_sudo_password_for_redaction(
+        state.credential_store.as_ref(),
+        server_id,
+    );
 
     // Unabhängiger Review-Pass (Spec 0018): `sudo -S` liest die per Stdin
     // eingespeiste Passwortzeile nur, wenn `sudo` tatsächlich einen Prompt

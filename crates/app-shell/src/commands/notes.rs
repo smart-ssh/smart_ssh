@@ -15,7 +15,6 @@ use app_logic::ai_provider_factory::build_ai_provider;
 use app_logic::dto::NoteRevisionDto;
 use app_logic::error::{secret_store_error, CommandResult};
 use app_logic::orchestration::execute_note_shrink_request;
-use app_logic::server_credentials::sudo_password_credential_ref;
 use app_logic::state::{AppState, SessionId};
 
 use super::ai_providers::active_ai_provider_config;
@@ -108,14 +107,11 @@ pub async fn request_note_shrink(
     // die Notiz gelangtes Sudo-Passwort dieses Servers (z. B. aus einem
     // NOPASSWD-/gültiger-Sudo-Timestamp-Fall, der es unredigiert in eine
     // Kommandoausgabe hätte durchreichen lassen) wäre sonst hier nicht
-    // erfasst. `sudo_password_credential_ref`/`get(...).ok()` wie dort:
-    // kein hinterlegtes Passwort ist kein harter Fehler.
-    let sudo_password = state
-        .credential_store
-        .get(&sudo_password_credential_ref(server_id))
-        .ok();
+    // erfasst. Kein hinterlegtes Passwort ist kein harter Fehler; ein
+    // Lesefehler des Schlüsselbunds wird protokolliert (Issue #36, s.
+    // `read_sudo_password_for_redaction`).
     let redactor: Box<dyn OutputRedactor> =
-        app_logic::server_redaction::redactor_with_sudo_password(sudo_password.as_ref());
+        app_logic::server_redaction::server_redactor(state.credential_store.as_ref(), server_id);
 
     tokio::spawn(async move {
         let state = app.state::<AppState>();
