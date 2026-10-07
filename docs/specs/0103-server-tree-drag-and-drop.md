@@ -57,11 +57,16 @@ Verwalten-Sidebar (`Sidebar.tsx`):
   Das Backend lehnt ihn zusätzlich ab.
 - **Tastatur.** Die Gruppen-Auswahl in `ServerForm`/`GroupForm` bleibt der
   tastaturbedienbare Weg zum Verschieben.
-- **Geöffnetes Formular.** Wird in der Verwalten-Ansicht das gerade
-  geöffnete Element verschoben, lädt das Formular neu. Sonst stünde dort
-  noch die alte Gruppe, und ein späteres Speichern würde das Verschieben
-  still rückgängig machen. Ungespeicherte Eingaben in diesem Formular gehen
-  dabei verloren.
+- **Geöffnetes Formular** (Issue #63). Wird in der Verwalten-Ansicht das
+  gerade geöffnete Element erfolgreich verschoben, übernimmt das Formular
+  nur den neuen Ort: Das Gruppen-Feld (Server) bzw. das Feld für die
+  übergeordnete Gruppe (Gruppe) zeigt sofort die neue Gruppe oder „keine"
+  (oberste Ebene). Ein späteres Speichern behält damit den neuen Ort. Alle
+  anderen ungespeicherten Eingaben bleiben stehen, das Formular lädt nicht
+  neu. Ein abgelehntes Verschieben (z. B. Zyklus) ändert im Formular nichts,
+  auch nicht das Gruppen-Feld. Das Verschieben eines anderen Elements und
+  das anschließende Neuladen der Listen lassen das geöffnete Formular
+  unverändert.
 - **Reihenfolge** bleibt alphabetisch, keine Migration.
 
 ## 3. Befehle
