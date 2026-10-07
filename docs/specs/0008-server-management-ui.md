@@ -17,8 +17,10 @@ zu sehen bekommt.
 ## 2. Scope-Abgrenzung
 
 Bewusst **nicht** Teil dieser Spec, um sie überschaubar zu halten:
-- Drag-and-Drop-Reorganisation der Gruppenhierarchie (stattdessen:
-  Gruppen-Auswahl per Dropdown im Bearbeiten-Formular)
+- ~~Drag-and-Drop-Reorganisation der Gruppenhierarchie~~ — nicht mehr
+  ausgeschlossen: Spec 0103 (Issue #48) ergänzt Drag-and-drop für Server
+  und Gruppen in beiden Bäumen. Die Gruppen-Auswahl per Dropdown im
+  Bearbeiten-Formular bleibt als tastaturbedienbarer Weg bestehen.
 - Mehrere parallele Server-Tabs/Sessions (eigene spätere Spec)
 - Tag-basierte Filter-Engine-UI (Regeln verwalten) — eigene spätere Spec,
   auch wenn Tags hier schon am Server gesetzt werden können (nur als

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
-import { connect, listGroups, listServers } from "../api";
+import { connect, listGroups, listServers, moveGroup, moveServerToGroup } from "../api";
 import { subscribeHostKeyPromptClear } from "../hostKeyPromptBus";
 import { onHostKeyVerificationNeeded } from "../events";
 
@@ -69,6 +69,8 @@ vi.mock("../api", async () => {
     listChatSessions: vi.fn(() => Promise.resolve([])),
     connect: vi.fn(),
     resumeChatSession: vi.fn(),
+    moveServerToGroup: vi.fn(() => Promise.resolve()),
+    moveGroup: vi.fn(() => Promise.resolve()),
     commandErrorMessage: actual.commandErrorMessage,
     commandErrorCode: actual.commandErrorCode,
   };
@@ -252,5 +254,66 @@ describe("ServerList host key prompt ownership (Issue #12)", () => {
       unsubscribe();
       vi.mocked(connect).mockReset();
     }
+  });
+});
+
+describe("ServerList drag and drop (issue #48 / Spec 0103)", () => {
+  afterEach(() => {
+    // @ts-expect-error -- jsdom hat die Funktion von Haus aus nicht.
+    delete document.elementFromPoint;
+    vi.mocked(listGroups).mockImplementation(() => Promise.resolve([]));
+  });
+
+  function dragOnto(source: HTMLElement, over: HTMLElement | null) {
+    document.elementFromPoint = vi.fn(() => over);
+    fireEvent.pointerDown(source, { button: 0, buttons: 1, pointerId: 1, clientX: 5, clientY: 5 });
+    fireEvent.pointerMove(source, { buttons: 1, pointerId: 1, clientX: 50, clientY: 80 });
+    fireEvent.pointerUp(source, { button: 0, buttons: 0, pointerId: 1, clientX: 50, clientY: 80 });
+    fireEvent.click(source);
+  }
+
+  it("moves a server into a group via the narrow command, reloads, and does not connect", async () => {
+    vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
+    renderList();
+    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+    const loadsBefore = vi.mocked(listServers).mock.calls.length;
+
+    dragOnto(screen.getByText("prod-1"), screen.getByText(/Prod$/));
+
+    await waitFor(() => expect(moveServerToGroup).toHaveBeenCalledWith("remote-1", "group-1"));
+    await waitFor(() =>
+      expect(vi.mocked(listServers).mock.calls.length).toBeGreaterThan(loadsBefore),
+    );
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it("does not let the local pseudo-server be dragged", async () => {
+    vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
+    vi.mocked(connect).mockClear();
+    vi.mocked(moveServerToGroup).mockClear();
+    renderList();
+    await waitFor(() => expect(screen.getByText("Localhost")).toBeInTheDocument());
+
+    dragOnto(screen.getByText("Localhost"), screen.getByText(/Prod$/));
+
+    expect(moveServerToGroup).not.toHaveBeenCalled();
+  });
+
+  it("shows the translated cycle error when a group is dropped into its own subgroup", async () => {
+    vi.mocked(listGroups).mockImplementation(() =>
+      Promise.resolve([group(), group({ id: "group-2", name: "Web", parentId: "group-1" })]),
+    );
+    vi.mocked(moveGroup).mockImplementationOnce(() =>
+      Promise.reject({ message: "Zyklus", code: "GROUP_CYCLE_DETECTED" }),
+    );
+    renderList();
+    await waitFor(() => expect(screen.getByText(/Web$/)).toBeInTheDocument());
+
+    dragOnto(screen.getByText(/Prod$/), screen.getByText(/Web$/));
+
+    await waitFor(() => expect(moveGroup).toHaveBeenCalledWith("group-1", "group-2"));
+    expect(
+      await screen.findByText(testI18n.t("errors.GROUP_CYCLE_DETECTED")),
+    ).toBeInTheDocument();
   });
 });

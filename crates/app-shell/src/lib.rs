@@ -672,10 +672,12 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_groups,
             commands::create_group,
             commands::update_group,
+            commands::move_group,
             commands::delete_group,
             commands::get_server,
             commands::create_server,
             commands::update_server,
+            commands::move_server_to_group,
             commands::delete_server,
             commands::clear_server_sudo_password,
             // Spec 0076 (BL-0221/BL-0222): Schlüsseldatei-Befund und

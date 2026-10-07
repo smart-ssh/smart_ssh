@@ -45,6 +45,29 @@ pub async fn validate_no_cycle(
     Ok(())
 }
 
+/// Issue #48: Verschieben einer Gruppe unter eine andere Gruppe (oder mit
+/// `parent_id: None` auf die Wurzelebene) per Drag-and-drop. Ändert nur
+/// `parent_id` — Name und Notizen bleiben unangetastet, anders als bei
+/// `update_group`, das den Namen mitschreibt. Zyklen lehnt derselbe
+/// [`validate_no_cycle`] ab wie beim Bearbeiten im Formular, mit
+/// denselben Codes (`GROUP_SELF_PARENT`/`GROUP_CYCLE_DETECTED`); bei
+/// einer Ablehnung wird nichts geschrieben.
+pub async fn move_group(
+    store: &dyn ProfileStore,
+    id: GroupId,
+    parent_id: Option<GroupId>,
+) -> CommandResult<()> {
+    validate_no_cycle(store, Some(id), parent_id).await?;
+    let mut group = store.get_group(&id).await?;
+    if group.parent_id == parent_id {
+        return Ok(());
+    }
+    group.parent_id = parent_id;
+    group.updated_at = chrono::Utc::now();
+    store.update_group(&group).await?;
+    Ok(())
+}
+
 /// Baut die Vorschau/das Ergebnis von `delete_group` (Spec 0008, Abschnitt
 /// 3): alle Nachfahre-Gruppen (rekursiv, da `ON DELETE CASCADE` in SQLite
 /// transitiv über mehrere Ebenen greift) sowie alle Server, die direkt in
@@ -280,6 +303,78 @@ mod tests {
         assert_eq!(
             unassigned.group_id, None,
             "Server verliert nur die Zuordnung"
+        );
+    }
+
+    // --- Issue #48: Verschieben per Drag-and-drop -------------------------
+
+    #[tokio::test]
+    async fn test_move_group_into_other_group_and_back_to_root() {
+        let a = group("a", None);
+        let b = group("b", None);
+        let store = InMemoryProfileStore::new()
+            .with_group(a.clone())
+            .with_group(b.clone());
+
+        move_group(&store, b.id, Some(a.id)).await.unwrap();
+        let moved = store.get_group(&b.id).await.unwrap();
+        assert_eq!(moved.parent_id, Some(a.id));
+        assert_eq!(moved.name, "b", "Name bleibt unverändert");
+
+        move_group(&store, b.id, None).await.unwrap();
+        assert_eq!(store.get_group(&b.id).await.unwrap().parent_id, None);
+    }
+
+    #[tokio::test]
+    async fn test_move_group_into_own_descendant_is_rejected_and_changes_nothing() {
+        let root = group("root", None);
+        let child = group("child", Some(root.id));
+        let grandchild = group("grandchild", Some(child.id));
+        let store = InMemoryProfileStore::new()
+            .with_group(root.clone())
+            .with_group(child.clone())
+            .with_group(grandchild.clone());
+
+        let err = move_group(&store, root.id, Some(grandchild.id))
+            .await
+            .expect_err("Zyklus muss abgelehnt werden");
+
+        assert_eq!(err.code, Some("GROUP_CYCLE_DETECTED"));
+        assert_eq!(store.get_group(&root.id).await.unwrap().parent_id, None);
+        assert_eq!(
+            store.get_group(&grandchild.id).await.unwrap().parent_id,
+            Some(child.id)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_move_group_onto_itself_is_rejected() {
+        let g = group("g", None);
+        let store = InMemoryProfileStore::new().with_group(g.clone());
+
+        let err = move_group(&store, g.id, Some(g.id))
+            .await
+            .expect_err("Selbst-Referenz muss abgelehnt werden");
+
+        assert_eq!(err.code, Some("GROUP_SELF_PARENT"));
+        assert_eq!(store.get_group(&g.id).await.unwrap().parent_id, None);
+    }
+
+    #[tokio::test]
+    async fn test_move_group_keeps_its_servers() {
+        let a = group("a", None);
+        let b = group("b", None);
+        let srv = server_in(Some(b.id));
+        let store = InMemoryProfileStore::new()
+            .with_group(a.clone())
+            .with_group(b.clone())
+            .with_server(srv.clone());
+
+        move_group(&store, b.id, Some(a.id)).await.unwrap();
+
+        assert_eq!(
+            store.get_server(&srv.id).await.unwrap().group_id,
+            Some(b.id)
         );
     }
 }

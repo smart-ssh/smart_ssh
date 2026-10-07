@@ -310,6 +310,40 @@ pub async fn delete_server(
     Ok(result)
 }
 
+/// Issue #48: Verschieben eines Servers in eine andere Gruppe (oder mit
+/// `group_id: None` auf die Wurzelebene) per Drag-and-drop — ein eigener,
+/// schmaler Weg statt [`update_server`] mit vollständigem `ServerInput`.
+///
+/// Bewusst **ohne** `CredentialStore`-Parameter: Ein Verschieben ändert nur
+/// `group_id`, die Anmeldeart samt ihrer Schlüsselbund-Verweise wird
+/// unverändert aus der gespeicherten Zeile übernommen. Damit gibt es hier
+/// strukturell keinen Weg, der den Schlüsselbund liest oder beschreibt
+/// (Spec 0082 / ADR 0081 betreffen dieses Kommando nicht).
+///
+/// Die Zielgruppe muss existieren (`get_group` schlägt sonst sichtbar
+/// fehl), der lokale Pseudo-Server (Spec 0032) hat keine `servers`-Zeile
+/// und ist nicht verschiebbar.
+pub async fn move_server_to_group(
+    store: &dyn ProfileStore,
+    id: ServerId,
+    group_id: Option<ssh_manager_core::profiles::GroupId>,
+) -> CommandResult<()> {
+    if crate::dto::is_local(id) {
+        return Err("Der lokale Pseudo-Server kann keiner Gruppe zugeordnet werden".into());
+    }
+    if let Some(group_id) = group_id {
+        store.get_group(&group_id).await?;
+    }
+    let mut server = store.get_server(&id).await?;
+    if server.group_id == group_id {
+        return Ok(());
+    }
+    server.group_id = group_id;
+    server.updated_at = Utc::now();
+    store.update_server(&server).await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
@@ -1613,5 +1647,103 @@ mod tests {
             matches!(auth_of(&store, &id), AuthMethod::PrivateKey { .. }),
             "die Datenbank ist unverändert"
         );
+    }
+
+    // --- Issue #48: Verschieben per Drag-and-drop -------------------------
+
+    fn stored_group(
+        name: &str,
+        parent: Option<ssh_manager_core::profiles::GroupId>,
+    ) -> ssh_manager_core::profiles::Group {
+        let now = Utc::now();
+        ssh_manager_core::profiles::Group {
+            id: ssh_manager_core::profiles::GroupId::new(),
+            name: name.to_string(),
+            parent_id: parent,
+            notes: String::new(),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_move_server_into_subgroup_and_back_to_root() {
+        let parent = stored_group("prod", None);
+        let child = stored_group("web", Some(parent.id));
+        let (id, store, _) = password_server();
+        let store = store.with_group(parent.clone()).with_group(child.clone());
+
+        move_server_to_group(&store, id, Some(child.id))
+            .await
+            .unwrap();
+        assert_eq!(
+            store.get_server(&id).await.unwrap().group_id,
+            Some(child.id)
+        );
+
+        move_server_to_group(&store, id, Some(parent.id))
+            .await
+            .unwrap();
+        assert_eq!(
+            store.get_server(&id).await.unwrap().group_id,
+            Some(parent.id)
+        );
+
+        move_server_to_group(&store, id, None).await.unwrap();
+        assert_eq!(store.get_server(&id).await.unwrap().group_id, None);
+    }
+
+    /// Issue #48, AC „The move commands do not read or write credentials":
+    /// `move_server_to_group` bekommt keinen `CredentialStore` — dieser
+    /// Test hält fest, dass die Zeile danach dieselbe Anmeldeart samt
+    /// derselben Schlüsselbund-Verweise trägt und sich außer `group_id`
+    /// (und `updated_at`) nichts geändert hat, und dass der Schlüsselbund
+    /// unberührt ist.
+    #[tokio::test]
+    async fn test_move_server_keeps_auth_and_every_other_field() {
+        let target = stored_group("prod", None);
+        let (id, store, password_ref) = password_server();
+        let store = store.with_group(target.clone());
+        let credentials = InMemoryCredentialStore::new().with_secret(&password_ref, "s3cret");
+        let before = store.get_server(&id).await.unwrap();
+
+        move_server_to_group(&store, id, Some(target.id))
+            .await
+            .unwrap();
+
+        let after = store.get_server(&id).await.unwrap();
+        assert_eq!(after.group_id, Some(target.id));
+        assert_eq!(after.auth, before.auth);
+        let mut expected = before.clone();
+        expected.group_id = Some(target.id);
+        expected.updated_at = after.updated_at;
+        assert_eq!(format!("{after:?}"), format!("{expected:?}"));
+        assert_eq!(
+            stored_secret(&credentials, &password_ref).as_deref(),
+            Some("s3cret")
+        );
+        assert_eq!(credentials.secrets.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_move_server_into_unknown_group_fails_and_changes_nothing() {
+        let (id, store, _) = password_server();
+
+        let result =
+            move_server_to_group(&store, id, Some(ssh_manager_core::profiles::GroupId::new()))
+                .await;
+
+        assert!(result.is_err());
+        assert_eq!(store.get_server(&id).await.unwrap().group_id, None);
+    }
+
+    #[tokio::test]
+    async fn test_move_local_pseudo_server_is_rejected() {
+        let target = stored_group("prod", None);
+        let store = InMemoryProfileStore::new().with_group(target.clone());
+
+        let result = move_server_to_group(&store, LOCAL_SERVER_ID, Some(target.id)).await;
+
+        assert!(result.is_err());
     }
 }
