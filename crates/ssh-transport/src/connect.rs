@@ -355,7 +355,7 @@ fn resolve_or_pending<H>(
 /// Helfer läuft komplett NACH einem bereits gescheiterten Versuch und
 /// ändert nichts an ihm.
 ///
-/// Issue #51 (ADR 0109): Die Namensauflösung ist seitdem ein eigener,
+/// Issue #51 (ADR 0110): Die Namensauflösung ist seitdem ein eigener,
 /// aufgezeichneter Schritt in [`open_tcp`] — derselbe Ablauf, den
 /// `russh::client::connect` intern hatte, nur ausgeschrieben. Ein Fehler
 /// dort wird direkt zu [`SshError::HostNotFound`]; dieser Helfer fängt

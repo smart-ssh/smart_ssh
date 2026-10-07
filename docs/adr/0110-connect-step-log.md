@@ -1,4 +1,4 @@
-# ADR 0109 — Schritt-Protokoll für Verbindungstest und Verbinden
+# ADR 0110 — Schritt-Protokoll für Verbindungstest und Verbinden
 
 Status: akzeptiert
 Betrifft: Spec 0005, Spec 0008 (Abschnitt 7), Spec 0069 (Teil A3), Spec 0076,

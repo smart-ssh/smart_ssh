@@ -79,7 +79,7 @@ pub enum SshError {
     /// SSH-Dienst dort. Bisher in `ConnectionFailed` verschmolzen.
     ConnectionRefused(String),
     /// Spec 0069, Teil A3: der Hostname ließ sich nicht auflösen (nur beim
-    /// ersten Hop). Seit Issue #51 (ADR 0109) erkennt das `ssh_transport`
+    /// ersten Hop). Seit Issue #51 (ADR 0110) erkennt das `ssh_transport`
     /// direkt an seinem eigenen DNS-Schritt; die nachträgliche Diagnose
     /// bleibt für `ConnectionFailed` danach bestehen.
     HostNotFound(String),
