@@ -138,6 +138,9 @@ impl StartupPrompt for ScriptedPrompt {
     fn notify_started_over(&self, _renamed_to: &str) {
         panic!("beim Secret-Umzug darf nichts umbenannt werden");
     }
+    fn notify_unreadable_history_removed(&self, removed: u64) {
+        panic!("no history removal notice expected, got {removed}");
+    }
 }
 
 struct Fixture {

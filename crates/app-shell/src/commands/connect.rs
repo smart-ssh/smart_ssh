@@ -515,23 +515,9 @@ pub(crate) async fn connect_session(
     // Best-effort-Fallback auf eine leere Historie (das würde dem Nutzer
     // eine augenscheinlich "leere" Sitzung zeigen, obwohl tatsächlich
     // Verlauf existiert, aber nicht lesbar war).
-    // Spec 0040, Abschnitt 7: `chat_session_store` ist `None`, wenn der
-    // Verschlüsselungsschlüssel beim App-Start nicht aufgelöst werden
-    // konnte (s. `lib::build_app_state`) — dieselbe "degradiert statt
-    // abzubrechen"-Haltung greift hier: ein explizit angefordertes
-    // `resume` schlägt dann klar fehl (nichts zum Laden da), eine neue
-    // Sitzung verbindet trotzdem, nur ohne Chat-Persistenz (wie beim
-    // Fehlerzweig direkt unten).
     let (mut initial_history, chat_session_id, initial_summary) = if let Some(existing_id) = resume
     {
-        let Some(store) = &state.chat_session_store else {
-            transport.disconnect().await.ok();
-            return Err(
-                "Chat-Verlauf kann nicht geladen werden — Verschlüsselungsschlüssel für \
-                 Chat-Inhalte nicht verfügbar (s. Log beim App-Start)."
-                    .into(),
-            );
-        };
+        let store = &state.chat_session_store;
         // Unabhängiger Review-Pass (Spec 0040, Abschnitt 7): die
         // SSH-Verbindung ist an dieser Stelle bereits aufgebaut (s. oben)
         // — ein `?` hier würde sie beim frühen Rückkehren nur fallen
@@ -604,24 +590,22 @@ pub(crate) async fn connect_session(
     } else if !should_create_chat_session(is_local, persist_chat_session) {
         (Vec::new(), None, None)
     } else {
-        match &state.chat_session_store {
-            Some(store) => match store
-                .create_session(&server_id, Some(active_config.id.0))
-                .await
-            {
-                Ok(id) => (Vec::new(), Some(id), None),
-                Err(err) => {
-                    // Spec 0034 führt reine Persistenz ein, kein hartes
-                    // Zusatz-Erfordernis fürs Verbinden selbst — ein
-                    // Schreibfehler hier (z. B. volle Festplatte) soll den
-                    // eigentlichen SSH-Verbindungsaufbau nicht verhindern, nur
-                    // die Chat-Historie dieser einen Sitzung bleibt dann
-                    // unpersistiert.
-                    tracing::warn!(error = %err, "chat session creation failed");
-                    (Vec::new(), None, None)
-                }
-            },
-            None => (Vec::new(), None, None),
+        match state
+            .chat_session_store
+            .create_session(&server_id, Some(active_config.id.0))
+            .await
+        {
+            Ok(id) => (Vec::new(), Some(id), None),
+            Err(err) => {
+                // Spec 0034 führt reine Persistenz ein, kein hartes
+                // Zusatz-Erfordernis fürs Verbinden selbst — ein
+                // Schreibfehler hier (z. B. volle Festplatte) soll den
+                // eigentlichen SSH-Verbindungsaufbau nicht verhindern, nur
+                // die Chat-Historie dieser einen Sitzung bleibt dann
+                // unpersistiert.
+                tracing::warn!(error = %err, "chat session creation failed");
+                (Vec::new(), None, None)
+            }
         }
     };
     // Spec 0064: vor die (Resume- oder frische) Historie gestellt — s.
@@ -690,19 +674,11 @@ pub(crate) async fn connect_session(
             injection_check_provider,
             injection_check_budget,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
-            chat_session_store: if chat_session_id.is_some() {
-                state.chat_session_store.clone()
-            } else {
-                None
-            },
+            chat_session_store: chat_session_id.map(|_| state.chat_session_store.clone()),
             // Spec 0057, §1: dieselbe Gating-Logik wie `chat_session_store`
             // direkt darüber — das Ledger braucht dieselbe `chat_sessions.id`
             // als FK (Migration 0011), kein unabhängiger Persistenz-Pfad.
-            ledger_store: if chat_session_id.is_some() {
-                state.ledger_store.clone()
-            } else {
-                None
-            },
+            ledger_store: chat_session_id.map(|_| state.ledger_store.clone()),
             chat_session_id: tokio::sync::Mutex::new(chat_session_id),
             ai_request_paced_at: tokio::sync::Mutex::new(None),
         })
@@ -729,14 +705,8 @@ pub async fn list_chat_sessions(
     state: State<'_, AppState>,
     server_id: ServerId,
 ) -> CommandResult<Vec<app_logic::dto::ChatSessionSummaryDto>> {
-    // Spec 0040, Abschnitt 7: kein Verschlüsselungsschlüssel verfügbar ->
-    // es existiert keine Chat-Persistenz für diesen App-Lauf, also eine
-    // leere Liste statt eines Fehlers (derselbe "degradiert statt
-    // abzubrechen"-Gedanke wie beim Nichtaufbau des Stores selbst).
-    let Some(store) = &state.chat_session_store else {
-        return Ok(Vec::new());
-    };
-    Ok(store
+    Ok(state
+        .chat_session_store
         .list_sessions_for_server(&server_id)
         .await?
         .into_iter()
@@ -780,14 +750,10 @@ pub async fn rename_chat_session(
     session_id: uuid::Uuid,
     new_title: String,
 ) -> CommandResult<()> {
-    let Some(store) = &state.chat_session_store else {
-        return Err(
-            "Chat-Sitzungen können nicht umbenannt werden — Verschlüsselungsschlüssel für \
-             Chat-Inhalte nicht verfügbar (s. Log beim App-Start)."
-                .into(),
-        );
-    };
-    Ok(store.rename_session(session_id, &new_title).await?)
+    Ok(state
+        .chat_session_store
+        .rename_session(session_id, &new_title)
+        .await?)
 }
 
 /// Spec 0034, Abschnitt 8: `delete_chat_session` — zugehörige Nachrichten
@@ -810,13 +776,7 @@ pub async fn delete_chat_session(
                 .into(),
         );
     }
-    let Some(store) = &state.chat_session_store else {
-        // Keine Chat-Persistenz für diesen App-Lauf (s. o.) — nichts zu
-        // löschen, aber auch kein Fehler: aus Nutzersicht ist die Sitzung
-        // danach ebenso "weg" wie bei einem erfolgreichen Löschen.
-        return Ok(());
-    };
-    Ok(store.delete_session(session_id).await?)
+    Ok(state.chat_session_store.delete_session(session_id).await?)
 }
 
 /// Spec 0031, Abschnitt 4: der eigentliche Türsteher vor

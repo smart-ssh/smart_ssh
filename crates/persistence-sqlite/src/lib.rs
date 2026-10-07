@@ -15,6 +15,9 @@ mod credential_store;
 /// Klartext-Datei umwandeln.
 mod encryption;
 mod error;
+/// Issue #113: einmalige Umstellung der früher feldweise verschlüsselten
+/// Spalten auf Klartext in der verschlüsselten Datei.
+mod field_content_decryption;
 /// Issue #19: exklusive Sperre auf das Datenverzeichnis.
 mod instance_lock;
 mod ledger_store;
@@ -39,6 +42,9 @@ mod tests_credential_store;
 /// T4–T6, T19, T20.
 #[cfg(test)]
 mod tests_encryption;
+/// Issue #113: die Umstellung der feldweise verschlüsselten Spalten.
+#[cfg(test)]
+mod tests_field_content_decryption;
 /// Spec 0101, T0 — eigene Datei: erzeugt (einmalig, von Hand) und prüft die
 /// eingecheckte Datenbank-Fixture `tests/fixtures/t0-pre-sqlcipher.sqlite3`,
 /// Grundlage für T4–T6 (Commit 4).
@@ -63,6 +69,9 @@ pub use encryption::{
     DatabaseFileState, SQLITE_PLAINTEXT_HEADER,
 };
 pub use error::{ConnectFailureKind, PersistenceError, PersistenceResult};
+pub use field_content_decryption::{
+    ColumnCounts, FieldContentDecryption, FieldContentDecryptionReport,
+};
 pub use instance_lock::{DataDirLock, DataDirLockError, DATA_DIR_LOCK_FILE_NAME};
 pub use ledger_store::{LedgerEntry, LedgerStoreError, SqliteLedgerStore};
 pub use paths::default_db_path;

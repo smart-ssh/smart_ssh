@@ -168,6 +168,16 @@ pub enum ConnectFailureKind {
     /// gelöscht" würde ein eingespieltes Backup den Umzug sogar erneut
     /// auslösen, während die Secrets im Schlüsselbund schon weg sind.
     SecretMigrationFailed,
+    /// Issue #113: Die einmalige Umstellung der früher feldweise
+    /// verschlüsselten Spalten auf Klartext ist gescheitert. Sie läuft in
+    /// einer Transaktion — **es wurde nichts verändert**, der nächste Start
+    /// beginnt sie von vorn.
+    ///
+    /// **Eigener Fall und nicht [`Self::Other`]**, aus demselben Grund wie
+    /// [`Self::SecretMigrationFailed`]: Die Datenbank ist gerade
+    /// erfolgreich geöffnet worden; der `Other`-Text riete als Erstes zu
+    /// einem Backup.
+    FieldContentDecryptionFailed,
     /// Spec 0101, A13: Das Einrichten eines Master-Passworts im
     /// Startablauf ist gescheitert — die Verpackungsdatei ließ sich nicht
     /// schreiben, oder der zurückgelesene Schlüssel wich ab.

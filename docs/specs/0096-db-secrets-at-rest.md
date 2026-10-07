@@ -9,7 +9,9 @@ Review-Priorität: ERHÖHT (Redaction, Persistenz)
 - **E1 — Verschlüsselung ist der Schutz für den Verlauf.** Chatverlauf,
   Ausführungsprotokoll, Eingabe-Historie und Zusammenfassungen bleiben, wie
   sie sind (verschlüsselt, Inhalt unverändert). Der Verlauf zeigt weiter,
-  was der Nutzer getippt hat.
+  was der Nutzer getippt hat. „Verschlüsselt" heißt seit Issue #113: durch
+  die Verschlüsselung der ganzen Datenbankdatei (Spec 0101, Spec 0036 §1);
+  eine eigene Verschlüsselung je Feld gibt es nicht mehr.
 - **E2 — Klartext-Stellen mit abgeleitetem Inhalt werden geschwärzt:** der
   von der KI erzeugte Sitzungstitel.
 - **E3 — Notizen bleiben Klartext.** Was der Nutzer selbst schreibt,
@@ -18,6 +20,11 @@ Review-Priorität: ERHÖHT (Redaction, Persistenz)
   Was er bestätigt, ist genau das, was gespeichert wird.
 
 ## 1. Ist-Stand (origin/main aa316fd)
+
+**Hinweis:** Dieser Abschnitt beschreibt den Stand vor Spec 0101 und vor
+Issue #113. Die feldweise Verschlüsselung aus Punkt 1 und der injizierbare
+Cipher aus Punkt 6 sind inzwischen zurückgebaut; die vier Inhalte liegen
+als Klartext in der verschlüsselten Datenbankdatei (Spec 0036 §1).
 
 1. **Verschlüsselt** (ChaCha20-Poly1305, Nonce je Aufruf, Schlüssel
    `app:chat_content_encryption_key` im OS-Schlüsselbund,
@@ -108,16 +115,17 @@ die KI es in ihren Vorschlag, zeigt der Vergleichsdialog es als
 
 **A3 — Rohdatei-Nachweis.** MUSS: Ein Test legt eine Datenbank in einem
 Temp-Verzeichnis an, schreibt über die echten Stores mit Verschlüsselung
-je einen Eintrag mit einem Geheimnis in: Chat-Nachricht (Text),
+(seit Issue #113: verschlüsselte Datenbankdatei, Spec 0101) je einen Eintrag mit einem Geheimnis in: Chat-Nachricht (Text),
 Kommando-Ergebnis (Kommando und Ausgabe), Ausführungsprotokoll,
 Eingabe-Historie, Zusammenfassung. Danach schließt er die Verbindung und
 durchsucht **jede Datei** des Verzeichnisses (Datenbank, `-wal`, `-shm`,
 `-journal`) byteweise nach dem Geheimnis → kein Treffer.
 
 **A4 — Der Nachweis kann scheitern.** MUSS: Derselbe Ablauf wie A3 läuft
-ein zweites Mal gegen eine eigene Temp-Datenbank mit einem Cipher, der
-Klartext durchreicht; dort muss dieselbe Suchfunktion das Geheimnis
-**finden**. Findet sie es nicht, ist der Test rot.
+ein zweites Mal gegen eine eigene, unverschlüsselte Temp-Datenbank
+(bis Issue #113: mit einem Cipher, der Klartext durchreicht); dort muss
+dieselbe Suchfunktion das Geheimnis **finden**. Findet sie es nicht, ist
+der Test rot.
 
 ## 5. Design
 
@@ -128,8 +136,11 @@ Redactor der Session; kein neuer Store-Parameter.
 ## 6. Sicherheits-Invarianten
 
 - **Redaction vor Datensenke:** verschärft (Titel).
-- **Verschlüsselung:** unverändert; kein Pfad schreibt künftig Klartext in
-  eine der verschlüsselten Spalten.
+- **Verschlüsselung:** unverändert; kein Pfad schreibt künftig Klartext
+  außerhalb der verschlüsselten Datenbankdatei. (Bis Issue #113 hieß das:
+  kein Klartext in einer der feldweise verschlüsselten Spalten. Seitdem
+  stehen die Inhalte als Klartext in der Datenbank, die als ganze Datei
+  verschlüsselt ist; Spec 0036 §1, Spec 0101.)
 - **Transparenz:** Chatverlauf und Eingabe-Historie zeigen weiter das
   Original; das Ausführungsprotokoll wie bisher redigiert.
 
@@ -146,8 +157,8 @@ beliebig.
 - **T2 Titel nur Platzhalter:** Titel `password=Geheim-0096` allein →
   kein Titel gespeichert (`title IS NULL`).
 - **T3 Rohdatei (A3):** wie beschrieben → kein Treffer in keiner Datei.
-- **T4 Gegenprobe (A4):** Ablauf aus T3 mit durchreichendem Cipher →
-  Suche findet das Geheimnis.
+- **T4 Gegenprobe (A4):** Ablauf aus T3 gegen eine unverschlüsselte
+  Datenbankdatei → Suche findet das Geheimnis.
 - **T8 Notizvorschlag im Chat (A2):** KI (Mock) schlägt eine Notiz mit
   `password=Geheim-0096` vor → das Ereignis an die Oberfläche und nach
   Bestätigung die gespeicherte Revision enthalten das Geheimnis nicht.
@@ -168,8 +179,10 @@ beliebig.
   Bruchstück des Geheimnisses im gespeicherten Titel.
 - **T7 Titel mit mehreren Mustern** und Geheimnis in Anführungszeichen →
   kein Treffer.
-- **T5 Wächter:** Die bestehenden Store-Tests auf verschlüsselte BLOBs
-  bleiben unverändert grün.
+- **T5 Wächter:** Die bestehenden Store-Tests zur Speicherform der Inhalte
+  bleiben grün. Seit Issue #113 prüfen sie je Spalte, dass ein neuer
+  Eintrag als Klartext (nicht als feldweise verschlüsselter Blob) in der
+  Datenbank steht; die Vertraulichkeit belegt T3 an der Datei selbst.
 
 ## 8. Offene Punkte
 

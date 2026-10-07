@@ -383,6 +383,49 @@ pub fn started_over_notice_text(renamed_to: &str, language: Language) -> DialogT
     }
 }
 
+/// Issue #113: der einmalige Hinweis, dass alte Einträge aus Chat-Verlauf,
+/// Ausführungsprotokoll, Eingabe-Historie oder Zusammenfassungen mit dem
+/// aktuellen Schlüssel nicht lesbar waren und entfernt wurden. `removed` ist
+/// immer mindestens 1 — ohne Entferntes gibt es keinen Hinweis.
+pub fn unreadable_history_removed_notice_text(removed: u64, language: Language) -> DialogText {
+    let (title, message) = match language {
+        Language::De => (
+            "Alte Verlaufseinträge entfernt",
+            if removed == 1 {
+                "1 alter Eintrag aus Chat-Verlauf, Ausführungsprotokoll, \
+                 Eingabe-Historie oder Sitzungszusammenfassungen ließ sich mit dem aktuellen Schlüssel nicht lesen und \
+                 wurde entfernt. Alles andere ist erhalten."
+                    .to_string()
+            } else {
+                format!(
+                    "{removed} alte Einträge aus Chat-Verlauf, Ausführungsprotokoll, \
+                     Eingabe-Historie oder Sitzungszusammenfassungen ließen sich mit dem aktuellen Schlüssel nicht lesen \
+                     und wurden entfernt. Alles andere ist erhalten."
+                )
+            },
+        ),
+        Language::En => (
+            "Old history entries removed",
+            if removed == 1 {
+                "1 old entry from the chat history, command log, input history or session \
+                 summaries could not be read with the current key and was removed. Everything else has been \
+                 kept."
+                    .to_string()
+            } else {
+                format!(
+                    "{removed} old entries from the chat history, command log, input \
+                     history or session summaries could not be read with the current key and were removed. \
+                     Everything else has been kept."
+                )
+            },
+        ),
+    };
+    DialogText {
+        title: title.to_string(),
+        message,
+    }
+}
+
 /// Wie `sanitize_path_for_display`, für einen Dateinamen — derselbe Grund
 /// (Spec 0071, X1): Ein Steuerzeichen darin könnte den Dialogtext optisch
 /// fortsetzen.
@@ -432,6 +475,22 @@ mod tests {
             let notice = started_over_notice_text("smart-ssh.db.unreadable-x", language);
             assert!(!notice.title.trim().is_empty());
             assert!(!notice.message.trim().is_empty());
+            for removed in [1, 7] {
+                let notice = unreadable_history_removed_notice_text(removed, language);
+                assert!(!notice.title.trim().is_empty());
+                assert!(
+                    notice.message.contains(&removed.to_string()),
+                    "{}",
+                    notice.message
+                );
+                // Spec 0036 U4/U5: auch eine entfernte Zusammenfassung zählt
+                // mit — der Hinweis muss sie deshalb auch nennen.
+                let summary_word = match language {
+                    Language::De => "Sitzungszusammenfassungen",
+                    Language::En => "session summaries",
+                };
+                assert!(notice.message.contains(summary_word), "{}", notice.message);
+            }
         }
     }
 

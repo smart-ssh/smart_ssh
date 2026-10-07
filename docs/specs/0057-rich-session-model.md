@@ -63,9 +63,15 @@ Platte. (Die Redaction-Härtung — Shadow, DB-Strings, Tokens — schützt dami
 auch den Ledger.)
 
 ### 1.3 Verschlüsselung
-Der Ledger wird wie die Chat-Historie **verschlüsselt** persistiert (Spec
-0036, chat-content encryption key). Konsistent mit „sensibler Inhalt liegt
-nie im Klartext in der DB".
+Der Ledger wird wie die Chat-Historie **verschlüsselt** persistiert:
+geschützt durch die Verschlüsselung der ganzen Datenbankdatei (Spec 0101,
+Spec 0036 §1). Konsistent mit „sensibler Inhalt liegt nie im Klartext in
+der Datenbankdatei".
+
+**Überholt durch Issue #113:** Eine eigene Verschlüsselung je Ledger-Eintrag
+(früher mit dem Chat-Inhalts-Schlüssel aus Spec 0036) gibt es nicht mehr.
+Wo diese Spec „verschlüsselt" sagt (Ledger, Summary), ist der Schutz durch
+die verschlüsselte Datenbankdatei gemeint.
 
 ### 1.4 Persistenz
 Neue Tabelle(n) in `persistence-sqlite`, **additive** Migration. Append-only:
@@ -94,7 +100,8 @@ Ausfall blockiert nie die Grundfunktion (Kontext klein genug halten).
 „Fehler containen" — dieselbe Invariante wie beim Body-Timeout-Fix.
 
 ### 2.3 Persistenz
-Die aktuelle Summary wird mit der Session persistiert (verschlüsselt), damit
+Die aktuelle Summary wird mit der Session persistiert (in der verschlüsselten
+Datenbankdatei, Spec 0101), damit
 sie bei Resume verfügbar ist.
 
 ## 3. Kompaktierung (der Auslöser + der Ablauf)
@@ -155,7 +162,8 @@ und nutzen die Kompaktierung. Kein Parsing/Umschreiben alter Daten.
 
 - **Ledger redigiert vor dem Persistieren** — kein Klartext-Secret dauerhaft
   auf der Platte.
-- **Ledger verschlüsselt** (wie Chat-Historie, 0036).
+- **Ledger verschlüsselt** (wie Chat-Historie: verschlüsselte Datenbankdatei,
+  0036 §1, 0101).
 - **Kompaktierung betrifft nur den KI-Kontext, nie den Ledger** (die
   dauerhafte Wahrheit bleibt vollständig).
 - **Gespeicherte Notiz wird nie ohne Nutzer-Bestätigung verändert** (das

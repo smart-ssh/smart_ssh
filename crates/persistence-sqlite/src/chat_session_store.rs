@@ -13,15 +13,13 @@
 //! übrigen Commands (`list_chat_sessions`/`rename_chat_session`/
 //! `delete_chat_session`/Aufbewahrung).
 //!
-//! **Spec 0036 (Feld-Verschlüsselung)**: `content` wird vor dem Schreiben
-//! über den mitgegebenen [`ContentCipher`] verschlüsselt und beim Lesen
-//! entschlüsselt — transparent für jeden Aufrufer dieses Stores (Spec
-//! 0036, Abschnitt 1: "aufrufender Code merkt davon nichts, arbeitet
-//! weiterhin mit Klartext-`String`s"). Die Spalte selbst ist seit Migration
-//! `0009` ein `BLOB` (`nonce || ciphertext`, s. `EncryptedContent::
-//! to_blob`), vorher `TEXT` mit rohem JSON.
-
-use std::sync::Arc;
+//! **Klartext in der verschlüsselten Datei** (Issue #113, ADR 0112):
+//! `content` (JSON eines `MessageContent`) und `summary_text` werden als
+//! SQLite-`TEXT` geschrieben, auch wenn die Spalten seit Migration
+//! `0009`/`0012` als `BLOB` deklariert sind. Die frühere feldweise
+//! Verschlüsselung (Spec 0036) ist zurückgebaut; geschützt ist der Inhalt
+//! durch die Verschlüsselung der ganzen Datei (Spec 0101). Altzeilen stellt
+//! `crate::field_content_decryption` beim Start einmal um.
 
 use chrono::Utc;
 use sqlx::sqlite::SqlitePool;
@@ -30,7 +28,6 @@ use sqlx::Row;
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
-use ssh_manager_core::crypto::{CipherError, ContentCipher, EncryptedContent};
 use ssh_manager_core::shared::ServerId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,12 +43,6 @@ pub enum ChatSessionStoreError {
         message_id: String,
         reason: String,
     },
-    /// Spec 0036: Ver-/Entschlüsselung ist fehlgeschlagen (korrupter Blob,
-    /// falscher/fehlender Schlüssel, manipuliertes Chiffrat). Eigene
-    /// Variante statt in `CorruptContent` verpackt — anders als dort ist
-    /// die *Struktur* der Zeile (gültiges BLOB, korrekte Spalten) nicht
-    /// das Problem, sondern der kryptografische Zugriff selbst.
-    Cipher(CipherError),
 }
 
 impl std::fmt::Display for ChatSessionStoreError {
@@ -62,18 +53,11 @@ impl std::fmt::Display for ChatSessionStoreError {
                 f,
                 "Nachricht '{message_id}' konnte nicht gelesen werden: {reason}"
             ),
-            ChatSessionStoreError::Cipher(err) => write!(f, "Verschlüsselungsfehler: {err}"),
         }
     }
 }
 
 impl std::error::Error for ChatSessionStoreError {}
-
-impl From<CipherError> for ChatSessionStoreError {
-    fn from(err: CipherError) -> Self {
-        ChatSessionStoreError::Cipher(err)
-    }
-}
 
 fn backend_err(e: sqlx::Error) -> ChatSessionStoreError {
     ChatSessionStoreError::Backend(e.to_string())
@@ -109,18 +93,14 @@ fn content_type_for(content: &MessageContent) -> &'static str {
 }
 
 /// S. Moduldoc — teilt sich den Pool mit [`crate::SqliteProfileStore`].
-/// `cipher`: `Arc`, nicht `Box`, da `Self` bereits `Clone` ist (billiger
-/// `SqlitePool::clone()`, s. o.) — ein `Box<dyn ContentCipher>` wäre nicht
-/// `Clone`.
 #[derive(Clone)]
 pub struct SqliteChatSessionStore {
     pool: SqlitePool,
-    cipher: Arc<dyn ContentCipher>,
 }
 
 impl SqliteChatSessionStore {
-    pub fn new(pool: SqlitePool, cipher: Arc<dyn ContentCipher>) -> Self {
-        Self { pool, cipher }
+    pub fn new(pool: SqlitePool) -> Self {
+        Self { pool }
     }
 
     /// Spec 0034, Abschnitt 4: "Eine Sitzung beginnt bei `connect()`" —
@@ -155,10 +135,8 @@ impl SqliteChatSessionStore {
     /// Aufrufer muss selbst keine fortlaufende Zählung pflegen.
     ///
     /// `content` wird als JSON serialisiert (s. Moduldoc auf
-    /// `MessageContent`s `Serialize`-Ableitung), dann über [`ContentCipher`]
-    /// verschlüsselt (Spec 0036, Abschnitt 3: `nonce || ciphertext` als
-    /// zusammenhängender Blob, s. `EncryptedContent::to_blob`) — bereits
-    /// redigierter Inhalt wird hier vorausgesetzt, nicht selbst geprüft
+    /// `MessageContent`s `Serialize`-Ableitung) und als Text gespeichert
+    /// (Issue #113) — bereits redigierter Inhalt wird hier vorausgesetzt, nicht selbst geprüft
     /// (Spec 0034, Abschnitt 3: das ist Aufgabe des Aufrufers/
     /// `OutputRedactor`, bevor diese Funktion überhaupt aufgerufen wird).
     pub async fn append_message(
@@ -182,8 +160,6 @@ impl SqliteChatSessionStore {
                 "MessageContent-Serialisierung fehlgeschlagen: {e}"
             ))
         })?;
-        let content_blob = self.cipher.encrypt(&content_json)?.to_blob();
-
         let message_id = Uuid::new_v4();
         sqlx::query(
             "INSERT INTO chat_messages \
@@ -194,7 +170,7 @@ impl SqliteChatSessionStore {
         .bind(&session_id_str)
         .bind(role_to_text(message.role))
         .bind(content_type_for(&message.content))
-        .bind(content_blob)
+        .bind(&content_json)
         .bind(next_sequence)
         .bind(Utc::now().to_rfc3339())
         .execute(&self.pool)
@@ -207,9 +183,8 @@ impl SqliteChatSessionStore {
     /// Spec 0034, Abschnitt 8 (`resume_chat_session`): "lädt ... die
     /// gespeicherte Historie" — alle Nachrichten einer Sitzung, sortiert
     /// nach `sequence` (Migrations-Index `idx_chat_messages_session` deckt
-    /// genau diese Sortierung ab). Entschlüsselt `content` transparent (Spec
-    /// 0036) — der Aufrufer bekommt wie vor Spec 0036 nur `ChatMessage`s
-    /// mit Klartext-`String`-Inhalten zu sehen.
+    /// genau diese Sortierung ab). Ein Inhalt, der kein Text ist (eine nicht
+    /// umgestellte Altzeile), ist ein sichtbarer Fehler.
     pub async fn load_session(
         &self,
         session_id: Uuid,
@@ -227,9 +202,7 @@ impl SqliteChatSessionStore {
             .map(|row| {
                 let id: String = row.get("id");
                 let role_raw: String = row.get("role");
-                let content_blob: Vec<u8> = row.get("content");
-                let encrypted = EncryptedContent::from_blob(&content_blob)?;
-                let content_raw = self.cipher.decrypt(&encrypted)?;
+                let content_raw: String = row.try_get("content").map_err(backend_err)?;
                 let content: MessageContent = serde_json::from_str(&content_raw).map_err(|e| {
                     ChatSessionStoreError::CorruptContent {
                         message_id: id.clone(),
@@ -275,10 +248,7 @@ impl SqliteChatSessionStore {
     /// primitives `(&str, i64)`-Paar entgegengenommen statt des
     /// app-shell-eigenen Typs — `persistence-sqlite` hängt nicht von
     /// `app-shell` ab, s. Crate-Grenzen in CLAUDE.md). `text` wird wie
-    /// `content` (Spec 0036) über den mitgegebenen Cipher verschlüsselt;
-    /// `rounds_covered` ist eine reine Buchhaltungszahl (keine
-    /// vertrauliche Nutzdaten), bleibt deshalb als Klartext-`INTEGER`
-    /// stehen. Ein `UPDATE` auf dieselbe `chat_sessions`-Zeile statt einer
+    /// `content` als Text gespeichert (Issue #113). Ein `UPDATE` auf dieselbe `chat_sessions`-Zeile statt einer
     /// separaten Tabelle — es gibt immer höchstens EINE aktuelle Summary
     /// pro Sitzung, kein append-only-Bedarf wie beim Ledger (Spec 0057,
     /// §1).
@@ -288,11 +258,10 @@ impl SqliteChatSessionStore {
         text: &str,
         rounds_covered: i64,
     ) -> Result<(), ChatSessionStoreError> {
-        let blob = self.cipher.encrypt(text)?.to_blob();
         sqlx::query(
             "UPDATE chat_sessions SET summary_text = ?, summary_rounds_covered = ? WHERE id = ?",
         )
-        .bind(blob)
+        .bind(text)
         .bind(rounds_covered)
         .bind(session_id.to_string())
         .execute(&self.pool)
@@ -319,13 +288,11 @@ impl SqliteChatSessionStore {
         let Some(row) = row else {
             return Ok(None);
         };
-        let blob: Option<Vec<u8>> = row.get("summary_text");
+        let text: Option<String> = row.try_get("summary_text").map_err(backend_err)?;
         let rounds_covered: Option<i64> = row.get("summary_rounds_covered");
-        let (Some(blob), Some(rounds_covered)) = (blob, rounds_covered) else {
+        let (Some(text), Some(rounds_covered)) = (text, rounds_covered) else {
             return Ok(None);
         };
-        let encrypted = EncryptedContent::from_blob(&blob)?;
-        let text = self.cipher.decrypt(&encrypted)?;
         Ok(Some((text, rounds_covered)))
     }
 
@@ -470,18 +437,12 @@ mod tests {
 
     use crate::SqliteProfileStore;
 
-    fn test_cipher() -> Arc<dyn ContentCipher> {
-        Arc::new(ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(
-            &[42u8; 32],
-        ))
-    }
-
     async fn in_memory_chat_session_store() -> (SqliteProfileStore, SqliteChatSessionStore) {
         let options = SqliteConnectOptions::new().filename(":memory:");
         let profile_store = SqliteProfileStore::connect_with(options)
             .await
             .expect("In-Memory-Store mit angewendeten Migrationen sollte immer aufbaubar sein");
-        let chat_store = profile_store.chat_session_store(test_cipher());
+        let chat_store = profile_store.chat_session_store();
         (profile_store, chat_store)
     }
 
@@ -888,158 +849,120 @@ mod tests {
         assert!(remaining_ids.contains(&recently_ended));
     }
 
-    // --- Spec 0036: Feld-Verschlüsselung ------------------------------------
+    // --- Issue #113: Klartext in der verschlüsselten Datei -----------------
 
-    /// Aufgabenstellung: "ein direkter SQL-Zugriff auf `chat_messages.
-    /// content` (am `ContentCipher` vorbei, wie es ein Angreifer mit
-    /// Dateizugriff tun würde) liefert nachweislich keinen lesbaren
-    /// Klartext." Liest die rohe BLOB-Spalte über eine eigene Query
-    /// (nicht `load_session`, das entschlüsselt) und prüft, dass weder der
-    /// Nachrichtentext noch sein JSON-Feldname (`"Text"`, aus `serde`s
-    /// externally-tagged Repräsentation von `MessageContent`) irgendwo
-    /// darin vorkommt — ein unverschlüsseltes JSON-Encoding hätte beides
-    /// im Klartext enthalten.
-    #[tokio::test]
-    async fn test_direct_sql_access_to_content_column_never_reveals_plaintext() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        let secret_text = "streng geheime Diagnoseinformationen, server42.internal";
-
-        chat_store
-            .append_message(session_id, &text_message(Role::User, secret_text))
-            .await
-            .unwrap();
-
-        let raw_blob: Vec<u8> =
-            sqlx::query("SELECT content FROM chat_messages WHERE session_id = ?")
-                .bind(session_id.to_string())
-                .fetch_one(&profile_store.pool)
-                .await
-                .unwrap()
-                .get("content");
-
-        let raw_as_lossy_string = String::from_utf8_lossy(&raw_blob);
-        assert!(
-            !raw_as_lossy_string.contains(secret_text),
-            "der rohe BLOB darf den Klartext nicht enthalten: {raw_as_lossy_string}"
-        );
-        assert!(
-            !raw_as_lossy_string.contains("Text"),
-            "der rohe BLOB darf nicht einmal als lesbares JSON erkennbar sein: {raw_as_lossy_string}"
-        );
-        // Der Blob muss trotzdem strukturell wie erwartet aussehen (Nonce +
-        // etwas Chiffrat, s. `EncryptedContent::to_blob`), kein leerer/
-        // kaputter Wert.
-        assert!(
-            raw_blob.len() > 12,
-            "Blob muss mindestens den 12-Byte-Nonce enthalten"
-        );
-    }
-
-    /// Aufgabenstellung: "fehlender/korrupter Schlüssel führt zu einem
-    /// klaren Fehler, nicht zu einem Panic" — hier über einen Store mit
-    /// einem ANDEREN Schlüssel als dem, mit dem die Zeile ursprünglich
-    /// geschrieben wurde (derselbe Effekt wie ein tatsächlich korrupter/
-    /// verlorener Schlüssel: Entschlüsselung kann nicht mehr gelingen).
-    #[tokio::test]
-    async fn test_load_session_with_wrong_key_yields_clean_error_not_panic() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        chat_store
-            .append_message(session_id, &text_message(Role::User, "geheim"))
-            .await
-            .unwrap();
-
-        let wrong_key_cipher: Arc<dyn ContentCipher> = Arc::new(
-            ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&[99u8; 32]),
-        );
-        let store_with_wrong_key =
-            SqliteChatSessionStore::new(profile_store.pool.clone(), wrong_key_cipher);
-
-        let result = store_with_wrong_key.load_session(session_id).await;
-
-        assert!(
-            matches!(
-                result,
-                Err(ChatSessionStoreError::Cipher(CipherError::DecryptionFailed))
-            ),
-            "erwartete einen klaren Cipher-Fehler, kein Panic: {result:?}"
-        );
-    }
-
-    // --- Spec 0057, §2.3: rollierende Zusammenfassung -----------------------
-
-    /// spec-reviewer-Fund (Review von Spec 0057 Etappe 3): der bisherige
-    /// Round-Trip-Test (`save_summary` gefolgt von `load_summary` über
-    /// DENSELBEN Store) ist gegenüber Verschlüsselung blind — er wäre
-    /// genauso grün, würde `save_summary` den Text im Klartext ablegen.
-    /// Hier wie bei `test_direct_sql_access_to_content_column_never_
-    /// reveals_plaintext` oben: roher SQL-Zugriff auf `summary_text`, am
-    /// `ContentCipher` vorbei.
-    #[tokio::test]
-    async fn test_direct_sql_access_to_summary_text_column_never_reveals_plaintext() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        let secret_summary = "Zusammenfassung: Zugriff mit password=hunter2geheim erfolgt";
-
-        chat_store
-            .save_summary(session_id, secret_summary, 3)
-            .await
-            .unwrap();
-
-        let raw_blob: Vec<u8> = sqlx::query("SELECT summary_text FROM chat_sessions WHERE id = ?")
-            .bind(session_id.to_string())
+    /// Liest Speicherklasse und Wert einer Spalte roh, am Store vorbei.
+    async fn raw_text_column(
+        profile_store: &SqliteProfileStore,
+        sql: &str,
+        id: Uuid,
+    ) -> (String, String) {
+        sqlx::query_as(sqlx::AssertSqlSafe(sql.to_string()))
+            .bind(id.to_string())
             .fetch_one(&profile_store.pool)
             .await
             .unwrap()
-            .get("summary_text");
-
-        let raw_as_lossy_string = String::from_utf8_lossy(&raw_blob);
-        assert!(
-            !raw_as_lossy_string.contains("hunter2geheim"),
-            "der rohe BLOB darf den Klartext nicht enthalten: {raw_as_lossy_string}"
-        );
-        assert!(
-            raw_blob.len() > 12,
-            "Blob muss mindestens den 12-Byte-Nonce enthalten"
-        );
-
-        // Die Gegenprobe: über den echten Store (mit dem richtigen
-        // Schlüssel) muss derselbe Klartext wieder herauskommen.
-        let loaded = chat_store.load_summary(session_id).await.unwrap();
-        assert_eq!(loaded, Some((secret_summary.to_string(), 3)));
     }
 
-    /// Wie [`test_load_session_with_wrong_key_yields_clean_error_not_panic`],
-    /// für `load_summary`.
+    /// Issue #113: Eine neue Nachricht liegt als SQLite-`TEXT` mit genau dem
+    /// JSON des `MessageContent` in `chat_messages.content` — keine
+    /// feldweise Verschlüsselung mehr dazwischen. (Gegenprobe: Mit dem
+    /// früheren Store stand hier ein `BLOB` aus Nonce und Chiffrat, und der
+    /// Test schlug fehl.)
     #[tokio::test]
-    async fn test_load_summary_with_wrong_key_yields_clean_error_not_panic() {
+    async fn test_issue_113_a_new_message_is_stored_as_plaintext_text() {
         let (profile_store, chat_store) = in_memory_chat_session_store().await;
         let server_id = create_test_server(&profile_store).await;
         let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        let message = text_message(Role::User, "Diagnose auf server42.internal");
+
         chat_store
-            .save_summary(session_id, "geheime Zusammenfassung", 2)
+            .append_message(session_id, &message)
             .await
             .unwrap();
 
-        let wrong_key_cipher: Arc<dyn ContentCipher> = Arc::new(
-            ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&[99u8; 32]),
-        );
-        let store_with_wrong_key =
-            SqliteChatSessionStore::new(profile_store.pool.clone(), wrong_key_cipher);
+        let (storage_class, raw) = raw_text_column(
+            &profile_store,
+            "SELECT typeof(content), CAST(content AS TEXT) FROM chat_messages WHERE session_id = ?",
+            session_id,
+        )
+        .await;
+        assert_eq!(storage_class, "text");
+        assert_eq!(raw, serde_json::to_string(&message.content).unwrap());
+    }
 
-        let result = store_with_wrong_key.load_summary(session_id).await;
+    /// Issue #113: dasselbe für `chat_sessions.summary_text`.
+    #[tokio::test]
+    async fn test_issue_113_a_new_summary_is_stored_as_plaintext_text() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
 
-        assert!(
-            matches!(
-                result,
-                Err(ChatSessionStoreError::Cipher(CipherError::DecryptionFailed))
-            ),
-            "erwartete einen klaren Cipher-Fehler, kein Panic: {result:?}"
+        chat_store
+            .save_summary(session_id, "Zusammenfassung: nginx neu gestartet", 3)
+            .await
+            .unwrap();
+
+        let (storage_class, raw) = raw_text_column(
+            &profile_store,
+            "SELECT typeof(summary_text), CAST(summary_text AS TEXT) FROM chat_sessions \
+             WHERE id = ?",
+            session_id,
+        )
+        .await;
+        assert_eq!(storage_class, "text");
+        assert_eq!(raw, "Zusammenfassung: nginx neu gestartet");
+        assert_eq!(
+            chat_store.load_summary(session_id).await.unwrap(),
+            Some(("Zusammenfassung: nginx neu gestartet".to_string(), 3))
         );
+    }
+
+    /// Ein Inhalt, der kein Text ist (eine nicht umgestellte Altzeile), ist
+    /// ein klarer Fehler — kein Panic, keine stille Lücke im Verlauf.
+    #[tokio::test]
+    async fn test_a_blob_message_yields_a_clean_error_not_a_panic() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        sqlx::query(
+            "INSERT INTO chat_messages \
+             (id, session_id, role, content_type, content, sequence, created_at) \
+             VALUES (?, ?, 'user', 'text', ?, 0, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(session_id.to_string())
+        .bind(vec![0u8; 40])
+        .bind(Utc::now().to_rfc3339())
+        .execute(&profile_store.pool)
+        .await
+        .unwrap();
+
+        assert!(matches!(
+            chat_store.load_session(session_id).await,
+            Err(ChatSessionStoreError::Backend(_))
+        ));
+    }
+
+    /// Wie oben, für `load_summary`.
+    #[tokio::test]
+    async fn test_a_blob_summary_yields_a_clean_error_not_a_panic() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        sqlx::query(
+            "UPDATE chat_sessions SET summary_text = ?, summary_rounds_covered = 2 WHERE id = ?",
+        )
+        .bind(vec![0u8; 40])
+        .bind(session_id.to_string())
+        .execute(&profile_store.pool)
+        .await
+        .unwrap();
+
+        assert!(matches!(
+            chat_store.load_summary(session_id).await,
+            Err(ChatSessionStoreError::Backend(_))
+        ));
     }
 
     /// `load_summary` muss für eine Sitzung ohne je gespeicherte

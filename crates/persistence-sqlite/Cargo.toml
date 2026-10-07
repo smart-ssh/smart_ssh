@@ -43,6 +43,11 @@ tracing = "0.1.44"
 uuid = { version = "1.26.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
+# Issue #113: `crypto::legacy_field_content::encrypt_for_tests` erzeugt
+# feldweise verschluesselte Altzeilen fuer die Tests der Umstellung. Dieselbe
+# Abhaengigkeit wie oben, nur mit dem Test-Feature -- dasselbe Muster wie in
+# `app-logic`/`app-shell`.
+ssh-manager-core = { path = "../core", features = ["test-support"] }
 tempfile = "3.27.0"
 # Spec 0101, A2 (spec-reviewer Runde 1): Der Nachweis, dass der
 # Datenbankschluessel in keinem `tracing`-Ereignis auftaucht, schneidet den

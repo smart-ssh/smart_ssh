@@ -80,12 +80,7 @@ pub async fn list_prompt_history(
     state: State<'_, AppState>,
     server_id: ServerId,
 ) -> CommandResult<Vec<String>> {
-    // Spec 0040, Abschnitt 7: kein Verschlüsselungsschlüssel verfügbar ->
-    // keine Prompt-Historie für diesen App-Lauf, leere Liste statt Fehler.
-    let Some(store) = &state.prompt_history_store else {
-        return Ok(Vec::new());
-    };
-    Ok(store.list(&server_id).await?)
+    Ok(state.prompt_history_store.list(&server_id).await?)
 }
 
 // --- Spec 0016: Strukturiertes Logging & Diagnose --------------------------

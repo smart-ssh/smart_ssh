@@ -9,28 +9,29 @@
 //!
 //! Die Reihenfolge folgt einem echten Update: Eine Klartext-Datei wird erst
 //! nach SQLCipher umgewandelt (`convert_plaintext_database`, Spec 0101 A6)
-//! und dann migriert — so wie `app_logic::database_startup` es tut.
+//! und dann migriert — so wie `app_logic::database_startup` es tut. Danach
+//! stellt der Start die feldweise verschlüsselten Spalten auf Klartext um
+//! (Issue #113); der Test prüft, dass dabei jede Zeile erhalten bleibt und
+//! keine Spalte mehr ein Chiffrat trägt.
 //!
 //! Wie die Fixture eines neuen Release hinzukommt:
 //! `tests/fixtures/releases/README.md`.
 
-use std::sync::Arc;
-
 use ssh_manager_core::ai::{MessageContent, Role};
 use ssh_manager_core::audit::LedgerEntryContent;
-use ssh_manager_core::crypto::{ChaCha20Poly1305Cipher, ContentCipher, DatabaseKey};
+use ssh_manager_core::crypto::DatabaseKey;
 use ssh_manager_core::filter::{Pattern, RuleAction, Scope};
 use ssh_manager_core::profiles::{AuthMethod, NoteTarget, PostIngestPolicy, ProfileStore};
 
 use crate::test_support::{
     align_migration_checksums, applied_migrations, max_known_migration_version, migrate_up_to,
-    snapshot_database, FixtureEncryption, ReleaseFixture, RELEASE_FIXTURES,
-    RELEASE_FIXTURE_ROOT_KEY,
+    snapshot_database, FixtureEncryption, ReleaseFixture, FIELD_ENCRYPTED_COLUMNS,
+    RELEASE_FIXTURES, RELEASE_FIXTURE_ROOT_KEY,
 };
-use crate::SqliteProfileStore;
 use crate::{
     convert_plaintext_database, detect_database_file_state, DataDirLock, DatabaseFileState,
 };
+use crate::{FieldContentDecryption, SqliteProfileStore};
 
 /// Die Daten, die jede Release-Fixture trägt (s. Generator neben jeder
 /// Fixture). Zeilen eines späteren Release bekommen eigene Marker; diese
@@ -55,10 +56,6 @@ mod marker {
 
 fn fixture_key() -> DatabaseKey {
     DatabaseKey::from_root_key(&RELEASE_FIXTURE_ROOT_KEY)
-}
-
-fn fixture_cipher() -> Arc<dyn ContentCipher> {
-    Arc::new(ChaCha20Poly1305Cipher::new(&RELEASE_FIXTURE_ROOT_KEY))
 }
 
 /// Das Verzeichnis selbst: Jede eingetragene Fixture existiert, ist, was
@@ -185,12 +182,10 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
         previous = current;
     }
 
-    // --- Das Öffnen des Startablaufs: nichts mehr zu migrieren, alles über
-    // die Stores lesbar.
+    // --- Das Öffnen des Startablaufs: nichts mehr zu migrieren.
     let store = SqliteProfileStore::connect_encrypted(&path, &key)
         .await
         .unwrap_or_else(|err| panic!("{release}: the upgraded file does not open: {err}"));
-    assert_release_data_readable(&store, release).await;
     // Vor dem Abbild schließen: `connect_encrypted` hält die einzige
     // Verbindung, und das Abbild soll sehen, was das Öffnen auf der Platte
     // hinterlassen hat.
@@ -199,6 +194,82 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
     assert_eq!(
         previous, after_open,
         "{release}: opening the fully migrated file must change nothing"
+    );
+
+    // --- Issue #113: die Umstellung der feldweise verschlüsselten Spalten,
+    // wie der Start sie nach dem Öffnen fährt.
+    let store = SqliteProfileStore::connect_encrypted(&path, &key)
+        .await
+        .unwrap_or_else(|err| panic!("{release}: the upgraded file does not open: {err}"));
+    let decryption = store
+        .decrypt_field_encrypted_content(&RELEASE_FIXTURE_ROOT_KEY)
+        .await
+        .unwrap_or_else(|err| panic!("{release}: field content decryption failed: {err}"));
+    let FieldContentDecryption::Completed(report) = decryption else {
+        panic!("{release}: the first start must run the field content decryption");
+    };
+    assert_eq!(
+        report.removed_total(),
+        0,
+        "{release}: every row was written under the fixture's K, none may be removed: {report:?}"
+    );
+    assert!(report.chat_messages.decrypted >= 2, "{release}: {report:?}");
+    assert!(
+        report.ledger_entries.decrypted >= 2,
+        "{release}: {report:?}"
+    );
+    assert!(
+        report.prompt_history.decrypted >= 2,
+        "{release}: {report:?}"
+    );
+    assert!(report.summaries.decrypted >= 1, "{release}: {report:?}");
+    assert_release_data_readable(&store, release).await;
+    store.close().await;
+
+    let after_decryption = snapshot_database(&path, Some(&key)).await;
+    // Umgeschrieben werden genau die vier Spalten und der Zustand.
+    let mut changed = FIELD_ENCRYPTED_COLUMNS.to_vec();
+    changed.push(("field_content_decryption_state", "state"));
+    previous.assert_preserved_in_except(
+        &after_decryption,
+        &format!("{release} -> field content decryption"),
+        &changed,
+    );
+    assert_release_rows_present(&after_decryption, release);
+    for (table, column) in FIELD_ENCRYPTED_COLUMNS {
+        let before = previous.column_values(table, column);
+        let after = after_decryption.column_values(table, column);
+        assert_eq!(
+            before.len(),
+            after.len(),
+            "{release}: {table}.{column} lost rows"
+        );
+        assert!(
+            after.iter().all(|v| !v.starts_with("X'")),
+            "{release}: {table}.{column} still holds an encrypted blob: {after:?}"
+        );
+    }
+    let state: Vec<String> =
+        after_decryption.column_values("field_content_decryption_state", "state");
+    assert_eq!(state, vec!["'done'".to_string()]);
+
+    // --- Ein zweiter Start ändert nichts mehr.
+    let store = SqliteProfileStore::connect_encrypted(&path, &key)
+        .await
+        .unwrap_or_else(|err| panic!("{release}: the decrypted file does not open: {err}"));
+    assert_eq!(
+        store
+            .decrypt_field_encrypted_content(&RELEASE_FIXTURE_ROOT_KEY)
+            .await
+            .unwrap_or_else(|err| panic!("{release}: second decryption run failed: {err}")),
+        FieldContentDecryption::AlreadyDone
+    );
+    assert_release_data_readable(&store, release).await;
+    store.close().await;
+    assert_eq!(
+        after_decryption,
+        snapshot_database(&path, Some(&key)).await,
+        "{release}: a second start must change nothing"
     );
 }
 
@@ -238,8 +309,8 @@ fn assert_release_rows_present(snapshot: &crate::test_support::DatabaseSnapshot,
 }
 
 /// Die Daten des Release, gelesen über die Stores dieses Builds — Feld für
-/// Feld, auch der feldweise verschlüsselte Chat, Prompt-Historie und
-/// Ledger.
+/// Feld, auch der früher feldweise verschlüsselte Chat, Prompt-Historie,
+/// Ledger und Zusammenfassung (nach der Umstellung, Issue #113).
 async fn assert_release_data_readable(store: &SqliteProfileStore, release: &str) {
     let groups = store.list_groups().await.expect("groups readable");
     let parent = groups
@@ -352,7 +423,7 @@ async fn assert_release_data_readable(store: &SqliteProfileStore, release: &str)
         .iter()
         .any(|(_, v)| v == marker::PROVIDER_HEADER));
 
-    let chat = store.chat_session_store(fixture_cipher());
+    let chat = store.chat_session_store();
     let sessions = chat
         .list_sessions_for_server(&a.id)
         .await
@@ -362,7 +433,7 @@ async fn assert_release_data_readable(store: &SqliteProfileStore, release: &str)
     let messages = chat
         .load_session(sessions[0].id)
         .await
-        .expect("chat content decrypts with the release's key");
+        .expect("chat content readable after the decryption");
     let texts: Vec<(Role, String)> = messages
         .iter()
         .filter_map(|m| match &m.content {
@@ -384,7 +455,7 @@ async fn assert_release_data_readable(store: &SqliteProfileStore, release: &str)
     assert_eq!(summary, Some((marker::CHAT_SUMMARY.to_string(), 1)));
 
     let history = store
-        .prompt_history_store(fixture_cipher())
+        .prompt_history_store()
         .list(&a.id)
         .await
         .expect("prompt history readable");
@@ -396,7 +467,7 @@ async fn assert_release_data_readable(store: &SqliteProfileStore, release: &str)
     );
 
     let ledger = store
-        .ledger_store(fixture_cipher())
+        .ledger_store()
         .load_entries(sessions[0].id)
         .await
         .expect("ledger readable");

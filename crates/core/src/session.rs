@@ -149,10 +149,9 @@ pub struct Session {
 
 /// Ein Ende-zu-Ende-verschlüsseltes Datenpaket für [`SyncBackend`] (Spec
 /// 0037, Abschnitt 6) — Aufbau von der Spec nicht weiter festgelegt;
-/// bewusst nur Ciphertext + Nonce (wie
-/// [`crate::crypto::EncryptedContent`], hier aber als eigener,
-/// bündel-weiter Typ statt einer einzelnen Nachricht, da ein Sync-Bündel
-/// mehrere Sitzungen/Notizen auf einmal transportieren können soll).
+/// bewusst nur Ciphertext + Nonce, als bündel-weiter Typ, da ein
+/// Sync-Bündel mehrere Sitzungen/Notizen auf einmal transportieren können
+/// soll.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EncryptedBundle {
     pub ciphertext: Vec<u8>,

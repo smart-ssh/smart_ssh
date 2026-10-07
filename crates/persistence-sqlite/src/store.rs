@@ -419,38 +419,21 @@ impl SqliteProfileStore {
     }
 
     /// Wie [`Self::ai_provider_store`], für die Chat-Prompt-Historie (Spec
-    /// 0015). `cipher`: Spec 0040, Abschnitt 3 — derselbe Cipher/Schlüssel
-    /// wie [`Self::chat_session_store`], kein zweiter Mechanismus.
-    pub fn prompt_history_store(
-        &self,
-        cipher: std::sync::Arc<dyn ssh_manager_core::crypto::ContentCipher>,
-    ) -> crate::SqlitePromptHistoryStore {
-        crate::SqlitePromptHistoryStore::new(self.pool.clone(), cipher)
+    /// 0015).
+    pub fn prompt_history_store(&self) -> crate::SqlitePromptHistoryStore {
+        crate::SqlitePromptHistoryStore::new(self.pool.clone())
     }
 
     /// Wie [`Self::ai_provider_store`], für persistente Chat-Sitzungen
-    /// (Spec 0034). `cipher`: Spec 0036 — der Aufrufer (`app-shell`)
-    /// beschafft ihn einmalig über `ssh_manager_core::crypto::
-    /// resolve_or_generate_key` + `ChaCha20Poly1305Cipher`, s. dortige
-    /// Doc-Kommentare. Kein Default hier: welcher Schlüssel/`CredentialStore`
-    /// verwendet wird, ist eine Entscheidung des Aufrufers, nicht dieser
-    /// rein persistenzseitigen Crate.
-    pub fn chat_session_store(
-        &self,
-        cipher: std::sync::Arc<dyn ssh_manager_core::crypto::ContentCipher>,
-    ) -> crate::SqliteChatSessionStore {
-        crate::SqliteChatSessionStore::new(self.pool.clone(), cipher)
+    /// (Spec 0034).
+    pub fn chat_session_store(&self) -> crate::SqliteChatSessionStore {
+        crate::SqliteChatSessionStore::new(self.pool.clone())
     }
 
     /// Wie [`Self::chat_session_store`], für das Session-Ledger (Spec
-    /// 0057, §1.3) — derselbe `chat_content_cipher` wie
-    /// `chat_session_store`/`prompt_history_store`, kein eigener
-    /// Schlüssel.
-    pub fn ledger_store(
-        &self,
-        cipher: std::sync::Arc<dyn ssh_manager_core::crypto::ContentCipher>,
-    ) -> crate::SqliteLedgerStore {
-        crate::SqliteLedgerStore::new(self.pool.clone(), cipher)
+    /// 0057, §1).
+    pub fn ledger_store(&self) -> crate::SqliteLedgerStore {
+        crate::SqliteLedgerStore::new(self.pool.clone())
     }
 
     async fn fetch_tags(&self, server_id: &str) -> ProfileResult<Vec<String>> {
