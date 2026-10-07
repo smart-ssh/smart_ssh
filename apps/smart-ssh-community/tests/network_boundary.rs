@@ -3,8 +3,16 @@
 //! `docs/netzwerkverbindungen.md`. Diese Tests verhindern, dass eine neue
 //! Verbindungsart unbemerkt dazukommt:
 //!
-//! 1. Die CSP des Webviews erlaubt für `fetch`/XHR/WebSocket nur die App
-//!    selbst und die Tauri-IPC (`connect-src 'self' ipc:`).
+//! 1. Die CSP des Webviews (Issue #62): Jede Direktive steht genau einmal
+//!    in der CSP und hat genau die Quellen aus [`ALLOWED_CSP`]. Damit kann
+//!    keine Direktive unbemerkt eine entfernte Herkunft erlauben, weder
+//!    `connect-src` (`fetch`/XHR/WebSocket nur an die App selbst und die
+//!    Tauri-IPC) noch `script-src`, `style-src`, `img-src` oder der
+//!    Rückfall `default-src`, der für alle nicht gesetzten Direktiven gilt
+//!    (Schriften, Medien, Frames, Worker …). Eine Direktive ohne Eintrag in
+//!    der Liste (z. B. ein neues `font-src`) und ein fehlendes
+//!    `default-src` (Browser-Vorgabe: alles erlaubt) lassen den Test
+//!    scheitern.
 //! 2. Nur eine feste Liste von Crates hängt direkt an einem HTTP-Client.
 //!    Geprüft wird der Produktionsgraph (`cargo tree -e normal,build`, ohne
 //!    Dev-Abhängigkeiten) für die Plattform, auf der der Test läuft. CI
@@ -19,6 +27,29 @@ use std::process::Command;
 
 /// Erlaubte Quellen in `connect-src`. Reihenfolge egal, Menge exakt.
 const ALLOWED_CONNECT_SRC: &[&str] = &["'self'", "ipc:"];
+
+/// Jede erlaubte CSP-Direktive mit genau ihren erlaubten Quellen.
+/// Reihenfolge egal, Menge exakt. Jede Direktive hier muss genau einmal in
+/// der CSP stehen; eine Direktive, die hier fehlt, ist verboten.
+///
+/// Die `tauri-plugin-decoration`-Quellen in `style-src` zeigen auf ein
+/// lokales Custom-Protocol (`*.localhost`), nicht ins Netz.
+const ALLOWED_CSP: &[(&str, &[&str])] = &[
+    ("default-src", &["'self'"]),
+    ("script-src", &["'self'"]),
+    (
+        "style-src",
+        &[
+            "'self'",
+            "'unsafe-inline'",
+            "tauri-plugin-decoration:",
+            "http://tauri-plugin-decoration.localhost",
+            "https://tauri-plugin-decoration.localhost",
+        ],
+    ),
+    ("img-src", &["'self'", "data:"]),
+    ("connect-src", ALLOWED_CONNECT_SRC),
+];
 
 /// Crates, über die ein Programm HTTP-Anfragen stellen kann. `hyper`,
 /// `hyper-util` und `h2` stehen mit drin, weil sie sowohl Client als auch
@@ -83,54 +114,98 @@ fn configured_csp() -> String {
         .to_owned()
 }
 
-/// Prüft, dass `csp` genau eine `connect-src`-Direktive mit genau den
-/// erlaubten Quellen enthält. Fehlt die Direktive, fiele der Webview auf
-/// `default-src` zurück; das zählt als Fehler, damit die Erlaubnis nicht
-/// still an eine andere Direktive wandert.
-fn check_connect_src(csp: &str) -> Result<(), String> {
+/// Prüft die ganze CSP gegen [`ALLOWED_CSP`]: Jede Direktive dort steht
+/// genau einmal in `csp` und hat genau die erlaubten Quellen (doppelte
+/// Quellen zählen als Änderung), und `csp` enthält keine weitere Direktive.
+/// Fehlt `connect-src`, fiele der Webview auf `default-src` zurück; fehlt
+/// `default-src`, erlaubt der Browser alles. Beides zählt als Fehler.
+/// Alle gefundenen Abweichungen landen in der Fehlermeldung.
+fn check_csp(csp: &str) -> Result<(), String> {
     let directives: Vec<Vec<&str>> = csp
         .split(';')
         .map(|d| d.split_whitespace().collect::<Vec<_>>())
         .filter(|d| !d.is_empty())
         .collect();
-    let connect: Vec<&Vec<&str>> = directives
-        .iter()
-        .filter(|d| d[0].eq_ignore_ascii_case("connect-src"))
-        .collect();
-    let [directive] = connect.as_slice() else {
-        return Err(format!(
-            "erwartet genau eine connect-src-Direktive, gefunden: {}",
-            connect.len()
-        ));
-    };
-    let actual: BTreeSet<&str> = directive[1..].iter().copied().collect();
-    let expected: BTreeSet<&str> = ALLOWED_CONNECT_SRC.iter().copied().collect();
-    if actual.len() != directive.len() - 1 || actual != expected {
-        return Err(format!(
-            "connect-src ist {:?}, erlaubt ist genau {:?}",
-            &directive[1..],
-            ALLOWED_CONNECT_SRC
-        ));
+    let mut errors = Vec::new();
+
+    for directive in &directives {
+        let name = directive[0];
+        if !ALLOWED_CSP
+            .iter()
+            .any(|(allowed, _)| allowed.eq_ignore_ascii_case(name))
+        {
+            errors.push(format!(
+                "Direktive {name} ist nicht erlaubt (Quellen: {:?})",
+                &directive[1..]
+            ));
+        }
     }
-    Ok(())
+
+    for (name, allowed) in ALLOWED_CSP {
+        let found: Vec<&Vec<&str>> = directives
+            .iter()
+            .filter(|d| d[0].eq_ignore_ascii_case(name))
+            .collect();
+        let [directive] = found.as_slice() else {
+            errors.push(format!(
+                "erwartet genau eine {name}-Direktive, gefunden: {}",
+                found.len()
+            ));
+            continue;
+        };
+        let actual: BTreeSet<&str> = directive[1..].iter().copied().collect();
+        let expected: BTreeSet<&str> = allowed.iter().copied().collect();
+        if actual.len() != directive.len() - 1 || actual != expected {
+            errors.push(format!(
+                "{name} ist {:?}, erlaubt ist genau {allowed:?}",
+                &directive[1..]
+            ));
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("\n"))
+    }
 }
 
 #[test]
-fn csp_connect_src_allows_only_self_and_ipc() {
+fn csp_allows_only_allowlisted_sources() {
     let csp = configured_csp();
-    if let Err(e) = check_connect_src(&csp) {
+    if let Err(e) = check_csp(&csp) {
         panic!(
-            "{e}\nCSP: {csp}\nEine neue Verbindung aus dem Webview gehört erst in \
-             docs/netzwerkverbindungen.md und in ALLOWED_CONNECT_SRC."
+            "{e}\nCSP: {csp}\nEine neue Verbindung oder Quelle aus dem Webview gehört \
+             erst in docs/netzwerkverbindungen.md und dann in ALLOWED_CSP \
+             (connect-src: ALLOWED_CONNECT_SRC)."
         );
     }
 }
 
+/// Die aktuelle CSP aus `tauri.conf.json`, als Ausgangspunkt der Tests.
+const CURRENT_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' \
+    'unsafe-inline' tauri-plugin-decoration: http://tauri-plugin-decoration.localhost \
+    https://tauri-plugin-decoration.localhost; img-src 'self' data:; connect-src 'self' ipc:;";
+
+#[test]
+fn csp_check_accepts_current_values_in_any_order() {
+    assert!(check_csp(CURRENT_CSP).is_ok());
+    // Direktiven umgestellt, Quellen umgestellt, Groß-/Kleinschreibung der
+    // Namen, ohne abschließendes Semikolon.
+    let reordered = "CONNECT-SRC ipc: 'self'; img-src data: 'self'; \
+        style-src https://tauri-plugin-decoration.localhost 'unsafe-inline' \
+        http://tauri-plugin-decoration.localhost tauri-plugin-decoration: 'self'; \
+        script-src 'self'; default-src 'self'";
+    assert_eq!(check_csp(reordered), Ok(()));
+}
+
 #[test]
 fn connect_src_check_rejects_every_change() {
-    let base = "default-src 'self'; img-src 'self' data:;";
-    assert!(check_connect_src(&format!("{base} connect-src 'self' ipc:;")).is_ok());
-    assert!(check_connect_src(&format!("{base} connect-src ipc: 'self'")).is_ok());
+    let base = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' \
+        tauri-plugin-decoration: http://tauri-plugin-decoration.localhost \
+        https://tauri-plugin-decoration.localhost; img-src 'self' data:;";
+    assert!(check_csp(&format!("{base} connect-src 'self' ipc:;")).is_ok());
+    assert!(check_csp(&format!("{base} connect-src ipc: 'self'")).is_ok());
 
     for changed in [
         // zusätzliche Quelle
@@ -149,7 +224,74 @@ fn connect_src_check_rejects_every_change() {
     ] {
         let csp = format!("{base} {changed}");
         assert!(
-            check_connect_src(&csp).is_err(),
+            check_csp(&csp).is_err(),
+            "geänderte CSP wurde akzeptiert: {csp}"
+        );
+    }
+}
+
+/// Ersetzt in [`CURRENT_CSP`] die Direktive `name` durch `replacement`
+/// (leer: Direktive entfernt).
+fn csp_with(name: &str, replacement: &str) -> String {
+    let directives: Vec<String> = CURRENT_CSP
+        .split(';')
+        .map(str::trim)
+        .filter(|d| !d.is_empty())
+        .map(|d| {
+            if d.split_whitespace().next() == Some(name) {
+                replacement.to_owned()
+            } else {
+                d.to_owned()
+            }
+        })
+        .filter(|d| !d.is_empty())
+        .collect();
+    assert_ne!(
+        directives.join("; "),
+        CURRENT_CSP.trim_end_matches(';'),
+        "{name} kommt in CURRENT_CSP nicht vor"
+    );
+    directives.join("; ")
+}
+
+#[test]
+fn csp_check_rejects_remote_origins_in_every_directive() {
+    let style_remote = format!(
+        "{} https://fonts.googleapis.com",
+        CURRENT_CSP
+            .split(';')
+            .map(str::trim)
+            .find(|d| d.starts_with("style-src"))
+            .expect("style-src in CURRENT_CSP")
+    );
+    let changed = [
+        csp_with("img-src", "img-src 'self' data: https:"),
+        csp_with("img-src", "img-src 'self' data: https://example.com"),
+        csp_with("script-src", "script-src 'self' https://cdn.example.com"),
+        csp_with("style-src", &style_remote),
+        csp_with("default-src", "default-src *"),
+        csp_with("default-src", "default-src 'self' https:"),
+        // fehlende Quelle
+        csp_with("img-src", "img-src 'self'"),
+        // doppelte Quelle verdeckt keine Änderung
+        csp_with("script-src", "script-src 'self' 'self'"),
+        // Direktive ohne Eintrag in ALLOWED_CSP
+        format!("{CURRENT_CSP} font-src https://fonts.gstatic.com;"),
+        format!("{CURRENT_CSP} font-src 'self';"),
+        format!("{CURRENT_CSP} frame-src https://example.com;"),
+        // default-src fehlt (Browser-Vorgabe: alles erlaubt)
+        csp_with("default-src", ""),
+        csp_with("script-src", ""),
+        csp_with("style-src", ""),
+        csp_with("img-src", ""),
+        // Direktive doppelt, auch mit identischen Quellen
+        format!("{CURRENT_CSP} img-src 'self' data:;"),
+        format!("{CURRENT_CSP} default-src 'self';"),
+        format!("{CURRENT_CSP} IMG-SRC https://example.com;"),
+    ];
+    for csp in changed {
+        assert!(
+            check_csp(&csp).is_err(),
             "geänderte CSP wurde akzeptiert: {csp}"
         );
     }
