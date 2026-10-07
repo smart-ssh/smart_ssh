@@ -4,7 +4,7 @@ import { commandErrorCode, commandErrorMessage, listGroups, listServers } from "
 import { translateErrorCode } from "../errorCodes";
 import { performMove, type DragItem, type DropTarget } from "../treeDrag";
 import type { GroupDto, ServerDto } from "../types";
-import { GroupForm } from "./GroupForm";
+import { GroupForm, type MovedTo } from "./GroupForm";
 import { ServerForm } from "./ServerForm";
 import { Sidebar, type Selection } from "./Sidebar";
 import { SshConfigExportDialog } from "./SshConfigExportDialog";
@@ -58,6 +58,7 @@ export function ManagementView({
     if (initialSelection) {
       setSelection(initialSelection);
       setFocusNotesOnOpen(true);
+      setMovedTo(null);
       setNewFormRevision((n) => n + 1);
       onInitialSelectionConsumed?.();
     }
@@ -73,6 +74,7 @@ export function ManagementView({
 
   const selectManually = (next: Selection | null) => {
     setFocusNotesOnOpen(false);
+    setMovedTo(null);
     setSelection(next);
     setNewFormRevision((n) => n + 1);
   };
@@ -88,12 +90,16 @@ export function ManagementView({
 
   useEffect(reload, []);
 
-  // Issue #48: erhöht, wenn das gerade geöffnete Element per Drag-and-drop
-  // verschoben wurde — Teil des Formular-`key`, damit `ServerForm`/
-  // `GroupForm` neu laden. Sonst stünde im Formular noch die alte Gruppe,
+  // Issue #63: neuer Ort des gerade geöffneten Elements nach einem
+  // erfolgreichen Verschieben per Drag-and-drop. `ServerForm`/`GroupForm`
+  // übernehmen daraus nur das Gruppen- bzw. Übergruppen-Feld, alle übrigen
+  // ungespeicherten Eingaben bleiben stehen (kein Remount mehr, s. Issue
+  // #48). Ohne diese Übernahme stünde im Formular noch die alte Gruppe,
   // und ein späteres Speichern würde das Verschieben still rückgängig
-  // machen.
-  const [moveRevision, setMoveRevision] = useState(0);
+  // machen. Jedes Verschieben erzeugt ein neues Objekt, damit das Formular
+  // auch einen erneuten Wechsel zurück auf denselben Ort bemerkt. Bei
+  // jedem Auswahlwechsel zurückgesetzt (`selectManually`).
+  const [movedTo, setMovedTo] = useState<MovedTo | null>(null);
 
   /** Issue #48 / Spec 0103: Verschieben per Drag-and-drop aus der Sidebar.
    * Ein Zyklus wird vom Backend abgelehnt; die übersetzte Meldung
@@ -103,7 +109,7 @@ export function ManagementView({
     try {
       await performMove(item, target);
       if (selection && "id" in selection && selection.kind === item.kind && selection.id === item.id) {
-        setMoveRevision((n) => n + 1);
+        setMovedTo({ groupId: target.kind === "group" ? target.id : null });
       }
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
@@ -155,11 +161,14 @@ export function ManagementView({
          * React-Fallstrick bei direktem A→B-Wechsel ohne Zwischenzustand
          * (kein zwischenzeitliches Unmounten), s. Commit
          * "fix(app-tauri): load notes and revision history correctly in
-         * server form". */}
+         * server form". Ein Verschieben des geöffneten Elements per
+         * Drag-and-drop remountet bewusst NICHT (Issue #63), sondern
+         * reicht nur den neuen Ort über `movedTo` durch. */}
         {selection?.kind === "group" && (
           <GroupForm
-            key={`${selection.id}-${moveRevision}`}
+            key={selection.id}
             groupId={selection.id}
+            movedTo={movedTo}
             defaultParentId={null}
             allGroups={groups}
             onSaved={reload}
@@ -178,8 +187,9 @@ export function ManagementView({
         )}
         {selection?.kind === "server" && (
           <ServerForm
-            key={`${selection.id}-${moveRevision}`}
+            key={selection.id}
             serverId={selection.id}
+            movedTo={movedTo}
             defaultGroupId={null}
             allGroups={groups}
             allServers={servers}

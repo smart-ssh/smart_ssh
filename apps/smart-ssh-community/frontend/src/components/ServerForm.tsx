@@ -38,6 +38,7 @@ import type {
   TestConnectionReport,
   TestConnectionResult,
 } from "../types";
+import type { MovedTo } from "./GroupForm";
 import { HostKeyDialog } from "./HostKeyDialog";
 import { NotesPanel } from "./NotesPanel";
 
@@ -54,6 +55,9 @@ interface ServerFormProps {
    * unten und den regulären `NotesPanel`-Zweig) — "Mache ich selbst" kann
    * sich auf jeden Server beziehen, den lokalen eingeschlossen. */
   autoFocusNotes?: boolean;
+  /** Issue #63: s. `MovedTo` in `GroupForm.tsx`. `null`/fehlend = nicht
+   * verschoben. */
+  movedTo?: MovedTo | null;
 }
 
 /** `t` wird als Parameter durchgereicht statt selbst `useTranslation()`
@@ -239,6 +243,7 @@ export function ServerForm({
   onSaved,
   onDeleted,
   autoFocusNotes = false,
+  movedTo = null,
 }: ServerFormProps) {
   const { t } = useTranslation();
   const AUTH_KIND_LABELS = authKindLabels(t);
@@ -443,6 +448,14 @@ export function ServerForm({
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(loadServer, [serverId, defaultGroupId]);
+
+  // Issue #63: nach einem erfolgreichen Verschieben dieses Servers per
+  // Drag-and-drop nur die Gruppe übernehmen — alle übrigen ungespeicherten
+  // Eingaben bleiben stehen. Ohne das stünde hier noch die alte Gruppe,
+  // und ein späteres Speichern machte das Verschieben rückgängig.
+  useEffect(() => {
+    if (movedTo) setGroupId(movedTo.groupId);
+  }, [movedTo]);
 
   // Spec 0076, B-3: fragt `inspect_key_file` für den Pfad an, der gerade im
   // Formular steht — entkoppelt, gedämpft (400 ms), damit nicht jeder
