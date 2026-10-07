@@ -369,6 +369,150 @@ async fn test_adv_here_strings_and_heredocs_never_autoexec() {
     }
 }
 
+/// Every shell with a `-c`-style code argument, not only bash/sh/zsh/dash,
+/// and `-c` in a later chain segment or behind other options: the code is
+/// evaluated as a command of its own, so the `Deny` rule still applies.
+#[tokio::test]
+async fn test_adv_shell_c_other_shells_and_positions_hit_deny_rule() {
+    for cmd in [
+        "ksh -c 'rm -rf /'",
+        "mksh -c 'rm -rf /'",
+        "ash -c 'rm -rf /'",
+        "yash -c 'rm -rf /'",
+        "csh -c 'rm -rf /'",
+        "tcsh -c 'rm -rf /'",
+        "fish -c 'rm -rf /'",
+        "fish --command 'rm -rf /'",
+        "fish --command='rm -rf /'",
+        "busybox ash -c 'rm -rf /'",
+        "/bin/mksh -c 'rm -rf /'",
+        "KSH -c 'rm -rf /'",
+        "bash -e -c 'rm -rf /'",
+        "bash -o errexit -c 'rm -rf /'",
+        "bash +o history -c 'rm -rf /'",
+        "bash --norc -c 'rm -rf /'",
+        "bash --rcfile /dev/null -c 'rm -rf /'",
+        "sh -c -- 'rm -rf /'",
+        "ls; bash -c 'rm -rf /'",
+        "ls && ksh -c 'rm -rf /'",
+        "ls | sudo bash -e -c 'rm -rf /'",
+    ] {
+        assert_denied_by_rm_rule(cmd).await;
+    }
+}
+
+/// Interpreter code flags behind other options or in a later segment.
+#[tokio::test]
+async fn test_adv_interpreter_code_flags_after_options_never_autoexec() {
+    for cmd in [
+        "python3 -W ignore -c \"import os; os.system('rm -rf /')\"",
+        "python3 -X utf8 -c 'import os'",
+        "python3.12 -c 'import os'",
+        "ls && python3 -c 'import os'",
+        "ls; perl -w -e 'system(\"rm -rf /\")'",
+        "ls; ruby -r json -e '`rm -rf /`'",
+        "ls; node --eval \"require('child_process').execSync('rm -rf /')\"",
+        "ls; php -d x=1 -r 'system(\"rm -rf /\");'",
+    ] {
+        assert_never_autoexec(cmd).await;
+    }
+}
+
+/// Option values and `+` options must not pass for a script operand, and
+/// `source`/`.` of stdin runs piped code too (review of PR #46).
+#[tokio::test]
+async fn test_adv_piping_into_a_shell_with_options_never_autoexec() {
+    for cmd in [
+        "echo cm0gLXJmIC8= | base64 -d | bash -o errexit",
+        "echo cm0gLXJmIC8= | base64 -d | sh +x",
+        "echo cm0gLXJmIC8= | base64 -d | bash +o history",
+        "echo cm0gLXJmIC8= | base64 -d | bash --rcfile /dev/null",
+        "echo cm0gLXJmIC8= | base64 -d | bash --init-file=/dev/null",
+        "echo cm0gLXJmIC8= | base64 -d | bash -O extglob",
+        "echo cm0gLXJmIC8= | base64 -d | bash -e -s",
+        "echo cm0gLXJmIC8= | base64 -d | bash --unknown-option value",
+        "echo cm0gLXJmIC8= | base64 -d | fish --debug all",
+        "echo 'import os' | python3 -W ignore",
+        "echo 'import os' | python3 -X utf8",
+        "echo 'import os' | python3 -",
+        "echo 'system(q(rm -rf /))' | perl -I lib",
+        "echo 'system(q(rm -rf /))' | perl -Mstrict",
+        "echo '`rm -rf /`' | ruby -r json",
+        "echo 'x' | node --require x",
+        "echo cm0gLXJmIC8= | base64 -d | source /dev/stdin",
+        "echo cm0gLXJmIC8= | base64 -d | . /dev/stdin",
+        "echo cm0gLXJmIC8= | base64 -d | source /dev/fd/0",
+        "echo cm0gLXJmIC8= | base64 -d | source /proc/self/fd/0",
+        "echo cm0gLXJmIC8= | base64 -d | bash x.sh /dev/stdin",
+    ] {
+        assert_never_autoexec(cmd).await;
+    }
+}
+
+/// Counter-check: a shell or interpreter running a visible script stays
+/// `AutoExec` under `Allow "*"`, also with option values in front.
+#[tokio::test]
+async fn test_adv_shell_and_interpreter_with_script_operand_stay_autoexec() {
+    for cmd in [
+        "bash deploy.sh",
+        "bash -e deploy.sh",
+        "bash -o errexit deploy.sh",
+        "bash +o history deploy.sh",
+        "bash --norc deploy.sh",
+        "sh +x deploy.sh",
+        "fish --debug all deploy.fish",
+        "python3 script.py",
+        "python3 -W ignore script.py",
+        "python3 -m http.server",
+        "perl -I lib script.pl",
+        "ruby -r json script.rb",
+        "node --require ts-node/register app.js",
+        "php -f index.php",
+        "source ~/.bashrc",
+        ". ./env.sh",
+    ] {
+        assert_benign_autoexec(cmd).await;
+    }
+}
+
+#[test]
+fn test_adv_program_source_parses_options_per_program() {
+    use super::parser::{program_source, ProgramSource};
+    let code = |c: &str| Some(ProgramSource::Code(vec![c.to_string()]));
+    assert_eq!(
+        program_source("bash -o errexit -c 'rm -rf /'"),
+        code("rm -rf /")
+    );
+    assert_eq!(program_source("bash -xc 'rm -rf /' arg0"), code("rm -rf /"));
+    assert_eq!(program_source("fish -c 'rm -rf /'"), code("rm -rf /"));
+    assert_eq!(program_source("python3 -c'import os'"), code("import os"));
+    assert_eq!(
+        program_source("bash -o errexit"),
+        Some(ProgramSource::Stdin)
+    );
+    assert_eq!(program_source("sh +x"), Some(ProgramSource::Stdin));
+    assert_eq!(program_source("bash -"), Some(ProgramSource::Stdin));
+    assert_eq!(program_source("bash -s x.sh"), Some(ProgramSource::Stdin));
+    assert_eq!(
+        program_source("source /dev/stdin"),
+        Some(ProgramSource::Stdin)
+    );
+    assert_eq!(
+        program_source("bash -o errexit x.sh"),
+        Some(ProgramSource::Operand)
+    );
+    assert_eq!(
+        program_source("python3 -m venv .venv"),
+        Some(ProgramSource::Operand)
+    );
+    assert_eq!(
+        program_source("bash --frobnicate x.sh"),
+        Some(ProgramSource::Opaque)
+    );
+    assert_eq!(program_source("bash -c"), Some(ProgramSource::Opaque));
+    assert_eq!(program_source("ls -la"), None);
+}
+
 /// Code piped into a shell or interpreter that reads its program from stdin.
 #[tokio::test]
 async fn test_adv_piping_into_a_shell_never_autoexec() {

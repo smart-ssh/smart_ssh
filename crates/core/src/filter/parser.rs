@@ -241,7 +241,27 @@ fn looks_like_heredoc_or_complex_shell_c(cmd: &str) -> bool {
 /// vorausgesetzt, s. Aufrufer) statt eigenem Tokenizing, damit Quotes/
 /// Escapes im Code-Argument korrekt aufgelöst werden — dasselbe Argument,
 /// das eine echte Shell auch tatsächlich als Code-String sähe.
-pub(super) fn extract_shell_c_style_code(cmd: &str) -> Option<String> {
+///
+/// Issue #13: besides that third token, the code found by [`program_source`]
+/// is returned as well (`sh -c -- CODE`, `bash -c -o x CODE`, `perl -w -e
+/// CODE -e CODE2`). Both are evaluated, so the result can only get
+/// stricter than with the third token alone.
+pub(super) fn extract_shell_c_style_codes(cmd: &str) -> Vec<String> {
+    let mut codes: Vec<String> = extract_shell_c_style_code(cmd).into_iter().collect();
+    if codes.is_empty() {
+        return codes;
+    }
+    if let Some(ProgramSource::Code(found)) = program_source(&normalize_whitespace(cmd)) {
+        for code in found {
+            if !codes.contains(&code) {
+                codes.push(code);
+            }
+        }
+    }
+    codes
+}
+
+fn extract_shell_c_style_code(cmd: &str) -> Option<String> {
     if cmd.contains("<<") {
         return None;
     }
@@ -818,46 +838,409 @@ pub(super) fn opaque_command_word_reason(literal: &str) -> Option<&'static str> 
     None
 }
 
-/// Shells that read their program from stdin when started without a script
-/// operand or with `-s`.
-const STDIN_SHELLS: &[&str] = &[
-    "sh", "bash", "zsh", "dash", "ksh", "mksh", "ash", "fish", "csh", "tcsh",
+/// Where a shell, interpreter or `source` call takes the program it runs
+/// from — see [`program_source`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum ProgramSource {
+    /// Code passed as an argument (`sh -c CODE`, `fish --command CODE`,
+    /// `python3 -c CODE`, `perl -e CODE`, ...), in the order given.
+    Code(Vec<String>),
+    /// The program is read from stdin (`... | sh`, `bash -s`, `python3 -`,
+    /// `source /dev/stdin`); its text never appears in the command.
+    Stdin,
+    /// A script or module operand the engine can see (`bash deploy.sh`).
+    Operand,
+    /// The arguments could not be analysed with confidence (an unknown long
+    /// option, untokenisable quoting, `-c` without its code argument).
+    Opaque,
+}
+
+/// How a program parses its options, as far as [`program_source`] needs to
+/// know. Characters are short options; long options are listed without the
+/// leading `--`. A long option that is in none of the lists makes the call
+/// [`ProgramSource::Opaque`] (fail closed): the engine cannot tell whether
+/// it swallows the next word, and guessing "no" would let an option value
+/// pass for the script operand (`| bash -o errexit`).
+struct OptionSpec {
+    /// Short options that say "the first operand is the code" (POSIX
+    /// shells' `-c`, also inside clusters such as `-xc`).
+    code_operand: &'static str,
+    /// Short options that make a shell read its program from stdin (`-s`).
+    stdin_flag: &'static str,
+    /// Short options whose value is code (`perl -e CODE`, `fish -c CODE`).
+    code_value: &'static str,
+    /// Short options whose value is a script or module to run (`python3 -m`).
+    script_value: &'static str,
+    /// Short options that take a value, attached or as the next word. When
+    /// unsure whether an option takes a value, it belongs here: swallowing
+    /// one word too many can only make a script operand look missing,
+    /// which reads as "stdin" and escalates.
+    value: &'static str,
+    /// Short options whose value can only be attached (`perl -Mstrict`).
+    attached_value: &'static str,
+    /// Whether `+x`-style options exist (`sh +x`, `bash +o history`).
+    plus_options: bool,
+    long_code: &'static [&'static str],
+    long_script: &'static [&'static str],
+    long_value: &'static [&'static str],
+    long_flag: &'static [&'static str],
+}
+
+const POSIX_SHELL_OPTIONS: OptionSpec = OptionSpec {
+    code_operand: "c",
+    stdin_flag: "s",
+    code_value: "",
+    script_value: "",
+    value: "oO",
+    attached_value: "",
+    plus_options: true,
+    long_code: &[],
+    long_script: &[],
+    long_value: &["rcfile", "init-file"],
+    long_flag: &[
+        "norc",
+        "noprofile",
+        "login",
+        "posix",
+        "noediting",
+        "restricted",
+        "verbose",
+        "debugger",
+        "dump-strings",
+        "dump-po-strings",
+        "version",
+        "help",
+    ],
+};
+
+const FISH_OPTIONS: OptionSpec = OptionSpec {
+    code_operand: "",
+    stdin_flag: "",
+    code_value: "cC",
+    script_value: "",
+    value: "dof",
+    attached_value: "",
+    plus_options: false,
+    long_code: &["command", "init-command"],
+    long_script: &[],
+    long_value: &[
+        "debug",
+        "debug-output",
+        "features",
+        "profile",
+        "profile-startup",
+    ],
+    long_flag: &[
+        "interactive",
+        "login",
+        "no-execute",
+        "no-config",
+        "private",
+        "print-rusage-self",
+        "print-debug-categories",
+        "version",
+        "help",
+    ],
+};
+
+const CSH_OPTIONS: OptionSpec = OptionSpec {
+    code_operand: "c",
+    stdin_flag: "s",
+    code_value: "",
+    script_value: "",
+    value: "",
+    attached_value: "",
+    plus_options: false,
+    long_code: &[],
+    long_script: &[],
+    long_value: &[],
+    long_flag: &["version", "help"],
+};
+
+const PYTHON_OPTIONS: OptionSpec = OptionSpec {
+    code_operand: "",
+    stdin_flag: "",
+    code_value: "c",
+    script_value: "m",
+    value: "WXQ",
+    attached_value: "",
+    plus_options: false,
+    long_code: &[],
+    long_script: &[],
+    long_value: &["check-hash-based-pycs"],
+    long_flag: &["version", "help", "help-env", "help-xoptions", "help-all"],
+};
+
+const PERL_OPTIONS: OptionSpec = OptionSpec {
+    code_operand: "",
+    stdin_flag: "",
+    code_value: "eE",
+    script_value: "",
+    value: "I",
+    attached_value: "0CdDilmMVx",
+    plus_options: false,
+    long_code: &[],
+    long_script: &[],
+    long_value: &[],
+    long_flag: &["version", "help"],
+};
+
+const RUBY_OPTIONS: OptionSpec = OptionSpec {
+    code_operand: "",
+    stdin_flag: "",
+    code_value: "e",
+    script_value: "",
+    value: "CEIr",
+    attached_value: "0FKTWx",
+    plus_options: false,
+    long_code: &[],
+    long_script: &[],
+    long_value: &[
+        "enable",
+        "disable",
+        "encoding",
+        "external-encoding",
+        "internal-encoding",
+        "dump",
+        "backtrace-limit",
+        "crash-report",
+        "parser",
+    ],
+    long_flag: &["version", "help", "verbose", "copyright", "yjit", "jit"],
+};
+
+const NODE_OPTIONS: OptionSpec = OptionSpec {
+    code_operand: "",
+    stdin_flag: "",
+    code_value: "ep",
+    script_value: "",
+    value: "Cr",
+    attached_value: "",
+    plus_options: false,
+    long_code: &["eval", "print"],
+    long_script: &[],
+    long_value: &[
+        "require",
+        "import",
+        "loader",
+        "experimental-loader",
+        "input-type",
+        "conditions",
+        "env-file",
+        "title",
+    ],
+    long_flag: &[
+        "version",
+        "help",
+        "check",
+        "interactive",
+        "no-warnings",
+        "no-deprecation",
+        "trace-warnings",
+        "enable-source-maps",
+    ],
+};
+
+const PHP_OPTIONS: OptionSpec = OptionSpec {
+    code_operand: "",
+    stdin_flag: "",
+    code_value: "BERr",
+    script_value: "Ff",
+    value: "cdz",
+    attached_value: "",
+    plus_options: false,
+    long_code: &[],
+    long_script: &[],
+    long_value: &[],
+    long_flag: &["version", "help", "info", "ini"],
+};
+
+/// Shells whose option syntax follows [`POSIX_SHELL_OPTIONS`]: `-c` makes
+/// the first operand the code, `-s` reads stdin, `-o`/`+o` take a value.
+const POSIX_SHELLS: &[&str] = &[
+    "sh", "bash", "rbash", "zsh", "dash", "ksh", "ksh93", "mksh", "lksh", "pdksh", "ash", "yash",
+    "posh",
 ];
 
-/// Interpreters that read their program from stdin when started without a
-/// script operand or with the operand `-`.
-const STDIN_INTERPRETERS: &[&str] = &["python", "python3", "perl", "ruby", "node", "php"];
+/// What kind of program `program` (lower-cased basename) is.
+enum ProgramKind {
+    WithOptions(&'static OptionSpec, bool),
+    Source,
+}
 
-/// Whether the segment starts a shell or interpreter that reads its program
-/// from stdin (`... | base64 -d | sh`, `curl ... | bash -s`, `... | python3`).
-/// The program text never appears in the command, so the engine cannot
-/// check it. `literal` as for [`opaque_command_word_reason`].
-pub(super) fn reads_program_from_stdin(literal: &str) -> bool {
-    let resolved = resolve_effective_command(literal);
-    let mut words = resolved.split_whitespace();
-    let Some(program) = words.next() else {
-        return false;
-    };
+fn program_kind(program: &str) -> Option<ProgramKind> {
+    let program = program.rsplit('/').next().unwrap_or(program);
     let program = program.to_ascii_lowercase();
-    let is_shell = STDIN_SHELLS.contains(&program.as_str());
-    let is_interpreter = STDIN_INTERPRETERS.contains(&program.as_str());
-    if !is_shell && !is_interpreter {
-        return false;
+    let program = program.as_str();
+    if POSIX_SHELLS.contains(&program) {
+        return Some(ProgramKind::WithOptions(&POSIX_SHELL_OPTIONS, true));
     }
-    let mut has_operand = false;
-    for word in words {
-        if matches!(word, "-" | "/dev/stdin" | "/dev/fd/0" | "/proc/self/fd/0") {
-            return true;
+    let interpreter = |spec| Some(ProgramKind::WithOptions(spec, false));
+    match program {
+        "fish" => Some(ProgramKind::WithOptions(&FISH_OPTIONS, true)),
+        "csh" | "tcsh" => Some(ProgramKind::WithOptions(&CSH_OPTIONS, true)),
+        "perl" => interpreter(&PERL_OPTIONS),
+        "ruby" => interpreter(&RUBY_OPTIONS),
+        "node" | "nodejs" => interpreter(&NODE_OPTIONS),
+        "php" => interpreter(&PHP_OPTIONS),
+        "source" | "." => Some(ProgramKind::Source),
+        // `python`, `python3`, `python3.12`, ...
+        _ if program
+            .strip_prefix("python")
+            .is_some_and(|v| v.chars().all(|c| c.is_ascii_digit() || c == '.')) =>
+        {
+            interpreter(&PYTHON_OPTIONS)
         }
-        if let Some(flags) = word.strip_prefix('-') {
-            if is_shell && !flags.starts_with('-') && flags.contains('s') {
-                return true;
+        _ => None,
+    }
+}
+
+/// An argument that names the process's own stdin.
+fn is_stdin_path(word: &str) -> bool {
+    matches!(word, "-" | "/dev/stdin")
+        || word.starts_with("/dev/fd/")
+        || (word.starts_with("/proc/") && word.contains("/fd/"))
+}
+
+/// Analyses one segment that starts (after wrappers, `sudo` and variable
+/// assignments) with a shell, a script interpreter, or `source`/`.`, and
+/// says where the program it runs comes from. Returns `None` for any other
+/// command. `literal` as for [`opaque_command_word_reason`].
+///
+/// Options are parsed per program ([`OptionSpec`]), so option values
+/// (`bash -o errexit`, `python3 -W ignore`), `+` options (`sh +x`) and an
+/// option before `-c` (`bash -e -c CODE`) are not mistaken for the script
+/// operand or missed.
+pub(super) fn program_source(literal: &str) -> Option<ProgramSource> {
+    let resolved = resolve_effective_command(literal);
+    let program = resolved.split_whitespace().next()?;
+    let kind = program_kind(program)?;
+    let Ok(words) = shell_words::split(&resolved) else {
+        return Some(ProgramSource::Opaque);
+    };
+    let args = words.get(1..).unwrap_or_default();
+    Some(match kind {
+        ProgramKind::Source => {
+            if args.iter().any(|arg| is_stdin_path(arg)) {
+                ProgramSource::Stdin
+            } else {
+                ProgramSource::Operand
+            }
+        }
+        ProgramKind::WithOptions(spec, is_shell) => analyse_options(spec, is_shell, args),
+    })
+}
+
+fn analyse_options(spec: &OptionSpec, is_shell: bool, args: &[String]) -> ProgramSource {
+    let mut codes: Vec<String> = Vec::new();
+    let mut code_operand = false;
+    let mut stdin = false;
+    let mut script = false;
+    let mut i = 0usize;
+
+    // Takes an option's value: the rest of the cluster if non-empty, else
+    // the next word. `None` if the value is missing.
+    let take_value = |attached: &str, i: &mut usize| -> Option<String> {
+        if !attached.is_empty() {
+            return Some(attached.to_string());
+        }
+        let value = args.get(*i).cloned();
+        if value.is_some() {
+            *i += 1;
+        }
+        value
+    };
+
+    while i < args.len() {
+        let arg = args[i].as_str();
+        i += 1;
+        if arg == "--" {
+            break;
+        }
+        if arg == "-" {
+            // A shell treats a lone `-` like `--`; an interpreter reads its
+            // program from stdin.
+            if !is_shell {
+                stdin = true;
+            }
+            break;
+        }
+        if let Some(long) = arg.strip_prefix("--") {
+            let (name, inline) = match long.split_once('=') {
+                Some((name, value)) => (name, Some(value.to_string())),
+                None => (long, None),
+            };
+            let in_list = |list: &[&str]| list.contains(&name);
+            if in_list(spec.long_code) {
+                match inline.or_else(|| take_value("", &mut i)) {
+                    Some(code) => codes.push(code),
+                    None => return ProgramSource::Opaque,
+                }
+            } else if in_list(spec.long_script) || in_list(spec.long_value) {
+                script |= in_list(spec.long_script);
+                if inline.is_none() {
+                    take_value("", &mut i);
+                }
+            } else if !in_list(spec.long_flag) {
+                return ProgramSource::Opaque;
             }
             continue;
         }
-        has_operand = true;
+        let cluster = match arg.strip_prefix('-') {
+            Some(cluster) => cluster,
+            None => match arg.strip_prefix('+') {
+                Some(cluster) if spec.plus_options && !cluster.is_empty() => cluster,
+                // First operand: options end here.
+                _ => {
+                    i -= 1;
+                    break;
+                }
+            },
+        };
+        let minus = arg.starts_with('-');
+        for (pos, c) in cluster.char_indices() {
+            let attached = &cluster[pos + c.len_utf8()..];
+            if spec.code_operand.contains(c) {
+                code_operand = true;
+            } else if spec.stdin_flag.contains(c) && minus {
+                stdin = true;
+            } else if spec.code_value.contains(c) {
+                match take_value(attached, &mut i) {
+                    Some(code) => codes.push(code),
+                    None => return ProgramSource::Opaque,
+                }
+                break;
+            } else if spec.script_value.contains(c) || spec.value.contains(c) {
+                script |= spec.script_value.contains(c);
+                take_value(attached, &mut i);
+                break;
+            } else if spec.attached_value.contains(c) {
+                break;
+            }
+        }
     }
-    !has_operand
+
+    let rest = &args[i.min(args.len())..];
+    if code_operand {
+        match rest.first() {
+            Some(code) => codes.push(code.clone()),
+            None if codes.is_empty() => return ProgramSource::Opaque,
+            None => {}
+        }
+    }
+    if !codes.is_empty() {
+        return ProgramSource::Code(codes);
+    }
+    // Conservative: any argument naming stdin counts, even one meant for
+    // the script (`bash x.sh /dev/stdin`) — that only costs a confirmation.
+    if stdin || rest.iter().any(|arg| is_stdin_path(arg)) {
+        return ProgramSource::Stdin;
+    }
+    if script || !rest.is_empty() {
+        ProgramSource::Operand
+    } else {
+        ProgramSource::Stdin
+    }
 }
 
 /// If the segment is an `eval` call, returns the code `eval` runs: its
