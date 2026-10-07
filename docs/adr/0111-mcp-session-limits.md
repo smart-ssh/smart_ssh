@@ -60,7 +60,7 @@ Issue #68 lässt zwei Werte offen und empfiehlt je einen.
 - **Einstellbare Höchstzahl:** mehr UI und Persistenz ohne belegten Bedarf.
   Lässt sich später ergänzen, ohne diese Entscheidung zu brechen.
 - **Nur eine globale Höchstzahl:** ein Client könnte alle Plätze auf einem
-  Server belegen. Je Server ist die Einheit, die der Nutzer im Tab-Leiste
+  Server belegen. Je Server ist die Einheit, die der Nutzer in der Tab-Leiste
   sieht.
 - **Lock-Eintrag in `unregister` entfernen:** Ein Eintrag entsteht auch
   für Anfragen, die nie eine Sitzung eintragen (Grenze erreicht,
