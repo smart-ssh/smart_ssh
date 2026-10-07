@@ -92,12 +92,19 @@ set_active_ai_provider(id: ProviderId)
 
 ```
 connection-status-changed   { session_id, status }
-host-key-verification-needed { session_id, host, port, kind: Unknown | Mismatch, fingerprint }
+host-key-verification-needed { session_id, prompt_id, host, port, kind: Unknown | Mismatch, fingerprint, expected_fingerprint }
+host-key-verification-ended  { session_id, prompt_id, reason: Decided | TimedOut | Abandoned }
 terminal-output              { session_id, data: Vec<u8> }
 chat-text-delta               { session_id, delta: String }
 chat-action-proposed          { session_id, action_id, action: AiAction, decision: AutoExec | Confirm | Deny }
 chat-action-result            { session_id, action_id, output: CommandOutput }
 ```
+
+`host-key-verification-ended` (Issue #37, ADR 0107): das Backend wartet nicht
+mehr auf die Abfrage `prompt_id` — gesendet bei jedem Ausgang des Wartens.
+`prompt_id` unterscheidet zwei Abfragen derselben `session_id` (Retry); das
+Frontend schließt nur die Abfrage mit passender `session_id` und
+`prompt_id`. Rein informativ: Timeout und Abbruch bleiben Ablehnung.
 
 Wichtig für die Transparenz-Philosophie des Projekts: **Auch ein `Deny`
 durch die Filter-Engine wird als `chat-action-proposed`-Event mit
