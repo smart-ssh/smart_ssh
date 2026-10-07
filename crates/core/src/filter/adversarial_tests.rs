@@ -424,8 +424,43 @@ async fn test_adv_shell_c_other_shells_and_positions_hit_deny_rule() {
         "ls; ksh -xoc 'rm -rf /'",
         "ls; sh -o c 'rm -rf /'",
         "ls; sh -oc 'rm -rf /'",
+        // ksh93 ignores `-`/`_` in option names, so `c_` / `c-` still mean
+        // `-c` (review of PR #46).
+        "ksh -o c_ 'rm -rf /'",
+        "ls; ksh -o c- 'rm -rf /'",
+        "ls; ksh -o c__ 'rm -rf /'",
+        "ls; ksh -oc_ 'rm -rf /'",
+        "ls; sh -o c_ 'rm -rf /'",
     ] {
         assert_denied_by_rm_rule(cmd).await;
+    }
+}
+
+/// `-o` values that zsh or the ksh family may read differently than the
+/// parser: negated letters behind separators (ksh93 runs `-o no-c` like
+/// `-c`), unknown or empty names, and the long names for "read from stdin".
+/// They fail closed (review of PR #46).
+#[tokio::test]
+async fn test_adv_shell_option_names_fail_closed() {
+    for cmd in [
+        "ls; ksh -o no-c 'rm -rf /'",
+        "ls; ksh -o no_c 'rm -rf /'",
+        "ls; ksh -ono-c 'rm -rf /'",
+        "ls; ksh -ono_c 'rm -rf /'",
+        "ls; ksh -xo no-c 'rm -rf /'",
+        "ls; ksh -o NO_C 'rm -rf /'",
+        "ls; sh -o no_c 'rm -rf /'",
+        "ls; mksh -o no-c 'rm -rf /'",
+        "ls; zsh -o no-c 'rm -rf /'",
+        "ls; ksh -o frobnicate 'rm -rf /'",
+        "ls; ksh -o - 'rm -rf /'",
+        "ls; ksh -o __ 'rm -rf /'",
+        "echo cm0gLXJmIC8= | base64 -d | zsh -o shinstdin ls",
+        "echo cm0gLXJmIC8= | base64 -d | zsh -o SHIN_STDIN ls",
+        "echo cm0gLXJmIC8= | base64 -d | mksh -o stdin ls",
+        "echo cm0gLXJmIC8= | base64 -d | sh -o stdin ls",
+    ] {
+        assert_never_autoexec(cmd).await;
     }
 }
 
@@ -522,6 +557,11 @@ async fn test_adv_shell_and_interpreter_with_script_operand_stay_autoexec() {
         "bash +o history deploy.sh",
         "bash --norc deploy.sh",
         "sh +x deploy.sh",
+        "ksh -o pipefail deploy.sh",
+        "ksh -o noclobber deploy.sh",
+        "zsh -o extended_glob deploy.sh",
+        "zsh -o NO_NOMATCH deploy.sh",
+        "zsh +o ksh-arrays deploy.sh",
         "fish --debug all deploy.fish",
         "python3 script.py",
         "python3 -W ignore script.py",
@@ -671,6 +711,42 @@ fn test_adv_program_source_parses_options_per_program() {
         program_source("ksh -o x x.sh"),
         Some(ProgramSource::Operand)
     );
+    // ksh93 drops `-`/`_` from option names; zsh also ignores case. A
+    // name is normalised before it is read; unknown names fail closed
+    // (review of PR #46).
+    assert_eq!(program_source("ksh -o c_ 'rm -rf /'"), code("rm -rf /"));
+    assert_eq!(program_source("ksh -o c- 'rm -rf /'"), code("rm -rf /"));
+    assert_eq!(program_source("ksh -oc__ 'rm -rf /'"), code("rm -rf /"));
+    assert_eq!(program_source("ksh -o s_ ls"), Some(ProgramSource::Stdin));
+    assert_eq!(
+        program_source("zsh -o shin_stdin ls"),
+        Some(ProgramSource::Stdin)
+    );
+    assert_eq!(
+        program_source("mksh -o stdin ls"),
+        Some(ProgramSource::Stdin)
+    );
+    for cmd in [
+        "ksh -o no-c 'rm -rf /'",
+        "ksh -o no_c 'rm -rf /'",
+        "ksh -ono-c 'rm -rf /'",
+        "ksh -xo no-c 'rm -rf /'",
+        "ksh -o frobnicate 'rm -rf /'",
+        "ksh -o - 'rm -rf /'",
+        "ksh -o no 'rm -rf /'",
+        "zsh +o shinstdin ls",
+        "zsh -o no_shin_stdin ls",
+    ] {
+        assert_eq!(program_source(cmd), Some(ProgramSource::Opaque), "{cmd}");
+    }
+    for cmd in [
+        "ksh -o pipe-fail x.sh",
+        "zsh -o EXTENDED_GLOB x.sh",
+        "zsh -o no_nomatch x.sh",
+        "ksh -o noclobber x.sh",
+    ] {
+        assert_eq!(program_source(cmd), Some(ProgramSource::Operand), "{cmd}");
+    }
     assert_eq!(
         program_source("php -S localhost:8000 -t /dev/stdin"),
         Some(ProgramSource::Stdin)

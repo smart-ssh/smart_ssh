@@ -885,7 +885,10 @@ struct OptionSpec {
     /// one-letter value that is a code or stdin option counts as that
     /// option; a negated (`+o c`, `-o noc`) or case-folded one, or one
     /// naming a value-taking option, makes the call
-    /// [`ProgramSource::Opaque`] (fail closed).
+    /// [`ProgramSource::Opaque`] (fail closed). The value is normalised
+    /// first (`-`/`_` dropped, so `-o c_` is `-c`), and a multi-letter
+    /// value must be a known option name, else the call is `Opaque` too
+    /// (see [`letter_option`]).
     letter_name_value: &'static str,
     /// Short options followed by an optional run of digits, after which the
     /// rest of the cluster is still read as options (`perl -l0e CODE`,
@@ -1255,7 +1258,222 @@ fn merge_program_sources(a: ProgramSource, b: ProgramSource) -> ProgramSource {
     }
 }
 
-/// What a one-letter option name given to `-o` means (see
+/// Option names (normalised: lower case, without `-`/`_`) that zsh and the
+/// ksh family accept for `-o`/`+o` and that do not change where the shell
+/// reads its program from. Any other multi-letter name makes the call
+/// [`ProgramSource::Opaque`] (fail closed): the shell might read it as a
+/// short option (ksh93 ignores `-`/`_` in names, so `-o c_` means `-c`),
+/// as an abbreviation, or as a name this list does not know yet.
+const KNOWN_SHELL_OPTION_NAMES: &[&str] = &[
+    // ksh93, mksh and the POSIX `set -o` names.
+    "allexport",
+    "bgnice",
+    "braceexpand",
+    "emacs",
+    "errexit",
+    "errtrace",
+    "functrace",
+    "globstar",
+    "gmacs",
+    "hashall",
+    "histexpand",
+    "history",
+    "ignoreeof",
+    "inheritxtrace",
+    "interactive",
+    "keyword",
+    "letoctal",
+    "login",
+    "markdirs",
+    "monitor",
+    "multiline",
+    "noclobber",
+    "noexec",
+    "noglob",
+    "nohup",
+    "nolog",
+    "notify",
+    "nounset",
+    "physical",
+    "pipefail",
+    "posix",
+    "privileged",
+    "restricted",
+    "sh",
+    "showme",
+    "trackall",
+    "utf8mode",
+    "verbose",
+    "vi",
+    "viesccomplete",
+    "viraw",
+    "vitabcomplete",
+    "xtrace",
+    // zsh (names that are not already listed above).
+    "aliases",
+    "alwayslastprompt",
+    "alwaystoend",
+    "appendhistory",
+    "autocd",
+    "autolist",
+    "automenu",
+    "autonamedirs",
+    "autoparamkeys",
+    "autoparamslash",
+    "autopushd",
+    "autoremoveslash",
+    "autoresume",
+    "badpattern",
+    "banghist",
+    "bareglobqual",
+    "bashautolist",
+    "bashrematch",
+    "beep",
+    "braceccl",
+    "bsdecho",
+    "caseglob",
+    "casematch",
+    "cbases",
+    "cdablevars",
+    "chasedots",
+    "chaselinks",
+    "checkjobs",
+    "checkrunningjobs",
+    "clobber",
+    "combiningchars",
+    "completealiases",
+    "completeinword",
+    "correct",
+    "correctall",
+    "cprecedences",
+    "cshjunkiehistory",
+    "cshjunkieloops",
+    "cshjunkiequotes",
+    "cshnullcmd",
+    "cshnullglob",
+    "equals",
+    "errreturn",
+    "evallineno",
+    "exec",
+    "extendedglob",
+    "extendedhistory",
+    "flowcontrol",
+    "functionargzero",
+    "glob",
+    "globalexport",
+    "globalrcs",
+    "globassign",
+    "globcomplete",
+    "globdots",
+    "globsubst",
+    "hashcmds",
+    "hashdirs",
+    "hashexecutablesonly",
+    "hashlistall",
+    "histallowclobber",
+    "histbeep",
+    "histexpiredupsfirst",
+    "histfcntllock",
+    "histfindnodups",
+    "histignorealldups",
+    "histignoredups",
+    "histignorespace",
+    "histlexwords",
+    "histnofunctions",
+    "histnostore",
+    "histreduceblanks",
+    "histsavebycopy",
+    "histsavenodups",
+    "histsubstpattern",
+    "histverify",
+    "hup",
+    "ignorebraces",
+    "ignoreclosebraces",
+    "incappendhistory",
+    "incappendhistorytime",
+    "interactivecomments",
+    "ksharrays",
+    "kshautoload",
+    "kshglob",
+    "kshoptionprint",
+    "kshtypeset",
+    "kshzerosubscript",
+    "listambiguous",
+    "listbeep",
+    "listpacked",
+    "listrowsfirst",
+    "listtypes",
+    "localloops",
+    "localoptions",
+    "localpatterns",
+    "localtraps",
+    "longlistjobs",
+    "magicequalsubst",
+    "mailwarning",
+    "menucomplete",
+    "multibyte",
+    "multifuncdef",
+    "multios",
+    "nomatch",
+    "nullglob",
+    "numericglobsort",
+    "octalzeroes",
+    "overstrike",
+    "pathdirs",
+    "pathscript",
+    "posixaliases",
+    "posixargzero",
+    "posixbuiltins",
+    "posixcd",
+    "posixidentifiers",
+    "posixjobs",
+    "posixstrings",
+    "posixtraps",
+    "printeightbit",
+    "printexitvalue",
+    "promptbang",
+    "promptcr",
+    "promptpercent",
+    "promptsp",
+    "promptsubst",
+    "pushdignoredups",
+    "pushdminus",
+    "pushdsilent",
+    "pushdtohome",
+    "rcexpandparam",
+    "rcquotes",
+    "rcs",
+    "recexact",
+    "rematchpcre",
+    "rmstarsilent",
+    "rmstarwait",
+    "sharehistory",
+    "shfileexpansion",
+    "shglob",
+    "shnullcmd",
+    "shoptionletters",
+    "shortloops",
+    "shortrepeat",
+    "shwordsplit",
+    "singlecommand",
+    "singlelinezle",
+    "sourcetrace",
+    "sunkeyboardhack",
+    "transientrprompt",
+    "trapsasync",
+    "typesetsilent",
+    "typesettounset",
+    "unset",
+    "warncreateglobal",
+    "warnnestedvar",
+    "zle",
+];
+
+/// Option names (normalised as above) that make the shell read its program
+/// from stdin, like `-s`: zsh's `SHIN_STDIN`, mksh's `stdin`.
+const STDIN_SHELL_OPTION_NAMES: &[&str] = &["shinstdin", "stdin"];
+
+/// What an option name given to `-o` means (see
 /// [`OptionSpec::letter_name_value`]).
 enum LetterOption {
     CodeOperand,
@@ -1264,18 +1482,50 @@ enum LetterOption {
 }
 
 /// Reads `name`, the value of an `-o`-style option (`minus` is false for
-/// `+o`), as a single-letter short option name. `None` if it is not one of
-/// the letters that matter here (an ordinary name such as `errexit`, or a
-/// harmless letter such as `x`).
+/// `+o`). The name is normalised first, the way ksh93 and zsh compare
+/// option names: `-`/`_` are dropped (`no-c`, `c_` → `noc`, `c`) and a
+/// leading `no` negates.
+///
+/// - A known option name ([`KNOWN_SHELL_OPTION_NAMES`]) or a harmless
+///   single letter (`x`) gives `None`.
+/// - A name meaning "read from stdin" ([`STDIN_SHELL_OPTION_NAMES`]) or the
+///   letter of a stdin option gives `Stdin`, the letter of the code option
+///   gives `CodeOperand`.
+/// - Everything else fails closed (`Opaque`): an unknown multi-letter name,
+///   an empty name, or a negated (`+o c`, `-o no-c`), case-folded (`-o C`)
+///   or value-taking (`-o o`) dangerous letter.
 fn letter_option(spec: &OptionSpec, name: &str, minus: bool) -> Option<LetterOption> {
-    let (negated, letter) = match name.strip_prefix("no") {
-        Some(rest) if rest.chars().count() == 1 => (true, rest),
-        _ => (false, name),
+    let normalised: String = name.chars().filter(|&c| c != '-' && c != '_').collect();
+    let lower = normalised.to_ascii_lowercase();
+    let (negated, stripped) = match lower.strip_prefix("no") {
+        Some(rest) => (true, rest),
+        None => (false, lower.as_str()),
     };
-    let mut chars = letter.chars();
-    let (Some(c), None) = (chars.next(), chars.next()) else {
+    if STDIN_SHELL_OPTION_NAMES.contains(&lower.as_str()) {
+        return Some(if minus {
+            LetterOption::Stdin
+        } else {
+            LetterOption::Opaque
+        });
+    }
+    if negated && STDIN_SHELL_OPTION_NAMES.contains(&stripped) {
+        return Some(LetterOption::Opaque);
+    }
+    if KNOWN_SHELL_OPTION_NAMES.contains(&lower.as_str())
+        || (negated && KNOWN_SHELL_OPTION_NAMES.contains(&stripped))
+    {
         return None;
+    }
+    // Single letter, case kept (ksh93 option letters are case-sensitive).
+    let letter = if normalised.chars().count() == 1 {
+        normalised.as_str()
+    } else if negated && stripped.chars().count() == 1 {
+        &normalised[2..]
+    } else {
+        return Some(LetterOption::Opaque);
     };
+    let negated = letter.len() < normalised.len();
+    let c = letter.chars().next()?;
     let dangerous = |d: char| {
         spec.code_operand.contains(d)
             || spec.stdin_flag.contains(d)
