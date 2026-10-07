@@ -897,3 +897,119 @@ fn test_spec_0077_t7_builtin_risk_patterns_all_compile() {
     }
     assert!(count > 0, "keine eingebauten Risiko-Muster gefunden");
 }
+
+// --- Issue #88: code inside `bash -c` / `sh -c` -------------------------
+
+#[test]
+fn test_shell_c_wrapped_shutdown_reboot_poweroff_are_server_red() {
+    for command in [
+        "bash -c 'shutdown -h now'",
+        "sh -c \"reboot\"",
+        "sudo bash -c 'poweroff'",
+        "env bash -c 'shutdown now'",
+        "BASH -c 'reboot'",
+        "/bin/sh -c -- 'reboot'",
+        "bash -lc 'shutdown -r now'",
+        "ls && bash -c 'reboot'",
+        "zsh -c 'reboot'",
+        "dash -c 'poweroff'",
+    ] {
+        assert_eq!(
+            classify(command).server_risk,
+            RiskLevel::Red,
+            "{command} must be server risk Red"
+        );
+    }
+}
+
+#[test]
+fn test_shell_c_wrapped_rm_rf_is_server_red() {
+    assert_eq!(
+        classify("sh -c \"rm -rf /var/lib/x\"").server_risk,
+        RiskLevel::Red
+    );
+}
+
+#[test]
+fn test_shell_c_wrapped_shadow_read_is_data_red_like_direct_read() {
+    let direct = classify("cat /etc/shadow");
+    let wrapped = classify("sh -c 'cat /etc/shadow'");
+    assert_eq!(direct.data_risk, RiskLevel::Red);
+    assert_eq!(wrapped.data_risk, RiskLevel::Red);
+}
+
+#[test]
+fn test_nested_shell_c_is_unwrapped() {
+    assert_eq!(
+        classify("bash -c \"sh -c 'reboot'\"").server_risk,
+        RiskLevel::Red
+    );
+}
+
+#[test]
+fn test_harmless_shell_c_stays_none() {
+    let a = classify("bash -c 'ls -la'");
+    assert_eq!(a.server_risk, RiskLevel::None);
+    assert_eq!(a.data_risk, RiskLevel::None);
+}
+
+/// `reboot` wrapped in `levels` nested `bash -c` calls, each level quoted
+/// with `shell_words::quote` — the quoting a real shell would need.
+fn nested_shell_c(levels: usize) -> String {
+    let mut command = "reboot".to_string();
+    for _ in 0..levels {
+        command = format!("bash -c {}", shell_words::quote(&command));
+    }
+    command
+}
+
+#[test]
+fn test_deepest_nested_shell_c_within_length_cap_is_rated_without_crash() {
+    // Each level roughly doubles the escaping, so only a limited number of
+    // levels fits under the command length cap; take the deepest one.
+    let mut levels = 1;
+    while nested_shell_c(levels + 1).len() <= crate::filter::DEFAULT_MAX_COMMAND_LENGTH {
+        levels += 1;
+    }
+    assert!(
+        levels >= 3,
+        "nesting helper broken: only {levels} levels fit"
+    );
+    assert_eq!(
+        classify(&nested_shell_c(levels)).server_risk,
+        RiskLevel::Red
+    );
+    // One level more exceeds the cap and returns before any parsing.
+    let too_long = nested_shell_c(levels + 1);
+    assert!(too_long.len() > crate::filter::DEFAULT_MAX_COMMAND_LENGTH);
+    let _ = classify(&too_long);
+}
+
+#[test]
+fn test_shell_c_unwrapping_stops_at_depth_limit() {
+    use super::classifier::{classify_into, RiskAccumulator};
+    use crate::filter::MAX_SUBSTITUTION_DEPTH;
+
+    // Within the limit: two `-c` levels still reach `reboot`.
+    let mut acc = RiskAccumulator::new();
+    classify_into(
+        "bash -c \"sh -c 'reboot'\"",
+        MAX_SUBSTITUTION_DEPTH - 2,
+        &mut acc,
+    );
+    assert_eq!(acc.server_risk, RiskLevel::Red);
+
+    // At the limit no further `-c` level is unwrapped: the call returns
+    // (no unbounded recursion) and only the outer level is rated.
+    let mut acc = RiskAccumulator::new();
+    classify_into(
+        "bash -c \"sh -c 'reboot'\"",
+        MAX_SUBSTITUTION_DEPTH,
+        &mut acc,
+    );
+    assert_eq!(acc.server_risk, RiskLevel::None);
+
+    // Far beyond the limit as a starting depth: still returns.
+    let mut acc = RiskAccumulator::new();
+    classify_into(&nested_shell_c(8), usize::MAX / 2, &mut acc);
+}

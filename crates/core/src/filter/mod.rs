@@ -45,6 +45,11 @@ pub(crate) use parser::segment_command;
 // usw.), s. `risk::classifier`-Doc-Kommentar. Wie `segment_command`
 // bewusst `pub(crate)` — internes Detail zwischen den beiden Modulen.
 pub(crate) use parser::resolve_effective_command;
+// Issue #88: also reused by `crate::risk`, so the risk classifier rates the
+// code of a `bash -c '…'`/`sh -c '…'` call with the same extraction the
+// filter engine uses for its own checks (no second `-c` parser). Internal
+// detail between the two modules, hence `pub(crate)`.
+pub(crate) use parser::extract_shell_c_style_codes;
 // Unabhängiger Review-Pass, Spec 0011: von `app-shell::rule_suggestions`
 // wiederverwendet, damit die Regel-Schnellvorschlag-Heuristik dieselbe
 // Elevation-/Wrapper-Erkennung nutzt wie die Hard-Blacklist-Prüfung, statt
