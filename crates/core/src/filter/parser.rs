@@ -880,6 +880,13 @@ struct OptionSpec {
     /// inside a cluster, while the rest of the cluster is still read as
     /// options (`bash -oc errexit CODE` runs `CODE`).
     next_word_value: &'static str,
+    /// Options (among `value`) whose value names a shell option and may be
+    /// that option's single letter: ksh93 reads `-oc`, `-o c` as `-c`. A
+    /// one-letter value that is a code or stdin option counts as that
+    /// option; a negated (`+o c`, `-o noc`) or case-folded one, or one
+    /// naming a value-taking option, makes the call
+    /// [`ProgramSource::Opaque`] (fail closed).
+    letter_name_value: &'static str,
     /// Short options followed by an optional run of digits, after which the
     /// rest of the cluster is still read as options (`perl -l0e CODE`,
     /// `ruby -W2e CODE`). A hexadecimal value (`perl -0x1ff`) makes the
@@ -909,6 +916,7 @@ const BASH_LIKE_SHELL_OPTIONS: OptionSpec = OptionSpec {
     script_value: "",
     value: "",
     next_word_value: "oO",
+    letter_name_value: "",
     digit_value: "",
     attached_value: "",
     plus_options: true,
@@ -941,6 +949,7 @@ const KSH_LIKE_SHELL_OPTIONS: OptionSpec = OptionSpec {
     script_value: "",
     value: "oO",
     next_word_value: "",
+    letter_name_value: "oO",
     digit_value: "",
     attached_value: "",
     plus_options: true,
@@ -970,6 +979,7 @@ const FISH_OPTIONS: OptionSpec = OptionSpec {
     script_value: "",
     value: "dof",
     next_word_value: "",
+    letter_name_value: "",
     digit_value: "",
     attached_value: "",
     plus_options: false,
@@ -1002,6 +1012,7 @@ const CSH_OPTIONS: OptionSpec = OptionSpec {
     script_value: "",
     value: "",
     next_word_value: "",
+    letter_name_value: "",
     digit_value: "",
     attached_value: "",
     plus_options: false,
@@ -1018,6 +1029,7 @@ const PYTHON_OPTIONS: OptionSpec = OptionSpec {
     script_value: "m",
     value: "WXQ",
     next_word_value: "",
+    letter_name_value: "",
     digit_value: "",
     attached_value: "",
     plus_options: false,
@@ -1034,6 +1046,7 @@ const PERL_OPTIONS: OptionSpec = OptionSpec {
     script_value: "",
     value: "I",
     next_word_value: "",
+    letter_name_value: "",
     digit_value: "0l",
     attached_value: "CdDimMVx",
     plus_options: false,
@@ -1050,6 +1063,7 @@ const RUBY_OPTIONS: OptionSpec = OptionSpec {
     script_value: "",
     value: "CEIr",
     next_word_value: "",
+    letter_name_value: "",
     digit_value: "0TW",
     attached_value: "FKx",
     plus_options: false,
@@ -1076,6 +1090,7 @@ const NODE_OPTIONS: OptionSpec = OptionSpec {
     script_value: "",
     value: "Cr",
     next_word_value: "",
+    letter_name_value: "",
     digit_value: "",
     attached_value: "",
     plus_options: false,
@@ -1110,6 +1125,7 @@ const PHP_OPTIONS: OptionSpec = OptionSpec {
     script_value: "Ff",
     value: "cdzSt",
     next_word_value: "",
+    letter_name_value: "",
     digit_value: "",
     attached_value: "",
     plus_options: false,
@@ -1239,6 +1255,53 @@ fn merge_program_sources(a: ProgramSource, b: ProgramSource) -> ProgramSource {
     }
 }
 
+/// What a one-letter option name given to `-o` means (see
+/// [`OptionSpec::letter_name_value`]).
+enum LetterOption {
+    CodeOperand,
+    Stdin,
+    Opaque,
+}
+
+/// Reads `name`, the value of an `-o`-style option (`minus` is false for
+/// `+o`), as a single-letter short option name. `None` if it is not one of
+/// the letters that matter here (an ordinary name such as `errexit`, or a
+/// harmless letter such as `x`).
+fn letter_option(spec: &OptionSpec, name: &str, minus: bool) -> Option<LetterOption> {
+    let (negated, letter) = match name.strip_prefix("no") {
+        Some(rest) if rest.chars().count() == 1 => (true, rest),
+        _ => (false, name),
+    };
+    let mut chars = letter.chars();
+    let (Some(c), None) = (chars.next(), chars.next()) else {
+        return None;
+    };
+    let dangerous = |d: char| {
+        spec.code_operand.contains(d)
+            || spec.stdin_flag.contains(d)
+            || spec.code_value.contains(d)
+            || spec.script_value.contains(d)
+            || spec.value.contains(d)
+            || spec.next_word_value.contains(d)
+            || spec.attached_value.contains(d)
+            || spec.digit_value.contains(d)
+    };
+    let folded = |d: char| dangerous(d.to_ascii_lowercase()) || dangerous(d.to_ascii_uppercase());
+    if !dangerous(c) {
+        return folded(c).then_some(LetterOption::Opaque);
+    }
+    if negated || !minus {
+        return Some(LetterOption::Opaque);
+    }
+    if spec.code_operand.contains(c) {
+        Some(LetterOption::CodeOperand)
+    } else if spec.stdin_flag.contains(c) {
+        Some(LetterOption::Stdin)
+    } else {
+        Some(LetterOption::Opaque)
+    }
+}
+
 fn analyse_options(spec: &OptionSpec, is_shell: bool, args: &[String]) -> ProgramSource {
     let mut codes: Vec<String> = Vec::new();
     let mut code_operand = false;
@@ -1325,7 +1388,16 @@ fn analyse_options(spec: &OptionSpec, is_shell: bool, args: &[String]) -> Progra
                 break;
             } else if spec.script_value.contains(c) || spec.value.contains(c) {
                 script |= spec.script_value.contains(c);
-                stdin |= take_value(attached, &mut i).is_some_and(|v| is_stdin_path(&v));
+                let value = take_value(attached, &mut i);
+                stdin |= value.as_deref().is_some_and(is_stdin_path);
+                if spec.letter_name_value.contains(c) {
+                    match value.as_deref().and_then(|v| letter_option(spec, v, minus)) {
+                        Some(LetterOption::CodeOperand) => code_operand = true,
+                        Some(LetterOption::Stdin) => stdin = true,
+                        Some(LetterOption::Opaque) => return ProgramSource::Opaque,
+                        None => {}
+                    }
+                }
                 break;
             } else if spec.next_word_value.contains(c) {
                 stdin |= take_value("", &mut i).is_some_and(|v| is_stdin_path(&v));

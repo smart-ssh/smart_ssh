@@ -414,6 +414,16 @@ async fn test_adv_shell_c_other_shells_and_positions_hit_deny_rule() {
         "ls; sh -oerrexit -c 'rm -rf /'",
         "ls; sh -oc errexit 'rm -rf /'",
         "ls; yash -oerrexit -c 'rm -rf /'",
+        // ksh93 reads a one-letter `-o` value as that short option, so
+        // `-oc` / `-o c` mean `-c` (review of PR #46).
+        "ksh -oc 'rm -rf /'",
+        "ls; ksh -oc 'rm -rf /'",
+        "ls; ksh -o c 'rm -rf /'",
+        "ls; ksh93 -o c 'rm -rf /'",
+        "ls; mksh -oc 'rm -rf /'",
+        "ls; ksh -xoc 'rm -rf /'",
+        "ls; sh -o c 'rm -rf /'",
+        "ls; sh -oc 'rm -rf /'",
     ] {
         assert_denied_by_rm_rule(cmd).await;
     }
@@ -621,9 +631,14 @@ fn test_adv_program_source_parses_options_per_program() {
         program_source("sh -oerrexit -c 'rm -rf /'"),
         code("rm -rf /")
     );
+    // bash/dash reading: `-o` takes `errexit`, code is `rm -rf /`; ksh93
+    // reading: `-oc` is `-c`, code is `errexit`. Both are evaluated.
     assert_eq!(
         program_source("sh -oc errexit 'rm -rf /'"),
-        code("rm -rf /")
+        Some(ProgramSource::Code(vec![
+            "rm -rf /".to_string(),
+            "errexit".to_string()
+        ]))
     );
     assert_eq!(
         program_source("sh -oerrexit -s ls"),
@@ -635,6 +650,25 @@ fn test_adv_program_source_parses_options_per_program() {
     );
     assert_eq!(
         program_source("zsh -o errexit x.sh"),
+        Some(ProgramSource::Operand)
+    );
+    // ksh93: a one-letter `-o` value is that short option (review of
+    // PR #46); negated, case-folded or value-taking letters fail closed.
+    assert_eq!(program_source("ksh -oc 'rm -rf /'"), code("rm -rf /"));
+    assert_eq!(program_source("ksh -o c 'rm -rf /'"), code("rm -rf /"));
+    assert_eq!(program_source("sh -o c 'rm -rf /'"), code("rm -rf /"));
+    assert_eq!(program_source("ksh -os"), Some(ProgramSource::Stdin));
+    assert_eq!(program_source("ksh -o s ls"), Some(ProgramSource::Stdin));
+    for cmd in [
+        "ksh +oc 'rm -rf /'",
+        "ksh -o noc 'rm -rf /'",
+        "ksh -oC 'rm -rf /'",
+        "ksh -o o 'rm -rf /'",
+    ] {
+        assert_eq!(program_source(cmd), Some(ProgramSource::Opaque), "{cmd}");
+    }
+    assert_eq!(
+        program_source("ksh -o x x.sh"),
         Some(ProgramSource::Operand)
     );
     assert_eq!(
