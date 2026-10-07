@@ -368,6 +368,7 @@ pub async fn apply_import(
                     ),
                     code: err.code,
                     feature_locked: None,
+                    connect_log: None,
                 });
             }
         }

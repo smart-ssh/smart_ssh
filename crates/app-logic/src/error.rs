@@ -196,6 +196,14 @@ pub struct CommandError {
     /// `None` für jeden anderen Fehler (die weit überwiegende Mehrheit).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub feature_locked: Option<FeatureLocked>,
+    /// Issue #51: das Schritt-Protokoll eines gescheiterten
+    /// Verbindungsaufbaus (`connect`), damit die Oberfläche es unter der
+    /// Fehlermeldung zeigen kann. `None` für jeden anderen Fehler.
+    ///
+    /// Nur für die Oberfläche: Wer einen `CommandError` loggt, loggt
+    /// `code`/`message`, nie dieses Feld (Spec 0094).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connect_log: Option<Vec<ssh_manager_core::ssh::ConnectStepRecord>>,
 }
 
 impl CommandError {
@@ -204,7 +212,17 @@ impl CommandError {
             message: message.into(),
             code: Some(code),
             feature_locked: None,
+            connect_log: None,
         }
+    }
+
+    /// Issue #51: hängt das Schritt-Protokoll eines Verbindungsversuchs an.
+    pub fn with_connect_log(
+        mut self,
+        steps: Vec<ssh_manager_core::ssh::ConnectStepRecord>,
+    ) -> Self {
+        self.connect_log = Some(steps);
+        self
     }
 
     /// Spec 0037, Abschnitt 3 (D5): Gating-Konvention. Kein `impl
@@ -227,6 +245,7 @@ impl CommandError {
             message: err.to_string(),
             code: Some("FEATURE_LOCKED"),
             feature_locked: Some(err),
+            connect_log: None,
         }
     }
 }
@@ -237,6 +256,7 @@ impl<E: std::fmt::Display> From<E> for CommandError {
             message: err.to_string(),
             code: None,
             feature_locked: None,
+            connect_log: None,
         }
     }
 }
@@ -581,5 +601,38 @@ mod feature_locked_tests {
 
         assert!(command_error.feature_locked.is_none());
         assert_eq!(command_error.code, None);
+    }
+}
+
+#[cfg(test)]
+mod connect_log_tests {
+    //! Issue #51: das Schritt-Protokoll reist nur am Verbindungsfehler mit.
+    use super::*;
+    use ssh_manager_core::ssh::{ConnectStep, ConnectStepRecord, StepStatus};
+
+    #[test]
+    fn test_issue_51_connect_log_is_serialized_only_when_attached() {
+        let plain = serde_json::to_value(CommandError::with_code("x", "SSH_TIMEOUT")).unwrap();
+        assert!(plain.get("connect_log").is_none(), "{plain}");
+
+        let step = ConnectStepRecord {
+            hop_index: 0,
+            hop: "deploy@example.invalid:22".into(),
+            step: ConnectStep::TcpConnect {
+                address: None,
+                port: 22,
+            },
+            status: StepStatus::Failed {
+                code: "SSH_TIMEOUT".into(),
+            },
+            duration_ms: Some(10_000),
+        };
+        let with_log = serde_json::to_value(
+            CommandError::with_code("x", "SSH_TIMEOUT").with_connect_log(vec![step]),
+        )
+        .unwrap();
+        assert_eq!(with_log["code"], "SSH_TIMEOUT");
+        assert_eq!(with_log["connect_log"][0]["step"]["kind"], "tcpConnect");
+        assert_eq!(with_log["connect_log"][0]["status"]["code"], "SSH_TIMEOUT");
     }
 }
