@@ -56,11 +56,15 @@ function App() {
    * Mechanismus wie oben (Spec 0057, §4.2), hier nur mit `newServer` statt
    * `server`. Kein `switchTo(null)` nötig: `ServerList` ist ohnehin nur
    * sichtbar, wenn kein Session-Tab aktiv ist (s. `activeSessionId === null`-
-   * Zweig unten). */
-  const handleCreateFirstServer = () => {
+   * Zweig unten).
+   *
+   * Issue #49: dasselbe für „+" an einer Gruppenzeile der Server-Liste,
+   * nur mit dieser Gruppe als Vorgabe. */
+  const handleCreateServerInGroup = (groupId: string | null) => {
     setTab("manage");
-    setPendingNoteEditSelection({ kind: "newServer", groupId: null });
+    setPendingNoteEditSelection({ kind: "newServer", groupId });
   };
+  const handleCreateFirstServer = () => handleCreateServerInGroup(null);
 
   const refreshProviderStatus = () => {
     listAiProviders()
@@ -180,6 +184,7 @@ function App() {
           pendingNoteEditSelection={pendingNoteEditSelection}
           onNoteEditSelectionConsumed={() => setPendingNoteEditSelection(null)}
           onCreateFirstServer={handleCreateFirstServer}
+          onCreateServerInGroup={handleCreateServerInGroup}
         />
       </div>
     </div>
@@ -202,6 +207,8 @@ interface MainScreenProps {
   onSwitchToExistingTab: (sessionId: string) => void;
   /** Spec 0069, Teil C1 (BL-0082). */
   onCreateFirstServer: () => void;
+  /** Issue #49. */
+  onCreateServerInGroup: (groupId: string) => void;
 }
 
 function MainScreen({
@@ -217,6 +224,7 @@ function MainScreen({
   pendingNoteEditSelection,
   onNoteEditSelectionConsumed,
   onCreateFirstServer,
+  onCreateServerInGroup,
 }: MainScreenProps) {
   const { t } = useTranslation();
   // Spec 0033, Abschnitt 4: hier statt in `ServerList` selbst gehalten,
@@ -312,6 +320,7 @@ function MainScreen({
               collapsedGroupIds={collapsedGroupIds}
               onToggleGroup={toggleGroup}
               onCreateFirstServer={onCreateFirstServer}
+              onCreateServerInGroup={onCreateServerInGroup}
             />
           </section>
         </main>
