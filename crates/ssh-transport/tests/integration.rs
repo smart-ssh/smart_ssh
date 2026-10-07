@@ -1768,6 +1768,45 @@ async fn test_issue_51_wrong_password_marks_auth_and_shows_remaining_methods_onl
     );
 }
 
+/// Abgelehnter Schlüssel: der Anmeldeschritt ist markiert, mit der Methode
+/// `identityFile`. Der Testserver nimmt jeden Schlüssel für `TEST_USERNAME`
+/// an; „falscher Schlüssel" heißt hier deshalb: ein anderer Benutzer, für
+/// den der Server die Signatur ablehnt — derselbe Weg wie ein unbekannter
+/// Schlüssel.
+#[tokio::test]
+async fn test_issue_51_rejected_key_marks_the_auth_step() {
+    let server = RunningTestServer::start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let key_path = dir.path().join("id_ed25519");
+    std::fs::write(&key_path, encrypted_test_key("issue51")).unwrap();
+    let mut hop = identity_file_hop(
+        "127.0.0.1",
+        server.addr.port(),
+        key_path.to_str().unwrap(),
+        true,
+    );
+    hop.username = "not-allowed-for-this-key".into();
+    let target = ConnectionTarget { hops: vec![hop] };
+    let (result, steps) = connect_logged(
+        &target,
+        &PassphraseStore("issue51"),
+        &PlainFileKeyReader,
+        trusted_host_keys(&server),
+    )
+    .await;
+    assert_eq!(result.err(), Some(SshError::AuthenticationFailed));
+    assert_eq!(
+        kinds(&steps),
+        ["dns", "tcp", "handshake", "hostKey", "auth"]
+    );
+    let step = the_failed_step(&steps);
+    assert_eq!(step.status, failed("SSH_AUTH_FAILED"));
+    let ConnectStep::Authentication { method, .. } = &step.step else {
+        unreachable!()
+    };
+    assert_eq!(*method, AuthMethodKind::IdentityFile);
+}
+
 /// Jump-Host: Schritte je Hop. Der zweite Hop öffnet seinen Tunnel über den
 /// ersten und hat keinen eigenen DNS-/TCP-Schritt. Ob der verschachtelte
 /// Handshake gegen russh 0.63.1 gelingt (ADR 0008), spielt hier keine
