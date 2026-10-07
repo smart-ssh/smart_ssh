@@ -16,9 +16,12 @@ use ssh_manager_core::shared::ServerId;
 
 use crate::commands::connect_session;
 use crate::event_emitter::TauriEventEmitter;
-use app_logic::events::{emit_mcp_action_tab_requested, EventEmitter};
+use app_logic::events::EventEmitter;
 use app_logic::mcp_lookup::McpLookup;
-use app_logic::mcp_sessions::{McpSessionKey, MCP_SESSION_CLOSED_MESSAGE};
+use app_logic::mcp_sessions::{
+    normalize_client_name, McpSessionKey, McpSessionSlot, MCP_SESSION_CLOSED_MESSAGE,
+    MCP_SESSION_LIMIT_MESSAGE,
+};
 use app_logic::orchestration::handle_mcp_action_proposed;
 use app_logic::session::Session;
 use app_logic::state::{AppState, SessionId};
@@ -31,6 +34,9 @@ enum EnsureSessionError {
     /// Verbindungsaufbau gescheitert — wie bisher als `UnknownServer` an den
     /// Client gemeldet.
     Unavailable,
+    /// Issue #68: Für den Server sind schon so viele MCP-Sitzungen offen
+    /// wie erlaubt; weder Verbindung noch Tab wurden angelegt.
+    LimitReached,
 }
 
 pub struct AppMcpBackend {
@@ -74,27 +80,29 @@ impl AppMcpBackend {
         // Hält gleichzeitige Anfragen desselben Clients an denselben Server
         // an, bis die erste ihre Sitzung angelegt hat — sonst bauten beide
         // eine eigene Verbindung auf.
-        let _creation = registry.lock_creation(&key).await;
+        let creation = registry.lock_creation(&key).await;
 
-        if let Some(session_id) = registry.reusable_session(&key, &state.sessions) {
-            let session = state
-                .sessions
-                .get(session_id)
-                .ok_or(EnsureSessionError::Closed)?;
-            return Ok((session_id, session));
-        }
-
-        let session_id: SessionId = uuid::Uuid::new_v4();
         // Vor dem Event und dem Verbindungsaufbau eintragen: `list_sessions()`
         // kennzeichnet den Tab damit schon während eines Host-Key-Dialogs als
-        // MCP-Tab, und Nutzer-Eingaben sind von Anfang an gesperrt.
-        registry.register(&key, session_id);
-        emit_mcp_action_tab_requested(
+        // MCP-Tab, und Nutzer-Eingaben sind von Anfang an gesperrt. Bei
+        // erreichter Höchstzahl je Server (Issue #68) gibt es weder Tab noch
+        // Verbindung.
+        let session_id = match registry.acquire_session(
+            &creation,
+            &key,
+            &state.sessions,
             &TauriEventEmitter(self.app.clone()),
-            session_id,
-            server_id,
-            key.client_name(),
-        );
+        ) {
+            Ok(McpSessionSlot::Existing(session_id)) => {
+                let session = state
+                    .sessions
+                    .get(session_id)
+                    .ok_or(EnsureSessionError::Closed)?;
+                return Ok((session_id, session));
+            }
+            Ok(McpSessionSlot::New(session_id)) => session_id,
+            Err(_) => return Err(EnsureSessionError::LimitReached),
+        };
 
         // Spec 0040, Abschnitt 4: `persist_chat_session: false` — eine rein
         // MCP-ausgelöste Verbindung erzeugt keine `chat_sessions`-Zeile
@@ -192,6 +200,10 @@ impl McpBackend for AppMcpBackend {
             .map(|s| s.name)
             .unwrap_or_else(|_| server_id.0.to_string());
 
+        // Issue #68: gekürzter Name auch für Benachrichtigung und
+        // Bestätigungsdialog, nicht nur für Schlüssel und Tab.
+        let client_name = normalize_client_name(client_name.as_deref());
+
         let (session_id, session) =
             match self.ensure_session(server_id, client_name.as_deref()).await {
                 Ok(found) => found,
@@ -204,6 +216,11 @@ impl McpBackend for AppMcpBackend {
                     });
                 }
                 Err(EnsureSessionError::Unavailable) => return Err(LookupError::UnknownServer),
+                Err(EnsureSessionError::LimitReached) => {
+                    return Ok(ActionOutcome::Failed {
+                        message: MCP_SESSION_LIMIT_MESSAGE.to_string(),
+                    });
+                }
             };
 
         self.notify_pending_confirmation(&server_name, client_name.as_deref());

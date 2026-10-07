@@ -62,7 +62,7 @@ fn test_registered_connected_mcp_session_is_reused_for_the_same_client() {
     let registry = McpSessionRegistry::new();
     let key = McpSessionKey::new(server, Some("Claude Code"));
     let mcp_session_id = Uuid::new_v4();
-    registry.register(&key, mcp_session_id);
+    registry.register(&key, mcp_session_id).unwrap();
     sessions.insert(
         mcp_session_id,
         Arc::new(session_on(server, MockSshTransport::default())),
@@ -91,7 +91,7 @@ fn test_two_mcp_clients_on_the_same_server_get_separate_sessions() {
     let first = McpSessionKey::new(server, Some("Claude Code"));
     let second = McpSessionKey::new(server, Some("Cursor"));
     let first_id = Uuid::new_v4();
-    registry.register(&first, first_id);
+    registry.register(&first, first_id).unwrap();
     sessions.insert(
         first_id,
         Arc::new(session_on(server, MockSshTransport::default())),
@@ -100,7 +100,7 @@ fn test_two_mcp_clients_on_the_same_server_get_separate_sessions() {
     assert_eq!(registry.reusable_session(&second, &sessions), None);
 
     let second_id = Uuid::new_v4();
-    registry.register(&second, second_id);
+    registry.register(&second, second_id).unwrap();
     sessions.insert(
         second_id,
         Arc::new(session_on(server, MockSshTransport::default())),
@@ -136,7 +136,7 @@ fn test_disconnected_mcp_session_is_not_reused_but_stays_marked() {
     let registry = McpSessionRegistry::new();
     let key = McpSessionKey::new(server, None);
     let id = Uuid::new_v4();
-    registry.register(&key, id);
+    registry.register(&key, id).unwrap();
     let session = session_on(server, MockSshTransport::default());
     *session.status.lock().unwrap() = ConnectionStatus::Disconnected;
     sessions.insert(id, Arc::new(session));
@@ -152,7 +152,7 @@ fn test_vanished_mcp_session_is_forgotten() {
     let registry = McpSessionRegistry::new();
     let key = McpSessionKey::new(server, None);
     let id = Uuid::new_v4();
-    registry.register(&key, id);
+    registry.register(&key, id).unwrap();
 
     assert_eq!(
         registry.reusable_session(&key, &SessionManager::new()),
@@ -167,7 +167,9 @@ fn test_vanished_mcp_session_is_forgotten() {
 fn test_user_input_is_rejected_for_mcp_sessions_only() {
     let registry = McpSessionRegistry::new();
     let mcp_id = Uuid::new_v4();
-    registry.register(&McpSessionKey::new(ServerId::new(), None), mcp_id);
+    registry
+        .register(&McpSessionKey::new(ServerId::new(), None), mcp_id)
+        .unwrap();
 
     let err = registry.ensure_user_session(mcp_id).unwrap_err();
     assert_eq!(err.message, MCP_SESSION_NOT_INTERACTIVE_MESSAGE);
@@ -181,7 +183,7 @@ fn test_unregister_frees_the_key_for_a_new_session() {
     let registry = McpSessionRegistry::new();
     let key = McpSessionKey::new(server, Some("Claude Code"));
     let id = Uuid::new_v4();
-    registry.register(&key, id);
+    registry.register(&key, id).unwrap();
     sessions.insert(
         id,
         Arc::new(session_on(server, MockSshTransport::default())),
@@ -238,7 +240,7 @@ async fn test_mcp_action_runs_only_in_the_mcp_session_and_stays_confirm() {
         let mcp_executed = mcp_transport.executed_handle();
         let mcp_session = Arc::new(session_on(server, mcp_transport));
         let mcp_session_id = Uuid::new_v4();
-        registry.register(&key, mcp_session_id);
+        registry.register(&key, mcp_session_id).unwrap();
         sessions.insert(mcp_session_id, Arc::clone(&mcp_session));
         assert_ne!(mcp_session_id, user_session_id);
 
@@ -319,7 +321,7 @@ async fn test_closing_the_mcp_session_rejects_its_pending_confirmation() {
         let executed = transport.executed_handle();
         let session = Arc::new(session_on(server, transport));
         let session_id = Uuid::new_v4();
-        registry.register(&key, session_id);
+        registry.register(&key, session_id).unwrap();
         sessions.insert(session_id, Arc::clone(&session));
 
         let emitter = TestEmitter::default();
@@ -384,7 +386,7 @@ async fn test_generic_close_keeps_the_mcp_session_behaviour() {
         let executed = transport.executed_handle();
         let session = Arc::new(session_on(server, transport));
         let session_id = Uuid::new_v4();
-        registry.register(&key, session_id);
+        registry.register(&key, session_id).unwrap();
         sessions.insert(session_id, Arc::clone(&session));
 
         let emitter = TestEmitter::default();
@@ -460,4 +462,284 @@ async fn test_creation_lock_serialises_the_same_key_only() {
     tokio::time::timeout(TEST_TIMEOUT, same)
         .await
         .expect("nach Freigabe verfügbar");
+}
+
+// ---- Issue #68: Grenzen für Client-Name, Sitzungen je Server, Anlege-Locks
+
+fn tab_requested_events(emitter: &TestEmitter) -> usize {
+    emitter
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(name, _)| name == "mcp-action-tab-requested")
+        .count()
+}
+
+/// Trägt `n` verbundene MCP-Sitzungen verschiedener Clients auf `server` ein.
+fn fill_server(
+    registry: &McpSessionRegistry,
+    sessions: &SessionManager,
+    server: ServerId,
+    n: usize,
+) -> Vec<(McpSessionKey, SessionId)> {
+    (0..n)
+        .map(|i| {
+            let key = McpSessionKey::new(server, Some(&format!("client-{i}")));
+            let id = Uuid::new_v4();
+            registry.register(&key, id).unwrap();
+            sessions.insert(
+                id,
+                Arc::new(session_on(server, MockSshTransport::default())),
+            );
+            (key, id)
+        })
+        .collect()
+}
+
+/// Issue #68, AC 1: Ein zu langer Name wird gekürzt; zwei Namen, die sich
+/// erst hinter der Grenze unterscheiden, ergeben denselben Schlüssel.
+#[test]
+fn test_client_name_is_capped_and_names_differing_after_the_cap_share_a_key() {
+    let server = ServerId::new();
+    let prefix = "x".repeat(MCP_CLIENT_NAME_MAX_CHARS);
+    let first = McpSessionKey::new(server, Some(&format!("{prefix}-alpha")));
+    let second = McpSessionKey::new(server, Some(&format!("{prefix}-beta")));
+
+    assert_eq!(first, second);
+    assert_eq!(first.client_name(), Some(prefix.clone()));
+    // Genau an der Grenze bleibt der Name unverändert.
+    assert_eq!(
+        McpSessionKey::new(server, Some(&prefix)).client_name(),
+        Some(prefix)
+    );
+    // Ein Unterschied vor der Grenze bleibt ein eigener Schlüssel.
+    assert_ne!(
+        McpSessionKey::new(server, Some("Claude Code")),
+        McpSessionKey::new(server, Some("Claude Cod"))
+    );
+}
+
+/// Issue #68, AC 1: Multi-Byte-Namen werden an einer Zeichengrenze
+/// gekürzt, ohne Panic; die Grenze zählt Zeichen, nicht Bytes.
+#[test]
+fn test_multibyte_client_name_is_cut_on_a_char_boundary() {
+    let server = ServerId::new();
+    for ch in ['ä', '€', '🦀'] {
+        let long: String = std::iter::repeat_n(ch, MCP_CLIENT_NAME_MAX_CHARS + 7).collect();
+        let name = McpSessionKey::new(server, Some(&long))
+            .client_name()
+            .expect("Name fehlt");
+        assert_eq!(name.chars().count(), MCP_CLIENT_NAME_MAX_CHARS);
+        assert!(name.chars().all(|c| c == ch));
+    }
+    // Mischung aus 1- und 4-Byte-Zeichen, Schnitt direkt hinter einem
+    // 4-Byte-Zeichen.
+    let mixed = format!("{}🦀🦀🦀", "a".repeat(MCP_CLIENT_NAME_MAX_CHARS - 1));
+    let name = normalize_client_name(Some(&mixed)).unwrap();
+    assert_eq!(
+        name,
+        format!("{}🦀", "a".repeat(MCP_CLIENT_NAME_MAX_CHARS - 1))
+    );
+}
+
+/// Issue #68: Leerraum, der nach dem Kürzen am Ende steht, fällt weg; ein
+/// Name aus nur Leerraum bleibt anonym.
+#[test]
+fn test_normalize_client_name_trims_after_cutting() {
+    let name = format!("{} tail", "a".repeat(MCP_CLIENT_NAME_MAX_CHARS - 1));
+    assert_eq!(
+        normalize_client_name(Some(&name)),
+        Some("a".repeat(MCP_CLIENT_NAME_MAX_CHARS - 1))
+    );
+    assert_eq!(normalize_client_name(Some(&" ".repeat(200))), None);
+    assert_eq!(normalize_client_name(None), None);
+}
+
+/// Issue #68, AC 2: Bei erreichter Höchstzahl bekommt ein weiterer Client
+/// einen Fehler — keine Sitzung eingetragen, kein Tab-Event; der Aufrufer
+/// baut ohne `McpSessionSlot::New` keine Verbindung auf.
+#[tokio::test]
+async fn test_session_cap_rejects_a_further_client_without_tab_or_connection() {
+    let server = ServerId::new();
+    let sessions = SessionManager::new();
+    let registry = McpSessionRegistry::new();
+    fill_server(&registry, &sessions, server, MCP_MAX_SESSIONS_PER_SERVER);
+
+    let emitter = TestEmitter::default();
+    let extra = McpSessionKey::new(server, Some("one too many"));
+    let creation = registry.lock_creation(&extra).await;
+    assert_eq!(
+        registry.acquire_session(&creation, &extra, &sessions, &emitter),
+        Err(McpSessionLimitReached)
+    );
+    assert_eq!(tab_requested_events(&emitter), 0);
+    assert!(emitter.events.lock().unwrap().is_empty());
+    assert_eq!(registry.reusable_session(&extra, &sessions), None);
+    assert_eq!(
+        registry.register(&extra, Uuid::new_v4()),
+        Err(McpSessionLimitReached)
+    );
+
+    // Die Grenze gilt je Server: ein anderer Server ist nicht betroffen.
+    let other = McpSessionKey::new(ServerId::new(), Some("one too many"));
+    let creation = registry.lock_creation(&other).await;
+    assert!(matches!(
+        registry.acquire_session(&creation, &other, &sessions, &emitter),
+        Ok(McpSessionSlot::New(_))
+    ));
+}
+
+/// Issue #68: Auch eine abgerissene, aber noch offene MCP-Sitzung belegt
+/// einen Platz — ihr Tab ist noch da.
+#[test]
+fn test_disconnected_open_mcp_session_still_counts_towards_the_cap() {
+    let server = ServerId::new();
+    let sessions = SessionManager::new();
+    let registry = McpSessionRegistry::new();
+    let filled = fill_server(&registry, &sessions, server, MCP_MAX_SESSIONS_PER_SERVER);
+    let (key, id) = &filled[0];
+    *sessions.get(*id).unwrap().status.lock().unwrap() = ConnectionStatus::Disconnected;
+
+    // Derselbe Client bekommt keine neue Sitzung, solange der alte Tab offen
+    // ist und die Höchstzahl erreicht ist.
+    assert_eq!(registry.reusable_session(key, &sessions), None);
+    assert!(registry.is_mcp_session(*id));
+    assert_eq!(
+        registry.register(key, Uuid::new_v4()),
+        Err(McpSessionLimitReached)
+    );
+}
+
+/// Issue #68, AC 3: Schließen einer MCP-Sitzung gibt einen Platz frei; die
+/// nächste Anfrage bekommt eine neue Sitzung samt Tab.
+#[tokio::test]
+async fn test_closing_an_mcp_session_frees_a_slot() {
+    let server = ServerId::new();
+    let sessions = SessionManager::new();
+    let registry = McpSessionRegistry::new();
+    let confirmations = ConfirmationRegistry::new();
+    let filled = fill_server(&registry, &sessions, server, MCP_MAX_SESSIONS_PER_SERVER);
+
+    let extra = McpSessionKey::new(server, Some("next"));
+    assert_eq!(
+        registry.register(&extra, Uuid::new_v4()),
+        Err(McpSessionLimitReached)
+    );
+
+    let (_, closed_id) = filled[2];
+    let removed = sessions.remove(closed_id).unwrap();
+    assert!(registry.end_session(closed_id, Some(&removed), &confirmations));
+
+    let emitter = TestEmitter::default();
+    let creation = registry.lock_creation(&extra).await;
+    let slot = registry.acquire_session(&creation, &extra, &sessions, &emitter);
+    let Ok(McpSessionSlot::New(new_id)) = slot else {
+        panic!("erwartet neue Sitzung, war {slot:?}");
+    };
+    assert!(registry.is_mcp_session(new_id));
+    assert_eq!(tab_requested_events(&emitter), 1);
+}
+
+/// Issue #68, AC 4: Bei erreichter Höchstzahl nimmt ein Client seine
+/// bestehende, verbundene Sitzung weiter — ohne neues Tab-Event.
+#[tokio::test]
+async fn test_existing_session_is_reused_when_the_cap_is_reached() {
+    let server = ServerId::new();
+    let sessions = SessionManager::new();
+    let registry = McpSessionRegistry::new();
+    let filled = fill_server(&registry, &sessions, server, MCP_MAX_SESSIONS_PER_SERVER);
+    let (key, id) = filled[1].clone();
+
+    let emitter = TestEmitter::default();
+    let creation = registry.lock_creation(&key).await;
+    assert_eq!(
+        registry.acquire_session(&creation, &key, &sessions, &emitter),
+        Ok(McpSessionSlot::Existing(id))
+    );
+    assert!(emitter.events.lock().unwrap().is_empty());
+}
+
+#[test]
+fn test_limit_message_names_the_cap() {
+    assert!(MCP_SESSION_LIMIT_MESSAGE.contains(&MCP_MAX_SESSIONS_PER_SERVER.to_string()));
+    assert_eq!(
+        McpSessionLimitReached.to_string(),
+        MCP_SESSION_LIMIT_MESSAGE
+    );
+}
+
+/// Issue #68, AC 5: Nach Öffnen und Austragen von Sitzungen hält
+/// `creation_locks` keine Einträge mehr für sie.
+#[tokio::test]
+async fn test_creation_locks_are_dropped_after_sessions_open_and_close() {
+    let server = ServerId::new();
+    let sessions = SessionManager::new();
+    let registry = McpSessionRegistry::new();
+    let emitter = TestEmitter::default();
+
+    let mut opened = Vec::new();
+    for i in 0..MCP_MAX_SESSIONS_PER_SERVER {
+        let key = McpSessionKey::new(server, Some(&format!("client-{i}")));
+        let creation = registry.lock_creation(&key).await;
+        assert_eq!(registry.creation_lock_entries(), 1);
+        let Ok(McpSessionSlot::New(id)) =
+            registry.acquire_session(&creation, &key, &sessions, &emitter)
+        else {
+            panic!("neue Sitzung erwartet");
+        };
+        drop(creation);
+        opened.push(id);
+    }
+    assert_eq!(registry.creation_lock_entries(), 0);
+
+    for id in opened {
+        assert!(registry.unregister(id).is_some());
+    }
+    assert_eq!(registry.creation_lock_entries(), 0);
+}
+
+/// Issue #68, AC 5: Der Eintrag bleibt, solange jemand wartet — sonst
+/// bekäme der Wartende ein anderes Lock als ein später Ankommender —, und
+/// verschwindet erst, wenn auch der Letzte fertig ist.
+#[tokio::test]
+async fn test_creation_lock_entry_survives_while_a_task_waits() {
+    let registry = McpSessionRegistry::new();
+    let key = McpSessionKey::new(ServerId::new(), Some("Claude Code"));
+
+    let guard = registry.lock_creation(&key).await;
+    let mut waiter = Box::pin(registry.lock_creation(&key));
+    assert!(futures::poll!(waiter.as_mut()).is_pending());
+    drop(guard);
+    assert_eq!(registry.creation_lock_entries(), 1);
+
+    // Ein dritter Aufrufer muss auf den Wartenden warten (dasselbe Lock).
+    let second = tokio::time::timeout(TEST_TIMEOUT, waiter)
+        .await
+        .expect("nach Freigabe verfügbar");
+    let mut third = Box::pin(registry.lock_creation(&key));
+    assert!(futures::poll!(third.as_mut()).is_pending());
+    drop(second);
+    drop(
+        tokio::time::timeout(TEST_TIMEOUT, third)
+            .await
+            .expect("nach Freigabe verfügbar"),
+    );
+    assert_eq!(registry.creation_lock_entries(), 0);
+}
+
+/// Issue #68: Ein abgebrochenes Warten (MCP-Anfrage verworfen) hinterlässt
+/// keinen Eintrag.
+#[tokio::test]
+async fn test_cancelled_wait_leaves_no_creation_lock_entry() {
+    let registry = McpSessionRegistry::new();
+    let key = McpSessionKey::new(ServerId::new(), None);
+
+    let guard = registry.lock_creation(&key).await;
+    let mut waiter = Box::pin(registry.lock_creation(&key));
+    assert!(futures::poll!(waiter.as_mut()).is_pending());
+    drop(waiter);
+    assert_eq!(registry.creation_lock_entries(), 1);
+    drop(guard);
+    assert_eq!(registry.creation_lock_entries(), 0);
 }
