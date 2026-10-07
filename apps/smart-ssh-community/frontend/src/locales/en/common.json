@@ -127,6 +127,12 @@
     "exportSshConfig": "Export …",
     "exportSshConfigHint": "Export servers to OpenSSH ssh_config"
   },
+  "treeDrag": {
+    "rootDropZone": "Drop here to move to the top level (no group)",
+    "hintRoot": "→ top level (no group)",
+    "hintGroup": "→ move into this group",
+    "hintCycle": "A group cannot be moved into its own subgroup"
+  },
   "management": {
     "emptyState": "Select a group or server on the left, or create something new via \"{{addGroup}}\"/\"{{addServer}}\"."
   },

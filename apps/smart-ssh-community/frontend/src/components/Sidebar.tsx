@@ -1,6 +1,15 @@
 import { useTranslation } from "react-i18next";
 import { buildGroupTree, type GroupTreeNode } from "../groupTree";
+import {
+  classifyDrop,
+  dropHighlightClass,
+  groupDropTargetValue,
+  type DragItem,
+  type DropTarget,
+} from "../treeDrag";
 import type { GroupDto, ServerDto } from "../types";
+import { useTreeDrag } from "../useTreeDrag";
+import { TreeDragGhost } from "./TreeDragGhost";
 
 export type Selection =
   | { kind: "group"; id: string }
@@ -16,6 +25,11 @@ interface SidebarProps {
   /** Spec 0075, §3.1.7/§3.2 — Import aus bzw. Export nach `ssh_config`. */
   onImportSshConfig: () => void;
   onExportSshConfig: () => void;
+  /** Issue #48 / Spec 0103: ein Server oder eine Gruppe wurde per
+   * Drag-and-drop auf ein Ziel gezogen, das etwas ändert (`valid`) oder
+   * einen Zyklus bilden würde (`cycle`, wird vom Backend abgelehnt).
+   * Unverändernde Ablagen (`noop`) kommen hier nie an. */
+  onMove: (item: DragItem, target: DropTarget) => void;
 }
 
 /** Spec 0008, Abschnitt 6: rekursiv aus `list_groups()`/`list_servers()`
@@ -35,22 +49,38 @@ export function Sidebar({
   onSelect,
   onImportSshConfig,
   onExportSshConfig,
+  onMove,
 }: SidebarProps) {
   const { t } = useTranslation();
   const tree = buildGroupTree(groups, servers);
   const localServer = servers.find((s) => s.isLocal);
+  const { drag, handlersFor } = useTreeDrag((item, target) => {
+    if (classifyDrop(item, target, groups, servers) !== "noop") onMove(item, target);
+  });
+  const dropKind = drag?.target ? classifyDrop(drag.item, drag.target, groups, servers) : null;
+  const highlightFor = (target: DropTarget) =>
+    drag?.target &&
+    drag.target.kind === target.kind &&
+    (target.kind === "root" || (drag.target.kind === "group" && drag.target.id === target.id))
+      ? dropHighlightClass(dropKind)
+      : "";
 
   const isSelected = (kind: "group" | "server", id: string) =>
     selection?.kind === kind && selection.id === id;
 
   const renderNode = (node: GroupTreeNode, depth: number) => (
-    <div key={node.group.id}>
+    <div
+      key={node.group.id}
+      data-drop-target={groupDropTargetValue(node.group.id)}
+      className={`rounded ${highlightFor({ kind: "group", id: node.group.id })}`}
+    >
       <div
         role="button"
         tabIndex={0}
+        {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
         onClick={() => onSelect({ kind: "group", id: node.group.id })}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
-        className={`cursor-pointer truncate rounded px-2 py-1 text-sm hover:bg-slate-800 ${
+        className={`cursor-pointer select-none truncate rounded px-2 py-1 text-sm hover:bg-slate-800 ${
           isSelected("group", node.group.id) ? "bg-slate-800 text-white" : "text-slate-300"
         }`}
       >
@@ -66,9 +96,13 @@ export function Sidebar({
       key={server.id}
       role="button"
       tabIndex={0}
+      // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
+      {...(server.isLocal
+        ? {}
+        : handlersFor({ kind: "server", id: server.id, label: server.name }))}
       onClick={() => onSelect({ kind: "server", id: server.id })}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`cursor-pointer truncate rounded px-2 py-1 text-sm hover:bg-slate-800 ${
+      className={`cursor-pointer select-none truncate rounded px-2 py-1 text-sm hover:bg-slate-800 ${
         isSelected("server", server.id) ? "bg-slate-800 text-white" : "text-slate-300"
       }`}
     >
@@ -112,16 +146,33 @@ export function Sidebar({
           {t("sidebar.exportSshConfig")}
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-2">
+      {/* Issue #48: der ganze Baumbereich ist das Ablageziel „Wurzelebene"
+       * (ohne Gruppe / oberste Ebene); Gruppen darin sind innere Ziele.
+       * Der angeheftete lokale Server schirmt seine Fläche ab (`none`). */}
+      <div
+        data-drop-target="root"
+        className={`flex flex-1 flex-col overflow-y-auto p-2 ${highlightFor({ kind: "root" })}`}
+      >
         {localServer && (
-          <div className="mb-2 border-b border-slate-800 pb-2">{renderServer(localServer, 0)}</div>
+          <div data-drop-target="none" className="mb-2 border-b border-slate-800 pb-2">
+            {renderServer(localServer, 0)}
+          </div>
         )}
         {tree.roots.map((node) => renderNode(node, 0))}
         {tree.ungroupedServers.map((s) => renderServer(s, 0))}
         {groups.length === 0 && tree.ungroupedServers.length === 0 && (
           <p className="px-2 py-1 text-sm text-slate-500">{t("sidebar.empty")}</p>
         )}
+        {drag && (
+          <p className="mt-2 rounded border border-dashed border-slate-600 px-2 py-2 text-xs text-slate-400">
+            {t("treeDrag.rootDropZone")}
+          </p>
+        )}
+        {/* Füllt den Rest, damit auch die freie Fläche unter dem Baum als
+         * Wurzel-Ziel greift. */}
+        <div className="min-h-4 flex-1" />
       </div>
+      {drag && <TreeDragGhost drag={drag} kind={dropKind} />}
     </div>
   );
 }

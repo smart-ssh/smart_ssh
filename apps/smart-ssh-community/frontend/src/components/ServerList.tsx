@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   commandErrorCode,
@@ -13,9 +13,19 @@ import { translateErrorCode } from "../errorCodes";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
 import { buildGroupTree, type GroupTreeNode } from "../groupTree";
 import { clearHostKeyPrompt } from "../hostKeyPromptBus";
+import {
+  classifyDrop,
+  dropHighlightClass,
+  groupDropTargetValue,
+  performMove,
+  type DragItem,
+  type DropTarget,
+} from "../treeDrag";
 import type { ChatSessionSummaryDto, GroupDto, ServerDto } from "../types";
+import { useTreeDrag } from "../useTreeDrag";
 import { ChatSessionPickerScreen } from "./ChatSessionPickerScreen";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
+import { TreeDragGhost } from "./TreeDragGhost";
 
 interface ServerListProps {
   onConnected: (sessionId: string, serverName: string, serverId: string) => void;
@@ -95,18 +105,48 @@ export function ServerList({
     sessions: ChatSessionSummaryDto[];
   } | null>(null);
 
+  const loadTree = useCallback(
+    () =>
+      Promise.all([listServers(), listGroups()])
+        .then(([s, g]) => {
+          setServers(s);
+          setGroups(g);
+        })
+        .catch((err) => setError(describeError(t, err)))
+        .finally(() => setLoading(false)),
+    [t],
+  );
+
   useEffect(() => {
-    Promise.all([listServers(), listGroups()])
-      .then(([s, g]) => {
-        setServers(s);
-        setGroups(g);
-      })
-      .catch((err) => setError(describeError(t, err)))
-      .finally(() => setLoading(false));
+    void loadTree();
     // `t` aus `react-i18next` ist referenziell stabil (löst diesen Effekt
     // bei einem Sprachwechsel nicht erneut aus) — hier trotzdem korrekt
-    // gelistet, statt des sonst nötigen exhaustive-deps-Lint-Suppressors.
-  }, [t]);
+    // über `loadTree` gelistet, statt des sonst nötigen
+    // exhaustive-deps-Lint-Suppressors.
+  }, [loadTree]);
+
+  /** Issue #48 / Spec 0103: Ablage eines gezogenen Servers/einer Gruppe.
+   * `noop` (schon dort) ruft nichts auf; ein Zyklus geht bewusst ans
+   * Backend, das ihn mit `GROUP_CYCLE_DETECTED` ablehnt — die Meldung
+   * erscheint dann hier sichtbar, geändert wird nichts. */
+  const handleDrop = async (item: DragItem, target: DropTarget) => {
+    if (classifyDrop(item, target, groups, servers) === "noop") return;
+    setError(null);
+    try {
+      await performMove(item, target);
+    } catch (err) {
+      setError(describeError(t, err));
+    }
+    await loadTree();
+  };
+  const { drag, handlersFor } = useTreeDrag((item, target) => void handleDrop(item, target));
+  const dropKind = drag?.target ? classifyDrop(drag.item, drag.target, groups, servers) : null;
+  const highlightFor = (target: DropTarget) =>
+    drag?.target &&
+    drag.target.kind === target.kind &&
+    (target.kind === "root" || (drag.target.kind === "group" && drag.target.id === target.id))
+      ? dropHighlightClass(dropKind)
+      : "";
 
   useEffect(() => {
     // Unabhängiger Review-Pass (Spec 0031): ohne `.catch` bleibt
@@ -226,10 +266,14 @@ export function ServerList({
     <li key={server.id}>
       <button
         type="button"
+        // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
+        {...(server.isLocal
+          ? {}
+          : handlersFor({ kind: "server", id: server.id, label: server.name }))}
         onClick={() => handleConnect(server)}
         disabled={connectingId !== null}
         style={{ paddingLeft: `${depth * 16 + 16}px` }}
-        className="flex w-full items-center justify-between py-3 pr-4 text-left hover:bg-slate-800 disabled:opacity-60"
+        className="flex w-full select-none items-center justify-between py-3 pr-4 text-left hover:bg-slate-800 disabled:opacity-60"
       >
         <div>
           <p className="font-medium text-slate-100">{server.name}</p>
@@ -279,12 +323,17 @@ export function ServerList({
   const renderGroupSection = (node: GroupTreeNode, depth: number) => {
     const collapsed = collapsedGroupIds.has(node.group.id);
     return (
-      <li key={node.group.id} className="border-b border-slate-700 last:border-b-0">
+      <li
+        key={node.group.id}
+        data-drop-target={groupDropTargetValue(node.group.id)}
+        className={`border-b border-slate-700 last:border-b-0 ${highlightFor({ kind: "group", id: node.group.id })}`}
+      >
         <button
           type="button"
+          {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
           onClick={() => onToggleGroup(node.group.id)}
           style={{ paddingLeft: `${depth * 16 + 16}px` }}
-          className="flex w-full items-center gap-2 py-2 pr-4 text-left text-sm font-medium text-slate-200 hover:bg-slate-800"
+          className="flex w-full select-none items-center gap-2 py-2 pr-4 text-left text-sm font-medium text-slate-200 hover:bg-slate-800"
         >
           <span className="w-3 text-slate-500">{collapsed ? "▸" : "▾"}</span>
           📁 {node.group.name}
@@ -354,18 +403,32 @@ export function ServerList({
       {hasGroupTreeContent && (
         <ul className="divide-y divide-slate-700 rounded-md border border-slate-700">
           {tree.roots.map((node) => renderGroupSection(node, 0))}
-          {tree.ungroupedServers.length > 0 && (
-            <li className="border-b border-slate-700 last:border-b-0">
+          {/* Issue #48: "Ohne Gruppe" ist zugleich das Ablageziel für die
+           * Wurzelebene — beim Ziehen auch dann sichtbar, wenn noch kein
+           * Server ungruppiert ist. */}
+          {(tree.ungroupedServers.length > 0 || drag) && (
+            <li
+              data-drop-target="root"
+              className={`border-b border-slate-700 last:border-b-0 ${highlightFor({ kind: "root" })}`}
+            >
               <div className="px-4 py-2 text-sm font-medium text-slate-200">
                 {t("mainScreen.ungrouped")}
               </div>
-              <ul className="divide-y divide-slate-800">
-                {tree.ungroupedServers.map((s) => renderServerRow(s, 1))}
-              </ul>
+              {tree.ungroupedServers.length > 0 ? (
+                <ul className="divide-y divide-slate-800">
+                  {tree.ungroupedServers.map((s) => renderServerRow(s, 1))}
+                </ul>
+              ) : (
+                <p className="mx-4 mb-2 rounded border border-dashed border-slate-600 px-3 py-2 text-xs text-slate-400">
+                  {t("treeDrag.rootDropZone")}
+                </p>
+              )}
             </li>
           )}
         </ul>
       )}
+
+      {drag && <TreeDragGhost drag={drag} kind={dropKind} />}
 
       {pendingConnectServer && (
         <FirstRunNoticeScreen onAcknowledge={handleFirstRunNoticeAcknowledged} />

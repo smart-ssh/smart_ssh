@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, listGroups, listServers } from "../api";
+import { commandErrorCode, commandErrorMessage, listGroups, listServers } from "../api";
+import { translateErrorCode } from "../errorCodes";
+import { performMove, type DragItem, type DropTarget } from "../treeDrag";
 import type { GroupDto, ServerDto } from "../types";
 import { GroupForm } from "./GroupForm";
 import { ServerForm } from "./ServerForm";
@@ -77,6 +79,29 @@ export function ManagementView({
 
   useEffect(reload, []);
 
+  // Issue #48: erhöht, wenn das gerade geöffnete Element per Drag-and-drop
+  // verschoben wurde — Teil des Formular-`key`, damit `ServerForm`/
+  // `GroupForm` neu laden. Sonst stünde im Formular noch die alte Gruppe,
+  // und ein späteres Speichern würde das Verschieben still rückgängig
+  // machen.
+  const [moveRevision, setMoveRevision] = useState(0);
+
+  /** Issue #48 / Spec 0103: Verschieben per Drag-and-drop aus der Sidebar.
+   * Ein Zyklus wird vom Backend abgelehnt; die übersetzte Meldung
+   * erscheint im Fehlerbereich, geändert wird nichts. */
+  const handleMove = async (item: DragItem, target: DropTarget) => {
+    setError(null);
+    try {
+      await performMove(item, target);
+      if (selection && "id" in selection && selection.kind === item.kind && selection.id === item.id) {
+        setMoveRevision((n) => n + 1);
+      }
+    } catch (err) {
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+    }
+    reload();
+  };
+
   const handleDeleted = () => {
     selectManually(null);
     reload();
@@ -96,6 +121,7 @@ export function ManagementView({
         onSelect={selectManually}
         onImportSshConfig={() => setImportOpen(true)}
         onExportSshConfig={() => setExportOpen(true)}
+        onMove={(item, target) => void handleMove(item, target)}
       />
       {importOpen && (
         <SshConfigImportDialog
@@ -123,7 +149,7 @@ export function ManagementView({
          * server form". */}
         {selection?.kind === "group" && (
           <GroupForm
-            key={selection.id}
+            key={`${selection.id}-${moveRevision}`}
             groupId={selection.id}
             defaultParentId={null}
             allGroups={groups}
@@ -143,7 +169,7 @@ export function ManagementView({
         )}
         {selection?.kind === "server" && (
           <ServerForm
-            key={selection.id}
+            key={`${selection.id}-${moveRevision}`}
             serverId={selection.id}
             defaultGroupId={null}
             allGroups={groups}

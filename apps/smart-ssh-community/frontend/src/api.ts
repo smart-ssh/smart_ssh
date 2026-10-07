@@ -250,6 +250,12 @@ export const createGroup = (name: string, parentId: string | null) =>
 export const updateGroup = (id: string, name: string, parentId: string | null) =>
   invoke<void>("update_group", { id, name, parentId });
 
+/** Issue #48 / Spec 0103: Drag-and-drop — ändert nur die übergeordnete
+ * Gruppe (`null` = Wurzelebene). Zyklen lehnt das Backend mit
+ * `GROUP_SELF_PARENT`/`GROUP_CYCLE_DETECTED` ab. */
+export const moveGroup = (id: string, parentId: string | null) =>
+  invoke<void>("move_group", { id, parentId });
+
 export const deleteGroup = (id: string, confirmCascade: boolean) =>
   invoke<DeleteGroupResult>("delete_group", { id, confirmCascade });
 
@@ -260,6 +266,12 @@ export const createServer = (input: ServerInput) =>
 
 export const updateServer = (id: string, input: ServerInput) =>
   invoke<void>("update_server", { id, input });
+
+/** Issue #48 / Spec 0103: Drag-and-drop — ändert nur die Gruppe des
+ * Servers (`null` = ohne Gruppe), ohne vollständigen `ServerInput` und
+ * ohne Schlüsselbund-Zugriff. */
+export const moveServerToGroup = (id: string, groupId: string | null) =>
+  invoke<void>("move_server_to_group", { id, groupId });
 
 export const deleteServer = (id: string, confirm: boolean) =>
   invoke<DeleteServerResult>("delete_server", { id, confirm });
