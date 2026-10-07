@@ -1,4 +1,4 @@
-# ADR 0107 — Das Backend meldet das Ende einer Host-Key-Abfrage
+# ADR 0108 — Das Backend meldet das Ende einer Host-Key-Abfrage
 
 Status: akzeptiert
 Betrifft: Spec 0007, Spec 0068 (Teil 5b), ADR 0104 (Punkt 6), Issue #37

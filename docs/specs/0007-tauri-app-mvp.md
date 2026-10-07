@@ -100,7 +100,7 @@ chat-action-proposed          { session_id, action_id, action: AiAction, decisio
 chat-action-result            { session_id, action_id, output: CommandOutput }
 ```
 
-`host-key-verification-ended` (Issue #37, ADR 0107): das Backend wartet nicht
+`host-key-verification-ended` (Issue #37, ADR 0108): das Backend wartet nicht
 mehr auf die Abfrage `prompt_id` — gesendet bei jedem Ausgang des Wartens.
 `prompt_id` unterscheidet zwei Abfragen derselben `session_id` (Retry); das
 Frontend schließt nur die Abfrage mit passender `session_id` und

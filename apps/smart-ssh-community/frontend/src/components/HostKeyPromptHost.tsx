@@ -22,7 +22,7 @@ import { HostKeyDialog } from "./HostKeyDialog";
  * (`HostKeyWait::TimedOut`). Schlägt `confirmHostKey` fehl, erscheint ein
  * Fehler-Toast.
  *
- * Issue #37 / ADR 0107: `host-key-verification-ended` schließt die Abfrage,
+ * Issue #37 / ADR 0108: `host-key-verification-ended` schließt die Abfrage,
  * sobald das Backend nicht mehr auf sie wartet — aber nur, wenn
  * `sessionId` UND `promptId` zur angezeigten Abfrage passen. Ein älteres
  * Ende-Ereignis (andere Session oder ältere Abfrage derselben Session)
