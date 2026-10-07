@@ -24,11 +24,13 @@ Test wartet, macht den Zeitbezug deterministisch sichtbar.
 | # | Test | Worauf er wartet | Warum er unter Last scheitern kann |
 |---|---|---|---|
 | F1 | `FileBrowserPanel.test.tsx`, „a file opened elevated is uploaded elevated even after the toggle is off …“ | `findByText(…, { timeout: 4000 })` auf die Meldung „wurde lokal geändert“ | Die Meldung hängt an einem echten 2-s-Intervall (`POLL_INTERVAL_MS`, `useLocalEditSession`), die Frist ist fest 4 s. Liegt die Ereignisschleife mehr als ~2 s zurück, kommt der Tick zu spät. |
-| F2 | `FileBrowserPanel.test.tsx`, „… (no stale closure)“ | `waitFor` mit Standardfrist 1000 ms auf den Upload-Spy | Kein Timer im Produktcode. Reines Ereigniswarten mit knapper Frist. |
+| F2 | `FileBrowserPanel.test.tsx`, „… (no stale closure)“ | `waitFor` mit Standardfrist 1000 ms auf den Upload-Spy | Kein Timer im Produktcode, sondern ein Reihenfolge-Rennen: Das Banner (`role="alert"`) des erhöhten Modus ist schon committet, bevor React den passiven Effekt erneut ausführt, der den Drag-and-Drop-Listener neu registriert (`FileBrowserPanel.tsx`, Effekt mit Abhängigkeiten `[isVisible, path, channelUser]`). Fällt der Drop in diese Lücke, lädt der alte Listener mit Kanal `null` hoch. Eine längere Frist hilft nicht (siehe „Zu F2“). |
 | F3 | `tests_core.rs`, `test_execute_suggested_command_cancellation_returns_partial_output` | `sleep(50 ms)`, danach `resolve(...).expect(...)` | **Kein Wackler.** Die Registrierung (`running_command_cancellations.register` in `action_exec.rs`) läuft synchron vor dem ersten `.await` von `exec_future`, beide Futures stehen im selben `tokio::join!`. Der Fall bleibt unverändert. |
 | F4 | `tests_core.rs`, `test_slow_session_does_not_block_concurrent_session_via_shared_manager` | `timeout(100 ms)` um den Turn der schnellen Sitzung | 100 ms echte Zeit für einen vollständigen Turn. |
 | F5 | `ssh-transport/tests/integration.rs`, `test_execute_cancellable_returns_partial_output_on_cancel` | Abbruch nach `sleep(200 ms)`, dann `stdout == "first line\n"` | Ist die erste Zeile nach 200 ms noch nicht da, ist `stdout` leer. |
 | F6 | `mcp-server/tests/integration.rs`, `test_confirm_timeout_over_real_http` | Server-Timeout 50 ms, Backend-Verzögerung 300 ms, `elapsed < 300 ms` | 250 ms Spielraum für einen HTTP-Rundlauf. |
+
+Zu F2: Die Ursache hat erst PR #28 gefunden. `waitFor` wartete auf einen Aufruf mit `"root"`, der nach einem Drop durch den alten Listener nie kam, und lief bis zur gemeinsamen Obergrenze von 5000 ms (`asyncUtilTimeout`, A4). Die Behebung in PR #28 wartet nach dem Umschalten auf den neu registrierten Listener und erwartet den Upload über ein Promise, das der Upload-Mock auflöst. PR #31 hat das Rennen danach im Produktcode beseitigt: Der Listener wird nur noch je Sichtbarkeit registriert (Abhängigkeiten `[isVisible]`), Kanal und Pfad liest er beim Drop über `uploadManyRef`. Der heutige Test prüft deshalb, dass der Listener beim Umschalten **nicht** neu registriert wird und dass ein Drop direkt nach dem Banner schon den erhöhten Kanal nutzt. Das Warten auf das Upload-Ereignis aus PR #28 ist geblieben.
 
 Zu F5: `execute_cancellable` wählt per `tokio::select!` ohne `biased` zwischen Abbruch und Kanal (`transport.rs`). Liegen Daten und Abbruch zugleich an, entscheidet der Zufall. Ein reines Ereignis „erste Zeile ist beim Client“ gibt es ohne Eingriff in den Produktcode nicht (gelesen, nicht ausgeführt).
 
@@ -137,12 +139,18 @@ Bericht belegt, aber **nicht committet**:
 - **T1 (F1):** `POLL_INTERVAL_MS` probeweise auf 10 000 ms setzen. Der alte
   Test scheitert, der neue bleibt grün. Gegenprobe: Den Aufruf, der die
   Änderung meldet, probeweise entfernen, dann muss der neue Test rot werden.
-- **T2 (F2):** Den `sftpExists`-Mock, der vor dem Upload aufgerufen wird,
-  probeweise 1500 ms verzögern. Den Upload-Mock selbst zu verzögern genügt
-  nicht, weil der Spy den Aufruf schon beim Aufrufen aufzeichnet. Der alte Test
-  scheitert, der neue bleibt grün. Gegenprobe: Den Upload über den erhöhten
-  Kanal probeweise auf den normalen umbiegen, dann muss der neue Test rot
-  werden.
+- **T2 (F2):** Im `onDragDropEvent`-Mock den Listener probeweise 50 ms
+  verspätet registrieren. Der Test vor PR #28 scheitert, der heutige bleibt
+  grün, weil er vor dem Umschalten auf die erste Registrierung wartet und
+  danach keine neue mehr kommt. Nebenprobe: Den `sftpExists`-Mock, der vor
+  dem Upload aufgerufen wird, probeweise 1500 ms verzögern. Den Upload-Mock
+  selbst zu verzögern genügt nicht, weil der Spy den Aufruf schon beim
+  Aufrufen aufzeichnet. Diese Probe trennt nur den Test vor dieser Spec
+  (Standardfrist 1000 ms) vom heutigen, nicht den Test vor PR #28 (der wartet
+  schon mit 5000 ms). Gegenproben, jeweils am heutigen Test: Den Upload über
+  den erhöhten Kanal probeweise auf den normalen umbiegen, und den Kanal beim
+  Drop probeweise aus der Closure des registrierenden Renders statt über
+  `uploadManyRef` lesen. In beiden Fällen muss der Test rot werden.
 - **T3 (F3):** entfällt, F3 ist kein Wackler (§1).
 - **T4 (F4):** Den Turn der schnellen Sitzung probeweise um 300 ms verzögern
   (ohne Sperre). Der alte Test scheitert, der neue bleibt grün. Gegenprobe:
