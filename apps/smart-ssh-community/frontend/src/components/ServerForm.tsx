@@ -21,6 +21,7 @@ import {
 import { translateErrorCode } from "../errorCodes";
 import { onNoteShrinkSucceeded } from "../events";
 import { pickAndReadTextFile, pickFilePath } from "../fileDialog";
+import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
 import { loadRiskClassifierSettings } from "../riskSettings";
 import { checkStartDirectory } from "../startDirectory";
 import type {
@@ -901,9 +902,11 @@ export function ServerForm({
             className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
           >
             <option value="">{t("serverForm.noGroup")}</option>
-            {allGroups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
+            {/* Issue #49: hierarchisch (eingerückter voller Pfad), damit
+             * eine vorbelegte Untergruppe erkennbar ist. */}
+            {flattenGroupOptions(allGroups).map((option) => (
+              <option key={option.group.id} value={option.group.id}>
+                {groupOptionLabel(option)}
               </option>
             ))}
           </select>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGroupTree } from "./groupTree";
+import { buildGroupTree, flattenGroupOptions, groupOptionLabel } from "./groupTree";
 import type { GroupDto, ServerDto } from "./types";
 
 // Spec 0033, Abschnitt 3/4/5 — reine Baum-Aufbau-Logik, geteilt zwischen
@@ -80,5 +80,46 @@ describe("buildGroupTree", () => {
     const tree = buildGroupTree([], []);
     expect(tree.roots).toEqual([]);
     expect(tree.ungroupedServers).toEqual([]);
+  });
+});
+
+describe("flattenGroupOptions (issue #49)", () => {
+  const g = (id: string, name: string, parentId: string | null): GroupDto => ({
+    id,
+    name,
+    parentId,
+    notes: "",
+  });
+
+  it("lists groups in tree order with depth and full path", () => {
+    const groups = [
+      g("web", "Web", "prod"),
+      g("prod", "Prod", null),
+      g("db", "DB", "prod"),
+      g("stage", "Stage", null),
+      g("web-stage", "Web", "stage"),
+      g("edge", "Edge", "web"),
+    ];
+    const options = flattenGroupOptions(groups);
+    expect(options.map((o) => [o.group.id, o.depth, o.path])).toEqual([
+      ["prod", 0, "Prod"],
+      ["web", 1, "Prod / Web"],
+      ["edge", 2, "Prod / Web / Edge"],
+      ["db", 1, "Prod / DB"],
+      ["stage", 0, "Stage"],
+      ["web-stage", 1, "Stage / Web"],
+    ]);
+  });
+
+  it("indents the label by depth with non-breaking spaces", () => {
+    const [root, child] = flattenGroupOptions([g("prod", "Prod", null), g("web", "Web", "prod")]);
+    expect(groupOptionLabel(root)).toBe("Prod");
+    expect(groupOptionLabel(child)).toBe("  Prod / Web");
+  });
+
+  it("never drops a group with a missing parent or in a cycle", () => {
+    const groups = [g("orphan", "Orphan", "missing"), g("a", "A", "b"), g("b", "B", "a")];
+    const ids = flattenGroupOptions(groups).map((o) => o.group.id);
+    expect(ids.sort()).toEqual(["a", "b", "orphan"]);
   });
 });
