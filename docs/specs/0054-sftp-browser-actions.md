@@ -112,6 +112,9 @@ Der anspruchsvollste Teil (wie „Edit with…" in Cyberduck/Transmit):
    im Temp-Verzeichnis werden als Link entfernt, ihr Ziel nie. Scheitert
    das Aufräumen eines Eintrags, startet die App trotzdem; das Protokoll
    nennt Pfad und Fehler, nie den Dateiinhalt.
+   Kopien, die eine Version vor Einführung dieses Aufräumens liegen gelassen
+   hat, räumt die App nicht automatisch weg, weil sie noch zu einer
+   laufenden älteren Installation gehören können.
 
 Fehlerfälle: lokales Programm nicht gefunden, Datei schon offen, Upload
 scheitert — alle sichtbar behandeln.

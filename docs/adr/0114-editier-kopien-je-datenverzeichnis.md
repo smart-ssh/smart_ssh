@@ -37,19 +37,19 @@ Kopien der jeweils anderen Instanz gelöscht.
    `remove_dir`), ein echtes Verzeichnis per `remove_dir_all`, das Links
    darin ebenfalls nicht folgt. Ein Link anstelle des eigenen Ordners wird
    selbst entfernt, sein Ziel nicht durchsucht.
-5. **Alte gemeinsame Ablage.** Sitzungsordner früherer Versionen liegen
-   direkt in `edit-sessions/` und beginnen nie mit `data-`. Sie entfernt
-   nur ein **Release-Build ohne umgelenktes Datenverzeichnis**
-   (`SMART_SSH_DATA_DIR`); die `data-*`-Ordner aller Instanzen bleiben
-   dabei stehen. Eine ältere Release-Version kann nicht daneben laufen
-   (gleiches Datenverzeichnis, gleiche Sperre). Nicht sehen kann die
-   Sperre eine ältere Version mit *anderem* Datenverzeichnis, also einen
-   Debug- oder umgelenkten Build — eine Entwicklungsumgebung. Dieser Rest
-   ist bewusst in Kauf genommen: Ein solcher Build verlöre im ungünstigsten
-   Fall seine lokale Kopie, nie die Datei auf dem Server, und der Editor
-   behält seinen Inhalt. Debug- und umgelenkte Builds räumen die alte
-   Ablage nie auf, damit sich zwei Entwicklungs-Builds nicht gegenseitig
-   etwas löschen.
+5. **Alte gemeinsame Ablage bleibt unberührt.** Sitzungsordner früherer
+   Versionen liegen direkt in `edit-sessions/`, außerhalb jedes
+   `data-*`-Ordners. Das Aufräumen fasst sie nie an. Die Sperre beweist nur,
+   dass kein anderer Prozess *dieses* Datenverzeichnis nutzt. Eine ältere
+   Version mit *anderem* Datenverzeichnis (ein Debug-Build oder ein über
+   `SMART_SSH_DATA_DIR` umgelenkter Build) sieht sie nicht. Diese Version
+   kann gerade eine Datei lokal geöffnet haben, und ihre Kopie liegt in der
+   alten Ablage. Ein Ordner der alten Ablage verrät nicht, zu welcher
+   Instanz er gehört. Es gibt also keinen Weg zu beweisen, dass ihn niemand
+   mehr nutzt, und eine Heuristik (Alter, Build-Art) wäre kein Beweis.
+   Verworfen wurde deshalb, dass ein Release-Build ohne Umlenkung die alte
+   Ablage räumt: Er hätte in diesem Fall die offene Kopie einer anderen,
+   laufenden Instanz gelöscht.
 
 ## Folgen
 
@@ -57,5 +57,7 @@ Kopien der jeweils anderen Instanz gelöscht.
   unverändert; es arbeitet auf dem neuen Ordner.
 - Die Rechte neuer Kopien bleiben `0700`/`0600` (Unix); das Anlegen ist nur
   in eine eigene Funktion gewandert.
-- Auf einer Entwicklungsmaschine bleibt die alte Ablage bestehen, bis ein
-  Release-Build ohne Umlenkung startet.
+- Kopien, die eine frühere Version nach einem Absturz liegen gelassen hat,
+  bleiben in `<cache>/smart-ssh/edit-sessions/` direkt liegen, bis der
+  Nutzer sie selbst löscht. Neue Überbleibsel entstehen dort nicht mehr. Der
+  Changelog-Eintrag weist darauf hin.
