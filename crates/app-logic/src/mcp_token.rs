@@ -107,9 +107,11 @@ fn remove_legacy_token_best_effort(legacy: &dyn LegacyMcpTokenFile) {
 /// kann; produktiv ist das die UUID-Erzeugung aus `app-shell`.
 ///
 /// Reihenfolge der Fälle, und warum sie so ist:
-/// 1. **Die Datenbank hat ein Token** → es gilt. Steht trotzdem noch eines
-///    in `settings.json`, ist ein früheres Entfernen gescheitert; das wird
-///    hier nachgeholt, nicht ignoriert.
+/// 1. **Die Datenbank hat ein nicht leeres Token** → es gilt. Steht
+///    trotzdem noch eines in `settings.json`, ist ein früheres Entfernen
+///    gescheitert; das wird hier nachgeholt, nicht ignoriert. Ein leeres
+///    oder nur aus Leerzeichen bestehendes Token in der Datenbank wird
+///    durch ein neu erzeugtes ersetzt (Issue #115).
 /// 2. **Kein Token in der Datenbank, eines in `settings.json`** → Umzug:
 ///    schreiben, zurücklesen, vergleichen, dann dort entfernen. Der Wert
 ///    bleibt **gleich** (A12) — ein neues Token würde jede bestehende
@@ -127,9 +129,25 @@ pub fn load_or_init_token(
     generate: &dyn Fn() -> String,
 ) -> CommandResult<String> {
     match credentials.get(&token_reference()) {
-        Ok(token) => {
+        Ok(token) if !token.expose_secret().trim().is_empty() => {
             remove_legacy_token_best_effort(legacy);
             Ok(token.expose_secret().to_string())
+        }
+        // Issue #115: **Ein leeres Token in der Datenbank ist kein Token.**
+        // Seit A12 entsteht auf diesem Weg kein leeres mehr, aber ein
+        // älterer Stand oder ein von Hand bearbeiteter Speicher ist nicht
+        // ausgeschlossen. Ein leeres erwartetes Token heißt MCP ohne
+        // Geheimnis; die Middleware lehnt es zwar ab, aber dann wäre MCP
+        // still unbenutzbar. Also wie „kein Token": neu erzeugen,
+        // schreiben, zurücklesen, vergleichen. Ein Wert aus `settings.json`
+        // wird hier bewusst **nicht** übernommen: Die Datenbank war schon
+        // die Quelle, ein Rest in der Datei ist eine veraltete Kopie.
+        Ok(_) => {
+            tracing::warn!("the stored MCP token was empty; a new one is generated (issue #115)");
+            let token = generate();
+            write_and_verify(credentials, &token)?;
+            remove_legacy_token_best_effort(legacy);
+            Ok(token)
         }
         Err(CredentialError::NotFound(_)) => {
             // **Ein leeres Token ist kein Token** (spec-reviewer Runde 3):
