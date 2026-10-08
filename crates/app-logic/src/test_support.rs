@@ -27,7 +27,8 @@ use secrecy::SecretString;
 
 use ssh_manager_core::profiles::{
     CredentialError, CredentialRef, CredentialResult, CredentialStore, Group, GroupId,
-    NoteRevision, NoteTarget, ProfileError, ProfileResult, ProfileStore, Server,
+    NoteRevision, NoteTarget, ProfileError, ProfileResult, ProfileStore, Server, ServerListing,
+    UnusableServer,
 };
 use ssh_manager_core::shared::ServerId;
 
@@ -35,6 +36,10 @@ use ssh_manager_core::shared::ServerId;
 pub struct InMemoryProfileStore {
     pub groups: Mutex<HashMap<GroupId, Group>>,
     pub servers: Mutex<HashMap<ServerId, Server>>,
+    /// Issue #100: gespeicherte Server, deren Anmeldeart unlesbar ist —
+    /// nur über `list_server_entries` sichtbar, `get_server` findet sie
+    /// nicht (wie beim SQLite-Store, der dort sichtbar scheitert).
+    pub unusable: Mutex<Vec<UnusableServer>>,
     pub note_revisions: Mutex<Vec<NoteRevision>>,
     /// Spec 0047, Fund A2: lässt `create_server` deterministisch
     /// fehlschlagen (simuliert einen DB-Fehler NACH bereits geschriebenen
@@ -68,6 +73,12 @@ impl InMemoryProfileStore {
 
     pub fn with_server(self, server: Server) -> Self {
         self.servers.lock().unwrap().insert(server.id, server);
+        self
+    }
+
+    /// Issue #100: ein nicht nutzbarer Server (Anmeldeart unlesbar).
+    pub fn with_unusable_server(self, server: UnusableServer) -> Self {
+        self.unusable.lock().unwrap().push(server);
         self
     }
 
@@ -110,6 +121,13 @@ impl ProfileStore for InMemoryProfileStore {
 
     async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
         Ok(self.servers.lock().unwrap().values().cloned().collect())
+    }
+
+    async fn list_server_entries(&self) -> ProfileResult<ServerListing> {
+        Ok(ServerListing {
+            servers: self.list_servers().await?,
+            unusable: self.unusable.lock().unwrap().clone(),
+        })
     }
 
     async fn list_groups(&self) -> ProfileResult<Vec<Group>> {
@@ -215,7 +233,12 @@ impl ProfileStore for InMemoryProfileStore {
         // Vorschau) — analog zum `group_id`-Nachbau in `delete_group` oben.
         let mut servers = self.servers.lock().unwrap();
         if servers.remove(id).is_none() {
-            return Err(ProfileError::ServerNotFound(*id));
+            let mut unusable = self.unusable.lock().unwrap();
+            let before = unusable.len();
+            unusable.retain(|u| u.id != *id);
+            if unusable.len() == before {
+                return Err(ProfileError::ServerNotFound(*id));
+            }
         }
         for server in servers.values_mut() {
             if server.jump_host == Some(*id) {
