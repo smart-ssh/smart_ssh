@@ -263,7 +263,7 @@ export function ServerList({
     }
   };
 
-  const handleFirstRunNoticeAcknowledged = async () => {
+  const handleFirstRunNoticeAcknowledged = async (afterStored: () => void) => {
     // Unabhängiger Review-Pass (Spec 0031): `setFirstRunAcknowledged(true)`
     // lief vorher VOR dem `await` unten — schlug das Speichern fehl, glaubte
     // das Frontend fortan "bestätigt", während der Store weiter `false`
@@ -280,6 +280,9 @@ export function ServerList({
       return;
     }
     setFirstRunAcknowledged(true);
+    // Spec 0031, Abschnitt 6: Erweiterungs-Handler erst nach erfolgreichem
+    // Speichern; sie blockieren den Verbindungsaufbau nicht.
+    afterStored();
     if (server) await performConnect(server);
   };
 

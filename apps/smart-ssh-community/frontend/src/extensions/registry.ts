@@ -16,8 +16,10 @@
  * wenn ein Feature ihn braucht, dann aber mit Rendering, nicht als leere
  * Deklaration. Verbleibende Typen: `registerSettingsSection` (gerendert in
  * `SettingsScreen`, Spec 0050 — vor dem dortigen Umbau auf die
- * zweispaltige Struktur in `AiProviderSettings`) und `registerDocumentAction`
- * (gerendert in `ChatPanel`s Dokument-Karte, Spec 0045).
+ * zweispaltige Struktur in `AiProviderSettings`), `registerDocumentAction`
+ * (gerendert in `ChatPanel`s Dokument-Karte, Spec 0045) und
+ * `registerFirstRunNoticeExtension` (gerendert in `FirstRunNoticeScreen`,
+ * Spec 0031, Abschnitt 6).
  *
  * **Scope-Hinweis:** Spec 0038 Abschnitt 4 skizziert dieses Paket unter
  * `frontend/packages/app` (Repo-Root, außerhalb der konkreten App). Das
@@ -87,14 +89,48 @@ export interface DocumentAction {
   disabledReason?: string;
 }
 
+/** Handler, den eine Erststart-Hinweis-Erweiterung über `onContinue`
+ * anmeldet. Darf synchron oder asynchron sein; ein Wurf bzw. eine
+ * Ablehnung wird protokolliert und blockiert nichts (Spec 0031,
+ * Abschnitt 6). */
+export type FirstRunNoticeContinueHandler = () => void | Promise<void>;
+
+/** Kontext, den `FirstRunNoticeScreen` jeder registrierten Erweiterung
+ * übergibt (Spec 0031, Abschnitt 6). Bewusst nur `onContinue`: Eine
+ * Erweiterung sieht weder den Hinweistext noch die Pflicht-Checkbox noch,
+ * ob "Weiter" aktiv ist, und kann nichts davon ändern. */
+export interface FirstRunNoticeExtensionContext {
+  /** Meldet einen Handler an, der genau einmal aufgerufen wird, nachdem
+   * die Pflicht-Bestätigung gespeichert ist. Je Erweiterung gilt ein
+   * Handler — ein erneuter Aufruf (z. B. bei jedem Render) ersetzt den
+   * vorherigen, statt einen zweiten anzuhängen. */
+  onContinue: (handler: FirstRunNoticeContinueHandler) => void;
+}
+
+/** Andockpunkt für optionale Inhalte im Erststart-Hinweis (Spec 0031,
+ * Abschnitt 6; Registry-Regeln aus Spec 0045). Gerendert in
+ * `FirstRunNoticeScreen`, je Erweiterung in einem eigenen, abgesetzten
+ * Bereich unter der Pflicht-Bestätigung, aufsteigend nach `order`.
+ *
+ * **Regel für Autoren:** Jedes optionale Element (Checkbox, Feld, …) ist
+ * beim Anzeigen aus bzw. leer. Nichts darf vorausgewählt sein — der
+ * Nutzer entscheidet sich aktiv dafür, wie bei der Pflicht-Checkbox. */
+export interface FirstRunNoticeExtension {
+  id: string;
+  order: number;
+  Component: ComponentType<FirstRunNoticeExtensionContext>;
+}
+
 interface Registry {
   settingsSections: Map<string, SettingsSectionContribution>;
   documentActions: Map<string, DocumentAction>;
+  firstRunNoticeExtensions: Map<string, FirstRunNoticeExtension>;
 }
 
 const registry: Registry = {
   settingsSections: new Map(),
   documentActions: new Map(),
+  firstRunNoticeExtensions: new Map(),
 };
 
 /** Registriert (bzw. ersetzt bei gleicher `id`, z. B. bei einem
@@ -131,9 +167,27 @@ export function listDocumentActions(): DocumentAction[] {
   return Array.from(registry.documentActions.values());
 }
 
+/** Registriert (bzw. ersetzt bei gleicher `id`) eine Erweiterung des
+ * Erststart-Hinweises (Spec 0031, Abschnitt 6). Wie die übrigen Typen vor
+ * dem ersten Render zu registrieren — der Hinweis liest die Liste beim
+ * Öffnen. */
+export function registerFirstRunNoticeExtension(extension: FirstRunNoticeExtension): void {
+  registry.firstRunNoticeExtensions.set(extension.id, extension);
+}
+
+/** Registrierte Erststart-Hinweis-Erweiterungen, aufsteigend nach `order`;
+ * bei gleichem `order` nach `id`, damit die Reihenfolge nicht von der
+ * Import-Reihenfolge abhängt. */
+export function listFirstRunNoticeExtensions(): FirstRunNoticeExtension[] {
+  return Array.from(registry.firstRunNoticeExtensions.values()).sort(
+    (a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+}
+
 /** Nur für Tests: setzt die Registry zwischen Testfällen zurück, damit
  * Registrierungen aus einem Test nicht in den nächsten durchsickern. */
 export function resetRegistryForTests(): void {
   registry.settingsSections.clear();
   registry.documentActions.clear();
+  registry.firstRunNoticeExtensions.clear();
 }
