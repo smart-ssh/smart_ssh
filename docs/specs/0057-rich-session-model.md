@@ -147,6 +147,16 @@ zusammenfassen"** / **„Mache ich selbst"** (→ öffnet die Notiz-Bearbeitung)
   was die neue Notiz wird, bevor sie ersetzt wird). Kein automatisches
   Überschreiben.
 - **Kein stilles Kürzen der gespeicherten Notiz** — immer Nutzer-Bestätigung.
+- Wurde die Zusammenfassung vom Provider wegen seines Längenlimits
+  **abgeschnitten**, erscheint der Vorschlag trotzdem, aber der Dialog zeigt
+  über dem Diff eine deutliche Warnung („Die Zusammenfassung wurde
+  abgeschnitten und ist unvollständig. Prüfe sie sorgfältig oder lehne sie
+  ab."). Die Warnung stammt von der App, steht außerhalb des Diff-Inhalts und
+  kann vom KI-Text weder vorgetäuscht noch verdeckt werden. Ist die
+  Zusammenfassung zusätzlich länger als erlaubt, bleibt der bestehende
+  Kappungs-Hinweis am Textende zusätzlich erhalten. Übernehmen speichert
+  genau den angezeigten Inhalt, Ablehnen lässt die Notiz unverändert.
+  Andere Notiz-Vorschläge (Chat, Sitzungsende) zeigen diese Warnung nie.
 - (Optional, Bonus: ein sanfter Hinweis schon **beim Bearbeiten** einer
   ungewöhnlich großen Notiz. Nicht zwingend für die erste Umsetzung.)
 
@@ -188,6 +198,8 @@ und nutzen die Kompaktierung. Kein Parsing/Umschreiben alter Daten.
 - Sitzungsende-Notiz-Dialog: erscheint bei großer Notiz, „Ja" → Diff-Dialog,
   „Mache ich selbst" → Bearbeitung; gespeicherte Notiz nie ohne Bestätigung
   geändert.
+- Abgeschnittene Zusammenfassung → Vorschlag als unvollständig markiert,
+  Warnung über dem Diff; vollständige Zusammenfassung → keine Warnung.
 - Migration: additiv, alte Sessions bleiben lesbar.
 
 ## 8. Reihenfolge der Umsetzung (Etappen)
