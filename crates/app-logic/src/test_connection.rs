@@ -3,7 +3,6 @@
 //! irgendetwas zu persistieren.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_trait::async_trait;
 use secrecy::SecretString;
@@ -16,30 +15,29 @@ use ssh_manager_core::ssh::{
     resolve_connection_target, ConnectLog, ConnectionTarget, Hop, HostKeyDecision, HostKeyStore,
     KeyFileReader, SshError,
 };
-use ssh_transport::ConnectOutcome;
+use ssh_transport::{ConnectLimits, ConnectOutcome};
 
 use crate::dto::{AuthMethodInput, ServerInput, TestConnectionReport, TestConnectionResult};
 use crate::ephemeral_credentials::EphemeralCredentialStore;
 
 use crate::error::{secret_store_error, CommandError, CommandResult};
 
-/// Spec 0084, §4 (Schnitt `test_connection` → `commands::SSH_CONNECT_TIMEOUT`):
-/// hierher verschoben, weil `test_connection` (Tauri-frei, zieht nach
-/// `app-logic`) diese Konstante braucht, `commands::connect` (Tauri-gebunden,
-/// bleibt in `app-shell`) sie aber ebenfalls nutzt — die umgekehrte
-/// Abhängigkeitsrichtung wäre nach dem Umzug nicht mehr erfüllbar.
+/// Spec 0084, §4: liegt hier, weil `test_connection` (Tauri-frei, in
+/// `app-logic`) und `commands::connect` (Tauri-gebunden, in `app-shell`)
+/// dieselben Grenzen brauchen — die umgekehrte Abhängigkeitsrichtung wäre
+/// nicht erfüllbar.
 ///
-/// Spec 0069, Teil A3: die bestehende 10-Sekunden-Grenze (ursprünglich
-/// `TEST_CONNECTION_TIMEOUT` allein hier) — **keine zweite Konstante**.
-/// Umschließt in `connect_session` (`commands::connect`) jeden einzelnen
-/// Aufruf von `ssh_transport::connect` (über
-/// `ssh_transport::connect_with_timeout`), NIE das Warten auf eine
-/// Host-Key-Entscheidung (das bleibt bei `crate::orchestration::
-/// PENDING_ACTION_CONFIRM_TIMEOUT`, Spec 0068 Teil 5b) — s.
-/// `ssh_transport::connect_with_timeout`s Doc-Kommentar zur
+/// Spec 0069, Teil A3 (Issue #97): die Zeitgrenzen je Phase und je Hop —
+/// Verbindung und Handshake kurz, Anmeldung großzügig. Beide Pfade,
+/// Verbinden und „Verbindung testen", nutzen **diese eine** Konstante; die
+/// Werte stehen in der Spec. Den ganzen Versuch umschließt zusätzlich
+/// `SSH_CONNECT_LIMITS.overall(hop_count)` als Sicherheitsnetz. Keine der
+/// Grenzen umfasst das Warten auf eine Host-Key-Entscheidung (das bleibt
+/// bei `crate::orchestration::PENDING_ACTION_CONFIRM_TIMEOUT`, Spec 0068
+/// Teil 5b) — s. `ssh_transport::connect_with_timeout`s Doc-Kommentar zur
 /// Sicherheits-Invariante ("liefert immer einen Fehler, nie `Connected`,
 /// nie `trust()`").
-pub const SSH_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+pub const SSH_CONNECT_LIMITS: ConnectLimits = ConnectLimits::DEFAULT;
 
 /// Kapselt `ssh_transport::connect()` hinter einem Trait, rein damit
 /// `test_connection`s Logik (Ephemeral-Credential-Aufbau, Hop-Kette,
@@ -61,6 +59,9 @@ pub trait Connector: Send + Sync {
         host_keys: Arc<dyn HostKeyStore>,
         // Issue #51: Schritt-Protokoll des Versuchs, nur für die Anzeige.
         log: &ConnectLog,
+        // Issue #97: Zeitgrenzen je Phase und Hop — dieselben wie beim
+        // Verbinden.
+        limits: ConnectLimits,
     ) -> Result<ConnectOutcome, SshError>;
 }
 
@@ -75,8 +76,10 @@ impl Connector for RealConnector {
         key_files: &(dyn KeyFileReader + Send + Sync),
         host_keys: Arc<dyn HostKeyStore>,
         log: &ConnectLog,
+        limits: ConnectLimits,
     ) -> Result<ConnectOutcome, SshError> {
-        ssh_transport::connect_with_log(target, credentials, key_files, host_keys, log).await
+        ssh_transport::connect_with_limits(target, credentials, key_files, host_keys, log, limits)
+            .await
     }
 }
 
@@ -99,7 +102,7 @@ pub async fn test_connection(
     input: ServerInput,
     existing_server_id: Option<ServerId>,
 ) -> CommandResult<TestConnectionReport> {
-    test_connection_with_timeout(
+    test_connection_with_limits(
         profile_store,
         real_credential_store,
         key_files,
@@ -107,20 +110,20 @@ pub async fn test_connection(
         connector,
         input,
         existing_server_id,
-        SSH_CONNECT_TIMEOUT,
+        SSH_CONNECT_LIMITS,
     )
     .await
 }
 
-/// Testbare Variante mit injizierbarem Timeout — die echten 10 Sekunden
-/// aus der Spec wären in einem Unit-Test schlicht zu langsam.
+/// Testbare Variante mit injizierbaren Grenzen — die echten Werte aus der
+/// Spec wären in einem Unit-Test schlicht zu langsam.
 ///
 /// Issue #51: liefert neben dem Ergebnis das Schritt-Protokoll des
 /// Versuchs — bei Erfolg wie bei Fehlschlag. Bricht der Timeout den Versuch
 /// ab, wird der gerade laufende Schritt mit `SSH_TIMEOUT` geschlossen.
 /// Das Protokoll geht nur an die Oberfläche, nie ins Log.
 #[allow(clippy::too_many_arguments)]
-async fn test_connection_with_timeout(
+async fn test_connection_with_limits(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
@@ -128,7 +131,7 @@ async fn test_connection_with_timeout(
     connector: &dyn Connector,
     input: ServerInput,
     existing_server_id: Option<ServerId>,
-    timeout: Duration,
+    limits: ConnectLimits,
 ) -> CommandResult<TestConnectionReport> {
     let log = ConnectLog::new();
     let result = run_test_connection(
@@ -139,7 +142,7 @@ async fn test_connection_with_timeout(
         connector,
         input,
         existing_server_id,
-        timeout,
+        limits,
         &log,
     )
     .await?;
@@ -158,7 +161,7 @@ async fn run_test_connection(
     connector: &dyn Connector,
     input: ServerInput,
     existing_server_id: Option<ServerId>,
-    timeout: Duration,
+    limits: ConnectLimits,
     log: &ConnectLog,
 ) -> CommandResult<TestConnectionResult> {
     let existing_auth = match existing_server_id {
@@ -197,8 +200,12 @@ async fn run_test_connection(
         real: real_credential_store,
     };
 
-    let attempt = connector.connect(&target, &tiered, key_files, host_key_store, log);
-    let outcome = match tokio::time::timeout(timeout, attempt).await {
+    // Issue #97: die Phasengrenzen wirken im Verbindungsaufbau selbst; der
+    // äußere Timeout ist nur das Sicherheitsnetz, das mit der Hop-Zahl
+    // wächst — wie in `connect_session`.
+    let overall = limits.overall(target.hops.len());
+    let attempt = connector.connect(&target, &tiered, key_files, host_key_store, log, limits);
+    let outcome = match tokio::time::timeout(overall, attempt).await {
         Err(_elapsed) => {
             log.fail_running(SshError::Timeout.code());
             return Ok(TestConnectionResult::Timeout);
@@ -509,6 +516,8 @@ mod tests {
     use ssh_manager_core::ssh::mock::MockKeyFileReader;
     use ssh_manager_core::ssh::{CommandOutput, HostKeyDecision, InteractiveShell, PtySize};
 
+    use std::time::Duration;
+
     use super::*;
     use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
 
@@ -526,7 +535,7 @@ mod tests {
         existing_server_id: Option<ServerId>,
         timeout: Duration,
     ) -> CommandResult<TestConnectionResult> {
-        test_connection_with_timeout(
+        test_connection_with_limits(
             profile_store,
             real_credential_store,
             key_files,
@@ -534,10 +543,18 @@ mod tests {
             connector,
             input,
             existing_server_id,
-            timeout,
+            limits_of(timeout),
         )
         .await
         .map(|report| report.result)
+    }
+
+    /// Kurze Test-Grenzen: `timeout` je Phase (Issue #97).
+    fn limits_of(timeout: Duration) -> ConnectLimits {
+        ConnectLimits {
+            handshake: timeout,
+            authentication: timeout,
+        }
     }
 
     struct NoOpHostKeyStore;
@@ -590,6 +607,7 @@ mod tests {
             _key_files: &(dyn KeyFileReader + Send + Sync),
             _host_keys: Arc<dyn HostKeyStore>,
             _log: &ConnectLog,
+            _limits: ConnectLimits,
         ) -> Result<ConnectOutcome, SshError> {
             match &self.0 {
                 MockOutcome::Success => Ok(ConnectOutcome::Connected(Box::new(StubSshTransport))),
@@ -669,6 +687,7 @@ mod tests {
             key_files: &(dyn KeyFileReader + Send + Sync),
             _host_keys: Arc<dyn HostKeyStore>,
             _log: &ConnectLog,
+            _limits: ConnectLimits,
         ) -> Result<ConnectOutcome, SshError> {
             for hop in &target.hops {
                 ssh_manager_core::ssh::resolve_auth(&hop.auth, credentials, key_files)
@@ -1202,6 +1221,120 @@ mod tests {
         assert!(matches!(result, TestConnectionResult::NetworkError { .. }));
     }
 
+    /// Issue #97: „Verbindung testen" läuft unter denselben Phasengrenzen
+    /// wie das Verbinden (`SSH_CONNECT_LIMITS`, an den Verbindungsaufbau
+    /// durchgereicht), und ein abgelaufenes Phasenlimit — dort ein
+    /// `SshError::Timeout` — erscheint als `Timeout`, nicht als
+    /// Netzwerkfehler.
+    #[tokio::test]
+    async fn test_issue_97_test_connection_uses_the_connect_phase_limits() {
+        struct PhaseTimeoutConnector(std::sync::Mutex<Vec<ConnectLimits>>);
+        #[async_trait]
+        impl Connector for PhaseTimeoutConnector {
+            async fn connect(
+                &self,
+                _target: &ConnectionTarget,
+                _credentials: &(dyn CredentialStore + Send + Sync),
+                _key_files: &(dyn KeyFileReader + Send + Sync),
+                _host_keys: Arc<dyn HostKeyStore>,
+                _log: &ConnectLog,
+                limits: ConnectLimits,
+            ) -> Result<ConnectOutcome, SshError> {
+                self.0.lock().unwrap().push(limits);
+                Err(SshError::Timeout)
+            }
+        }
+
+        let connector = PhaseTimeoutConnector(std::sync::Mutex::new(Vec::new()));
+        let report = test_connection(
+            &InMemoryProfileStore::new(),
+            &InMemoryCredentialStore::new(),
+            &MockKeyFileReader::new(),
+            Arc::new(NoOpHostKeyStore),
+            &connector,
+            password_input(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert!(matches!(report.result, TestConnectionResult::Timeout));
+        assert_eq!(*connector.0.lock().unwrap(), [SSH_CONNECT_LIMITS]);
+        assert_eq!(SSH_CONNECT_LIMITS, ConnectLimits::DEFAULT);
+    }
+
+    /// Issue #97: das äußere Sicherheitsnetz wächst mit der Hop-Zahl. Ein
+    /// Versuch, der 100 s braucht (z. B. zwei Hops mit langsamer Anmeldung),
+    /// liegt über der Grenze für einen Hop, aber unter der für zwei — über
+    /// einen Jump-Host verbindet er, direkt nicht.
+    ///
+    /// *Gegenbeweis:* mit einer festen Grenze über den ganzen Versuch (Stand
+    /// vor Issue #97: 10 s) scheitert auch der Fall mit Jump-Host.
+    #[tokio::test(start_paused = true)]
+    async fn test_issue_97_overall_limit_grows_with_the_hop_count() {
+        struct SlowConnector;
+        #[async_trait]
+        impl Connector for SlowConnector {
+            async fn connect(
+                &self,
+                _target: &ConnectionTarget,
+                _credentials: &(dyn CredentialStore + Send + Sync),
+                _key_files: &(dyn KeyFileReader + Send + Sync),
+                _host_keys: Arc<dyn HostKeyStore>,
+                _log: &ConnectLog,
+                _limits: ConnectLimits,
+            ) -> Result<ConnectOutcome, SshError> {
+                tokio::time::sleep(Duration::from_secs(100)).await;
+                Ok(ConnectOutcome::Connected(Box::new(StubSshTransport)))
+            }
+        }
+
+        let jump_id = ServerId::new();
+        let jump_ref = ssh_manager_core::profiles::CredentialRef::new("server:jump:password");
+        let profile_store = InMemoryProfileStore::new()
+            .with_server(stored_server(jump_id, "jump", &jump_ref, None));
+        let real_store = InMemoryCredentialStore::new().with_secret(&jump_ref, "jump-secret");
+
+        let run = |input: ServerInput| {
+            let profile_store = &profile_store;
+            let real_store = &real_store;
+            async move {
+                tokio::time::timeout(
+                    Duration::from_secs(3600),
+                    test_connection(
+                        profile_store,
+                        real_store,
+                        &MockKeyFileReader::new(),
+                        Arc::new(NoOpHostKeyStore),
+                        &SlowConnector,
+                        input,
+                        None,
+                    ),
+                )
+                .await
+                .expect("der Verbindungstest darf nicht hängen")
+                .unwrap()
+                .result
+            }
+        };
+
+        let via_jump = run(ServerInput {
+            jump_host: Some(jump_id),
+            ..password_input()
+        })
+        .await;
+        assert!(
+            matches!(via_jump, TestConnectionResult::Success),
+            "zwei Hops: {via_jump:?}"
+        );
+
+        let direct = run(password_input()).await;
+        assert!(
+            matches!(direct, TestConnectionResult::Timeout),
+            "ein Hop: {direct:?}"
+        );
+    }
+
     #[tokio::test]
     async fn test_timeout() {
         let profile_store = InMemoryProfileStore::new();
@@ -1393,6 +1526,7 @@ mod tests {
                 _key_files: &(dyn KeyFileReader + Send + Sync),
                 _host_keys: Arc<dyn HostKeyStore>,
                 _log: &ConnectLog,
+                _limits: ConnectLimits,
             ) -> Result<ConnectOutcome, SshError> {
                 assert_eq!(target.hops.len(), 2);
 
@@ -2037,6 +2171,7 @@ mod tests {
             _key_files: &(dyn KeyFileReader + Send + Sync),
             _host_keys: Arc<dyn HostKeyStore>,
             log: &ConnectLog,
+            _limits: ConnectLimits,
         ) -> Result<ConnectOutcome, SshError> {
             let hop = "deploy@example.invalid:22";
             let dns = log.start(
@@ -2089,7 +2224,7 @@ mod tests {
     }
 
     async fn report_with(connector: &dyn Connector) -> TestConnectionReport {
-        test_connection_with_timeout(
+        test_connection_with_limits(
             &InMemoryProfileStore::new(),
             &InMemoryCredentialStore::new(),
             &MockKeyFileReader::new(),
@@ -2097,7 +2232,7 @@ mod tests {
             connector,
             password_input(),
             None,
-            Duration::from_millis(50),
+            limits_of(Duration::from_millis(50)),
         )
         .await
         .unwrap()
