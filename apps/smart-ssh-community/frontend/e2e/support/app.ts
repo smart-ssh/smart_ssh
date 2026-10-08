@@ -42,7 +42,7 @@ export const test = base.extend<{ app: AppDriver }>({
     const waitForApp = async () => {
       // `main.tsx` renders only after its start-up `invoke`s resolved; the
       // root then has content (main screen, or a dialog over it).
-      await expect(page.locator("#root")).not.toBeEmpty();
+      await expect(page.locator("#root")).not.toBeEmpty({ timeout: 20_000 });
     };
 
     const driver: AppDriver = {

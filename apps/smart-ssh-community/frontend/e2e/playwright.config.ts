@@ -34,9 +34,9 @@ export default defineConfig({
     })),
   ),
   webServer: {
-    // The dev server of the real Vite config, on its own port so it never
-    // collides with a running `npm run dev`.
-    command: `npx vite --host 127.0.0.1 --port ${PORT} --strictPort`,
+    // The app's Vite config (see `vite.config.ts` here), on its own port so
+    // it never collides with a running `npm run dev`.
+    command: `npx vite --config e2e/vite.config.ts --host 127.0.0.1 --port ${PORT} --strictPort`,
     cwd: "..",
     url: `http://127.0.0.1:${PORT}/e2e/harness/index.html`,
     reuseExistingServer: !process.env.CI,
