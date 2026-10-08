@@ -510,6 +510,7 @@
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Reads a file with credentials (e.g. SSH key, .env, /etc/shadow) – always requires confirmation",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "An earlier action in this response was rejected – requires confirmation",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Starts sftp-server (with sudo: file access with root privileges) – always requires confirmation",
+    "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM": "Command is too long or too deeply nested to be checked – always requires confirmation",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risk assessed as red, or could not be assessed reliably (e.g. too long) – always requires confirmation",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Note updates always require confirmation",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "File writes always require confirmation",

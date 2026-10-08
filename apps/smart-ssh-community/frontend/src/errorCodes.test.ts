@@ -349,3 +349,30 @@ describe("FILTER_RED_RISK_REQUIRES_CONFIRM (Spec 0092)", () => {
     expect(de).not.toBe(en);
   });
 });
+
+// Issue #109: Ein Kommando, das für die Secret-Pfad- bzw. sftp-server-Prüfung
+// zu lang oder zu tief verschachtelt ist, bekommt einen eigenen Code — der
+// Dialog darf dann nicht behaupten, es lese eine Datei mit Zugangsdaten.
+describe("FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM (Issue #109)", () => {
+  it("(de) zeigt den festgelegten Text", () => {
+    expect(
+      translateErrorCode(
+        testI18n.getFixedT("de"),
+        "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM",
+        "fallback",
+      ),
+    ).toBe(
+      "Kommando ist zu lang oder zu tief verschachtelt für eine Prüfung – erfordert immer Bestätigung",
+    );
+  });
+
+  it("(en) shows the specified text", () => {
+    expect(
+      translateErrorCode(
+        testI18n.getFixedT("en"),
+        "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM",
+        "fallback",
+      ),
+    ).toBe("Command is too long or too deeply nested to be checked – always requires confirmation");
+  });
+});
