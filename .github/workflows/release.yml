@@ -7,11 +7,23 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  # Das volle Gate (Test-Matrix und Dependency-Audit aus `community.yml`)
+  # läuft auf genau dem getaggten Commit. Scheitert ein Job, startet
+  # `build-release` nicht, und es entsteht kein Release.
+  gate:
+    name: Gate
+    uses: ./.github/workflows/community.yml
+    permissions:
+      contents: read
+
   build-release:
     name: Build (${{ matrix.platform }})
+    needs: gate
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
