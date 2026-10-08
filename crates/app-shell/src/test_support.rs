@@ -232,3 +232,170 @@ pub(crate) mod elevation {
         }
     }
 }
+
+/// Issue #114: Warten auf ein Ereignis statt auf ein festes Zeitbudget, für
+/// die Tests des erhöhten Kanals (`commands::elevation`,
+/// `commands::sftp::revocation_tests`).
+///
+/// Die Tests dort warteten in festen 5-s-Fristen und scheiterten unter der
+/// Last eines vollen `cargo test --workspace` gelegentlich, obwohl das
+/// erwartete Ereignis nur später kam. Hier wartet jeder Test auf das
+/// Ereignis selbst; [`HANG_GUARD`] greift nur, wenn es nie kommt, und die
+/// Meldung nennt dann das erwartete Ereignis und listet auf, was
+/// stattdessen ankam (dasselbe Muster wie `chat_turn::test_events`,
+/// Issue #2).
+pub(crate) mod waiting {
+    use std::future::Future;
+    use std::time::Duration;
+
+    use app_logic::events::{EventEmitter, TestEmitter};
+    use tokio::sync::Notify;
+
+    /// Obergrenze gegen Hängen. Großzügig, weil der gute Fall sofort endet:
+    /// sie entscheidet nie über Bestehen oder Scheitern eines korrekten
+    /// Ablaufs, nur darüber, wann ein kaputter sichtbar abbricht. Deutlich
+    /// über den alten 5 s, damit eine Verzögerung am erwarteten Ereignis
+    /// (Verzögerungsprobe, Spec 0097) keinen falschen Fehlschlag auslöst.
+    pub(crate) const HANG_GUARD: Duration = Duration::from_secs(60);
+
+    /// Längste Payload-Darstellung je Event in der Fehlermeldung.
+    const MAX_PAYLOAD_CHARS: usize = 300;
+
+    /// Wartet höchstens [`HANG_GUARD`] auf `fut`. Läuft die Zeit ab, scheitert
+    /// der Test mit einer Meldung, die `expected` nennt und `received()`
+    /// (was bis dahin tatsächlich ankam) auflistet.
+    pub(crate) async fn expect_within<F: Future>(
+        expected: &str,
+        received: impl FnOnce() -> String,
+        fut: F,
+    ) -> F::Output {
+        match tokio::time::timeout(HANG_GUARD, fut).await {
+            Ok(output) => output,
+            Err(_) => panic!("{}", timeout_message(expected, &received())),
+        }
+    }
+
+    fn timeout_message(expected: &str, received: &str) -> String {
+        format!(
+            "Zeitüberschreitung nach {} s beim Warten auf erwartetes Ereignis: {expected}\n\
+             Stattdessen empfangen: {received}",
+            HANG_GUARD.as_secs()
+        )
+    }
+
+    /// Alle Events eines [`TestEmitter`] in Sende-Reihenfolge, lange
+    /// Payloads gekürzt — für `received` in [`expect_within`].
+    pub(crate) fn render_events(emitter: &TestEmitter) -> String {
+        // Vergiftete Sperre (ein anderer Task ist mit ihr gepanickt): die
+        // Liste trotzdem zeigen statt einer zweiten, nichtssagenden Panik.
+        let events = emitter
+            .events
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if events.is_empty() {
+            return "(keine Events)".to_string();
+        }
+        let mut rendered = format!("{} Events:", events.len());
+        for (index, (name, payload)) in events.iter().enumerate() {
+            let mut payload = payload.to_string();
+            if payload.chars().count() > MAX_PAYLOAD_CHARS {
+                payload = payload.chars().take(MAX_PAYLOAD_CHARS).collect::<String>() + "…";
+            }
+            rendered.push_str(&format!("\n  {}. {name}: {payload}", index + 1));
+        }
+        rendered
+    }
+
+    /// [`TestEmitter`], der jedes gesendete Event zusätzlich meldet. Ein
+    /// Test wartet damit auf ein Event, statt die Liste in einer
+    /// `yield_now`-Schleife abzufragen.
+    #[derive(Default)]
+    pub(crate) struct NotifyingEmitter {
+        pub(crate) inner: TestEmitter,
+        emitted: Notify,
+    }
+
+    impl EventEmitter for NotifyingEmitter {
+        fn emit_event(&self, event: &str, payload: serde_json::Value) {
+            self.inner.emit_event(event, payload);
+            self.emitted.notify_waiters();
+        }
+    }
+
+    impl NotifyingEmitter {
+        /// Wartet, bis ein Event namens `name` gesendet wurde, und gibt
+        /// dessen (erste) Payload zurück. Scheitert nach [`HANG_GUARD`] mit
+        /// der Liste der stattdessen gesendeten Events.
+        pub(crate) async fn wait_for_event(&self, name: &str) -> serde_json::Value {
+            expect_within(name, || render_events(&self.inner), async {
+                loop {
+                    // `notified()` vor der Prüfung anlegen, sonst ginge
+                    // ein Event zwischen Prüfung und `await` verloren.
+                    let notified = self.emitted.notified();
+                    if let Some(payload) = self.find(name) {
+                        return payload;
+                    }
+                    notified.await;
+                }
+            })
+            .await
+        }
+
+        fn find(&self, name: &str) -> Option<serde_json::Value> {
+            self.inner
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|(event, _)| event == name)
+                .map(|(_, payload)| payload.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_event_returns_an_event_sent_after_waiting_began() {
+        let emitter = std::sync::Arc::new(NotifyingEmitter::default());
+        let sender = emitter.clone();
+        let send = tokio::spawn(async move {
+            sender.emit_event("chat-text-delta", serde_json::json!({"text": "a"}));
+            sender.emit_event("chat-action-proposed", serde_json::json!({"actionId": "x"}));
+        });
+        let payload = emitter.wait_for_event("chat-action-proposed").await;
+        assert_eq!(payload["actionId"], "x");
+        send.await.unwrap();
+    }
+
+    /// Die Meldung nennt das erwartete Ereignis und listet die empfangenen
+    /// Events auf. `start_paused`, damit die Obergrenze ohne echte Wartezeit
+    /// abläuft.
+    #[tokio::test(start_paused = true)]
+    async fn test_a_missing_event_names_the_expected_event_and_lists_the_received_ones() {
+        let emitter = std::sync::Arc::new(NotifyingEmitter::default());
+        emitter.emit_event("chat-text-delta", serde_json::json!({"text": "hallo"}));
+        let waiting = emitter.clone();
+        let outcome =
+            tokio::spawn(async move { waiting.wait_for_event("chat-action-result").await }).await;
+
+        let message = outcome
+            .expect_err("das Warten muss an der Obergrenze scheitern")
+            .into_panic()
+            .downcast::<String>()
+            .map(|message| *message)
+            .expect("panic!-Meldung mit Format-Argumenten ist ein String");
+        assert!(message.contains("chat-action-result"), "{message}");
+        assert!(
+            message.contains(r#"1. chat-text-delta: {"text":"hallo"}"#),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn test_render_events_says_none_and_truncates_long_payloads() {
+        assert_eq!(render_events(&TestEmitter::default()), "(keine Events)");
+        let long = TestEmitter::default();
+        long.emit_event("chat-text-delta", serde_json::json!("a".repeat(1000)));
+        let rendered = render_events(&long);
+        assert!(rendered.ends_with('…'), "{rendered}");
+        assert!(rendered.len() < 600, "{rendered}");
+    }
+}
