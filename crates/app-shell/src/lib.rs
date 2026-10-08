@@ -670,6 +670,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // von `startup_gate`.
         .invoke_handler(gated(gate, tauri::generate_handler![
             commands::list_servers,
+            commands::list_unusable_servers,
             commands::list_ai_providers,
             commands::add_ai_provider,
             commands::update_ai_provider,
@@ -708,6 +709,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::update_server,
             commands::move_server_to_group,
             commands::delete_server,
+            commands::delete_unusable_server,
             commands::clear_server_sudo_password,
             // Spec 0076 (BL-0221/BL-0222): Schlüsseldatei-Befund und
             // Überführung in den Schlüsselbund.
