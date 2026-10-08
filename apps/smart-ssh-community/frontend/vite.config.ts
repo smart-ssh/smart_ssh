@@ -33,5 +33,8 @@ export default {
     // selbst aus, und ein Wackler erschiene als nichtssagendes "Test timed
     // out" statt als die fehlgeschlagene Erwartung mit Inhalt.
     testTimeout: 15000,
+    // Issue #166: the browser tests under `e2e/` are Playwright specs
+    // (`npm run test:e2e`), not Vitest tests.
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 }
