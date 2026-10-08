@@ -150,7 +150,7 @@ test("connection step log: a long log scrolls with the page, the navigation stay
 
   const manage = page.getByRole("button", { name: "Manage", exact: true });
   const settings = page.getByRole("button", { name: "Settings", exact: true });
-  const scroller = page.locator("main.overflow-y-auto");
+  const scroller = page.locator("main");
   await expectUsable(manage);
   await expectUsable(settings);
   await expectOnlyContentScrolls(scroller, [manage, settings]);

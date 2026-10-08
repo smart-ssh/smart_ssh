@@ -28,7 +28,7 @@ export async function expectFullyInViewport(locator: Locator): Promise<void> {
       inside,
       `element box ${JSON.stringify(box4)} must lie inside the ${v.width}×${v.height} viewport`,
     ).toBe(true);
-  }).toPass();
+  }).toPass({ timeout: 5_000 });
 }
 
 /**
@@ -46,7 +46,7 @@ export async function expectTopmostAtCenter(locator: Locator): Promise<void> {
       return { ok: top !== null && (top === el || el.contains(top)), found: describe(top) };
     });
     expect(hit.ok, `element is covered at its centre by ${hit.found}`).toBe(true);
-  }).toPass();
+  }).toPass({ timeout: 5_000 });
 }
 
 /** Visible, inside the viewport and not covered. */
