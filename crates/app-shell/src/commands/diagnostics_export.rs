@@ -273,6 +273,8 @@ pub async fn generate_diagnostics_bundle<R: tauri::Runtime>(
                     // trotzdem im exhaustiven Destructuring aufgeführt,
                     // s. Kommentar oben.
                     max_tokens_override: _,
+                    // Issue #162: ebenfalls nicht Diagnose-relevant.
+                    web_research_enabled: _,
                     created_at: _,
                     updated_at: _,
                 } = config;

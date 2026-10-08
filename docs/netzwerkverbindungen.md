@@ -36,6 +36,15 @@ Rechner.
   Sitzungstitel, Notiz-Vorschlag) gibt es nur innerhalb einer Sitzung, die
   der Nutzer gestartet hat, und nur an Provider, die er selbst eingerichtet
   hat. Ohne KI-Provider fällt keiner dieser Aufrufe an.
+- **Web-Recherche der KI** (Spec 0105): Bei einem Provider mit
+  serverseitigen Web-Werkzeugen (heute Anthropic) und eingeschalteter
+  Einstellung „Web-Recherche" darf der Provider während eines Chat-Zugs im
+  Web suchen und Webseiten abrufen. Das tut der Provider auf seinen eigenen
+  Servern im Auftrag dieses Chat-Zugs — es ist **keine Verbindung von
+  diesem Rechner**: Die App schickt dafür nur die bestehende Anfrage an die
+  Basis-URL des Providers (Zeile „KI-Chat") und bekommt Suchtreffer und
+  Seitentext in dessen Antwort zurück. Ausgeschaltet oder bei anderen
+  Providern fragt der Provider nichts im Web ab.
 - **Externe MCP-Clients** können über den lokalen MCP-Server Befehle auf
   freigegebenen Servern anstoßen. Die SSH-Verbindung dazu ist dieselbe wie
   oben; der Nutzer hat den Server freigegeben und den Client selbst

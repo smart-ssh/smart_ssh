@@ -4,7 +4,9 @@
 
 use futures::StreamExt;
 
-use ssh_manager_core::ai::{AiError, AiEvent, ChatMessage, MessageContent, OutputRedactor, Role};
+use ssh_manager_core::ai::{
+    AiError, AiEvent, ChatMessage, MessageContent, OutputRedactor, Role, WebActivity, WebSource,
+};
 use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::profiles::{AiAction, ProfileStore};
 
@@ -13,7 +15,8 @@ use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_chat_auto_continuation_limit_reached, emit_chat_auto_continuation_started,
     emit_chat_error, emit_chat_queued_messages_sent, emit_chat_response_cancelled,
-    emit_chat_response_empty, emit_chat_response_truncated, emit_chat_text_delta, EventEmitter,
+    emit_chat_response_empty, emit_chat_response_truncated, emit_chat_text_delta,
+    emit_chat_web_activity, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -37,6 +40,10 @@ mod tests_continuation;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_rounds;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_web;
 
 /// Sicherheitsgrenze gegen eine KI, die in jeder Folgerunde erneut eine
 /// Aktion vorschlägt, die wieder ausgeführt/abgelehnt/blockiert wird — ohne
@@ -522,9 +529,43 @@ pub(crate) fn reapply_redaction_for_send(
                     cancelled,
                 },
                 other @ MessageContent::ActionRejected { .. } => other,
+                // Issue #162: nur-additiv wie oben; der Webinhalt wird erst
+                // beim Request-Aufbau gefencet (`WebActivity::to_model_
+                // text`), hier also noch ungefencet redigiert.
+                MessageContent::WebActivity(activity) => {
+                    MessageContent::WebActivity(redact_web_activity(activity, redactor))
+                }
             },
         })
         .collect()
+}
+
+/// Issue #162: redigiert jedes Textfeld einer Web-Recherche — Anfrage und
+/// URLs können von der KI eingesetzte Geheimnisse tragen, Titel und
+/// Seitentext stammen aus dem offenen Web. Läuft vor dem Speichern und
+/// erneut vor jedem Versand (s. `reapply_redaction_for_send`).
+pub(crate) fn redact_web_activity(
+    activity: WebActivity,
+    redactor: &dyn OutputRedactor,
+) -> WebActivity {
+    let redact_sources = |sources: Vec<WebSource>| {
+        sources
+            .into_iter()
+            .map(|source| WebSource {
+                title: redactor.redact_text(&source.title),
+                url: redactor.redact_text(&source.url),
+            })
+            .collect()
+    };
+    WebActivity {
+        kind: activity.kind,
+        input: redactor.redact_text(&activity.input),
+        results: redact_sources(activity.results),
+        cited: redact_sources(activity.cited),
+        content: activity.content.map(|c| redactor.redact_text(&c)),
+        content_truncated: activity.content_truncated,
+        error_code: activity.error_code,
+    }
 }
 
 /// s. `reapply_redaction_for_send`-Doc-Kommentar ("Fencing-Sicherheit").
@@ -756,6 +797,13 @@ async fn run_one_round(
                     executed_action = true;
                 }
             }
+            AiEvent::WebActivity(activity) => {
+                // Issue #162: reine Information — keine Filter-Engine, keine
+                // Bestätigung, KEINE Folgerunde (`executed_action` bleibt
+                // unberührt). Die Antwort ist trotzdem nicht leer.
+                round_had_content = true;
+                handle_web_activity(session, session_id, emitter, activity, &mut text_buffer).await;
+            }
             AiEvent::Done => {
                 flush_text_buffer(session, &mut text_buffer).await;
                 // Spec 0080, A2, Klarstellung Q-BL-0259-01 (Variante b): nur
@@ -801,6 +849,74 @@ async fn run_one_round(
     } else {
         RoundOutcome::Finished
     }
+}
+
+/// Issue #162: eine serverseitige Web-Recherche des Providers. Reihenfolge:
+///
+/// 1. Bis hierher gestreamter Text wird zuerst als eigene Nachricht
+///    gespeichert — die Recherche-Karte erscheint live nach dem Text, also
+///    auch in der Historie dahinter.
+/// 2. Redaction VOR dem Speichern und Anzeigen (Anfrage/URL kann ein von
+///    der KI eingesetztes Geheimnis tragen).
+/// 3. Gespeichert mit `Role::Assistant` — so behält die
+///    URL-Regel des Providers (`web_fetch` nur für URLs, die schon im
+///    Gespräch stehen) in späteren Anfragen ihre volle Strenge: eine URL aus
+///    einer Recherche zählt dann als Teil der KI-Ausgabe, nicht als
+///    Nutzertext.
+/// 4. Spec 0039, Abschnitt 5: Webinhalt ist nicht vertrauenswürdig —
+///    `untrusted_content_ingested` wird gesetzt (monoton), und die optionale
+///    Prüfung auf eingeschleuste Anweisungen läuft über den gelesenen
+///    Seitentext bzw. die Treffertitel (ADR 0117).
+async fn handle_web_activity(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+    activity: WebActivity,
+    text_buffer: &mut String,
+) {
+    flush_text_buffer(session, text_buffer).await;
+    let activity = redact_web_activity(activity, session.redactor.as_ref());
+    emit_chat_web_activity(
+        emitter,
+        session_id,
+        crate::dto::WebActivityDto::from(&activity),
+    );
+    let check_text = injection_check_text(&activity);
+    push_history(
+        session,
+        ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::WebActivity(activity),
+        },
+    )
+    .await;
+    session
+        .untrusted_content_ingested
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    if !check_text.trim().is_empty() {
+        super::action_exec::check_for_injected_instructions(
+            session,
+            session_id,
+            emitter,
+            &check_text,
+        )
+        .await;
+    }
+}
+
+/// Issue #162: der Teil einer Web-Recherche, den die KI tatsächlich als
+/// Inhalt aus dem Web gelesen hat (Treffertitel, Seitentext) — Grundlage
+/// der Prüfung auf eingeschleuste Anweisungen.
+fn injection_check_text(activity: &WebActivity) -> String {
+    let mut text: String = activity
+        .results
+        .iter()
+        .map(|r| format!("{}\n", r.title))
+        .collect();
+    if let Some(content) = &activity.content {
+        text.push_str(content);
+    }
+    text
 }
 
 fn describe_ai_error(err: &AiError) -> String {

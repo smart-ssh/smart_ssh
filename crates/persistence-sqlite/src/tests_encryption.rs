@@ -144,6 +144,7 @@ async fn populate_markers(store: &SqliteProfileStore) {
             extra_headers: vec![("X-Test".to_string(), HEADER_MARKER.to_string())],
             attestation_url: None,
             max_tokens_override: None,
+            web_research_enabled: true,
             created_at: now,
             updated_at: now,
         })

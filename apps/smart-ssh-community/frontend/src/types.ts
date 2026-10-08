@@ -72,6 +72,9 @@ export interface AiProviderConfigDto {
   attestationUrl: string | null;
   /** Spec 0065, Teil 4: `null` = „Automatisch" (Default). */
   maxTokensOverride: number | null;
+  /** Issue #162 / Spec 0105: serverseitige Web-Recherche des Providers
+   * (Default an; wirkt nur bei Providern, die sie unterstützen). */
+  webResearchEnabled: boolean;
 }
 
 export interface AiProviderConfigInput {
@@ -88,6 +91,14 @@ export interface AiProviderConfigInput {
   /** Spec 0065, Teil 4: `null` = „Automatisch" — nur relevant für den
    * Haupt-Chat dieses Providers, Nebenaufrufe behalten ihre kleinen Werte. */
   maxTokensOverride: number | null;
+  /** Issue #162 / Spec 0105. */
+  webResearchEnabled: boolean;
+}
+
+/** Spec 0105: nur diese Provider-Typen haben serverseitige Web-Werkzeuge —
+ * nur für sie zeigt das Formular den Schalter. */
+export function supportsWebResearch(type: ProviderType): boolean {
+  return type === "anthropic";
 }
 
 // Nur bei diesen beiden Typen ist Base-URL relevant (Spec 0007, Abschnitt
@@ -414,6 +425,30 @@ export interface ChatResponseTruncatedEvent {
   sessionId: string;
 }
 
+/** Spec 0105: eine Quelle einer Web-Recherche. */
+export interface WebSourceDto {
+  title: string;
+  url: string;
+}
+
+/** Spec 0105: eine serverseitige Web-Recherche des Providers — Suchanfrage
+ * (`search`) bzw. URL (`fetch`), Treffer, zitierte Quellen, ggf. ein
+ * Fehlercode des Providers (z. B. `max_uses_exceeded`). */
+export interface WebActivityDto {
+  kind: "search" | "fetch";
+  input: string;
+  results: WebSourceDto[];
+  cited: WebSourceDto[];
+  contentTruncated: boolean;
+  errorCode: string | null;
+}
+
+/** Spec 0105 — `chat-web-activity`. */
+export interface ChatWebActivityEvent {
+  sessionId: string;
+  activity: WebActivityDto;
+}
+
 /** Spec 0080, A2 — eine Runde endete ohne jeden Text und ohne vorgeschlagene
  * Aktion (z. B. ein Reasoning-Modell, dessen Denk-Tokens das ganze Budget
  * vor jedem Text aufbrauchen). Zeigt einen reinen Hinweis ohne „Weiter" und
@@ -734,7 +769,9 @@ export type ChatHistoryEntryDto =
       /** Spec 0043, Fund A — s. `ActionResultPayload`'s `truncated`. */
       truncated: boolean;
     }
-  | { type: "actionRejected"; role: ChatHistoryRole; command: string; reason: string };
+  | { type: "actionRejected"; role: ChatHistoryRole; command: string; reason: string }
+  /** Spec 0105. */
+  | { type: "webActivity"; role: ChatHistoryRole; activity: WebActivityDto };
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
 

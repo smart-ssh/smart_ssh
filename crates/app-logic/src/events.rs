@@ -757,6 +757,33 @@ pub fn emit_chat_response_truncated(emitter: &dyn EventEmitter, session_id: Sess
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ChatWebActivityPayload {
+    session_id: SessionId,
+    activity: crate::dto::WebActivityDto,
+}
+
+/// Issue #162: der Provider hat während der laufenden KI-Antwort im Web
+/// gesucht oder eine Seite gelesen — das Frontend zeigt Suchanfrage bzw.
+/// URL, die zitierten Quellen und ggf. einen Fehlerhinweis als eigene
+/// Karte. Eigenes Event statt Text im `chat-text-delta`-Inhalt (Lehre aus
+/// Spec 0057, s. `emit_chat_response_truncated`).
+pub fn emit_chat_web_activity(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    activity: crate::dto::WebActivityDto,
+) {
+    emit(
+        emitter,
+        "chat-web-activity",
+        &ChatWebActivityPayload {
+            session_id,
+            activity,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ChatResponseEmptyPayload {
     session_id: SessionId,
 }

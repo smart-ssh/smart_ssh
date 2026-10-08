@@ -117,6 +117,9 @@ fn estimate_message_tokens(message: &ChatMessage) -> usize {
                 + estimate_tokens(&stderr_fenced)
                 + COMMAND_RESULT_WRAPPER_TOKEN_OVERHEAD
         }
+        // Issue #162: gesendet wird die gefencte Form, s.
+        // `WebActivity::to_model_text`.
+        MessageContent::WebActivity(activity) => estimate_tokens(&activity.to_model_text()),
         MessageContent::ActionRejected { command, reason } => {
             let reason_text = match reason {
                 RejectionReason::User => "",
@@ -753,6 +756,9 @@ async fn generate_rolling_summary(
                 // Kein Tool-Schema angeboten, aber defensiv wie an den
                 // anderen reinen-Text-Aufrufstellen: einfach ignorieren.
                 AiEvent::ActionProposed(_) => {}
+                // Issue #162: Nebenaufrufe bekommen keine Web-Werkzeuge
+                // (s. `ai_providers::anthropic`); defensiv ignoriert.
+                AiEvent::WebActivity(_) => {}
                 // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
                 // Nebenaufruf — eine unvollständige Zusammenfassung ist
                 // immer noch besser als gar keine.

@@ -462,7 +462,9 @@
       "anthropic": "Anthropic",
       "generic_openai_compatible": "Generisch (OpenAI-kompatibel)",
       "ollama": "Ollama"
-    }
+    },
+    "webResearch": "Web-Recherche (im Web suchen und Seiten lesen)",
+    "webResearchHint": "Die KI darf beim Antworten im Web suchen und Webseiten lesen (nur Text). Die Seiten ruft der Provider ab; dieser Rechner öffnet dafür keine zusätzliche Verbindung. Gilt für Sitzungen, die nach der Änderung verbunden werden."
   },
   "errors": {
     "SSH_CONNECTION_FAILED": "Verbindung fehlgeschlagen – ist der Host erreichbar (Adresse, Port, Netzwerk)?",
@@ -991,7 +993,28 @@
     "exportedAsMarkdown": "Als Markdown exportiert",
     "exportDefaultTitle": "Antwort",
     "responseTruncated": "Antwort wurde abgeschnitten (Längenlimit erreicht).",
-    "continue": "Weiter"
+    "continue": "Weiter",
+    "webSearchTitle": "Websuche: {{query}}",
+    "webFetchTitle": "Webseite gelesen: {{url}}",
+    "webCitedSources": "Zitierte Quellen:",
+    "webNoCitedSearch_one": "{{count}} Treffer, keiner zitiert.",
+    "webNoCitedSearch_other": "{{count}} Treffer, keiner zitiert.",
+    "webNoCitedFetch": "Seite gelesen, nicht zitiert.",
+    "webContentTruncated": "Der Seitentext wurde für den Chatverlauf gekürzt.",
+    "webErrors": {
+      "max_uses_exceeded": "Höchstzahl an Websuchen bzw. Seitenabrufen für diese Antwort erreicht.",
+      "too_many_requests": "Der Provider begrenzt Webanfragen gerade.",
+      "url_not_accessible": "Die Seite konnte nicht geladen werden.",
+      "url_not_allowed": "Der Provider erlaubt das Lesen dieser Seite nicht.",
+      "url_not_in_prior_context": "Die Seite wurde nicht gelesen: Lesbar sind nur Adressen, die im Gespräch schon vorkommen.",
+      "unsupported_content_type": "Die Seite hat einen Inhaltstyp, der nicht gelesen werden kann.",
+      "query_too_long": "Die Suchanfrage war zu lang.",
+      "url_too_long": "Die Adresse war zu lang.",
+      "invalid_tool_input": "Die Suchanfrage oder Adresse war ungültig.",
+      "request_too_large": "Die Webanfrage war zu groß.",
+      "unavailable": "Die Web-Recherche ist beim Provider gerade nicht verfügbar.",
+      "other": "Web-Recherche fehlgeschlagen ({{code}})."
+    }
   },
   "notes": {
     "largeNoteHint": "Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt werden. Die gespeicherte Notiz bleibt vollständig erhalten.",

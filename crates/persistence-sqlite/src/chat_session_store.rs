@@ -89,6 +89,8 @@ fn content_type_for(content: &MessageContent) -> &'static str {
         MessageContent::Text(_) => "text",
         MessageContent::CommandResult { .. } => "command_result",
         MessageContent::ActionRejected { .. } => "action_rejected",
+        // Issue #162, Migration `0020_...sql`.
+        MessageContent::WebActivity(_) => "web_activity",
     }
 }
 
@@ -543,6 +545,22 @@ mod tests {
                     reason: ssh_manager_core::ai::RejectionReason::User,
                 },
             },
+            // Issue #162, Migration 0020.
+            ChatMessage {
+                role: Role::Assistant,
+                content: MessageContent::WebActivity(ssh_manager_core::ai::WebActivity {
+                    kind: ssh_manager_core::ai::WebActivityKind::Fetch,
+                    input: "https://example.com/doc".to_string(),
+                    results: vec![ssh_manager_core::ai::WebSource {
+                        title: "Doc".to_string(),
+                        url: "https://example.com/doc".to_string(),
+                    }],
+                    cited: Vec::new(),
+                    content: Some("Seitentext".to_string()),
+                    content_truncated: false,
+                    error_code: None,
+                }),
+            },
         ];
         for message in &messages {
             chat_store
@@ -553,6 +571,20 @@ mod tests {
 
         let loaded = chat_store.load_session(session_id).await.unwrap();
         assert_eq!(loaded, messages);
+    }
+
+    /// Issue #162: eine gespeicherte Web-Recherche aus einer Zeile ohne die
+    /// optionalen Felder bleibt lesbar (serde-Defaults).
+    #[test]
+    fn test_web_activity_deserializes_with_missing_optional_fields() {
+        let json = r#"{"WebActivity":{"kind":"Search","input":"rust release"}}"#;
+        let content: MessageContent = serde_json::from_str(json).unwrap();
+        let MessageContent::WebActivity(activity) = content else {
+            panic!("falsche Variante: {content:?}");
+        };
+        assert_eq!(activity.input, "rust release");
+        assert!(activity.results.is_empty());
+        assert_eq!(activity.content, None);
     }
 
     /// Spec 0034, Abschnitt 4, letzter Punkt: "`sequence` läuft weiter

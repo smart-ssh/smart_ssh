@@ -11,6 +11,7 @@ import {
   listAiProviders,
   setActiveAiProvider,
   testAiProviderCredentials,
+  updateAiProvider,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
 import { effectiveApiKey, OLLAMA_BASE_URL, OLLAMA_PLACEHOLDER_API_KEY } from "../ollama";
@@ -27,6 +28,7 @@ import {
   type TestAiProviderCredentialsResult,
   needsBaseUrl,
   supportsModelDiscovery,
+  supportsWebResearch,
 } from "../types";
 
 const PROVIDER_TYPES: ProviderType[] = [
@@ -47,6 +49,8 @@ function emptyForm(): AiProviderConfigInput {
     extraHeaders: [],
     attestationUrl: null,
     maxTokensOverride: null,
+    // Spec 0105: Default an.
+    webResearchEnabled: true,
   };
 }
 
@@ -256,6 +260,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         extraHeaders: [],
         attestationUrl: null,
         maxTokensOverride: null,
+        webResearchEnabled: true,
       });
       if (models.length > 0) {
         setOllamaProbe({ status: "found", models });
@@ -308,6 +313,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         extraHeaders: [],
         attestationUrl: null,
         maxTokensOverride: null,
+        webResearchEnabled: true,
       });
       if (!wasAnyProviderActive) {
         await setActiveAiProvider(newId);
@@ -473,6 +479,30 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     }
   };
 
+  /** Spec 0105: Web-Recherche eines bestehenden Providers ein-/ausschalten.
+   * Leerer `apiKey` = Zugangsdaten unverändert (s. `update_ai_provider`). */
+  const handleWebResearchChange = async (provider: AiProviderConfigDto, enabled: boolean) => {
+    setError(null);
+    try {
+      await updateAiProvider(provider.id, {
+        providerType: provider.providerType,
+        displayName: provider.displayName,
+        baseUrl: provider.baseUrl,
+        model: provider.model,
+        supportsNativeToolCalling: provider.supportsNativeToolCalling,
+        apiKey: "",
+        extraHeaders: provider.extraHeaders,
+        attestationUrl: provider.attestationUrl,
+        maxTokensOverride: provider.maxTokensOverride,
+        webResearchEnabled: enabled,
+      });
+      reload();
+      onProvidersChanged();
+    } catch (err) {
+      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+    }
+  };
+
   const apiKeyWarning = apiKeyFormatWarning(form.providerType, form.baseUrl, form.apiKey);
 
   // Spec 0069, Teil B3: `otherError` (und `unreachable`, wenn dessen
@@ -542,6 +572,17 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                   </button>
                 </div>
               </div>
+
+              {supportsWebResearch(provider.providerType) && (
+                <label className="mt-2 flex items-center gap-2 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={provider.webResearchEnabled}
+                    onChange={(e) => handleWebResearchChange(provider, e.target.checked)}
+                  />
+                  {t("aiProvider.webResearch")}
+                </label>
+              )}
 
               {provider.attestationUrl && (
                 <div className="mt-2 space-y-1.5">
@@ -977,6 +1018,20 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             />
             {t("aiProvider.nativeToolCalling")}
           </label>
+
+          {supportsWebResearch(form.providerType) && (
+            <div>
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={form.webResearchEnabled}
+                  onChange={(e) => setForm({ ...form, webResearchEnabled: e.target.checked })}
+                />
+                {t("aiProvider.webResearch")}
+              </label>
+              <p className="mt-1 text-xs text-slate-500">{t("aiProvider.webResearchHint")}</p>
+            </div>
+          )}
 
           {/* Spec 0025, Abschnitt 3/4: Zusatz-Header und Attestierungs-URL
            * hinter einem "Erweitert"-Bereich, damit das Formular für den

@@ -418,6 +418,12 @@ async fn assert_release_data_readable(store: &SqliteProfileStore, release: &str)
     assert_eq!(provider.model, marker::PROVIDER_MODEL);
     assert!(provider.is_active);
     assert_eq!(provider.max_tokens_override, Some(4096));
+    // Issue #162: eine schon bestehende Provider-Konfiguration startet mit
+    // eingeschalteter Web-Recherche.
+    assert!(
+        provider.web_research_enabled,
+        "{release}: web research must default to on for existing providers"
+    );
     assert!(provider
         .extra_headers
         .iter()

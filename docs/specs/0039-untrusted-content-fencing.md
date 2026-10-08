@@ -72,6 +72,10 @@ Anforderungen:
   einordnen kann, woher der Inhalt stammt.
 - **Kein Aufrufer baut Fence-Tags selbst zusammen.** Falls im Code noch
   Stellen existieren, die das tun, werden sie auf diese Funktion umgestellt.
+- **Webinhalt (Spec 0105):** Suchanfragen, Treffer und Seitentext aus der
+  Web-Recherche des KI-Providers sind eine weitere nicht vertrauenswürdige
+  Quelle (Fence `web_content`) und setzen wie die übrigen Quellen das Flag
+  aus Abschnitt 5.
 
 ## 4. Instruktion im System-Prompt
 

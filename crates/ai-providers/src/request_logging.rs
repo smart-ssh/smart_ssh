@@ -110,6 +110,14 @@ fn history_shapes(context: &SessionContext) -> Vec<String> {
                     RejectionReason::Timeout => "timeout",
                 }
             ),
+            // Issue #162: nur Art und Längen, keine Anfrage/URL/Seitentext.
+            MessageContent::WebActivity(activity) => format!(
+                "[web_activity] kind={:?} input_len={} results={} content_len={}",
+                activity.kind,
+                activity.input.chars().count(),
+                activity.results.len(),
+                activity.content.as_ref().map_or(0, |c| c.chars().count())
+            ),
         })
         .collect()
 }
@@ -141,6 +149,13 @@ fn history_contents(context: &SessionContext) -> Vec<String> {
                     }
                     RejectionReason::Timeout => "timeout".to_string(),
                 }
+            ),
+            MessageContent::WebActivity(activity) => format!(
+                "[web_activity] {:?} {} (results={}, content_len={})",
+                activity.kind,
+                redactor.redact_text(&activity.input),
+                activity.results.len(),
+                activity.content.as_ref().map_or(0, |c| c.chars().count())
             ),
         })
         .collect()

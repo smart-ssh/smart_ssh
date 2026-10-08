@@ -337,6 +337,7 @@ async fn test_t11_the_provider_branch_and_the_other_auth_kinds_move_too() {
             extra_headers: Vec::new(),
             attestation_url: None,
             max_tokens_override: None,
+            web_research_enabled: true,
             created_at: now,
             updated_at: now,
         })
@@ -988,6 +989,7 @@ async fn test_t17_the_secret_migration_keeps_the_key_and_the_secrets_out_of_the_
             extra_headers: Vec::new(),
             attestation_url: None,
             max_tokens_override: None,
+            web_research_enabled: true,
             created_at: now,
             updated_at: now,
         })

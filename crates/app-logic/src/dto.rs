@@ -293,6 +293,9 @@ pub struct AiProviderConfigDto {
     pub attestation_url: Option<String>,
     /// Spec 0065, Teil 4: `None` = „Automatisch" (Default) im Formular.
     pub max_tokens_override: Option<u32>,
+    /// Issue #162: serverseitige Web-Recherche (nur Provider, die sie
+    /// unterstützen).
+    pub web_research_enabled: bool,
 }
 
 impl From<&AiProviderConfig> for AiProviderConfigDto {
@@ -308,6 +311,7 @@ impl From<&AiProviderConfig> for AiProviderConfigDto {
             extra_headers: config.extra_headers.clone(),
             attestation_url: config.attestation_url.clone(),
             max_tokens_override: config.max_tokens_override,
+            web_research_enabled: config.web_research_enabled,
         }
     }
 }
@@ -335,6 +339,14 @@ pub struct AiProviderConfigInput {
     /// `trimmed()`: eine
     /// Deserialize-Quelle kennt keine fachliche Validierung).
     pub max_tokens_override: Option<u32>,
+    /// Issue #162: fehlt das Feld (älteres Frontend), gilt der Default
+    /// „an".
+    #[serde(default = "default_web_research_enabled")]
+    pub web_research_enabled: bool,
+}
+
+fn default_web_research_enabled() -> bool {
+    true
 }
 
 /// Spec 0065, Teil 4: sinnvolle Obergrenze für den Override — großzügig
@@ -419,6 +431,7 @@ impl AiProviderConfigInput {
             extra_headers: self.extra_headers,
             attestation_url: self.attestation_url,
             max_tokens_override: self.max_tokens_override,
+            web_research_enabled: self.web_research_enabled,
             created_at: now,
             updated_at: now,
         }
@@ -435,6 +448,7 @@ impl AiProviderConfigInput {
             extra_headers: self.extra_headers,
             attestation_url: self.attestation_url,
             max_tokens_override: self.max_tokens_override,
+            web_research_enabled: self.web_research_enabled,
             updated_at: Utc::now(),
         }
     }
@@ -1110,6 +1124,65 @@ pub enum ChatHistoryEntryDto {
         command: String,
         reason: String,
     },
+    /// Issue #162: eine serverseitige Web-Recherche des Providers.
+    WebActivity {
+        role: ChatHistoryRoleDto,
+        activity: WebActivityDto,
+    },
+}
+
+/// Issue #162: Anzeige einer Web-Recherche im Chat (Live-Event
+/// `chat-web-activity` und wiederaufgenommene Historie) — Suchanfrage bzw.
+/// URL, Treffer, zitierte Quellen, ggf. Fehlercode. Der gelesene
+/// Seitentext selbst geht bewusst nicht ans Frontend (nur Anzeige der
+/// Quellen, s. Spec 0105).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebActivityDto {
+    pub kind: WebActivityKindDto,
+    pub input: String,
+    pub results: Vec<WebSourceDto>,
+    pub cited: Vec<WebSourceDto>,
+    pub content_truncated: bool,
+    pub error_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WebActivityKindDto {
+    Search,
+    Fetch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebSourceDto {
+    pub title: String,
+    pub url: String,
+}
+
+impl From<&ssh_manager_core::ai::WebActivity> for WebActivityDto {
+    fn from(activity: &ssh_manager_core::ai::WebActivity) -> Self {
+        let sources = |list: &[ssh_manager_core::ai::WebSource]| {
+            list.iter()
+                .map(|s| WebSourceDto {
+                    title: s.title.clone(),
+                    url: s.url.clone(),
+                })
+                .collect()
+        };
+        Self {
+            kind: match activity.kind {
+                ssh_manager_core::ai::WebActivityKind::Search => WebActivityKindDto::Search,
+                ssh_manager_core::ai::WebActivityKind::Fetch => WebActivityKindDto::Fetch,
+            },
+            input: activity.input.clone(),
+            results: sources(&activity.results),
+            cited: sources(&activity.cited),
+            content_truncated: activity.content_truncated,
+            error_code: activity.error_code.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -1169,6 +1242,12 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                     role,
                     command,
                     reason: reason_text,
+                }
+            }
+            ssh_manager_core::ai::MessageContent::WebActivity(activity) => {
+                ChatHistoryEntryDto::WebActivity {
+                    role,
+                    activity: WebActivityDto::from(&activity),
                 }
             }
         }
@@ -1493,6 +1572,7 @@ mod tests {
             extra_headers: Vec::new(),
             attestation_url: None,
             max_tokens_override: None,
+            web_research_enabled: true,
         }
     }
 
