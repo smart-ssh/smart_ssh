@@ -874,7 +874,101 @@
   },
   "fileBrowser": {
     "actionsColumn": "Aktionen",
-    "chmodClassColumn": "Gilt für"
+    "chmodClassColumn": "Gilt für",
+    "toStartDirectory": "Zum Startverzeichnis",
+    "parentDirectory": "Übergeordnetes Verzeichnis",
+    "newFolderButton": "+ Ordner",
+    "upload": "Hochladen",
+    "uploadDialogTitle": "Datei(en) hochladen",
+    "paste": "Einfügen",
+    "pasteTitle": "{{name}} hierher verschieben",
+    "cancelCut": "Ausschneiden abbrechen",
+    "transferUpload": "Hochladen: {{name}}",
+    "transferDownload": "Herunterladen: {{name}}",
+    "loading": "Lädt…",
+    "emptyDirectory": "(leeres Verzeichnis)",
+    "dropHint": "Hier ablegen zum Hochladen nach {{path}}",
+    "cancel": "Abbrechen",
+    "apply": "Übernehmen",
+    "overwrite": "Überschreiben",
+    "delete": "Löschen",
+    "column": {
+      "name": "Name",
+      "size": "Größe",
+      "permissions": "Rechte",
+      "modified": "Geändert"
+    },
+    "localEdit": {
+      "uploading": "„{{name}}\" wird hochgeladen…",
+      "changed": "„{{name}}\" wurde lokal geändert. Auf den Server hochladen?",
+      "later": "Später",
+      "editing": "„{{name}}\" wird lokal bearbeitet…",
+      "end": "Bearbeitung beenden",
+      "uploadTitle": "Lokale Änderungen hochladen?",
+      "remoteChanged": "Die Remote-Datei wurde seit dem Download verändert — ein Hochladen würde diese andere Änderung überschreiben.",
+      "noDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß). Neue Größe: {{size}}."
+    },
+    "deleteDialog": {
+      "fileTitle": "Datei löschen?",
+      "dirTitle": "Ordner löschen?",
+      "body": "wird unwiderruflich vom Server gelöscht.",
+      "contents": "Enthält <strong>{{fileCount}}</strong> {{files}} in <strong>{{dirCount}}</strong> {{dirs}} (inkl. diesem) — alle werden mitgelöscht.",
+      "files_one": "Datei(en)",
+      "files_other": "Datei(en)",
+      "dirs_one": "Ordner(n)",
+      "dirs_other": "Ordner(n)",
+      "counting": "Ermittle Inhalt…"
+    },
+    "moveCollision": {
+      "title": "Ziel existiert bereits",
+      "body": "gibt es schon und würde überschrieben."
+    },
+    "uploadConflict": {
+      "title": "Datei überschreiben?",
+      "body": "existiert bereits auf dem Server.",
+      "noDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß). Bisherige Größe: {{remoteSize}}, neue Größe: {{localSize}}."
+    },
+    "menu": {
+      "download": "Herunterladen",
+      "downloadTo": "Herunterladen nach…",
+      "copyContent": "Dateiinhalt kopieren",
+      "openLocally": "Lokal öffnen…",
+      "copyPath": "Pfad kopieren",
+      "properties": "Eigenschaften",
+      "refresh": "Aktualisieren",
+      "chmod": "Rechte bearbeiten…",
+      "rename": "Umbenennen",
+      "cut": "Ausschneiden",
+      "delete": "Löschen"
+    },
+    "properties": {
+      "title": "Eigenschaften",
+      "name": "Name",
+      "path": "Pfad",
+      "type": "Typ",
+      "typeFolder": "Ordner",
+      "typeFile": "Datei",
+      "size": "Größe",
+      "permissionsSymbolic": "Rechte (symbolisch)",
+      "permissionsNumeric": "Rechte (numerisch)",
+      "owner": "Besitzer",
+      "group": "Gruppe",
+      "modified": "Geändert",
+      "close": "Schließen"
+    },
+    "chmod": {
+      "title": "Rechte bearbeiten",
+      "read": "Lesen",
+      "write": "Schreiben",
+      "execute": "Ausführen",
+      "numeric": "Numerisch",
+      "recursive": "Rekursiv",
+      "recursiveWarning": "— ändert die Rechte für ALLE Dateien und Unterordner in diesem Ordner. Mächtige Aktion, nicht rückgängig machbar."
+    },
+    "renamePrompt": {
+      "renameTitle": "Umbenennen",
+      "newFolderTitle": "Neuer Ordner"
+    }
   },
   "chat": {
     "autoContinuing": "Automatik läuft — KI reagiert automatisch auf das letzte Ergebnis…",

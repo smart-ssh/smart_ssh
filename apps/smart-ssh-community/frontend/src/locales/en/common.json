@@ -874,7 +874,101 @@
   },
   "fileBrowser": {
     "actionsColumn": "Actions",
-    "chmodClassColumn": "Applies to"
+    "chmodClassColumn": "Applies to",
+    "toStartDirectory": "Go to start directory",
+    "parentDirectory": "Parent directory",
+    "newFolderButton": "+ Folder",
+    "upload": "Upload",
+    "uploadDialogTitle": "Upload file(s)",
+    "paste": "Paste",
+    "pasteTitle": "Move {{name}} here",
+    "cancelCut": "Cancel cut",
+    "transferUpload": "Uploading: {{name}}",
+    "transferDownload": "Downloading: {{name}}",
+    "loading": "Loading…",
+    "emptyDirectory": "(empty directory)",
+    "dropHint": "Drop here to upload to {{path}}",
+    "cancel": "Cancel",
+    "apply": "Apply",
+    "overwrite": "Overwrite",
+    "delete": "Delete",
+    "column": {
+      "name": "Name",
+      "size": "Size",
+      "permissions": "Permissions",
+      "modified": "Modified"
+    },
+    "localEdit": {
+      "uploading": "Uploading “{{name}}”…",
+      "changed": "“{{name}}” was changed locally. Upload it to the server?",
+      "later": "Later",
+      "editing": "Editing “{{name}}” locally…",
+      "end": "Stop editing",
+      "uploadTitle": "Upload local changes?",
+      "remoteChanged": "The remote file was changed since the download — uploading would overwrite that other change.",
+      "noDiff": "No text diff possible (binary file or too large). New size: {{size}}."
+    },
+    "deleteDialog": {
+      "fileTitle": "Delete file?",
+      "dirTitle": "Delete folder?",
+      "body": "will be deleted from the server permanently.",
+      "contents": "Contains <strong>{{fileCount}}</strong> {{files}} in <strong>{{dirCount}}</strong> {{dirs}} (including this one) — all of them will be deleted.",
+      "files_one": "file",
+      "files_other": "files",
+      "dirs_one": "folder",
+      "dirs_other": "folders",
+      "counting": "Counting contents…"
+    },
+    "moveCollision": {
+      "title": "Target already exists",
+      "body": "already exists and would be overwritten."
+    },
+    "uploadConflict": {
+      "title": "Overwrite file?",
+      "body": "already exists on the server.",
+      "noDiff": "No text diff possible (binary file or too large). Current size: {{remoteSize}}, new size: {{localSize}}."
+    },
+    "menu": {
+      "download": "Download",
+      "downloadTo": "Download to…",
+      "copyContent": "Copy file content",
+      "openLocally": "Open locally…",
+      "copyPath": "Copy path",
+      "properties": "Properties",
+      "refresh": "Refresh",
+      "chmod": "Edit permissions…",
+      "rename": "Rename",
+      "cut": "Cut",
+      "delete": "Delete"
+    },
+    "properties": {
+      "title": "Properties",
+      "name": "Name",
+      "path": "Path",
+      "type": "Type",
+      "typeFolder": "Folder",
+      "typeFile": "File",
+      "size": "Size",
+      "permissionsSymbolic": "Permissions (symbolic)",
+      "permissionsNumeric": "Permissions (numeric)",
+      "owner": "Owner",
+      "group": "Group",
+      "modified": "Modified",
+      "close": "Close"
+    },
+    "chmod": {
+      "title": "Edit permissions",
+      "read": "Read",
+      "write": "Write",
+      "execute": "Execute",
+      "numeric": "Numeric",
+      "recursive": "Recursive",
+      "recursiveWarning": "— changes the permissions of ALL files and subfolders in this folder. Powerful action, cannot be undone."
+    },
+    "renamePrompt": {
+      "renameTitle": "Rename",
+      "newFolderTitle": "New folder"
+    }
   },
   "chat": {
     "autoContinuing": "Automatic mode running — the AI responds to the last result on its own…",
