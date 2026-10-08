@@ -65,7 +65,9 @@ describe("UnusableServerPanel", () => {
     const onDeleted = renderPanel();
 
     fireEvent.click(screen.getByText("Server löschen"));
-    await screen.findByText("Alle für diesen Server gespeicherten Secrets werden gelöscht.");
+    await screen.findByText(
+      "Alle Secrets, die diese Version für diesen Server speichern kann, werden gelöscht. Secrets, die eine neuere Version der App angelegt hat, können zurückbleiben.",
+    );
     expect(deleteUnusableServer).toHaveBeenCalledWith("unusable-1", false);
     expect(onDeleted).not.toHaveBeenCalled();
 
