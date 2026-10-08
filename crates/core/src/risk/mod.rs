@@ -27,6 +27,7 @@ mod types;
 mod tests;
 
 pub use classifier::{
-    secret_path_read_reason, sftp_server_invocation_reason, RuleBasedRiskClassifier,
+    secret_path_read_reason, sftp_server_invocation_reason, CommandCheckFinding,
+    RuleBasedRiskClassifier,
 };
 pub use types::{RiskAssessment, RiskClassifier, RiskLevel};

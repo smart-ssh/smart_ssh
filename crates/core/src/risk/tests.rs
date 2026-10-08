@@ -1013,3 +1013,104 @@ fn test_shell_c_unwrapping_stops_at_depth_limit() {
     let mut acc = RiskAccumulator::new();
     classify_into(&nested_shell_c(8), usize::MAX / 2, &mut acc);
 }
+
+// --- Issue #109: „nicht prüfbar" ist kein Treffer ------------------------
+
+use super::CommandCheckFinding;
+
+/// `inner` in `levels` verschachtelten `bash -c`-Aufrufen,
+/// gequotet wie eine echte Shell es bräuchte.
+fn nested_harmless_shell_c(inner: &str, levels: usize) -> String {
+    let mut command = inner.to_string();
+    for _ in 0..levels {
+        command = format!("bash -c {}", shell_words::quote(&command));
+    }
+    command
+}
+
+/// Ein Kommando über der Längenschranke: die Secret-Pfad- und die
+/// `sftp-server`-Prüfung melden „nicht prüfbar", keinen Treffer — eskaliert
+/// wird trotzdem (`Some`).
+#[test]
+fn test_overlong_command_is_not_assessable_for_secret_and_sftp_checks() {
+    let command = format!(
+        "echo {}",
+        "ä".repeat(crate::filter::DEFAULT_MAX_COMMAND_LENGTH)
+    );
+    assert!(command.chars().count() <= crate::filter::DEFAULT_MAX_COMMAND_LENGTH + 5);
+    let secret = secret_path_read_reason(&command).expect("Überlänge muss eskalieren");
+    assert!(
+        matches!(secret, CommandCheckFinding::NotAssessable(_)),
+        "{secret:?}"
+    );
+    let sftp = sftp_server_invocation_reason(&command).expect("Überlänge muss eskalieren");
+    assert!(
+        matches!(sftp, CommandCheckFinding::NotAssessable(_)),
+        "{sftp:?}"
+    );
+}
+
+/// Shell-Code-Strings tiefer verschachtelt als geprüft wird: „nicht
+/// prüfbar" statt eines angeblichen Secret-Treffers — und weiterhin
+/// eskaliert. Eine Ebene weniger bleibt unauffällig (Grenze sichtbar).
+#[test]
+fn test_too_deeply_nested_shell_code_is_not_assessable_for_secret_check() {
+    assert_eq!(
+        secret_path_read_reason(&nested_harmless_shell_c("ls -la", 3)),
+        None,
+        "Vorbedingung: innerhalb der Tiefengrenze ist harmloser Code unauffällig"
+    );
+    let command = nested_harmless_shell_c("ls -la", 4);
+    let finding = secret_path_read_reason(&command).expect("zu tief muss eskalieren");
+    assert!(
+        matches!(finding, CommandCheckFinding::NotAssessable(_)),
+        "{command}: {finding:?}"
+    );
+}
+
+/// Dasselbe für `sftp-server`: tiefer verschachtelt als die Wort-Prüfung
+/// geht, ist „nicht prüfbar", kein Aufruf-Treffer — und eskaliert.
+#[test]
+fn test_too_deeply_nested_sftp_server_mention_is_not_assessable() {
+    assert_eq!(
+        sftp_server_invocation_reason(&nested_harmless_shell_c(
+            "ls /usr/lib/openssh/sftp-server -la",
+            3
+        )),
+        None,
+        "Vorbedingung: innerhalb der Tiefengrenze ist eine bloße Erwähnung unauffällig"
+    );
+    let command = nested_harmless_shell_c("ls /usr/lib/openssh/sftp-server -la", 4);
+    let finding = sftp_server_invocation_reason(&command).expect("zu tief muss eskalieren");
+    assert!(
+        matches!(finding, CommandCheckFinding::NotAssessable(_)),
+        "{command}: {finding:?}"
+    );
+}
+
+/// Echte Treffer bleiben Treffer.
+#[test]
+fn test_real_secret_read_and_sftp_server_call_are_matches() {
+    for command in [
+        "cat /etc/shadow",
+        "cat ~/.ssh/id_rsa",
+        "sh -c 'cat /etc/sha*'",
+    ] {
+        assert!(
+            matches!(
+                secret_path_read_reason(command),
+                Some(CommandCheckFinding::Match(_))
+            ),
+            "{command}"
+        );
+    }
+    for command in ["sftp-server", "sudo -n /usr/lib/openssh/sftp-server"] {
+        assert!(
+            matches!(
+                sftp_server_invocation_reason(command),
+                Some(CommandCheckFinding::Match(_))
+            ),
+            "{command}"
+        );
+    }
+}

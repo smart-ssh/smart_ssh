@@ -57,6 +57,10 @@ mod tests_red_risk;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_red_risk_second_opinion;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_not_assessable;
 
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das
 /// bereits registrierte Warten.
@@ -161,27 +165,17 @@ pub(crate) async fn handle_action_proposed(
     // GELESEN (nicht verbraucht) und bei gesetztem Flag der Injection-Grund
     // angezeigt.
     if matches!(decision, Decision::AutoExec) {
-        if let Some(reason) = pseudo_command_for_risk_classification(&action)
+        if let Some(finding) = pseudo_command_for_risk_classification(&action)
             .as_deref()
             .and_then(ssh_manager_core::risk::secret_path_read_reason)
         {
-            decision = if session
-                .injection_suspected
-                .load(std::sync::atomic::Ordering::SeqCst)
-            {
-                Decision::Confirm {
-                    reason: format!(
-                        "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
-                         erkannt; außerdem: {reason} – erfordert Bestätigung"
-                    ),
-                    code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
-                }
-            } else {
-                Decision::Confirm {
-                    reason: format!("{reason} – erfordert immer Bestätigung"),
-                    code: "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM".to_string(),
-                }
-            };
+            decision = check_finding_confirm(
+                finding,
+                "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM",
+                session
+                    .injection_suspected
+                    .load(std::sync::atomic::Ordering::SeqCst),
+            );
         }
     }
 
@@ -192,27 +186,17 @@ pub(crate) async fn handle_action_proposed(
     // Secret-Prüfung oben: nur `AutoExec` → `Confirm`, vor der
     // Injection-Prüfung, deren Flag hier nur gelesen wird.
     if matches!(decision, Decision::AutoExec) {
-        if let Some(reason) = pseudo_command_for_risk_classification(&action)
+        if let Some(finding) = pseudo_command_for_risk_classification(&action)
             .as_deref()
             .and_then(ssh_manager_core::risk::sftp_server_invocation_reason)
         {
-            decision = if session
-                .injection_suspected
-                .load(std::sync::atomic::Ordering::SeqCst)
-            {
-                Decision::Confirm {
-                    reason: format!(
-                        "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
-                         erkannt; außerdem: {reason} – erfordert Bestätigung"
-                    ),
-                    code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
-                }
-            } else {
-                Decision::Confirm {
-                    reason: format!("{reason} – erfordert immer Bestätigung"),
-                    code: "FILTER_SFTP_SERVER_REQUIRES_CONFIRM".to_string(),
-                }
-            };
+            decision = check_finding_confirm(
+                finding,
+                "FILTER_SFTP_SERVER_REQUIRES_CONFIRM",
+                session
+                    .injection_suspected
+                    .load(std::sync::atomic::Ordering::SeqCst),
+            );
         }
     }
 
@@ -833,6 +817,41 @@ fn pseudo_command_for_risk_classification(action: &AiAction) -> Option<String> {
         AiAction::ReadRemoteFile { path } => Some(sftp_read_pseudo_command(path)),
         AiAction::WriteRemoteFile { path, .. } => Some(sftp_write_pseudo_command(path)),
         AiAction::ProposeNoteUpdate { .. } | AiAction::GenerateDocument { .. } => None,
+    }
+}
+
+/// `Confirm`-Entscheidung für einen Treffer der Secret-Pfad- bzw.
+/// `sftp-server`-Prüfung (Spec 0068 Teil 2, ADR 0058 §8). Reine Eskalation;
+/// der Aufrufer ruft das nur bei `AutoExec` auf.
+///
+/// Issue #109: Konnte die Prüfung das Kommando nicht prüfen (Längen- oder
+/// Verschachtelungsgrenze), nennt der Dialog genau das
+/// (`FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM`) statt eines Treffers,
+/// den es nicht gab. Ein Injection-Verdacht hat weiterhin Vorrang.
+fn check_finding_confirm(
+    finding: ssh_manager_core::risk::CommandCheckFinding,
+    match_code: &str,
+    injection_suspected: bool,
+) -> Decision {
+    let reason = finding.reason();
+    if injection_suspected {
+        Decision::Confirm {
+            reason: format!(
+                "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
+                 erkannt; außerdem: {reason} – erfordert Bestätigung"
+            ),
+            code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
+        }
+    } else if finding.is_not_assessable() {
+        Decision::Confirm {
+            reason: format!("{reason} – erfordert immer Bestätigung"),
+            code: "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM".to_string(),
+        }
+    } else {
+        Decision::Confirm {
+            reason: format!("{reason} – erfordert immer Bestätigung"),
+            code: match_code.to_string(),
+        }
     }
 }
 
