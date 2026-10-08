@@ -203,16 +203,38 @@ Tabelle in §4.1. Für jeden Code MUSS gelten:
   ist; wenn nicht → `HostNotFound`. Der Erfolgspfad und der Host-Key-Pfad
   (`resolve_or_pending`, `ClientHandler { host, … }`) bleiben **byte-gleich**
   — keine Vorab-Auflösung, kein Ersetzen des Hostnamens durch eine IP.
-- **Connect-Timeout in `connect_session`:** Jeder Aufruf von
-  `ssh_transport::connect` in der Schleife läuft unter
-  `tokio::time::timeout(SSH_CONNECT_TIMEOUT, …)`; Ablauf →
-  `SshError::Timeout` → `CommandError::with_code(…, "SSH_TIMEOUT")`.
-  `SSH_CONNECT_TIMEOUT` ist **die bestehende** 10-s-Konstante aus
-  `test_connection.rs` (`TEST_CONNECTION_TIMEOUT`), umbenannt und an eine
-  gemeinsame Stelle verschoben, von beiden Pfaden genutzt — keine zweite
-  Konstante. Der Timeout umschließt **nur** `ssh_transport::connect`, nie das
-  Warten auf die Host-Key-Entscheidung (das bleibt bei
-  `PENDING_ACTION_CONFIRM_TIMEOUT`, Spec 0068 Teil 5b).
+- **Zeitgrenzen je Phase und je Hop** (Issue #97, ersetzt die frühere eine
+  10-s-Grenze über den ganzen Aufbau): Jeder Hop einer Verbindung — der
+  Zielserver und jeder Jump-Host davor — bekommt eigene Grenzen für zwei
+  Phasen:
+
+  | Phase (je Hop) | umfasst | Grenze |
+  |---|---|---|
+  | Verbindung und Handshake | erster Hop: Namensauflösung, TCP-Verbindung, SSH-Handshake mit Host-Key-Prüfung; jeder weitere Hop: Tunnel über den vorherigen Hop, SSH-Handshake mit Host-Key-Prüfung | **10 s** |
+  | Anmeldung | die konfigurierte Anmeldung an diesem Hop, einschließlich der Zeit, in der der Nutzer einen Hardware-Schlüssel berührt oder eine Agent-Bestätigung gibt | **60 s** |
+
+  - Ein Server, der während der Verbindung oder des Handshakes hängt (z. B.
+    TCP annimmt, aber nie ein SSH-Banner schickt), scheitert nach 10 s.
+  - Eine Anmeldung, die länger als 10 s, aber kürzer als 60 s dauert, bricht
+    **nicht** ab.
+  - Die Grenzen gelten je Hop: die mögliche Gesamtdauer wächst linear mit
+    der Zahl der Hops; es gibt keine Gesamtgrenze, die die Hop-Zahl
+    ignoriert. Als reines Sicherheitsnetz umschließt den ganzen Versuch
+    zusätzlich eine Grenze aus der Summe aller Phasengrenzen plus einer
+    weiteren Handshake-Grenze (ein Hop: 80 s, zwei Hops: 150 s); sie greift
+    im normalen Ablauf nie vor einer Phasengrenze.
+  - Läuft eine Grenze ab, endet der Versuch immer mit dem Fehler
+    `SSH_TIMEOUT` — nie verbunden, nie mit einer Host-Key-Rückfrage, und es
+    beginnt keine weitere Phase. Das Schritt-Protokoll im
+    Verbindungsdialog markiert den Schritt, der beim Ablauf lief, mit
+    `SSH_TIMEOUT`.
+  - Das Warten auf die Host-Key-Entscheidung des Nutzers liegt außerhalb
+    jeder dieser Grenzen: ein unbekannter oder geänderter Host-Key beendet
+    den Versuch sofort mit der Rückfrage; danach gilt ausschließlich der
+    Host-Key-Timeout (Spec 0068 Teil 5b). Nach „Vertrauen" beginnt ein neuer
+    Versuch mit frischen Grenzen.
+  - Verbinden und „Verbindung testen" nutzen dieselben Grenzen; ein
+    Ablauf zeigt im Test das Ergebnis „Timeout".
 - Gilt für alle Aufrufer von `connect_session`, also auch für MCP
   (`mcp_backend::ensure_session`): der MCP-Client bekommt den Fehler statt
   eines hängenden Tool-Calls.
@@ -433,7 +455,7 @@ würfe Ollama auf einem anderen Rechner fälschlich in „starte Ollama".
 | Name nicht auflösbar | `ConnectionFailed` + nachträgliches `lookup_host` scheitert | `SSH_HOST_NOT_FOUND` |
 | Port zu / kein Dienst | `io::ErrorKind::ConnectionRefused` | `SSH_CONNECTION_REFUSED` |
 | keine Route | `HostUnreachable`/`NetworkUnreachable` | `SSH_HOST_UNREACHABLE` |
-| keine Antwort | `SSH_CONNECT_TIMEOUT` abgelaufen oder `TimedOut` | `SSH_TIMEOUT` |
+| keine Antwort | eine Phasengrenze (A3) abgelaufen oder `TimedOut` | `SSH_TIMEOUT` |
 | Abbruch während Aufbau | `Disconnect`, `ConnectionReset`/`Aborted`/`UnexpectedEof` | `SSH_CONNECTION_CLOSED` |
 | sonst | — | `SSH_CONNECTION_FAILED` |
 
@@ -476,7 +498,7 @@ Ein altes Frontend ignoriert das neue Feld; ein unbekannter Code fällt auf
 | Stopp/Einreihen | nicht berührt. |
 | Ledger/Audit | nicht berührt (keine Aktion auf einem Server). |
 | MCP | `connect_session`-Timeout gilt auch für MCP (§3.A3); Fehlertext an den MCP-Client ist die `message` wie bisher. |
-| Nie hängen | neuer Timeout im SSH-Connect; `lookup_host` in der Diagnose läuft innerhalb dieses Timeouts. |
+| Nie hängen | Zeitgrenzen je Phase und Hop im SSH-Connect (A3); `lookup_host` in der Diagnose läuft innerhalb der Handshake-Grenze des ersten Hops. |
 | BL-0042 | Probe nur auf Nutzeraktion (E1), nur Loopback, nie beim Start. |
 
 ---
@@ -484,8 +506,9 @@ Ein altes Frontend ignoriert das neue Feld; ein unbekannter Code fällt auf
 ## 5. Sicherheits-Invarianten
 
 - **Host-Keys (Invariante 5):** Kein Pfad dieser Spec akzeptiert einen
-  Host-Key. Der Connect-Timeout liefert immer einen Fehler, nie
-  `Connected`, nie `trust()`. Er umschließt nicht das Warten auf die
+  Host-Key. Jede Zeitgrenze des Verbindungsaufbaus (je Phase, je Hop,
+  und das äußere Sicherheitsnetz) liefert immer einen Fehler, nie
+  `Connected`, nie `trust()`. Keine umschließt das Warten auf die
   Host-Key-Entscheidung. `resolve_or_pending`, `ClientHandler` und der
   Hostname, unter dem Host-Keys gespeichert/geprüft werden, bleiben
   unverändert.
@@ -542,13 +565,24 @@ im Bericht bestätigen.
     timeout)` mit einer nie fertig werdenden Future → `Err(SSH_TIMEOUT)`;
     ein `HostKeyStore`-Mock zählt `trust()`-Aufrufe → 0.
 12. **Timeout umfasst nicht die Host-Key-Wartezeit:** Future liefert sofort
-    `PendingHostKeyConfirmation`; danach vergeht mehr als
-    `SSH_CONNECT_TIMEOUT`, bevor die (simulierte) Entscheidung kommt → kein
+    `PendingHostKeyConfirmation`; danach vergeht mehr als jede
+    Verbindungsgrenze, bevor die (simulierte) Entscheidung kommt → kein
     `SSH_TIMEOUT`; es gilt ausschließlich der Host-Key-Timeout.
 13. **Hängender Handshake:** lokaler `TcpListener`, der annimmt, aber nie ein
     SSH-Banner schickt → `connect_with_timeout(ssh_transport::connect(…))`
     endet nach dem (für den Test verkürzten) Timeout mit `SSH_TIMEOUT`.
     Test selbst mit äußerem Timeout, damit er nie hängt.
+13a. **Grenzen je Phase und Hop (Issue #97):** mit pausierter Uhr und
+    verzögerten Phasen: Handshake hängt → `SSH_TIMEOUT` nach genau der
+    Handshake-Grenze, keine Anmeldung; Anmeldung über der Handshake-, unter
+    der Anmeldegrenze → verbunden; Anmeldung über der Anmeldegrenze →
+    `SSH_TIMEOUT`; zwei Hops mit je knapp unter den Grenzen (Gesamtzeit über
+    den Grenzen eines Hops) → verbunden; Ablauf am zweiten Hop → `SSH_TIMEOUT`,
+    keine weitere Phase. Gegen einen echten Server ohne Banner endet der
+    Aufbau an der Handshake-Grenze selbst (ohne äußere Grenze), der
+    Handshake-Schritt trägt `SSH_TIMEOUT`, 0 `trust()`. „Verbindung testen"
+    reicht dieselben Grenzen durch und meldet einen Ablauf als `Timeout`;
+    das äußere Sicherheitsnetz wächst mit der Hop-Zahl.
 14. **Host-Key-Pfad unverändert:** Integrationstest gegen den Test-Fixture-
     Server: unbekannter Key → weiterhin `PendingHostKeyConfirmation`
     (nicht als `ConnectionClosed`/`ConnectionFailed` fehlklassifiziert);
@@ -614,6 +648,9 @@ sie ausformuliert mit:
 - Server mit Tippfehler im Namen, geschlossenem Port, nicht routbarer
   Adresse (z. B. eine ungenutzte private IP) → je eigene Meldung; letzte
   nach etwa 10 s statt nach Minuten.
+- Schlüssel mit Bestätigungspflicht (Hardware-Schlüssel mit Berührung oder
+  Agent-Schlüssel mit `ssh-add -c`): verbinden und erst nach etwa 20 s
+  bestätigen → die Verbindung kommt zustande.
 - Host-Key ablehnen; Host-Key-Dialog offen lassen bis zum Timeout.
 - Frische Installation (leeres Datenverzeichnis): Einstiegs-Block → Server
   anlegen.
