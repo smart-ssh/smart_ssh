@@ -1637,6 +1637,68 @@ async fn test_issue_51_timeout_marks_the_step_that_was_running() {
     assert_eq!(host_keys.trust_calls(), 0);
 }
 
+/// Issue #97 (Spec 0069, A3): die Handshake-Grenze sitzt jetzt **im**
+/// Verbindungsaufbau, je Hop — ohne äußeren `connect_with_timeout`. Eine
+/// Gegenstelle, die annimmt, aber nie ein Banner schickt, endet nach der
+/// (verkürzten) Handshake-Grenze mit `SSH_TIMEOUT`, obwohl die
+/// Anmeldegrenze lang ist; der Handshake-Schritt ist mit `SSH_TIMEOUT`
+/// markiert, und es wird kein Host-Key vertraut.
+#[tokio::test]
+async fn test_issue_97_hanging_handshake_hits_the_handshake_phase_limit() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        if let Ok((stream, _)) = listener.accept() {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            drop(stream);
+        }
+    });
+
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", port)],
+    };
+    let log = ConnectLog::new();
+    let host_keys = std::sync::Arc::new(TestHostKeyStore::default());
+    let limits = ssh_transport::ConnectLimits {
+        handshake: std::time::Duration::from_millis(300),
+        authentication: std::time::Duration::from_secs(60),
+    };
+    let started = std::time::Instant::now();
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        ssh_transport::connect_with_limits(
+            &target,
+            &TestCredentialStore::default(),
+            &NoKeyFiles,
+            host_keys.clone(),
+            &log,
+            limits,
+        ),
+    )
+    .await
+    .expect("die Handshake-Grenze muss greifen, lange vor dem äußeren Test-Timeout");
+
+    match result {
+        Err(SshError::Timeout) => {}
+        Err(other) => panic!("erwartet SshError::Timeout, bekam {other:?}"),
+        Ok(_) => panic!("ein hängender Handshake darf niemals als verbunden gelten"),
+    }
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(5),
+        "abgebrochen hat die Handshake-Grenze, nicht die Anmeldegrenze"
+    );
+    // Ohne Zutun des Aufrufers: `connect_with_limits` schließt den
+    // laufenden Schritt selbst.
+    let steps = log.snapshot();
+    assert_eq!(kinds(&steps), ["dns", "tcp", "handshake"]);
+    assert_eq!(the_failed_step(&steps).status, failed("SSH_TIMEOUT"));
+    assert_eq!(
+        host_keys.trust_calls(),
+        0,
+        "ein Timeout darf niemals einen Host-Key vertrauen"
+    );
+}
+
 /// Unbekannter Host-Key: der Host-Key-Schritt ist markiert, mit Typ und
 /// Fingerprint — und es bleibt bei der Rückfrage, kein Vertrauen.
 #[tokio::test]
