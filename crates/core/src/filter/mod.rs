@@ -19,8 +19,8 @@ mod tests;
 mod adversarial_tests;
 
 pub use engine::{
-    scope_applies, CombinedPolicySource, FilterEngine, PolicySource, PolicySourceError,
-    PolicySourceResult, PolicyStore, DEFAULT_MAX_COMMAND_LENGTH,
+    exceeds_command_length_limit, scope_applies, CombinedPolicySource, FilterEngine, PolicySource,
+    PolicySourceError, PolicySourceResult, PolicyStore, DEFAULT_MAX_COMMAND_LENGTH,
 };
 // Spec 0043, Fund B: von `crate::risk::classifier` wiederverwendet, damit
 // beide Konsumenten (Filter-Engine hier, Risiko-Klassifizierer dort)
