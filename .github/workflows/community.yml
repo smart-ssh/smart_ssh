@@ -14,10 +14,13 @@ name: Community
 # `push` nur auf `main`: Commits eines PR-Branches laufen über
 # `pull_request`. Vorher lief jeder PR-Commit zweimal unter denselben
 # Check-Namen, und ein roter Lauf von beiden blockierte den Merge (#26).
+# `workflow_call`: `release.yml` ruft denselben Workflow als Gate vor dem
+# Release-Build auf, damit die Prüfschritte nur an dieser Stelle stehen.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 # Ein neuer Push auf denselben PR bricht den noch laufenden Lauf ab.
 # Jeder Lauf auf `main` bekommt eine eigene Gruppe (`run_id`): Eine

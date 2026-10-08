@@ -135,6 +135,11 @@ Nicht-Ziele:
   die den Berichtsmodus als Zustand oder offenen Folgeschritt beschreiben
   oder nach A5 nicht mehr stimmen (etwa der Kopfkommentar des Workflows
   zum Frontend-Build), sind entfernt oder berichtigt.
+- **A8 MUSS:** Ein Release-Build (Tag `v*` oder manueller Start) läuft
+  erst, wenn das volle Gate auf genau diesem Commit grün ist: dieselbe
+  Test-Matrix und dieselbe Dependency-Prüfung wie bei Pull Requests.
+  Scheitert ein Teil davon, entstehen weder ein Release noch
+  Release-Dateien. Die Prüfschritte sind nur an einer Stelle definiert.
 
 ## 5. Design
 
