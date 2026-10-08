@@ -1164,11 +1164,17 @@ mod browser_channel_tests {
         let removal = tokio::task::spawn_blocking(move || {
             registry_for_removal.remove_session(&sessions_for_removal, session_id)
         });
-        tokio::time::timeout(std::time::Duration::from_secs(5), removal)
-            .await
-            .expect("Trennen darf nicht auf den laufenden Transfer warten")
-            .expect("der Entfernen-Task darf nicht panisch enden")
-            .expect("die Sitzung war eingetragen");
+        // Gegenbeweis bleibt gültig: Eine Variante, die beim Entfernen auf die
+        // Kanal-Sperre wartet, kehrt nie zurück, solange `transfer_guard`
+        // gehalten wird — sie scheitert an der Obergrenze statt an 5 s.
+        crate::test_support::waiting::expect_within(
+            "Trennen kehrt zurück, ohne auf den laufenden Transfer zu warten",
+            || format!("Kanal widerrufen: {}", held.is_revoked()),
+            removal,
+        )
+        .await
+        .expect("der Entfernen-Task darf nicht panisch enden")
+        .expect("die Sitzung war eingetragen");
 
         assert!(
             held.is_revoked(),
@@ -1224,13 +1230,24 @@ mod browser_channel_tests {
             )
             .await
         });
-        tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            while !held.is_revoked() {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("der Widerruf muss wirken, bevor die Sperre frei wird");
+        // Wartet auf das Ereignis selbst (der Widerruf ist gesetzt), nicht auf
+        // eine Dauer. Die Abfrage gibt nach jedem Blick ab, damit der
+        // Umschalt-Task auf derselben Ein-Thread-Laufzeit weiterkommt.
+        crate::test_support::waiting::expect_within(
+            "der Widerruf wirkt, bevor die Sperre frei wird",
+            || {
+                format!(
+                    "Kanal nicht widerrufen, Umschalten beendet: {}",
+                    switch.is_finished()
+                )
+            },
+            async {
+                while !held.is_revoked() {
+                    tokio::task::yield_now().await;
+                }
+            },
+        )
+        .await;
 
         // Jetzt gibt A die Sperre frei, B kommt dran — und scheitert.
         drop(guard_a);
@@ -1243,11 +1260,14 @@ mod browser_channel_tests {
         assert!(err.message.contains("nicht mehr aktiv"), "{}", err.message);
         drop(guard);
 
-        tokio::time::timeout(std::time::Duration::from_secs(5), switch)
-            .await
-            .expect("das Umschalten muss enden")
-            .expect("der Umschalt-Task darf nicht panisch enden")
-            .expect("das Umschalten selbst gelingt");
+        crate::test_support::waiting::expect_within(
+            "das Umschalten endet, nachdem B die Sperre freigegeben hat",
+            || format!("alter Kanal widerrufen: {}", held.is_revoked()),
+            switch,
+        )
+        .await
+        .expect("der Umschalt-Task darf nicht panisch enden")
+        .expect("das Umschalten selbst gelingt");
     }
 
     // --- Spec 0084, T5/T5b -------------------------------------------------
@@ -1278,6 +1298,66 @@ mod browser_channel_tests {
         }
     }
 
+    /// Schlägt die Aktionen nur in der **ersten** Runde vor und antwortet in
+    /// jeder Folgerunde mit `Done`.
+    ///
+    /// Issue #114: Der feste `MockAiProvider` liefert bei jedem Aufruf
+    /// dieselben Events. Ein KI-Zweig mit ihm schlug das Lesen in jeder
+    /// Folgerunde erneut vor, bis zur Rundengrenze (zehn Runden), und jede
+    /// Runde wartete vorher den echten Mindestabstand zwischen zwei
+    /// KI-Anfragen ab (300 ms). Das waren rund 3 s echte Zeit in einer Frist
+    /// von 5 s, und unter Last lief die Frist ab. Eine Runde mit der Aktion
+    /// reicht für die Aussage des Tests.
+    struct ProposeOnceAiProvider {
+        first_round: Vec<ssh_manager_core::ai::AiEvent>,
+        sent: std::sync::atomic::AtomicBool,
+    }
+
+    impl ProposeOnceAiProvider {
+        fn new(first_round: Vec<ssh_manager_core::ai::AiEvent>) -> Self {
+            Self {
+                first_round,
+                sent: std::sync::atomic::AtomicBool::new(false),
+            }
+        }
+    }
+
+    impl ssh_manager_core::ai::AiProvider for ProposeOnceAiProvider {
+        fn send(
+            &self,
+            _context: ssh_manager_core::ai::SessionContext,
+        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = ssh_manager_core::ai::AiEvent> + Send>>
+        {
+            let events = if self.sent.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                vec![ssh_manager_core::ai::AiEvent::Done]
+            } else {
+                self.first_round.clone()
+            };
+            Box::pin(futures::stream::iter(events))
+        }
+    }
+
+    /// Genehmigt die erste vorgeschlagene Aktion, sobald ihr
+    /// `chat-action-proposed`-Event gesendet ist — wartet auf das Event
+    /// statt die Event-Liste in einer Schleife abzufragen.
+    async fn approve_first_proposal(
+        emitter: &crate::test_support::waiting::NotifyingEmitter,
+        confirmations: &app_logic::confirmation::ConfirmationRegistry<
+            app_logic::state::ActionId,
+            app_logic::dto::ActionUserDecision,
+        >,
+    ) {
+        let proposed = emitter.wait_for_event("chat-action-proposed").await;
+        let id = proposed["actionId"]
+            .as_str()
+            .expect("chat-action-proposed trägt eine actionId")
+            .parse()
+            .expect("actionId ist eine UUID");
+        confirmations
+            .resolve(&id, app_logic::dto::ActionUserDecision::Approve)
+            .expect("die vorgeschlagene Aktion wartet auf eine Bestätigung");
+    }
+
     /// Spec 0067, A5 (Regressionstest): ist der erhöhte Dateibrowser-Kanal
     /// aktiv, lesen und schreiben KI- und MCP-Aktionen trotzdem über den
     /// NORMALEN Kanal — der erhöhte ist nur für Browser-Commands da.
@@ -1288,10 +1368,10 @@ mod browser_channel_tests {
         use ssh_manager_core::ssh::mock::MockSftpSession;
 
         use app_logic::confirmation::ConfirmationRegistry;
-        use app_logic::dto::ActionUserDecision;
-        use app_logic::events::TestEmitter;
         use app_logic::orchestration::{handle_mcp_action_proposed, run_chat_turn};
         use app_logic::test_support::InMemoryProfileStore;
+
+        use crate::test_support::waiting::{expect_within, render_events, NotifyingEmitter};
 
         for origin in ["ai", "mcp"] {
             let ai_events = if origin == "ai" {
@@ -1305,7 +1385,7 @@ mod browser_channel_tests {
                 vec![AiEvent::Done]
             };
             let mut session = app_logic::test_support::session_with_ai_and_transport(
-                crate::test_support::MockAiProvider::new(ai_events),
+                ProposeOnceAiProvider::new(ai_events),
                 Box::new(NoTransport),
             );
             session.parts_mut_for_tests().filter_engine = Box::new(
@@ -1323,16 +1403,17 @@ mod browser_channel_tests {
             let session_id = SessionId::new_v4();
             let elevated_registry = registry_with_channel(session_id, "root", elevated.clone());
 
-            let emitter = TestEmitter::default();
+            let emitter = NotifyingEmitter::default();
             let profile_store = InMemoryProfileStore::default();
             let confirmations = ConfirmationRegistry::new();
             if origin == "ai" {
-                // Spec 0085, A5: derselbe Timeout wie im MCP-Zweig unten —
-                // ohne ihn würde ein künftig auf Bestätigung wartender
-                // KI-Zweig bis zu `PENDING_ACTION_CONFIRM_TIMEOUT` (3600 s)
-                // hängen, statt sichtbar zu scheitern.
-                tokio::time::timeout(
-                    std::time::Duration::from_secs(5),
+                // Spec 0085, A5: auch der KI-Zweig steht unter der
+                // Obergrenze — ohne sie würde ein künftig auf Bestätigung
+                // wartender KI-Zweig bis zu `PENDING_ACTION_CONFIRM_TIMEOUT`
+                // (3600 s) hängen, statt sichtbar zu scheitern.
+                expect_within(
+                    "KI-Zweig: der Turn endet nach dem Lese-Ergebnis",
+                    || render_events(&emitter.inner),
                     run_chat_turn(
                         &session,
                         session_id,
@@ -1341,11 +1422,11 @@ mod browser_channel_tests {
                         &confirmations,
                     ),
                 )
-                .await
-                .expect("KI-Zweig muss innerhalb der Frist enden");
+                .await;
             } else {
                 // MCP verlangt immer eine Bestätigung — hier genehmigt,
-                // damit die Aktion wirklich ausgeführt wird.
+                // sobald sie angefragt ist, damit die Aktion wirklich
+                // ausgeführt wird.
                 let action = handle_mcp_action_proposed(
                     &session,
                     session_id,
@@ -1357,28 +1438,17 @@ mod browser_channel_tests {
                     &confirmations,
                     Some("test-client".to_string()),
                 );
-                let responder = async {
-                    loop {
-                        let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
-                            (n == "chat-action-proposed")
-                                .then(|| p["actionId"].as_str().unwrap().to_string())
-                        });
-                        if let Some(id) = pending {
-                            let _ = confirmations
-                                .resolve(&id.parse().unwrap(), ActionUserDecision::Approve);
-                            break;
-                        }
-                        tokio::task::yield_now().await;
-                    }
-                };
-                tokio::time::timeout(std::time::Duration::from_secs(5), async {
-                    tokio::join!(action, responder)
-                })
-                .await
-                .expect("MCP-Aktion muss nach der Bestätigung enden");
+                expect_within(
+                    "MCP-Zweig: die Aktion endet nach der Bestätigung",
+                    || render_events(&emitter.inner),
+                    async {
+                        tokio::join!(action, approve_first_proposal(&emitter, &confirmations))
+                    },
+                )
+                .await;
             }
 
-            let events = emitter.events.lock().unwrap().clone();
+            let events = emitter.inner.events.lock().unwrap().clone();
             let result = events
                 .iter()
                 .find(|(name, _)| name == "chat-action-result")
@@ -1415,10 +1485,10 @@ mod browser_channel_tests {
         use ssh_manager_core::ssh::mock::MockSftpSession;
 
         use app_logic::confirmation::ConfirmationRegistry;
-        use app_logic::dto::ActionUserDecision;
-        use app_logic::events::TestEmitter;
         use app_logic::orchestration::handle_mcp_action_proposed;
         use app_logic::test_support::InMemoryProfileStore;
+
+        use crate::test_support::waiting::{expect_within, render_events, NotifyingEmitter};
 
         let mut session = app_logic::test_support::session_with_ai_and_transport(
             crate::test_support::MockAiProvider::new(vec![AiEvent::Done]),
@@ -1434,7 +1504,7 @@ mod browser_channel_tests {
         let session_id = SessionId::new_v4();
         let elevated_registry = registry_with_channel(session_id, "root", elevated.clone());
 
-        let emitter = TestEmitter::default();
+        let emitter = NotifyingEmitter::default();
         let profile_store = InMemoryProfileStore::default();
         let confirmations = ConfirmationRegistry::new();
         let action = handle_mcp_action_proposed(
@@ -1449,25 +1519,12 @@ mod browser_channel_tests {
             &confirmations,
             Some("test-client".to_string()),
         );
-        let responder = async {
-            loop {
-                let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
-                    (n == "chat-action-proposed")
-                        .then(|| p["actionId"].as_str().unwrap().to_string())
-                });
-                if let Some(id) = pending {
-                    let _ =
-                        confirmations.resolve(&id.parse().unwrap(), ActionUserDecision::Approve);
-                    break;
-                }
-                tokio::task::yield_now().await;
-            }
-        };
-        tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            tokio::join!(action, responder)
-        })
-        .await
-        .expect("MCP-Schreibaktion muss nach der Bestätigung enden");
+        expect_within(
+            "MCP-Schreibaktion endet nach der Bestätigung",
+            || render_events(&emitter.inner),
+            async { tokio::join!(action, approve_first_proposal(&emitter, &confirmations)) },
+        )
+        .await;
 
         assert!(
             elevated.calls().is_empty(),
