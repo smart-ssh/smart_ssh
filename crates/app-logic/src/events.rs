@@ -473,6 +473,12 @@ struct NoteUpdateSuggestedPayload {
     /// Nutzer hat beim Empfang also potenziell einen ganz anderen Server
     /// offen als den, auf den sich der Vorschlag bezieht.
     target_name: Option<String>,
+    /// Spec 0057, §4.2 (Issue #94): `true` nur, wenn dieser Vorschlag aus
+    /// "Ja, zusammenfassen" stammt UND die KI-Antwort vom Provider wegen
+    /// des Längenlimits abgeschnitten wurde. Die Oberfläche zeigt dann
+    /// eine app-eigene Warnung außerhalb des Diff-Inhalts. Jeder andere
+    /// Emitter setzt `false`.
+    summary_incomplete: bool,
 }
 
 pub fn emit_note_update_suggested(
@@ -482,6 +488,7 @@ pub fn emit_note_update_suggested(
     action: AiAction,
     previous_note_content: Option<String>,
     target_name: Option<String>,
+    summary_incomplete: bool,
 ) {
     emit(
         emitter,
@@ -492,6 +499,7 @@ pub fn emit_note_update_suggested(
             action,
             previous_note_content,
             target_name,
+            summary_incomplete,
         },
     );
 }

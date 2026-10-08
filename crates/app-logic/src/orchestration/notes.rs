@@ -669,6 +669,9 @@ pub async fn suggest_note_update_on_disconnect(
         proposed_action,
         previous_note_content,
         target_name,
+        // Issue #94: nur der Kürzungspfad kann eine abgeschnittene
+        // Zusammenfassung liefern.
+        false,
     );
 
     let rx = action_confirmations.register(action_id);
@@ -863,7 +866,7 @@ async fn summarize_note_for_shrink(
     redactor: &dyn OutputRedactor,
     note_source_label: &str,
     note_text: &str,
-) -> Option<String> {
+) -> Option<NoteShrinkSummary> {
     if note_text.trim().is_empty() {
         return None;
     }
@@ -908,11 +911,15 @@ async fn summarize_note_for_shrink(
                 // Kein Tool-Schema angeboten, aber defensiv wie an den
                 // anderen reinen-Text-Aufrufstellen: einfach ignorieren.
                 AiEvent::ActionProposed(_) => {}
+                AiEvent::Done => return Some((text, false)),
                 // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
                 // Nebenaufruf — die gekürzte Notiz gilt trotzdem als
                 // Ergebnis (besser eine unvollständig gekürzte Notiz
-                // zurückgeben als gar keine).
-                AiEvent::Done | AiEvent::TextTruncated => return Some(text),
+                // zurückgeben als gar keine). Issue #94 / Spec 0057 §4.2:
+                // aber als unvollständig markiert, damit der Diff-Dialog
+                // eine abgeschnittene Kürzung nicht wie eine absichtliche
+                // aussehen lässt.
+                AiEvent::TextTruncated => return Some((text, true)),
                 AiEvent::Error(err) => {
                     // Spec 0094, A1.7: s. `compaction::generate_rolling_summary`
                     // — ab `warn` nur der Code, der Text auf `debug`.
@@ -933,7 +940,7 @@ async fn summarize_note_for_shrink(
         None
     };
 
-    let text = match tokio::time::timeout(NOTE_SHRINK_CALL_TIMEOUT, call).await {
+    let (text, incomplete) = match tokio::time::timeout(NOTE_SHRINK_CALL_TIMEOUT, call).await {
         Ok(result) => result,
         Err(_elapsed) => {
             tracing::warn!(
@@ -952,7 +959,10 @@ async fn summarize_note_for_shrink(
         return None;
     }
     if redacted.len() <= NOTE_SHRINK_MAX_BYTES {
-        return Some(redacted);
+        return Some(NoteShrinkSummary {
+            text: redacted,
+            incomplete,
+        });
     }
     // spec-reviewer-Fund (Review dieses Schritts): ohne Hinweis sähe der
     // Nutzer im Diff eine mitten im Satz abbrechende Notiz, ohne dass
@@ -964,7 +974,21 @@ async fn summarize_note_for_shrink(
         "\n\n[Hinweis: Zusammenfassung war länger als erlaubt und wurde hier gekappt.]";
     let budget = NOTE_SHRINK_MAX_BYTES.saturating_sub(TRUNCATION_NOTICE.len());
     let capped = crate::compaction::truncate_to_char_boundary(&redacted, budget);
-    Some(format!("{capped}{TRUNCATION_NOTICE}"))
+    Some(NoteShrinkSummary {
+        text: format!("{capped}{TRUNCATION_NOTICE}"),
+        incomplete,
+    })
+}
+
+/// Ergebnis von [`summarize_note_for_shrink`]: der (redigierte, ggf. von
+/// der App gekappte) Kürzungstext plus, ob die KI-Antwort vom Provider
+/// wegen des Längenlimits abgeschnitten wurde (`TextTruncated`, Spec
+/// 0065). `incomplete` ist unabhängig vom App-eigenen Cap-Hinweis — beide
+/// können gleichzeitig zutreffen (Issue #94).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NoteShrinkSummary {
+    text: String,
+    incomplete: bool,
 }
 
 /// Spec 0058, Teil 2: abstrahiert Lesen/Schreiben der Notiz des
@@ -1061,7 +1085,10 @@ pub async fn execute_note_shrink_request(
         return;
     };
 
-    let Some(new_content) = summarize_note_for_shrink(
+    let Some(NoteShrinkSummary {
+        text: new_content,
+        incomplete: summary_incomplete,
+    }) = summarize_note_for_shrink(
         ai_provider,
         ai_provider_budget,
         emitter,
@@ -1094,6 +1121,7 @@ pub async fn execute_note_shrink_request(
         },
         Some(previous_notes.clone()),
         Some(server_name),
+        summary_incomplete,
     );
 
     let rx = action_confirmations.register(action_id);

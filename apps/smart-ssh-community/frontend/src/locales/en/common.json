@@ -810,6 +810,9 @@
   "startDirectory": {
     "notFound": "Start directory \"{{dir}}\" was not found or is not accessible. Terminal and file browser use the home directory instead."
   },
+  "noteSuggestion": {
+    "summaryIncomplete": "The summary was cut off and is incomplete. Check it carefully or reject it."
+  },
   "connectLog": {
     "title": "Details",
     "copy": "Copy",

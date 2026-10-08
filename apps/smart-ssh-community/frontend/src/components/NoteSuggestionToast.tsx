@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { commandErrorMessage, respondToAction } from "../api";
 import { onNoteUpdateSuggested } from "../events";
 import type { NoteUpdateSuggestedEvent } from "../types";
@@ -19,6 +20,10 @@ interface PendingSuggestion {
   /** Spec 0019, Abschnitt 3/4: aktueller Inhalt des Ziels, für die
    * Diff-Vorschau statt des vollen neuen Texts. */
   previousNoteContent: string | null;
+  /** Spec 0057, §4.2 (Issue #94): die Kürzung wurde vom Provider
+   * abgeschnitten — die App zeigt dann eine eigene Warnung über dem Diff,
+   * außerhalb des KI-generierten Inhalts. */
+  summaryIncomplete: boolean;
   /** Kompakte Ansicht per Default (Spec 0010, Abschnitt 2, Punkt 6: "dezente
    * Benachrichtigung statt eines blockierenden Modals") — erst nach Klick
    * auf "Anzeigen" wird der Inhalt (das "Dialog"-Äquivalent) eingeblendet. */
@@ -59,6 +64,7 @@ function suggestionTitle(kind: "server" | "group", targetName: string | null): s
  * Aufgabe.
  */
 export function NoteSuggestionToast() {
+  const { t } = useTranslation();
   const [suggestions, setSuggestions] = useState<PendingSuggestion[]>([]);
 
   useEffect(() => {
@@ -72,6 +78,7 @@ export function NoteSuggestionToast() {
           targetName: event.targetName,
           newContent: event.action.ProposeNoteUpdate.new_content,
           previousNoteContent: event.previousNoteContent,
+          summaryIncomplete: event.summaryIncomplete === true,
           expanded: false,
           deciding: false,
           error: null,
@@ -141,6 +148,14 @@ export function NoteSuggestionToast() {
               <p className="font-semibold text-slate-100">
                 {suggestionTitle(suggestion.targetKind, suggestion.targetName)}
               </p>
+              {suggestion.summaryIncomplete && (
+                <p
+                  role="alert"
+                  className="rounded border border-amber-600 bg-amber-950 px-2 py-1 text-xs text-amber-200"
+                >
+                  {t("noteSuggestion.summaryIncomplete")}
+                </p>
+              )}
               <div className="max-h-40 overflow-y-auto">
                 <NoteDiffPreview
                   previousContent={suggestion.previousNoteContent}
