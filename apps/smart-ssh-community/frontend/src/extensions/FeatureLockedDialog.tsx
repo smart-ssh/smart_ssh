@@ -21,6 +21,7 @@ import { useTranslation } from "react-i18next";
 
 import type { FeatureLockedPayload } from "./entitlements";
 import { subscribeFeatureLocked } from "./featureLockedBus";
+import { ModalBackdrop } from "../components/ModalBackdrop";
 
 export function FeatureLockedDialog() {
   const { t } = useTranslation();
@@ -31,7 +32,7 @@ export function FeatureLockedDialog() {
   if (!locked) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-sm space-y-3 rounded border border-slate-700 bg-slate-900 p-5 text-slate-100">
         <h2 className="font-heading text-sm font-semibold tracking-wide">
           {t("featureLocked.title")}
@@ -47,7 +48,7 @@ export function FeatureLockedDialog() {
           {t("featureLocked.close")}
         </button>
       </div>
-    </div>,
+    </ModalBackdrop>,
     document.body,
   );
 }

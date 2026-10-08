@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { deleteChatSession, renameChatSession } from "../api";
 import type { ChatSessionSummaryDto } from "../types";
+import { ModalBackdrop } from "./ModalBackdrop";
 
 interface ChatSessionPickerScreenProps {
   serverName: string;
@@ -73,7 +74,7 @@ export function ChatSessionPickerScreen({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-lg rounded-lg bg-slate-800 p-6 shadow-xl">
         <h2 className="font-heading mb-1 text-lg font-semibold tracking-wide text-slate-100">
           {serverName}
@@ -165,7 +166,7 @@ export function ChatSessionPickerScreen({
           </button>
         </div>
       </div>
-    </div>,
+    </ModalBackdrop>,
     document.body,
   );
 }

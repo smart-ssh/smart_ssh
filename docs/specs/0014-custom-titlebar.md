@@ -84,6 +84,33 @@ Drag-Region ausgenommen werden (`pointer-events`-Handling gemäß
 Plugin-Dokumentation), sonst werden Klicks fälschlich als Fenster-Ziehen
 interpretiert statt als Interaktion.
 
+**Bei geöffnetem modalem Dialog.** Ein modaler Dialog dunkelt das ganze
+Fenster ab, die Titelleiste eingeschlossen. Die Fensterfunktionen der
+Titelleiste bleiben dabei trotzdem erhalten, für jeden modalen Dialog
+gleichermaßen, auch für über Erweiterungen beigesteuerte:
+
+- Das Fenster lässt sich weiterhin an der Titelleiste ziehen.
+- Ein Doppelklick auf die Titelleiste zoomt bzw. maximiert das Fenster
+  wie ohne Dialog, so wie es die Plattform tut.
+- Die Fenster-Controls bleiben bedienbar: die Ampel auf macOS,
+  Minimieren/Maximieren/Schließen auf Windows und Linux.
+- Die Inhalte des Headers (z. B. Session-Tabs) reagieren dagegen nicht
+  auf Klicks, solange der Dialog offen ist; nach dem Schließen wieder wie
+  gewohnt. Der Dialog bleibt modal und behält seine Fokusführung, die
+  Titelleiste trägt währenddessen nur Fensterfunktionen, keine
+  App-Inhalte.
+- Optisch ändert sich nichts: Die Titelleiste ist so abgedunkelt wie der
+  Rest des Fensters.
+
+Als geöffnet zählt nur ein Dialog, der gerade sichtbar ist. Bleibt ein
+Dialog in einem Session-Tab oder in der Startansicht offen und wechselt der
+Nutzer (etwa per Tastenkürzel) zu einer anderen Ansicht, ist der Dialog dort
+nicht zu sehen. Dann reagieren die Header-Inhalte wieder wie ohne Dialog.
+Kehrt der Nutzer zurück, gilt wieder das Verhalten bei geöffnetem Dialog.
+
+Ohne geöffneten Dialog verhalten sich Header, Drag-Region und
+Fenster-Controls unverändert wie oben beschrieben.
+
 ## 6. Offene Punkte
 
 - Der `set_traffic_lights_inset(12.0, 16.0)`-Wert ist ein Startwert und
