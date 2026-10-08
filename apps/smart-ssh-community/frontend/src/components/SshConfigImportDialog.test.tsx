@@ -4,9 +4,8 @@
 // jeder Änderung der Wahl neu berechnet (nicht die statische
 // `identityFilePaths`-Liste aus dem DTO); ein buchstäbliches Schlagwort ist
 // abwählbar und geht bei Abwahl als `droppedTags` in die Bestätigung; die
-// Vorgabe folgt Q-BL-0216-02: ein buchstäbliches Schlagwort, das eine
-// bestehende Tag-Allow-Regel trifft, ist standardmäßig abgewählt, jedes
-// andere bleibt angewählt (s. `defaultTagSelected`).
+// Vorgabe „angewählt/abgewählt" kommt als `defaultSelected` aus dem Backend
+// (§5.2a/§9, Issue #105) und wird unverändert übernommen.
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,12 +47,14 @@ function preview(): SshConfigImportPreviewDto {
             origin: { file: "/tmp/config", line: 1, block: "*.prod.de" },
             matchedRules: [{ ruleId: "rule-1", action: "confirm" }],
             isLiteral: false,
+            defaultSelected: true,
           },
           {
             tag: "prod",
             origin: { file: "/tmp/config", line: 5, block: "prod *" },
             matchedRules: [{ ruleId: "rule-2", action: "allow" }],
             isLiteral: true,
+            defaultSelected: false,
           },
         ],
         identityFile: {
@@ -93,7 +94,35 @@ function previewWithDenyOnlyLiteralTag(): SshConfigImportPreviewDto {
     origin: { file: "/tmp/config", line: 6, block: "onlydeny *" },
     matchedRules: [{ ruleId: "rule-3", action: "deny" }],
     isLiteral: true,
+    defaultSelected: true,
   });
+  return dto;
+}
+
+// Issue #105: ein Muster-Schlagwort mit Allow-Treffer (Backend-Vorgabe
+// abgewählt) und ein buchstäbliches mit Allow- **und** Deny-Treffer
+// (Backend-Vorgabe angewählt).
+function previewIssue105(): SshConfigImportPreviewDto {
+  const dto = preview();
+  dto.entries[0].tags = [
+    {
+      tag: "*.prod.de",
+      origin: { file: "/tmp/config", line: 1, block: "*.prod.de" },
+      matchedRules: [{ ruleId: "rule-a", action: "allow" }],
+      isLiteral: false,
+      defaultSelected: false,
+    },
+    {
+      tag: "prod",
+      origin: { file: "/tmp/config", line: 5, block: "prod *" },
+      matchedRules: [
+        { ruleId: "rule-a2", action: "allow" },
+        { ruleId: "rule-d2", action: "deny" },
+      ],
+      isLiteral: true,
+      defaultSelected: true,
+    },
+  ];
   return dto;
 }
 
@@ -206,24 +235,56 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     expect(denyOnlyHitCheckbox).toBeChecked();
   });
 
-  // spec-reviewer-Fund (Runde 1, I-1): `action` ist heute immer klein
-  // geschrieben (`rule_action_key` in `ssh_config_apply.rs` ist exhaustiv),
-  // aber ein Vergleich, der das voraussetzt, fällt bei einer künftigen
-  // Änderung der DTO-Kodierung stillschweigend in die unsichere Richtung
-  // (angewählt). Hält die für diesen Fall sichere Richtung fest.
-  it("treats a differently-cased 'Allow' action as an allow match too", async () => {
-    const dto = preview();
-    // Die DTO-Kodierung sagt heute exhaustiv `"allow"` klein; der Cast
-    // simuliert absichtlich eine andere Schreibweise, um `.toLowerCase()`
-    // in `defaultTagSelected` zu verifizieren.
-    (dto.entries[0].tags[1].matchedRules as unknown as Array<{ ruleId: string; action: string }>)[0].action =
-      "Allow";
-    vi.mocked(previewSshConfigImport).mockResolvedValue(dto);
+  // Issue #105: Der Dialog leitet die Vorgabe nicht mehr selbst aus den
+  // Regel-Aktionen ab, sondern übernimmt `defaultSelected` aus dem Backend.
+  // Gegen den alten Stand (Ableitung nur für `isLiteral` + Allow-Treffer)
+  // rot gesehen: "*.prod.de" (Muster) startete angewählt, "prod"
+  // (Allow + Deny) abgewählt.
+  it("issue #105: a pattern tag with an Allow hit starts deselected, a tag hitting Allow and Deny stays selected", async () => {
+    vi.mocked(previewSshConfigImport).mockResolvedValue(previewIssue105());
+    vi.mocked(applySshConfigImport).mockResolvedValue({
+      createdServers: 2,
+      createdGroups: 1,
+      skippedConflicts: 0,
+      identityFallbacks: [],
+      identityEncrypted: [],
+    });
     renderDialog();
     await screen.findByText("web1");
 
-    const literalTagCheckbox = screen.getByText("prod").closest("label")?.querySelector("input");
-    expect(literalTagCheckbox).not.toBeChecked();
+    const patternLabel = screen.getByText("*.prod.de").closest("label");
+    expect(patternLabel?.querySelector("input")).not.toBeChecked();
+    // Gekennzeichnet samt Wirkung der Regel (§5.2a).
+    expect(patternLabel?.textContent).toContain("Allow");
+    expect(patternLabel?.textContent).toContain("automatisch abgewählt");
+    const literalLabel = screen.getByText("prod").closest("label");
+    expect(literalLabel?.querySelector("input")).toBeChecked();
+    expect(literalLabel?.textContent).toContain("Deny");
+    expect(literalLabel?.textContent).not.toContain("automatisch abgewählt");
+
+    fireEvent.click(screen.getByText("Importieren"));
+    await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
+    expect(vi.mocked(applySshConfigImport).mock.calls[0][0][0].droppedTags).toEqual(["*.prod.de"]);
+  });
+
+  it("issue #105: both defaults can be flipped by hand", async () => {
+    vi.mocked(previewSshConfigImport).mockResolvedValue(previewIssue105());
+    vi.mocked(applySshConfigImport).mockResolvedValue({
+      createdServers: 2,
+      createdGroups: 1,
+      skippedConflicts: 0,
+      identityFallbacks: [],
+      identityEncrypted: [],
+    });
+    renderDialog();
+    await screen.findByText("web1");
+
+    fireEvent.click(screen.getByText("*.prod.de").closest("label")?.querySelector("input") as HTMLInputElement);
+    fireEvent.click(screen.getByText("prod").closest("label")?.querySelector("input") as HTMLInputElement);
+    fireEvent.click(screen.getByText("Importieren"));
+
+    await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
+    expect(vi.mocked(applySshConfigImport).mock.calls[0][0][0].droppedTags).toEqual(["prod"]);
   });
 
   it("reselecting the literal Allow-tag that starts deselected removes it from droppedTags on confirm", async () => {
@@ -256,9 +317,8 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
   // "abwählen"-Richtung (`dropped.add`) fiele eine Regression, die ein von
   // Hand abgewähltes Schlagwort stillschweigend doch mit anlegt, niemandem
   // auf — genau die Fähigkeit, auf die §5.2a und §6.4.3a aufsetzen. Das
-  // Muster-Schlagwort "*.prod.de" ist angewählt (nicht buchstäblich, s.
-  // `defaultTagSelected`) und deckt zusätzlich ab, dass Nicht-Literale
-  // wirklich mit der Vorgabe "angewählt" starten.
+  // Muster-Schlagwort "*.prod.de" ist angewählt (trifft nur eine
+  // Confirm-Regel, Backend-Vorgabe `defaultSelected: true`).
   it("deselecting the pattern tag by hand sends it as droppedTags on confirm", async () => {
     vi.mocked(previewSshConfigImport).mockResolvedValue(preview());
     vi.mocked(applySshConfigImport).mockResolvedValue({
