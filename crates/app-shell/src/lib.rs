@@ -12,6 +12,9 @@
 
 mod chat_retention;
 mod commands;
+/// Issue #93: Ort der „Lokal öffnen"-Kopien je Datenverzeichnis und das
+/// Aufräumen von Überbleibseln beim Start.
+mod edit_copies;
 mod elevated_sftp;
 /// Spec 0084, §4: der Newtype, der die `EventEmitter`-Impl für
 /// `tauri::AppHandle` trägt (s. dortiger Moduldoc-Kommentar).
@@ -462,6 +465,13 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
         }
     };
+
+    // Issue #93: erst jetzt, mit gehaltener Sperre — kein anderer Prozess
+    // nutzt dieses Datenverzeichnis, und noch existiert keine Sitzung. Alles
+    // im Editier-Kopien-Ordner dieser Instanz ist also ein Überbleibsel
+    // eines abgestürzten oder beendeten Prozesses. Best effort, blockiert
+    // den Start nie.
+    edit_copies::sweep_at_startup(data_dir_lock.dir());
 
     let inputs = startup_inputs(db_path, data_dir_lock, language);
     let mode = app_logic::master_password::key_mode(&inputs.db_path);

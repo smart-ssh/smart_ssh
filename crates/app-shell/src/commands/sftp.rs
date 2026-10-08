@@ -1208,15 +1208,15 @@ pub(super) async fn read_local_text_preview_impl(
 /// Trennen der Verbindung gezielt genau diese und keine fremden
 /// Editier-Sessions aufräumen kann ("Temp aufräumen bei Session-Ende
 /// spätestens", Spec 0054 Teil 4, Punkt 6).
+///
+/// Issue #93: liegt im Editier-Kopien-Ordner **dieser Instanz** (je
+/// Datenverzeichnis, s. [`crate::edit_copies`]), den der Start von
+/// Überbleibseln eines abgestürzten Prozesses befreit.
 pub(super) fn edit_session_dir(session_id: SessionId) -> CommandResult<std::path::PathBuf> {
-    let base = directories::BaseDirs::new()
+    let root = crate::edit_copies::instance_root()
         .ok_or("Kein Cache-Verzeichnis gefunden")
         .map_err(CommandError::from)?;
-    Ok(base
-        .cache_dir()
-        .join("smart-ssh")
-        .join("edit-sessions")
-        .join(session_id.to_string()))
+    Ok(root.join(session_id.to_string()))
 }
 
 /// Spec 0086, A1.2: Obergrenze für „Lokal öffnen". Bewusst eine **eigene**
@@ -1320,44 +1320,10 @@ async fn open_for_editing_impl(
     let dir = edit_session_dir(session_id)?;
     let local_path = dir.join(&file_name);
     let local_path_for_write = local_path.clone();
-    tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-        std::fs::create_dir_all(&dir)?;
-        // Spec-Reviewer-Härtungshinweis (Spec 0054, Review des
-        // Gesamtpakets): der Inhalt ist Remote-Serverinhalt (potenziell
-        // Passwörter/Keys in einer `.conf`-Datei) — ohne restriktive Unix-
-        // Rechte wäre er auf einem Mehrbenutzer-System für andere lokale
-        // Nutzer lesbar (Standard-Umask liegt typischerweise bei
-        // 0755/0644). `0700`/`0600` schränken auf den eigenen Owner ein.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
-        }
-        // Spec 0067, A5: Datei gleich mit 0600 anlegen statt erst mit den
-        // Standardrechten zu schreiben und danach einzuschränken — im
-        // erhöhten Modus können das Root-Dateien sein. `set_permissions`
-        // bleibt für eine schon vorhandene Datei (`mode` wirkt nur beim
-        // Neuanlegen).
-        {
-            let mut options = std::fs::OpenOptions::new();
-            options.write(true).create(true).truncate(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                options.mode(0o600);
-            }
-            let mut file = options.open(&local_path_for_write)?;
-            std::io::Write::write_all(&mut file, &bytes)?;
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(
-                &local_path_for_write,
-                std::fs::Permissions::from_mode(0o600),
-            )?;
-        }
-        Ok(())
+    // Spec-Reviewer-Härtungshinweis (Spec 0054) / Spec 0067, A5: `0700`/
+    // `0600` auf Unix, s. `write_edit_copy`.
+    tokio::task::spawn_blocking(move || {
+        crate::edit_copies::write_edit_copy(&dir, &local_path_for_write, &bytes)
     })
     .await
     .map_err(|e| format!("Hintergrund-Task für lokalen Download fehlgeschlagen: {e}"))??;
