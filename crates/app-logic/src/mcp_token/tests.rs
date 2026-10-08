@@ -346,3 +346,104 @@ fn test_a12_an_unreadable_settings_file_does_not_block_the_cleanup_path() {
     assert_eq!(token, database_token);
     assert_eq!(legacy.removes(), 0);
 }
+
+/// **Issue #115:** Ein leeres Token in der Datenbank ist kein Token.
+///
+/// Statt den Leerstring zurückzugeben (MCP ohne Geheimnis), muss ein neues
+/// Token erzeugt, geschrieben und zurückgelesen werden. Ein Rest in
+/// `settings.json` wird dabei **nicht** übernommen — die Datenbank war schon
+/// die Quelle, der Rest ist eine veraltete Kopie und gehört weg.
+///
+/// **Gegenbeweis geführt:** Ohne die Leer-Prüfung im `Ok`-Zweig liefert der
+/// Aufruf den Leerstring zurück und die erste Zusicherung scheitert.
+#[test]
+fn test_issue_115_an_empty_database_token_is_replaced() {
+    for stored in ["", "   ", "\t\n"] {
+        let credentials = InMemoryCredentialStore::new().with_secret(&reference(), stored);
+        let legacy = FakeSettingsFile::with_token("Token-0101-alt");
+        let generated = AtomicUsize::new(0);
+
+        let token = load_or_init_token(&credentials, &legacy, &|| {
+            generated.fetch_add(1, Ordering::SeqCst);
+            TOKEN_MARKER.to_string()
+        })
+        .expect("muss gelingen");
+
+        assert_eq!(
+            token, TOKEN_MARKER,
+            "statt des leeren Werts {stored:?} muss ein neues Token kommen"
+        );
+        assert!(!token.trim().is_empty());
+        assert_eq!(generated.load(Ordering::SeqCst), 1, "genau einmal erzeugt");
+        assert_eq!(
+            credentials
+                .get(&reference())
+                .expect("das neue Token muss in der Datenbank liegen")
+                .expose_secret(),
+            TOKEN_MARKER,
+            "der leere Wert muss in der Datenbank ersetzt sein"
+        );
+        assert_eq!(
+            legacy.current(),
+            None,
+            "die alte Kopie in settings.json muss verschwinden"
+        );
+    }
+}
+
+/// **Issue #115:** Auch das Ersetzen eines leeren Tokens wird
+/// zurückgelesen und verglichen. Gibt der Speicher etwas anderes zurück,
+/// scheitert der Aufruf sichtbar, statt ein unbrauchbares Token anzuzeigen.
+#[test]
+fn test_issue_115_replacing_an_empty_database_token_is_verified() {
+    /// Liefert beim ersten Lesen einen Leerstring (der alte, leere
+    /// Datenbankwert), danach verhält er sich wie [`LyingCredentialStore`]:
+    /// nimmt an und gibt etwas anderes zurück.
+    struct EmptyThenLying(LyingCredentialStore, AtomicUsize);
+    impl CredentialStore for EmptyThenLying {
+        fn get(
+            &self,
+            r: &CredentialRef,
+        ) -> ssh_manager_core::profiles::CredentialResult<SecretString> {
+            if self.1.fetch_add(1, Ordering::SeqCst) == 0 {
+                return Ok(SecretString::from(String::new()));
+            }
+            self.0.get(r)
+        }
+        fn set(
+            &self,
+            r: &CredentialRef,
+            value: SecretString,
+        ) -> ssh_manager_core::profiles::CredentialResult<()> {
+            self.0.set(r, value)
+        }
+        fn delete(&self, r: &CredentialRef) -> ssh_manager_core::profiles::CredentialResult<()> {
+            self.0.delete(r)
+        }
+    }
+    let credentials = EmptyThenLying(LyingCredentialStore::default(), AtomicUsize::new(0));
+    let legacy = FakeSettingsFile::empty();
+
+    let err = load_or_init_token(&credentials, &legacy, &|| TOKEN_MARKER.to_string())
+        .expect_err("ein nicht zurücklesbarer Wert muss sichtbar scheitern");
+
+    assert_eq!(err.code, Some(SECRET_STORE_FAILED));
+    assert!(
+        !err.message.contains(TOKEN_MARKER),
+        "das Token gehört nicht in die Meldung: {}",
+        err.message
+    );
+}
+
+/// **Issue #115:** Eine Störung des Speichers bleibt ein Fehler und
+/// erzeugt kein Token — auch wenn die Leer-Prüfung jetzt neu erzeugen kann.
+#[test]
+fn test_issue_115_a_store_failure_still_does_not_generate_a_token() {
+    let credentials = InMemoryCredentialStore::new().with_failing_get();
+    let legacy = FakeSettingsFile::empty();
+
+    let err = load_or_init_token(&credentials, &legacy, &never_generate)
+        .expect_err("ein klemmender Speicher muss sichtbar scheitern");
+
+    assert_eq!(err.code, Some(SECRET_STORE_FAILED));
+}
