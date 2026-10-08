@@ -5,13 +5,14 @@
 // seinen Port unverändert.
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
 import { connect, listGroups, listServers, moveGroup, moveServerToGroup } from "../api";
 import { subscribeHostKeyPromptClear } from "../hostKeyPromptBus";
 import { onHostKeyVerificationNeeded } from "../events";
+import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
 
 function localServer(): ServerDto {
   return {
@@ -395,6 +396,113 @@ describe("ServerList new server in a group (issue #49)", () => {
 
     expect(onCreateServerInGroup).toHaveBeenCalledWith("group-2");
     expect(onToggleGroup).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #111 / Spec 0031: the first-run notice through the real `ServerList`
+// (the component alone is covered in `FirstRunNoticeScreen.test.tsx`). The
+// module mock above keeps "acknowledged" for every other test; this block
+// switches it to "not acknowledged" for its own tests only.
+describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
+  beforeEach(() => {
+    vi.mocked(loadFirstRunNoticeAcknowledged).mockResolvedValue(false);
+    vi.mocked(saveFirstRunNoticeAcknowledged).mockReset();
+    vi.mocked(saveFirstRunNoticeAcknowledged).mockResolvedValue(undefined);
+    vi.mocked(connect).mockReset();
+    vi.mocked(connect).mockResolvedValue("11111111-1111-4111-8111-111111111111");
+  });
+
+  afterEach(() => {
+    vi.mocked(loadFirstRunNoticeAcknowledged).mockImplementation(() => Promise.resolve(true));
+    vi.mocked(saveFirstRunNoticeAcknowledged).mockImplementation(() => Promise.resolve());
+    vi.mocked(connect).mockReset();
+  });
+
+  const noticeTitle = () => testI18n.t("firstRunNotice.title");
+
+  /** Renders the list and waits until both the servers and the (not yet
+   * given) acknowledgement are loaded, so a click hits the "not
+   * acknowledged" branch and not the short "still loading" window. */
+  async function renderUnacknowledged() {
+    renderList();
+    await screen.findByText("prod-1");
+    await waitFor(() => expect(loadFirstRunNoticeAcknowledged).toHaveBeenCalled());
+    await act(async () => {});
+  }
+
+  async function acknowledgeNotice() {
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: testI18n.t("firstRunNotice.checkboxLabel") }),
+    );
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: testI18n.t("firstRunNotice.continueButton") }),
+      );
+    });
+  }
+
+  it("shows the notice on the first connect and does not call connect while it is open", async () => {
+    await renderUnacknowledged();
+
+    fireEvent.click(screen.getByText("prod-1"));
+
+    expect(await screen.findByText(noticeTitle())).toBeInTheDocument();
+    await act(async () => {});
+    expect(connect).not.toHaveBeenCalled();
+    expect(saveFirstRunNoticeAcknowledged).not.toHaveBeenCalled();
+  });
+
+  it("after acknowledging, saves once, closes the notice and connects to the clicked server", async () => {
+    await renderUnacknowledged();
+
+    fireEvent.click(screen.getByText("prod-1"));
+    await screen.findByText(noticeTitle());
+    await acknowledgeNotice();
+
+    await waitFor(() => expect(connect).toHaveBeenCalledTimes(1));
+    expect(connect).toHaveBeenCalledWith("remote-1");
+    expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(noticeTitle())).toBeNull();
+  });
+
+  it("does not show the notice again on a later connect in the same list", async () => {
+    await renderUnacknowledged();
+
+    fireEvent.click(screen.getByText("prod-1"));
+    await screen.findByText(noticeTitle());
+    await acknowledgeNotice();
+    await waitFor(() => expect(connect).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText("prod-1").closest("button")).toBeEnabled());
+
+    fireEvent.click(screen.getByText("Localhost"));
+
+    await waitFor(() => expect(connect).toHaveBeenCalledTimes(2));
+    expect(connect).toHaveBeenLastCalledWith("local");
+    expect(screen.queryByText(noticeTitle())).toBeNull();
+    expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
+  });
+
+  it("on a failed save shows the error, does not connect, and shows the notice again next time", async () => {
+    vi.mocked(saveFirstRunNoticeAcknowledged).mockRejectedValueOnce({
+      code: null,
+      message: "settings store write failed",
+    });
+    await renderUnacknowledged();
+
+    fireEvent.click(screen.getByText("prod-1"));
+    await screen.findByText(noticeTitle());
+    await acknowledgeNotice();
+
+    expect(await screen.findByText("settings store write failed")).toBeInTheDocument();
+    expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
+    expect(connect).not.toHaveBeenCalled();
+    expect(screen.queryByText(noticeTitle())).toBeNull();
+
+    fireEvent.click(screen.getByText("prod-1"));
+
+    expect(await screen.findByText(noticeTitle())).toBeInTheDocument();
+    await act(async () => {});
     expect(connect).not.toHaveBeenCalled();
   });
 });
