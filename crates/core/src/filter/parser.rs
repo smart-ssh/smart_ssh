@@ -246,7 +246,7 @@ fn looks_like_heredoc_or_complex_shell_c(cmd: &str) -> bool {
 /// is returned as well (`sh -c -- CODE`, `bash -c -o x CODE`, `perl -w -e
 /// CODE -e CODE2`). Both are evaluated, so the result can only get
 /// stricter than with the third token alone.
-pub(super) fn extract_shell_c_style_codes(cmd: &str) -> Vec<String> {
+pub(crate) fn extract_shell_c_style_codes(cmd: &str) -> Vec<String> {
     let mut codes: Vec<String> = extract_shell_c_style_code(cmd).into_iter().collect();
     if codes.is_empty() {
         return codes;
