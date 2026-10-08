@@ -68,6 +68,10 @@ pub trait ProfileStore: Send + Sync {
     /// `list_servers`-Tauri-Befehl vorausgesetzt — daher hier als
     /// zusätzliche Trait-Methode ergänzt statt in `app-shell` mit
     /// Store-internen Interna zu umgehen.
+    ///
+    /// Issue #100: nur **nutzbare** Server. Ein Store, der eine Zeile mit
+    /// unlesbarer Anmeldeart findet, lässt sie hier aus, statt zu
+    /// scheitern — sie steht in [`ProfileStore::list_server_entries`].
     async fn list_servers(&self) -> ProfileResult<Vec<Server>>;
 
     /// Issue #100: alle gespeicherten Server, getrennt nach nutzbaren und
