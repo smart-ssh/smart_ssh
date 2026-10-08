@@ -96,3 +96,29 @@ operating system's disk encryption if you haven't already.
 - Kein UI zum nachträglichen erneuten Anzeigen des Hinweises (z. B. über
   "Rechtliches" in den Einstellungen) — naheliegende kleine Ergänzung,
   nicht Teil dieser Spec.
+
+## 6. Optionale Erweiterungen (Issue #157)
+
+Editionen, die auf dem Kern aufbauen, können dem Hinweis eigene, optionale
+Inhalte hinzufügen (z. B. zusätzliche Checkboxen oder Felder), ohne den
+Kern-Hinweis zu ändern.
+
+- **Ohne Erweiterung** sieht der Hinweis genau so aus und verhält sich genau
+  so wie in den Abschnitten 3 und 4 beschrieben.
+- **Platzierung:** Jede Erweiterung erscheint in einem eigenen, optisch
+  abgesetzten Bereich unterhalb der Pflicht-Bestätigung. Mehrere
+  Erweiterungen erscheinen in ihrer festgelegten Reihenfolge.
+- **Pflichtteil unantastbar:** Eine Erweiterung sieht und ändert weder den
+  Hinweistext noch die Pflicht-Checkbox noch, ob "Weiter" aktiv ist.
+  "Weiter" hängt allein von der Pflicht-Checkbox ab. Eine Erweiterung kann
+  die Bestätigung weder überspringen noch vorab setzen.
+- **Voreinstellung:** Jedes optionale Element einer Erweiterung ist beim
+  Anzeigen aus bzw. leer. Nichts ist vorausgewählt.
+- **Bei "Weiter":** Erst wird die Pflicht-Bestätigung gespeichert. Nur wenn
+  das gelingt, wird danach jede Erweiterung genau einmal benachrichtigt.
+  Schlägt das Speichern fehl, wird keine Erweiterung benachrichtigt
+  (Verhalten wie in Abschnitt 4).
+- **Fehler einer Erweiterung:** Scheitert eine Erweiterung bei dieser
+  Benachrichtigung, wird das protokolliert. Die Bestätigung bleibt
+  gespeichert, der Hinweis schließt sich, die übrigen Erweiterungen werden
+  trotzdem benachrichtigt und die Verbindung wird wie gewohnt aufgebaut.

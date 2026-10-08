@@ -1,9 +1,35 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import {
+  listFirstRunNoticeExtensions,
+  type FirstRunNoticeContinueHandler,
+  type FirstRunNoticeExtensionContext,
+} from "../extensions/registry";
 
 interface FirstRunNoticeScreenProps {
-  onAcknowledge: () => void;
+  /** Aufgerufen bei "Weiter". Der Aufrufer speichert die Pflicht-
+   * Bestätigung und ruft danach — und nur, wenn das Speichern geklappt
+   * hat — `afterStored` auf; erst das löst die `onContinue`-Handler der
+   * Erweiterungen aus (Spec 0031, Abschnitt 6). */
+  onAcknowledge: (afterStored: () => void) => void | Promise<void>;
+}
+
+/** Ruft jeden Handler auf. Ein Wurf oder eine abgelehnte Promise wird
+ * protokolliert und hält weder die übrigen Handler noch das Schließen des
+ * Hinweises auf (Spec 0031, Abschnitt 6). Bewusst nicht abgewartet: Die
+ * Pflicht-Bestätigung ist zu diesem Zeitpunkt schon gespeichert, ein
+ * langsamer Handler soll den Verbindungsaufbau nicht verzögern. */
+function runContinueHandlers(handlers: [string, FirstRunNoticeContinueHandler][]): void {
+  for (const [id, handler] of handlers) {
+    const report = (err: unknown) =>
+      console.error(`First-run notice extension "${id}" failed on continue:`, err);
+    try {
+      Promise.resolve(handler()).catch(report);
+    } catch (err) {
+      report(err);
+    }
+  }
 }
 
 /**
@@ -17,6 +43,28 @@ interface FirstRunNoticeScreenProps {
 export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProps) {
   const { t } = useTranslation();
   const [checked, setChecked] = useState(false);
+
+  // Spec 0031, Abschnitt 6: Erweiterungen werden beim Öffnen einmal
+  // gelesen. Jede bekommt nur `onContinue` — keinen Zugriff auf
+  // `checked`, den Text oder den "Weiter"-Button.
+  const continueHandlers = useRef(new Map<string, FirstRunNoticeContinueHandler>());
+  const handlersRan = useRef(false);
+  const [extensions] = useState(() =>
+    listFirstRunNoticeExtensions().map(({ id, Component }) => {
+      const context: FirstRunNoticeExtensionContext = {
+        onContinue: (handler) => {
+          continueHandlers.current.set(id, handler);
+        },
+      };
+      return { id, Component, context };
+    }),
+  );
+
+  const afterStored = () => {
+    if (handlersRan.current) return;
+    handlersRan.current = true;
+    runContinueHandlers(Array.from(continueHandlers.current.entries()));
+  };
 
   // Unabhängiger Review-Pass: s. identischer Kommentar in
   // `HostKeyDialog.tsx` — dieser Screen kann ebenfalls von `ServerList`
@@ -38,10 +86,19 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
           />
           {t("firstRunNotice.checkboxLabel")}
         </label>
+        {extensions.map(({ id, Component, context }) => (
+          <section
+            key={id}
+            data-testid={`first-run-notice-extension-${id}`}
+            className="mb-4 border-t border-slate-700 pt-4 text-sm text-slate-300"
+          >
+            <Component {...context} />
+          </section>
+        ))}
         <div className="flex justify-end">
           <button
             type="button"
-            onClick={onAcknowledge}
+            onClick={() => void onAcknowledge(afterStored)}
             disabled={!checked}
             className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
           >

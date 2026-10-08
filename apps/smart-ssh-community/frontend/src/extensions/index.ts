@@ -3,12 +3,17 @@ export {
   registerDocumentAction,
   listSettingsSections,
   listDocumentActions,
+  registerFirstRunNoticeExtension,
+  listFirstRunNoticeExtensions,
   resetRegistryForTests,
 } from "./registry";
 export type {
   SettingsSectionContribution,
   DocumentAction,
   DocumentContext,
+  FirstRunNoticeExtension,
+  FirstRunNoticeExtensionContext,
+  FirstRunNoticeContinueHandler,
 } from "./registry";
 
 export { useEntitlements } from "./useEntitlements";

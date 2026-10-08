@@ -101,7 +101,8 @@ Registry **entfernt**, samt zugehöriger Typen. Prüfe vor dem Entfernen:
   UI-Sperre führt weiterhin zu `FeatureLocked`.
 - Nach dem Entfernen der drei Typen gibt es **kein** totes Registry-Vokabular
   mehr — jeder verbleibende Typ (`registerSettingsSection`,
-  `registerDocumentAction`) hat einen echten Renderer.
+  `registerDocumentAction`, sowie der später hinzugekommene
+  `registerFirstRunNoticeExtension`, Abschnitt 9) hat einen echten Renderer.
 
 ## 7. Testbarkeit
 
@@ -122,3 +123,29 @@ Registry **entfernt**, samt zugehöriger Typen. Prüfe vor dem Entfernen:
 - Falls später ein Pro-Feature doch eine eigene Route/ein Panel braucht,
   wird der entsprechende Typ **neu und mit Renderer** hinzugefügt — nicht
   aus einer leeren Deklaration reaktiviert.
+
+## 9. Nachtrag: Erweiterungen des Erststart-Hinweises (Issue #157)
+
+Ein weiterer Typ nach dem Prinzip aus Abschnitt 2 — eingeführt zusammen mit
+seinem Renderer, dem Erststart-Hinweis (Spec 0031, Abschnitt 6):
+
+```ts
+export interface FirstRunNoticeExtension {
+  id: string;
+  order: number;   // aufsteigend; bei Gleichstand nach id
+  Component: ComponentType<{ onContinue: (handler: () => void | Promise<void>) => void }>;
+}
+
+export function registerFirstRunNoticeExtension(ext: FirstRunNoticeExtension): void;
+export function listFirstRunNoticeExtensions(): FirstRunNoticeExtension[];
+```
+
+- Gleiche `id` ersetzt die vorherige Registrierung (wie bei den übrigen
+  Typen).
+- Eine Erweiterung bekommt nur `onContinue`. Je Erweiterung gilt ein
+  Handler; ein erneuter Aufruf ersetzt den vorherigen.
+- Der Typ ist editionsneutral: Die Registry kennt keine Editionen,
+  Entitlements, Netzwerk- oder Update-Logik. Was eine Erweiterung anzeigt
+  und tut, verantwortet der Registrierende.
+- Regel für Autoren: Optionale Elemente sind beim Anzeigen aus bzw. leer
+  (Spec 0031, Abschnitt 6).

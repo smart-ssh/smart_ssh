@@ -1,6 +1,8 @@
 import { describe, expect, it, afterEach, vi } from "vitest";
 import {
   listDocumentActions,
+  listFirstRunNoticeExtensions,
+  registerFirstRunNoticeExtension,
   listSettingsSections,
   registerDocumentAction,
   registerSettingsSection,
@@ -69,5 +71,33 @@ describe("registry", () => {
     const [action] = listDocumentActions();
     expect(action.disabled).toBe(true);
     expect(action.disabledReason).toBe("Requires a paid plan");
+  });
+
+  // Spec 0031, Abschnitt 6 (issue #157).
+  it("lists first-run notice extensions sorted by order, ties by id", () => {
+    registerFirstRunNoticeExtension({ id: "late", order: 20, Component: Noop });
+    registerFirstRunNoticeExtension({ id: "b-early", order: 10, Component: Noop });
+    registerFirstRunNoticeExtension({ id: "a-early", order: 10, Component: Noop });
+
+    expect(listFirstRunNoticeExtensions().map((e) => e.id)).toEqual([
+      "a-early",
+      "b-early",
+      "late",
+    ]);
+  });
+
+  it("replaces a first-run notice extension registered again under the same id, and resets", () => {
+    function Other() {
+      return null;
+    }
+    registerFirstRunNoticeExtension({ id: "x", order: 1, Component: Noop });
+    registerFirstRunNoticeExtension({ id: "x", order: 2, Component: Other });
+
+    const extensions = listFirstRunNoticeExtensions();
+    expect(extensions).toHaveLength(1);
+    expect(extensions[0].Component).toBe(Other);
+
+    resetRegistryForTests();
+    expect(listFirstRunNoticeExtensions()).toEqual([]);
   });
 });

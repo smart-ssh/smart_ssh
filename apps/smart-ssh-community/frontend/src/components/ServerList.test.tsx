@@ -13,6 +13,11 @@ import { connect, listGroups, listServers, moveGroup, moveServerToGroup } from "
 import { subscribeHostKeyPromptClear } from "../hostKeyPromptBus";
 import { onHostKeyVerificationNeeded } from "../events";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
+import {
+  registerFirstRunNoticeExtension,
+  resetRegistryForTests,
+  type FirstRunNoticeExtensionContext,
+} from "../extensions/registry";
 
 function localServer(): ServerDto {
   return {
@@ -417,9 +422,24 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     vi.mocked(loadFirstRunNoticeAcknowledged).mockImplementation(() => Promise.resolve(true));
     vi.mocked(saveFirstRunNoticeAcknowledged).mockImplementation(() => Promise.resolve());
     vi.mocked(connect).mockReset();
+    resetRegistryForTests();
+    vi.restoreAllMocks();
   });
 
   const noticeTitle = () => testI18n.t("firstRunNotice.title");
+
+  /** Spec 0031, section 6 (issue #157): registers an extension whose
+   * continue handler is `handler`. */
+  function registerHandler(id: string, order: number, handler: () => void | Promise<void>) {
+    registerFirstRunNoticeExtension({
+      id,
+      order,
+      Component: ({ onContinue }: FirstRunNoticeExtensionContext) => {
+        onContinue(handler);
+        return <span>{id}</span>;
+      },
+    });
+  }
 
   /** Renders the list and waits until both the servers and the (not yet
    * given) acknowledgement are loaded, so a click hits the "not
@@ -503,6 +523,66 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
 
     expect(await screen.findByText(noticeTitle())).toBeInTheDocument();
     await act(async () => {});
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  // Spec 0031, section 6 (issue #157).
+  it("calls extension handlers once after the acknowledgement is stored", async () => {
+    const order: string[] = [];
+    vi.mocked(saveFirstRunNoticeAcknowledged).mockImplementation(async () => {
+      order.push("save");
+    });
+    const handler = vi.fn(() => {
+      order.push("handler");
+    });
+    registerHandler("ext", 1, handler);
+    await renderUnacknowledged();
+
+    fireEvent.click(screen.getByText("prod-1"));
+    await screen.findByText(noticeTitle());
+    expect(screen.getByText("ext")).toBeInTheDocument();
+    await acknowledgeNotice();
+
+    await waitFor(() => expect(connect).toHaveBeenCalledTimes(1));
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(["save", "handler"]);
+  });
+
+  it("a throwing extension handler does not keep the notice open or block the connect", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const other = vi.fn();
+    registerHandler("broken", 1, () => {
+      throw new Error("extension failed");
+    });
+    registerHandler("other", 2, other);
+    await renderUnacknowledged();
+
+    fireEvent.click(screen.getByText("prod-1"));
+    await screen.findByText(noticeTitle());
+    await acknowledgeNotice();
+
+    await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1"));
+    expect(screen.queryByText(noticeTitle())).toBeNull();
+    expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
+    expect(other).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalled();
+  });
+
+  it("does not call extension handlers when storing the acknowledgement fails", async () => {
+    vi.mocked(saveFirstRunNoticeAcknowledged).mockRejectedValueOnce({
+      code: null,
+      message: "settings store write failed",
+    });
+    const handler = vi.fn();
+    registerHandler("ext", 1, handler);
+    await renderUnacknowledged();
+
+    fireEvent.click(screen.getByText("prod-1"));
+    await screen.findByText(noticeTitle());
+    await acknowledgeNotice();
+
+    expect(await screen.findByText("settings store write failed")).toBeInTheDocument();
+    expect(handler).not.toHaveBeenCalled();
     expect(connect).not.toHaveBeenCalled();
   });
 });
