@@ -262,6 +262,11 @@ async fn test_disconnect_suggestion_emits_event_and_accept_persists_revision() {
 
     let (_, suggested_payload) = &events[0];
     assert_eq!(suggested_payload["sessionId"], session_id.to_string());
+    assert_eq!(
+        suggested_payload["summaryIncomplete"],
+        serde_json::json!(false),
+        "Issue #94: ein regulärer Disconnect-Vorschlag ist nie als unvollständig markiert"
+    );
 
     let revisions = profile_store.note_revisions.lock().unwrap();
     assert_eq!(revisions.len(), 1);
@@ -607,6 +612,11 @@ async fn test_summarize_note_for_shrink_returns_redacted_text_on_success() {
     )
     .await
     .expect("Erfolgsfall muss Some liefern");
+    assert!(
+        !result.incomplete,
+        "eine mit Done beendete Antwort ist vollständig"
+    );
+    let result = result.text;
 
     assert!(
         result.contains("Gekürzte Notiz mit"),
@@ -760,12 +770,78 @@ async fn test_summarize_note_for_shrink_caps_the_returned_text() {
         "Eine Notiz.",
     )
     .await
-    .expect("Erfolgsfall muss Some liefern");
+    .expect("Erfolgsfall muss Some liefern")
+    .text;
 
     assert!(
         result.len() <= NOTE_SHRINK_MAX_BYTES,
         "die zurückgelieferte Kürzung muss auf NOTE_SHRINK_MAX_BYTES gedeckelt sein: {}",
         result.len()
+    );
+}
+
+/// Issue #94 / Spec 0057, §4.2: eine vom Provider abgeschnittene Antwort
+/// (`TextTruncated`, Spec 0065) bleibt als Vorschlag erhalten, wird aber
+/// als unvollständig markiert.
+#[tokio::test]
+async fn test_summarize_note_for_shrink_marks_truncated_reply_as_incomplete() {
+    let provider = MockAiProvider::new(vec![
+        AiEvent::TextDelta("Halbe Kürzung".to_string()),
+        AiEvent::TextTruncated,
+    ]);
+    let redactor = DefaultOutputRedactor::new();
+
+    let budget = ai_providers::ProviderBudgetGuard::new();
+    let emitter = TestEmitter::default();
+    let result = summarize_note_for_shrink(
+        &provider,
+        &budget,
+        &emitter,
+        Uuid::new_v4(),
+        &redactor,
+        "Test-Server",
+        "Eine Notiz.",
+    )
+    .await
+    .expect("eine abgeschnittene Antwort muss trotzdem Some liefern");
+
+    assert_eq!(result.text, "Halbe Kürzung");
+    assert!(
+        result.incomplete,
+        "TextTruncated muss als unvollständig markiert sein"
+    );
+}
+
+/// Issue #94: abgeschnitten UND über `NOTE_SHRINK_MAX_BYTES` — beide
+/// Hinweise bleiben erhalten: die Unvollständig-Markierung und der
+/// app-eigene Cap-Hinweis im Text.
+#[tokio::test]
+async fn test_summarize_note_for_shrink_truncated_and_oversized_keeps_cap_notice_and_flag() {
+    let huge_reply = "x".repeat(NOTE_SHRINK_MAX_BYTES * 3);
+    let provider =
+        MockAiProvider::new(vec![AiEvent::TextDelta(huge_reply), AiEvent::TextTruncated]);
+    let redactor = DefaultOutputRedactor::new();
+
+    let budget = ai_providers::ProviderBudgetGuard::new();
+    let emitter = TestEmitter::default();
+    let result = summarize_note_for_shrink(
+        &provider,
+        &budget,
+        &emitter,
+        Uuid::new_v4(),
+        &redactor,
+        "Test-Server",
+        "Eine Notiz.",
+    )
+    .await
+    .expect("Some erwartet");
+
+    assert!(result.incomplete);
+    assert!(result.text.len() <= NOTE_SHRINK_MAX_BYTES);
+    assert!(
+        result.text.contains("wurde hier gekappt"),
+        "der bestehende Cap-Hinweis muss erhalten bleiben: {}",
+        &result.text[result.text.len().saturating_sub(120)..]
     );
 }
 
@@ -877,6 +953,11 @@ async fn test_execute_note_shrink_request_emits_diff_and_persists_only_after_app
         events[0].1["action"]["ProposeNoteUpdate"]["new_content"],
         "Gekürzte Fassung."
     );
+    assert_eq!(
+        events[0].1["summaryIncomplete"],
+        serde_json::json!(false),
+        "Issue #94: eine mit Done beendete Kürzung ist nicht als unvollständig markiert"
+    );
     assert_eq!(events[1].0, "note-shrink-succeeded");
     assert_eq!(events[1].1["serverId"], server_id.0.to_string());
 
@@ -894,6 +975,154 @@ async fn test_execute_note_shrink_request_emits_diff_and_persists_only_after_app
             model: "test-model".to_string(),
         }
     );
+}
+
+/// Issue #94 / Spec 0057, §4.2: eine abgeschnittene Kürzung erreicht den
+/// Nutzer weiterhin als Diff-Vorschlag, aber mit `summaryIncomplete: true`
+/// — und eine Zustimmung speichert exakt den angezeigten Inhalt.
+#[tokio::test]
+async fn test_execute_note_shrink_request_flags_truncated_summary_and_stores_shown_content() {
+    let provider = MockAiProvider::new(vec![
+        AiEvent::TextDelta("Gekürzte, aber abgeschnittene Fass".to_string()),
+        AiEvent::TextTruncated,
+    ]);
+    let redactor = DefaultOutputRedactor::new();
+    let server_id = ServerId::new();
+    let profile_store = crate::test_support::InMemoryProfileStore::new().with_server(
+        server_with_notes(server_id, "Die lange, ursprüngliche Notiz."),
+    );
+    let emitter = TestEmitter::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+        profile_store: &profile_store,
+        server_id,
+        provider_label: "Test-Provider".to_string(),
+        model: "test-model".to_string(),
+    };
+    let budget = ai_providers::ProviderBudgetGuard::new();
+    let flow = execute_note_shrink_request(
+        Uuid::new_v4(),
+        server_id,
+        &provider,
+        &budget,
+        &redactor,
+        &emitter,
+        &target,
+        &confirmations,
+    );
+    let responder = async {
+        loop {
+            let action_id = {
+                let events = emitter.events.lock().unwrap();
+                events.iter().find_map(|(name, payload)| {
+                    (name == "note-update-suggested")
+                        .then(|| payload["actionId"].as_str().unwrap().to_string())
+                })
+            };
+            if let Some(action_id) = action_id {
+                assert_eq!(
+                    profile_store.get_server(&server_id).await.unwrap().notes,
+                    "Die lange, ursprüngliche Notiz.",
+                    "vor der Zustimmung bleibt die Notiz unverändert"
+                );
+                let action_id: ActionId = action_id.parse().unwrap();
+                confirmations
+                    .resolve(&action_id, ActionUserDecision::Approve)
+                    .unwrap();
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    };
+
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        tokio::join!(flow, responder)
+    })
+    .await
+    .expect("Ablauf darf nicht hängen");
+
+    let events = emitter.events.lock().unwrap().clone();
+    assert_eq!(events[0].0, "note-update-suggested");
+    assert_eq!(events[0].1["summaryIncomplete"], serde_json::json!(true));
+    let shown = events[0].1["action"]["ProposeNoteUpdate"]["new_content"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(shown, "Gekürzte, aber abgeschnittene Fass");
+    assert_eq!(
+        profile_store.get_server(&server_id).await.unwrap().notes,
+        shown,
+        "eine Zustimmung speichert exakt den angezeigten Inhalt"
+    );
+}
+
+/// Issue #94: auch ein abgeschnittener, markierter Vorschlag lässt die
+/// gespeicherte Notiz bei Ablehnung unverändert.
+#[tokio::test]
+async fn test_execute_note_shrink_request_truncated_summary_denied_leaves_note_unchanged() {
+    let provider = MockAiProvider::new(vec![
+        AiEvent::TextDelta("Abgeschnitt".to_string()),
+        AiEvent::TextTruncated,
+    ]);
+    let redactor = DefaultOutputRedactor::new();
+    let server_id = ServerId::new();
+    let profile_store = crate::test_support::InMemoryProfileStore::new().with_server(
+        server_with_notes(server_id, "Die lange, ursprüngliche Notiz."),
+    );
+    let emitter = TestEmitter::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+        profile_store: &profile_store,
+        server_id,
+        provider_label: "Test-Provider".to_string(),
+        model: "test-model".to_string(),
+    };
+    let budget = ai_providers::ProviderBudgetGuard::new();
+    let flow = execute_note_shrink_request(
+        Uuid::new_v4(),
+        server_id,
+        &provider,
+        &budget,
+        &redactor,
+        &emitter,
+        &target,
+        &confirmations,
+    );
+    let responder = async {
+        loop {
+            let action_id = {
+                let events = emitter.events.lock().unwrap();
+                events.iter().find_map(|(name, payload)| {
+                    (name == "note-update-suggested")
+                        .then(|| payload["actionId"].as_str().unwrap().to_string())
+                })
+            };
+            if let Some(action_id) = action_id {
+                let action_id: ActionId = action_id.parse().unwrap();
+                confirmations
+                    .resolve(&action_id, ActionUserDecision::Deny)
+                    .unwrap();
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    };
+
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        tokio::join!(flow, responder)
+    })
+    .await
+    .expect("Ablauf darf nicht hängen");
+
+    let events = emitter.events.lock().unwrap().clone();
+    assert_eq!(events[0].1["summaryIncomplete"], serde_json::json!(true));
+    assert_eq!(
+        profile_store.get_server(&server_id).await.unwrap().notes,
+        "Die lange, ursprüngliche Notiz."
+    );
+    assert!(profile_store.note_revisions.lock().unwrap().is_empty());
 }
 
 /// Regressionstest für die zentrale Invariante aus der Aufgabenstellung
