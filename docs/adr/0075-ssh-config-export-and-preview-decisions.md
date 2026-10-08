@@ -340,3 +340,26 @@ Gegenbeweise scharf) hielt.
    `SkipReason`-Auflösung bereits als offene Nacharbeit), durch den neuen
    Test jetzt nur belegt, nicht verursacht — zusammen mit Punkt 10.3 zu
    erledigen, nicht zweimal.
+
+## 12. Nachtrag (Issue #105): Vorgabe je Schlagwort aus `core`, erweitert
+
+Die in §11 als „bewusst nicht behoben“ geführten Punkte I-2, I-3 und
+Testfall 3 sind mit Issue #105 entschieden und umgesetzt:
+
+1. **Regel.** Jedes importierte Schlagwort mit Treffer auf eine
+   Tag-`Allow`-Regel startet abgewählt — buchstäblich wie Muster (schließt
+   Testfall 3) —, **außer** es trifft zugleich eine Tag-`Deny`-Regel;
+   dann bleibt es angewählt (schließt I-3: die `Deny`-Abdeckung geht durch
+   die Vorgabe nicht mehr verloren). `is_literal` bleibt reine
+   Kennzeichnung und fließt in die Vorgabe nicht mehr ein.
+2. **Ort.** Die Vorgabe berechnet allein `PlannedTag::default_selected`
+   in `core`. Das Vorschau-DTO trägt sie als `defaultSelected`; der Dialog
+   übernimmt den Wert, statt ihn aus den Regel-Aktionen abzuleiten. Der
+   Vergleich läuft dort auf dem `RuleAction`-Enum mit erschöpfendem
+   `match` — eine neue Aktion erzwingt eine bewusste Entscheidung, eine
+   Schreibweisen-Frage stellt sich nicht mehr. Der bisherige
+   Frontend-Test zur Groß-/Kleinschreibung entfällt damit.
+3. **Tiefenverteidigung (schließt I-2).** `apply_import` nimmt für einen
+   Eintrag ohne `EntryChoice` dieselbe Vorgabe: Die standardmäßig
+   abgewählten Schlagworte landen in `dropped_tags`, statt dass „alles
+   angewählt“ gilt.
