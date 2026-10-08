@@ -1,4 +1,4 @@
-# ADR 0118 — Server mit unlesbarer Anmeldeart als eigener Listentyp
+# ADR 0119 — Server mit unlesbarer Anmeldeart als eigener Listentyp
 
 Status: akzeptiert
 Betrifft: Spec 0008 (Abschnitt 6a), Spec 0101, Issue #100
