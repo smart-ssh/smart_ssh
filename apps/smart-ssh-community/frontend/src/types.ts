@@ -973,11 +973,14 @@ export interface SshConfigPreviewTagDto {
   /** `true` ⇒ das Schlagwort trägt **keinen** Platzhalter (buchstäbliche
    * Angabe in einem gemischten `Host`-Block, z. B. `Host prod *`) und
    * trifft eine `Scope::Tag`-Regel **exakt** — deutlicher zu kennzeichnen
-   * als ein Muster-Schlagwort (§5.2a). Trifft es zusätzlich eine
-   * `matchedRules`-Regel mit `action === "allow"`, startet es in der
-   * Vorschau abgewählt (Q-BL-0216-02, entschieden — s.
-   * `defaultTagSelected` in `SshConfigImportDialog.tsx`). */
+   * als ein Muster-Schlagwort (§5.2a). Nur Kennzeichnung — die Vorgabe
+   * trägt `defaultSelected`. */
   isLiteral: boolean;
+  /** §5.2a/§9: `false` ⇒ das Schlagwort startet in der Vorschau abgewählt
+   * (trifft eine Tag-Allow-Regel und keine Tag-Deny-Regel — gleich, ob
+   * buchstäblich oder Muster). Vom Backend berechnet; der Dialog übernimmt
+   * den Wert unverändert, und `apply` ohne Wahl folgt derselben Vorgabe. */
+  defaultSelected: boolean;
 }
 
 export interface SshConfigPreviewIdentityFileDto {

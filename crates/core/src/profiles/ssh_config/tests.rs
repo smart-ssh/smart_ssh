@@ -959,6 +959,89 @@ fn t_review2_buchstaebliches_schlagwort_bleibt_aber_ist_gekennzeichnet() {
     assert!(!entry(&plan2, "web1.prod.de").tags[0].is_literal);
 }
 
+// ------------------- Issue #105: Vorgabe „angewählt" je Schlagwort (§5.2a/§9)
+
+fn tag_rule(id: &str, action: RuleAction, scope: &str) -> Rule {
+    Rule {
+        id: RuleId(id.into()),
+        pattern: Pattern::Glob("x *".into()),
+        action,
+        scope: Scope::Tag(scope.into()),
+        priority: 0,
+        origin: RuleOrigin::User,
+    }
+}
+
+/// Plan mit einem Muster-Schlagwort `*.prod.de` (Server `web1.prod.de`) und
+/// einem buchstäblichen Schlagwort `prod` (Server `prod`, gemischter Block).
+fn tag_default_plan(rules: &[Rule]) -> ImportPlan {
+    build_plan(
+        &[source(
+            "/tmp/config",
+            "Host *.prod.de\n  User deploy\nHost web1.prod.de\nHost prod\n  HostName 10.0.0.1\nHost prod *\n  User deploy\n",
+        )],
+        inv(&[], &[], rules),
+    )
+}
+
+fn planned_tag<'a>(plan: &'a ImportPlan, server: &str, tag: &str) -> &'a PlannedTag {
+    entry(plan, server)
+        .tags
+        .iter()
+        .find(|t| t.tag == tag)
+        .unwrap_or_else(|| panic!("Schlagwort {tag} fehlt an {server}"))
+}
+
+#[test]
+fn t_105_muster_schlagwort_mit_allow_treffer_ist_abgewaehlt() {
+    let plan = tag_default_plan(&[tag_rule("a", RuleAction::Allow, "*.prod.de")]);
+    let t = planned_tag(&plan, "web1.prod.de", "*.prod.de");
+    assert!(!t.is_literal);
+    assert!(
+        !t.default_selected(),
+        "Muster-Schlagwort hebt Confirm→Allow"
+    );
+}
+
+#[test]
+fn t_105_allow_und_deny_treffer_bleibt_angewaehlt() {
+    let rules = [
+        tag_rule("a1", RuleAction::Allow, "*.prod.de"),
+        tag_rule("d1", RuleAction::Deny, "*.prod.de"),
+        tag_rule("a2", RuleAction::Allow, "prod"),
+        tag_rule("d2", RuleAction::Deny, "prod"),
+    ];
+    let plan = tag_default_plan(&rules);
+    // Muster-Schlagwort
+    assert!(planned_tag(&plan, "web1.prod.de", "*.prod.de").default_selected());
+    // Buchstäbliches Schlagwort
+    let lit = planned_tag(&plan, "prod", "prod");
+    assert!(lit.is_literal);
+    assert!(lit.default_selected(), "Abwahl nähme die Deny-Abdeckung");
+}
+
+#[test]
+fn t_105_buchstaebliches_schlagwort_nur_allow_bleibt_abgewaehlt() {
+    let plan = tag_default_plan(&[tag_rule("a", RuleAction::Allow, "prod")]);
+    assert!(!planned_tag(&plan, "prod", "prod").default_selected());
+}
+
+#[test]
+fn t_105_nur_deny_confirm_oder_kein_treffer_bleibt_angewaehlt() {
+    for action in [RuleAction::Deny, RuleAction::Confirm] {
+        let rules = [
+            tag_rule("r1", action.clone(), "prod"),
+            tag_rule("r2", action, "*.prod.de"),
+        ];
+        let plan = tag_default_plan(&rules);
+        assert!(planned_tag(&plan, "prod", "prod").default_selected());
+        assert!(planned_tag(&plan, "web1.prod.de", "*.prod.de").default_selected());
+    }
+    let plan = tag_default_plan(&[]);
+    assert!(planned_tag(&plan, "prod", "prod").default_selected());
+    assert!(planned_tag(&plan, "web1.prod.de", "*.prod.de").default_selected());
+}
+
 #[test]
 fn t_review1_wertgrenze_gilt_auch_fuer_unbekannte_direktive() {
     // §3.3 ist unbedingt formuliert. Vorher stand die Prüfung hinter dem

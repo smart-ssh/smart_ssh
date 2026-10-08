@@ -18,21 +18,14 @@ interface SshConfigImportDialogProps {
   onImported: () => void;
 }
 
-/** Spec 0075, §5.2a — ob ein Schlagwort standardmäßig angewählt bleibt.
- * Q-BL-0216-02 (2026-09-25, §9 der Spec): Ein buchstäbliches
- * Schlagwort (`isLiteral`), das eine bestehende Tag-**Allow**-Regel trifft,
- * ist standardmäßig **abgewählt** — es hebt sonst ein importiertes Profil
- * unbemerkt von `Confirm` auf `Allow`. Trifft es nur `Deny`/`Confirm` oder
- * keine Regel, bleibt es angewählt — eine Tag-`Deny`-Regel bleibt so ohne
- * Zutun wirksam. Der Nutzer kann in beide Richtungen umwählen
- * (`toggleTag`). Dies ist die **einzige** Stelle, die diese Vorgabe trägt. */
+/** Spec 0075, §5.2a/§9 — ob ein Schlagwort standardmäßig angewählt bleibt.
+ * Die Vorgabe berechnet allein das Backend (Import-Plan in `core`) und
+ * liefert sie als `defaultSelected` im DTO — hier wird sie nur übernommen,
+ * nicht neu abgeleitet, damit Vorschau und ein `apply` ohne Wahl nie
+ * auseinanderlaufen. Der Nutzer kann in beide Richtungen umwählen
+ * (`toggleTag`). */
 function defaultTagSelected(tag: SshConfigPreviewTagDto): boolean {
-  if (!tag.isLiteral) return true;
-  // spec-reviewer-Fund (Runde 1, I-1): `.toLowerCase()` statt eines exakten
-  // Vergleichs auf die aktuell einzige Kodierung (`"allow"`) — ein
-  // künftiger Wechsel der DTO-Kodierung soll hier in die sichere Richtung
-  // (weiter abgewählt) fallen, nicht stillschweigend in die unsichere.
-  return !tag.matchedRules.some((r) => r.action.toLowerCase() === "allow");
+  return tag.defaultSelected;
 }
 
 interface EntryUiState {
@@ -387,14 +380,13 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                             {e.tags.map((tag) => {
                               const dropped = st.droppedTags.has(tag.tag);
                               const flagged = tag.matchedRules.length > 0;
-                              // Q-BL-0216-02 verlangt nicht nur die Vorgabe
+                              // §9 verlangt nicht nur die Vorgabe
                               // (`defaultTagSelected`), sondern auch, dass
                               // dieser Fall sichtbar **anders** markiert ist
-                              // als ein buchstäbliches Schlagwort, das nur
-                              // Deny/Confirm trifft — sonst unterscheiden
-                              // sich beide nur am Häkchen (spec-reviewer-Fund,
-                              // Runde 1, K-3). Bewusst dieselbe Funktion wie
-                              // die Vorgabe selbst, keine zweite Ableitung.
+                              // als ein Schlagwort, das nur Deny/Confirm
+                              // trifft — sonst unterscheiden sich beide nur
+                              // am Häkchen. Bewusst dieselbe Funktion wie die
+                              // Vorgabe selbst, keine zweite Ableitung.
                               const autoDeselected = !defaultTagSelected(tag);
                               // §5.2a verlangt, die betroffene Regel zu
                               // nennen — mindestens ihre Wirkung (Allow
@@ -416,7 +408,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                                   }`}
                                   title={
                                     autoDeselected
-                                      ? t("sshConfigImport.tag.literalDeselectedHint")
+                                      ? t("sshConfigImport.tag.allowDeselectedHint")
                                       : tag.isLiteral
                                         ? t("sshConfigImport.tag.literalHint")
                                         : flagged
