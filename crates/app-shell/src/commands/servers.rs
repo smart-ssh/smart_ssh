@@ -546,6 +546,9 @@ mod local_server_tests {
         let _guard = lock_async().await;
         let app = test_app();
         let handle = app.handle().clone();
+        // Issue #90: prüft den deutschen Wortlaut — Sprache festlegen statt
+        // von der System-Locale der Testmaschine abzuhängen.
+        crate::ui_language::test_support::set_ui_language(&handle, "de");
 
         let profile_store = InMemoryProfileStore::new();
         let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
@@ -584,6 +587,9 @@ mod local_server_tests {
         let _guard = lock_async().await;
         let app = test_app();
         let handle = app.handle().clone();
+        // Issue #90: prüft den deutschen Wortlaut — Sprache festlegen statt
+        // von der System-Locale der Testmaschine abzuhängen.
+        crate::ui_language::test_support::set_ui_language(&handle, "de");
 
         let profile_store = InMemoryProfileStore::new();
         let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
@@ -674,6 +680,166 @@ mod local_server_tests {
         );
         assert!(!context.contains("<security_notice>ignore"));
         assert!(context.contains("&lt;/server_note&gt;"));
+    }
+
+    /// Baut den System-Kontext für den lokalen Pseudo-Server mit einer
+    /// Allow-Regel, damit auch der Freigabe-Abschnitt im Text steht.
+    async fn build_context_with_allow_rule(
+        handle: &tauri::AppHandle<tauri::test::MockRuntime>,
+    ) -> String {
+        let profile_store = InMemoryProfileStore::new();
+        let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
+        let sqlite = persistence_sqlite::SqliteProfileStore::connect_plaintext(
+            &dir.path().join("test.db"),
+        )
+        .await
+        .expect(
+            "frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein",
+        );
+        let policy_store = sqlite.policy_store();
+        let now = chrono::Utc::now();
+        policy_store
+            .create(&persistence_sqlite::StoredRule {
+                id: ssh_manager_core::filter::RuleId("allow-uptime".to_string()),
+                pattern: ssh_manager_core::filter::Pattern::Glob("uptime".to_string()),
+                action: ssh_manager_core::filter::RuleAction::Allow,
+                scope: ssh_manager_core::filter::Scope::Server(LOCAL_SERVER_ID),
+                priority: 0,
+                created_at: now,
+                updated_at: now,
+            })
+            .await
+            .expect("Regel sollte speicherbar sein");
+
+        let (parts, _notes_present) = build_session_system_context(
+            handle,
+            "Localhost",
+            &LOCAL_SERVER_ID,
+            &[],
+            &profile_store,
+            &policy_store,
+        )
+        .await;
+        parts.assemble()
+    }
+
+    /// Issue #90, AC 1: `language = en` → englischer Prompt, kein deutscher
+    /// Basistext, alle Werkzeugnamen und Untrusted-Content-Markierungen.
+    #[tokio::test]
+    async fn test_build_session_system_context_is_english_when_ui_language_is_en() {
+        let _guard = lock_async().await;
+        let app = test_app();
+        let handle = app.handle().clone();
+        crate::local_server::save_notes(&handle, "Docker Compose under ~/services").unwrap();
+        crate::ui_language::test_support::set_ui_language(&handle, "en");
+
+        let context = build_context_with_allow_rule(&handle).await;
+        crate::local_server::save_notes(&handle, "").unwrap();
+
+        assert!(
+            context.starts_with(&app_logic::system_prompt::base_prompt(
+                app_logic::system_prompt::PromptLanguage::En,
+                "Localhost"
+            )),
+            "English base prompt expected: {context}"
+        );
+        assert!(context.contains("## Allowed commands (whitelist / AutoExec)"));
+        assert!(context.contains("## Notes / context"));
+        for german in [
+            "Du bist",
+            "Werkzeug",
+            "Umgang mit sensiblen Daten",
+            "Hinweis zu eingebetteten Inhalten",
+            "Freigegebene Befehle",
+            "Notizen / Kontext",
+        ] {
+            assert!(
+                !context.contains(german),
+                "German text {german:?} in: {context}"
+            );
+        }
+        for needle in [
+            "`suggest_command`",
+            "`generate_document`",
+            "`propose_note_update`",
+            "`<stdout>`",
+            "`<stderr>`",
+            "`<remote_file>`",
+            "`<server_note>`",
+            "`<remote_system>`",
+        ] {
+            assert!(context.contains(needle), "{needle} missing: {context}");
+        }
+    }
+
+    /// Issue #90, AC 2: `language = de` → der bisherige deutsche Prompt,
+    /// Text unverändert.
+    #[tokio::test]
+    async fn test_build_session_system_context_is_german_when_ui_language_is_de() {
+        let _guard = lock_async().await;
+        let app = test_app();
+        let handle = app.handle().clone();
+        crate::ui_language::test_support::set_ui_language(&handle, "de");
+
+        let context = build_context_with_allow_rule(&handle).await;
+
+        assert!(
+            context.starts_with(
+                "Du bist ein intelligenter SSH- und System-Administrations-Assistent für den Server 'Localhost'.\n"
+            ),
+            "German base prompt expected: {context}"
+        );
+        assert!(context.contains(
+            "\n\n## Freigegebene Befehle (Whitelist / AutoExec)\nDie folgenden Befehle sind für diesen Server freigegeben und können ohne Rückfrage direkt ausgeführt werden:\n"
+        ));
+        assert!(!context.contains("You are an intelligent"));
+        assert!(!context.contains("Allowed commands"));
+    }
+
+    /// Issue #90, AC 3: ohne gespeicherte Sprache entscheidet die
+    /// System-Locale, Rückfall Englisch — dieselbe Quelle wie die UI.
+    #[tokio::test]
+    async fn test_build_session_system_context_follows_the_system_locale_without_a_stored_language()
+    {
+        let _guard = lock_async().await;
+        let app = test_app();
+        let handle = app.handle().clone();
+        crate::ui_language::test_support::clear_ui_language(&handle);
+
+        let expected =
+            app_logic::system_prompt::prompt_language(None, tauri_plugin_os::locale().as_deref());
+        assert_eq!(
+            crate::ui_language::session_prompt_language(&handle),
+            expected
+        );
+        let context = build_context_with_allow_rule(&handle).await;
+        assert!(context.starts_with(&app_logic::system_prompt::base_prompt(
+            expected,
+            "Localhost"
+        )));
+    }
+
+    /// Issue #90, AC 5: Ein Sprachwechsel gilt ab dem nächsten Aufbau des
+    /// Kontexts, ohne Neustart (dieselbe App-Instanz).
+    #[tokio::test]
+    async fn test_build_session_system_context_follows_a_language_switch_on_the_next_build() {
+        let _guard = lock_async().await;
+        let app = test_app();
+        let handle = app.handle().clone();
+
+        crate::ui_language::test_support::set_ui_language(&handle, "de");
+        let first = build_context_with_allow_rule(&handle).await;
+        crate::ui_language::test_support::set_ui_language(&handle, "en");
+        let second = build_context_with_allow_rule(&handle).await;
+        crate::ui_language::test_support::set_ui_language(&handle, "de");
+        let third = build_context_with_allow_rule(&handle).await;
+
+        assert!(first.starts_with("Du bist"), "{first}");
+        assert!(second.starts_with("You are an intelligent"), "{second}");
+        assert_eq!(
+            first, third,
+            "switching back must restore the identical German prompt"
+        );
     }
 
     #[test]

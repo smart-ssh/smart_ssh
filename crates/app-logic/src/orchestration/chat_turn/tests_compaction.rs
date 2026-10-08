@@ -274,6 +274,7 @@ async fn test_immich_case_large_note_and_long_history_stays_under_budget() {
             ("Gruppe \"Media-Server\"".to_string(), "m".repeat(40_000)),
             ("Server \"immich\"".to_string(), "s".repeat(10_000)),
         ],
+        language: crate::system_prompt::PromptLanguage::De,
     };
 
     // Lange Historie: 15 Runden mit je einer moderaten Kommando-Ausgabe.
@@ -1106,6 +1107,7 @@ async fn test_summarization_leaves_ledger_and_stored_note_untouched() {
             "Server \"web-01\"".to_string(),
             "Wichtige Notiz".to_string(),
         )],
+        language: crate::system_prompt::PromptLanguage::De,
     };
     {
         let mut ctx = session.context.lock().await;

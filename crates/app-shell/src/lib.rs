@@ -48,6 +48,8 @@ mod startup_gate_wiring;
 mod startup_prompt;
 #[cfg(test)]
 mod test_support;
+/// Issue #90: die UI-Sprache als Sprache des Sitzungs-System-Prompts.
+mod ui_language;
 /// Spec 0101, Teil 0 Frage 3: die Startdialoge im Fenster, fuer den
 /// Passwort-Modus.
 mod window_prompt;
