@@ -222,6 +222,19 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       waiter((decision as { decision: string }).decision === "trust");
       return null;
     },
+    // An open session: empty history, a terminal that echoes nothing, an
+    // empty home directory in the file browser.
+    get_chat_history: () => [],
+    list_prompt_history: () => [],
+    open_terminal: () => ({ missingDirectory: null }),
+    terminal_resize: () => null,
+    terminal_input: () => null,
+    sftp_start_directory: () => ({ path: ".", missingDirectory: null }),
+    sftp_list: () => [],
+    sftp_elevation_disable: () => null,
+    sftp_elevation_status: () => null,
+    // Approve/deny of a pending action; the result event is up to the test.
+    respond_to_action: () => null,
     disconnect: ({ sessionId }) => {
       model.sessions = model.sessions.filter((s) => s.sessionId !== sessionId);
       persist();
