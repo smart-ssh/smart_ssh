@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 // Spec 0099, A1.8/A4.3: die Kennzeile der erzeugten Datei — eine Kopie für
 // das ganze Frontend, gegen das Generierungs-Skript geprüft (Issue #7).
 import { THIRD_PARTY_NOTICES_MARKER } from "../thirdPartyNoticesMarker";
+import { ModalBackdrop } from "./ModalBackdrop";
 
 // A4.4: eine relative Adresse — die Datei liegt im eigenen Bundle
 // (`public/third-party-notices.txt`, von Vite nach `dist/` kopiert), ein
@@ -48,7 +49,7 @@ export function ThirdPartyLicensesDialog({ onClose }: ThirdPartyLicensesDialogPr
   }, []);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded border border-slate-600 bg-slate-900 p-6 shadow-xl">
         <h2 className="font-heading mb-3 text-lg font-semibold text-slate-100">
           {t("about.thirdPartyLicenses.title")}
@@ -83,7 +84,7 @@ export function ThirdPartyLicensesDialog({ onClose }: ThirdPartyLicensesDialogPr
           </button>
         </div>
       </div>
-    </div>,
+    </ModalBackdrop>,
     document.body,
   );
 }

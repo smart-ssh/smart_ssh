@@ -10,6 +10,7 @@ import {
   switchToOsKeychain,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
+import { ModalBackdrop } from "./ModalBackdrop";
 
 /** Spec 0101, A13: Mindestlänge. Das Backend prüft dieselbe Grenze und
  * lehnt mit `MASTER_PASSWORD_REJECTED` ab; hier bleibt nur der Knopf aus. */
@@ -270,7 +271,7 @@ export function MasterPasswordSettings() {
       {/* Klarstellung 10b: die Frage vor dem Überschreiben eines fremden
        * Schlüssels. Ohne Bestätigung bleibt alles, wie es war. */}
       {askAboutAnotherKey && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-xl">
             <h2 className="font-heading mb-4 text-lg font-semibold tracking-wide text-slate-100">
               {t("masterPassword.anotherKeyTitle")}
@@ -297,7 +298,7 @@ export function MasterPasswordSettings() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
 
       {error && (
