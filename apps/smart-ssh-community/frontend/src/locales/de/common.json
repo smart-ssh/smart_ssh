@@ -477,6 +477,7 @@
     "SSH_HOST_NOT_FOUND": "Der Hostname ist unbekannt. Schreibweise der Adresse prüfen (oder die IP-Adresse eintragen).",
     "SSH_HOST_UNREACHABLE": "Der Server ist aus diesem Netz nicht erreichbar. Netzwerk/VPN prüfen.",
     "SSH_CONNECTION_CLOSED": "Der Server hat die Verbindung während des Aufbaus beendet. Prüfen, ob auf diesem Port ein SSH-Dienst läuft; ggf. kurz warten (Schutz vor zu vielen Versuchen).",
+    "SSH_SESSION_CLOSED": "Die Verbindung zum Server wurde unterbrochen. Erneut verbinden, um weiterzuarbeiten.",
     "SSH_HOST_KEY_NOT_TRUSTED": "Verbindung abgebrochen, weil der Host-Key nicht bestätigt wurde. Wenn du dem Server vertraust: erneut verbinden und den Fingerprint prüfen.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Die Host-Key-Abfrage wurde nicht rechtzeitig beantwortet; der Key wurde nicht übernommen. Erneut verbinden.",
     "SSH_CONNECTION_ABANDONED": "Verbindungsaufbau abgebrochen (z. B. durch ein Neuladen der App, während die Host-Key-Abfrage offen war). Erneut verbinden.",

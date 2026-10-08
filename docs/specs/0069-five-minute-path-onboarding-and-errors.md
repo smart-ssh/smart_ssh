@@ -197,6 +197,15 @@ Tabelle in §4.1. Für jeden Code MUSS gelten:
   `ConnectionReset`/`ConnectionAborted`/`UnexpectedEof` → `ConnectionClosed`;
   sonst `ConnectionFailed` wie bisher. `russh::Error::Disconnect` →
   `ConnectionClosed`.
+- **Abbruch einer laufenden Sitzung** (Issue #96): Dieselben Abbrüche
+  (`Disconnect`, `ConnectionReset`/`ConnectionAborted`/`UnexpectedEof`) bei
+  einer Operation auf einer **bereits aufgebauten** Sitzung (Kommando,
+  interaktive Shell, SFTP, Trennen) ergeben
+  `SessionClosed(String)` → `SSH_SESSION_CLOSED`, nie
+  `SSH_CONNECTION_CLOSED`; deren Text spricht vom Verbindungsaufbau und
+  passt dort nicht. Der Aufbau (einschließlich Jump-Host-Tunnel) behält
+  `SSH_CONNECTION_CLOSED`. Alle anderen Zuordnungen sind in beiden Fällen
+  gleich.
 - **DNS des ersten Hops: eigener Schritt, Nachdiagnose bleibt**
   ([ADR 0110](../adr/0110-connect-step-log.md), Entscheidung 3, ersetzt die
   frühere Aussage „keine Vorab-Auflösung"): Der **erste** Hop wird
@@ -416,6 +425,7 @@ Schritt müssen erhalten bleiben. Kein `{{…}}`-Platzhalter in `errors.*`
 | `SSH_HOST_UNREACHABLE` (neu) | Der Server ist aus diesem Netz nicht erreichbar. Netzwerk/VPN prüfen. | The server can't be reached from this network. Check your network/VPN. |
 | `SSH_TIMEOUT` (Text neu) | Der Server antwortet nicht. Adresse, Port und Firewall prüfen und erneut verbinden. | The server isn't responding. Check address, port and firewall, then connect again. |
 | `SSH_CONNECTION_CLOSED` (neu) | Der Server hat die Verbindung während des Aufbaus beendet. Prüfen, ob auf diesem Port ein SSH-Dienst läuft; ggf. kurz warten (Schutz vor zu vielen Versuchen). | The server closed the connection during setup. Check that an SSH service runs on this port; wait a moment if too many attempts were made. |
+| `SSH_SESSION_CLOSED` (Issue #96) | Die Verbindung zum Server wurde unterbrochen. Erneut verbinden, um weiterzuarbeiten. | The connection to the server was lost. Reconnect to continue. |
 | `SSH_CONNECTION_FAILED` (bleibt) | unverändert (0047 D2) | unchanged |
 | `SSH_AUTH_FAILED` (Text neu) | Anmeldung abgelehnt. Benutzername und Passwort bzw. Schlüssel in den Server-Einstellungen prüfen. | Login rejected. Check the user name and password or key in the server settings. |
 | `SSH_HOST_KEY_NOT_TRUSTED` (neu) | Verbindung abgebrochen, weil der Host-Key nicht bestätigt wurde. Wenn du dem Server vertraust: erneut verbinden und den Fingerprint prüfen. | Connection cancelled because the host key wasn't confirmed. If you trust the server, connect again and verify the fingerprint. |
@@ -465,6 +475,7 @@ würfe Ollama auf einem anderen Rechner fälschlich in „starte Ollama".
 | keine Route | `HostUnreachable`/`NetworkUnreachable` | `SSH_HOST_UNREACHABLE` |
 | keine Antwort | eine Phasengrenze (A3) abgelaufen oder `TimedOut` | `SSH_TIMEOUT` |
 | Abbruch während Aufbau | `Disconnect`, `ConnectionReset`/`Aborted`/`UnexpectedEof` | `SSH_CONNECTION_CLOSED` |
+| Abbruch einer bereits aufgebauten Sitzung | dieselben Fehler bei Kommando, Shell, SFTP oder Trennen | `SSH_SESSION_CLOSED` |
 | sonst | — | `SSH_CONNECTION_FAILED` |
 
 Ursprünglich wurde DNS nur **nachträglich** diagnostiziert statt vorab
