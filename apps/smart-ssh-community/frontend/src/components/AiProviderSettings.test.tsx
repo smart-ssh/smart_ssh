@@ -6,6 +6,7 @@ import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   addAiProvider,
+  deleteAiProvider,
   discoverModels,
   listAiProviders,
   setActiveAiProvider,
@@ -600,5 +601,124 @@ describe("AiProviderSettings red-risk-always-confirm toggle (Spec 0092, A1.4)", 
     await waitFor(() => expect(toggle).not.toBeChecked());
     const { saveRedRiskAlwaysConfirm } = await import("../riskSettings");
     expect(saveRedRiskAlwaysConfirm).toHaveBeenCalledWith(false);
+  });
+});
+
+// Spec 0069, Teil B6 (#95): Ein über das normale Formular angelegter
+// Provider wird aktiv, wenn beim Speichern noch keiner aktiv ist.
+describe("AiProviderSettings form submit activates the first provider (Spec 0069, Teil B6)", () => {
+  function newOpenAiProvider(overrides: Partial<AiProviderConfigDto> = {}): AiProviderConfigDto {
+    return {
+      id: "new-form-id",
+      providerType: "openai",
+      displayName: "Prov",
+      baseUrl: null,
+      model: "gpt-4o",
+      supportsNativeToolCalling: true,
+      isActive: false,
+      extraHeaders: [],
+      attestationUrl: null,
+      maxTokensOverride: null,
+      ...overrides,
+    };
+  }
+
+  function fillAndSubmit() {
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Prov" } });
+    fireEvent.change(screen.getByLabelText("Modell"), { target: { value: "gpt-4o" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+  }
+
+  const WILL_ACTIVATE_HINT = "Wird als aktiver Provider verwendet, da noch keiner aktiv ist.";
+
+  it("without an active provider -> addAiProvider, then setActiveAiProvider with the returned id; the list shows it as active", async () => {
+    vi.mocked(listAiProviders)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([newOpenAiProvider({ isActive: true })]);
+    vi.mocked(addAiProvider).mockResolvedValueOnce("new-form-id");
+    vi.mocked(setActiveAiProvider).mockResolvedValueOnce(undefined);
+
+    renderForm();
+    await screen.findByText(WILL_ACTIVATE_HINT);
+    fillAndSubmit();
+
+    await waitFor(() => expect(setActiveAiProvider).toHaveBeenCalledWith("new-form-id"));
+    expect(addAiProvider).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(addAiProvider).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(setActiveAiProvider).mock.invocationCallOrder[0],
+    );
+    // Liste neu geladen: der neue Provider trägt die "Aktiv"-Markierung.
+    expect(await screen.findByText("Prov")).toBeInTheDocument();
+    expect(screen.getByText("aktiv")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Aktiv setzen" })).not.toBeInTheDocument();
+    // Ab jetzt ist ein Provider aktiv -> kein Hinweis mehr.
+    expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
+  });
+
+  it("with an already-active provider -> addAiProvider only, no hint, the active provider stays active", async () => {
+    vi.mocked(listAiProviders)
+      .mockResolvedValueOnce([activeAnthropicProvider()])
+      .mockResolvedValueOnce([activeAnthropicProvider(), newOpenAiProvider()]);
+    vi.mocked(addAiProvider).mockResolvedValueOnce("new-form-id");
+
+    renderForm();
+    await screen.findByText("Claude");
+    expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
+    fillAndSubmit();
+
+    await waitFor(() => expect(addAiProvider).toHaveBeenCalledTimes(1));
+    // Zeit für einen fälschlichen Aufruf lassen, bevor negativ geprüft wird.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(setActiveAiProvider).not.toHaveBeenCalled();
+    // Nach dem Neuladen: Claude weiterhin aktiv, der neue Provider inaktiv.
+    expect(await screen.findByText("Prov")).toBeInTheDocument();
+    expect(screen.getAllByText("aktiv")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Aktiv setzen" })).toHaveLength(1);
+  });
+
+  it("shows the will-become-active hint only while no provider is active", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([
+      newOpenAiProvider({ id: "inactive-one", displayName: "Inactive", isActive: false }),
+    ]);
+
+    renderForm();
+    expect(await screen.findByText(WILL_ACTIVATE_HINT)).toBeInTheDocument();
+  });
+
+  it("addAiProvider failing -> no setActiveAiProvider call, error shown", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([]);
+    vi.mocked(addAiProvider).mockRejectedValueOnce(new Error("add boom"));
+
+    renderForm();
+    await screen.findByText(WILL_ACTIVATE_HINT);
+    fillAndSubmit();
+
+    expect(await screen.findByText("add boom")).toBeInTheDocument();
+    expect(setActiveAiProvider).not.toHaveBeenCalled();
+  });
+
+  it("setActiveAiProvider failing after a successful add -> error shown, the provider stays in the list (inactive), nothing deleted", async () => {
+    vi.mocked(listAiProviders)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([newOpenAiProvider({ isActive: false })]);
+    vi.mocked(addAiProvider).mockResolvedValueOnce("new-form-id");
+    vi.mocked(setActiveAiProvider).mockRejectedValueOnce({
+      code: "KEYCHAIN_UNAVAILABLE",
+      message: "raw activation failure",
+    });
+
+    renderForm();
+    await screen.findByText(WILL_ACTIVATE_HINT);
+    fillAndSubmit();
+
+    // Fehler über `translateErrorCode` (übersetzter Text statt Rohtext).
+    const error = await screen.findByText(/Systemschlüsselbund ist nicht verfügbar/);
+    expect(error).not.toHaveTextContent("raw activation failure");
+    expect(setActiveAiProvider).toHaveBeenCalledWith("new-form-id");
+    // Liste neu geladen, neuer Provider da und inaktiv.
+    expect(await screen.findByText("Prov")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Aktiv setzen" })).toBeInTheDocument();
+    expect(deleteAiProvider).not.toHaveBeenCalled();
   });
 });
