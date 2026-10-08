@@ -123,6 +123,7 @@ export function StartupPromptDialog({
               {t("startup.newPasswordLabel")}
               <input
                 type="password"
+                // eslint-disable-next-line jsx-a11y/no-autofocus -- gewollter Anfangsfokus des Dialogs (Issue #112): das Passwortfeld ist die einzige Eingabe.
                 autoFocus
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

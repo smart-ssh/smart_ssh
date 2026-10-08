@@ -191,3 +191,23 @@ describe("Sidebar new items in the current folder (issue #49)", () => {
     expect(onSelect).toHaveBeenLastCalledWith({ kind: "newGroup", parentId: null });
   });
 });
+
+describe("Sidebar tree entries are keyboard-operable (issue #112)", () => {
+  // Native Buttons lösen Enter/Leertaste selbst als Klick aus — jsdom
+  // simuliert diese Aktivierung nicht, darum prüft der Test das Element.
+  it("renders groups and servers as native buttons that select on click", () => {
+    const { onSelect } = renderSidebar();
+
+    const groupEntry = screen.getByRole("button", { name: /Prod/ });
+    const serverEntry = screen.getByRole("button", { name: /free-1/ });
+    for (const entry of [groupEntry, serverEntry]) {
+      expect(entry.tagName).toBe("BUTTON");
+      expect(entry.getAttribute("type")).toBe("button");
+    }
+
+    fireEvent.click(groupEntry);
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "group", id: "g-prod" });
+    fireEvent.click(serverEntry);
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "server", id: "s-free" });
+  });
+});

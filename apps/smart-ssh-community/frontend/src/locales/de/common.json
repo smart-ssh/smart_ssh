@@ -855,5 +855,9 @@
       "partialSuccess": "teilweise akzeptiert, weitere Anmeldung nötig",
       "remainingMethods": "Server bietet außerdem an: {{methods}} (nicht versucht)"
     }
+  },
+  "fileBrowser": {
+    "actionsColumn": "Aktionen",
+    "chmodClassColumn": "Gilt für"
   }
 }

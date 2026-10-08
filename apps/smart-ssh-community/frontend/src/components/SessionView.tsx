@@ -244,6 +244,7 @@ export function SessionView({
         {/* Spec 0053, Teil 2: Drag-Divider zwischen KI- und SSH-/SFTP-
             Bereich — ersetzt den vorherigen statischen `border-r`. */}
         <span
+          // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- ziehbarer Trenner mit Griff-Kindelement; <hr> ist ein leeres Element und kann den Griff nicht aufnehmen (Issue #112).
           role="separator"
           aria-orientation="vertical"
           aria-label="Bereichsaufteilung"

@@ -855,5 +855,9 @@
       "partialSuccess": "partially accepted, further authentication required",
       "remainingMethods": "Server also offers: {{methods}} (not tried)"
     }
+  },
+  "fileBrowser": {
+    "actionsColumn": "Actions",
+    "chmodClassColumn": "Applies to"
   }
 }

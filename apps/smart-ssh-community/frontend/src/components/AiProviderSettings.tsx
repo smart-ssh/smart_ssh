@@ -828,7 +828,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
              * gar nicht erst versucht wird. */}
             <datalist id={MODEL_DATALIST_ID}>
               {models.map((model) => (
-                <option key={model} value={model} />
+                <option key={model} value={model} aria-label={model} />
               ))}
             </datalist>
             {modelsFailed && (
