@@ -130,6 +130,7 @@ async fn test_disconnect_suggestion_skipped_when_compaction_shortens_the_note() 
     let parts = crate::compaction::SystemContextParts {
         base: "Basis".to_string(),
         note_sections: vec![("Server \"web-01\"".to_string(), "n".repeat(50_000))],
+        language: crate::system_prompt::PromptLanguage::De,
     };
     {
         let mut ctx = session.context.lock().await;

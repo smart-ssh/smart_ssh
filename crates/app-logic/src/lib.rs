@@ -84,6 +84,9 @@ pub mod start_directory;
 pub mod startup_choice_dialogs;
 pub mod startup_error_messages;
 pub mod state;
+/// Issue #90: Sitzungs-System-Prompt auf Deutsch und Englisch, gewählt
+/// nach der UI-Sprache.
+pub mod system_prompt;
 pub mod test_connection;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
