@@ -11,10 +11,28 @@ use super::types::{
     Scope,
 };
 
-/// Ab dieser Zeichenlänge wird ein Kommando ungeprüft auf `Confirm` gesetzt,
-/// statt es vollständig zu parsen (Spec 0002, Abschnitt 6, Testfall 11).
-/// Über [`FilterEngine::with_max_command_length`] konfigurierbar.
+/// Ab dieser Länge in **Bytes** (UTF-8) wird ein Kommando ungeprüft auf
+/// `Confirm` gesetzt, statt es vollständig zu parsen (Spec 0002, Abschnitt
+/// 4.7 und Abschnitt 6, Testfall 11). Über
+/// [`FilterEngine::with_max_command_length`] konfigurierbar.
 pub const DEFAULT_MAX_COMMAND_LENGTH: usize = 4096;
+
+/// `true`, wenn `command` das Längenlimit `limit` überschreitet.
+///
+/// Issue #110: **die eine** Längenmessung für jede Längenprüfung — in der
+/// Filter-Engine, im Risiko-Klassifizierer samt seiner Secret-Pfad- und
+/// `sftp-server`-Prüfungen und im Fail-safe der Ausführungskette. Gemessen
+/// wird in Bytes (`str::len`), nicht in Zeichen: Vorher zählte die
+/// Filter-Engine Zeichen, der Klassifizierer Bytes, und ein Kommando mit
+/// Mehrbyte-Zeichen lag dazwischen — für die Filter-Engine noch normal
+/// auswertbar (mit Allow-Regel also `AutoExec`), während der Klassifizierer
+/// schon aufgegeben hatte. Bytes ≥ Zeichen, die Umstellung macht die
+/// Filter-Engine also nur strenger. Ein gemeinsamer Helfer statt
+/// verstreuter `.len()`-Vergleiche, damit die Einheit nicht wieder
+/// auseinanderläuft.
+pub fn exceeds_command_length_limit(command: &str, limit: usize) -> bool {
+    command.len() > limit
+}
 
 /// Quelle für die auf einen [`EffectiveScope`] anwendbaren [`Rule`]s (Spec
 /// 0002, Abschnitt 5).
@@ -164,13 +182,13 @@ impl<S: PolicyStore> FilterEngine<S> {
         // eines eingebauten Musters. `sub_command_traces` wird bewusst
         // weiterhin nicht geloggt.
         //
-        // Nur die Gesamtlänge in Zeichen, nicht je Teilkommando oder je
+        // Nur die Gesamtlänge in Bytes, nicht je Teilkommando oder je
         // Wort: eine Längenreihe verrät die Struktur des Kommandos und damit
-        // mittelbar seinen Inhalt. `chars().count()` wie in der
-        // Längenprüfung von `evaluate_explained_inner`, damit beide Zahlen
+        // mittelbar seinen Inhalt. Bytes wie in der Längenprüfung von
+        // `evaluate_explained_inner` (Issue #110), damit beide Zahlen
         // dieselbe Einheit haben.
         tracing::info!(
-            command_len = command.chars().count(),
+            command_len = command.len(),
             decision = ?trace.decision,
             matched_rule = ?trace.matched_rule,
             matched_hard_blacklist_entry = ?trace.matched_hard_blacklist_entry,
@@ -207,14 +225,14 @@ impl<S: PolicyStore> FilterEngine<S> {
                 sub_command_traces: Vec::new(),
             };
         }
-        if command.chars().count() > self.max_command_length {
+        if exceeds_command_length_limit(command, self.max_command_length) {
             // Testfall 11: bewusst VOR jedem Parsing/Blacklist-Scan geprüft,
             // damit extrem lange Payloads gar nicht erst vollständig
             // analysiert werden müssen.
             return EvaluationTrace {
                 decision: Decision::Confirm {
                     reason: format!(
-                        "Kommando überschreitet Längenlimit von {} Zeichen",
+                        "Kommando überschreitet Längenlimit von {} Bytes",
                         self.max_command_length
                     ),
                     code: FILTER_COMMAND_TOO_LONG.to_string(),

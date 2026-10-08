@@ -1,6 +1,6 @@
 use crate::filter::{
-    extract_shell_c_style_codes, resolve_effective_command, segment_command, Pattern,
-    DEFAULT_MAX_COMMAND_LENGTH, MAX_SUBSTITUTION_DEPTH,
+    exceeds_command_length_limit, extract_shell_c_style_codes, resolve_effective_command,
+    segment_command, Pattern, DEFAULT_MAX_COMMAND_LENGTH, MAX_SUBSTITUTION_DEPTH,
 };
 
 use super::patterns::{
@@ -36,7 +36,7 @@ impl RiskClassifier for RuleBasedRiskClassifier {
         // ohnehin bereits die Filter-Engine (`FILTER_COMMAND_TOO_LONG`) —
         // hier zählt nur "nicht abstürzen", ein unklassifiziertes Ergebnis
         // ist ein akzeptabler Fail-safe.
-        if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+        if exceeds_command_length_limit(command, DEFAULT_MAX_COMMAND_LENGTH) {
             return RiskAssessment {
                 server_risk: RiskLevel::None,
                 server_risk_reason: None,
@@ -196,7 +196,7 @@ fn best_match(
 /// `cat` auf den Pfad) lösen nichts aus.
 pub fn sftp_server_invocation_reason(command: &str) -> Option<&'static str> {
     const REASON: &str = "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten)";
-    if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+    if exceeds_command_length_limit(command, DEFAULT_MAX_COMMAND_LENGTH) {
         return Some("Kommando zu lang für eine Prüfung auf sftp-server-Aufrufe");
     }
     static INVOCATION: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
@@ -302,7 +302,7 @@ pub fn secret_path_read_reason(command: &str) -> Option<&'static str> {
 /// Teilkommandos + Secret-Pfad, `-exec`/`xargs` mit Secret-Hinweis,
 /// Platzhalter auf Punktdateien/Secret-Hinweise.
 fn first_version_secret_read_reason(command: &str) -> Option<&'static str> {
-    if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+    if exceeds_command_length_limit(command, DEFAULT_MAX_COMMAND_LENGTH) {
         return Some("Kommando zu lang für eine Prüfung auf Secret-Pfade");
     }
 
@@ -457,7 +457,7 @@ fn extended_secret_read_reason_in(
     depth: usize,
     budget: &NestedBudget,
 ) -> Option<&'static str> {
-    if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+    if exceeds_command_length_limit(command, DEFAULT_MAX_COMMAND_LENGTH) {
         return Some("Kommando zu lang für eine Prüfung auf Secret-Pfade");
     }
     budget.checks.set(budget.checks.get() + 1);

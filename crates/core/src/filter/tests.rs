@@ -256,6 +256,107 @@ async fn test_command_exceeding_length_limit_forces_confirm() {
     assert_confirm(&decision);
 }
 
+/// Issue #110: Ein Kommando der Form `iptables -F -m comment --comment "€…"`
+/// mit genau `total_bytes` Bytes (UTF-8). „€" sind 3 Bytes, 1 Zeichen; der
+/// Rest wird mit ASCII aufgefüllt, damit jede Bytezahl erreichbar ist und
+/// die Zeichenzahl deutlich unter der Bytezahl liegt.
+fn multibyte_command_with_bytes(total_bytes: usize) -> String {
+    let prefix = "iptables -F -m comment --comment \"";
+    let suffix = "\"";
+    let budget = total_bytes - prefix.len() - suffix.len();
+    let euros = budget / 3;
+    let padding = budget - euros * 3;
+    let command = format!(
+        "{prefix}{}{}{suffix}",
+        "€".repeat(euros),
+        "a".repeat(padding)
+    );
+    assert_eq!(command.len(), total_bytes);
+    command
+}
+
+fn allow_iptables() -> Vec<Rule> {
+    vec![glob_rule(
+        "allow-iptables",
+        "iptables *",
+        RuleAction::Allow,
+        Scope::Global,
+        5,
+    )]
+}
+
+/// Issue #110: Das Längenlimit zählt Bytes, nicht Zeichen. Ein Kommando mit
+/// Mehrbyte-Zeichen über 4096 Bytes, aber höchstens 4096 Zeichen, ist für
+/// die Filter-Engine zu lang — auch wenn eine Allow-Regel passt. Vorher zählte
+/// die Engine Zeichen und wertete es normal aus (Allow -> `AutoExec`),
+/// während der Risiko-Klassifizierer es schon nicht mehr einstufte.
+#[tokio::test]
+async fn test_multibyte_command_over_byte_limit_forces_confirm_despite_allow() {
+    let command = multibyte_command_with_bytes(DEFAULT_MAX_COMMAND_LENGTH + 200);
+    assert!(command.chars().count() <= DEFAULT_MAX_COMMAND_LENGTH);
+    let eng = engine(allow_iptables());
+    let trace = eng.evaluate_explained(&command, &ctx("srv1", &[])).await;
+    assert!(
+        matches!(
+            &trace.decision,
+            Decision::Confirm { code, .. } if code == "FILTER_COMMAND_TOO_LONG"
+        ),
+        "expected Confirm/FILTER_COMMAND_TOO_LONG, got {:?}",
+        trace.decision
+    );
+}
+
+/// Issue #110: Grenze bei genau 4096 Bytes (mit Mehrbyte-Zeichen). Bis
+/// einschließlich der Grenze werten Filter-Engine **und** Klassifizierer
+/// normal aus, ein Byte darüber geben beide auf — dieselbe Grenze für beide.
+#[tokio::test]
+async fn test_byte_limit_boundary_is_shared_by_filter_and_classifier() {
+    use crate::risk::{RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
+
+    let eng = engine(allow_iptables());
+
+    let at_limit = multibyte_command_with_bytes(DEFAULT_MAX_COMMAND_LENGTH);
+    let trace = eng.evaluate_explained(&at_limit, &ctx("srv1", &[])).await;
+    assert!(
+        matches!(trace.decision, Decision::AutoExec),
+        "an der Grenze normal ausgewertet (Allow-Regel greift): {:?}",
+        trace.decision
+    );
+    assert_eq!(
+        RuleBasedRiskClassifier.classify(&at_limit).server_risk,
+        RiskLevel::Red,
+        "an der Grenze stuft der Klassifizierer normal ein"
+    );
+
+    let over_limit = multibyte_command_with_bytes(DEFAULT_MAX_COMMAND_LENGTH + 1);
+    let trace = eng.evaluate_explained(&over_limit, &ctx("srv1", &[])).await;
+    assert!(
+        matches!(
+            &trace.decision,
+            Decision::Confirm { code, .. } if code == "FILTER_COMMAND_TOO_LONG"
+        ),
+        "ein Byte über der Grenze: {:?}",
+        trace.decision
+    );
+    let assessment = RuleBasedRiskClassifier.classify(&over_limit);
+    assert_eq!(
+        (assessment.server_risk, assessment.data_risk),
+        (RiskLevel::None, RiskLevel::None),
+        "ein Byte über der Grenze stuft der Klassifizierer nicht mehr ein"
+    );
+}
+
+/// Issue #110: Der gemeinsame Helfer misst Bytes; reines ASCII verhält sich
+/// wie zuvor (Bytes = Zeichen).
+#[test]
+fn test_exceeds_command_length_limit_counts_bytes() {
+    assert!(!exceeds_command_length_limit("abcd", 4));
+    assert!(exceeds_command_length_limit("abcde", 4));
+    // „€" ist 1 Zeichen, aber 3 Bytes.
+    assert!(!exceeds_command_length_limit("a€", 4));
+    assert!(exceeds_command_length_limit("ab€", 4));
+}
+
 /// Tabellenzeile 12: bei gleicher Priorität/gleichem Scope gewinnt im
 /// Zweifel die strengere Regel (Confirm schlägt Allow).
 #[tokio::test]
@@ -1622,7 +1723,7 @@ async fn test_t1_0094_filter_decision_logs_no_command_text_at_info() {
          (Spec 0094, §5): {line}"
     );
     assert!(
-        line.contains(&format!("\"command_len\":{}", command.chars().count())),
+        line.contains(&format!("\"command_len\":{}", command.len())),
         "die Kommandolänge muss erhalten bleiben (A1.1): {line}"
     );
     assert!(
@@ -1654,7 +1755,7 @@ async fn test_t2_0094_chained_command_logs_no_command_text_at_info() {
     // wieder auf ERROR herunterdreht.
     assert!(
         lines.iter().any(|l| l.contains("filter engine decision")
-            && l.contains(&format!("\"command_len\":{}", command.chars().count()))),
+            && l.contains(&format!("\"command_len\":{}", command.len()))),
         "die Entscheidungszeile muss ab info entstehen und die Kommandolänge tragen: {lines:?}"
     );
 }
@@ -1687,7 +1788,7 @@ async fn test_t3_0094_multiline_heredoc_logs_no_command_text_at_info() {
     // Runde 1).
     assert!(
         lines.iter().any(|l| l.contains("filter engine decision")
-            && l.contains(&format!("\"command_len\":{}", command.chars().count()))),
+            && l.contains(&format!("\"command_len\":{}", command.len()))),
         "die Entscheidungszeile muss ab info entstehen und die Kommandolänge tragen: {lines:?}"
     );
 }
