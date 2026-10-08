@@ -102,6 +102,12 @@ gleichermaßen, auch für über Erweiterungen beigesteuerte:
 - Optisch ändert sich nichts: Die Titelleiste ist so abgedunkelt wie der
   Rest des Fensters.
 
+Als geöffnet zählt nur ein Dialog, der gerade sichtbar ist. Bleibt ein
+Dialog in einem Session-Tab oder in der Startansicht offen und wechselt der
+Nutzer (etwa per Tastenkürzel) zu einer anderen Ansicht, ist der Dialog dort
+nicht zu sehen. Dann reagieren die Header-Inhalte wieder wie ohne Dialog.
+Kehrt der Nutzer zurück, gilt wieder das Verhalten bei geöffnetem Dialog.
+
 Ohne geöffneten Dialog verhalten sich Header, Drag-Region und
 Fenster-Controls unverändert wie oben beschrieben.
 
