@@ -32,6 +32,7 @@ import {
   onChatResponseEmpty,
   onChatResponseTruncated,
   onChatTextDelta,
+  onChatWebActivity,
   onRiskAssessmentUpdated,
 } from "../events";
 import { translateErrorCode } from "../errorCodes";
@@ -54,8 +55,10 @@ import type {
   PatternType,
   RiskAssessment,
   Scope,
+  WebActivityDto,
 } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
+import { WebActivityCard } from "./WebActivityCard";
 
 export type ChatItem =
   | {
@@ -160,7 +163,11 @@ export type ChatItem =
       cancelled: boolean;
       truncated: boolean;
     }
-  | { type: "historyRejected"; id: string; command: string; reason: string };
+  | { type: "historyRejected"; id: string; command: string; reason: string }
+  // Spec 0105: serverseitige Web-Recherche des Providers — live
+  // (`chat-web-activity`) und aus einer fortgesetzten Historie gleich
+  // dargestellt.
+  | { type: "webActivity"; id: string; activity: WebActivityDto };
 
 /** Spec 0023, Abschnitt 3/4: `targetName` wird für `ProposeNoteUpdate`
  * *immer* im Label gezeigt — auch wenn es der aktuell offene Server der
@@ -366,6 +373,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                   command: entry.command,
                   reason: entry.reason,
                 };
+              case "webActivity":
+                return { type: "webActivity", id: freshId(), activity: entry.activity };
             }
           }),
           ...prev,
@@ -517,6 +526,13 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           // mit Kürzungs-Hinweis + „Weiter" dazu.
           return [...prev, { type: "assistant", id: freshId(), text: "", truncated: true }];
         });
+      }),
+      onChatWebActivity((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) => [
+          ...prev,
+          { type: "webActivity", id: freshId(), activity: event.activity },
+        ]);
       }),
       onChatResponseEmpty((event) => {
         if (event.sessionId !== sessionId) return;
@@ -1160,6 +1176,9 @@ export function ChatItemView({
         )}
       </div>
     );
+  }
+  if (item.type === "webActivity") {
+    return <WebActivityCard activity={item.activity} />;
   }
   if (item.type === "historyRejected") {
     return (

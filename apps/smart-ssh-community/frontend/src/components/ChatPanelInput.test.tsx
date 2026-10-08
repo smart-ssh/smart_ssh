@@ -21,8 +21,13 @@ import {
   onChatResponseEmpty,
   onChatResponseTruncated,
   onChatTextDelta,
+  onChatWebActivity,
 } from "../events";
-import type { ActionDecisionEscalatedEvent, ChatActionProposedEvent } from "../types";
+import type {
+  ActionDecisionEscalatedEvent,
+  ChatActionProposedEvent,
+  ChatWebActivityEvent,
+} from "../types";
 import { testI18n } from "../testI18n";
 import { ChatPanel } from "./ChatPanel";
 
@@ -77,6 +82,7 @@ vi.mock("../events", () => ({
   onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
+  onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
   onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
 }));
 
@@ -460,5 +466,61 @@ describe("ChatPanel red-risk escalation (Spec 0092, A3.2/U1)", () => {
     });
 
     expect(screen.queryByRole("button", { name: "Ausführen" })).not.toBeInTheDocument();
+  });
+});
+
+// Spec 0105: eine Web-Recherche erscheint als eigene Karte nach dem bis
+// dahin gestreamten Text; ein späteres Text-Delta beginnt ein neues Element.
+describe("ChatPanel web activity (Spec 0105)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders a web activity card from the live event", async () => {
+    let webHandler: ((event: ChatWebActivityEvent) => void) | null = null;
+    let deltaHandler: ((event: { sessionId: string; delta: string }) => void) | null = null;
+    vi.mocked(onChatWebActivity).mockImplementation((h) => {
+      webHandler = h;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(onChatTextDelta).mockImplementation((h) => {
+      deltaHandler = h as typeof deltaHandler;
+      return Promise.resolve(() => {});
+    });
+    renderChatPanel();
+    await waitFor(() => expect(webHandler).not.toBeNull());
+
+    act(() => {
+      deltaHandler!({ sessionId: "session-1", delta: "Antwort vorher" });
+      webHandler!({
+        sessionId: "session-1",
+        activity: {
+          kind: "search",
+          input: "openssh 10 changelog",
+          results: [{ title: "OpenSSH Release Notes", url: "https://www.openssh.com/releasenotes.html" }],
+          cited: [{ title: "OpenSSH Release Notes", url: "https://www.openssh.com/releasenotes.html" }],
+          contentTruncated: false,
+          errorCode: null,
+        },
+      });
+      // Eine Recherche für eine andere Sitzung erscheint nicht.
+      webHandler!({
+        sessionId: "other-session",
+        activity: {
+          kind: "search",
+          input: "fremde Suche",
+          results: [],
+          cited: [],
+          contentTruncated: false,
+          errorCode: null,
+        },
+      });
+      deltaHandler!({ sessionId: "session-1", delta: "Antwort danach" });
+    });
+
+    expect(await screen.findByText(/Websuche: openssh 10 changelog/)).toBeInTheDocument();
+    expect(screen.queryByText(/fremde Suche/)).not.toBeInTheDocument();
+    expect(screen.getByText("Antwort vorher")).toBeInTheDocument();
+    expect(screen.getByText("Antwort danach")).toBeInTheDocument();
   });
 });

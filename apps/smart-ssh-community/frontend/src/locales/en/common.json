@@ -462,7 +462,9 @@
       "anthropic": "Anthropic",
       "generic_openai_compatible": "Generic (OpenAI-compatible)",
       "ollama": "Ollama"
-    }
+    },
+    "webResearch": "Web research (search and read web pages)",
+    "webResearchHint": "The AI may search the web and read web pages (text only) while answering. The provider fetches the pages; this computer opens no additional connection. Applies to sessions connected after the change."
   },
   "errors": {
     "SSH_CONNECTION_FAILED": "Connection failed – is the host reachable (address, port, network)?",
@@ -991,7 +993,28 @@
     "exportedAsMarkdown": "Exported as Markdown",
     "exportDefaultTitle": "Response",
     "responseTruncated": "Response was cut off (length limit reached).",
-    "continue": "Continue"
+    "continue": "Continue",
+    "webSearchTitle": "Web search: {{query}}",
+    "webFetchTitle": "Web page read: {{url}}",
+    "webCitedSources": "Cited sources:",
+    "webNoCitedSearch_one": "{{count}} result, none cited.",
+    "webNoCitedSearch_other": "{{count}} results, none cited.",
+    "webNoCitedFetch": "Page read, not cited.",
+    "webContentTruncated": "The page text was shortened for the chat history.",
+    "webErrors": {
+      "max_uses_exceeded": "Limit of web searches or page reads for this answer reached.",
+      "too_many_requests": "The provider is rate-limiting web requests right now.",
+      "url_not_accessible": "The page could not be loaded.",
+      "url_not_allowed": "The provider does not allow reading this page.",
+      "url_not_in_prior_context": "The page was not read: only addresses that already appear in the conversation can be read.",
+      "unsupported_content_type": "The page has a content type that cannot be read.",
+      "query_too_long": "The search query was too long.",
+      "url_too_long": "The address was too long.",
+      "invalid_tool_input": "The search query or address was invalid.",
+      "request_too_large": "The web request was too large.",
+      "unavailable": "Web research is temporarily unavailable at the provider.",
+      "other": "Web research failed ({{code}})."
+    }
   },
   "notes": {
     "largeNoteHint": "This note is very large and may be shortened for the AI context in long sessions. The saved note stays complete.",

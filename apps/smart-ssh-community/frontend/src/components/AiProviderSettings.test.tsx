@@ -11,6 +11,7 @@ import {
   listAiProviders,
   setActiveAiProvider,
   testAiProviderCredentials,
+  updateAiProvider,
 } from "../api";
 import type { AiProviderConfigDto } from "../types";
 import { testI18n } from "../testI18n";
@@ -32,6 +33,7 @@ vi.mock("../api", () => ({
   fetchAttestationInfo: vi.fn(),
   setActiveAiProvider: vi.fn(),
   testAiProviderCredentials: vi.fn(),
+  updateAiProvider: vi.fn(() => Promise.resolve()),
   // Spec 0069, Teil B: `runOllamaProbe` braucht das tatsächliche
   // `code`-Extraktionsverhalten (wie in `ServerList.test.tsx` bereits
   // etabliert), Spec 0071 braucht `.message`-Extraktion für
@@ -358,6 +360,7 @@ function ollamaProvider(overrides: Partial<AiProviderConfigDto> = {}): AiProvide
     extraHeaders: [],
     attestationUrl: null,
     maxTokensOverride: null,
+    webResearchEnabled: true,
     ...overrides,
   };
 }
@@ -374,6 +377,7 @@ function activeAnthropicProvider(): AiProviderConfigDto {
     extraHeaders: [],
     attestationUrl: null,
     maxTokensOverride: null,
+    webResearchEnabled: true,
   };
 }
 
@@ -619,6 +623,7 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
       extraHeaders: [],
       attestationUrl: null,
       maxTokensOverride: null,
+      webResearchEnabled: true,
       ...overrides,
     };
   }
@@ -720,5 +725,44 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     expect(await screen.findByText("Prov")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Aktiv setzen" })).toBeInTheDocument();
     expect(deleteAiProvider).not.toHaveBeenCalled();
+  });
+});
+
+// Spec 0105: Web-Recherche-Schalter (Default an, nur bei Providern mit
+// serverseitigen Web-Werkzeugen).
+describe("AiProviderSettings web research toggle (Spec 0105)", () => {
+  const LABEL = "Web-Recherche (im Web suchen und Seiten lesen)";
+
+  it("is shown checked for a new Anthropic provider", () => {
+    renderForm();
+    expect(screen.queryByLabelText(LABEL)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "anthropic" } });
+    expect(screen.getByLabelText(LABEL)).toBeChecked();
+  });
+
+  it("is not offered for OpenAI-compatible providers", () => {
+    renderForm();
+    for (const type of ["openai", "generic_openai_compatible", "ollama"]) {
+      fireEvent.change(screen.getByLabelText("Typ"), { target: { value: type } });
+      expect(screen.queryByLabelText(LABEL)).not.toBeInTheDocument();
+    }
+  });
+
+  it("turns web research off for an existing provider without touching its key", async () => {
+    vi.mocked(listAiProviders).mockResolvedValue([activeAnthropicProvider()]);
+    renderForm();
+
+    const toggle = await screen.findByLabelText(LABEL);
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(updateAiProvider).toHaveBeenCalledTimes(1));
+    const [id, config] = vi.mocked(updateAiProvider).mock.calls[0];
+    expect(id).toBe("existing-anthropic");
+    expect(config.webResearchEnabled).toBe(false);
+    expect(config.apiKey).toBe("");
+    expect(config.model).toBe("claude-sonnet");
+    vi.mocked(listAiProviders).mockResolvedValue([]);
   });
 });

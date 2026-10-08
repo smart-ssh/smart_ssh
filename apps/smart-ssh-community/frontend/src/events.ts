@@ -13,6 +13,7 @@ import type {
   ChatResponseEmptyEvent,
   ChatResponseTruncatedEvent,
   ChatTextDeltaEvent,
+  ChatWebActivityEvent,
   ConnectionStatusChangedEvent,
   HostKeyVerificationEndedEvent,
   HostKeyVerificationNeededEvent,
@@ -94,6 +95,12 @@ export const onChatResponseTruncated = (
   handler: (event: ChatResponseTruncatedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatResponseTruncatedEvent>("chat-response-truncated", (e) => handler(e.payload));
+
+/** Spec 0105 — eine serverseitige Web-Recherche des Providers. */
+export const onChatWebActivity = (
+  handler: (event: ChatWebActivityEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatWebActivityEvent>("chat-web-activity", (e) => handler(e.payload));
 
 /** Spec 0080, A2 — s. `ChatResponseEmptyEvent`-Doc-Kommentar. */
 export const onChatResponseEmpty = (
