@@ -63,6 +63,22 @@ describe("translateErrorCode", () => {
     expect(text).toMatch(/again/i);
   });
 
+  // Issue #96: Verbindungsverlust einer laufenden Sitzung bekommt einen
+  // eigenen Text, nicht den des Verbindungsaufbaus.
+  it.each(["de", "en"] as const)(
+    "übersetzt SSH_SESSION_CLOSED (%s) mit eigenem Text ohne Aufbau-Bezug",
+    (language) => {
+      const t = testI18n.getFixedT(language);
+      const text = translateErrorCode(t, "SSH_SESSION_CLOSED", "fallback");
+
+      expect(text).not.toBe("fallback");
+      expect(text).not.toBe("errors.SSH_SESSION_CLOSED");
+      expect(text).not.toBe(translateErrorCode(t, "SSH_CONNECTION_CLOSED", "fallback"));
+      expect(text).not.toMatch(/setup|aufbau/i);
+      expect(text).toMatch(language === "de" ? /erneut verbinden/i : /reconnect/i);
+    },
+  );
+
   // Spec 0071, A13/X2: Der Backend-Fehler kommt als
   // `{ code: "KEYCHAIN_UNAVAILABLE" }` — das Frontend muss den eigenen,
   // übersetzten Text zeigen, nicht den `message`-Fallback. Ohne den Eintrag
