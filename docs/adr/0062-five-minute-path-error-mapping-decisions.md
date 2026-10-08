@@ -113,6 +113,8 @@ SOLLTE-Funde wurden geprüft und bewusst **nicht** verändert:
   sichtbar im UI, keine Invariante verletzt. Falls das in der Praxis
   stört, ist das eine Produktentscheidung (höherer Timeout, oder
   Ausklammern der Auth-Phase) — gehört an den Menschen.
+  **Abgelöst durch ADR 0115 (Issue #97):** getrennte Grenzen je Phase und
+  je Hop.
 - **IPv6-/Trailing-Dot-Sonderfälle bei der Loopback-Erkennung** (s.
   Abschnitt 1 oben) — bewusst nicht erweitert, reine Label-Ungenauigkeit
   ohne Sicherheitswirkung, außerhalb des von der Spec vorgegebenen

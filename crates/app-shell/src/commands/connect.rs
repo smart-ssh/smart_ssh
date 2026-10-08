@@ -26,11 +26,11 @@ use app_logic::events::{
 };
 use app_logic::session::{history_contains_untrusted_content, Session, SessionParts};
 use app_logic::state::{AppState, SessionId};
-// Spec 0084, §4 (Schnitt `test_connection` → `commands::SSH_CONNECT_TIMEOUT`):
-// die Konstante liegt jetzt in `app_logic::test_connection` (s. dortiger
-// Kommentar) — `test_connection` ist Tauri-frei und zieht nach `app-logic`,
-// `commands::connect` bleibt Tauri-gebunden in `app-shell`.
-use app_logic::test_connection::SSH_CONNECT_TIMEOUT;
+// Spec 0084, §4: die Konstante liegt in `app_logic::test_connection` (s.
+// dortiger Kommentar) — `test_connection` ist Tauri-frei in `app-logic`,
+// `commands::connect` bleibt Tauri-gebunden in `app-shell`; beide nutzen
+// dieselben Grenzen (Issue #97).
+use app_logic::test_connection::SSH_CONNECT_LIMITS;
 
 use super::ai_providers::active_ai_provider_config;
 use super::diagnostics_export::build_os_banner_message;
@@ -230,13 +230,16 @@ pub(crate) async fn connect_session(
             // Log — die `tracing`-Aufrufe unten nennen weiter nur Code und
             // Meldung.
             let attempt_log = ConnectLog::new();
-            // Spec 0069, Teil A3: jeder Verbindungsversuch (auch nach
-            // `Trust` erneut, s. Schleife) läuft unter
-            // `SSH_CONNECT_TIMEOUT` — umschließt bewusst NUR diesen
-            // Aufruf, nicht das Warten auf eine Host-Key-Entscheidung
-            // weiter unten.
+            // Spec 0069, Teil A3 (Issue #97): jeder Verbindungsversuch
+            // (auch nach `Trust` erneut, s. Schleife) läuft unter den
+            // Phasengrenzen `SSH_CONNECT_LIMITS` — je Hop eine für
+            // Verbindung/Handshake, eine für die Anmeldung. Außen herum
+            // liegt nur ein Sicherheitsnetz, das mit der Hop-Zahl wächst
+            // und im normalen Ablauf nicht erreichbar ist. Beides
+            // umschließt bewusst NUR diesen Aufruf, nicht das Warten auf
+            // eine Host-Key-Entscheidung weiter unten.
             let attempt = ssh_transport::connect_with_timeout(
-                ssh_transport::connect_with_log(
+                ssh_transport::connect_with_limits(
                     &target,
                     state.credential_store.as_ref(),
                     // Spec 0076, §4.2: der echte Produktionspfad —
@@ -246,12 +249,13 @@ pub(crate) async fn connect_session(
                     state.key_file_reader.as_ref(),
                     state.host_key_store.clone(),
                     &attempt_log,
+                    SSH_CONNECT_LIMITS,
                 ),
-                SSH_CONNECT_TIMEOUT,
+                SSH_CONNECT_LIMITS.overall(target.hops.len()),
             )
             .await;
-            // Ein Timeout bricht den Versuch mitten im Schritt ab; den
-            // schließt hier niemand sonst.
+            // Greift das äußere Sicherheitsnetz, bricht es den Versuch
+            // mitten im Schritt ab; den schließt hier niemand sonst.
             if let Err(err) = &attempt {
                 attempt_log.fail_running(err.code());
             }

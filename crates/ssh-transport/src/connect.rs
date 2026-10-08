@@ -2,6 +2,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use russh::client;
 use ssh_manager_core::profiles::CredentialStore;
 use ssh_manager_core::ssh::{
@@ -101,13 +102,65 @@ pub async fn connect(
     .await
 }
 
+/// Zeitgrenzen je Phase des Verbindungsaufbaus (Spec 0069, A3; Issue #97).
+///
+/// Jeder Hop bekommt **eigene** Grenzen: eine kurze für Verbindung und
+/// Handshake (erster Hop: Namensauflösung, TCP, SSH-Handshake samt
+/// Host-Key-Prüfung; weitere Hops: Tunnel über den vorherigen Hop und
+/// Handshake), eine großzügige für die Anmeldung, damit ein Nutzer einen
+/// Hardware-Schlüssel berühren oder eine Agent-Bestätigung abnicken kann.
+/// Die Gesamtzeit wächst damit linear mit der Zahl der Hops.
+///
+/// Die Werte stehen in Spec 0069; [`ConnectLimits::DEFAULT`] bildet sie ab.
+/// Das Warten auf eine Host-Key-Entscheidung liegt außerhalb jeder Grenze:
+/// eine unbekannte oder geänderte Host-Key beendet den Aufbau sofort mit
+/// [`ConnectOutcome::PendingHostKeyConfirmation`], gewartet wird erst beim
+/// Aufrufer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConnectLimits {
+    /// Verbindung (DNS + TCP bzw. Tunnel) und SSH-Handshake, je Hop.
+    pub handshake: Duration,
+    /// Anmeldung, je Hop.
+    pub authentication: Duration,
+}
+
+impl ConnectLimits {
+    /// Spec 0069, A3: 10 s für Verbindung und Handshake, 60 s für die
+    /// Anmeldung, jeweils je Hop.
+    pub const DEFAULT: ConnectLimits = ConnectLimits {
+        handshake: Duration::from_secs(10),
+        authentication: Duration::from_secs(60),
+    };
+
+    /// Äußere Sicherheitsgrenze für einen ganzen Versuch über `hop_count`
+    /// Hops: die Summe aller Phasengrenzen plus eine weitere
+    /// Handshake-Grenze als Reserve. Die Phasen laufen nacheinander und sind
+    /// jede für sich begrenzt — diese Grenze ist nur ein Netz für den Fall,
+    /// dass ein Abschnitt außerhalb einer Phase hängt, und im normalen
+    /// Ablauf nicht erreichbar.
+    pub fn overall(&self, hop_count: usize) -> Duration {
+        let per_hop = self.handshake.saturating_add(self.authentication);
+        let hops = u32::try_from(hop_count.max(1)).unwrap_or(u32::MAX);
+        per_hop
+            .checked_mul(hops)
+            .unwrap_or(Duration::MAX)
+            .saturating_add(self.handshake)
+    }
+}
+
+impl Default for ConnectLimits {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 /// Wie [`connect`], zeichnet dabei aber jeden Schritt je Hop in `log` auf
 /// (Issue #51): DNS, TCP bzw. Tunnel, Handshake, Host-Key-Prüfung,
 /// Anmeldung, fertige Sitzung. Ein Fehler schließt den gerade laufenden
-/// Schritt mit dem Code des Fehlers ([`SshError::code`]).
+/// Schritt mit dem Code des Fehlers ([`SshError::code`]) — auch ein
+/// abgelaufenes Phasenlimit (`SSH_TIMEOUT`).
 ///
-/// Bricht ein Timeout den Versuch von außen ab, bleibt der laufende Schritt
-/// offen — der Aufrufer schließt ihn mit [`ConnectLog::fail_running`].
+/// Läuft mit [`ConnectLimits::DEFAULT`]; s. [`connect_with_limits`].
 ///
 /// Die Aufzeichnung ändert keine Entscheidung: Host-Key-Prüfung und
 /// Anmeldung laufen exakt wie in [`connect`], es wird keine zusätzliche
@@ -119,7 +172,35 @@ pub async fn connect_with_log(
     host_keys: Arc<dyn HostKeyStore>,
     log: &ConnectLog,
 ) -> Result<ConnectOutcome, SshError> {
-    let result = connect_inner(target, credentials, key_files, host_keys, log).await;
+    connect_with_limits(
+        target,
+        credentials,
+        key_files,
+        host_keys,
+        log,
+        ConnectLimits::DEFAULT,
+    )
+    .await
+}
+
+/// Wie [`connect_with_log`], mit ausdrücklichen Phasengrenzen (Issue #97).
+///
+/// Läuft eine Phase über ihre Grenze, endet der Versuch mit
+/// [`SshError::Timeout`] — nie mit `Connected`, nie mit einer
+/// Host-Key-Rückfrage, und ohne dass danach noch eine weitere Phase
+/// beginnt. Der laufende Schritt im `log` wird mit `SSH_TIMEOUT`
+/// geschlossen. Bricht dagegen ein Aufrufer den Versuch von außen ab (z. B.
+/// mit [`connect_with_timeout`]), bleibt der laufende Schritt offen — der
+/// Aufrufer schließt ihn mit [`ConnectLog::fail_running`].
+pub async fn connect_with_limits(
+    target: &ConnectionTarget,
+    credentials: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
+    host_keys: Arc<dyn HostKeyStore>,
+    log: &ConnectLog,
+    limits: ConnectLimits,
+) -> Result<ConnectOutcome, SshError> {
+    let result = connect_inner(target, credentials, key_files, host_keys, log, limits).await;
     if let Err(err) = &result {
         log.fail_running(err.code());
     }
@@ -132,13 +213,8 @@ async fn connect_inner(
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
     log: &ConnectLog,
+    limits: ConnectLimits,
 ) -> Result<ConnectOutcome, SshError> {
-    let Some((first_hop, remaining_hops)) = target.hops.split_first() else {
-        return Err(SshError::ConnectionFailed(
-            "ConnectionTarget ohne Hops kann nicht verbunden werden".to_string(),
-        ));
-    };
-
     // `nodelay: true` (Nagle deaktiviert): standardmäßig `false` in `russh`.
     // Bei mehrstufigen Verbindungen (Jump-Hosts) kann Nagles Algorithmus
     // dazu führen, dass die ID-Zeile und der direkt folgende KEXINIT-Frame
@@ -150,93 +226,17 @@ async fn connect_inner(
         ..Default::default()
     });
 
-    let first_label = hop_label(first_hop);
-    let socket = match open_tcp(log, &first_label, &first_hop.host, first_hop.port).await {
-        Ok(socket) => socket,
-        // Spec 0069, Teil A3: DNS-Diagnose nur für den ersten Hop, nur
-        // im Fehlerfall, nur nachträglich — s. `diagnose_connection_
-        // failed_dns`-Doc-Kommentar.
-        Err(err) => {
-            return Err(diagnose_connection_failed_dns(err, &first_hop.host, first_hop.port).await)
-        }
-    };
-
-    let handler = ClientHandler {
-        host: first_hop.host.clone(),
-        port: first_hop.port,
-        host_keys: host_keys.clone(),
-        steps: HopSteps::start(log, 0, &first_label),
-    };
-    let connect_result = client::connect_stream(config.clone(), socket, handler).await;
-    let mut current_handle =
-        match resolve_or_pending(connect_result, &first_hop.host, first_hop.port) {
-            Ok(Ok(handle)) => handle,
-            Ok(Err(outcome)) => return Ok(outcome),
-            Err(err) => {
-                return Err(
-                    diagnose_connection_failed_dns(err, &first_hop.host, first_hop.port).await,
-                )
-            }
-        };
-
-    authenticate(
-        &mut current_handle,
-        first_hop,
+    let mut hops = RusshHops {
+        config,
+        host_keys,
         credentials,
         key_files,
-        &AuthSteps::new(log, 0, &first_label),
-    )
-    .await?;
-
-    let mut intermediate_hops = Vec::new();
-
-    for (offset, hop) in remaining_hops.iter().enumerate() {
-        let hop_index = offset + 1;
-        let label = hop_label(hop);
-        let tunnel_step = log.start(
-            hop_index,
-            &label,
-            ConnectStep::TunnelOpen {
-                host: hop.host.clone(),
-                port: hop.port,
-            },
-        );
-        let tunnel_channel = current_handle
-            .channel_open_direct_tcpip(
-                hop.host.clone(),
-                u32::from(hop.port),
-                "127.0.0.1".to_string(),
-                0,
-            )
-            .await
-            .map_err(map_russh_error)?;
-        log.succeed(tunnel_step);
-        let stream = tunnel_channel.into_stream();
-
-        let handler = ClientHandler {
-            host: hop.host.clone(),
-            port: hop.port,
-            host_keys: host_keys.clone(),
-            steps: HopSteps::start(log, hop_index, &label),
-        };
-        let connect_result = client::connect_stream(config.clone(), stream, handler).await;
-        let next_handle = match resolve_or_pending(connect_result, &hop.host, hop.port)? {
-            Ok(handle) => handle,
-            Err(outcome) => return Ok(outcome),
-        };
-
-        let previous_handle = std::mem::replace(&mut current_handle, next_handle);
-        intermediate_hops.push(previous_handle);
-
-        authenticate(
-            &mut current_handle,
-            hop,
-            credentials,
-            key_files,
-            &AuthSteps::new(log, hop_index, &label),
-        )
-        .await?;
-    }
+        log,
+    };
+    let mut sessions = match drive_chain(&mut hops, &target.hops, limits).await? {
+        Chain::Ready(sessions) => sessions,
+        Chain::HostKeyPending(outcome) => return Ok(outcome),
+    };
 
     let last_index = target.hops.len() - 1;
     let ready = log.start(
@@ -246,11 +246,207 @@ async fn connect_inner(
     );
     log.succeed(ready);
 
+    let handle = sessions
+        .pop()
+        .expect("drive_chain liefert je Hop genau eine Sitzung, mindestens eine");
     Ok(ConnectOutcome::Connected(Box::new(RusshTransport {
-        handle: current_handle,
-        _intermediate_hops: intermediate_hops,
+        handle,
+        _intermediate_hops: sessions,
         max_output_bytes: crate::exec::MAX_STREAM_OUTPUT_BYTES,
     })))
+}
+
+/// Ergebnis der Verbindungsphase eines Hops.
+enum Opened<S> {
+    /// Handshake fertig, Host-Key bekannt — weiter zur Anmeldung.
+    Ready(S),
+    /// Host-Key unbekannt oder geändert: der Aufbau endet hier, der
+    /// Aufrufer fragt den Nutzer (außerhalb jeder Zeitgrenze).
+    HostKeyPending(ConnectOutcome),
+}
+
+/// Ergebnis der ganzen Kette.
+enum Chain<S> {
+    /// Eine Sitzung je Hop, in Reihenfolge; die letzte ist das Ziel.
+    Ready(Vec<S>),
+    HostKeyPending(ConnectOutcome),
+}
+
+/// Die drei Phasen eines Hops, getrennt von ihren Zeitgrenzen: die
+/// Verkettung und die Grenzen setzt [`drive_chain`], die echte Umsetzung ist
+/// [`RusshHops`]. Die Trennung macht die Grenzen mit pausierter Tokio-Uhr
+/// testbar, ohne Netzwerk (Issue #97).
+///
+/// Kein Teil dieses Traits bekommt einen [`HostKeyStore`] zu sehen, den
+/// [`drive_chain`] beschreiben könnte: ein Timeout kann strukturell kein
+/// `trust()` auslösen.
+#[async_trait]
+trait HopConnector: Send {
+    type Session: Send;
+
+    /// Erster Hop: Namensauflösung, TCP, SSH-Handshake, Host-Key-Prüfung.
+    async fn open_first(&mut self, hop: &Hop) -> Result<Opened<Self::Session>, SshError>;
+
+    /// Weiterer Hop: Tunnel über `via`, SSH-Handshake, Host-Key-Prüfung.
+    async fn open_next(
+        &mut self,
+        via: &mut Self::Session,
+        hop_index: usize,
+        hop: &Hop,
+    ) -> Result<Opened<Self::Session>, SshError>;
+
+    /// Anmeldung am gerade geöffneten Hop.
+    async fn authenticate(
+        &mut self,
+        session: &mut Self::Session,
+        hop_index: usize,
+        hop: &Hop,
+    ) -> Result<(), SshError>;
+}
+
+/// Spec 0069, A3 (Issue #97): baut die Kette Hop für Hop auf; jede Phase
+/// jedes Hops läuft unter ihrer eigenen Grenze aus `limits`. Ein Ablauf
+/// liefert `Err(SshError::Timeout)`; danach beginnt keine weitere Phase.
+async fn drive_chain<C: HopConnector>(
+    connector: &mut C,
+    hops: &[Hop],
+    limits: ConnectLimits,
+) -> Result<Chain<C::Session>, SshError> {
+    let Some((first_hop, remaining_hops)) = hops.split_first() else {
+        return Err(SshError::ConnectionFailed(
+            "ConnectionTarget ohne Hops kann nicht verbunden werden".to_string(),
+        ));
+    };
+
+    let mut current =
+        match connect_with_timeout(connector.open_first(first_hop), limits.handshake).await? {
+            Opened::Ready(session) => session,
+            Opened::HostKeyPending(outcome) => return Ok(Chain::HostKeyPending(outcome)),
+        };
+    connect_with_timeout(
+        connector.authenticate(&mut current, 0, first_hop),
+        limits.authentication,
+    )
+    .await?;
+
+    let mut sessions = Vec::with_capacity(hops.len());
+    for (offset, hop) in remaining_hops.iter().enumerate() {
+        let hop_index = offset + 1;
+        let next = match connect_with_timeout(
+            connector.open_next(&mut current, hop_index, hop),
+            limits.handshake,
+        )
+        .await?
+        {
+            Opened::Ready(session) => session,
+            Opened::HostKeyPending(outcome) => return Ok(Chain::HostKeyPending(outcome)),
+        };
+        sessions.push(std::mem::replace(&mut current, next));
+        connect_with_timeout(
+            connector.authenticate(&mut current, hop_index, hop),
+            limits.authentication,
+        )
+        .await?;
+    }
+    sessions.push(current);
+    Ok(Chain::Ready(sessions))
+}
+
+/// Die echten Phasen über `russh`.
+struct RusshHops<'a> {
+    config: Arc<client::Config>,
+    host_keys: Arc<dyn HostKeyStore>,
+    credentials: &'a (dyn CredentialStore + Send + Sync),
+    key_files: &'a (dyn KeyFileReader + Send + Sync),
+    log: &'a ConnectLog,
+}
+
+#[async_trait]
+impl HopConnector for RusshHops<'_> {
+    type Session = client::Handle<ClientHandler>;
+
+    async fn open_first(&mut self, hop: &Hop) -> Result<Opened<Self::Session>, SshError> {
+        let label = hop_label(hop);
+        let socket = match open_tcp(self.log, &label, &hop.host, hop.port).await {
+            Ok(socket) => socket,
+            // Spec 0069, Teil A3: DNS-Diagnose nur für den ersten Hop, nur
+            // im Fehlerfall, nur nachträglich — s. `diagnose_connection_
+            // failed_dns`-Doc-Kommentar. Läuft innerhalb der
+            // Handshake-Grenze dieses Hops.
+            Err(err) => return Err(diagnose_connection_failed_dns(err, &hop.host, hop.port).await),
+        };
+
+        let handler = ClientHandler {
+            host: hop.host.clone(),
+            port: hop.port,
+            host_keys: self.host_keys.clone(),
+            steps: HopSteps::start(self.log, 0, &label),
+        };
+        let connect_result = client::connect_stream(self.config.clone(), socket, handler).await;
+        match resolve_or_pending(connect_result, &hop.host, hop.port) {
+            Ok(Ok(handle)) => Ok(Opened::Ready(handle)),
+            Ok(Err(outcome)) => Ok(Opened::HostKeyPending(outcome)),
+            Err(err) => Err(diagnose_connection_failed_dns(err, &hop.host, hop.port).await),
+        }
+    }
+
+    async fn open_next(
+        &mut self,
+        via: &mut Self::Session,
+        hop_index: usize,
+        hop: &Hop,
+    ) -> Result<Opened<Self::Session>, SshError> {
+        let label = hop_label(hop);
+        let tunnel_step = self.log.start(
+            hop_index,
+            &label,
+            ConnectStep::TunnelOpen {
+                host: hop.host.clone(),
+                port: hop.port,
+            },
+        );
+        let tunnel_channel = via
+            .channel_open_direct_tcpip(
+                hop.host.clone(),
+                u32::from(hop.port),
+                "127.0.0.1".to_string(),
+                0,
+            )
+            .await
+            .map_err(map_russh_error)?;
+        self.log.succeed(tunnel_step);
+        let stream = tunnel_channel.into_stream();
+
+        let handler = ClientHandler {
+            host: hop.host.clone(),
+            port: hop.port,
+            host_keys: self.host_keys.clone(),
+            steps: HopSteps::start(self.log, hop_index, &label),
+        };
+        let connect_result = client::connect_stream(self.config.clone(), stream, handler).await;
+        Ok(
+            match resolve_or_pending(connect_result, &hop.host, hop.port)? {
+                Ok(handle) => Opened::Ready(handle),
+                Err(outcome) => Opened::HostKeyPending(outcome),
+            },
+        )
+    }
+
+    async fn authenticate(
+        &mut self,
+        session: &mut Self::Session,
+        hop_index: usize,
+        hop: &Hop,
+    ) -> Result<(), SshError> {
+        authenticate(
+            session,
+            hop,
+            self.credentials,
+            self.key_files,
+            &AuthSteps::new(self.log, hop_index, &hop_label(hop)),
+        )
+        .await
+    }
 }
 
 /// `user@host:port` — dieselbe Form wie [`ssh_manager_core::ssh::HopLabel`].
@@ -380,16 +576,17 @@ async fn diagnose_connection_failed_dns(err: SshError, host: &str, port: u16) ->
 
 /// Spec 0069, Teil A3: verhindert, dass ein hängender Verbindungsaufbau
 /// (TCP-SYN ohne Antwort, eine Gegenstelle, die annimmt, aber nie ein
-/// SSH-Banner schickt, …) den Nutzer endlos warten lässt — vorher rief
-/// `connect_session` `ssh_transport::connect` ohne jeden Timeout auf (nur
-/// `test_connection` hatte eine eigene 10-Sekunden-Grenze). Generisch über
+/// SSH-Banner schickt, …) den Nutzer endlos warten lässt. Generisch über
 /// `T`/die Future, damit sie in Tests (11/13) auch eine nie fertig
 /// werdende Fake-Future umschließen kann, ohne einen echten
-/// Netzwerkaufbau zu brauchen. Umschließt bewusst **nur** die übergebene
-/// Future — nie das Warten auf eine Host-Key-Entscheidung; das bleibt
-/// Sache des Aufrufers (`app-shell::commands::connect_session`, der jeden
-/// `ssh_transport::connect`-Aufruf einzeln hiermit umschließt, aber NICHT
-/// den Host-Key-Wartezyklus, s. dortiger Kommentar und Spec 0069 §5:
+/// Netzwerkaufbau zu brauchen.
+///
+/// Issue #97: begrenzt jede einzelne Phase in [`drive_chain`] (je Hop
+/// Handshake und Anmeldung mit eigenen Grenzen aus [`ConnectLimits`]) und
+/// beim Aufrufer (`connect_session`, `test_connection`) den ganzen Versuch
+/// mit [`ConnectLimits::overall`] als Sicherheitsnetz. Umschließt bewusst
+/// **nur** die übergebene Future — nie das Warten auf eine
+/// Host-Key-Entscheidung; das bleibt Sache des Aufrufers (Spec 0069 §5:
 /// "Der Connect-Timeout liefert immer einen Fehler, nie `Connected`, nie
 /// `trust()`").
 pub async fn connect_with_timeout<F, T>(fut: F, timeout: Duration) -> Result<T, SshError>
@@ -485,5 +682,320 @@ mod connect_with_timeout_tests {
         // `connect_session` erst NACH diesem (bereits abgeschlossenen)
         // Aufruf beginnt.
         tokio::time::advance(Duration::from_secs(3601)).await;
+    }
+}
+
+#[cfg(test)]
+mod phase_limit_tests {
+    //! Issue #97 (Spec 0069, A3): je Hop eigene Grenzen für Handshake und
+    //! Anmeldung. Netzwerkfrei über einen [`HopConnector`]-Fake mit
+    //! pausierter Tokio-Uhr — die Verzögerungen sind virtuell, kein Test
+    //! wartet wirklich. Jeder Test ist zusätzlich mit einem äußeren
+    //! `tokio::time::timeout` abgesichert, damit ein Regressionsfehler
+    //! (fehlende Grenze → nie fertig) als Fehlschlag auffällt statt den
+    //! Testlauf zu blockieren.
+    use super::*;
+    use ssh_manager_core::profiles::{AuthMethod, CredentialRef};
+    use tokio::time::Instant;
+
+    /// Dauer einer Phase: `None` = wird nie fertig.
+    #[derive(Clone, Copy)]
+    struct HopTiming {
+        handshake: Option<Duration>,
+        authentication: Option<Duration>,
+        unknown_host_key: bool,
+    }
+
+    fn timing(handshake_secs: u64, authentication_secs: u64) -> HopTiming {
+        HopTiming {
+            handshake: Some(Duration::from_secs(handshake_secs)),
+            authentication: Some(Duration::from_secs(authentication_secs)),
+            unknown_host_key: false,
+        }
+    }
+
+    struct FakeHops {
+        timings: Vec<HopTiming>,
+        calls: Vec<String>,
+    }
+
+    impl FakeHops {
+        fn new(timings: Vec<HopTiming>) -> Self {
+            Self {
+                timings,
+                calls: Vec::new(),
+            }
+        }
+
+        async fn open(&mut self, hop_index: usize) -> Result<Opened<usize>, SshError> {
+            self.calls.push(format!("open:{hop_index}"));
+            let t = self.timings[hop_index];
+            wait(t.handshake).await;
+            if t.unknown_host_key {
+                return Ok(Opened::HostKeyPending(
+                    ConnectOutcome::PendingHostKeyConfirmation {
+                        host: format!("hop{hop_index}.invalid"),
+                        port: 22,
+                        raw_key: b"raw-key".to_vec(),
+                        decision: HostKeyDecision::Unknown {
+                            fingerprint: "SHA256:fake".to_string(),
+                        },
+                    },
+                ));
+            }
+            Ok(Opened::Ready(hop_index))
+        }
+    }
+
+    async fn wait(duration: Option<Duration>) {
+        match duration {
+            Some(d) => tokio::time::sleep(d).await,
+            None => std::future::pending::<()>().await,
+        }
+    }
+
+    #[async_trait]
+    impl HopConnector for FakeHops {
+        type Session = usize;
+
+        async fn open_first(&mut self, _hop: &Hop) -> Result<Opened<usize>, SshError> {
+            self.open(0).await
+        }
+
+        async fn open_next(
+            &mut self,
+            via: &mut usize,
+            hop_index: usize,
+            _hop: &Hop,
+        ) -> Result<Opened<usize>, SshError> {
+            assert_eq!(*via + 1, hop_index, "Tunnel muss über den Vorgänger laufen");
+            self.open(hop_index).await
+        }
+
+        async fn authenticate(
+            &mut self,
+            session: &mut usize,
+            hop_index: usize,
+            _hop: &Hop,
+        ) -> Result<(), SshError> {
+            assert_eq!(*session, hop_index);
+            self.calls.push(format!("auth:{hop_index}"));
+            wait(self.timings[hop_index].authentication).await;
+            Ok(())
+        }
+    }
+
+    fn hops(count: usize) -> Vec<Hop> {
+        (0..count)
+            .map(|i| Hop {
+                host: format!("hop{i}.invalid"),
+                port: 22,
+                username: "deploy".to_string(),
+                auth: AuthMethod::Password {
+                    credential_ref: CredentialRef::new("test:password"),
+                },
+            })
+            .collect()
+    }
+
+    /// Ergebnis und verstrichene (virtuelle) Zeit eines Aufbaus mit den
+    /// Grenzen aus der Spec.
+    async fn run(fake: &mut FakeHops) -> (Result<Chain<usize>, SshError>, Duration) {
+        let hop_list = hops(fake.timings.len());
+        let start = Instant::now();
+        let result = tokio::time::timeout(
+            Duration::from_secs(24 * 3600),
+            drive_chain(fake, &hop_list, ConnectLimits::DEFAULT),
+        )
+        .await
+        .expect("drive_chain darf mit Phasengrenzen nie hängen");
+        (result, start.elapsed())
+    }
+
+    fn ready_sessions(result: Result<Chain<usize>, SshError>) -> Vec<usize> {
+        match result {
+            Ok(Chain::Ready(sessions)) => sessions,
+            Ok(Chain::HostKeyPending(_)) => panic!("erwartet Ready, bekam HostKeyPending"),
+            Err(err) => panic!("erwartet Ready, bekam {err:?}"),
+        }
+    }
+
+    fn assert_timeout(result: Result<Chain<usize>, SshError>) {
+        match result {
+            Err(SshError::Timeout) => {}
+            Err(other) => panic!("erwartet SshError::Timeout, bekam {other:?}"),
+            Ok(Chain::Ready(_)) => panic!("ein Timeout darf nie als verbunden gelten"),
+            Ok(Chain::HostKeyPending(_)) => {
+                panic!("ein Timeout darf nie in eine Host-Key-Rückfrage münden")
+            }
+        }
+    }
+
+    #[test]
+    fn test_default_limits_are_the_spec_values() {
+        assert_eq!(ConnectLimits::DEFAULT.handshake, Duration::from_secs(10));
+        assert_eq!(
+            ConnectLimits::DEFAULT.authentication,
+            Duration::from_secs(60)
+        );
+        assert_eq!(ConnectLimits::default(), ConnectLimits::DEFAULT);
+    }
+
+    /// Das Sicherheitsnetz wächst mit der Hop-Zahl und liegt über der Summe
+    /// aller Phasengrenzen — es kann im normalen Ablauf nicht vor einer
+    /// Phasengrenze greifen.
+    #[test]
+    fn test_overall_limit_exceeds_the_sum_of_all_phase_limits() {
+        let limits = ConnectLimits::DEFAULT;
+        assert_eq!(limits.overall(1), Duration::from_secs(80));
+        assert_eq!(limits.overall(3), Duration::from_secs(220));
+        for hop_count in 1..=8u32 {
+            let sum = (limits.handshake + limits.authentication) * hop_count;
+            assert!(limits.overall(hop_count as usize) > sum);
+        }
+        // Ohne Hops scheitert der Aufbau sofort; die Grenze bleibt sinnvoll.
+        assert_eq!(limits.overall(0), limits.overall(1));
+    }
+
+    /// AC 1 (netzwerkfrei; der echte hängende Server steht in
+    /// `tests/integration.rs`): ein Handshake, der nie fertig wird, endet
+    /// nach genau der Handshake-Grenze mit `SSH_TIMEOUT`, ohne dass die
+    /// Anmeldung beginnt.
+    #[tokio::test(start_paused = true)]
+    async fn test_hanging_handshake_fails_after_the_handshake_limit() {
+        let mut fake = FakeHops::new(vec![HopTiming {
+            handshake: None,
+            ..timing(0, 0)
+        }]);
+        let (result, elapsed) = run(&mut fake).await;
+        assert_timeout(result);
+        assert_eq!(elapsed, ConnectLimits::DEFAULT.handshake);
+        assert_eq!(fake.calls, ["open:0"]);
+    }
+
+    /// AC 2: eine Anmeldung, die länger dauert als die Handshake-Grenze,
+    /// aber kürzer als die Anmeldegrenze (Touch-Schlüssel, Agent mit
+    /// Bestätigung), bricht nicht ab.
+    ///
+    /// *Gegenbeweis:* mit einer gemeinsamen 10-s-Grenze über alles (Stand
+    /// vor Issue #97) oder der Handshake-Grenze für die Anmeldung scheitert
+    /// dieser Test mit `SSH_TIMEOUT`.
+    #[tokio::test(start_paused = true)]
+    async fn test_slow_authentication_within_its_limit_connects() {
+        let mut fake = FakeHops::new(vec![timing(2, 30)]);
+        let (result, elapsed) = run(&mut fake).await;
+        assert_eq!(ready_sessions(result), [0]);
+        assert_eq!(elapsed, Duration::from_secs(32));
+        assert_eq!(fake.calls, ["open:0", "auth:0"]);
+    }
+
+    /// AC 3: eine Anmeldung über der Anmeldegrenze endet mit `SSH_TIMEOUT`.
+    ///
+    /// *Gegenbeweis:* ohne Grenze um die Anmeldung wird dieser Test nie
+    /// fertig und scheitert am äußeren Timeout.
+    #[tokio::test(start_paused = true)]
+    async fn test_authentication_beyond_its_limit_fails_with_timeout() {
+        let mut fake = FakeHops::new(vec![timing(2, 61)]);
+        let (result, elapsed) = run(&mut fake).await;
+        assert_timeout(result);
+        assert_eq!(
+            elapsed,
+            Duration::from_secs(2) + ConnectLimits::DEFAULT.authentication
+        );
+
+        let mut never = FakeHops::new(vec![HopTiming {
+            authentication: None,
+            ..timing(2, 0)
+        }]);
+        let (result, _) = run(&mut never).await;
+        assert_timeout(result);
+    }
+
+    /// AC 4: in einer Kette aus zwei Hops bekommt jeder Hop eigene Grenzen.
+    /// Jeder Hop braucht hier knapp unter seinen Grenzen (9 s + 59 s); die
+    /// Gesamtzeit von 136 s liegt weit über den Grenzen eines einzelnen
+    /// Hops (70 s) — die Kette verbindet trotzdem.
+    #[tokio::test(start_paused = true)]
+    async fn test_two_hop_chain_gets_limits_per_hop() {
+        let mut fake = FakeHops::new(vec![timing(9, 59), timing(9, 59)]);
+        let (result, elapsed) = run(&mut fake).await;
+        assert_eq!(ready_sessions(result), [0, 1]);
+        assert_eq!(elapsed, Duration::from_secs(136));
+        let single_hop = ConnectLimits::DEFAULT.handshake + ConnectLimits::DEFAULT.authentication;
+        assert!(elapsed > single_hop);
+        assert_eq!(fake.calls, ["open:0", "auth:0", "open:1", "auth:1"]);
+    }
+
+    /// Die Grenzen gelten auch am zweiten Hop: ein hängender Tunnel bzw.
+    /// Handshake dort endet nach der Handshake-Grenze, eine zu lange
+    /// Anmeldung dort nach der Anmeldegrenze — jeweils `SSH_TIMEOUT`, und es
+    /// beginnt keine weitere Phase.
+    #[tokio::test(start_paused = true)]
+    async fn test_second_hop_phases_are_limited_too() {
+        let mut hanging_tunnel = FakeHops::new(vec![
+            timing(1, 1),
+            HopTiming {
+                handshake: None,
+                ..timing(0, 0)
+            },
+        ]);
+        let (result, elapsed) = run(&mut hanging_tunnel).await;
+        assert_timeout(result);
+        assert_eq!(elapsed, Duration::from_secs(12));
+        assert_eq!(hanging_tunnel.calls, ["open:0", "auth:0", "open:1"]);
+
+        let mut slow_auth = FakeHops::new(vec![timing(1, 1), timing(1, 61)]);
+        let (result, elapsed) = run(&mut slow_auth).await;
+        assert_timeout(result);
+        assert_eq!(elapsed, Duration::from_secs(63));
+    }
+
+    /// Ein Timeout am ersten Hop beendet die Kette: kein Tunnel, keine
+    /// weitere Anmeldung.
+    #[tokio::test(start_paused = true)]
+    async fn test_timeout_stops_the_chain() {
+        let mut fake = FakeHops::new(vec![
+            HopTiming {
+                authentication: None,
+                ..timing(1, 0)
+            },
+            timing(1, 1),
+        ]);
+        let (result, _) = run(&mut fake).await;
+        assert_timeout(result);
+        assert_eq!(fake.calls, ["open:0", "auth:0"]);
+    }
+
+    /// Eine unbekannte Host-Key am zweiten Hop beendet den Aufbau mit der
+    /// Rückfrage — nach dieser Rückgabe läuft keine Grenze weiter, auch wenn
+    /// der Nutzer danach lange überlegt.
+    #[tokio::test(start_paused = true)]
+    async fn test_host_key_question_ends_the_attempt_outside_every_limit() {
+        let mut fake = FakeHops::new(vec![
+            timing(1, 1),
+            HopTiming {
+                unknown_host_key: true,
+                ..timing(1, 0)
+            },
+        ]);
+        let (result, _) = run(&mut fake).await;
+        assert!(matches!(
+            result,
+            Ok(Chain::HostKeyPending(
+                ConnectOutcome::PendingHostKeyConfirmation { .. }
+            ))
+        ));
+        assert_eq!(fake.calls, ["open:0", "auth:0", "open:1"]);
+        // Simuliert die Bedenkzeit des Nutzers nach der Rückgabe.
+        tokio::time::advance(Duration::from_secs(3601)).await;
+    }
+
+    /// Ohne Hops: sofortiger Fehler, wie vor Issue #97.
+    #[tokio::test]
+    async fn test_empty_chain_fails_immediately() {
+        let mut fake = FakeHops::new(Vec::new());
+        let result = drive_chain(&mut fake, &[], ConnectLimits::DEFAULT).await;
+        assert!(matches!(result, Err(SshError::ConnectionFailed(_))));
+        assert!(fake.calls.is_empty());
     }
 }
