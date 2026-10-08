@@ -12,20 +12,24 @@
 //! echten Stores, schließt den Pool und durchsucht danach **jede Datei** des
 //! Datenbank-Verzeichnisses byteweise — ohne SQLite, ohne SQL.
 //!
+//! **Seit Issue #113** schreiben die Stores die vier Spalten (Chat,
+//! Zusammenfassung, Ledger, Historie) als Klartext; geschützt sind sie
+//! allein durch die Verschlüsselung der ganzen Datei (Spec 0101). Der
+//! Nachweis schreibt deshalb in eine **mit Schlüssel geöffnete** Datenbank
+//! (T3) und als Gegenprobe in eine Klartext-Datenbank (T4) — dort muss die
+//! Suche das Geheimnis finden.
+//!
 //! **Grenze des Nachweises (bewusst):** gesucht werden die UTF-8-Bytes des
 //! Geheimnisses. Läge dasselbe Geheimnis in einer anderen Kodierung
 //! (UTF-16, Base64, komprimiert) in einer der Dateien, fände diese Suche es
 //! nicht. Für die geprüften Schreibpfade ist UTF-8 die einzige Kodierung, die
-//! entsteht (`ContentCipher::encrypt` nimmt `&str`, `serde_json` schreibt
-//! UTF-8) — für neue Schreibpfade gilt das nicht automatisch.
+//! entsteht (die Stores schreiben `&str`, `serde_json` schreibt UTF-8) — für
+//! neue Schreibpfade gilt das nicht automatisch.
 
 use std::path::Path;
-use std::sync::Arc;
 
 use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
-use ssh_manager_core::crypto::{
-    ChaCha20Poly1305Cipher, CipherError, ContentCipher, EncryptedContent,
-};
+use ssh_manager_core::crypto::DatabaseKey;
 use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::CommandOutput;
@@ -37,29 +41,16 @@ use crate::SqliteProfileStore;
 /// ist es, der nicht im Klartext auf der Platte stehen darf.
 const SECRET: &str = "Geheim-0096";
 
-/// Länge des Nonce-Präfixes aus `EncryptedContent::to_blob`. Die Konstante
-/// selbst ist in `ssh_manager_core::crypto` privat; ändert sie sich, bricht
-/// hier der Typ des Array-Literals auf — sichtbar, nicht still.
-const NONCE_LEN: usize = 12;
-
-/// Cipher, der den Klartext unverändert durchreicht — **nur** für die
-/// Gegenprobe A4. Er belegt, dass die Suchfunktion in T3 tatsächlich
-/// zuschlagen würde, wenn Klartext in einer der Dateien stünde; ohne ihn
-/// wäre T3 ein Test, der auch dann grün bliebe, wenn die Suche gar nichts
-/// liest.
-struct PassthroughCipher;
-
-impl ContentCipher for PassthroughCipher {
-    fn encrypt(&self, plaintext: &str) -> Result<EncryptedContent, CipherError> {
-        Ok(EncryptedContent {
-            ciphertext: plaintext.as_bytes().to_vec(),
-            nonce: [0u8; NONCE_LEN],
-        })
-    }
-
-    fn decrypt(&self, data: &EncryptedContent) -> Result<String, CipherError> {
-        Ok(String::from_utf8_lossy(&data.ciphertext).into_owned())
-    }
+/// Wie die Datenbank für den Nachweis geöffnet wird.
+#[derive(Clone, Copy)]
+enum FileEncryption {
+    /// Wie in der App: SQLCipher mit einem aus K abgeleiteten Schlüssel.
+    Sqlcipher,
+    /// **Nur** für die Gegenprobe A4: eine Klartext-Datei. Sie belegt, dass
+    /// die Suchfunktion in T3 tatsächlich zuschlagen würde, wenn Klartext
+    /// in einer der Dateien stünde; ohne sie wäre T3 ein Test, der auch
+    /// dann grün bliebe, wenn die Suche gar nichts liest.
+    Plaintext,
 }
 
 fn test_server(server_id: ServerId) -> Server {
@@ -87,18 +78,23 @@ fn test_server(server_id: ServerId) -> Server {
     }
 }
 
-/// Schreibt mit `cipher` über die **echten** Stores je einen Eintrag mit dem
-/// Geheimnis in alle fünf von Spec 0096, A3 genannten Senken und gibt den
-/// noch **offenen** Store zurück. Der Aufrufer entscheidet, ob er vor oder
+/// Schreibt über die **echten** Stores je einen Eintrag mit dem Geheimnis in
+/// alle fünf von Spec 0096, A3 genannten Senken und gibt den noch **offenen**
+/// Store zurück. Der Aufrufer entscheidet, ob er vor oder
 /// nach `pool.close()` liest — beide Zeitpunkte werden geprüft (s. T3 und
 /// `test_t3_..._while_the_database_is_still_open`).
 async fn write_secret_through_all_stores(
     db_path: &Path,
-    cipher: Arc<dyn ContentCipher>,
+    encryption: FileEncryption,
 ) -> SqliteProfileStore {
-    let profile_store = SqliteProfileStore::connect_plaintext(db_path)
-        .await
-        .expect("frische DB mit angewendeten Migrationen sollte immer aufbaubar sein");
+    let profile_store = match encryption {
+        FileEncryption::Sqlcipher => {
+            SqliteProfileStore::connect_encrypted(db_path, &DatabaseKey::from_root_key(&[42u8; 32]))
+                .await
+        }
+        FileEncryption::Plaintext => SqliteProfileStore::connect_plaintext(db_path).await,
+    }
+    .expect("frische DB mit angewendeten Migrationen sollte immer aufbaubar sein");
 
     let server_id = ServerId::new();
     profile_store
@@ -106,7 +102,7 @@ async fn write_secret_through_all_stores(
         .await
         .expect("servers-Zeile ist FK-Voraussetzung fuer chat_sessions/prompt_history");
 
-    let chat_store = profile_store.chat_session_store(Arc::clone(&cipher));
+    let chat_store = profile_store.chat_session_store();
     let session_id = chat_store
         .create_session(&server_id, None)
         .await
@@ -161,7 +157,7 @@ async fn write_secret_through_all_stores(
 
     // 4. Ausführungsprotokoll.
     profile_store
-        .ledger_store(Arc::clone(&cipher))
+        .ledger_store()
         .append_entry(
             session_id,
             LedgerSource::User,
@@ -181,7 +177,7 @@ async fn write_secret_through_all_stores(
 
     // 5. Eingabe-Historie.
     profile_store
-        .prompt_history_store(Arc::clone(&cipher))
+        .prompt_history_store()
         .record(&server_id, &format!("mysql --password={SECRET}"))
         .await
         .expect("Eingabe-Historie schreiben");
@@ -229,11 +225,7 @@ async fn test_t3_spec_0096_no_plaintext_secret_in_any_database_file() {
     let tmp_dir = tempfile::tempdir().expect("Temp-Verzeichnis anlegbar");
     let db_path = tmp_dir.path().join("smart-ssh.sqlite3");
 
-    let store = write_secret_through_all_stores(
-        &db_path,
-        Arc::new(ChaCha20Poly1305Cipher::new(&[42u8; 32])),
-    )
-    .await;
+    let store = write_secret_through_all_stores(&db_path, FileEncryption::Sqlcipher).await;
     // Erst schließen, dann lesen: beim Schließen überträgt SQLite den Inhalt
     // des WAL in die Hauptdatei. Wer vorher liest, prüft einen
     // Zwischenstand und übersieht genau die Bytes, die erst dabei umziehen.
@@ -256,8 +248,8 @@ async fn test_t3_spec_0096_no_plaintext_secret_in_any_database_file() {
     );
 }
 
-/// T4 (Spec 0096, A4): Derselbe Ablauf gegen eine eigene Temp-Datenbank mit
-/// einem Cipher, der Klartext durchreicht — **dieselbe** Suchfunktion muss
+/// T4 (Spec 0096, A4): Derselbe Ablauf gegen eine eigene Klartext-Datenbank
+/// — **dieselbe** Suchfunktion muss
 /// das Geheimnis dort finden. Ohne diesen Gegenbeweis wäre T3 auch dann
 /// grün, wenn `scan_directory_for_secret` gar nichts läse.
 #[tokio::test]
@@ -265,7 +257,7 @@ async fn test_t4_spec_0096_the_scan_finds_the_secret_without_encryption() {
     let tmp_dir = tempfile::tempdir().expect("Temp-Verzeichnis anlegbar");
     let db_path = tmp_dir.path().join("smart-ssh.sqlite3");
 
-    let store = write_secret_through_all_stores(&db_path, Arc::new(PassthroughCipher)).await;
+    let store = write_secret_through_all_stores(&db_path, FileEncryption::Plaintext).await;
     store.pool.close().await;
 
     let (searched, hits) = scan_directory_for_secret(tmp_dir.path());
@@ -292,11 +284,7 @@ async fn test_spec_0096_no_plaintext_secret_while_the_database_is_still_open() {
     let tmp_dir = tempfile::tempdir().expect("Temp-Verzeichnis anlegbar");
     let db_path = tmp_dir.path().join("smart-ssh.sqlite3");
 
-    let store = write_secret_through_all_stores(
-        &db_path,
-        Arc::new(ChaCha20Poly1305Cipher::new(&[42u8; 32])),
-    )
-    .await;
+    let store = write_secret_through_all_stores(&db_path, FileEncryption::Sqlcipher).await;
 
     // Bewusst VOR `pool.close()`: genau jetzt liegen die frischen Seiten im
     // WAL statt in der Hauptdatei.

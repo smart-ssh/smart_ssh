@@ -467,7 +467,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
             />
             <datalist id="known-tags">
               {knownTags.map((t) => (
-                <option key={t} value={t} />
+                <option key={t} value={t} aria-label={t} />
               ))}
             </datalist>
           </>

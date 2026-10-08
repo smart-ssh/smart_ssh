@@ -102,9 +102,12 @@ Schaltfläche erst beim Loslassen aus, und der Fokus liegt beim Öffnen auf
 `reject` — schlimmstenfalls wird also abgelehnt.
 
 **A6 Linter**
-- A6.1 MUSS: `jsx-a11y` ist in `.oxlintrc.json` aktiv, mit
-  Standard-Schweregrad (heute Warnung). `npm run lint` bleibt mit
-  Rückgabewert 0.
+- A6.1 MUSS: `jsx-a11y` ist in `.oxlintrc.json` aktiv; seine Funde sind
+  Fehler (seit Issue #112, vorher Warnungen). Ein neuer Fund lässt
+  `npm run lint` und damit den CI-Job scheitern. Auf dem Stand von `main`
+  hat das Frontend keinen `jsx-a11y`-Fund, `npm run lint` endet mit
+  Rückgabewert 0. Ausnahmen gelten in jeder Komponente wie in A6.3:
+  zeilengenau und begründet, keine Regel global abgeschaltet.
 - A6.2 MUSS: Die Altfunde sind im Bericht aufgelistet (Regel, Datei:Zeile),
   damit der Architekt daraus ein Item anlegt.
 - A6.3 MUSS: `HostKeyDialog.tsx` hat danach keinen `jsx-a11y`-Fund. Nötige

@@ -63,6 +63,22 @@ describe("translateErrorCode", () => {
     expect(text).toMatch(/again/i);
   });
 
+  // Issue #96: Verbindungsverlust einer laufenden Sitzung bekommt einen
+  // eigenen Text, nicht den des Verbindungsaufbaus.
+  it.each(["de", "en"] as const)(
+    "übersetzt SSH_SESSION_CLOSED (%s) mit eigenem Text ohne Aufbau-Bezug",
+    (language) => {
+      const t = testI18n.getFixedT(language);
+      const text = translateErrorCode(t, "SSH_SESSION_CLOSED", "fallback");
+
+      expect(text).not.toBe("fallback");
+      expect(text).not.toBe("errors.SSH_SESSION_CLOSED");
+      expect(text).not.toBe(translateErrorCode(t, "SSH_CONNECTION_CLOSED", "fallback"));
+      expect(text).not.toMatch(/setup|aufbau/i);
+      expect(text).toMatch(language === "de" ? /erneut verbinden/i : /reconnect/i);
+    },
+  );
+
   // Spec 0071, A13/X2: Der Backend-Fehler kommt als
   // `{ code: "KEYCHAIN_UNAVAILABLE" }` — das Frontend muss den eigenen,
   // übersetzten Text zeigen, nicht den `message`-Fallback. Ohne den Eintrag
@@ -331,5 +347,32 @@ describe("FILTER_RED_RISK_REQUIRES_CONFIRM (Spec 0092)", () => {
       "fallback",
     );
     expect(de).not.toBe(en);
+  });
+});
+
+// Issue #109: Ein Kommando, das für die Secret-Pfad- bzw. sftp-server-Prüfung
+// zu lang oder zu tief verschachtelt ist, bekommt einen eigenen Code — der
+// Dialog darf dann nicht behaupten, es lese eine Datei mit Zugangsdaten.
+describe("FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM (Issue #109)", () => {
+  it("(de) zeigt den festgelegten Text", () => {
+    expect(
+      translateErrorCode(
+        testI18n.getFixedT("de"),
+        "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM",
+        "fallback",
+      ),
+    ).toBe(
+      "Kommando ist zu lang oder zu tief verschachtelt für eine Prüfung – erfordert immer Bestätigung",
+    );
+  });
+
+  it("(en) shows the specified text", () => {
+    expect(
+      translateErrorCode(
+        testI18n.getFixedT("en"),
+        "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM",
+        "fallback",
+      ),
+    ).toBe("Command is too long or too deeply nested to be checked – always requires confirmation");
   });
 });

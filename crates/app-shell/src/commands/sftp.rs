@@ -29,7 +29,8 @@ use app_logic::error::CommandResult;
 use app_logic::events::{
     emit_sftp_transfer_finished, emit_sftp_transfer_started, EventEmitter, SftpTransferKind,
 };
-use app_logic::session::Session;
+use app_logic::local_path_grants::{GrantedLocalPath, LocalPathGrants, LOCAL_PATH_NOT_GRANTED};
+use app_logic::session::{Session, SessionManager};
 use app_logic::state::{AppState, SessionId};
 
 use super::elevation::{
@@ -50,6 +51,12 @@ mod revocation_tests;
 /// ist.
 #[cfg(test)]
 mod size_limit_tests;
+
+/// Issue #89: only local paths the user picked, dropped or that belong to
+/// the session's own edit copy are read. Own file because the setup (a
+/// session with a mock channel plus grants) is shared by several tests.
+#[cfg(test)]
+mod local_path_tests;
 
 #[tauri::command]
 pub async fn sftp_list(
@@ -440,24 +447,29 @@ pub async fn sftp_download_dir(
     .await
 }
 
-/// `local_path` ist bereits vom Frontend aufgelöst — entweder über den
-/// nativen Öffnen-Dialog (Upload-Button, `@tauri-apps/plugin-dialog`, s.
-/// `frontend/src/fileDialog.ts` für das bereits etablierte Muster) oder über
-/// einen Drag-and-Drop-Vorgang aus dem Betriebssystem (der Pfad kommt dort
-/// direkt vom OS-Drop-Ereignis) — beides sind explizite Nutzeraktionen im
-/// Sinne von Spec 0020, Abschnitt 5 ("nie ohne expliziten Dialog"), auch
-/// wenn der Dialog beim Drag-and-Drop kein Fenster ist, sondern die
-/// Drag-Geste selbst.
+/// Issue #89: `local_path` comes from the webview and proves nothing on its
+/// own — the webview also renders AI-generated content. It is read only if
+/// it lies inside a grant of this session (native open dialog via
+/// [`pick_upload_files`], native drop via [`claim_dropped_paths`], or the
+/// session's own edit-session directory), see
+/// `app_logic::local_path_grants`. Any other path fails before a channel
+/// is opened, anything is read or a transfer starts.
+// Tauri command arguments are the IPC interface; grouping them into a
+// struct would change the frontend call shape.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn sftp_upload(
     app: AppHandle,
     state: State<'_, AppState>,
     elevated: State<'_, ElevatedSftpRegistry>,
+    grants: State<'_, LocalPathGrants>,
     session_id: SessionId,
     local_path: String,
     remote_path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<()> {
+    let local_path =
+        authorize_local_path(&state.sessions, grants.inner(), session_id, &local_path)?;
     run_browser_command(
         &state,
         elevated.inner(),
@@ -478,6 +490,115 @@ pub async fn sftp_upload(
     .await
 }
 
+/// Issue #89: the one place where a frontend-supplied local path becomes a
+/// [`GrantedLocalPath`]. The session must still exist (grants die with it,
+/// and a leftover edit-session directory of a closed session must not count
+/// either), then the path must lie inside a grant of exactly this session.
+pub(super) fn authorize_local_path(
+    sessions: &SessionManager,
+    grants: &LocalPathGrants,
+    session_id: SessionId,
+    local_path: &str,
+) -> CommandResult<GrantedLocalPath> {
+    if sessions.get(session_id).is_none() {
+        return Err(CommandError::from(LOCAL_PATH_NOT_GRANTED));
+    }
+    let edit_dir = edit_session_dir(session_id).ok();
+    grants.check(
+        session_id,
+        std::path::Path::new(local_path),
+        edit_dir.as_deref(),
+    )
+}
+
+/// Issue #89: the upload button's native open dialog, run in the backend
+/// (pattern: `read_credential_file`). The frontend passes only a title;
+/// the picked paths are granted to this session and returned. `None` =
+/// cancelled. Files only — folder upload is not supported (ADR 0113).
+#[tauri::command]
+pub async fn pick_upload_files(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    grants: State<'_, LocalPathGrants>,
+    session_id: SessionId,
+    title: String,
+) -> CommandResult<Option<Vec<String>>> {
+    use tauri_plugin_dialog::DialogExt;
+
+    if state.sessions.get(session_id).is_none() {
+        return Err(CommandError::from("Session nicht gefunden"));
+    }
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_title(&title)
+        .pick_files(move |paths| {
+            let _ = tx.send(paths);
+        });
+    let Some(picked) = rx.await.ok().flatten() else {
+        return Ok(None); // Abbrechen ist kein Fehler.
+    };
+    let paths = picked
+        .into_iter()
+        .map(|p| p.into_path())
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Some(grant_for_live_session(
+        &state.sessions,
+        grants.inner(),
+        session_id,
+        paths,
+    )))
+}
+
+/// Issue #89: hands the most recent native drop (captured from the window's
+/// drag-and-drop event in the backend, see `crate::run`) to this session's
+/// file browser and grants its paths. The frontend sends no paths — only
+/// which session claims the drop. Empty list = no fresh drop to claim.
+#[tauri::command]
+pub async fn claim_dropped_paths(
+    state: State<'_, AppState>,
+    grants: State<'_, LocalPathGrants>,
+    session_id: SessionId,
+) -> CommandResult<Vec<String>> {
+    claim_dropped_paths_impl(&state.sessions, grants.inner(), session_id)
+}
+
+pub(super) fn claim_dropped_paths_impl(
+    sessions: &SessionManager,
+    grants: &LocalPathGrants,
+    session_id: SessionId,
+) -> CommandResult<Vec<String>> {
+    if sessions.get(session_id).is_none() {
+        return Err(CommandError::from("Session nicht gefunden"));
+    }
+    Ok(grants
+        .claim_drop(session_id)
+        .into_iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect())
+}
+
+/// Grants `paths` only if the session is still there once the dialog
+/// returns — a session closed while the dialog was open gets no grants.
+/// A disconnect between this check and the grant leaves an entry for a
+/// session id that is never used again; every reader checks that the
+/// session exists ([`authorize_local_path`]).
+pub(super) fn grant_for_live_session(
+    sessions: &SessionManager,
+    grants: &LocalPathGrants,
+    session_id: SessionId,
+    paths: Vec<std::path::PathBuf>,
+) -> Vec<String> {
+    if sessions.get(session_id).is_none() {
+        return Vec::new();
+    }
+    grants
+        .grant(session_id, paths)
+        .into_iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect()
+}
+
 /// Spec 0086, T8: `emitter` statt eines `AppHandle` — s.
 /// [`download_one_file`].
 async fn upload_impl(
@@ -485,12 +606,12 @@ async fn upload_impl(
     session: &Session,
     channel: &BrowserChannel,
     session_id: SessionId,
-    local_path: &str,
+    local_path: &GrantedLocalPath,
     remote_path: &str,
 ) -> CommandResult<()> {
     let file_name = file_name_of(remote_path);
 
-    let local_path_for_stat = local_path.to_string();
+    let local_path_for_stat = local_path.as_path().to_path_buf();
     let total_bytes = tokio::task::spawn_blocking(move || {
         std::fs::metadata(&local_path_for_stat)
             .map(|m| m.len())
@@ -509,7 +630,7 @@ async fn upload_impl(
         total_bytes,
     );
 
-    let local_path_for_read = local_path.to_string();
+    let local_path_for_read = local_path.as_path().to_path_buf();
     let result: CommandResult<()> = async {
         let bytes = tokio::task::spawn_blocking(move || std::fs::read(local_path_for_read))
             .await
@@ -1033,16 +1154,28 @@ async fn read_text_impl(
 /// "Dateiinhalt kopieren" ist eine Binärdatei hier ein erwarteter,
 /// alltäglicher Fall (Uploads sind keine Textdateien), kein Ausnahmefall.
 ///
-/// `local_path` ist wie bei `sftp_upload` bereits vom Frontend aufgelöst
-/// (nativer Öffnen-Dialog oder OS-Drag-and-Drop) — derselbe Vertrauens-
-/// Grenzfall, dieselbe Begründung wie dort.
+/// Issue #89: same rule as [`sftp_upload`] — `local_path` must lie inside a
+/// grant of this session, otherwise nothing is read.
 #[tauri::command]
 pub async fn read_local_text_preview(
+    state: State<'_, AppState>,
+    grants: State<'_, LocalPathGrants>,
+    session_id: SessionId,
     local_path: String,
+) -> CommandResult<app_logic::dto::LocalFilePreviewDto> {
+    read_local_text_preview_impl(&state.sessions, grants.inner(), session_id, &local_path).await
+}
+
+pub(super) async fn read_local_text_preview_impl(
+    sessions: &SessionManager,
+    grants: &LocalPathGrants,
+    session_id: SessionId,
+    local_path: &str,
 ) -> CommandResult<app_logic::dto::LocalFilePreviewDto> {
     use app_logic::dto::LocalFilePreviewDto;
 
-    let bytes = tokio::task::spawn_blocking(move || std::fs::read(&local_path))
+    let local_path = authorize_local_path(sessions, grants, session_id, local_path)?;
+    let bytes = tokio::task::spawn_blocking(move || std::fs::read(local_path.as_path()))
         .await
         .map_err(|e| format!("Hintergrund-Task für Datei-Vorschau fehlgeschlagen: {e}"))??;
     let size = bytes.len() as u64;
@@ -1075,15 +1208,15 @@ pub async fn read_local_text_preview(
 /// Trennen der Verbindung gezielt genau diese und keine fremden
 /// Editier-Sessions aufräumen kann ("Temp aufräumen bei Session-Ende
 /// spätestens", Spec 0054 Teil 4, Punkt 6).
+///
+/// Issue #93: liegt im Editier-Kopien-Ordner **dieser Instanz** (je
+/// Datenverzeichnis, s. [`crate::edit_copies`]), den der Start von
+/// Überbleibseln eines abgestürzten Prozesses befreit.
 pub(super) fn edit_session_dir(session_id: SessionId) -> CommandResult<std::path::PathBuf> {
-    let base = directories::BaseDirs::new()
+    let root = crate::edit_copies::instance_root()
         .ok_or("Kein Cache-Verzeichnis gefunden")
         .map_err(CommandError::from)?;
-    Ok(base
-        .cache_dir()
-        .join("smart-ssh")
-        .join("edit-sessions")
-        .join(session_id.to_string()))
+    Ok(root.join(session_id.to_string()))
 }
 
 /// Spec 0086, A1.2: Obergrenze für „Lokal öffnen". Bewusst eine **eigene**
@@ -1187,44 +1320,10 @@ async fn open_for_editing_impl(
     let dir = edit_session_dir(session_id)?;
     let local_path = dir.join(&file_name);
     let local_path_for_write = local_path.clone();
-    tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-        std::fs::create_dir_all(&dir)?;
-        // Spec-Reviewer-Härtungshinweis (Spec 0054, Review des
-        // Gesamtpakets): der Inhalt ist Remote-Serverinhalt (potenziell
-        // Passwörter/Keys in einer `.conf`-Datei) — ohne restriktive Unix-
-        // Rechte wäre er auf einem Mehrbenutzer-System für andere lokale
-        // Nutzer lesbar (Standard-Umask liegt typischerweise bei
-        // 0755/0644). `0700`/`0600` schränken auf den eigenen Owner ein.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
-        }
-        // Spec 0067, A5: Datei gleich mit 0600 anlegen statt erst mit den
-        // Standardrechten zu schreiben und danach einzuschränken — im
-        // erhöhten Modus können das Root-Dateien sein. `set_permissions`
-        // bleibt für eine schon vorhandene Datei (`mode` wirkt nur beim
-        // Neuanlegen).
-        {
-            let mut options = std::fs::OpenOptions::new();
-            options.write(true).create(true).truncate(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                options.mode(0o600);
-            }
-            let mut file = options.open(&local_path_for_write)?;
-            std::io::Write::write_all(&mut file, &bytes)?;
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(
-                &local_path_for_write,
-                std::fs::Permissions::from_mode(0o600),
-            )?;
-        }
-        Ok(())
+    // Spec-Reviewer-Härtungshinweis (Spec 0054) / Spec 0067, A5: `0700`/
+    // `0600` auf Unix, s. `write_edit_copy`.
+    tokio::task::spawn_blocking(move || {
+        crate::edit_copies::write_edit_copy(&dir, &local_path_for_write, &bytes)
     })
     .await
     .map_err(|e| format!("Hintergrund-Task für lokalen Download fehlgeschlagen: {e}"))??;
@@ -1243,10 +1342,33 @@ async fn open_for_editing_impl(
 /// verlässlicher Zeitstempel verfügbar" in beiden Fällen dieselbe
 /// Situation, ein technischer Fehlerdialog dafür wäre für einen
 /// Hintergrund-Poll unangemessen aufdringlich.
+///
+/// Issue #89: same rule as [`sftp_upload`]. A path outside every grant of
+/// this session also yields `None` — for a background poll a refusal is the
+/// same "no reliable timestamp", and answering `None` for both a missing
+/// and a refused path keeps the command from telling the webview which
+/// arbitrary paths exist. The refusal itself is logged by the grant check.
 #[tauri::command]
-pub async fn local_file_mtime(local_path: String) -> Option<String> {
+pub async fn local_file_mtime(
+    state: State<'_, AppState>,
+    grants: State<'_, LocalPathGrants>,
+    session_id: SessionId,
+    local_path: String,
+) -> CommandResult<Option<String>> {
+    // Always `Ok` — `CommandResult` only because Tauri requires it for an
+    // async command with borrowed `State` arguments.
+    Ok(local_file_mtime_impl(&state.sessions, grants.inner(), session_id, &local_path).await)
+}
+
+pub(super) async fn local_file_mtime_impl(
+    sessions: &SessionManager,
+    grants: &LocalPathGrants,
+    session_id: SessionId,
+    local_path: &str,
+) -> Option<String> {
+    let local_path = authorize_local_path(sessions, grants, session_id, local_path).ok()?;
     tokio::task::spawn_blocking(move || {
-        std::fs::metadata(&local_path)
+        std::fs::metadata(local_path.as_path())
             .and_then(|m| m.modified())
             .ok()
     })
@@ -1463,8 +1585,9 @@ mod sftp_mutation_tests {
 /// losgelösten Bausteine des "Lokal öffnen"-Flows — `sftp_open_for_editing`
 /// selbst bräuchte eine volle `Session` (kein bestehendes Test-Setup dafür,
 /// s. Fehlen jeglicher `sftp_*`-Command-Tests auf dieser Ebene schon vor
-/// Spec 0054), aber `edit_session_dir`/`local_file_mtime`/
-/// `close_edit_session` sind pure bzw. rein-lokale Dateisystem-Funktionen.
+/// Spec 0054), aber `edit_session_dir`/`close_edit_session` sind pure bzw.
+/// rein-lokale Dateisystem-Funktionen. `local_file_mtime` steht seit
+/// Issue #89 (braucht Sitzung und Freigaben) in `local_path_tests`.
 #[cfg(test)]
 mod edit_session_tests {
     use super::*;
@@ -1475,23 +1598,6 @@ mod edit_session_tests {
         let b = edit_session_dir(SessionId::new_v4()).unwrap();
         assert_ne!(a, b);
         assert!(a.ends_with(a.file_name().unwrap()));
-    }
-
-    #[tokio::test]
-    async fn test_local_file_mtime_returns_some_for_an_existing_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("edited.txt");
-        std::fs::write(&path, b"x").unwrap();
-
-        let mtime = local_file_mtime(path.to_str().unwrap().to_string()).await;
-
-        assert!(mtime.is_some());
-    }
-
-    #[tokio::test]
-    async fn test_local_file_mtime_returns_none_for_a_missing_file() {
-        let mtime = local_file_mtime("/this/path/does-not-exist-smart-ssh-test".to_string()).await;
-        assert!(mtime.is_none());
     }
 
     #[tokio::test]

@@ -3,7 +3,7 @@ use russh::client::Msg;
 use russh::{Channel, ChannelMsg};
 use ssh_manager_core::ssh::{InteractiveShell, PtySize, SshError};
 
-use crate::error::map_russh_error;
+use crate::error::map_session_russh_error;
 
 /// PTY-Shell für den interaktiven Modus (Spec 0005, Abschnitt 4).
 ///
@@ -25,7 +25,7 @@ impl InteractiveShell for RusshShell {
         self.channel
             .data_bytes(data.to_vec())
             .await
-            .map_err(map_russh_error)
+            .map_err(map_session_russh_error)
     }
 
     async fn read(&mut self) -> Result<Vec<u8>, SshError> {
@@ -46,6 +46,6 @@ impl InteractiveShell for RusshShell {
         self.channel
             .window_change(u32::from(size.cols), u32::from(size.rows), 0, 0)
             .await
-            .map_err(map_russh_error)
+            .map_err(map_session_russh_error)
     }
 }

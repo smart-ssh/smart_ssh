@@ -14,10 +14,12 @@
 //! eigenen `PromptHistoryEntry`-Domänentyp, nur die beiden Operationen
 //! [`SqlitePromptHistoryStore::record`]/[`SqlitePromptHistoryStore::list`].
 //!
-//! **Spec 0040, Abschnitt 3 (löst Spec 0036 §6)**: `content` wird über
-//! denselben [`ContentCipher`]/Schlüssel wie `chat_messages` verschlüsselt
-//! — transparent für den Aufrufer, der weiterhin nur mit Klartext-`String`s
-//! arbeitet. Die Spalte ist seit Migration `0010` ein `BLOB`.
+//! **Klartext in der verschlüsselten Datei** (Issue #113, ADR 0112): Die
+//! frühere feldweise Verschlüsselung (Spec 0040, Abschnitt 3) ist
+//! zurückgebaut; `content` wird als SQLite-`TEXT` in die (seit Migration
+//! `0010` als `BLOB` deklarierte) Spalte geschrieben. Geschützt ist der
+//! Inhalt durch die Verschlüsselung der ganzen Datei (Spec 0101). Altzeilen
+//! stellt `crate::field_content_decryption` beim Start einmal um.
 
 use chrono::Utc;
 use sqlx::sqlite::SqlitePool;
@@ -25,7 +27,6 @@ use sqlx::Row;
 
 use uuid::Uuid;
 
-use ssh_manager_core::crypto::{CipherError, ContentCipher, EncryptedContent};
 use ssh_manager_core::shared::ServerId;
 
 /// Spec 0015, Abschnitt 3: "maximal die letzten 200 Einträge".
@@ -34,25 +35,17 @@ const MAX_ENTRIES_PER_SERVER: i64 = 200;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptHistoryStoreError {
     Backend(String),
-    Cipher(CipherError),
 }
 
 impl std::fmt::Display for PromptHistoryStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PromptHistoryStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
-            PromptHistoryStoreError::Cipher(err) => write!(f, "Verschlüsselungsfehler: {err}"),
         }
     }
 }
 
 impl std::error::Error for PromptHistoryStoreError {}
-
-impl From<CipherError> for PromptHistoryStoreError {
-    fn from(err: CipherError) -> Self {
-        PromptHistoryStoreError::Cipher(err)
-    }
-}
 
 fn backend_err(e: sqlx::Error) -> PromptHistoryStoreError {
     PromptHistoryStoreError::Backend(e.to_string())
@@ -64,12 +57,11 @@ fn backend_err(e: sqlx::Error) -> PromptHistoryStoreError {
 #[derive(Clone)]
 pub struct SqlitePromptHistoryStore {
     pool: SqlitePool,
-    cipher: std::sync::Arc<dyn ContentCipher>,
 }
 
 impl SqlitePromptHistoryStore {
-    pub fn new(pool: SqlitePool, cipher: std::sync::Arc<dyn ContentCipher>) -> Self {
-        Self { pool, cipher }
+    pub fn new(pool: SqlitePool) -> Self {
+        Self { pool }
     }
 
     /// Spec 0015, Abschnitt 3: speichert `content` für `server_id`. Ist der
@@ -80,12 +72,6 @@ impl SqlitePromptHistoryStore {
     /// gilt, ohne die Historie mit Duplikaten aufzublähen. Danach wird die
     /// 200-Einträge-Grenze durchgesetzt: überzählige, älteste Einträge für
     /// diesen Server werden gelöscht.
-    ///
-    /// Der Duplikat-Vergleich entschlüsselt den bisher jüngsten Eintrag
-    /// zuerst (Spec 0040): ein reiner Byte-Vergleich der verschlüsselten
-    /// Blobs würde wegen des pro Verschlüsselungsvorgang zufälligen Nonce
-    /// (Spec 0036, Abschnitt 3) selbst für identischen Klartext nie
-    /// gleich sein.
     pub async fn record(
         &self,
         server_id: &ServerId,
@@ -104,32 +90,25 @@ impl SqlitePromptHistoryStore {
         .map_err(backend_err)?;
 
         if let Some(row) = &latest {
-            let existing_blob: Vec<u8> = row.get("content");
-            if let Ok(existing_content) = self.decrypt_blob(&existing_blob) {
-                if existing_content == content {
-                    let existing_id: String = row.get("id");
-                    sqlx::query("UPDATE prompt_history SET created_at = ? WHERE id = ?")
-                        .bind(&now)
-                        .bind(&existing_id)
-                        .execute(&self.pool)
-                        .await
-                        .map_err(backend_err)?;
-                    return Ok(());
-                }
+            let existing_content: String = row.try_get("content").map_err(backend_err)?;
+            if existing_content == content {
+                let existing_id: String = row.get("id");
+                sqlx::query("UPDATE prompt_history SET created_at = ? WHERE id = ?")
+                    .bind(&now)
+                    .bind(&existing_id)
+                    .execute(&self.pool)
+                    .await
+                    .map_err(backend_err)?;
+                return Ok(());
             }
-            // Ein nicht entschlüsselbarer jüngster Eintrag (z. B. noch nicht
-            // von der Anwendungs-Migration erfasste Alt-Zeile) wird hier
-            // bewusst NICHT als Fehler behandelt — er zählt einfach nicht
-            // als Duplikat, der neue Eintrag wird regulär angelegt.
         }
 
-        let content_blob = self.cipher.encrypt(content)?.to_blob();
         sqlx::query(
             "INSERT INTO prompt_history (id, server_id, content, created_at) VALUES (?, ?, ?, ?)",
         )
         .bind(Uuid::new_v4().to_string())
         .bind(&server_id_str)
-        .bind(content_blob)
+        .bind(content)
         .bind(&now)
         .execute(&self.pool)
         .await
@@ -152,13 +131,9 @@ impl SqlitePromptHistoryStore {
 
     /// Spec 0015, Abschnitt 4: chronologisch aufsteigend (älteste zuerst) —
     /// das Frontend kehrt für die Navigation selbst um bzw. greift von
-    /// hinten zu. Entschlüsselt jede Zeile transparent (Spec 0040).
-    /// Zeilen, die (noch) nicht entschlüsselbar sind — z. B. eine Alt-Zeile
-    /// vor der einmaligen Anwendungs-Migration (s.
-    /// [`Self::migrate_legacy_plaintext_content`]) — werden übersprungen
-    /// statt die gesamte Liste mit einem Fehler abzubrechen: die Navigation
-    /// im Eingabefeld ist ein reines Komfort-Feature (Spec 0015, Abschnitt
-    /// 3), kein Grund, den Chat unbenutzbar zu machen.
+    /// hinten zu. Ein Wert, der kein Text ist (eine nicht umgestellte
+    /// Altzeile, die es nach dem Start nicht mehr geben kann), ist ein
+    /// sichtbarer Fehler, kein still übersprungener Eintrag.
     pub async fn list(&self, server_id: &ServerId) -> Result<Vec<String>, PromptHistoryStoreError> {
         let rows = sqlx::query(
             "SELECT content FROM prompt_history WHERE server_id = ? ORDER BY created_at ASC",
@@ -168,101 +143,28 @@ impl SqlitePromptHistoryStore {
         .await
         .map_err(backend_err)?;
 
-        Ok(rows
-            .into_iter()
-            .filter_map(|row| {
-                let blob: Vec<u8> = row.get("content");
-                self.decrypt_blob(&blob).ok()
-            })
-            .collect())
-    }
-
-    fn decrypt_blob(&self, blob: &[u8]) -> Result<String, PromptHistoryStoreError> {
-        let encrypted = EncryptedContent::from_blob(blob)?;
-        Ok(self.cipher.decrypt(&encrypted)?)
-    }
-
-    /// Spec 0040, Abschnitt 3: einmalige, idempotente Migration bestehender
-    /// Klartext-Zeilen — anders als `chat_messages` (Spec 0036, das dortige
-    /// `Migrations-Skript`-Feld blieb leer, weil die Tabelle in derselben
-    /// Implementierungssitzung neu entstand) existiert `prompt_history`
-    /// bereits seit Spec 0015 und die App hat laut Architektur-Brief
-    /// bereits Downloads über die Marketing-Website — es könnten also
-    /// echte Klartext-Bestandszeilen existieren.
-    ///
-    /// **Idempotenz-Erkennung**: für jede Zeile wird versucht, sie mit dem
-    /// aktuellen Schlüssel zu entschlüsseln. Gelingt das, ist die Zeile
-    /// bereits (in einem früheren Lauf dieser Funktion) verschlüsselt
-    /// worden — sie wird unangetastet gelassen. Schlägt es fehl (weder
-    /// gültiger `EncryptedContent`-Blob noch mit dem aktuellen Schlüssel
-    /// entschlüsselbar), wird der rohe Inhalt als UTF-8-Klartext
-    /// interpretiert, verschlüsselt und zurückgeschrieben. Ein
-    /// AEAD-Chiffrat "zufällig" erfolgreich zu entschlüsseln ist wegen der
-    /// Poly1305-Authentifizierung praktisch ausgeschlossen — die
-    /// Idempotenz-Prüfung hat damit keine relevante Falsch-Positiv-Rate.
-    ///
-    /// Rein additiv/reparierend: ein Fehler bei einer einzelnen Zeile
-    /// (z. B. nicht UTF-8-dekodierbare Altdaten) überspringt nur diese
-    /// Zeile, bricht die Migration nicht insgesamt ab. Gibt die Anzahl
-    /// tatsächlich neu verschlüsselter Zeilen zurück (fürs Log).
-    pub async fn migrate_legacy_plaintext_content(&self) -> Result<u64, PromptHistoryStoreError> {
-        let rows = sqlx::query("SELECT id, content FROM prompt_history")
-            .fetch_all(&self.pool)
-            .await
-            .map_err(backend_err)?;
-
-        let mut migrated = 0u64;
-        for row in rows {
-            let id: String = row.get("id");
-            let blob: Vec<u8> = row.get("content");
-
-            if self.decrypt_blob(&blob).is_ok() {
-                continue; // bereits verschlüsselt
-            }
-            let Ok(plaintext) = String::from_utf8(blob) else {
-                continue; // weder verschlüsselt noch gültiges UTF-8 — überspringen
-            };
-            let Ok(encrypted) = self.cipher.encrypt(&plaintext) else {
-                continue;
-            };
-            let new_blob = encrypted.to_blob();
-
-            if sqlx::query("UPDATE prompt_history SET content = ? WHERE id = ?")
-                .bind(new_blob)
-                .bind(&id)
-                .execute(&self.pool)
-                .await
-                .is_ok()
-            {
-                migrated += 1;
-            }
-        }
-        Ok(migrated)
+        rows.into_iter()
+            .map(|row| row.try_get::<String, _>("content").map_err(backend_err))
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use sqlx::sqlite::SqliteConnectOptions;
-    use std::sync::Arc;
 
     use super::*;
     use chrono::Utc;
 
     use crate::SqliteProfileStore;
-    use ssh_manager_core::crypto::ChaCha20Poly1305Cipher;
     use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileStore, Server};
-
-    fn test_cipher() -> Arc<dyn ContentCipher> {
-        Arc::new(ChaCha20Poly1305Cipher::new(&[5u8; 32]))
-    }
 
     async fn in_memory_prompt_history_store() -> (SqliteProfileStore, SqlitePromptHistoryStore) {
         let options = SqliteConnectOptions::new().filename(":memory:");
         let profile_store = SqliteProfileStore::connect_with(options)
             .await
             .expect("In-Memory-Store mit angewendeten Migrationen sollte immer aufbaubar sein");
-        let history_store = profile_store.prompt_history_store(test_cipher());
+        let history_store = profile_store.prompt_history_store();
         (profile_store, history_store)
     }
 
@@ -418,144 +320,76 @@ mod tests {
         assert!(history_store.list(&server_id).await.unwrap().is_empty());
     }
 
-    // --- Spec 0040, Abschnitt 3: Verschlüsselung ----------------------------
+    // --- Issue #113: Klartext in der verschlüsselten Datei -----------------
 
-    /// Direkter SQL-Zugriff (am Store vorbei) darf den Klartext nicht
-    /// enthalten — derselbe Test-Aufbau wie
-    /// `chat_session_store::tests::test_direct_sql_access_to_content_column_never_reveals_plaintext`
-    /// (Spec 0036).
+    /// Issue #113: Ein neuer Eintrag liegt als SQLite-`TEXT` mit genau dem
+    /// eingegebenen Text in der Spalte — keine feldweise Verschlüsselung
+    /// mehr dazwischen. (Gegenprobe: Mit dem früheren Store stand hier ein
+    /// `BLOB` aus Nonce und Chiffrat, und der Test schlug fehl.)
     #[tokio::test]
-    async fn test_direct_sql_access_to_content_column_never_reveals_plaintext() {
+    async fn test_issue_113_a_new_entry_is_stored_as_plaintext_text() {
         let (profile_store, history_store) = in_memory_prompt_history_store().await;
         let server_id = create_test_server(&profile_store).await;
-        let secret_prompt = "ssh in --identity /home/stefan/.ssh/id_ed25519_prod deploy@10.0.0.5";
 
         history_store
-            .record(&server_id, secret_prompt)
+            .record(&server_id, "systemctl status nginx")
             .await
             .unwrap();
 
-        let raw_blob: Vec<u8> =
-            sqlx::query("SELECT content FROM prompt_history WHERE server_id = ?")
-                .bind(server_id.0.to_string())
-                .fetch_one(&profile_store.pool)
-                .await
-                .unwrap()
-                .get("content");
-
-        let raw_as_lossy_string = String::from_utf8_lossy(&raw_blob);
-        assert!(
-            !raw_as_lossy_string.contains(secret_prompt),
-            "der rohe BLOB darf den Klartext nicht enthalten: {raw_as_lossy_string}"
-        );
-        assert!(
-            raw_blob.len() > 12,
-            "Blob muss mindestens den 12-Byte-Nonce enthalten"
-        );
-    }
-
-    /// Zwei aufeinanderfolgende, absichtlich unterschiedliche Prompts
-    /// müssen unterschiedliche Blobs erzeugen (Nonce pro Vorgang zufällig,
-    /// Spec 0036) — reine Gegenprobe, dass hier nicht versehentlich
-    /// deterministisch verschlüsselt wird.
-    #[tokio::test]
-    async fn test_repeated_recording_uses_fresh_nonce_each_time() {
-        let (profile_store, history_store) = in_memory_prompt_history_store().await;
-        let server_id = create_test_server(&profile_store).await;
-
-        history_store.record(&server_id, "a").await.unwrap();
-        history_store.record(&server_id, "b").await.unwrap();
-
-        let blobs: Vec<Vec<u8>> = sqlx::query(
-            "SELECT content FROM prompt_history WHERE server_id = ? ORDER BY created_at ASC",
+        let (storage_class, raw): (String, String) = sqlx::query_as(
+            "SELECT typeof(content), CAST(content AS TEXT) FROM prompt_history WHERE server_id = ?",
         )
         .bind(server_id.0.to_string())
-        .fetch_all(&profile_store.pool)
+        .fetch_one(&profile_store.pool)
         .await
-        .unwrap()
-        .into_iter()
-        .map(|row| row.get("content"))
-        .collect();
-
-        assert_eq!(blobs.len(), 2);
-        assert_ne!(
-            blobs[0][..12],
-            blobs[1][..12],
-            "Nonces müssen unterschiedlich sein"
-        );
+        .unwrap();
+        assert_eq!(storage_class, "text");
+        assert_eq!(raw, "systemctl status nginx");
     }
 
-    /// Spec 0040, Abschnitt 3: die einmalige, idempotente
-    /// Anwendungs-Migration verschlüsselt bestehende Klartext-Zeilen
-    /// (simuliert hier durch einen direkten SQL-`INSERT` mit rohem
-    /// Klartext in die BLOB-Spalte, wie es echte Alt-Bestandsdaten nach
-    /// der reinen Schema-Migration `0010` wären) und lässt bereits
-    /// verschlüsselte Zeilen unangetastet.
+    /// Issue #113: Eine Zeile aus der Zeit vor Spec 0040 (roher Text, nie
+    /// verschlüsselt) ist ohne jede Umstellung lesbar.
     #[tokio::test]
-    async fn test_migrate_legacy_plaintext_content_encrypts_only_unencrypted_rows() {
+    async fn test_issue_113_a_pre_0040_plaintext_row_is_listed() {
         let (profile_store, history_store) = in_memory_prompt_history_store().await;
         let server_id = create_test_server(&profile_store).await;
-
-        // Simulierte Alt-Zeile: roher Klartext direkt in die BLOB-Spalte,
-        // am ContentCipher vorbei — genau das, was Migration `0010` für
-        // eine vor Spec 0040 angelegte Zeile übernommen hätte.
         sqlx::query(
             "INSERT INTO prompt_history (id, server_id, content, created_at) VALUES (?, ?, ?, ?)",
         )
         .bind(Uuid::new_v4().to_string())
         .bind(server_id.0.to_string())
-        .bind(b"legacy klartext prompt".to_vec())
+        .bind("legacy klartext prompt")
         .bind(Utc::now().to_rfc3339())
         .execute(&profile_store.pool)
         .await
         .unwrap();
 
-        // Bereits verschlüsselte Zeile (regulär über den Store angelegt).
-        history_store
-            .record(&server_id, "bereits verschluesselt")
-            .await
-            .unwrap();
-
-        let migrated_count = history_store
-            .migrate_legacy_plaintext_content()
-            .await
-            .unwrap();
         assert_eq!(
-            migrated_count, 1,
-            "nur die eine Klartext-Zeile darf migriert werden"
+            history_store.list(&server_id).await.unwrap(),
+            vec!["legacy klartext prompt".to_string()]
         );
+    }
 
-        // Idempotenz: ein zweiter Lauf migriert nichts mehr.
-        let second_run_count = history_store
-            .migrate_legacy_plaintext_content()
-            .await
-            .unwrap();
-        assert_eq!(second_run_count, 0);
+    /// Ein Blob, der kein Text ist (eine nicht umgestellte Altzeile), wird
+    /// nicht still übersprungen, sondern ist ein sichtbarer Fehler.
+    #[tokio::test]
+    async fn test_a_blob_value_is_an_error_not_a_silently_skipped_row() {
+        let (profile_store, history_store) = in_memory_prompt_history_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        sqlx::query(
+            "INSERT INTO prompt_history (id, server_id, content, created_at) VALUES (?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(server_id.0.to_string())
+        .bind(vec![0u8, 1, 2, 3])
+        .bind(Utc::now().to_rfc3339())
+        .execute(&profile_store.pool)
+        .await
+        .unwrap();
 
-        let mut listed = history_store.list(&server_id).await.unwrap();
-        listed.sort();
-        assert_eq!(
-            listed,
-            vec![
-                "bereits verschluesselt".to_string(),
-                "legacy klartext prompt".to_string()
-            ]
-        );
-
-        // Und die migrierte Zeile liegt jetzt tatsächlich verschlüsselt auf
-        // der Platte, nicht mehr als roher Klartext.
-        let raw_blobs: Vec<Vec<u8>> =
-            sqlx::query("SELECT content FROM prompt_history WHERE server_id = ?")
-                .bind(server_id.0.to_string())
-                .fetch_all(&profile_store.pool)
-                .await
-                .unwrap()
-                .into_iter()
-                .map(|row| row.get("content"))
-                .collect();
-        for blob in &raw_blobs {
-            let as_lossy = String::from_utf8_lossy(blob);
-            assert!(!as_lossy.contains("legacy klartext prompt"));
-        }
+        assert!(matches!(
+            history_store.list(&server_id).await,
+            Err(PromptHistoryStoreError::Backend(_))
+        ));
     }
 }

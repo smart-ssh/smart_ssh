@@ -16,6 +16,8 @@ import {
   onConnectionStatusChanged,
   onMcpActionTabRequested,
 } from "./events";
+// Registriert die Test-i18n-Instanz global für `useTranslation()` im Hook.
+import "./testI18n";
 import type { ChatActionProposedEvent, McpActionTabRequestedEvent } from "./types";
 import { sessionTabLabel, useSessionTabs } from "./useSessionTabs";
 
@@ -97,6 +99,11 @@ describe("useSessionTabs / action-decision-escalated (Spec 0092, A3.6)", () => {
       await result.current.requestCloseTab("session-1");
     });
 
+    // Issue #116: Die Rückfrage kommt aus der i18n-Schicht (deutsche
+    // Testsprache), mit dem Servernamen eingesetzt.
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Für "prod-db" wartet noch eine Bestätigung. Tab wirklich schließen? Die wartende Aktion gilt dann als abgelehnt.',
+    );
     expect(respondToAction).toHaveBeenCalledWith("session-1", "action-1", { decision: "deny" });
     expect(disconnect).toHaveBeenCalledWith("session-1");
   });

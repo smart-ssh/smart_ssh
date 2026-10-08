@@ -88,7 +88,12 @@ nutzbar.
 - **Nur `127.0.0.1`**, niemals im Netzwerk erreichbar.
 - **Bearer-Token**, beim erstmaligen Aktivieren generiert, in den
   Einstellungen einsehbar/neu generierbar. Jeder Tool-Call ohne oder mit
-  falschem Token wird abgelehnt, kein Teil-Zugriff.
+  falschem Token wird abgelehnt, kein Teil-Zugriff. Ein leeres oder nur aus
+  Leerzeichen bestehendes Token gewährt nie Zugriff, auch nicht einem
+  Client, der selbst ein leeres Token schickt. Findet die App beim Laden
+  ein solches gespeichertes Token, ersetzt sie es durch ein neu generiertes;
+  die Einstellungen zeigen danach wie gewohnt das neue Token, ohne
+  zusätzlichen Dialog.
 - **Standardmäßig deaktiviert** — eigener Schalter in den Einstellungen,
   keine automatische Aktivierung.
 - **Server-Allow-Liste**: eine explizite Auswahl, welche verwalteten Server

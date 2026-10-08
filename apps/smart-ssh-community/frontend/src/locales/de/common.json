@@ -385,7 +385,8 @@
       "tabHint": "Sitzung eines externen Tools (MCP) — eigene Verbindung, getrennt von deinen Sitzungen.",
       "pendingBadge": "Bestätigung nötig",
       "readOnlyHint": "Diese Sitzung gehört einem externen Tool (MCP). Hier erscheinen nur seine Aktionen zum Bestätigen oder Ablehnen und deren Ergebnis; eigene Eingaben und Terminal gibt es hier nicht. Schließen beendet die MCP-Sitzung und lehnt offene Bestätigungen ab."
-    }
+    },
+    "confirmClosePending": "Für \"{{name}}\" wartet noch eine Bestätigung. Tab wirklich schließen? Die wartende Aktion gilt dann als abgelehnt."
   },
   "aiProvider": {
     "title": "AI-Provider",
@@ -448,13 +449,20 @@
     "ollamaProbeFoundHeading": "Ollama läuft auf diesem Rechner.",
     "ollamaProbeFoundHintWillActivate": "Wird als aktiver Provider verwendet.",
     "ollamaProbeFoundHintInactive": "Wird als weiterer Provider angelegt (aktuell bleibt ein anderer aktiv).",
+    "addHintWillActivate": "Wird als aktiver Provider verwendet, da noch keiner aktiv ist.",
     "ollamaProbeAdopt": "Ollama übernehmen",
     "ollamaProbeDismiss": "Nein danke",
     "ollamaProbeEmptyHeading": "Ollama läuft, aber es ist noch kein Modell geladen.",
     "ollamaProbePullHint": "Ein Modell laden: im Terminal `ollama pull <modell>` ausführen, dann erneut suchen.",
     "ollamaProbeRetry": "Erneut suchen",
     "ollamaProbeNotFoundHeading": "Kein lokales Ollama gefunden (Standard-Port 11434).",
-    "ollamaProbeNotFoundInstructions": "Ollama von ollama.com installieren, starten und ein Modell laden (z. B. `ollama pull llama3`), dann erneut suchen."
+    "ollamaProbeNotFoundInstructions": "Ollama von ollama.com installieren, starten und ein Modell laden (z. B. `ollama pull llama3`), dann erneut suchen.",
+    "providerTypes": {
+      "openai": "OpenAI",
+      "anthropic": "Anthropic",
+      "generic_openai_compatible": "Generisch (OpenAI-kompatibel)",
+      "ollama": "Ollama"
+    }
   },
   "errors": {
     "SSH_CONNECTION_FAILED": "Verbindung fehlgeschlagen – ist der Host erreichbar (Adresse, Port, Netzwerk)?",
@@ -469,6 +477,7 @@
     "SSH_HOST_NOT_FOUND": "Der Hostname ist unbekannt. Schreibweise der Adresse prüfen (oder die IP-Adresse eintragen).",
     "SSH_HOST_UNREACHABLE": "Der Server ist aus diesem Netz nicht erreichbar. Netzwerk/VPN prüfen.",
     "SSH_CONNECTION_CLOSED": "Der Server hat die Verbindung während des Aufbaus beendet. Prüfen, ob auf diesem Port ein SSH-Dienst läuft; ggf. kurz warten (Schutz vor zu vielen Versuchen).",
+    "SSH_SESSION_CLOSED": "Die Verbindung zum Server wurde unterbrochen. Erneut verbinden, um weiterzuarbeiten.",
     "SSH_HOST_KEY_NOT_TRUSTED": "Verbindung abgebrochen, weil der Host-Key nicht bestätigt wurde. Wenn du dem Server vertraust: erneut verbinden und den Fingerprint prüfen.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Die Host-Key-Abfrage wurde nicht rechtzeitig beantwortet; der Key wurde nicht übernommen. Erneut verbinden.",
     "SSH_CONNECTION_ABANDONED": "Verbindungsaufbau abgebrochen (z. B. durch ein Neuladen der App, während die Host-Key-Abfrage offen war). Erneut verbinden.",
@@ -501,6 +510,7 @@
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Liest eine Datei mit Zugangsdaten (z. B. SSH-Schlüssel, .env, /etc/shadow) – erfordert immer Bestätigung",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Eine vorherige Aktion dieser Antwort wurde abgelehnt – erfordert Bestätigung",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten) – erfordert immer Bestätigung",
+    "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM": "Kommando ist zu lang oder zu tief verschachtelt für eine Prüfung – erfordert immer Bestätigung",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risiko rot eingestuft oder nicht sicher einschätzbar (z. B. zu lang) – erfordert immer Bestätigung",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notiz-Aktualisierungen erfordern immer eine Bestätigung",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Dateischreibvorgänge erfordern immer eine Bestätigung",
@@ -704,7 +714,7 @@
     },
     "tag": {
       "literalHint": "Buchstäbliches Schlagwort aus einer fremden Datei — kann eine Allow-Regel exakt treffen. Einzeln abwählbar.",
-      "literalDeselectedHint": "Buchstäbliches Schlagwort — trifft eine bestehende Allow-Regel und ist deshalb standardmäßig abgewählt. Einzeln wieder anwählbar.",
+      "allowDeselectedHint": "Trifft eine bestehende Allow-Regel und keine Deny-Regel — deshalb standardmäßig abgewählt. Einzeln wieder anwählbar.",
       "autoDeselectedBadge": "automatisch abgewählt",
       "matchesRuleHint": "trifft {{count}} bestehende Filterregel(n): {{actions}}",
       "action": {
@@ -810,6 +820,17 @@
   "startDirectory": {
     "notFound": "Startverzeichnis „{{dir}}“ wurde nicht gefunden oder ist nicht zugänglich. Terminal und Dateibrowser verwenden stattdessen das Home-Verzeichnis."
   },
+  "noteSuggestion": {
+    "summaryIncomplete": "Die Zusammenfassung wurde abgeschnitten und ist unvollständig. Prüfe sie sorgfältig oder lehne sie ab.",
+    "unknownTarget": "unbekanntes Ziel",
+    "groupTitle": "Gruppen-Notiz-Vorschlag für „{{name}}“",
+    "serverTitle": "Notiz-Vorschlag für Server „{{name}}“",
+    "show": "Anzeigen",
+    "dismiss": "Vorschlag verwerfen",
+    "reject": "Ablehnen",
+    "applying": "Übernimmt…",
+    "apply": "Übernehmen"
+  },
   "connectLog": {
     "title": "Details",
     "copy": "Kopieren",
@@ -851,5 +872,157 @@
       "partialSuccess": "teilweise akzeptiert, weitere Anmeldung nötig",
       "remainingMethods": "Server bietet außerdem an: {{methods}} (nicht versucht)"
     }
+  },
+  "fileBrowser": {
+    "actionsColumn": "Aktionen",
+    "chmodClassColumn": "Gilt für",
+    "toStartDirectory": "Zum Startverzeichnis",
+    "parentDirectory": "Übergeordnetes Verzeichnis",
+    "newFolderButton": "+ Ordner",
+    "upload": "Hochladen",
+    "uploadDialogTitle": "Datei(en) hochladen",
+    "paste": "Einfügen",
+    "pasteTitle": "{{name}} hierher verschieben",
+    "cancelCut": "Ausschneiden abbrechen",
+    "transferUpload": "Hochladen: {{name}}",
+    "transferDownload": "Herunterladen: {{name}}",
+    "loading": "Lädt…",
+    "emptyDirectory": "(leeres Verzeichnis)",
+    "dropHint": "Hier ablegen zum Hochladen nach {{path}}",
+    "cancel": "Abbrechen",
+    "apply": "Übernehmen",
+    "overwrite": "Überschreiben",
+    "delete": "Löschen",
+    "column": {
+      "name": "Name",
+      "size": "Größe",
+      "permissions": "Rechte",
+      "modified": "Geändert"
+    },
+    "localEdit": {
+      "uploading": "„{{name}}\" wird hochgeladen…",
+      "changed": "„{{name}}\" wurde lokal geändert. Auf den Server hochladen?",
+      "later": "Später",
+      "editing": "„{{name}}\" wird lokal bearbeitet…",
+      "end": "Bearbeitung beenden",
+      "uploadTitle": "Lokale Änderungen hochladen?",
+      "remoteChanged": "Die Remote-Datei wurde seit dem Download verändert — ein Hochladen würde diese andere Änderung überschreiben.",
+      "noDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß). Neue Größe: {{size}}."
+    },
+    "deleteDialog": {
+      "fileTitle": "Datei löschen?",
+      "dirTitle": "Ordner löschen?",
+      "body": "wird unwiderruflich vom Server gelöscht.",
+      "contents": "Enthält <strong>{{fileCount}}</strong> {{files}} in <strong>{{dirCount}}</strong> {{dirs}} (inkl. diesem) — alle werden mitgelöscht.",
+      "files_one": "Datei(en)",
+      "files_other": "Datei(en)",
+      "dirs_one": "Ordner(n)",
+      "dirs_other": "Ordner(n)",
+      "counting": "Ermittle Inhalt…"
+    },
+    "moveCollision": {
+      "title": "Ziel existiert bereits",
+      "body": "gibt es schon und würde überschrieben."
+    },
+    "uploadConflict": {
+      "title": "Datei überschreiben?",
+      "body": "existiert bereits auf dem Server.",
+      "noDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß). Bisherige Größe: {{remoteSize}}, neue Größe: {{localSize}}."
+    },
+    "menu": {
+      "download": "Herunterladen",
+      "downloadTo": "Herunterladen nach…",
+      "copyContent": "Dateiinhalt kopieren",
+      "openLocally": "Lokal öffnen…",
+      "copyPath": "Pfad kopieren",
+      "properties": "Eigenschaften",
+      "refresh": "Aktualisieren",
+      "chmod": "Rechte bearbeiten…",
+      "rename": "Umbenennen",
+      "cut": "Ausschneiden",
+      "delete": "Löschen"
+    },
+    "properties": {
+      "title": "Eigenschaften",
+      "name": "Name",
+      "path": "Pfad",
+      "type": "Typ",
+      "typeFolder": "Ordner",
+      "typeFile": "Datei",
+      "size": "Größe",
+      "permissionsSymbolic": "Rechte (symbolisch)",
+      "permissionsNumeric": "Rechte (numerisch)",
+      "owner": "Besitzer",
+      "group": "Gruppe",
+      "modified": "Geändert",
+      "close": "Schließen"
+    },
+    "chmod": {
+      "title": "Rechte bearbeiten",
+      "read": "Lesen",
+      "write": "Schreiben",
+      "execute": "Ausführen",
+      "numeric": "Numerisch",
+      "recursive": "Rekursiv",
+      "recursiveWarning": "— ändert die Rechte für ALLE Dateien und Unterordner in diesem Ordner. Mächtige Aktion, nicht rückgängig machbar."
+    },
+    "renamePrompt": {
+      "renameTitle": "Umbenennen",
+      "newFolderTitle": "Neuer Ordner"
+    }
+  },
+  "chat": {
+    "autoContinuing": "Automatik läuft — KI reagiert automatisch auf das letzte Ergebnis…",
+    "stopAutoContinuation": "Automatik stoppen",
+    "generating": "KI generiert Antwort / Dokument…",
+    "stop": "Stopp",
+    "noActiveProvider": "Kein aktiver AI-Provider konfiguriert. Bitte zuerst in den Einstellungen einrichten.",
+    "inputPlaceholder": "Frage stellen oder Kommando beschreiben …",
+    "send": "Senden",
+    "queued": "Wird mit der nächsten Anfrage gesendet",
+    "responseCancelled": "Antwort abgebrochen.",
+    "emptyResponse": "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.",
+    "outputTruncated": "(gekürzt)",
+    "fileWritten": "Datei '{{path}}' geschrieben.",
+    "writtenWithSudoPassword": "Über hinterlegtes Sudo-Passwort geschrieben.",
+    "documentGenerated": "Dokument generiert",
+    "saveAsMarkdown": "Als Markdown speichern",
+    "exportAsMarkdown": "Als Markdown",
+    "exportedAsMarkdown": "Als Markdown exportiert",
+    "exportDefaultTitle": "Antwort",
+    "responseTruncated": "Antwort wurde abgeschnitten (Längenlimit erreicht).",
+    "continue": "Weiter"
+  },
+  "notes": {
+    "largeNoteHint": "Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt werden. Die gespeicherte Notiz bleibt vollständig erhalten.",
+    "summarizeRequesting": "Wird angefragt…",
+    "summarizeNow": "Jetzt zusammenfassen",
+    "noteLabel": "Notiz (Kontext für die KI)",
+    "saveNote": "Notiz speichern",
+    "hideHistory": "Historie ausblenden",
+    "showHistory": "Historie anzeigen",
+    "noHistory": "Noch keine Historie.",
+    "editedByUser": "Nutzer",
+    "editedByAi": "KI ({{provider}}/{{model}})",
+    "restore": "Wiederherstellen",
+    "originalVersion": "Ursprüngliche Version"
+  },
+  "noteShrink": {
+    "title": "Notiz für Server „{{name}}“ ist sehr groß",
+    "dismissHint": "Hinweis schließen",
+    "body": "Deine Notiz für diesen Server ist sehr groß und kann bei langen Sitzungen gekürzt werden müssen. Soll ich sie zusammenfassen?",
+    "later": "Später",
+    "editMyself": "Mache ich selbst",
+    "summarize": "Ja, zusammenfassen",
+    "dismissError": "Fehlermeldung verwerfen"
+  },
+  "session": {
+    "disconnected": "Verbindung getrennt",
+    "disconnectedWithReason": "Verbindung getrennt: {{reason}}",
+    "disconnect": "Trennen",
+    "splitHandle": "Bereichsaufteilung",
+    "terminalTab": "Terminal",
+    "filesTab": "Dateien",
+    "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}"
   }
 }

@@ -624,10 +624,13 @@ async fn test_t17_multiline_script_with_one_red_line_is_escalated() {
 
 // --- Überlänge: Fail-safe statt „kein Risiko" --------------------------
 
-/// Ein Kommando mit Mehrbyte-Zeichen, das **über** der Byte-Schranke des
-/// Klassifizierers, aber **unter** der Zeichen-Schranke der Filter-Engine
-/// liegt — genau das Fenster, in dem der Klassifizierer aussteigt und die
-/// Engine mit Allow-Regel `AutoExec` liefert.
+/// Ein Kommando mit Mehrbyte-Zeichen über der Byte-Schranke
+/// ([`DEFAULT_MAX_COMMAND_LENGTH`](ssh_manager_core::filter::DEFAULT_MAX_COMMAND_LENGTH)),
+/// aber mit weniger Zeichen als Bytes. Bis Issue #110 lag es genau im
+/// Fenster, in dem der Klassifizierer (Bytes) ausstieg, die Filter-Engine
+/// (Zeichen) aber mit Allow-Regel `AutoExec` lieferte. Seit beide Bytes
+/// zählen, verlangt schon die Filter-Engine `Confirm`; der Fail-safe des
+/// Rot-Glieds bleibt als Tiefenverteidigung und wird unten direkt geprüft.
 fn overlong_multibyte_red_command() -> String {
     // „€" sind 3 Bytes, 1 Zeichen.
     format!("iptables -F -m comment --comment \"{}\"", "€".repeat(1400))
@@ -637,18 +640,20 @@ fn overlong_multibyte_red_command() -> String {
 /// liefert für Überlänge `None`/`None` — „nicht geprüft", nicht „unauffällig".
 /// Das Glied muss das selbst als rot behandeln, statt sich darauf zu
 /// verlassen, dass ein Nachbarglied zufällig ebenfalls eskaliert.
+///
+/// Issue #110: Die Filter-Engine misst seither ebenfalls in Bytes, das
+/// Kommando ist also auch für sie zu lang. Der Test ruft das Glied deshalb
+/// direkt auf und belegt den Fail-safe unabhängig von der Filter-Engine.
 #[test]
 fn test_overlong_pseudo_command_is_treated_as_red() {
     let command = overlong_multibyte_red_command();
     assert!(
-        command.len() > ssh_manager_core::filter::DEFAULT_MAX_COMMAND_LENGTH,
-        "Vorbedingung: über der Byte-Schranke ({} Bytes)",
+        ssh_manager_core::filter::exceeds_command_length_limit(
+            &command,
+            ssh_manager_core::filter::DEFAULT_MAX_COMMAND_LENGTH
+        ),
+        "Vorbedingung: über der Schranke ({} Bytes)",
         command.len()
-    );
-    assert!(
-        command.chars().count() <= ssh_manager_core::filter::DEFAULT_MAX_COMMAND_LENGTH,
-        "Vorbedingung: unter der Zeichen-Schranke ({} Zeichen)",
-        command.chars().count()
     );
     let action = AiAction::SuggestCommand {
         command: command.clone(),
@@ -672,11 +677,11 @@ fn test_overlong_pseudo_command_is_treated_as_red() {
 /// niemals `AutoExec`.
 ///
 /// **Ehrlich zum Beweiswert**: Dieser Test bleibt auch ohne den Fail-safe
-/// oben grün — `secret_path_read_reason` eskaliert für Überlänge selbst und
-/// steht in der Kette davor. Er sichert also nicht den Fail-safe (das tut der
-/// Unit-Test darüber), sondern die Gesamtzusage: sollte der Überlängen-Zweig
-/// des Nachbarglieds je auf lesende Kommandos eingeengt werden, wird dieser
-/// Test rot statt die Eskalation still zu verschwinden.
+/// oben grün — seit Issue #110 verlangt schon die Filter-Engine `Confirm`
+/// (Längenlimit in Bytes), und `secret_path_read_reason` eskaliert für
+/// Überlänge ebenfalls. Er sichert also nicht den Fail-safe (das tut der
+/// Unit-Test darüber), sondern die Gesamtzusage: Fiele eine dieser Schichten
+/// weg, hielten die anderen; fielen alle, wird dieser Test rot.
 #[tokio::test]
 async fn test_overlong_command_never_reaches_autoexec() {
     let command = overlong_multibyte_red_command();

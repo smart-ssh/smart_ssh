@@ -242,6 +242,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
               {t("startup.passwordLabel")}
               <input
                 type="password"
+                // eslint-disable-next-line jsx-a11y/no-autofocus -- gewollter Anfangsfokus des Dialogs (Issue #112): das Passwortfeld ist die einzige Eingabe.
                 autoFocus
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

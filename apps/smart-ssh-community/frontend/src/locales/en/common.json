@@ -385,7 +385,8 @@
       "tabHint": "Session of an external tool (MCP) — its own connection, separate from your sessions.",
       "pendingBadge": "Needs confirmation",
       "readOnlyHint": "This session belongs to an external tool (MCP). It only shows the tool's actions to confirm or reject and their results; there is no chat input or terminal here. Closing it ends the MCP session and rejects pending confirmations."
-    }
+    },
+    "confirmClosePending": "A confirmation is still pending for \"{{name}}\". Close the tab anyway? The pending action will then count as rejected."
   },
   "aiProvider": {
     "title": "AI Provider",
@@ -448,13 +449,20 @@
     "ollamaProbeFoundHeading": "Ollama is running on this machine.",
     "ollamaProbeFoundHintWillActivate": "Will be used as the active provider.",
     "ollamaProbeFoundHintInactive": "Will be added as another provider (another one stays active for now).",
+    "addHintWillActivate": "Will be used as the active provider, since none is active yet.",
     "ollamaProbeAdopt": "Use Ollama",
     "ollamaProbeDismiss": "No thanks",
     "ollamaProbeEmptyHeading": "Ollama is running, but no model is loaded yet.",
     "ollamaProbePullHint": "Load a model: run `ollama pull <model>` in a terminal, then search again.",
     "ollamaProbeRetry": "Search again",
     "ollamaProbeNotFoundHeading": "No local Ollama found (default port 11434).",
-    "ollamaProbeNotFoundInstructions": "Install Ollama from ollama.com, start it and load a model (e.g. `ollama pull llama3`), then search again."
+    "ollamaProbeNotFoundInstructions": "Install Ollama from ollama.com, start it and load a model (e.g. `ollama pull llama3`), then search again.",
+    "providerTypes": {
+      "openai": "OpenAI",
+      "anthropic": "Anthropic",
+      "generic_openai_compatible": "Generic (OpenAI-compatible)",
+      "ollama": "Ollama"
+    }
   },
   "errors": {
     "SSH_CONNECTION_FAILED": "Connection failed – is the host reachable (address, port, network)?",
@@ -469,6 +477,7 @@
     "SSH_HOST_NOT_FOUND": "Unknown host name. Check the address spelling (or enter the IP address).",
     "SSH_HOST_UNREACHABLE": "The server can't be reached from this network. Check your network/VPN.",
     "SSH_CONNECTION_CLOSED": "The server closed the connection during setup. Check that an SSH service runs on this port; wait a moment if too many attempts were made.",
+    "SSH_SESSION_CLOSED": "The connection to the server was lost. Reconnect to continue.",
     "SSH_HOST_KEY_NOT_TRUSTED": "Connection cancelled because the host key wasn't confirmed. If you trust the server, connect again and verify the fingerprint.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "The host key prompt wasn't answered in time; the key was not trusted. Connect again.",
     "SSH_CONNECTION_ABANDONED": "Connection attempt cancelled (e.g. the app reloaded while the host key prompt was open). Connect again.",
@@ -501,6 +510,7 @@
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Reads a file with credentials (e.g. SSH key, .env, /etc/shadow) – always requires confirmation",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "An earlier action in this response was rejected – requires confirmation",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Starts sftp-server (with sudo: file access with root privileges) – always requires confirmation",
+    "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM": "Command is too long or too deeply nested to be checked – always requires confirmation",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risk assessed as red, or could not be assessed reliably (e.g. too long) – always requires confirmation",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Note updates always require confirmation",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "File writes always require confirmation",
@@ -704,7 +714,7 @@
     },
     "tag": {
       "literalHint": "Literal tag from a foreign file — can match an Allow rule exactly. Deselectable individually.",
-      "literalDeselectedHint": "Literal tag — matches an existing Allow rule and is therefore deselected by default. Selectable again individually.",
+      "allowDeselectedHint": "Matches an existing Allow rule and no Deny rule — therefore deselected by default. Selectable again individually.",
       "autoDeselectedBadge": "automatically deselected",
       "matchesRuleHint": "matches {{count}} existing filter rule(s): {{actions}}",
       "action": {
@@ -810,6 +820,17 @@
   "startDirectory": {
     "notFound": "Start directory \"{{dir}}\" was not found or is not accessible. Terminal and file browser use the home directory instead."
   },
+  "noteSuggestion": {
+    "summaryIncomplete": "The summary was cut off and is incomplete. Check it carefully or reject it.",
+    "unknownTarget": "unknown target",
+    "groupTitle": "Group note suggestion for \"{{name}}\"",
+    "serverTitle": "Note suggestion for server \"{{name}}\"",
+    "show": "Show",
+    "dismiss": "Dismiss suggestion",
+    "reject": "Reject",
+    "applying": "Applying…",
+    "apply": "Apply"
+  },
   "connectLog": {
     "title": "Details",
     "copy": "Copy",
@@ -851,5 +872,157 @@
       "partialSuccess": "partially accepted, further authentication required",
       "remainingMethods": "Server also offers: {{methods}} (not tried)"
     }
+  },
+  "fileBrowser": {
+    "actionsColumn": "Actions",
+    "chmodClassColumn": "Applies to",
+    "toStartDirectory": "Go to start directory",
+    "parentDirectory": "Parent directory",
+    "newFolderButton": "+ Folder",
+    "upload": "Upload",
+    "uploadDialogTitle": "Upload file(s)",
+    "paste": "Paste",
+    "pasteTitle": "Move {{name}} here",
+    "cancelCut": "Cancel cut",
+    "transferUpload": "Uploading: {{name}}",
+    "transferDownload": "Downloading: {{name}}",
+    "loading": "Loading…",
+    "emptyDirectory": "(empty directory)",
+    "dropHint": "Drop here to upload to {{path}}",
+    "cancel": "Cancel",
+    "apply": "Apply",
+    "overwrite": "Overwrite",
+    "delete": "Delete",
+    "column": {
+      "name": "Name",
+      "size": "Size",
+      "permissions": "Permissions",
+      "modified": "Modified"
+    },
+    "localEdit": {
+      "uploading": "Uploading “{{name}}”…",
+      "changed": "“{{name}}” was changed locally. Upload it to the server?",
+      "later": "Later",
+      "editing": "Editing “{{name}}” locally…",
+      "end": "Stop editing",
+      "uploadTitle": "Upload local changes?",
+      "remoteChanged": "The remote file was changed since the download — uploading would overwrite that other change.",
+      "noDiff": "No text diff possible (binary file or too large). New size: {{size}}."
+    },
+    "deleteDialog": {
+      "fileTitle": "Delete file?",
+      "dirTitle": "Delete folder?",
+      "body": "will be deleted from the server permanently.",
+      "contents": "Contains <strong>{{fileCount}}</strong> {{files}} in <strong>{{dirCount}}</strong> {{dirs}} (including this one) — all of them will be deleted.",
+      "files_one": "file",
+      "files_other": "files",
+      "dirs_one": "folder",
+      "dirs_other": "folders",
+      "counting": "Counting contents…"
+    },
+    "moveCollision": {
+      "title": "Target already exists",
+      "body": "already exists and would be overwritten."
+    },
+    "uploadConflict": {
+      "title": "Overwrite file?",
+      "body": "already exists on the server.",
+      "noDiff": "No text diff possible (binary file or too large). Current size: {{remoteSize}}, new size: {{localSize}}."
+    },
+    "menu": {
+      "download": "Download",
+      "downloadTo": "Download to…",
+      "copyContent": "Copy file content",
+      "openLocally": "Open locally…",
+      "copyPath": "Copy path",
+      "properties": "Properties",
+      "refresh": "Refresh",
+      "chmod": "Edit permissions…",
+      "rename": "Rename",
+      "cut": "Cut",
+      "delete": "Delete"
+    },
+    "properties": {
+      "title": "Properties",
+      "name": "Name",
+      "path": "Path",
+      "type": "Type",
+      "typeFolder": "Folder",
+      "typeFile": "File",
+      "size": "Size",
+      "permissionsSymbolic": "Permissions (symbolic)",
+      "permissionsNumeric": "Permissions (numeric)",
+      "owner": "Owner",
+      "group": "Group",
+      "modified": "Modified",
+      "close": "Close"
+    },
+    "chmod": {
+      "title": "Edit permissions",
+      "read": "Read",
+      "write": "Write",
+      "execute": "Execute",
+      "numeric": "Numeric",
+      "recursive": "Recursive",
+      "recursiveWarning": "— changes the permissions of ALL files and subfolders in this folder. Powerful action, cannot be undone."
+    },
+    "renamePrompt": {
+      "renameTitle": "Rename",
+      "newFolderTitle": "New folder"
+    }
+  },
+  "chat": {
+    "autoContinuing": "Automatic mode running — the AI responds to the last result on its own…",
+    "stopAutoContinuation": "Stop automatic mode",
+    "generating": "AI is generating a response / document…",
+    "stop": "Stop",
+    "noActiveProvider": "No active AI provider configured. Please set one up in the settings first.",
+    "inputPlaceholder": "Ask a question or describe a command …",
+    "send": "Send",
+    "queued": "Will be sent with the next request",
+    "responseCancelled": "Response cancelled.",
+    "emptyResponse": "The model returned no response. For models with a thinking phase, a higher output limit in the provider settings helps.",
+    "outputTruncated": "(truncated)",
+    "fileWritten": "File '{{path}}' written.",
+    "writtenWithSudoPassword": "Written using the stored sudo password.",
+    "documentGenerated": "Document generated",
+    "saveAsMarkdown": "Save as Markdown",
+    "exportAsMarkdown": "As Markdown",
+    "exportedAsMarkdown": "Exported as Markdown",
+    "exportDefaultTitle": "Response",
+    "responseTruncated": "Response was cut off (length limit reached).",
+    "continue": "Continue"
+  },
+  "notes": {
+    "largeNoteHint": "This note is very large and may be shortened for the AI context in long sessions. The saved note stays complete.",
+    "summarizeRequesting": "Requesting…",
+    "summarizeNow": "Summarize now",
+    "noteLabel": "Note (context for the AI)",
+    "saveNote": "Save note",
+    "hideHistory": "Hide history",
+    "showHistory": "Show history",
+    "noHistory": "No history yet.",
+    "editedByUser": "User",
+    "editedByAi": "AI ({{provider}}/{{model}})",
+    "restore": "Restore",
+    "originalVersion": "Original version"
+  },
+  "noteShrink": {
+    "title": "Note for server \"{{name}}\" is very large",
+    "dismissHint": "Dismiss notice",
+    "body": "Your note for this server is very large and may have to be shortened in long sessions. Should I summarize it?",
+    "later": "Later",
+    "editMyself": "I'll do it myself",
+    "summarize": "Yes, summarize",
+    "dismissError": "Dismiss error message"
+  },
+  "session": {
+    "disconnected": "Disconnected",
+    "disconnectedWithReason": "Disconnected: {{reason}}",
+    "disconnect": "Disconnect",
+    "splitHandle": "Panel divider",
+    "terminalTab": "Terminal",
+    "filesTab": "Files",
+    "terminalOpenFailed": "Could not open terminal: {{error}}"
   }
 }

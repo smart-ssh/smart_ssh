@@ -14,7 +14,9 @@
 //!   wie es war.
 //!
 //! „Startablauf“ heißt hier, was `app_shell::open_and_assemble` vor dem
-//! Zusammenbau des App-Zustands ausführt: [`open_or_prepare_database`] und
+//! Zusammenbau des App-Zustands ausführt: [`open_or_prepare_database`], die
+//! Umstellung der feldweise verschlüsselten Spalten
+//! ([`crate::field_content_decryption`], Issue #113) und
 //! [`crate::secret_migration::migrate_secrets_into_database`].
 
 use std::sync::Mutex;
@@ -25,7 +27,7 @@ use credentials_keyring::KeychainAvailability;
 use persistence_sqlite::test_support::{
     align_migration_checksums, apply_future_migration, current_release_fixture, directory_contents,
     directory_file_names, max_known_migration_version, snapshot_database, FixtureEncryption,
-    RELEASE_FIXTURE_ROOT_KEY,
+    FIELD_ENCRYPTED_COLUMNS, RELEASE_FIXTURE_ROOT_KEY,
 };
 use persistence_sqlite::{detect_database_file_state, DatabaseFileState, DATA_DIR_LOCK_FILE_NAME};
 use ssh_manager_core::crypto::{DatabaseKey, CHAT_CONTENT_ENCRYPTION_KEY_REF};
@@ -101,11 +103,17 @@ fn database_key() -> DatabaseKey {
 #[derive(Default)]
 struct NoDialogExpected {
     asked: Mutex<Vec<StartupDialog>>,
+    /// Issue #113: kein Dialog, aber ein Hinweis — er wird aufgezeichnet.
+    removed_notices: Mutex<Vec<u64>>,
 }
 
 impl NoDialogExpected {
     fn asked(&self) -> Vec<StartupDialog> {
         self.asked.lock().unwrap().clone()
+    }
+
+    fn removed_notices(&self) -> Vec<u64> {
+        self.removed_notices.lock().unwrap().clone()
     }
 }
 
@@ -122,6 +130,9 @@ impl StartupPrompt for NoDialogExpected {
     }
     fn notify_started_over(&self, renamed_to: &str) {
         panic!("no start-over expected, got a rename to {renamed_to}");
+    }
+    fn notify_unreadable_history_removed(&self, removed: u64) {
+        self.removed_notices.lock().unwrap().push(removed);
     }
     fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {
         panic!("no master password expected");
@@ -153,6 +164,12 @@ async fn start_app(
         KeychainAvailability::Available,
         prompt,
         &lock,
+    )
+    .await?;
+    crate::field_content_decryption::decrypt_field_encrypted_content(
+        &opened.store,
+        &opened.root_key,
+        prompt,
     )
     .await?;
     let database_credentials = opened
@@ -229,7 +246,30 @@ async fn test_a_second_start_on_a_release_database_changes_neither_schema_nor_da
         "the first start must have converted the file"
     );
     let after_first_start = snapshot_database(&db_path, Some(&database_key())).await;
-    before_first_start.assert_preserved_in(&after_first_start, "first start");
+    // Issue #113: Der erste Start stellt die feldweise verschlüsselten
+    // Spalten auf Klartext um — deren Werte ändern sich, jede Zeile bleibt.
+    before_first_start.assert_preserved_in_except(
+        &after_first_start,
+        "first start",
+        &FIELD_ENCRYPTED_COLUMNS,
+    );
+    for (table, column) in FIELD_ENCRYPTED_COLUMNS {
+        let before = before_first_start.column_values(table, column);
+        let after = after_first_start.column_values(table, column);
+        assert_eq!(before.len(), after.len(), "{table}.{column} lost rows");
+        assert!(
+            before.iter().any(|v| v.starts_with("X'")),
+            "the release fixture must carry field-encrypted rows in {table}.{column}"
+        );
+        assert!(
+            after.iter().all(|v| !v.starts_with("X'")),
+            "{table}.{column} still holds an encrypted blob: {after:?}"
+        );
+    }
+    assert!(
+        prompt.removed_notices().is_empty(),
+        "every row of the release was readable, nothing may be announced as removed"
+    );
     assert_eq!(
         after_first_start.tables["_sqlx_migrations"].rows.len() as i64,
         max_known_migration_version(),
@@ -283,6 +323,94 @@ async fn test_a_second_start_on_a_release_database_changes_neither_schema_nor_da
             .get(&CredentialRef::new(reference.clone()))
             .unwrap_or_else(|err| panic!("{reference} missing from the database: {err:?}"));
         assert_eq!(stored.expose_secret(), value);
+    }
+    store.close().await;
+}
+
+/// Issue #113: Ein Nutzer des Release, dessen K nicht mehr der ist, unter
+/// dem sein Verlauf feldweise verschlüsselt wurde (z. B. weil er ihn nach
+/// einem unbrauchbaren Schlüssel neu erzeugt hat, Spec 0101 D4). Der Start
+/// wandelt die Datei mit dem neuen K um; die Umstellung kann keine der
+/// Altzeilen lesen, entfernt sie alle und weist **einmal** darauf hin —
+/// der zweite Start nicht mehr. Server und übrige Daten bleiben.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_history_under_an_earlier_key_is_removed_and_announced_once() {
+    use base64::Engine;
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = release_database(dir.path()).await;
+    let legacy_rows: usize = {
+        let snapshot = snapshot_database(&db_path, None).await;
+        FIELD_ENCRYPTED_COLUMNS
+            .iter()
+            .map(|(table, column)| {
+                snapshot
+                    .column_values(table, column)
+                    .iter()
+                    .filter(|v| v.starts_with("X'"))
+                    .count()
+            })
+            .sum()
+    };
+    assert!(
+        legacy_rows >= 7,
+        "the fixture carries {legacy_rows} legacy rows"
+    );
+
+    let new_root_key = [0x77u8; 32];
+    let keychain = release_keychain();
+    keychain.secrets.lock().unwrap().insert(
+        CHAT_CONTENT_ENCRYPTION_KEY_REF.to_string(),
+        SecretString::from(base64::engine::general_purpose::STANDARD.encode(new_root_key)),
+    );
+    let prompt = NoDialogExpected::default();
+
+    start_app(&db_path, &keychain, &prompt)
+        .await
+        .unwrap_or_else(|abort| panic!("first start failed: {abort:?}"));
+    start_app(&db_path, &keychain, &prompt)
+        .await
+        .unwrap_or_else(|abort| panic!("second start failed: {abort:?}"));
+
+    assert!(prompt.asked().is_empty(), "asked {:?}", prompt.asked());
+    assert_eq!(prompt.removed_notices(), vec![legacy_rows as u64]);
+    let new_key = DatabaseKey::from_root_key(&new_root_key);
+    let after = snapshot_database(&db_path, Some(&new_key)).await;
+    for (table, column) in FIELD_ENCRYPTED_COLUMNS {
+        assert!(
+            after
+                .column_values(table, column)
+                .iter()
+                .all(|v| !v.starts_with("X'")),
+            "{table}.{column} still holds an encrypted blob"
+        );
+    }
+    let store = SqliteProfileStore::connect_encrypted(&db_path, &new_key)
+        .await
+        .unwrap();
+    let servers = store.list_servers().await.unwrap();
+    assert!(
+        servers.iter().any(|s| s.host == "host-a-r052.example"),
+        "{servers:?}"
+    );
+    let chat = store.chat_session_store();
+    for server in &servers {
+        for session in chat.list_sessions_for_server(&server.id).await.unwrap() {
+            assert!(chat.load_session(session.id).await.unwrap().is_empty());
+            assert_eq!(chat.load_summary(session.id).await.unwrap(), None);
+            assert!(store
+                .ledger_store()
+                .load_entries(session.id)
+                .await
+                .unwrap()
+                .is_empty());
+        }
+        assert!(store
+            .prompt_history_store()
+            .list(&server.id)
+            .await
+            .unwrap()
+            .is_empty());
     }
     store.close().await;
 }

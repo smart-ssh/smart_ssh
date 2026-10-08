@@ -160,8 +160,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
       {isLarge && (
         <div className="rounded border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
           <p>
-            Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt
-            werden. Die gespeicherte Notiz bleibt vollständig erhalten.
+            {t("notes.largeNoteHint")}
           </p>
           {"Server" in target && (
             <>
@@ -171,7 +170,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                 disabled={shrinkRequesting}
                 className="mt-1.5 underline hover:no-underline disabled:opacity-50"
               >
-                {shrinkRequesting ? "Wird angefragt…" : "Jetzt zusammenfassen"}
+                {shrinkRequesting ? t("notes.summarizeRequesting") : t("notes.summarizeNow")}
               </button>
               {shrinkError && <p className="mt-1 text-red-400">{shrinkError}</p>}
             </>
@@ -180,7 +179,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
       )}
 
       <label className="block text-sm text-slate-300">
-        Notiz (Kontext für die KI)
+        {t("notes.noteLabel")}
         <textarea
           ref={textareaRef}
           value={draft}
@@ -199,21 +198,21 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
           disabled={saving || draft === currentNotes}
           className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
         >
-          {saving ? "Speichert…" : "Notiz speichern"}
+          {saving ? t("common.saving") : t("notes.saveNote")}
         </button>
         <button
           type="button"
           onClick={() => setShowHistory((s) => !s)}
           className="rounded bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700"
         >
-          {showHistory ? "Historie ausblenden" : "Historie anzeigen"}
+          {showHistory ? t("notes.hideHistory") : t("notes.showHistory")}
         </button>
       </div>
 
       {showHistory && (
         <ul className="divide-y divide-slate-700 rounded border border-slate-700">
           {revisions.length === 0 && (
-            <li className="px-3 py-2 text-sm text-slate-400">Noch keine Historie.</li>
+            <li className="px-3 py-2 text-sm text-slate-400">{t("notes.noHistory")}</li>
           )}
           {revisions.map((r, index) => {
             // Spec 0030, Abschnitt 3: `revisions` kommt chronologisch
@@ -235,15 +234,18 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                     <span className="select-none">{expanded ? "▾" : "▸"}</span>
                     {new Date(r.createdAt).toLocaleString()} ·{" "}
                     {r.editedBy.kind === "user"
-                      ? "Nutzer"
-                      : `KI (${r.editedBy.provider}/${r.editedBy.model})`}
+                      ? t("notes.editedByUser")
+                      : t("notes.editedByAi", {
+                          provider: r.editedBy.provider,
+                          model: r.editedBy.model,
+                        })}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleRollback(r.id)}
                     className="shrink-0 rounded bg-slate-700 px-2 py-0.5 text-xs hover:bg-slate-600"
                   >
-                    Wiederherstellen
+                    {t("notes.restore")}
                   </button>
                 </div>
                 {expanded && (
@@ -251,7 +253,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                     {previous === null ? (
                       <div>
                         <p className="mb-1 text-xs font-semibold text-slate-500">
-                          Ursprüngliche Version
+                          {t("notes.originalVersion")}
                         </p>
                         <p className="whitespace-pre-wrap text-slate-300">{r.content}</p>
                       </div>

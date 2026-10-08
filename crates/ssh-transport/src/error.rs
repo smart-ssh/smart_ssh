@@ -118,6 +118,23 @@ pub(crate) fn map_russh_error(e: russh::Error) -> SshError {
     }
 }
 
+/// Issue #96 (Spec 0069, Teil A3): Abbildung für Fehler aus Operationen auf
+/// einer **bereits aufgebauten** Sitzung (Kanal öffnen, `exec`, Shell,
+/// SFTP, Trennen). Identisch zu [`map_russh_error`] — mit genau einer
+/// Ausnahme: was dort [`SshError::ConnectionClosed`] („während des
+/// Aufbaus beendet") wird, wird hier [`SshError::SessionClosed`]. Alle
+/// anderen Zuordnungen (`NotAuthenticated`, `ConnectionRefused`,
+/// `HostUnreachable`, `TimedOut`, unbekannte Kinds, sonstige Varianten)
+/// laufen unverändert durch [`map_russh_error`]; das ist Absicht, damit
+/// beide Kontexte nicht auseinanderlaufen können. Nur die Einordnung
+/// ändert sich, nie der Kontrollfluss: ein Fehler bleibt ein Fehler.
+pub(crate) fn map_session_russh_error(e: russh::Error) -> SshError {
+    match map_russh_error(e) {
+        SshError::ConnectionClosed(msg) => SshError::SessionClosed(msg),
+        other => other,
+    }
+}
+
 pub(crate) fn map_io_error(io_err: std::io::Error) -> SshError {
     use std::io::ErrorKind;
 
@@ -146,7 +163,7 @@ mod map_russh_error_tests {
 
     use ssh_manager_core::ssh::SshError;
 
-    use super::map_russh_error;
+    use super::{map_russh_error, map_session_russh_error};
 
     fn io(kind: ErrorKind) -> russh::Error {
         russh::Error::IO(IoError::new(kind, "probe"))
@@ -225,5 +242,62 @@ mod map_russh_error_tests {
             map_russh_error(io(ErrorKind::PermissionDenied)),
             SshError::ConnectionFailed(_)
         ));
+    }
+
+    /// Issue #96: dieselben vier Abbruch-Fehler auf einer **aufgebauten**
+    /// Sitzung ergeben `SessionClosed` (`SSH_SESSION_CLOSED`), nie
+    /// `ConnectionClosed` (`SSH_CONNECTION_CLOSED`). Gegenbeweis: mit
+    /// `map_russh_error` an den Sitzungs-Aufrufstellen (Stand vor dem Fix)
+    /// kam hier `ConnectionClosed` heraus.
+    #[test]
+    fn test_session_context_maps_closed_connection_to_session_closed() {
+        let cases = [
+            russh::Error::Disconnect,
+            io(ErrorKind::ConnectionReset),
+            io(ErrorKind::ConnectionAborted),
+            io(ErrorKind::UnexpectedEof),
+        ];
+        for case in cases {
+            let label = format!("{case:?}");
+            let mapped = map_session_russh_error(case);
+            assert!(
+                matches!(mapped, SshError::SessionClosed(_)),
+                "{label} -> {mapped:?}"
+            );
+            assert_eq!(mapped.code(), "SSH_SESSION_CLOSED", "{label}");
+        }
+    }
+
+    /// Issue #96: im Aufbau-Kontext bleibt es bei `SSH_CONNECTION_CLOSED`.
+    #[test]
+    fn test_setup_context_keeps_connection_closed_code() {
+        let cases = [
+            russh::Error::Disconnect,
+            io(ErrorKind::ConnectionReset),
+            io(ErrorKind::ConnectionAborted),
+            io(ErrorKind::UnexpectedEof),
+        ];
+        for case in cases {
+            let label = format!("{case:?}");
+            let mapped = map_russh_error(case);
+            assert_eq!(mapped.code(), "SSH_CONNECTION_CLOSED", "{label}");
+        }
+    }
+
+    /// Issue #96: alle übrigen Zuordnungen sind in beiden Kontexten gleich.
+    #[test]
+    fn test_session_context_leaves_other_mappings_unchanged() {
+        let make: [fn() -> russh::Error; 7] = [
+            || russh::Error::NotAuthenticated,
+            || io(ErrorKind::ConnectionRefused),
+            || io(ErrorKind::TimedOut),
+            || io(ErrorKind::HostUnreachable),
+            || io(ErrorKind::NetworkUnreachable),
+            || io(ErrorKind::PermissionDenied),
+            || russh::Error::KexInit,
+        ];
+        for f in make {
+            assert_eq!(map_session_russh_error(f()), map_russh_error(f()));
+        }
     }
 }

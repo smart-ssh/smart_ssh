@@ -1,5 +1,6 @@
 use crate::filter::{
-    resolve_effective_command, segment_command, Pattern, DEFAULT_MAX_COMMAND_LENGTH,
+    exceeds_command_length_limit, extract_shell_c_style_codes, resolve_effective_command,
+    segment_command, Pattern, DEFAULT_MAX_COMMAND_LENGTH, MAX_SUBSTITUTION_DEPTH,
 };
 
 use super::patterns::{
@@ -35,7 +36,7 @@ impl RiskClassifier for RuleBasedRiskClassifier {
         // ohnehin bereits die Filter-Engine (`FILTER_COMMAND_TOO_LONG`) —
         // hier zählt nur "nicht abstürzen", ein unklassifiziertes Ergebnis
         // ist ein akzeptabler Fail-safe.
-        if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+        if exceeds_command_length_limit(command, DEFAULT_MAX_COMMAND_LENGTH) {
             return RiskAssessment {
                 server_risk: RiskLevel::None,
                 server_risk_reason: None,
@@ -45,70 +46,123 @@ impl RiskClassifier for RuleBasedRiskClassifier {
             };
         }
 
-        let mut segments = segment_command(command);
-        // Zusätzlich das unzerlegte Gesamtkommando prüfen: `scan_top_level_
-        // segments` (`filter::parser`) verfolgt nur `(`/`)`, keine `{`/`}` —
-        // ein Muster wie die klassische Fork-Bombe `:(){ :|:& };:`, dessen
-        // `|`/`;` innerhalb der `{}`-Klammern liegen, wird deshalb an
-        // genau diesen Zeichen mit-aufgetrennt, obwohl es fachlich ein
-        // einzelnes Kommando ist. Ein per-Segment-Match allein würde ein
-        // extra/exakt formuliertes Muster für so einen Fall daher nie
-        // treffen; das volle Kommando zusätzlich zu prüfen fängt das aber
-        // ohne eine (hier nicht gewollte) Änderung an `filter::parser`
-        // selbst auf.
-        segments.push(command.to_lowercase());
-        // Unabhängiger Review-Pass (Spec 0026): ohne dieselbe Normalisierung,
-        // die die Filter-Engine für ihre eigene Hard-Blacklist anwendet
-        // (`resolve_effective_command` — wiederholtes Entfernen von
-        // `sudo`/`doas`/Wrapper-Präfixen und Variablen-Zuweisungen), sind
-        // fast alle Risiko-Muster durch ein vorangestelltes `sudo`/`env`/
-        // `bash -c` wirkungslos, weil sie am Anfang verankert sind (z. B.
-        // die Daten-Risiko-Regexes `^(?:cat|less|head|tail|...)`,
-        // Server-Risiko-Muster wie `shutdown*`/`kill *`) — empirisch
-        // verifiziert: `sudo cat /etc/shadow` klassifizierte zuvor als "kein
-        // Risiko" statt "Daten Rot", obwohl genau das die praktisch
-        // häufigere UND gefährlichere Form ist. Zusätzlich zum rohen Segment
-        // auch die aufgelöste Form prüfen — dasselbe Dual-Text-Muster wie
-        // ADR 0002, hier für die Risiko-Einschätzung statt für Regeln.
-        let resolved: Vec<String> = segments
-            .iter()
-            .map(|segment| resolve_effective_command(segment))
-            .collect();
-        segments.extend(resolved);
-
-        let mut server_risk = RiskLevel::None;
-        let mut server_risk_reason: Option<&'static str> = None;
-        let mut data_risk = RiskLevel::None;
-        let mut data_risk_reason: Option<&'static str> = None;
-
-        for segment in &segments {
-            // Wie die Hard-Blacklist der Filter-Engine (s.
-            // `filter::blacklist`-Modul-Kommentar) case-insensitiv über
-            // Lowercasing statt eines `case_insensitive`-Glob-Builders —
-            // dieselbe, bereits etablierte Konvention.
-            let lower = segment.to_lowercase();
-
-            if let Some((level, reason)) = best_match(server_risk_patterns(), &lower) {
-                if level > server_risk {
-                    server_risk = level;
-                    server_risk_reason = Some(reason);
-                }
-            }
-            if let Some((level, reason)) = best_match(data_risk_patterns(), &lower) {
-                if level > data_risk {
-                    data_risk = level;
-                    data_risk_reason = Some(reason);
-                }
-            }
-        }
+        let mut acc = RiskAccumulator::new();
+        classify_into(command, 0, &mut acc);
 
         RiskAssessment {
-            server_risk,
-            server_risk_reason: server_risk_reason.map(str::to_string),
-            data_risk,
-            data_risk_reason: data_risk_reason.map(str::to_string),
+            server_risk: acc.server_risk,
+            server_risk_reason: acc.server_risk_reason.map(str::to_string),
+            data_risk: acc.data_risk,
+            data_risk_reason: acc.data_risk_reason.map(str::to_string),
             ai_reviewed: false,
         }
+    }
+}
+
+/// Highest level found so far per axis, with the reason of the pattern
+/// that set it.
+pub(super) struct RiskAccumulator {
+    pub(super) server_risk: RiskLevel,
+    server_risk_reason: Option<&'static str>,
+    pub(super) data_risk: RiskLevel,
+    data_risk_reason: Option<&'static str>,
+}
+
+impl RiskAccumulator {
+    pub(super) fn new() -> Self {
+        Self {
+            server_risk: RiskLevel::None,
+            server_risk_reason: None,
+            data_risk: RiskLevel::None,
+            data_risk_reason: None,
+        }
+    }
+}
+
+/// Classifies `command` into `acc` (keeping the highest level per axis) and
+/// then, issue #88, the code argument(s) of every shell/interpreter `-c`
+/// call found in it — `bash -c 'shutdown now'`, `sudo sh -c "cat
+/// /etc/shadow"`, `env bash -c '…'` — with the same segmenting,
+/// normalisation and patterns. Without this the start-anchored patterns
+/// never see the wrapped command, and a red command was shown as "no risk".
+///
+/// The extraction is the filter engine's own (`extract_shell_c_style_codes`),
+/// so both consumers agree on what counts as `-c` code. Nested calls
+/// (`bash -c "sh -c 'reboot'"`) are unwrapped level by level up to
+/// [`MAX_SUBSTITUTION_DEPTH`], the same cap the filter engine and
+/// `segment_command` use; beyond it the remaining code is not unwrapped
+/// further (no unbounded recursion). The outer levels are still rated, so
+/// the result is never lower than without the unwrapping.
+pub(super) fn classify_into(command: &str, depth: usize, acc: &mut RiskAccumulator) {
+    let mut segments = segment_command(command);
+    // Zusätzlich das unzerlegte Gesamtkommando prüfen: `scan_top_level_
+    // segments` (`filter::parser`) verfolgt nur `(`/`)`, keine `{`/`}` —
+    // ein Muster wie die klassische Fork-Bombe `:(){ :|:& };:`, dessen
+    // `|`/`;` innerhalb der `{}`-Klammern liegen, wird deshalb an
+    // genau diesen Zeichen mit-aufgetrennt, obwohl es fachlich ein
+    // einzelnes Kommando ist. Ein per-Segment-Match allein würde ein
+    // extra/exakt formuliertes Muster für so einen Fall daher nie
+    // treffen; das volle Kommando zusätzlich zu prüfen fängt das aber
+    // ohne eine (hier nicht gewollte) Änderung an `filter::parser`
+    // selbst auf.
+    segments.push(command.to_lowercase());
+    // Unabhängiger Review-Pass (Spec 0026): ohne dieselbe Normalisierung,
+    // die die Filter-Engine für ihre eigene Hard-Blacklist anwendet
+    // (`resolve_effective_command` — wiederholtes Entfernen von
+    // `sudo`/`doas`/Wrapper-Präfixen und Variablen-Zuweisungen), sind
+    // fast alle Risiko-Muster durch ein vorangestelltes `sudo`/`env`/
+    // `bash -c` wirkungslos, weil sie am Anfang verankert sind (z. B.
+    // die Daten-Risiko-Regexes `^(?:cat|less|head|tail|...)`,
+    // Server-Risiko-Muster wie `shutdown*`/`kill *`) — empirisch
+    // verifiziert: `sudo cat /etc/shadow` klassifizierte zuvor als "kein
+    // Risiko" statt "Daten Rot", obwohl genau das die praktisch
+    // häufigere UND gefährlichere Form ist. Zusätzlich zum rohen Segment
+    // auch die aufgelöste Form prüfen — dasselbe Dual-Text-Muster wie
+    // ADR 0002, hier für die Risiko-Einschätzung statt für Regeln.
+    let resolved: Vec<String> = segments
+        .iter()
+        .map(|segment| resolve_effective_command(segment))
+        .collect();
+    segments.extend(resolved);
+
+    for segment in &segments {
+        // Wie die Hard-Blacklist der Filter-Engine (s.
+        // `filter::blacklist`-Modul-Kommentar) case-insensitiv über
+        // Lowercasing statt eines `case_insensitive`-Glob-Builders —
+        // dieselbe, bereits etablierte Konvention.
+        let lower = segment.to_lowercase();
+
+        if let Some((level, reason)) = best_match(server_risk_patterns(), &lower) {
+            if level > acc.server_risk {
+                acc.server_risk = level;
+                acc.server_risk_reason = Some(reason);
+            }
+        }
+        if let Some((level, reason)) = best_match(data_risk_patterns(), &lower) {
+            if level > acc.data_risk {
+                acc.data_risk = level;
+                acc.data_risk_reason = Some(reason);
+            }
+        }
+    }
+
+    if depth >= MAX_SUBSTITUTION_DEPTH {
+        return;
+    }
+    // Lower-cased and de-duplicated before recursing: the raw segment,
+    // the whole command and their resolved forms usually yield the same
+    // code, and recursing once per copy would multiply the work at every
+    // nesting level.
+    let mut codes: Vec<String> = Vec::new();
+    for segment in &segments {
+        for code in extract_shell_c_style_codes(&segment.to_lowercase()) {
+            if !codes.contains(&code) {
+                codes.push(code);
+            }
+        }
+    }
+    for code in &codes {
+        classify_into(code, depth + 1, acc);
     }
 }
 
@@ -127,6 +181,32 @@ fn best_match(
         .max_by_key(|(level, _)| *level)
 }
 
+/// Ergebnis der Secret-Pfad- bzw. `sftp-server`-Prüfung (Issue #109).
+/// Beide Varianten eskalieren gleich (`AutoExec` → `Confirm`); sie
+/// unterscheiden nur den Grund, den der Bestätigungsdialog nennt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandCheckFinding {
+    /// Die Prüfung hat einen Treffer gefunden.
+    Match(&'static str),
+    /// Das Kommando ließ sich nicht prüfen (Längen- oder
+    /// Verschachtelungsgrenze) — fail-safe wie ein Treffer behandelt.
+    NotAssessable(&'static str),
+}
+
+impl CommandCheckFinding {
+    /// Die deutsche Begründung, unabhängig von der Variante.
+    pub fn reason(&self) -> &'static str {
+        match self {
+            Self::Match(reason) | Self::NotAssessable(reason) => reason,
+        }
+    }
+
+    /// `true`, wenn das Kommando nicht geprüft werden konnte.
+    pub fn is_not_assessable(&self) -> bool {
+        matches!(self, Self::NotAssessable(_))
+    }
+}
+
 /// ADR 0058 §8 (Entscheidung, 2026-09-21): liefert eine Begründung,
 /// wenn `command` `sftp-server` aufruft. Der Aufrufer
 /// (`app-shell::orchestration::handle_action_proposed`) macht aus
@@ -140,10 +220,12 @@ fn best_match(
 /// Übergabe per Pipe an eine Shell. Die Erweiterung kann so nie weniger
 /// erkennen als das Rot-Muster. Bloße Erwähnungen (`ls`, `grep`, `which`,
 /// `cat` auf den Pfad) lösen nichts aus.
-pub fn sftp_server_invocation_reason(command: &str) -> Option<&'static str> {
+pub fn sftp_server_invocation_reason(command: &str) -> Option<CommandCheckFinding> {
     const REASON: &str = "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten)";
-    if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
-        return Some("Kommando zu lang für eine Prüfung auf sftp-server-Aufrufe");
+    if exceeds_command_length_limit(command, DEFAULT_MAX_COMMAND_LENGTH) {
+        return Some(CommandCheckFinding::NotAssessable(
+            "Kommando zu lang für eine Prüfung auf sftp-server-Aufrufe",
+        ));
     }
     static INVOCATION: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let invocation = INVOCATION.get_or_init(|| {
@@ -162,10 +244,25 @@ pub fn sftp_server_invocation_reason(command: &str) -> Option<&'static str> {
         .iter()
         .any(|segment| invocation.is_match(&segment.to_lowercase()))
     {
-        return Some(REASON);
+        return Some(CommandCheckFinding::Match(REASON));
     }
     // (b) Wort-Prüfung.
-    sftp_server_word_check(command, 0).then_some(REASON)
+    match sftp_server_word_check(command, 0) {
+        WordCheck::Found => Some(CommandCheckFinding::Match(REASON)),
+        WordCheck::TooDeep => Some(CommandCheckFinding::NotAssessable(
+            "Zu tief verschachtelte Shell-Aufrufe für eine Prüfung auf sftp-server-Aufrufe",
+        )),
+        WordCheck::Clean => None,
+    }
+}
+
+/// Ergebnis der Wort-Prüfung auf `sftp-server`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WordCheck {
+    Found,
+    /// Tiefer verschachtelt als geprüft wird — fail-safe eskalieren.
+    TooDeep,
+    Clean,
 }
 
 /// Programme, hinter denen das nächste Nicht-Options-Wort ausgeführt wird.
@@ -175,9 +272,9 @@ const COMMAND_PREFIXES: &[&str] = &[
     "ltrace",
 ];
 
-fn sftp_server_word_check(command: &str, depth: usize) -> bool {
+fn sftp_server_word_check(command: &str, depth: usize) -> WordCheck {
     if depth > 3 {
-        return true;
+        return WordCheck::TooDeep;
     }
     let lower = command.to_lowercase();
     let words = shell_words(&lower);
@@ -192,13 +289,13 @@ fn sftp_server_word_check(command: &str, depth: usize) -> bool {
         }
         let word_name = name(word);
         if word_name == "sftp-server" && (at_command_position || has_reshell) {
-            return true;
+            return WordCheck::Found;
         }
-        if word.text.contains(char::is_whitespace)
-            && word.text.contains("sftp-server")
-            && sftp_server_word_check(&word.text, depth + 1)
-        {
-            return true;
+        if word.text.contains(char::is_whitespace) && word.text.contains("sftp-server") {
+            let nested = sftp_server_word_check(&word.text, depth + 1);
+            if nested != WordCheck::Clean {
+                return nested;
+            }
         }
         if at_command_position {
             let is_prefix = COMMAND_PREFIXES.contains(&word_name.as_str())
@@ -212,7 +309,7 @@ fn sftp_server_word_check(command: &str, depth: usize) -> bool {
             at_command_position = is_prefix;
         }
     }
-    false
+    WordCheck::Clean
 }
 
 /// `NAME=wert` vor einem Kommando.
@@ -240,16 +337,18 @@ fn is_env_assignment(word: &str) -> bool {
 /// ([`extended_secret_read_reason`]) kommt nur hinzu. Eine Umstellung der
 /// erweiterten Prüfung kann so nie etwas durchlassen, das vorher
 /// eskaliert wurde.
-pub fn secret_path_read_reason(command: &str) -> Option<&'static str> {
+pub fn secret_path_read_reason(command: &str) -> Option<CommandCheckFinding> {
     first_version_secret_read_reason(command).or_else(|| extended_secret_read_reason(command))
 }
 
 /// Erste Fassung (Commit `8817a6f`), wörtlich: Lesebefehl am Anfang eines
 /// Teilkommandos + Secret-Pfad, `-exec`/`xargs` mit Secret-Hinweis,
 /// Platzhalter auf Punktdateien/Secret-Hinweise.
-fn first_version_secret_read_reason(command: &str) -> Option<&'static str> {
-    if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
-        return Some("Kommando zu lang für eine Prüfung auf Secret-Pfade");
+fn first_version_secret_read_reason(command: &str) -> Option<CommandCheckFinding> {
+    if exceeds_command_length_limit(command, DEFAULT_MAX_COMMAND_LENGTH) {
+        return Some(CommandCheckFinding::NotAssessable(
+            "Kommando zu lang für eine Prüfung auf Secret-Pfade",
+        ));
     }
 
     let mut segments = segment_command(command);
@@ -278,7 +377,9 @@ fn first_version_secret_read_reason(command: &str) -> Option<&'static str> {
     for segment in &segments {
         let normalized = normalize(segment);
         if exec_read.is_match(&normalized) && SECRET_PATH_HINTS.iter().any(|h| full.contains(h)) {
-            return Some("Liest Dateien per -exec/xargs aus einem Secret-Pfad");
+            return Some(CommandCheckFinding::Match(
+                "Liest Dateien per -exec/xargs aus einem Secret-Pfad",
+            ));
         }
         if !read_start.is_match(&normalized) {
             continue;
@@ -287,7 +388,7 @@ fn first_version_secret_read_reason(command: &str) -> Option<&'static str> {
             .iter()
             .find(|(pattern, _)| pattern.is_match(&normalized))
         {
-            return Some(reason);
+            return Some(CommandCheckFinding::Match(reason));
         }
         let globbed_secret = normalized.split_whitespace().skip(1).any(|arg| {
             let has_glob = arg.contains(['*', '?', '[', '{']);
@@ -300,7 +401,9 @@ fn first_version_secret_read_reason(command: &str) -> Option<&'static str> {
                     || SECRET_PATH_HINTS.iter().any(|h| arg.contains(h)))
         });
         if globbed_secret {
-            return Some("Lesebefehl mit Platzhalter auf einen möglichen Secret-Pfad");
+            return Some(CommandCheckFinding::Match(
+                "Lesebefehl mit Platzhalter auf einen möglichen Secret-Pfad",
+            ));
         }
     }
     None
@@ -335,7 +438,7 @@ fn first_version_secret_read_reason(command: &str) -> Option<&'static str> {
 /// und Umwege über eine zuvor unverdächtig kopierte Datei. Inline-Code
 /// (`python -c`, `bash -c`, `$(…)`) setzt die Filter-Engine ohnehin auf
 /// Bestätigung; Redaction bleibt die weitere Schicht.
-fn extended_secret_read_reason(command: &str) -> Option<&'static str> {
+fn extended_secret_read_reason(command: &str) -> Option<CommandCheckFinding> {
     extended_secret_read_reason_in(command, &[], 0, &NestedBudget::default())
 }
 
@@ -402,13 +505,17 @@ fn extended_secret_read_reason_in(
     inherited_prefixes: &[String],
     depth: usize,
     budget: &NestedBudget,
-) -> Option<&'static str> {
-    if command.len() > DEFAULT_MAX_COMMAND_LENGTH {
-        return Some("Kommando zu lang für eine Prüfung auf Secret-Pfade");
+) -> Option<CommandCheckFinding> {
+    if exceeds_command_length_limit(command, DEFAULT_MAX_COMMAND_LENGTH) {
+        return Some(CommandCheckFinding::NotAssessable(
+            "Kommando zu lang für eine Prüfung auf Secret-Pfade",
+        ));
     }
     budget.checks.set(budget.checks.get() + 1);
     if depth > 3 || budget.checks.get() > MAX_NESTED_CHECKS {
-        return Some("Zu tief verschachtelte Shell-Aufrufe für eine Prüfung auf Secret-Pfade");
+        return Some(CommandCheckFinding::NotAssessable(
+            "Zu tief verschachtelte Shell-Aufrufe für eine Prüfung auf Secret-Pfade",
+        ));
     }
 
     let mut segments = segment_command(command);
@@ -489,21 +596,25 @@ fn extended_secret_read_reason_in(
                 .any(|target| stripped.contains(target));
         if let Some(reason) = concrete.or(globbed) {
             if outputs {
-                return Some(reason);
+                return Some(CommandCheckFinding::Match(reason));
             }
         }
         if outputs && cd_prefixes.is_none() && words.iter().any(|word| word.unquoted_glob) {
-            return Some("Umleitung mit Platzhalter nach nicht prüfbarem Verzeichniswechsel");
+            return Some(CommandCheckFinding::Match(
+                "Umleitung mit Platzhalter nach nicht prüfbarem Verzeichniswechsel",
+            ));
         }
         if reads_file_via_xargs(&words) {
-            return Some("xargs liest Argumente aus einer Datei – Inhalt nicht vorab prüfbar");
+            return Some(CommandCheckFinding::Match(
+                "xargs liest Argumente aus einer Datei – Inhalt nicht vorab prüfbar",
+            ));
         }
 
         let Some(reader) = words.iter().position(|word| is_read_command(&word.text)) else {
             continue;
         };
         if let Some(reason) = concrete {
-            return Some(reason);
+            return Some(CommandCheckFinding::Match(reason));
         }
         let reader_name = words[reader].text.rsplit('/').next().unwrap_or("");
         if ARCHIVE_COMMANDS.contains(&reader_name)
@@ -511,22 +622,28 @@ fn extended_secret_read_reason_in(
                 .iter()
                 .any(|word| is_secret_directory(&normalize_path(&word.text)))
         {
-            return Some("Packt oder überträgt ein Verzeichnis mit Zugangsdaten");
+            return Some(CommandCheckFinding::Match(
+                "Packt oder überträgt ein Verzeichnis mit Zugangsdaten",
+            ));
         }
         if is_bulk_read(&words, reader) {
-            return Some(
+            return Some(CommandCheckFinding::Match(
                 "Liest Dateien rekursiv bzw. per -exec/xargs – Inhalt nicht vorab prüfbar",
-            );
+            ));
         }
         let Some(cd_prefixes) = cd_prefixes.as_deref() else {
-            return Some("Lesebefehl nach Verzeichniswechsel in ein nicht prüfbares Ziel");
+            return Some(CommandCheckFinding::Match(
+                "Lesebefehl nach Verzeichniswechsel in ein nicht prüfbares Ziel",
+            ));
         };
         for (index, word) in words.iter().enumerate() {
             if index == reader {
                 continue;
             }
             if word.expands || word.text.contains('`') {
-                return Some("Lesebefehl mit Variable im Pfad – Ziel nicht prüfbar");
+                return Some(CommandCheckFinding::Match(
+                    "Lesebefehl mit Variable im Pfad – Ziel nicht prüfbar",
+                ));
             }
             if word.text.starts_with('-') && !word.text.contains('=') {
                 continue;
@@ -537,14 +654,14 @@ fn extended_secret_read_reason_in(
             }
             if word.unquoted_glob {
                 if let Some(reason) = glob_may_hit_secret(arg, cd_prefixes) {
-                    return Some(reason);
+                    return Some(CommandCheckFinding::Match(reason));
                 }
             }
             if !arg.starts_with(['/', '~']) {
                 for prefix in cd_prefixes {
                     let joined = normalize_path(&format!("{prefix}{arg}"));
                     if let Some(reason) = secret_path_match(&joined) {
-                        return Some(reason);
+                        return Some(CommandCheckFinding::Match(reason));
                     }
                 }
             }

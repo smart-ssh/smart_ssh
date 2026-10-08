@@ -640,10 +640,9 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
 
     // 0009 stellt NUR den Spaltentyp um (TEXT -> BLOB), kopiert die Bytes
     // unverändert — der ehemalige Klartext muss byteidentisch in der neuen
-    // BLOB-Spalte stehen (die eigentliche Verschlüsselung ist eine
-    // separate, bereits eigenständig getestete Anwendungs-Routine, s.
-    // `prompt_history_store::migrate_legacy_plaintext_content`, läuft beim
-    // App-Start NACH dieser SQL-Migration).
+    // BLOB-Spalte stehen. Als SQLite-`TEXT` bleibt so ein Wert auch nach
+    // Issue #113 lesbar: die Umstellung beim Start fasst nur Werte der
+    // Speicherklasse `BLOB` an.
     let migrated_message_content: Vec<u8> =
         sqlx::query_scalar("SELECT content FROM chat_messages WHERE id = ?")
             .bind(chat_message_id.to_string())

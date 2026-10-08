@@ -16,8 +16,10 @@ if (!Element.prototype.setPointerCapture) {
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
+  claimDroppedPaths,
   closeEditSession,
   localFileMtime,
+  pickUploadFiles,
   readLocalTextPreview,
   sftpChmod,
   sftpDelete,
@@ -35,14 +37,14 @@ import {
   sftpStat,
   sftpUpload,
 } from "../api";
-import { onConnectionStatusChanged } from "../events";
+import { onConnectionStatusChanged, onSftpTransferStarted } from "../events";
 import {
   loadFileManagerColumnWidths,
   saveFileManagerColumnWidths,
 } from "../layoutSettings";
 import { testI18n } from "../testI18n";
 import { showToast } from "../toastBus";
-import type { RemoteEntryDto } from "../types";
+import type { RemoteEntryDto, SftpTransferStartedEvent } from "../types";
 import { FileBrowserPanel } from "./FileBrowserPanel";
 
 vi.mock("../api", () => ({
@@ -63,6 +65,10 @@ vi.mock("../api", () => ({
   sftpExists: vi.fn(),
   sftpChmod: vi.fn(),
   readLocalTextPreview: vi.fn(),
+  // Issue #89: the backend hands out the paths of the native drop it
+  // captured — here the paths of the last simulated drop event.
+  claimDroppedPaths: vi.fn(() => Promise.resolve(nativeDrop.paths)),
+  pickUploadFiles: vi.fn(),
   sftpStat: vi.fn(),
   sftpOpenForEditing: vi.fn(),
   localFileMtime: vi.fn(),
@@ -89,6 +95,10 @@ vi.mock("../fileTypeSettings", () => ({
   appForFileName: () => null,
 }));
 
+// Issue #89: what the backend saw in the native drop event. The webview's
+// event payload is not trusted; the panel claims these paths instead.
+const nativeDrop = vi.hoisted(() => ({ paths: [] as string[] }));
+
 const dragDrop = vi.hoisted(() => ({
   handler: null as null | ((event: { payload: { type: string; paths?: string[] } }) => void),
   // Issue #29: how often a listener was registered / removed, so tests can
@@ -100,7 +110,10 @@ const dragDrop = vi.hoisted(() => ({
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({
     onDragDropEvent: vi.fn((h) => {
-      dragDrop.handler = h;
+      dragDrop.handler = (event: { payload: { type: string; paths?: string[] } }) => {
+        if (event.payload.type === "drop") nativeDrop.paths = event.payload.paths ?? [];
+        h(event);
+      };
       dragDrop.registrations += 1;
       return Promise.resolve(() => {
         dragDrop.unlistens += 1;
@@ -544,6 +557,19 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     );
   });
 
+  it("names the otherwise empty header cells of the file table and chmod matrix (issue #112)", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    expect(screen.getByRole("columnheader", { name: "Aktionen" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Rechte bearbeiten…"));
+    expect(await screen.findByRole("columnheader", { name: "Gilt für" })).toBeInTheDocument();
+  });
+
   it("chmod dialog's numeric input overrides the checkbox matrix", async () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
@@ -713,7 +739,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     vi.mocked(readLocalTextPreview).mockResolvedValue({ text: "neu", size: 3 });
     vi.mocked(sftpReadText).mockResolvedValue("alt");
     vi.mocked(sftpUpload).mockResolvedValue(undefined);
-    vi.mocked(open).mockResolvedValue("/local/a.txt");
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/a.txt"]);
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -729,6 +755,41 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     await waitFor(() =>
       expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/a.txt", "a.txt", null),
     );
+    // Issue #89: the preview names its session, so the backend can check the
+    // path against that session's grants.
+    expect(readLocalTextPreview).toHaveBeenCalledWith("session-1", "/local/a.txt");
+  });
+
+  // Issue #89: the upload button asks the backend to show the dialog; the
+  // webview never opens a file dialog itself.
+  it("the upload button uses the backend dialog and uploads what it returns", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/picked.txt"]);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Hochladen"));
+
+    await waitFor(() =>
+      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/picked.txt", "picked.txt", null),
+    );
+    expect(pickUploadFiles).toHaveBeenCalledWith("session-1", "Datei(en) hochladen");
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("cancelling the backend dialog uploads nothing", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(pickUploadFiles).mockResolvedValue(null);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Hochladen"));
+
+    await waitFor(() => expect(pickUploadFiles).toHaveBeenCalledTimes(1));
+    expect(sftpExists).not.toHaveBeenCalled();
+    expect(sftpUpload).not.toHaveBeenCalled();
   });
 
   it("upload to a new path skips the conflict dialog entirely", async () => {
@@ -736,7 +797,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
     vi.mocked(sftpExists).mockResolvedValue(false);
     vi.mocked(sftpUpload).mockResolvedValue(undefined);
-    vi.mocked(open).mockResolvedValue("/local/new.txt");
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/new.txt"]);
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -880,7 +941,7 @@ describe("FileBrowserPanel result toasts (Spec 0067, Teil B)", () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(sftpExists).mockResolvedValue(false);
     vi.mocked(sftpUpload).mockResolvedValue(undefined);
-    vi.mocked(open).mockResolvedValue(["/local/x.txt", "/local/y.txt", "/local/z.txt"]);
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/x.txt", "/local/y.txt", "/local/z.txt"]);
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -1290,7 +1351,7 @@ describe("FileBrowserPanel upload failure summary (Spec 0067, B2)", () => {
   it("several failed uploads produce one error toast, not one per file", async () => {
     vi.mocked(sftpExists).mockResolvedValue(false);
     vi.mocked(sftpUpload).mockRejectedValue({ message: "Permission denied", code: null });
-    vi.mocked(open).mockResolvedValue(["/local/x", "/local/y", "/local/z"]);
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/x", "/local/y", "/local/z"]);
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -1303,5 +1364,408 @@ describe("FileBrowserPanel upload failure summary (Spec 0067, B2)", () => {
       }),
     );
     expect(showToast).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Issue #89: a drop uploads only the paths the backend captured from the
+// native drop event and granted to this session. The webview's own event
+// payload is not used as a path source.
+describe("FileBrowserPanel drop uses backend-granted paths (Issue #89)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpList).mockResolvedValue([{ ...entry, name: "a.txt", path: "a.txt" }]);
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    dragDrop.handler = null;
+  });
+
+  it("uploads the claimed paths, not the paths in the event payload", async () => {
+    vi.mocked(claimDroppedPaths).mockResolvedValueOnce(["/native/real.txt"]);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    act(() =>
+      dragDrop.handler!({ payload: { type: "drop", paths: ["/home/user/.ssh/id_ed25519"] } }),
+    );
+
+    await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
+    expect(claimDroppedPaths).toHaveBeenCalledWith("session-1");
+    expect(sftpUpload).toHaveBeenCalledWith("session-1", "/native/real.txt", "real.txt", null);
+    expect(sftpUpload).not.toHaveBeenCalledWith(
+      "session-1",
+      "/home/user/.ssh/id_ed25519",
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("a claim with nothing to hand out uploads nothing", async () => {
+    vi.mocked(claimDroppedPaths).mockResolvedValueOnce([]);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/x.txt"] } }));
+
+    await waitFor(() => expect(claimDroppedPaths).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(sftpExists).not.toHaveBeenCalled();
+    expect(sftpUpload).not.toHaveBeenCalled();
+  });
+
+  // ADR 0113: folder upload is not added here. A dropped folder is forwarded
+  // exactly like a file (and fails in the backend as before).
+  it("a dropped folder is forwarded the same way as a file", async () => {
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/project"] } }));
+
+    await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
+    expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/project", "project", null);
+  });
+});
+
+// Issue #91: every label and dialog of the file browser follows the UI
+// language. These tests render the panel with an `en` clone of the test
+// i18n instance and walk through the toolbar, table, entry menu and each
+// dialog; the German wording is checked separately below.
+describe("FileBrowserPanel UI language (issue #91)", () => {
+  const enI18n = testI18n.cloneInstance({ lng: "en" });
+  const fileEntry: RemoteEntryDto = { ...entry, name: "a.txt", path: "a.txt" };
+  const dirEntry: RemoteEntryDto = {
+    ...entry,
+    name: "logs",
+    path: "logs",
+    isDir: true,
+    permissionsOctal: 0o755,
+    permissions: "rwxr-xr-x",
+  };
+
+  /** Words of the former hard-coded German texts. None of them may show up
+   * as text, `title` or `aria-label` while the UI is English. */
+  const GERMAN_WORDS = [
+    "Abbrechen", "Aktualisieren", "Ausführen", "Ausschneiden", "Bearbeitung",
+    "Besitzer", "Datei", "Einfügen", "Eigenschaften", "Enthält", "Ermittle",
+    "existiert", "Geändert", "Größe", "Gruppe", "Herunterladen", "Hochladen",
+    "kopieren", "Lädt", "Lesen", "Löschen", "Numerisch", "Ordner", "Pfad",
+    "Rechte", "Rekursiv", "Schließen", "Schreiben", "Später", "Startverzeichnis",
+    "Übergeordnetes", "Übernehmen", "Überschreiben", "Umbenennen", "Verzeichnis",
+    "wird", "würde",
+  ];
+
+  function expectNoGerman() {
+    const texts = [document.body.textContent ?? ""];
+    for (const el of document.body.querySelectorAll("[title], [aria-label]")) {
+      texts.push(el.getAttribute("title") ?? "", el.getAttribute("aria-label") ?? "");
+    }
+    const all = texts.join("\n");
+    const found = GERMAN_WORDS.filter((word) => new RegExp(`(^|[^\\p{L}])${word}`, "u").test(all));
+    expect(found, `German text visible: ${found.join(", ")}`).toEqual([]);
+    expect(all).not.toMatch(/[äöüÄÖÜß„]/);
+  }
+
+  function renderEn(i18n = enI18n) {
+    return render(
+      <I18nextProvider i18n={i18n}>
+        <FileBrowserPanel sessionId="session-1" isVisible={true} />
+      </I18nextProvider>,
+    );
+  }
+
+  function openMenu() {
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    dragDrop.handler = null;
+  });
+
+  it("toolbar, table header, entry menu and drop hint are English", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+
+    renderEn();
+    await screen.findByText(/a\.txt/);
+
+    expect(screen.getByTitle("Go to start directory")).toBeInTheDocument();
+    expect(screen.getByTitle("Parent directory")).toBeInTheDocument();
+    expect(screen.getByText("+ Folder")).toBeVisible();
+    expect(screen.getByText("Upload")).toBeVisible();
+    for (const header of ["Name", "Size", "Permissions", "Modified"]) {
+      expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
+    }
+
+    openMenu();
+    for (const item of [
+      "Download",
+      "Download to…",
+      "Copy file content",
+      "Open locally…",
+      "Copy path",
+      "Properties",
+      "Refresh",
+      "Edit permissions…",
+      "Rename",
+      "Cut",
+      "Delete",
+    ]) {
+      expect(screen.getByRole("button", { name: item })).toBeVisible();
+    }
+    expectNoGerman();
+
+    // Cut + paste buttons.
+    fireEvent.click(screen.getByRole("button", { name: "Cut" }));
+    expect(screen.getByRole("button", { name: "Paste" })).toHaveAttribute("title", "Move a.txt here");
+    expect(screen.getByTitle("Cancel cut")).toBeInTheDocument();
+
+    // Drop hint while dragging files over the panel.
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    act(() => dragDrop.handler!({ payload: { type: "over" } }));
+    expect(screen.getByText(/^Drop here to upload to /)).toBeVisible();
+    expectNoGerman();
+  });
+
+  it("loading and empty directory texts are English", async () => {
+    let resolveList: (entries: RemoteEntryDto[]) => void = () => {};
+    vi.mocked(sftpList).mockReturnValue(
+      new Promise((resolve) => {
+        resolveList = resolve;
+      }),
+    );
+
+    renderEn();
+    expect(await screen.findByText("Loading…")).toBeVisible();
+    await act(async () => resolveList([]));
+    expect(await screen.findByText("(empty directory)")).toBeVisible();
+    expectNoGerman();
+  });
+
+  it("transfer progress lines are English", async () => {
+    let started: ((event: SftpTransferStartedEvent) => void) | null = null;
+    vi.mocked(onSftpTransferStarted).mockImplementation((handler) => {
+      started = handler;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+
+    renderEn();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(started).not.toBeNull());
+    act(() => {
+      started!({ sessionId: "session-1", transferId: "t1", kind: "upload", fileName: "up.bin", totalBytes: null });
+      started!({ sessionId: "session-1", transferId: "t2", kind: "download", fileName: "down.bin", totalBytes: null });
+    });
+
+    expect(screen.getByText("Uploading: up.bin")).toBeVisible();
+    expect(screen.getByText("Downloading: down.bin")).toBeVisible();
+    expectNoGerman();
+  });
+
+  it("the native upload dialog gets an English title", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(pickUploadFiles).mockResolvedValue(null);
+
+    renderEn();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Upload"));
+
+    await waitFor(() => expect(pickUploadFiles).toHaveBeenCalledWith("session-1", "Upload file(s)"));
+  });
+
+  it("properties dialog is English", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+
+    renderEn();
+    await screen.findByText(/a\.txt/);
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Properties" }));
+
+    expect(await screen.findByRole("heading", { name: "Properties" })).toBeVisible();
+    for (const label of [
+      "Path",
+      "Type",
+      "File",
+      "Permissions (symbolic)",
+      "Permissions (numeric)",
+      "Owner",
+      "Group",
+      "Close",
+    ]) {
+      expect(screen.getByText(label)).toBeVisible();
+    }
+    expectNoGerman();
+  });
+
+  it("chmod dialog, including the recursive warning, is English", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+
+    renderEn();
+    await screen.findByText(/logs/);
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Edit permissions…" }));
+
+    expect(await screen.findByRole("heading", { name: "Edit permissions" })).toBeVisible();
+    for (const header of ["Read", "Write", "Execute"]) {
+      expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
+    }
+    expect(screen.getByText("Numeric")).toBeVisible();
+    expect(screen.getByText("Recursive")).toBeVisible();
+    expect(screen.getByText(/changes the permissions of ALL files and subfolders/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
+    expectNoGerman();
+  });
+
+  it("rename and new-folder prompts are English", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+
+    renderEn();
+    await screen.findByText(/a\.txt/);
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    expect(await screen.findByRole("heading", { name: "Rename" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeVisible();
+    expectNoGerman();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    fireEvent.click(screen.getByText("+ Folder"));
+    expect(await screen.findByRole("heading", { name: "New folder" })).toBeVisible();
+    expectNoGerman();
+  });
+
+  it("delete dialog for a folder is English, with plural counts", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+    vi.mocked(sftpDeletePreview).mockResolvedValue({ fileCount: 3, dirCount: 1 });
+
+    renderEn();
+    await screen.findByText(/logs/);
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    const heading = await screen.findByRole("heading", { name: "Delete folder?" });
+    const body = heading.nextElementSibling as HTMLElement;
+    await waitFor(() =>
+      expect(body.textContent).toBe(
+        "logs will be deleted from the server permanently. Contains 3 files in 1 folder (including this one) — all of them will be deleted.",
+      ),
+    );
+    // The counts stay emphasised.
+    expect(within(body).getByText("3").tagName).toBe("STRONG");
+    expect(within(body).getByText("1").tagName).toBe("STRONG");
+    expectNoGerman();
+    expect(sftpDelete).not.toHaveBeenCalled();
+  });
+
+  it("delete dialog for a file is English", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+
+    renderEn();
+    await screen.findByText(/a\.txt/);
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(await screen.findByRole("heading", { name: "Delete file?" })).toBeVisible();
+    expect(screen.getByText("will be deleted from the server permanently.", { exact: false })).toBeVisible();
+    expectNoGerman();
+  });
+
+  it("move collision dialog is English", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(sftpExists).mockResolvedValue(true);
+
+    renderEn();
+    await screen.findByText(/a\.txt/);
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    fireEvent.change(screen.getByDisplayValue("a.txt"), { target: { value: "b.txt" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(await screen.findByRole("heading", { name: "Target already exists" })).toBeVisible();
+    expect(screen.getByText(/already exists and would be overwritten\./)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Overwrite" })).toBeVisible();
+    expectNoGerman();
+  });
+
+  it("upload conflict dialog without a text diff is English", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(sftpExists).mockResolvedValue(true);
+    vi.mocked(readLocalTextPreview).mockResolvedValue({ text: null, size: 2048 });
+    vi.mocked(sftpReadText).mockRejectedValue("binary");
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/a.txt"]);
+
+    renderEn();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Upload"));
+
+    expect(await screen.findByRole("heading", { name: "Overwrite file?" })).toBeVisible();
+    expect(screen.getByText(/already exists on the server\./)).toBeVisible();
+    expect(
+      screen.getByText(/^No text diff possible \(binary file or too large\)\. Current size: .+, new size: .+\.$/),
+    ).toBeVisible();
+    expectNoGerman();
+  });
+
+  it("local edit status bar and upload offer are English", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(sftpOpenForEditing).mockResolvedValue({
+      localPath: "/tmp/edit/a.txt",
+      remoteModified: "2026-01-01T00:00:00Z",
+    });
+    // First call: baseline after opening; every later poll sees a change.
+    vi.mocked(localFileMtime)
+      .mockResolvedValueOnce("2026-01-01T00:00:01Z")
+      .mockResolvedValue("2026-01-01T00:00:09Z");
+    vi.mocked(readLocalTextPreview).mockResolvedValue({ text: null, size: 10 });
+    vi.mocked(sftpStat).mockResolvedValue({ ...fileEntry, modified: "2026-01-01T00:00:05Z" });
+    vi.mocked(sftpReadText).mockRejectedValue("binary");
+
+    renderEn();
+    await screen.findByText(/a\.txt/);
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Open locally…" }));
+
+    expect(await screen.findByText("Editing “a.txt” locally…")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Stop editing" })).toBeVisible();
+    expectNoGerman();
+
+    expect(
+      await screen.findByText("“a.txt” was changed locally. Upload it to the server?", undefined, {
+        timeout: 4000,
+      }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Later" })).toBeVisible();
+    expectNoGerman();
+
+    // The second "Upload" button is the one in the status bar.
+    fireEvent.click(screen.getAllByRole("button", { name: "Upload" })[1]);
+    expect(await screen.findByRole("heading", { name: "Upload local changes?" })).toBeVisible();
+    expect(
+      screen.getByText("The remote file was changed since the download — uploading would overwrite that other change."),
+    ).toBeVisible();
+    expect(screen.getByText(/^No text diff possible \(binary file or too large\)\. New size: .+\.$/)).toBeVisible();
+    expectNoGerman();
+  });
+
+  it("German wording stays as before", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+    vi.mocked(sftpDeletePreview).mockResolvedValue({ fileCount: 1, dirCount: 1 });
+
+    renderEn(testI18n);
+    await screen.findByText(/logs/);
+    expect(screen.getByTitle("Übergeordnetes Verzeichnis")).toBeInTheDocument();
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Löschen" }));
+
+    const heading = await screen.findByRole("heading", { name: "Ordner löschen?" });
+    const body = heading.nextElementSibling as HTMLElement;
+    await waitFor(() =>
+      expect(body.textContent).toBe(
+        "logs wird unwiderruflich vom Server gelöscht. Enthält 1 Datei(en) in 1 Ordner(n) (inkl. diesem) — alle werden mitgelöscht.",
+      ),
+    );
   });
 });

@@ -17,6 +17,15 @@ use sqlx::Connection;
 
 use ssh_manager_core::crypto::DatabaseKey;
 
+/// Issue #113: die vier Spalten, die bis dahin feldweise verschlüsselt
+/// geschrieben wurden und beim Start auf Klartext umgestellt werden.
+pub const FIELD_ENCRYPTED_COLUMNS: [(&str, &str); 4] = [
+    ("chat_messages", "content"),
+    ("ledger_entries", "content"),
+    ("prompt_history", "content"),
+    ("chat_sessions", "summary_text"),
+];
+
 /// Der Wurzelschlüssel K, unter dem jede Release-Fixture ihren feldweise
 /// verschlüsselten Inhalt (Chat, Prompt-Historie, Ledger) schreibt — und ab
 /// den SQLCipher-Releases der K, aus dem der Datenbankschlüssel der Fixture
@@ -274,6 +283,21 @@ impl DatabaseSnapshot {
     /// diesen Spalten. Neue Tabellen, Spalten und Zeilen sind erlaubt — die
     /// bringt eine Migration mit.
     pub fn assert_preserved_in(&self, later: &DatabaseSnapshot, step: &str) {
+        self.assert_preserved_in_except(later, step, &[]);
+    }
+
+    /// Wie [`Self::assert_preserved_in`], aber die Werte der Spalten in
+    /// `changed` (je `(Tabelle, Spalte)`) dürfen sich ändern — für einen
+    /// Schritt, der genau diese Spalten bewusst umschreibt (Issue #113: die
+    /// Umstellung der feldweise verschlüsselten Spalten auf Klartext).
+    /// Spalten und Zeilen dürfen trotzdem nicht verschwinden; das prüft der
+    /// Aufrufer für die umgeschriebenen Spalten selbst.
+    pub fn assert_preserved_in_except(
+        &self,
+        later: &DatabaseSnapshot,
+        step: &str,
+        changed: &[(&str, &str)],
+    ) {
         for (name, before) in &self.tables {
             let after = later
                 .tables
@@ -300,12 +324,35 @@ impl DatabaseSnapshot {
                 }
                 continue;
             }
+            let compared: Vec<String> = before
+                .columns
+                .iter()
+                .filter(|c| !changed.contains(&(name.as_str(), c.as_str())))
+                .cloned()
+                .collect();
             assert_eq!(
-                before.rows_projected(&before.columns),
-                after.rows_projected(&before.columns),
+                before.rows_projected(&compared),
+                after.rows_projected(&compared),
                 "{step}: rows of table {name} changed"
             );
         }
+    }
+
+    /// Die Werte einer Spalte in `quote()`-Darstellung (s. [`snapshot_database`]),
+    /// sortiert. Ein Blob beginnt mit `X'`, Text mit `'`, `NULL` ist `NULL`.
+    pub fn column_values(&self, table: &str, column: &str) -> Vec<String> {
+        let mut values: Vec<String> = self
+            .tables
+            .get(table)
+            .map(|t| {
+                t.rows
+                    .iter()
+                    .filter_map(|r| r.get(column).cloned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        values.sort();
+        values
     }
 
     /// Anzahl der Zeilen in `table`, 0, wenn es die Tabelle nicht gibt.
@@ -413,4 +460,40 @@ pub fn directory_file_names(dir: &Path) -> Vec<String> {
         .collect();
     names.sort();
     names
+}
+
+/// Issue #113: schreibt eine Prompt-Historie-Zeile mit dem rohen Wert `blob`
+/// — so, wie die Stores vor Issue #113 eine feldweise verschlüsselte Zeile
+/// geschrieben haben (`nonce || ciphertext` als Blob). Für Tests außerhalb
+/// dieser Crate, die keinen eigenen SQL-Zugang haben.
+pub async fn insert_legacy_prompt_history_row(
+    store: &crate::SqliteProfileStore,
+    server_id: &ssh_manager_core::shared::ServerId,
+    blob: Vec<u8>,
+) {
+    sqlx::query(
+        "INSERT INTO prompt_history (id, server_id, content, created_at) VALUES (?, ?, ?, ?)",
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(server_id.0.to_string())
+    .bind(blob)
+    .bind(chrono::Utc::now().to_rfc3339())
+    .execute(&store.pool)
+    .await
+    .expect("legacy prompt_history row can be inserted");
+}
+
+/// Issue #113: Wie viele Werte der vier früher feldweise verschlüsselten
+/// Spalten noch Blobs (also Chiffrate) sind.
+pub async fn field_encrypted_blob_count(store: &crate::SqliteProfileStore) -> i64 {
+    let mut total = 0;
+    for (table, column) in FIELD_ENCRYPTED_COLUMNS {
+        let sql = format!("SELECT COUNT(*) FROM {table} WHERE typeof({column}) = 'blob'");
+        let n: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
+            .fetch_one(&store.pool)
+            .await
+            .expect("column is readable");
+        total += n;
+    }
+    total
 }

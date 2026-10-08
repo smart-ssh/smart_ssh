@@ -99,7 +99,10 @@ export function SessionView({
   mcp = null,
 }: SessionViewProps) {
   const { t } = useTranslation();
-  const [statusNote, setStatusNote] = useState<string | null>(null);
+  /** Grund des Verbindungsabbruchs; `null` = noch verbunden. Gespeichert
+   * wird der Grund statt des fertigen Texts, damit ein Sprachwechsel auch
+   * diesen Hinweis sofort umstellt (Spec 0024, Abschnitt 4). */
+  const [disconnectReason, setDisconnectReason] = useState<{ reason: string | null } | null>(null);
   // Spec 0020, Abschnitt 5.1: "Terminal | Dateien"-Umschalter im rechten
   // Panel. Beide Ansichten bleiben gemountet (analog zum
   // Immer-gemountet-Muster der Session-Tabs selbst, Spec 0017 Abschnitt 4) —
@@ -173,11 +176,18 @@ export function SessionView({
 
   const splitHandlers = useDragResize(handleSplitDrag, handleSplitDragEnd);
 
+  const statusNote =
+    disconnectReason === null
+      ? null
+      : disconnectReason.reason
+        ? t("session.disconnectedWithReason", { reason: disconnectReason.reason })
+        : t("session.disconnected");
+
   useEffect(() => {
     const unlisten = onConnectionStatusChanged((event) => {
       if (event.sessionId !== sessionId) return;
       if (event.status === "disconnected") {
-        setStatusNote(event.reason ? `Verbindung getrennt: ${event.reason}` : "Verbindung getrennt");
+        setDisconnectReason({ reason: event.reason ?? null });
       }
     });
     return () => {
@@ -207,7 +217,7 @@ export function SessionView({
             onClick={onRequestClose}
             className="font-heading border border-slate-700 px-3 py-1.5 text-sm font-semibold tracking-wide text-slate-200 hover:bg-slate-800"
           >
-            Trennen
+            {t("session.disconnect")}
           </button>
         </header>
         <div className="min-h-0 flex-1">
@@ -234,7 +244,7 @@ export function SessionView({
           onClick={onRequestClose}
           className="font-heading border border-slate-700 px-3 py-1.5 text-sm font-semibold tracking-wide text-slate-200 hover:bg-slate-800"
         >
-          Trennen
+          {t("session.disconnect")}
         </button>
       </header>
       <div ref={splitContainerRef} className="flex min-h-0 flex-1">
@@ -244,9 +254,10 @@ export function SessionView({
         {/* Spec 0053, Teil 2: Drag-Divider zwischen KI- und SSH-/SFTP-
             Bereich — ersetzt den vorherigen statischen `border-r`. */}
         <span
+          // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- ziehbarer Trenner mit Griff-Kindelement; <hr> ist ein leeres Element und kann den Griff nicht aufnehmen (Issue #112).
           role="separator"
           aria-orientation="vertical"
-          aria-label="Bereichsaufteilung"
+          aria-label={t("session.splitHandle")}
           className="group relative w-1.5 shrink-0 cursor-col-resize touch-none select-none bg-slate-800"
           {...splitHandlers}
         >
@@ -264,7 +275,7 @@ export function SessionView({
                 rightPanelView === "terminal" ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
               }`}
             >
-              Terminal
+              {t("session.terminalTab")}
             </button>
             <button
               type="button"
@@ -273,7 +284,7 @@ export function SessionView({
                 rightPanelView === "files" ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
               }`}
             >
-              Dateien
+              {t("session.filesTab")}
               {filesElevatedUser && (
                 // Spec 0067, A5: erhöhter Modus bleibt auch bei verborgener
                 // Dateien-Ansicht sichtbar.

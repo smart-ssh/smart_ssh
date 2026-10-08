@@ -20,7 +20,10 @@ mod transport;
 mod tests;
 
 pub use auth::{classify_openssh_key, KeyClassification};
-pub use connect::{connect, connect_with_log, connect_with_timeout, ConnectOutcome};
+pub use connect::{
+    connect, connect_with_limits, connect_with_log, connect_with_timeout, ConnectLimits,
+    ConnectOutcome,
+};
 pub use exec::{MAX_STREAM_OUTPUT_BYTES, TRUNCATION_NOTICE};
 pub use local::LocalTransport;
 pub use local_sftp::LocalFileSession;

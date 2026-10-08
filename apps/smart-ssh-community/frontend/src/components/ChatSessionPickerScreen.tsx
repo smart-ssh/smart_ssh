@@ -104,6 +104,7 @@ export function ChatSessionPickerScreen({
               >
                 {renamingId === session.sessionId ? (
                   <input
+                    // eslint-disable-next-line jsx-a11y/no-autofocus -- das Umbenennen-Feld erscheint erst auf die ausdrückliche Aktion „Umbenennen“ und muss den Fokus bekommen, damit man sofort tippen kann (Issue #112).
                     autoFocus
                     type="text"
                     value={renameDraft}

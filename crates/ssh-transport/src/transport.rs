@@ -7,7 +7,7 @@ use ssh_manager_core::ssh::{
     CommandOutput, ExecOutcome, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
 };
 
-use crate::error::map_russh_error;
+use crate::error::map_session_russh_error;
 use crate::exec::ExecAccumulator;
 use crate::handler::ClientHandler;
 use crate::sftp::RusshSftpSession;
@@ -137,8 +137,11 @@ impl SshTransport for RusshTransport {
             .handle
             .channel_open_session()
             .await
-            .map_err(map_russh_error)?;
-        channel.exec(true, command).await.map_err(map_russh_error)?;
+            .map_err(map_session_russh_error)?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(map_session_russh_error)?;
         drain_channel(channel, self.max_output_bytes).await
     }
 
@@ -156,15 +159,18 @@ impl SshTransport for RusshTransport {
             .handle
             .channel_open_session()
             .await
-            .map_err(map_russh_error)?;
-        channel.exec(true, command).await.map_err(map_russh_error)?;
+            .map_err(map_session_russh_error)?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(map_session_russh_error)?;
         if !stdin.is_empty() {
             channel
                 .data_bytes(stdin.to_vec())
                 .await
-                .map_err(map_russh_error)?;
+                .map_err(map_session_russh_error)?;
         }
-        channel.eof().await.map_err(map_russh_error)?;
+        channel.eof().await.map_err(map_session_russh_error)?;
         drain_channel(channel, self.max_output_bytes).await
     }
 
@@ -177,8 +183,11 @@ impl SshTransport for RusshTransport {
             .handle
             .channel_open_session()
             .await
-            .map_err(map_russh_error)?;
-        channel.exec(true, command).await.map_err(map_russh_error)?;
+            .map_err(map_session_russh_error)?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(map_session_russh_error)?;
         drain_channel_cancellable(channel, cancel, self.max_output_bytes).await
     }
 
@@ -192,15 +201,18 @@ impl SshTransport for RusshTransport {
             .handle
             .channel_open_session()
             .await
-            .map_err(map_russh_error)?;
-        channel.exec(true, command).await.map_err(map_russh_error)?;
+            .map_err(map_session_russh_error)?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(map_session_russh_error)?;
         if !stdin.is_empty() {
             channel
                 .data_bytes(stdin.to_vec())
                 .await
-                .map_err(map_russh_error)?;
+                .map_err(map_session_russh_error)?;
         }
-        channel.eof().await.map_err(map_russh_error)?;
+        channel.eof().await.map_err(map_session_russh_error)?;
         drain_channel_cancellable(channel, cancel, self.max_output_bytes).await
     }
 
@@ -209,7 +221,7 @@ impl SshTransport for RusshTransport {
             .handle
             .channel_open_session()
             .await
-            .map_err(map_russh_error)?;
+            .map_err(map_session_russh_error)?;
         channel
             .request_pty(
                 true,
@@ -221,8 +233,11 @@ impl SshTransport for RusshTransport {
                 &[],
             )
             .await
-            .map_err(map_russh_error)?;
-        channel.request_shell(true).await.map_err(map_russh_error)?;
+            .map_err(map_session_russh_error)?;
+        channel
+            .request_shell(true)
+            .await
+            .map_err(map_session_russh_error)?;
         Ok(Box::new(RusshShell { channel }))
     }
 
@@ -234,11 +249,11 @@ impl SshTransport for RusshTransport {
             .handle
             .channel_open_session()
             .await
-            .map_err(map_russh_error)?;
+            .map_err(map_session_russh_error)?;
         channel
             .request_subsystem(true, "sftp")
             .await
-            .map_err(map_russh_error)?;
+            .map_err(map_session_russh_error)?;
         let client = russh_sftp::client::SftpSession::new(channel.into_stream())
             .await
             .map_err(|e| SshError::ChannelError(format!("SFTP-Init fehlgeschlagen: {e}")))?;
@@ -271,7 +286,7 @@ impl SshTransport for RusshTransport {
         self.handle
             .disconnect(russh::Disconnect::ByApplication, "", "")
             .await
-            .map_err(map_russh_error)
+            .map_err(map_session_russh_error)
     }
 
     fn set_max_output_bytes(&mut self, limit: usize) {
@@ -296,8 +311,11 @@ impl RusshTransport {
             .handle
             .channel_open_session()
             .await
-            .map_err(map_russh_error)?;
-        channel.exec(true, command).await.map_err(map_russh_error)?;
+            .map_err(map_session_russh_error)?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(map_session_russh_error)?;
         // `russh-sftp` wartet auf jede Antwort bis zum Request-Timeout
         // (Default 10 s) — auch dann, wenn der Kanal schon zu ist (sudo hat
         // abgelehnt). Für den Handshake daher kurz, danach der Normalwert.

@@ -23,6 +23,11 @@ Alle Fixtures nutzen denselben festen, nicht geheimen Wurzelschlüssel
 verschlüsselten Inhalt (Chat, Prompt-Historie, Ledger) und ab SQLCipher als
 den K, aus dem ihr Datenbankschlüssel abgeleitet ist.
 
+Releases ab Issue #113 schreiben Chat, Prompt-Historie, Ledger und
+Zusammenfassung nicht mehr feldweise verschlüsselt. Die Generatoren älterer
+Releases (z. B. `generate_v0.5.2.rs`) nutzen die damalige API und laufen nur
+gegen ihren Release-Tag, nicht in diesem Workspace.
+
 ## Beim Release eine Fixture hinzufügen
 
 Für jedes Release, dessen Schema von dem der neuesten Fixture abweicht (das

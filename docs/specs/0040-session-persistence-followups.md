@@ -52,6 +52,10 @@ Mechanismus). Migration `content` TEXT → BLOB analog zu 0036. Falls zum
 Zeitpunkt der Umsetzung bereits Klartext-Zeilen existieren: einmaliges
 idempotentes Migrations-Skript wie in 0036 §5.
 
+**Überholt durch Issue #113:** Die feldweise Verschlüsselung ist
+zurückgebaut; die Eingabe-Historie ist wie der Chat durch die Verschlüsselung
+der ganzen Datenbankdatei geschützt (Spec 0036, Spec 0101).
+
 ## 4. Fund #6 — MCP-Ergebnisse landen in wiederaufnehmbarer Menschen-Historie
 
 `connect_session(..., resume: None)` für ein MCP-ausgelöstes, noch nicht

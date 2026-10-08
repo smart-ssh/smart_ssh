@@ -96,6 +96,9 @@ describe("useLocalEditSession", () => {
     });
 
     expect(result.current.session?.status).toBe("changed");
+    // Issue #89: the poll names its session — the backend only answers for
+    // that session's own edit copy.
+    expect(localFileMtime).toHaveBeenLastCalledWith("session-1", "/tmp/edit/nginx.conf");
   });
 
   it("does not flag a change when the mtime is unchanged", async () => {
@@ -140,6 +143,7 @@ describe("useLocalEditSession", () => {
       remoteText: "alt",
       remoteChangedSinceDownload: true,
     });
+    expect(readLocalTextPreview).toHaveBeenCalledWith("session-1", "/tmp/edit/nginx.conf");
   });
 
   it("buildUploadOffer conservatively flags a conflict when both timestamps are null", async () => {
@@ -211,6 +215,7 @@ describe("useLocalEditSession", () => {
       "/etc/nginx.conf",
       null,
     );
+    expect(localFileMtime).toHaveBeenLastCalledWith("session-1", "/tmp/edit/nginx.conf");
     expect(result.current.session?.status).toBe("editing");
   });
 

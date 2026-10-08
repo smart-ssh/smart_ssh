@@ -63,9 +63,15 @@ Platte. (Die Redaction-Härtung — Shadow, DB-Strings, Tokens — schützt dami
 auch den Ledger.)
 
 ### 1.3 Verschlüsselung
-Der Ledger wird wie die Chat-Historie **verschlüsselt** persistiert (Spec
-0036, chat-content encryption key). Konsistent mit „sensibler Inhalt liegt
-nie im Klartext in der DB".
+Der Ledger wird wie die Chat-Historie **verschlüsselt** persistiert:
+geschützt durch die Verschlüsselung der ganzen Datenbankdatei (Spec 0101,
+Spec 0036 §1). Konsistent mit „sensibler Inhalt liegt nie im Klartext in
+der Datenbankdatei".
+
+**Überholt durch Issue #113:** Eine eigene Verschlüsselung je Ledger-Eintrag
+(früher mit dem Chat-Inhalts-Schlüssel aus Spec 0036) gibt es nicht mehr.
+Wo diese Spec „verschlüsselt" sagt (Ledger, Summary), ist der Schutz durch
+die verschlüsselte Datenbankdatei gemeint.
 
 ### 1.4 Persistenz
 Neue Tabelle(n) in `persistence-sqlite`, **additive** Migration. Append-only:
@@ -94,7 +100,8 @@ Ausfall blockiert nie die Grundfunktion (Kontext klein genug halten).
 „Fehler containen" — dieselbe Invariante wie beim Body-Timeout-Fix.
 
 ### 2.3 Persistenz
-Die aktuelle Summary wird mit der Session persistiert (verschlüsselt), damit
+Die aktuelle Summary wird mit der Session persistiert (in der verschlüsselten
+Datenbankdatei, Spec 0101), damit
 sie bei Resume verfügbar ist.
 
 ## 3. Kompaktierung (der Auslöser + der Ablauf)
@@ -140,6 +147,16 @@ zusammenfassen"** / **„Mache ich selbst"** (→ öffnet die Notiz-Bearbeitung)
   was die neue Notiz wird, bevor sie ersetzt wird). Kein automatisches
   Überschreiben.
 - **Kein stilles Kürzen der gespeicherten Notiz** — immer Nutzer-Bestätigung.
+- Wurde die Zusammenfassung vom Provider wegen seines Längenlimits
+  **abgeschnitten**, erscheint der Vorschlag trotzdem, aber der Dialog zeigt
+  über dem Diff eine deutliche Warnung („Die Zusammenfassung wurde
+  abgeschnitten und ist unvollständig. Prüfe sie sorgfältig oder lehne sie
+  ab."). Die Warnung stammt von der App, steht außerhalb des Diff-Inhalts und
+  kann vom KI-Text weder vorgetäuscht noch verdeckt werden. Ist die
+  Zusammenfassung zusätzlich länger als erlaubt, bleibt der bestehende
+  Kappungs-Hinweis am Textende zusätzlich erhalten. Übernehmen speichert
+  genau den angezeigten Inhalt, Ablehnen lässt die Notiz unverändert.
+  Andere Notiz-Vorschläge (Chat, Sitzungsende) zeigen diese Warnung nie.
 - (Optional, Bonus: ein sanfter Hinweis schon **beim Bearbeiten** einer
   ungewöhnlich großen Notiz. Nicht zwingend für die erste Umsetzung.)
 
@@ -155,7 +172,8 @@ und nutzen die Kompaktierung. Kein Parsing/Umschreiben alter Daten.
 
 - **Ledger redigiert vor dem Persistieren** — kein Klartext-Secret dauerhaft
   auf der Platte.
-- **Ledger verschlüsselt** (wie Chat-Historie, 0036).
+- **Ledger verschlüsselt** (wie Chat-Historie: verschlüsselte Datenbankdatei,
+  0036 §1, 0101).
 - **Kompaktierung betrifft nur den KI-Kontext, nie den Ledger** (die
   dauerhafte Wahrheit bleibt vollständig).
 - **Gespeicherte Notiz wird nie ohne Nutzer-Bestätigung verändert** (das
@@ -180,6 +198,8 @@ und nutzen die Kompaktierung. Kein Parsing/Umschreiben alter Daten.
 - Sitzungsende-Notiz-Dialog: erscheint bei großer Notiz, „Ja" → Diff-Dialog,
   „Mache ich selbst" → Bearbeitung; gespeicherte Notiz nie ohne Bestätigung
   geändert.
+- Abgeschnittene Zusammenfassung → Vorschlag als unvollständig markiert,
+  Warnung über dem Diff; vollständige Zusammenfassung → keine Warnung.
 - Migration: additiv, alte Sessions bleiben lesbar.
 
 ## 8. Reihenfolge der Umsetzung (Etappen)

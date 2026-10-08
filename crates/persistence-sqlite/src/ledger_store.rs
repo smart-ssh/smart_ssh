@@ -7,11 +7,12 @@
 //! [`SqliteLedgerStore::new`] und `crate::store::SqliteProfileStore::
 //! ledger_store`).
 //!
-//! **Feld-Verschlüsselung** (Spec 0036-Muster, ausgeweitet auf den Ledger
-//! per Spec 0057, §1.3): `content` wird vor dem Schreiben über den
-//! mitgegebenen [`ContentCipher`] verschlüsselt und beim Lesen entschlüsselt
-//! — transparent für jeden Aufrufer dieses Stores, exakt wie bei
-//! [`crate::SqliteChatSessionStore`]. Redaction ist **nicht** Aufgabe
+//! **Klartext in der verschlüsselten Datei** (Issue #113, ADR 0112):
+//! `content` (JSON eines `LedgerEntryContent`) wird als SQLite-`TEXT`
+//! geschrieben, exakt wie bei [`crate::SqliteChatSessionStore`]; die frühere
+//! feldweise Verschlüsselung (Spec 0057, §1.3) ist zurückgebaut, geschützt
+//! ist der Inhalt durch die Verschlüsselung der ganzen Datei (Spec 0101).
+//! Redaction ist **nicht** Aufgabe
 //! dieses Stores (Spec 0057, §1.2: "Pflicht", aber vom Aufrufer VOR
 //! [`SqliteLedgerStore::append_entry`] zu erledigen — s. `app-shell::
 //! orchestration::write_ledger_entry`, die einzige vorgesehene Aufrufstelle
@@ -23,8 +24,9 @@
 //! (Lesen). Einträge verschwinden ausschließlich über die
 //! `ON DELETE CASCADE`-Regel der Migration, wenn die ganze Sitzung
 //! gelöscht wird — kein eigener Code-Pfad dafür in diesem Modul nötig.
-
-use std::sync::Arc;
+//! Einzige Ausnahme außerhalb dieses Moduls: die einmalige Umstellung beim
+//! Start entfernt Einträge, die mit dem aktuellen Schlüssel nie mehr lesbar
+//! waren (Issue #113, `crate::field_content_decryption`).
 
 use chrono::Utc;
 use sqlx::sqlite::SqlitePool;
@@ -33,21 +35,17 @@ use sqlx::Row;
 use uuid::Uuid;
 
 use ssh_manager_core::audit::LedgerEntryContent;
-use ssh_manager_core::crypto::{CipherError, ContentCipher, EncryptedContent};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LedgerStoreError {
     Backend(String),
     /// Wie `ChatSessionStoreError::CorruptContent` (s. dortiger
     /// Doc-Kommentar): die geladene `content`-Spalte eines Eintrags ließ
-    /// sich nach der Entschlüsselung nicht als `LedgerEntryContent`
-    /// deserialisieren.
+    /// sich nicht als `LedgerEntryContent` deserialisieren.
     CorruptContent {
         entry_id: String,
         reason: String,
     },
-    /// Wie `ChatSessionStoreError::Cipher`.
-    Cipher(CipherError),
 }
 
 impl std::fmt::Display for LedgerStoreError {
@@ -58,18 +56,11 @@ impl std::fmt::Display for LedgerStoreError {
                 f,
                 "Ledger-Eintrag '{entry_id}' konnte nicht gelesen werden: {reason}"
             ),
-            LedgerStoreError::Cipher(err) => write!(f, "Verschlüsselungsfehler: {err}"),
         }
     }
 }
 
 impl std::error::Error for LedgerStoreError {}
-
-impl From<CipherError> for LedgerStoreError {
-    fn from(err: CipherError) -> Self {
-        LedgerStoreError::Cipher(err)
-    }
-}
 
 fn backend_err(e: sqlx::Error) -> LedgerStoreError {
     LedgerStoreError::Backend(e.to_string())
@@ -78,7 +69,7 @@ fn backend_err(e: sqlx::Error) -> LedgerStoreError {
 /// Spiegelt `LedgerEntryContent`s Varianten in der `entry_type`-Spalte
 /// (dieselbe Konvention wie `chat_session_store::content_type_for`) — rein
 /// für Filterung/Übersicht, die tatsächlichen Daten liegen ausschließlich
-/// im verschlüsselten `content`-Blob.
+/// in `content`.
 fn entry_type_for(content: &LedgerEntryContent) -> &'static str {
     match content {
         LedgerEntryContent::CommandProposed { .. } => "command_proposed",
@@ -113,12 +104,11 @@ fn source_from_text(raw: &str) -> ssh_manager_core::audit::LedgerSource {
 #[derive(Clone)]
 pub struct SqliteLedgerStore {
     pool: SqlitePool,
-    cipher: Arc<dyn ContentCipher>,
 }
 
 impl SqliteLedgerStore {
-    pub fn new(pool: SqlitePool, cipher: Arc<dyn ContentCipher>) -> Self {
-        Self { pool, cipher }
+    pub fn new(pool: SqlitePool) -> Self {
+        Self { pool }
     }
 
     /// Hängt einen neuen Eintrag an das Ledger einer Sitzung an (Spec 0057,
@@ -151,7 +141,6 @@ impl SqliteLedgerStore {
                 "LedgerEntryContent-Serialisierung fehlgeschlagen: {e}"
             ))
         })?;
-        let content_blob = self.cipher.encrypt(&content_json)?.to_blob();
 
         let entry_id = Uuid::new_v4();
         sqlx::query(
@@ -164,7 +153,7 @@ impl SqliteLedgerStore {
         .bind(next_sequence)
         .bind(source_to_text(source))
         .bind(entry_type_for(content))
-        .bind(content_blob)
+        .bind(&content_json)
         .bind(Utc::now().to_rfc3339())
         .execute(&self.pool)
         .await
@@ -174,8 +163,9 @@ impl SqliteLedgerStore {
     }
 
     /// Lädt das vollständige Ledger einer Sitzung, sortiert nach
-    /// `sequence` (Spec 0057, §1: "Reihenfolge-garantiert"). Entschlüsselt
-    /// `content` transparent, wie `SqliteChatSessionStore::load_session`.
+    /// `sequence` (Spec 0057, §1: "Reihenfolge-garantiert"). Ein Inhalt, der
+    /// kein Text ist, ist ein sichtbarer Fehler, wie bei
+    /// `SqliteChatSessionStore::load_session`.
     pub async fn load_entries(
         &self,
         session_id: Uuid,
@@ -193,10 +183,8 @@ impl SqliteLedgerStore {
             .map(|row| {
                 let id: String = row.get("id");
                 let source_raw: String = row.get("source");
-                let content_blob: Vec<u8> = row.get("content");
+                let content_json: String = row.try_get("content").map_err(backend_err)?;
                 let created_at_raw: String = row.get("created_at");
-                let encrypted = EncryptedContent::from_blob(&content_blob)?;
-                let content_json = self.cipher.decrypt(&encrypted)?;
                 let content: LedgerEntryContent =
                     serde_json::from_str(&content_json).map_err(|e| {
                         LedgerStoreError::CorruptContent {
@@ -220,7 +208,7 @@ impl SqliteLedgerStore {
     }
 }
 
-/// Ein aus dem Ledger geladener, bereits entschlüsselter Eintrag (Spec
+/// Ein aus dem Ledger geladener Eintrag (Spec
 /// 0057, §1) — die "Zeile", nicht der reine [`LedgerEntryContent`]: ergänzt
 /// um die DB-eigenen Felder (`id`, `source`, `created_at`), die
 /// `LedgerEntryContent` selbst bewusst nicht trägt (s. dortiger
@@ -243,18 +231,12 @@ mod tests {
     use super::*;
     use crate::SqliteProfileStore;
 
-    fn test_cipher() -> Arc<dyn ContentCipher> {
-        Arc::new(ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(
-            &[42u8; 32],
-        ))
-    }
-
     async fn in_memory_ledger_store() -> (SqliteProfileStore, SqliteLedgerStore) {
         let options = SqliteConnectOptions::new().filename(":memory:");
         let profile_store = SqliteProfileStore::connect_with(options)
             .await
             .expect("In-Memory-Store mit angewendeten Migrationen sollte immer aufbaubar sein");
-        let ledger_store = profile_store.ledger_store(test_cipher());
+        let ledger_store = profile_store.ledger_store();
         (profile_store, ledger_store)
     }
 
@@ -288,9 +270,7 @@ mod tests {
         let server_id = server.id;
         profile_store.create_server(&server).await.unwrap();
 
-        let chat_store = profile_store.chat_session_store(Arc::new(
-            ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&[7u8; 32]),
-        ));
+        let chat_store = profile_store.chat_session_store();
         chat_store.create_session(&server_id, None).await.unwrap()
     }
 
@@ -496,79 +476,59 @@ mod tests {
         assert_eq!(count, 0);
     }
 
-    /// Spec 0057, §7: "verschlüsselt" — ein direkter SQL-Zugriff auf
-    /// `content` (am `ContentCipher` vorbei) liefert keinen lesbaren
-    /// Klartext, analog zu
-    /// `chat_session_store::tests::test_direct_sql_access_to_content_column_never_reveals_plaintext`.
+    /// Issue #113: Ein neuer Eintrag liegt als SQLite-`TEXT` mit genau dem
+    /// JSON des `LedgerEntryContent` in `ledger_entries.content` — keine
+    /// feldweise Verschlüsselung mehr dazwischen; geschützt ist er durch die
+    /// verschlüsselte Datei (Spec 0101). (Gegenprobe: Mit dem früheren Store
+    /// stand hier ein `BLOB` aus Nonce und Chiffrat, und der Test schlug
+    /// fehl.)
     #[tokio::test]
-    async fn test_direct_sql_access_to_content_column_never_reveals_plaintext() {
+    async fn test_issue_113_a_new_entry_is_stored_as_plaintext_text() {
         let (profile_store, ledger_store) = in_memory_ledger_store().await;
         let session_id = create_test_session(&profile_store).await;
-        let secret_command = "mysql --password=hunter2geheim --host=db.internal.example";
+        let content = LedgerEntryContent::CommandProposed {
+            command: "systemctl restart nginx".to_string(),
+        };
 
         ledger_store
-            .append_entry(
-                session_id,
-                LedgerSource::Ai,
-                &LedgerEntryContent::CommandProposed {
-                    command: secret_command.to_string(),
-                },
-            )
+            .append_entry(session_id, LedgerSource::Ai, &content)
             .await
             .unwrap();
 
-        let raw_blob: Vec<u8> =
-            sqlx::query("SELECT content FROM ledger_entries WHERE session_id = ?")
-                .bind(session_id.to_string())
-                .fetch_one(&profile_store.pool)
-                .await
-                .unwrap()
-                .get("content");
-
-        let raw_as_lossy_string = String::from_utf8_lossy(&raw_blob);
-        assert!(
-            !raw_as_lossy_string.contains("hunter2geheim"),
-            "der rohe BLOB darf den Klartext nicht enthalten: {raw_as_lossy_string}"
-        );
-        assert!(
-            !raw_as_lossy_string.contains("CommandProposed"),
-            "der rohe BLOB darf nicht einmal als lesbares JSON erkennbar sein: {raw_as_lossy_string}"
-        );
-        assert!(
-            raw_blob.len() > 12,
-            "Blob muss mindestens den 12-Byte-Nonce enthalten"
-        );
+        let (storage_class, raw): (String, String) = sqlx::query_as(
+            "SELECT typeof(content), CAST(content AS TEXT) FROM ledger_entries \
+             WHERE session_id = ?",
+        )
+        .bind(session_id.to_string())
+        .fetch_one(&profile_store.pool)
+        .await
+        .unwrap();
+        assert_eq!(storage_class, "text");
+        assert_eq!(raw, serde_json::to_string(&content).unwrap());
     }
 
+    /// Ein Inhalt, der kein Text ist (eine nicht umgestellte Altzeile), ist
+    /// ein klarer Fehler, kein Panic.
     #[tokio::test]
-    async fn test_load_entries_with_wrong_key_yields_clean_error_not_panic() {
+    async fn test_a_blob_entry_yields_a_clean_error_not_a_panic() {
         let (profile_store, ledger_store) = in_memory_ledger_store().await;
         let session_id = create_test_session(&profile_store).await;
-        ledger_store
-            .append_entry(
-                session_id,
-                LedgerSource::Ai,
-                &LedgerEntryContent::AiMessage {
-                    text: "geheim".to_string(),
-                },
-            )
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT INTO ledger_entries \
+             (id, session_id, sequence, source, entry_type, content, created_at) \
+             VALUES (?, ?, 0, 'ai', 'ai_message', ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(session_id.to_string())
+        .bind(vec![0u8; 40])
+        .bind(Utc::now().to_rfc3339())
+        .execute(&profile_store.pool)
+        .await
+        .unwrap();
 
-        let wrong_key_cipher: Arc<dyn ContentCipher> = Arc::new(
-            ssh_manager_core::crypto::ChaCha20Poly1305Cipher::new(&[99u8; 32]),
-        );
-        let store_with_wrong_key =
-            SqliteLedgerStore::new(profile_store.pool.clone(), wrong_key_cipher);
-
-        let result = store_with_wrong_key.load_entries(session_id).await;
-
-        assert!(
-            matches!(
-                result,
-                Err(LedgerStoreError::Cipher(CipherError::DecryptionFailed))
-            ),
-            "erwartete einen klaren Cipher-Fehler, kein Panic: {result:?}"
-        );
+        assert!(matches!(
+            ledger_store.load_entries(session_id).await,
+            Err(LedgerStoreError::Backend(_))
+        ));
     }
 }

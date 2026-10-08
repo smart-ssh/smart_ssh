@@ -103,6 +103,18 @@ Der anspruchsvollste Teil (wie „Edit with…" in Cyberduck/Transmit):
    Überschreiben (Datenverlust vermeiden).
 6. **Sauberes Ende**: Watcher stoppt, wenn der Nutzer den Flow beendet;
    Temp-Datei aufräumen (bei Session-Ende spätestens).
+   Endet die App unsauber (Absturz, beendeter Prozess), bleibt die Kopie
+   nicht dauerhaft liegen: Der nächste Start derselben Installation räumt
+   alle liegengebliebenen Bearbeitungskopien weg, bevor eine Verbindung
+   geöffnet werden kann. Bearbeitungskopien einer gleichzeitig laufenden
+   anderen Installation mit eigenem Datenverzeichnis (z. B. Entwicklungs-
+   neben installiertem Build) bleiben dabei unberührt. Symbolische Links
+   im Temp-Verzeichnis werden als Link entfernt, ihr Ziel nie. Scheitert
+   das Aufräumen eines Eintrags, startet die App trotzdem; das Protokoll
+   nennt Pfad und Fehler, nie den Dateiinhalt.
+   Kopien, die eine Version vor Einführung dieses Aufräumens liegen gelassen
+   hat, räumt die App nicht automatisch weg, weil sie noch zu einer
+   laufenden älteren Installation gehören können.
 
 Fehlerfälle: lokales Programm nicht gefunden, Datei schon offen, Upload
 scheitert — alle sichtbar behandeln.
@@ -126,7 +138,7 @@ scheitert — alle sichtbar behandeln.
 - Überschreiben/Upload: **Diff-Vorschau (0020)** + Konflikt-Prüfung
   (Remote-Änderung seit Download).
 - Temp-Dateien des Lokal-Öffnen-Flows in einem **kontrollierten** Pfad,
-  aufgeräumt.
+  aufgeräumt — spätestens beim nächsten Start, auch nach einem Absturz.
 - Frontend-Pfade vom Nutzer werden validiert (bestehende Pfad-Validierung).
 
 ## Testbarkeit

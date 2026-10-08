@@ -73,7 +73,7 @@ schließt nur die verbliebenen Lücken:
 | Kein aktiver KI-Provider beim Verbinden | roher Text „kein aktiver AI-Provider konfiguriert — …" (`active_ai_provider_config`), ohne Code | englische UI zeigt Deutsch |
 | Leere Serverliste | `ServerList.tsx`: fest verdrahteter deutscher Entwicklertext („… s. `profiles_demo`-Beispiel oder CLI-Helfer …") | BL-0082; dazu „Lade Server…" / „Verbinde…" fest deutsch |
 | Ollama-Provider anlegen | API-Key-Feld ist `required`; „Zugangsdaten testen" ist ohne Key gesperrt; `discover_models`/`test_ai_provider_credentials` lehnen leeren Key ab | Ollama braucht keinen Key — der Nutzer muss einen erfinden |
-| Neuer Provider | wird inaktiv angelegt (`ai_provider_store.rs::create` ignoriert `is_active`) | nach „Hinzufügen" muss man noch „Aktiv setzen" — s. §8, Punkt 2 |
+| Neuer Provider | wird inaktiv angelegt (`ai_provider_store.rs::create` ignoriert `is_active`) | nach „Hinzufügen" muss man noch „Aktiv setzen" — s. §8, Punkt 2; gelöst durch B6 |
 
 `CommandError` (`app-shell/src/error.rs`) trägt `code: Option<&'static str>`;
 nur Stellen mit `CommandError::with_code` liefern einen Code. Der blanket
@@ -197,22 +197,61 @@ Tabelle in §4.1. Für jeden Code MUSS gelten:
   `ConnectionReset`/`ConnectionAborted`/`UnexpectedEof` → `ConnectionClosed`;
   sonst `ConnectionFailed` wie bisher. `russh::Error::Disconnect` →
   `ConnectionClosed`.
-- **DNS nachträglich diagnostizieren, nicht vorab:** Nur wenn der **erste**
-  Hop mit `ConnectionFailed` scheitert, prüft `connect()` per
-  `tokio::net::lookup_host((host, port))`, ob der Name überhaupt auflösbar
-  ist; wenn nicht → `HostNotFound`. Der Erfolgspfad und der Host-Key-Pfad
-  (`resolve_or_pending`, `ClientHandler { host, … }`) bleiben **byte-gleich**
-  — keine Vorab-Auflösung, kein Ersetzen des Hostnamens durch eine IP.
-- **Connect-Timeout in `connect_session`:** Jeder Aufruf von
-  `ssh_transport::connect` in der Schleife läuft unter
-  `tokio::time::timeout(SSH_CONNECT_TIMEOUT, …)`; Ablauf →
-  `SshError::Timeout` → `CommandError::with_code(…, "SSH_TIMEOUT")`.
-  `SSH_CONNECT_TIMEOUT` ist **die bestehende** 10-s-Konstante aus
-  `test_connection.rs` (`TEST_CONNECTION_TIMEOUT`), umbenannt und an eine
-  gemeinsame Stelle verschoben, von beiden Pfaden genutzt — keine zweite
-  Konstante. Der Timeout umschließt **nur** `ssh_transport::connect`, nie das
-  Warten auf die Host-Key-Entscheidung (das bleibt bei
-  `PENDING_ACTION_CONFIRM_TIMEOUT`, Spec 0068 Teil 5b).
+- **Abbruch einer laufenden Sitzung** (Issue #96): Dieselben Abbrüche
+  (`Disconnect`, `ConnectionReset`/`ConnectionAborted`/`UnexpectedEof`) bei
+  einer Operation auf einer **bereits aufgebauten** Sitzung (Kommando,
+  interaktive Shell, SFTP, Trennen) ergeben
+  `SessionClosed(String)` → `SSH_SESSION_CLOSED`, nie
+  `SSH_CONNECTION_CLOSED`; deren Text spricht vom Verbindungsaufbau und
+  passt dort nicht. Der Aufbau (einschließlich Jump-Host-Tunnel) behält
+  `SSH_CONNECTION_CLOSED`. Alle anderen Zuordnungen sind in beiden Fällen
+  gleich.
+- **DNS des ersten Hops: eigener Schritt, Nachdiagnose bleibt**
+  ([ADR 0110](../adr/0110-connect-step-log.md), Entscheidung 3, ersetzt die
+  frühere Aussage „keine Vorab-Auflösung"): Der **erste** Hop wird
+  ausdrücklich aufgelöst (`tokio::net::lookup_host((host, port))`), danach
+  per TCP mit den aufgelösten Adressen verbunden — derselbe Ablauf, den
+  `russh::client::connect` intern hat, nur ausgeschrieben, damit Auflösung
+  und TCP-Verbindung als getrennte Schritte gemessen werden. Scheitert die
+  Auflösung → `HostNotFound`. Scheitert der erste Hop danach mit
+  `ConnectionFailed` (TCP oder Handshake), prüft `connect()` weiterhin
+  **nachträglich** per `lookup_host`, ob der Name auflösbar ist; wenn
+  nicht → `HostNotFound`. Der Host-Key-Pfad bleibt unverändert: Schlüssel
+  der Host-Key-Prüfung (`resolve_or_pending`, `ClientHandler { host, … }`)
+  ist immer der **Hostname**, nie die aufgelöste IP. Am Ergebnis eines
+  Verbindungsversuchs ändert die ausdrückliche Auflösung nichts.
+- **Zeitgrenzen je Phase und je Hop** (Issue #97, ersetzt die frühere eine
+  10-s-Grenze über den ganzen Aufbau): Jeder Hop einer Verbindung — der
+  Zielserver und jeder Jump-Host davor — bekommt eigene Grenzen für zwei
+  Phasen:
+
+  | Phase (je Hop) | umfasst | Grenze |
+  |---|---|---|
+  | Verbindung und Handshake | erster Hop: Namensauflösung, TCP-Verbindung, SSH-Handshake mit Host-Key-Prüfung; jeder weitere Hop: Tunnel über den vorherigen Hop, SSH-Handshake mit Host-Key-Prüfung | **10 s** |
+  | Anmeldung | die konfigurierte Anmeldung an diesem Hop, einschließlich der Zeit, in der der Nutzer einen Hardware-Schlüssel berührt oder eine Agent-Bestätigung gibt | **60 s** |
+
+  - Ein Server, der während der Verbindung oder des Handshakes hängt (z. B.
+    TCP annimmt, aber nie ein SSH-Banner schickt), scheitert nach 10 s.
+  - Eine Anmeldung, die länger als 10 s, aber kürzer als 60 s dauert, bricht
+    **nicht** ab.
+  - Die Grenzen gelten je Hop: die mögliche Gesamtdauer wächst linear mit
+    der Zahl der Hops; es gibt keine Gesamtgrenze, die die Hop-Zahl
+    ignoriert. Als reines Sicherheitsnetz umschließt den ganzen Versuch
+    zusätzlich eine Grenze aus der Summe aller Phasengrenzen plus einer
+    weiteren Handshake-Grenze (ein Hop: 80 s, zwei Hops: 150 s); sie greift
+    im normalen Ablauf nie vor einer Phasengrenze.
+  - Läuft eine Grenze ab, endet der Versuch immer mit dem Fehler
+    `SSH_TIMEOUT` — nie verbunden, nie mit einer Host-Key-Rückfrage, und es
+    beginnt keine weitere Phase. Das Schritt-Protokoll im
+    Verbindungsdialog markiert den Schritt, der beim Ablauf lief, mit
+    `SSH_TIMEOUT`.
+  - Das Warten auf die Host-Key-Entscheidung des Nutzers liegt außerhalb
+    jeder dieser Grenzen: ein unbekannter oder geänderter Host-Key beendet
+    den Versuch sofort mit der Rückfrage; danach gilt ausschließlich der
+    Host-Key-Timeout (Spec 0068 Teil 5b). Nach „Vertrauen" beginnt ein neuer
+    Versuch mit frischen Grenzen.
+  - Verbinden und „Verbindung testen" nutzen dieselben Grenzen; ein
+    Ablauf zeigt im Test das Ergebnis „Timeout".
 - Gilt für alle Aufrufer von `connect_session`, also auch für MCP
   (`mcp_backend::ensure_session`): der MCP-Client bekommt den Fehler statt
   eines hängenden Tool-Calls.
@@ -312,6 +351,27 @@ aktiv gesetzt. Kein Speichern ohne Klick.
   `http://127.0.0.1:11434/v1` vorbelegt (sichtbar, änderbar).
 Backend unverändert: für das Backend ist der Platzhalter ein normaler Key.
 
+**B6 — Erster Provider aus dem Formular wird aktiv (§8, Punkt 2, Option a).**
+Für das normale Formular „Provider hinzufügen" gilt dieselbe Regel wie für
+den Ollama-Vorschlag (B4):
+1. Ist beim Speichern **noch kein** Provider aktiv, wird der neue Provider
+   nach erfolgreichem Anlegen aktiv gesetzt. Ist schon einer aktiv, wird der
+   neue inaktiv angelegt; der bisher aktive bleibt aktiv.
+2. Solange kein Provider aktiv ist, steht direkt über „Hinzufügen" der
+   Hinweis „Wird als aktiver Provider verwendet, da noch keiner aktiv ist."
+   bzw. „Will be used as the active provider, since none is active yet.".
+   Ist ein Provider aktiv, steht dort kein Hinweis. Der Hinweis erscheint
+   erst, wenn die Provider-Liste geladen ist.
+3. Schlägt das Anlegen fehl: Fehler wie bisher, nichts aktiv gesetzt.
+4. Wird der Provider angelegt, schlägt aber das Aktiv-Setzen fehl: Der
+   Provider bleibt gespeichert und erscheint inaktiv in der neu geladenen
+   Liste, das Formular wird wie nach jedem erfolgreichen Anlegen geleert,
+   und der Fehler wird übersetzt angezeigt (wie jeder andere Fehler in
+   diesem Dialog). Der Provider wird nicht wieder gelöscht; der Nutzer kann
+   ihn über „Aktiv setzen" aktivieren.
+Das Anlegen selbst bleibt unverändert: Ein neuer Provider entsteht immer
+inaktiv, das Aktiv-Setzen ist ein eigener, nachgelagerter Schritt.
+
 ### 3.C Teil C — Einstieg (BL-0082, BL-0110)
 
 **C1 — Leerer Zustand (BL-0082).** Definition: **„leer" = keine echten
@@ -365,6 +425,7 @@ Schritt müssen erhalten bleiben. Kein `{{…}}`-Platzhalter in `errors.*`
 | `SSH_HOST_UNREACHABLE` (neu) | Der Server ist aus diesem Netz nicht erreichbar. Netzwerk/VPN prüfen. | The server can't be reached from this network. Check your network/VPN. |
 | `SSH_TIMEOUT` (Text neu) | Der Server antwortet nicht. Adresse, Port und Firewall prüfen und erneut verbinden. | The server isn't responding. Check address, port and firewall, then connect again. |
 | `SSH_CONNECTION_CLOSED` (neu) | Der Server hat die Verbindung während des Aufbaus beendet. Prüfen, ob auf diesem Port ein SSH-Dienst läuft; ggf. kurz warten (Schutz vor zu vielen Versuchen). | The server closed the connection during setup. Check that an SSH service runs on this port; wait a moment if too many attempts were made. |
+| `SSH_SESSION_CLOSED` (Issue #96) | Die Verbindung zum Server wurde unterbrochen. Erneut verbinden, um weiterzuarbeiten. | The connection to the server was lost. Reconnect to continue. |
 | `SSH_CONNECTION_FAILED` (bleibt) | unverändert (0047 D2) | unchanged |
 | `SSH_AUTH_FAILED` (Text neu) | Anmeldung abgelehnt. Benutzername und Passwort bzw. Schlüssel in den Server-Einstellungen prüfen. | Login rejected. Check the user name and password or key in the server settings. |
 | `SSH_HOST_KEY_NOT_TRUSTED` (neu) | Verbindung abgebrochen, weil der Host-Key nicht bestätigt wurde. Wenn du dem Server vertraust: erneut verbinden und den Fingerprint prüfen. | Connection cancelled because the host key wasn't confirmed. If you trust the server, connect again and verify the fingerprint. |
@@ -409,18 +470,30 @@ würfe Ollama auf einem anderen Rechner fälschlich in „starte Ollama".
 
 | Situation | Erkennung | Code |
 |---|---|---|
-| Name nicht auflösbar | `ConnectionFailed` + nachträgliches `lookup_host` scheitert | `SSH_HOST_NOT_FOUND` |
+| Name nicht auflösbar | Auflösung des ersten Hops scheitert, oder `ConnectionFailed` + nachträgliches `lookup_host` scheitert | `SSH_HOST_NOT_FOUND` |
 | Port zu / kein Dienst | `io::ErrorKind::ConnectionRefused` | `SSH_CONNECTION_REFUSED` |
 | keine Route | `HostUnreachable`/`NetworkUnreachable` | `SSH_HOST_UNREACHABLE` |
-| keine Antwort | `SSH_CONNECT_TIMEOUT` abgelaufen oder `TimedOut` | `SSH_TIMEOUT` |
+| keine Antwort | eine Phasengrenze (A3) abgelaufen oder `TimedOut` | `SSH_TIMEOUT` |
 | Abbruch während Aufbau | `Disconnect`, `ConnectionReset`/`Aborted`/`UnexpectedEof` | `SSH_CONNECTION_CLOSED` |
+| Abbruch einer bereits aufgebauten Sitzung | dieselben Fehler bei Kommando, Shell, SFTP oder Trennen | `SSH_SESSION_CLOSED` |
 | sonst | — | `SSH_CONNECTION_FAILED` |
 
-DNS wird **nachträglich** diagnostiziert statt vorab aufgelöst: so bleibt
-der erfolgreiche Verbindungsaufbau und der Host-Key-Abgleich (der am
-Hostnamen hängt) unverändert. Verworfen: Vorab-Auflösung und Übergabe der
-IP an `russh` — spart eine DNS-Anfrage im Fehlerfall, ändert aber den
-sicherheitsrelevanten Pfad.
+Ursprünglich wurde DNS nur **nachträglich** diagnostiziert statt vorab
+aufgelöst: so blieben der erfolgreiche Verbindungsaufbau und der
+Host-Key-Abgleich (der am Hostnamen hängt) unverändert. Verworfen war
+damals: Vorab-Auflösung und Übergabe der IP an `russh` — spart eine
+DNS-Anfrage im Fehlerfall, ändert aber den sicherheitsrelevanten Pfad.
+
+[ADR 0110](../adr/0110-connect-step-log.md) (Entscheidung 3) hat den Teil
+„keine Vorab-Auflösung" abgelöst: Der erste Hop wird jetzt ausdrücklich
+aufgelöst, damit Auflösung und TCP-Verbindung als eigene Schritte gemessen
+werden können. Am Ergebnis eines Versuchs ändert das nichts, weil genau der
+Ablauf ausgeschrieben ist, den `russh::client::connect` vorher intern
+ausführte (auflösen, mit den aufgelösten Adressen verbinden, `nodelay`,
+SSH-Handshake), und weil der Host-Key-Abgleich weiterhin am Hostnamen
+hängt, nie an der IP. Ein Auflösungsfehler ergibt denselben
+`HostNotFound`-Text wie die Nachdiagnose; die nachträgliche Diagnose bleibt
+für `ConnectionFailed` bestehen.
 
 ### 4.3 DTO-Änderungen (alle additiv, E3)
 
@@ -455,7 +528,7 @@ Ein altes Frontend ignoriert das neue Feld; ein unbekannter Code fällt auf
 | Stopp/Einreihen | nicht berührt. |
 | Ledger/Audit | nicht berührt (keine Aktion auf einem Server). |
 | MCP | `connect_session`-Timeout gilt auch für MCP (§3.A3); Fehlertext an den MCP-Client ist die `message` wie bisher. |
-| Nie hängen | neuer Timeout im SSH-Connect; `lookup_host` in der Diagnose läuft innerhalb dieses Timeouts. |
+| Nie hängen | Zeitgrenzen je Phase und Hop im SSH-Connect (A3); `lookup_host` — die Auflösung des ersten Hops ([ADR 0110](../adr/0110-connect-step-log.md)) wie die Nachdiagnose — läuft innerhalb der Handshake-Grenze des ersten Hops. |
 | BL-0042 | Probe nur auf Nutzeraktion (E1), nur Loopback, nie beim Start. |
 
 ---
@@ -463,8 +536,9 @@ Ein altes Frontend ignoriert das neue Feld; ein unbekannter Code fällt auf
 ## 5. Sicherheits-Invarianten
 
 - **Host-Keys (Invariante 5):** Kein Pfad dieser Spec akzeptiert einen
-  Host-Key. Der Connect-Timeout liefert immer einen Fehler, nie
-  `Connected`, nie `trust()`. Er umschließt nicht das Warten auf die
+  Host-Key. Jede Zeitgrenze des Verbindungsaufbaus (je Phase, je Hop,
+  und das äußere Sicherheitsnetz) liefert immer einen Fehler, nie
+  `Connected`, nie `trust()`. Keine umschließt das Warten auf die
   Host-Key-Entscheidung. `resolve_or_pending`, `ClientHandler` und der
   Hostname, unter dem Host-Keys gespeichert/geprüft werden, bleiben
   unverändert.
@@ -480,7 +554,9 @@ Ein altes Frontend ignoriert das neue Feld; ein unbekannter Code fällt auf
 - **Filter-Engine, Risiko, Confirm/AutoExec, Redactor:** nicht berührt.
 - **Kein Phone-Home:** E1; Probe-Ziel fest `127.0.0.1:11434`.
 - **Keine stillen Rückfälle:** Ein Vorschlag wird nie ohne Klick übernommen
-  (E2); ein fehlgeschlagenes Anlegen setzt nichts aktiv.
+  (E2); ein fehlgeschlagenes Anlegen setzt nichts aktiv. Ein über das
+  Formular angelegter Provider wird nur aktiv, wenn vorher keiner aktiv war
+  (B6) — ein bereits aktiver Provider wird nie stillschweigend ersetzt.
 
 ---
 
@@ -519,13 +595,24 @@ im Bericht bestätigen.
     timeout)` mit einer nie fertig werdenden Future → `Err(SSH_TIMEOUT)`;
     ein `HostKeyStore`-Mock zählt `trust()`-Aufrufe → 0.
 12. **Timeout umfasst nicht die Host-Key-Wartezeit:** Future liefert sofort
-    `PendingHostKeyConfirmation`; danach vergeht mehr als
-    `SSH_CONNECT_TIMEOUT`, bevor die (simulierte) Entscheidung kommt → kein
+    `PendingHostKeyConfirmation`; danach vergeht mehr als jede
+    Verbindungsgrenze, bevor die (simulierte) Entscheidung kommt → kein
     `SSH_TIMEOUT`; es gilt ausschließlich der Host-Key-Timeout.
 13. **Hängender Handshake:** lokaler `TcpListener`, der annimmt, aber nie ein
     SSH-Banner schickt → `connect_with_timeout(ssh_transport::connect(…))`
     endet nach dem (für den Test verkürzten) Timeout mit `SSH_TIMEOUT`.
     Test selbst mit äußerem Timeout, damit er nie hängt.
+13a. **Grenzen je Phase und Hop (Issue #97):** mit pausierter Uhr und
+    verzögerten Phasen: Handshake hängt → `SSH_TIMEOUT` nach genau der
+    Handshake-Grenze, keine Anmeldung; Anmeldung über der Handshake-, unter
+    der Anmeldegrenze → verbunden; Anmeldung über der Anmeldegrenze →
+    `SSH_TIMEOUT`; zwei Hops mit je knapp unter den Grenzen (Gesamtzeit über
+    den Grenzen eines Hops) → verbunden; Ablauf am zweiten Hop → `SSH_TIMEOUT`,
+    keine weitere Phase. Gegen einen echten Server ohne Banner endet der
+    Aufbau an der Handshake-Grenze selbst (ohne äußere Grenze), der
+    Handshake-Schritt trägt `SSH_TIMEOUT`, 0 `trust()`. „Verbindung testen"
+    reicht dieselben Grenzen durch und meldet einen Ablauf als `Timeout`;
+    das äußere Sicherheitsnetz wächst mit der Hop-Zahl.
 14. **Host-Key-Pfad unverändert:** Integrationstest gegen den Test-Fixture-
     Server: unbekannter Key → weiterhin `PendingHostKeyConfirmation`
     (nicht als `ConnectionClosed`/`ConnectionFailed` fehlklassifiziert);
@@ -533,8 +620,10 @@ im Bericht bestätigen.
 15. **Mismatch bleibt Mismatch:** geänderter Key → weiterhin
     `PendingHostKeyConfirmation { Mismatch }`, nie ein Verbindungsfehler-Code.
 16. **DNS-Diagnose nur im Fehlerfall:** erfolgreicher Connect ruft
-    `lookup_host` nicht zusätzlich auf (Zähler über eine injizierbare
-    Lookup-Funktion oder Nachweis per Code-Struktur im Review).
+    `lookup_host` nicht zusätzlich auf — außer der einen Auflösung des
+    ersten Hops ([ADR 0110](../adr/0110-connect-step-log.md)) keine weitere
+    (Zähler über eine injizierbare Lookup-Funktion oder Nachweis per
+    Code-Struktur im Review).
 17. **Keine Secrets im Fehler:** Connect mit Passwort gegen geschlossenen
     Port → weder `message` noch Log enthalten das Passwort.
 
@@ -566,6 +655,12 @@ im Bericht bestätigen.
     erfolgreicher Probe).
 26. `effectiveApiKey`: Ollama + leer → Platzhalter; Ollama + Wert → Wert;
     anderer Typ + leer → leer (kein Platzhalter für Cloud-Provider).
+26a. Formular (B6): ohne aktiven Provider → Hinweis sichtbar, Anlegen und
+    danach Aktiv-Setzen des neuen Providers, Liste zeigt ihn aktiv; mit
+    aktivem Provider → kein Hinweis, kein Aktiv-Setzen, der bisherige bleibt
+    aktiv; Anlegen schlägt fehl → kein Aktiv-Setzen, Fehler sichtbar;
+    Aktiv-Setzen schlägt fehl → übersetzter Fehler, Provider inaktiv in der
+    Liste, nicht gelöscht.
 
 **Teil C**
 27. `ServerList`: nur Localhost → Einstiegs-Block sichtbar, Entwicklertext
@@ -585,6 +680,9 @@ sie ausformuliert mit:
 - Server mit Tippfehler im Namen, geschlossenem Port, nicht routbarer
   Adresse (z. B. eine ungenutzte private IP) → je eigene Meldung; letzte
   nach etwa 10 s statt nach Minuten.
+- Schlüssel mit Bestätigungspflicht (Hardware-Schlüssel mit Berührung oder
+  Agent-Schlüssel mit `ssh-add -c`): verbinden und erst nach etwa 20 s
+  bestätigen → die Verbindung kommt zustande.
 - Host-Key ablehnen; Host-Key-Dialog offen lassen bis zum Timeout.
 - Frische Installation (leeres Datenverzeichnis): Einstiegs-Block → Server
   anlegen.
@@ -649,6 +747,7 @@ Beide Punkte wurden am 2026-09-22 entschieden, siehe Klarstellungen (§ 9).
    - Option b: so lassen; Einstieg und Banner verweisen auf „Aktiv setzen".
    **Empfehlung: a**, als eigenes kleines Item nach dieser Spec (nicht
    blockierend, nicht Teil dieser Umsetzung).
+   **Erledigt:** Option a, umgesetzt als B6.
 
 ---
 
@@ -663,3 +762,6 @@ Beide Punkte wurden am 2026-09-22 entschieden, siehe Klarstellungen (§ 9).
   Spec:** Ein manuell angelegter erster Provider soll automatisch aktiv werden;
   das läuft als eigenes Item. Diese Spec aktiviert weiterhin nur beim
   Ollama-Vorschlag nach Klick (B4).
+- 2026-10-08 · Offener Punkt 2 (Folge-Item #95) · Umgesetzt als **B6**: Ein
+  über das normale Formular angelegter Provider wird aktiv, wenn beim
+  Speichern noch keiner aktiv ist; das Formular sagt das vorher.

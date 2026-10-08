@@ -34,11 +34,15 @@ pub mod dto;
 pub mod ephemeral_credentials;
 pub mod error;
 pub mod events;
+pub mod field_content_decryption;
 pub mod filter_rules;
 pub mod groups;
 pub mod host_key_store;
 pub mod identity_file;
 pub mod key_files;
+/// Issue #89: which local paths the file browser may read (upload,
+/// overwrite preview, edit-session polling).
+pub mod local_path_grants;
 pub mod logging;
 /// Spec 0101, A13–A17 (E9): die Verpackungsdatei des Master-Passworts und
 /// die Vorgänge auf ihr — einrichten, entsperren, ändern, zurück auf den
@@ -80,6 +84,9 @@ pub mod start_directory;
 pub mod startup_choice_dialogs;
 pub mod startup_error_messages;
 pub mod state;
+/// Issue #90: Sitzungs-System-Prompt auf Deutsch und Englisch, gewählt
+/// nach der UI-Sprache.
+pub mod system_prompt;
 pub mod test_connection;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;

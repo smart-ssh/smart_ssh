@@ -298,7 +298,7 @@ impl Header {
 /// Baut den AEAD aus dem abgeleiteten Schlüssel.
 ///
 /// `.into()` statt `Key::from_slice`: Dieselbe Schreibweise wie in
-/// [`super::chacha`], und `from_slice` ist in `generic-array` 0.14
+/// [`super::legacy_field_content`], und `from_slice` ist in `generic-array` 0.14
 /// deprecated — `clippy -D warnings` nimmt es nicht an.
 fn cipher_for(key: &Zeroizing<[u8; DATABASE_KEY_LEN]>) -> ChaCha20Poly1305 {
     ChaCha20Poly1305::new(&(**key).into())

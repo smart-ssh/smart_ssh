@@ -91,6 +91,15 @@ pub enum SshError {
     /// `russh::Error::Disconnect`) — z. B. ein Nicht-SSH-Dienst auf dem
     /// Port, oder ein Server, der zu viele Versuche abwehrt.
     ConnectionClosed(String),
+    /// Spec 0069, Teil A3 (Issue #96): eine bereits **aufgebaute** Sitzung
+    /// hat die Verbindung verloren — dieselben Ursachen wie
+    /// [`Self::ConnectionClosed`] (`ConnectionReset`/`ConnectionAborted`/
+    /// `UnexpectedEof`, `russh::Error::Disconnect`), aber bei einer
+    /// Operation auf der laufenden Sitzung (Kommando, Shell, SFTP,
+    /// Trennen). Eigene Variante, weil der Text von
+    /// [`Self::ConnectionClosed`] vom Aufbau spricht und den Nutzer dann zum
+    /// Port und SSH-Dienst schickt, obwohl die Sitzung schon lief.
+    SessionClosed(String),
     /// Spec 0098, A4: Das Lesen eines Secrets aus dem [`CredentialStore`]
     /// ist mit [`crate::profiles::CredentialError::Backend`] gescheitert —
     /// der Secret-Speicher hat nicht geantwortet oder abgelehnt. Eigene
@@ -140,6 +149,9 @@ impl fmt::Display for SshError {
             SshError::ConnectionClosed(msg) => {
                 write!(f, "Verbindung während des Aufbaus beendet: {msg}")
             }
+            SshError::SessionClosed(msg) => {
+                write!(f, "Verbindung zum Server unterbrochen: {msg}")
+            }
             // Spec 0098, A5: feste Texte, die Art des Secrets und die
             // Hop-Angabe — nichts sonst. Der Hop steht **vorn**, wie bei
             // jeder anderen benannten Meldung (Spec 0076, A-8), damit in
@@ -184,6 +196,7 @@ impl SshError {
             SshError::HostNotFound(_) => "SSH_HOST_NOT_FOUND",
             SshError::HostUnreachable(_) => "SSH_HOST_UNREACHABLE",
             SshError::ConnectionClosed(_) => "SSH_CONNECTION_CLOSED",
+            SshError::SessionClosed(_) => "SSH_SESSION_CLOSED",
             // Spec 0098, A4: **nicht** `SSH_`-präfigiert, weil es kein
             // SSH-Problem ist — der Nutzer soll den Secret-Speicher als
             // Ursache sehen, nicht „Netzwerkfehler" und nicht „Zugangsdaten
@@ -274,6 +287,8 @@ mod code_tests {
             SshError::HostNotFound("x".to_string()),
             SshError::HostUnreachable("x".to_string()),
             SshError::ConnectionClosed("x".to_string()),
+            // Issue #96.
+            SshError::SessionClosed("x".to_string()),
             // Spec 0098, A4.
             SshError::CredentialStoreFailed {
                 secret: SecretKind::Password,
@@ -288,6 +303,24 @@ mod code_tests {
             codes.len(),
             unique.len(),
             "doppelt vergebener SshError-Code: {codes:?}"
+        );
+    }
+
+    /// Issue #96: der Text für eine verlorene, schon aufgebaute Sitzung
+    /// spricht nicht vom Aufbau — und der Code ist nicht der des Aufbaus.
+    #[test]
+    fn test_session_closed_display_does_not_mention_setup() {
+        let err = SshError::SessionClosed("connection reset".to_string());
+        let message = err.to_string();
+        assert!(
+            !message.to_lowercase().contains("aufbau") && !message.to_lowercase().contains("setup"),
+            "Sitzungsabbruch darf nicht vom Aufbau sprechen: {message}"
+        );
+        assert!(message.contains("connection reset"), "{message}");
+        assert_eq!(err.code(), "SSH_SESSION_CLOSED");
+        assert_ne!(
+            err.code(),
+            SshError::ConnectionClosed("connection reset".to_string()).code()
         );
     }
 

@@ -50,13 +50,23 @@ pub async fn require_bearer_token(
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    let expected = expected.get();
+    // Issue #115: Ein leeres oder nur aus Leerzeichen bestehendes erwartetes
+    // Token heißt "MCP ohne Geheimnis" — `Authorization: Bearer ` (leerer
+    // Wert) wäre sonst gleich und käme durch. Ein solches Token gewährt
+    // **nie** Zugriff, egal was der Client schickt; `SharedToken::default()`
+    // ist genau so ein Leerstring. Ersetzt wird es beim Laden
+    // (`app_logic::mcp_token::load_or_init_token`), nicht hier.
+    if expected.trim().is_empty() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
     match extract_bearer(&headers) {
         // Konstante Laufzeit wäre hier zusätzliche Härtung, aber die Spec
         // (Abschnitt 6) verlangt nur "kein Teil-Zugriff bei falschem
         // Token", kein Schutz gegen Timing-Seitenkanäle innerhalb von
         // 127.0.0.1 — ein einfacher Vergleich reicht für diese
         // Bedrohungslage.
-        Some(token) if token == expected.get() => Ok(next.run(request).await),
+        Some(token) if token == expected => Ok(next.run(request).await),
         _ => Err(StatusCode::UNAUTHORIZED),
     }
 }
@@ -150,5 +160,60 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(new_token_response.status(), StatusCode::OK);
+    }
+
+    async fn status_for(token: SharedToken, authorization: Option<&str>) -> StatusCode {
+        let mut request = HttpRequest::get("/protected");
+        if let Some(value) = authorization {
+            request = request.header("Authorization", value);
+        }
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            app(token).oneshot(request.body(Body::empty()).unwrap()),
+        )
+        .await
+        .expect("die Middleware darf nicht hängen")
+        .unwrap();
+        response.status()
+    }
+
+    /// Issue #115: Ein leeres erwartetes Token darf nicht mit einem leeren
+    /// `Bearer `-Wert übereinstimmen. Gegenbeweis: ohne die Leer-Prüfung in
+    /// `require_bearer_token` liefert dieser Test 200.
+    #[tokio::test]
+    async fn test_empty_expected_token_rejects_empty_bearer() {
+        assert_eq!(
+            status_for(SharedToken::new(""), Some("Bearer ")).await,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    /// Issue #115: Ein nur aus Leerzeichen bestehendes erwartetes Token
+    /// gewährt ebenfalls keinen Zugriff, auch nicht mit exakt gleichem Wert.
+    #[tokio::test]
+    async fn test_whitespace_expected_token_rejects_matching_whitespace_bearer() {
+        assert_eq!(
+            status_for(SharedToken::new("   "), Some("Bearer    ")).await,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    /// Issue #115: Leeres erwartetes Token und gar kein Header → 401.
+    #[tokio::test]
+    async fn test_empty_expected_token_rejects_missing_header() {
+        assert_eq!(
+            status_for(SharedToken::new(""), None).await,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    /// Issue #115: `SharedToken::default()` ist ein Leerstring und darf
+    /// daher ebenfalls nichts freischalten.
+    #[tokio::test]
+    async fn test_default_shared_token_grants_no_access() {
+        assert_eq!(
+            status_for(SharedToken::default(), Some("Bearer ")).await,
+            StatusCode::UNAUTHORIZED
+        );
     }
 }

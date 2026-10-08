@@ -16,13 +16,12 @@
 //! Startpfad.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use sqlx::Connection;
 
 use secrecy::SecretString;
 use ssh_manager_core::ai::{MessageContent, ProviderId, ProviderType};
-use ssh_manager_core::crypto::{ChaCha20Poly1305Cipher, ContentCipher, DatabaseKey};
+use ssh_manager_core::crypto::DatabaseKey;
 
 use ssh_manager_core::profiles::{
     AuthMethod, CredentialRef, CredentialStore, PostIngestPolicy, ProfileStore, Server,
@@ -77,10 +76,6 @@ fn other_key() -> DatabaseKey {
     let mut root = TEST_ROOT_KEY;
     root[0] ^= 0xff;
     DatabaseKey::from_root_key(&root)
-}
-
-fn test_cipher() -> Arc<dyn ContentCipher> {
-    Arc::new(ChaCha20Poly1305Cipher::new(&TEST_ROOT_KEY))
 }
 
 /// Sucht `needle` roh in allen Dateien des Verzeichnisses `dir` (nicht nur
@@ -815,8 +810,22 @@ async fn test_t4_converting_the_pre_sqlcipher_fixture_keeps_everything() {
     assert_eq!(servers[0].username, USER_MARKER);
 
     // Der feldweise verschlüsselte Chatinhalt bleibt unter dem Test-K
-    // lesbar — die Umwandlung darf die Blobs nicht anfassen (E11).
-    let chat = store.chat_session_store(test_cipher());
+    // lesbar — die Umwandlung darf die Blobs nicht anfassen. Die
+    // Umstellung danach (Issue #113) entschlüsselt ihn mit demselben K.
+    let decryption = store
+        .decrypt_field_encrypted_content(&TEST_ROOT_KEY)
+        .await
+        .expect("Umstellung nach der Umwandlung gelingt");
+    assert!(
+        matches!(
+            decryption,
+            crate::FieldContentDecryption::Completed(report)
+                if report.chat_messages.decrypted == 1 && report.removed_total() == 0
+        ),
+        "der Chatinhalt muss nach der Umwandlung mit dem Test-K entschlüsselbar sein: \
+         {decryption:?}"
+    );
+    let chat = store.chat_session_store();
     let sessions = chat
         .list_sessions_for_server(&servers[0].id)
         .await
@@ -836,7 +845,9 @@ async fn test_t4_converting_the_pre_sqlcipher_fixture_keeps_everything() {
 
     store.pool.close().await;
 
-    for marker in [HOST_MARKER, USER_MARKER, HEADER_MARKER] {
+    // Issue #113: Auch der jetzt als Klartext in der Spalte stehende
+    // Chatinhalt steht nirgends im Klartext auf der Platte.
+    for marker in [HOST_MARKER, USER_MARKER, HEADER_MARKER, "Chat-0101"] {
         let hits = files_containing(dir.path(), marker);
         assert!(
             hits.is_empty(),

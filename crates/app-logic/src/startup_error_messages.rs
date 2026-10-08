@@ -212,6 +212,17 @@ pub fn db_connect_failure_text(
              under {log_dir} names the exact cause.\n\n\
              Data path: {db_path}"
         ),
+        // Issue #113: die Datenbank ist offen und die Umstellung rollt
+        // vollständig zurück — also kein „Backup einspielen".
+        (Language::En, ConnectFailureKind::FieldContentDecryptionFailed) => format!(
+            "Smart SSH could not finish converting your stored chat history, command log \
+             and input history to the new storage format. The database itself opened \
+             fine — this is not a damaged file, and nothing has been changed.\n\n\
+             Next step: check whether the data directory is writable and has free space, \
+             then start Smart SSH again; the conversion starts over. If the same error \
+             comes back, the log under {log_dir} names the exact cause.\n\n\
+             Data path: {db_path}"
+        ),
         // Spec 0101, A13: Der Schlüssel liegt noch, wo er lag — also
         // ausdrücklich **kein** „Backup einspielen" und kein Hinweis auf
         // Datenverlust.
@@ -378,6 +389,19 @@ fn db_connect_failure_message_de(
              Platz hat, und starte Smart SSH erneut; der Umzug macht dort weiter, wo er \
              aufgehört hat. Kommt derselbe Fehler wieder, kann der Datenbankinhalt doch \
              beschädigt sein — das Log unter {log_dir} nennt die genaue Ursache.\n\n\
+             Datenpfad: {db_path}"
+        ),
+        // Issue #113: s. englischer Zweig — die Umstellung rollt
+        // vollständig zurück, die Datenbank ist offen.
+        ConnectFailureKind::FieldContentDecryptionFailed => format!(
+            "Smart SSH konnte deinen gespeicherten Chat-Verlauf, das \
+             Ausführungsprotokoll und die Eingabe-Historie nicht in das neue \
+             Speicherformat übernehmen. Die Datenbank selbst ließ sich öffnen — es ist \
+             keine Datei beschädigt, und es wurde nichts verändert.\n\n\
+             Nächster Schritt: Prüfe, ob das Datenverzeichnis beschreibbar ist und noch \
+             Platz hat, und starte Smart SSH erneut; die Umstellung beginnt dann von \
+             vorn. Kommt derselbe Fehler wieder, nennt das Log unter {log_dir} die genaue \
+             Ursache.\n\n\
              Datenpfad: {db_path}"
         ),
         // Spec 0101, A13: Die Reihenfolge in A13 sorgt dafür, dass der
@@ -978,6 +1002,36 @@ mod tests {
                 moved.message
             );
             assert!(moved.message.contains("/tmp/test/logs"));
+        }
+    }
+
+    /// Issue #113: Der Text zur gescheiterten Umstellung sagt in beiden
+    /// Sprachen, dass nichts verändert wurde, rät nicht zu einem Backup und
+    /// nennt Log und Datenpfad.
+    #[test]
+    fn test_the_field_content_decryption_failure_promises_nothing_changed_and_no_backup() {
+        for (language, nothing_changed) in [
+            (Language::De, "nichts verändert"),
+            (Language::En, "nothing has been changed"),
+        ] {
+            let text = db_connect_failure_text(
+                &ConnectFailureKind::FieldContentDecryptionFailed,
+                Path::new("/tmp/test/smart-ssh.db"),
+                Path::new("/tmp/test/logs"),
+                language,
+            );
+            assert!(
+                text.message.contains(nothing_changed),
+                "{language:?}: {}",
+                text.message
+            );
+            assert!(
+                !text.message.to_lowercase().contains("backup"),
+                "{language:?}: the database opened fine, a backup is the wrong advice: {}",
+                text.message
+            );
+            assert!(text.message.contains("/tmp/test/smart-ssh.db"));
+            assert!(text.message.contains("/tmp/test/logs"));
         }
     }
 

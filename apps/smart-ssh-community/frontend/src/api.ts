@@ -466,10 +466,25 @@ export const sftpDownloadDefault = (sessionId: string, remotePath: string, eleva
 export const sftpDownloadDir = (sessionId: string, remotePath: string, elevatedUser: string | null = null) =>
   invoke<DownloadResultDto | null>("sftp_download_dir", { sessionId, remotePath, elevatedUser });
 
-/** `localPath` muss bereits aufgelöst sein (nativer Öffnen-Dialog oder
- * OS-Drag-and-Drop, s. `crate::commands::sftp_upload`-Doc-Kommentar). */
+/** Issue #89: `localPath` must be a path the backend granted to this
+ * session — returned by `pickUploadFiles` or `claimDroppedPaths`, or the
+ * session's own edit copy. Any other path is refused before it is read
+ * (s. `crate::commands::sftp_upload`). */
 export const sftpUpload = (sessionId: string, localPath: string, remotePath: string, elevatedUser: string | null = null) =>
   invoke<void>("sftp_upload", { sessionId, localPath, remotePath, elevatedUser });
+
+/** Issue #89: the upload button's native open dialog, run in the backend.
+ * Only a title goes in; the picked paths come back already granted to this
+ * session. `null` = cancelled. */
+export const pickUploadFiles = (sessionId: string, title: string) =>
+  invoke<string[] | null>("pick_upload_files", { sessionId, title });
+
+/** Issue #89: claims the most recent drop onto the window for this
+ * session. The paths come from the native drag-and-drop event captured in
+ * the backend, never from the webview's event payload. Empty = nothing
+ * fresh to claim. */
+export const claimDroppedPaths = (sessionId: string) =>
+  invoke<string[]>("claim_dropped_paths", { sessionId });
 
 /** Löscht Datei ODER Ordner (rekursiv, Spec 0054, Teil 3) — die
  * Bestätigung (inkl. `sftpDeletePreview` bei Ordnern) läuft im Frontend. */
@@ -514,8 +529,8 @@ export const sftpChmod = (sessionId: string, path: string, mode: number, recursi
 /** Spec 0054, Teil 3: die lokale Seite der Upload-Überschreib-Diff-
  * Vorschau — `text: null` bei einer zu großen/nicht-Text-Datei, `size` ist
  * immer gesetzt (s. `crate::commands::read_local_text_preview`). */
-export const readLocalTextPreview = (localPath: string) =>
-  invoke<LocalFilePreviewDto>("read_local_text_preview", { localPath });
+export const readLocalTextPreview = (sessionId: string, localPath: string) =>
+  invoke<LocalFilePreviewDto>("read_local_text_preview", { sessionId, localPath });
 
 /** Spec 0054, Teil 4: einzelnen Eintrag abfragen (Konflikt-Prüfung vor dem
  * Hochladen aus dem "Lokal öffnen"-Flow). */
@@ -529,9 +544,10 @@ export const sftpOpenForEditing = (sessionId: string, remotePath: string, elevat
 
 /** Spec 0054, Teil 4, Punkt 3/4: Polling-Grundlage für die lokale
  * Änderungserkennung — RFC3339-Zeitstempel, oder `null`, wenn die Datei
- * (mehr) nicht lesbar ist. */
-export const localFileMtime = (localPath: string) =>
-  invoke<string | null>("local_file_mtime", { localPath });
+ * (mehr) nicht lesbar ist oder nicht zu den Freigaben dieser Sitzung gehört
+ * (Issue #89). */
+export const localFileMtime = (sessionId: string, localPath: string) =>
+  invoke<string | null>("local_file_mtime", { sessionId, localPath });
 
 /** Spec 0054, Teil 4, Punkt 6: Watcher beenden + Temp-Datei aufräumen.
  * `sessionId` schränkt den Befehl auf den Editier-Temp-Ordner GENAU dieser

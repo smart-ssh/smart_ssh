@@ -47,6 +47,7 @@ export const FIVE_MINUTE_PATH_ERROR_CODES = [
   "SSH_HOST_UNREACHABLE",
   "SSH_TIMEOUT",
   "SSH_CONNECTION_CLOSED",
+  "SSH_SESSION_CLOSED",
   "SSH_CONNECTION_FAILED",
   "SSH_AUTH_FAILED",
   "SSH_HOST_KEY_NOT_TRUSTED",
@@ -68,6 +69,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "SSH_HOST_NOT_FOUND",
   "SSH_HOST_UNREACHABLE",
   "SSH_CONNECTION_CLOSED",
+  // Issue #96: Verbindungsverlust einer bereits aufgebauten Sitzung.
+  "SSH_SESSION_CLOSED",
   // Spec 0069, Teil A4:
   "SSH_HOST_KEY_NOT_TRUSTED",
   "SSH_HOST_KEY_CONFIRM_TIMEOUT",
@@ -110,6 +113,9 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM",
   "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM",
   "FILTER_SFTP_SERVER_REQUIRES_CONFIRM",
+  // Issue #109: Secret-Pfad-/sftp-server-Prüfung nicht möglich (zu lang
+  // oder zu tief verschachtelt).
+  "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM",
   // Spec 0092, A2/A3: Rot auf einer der beiden Risiko-Achsen (oder ein zu
   // langes, nicht einschätzbares Kommando), Einstellung „Bei rotem Risiko
   // immer nachfragen" an.

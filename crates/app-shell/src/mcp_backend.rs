@@ -19,25 +19,12 @@ use crate::event_emitter::TauriEventEmitter;
 use app_logic::events::EventEmitter;
 use app_logic::mcp_lookup::McpLookup;
 use app_logic::mcp_sessions::{
-    normalize_client_name, McpSessionKey, McpSessionSlot, MCP_SESSION_CLOSED_MESSAGE,
-    MCP_SESSION_LIMIT_MESSAGE,
+    ensure_mcp_session, normalize_client_name, EnsureMcpSessionError, McpSessionKey,
+    MCP_SESSION_CLOSED_MESSAGE, MCP_SESSION_LIMIT_MESSAGE,
 };
 use app_logic::orchestration::handle_mcp_action_proposed;
 use app_logic::session::Session;
 use app_logic::state::{AppState, SessionId};
-
-/// Warum `ensure_session` keine Sitzung liefern konnte.
-enum EnsureSessionError {
-    /// Die MCP-Sitzung wurde in der App geschlossen, während die Anfrage
-    /// lief (Spec 0104, §5).
-    Closed,
-    /// Verbindungsaufbau gescheitert — wie bisher als `UnknownServer` an den
-    /// Client gemeldet.
-    Unavailable,
-    /// Issue #68: Für den Server sind schon so viele MCP-Sitzungen offen
-    /// wie erlaubt; weder Verbindung noch Tab wurden angelegt.
-    LimitReached,
-}
 
 pub struct AppMcpBackend {
     app: AppHandle,
@@ -57,13 +44,14 @@ impl AppMcpBackend {
     }
 
     /// Spec 0104 / Issue #50: liefert die eigene MCP-Sitzung dieses
-    /// MCP-Clients auf `server_id` — nie eine Nutzer-Sitzung, auch wenn für
-    /// den Server ein verbundener Nutzer-Tab offen ist (die Zuordnung kommt
-    /// ausschließlich aus `McpSessionRegistry`, in der Nutzer-Sitzungen nie
-    /// stehen). Gibt es keine verbundene, wird über denselben
-    /// `connect_session`-Pfad wie ein manueller Sidebar-Klick eine neue
-    /// Verbindung aufgebaut (eigene SSH-Verbindung, gleiche gespeicherte
-    /// Zugangsdaten, gleicher Host-Key-Ablauf).
+    /// MCP-Clients auf `server_id` — nie eine Nutzer-Sitzung. Die
+    /// Entscheidung (Wiederverwenden, Eintragen vor dem Verbindungsaufbau,
+    /// Austragen bei Fehlschlag, Trennen einer verwaisten Verbindung) liegt
+    /// Tauri-frei in [`ensure_mcp_session`] (Issue #67); hier kommen nur die
+    /// Tauri-Teile dazu: der `connect_session`-Pfad eines manuellen
+    /// Sidebar-Klicks (eigene SSH-Verbindung, gleiche gespeicherte
+    /// Zugangsdaten, gleicher Host-Key-Ablauf), der Event-Emitter und das
+    /// Trennen über `ElevatedSftpRegistry`.
     ///
     /// Das `mcp-action-tab-requested`-Event geht **vor** einem eventuell
     /// wartenden Host-Key-Dialog raus, damit der Tab sichtbar ist, bevor ein
@@ -73,71 +61,35 @@ impl AppMcpBackend {
         &self,
         server_id: ServerId,
         client_name: Option<&str>,
-    ) -> Result<(SessionId, Arc<Session>), EnsureSessionError> {
+    ) -> Result<(SessionId, Arc<Session>), EnsureMcpSessionError> {
         let state = self.state();
-        let registry = &state.mcp.sessions;
+        let state: &AppState = &state;
+        let app = &self.app;
         let key = McpSessionKey::new(server_id, client_name);
-        // Hält gleichzeitige Anfragen desselben Clients an denselben Server
-        // an, bis die erste ihre Sitzung angelegt hat — sonst bauten beide
-        // eine eigene Verbindung auf.
-        let creation = registry.lock_creation(&key).await;
-
-        // Vor dem Event und dem Verbindungsaufbau eintragen: `list_sessions()`
-        // kennzeichnet den Tab damit schon während eines Host-Key-Dialogs als
-        // MCP-Tab, und Nutzer-Eingaben sind von Anfang an gesperrt. Bei
-        // erreichter Höchstzahl je Server (Issue #68) gibt es weder Tab noch
-        // Verbindung.
-        let session_id = match registry.acquire_session(
-            &creation,
-            &key,
+        ensure_mcp_session(
+            &state.mcp.sessions,
             &state.sessions,
+            &key,
             &TauriEventEmitter(self.app.clone()),
-        ) {
-            Ok(McpSessionSlot::Existing(session_id)) => {
-                let session = state
-                    .sessions
-                    .get(session_id)
-                    .ok_or(EnsureSessionError::Closed)?;
-                return Ok((session_id, session));
-            }
-            Ok(McpSessionSlot::New(session_id)) => session_id,
-            Err(_) => return Err(EnsureSessionError::LimitReached),
-        };
-
-        // Spec 0040, Abschnitt 4: `persist_chat_session: false` — eine rein
-        // MCP-ausgelöste Verbindung erzeugt keine `chat_sessions`-Zeile
-        // (s. `connect_session`-Doc-Kommentar).
-        if connect_session(&self.app, &state, server_id, session_id, None, false)
-            .await
-            .is_err()
-        {
-            registry.unregister(session_id);
-            return Err(EnsureSessionError::Unavailable);
-        }
-
-        // Spec 0104, §5: Hat der Nutzer den MCP-Tab geschlossen, während der
-        // Aufbau noch lief (z. B. offener Host-Key-Dialog), ist die Sitzung
-        // schon ausgetragen. Dann wird die eben aufgebaute Verbindung wieder
-        // getrennt, statt eine Aktion in einer Sitzung ohne Tab laufen zu
-        // lassen.
-        if !registry.is_mcp_session(session_id) {
-            let elevated = self
-                .app
-                .state::<crate::elevated_sftp::ElevatedSftpRegistry>();
-            if let Some(orphan) = elevated.remove_session(&state.sessions, session_id) {
-                if let Err(err) = orphan.transport.lock().await.disconnect().await {
-                    tracing::debug!(error = %err, "disconnecting orphaned MCP session failed");
+            // Spec 0040, Abschnitt 4: `persist_chat_session: false` — eine
+            // rein MCP-ausgelöste Verbindung erzeugt keine
+            // `chat_sessions`-Zeile (s. `connect_session`-Doc-Kommentar).
+            |session_id| async move {
+                connect_session(app, state, server_id, session_id, None, false)
+                    .await
+                    .map(|_| ())
+            },
+            |session_id| async move {
+                let elevated = app.state::<crate::elevated_sftp::ElevatedSftpRegistry>();
+                if let Some(orphan) = elevated.remove_session(&state.sessions, session_id) {
+                    if let Err(err) = orphan.transport.lock().await.disconnect().await {
+                        tracing::debug!(error = %err, "disconnecting orphaned MCP session failed");
+                    }
+                    *orphan.terminal.lock().unwrap() = None;
                 }
-                *orphan.terminal.lock().unwrap() = None;
-            }
-            return Err(EnsureSessionError::Closed);
-        }
-
-        let session = state
-            .sessions
-            .get(session_id)
-            .ok_or(EnsureSessionError::Closed)?;
-        Ok((session_id, session))
+            },
+        )
+        .await
     }
 
     /// Spec 0028, Abschnitt 9a: native OS-Benachrichtigung für eine
@@ -210,13 +162,13 @@ impl McpBackend for AppMcpBackend {
                 // Spec 0104, §5: in der App geschlossen, bevor die Aktion
                 // überhaupt vorgeschlagen wurde — eindeutige Meldung an den
                 // Client, nichts wurde ausgeführt.
-                Err(EnsureSessionError::Closed) => {
+                Err(EnsureMcpSessionError::Closed) => {
                     return Ok(ActionOutcome::Failed {
                         message: MCP_SESSION_CLOSED_MESSAGE.to_string(),
                     });
                 }
-                Err(EnsureSessionError::Unavailable) => return Err(LookupError::UnknownServer),
-                Err(EnsureSessionError::LimitReached) => {
+                Err(EnsureMcpSessionError::Unavailable) => return Err(LookupError::UnknownServer),
+                Err(EnsureMcpSessionError::LimitReached) => {
                     return Ok(ActionOutcome::Failed {
                         message: MCP_SESSION_LIMIT_MESSAGE.to_string(),
                     });

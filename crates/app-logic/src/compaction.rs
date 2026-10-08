@@ -956,6 +956,10 @@ pub struct SystemContextParts {
     /// gekürzt/entfernt, der letzte (server-spezifische) bleibt am
     /// längsten erhalten.
     pub note_sections: Vec<(String, String)>,
+    /// Issue #90: Sprache von `base` — bestimmt auch die Überschrift über
+    /// den Notiz-Sektionen und den Kürzungshinweis, damit der ganze
+    /// System-Prompt in einer Sprache bleibt.
+    pub language: crate::system_prompt::PromptLanguage,
 }
 
 impl SystemContextParts {
@@ -981,7 +985,7 @@ impl SystemContextParts {
     pub fn assemble_with_notes(&self, note_sections: &[(String, String)]) -> String {
         let mut context = self.base.clone();
         if !note_sections.is_empty() {
-            context.push_str("\n\n## Notizen / Kontext\n");
+            context.push_str(crate::system_prompt::notes_heading(self.language));
             let fenced_sections: Vec<String> = note_sections
                 .iter()
                 .map(|(label, notes)| fence_untrusted(UntrustedKind::ServerNote, label, notes))
@@ -991,14 +995,6 @@ impl SystemContextParts {
         context
     }
 }
-
-/// Wird beim Kürzen einer Notiz-Sektion (Spec 0057, §4.1) an ihr Ende
-/// gehängt — lautlos (keine Dialog-Unterbrechung, s. Spec 0057 §4.1,
-/// letzter Satz), nur für DIESE eine Anfrage; die gespeicherte Notiz
-/// bleibt unangetastet (s. [`SystemContextParts::assemble_with_notes`]-
-/// Doc-Kommentar).
-const NOTE_TRUNCATED_FOR_CONTEXT_NOTICE: &str =
-    "\n[... für diese Anfrage gekürzt — die gespeicherte Notiz ist vollständig.]";
 
 /// Untergrenze für die zuletzt verbleibende (server-spezifische, s. Spec
 /// 0057 §4.1: "server-spezifische Notiz bleibt am längsten") Notiz-Sektion
@@ -1041,7 +1037,7 @@ fn compact_notes_for_budget(
             .max(MIN_LAST_NOTE_SECTION_BYTES)
             .min(text.len());
         let mut truncated_text = truncate_to_char_boundary(&text, target_bytes).to_string();
-        truncated_text.push_str(NOTE_TRUNCATED_FOR_CONTEXT_NOTICE);
+        truncated_text.push_str(crate::system_prompt::note_truncated_notice(parts.language));
         sections[0] = (label, truncated_text);
         context.system_context = parts.assemble_with_notes(&sections);
     }
@@ -1462,6 +1458,7 @@ mod tests {
                 ("Gruppe \"Global\"".to_string(), "g".repeat(3000)),
                 ("Server \"db1\"".to_string(), "s".repeat(200)),
             ],
+            language: crate::system_prompt::PromptLanguage::De,
         };
         let mut context = context_with(parts.assemble(), Vec::new());
         // Budget knapp über dem, was die Server-Notiz allein braucht.
@@ -1490,6 +1487,7 @@ mod tests {
         let parts = SystemContextParts {
             base: "Basis".to_string(),
             note_sections: vec![("Server \"db1\"".to_string(), "s".repeat(50_000))],
+            language: crate::system_prompt::PromptLanguage::De,
         };
         let mut context = context_with(parts.assemble(), Vec::new());
         let budget = 100; // sehr klein — zwingt zur Kürzung der letzten Sektion.
@@ -1512,6 +1510,33 @@ mod tests {
         // Untergrenze eingehalten (Notiztext + Label + Fence-Tags + Hinweis
         // bleiben spürbar über 0, s. `MIN_LAST_NOTE_SECTION_BYTES`).
         assert!(context.system_context.len() >= MIN_LAST_NOTE_SECTION_BYTES);
+    }
+
+    /// Issue #90: Mit englischem System-Prompt sind auch die Notiz-
+    /// Überschrift und der Kürzungshinweis englisch — kein deutscher Rest
+    /// im ganzen gesendeten System-Prompt.
+    #[test]
+    fn test_english_parts_use_english_notes_heading_and_truncation_notice() {
+        let parts = SystemContextParts {
+            base: "Base".to_string(),
+            note_sections: vec![("Server \"db1\"".to_string(), "s".repeat(50_000))],
+            language: crate::system_prompt::PromptLanguage::En,
+        };
+        assert!(parts.assemble().contains("\n\n## Notes / context\n"));
+        assert!(!parts.assemble().contains("Notizen"));
+
+        let mut context = context_with(parts.assemble(), Vec::new());
+        compact_notes_for_budget(&mut context, &parts, 100);
+
+        assert!(
+            context
+                .system_context
+                .contains("shortened for this request — the stored note is complete"),
+            "English truncation notice expected: {}",
+            context.system_context
+        );
+        assert!(!context.system_context.contains("gekürzt"));
+        assert!(!context.system_context.contains("Notizen"));
     }
 
     // --- Modell-Kontextfenster ---------------------------------------------

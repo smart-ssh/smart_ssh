@@ -67,8 +67,38 @@ pub struct PlannedTag {
     /// trifft das nicht zu, und genau er kann eine bestehende
     /// `Scope::Tag`-Regel **exakt** treffen. Die Vorschau soll ihn deshalb
     /// deutlicher kennzeichnen als ein Mustern-Schlagwort (Review-Runde 1
-    /// und 2, offene Entscheidung `Q-BL-0216-02`).
+    /// und 2). Die Vorgabe „angewählt/abgewählt" hängt **nicht** hiervon
+    /// ab, sondern allein an den Regel-Treffern — s. [`Self::default_selected`].
     pub is_literal: bool,
+}
+
+impl PlannedTag {
+    /// §5.2a/§9: ob dieses Schlagwort in der Vorschau **standardmäßig
+    /// angewählt** ist. Die **einzige** Stelle, die diese Vorgabe trägt —
+    /// das Vorschau-DTO reicht sie an den Dialog durch, und `apply` nimmt
+    /// sie für einen Eintrag ohne Wahl des Nutzers.
+    ///
+    /// Trifft das Schlagwort eine Tag-`Allow`-Regel, ist es abgewählt — es
+    /// hebt ein importiertes Profil sonst unbemerkt von `Confirm` auf
+    /// `Allow`. Trifft es **zusätzlich** eine Tag-`Deny`-Regel, bleibt es
+    /// angewählt: Die Abwahl nähme dem Profil sonst auch die
+    /// `Deny`-Abdeckung, und `Deny` geht in der Filter-Engine ohnehin vor
+    /// `Allow`. Nur `Confirm`/`Deny` oder keine Regel ⇒ angewählt. Das gilt
+    /// für buchstäbliche und Muster-Schlagworte gleichermaßen (Issue #105).
+    pub fn default_selected(&self) -> bool {
+        let mut hits_allow = false;
+        let mut hits_deny = false;
+        for m in &self.matched_rules {
+            // Erschöpfender `match` statt `==`: eine neue `RuleAction`
+            // zwingt hier zu einer bewussten Entscheidung.
+            match m.action {
+                RuleAction::Allow => hits_allow = true,
+                RuleAction::Deny => hits_deny = true,
+                RuleAction::Confirm => {}
+            }
+        }
+        hits_deny || !hits_allow
+    }
 }
 
 /// §3.1.9 (a): Der Pfad wird **unverändert** übernommen — kein `realpath`,
@@ -504,14 +534,11 @@ pub fn build_plan(sources: &[ImportSource], inv: Inventory<'_>) -> ImportPlan {
                         // Deshalb bleibt das Schlagwort, und der Weg wird
                         // dort geschlossen, wo §5.2a ihn ohnehin schließen
                         // will: Es wird gekennzeichnet (`is_literal`) und ist
-                        // in der Vorschau einzeln abwählbar. Q-BL-0216-02
-                        // (2026-09-25, §9 der Spec) wurde entschieden,
-                        // welche der beiden Richtungen die Vorgabe trägt:
-                        // Trifft das buchstäbliche Schlagwort eine
-                        // Allow-Regel, ist es in der Vorschau standardmäßig
-                        // abgewählt (umgesetzt in `defaultTagSelected`,
-                        // `SshConfigImportDialog.tsx`) — s. ADR 0074 Punkt 8,
-                        // ADR 0075 §9.
+                        // in der Vorschau einzeln abwählbar. Welche der
+                        // beiden Richtungen die Vorgabe trägt, entscheidet
+                        // `PlannedTag::default_selected` (§5.2a/§9 der
+                        // Spec): ein Allow-Treffer ohne Deny-Treffer startet
+                        // abgewählt — s. ADR 0074 Punkt 8, ADR 0075 §9/§12.
                         if !c.matches(alias) || tag_seen.contains(&c.pattern) {
                             continue;
                         }

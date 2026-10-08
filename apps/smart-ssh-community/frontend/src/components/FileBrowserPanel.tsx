@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import {
+  claimDroppedPaths,
   commandErrorMessage,
+  pickUploadFiles,
   readLocalTextPreview,
   sftpChmod,
   sftpDelete,
@@ -486,8 +487,18 @@ export function FileBrowserPanel({
           setDragOver(false);
           // Issue #29: always the `uploadMany` of the latest render — and
           // with it the current `channelUser` and `path` — never the one of
-          // the render that registered this listener.
-          uploadManyRef.current(event.payload.paths);
+          // the render that registered this listener. Taken now, at the
+          // drop, not once the claim below returns.
+          const upload = uploadManyRef.current;
+          // Issue #89: the payload's paths are not trusted. The backend
+          // captured the same drop from the native window event; claiming it
+          // grants those paths to this session and returns them.
+          claimDroppedPaths(sessionId)
+            .then((paths) => {
+              if (paths.length > 0) upload(paths);
+            })
+            // Fails only if the session is already gone (tab closing).
+            .catch((err) => console.warn("Could not claim the dropped files:", err));
         }
       })
       .then((fn) => {
@@ -502,7 +513,8 @@ export function FileBrowserPanel({
     // through `uploadManyRef` when the drop is handled, so there is no window
     // between a channel switch (banner already committed) and a re-registered
     // listener in which a drop would still use the previous channel.
-  }, [isVisible]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVisible, sessionId]);
 
   /** Spec 0054, Teil 3: "Hochladen ... Überschreibt bestehende →
    * Diff-Vorschau (0020)". Kein Dialog für den unkritischen Normalfall
@@ -525,7 +537,7 @@ export function FileBrowserPanel({
         return "uploaded";
       }
       const [localPreview, remoteText] = await Promise.all([
-        readLocalTextPreview(localPath),
+        readLocalTextPreview(sessionId, localPath),
         sftpReadText(sessionId, remotePath, channelUser).catch(() => null),
       ]);
       const remoteSize = entries.find((e) => e.path === remotePath)?.size ?? 0;
@@ -583,9 +595,11 @@ export function FileBrowserPanel({
   };
 
   const handleUploadButton = async () => {
-    const picked = await open({ title: "Datei(en) hochladen", multiple: true, directory: false });
-    if (!picked) return;
-    uploadMany(Array.isArray(picked) ? picked : [picked]);
+    // Issue #89: the dialog runs in the backend, which grants the picked
+    // files to this session; the webview never names a path itself.
+    const picked = await pickUploadFiles(sessionId, t("fileBrowser.uploadDialogTitle"));
+    if (!picked || picked.length === 0) return;
+    uploadMany(picked);
   };
 
   /** Spec 0054, Teil 2: "Herunterladen" — direkt ins Standard-
@@ -865,7 +879,7 @@ export function FileBrowserPanel({
         <button
           type="button"
           onClick={() => load(startPath)}
-          title="Zum Startverzeichnis"
+          title={t("fileBrowser.toStartDirectory")}
           className="border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
         >
           ⌂
@@ -874,7 +888,7 @@ export function FileBrowserPanel({
           type="button"
           onClick={() => load(parentPath(path))}
           disabled={path === "."}
-          title="Übergeordnetes Verzeichnis"
+          title={t("fileBrowser.parentDirectory")}
           className="border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40"
         >
           ↑
@@ -897,14 +911,14 @@ export function FileBrowserPanel({
           onClick={() => setMkdirOpen("")}
           className="border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
         >
-          + Ordner
+          {t("fileBrowser.newFolderButton")}
         </button>
         <button
           type="button"
           onClick={handleUploadButton}
           className="font-heading border border-indigo-600/50 px-2 py-1 text-xs font-semibold text-indigo-400 hover:bg-indigo-600/14"
         >
-          Hochladen
+          {t("fileBrowser.upload")}
         </button>
         {!elevated && (
           <input
@@ -931,15 +945,15 @@ export function FileBrowserPanel({
             <button
               type="button"
               onClick={handlePaste}
-              title={`${cutEntry.name} hierher verschieben`}
+              title={t("fileBrowser.pasteTitle", { name: cutEntry.name })}
               className="font-heading border border-indigo-600/50 px-2 py-1 text-xs font-semibold text-indigo-400 hover:bg-indigo-600/14"
             >
-              Einfügen
+              {t("fileBrowser.paste")}
             </button>
             <button
               type="button"
               onClick={() => setCutEntry(null)}
-              title="Ausschneiden abbrechen"
+              title={t("fileBrowser.cancelCut")}
               className="border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:bg-slate-800"
             >
               ✕
@@ -950,17 +964,17 @@ export function FileBrowserPanel({
 
       {transfers.length > 0 && (
         <div className="space-y-1 border-b border-slate-800 bg-slate-950/60 px-2 py-1.5">
-          {transfers.map((t) => (
-            <div key={t.id} className="flex items-center gap-2 text-xs">
-              {t.error ? (
+          {transfers.map((transfer) => (
+            <div key={transfer.id} className="flex items-center gap-2 text-xs">
+              {transfer.error ? (
                 <>
                   <span className="text-red-400">✗</span>
                   <span className="min-w-0 flex-1 truncate text-red-300">
-                    {t.fileName}: {t.error}
+                    {transfer.fileName}: {transfer.error}
                   </span>
                   <button
                     type="button"
-                    onClick={() => setTransfers((prev) => prev.filter((x) => x.id !== t.id))}
+                    onClick={() => setTransfers((prev) => prev.filter((x) => x.id !== transfer.id))}
                     className="text-red-400 hover:text-red-300"
                   >
                     ✕
@@ -970,8 +984,13 @@ export function FileBrowserPanel({
                 <>
                   <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-indigo-400" />
                   <span className="min-w-0 flex-1 truncate text-slate-300">
-                    {t.kind === "upload" ? "Hochladen" : "Herunterladen"}: {t.fileName}
-                    {t.totalBytes !== null && ` (${formatBytes(t.totalBytes)})`}
+                    {t(
+                      transfer.kind === "upload"
+                        ? "fileBrowser.transferUpload"
+                        : "fileBrowser.transferDownload",
+                      { name: transfer.fileName },
+                    )}
+                    {transfer.totalBytes !== null && ` (${formatBytes(transfer.totalBytes)})`}
                   </span>
                 </>
               )}
@@ -984,10 +1003,10 @@ export function FileBrowserPanel({
         ref={tableContainerRef}
         className={`relative min-h-0 flex-1 overflow-auto ${dragOver ? "bg-indigo-950/40" : ""}`}
       >
-        {loading && <p className="p-3 text-xs text-slate-400">Lädt…</p>}
+        {loading && <p className="p-3 text-xs text-slate-400">{t("fileBrowser.loading")}</p>}
         {error && <p className="p-3 text-xs text-red-400">{error}</p>}
         {!loading && !error && entries.length === 0 && (
-          <p className="p-3 text-xs text-slate-500">(leeres Verzeichnis)</p>
+          <p className="p-3 text-xs text-slate-500">{t("fileBrowser.emptyDirectory")}</p>
         )}
         {!loading && !error && entries.length > 0 && (
           <table
@@ -1029,9 +1048,9 @@ export function FileBrowserPanel({
             </colgroup>
             <thead className="sticky top-0 bg-slate-900 text-slate-500">
               <tr className="[&>th]:px-2 [&>th]:py-1 [&>th]:font-normal">
-                <th>Name</th>
+                <th>{t("fileBrowser.column.name")}</th>
                 <th className="relative">
-                  Größe
+                  {t("fileBrowser.column.size")}
                   <ColumnResizeHandle
                     testId="column-resize-size"
                     onDrag={handleColumnDrag("size")}
@@ -1039,7 +1058,7 @@ export function FileBrowserPanel({
                   />
                 </th>
                 <th className="relative">
-                  Rechte
+                  {t("fileBrowser.column.permissions")}
                   <ColumnResizeHandle
                     testId="column-resize-permissions"
                     onDrag={handleColumnDrag("permissions")}
@@ -1047,14 +1066,16 @@ export function FileBrowserPanel({
                   />
                 </th>
                 <th className="relative">
-                  Geändert
+                  {t("fileBrowser.column.modified")}
                   <ColumnResizeHandle
                     testId="column-resize-modified"
                     onDrag={handleColumnDrag("modified")}
                     onDragEnd={handleColumnDragEnd}
                   />
                 </th>
-                <th />
+                <th>
+                  <span className="sr-only">{t("fileBrowser.actionsColumn")}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -1164,7 +1185,7 @@ export function FileBrowserPanel({
         )}
         {dragOver && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center border-2 border-dashed border-indigo-500 bg-indigo-950/30 text-sm text-indigo-200">
-            Hier ablegen zum Hochladen nach {displayPath(path)}
+            {t("fileBrowser.dropHint", { path: displayPath(path) })}
           </div>
         )}
       </div>
@@ -1209,31 +1230,31 @@ export function FileBrowserPanel({
         <div className="flex items-center gap-2 border-t border-indigo-700/50 bg-indigo-950/40 px-2 py-1.5 text-xs">
           {localEdit.session.status === "uploading" ? (
             <span className="text-slate-300">
-              „{localEdit.session.entry.name}" wird hochgeladen…
+              {t("fileBrowser.localEdit.uploading", { name: localEdit.session.entry.name })}
             </span>
           ) : localEdit.session.status === "changed" ? (
             <>
               <span className="flex-1 text-amber-300">
-                „{localEdit.session.entry.name}" wurde lokal geändert. Auf den Server hochladen?
+                {t("fileBrowser.localEdit.changed", { name: localEdit.session.entry.name })}
               </span>
               <button
                 type="button"
                 onClick={handleOfferEditUpload}
                 className="font-heading border border-indigo-600/50 px-2 py-1 text-xs font-semibold text-indigo-300 hover:bg-indigo-600/14"
               >
-                Hochladen
+                {t("fileBrowser.upload")}
               </button>
               <button
                 type="button"
                 onClick={localEdit.dismissChange}
                 className="border border-slate-700 px-2 py-1 text-slate-400 hover:bg-slate-800"
               >
-                Später
+                {t("fileBrowser.localEdit.later")}
               </button>
             </>
           ) : (
             <span className="flex-1 text-slate-300">
-              „{localEdit.session.entry.name}" wird lokal bearbeitet…
+              {t("fileBrowser.localEdit.editing", { name: localEdit.session.entry.name })}
               {localEdit.session.elevatedUser && (
                 <span className="ml-1 text-amber-300">
                   {t("fileElevation.editOpenedAs", { user: localEdit.session.elevatedUser })}
@@ -1246,7 +1267,7 @@ export function FileBrowserPanel({
             onClick={localEdit.endSession}
             className="border border-slate-700 px-2 py-1 text-slate-400 hover:bg-slate-800"
           >
-            Bearbeitung beenden
+            {t("fileBrowser.localEdit.end")}
           </button>
           {localEdit.session.error && (
             <span className="w-full text-red-300">{localEdit.session.error}</span>
@@ -1260,12 +1281,11 @@ export function FileBrowserPanel({
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
               {localEdit.session?.elevatedUser
                 ? t("fileElevation.editUploadTitle", { user: localEdit.session.elevatedUser })
-                : "Lokale Änderungen hochladen?"}
+                : t("fileBrowser.localEdit.uploadTitle")}
             </h2>
             {editUploadOffer.remoteChangedSinceDownload && (
               <p className="mb-3 border border-red-700/50 bg-red-950/40 px-2 py-1.5 text-xs text-red-300">
-                Die Remote-Datei wurde seit dem Download verändert — ein Hochladen würde diese
-                andere Änderung überschreiben.
+                {t("fileBrowser.localEdit.remoteChanged")}
               </p>
             )}
             {editUploadOffer.localText !== null && editUploadOffer.remoteText !== null ? (
@@ -1275,8 +1295,7 @@ export function FileBrowserPanel({
               />
             ) : (
               <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
-                Kein Text-Diff möglich (Binärdatei oder zu groß). Neue Größe:{" "}
-                {formatBytes(editUploadOffer.localSize)}.
+                {t("fileBrowser.localEdit.noDiff", { size: formatBytes(editUploadOffer.localSize) })}
               </p>
             )}
             <div className="mt-4 flex justify-end gap-2">
@@ -1285,14 +1304,14 @@ export function FileBrowserPanel({
                 onClick={() => setEditUploadOffer(null)}
                 className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
               >
-                Abbrechen
+                {t("fileBrowser.cancel")}
               </button>
               <button
                 type="button"
                 onClick={handleConfirmEditUpload}
                 className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
               >
-                Hochladen
+                {t("fileBrowser.upload")}
               </button>
             </div>
           </div>
@@ -1314,7 +1333,7 @@ export function FileBrowserPanel({
 
       {mkdirOpen !== null && (
         <RenamePrompt
-          title="Neuer Ordner"
+          title={t("fileBrowser.renamePrompt.newFolderTitle")}
           initialValue={mkdirOpen}
           onChange={setMkdirOpen}
           onCancel={() => setMkdirOpen(null)}
@@ -1331,22 +1350,30 @@ export function FileBrowserPanel({
                     user: elevatedUser,
                   })
                 : deleteTarget.isDir
-                  ? "Ordner löschen?"
-                  : "Datei löschen?"}
+                  ? t("fileBrowser.deleteDialog.dirTitle")
+                  : t("fileBrowser.deleteDialog.fileTitle")}
             </h2>
             <p className="mb-4 text-sm text-slate-300">
-              <span className="font-mono text-xs break-all">{deleteTarget.path}</span> wird
-              unwiderruflich vom Server gelöscht.
+              <span className="font-mono text-xs break-all">{deleteTarget.path}</span>{" "}
+              {t("fileBrowser.deleteDialog.body")}
               {deleteTarget.isDir &&
                 (deletePreview ? (
                   <>
                     {" "}
-                    Enthält <strong>{deletePreview.fileCount}</strong> Datei(en) in{" "}
-                    <strong>{deletePreview.dirCount}</strong> Ordner(n) (inkl. diesem) — alle
-                    werden mitgelöscht.
+                    <Trans
+                      t={t}
+                      i18nKey="fileBrowser.deleteDialog.contents"
+                      values={{
+                        fileCount: deletePreview.fileCount,
+                        dirCount: deletePreview.dirCount,
+                        files: t("fileBrowser.deleteDialog.files", { count: deletePreview.fileCount }),
+                        dirs: t("fileBrowser.deleteDialog.dirs", { count: deletePreview.dirCount }),
+                      }}
+                      components={{ strong: <strong /> }}
+                    />
                   </>
                 ) : (
-                  " Ermittle Inhalt…"
+                  ` ${t("fileBrowser.deleteDialog.counting")}`
                 ))}
             </p>
             <div className="flex justify-end gap-2">
@@ -1355,14 +1382,14 @@ export function FileBrowserPanel({
                 onClick={() => setDeleteTarget(null)}
                 className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
               >
-                Abbrechen
+                {t("fileBrowser.cancel")}
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDelete}
                 className="font-heading bg-red-600 px-3 py-1.5 text-xs font-semibold text-red-50 hover:bg-red-500"
               >
-                Löschen
+                {t("fileBrowser.delete")}
               </button>
             </div>
           </div>
@@ -1384,11 +1411,11 @@ export function FileBrowserPanel({
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
               {elevated
                 ? t("fileElevation.moveCollisionTitle", { user: elevatedUser })
-                : "Ziel existiert bereits"}
+                : t("fileBrowser.moveCollision.title")}
             </h2>
             <p className="mb-4 text-sm text-slate-300">
-              <span className="font-mono text-xs break-all">{moveCollision.to}</span> gibt es
-              schon und würde überschrieben.
+              <span className="font-mono text-xs break-all">{moveCollision.to}</span>{" "}
+              {t("fileBrowser.moveCollision.body")}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -1396,14 +1423,14 @@ export function FileBrowserPanel({
                 onClick={() => setMoveCollision(null)}
                 className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
               >
-                Abbrechen
+                {t("fileBrowser.cancel")}
               </button>
               <button
                 type="button"
                 onClick={handleConfirmMoveCollision}
                 className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
               >
-                Überschreiben
+                {t("fileBrowser.overwrite")}
               </button>
             </div>
           </div>
@@ -1414,11 +1441,11 @@ export function FileBrowserPanel({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
-              {elevated ? t("fileElevation.overwriteTitle", { user: elevatedUser }) : "Datei überschreiben?"}
+              {elevated ? t("fileElevation.overwriteTitle", { user: elevatedUser }) : t("fileBrowser.uploadConflict.title")}
             </h2>
             <p className="mb-3 text-sm text-slate-300">
               <span className="font-mono text-xs break-all">{uploadConflict.remotePath}</span>{" "}
-              existiert bereits auf dem Server.
+              {t("fileBrowser.uploadConflict.body")}
             </p>
             {uploadConflict.localPreview.text !== null && uploadConflict.remoteText !== null ? (
               <NoteDiffPreview
@@ -1427,9 +1454,10 @@ export function FileBrowserPanel({
               />
             ) : (
               <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
-                Kein Text-Diff möglich (Binärdatei oder zu groß). Bisherige Größe:{" "}
-                {formatBytes(uploadConflict.remoteSize)}, neue Größe:{" "}
-                {formatBytes(uploadConflict.localPreview.size)}.
+                {t("fileBrowser.uploadConflict.noDiff", {
+                  remoteSize: formatBytes(uploadConflict.remoteSize),
+                  localSize: formatBytes(uploadConflict.localPreview.size),
+                })}
               </p>
             )}
             <div className="mt-4 flex justify-end gap-2">
@@ -1438,14 +1466,14 @@ export function FileBrowserPanel({
                 onClick={() => setUploadConflict(null)}
                 className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
               >
-                Abbrechen
+                {t("fileBrowser.cancel")}
               </button>
               <button
                 type="button"
                 onClick={handleConfirmUpload}
                 className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
               >
-                Überschreiben
+                {t("fileBrowser.overwrite")}
               </button>
             </div>
           </div>
@@ -1501,6 +1529,7 @@ function FileEntryMenu({
   onChmod: (entry: RemoteEntryDto) => void;
   onDelete: (entry: RemoteEntryDto) => void;
 }) {
+  const { t } = useTranslation();
   const itemClass = "block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14";
   return (
     <div
@@ -1508,46 +1537,46 @@ function FileEntryMenu({
       style={style}
     >
       <button type="button" onClick={() => onDownloadDefault(entry)} className={itemClass}>
-        Herunterladen
+        {t("fileBrowser.menu.download")}
       </button>
       <button type="button" onClick={() => onDownloadChoose(entry)} className={itemClass}>
-        Herunterladen nach…
+        {t("fileBrowser.menu.downloadTo")}
       </button>
       {!entry.isDir && (
         <button type="button" onClick={() => onCopyContent(entry)} className={itemClass}>
-          Dateiinhalt kopieren
+          {t("fileBrowser.menu.copyContent")}
         </button>
       )}
       {!entry.isDir && (
         <button type="button" onClick={() => onOpenLocally(entry)} className={itemClass}>
-          Lokal öffnen…
+          {t("fileBrowser.menu.openLocally")}
         </button>
       )}
       <button type="button" onClick={() => onCopyPath(entry)} className={itemClass}>
-        Pfad kopieren
+        {t("fileBrowser.menu.copyPath")}
       </button>
       <button type="button" onClick={() => onShowProperties(entry)} className={itemClass}>
-        Eigenschaften
+        {t("fileBrowser.menu.properties")}
       </button>
       <button type="button" onClick={onRefresh} className={itemClass}>
-        Aktualisieren
+        {t("fileBrowser.menu.refresh")}
       </button>
       <div className="my-1 border-t border-slate-800" />
       <button type="button" onClick={() => onChmod(entry)} className={itemClass}>
-        Rechte bearbeiten…
+        {t("fileBrowser.menu.chmod")}
       </button>
       <button type="button" onClick={() => onRename(entry)} className={itemClass}>
-        Umbenennen
+        {t("fileBrowser.menu.rename")}
       </button>
       <button type="button" onClick={() => onCut(entry)} className={itemClass}>
-        Ausschneiden
+        {t("fileBrowser.menu.cut")}
       </button>
       <button
         type="button"
         onClick={() => onDelete(entry)}
         className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-600/12"
       >
-        Löschen
+        {t("fileBrowser.menu.delete")}
       </button>
     </div>
   );
@@ -1566,6 +1595,7 @@ function FilePropertiesDialog({
   entry: RemoteEntryDto;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const octal = entry.permissionsOctal.toString(8).padStart(3, "0");
   const owner = entry.owner ?? (entry.uid !== null ? String(entry.uid) : "—");
   const group = entry.group ?? (entry.gid !== null ? String(entry.gid) : "—");
@@ -1580,17 +1610,25 @@ function FilePropertiesDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
-        <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">Eigenschaften</h2>
+        <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
+          {t("fileBrowser.properties.title")}
+        </h2>
         <div className="divide-y divide-slate-800/70 text-xs">
-          {row("Name", entry.name)}
-          {row("Pfad", entry.path)}
-          {row("Typ", entry.isDir ? "Ordner" : "Datei")}
-          {row("Größe", entry.isDir ? "—" : formatBytes(entry.size))}
-          {row("Rechte (symbolisch)", entry.permissions)}
-          {row("Rechte (numerisch)", octal)}
-          {row("Besitzer", owner)}
-          {row("Gruppe", group)}
-          {row("Geändert", entry.modified ? new Date(entry.modified).toLocaleString() : "—")}
+          {row(t("fileBrowser.properties.name"), entry.name)}
+          {row(t("fileBrowser.properties.path"), entry.path)}
+          {row(
+            t("fileBrowser.properties.type"),
+            entry.isDir ? t("fileBrowser.properties.typeFolder") : t("fileBrowser.properties.typeFile"),
+          )}
+          {row(t("fileBrowser.properties.size"), entry.isDir ? "—" : formatBytes(entry.size))}
+          {row(t("fileBrowser.properties.permissionsSymbolic"), entry.permissions)}
+          {row(t("fileBrowser.properties.permissionsNumeric"), octal)}
+          {row(t("fileBrowser.properties.owner"), owner)}
+          {row(t("fileBrowser.properties.group"), group)}
+          {row(
+            t("fileBrowser.properties.modified"),
+            entry.modified ? new Date(entry.modified).toLocaleString() : "—",
+          )}
         </div>
         <div className="mt-4 flex justify-end">
           <button
@@ -1598,7 +1636,7 @@ function FilePropertiesDialog({
             onClick={onClose}
             className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
           >
-            Schließen
+            {t("fileBrowser.properties.close")}
           </button>
         </div>
       </div>
@@ -1635,6 +1673,7 @@ function ChmodDialog({
   onCancel: () => void;
   onConfirm: (mode: number, recursive: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState(entry.permissionsOctal);
   // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): mit nur 3
   // Ziffern (`maxLength={3}`, `/^[0-7]{1,3}$/`) ließ sich eine Datei mit
@@ -1668,7 +1707,7 @@ function ChmodDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
         <h2 className="font-heading mb-1 text-sm font-semibold text-slate-100">
-          Rechte bearbeiten
+          {t("fileBrowser.chmod.title")}
         </h2>
         <p className="mb-3 font-mono text-xs break-all text-slate-400">{entry.path}</p>
         {modeNote && (
@@ -1680,10 +1719,12 @@ function ChmodDialog({
         <table className="mb-3 w-full text-xs text-slate-300">
           <thead>
             <tr className="text-slate-500">
-              <th className="text-left font-normal"> </th>
-              <th className="font-normal">Lesen</th>
-              <th className="font-normal">Schreiben</th>
-              <th className="font-normal">Ausführen</th>
+              <th className="text-left font-normal">
+                <span className="sr-only">{t("fileBrowser.chmodClassColumn")}</span>
+              </th>
+              <th className="font-normal">{t("fileBrowser.chmod.read")}</th>
+              <th className="font-normal">{t("fileBrowser.chmod.write")}</th>
+              <th className="font-normal">{t("fileBrowser.chmod.execute")}</th>
             </tr>
           </thead>
           <tbody>
@@ -1706,7 +1747,7 @@ function ChmodDialog({
         </table>
 
         <label className="mb-3 flex items-center gap-2 text-xs text-slate-300">
-          Numerisch
+          {t("fileBrowser.chmod.numeric")}
           <input
             value={numericInput}
             onChange={(e) => handleNumericChange(e.target.value)}
@@ -1724,8 +1765,8 @@ function ChmodDialog({
               className="mt-0.5"
             />
             <span>
-              <strong>Rekursiv</strong> — ändert die Rechte für ALLE Dateien und Unterordner in
-              diesem Ordner. Mächtige Aktion, nicht rückgängig machbar.
+              <strong>{t("fileBrowser.chmod.recursive")}</strong>{" "}
+              {t("fileBrowser.chmod.recursiveWarning")}
             </span>
           </label>
         )}
@@ -1736,14 +1777,14 @@ function ChmodDialog({
             onClick={onCancel}
             className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
           >
-            Abbrechen
+            {t("fileBrowser.cancel")}
           </button>
           <button
             type="button"
             onClick={() => onConfirm(mode, recursive)}
             className="font-heading bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-indigo-500"
           >
-            Übernehmen
+            {t("fileBrowser.apply")}
           </button>
         </div>
       </div>
@@ -1756,7 +1797,7 @@ function ChmodDialog({
  * Abbrechen, ein voller Modal-Dialog (wie beim Löschen) wäre hier
  * überdimensioniert. */
 function RenamePrompt({
-  title = "Umbenennen",
+  title,
   initialValue,
   onChange,
   onCancel,
@@ -1768,6 +1809,7 @@ function RenamePrompt({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     inputRef.current?.focus();
@@ -1777,7 +1819,9 @@ function RenamePrompt({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
-        <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">{title}</h2>
+        <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
+          {title ?? t("fileBrowser.renamePrompt.renameTitle")}
+        </h2>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -1796,13 +1840,13 @@ function RenamePrompt({
               onClick={onCancel}
               className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
             >
-              Abbrechen
+              {t("fileBrowser.cancel")}
             </button>
             <button
               type="submit"
               className="font-heading bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-indigo-500"
             >
-              Übernehmen
+              {t("fileBrowser.apply")}
             </button>
           </div>
         </form>
@@ -1875,6 +1919,7 @@ function ElevationFailureDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div
+        // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- ein natives <dialog> bleibt ohne showModal()/`open` unsichtbar und bringt eigene Browser-Stile und Top-Layer-Stapelung mit; das Overlay darüber liefert das modale Layout bereits (Issue #112).
         role="dialog"
         className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl"
       >

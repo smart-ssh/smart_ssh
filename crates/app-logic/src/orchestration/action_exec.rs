@@ -11,7 +11,8 @@ use ssh_manager_core::ai::{
 };
 use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent, LedgerSource};
 use ssh_manager_core::filter::{
-    Decision, EvalContext, EvaluationTrace, RuleId, RuleOrigin, DEFAULT_MAX_COMMAND_LENGTH,
+    exceeds_command_length_limit, Decision, EvalContext, EvaluationTrace, RuleId, RuleOrigin,
+    DEFAULT_MAX_COMMAND_LENGTH,
 };
 use ssh_manager_core::profiles::{AiAction, NoteTargetSelector, PostIngestPolicy, ProfileStore};
 use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
@@ -56,6 +57,10 @@ mod tests_red_risk;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_red_risk_second_opinion;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_not_assessable;
 
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das
 /// bereits registrierte Warten.
@@ -160,27 +165,17 @@ pub(crate) async fn handle_action_proposed(
     // GELESEN (nicht verbraucht) und bei gesetztem Flag der Injection-Grund
     // angezeigt.
     if matches!(decision, Decision::AutoExec) {
-        if let Some(reason) = pseudo_command_for_risk_classification(&action)
+        if let Some(finding) = pseudo_command_for_risk_classification(&action)
             .as_deref()
             .and_then(ssh_manager_core::risk::secret_path_read_reason)
         {
-            decision = if session
-                .injection_suspected
-                .load(std::sync::atomic::Ordering::SeqCst)
-            {
-                Decision::Confirm {
-                    reason: format!(
-                        "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
-                         erkannt; außerdem: {reason} – erfordert Bestätigung"
-                    ),
-                    code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
-                }
-            } else {
-                Decision::Confirm {
-                    reason: format!("{reason} – erfordert immer Bestätigung"),
-                    code: "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM".to_string(),
-                }
-            };
+            decision = check_finding_confirm(
+                finding,
+                "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM",
+                session
+                    .injection_suspected
+                    .load(std::sync::atomic::Ordering::SeqCst),
+            );
         }
     }
 
@@ -191,27 +186,17 @@ pub(crate) async fn handle_action_proposed(
     // Secret-Prüfung oben: nur `AutoExec` → `Confirm`, vor der
     // Injection-Prüfung, deren Flag hier nur gelesen wird.
     if matches!(decision, Decision::AutoExec) {
-        if let Some(reason) = pseudo_command_for_risk_classification(&action)
+        if let Some(finding) = pseudo_command_for_risk_classification(&action)
             .as_deref()
             .and_then(ssh_manager_core::risk::sftp_server_invocation_reason)
         {
-            decision = if session
-                .injection_suspected
-                .load(std::sync::atomic::Ordering::SeqCst)
-            {
-                Decision::Confirm {
-                    reason: format!(
-                        "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
-                         erkannt; außerdem: {reason} – erfordert Bestätigung"
-                    ),
-                    code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
-                }
-            } else {
-                Decision::Confirm {
-                    reason: format!("{reason} – erfordert immer Bestätigung"),
-                    code: "FILTER_SFTP_SERVER_REQUIRES_CONFIRM".to_string(),
-                }
-            };
+            decision = check_finding_confirm(
+                finding,
+                "FILTER_SFTP_SERVER_REQUIRES_CONFIRM",
+                session
+                    .injection_suspected
+                    .load(std::sync::atomic::Ordering::SeqCst),
+            );
         }
     }
 
@@ -835,6 +820,41 @@ fn pseudo_command_for_risk_classification(action: &AiAction) -> Option<String> {
     }
 }
 
+/// `Confirm`-Entscheidung für einen Treffer der Secret-Pfad- bzw.
+/// `sftp-server`-Prüfung (Spec 0068 Teil 2, ADR 0058 §8). Reine Eskalation;
+/// der Aufrufer ruft das nur bei `AutoExec` auf.
+///
+/// Issue #109: Konnte die Prüfung das Kommando nicht prüfen (Längen- oder
+/// Verschachtelungsgrenze), nennt der Dialog genau das
+/// (`FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM`) statt eines Treffers,
+/// den es nicht gab. Ein Injection-Verdacht hat weiterhin Vorrang.
+fn check_finding_confirm(
+    finding: ssh_manager_core::risk::CommandCheckFinding,
+    match_code: &str,
+    injection_suspected: bool,
+) -> Decision {
+    let reason = finding.reason();
+    if injection_suspected {
+        Decision::Confirm {
+            reason: format!(
+                "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
+                 erkannt; außerdem: {reason} – erfordert Bestätigung"
+            ),
+            code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
+        }
+    } else if finding.is_not_assessable() {
+        Decision::Confirm {
+            reason: format!("{reason} – erfordert immer Bestätigung"),
+            code: "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM".to_string(),
+        }
+    } else {
+        Decision::Confirm {
+            reason: format!("{reason} – erfordert immer Bestätigung"),
+            code: match_code.to_string(),
+        }
+    }
+}
+
 fn risk_assessment_for_action(action: &AiAction) -> Option<RiskAssessment> {
     let pseudo_command = pseudo_command_for_risk_classification(action)?;
     Some(RuleBasedRiskClassifier.classify(&pseudo_command))
@@ -845,22 +865,24 @@ fn risk_assessment_for_action(action: &AiAction) -> Option<RiskAssessment> {
 ///
 /// **Fail-safe bei Überlänge** (spec-reviewer-Fund, Runde 1, adversarialer
 /// Fall 7): Der Klassifizierer bricht ab, sobald das Pseudokommando länger
-/// als [`DEFAULT_MAX_COMMAND_LENGTH`] **Bytes** ist, und liefert dann
-/// `None`/`None` — „kein Risiko erkannt" heißt dort „nicht geprüft". Die
-/// Filter-Engine dagegen zählt **Zeichen**; ein Kommando mit Mehrbyte-Zeichen
-/// kann deshalb unter ihrer Schranke liegen (also mit Allow-Regel `AutoExec`
-/// werden), während der Klassifizierer schon aufgegeben hat. Ohne diesen
-/// Zweig griffe das Glied genau dann nicht — und A2 hinge daran, dass
-/// `secret_path_read_reason` für Überlänge zufällig selbst eskaliert (mit
-/// einem sachlich falschen Code). Dieselbe Schranke und dasselbe `.len()`
-/// wie im Klassifizierer, damit genau das Fenster abgedeckt ist, in dem er
-/// aussteigt.
+/// als [`DEFAULT_MAX_COMMAND_LENGTH`] Bytes ist, und liefert dann
+/// `None`/`None` — „kein Risiko erkannt" heißt dort „nicht geprüft". Früher
+/// zählte die Filter-Engine Zeichen statt Bytes, und ein Kommando mit
+/// Mehrbyte-Zeichen konnte unter ihrer Schranke liegen (mit Allow-Regel also
+/// `AutoExec` werden), während der Klassifizierer schon aufgegeben hatte.
+/// Seit Issue #110 messen beide über [`exceeds_command_length_limit`]
+/// dasselbe, die Filter-Engine verlangt in diesem Fall also selbst schon
+/// `Confirm`. Der Zweig bleibt trotzdem als Tiefenverteidigung: Das
+/// Pseudokommando ist nicht immer das Kommando, das die Filter-Engine sieht,
+/// und „nicht geprüft" darf hier nie als „unauffällig" durchgehen. Derselbe
+/// Helfer und dieselbe Schranke wie im Klassifizierer, damit genau das
+/// Fenster abgedeckt ist, in dem er aussteigt.
 fn red_risk_confirm_reason(
     action: &AiAction,
     assessment: Option<&RiskAssessment>,
 ) -> Option<String> {
     if let Some(pseudo_command) = pseudo_command_for_risk_classification(action) {
-        if pseudo_command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+        if exceeds_command_length_limit(&pseudo_command, DEFAULT_MAX_COMMAND_LENGTH) {
             return Some(
                 "Kommando zu lang für eine Risiko-Einschätzung – wird wie rot behandelt"
                     .to_string(),

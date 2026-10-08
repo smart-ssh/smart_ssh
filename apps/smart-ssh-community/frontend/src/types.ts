@@ -90,13 +90,6 @@ export interface AiProviderConfigInput {
   maxTokensOverride: number | null;
 }
 
-export const PROVIDER_TYPE_LABELS: Record<ProviderType, string> = {
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-  generic_openai_compatible: "Generisch (OpenAI-kompatibel)",
-  ollama: "Ollama",
-};
-
 // Nur bei diesen beiden Typen ist Base-URL relevant (Spec 0007, Abschnitt
 // 8.3: "Base-URL-Feld nur bei generic_openai_compatible/ollama sichtbar").
 export function needsBaseUrl(type: ProviderType): boolean {
@@ -317,6 +310,10 @@ export interface NoteUpdateSuggestedEvent {
    * statt tab-gebunden (Spec 0010, Abschnitt 2, Punkt 6), der Nutzer hat
    * beim Empfang womöglich einen ganz anderen Server offen. */
   targetName: string | null;
+  /** Spec 0057, §4.2 (Issue #94): `true` nur, wenn der Vorschlag aus "Ja,
+   * zusammenfassen" stammt und die KI-Antwort vom Provider wegen des
+   * Längenlimits abgeschnitten wurde. Jeder andere Vorschlag: `false`. */
+  summaryIncomplete: boolean;
 }
 
 /** Spec 0057, §4.2 (Etappe 4) — der ERSTE Dialog ("Deine Notiz für diesen
@@ -969,11 +966,14 @@ export interface SshConfigPreviewTagDto {
   /** `true` ⇒ das Schlagwort trägt **keinen** Platzhalter (buchstäbliche
    * Angabe in einem gemischten `Host`-Block, z. B. `Host prod *`) und
    * trifft eine `Scope::Tag`-Regel **exakt** — deutlicher zu kennzeichnen
-   * als ein Muster-Schlagwort (§5.2a). Trifft es zusätzlich eine
-   * `matchedRules`-Regel mit `action === "allow"`, startet es in der
-   * Vorschau abgewählt (Q-BL-0216-02, entschieden — s.
-   * `defaultTagSelected` in `SshConfigImportDialog.tsx`). */
+   * als ein Muster-Schlagwort (§5.2a). Nur Kennzeichnung — die Vorgabe
+   * trägt `defaultSelected`. */
   isLiteral: boolean;
+  /** §5.2a/§9: `false` ⇒ das Schlagwort startet in der Vorschau abgewählt
+   * (trifft eine Tag-Allow-Regel und keine Tag-Deny-Regel — gleich, ob
+   * buchstäblich oder Muster). Vom Backend berechnet; der Dialog übernimmt
+   * den Wert unverändert, und `apply` ohne Wahl folgt derselben Vorgabe. */
+  defaultSelected: boolean;
 }
 
 export interface SshConfigPreviewIdentityFileDto {
