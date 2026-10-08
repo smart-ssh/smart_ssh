@@ -38,9 +38,15 @@ since that call compiles fine as long as `test-support` is on.
 ```bash
 cd apps/smart-ssh-community/frontend
 npx tsc -b
-npx oxlint
+npm run lint      # Tauri command check (scripts/check-tauri-commands.mjs), then oxlint
 npx vitest run
 ```
+
+`npm run lint` first runs `npm run check-commands`: it fails when a
+`#[tauri::command]` is not in `generate_handler!`, a `generate_handler!`
+entry has no definition, a non-test frontend file `invoke`s an
+unregistered name, or a name in the startup gate's allow list is not
+registered (issue #101). CI runs it through the same `npm run lint` step.
 
 Order matters: `cargo fmt --all --check` runs *before* clippy/test in CI —
 if formatting is off, clippy and test never even execute, so a red CI run
