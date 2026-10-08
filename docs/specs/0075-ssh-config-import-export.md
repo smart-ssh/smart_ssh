@@ -671,6 +671,16 @@ Tag-`Allow`-Regel, die ein importiertes Profil von der Vorgabe
 betroffene Regel nennen. Der Nutzer kann sie einzeln abwählen.
 Nachgewiesen durch §6.4.3a.
 
+**Vorgabe in der Vorschau (§9):** Jedes importierte Schlagwort — ob
+buchstäblich oder Muster —, das eine bestehende Tag-`Allow`-Regel trifft,
+ist standardmäßig **abgewählt**, es sei denn, es trifft zugleich eine
+Tag-`Deny`-Regel; dann bleibt es angewählt, damit die `Deny`-Abdeckung
+nicht verloren geht. Schlagworte, die nur `Confirm`-/`Deny`-Regeln oder
+keine Regel treffen, bleiben angewählt. Der Nutzer kann jedes Schlagwort
+in beide Richtungen umwählen. Bestätigt der Import einen Eintrag, ohne
+dass eine Wahl dazu vorliegt, gilt dieselbe Vorgabe: Die standardmäßig
+abgewählten Schlagworte entstehen nicht.
+
 **5.3 Kein unbemerkter Jump-Host.** Jeder `jump_host`, der beim Import
 entsteht, steht in der Vorschau. Eine Jump-Host-**Schleife** wird beim
 Import abgelehnt, nicht erst beim Verbinden — heute prüft das nur
@@ -876,7 +886,9 @@ wie es die Architekturregel verlangt.
    Regel (5.2a); der Nutzer kann es abwählen; wählt er ab, trägt das
    Profil das Schlagwort nicht. Zweiter Fall: eine `Deny`-Regel — sie
    bleibt in jedem Fall wirksam (Stufen vor Scope-Genauigkeit,
-   `engine.rs:473`).
+   `engine.rs:473`). Vorgabe (§5.2a, §9): Trifft `*.prod.de` nur die
+   `Allow`-Regel, startet es abgewählt; trifft es `Allow` und `Deny`,
+   bleibt es angewählt — für ein buchstäbliches Schlagwort ebenso.
 
 4. **Jump-Host-Schleife.** `a` springt über `b`, `b` über `a`. Der
    Import legt die Schleife **nicht** an und sagt warum (5.3). Zweiter
@@ -1209,16 +1221,23 @@ Gesamtgrenze wäre §5.6 nicht haltbar. Am 2026-09-23 vorgelegt,
 kein Widerspruch — die Grenzen aus §3.3 gelten damit als entschieden,
 §8 bleibt bei „keine offenen Punkte".
 
-**Q-BL-0216-02 entschieden (2026-09-25).** Ein buchstäbliches
-importiertes Schlagwort (aus einem gemischten Block wie `Host prod *`)
-entsteht wie jedes andere, damit bestehende Tag-`Deny`-Regeln weiter
-greifen. **Trifft es eine bestehende Tag-`Allow`-Regel, ist es in der
-Vorschau standardmäßig abgewählt** und deutlich als solches
-gekennzeichnet, samt der betroffenen Regel. Trifft es nur `Deny`- oder
-`Confirm`-Regeln oder keine, bleibt es angewählt. Der Nutzer kann in
-beide Richtungen umwählen. Zusätzlicher Test: buchstäbliches Schlagwort
-mit Treffer auf eine Tag-`Allow`-Regel → in der Vorschau abgewählt;
-dasselbe Schlagwort mit Treffer nur auf eine `Deny`-Regel → angewählt.
+**Q-BL-0216-02 entschieden (2026-09-25), erweitert durch Issue #105.**
+Ein buchstäbliches importiertes Schlagwort (aus einem gemischten Block
+wie `Host prod *`) entsteht wie jedes andere, damit bestehende
+Tag-`Deny`-Regeln weiter greifen. **Trifft ein importiertes Schlagwort —
+buchstäblich oder Muster — eine bestehende Tag-`Allow`-Regel, ist es in
+der Vorschau standardmäßig abgewählt** und deutlich als solches
+gekennzeichnet, samt der betroffenen Regel. **Ausnahme:** Trifft es
+zugleich eine Tag-`Deny`-Regel, bleibt es angewählt — eine Abwahl nähme
+dem Profil sonst auch die `Deny`-Abdeckung, und `Deny` geht ohnehin vor
+`Allow` (§5.2a). Trifft es nur `Deny`- oder `Confirm`-Regeln oder keine,
+bleibt es angewählt. Der Nutzer kann in beide Richtungen umwählen. Ein
+Eintrag, zu dem beim Bestätigen keine Wahl vorliegt, folgt derselben
+Vorgabe. Tests: buchstäbliches Schlagwort mit Treffer nur auf eine
+Tag-`Allow`-Regel → abgewählt; Muster-Schlagwort `*.prod.de` mit Treffer
+auf eine `Allow`-Regel mit Scope `*.prod.de` → abgewählt; buchstäbliches
+oder Muster-Schlagwort mit Treffer auf `Allow` und `Deny` → angewählt;
+Treffer nur auf `Deny`/`Confirm` oder keiner → angewählt.
 
 **Klarstellung zu §3.1.9 (b) und §5.1 (Architekt, 2026-09-25, K2).**
 „Die Vorschau nennt den Passphrase-Bedarf" gilt für Weg (b) als „die

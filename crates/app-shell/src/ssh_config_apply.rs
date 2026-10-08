@@ -168,12 +168,25 @@ pub async fn apply_import(
             .iter()
             .find(|c| c.index == i)
             .cloned()
-            .unwrap_or(EntryChoice {
+            .unwrap_or_else(|| EntryChoice {
                 index: i,
                 selected: true,
                 identity_mode: IdentityMode::default(),
                 rename_to: None,
-                dropped_tags: Vec::new(),
+                // §5.2a/§9: dieselbe Vorgabe wie in der Vorschau — ein
+                // Schlagwort, das dort standardmäßig abgewählt startet,
+                // entsteht auch ohne Wahl des Nutzers nicht.
+                dropped_tags: plan
+                    .entries
+                    .get(i)
+                    .map(|e| {
+                        e.tags
+                            .iter()
+                            .filter(|t| !t.default_selected())
+                            .map(|t| t.tag.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default(),
             })
     };
 
@@ -598,11 +611,14 @@ pub struct PreviewTagDto {
     pub matched_rules: Vec<PreviewMatchedRuleDto>,
     /// Schlagwort ohne Platzhalter, aus einer buchstäblichen Angabe in einem
     /// gemischten Block — trifft eine Tag-Regel **exakt** und gehört deshalb
-    /// deutlicher gekennzeichnet (§5.2a). Trifft es zusätzlich eine
-    /// Allow-Regel, ist es in der Vorschau standardmäßig abgewählt
-    /// (Q-BL-0216-02, entschieden — `defaultTagSelected` in
-    /// `SshConfigImportDialog.tsx`).
+    /// deutlicher gekennzeichnet (§5.2a). Nur Kennzeichnung — die Vorgabe
+    /// trägt [`Self::default_selected`].
     pub is_literal: bool,
+    /// §5.2a/§9: `false` ⇒ das Schlagwort startet in der Vorschau
+    /// abgewählt (Allow-Treffer ohne Deny-Treffer). Berechnet allein von
+    /// `PlannedTag::default_selected` in `core`; der Dialog übernimmt den
+    /// Wert, statt ihn selbst abzuleiten.
+    pub default_selected: bool,
 }
 
 /// §5.2a verlangt, „die betroffene Regel" zu nennen, nicht nur, dass eine
@@ -713,6 +729,7 @@ pub fn build_preview_dto(
                         })
                         .collect(),
                     is_literal: t.is_literal,
+                    default_selected: t.default_selected(),
                 })
                 .collect(),
             identity_file: e.identity_file.as_ref().map(|idf| PreviewIdentityFileDto {

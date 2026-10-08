@@ -535,6 +535,96 @@ async fn t_5_2a_nicht_abgewaehltes_schlagwort_bleibt() {
     assert_eq!(f.server("web1.prod.de").await.tags, vec!["*.prod.de"]);
 }
 
+// ------------- Issue #105: Vorgabe je Schlagwort aus `core`, auch ohne Wahl
+
+/// `web1.prod.de` bekommt drei Schlagworte: `*.prod.de` trifft nur eine
+/// Allow-Regel (Vorgabe: abgewählt), `*.de` trifft Allow **und** Deny
+/// (Vorgabe: angewählt), `web*` trifft keine Regel (angewählt).
+fn issue_105_plan() -> ssh_manager_core::profiles::ssh_config::ImportPlan {
+    use ssh_manager_core::filter::{Pattern, Rule, RuleAction, RuleId, RuleOrigin, Scope};
+    let rule = |id: &str, action: RuleAction, scope: &str| Rule {
+        id: RuleId(id.into()),
+        pattern: Pattern::Glob("systemctl restart *".into()),
+        action,
+        scope: Scope::Tag(scope.into()),
+        priority: 0,
+        origin: RuleOrigin::User,
+    };
+    let rules = vec![
+        rule("a-prod", RuleAction::Allow, "*.prod.de"),
+        rule("a-de", RuleAction::Allow, "*.de"),
+        rule("d-de", RuleAction::Deny, "*.de"),
+    ];
+    plan_from_inv(
+        "Host *.prod.de\n  User deploy\nHost *.de\n  Port 2222\nHost web*\n  User x\nHost web1.prod.de\n",
+        &[],
+        &rules,
+    )
+}
+
+fn sorted(mut v: Vec<String>) -> Vec<String> {
+    v.sort();
+    v
+}
+
+#[tokio::test]
+async fn t_105_apply_ohne_wahl_folgt_der_vorgabe() {
+    let plan = issue_105_plan();
+    assert_eq!(
+        sorted(plan.entries[0].tags.iter().map(|t| t.tag.clone()).collect()),
+        vec!["*.de", "*.prod.de", "web*"]
+    );
+    let f = Fixture::new();
+    f.apply(&plan, &[], &SpyKeyFiles::default())
+        .await
+        .expect("Import");
+    assert_eq!(
+        sorted(f.server("web1.prod.de").await.tags),
+        vec!["*.de".to_string(), "web*".to_string()],
+        "ohne EntryChoice muss das Allow-only-Schlagwort entfallen"
+    );
+}
+
+#[tokio::test]
+async fn t_105_nutzer_waehlt_in_beide_richtungen_um() {
+    let plan = issue_105_plan();
+    let f = Fixture::new();
+    // Allow-only-Schlagwort wieder angewählt, zwei angewählte abgewählt.
+    f.apply(
+        &plan,
+        &[EntryChoice {
+            index: 0,
+            selected: true,
+            identity_mode: IdentityMode::default(),
+            rename_to: None,
+            dropped_tags: vec!["*.de".to_string(), "web*".to_string()],
+        }],
+        &SpyKeyFiles::default(),
+    )
+    .await
+    .expect("Import");
+    assert_eq!(f.server("web1.prod.de").await.tags, vec!["*.prod.de"]);
+}
+
+#[test]
+fn t_105_dto_traegt_die_vorgabe_aus_core() {
+    let plan = issue_105_plan();
+    let dto = build_preview_dto(&plan, &[], &[]);
+    let tag = |name: &str| {
+        dto.entries[0]
+            .tags
+            .iter()
+            .find(|t| t.tag == name)
+            .unwrap_or_else(|| panic!("{name} fehlt"))
+    };
+    assert!(!tag("*.prod.de").default_selected);
+    assert!(tag("*.de").default_selected);
+    assert!(tag("web*").default_selected);
+    // Feldname im JSON, auf den sich `types.ts` verlässt.
+    let json = serde_json::to_value(tag("*.prod.de")).expect("json");
+    assert_eq!(json["defaultSelected"], serde_json::json!(false));
+}
+
 // ------------------------------------------- §6.3.4/5: Konflikte, zweiter Import
 
 #[tokio::test]
