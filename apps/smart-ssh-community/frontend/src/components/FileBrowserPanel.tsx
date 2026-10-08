@@ -1068,7 +1068,9 @@ export function FileBrowserPanel({
                     onDragEnd={handleColumnDragEnd}
                   />
                 </th>
-                <th />
+                <th>
+                  <span className="sr-only">{t("fileBrowser.actionsColumn")}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -1649,6 +1651,7 @@ function ChmodDialog({
   onCancel: () => void;
   onConfirm: (mode: number, recursive: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState(entry.permissionsOctal);
   // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): mit nur 3
   // Ziffern (`maxLength={3}`, `/^[0-7]{1,3}$/`) ließ sich eine Datei mit
@@ -1694,7 +1697,9 @@ function ChmodDialog({
         <table className="mb-3 w-full text-xs text-slate-300">
           <thead>
             <tr className="text-slate-500">
-              <th className="text-left font-normal"> </th>
+              <th className="text-left font-normal">
+                <span className="sr-only">{t("fileBrowser.chmodClassColumn")}</span>
+              </th>
               <th className="font-normal">Lesen</th>
               <th className="font-normal">Schreiben</th>
               <th className="font-normal">Ausführen</th>
@@ -1889,6 +1894,7 @@ function ElevationFailureDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div
+        // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- ein natives <dialog> bleibt ohne showModal()/`open` unsichtbar und bringt eigene Browser-Stile und Top-Layer-Stapelung mit; das Overlay darüber liefert das modale Layout bereits (Issue #112).
         role="dialog"
         className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl"
       >

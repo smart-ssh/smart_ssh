@@ -557,6 +557,19 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     );
   });
 
+  it("names the otherwise empty header cells of the file table and chmod matrix (issue #112)", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    expect(screen.getByRole("columnheader", { name: "Aktionen" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Rechte bearbeiten…"));
+    expect(await screen.findByRole("columnheader", { name: "Gilt für" })).toBeInTheDocument();
+  });
+
   it("chmod dialog's numeric input overrides the checkbox matrix", async () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
