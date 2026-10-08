@@ -119,7 +119,11 @@ describe("title bar drag layer above modals (issue #160)", () => {
     expect(layer).not.toHaveClass("pointer-events-none");
     // Der interaktive Header-Inhalt liegt horizontal unter der Schicht
     // (links ab 0, rechts nur der Controls-Freiraum frei) und hat selbst
-    // keinen Stapelrang darüber -> per Zeiger nicht erreichbar.
+    // keinen Stapelrang darüber -> per Zeiger nicht erreichbar. Erst nach
+    // der Plattform-Antwort prüfen (davor gilt die User-Agent-Vermutung).
+    await waitFor(() =>
+      expect(header.style.paddingRight).toContain("--tauri-plugin-decoration-right-clearance"),
+    );
     expect(layer!.style.left).toBe("0px");
     expect(layer!.style.right).toBe(header.style.paddingRight);
     const tab = screen.getByRole("button", { name: "session tab" });
@@ -135,6 +139,9 @@ describe("title bar drag layer above modals (issue #160)", () => {
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
 
     const header = container.querySelector("header")!;
+    await waitFor(() =>
+      expect(header.style.paddingLeft).toContain("--tauri-plugin-decoration-left-clearance"),
+    );
     const layer = dragLayer()!;
     expect(layer.style.left).toBe(header.style.paddingLeft);
     expect(layer.style.left).toContain("--tauri-plugin-decoration-left-clearance");
