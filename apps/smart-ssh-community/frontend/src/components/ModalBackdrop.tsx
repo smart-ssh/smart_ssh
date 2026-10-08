@@ -1,4 +1,4 @@
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { registerOpenModal } from "../modalLayer";
@@ -18,14 +18,18 @@ interface ModalBackdropProps {
  * ziehbar, solange der Dialog offen ist. Jeder neue modale Dialog
  * (auch einer, der über die Erweiterungs-Registry beigesteuert wird)
  * nutzt diese Komponente statt eines eigenen `fixed inset-0`-Divs; ein
- * Test (`ModalBackdrop.test.tsx`) prüft das für alle Quelldateien. */
+ * Test (`TitleBarDragLayer.test.tsx`) prüft das für alle Quelldateien. */
 export function ModalBackdrop({ className, children }: ModalBackdropProps) {
+  const ref = useRef<HTMLDivElement>(null);
   // Layout-Effekt statt `useEffect`: die Drag-Schicht soll im selben
-  // Frame erscheinen wie der Backdrop, nicht einen Frame später.
-  useLayoutEffect(() => registerOpenModal(), []);
+  // Frame erscheinen wie der Backdrop, nicht einen Frame später. Das
+  // Element wird mit angemeldet, damit `modalLayer` nur einen tatsächlich
+  // angezeigten Backdrop zählt (nicht einen in einem per `display:none`
+  // ausgeblendeten Session-Tab).
+  useLayoutEffect(() => (ref.current ? registerOpenModal(ref.current) : undefined), []);
 
   return (
-    <div data-modal-backdrop className={className}>
+    <div ref={ref} data-modal-backdrop className={className}>
       {children}
     </div>
   );

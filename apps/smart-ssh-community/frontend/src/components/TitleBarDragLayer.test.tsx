@@ -196,6 +196,95 @@ describe("title bar drag layer above modals (issue #160)", () => {
   });
 });
 
+// Review zu #161: inaktive Session-Tabs und die Startansicht bleiben
+// gemountet und werden nur per `hidden` (`display:none`) ausgeblendet. Ein
+// darin inline gerenderter Dialog (Einstellungen, Dateibrowser-Dialoge) ist
+// nach einem Tab-Wechsel per Tastatur unsichtbar — dann darf die
+// Drag-Schicht die Session-Tabs nicht blockieren.
+describe("title bar drag layer with a dialog in a hidden container (issue #160)", () => {
+  let style: HTMLStyleElement;
+
+  beforeEach(() => {
+    invokeMock.mockReset();
+    // Tailwinds `hidden` wie in der App: `display: none`.
+    style = document.createElement("style");
+    style.textContent = ".hidden { display: none; }";
+    document.head.appendChild(style);
+  });
+
+  afterEach(() => {
+    style.remove();
+    vi.restoreAllMocks();
+  });
+
+  /** Header plus ein Container wie ein Session-Tab bzw. die Startansicht
+   * in `App.tsx`, darin ein inline (ohne Portal) gerenderter Dialog. */
+  function app(containerVisible: boolean, dialog: React.ReactNode) {
+    return (
+      <I18nextProvider i18n={testI18n}>
+        <AppHeader>
+          <button type="button">session tab</button>
+        </AppHeader>
+        <div
+          data-testid="tab-container"
+          className={containerVisible ? "flex flex-1 min-h-0 flex-col" : "hidden"}
+        >
+          {dialog}
+        </div>
+      </I18nextProvider>
+    );
+  }
+
+  const inlineDialog = <ModalBackdrop className="fixed inset-0 z-50 bg-black/70" />;
+
+  it("disappears when the container of an open dialog is hidden, and returns when it is shown", async () => {
+    mockCommands("windows", "custom");
+    const { rerender } = render(app(true, inlineDialog));
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
+    expect(dragLayer()).not.toBeNull();
+
+    // Tab-Wechsel per Tastatur: nur die Klasse des Containers ändert sich,
+    // der Dialog bleibt gemountet.
+    rerender(app(false, inlineDialog));
+    expect(document.querySelector("[data-modal-backdrop]")).not.toBeNull();
+    await waitFor(() => expect(dragLayer()).toBeNull());
+
+    rerender(app(true, inlineDialog));
+    await waitFor(() => expect(dragLayer()).not.toBeNull());
+  });
+
+  it("is absent when a dialog is opened inside an already hidden container", async () => {
+    mockCommands("windows", "custom");
+    render(app(false, inlineDialog));
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
+
+    expect(document.querySelector("[data-modal-backdrop]")).not.toBeNull();
+    expect(dragLayer()).toBeNull();
+  });
+
+  it("also reacts to an inline display:none on a container", async () => {
+    mockCommands("linux", "custom");
+    render(app(true, inlineDialog));
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
+    expect(dragLayer()).not.toBeNull();
+
+    act(() => {
+      screen.getByTestId("tab-container").style.display = "none";
+    });
+    await waitFor(() => expect(dragLayer()).toBeNull());
+  });
+
+  it("stays for a portaled dialog even if the component lives in a hidden container", async () => {
+    mockCommands("windows", "custom");
+    // Portal nach `document.body`: sichtbar, auch wenn der Container
+    // ausgeblendet ist.
+    render(app(false, <HostKeyDialog event={hostKeyEvent} onDecision={vi.fn()} />));
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
+
+    expect(dragLayer()).not.toBeNull();
+  });
+});
+
 // Ein neuer Dialog mit eigenem `fixed inset-0`-Backdrop statt
 // `ModalBackdrop` würde die Titelleiste wieder verdecken, ohne dass die
 // Drag-Schicht davon erfährt.
@@ -211,14 +300,17 @@ describe("every full-window modal backdrop uses ModalBackdrop (issue #160)", () 
   }
 
   it("no source file renders a plain element with a fixed inset-0 backdrop", () => {
-    const offenders = sourceFiles(SRC_DIR).flatMap((file) =>
-      fs
-        .readFileSync(file, "utf8")
-        .split("\n")
-        .map((line, i) => ({ line, i }))
-        .filter(({ line }) => /<(?!ModalBackdrop\b)[A-Za-z]\w*[^>]*\bfixed\b[^>]*\binset-0\b/.test(line))
-        .map(({ line, i }) => `${path.relative(SRC_DIR, file)}:${i + 1}: ${line.trim()}`),
-    );
+    // Über die ganze Datei statt zeilenweise: ein `className` auf eigener
+    // Zeile unter dem Tag-Namen wird so ebenfalls erkannt.
+    const offenders = sourceFiles(SRC_DIR).flatMap((file) => {
+      const source = fs.readFileSync(file, "utf8");
+      return [
+        ...source.matchAll(/<(?!ModalBackdrop\b)[A-Za-z]\w*[^>]*\bfixed\b[^>]*\binset-0\b/g),
+      ].map((m) => {
+        const line = source.slice(0, m.index).split("\n").length;
+        return `${path.relative(SRC_DIR, file)}:${line}: ${m[0].replace(/\s+/g, " ").trim()}`;
+      });
+    });
     expect(offenders, offenders.join("\n")).toEqual([]);
   });
 });
