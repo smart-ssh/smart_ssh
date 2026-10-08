@@ -33,6 +33,7 @@ use super::chat_turn::{
     wait_for_rate_limit_budget, write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT,
     SIDE_CALL_MAX_TOKENS,
 };
+use super::pending_confirmation::RegisteredConfirmation;
 
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
@@ -674,8 +675,15 @@ pub async fn suggest_note_update_on_disconnect(
         false,
     );
 
-    let rx = action_confirmations.register(action_id);
-    let user_decision = match tokio::time::timeout(PENDING_ACTION_CONFIRM_TIMEOUT, rx).await {
+    // Issue #107 (Spec 0088, A1): Registrieren über den drop-basierten
+    // Guard — der Registry-Eintrag fällt auf jedem Ausgang weg, auch wenn
+    // dieser Future fallen gelassen wird. Bewusst ohne Tab-Indikator
+    // (`Session::pending_action`): diese Benachrichtigung ist app-weit.
+    let pending = RegisteredConfirmation::register(action_confirmations, action_id);
+    let (wait_outcome, _registry_cleanup) = pending
+        .wait_for_decision(PENDING_ACTION_CONFIRM_TIMEOUT)
+        .await;
+    let user_decision = match wait_outcome {
         Ok(Ok(decision)) => decision,
         Ok(Err(_)) => {
             // Sender gedroppt (z. B. App wurde beendet, bevor der Nutzer
@@ -685,8 +693,8 @@ pub async fn suggest_note_update_on_disconnect(
         }
         Err(_elapsed) => {
             // Spec 0046, Fund 4 — s. identischer Kommentar in
-            // `handle_action_proposed`.
-            action_confirmations.cancel(&action_id);
+            // `handle_action_proposed`. Den Registry-Eintrag räumt
+            // `_registry_cleanup` beim Fallen ab.
             tracing::warn!(
                 ?action_id,
                 timeout_secs = PENDING_ACTION_CONFIRM_TIMEOUT.as_secs(),
@@ -1124,12 +1132,16 @@ pub async fn execute_note_shrink_request(
         summary_incomplete,
     );
 
-    let rx = action_confirmations.register(action_id);
-    let user_decision = match tokio::time::timeout(PENDING_ACTION_CONFIRM_TIMEOUT, rx).await {
+    // Issue #107: wie in `suggest_note_update_on_disconnect` — drop-basiert
+    // abräumen, kein Tab-Indikator (es gibt hier keine Session).
+    let pending = RegisteredConfirmation::register(action_confirmations, action_id);
+    let (wait_outcome, _registry_cleanup) = pending
+        .wait_for_decision(PENDING_ACTION_CONFIRM_TIMEOUT)
+        .await;
+    let user_decision = match wait_outcome {
         Ok(Ok(decision)) => decision,
         Ok(Err(_)) => return,
         Err(_elapsed) => {
-            action_confirmations.cancel(&action_id);
             tracing::warn!(
                 ?action_id,
                 timeout_secs = PENDING_ACTION_CONFIRM_TIMEOUT.as_secs(),
