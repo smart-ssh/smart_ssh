@@ -1,6 +1,6 @@
 // Builders for fake-backend data. Defaults mirror what the real backend
 // sends for an ordinary password server; tests override only what matters.
-import type { AiProviderConfigDto, GroupDto, ServerDto } from "../../src/types";
+import type { AiProviderConfigDto, ConnectStepRecord, GroupDto, ServerDto } from "../../src/types";
 import type { FakeBackendFixture } from "../harness/fixtureTypes";
 
 export function server(overrides: Partial<ServerDto> & Pick<ServerDto, "id" | "name">): ServerDto {
@@ -69,4 +69,39 @@ export function populated(): FakeBackendFixture {
       server({ id: "s-loose", name: "standalone" }),
     ],
   };
+}
+
+/**
+ * A step log of a connection through `hops` jump hosts that fails at the
+ * authentication of the last hop.
+ */
+export function failingStepLog(hops: number): ConnectStepRecord[] {
+  const records: ConnectStepRecord[] = [];
+  for (let hopIndex = 0; hopIndex < hops; hopIndex++) {
+    const host = `hop-${hopIndex}.example.test`;
+    const hop = `deploy@${host}:22`;
+    const last = hopIndex === hops - 1;
+    const ok = { state: "ok" } as const;
+    records.push(
+      { hopIndex, hop, step: { kind: "dnsResolution", host, port: 22, addresses: ["192.0.2.10"] }, status: ok, durationMs: 3 },
+      { hopIndex, hop, step: { kind: "tcpConnect", address: "192.0.2.10", port: 22 }, status: ok, durationMs: 12 },
+      {
+        hopIndex,
+        hop,
+        step: { kind: "handshake", serverVersion: "SSH-2.0-OpenSSH_9.6", kex: "curve25519-sha256", hostKeyAlgorithm: "ssh-ed25519", cipher: "chacha20-poly1305@openssh.com", mac: null },
+        status: ok,
+        durationMs: 40,
+      },
+      { hopIndex, hop, step: { kind: "hostKeyCheck", keyType: "ssh-ed25519", fingerprint: `SHA256:hop${hopIndex}fingerprint`, result: "known" }, status: ok, durationMs: 1 },
+      {
+        hopIndex,
+        hop,
+        step: { kind: "authentication", method: "password", remainingMethods: ["publickey"], partialSuccess: false },
+        status: last ? { state: "failed", code: "AUTH_FAILED" } : ok,
+        durationMs: 210,
+      },
+    );
+    if (!last) records.push({ hopIndex, hop, step: { kind: "tunnelOpen", host: `hop-${hopIndex + 1}.example.test`, port: 22 }, status: ok, durationMs: 5 });
+  }
+  return records;
 }

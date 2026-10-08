@@ -87,6 +87,32 @@ export async function expectReachableByTab(
 }
 
 /**
+ * The nearest ancestor of `content` that scrolls vertically, searched only
+ * up to `boundary` (a dialog). Fails if the content has no own scroll
+ * container inside the boundary.
+ */
+export async function scrollContainerWithin(boundary: Locator, content: Locator): Promise<Locator> {
+  const boundaryHandle = await boundary.elementHandle();
+  expect(boundaryHandle, "dialog not found").not.toBeNull();
+  const marker = `scroller-${Math.random().toString(36).slice(2)}`;
+  const found = await content.evaluate(
+    (el, [b, m]) => {
+      for (let n = el.parentElement; n && n !== (b as Element).parentElement; n = n.parentElement) {
+        const overflowY = getComputedStyle(n).overflowY;
+        if (overflowY === "auto" || overflowY === "scroll") {
+          n.setAttribute("data-e2e-scroller", m as string);
+          return true;
+        }
+      }
+      return false;
+    },
+    [boundaryHandle, marker] as const,
+  );
+  expect(found, "the content has no scroll container of its own inside the dialog").toBe(true);
+  return content.page().locator(`[data-e2e-scroller="${marker}"]`);
+}
+
+/**
  * `scroller` scrolls its own content vertically (content taller than the
  * box), and scrolling it does not move `fixedParts` — header and buttons
  * stay where they were.

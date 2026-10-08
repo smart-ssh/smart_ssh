@@ -188,8 +188,30 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       return null;
     },
 
-    // --- AI providers ----------------------------------------------------
+    large_note_dialog_threshold_chars: () => 4000,
+    test_connection: () => ({ kind: "success", steps: [] }),
+
+    // --- Filter rules ----------------------------------------------------
+    list_rules: () => [],
+    list_hard_blacklist: () => [],
+
+    // --- Settings screens ------------------------------------------------
     list_ai_providers: () => model.aiProviders,
+    discover_models: () => [],
+    get_data_paths: () => [
+      { id: "database", label: null, path: "/data/smart-ssh/smart-ssh.db", isDirectory: false },
+      { id: "logs", label: null, path: "/data/smart-ssh/logs", isDirectory: true },
+    ],
+    get_keychain_status: () => ({ available: true, reason: null }),
+    get_master_password_mode: () => "keychain",
+    get_chat_session_retention_days: () => null,
+    get_mcp_server_settings: () => ({
+      enabled: false,
+      endpoint: "http://127.0.0.1:7777",
+      token: "e2e-token-not-a-secret",
+      allowedServerIds: [],
+      confirmTimeoutSecs: 120,
+    }),
 
     // --- Sessions --------------------------------------------------------
     list_sessions: () => model.sessions,
