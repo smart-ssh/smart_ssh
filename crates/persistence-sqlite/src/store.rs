@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use ssh_manager_core::profiles::{
     Group, GroupId, NoteEditor, NoteRevision, NoteTarget, ProfileError, ProfileResult,
-    ProfileStore, Server,
+    ProfileStore, Server, ServerListing, UnusableReason, UnusableServer,
 };
 use ssh_manager_core::shared::ServerId;
 
@@ -468,6 +468,40 @@ fn row_to_group(row: &sqlx::sqlite::SqliteRow) -> ProfileResult<Group> {
     })
 }
 
+/// Issue #100: eine `servers`-Zeile, deren Anmeldeart unlesbar ist, als
+/// nicht nutzbarer Eintrag. Nur die Anmeldeart darf unlesbar sein, ohne
+/// dass die Abfrage scheitert — andere unlesbare Spalten (ID, Gruppe,
+/// Zeitstempel, Port) bleiben ein harter Fehler wie bisher, denn sie
+/// entstehen nicht durch einen Versionswechsel. Die Zeile selbst wird nie
+/// verändert: Mit der neueren Version ist sie unverändert lesbar.
+fn row_to_unusable_server(
+    row: &sqlx::sqlite::SqliteRow,
+    reason: UnusableReason,
+) -> ProfileResult<UnusableServer> {
+    let id: String = row.get("id");
+    let group_id: Option<String> = row.get("group_id");
+    Ok(UnusableServer {
+        id: ServerId(parse_uuid(&id, "servers.id")?),
+        name: row.get("name"),
+        host: row.get("host"),
+        group_id: group_id
+            .map(|raw| parse_uuid(&raw, "servers.group_id"))
+            .transpose()?
+            .map(GroupId),
+        reason,
+    })
+}
+
+/// Fehler für [`ProfileStore::get_server`] auf einen nicht nutzbaren
+/// Server: sichtbar scheitern, nie ein Ersatzwert.
+fn unusable_server_error(server: &UnusableServer) -> ProfileError {
+    let why = match server.reason {
+        UnusableReason::UnknownAuthMethod => "unbekannte Anmeldeart (neuere Version?)",
+        UnusableReason::UnreadableAuthMethod => "Anmeldeart nicht lesbar",
+    };
+    ProfileError::Backend(format!("Server {} ist nicht nutzbar: {why}", server.id.0))
+}
+
 fn row_to_server(row: &sqlx::sqlite::SqliteRow, tags: Vec<String>) -> ProfileResult<Server> {
     let id: String = row.get("id");
     let group_id: Option<String> = row.get("group_id");
@@ -493,7 +527,12 @@ fn row_to_server(row: &sqlx::sqlite::SqliteRow, tags: Vec<String>) -> ProfileRes
             .transpose()?
             .map(GroupId),
         tags,
-        auth: auth_method_from_json(&auth_json)?,
+        // Wer hier ankommt, hat die Anmeldeart über `read_server_row`
+        // bereits als lesbar geprüft; der Fehlerzweig bleibt trotzdem ein
+        // sichtbarer Fehler statt eines Ersatzwerts.
+        auth: auth_method_from_json(&auth_json).map_err(|reason| {
+            ProfileError::Backend(format!("AuthMethod nicht lesbar: {reason:?}"))
+        })?,
         notes: row.get("notes"),
         jump_host: jump_host_id
             .map(|raw| parse_uuid(&raw, "servers.jump_host_id"))
@@ -540,11 +579,20 @@ impl ProfileStore for SqliteProfileStore {
         .map_err(backend_err)?
         .ok_or(ProfileError::ServerNotFound(*id))?;
 
+        // Issue #100: ein nicht nutzbarer Server scheitert sichtbar — kein
+        // Ersatzwert, der Verbinden/Bearbeiten/MCP eine Anmeldeart vorgäbe.
+        let auth_json: String = row.get("auth_method");
+        if let Err(reason) = auth_method_from_json(&auth_json) {
+            return Err(unusable_server_error(&row_to_unusable_server(
+                &row, reason,
+            )?));
+        }
+
         let tags = self.fetch_tags(&id_str).await?;
         row_to_server(&row, tags)
     }
 
-    async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
+    async fn list_server_entries(&self) -> ProfileResult<ServerListing> {
         let rows = sqlx::query(
             "SELECT id, name, host, port, username, group_id, auth_method, notes, \
              jump_host_id, post_ingest_policy, ai_injection_check_enabled, sftp_server_path, \
@@ -554,13 +602,25 @@ impl ProfileStore for SqliteProfileStore {
         .await
         .map_err(backend_err)?;
 
-        let mut servers = Vec::with_capacity(rows.len());
+        let mut listing = ServerListing::default();
         for row in &rows {
+            let auth_json: String = row.get("auth_method");
+            if let Err(reason) = auth_method_from_json(&auth_json) {
+                listing.unusable.push(row_to_unusable_server(row, reason)?);
+                continue;
+            }
             let id: String = row.get("id");
             let tags = self.fetch_tags(&id).await?;
-            servers.push(row_to_server(row, tags)?);
+            listing.servers.push(row_to_server(row, tags)?);
         }
-        Ok(servers)
+        Ok(listing)
+    }
+
+    /// Issue #100: nur die nutzbaren Server — ein nicht nutzbarer lässt die
+    /// Liste nicht mehr scheitern, er fehlt darin. Wer ihn sehen muss
+    /// (Serverbaum, Löschen, Secret-Umzug), fragt `list_server_entries`.
+    async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
+        Ok(self.list_server_entries().await?.servers)
     }
 
     async fn list_groups(&self) -> ProfileResult<Vec<Group>> {

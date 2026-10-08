@@ -813,3 +813,122 @@ async fn test_identity_file_auth_survives_the_database_roundtrip() {
         }
     );
 }
+
+// --- Issue #100: Server mit unlesbarer Anmeldeart ------------------------
+
+/// Eine Anmeldeart, die diese Version nicht kennt — so, wie eine künftige
+/// Version mit einer zusätzlichen `AuthMethod`-Variante sie speichern würde.
+const UNKNOWN_AUTH_JSON: &str = r#"{"HardwareToken":{"token_ref":"server:x:token"}}"#;
+/// Kein JSON — beschädigter Inhalt.
+const MALFORMED_AUTH_JSON: &str = r#"{"Password":{"credential_ref":"#;
+
+/// Legt einen Server an und überschreibt danach seine `auth_method`-Spalte
+/// per rohem SQL — der einzige Weg zu einer Zeile, die diese Version nicht
+/// lesen kann.
+async fn insert_server_with_raw_auth(
+    store: &SqliteProfileStore,
+    name: &str,
+    group_id: Option<GroupId>,
+    auth_json: &str,
+) -> ServerId {
+    let server = make_server(name, group_id, vec!["prod".to_string()]);
+    store.create_server(&server).await.unwrap();
+    sqlx::query("UPDATE servers SET auth_method = ? WHERE id = ?")
+        .bind(auth_json)
+        .bind(server.id.0.to_string())
+        .execute(&store.pool)
+        .await
+        .unwrap();
+    server.id
+}
+
+async fn raw_auth_json(store: &SqliteProfileStore, id: ServerId) -> String {
+    sqlx::query_scalar("SELECT auth_method FROM servers WHERE id = ?")
+        .bind(id.0.to_string())
+        .fetch_one(&store.pool)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn test_unknown_auth_method_does_not_break_the_server_list() {
+    let store = in_memory_store().await;
+    let group = make_group("Produktion", None);
+    store.create_group(&group).await.unwrap();
+    let readable = make_server("a-readable", None, vec![]);
+    store.create_server(&readable).await.unwrap();
+    let unusable_id =
+        insert_server_with_raw_auth(&store, "b-newer", Some(group.id), UNKNOWN_AUTH_JSON).await;
+
+    let servers = store.list_servers().await.expect("list must not fail");
+    assert_eq!(servers, vec![readable.clone()]);
+
+    let listing = store.list_server_entries().await.unwrap();
+    assert_eq!(listing.servers, vec![readable]);
+    assert_eq!(
+        listing.unusable,
+        vec![ssh_manager_core::profiles::UnusableServer {
+            id: unusable_id,
+            name: "b-newer".to_string(),
+            host: "example.invalid".to_string(),
+            group_id: Some(group.id),
+            reason: ssh_manager_core::profiles::UnusableReason::UnknownAuthMethod,
+        }]
+    );
+    // Der Tag-Default von `list_servers` darf ebenfalls nicht scheitern.
+    assert!(store.list_known_tags().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_malformed_auth_method_is_handled_like_an_unknown_one() {
+    let store = in_memory_store().await;
+    let readable = make_server("readable", None, vec![]);
+    store.create_server(&readable).await.unwrap();
+    let broken_id = insert_server_with_raw_auth(&store, "broken", None, MALFORMED_AUTH_JSON).await;
+
+    let listing = store.list_server_entries().await.unwrap();
+    assert_eq!(listing.servers, vec![readable]);
+    assert_eq!(listing.unusable.len(), 1);
+    assert_eq!(listing.unusable[0].id, broken_id);
+    assert_eq!(
+        listing.unusable[0].reason,
+        ssh_manager_core::profiles::UnusableReason::UnreadableAuthMethod
+    );
+}
+
+/// Kein Rückfall auf eine Ersatz-Anmeldeart: `get_server` scheitert
+/// sichtbar, statt einen Server mit erfundener Anmeldeart zu liefern.
+#[tokio::test]
+async fn test_get_server_on_an_unusable_row_fails_instead_of_inventing_a_method() {
+    let store = in_memory_store().await;
+    let id = insert_server_with_raw_auth(&store, "newer", None, UNKNOWN_AUTH_JSON).await;
+    match store.get_server(&id).await {
+        Err(ProfileError::Backend(msg)) => assert!(msg.contains("nicht nutzbar"), "{msg}"),
+        other => panic!("expected a visible error, got {other:?}"),
+    }
+}
+
+/// Lesen ändert die Zeile nie — zurück in der neueren Version ist sie
+/// unverändert lesbar.
+#[tokio::test]
+async fn test_listing_an_unusable_server_leaves_its_stored_json_untouched() {
+    let store = in_memory_store().await;
+    let id = insert_server_with_raw_auth(&store, "newer", None, UNKNOWN_AUTH_JSON).await;
+    store.list_servers().await.unwrap();
+    store.list_server_entries().await.unwrap();
+    let _ = store.get_server(&id).await;
+    assert_eq!(raw_auth_json(&store, id).await, UNKNOWN_AUTH_JSON);
+}
+
+#[tokio::test]
+async fn test_an_unusable_server_row_can_be_deleted() {
+    let store = in_memory_store().await;
+    let id = insert_server_with_raw_auth(&store, "newer", None, UNKNOWN_AUTH_JSON).await;
+    store.delete_server(&id).await.unwrap();
+    assert!(store
+        .list_server_entries()
+        .await
+        .unwrap()
+        .unusable
+        .is_empty());
+}

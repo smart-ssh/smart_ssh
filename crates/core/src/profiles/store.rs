@@ -5,7 +5,7 @@ use async_trait::async_trait;
 
 use crate::shared::ServerId;
 
-use super::types::{Group, GroupId, NoteRevision, NoteTarget, Server};
+use super::types::{Group, GroupId, NoteRevision, NoteTarget, Server, ServerListing};
 
 /// Fehler eines [`ProfileStore`]-Zugriffs bzw. einer darauf aufbauenden
 /// Operation wie `group_chain`/`effective_notes`.
@@ -69,6 +69,28 @@ pub trait ProfileStore: Send + Sync {
     /// zusätzliche Trait-Methode ergänzt statt in `app-shell` mit
     /// Store-internen Interna zu umgehen.
     async fn list_servers(&self) -> ProfileResult<Vec<Server>>;
+
+    /// Issue #100: alle gespeicherten Server, getrennt nach nutzbaren und
+    /// nicht nutzbaren (Anmeldeart unlesbar, z. B. von einer neueren
+    /// Version gespeichert). Eine unlesbare Zeile lässt den Aufruf **nicht**
+    /// scheitern.
+    ///
+    /// [`ProfileStore::list_servers`] liefert genau `servers` daraus — die
+    /// nicht nutzbaren Einträge sieht nur, wer sie ausdrücklich abfragt:
+    /// der Serverbaum, das Löschen und der Secret-Umzug. Alle übrigen
+    /// Aufrufer (Verbinden, MCP, Export) brauchen einen nutzbaren Server
+    /// und überspringen sie damit automatisch.
+    ///
+    /// Die Default-Implementierung kennt keine nicht nutzbaren Einträge —
+    /// passend für jeden Store, der nur fertige [`Server`]-Werte hält
+    /// (In-Memory-Stores in Tests). Ein Store mit serialisierter
+    /// Anmeldeart (SQLite) überschreibt sie.
+    async fn list_server_entries(&self) -> ProfileResult<ServerListing> {
+        Ok(ServerListing {
+            servers: self.list_servers().await?,
+            unusable: Vec::new(),
+        })
+    }
 
     /// Alle im Moment tatsächlich verwendeten Tags über sämtliche Server
     /// hinweg, dedupliziert und sortiert — für die Scope-Auswahl im

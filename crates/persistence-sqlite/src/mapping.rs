@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileError};
+use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileError, UnusableReason};
 use uuid::Uuid;
 
 /// `auth_method`-Spalte (Spec 0004 Abschnitt 4): JSON-serialisiertes
@@ -12,9 +12,19 @@ pub(crate) fn auth_method_to_json(auth: &AuthMethod) -> Result<String, ProfileEr
     })
 }
 
-pub(crate) fn auth_method_from_json(json: &str) -> Result<AuthMethod, ProfileError> {
-    serde_json::from_str(json).map_err(|e| {
-        ProfileError::Backend(format!("AuthMethod-Deserialisierung fehlgeschlagen: {e}"))
+/// Issue #100: liest die `auth_method`-Spalte. Scheitert das, ist der
+/// Server **nicht nutzbar** — kein Rückfall auf eine Standard-Anmeldeart
+/// (etwa `Agent`), denn das machte aus einer unlesbaren Anmeldeart still
+/// eine nutzbare. Der Grund unterscheidet nur, was der Nutzer erfährt:
+/// gültiges JSON mit unbekanntem Inhalt stammt typischerweise von einer
+/// neueren Version, alles andere ist beschädigt.
+pub(crate) fn auth_method_from_json(json: &str) -> Result<AuthMethod, UnusableReason> {
+    serde_json::from_str(json).map_err(|_| {
+        if serde_json::from_str::<serde_json::Value>(json).is_ok() {
+            UnusableReason::UnknownAuthMethod
+        } else {
+            UnusableReason::UnreadableAuthMethod
+        }
     })
 }
 
