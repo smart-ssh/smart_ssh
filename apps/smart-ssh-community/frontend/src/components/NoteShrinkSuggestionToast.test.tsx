@@ -2,9 +2,12 @@
 // Notiz-ist-groß-Karte, dazu die Nicht-Vormerkung durch "Mache ich selbst"
 // (A5).
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { i18n as I18n } from "i18next";
+import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { onNoteShrinkSuggested } from "../events";
 import { publishRequestServerNoteEdit } from "../navigationBus";
+import { testI18n } from "../testI18n";
 import type { NoteShrinkSuggestedEvent } from "../types";
 import {
   NoteShrinkSuggestionToast,
@@ -28,14 +31,18 @@ vi.mock("../navigationBus", () => ({
 /** Fängt den Handler ab, den `NoteShrinkSuggestionToast` beim Mounten bei
  * `onNoteShrinkSuggested` registriert, und liefert eine Funktion, mit der
  * ein Test ein Event so simuliert, als käme es vom Backend. */
-async function renderToastAndCaptureEmit() {
+async function renderToastAndCaptureEmit(i18n: I18n = testI18n) {
   let handler: ((event: NoteShrinkSuggestedEvent) => void) | null = null;
   vi.mocked(onNoteShrinkSuggested).mockImplementation((h) => {
     handler = h;
     return Promise.resolve(() => {});
   });
 
-  const view = render(<NoteShrinkSuggestionToast />);
+  const view = render(
+    <I18nextProvider i18n={i18n}>
+      <NoteShrinkSuggestionToast />
+    </I18nextProvider>,
+  );
   await waitFor(() => expect(handler).not.toBeNull());
 
   // `act()`, nicht der bloße direkte Aufruf: der simulierte Handler löst
@@ -116,5 +123,19 @@ describe("NoteShrinkSuggestionToast (Spec 0079)", () => {
 
     emit(serverA);
     expect(await screen.findByText("Notiz für Server „Server A“ ist sehr groß")).toBeInTheDocument();
+  });
+
+  // Issue #116: Mit englischer Oberfläche erscheint die Karte vollständig
+  // auf Englisch (vorher fest deutsch).
+  it("zeigt die Karte auf Englisch, wenn die UI-Sprache Englisch ist", async () => {
+    const { emit } = await renderToastAndCaptureEmit(testI18n.cloneInstance({ lng: "en" }));
+
+    emit(serverA);
+    expect(await screen.findByText('Note for server "Server A" is very large')).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Dismiss notice" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Later" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "I'll do it myself" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Yes, summarize" })).toBeInTheDocument();
+    expect(screen.queryByText(/Notiz/)).toBeNull();
   });
 });

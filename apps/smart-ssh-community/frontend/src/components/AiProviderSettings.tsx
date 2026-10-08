@@ -25,7 +25,6 @@ import {
   type AiProviderConfigInput,
   type ProviderType,
   type TestAiProviderCredentialsResult,
-  PROVIDER_TYPE_LABELS,
   needsBaseUrl,
   supportsModelDiscovery,
 } from "../types";
@@ -525,7 +524,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     )}
                   </p>
                   <p className="text-sm text-slate-400">
-                    {PROVIDER_TYPE_LABELS[provider.providerType]} · {provider.model}
+                    {t(`aiProvider.providerTypes.${provider.providerType}`)} · {provider.model}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -770,7 +769,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             >
               {PROVIDER_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {PROVIDER_TYPE_LABELS[type]}
+                  {t(`aiProvider.providerTypes.${type}`)}
                 </option>
               ))}
             </select>
@@ -901,7 +900,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
           {apiKeyWarning && (
             <p className="rounded border border-amber-800 bg-amber-950/40 px-2.5 py-1.5 text-xs text-amber-300">
               {t("aiProvider.apiKeyFormatHint", {
-                providerLabel: PROVIDER_TYPE_LABELS[form.providerType],
+                providerLabel: t(`aiProvider.providerTypes.${form.providerType}`),
                 expectedPrefix: apiKeyWarning.expectedPrefix,
               })}
             </p>

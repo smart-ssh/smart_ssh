@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { commandErrorMessage, requestNoteShrink } from "../api";
 import { onNoteShrinkFailed, onNoteShrinkSuggested } from "../events";
 import { publishRequestServerNoteEdit } from "../navigationBus";
@@ -50,6 +51,7 @@ export function resetSnoozedNoteShrinkServersForTests(): void {
  * gespeicherte Notiz wurde nicht verändert.").
  */
 export function NoteShrinkSuggestionToast() {
+  const { t } = useTranslation();
   const [suggestions, setSuggestions] = useState<PendingShrinkSuggestion[]>([]);
   const [failures, setFailures] = useState<ShrinkFailure[]>([]);
 
@@ -122,7 +124,7 @@ export function NoteShrinkSuggestionToast() {
         >
           <div className="flex items-start justify-between gap-2">
             <p className="font-semibold text-slate-100">
-              Notiz für Server „{suggestion.serverName}“ ist sehr groß
+              {t("noteShrink.title", { name: suggestion.serverName })}
             </p>
             {/* Spec 0079, A1: gestaltet wie der ✕-Knopf der Fehler-Karten
              * unten (`dismissFailure`) — entfernt nur diese Karte, merkt den
@@ -131,14 +133,13 @@ export function NoteShrinkSuggestionToast() {
               type="button"
               onClick={() => dismiss(suggestion.serverId)}
               className="shrink-0 rounded bg-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-600"
-              aria-label="Hinweis schließen"
+              aria-label={t("noteShrink.dismissHint")}
             >
               ✕
             </button>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            Deine Notiz für diesen Server ist sehr groß und kann bei langen Sitzungen gekürzt
-            werden müssen. Soll ich sie zusammenfassen?
+            {t("noteShrink.body")}
           </p>
           {/* Spec 0079, A2: dritter Knopf ("Später") zusätzlich zu den
            * bisherigen zweien — bei `w-80` (320px, abzüglich `p-3` 296px
@@ -151,21 +152,21 @@ export function NoteShrinkSuggestionToast() {
               onClick={() => later(suggestion.serverId)}
               className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
             >
-              Später
+              {t("noteShrink.later")}
             </button>
             <button
               type="button"
               onClick={() => editMyself(suggestion)}
               className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
             >
-              Mache ich selbst
+              {t("noteShrink.editMyself")}
             </button>
             <button
               type="button"
               onClick={() => summarize(suggestion)}
               className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-500"
             >
-              Ja, zusammenfassen
+              {t("noteShrink.summarize")}
             </button>
           </div>
         </div>
@@ -180,7 +181,7 @@ export function NoteShrinkSuggestionToast() {
             type="button"
             onClick={() => dismissFailure(failure.id)}
             className="shrink-0 rounded bg-red-900 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
-            aria-label="Fehlermeldung verwerfen"
+            aria-label={t("noteShrink.dismissError")}
           >
             ✕
           </button>

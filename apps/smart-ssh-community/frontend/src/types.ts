@@ -90,13 +90,6 @@ export interface AiProviderConfigInput {
   maxTokensOverride: number | null;
 }
 
-export const PROVIDER_TYPE_LABELS: Record<ProviderType, string> = {
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-  generic_openai_compatible: "Generisch (OpenAI-kompatibel)",
-  ollama: "Ollama",
-};
-
 // Nur bei diesen beiden Typen ist Base-URL relevant (Spec 0007, Abschnitt
 // 8.3: "Base-URL-Feld nur bei generic_openai_compatible/ollama sichtbar").
 export function needsBaseUrl(type: ProviderType): boolean {
