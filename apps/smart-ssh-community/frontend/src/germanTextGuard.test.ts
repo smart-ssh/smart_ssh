@@ -23,13 +23,8 @@ const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
 const GERMAN_MARKERS = /[äöüÄÖÜß„]/;
 
 /** Dateien (relativ zu `src/`), die der Test vorerst auslässt. Die Liste
- * darf nur schrumpfen, nie wachsen.
- *
- * - `components/FileBrowserPanel.tsx`: Die Dialoge des Dateibrowsers werden
- *   in einem eigenen Issue übersetzt (#91, "Translate the remaining
- *   hard-coded German texts in the file browser dialogs"). Ist das erledigt,
- *   fliegt der Eintrag hier raus. */
-const ALLOWLIST: readonly string[] = ["components/FileBrowserPanel.tsx"];
+ * darf nur schrumpfen, nie wachsen. Derzeit ist sie leer. */
+const ALLOWLIST: readonly string[] = [];
 
 interface GermanTextFinding {
   line: number;
