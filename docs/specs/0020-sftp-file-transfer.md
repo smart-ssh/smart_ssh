@@ -226,7 +226,8 @@ Verhalten:
   interaktiven Terminal (Spec 0005, Abschnitt 1).
 - Down- und Uploads laufen über den **nativen Datei-Dialog** (Tauri
   Dialog-Plugin), konsistent mit Spec 0012: Es wird nie ohne expliziten
-  Dialog auf die lokale Festplatte geschrieben oder von ihr gelesen.
+  Dialog auf die lokale Festplatte geschrieben oder von ihr gelesen. Welche
+  lokalen Dateien gelesen werden dürfen, regelt Abschnitt 5.2.
 - Löschen erfordert eine Bestätigungsrückfrage im UI (auch wenn es eine
   Nutzeraktion ist — versehentliches Löschen per Fehlklick soll nicht
   passieren).
@@ -245,6 +246,37 @@ das den ohnehin knappen Platz weiter aufteilt.
 Inhalt: Pfadleiste mit Navigation, Dateiliste (Name, Größe, Rechte,
 Änderungsdatum), Kontextmenü (Herunterladen, Umbenennen, Löschen), Upload
 per Button oder Drag-and-Drop aus dem Betriebssystem.
+
+### 5.2 Welche lokalen Dateien gelesen werden dürfen
+
+Die Oberfläche ist keine Vertrauensgrenze — sie zeigt auch KI-erzeugte
+Inhalte. Ein lokaler Pfad gilt deshalb nicht schon, weil die Oberfläche ihn
+nennt. Für Upload, die Überschreib-Vorschau beim Upload und die
+Änderungserkennung von „Lokal öffnen“ liest die App lokal nur Dateien, die
+der Nutzer dieser Sitzung freigegeben hat:
+
+- **Ausgewählt:** im nativen Öffnen-Dialog des Upload-Buttons. Der Dialog
+  wird von der App selbst geöffnet; die Oberfläche kann keinen Pfad
+  vorgeben.
+- **Abgelegt:** per Drag-and-Drop aus dem Betriebssystem auf das Fenster.
+  Maßgeblich sind die Pfade, die das Betriebssystem beim Ablegen meldet,
+  nicht ein von der Oberfläche genannter Pfad. Ein Ablegen gilt für die
+  Sitzung, deren Dateibrowser es entgegennimmt, und verfällt nach kurzer
+  Zeit, wenn es niemand entgegennimmt.
+- **Eigene Bearbeitungskopie:** Dateien in der Bearbeitungskopie dieser
+  Sitzung („Lokal öffnen“). Die Bearbeitungskopie einer anderen Sitzung
+  zählt nicht.
+
+Ist ein Ordner freigegeben, gelten auch die Dateien darunter als
+freigegeben. Ein Upload ganzer Ordner ist damit nicht verbunden; er wird
+weiterhin nicht unterstützt. Ob ein Pfad unter einer Freigabe liegt, wird
+am tatsächlichen Ziel entschieden: Ein Pfad mit `..` oder ein symbolischer
+Link, der aus der Freigabe hinausführt, ist nicht freigegeben.
+
+Jeder andere lokale Pfad wird abgelehnt, bevor etwas gelesen wird: Upload
+und Überschreib-Vorschau scheitern mit einer Meldung, die Änderungserkennung
+meldet keinen Zeitstempel. Freigaben bestehen nur im Speicher und enden,
+wenn die Sitzung getrennt wird.
 
 ## 6. Testbarkeit
 

@@ -1425,7 +1425,8 @@ async fn test_t8_a_revoked_upload_reports_the_same_text_in_its_event_as_in_its_r
     let local_dir = tempfile::tempdir().unwrap();
     let local_file = local_dir.path().join("upload.txt");
     std::fs::write(&local_file, b"NEUER-INHALT").unwrap();
-    let local_path = local_file.to_string_lossy().into_owned();
+    let local_path =
+        app_logic::local_path_grants::GrantedLocalPath::unchecked_for_tests(local_file);
     let session_id = s.session_id;
     let em = emitter.clone();
 
