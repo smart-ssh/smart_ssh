@@ -317,6 +317,10 @@ export interface NoteUpdateSuggestedEvent {
    * statt tab-gebunden (Spec 0010, Abschnitt 2, Punkt 6), der Nutzer hat
    * beim Empfang womöglich einen ganz anderen Server offen. */
   targetName: string | null;
+  /** Spec 0057, §4.2 (Issue #94): `true` nur, wenn der Vorschlag aus "Ja,
+   * zusammenfassen" stammt und die KI-Antwort vom Provider wegen des
+   * Längenlimits abgeschnitten wurde. Jeder andere Vorschlag: `false`. */
+  summaryIncomplete: boolean;
 }
 
 /** Spec 0057, §4.2 (Etappe 4) — der ERSTE Dialog ("Deine Notiz für diesen
