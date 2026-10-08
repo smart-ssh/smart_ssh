@@ -197,12 +197,20 @@ Tabelle in §4.1. Für jeden Code MUSS gelten:
   `ConnectionReset`/`ConnectionAborted`/`UnexpectedEof` → `ConnectionClosed`;
   sonst `ConnectionFailed` wie bisher. `russh::Error::Disconnect` →
   `ConnectionClosed`.
-- **DNS nachträglich diagnostizieren, nicht vorab:** Nur wenn der **erste**
-  Hop mit `ConnectionFailed` scheitert, prüft `connect()` per
-  `tokio::net::lookup_host((host, port))`, ob der Name überhaupt auflösbar
-  ist; wenn nicht → `HostNotFound`. Der Erfolgspfad und der Host-Key-Pfad
-  (`resolve_or_pending`, `ClientHandler { host, … }`) bleiben **byte-gleich**
-  — keine Vorab-Auflösung, kein Ersetzen des Hostnamens durch eine IP.
+- **DNS des ersten Hops: eigener Schritt, Nachdiagnose bleibt**
+  ([ADR 0110](../adr/0110-connect-step-log.md), Entscheidung 3, ersetzt die
+  frühere Aussage „keine Vorab-Auflösung"): Der **erste** Hop wird
+  ausdrücklich aufgelöst (`tokio::net::lookup_host((host, port))`), danach
+  per TCP mit den aufgelösten Adressen verbunden — derselbe Ablauf, den
+  `russh::client::connect` intern hat, nur ausgeschrieben, damit Auflösung
+  und TCP-Verbindung als getrennte Schritte gemessen werden. Scheitert die
+  Auflösung → `HostNotFound`. Scheitert der erste Hop danach mit
+  `ConnectionFailed` (TCP oder Handshake), prüft `connect()` weiterhin
+  **nachträglich** per `lookup_host`, ob der Name auflösbar ist; wenn
+  nicht → `HostNotFound`. Der Host-Key-Pfad bleibt unverändert: Schlüssel
+  der Host-Key-Prüfung (`resolve_or_pending`, `ClientHandler { host, … }`)
+  ist immer der **Hostname**, nie die aufgelöste IP. Am Ergebnis eines
+  Verbindungsversuchs ändert die ausdrückliche Auflösung nichts.
 - **Zeitgrenzen je Phase und je Hop** (Issue #97, ersetzt die frühere eine
   10-s-Grenze über den ganzen Aufbau): Jeder Hop einer Verbindung — der
   Zielserver und jeder Jump-Host davor — bekommt eigene Grenzen für zwei
@@ -452,18 +460,29 @@ würfe Ollama auf einem anderen Rechner fälschlich in „starte Ollama".
 
 | Situation | Erkennung | Code |
 |---|---|---|
-| Name nicht auflösbar | `ConnectionFailed` + nachträgliches `lookup_host` scheitert | `SSH_HOST_NOT_FOUND` |
+| Name nicht auflösbar | Auflösung des ersten Hops scheitert, oder `ConnectionFailed` + nachträgliches `lookup_host` scheitert | `SSH_HOST_NOT_FOUND` |
 | Port zu / kein Dienst | `io::ErrorKind::ConnectionRefused` | `SSH_CONNECTION_REFUSED` |
 | keine Route | `HostUnreachable`/`NetworkUnreachable` | `SSH_HOST_UNREACHABLE` |
 | keine Antwort | eine Phasengrenze (A3) abgelaufen oder `TimedOut` | `SSH_TIMEOUT` |
 | Abbruch während Aufbau | `Disconnect`, `ConnectionReset`/`Aborted`/`UnexpectedEof` | `SSH_CONNECTION_CLOSED` |
 | sonst | — | `SSH_CONNECTION_FAILED` |
 
-DNS wird **nachträglich** diagnostiziert statt vorab aufgelöst: so bleibt
-der erfolgreiche Verbindungsaufbau und der Host-Key-Abgleich (der am
-Hostnamen hängt) unverändert. Verworfen: Vorab-Auflösung und Übergabe der
-IP an `russh` — spart eine DNS-Anfrage im Fehlerfall, ändert aber den
-sicherheitsrelevanten Pfad.
+Ursprünglich wurde DNS nur **nachträglich** diagnostiziert statt vorab
+aufgelöst: so blieben der erfolgreiche Verbindungsaufbau und der
+Host-Key-Abgleich (der am Hostnamen hängt) unverändert. Verworfen war
+damals: Vorab-Auflösung und Übergabe der IP an `russh` — spart eine
+DNS-Anfrage im Fehlerfall, ändert aber den sicherheitsrelevanten Pfad.
+
+[ADR 0110](../adr/0110-connect-step-log.md) (Entscheidung 3) hat den Teil
+„keine Vorab-Auflösung" abgelöst: Der erste Hop wird jetzt ausdrücklich
+aufgelöst, damit Auflösung und TCP-Verbindung als eigene Schritte gemessen
+werden können. Am Ergebnis eines Versuchs ändert das nichts, weil genau der
+Ablauf ausgeschrieben ist, den `russh::client::connect` vorher intern
+ausführte (auflösen, mit den aufgelösten Adressen verbinden, `nodelay`,
+SSH-Handshake), und weil der Host-Key-Abgleich weiterhin am Hostnamen
+hängt, nie an der IP. Ein Auflösungsfehler ergibt denselben
+`HostNotFound`-Text wie die Nachdiagnose; die nachträgliche Diagnose bleibt
+für `ConnectionFailed` bestehen.
 
 ### 4.3 DTO-Änderungen (alle additiv, E3)
 
@@ -498,7 +517,7 @@ Ein altes Frontend ignoriert das neue Feld; ein unbekannter Code fällt auf
 | Stopp/Einreihen | nicht berührt. |
 | Ledger/Audit | nicht berührt (keine Aktion auf einem Server). |
 | MCP | `connect_session`-Timeout gilt auch für MCP (§3.A3); Fehlertext an den MCP-Client ist die `message` wie bisher. |
-| Nie hängen | Zeitgrenzen je Phase und Hop im SSH-Connect (A3); `lookup_host` in der Diagnose läuft innerhalb der Handshake-Grenze des ersten Hops. |
+| Nie hängen | Zeitgrenzen je Phase und Hop im SSH-Connect (A3); `lookup_host` — die Auflösung des ersten Hops ([ADR 0110](../adr/0110-connect-step-log.md)) wie die Nachdiagnose — läuft innerhalb der Handshake-Grenze des ersten Hops. |
 | BL-0042 | Probe nur auf Nutzeraktion (E1), nur Loopback, nie beim Start. |
 
 ---
@@ -590,8 +609,10 @@ im Bericht bestätigen.
 15. **Mismatch bleibt Mismatch:** geänderter Key → weiterhin
     `PendingHostKeyConfirmation { Mismatch }`, nie ein Verbindungsfehler-Code.
 16. **DNS-Diagnose nur im Fehlerfall:** erfolgreicher Connect ruft
-    `lookup_host` nicht zusätzlich auf (Zähler über eine injizierbare
-    Lookup-Funktion oder Nachweis per Code-Struktur im Review).
+    `lookup_host` nicht zusätzlich auf — außer der einen Auflösung des
+    ersten Hops ([ADR 0110](../adr/0110-connect-step-log.md)) keine weitere
+    (Zähler über eine injizierbare Lookup-Funktion oder Nachweis per
+    Code-Struktur im Review).
 17. **Keine Secrets im Fehler:** Connect mit Passwort gegen geschlossenen
     Port → weder `message` noch Log enthalten das Passwort.
 
