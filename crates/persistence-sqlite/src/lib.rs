@@ -74,7 +74,7 @@ pub use field_content_decryption::{
 };
 pub use instance_lock::{DataDirLock, DataDirLockError, DATA_DIR_LOCK_FILE_NAME};
 pub use ledger_store::{LedgerEntry, LedgerStoreError, SqliteLedgerStore};
-pub use paths::{data_dir_is_overridden, default_db_path};
+pub use paths::default_db_path;
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};
 pub use prompt_history_store::{PromptHistoryStoreError, SqlitePromptHistoryStore};
 pub use store::SqliteProfileStore;
