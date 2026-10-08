@@ -11,7 +11,8 @@ use ssh_manager_core::ai::{
 };
 use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent, LedgerSource};
 use ssh_manager_core::filter::{
-    Decision, EvalContext, EvaluationTrace, RuleId, RuleOrigin, DEFAULT_MAX_COMMAND_LENGTH,
+    exceeds_command_length_limit, Decision, EvalContext, EvaluationTrace, RuleId, RuleOrigin,
+    DEFAULT_MAX_COMMAND_LENGTH,
 };
 use ssh_manager_core::profiles::{AiAction, NoteTargetSelector, PostIngestPolicy, ProfileStore};
 use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
@@ -845,22 +846,24 @@ fn risk_assessment_for_action(action: &AiAction) -> Option<RiskAssessment> {
 ///
 /// **Fail-safe bei Überlänge** (spec-reviewer-Fund, Runde 1, adversarialer
 /// Fall 7): Der Klassifizierer bricht ab, sobald das Pseudokommando länger
-/// als [`DEFAULT_MAX_COMMAND_LENGTH`] **Bytes** ist, und liefert dann
-/// `None`/`None` — „kein Risiko erkannt" heißt dort „nicht geprüft". Die
-/// Filter-Engine dagegen zählt **Zeichen**; ein Kommando mit Mehrbyte-Zeichen
-/// kann deshalb unter ihrer Schranke liegen (also mit Allow-Regel `AutoExec`
-/// werden), während der Klassifizierer schon aufgegeben hat. Ohne diesen
-/// Zweig griffe das Glied genau dann nicht — und A2 hinge daran, dass
-/// `secret_path_read_reason` für Überlänge zufällig selbst eskaliert (mit
-/// einem sachlich falschen Code). Dieselbe Schranke und dasselbe `.len()`
-/// wie im Klassifizierer, damit genau das Fenster abgedeckt ist, in dem er
-/// aussteigt.
+/// als [`DEFAULT_MAX_COMMAND_LENGTH`] Bytes ist, und liefert dann
+/// `None`/`None` — „kein Risiko erkannt" heißt dort „nicht geprüft". Früher
+/// zählte die Filter-Engine Zeichen statt Bytes, und ein Kommando mit
+/// Mehrbyte-Zeichen konnte unter ihrer Schranke liegen (mit Allow-Regel also
+/// `AutoExec` werden), während der Klassifizierer schon aufgegeben hatte.
+/// Seit Issue #110 messen beide über [`exceeds_command_length_limit`]
+/// dasselbe, die Filter-Engine verlangt in diesem Fall also selbst schon
+/// `Confirm`. Der Zweig bleibt trotzdem als Tiefenverteidigung: Das
+/// Pseudokommando ist nicht immer das Kommando, das die Filter-Engine sieht,
+/// und „nicht geprüft" darf hier nie als „unauffällig" durchgehen. Derselbe
+/// Helfer und dieselbe Schranke wie im Klassifizierer, damit genau das
+/// Fenster abgedeckt ist, in dem er aussteigt.
 fn red_risk_confirm_reason(
     action: &AiAction,
     assessment: Option<&RiskAssessment>,
 ) -> Option<String> {
     if let Some(pseudo_command) = pseudo_command_for_risk_classification(action) {
-        if pseudo_command.len() > DEFAULT_MAX_COMMAND_LENGTH {
+        if exceeds_command_length_limit(&pseudo_command, DEFAULT_MAX_COMMAND_LENGTH) {
             return Some(
                 "Kommando zu lang für eine Risiko-Einschätzung – wird wie rot behandelt"
                     .to_string(),
