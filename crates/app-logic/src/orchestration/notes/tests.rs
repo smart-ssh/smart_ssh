@@ -2346,3 +2346,284 @@ async fn test_t12_spec_0096_take_into_note_keeps_user_selected_content_unchanged
         "vom Nutzer selbst ausgewaehlter Inhalt bleibt unveraendert (Spec 0096, E3)"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Issue #107: Die beiden app-weiten Notiz-Bestätigungen (Vorschlag beim
+// Verbindungsende, Notiz-Kürzung) räumen ihren Registry-Eintrag auf jedem
+// Ausgang ab — auch wenn der wartende Future fallen gelassen wird — und
+// setzen nie den Tab-Indikator `Session::pending_action`.
+// ---------------------------------------------------------------------------
+
+/// Obergrenze für jedes Warten in diesen Tests — ein Hänger endet als
+/// Testfehler statt den Lauf zu blockieren.
+const ISSUE_107_TEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+fn suggested_action_id(emitter: &TestEmitter) -> Option<ActionId> {
+    let events = emitter.events.lock().unwrap();
+    events.iter().find_map(|(name, payload)| {
+        (name == "note-update-suggested")
+            .then(|| payload["actionId"].as_str().unwrap().parse().unwrap())
+    })
+}
+
+/// Wartet, bis der Vorschlag emittiert UND der Registry-Eintrag angelegt
+/// ist, d. h. bis der Ablauf tatsächlich auf die Entscheidung wartet.
+async fn await_registered_suggestion(
+    emitter: &TestEmitter,
+    confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+) -> ActionId {
+    loop {
+        if let Some(action_id) = suggested_action_id(emitter) {
+            if confirmations.contains(&action_id) {
+                return action_id;
+            }
+        }
+        tokio::task::yield_now().await;
+    }
+}
+
+fn disconnect_session_with_note_proposal() -> Session {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![
+            AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
+                target: NoteTargetSelector::CurrentServer,
+                new_content: "Neuer Kontext nach der Sitzung".to_string(),
+            }),
+            AiEvent::Done,
+        ]),
+        MockSshTransport::default(),
+    );
+    session
+        .context
+        .try_lock()
+        .expect("frische Session, niemand hält den Kontext")
+        .history
+        .push(command_result_message());
+    session
+}
+
+fn shrink_provider() -> MockAiProvider {
+    MockAiProvider::new(vec![
+        AiEvent::TextDelta("Gekürzte Fassung.".to_string()),
+        AiEvent::Done,
+    ])
+}
+
+fn shrink_target(
+    profile_store: &crate::test_support::InMemoryProfileStore,
+    server_id: ServerId,
+) -> crate::orchestration::ProfileStoreNoteShrinkTarget<'_> {
+    crate::orchestration::ProfileStoreNoteShrinkTarget {
+        profile_store,
+        server_id,
+        provider_label: "Test-Provider".to_string(),
+        model: "test-model".to_string(),
+    }
+}
+
+#[tokio::test]
+async fn test_issue_107_dropping_the_disconnect_suggestion_wait_removes_the_registry_entry() {
+    let session = disconnect_session_with_note_proposal();
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let flow = suggest_note_update_on_disconnect(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &profile_store,
+        &confirmations,
+    );
+    // `select!` lässt den Ablauf fallen, sobald er wartet — genau der Weg,
+    // den ein hand-geschriebenes Abräumen im Timeout-Zweig nicht nimmt.
+    let action_id = tokio::time::timeout(ISSUE_107_TEST_TIMEOUT, async {
+        tokio::select! {
+            biased;
+            _ = flow => panic!("der Ablauf darf ohne Entscheidung nicht enden"),
+            action_id = await_registered_suggestion(&emitter, &confirmations) => action_id,
+        }
+    })
+    .await
+    .expect("der Vorschlag muss innerhalb der Testgrenze registriert werden");
+
+    assert!(
+        !confirmations.contains(&action_id),
+        "nach dem Fallenlassen des wartenden Futures darf kein Registry-Eintrag bleiben"
+    );
+    assert!(
+        confirmations
+            .resolve(&action_id, ActionUserDecision::Approve)
+            .is_err(),
+        "eine späte Zustimmung darf nichts mehr auflösen"
+    );
+    assert!(profile_store.note_revisions.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_issue_107_dropping_the_note_shrink_wait_removes_the_registry_entry() {
+    let provider = shrink_provider();
+    let redactor = DefaultOutputRedactor::new();
+    let server_id = ServerId::new();
+    let profile_store = crate::test_support::InMemoryProfileStore::new()
+        .with_server(server_with_notes(server_id, "Unveränderte Notiz."));
+    let emitter = TestEmitter::default();
+    let confirmations = ConfirmationRegistry::new();
+    let target = shrink_target(&profile_store, server_id);
+    let budget = ai_providers::ProviderBudgetGuard::new();
+
+    let flow = execute_note_shrink_request(
+        Uuid::new_v4(),
+        server_id,
+        &provider,
+        &budget,
+        &redactor,
+        &emitter,
+        &target,
+        &confirmations,
+    );
+    let action_id = tokio::time::timeout(ISSUE_107_TEST_TIMEOUT, async {
+        tokio::select! {
+            biased;
+            () = flow => panic!("der Ablauf darf ohne Entscheidung nicht enden"),
+            action_id = await_registered_suggestion(&emitter, &confirmations) => action_id,
+        }
+    })
+    .await
+    .expect("der Vorschlag muss innerhalb der Testgrenze registriert werden");
+
+    assert!(
+        !confirmations.contains(&action_id),
+        "nach dem Fallenlassen des wartenden Futures darf kein Registry-Eintrag bleiben"
+    );
+    assert!(confirmations
+        .resolve(&action_id, ActionUserDecision::Approve)
+        .is_err());
+    assert_eq!(
+        profile_store.get_server(&server_id).await.unwrap().notes,
+        "Unveränderte Notiz."
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_issue_107_disconnect_suggestion_timeout_leaves_no_entry_and_rejects_late_resolve() {
+    let session = disconnect_session_with_note_proposal();
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let flow = suggest_note_update_on_disconnect(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &profile_store,
+        &confirmations,
+    );
+    let advancer = async {
+        let action_id = await_registered_suggestion(&emitter, &confirmations).await;
+        tokio::time::advance(PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1))
+            .await;
+        action_id
+    };
+    let (suggested, action_id) = tokio::join!(flow, advancer);
+
+    assert!(suggested, "der Vorschlag wurde emittiert");
+    assert!(!confirmations.contains(&action_id));
+    assert!(
+        confirmations
+            .resolve(&action_id, ActionUserDecision::Approve)
+            .is_err(),
+        "nach dem Timeout muss ein spätes `resolve` fehlschlagen"
+    );
+    assert!(
+        profile_store.note_revisions.lock().unwrap().is_empty(),
+        "ein Timeout gilt als Ablehnung"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_issue_107_note_shrink_timeout_leaves_no_entry_and_rejects_late_resolve() {
+    let provider = shrink_provider();
+    let redactor = DefaultOutputRedactor::new();
+    let server_id = ServerId::new();
+    let profile_store = crate::test_support::InMemoryProfileStore::new()
+        .with_server(server_with_notes(server_id, "Unveränderte Notiz."));
+    let emitter = TestEmitter::default();
+    let confirmations = ConfirmationRegistry::new();
+    let target = shrink_target(&profile_store, server_id);
+    let budget = ai_providers::ProviderBudgetGuard::new();
+
+    let flow = execute_note_shrink_request(
+        Uuid::new_v4(),
+        server_id,
+        &provider,
+        &budget,
+        &redactor,
+        &emitter,
+        &target,
+        &confirmations,
+    );
+    let advancer = async {
+        let action_id = await_registered_suggestion(&emitter, &confirmations).await;
+        tokio::time::advance(PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1))
+            .await;
+        action_id
+    };
+    let ((), action_id) = tokio::join!(flow, advancer);
+
+    assert!(!confirmations.contains(&action_id));
+    assert!(confirmations
+        .resolve(&action_id, ActionUserDecision::Approve)
+        .is_err());
+    assert_eq!(
+        profile_store.get_server(&server_id).await.unwrap().notes,
+        "Unveränderte Notiz."
+    );
+}
+
+/// Der Vorschlag beim Verbindungsende ist app-weit (Spec 0010, Abschnitt
+/// 2, Punkt 6) — der Tab-Indikator darf weder während des Wartens noch
+/// danach gesetzt sein. Geprüft wird in dem Moment, in dem der Ablauf
+/// nachweislich auf die Entscheidung wartet.
+///
+/// Die Notiz-Kürzung bekommt keine `Session` übergeben und kann den
+/// Indikator deshalb gar nicht setzen; ihr Guard
+/// (`RegisteredConfirmation`) hält ebenfalls keine.
+#[tokio::test]
+async fn test_issue_107_disconnect_suggestion_never_sets_the_pending_action_indicator() {
+    let session = disconnect_session_with_note_proposal();
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let flow = suggest_note_update_on_disconnect(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &profile_store,
+        &confirmations,
+    );
+    let responder = async {
+        let action_id = await_registered_suggestion(&emitter, &confirmations).await;
+        // Ein paar weitere Runden, damit der Ablauf sicher im Warten steckt.
+        for _ in 0..10 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(
+            *session.pending_action.lock().unwrap(),
+            None,
+            "eine app-weite Notiz-Benachrichtigung darf keinen Tab-Indikator setzen"
+        );
+        confirmations
+            .resolve(&action_id, ActionUserDecision::Deny)
+            .unwrap();
+    };
+    let (suggested, ()) = tokio::time::timeout(ISSUE_107_TEST_TIMEOUT, async {
+        tokio::join!(flow, responder)
+    })
+    .await
+    .expect("der Ablauf muss nach der Ablehnung enden");
+
+    assert!(suggested);
+    assert_eq!(*session.pending_action.lock().unwrap(), None);
+}

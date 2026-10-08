@@ -54,14 +54,10 @@ impl<'a> PendingConfirmation<'a> {
         registry: &'a ConfirmationRegistry<ActionId, ActionUserDecision>,
         action_id: ActionId,
     ) -> Self {
-        let (generation, receiver) = registry.register_tracked(action_id);
+        let RegisteredConfirmation { registry, receiver } =
+            RegisteredConfirmation::register(registry, action_id);
         Self {
-            cleanup: ConfirmationCleanup {
-                session,
-                registry,
-                action_id,
-                generation,
-            },
+            cleanup: ConfirmationCleanup { session, registry },
             receiver,
         }
     }
@@ -90,7 +86,7 @@ impl<'a> PendingConfirmation<'a> {
     ) -> (ConfirmationWaitOutcome, ConfirmationCleanup<'a>) {
         let Self { cleanup, receiver } = self;
         // A2.1: auch bei vergifteter Sperre setzen statt panicken.
-        *lock_tolerating_poison(&cleanup.session.pending_action) = Some(cleanup.action_id);
+        *lock_tolerating_poison(&cleanup.session.pending_action) = Some(cleanup.registry.action_id);
         let outcome = tokio::time::timeout(timeout, receiver).await;
         (outcome, cleanup)
     }
@@ -99,15 +95,18 @@ impl<'a> PendingConfirmation<'a> {
 /// Die aufräumende Hälfte einer [`PendingConfirmation`] — lebt weiter,
 /// nachdem der Empfänger verbraucht ist, und räumt beim Fallen Tab-Indikator
 /// und Registry-Eintrag ab.
+///
+/// Issue #107: Das Abräumen des Registry-Eintrags steckt in
+/// [`RegistryCleanup`], damit app-weite Bestätigungen ohne Tab
+/// ([`RegisteredConfirmation`]) dieselbe und nur diese eine Implementierung
+/// nutzen. Hier kommt nur der Tab-Indikator dazu.
 pub(crate) struct ConfirmationCleanup<'a> {
     session: &'a Session,
-    registry: &'a ConfirmationRegistry<ActionId, ActionUserDecision>,
-    action_id: ActionId,
-    /// Spec 0068, Teil 5b: Nur der Eintrag DIESER Registrierung wird
-    /// abgeräumt. `action_id`s werden heute nicht wiederverwendet, aber die
-    /// Prüfung kostet nichts und macht den Guard unabhängig von dieser
-    /// Zusage.
-    generation: RegistrationGeneration,
+    /// Fällt (und räumt den Registry-Eintrag ab) erst, nachdem
+    /// [`Drop::drop`] unten den Indikator zurückgesetzt hat — Felder werden
+    /// nach dem `Drop` des umschließenden Werts verworfen. Die Reihenfolge
+    /// ist damit dieselbe wie vor der Aufteilung.
+    registry: RegistryCleanup<'a>,
 }
 
 impl Drop for ConfirmationCleanup<'_> {
@@ -122,15 +121,81 @@ impl Drop for ConfirmationCleanup<'_> {
             // Panic hier, während bereits ein anderer Panic abgewickelt
             // wird, bräche den Prozess ab.
             let mut pending = lock_tolerating_poison(&self.session.pending_action);
-            if *pending == Some(self.action_id) {
+            if *pending == Some(self.registry.action_id) {
                 *pending = None;
             }
         }
+        // Der Registry-Eintrag wird danach vom Feld `registry`
+        // ([`RegistryCleanup`]) abgeräumt.
+    }
+}
+
+/// Issue #107: Eine registrierte, noch nicht aufgelöste Bestätigung **ohne**
+/// Tab-Indikator — für app-weite Benachrichtigungen, die an keinen Tab
+/// gebunden sind (Notiz-Vorschlag beim Verbindungsende, Notiz-Kürzung).
+/// Setzt `Session::pending_action` nie; hält dafür gar keine `Session`.
+///
+/// Sonst gilt dasselbe wie für [`PendingConfirmation`]: an einen benannten
+/// Binding binden, und ab der Registrierung räumt `Drop` den
+/// Registry-Eintrag auf jedem Weg ab — Entscheidung, gedroppter Sender,
+/// Zeitgrenze, fallen gelassener Future, Panic.
+pub(crate) struct RegisteredConfirmation<'a> {
+    registry: RegistryCleanup<'a>,
+    receiver: oneshot::Receiver<ActionUserDecision>,
+}
+
+impl<'a> RegisteredConfirmation<'a> {
+    /// Registriert `action_id` als wartend. Ab hier räumt [`Drop`] auf.
+    pub(crate) fn register(
+        registry: &'a ConfirmationRegistry<ActionId, ActionUserDecision>,
+        action_id: ActionId,
+    ) -> Self {
+        let (generation, receiver) = registry.register_tracked(action_id);
+        Self {
+            registry: RegistryCleanup {
+                registry,
+                action_id,
+                generation,
+            },
+            receiver,
+        }
+    }
+
+    /// Wartet bis zur Entscheidung oder `timeout`. Verbraucht `self` aus
+    /// demselben Grund wie [`PendingConfirmation::wait_for_decision`]: Der
+    /// Empfänger darf nach seiner Auflösung nicht erneut gepollt werden. Das
+    /// zurückgegebene [`RegistryCleanup`] räumt beim Fallen ab.
+    pub(crate) async fn wait_for_decision(
+        self,
+        timeout: std::time::Duration,
+    ) -> (ConfirmationWaitOutcome, RegistryCleanup<'a>) {
+        let Self { registry, receiver } = self;
+        let outcome = tokio::time::timeout(timeout, receiver).await;
+        (outcome, registry)
+    }
+}
+
+/// Räumt beim Fallen den Registry-Eintrag DIESER Registrierung ab. Die
+/// einzige Stelle, an der ein wartendes Bestätigen seinen Registry-Eintrag
+/// entfernt — genutzt von [`ConfirmationCleanup`] und
+/// [`RegisteredConfirmation`].
+pub(crate) struct RegistryCleanup<'a> {
+    registry: &'a ConfirmationRegistry<ActionId, ActionUserDecision>,
+    action_id: ActionId,
+    /// Spec 0068, Teil 5b: Nur der Eintrag DIESER Registrierung wird
+    /// abgeräumt. `action_id`s werden heute nicht wiederverwendet, aber die
+    /// Prüfung kostet nichts und macht den Guard unabhängig von dieser
+    /// Zusage.
+    generation: RegistrationGeneration,
+}
+
+impl Drop for RegistryCleanup<'_> {
+    fn drop(&mut self) {
         // Nach `resolve` ist der Eintrag ohnehin weg; dann ist das hier ein
         // No-Op. Nach Timeout oder Abbruch räumt es ihn ab, damit ein
         // späteres `resolve` für diese `action_id` fehlschlägt statt
         // irgendetwas auszulösen (A1.2/A1.3). Die Registry sperrt intern
-        // vergiftungstolerant (A2.2).
+        // vergiftungstolerant (A2.2) — kein Panic im `Drop`.
         self.registry
             .cancel_if_current(&self.action_id, self.generation);
     }
