@@ -1,4 +1,4 @@
-# ADR 0117 — Titelleisten-Drag-Schicht über modalen Dialogen
+# ADR 0118 — Titelleisten-Drag-Schicht über modalen Dialogen
 
 Status: akzeptiert
 Betrifft: Spec 0014 (Abschnitt 5), Issue #160
