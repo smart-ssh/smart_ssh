@@ -79,40 +79,38 @@ export function Sidebar({
       data-drop-target={groupDropTargetValue(node.group.id)}
       className={`rounded ${highlightFor({ kind: "group", id: node.group.id })}`}
     >
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
         onClick={() => onSelect({ kind: "group", id: node.group.id })}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
-        className={`cursor-pointer select-none truncate rounded px-2 py-1 text-sm hover:bg-slate-800 ${
+        className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 ${
           isSelected("group", node.group.id) ? "bg-slate-800 text-white" : "text-slate-300"
         }`}
       >
         📁 {node.group.name}
-      </div>
+      </button>
       {node.children.map((child) => renderNode(child, depth + 1))}
       {node.servers.map((s) => renderServer(s, depth + 1))}
     </div>
   );
 
   const renderServer = (server: ServerDto, depth: number) => (
-    <div
+    <button
       key={server.id}
-      role="button"
-      tabIndex={0}
+      type="button"
       // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
       {...(server.isLocal
         ? {}
         : handlersFor({ kind: "server", id: server.id, label: server.name }))}
       onClick={() => onSelect({ kind: "server", id: server.id })}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`cursor-pointer select-none truncate rounded px-2 py-1 text-sm hover:bg-slate-800 ${
+      className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 ${
         isSelected("server", server.id) ? "bg-slate-800 text-white" : "text-slate-300"
       }`}
     >
       🖥️ {server.name}
-    </div>
+    </button>
   );
 
   return (
