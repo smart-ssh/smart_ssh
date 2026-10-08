@@ -138,7 +138,11 @@ darf **nicht** als Ganzes gegen `ls *` gematcht werden. Vorgehen:
    nicht als undurchsichtiges Argument durchgewunken.
 
 7. **Längenbegrenzung als Absturzschutz**: Vor dem Parsen wird die
-   Kommandolänge geprüft (Cap z. B. 4096 Zeichen). Auch die Rekursionstiefe
+   Kommandolänge geprüft (Cap z. B. 4096 Bytes). Gemessen wird in Bytes
+   der UTF-8-Kodierung, nicht in Zeichen: Ein Kommando mit Mehrbyte-Zeichen
+   (z. B. „€", 3 Bytes) erreicht das Limit also schon mit weniger Zeichen.
+   Alle Konsumenten messen gleich, ein Kommando ist entweder für alle
+   innerhalb des Limits oder für alle darüber. Auch die Rekursionstiefe
    bei verschachtelter Command-Substitution (`$(echo $(echo ...))`) wird
    begrenzt. Überschreitung → `Confirm` mit entsprechendem Grund, **nie** ein
    unbegrenzter rekursiver Abstieg, der den Prozess per Stack-Overflow
@@ -184,7 +188,7 @@ können, ohne die spätere DB-Anbindung zu brauchen.
 | 8 | Kommando mit verschachtelten/unklaren Quotes | Confirm | Parser-Fallback, nie AutoExec |
 | 9 | `ls -la; rm important.txt` (kein Whitelist-Treffer für `rm`) | Confirm | Default-Fallback für unbekannten Teil |
 | 10 | Leerer/nur-Whitespace-String | Deny | kein sinnvolles Kommando |
-| 11 | Kommando > konfigurierbares Längenlimit | Confirm | Schutz vor Obfuskierung durch extrem lange Payloads |
+| 11 | Kommando > konfigurierbares Längenlimit (in Bytes) | Confirm | Schutz vor Obfuskierung durch extrem lange Payloads |
 | 12 | Zwei widersprüchliche Nutzerregeln gleicher Priorität (Allow vs Confirm, gleicher Scope) | Confirm | im Zweifel die strengere Regel |
 
 ## 7. Offene Punkte für Diskussion
