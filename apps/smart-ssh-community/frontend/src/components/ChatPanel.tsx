@@ -267,6 +267,7 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }: ChatPanelProps) {
+  const { t } = useTranslation();
   const [items, setItems] = useState<ChatItem[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -898,28 +899,28 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           <div className="flex items-center gap-2 rounded-lg border border-indigo-700/50 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300">
             <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
             <span className="flex-1">
-              🤖 Automatik läuft — KI reagiert automatisch auf das letzte Ergebnis…
+              🤖 {t("chat.autoContinuing")}
             </span>
             <button
               type="button"
               onClick={handleStopAutoContinuation}
               className="font-heading border border-indigo-500/60 px-2 py-1 text-xs font-semibold tracking-wide text-indigo-200 hover:bg-indigo-600/20"
             >
-              Automatik stoppen
+              {t("chat.stopAutoContinuation")}
             </button>
           </div>
         ) : (
           sending && (
             <div className="flex items-center gap-2 rounded-lg bg-slate-800/80 px-3 py-2 text-xs text-indigo-300">
               <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
-              <span className="flex-1">KI generiert Antwort / Dokument…</span>
+              <span className="flex-1">{t("chat.generating")}</span>
               {/* Spec 0066, §1: bricht den laufenden KI-Request sofort ab. */}
               <button
                 type="button"
                 onClick={handleStopAutoContinuation}
                 className="font-heading border border-indigo-500/60 px-2 py-1 text-xs font-semibold tracking-wide text-indigo-200 hover:bg-indigo-600/20"
               >
-                Stopp
+                {t("chat.stop")}
               </button>
             </div>
           )
@@ -932,7 +933,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         </div>
       ) : hasActiveProvider === false ? (
         <div className="border-t border-slate-700 p-4 text-sm text-amber-300">
-          Kein aktiver AI-Provider konfiguriert. Bitte zuerst in den Einstellungen einrichten.
+          {t("chat.noActiveProvider")}
         </div>
       ) : (
         <form
@@ -951,7 +952,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             value={draft}
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
-            placeholder="Frage stellen oder Kommando beschreiben …"
+            placeholder={t("chat.inputPlaceholder")}
             className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
           />
           <button
@@ -959,7 +960,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             disabled={draft.trim().length === 0}
             className="font-heading bg-indigo-600 px-4 py-1.5 text-sm font-semibold tracking-wide text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
           >
-            Senden
+            {t("chat.send")}
           </button>
         </form>
       )}
@@ -1078,7 +1079,7 @@ export function ChatItemView({
       <div className="ml-auto max-w-[80%] border border-indigo-500/60 bg-indigo-700 px-3 py-2 text-sm text-indigo-50">
         {item.text}
         {item.queued && (
-          <p className="mt-1 text-xs text-indigo-200/80">⏳ Wird mit der nächsten Anfrage gesendet</p>
+          <p className="mt-1 text-xs text-indigo-200/80">⏳ {t("chat.queued")}</p>
         )}
       </div>
     );
@@ -1111,7 +1112,7 @@ export function ChatItemView({
     );
   }
   if (item.type === "responseCancelled") {
-    return <div className="px-1 text-xs text-slate-400">⏹ Antwort abgebrochen.</div>;
+    return <div className="px-1 text-xs text-slate-400">⏹ {t("chat.responseCancelled")}</div>;
   }
   if (item.type === "emptyResponse") {
     // Spec 0080, A3: kein „Weiter"-Knopf (der Fortsetzungstext meint eine
@@ -1121,8 +1122,7 @@ export function ChatItemView({
     // kein eigenständiges Element mit Aktionen, nur ein Hinweis.
     return (
       <div className="border border-amber-700/40 bg-slate-800 px-3 py-2 text-sm text-amber-200">
-        Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres
-        Ausgabe-Limit in den Provider-Einstellungen.
+        {t("chat.emptyResponse")}
       </div>
     );
   }
@@ -1633,7 +1633,8 @@ function ActionResultView({
   if (result.kind === "noteUpdate") {
     return <p className="mt-2 text-xs text-emerald-300">{result.summary}</p>;
   }
-  const truncate = (s: string, max = 2000) => (s.length > max ? `${s.slice(0, max)}\n… (gekürzt)` : s);
+  const truncate = (s: string, max = 2000) =>
+    s.length > max ? `${s.slice(0, max)}\n… ${t("chat.outputTruncated")}` : s;
   if (result.kind === "fileRead") {
     return (
       <div className="mt-2 space-y-1 rounded bg-slate-950 p-2 font-mono text-xs">
@@ -1647,10 +1648,10 @@ function ActionResultView({
   if (result.kind === "fileWrite") {
     return (
       <div className="mt-2 space-y-1 text-xs text-emerald-300">
-        <p>✓ Datei '{result.path}' geschrieben.</p>
+        <p>✓ {t("chat.fileWritten", { path: result.path })}</p>
         {result.backupPath && <p className="text-slate-400">Backup: {result.backupPath}</p>}
         {result.usedSudoPassword && (
-          <p className="text-amber-300">🔑 Über hinterlegtes Sudo-Passwort geschrieben.</p>
+          <p className="text-amber-300">🔑 {t("chat.writtenWithSudoPassword")}</p>
         )}
       </div>
     );
@@ -1749,6 +1750,7 @@ function DocumentCard({
   contentMarkdown: string;
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [exporting, setExporting] = useState<DocumentFormat | null>(null);
   const [savedFormat, setSavedFormat] = useState<DocumentFormat | null>(null);
 
@@ -1770,7 +1772,7 @@ function DocumentCard({
           <span className="font-semibold text-slate-100">{title}</span>
         </div>
         <span className="rounded bg-indigo-950/80 px-2 py-0.5 text-xs text-indigo-300 border border-indigo-800/50">
-          Dokument generiert
+          {t("chat.documentGenerated")}
         </span>
       </div>
       <div className="prose prose-sm prose-invert max-w-none rounded bg-slate-950 p-3 prose-pre:bg-slate-900 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
@@ -1783,9 +1785,9 @@ function DocumentCard({
           onClick={() => handleExportClick("markdown")}
           className="rounded bg-indigo-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
         >
-          {exporting === "markdown" ? "Speichert…" : "Als Markdown speichern"}
+          {exporting === "markdown" ? t("common.saving") : t("chat.saveAsMarkdown")}
         </button>
-        {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
+        {savedFormat && <span className="text-xs text-emerald-400">✓ {t("chat.exportedAsMarkdown")}</span>}
         {/* Spec 0045: registrierte Dokument-Aktionen neben dem Markdown-
          * Export — der bestehende Export-Button bleibt unverändert an
          * seinem Platz, die Registry-Aktionen kommen daneben, nicht statt. */}
@@ -1842,6 +1844,7 @@ function AssistantMessageView({
   truncated: boolean;
   onContinue: () => void;
 }) {
+  const { t } = useTranslation();
   const [exporting, setExporting] = useState<DocumentFormat | null>(null);
   const [savedFormat, setSavedFormat] = useState<DocumentFormat | null>(null);
   const [noteState, setNoteState] = useState<"idle" | "sending" | "error">("idle");
@@ -1854,7 +1857,7 @@ function AssistantMessageView({
           .trim()
           .split("\n")[0]
           .replace(/^[#\s*-]+/, "")
-          .slice(0, 40) || "Antwort";
+          .slice(0, 40) || t("chat.exportDefaultTitle");
       await onExport(text, firstLine, format);
       setSavedFormat(format);
     } finally {
@@ -1901,9 +1904,9 @@ function AssistantMessageView({
             onClick={() => handleExportClick("markdown")}
             className="rounded bg-slate-700/80 px-2 py-1 text-xs text-slate-200 hover:bg-slate-600 hover:text-white disabled:opacity-50"
           >
-            {exporting === "markdown" ? "Speichert…" : "📄 Als Markdown"}
+            {exporting === "markdown" ? t("common.saving") : `📄 ${t("chat.exportAsMarkdown")}`}
           </button>
-          {savedFormat && <span className="text-xs text-emerald-400">✓ Als Markdown exportiert</span>}
+          {savedFormat && <span className="text-xs text-emerald-400">✓ {t("chat.exportedAsMarkdown")}</span>}
         </div>
       )}
       {truncated ? (
@@ -1913,13 +1916,13 @@ function AssistantMessageView({
         // gerade unvollständig endet. Reines UI-Element aus dem `truncated`-
         // Flag, nicht Teil von `text` (nicht fälschbar, s. Feld-Kommentar).
         <div className="flex flex-wrap items-center gap-2 border-t border-amber-700/40 pt-2 text-xs text-amber-300">
-          <span>✂ Antwort wurde abgeschnitten (Längenlimit erreicht).</span>
+          <span>✂ {t("chat.responseTruncated")}</span>
           <button
             type="button"
             onClick={onContinue}
             className="rounded bg-amber-700/80 px-2 py-1 text-xs text-amber-50 hover:bg-amber-600"
           >
-            Weiter
+            {t("chat.continue")}
           </button>
         </div>
       ) : null}

@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorMessage, respondToAction } from "../api";
@@ -43,11 +44,11 @@ function targetKindFromEvent(event: NoteUpdateSuggestedEvent): "server" | "group
  * bekommen bewusst das eigene Wort "Gruppen-Notiz-Vorschlag" (nicht
  * "Server-Notiz-Vorschlag für 'X'"), um die Verwechslungsgefahr auf der
  * Server-vs-Gruppe-Achse zu vermeiden. */
-function suggestionTitle(kind: "server" | "group", targetName: string | null): string {
-  const name = targetName ?? "unbekanntes Ziel";
+function suggestionTitle(t: TFunction, kind: "server" | "group", targetName: string | null): string {
+  const name = targetName ?? t("noteSuggestion.unknownTarget");
   return kind === "group"
-    ? `Gruppen-Notiz-Vorschlag für „${name}“`
-    : `Notiz-Vorschlag für Server „${name}“`;
+    ? t("noteSuggestion.groupTitle", { name })
+    : t("noteSuggestion.serverTitle", { name });
 }
 
 /**
@@ -123,7 +124,7 @@ export function NoteSuggestionToast() {
           {!suggestion.expanded ? (
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold text-slate-100">
-                {suggestionTitle(suggestion.targetKind, suggestion.targetName)}
+                {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
               </span>
               <div className="flex shrink-0 gap-1">
                 <button
@@ -131,13 +132,13 @@ export function NoteSuggestionToast() {
                   onClick={() => updateSuggestion(suggestion.actionId, { expanded: true })}
                   className="rounded bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-500"
                 >
-                  Anzeigen
+                  {t("noteSuggestion.show")}
                 </button>
                 <button
                   type="button"
                   onClick={() => decide(suggestion, "deny")}
                   className="rounded bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600"
-                  aria-label="Vorschlag verwerfen"
+                  aria-label={t("noteSuggestion.dismiss")}
                 >
                   ✕
                 </button>
@@ -146,7 +147,7 @@ export function NoteSuggestionToast() {
           ) : (
             <div className="space-y-2">
               <p className="font-semibold text-slate-100">
-                {suggestionTitle(suggestion.targetKind, suggestion.targetName)}
+                {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
               </p>
               {suggestion.summaryIncomplete && (
                 <p
@@ -170,7 +171,7 @@ export function NoteSuggestionToast() {
                   disabled={suggestion.deciding}
                   className="rounded bg-red-900 px-3 py-1 text-xs text-red-200 hover:bg-red-800 disabled:opacity-50"
                 >
-                  Ablehnen
+                  {t("noteSuggestion.reject")}
                 </button>
                 <button
                   type="button"
@@ -178,7 +179,7 @@ export function NoteSuggestionToast() {
                   disabled={suggestion.deciding}
                   className="rounded bg-emerald-700 px-3 py-1 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"
                 >
-                  {suggestion.deciding ? "Übernimmt…" : "Übernehmen"}
+                  {suggestion.deciding ? t("noteSuggestion.applying") : t("noteSuggestion.apply")}
                 </button>
               </div>
             </div>

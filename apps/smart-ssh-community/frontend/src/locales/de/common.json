@@ -385,7 +385,8 @@
       "tabHint": "Sitzung eines externen Tools (MCP) — eigene Verbindung, getrennt von deinen Sitzungen.",
       "pendingBadge": "Bestätigung nötig",
       "readOnlyHint": "Diese Sitzung gehört einem externen Tool (MCP). Hier erscheinen nur seine Aktionen zum Bestätigen oder Ablehnen und deren Ergebnis; eigene Eingaben und Terminal gibt es hier nicht. Schließen beendet die MCP-Sitzung und lehnt offene Bestätigungen ab."
-    }
+    },
+    "confirmClosePending": "Für \"{{name}}\" wartet noch eine Bestätigung. Tab wirklich schließen? Die wartende Aktion gilt dann als abgelehnt."
   },
   "aiProvider": {
     "title": "AI-Provider",
@@ -455,7 +456,13 @@
     "ollamaProbePullHint": "Ein Modell laden: im Terminal `ollama pull <modell>` ausführen, dann erneut suchen.",
     "ollamaProbeRetry": "Erneut suchen",
     "ollamaProbeNotFoundHeading": "Kein lokales Ollama gefunden (Standard-Port 11434).",
-    "ollamaProbeNotFoundInstructions": "Ollama von ollama.com installieren, starten und ein Modell laden (z. B. `ollama pull llama3`), dann erneut suchen."
+    "ollamaProbeNotFoundInstructions": "Ollama von ollama.com installieren, starten und ein Modell laden (z. B. `ollama pull llama3`), dann erneut suchen.",
+    "providerTypes": {
+      "openai": "OpenAI",
+      "anthropic": "Anthropic",
+      "generic_openai_compatible": "Generisch (OpenAI-kompatibel)",
+      "ollama": "Ollama"
+    }
   },
   "errors": {
     "SSH_CONNECTION_FAILED": "Verbindung fehlgeschlagen – ist der Host erreichbar (Adresse, Port, Netzwerk)?",
@@ -812,7 +819,15 @@
     "notFound": "Startverzeichnis „{{dir}}“ wurde nicht gefunden oder ist nicht zugänglich. Terminal und Dateibrowser verwenden stattdessen das Home-Verzeichnis."
   },
   "noteSuggestion": {
-    "summaryIncomplete": "Die Zusammenfassung wurde abgeschnitten und ist unvollständig. Prüfe sie sorgfältig oder lehne sie ab."
+    "summaryIncomplete": "Die Zusammenfassung wurde abgeschnitten und ist unvollständig. Prüfe sie sorgfältig oder lehne sie ab.",
+    "unknownTarget": "unbekanntes Ziel",
+    "groupTitle": "Gruppen-Notiz-Vorschlag für „{{name}}“",
+    "serverTitle": "Notiz-Vorschlag für Server „{{name}}“",
+    "show": "Anzeigen",
+    "dismiss": "Vorschlag verwerfen",
+    "reject": "Ablehnen",
+    "applying": "Übernimmt…",
+    "apply": "Übernehmen"
   },
   "connectLog": {
     "title": "Details",
@@ -859,5 +874,59 @@
   "fileBrowser": {
     "actionsColumn": "Aktionen",
     "chmodClassColumn": "Gilt für"
+  },
+  "chat": {
+    "autoContinuing": "Automatik läuft — KI reagiert automatisch auf das letzte Ergebnis…",
+    "stopAutoContinuation": "Automatik stoppen",
+    "generating": "KI generiert Antwort / Dokument…",
+    "stop": "Stopp",
+    "noActiveProvider": "Kein aktiver AI-Provider konfiguriert. Bitte zuerst in den Einstellungen einrichten.",
+    "inputPlaceholder": "Frage stellen oder Kommando beschreiben …",
+    "send": "Senden",
+    "queued": "Wird mit der nächsten Anfrage gesendet",
+    "responseCancelled": "Antwort abgebrochen.",
+    "emptyResponse": "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.",
+    "outputTruncated": "(gekürzt)",
+    "fileWritten": "Datei '{{path}}' geschrieben.",
+    "writtenWithSudoPassword": "Über hinterlegtes Sudo-Passwort geschrieben.",
+    "documentGenerated": "Dokument generiert",
+    "saveAsMarkdown": "Als Markdown speichern",
+    "exportAsMarkdown": "Als Markdown",
+    "exportedAsMarkdown": "Als Markdown exportiert",
+    "exportDefaultTitle": "Antwort",
+    "responseTruncated": "Antwort wurde abgeschnitten (Längenlimit erreicht).",
+    "continue": "Weiter"
+  },
+  "notes": {
+    "largeNoteHint": "Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt werden. Die gespeicherte Notiz bleibt vollständig erhalten.",
+    "summarizeRequesting": "Wird angefragt…",
+    "summarizeNow": "Jetzt zusammenfassen",
+    "noteLabel": "Notiz (Kontext für die KI)",
+    "saveNote": "Notiz speichern",
+    "hideHistory": "Historie ausblenden",
+    "showHistory": "Historie anzeigen",
+    "noHistory": "Noch keine Historie.",
+    "editedByUser": "Nutzer",
+    "editedByAi": "KI ({{provider}}/{{model}})",
+    "restore": "Wiederherstellen",
+    "originalVersion": "Ursprüngliche Version"
+  },
+  "noteShrink": {
+    "title": "Notiz für Server „{{name}}“ ist sehr groß",
+    "dismissHint": "Hinweis schließen",
+    "body": "Deine Notiz für diesen Server ist sehr groß und kann bei langen Sitzungen gekürzt werden müssen. Soll ich sie zusammenfassen?",
+    "later": "Später",
+    "editMyself": "Mache ich selbst",
+    "summarize": "Ja, zusammenfassen",
+    "dismissError": "Fehlermeldung verwerfen"
+  },
+  "session": {
+    "disconnected": "Verbindung getrennt",
+    "disconnectedWithReason": "Verbindung getrennt: {{reason}}",
+    "disconnect": "Trennen",
+    "splitHandle": "Bereichsaufteilung",
+    "terminalTab": "Terminal",
+    "filesTab": "Dateien",
+    "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}"
   }
 }

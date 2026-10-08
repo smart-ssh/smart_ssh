@@ -10,6 +10,7 @@
 // gerade aktiven Tab (Abschnitt 4, "das ist der wahrscheinlichste
 // Fehlerfall bei dieser Umstellung").
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { commandErrorMessage, disconnect, getServer, listSessions, respondToAction } from "./api";
 import {
   onActionDecisionEscalated,
@@ -67,6 +68,7 @@ export function nextActiveAfterClose(
 }
 
 export function useSessionTabs() {
+  const { t: translate } = useTranslation();
   const [tabs, setTabs] = useState<SessionTab[]>([]);
   // `null` heißt "Übersicht" (Server-/Verwaltungs-Screens) ist aktiv, nicht
   // "keine Tabs offen" — beides ist gleichzeitig möglich (Tabs bleiben im
@@ -255,8 +257,7 @@ export function useSessionTabs() {
     const tab = tabs.find((t) => t.sessionId === sessionId);
     if (tab?.hasPendingAction) {
       const proceed = window.confirm(
-        `Für "${tab.serverName}" wartet noch eine Bestätigung. Tab wirklich schließen? ` +
-          "Die wartende Aktion gilt dann als abgelehnt.",
+        translate("sessionTabs.confirmClosePending", { name: tab.serverName }),
       );
       if (!proceed) return;
       if (tab.pendingActionId) {

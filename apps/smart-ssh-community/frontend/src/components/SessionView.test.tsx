@@ -211,6 +211,28 @@ describe("SessionView AI/SSH split (Spec 0053, Teil 2)", () => {
 
     expect(await screen.findByText("file-browser-stub")).toBeVisible();
   });
+
+  // Issue #116: Kopfzeile und Bereichsumschalter folgen der UI-Sprache.
+  it("shows the header and panel switcher in English with an English UI", async () => {
+    vi.mocked(loadAiSshSplitWidthPx).mockResolvedValue(null);
+    render(
+      <I18nextProvider i18n={testI18n.cloneInstance({ lng: "en" })}>
+        <SessionView
+          sessionId="session-1"
+          serverName="srv1"
+          serverId="server-1"
+          onRequestClose={vi.fn()}
+          onActionSettled={vi.fn()}
+          isActiveTab={true}
+        />
+      </I18nextProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Panel divider")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Files"));
+    expect(await screen.findByText("file-browser-stub")).toBeVisible();
+  });
 });
 
 // Spec 0104 / Issue #50: Eine MCP-Sitzung zeigt nur die Aktionskarten des

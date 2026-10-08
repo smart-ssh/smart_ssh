@@ -79,7 +79,9 @@ export function TerminalView({ sessionId }: TerminalViewProps) {
         return terminalResize(sessionId, term.cols, term.rows);
       })
       .catch((err) => {
-        term.writeln(`\r\n[Terminal konnte nicht geöffnet werden: ${commandErrorMessage(err)}]`);
+        term.writeln(
+          `\r\n[${t("session.terminalOpenFailed", { error: commandErrorMessage(err) })}]`,
+        );
       });
 
     onTerminalOutput((event) => {
