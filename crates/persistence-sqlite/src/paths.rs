@@ -94,6 +94,16 @@ pub fn default_db_path() -> PathBuf {
     resolve_data_dir().join("smart-ssh.db")
 }
 
+/// Ist der Datenpfad über `SMART_SSH_DATA_DIR` umgelenkt (s.
+/// [`resolve_data_dir`], gleiche Regel: ein leerer Wert zählt nicht)?
+///
+/// Issue #93: Nur ohne Umlenkung weiß ein Release-Build, dass keine andere,
+/// ältere Instanz mit einem fremden Datenpfad neben ihm laufen kann, die er
+/// über die Datenverzeichnis-Sperre nicht sieht.
+pub fn data_dir_is_overridden() -> bool {
+    std::env::var_os(DATA_DIR_OVERRIDE_ENV).is_some_and(|value| !value.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
