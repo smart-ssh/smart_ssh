@@ -75,6 +75,15 @@ Ergänzung in der Risiko-Klassifizierung.
   (0060-Lehre) → im Zweifel eskalieren (strenger ist hier die sichere
   Richtung). Verkettungen (`echo x; cat ~/.ssh/id_rsa`) über die bestehenden
   Sub-Kommando-Traces.
+- **Nicht prüfbare Kommandos**: Ist ein Kommando zu lang für die Prüfung
+  oder enthält es tiefer verschachtelte Shell-Code-Strings, als die Prüfung
+  zerlegt (dasselbe gilt für die Prüfung auf `sftp-server`-Aufrufe), wird es
+  ebenso eskaliert (nur `AutoExec` → `Confirm`, `Deny` bleibt `Deny`). Der
+  Bestätigungsdialog nennt dann aber den eigenen Grund „Kommando ist zu lang
+  oder zu tief verschachtelt für eine Prüfung – erfordert immer
+  Bestätigung“, nicht „Liest eine Datei mit Zugangsdaten“ bzw. „Startet
+  sftp-server“. Ein Verdacht auf eingeschleuste Anweisungen hat als Grund
+  weiterhin Vorrang.
 - **Ehrlich dokumentieren**: lexikalisch, über Variablen/Symlinks umgehbar
   — Redaction und Confirm bleiben die weiteren Schichten.
 
