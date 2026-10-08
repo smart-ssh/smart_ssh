@@ -477,6 +477,7 @@
     "SSH_HOST_NOT_FOUND": "Unknown host name. Check the address spelling (or enter the IP address).",
     "SSH_HOST_UNREACHABLE": "The server can't be reached from this network. Check your network/VPN.",
     "SSH_CONNECTION_CLOSED": "The server closed the connection during setup. Check that an SSH service runs on this port; wait a moment if too many attempts were made.",
+    "SSH_SESSION_CLOSED": "The connection to the server was lost. Reconnect to continue.",
     "SSH_HOST_KEY_NOT_TRUSTED": "Connection cancelled because the host key wasn't confirmed. If you trust the server, connect again and verify the fingerprint.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "The host key prompt wasn't answered in time; the key was not trusted. Connect again.",
     "SSH_CONNECTION_ABANDONED": "Connection attempt cancelled (e.g. the app reloaded while the host key prompt was open). Connect again.",

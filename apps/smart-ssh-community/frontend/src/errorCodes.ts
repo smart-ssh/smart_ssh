@@ -68,6 +68,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "SSH_HOST_NOT_FOUND",
   "SSH_HOST_UNREACHABLE",
   "SSH_CONNECTION_CLOSED",
+  // Issue #96: Verbindungsverlust einer bereits aufgebauten Sitzung.
+  "SSH_SESSION_CLOSED",
   // Spec 0069, Teil A4:
   "SSH_HOST_KEY_NOT_TRUSTED",
   "SSH_HOST_KEY_CONFIRM_TIMEOUT",
