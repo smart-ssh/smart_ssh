@@ -28,6 +28,7 @@ vi.mock("./api", async () => {
     commandErrorCode: actual.commandErrorCode,
     listAiProviders: vi.fn(() => Promise.resolve([])),
     listServers: vi.fn(() => Promise.resolve([])),
+    listUnusableServers: vi.fn(() => Promise.resolve([])),
     listGroups: vi.fn(() => Promise.resolve([])),
     listChatSessions: vi.fn(() => Promise.resolve([])),
     listSessions: vi.fn(() => Promise.resolve([])),

@@ -8,19 +8,25 @@ import {
   type DragItem,
   type DropTarget,
 } from "../treeDrag";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
 import { useTreeDrag } from "../useTreeDrag";
 import { TreeDragGhost } from "./TreeDragGhost";
+import { unusableReasonText } from "../unusableServer";
 
 export type Selection =
   | { kind: "group"; id: string }
   | { kind: "server"; id: string }
+  /** Issue #100: ein nicht nutzbarer Server (Anmeldeart unlesbar). */
+  | { kind: "unusableServer"; id: string }
   | { kind: "newGroup"; parentId: string | null }
   | { kind: "newServer"; groupId: string | null };
 
 interface SidebarProps {
   groups: GroupDto[];
   servers: ServerDto[];
+  /** Issue #100: Server, deren Anmeldeart diese Version nicht lesen kann —
+   * im Baum sichtbar und auswählbar (zum Löschen), aber nicht ziehbar. */
+  unusableServers?: UnusableServerDto[];
   selection: Selection | null;
   onSelect: (selection: Selection) => void;
   /** Spec 0075, §3.1.7/§3.2 — Import aus bzw. Export nach `ssh_config`. */
@@ -46,6 +52,7 @@ interface SidebarProps {
 export function Sidebar({
   groups,
   servers,
+  unusableServers = [],
   selection,
   onSelect,
   onImportSshConfig,
@@ -53,7 +60,7 @@ export function Sidebar({
   onMove,
 }: SidebarProps) {
   const { t } = useTranslation();
-  const tree = buildGroupTree(groups, servers);
+  const tree = buildGroupTree(groups, servers, unusableServers);
   const localServer = servers.find((s) => s.isLocal);
   const { drag, handlersFor } = useTreeDrag((item, target) => {
     if (classifyDrop(item, target, groups, servers) !== "noop") onMove(item, target);
@@ -68,9 +75,9 @@ export function Sidebar({
 
   // Issue #49: neue Elemente landen in der aktuellen Gruppe (ausgewählte
   // Gruppe bzw. Gruppe des ausgewählten Servers), s. `folderForNewItem`.
-  const currentFolder = folderForNewItem(selection, servers);
+  const currentFolder = folderForNewItem(selection, servers, unusableServers);
 
-  const isSelected = (kind: "group" | "server", id: string) =>
+  const isSelected = (kind: "group" | "server" | "unusableServer", id: string) =>
     selection?.kind === kind && selection.id === id;
 
   const renderNode = (node: GroupTreeNode, depth: number) => (
@@ -92,6 +99,7 @@ export function Sidebar({
       </button>
       {node.children.map((child) => renderNode(child, depth + 1))}
       {node.servers.map((s) => renderServer(s, depth + 1))}
+      {node.unusableServers.map((s) => renderUnusableServer(s, depth + 1))}
     </div>
   );
 
@@ -110,6 +118,25 @@ export function Sidebar({
       }`}
     >
       🖥️ {server.name}
+    </button>
+  );
+
+  /** Issue #100: auswählbar, damit das Löschen erreichbar ist — aber kein
+   * Ziehen und kein Bearbeiten-Formular. */
+  const renderUnusableServer = (server: UnusableServerDto, depth: number) => (
+    <button
+      key={server.id}
+      type="button"
+      data-testid="unusable-server-entry"
+      onClick={() => onSelect({ kind: "unusableServer", id: server.id })}
+      title={unusableReasonText(t, server.reason)}
+      style={{ paddingLeft: `${depth * 14 + 8}px` }}
+      className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm italic hover:bg-slate-800 ${
+        isSelected("unusableServer", server.id) ? "bg-slate-800 text-amber-200" : "text-amber-300/80"
+      }`}
+    >
+      <span aria-hidden="true">⚠️</span> {server.name}{" "}
+      <span className="text-xs not-italic text-slate-500">({t("unusableServer.badge")})</span>
     </button>
   );
 
@@ -163,7 +190,10 @@ export function Sidebar({
         )}
         {tree.roots.map((node) => renderNode(node, 0))}
         {tree.ungroupedServers.map((s) => renderServer(s, 0))}
-        {groups.length === 0 && tree.ungroupedServers.length === 0 && (
+        {tree.ungroupedUnusableServers.map((s) => renderUnusableServer(s, 0))}
+        {groups.length === 0 &&
+          tree.ungroupedServers.length === 0 &&
+          tree.ungroupedUnusableServers.length === 0 && (
           <p className="px-2 py-1 text-sm text-slate-500">{t("sidebar.empty")}</p>
         )}
         {drag && (

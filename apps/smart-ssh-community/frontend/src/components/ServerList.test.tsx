@@ -9,7 +9,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
-import { connect, listGroups, listServers, moveGroup, moveServerToGroup } from "../api";
+import {
+  connect,
+  listGroups,
+  listServers,
+  listUnusableServers,
+  moveGroup,
+  moveServerToGroup,
+} from "../api";
 import { subscribeHostKeyPromptClear } from "../hostKeyPromptBus";
 import { onHostKeyVerificationNeeded } from "../events";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
@@ -71,6 +78,7 @@ vi.mock("../api", async () => {
   const actual = await vi.importActual<typeof import("../api")>("../api");
   return {
     listServers: vi.fn(() => Promise.resolve([localServer(), remoteServer()])),
+    listUnusableServers: vi.fn(() => Promise.resolve([])),
     listGroups: vi.fn(() => Promise.resolve([] as GroupDto[])),
     listChatSessions: vi.fn(() => Promise.resolve([])),
     connect: vi.fn(),
@@ -583,6 +591,39 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
 
     expect(await screen.findByText("settings store write failed")).toBeInTheDocument();
     expect(handler).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+  });
+});
+
+describe("ServerList not-usable servers (issue #100)", () => {
+  it("shows a not-usable server with its reason, and clicking it never connects", async () => {
+    vi.mocked(listGroups).mockResolvedValueOnce([group()]);
+    vi.mocked(listUnusableServers).mockResolvedValueOnce([
+      {
+        id: "unusable-1",
+        name: "newer-box",
+        host: "newer.internal",
+        groupId: "group-1",
+        reason: "unknown_auth_method",
+      },
+    ]);
+    vi.mocked(connect).mockClear();
+
+    renderList();
+
+    const row = await screen.findByTestId("unusable-server-row");
+    expect(row).toHaveTextContent("newer-box");
+    expect(row).toHaveTextContent("Nicht nutzbar");
+    expect(row).toHaveTextContent(
+      "Mit einer neueren Version der App gespeichert; diese Version kennt die Anmeldeart nicht.",
+    );
+    // The readable servers are listed as usual.
+    expect(screen.getByText("prod-1")).toBeInTheDocument();
+    // No button, so nothing to connect or drag.
+    expect(row.querySelector("button")).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByText("newer-box"));
+    });
     expect(connect).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,7 @@
 // Regel ohne Rendering testbar ist.
 
 import type { Selection } from "./components/Sidebar";
-import type { ServerDto } from "./types";
+import type { ServerDto, UnusableServerDto } from "./types";
 
 /** Die Gruppe, die ein neuer Server bzw. eine neue Gruppe als Vorgabe
  * bekommt:
@@ -15,13 +15,20 @@ import type { ServerDto } from "./types";
  *
  * Nur eine Vorgabe: das Formular lässt die Gruppe vor dem Speichern
  * ändern. */
-export function folderForNewItem(selection: Selection | null, servers: ServerDto[]): string | null {
+export function folderForNewItem(
+  selection: Selection | null,
+  servers: ServerDto[],
+  unusableServers: UnusableServerDto[] = [],
+): string | null {
   if (!selection) return null;
   switch (selection.kind) {
     case "group":
       return selection.id;
     case "server":
       return servers.find((s) => s.id === selection.id)?.groupId ?? null;
+    // Issue #100: wie ein normaler Server — seine Gruppe.
+    case "unusableServer":
+      return unusableServers.find((s) => s.id === selection.id)?.groupId ?? null;
     case "newGroup":
       return selection.parentId;
     case "newServer":

@@ -8,6 +8,7 @@ import {
   listChatSessions,
   listGroups,
   listServers,
+  listUnusableServers,
   resumeChatSession,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
@@ -22,12 +23,19 @@ import {
   type DragItem,
   type DropTarget,
 } from "../treeDrag";
-import type { ChatSessionSummaryDto, ConnectStepRecord, GroupDto, ServerDto } from "../types";
+import type {
+  ChatSessionSummaryDto,
+  ConnectStepRecord,
+  GroupDto,
+  ServerDto,
+  UnusableServerDto,
+} from "../types";
 import { useTreeDrag } from "../useTreeDrag";
 import { ChatSessionPickerScreen } from "./ChatSessionPickerScreen";
 import { ConnectStepLog } from "./ConnectStepLog";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { TreeDragGhost } from "./TreeDragGhost";
+import { unusableReasonText } from "../unusableServer";
 
 interface ServerListProps {
   onConnected: (sessionId: string, serverName: string, serverId: string) => void;
@@ -92,6 +100,9 @@ export function ServerList({
   const { t } = useTranslation();
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [groups, setGroups] = useState<GroupDto[]>([]);
+  // Issue #100: Server mit unlesbarer Anmeldeart — sichtbar, aber nicht
+  // verbindbar.
+  const [unusableServers, setUnusableServers] = useState<UnusableServerDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [connectingId, setConnectingId] = useState<string | null>(null);
@@ -117,10 +128,11 @@ export function ServerList({
 
   const loadTree = useCallback(
     () =>
-      Promise.all([listServers(), listGroups()])
-        .then(([s, g]) => {
+      Promise.all([listServers(), listGroups(), listUnusableServers()])
+        .then(([s, g, u]) => {
           setServers(s);
           setGroups(g);
+          setUnusableServers(u);
         })
         .catch((err) => setError(describeError(t, err)))
         .finally(() => setLoading(false)),
@@ -338,6 +350,31 @@ export function ServerList({
     </li>
   );
 
+  /** Issue #100: ein nicht nutzbarer Server — bewusst kein Button: kein
+   * Verbinden, kein Ziehen. Begründung sichtbar, Löschen unter „Verwalten". */
+  const renderUnusableServerRow = (server: UnusableServerDto, depth: number) => (
+    <li key={server.id} data-testid="unusable-server-row">
+      <div
+        style={{ paddingLeft: `${depth * 16 + 16}px` }}
+        className="flex w-full select-none items-center justify-between py-3 pr-4 text-left opacity-70"
+      >
+        <div>
+          <p className="font-medium text-slate-300">
+            <span aria-hidden="true">⚠️</span> {server.name}
+          </p>
+          <p className="text-sm text-slate-500">{server.host}</p>
+          <p className="text-xs text-amber-300">{unusableReasonText(t, server.reason)}</p>
+          <p className="text-xs text-slate-500">
+            {t("unusableServer.listHint", { manage: t("nav.manage") })}
+          </p>
+        </div>
+        <span className="rounded bg-amber-900 px-2 py-0.5 text-xs text-amber-200">
+          {t("unusableServer.badge")}
+        </span>
+      </div>
+    </li>
+  );
+
   /** Spec 0033, Abschnitt 3/4: eine Gruppe erscheint als eigener,
    * auf-/zuklappbarer Abschnitt, Untergruppen darin rekursiv eingerückt.
    * Bewusst KEINE Filterung "nur wenn Server enthalten" (Abschnitt 4:
@@ -375,10 +412,14 @@ export function ServerList({
             +
           </button>
         </div>
-        {!collapsed && (node.children.length > 0 || node.servers.length > 0) && (
+        {!collapsed &&
+          (node.children.length > 0 ||
+            node.servers.length > 0 ||
+            node.unusableServers.length > 0) && (
           <ul className="divide-y divide-slate-800">
             {node.children.map((child) => renderGroupSection(child, depth + 1))}
             {node.servers.map((s) => renderServerRow(s, depth + 1))}
+            {node.unusableServers.map((s) => renderUnusableServerRow(s, depth + 1))}
           </ul>
         )}
       </li>
@@ -390,7 +431,7 @@ export function ServerList({
   }
 
   const localServer = servers.find((s) => s.isLocal);
-  const tree = buildGroupTree(groups, servers);
+  const tree = buildGroupTree(groups, servers, unusableServers);
   // Spec 0069, Teil C1 (BL-0082): "leer" für den Einstiegs-Block heißt
   // ausschließlich "keine echten Server" — der lokale Pseudo-Server zählt
   // nie mit, Gruppen (auch leere) zählen für DIESE Bedingung nicht: eine
@@ -398,10 +439,15 @@ export function ServerList({
   // der Frage unten, ob der Gruppenbaum überhaupt etwas zu zeigen hat
   // (die zwei Bedingungen sind nicht dasselbe — nur-Gruppen-ohne-Server
   // zeigt BEIDES: Block und Baum).
-  const hasRealServers = servers.some((s) => !s.isLocal);
+  // Issue #100: ein nicht nutzbarer Server zählt mit — er existiert, der
+  // Einstiegs-Block „ersten Server anlegen" wäre irreführend.
+  const hasRealServers = servers.some((s) => !s.isLocal) || unusableServers.length > 0;
   // Spec 0032, Abschnitt 3: der lokale Pseudo-Server ist immer vorhanden,
   // `servers` ist deshalb nie tatsächlich leer.
-  const hasGroupTreeContent = groups.length > 0 || tree.ungroupedServers.length > 0;
+  const hasGroupTreeContent =
+    groups.length > 0 ||
+    tree.ungroupedServers.length > 0 ||
+    tree.ungroupedUnusableServers.length > 0;
 
   return (
     <>
@@ -448,7 +494,9 @@ export function ServerList({
           {/* Issue #48: "Ohne Gruppe" ist zugleich das Ablageziel für die
            * Wurzelebene — beim Ziehen auch dann sichtbar, wenn noch kein
            * Server ungruppiert ist. */}
-          {(tree.ungroupedServers.length > 0 || drag) && (
+          {(tree.ungroupedServers.length > 0 ||
+            tree.ungroupedUnusableServers.length > 0 ||
+            drag) && (
             <li
               data-drop-target="root"
               className={`border-b border-slate-700 last:border-b-0 ${highlightFor({ kind: "root" })}`}
@@ -456,9 +504,10 @@ export function ServerList({
               <div className="px-4 py-2 text-sm font-medium text-slate-200">
                 {t("mainScreen.ungrouped")}
               </div>
-              {tree.ungroupedServers.length > 0 ? (
+              {tree.ungroupedServers.length > 0 || tree.ungroupedUnusableServers.length > 0 ? (
                 <ul className="divide-y divide-slate-800">
                   {tree.ungroupedServers.map((s) => renderServerRow(s, 1))}
+                  {tree.ungroupedUnusableServers.map((s) => renderUnusableServerRow(s, 1))}
                 </ul>
               ) : (
                 <p className="mx-4 mb-2 rounded border border-dashed border-slate-600 px-3 py-2 text-xs text-slate-400">

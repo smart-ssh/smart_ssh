@@ -211,3 +211,37 @@ describe("Sidebar tree entries are keyboard-operable (issue #112)", () => {
     expect(onSelect).toHaveBeenLastCalledWith({ kind: "server", id: "s-free" });
   });
 });
+
+describe("Sidebar not-usable servers (issue #100)", () => {
+  it("lists a not-usable server in its group and selects it as such, not as a server", () => {
+    const onSelect = vi.fn();
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <Sidebar
+          groups={groups}
+          servers={servers}
+          unusableServers={[
+            {
+              id: "u-1",
+              name: "newer-1",
+              host: "h",
+              groupId: "g-prod",
+              reason: "unknown_auth_method",
+            },
+          ]}
+          selection={null}
+          onSelect={onSelect}
+          onImportSshConfig={vi.fn()}
+          onExportSshConfig={vi.fn()}
+          onMove={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+
+    const entry = screen.getByTestId("unusable-server-entry");
+    expect(entry).toHaveTextContent("newer-1");
+    expect(entry).toHaveTextContent("Nicht nutzbar");
+    fireEvent.click(entry);
+    expect(onSelect).toHaveBeenCalledWith({ kind: "unusableServer", id: "u-1" });
+  });
+});

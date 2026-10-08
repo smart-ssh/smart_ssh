@@ -14,6 +14,7 @@ import type {
   DownloadResultDto,
   ElevationResultDto,
   DeleteServerResult,
+  DeleteUnusableServerResult,
   DocumentFormat,
   EditSessionDto,
   EvalContextInput,
@@ -47,6 +48,7 @@ import type {
   ConnectStepRecord,
   StartDirectoryDto,
   TerminalStartDto,
+  UnusableServerDto,
 } from "./types";
 
 /** Von `crate::error::CommandError` (`crates/app-shell/src/error.rs`). */
@@ -288,6 +290,15 @@ export const moveServerToGroup = (id: string, groupId: string | null) =>
 
 export const deleteServer = (id: string, confirm: boolean) =>
   invoke<DeleteServerResult>("delete_server", { id, confirm });
+
+/** Issue #100: Server, deren Anmeldeart diese Version nicht lesen kann —
+ * getrennt von `listServers`, das nur nutzbare Server liefert. */
+export const listUnusableServers = () => invoke<UnusableServerDto[]>("list_unusable_servers");
+
+/** Issue #100: Löschen eines nicht nutzbaren Servers, zweistufig wie
+ * `deleteServer` (`confirm: false` liefert nur die Vorschau). */
+export const deleteUnusableServer = (id: string, confirm: boolean) =>
+  invoke<DeleteUnusableServerResult>("delete_unusable_server", { id, confirm });
 
 /** Spec 0018, Abschnitt 4: expliziter Entfernen-Weg — ein leeres
  * `sudoPassword`-Feld in `updateServer` bedeutet bereits "unverändert". */

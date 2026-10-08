@@ -1047,5 +1047,15 @@
     "terminalTab": "Terminal",
     "filesTab": "Files",
     "terminalOpenFailed": "Could not open terminal: {{error}}"
+  },
+  "unusableServer": {
+    "badge": "Not usable",
+    "reason_unknown_auth_method": "Saved with a newer version of the app; this version does not know its sign-in method.",
+    "reason_unreadable_auth_method": "The stored sign-in method is damaged and cannot be read.",
+    "explanation": "This server cannot be connected to, edited or used through MCP in this version. Its stored data is left unchanged, so a newer version of the app can still use it. You can delete it.",
+    "listHint": "Not usable: you can delete it under “{{manage}}”.",
+    "host": "Host: {{host}}",
+    "delete": "Delete server",
+    "deleteSecrets": "Every secret stored for this server is deleted."
   }
 }

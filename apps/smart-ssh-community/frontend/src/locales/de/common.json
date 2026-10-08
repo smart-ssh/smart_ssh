@@ -1047,5 +1047,15 @@
     "terminalTab": "Terminal",
     "filesTab": "Dateien",
     "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}"
+  },
+  "unusableServer": {
+    "badge": "Nicht nutzbar",
+    "reason_unknown_auth_method": "Mit einer neueren Version der App gespeichert; diese Version kennt die Anmeldeart nicht.",
+    "reason_unreadable_auth_method": "Die gespeicherte Anmeldeart ist beschädigt und nicht lesbar.",
+    "explanation": "Mit diesem Server kann sich diese Version nicht verbinden, ihn nicht bearbeiten und nicht über MCP nutzen. Seine gespeicherten Daten bleiben unverändert, eine neuere Version der App kann ihn also weiter nutzen. Du kannst ihn löschen.",
+    "listHint": "Nicht nutzbar: Unter „{{manage}}“ lässt er sich löschen.",
+    "host": "Host: {{host}}",
+    "delete": "Server löschen",
+    "deleteSecrets": "Alle für diesen Server gespeicherten Secrets werden gelöscht."
   }
 }

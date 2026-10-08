@@ -1,14 +1,21 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode, commandErrorMessage, listGroups, listServers } from "../api";
+import {
+  commandErrorCode,
+  commandErrorMessage,
+  listGroups,
+  listServers,
+  listUnusableServers,
+} from "../api";
 import { translateErrorCode } from "../errorCodes";
 import { performMove, type DragItem, type DropTarget } from "../treeDrag";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
 import { GroupForm, type MovedTo } from "./GroupForm";
 import { ServerForm } from "./ServerForm";
 import { Sidebar, type Selection } from "./Sidebar";
 import { SshConfigExportDialog } from "./SshConfigExportDialog";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
+import { UnusableServerPanel } from "./UnusableServerPanel";
 
 interface ManagementViewProps {
   /** Spec 0057, §4.2 (Etappe 4): "Mache ich selbst" im Kürzungs-Vorschlags-
@@ -35,6 +42,8 @@ export function ManagementView({
   const { t } = useTranslation();
   const [groups, setGroups] = useState<GroupDto[]>([]);
   const [servers, setServers] = useState<ServerDto[]>([]);
+  // Issue #100: Server mit unlesbarer Anmeldeart — nur anzeigen und löschen.
+  const [unusableServers, setUnusableServers] = useState<UnusableServerDto[]>([]);
   const [selection, setSelection] = useState<Selection | null>(initialSelection);
   const [error, setError] = useState<string | null>(null);
   // Spec 0058, Teil 2: `true` genau dann, wenn die aktuelle `selection` aus
@@ -80,10 +89,11 @@ export function ManagementView({
   };
 
   const reload = () => {
-    Promise.all([listGroups(), listServers()])
-      .then(([g, s]) => {
+    Promise.all([listGroups(), listServers(), listUnusableServers()])
+      .then(([g, s, u]) => {
         setGroups(g);
         setServers(s);
+        setUnusableServers(u);
       })
       .catch((err) => setError(commandErrorMessage(err)));
   };
@@ -132,6 +142,7 @@ export function ManagementView({
       <Sidebar
         groups={groups}
         servers={servers}
+        unusableServers={unusableServers}
         selection={selection}
         onSelect={selectManually}
         onImportSshConfig={() => setImportOpen(true)}
@@ -198,6 +209,13 @@ export function ManagementView({
             autoFocusNotes={focusNotesOnOpen}
           />
         )}
+        {selection?.kind === "unusableServer" &&
+          (() => {
+            const unusable = unusableServers.find((s) => s.id === selection.id);
+            return unusable ? (
+              <UnusableServerPanel key={unusable.id} server={unusable} onDeleted={handleDeleted} />
+            ) : null;
+          })()}
         {selection?.kind === "newServer" && (
           <ServerForm
             key={`new-server-${newFormRevision}`}
