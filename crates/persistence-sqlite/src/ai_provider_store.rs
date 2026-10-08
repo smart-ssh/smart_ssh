@@ -53,6 +53,10 @@ pub struct AiProviderConfig {
     /// core — dort greift dieser Override nur, wenn KEIN Nebenaufruf-Hint
     /// gesetzt ist, s. `ai_provider_factory::build_ai_provider`).
     pub max_tokens_override: Option<u32>,
+    /// Issue #162: serverseitige Web-Recherche (Default an, s. Migration
+    /// `0019_...sql`) — wirkt nur bei Providern mit serverseitigen
+    /// Web-Werkzeugen.
+    pub web_research_enabled: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -79,6 +83,8 @@ pub struct AiProviderConfigUpdate {
     /// Spec 0065, Teil 4 — s. `AiProviderConfig::max_tokens_override`-Doc-
     /// Kommentar.
     pub max_tokens_override: Option<u32>,
+    /// Issue #162 — s. `AiProviderConfig::web_research_enabled`.
+    pub web_research_enabled: bool,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -172,6 +178,7 @@ fn row_to_config(row: &sqlx::sqlite::SqliteRow) -> Result<AiProviderConfig, AiPr
         // oder zu großen Wert still umgewrapt statt sichtbar zu clampen —
         // die Validierung greift nur am Command-Layer, nicht hier.
         max_tokens_override: max_tokens_override.map(|v| v.clamp(0, i64::from(u32::MAX)) as u32),
+        web_research_enabled: row.get("web_research_enabled"),
         created_at: parse_timestamp(&created_at)?,
         updated_at: parse_timestamp(&updated_at)?,
     })
@@ -196,8 +203,8 @@ impl SqliteAiProviderStore {
         let rows = sqlx::query(
             "SELECT id, provider_type, display_name, base_url, model, \
              supports_native_tool_calling, credential_ref, is_active, extra_headers, \
-             attestation_url, max_tokens_override, created_at, updated_at \
-             FROM ai_provider_configs ORDER BY created_at",
+             attestation_url, max_tokens_override, web_research_enabled, created_at, \
+             updated_at FROM ai_provider_configs ORDER BY created_at",
         )
         .fetch_all(&self.pool)
         .await
@@ -214,8 +221,8 @@ impl SqliteAiProviderStore {
         let row = sqlx::query(
             "SELECT id, provider_type, display_name, base_url, model, \
              supports_native_tool_calling, credential_ref, is_active, extra_headers, \
-             attestation_url, max_tokens_override, created_at, updated_at \
-             FROM ai_provider_configs WHERE id = ?",
+             attestation_url, max_tokens_override, web_research_enabled, created_at, \
+             updated_at FROM ai_provider_configs WHERE id = ?",
         )
         .bind(id.0.to_string())
         .fetch_optional(&self.pool)
@@ -239,8 +246,8 @@ impl SqliteAiProviderStore {
             "INSERT INTO ai_provider_configs \
              (id, provider_type, display_name, base_url, model, supports_native_tool_calling, \
               credential_ref, is_active, extra_headers, attestation_url, max_tokens_override, \
-              created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?, ?, ?, ?)",
+              web_research_enabled, created_at, updated_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?, ?, ?, ?, ?)",
         )
         .bind(config.id.0.to_string())
         .bind(config.provider_type.as_db_str())
@@ -252,6 +259,7 @@ impl SqliteAiProviderStore {
         .bind(encode_extra_headers(&config.extra_headers))
         .bind(&config.attestation_url)
         .bind(config.max_tokens_override.map(|v| v as i64))
+        .bind(config.web_research_enabled)
         .bind(config.created_at.to_rfc3339())
         .bind(config.updated_at.to_rfc3339())
         .execute(&self.pool)
@@ -270,7 +278,8 @@ impl SqliteAiProviderStore {
         let result = sqlx::query(
             "UPDATE ai_provider_configs SET provider_type = ?, display_name = ?, base_url = ?, \
              model = ?, supports_native_tool_calling = ?, extra_headers = ?, \
-             attestation_url = ?, max_tokens_override = ?, updated_at = ? WHERE id = ?",
+             attestation_url = ?, max_tokens_override = ?, web_research_enabled = ?, \
+             updated_at = ? WHERE id = ?",
         )
         .bind(update.provider_type.as_db_str())
         .bind(&update.display_name)
@@ -280,6 +289,7 @@ impl SqliteAiProviderStore {
         .bind(encode_extra_headers(&update.extra_headers))
         .bind(&update.attestation_url)
         .bind(update.max_tokens_override.map(|v| v as i64))
+        .bind(update.web_research_enabled)
         .bind(update.updated_at.to_rfc3339())
         .bind(update.id.0.to_string())
         .execute(&self.pool)
@@ -399,6 +409,7 @@ mod tests {
             extra_headers: Vec::new(),
             attestation_url: None,
             max_tokens_override: None,
+            web_research_enabled: true,
             created_at: now,
             updated_at: now,
         }
@@ -435,6 +446,7 @@ mod tests {
             extra_headers: vec![("X-Title".to_string(), "Smart SSH".to_string())],
             attestation_url: Some("https://attest.example/report".to_string()),
             max_tokens_override: Some(16_384),
+            web_research_enabled: true,
             updated_at: Utc::now(),
         };
         store.update_fields(&update).await.unwrap();
@@ -488,6 +500,7 @@ mod tests {
             extra_headers: config.extra_headers.clone(),
             attestation_url: config.attestation_url.clone(),
             max_tokens_override: Some(32_000),
+            web_research_enabled: true,
             updated_at: Utc::now(),
         };
         store.update_fields(&update).await.unwrap();
@@ -507,6 +520,60 @@ mod tests {
         );
     }
 
+    /// Issue #162: die Web-Recherche-Einstellung ist für eine neue
+    /// Konfiguration an und überlebt Aus- und Wiedereinschalten.
+    #[tokio::test]
+    async fn test_web_research_enabled_roundtrips() {
+        let store = in_memory_ai_provider_store().await;
+        let config = make_config("Web");
+        store.create(&config).await.unwrap();
+        assert!(store.get(&config.id).await.unwrap().web_research_enabled);
+
+        let mut update = AiProviderConfigUpdate {
+            id: config.id,
+            provider_type: config.provider_type,
+            display_name: config.display_name.clone(),
+            base_url: config.base_url.clone(),
+            model: config.model.clone(),
+            supports_native_tool_calling: config.supports_native_tool_calling,
+            extra_headers: config.extra_headers.clone(),
+            attestation_url: config.attestation_url.clone(),
+            max_tokens_override: None,
+            web_research_enabled: false,
+            updated_at: Utc::now(),
+        };
+        store.update_fields(&update).await.unwrap();
+        assert!(!store.get(&config.id).await.unwrap().web_research_enabled);
+        assert!(!store.list().await.unwrap()[0].web_research_enabled);
+
+        update.web_research_enabled = true;
+        store.update_fields(&update).await.unwrap();
+        assert!(store.get(&config.id).await.unwrap().web_research_enabled);
+    }
+
+    /// Issue #162: eine Zeile, die vor Migration 0019 angelegt wurde (ohne
+    /// die Spalte im `INSERT`), bekommt den Default „an".
+    #[tokio::test]
+    async fn test_web_research_defaults_to_enabled_for_rows_without_the_column() {
+        let store = in_memory_ai_provider_store().await;
+        let id = ProviderId::new();
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "INSERT INTO ai_provider_configs \
+             (id, provider_type, display_name, base_url, model, supports_native_tool_calling, \
+              credential_ref, is_active, extra_headers, attestation_url, created_at, updated_at) \
+             VALUES (?, 'anthropic', 'Alt', NULL, 'claude-sonnet-5', TRUE, 'ai-provider:alt', \
+                     FALSE, '[]', NULL, ?, ?)",
+        )
+        .bind(id.0.to_string())
+        .bind(&now)
+        .bind(&now)
+        .execute(&store.pool)
+        .await
+        .unwrap();
+        assert!(store.get(&id).await.unwrap().web_research_enabled);
+    }
+
     #[tokio::test]
     async fn test_update_fields_on_unknown_id_yields_not_found() {
         let store = in_memory_ai_provider_store().await;
@@ -520,6 +587,7 @@ mod tests {
             extra_headers: Vec::new(),
             attestation_url: None,
             max_tokens_override: None,
+            web_research_enabled: true,
             updated_at: Utc::now(),
         };
 

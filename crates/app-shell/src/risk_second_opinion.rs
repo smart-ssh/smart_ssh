@@ -100,6 +100,9 @@ pub async fn resolve_second_opinion_provider(
         // dass dieser Provider künftig noch für einen zweiten,
         // hint-losen Zweck wiederverwendet wird.
         config.max_tokens_override,
+        // Issue #162: Nebenaufruf (Zweitmeinung/Injection-Check) — nie
+        // Web-Werkzeuge.
+        false,
     ))
 }
 

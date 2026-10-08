@@ -940,6 +940,8 @@ pub fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
         // rejected`-Doc-Kommentar in `ai-providers`) — keine untrusted
         // Quelle.
         MessageContent::ActionRejected { .. } => false,
+        // Issue #162: Inhalt aus dem offenen Web (Spec 0039).
+        MessageContent::WebActivity(_) => true,
     })
 }
 

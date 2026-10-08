@@ -166,6 +166,8 @@ pub(crate) async fn connect_session(
         active_config.supports_native_tool_calling,
         active_config.extra_headers.clone(),
         active_config.max_tokens_override,
+        // Issue #162: Einstellung des Providers (Default an).
+        active_config.web_research_enabled,
     );
 
     // Spec 0032, Abschnitt 2/3: der lokale Pseudo-Server hat keinen

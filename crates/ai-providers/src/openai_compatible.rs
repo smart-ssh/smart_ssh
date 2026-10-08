@@ -353,6 +353,9 @@ fn message_content_text(content: &MessageContent) -> String {
         MessageContent::ActionRejected { command, reason } => {
             format_action_rejected(command, reason)
         }
+        // Issue #162: Webinhalt geht nur gefencet zurück an die KI (Spec
+        // 0039), s. `WebActivity::to_model_text`.
+        MessageContent::WebActivity(activity) => activity.to_model_text(),
     }
 }
 

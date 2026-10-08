@@ -98,6 +98,8 @@ pub async fn request_note_shrink(
         active_config.supports_native_tool_calling,
         active_config.extra_headers.clone(),
         active_config.max_tokens_override,
+        // Issue #162: Notiz-Nebenaufruf — nie Web-Werkzeuge.
+        false,
     );
     let provider_label = active_config.display_name.clone();
     let model = active_config.model.clone();

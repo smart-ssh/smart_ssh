@@ -100,6 +100,9 @@ pub async fn fetch_second_opinion(
             // falls der Prompt-Text zufällig danach aussieht. Einfach
             // ignoriert, das Textergebnis zählt.
             AiEvent::ActionProposed(_) => {}
+            // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
+            // ignoriert.
+            AiEvent::WebActivity(_) => {}
         }
     }
 
@@ -223,6 +226,9 @@ pub async fn fetch_injection_check(
             AiEvent::Done | AiEvent::TextTruncated => break,
             AiEvent::Error(_) => return None,
             AiEvent::ActionProposed(_) => {}
+            // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
+            // ignoriert.
+            AiEvent::WebActivity(_) => {}
         }
     }
 

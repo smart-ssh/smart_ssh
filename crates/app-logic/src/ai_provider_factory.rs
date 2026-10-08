@@ -51,6 +51,11 @@ pub fn build_ai_provider(
     // dortigen `max_tokens_override`-Doc-Kommentar zur Rangfolge gegenüber
     // `SessionContext::max_tokens_hint`.
     max_tokens_override: Option<u32>,
+    // Issue #162: serverseitige Web-Recherche — wirkt nur bei Providern
+    // mit serverseitigen Web-Werkzeugen (Anthropic). Die OpenAI-kompatible
+    // Familie bekommt nie ein Web-Werkzeug: ob ein beliebiger kompatibler
+    // Endpunkt eines kennt, lässt sich nicht sicher feststellen (ADR 0117).
+    web_research_enabled: bool,
 ) -> (Box<dyn AiProvider>, Arc<ProviderBudgetGuard>) {
     let api_key = api_key.expose_secret().to_string();
     match provider_type {
@@ -73,14 +78,17 @@ pub fn build_ai_provider(
             let resolved_base_url = base_url.unwrap_or(DEFAULT_ANTHROPIC_BASE_URL);
             let budget =
                 registry.guard_for(&provider_identity_key(resolved_base_url, model, &api_key));
-            let provider: Box<dyn AiProvider> = Box::new(AnthropicProvider::new(
-                resolved_base_url,
-                model,
-                api_key,
-                supports_native_tool_calling,
-                budget.clone(),
-                max_tokens_override,
-            ));
+            let provider: Box<dyn AiProvider> = Box::new(
+                AnthropicProvider::new(
+                    resolved_base_url,
+                    model,
+                    api_key,
+                    supports_native_tool_calling,
+                    budget.clone(),
+                    max_tokens_override,
+                )
+                .with_web_research(web_research_enabled),
+            );
             (provider, budget)
         }
     }
@@ -133,6 +141,7 @@ mod tests {
             true,
             Vec::new(),
             None,
+            false,
         );
 
         // Fünf "Chat-Runden" — `send()` liefert nur einen (nicht gepollten)
@@ -167,6 +176,7 @@ mod tests {
             true,
             Vec::new(),
             None,
+            false,
         );
         let (_provider_b, budget_b) = build_ai_provider(
             &registry,
@@ -177,6 +187,7 @@ mod tests {
             true,
             Vec::new(),
             None,
+            false,
         );
 
         assert!(
@@ -200,6 +211,7 @@ mod tests {
             true,
             Vec::new(),
             None,
+            false,
         );
         let (_provider_b, budget_b) = build_ai_provider(
             &registry,
@@ -210,6 +222,7 @@ mod tests {
             true,
             Vec::new(),
             None,
+            false,
         );
 
         assert!(

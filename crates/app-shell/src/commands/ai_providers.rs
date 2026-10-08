@@ -409,6 +409,8 @@ pub async fn test_ai_provider_credentials(
         config.supports_native_tool_calling,
         config.extra_headers.clone(),
         config.max_tokens_override,
+        // Issue #162: der Zugangsdaten-Test braucht keine Web-Werkzeuge.
+        false,
     );
 
     Ok(classify_credential_test_result(provider.as_ref()).await)
@@ -658,6 +660,7 @@ mod pick_active_provider_tests {
             supports_native_tool_calling: true,
             extra_headers: Vec::new(),
             max_tokens_override: None,
+            web_research_enabled: true,
             attestation_url: None,
             created_at: now,
             updated_at: now,
