@@ -38,10 +38,12 @@ use super::*;
 use crate::commands::elevation::{with_browser_channel, BrowserChannel};
 use crate::elevated_sftp::{ElevatedSftp, ElevatedSftpRegistry, ElevatedSftpSlot};
 
-/// Frist für alles, was in diesen Tests auf ein Signal wartet. Ein Test, der
-/// hier hängen bliebe, soll sichtbar scheitern statt den Testlauf anzuhalten
-/// (Vorgabe aus `CLAUDE.md`/Coder-Skill für den Gegenbeweis).
-const DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
+// Jedes Warten hier wartet auf ein Ereignis (Haltepunkt erreicht, Widerruf
+// gesetzt, Task beendet). Ein Test, der hängen bliebe, scheitert sichtbar an
+// der gemeinsamen Obergrenze `waiting::HANG_GUARD` statt den Testlauf
+// anzuhalten, und nennt dabei das erwartete Ereignis und die bis dahin
+// gelaufenen Operationen (Issue #114: vorher feste 5 s).
+use crate::test_support::waiting::expect_within;
 
 // --- Test-Double für den erhöhten Kanal --------------------------------------
 
@@ -164,17 +166,31 @@ impl GatedSftp {
     /// der Flag-Prüfung angelegt, sonst ginge ein Signal zwischen Prüfung
     /// und `await` verloren.
     async fn wait_until_paused(&self) {
-        tokio::time::timeout(DEADLINE, async {
-            loop {
-                let notified = self.0.reached.notified();
-                if self.0.paused.load(Ordering::SeqCst) {
-                    return;
+        expect_within(
+            "der Mock erreicht den Haltepunkt",
+            || self.describe(),
+            async {
+                loop {
+                    let notified = self.0.reached.notified();
+                    if self.0.paused.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    notified.await;
                 }
-                notified.await;
-            }
-        })
-        .await
-        .expect("der Mock muss den Haltepunkt erreichen");
+            },
+        )
+        .await;
+    }
+
+    /// Was der Mock bis jetzt gesehen hat — für die Meldung, wenn ein
+    /// erwartetes Ereignis ausbleibt.
+    fn describe(&self) -> String {
+        format!(
+            "am Haltepunkt: {}, freigegeben: {}, Operationen: {:?}",
+            self.0.paused.load(Ordering::SeqCst),
+            self.0.released.load(Ordering::SeqCst),
+            self.ops()
+        )
     }
 
     fn release(&self) {
@@ -491,14 +507,21 @@ impl Setup {
 
     /// Wartet, bis der Widerruf wirkt — er ist der sofort wirksame Teil und
     /// geht dem Herausnehmen des Kanalwerts voraus (Spec 0084, §9).
+    ///
+    /// Der Widerruf meldet sich nicht von selbst; die Abfrage gibt nach jedem
+    /// Blick ab, damit der widerrufende Task auf derselben
+    /// Ein-Thread-Laufzeit weiterkommt.
     async fn wait_until_revoked(&self, slot: &ElevatedSftpSlot) {
-        tokio::time::timeout(DEADLINE, async {
-            while !slot.is_revoked() {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("der Widerruf muss sofort wirken, nicht erst nach dem Befehl");
+        expect_within(
+            "der Widerruf wirkt sofort, nicht erst nach dem Befehl",
+            || "Kanal noch nicht widerrufen".to_string(),
+            async {
+                while !slot.is_revoked() {
+                    tokio::task::yield_now().await;
+                }
+            },
+        )
+        .await;
     }
 }
 
@@ -518,11 +541,17 @@ where
     tokio::spawn(async move { with_browser_channel(session, channel, body).await })
 }
 
-async fn join<T>(handle: tokio::task::JoinHandle<CommandResult<T>>) -> CommandResult<T> {
-    tokio::time::timeout(DEADLINE, handle)
-        .await
-        .expect("der Befehl muss enden, statt auf den widerrufenen Kanal zu warten")
-        .expect("der Befehls-Task darf nicht panisch enden")
+async fn join<T>(
+    handle: tokio::task::JoinHandle<CommandResult<T>>,
+    elevated: &GatedSftp,
+) -> CommandResult<T> {
+    expect_within(
+        "der Befehl endet, statt auf den widerrufenen Kanal zu warten",
+        || elevated.describe(),
+        handle,
+    )
+    .await
+    .expect("der Befehls-Task darf nicht panisch enden")
 }
 
 /// Der Wortlaut von `ELEVATED_CHANNEL_INACTIVE` (dort `pub(super)`-los, also
@@ -570,13 +599,28 @@ impl CapturedLogs {
 ///
 /// Von Hand statt über `tracing-subscriber`: diese Kiste hat die Abhängigkeit
 /// nicht, und für „welche Felder hatte das Ereignis" braucht es nichts
-/// weiter. Als **Thread-Default** gesetzt (`tracing::subscriber::
-/// set_default`), nicht global — `#[tokio::test]` fährt eine
-/// Ein-Thread-Laufzeit, die auch die per `tokio::spawn` gestarteten Tasks auf
-/// genau diesem Thread abarbeitet, der Mitschnitt erfasst sie also mit.
-struct CapturingSubscriber(CapturedLogs);
+/// weiter.
+///
+/// Issue #114: **prozessweit** gesetzt (einmal je Testlauf), nicht als
+/// Thread-Standard. `tracing` merkt sich je Aufrufstelle prozessweit, ob sie
+/// jemand hören will, und fragt dafür den Thread, der sie zuerst erreicht.
+/// Mit einem Thread-Standard konnte das ein paralleler Test ohne Mitschnitt
+/// sein, dann galt die Audit-Zeile für immer als „nie" und T7 sah sie nicht
+/// (s. `test_capture_sees_a_line_whose_callsite_another_thread_reached_first`).
+/// Der prozessweite Subscriber hört jede Aufrufstelle, egal von welchem
+/// Thread, und legt eine Zeile nur ab, wenn auf **ihrem** Thread gerade ein
+/// Mitschnitt läuft. `#[tokio::test]` fährt eine Ein-Thread-Laufzeit, die
+/// auch die per `tokio::spawn` gestarteten Tasks auf genau diesem Thread
+/// abarbeitet, der Mitschnitt erfasst sie also mit.
+struct RoutingSubscriber;
 
-impl tracing::Subscriber for CapturingSubscriber {
+thread_local! {
+    /// Mitschnitt des Tests, der auf diesem Thread läuft, falls einer läuft.
+    static THREAD_CAPTURE: std::cell::RefCell<Option<CapturedLogs>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+impl tracing::Subscriber for RoutingSubscriber {
     fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
         true
     }
@@ -586,9 +630,13 @@ impl tracing::Subscriber for CapturingSubscriber {
     fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
     fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
     fn event(&self, event: &tracing::Event<'_>) {
-        let mut fields = HashMap::new();
-        event.record(&mut FieldCollector(&mut fields));
-        self.0 .0.lock().unwrap().push(fields);
+        THREAD_CAPTURE.with(|capture| {
+            if let Some(logs) = capture.borrow().as_ref() {
+                let mut fields = HashMap::new();
+                event.record(&mut FieldCollector(&mut fields));
+                logs.0.lock().unwrap().push(fields);
+            }
+        });
     }
     fn enter(&self, _span: &tracing::span::Id) {}
     fn exit(&self, _span: &tracing::span::Id) {}
@@ -609,10 +657,64 @@ impl tracing::field::Visit for FieldCollector<'_> {
     }
 }
 
-fn capture_logs() -> (CapturedLogs, tracing::subscriber::DefaultGuard) {
+/// Beendet den Mitschnitt dieses Threads beim Verlassen des Tests (auch bei
+/// einer Panik) und stellt den vorherigen Zustand wieder her.
+struct CaptureGuard(Option<CapturedLogs>);
+
+impl Drop for CaptureGuard {
+    fn drop(&mut self) {
+        let previous = self.0.take();
+        THREAD_CAPTURE.with(|capture| *capture.borrow_mut() = previous);
+    }
+}
+
+fn capture_logs() -> (CapturedLogs, CaptureGuard) {
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+    INSTALL.call_once(|| {
+        tracing::subscriber::set_global_default(RoutingSubscriber)
+            .expect("in diesem Testlauf darf niemand sonst einen prozessweiten Subscriber setzen");
+    });
     let logs = CapturedLogs::default();
-    let guard = tracing::subscriber::set_default(CapturingSubscriber(logs.clone()));
-    (logs, guard)
+    let previous = THREAD_CAPTURE.with(|capture| capture.borrow_mut().replace(logs.clone()));
+    (logs, CaptureGuard(previous))
+}
+
+/// Eine eigene Aufrufstelle nur für den Test unten: Welcher Thread sie zuerst
+/// erreicht, bestimmt der Test selbst, nicht die Reihenfolge anderer Tests.
+fn emit_capture_probe_line() {
+    tracing::info!(probe = "capture", "capture probe");
+}
+
+/// Issue #114 (Ursache des Wacklers in T7): `tracing` merkt sich je
+/// Aufrufstelle prozessweit, ob sie überhaupt jemand hören will. Erreicht ein
+/// anderer Thread ohne Mitschnitt die Aufrufstelle zuerst, während der
+/// Mitschnitt dieses Tests der einzige eingetragene ist, fragt `tracing` nur
+/// den Standard **jenes** Threads und merkt sich „nie". Danach geht die Zeile
+/// auch auf dem Thread mit Mitschnitt verloren.
+///
+/// Genau so lief es unter voller Last mit der Audit-Zeile: Ein paralleler
+/// Test ohne Mitschnitt erreichte `audit_elevated_change` zuerst, und T7 sah
+/// keine einzige Zeile. Der Mitschnitt muss deshalb unabhängig davon sein,
+/// welcher Thread eine Aufrufstelle zuerst erreicht.
+#[test]
+fn test_capture_sees_a_line_whose_callsite_another_thread_reached_first() {
+    let (logs, _capture) = capture_logs();
+    std::thread::spawn(emit_capture_probe_line)
+        .join()
+        .expect("der fremde Thread darf nicht panisch enden");
+    emit_capture_probe_line();
+
+    let probe_lines = logs
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|fields| fields.get("probe").map(String::as_str) == Some("capture"))
+        .count();
+    assert_eq!(
+        probe_lines, 1,
+        "genau die Zeile dieses Threads muss im Mitschnitt stehen, nicht die des fremden"
+    );
 }
 
 // --- T1–T5: Widerruf mitten in einer Rekursion ------------------------------
@@ -660,10 +762,9 @@ async fn test_t1_disabling_during_a_recursive_delete_stops_it_immediately() {
     s.wait_until_revoked(&slot).await;
     elevated.release();
 
-    assert_inactive(join(command).await);
-    tokio::time::timeout(DEADLINE, disable)
+    assert_inactive(join(command, &elevated).await);
+    expect_within("das Ausschalten endet", || elevated.describe(), disable)
         .await
-        .expect("das Ausschalten muss enden")
         .expect("der Ausschalt-Task darf nicht panisch enden")
         .expect("Ausschalten gelingt");
 
@@ -720,10 +821,9 @@ async fn test_t2_disabling_during_a_recursive_chmod_stops_it_immediately() {
     s.wait_until_revoked(&slot).await;
     elevated.release();
 
-    assert_inactive(join(command).await);
-    tokio::time::timeout(DEADLINE, disable)
+    assert_inactive(join(command, &elevated).await);
+    expect_within("das Ausschalten endet", || elevated.describe(), disable)
         .await
-        .expect("das Ausschalten muss enden")
         .expect("der Ausschalt-Task darf nicht panisch enden")
         .expect("Ausschalten gelingt");
 
@@ -767,7 +867,7 @@ async fn test_t3_removing_the_session_during_a_recursive_delete_stops_it_immedia
     );
 
     elevated.release();
-    assert_inactive(join(command).await);
+    assert_inactive(join(command, &elevated).await);
     assert_eq!(
         elevated.op_count(),
         ops_before,
@@ -828,19 +928,26 @@ async fn test_t4_reactivating_for_another_user_during_a_recursive_delete_stops_i
         )
         .await
     });
-    tokio::time::timeout(DEADLINE, async {
-        while !slot.is_revoked() {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("das Neu-Aktivieren widerruft den alten Kanal sofort");
+    expect_within(
+        "das Neu-Aktivieren widerruft den alten Kanal sofort",
+        || {
+            format!(
+                "Kanal nicht widerrufen, Umschalten beendet: {}",
+                switch.is_finished()
+            )
+        },
+        async {
+            while !slot.is_revoked() {
+                tokio::task::yield_now().await;
+            }
+        },
+    )
+    .await;
     elevated.release();
 
-    assert_inactive(join(command).await);
-    tokio::time::timeout(DEADLINE, switch)
+    assert_inactive(join(command, &elevated).await);
+    expect_within("das Umschalten endet", || elevated.describe(), switch)
         .await
-        .expect("das Umschalten muss enden")
         .expect("der Umschalt-Task darf nicht panisch enden")
         .expect("das Umschalten selbst gelingt");
 
@@ -895,13 +1002,19 @@ async fn test_t5_disabling_waits_only_for_the_running_operation_not_for_the_rest
     s.wait_until_revoked(&slot).await;
     elevated.release();
 
-    tokio::time::timeout(DEADLINE, disable)
-        .await
-        .expect("das Ausschalten darf nicht auf den Rest des Befehls warten")
-        .expect("der Ausschalt-Task darf nicht panisch enden")
-        .expect("Ausschalten gelingt");
+    // Gegenbeweis bleibt gültig: Wartet das Ausschalten auf den Rest des
+    // Befehls, hängt es im Dauerhalt des Mocks und scheitert an der
+    // Obergrenze.
+    expect_within(
+        "das Ausschalten endet, ohne auf den Rest des Befehls zu warten",
+        || elevated.describe(),
+        disable,
+    )
+    .await
+    .expect("der Ausschalt-Task darf nicht panisch enden")
+    .expect("Ausschalten gelingt");
 
-    assert_inactive(join(command).await);
+    assert_inactive(join(command, &elevated).await);
     assert_eq!(
         elevated.op_count(),
         ops_before,
@@ -936,7 +1049,7 @@ async fn test_t6_delete_preview_stops_at_a_revocation_instead_of_returning_count
     s.wait_until_revoked(&slot).await;
     elevated.release();
 
-    assert_inactive(join(command).await);
+    assert_inactive(join(command, &elevated).await);
     assert_eq!(
         elevated.op_count(),
         ops_before,
@@ -995,7 +1108,7 @@ async fn test_t6b_a_revocation_between_stat_and_read_leaves_the_file_unread() {
         s.wait_until_revoked(&slot).await;
         elevated.release();
 
-        assert_inactive(join(command).await);
+        assert_inactive(join(command, &elevated).await);
         assert!(
             !elevated.ops().iter().any(|op| op.starts_with("read_file")),
             "{command_name}: die Datei darf nach dem Widerruf nicht gelesen werden, war: {:?}",
@@ -1139,7 +1252,7 @@ async fn test_t7_an_aborted_elevated_change_is_audited_once_with_its_target_user
         s.registry.remove_session(&s.sessions, s.session_id);
         s.wait_until_revoked(&slot).await;
         elevated.release();
-        assert_inactive(join(command).await);
+        assert_inactive(join(command, &elevated).await);
 
         let lines = logs.audit_lines(action, "/t");
         assert_eq!(
@@ -1562,7 +1675,7 @@ async fn test_t9_a_transfer_finished_before_the_revocation_still_reports_success
     s.wait_until_revoked(&slot).await;
     elevated.release();
 
-    assert_inactive(join(command).await);
+    assert_inactive(join(command, &elevated).await);
     assert_eq!(
         transfer_finished_errors(&emitter),
         vec![None, Some(ELEVATED_CHANNEL_INACTIVE_TEXT.to_string()),],
