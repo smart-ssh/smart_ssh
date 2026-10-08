@@ -1182,6 +1182,38 @@ mod tests {
         }
     }
 
+    /// Issue #162 / Spec 0105: OpenAI-kompatible Provider bekommen nie ein
+    /// Web-Werkzeug und kein `web_search_options` — die Anfrage bleibt wie
+    /// vor der Web-Recherche.
+    #[test]
+    fn test_request_body_never_contains_a_web_tool() {
+        let provider = OpenAiCompatibleProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-test",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+            None,
+        );
+        let body =
+            provider.build_request_body(&context_with_system("System.", default_action_schemas()));
+        let names: Vec<String> = body["tools"]
+            .as_array()
+            .expect("tools muss gesetzt sein")
+            .iter()
+            .map(|t| {
+                t["function"]["name"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string()
+            })
+            .collect();
+        assert_eq!(names.len(), default_action_schemas().len(), "{names:?}");
+        assert!(!body.to_string().contains("web_search"), "{body}");
+        assert!(!body.to_string().contains("web_fetch"), "{body}");
+    }
+
     /// Spec 0087, T15 (A3.1, BL-0264): natives Tool-Calling, ein leerer bzw.
     /// reiner Leerraum-System-Prompt — `messages[0]` muss die Nutzernachricht
     /// sein, keine System-Nachricht vorangestellt. Analog zu Anthropics
