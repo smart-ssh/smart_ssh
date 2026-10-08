@@ -810,6 +810,9 @@
   "startDirectory": {
     "notFound": "Startverzeichnis „{{dir}}“ wurde nicht gefunden oder ist nicht zugänglich. Terminal und Dateibrowser verwenden stattdessen das Home-Verzeichnis."
   },
+  "noteSuggestion": {
+    "summaryIncomplete": "Die Zusammenfassung wurde abgeschnitten und ist unvollständig. Prüfe sie sorgfältig oder lehne sie ab."
+  },
   "connectLog": {
     "title": "Details",
     "copy": "Kopieren",
