@@ -448,6 +448,7 @@
     "ollamaProbeFoundHeading": "Ollama läuft auf diesem Rechner.",
     "ollamaProbeFoundHintWillActivate": "Wird als aktiver Provider verwendet.",
     "ollamaProbeFoundHintInactive": "Wird als weiterer Provider angelegt (aktuell bleibt ein anderer aktiv).",
+    "addHintWillActivate": "Wird als aktiver Provider verwendet, da noch keiner aktiv ist.",
     "ollamaProbeAdopt": "Ollama übernehmen",
     "ollamaProbeDismiss": "Nein danke",
     "ollamaProbeEmptyHeading": "Ollama läuft, aber es ist noch kein Modell geladen.",

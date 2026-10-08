@@ -73,7 +73,7 @@ schließt nur die verbliebenen Lücken:
 | Kein aktiver KI-Provider beim Verbinden | roher Text „kein aktiver AI-Provider konfiguriert — …" (`active_ai_provider_config`), ohne Code | englische UI zeigt Deutsch |
 | Leere Serverliste | `ServerList.tsx`: fest verdrahteter deutscher Entwicklertext („… s. `profiles_demo`-Beispiel oder CLI-Helfer …") | BL-0082; dazu „Lade Server…" / „Verbinde…" fest deutsch |
 | Ollama-Provider anlegen | API-Key-Feld ist `required`; „Zugangsdaten testen" ist ohne Key gesperrt; `discover_models`/`test_ai_provider_credentials` lehnen leeren Key ab | Ollama braucht keinen Key — der Nutzer muss einen erfinden |
-| Neuer Provider | wird inaktiv angelegt (`ai_provider_store.rs::create` ignoriert `is_active`) | nach „Hinzufügen" muss man noch „Aktiv setzen" — s. §8, Punkt 2 |
+| Neuer Provider | wird inaktiv angelegt (`ai_provider_store.rs::create` ignoriert `is_active`) | nach „Hinzufügen" muss man noch „Aktiv setzen" — s. §8, Punkt 2; gelöst durch B6 |
 
 `CommandError` (`app-shell/src/error.rs`) trägt `code: Option<&'static str>`;
 nur Stellen mit `CommandError::with_code` liefern einen Code. Der blanket
@@ -312,6 +312,27 @@ aktiv gesetzt. Kein Speichern ohne Klick.
   `http://127.0.0.1:11434/v1` vorbelegt (sichtbar, änderbar).
 Backend unverändert: für das Backend ist der Platzhalter ein normaler Key.
 
+**B6 — Erster Provider aus dem Formular wird aktiv (§8, Punkt 2, Option a).**
+Für das normale Formular „Provider hinzufügen" gilt dieselbe Regel wie für
+den Ollama-Vorschlag (B4):
+1. Ist beim Speichern **noch kein** Provider aktiv, wird der neue Provider
+   nach erfolgreichem Anlegen aktiv gesetzt. Ist schon einer aktiv, wird der
+   neue inaktiv angelegt; der bisher aktive bleibt aktiv.
+2. Solange kein Provider aktiv ist, steht direkt über „Hinzufügen" der
+   Hinweis „Wird als aktiver Provider verwendet, da noch keiner aktiv ist."
+   bzw. „Will be used as the active provider, since none is active yet.".
+   Ist ein Provider aktiv, steht dort kein Hinweis. Der Hinweis erscheint
+   erst, wenn die Provider-Liste geladen ist.
+3. Schlägt das Anlegen fehl: Fehler wie bisher, nichts aktiv gesetzt.
+4. Wird der Provider angelegt, schlägt aber das Aktiv-Setzen fehl: Der
+   Provider bleibt gespeichert und erscheint inaktiv in der neu geladenen
+   Liste, das Formular wird wie nach jedem erfolgreichen Anlegen geleert,
+   und der Fehler wird übersetzt angezeigt (wie jeder andere Fehler in
+   diesem Dialog). Der Provider wird nicht wieder gelöscht; der Nutzer kann
+   ihn über „Aktiv setzen" aktivieren.
+Das Anlegen selbst bleibt unverändert: Ein neuer Provider entsteht immer
+inaktiv, das Aktiv-Setzen ist ein eigener, nachgelagerter Schritt.
+
 ### 3.C Teil C — Einstieg (BL-0082, BL-0110)
 
 **C1 — Leerer Zustand (BL-0082).** Definition: **„leer" = keine echten
@@ -480,7 +501,9 @@ Ein altes Frontend ignoriert das neue Feld; ein unbekannter Code fällt auf
 - **Filter-Engine, Risiko, Confirm/AutoExec, Redactor:** nicht berührt.
 - **Kein Phone-Home:** E1; Probe-Ziel fest `127.0.0.1:11434`.
 - **Keine stillen Rückfälle:** Ein Vorschlag wird nie ohne Klick übernommen
-  (E2); ein fehlgeschlagenes Anlegen setzt nichts aktiv.
+  (E2); ein fehlgeschlagenes Anlegen setzt nichts aktiv. Ein über das
+  Formular angelegter Provider wird nur aktiv, wenn vorher keiner aktiv war
+  (B6) — ein bereits aktiver Provider wird nie stillschweigend ersetzt.
 
 ---
 
@@ -566,6 +589,12 @@ im Bericht bestätigen.
     erfolgreicher Probe).
 26. `effectiveApiKey`: Ollama + leer → Platzhalter; Ollama + Wert → Wert;
     anderer Typ + leer → leer (kein Platzhalter für Cloud-Provider).
+26a. Formular (B6): ohne aktiven Provider → Hinweis sichtbar, Anlegen und
+    danach Aktiv-Setzen des neuen Providers, Liste zeigt ihn aktiv; mit
+    aktivem Provider → kein Hinweis, kein Aktiv-Setzen, der bisherige bleibt
+    aktiv; Anlegen schlägt fehl → kein Aktiv-Setzen, Fehler sichtbar;
+    Aktiv-Setzen schlägt fehl → übersetzter Fehler, Provider inaktiv in der
+    Liste, nicht gelöscht.
 
 **Teil C**
 27. `ServerList`: nur Localhost → Einstiegs-Block sichtbar, Entwicklertext
@@ -649,6 +678,7 @@ Beide Punkte wurden am 2026-09-22 entschieden, siehe Klarstellungen (§ 9).
    - Option b: so lassen; Einstieg und Banner verweisen auf „Aktiv setzen".
    **Empfehlung: a**, als eigenes kleines Item nach dieser Spec (nicht
    blockierend, nicht Teil dieser Umsetzung).
+   **Erledigt:** Option a, umgesetzt als B6.
 
 ---
 
@@ -663,3 +693,6 @@ Beide Punkte wurden am 2026-09-22 entschieden, siehe Klarstellungen (§ 9).
   Spec:** Ein manuell angelegter erster Provider soll automatisch aktiv werden;
   das läuft als eigenes Item. Diese Spec aktiviert weiterhin nur beim
   Ollama-Vorschlag nach Klick (B4).
+- 2026-10-08 · Offener Punkt 2 (Folge-Item #95) · Umgesetzt als **B6**: Ein
+  über das normale Formular angelegter Provider wird aktiv, wenn beim
+  Speichern noch keiner aktiv ist; das Formular sagt das vorher.
