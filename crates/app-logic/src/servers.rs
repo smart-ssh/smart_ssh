@@ -767,6 +767,33 @@ mod tests {
         assert!(credentials.get(&sudo).is_ok());
     }
 
+    /// Spec 0008 §6a, dokumentierte Grenze: Ein Slot, den erst eine neuere
+    /// Version einführt, kennt diese Version nicht. Er bleibt beim Löschen
+    /// stehen und taucht nicht in `secrets_left_behind` auf — genau das
+    /// sagen Spec und Vorschau-Text. Ändert sich das Verhalten (etwa durch
+    /// ein Löschen per Präfix), muss die Spec mitgezogen werden.
+    #[tokio::test]
+    async fn test_delete_unusable_server_leaves_slots_of_newer_versions_unreported() {
+        let broken = unusable("broken");
+        let store = InMemoryProfileStore::new().with_unusable_server(broken.clone());
+        let newer_slot = crate::server_credentials::credential_ref(broken.id, "token");
+        let mut credentials = InMemoryCredentialStore::new().with_secret(&newer_slot, "s3cret");
+        for r in all_slot_refs(broken.id) {
+            credentials = credentials.with_secret(&r, "s3cret");
+        }
+
+        let result = delete_unusable_server(&store, &credentials, broken.id, true)
+            .await
+            .unwrap();
+
+        assert!(result.executed);
+        assert!(result.secrets_left_behind.is_empty());
+        for r in all_slot_refs(broken.id) {
+            assert!(credentials.get(&r).is_err(), "{} must be gone", r.as_str());
+        }
+        assert!(credentials.get(&newer_slot).is_ok());
+    }
+
     /// Gegen den echten SQLite-Store: Eine Zeile mit unbekannter
     /// Anmeldeart erscheint als nicht nutzbar, alle anderen normal; danach
     /// lässt sie sich samt Secrets löschen.

@@ -169,19 +169,24 @@ Anmeldeart beschädigt ist.
 - **Löschen:** Wählt man ihn in der Verwalten-Ansicht aus, zeigt der
   Hauptbereich den Grund und nur einen Löschen-Button, zweistufig wie beim
   normalen Server (Vorschau, dann „Endgültig löschen"). Gelöscht werden der
-  Server samt Chat-Verlauf, Notizen und Tags sowie **alle** Secrets, die
-  unter seiner ID gespeichert sein können — welche er tatsächlich hat, ist
-  mit unlesbarer Anmeldeart nicht bekannt. Secrets anderer Server werden
-  dabei nie berührt. Lässt sich ein Secret nicht entfernen, läuft das
+  Server samt Chat-Verlauf, Notizen und Tags sowie jedes Secret, das diese
+  Version der App unter seiner ID speichern kann — welche er tatsächlich
+  hat, ist mit unlesbarer Anmeldeart nicht bekannt. Secrets, die nur eine
+  neuere Version für ihn angelegt hat, kennt diese Version nicht: Sie
+  bleiben im Schlüsselbund bzw. in der Datenbank zurück und werden nicht
+  als zurückgeblieben gemeldet; die Vorschau weist darauf hin. Secrets
+  anderer Server werden dabei nie berührt. Lässt sich ein Secret nicht entfernen, läuft das
   Löschen trotzdem durch und nennt jeden zurückgebliebenen Eintrag, wie
   beim normalen Löschen. Andere Server, die ihn als Jump-Host nutzen,
   werden in der Vorschau genannt und verlieren diesen Verweis.
 - **Gespeicherte Daten bleiben unverändert.** Anzeigen, Auflisten und der
   einmalige Umzug der Secrets in die verschlüsselte Datenbank (Spec 0101)
   ändern die gespeicherte Anmeldeart nicht. Mit der neueren Version ist der
-  Server danach wieder normal nutzbar. Der Secret-Umzug übernimmt seine
-  Secrets wie die jedes anderen Servers, statt sie im Schlüsselbund
-  zurückzulassen.
+  Server danach wieder normal nutzbar. Der Secret-Umzug übernimmt jedes
+  seiner Secrets, das diese Version kennt, statt es im Schlüsselbund
+  zurückzulassen. Secrets, die nur eine neuere Version für ihn angelegt
+  hat, übernimmt er nicht; sie bleiben im Schlüsselbund, auch nachdem der
+  Umzug als abgeschlossen gilt.
 - Andere beschädigte Felder eines Servers (ID, Zeitstempel, Port) sind
   davon nicht erfasst und lassen das Laden weiterhin scheitern.
 

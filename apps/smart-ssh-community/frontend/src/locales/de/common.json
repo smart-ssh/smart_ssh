@@ -1056,6 +1056,6 @@
     "listHint": "Nicht nutzbar: Unter „{{manage}}“ lässt er sich löschen.",
     "host": "Host: {{host}}",
     "delete": "Server löschen",
-    "deleteSecrets": "Alle für diesen Server gespeicherten Secrets werden gelöscht."
+    "deleteSecrets": "Alle Secrets, die diese Version für diesen Server speichern kann, werden gelöscht. Secrets, die eine neuere Version der App angelegt hat, können zurückbleiben."
   }
 }

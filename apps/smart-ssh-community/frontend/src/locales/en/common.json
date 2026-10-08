@@ -1056,6 +1056,6 @@
     "listHint": "Not usable: you can delete it under “{{manage}}”.",
     "host": "Host: {{host}}",
     "delete": "Delete server",
-    "deleteSecrets": "Every secret stored for this server is deleted."
+    "deleteSecrets": "Every secret this version knows how to store for this server is deleted. Secrets added by a newer version of the app may remain."
   }
 }
