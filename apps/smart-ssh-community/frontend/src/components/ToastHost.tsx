@@ -31,7 +31,11 @@ export function ToastHost() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 flex w-96 flex-col gap-2" role="status">
+    <div
+      className="fixed bottom-4 left-4 z-50 flex w-96 flex-col gap-2"
+      // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- <output> ist ein Formular-Element, dessen Live-Region-Unterstützung je nach Webview und Screenreader schwankt; role="status" auf einem einfachen Container hält die Ansage verlässlich (Issue #112).
+      role="status"
+    >
       {toasts.map((toast) => (
         <div
           key={toast.id}
