@@ -9,6 +9,7 @@ import { DiagnosticsSettings } from "./DiagnosticsSettings";
 import { FileTypeSettings } from "./FileTypeSettings";
 import { LanguageSettings } from "./LanguageSettings";
 import { MasterPasswordSettings } from "./MasterPasswordSettings";
+import { ModalBackdrop } from "./ModalBackdrop";
 
 interface SettingsScreenProps {
   onClose: () => void;
@@ -96,7 +97,7 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
   const active = categories.find((c) => c.id === activeId) ?? categories[0];
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
+    <ModalBackdrop className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
       <div className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-slate-800 shadow-xl">
         <nav className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-slate-700 bg-slate-900/40">
           <h2 className="font-heading px-4 pt-4 pb-2 text-lg font-semibold tracking-wide text-slate-100">
@@ -151,6 +152,6 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
           </div>
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
   );
 }

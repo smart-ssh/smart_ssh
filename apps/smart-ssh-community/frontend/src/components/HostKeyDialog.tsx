@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { HostKeyInfo, HostKeyUserDecision } from "../types";
 import { useDialogFocusTrap } from "../useDialogFocusTrap";
+import { ModalBackdrop } from "./ModalBackdrop";
 
 interface HostKeyDialogProps {
   event: HostKeyInfo;
@@ -71,7 +72,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   // diesen Dialog für die Test-Verbindung aus seinem eigenen (ausblendbaren)
   // Teilbaum heraus.
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       {/* A6.3: begründete `jsx-a11y`-Ausnahme, zeilengenau statt global —
        * `role` ist hier zweigabhängig (`alertdialog`/`dialog`, A1) und
        * damit kein String-Literal; die statische Analyse von
@@ -191,7 +192,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
           </div>
         )}
       </div>
-    </div>,
+    </ModalBackdrop>,
     document.body,
   );
 }

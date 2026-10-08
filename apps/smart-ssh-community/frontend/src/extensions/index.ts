@@ -23,3 +23,7 @@ export type { Entitlements, Feature, Tier, FeatureLockedPayload } from "./entitl
 
 export { publishFeatureLocked, subscribeFeatureLocked } from "./featureLockedBus";
 export { FeatureLockedDialog } from "./FeatureLockedDialog";
+
+/** Issue #160: beigesteuerte modale Dialoge nutzen denselben Backdrop wie
+ * die eingebauten — dann bleibt die Titelleiste auch bei ihnen ziehbar. */
+export { ModalBackdrop } from "../components/ModalBackdrop";

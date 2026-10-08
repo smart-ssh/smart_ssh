@@ -10,6 +10,7 @@ import type {
   SshConfigPreviewEntryDto,
   SshConfigPreviewTagDto,
 } from "../types";
+import { ModalBackdrop } from "./ModalBackdrop";
 
 interface SshConfigImportDialogProps {
   onClose: () => void;
@@ -187,7 +188,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded border border-slate-600 bg-slate-900 shadow-xl">
         <div className="border-b border-slate-700 p-4">
           <h2 className="font-heading text-lg font-semibold text-slate-100">
@@ -484,7 +485,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
           </button>
         </div>
       </div>
-    </div>,
+    </ModalBackdrop>,
     document.body,
   );
 }

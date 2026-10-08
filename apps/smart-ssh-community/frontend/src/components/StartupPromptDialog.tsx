@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { characterCount } from "../passwordLength";
 import type { StartupPromptAnswer, StartupPromptKind, StartupPromptRequest } from "../types";
+import { ModalBackdrop } from "./ModalBackdrop";
 
 /** Spec 0101, A13: Mindestlänge des Master-Passworts.
  *
@@ -108,7 +109,7 @@ export function StartupPromptDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-xl">
         <h2 className="font-heading mb-4 text-lg font-semibold tracking-wide text-slate-100">
           {request.title}
@@ -192,6 +193,6 @@ export function StartupPromptDialog({
           )}
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
   );
 }
