@@ -334,6 +334,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     setSubmitting(true);
     setError(null);
     try {
+      // Spec 0069, Teil B6: wie bei `handleAdoptOllama` VOR dem Anlegen
+      // festhalten, ob schon ein Provider aktiv ist — nur dann bleibt der
+      // neue inaktiv.
+      const wasAnyProviderActive = providers.some((p) => p.isActive);
       // Spec 0069, Teil B5: Ollama mit leerem Key -> Platzhalter statt des
       // (dann leeren) `form.apiKey` — jeder andere Providertyp unverändert.
       const newId = await addAiProvider({ ...form, apiKey: effectiveApiKey(form) });
@@ -342,6 +346,18 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       if (form.attestationUrl) {
         void handleFetchAttestation(newId);
       }
+      // Spec 0069, Teil B6: Schlägt das Aktiv-Setzen fehl, ist der Provider
+      // trotzdem gespeichert — Formular zurücksetzen und Liste neu laden wie
+      // bei Erfolg (kein Löschen, kein doppeltes Anlegen beim erneuten
+      // Absenden), den Fehler aber sichtbar machen.
+      let activationError: unknown = null;
+      if (!wasAnyProviderActive) {
+        try {
+          await setActiveAiProvider(newId);
+        } catch (err) {
+          activationError = err;
+        }
+      }
       setForm(emptyForm());
       setModels([]);
       setModelsFailed(false);
@@ -349,6 +365,15 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       setCredentialTestResult(null);
       reload();
       onProvidersChanged();
+      if (activationError !== null) {
+        setError(
+          translateErrorCode(
+            t,
+            commandErrorCode(activationError),
+            commandErrorMessage(activationError),
+          ),
+        );
+      }
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
     } finally {
@@ -1058,6 +1083,12 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
           </div>
         </section>
 
+        {/* Spec 0069, Teil B6: Hinweis vor dem Speichern, nur solange kein
+            Provider aktiv ist (erst nach dem Laden der Liste, sonst
+            blitzte er bei schon aktivem Provider kurz auf). */}
+        {providersLoaded && !providers.some((p) => p.isActive) && (
+          <p className="text-xs text-slate-500">{t("aiProvider.addHintWillActivate")}</p>
+        )}
         <button
           type="submit"
           disabled={submitting || (form.maxTokensOverride !== null && form.maxTokensOverride <= 0)}

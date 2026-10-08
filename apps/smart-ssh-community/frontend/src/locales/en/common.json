@@ -448,6 +448,7 @@
     "ollamaProbeFoundHeading": "Ollama is running on this machine.",
     "ollamaProbeFoundHintWillActivate": "Will be used as the active provider.",
     "ollamaProbeFoundHintInactive": "Will be added as another provider (another one stays active for now).",
+    "addHintWillActivate": "Will be used as the active provider, since none is active yet.",
     "ollamaProbeAdopt": "Use Ollama",
     "ollamaProbeDismiss": "No thanks",
     "ollamaProbeEmptyHeading": "Ollama is running, but no model is loaded yet.",
