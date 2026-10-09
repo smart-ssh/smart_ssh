@@ -10,6 +10,7 @@ mod discovery;
 mod error;
 mod fallback;
 mod openai_compatible;
+mod openai_responses;
 mod rate_limit_budget;
 mod request_logging;
 mod retry;
@@ -20,6 +21,7 @@ mod test_support;
 pub use anthropic::AnthropicProvider;
 pub use discovery::{discover_models, fetch_attestation_info};
 pub use openai_compatible::OpenAiCompatibleProvider;
+pub use openai_responses::OpenAiResponsesProvider;
 pub use rate_limit_budget::{
     provider_identity_key, ProviderBudgetGuard, RateLimitHeaderSnapshot, RateLimitRegistry,
     RawCounter,
