@@ -42,7 +42,7 @@ npm run lint      # Tauri command check (scripts/check-tauri-commands.mjs), then
 npx vitest run
 ```
 
-Browser tests (issue #166, ADR 0119) run the real frontend in Chromium and
+Browser tests (issue #166, ADR 0120) run the real frontend in Chromium and
 WebKit, at 1280×800 and 800×560, against a fake backend that replaces the
 Tauri IPC layer (`e2e/harness/`). Unknown commands fail the test, so a new
 screen or command needs a handler in `e2e/harness/fakeBackend.ts` or a
