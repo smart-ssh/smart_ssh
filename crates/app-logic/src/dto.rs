@@ -1166,8 +1166,14 @@ impl From<ChatSessionSummary> for ChatSessionSummaryDto {
 /// (deren `CommandOutput.stdout`/`stderr` als `Vec<u8>` fürs Frontend
 /// unhandlich wären) — analog zu `ActionResultPayload::Command`, dessen
 /// Form hier für den `command_result`-Fall bewusst wiederverwendet wird.
+/// `rename_all_fields` ist nötig, damit z. B. `exit_code` als `exitCode`
+/// ankommt (Issue #167, s. Regressionstests unten).
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
 pub enum ChatHistoryEntryDto {
     Text {
         role: ChatHistoryRoleDto,
@@ -1534,6 +1540,145 @@ mod tests {
             json.get("raw_key").is_none(),
             "raw_key darf nicht mehr im snake_case vorkommen"
         );
+    }
+
+    fn command_result_entry(exit_code: Option<i32>) -> ChatHistoryEntryDto {
+        ChatHistoryEntryDto::CommandResult {
+            role: ChatHistoryRoleDto::ActionResult,
+            command: "uname -a".to_string(),
+            stdout: "Linux\n".to_string(),
+            stderr: String::new(),
+            exit_code,
+            cancelled: false,
+            truncated: false,
+        }
+    }
+
+    /// Issue #167: ohne `rename_all_fields` kam `exit_code` beim Frontend
+    /// an, das `exitCode` liest — ein fortgesetzter Chat zeigte deshalb
+    /// immer "exit code: —".
+    #[test]
+    fn test_chat_history_command_result_uses_camel_case_exit_code() {
+        for (exit_code, expected) in [
+            (Some(0), serde_json::json!(0)),
+            (Some(1), serde_json::json!(1)),
+            (None, serde_json::Value::Null),
+        ] {
+            let json = serde_json::to_value(command_result_entry(exit_code)).unwrap();
+            let object = json.as_object().unwrap();
+
+            assert!(
+                object.contains_key("exitCode"),
+                "exitCode fehlt für {exit_code:?}: {json}"
+            );
+            assert_eq!(json["exitCode"], expected, "für {exit_code:?}");
+            assert!(
+                !object.contains_key("exit_code"),
+                "exit_code darf nicht im snake_case vorkommen: {json}"
+            );
+        }
+    }
+
+    /// Issue #167: die volle JSON-Form aller Varianten, inklusive der
+    /// unveränderten Tag-Werte — `rename_all_fields` darf nur die Feldnamen
+    /// betreffen, nicht die Tags, auf die das Frontend per `type` matcht.
+    #[test]
+    fn test_chat_history_entry_json_shape_and_tags() {
+        let role = || ChatHistoryRoleDto::Assistant;
+        let text = ChatHistoryEntryDto::Text {
+            role: role(),
+            text: "hi".to_string(),
+        };
+        let rejected = ChatHistoryEntryDto::ActionRejected {
+            role: role(),
+            command: "rm -rf /".to_string(),
+            reason: "blocked".to_string(),
+        };
+        let web = ChatHistoryEntryDto::WebActivity {
+            role: role(),
+            activity: WebActivityDto {
+                kind: WebActivityKindDto::Fetch,
+                input: "https://example.invalid".to_string(),
+                results: vec![WebSourceDto {
+                    title: "Example".to_string(),
+                    url: "https://example.invalid".to_string(),
+                }],
+                cited: vec![],
+                content_truncated: true,
+                error_code: Some("WEB_FETCH_FAILED".to_string()),
+            },
+        };
+
+        assert_eq!(
+            serde_json::to_value(&text).unwrap(),
+            serde_json::json!({ "type": "text", "role": "assistant", "text": "hi" })
+        );
+        assert_eq!(
+            serde_json::to_value(command_result_entry(Some(2))).unwrap(),
+            serde_json::json!({
+                "type": "commandResult",
+                "role": "action_result",
+                "command": "uname -a",
+                "stdout": "Linux\n",
+                "stderr": "",
+                "exitCode": 2,
+                "cancelled": false,
+                "truncated": false,
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(&rejected).unwrap(),
+            serde_json::json!({
+                "type": "actionRejected",
+                "role": "assistant",
+                "command": "rm -rf /",
+                "reason": "blocked",
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(&web).unwrap(),
+            serde_json::json!({
+                "type": "webActivity",
+                "role": "assistant",
+                "activity": {
+                    "kind": "fetch",
+                    "input": "https://example.invalid",
+                    "results": [{ "title": "Example", "url": "https://example.invalid" }],
+                    "cited": [],
+                    "contentTruncated": true,
+                    "errorCode": "WEB_FETCH_FAILED",
+                },
+            })
+        );
+    }
+
+    /// Issue #167, Weg wie beim Fortsetzen einer Sitzung: gespeicherte
+    /// `ChatMessage` → DTO → JSON trägt den echten Exit-Code (0 und ≠ 0).
+    #[test]
+    fn test_resumed_command_result_message_keeps_exit_code_in_json() {
+        use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
+        use ssh_manager_core::ssh::CommandOutput;
+
+        for code in [0, 127] {
+            let message = ChatMessage {
+                role: Role::ActionResult,
+                content: MessageContent::CommandResult {
+                    command: "false".to_string(),
+                    output: CommandOutput {
+                        stdout: Vec::new(),
+                        stderr: Vec::new(),
+                        exit_code: Some(code),
+                        truncated: false,
+                    },
+                    cancelled: false,
+                },
+            };
+
+            let json = serde_json::to_value(ChatHistoryEntryDto::from(message)).unwrap();
+
+            assert_eq!(json["type"], "commandResult");
+            assert_eq!(json["exitCode"], serde_json::json!(code));
+        }
     }
 
     #[test]
