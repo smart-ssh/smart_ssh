@@ -267,33 +267,39 @@ asked; run the full gate above first. Stage exact paths, never
 `git add -A` (see "Git staging" above).
 
 
-## Verbindlicher Review-Workflow nach jedem Spec-Implementierungsschritt
+## Mandatory review after every implementation step
 
-Nach dem letzten Commit eines Implementierungsschritts (oder eines
-benannten Teils davon, z. B. "Teil 1"), **bevor** du dem Nutzer den
-Abschluss meldest:
+After the last commit of an implementation step (or of a named part of
+it, e.g. "Part 1"), **before** you report completion to the user:
 
-1. Rufe explizit den `spec-reviewer`-Subagenten auf (Task-Tool, Agent
-   `spec-reviewer`) — verlass dich nicht auf automatisches Delegieren,
-   ruf ihn aktiv auf. Gib ihm mit: den Pfad zur betroffenen Spec
-   (`docs/specs/00XX-*.md`), die Commit-Range seit Beginn dieses Schritts,
-   und die Priorität ("NORMAL" oder "ERHÖHT" — ERHÖHT, wenn der Schritt
-   Filter-Engine, Risiko-Klassifizierer, Redactor oder Credential-Handling
-   berührt).
-2. Lies den zurückgelieferten Bericht vollständig.
-3. Für jeden gefundenen Punkt: entscheide, ob du ihn direkt behebst.
-   - Behebst du ihn: fixe, lass Tests/Clippy erneut grün laufen, committe
-     den Fix separat mit Bezug auf den Review-Fund.
-   - Behebst du ihn **nicht** (z. B. weil du ihn für einen Fehlalarm
-     hältst, für außerhalb des Scopes dieses Schritts, oder für eine
-     bewusste Design-Entscheidung): **liste das dem Nutzer explizit auf,
-     mit Begründung, warum du es nicht angefasst hast.** Nichts aus dem
-     Bericht stillschweigend fallen lassen.
-4. Abschlussmeldung an den Nutzer enthält immer beide Teile: was durch den
-   Review gefunden und behoben wurde, und was gefunden, aber bewusst nicht
-   behoben wurde (mit Begründung).
+1. Invoke the `spec-reviewer` subagent explicitly (Task tool, agent
+   `spec-reviewer`) — don't rely on automatic delegation, call it
+   actively. Pass it:
+   - **What to review against**, depending on the step's spec impact
+     (see "Spec workflow" above):
+     - `new` / `update NNNN`: the path(s) of the new or changed spec(s)
+       (`docs/specs/NNNN-*.md`).
+     - `none`: no spec path. Pass the issue number or reference, and
+       state the spec impact `none` explicitly, so the reviewer checks
+       the change against the issue — and, for a fix, against the spec
+       whose behaviour is being restored, if there is one (name it if
+       you know it).
+   - The commit range since the start of this step.
+   - The priority, `NORMAL` or `ELEVATED` — `ELEVATED` when the step
+     touches the filter engine, risk classifier, redactor or credential
+     handling.
+2. Read the returned report in full.
+3. For every finding, decide whether you fix it directly.
+   - If you fix it: fix it, get tests/clippy green again, and commit the
+     fix separately, referencing the review finding.
+   - If you do **not** fix it (e.g. because you consider it a false
+     alarm, out of scope for this step, or a deliberate design decision):
+     **list it explicitly for the user, with the reason why you left it
+     untouched.** Never drop anything from the report silently.
+4. The completion report to the user always contains both parts: what
+   the review found and was fixed, and what it found but was deliberately
+   not fixed (with the reason).
 
-Dieser Workflow ist nicht optional und nicht nur bei offensichtlich
-riskanten Änderungen anzuwenden — er gilt nach jedem Implementierungsschritt
-mit eigenem Commit.
-
+This workflow is not optional and not reserved for obviously risky
+changes — it applies after every implementation step with its own commit,
+whatever its spec impact.
