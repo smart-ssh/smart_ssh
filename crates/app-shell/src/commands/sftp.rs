@@ -468,8 +468,14 @@ pub async fn sftp_upload(
     remote_path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<()> {
-    let local_path =
-        authorize_local_path(&state.sessions, grants.inner(), session_id, &local_path)?;
+    let edit_root = crate::edit_copies::instance_root();
+    let local_path = authorize_local_path(
+        &state.sessions,
+        grants.inner(),
+        edit_root.as_deref(),
+        session_id,
+        &local_path,
+    )?;
     run_browser_command(
         &state,
         elevated.inner(),
@@ -494,16 +500,20 @@ pub async fn sftp_upload(
 /// [`GrantedLocalPath`]. The session must still exist (grants die with it,
 /// and a leftover edit-session directory of a closed session must not count
 /// either), then the path must lie inside a grant of exactly this session.
+///
+/// `edit_root`: the edit-copy root, see [`edit_session_dir_in`]. Every
+/// command passes [`crate::edit_copies::instance_root`].
 pub(super) fn authorize_local_path(
     sessions: &SessionManager,
     grants: &LocalPathGrants,
+    edit_root: Option<&std::path::Path>,
     session_id: SessionId,
     local_path: &str,
 ) -> CommandResult<GrantedLocalPath> {
     if sessions.get(session_id).is_none() {
         return Err(CommandError::from(LOCAL_PATH_NOT_GRANTED));
     }
-    let edit_dir = edit_session_dir(session_id).ok();
+    let edit_dir = edit_session_dir_in(edit_root, session_id).ok();
     grants.check(
         session_id,
         std::path::Path::new(local_path),
@@ -1163,18 +1173,26 @@ pub async fn read_local_text_preview(
     session_id: SessionId,
     local_path: String,
 ) -> CommandResult<app_logic::dto::LocalFilePreviewDto> {
-    read_local_text_preview_impl(&state.sessions, grants.inner(), session_id, &local_path).await
+    read_local_text_preview_impl(
+        &state.sessions,
+        grants.inner(),
+        crate::edit_copies::instance_root().as_deref(),
+        session_id,
+        &local_path,
+    )
+    .await
 }
 
 pub(super) async fn read_local_text_preview_impl(
     sessions: &SessionManager,
     grants: &LocalPathGrants,
+    edit_root: Option<&std::path::Path>,
     session_id: SessionId,
     local_path: &str,
 ) -> CommandResult<app_logic::dto::LocalFilePreviewDto> {
     use app_logic::dto::LocalFilePreviewDto;
 
-    let local_path = authorize_local_path(sessions, grants, session_id, local_path)?;
+    let local_path = authorize_local_path(sessions, grants, edit_root, session_id, local_path)?;
     let bytes = tokio::task::spawn_blocking(move || std::fs::read(local_path.as_path()))
         .await
         .map_err(|e| format!("Hintergrund-Task für Datei-Vorschau fehlgeschlagen: {e}"))??;
@@ -1213,7 +1231,28 @@ pub(super) async fn read_local_text_preview_impl(
 /// Datenverzeichnis, s. [`crate::edit_copies`]), den der Start von
 /// Überbleibseln eines abgestürzten Prozesses befreit.
 pub(super) fn edit_session_dir(session_id: SessionId) -> CommandResult<std::path::PathBuf> {
-    let root = crate::edit_copies::instance_root()
+    edit_session_dir_in(crate::edit_copies::instance_root().as_deref(), session_id)
+}
+
+/// [`edit_session_dir`] below an explicitly given edit-copy root (`None` =
+/// the OS reports no cache directory, which stays an error here).
+///
+/// Issue #134: the root is a **parameter** of every `*_impl` function that
+/// derives an edit-session directory (`authorize_local_path`,
+/// `open_for_editing_impl`, `close_edit_session_impl`, …), and each Tauri
+/// command passes [`crate::edit_copies::instance_root`] — the same value
+/// the old code read inside. Tests pass a `tempfile::tempdir()` of their
+/// own instead, so they never touch the real user cache, and the guard
+/// removes it even when a test panics. Chosen over a settable test
+/// override: a parameter has no process-global (or thread-local) state one
+/// test could change under another running in parallel, and nothing
+/// test-specific is compiled into the production build — the commands
+/// simply have no other value to pass.
+pub(super) fn edit_session_dir_in(
+    edit_root: Option<&std::path::Path>,
+    session_id: SessionId,
+) -> CommandResult<std::path::PathBuf> {
+    let root = edit_root
         .ok_or("Kein Cache-Verzeichnis gefunden")
         .map_err(CommandError::from)?;
     Ok(root.join(session_id.to_string()))
@@ -1252,6 +1291,7 @@ pub async fn sftp_open_for_editing(
     remote_path: String,
     elevated_user: Option<String>,
 ) -> CommandResult<EditSessionDto> {
+    let edit_root = crate::edit_copies::instance_root();
     run_browser_command(
         &state,
         elevated.inner(),
@@ -1261,6 +1301,7 @@ pub async fn sftp_open_for_editing(
             open_for_editing_impl(
                 &session,
                 &channel,
+                edit_root.as_deref(),
                 session_id,
                 &remote_path,
                 MAX_EDIT_OPEN_BYTES,
@@ -1278,9 +1319,12 @@ pub async fn sftp_open_for_editing(
 /// der einzige **produktive** Aufrufer; die übrigen Aufrufstellen liegen in
 /// `revocation_tests.rs` (ebenfalls mit der echten Konstante) und
 /// `size_limit_tests.rs` (mit kleinen Werten) — s. ADR 0080.
+///
+/// `edit_root`: s. [`edit_session_dir_in`] (Issue #134).
 async fn open_for_editing_impl(
     session: &Session,
     channel: &BrowserChannel,
+    edit_root: Option<&std::path::Path>,
     session_id: SessionId,
     remote_path: &str,
     max_bytes: u64,
@@ -1317,7 +1361,7 @@ async fn open_for_editing_impl(
         return Err(CommandError::from(TOO_LARGE_FOR_EDITING));
     }
 
-    let dir = edit_session_dir(session_id)?;
+    let dir = edit_session_dir_in(edit_root, session_id)?;
     let local_path = dir.join(&file_name);
     let local_path_for_write = local_path.clone();
     // Spec-Reviewer-Härtungshinweis (Spec 0054) / Spec 0067, A5: `0700`/
@@ -1357,16 +1401,25 @@ pub async fn local_file_mtime(
 ) -> CommandResult<Option<String>> {
     // Always `Ok` — `CommandResult` only because Tauri requires it for an
     // async command with borrowed `State` arguments.
-    Ok(local_file_mtime_impl(&state.sessions, grants.inner(), session_id, &local_path).await)
+    Ok(local_file_mtime_impl(
+        &state.sessions,
+        grants.inner(),
+        crate::edit_copies::instance_root().as_deref(),
+        session_id,
+        &local_path,
+    )
+    .await)
 }
 
 pub(super) async fn local_file_mtime_impl(
     sessions: &SessionManager,
     grants: &LocalPathGrants,
+    edit_root: Option<&std::path::Path>,
     session_id: SessionId,
     local_path: &str,
 ) -> Option<String> {
-    let local_path = authorize_local_path(sessions, grants, session_id, local_path).ok()?;
+    let local_path =
+        authorize_local_path(sessions, grants, edit_root, session_id, local_path).ok()?;
     tokio::task::spawn_blocking(move || {
         std::fs::metadata(local_path.as_path())
             .and_then(|m| m.modified())
@@ -1384,6 +1437,20 @@ pub(super) async fn local_file_mtime_impl(
 /// oder dem externen Programm gelöschte Datei ist kein Fehlerfall.
 #[tauri::command]
 pub async fn close_edit_session(session_id: SessionId, local_path: String) -> CommandResult<()> {
+    close_edit_session_impl(
+        crate::edit_copies::instance_root().as_deref(),
+        session_id,
+        &local_path,
+    )
+    .await
+}
+
+/// `edit_root`: s. [`edit_session_dir_in`] (Issue #134).
+async fn close_edit_session_impl(
+    edit_root: Option<&std::path::Path>,
+    session_id: SessionId,
+    local_path: &str,
+) -> CommandResult<()> {
     // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): ohne
     // `session_id`-Parameter hätte dieser Befehl JEDEN vom Frontend
     // übergebenen lokalen Pfad gelöscht — bei einem sauberen Frontend
@@ -1392,13 +1459,13 @@ pub async fn close_edit_session(session_id: SessionId, local_path: String) -> Co
     // Einschränkung auf den eigenen Editier-Temp-Ordner dieser Session
     // nichts an Funktionalität — `close_edit_session` wird ohnehin nie mit
     // einem anderen Pfad aufgerufen.
-    let dir = edit_session_dir(session_id)?;
-    if !std::path::Path::new(&local_path).starts_with(&dir) {
+    let dir = edit_session_dir_in(edit_root, session_id)?;
+    if !std::path::Path::new(local_path).starts_with(&dir) {
         return Err(CommandError::from(
             "Pfad liegt außerhalb des Editier-Temp-Ordners dieser Session",
         ));
     }
-    match tokio::fs::remove_file(&local_path).await {
+    match tokio::fs::remove_file(local_path).await {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(CommandError::from(e.to_string())),
@@ -1592,28 +1659,42 @@ mod sftp_mutation_tests {
 mod edit_session_tests {
     use super::*;
 
+    /// Issue #134: every test owns its edit-copy root — a temporary
+    /// directory the guard removes even when the test panics, never the
+    /// real user cache.
+    fn temp_edit_root() -> tempfile::TempDir {
+        tempfile::tempdir().unwrap()
+    }
+
     #[test]
     fn test_edit_session_dir_is_distinct_per_session() {
-        let a = edit_session_dir(SessionId::new_v4()).unwrap();
-        let b = edit_session_dir(SessionId::new_v4()).unwrap();
+        let root = temp_edit_root();
+        let a = edit_session_dir_in(Some(root.path()), SessionId::new_v4()).unwrap();
+        let b = edit_session_dir_in(Some(root.path()), SessionId::new_v4()).unwrap();
         assert_ne!(a, b);
         assert!(a.ends_with(a.file_name().unwrap()));
+        assert!(a.starts_with(root.path()) && b.starts_with(root.path()));
+    }
+
+    #[test]
+    fn test_edit_session_dir_without_a_cache_dir_is_an_error() {
+        assert!(edit_session_dir_in(None, SessionId::new_v4()).is_err());
     }
 
     #[tokio::test]
     async fn test_close_edit_session_removes_the_file() {
+        let root = temp_edit_root();
         let session_id = SessionId::new_v4();
-        let dir = edit_session_dir(session_id).unwrap();
+        let dir = edit_session_dir_in(Some(root.path()), session_id).unwrap();
         tokio::fs::create_dir_all(&dir).await.unwrap();
         let path = dir.join("edited.txt");
         tokio::fs::write(&path, b"x").await.unwrap();
 
-        close_edit_session(session_id, path.to_str().unwrap().to_string())
+        close_edit_session_impl(Some(root.path()), session_id, path.to_str().unwrap())
             .await
             .expect("close_edit_session() sollte gelingen");
 
         assert!(!path.exists());
-        let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 
     /// Spec 0054, Teil 4, Punkt 6: "Watcher stoppt ... Temp-Datei
@@ -1621,12 +1702,13 @@ mod edit_session_tests {
     /// selbst gelöschtes Temp-File ist kein Fehlerfall.
     #[tokio::test]
     async fn test_close_edit_session_on_an_already_missing_file_is_not_an_error() {
+        let root = temp_edit_root();
         let session_id = SessionId::new_v4();
-        let path = edit_session_dir(session_id)
+        let path = edit_session_dir_in(Some(root.path()), session_id)
             .unwrap()
             .join("never-existed.txt");
 
-        close_edit_session(session_id, path.to_str().unwrap().to_string())
+        close_edit_session_impl(Some(root.path()), session_id, path.to_str().unwrap())
             .await
             .expect(
                 "ein bereits fehlendes Temp-File darf close_edit_session nicht scheitern lassen",
@@ -1639,17 +1721,40 @@ mod edit_session_tests {
     /// an `close_edit_session`).
     #[tokio::test]
     async fn test_close_edit_session_rejects_a_path_outside_its_own_session_dir() {
+        let root = temp_edit_root();
         let session_id = SessionId::new_v4();
         let outside = tempfile::tempdir().unwrap();
         let path = outside.path().join("not-mine.txt");
         std::fs::write(&path, b"x").unwrap();
 
-        let result = close_edit_session(session_id, path.to_str().unwrap().to_string()).await;
+        let result =
+            close_edit_session_impl(Some(root.path()), session_id, path.to_str().unwrap()).await;
 
         assert!(result.is_err());
         assert!(
             path.exists(),
             "eine fremde Datei darf nicht gelöscht werden"
         );
+    }
+
+    /// Issue #134: the scope check also holds inside the same edit-copy
+    /// root — the copy of another session is not "its own session dir".
+    #[tokio::test]
+    async fn test_close_edit_session_rejects_the_copy_of_another_session() {
+        let root = temp_edit_root();
+        let other_dir = edit_session_dir_in(Some(root.path()), SessionId::new_v4()).unwrap();
+        std::fs::create_dir_all(&other_dir).unwrap();
+        let path = other_dir.join("nginx.conf");
+        std::fs::write(&path, b"x").unwrap();
+
+        let result = close_edit_session_impl(
+            Some(root.path()),
+            SessionId::new_v4(),
+            path.to_str().unwrap(),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(path.exists(), "die Kopie einer anderen Session bleibt");
     }
 }
