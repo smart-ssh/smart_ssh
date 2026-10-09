@@ -149,6 +149,14 @@ darf **nicht** als Ganzes gegen `ls *` gematcht werden. Vorgehen:
    Wrapper behandelt: Der Inhalt des `-c`-Arguments wird als eigenes
    Kommando (bzw. bei Nicht-Parsebarkeit als `Confirm`-pflichtig) geprüft,
    nicht als undurchsichtiges Argument durchgewunken.
+   Dasselbe gilt für Code, den eine Shell aus einem Here-String liest
+   (`bash <<< "rm -rf /"`, auch hinter `sudo`/Wrappern): Er wird als eigenes
+   Kommando geprüft, das Gesamtergebnis ist mindestens `Confirm` und wird
+   `Deny`, wenn der Inhalt `Deny` ergibt. Lässt sich der Inhalt nicht
+   eindeutig bestimmen (Here-Docs, mehrere Here-Strings, weitere
+   Eingabe-Umleitungen, ein Here-String-Wort mit `$`-/Backtick-Expansion,
+   ein Ziel, das keine von stdin lesende Shell ist), bleibt es bei
+   `Confirm`.
 
 7. **Längenbegrenzung als Absturzschutz**: Vor dem Parsen wird die
    Kommandolänge geprüft (Cap z. B. 4096 Bytes). Gemessen wird in Bytes
