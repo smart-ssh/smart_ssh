@@ -74,6 +74,21 @@ Fälle konkret zu lesen sind.
    unbeschriftete Kommandofeld im Bestätigungsdialog wurde stattdessen
    behoben.
 
+## Abgrenzung
+
+- **Fall 4 prüft keinen Schlüsseltyp.** Das Issue nennt für den
+  Host-Key-Dialog „Host, Schlüsseltyp und Fingerprint“. Auf `main` zeigt
+  der Dialog `host:port` und den SHA-256-Fingerprint, aber keinen
+  Schlüsseltyp, und keine Spec verlangt ihn (Spec 0005 und Spec 0007
+  nennen nur den Fingerprint; das Ereignis
+  `host-key-verification-needed` trägt kein Feld dafür). Fall 4 prüft
+  deshalb Host, Port und Fingerprint (unbekannter und geänderter
+  Schlüssel), dass ohne Klick nichts akzeptiert wird, dass „Ablehnen“ die
+  Verbindung nicht herstellt und dass beide Knöpfe in beiden Fenstergrößen
+  bedienbar bleiben. Den Schlüsseltyp anzuzeigen wäre eine eigene
+  Produktänderung (Ereignis, Dialog, Spec 0007) und gehört in ein eigenes
+  Issue; Fall 4 kann dann erweitert werden.
+
 ## Konsequenzen
 
 - Neue Bildschirme oder Kommandos brauchen einen Handler im gefälschten
