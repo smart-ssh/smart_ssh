@@ -35,7 +35,10 @@ ist nicht eingecheckt.
   (a) aller Rust-Abhängigkeiten des Workspace, (b) aller
   Produktionsabhängigkeiten des Frontends, (c) der Entwicklungs-
   abhängigkeiten, deren Code ins gebaute Frontend gelangt (heute
-  `tailwindcss` und `vite`), (d) der Schriften (A6). Je Lizenztext stehen
+  `tailwindcss` und `vite`), (d) der Schriften (A6), (e) des fremden
+  C-Quelltexts, den Rust-Abhängigkeiten gebündelt mitbringen (heute
+  SQLCipher und OpenSSL, Spec 0101); fehlt einer dieser Texte, bricht die
+  Erzeugung ab. Je Lizenztext stehen
   die Pakete (Name, Version), die ihn verwenden. Pakete des eigenen
   Workspace und lokale npm-Pakete (Mitglieder eines npm-Workspace, per
   `file:` verlinkte Verzeichnisse) sind keine Drittpakete: Sie stehen nicht
