@@ -67,6 +67,19 @@ propose_note_update(server_id, new_content)  → AiAction::ProposeNoteUpdate
 Bewusst **nicht** angeboten: Datei löschen/umbenennen/Verzeichnis anlegen —
 dieselbe Begründung wie in Spec 0020, Abschnitt 4.3 für die interne KI.
 
+Inhalte, die vom Server stammen, gehen an den externen Client genauso
+geschützt wie an die eingebaute KI (Spec 0039): Notizen aus
+`get_server_notes`, die Kommandoausgabe aus `propose_command` (stdout und,
+falls vorhanden, stderr) und der Dateiinhalt aus `read_remote_file` sind
+zuerst redigiert und danach als nicht vertrauenswürdiger Inhalt gefenct,
+mit dem Kommando bzw. Pfad als Quelle. Eingeschleuste Tags im Inhalt sind
+escapt und können den Fence nicht schließen. Kurze Statusangaben der App
+(Exit-Code, Hinweis auf einen Abbruch durch den Nutzer) stehen außerhalb
+des Fence; die Rückmeldungen von `write_remote_file` und
+`propose_note_update` enthalten keine Server-Inhalte und sind nicht
+gefenct. Die Tool-Beschreibungen weisen den Client darauf hin, dass
+gefencter Inhalt Daten ist, keine Anweisung.
+
 ## 5. Strengere Behandlung als interne KI-Vorschläge
 
 Jede der oben genannten aktionsauslösenden Tools (`propose_command`,
