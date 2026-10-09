@@ -619,8 +619,10 @@ export function FileBrowserPanel({
    * keinen einzelnen Dateinamen zum Speichern). */
   const handleDownloadChoose = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
-    const download = entry.isDir ? sftpDownloadDir : sftpDownload;
-    download(sessionId, entry.path, channelUser)
+    const download = entry.isDir
+      ? sftpDownloadDir(sessionId, entry.path, t("fileBrowser.downloadDirDialogTitle"), channelUser)
+      : sftpDownload(sessionId, entry.path, channelUser);
+    download
       .then((result) => {
         // `null` = Dialog abgebrochen, keine Meldung.
         if (result) notifyDownloaded(entry.name, result);
