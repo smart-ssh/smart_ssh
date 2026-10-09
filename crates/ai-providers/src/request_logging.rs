@@ -75,6 +75,11 @@ fn redact_for_debug(text: &str, secrets: &[&str]) -> String {
 /// ausschließlich Art und Länge je Eintrag — der Text selbst
 /// (Chat-Nachrichten, Notizen, Kommandotexte) steht nur noch auf `debug`,
 /// s. [`history_contents`].
+///
+/// Issue #143: `command_len` zählt Bytes wie `stdout_len`/`stderr_len` und
+/// das gleichnamige Feld der Filter-Entscheidungszeile. `[text] len=` und
+/// die Längen von `[web_activity]` zählen weiterhin Zeichen (ADR 0086,
+/// Konsequenz 3).
 fn history_shapes(context: &SessionContext) -> Vec<String> {
     context
         .history
@@ -90,7 +95,7 @@ fn history_shapes(context: &SessionContext) -> Vec<String> {
             } => format!(
                 "[command_result] command_len={} exit={:?} stdout_len={} stderr_len={} \
                  cancelled={cancelled}",
-                command.chars().count(),
+                command.len(),
                 output.exit_code,
                 output.stdout.len(),
                 output.stderr.len()
@@ -103,7 +108,7 @@ fn history_shapes(context: &SessionContext) -> Vec<String> {
             // unabhängig davon, woraus dieser Grund künftig gebaut wird.
             MessageContent::ActionRejected { command, reason } => format!(
                 "[action_rejected] command_len={} reason={}",
-                command.chars().count(),
+                command.len(),
                 match reason {
                     RejectionReason::User => "user",
                     RejectionReason::Blocked(_) => "blocked",
@@ -672,6 +677,64 @@ mod error_logging_tests {
     /// hinter `-p ` ist für den MySQL-Client der Datenbankname.
     fn secret_command() -> String {
         format!("mysql -u root -p {SECRET_0094} -e 'select 1'")
+    }
+
+    /// Issue #143: `command_len` in `history_shapes` zählt Bytes, wie das
+    /// gleichnamige Feld der Filter-Entscheidungszeile. `€` ist in UTF-8
+    /// drei Bytes lang — `echo €€€` hat 8 Zeichen, aber 14 Bytes.
+    /// Gegenprobe: mit `command.chars().count()` stünde hier 8.
+    #[test]
+    fn test_143_history_shapes_report_command_len_in_bytes() {
+        use ssh_manager_core::ai::{ChatMessage, Role};
+        use ssh_manager_core::ssh::CommandOutput;
+
+        let command = "echo €€€";
+        assert_eq!(command.len(), 14);
+        assert_eq!(command.chars().count(), 8);
+
+        let context = SessionContext {
+            system_context: String::new(),
+            history: vec![
+                ChatMessage {
+                    role: Role::ActionResult,
+                    content: MessageContent::CommandResult {
+                        command: command.to_string(),
+                        output: CommandOutput {
+                            stdout: "€\n".as_bytes().to_vec(),
+                            stderr: Vec::new(),
+                            exit_code: Some(0),
+                            truncated: false,
+                        },
+                        cancelled: false,
+                    },
+                },
+                ChatMessage {
+                    role: Role::ActionResult,
+                    content: MessageContent::ActionRejected {
+                        command: command.to_string(),
+                        reason: RejectionReason::User,
+                    },
+                },
+            ],
+            available_actions: Vec::new(),
+            max_tokens_hint: None,
+        };
+
+        let shapes = history_shapes(&context);
+
+        assert_eq!(shapes.len(), 2, "{shapes:?}");
+        assert!(
+            shapes[0].starts_with("[command_result] command_len=14 "),
+            "command_len muss Bytes zählen: {shapes:?}"
+        );
+        assert_eq!(
+            shapes[1], "[action_rejected] command_len=14 reason=user",
+            "command_len muss Bytes zählen: {shapes:?}"
+        );
+        assert!(
+            !shapes.iter().any(|s| s.contains('€') || s.contains("echo")),
+            "kein Kommandotext in den Formen (Spec 0094, A1.2): {shapes:?}"
+        );
     }
 
     /// Spec 0094, T4: Der ausgehende Kontext ist die umfangreichste
