@@ -590,7 +590,7 @@ pub fn keychain_unavailable_text(
 
     let (title, state, next_step) = match (linux, reason, language) {
         // ── Kein Anbieter (Linux) ──────────────────────────────────────
-        // Paketnamen **gemessen** auf Debian 13 (Spec 0071 §9,
+        // Paketnamen **gemessen** auf Debian 13 (Spec 0071 §1,
         // Klarstellung vom 2026-09-22 — die frühere `ANNAHME A-1` ist
         // damit aufgelöst und war teils falsch):
         //

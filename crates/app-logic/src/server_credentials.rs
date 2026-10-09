@@ -253,7 +253,7 @@ fn write_or_reuse_secret(
 }
 
 /// Welche Schlüsselbund-Einträge zu einer [`AuthMethod`] gehören — die
-/// **eine** Stelle, an der diese Zuordnung steht (Spec 0082, §5).
+/// **eine** Stelle, an der diese Zuordnung steht (Spec 0082, §4).
 ///
 /// Vorher gab es sie zweimal: als Paarliste in einem `cleanup_abandoned_
 /// slots` („ist die neue Art dieselbe wie die alte?") und in
@@ -349,7 +349,7 @@ fn remove_obsolete_secret(
 /// alte Wert unter dem Sudo-Slot stehen, statt geleert zu werden — ein
 /// verwaister Eintrag, der ab da als Sudo-Passwort gälte. Das ist der
 /// gewollte Tausch: ein Eintrag zu viel statt ein Credential zu wenig. S.
-/// Spec 0082 §9 (K1) und `docs/adr/0081`.
+/// Spec 0082 §8 (K1) und `docs/adr/0081`.
 pub(crate) fn cleanup_replaced_auth_method_secrets(
     credential_store: &dyn CredentialStore,
     server_id: ServerId,
@@ -633,7 +633,7 @@ pub fn delete_auth_method_secrets(
     credential_store: &dyn CredentialStore,
     auth: &AuthMethod,
 ) -> Vec<CredentialRef> {
-    // Spec 0082, §5: dieselbe Zuordnung, die auch das Aufräumen nach einem
+    // Spec 0082, §4: dieselbe Zuordnung, die auch das Aufräumen nach einem
     // Methodenwechsel benutzt — sie steht nur noch an einer Stelle.
     auth_method_credential_refs(auth)
         .into_iter()
