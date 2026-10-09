@@ -62,8 +62,11 @@ When a `v*` tag is pushed (or triggered manually via **Workflow Dispatch** in Gi
   - **Linux** (`ubuntu-22.04`): `.deb` and `.AppImage` packages
 - Automatically creates a GitHub Draft Release under the **Releases** section with all installers and binaries attached for download.
 
+### Branches
+`main` is the released version. Work happens on `develop` (the default branch, base of every pull request). A version under test lives on `release/X.Y.0`, an urgent fix of the released version on `hotfix/X.Y.Z`; both are merged into `main` and tagged when they ship.
+
 ### CI Workflow ([`.github/workflows/community.yml`](./.github/workflows/community.yml))
-Runs on every pull request and on every push to `main`, from a fresh clone
+Runs on every pull request and on every push to `main`, `develop`, `release/*` and `hotfix/*`, from a fresh clone
 with no secrets (Spec 0090). Every step blocks:
 - On Ubuntu, Windows and macOS:
   - Code formatting (`cargo fmt --all --check`)

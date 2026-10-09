@@ -15,11 +15,15 @@ Diese Spec fasst die früheren Specs 0035, 0089, 0091 (CI-Teil), 0093 und
 
 ## 1. Wann die CI läuft
 
-- Bei jedem Pull Request und bei jedem Push auf `main`. Ein Commit eines
+- Bei jedem Pull Request und bei jedem Push auf einen der langlebigen
+  Branches: `main` (die veröffentlichte Version), `develop` (die nächste
+  Version), `release/*` (eine Version im Test) und `hotfix/*` (eine
+  dringende Korrektur der veröffentlichten Version). Ein Commit eines
   Pull-Request-Branches läuft einmal, nicht doppelt unter denselben
   Prüfnamen.
 - Ein neuer Push auf denselben Pull Request bricht dessen noch laufenden
-  Lauf ab. Läufe auf `main` brechen sich gegenseitig nicht ab.
+  Lauf ab. Push-Läufe auf den langlebigen Branches brechen sich gegenseitig
+  nicht ab.
 - Die CI baut aus einem frischen Klon ohne Secrets. Scheitert ein Schritt,
   weil etwas außerhalb dieses Repositorys fehlt, ist das ein Fehler.
 
