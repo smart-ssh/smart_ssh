@@ -81,7 +81,7 @@ macOS-Runnern der CI (R1).
 
 ## 3. Ziel und Nicht-Ziele
 
-Ziel: A1–A7.
+Ziel: A1–A8.
 
 Nicht-Ziele:
 - Kein Upgrade von GTK3, `russh` oder `rsa`; keine neue Bewertung der
@@ -90,12 +90,14 @@ Nicht-Ziele:
 - Hinweise (`unmaintained`/`unsound`) und yanked-Crates blockieren nicht
   (A2); neue Hinweise bleiben sichtbare Warnungen im Protokoll.
 - Aus BL-0229 Punkt 3 deckt diese Spec nur ab, dass eine überholte
-  Ausnahme auffällt (A3, A4). Die wiederkehrende Nachprüfung von
-  `RUSTSEC-2023-0071` bei einem Update von `russh`/`rsa` und die Prüfung
-  vor jedem Release liegen außerhalb (BL-0126).
+  Ausnahme auffällt (A3, A4). Außerhalb liegt die wiederkehrende
+  manuelle Neubewertung der Ausnahme `RUSTSEC-2023-0071` — bei einem
+  Update von `russh`/`rsa` und vor jedem Release (BL-0126). Das betrifft
+  nur diese inhaltliche Nachprüfung der Ausnahme; dass ein Release erst
+  nach grünem Gate entsteht, regelt A8.
 - Keine Änderung an der Test-Matrix oder den Rust-Schritten des
-  Test-Jobs. Spec 0089 fasst denselben Workflow an; diese Spec setzt
-  auf deren Stand auf.
+  Test-Jobs; A8 verwendet beide unverändert als Gate. Spec 0089 fasst
+  denselben Workflow an; diese Spec setzt auf deren Stand auf.
 
 ## 4. Anforderungen
 
@@ -189,6 +191,17 @@ voraussetzt. Die CI-Seite belegt der Workflow-Diff.
 - **N9 (A3, A7):** Diff von `.cargo/audit.toml` zeigt je verbleibender
   Ausnahme Crate, Version und Ablaufbedingung; Diff von `CLAUDE.md`,
   Workflow und Konfigurationsdateien zeigt die berichtigten Stellen.
+- **N10 (A8):** Diff des Release-Workflows zeigt: Der Job, der die
+  Release-Dateien baut und das Release anlegt, hängt vom Gate ab; das
+  Gate ruft den Workflow `Community` auf demselben Commit auf, statt die
+  Prüfschritte zu wiederholen — die Schritte stehen also nur dort. Der
+  Workflow `Community` behält seine Auslöser für Push auf `main` und Pull
+  Requests; die Prüfnamen dort bleiben unverändert (ein Lauf auf einem
+  Pull Request zeigt dieselben Namen wie vorher). Der Negativfall (ein
+  rotes Gate auf einem Tag lässt weder Release noch Release-Dateien
+  entstehen) folgt aus dieser Abhängigkeit zwischen den Jobs; er ist
+  nicht mit einem echten, absichtlich roten Tag vorgeführt, weil das
+  einen Tag im Repository voraussetzt.
 
 ## 8. Offene Punkte
 
