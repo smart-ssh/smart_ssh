@@ -45,6 +45,7 @@ export function McpServerSettings() {
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"copied" | "failed" | null>(null);
 
   useEffect(() => {
     Promise.all([getMcpServerSettings(), listServers()])
@@ -54,6 +55,18 @@ export function McpServerSettings() {
       })
       .catch((err) => setError(commandErrorMessage(err)));
   }, []);
+
+  /** Kopiert exakt den angezeigten Konfigurationstext (enthält das Token —
+   * nie loggen). */
+  const handleCopyConfig = async () => {
+    if (!settings) return;
+    try {
+      await navigator.clipboard.writeText(exampleConfig(settings));
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  };
 
   const handleToggleEnabled = async (enabled: boolean) => {
     setBusy(true);
@@ -205,9 +218,24 @@ export function McpServerSettings() {
           </div>
 
           <p className="mb-1 text-xs text-slate-500">{t("mcpServer.exampleConfigHint")}</p>
-          <pre className="max-h-40 overflow-auto rounded border border-slate-700 bg-slate-950 p-2 text-xs whitespace-pre-wrap text-slate-300">
+          <pre className="rounded border border-slate-700 bg-slate-950 p-2 text-xs break-all whitespace-pre-wrap text-slate-300">
             {exampleConfig(settings)}
           </pre>
+          <div className="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleCopyConfig()}
+              className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-700"
+            >
+              {t("mcpServer.copyConfig")}
+            </button>
+            <output
+              className={`text-xs ${copyStatus === "failed" ? "text-red-300" : "text-slate-400"}`}
+            >
+              {copyStatus === "copied" && t("mcpServer.copyConfigCopied")}
+              {copyStatus === "failed" && t("mcpServer.copyConfigFailed")}
+            </output>
+          </div>
         </>
       )}
     </div>
