@@ -60,8 +60,8 @@ das, was in der Antwort steht.
    kann sich nicht daran halten; der Parser muss robust sein, nicht der
    Prompt strenger.
 3. **Kein Entfernen der Begründung.** Sie wird weiterhin übernommen.
-4. **Keine neue Abhängigkeit**, kein strukturiertes Ausgabeformat, kein
-   zweiter Aufruf beim Modell.
+4. **Kein zweiter Aufruf beim Modell.** (Das strukturierte Ausgabeformat
+   kam später, §4.4.)
 
 ## 3. Anforderungen
 
@@ -113,8 +113,9 @@ Architektur-Checkliste).
 Bewusst in Kauf genommen: Eine falsche Eskalation ist sichtbar und
 korrigierbar, eine verschluckte nicht. Sollte sich Confirm-Fatigue im
 Betrieb zeigen, ist die Antwort ein strukturiertes Ausgabeformat für die
-Zweitmeinung — nicht ein Zurück zu „erste gewinnt". Das gehört dann in ein
-eigenes Item, nicht in diese Spec.
+Zweitmeinung — nicht ein Zurück zu „erste gewinnt". Dieses Format ist in
+§4.4 beschrieben; die Regel „höchste gewinnt" bleibt dahinter als
+Rückfall bestehen.
 
 ### 4.3 Verworfen
 
@@ -123,9 +124,34 @@ eigenes Item, nicht in diese Spec.
   Aber ein Modell, das sich nicht daran hält, bekäme dann gar kein Urteil
   — aus einer verschluckten Eskalation würde ein `None`. Besser, aber
   nicht gut.
-- **Auf ein strukturiertes Antwortformat umstellen.** Sauberste Lösung,
-  aber ein anderer Umfang: neuer Prompt, neues Parsing, Verhalten bei
-  Modellen ohne verlässliche Formattreue. Eigenes Item.
+- **Auf ein strukturiertes Antwortformat umstellen, ohne Rückfall.**
+  Ein Modell, das das Format nicht einhält, bekäme kein Urteil. Siehe
+  §4.4: Das Format kommt, der Rückfall bleibt.
+
+### 4.4 Strukturiertes Urteilsfeld
+
+Beide Prompts bitten das Modell, in der ersten Zeile nur das Urteil zu
+nennen und danach die Begründung zu schreiben: `VERDICT: none|yellow|red`
+(Zweitmeinung) bzw. `VERDICT: yes|no` (Injektions-Check).
+
+- **Nur das Feld zählt.** Steht ein gültiges Urteilsfeld in der Antwort,
+  bestimmt allein dessen Wert das Urteil. Begründung und zitierter Inhalt
+  (etwa `PermitRootLogin yes` oder das Wort `red`) beeinflussen es nicht.
+  Ein Feld steht am Zeilenanfang (Markdown-Zeichen davor sind erlaubt);
+  ein Zitat mitten in einer Zeile ist kein Feld. `VERDICT:yes`, Groß-/
+  Kleinschreibung und ein kompaktes JSON-Objekt `{"verdict":"yes",…}`
+  werden erkannt. Die Begründung ist der übrige Text ohne die Feldzeile.
+- **Normalisierung.** Der Wert wird per Unicode-NFKC normalisiert und
+  kleingeschrieben, Vollbreiten-Zeichen (`ｙｅｓ`) gelten also. Zeichen
+  anderer Schriften (kyrillisches `а` in `jа`) werden **nicht** auf
+  lateinische Buchstaben abgebildet und sind kein gültiger Wert.
+- **Rückfall.** Fehlt das Feld, ist sein Wert unbekannt oder ungültig,
+  oder nennen mehrere Felder verschiedene Werte, gilt exakt die Regel aus
+  A1–A5 auf dem ganzen Text. Das Ergebnis ist dann nie niedriger als bei
+  dieser Regel. „Kein Urteil" bleibt „keine Prüfung verfügbar" (A3/I3).
+- Die Eskalationsrichtung ändert sich nicht: Die Daten-Risiko-Stufe ist
+  weiter das Maximum aus Regel und KI (Spec 0026, Abschnitt 3); ein
+  strukturiertes `none`/`no` senkt nie ein regelbasiertes Ergebnis.
 
 ## 5. Sicherheits-Invarianten
 
@@ -184,6 +210,16 @@ Anweisungen.**
 - X6 **Mehrsprachig gemischt:** `"no — aber ja"` → `true`; ein
   englisches und ein deutsches Urteilswort widersprechen sich nicht,
   sondern werden wie zwei Urteile behandelt.
+
+### 6.4 Strukturiertes Feld (§4.4)
+
+- S1 Strukturiertes `no`/`none`, dessen Begründung `PermitRootLogin yes`
+  bzw. `red` zitiert → `no`/`none`.
+- S2 `VERDICT:yes`, vollbreite Zeichen und kompaktes JSON werden erkannt.
+- S3 Homoglyphen-Wert → kein gültiges Feld, Rückfall.
+- S4 Ohne Feld oder mit widersprüchlichen Feldern ist das Ergebnis exakt
+  das der Regel aus A1–A5 (Eigenschaftstest).
+- S5 Provider-Fehler und leere Antwort → „keine Prüfung verfügbar".
 
 ## 7. Umsetzungsreihenfolge
 
