@@ -45,7 +45,9 @@ den Server schreiben lassen (z. B. `~/.ssh/id_ed25519`), oder ihren Inhalt
 5. **Ablegen verfällt.** Ein nicht abgeholtes Ablegen gilt höchstens
    `DROP_CLAIM_WINDOW` (10 s) und nur einmal. Ein Ablegen, das kein
    sichtbarer Dateibrowser abholt (z. B. auf den Chat), liegt also nicht
-   für eine spätere, fremde Abholung bereit.
+   für eine spätere, fremde Abholung bereit. Innerhalb dieser 10 s ist das
+   Abholen allerdings an keine Sitzung und kein Ablageziel gebunden, siehe
+   „Restrisiko: Abholen ist nicht an Sitzung oder Ziel gebunden“.
 6. **`local_file_mtime` meldet bei Ablehnung `None`,** wie für eine fehlende
    Datei. Für eine Hintergrundabfrage ist beides „kein verlässlicher
    Zeitstempel“, und so verrät der Befehl dem Webview nicht, welche
@@ -60,6 +62,45 @@ an das Webview gesendet, dann laufen im selben Aufruf die
 und sein `invoke` wird auf demselben Thread angenommen. Das gemerkte
 Ablegen steht also bereit, bevor `claim_dropped_paths` ankommt; ein Warten
 im Befehl ist nicht nötig.
+
+### Restrisiko: Abholen ist nicht an Sitzung oder Ziel gebunden
+
+Das gemerkte Ablegen ist **global**: `record_drop` speichert genau eine
+Pfadliste für die ganze App, ohne Sitzung, Fenster oder Ablageposition.
+`claim_dropped_paths` prüft nur, dass die nennende Sitzung existiert;
+danach gibt `claim_drop` das Ablegen dieser Sitzung frei, wenn es höchstens
+`DROP_CLAIM_WINDOW` (10 s) alt ist. Ob es auf dem Dateibrowser dieser
+Sitzung, auf dem einer anderen oder überhaupt auf einem Dateibrowser
+gelandet ist, prüft das Backend nicht.
+
+- **Jede lebende Sitzung kann ein Ablegen abholen,** innerhalb von
+  `DROP_CLAIM_WINDOW` und genau einmal. Das erste Abholen verbraucht es;
+  jede weitere Sitzung bekommt danach eine leere Liste.
+- **„Nur der sichtbare Dateibrowser holt ab“ ist eine Regel des
+  Frontends,** nicht des Backends. Code im Webview, das keine
+  Vertrauensgrenze ist (siehe „Problem“), könnte ein Ablegen auf den Chat
+  oder eines, das für eine andere Sitzung gedacht war, innerhalb der 10 s
+  für eine beliebige lebende Sitzung abholen.
+
+**Warum das Risiko getragen wird:** Freigegeben werden können nur Pfade,
+die der Nutzer wirklich auf das Fenster gezogen hat — beliebige Pfade
+lassen sich so nicht lesen. Das Fenster ist kurz, und ein Abholen
+verbraucht das Ablegen, sodass derselbe Drop nicht mehreren Sitzungen
+zufallen kann. Der Schaden beschränkt sich darauf, dass eine abgelegte
+Datei auf einem anderen der verbundenen Server landen kann als gemeint.
+
+**Mögliche Verengung, falls nötig:** Das Backend merkt sich beim Ablegen
+die Ablageposition oder die fokussierte Sitzung und prüft beim Abholen,
+dass die nennende Sitzung dazu passt; ein Abholen durch eine andere
+Sitzung wird abgelehnt. Dafür müsste das Backend eine Fensterposition
+einem Dateibrowser zuordnen können, was es heute nicht kann. Das wäre eine
+eigene Designänderung.
+
+Der Test `test_a_drop_is_claimable_by_any_session_but_only_once` in
+`local_path_grants` hält dieses Verhalten fest: Sitzung B holt ein Ablegen
+ab, das für Sitzung A gedacht war, und A bekommt danach eine leere Liste.
+Ändert sich das Verhalten (z. B. durch die Verengung oben), schlägt der
+Test fehl, und dieser Abschnitt ist mit anzupassen.
 
 ## Bewusst nicht Teil dieser Änderung: Ordner-Upload
 
