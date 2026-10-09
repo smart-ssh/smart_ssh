@@ -282,6 +282,171 @@ fn extract_shell_c_style_code(cmd: &str) -> Option<String> {
     tokens.into_iter().nth(2)
 }
 
+/// Issue #53 (ADR 0122): the code a shell reads from a here-string
+/// (`bash <<< "CODE"`, `sudo sh <<< 'CODE'`, `bash<<<'CODE'`), so the engine
+/// can evaluate it like the code behind `bash -c`. Returns at most one code.
+///
+/// Only an unambiguous case is extracted; everything else returns an empty
+/// list and stays at the `Confirm` the here-doc detection (ADR 0001) gives
+/// the whole command:
+///
+/// - the command must split into segments (balanced quotes, see
+///   [`scan_top_level_segments`]), and exactly one unquoted `<` run must
+///   occur in the whole command, and it must be exactly `<<<` — here-docs
+///   (`<<`, `<<-`), several here-strings and any other input redirection or
+///   process substitution are left alone;
+/// - the here-string word must not contain `$` or a backtick, or start with
+///   `~` (the shell would expand it, the engine cannot), and must unquote to
+///   exactly one word with the same quoting rules as `-c` extraction
+///   (`shell_words`);
+/// - the command left after removing `<<< WORD` must be a shell (or
+///   `source`/`.`) that reads its program from stdin, resolved through
+///   wrappers and `sudo` like every other check ([`program_source`]).
+///
+/// The caller combines the result with its `Confirm` baseline, so this can
+/// only escalate a decision.
+pub(crate) fn extract_here_string_codes(cmd: &str) -> Vec<String> {
+    extract_here_string_code(cmd).into_iter().collect()
+}
+
+fn extract_here_string_code(cmd: &str) -> Option<String> {
+    let runs = unquoted_input_redirection_runs(cmd)?;
+    if runs.len() != 1 || runs[0].1 != 3 {
+        return None;
+    }
+    let segments = scan_top_level_segments(cmd)?;
+    let mut candidates = segments.iter().filter_map(|segment| {
+        let runs = unquoted_input_redirection_runs(segment)?;
+        (runs.len() == 1 && runs[0].1 == 3).then(|| (segment, runs[0].0))
+    });
+    let (segment, start) = candidates.next()?;
+    if candidates.next().is_some() {
+        return None;
+    }
+
+    let chars: Vec<char> = segment.chars().collect();
+    let prefix: String = chars[..start].iter().collect();
+    let after: Vec<char> = chars[start + 3..].to_vec();
+    let word_start = after.iter().position(|c| !c.is_whitespace())?;
+    let word_end = word_start + unquoted_word_len(&after[word_start..])?;
+    let word_raw: String = after[word_start..word_end].iter().collect();
+    let rest: String = after[word_end..].iter().collect();
+
+    if word_raw.contains(['$', '`']) || word_raw.starts_with('~') {
+        return None;
+    }
+    let mut words = shell_words::split(&word_raw).ok()?;
+    if words.len() != 1 {
+        return None;
+    }
+    let code = words.pop()?;
+
+    let target = normalize_whitespace(&format!("{prefix} {rest}"));
+    if !is_shell_program(&target) {
+        return None;
+    }
+    match program_source(&target) {
+        Some(ProgramSource::Stdin) => Some(code),
+        _ => None,
+    }
+}
+
+/// Every run of unquoted `<` characters in `text` as `(char index, length)`.
+/// Quoting as in a POSIX shell: single quotes, double quotes with backslash
+/// escapes, and an unquoted backslash escaping the next character. `None` if
+/// a quote is left open.
+fn unquoted_input_redirection_runs(text: &str) -> Option<Vec<(usize, usize)>> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut runs = Vec::new();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut i = 0usize;
+    while i < chars.len() {
+        let c = chars[i];
+        if in_single {
+            in_single = c != '\'';
+            i += 1;
+            continue;
+        }
+        if in_double {
+            if c == '\\' {
+                i += 2;
+                continue;
+            }
+            in_double = c != '"';
+            i += 1;
+            continue;
+        }
+        match c {
+            '\\' => i += 2,
+            '\'' => {
+                in_single = true;
+                i += 1;
+            }
+            '"' => {
+                in_double = true;
+                i += 1;
+            }
+            '<' => {
+                let len = chars[i..].iter().take_while(|&&c| c == '<').count();
+                runs.push((i, len));
+                i += len;
+            }
+            _ => i += 1,
+        }
+    }
+    (!in_single && !in_double).then_some(runs)
+}
+
+/// Length in chars of the shell word at the start of `chars` (up to the
+/// first unquoted whitespace), quoting as in
+/// [`unquoted_input_redirection_runs`]. `None` if a quote is left open or
+/// the word is empty.
+fn unquoted_word_len(chars: &[char]) -> Option<usize> {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut i = 0usize;
+    while i < chars.len() {
+        let c = chars[i];
+        if in_single {
+            in_single = c != '\'';
+        } else if in_double {
+            if c == '\\' {
+                i += 1;
+            } else {
+                in_double = c != '"';
+            }
+        } else if c.is_whitespace() {
+            break;
+        } else if c == '\\' {
+            i += 1;
+        } else if c == '\'' {
+            in_single = true;
+        } else if c == '"' {
+            in_double = true;
+        }
+        i += 1;
+    }
+    let len = i.min(chars.len());
+    (!in_single && !in_double && len > 0).then_some(len)
+}
+
+/// Whether `literal` (after wrappers and `sudo`) runs a known shell or
+/// `source`/`.` — a program whose stdin program is shell code. Interpreters
+/// (`python3`, `perl`, ...) and unclassified names are not.
+fn is_shell_program(literal: &str) -> bool {
+    let resolved = resolve_effective_command(literal);
+    let Some(program) = resolved.split_whitespace().next() else {
+        return false;
+    };
+    matches!(
+        program_kind(program),
+        Some(
+            ProgramKind::WithOptions(_, true) | ProgramKind::EitherShell(..) | ProgramKind::Source
+        )
+    )
+}
+
 /// Skript-Interpreter mit einem `-c`/`-e`-artigen "führe diesen String als
 /// Code aus"-Flag — dieselbe Umgehungsklasse wie `bash -c`/`sh -c`, nur mit
 /// einer anderen Sprache (unabhängiger Review-Pass, Spec 0002: `python3 -c
