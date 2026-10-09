@@ -8,6 +8,13 @@
 //! (`crate::run`). Das Plugin sorgt nur dafür, dass ein Doppelstart nicht
 //! in einem Fehlerdialog endet, sondern im schon offenen Fenster.
 //!
+//! **Nur mit dem Standard-Datenverzeichnis** (Issue #44, ADR 0121): Mit
+//! gesetztem `SMART_SSH_DATA_DIR` bleibt das Plugin in diesem Prozess aus,
+//! sowohl am Builder als auch in [`hand_over_to_running_instance`]. So
+//! laufen Instanzen mit verschiedenen Datenverzeichnissen nebeneinander,
+//! und ein zweiter Start mit demselben Override-Verzeichnis endet an der
+//! Sperre mit dem Startfehler „läuft bereits".
+//!
 //! **Nur in Release-Builds** (ADR 0106): Debug- und Release-Build tragen
 //! dieselbe Kennung, haben aber getrennte Datenverzeichnisse (ADR 0032),
 //! damit beide nebeneinander laufen können. Mit dem Plugin im Debug-Build
@@ -17,9 +24,12 @@
 
 use tauri::Manager;
 
-/// Ob der Single-Instance-Schutz in diesem Build aktiv ist (s. Moduldoc).
+/// Ob der Single-Instance-Schutz in diesem Prozess aktiv ist: nur im
+/// Release-Build und nur mit dem Standard-Datenverzeichnis (Issue #44,
+/// Entscheidung in [`app_logic::single_instance::focusing_applies`]).
 pub(crate) fn enabled() -> bool {
-    !cfg!(debug_assertions)
+    let raw_override = std::env::var(persistence_sqlite::DATA_DIR_OVERRIDE_ENV).ok();
+    app_logic::single_instance::focusing_applies(raw_override.as_deref(), cfg!(debug_assertions))
 }
 
 /// Das Plugin mit dem Rückruf, der in der **laufenden** Instanz ankommt,
@@ -40,8 +50,8 @@ pub(crate) fn register_on(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder
         builder.plugin(plugin())
     } else {
         tracing::info!(
-            "single-instance focusing is off in debug builds; the data directory lock still \
-             applies (issue #19, ADR 0106)"
+            "single-instance focusing is off (debug build or SMART_SSH_DATA_DIR set); the data \
+             directory lock still applies (issues #19, #44, ADR 0106, ADR 0121)"
         );
         builder
     }
@@ -54,7 +64,8 @@ pub(crate) fn register_on(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder
 ///
 /// Kehrt die Funktion zurück, war es keine Instanz desselben Builds (etwa
 /// ein anderer Build mit demselben Datenverzeichnis), oder das Plugin ist
-/// in diesem Build aus. Dann zeigt der Aufrufer den Startfehler.
+/// in diesem Prozess aus (Debug-Build oder `SMART_SSH_DATA_DIR`, s.
+/// [`enabled`]). Dann zeigt der Aufrufer den Startfehler.
 ///
 /// Gebaut wird eine App **nur mit diesem Plugin**: `Builder::build`
 /// richtet die Plugins ein, die Fenster aus der Konfiguration entstehen
