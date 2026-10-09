@@ -84,7 +84,7 @@ fn symlinks_are_skipped_and_never_followed() {
     symlink(outside.join("canary.txt"), root.join("link-file")).unwrap();
     symlink(&outside, root.join("link-dir")).unwrap();
     // A link inside the root pointing to a sibling inside the root is
-    // skipped as well (ADR 0125: no link is followed).
+    // skipped as well (ADR 0126: no link is followed).
     symlink(root.join("ok.txt"), root.join("link-inside")).unwrap();
     // A loop.
     symlink(&root, root.join("loop")).unwrap();

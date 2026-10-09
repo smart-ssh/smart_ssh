@@ -2,7 +2,7 @@
 //!
 //! [`plan_folder`] walks a granted local folder and returns what would be
 //! uploaded. It reads only directory listings and file metadata, never file
-//! contents. Rules (ADR 0125):
+//! contents. Rules (ADR 0126):
 //!
 //! - Symbolic links are never followed: they are listed as skipped.
 //! - Every file and subfolder must pass the grant rule (canonicalised, inside

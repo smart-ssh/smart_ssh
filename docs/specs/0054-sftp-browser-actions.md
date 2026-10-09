@@ -82,6 +82,42 @@ gebaut, dass der Audit-Log sie später erfassen kann.
   zwischen Ordnern). Überschreib-Warnung bei Zielkollision.
 - **Hochladen** — lokale Datei(en) in den aktuellen Remote-Ordner (per Dialog
   oder Drag-and-Drop). Überschreibt bestehende → **Diff-Vorschau (0020)**.
+- **Ordner hochladen** — ein lokaler Ordner samt Unterordnern in den
+  aktuellen Remote-Ordner, per eigenem Eintrag „Ordner hochladen“ neben
+  „Hochladen“ (Ordner-Dialog) oder per Drag-and-Drop. Der Inhalt landet in
+  `<aktueller Remote-Ordner>/<Ordnername>/`; die Ordnerstruktur wird
+  nachgebaut, ein leerer Ordner entsteht als leerer Remote-Ordner. Der
+  Ordner ist für die Sitzung nur freigegeben, wenn der Nutzer ihn gewählt
+  oder abgelegt hat (0020, Abschnitt 5); jede Datei darunter wird gegen
+  diese Freigabe geprüft, bevor sie gelesen wird. Ein Pfad, der über `..`
+  oder einen Link aus dem Ordner hinausführt, wird nie gelesen.
+  - **Konflikte:** Würde der Upload bestehende Remote-Dateien überschreiben,
+    zeigt die App **eine** Bestätigung für den ganzen Ordner, die jede dieser
+    Dateien auflistet. Es gibt dabei **keine Diff-Vorschau je Datei** — das
+    ist die einzige Ausnahme von der Diff-Regel, und sie gilt nur für
+    Ordner-Uploads. Ohne Bestätigung wird nichts überschrieben: Bestehende
+    Dateien, die nicht in der bestätigten Liste standen, bleiben unberührt
+    und stehen als übersprungen in der Zusammenfassung. Bestehende
+    Remote-Ordner werden wiederverwendet. Liegt an einem Zielpfad eine Datei
+    statt eines Ordners (oder umgekehrt), schlägt dieser Eintrag fehl.
+    Dateien, die es auf dem Server noch nicht gibt, brauchen keine
+    Bestätigung.
+  - **Symbolische Links** unterhalb des Ordners werden nie verfolgt: Sie
+    werden übersprungen und in der Zusammenfassung genannt. Dasselbe gilt
+    für Einträge, die keine normale Datei und kein Ordner sind, für Einträge
+    außerhalb der Freigabe und für Ordner tiefer als 64 Ebenen. Ein Ordner
+    mit mehr als 100 000 Einträgen wird abgelehnt, bevor etwas geschrieben
+    wird.
+  - **Teilweises Scheitern:** Scheitert eine Datei (lokal nicht lesbar,
+    Remote-Rechte fehlen), macht der Upload mit den übrigen weiter. Scheitert
+    das Anlegen eines Unterordners, werden die Dateien darin nicht versucht
+    und gezählt. Scheitert der Zielordner selbst, wird nichts hochgeladen.
+  - **Fortschritt und Zusammenfassung:** Jede Datei erscheint als eigene
+    Übertragung in der Übertragungsliste. Am Ende zeigt die App die Zahl der
+    hochgeladenen, übersprungenen und fehlgeschlagenen Dateien; gab es
+    Übersprungenes oder Fehler, nennt eine Liste jeden Eintrag mit Grund.
+  - Mit erhöhten Rechten (0067) wird jede geschriebene Remote-Datei und
+    jeder angelegte Ordner einzeln protokolliert, wie beim Einzel-Upload.
 
 ## Teil 4: „Lokal öffnen → bearbeiten → Upload anbieten"-Flow
 
@@ -137,6 +173,9 @@ scheitert — alle sichtbar behandeln.
   er umgangen würde.
 - Überschreiben/Upload: **Diff-Vorschau (0020)** + Konflikt-Prüfung
   (Remote-Änderung seit Download).
+  Ausnahme: Ein Ordner-Upload ersetzt die Diff-Vorschau je Datei durch eine
+  aufgelistete Bestätigung für den ganzen Ordner (Teil 3); auch dort wird
+  nichts ohne Bestätigung überschrieben.
 - Temp-Dateien des Lokal-Öffnen-Flows in einem **kontrollierten** Pfad,
   aufgeräumt — spätestens beim nächsten Start, auch nach einem Absturz.
 - Frontend-Pfade vom Nutzer werden validiert (bestehende Pfad-Validierung).

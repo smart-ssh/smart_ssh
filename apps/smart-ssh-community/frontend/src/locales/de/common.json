@@ -634,6 +634,8 @@
     "openLocallyFailed": "„{{name}}“ konnte nicht lokal geöffnet werden: {{reason}}",
     "editUploaded": "Änderung an „{{name}}“ hochgeladen",
     "editUploadFailed": "Änderung an „{{name}}“ konnte nicht hochgeladen werden: {{reason}}",
+    "uploadedFolder": "Ordner „{{name}}“ hochgeladen — {{count}} Dateien",
+    "uploadFolderFailed": "Ordner „{{name}}“ konnte nicht hochgeladen werden: {{reason}}",
     "uploadFailedMany": "{{name}} Dateien konnten nicht hochgeladen werden, z. B.: {{reason}}"
   },
   "fileElevation": {
@@ -894,6 +896,8 @@
     "newFolderButton": "+ Ordner",
     "upload": "Hochladen",
     "uploadDialogTitle": "Datei(en) hochladen",
+    "uploadFolder": "Ordner hochladen",
+    "uploadFolderDialogTitle": "Ordner hochladen",
     "downloadDirDialogTitle": "Zielordner wählen",
     "paste": "Einfügen",
     "pasteTitle": "{{name}} hierher verschieben",
@@ -937,6 +941,23 @@
     "moveCollision": {
       "title": "Ziel existiert bereits",
       "body": "gibt es schon und würde überschrieben."
+    },
+    "folderUpload": {
+      "conflictTitle": "Dateien im Ordner überschreiben?",
+      "conflictBody": "Beim Hochladen von „{{name}}“ würden diese {{count}} Dateien auf dem Server überschrieben. Ohne deine Bestätigung wird nichts überschrieben.",
+      "summaryTitle": "Ordner-Upload: „{{name}}“",
+      "summary": "{{uploaded}} Dateien hochgeladen, {{skipped}} übersprungen, {{failed}} fehlgeschlagen.",
+      "notAttempted": "{{count}} Dateien wurden nicht versucht, weil ihr Ordner nicht angelegt werden konnte.",
+      "skipped": "Übersprungen",
+      "failed": "Fehlgeschlagen",
+      "close": "Schließen",
+      "reason": {
+        "symlink": "symbolischer Link (wird nie verfolgt)",
+        "tooDeep": "zu tief verschachtelt",
+        "unsupported": "keine normale Datei oder Ordner",
+        "notGranted": "nicht von deiner Auswahl abgedeckt",
+        "overwriteNotConfirmed": "existiert auf dem Server, Überschreiben nicht bestätigt"
+      }
     },
     "uploadConflict": {
       "title": "Datei überschreiben?",

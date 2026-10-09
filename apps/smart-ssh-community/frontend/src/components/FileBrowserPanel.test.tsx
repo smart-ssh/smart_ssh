@@ -20,6 +20,9 @@ import {
   closeEditSession,
   localFileMtime,
   pickUploadFiles,
+  pickUploadFolder,
+  sftpUploadFolder,
+  sftpUploadFolderPreview,
   readLocalTextPreview,
   sftpChmod,
   sftpDelete,
@@ -69,6 +72,12 @@ vi.mock("../api", () => ({
   // captured — here the paths of the last simulated drop event.
   claimDroppedPaths: vi.fn(() => Promise.resolve(nativeDrop.paths)),
   pickUploadFiles: vi.fn(),
+  pickUploadFolder: vi.fn(),
+  sftpLocalPathsAreFolders: vi.fn((_s: string, paths: string[]) =>
+    Promise.resolve(paths.map(() => false)),
+  ),
+  sftpUploadFolder: vi.fn(),
+  sftpUploadFolderPreview: vi.fn(),
   sftpStat: vi.fn(),
   sftpOpenForEditing: vi.fn(),
   localFileMtime: vi.fn(),
@@ -808,6 +817,112 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     );
     expect(screen.queryByText("Datei überschreiben?")).not.toBeInTheDocument();
     expect(readLocalTextPreview).not.toHaveBeenCalled();
+  });
+
+  // Issue #128: folder upload.
+  const folderPreview = (overwrites: string[] = []) => ({
+    folderName: "proj",
+    fileCount: 2,
+    folderCount: 1,
+    overwrites,
+    skipped: [],
+  });
+  const folderSummary = {
+    folderName: "proj",
+    filesUploaded: 2,
+    foldersCreated: 2,
+    skipped: [],
+    failed: [],
+    notAttempted: 0,
+  };
+
+  it("'Ordner hochladen' picks a folder in the backend and uploads it without a dialog when nothing is overwritten", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(pickUploadFolder).mockResolvedValue("/local/proj");
+    vi.mocked(sftpUploadFolderPreview).mockResolvedValue(folderPreview());
+    vi.mocked(sftpUploadFolder).mockResolvedValue(folderSummary);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Ordner hochladen"));
+
+    await waitFor(() =>
+      expect(sftpUploadFolder).toHaveBeenCalledWith("session-1", "/local/proj", ".", [], null),
+    );
+    expect(pickUploadFolder).toHaveBeenCalledWith("session-1", "Ordner hochladen");
+    expect(screen.queryByText("Dateien im Ordner überschreiben?")).not.toBeInTheDocument();
+  });
+
+  it("a folder that would overwrite files asks once, listing them, and uploads nothing before the confirmation", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(pickUploadFolder).mockResolvedValue("/local/proj");
+    vi.mocked(sftpUploadFolderPreview).mockResolvedValue(folderPreview(["proj/a.txt", "proj/b.txt"]));
+    vi.mocked(sftpUploadFolder).mockResolvedValue(folderSummary);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Ordner hochladen"));
+
+    expect(await screen.findByText("Dateien im Ordner überschreiben?")).toBeVisible();
+    expect(screen.getByText("proj/b.txt")).toBeVisible();
+    expect(sftpUploadFolder).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText("Überschreiben"));
+    await waitFor(() =>
+      expect(sftpUploadFolder).toHaveBeenCalledWith(
+        "session-1",
+        "/local/proj",
+        ".",
+        ["proj/a.txt", "proj/b.txt"],
+        null,
+      ),
+    );
+  });
+
+  it("cancelling the folder confirmation uploads nothing", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(pickUploadFolder).mockResolvedValue("/local/proj");
+    vi.mocked(sftpUploadFolderPreview).mockResolvedValue(folderPreview(["proj/a.txt"]));
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Ordner hochladen"));
+    await screen.findByText("Dateien im Ordner überschreiben?");
+    fireEvent.click(screen.getByText("Abbrechen"));
+
+    expect(screen.queryByText("Dateien im Ordner überschreiben?")).not.toBeInTheDocument();
+    expect(sftpUploadFolder).not.toHaveBeenCalled();
+  });
+
+  it("the summary names skipped and failed entries", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(pickUploadFolder).mockResolvedValue("/local/proj");
+    vi.mocked(sftpUploadFolderPreview).mockResolvedValue(folderPreview());
+    vi.mocked(sftpUploadFolder).mockResolvedValue({
+      ...folderSummary,
+      skipped: [{ path: "link.txt", reason: "symlink" }],
+      failed: [{ path: "locked.txt", error: "Permission denied" }],
+    });
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Ordner hochladen"));
+
+    expect(await screen.findByText("locked.txt")).toBeVisible();
+    expect(screen.getByText("link.txt")).toBeVisible();
+    expect(screen.getByText(/Permission denied/)).toBeVisible();
+  });
+
+  it("cancelling the folder dialog does nothing", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(pickUploadFolder).mockResolvedValue(null);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Ordner hochladen"));
+
+    await waitFor(() => expect(pickUploadFolder).toHaveBeenCalledTimes(1));
+    expect(sftpUploadFolderPreview).not.toHaveBeenCalled();
   });
 });
 

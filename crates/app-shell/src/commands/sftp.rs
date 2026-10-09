@@ -530,7 +530,7 @@ pub(super) fn authorize_local_path(
 /// Issue #89: the upload button's native open dialog, run in the backend
 /// (pattern: `read_credential_file`). The frontend passes only a title;
 /// the picked paths are granted to this session and returned. `None` =
-/// cancelled. Files only — folder upload is not supported (ADR 0113).
+/// cancelled. Files only — folders go through `pick_upload_folder` (ADR 0126).
 #[tauri::command]
 pub async fn pick_upload_files(
     app: AppHandle,

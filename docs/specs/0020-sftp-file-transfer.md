@@ -255,9 +255,9 @@ nennt. Für Upload, die Überschreib-Vorschau beim Upload und die
 Änderungserkennung von „Lokal öffnen“ liest die App lokal nur Dateien, die
 der Nutzer dieser Sitzung freigegeben hat:
 
-- **Ausgewählt:** im nativen Öffnen-Dialog des Upload-Buttons. Der Dialog
-  wird von der App selbst geöffnet; die Oberfläche kann keinen Pfad
-  vorgeben.
+- **Ausgewählt:** im nativen Öffnen-Dialog des Upload-Buttons oder im
+  Ordner-Dialog von „Ordner hochladen“. Der Dialog wird von der App selbst
+  geöffnet; die Oberfläche kann keinen Pfad vorgeben.
 - **Abgelegt:** per Drag-and-Drop aus dem Betriebssystem auf das Fenster.
   Maßgeblich sind die Pfade, die das Betriebssystem beim Ablegen meldet,
   nicht ein von der Oberfläche genannter Pfad. Ein Ablegen gilt für die
@@ -268,8 +268,8 @@ der Nutzer dieser Sitzung freigegeben hat:
   zählt nicht.
 
 Ist ein Ordner freigegeben, gelten auch die Dateien darunter als
-freigegeben. Ein Upload ganzer Ordner ist damit nicht verbunden; er wird
-weiterhin nicht unterstützt. Ob ein Pfad unter einer Freigabe liegt, wird
+freigegeben; darauf beruht der Ordner-Upload (Spec 0054, Teil 3), der jede
+Datei darunter einzeln gegen die Freigabe prüft, kurz bevor er sie liest. Ob ein Pfad unter einer Freigabe liegt, wird
 am tatsächlichen Ziel entschieden: Ein Pfad mit `..` oder ein symbolischer
 Link, der aus der Freigabe hinausführt, ist nicht freigegeben.
 
