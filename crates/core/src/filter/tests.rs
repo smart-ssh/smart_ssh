@@ -1669,10 +1669,10 @@ fn test_log_capture_records_debug_and_info_separately() {
 /// Redaction und nicht, was A1 verlangt: dass der Text gar nicht erst auf
 /// `info` geschrieben wird.
 ///
-/// Spec 0095, A4: Die ursprünglich gewählten Formen `-p'…'` und `-p…`
+/// Spec 0095 §5: Die ursprünglich gewählten Formen `-p'…'` und `-p…`
 /// (angehängter Wert) **erkennt** der Redactor seit Spec 0095. Die Tests
 /// unten benutzen deshalb `mysql -u root -p <geheimnis>` — die Form mit
-/// Leerzeichen, die Spec 0095 §3 ausdrücklich als Nicht-Ziel führt: ohne
+/// Leerzeichen, die Spec 0095 §5 ausdrücklich als Grenze führt: ohne
 /// angehängten Wert fragt der MySQL-Client interaktiv, der folgende Wert
 /// ist der Datenbankname, also ist dort gar kein Passwort zu erkennen.
 /// `--password=…` wird weiter ersetzt (T9 baut darauf). Festgenagelt in

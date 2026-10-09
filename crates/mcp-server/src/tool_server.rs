@@ -706,9 +706,9 @@ mod tests {
     /// Redaction.
     const SECRET_0094: &str = "geheim-0094";
 
-    /// Spec 0095, A4: `sshpass -p <wert>` erkennt der Redactor seit Spec 0095.
+    /// Spec 0095 §5: `sshpass -p <wert>` erkennt der Redactor seit Spec 0095.
     /// Stattdessen `mysql -u root -p <wert>` — die Form mit Leerzeichen, die
-    /// Spec 0095 §3 als Nicht-Ziel führt (der Wert hinter `-p ` ist für den
+    /// Spec 0095 §5 als Grenze führt (der Wert hinter `-p ` ist für den
     /// MySQL-Client der Datenbankname, also kein erkennbares Passwort).
     fn secret_command_0094() -> String {
         format!("mysql -u root -p {SECRET_0094} -h host")
