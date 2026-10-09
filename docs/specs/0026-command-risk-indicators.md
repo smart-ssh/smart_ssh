@@ -119,6 +119,32 @@ Schaden lässt sich gut musterbasiert erfassen.
    Zweitmeinung wird danach eingeholt und per Aktualisierung nachgereicht. Ein
    automatisches Ausführen wartet jedoch auf sie (Spec 0092, A3).
 
+6. **Nicht verfügbar ist sichtbar, nie still.** Kann die Zweitmeinung zu
+   einer Aktion nicht eingeholt werden – der Provider antwortet mit einem
+   Fehler (abgelaufener oder gedrehter Schlüssel, Rate-Limit, Netzwerk,
+   nicht laufendes Ollama) oder die Antwort enthält kein erkennbares Urteil –,
+   unterscheidet sich das von „geprüft, unauffällig":
+   - Die Aktionskarte zeigt den Hinweis „KI-Zweitmeinung nicht verfügbar";
+     das Badge behält die regelbasierte Stufe. Ein regelbasiertes `red` wird
+     dadurch nie gesenkt.
+   - **Fail closed, pro Aktion:** Eine Aktion, die sonst automatisch liefe,
+     wird bestätigungspflichtig (Grund: Zweitmeinung nicht verfügbar). Das
+     gilt unabhängig von der Einstellung „Bei rotem Risiko immer nachfragen"
+     (Spec 0092), weil hier keine rote Einstufung vorliegt, sondern eine
+     fehlende Schutzschicht. Eine Aktion, die ohnehin eine Bestätigung
+     verlangt oder abgelehnt wird, bleibt davon unberührt.
+   - Jeder Provider-Fehler wird mit `warn` und dem Fehlercode protokolliert,
+     ohne Kommando und ohne Fehlertext des Providers (Spec 0094). Auch die
+     Hinweise enthalten nur feste Texte.
+7. **Nicht einrichtbar beim Verbinden:** Ist die Zweitmeinung in den
+   Einstellungen aktiv, lässt sich aber beim Verbinden nicht einrichten
+   (gewählter Provider gelöscht, ungültige Provider-Kennung, Zugangsdaten
+   nicht auflösbar), zeigt die Sitzung einmalig einen Hinweis, dass die
+   Zweitmeinung (und der Injection-Check aus Spec 0039 §5.2) in dieser
+   Sitzung nicht aktiv ist. Die Sitzung läuft sonst wie bisher; es wird nicht
+   jede Aktion bestätigungspflichtig. Ist die Zweitmeinung ausgeschaltet,
+   bleibt es still.
+
 ## 4. Darstellung
 
 1. Zwei kleine, getrennte Badges („Server", „Daten") an der Aktionskarte und

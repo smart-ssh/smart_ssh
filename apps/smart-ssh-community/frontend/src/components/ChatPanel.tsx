@@ -126,6 +126,9 @@ export type ChatItem =
        * updated` für diese `actionId` ankommt. Bleibt `false`, wenn die
        * Zweitmeinung deaktiviert ist (dann kommt gar kein Update-Event). */
       riskSecondOpinionPending: boolean;
+      /** Issue #102: die KI-Zweitmeinung konnte nicht eingeholt werden
+       * (aus `risk-assessment-updated`); die Karte zeigt einen Hinweis. */
+      secondOpinionUnavailable: boolean;
       /** Spec 0027, Abschnitt 2 — Zeitpunkt (`Date.now()`), an dem die
        * tatsächliche Ausführung begann: sofort bei `AutoExec`, sonst erst
        * nach Klick auf "Ausführen"/"editierten Vorschlag ausführen" im
@@ -438,6 +441,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             targetName: event.targetName,
             riskAssessment: event.riskAssessment,
             riskSecondOpinionPending,
+            secondOpinionUnavailable: false,
             // Spec 0027: bei AutoExec beginnt die Ausführung sofort (keine
             // Bestätigung nötig) — bei Confirm/Deny erst später, s.
             // `respond()` unten.
@@ -460,6 +464,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                     aiReviewed: true,
                   },
                   riskSecondOpinionPending: false,
+                  secondOpinionUnavailable: event.secondOpinionUnavailable === true,
                 }
               : item,
           ),
@@ -1013,9 +1018,11 @@ const RISK_LEVEL_BADGE_CLASS: Record<Exclude<RiskAssessment["serverRisk"], "none
 function RiskBadges({
   assessment,
   pending,
+  unavailable,
 }: {
   assessment: RiskAssessment | null;
   pending: boolean;
+  unavailable: boolean;
 }) {
   const { t } = useTranslation();
   if (!assessment) return null;
@@ -1041,6 +1048,14 @@ function RiskBadges({
         >
           {t("actionCard.riskDataLabel")}
         </span>
+      )}
+      {unavailable && (
+        <output
+          title={t("actionCard.riskSecondOpinionUnavailableHint")}
+          className="font-sans text-[10px] text-amber-300"
+        >
+          {t("actionCard.riskSecondOpinionUnavailable")}
+        </output>
       )}
       {pending && (
         <span
@@ -1256,7 +1271,11 @@ export function ChatItemView({
               })}
             </span>
           )}
-          <RiskBadges assessment={item.riskAssessment} pending={item.riskSecondOpinionPending} />
+          <RiskBadges
+            assessment={item.riskAssessment}
+            pending={item.riskSecondOpinionPending}
+            unavailable={item.secondOpinionUnavailable}
+          />
           <span
             className={`font-heading px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${badge.className}`}
           >
