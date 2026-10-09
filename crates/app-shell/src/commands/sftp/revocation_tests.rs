@@ -1072,6 +1072,10 @@ async fn test_t6b_a_revocation_between_stat_and_read_leaves_the_file_unread() {
         let s = setup(Box::new(elevated.clone())).await;
         let slot = s.slot();
         let session_id = s.session_id;
+        // Issue #134: never the real user cache, even if a regression lets
+        // the read (and so the write of the edit copy) through.
+        let edit_root = tempfile::tempdir().unwrap();
+        let edit_root_path = edit_root.path().to_path_buf();
 
         let command = spawn_command(
             s.session.clone(),
@@ -1088,6 +1092,7 @@ async fn test_t6b_a_revocation_between_stat_and_read_leaves_the_file_unread() {
                     open_for_editing_impl(
                         &session,
                         &channel,
+                        Some(&edit_root_path),
                         session_id,
                         "/t/a.txt",
                         MAX_EDIT_OPEN_BYTES,
