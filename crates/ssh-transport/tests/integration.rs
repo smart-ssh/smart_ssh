@@ -2130,3 +2130,55 @@ async fn test_issue_51_step_log_never_contains_secrets_for_any_auth_method() {
         }
     }
 }
+
+/// Issue #128 / Spec 0054 Teil 3: Ordner-Upload über eine echte russh-Sitzung.
+/// Die Reihenfolge entspricht der des Backends: Verzeichnisse
+/// Eltern-zuerst anlegen (auch leere), dann jede Datei schreiben. Prüft
+/// Struktur und Inhalt direkt auf der Platte des Testservers, einschließlich
+/// leerer Datei, Binärdaten und einer Datei über mehrere SFTP-Pakete.
+#[tokio::test]
+async fn test_sftp_folder_upload_mirrors_nested_tree_with_identical_contents() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    let mut sftp = transport
+        .open_sftp()
+        .await
+        .expect("open_sftp() sollte gelingen");
+
+    let big: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+    let binary: Vec<u8> = vec![0, 255, 1, 254, 0, 0, 10, 13];
+    let dirs = ["/proj", "/proj/src", "/proj/src/deep", "/proj/empty"];
+    let files: [(&str, &[u8]); 4] = [
+        ("/proj/readme.txt", b"hallo ordner"),
+        ("/proj/src/data.bin", &binary),
+        ("/proj/src/deep/big.bin", &big),
+        ("/proj/src/deep/zero.txt", b""),
+    ];
+
+    for dir in dirs {
+        sftp.create_dir(dir)
+            .await
+            .expect("create_dir sollte gelingen");
+    }
+    for (path, content) in files {
+        sftp.write_file(path, content)
+            .await
+            .expect("write_file sollte gelingen");
+    }
+
+    for dir in dirs {
+        assert!(sftp_local_path(&server, dir).is_dir(), "{dir} fehlt");
+    }
+    for (path, content) in files {
+        let on_disk = std::fs::read(sftp_local_path(&server, path)).unwrap();
+        assert_eq!(on_disk, content, "Inhalt von {path} weicht ab");
+        let read_back = sftp.read_file(path).await.unwrap();
+        assert_eq!(read_back, content, "Rücklesen von {path} weicht ab");
+    }
+    assert_eq!(
+        std::fs::read_dir(sftp_local_path(&server, "/proj/empty"))
+            .unwrap()
+            .count(),
+        0
+    );
+}
