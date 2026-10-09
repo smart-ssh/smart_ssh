@@ -1,116 +1,115 @@
-# Spec: Glob `*` überquert `/` nicht mehr (pfadförmige Muster)
+# Spec 0060 — Glob `*` überquert `/` nicht (pfadförmige Muster)
 
-Status: Entwurf
-Repo: **öffentlich** `smart_ssh`, `crates/core` (Filter-Engine/Glob-Matching)
-Modul: Das Glob-Matching der Filter-Engine (Regel-Auswertung)
-Abhängigkeiten: Filter-Engine + Präzedenz (0002), Regel-Test-Panel (0009),
-großer Spec-Audit (0009/0002, woher der Fund stammt)
-Release-Gate: **C (MUSS)** — sicherheitskritisch, adversarial zu prüfen.
+Status: umgesetzt
+Zweck: Eine Allow-Regel mit einem Pfad-Muster wie `cat /var/log/*` erlaubt nur Pfade in diesem Verzeichnis und lässt sich nicht durch `..` oder weitere Verzeichnisebenen aushebeln.
+Bezüge: Spec 0002 (Filter-Engine, Rangfolge), Spec 0009 (Testen-Panel), Spec 0020 (Pfad-Normalisierung bei SFTP-Aktionen), Spec 0077 (ungültige Muster), ADR 0053.
 
-> **Das Problem (Filter-Engine-Umgehung):** Eine Allow-Regel wie
-> `cat /var/log/*` matcht aktuell auch `cat /var/log/../../../etc/shadow`,
-> weil der Glob-`*` über `/`-Grenzen hinweggeht. Ein Angreifer (oder ein
-> KI-Vorschlag) könnte eine harmlos aussehende, legitim erteilte Allow-Regel
-> ausnutzen, um Zugriff auf ganz andere Pfade zu bekommen — die Filter-Engine
-> „erlaubt" dann etwas, das der Nutzer nie freigeben wollte.
-> **Priorität ERHÖHT + adversariale Prüfung** (Filter-Engine-Invariante:
-> „kann ein Kommando die Prüfung umgehen").
+Ohne diese Regel würde `cat /var/log/*` auch `cat /var/log/../../../etc/shadow`
+treffen, weil das Glob-`*` über `/`-Grenzen hinweggeht. Eine harmlos
+aussehende, legitim erteilte Allow-Regel gäbe dann Zugriff auf ganz andere
+Pfade frei. Das ist eine Umgehung der Filter-Engine und wird entsprechend
+streng behandelt.
 
-## Die Design-Entscheidung (aus dem Backlog)
+## Die Design-Entscheidung
 
-Ein pauschales `literal_separator` für **alle** Globs würde den Normalfall
-brechen: Kommando-Argument-Globs, die legitim Slashes enthalten (z. B. ein
-Glob über URL-artige Argumente), würden nicht mehr matchen. Deshalb:
-
-**Ein separater Glob-Modus für pfadförmige Muster.** Ein Muster, das wie ein
-**Pfad** aussieht (beginnt mit `/`, oder ist klar ein Dateipfad-Argument),
-wird mit `literal_separator = true` gematcht (`*` überquert `/` NICHT). Andere
-Globs (Nicht-Pfad-Argumente) behalten das bisherige Verhalten (`*` überquert
-`/`, wie bisher).
-
-**Die Abgrenzung „was ist ein pfadförmiges Muster" ist der Kern der Spec** —
-sie muss präzise und adversarial-fest sein (siehe unten).
+Ein pauschales Verbot, mit `*` über `/` zu gehen, würde den Normalfall
+brechen: Kommando-Argument-Globs, die legitim Schrägstriche enthalten (etwa
+über URL-artige Argumente), würden nicht mehr passen. Deshalb gibt es einen
+**eigenen Glob-Modus für pfadförmige Muster**. Nur in diesem Modus überquert
+`*` kein `/`. Alle anderen Globs verhalten sich wie bisher.
 
 ## 1. Erkennung pfadförmiger Muster
 
-Kläre und definiere präzise: **Wann gilt ein Glob-Muster als „pfadförmig"**
-(→ `literal_separator`)?
-- Der klare Fall: Muster **beginnt mit `/`** (absoluter Pfad, wie
-  `/var/log/*`).
-- Zu klären: relative Pfade (`./foo/*`, `foo/bar/*`)? Muster mit `/` irgendwo
-  drin? **Beschreibe mir deinen Erkennungs-Ansatz** und die Grenzfälle, bevor
-  du ihn festzurrst — das ist die eine echte Design-Entscheidung.
-- **Konservativ im Zweifel**: Wenn unklar, ob pfadförmig, lieber
-  `literal_separator` anwenden (strenger) als nicht — eine zu strenge Regel
-  matcht im Zweifel *weniger* (Nutzer muss dann bestätigen, statt dass etwas
-  fälschlich auto-erlaubt wird). Sicherheit vor Bequemlichkeit.
+Ein Glob-Muster gilt als pfadförmig, wenn **mindestens ein Wort** (durch
+Leerraum getrennt) ein `/` enthält und kein URL-Schema (`…://`) trägt. Das
+umfasst:
 
-## 2. Das eigentliche Matching
+- absolute Pfade (`/var/log/*`),
+- ausdrücklich relative Pfade (`./foo/*`, `../foo/*`),
+- bloße relative Pfade ohne `./` (`foo/bar/*`): Im Zweifel streng, denn ein
+  zu strenges Muster passt im Zweifel auf weniger (der Nutzer muss dann
+  bestätigen), nie auf mehr.
 
-- Pfadförmiges Muster → Glob mit `literal_separator = true`: `*` matcht
-  **kein** `/`. `/var/log/*` matcht `/var/log/foo`, aber **nicht**
-  `/var/log/sub/foo` und **nicht** `/var/log/../etc/shadow`.
-- Nicht-pfadförmig → bisheriges Verhalten unverändert.
-- **Path-Traversal**: `..` in einem gematchten Pfad darf nicht dazu führen,
-  dass das Muster auf etwas außerhalb matcht. Der akute SFTP-Traversal-Fall
-  ist bereits separat über einen lexikalischen Pfad-Normalizer entschärft —
-  **prüfe, ob dieser Normalizer auch hier greift** (idealerweise: Pfad erst
-  normalisieren, dann gegen das Muster matchen, sodass `../` gar nicht erst
-  ins Matching kommt). Kläre das Zusammenspiel und beschreibe es mir.
+Ein Wort mit URL-Schema zählt nicht als Pfad: `curl http://example.com/*`
+passt weiterhin über `/` hinweg. Enthält ein Muster mindestens ein Pfad-Wort,
+gilt das **ganze** Muster als pfadförmig (der Glob lässt sich nicht
+wortweise konfigurieren). Ein gemischtes Muster wie
+`wget http://x/* -O /tmp/*` wird dadurch auch im URL-Teil strenger; das ist
+ein seltener, bewusst hingenommener Fall.
 
-## 3. Bestehende Regeln / Migration
+## 2. Das Matching
 
-- Bestehende `User`-Regeln in der DB ändern sich nicht — nur ihre
-  **Auswertung** wird strenger. Eine bestehende `Allow: cat /var/log/*`-Regel
-  matcht ab dem Fix keine `../`-Ausbrüche mehr. Das ist die **gewollte**
-  Verschärfung (kein Datenverlust, keine Migration nötig).
-- Prüfe, ob dadurch ein **legitimer** bestehender Anwendungsfall bricht (ein
-  Nutzer, der bewusst `*` über `/` in einem Pfad-Glob nutzt) — unwahrscheinlich
-  bei pfadförmigen Mustern, aber im CHANGELOG als Verhaltensänderung nennen.
+- **Pfadförmiges Muster:** `*` passt auf **kein** `/`. `/var/log/*` passt auf
+  `/var/log/foo`, aber nicht auf `/var/log/sub/foo` und nicht auf
+  `/var/log/../etc/shadow`.
+- **Nicht pfadförmig:** unverändert, `*` überquert `/`.
+- **Erst normalisieren, dann vergleichen.** `.`- und `..`-Segmente sowie
+  doppelte Schrägstriche in den Pfad-Wörtern des Kommandos werden rein
+  lexikalisch aufgelöst (kein Dateisystemzugriff, keine Symlink-Auflösung),
+  bevor das Muster geprüft wird. Das ist dieselbe Auflösung wie bei den
+  SFTP-Aktionen (Spec 0020). Ein einzelnes `..` ohne eigenes `/`
+  (`/var/log/..`) würde sonst trotz Verbots von `*` über `/` als ein Segment
+  durchrutschen. Bei SFTP-Pseudokommandos ist der Pfad schon normalisiert,
+  die zweite Normalisierung ändert dann nichts. Auch Wörter mit `://` im
+  Kommando werden normalisiert (sonst ließe sich ein Pfad wie
+  `/tmp/x://../../../etc/shadow` ausnutzen).
+- **Shell-Metazeichen machen die Normalisierung unzuverlässig.** Enthält ein
+  Pfad-Wort im Kommando Zeichen, die Quoting, Escaping oder Klammer-Expansion
+  auslösen können (`\ ' " { } [ ] $` und Backtick), lässt sich nicht
+  lexikalisch sagen, welcher Pfad daraus wird (`\..`, `".."`, `{..,..}`,
+  `.[.]` ergeben nach der Shell-Expansion `..`). Dann gilt der strenge
+  Vergleich als nicht erfüllt. Für Allow heißt das: kein Treffer, es bleibt
+  bei `Confirm`, nie `AutoExec`.
+- **Deny und Confirm werden nie schwächer.** Für diese Aktionen gilt
+  zusätzlich der bisherige, großzügige Vergleich (`*` überquert `/`) als
+  Alternative. Eine bestehende Regel `Deny: rm /home/u/*` greift also weiter
+  auch auf `rm /home/u/sub/file`; sie wird durch die Normalisierung nur
+  zusätzlich verstärkt.
 
-## 4. Adversariale Prüfung (ERHÖHT — Pflicht)
+## 3. Bestehende Regeln
 
-Erfinde und prüfe konkrete Umgehungsversuche gegen die neue Logik:
+Gespeicherte Regeln ändern sich nicht, nur ihre **Auswertung** wird
+strenger: Eine vorhandene `Allow: cat /var/log/*` trifft ab dieser Regel
+keine `../`-Ausbrüche mehr. Es gibt keinen Datenverlust und keine Migration.
+Betroffen ist vor allem eine Regel, die mit einem einzelnen `*` mehrere
+Verzeichnisebenen abdecken sollte: Ein einzelnes `*` deckt nur noch eine Ebene
+ab. Für Deny- und Confirm-Regeln ist `**` der Ausweg (z. B. `/etc/**`); für
+Allow-Regeln ist `**` kein pauschaler Rat (ADR 0053, Abschnitt 5). Das ist als
+Verhaltensänderung im Changelog vermerkt.
+
+## 4. Adversariale Fälle (Pflicht bei Änderungen)
+
+Folgende Umgehungsversuche gegen eine Allow-Regel `cat /var/log/*` dürfen
+nicht zu `AutoExec` führen:
+
 - `/var/log/../../etc/shadow`, `/var/log/../log/../../etc/passwd`
-- Ungewöhnliches Quoting, Whitespace-Tricks, Groß-/Kleinschreibung im Pfad
-- Symlink-artige Konstrukte, doppelte Slashes (`/var//log/*`), `.`-Segmente
-  (`/var/log/./x`)
-- Ein Muster, das *fast* pfadförmig aussieht, aber die Erkennung austricksen
+- Quoting- und Escaping-Tricks (`\..`, `".."`, `'..'`, `{..,..}`, `.[.]`),
+  Variablen und Backticks im Pfad
+- doppelte Schrägstriche (`/var//log/*`) und `.`-Segmente (`/var/log/./x`)
+- ein Pfad, der ein `://` enthält, ohne ein URL zu sein
+- ein Muster, das fast pfadförmig aussieht, die Erkennung aber austricksen
   könnte
-- Relative Ausbrüche, falls relative Pfade als pfadförmig gelten
-Dokumentiere die Testfälle und dass sie **nicht** durchkommen.
+- relative Ausbrüche, soweit relative Pfade als pfadförmig gelten
 
-## Invarianten / Sicherheit
-- Eine Allow-Regel mit pfadförmigem Muster kann **nie** auf einen Pfad
-  außerhalb ihres Verzeichnisses matchen (kein `../`-Ausbruch, kein
-  `/`-Übersprung).
-- Im Zweifel strenger (weniger auto-erlaubt) — Sicherheit vor Bequemlichkeit.
-- Nicht-pfadförmige Globs unverändert (kein Bruch des Normalfalls).
-- Zusammenspiel mit dem bestehenden Pfad-Normalizer geklärt (keine doppelte/
-  widersprüchliche Behandlung).
+## Sicherheitszusagen
+
+- Eine Allow-Regel mit pfadförmigem Muster passt nie auf einen Pfad außerhalb
+  ihres Verzeichnisses (kein `../`-Ausbruch, kein Überspringen von `/`).
+- Im Zweifel strenger: weniger wird automatisch erlaubt.
+- Nicht pfadförmige Globs bleiben unverändert.
+- Es gibt keine doppelte oder widersprüchliche Behandlung neben der
+  SFTP-Normalisierung.
 
 ## Testbarkeit
-- `Allow: cat /var/log/*` matcht `/var/log/syslog` ✅, matcht NICHT
-  `/var/log/../../etc/shadow` ✅, matcht NICHT `/var/log/sub/deep` ✅.
-- Nicht-pfadförmiges Glob (Kommando-Argument ohne führenden `/`) verhält sich
-  wie bisher (Regressionstest, dass der Normalfall nicht bricht).
-- Die adversarialen Fälle (§4) alle als „matcht nicht / führt zu Confirm".
-- Regel-Test-Panel (0009): zeigt das strengere Verhalten korrekt (ein
-  `../`-Kommando, das früher „Allow" zeigte, zeigt jetzt „Confirm/kein Match").
-- Regressionstest gegen den ungefixten Stand (der `../`-Ausbruch matcht
-  vorher, nachher nicht).
+
+- `Allow: cat /var/log/*` passt auf `/var/log/syslog`, nicht auf
+  `/var/log/../../etc/shadow` und nicht auf `/var/log/sub/deep`.
+- Ein nicht pfadförmiger Glob (Argument ohne `/`) verhält sich wie bisher.
+- Alle Fälle aus Abschnitt 4 führen zu „passt nicht" bzw. `Confirm`.
+- Das Testen-Panel (Spec 0009) zeigt für ein `../`-Kommando kein „Allow"
+  mehr, sondern „Confirm / keine Regel".
 
 ## Nicht Teil dieser Spec
-- Der bereits entschärfte akute SFTP-Traversal (lexikalischer Normalizer) —
-  nur das Zusammenspiel prüfen.
-- Andere Glob-Semantik-Fragen außerhalb der `*`-über-`/`-Frage.
 
-## Abschluss
-- `spec-reviewer` **ERHÖHT mit adversarialer Haltung** (das ist genau ein
-  Fall, wo 5–10 erfundene Umgehungsversuche gedanklich gegen den Code laufen
-  müssen).
-- CHANGELOG (Security-Kategorie): „Glob-`*` in pfadförmigen Allow-Regeln
-  überquert keine Verzeichnisgrenzen mehr".
-- Melde mir: deinen Erkennungs-Ansatz für „pfadförmig" (§1), das Zusammenspiel
-  mit dem Normalizer (§2), die adversarialen Testfälle (§4), und ob ein
-  bestehender legitimer Fall bricht (§3).
+- Die SFTP-Pfad-Normalisierung selbst (Spec 0020).
+- Andere Glob-Fragen außerhalb von `*` über `/`.

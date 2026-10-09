@@ -1,278 +1,171 @@
-# Spec 0092 — Rotes Risiko verlangt Bestätigung (Einstellung, Standard an)
+# Spec 0092 — Rotes Risiko verlangt Bestätigung
 
-Status: freigegeben · Backlog: BL-0074 · Gate: —
-Zweck: Ein rot eingestufter Vorschlag läuft nie ohne Rückfrage, solange die
-neue App-Einstellung an ist — auch gegen eine Allow-Regel.
-Review-Priorität: ERHÖHT
+Status: umgesetzt
+Zweck: Ein rot eingestufter Vorschlag läuft nie ohne Rückfrage, solange die App-Einstellung „Bei rotem Risiko immer nachfragen" an ist (Standard), auch nicht gegen eine Allow-Regel.
+Bezüge: Spec 0002 (Filter-Engine), Spec 0026 (Risiko-Einstufung und Zweitmeinung), Spec 0028 (MCP), Spec 0074 (Auswertung der Zweitmeinung), ADR 0084.
 
-## 1. Ist-Stand (origin/main 42ac8b4, gelesen, nicht ausgeführt)
+## 1. Ausgangspunkt
 
-1. Die Risiko-Einstufung hat zwei Achsen, `server_risk` und `data_risk`,
-   je `RiskLevel::{None, Yellow, Red}` (`core::risk::types::RiskAssessment`).
-   Laut Doc-Kommentar ist sie „rein informativ — beeinflusst nie die
-   `Decision`“. Das Frontend zeigt je Achse ein eigenes Badge
-   (`ChatPanel.tsx`, `RISK_LEVEL_BADGE_CLASS`).
-2. `handle_action_proposed` (`app-logic/src/orchestration/action_exec.rs`)
-   berechnet nach `evaluate_action` die Einstufung
-   (`risk_assessment_for_action`, regelbasiert) und eskaliert danach in
-   einer Kette nur `AutoExec → Confirm`: Secret-Pfad, `sftp-server`,
-   eingelesener Serverinhalt (`PostIngestPolicy`, nutzt `server_risk`),
-   Injection-Verdacht (verbraucht das Flag per `swap`), MCP-Herkunft,
-   gespeichertes Sudo-Passwort, frühere Ablehnung. Kein Glied prüft
-   `Red`. Ein rot eingestuftes Kommando mit Allow-Regel läuft ohne diese
-   Sonderfälle automatisch.
-3. Secret-Pfad- und `sftp-server`-Glied stehen **vor** der
-   Injection-Prüfung und lesen das Verdachts-Flag nur; ist es gesetzt,
-   zeigen sie den Injection-Grund (`FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM`).
-   Begründung im Kommentar dort: sonst verbraucht die eskalierte Aktion das
-   Flag, und die eigentliche Folgeaktion liefe automatisch.
-4. MCP läuft durch dieselbe Funktion (`handle_mcp_action_proposed` →
-   `handle_action_proposed` mit `ActionOrigin::Mcp`) und wird ohnehin immer
-   bestätigt.
-5. Die Einstufung gibt es nur für Aktionen mit Pseudokommando
-   (`pseudo_command_for_risk_classification`): `SuggestCommand`,
-   `ReadRemoteFile`, `WriteRemoteFile`. `ProposeNoteUpdate` und
-   `GenerateDocument` haben keine.
-6. **Zweitmeinung:** Das Ereignis `chat-action-proposed` geht mit der
-   regelbasierten Einstufung und der Entscheidung hinaus. **Danach** wird,
-   falls konfiguriert, die KI-Zweitmeinung abgewartet
-   (`fetch_second_opinion`, nur Daten-Achse, nur Anhebung:
-   `escalate_data_risk`) und per `risk-assessment-updated` gemeldet. Erst
-   dann läuft der `match prepared`: `AutoExec` führt aus. Eine Anhebung auf
-   Rot ändert die Entscheidung heute nicht.
-7. Der Empfänger für eine Bestätigung wird vor den `await`s registriert
-   (`PreparedDecision::Confirm { pending }`, `PendingConfirmation::register`),
-   damit ein früher Klick nicht verloren geht.
-8. Die Zweitmeinungs-Einstellungen liegen app-weit in `settings.json`
-   (`tauri-plugin-store`; Schlüssel `riskClassifierEnabled`,
-   `riskClassifierProviderId`). Das Backend liest sie einmal in `connect()`
-   (`app-shell::risk_second_opinion::resolve_second_opinion_provider`) und
-   legt das Ergebnis auf die `Session`. Das Frontend liest und schreibt sie
-   über `riskSettings.ts`; der Schalter liegt in `AiProviderSettings.tsx`.
-9. Bestätigungsgründe werden über den `code` übersetzt: `errorCodes.ts` und
-   `locales/{de,en}/common.json` (z. B. `FILTER_SFTP_SERVER_REQUIRES_CONFIRM`).
-10. Andere Editionen binden diese Oberfläche und `app-shell` unverändert
-    ein; sie brauchen keinen eigenen Teil.
-11. Es gibt kein `THREAT-MODEL`-Dokument im Repo (`ls docs`); die
-    Sicherheitsgrundsätze stehen im README, Abschnitt „Filter- & Policy-Engine“,
-    und in ADRs (zuletzt `docs/adr/0082-…`).
+Die Risiko-Einstufung (Spec 0026) hat zwei Achsen, Server-Risiko und
+Daten-Risiko, je mit den Stufen keine, gelb, rot. Ohne diese Spec wäre sie ein
+reiner Hinweis: Ein Kommando, das rot eingestuft ist und auf das eine
+Allow-Regel passt, liefe automatisch.
 
-## 2. Teil 0
+Die Einstufung gibt es für Aktionen mit Pseudokommando: Kommandos
+(`SuggestCommand`), Datei lesen und Datei schreiben. Notiz-Änderungen und
+Dokument-Erzeugung haben keine.
 
-Teil 0: entfällt. Alle tragenden Stellen sind gelesen. Welche Kommandos der
-Klassifizierer rot einstuft, ermittelt der Coder für die Tests selbst über
-den Klassifizierer (§7, Vorbemerkung). Das ist Testauswahl, kein Zuschnitt.
+Die Einschätzung der Zweitmeinung (Spec 0026, Abschnitt 3) kommt erst nach der
+regelbasierten Einstufung. Die Karte zeigt zuerst die regelbasierte
+Einstufung; die Zweitmeinung wird danach eingeholt.
 
-## 3. Ziel und Nicht-Ziele
+## 2. Verhalten
 
-Ziel: Neue app-weite Einstellung „Bei rotem Risiko immer nachfragen“,
-Standard an. Ist sie an, wird jeder Vorschlag mit Rot auf **einer** der
-beiden Achsen bestätigungspflichtig. Das gilt auch dann, wenn erst die
-KI-Zweitmeinung auf Rot hebt.
+Mit der Einstellung „Bei rotem Risiko immer nachfragen" (Standard an) wird jeder
+Vorschlag mit Rot auf **einer** der beiden Achsen bestätigungspflichtig. Das
+gilt auch dann, wenn erst die KI-Zweitmeinung auf Rot hebt.
 
-Nicht-Ziele:
-- Keine Änderung am Klassifizierer, an seinen Mustern oder an Gelb.
-- Keine Abschwächung: `Deny` bleibt `Deny`, und keine bestehende
-  Eskalation entfällt, auch nicht bei ausgeschalteter Einstellung.
-- Keine Einstellung je Server, keine Datenbank-Migration.
-- Kein Umbau der Zweitmeinung zu einem losgelösten Task.
-- Keine editionsspezifischen Teile.
+**Nicht-Ziele:** Die Einstufung, ihre Muster und Gelb ändern sich nicht. Es
+gibt keine Einstellung je Server. `Deny` bleibt `Deny`, und keine bestehende
+Eskalation entfällt, auch nicht bei ausgeschalteter Einstellung.
 
-## 4. Anforderungen
+## 3. Anforderungen
 
 **A1 — Einstellung**
-- A1.1 MUSS: App-weiter boolescher Wert in `settings.json`, Schlüssel
-  `redRiskAlwaysConfirm`.
-- A1.2 MUSS: Fehlt der Schlüssel oder ist er kein boolescher Wert, gilt
-  „an“ (fail-safe; betrifft auch bestehende Installationen).
-- A1.3 MUSS: Das Backend liest den Wert bei `connect()` und hält ihn für die
-  Dauer der Sitzung fest, wie die Zweitmeinung. Eine Änderung wirkt ab der
-  nächsten Verbindung. Der Hinweistext am Schalter sagt das.
-- A1.4 MUSS: Der Schalter steht im Einstellungsbereich des
-  Risiko-Klassifizierers. Er ist unabhängig davon bedienbar, ob die
-  Zweitmeinung an ist. Texte gibt es auf Deutsch und Englisch.
+
+- A1.1 Die Einstellung ist app-weit und boolesch.
+- A1.2 Fehlt der Wert oder ist er kein boolescher Wert (z. B. die Zeichenkette
+  `"false"` oder `0`), gilt „an". Das ist fail-safe und betrifft auch
+  bestehende Installationen.
+- A1.3 Der Wert wird beim Verbinden gelesen und gilt für die Dauer der
+  Sitzung. Eine Änderung wirkt ab der nächsten Verbindung; der Hinweistext am
+  Schalter sagt das.
+- A1.4 Der Schalter steht im Einstellungsbereich des Risiko-Klassifizierers und
+  lässt sich unabhängig davon bedienen, ob die Zweitmeinung an ist. Die Texte
+  gibt es auf Deutsch und Englisch.
 
 **A2 — Eskalation bei regelbasiertem Rot**
-- A2.1 MUSS: Einstellung an, Entscheidung `AutoExec`, und `server_risk ==
-  Red` **oder** `data_risk == Red` → `Confirm` mit Code
-  `FILTER_RED_RISK_REQUIRES_CONFIRM` und einem Grund, der die rote Achse
-  und deren Begründung nennt.
-- A2.2 MUSS: Gilt für Chat und MCP gleichermaßen (ein Pfad).
-- A2.3 MUSS: Das Glied liest das Injection-Flag nur und verbraucht es nicht.
-  Ist es gesetzt, wird der Injection-Grund gezeigt, wie bei Secret-Pfad und
-  `sftp-server` (Ist-Stand 3).
-- A2.4 MUSS: Secret-Pfad- und `sftp-server`-Grund haben Vorrang: Greift
-  eines davon, bleibt dessen Code.
-- A2.5 MUSS: Einstellung aus → Entscheidung und Code exakt wie heute.
+
+- A2.1 Ist die Einstellung an, die Entscheidung `AutoExec` und mindestens eine
+  Achse rot, wird die Entscheidung `Confirm` mit dem Code
+  `FILTER_RED_RISK_REQUIRES_CONFIRM` und einem Grund, der die rote Achse und
+  deren Begründung nennt. Der übersetzte Text zu diesem Code ist so formuliert, dass
+  er auch den Fall „nicht einschätzbar" (Kommando über dem Längenlimit)
+  abdeckt.
+- A2.2 Das gilt für den Chat und für MCP gleichermaßen.
+- A2.3 Das Verdachts-Kennzeichen für eingeschleuste Anweisungen wird dabei nur
+  gelesen, nicht verbraucht. Ist es gesetzt, wird der Injection-Grund gezeigt,
+  wie bei Secret-Pfad und `sftp-server`.
+- A2.4 Der Secret-Pfad-Grund und der `sftp-server`-Grund haben Vorrang. Greift
+  einer davon, bleibt dessen Code.
+- A2.5 Ist die Einstellung aus, sind Entscheidung und Code wie ohne diese Spec.
 
 **A3 — Nachträgliches Rot durch die Zweitmeinung**
-- A3.1 MUSS: Einstellung an, Entscheidung nach der Kette `AutoExec`, und die
-  Zweitmeinung hebt `data_risk` auf `Red` → Die Aktion wird **nicht**
-  automatisch ausgeführt, sondern wie ein `Confirm` mit
-  `FILTER_RED_RISK_REQUIRES_CONFIRM` behandelt. Es gelten dieselbe
-  Wartezeit, dieselbe Abbruchlogik, derselbe Hintergrund-Tab-Indikator und
-  dieselben Ledger-Einträge (`Confirmed`/`Rejected` mit Code) wie bei
-  jedem anderen `Confirm`.
-- A3.2 MUSS: Das Frontend erfährt die geänderte Entscheidung über ein
-  Ereignis (§5). Die Karte zeigt danach den Bestätigungsdialog mit dem
-  übersetzten Grund. Ein Klick darauf erreicht die wartende Aktion. Die
-  Registrierung liegt deshalb vor dem Ereignis.
-- A3.3 MUSS: Ein Stopp (`auto_continue_stop`) hat Vorrang. Eine gestoppte
-  Aktion wird wie heute übersprungen und bekommt keinen Dialog.
-- A3.4 MUSS: Ablehnung setzt `earlier_rejection` wie jede andere Ablehnung.
-- A3.5 MUSS: Hebt die Zweitmeinung nur auf Gelb, bleibt sie aus oder ist
-  die Einstellung aus, ändert sich nichts gegenüber heute.
-- A3.6 MUSS: Auch der Tab-Zustand im Frontend (Hinweis auf eine wartende
-  Aktion, Ablehnen beim Schließen des Tabs) reagiert auf das Ereignis aus
-  §5, nicht nur die Karte. Heute setzt ihn nur `chat-action-proposed` mit
-  `Confirm` (`useSessionTabs.ts`).
+
+- A3.1 Ist die Einstellung an, die Entscheidung nach allen anderen
+  Eskalationen `AutoExec` und hebt die Zweitmeinung das Daten-Risiko auf Rot,
+  wird die Aktion **nicht** automatisch ausgeführt, sondern wie ein `Confirm`
+  mit `FILTER_RED_RISK_REQUIRES_CONFIRM` behandelt: gleiche Wartezeit, gleiche
+  Abbruchlogik, gleicher Hinweis am Hintergrund-Tab und gleiche
+  Ledger-Einträge (bestätigt/abgelehnt, mit Code) wie bei jedem anderen
+  `Confirm`.
+- A3.2 Die Oberfläche erfährt die geänderte Entscheidung über ein eigenes
+  Ereignis, das nach der Aktualisierung der Einstufung gesendet wird. Die
+  Karte zeigt danach den Bestätigungsdialog mit dem übersetzten Grund; ein
+  Klick darauf erreicht die wartende Aktion. Die wartende Bestätigung ist
+  deshalb schon vor dem Ereignis registriert, sodass ein früher Klick nicht
+  verloren geht.
+- A3.3 Ein Stopp der automatischen Fortsetzung hat Vorrang. Eine gestoppte
+  Aktion wird wie sonst übersprungen und bekommt keinen Dialog.
+- A3.4 Eine Ablehnung setzt wie jede andere die „frühere Ablehnung".
+- A3.5 Hebt die Zweitmeinung nur auf Gelb, bleibt sie aus, oder ist die
+  Einstellung aus, ändert sich nichts.
+- A3.6 Auch der Tab-Zustand (Hinweis auf eine wartende Aktion, Ablehnen beim
+  Schließen des Tabs) reagiert auf das Ereignis, nicht nur die Karte.
 
 **A4 — Dokumentation**
-- A4.1 MUSS: Neuer ADR `docs/adr/0084-red-risk-requires-confirm.md`:
-  Entscheidung, Standard, Verhalten bei der Zweitmeinung, Restfall (§6).
-- A4.2 MUSS: Der README-Abschnitt „Filter- & Policy-Engine“ nennt die
-  Einstellung, ihren Standard und dass sie auch eine Allow-Regel übersteuert.
-- A4.3 MUSS: Ein Changelog-Fragment unter `changelog.d/`.
-- A4.4 MUSS: Die Doc-Kommentare in `core::risk` („beeinflusst nie die
-  `Decision`“) werden richtiggestellt und verweisen auf ADR 0084.
 
-## 5. Design
+- A4.1 ADR 0084 hält Entscheidung, Standard, das Verhalten bei der Zweitmeinung
+  und die Restfälle (Abschnitt 6) fest.
+- A4.2 Die README beschreibt die Einstellung, ihren Standard und dass sie auch
+  eine Allow-Regel übersteuert.
+- A4.3 Die Doc-Kommentare des Risiko-Moduls sagen nicht mehr „beeinflusst nie
+  die Entscheidung", sondern verweisen auf diese Spec und ADR 0084.
 
-- **Stelle in der Kette:** nach `sftp-server`, vor dem Glied für
-  eingelesenen Serverinhalt. So bleibt A2.4 erfüllt, und das Flag wird
-  nur gelesen (A2.3).
-- **Ereignis für A3:** `action-decision-escalated` mit `sessionId`,
-  `actionId`, `reason`, `code`. Ein neues Ereignis statt einer Erweiterung
-  von `risk-assessment-updated`, weil das Badge-Update auch ohne
-  Eskalation kommt. Die Karte behandelt es wie eine `Confirm`-Entscheidung
-  aus `chat-action-proposed`. Das Ereignis wird erst nach
-  `risk-assessment-updated` gesendet.
-- **Anzeige des Grunds:** Der Dialog zeigt, wie bei allen bekannten Codes,
-  den festen übersetzten Text zum Code. Die rote Achse samt Begründung
-  steht in `reason` für Ledger und KI-Kontext; im Dialog sieht der Nutzer
-  sie am Badge. Keine Interpolation nötig.
-- **Hard-Blacklist:** liefert heute `Confirm` (`FILTER_HARD_BLACKLIST`),
-  nicht `Deny`. Das Glied greift nur auf `AutoExec` und lässt den Code
-  deshalb unberührt.
-- **Sitzungswert:** ein `bool` auf der `Session`, gesetzt in `connect()`.
-  In Test-Fixtures ist er standardmäßig `true`, sodass bestehende Tests
-  mit roten Kommandos und Allow-Regel sichtbar brechen und angepasst
-  werden müssen, statt still auf „aus“ zu laufen.
-- Herleitung und verworfene Varianten: HQ-Beilage.
+## 4. Verhaltensdetails
 
-## 6. Sicherheits-Invarianten
+- **Stelle in der Eskalationskette:** nach dem `sftp-server`-Grund, vor dem Grund
+  für eingelesenen Serverinhalt. So bleibt A2.4 erfüllt, und das Kennzeichen
+  wird nur gelesen (A2.3).
+- **Anzeige des Grunds:** Der Dialog zeigt wie bei allen bekannten Codes den
+  festen übersetzten Text zum Code. Die rote Achse samt Musterbegründung steht
+  im Grund für Ledger und KI-Kontext; im Dialog sieht der Nutzer sie am Badge.
+- **Grund im Fall A3:** Er nennt nur die rote Achse, nicht die Begründung der
+  KI-Zweitmeinung. Der Grund wird unredigiert im Ledger gespeichert, und der
+  Modelltext kann Teile des Kommandos zitieren, etwa ein Passwort. Der Text
+  der Zweitmeinung (`risk-assessment-updated`) wird nur angezeigt, nicht
+  gespeichert und nicht als HTML gerendert.
+- **Hard-Blacklist:** Sie liefert `Confirm` mit ihrem eigenen Code, nicht
+  `Deny`. Die Eskalation greift nur auf `AutoExec` und lässt diesen Code
+  unberührt.
+- **Kommando über dem Längenlimit des Filters:** Es gilt bei eingeschalteter
+  Einstellung als rot, weil seine Einstufung nicht belastbar ist (nur
+  Eskalation).
 
-- **Nur Eskalation:** Das neue Glied und A3 machen nur aus `AutoExec` ein
+## 5. Sicherheitszusagen
+
+- **Nur Eskalation:** Die Eskalation und A3 machen nur aus `AutoExec` ein
   `Confirm`. Kein Pfad erzeugt `AutoExec` oder hebt `Deny` auf.
-- **Injection-Flag:** wird nicht zusätzlich verbraucht (A2.3). Das Muster
-  bleibt dasselbe wie bei Secret-Pfad und `sftp-server`.
-- **Bestätigung geht nicht verloren:** Registrierung vor dem Ereignis
-  (A3.2); `PendingConfirmation` räumt wie bisher per `Drop` auf.
-- **Fail-safe:** unlesbare oder fehlende Einstellung → an (A1.2).
-- **Restfall (bewusst):** Nach Ausschalten gilt Rot wieder nur als Hinweis.
-  Eine laufende Sitzung behält ihren Wert bis zur nächsten Verbindung. Der
-  ADR nennt das.
-- Keine neue Datensenke. Der Grundtext enthält die Musterbegründung des
+- **Verdachts-Kennzeichen:** Es wird nicht zusätzlich verbraucht (A2.3).
+- **Bestätigung geht nicht verloren:** Die Registrierung liegt vor dem Ereignis
+  (A3.2) und wird auf jedem Ausgang abgeräumt (Spec 0088).
+- **Fail-safe:** Eine unlesbare oder fehlende Einstellung bedeutet „an" (A1.2).
+- **Keine neue Datensenke:** Der Grundtext enthält die Musterbegründung des
   Klassifizierers, keine Kommandoausgabe.
 
-## 7. Tests
+## 6. Grenzen
 
-Vorbemerkung: Für „rotes Kommando“ nimmt der Coder Beispiele, die der
-regelbasierte Klassifizierer heute rot einstuft **und** die weder an der
-Hard-Blacklist noch an Secret-Pfad oder `sftp-server` hängen. Er ermittelt
-sie mit einem Test über den Klassifizierer, nicht per Hand, und nennt sie
-im Bericht. Alle Backend-Fälle laufen mit einer Allow-Regel, die das
-Kommando sonst automatisch ausführen ließe.
+- Nach dem Ausschalten gilt Rot wieder nur als Hinweis. Eine laufende Sitzung
+  behält ihren Wert bis zur nächsten Verbindung.
+- Der Weg „Bearbeiten und ausführen" im Dialog läuft nicht durch die
+  Risiko-Kette.
+- Die Muster des Klassifizierers sind nicht vollständig (Spec 0026,
+  Abschnitt 2): Ein inhaltlich rotes Kommando ohne passendes Muster löst die
+  Rückfrage nicht aus.
+- Harmlose, aber rot eingestufte Leser wie `cat ~/.ssh/id_rsa.pub` führen zu
+  Rückfragen.
+- Eine Allow-Regel auf ein rot eingestuftes Kommando wirkt bei eingeschalteter
+  Einstellung nie automatisch.
 
-| # | Fall | Erwartet | Scheitert, wenn … |
-|---|---|---|---|
-| T1 | Server-Rot, Einstellung an | `Confirm`, `FILTER_RED_RISK_REQUIRES_CONFIRM`, keine Ausführung vor Klick | das Glied fehlt |
-| T2 | Daten-Rot (Server nicht rot), an | wie T1 | nur eine Achse geprüft wird |
-| T3 | T1 und T2 mit Einstellung aus | `AutoExec` wie heute | die Einstellung ignoriert wird |
-| T4 | nur Gelb, an | `AutoExec` | Gelb mit eskaliert |
-| T5 | Rot mit Deny-Regel | `Deny` bleibt | das Glied `Deny` überschreibt |
-| T5b | Rot und Hard-Blacklist (liefert heute `Confirm` mit `FILTER_HARD_BLACKLIST`) | Code bleibt `FILTER_HARD_BLACKLIST` | das Glied einen vorhandenen `Confirm` umschreibt |
-| T6 | Rot + gesetztes Injection-Flag | Injection-Code; Flag danach **noch gesetzt**; nächste grüne Aktion mit Allow-Regel wird per Injection eskaliert | das Flag verbraucht wird |
-| T7 | Secret-Pfad-Lesen, das zugleich rot ist | Secret-Code | A2.4 verletzt |
-| T8 | MCP, rot | Code `FILTER_RED_RISK_REQUIRES_CONFIRM` (das Glied steht vor dem MCP-Glied) | der MCP-Pfad das Glied umgeht |
-| T8b | `sudo <rotes Kommando>`, Allow-Regel auf die Form ohne `sudo`, kein gespeichertes Passwort | Code `FILTER_RED_RISK_REQUIRES_CONFIRM` | die Dual-Text-Allow-Prüfung das Glied umgeht; stuft der Klassifizierer die `sudo`-Form nicht rot ein, im Bericht melden |
-| T9 | `ReadRemoteFile` auf rot eingestuften Pfad, der **kein** Secret-Pfad ist | Code `FILTER_RED_RISK_REQUIRES_CONFIRM` | Pseudokommandos nicht geprüft; findet der Klassifizierer keinen solchen Pfad, im Bericht melden statt den Test aufzuweichen |
-| T10 | Zweitmeinung (Mock) hebt Gelb → Rot, an | keine Ausführung; `action-decision-escalated` nach `risk-assessment-updated`; Bestätigen → genau eine Ausführung; Ledger `Confirmed` mit Code | A3 fehlt oder doppelt ausführt |
-| T11 | wie T10, Ablehnen | keine Ausführung, `earlier_rejection` gesetzt, Ledger `Rejected` | Ablehnung wirkungslos |
-| T12 | wie T10, Einstellung aus | Ausführung wie heute, kein neues Ereignis | A3.5 verletzt |
-| T13 | Zweitmeinung hebt nur auf Gelb, an | Ausführung, kein neues Ereignis | Schwelle falsch |
-| T14 | wie T10, Stopp während der Zweitmeinung | übersprungen, kein Dialog | A3.3 verletzt |
-| T15 | wie T10, Klick-Timeout | wie jede Bestätigung: nichts ausgeführt | eigener Wartepfad ohne Timeout |
-| T16 | Einstellung: Schlüssel fehlt / `false` / `"false"` (String) | an / aus / an | kein Fail-safe |
-| T17 | Messfall, kein MUSS: mehrzeiliges Skript mit einer roten Zeile, Allow-Regel | Stuft der Klassifizierer es rot ein, `Confirm` mit neuem Code; sonst Befund in den Bericht, keine Änderung am Klassifizierer | Klassifizierer rot, aber `AutoExec` |
-| U1 | Frontend: Karte bekommt `action-decision-escalated` | zeigt Bestätigungsdialog mit übersetztem Text; Klick sendet `respond_to_action` | Ereignis nicht verdrahtet |
-| U2 | Frontend: Hintergrund-Tab bekommt `action-decision-escalated` | Tab zeigt den Hinweis auf eine wartende Aktion; Tab schließen lehnt genau diese Aktion ab | Tab-Zustand hört nur auf `chat-action-proposed` |
-| U3 | Frontend: Schalter — Wert fehlt / `false` / kein boolescher Wert (`0`, `"false"`) | an / aus / an, wie das Backend (A1.2) | Frontend und Backend zeigen Verschiedenes |
-| U4 | Locale-Parität de/en inkl. neuem Code | grün | Schlüssel fehlt |
+## 7. Prüffälle
 
-## 8. Offene Punkte
+Alle Backend-Fälle laufen mit einer Allow-Regel, die das Kommando sonst
+automatisch ausführen ließe. Als „rotes Kommando" dienen Beispiele, die der
+regelbasierte Klassifizierer tatsächlich rot einstuft und die weder an der
+Hard-Blacklist noch an Secret-Pfad oder `sftp-server` hängen.
 
-Keine. Die drei Designfragen aus BL-0074 sind entschieden: Rot auf einer der
-beiden Achsen zählt, nachträgliches Rot durch die Zweitmeinung wird
-bestätigt, die Einstellung gilt app-weit.
-
-## 9. Klarstellungen
-
-- 2026-09-29 · Review Lauf 1 · K2: Im A3-Pfad nennt `reason` nur die rote
-  Achse, nicht die Begründung der KI-Zweitmeinung. `Decision.reason` wird
-  unredigiert im Ledger gespeichert, und der Modelltext kann Teile des
-  Kommandos zitieren, etwa ein Passwort. Das hat Vorrang vor der
-  Formulierung in §5 „samt Begründung“ (§6: keine neue Datensenke).
-- 2026-09-29 · Review Lauf 1 · K1: Ein Kommando, das länger ist als die
-  Längengrenze des Filters, gilt bei eingeschalteter Einstellung als rot.
-  Seine Einstufung ist nicht belastbar. Nur Eskalation, deckt sich mit §6.
-- 2026-09-29 · Übergabe an Lauf 2: Den Text zu
-  `FILTER_RED_RISK_REQUIRES_CONFIRM` so formulieren, dass er auch den Fall
-  „nicht einschätzbar“ (Überlänge) deckt. `risk-assessment-updated.reason`
-  (Text aus dem Modell) nur anzeigen: nicht speichern, nicht als HTML
-  rendern. ADR 0084 nennt zusätzlich: den Weg über „Bearbeiten und
-  ausführen“, der nicht durch die Risiko-Kette läuft; die Grenze des
-  Klassifizierers; Rückfragen bei harmlosen, aber rot eingestuften Lesern
-  wie `cat ~/.ssh/id_rsa.pub`; den Punkt zum Ledger oben; eine Allow-Regel
-  auf ein rotes Kommando wirkt bei eingeschalteter Einstellung nie. A4.4
-  umfasst auch den Moduldoc von `core::risk::patterns`.
-
-## Umsetzung
-
-**Teil 0:** entfällt.
-
-**Reihenfolge:**
-1. `feat(app-logic,app-shell): require confirmation for red-risk proposals [BL-0074]` — A1.2/A1.3 (Backend), A2, Tests T1–T9 (inkl. T5b, T8b), T16, T17.
-2. `feat(app-logic): escalate to confirmation when the second opinion raises risk to red [BL-0074]` — A3 Backend, T10–T15.
-3. `feat(frontend): setting and dialog for red-risk confirmation [BL-0074]` — A1.4, A3.2/A3.6 Frontend, U1–U4.
-4. `docs: record red-risk confirmation decision [BL-0074]` — A4 (inkl. A4.4, Doc-Kommentare in `core::risk`, nach dem ADR).
-
-**Priorität:** ERHÖHT. Angriffsrichtungen für den Review:
-- Allow-Regel plus rotes Kommando: Gibt es einen Weg an dem Glied vorbei,
-  etwa MCP, `ReadRemoteFile`, `sudo`-Variante (Dual-Text) oder ein
-  Mehrzeilen-Skript?
-- Timing bei A3: Führt der `AutoExec`-Zweig aus, bevor die Zweitmeinung
-  ausgewertet ist? Geht ein Klick zwischen Ereignis und Registrierung
-  verloren?
-- Injection-Flag: Verbraucht das neue Glied es, sodass die Folgeaktion
-  automatisch läuft?
-- Einstellung: Lässt sie sich durch einen fehlerhaften Wert in
-  `settings.json` still auf „aus“ bringen?
-- Verwechseln sich die Codes (A2.4), sodass ein Secret-Pfad-Dialog seinen
-  genaueren Grund verliert?
-
-**Aufteilung:** zwei Läufe.
-Lauf 1 auf Opus: Schritte 1–2, also Ausführungspfad und Sitzungsaufbau.
-Lauf 2 auf Sonnet, danach: Schritte 3–4 (Oberfläche, Texte, ADR, README,
-Changelog). Das Ereignis aus §5 ist die Schnittstelle zwischen beiden
-Läufen. Lauf 2 ruft den spec-reviewer mit Priorität NORMAL.
-
-**Berührte Module:** `core` (nur Doc-Kommentare in `risk`), `app-logic` (orchestration, session), `app-shell`
-(connect, Einstellungen lesen), Frontend `riskSettings.ts`,
-`AiProviderSettings.tsx`, `ChatPanel.tsx`, `useSessionTabs.ts`, `events.ts`, `errorCodes.ts`,
-Locales, `docs/adr/`, `README.md`, `changelog.d/`.
-
-**Melde zurück:** die gewählten roten Beispielkommandos (T1/T2/T9) samt
-Klassifizierer-Ergebnis, das Ergebnis von T17, jede Entscheidung, die du
-treffen musstest, und einen manuellen Testablauf für A3 mit
-Zweitmeinungs-Provider.
+| # | Fall | Erwartet |
+|---|---|---|
+| T1 | Server-Rot, Einstellung an | `Confirm` mit `FILTER_RED_RISK_REQUIRES_CONFIRM`, keine Ausführung vor dem Klick |
+| T2 | Daten-Rot (Server nicht rot), an | wie T1 |
+| T3 | T1 und T2 mit Einstellung aus | `AutoExec` |
+| T4 | nur Gelb, an | `AutoExec` |
+| T5 | Rot mit Deny-Regel | `Deny` bleibt |
+| T5b | Rot und Hard-Blacklist | Code bleibt der der Hard-Blacklist |
+| T6 | Rot und gesetztes Verdachts-Kennzeichen | Injection-Code; Kennzeichen danach noch gesetzt; die nächste harmlose Aktion mit Allow-Regel wird per Injection eskaliert |
+| T7 | Secret-Pfad-Lesen, das zugleich rot ist | Secret-Code |
+| T8 | MCP, rot | Code `FILTER_RED_RISK_REQUIRES_CONFIRM` |
+| T8b | `sudo <rotes Kommando>`, Allow-Regel auf die Form ohne `sudo`, kein gespeichertes Passwort | Code `FILTER_RED_RISK_REQUIRES_CONFIRM` |
+| T9 | Datei lesen auf einen rot eingestuften Pfad, der kein Secret-Pfad ist | Code `FILTER_RED_RISK_REQUIRES_CONFIRM` |
+| T10 | Zweitmeinung (Mock) hebt Gelb auf Rot, an | keine Ausführung; Ereignis nach der Aktualisierung der Einstufung; Bestätigen führt genau einmal aus; Ledger „bestätigt" mit Code |
+| T11 | wie T10, Ablehnen | keine Ausführung, „frühere Ablehnung" gesetzt, Ledger „abgelehnt" |
+| T12 | wie T10, Einstellung aus | Ausführung wie sonst, kein neues Ereignis |
+| T13 | Zweitmeinung hebt nur auf Gelb, an | Ausführung, kein neues Ereignis |
+| T14 | wie T10, Stopp während der Zweitmeinung | übersprungen, kein Dialog |
+| T15 | wie T10, Zeitüberschreitung beim Klick | wie jede Bestätigung: nichts ausgeführt |
+| T16 | Einstellung: Wert fehlt / `false` / `"false"` | an / aus / an |
+| T17 | mehrzeiliges Skript mit einer roten Zeile, Allow-Regel | Stuft der Klassifizierer es rot ein, `Confirm`; sonst ist das ein Befund zur Klassifizierer-Grenze |
+| U1 | Oberfläche: Karte erhält das Ereignis | zeigt Dialog mit übersetztem Text; Klick sendet die Antwort |
+| U2 | Oberfläche: Hintergrund-Tab erhält das Ereignis | Hinweis auf wartende Aktion; Tab schließen lehnt genau diese Aktion ab |
+| U3 | Oberfläche: Schalter — Wert fehlt / `false` / kein boolescher Wert | an / aus / an, wie im Backend (A1.2) |
+| U4 | Sprachdateien de/en enthalten den neuen Code | Parität |
