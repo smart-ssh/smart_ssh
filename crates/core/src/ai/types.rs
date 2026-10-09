@@ -588,6 +588,12 @@ pub enum AiError {
     /// generischen 5xx/Wartungsfehler unterscheidbar
     /// (`ProviderUnavailable`).
     ModelNotFound(String),
+    /// Issue #99: der Provider lehnt das Modell ab, weil es keine
+    /// Tool-Aufrufe unterstützt, obwohl der Provider mit nativem
+    /// Tool-Calling konfiguriert ist (Ollama: HTTP 400, „… does not
+    /// support tools“). Abhilfe: „Natives Tool-Calling“ für den Provider
+    /// ausschalten. Terminal; es wird nichts ausgeführt oder vorgeschlagen.
+    ModelNoToolSupport(String),
     /// Spec 0069, Teil A2: ein Verbindungsaufbau zu einem **lokalen**
     /// KI-Dienst (Loopback-Adresse) ist gescheitert — typischerweise, weil
     /// Ollama (oder ein anderer lokaler Server) nicht läuft. Getrennt von
@@ -649,6 +655,9 @@ impl fmt::Display for AiError {
                 )
             }
             AiError::ModelNotFound(msg) => write!(f, "Modell nicht gefunden: {msg}"),
+            AiError::ModelNoToolSupport(msg) => {
+                write!(f, "Modell unterstützt keine Tool-Aufrufe: {msg}")
+            }
             AiError::LocalProviderUnreachable(msg) => {
                 write!(f, "Lokaler KI-Dienst nicht erreichbar: {msg}")
             }
@@ -679,6 +688,7 @@ impl AiError {
             AiError::ProviderUnavailable(_) => "AI_PROVIDER_UNAVAILABLE",
             AiError::ResponseTruncated => "AI_RESPONSE_TRUNCATED",
             AiError::ModelNotFound(_) => "AI_MODEL_NOT_FOUND",
+            AiError::ModelNoToolSupport(_) => "AI_MODEL_NO_TOOL_SUPPORT",
             AiError::LocalProviderUnreachable(_) => "AI_LOCAL_PROVIDER_UNREACHABLE",
             AiError::Timeout { .. } => "AI_TIMEOUT",
             AiError::WebResearchRejected(_) => "AI_WEB_RESEARCH_REJECTED",
@@ -705,6 +715,7 @@ mod ai_error_code_tests {
             AiError::ProviderUnavailable("x".to_string()),
             AiError::ResponseTruncated,
             AiError::ModelNotFound("x".to_string()),
+            AiError::ModelNoToolSupport("x".to_string()),
             AiError::LocalProviderUnreachable("x".to_string()),
             AiError::Timeout { secs: 90 },
             AiError::WebResearchRejected("x".to_string()),
