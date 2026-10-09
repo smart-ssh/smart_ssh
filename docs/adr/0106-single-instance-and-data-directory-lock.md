@@ -1,6 +1,6 @@
 # ADR 0106 — Single-Instance-Schutz und Sperre auf das Datenverzeichnis
 
-Status: akzeptiert
+Status: akzeptiert; §5/§6 und eine Konsequenz ergänzt durch ADR 0121
 Betrifft: Issue #19, Spec 0101 §1, ADR 0093 §7, ADR 0032
 
 ## Problem
@@ -56,7 +56,8 @@ Punkte ließ das Issue offen.
      zurück (`destroy`) und zeigt den Startfehler. Ohne das Zurücknehmen
      würde eine danach startende echte Instanz den Prozess mit dem
      Fehlerdialog nach vorn holen und sich selbst beenden.
-6. **Das Plugin ist nur in Release-Builds aktiv.** Es erkennt Instanzen an
+6. **Das Plugin ist nur in Release-Builds aktiv** (und seit ADR 0121 nur
+   mit dem Standard-Datenverzeichnis). Es erkennt Instanzen an
    der App-Kennung (`identifier`), nicht am Datenverzeichnis. Debug- und
    Release-Build tragen dieselbe Kennung, haben aber nach ADR 0032 getrennte
    Datenverzeichnisse, damit beide nebeneinander laufen. Mit dem Plugin im
@@ -72,13 +73,13 @@ Punkte ließ das Issue offen.
   unberührt.
 - Ein zweiter Start derselben Release-Version holt das offene Fenster nach
   vorn, statt einen Dialog zu zeigen.
-- Läuft dieselbe Release-Version mit einem **anderen** Datenverzeichnis
-  (`SMART_SSH_DATA_DIR`), holt ein zweiter Start ebenfalls die erste Instanz
-  nach vorn, weil das Plugin nur die Kennung kennt. Im Schlüsselbund-Modus
-  hat der zweite Prozess seine eigene Datenbank dann schon geöffnet (unter
-  seiner eigenen Sperre), bevor er endet. Das ist datenseitig unkritisch.
-  Wer zwei Release-Instanzen nebeneinander braucht, startet eine davon als
-  Debug-Build.
+- ~~Läuft dieselbe Release-Version mit einem anderen Datenverzeichnis, holt
+  ein zweiter Start ebenfalls die erste Instanz nach vorn.~~ **Abgelöst
+  durch ADR 0121 (Issue #44):** Das Plugin ist nur noch in Prozessen mit dem
+  Standard-Datenverzeichnis aktiv. Release-Instanzen mit verschiedenen
+  Datenverzeichnissen laufen nebeneinander, und kein zweiter Prozess öffnet
+  eine Datenbank, bevor er wegen des Plugins endet. Der frühere Hinweis,
+  eine der Instanzen als Debug-Build zu starten, entfällt.
 - Auf Linux ohne D-Bus-Sitzung meldet das Plugin sich nicht an und startet
   normal. Den Schutz der Daten übernimmt auch dort die Sperre.
 - Windows gibt die Sperre eines beendeten Prozesses laut Dokumentation von
