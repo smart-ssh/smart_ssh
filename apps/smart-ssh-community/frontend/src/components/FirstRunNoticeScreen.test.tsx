@@ -205,3 +205,128 @@ describe("first-run notice extensions (Spec 0031, section 6)", () => {
     await vi.waitFor(() => expect(consoleError).toHaveBeenCalledTimes(2));
   });
 });
+
+// Spec 0031, Abschnitt 6 (issue #159): Eine Erweiterung, die beim Rendern
+// wirft, darf den Pflicht-Hinweis nicht mitreißen. *Gegenbeweis:* Ohne die
+// Error-Boundary in `FirstRunNoticeScreen` hängt der Wurf den ganzen Baum
+// aus — `render` wirft, und jeder dieser Tests scheitert.
+describe("first-run notice extensions that fail to render (Spec 0031, section 6)", () => {
+  afterEach(() => {
+    resetRegistryForTests();
+    vi.restoreAllMocks();
+  });
+
+  function confirm() {
+    fireEvent.click(screen.getByRole("checkbox", { name: /gelesen und verstanden/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
+  }
+
+  function workingExtension(label: string, onContinue: () => void = () => {}) {
+    return function Working({ onContinue: register }: FirstRunNoticeExtensionContext) {
+      useEffect(() => register(onContinue));
+      return <p>{label}</p>;
+    };
+  }
+
+  /** Registers its continue handler during render, then throws. */
+  function throwingExtension(onContinue: () => void = () => {}) {
+    return function Throwing({ onContinue: register }: FirstRunNoticeExtensionContext): never {
+      register(onContinue);
+      throw new Error("render boom");
+    };
+  }
+
+  const ourLogsFor = (spy: ReturnType<typeof vi.spyOn>, id: string) =>
+    spy.mock.calls.filter(
+      ([message]) => typeof message === "string" && message.includes(`"${id}"`),
+    );
+
+  it("keeps the notice usable and hides only the failing extension's area", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    registerFirstRunNoticeExtension({ id: "broken", order: 1, Component: throwingExtension() });
+    registerFirstRunNoticeExtension({ id: "working", order: 2, Component: workingExtension("Working option") });
+    const onAcknowledge = vi.fn();
+    renderScreen(onAcknowledge);
+
+    expect(screen.getByText(/Verantwortung für jedes bestätigte Kommando liegt bei dir/)).toBeInTheDocument();
+    expect(screen.queryByTestId("first-run-notice-extension-broken")).toBeNull();
+    expect(screen.getByTestId("first-run-notice-extension-working")).toHaveTextContent("Working option");
+
+    const continueButton = screen.getByRole("button", { name: "Weiter" });
+    expect(continueButton).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /gelesen und verstanden/ }));
+    expect(continueButton).toBeEnabled();
+    fireEvent.click(continueButton);
+    expect(onAcknowledge).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs the failure once with the extension id", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    registerFirstRunNoticeExtension({ id: "broken", order: 1, Component: throwingExtension() });
+    registerFirstRunNoticeExtension({ id: "working", order: 2, Component: workingExtension("Working option") });
+    renderScreen();
+
+    const logs = ourLogsFor(consoleError, "broken");
+    expect(logs).toHaveLength(1);
+    expect(logs[0][0]).toBe('First-run notice extension "broken" failed to render:');
+    expect(logs[0][1]).toEqual(new Error("render boom"));
+    expect(ourLogsFor(consoleError, "working")).toHaveLength(0);
+  });
+
+  it("with only a throwing extension, the notice can still be acknowledged", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    registerFirstRunNoticeExtension({ id: "broken", order: 1, Component: throwingExtension() });
+    const onAcknowledge = vi.fn();
+    renderScreen(onAcknowledge);
+
+    expect(screen.queryByTestId(/^first-run-notice-extension-/)).toBeNull();
+    confirm();
+    expect(onAcknowledge).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call the continue handler of an extension that failed to render", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const brokenHandler = vi.fn();
+    const workingHandler = vi.fn();
+    registerFirstRunNoticeExtension({ id: "broken", order: 1, Component: throwingExtension(brokenHandler) });
+    registerFirstRunNoticeExtension({ id: "working", order: 2, Component: workingExtension("W", workingHandler) });
+    const onAcknowledge = vi.fn((afterStored: () => void) => afterStored());
+    renderScreen(onAcknowledge);
+
+    confirm();
+
+    expect(onAcknowledge).toHaveBeenCalledTimes(1);
+    expect(brokenHandler).not.toHaveBeenCalled();
+    expect(workingHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops the handler of an extension that registered in an effect and throws on a later render", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const lateHandler = vi.fn();
+    const workingHandler = vi.fn();
+    function ThrowsLater({ onContinue: register }: FirstRunNoticeExtensionContext) {
+      const [broken, setBroken] = useState(false);
+      useEffect(() => register(lateHandler));
+      if (broken) throw new Error("late boom");
+      return (
+        <button type="button" onClick={() => setBroken(true)}>
+          Break
+        </button>
+      );
+    }
+    registerFirstRunNoticeExtension({ id: "late", order: 1, Component: ThrowsLater });
+    registerFirstRunNoticeExtension({ id: "working", order: 2, Component: workingExtension("W", workingHandler) });
+    const onAcknowledge = vi.fn((afterStored: () => void) => afterStored());
+    renderScreen(onAcknowledge);
+
+    expect(screen.getByTestId("first-run-notice-extension-late")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Break" }));
+    expect(screen.queryByTestId("first-run-notice-extension-late")).toBeNull();
+
+    confirm();
+
+    expect(onAcknowledge).toHaveBeenCalledTimes(1);
+    expect(lateHandler).not.toHaveBeenCalled();
+    expect(workingHandler).toHaveBeenCalledTimes(1);
+  });
+});

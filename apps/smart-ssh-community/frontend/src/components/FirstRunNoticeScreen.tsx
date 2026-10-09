@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { Component as ReactComponent, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -33,6 +33,34 @@ function runContinueHandlers(handlers: [string, FirstRunNoticeContinueHandler][]
   }
 }
 
+interface ExtensionBoundaryProps {
+  id: string;
+  onError: (id: string, error: unknown, info: ErrorInfo) => void;
+  children: ReactNode;
+}
+
+/** Fängt Render-, Lifecycle- und Effect-Fehler genau einer Erweiterung ab
+ * (Spec 0031, Abschnitt 6, issue #159). Danach rendert sie nichts mehr für
+ * diese Erweiterung — auch nicht den umgebenden Bereich —, damit
+ * Hinweistext, Pflicht-Checkbox und "Weiter" bedienbar bleiben. Ohne sie
+ * würde ein Wurf den ganzen Baum aushängen und damit die einzige
+ * Möglichkeit, den Hinweis zu bestätigen. */
+class ExtensionBoundary extends ReactComponent<ExtensionBoundaryProps, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown, info: ErrorInfo): void {
+    this.props.onError(this.props.id, error, info);
+  }
+
+  render(): ReactNode {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 /**
  * Spec 0031: Zustimmungs-Screen vor der ersten Server-Verbindung
  * (Verantwortung für bestätigte Kommandos + Hinweis auf fehlende
@@ -50,16 +78,26 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
   // `checked`, den Text oder den "Weiter"-Button.
   const continueHandlers = useRef(new Map<string, FirstRunNoticeContinueHandler>());
   const handlersRan = useRef(false);
+  // Erweiterungen, deren Darstellung gescheitert ist: ihr Handler wird
+  // verworfen und darf auch später nicht mehr registriert werden.
+  const failedExtensions = useRef(new Set<string>());
   const [extensions] = useState(() =>
     listFirstRunNoticeExtensions().map(({ id, Component }) => {
       const context: FirstRunNoticeExtensionContext = {
         onContinue: (handler) => {
+          if (failedExtensions.current.has(id)) return;
           continueHandlers.current.set(id, handler);
         },
       };
       return { id, Component, context };
     }),
   );
+
+  const onExtensionError = (id: string, error: unknown) => {
+    failedExtensions.current.add(id);
+    continueHandlers.current.delete(id);
+    console.error(`First-run notice extension "${id}" failed to render:`, error);
+  };
 
   const afterStored = () => {
     if (handlersRan.current) return;
@@ -88,13 +126,14 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
           {t("firstRunNotice.checkboxLabel")}
         </label>
         {extensions.map(({ id, Component, context }) => (
-          <section
-            key={id}
-            data-testid={`first-run-notice-extension-${id}`}
-            className="mb-4 border-t border-slate-700 pt-4 text-sm text-slate-300"
-          >
-            <Component {...context} />
-          </section>
+          <ExtensionBoundary key={id} id={id} onError={onExtensionError}>
+            <section
+              data-testid={`first-run-notice-extension-${id}`}
+              className="mb-4 border-t border-slate-700 pt-4 text-sm text-slate-300"
+            >
+              <Component {...context} />
+            </section>
+          </ExtensionBoundary>
         ))}
         <div className="flex justify-end">
           <button
