@@ -25,6 +25,26 @@ use super::*;
 
 // --- Spec 0057, §3 + §4.1: Kompaktierung (Etappe 2) --------------------
 
+/// Issue #129: kennzeichnender Teil des Kürzungshinweises je Sprache des
+/// System-Prompts, damit jeder Test die Sprache seiner Anfrage prüft.
+fn truncation_marker(language: crate::system_prompt::PromptLanguage) -> &'static str {
+    match language {
+        crate::system_prompt::PromptLanguage::De => "ältere Konversation gekürzt",
+        crate::system_prompt::PromptLanguage::En => "older conversation truncated",
+    }
+}
+
+/// Issue #129: wie [`truncation_marker`], für die Hülle um eine
+/// rollierende Zusammenfassung.
+fn summary_marker(language: crate::system_prompt::PromptLanguage) -> &'static str {
+    match language {
+        crate::system_prompt::PromptLanguage::De => {
+            "[Zusammenfassung der bisherigen Konversation: "
+        }
+        crate::system_prompt::PromptLanguage::En => "[Summary of the conversation so far: ",
+    }
+}
+
 /// Spec 0057, §3.3/§6: "Kompaktierung betrifft nur den an die KI
 /// gesendeten Kontext, nie den Ledger." End-to-End-Beweis: Runde 1
 /// führt ein Kommando mit einer riesigen Ausgabe aus (landet
@@ -522,7 +542,9 @@ async fn test_compact_for_send_uses_summary_when_the_call_succeeds() {
         .history
         .iter()
         .find_map(|m| match &m.content {
-            MessageContent::Text(t) if t.contains("Zusammenfassung") => Some(t.clone()),
+            MessageContent::Text(t) if t.contains(summary_marker(parts.language)) => {
+                Some(t.clone())
+            }
             _ => None,
         })
         .expect("ein Zusammenfassungs-Platzhalter muss in der gekürzten Historie stehen");
@@ -531,7 +553,7 @@ async fn test_compact_for_send_uses_summary_when_the_call_succeeds() {
         "der Platzhalter muss den tatsächlichen KI-Text tragen: {placeholder_text}"
     );
     assert!(
-        !placeholder_text.contains("ältere Konversation gekürzt"),
+        !placeholder_text.contains(truncation_marker(parts.language)),
         "bei Erfolg darf NICHT der generische Etappe-2-Hinweis verwendet werden"
     );
     let stored = session.summary.lock().await.clone();
@@ -691,7 +713,7 @@ async fn test_compact_for_send_falls_back_to_plain_truncation_on_summary_error()
         result
             .history
             .iter()
-            .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("ältere Konversation gekürzt"))),
+            .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains(truncation_marker(parts.language)))),
         "bei einem Fehlschlag muss der generische Etappe-2-Hinweis verwendet werden: {:?}",
         result.history
     );
@@ -732,7 +754,7 @@ async fn test_compact_for_send_falls_back_to_plain_truncation_on_empty_summary_r
         result
             .history
             .iter()
-            .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("ältere Konversation gekürzt"))),
+            .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains(truncation_marker(parts.language)))),
         "eine leere Antwort zählt als Fehlschlag, muss auf den Etappe-2-Hinweis zurückfallen"
     );
     assert!(session.summary.lock().await.is_none());
@@ -772,7 +794,7 @@ async fn test_compact_for_send_falls_back_when_stream_ends_without_done_or_error
         result
             .history
             .iter()
-            .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("ältere Konversation gekürzt"))),
+            .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains(truncation_marker(parts.language)))),
         "ein Stream-Ende ohne Done/Error muss wie ein Fehlschlag behandelt werden, nicht \
          als Erfolg mit unvollständigem Text: {:?}",
         result.history
@@ -830,7 +852,7 @@ async fn test_compact_for_send_falls_back_when_summary_call_never_responds() {
         result
             .history
             .iter()
-            .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("ältere Konversation gekürzt"))),
+            .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains(truncation_marker(parts.language)))),
         "ein niemals antwortender Provider muss nach dem Zeitrahmen auf den Fallback \
          zurückfallen, nicht unbegrenzt blockieren: {:?}",
         result.history
@@ -905,7 +927,9 @@ async fn test_generate_rolling_summary_redacts_secrets_outgoing_and_incoming() {
         .history
         .iter()
         .find_map(|m| match &m.content {
-            MessageContent::Text(t) if t.contains("Zusammenfassung") => Some(t.clone()),
+            MessageContent::Text(t) if t.contains(summary_marker(parts.language)) => {
+                Some(t.clone())
+            }
             _ => None,
         })
         .expect("Zusammenfassungs-Platzhalter erwartet");
@@ -1559,7 +1583,7 @@ async fn test_compaction_skips_ai_call_when_all_newly_cut_rounds_are_mcp() {
     // gegriffen hat, statt eines echten KI-Aufrufs.
     assert!(
         result.history.iter().any(
-            |m| matches!(&m.content, MessageContent::Text(t) if t.contains("ältere Konversation gekürzt"))
+            |m| matches!(&m.content, MessageContent::Text(t) if t.contains(truncation_marker(parts.language)))
         ),
         "der generische Kürzungs-Platzhalter muss stehen: {:?}",
         result.history
@@ -2191,4 +2215,233 @@ async fn test_a_poisoned_mcp_origin_flags_lock_breaks_neither_push_nor_compactio
         !result.history.is_empty(),
         "die Kompaktierung darf den Verlauf nicht leer zuruecklassen"
     );
+}
+
+// --- Issue #129: Kompaktierungs-Hinweise in der Sprache des System-Prompts ---
+
+/// Kompaktiert die synthetische Historie von `session` mit einem
+/// System-Prompt der Sprache `language` — dieselbe aufgelöste Sprache, die
+/// `SystemContextParts` für den Prompt dieser Anfrage trägt.
+async fn compact_with_prompt_language(
+    session: &Session,
+    language: crate::system_prompt::PromptLanguage,
+) -> SessionContext {
+    let request_context = session.context.lock().await.clone();
+    let parts = crate::compaction::SystemContextParts {
+        language,
+        ..session.system_context_parts.lock().await.clone()
+    };
+    crate::compaction::compact_for_send(
+        session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        request_context,
+        &parts,
+        session.model_context_window_tokens,
+    )
+    .await
+}
+
+fn history_texts(context: &SessionContext) -> Vec<String> {
+    context
+        .history
+        .iter()
+        .filter_map(|m| match &m.content {
+            MessageContent::Text(t) => Some(t.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Issue #129 / Spec 0057 §2.2: auch der Fallback nach einem
+/// fehlgeschlagenen Zusammenfassungs-Aufruf folgt der Sprache — mit
+/// Englisch steht der englische Hinweis an erster Stelle, als
+/// `ActionResult`, und kein deutscher Hinweistext im Kontext.
+#[tokio::test]
+async fn test_english_prompt_gets_english_truncation_notice_on_summary_failure() {
+    use crate::system_prompt::PromptLanguage;
+    let mut session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Error(AiError::RateLimited)]),
+        MockSshTransport::default(),
+    );
+    session.parts_mut_for_tests().model_context_window_tokens = 2_000;
+    push_synthetic_rounds(&session, 6, 5_000).await;
+
+    let result = compact_with_prompt_language(&session, PromptLanguage::En).await;
+
+    assert_eq!(result.history[0].role, Role::ActionResult);
+    let texts = history_texts(&result);
+    assert!(
+        matches!(&result.history[0].content, MessageContent::Text(t)
+            if t.contains(truncation_marker(PromptLanguage::En))),
+        "der englische Kürzungshinweis muss an erster Stelle stehen: {texts:?}"
+    );
+    assert!(
+        texts
+            .iter()
+            .all(|t| !t.contains(truncation_marker(PromptLanguage::De))),
+        "mit Englisch darf kein deutscher Kürzungshinweis im Kontext stehen: {texts:?}"
+    );
+    assert!(session.summary.lock().await.is_none());
+}
+
+/// Issue #129: eine neu erzeugte rollierende Zusammenfassung bekommt mit
+/// Englisch die englische Hülle; ihr Text selbst bleibt unverändert.
+#[tokio::test]
+async fn test_english_prompt_gets_english_wrapper_for_a_generated_summary() {
+    use crate::system_prompt::PromptLanguage;
+    let mut session = session_with_ai_provider(
+        MockAiProvider::new(vec![
+            AiEvent::TextDelta("Nutzer prüfte Logs.".to_string()),
+            AiEvent::Done,
+        ]),
+        MockSshTransport::default(),
+    );
+    session.parts_mut_for_tests().model_context_window_tokens = 2_000;
+    push_synthetic_rounds(&session, 6, 5_000).await;
+
+    let result = compact_with_prompt_language(&session, PromptLanguage::En).await;
+
+    let texts = history_texts(&result);
+    assert!(
+        texts
+            .iter()
+            .any(|t| t == "[Summary of the conversation so far: Nutzer prüfte Logs.]"),
+        "die erzeugte Zusammenfassung muss in der englischen Hülle stehen: {texts:?}"
+    );
+    assert!(
+        texts
+            .iter()
+            .all(|t| !t.contains(summary_marker(PromptLanguage::De))),
+        "{texts:?}"
+    );
+}
+
+/// Issue #129: auch eine wiederverwendete Zusammenfassung (kein neuer
+/// KI-Aufruf) bekommt die Hülle der aktuellen Anfrage-Sprache, und mit
+/// Deutsch bleibt die Hülle byte-identisch zum bisherigen Text.
+#[tokio::test]
+async fn test_reused_summary_wrapper_follows_the_prompt_language() {
+    use crate::system_prompt::PromptLanguage;
+    for (language, expected) in [
+        (
+            PromptLanguage::En,
+            "[Summary of the conversation so far: Vorhandene Zusammenfassung.]",
+        ),
+        (
+            PromptLanguage::De,
+            "[Zusammenfassung der bisherigen Konversation: Vorhandene Zusammenfassung.]",
+        ),
+    ] {
+        let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
+        let mut session = session_with_ai_provider(
+            MockAiProvider {
+                rounds: StdMutex::new(vec![vec![AiEvent::Done]].into()),
+                received_contexts: received_contexts.clone(),
+            },
+            MockSshTransport::default(),
+        );
+        session.parts_mut_for_tests().model_context_window_tokens = 2_000;
+        push_synthetic_rounds(&session, 6, 5_000).await;
+        *session.summary.lock().await = Some(crate::compaction::RollingSummary {
+            text: "Vorhandene Zusammenfassung.".to_string(),
+            rounds_covered: 6,
+        });
+
+        let result = compact_with_prompt_language(&session, language).await;
+
+        assert!(received_contexts.lock().unwrap().is_empty());
+        assert_eq!(result.history[0].role, Role::ActionResult);
+        assert!(
+            matches!(&result.history[0].content, MessageContent::Text(t) if t == expected),
+            "{language:?}: {:?}",
+            result.history[0]
+        );
+    }
+}
+
+/// Issue #129: ohne gespeicherte Sprache entscheidet die System-Locale,
+/// sonst Englisch — die Kompaktierung nimmt genau den Wert, den die Regel
+/// des System-Prompts liefert, ohne eigene Abfrage.
+#[tokio::test]
+async fn test_notice_language_follows_the_system_prompt_rule_without_stored_language() {
+    use crate::system_prompt::{prompt_language, PromptLanguage};
+    for (locale, expected) in [
+        (Some("de-DE"), PromptLanguage::De),
+        (Some("en-US"), PromptLanguage::En),
+        (Some("fr-FR"), PromptLanguage::En),
+        (None, PromptLanguage::En),
+    ] {
+        let language = prompt_language(None, locale);
+        assert_eq!(language, expected, "{locale:?}");
+        let mut session = session_with_ai_provider(
+            MockAiProvider::new(vec![AiEvent::Error(AiError::RateLimited)]),
+            MockSshTransport::default(),
+        );
+        session.parts_mut_for_tests().model_context_window_tokens = 2_000;
+        push_synthetic_rounds(&session, 6, 5_000).await;
+
+        let result = compact_with_prompt_language(&session, language).await;
+
+        let other = match expected {
+            PromptLanguage::De => PromptLanguage::En,
+            PromptLanguage::En => PromptLanguage::De,
+        };
+        let texts = history_texts(&result);
+        assert!(
+            texts
+                .iter()
+                .any(|t| t.contains(truncation_marker(expected))),
+            "{locale:?}: {texts:?}"
+        );
+        assert!(
+            texts.iter().all(|t| !t.contains(truncation_marker(other))),
+            "{locale:?}: {texts:?}"
+        );
+    }
+}
+
+/// Issue #129: mit Englisch passt auch der Fallback-Hinweis unters Budget
+/// — die Cut-Count-Schätzung schätzt den englischen Text, der tatsächlich
+/// eingefügt wird.
+#[tokio::test]
+async fn test_english_fallback_notice_fits_under_budget() {
+    use crate::system_prompt::PromptLanguage;
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Error(AiError::RateLimited)]),
+        MockSshTransport::default(),
+    );
+    {
+        let mut ctx = session.context.lock().await;
+        ctx.history = vec![
+            user_msg("Runde 1"),
+            user_msg("Runde 2"),
+            user_msg("Runde 3"),
+            user_msg("Runde 4"),
+            command_result_msg("cat big.log", &"a".repeat(100_000)),
+        ];
+    }
+    let request_context = session.context.lock().await.clone();
+    let parts = crate::compaction::SystemContextParts {
+        language: PromptLanguage::En,
+        ..Default::default()
+    };
+    let result = crate::compaction::compact_for_send(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        request_context,
+        &parts,
+        10_000,
+    )
+    .await;
+    let budget = (10_000_f64 * 0.75) as usize;
+    let estimated = crate::compaction::estimate_request_tokens(&result);
+    assert!(
+        estimated <= budget,
+        "geschätzt {estimated}, Budget {budget}"
+    );
+    assert!(history_texts(&result)
+        .iter()
+        .any(|t| t.contains(truncation_marker(PromptLanguage::En))));
 }
