@@ -415,7 +415,7 @@ async fn test_unknown_host_key_pauses_then_trust_continues() {
 /// Zweig) — dieser Test schlug vor dem Fix fehl (der `matches!` traf nicht
 /// zu), s. Bericht.
 ///
-/// Spec 0093, §9 (Q-BL-0281-01): Der Port wird gebunden und sofort wieder
+/// ADR 0122, R11: Der Port wird gebunden und sofort wieder
 /// freigegeben, dann verbindet dieser Test dorthin. Zwischen `drop()` und
 /// `connect()` kann in seltenen Fällen ein fremder Testserver (aus einem
 /// parallel laufenden Testbinary) genau diesen Port belegen — dann liefert
@@ -1149,7 +1149,7 @@ async fn test_sftp_set_permissions() {
         .await
         .expect("set_permissions() sollte gelingen");
 
-    // Spec 0093, A1: auf allen Plattformen prüfen, dass der Client den
+    // ADR 0122, R4: auf allen Plattformen prüfen, dass der Client den
     // Modus tatsächlich per `setstat` überträgt — unabhängig davon, ob der
     // Testserver ihn anwendet (das tut er nur unter Unix, s. unten).
     assert_eq!(
@@ -1199,11 +1199,11 @@ async fn test_sftp_stat() {
 /// erste Ausgabezeile mitliefern.
 ///
 /// Der Abbruch wartet erst auf das Signal des Testservers, dass die erste
-/// Zeile gesendet ist (Spec 0097, A3/F5: ein `tokio::select!` ohne `biased`
+/// Zeile gesendet ist (ADR 0122, R6: ein `tokio::select!` ohne `biased`
 /// entscheidet sonst zufällig zwischen Abbruch und Kanaldaten, wenn beide
 /// gleichzeitig anliegen) und danach fest 1s, bevor er abbricht — die
 /// Zustellung über localhost liegt weit darunter, die 5s-Obergrenze
-/// darüber (Richtwert A2).
+/// darüber (Richtwert aus ADR 0122, R6).
 #[tokio::test]
 async fn test_execute_cancellable_returns_partial_output_on_cancel() {
     let server = RunningTestServer::start().await;

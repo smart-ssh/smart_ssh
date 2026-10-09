@@ -702,15 +702,15 @@ fn test_third_round_checks_leave_ordinary_commands_alone() {
 /// Lange, verschachtelte Eingaben an der Längengrenze bleiben schnell
 /// (Rekursion in Code-Strings ist tiefenbegrenzt, `cd`-Präfixe gedeckelt).
 ///
-/// Spec 0093, A6: Limit 3s riss unter `windows-latest` bei 3,01s (derselbe
+/// ADR 0122, R10: Limit 3s riss unter `windows-latest` bei 3,01s (derselbe
 /// Debug-Build, nur ein langsamerer Runner) — kein echter Rückfall. Neues
 /// Limit 10s, hergeleitet aus zwei Messungen auf dem eigenen Rechner
 /// (macOS, Debug-Build): alle vier Eingaben zusammen liefen in ~0,57s, die
 /// langsamste einzeln (Eingabe 1, 3608 Zeichen) in ~0,45s — 10s lässt >20x
 /// Marge zu diesem lokalen Wert und >3x zum gemessenen Windows-Wert.
 ///
-/// Abstand zu einer echten exponentiellen Explosion (Gegenprobe, Spec
-/// 0093 T7): Rekursionstiefen- (`depth > 3`) und Budget-Schranke
+/// Abstand zu einer echten exponentiellen Explosion (Gegenprobe):
+/// Rekursionstiefen- (`depth > 3`) und Budget-Schranke
 /// (`MAX_NESTED_CHECKS`) in `extended_secret_read_reason_in` testweise
 /// stark gelockert (`depth > 30`, Budget `1_000_000`) und dieselben vier
 /// Muster bei 25/50/75/100% ihrer Wiederholungszahl erneut gemessen:

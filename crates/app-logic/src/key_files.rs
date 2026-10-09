@@ -684,11 +684,11 @@ mod tests {
 
     /// §6.2.7: Ein Verzeichnis ist keine reguläre Datei.
     ///
-    /// A3 (Spec 0091, F2): Unter Windows scheitert schon das Öffnen des
+    /// ADR 0122, R2: Unter Windows scheitert schon das Öffnen des
     /// Verzeichnis-Handles oder das Lesen seiner Metadaten — `probe` ordnet
     /// das als `NotReadable` ein, die Prüfung auf eine reguläre Datei
     /// (`NotARegularFile`) läuft dort nie. Plattformverhalten, kein
-    /// Produktcode geändert (Klarstellung §9 der Spec).
+    /// Produktcode geändert.
     #[test]
     fn test_directory_is_rejected() {
         let dir = TempDir::new().unwrap();
@@ -971,7 +971,7 @@ mod tests {
     /// §6.4.6: Ein Pfad mit NUL-Byte ergibt einen sauberen Fehler — kein
     /// Panic, kein Hänger.
     ///
-    /// A3 (Spec 0091, F3): Der Pfad muss auf der jeweiligen Plattform
+    /// ADR 0122, R2: Der Pfad muss auf der jeweiligen Plattform
     /// absolut sein — `/tmp/…` ist das unter Windows nicht, dort schlüge
     /// der Test nur `PathNotAbsolute` fehl, statt den Lesefehler zu prüfen.
     #[test]

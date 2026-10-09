@@ -63,7 +63,7 @@ export function ThirdPartyLicensesDialog({ onClose }: ThirdPartyLicensesDialogPr
             <p className="text-sm text-slate-400">{t("about.thirdPartyLicenses.unavailable")}</p>
           )}
           {state.status === "available" && (
-            // A4.2 (adversarial, s. T8): `<pre>` mit reinem Textinhalt —
+            // A4.2 (adversarial, s. Test zu A4.2): `<pre>` mit reinem Textinhalt —
             // React escaped Kind-Text automatisch, kein
             // `dangerouslySetInnerHTML`, kein Markdown-Renderer. Ein
             // `<img onerror=…>` oder `<script>` in einer fremden

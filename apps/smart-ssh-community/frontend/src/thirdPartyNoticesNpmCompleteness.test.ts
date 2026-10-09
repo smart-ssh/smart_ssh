@@ -1,4 +1,4 @@
-// Spec 0099 (BL-0054), T5: zählt die produktiv genutzten npm-Pakete zur
+// Spec 0099, A1.1: zählt die produktiv genutzten npm-Pakete zur
 // Laufzeit über `npm ls --omit=dev --all --json`, **unabhängig vom Code**
 // von `scripts/generate-third-party-notices.mjs` (eigene Traversierung
 // hier, keine Wiederverwendung von dessen `collectProdPackages`) — ein Bug
@@ -20,11 +20,11 @@ const FRONTEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const NOTICES_PATH = path.join(FRONTEND_DIR, "public/third-party-notices.txt");
 
 // Muss A1.1(c) widerspiegeln (heute: tailwindcss, vite — s. Spec 0099,
-// Ist-Stand). Bewusst hier dupliziert statt aus dem Skript importiert,
+// A1.1). Bewusst hier dupliziert statt aus dem Skript importiert,
 // s. Kommentar oben.
 const BUNDLED_DEV_DEPS = ["tailwindcss", "vite"];
 
-// Klarstellung Spec 0099 Abschnitt 9 (2026-10-01, Windows): `npm` ist unter
+// Spec 0099, §2 (das Skript läuft auch unter Windows): `npm` ist unter
 // Windows `npm.cmd`, kein `.exe` — `execFileSync` findet es ohne Shell
 // nicht. Die Argumentliste bleibt fest (keine Nutzereingabe), nur unter
 // `win32` kommt `shell: true` dazu, analog zu `spawnCommand` im
@@ -83,7 +83,7 @@ function packagesInOutput(): Set<string> {
   return set;
 }
 
-describe("Drittlizenzen: npm-Seite vollständig (Spec 0099, T5)", () => {
+describe("Drittlizenzen: npm-Seite vollständig (Spec 0099, A1.1)", () => {
   const hasOutput = fs.existsSync(NOTICES_PATH);
 
   it.skipIf(!hasOutput)(

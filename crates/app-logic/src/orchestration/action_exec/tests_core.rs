@@ -2038,7 +2038,7 @@ async fn test_executed_action_triggers_automatic_followup_round_with_final_answe
 /// Absatz): eine langsame KI-Antwort in einer Session darf einen
 /// zeitnahen Befehl in einer anderen Session nicht ausbremsen. Session A
 /// bekommt einen `AiProvider`, dessen `send()`-Stream erst antwortet, wenn
-/// der Test es über `release` freigibt (Spec 0097, A3/F4: ein Signal statt
+/// der Test es über `release` freigibt (ADR 0122, R8: ein Signal statt
 /// einer festen Verzögerung — Session A bleibt so beliebig lange "mitten
 /// im Turn", unabhängig davon, wie schnell die Maschine gerade ist)
 /// — währenddessen muss `run_chat_turn` für Session B (über denselben
@@ -2116,9 +2116,9 @@ async fn test_slow_session_does_not_block_concurrent_session_via_shared_manager(
     // was ein zweiter, gleichzeitiger `send_chat_message`-Aufruf für einen
     // anderen Tab täte. Erst NACHDEM Session B fertig ist, wird Session A
     // freigegeben — eine über Sessions hinweg gehaltene Sperre würde B
-    // damit für immer blockieren, nicht nur messbar verzögern (Spec 0097,
-    // A3: Reihenfolge/Signal statt enges Zeitfenster). Die 5s-Obergrenze
-    // greift nur, wenn tatsächlich etwas hängt (Richtwert A2).
+    // damit für immer blockieren, nicht nur messbar verzögern (ADR 0122,
+    // R8: Reihenfolge/Signal statt enges Zeitfenster). Die 5s-Obergrenze
+    // greift nur, wenn tatsächlich etwas hängt (Richtwert R6).
     let fast_turn = async {
         entered.notified().await;
         tokio::time::timeout(

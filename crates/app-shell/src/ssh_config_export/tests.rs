@@ -231,7 +231,7 @@ fn t_6_3_14_anderer_pfad_wird_nicht_abgelehnt() {
     assert!(!super::resolves_to_ssh_config_under(&other, home.path()));
 }
 
-// Windows kennt Symlinks über diese API nicht (Spec 0089, W3) — der Test
+// Windows kennt Symlinks über diese API nicht (ADR 0122, R1) — der Test
 // bleibt auf Unix unverändert aktiv.
 #[cfg(unix)]
 #[test]

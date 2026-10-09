@@ -157,7 +157,7 @@ fn t_a2_platzhalter_vor_letzter_pfadkomponente_wird_gemeldet_nicht_aufgeloest() 
     );
 }
 
-// --------------------------- Spec 0091 F1/A1 (Windows: `\\?\`-Präfix)
+// --------------------------- Spec 0075 §3.1.4 (Windows: `\\?\`-Präfix)
 
 // Unter Windows liefert `std::fs::canonicalize` einen Pfad mit dem Präfix
 // `\\?\`; sein `?` darf den Include nicht zum Muster machen, obwohl der
@@ -254,7 +254,7 @@ fn t_6_2_4_relativer_include_relativ_zur_einbindenden_datei() {
         .map(|f| f.path.as_str())
         .collect();
     assert_eq!(names.len(), 2, "beide Dateien gelesen: {names:?}");
-    // A3a (Spec 0091, F4): Pfadbestandteile vergleichen, nicht die
+    // ADR 0122, R3: Pfadbestandteile vergleichen, nicht die
     // Zeichenkette mit einem bestimmten Trenner — unter Windows trennt der
     // kanonische Pfad mit `\`, nicht mit `/`. `Path::ends_with` vergleicht
     // Komponenten und ist damit auf jeder Plattform richtig.

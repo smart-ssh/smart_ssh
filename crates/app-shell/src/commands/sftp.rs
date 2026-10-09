@@ -1519,7 +1519,7 @@ mod sftp_mutation_tests {
     /// `lstat` als Root-Prüfung (der Zustand vor diesem Fix) schlägt dieser
     /// Test fehl, weil `outside/victim.txt` dann mitgelöscht würde.
     // Windows kennt weder Symlinks noch Unix-Rechtebits über diese API
-    // (Spec 0089, W2) — der Test bleibt auf Unix unverändert aktiv (Spec
+    // (ADR 0122, R1) — der Test bleibt auf Unix unverändert aktiv (Spec
     // 0054, Review des Gesamtpakets, ERHÖHTE Priorität).
     #[cfg(unix)]
     #[tokio::test]
@@ -1544,7 +1544,7 @@ mod sftp_mutation_tests {
     }
 
     /// Gegenstück für rekursives chmod — dieselbe Symlink-Begründung.
-    /// Unix-only wie oben (Spec 0089, W2).
+    /// Unix-only wie oben (ADR 0122, R1).
     #[cfg(unix)]
     #[tokio::test]
     async fn test_chmod_recursive_does_not_follow_a_symlink_at_the_root() {
@@ -1593,9 +1593,9 @@ mod sftp_mutation_tests {
     }
 
     // `LocalFileSession::set_permissions` liefert unter Windows absichtlich
-    // `Unsupported` (keine Unix-Rechtebits über diese API, Spec 0089, W2) —
+    // `Unsupported` (keine Unix-Rechtebits über diese API) —
     // dieser Test erwartet Erfolg und bleibt deshalb wie sein Nachbar oben
-    // auf Unix beschränkt (Spec 0093, A8).
+    // auf Unix beschränkt (ADR 0122, R1).
     #[cfg(unix)]
     #[tokio::test]
     async fn test_chmod_recursive_without_recursive_flag_only_touches_the_root() {
@@ -1617,7 +1617,7 @@ mod sftp_mutation_tests {
     }
 
     // Dasselbe wie oben: `set_permissions` liefert unter Windows
-    // `Unsupported`, der Test bleibt auf Unix beschränkt (Spec 0093, A8).
+    // `Unsupported`, der Test bleibt auf Unix beschränkt (ADR 0122, R1).
     #[cfg(unix)]
     #[tokio::test]
     async fn test_chmod_recursive_with_recursive_flag_touches_every_entry() {

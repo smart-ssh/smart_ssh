@@ -320,7 +320,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
   // Regressionstest mit Gegenbeweis: mit der Bedingung `auth.kind !==
   // "identityFile"` durch `true` ersetzt (Effekt ruft `inspectKeyFile` nie
   // auf) schlägt dieser Test fehl — verifiziert, danach wiederhergestellt.
-  // Spec 0097, A1: wartet auf den echten 400-ms-Debounce vor `inspectKeyFile`
+  // ADR 0122, R7: wartet auf den echten 400-ms-Debounce vor `inspectKeyFile`
   // (`ServerForm.tsx`, Spec 0076 B-3) — Fake-Timer steuern diese Zeit
   // selbst, statt auf eine geschätzte Dauer zu hoffen.
   it("fragt nach einer Pause den Vorab-Befund ab und zeigt die übersetzte Meldung (B-3)", async () => {
