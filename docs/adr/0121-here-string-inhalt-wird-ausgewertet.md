@@ -55,6 +55,16 @@ wird. ADR 0107 (Entscheidung 7) hatte das bewusst offen gelassen.
    laut Spec 0002, Abschnitt 3.1 weiterhin mindestens `Confirm`; an ihrer
    Wirkung ändert diese ADR nichts.
 
+   Auslegung des Akzeptanzkriteriums 2 von Issue #53 („ohne Nutzerregeln
+   ergibt ein Hard-Blacklist-Kommando hinter einem Here-String `Deny`“): Die
+   Hard-Blacklist wirkt hinter einem Here-String genau wie anderswo. Ohne
+   Nutzerregeln ergibt `bash <<< "rm -rf /"` also `Confirm` mit dem Code
+   `FILTER_HARD_BLACKLIST`, genau wie `bash -c "rm -rf /"` und `rm -rf /`,
+   und nie `AutoExec`. Greift zusätzlich eine `Deny`-Regel, gewinnt `Deny`.
+   Ein `Deny` nur hinter Here-Strings wäre inkonsistent mit dem `-c`-Pfad;
+   eine Hard-Blacklist, die überall `Deny` ergibt, wäre eine
+   Produktentscheidung mit eigener Spec-Änderung und gehört nicht hierher.
+
 ## Konsequenzen
 
 - `bash <<< "rm -rf /"` mit `Deny "rm *"` ist jetzt `Deny` statt `Confirm`.
