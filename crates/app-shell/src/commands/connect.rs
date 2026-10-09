@@ -666,6 +666,7 @@ pub(crate) async fn connect_session(
             sudo_password,
             status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),
+            mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
             chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),

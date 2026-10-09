@@ -122,6 +122,9 @@ Stattdessen:
   Verbindung getrennt wird; das Frontend ist dafür nicht der einzige Weg
   (nach einem Reload kennt es die `actionId` nicht). Seine eigene
   Ablehnung beim Schließen ist redundant und harmlos.
+- In einer MCP-Sitzung wartet höchstens eine Bestätigung zugleich (Spec 0104,
+  Abschnitt 3); der Indikator gehört damit immer zur einen offenen Aktion,
+  und das Schließen lehnt genau diese ab.
 
 ## 6. Verbindungsabbau
 

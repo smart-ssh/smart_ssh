@@ -42,6 +42,13 @@ pub(crate) struct PendingConfirmation<'a> {
     receiver: oneshot::Receiver<ActionUserDecision>,
 }
 
+/// Issue #108: In dieser (MCP-)Sitzung wartet bereits eine Bestätigung.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AnotherConfirmationPending;
+
+/// Fehlertext an den MCP-Client, wenn ein weiterer Vorschlag abgewiesen wird.
+pub(crate) const ANOTHER_CONFIRMATION_PENDING_MESSAGE: &str = "Another action is awaiting confirmation in this session. Decide or reject the pending action in the app first, then propose again.";
+
 /// Ausgang eines Wartens: äußeres `Err` = Zeitgrenze erreicht, inneres
 /// `Err` = der Sender wurde gedroppt.
 pub(crate) type ConfirmationWaitOutcome =
@@ -49,17 +56,42 @@ pub(crate) type ConfirmationWaitOutcome =
 
 impl<'a> PendingConfirmation<'a> {
     /// Registriert `action_id` als wartend. Ab hier räumt [`Drop`] auf.
+    /// Der Tab-Indikator wird erst in [`Self::wait_for_decision`] gesetzt.
+    ///
+    /// `exclusive` (MCP-Sitzungen, Spec 0104 §5): Wartet in der Sitzung
+    /// bereits eine Bestätigung, wird nichts registriert und
+    /// [`AnotherConfirmationPending`] zurückgegeben. Prüfung und Belegung
+    /// geschehen in einem atomaren Schritt (von der Registrierung bis zum Fallen), damit parallele Vorschläge nicht
+    /// beide durchkommen. Nicht exklusiv ändert sich nichts gegenüber vorher.
     pub(crate) fn register(
         session: &'a Session,
         registry: &'a ConfirmationRegistry<ActionId, ActionUserDecision>,
         action_id: ActionId,
-    ) -> Self {
+        exclusive: bool,
+    ) -> Result<Self, AnotherConfirmationPending> {
+        if exclusive
+            && session
+                .mcp_confirmation_claim
+                .compare_exchange(
+                    false,
+                    true,
+                    std::sync::atomic::Ordering::SeqCst,
+                    std::sync::atomic::Ordering::SeqCst,
+                )
+                .is_err()
+        {
+            return Err(AnotherConfirmationPending);
+        }
         let RegisteredConfirmation { registry, receiver } =
             RegisteredConfirmation::register(registry, action_id);
-        Self {
-            cleanup: ConfirmationCleanup { session, registry },
+        Ok(Self {
+            cleanup: ConfirmationCleanup {
+                session,
+                registry,
+                claimed: exclusive,
+            },
             receiver,
-        }
+        })
     }
 
     /// Setzt den Tab-Indikator (Spec 0017, Abschnitt 5:
@@ -107,10 +139,17 @@ pub(crate) struct ConfirmationCleanup<'a> {
     /// nach dem `Drop` des umschließenden Werts verworfen. Die Reihenfolge
     /// ist damit dieselbe wie vor der Aufteilung.
     registry: RegistryCleanup<'a>,
+    /// Issue #108: gibt beim Fallen den exklusiven Platz der MCP-Sitzung frei.
+    claimed: bool,
 }
 
 impl Drop for ConfirmationCleanup<'_> {
     fn drop(&mut self) {
+        if self.claimed {
+            self.session
+                .mcp_confirmation_claim
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+        }
         {
             // Spec 0088, §5: nur den EIGENEN Indikator löschen. MCP und Chat
             // teilen sich eine `Session`; steht dort inzwischen die
