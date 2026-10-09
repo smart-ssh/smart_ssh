@@ -146,10 +146,11 @@ jobs:
         working-directory: apps/smart-ssh-community/frontend
         run: npm run generate-notices
 
-      # Spec 0090, A5: oxlint-Verstöße der Stufe "error" färben den Job rot;
-      # Warnungen (aktuell 19, seit Spec 0100/A6.1 inkl. `jsx-a11y`, s. dort
-      # §1/A6.2 für die Liste) bleiben Warnungen — oxlints eigener
-      # Exit-Code unterscheidet das bereits.
+      # Spec 0090, A5: oxlint findings of severity "error" fail the job.
+      # Spec 0100, A6.1: every `jsx-a11y` rule is configured as "error" in
+      # `.oxlintrc.json`, so accessibility findings fail the job too.
+      # Remaining warnings do not fail the job (oxlint's exit code already
+      # makes that distinction); see the `npm run lint` output for them.
       - name: Frontend lint
         working-directory: apps/smart-ssh-community/frontend
         run: npm run lint
