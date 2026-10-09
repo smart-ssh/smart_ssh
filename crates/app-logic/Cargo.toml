@@ -21,6 +21,8 @@ path = "src/lib.rs"
 test-support = []
 
 [dependencies]
+# Issue #104: NFKC-Normalisierung der Urteilswerte (Spec 0074).
+unicode-normalization = "0.1.25"
 ai-providers = { version = "0.5.2", path = "../ai-providers" }
 async-trait = "0.1.92"
 base64 = "0.23.1"
@@ -54,6 +56,8 @@ tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
 uuid = { version = "1.26.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
+# Issue #104: Eigenschaftstest gegen den Fallback-Parser. Nur hier.
+proptest = "1"
 # Spec 0101 (spec-reviewer Runde 1): Die Tests dieser Crate legen
 # Klartext-Datenbanken an (Ausgangszustand einer bestehenden
 # Installation) und brauchen dafuer `connect_plaintext`. Nur hier, nie
