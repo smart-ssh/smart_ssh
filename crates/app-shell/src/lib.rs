@@ -24,7 +24,7 @@ mod local_server;
 mod mcp_backend;
 mod mcp_settings;
 mod risk_second_opinion;
-/// Spec 0101, Teil 0 Frage 2: die gemessene Annahme über Tauris
+/// Spec 0101, §2 Frage 2: die gemessene Annahme über Tauris
 /// Async-Runtime, auf der der synchrone Secret-Speicher steht.
 #[cfg(test)]
 mod runtime_assumptions;
@@ -54,7 +54,7 @@ mod startup_prompt;
 mod test_support;
 /// Issue #90: die UI-Sprache als Sprache des Sitzungs-System-Prompts.
 mod ui_language;
-/// Spec 0101, Teil 0 Frage 3: die Startdialoge im Fenster, fuer den
+/// Spec 0101, §2 Frage 3: die Startdialoge im Fenster, fuer den
 /// Passwort-Modus.
 mod window_prompt;
 mod wiring;
@@ -76,7 +76,7 @@ use app_logic::state::AppState;
 /// K beschafft wird.
 ///
 /// **Eigener Typ seit Spec 0101 Etappe 3:** Im Passwort-Modus wird der
-/// Startablauf in zwei Hälften geteilt (Teil 0 Frage 3). Die erste läuft in
+/// Startablauf in zwei Hälften geteilt (§2 Frage 3). Die erste läuft in
 /// [`run`] vor dem Fenster, die zweite im Entsperr-Kommando. Beide brauchen
 /// dieselben Angaben, und sie dürfen sich nicht unterscheiden — die
 /// Umgebung wird deshalb genau einmal gelesen.
@@ -418,7 +418,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // `State`.
     let edition_data_paths = commands::EditionDataPaths(wiring.extra_data_paths);
 
-    // Spec 0101, Etappe 3 (Teil 0 Frage 3): Der Startablauf hat seit dem
+    // Spec 0101, Etappe 3 (§2 Frage 3): Der Startablauf hat seit dem
     // Master-Passwort zwei Formen.
     //
     // **Schlüsselbund-Modus** (Standard, E8): unverändert — der `AppState`
@@ -510,7 +510,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                     drop(_log_guard);
                     std::process::exit(0);
                 }
-                // Teil 0 Frage 3: „Master-Passwort einrichten" aus D1
+                // §2 Frage 3: „Master-Passwort einrichten" aus D1
                 // braucht eine Texteingabe, die rfd nicht hat. Es ist
                 // nichts verändert; die App startet ohne Zustand und
                 // wiederholt den Ablauf aus dem Fenster.

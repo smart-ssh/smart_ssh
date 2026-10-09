@@ -274,7 +274,7 @@ pub fn db_connect_failure_text(
         ),
         // Spec 0101 Etappe 3: Der Host-Key-Speicher hat seinen eigenen Text
         // (`host_key_store_failure_text`) — dieser Zweig wird nur erreicht,
-        // wenn der Fall über die Startfehler-Rückgabe kommt (Teil 0 Frage 3).
+        // wenn der Fall über die Startfehler-Rückgabe kommt (§2 Frage 3).
         //
         // **Mit dem Pfad des Host-Key-Speichers, nicht dem der Datenbank**
         // (spec-reviewer Lauf 4, Fund 9): Der Text rät dazu, die Datei zu
