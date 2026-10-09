@@ -1752,12 +1752,17 @@ fn truncate_for_log(text: &str) -> String {
 /// bleiben deshalb nur Zahlen: `session_id`, Exit-Code, Ausgabelängen,
 /// Kommandolänge. Kommando und Ausgaben stehen auf `debug`, dort
 /// unverändert redigiert und auf `MAX_LOGGED_OUTPUT_LEN` gekürzt.
+///
+/// Issue #143: `command_len` zählt Bytes (`str::len`) — dieselbe Einheit wie
+/// `stdout_len`/`stderr_len`, das Längenlimit und das gleichnamige Feld der
+/// Filter-Entscheidungszeile, damit beide Zeilen für dasselbe Kommando
+/// dieselbe Zahl zeigen.
 fn log_command_execution(session_id: SessionId, command: &str, redacted_output: &CommandOutput) {
     let stdout = String::from_utf8_lossy(&redacted_output.stdout);
     let stderr = String::from_utf8_lossy(&redacted_output.stderr);
     tracing::info!(
         session_id = %session_id,
-        command_len = command.chars().count(),
+        command_len = command.len(),
         exit_code = ?redacted_output.exit_code,
         stdout_len = stdout.len(),
         stderr_len = stderr.len(),
@@ -1800,11 +1805,11 @@ fn log_command_execution(session_id: SessionId, command: &str, redacted_output: 
 /// nicht — und `SshError`s `Display` gibt bei `ConnectionFailed`/
 /// `ChannelError`/`CredentialResolutionFailed` freien Text der darunter
 /// liegenden Bibliothek wieder, der das Kommando enthalten kann. Ab `warn`
-/// bleiben Kommandolänge und `code()`.
+/// bleiben Kommandolänge (in Bytes, Issue #143) und `code()`.
 fn log_command_execution_failed(session_id: SessionId, command: &str, err: &SshError) {
     tracing::warn!(
         session_id = %session_id,
-        command_len = command.chars().count(),
+        command_len = command.len(),
         code = err.code(),
         "ssh command execution failed",
     );

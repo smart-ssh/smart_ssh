@@ -122,12 +122,25 @@ steht — melden, nicht mitreparieren."
    `stop_reason`-String roh auf `info`, und die Zeile steht in
    `SAFE_LOG_MESSAGES`. Provider-kontrolliert, in der Praxis ein Enum-Wert
    (`end_turn`, `max_tokens`), kein Nutzerinhalt. Eigener Backlog-Punkt.
-3. **Gemischte Einheiten bei den Längenfeldern.** `command_len` und die
-   Längen in `history_shapes` zählen Zeichen, `stdout_len`/`stderr_len`
-   zählen Bytes. Letzteres stand schon vor dieser Spec so da
-   (`output.stdout.len()`); die Bedeutung eines bestehenden Feldes ungefragt
-   zu ändern wäre eine eigene Änderung, nicht Teil von A1.4. Eigener
-   Backlog-Punkt.
+3. **Einheiten der Längenfelder.** Ursprünglich zählten `command_len` und
+   die Längen in `history_shapes` Zeichen, `stdout_len`/`stderr_len` Bytes;
+   die Bedeutung eines bestehenden Feldes ungefragt zu ändern war nicht Teil
+   von A1.4. Nachgezogen in zwei Schritten: Seit Issue #110 misst das
+   Längenlimit Bytes, und die Entscheidungszeile der Filter-Engine meldet
+   `command_len` in Bytes. Seit Issue #143 gilt das für jedes Feld namens
+   `command_len` — die Zeilen „ssh command executed" und „ssh command
+   execution failed" sowie die Einträge `[command_result]` und
+   `[action_rejected]` in `history_shapes`. `command_len`,
+   `stdout_len` und `stderr_len` zählen damit überall Bytes, und Filter-
+   und Ausführungszeile zeigen für dasselbe Kommando dieselbe Zahl.
+
+   Bewusst weiter in Zeichen: `[text] len=` sowie `input_len`/
+   `content_len` von `[web_activity]` in `history_shapes`. Keines davon hat
+   ein gleichnamiges Gegenstück in einer anderen Zeile oder ein Limit, mit
+   dem es übereinstimmen müsste, und für Chat-Text ist die Zeichenzahl die
+   aussagekräftigere Größe (sie entspricht dem, was ein Nutzer als
+   Nachrichtenlänge wahrnimmt). Die Felder unterscheiden sich im Namen von
+   `command_len`, eine Verwechslung der Einheit liegt also nicht nahe.
 4. **`CHANGELOG.md`** bleibt unverändert. Nicht weil der Eintrag fehlen
    soll, sondern weil dieses Repo Changelog-Einträge als Fragment unter
    `changelog.d/` sammelt und erst beim Versionssprung zusammenführt. Das
