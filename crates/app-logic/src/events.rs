@@ -784,6 +784,27 @@ pub fn emit_chat_web_activity(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ChatWebResearchUnavailablePayload {
+    session_id: SessionId,
+}
+
+/// Issue #169 (Spec 0105 §7): der Provider hat die laufende Anfrage
+/// abgelehnt, weil die Web-Werkzeuge für das Provider-Konto abgeschaltet
+/// sind; die Sitzung fragt ab jetzt ohne Web-Recherche weiter. Das Frontend
+/// zeigt einen übersetzten Hinweis samt Verweis auf die Einstellung. Bewusst
+/// ohne den Fehlertext des Providers (der Hinweis ist ein fester Text) und
+/// als eigenes Event statt Text im Inhalt (Lehre aus Spec 0057, s.
+/// `emit_chat_response_truncated`).
+pub fn emit_chat_web_research_unavailable(emitter: &dyn EventEmitter, session_id: SessionId) {
+    emit(
+        emitter,
+        "chat-web-research-unavailable",
+        &ChatWebResearchUnavailablePayload { session_id },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ChatResponseEmptyPayload {
     session_id: SessionId,
 }

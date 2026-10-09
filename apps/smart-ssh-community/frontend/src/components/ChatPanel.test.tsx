@@ -521,3 +521,43 @@ describe("resumed command results (issue #167)", () => {
     expect(screen.getByText("exit code: —")).toBeTruthy();
   });
 });
+
+// Spec 0105 §7 (issue #169): the provider account has web search disabled —
+// a translated notice with a pointer to the setting, never the provider's
+// raw error body.
+describe("web research unavailable notice (issue #169)", () => {
+  function renderNoticeIn(lng: "de" | "en") {
+    return render(
+      <I18nextProvider i18n={testI18n.cloneInstance({ lng })}>
+        <ChatItemView
+          item={{ type: "webResearchUnavailable", id: "w-1" }}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+  }
+
+  it("shows the English notice with a pointer to the setting", () => {
+    const { container } = renderNoticeIn("en");
+    expect(
+      screen.getByText(/^Web research is not available for this provider account/),
+    ).toBeInTheDocument();
+    expect(container.textContent).toContain("Settings → AI Provider → “Web research”");
+    expect(container.textContent).not.toMatch(/invalid_request_error|not enabled|HTTP 400/);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("shows the German notice with a pointer to the setting", () => {
+    const { container } = renderNoticeIn("de");
+    expect(
+      screen.getByText(/^Web-Recherche ist für dieses Provider-Konto nicht verfügbar/),
+    ).toBeInTheDocument();
+    expect(container.textContent).toContain("Einstellungen → KI-Provider → „Web-Recherche“");
+    expect(container.textContent).not.toMatch(/invalid_request_error|not enabled|HTTP 400/);
+  });
+});

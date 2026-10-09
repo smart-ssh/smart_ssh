@@ -16,7 +16,7 @@ use crate::events::{
     emit_chat_auto_continuation_limit_reached, emit_chat_auto_continuation_started,
     emit_chat_error, emit_chat_queued_messages_sent, emit_chat_response_cancelled,
     emit_chat_response_empty, emit_chat_response_truncated, emit_chat_text_delta,
-    emit_chat_web_activity, EventEmitter,
+    emit_chat_web_activity, emit_chat_web_research_unavailable, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -44,6 +44,10 @@ mod tests_rounds;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_web;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_web_research_rejected;
 
 /// Sicherheitsgrenze gegen eine KI, die in jeder Folgerunde erneut eine
 /// Aktion vorschlägt, die wieder ausgeführt/abgelehnt/blockiert wird — ohne
@@ -307,6 +311,36 @@ pub(crate) async fn wait_for_rate_limit_budget(
             wait.as_secs_f64().ceil() as u64,
         );
         tokio::time::sleep(wait).await;
+    }
+}
+
+/// Wartet vor einem `send()` des Haupt-Chats: Mindestabstand
+/// ([`wait_for_ai_request_slot`]) und proaktives Rate-Limit-Gate
+/// ([`wait_for_rate_limit_budget`], Spec 0061 Abschnitt 3 — nach der
+/// Kompaktierung/Redaction, damit die Schätzung den tatsächlich gesendeten
+/// Request widerspiegelt). Spec 0066, §1: beide Wartezeiten sind per Stopp
+/// abbrechbar (beide schlafen nur, Abbruch ist folgenlos). `true` heißt:
+/// der Nutzer hat gestoppt, es darf nichts gesendet werden. Issue #169: auch
+/// der Wiederholversuch ohne Web-Werkzeuge läuft hier durch.
+async fn wait_before_main_send(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+    estimated_tokens: usize,
+) -> bool {
+    tokio::select! {
+        biased;
+        () = session.auto_continue_stop_requested() => true,
+        () = async {
+            wait_for_ai_request_slot(session).await;
+            wait_for_rate_limit_budget(
+                &session.ai_provider_budget,
+                estimated_tokens,
+                emitter,
+                session_id,
+            )
+            .await;
+        } => false,
     }
 }
 
@@ -648,31 +682,18 @@ async fn run_one_round(
     // `send()`-Aufruf, s. `reapply_redaction_for_send`-Doc-Kommentar.
     request_context.history =
         reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
-    // Spec 0066, §1: auch die Wartezeiten vor dem Send sind per Stopp
-    // abbrechbar (beide schlafen nur, Abbruch ist folgenlos).
     let estimated_tokens = crate::compaction::estimate_request_tokens(&request_context);
-    let stopped_before_send = tokio::select! {
-        biased;
-        () = session.auto_continue_stop_requested() => true,
-        () = async {
-            wait_for_ai_request_slot(session).await;
-            // Spec 0061, Abschnitt 3: proaktives Rate-Limit-Gate, direkt vor
-            // dem Send — nach der Kompaktierung/Redaction, damit die
-            // Schätzung den tatsächlich gesendeten Request widerspiegelt.
-            wait_for_rate_limit_budget(
-                &session.ai_provider_budget,
-                estimated_tokens,
-                emitter,
-                session_id,
-            )
-            .await;
-        } => false,
-    };
-    if stopped_before_send {
+    if wait_before_main_send(session, session_id, emitter, estimated_tokens).await {
         emit_chat_response_cancelled(emitter, session_id);
         return RoundOutcome::StoppedBeforeSend;
     }
-    let mut stream = session.ai_provider.send(request_context);
+    // Issue #169: geklont, weil ein abgelehnter Request mit Web-Werkzeugen
+    // genau einmal mit demselben (bereits kompaktierten und geschwärzten)
+    // Kontext wiederholt wird, s. `AiError::WebResearchRejected` unten.
+    let mut stream = session.ai_provider.send(request_context.clone());
+    // Issue #169: höchstens ein Wiederholversuch ohne Web-Werkzeuge je
+    // Anfrage, nie eine Schleife.
+    let mut web_research_retry_used = false;
 
     let mut text_buffer = String::new();
     let mut executed_action = false;
@@ -830,6 +851,29 @@ async fn run_one_round(
                 flush_text_buffer(session, &mut text_buffer).await;
                 emit_chat_response_truncated(emitter, session_id);
                 break;
+            }
+            AiEvent::Error(AiError::WebResearchRejected(_)) if !web_research_retry_used => {
+                // Issue #169 (Spec 0105 §7): das Provider-Konto hat die
+                // Web-Werkzeuge abgeschaltet. Die Sitzung bietet sie ab jetzt
+                // nicht mehr an (nur im Speicher, die gespeicherte
+                // Einstellung bleibt), der Nutzer bekommt einen Hinweis, und
+                // dieselbe Anfrage geht genau einmal ohne Web-Werkzeuge raus
+                // — über dieselbe Taktung und dasselbe Rate-Limit-Gate wie
+                // jede andere Anfrage. Der Provider meldet diesen Fehler nur
+                // für eine Anfrage MIT Web-Werkzeug, der Wiederholversuch
+                // kann ihn also nicht erneut auslösen; `web_research_retry_
+                // used` sichert das zusätzlich ab (ein zweiter landet im
+                // allgemeinen Fehlerzweig unten).
+                web_research_retry_used = true;
+                drop(stream);
+                flush_text_buffer(session, &mut text_buffer).await;
+                session.ai_provider.disable_web_research();
+                emit_chat_web_research_unavailable(emitter, session_id);
+                if wait_before_main_send(session, session_id, emitter, estimated_tokens).await {
+                    emit_chat_response_cancelled(emitter, session_id);
+                    return RoundOutcome::StoppedBeforeSend;
+                }
+                stream = session.ai_provider.send(request_context.clone());
             }
             AiEvent::Error(err) => {
                 flush_text_buffer(session, &mut text_buffer).await;

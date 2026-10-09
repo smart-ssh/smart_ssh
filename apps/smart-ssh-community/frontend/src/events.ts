@@ -14,6 +14,7 @@ import type {
   ChatResponseTruncatedEvent,
   ChatTextDeltaEvent,
   ChatWebActivityEvent,
+  ChatWebResearchUnavailableEvent,
   ConnectionStatusChangedEvent,
   HostKeyVerificationEndedEvent,
   HostKeyVerificationNeededEvent,
@@ -101,6 +102,14 @@ export const onChatWebActivity = (
   handler: (event: ChatWebActivityEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatWebActivityEvent>("chat-web-activity", (e) => handler(e.payload));
+
+/** Spec 0105 §7 (Issue #169) — s. `ChatWebResearchUnavailableEvent`. */
+export const onChatWebResearchUnavailable = (
+  handler: (event: ChatWebResearchUnavailableEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatWebResearchUnavailableEvent>("chat-web-research-unavailable", (e) =>
+    handler(e.payload),
+  );
 
 /** Spec 0080, A2 — s. `ChatResponseEmptyEvent`-Doc-Kommentar. */
 export const onChatResponseEmpty = (
