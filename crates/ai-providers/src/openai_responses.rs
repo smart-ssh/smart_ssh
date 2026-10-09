@@ -221,23 +221,33 @@ struct WebCollector {
 impl WebCollector {
     fn record_call(&mut self, item: &Value) {
         let action = item.get("action");
-        match action.and_then(|a| a.get("type")).and_then(Value::as_str) {
-            // `open_page` / `find_in_page` carry no page text the app could
-            // store, fence or check; they are not shown (Spec 0105 §4).
-            Some("open_page") | Some("find_in_page") => return,
-            _ => {}
-        }
-        let query = action
-            .and_then(|a| a.get("query"))
-            .and_then(Value::as_str)
-            .or_else(|| {
-                action
-                    .and_then(|a| a.get("queries"))
-                    .and_then(|q| q.get(0))
-                    .and_then(Value::as_str)
-            })
-            .unwrap_or_default()
-            .to_string();
+        // `open_page` / `find_in_page` carry no page text the app could
+        // store, fence or check. They still count as web activity (the
+        // model read untrusted content), so they are shown as a search
+        // card with the page URL and trigger the escalation (Spec 0105 §4/§6).
+        let is_page_action = matches!(
+            action.and_then(|a| a.get("type")).and_then(Value::as_str),
+            Some("open_page") | Some("find_in_page")
+        );
+        let query = if is_page_action {
+            action
+                .and_then(|a| a.get("url"))
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string()
+        } else {
+            action
+                .and_then(|a| a.get("query"))
+                .and_then(Value::as_str)
+                .or_else(|| {
+                    action
+                        .and_then(|a| a.get("queries"))
+                        .and_then(|q| q.get(0))
+                        .and_then(Value::as_str)
+                })
+                .unwrap_or_default()
+                .to_string()
+        };
         let failed = item.get("status").and_then(Value::as_str) == Some("failed");
         self.searches.push(WebActivity {
             kind: WebActivityKind::Search,
@@ -292,6 +302,18 @@ impl WebCollector {
         if let Some(last) = searches.last_mut() {
             last.results = citations.clone();
             last.cited = citations;
+        } else if !citations.is_empty() {
+            // Cited sources without a recorded search call: the answer still
+            // rests on web content, so it must not go unflagged.
+            searches.push(WebActivity {
+                kind: WebActivityKind::Search,
+                input: String::new(),
+                results: citations.clone(),
+                cited: citations,
+                content: None,
+                content_truncated: false,
+                error_code: None,
+            });
         }
         searches
     }

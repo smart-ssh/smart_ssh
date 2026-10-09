@@ -24,8 +24,9 @@ ADR 0127 (Web-Recherche über die Responses-API von OpenAI).
   bei Anthropic gibt es keinen Seitenabruf: Der Provider liefert keinen
   Seitentext zurück.
 - **Generische OpenAI-kompatible Endpunkte, Ollama und OpenAI mit
-  eigener Basis-URL:** keine Web-Recherche. Die Anfrage enthält kein Web-Werkzeug; der Chat verhält
-  sich genau wie ohne diese Spec.
+  eigener Basis-URL:** keine Web-Recherche. Die Anfrage enthält kein
+  Web-Werkzeug, und der Schalter erscheint nicht; der Chat verhält sich
+  genau wie ohne diese Spec.
 
 ## 2. Einstellung
 
@@ -74,7 +75,10 @@ ADR 0127 (Web-Recherche über die Responses-API von OpenAI).
   zitierten Quellen (Titel, URL); der Provider nennt nicht, welche Quelle
   zu welcher Suche gehört, die Zitate stehen deshalb bei der letzten Suche
   der Antwort. Es gibt keine Karte „Webseite gelesen": Öffnet der Provider
-  eine Seite, zeigt die App das nicht an, weil kein Seitentext vorliegt.
+  eine Seite, zeigt die App das als Suchkarte mit der Adresse der Seite,
+  ohne Seitentext, und die Sitzung gilt als „nicht vertrauenswürdigen
+  Inhalt gelesen" (Abschnitt 6). Zitiert eine Antwort Quellen, ohne dass
+  eine Suche gemeldet wurde, zeigt die App eine Karte mit diesen Quellen.
 - Meldet der Provider einen Fehler des Web-Werkzeugs (z. B. Seite nicht
   erreichbar, Höchstzahl erreicht, Adresse nicht im Gespräch), zeigt die
   Karte einen übersetzten, lesbaren Hinweis; ein unbekannter Fehlercode

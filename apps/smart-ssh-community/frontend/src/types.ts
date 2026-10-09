@@ -97,8 +97,15 @@ export interface AiProviderConfigInput {
 
 /** Spec 0105: nur diese Provider-Typen haben serverseitige Web-Werkzeuge —
  * nur für sie zeigt das Formular den Schalter. */
-export function supportsWebResearch(type: ProviderType): boolean {
-  return type === "anthropic" || type === "openai";
+export function supportsWebResearch(type: ProviderType, baseUrl?: string | null): boolean {
+  if (type === "anthropic") return true;
+  // OpenAI: nur der offizielle Dienst (keine eigene Basis-URL); gleiche Regel
+  // wie `is_official_openai` im Backend.
+  if (type === "openai") {
+    const url = baseUrl?.trim().replace(/\/+$/, "") ?? "";
+    return url === "" || url === "https://api.openai.com/v1";
+  }
+  return false;
 }
 
 // Nur bei diesen beiden Typen ist Base-URL relevant (Spec 0007, Abschnitt

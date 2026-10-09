@@ -27,8 +27,10 @@ always search, so they cannot honour the "Web research" switch (Spec 0105
    Activities are held to the end of the response and dropped together with
    a discarded (retried) or failed response.
 4. **No page reads.** The Responses tool returns no page text, so
-   `open_page`/`find_in_page` actions are not shown and nothing is stored or
-   fenced as page content.
+   `open_page`/`find_in_page` actions are shown as a search card with the
+   page URL, and nothing is stored or fenced as page content. They (and
+   citations without a search call) still produce an activity, so the
+   "untrusted content ingested" flag and the escalation apply.
 5. **Citations and injection check.** Citations cannot be tied to one search;
    they are attached to the last search of the response. They are stored as
    both `results` and `cited`, so the existing injection check (titles of

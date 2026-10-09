@@ -361,7 +361,7 @@ async fn web_search_call_and_citations_become_one_search_activity() {
 }
 
 #[tokio::test]
-async fn open_page_action_is_not_shown_and_failed_search_carries_a_code() {
+async fn open_page_action_counts_as_activity_and_failed_search_carries_a_code() {
     let server = serve(sse(&[
         (
             "response.output_item.done",
@@ -382,9 +382,54 @@ async fn open_page_action_is_not_shown_and_failed_search_carries_a_code() {
             _ => None,
         })
         .collect();
-    assert_eq!(activities.len(), 1, "{events:?}");
-    assert_eq!(activities[0].input, "q");
-    assert_eq!(activities[0].error_code.as_deref(), Some("search_failed"));
+    assert_eq!(activities.len(), 2, "{events:?}");
+    assert_eq!(activities[0].input, "https://example.com/x");
+    assert!(activities[0].content.is_none());
+    assert_eq!(activities[1].input, "q");
+    assert_eq!(activities[1].error_code.as_deref(), Some("search_failed"));
+}
+
+#[tokio::test]
+async fn open_page_only_response_still_emits_an_activity() {
+    let server = serve(sse(&[
+        (
+            "response.output_item.done",
+            r#"{"type":"response.output_item.done","output_index":0,"item":{"type":"web_search_call","status":"completed","action":{"type":"open_page","url":"https://example.com/x"}}}"#,
+        ),
+        COMPLETED,
+    ]))
+    .await;
+    let events = collect(&web_provider(&server, true)).await;
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| matches!(e, AiEvent::WebActivity(_)))
+            .count(),
+        1,
+        "{events:?}"
+    );
+}
+
+#[tokio::test]
+async fn citation_without_search_call_still_emits_an_activity() {
+    let server = serve(sse(&[
+        (
+            "response.output_item.done",
+            r#"{"type":"response.output_item.done","output_index":0,"item":{"type":"message","content":[{"type":"output_text","text":"x","annotations":[{"type":"url_citation","url":"https://example.com/a","title":"A"}]}]}}"#,
+        ),
+        COMPLETED,
+    ]))
+    .await;
+    let events = collect(&web_provider(&server, true)).await;
+    let acts: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            AiEvent::WebActivity(a) => Some(a),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(acts.len(), 1, "{events:?}");
+    assert_eq!(acts[0].cited.len(), 1);
 }
 
 #[tokio::test]
