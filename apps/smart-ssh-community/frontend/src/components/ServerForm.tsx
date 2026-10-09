@@ -41,6 +41,7 @@ import type {
 import type { MovedTo } from "./GroupForm";
 import { HostKeyDialog } from "./HostKeyDialog";
 import { NotesPanel } from "./NotesPanel";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 interface ServerFormProps {
   /** `null` = Neuanlage. */
@@ -797,6 +798,7 @@ export function ServerForm({
               </span>
             ))}
             <input
+              {...TECHNICAL_INPUT_PROPS}
               type="text"
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
@@ -868,6 +870,7 @@ export function ServerForm({
           <label className="block text-sm text-slate-300">
             {t("common.name")}
             <input
+              {...TECHNICAL_INPUT_PROPS}
               type="text"
               required
               value={name}
@@ -878,6 +881,7 @@ export function ServerForm({
           <label className="block text-sm text-slate-300">
             {t("serverForm.host")}
             <input
+              {...TECHNICAL_INPUT_PROPS}
               type="text"
               required
               value={host}
@@ -900,6 +904,7 @@ export function ServerForm({
           <label className="block text-sm text-slate-300">
             {t("serverForm.username")}
             <input
+              {...TECHNICAL_INPUT_PROPS}
               type="text"
               required
               value={username}
@@ -963,6 +968,7 @@ export function ServerForm({
               </span>
             ))}
             <input
+              {...TECHNICAL_INPUT_PROPS}
               type="text"
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
@@ -998,6 +1004,7 @@ export function ServerForm({
               {t("serverForm.password")}{" "}
               {!isCreate && <span className="text-slate-500">{t("serverForm.unchangedHint")}</span>}
               <input
+                {...TECHNICAL_INPUT_PROPS}
                 type="password"
                 required={isCreate}
                 value={auth.value}
@@ -1029,6 +1036,7 @@ export function ServerForm({
                   </button>
                 </div>
                 <textarea
+                  {...TECHNICAL_INPUT_PROPS}
                   required={isCreate}
                   value={auth.keyContent}
                   onChange={(e) => setAuth({ ...auth, keyContent: e.target.value })}
@@ -1044,6 +1052,7 @@ export function ServerForm({
               <label className="block text-sm text-slate-300">
                 {t("serverForm.passphraseOptional")}
                 <input
+                  {...TECHNICAL_INPUT_PROPS}
                   type="password"
                   value={auth.passphrase}
                   onChange={(e) => setAuth({ ...auth, passphrase: e.target.value })}
@@ -1079,6 +1088,7 @@ export function ServerForm({
                   </button>
                 </div>
                 <textarea
+                  {...TECHNICAL_INPUT_PROPS}
                   required={isCreate}
                   value={auth.certContent}
                   onChange={(e) => setAuth({ ...auth, certContent: e.target.value })}
@@ -1104,6 +1114,7 @@ export function ServerForm({
                   </button>
                 </div>
                 <textarea
+                  {...TECHNICAL_INPUT_PROPS}
                   required={isCreate}
                   value={auth.keyContent}
                   onChange={(e) => setAuth({ ...auth, keyContent: e.target.value })}
@@ -1131,6 +1142,7 @@ export function ServerForm({
                   </button>
                 </div>
                 <input
+                  {...TECHNICAL_INPUT_PROPS}
                   type="text"
                   required
                   value={auth.path}
@@ -1150,6 +1162,7 @@ export function ServerForm({
               <label className="block text-sm text-slate-300">
                 {t("serverForm.passphraseOptional")}
                 <input
+                  {...TECHNICAL_INPUT_PROPS}
                   type="password"
                   value={auth.passphrase}
                   onChange={(e) => setAuth({ ...auth, passphrase: e.target.value })}
@@ -1243,6 +1256,7 @@ export function ServerForm({
                   : t("serverForm.sudoUnchanged")}
             </span>
             <input
+              {...TECHNICAL_INPUT_PROPS}
               type="password"
               value={sudoPassword}
               onChange={(e) => setSudoPassword(e.target.value)}
@@ -1315,6 +1329,7 @@ export function ServerForm({
             <label className="block text-sm text-slate-300">
               {t("serverForm.startDirectoryLabel")}
               <input
+                {...TECHNICAL_INPUT_PROPS}
                 value={startDirectory}
                 onChange={(e) => setStartDirectory(e.target.value)}
                 placeholder={t("serverForm.startDirectoryPlaceholder")}
@@ -1338,6 +1353,7 @@ export function ServerForm({
             <label className="mt-3 block text-sm text-slate-300">
               {t("serverForm.sftpServerPathLabel")}
               <input
+                {...TECHNICAL_INPUT_PROPS}
                 value={sftpServerPath}
                 onChange={(e) => setSftpServerPath(e.target.value)}
                 placeholder={t("serverForm.sftpServerPathPlaceholder")}
