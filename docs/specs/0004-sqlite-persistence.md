@@ -158,7 +158,29 @@ Testfälle (Auszug):
 - Migrationen sind idempotent: zweimaliges Ausführen von `connect()` auf
   derselben DB-Datei bricht nicht
 
-## 7. Entscheidung: keine Datei-Verschlüsselung im MVP
+## 7. Entscheidung: keine Datei-Verschlüsselung im MVP (überholt)
+
+**Überholt durch Spec 0101 und Issue #113:** Dieser Abschnitt beschreibt
+die ursprüngliche MVP-Entscheidung und bleibt als Historie stehen; er gibt
+nicht mehr den aktuellen Stand wieder. Heute gilt:
+
+- Die Datenbankdatei ist vollständig verschlüsselt (Spec 0101). Ohne den
+  Schlüssel lässt sich keine ihrer Tabellen lesen, auch nicht Hostnames,
+  Usernames, Gruppen-/Server-Namen oder Notizen.
+- Secrets (Server-Passwörter, Private Keys, Passphrasen, API-Keys usw.)
+  liegen in der verschlüsselten Datenbank, nicht mehr im OS-Schlüsselbund.
+  Dort liegt höchstens noch der Schlüssel der Datenbank; im
+  Master-Passwort-Modus liegt er stattdessen, mit dem Passwort verpackt, in
+  einer Datei neben der Datenbank (Spec 0101).
+- Konversationsinhalte (Chat, Ledger, Eingabe-Historie, Zusammenfassungen)
+  werden nicht mehr feldweise verschlüsselt; sie liegen als Klartext in der
+  verschlüsselten Datenbankdatei und sind durch deren Verschlüsselung
+  geschützt (Issue #113, Spec 0036).
+- Der unten verlangte Hinweis, die lokale Datenbank liege unverschlüsselt
+  auf der Festplatte, und das zurückgestellte optionale SQLCipher-Feature
+  sind damit gegenstandslos.
+
+Ursprünglicher Text:
 
 Die SQLite-Datei wird **nicht** zusätzlich verschlüsselt (kein SQLCipher).
 Begründung: Sie enthält keine Secrets (die liegen im Keychain, siehe Spec
@@ -179,7 +201,10 @@ entsperrtem Nutzerkonto wollen (z. B. durch Malware oder versehentliches
 Cloud-Backup). Kein Bestandteil dieser Spec, keine offene Frage mehr, sondern
 bewusst zurückgestellt.
 
-**Ergänzung**: Mit der Einführung persistenter Chat-Sitzungen (Spec 0034)
+**Ergänzung** (ebenfalls überholt, siehe Hinweis am Anfang dieses
+Abschnitts: Full-Database-Verschlüsselung ist mit Spec 0101 umgesetzt, und
+seit Issue #113 gibt es keine gesonderte Verschlüsselung des
+Konversationsinhalts mehr): Mit der Einführung persistenter Chat-Sitzungen (Spec 0034)
 wurde diese Bewertung für Chat-Inhalte verfeinert, nicht revidiert — statt
 Full-Database-Verschlüsselung (technisch mit `sqlx` nicht ohne Weiteres
 umsetzbar, siehe Spec 0036) wird gezielt nur der Konversationsinhalt
