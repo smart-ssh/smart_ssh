@@ -615,8 +615,8 @@ impl<S: PolicyStore> FilterEngine<S> {
 /// Dieses Log ist eine neue Datensenke, und ein Kommando kann ein Geheimnis
 /// enthalten (Passwort in einem Argument). Gemeldet wird nur die Regel.
 ///
-/// **Auch das Muster selbst steht nicht im Klartext im Log** (Klarstellung
-/// Q-BL-0249-03): Anders als `Pattern::validate()` liefert
+/// **Auch das Muster selbst steht nicht im Klartext im Log** (Spec 0077,
+/// 3.2.2): Anders als `Pattern::validate()` liefert
 /// [`Pattern::compile_failure_reason`] nie den Fehlertext von
 /// `regex`/`globset` — der zitiert das Muster wörtlich, und ein Muster ist
 /// selbst geschriebener Text, der ebenso ein Geheimnis enthalten kann (eine

@@ -662,7 +662,7 @@ mod send_chat_message_persistence_tests {
             chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),
             risk_second_opinion_provider: None,
             risk_second_opinion_budget: None,
-            // Spec 0092, §5: standardmäßig „an", wie in der App.
+            // Spec 0092, A1.2: standardmäßig „an", wie in der App.
             red_risk_always_confirm: true,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),

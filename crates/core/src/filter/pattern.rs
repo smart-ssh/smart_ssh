@@ -53,7 +53,7 @@ impl Pattern {
     }
 
     /// Klassifiziert ein ungültiges Muster für das Protokoll aus 3.2.2, ohne
-    /// je Nutzertext zurückzugeben (Spec 0077, Klarstellung Q-BL-0249-03).
+    /// je Nutzertext zurückzugeben (Spec 0077, 3.2.2).
     ///
     /// `validate()` liefert den Fehlertext von `regex`/`globset` — der
     /// zitiert das Muster wörtlich, was für das Formular (3.1.4) und das DTO
@@ -470,8 +470,7 @@ mod path_glob_tests {
 
     /// Spec 0077, T-4 (core-Teil): Ein pfadförmiger Glob, bei dem nur
     /// **einer** der beiden Zweige nicht übersetzt, ist ungültig — in
-    /// **beiden** Richtungen (§1, Tabelle „Gemessen, zweiter Befund";
-    /// Klarstellung Q-BL-0249-01).
+    /// **beiden** Richtungen (Spec 0077, Abschnitt 1, Tabelle der Einzelzweig-Fälle).
     ///
     /// Beide Richtungen zusammen belegen, dass `validate` wirklich beide
     /// Zweige baut: Eine Fassung, die nur den strengen Zweig prüft, käme

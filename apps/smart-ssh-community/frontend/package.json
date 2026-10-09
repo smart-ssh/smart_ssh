@@ -7,9 +7,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "npm run check-commands && npm run check-a11y-rules && oxlint",
+    "lint": "npm run check-commands && npm run check-a11y-rules && npm run check-changelog && oxlint",
     "check-commands": "node ../../../scripts/check-tauri-commands.mjs",
     "check-a11y-rules": "node ../../../scripts/check-a11y-lint-rules.mjs",
+    "check-changelog": "node ../../../scripts/check-changelog-highlights.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test -c e2e/playwright.config.ts",

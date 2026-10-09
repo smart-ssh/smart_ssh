@@ -303,12 +303,12 @@ describe("FILTER_RULE_PATTERN_INVALID (Spec 0077)", () => {
   });
 });
 
-// Spec 0092, §9 (Übergabe an Lauf 2): der Text zu
+// Spec 0092, A2.1: der Text zu
 // FILTER_RED_RISK_REQUIRES_CONFIRM muss sowohl den regulären Fall ("rot
 // eingestuft") als auch den Überlängen-Fail-safe ("nicht einschätzbar", s.
 // `action_exec.rs::red_risk_confirm_reason`) abdecken — der Dialog zeigt den
 // FESTEN übersetzten Text zum Code, nicht den variablen `reason` aus dem
-// Backend (Spec 0092, §5 "Anzeige des Grunds"), es gibt also nur diesen
+// Backend (Spec 0092, §4 "Anzeige des Grunds"), es gibt also nur diesen
 // einen Text für beide Fälle.
 describe("FILTER_RED_RISK_REQUIRES_CONFIRM (Spec 0092)", () => {
   it("(de) nennt sowohl 'rot' als auch den Überlängen-/Unsicherheitsfall", () => {

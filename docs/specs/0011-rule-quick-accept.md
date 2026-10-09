@@ -1,79 +1,65 @@
-# Spec: Regel-Schnellvorschlag im Bestätigungsdialog
+# Spec 0011 — Regel-Schnellvorschlag im Bestätigungsdialog
 
-Status: Entwurf
-Modul: Erweiterung `crates/app-tauri` + `frontend/`
-Abhängigkeiten: `core::filter` (Spec 0002), Regel-Verwaltung (Spec 0009),
-Bestätigungsdialog (Spec 0007, Abschnitt 6/7)
+Status: umgesetzt
+Zweck: Im Bestätigungsdialog führt ein Klick das Kommando aus und legt zugleich eine passende Allow-Regel an, damit ähnliche Kommandos künftig nicht erneut bestätigt werden müssen.
+Bezüge: Spec 0002 (Filter-Engine), Spec 0009 (Regelverwaltung), Spec 0007 (Bestätigungsdialog), Spec 0077 (ungültige Muster), ADR 0002 (Abgleich mit und ohne `sudo`).
 
 ## 1. Ziel
 
-Im bestehenden Bestätigungsdialog für `Confirm`-Kommandos (weder Blacklist
-noch Whitelist gegriffen) bekommt der Nutzer einen zusätzlichen Button
-**"Akzeptieren und Regel erstellen"** mit einem Dropdown sinnvoller
-Muster-Vorschläge. Ein Klick erledigt beides gleichzeitig: das aktuelle
-Kommando wird ausgeführt **und** eine passende Allow-Regel angelegt, damit
-ähnliche Kommandos künftig nicht erneut bestätigt werden müssen.
+Im Bestätigungsdialog für `Confirm`-Kommandos (weder Hard-Blacklist noch
+Allow-Regel hat gegriffen) gibt es neben „Ausführen" und „Ablehnen" die
+Schaltfläche **„Akzeptieren + Regel"** mit einem Aufklappmenü sinnvoller
+Muster-Vorschläge.
 
 ## 2. Muster-Vorschläge
 
-```
-suggest_rule_patterns(command: String) -> Vec<PatternSuggestionDto>
-```
+Die Heuristik ist bewusst einfach und erhebt keinen Anspruch auf
+Vollständigkeit. Es gibt höchstens drei Vorschläge, doppelte werden entfernt:
 
-```rust
-pub struct PatternSuggestionDto {
-    pub label: String,           // menschenlesbar, für die Dropdown-Anzeige
-    pub pattern_type: PatternType,
-    pub pattern_value: String,
-}
-```
+- **Exakt:** das Kommando selbst, unverändert.
+- **Basis-Wildcard:** erstes Wort plus ` *`, z. B. `ls -la /var/log` →
+  `ls *`; nur, wenn das Kommando mehr als ein Wort hat. Ist das erste Wort ein
+  `sudo`/`doas` oder ein durchreichender Wrapper wie `env`, wird stattdessen
+  das zweite Wort verwendet (`apt *` statt `sudo *`): Ein Vorschlag `sudo *`
+  würde jedes `sudo`-Kommando automatisch ausführbar machen. Dank des
+  Abgleichs mit und ohne `sudo` (ADR 0002) deckt `apt *` auch `sudo apt …` ab.
+- **Subkommando-Wildcard:** wenn das zweite Wort nicht mit `-` beginnt (also
+  wie ein Subkommando aussieht, nicht wie eine Option), z. B.
+  `systemctl status nginx` → `systemctl status *`.
 
-Heuristik (bewusst einfach, kein Anspruch auf Vollständigkeit):
-- **Exakt**: das Kommando selbst, unverändert (`Pattern::Exact`)
-- **Basis-Wildcard**: erstes Token + `" *"`, z. B. `ls -la /var/log` →
-  `ls *` (nur falls das Kommando mehr als ein Token hat)
-- **Subkommando-Wildcard**: falls das zweite Token nicht mit `-`/`--`
-  beginnt (sieht nach einem Subkommando aus, nicht nach einer Flag), z. B.
-  `systemctl status nginx` → `systemctl status *`
+Ein Vorschlag, dessen Muster sich nicht übersetzen lässt (z. B. wegen einer
+einzelnen `[` im Kommando), wird weggelassen (Spec 0077).
 
-Maximal drei Vorschläge, Duplikate (falls zwei Heuristiken dasselbe Muster
-ergeben) werden entfernt.
+## 3. Akzeptieren und Regel anlegen
 
-## 3. Kombinierter Command
+Der Klick auf einen Vorschlag tut zwei Dinge:
 
-```
-accept_and_create_rule(
-    session_id: SessionId,
-    action_id: ActionId,
-    pattern: PatternInput,
-    scope: ScopeInput,
-    priority: Option<i32>,
-) -> RuleId
-```
+1. Er legt eine Regel mit der Aktion **Allow** an. Die Aktion ist fest, weil
+   eine Confirm-Regel gegenüber dem Standardfall nichts bringt. Die Priorität
+   ist 0, sofern nicht anders angegeben. Die Anlage läuft über dieselbe Logik
+   und Prüfung wie das Regel-Formular (Spec 0009, Spec 0077).
+2. Er löst die wartende Bestätigung auf, exakt wie ein normales „Ausführen".
 
-Führt intern zwei Schritte atomar hintereinander aus: 1) legt die Regel an
-(gleiche Logik wie `create_rule`, Spec 0009), 2) löst die wartende
-`Confirm`-Entscheidung für `action_id` auf, exakt wie ein normaler
-`respond_to_action`-Aufruf mit `Approve`. Die neue Regel wirkt sich **nicht**
-rückwirkend auf das gerade laufende Kommando aus — dessen Ausführung basiert
-weiterhin auf der expliziten Nutzer-Bestätigung in diesem Moment, nicht auf
-der neuen Regel. Erst künftige, ähnliche Vorschläge profitieren automatisch.
+Die Bestätigung wird auch dann aufgelöst, wenn die Regel nicht angelegt
+werden konnte (z. B. ungültiges Muster); der Fehler kommt getrennt zurück
+und wird übersetzt angezeigt.
 
-## 4. UI
+Die neue Regel wirkt nicht rückwirkend auf das gerade laufende Kommando. Es
+läuft aufgrund der ausdrücklichen Bestätigung in diesem Moment, nicht wegen
+der neuen Regel. Erst künftige, ähnliche Vorschläge profitieren.
 
-Im Bestätigungsdialog: zusätzlicher Button "Akzeptieren und Regel erstellen ▾"
-neben den bestehenden "Ausführen"/"Ablehnen"-Buttons. Klick öffnet ein
-kompaktes Dropdown mit den Vorschlägen aus `suggest_rule_patterns` (Label +
-Pattern-Vorschau), daneben eine Scope-Auswahl (Default: **aktueller Server**,
-nicht Global — sicherere Voreinstellung, Nutzer kann auf Global/Tag
-umstellen, gleiche Scope-Auswahl-Komponente wie im Regel-Formular aus Spec
-0009). Klick auf einen Vorschlag ruft `accept_and_create_rule` auf und
-schließt den Dialog.
+## 4. Oberfläche
 
-## 5. Offene Punkte
+Das Aufklappmenü zeigt die Vorschläge mit Beschriftung und Muster-Vorschau.
+Daneben wählt der Nutzer den Geltungsbereich: **„Dieser Server"** (Vorgabe,
+die sicherere Wahl), „Global" oder „Tag" (mit Tag-Name). Die Auswahl entspricht
+der im Regel-Formular (Spec 0009). Ein Klick auf einen Vorschlag schließt den
+Dialog.
 
-- Soll die neu erstellte Regel-Aktion (`Allow`) fest sein, oder soll der
-  Nutzer im selben Dropdown auch `Confirm` als Aktion wählen können (z. B.
-  "ich will das nicht automatisch, aber der Dialog soll sich das Muster
-  merken")? Aktuell nur `Allow` vorgesehen, da `Confirm` als Regel gegenüber
-  dem bereits bestehenden Default-Fallback keinen echten Mehrwert böte.
+## 5. Grenzen
+
+- Es wird nur die Aktion Allow angeboten.
+- Die Vorschläge sind keine sicherheitsrelevante Auswertung: Sie zerlegen das
+  Kommando nur nach Wörtern und erkennen weder Verkettung noch Substitution.
+  Ob ein später passendes Kommando automatisch läuft, entscheidet allein die
+  Filter-Engine (Spec 0002).

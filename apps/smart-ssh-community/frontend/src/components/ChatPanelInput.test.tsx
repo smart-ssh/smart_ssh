@@ -360,7 +360,7 @@ describe("ChatPanel empty/truncated response notices (Spec 0080, A3)", () => {
   });
 });
 
-// Spec 0092, §5/A3.2, U1: der volle Ereignis-Pfad — eine Aktion, die als
+// Spec 0092, A3.2, U1: der volle Ereignis-Pfad — eine Aktion, die als
 // `AutoExec` vorgeschlagen wurde, bekommt NACHTRÄGLICH per
 // `action-decision-escalated` einen Bestätigungsdialog, weil die
 // KI-Zweitmeinung das Daten-Risiko auf Rot gehoben hat. *Gegenbeweis*
@@ -429,7 +429,7 @@ describe("ChatPanel red-risk escalation (Spec 0092, A3.2/U1)", () => {
 
     expect(await screen.findByRole("button", { name: "Ausführen" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ablehnen" })).toBeInTheDocument();
-    // Der feste, übersetzte Text zum Code (Spec 0092, §5 „Anzeige des
+    // Der feste, übersetzte Text zum Code (Spec 0092, §4 „Anzeige des
     // Grunds"), nicht der rohe `reason`-String aus dem Event.
     expect(
       screen.getByText(/Risiko rot eingestuft oder nicht sicher einschätzbar/),

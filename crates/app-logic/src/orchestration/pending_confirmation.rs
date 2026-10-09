@@ -151,7 +151,7 @@ impl Drop for ConfirmationCleanup<'_> {
                 .store(false, std::sync::atomic::Ordering::SeqCst);
         }
         {
-            // Spec 0088, §5: nur den EIGENEN Indikator löschen. MCP und Chat
+            // Spec 0088, §4: nur den EIGENEN Indikator löschen. MCP und Chat
             // teilen sich eine `Session`; steht dort inzwischen die
             // `action_id` einer anderen wartenden Aktion, bleibt deren
             // Indikator stehen.

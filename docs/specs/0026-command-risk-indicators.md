@@ -1,172 +1,142 @@
-# Spec: Risiko-Indikatoren für KI-Vorschläge (Server-Risiko / Daten-Risiko)
+# Spec 0026 — Risiko-Hinweise für KI-Vorschläge (Server-Risiko / Daten-Risiko)
 
-Status: Entwurf
-Modul: neues Modul `crates/core/src/risk/`, Erweiterung
-`crates/app-tauri`, `frontend/`
-Abhängigkeiten: Filter-Engine (Spec 0002, Pattern-Typ und
-Kommando-Segmentierung werden wiederverwendet), Kernschleife (Spec 0007),
-SFTP-Aktionen (Spec 0020), KI-Provider-Verwaltung (Spec 0006/0007),
-Einstellungs-Speicher (Spec 0024, `tauri-plugin-store`)
+Status: umgesetzt
+Zweck: Jeder KI-vorgeschlagenen Aktion wird eine Risiko-Einschätzung auf zwei unabhängigen Achsen beigefügt. Sie ist ein Hinweis neben der Filter-Entscheidung; nur über die Einstellung aus Spec 0092 kann ein rotes Risiko eine Bestätigung verlangen.
+Bezüge: Spec 0002 (Zerlegung, Normalisierung und Begrenzungen werden gemeinsam genutzt), Spec 0007 (Kernschleife), Spec 0020 (SFTP-Aktionen), Spec 0029 (Anordnung der Badges), Spec 0074 (Auswertung der Zweitmeinung), Spec 0092 (Rot verlangt Bestätigung), ADR 0024, ADR 0084.
 
 ## 1. Ziel
 
-Jeder KI-vorgeschlagenen Aktion (`SuggestCommand`, `ReadRemoteFile`,
-`WriteRemoteFile`) wird eine **rein informative** Risiko-Einschätzung auf
-zwei unabhängigen Achsen beigefügt:
+Jede Aktion vom Typ `SuggestCommand`, `ReadRemoteFile` oder
+`WriteRemoteFile` bekommt eine Einschätzung auf zwei Achsen:
 
-- **Server-Risiko** (gelb/rot): könnte die Aktion dem Server schaden
+- **Server-Risiko** (gelb/rot): Könnte die Aktion dem Server schaden
   (destruktiv, irreversibel, dienstunterbrechend)?
-- **Daten-Risiko** (gelb/rot): könnte die Aktion sensible Daten (Passwörter,
-  Schlüssel, Secrets) in den Chatverlauf und damit an den KI-Anbieter
-  fließen lassen?
+- **Daten-Risiko** (gelb/rot): Könnte die Aktion sensible Daten (Passwörter,
+  Schlüssel, Secrets) in den Chatverlauf und damit zum KI-Anbieter fließen
+  lassen?
 
-**Kein drittes "grün"-Badge** — Abwesenheit eines Badges bedeutet "laut
-bekannten Mustern unauffällig", kein Sicherheitsversprechen.
+Es gibt **kein „grün"-Badge**: Fehlt ein Badge, bedeutet das „nach bekannten
+Mustern unauffällig", nicht „sicher".
 
-**Nicht verhandelbar**: Dieser Indikator ersetzt und beeinflusst **nicht**
-die Filter-Engine (Spec 0002) — er blockiert nichts, führt nichts automatisch
-aus, ändert keine `Decision`. Er ist eine zusätzliche Einschätzung neben der
-eigentlichen Freigabe-Entscheidung, sichtbar auch bei `AutoExec`-Kommandos.
+**Nicht verhandelbar:** Die Einschätzung ersetzt die Filter-Engine (Spec 0002)
+nicht, blockiert nichts und führt nichts aus. Sie ändert keine Entscheidung
+`Deny`, und sie macht nie aus `Confirm` ein `AutoExec`. Sie ist auch bei
+automatisch ausgeführten Kommandos sichtbar. Einzige Ausnahme ist die
+Einstellung „Bei rotem Risiko immer nachfragen" (Spec 0092): Ist sie an
+(Standard), wird ein automatisch ausführbarer Vorschlag mit Rot auf einer
+Achse bestätigungspflichtig. Auch das ist nur Eskalation.
 
-## 2. Regelbasierte Basis-Einschätzung
+## 2. Regelbasierte Einschätzung
 
-```rust
-pub enum RiskLevel { None, Yellow, Red }
+Jede Achse hat die Stufen *keine*, *gelb*, *rot*. Zu jeder Stufe gehört eine
+kurze Begründung (welches Muster gegriffen hat). Außerdem ist vermerkt, ob die
+KI-Zweitmeinung beteiligt war.
 
-pub struct RiskAssessment {
-    pub server_risk: RiskLevel,
-    pub server_risk_reason: Option<String>,
-    pub data_risk: RiskLevel,
-    pub data_risk_reason: Option<String>,
-    pub ai_reviewed: bool,
-}
+Die Muster sind zwei fest eingebaute Listen, eine je Achse, mit denselben
+Mustertypen wie die Filterregeln (Spec 0002, Abschnitt 2). Nutzerregeln
+verändern sie nicht.
 
-pub trait RiskClassifier: Send + Sync {
-    fn classify(&self, command: &str) -> RiskAssessment;
-}
-```
+**Segmentierung:** Verkettungen (`&&`, `;`, `|`, Command-Substitution) werden
+exakt wie in der Filter-Engine zerlegt (Spec 0002, Abschnitt 4). Jedes
+Teilkommando wird einzeln eingestuft; je Achse gilt das höchste Level aller
+Teile.
 
-Wiederverwendung statt Neubau: Die Kommando-**Segmentierung** bei
-Verkettungen (`&&`, `;`, `|`, Command-Substitution) nutzt exakt dieselbe
-Logik wie die Filter-Engine (Spec 0002, Abschnitt 4) — jedes Teilkommando
-wird einzeln klassifiziert, das Gesamtergebnis je Achse ist das jeweils
-höhere Risiko-Level über alle Teile. Die **Muster** selbst nutzen denselben
-`Pattern`-Typ (Glob/Regex/Exact, Spec 0002 Abschnitt 2), zwei eigene,
-containerinterne Listen statt der Filter-Regeln.
+**Dieselbe Normalisierung und dieselben Begrenzungen wie die Filter-Engine.**
+Der Klassifizierer vergleicht gegen das **normalisierte** effektive Kommando
+(Spec 0002, Abschnitt 4, Punkt 6: Wrapper, Rechteerhöhung und
+Variablen-Präfixe abgeschält), nicht gegen den Rohtext. Sonst würden
+`sudo cat /etc/shadow` oder `env shutdown -h now` als „kein Risiko" durchgehen,
+weil die Muster am Kommandoanfang ansetzen. Ebenso gelten Längen- und
+Verschachtelungsgrenze aus Spec 0002, Abschnitt 4, Punkt 7: Der
+Klassifizierer steigt nicht ungebremst in verschachtelte `$(...)` ab. Ein
+Kommando über dem Längenlimit gilt bei eingeschalteter Einstellung aus
+Spec 0092 als rot, weil seine Einstufung nicht belastbar ist.
 
-**Kritisch — dieselbe Normalisierung und derselbe Cap wie die
-Filter-Engine**: Der Klassifizierer matcht gegen das **normalisierte**
-effektive Kommando aus Spec 0002, Abschnitt 4, Punkt 6 (Wrapper/Elevation/
-Variablen-Präfixe fixpunkt-abgeschält), **nicht** gegen den Rohtext. Sonst
-entsteht genau die im Audit gefundene Blindheit: `sudo cat /etc/shadow` oder
-`env shutdown -h now` würden als "kein Risiko" durchgehen, weil die
-Muster am Kommandoanfang ankern und der `sudo`/`env`-Präfix davor sitzt.
-Ebenso gilt die Längen-/Rekursions-Begrenzung aus Spec 0002, Abschnitt 4,
-Punkt 7 **auch hier** — der Klassifizierer darf nicht ungebremst in
-verschachtelte `$(...)` absteigen, wo die Filter-Engine das begrenzt (sonst
-Stack-Overflow-Absturz über einen Pfad, der die Filter-Engine gar nicht
-erreicht).
+**Code in Shell-`-c`-Aufrufen wird mitbewertet.** Steckt ein Kommando im
+Code-Argument eines Shell- oder Interpreter-Aufrufs (`bash -c 'shutdown now'`,
+`sh -c "cat /etc/shadow"`, auch hinter `sudo` oder Wrappern wie `env bash -c
+'…'`), wird dieser Code zusätzlich wie ein direkt eingegebenes Kommando
+bewertet: mit derselben Segmentierung, Normalisierung und denselben Mustern
+sowie derselben Erkennung von `-c`-Code wie in der Filter-Engine (Spec 0002,
+Abschnitt 4.6). Je Achse gilt das höchste Level aus äußerem Aufruf und
+innerem Code; `bash -c 'shutdown -h now'` ist also Server-Risiko rot wie
+`shutdown -h now`. Verschachtelte Aufrufe (`bash -c "sh -c 'reboot'"`) werden
+Ebene für Ebene ausgepackt, höchstens bis zur Verschachtelungsgrenze aus
+Spec 0002; darüber hinaus wird nicht weiter ausgepackt (kein Absturz), die
+äußeren Ebenen bleiben bewertet. Die Bewertung kann dadurch nur strenger
+werden.
 
-**Code in Shell-`-c`-Aufrufen wird mitbewertet**: Steckt ein Kommando im
-Code-Argument eines Shell- oder Interpreter-Aufrufs (`bash -c 'shutdown
-now'`, `sh -c "cat /etc/shadow"`, auch hinter `sudo`/Wrappern wie `sudo bash
--c '…'` oder `env bash -c '…'`), bewertet der Klassifizierer diesen Code
-zusätzlich wie ein direkt eingegebenes Kommando — mit derselben
-Segmentierung, Normalisierung und denselben Mustern und mit derselben
-Erkennung von `-c`-Code wie die Filter-Engine (Spec 0002, Abschnitt 4.6). Je
-Achse gilt das höchste Level aus äußerem Aufruf und innerem Code;
-`bash -c 'shutdown -h now'` ist also Server-Risiko Rot wie `shutdown -h now`
-selbst. Verschachtelte Aufrufe (`bash -c "sh -c 'reboot'"`) werden Ebene für
-Ebene ausgepackt, höchstens bis zur selben Verschachtelungsgrenze wie bei
-Command-Substitution; darüber hinaus wird nicht weiter ausgepackt (kein
-Absturz), die äußeren Ebenen bleiben bewertet. Die Bewertung kann dadurch
-nur strenger werden, nie niedriger.
+**Beispiele Server-Risiko.** Rot: `rm -rf *`, `dd if=* of=/dev/*`, `mkfs*`,
+Fork-Bomb, `shutdown*`/`reboot*`/`poweroff*`, `iptables -F*`,
+`chmod -R 777 /*`. Gelb: `rm *` (ohne `-rf`), `systemctl stop/restart *`,
+`apt/yum remove *`, `git reset --hard*`, `kill *` (ohne PID 1).
 
-Beispielhafte Server-Risiko-Muster (Rot): `rm -rf *`, `dd if=* of=/dev/*`,
-`mkfs*`, Fork-Bomb-Muster, `shutdown*`/`reboot*`/`poweroff*`,
-`iptables -F*`, `chmod -R 777 /*`. (Gelb): `rm *` (ohne `-rf`),
-`systemctl stop/restart *`, `apt/yum remove *`, `git reset --hard*`,
-`kill *` (ohne PID 1).
+**Beispiele Daten-Risiko.** Rot: `cat`/`less`/`head`/`tail` auf `*id_rsa*`,
+`*.pem`, `*.key`, `*.env`, `*credentials*`, `*shadow*`, `*.aws/credentials*`;
+`env`/`printenv`; `mysqldump`/`pg_dump` ohne Ziel-Redaction; SQL mit
+`SELECT * FROM *user*`/`*password*`. Gelb: `find` mit `-name *.key`-artigen
+Mustern, `ls` in `~/.ssh` oder `/etc`, `grep` nach `password`/`secret`/`token`
+in Dateien.
 
-Beispielhafte Daten-Risiko-Muster (Rot): `cat`/`less`/`head`/`tail` auf
-`*id_rsa*`, `*.pem`, `*.key`, `*.env`, `*credentials*`, `*shadow*`,
-`*.aws/credentials*`; `env`/`printenv`; `mysqldump`/`pg_dump` ohne
-Ziel-Redaction; SQL mit `SELECT * FROM *user*`/`*password*`. (Gelb):
-`find` mit `-name *.key`-artigen Mustern, `ls` in `~/.ssh`/`/etc`, `grep`
-nach `password`/`secret`/`token` in Dateien.
+**Diese Listen sind Startpunkte ohne Anspruch auf Vollständigkeit.** Sie
+blockieren nichts; ein fehlendes Muster ist eine unvollständige Warnung, kein
+Loch in der Filter-Engine. Mit der Einstellung aus Spec 0092 hängt allerdings
+die zusätzliche Rückfrage bei Rot an diesen Listen: Ein inhaltlich rotes
+Kommando, das kein Muster trifft, löst sie nicht aus.
 
-Diese Listen sind **Startpunkte, kein Anspruch auf Vollständigkeit** — anders
-als die Hard-Blacklist der Filter-Engine sind sie bewusst nicht
-sicherheitskritisch (sie blockieren nichts), daher ist eine gewisse
-Unvollständigkeit tolerierbar und kein Sicherheitsloch, nur eine
-unvollständige Warnung. Nutzer-Erweiterbarkeit dieser Listen ist nicht Teil
-dieser Spec (siehe offene Punkte).
+**SFTP-Aktionen.** `ReadRemoteFile` und `WriteRemoteFile` werden gegen den
+Dateipfad eingestuft, abgebildet auf die Pseudokommandos `sftp-read <pfad>`
+und `sftp-write <pfad>` aus Spec 0020, Abschnitt 4.1 (dieselbe Konvention wie
+für die Filter-Engine).
 
-Für `ReadRemoteFile`/`WriteRemoteFile` (Spec 0020): Klassifizierung läuft
-gegen den Dateipfad, gemappt auf dieselben Pseudokommandos
-(`sftp-read <pfad>`/`sftp-write <pfad>`), die bereits für die Filter-Engine-
-Anbindung in Spec 0020, Abschnitt 4.1 etabliert wurden — dieselbe
-Konvention, keine zweite Mapping-Logik.
+## 3. Optionale KI-Zweitmeinung (nur Daten-Risiko)
 
-## 3. Optionale KI-Zweitmeinung (nur Daten-Risiko-Achse)
+Die Zweitmeinung gibt es bewusst nur für die Daten-Achse: Ob ein Pfad trotz
+unauffälligem Namen sensibel sein könnte, ist eine semantische Frage; Server-
+Schaden lässt sich gut musterbasiert erfassen.
 
-Bewusst nur für die Daten-Risiko-Achse — semantisches Einordnen ("könnte
-dieser Pfad trotz unbekannten Namens sensibel sein") passt besser zu einer
-KI-Einschätzung als Server-Schaden, der sich gut musterbasiert erfassen
-lässt.
+1. **Standardmäßig aus** (Opt-in in den Einstellungen). Das Kommando an einen
+   weiteren KI-Anbieter zu schicken ist selbst ein zusätzlicher Datenfluss
+   und muss ausdrücklich gewählt werden.
+2. **Eigener, frei wählbarer Provider** aus den bereits konfigurierten. Der
+   Hinweistext empfiehlt ein lokales Modell (z. B. Ollama), damit auch die
+   Zweitmeinung nicht zwingend an einen weiteren externen Anbieter geht. Die
+   Wahl ist eine app-weite Einstellung und wird beim Verbinden einer Sitzung
+   gelesen.
+3. **Minimaler Kontext:** Die Anfrage enthält ausschließlich das Kommando bzw.
+   den Pfad als Text, keinen Chatverlauf und keine Server-Notizen. Gefragt
+   wird sinngemäß, ob die Ausgabe sensible Daten enthalten könnte, die nicht an
+   einen KI-Anbieter gehen sollten; die Antwort lautet none/yellow/red mit
+   kurzer Begründung.
+4. **Nur Eskalation, nie Abschwächung.** Das Endergebnis der Daten-Achse ist
+   das Maximum aus regelbasiertem und KI-Ergebnis. Die KI kann `none` zu
+   `yellow` oder `yellow` zu `red` anheben, ein regelbasiertes `red` aber nie
+   absenken. Eine probabilistische Zweitmeinung darf eine deterministische
+   Warnung nicht entkräften, auch nicht per Prompt-Injection über den
+   Kommandotext. Enthält die Antwort mehrere Urteilswörter, gilt das
+   höchste (Spec 0074).
+5. **Zeitpunkt:** Die regelbasierte Einschätzung wird sofort angezeigt. Die
+   Zweitmeinung wird danach eingeholt und per Aktualisierung nachgereicht. Ein
+   automatisches Ausführen wartet jedoch auf sie (Spec 0092, A3).
 
-- **Standardmäßig deaktiviert** (Opt-in in den Einstellungen) — das
-  Kommando an einen weiteren KI-Anbieter zu schicken ist selbst ein
-  zusätzlicher Datenfluss, der explizit gewählt werden muss, nicht
-  automatisch passiert.
-- **Eigener, separat wählbarer Provider** — Referenz auf eine bestehende
-  `AiProviderConfig` (Spec 0007), gespeichert als einfache Einstellung über
-  `tauri-plugin-store` (Spec 0024), keine neue SQLite-Tabelle. Empfehlung im
-  UI-Hinweistext: bewusst ein lokales Modell (Ollama) wählbar, damit auch
-  diese Zweitmeinung nicht zwingend an einen weiteren externen Anbieter
-  geht.
-- **Minimaler Kontext**: Der Zweitmeinungs-Request bekommt **ausschließlich**
-  das Kommando/den Pfad als Text, keinen Chatverlauf, keine Server-Notizen —
-  dasselbe Sparsamkeits-Prinzip wie beim `OutputRedactor` (Spec 0006).
-  Prompt sinngemäß: "Könnte die Ausgabe dieses Kommandos sensible Daten
-  enthalten, die nicht an einen KI-Anbieter weitergegeben werden sollten?
-  Antworte nur mit none/yellow/red und einer kurzen Begründung."
-- **Nur Eskalation, nie Abschwächung**: Das Endergebnis der Daten-Risiko-
-  Achse ist `max(regelbasiertes_ergebnis, ki_ergebnis)`. Eine
-  KI-Einschätzung kann ein `None` zu `Yellow` oder `Yellow` zu `Red` anheben,
-  aber **niemals** ein regelbasiertes `Red` auf `Yellow`/`None` absenken —
-  eine probabilistische Zweitmeinung darf eine deterministische Warnung
-  nicht stillschweigend entkräften (auch mit Blick auf mögliche
-  Prompt-Injection über den Kommandotext selbst).
-- Läuft **asynchron**, nachdem die regelbasierte Einschätzung bereits
-  angezeigt wurde — kein Warten auf einen zusätzlichen API-Roundtrip, bevor
-  überhaupt ein Badge sichtbar wird.
+## 4. Darstellung
 
-## 4. Darstellung im UI
+1. Zwei kleine, getrennte Badges („Server", „Daten") an der Aktionskarte und
+   im Bestätigungsdialog, nur sichtbar, wenn die Stufe nicht „keine" ist.
+   Der Tooltip zeigt die Begründung (das gegriffene Muster bzw. die
+   KI-Begründung). Anordnung: Spec 0029.
+2. Ist die Zweitmeinung aktiv und noch ausstehend, erscheint ein dezenter
+   Lade-Indikator neben dem Daten-Badge (bzw. an dessen Stelle, wenn die
+   Regeln „keine" ergaben). Er verschwindet oder wird zu gelb/rot, sobald die
+   Antwort da ist.
+3. Ein Hinweistext sagt: „Einschätzung basierend auf bekannten Mustern —
+   keine Garantie." Es gibt kein „sicher" oder „geprüft" ohne Einschränkung.
+4. Die Badges erscheinen nur für KI-vorgeschlagene Aktionen, **nicht** im
+   manuellen SFTP-Dateibrowser (Spec 0020, Abschnitt 5) und nicht für direkte
+   Terminal-Eingaben: eigene bewusste Aktionen brauchen keine Warnung vor sich
+   selbst.
 
-- Zwei kleine, getrennte Badges ("Server", "Daten") an der Aktionskarte/dem
-  Bestätigungsdialog, nur sichtbar, wenn ein Level ≠ `None` vorliegt.
-  Tooltip zeigt den jeweiligen `*_reason`-Text (welches Muster gegriffen
-  hat bzw. die KI-Begründung).
-- Ist die KI-Zweitmeinung aktiviert und ihr Ergebnis noch ausstehend: ein
-  dezenter Lade-Indikator neben dem Daten-Badge (bzw. an dessen Stelle,
-  falls die Regel-Einschätzung `None` ergab), der verschwindet oder sich zu
-  `Yellow`/`Red` aktualisiert, sobald die Antwort da ist.
-- Klarer Hinweistext (z. B. im Tooltip oder als Fußnote): "Einschätzung
-  basierend auf bekannten Mustern — keine Garantie." Kein Wort wie "sicher"
-  oder "geprüft" ohne Einschränkung, konsistent mit der bereits in Spec
-  0025 etablierten Zurückhaltung bei Sicherheits-Aussagen.
-- Nur für KI-vorgeschlagene Aktionen — **nicht** für den manuellen
-  SFTP-Dateibrowser (Spec 0020, Abschnitt 5) und nicht für direkte
-  Terminal-Eingaben, konsistent mit dem Prinzip, dass eigene bewusste
-  Aktionen keine Warnung vor sich selbst brauchen.
+## 5. Grenzen
 
-## 5. Offene Punkte
-
-- Nutzer-Erweiterbarkeit der Muster-Listen (eigene zusätzliche Server-/
-  Daten-Risiko-Muster definieren, analog zur Regel-Verwaltung aus Spec
-  0009) — sinnvolle spätere Ausbaustufe, nicht Teil dieser Spec.
-- Soll die KI-Zweitmeinung optional auch auf die Server-Risiko-Achse
-  ausgeweitet werden? Aktuell bewusst nur Daten-Risiko (Abschnitt 3) —
-  falls sich in der Praxis zeigt, dass musterbasierte Server-Risiko-Analyse
-  zu viele Fälle übersieht, wäre eine Erweiterung denkbar.
+- Die Muster-Listen lassen sich nicht durch den Nutzer erweitern.
+- Die Zweitmeinung betrifft nur das Daten-Risiko, nicht das Server-Risiko.

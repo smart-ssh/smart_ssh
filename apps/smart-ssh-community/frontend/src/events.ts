@@ -76,7 +76,7 @@ export const onRiskAssessmentUpdated = (
 ): Promise<UnlistenFn> =>
   listen<RiskAssessmentUpdatedEvent>("risk-assessment-updated", (e) => handler(e.payload));
 
-/** Spec 0092, §5/A3.2 — s. `ActionDecisionEscalatedEvent`-Doc-Kommentar.
+/** Spec 0092, A3.2 — s. `ActionDecisionEscalatedEvent`-Doc-Kommentar.
  * Kommt nach `onRiskAssessmentUpdated` für dieselbe `actionId`. */
 export const onActionDecisionEscalated = (
   handler: (event: ActionDecisionEscalatedEvent) => void,
