@@ -44,6 +44,7 @@ const SERVERS = [server("s-web", "web-1", "g-web")];
 vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) => String(err),
   commandErrorCode: () => null,
+  listUnusableServers: vi.fn(() => Promise.resolve([])),
   listGroups: vi.fn(() => Promise.resolve(GROUPS)),
   listServers: vi.fn(() => Promise.resolve(SERVERS)),
   getServer: vi.fn(),

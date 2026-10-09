@@ -85,6 +85,43 @@ pub struct Server {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Issue #100: Warum ein gespeicherter Server nicht nutzbar ist.
+///
+/// Heute gibt es genau einen Grund: Die gespeicherte Anmeldeart lässt sich
+/// nicht lesen. Die beiden Varianten unterscheiden nur, was der Nutzer als
+/// Ursache genannt bekommt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnusableReason {
+    /// Gültiges JSON, aber eine Anmeldeart, die diese Version nicht kennt —
+    /// typischerweise gespeichert von einer neueren Version der App.
+    UnknownAuthMethod,
+    /// Die gespeicherte Anmeldeart ist kein lesbares JSON (beschädigt).
+    UnreadableAuthMethod,
+}
+
+/// Issue #100: ein gespeicherter Server, dessen Anmeldeart diese Version
+/// nicht lesen kann. Bewusst **kein** [`Server`]: Ein `Server` hat immer
+/// eine nutzbare [`AuthMethod`], und es gibt keinen Rückfall (etwa auf
+/// `Agent`), der aus einer unlesbaren Anmeldeart eine nutzbare macht. Nur
+/// die Felder, die zum Anzeigen im Baum und zum Löschen nötig sind.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnusableServer {
+    pub id: ServerId,
+    pub name: String,
+    pub host: String,
+    pub group_id: Option<GroupId>,
+    pub reason: UnusableReason,
+}
+
+/// Issue #100: Ergebnis von [`crate::profiles::ProfileStore::list_server_entries`]
+/// — die nutzbaren Server unverändert wie bei `list_servers`, die nicht
+/// nutzbaren getrennt daneben.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ServerListing {
+    pub servers: Vec<Server>,
+    pub unusable: Vec<UnusableServer>,
+}
+
 /// Spec 0039, Abschnitt 5.1: steuert ausschließlich die zusätzliche
 /// Eskalation, nachdem `Session::untrusted_content_ingested == true` ist
 /// — das Fencing (Abschnitt 3/4) ist in **allen** Stufen aktiv und nicht

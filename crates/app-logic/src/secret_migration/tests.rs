@@ -1082,3 +1082,61 @@ async fn test_t17_the_secret_migration_keeps_the_key_and_the_secrets_out_of_the_
 
     store.close().await;
 }
+
+/// Issue #100: Ein Server, dessen Anmeldeart diese Version nicht lesen
+/// kann, hält den Umzug nicht an — und seine Secrets werden weder
+/// verworfen noch im Schlüsselbund vergessen: Alle Slots seines festen
+/// Schemas ziehen um wie die eines lesbaren Servers. Seine
+/// `auth_method`-Zeile bleibt dabei Byte für Byte unverändert.
+///
+/// **Gegenbeweis geführt:** Ohne die Schleife über die nicht nutzbaren
+/// Server in `refs_in_database` bleiben seine Einträge im Schlüsselbund
+/// und fehlen in der Datenbank; vor Issue #100 brach der Umzug schon beim
+/// Auflisten der Server ab. Beides scheitert hier.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_issue_100_an_unusable_server_does_not_stop_the_migration_or_lose_secrets() {
+    const NEWER_AUTH: &str = r#"{"HardwareToken":{"token_ref":"x"}}"#;
+    let fixture = fixture().await;
+    let unusable = fixture.servers[1];
+    persistence_sqlite::test_support::set_raw_auth_method(&fixture.store, &unusable, NEWER_AUTH)
+        .await;
+    let keyring = keyring_for(&fixture, None);
+    // Ein Slot, den die gespeicherte (unbekannte) Anmeldeart vielleicht
+    // benutzt — er muss ebenfalls mitkommen.
+    let password_ref = format!("server:{}:password", unusable.0);
+    keyring
+        .set(
+            &CredentialRef::new(password_ref.clone()),
+            SecretString::from(format!("{MARKER}-password")),
+        )
+        .unwrap();
+    let prompt = ScriptedPrompt::new(Vec::new());
+
+    migrate_secrets_into_database(&fixture.store, &keyring, &fixture.database, &prompt, false)
+        .await
+        .expect("an unusable server must not stop the migration");
+
+    for slot in ["private_key", "passphrase", "sudo_password", "password"] {
+        let reference = CredentialRef::new(format!("server:{}:{slot}", unusable.0));
+        assert_eq!(
+            fixture
+                .database
+                .get(&reference)
+                .unwrap_or_else(|err| panic!("{slot} must have moved, got {err:?}"))
+                .expose_secret(),
+            format!("{MARKER}-{slot}"),
+        );
+    }
+    assert_eq!(
+        keyring.count(),
+        0,
+        "nothing may be left behind in the keychain"
+    );
+    assert_eq!(
+        persistence_sqlite::test_support::raw_auth_method(&fixture.store, &unusable).await,
+        NEWER_AUTH,
+        "the stored sign-in method must stay untouched"
+    );
+    let (state, _) = fixture.store.secret_migration_state().await.unwrap();
+    assert_eq!(state, STATE_DONE);
+}

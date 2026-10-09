@@ -584,6 +584,70 @@ pub struct DeleteServerResult {
     pub secrets_left_behind: Vec<String>,
 }
 
+/// Issue #100: warum ein Server nicht nutzbar ist — als stabiler Code, den
+/// das Frontend übersetzt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnusableReasonDto {
+    /// Von einer neueren Version gespeichert; diese kennt die Anmeldeart
+    /// nicht.
+    UnknownAuthMethod,
+    /// Die gespeicherte Anmeldeart ist beschädigt.
+    UnreadableAuthMethod,
+}
+
+impl From<ssh_manager_core::profiles::UnusableReason> for UnusableReasonDto {
+    fn from(reason: ssh_manager_core::profiles::UnusableReason) -> Self {
+        use ssh_manager_core::profiles::UnusableReason;
+        match reason {
+            UnusableReason::UnknownAuthMethod => Self::UnknownAuthMethod,
+            UnusableReason::UnreadableAuthMethod => Self::UnreadableAuthMethod,
+        }
+    }
+}
+
+/// Issue #100: ein Server, dessen Anmeldeart diese Version nicht lesen
+/// kann. Nur Anzeige und Löschen — keine Anmeldeart, kein Port, kein
+/// Benutzer, damit das Frontend ihn gar nicht wie einen nutzbaren Server
+/// behandeln kann.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnusableServerDto {
+    pub id: ServerId,
+    pub name: String,
+    pub host: String,
+    pub group_id: Option<GroupId>,
+    pub reason: UnusableReasonDto,
+}
+
+impl From<&ssh_manager_core::profiles::UnusableServer> for UnusableServerDto {
+    fn from(server: &ssh_manager_core::profiles::UnusableServer) -> Self {
+        Self {
+            id: server.id,
+            name: server.name.clone(),
+            host: server.host.clone(),
+            group_id: server.group_id,
+            reason: server.reason.into(),
+        }
+    }
+}
+
+/// Issue #100: Vorschau bzw. Ergebnis von `delete_unusable_server` — wie
+/// [`DeleteServerResult`], nur mit dem nicht nutzbaren Eintrag. Welche
+/// Secrets er hatte, ist unbekannt (die Anmeldeart ist ja unlesbar);
+/// gelöscht werden deshalb alle Slots seines festen Schemas
+/// `server:<id>:<slot>`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteUnusableServerResult {
+    pub server: UnusableServerDto,
+    pub servers_losing_jump_host: Vec<ServerDto>,
+    pub executed: bool,
+    /// Wie [`DeleteServerResult::secrets_left_behind`]: was beim Löschen
+    /// nicht entfernt werden konnte. Leer bei `executed: false`.
+    pub secrets_left_behind: Vec<String>,
+}
+
 /// Eingabe für `create_server`/`update_server`/`test_connection` (Spec
 /// 0008, Abschnitt 4). `group_id`/`jump_host` direkt als `GroupId`/
 /// `ServerId` statt `String` — beide sind `Uuid`-Newtypes und

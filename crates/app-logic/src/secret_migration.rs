@@ -76,8 +76,8 @@ fn refs_of_server(id: ServerId, auth: &AuthMethod) -> Vec<CredentialRef> {
 async fn refs_in_database(store: &SqliteProfileStore) -> Result<Vec<CredentialRef>, StartupAbort> {
     use ssh_manager_core::profiles::ProfileStore;
 
-    let servers = store
-        .list_servers()
+    let listing = store
+        .list_server_entries()
         .await
         .map_err(|err| StartupAbort::Fatal {
             // **`Other`, nicht `SecretMigrationFailed`** (spec-reviewer
@@ -100,8 +100,21 @@ async fn refs_in_database(store: &SqliteProfileStore) -> Result<Vec<CredentialRe
         })?;
 
     let mut refs: Vec<CredentialRef> = Vec::new();
-    for server in &servers {
+    for server in &listing.servers {
         for reference in refs_of_server(server.id, &server.auth) {
+            if is_migratable(&reference) && !refs.contains(&reference) {
+                refs.push(reference);
+            }
+        }
+    }
+    // Issue #100: Ein nicht nutzbarer Server (Anmeldeart unlesbar) wird
+    // **nicht** übersprungen — sonst blieben seine Secrets im Schlüsselbund
+    // zurück, während der Umzug als `done` gilt, und wären danach für jede
+    // Version unerreichbar. Welche Slots er belegt, ist unbekannt; also alle
+    // seines festen Schemas. Ein leerer Slot ist `NotFound` und wird wie
+    // überall ausgelassen. Seine `auth_method`-Zeile bleibt unberührt.
+    for server in &listing.unusable {
+        for reference in crate::server_credentials::all_server_secret_refs(server.id) {
             if is_migratable(&reference) && !refs.contains(&reference) {
                 refs.push(reference);
             }

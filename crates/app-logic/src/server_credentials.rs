@@ -646,6 +646,46 @@ pub fn delete_sudo_password_on_server_delete(
         .collect()
 }
 
+/// Alle Slots, die ein Server unter dem festen Schema `server:<id>:<slot>`
+/// (s. [`credential_ref`]) belegen kann — unabhängig von seiner
+/// Anmeldeart. Eine Liste an einer Stelle, damit ein neuer Slot nicht in
+/// einem der Aufräumwege fehlt.
+pub(crate) const SERVER_SECRET_SLOTS: [&str; 6] = [
+    "password",
+    "private_key",
+    "passphrase",
+    "certificate",
+    "certificate_key",
+    "sudo_password",
+];
+
+/// Issue #100: alle `CredentialRef`s des festen Schemas eines Servers.
+pub fn all_server_secret_refs(server_id: ServerId) -> Vec<CredentialRef> {
+    SERVER_SECRET_SLOTS
+        .iter()
+        .map(|slot| credential_ref(server_id, slot))
+        .collect()
+}
+
+/// Issue #100: Löschen eines **nicht nutzbaren** Servers. Seine Anmeldeart
+/// ist unlesbar, welche Slots er belegt, ist also unbekannt — gelöscht
+/// werden deshalb alle Slots seines festen Schemas. Das betrifft nur
+/// Einträge mit genau seiner ID, also nie die eines anderen Servers.
+///
+/// Dieselbe Haltung wie [`delete_auth_method_secrets`] (Spec 0071, A17):
+/// durchlaufen und melden. Zurück kommen die Refs, die **nicht** entfernt
+/// werden konnten; ein fehlender Eintrag gilt als Erfolg.
+#[must_use]
+pub fn delete_all_server_secrets_on_unusable_delete(
+    credential_store: &dyn CredentialStore,
+    server_id: ServerId,
+) -> Vec<CredentialRef> {
+    all_server_secret_refs(server_id)
+        .iter()
+        .filter_map(|r| delete_user_requested_secret(credential_store, r))
+        .collect()
+}
+
 /// Spec 0047, Fund A2: räumt bei einem fehlgeschlagenen `create_server`
 /// **alle** Keychain-Slots ab, die dieser Aufruf potenziell beschrieben
 /// haben könnte — unabhängig davon, an welcher Stelle genau der Fehler
@@ -662,14 +702,7 @@ pub fn delete_all_possible_server_secrets(
     credential_store: &dyn CredentialStore,
     server_id: ServerId,
 ) {
-    for slot in [
-        "password",
-        "private_key",
-        "passphrase",
-        "certificate",
-        "certificate_key",
-        "sudo_password",
-    ] {
+    for slot in SERVER_SECRET_SLOTS {
         // Spec-Reviewer-Fund (Spec 0047, Fund A2): ein fehlendes `NotFound`
         // ist erwartet (der Slot wurde nie geschrieben) und bleibt still.
         // Ein `Backend`-Fehler (z. B. gesperrte/verweigerte macOS-Keychain

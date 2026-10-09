@@ -509,6 +509,32 @@ export interface DeleteServerResult {
   secretsLeftBehind: string[];
 }
 
+/** Issue #100: warum ein gespeicherter Server nicht nutzbar ist —
+ * `unknown_auth_method`: von einer neueren Version gespeichert, diese kennt
+ * die Anmeldeart nicht; `unreadable_auth_method`: gespeicherte Anmeldeart
+ * beschädigt. */
+export type UnusableReason = "unknown_auth_method" | "unreadable_auth_method";
+
+/** Issue #100: ein gespeicherter Server, dessen Anmeldeart diese Version
+ * nicht lesen kann. Absichtlich kein `ServerDto`: Er lässt sich weder
+ * verbinden noch bearbeiten, nur anzeigen und löschen. */
+export interface UnusableServerDto {
+  id: string;
+  name: string;
+  host: string;
+  groupId: string | null;
+  reason: UnusableReason;
+}
+
+/** Issue #100: Vorschau/Ergebnis von `deleteUnusableServer` — wie
+ * `DeleteServerResult`. */
+export interface DeleteUnusableServerResult {
+  server: UnusableServerDto;
+  serversLosingJumpHost: ServerDto[];
+  executed: boolean;
+  secretsLeftBehind: string[];
+}
+
 /** Eingabe für `create_server`/`update_server`/`test_connection`. */
 export interface ServerInput {
   name: string;

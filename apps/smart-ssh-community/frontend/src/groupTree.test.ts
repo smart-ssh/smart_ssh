@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildGroupTree, flattenGroupOptions, groupOptionLabel } from "./groupTree";
-import type { GroupDto, ServerDto } from "./types";
+import type { GroupDto, ServerDto, UnusableServerDto } from "./types";
 
 // Spec 0033, Abschnitt 3/4/5 — reine Baum-Aufbau-Logik, geteilt zwischen
 // Sidebar (Verwalten-Tab) und der gruppierten Hauptübersicht.
@@ -80,6 +80,21 @@ describe("buildGroupTree", () => {
     const tree = buildGroupTree([], []);
     expect(tree.roots).toEqual([]);
     expect(tree.ungroupedServers).toEqual([]);
+  });
+
+  it("places not-usable servers (issue #100) under their group, separate from usable ones", () => {
+    const groups = [group("g1", "Prod", null)];
+    const unusable: UnusableServerDto[] = [
+      { id: "u1", name: "newer-1", host: "h", groupId: "g1", reason: "unknown_auth_method" },
+      { id: "u2", name: "broken", host: "h", groupId: null, reason: "unreadable_auth_method" },
+    ];
+
+    const tree = buildGroupTree(groups, [server("s1", "web-1", "g1")], unusable);
+
+    expect(tree.roots[0].servers.map((s) => s.id)).toEqual(["s1"]);
+    expect(tree.roots[0].unusableServers.map((s) => s.id)).toEqual(["u1"]);
+    expect(tree.ungroupedServers).toEqual([]);
+    expect(tree.ungroupedUnusableServers.map((s) => s.id)).toEqual(["u2"]);
   });
 });
 

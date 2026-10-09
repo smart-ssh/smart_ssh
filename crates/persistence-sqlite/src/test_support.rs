@@ -497,3 +497,33 @@ pub async fn field_encrypted_blob_count(store: &crate::SqliteProfileStore) -> i6
     }
     total
 }
+
+/// Issue #100: überschreibt die `auth_method`-Spalte eines Servers mit dem
+/// rohen Wert `json` — so, wie eine neuere Version eine Anmeldeart
+/// speichern würde, die dieser Build nicht kennt. Für Tests außerhalb
+/// dieser Crate, die keinen eigenen SQL-Zugang haben.
+pub async fn set_raw_auth_method(
+    store: &crate::SqliteProfileStore,
+    server_id: &ssh_manager_core::shared::ServerId,
+    json: &str,
+) {
+    let result = sqlx::query("UPDATE servers SET auth_method = ? WHERE id = ?")
+        .bind(json)
+        .bind(server_id.0.to_string())
+        .execute(&store.pool)
+        .await
+        .expect("auth_method can be overwritten");
+    assert_eq!(result.rows_affected(), 1, "server row must exist");
+}
+
+/// Issue #100: der gespeicherte, rohe Wert der `auth_method`-Spalte.
+pub async fn raw_auth_method(
+    store: &crate::SqliteProfileStore,
+    server_id: &ssh_manager_core::shared::ServerId,
+) -> String {
+    sqlx::query_scalar("SELECT auth_method FROM servers WHERE id = ?")
+        .bind(server_id.0.to_string())
+        .fetch_one(&store.pool)
+        .await
+        .expect("auth_method is readable")
+}

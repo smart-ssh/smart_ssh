@@ -56,6 +56,7 @@ vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) => String(err),
   commandErrorCode: (err: unknown) =>
     err && typeof err === "object" && "code" in err ? (err as { code: string }).code : null,
+  listUnusableServers: vi.fn(() => Promise.resolve([])),
   listGroups: vi.fn(() => Promise.resolve(backend.groups.map((g) => ({ ...g })))),
   listServers: vi.fn(() => Promise.resolve(backend.servers.map((s) => ({ ...s })))),
   getServer: vi.fn((id: string) => {

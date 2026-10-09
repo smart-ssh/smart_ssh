@@ -12,6 +12,7 @@ import { testI18n } from "../testI18n";
 import { ManagementView } from "./ManagementView";
 
 vi.mock("../api", () => ({
+  listUnusableServers: vi.fn(() => Promise.resolve([])),
   listGroups: vi.fn(() => Promise.resolve([])),
   listServers: vi.fn(() => Promise.resolve([])),
   commandErrorMessage: (err: unknown) => String(err),

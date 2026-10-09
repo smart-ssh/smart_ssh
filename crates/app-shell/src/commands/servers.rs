@@ -6,7 +6,10 @@ use tauri::{AppHandle, State};
 use ssh_manager_core::profiles::{GroupId, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 
-use app_logic::dto::{DeleteServerResult, ServerDto, ServerInput, TestConnectionReport};
+use app_logic::dto::{
+    DeleteServerResult, DeleteUnusableServerResult, ServerDto, ServerInput, TestConnectionReport,
+    UnusableServerDto,
+};
 use app_logic::error::CommandResult;
 use app_logic::server_credentials::clear_sudo_password;
 use app_logic::servers::reject_local_jump_host;
@@ -166,6 +169,35 @@ pub async fn delete_server(
         return Err("Der lokale Pseudo-Server kann nicht gelöscht werden".into());
     }
     app_logic::servers::delete_server(
+        state.profile_store.as_ref(),
+        state.credential_store.as_ref(),
+        id,
+        confirm,
+    )
+    .await
+}
+
+/// Issue #100: die gespeicherten Server, deren Anmeldeart diese Version
+/// nicht lesen kann — der Serverbaum zeigt sie als „nicht nutzbar".
+/// Getrennt von [`list_servers`], damit jeder bestehende Aufrufer weiter
+/// ausschließlich nutzbare Server bekommt.
+#[tauri::command]
+pub async fn list_unusable_servers(
+    state: State<'_, AppState>,
+) -> CommandResult<Vec<UnusableServerDto>> {
+    app_logic::servers::list_unusable_servers(state.profile_store.as_ref()).await
+}
+
+/// Issue #100: Löschen eines nicht nutzbaren Servers, zweistufig wie
+/// [`delete_server`] — die Logik lebt in
+/// `app_logic::servers::delete_unusable_server`.
+#[tauri::command]
+pub async fn delete_unusable_server(
+    state: State<'_, AppState>,
+    id: ServerId,
+    confirm: bool,
+) -> CommandResult<DeleteUnusableServerResult> {
+    app_logic::servers::delete_unusable_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         id,

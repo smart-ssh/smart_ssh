@@ -22,12 +22,15 @@ use chrono::Utc;
 use ssh_manager_core::profiles::{AuthMethod, CredentialStore, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 
-use crate::dto::{DeleteServerResult, ServerDto, ServerInput};
+use crate::dto::{
+    DeleteServerResult, DeleteUnusableServerResult, ServerDto, ServerInput, UnusableServerDto,
+};
 use crate::error::{CommandError, CommandResult};
 use crate::server_credentials::{
     cleanup_replaced_auth_method_secrets, delete_all_possible_server_secrets,
-    delete_auth_method_secrets, delete_sudo_password_on_server_delete, resolve_auth_method,
-    resolve_sudo_password, roll_back_failed_edit, RecordingCredentialStore,
+    delete_all_server_secrets_on_unusable_delete, delete_auth_method_secrets,
+    delete_sudo_password_on_server_delete, resolve_auth_method, resolve_sudo_password,
+    roll_back_failed_edit, RecordingCredentialStore,
 };
 
 /// Spec 0032, Abschnitt 6: der lokale Pseudo-Server ist explizit als
@@ -310,6 +313,75 @@ pub async fn delete_server(
     Ok(result)
 }
 
+/// Issue #100: die gespeicherten Server, deren Anmeldeart diese Version
+/// nicht lesen kann — für den Serverbaum, der sie als „nicht nutzbar"
+/// zeigt. Alle übrigen Wege (Verbinden, Bearbeiten, MCP, Export) sehen sie
+/// nicht, weil `list_servers` sie nicht enthält und `get_server` für sie
+/// scheitert.
+pub async fn list_unusable_servers(
+    store: &dyn ProfileStore,
+) -> CommandResult<Vec<UnusableServerDto>> {
+    Ok(store
+        .list_server_entries()
+        .await?
+        .unusable
+        .iter()
+        .map(UnusableServerDto::from)
+        .collect())
+}
+
+/// Issue #100: Löschen eines nicht nutzbaren Servers — der einzige Weg,
+/// der für ihn offensteht. Wie [`delete_server`] zweistufig: Ohne
+/// `confirm` wird nichts gelöscht, nur die Vorschau geliefert.
+///
+/// Gelöscht werden die Zeile und alle Secrets seines festen Schemas
+/// `server:<id>:<slot>` (welche er belegt, ist mit unlesbarer Anmeldeart
+/// unbekannt). Was nicht entfernt werden konnte, steht wie bei
+/// [`delete_server`] in `secrets_left_behind` (Spec 0071, A17).
+///
+/// Ein **nutzbarer** Server wird hier abgelehnt: Für ihn gilt
+/// [`delete_server`], das seine Secrets aus der gelesenen Anmeldeart
+/// bestimmt. So kann dieser Weg nie zu einem lesbaren Server führen.
+pub async fn delete_unusable_server(
+    store: &dyn ProfileStore,
+    credential_store: &(dyn CredentialStore + Send + Sync),
+    id: ServerId,
+    confirm: bool,
+) -> CommandResult<DeleteUnusableServerResult> {
+    let listing = store.list_server_entries().await?;
+    let Some(unusable) = listing.unusable.iter().find(|s| s.id == id) else {
+        if listing.servers.iter().any(|s| s.id == id) {
+            return Err(CommandError::from(
+                "Der Server ist nutzbar und wird über das normale Löschen entfernt".to_string(),
+            ));
+        }
+        return Err(ssh_manager_core::profiles::ProfileError::ServerNotFound(id).into());
+    };
+    let servers_losing_jump_host = listing
+        .servers
+        .iter()
+        .filter(|s| s.jump_host == Some(id))
+        .map(|s| ServerDto::from_server(s, credential_store))
+        .collect();
+    let mut result = DeleteUnusableServerResult {
+        server: UnusableServerDto::from(unusable),
+        servers_losing_jump_host,
+        executed: confirm,
+        secrets_left_behind: Vec::new(),
+    };
+    if confirm {
+        // Dieselbe Reihenfolge wie `delete_server`: erst die Secrets, dann
+        // die Zeile — und durchlaufen, auch wenn ein Secret stehen bleibt.
+        let left_behind = delete_all_server_secrets_on_unusable_delete(credential_store, id);
+        store.delete_server(&id).await?;
+        result.secrets_left_behind = left_behind
+            .into_iter()
+            .map(|r| r.as_str().to_string())
+            .collect();
+    }
+    Ok(result)
+}
+
 /// Issue #48: Verschieben eines Servers in eine andere Gruppe (oder mit
 /// `group_id: None` auf die Wurzelebene) per Drag-and-drop — ein eigener,
 /// schmaler Weg statt [`update_server`] mit vollständigem `ServerInput`.
@@ -555,6 +627,212 @@ mod tests {
 
         assert!(!preview.executed);
         assert!(preview.secrets_left_behind.is_empty());
+    }
+
+    // --- Issue #100: nicht nutzbare Server ---------------------------------
+
+    fn unusable(name: &str) -> ssh_manager_core::profiles::UnusableServer {
+        ssh_manager_core::profiles::UnusableServer {
+            id: ServerId::new(),
+            name: name.to_string(),
+            host: "newer.example.invalid".to_string(),
+            group_id: None,
+            reason: ssh_manager_core::profiles::UnusableReason::UnknownAuthMethod,
+        }
+    }
+
+    fn all_slot_refs(id: ServerId) -> Vec<CredentialRef> {
+        crate::server_credentials::all_server_secret_refs(id)
+    }
+
+    #[tokio::test]
+    async fn test_list_unusable_servers_returns_only_the_unusable_entries() {
+        let readable = server("readable", None);
+        let broken = unusable("broken");
+        let store = InMemoryProfileStore::new()
+            .with_server(readable)
+            .with_unusable_server(broken.clone());
+
+        let listed = list_unusable_servers(&store).await.unwrap();
+
+        assert_eq!(listed, vec![crate::dto::UnusableServerDto::from(&broken)]);
+        assert_eq!(
+            listed[0].reason,
+            crate::dto::UnusableReasonDto::UnknownAuthMethod
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_unusable_server_preview_deletes_nothing() {
+        let broken = unusable("broken");
+        let store = InMemoryProfileStore::new().with_unusable_server(broken.clone());
+        let mut credentials = InMemoryCredentialStore::new();
+        for r in all_slot_refs(broken.id) {
+            credentials = credentials.with_secret(&r, "s3cret");
+        }
+
+        let preview = delete_unusable_server(&store, &credentials, broken.id, false)
+            .await
+            .unwrap();
+
+        assert!(!preview.executed);
+        assert!(preview.secrets_left_behind.is_empty());
+        assert_eq!(store.list_server_entries().await.unwrap().unusable.len(), 1);
+        for r in all_slot_refs(broken.id) {
+            assert!(credentials.get(&r).is_ok(), "{} must stay", r.as_str());
+        }
+    }
+
+    /// Löscht die Zeile und jeden Slot seines Schemas — aber nie ein
+    /// Secret eines anderen (lesbaren) Servers.
+    #[tokio::test]
+    async fn test_delete_unusable_server_removes_row_and_every_slot_of_its_scheme() {
+        let broken = unusable("broken");
+        let readable = server("readable", Some(broken.id));
+        let store = InMemoryProfileStore::new()
+            .with_server(readable.clone())
+            .with_unusable_server(broken.clone());
+        let mut credentials = InMemoryCredentialStore::new();
+        for r in all_slot_refs(broken.id)
+            .into_iter()
+            .chain(all_slot_refs(readable.id))
+        {
+            credentials = credentials.with_secret(&r, "s3cret");
+        }
+
+        let result = delete_unusable_server(&store, &credentials, broken.id, true)
+            .await
+            .unwrap();
+
+        assert!(result.executed);
+        assert!(result.secrets_left_behind.is_empty());
+        assert_eq!(result.servers_losing_jump_host.len(), 1);
+        assert!(store
+            .list_server_entries()
+            .await
+            .unwrap()
+            .unusable
+            .is_empty());
+        for r in all_slot_refs(broken.id) {
+            assert!(credentials.get(&r).is_err(), "{} must be gone", r.as_str());
+        }
+        for r in all_slot_refs(readable.id) {
+            assert!(credentials.get(&r).is_ok(), "{} must stay", r.as_str());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_delete_unusable_server_reports_secrets_it_could_not_remove() {
+        let broken = unusable("broken");
+        let store = InMemoryProfileStore::new().with_unusable_server(broken.clone());
+        let password_ref = crate::server_credentials::credential_ref(broken.id, "password");
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&password_ref, "s3cret")
+            .with_failing_delete();
+
+        let result = delete_unusable_server(&store, &credentials, broken.id, true)
+            .await
+            .expect("a stuck secret store must not block the delete");
+
+        assert!(store
+            .list_server_entries()
+            .await
+            .unwrap()
+            .unusable
+            .is_empty());
+        assert!(
+            result
+                .secrets_left_behind
+                .contains(&password_ref.as_str().to_string()),
+            "{:?}",
+            result.secrets_left_behind
+        );
+    }
+
+    /// Dieser Weg bestimmt die Secrets nicht aus der Anmeldeart — für einen
+    /// lesbaren Server ist er deshalb gesperrt.
+    #[tokio::test]
+    async fn test_delete_unusable_server_refuses_a_usable_server() {
+        let readable = server("readable", None);
+        let store = InMemoryProfileStore::new().with_server(readable.clone());
+        let sudo = crate::server_credentials::sudo_password_credential_ref(readable.id);
+        let credentials = InMemoryCredentialStore::new().with_secret(&sudo, "s3cret");
+
+        assert!(
+            delete_unusable_server(&store, &credentials, readable.id, true)
+                .await
+                .is_err()
+        );
+        assert!(store.get_server(&readable.id).await.is_ok());
+        assert!(credentials.get(&sudo).is_ok());
+    }
+
+    /// Spec 0008 §6a, dokumentierte Grenze: Ein Slot, den erst eine neuere
+    /// Version einführt, kennt diese Version nicht. Er bleibt beim Löschen
+    /// stehen und taucht nicht in `secrets_left_behind` auf — genau das
+    /// sagen Spec und Vorschau-Text. Ändert sich das Verhalten (etwa durch
+    /// ein Löschen per Präfix), muss die Spec mitgezogen werden.
+    #[tokio::test]
+    async fn test_delete_unusable_server_leaves_slots_of_newer_versions_unreported() {
+        let broken = unusable("broken");
+        let store = InMemoryProfileStore::new().with_unusable_server(broken.clone());
+        let newer_slot = crate::server_credentials::credential_ref(broken.id, "token");
+        let mut credentials = InMemoryCredentialStore::new().with_secret(&newer_slot, "s3cret");
+        for r in all_slot_refs(broken.id) {
+            credentials = credentials.with_secret(&r, "s3cret");
+        }
+
+        let result = delete_unusable_server(&store, &credentials, broken.id, true)
+            .await
+            .unwrap();
+
+        assert!(result.executed);
+        assert!(result.secrets_left_behind.is_empty());
+        for r in all_slot_refs(broken.id) {
+            assert!(credentials.get(&r).is_err(), "{} must be gone", r.as_str());
+        }
+        assert!(credentials.get(&newer_slot).is_ok());
+    }
+
+    /// Gegen den echten SQLite-Store: Eine Zeile mit unbekannter
+    /// Anmeldeart erscheint als nicht nutzbar, alle anderen normal; danach
+    /// lässt sie sich samt Secrets löschen.
+    #[tokio::test]
+    async fn test_issue_100_sqlite_row_with_unknown_auth_is_listed_and_deletable() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = persistence_sqlite::SqliteProfileStore::connect_encrypted(
+            &dir.path().join("smart-ssh.db"),
+            &ssh_manager_core::crypto::DatabaseKey::from_root_key(&[7; 32]),
+        )
+        .await
+        .unwrap();
+        let readable = server("readable", None);
+        let newer = server("newer", None);
+        store.create_server(&readable).await.unwrap();
+        store.create_server(&newer).await.unwrap();
+        persistence_sqlite::test_support::set_raw_auth_method(
+            &store,
+            &newer.id,
+            r#"{"HardwareToken":{"token_ref":"x"}}"#,
+        )
+        .await;
+        let sudo = crate::server_credentials::sudo_password_credential_ref(newer.id);
+        let credentials = InMemoryCredentialStore::new().with_secret(&sudo, "s3cret");
+
+        assert_eq!(store.list_servers().await.unwrap(), vec![readable.clone()]);
+        let listed = list_unusable_servers(&store).await.unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, newer.id);
+        assert_eq!(listed[0].name, "newer");
+
+        let result = delete_unusable_server(&store, &credentials, newer.id, true)
+            .await
+            .unwrap();
+        assert!(result.secrets_left_behind.is_empty());
+        assert!(credentials.get(&sudo).is_err());
+        assert!(list_unusable_servers(&store).await.unwrap().is_empty());
+        assert_eq!(store.list_servers().await.unwrap(), vec![readable]);
+        store.close().await;
     }
 
     fn password_input(password_value: &str, sudo_password: &str) -> ServerInput {

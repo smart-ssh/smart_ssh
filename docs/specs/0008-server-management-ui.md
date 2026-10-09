@@ -141,6 +141,55 @@ preview_effective_notes(server_id: ServerId) -> String
   und einen "Wiederherstellen"-Button pro vergangenem Eintrag (→
   `rollback_note`).
 
+## 6a. Nicht nutzbare Server (Issue #100)
+
+Ein gespeicherter Server, dessen Anmeldeart diese Version der App nicht
+lesen kann, ist **nicht nutzbar**. Das passiert, wenn eine neuere Version
+eine Anmeldeart gespeichert hat, die diese Version nicht kennt (z. B. nach
+dem Zurückgehen auf eine ältere Version), oder wenn die gespeicherte
+Anmeldeart beschädigt ist.
+
+- **Die Serverliste lädt trotzdem.** Alle übrigen Server erscheinen und
+  funktionieren wie gewohnt; ein einzelner nicht nutzbarer Server lässt
+  weder die Liste noch den Start der App scheitern.
+- **Anzeige:** In beiden Bäumen (Verbinden und Verwalten) steht der Server
+  an seinem Platz in der Gruppe, deutlich als „nicht nutzbar" markiert, mit
+  Name, Host und Grund:
+  - unbekannte Anmeldeart: „Mit einer neueren Version der App gespeichert;
+    diese Version kennt die Anmeldeart nicht."
+  - beschädigte Anmeldeart: „Die gespeicherte Anmeldeart ist beschädigt
+    und nicht lesbar."
+- **Was nicht geht:** Verbinden, Bearbeiten, Verschieben per
+  Drag-and-drop, Zugriff über MCP, Export in eine SSH-Konfiguration. Die
+  Anmeldeart wird nie durch eine Ersatz-Anmeldeart (etwa „Agent")
+  ersetzt — ein nicht nutzbarer Server wird nie wie ein nutzbarer
+  behandelt. Wege, die einen nutzbaren Server brauchen (Verbinden, MCP,
+  SSH-Konfigurations-Export, Diagnose-Export), lassen ihn aus und
+  scheitern nicht an ihm.
+- **Löschen:** Wählt man ihn in der Verwalten-Ansicht aus, zeigt der
+  Hauptbereich den Grund und nur einen Löschen-Button, zweistufig wie beim
+  normalen Server (Vorschau, dann „Endgültig löschen"). Gelöscht werden der
+  Server samt Chat-Verlauf, Notizen und Tags sowie jedes Secret, das diese
+  Version der App unter seiner ID speichern kann — welche er tatsächlich
+  hat, ist mit unlesbarer Anmeldeart nicht bekannt. Secrets, die nur eine
+  neuere Version für ihn angelegt hat, kennt diese Version nicht: Sie
+  bleiben im Schlüsselbund bzw. in der Datenbank zurück und werden nicht
+  als zurückgeblieben gemeldet; die Vorschau weist darauf hin. Secrets
+  anderer Server werden dabei nie berührt. Lässt sich ein Secret nicht entfernen, läuft das
+  Löschen trotzdem durch und nennt jeden zurückgebliebenen Eintrag, wie
+  beim normalen Löschen. Andere Server, die ihn als Jump-Host nutzen,
+  werden in der Vorschau genannt und verlieren diesen Verweis.
+- **Gespeicherte Daten bleiben unverändert.** Anzeigen, Auflisten und der
+  einmalige Umzug der Secrets in die verschlüsselte Datenbank (Spec 0101)
+  ändern die gespeicherte Anmeldeart nicht. Mit der neueren Version ist der
+  Server danach wieder normal nutzbar. Der Secret-Umzug übernimmt jedes
+  seiner Secrets, das diese Version kennt, statt es im Schlüsselbund
+  zurückzulassen. Secrets, die nur eine neuere Version für ihn angelegt
+  hat, übernimmt er nicht; sie bleiben im Schlüsselbund, auch nachdem der
+  Umzug als abgeschlossen gilt.
+- Andere beschädigte Felder eines Servers (ID, Zeitstempel, Port) sind
+  davon nicht erfasst und lassen das Laden weiterhin scheitern.
+
 ## 7. Verbindungstest ("Verbindung testen"-Button)
 
 `test_connection(input: ServerInput) -> TestConnectionResult` erlaubt, eine
