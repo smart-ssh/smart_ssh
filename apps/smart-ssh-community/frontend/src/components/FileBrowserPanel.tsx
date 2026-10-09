@@ -6,6 +6,10 @@ import {
   claimDroppedPaths,
   commandErrorMessage,
   pickUploadFiles,
+  pickUploadFolder,
+  sftpLocalPathsAreFolders,
+  sftpUploadFolder,
+  sftpUploadFolderPreview,
   readLocalTextPreview,
   sftpChmod,
   sftpDelete,
@@ -43,6 +47,8 @@ import type {
   DownloadResultDto,
   ElevationResultDto,
   LocalFilePreviewDto,
+  FolderUploadPreviewDto,
+  FolderUploadSummaryDto,
   RemoteEntryDto,
 } from "../types";
 import { useDragResize } from "../useDragResize";
@@ -172,6 +178,15 @@ export function FileBrowserPanel({
     remoteText: string | null;
     remoteSize: number;
   } | null>(null);
+  // Issue #128: folder upload. `folderConfirm` = the list of existing remote
+  // files the upload would overwrite (one confirmation for the whole folder,
+  // Spec 0054 Teil 3); `folderSummary` = result with skipped/failed entries.
+  const [folderConfirm, setFolderConfirm] = useState<{
+    localPath: string;
+    remoteDir: string;
+    preview: FolderUploadPreviewDto;
+  } | null>(null);
+  const [folderSummary, setFolderSummary] = useState<FolderUploadSummaryDto | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [columnWidths, setColumnWidths] = useState<FileManagerColumnWidths>(DEFAULT_COLUMN_WIDTHS);
@@ -554,7 +569,18 @@ export function FileBrowserPanel({
   /** Spec 0067, Teil B: mehrere Dateien → eine Sammelmeldung statt einer
    * pro Datei. Fehler kommen einzeln (mit Grund), Konflikte melden sich
    * nach ihrer Bestätigung selbst. */
-  const uploadMany = async (localPaths: string[]) => {
+  const uploadMany = async (allPaths: string[]) => {
+    // Issue #128: folders go the folder way (preview, one confirmation,
+    // summary); everything else keeps the per-file flow unchanged.
+    const folderFlags = await sftpLocalPathsAreFolders(sessionId, allPaths).catch(() =>
+      allPaths.map(() => false),
+    );
+    const localPaths = allPaths.filter((_, i) => !folderFlags[i]);
+    const remoteDir = path;
+    for (const folder of allPaths.filter((_, i) => folderFlags[i])) {
+      void startFolderUpload(folder, remoteDir);
+    }
+    if (localPaths.length === 0) return;
     const outcomes = await Promise.all(
       localPaths.map((localPath) =>
         startUpload(localPath, joinPath(path, localBaseName(localPath)), false),
@@ -578,6 +604,62 @@ export function FileBrowserPanel({
       notifyFailed("fileToasts.uploadFailedMany", String(failures.length), failures[0].error);
     }
   };
+  /** Issue #128: preview first; only if the folder would overwrite existing
+   * remote files does the user get the (single) confirmation. */
+  const startFolderUpload = async (localPath: string, remoteDir: string) => {
+    try {
+      const preview = await sftpUploadFolderPreview(sessionId, localPath, remoteDir, channelUser);
+      if (preview.overwrites.length > 0) {
+        setFolderConfirm({ localPath, remoteDir, preview });
+        return;
+      }
+      await runFolderUpload(localPath, remoteDir, preview.folderName, []);
+    } catch (err) {
+      notifyFailed("fileToasts.uploadFolderFailed", localBaseName(localPath), err);
+    }
+  };
+
+  const runFolderUpload = async (
+    localPath: string,
+    remoteDir: string,
+    folderName: string,
+    confirmedOverwrites: string[],
+  ) => {
+    showToast({ kind: "info", message: t("fileBrowser.uploadFolder") + ": " + folderName + modeSuffix });
+    try {
+      const summary = await sftpUploadFolder(
+        sessionId,
+        localPath,
+        remoteDir,
+        confirmedOverwrites,
+        channelUser,
+      );
+      if (summary.skipped.length === 0 && summary.failed.length === 0 && summary.notAttempted === 0) {
+        notifyOk("fileToasts.uploadedFolder", { name: summary.folderName, count: summary.filesUploaded });
+      } else {
+        setFolderSummary(summary);
+      }
+      if (remoteDir === path) load(path);
+    } catch (err) {
+      notifyFailed("fileToasts.uploadFolderFailed", folderName, err);
+    }
+  };
+
+  const handleConfirmFolderUpload = () => {
+    if (!folderConfirm) return;
+    const { localPath, remoteDir, preview } = folderConfirm;
+    setFolderConfirm(null);
+    void runFolderUpload(localPath, remoteDir, preview.folderName, preview.overwrites);
+  };
+
+  const handleUploadFolderButton = async () => {
+    // The dialog runs in the backend and grants the picked folder to this
+    // session; the webview never names a path itself (Issue #89).
+    const picked = await pickUploadFolder(sessionId, t("fileBrowser.uploadFolderDialogTitle"));
+    if (!picked) return;
+    void startFolderUpload(picked, path);
+  };
+
   // Issue #29: updated during render, so a drop handled after the commit
   // of a channel switch or a navigation already sees the new `channelUser`
   // and `path` — before any passive effect has run.
@@ -924,6 +1006,13 @@ export function FileBrowserPanel({
           className="font-heading border border-indigo-600/50 px-2 py-1 text-xs font-semibold text-indigo-400 hover:bg-indigo-600/14"
         >
           {t("fileBrowser.upload")}
+        </button>
+        <button
+          type="button"
+          onClick={handleUploadFolderButton}
+          className="font-heading border border-indigo-600/50 px-2 py-1 text-xs font-semibold text-indigo-400 hover:bg-indigo-600/14"
+        >
+          {t("fileBrowser.uploadFolder")}
         </button>
         {!elevated && (
           <input
@@ -1480,6 +1569,89 @@ export function FileBrowserPanel({
                 className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
               >
                 {t("fileBrowser.overwrite")}
+              </button>
+            </div>
+          </div>
+        </ModalBackdrop>
+      )}
+
+      {folderConfirm && (
+        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
+            <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
+              {t("fileBrowser.folderUpload.conflictTitle")}
+            </h2>
+            <p className="mb-3 text-sm text-slate-300">
+              {t("fileBrowser.folderUpload.conflictBody", {
+                name: folderConfirm.preview.folderName,
+                count: folderConfirm.preview.overwrites.length,
+              })}
+            </p>
+            <ul className="max-h-48 overflow-y-auto border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono text-xs break-all text-slate-300">
+              {folderConfirm.preview.overwrites.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setFolderConfirm(null)}
+                className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+              >
+                {t("fileBrowser.cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmFolderUpload}
+                className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
+              >
+                {t("fileBrowser.overwrite")}
+              </button>
+            </div>
+          </div>
+        </ModalBackdrop>
+      )}
+
+      {folderSummary && (
+        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg border border-slate-700 bg-slate-900 p-5 shadow-xl">
+            <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
+              {t("fileBrowser.folderUpload.summaryTitle", { name: folderSummary.folderName })}
+            </h2>
+            <p className="mb-3 text-sm text-slate-300">
+              {t("fileBrowser.folderUpload.summary", {
+                uploaded: folderSummary.filesUploaded,
+                skipped: folderSummary.skipped.length,
+                failed: folderSummary.failed.length,
+              })}
+            </p>
+            {folderSummary.notAttempted > 0 && (
+              <p className="mb-3 text-sm text-amber-300">
+                {t("fileBrowser.folderUpload.notAttempted", { count: folderSummary.notAttempted })}
+              </p>
+            )}
+            <ul className="max-h-60 overflow-y-auto border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-300">
+              {folderSummary.failed.map((f) => (
+                <li key={"f:" + f.path} className="break-all">
+                  <span className="text-red-400">{t("fileBrowser.folderUpload.failed")}:</span>{" "}
+                  <span className="font-mono">{f.path}</span> — {f.error}
+                </li>
+              ))}
+              {folderSummary.skipped.map((e) => (
+                <li key={"s:" + e.path} className="break-all">
+                  <span className="text-amber-300">{t("fileBrowser.folderUpload.skipped")}:</span>{" "}
+                  <span className="font-mono">{e.path}</span> —{" "}
+                  {t("fileBrowser.folderUpload.reason." + e.reason)}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setFolderSummary(null)}
+                className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+              >
+                {t("fileBrowser.folderUpload.close")}
               </button>
             </div>
           </div>

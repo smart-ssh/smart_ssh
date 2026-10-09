@@ -880,6 +880,42 @@ export interface LocalFilePreviewDto {
   size: number;
 }
 
+/** Issue #128 / Spec 0054, Teil 3: Ordner-Upload. */
+export type FolderSkipReason =
+  | "symlink"
+  | "tooDeep"
+  | "unsupported"
+  | "notGranted"
+  | "overwriteNotConfirmed";
+
+export interface FolderSkippedEntryDto {
+  path: string;
+  reason: FolderSkipReason;
+}
+
+export interface FolderFailedEntryDto {
+  path: string;
+  error: string;
+}
+
+export interface FolderUploadPreviewDto {
+  folderName: string;
+  fileCount: number;
+  folderCount: number;
+  /** Remote paths of existing files the upload would overwrite. */
+  overwrites: string[];
+  skipped: FolderSkippedEntryDto[];
+}
+
+export interface FolderUploadSummaryDto {
+  folderName: string;
+  filesUploaded: number;
+  foldersCreated: number;
+  skipped: FolderSkippedEntryDto[];
+  failed: FolderFailedEntryDto[];
+  notAttempted: number;
+}
+
 /** Spec 0054, Teil 4: Ergebnis von `sftpOpenForEditing`. */
 export interface EditSessionDto {
   localPath: string;

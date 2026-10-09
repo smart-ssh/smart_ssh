@@ -256,6 +256,8 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     terminal_input: () => null,
     sftp_start_directory: () => ({ path: ".", missingDirectory: null }),
     sftp_list: () => [],
+    sftp_local_paths_are_folders: (args) =>
+      (args.localPaths as string[]).map(() => false),
     sftp_elevation_disable: () => null,
     sftp_elevation_status: () => null,
     // Approve/deny of a pending action; the result event is up to the test.

@@ -24,6 +24,8 @@ import type {
   KeychainStatusDto,
   KeyFileFactsDto,
   LocalFilePreviewDto,
+  FolderUploadPreviewDto,
+  FolderUploadSummaryDto,
   McpServerSettingsDto,
   NoteRevisionDto,
   NoteTarget,
@@ -494,6 +496,47 @@ export const sftpUpload = (sessionId: string, localPath: string, remotePath: str
  * session. `null` = cancelled. */
 export const pickUploadFiles = (sessionId: string, title: string) =>
   invoke<string[] | null>("pick_upload_files", { sessionId, title });
+
+/** Issue #128: the "Upload folder" entry's native folder dialog, run in the
+ * backend; the picked folder comes back already granted to this session.
+ * `null` = cancelled. */
+export const pickUploadFolder = (sessionId: string, title: string) =>
+  invoke<string | null>("pick_upload_folder", { sessionId, title });
+
+/** Issue #128: which of the granted paths are folders (same order). */
+export const sftpLocalPathsAreFolders = (sessionId: string, localPaths: string[]) =>
+  invoke<boolean[]>("sftp_local_paths_are_folders", { sessionId, localPaths });
+
+/** Issue #128: what a folder upload would do; writes nothing. */
+export const sftpUploadFolderPreview = (
+  sessionId: string,
+  localPath: string,
+  remoteDir: string,
+  elevatedUser: string | null = null,
+) =>
+  invoke<FolderUploadPreviewDto>("sftp_upload_folder_preview", {
+    sessionId,
+    localPath,
+    remoteDir,
+    elevatedUser,
+  });
+
+/** Issue #128: uploads the folder. Existing remote files are overwritten
+ * only if listed in `confirmedOverwrites` (taken from the preview). */
+export const sftpUploadFolder = (
+  sessionId: string,
+  localPath: string,
+  remoteDir: string,
+  confirmedOverwrites: string[],
+  elevatedUser: string | null = null,
+) =>
+  invoke<FolderUploadSummaryDto>("sftp_upload_folder", {
+    sessionId,
+    localPath,
+    remoteDir,
+    confirmedOverwrites,
+    elevatedUser,
+  });
 
 /** Issue #89: claims the most recent drop onto the window for this
  * session. The paths come from the native drag-and-drop event captured in

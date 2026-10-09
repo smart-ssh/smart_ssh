@@ -634,6 +634,8 @@
     "openLocallyFailed": "“{{name}}” could not be opened locally: {{reason}}",
     "editUploaded": "Change to “{{name}}” uploaded",
     "editUploadFailed": "Change to “{{name}}” could not be uploaded: {{reason}}",
+    "uploadedFolder": "Folder “{{name}}” uploaded — {{count}} files",
+    "uploadFolderFailed": "Uploading folder “{{name}}” failed: {{reason}}",
     "uploadFailedMany": "{{name}} files could not be uploaded, e.g.: {{reason}}"
   },
   "fileElevation": {
@@ -894,6 +896,8 @@
     "newFolderButton": "+ Folder",
     "upload": "Upload",
     "uploadDialogTitle": "Upload file(s)",
+    "uploadFolder": "Upload folder",
+    "uploadFolderDialogTitle": "Upload folder",
     "downloadDirDialogTitle": "Choose destination folder",
     "paste": "Paste",
     "pasteTitle": "Move {{name}} here",
@@ -937,6 +941,23 @@
     "moveCollision": {
       "title": "Target already exists",
       "body": "already exists and would be overwritten."
+    },
+    "folderUpload": {
+      "conflictTitle": "Overwrite files in the folder?",
+      "conflictBody": "Uploading “{{name}}” would overwrite these {{count}} files on the server. Nothing is overwritten unless you confirm.",
+      "summaryTitle": "Folder upload: “{{name}}”",
+      "summary": "{{uploaded}} files uploaded, {{skipped}} skipped, {{failed}} failed.",
+      "notAttempted": "{{count}} files were not attempted because their folder could not be created.",
+      "skipped": "Skipped",
+      "failed": "Failed",
+      "close": "Close",
+      "reason": {
+        "symlink": "symbolic link (never followed)",
+        "tooDeep": "nested too deeply",
+        "unsupported": "not a regular file or folder",
+        "notGranted": "not covered by your selection",
+        "overwriteNotConfirmed": "exists on the server, overwrite not confirmed"
+      }
     },
     "uploadConflict": {
       "title": "Overwrite file?",

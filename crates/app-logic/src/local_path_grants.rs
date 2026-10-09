@@ -65,6 +65,40 @@ impl GrantedLocalPath {
     }
 }
 
+/// The one grant rule: `canonical` is inside a granted root, or inside
+/// (but not equal to) the session's edit-session directory.
+fn decide(
+    canonical: PathBuf,
+    roots: &[PathBuf],
+    edit_session_dir: Option<&Path>,
+) -> Option<GrantedLocalPath> {
+    if roots.iter().any(|root| canonical.starts_with(root)) {
+        return Some(GrantedLocalPath(canonical));
+    }
+    let in_edit_dir = edit_session_dir
+        .and_then(|dir| std::fs::canonicalize(dir).ok())
+        .is_some_and(|dir| canonical.starts_with(&dir) && canonical != dir);
+    in_edit_dir.then_some(GrantedLocalPath(canonical))
+}
+
+/// See [`LocalPathGrants::snapshot`].
+#[derive(Debug, Clone)]
+pub struct GrantSnapshot {
+    roots: Vec<PathBuf>,
+    edit_session_dir: Option<PathBuf>,
+}
+
+impl GrantSnapshot {
+    /// Same contract as [`LocalPathGrants::check`]: canonicalises, then
+    /// compares. A path that does not resolve is not granted.
+    pub fn check(&self, requested: &Path) -> Result<GrantedLocalPath, CommandError> {
+        std::fs::canonicalize(requested)
+            .ok()
+            .and_then(|canonical| decide(canonical, &self.roots, self.edit_session_dir.as_deref()))
+            .ok_or_else(|| CommandError::from(LOCAL_PATH_NOT_GRANTED))
+    }
+}
+
 #[derive(Debug)]
 struct PendingDrop {
     paths: Vec<PathBuf>,
@@ -133,25 +167,39 @@ impl LocalPathGrants {
         // granted — there is nothing to compare.
         let canonical = std::fs::canonicalize(requested).map_err(|_| not_granted())?;
 
-        let in_granted_root = lock_tolerating_poison(&self.roots)
+        let roots = lock_tolerating_poison(&self.roots)
             .get(&session_id)
-            .is_some_and(|roots| roots.iter().any(|root| canonical.starts_with(root)));
-        if in_granted_root {
-            return Ok(GrantedLocalPath(canonical));
+            .cloned()
+            .unwrap_or_default();
+        match decide(canonical, &roots, edit_session_dir) {
+            Some(granted) => Ok(granted),
+            None => {
+                tracing::warn!(
+                    session_id = %session_id,
+                    "a local path outside every grant of this session was refused"
+                );
+                Err(not_granted())
+            }
         }
+    }
 
-        let in_edit_dir = edit_session_dir
-            .and_then(|dir| std::fs::canonicalize(dir).ok())
-            .is_some_and(|dir| canonical.starts_with(&dir) && canonical != dir);
-        if in_edit_dir {
-            return Ok(GrantedLocalPath(canonical));
+    /// Issue #128: an owned copy of the grants of `session_id`, for code
+    /// that must check many paths off the async runtime (the folder walk
+    /// runs in a blocking task). It applies exactly the rule of
+    /// [`Self::check`] (same function), and it does not see grants that
+    /// are added or dropped after the snapshot was taken.
+    pub fn snapshot(
+        &self,
+        session_id: SessionId,
+        edit_session_dir: Option<&Path>,
+    ) -> GrantSnapshot {
+        GrantSnapshot {
+            roots: lock_tolerating_poison(&self.roots)
+                .get(&session_id)
+                .cloned()
+                .unwrap_or_default(),
+            edit_session_dir: edit_session_dir.map(Path::to_path_buf),
         }
-
-        tracing::warn!(
-            session_id = %session_id,
-            "a local path outside every grant of this session was refused"
-        );
-        Err(not_granted())
     }
 
     /// Drops every grant of `session_id` (disconnect).
