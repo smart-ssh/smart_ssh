@@ -652,7 +652,8 @@ mod folder_upload_tests {
         write(&remote.path().join("proj/other.txt"), b"keep");
 
         let preview = s.folder_preview(&folder, remote.path()).await.unwrap();
-        let a = remote_str(&remote.path().join("proj/a.txt"));
+        // The upload joins remote paths with "/", whatever the host OS.
+        let a = format!("{}/proj/a.txt", remote_str(remote.path()));
         assert_eq!(preview.overwrites, vec![a.clone()]);
         assert_eq!(preview.file_count, 2);
 
