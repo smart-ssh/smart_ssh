@@ -367,6 +367,9 @@ pub async fn run_chat_turn(
     profile_store: &dyn ProfileStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> bool {
+    // Issue #102: Sitzungs-Hinweis, falls die Zweitmeinung aktiviert war,
+    // aber beim Verbinden nicht eingerichtet werden konnte.
+    super::action_exec::announce_second_opinion_setup_failure(session, session_id, emitter);
     // Das Stopp-Flag wird NICHT hier zurückgesetzt, sondern in
     // `app_shell::commands::send_chat_message_impl` atomar mit dem Start des
     // Turns (Spec 0066, spec-reviewer-Fund: ein Reset erst hier, nach

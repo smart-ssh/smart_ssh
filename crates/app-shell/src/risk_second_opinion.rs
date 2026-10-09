@@ -59,32 +59,85 @@ pub(crate) fn red_risk_always_confirm_from_stored(value: Option<serde_json::Valu
     value.is_none_or(|value| value.as_bool().unwrap_or(true))
 }
 
+/// Ergebnis der Auflösung der Zweitmeinungs-Einstellungen (Issue #102):
+/// "ausgeschaltet" und "eingeschaltet, aber nicht einrichtbar" sind getrennt,
+/// damit Letzteres dem Nutzer gemeldet werden kann statt still zu enden.
+pub enum SecondOpinionSetup {
+    /// Zweitmeinung in den Einstellungen aus (oder Einstellung nicht lesbar
+    /// bzw. nie gesetzt): bleibt still wie bisher.
+    Disabled,
+    /// Eingeschaltet und aufgelöst.
+    Ready(Box<dyn AiProvider>, Arc<ProviderBudgetGuard>),
+    /// Eingeschaltet, aber der Provider fehlt/ist gelöscht, seine ID ist
+    /// ungültig oder sein Credential ist nicht auflösbar.
+    Unavailable,
+}
+
+type ResolvedProvider = Option<(Box<dyn AiProvider>, Arc<ProviderBudgetGuard>)>;
+
+impl SecondOpinionSetup {
+    /// Zerlegt in den bisherigen Provider/Budget-Paarwert und das Flag
+    /// "eingeschaltet, aber nicht einrichtbar".
+    pub fn into_parts(self) -> (ResolvedProvider, bool) {
+        match self {
+            SecondOpinionSetup::Disabled => (None, false),
+            SecondOpinionSetup::Ready(provider, budget) => (Some((provider, budget)), false),
+            SecondOpinionSetup::Unavailable => (None, true),
+        }
+    }
+}
+
+/// Erster Schritt der Auflösung, rein auf den gespeicherten Werten (testbar
+/// ohne Store): ist die Zweitmeinung an, und welche Provider-ID ist gewählt?
+/// `Err(..)` ist bereits das Endergebnis.
+pub(crate) fn parse_second_opinion_settings(
+    enabled: Option<serde_json::Value>,
+    provider_id: Option<serde_json::Value>,
+) -> Result<ssh_manager_core::ai::ProviderId, SecondOpinionSetup> {
+    let enabled = enabled.and_then(|v| v.as_bool()).unwrap_or(false);
+    if !enabled {
+        return Err(SecondOpinionSetup::Disabled);
+    }
+    provider_id
+        .as_ref()
+        .and_then(|v| v.as_str())
+        .and_then(|raw| uuid::Uuid::parse_str(raw).ok())
+        .map(ssh_manager_core::ai::ProviderId)
+        .ok_or(SecondOpinionSetup::Unavailable)
+}
+
 /// Liest die Zweitmeinungs-Einstellungen und baut bei Bedarf den
 /// konfigurierten `AiProvider` — einmalig bei `connect()` aufgerufen (s.
 /// `Session::risk_second_opinion_provider`-Doc-Kommentar zur Begründung,
-/// warum nicht live pro Aktionsvorschlag neu gelesen). `None`, wenn die
-/// Zweitmeinung deaktiviert ist, kein Provider gewählt wurde, der gewählte
-/// Provider inzwischen gelöscht wurde, oder sein Credential nicht auflösbar
-/// ist — in jedem dieser Fälle bleibt Spec 0026 Abschnitt 3 Punkt 1 erfüllt
-/// ("Standardmäßig deaktiviert"): lieber gar keine Zweitmeinung als eine
-/// mit falscher/fehlender Konfiguration.
+/// warum nicht live pro Aktionsvorschlag neu gelesen). Ohne Provider bleibt
+/// Spec 0026 Abschnitt 3 Punkt 1 erfüllt ("Standardmäßig deaktiviert"):
+/// lieber gar keine Zweitmeinung als eine mit falscher/fehlender
+/// Konfiguration. Issue #102: war sie eingeschaltet, aber der gewählte
+/// Provider ist gelöscht, die ID ungültig oder das Credential nicht
+/// auflösbar, ist das [`SecondOpinionSetup::Unavailable`] — der Aufrufer
+/// meldet es der Sitzung.
 pub async fn resolve_second_opinion_provider(
     app: &tauri::AppHandle,
     state: &AppState,
-) -> Option<(Box<dyn AiProvider>, Arc<ProviderBudgetGuard>)> {
-    let store = app.store(SETTINGS_STORE_FILE).ok()?;
-    let enabled = store.get(ENABLED_KEY)?.as_bool().unwrap_or(false);
-    if !enabled {
-        return None;
-    }
-    let provider_id_raw = store.get(PROVIDER_ID_KEY)?.as_str()?.to_string();
+) -> SecondOpinionSetup {
+    // Ein nicht öffenbarer Store verhält sich wie bisher: "aus".
+    let Ok(store) = app.store(SETTINGS_STORE_FILE) else {
+        return SecondOpinionSetup::Disabled;
+    };
     let provider_id =
-        ssh_manager_core::ai::ProviderId(uuid::Uuid::parse_str(&provider_id_raw).ok()?);
+        match parse_second_opinion_settings(store.get(ENABLED_KEY), store.get(PROVIDER_ID_KEY)) {
+            Ok(id) => id,
+            Err(setup) => return setup,
+        };
 
-    let config = state.ai_provider_store.get(&provider_id).await.ok()?;
-    let api_key = state.credential_store.get(&config.credential_ref).ok()?;
+    let Ok(config) = state.ai_provider_store.get(&provider_id).await else {
+        return SecondOpinionSetup::Unavailable;
+    };
+    let Ok(api_key) = state.credential_store.get(&config.credential_ref) else {
+        return SecondOpinionSetup::Unavailable;
+    };
 
-    Some(build_ai_provider(
+    let (provider, budget) = build_ai_provider(
         &state.rate_limit_registry,
         config.provider_type,
         config.base_url.as_deref(),
@@ -103,7 +156,8 @@ pub async fn resolve_second_opinion_provider(
         // Issue #162: Nebenaufruf (Zweitmeinung/Injection-Check) — nie
         // Web-Werkzeuge.
         false,
-    ))
+    );
+    SecondOpinionSetup::Ready(provider, budget)
 }
 
 /// Spec 0092, T16: die Einstellung darf sich durch einen fehlerhaften Wert in
@@ -115,6 +169,51 @@ pub async fn resolve_second_opinion_provider(
 mod tests {
     use super::*;
     use crate::first_run_notice::test_support::{lock, test_app};
+
+    // Issue #102: eingeschaltet-aber-nicht-einrichtbar ist von
+    // ausgeschaltet unterscheidbar.
+    #[test]
+    fn test_disabled_settings_stay_silent() {
+        for enabled in [
+            None,
+            Some(serde_json::json!(false)),
+            Some(serde_json::json!("true")),
+        ] {
+            let result =
+                parse_second_opinion_settings(enabled, Some(serde_json::json!("not-a-uuid")));
+            assert!(matches!(result, Err(SecondOpinionSetup::Disabled)));
+        }
+    }
+
+    #[test]
+    fn test_enabled_without_usable_provider_id_is_unavailable() {
+        for id in [
+            None,
+            Some(serde_json::json!(null)),
+            Some(serde_json::json!("not-a-uuid")),
+            Some(serde_json::json!(42)),
+        ] {
+            let result = parse_second_opinion_settings(Some(serde_json::json!(true)), id);
+            assert!(matches!(result, Err(SecondOpinionSetup::Unavailable)));
+        }
+    }
+
+    #[test]
+    fn test_enabled_with_valid_provider_id_proceeds_to_lookup() {
+        let id = uuid::Uuid::new_v4();
+        let result = parse_second_opinion_settings(
+            Some(serde_json::json!(true)),
+            Some(serde_json::json!(id.to_string())),
+        );
+        assert!(matches!(result, Ok(ssh_manager_core::ai::ProviderId(got)) if got == id));
+    }
+
+    #[test]
+    fn test_setup_into_parts_flags_only_unavailable() {
+        assert!(!SecondOpinionSetup::Disabled.into_parts().1);
+        let (provider, flagged) = SecondOpinionSetup::Unavailable.into_parts();
+        assert!(provider.is_none() && flagged);
+    }
 
     #[test]
     fn test_missing_key_means_on() {

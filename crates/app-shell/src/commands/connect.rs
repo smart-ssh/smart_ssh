@@ -474,11 +474,16 @@ pub(crate) async fn connect_session(
     // `Session::risk_second_opinion_provider`-Doc-Kommentar. Spec 0061:
     // liefert zusätzlich den (bei gleicher Provider-Identität mit
     // `injection_check_provider` unten geteilten) Budget-Wächter mit.
-    let (risk_second_opinion_provider, risk_second_opinion_budget) =
-        match crate::risk_second_opinion::resolve_second_opinion_provider(app, state).await {
-            Some((provider, budget)) => (Some(provider), Some(budget)),
-            None => (None, None),
-        };
+    // Issue #102: "eingeschaltet, aber nicht einrichtbar" wird der Sitzung
+    // gemeldet (`second_opinion_setup_notice_pending`), "aus" bleibt still.
+    let (second_opinion_resolved, second_opinion_setup_failed) =
+        crate::risk_second_opinion::resolve_second_opinion_provider(app, state)
+            .await
+            .into_parts();
+    let (risk_second_opinion_provider, risk_second_opinion_budget) = match second_opinion_resolved {
+        Some((provider, budget)) => (Some(provider), Some(budget)),
+        None => (None, None),
+    };
 
     // Spec 0092, A1.3: einmalig gelesen, wie die Zweitmeinung oben — eine
     // Änderung greift erst bei der nächsten Verbindung. Fail-safe „an",
@@ -498,7 +503,11 @@ pub(crate) async fn connect_session(
     // Zweitmeinungs-Konfiguration (Spec 0026, Abschnitt 3), sonst wäre die
     // Checkbox im Frontend wirkungslos, obwohl sie aktiviert wurde.
     let (injection_check_provider, injection_check_budget) = if server.ai_injection_check_enabled {
-        match crate::risk_second_opinion::resolve_second_opinion_provider(app, state).await {
+        match crate::risk_second_opinion::resolve_second_opinion_provider(app, state)
+            .await
+            .into_parts()
+            .0
+        {
             Some((provider, budget)) => (Some(provider), Some(budget)),
             None => (None, None),
         }
@@ -681,6 +690,10 @@ pub(crate) async fn connect_session(
             injection_check_provider,
             injection_check_budget,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
+            second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(
+                second_opinion_setup_failed,
+            ),
             chat_session_store: chat_session_id.map(|_| state.chat_session_store.clone()),
             // Spec 0057, §1: dieselbe Gating-Logik wie `chat_session_store`
             // direkt darüber — das Ledger braucht dieselbe `chat_sessions.id`
