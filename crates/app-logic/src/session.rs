@@ -554,7 +554,7 @@ pub struct SessionParts {
     ///
     /// **Fail-safe `true`** (A1.2): fehlender Schlüssel, kein boolescher
     /// Wert oder ein nicht öffenbarer Store gelten als „an". In
-    /// Test-Fixtures ebenfalls `true` (Spec 0092, §5) — damit ein
+    /// Test-Fixtures ebenfalls `true` (Spec 0092, A1.2) — damit ein
     /// bestehender Test mit rotem Kommando und Allow-Regel sichtbar bricht,
     /// statt still auf „aus" zu laufen.
     pub red_risk_always_confirm: bool,
@@ -1224,7 +1224,7 @@ mod tests {
             chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
             risk_second_opinion_provider: None,
             risk_second_opinion_budget: None,
-            // Spec 0092, §5: in Test-Fixtures wie in der App standardmäßig
+            // Spec 0092, A1.2: in Test-Fixtures wie in der App standardmäßig
             // „an".
             red_risk_always_confirm: true,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),

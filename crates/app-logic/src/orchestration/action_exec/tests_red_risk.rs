@@ -74,7 +74,7 @@ fn red_risk_session(transport: MockSshTransport) -> Session {
         Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     assert!(
         session.red_risk_always_confirm,
-        "Spec 0092, §5: Test-Fixtures starten mit eingeschalteter Einstellung"
+        "Spec 0092, A1.2: Test-Fixtures starten mit eingeschalteter Einstellung"
     );
     session
 }

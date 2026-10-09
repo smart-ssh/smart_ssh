@@ -51,7 +51,7 @@ pub(super) fn split_command(cmd: &str) -> ParseResult {
     if looks_like_heredoc_or_complex_shell_c(trimmed) {
         return ParseResult::Ambiguous {
             reason: "mehrzeiliges Skript (Here-Doc oder `... -c \"...\"`) wird als \
-                     Ganzes behandelt, kein Sub-Parsing (Spec 0002, Abschnitt 7)"
+                     Ganzes behandelt, kein Sub-Parsing (Spec 0002, Abschnitt 8)"
                 .to_string(),
         };
     }

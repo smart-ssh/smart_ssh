@@ -2087,7 +2087,7 @@ async fn test_spec_0077_ta10_pattern_error_log_names_the_rule_but_never_the_comm
     }
 }
 
-/// Spec 0077, Klarstellung Q-BL-0249-03: Ein Muster ist selbst geschriebener
+/// Spec 0077, 3.2.2: Ein Muster ist selbst geschriebener
 /// Text und kann ebenso ein Geheimnis enthalten wie ein Kommando — hier eine
 /// Deny-Regel, die durch einen Tippfehler (fehlende schließende Klammer)
 /// ungültig ist und ein Passwort im eigenen Muster trägt. Der Fehlertext von
