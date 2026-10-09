@@ -3,8 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { getAppInfo } from "../api";
 import type { AppInfoDto } from "../types";
 import { TITLEBAR_DRAG_LAYER_Z_INDEX, useIsAnyModalOpen } from "../modalLayer";
-
-export type Platform = "macos" | "windows" | "linux" | "unknown";
+import {
+  TITLEBAR_HEIGHT_CLASS,
+  titlebarDragInsetStyle,
+  titlebarPaddingStyle,
+  usePlatform,
+  type DecorationMode,
+} from "../titlebarLayout";
 
 /** Spec 0052, Abschnitt 3.3: die Titelzeile zeigt Version+Hash (+ Edition,
  * z. B. "· Official" — spec-optional "falls billig", hier billig genug für
@@ -18,29 +23,6 @@ export type Platform = "macos" | "windows" | "linux" | "unknown";
  * mehreren Stellen suchen zu müssen. */
 const SHOW_EARLY_ACCESS_TITLEBAR_INFO = true;
 
-/** Spec 0049, Fund 3/4: `create_overlay_titlebar` liefert jetzt zurück, ob
- * die plattformspezifische Overlay-Titelleiste des Plugins tatsächlich
- * aktiv ist ("custom" — macOS-Ampel bzw. die HTML-Controls des Plugins auf
- * Windows/Linux) oder ob die Aktivierung fehlgeschlagen ist und auf die
- * native Titelleiste zurückgefallen wurde ("native" — dann rendert das
- * Betriebssystem seine eigene Titelzeile inkl. eigener Minimieren-/
- * Maximieren-/Schließen-Controls **oberhalb** dieses Headers, der dann
- * keinerlei reservierten Platz mehr braucht). "pending" ist der kurze
- * Moment zwischen Mount und der ersten Antwort des Backends — hält
- * bewusst dieselbe reservierte Platzierung wie "custom", damit während
- * dieses kurzen Fensters kein sichtbarer Sprung im Layout entsteht, falls
- * die Aktivierung (der Normalfall) erfolgreich ist. */
-type DecorationMode = "pending" | "custom" | "native";
-
-function detectFallbackPlatform(): Platform {
-  if (typeof navigator === "undefined") return "unknown";
-  const ua = navigator.userAgent.toLowerCase();
-  if (ua.includes("mac")) return "macos";
-  if (ua.includes("win")) return "windows";
-  if (ua.includes("linux")) return "linux";
-  return "unknown";
-}
-
 interface AppHeaderProps {
   children?: React.ReactNode;
 }
@@ -53,7 +35,7 @@ interface AppHeaderProps {
  * - Drag-Region via `data-tauri-drag-region`
  */
 export function AppHeader({ children }: AppHeaderProps) {
-  const [platform, setPlatform] = useState<Platform>(detectFallbackPlatform);
+  const platform = usePlatform();
   const [decorationMode, setDecorationMode] = useState<DecorationMode>("pending");
   const [appInfo, setAppInfo] = useState<AppInfoDto | null>(null);
   const anyModalOpen = useIsAnyModalOpen();
@@ -70,16 +52,6 @@ export function AppHeader({ children }: AppHeaderProps) {
   }, []);
 
   useEffect(() => {
-    invoke<string>("get_platform")
-      .then((p) => {
-        if (p === "macos" || p === "windows" || p === "linux") {
-          setPlatform(p);
-        }
-      })
-      .catch((err) => {
-        console.warn("Konnte Plattform nicht über Tauri-Command ermitteln, nutze Fallback:", err);
-      });
-
     // Initialisiere die Overlay-Titelleiste — der Rückgabewert sagt, ob
     // sie tatsächlich aktiv wurde oder das Backend auf die native
     // Titelleiste zurückgefallen ist (s. `DecorationMode`-Doc-Kommentar).
@@ -98,42 +70,22 @@ export function AppHeader({ children }: AppHeaderProps) {
       });
   }, []);
 
-  const isMac = platform === "macos";
-
   // Plattformspezifisches Padding — nur solange die Overlay-Titelleiste
-  // tatsächlich aktiv ist (oder die Aktivierung noch aussteht, s. o.).
-  // Ist auf "native" zurückgefallen, zeichnet das Betriebssystem seine
-  // eigene Titelzeile oberhalb dieses Headers; hier ist dann kein
-  // reservierter Platz mehr nötig.
-  const paddingStyle =
-    decorationMode === "native"
-      ? { paddingLeft: "16px", paddingRight: "16px" }
-      : isMac
-        ? {
-            paddingLeft: "max(78px, var(--tauri-plugin-decoration-left-clearance, 78px))",
-            paddingRight: "16px",
-          }
-        : {
-            paddingLeft: "16px",
-            paddingRight: "max(140px, var(--tauri-plugin-decoration-right-clearance, 140px))",
-          };
+  // tatsächlich aktiv ist (oder die Aktivierung noch aussteht, s.
+  // `DecorationMode` in `titlebarLayout.ts`).
+  const paddingStyle = titlebarPaddingStyle(platform, decorationMode);
 
   // Issue #160 / Spec 0014, Abschnitt 5: Freiraum der Drag-Schicht für die
   // Fenster-Controls — dieselben Werte wie das Padding oben, nur ohne den
   // 16px-Innenabstand auf der Seite ohne Controls.
-  const dragLayerInsetStyle =
-    decorationMode === "native"
-      ? { left: "0px", right: "0px" }
-      : isMac
-        ? { left: paddingStyle.paddingLeft, right: "0px" }
-        : { left: "0px", right: paddingStyle.paddingRight };
+  const dragLayerInsetStyle = titlebarDragInsetStyle(platform, decorationMode);
 
   return (
     <>
       <header
         data-tauri-drag-region
         style={paddingStyle}
-        className="flex h-9 select-none items-center justify-between border-b border-slate-800/80 bg-slate-950/90 text-slate-300 text-xs backdrop-blur-sm transition-all"
+        className={`flex ${TITLEBAR_HEIGHT_CLASS} select-none items-center justify-between border-b border-slate-800/80 bg-slate-950/90 text-slate-300 text-xs backdrop-blur-sm transition-all`}
       >
         {/* Linker Bereich: App-Icon + Schriftzug — Marke aus dem Claude-
             Design-Entwurf (Abschnitt 1a, "Terminal-Cursor mit Spark"):
@@ -212,7 +164,7 @@ export function AppHeader({ children }: AppHeaderProps) {
           data-tauri-drag-region
           data-testid="titlebar-drag-layer"
           aria-hidden="true"
-          className="fixed top-0 h-9 select-none"
+          className={`fixed top-0 ${TITLEBAR_HEIGHT_CLASS} select-none`}
           style={{ ...dragLayerInsetStyle, zIndex: TITLEBAR_DRAG_LAYER_Z_INDEX }}
         />
       )}
