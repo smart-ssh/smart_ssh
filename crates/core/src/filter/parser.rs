@@ -1910,23 +1910,17 @@ pub(super) fn deferred_code(literal: &str) -> Option<DeferredCode> {
 /// `None` for the read-only and reset forms listed at [`deferred_code`].
 /// An unknown option yields an empty list (`Confirm`, nothing to evaluate).
 fn trap_handler(args: &[String]) -> Option<Vec<String>> {
-    let mut i = 0usize;
-    while let Some(arg) = args.get(i) {
-        match arg.as_str() {
-            "--" => {
-                i += 1;
-                break;
-            }
-            // `-p`/`-l` only list handlers/signals; with them, the
-            // remaining operands are signal names, not an action.
-            "-p" | "-l" | "-lp" | "-pl" => return None,
-            // `-` alone is the reset action, handled below as an operand.
-            "-" => break,
-            _ if arg.starts_with('-') && arg.len() > 1 => return Some(Vec::new()),
-            _ => break,
-        }
-    }
-    let operands = &args[i.min(args.len())..];
+    // Only the first argument can be an option: `trap` takes no option
+    // values, and its operands start right after it.
+    let operands = match args.first().map(String::as_str) {
+        Some("--") => &args[1..],
+        // `-p`/`-l` only list handlers/signals; with them, the remaining
+        // operands are signal names, not an action.
+        Some("-p" | "-l" | "-lp" | "-pl") => return None,
+        // `-` alone is the reset action, handled below as an operand.
+        Some(arg) if arg.starts_with('-') && arg != "-" => return Some(Vec::new()),
+        _ => args,
+    };
     match operands {
         [] => None,
         [single] if is_signal_spec(single) => None,
