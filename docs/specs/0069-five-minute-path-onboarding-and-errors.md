@@ -356,7 +356,10 @@ Für das normale Formular „Provider hinzufügen" gilt dieselbe Regel wie für
 den Ollama-Vorschlag (B4):
 1. Ist beim Speichern **noch kein** Provider aktiv, wird der neue Provider
    nach erfolgreichem Anlegen aktiv gesetzt. Ist schon einer aktiv, wird der
-   neue inaktiv angelegt; der bisher aktive bleibt aktiv.
+   neue inaktiv angelegt; der bisher aktive bleibt aktiv. Ist die
+   Provider-Liste beim Speichern nicht geladen (Laden läuft noch oder ist
+   fehlgeschlagen), ist unbekannt, ob schon einer aktiv ist: Der neue
+   Provider wird dann inaktiv angelegt.
 2. Solange kein Provider aktiv ist, steht direkt über „Hinzufügen" der
    Hinweis „Wird als aktiver Provider verwendet, da noch keiner aktiv ist."
    bzw. „Will be used as the active provider, since none is active yet.".
@@ -660,7 +663,8 @@ im Bericht bestätigen.
     aktivem Provider → kein Hinweis, kein Aktiv-Setzen, der bisherige bleibt
     aktiv; Anlegen schlägt fehl → kein Aktiv-Setzen, Fehler sichtbar;
     Aktiv-Setzen schlägt fehl → übersetzter Fehler, Provider inaktiv in der
-    Liste, nicht gelöscht.
+    Liste, nicht gelöscht; Provider-Liste beim Speichern noch nicht geladen
+    oder Laden fehlgeschlagen → Anlegen, aber kein Aktiv-Setzen.
 
 **Teil C**
 27. `ServerList`: nur Localhost → Einstiegs-Block sichtbar, Entwicklertext
@@ -765,3 +769,5 @@ Beide Punkte wurden am 2026-09-22 entschieden, siehe Klarstellungen (§ 9).
 - 2026-10-08 · Offener Punkt 2 (Folge-Item #95) · Umgesetzt als **B6**: Ein
   über das normale Formular angelegter Provider wird aktiv, wenn beim
   Speichern noch keiner aktiv ist; das Formular sagt das vorher.
+- 2026-10-09 · Folge-Item #135 · B6.1 ergänzt: Ist die Provider-Liste beim
+  Speichern nicht geladen, wird der neue Provider inaktiv angelegt.

@@ -726,6 +726,43 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     expect(screen.getByRole("button", { name: "Aktiv setzen" })).toBeInTheDocument();
     expect(deleteAiProvider).not.toHaveBeenCalled();
   });
+
+  // #135: Ohne geladene Liste ist `providers` leer, sagt aber nichts über
+  // den Backend-Zustand — ein dort schon aktiver Provider darf nicht
+  // ersetzt werden.
+  it("initial provider list failed to load -> addAiProvider, but no setActiveAiProvider", async () => {
+    vi.mocked(listAiProviders)
+      .mockRejectedValueOnce(new Error("list boom"))
+      .mockResolvedValueOnce([activeAnthropicProvider(), newOpenAiProvider()]);
+    vi.mocked(addAiProvider).mockResolvedValueOnce("new-form-id");
+
+    renderForm();
+    expect(await screen.findByText("list boom")).toBeInTheDocument();
+    expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
+    fillAndSubmit();
+
+    await waitFor(() => expect(addAiProvider).toHaveBeenCalledTimes(1));
+    // Rest des Erfolgspfads unverändert: Liste neu geladen.
+    expect(await screen.findByText("Prov")).toBeInTheDocument();
+    expect(listAiProviders).toHaveBeenCalledTimes(2);
+    expect(setActiveAiProvider).not.toHaveBeenCalled();
+  });
+
+  it("initial provider list still pending at submit time -> addAiProvider, but no setActiveAiProvider", async () => {
+    // Bleibt für die Dauer des Tests offen.
+    vi.mocked(listAiProviders)
+      .mockReturnValueOnce(new Promise<AiProviderConfigDto[]>(() => {}))
+      .mockResolvedValueOnce([activeAnthropicProvider(), newOpenAiProvider()]);
+    vi.mocked(addAiProvider).mockResolvedValueOnce("new-form-id");
+
+    renderForm();
+    expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
+    fillAndSubmit();
+
+    await waitFor(() => expect(addAiProvider).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Prov")).toBeInTheDocument();
+    expect(setActiveAiProvider).not.toHaveBeenCalled();
+  });
 });
 
 // Spec 0105: Web-Recherche-Schalter (Default an, nur bei Providern mit

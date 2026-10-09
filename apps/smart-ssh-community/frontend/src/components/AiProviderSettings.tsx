@@ -340,9 +340,13 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     setError(null);
     try {
       // Spec 0069, Teil B6: wie bei `handleAdoptOllama` VOR dem Anlegen
-      // festhalten, ob schon ein Provider aktiv ist — nur dann bleibt der
-      // neue inaktiv.
-      const wasAnyProviderActive = providers.some((p) => p.isActive);
+      // festhalten, ob der neue Provider aktiv gesetzt werden darf. Nur
+      // wenn die Provider-Liste geladen ist UND keiner aktiv ist — solange
+      // `listAiProviders()` noch läuft oder fehlgeschlagen ist, ist
+      // `providers` leer und sagt nichts darüber, ob im Backend schon einer
+      // aktiv ist; dann bleibt der neue inaktiv (B6.1, #135), damit ein
+      // aktiver Provider nie stillschweigend ersetzt wird.
+      const shouldActivateNewProvider = providersLoaded && !providers.some((p) => p.isActive);
       // Spec 0069, Teil B5: Ollama mit leerem Key -> Platzhalter statt des
       // (dann leeren) `form.apiKey` — jeder andere Providertyp unverändert.
       const newId = await addAiProvider({ ...form, apiKey: effectiveApiKey(form) });
@@ -356,7 +360,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       // bei Erfolg (kein Löschen, kein doppeltes Anlegen beim erneuten
       // Absenden), den Fehler aber sichtbar machen.
       let activationError: unknown = null;
-      if (!wasAnyProviderActive) {
+      if (shouldActivateNewProvider) {
         try {
           await setActiveAiProvider(newId);
         } catch (err) {
