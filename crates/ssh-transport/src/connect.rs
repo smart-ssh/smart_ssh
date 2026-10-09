@@ -61,27 +61,13 @@ pub enum ConnectOutcome {
 /// (die Integrationstests riefen `connect()` bislang nur direkt in
 /// `#[tokio::test]`s auf, wo eine `Send`-Future nicht verlangt wird).
 ///
-/// **Bekannte Einschränkung (Jump-Hosts, `remaining_hops`-Zweig):** die
-/// Verkettung über `channel_open_direct_tcpip` + `Channel::into_stream()` +
-/// `client::connect_stream()` folgt exakt dem in Spec 0005 Abschnitt 5
-/// beschriebenen Standard-Tunneling-Verfahren und ist architektonisch
-/// korrekt — betrifft nur den Jump-Host-Fall (zweiter und weitere Hops),
-/// ein einzelner Hop ist davon nicht betroffen und funktioniert (s.
-/// Integrationstests). Gegen `russh` 0.63.1 sendet der über den Tunnel
-/// erreichte Ziel-Server (verifiziert per Byte-Level-Tracing direkt auf dem
-/// rohen `TcpStream`, nicht nur eine Vermutung) seine eigene
-/// SSH-Identifikationszeile ein zweites Mal, unmittelbar vor seiner
-/// KEXINIT-Antwort — der Client liest die zweite Kopie fälschlich als
-/// 4-Byte-Paketlängen-Präfix und bricht mit "Bad packet size" ab.
-/// Ausgeschlossen wurden dabei: TCP-Nagle-Koaleszenz (`nodelay` half
-/// nicht), doppelter `channel_open_direct_tcpip`-Aufruf (per Zähler
-/// verifiziert: genau 1), doppelter `run_stream`-Aufruf (per Log
-/// verifiziert: genau 1) sowie ein zweiter `send_ssh_id`-Aufrufort (es gibt
-/// nur einen einzigen in der gesamten `russh`-Quelle). Details und
-/// Recherche zu zwei unabhängigen, offenen `russh`-Upstream-Reports mit
-/// demselben grundsätzlichen Muster (SSH-über-SSH via
-/// `channel_open_direct_tcpip`) in
-/// `docs/adr/0008-russh-nested-tunnel-limitation.md`.
+/// **Jump-Hosts (`remaining_hops`-Zweig):** die Verkettung über
+/// `channel_open_direct_tcpip` + `Channel::into_stream()` +
+/// `client::connect_stream()` folgt dem in Spec 0005 Abschnitt 5
+/// beschriebenen Standard-Tunneling-Verfahren; jeder Hop durchläuft eigene
+/// Host-Key-Prüfung und Authentifizierung. Ein früherer „Bad packet
+/// size“-Fehler im Zwei-Hop-Test lag am Echo der Test-Fixture auf
+/// Tunnel-Channels, nicht an diesem Code (ADR 0008, Update 2026-10-09).
 ///
 /// Spec 0076, §4.2: `key_files` ist die äußere Grenze zum Dateisystem für
 /// [`ssh_manager_core::profiles::AuthMethod::IdentityFile`] — durchgereicht
