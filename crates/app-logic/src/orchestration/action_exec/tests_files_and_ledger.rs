@@ -1223,7 +1223,7 @@ fn test_t6_0094_command_execution_logs_no_content_at_info() {
         .find(|l| l.contains("ssh command executed"))
         .expect("die info-Zeile muss weiterhin entstehen");
     assert!(
-        line.contains(&format!("\"command_len\":{}", command.chars().count()))
+        line.contains(&format!("\"command_len\":{}", command.len()))
             && line.contains("\"exit_code\":\"Some(0)\"")
             && line.contains("\"stdout_len\":")
             && line.contains("\"stderr_len\":"),
@@ -1257,6 +1257,109 @@ fn test_t6_0094_failed_command_execution_logs_no_error_text_at_warn() {
             .iter()
             .any(|l| l.contains("\"code\":\"SSH_CONNECTION_FAILED\"")),
         "der Fehlercode muss ab warn stehen (A1.4): {info_or_above:?}"
+    );
+}
+
+// --- Issue #143: `command_len` in Bytes ---------------------------------
+
+/// Ein Kommando, dessen Länge in Bytes (14) von der Zeichenzahl (8)
+/// abweicht — `€` ist in UTF-8 drei Bytes lang.
+const MULTI_BYTE_COMMAND_143: &str = "echo €€€";
+
+/// Liest `command_len` aus der JSON-Zeile mit `message`, die genau einmal
+/// aufgezeichnet sein muss.
+fn command_len_of_line(lines: &[String], message: &str) -> u64 {
+    let matching: Vec<&String> = lines
+        .iter()
+        .filter(|l| {
+            serde_json::from_str::<serde_json::Value>(l)
+                .ok()
+                .and_then(|v| v["fields"]["message"].as_str().map(|m| m == message))
+                .unwrap_or(false)
+        })
+        .collect();
+    assert_eq!(
+        matching.len(),
+        1,
+        "genau eine Zeile {message:?} erwartet: {lines:?}"
+    );
+    let value: serde_json::Value = serde_json::from_str(matching[0]).expect("JSON-Zeile");
+    value["fields"]["command_len"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("command_len fehlt oder ist keine Zahl: {}", matching[0]))
+}
+
+/// Wertet das Kommando wie im Produktionspfad über die Filter-Engine aus,
+/// damit deren Entscheidungszeile im selben Puffer landet.
+async fn evaluate_for_log_143(command: &str) {
+    let engine = FilterEngine::new(AllowEverythingPolicyStore);
+    let ctx = ssh_manager_core::filter::EvalContext {
+        server_id: ServerId::new(),
+        tags: Vec::new(),
+    };
+    engine.evaluate_explained(command, &ctx).await;
+}
+
+/// Issue #143: Die Ausführungszeile meldet `command_len` in Bytes, also
+/// dieselbe Zahl wie die Filter-Entscheidungszeile für dasselbe Kommando.
+/// Gegenprobe: mit `command.chars().count()` steht hier 8 statt 14.
+#[tokio::test]
+async fn test_143_command_executed_line_reports_command_len_in_bytes_like_filter_line() {
+    log_capture::start_recording();
+    let command = MULTI_BYTE_COMMAND_143;
+    assert_ne!(command.len(), command.chars().count());
+
+    evaluate_for_log_143(command).await;
+    let output = CommandOutput {
+        stdout: b"\xe2\x82\xac\n".to_vec(),
+        stderr: Vec::new(),
+        exit_code: Some(0),
+        truncated: false,
+    };
+    log_command_execution(Uuid::new_v4(), command, &output);
+
+    let lines = log_capture::recorded_lines_at_info_or_above();
+    let filter_len = command_len_of_line(&lines, "filter engine decision");
+    let exec_len = command_len_of_line(&lines, "ssh command executed");
+    assert_eq!(exec_len, command.len() as u64, "Bytes erwartet: {lines:?}");
+    assert_eq!(
+        exec_len, filter_len,
+        "beide Zeilen müssen dieselbe Zahl tragen: {lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|l| l.contains('€') || l.contains("echo")),
+        "das Kommando selbst darf ab info nicht stehen (Spec 0094, A1.4): {lines:?}"
+    );
+}
+
+/// Issue #143: dasselbe für die Fehlschlag-Zeile auf `warn`.
+#[tokio::test]
+async fn test_143_command_failed_line_reports_command_len_in_bytes_like_filter_line() {
+    log_capture::start_recording();
+    let command = MULTI_BYTE_COMMAND_143;
+
+    evaluate_for_log_143(command).await;
+    log_command_execution_failed(
+        Uuid::new_v4(),
+        command,
+        &SshError::ConnectionFailed("verbindung weg".to_string()),
+    );
+
+    let lines = log_capture::recorded_lines_at_info_or_above();
+    let filter_len = command_len_of_line(&lines, "filter engine decision");
+    let failed_len = command_len_of_line(&lines, "ssh command execution failed");
+    assert_eq!(
+        failed_len,
+        command.len() as u64,
+        "Bytes erwartet: {lines:?}"
+    );
+    assert_eq!(
+        failed_len, filter_len,
+        "beide Zeilen müssen dieselbe Zahl tragen: {lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|l| l.contains('€') || l.contains("echo")),
+        "das Kommando selbst darf ab warn nicht stehen (Spec 0094, A1.4): {lines:?}"
     );
 }
 
