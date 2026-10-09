@@ -10,7 +10,23 @@ use directories::BaseDirs;
 /// nicht als "aktuelles Verzeichnis" — ein versehentlich leer
 /// exportiertes `SMART_SSH_DATA_DIR=` soll nicht stillschweigend auf
 /// einen kaum sinnvollen relativen Pfad zeigen.
-const DATA_DIR_OVERRIDE_ENV: &str = "SMART_SSH_DATA_DIR";
+pub const DATA_DIR_OVERRIDE_ENV: &str = "SMART_SSH_DATA_DIR";
+
+/// Der wirksame Override aus einem Rohwert von `SMART_SSH_DATA_DIR`:
+/// `None`, wenn die Variable fehlt **oder leer ist** (s.
+/// [`DATA_DIR_OVERRIDE_ENV`]). Rein, ohne Umgebungszugriff, damit die
+/// Regel „leer gilt als nicht gesetzt" an einer Stelle steht und sich
+/// auch außerhalb dieses Crates prüfen lässt (Issue #44).
+pub fn data_dir_override_from(raw: Option<&str>) -> Option<PathBuf> {
+    raw.filter(|value| !value.is_empty()).map(PathBuf::from)
+}
+
+/// Der wirksame Override dieses Prozesses, dieselbe Quelle wie
+/// [`resolve_data_dir`]. Ein nicht als Unicode lesbarer Wert gilt — wie
+/// dort seit jeher — als nicht gesetzt.
+pub fn data_dir_override() -> Option<PathBuf> {
+    data_dir_override_from(std::env::var(DATA_DIR_OVERRIDE_ENV).ok().as_deref())
+}
 
 /// Ermittelt das App-Datenverzeichnis — Grundlage für [`default_db_path`]
 /// und (über dessen `.parent()`) den Host-Key-Speicher
@@ -34,10 +50,8 @@ const DATA_DIR_OVERRIDE_ENV: &str = "SMART_SSH_DATA_DIR";
 /// identisch, wie von D2 verlangt (s.
 /// `docs/adr/0032-dev-data-dir-separation-vs-d2.md`).
 fn resolve_data_dir() -> PathBuf {
-    if let Ok(override_dir) = std::env::var(DATA_DIR_OVERRIDE_ENV) {
-        if !override_dir.is_empty() {
-            return PathBuf::from(override_dir);
-        }
+    if let Some(override_dir) = data_dir_override() {
+        return override_dir;
     }
 
     let base = BaseDirs::new()
@@ -198,6 +212,17 @@ mod tests {
             !path_str.contains("(dev)") && !path_str.contains("-dev"),
             "Release-Build darf keinen Dev-Suffix tragen — Community/Official müssen \
              identisch bleiben (D2): {path_str}"
+        );
+    }
+
+    /// Issue #44: die reine Regel hinter dem Override, ohne Umgebung.
+    #[test]
+    fn test_data_dir_override_from_treats_missing_and_empty_as_unset() {
+        assert_eq!(data_dir_override_from(None), None);
+        assert_eq!(data_dir_override_from(Some("")), None);
+        assert_eq!(
+            data_dir_override_from(Some("/tmp/smart-ssh-b")),
+            Some(PathBuf::from("/tmp/smart-ssh-b"))
         );
     }
 }
