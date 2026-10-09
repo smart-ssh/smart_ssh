@@ -139,6 +139,40 @@ describe("check-tauri-commands on the real repository", () => {
     expect(broken.stderr).toMatch(/brand_new_command: definiert, aber nicht in generate_handler! registriert/);
   });
 
+  // Issue #139: Kurzform `#[command]` nach `use tauri::command;`.
+  it.each([
+    ["#[command]", "pub fn short_attr_command() {}"],
+    ['#[command(rename_all = "snake_case")]', "pub async fn short_attr_with_args() {}"],
+  ])("exits 1 and names file and line for the short attribute %s", (attribute, fn) => {
+    const script = path.join(REPO_ROOT, "scripts/check-tauri-commands.mjs");
+    const root = copyRepo();
+    const file = "crates/app-shell/src/commands/app_meta.rs";
+    const before = fs.readFileSync(path.join(root, file), "utf8");
+    const attrLine = before.split("\n").length + 2;
+    // `use` am Dateiende ist ungewöhnlich, aber gültiges Rust.
+    edit(root, file, (t) => `${t}\nuse tauri::command;\n${attribute}\n${fn}\n`);
+    const res = spawnSync(process.execPath, [script, "--root", root], { encoding: "utf8" });
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain(`${file}:${attrLine}:`);
+    expect(res.stderr).toMatch(/voll qualifiziert `#\[tauri::command\]`/);
+  });
+
+  // Issue #139: Ein Byte-Raw-String darf nachfolgende Definitionen nicht
+  // verschlucken.
+  it.each([
+    ['br"\\"', "after_byte_raw_string"],
+    ['br#"a"\\"#', "after_hashed_byte_raw_string"],
+    ['br##"x"#\\"##', "after_double_hashed_byte_raw_string"],
+  ])("still sees an unregistered command after %s", (literal, name) => {
+    const root = copyRepo();
+    edit(root, "crates/app-shell/src/commands/app_meta.rs", (t) =>
+      `${t}\nconst _BYTES: &[u8] = ${literal};\n#[tauri::command]\npub fn ${name}() {}\n`,
+    );
+    expect(checkRepo(root).problems).toEqual([
+      expect.objectContaining({ name, kind: expect.stringMatching(/definiert, aber nicht/) }),
+    ]);
+  });
+
   it("fails loudly on a second generate_handler!", () => {
     const root = copyRepo();
     edit(root, "crates/app-shell/src/commands/app_meta.rs", (t) =>
@@ -175,6 +209,45 @@ describe("parseDefinedCommands", () => {
 
   it("fails loudly when no fn follows the attribute", () => {
     expect(() => parseDefinedCommands("#[tauri::command]\nstruct NotAFn;\n", "x.rs")).toThrow(/x\.rs:1/);
+  });
+
+  // Issue #139
+  it("rejects short or otherwise qualified command attributes with file and line", () => {
+    for (const attribute of ["#[command]", '#[command(rename_all = "snake_case")]', "#[ command ]", "#[::tauri::command]"]) {
+      expect(() => parseDefinedCommands(`fn a() {}\n${attribute}\nfn b() {}\n`, "x.rs")).toThrow(
+        /x\.rs:2: .*voll qualifiziert `#\[tauri::command\]`/,
+      );
+    }
+  });
+
+  it("rejects importing the command macro, also under another name", () => {
+    for (const use of ["use tauri::command;", "use tauri::command as cmd;", "pub use ::tauri::{Manager, command as cmd};"]) {
+      expect(() => parseDefinedCommands(`\n${use}\n#[cmd]\nfn b() {}\n`, "x.rs")).toThrow(/x\.rs:2: `use` importiert `tauri::command`/);
+    }
+  });
+
+  it("does not reject unrelated uses of the word command", () => {
+    const src = [
+      "use tauri::{Manager, State};",
+      "use crate::command::Runner;",
+      "#[derive(Debug)]",
+      "struct Command;",
+      'const S: &str = "#[command] use tauri::command;";',
+      "// #[command]",
+      "#[tauri::command]",
+      "fn command() {}",
+    ].join("\n");
+    expect(parseDefinedCommands(src).map((d: { name: string }) => d.name)).toEqual(["command"]);
+  });
+
+  it("does not count a #[tauri::command] inside a byte raw string", () => {
+    const src = [
+      'const A: &[u8] = br#"x" #[tauri::command] fn in_hashed_bytes() {} "#;',
+      'const B: &[u8] = br"#[tauri::command] fn in_bytes() {}";',
+      "#[tauri::command]",
+      "fn real() {}",
+    ].join("\n");
+    expect(parseDefinedCommands(src).map((d: { name: string }) => d.name)).toEqual(["real"]);
   });
 });
 
@@ -254,6 +327,26 @@ describe("helpers", () => {
   it("keeps Rust lifetimes, char literals and strings when stripping comments", () => {
     const src = "fn f<'a>(x: &'a str) -> char { let s = \"// no\"; '/' } // gone";
     expect(stripRustComments(src)).toBe("fn f<'a>(x: &'a str) -> char { let s = \"// no\"; '/' }        ");
+  });
+
+  // Issue #139
+  it("tokenises byte raw strings like raw strings, without breaking byte strings, byte chars or identifiers", () => {
+    const src = [
+      'let a = br"\\"; // c1',
+      'let b = br#"q"\\"#; // c2',
+      'let c = b"\\"//"; // c3',
+      "let d = b'\"'; // c4",
+      'for r in xbr { f(r, br, "\\"//"); } // c5',
+    ].join("\n");
+    expect(stripRustComments(src, { blankStrings: true })).toBe(
+      [
+        'let a = br"  ;      ',
+        'let b = br#"     ;      ',
+        'let c = b"    ";      ',
+        "let d = b'\"';      ",
+        'for r in xbr { f(r, br, "    "); }      ',
+      ].join("\n"),
+    );
   });
 
   it("keeps strings with comment markers in JS", () => {
