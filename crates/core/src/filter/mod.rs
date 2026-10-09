@@ -50,6 +50,11 @@ pub(crate) use parser::resolve_effective_command;
 // filter engine uses for its own checks (no second `-c` parser). Internal
 // detail between the two modules, hence `pub(crate)`.
 pub(crate) use parser::extract_shell_c_style_codes;
+// Issue #126: the risk classifier also takes the `-c`/`-e`-style code from
+// the source the engine's per-segment path uses, so `ksh -c '…'`, `fish -c
+// '…'`, `bash5 -c '…'` and unknown `*sh` names are rated too. Read-only
+// reuse; internal detail between the two modules, hence `pub(crate)`.
+pub(crate) use parser::{program_source, ProgramSource};
 // Unabhängiger Review-Pass, Spec 0011: von `app-shell::rule_suggestions`
 // wiederverwendet, damit die Regel-Schnellvorschlag-Heuristik dieselbe
 // Elevation-/Wrapper-Erkennung nutzt wie die Hard-Blacklist-Prüfung, statt
