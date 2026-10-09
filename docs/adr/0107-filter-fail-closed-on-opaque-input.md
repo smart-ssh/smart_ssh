@@ -180,6 +180,10 @@ wie weit die Engine sie auflösen soll.
    nicht extrahiert, ein `Deny` dahinter greift also nicht. Das erfüllt
    „nie AutoExec“; eine Auflösung zu `Deny` wäre ein eigener Schritt.
 
+   > **Nachtrag (Issue #53):** Abgelöst durch ADR 0121 — der Inhalt eines
+   > Here-Strings, den eine Shell als Programm liest, wird jetzt wie `-c`-Code
+   > ausgewertet; ein `Deny` dahinter greift.
+
 8. **Hinterlegter Code: `trap` und `alias` (Issue #55).** Beide speichern
    Shell-Code, der *später* läuft — der `trap`-Handler bei einem Signal
    oder beim Beenden der Shell, der Alias-Wert bei jedem späteren
