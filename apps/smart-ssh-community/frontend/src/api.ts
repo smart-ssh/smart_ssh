@@ -473,9 +473,14 @@ export const sftpDownloadDefault = (sessionId: string, remotePath: string, eleva
 
 /** Spec 0054, Teil 2: Ordner-Download an einen per Dialog gewählten
  * Zielort (rekursiv) — kehrt ohne Fehler zurück, wenn der Nutzer abbricht.
+ * `title` is the (translated) title of the native folder dialog (issue #153).
  * s. `crate::commands::sftp_download_dir`. */
-export const sftpDownloadDir = (sessionId: string, remotePath: string, elevatedUser: string | null = null) =>
-  invoke<DownloadResultDto | null>("sftp_download_dir", { sessionId, remotePath, elevatedUser });
+export const sftpDownloadDir = (
+  sessionId: string,
+  remotePath: string,
+  title: string,
+  elevatedUser: string | null = null,
+) => invoke<DownloadResultDto | null>("sftp_download_dir", { sessionId, remotePath, title, elevatedUser });
 
 /** Issue #89: `localPath` must be a path the backend granted to this
  * session — returned by `pickUploadFiles` or `claimDroppedPaths`, or the

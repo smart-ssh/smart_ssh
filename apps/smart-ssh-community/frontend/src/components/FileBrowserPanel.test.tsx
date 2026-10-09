@@ -427,7 +427,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     fireEvent.click(screen.getByRole("button", { name: "⋮" }));
     fireEvent.click(screen.getByText("Herunterladen nach…"));
 
-    expect(sftpDownloadDir).toHaveBeenCalledWith("session-1", "logs", null);
+    expect(sftpDownloadDir).toHaveBeenCalledWith("session-1", "logs", "Zielordner wählen", null);
     expect(sftpDownload).not.toHaveBeenCalled();
   });
 
@@ -1574,6 +1574,23 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     fireEvent.click(screen.getByText("Upload"));
 
     await waitFor(() => expect(pickUploadFiles).toHaveBeenCalledWith("session-1", "Upload file(s)"));
+  });
+
+  // Issue #153: the native folder dialog of "Download to…" on a directory
+  // used to have a hard-coded German title.
+  it("the native folder-download dialog gets an English title", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+    vi.mocked(sftpDownloadDir).mockResolvedValue(null);
+
+    renderEn();
+    await screen.findByText(/logs/);
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Download to…" }));
+
+    await waitFor(() =>
+      expect(sftpDownloadDir).toHaveBeenCalledWith("session-1", "logs", "Choose destination folder", null),
+    );
+    expect(sftpDownload).not.toHaveBeenCalled();
   });
 
   it("properties dialog is English", async () => {
