@@ -1,5 +1,6 @@
 //! Bettet unter Windows ein Manifest mit der Abhängigkeit auf Common
-//! Controls v6 in das Test-Ziel dieser Lib ein (Spec 0093, A2–A4).
+//! Controls v6 in das Test-Ziel dieser Lib ein (ADR 0122, R5; ADR 0085,
+//! Abschnitt 1).
 //!
 //! Ohne dieses Manifest lädt Windows für ein Programm ohne Manifest die
 //! alte comctl32-Version, die `TaskDialogIndirect` nicht kennt (kommt aus
@@ -53,7 +54,7 @@ fn main() {
 
 /// MSVC: `link.exe` baut das Manifest selbst und bettet es ein, wenn man
 /// ihm die zusätzliche Abhängigkeit mitgibt — kein Ressourcen-Compiler
-/// nötig. Nicht per CI-Lauf nachgemessen (Spec 0093, Ist-Stand 4), aber
+/// nötig. Nicht per CI-Lauf nachgemessen (ADR 0085, Abschnitt 1), aber
 /// derselbe Import wie beim per `windres` gemessenen GNU-Weg.
 fn embed_via_linker() {
     println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
@@ -67,7 +68,7 @@ fn embed_via_linker() {
 /// GNU (mingw): `ld` kennt kein `/MANIFEST`; das Manifest muss als
 /// `.rsrc`-Ressource (Typ 24 = `RT_MANIFEST`, ID 1 =
 /// `CREATEPROCESS_MANIFEST_RESOURCE_ID`) mitkompiliert werden — gemessen
-/// per Cross-Build/`windres` (Spec 0093, Ist-Stand 4: danach hat das
+/// per Cross-Build/`windres` (ADR 0085, Abschnitt 1: danach hat das
 /// Test-Binary einen `.rsrc`-Abschnitt, vorher keinen).
 fn embed_via_windres() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR sollte immer gesetzt sein"));

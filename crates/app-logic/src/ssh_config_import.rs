@@ -357,7 +357,7 @@ fn resolve_include(raw: &str, including_dir: &Path) -> Result<Vec<PathBuf>, ()> 
         including_dir.join(raw)
     };
 
-    // A1 (Spec 0091, F1): Ob der Wert ein Muster ist, entscheidet allein
+    // Spec 0075, §3.1.4: Ob der Wert ein Muster ist, entscheidet allein
     // der geschriebene Wert `raw` — nicht der aufgelöste Pfad `expanded`.
     // Der ist um `including_dir` erweitert, und dessen kanonische Form
     // trägt unter Windows das Präfix `\\?\` (`std::fs::canonicalize`);

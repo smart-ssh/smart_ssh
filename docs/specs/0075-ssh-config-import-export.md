@@ -214,7 +214,13 @@ Untergruppe.** Entschieden in §9/E-4.
   eben nicht `~/.ssh/config` sein muss. Diese Abweichung steht in der
   Vorschau.
 - **Platzhalter im Pfad** (`Include conf.d/*.conf`) werden aufgelöst;
-  jede getroffene Datei zählt einzeln.
+  jede getroffene Datei zählt einzeln. Ob ein `Include` ein Muster ist,
+  entscheidet allein der geschriebene Wert (`*`, `?`, `[`), nicht das
+  Verzeichnis der einbindenden Datei und keine Pfadform der Plattform:
+  Liegt die einbindende Datei in einem Verzeichnis mit solchen Zeichen im
+  Namen, wird ein Wert ohne Platzhalter als einzelne Datei gefolgt.
+  Platzhalter sind nur im letzten Teil des Werts zulässig; steht einer
+  weiter vorne, wird der `Include` gemeldet, nicht aufgelöst.
 - **Tiefe höchstens 3.** Die gewählte Datei ist Tiefe 0; ein `Include`
   darin führt auf Tiefe 1. Ein `Include` auf Tiefe 3 wird nicht mehr
   gefolgt, sondern als nicht übernommen gemeldet (3.1.5).

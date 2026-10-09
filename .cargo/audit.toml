@@ -1,4 +1,4 @@
-# cargo-audit Konfiguration (Spec 0035, Abschnitt 3).
+# cargo-audit Konfiguration (Spec 0090, A2–A4).
 #
 # Läuft gegen `Cargo.lock` über den gesamten Workspace. Jede Ausnahme hier
 # trägt einen Begründungskommentar direkt daneben — nie eine

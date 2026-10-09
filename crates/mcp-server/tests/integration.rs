@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 struct TestBackend {
     known_server: ServerId,
-    /// Spec 0097, K1 (F6): Ist das gesetzt, wartet `propose_action` auf
+    /// ADR 0122, R8: Ist das gesetzt, wartet `propose_action` auf
     /// dieses Signal statt auf eine feste Dauer — der Test gibt es erst
     /// frei, nachdem er geprüft hat, dass die Antwort schon da ist.
     release: Option<Arc<tokio::sync::Notify>>,
@@ -227,7 +227,7 @@ async fn test_unknown_server_over_real_http() {
 /// Zeitüberschreitungs-Antwort — geprüft über den echten HTTP-Roundtrip,
 /// nicht nur die interne `run_confirmable`-Logik.
 ///
-/// Spec 0097, K1/A3 (F6): Das Backend wartet auf eine Freigabe durch den
+/// ADR 0122, R8: Das Backend wartet auf eine Freigabe durch den
 /// Test statt auf eine feste Verzögerung — ein enges Zeitfenster würde
 /// unter Last (längerer HTTP-Rundlauf) fälschlich grün bleiben, weil das
 /// Backend dann doch schon fertig wäre, bevor der Test hinschaut.

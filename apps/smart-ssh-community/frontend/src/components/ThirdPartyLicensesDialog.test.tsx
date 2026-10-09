@@ -1,4 +1,4 @@
-// Spec 0099 (BL-0054), T6-T9.
+// Spec 0099, A4.1–A4.4.
 import { render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe("ThirdPartyLicensesDialog (Spec 0099)", () => {
-  it("T6: shows the license text once the fetch resolves with a marked file", async () => {
+  it("A4.1: shows the license text once the fetch resolves with a marked file", async () => {
     const content = `${MARKER}\n\nMIT License\n\nVerwendet von: example 1.0.0`;
     vi.stubGlobal(
       "fetch",
@@ -31,7 +31,7 @@ describe("ThirdPartyLicensesDialog (Spec 0099)", () => {
     expect(await screen.findByText(/MIT License/)).toBeInTheDocument();
   });
 
-  it("T7a: shows the 'release builds only' hint instead of crashing when the fetch fails", async () => {
+  it("A4.3: shows the 'release builds only' hint instead of crashing when the fetch fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network error")));
 
     renderDialog();
@@ -41,7 +41,7 @@ describe("ThirdPartyLicensesDialog (Spec 0099)", () => {
     ).toBeInTheDocument();
   });
 
-  it("T7b: shows the hint (not the loaded content) when the response has no marker — e.g. the dev server's SPA fallback page", async () => {
+  it("A4.3: shows the hint (not the loaded content) when the response has no marker — e.g. the dev server's SPA fallback page", async () => {
     const spaFallbackHtml = "<!doctype html><html><body><div id=\"root\"></div></body></html>";
     vi.stubGlobal(
       "fetch",
@@ -56,7 +56,7 @@ describe("ThirdPartyLicensesDialog (Spec 0099)", () => {
     expect(screen.queryByText(/doctype/)).not.toBeInTheDocument();
   });
 
-  it("T8: renders an adversarial license text as literal text, never as markup", async () => {
+  it("A4.2: renders an adversarial license text as literal text, never as markup", async () => {
     const adversarial = `${MARKER}\n\n<img src=x onerror=alert(1)>\n<script>alert(1)</script>`;
     vi.stubGlobal(
       "fetch",
@@ -71,7 +71,7 @@ describe("ThirdPartyLicensesDialog (Spec 0099)", () => {
     expect(screen.getByText(/onerror=alert/).textContent).toContain("<script>alert(1)</script>");
   });
 
-  it("T9: only ever requests a relative address, never a foreign host", async () => {
+  it("A4.4: only ever requests a relative address, never a foreign host", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue({ ok: true, text: () => Promise.resolve(`${MARKER}\n\ncontent`) });

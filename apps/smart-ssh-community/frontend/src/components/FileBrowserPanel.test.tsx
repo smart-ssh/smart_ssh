@@ -1291,11 +1291,11 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     });
     await enableElevation();
 
-    // Spec 0097, A1 (F1): "wurde lokal geändert" hängt an einem echten
+    // ADR 0122, R7: "wurde lokal geändert" hängt an einem echten
     // Produktcode-Intervall (`POLL_INTERVAL_MS` in `useLocalEditSession`,
     // 2000ms) — ab hier Fake-Timer, damit der Poll-Tick steuerbar ist, statt
     // sich auf ein festes 4s-Timeout über zwei Ticks hinweg zu verlassen
-    // (das unter Last reißen kann, s. Spec 0097 §1). Testing-Library
+    // (das unter Last reißen kann). Testing-Library
     // erkennt vitests Fake-Timer hier nicht (kein globales `jest`, s.
     // `@testing-library/dom`s `jestFakeTimersAreEnabled`) — `waitFor`/
     // `findBy*` würden also hängen bleiben; ab hier deshalb per

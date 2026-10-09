@@ -1,4 +1,4 @@
-// Spec 0099 (BL-0054), T1/T2: prüft den Inhalt der erzeugten Drittlizenz-
+// Spec 0099, A1.1/A1.2/A1.8: prüft den Inhalt der erzeugten Drittlizenz-
 // Datei gegen den heutigen Abhängigkeitsbaum. Läuft nur, wenn
 // `public/third-party-notices.txt` existiert (A2.4/A3.1, s. Kommentar in
 // thirdPartyNoticesNpmCompleteness.test.ts) — ein Dev-Build ohne
@@ -12,7 +12,7 @@ import { THIRD_PARTY_NOTICES_MARKER as MARKER } from "./thirdPartyNoticesMarker"
 const FRONTEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const NOTICES_PATH = path.join(FRONTEND_DIR, "public/third-party-notices.txt");
 
-describe("Drittlizenzen: Inhalt auf dem aktuellen Stand (Spec 0099, T1)", () => {
+describe("Drittlizenzen: Inhalt auf dem aktuellen Stand (Spec 0099, A1.1, A1.8)", () => {
   const hasOutput = fs.existsSync(NOTICES_PATH);
   const content = hasOutput ? fs.readFileSync(NOTICES_PATH, "utf8") : "";
 
@@ -60,7 +60,7 @@ describe("Drittlizenzen: Inhalt auf dem aktuellen Stand (Spec 0099, T1)", () => 
   );
 });
 
-describe("Drittlizenzen: Hinweisdateien (Spec 0099, T2)", () => {
+describe("Drittlizenzen: Hinweisdateien (Spec 0099, A1.2)", () => {
   const hasOutput = fs.existsSync(NOTICES_PATH);
   const content = hasOutput ? fs.readFileSync(NOTICES_PATH, "utf8") : "";
 

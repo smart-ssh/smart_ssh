@@ -1,4 +1,4 @@
-// Spec 0099 (BL-0054), A1: erzeugt eine einzelne Textdatei mit den Lizenzen
+// Spec 0099, A1: erzeugt eine einzelne Textdatei mit den Lizenzen
 // (a) aller Rust-Abhängigkeiten des Workspace (`cargo-about`), (b) aller
 // Produktionsabhängigkeiten des Frontends (`npm ls`), (c) der
 // devDependencies, deren Code ins Bundle gelangt, und (d) der mitgelieferten
@@ -59,7 +59,7 @@ function fail(message) {
   throw new GenerationError(message);
 }
 
-// Klarstellung Spec 0099 Abschnitt 9 (2026-10-01, Windows): Unter PowerShell
+// Spec 0099, §2 (das Skript läuft auch unter Windows): Unter PowerShell
 // bricht ein Kindprozess ab, dessen Ausgabe per `encoding: "utf8"`
 // mitgeschnitten (nicht per `-o`/`--output-file` umgeleitet) wird, wenn das
 // übergeordnete Programm selbst unter PowerShell läuft. Für `cargo about
@@ -192,7 +192,7 @@ function runCargoAbout(workspaceManifest, aboutTomlPath, tmpDir) {
     );
   }
 
-  // Klarstellung Spec 0099 Abschnitt 9: Unter PowerShell bricht
+  // Spec 0099, §2 (auch unter PowerShell): Unter PowerShell bricht
   // `cargo about generate` ab, wenn seine Ausgabe über die mitgeschnittene
   // `stdout` des Kindprozesses abgegriffen wird ("should not redirect its
   // output in powershell"). Die Ausgabe geht deshalb plattformunabhängig

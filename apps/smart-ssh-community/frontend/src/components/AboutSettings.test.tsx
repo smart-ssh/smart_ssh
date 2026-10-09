@@ -131,7 +131,7 @@ describe("AboutSettings (Spec 0052)", () => {
     ).toBeInTheDocument();
   });
 
-  // Spec 0099, T6: Klick auf den Eintrag öffnet die Drittlizenz-Ansicht.
+  // Spec 0099, A4.1: Klick auf den Eintrag öffnet die Drittlizenz-Ansicht.
   it("opens the third-party licenses dialog when its entry is clicked", async () => {
     vi.mocked(getAppInfo).mockResolvedValue({
       version: "0.5.0",

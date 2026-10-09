@@ -79,7 +79,7 @@ impl ExecChannelWatch {
     }
 }
 
-/// Spec 0097, A3 (F5): Beobachtet, ob der Server für das `"never-ending"`-
+/// ADR 0122, R6: Beobachtet, ob der Server für das `"never-ending"`-
 /// Testkommando die erste Ausgabezeile schon gesendet hat — ein Test, der
 /// danach abbrechen will, wartet auf dieses Signal statt auf eine
 /// geschätzte Übertragungszeit über localhost.
@@ -112,7 +112,7 @@ impl FirstLineSentWatch {
     }
 }
 
-/// Spec 0093, A1: Hält fest, welchen `permissions`-Wert der Client zuletzt
+/// ADR 0122, R4: Hält fest, welchen `permissions`-Wert der Client zuletzt
 /// per SFTP-`setstat` gesendet hat — unabhängig davon, ob dieser Testserver
 /// ihn überhaupt anwendet. Der Testserver wendet Unix-Mode-Bits nur unter
 /// `#[cfg(unix)]` an (s. `SftpTestHandler::setstat`); unter Windows bliebe
@@ -155,9 +155,9 @@ pub struct RunningTestServer {
     pub sftp_root: TempDir,
     /// Spec 0085, A2.1/T14 — s. [`ExecChannelWatch`].
     pub exec_channel: Arc<ExecChannelWatch>,
-    /// Spec 0093, A1 — s. [`SetstatModeWatch`].
+    /// ADR 0122, R4 — s. [`SetstatModeWatch`].
     pub setstat_mode: Arc<SetstatModeWatch>,
-    /// Spec 0097, A3 (F5) — s. [`FirstLineSentWatch`].
+    /// ADR 0122, R6 — s. [`FirstLineSentWatch`].
     pub first_line_sent: Arc<FirstLineSentWatch>,
     shutdown: Option<oneshot::Sender<()>>,
     accept_task: JoinHandle<()>,
@@ -271,10 +271,10 @@ struct TestHandler {
     /// geöffneten Kanals mit — das normale `sftp`-Subsystem soll den Zähler
     /// nicht mitbewegen.
     exec_channel: Arc<ExecChannelWatch>,
-    /// Spec 0093, A1 — beide SFTP-Subsysteme (normal und über `exec`)
+    /// ADR 0122, R4 — beide SFTP-Subsysteme (normal und über `exec`)
     /// bewegen hier denselben Beobachter, s. `SftpTestHandler::setstat`.
     setstat_mode: Arc<SetstatModeWatch>,
-    /// Spec 0097, A3 (F5) — s. [`FirstLineSentWatch`].
+    /// ADR 0122, R6 — s. [`FirstLineSentWatch`].
     first_line_sent: Arc<FirstLineSentWatch>,
 }
 
@@ -553,7 +553,7 @@ struct SftpTestHandler {
     /// besitzt ihn, und seine Schleife endet, wenn der Kanal-Datenstrom
     /// endet.
     closed: Option<Arc<ExecChannelWatch>>,
-    /// Spec 0093, A1 — s. [`SetstatModeWatch`].
+    /// ADR 0122, R4 — s. [`SetstatModeWatch`].
     setstat_mode: Arc<SetstatModeWatch>,
 }
 
@@ -630,7 +630,7 @@ impl russh_sftp::server::Handler for SftpTestHandler {
     }
 
     async fn close(&mut self, id: u32, handle: String) -> Result<Status, Self::Error> {
-        // Spec 0093, A7: erst bestätigen, wenn zuvor gepufferte Schreiben
+        // ADR 0122, R12: erst bestätigen, wenn zuvor gepufferte Schreiben
         // wirklich abgeschlossen sind — sonst kann ein direkt danach vom
         // Client gelesenes `on_disk` (außerhalb von SFTP, s.
         // `sftp_local_path`) auf noch nicht geschriebene Daten treffen (s.
@@ -680,7 +680,7 @@ impl russh_sftp::server::Handler for SftpTestHandler {
             .await
             .map_err(map_io_err)?;
         file.write_all(&data).await.map_err(map_io_err)?;
-        // Spec 0093, A7: erst bestätigen, wenn die Daten tatsächlich
+        // ADR 0122, R12: erst bestätigen, wenn die Daten tatsächlich
         // geschrieben sind — `tokio::fs::File` puffert sonst intern, ein
         // `write`/`close` ohne `flush` kann zurückkehren, bevor der Inhalt
         // für einen direkt danach lesenden Beobachter sichtbar ist.
@@ -754,12 +754,12 @@ impl russh_sftp::server::Handler for SftpTestHandler {
         path: String,
         attrs: FileAttributes,
     ) -> Result<Status, Self::Error> {
-        // Spec 0093, A1: für den Test auf allen Plattformen sichtbar machen,
+        // ADR 0122, R4: für den Test auf allen Plattformen sichtbar machen,
         // was der Client tatsächlich sendet — unabhängig davon, ob dieser
         // Testserver es anwendet.
         self.setstat_mode.record(attrs.permissions);
         // Windows kennt keine Unix-`mode`-Bits; `path` bliebe dort sonst
-        // unbenutzt (Spec 0089, W4) — der Testserver wendet dort schlicht
+        // unbenutzt (ADR 0122, R1) — der Testserver wendet dort schlicht
         // keine Rechte an, unverändert für Unix (Spec 0054, Teil 3).
         #[cfg(unix)]
         {

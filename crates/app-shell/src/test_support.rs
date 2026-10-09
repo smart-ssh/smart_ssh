@@ -255,7 +255,7 @@ pub(crate) mod waiting {
     /// sie entscheidet nie über Bestehen oder Scheitern eines korrekten
     /// Ablaufs, nur darüber, wann ein kaputter sichtbar abbricht. Deutlich
     /// über den alten 5 s, damit eine Verzögerung am erwarteten Ereignis
-    /// (Verzögerungsprobe, Spec 0097) keinen falschen Fehlschlag auslöst.
+    /// (Verzögerungsprobe, ADR 0122) keinen falschen Fehlschlag auslöst.
     pub(crate) const HANG_GUARD: Duration = Duration::from_secs(60);
 
     /// Längste Payload-Darstellung je Event in der Fehlermeldung.
