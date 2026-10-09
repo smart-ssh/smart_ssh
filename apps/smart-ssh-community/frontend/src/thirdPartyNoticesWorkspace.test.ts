@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   collectNpmProdPackages,
   collectProdPackages,
+  localPackagePredicate,
 } from "../../../../scripts/generate-third-party-notices.mjs";
 
 const ALLOW_LIST = ["MIT", "Apache-2.0"];
@@ -151,5 +152,116 @@ describe("Drittlizenzen: lokale Pakete in der npm-ls-Ausgabe (Issue #118)", () =
       "linked@0.1.0",
       "other@0.0.0",
     ]);
+  });
+});
+
+// Issue #122 (Spec 0099, A1.1/A1.3, T5a): Ein aus einem lokalen Tarball
+// installiertes Paket (`"foo": "file:vendor/foo-1.0.0.tgz"`) hat in `npm ls`
+// ebenfalls eine `file:`-Auflösung, ist aber echter Drittcode: npm entpackt
+// es als gewöhnliches Verzeichnis nach `node_modules`. Es wird gelistet und
+// gegen die erlaubten Lizenzen geprüft wie ein Registry-Paket.
+//
+// Fixture ohne `npm install` und ohne den Tarball selbst: `npm ls` liest die
+// Auflösung aus der `package-lock.json`, so wie npm sie bei der Installation
+// schreibt.
+function buildTarballProject(fooLicense: string | null = "MIT"): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "smart-ssh-notices-tgz-"));
+  fixtureRoot = root;
+  const manifest = {
+    name: "fixture-tarball",
+    version: "0.0.0",
+    private: true,
+    dependencies: { foo: "file:vendor/foo-1.0.0.tgz", linked: "file:vendor/linked" },
+  };
+  writeJson(path.join(root, "package.json"), manifest);
+  writeJson(path.join(root, "vendor/linked/package.json"), { name: "linked", version: "0.1.0" });
+  writeJson(path.join(root, "package-lock.json"), {
+    name: manifest.name,
+    version: manifest.version,
+    lockfileVersion: 3,
+    requires: true,
+    packages: {
+      "": {
+        name: manifest.name,
+        version: manifest.version,
+        dependencies: manifest.dependencies,
+      },
+      "node_modules/foo": { version: "1.0.0", resolved: "file:vendor/foo-1.0.0.tgz" },
+      "node_modules/linked": { resolved: "vendor/linked", link: true },
+      "vendor/linked": { name: "linked", version: "0.1.0" },
+    },
+  });
+  // Entpackter Tarball: ein echtes Verzeichnis, kein Verweis.
+  writeThirdParty(path.join(root, "node_modules/foo"), "foo", "1.0.0", fooLicense);
+  // Verlinktes Verzeichnis ohne Lizenzfeld: bleibt lokal.
+  fs.symlinkSync(
+    path.join(root, "vendor/linked"),
+    path.join(root, "node_modules/linked"),
+    "junction",
+  );
+  return root;
+}
+
+describe("Drittlizenzen: Pakete aus einem lokalen Tarball (Issue #122)", () => {
+  it("listet das Tarball-Paket mit Lizenztext, das verlinkte Verzeichnis nicht", () => {
+    const root = buildTarballProject();
+    const result = collectNpmProdPackages(root, ALLOW_LIST);
+
+    expect(result.map((p) => `${p.name}@${p.version}`)).toEqual(["foo@1.0.0"]);
+    expect(result[0].licenseText).toContain("MIT license text of foo@1.0.0");
+  });
+
+  it("bricht ab, wenn das Tarball-Paket eine nicht erlaubte Lizenz hat", () => {
+    const root = buildTarballProject("GPL-3.0-only");
+    expect(() => collectNpmProdPackages(root, ALLOW_LIST)).toThrow(
+      /foo@1\.0\.0 hat eine nicht erlaubte Lizenz/,
+    );
+  });
+
+  it("bricht ab, wenn das Tarball-Paket gar kein Lizenzfeld hat", () => {
+    const root = buildTarballProject(null);
+    expect(() => collectNpmProdPackages(root, ALLOW_LIST)).toThrow(
+      /foo@1\.0\.0 hat kein "license"-Feld/,
+    );
+  });
+
+  it("zählt Tarball-Auflösungen als Drittpakete, auch für gleichnamige Einträge ohne `resolved`", () => {
+    const packages = collectProdPackages({
+      dependencies: {
+        "tgz-abs": { version: "1.0.0", resolved: "file:/abs/vendor/tgz-abs-1.0.0.tgz" },
+        "tgz-gz": { version: "1.0.0", resolved: "file:vendor/tgz-gz-1.0.0.TAR.GZ" },
+        "tgz-tar": { version: "1.0.0", resolved: "file:../vendor/tgz-tar-1.0.0.tar" },
+        "dir-link": { version: "0.1.0", resolved: "file:../vendor/dir-link" },
+        // Ein Verzeichnis, dessen Name nur nach Tarball klingt, bleibt lokal.
+        "dir-dotted": { version: "0.2.0", resolved: "file:../vendor/dir.tgz-src" },
+        consumer: {
+          version: "2.0.0",
+          dependencies: {
+            // Gleicher Name und gleiche Version wie das Tarball-Paket, ohne
+            // `resolved`: kein lokales Paket.
+            "tgz-abs": { version: "1.0.0" },
+            "dir-link": { version: "0.1.0" },
+          },
+        },
+      },
+    });
+    expect(packages.map((p) => `${p.name}@${p.version}`).sort()).toEqual([
+      "consumer@2.0.0",
+      "tgz-abs@1.0.0",
+      "tgz-gz@1.0.0",
+      "tgz-tar@1.0.0",
+    ]);
+  });
+
+  it("macht einen gleichnamigen Eintrag ohne `resolved` nicht lokal, nur ein verlinktes Verzeichnis", () => {
+    const tree = {
+      dependencies: {
+        "tgz-pkg": { version: "1.0.0", resolved: "file:/abs/vendor/tgz-pkg-1.0.0.tgz" },
+        "dir-link": { version: "0.1.0", resolved: "file:../vendor/dir-link" },
+      },
+    };
+    const isLocal = localPackagePredicate(tree);
+    expect(isLocal("tgz-pkg", { version: "1.0.0" })).toBe(false);
+    expect(isLocal("dir-link", { version: "0.1.0" })).toBe(true);
   });
 });
