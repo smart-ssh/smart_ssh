@@ -128,6 +128,22 @@ In `crates/core/src/ai/redactor.rs`:
 1. **Quoted Credential Values:**
    Das Muster `(?i)(password|token|api_key)\s*=\s*\S+` wird ersetzt durch:
    `(?i)(password|token|api_key|secret|passphrase)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|\S+)`
+   Die Schlüsselwortliste steht je UI-Sprache an einer Stelle im Core, und
+   die Redaction wendet **immer die Listen aller unterstützten Sprachen**
+   an, unabhängig von der gewählten Oberflächensprache (die KI antwortet
+   nicht verlässlich in der UI-Sprache, ein Kommando kann aus anderer Quelle
+   stammen). Dasselbe gilt für Query-Parameter in URLs (`?Passwort=…`).
+   - Englisch: `password`, `passwd`, `token`, `api_key`, `secret`,
+     `passphrase`, `credentials`, `private key`, `access key`
+     (Leerzeichen steht für Leerzeichen, `_` oder `-`).
+   - Deutsch: `Passwort`, `Kennwort`, `Zugangsdaten`, `Geheimnis`,
+     `Schlüssel`, `Zugangsschlüssel`, `Token`, jeweils auch mit
+     Umlaut-Umschrift (`Schluessel`); Groß-/Kleinschreibung egal.
+   - Bewusst nicht aufgenommen: `pwd` (`PWD=/pfad` steht in jeder
+     Umgebungsausgabe), `pass` und `pw` (zu kurz, zu viele Fehltreffer).
+   - Text ohne Wert dahinter bleibt unverändert (`Passwort vergessen?`).
+   - Jede unterstützte UI-Sprache braucht eine eigene Liste; ein Test
+     schlägt fehl, wenn eine fehlt.
 2. **Erweiterte Token- & Secret-Muster:**
    - Bearer Tokens: `(?i)Bearer\s+[A-Za-z0-9_\-\.]{16,}`
    - Private Keys: `(?s)-----BEGIN [A-Z0-9_\- ]+PRIVATE KEY[A-Z0-9_\- ]*-----.*?-----END [A-Z0-9_\- ]+PRIVATE KEY[A-Z0-9_\- ]*-----`

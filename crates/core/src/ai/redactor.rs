@@ -701,7 +701,10 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // bisher das Schlüsselwort-Muster.
         PatternRule {
             regex: Regex::new(
-                r#"(?i)(?P<sep>\?(?:[^\s,;"'#?@&]*&)*)(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)"#,
+                &format!(
+                    r#"(?i)(?P<sep>\?(?:[^\s,;"'#?@&]*&)*)(?P<key>{})=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)"#,
+                    super::keywords::keyword_alternation()
+                ),
             )
             .expect("eingebautes Query-Parameter-Muster ist gültig"),
             replacement: "${sep}${key}=[REDACTED]",
@@ -747,7 +750,10 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // `…_redacts_two_at_bearing_query_parameters_in_one_token`.
         PatternRule {
             regex: Regex::new(
-                r#"(?i)(?P<sep>\?(?:[^\s,;"'#?@&]*&)*)(?P<key>password|token|api_key|secret|passphrase)=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)"#,
+                &format!(
+                    r#"(?i)(?P<sep>\?(?:[^\s,;"'#?@&]*&)*)(?P<key>{})=(?:'[^'\r\n]*@[^'\r\n]*'|"[^"\r\n]*@[^"\r\n]*"|[^&#\s,;"']*@[^&#\s,;"']*)"#,
+                    super::keywords::keyword_alternation()
+                ),
             )
             .expect("eingebautes Query-Parameter-Muster (zweite Anwendung) ist gültig"),
             replacement: "${sep}${key}=[REDACTED]",
@@ -938,8 +944,13 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // schließenden Quote, nicht vom Trenner; ohne dieses `['"]?` bricht
         // das Matching genau an dieser Stelle ab, unabhängiger Review-Pass
         // Spec 0006).
+        // Die Schlüsselwörter kommen aus allen UI-Sprachen (`keywords.rs`,
+        // Issue #261), nicht nur aus dem Englischen.
         simple(
-            r#"(?i)(password|token|api_key|secret|passphrase)['"]?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|\S+)"#,
+            &format!(
+                r#"(?i)({})['"]?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|\S+)"#,
+                super::keywords::keyword_alternation()
+            ),
             "eingebautes Credential-Zeilen-Muster ist gültig",
         ),
         // `aws_secret_access_key = ...` — vom Muster oben NICHT erfasst:
