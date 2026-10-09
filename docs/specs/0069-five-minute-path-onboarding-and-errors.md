@@ -205,7 +205,11 @@ Tabelle in §4.1. Für jeden Code MUSS gelten:
   `SSH_CONNECTION_CLOSED`; deren Text spricht vom Verbindungsaufbau und
   passt dort nicht. Der Aufbau (einschließlich Jump-Host-Tunnel) behält
   `SSH_CONNECTION_CLOSED`. Alle anderen Zuordnungen sind in beiden Fällen
-  gleich.
+  gleich. Bei SFTP gilt ein Fehler als Abbruch der Sitzung, wenn
+  der Server „keine Verbindung"/„Verbindung verloren" meldet oder der
+  SFTP-Kanal endet und zugleich die SSH-Sitzung beendet ist; endet nur der
+  Kanal (z. B. weil sudo den erhöhten Start ablehnt), bleibt es
+  `SSH_CHANNEL_ERROR` (Issue #155, [ADR 0123](../adr/0123-sftp-sitzungsabbruch-erkennen.md)).
 - **DNS des ersten Hops: eigener Schritt, Nachdiagnose bleibt**
   ([ADR 0110](../adr/0110-connect-step-log.md), Entscheidung 3, ersetzt die
   frühere Aussage „keine Vorab-Auflösung"): Der **erste** Hop wird

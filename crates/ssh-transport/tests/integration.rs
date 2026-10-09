@@ -135,14 +135,23 @@ fn password_hop(host: &str, port: u16) -> Hop {
 async fn connect_trusted(
     server: &RunningTestServer,
 ) -> Box<dyn ssh_manager_core::ssh::SshTransport> {
+    connect_trusted_at(server, server.addr.port()).await
+}
+
+/// Wie [`connect_trusted`], aber über einen anderen lokalen Port (z. B.
+/// einen [`SeverableProxy`] vor `server`).
+async fn connect_trusted_at(
+    server: &RunningTestServer,
+    port: u16,
+) -> Box<dyn ssh_manager_core::ssh::SshTransport> {
     let host_keys = TestHostKeyStore::default();
     host_keys
-        .trust("127.0.0.1", server.addr.port(), &server.host_public_key)
+        .trust("127.0.0.1", port, &server.host_public_key)
         .unwrap();
     let host_keys: std::sync::Arc<dyn HostKeyStore> = std::sync::Arc::new(host_keys);
 
     let target = ConnectionTarget {
-        hops: vec![password_hop("127.0.0.1", server.addr.port())],
+        hops: vec![password_hop("127.0.0.1", port)],
     };
     let credentials = TestCredentialStore::default();
 
@@ -1395,6 +1404,103 @@ async fn test_sftp_via_exec_fails_fast_when_sudo_refuses() {
     .expect("ein verweigertes sudo muss nach der kurzen Handshake-Frist scheitern");
 
     assert!(result.is_err());
+}
+
+/// Issue #155: Ein von sudo abgelehnter Start schließt nur den Exec-Kanal,
+/// die Sitzung lebt weiter — das bleibt `SSH_CHANNEL_ERROR` und wird nicht
+/// als Verbindungsabbruch (`SSH_SESSION_CLOSED`) gemeldet.
+#[tokio::test]
+async fn test_sftp_via_exec_refused_by_sudo_stays_channel_error() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+
+    let err = match transport
+        .open_sftp_via_exec("sudo -n /denied/sftp-server")
+        .await
+    {
+        Ok(_) => panic!("ein verweigertes sudo darf keinen SFTP-Kanal liefern"),
+        Err(err) => err,
+    };
+    assert_eq!(err.code(), "SSH_CHANNEL_ERROR", "{err:?}");
+
+    let output = transport
+        .execute("noch da")
+        .await
+        .expect("die Sitzung muss nach dem abgelehnten Start weiter stehen");
+    assert_eq!(output.stdout, b"echo:noch da\n");
+}
+
+/// TCP-Weiterleitung für genau eine Verbindung, die ein Test jederzeit
+/// hart kappen kann — wie ein Netzabbruch mitten in einer Sitzung.
+struct SeverableProxy {
+    port: u16,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl SeverableProxy {
+    async fn start(target: std::net::SocketAddr) -> Self {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let task = tokio::spawn(async move {
+            let (mut inbound, _) = listener.accept().await.unwrap();
+            let mut outbound = tokio::net::TcpStream::connect(target).await.unwrap();
+            let _ = tokio::io::copy_bidirectional(&mut inbound, &mut outbound).await;
+        });
+        Self { port, task }
+    }
+
+    /// Beendet die Weiterleitung; beide Sockets werden geschlossen.
+    async fn sever(self) {
+        self.task.abort();
+        let _ = self.task.await;
+    }
+}
+
+/// Issue #155 (Spec 0069, Teil A3): Bricht die Verbindung ab, während der
+/// Dateibrowser offen ist, meldet die nächste SFTP-Operation
+/// `SSH_SESSION_CLOSED` statt `SSH_CHANNEL_ERROR`. **Gegenbeweis**: vor dem
+/// Fix kam hier `SSH_CHANNEL_ERROR` heraus.
+#[tokio::test]
+async fn test_sftp_operation_after_connection_drop_reports_session_closed() {
+    let server = RunningTestServer::start().await;
+    std::fs::write(sftp_local_path(&server, "/a.txt"), b"eins").unwrap();
+    let proxy = SeverableProxy::start(server.addr).await;
+    let mut transport = connect_trusted_at(&server, proxy.port).await;
+    let mut sftp = transport
+        .open_sftp()
+        .await
+        .expect("open_sftp() sollte gelingen");
+    sftp.list_dir("/")
+        .await
+        .expect("vor dem Abbruch funktioniert der Kanal");
+
+    proxy.sever().await;
+    // Erst wenn auch ein Kommando scheitert, hat der Client das Ende der
+    // Sitzung bemerkt.
+    let mut gone = false;
+    for _ in 0..100 {
+        if transport.execute("x").await.is_err() {
+            gone = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(gone, "die Sitzung sollte nach dem Kappen enden");
+
+    let err = sftp
+        .list_dir("/")
+        .await
+        .expect_err("nach dem Abbruch kann die Operation nicht gelingen");
+    assert_eq!(err.code(), "SSH_SESSION_CLOSED", "{err:?}");
+    assert!(err.to_string().contains("'/'"), "Pfad fehlt: {err}");
+
+    let err = sftp
+        .write_file("/b.txt", b"zwei")
+        .await
+        .expect_err("nach dem Abbruch kann die Operation nicht gelingen");
+    assert_eq!(err.code(), "SSH_SESSION_CLOSED", "{err:?}");
 }
 
 // --- Issue #51: Schritt-Protokoll eines Verbindungsversuchs ----------------

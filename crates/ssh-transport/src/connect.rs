@@ -250,7 +250,7 @@ async fn connect_inner(
         .pop()
         .expect("drive_chain liefert je Hop genau eine Sitzung, mindestens eine");
     Ok(ConnectOutcome::Connected(Box::new(RusshTransport {
-        handle,
+        handle: std::sync::Arc::new(handle),
         _intermediate_hops: sessions,
         max_output_bytes: crate::exec::MAX_STREAM_OUTPUT_BYTES,
     })))

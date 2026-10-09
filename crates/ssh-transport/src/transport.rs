@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use russh::client::{Handle, Msg};
 use russh::{Channel, ChannelMsg};
@@ -10,7 +12,7 @@ use ssh_manager_core::ssh::{
 use crate::error::map_session_russh_error;
 use crate::exec::ExecAccumulator;
 use crate::handler::ClientHandler;
-use crate::sftp::RusshSftpSession;
+use crate::sftp::{map_sftp_init_error, RusshSftpSession, SessionProbe};
 use crate::shell::RusshShell;
 
 /// `russh`-gestützte Implementierung von `SshTransport` (Spec 0005,
@@ -22,7 +24,11 @@ const EXEC_SFTP_HANDSHAKE_TIMEOUT_SECS: u64 = 5;
 const EXEC_SFTP_INIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
 pub struct RusshTransport {
-    pub(crate) handle: Handle<ClientHandler>,
+    /// In einem `Arc`, damit jede geöffnete SFTP-Sitzung über einen
+    /// [`SessionProbe`] (nur ein `Weak`-Verweis) abfragen kann, ob diese
+    /// SSH-Sitzung beendet ist (Issue #155) — der Transport bleibt der
+    /// einzige Besitzer.
+    pub(crate) handle: Arc<Handle<ClientHandler>>,
     /// Handles der Zwischen-Hops (alles außer dem letzten aus
     /// `ConnectionTarget::hops`, s. `crate::connect`). Werden selbst nie
     /// mehr direkt benutzt, müssen aber für die Lebensdauer dieses
@@ -256,8 +262,13 @@ impl SshTransport for RusshTransport {
             .map_err(map_session_russh_error)?;
         let client = russh_sftp::client::SftpSession::new(channel.into_stream())
             .await
-            .map_err(|e| SshError::ChannelError(format!("SFTP-Init fehlgeschlagen: {e}")))?;
-        Ok(Box::new(RusshSftpSession::new(client)))
+            .map_err(|e| {
+                map_sftp_init_error("SFTP-Init fehlgeschlagen", e, self.handle.is_closed())
+            })?;
+        Ok(Box::new(RusshSftpSession::new(
+            client,
+            SessionProbe::new(&self.handle),
+        )))
     }
 
     /// Spec 0067, Teil A: wie [`open_sftp`](Self::open_sftp), aber `exec`
@@ -327,9 +338,16 @@ impl RusshTransport {
             russh_sftp::client::SftpSession::new_with_config(channel.into_stream(), config)
                 .await
                 .map_err(|e| {
-                    SshError::ChannelError(format!("SFTP-Init über Exec-Kanal fehlgeschlagen: {e}"))
+                    map_sftp_init_error(
+                        "SFTP-Init über Exec-Kanal fehlgeschlagen",
+                        e,
+                        self.handle.is_closed(),
+                    )
                 })?;
         client.set_timeout(russh_sftp::client::Config::default().request_timeout_secs);
-        Ok(Box::new(RusshSftpSession::new(client)))
+        Ok(Box::new(RusshSftpSession::new(
+            client,
+            SessionProbe::new(&self.handle),
+        )))
     }
 }
