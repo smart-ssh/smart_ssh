@@ -99,6 +99,17 @@ werden **ohne** Summary abgeschnitten, mit einem sichtbaren Hinweis im Kontext
 Ausfall blockiert nie die Grundfunktion (Kontext klein genug halten).
 „Fehler containen" — dieselbe Invariante wie beim Body-Timeout-Fix.
 
+### 2.2a Sprache der Hinweise im Kontext
+Der Kürzungshinweis (§2.2) und die Hülle, in der eine Summary im Kontext
+steht, sind auf Deutsch und Englisch vorhanden und folgen der Sprache des
+System-Prompts derselben Anfrage (Spec 0024, Abschnitt 2: gespeicherte
+UI-Sprache, sonst System-Locale, sonst Englisch). Beide Fassungen tragen
+dieselbe Information: wie viele frühere Runden entfernt wurden und dass der
+vollständige Verlauf im Session-Ledger erhalten bleibt. Der Text der Summary
+selbst wird nicht übersetzt. Ohne Sprachwechsel bleiben die Hinweise von
+Anfrage zu Anfrage unverändert; gespeicherte Historie und Ledger enthalten
+sie nicht, sie entstehen bei jeder Anfrage neu.
+
 ### 2.3 Persistenz
 Die aktuelle Summary wird mit der Session persistiert (in der verschlüsselten
 Datenbankdatei, Spec 0101), damit
