@@ -488,3 +488,36 @@ describe("chat notices follow the UI language (issue #116)", () => {
     expect(screen.getByRole("button", { name: "Weiter" })).toBeInTheDocument();
   });
 });
+
+describe("resumed command results (issue #167)", () => {
+  function historyCommandResult(exitCode: number | null): ChatItem {
+    return {
+      type: "historyCommandResult",
+      id: `history-${exitCode}`,
+      command: "test -f /etc/hosts",
+      stdout: "",
+      stderr: "",
+      exitCode,
+      cancelled: false,
+      truncated: false,
+    };
+  }
+
+  it("shows exit code 0 instead of the placeholder", () => {
+    renderItem(historyCommandResult(0));
+
+    expect(screen.getByText("exit code: 0")).toBeTruthy();
+  });
+
+  it("shows a non-zero exit code", () => {
+    renderItem(historyCommandResult(1));
+
+    expect(screen.getByText("exit code: 1")).toBeTruthy();
+  });
+
+  it("falls back to the placeholder only when no exit code is known", () => {
+    renderItem(historyCommandResult(null));
+
+    expect(screen.getByText("exit code: —")).toBeTruthy();
+  });
+});
