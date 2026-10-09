@@ -18,8 +18,9 @@
 //
 // Bewusst textbasiert und ohne Abhängigkeiten. Wo die Auslegung mehrdeutig
 // wird (zweites `generate_handler!`, ein `#[tauri::command]` ohne erkennbare
-// `fn`, ein nicht lesbarer Listeneintrag, doppelte Namen), bricht das Skript
-// mit einer Meldung ab, statt zu raten.
+// `fn`, ein nicht lesbarer Listeneintrag, doppelte Namen, ein Kommando-Attribut
+// in anderer Form als `#[tauri::command]` oder ein `use tauri::command`),
+// bricht das Skript mit einer Meldung ab, statt zu raten.
 //
 // Aufruf: `npm run check-commands` im Frontend; läuft außerdem als erster
 // Teil von `npm run lint` und damit in jedem CI-Lauf.
@@ -66,9 +67,12 @@ function blank(s) {
 // Rust
 // ---------------------------------------------------------------------------
 
+/** Anfang eines Raw-Strings: Präfix (`r`, `br`, `cr`), `#`-Folge, `"`. */
+const RAW_STRING_START = /^([bc]?r)(#*)"/;
+
 /**
  * Entfernt `//`- und (verschachtelte) `/* *\/`-Kommentare aus Rust-Quelltext.
- * Zeichenketten (auch Raw-Strings `r#"…"#`) und Zeichenliterale bleiben
+ * Zeichenketten (auch Raw-Strings `r#"…"#`, `br#"…"#`) und Zeichenliterale bleiben
  * erhalten; ein `'` ohne passendes Zeichenliteral ist eine Lifetime. Mit
  * `blankStrings` wird zusätzlich der Inhalt jeder Zeichenkette durch
  * Leerzeichen ersetzt (die Anführungszeichen bleiben), damit ein
@@ -103,10 +107,13 @@ export function stripRustComments(src, { blankStrings = false } = {}) {
       }
       out += blank(src.slice(i, j));
       i = j;
-    } else if (c === "r" && !/[A-Za-z0-9_]/.test(src[i - 1] ?? "") && /^r#*"/.test(src.slice(i, i + 260))) {
-      const hashes = /^r(#*)"/.exec(src.slice(i))[1];
+    } else if ("rbc".includes(c) && !/[A-Za-z0-9_]/.test(src[i - 1] ?? "") && RAW_STRING_START.test(src.slice(i, i + 260))) {
+      // Raw-String `r"…"`, Byte-Raw-String `br"…"`, C-Raw-String `cr"…"` —
+      // jeweils mit beliebig vielen `#`. Das Präfix darf nicht Ende eines
+      // Bezeichners sein (`xbr"` ist kein Raw-String-Anfang).
+      const [whole, , hashes] = RAW_STRING_START.exec(src.slice(i));
       const close = `"${hashes}`;
-      const start = i + 2 + hashes.length;
+      const start = i + whole.length;
       let j = src.indexOf(close, start);
       j = j === -1 ? n : j + close.length;
       out += blankStrings ? src.slice(i, start) + blank(src.slice(start, j)) : src.slice(i, j);
@@ -157,6 +164,40 @@ function matchingClose(text, open) {
 }
 
 /**
+ * Issue #139: Die Prüfung erkennt eine Definition nur an der voll
+ * qualifizierten Form `#[tauri::command]`. Jede andere Schreibweise würde die
+ * `fn` unbemerkt durchlassen und bricht deshalb mit `Datei:Zeile` ab:
+ *
+ * - ein Attribut, dessen letztes Pfadsegment `command` ist, das aber nicht
+ *   genau `tauri::command` lautet (`#[command]`, `#[command(...)]`,
+ *   `#[::tauri::command]`);
+ * - ein `use`, das `command` aus `tauri` importiert — auch umbenannt
+ *   (`use tauri::command as cmd;`), denn `#[cmd]` ließe sich am Attribut
+ *   allein nicht erkennen.
+ *
+ * Erwartet Code ohne Kommentare und mit geleerten Zeichenketten.
+ */
+function rejectShortCommandForms(code, file) {
+  const attr = new RegExp(`#\\s*!?\\s*\\[\\s*((?:::\\s*)?(?:${IDENT}\\s*::\\s*)*)command\\b(?!\\s*::)`, "g");
+  let m;
+  while ((m = attr.exec(code)) !== null) {
+    if (m[1].replace(/\s+/g, "") !== "tauri::") {
+      fail(
+        `${file}:${lineOf(code, m.index)}: Attribut \`${m[0].replace(/\s+/g, "")}\` — bitte voll qualifiziert \`#[tauri::command]\` schreiben, sonst erkennt die Prüfung die Definition nicht`,
+      );
+    }
+  }
+  const use = /\buse\s+(?:::\s*)?tauri\s*::([^;]*)/g;
+  while ((m = use.exec(code)) !== null) {
+    if (/(?<![A-Za-z0-9_])command(?![A-Za-z0-9_])(?!\s*::)/.test(m[1])) {
+      fail(
+        `${file}:${lineOf(code, m.index)}: \`use\` importiert \`tauri::command\` — bitte \`#[tauri::command]\` voll qualifiziert schreiben statt das Makro zu importieren`,
+      );
+    }
+  }
+}
+
+/**
  * Definierte Kommandos einer Rust-Datei: der Name der `fn`, die auf
  * `#[tauri::command]` (mit oder ohne Argumente) folgt — gegebenenfalls nach
  * weiteren Attributen, mit `pub`/`pub(...)`, `async` usw.
@@ -165,6 +206,7 @@ function matchingClose(text, open) {
  */
 export function parseDefinedCommands(src, file = "<rust>") {
   const code = stripRustComments(src, { blankStrings: true });
+  rejectShortCommandForms(code, file);
   const result = [];
   const attr = /#\s*\[\s*tauri\s*::\s*command\b/g;
   let m;
