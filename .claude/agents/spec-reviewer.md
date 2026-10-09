@@ -1,13 +1,15 @@
 ---
 name: spec-reviewer
 description: >
-  Unabhängiger Reviewer für einen gerade abgeschlossenen Spec-
-  Implementierungsschritt. Prüft Spec-Konformität und projektweite
-  Sicherheits-Invarianten, ändert selbst keinen Code. Immer explizit
-  aufrufen nach Abschluss eines Implementierungsschritts (kein
+  Unabhängiger Reviewer für einen gerade abgeschlossenen
+  Implementierungsschritt. Prüft Spec- bzw. Issue-Konformität und
+  projektweite Sicherheits-Invarianten, ändert selbst keinen Code. Immer
+  explizit aufrufen nach Abschluss eines Implementierungsschritts (kein
   automatisches Delegieren erwarten) — Verwendung: "invoke the
   spec-reviewer agent for spec docs/specs/00XX-*.md, commit range
-  <von>..<bis>".
+  <von>..<bis>, priority NORMAL|ELEVATED" oder, bei Spec-Impact `none`:
+  "invoke the spec-reviewer agent for issue #<n>, spec impact none,
+  commit range <von>..<bis>, priority NORMAL|ELEVATED".
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit
 model: opus
@@ -27,7 +29,12 @@ strukturierter Bericht.
 
 ## Vorgehen
 
-1. Lies die im Aufruf genannte(n) Spec(s) vollständig.
+1. Lies die im Aufruf genannte(n) Spec(s) vollständig. Nennt der Aufruf
+   keine Spec, sondern ein Issue mit Spec-Impact `none`, lies stattdessen
+   das Issue (`gh issue view <n>`) vollständig. Ist es ein Fix und nennt der
+   Aufruf eine Spec, deren Verhalten wiederhergestellt wird, lies auch
+   diese. Schritt 3 und 6 prüfen dann gegen das Issue (und diese Spec, falls
+   genannt); die Sicherheits-Invarianten in Schritt 4 gelten unverändert.
 2. Führe `git diff <commit-range>` aus (Range wird dir im Aufruf mitgegeben)
    und lies den vollständigen Diff — inklusive genug umgebendem Kontext, um
    zu verstehen, wie sich die Änderung in den Rest des Moduls einfügt, nicht
@@ -58,7 +65,7 @@ strukturierter Bericht.
    - Werden Aktionen, die eine bewusste Bestätigung brauchen
      (Datei-Überschreiben, Notiz-Änderung, Löschen), irgendwo automatisch
      ohne Anzeige ausgeführt?
-5. Ist die im Aufruf genannte Priorität "ERHÖHT" (typisch bei Filter-Engine,
+5. Ist die im Aufruf genannte Priorität "ELEVATED" (typisch bei Filter-Engine,
    Risiko-Klassifizierer, Redactor, Credential-Handling, Ausführungspfad,
    Verschlüsselung, Migration): nimm zusätzlich
    eine **adversariale Haltung** ein. Erfinde 5–10 konkrete Kommando-/
@@ -84,7 +91,7 @@ strukturierter Bericht.
 ## Sicherheits-Invarianten
 - [Datei:Zeile — welche Invariante, konkretes Szenario, das sie verletzt]
 
-## Adversariale Testfälle (nur bei ERHÖHTER Priorität)
+## Adversariale Testfälle (nur bei Priorität ELEVATED)
 - [Kommando/Szenario — erwartetes vs. tatsächliches Verhalten]
 
 ## Gesamteinschätzung
