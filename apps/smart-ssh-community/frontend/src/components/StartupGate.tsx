@@ -15,6 +15,7 @@ import { translateErrorCode } from "../errorCodes";
 import type { StartupPromptAnswer, StartupPromptRequest, StartupStateDto } from "../types";
 import { StartupPromptDialog } from "./StartupPromptDialog";
 import { StartupTitleBarDragStrip } from "./StartupTitleBarDragStrip";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 interface StartupGateProps {
   /** Der Zustand, den `main.tsx` schon geholt hat, damit die Maske ohne
@@ -247,6 +248,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
             <label className="block text-sm text-slate-200">
               {t("startup.passwordLabel")}
               <input
+                {...TECHNICAL_INPUT_PROPS}
                 type="password"
                 // eslint-disable-next-line jsx-a11y/no-autofocus -- gewollter Anfangsfokus des Dialogs (Issue #112): das Passwortfeld ist die einzige Eingabe.
                 autoFocus

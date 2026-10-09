@@ -7,6 +7,7 @@ import {
   saveFileTypeApps,
   type FileTypeAppSettings,
 } from "../fileTypeSettings";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 interface Row {
   /** Stabiler React-`key`, unabhängig vom (während der Bearbeitung
@@ -116,12 +117,14 @@ export function FileTypeSettings() {
         {rows.map((row) => (
           <div key={row.id} className="flex items-center gap-2">
             <input
+              {...TECHNICAL_INPUT_PROPS}
               value={row.extension}
               onChange={(e) => updateRow(row.id, { extension: e.target.value })}
               placeholder=".conf"
               className="w-24 rounded border border-slate-600 bg-slate-900 px-2 py-1.5 font-mono text-sm text-slate-100 focus:outline-none"
             />
             <input
+              {...TECHNICAL_INPUT_PROPS}
               value={row.appPath}
               onChange={(e) => updateRow(row.id, { appPath: e.target.value })}
               placeholder={t("fileTypes.appPathPlaceholder")}

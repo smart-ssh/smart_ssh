@@ -11,6 +11,7 @@ import {
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
 import { ModalBackdrop } from "./ModalBackdrop";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 /** Spec 0101, A13: Mindestlänge. Das Backend prüft dieselbe Grenze und
  * lehnt mit `MASTER_PASSWORD_REJECTED` ab; hier bleibt nur der Knopf aus. */
@@ -331,6 +332,7 @@ function PasswordField({
     <label className="block text-sm text-slate-200">
       {label}
       <input
+        {...TECHNICAL_INPUT_PROPS}
         type="password"
         value={value}
         onChange={(e) => onChange(e.target.value)}
