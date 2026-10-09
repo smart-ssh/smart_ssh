@@ -22,6 +22,7 @@ import {
   onChatResponseTruncated,
   onChatTextDelta,
   onChatWebActivity,
+  onChatWebResearchUnavailable,
 } from "../events";
 import type {
   ActionDecisionEscalatedEvent,
@@ -83,6 +84,7 @@ vi.mock("../events", () => ({
   onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
   onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
+  onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),
   onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
 }));
 
@@ -522,5 +524,42 @@ describe("ChatPanel web activity (Spec 0105)", () => {
     expect(screen.queryByText(/fremde Suche/)).not.toBeInTheDocument();
     expect(screen.getByText("Antwort vorher")).toBeInTheDocument();
     expect(screen.getByText("Antwort danach")).toBeInTheDocument();
+  });
+});
+
+// Spec 0105 §7 (issue #169): the provider account rejected the web tools —
+// the notice appears before the answer of the retried request, only for
+// this session.
+describe("ChatPanel web research unavailable (issue #169)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows the notice from the live event, followed by the answer", async () => {
+    let noticeHandler: ((event: { sessionId: string }) => void) | null = null;
+    let deltaHandler: ((event: { sessionId: string; delta: string }) => void) | null = null;
+    vi.mocked(onChatWebResearchUnavailable).mockImplementation((h) => {
+      noticeHandler = h;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(onChatTextDelta).mockImplementation((h) => {
+      deltaHandler = h as typeof deltaHandler;
+      return Promise.resolve(() => {});
+    });
+    renderChatPanel();
+    await waitFor(() => expect(noticeHandler).not.toBeNull());
+
+    act(() => {
+      noticeHandler!({ sessionId: "other-session" });
+      noticeHandler!({ sessionId: "session-1" });
+      deltaHandler!({ sessionId: "session-1", delta: "Antwort ohne Web" });
+    });
+
+    const notices = screen.getAllByText(/Web-Recherche ist für dieses Provider-Konto nicht verfügbar/);
+    expect(notices).toHaveLength(1);
+    const answer = screen.getByText("Antwort ohne Web");
+    expect(
+      notices[0].compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

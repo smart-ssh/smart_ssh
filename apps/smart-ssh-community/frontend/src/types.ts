@@ -458,6 +458,13 @@ export interface ChatResponseEmptyEvent {
   sessionId: string;
 }
 
+/** Spec 0105 §7 (Issue #169) — das Provider-Konto hat die Web-Werkzeuge
+ * abgeschaltet; die Sitzung fragt ab jetzt ohne Web-Recherche weiter. Trägt
+ * bewusst keinen Fehlertext des Providers. */
+export interface ChatWebResearchUnavailableEvent {
+  sessionId: string;
+}
+
 /** Spec 0066, §1 — der Nutzer hat die laufende KI-Anfrage per Stopp
  * abgebrochen. */
 export interface ChatResponseCancelledEvent {

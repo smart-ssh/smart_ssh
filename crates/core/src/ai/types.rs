@@ -608,6 +608,13 @@ pub enum AiError {
     Timeout {
         secs: u64,
     },
+    /// Issue #169 (Spec 0105 §7): der Provider lehnt die Anfrage ab, weil
+    /// sie ein Web-Werkzeug enthält, das für das Provider-Konto abgeschaltet
+    /// ist. Nur gemeldet, wenn die abgelehnte Anfrage tatsächlich ein
+    /// Web-Werkzeug trug — eine Anfrage ohne Web-Werkzeug kann diesen Fehler
+    /// nie auslösen. Der Haupt-Chat wiederholt die Anfrage daraufhin genau
+    /// einmal ohne Web-Werkzeuge (`app_logic::orchestration::chat_turn`).
+    WebResearchRejected(String),
 }
 
 impl fmt::Display for AiError {
@@ -648,6 +655,10 @@ impl fmt::Display for AiError {
             AiError::Timeout { secs } => {
                 write!(f, "Keine Antwort vom KI-Provider seit über {secs} Sekunden")
             }
+            AiError::WebResearchRejected(msg) => write!(
+                f,
+                "Der KI-Provider lehnt die Web-Recherche für dieses Konto ab: {msg}"
+            ),
         }
     }
 }
@@ -670,6 +681,7 @@ impl AiError {
             AiError::ModelNotFound(_) => "AI_MODEL_NOT_FOUND",
             AiError::LocalProviderUnreachable(_) => "AI_LOCAL_PROVIDER_UNREACHABLE",
             AiError::Timeout { .. } => "AI_TIMEOUT",
+            AiError::WebResearchRejected(_) => "AI_WEB_RESEARCH_REJECTED",
         }
     }
 }
@@ -695,6 +707,7 @@ mod ai_error_code_tests {
             AiError::ModelNotFound("x".to_string()),
             AiError::LocalProviderUnreachable("x".to_string()),
             AiError::Timeout { secs: 90 },
+            AiError::WebResearchRejected("x".to_string()),
         ];
         let codes: Vec<&'static str> = samples.iter().map(AiError::code).collect();
         let mut unique = codes.clone();

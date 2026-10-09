@@ -648,3 +648,136 @@ async fn test_context_length_wording_at_anthropic_provider_stays_provider_unavai
         [AiEvent::Error(AiError::ProviderUnavailable(_))]
     ));
 }
+
+// --- Issue #169: Web-Werkzeuge vom Konto abgelehnt -----------------------
+
+const WEB_SEARCH_DISABLED_BODY: &str = r#"{"type":"error","error":{"type":"invalid_request_error","message":"Web search is not enabled for this organization."}}"#;
+
+async fn mock_server_with_error(status: u16, body: &str) -> MockServer {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(status)
+                .insert_header("content-type", "application/json")
+                .set_body_string(body.to_string()),
+        )
+        .mount(&server)
+        .await;
+    server
+}
+
+fn web_provider(uri: String, web_research: bool) -> AnthropicProvider {
+    AnthropicProvider::new(uri, "claude-test", "test-key", true, test_budget(), None)
+        .with_web_research(web_research)
+}
+
+fn sent_bodies(requests: &[Request]) -> Vec<String> {
+    requests
+        .iter()
+        .map(|r| String::from_utf8_lossy(&r.body).to_string())
+        .collect()
+}
+
+/// Die Ablehnung einer Anfrage mit Web-Werkzeug wird als eigener Fehler
+/// gemeldet — der Provider selbst wiederholt nicht (das macht der
+/// Haupt-Chat, über dieselbe Taktung und dasselbe Rate-Limit-Gate).
+#[tokio::test]
+async fn test_web_tool_rejection_is_reported_as_web_research_rejected() {
+    let server = mock_server_with_error(400, WEB_SEARCH_DISABLED_BODY).await;
+    let provider = web_provider(server.uri(), true);
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert!(
+        matches!(&events[0], AiEvent::Error(AiError::WebResearchRejected(_))),
+        "{events:?}"
+    );
+    let bodies = sent_bodies(&server.received_requests().await.unwrap());
+    assert_eq!(bodies.len(), 1);
+    assert!(bodies[0].contains("\"web_search\""));
+}
+
+/// Nach `disable_web_research` enthält die nächste Anfrage weder
+/// `web_search` noch `web_fetch`; dieselbe Ablehnung ist dann ein normaler
+/// Provider-Fehler und kann keinen weiteren Wiederholversuch auslösen.
+#[tokio::test]
+async fn test_after_disable_the_request_has_no_web_tools_and_cannot_be_rejected_again() {
+    let server = mock_server_with_error(400, WEB_SEARCH_DISABLED_BODY).await;
+    let provider = web_provider(server.uri(), true);
+    let _: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    provider.disable_web_research();
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    let bodies = sent_bodies(&server.received_requests().await.unwrap());
+    assert_eq!(bodies.len(), 2);
+    assert!(!bodies[1].contains("web_search"), "{}", bodies[1]);
+    assert!(!bodies[1].contains("web_fetch"), "{}", bodies[1]);
+    assert!(bodies[1].contains("suggest_command"));
+    assert!(
+        matches!(
+            &events[..],
+            [AiEvent::Error(AiError::ProviderUnavailable(_))]
+        ),
+        "{events:?}"
+    );
+}
+
+/// Ohne Web-Werkzeug in der Anfrage (Einstellung aus) ist dieselbe Antwort
+/// nie eine Web-Ablehnung.
+#[tokio::test]
+async fn test_rejection_body_without_web_tools_in_request_is_a_plain_error() {
+    let server = mock_server_with_error(400, WEB_SEARCH_DISABLED_BODY).await;
+    let provider = web_provider(server.uri(), false);
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert!(
+        matches!(
+            &events[..],
+            [AiEvent::Error(AiError::ProviderUnavailable(_))]
+        ),
+        "{events:?}"
+    );
+}
+
+type ErrorCheck = fn(&AiError) -> bool;
+
+/// AC 2/3: andere Fehler einer Anfrage MIT Web-Werkzeug bleiben, was sie
+/// waren — kein `WebResearchRejected`, also kein Wiederholversuch.
+#[tokio::test]
+async fn test_other_errors_with_web_tools_keep_their_usual_mapping() {
+    let generic_400 = r#"{"type":"error","error":{"type":"invalid_request_error","message":"messages: at least one message is required"}}"#;
+    let cases: [(u16, &str, ErrorCheck); 4] = [
+        (400, generic_400, |e| {
+            matches!(e, AiError::ProviderUnavailable(_))
+        }),
+        (401, WEB_SEARCH_DISABLED_BODY, |e| {
+            matches!(e, AiError::AuthenticationFailed)
+        }),
+        (403, WEB_SEARCH_DISABLED_BODY, |e| {
+            matches!(e, AiError::AuthenticationFailed)
+        }),
+        (529, WEB_SEARCH_DISABLED_BODY, |e| {
+            matches!(e, AiError::ProviderUnavailable(_))
+        }),
+    ];
+    for (status, body, expected) in cases {
+        let server = mock_server_with_error(status, body).await;
+        let provider = web_provider(server.uri(), true);
+
+        let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+        match &events[..] {
+            [AiEvent::Error(err)] => assert!(expected(err), "{status}: {err:?}"),
+            other => panic!("{status}: {other:?}"),
+        }
+        assert_eq!(
+            server.received_requests().await.unwrap().len(),
+            1,
+            "{status}"
+        );
+    }
+}

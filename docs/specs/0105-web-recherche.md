@@ -1,6 +1,6 @@
 # Spec 0105 — Web-Recherche der KI über den Provider
 
-Status: umgesetzt · Issue: #162
+Status: umgesetzt · Issue: #162, #169
 Zweck: Die KI kann beim Antworten im Web suchen und Webseiten lesen (nur
 Text), um aktuelle Dokumentation, Fehlermeldungen und Release Notes
 einzubeziehen. Die Recherche läuft ausschließlich über die serverseitigen
@@ -11,7 +11,8 @@ Fencing, Injection-Prüfung)
 
 Bezüge: Spec 0006 (KI-Provider), Spec 0024 (Übersetzungen), Spec 0039
 (Fencing, Eskalation nach dem Einlesen), Spec 0064 (Prompt-Caching),
-ADR 0027 (Injection-Prüfung), ADR 0117 (Entscheidungen zu dieser Spec).
+ADR 0027 (Injection-Prüfung), ADR 0117 (Entscheidungen zu dieser Spec),
+ADR 0124 (Websuche im Provider-Konto abgeschaltet).
 
 ## 1. Welche Provider
 
@@ -48,6 +49,8 @@ ADR 0027 (Injection-Prüfung), ADR 0117 (Entscheidungen zu dieser Spec).
   schränkt keine Domains frei.
 - Der angebotene Werkzeugsatz hängt nur vom Provider und der Einstellung ab,
   nicht von Sitzung, Server oder Verlauf (Spec 0064 bleibt wirksam).
+  Einzige Ausnahme: Hat das Provider-Konto die Web-Werkzeuge abgelehnt
+  (Abschnitt 7), bietet die Sitzung ab da keine mehr an.
 
 ## 4. Anzeige im Chat
 
@@ -113,8 +116,27 @@ ADR 0027 (Injection-Prüfung), ADR 0117 (Entscheidungen zu dieser Spec).
   Der Nutzer kann mit einer neuen Nachricht weitermachen lassen.
 - **Websuche in der Organisation abgeschaltet:** Hat der Betreiber des
   Provider-Kontos die Websuche abgeschaltet, lehnt der Provider jede Anfrage
-  mit Web-Werkzeug ab; der Chat zeigt den Fehler des Providers. Abhilfe:
-  Web-Recherche für diesen Provider ausschalten.
+  mit Web-Werkzeug ab. Erkannt wird nur genau diese Ablehnung (Anfrage mit
+  Web-Werkzeug, vom Provider als ungültige Anfrage abgelehnt mit dem
+  Hinweis, dass die Websuche nicht aktiviert ist). Dann:
+  - Der Chat zeigt einen übersetzten Hinweis: Web-Recherche ist für dieses
+    Provider-Konto nicht verfügbar, die Sitzung antwortet ohne; dauerhaft
+    abschalten lässt sie sich unter Einstellungen → KI-Provider →
+    „Web-Recherche". Der Hinweis enthält nicht den Fehlertext des
+    Providers.
+  - Dieselbe Anfrage geht genau einmal ohne Web-Werkzeuge erneut an den
+    Provider, mit demselben Mindestabstand und derselben Wartezeit bei
+    knappem Rate-Limit-Budget wie jede andere Anfrage. Die Antwort
+    erscheint normal unter dem Hinweis.
+  - Für den Rest der Sitzung enthält keine Anfrage mehr ein Web-Werkzeug;
+    der Hinweis erscheint deshalb je Sitzung höchstens einmal. Die
+    gespeicherte Einstellung bleibt unverändert, eine neu verbundene
+    Sitzung versucht es wieder mit Web-Recherche.
+  - Scheitert auch die erneute Anfrage, zeigt der Chat deren Fehler; es
+    folgt kein weiterer Versuch.
+  - Jeder andere Fehler (andere ungültige Anfrage, Anmeldung, Rate-Limit,
+    Überlastung oder Serverfehler, Budget) erscheint wie bisher und wird
+    hierüber nie wiederholt.
 - **Abgeschnittene Antwort:** Wird eine Antwort mit Aktionsvorschlag wegen
   des Längenlimits verworfen und wiederholt (Spec 0065), verfallen auch die
   Recherchen der verworfenen Antwort; angezeigt und gespeichert werden nur

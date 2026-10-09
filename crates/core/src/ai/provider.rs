@@ -22,4 +22,12 @@ use super::types::{AiEvent, SessionContext};
 /// nichts zu transformieren.
 pub trait AiProvider: Send + Sync {
     fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>>;
+
+    /// Issue #169 (Spec 0105 §7): bietet ab jetzt für den Rest der Lebenszeit
+    /// dieser Instanz (= der Sitzung) kein Web-Werkzeug mehr an. Aufgerufen,
+    /// nachdem der Provider eine Anfrage mit
+    /// [`AiError::WebResearchRejected`](super::types::AiError::WebResearchRejected)
+    /// abgelehnt hat. Ändert keine gespeicherte Einstellung. Default: nichts
+    /// (Provider ohne Web-Werkzeuge).
+    fn disable_web_research(&self) {}
 }

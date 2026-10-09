@@ -92,6 +92,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "AI_MODEL_NOT_FOUND",
   "AI_LOCAL_PROVIDER_UNREACHABLE",
   "AI_TIMEOUT",
+  // Spec 0105 §7 (Issue #169):
+  "AI_WEB_RESEARCH_REJECTED",
   // Spec 0069, Teil A4:
   "AI_NO_ACTIVE_PROVIDER",
   // Decision/EvaluationTrace (crates/core/src/filter/engine.rs +

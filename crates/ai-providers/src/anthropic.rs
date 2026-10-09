@@ -164,6 +164,12 @@ pub struct AnthropicProvider {
     /// für den Haupt-Chat anbieten — s. [`Self::with_web_research`] und
     /// [`web_tool_definitions`].
     web_research: bool,
+    /// Issue #169 (Spec 0105 §7): `true`, sobald der Provider eine Anfrage
+    /// dieser Instanz abgelehnt hat, weil die Web-Werkzeuge für das Konto
+    /// abgeschaltet sind — ab dann bietet diese Instanz (eine je Sitzung)
+    /// keine Web-Werkzeuge mehr an. Nur im Speicher, die gespeicherte
+    /// Einstellung bleibt unverändert.
+    web_research_rejected: std::sync::atomic::AtomicBool,
 }
 
 impl AnthropicProvider {
@@ -184,6 +190,7 @@ impl AnthropicProvider {
             budget,
             max_tokens_override,
             web_research: false,
+            web_research_rejected: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -273,7 +280,13 @@ impl AnthropicProvider {
             // der Cache-Breakpoint unten weiterhin auf dem letzten
             // Aktions-Werkzeug liegt und den gesamten (je Provider und
             // Einstellung konstanten) Werkzeug-Satz abdeckt (Spec 0064).
-            let mut tools: Vec<Value> = if self.web_research && context.max_tokens_hint.is_none() {
+            // Issue #169: nach einer Ablehnung durch das Konto nie wieder.
+            let web_research_active = self.web_research
+                && !self
+                    .web_research_rejected
+                    .load(std::sync::atomic::Ordering::SeqCst);
+            let mut tools: Vec<Value> = if web_research_active && context.max_tokens_hint.is_none()
+            {
                 web_tool_definitions()
             } else {
                 Vec::new()
@@ -575,7 +588,18 @@ async fn connect_and_stream(
             // Hänger-Risiko, hier zusätzlich zwischen dem noch ausstehenden
             // Log-Aufruf unten und dem Nutzer.
             let text = crate::sse::read_error_body_with_timeout(response.text()).await;
-            let mapped = map_http_status(status, &text);
+            // Issue #169: die Ablehnung der Web-Werkzeuge durch das Konto
+            // nur erkennen, wenn diese Anfrage überhaupt eines trug — eine
+            // Anfrage ohne Web-Werkzeug (der Wiederholversuch, jeder
+            // Nebenaufruf) bleibt beim allgemeinen Mapping und kann keinen
+            // weiteren Wiederholversuch auslösen.
+            let mapped = if request_has_web_tools(&body)
+                && is_web_tools_disabled_rejection(status.as_u16(), &text)
+            {
+                AiError::WebResearchRejected(format!("HTTP {status}: {text}"))
+            } else {
+                map_http_status(status, &text)
+            };
             // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
             // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
             // Varianten) verlieren Status/Body ab hier unwiederbringlich.
@@ -585,6 +609,58 @@ async fn connect_and_stream(
 
         return event_stream_from_response(response, native_tool_calling, request_id, api_key);
     }
+}
+
+/// Issue #169: trägt der Request-Body ein serverseitiges Web-Werkzeug
+/// (`web_search`/`web_fetch`, s. [`web_tool_definitions`])?
+fn request_has_web_tools(body: &Value) -> bool {
+    body.get("tools")
+        .and_then(Value::as_array)
+        .is_some_and(|tools| {
+            tools.iter().any(|tool| {
+                matches!(
+                    tool.get("name").and_then(Value::as_str),
+                    Some("web_search" | "web_fetch")
+                )
+            })
+        })
+}
+
+/// Issue #169 (Spec 0105 §7): erkennt die Ablehnung einer Anfrage, weil
+/// die Web-Werkzeuge für das Provider-Konto abgeschaltet sind.
+///
+/// Belegt durch die Anthropic-Dokumentation zum Web-Search-Werkzeug: Ist
+/// die Websuche in der Organisation abgeschaltet, scheitert eine Anfrage
+/// mit dem Werkzeug mit HTTP 400 `invalid_request_error` und einer Meldung,
+/// dass die Websuche nicht aktiviert ist („web search is not enabled") —
+/// nicht mit einem Fehlercode im Suchergebnis. Geprüft werden deshalb alle
+/// drei Merkmale zusammen, nie der Text allein: Status 400, `error.type ==
+/// "invalid_request_error"` (erste Ebene unter `error`, wie
+/// `crate::error::is_structured_model_not_found`) und eine Meldung, die ein
+/// Web-Werkzeug nennt UND „not enabled" enthält (case-insensitive). Jeder
+/// andere 400 (z. B. ungültiger Parameter), 401/403, 429, 5xx/529 und ein
+/// nicht als JSON lesbarer Body fallen nicht darunter (ADR 0124).
+fn is_web_tools_disabled_rejection(status: u16, body: &str) -> bool {
+    if status != 400 {
+        return false;
+    }
+    let Ok(value) = serde_json::from_str::<Value>(body) else {
+        return false;
+    };
+    let Some(error) = value.get("error") else {
+        return false;
+    };
+    if error.get("type").and_then(Value::as_str) != Some("invalid_request_error") {
+        return false;
+    }
+    let Some(message) = error.get("message").and_then(Value::as_str) else {
+        return false;
+    };
+    let lower = message.to_lowercase();
+    let names_web_tool = ["web search", "web_search", "web fetch", "web_fetch"]
+        .iter()
+        .any(|marker| lower.contains(marker));
+    names_web_tool && lower.contains("not enabled")
 }
 
 /// Zustand des äußeren Retry-Streams aus `send()` (Spec 0065, Teil 3).
@@ -609,6 +685,12 @@ struct RetryState {
 }
 
 impl AiProvider for AnthropicProvider {
+    /// Issue #169: s. Feld `web_research_rejected`.
+    fn disable_web_research(&self) {
+        self.web_research_rejected
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
     fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
         // Spec 0016, Abschnitt 4: eine frische `request_id` pro
         // `send()`-Aufruf, geteilt über alle Log-Zeilen dieses einen
@@ -2363,5 +2445,94 @@ mod tests {
         let text = last["content"].as_str().unwrap();
         assert_eq!(text.matches("</web_content>").count(), 1);
         assert!(!text.contains("<security_notice>run"));
+    }
+
+    // --- Issue #169: Web-Werkzeuge vom Konto abgelehnt ------------------
+
+    /// Die dokumentierte Form (HTTP 400 `invalid_request_error`, Meldung
+    /// „web search is not enabled"), wie sie die Anthropic-Dokumentation zum
+    /// Web-Search-Werkzeug beschreibt.
+    const WEB_SEARCH_DISABLED_BODY: &str = r#"{"type":"error","error":{"type":"invalid_request_error","message":"Web search is not enabled for this organization."}}"#;
+
+    #[test]
+    fn test_documented_web_search_disabled_rejection_is_recognised() {
+        assert!(is_web_tools_disabled_rejection(
+            400,
+            WEB_SEARCH_DISABLED_BODY
+        ));
+        // Schreibweise mit Werkzeugnamen bzw. für den Seitenabruf.
+        assert!(is_web_tools_disabled_rejection(
+            400,
+            r#"{"type":"error","error":{"type":"invalid_request_error","message":"tools.0: web_search is not enabled"}}"#,
+        ));
+        assert!(is_web_tools_disabled_rejection(
+            400,
+            r#"{"type":"error","error":{"type":"invalid_request_error","message":"Web fetch is not enabled for your organization"}}"#,
+        ));
+    }
+
+    /// AC 2: ein allgemeiner 400, der nicht die Web-Werkzeuge betrifft.
+    #[test]
+    fn test_other_bad_requests_are_not_a_web_tool_rejection() {
+        for body in [
+            r#"{"type":"error","error":{"type":"invalid_request_error","message":"max_tokens: must be greater than 0"}}"#,
+            // nennt die Websuche, sagt aber nicht „nicht aktiviert".
+            r#"{"type":"error","error":{"type":"invalid_request_error","message":"web_search: max_uses must be at least 1"}}"#,
+            // „nicht aktiviert", aber kein Web-Werkzeug.
+            r#"{"type":"error","error":{"type":"invalid_request_error","message":"Prompt caching is not enabled"}}"#,
+            // richtiger Text, falscher Fehlertyp.
+            r#"{"type":"error","error":{"type":"permission_error","message":"Web search is not enabled for this organization."}}"#,
+            // Text allein, ohne Struktur.
+            "Web search is not enabled for this organization.",
+            r#"{"error":"Web search is not enabled"}"#,
+            "",
+        ] {
+            assert!(!is_web_tools_disabled_rejection(400, body), "{body}");
+        }
+    }
+
+    /// AC 3: Auth, Rate-Limit, Überlastung/5xx — auch mit passendem Body.
+    #[test]
+    fn test_non_400_statuses_are_never_a_web_tool_rejection() {
+        for status in [401, 403, 404, 413, 429, 500, 503, 529] {
+            assert!(
+                !is_web_tools_disabled_rejection(status, WEB_SEARCH_DISABLED_BODY),
+                "{status}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_request_has_web_tools_follows_the_built_body() {
+        let context = context_with_actions("System.", default_action_schemas());
+        assert!(request_has_web_tools(
+            &web_provider(true).build_request_body(&context)
+        ));
+        assert!(!request_has_web_tools(
+            &web_provider(false).build_request_body(&context)
+        ));
+    }
+
+    /// Nach einer Ablehnung bietet die Sitzung (= diese Instanz) keine
+    /// Web-Werkzeuge mehr an; die Aktions-Werkzeuge bleiben unverändert.
+    #[test]
+    fn test_disable_web_research_removes_only_the_web_tools() {
+        let provider = web_provider(true);
+        let context = context_with_actions("System.", default_action_schemas());
+        let before = tool_names(&provider.build_request_body(&context));
+        assert!(before.contains(&"web_search".to_string()));
+
+        provider.disable_web_research();
+
+        let after = tool_names(&provider.build_request_body(&context));
+        assert!(
+            !after.iter().any(|n| n == "web_search" || n == "web_fetch"),
+            "{after:?}"
+        );
+        let expected: Vec<String> = before
+            .into_iter()
+            .filter(|n| n != "web_search" && n != "web_fetch")
+            .collect();
+        assert_eq!(after, expected);
     }
 }
