@@ -122,3 +122,10 @@ Kern-Hinweis zu ändern.
   Benachrichtigung, wird das protokolliert. Die Bestätigung bleibt
   gespeichert, der Hinweis schließt sich, die übrigen Erweiterungen werden
   trotzdem benachrichtigt und die Verbindung wird wie gewohnt aufgebaut.
+  Scheitert eine Erweiterung schon beim Anzeigen (oder später, solange der
+  Hinweis offen ist), wird das mit ihrer Kennung protokolliert und ihr
+  Bereich verschwindet vollständig, ohne leeren Rahmen. Hinweistext,
+  Pflicht-Checkbox, "Weiter" und alle übrigen Erweiterungen bleiben
+  bedienbar; der Hinweis lässt sich also weiterhin bestätigen. Eine so
+  gescheiterte Erweiterung wird bei "Weiter" nicht benachrichtigt, die
+  übrigen genau einmal wie oben beschrieben.
