@@ -40,6 +40,7 @@ use crate::orchestration::{
 };
 use crate::session::Session;
 use crate::state::SessionId;
+use crate::system_prompt::PromptLanguage;
 
 /* --------------------- Token-Schätzung (Spec 0057, §3.1) ------------------- */
 
@@ -334,6 +335,7 @@ pub fn round_count(history: &[ChatMessage]) -> usize {
 fn truncate_rounds_with_placeholder(
     history: Vec<ChatMessage>,
     min_preserved_rounds: usize,
+    language: PromptLanguage,
 ) -> Vec<ChatMessage> {
     let rounds = split_into_rounds(history);
     if rounds.len() <= min_preserved_rounds {
@@ -341,7 +343,7 @@ fn truncate_rounds_with_placeholder(
     }
 
     let cut_count = rounds.len() - min_preserved_rounds;
-    let mut result = vec![round_truncation_placeholder(cut_count)];
+    let mut result = vec![round_truncation_placeholder(language, cut_count)];
     for round in rounds.into_iter().skip(cut_count) {
         result.extend(round);
     }
@@ -366,6 +368,7 @@ fn compact_rounds_for_budget(
     context: &mut SessionContext,
     min_preserved_rounds: usize,
     budget_tokens: usize,
+    language: PromptLanguage,
 ) {
     let rounds = split_into_rounds(std::mem::take(&mut context.history));
     if rounds.len() <= min_preserved_rounds {
@@ -374,10 +377,18 @@ fn compact_rounds_for_budget(
     }
     let fixed_tokens = estimate_tokens(&context.system_context)
         + estimate_action_schemas_tokens(&context.available_actions);
-    let cut_count =
-        determine_round_cut_count(&rounds, min_preserved_rounds, fixed_tokens, budget_tokens);
-    context.history =
-        build_round_result(rounds, cut_count, round_truncation_placeholder(cut_count));
+    let cut_count = determine_round_cut_count(
+        &rounds,
+        min_preserved_rounds,
+        fixed_tokens,
+        budget_tokens,
+        language,
+    );
+    context.history = build_round_result(
+        rounds,
+        cut_count,
+        round_truncation_placeholder(language, cut_count),
+    );
 }
 
 /// Reine Cut-Count-Bestimmung (kein Zusammenfassungs-Aufruf, keine
@@ -399,11 +410,13 @@ fn determine_round_cut_count(
     min_preserved_rounds: usize,
     fixed_tokens: usize,
     budget_tokens: usize,
+    language: PromptLanguage,
 ) -> usize {
     let max_cut = rounds.len() - min_preserved_rounds;
     let mut cut_count = max_cut;
     for candidate in 1..=max_cut {
-        let mut tokens = estimate_message_tokens(&round_truncation_placeholder(candidate));
+        let mut tokens =
+            estimate_message_tokens(&round_truncation_placeholder(language, candidate));
         for round in &rounds[candidate..] {
             tokens += round.iter().map(estimate_message_tokens).sum::<usize>();
         }
@@ -486,15 +499,13 @@ const SUMMARY_MAX_BYTES: usize = 8_000;
 /// Baut die Platzhalter-Nachricht für eine ERFOLGREICH erzeugte
 /// Zusammenfassung — Gegenstück zu [`round_truncation_placeholder`] (dem
 /// Fallback-Hinweis ohne Zusammenfassung).
-fn summary_placeholder_message(summary_text: &str) -> ChatMessage {
+fn summary_placeholder_message(language: PromptLanguage, summary_text: &str) -> ChatMessage {
     ChatMessage {
         // Dieselbe Begründung wie bei `round_truncation_placeholder`:
         // `ActionResult` ist weder `User` noch `Assistant`, sondern ein
         // vom Backend eingefügter Systemhinweis.
         role: Role::ActionResult,
-        content: MessageContent::Text(format!(
-            "[Zusammenfassung der bisherigen Konversation: {summary_text}]"
-        )),
+        content: MessageContent::Text(crate::system_prompt::summary_notice(language, summary_text)),
     }
 }
 
@@ -524,6 +535,7 @@ async fn compact_rounds_with_summary(
     context: &mut SessionContext,
     min_preserved_rounds: usize,
     budget_tokens: usize,
+    language: PromptLanguage,
 ) {
     let history = std::mem::take(&mut context.history);
     // spec-reviewer-Nachtrag (MCP-Ausschluss aus der Summary): dieselbe
@@ -543,8 +555,13 @@ async fn compact_rounds_with_summary(
     }
     let fixed_tokens = estimate_tokens(&context.system_context)
         + estimate_action_schemas_tokens(&context.available_actions);
-    let cut_count =
-        determine_round_cut_count(&rounds, min_preserved_rounds, fixed_tokens, budget_tokens);
+    let cut_count = determine_round_cut_count(
+        &rounds,
+        min_preserved_rounds,
+        fixed_tokens,
+        budget_tokens,
+        language,
+    );
 
     let existing_summary = session.summary.lock().await.clone();
     let already_covered = existing_summary
@@ -557,7 +574,7 @@ async fn compact_rounds_with_summary(
         // an Kürzung braucht — direkt wiederverwenden, kein KI-Aufruf.
         existing_summary
             .as_ref()
-            .map(|s| summary_placeholder_message(&s.text))
+            .map(|s| summary_placeholder_message(language, &s.text))
     } else {
         None
     };
@@ -613,9 +630,9 @@ async fn compact_rounds_with_summary(
                         };
                         *session.summary.lock().await = Some(advanced.clone());
                         persist_rolling_summary(session, &advanced).await;
-                        summary_placeholder_message(&advanced.text)
+                        summary_placeholder_message(language, &advanced.text)
                     }
-                    None => round_truncation_placeholder(cut_count),
+                    None => round_truncation_placeholder(language, cut_count),
                 }
             } else {
                 let previous_summary_text = existing_summary.as_ref().map(|s| s.text.as_str());
@@ -635,13 +652,13 @@ async fn compact_rounds_with_summary(
                         };
                         *session.summary.lock().await = Some(new_summary.clone());
                         persist_rolling_summary(session, &new_summary).await;
-                        summary_placeholder_message(&new_text)
+                        summary_placeholder_message(language, &new_text)
                     }
                     // Spec 0057, §2.2: Fallback auf das reine Abschneiden
                     // ohne Zusammenfassung — `session.summary` bleibt
                     // unverändert (der alte, noch gültige Stand geht
                     // nicht verloren).
-                    None => round_truncation_placeholder(cut_count),
+                    None => round_truncation_placeholder(language, cut_count),
                 }
             }
         }
@@ -820,7 +837,7 @@ async fn generate_rolling_summary(
     Some(truncate_to_char_boundary(&redacted, SUMMARY_MAX_BYTES).to_string())
 }
 
-fn round_truncation_placeholder(cut_rounds: usize) -> ChatMessage {
+fn round_truncation_placeholder(language: PromptLanguage, cut_rounds: usize) -> ChatMessage {
     ChatMessage {
         // `ActionResult` statt `User`/`Assistant`: dieser Eintrag stammt
         // weder vom Nutzer noch von der KI, sondern ist ein vom Backend
@@ -834,10 +851,8 @@ fn round_truncation_placeholder(cut_rounds: usize) -> ChatMessage {
         // `has_user_message`-Prüfung angewiesen ist (durch mindestens eine
         // erhaltene Runde ohnehin unkritisch, hier zusätzlich robust).
         role: Role::ActionResult,
-        content: MessageContent::Text(format!(
-            "[Hinweis: ältere Konversation gekürzt — {cut_rounds} frühere Gesprächsrunde(n) \
-             wurden aus Platzgründen aus diesem Kontext entfernt. Der vollständige Verlauf \
-             bleibt im Session-Ledger erhalten.]"
+        content: MessageContent::Text(crate::system_prompt::round_truncation_notice(
+            language, cut_rounds,
         )),
     }
 }
@@ -1120,6 +1135,9 @@ pub(crate) async fn compact_for_send(
         &mut context,
         MIN_PRESERVED_ROUNDS,
         budget_tokens,
+        // Issue #129: dieselbe, bereits aufgelöste Sprache wie der
+        // System-Prompt dieser Anfrage — keine zweite, eigene Abfrage.
+        system_context_parts.language,
     )
     .await;
     if estimate_request_tokens(&context) <= budget_tokens {
@@ -1318,7 +1336,7 @@ mod tests {
             user_message("Runde 4"),
             command_result("cmd4", "out4"),
         ];
-        let result = truncate_rounds_with_placeholder(history.clone(), 3);
+        let result = truncate_rounds_with_placeholder(history.clone(), 3, PromptLanguage::De);
 
         // Platzhalter + die letzten 3 Runden (je 2 Nachrichten) = 7.
         assert_eq!(result.len(), 1 + 6);
@@ -1329,7 +1347,7 @@ mod tests {
     #[test]
     fn test_truncate_rounds_with_placeholder_is_noop_when_within_limit() {
         let history = vec![user_message("a"), user_message("b")];
-        let result = truncate_rounds_with_placeholder(history.clone(), 3);
+        let result = truncate_rounds_with_placeholder(history.clone(), 3, PromptLanguage::De);
         assert_eq!(result, history);
     }
 
@@ -1351,11 +1369,11 @@ mod tests {
         // Budget genau so bemessen, dass das Entfernen NUR der ältesten
         // Runde ("alte Runde 1") bereits reicht.
         let mut budget_probe = context_with(String::new(), history.clone());
-        compact_rounds_for_budget(&mut budget_probe, 4, usize::MAX); // 1 Runde entfernt (5 > 4)
+        compact_rounds_for_budget(&mut budget_probe, 4, usize::MAX, PromptLanguage::De); // 1 Runde entfernt (5 > 4)
         let budget = estimate_request_tokens(&budget_probe);
 
         let mut context = context_with(String::new(), history);
-        compact_rounds_for_budget(&mut context, 1, budget);
+        compact_rounds_for_budget(&mut context, 1, budget, PromptLanguage::De);
 
         assert!(
             context.history.iter().any(
@@ -1365,6 +1383,85 @@ mod tests {
              {:?}",
             context.history
         );
+    }
+
+    fn placeholder_text(message: &ChatMessage) -> &str {
+        match &message.content {
+            MessageContent::Text(text) => text,
+            other => panic!("Platzhalter muss eine Text-Nachricht sein: {other:?}"),
+        }
+    }
+
+    /// Issue #129: der Kürzungshinweis folgt der übergebenen Sprache —
+    /// Rolle und Platzierung (erste Nachricht) bleiben gleich.
+    #[test]
+    fn test_round_truncation_placeholder_follows_the_prompt_language() {
+        let history = vec![
+            user_message("Runde 1"),
+            user_message("Runde 2"),
+            user_message("Runde 3"),
+        ];
+        let english = truncate_rounds_with_placeholder(history.clone(), 1, PromptLanguage::En);
+        assert_eq!(english[0].role, Role::ActionResult);
+        let text = placeholder_text(&english[0]);
+        assert!(text.contains("older conversation truncated"), "{text}");
+        assert!(text.contains("2 earlier conversation round(s)"), "{text}");
+        assert!(!text.contains("ältere Konversation gekürzt"), "{text}");
+
+        let german = truncate_rounds_with_placeholder(history, 1, PromptLanguage::De);
+        assert_eq!(german[0].role, Role::ActionResult);
+        assert_eq!(
+            placeholder_text(&german[0]),
+            "[Hinweis: ältere Konversation gekürzt — 2 frühere Gesprächsrunde(n) wurden aus \
+             Platzgründen aus diesem Kontext entfernt. Der vollständige Verlauf bleibt im \
+             Session-Ledger erhalten.]"
+        );
+    }
+
+    /// Issue #129: die Cut-Count-Schätzung muss denselben Text schätzen,
+    /// der tatsächlich eingefügt wird. Das Budget ist je Sprache genau das
+    /// Minimum für "eine Runde entfernen" mit dem Hinweis DIESER Sprache:
+    /// Schätzte die Suche den Hinweis der anderen Sprache, entfernte sie
+    /// entweder eine Runde zu viel (anderer Text länger) oder das Ergebnis
+    /// läge über dem Budget (anderer Text kürzer).
+    #[test]
+    fn test_round_cut_estimate_uses_the_inserted_notice_language() {
+        assert_ne!(
+            estimate_message_tokens(&round_truncation_placeholder(PromptLanguage::De, 1)),
+            estimate_message_tokens(&round_truncation_placeholder(PromptLanguage::En, 1)),
+            "Vorbedingung: die beiden Hinweise müssen sich in der Schätzung unterscheiden"
+        );
+        let history = vec![
+            user_message(&"a".repeat(4_000)),
+            user_message(&"b".repeat(4_000)),
+            user_message(&"c".repeat(4_000)),
+            user_message("Runde 4"),
+        ];
+        for language in [PromptLanguage::De, PromptLanguage::En] {
+            let budget = estimate_message_tokens(&round_truncation_placeholder(language, 1))
+                + history[1..]
+                    .iter()
+                    .map(estimate_message_tokens)
+                    .sum::<usize>();
+            let mut context = context_with(String::new(), history.clone());
+            compact_rounds_for_budget(&mut context, 1, budget, language);
+
+            assert_eq!(
+                context.history.len(),
+                1 + 3,
+                "{language:?}: genau eine Runde hätte entfernt werden müssen"
+            );
+            assert_eq!(
+                context.history[0],
+                round_truncation_placeholder(language, 1),
+                "{language:?}: eingefügt werden muss der Hinweis der Anfrage-Sprache"
+            );
+            let estimated = estimate_request_tokens(&context);
+            assert!(
+                estimated <= budget,
+                "{language:?}: geschätzt {estimated}, Budget {budget}"
+            );
+        }
     }
 
     // --- Schritt 2: Riesen-Einzelausgabe gekürzt, Runde nicht verworfen ---
