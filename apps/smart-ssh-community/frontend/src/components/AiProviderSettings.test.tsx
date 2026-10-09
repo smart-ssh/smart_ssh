@@ -265,6 +265,23 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
     expect(screen.queryByText(/HTTP 404: model_not_found/)).not.toBeInTheDocument();
   });
 
+  it("shows the translated text for AI_MODEL_NO_TOOL_SUPPORT instead of the raw message", async () => {
+    vi.mocked(testAiProviderCredentials).mockResolvedValue({
+      kind: "unreachable",
+      message: "HTTP 400: m does not support tools",
+      code: "AI_MODEL_NO_TOOL_SUPPORT",
+    });
+    renderForm();
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/unterstützt keine Tool-Aufrufe/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/does not support tools/)).not.toBeInTheDocument();
+  });
+
   it("clears a stale result once the key is edited again", async () => {
     vi.mocked(testAiProviderCredentials).mockResolvedValue({ kind: "valid" });
     renderForm();
