@@ -402,7 +402,9 @@ pub async fn sftp_download_default(
 /// Spec 0054, Teil 2: Ordner-Download an einen per Dialog gewählten
 /// Zielort — Gegenstück zu `sftp_download`s Datei-Speichern-Dialog, nur
 /// dass ein Ordner keinen Dateinamen zum Speichern hat, sondern ein
-/// Zielverzeichnis braucht (`pick_folder` statt `save_file`).
+/// Zielverzeichnis braucht (`pick_folder` statt `save_file`). Issue #153:
+/// the dialog title comes translated from the frontend (pattern:
+/// `pick_upload_files`); it is display-only.
 #[tauri::command]
 pub async fn sftp_download_dir(
     app: AppHandle,
@@ -410,6 +412,7 @@ pub async fn sftp_download_dir(
     elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     remote_path: String,
+    title: String,
     elevated_user: Option<String>,
 ) -> CommandResult<Option<app_logic::dto::DownloadResultDto>> {
     run_browser_command(
@@ -423,7 +426,7 @@ pub async fn sftp_download_dir(
             let (tx, rx) = tokio::sync::oneshot::channel();
             app.dialog()
                 .file()
-                .set_title("Zielordner wählen")
+                .set_title(&title)
                 .pick_folder(move |path| {
                     let _ = tx.send(path);
                 });
