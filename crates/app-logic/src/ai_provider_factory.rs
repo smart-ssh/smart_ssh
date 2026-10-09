@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use ai_providers::{
-    provider_identity_key, AnthropicProvider, OpenAiCompatibleProvider, ProviderBudgetGuard,
-    RateLimitRegistry,
+    provider_identity_key, AnthropicProvider, OpenAiCompatibleProvider, OpenAiResponsesProvider,
+    ProviderBudgetGuard, RateLimitRegistry,
 };
 use secrecy::{ExposeSecret, SecretString};
 use ssh_manager_core::ai::{AiProvider, ProviderType};
@@ -17,6 +17,15 @@ pub const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 /// Endpunkt zu discovern, statt fälschlich auf [`DEFAULT_OPENAI_BASE_URL`]
 /// zurückzufallen.
 pub const DEFAULT_ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
+
+/// The official OpenAI API: provider type `openai` without a base URL or
+/// with the default one (ADR 0124). Only this combination uses the
+/// Responses API; custom endpoints, generic compatible endpoints and Ollama
+/// keep the Chat Completions request unchanged.
+pub fn is_official_openai(provider_type: ProviderType, base_url: Option<&str>) -> bool {
+    provider_type == ProviderType::OpenAi
+        && base_url.is_none_or(|url| url.trim().trim_end_matches('/') == DEFAULT_OPENAI_BASE_URL)
+}
 
 /// `base_url` ist in der Persistenz nur für `generic_openai_compatible`/
 /// `ollama` als Pflichtfeld vorgesehen (Spec 0007, Abschnitt 8.3); für
@@ -63,15 +72,27 @@ pub fn build_ai_provider(
             let resolved_base_url = base_url.unwrap_or(DEFAULT_OPENAI_BASE_URL);
             let budget =
                 registry.guard_for(&provider_identity_key(resolved_base_url, model, &api_key));
-            let provider: Box<dyn AiProvider> = Box::new(OpenAiCompatibleProvider::new(
-                resolved_base_url,
-                model,
-                api_key,
-                supports_native_tool_calling,
-                extra_headers,
-                budget.clone(),
-                max_tokens_override,
-            ));
+            let provider: Box<dyn AiProvider> = if is_official_openai(provider_type, base_url) {
+                Box::new(OpenAiResponsesProvider::new(
+                    resolved_base_url,
+                    model,
+                    api_key,
+                    supports_native_tool_calling,
+                    extra_headers,
+                    budget.clone(),
+                    max_tokens_override,
+                ))
+            } else {
+                Box::new(OpenAiCompatibleProvider::new(
+                    resolved_base_url,
+                    model,
+                    api_key,
+                    supports_native_tool_calling,
+                    extra_headers,
+                    budget.clone(),
+                    max_tokens_override,
+                ))
+            };
             (provider, budget)
         }
         ProviderType::Anthropic => {
@@ -96,6 +117,33 @@ pub fn build_ai_provider(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_the_official_openai_endpoint_uses_the_responses_api() {
+        use ssh_manager_core::ai::ProviderType as P;
+        assert!(is_official_openai(P::OpenAi, None));
+        assert!(is_official_openai(P::OpenAi, Some(DEFAULT_OPENAI_BASE_URL)));
+        assert!(is_official_openai(
+            P::OpenAi,
+            Some("https://api.openai.com/v1/")
+        ));
+        // Custom base URL (proxy), generic compatible endpoints and Ollama
+        // stay on Chat Completions, even with the official URL.
+        assert!(!is_official_openai(
+            P::OpenAi,
+            Some("https://proxy.example.com/v1")
+        ));
+        assert!(!is_official_openai(P::GenericOpenAiCompatible, None));
+        assert!(!is_official_openai(
+            P::GenericOpenAiCompatible,
+            Some(DEFAULT_OPENAI_BASE_URL)
+        ));
+        assert!(!is_official_openai(
+            P::Ollama,
+            Some("http://localhost:11434/v1")
+        ));
+        assert!(!is_official_openai(P::Anthropic, None));
+    }
+
     use ssh_manager_core::ai::SessionContext;
     use ssh_manager_core::profiles::{CredentialRef, CredentialStore};
 

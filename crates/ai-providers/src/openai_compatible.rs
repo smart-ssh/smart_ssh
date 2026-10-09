@@ -84,7 +84,7 @@ const OPENAI_COMPATIBLE_OFFICIAL_API_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS: u32 = 4_09
 /// Maximum'"). Jetzt umgekehrt: nur EXPLIZIT als aktuelle Generation
 /// bekannte Namen bekommen 128K, alles andere (inkl. unbekannt) fällt auf
 /// den konservativen Wert zurück.
-fn openai_compatible_model_max_output_tokens(base_url: &str, model: &str) -> u32 {
+pub(crate) fn openai_compatible_model_max_output_tokens(base_url: &str, model: &str) -> u32 {
     if !base_url.contains("api.openai.com") {
         return OPENAI_COMPATIBLE_NON_OPENAI_ENDPOINT_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS;
     }
@@ -119,7 +119,7 @@ fn openai_compatible_model_max_output_tokens(base_url: &str, model: &str) -> u32
 /// kleiner als das Modell-Maximum, sonst hat der einmalige Retry aus Teil 3
 /// keinen Spielraum zum Verdoppeln mehr (spec-reviewer-Fund, ERHÖHT, Review
 /// dieses Schritts — beide waren in einer früheren Fassung identisch).
-fn openai_compatible_default_max_tokens(base_url: &str, model: &str) -> u32 {
+pub(crate) fn openai_compatible_default_max_tokens(base_url: &str, model: &str) -> u32 {
     let max = openai_compatible_model_max_output_tokens(base_url, model);
     match max {
         128_000 => 32_000,
@@ -136,7 +136,7 @@ fn openai_compatible_default_max_tokens(base_url: &str, model: &str) -> u32 {
 /// (`model` ist bei einem generischen Gateway frei wählbar und ein
 /// Gateway kann denselben Modellnamen unter dem klassischen Feld
 /// erwarten).
-fn openai_max_tokens_field_name(base_url: &str, model: &str) -> &'static str {
+pub(crate) fn openai_max_tokens_field_name(base_url: &str, model: &str) -> &'static str {
     let model = model.to_lowercase();
     if base_url.contains("api.openai.com")
         && (model.starts_with("o1")
@@ -171,7 +171,7 @@ const CONTEXT_LENGTH_ERROR_MARKERS: &[&str] = &[
 /// der mit `AnthropicProvider` geteilten `crate::error::map_http_status` —
 /// T11b belegt, dass ein identischer Anthropic-400-Body unverändert
 /// `ProviderUnavailable` bleibt.
-fn is_context_length_error(body: &str) -> bool {
+pub(crate) fn is_context_length_error(body: &str) -> bool {
     let lower = body.to_lowercase();
     CONTEXT_LENGTH_ERROR_MARKERS
         .iter()
@@ -185,13 +185,13 @@ fn is_context_length_error(body: &str) -> bool {
 /// Entscheidung, ob (und mit welchem Budget) ein Retry stattfindet, liegt
 /// beim äußeren Retry-Zustand in `send()`, nicht hier.
 #[derive(Debug, Clone, PartialEq)]
-enum RawEvent {
+pub(crate) enum RawEvent {
     Public(AiEvent),
     RetryWithHigherMaxTokens,
     ContextLimitError,
 }
 
-fn to_raw_stream(
+pub(crate) fn to_raw_stream(
     inner: Pin<Box<dyn Stream<Item = AiEvent> + Send>>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
     Box::pin(inner.map(RawEvent::Public))
@@ -201,7 +201,7 @@ fn to_raw_stream(
 /// `crate::error::error_stream` für den `ContextLimitError`-Fall, der (anders
 /// als jeder `AiEvent::Error`) nicht öffentlich sichtbar wird, sondern vom
 /// äußeren Retry-Zustand in `send()` konsumiert wird.
-fn raw_event_stream(event: RawEvent) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
+pub(crate) fn raw_event_stream(event: RawEvent) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
     Box::pin(futures::stream::once(async move { event }))
 }
 
@@ -329,7 +329,7 @@ impl OpenAiCompatibleProvider {
     }
 }
 
-fn role_str(role: Role) -> &'static str {
+pub(crate) fn role_str(role: Role) -> &'static str {
     match role {
         Role::User => "user",
         // OpenAI kennt keine eigene Rolle für das Ergebnis einer Aktion, die
@@ -342,7 +342,7 @@ fn role_str(role: Role) -> &'static str {
     }
 }
 
-fn message_content_text(content: &MessageContent) -> String {
+pub(crate) fn message_content_text(content: &MessageContent) -> String {
     match content {
         MessageContent::Text(text) => text.clone(),
         MessageContent::CommandResult {
@@ -449,11 +449,22 @@ fn openai_tool_definition(action: &ActionSchema) -> Value {
     })
 }
 
+/// Wandelt eine erfolgreiche HTTP-Antwort in den rohen Ereignisstrom um —
+/// je API-Format (Chat Completions bzw. Responses) eine eigene Funktion.
+pub(crate) type StreamParser = fn(
+    reqwest::Response,
+    bool,
+    Uuid,
+    String,
+    Vec<(String, String)>,
+) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>>;
+
 /// s. `crate::anthropic::connect_and_stream`-Kommentar — identisches Muster,
 /// losgelöst von `send()`, damit Spec 0065 Teil 3 sie ein zweites Mal mit
 /// höherem `max_tokens` aufrufen kann.
 #[allow(clippy::too_many_arguments)]
-async fn connect_and_stream(
+pub(crate) async fn connect_and_stream(
+    parse: StreamParser,
     client: reqwest::Client,
     url: String,
     api_key: String,
@@ -563,7 +574,7 @@ async fn connect_and_stream(
             return to_raw_stream(error_stream(mapped));
         }
 
-        return event_stream_from_response(
+        return parse(
             response,
             native_tool_calling,
             request_id,
@@ -580,7 +591,7 @@ async fn connect_and_stream(
 /// darauf prüfen können, statt je ein eigenes, unabhängiges Bool zu führen
 /// (das könnte sonst beide Retrys im selben `send()`-Aufruf zulassen).
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum RetryKind {
+pub(crate) enum RetryKind {
     None,
     Truncation,
     Context,
@@ -588,32 +599,33 @@ enum RetryKind {
 
 /// Zustand des äußeren Retry-Streams aus `send()` (Spec 0065, Teil 3) — s.
 /// `crate::anthropic::RetryState`-Kommentar für das identische Muster.
-struct RetryState {
-    client: reqwest::Client,
-    url: String,
-    api_key: String,
-    native_tool_calling: bool,
-    request_id: Uuid,
-    extra_headers: Vec<(String, String)>,
-    body: Value,
-    max_tokens: u32,
+pub(crate) struct RetryState {
+    pub(crate) parse: StreamParser,
+    pub(crate) client: reqwest::Client,
+    pub(crate) url: String,
+    pub(crate) api_key: String,
+    pub(crate) native_tool_calling: bool,
+    pub(crate) request_id: Uuid,
+    pub(crate) extra_headers: Vec<(String, String)>,
+    pub(crate) body: Value,
+    pub(crate) max_tokens: u32,
     /// Modell-Maximum (Spec 0065, Teil 1) — der Retry-Deckel, s.
     /// `openai_compatible_model_max_output_tokens`.
-    model_max_tokens: u32,
+    pub(crate) model_max_tokens: u32,
     /// Spec-reviewer-Fund (ERHÖHT): welcher JSON-Schlüssel den Wert trägt
     /// (`max_tokens` vs. `max_completion_tokens` für Reasoning-Modelle, s.
     /// `openai_max_tokens_field_name`) — für den Retry-Schritt unten
     /// wiederverwendet, statt ihn erneut zu bestimmen.
-    max_tokens_field: &'static str,
+    pub(crate) max_tokens_field: &'static str,
     /// Spec 0087, A1.2a: `true` genau dann, wenn das ANFANGS-Budget aus
     /// `max_tokens_override` stammt (kein `max_tokens_hint` gesetzt UND ein
     /// Override konfiguriert) — ein Nebenaufruf-Hint gilt nie als
     /// Nutzereinstellung. Berechnet in `send()`, bevor `context` durch
     /// `build_request_body` verbraucht wird.
-    max_tokens_is_user_override: bool,
-    retry_used: RetryKind,
-    inner: Option<Pin<Box<dyn Stream<Item = RawEvent> + Send>>>,
-    finished: bool,
+    pub(crate) max_tokens_is_user_override: bool,
+    pub(crate) retry_used: RetryKind,
+    pub(crate) inner: Option<Pin<Box<dyn Stream<Item = RawEvent> + Send>>>,
+    pub(crate) finished: bool,
 }
 
 impl AiProvider for OpenAiCompatibleProvider {
@@ -660,8 +672,17 @@ impl AiProvider for OpenAiCompatibleProvider {
             retry_used: RetryKind::None,
             inner: None,
             finished: false,
+            parse: event_stream_from_response,
         };
+        retry_stream(state)
+    }
+}
 
+/// Der äußere Retry-Wrapper (Spec 0065, Teil 3 / Spec 0087) — für beide
+/// API-Formate derselbe; die Bausteine unterscheiden sich nur über
+/// `RetryState::parse` und `RetryState::max_tokens_field`.
+pub(crate) fn retry_stream(state: RetryState) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+    {
         // s. `crate::anthropic::AnthropicProvider::send`-Kommentar zum
         // identischen Retry-Wrapper-Muster (Spec 0065, Teil 3).
         Box::pin(futures::stream::unfold(state, |mut state| async move {
@@ -671,6 +692,7 @@ impl AiProvider for OpenAiCompatibleProvider {
                 }
                 if state.inner.is_none() {
                     let stream = connect_and_stream(
+                        state.parse,
                         state.client.clone(),
                         state.url.clone(),
                         state.api_key.clone(),
@@ -785,42 +807,42 @@ impl AiProvider for OpenAiCompatibleProvider {
 /// Tool-Call-Fragment (`name`/`arguments` werden jeweils als Teilstrings
 /// geliefert und müssen aneinandergehängt werden).
 #[derive(Default)]
-struct ToolCallAccumulator {
-    name: String,
-    arguments: String,
+pub(crate) struct ToolCallAccumulator {
+    pub(crate) name: String,
+    pub(crate) arguments: String,
 }
 
-struct OpenAiStreamState {
-    frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
-    tool_calls: BTreeMap<u64, ToolCallAccumulator>,
-    fallback_text: String,
+pub(crate) struct OpenAiStreamState {
+    pub(crate) frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
+    pub(crate) tool_calls: BTreeMap<u64, ToolCallAccumulator>,
+    pub(crate) fallback_text: String,
     /// Spec 0049, Fund 2: API-Key + jeder `extra_headers`-Wert, für die
     /// Redaction bei einem Transport-Fehler mitten im Stream (s.
     /// `AnthropicStreamState::api_key`-Doc-Kommentar — derselbe Grund).
     /// Eigene, besitzende `String`s statt `&str`, da sie über die gesamte
     /// Stream-Laufzeit gebraucht werden, nicht nur innerhalb der
     /// `async move`-Anfrage, aus der `api_key`/`extra_headers` stammen.
-    secrets: Vec<String>,
+    pub(crate) secrets: Vec<String>,
     /// s. `AnthropicStreamState::text_delta_total_len` (Spec 0016,
     /// Abschnitt 4, Punkt 2).
-    text_delta_total_len: usize,
+    pub(crate) text_delta_total_len: usize,
     /// Spec 0080, A4: Gesamtlänge der Denk-Deltas (`delta.reasoning_content`
     /// bzw. `delta.reasoning`, je nach Gateway) — nur gezählt, s.
     /// `handle_chunk`. Nie in `fallback_text` oder als `TextDelta`
     /// weitergegeben (Spec 0080 §4, Invariante 1).
-    reasoning_delta_total_len: usize,
-    native_tool_calling: bool,
-    pending: VecDeque<RawEvent>,
-    finished: bool,
-    request_id: Uuid,
+    pub(crate) reasoning_delta_total_len: usize,
+    pub(crate) native_tool_calling: bool,
+    pub(crate) pending: VecDeque<RawEvent>,
+    pub(crate) finished: bool,
+    pub(crate) request_id: Uuid,
     /// Spec 0065, Teil 3: letzter gesehener `finish_reason` — `None`, wenn
     /// noch keiner ankam (z. B. bei einem abrupten Verbindungsabbruch vor
     /// jedem Chunk mit diesem Feld).
-    finish_reason: Option<String>,
+    pub(crate) finish_reason: Option<String>,
 }
 
 impl OpenAiStreamState {
-    fn handle_chunk(&mut self, chunk: &Value) {
+    pub(crate) fn handle_chunk(&mut self, chunk: &Value) {
         let choice = chunk.get("choices").and_then(|choices| choices.get(0));
 
         // Spec 0063, Teil 1: analog zu Anthropics `stop_reason` (s.
@@ -904,7 +926,7 @@ impl OpenAiStreamState {
     /// mehr ankam). Der Ist-Befund vor diesem Fix: `finalize()` versuchte
     /// in JEDEM Fall (auch `abrupt`), akkumulierte `tool_calls` zu parsen —
     /// ganz ohne Rücksicht auf `finish_reason`/den Verbindungszustand.
-    fn finalize(&mut self, abrupt: bool) -> Vec<RawEvent> {
+    pub(crate) fn finalize(&mut self, abrupt: bool) -> Vec<RawEvent> {
         // Spec 0080, A4: eigene, IMMER (auch bei `text_len == 0`) loggende
         // Funktion statt der geteilten `log_text_delta_summary` — die
         // überspringt bei 0 ganz (für Anthropic unverändert gewollt, s.
@@ -1017,7 +1039,7 @@ impl OpenAiStreamState {
     }
 }
 
-fn finalize_tool_call(request_id: Uuid, name: &str, arguments: &str) -> AiEvent {
+pub(crate) fn finalize_tool_call(request_id: Uuid, name: &str, arguments: &str) -> AiEvent {
     match serde_json::from_str::<Value>(arguments) {
         Ok(args_json) => match action_from_tool_arguments(name, &args_json) {
             Ok(action) => {
