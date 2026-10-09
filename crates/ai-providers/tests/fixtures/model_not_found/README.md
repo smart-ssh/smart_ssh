@@ -3,9 +3,9 @@
 | Datei | Status | Datum |
 |---|---|---|
 | `anthropic.json` | **gemessen** — echter Aufruf gegen `POST /v1/messages` mit falschem Modellnamen | 2026-09-23 |
-| `openai.json` | rekonstruiert, unbelegt | — |
-| `ollama.json` | rekonstruiert, unbelegt | — |
-| `openrouter.json` | rekonstruiert, unbelegt | — |
+| `openai.json` | **gemessen** — `POST …/chat/completions` (`stream` true und false identisch), HTTP 404 | 2026-10-09 |
+| `ollama.json` | **gemessen** — Ollama 0.40.2, lokal, HTTP 404 | 2026-10-09 |
+| `openrouter.json` | **gemessen** — HTTP 400; kein strukturiertes Feld (`code` ist nur der HTTP-Status), erkannt über den Marker `is not a valid model id`. Der Antwort-Body trug ein `user_id`, das hier entfernt ist | 2026-10-09 |
 
 `anthropic.json` trägt die tatsächliche Antwort (BL-0200, Messung
 2026-09-23): `{"type":"error","error":{"type":"not_found_error","message":
@@ -14,17 +14,10 @@ found: …"` an — keiner der `MODEL_NOT_FOUND_MARKERS` traf darauf zu; erkannt
 wird dieser Fall seit Spec 0072 stattdessen strukturell über `error.type`
 (s. `src/error.rs::is_structured_model_not_found`).
 
-Die übrigen drei Dateien sind weiterhin aus öffentlich dokumentiertem/
-bekanntem API-Verhalten rekonstruiert, **nicht** durch einen echten Aufruf
-verifiziert (Key bzw. laufende Ollama-Instanz fehlten beim Messlauf). BL-0200
-bleibt deshalb offen, bis auch sie gemessen sind. Keine der Dateien enthält
-echte Zugangsdaten; `anthropic.json`s `request_id` ist nachträglich durch
-einen generischen Platzhalter ersetzt (Spec-Reviewer-Fund, Review dieses
-Schritts) — kein Geheimnis, aber ein mit Anthropics Anfrageprotokollen
-korrelierbarer Bezeichner, für die Fixture ohne Funktion.
+Alle vier Dateien sind gemessen (Modellname `no-such-model-xyz`). Keine
+enthält Zugangsdaten oder kontokorrelierbare Werte.
 
-Vor dem nächsten Release bitte einmal gegen echte Accounts abgleichen
-(s. „Manuelle Testabläufe“ im Abschlussbericht: „Falscher Modellname bei
-OpenAI, OpenRouter, Ollama“). Weicht die Formulierung ab, die
-Marker-Konstante `MODEL_NOT_FOUND_MARKERS` in `src/error.rs` entsprechend
-nachschärfen.
+Ollama (0.40.2), ebenfalls gemessen: `GET /v1/models` liefert das
+OpenAI-Format (`{"object":"list","data":[{"id":…}]}`), und ein beliebiger
+Bearer-Wert wird ignoriert (HTTP 200 für Modellliste und Chat). Ollama wird
+strukturell über `error.type == "not_found_error"` erkannt.

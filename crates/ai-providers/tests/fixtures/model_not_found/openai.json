@@ -2,9 +2,9 @@
   "status": 404,
   "body": {
     "error": {
-      "message": "The model `gpt-9-does-not-exist` does not exist or you do not have access to it.",
+      "message": "The model `no-such-model-xyz` does not exist or you do not have access to it.",
       "type": "invalid_request_error",
-      "param": "model",
+      "param": null,
       "code": "model_not_found"
     }
   }
