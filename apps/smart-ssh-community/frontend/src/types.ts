@@ -290,6 +290,10 @@ export interface RiskAssessmentUpdatedEvent {
   actionId: string;
   dataRisk: RiskLevel;
   reason: string | null;
+  /** Issue #102: die Zweitmeinung konnte nicht eingeholt werden
+   * (Provider-Fehler oder kein erkennbares Urteil). `dataRisk` ist dann die
+   * regelbasierte Stufe. Optional, damit ältere Payloads weiter passen. */
+  secondOpinionUnavailable?: boolean;
 }
 
 /** Spec 0092, A3.2: Die Entscheidung zu `actionId` hat sich NACH

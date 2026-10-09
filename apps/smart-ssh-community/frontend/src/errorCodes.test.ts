@@ -376,3 +376,23 @@ describe("FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM (Issue #109)", () => {
     ).toBe("Command is too long or too deeply nested to be checked – always requires confirmation");
   });
 });
+
+// Issue #102: Codes der "Prüfung nicht verfügbar"-Hinweise haben DE- und
+// EN-Text (kein Rückfall auf den rohen Backend-Text).
+describe("Prüfung nicht verfügbar (Issue #102)", () => {
+  const codes = [
+    "FILTER_SECOND_OPINION_UNAVAILABLE_REQUIRES_CONFIRM",
+    "FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM",
+    "AI_INJECTION_CHECK_UNAVAILABLE",
+    "AI_SECOND_OPINION_SETUP_FAILED",
+  ];
+  for (const code of codes) {
+    for (const lng of ["de", "en"]) {
+      it(`${code} hat einen ${lng}-Text`, () => {
+        const text = translateErrorCode(testI18n.getFixedT(lng), code, "fallback");
+        expect(text).not.toBe("fallback");
+        expect(text).not.toContain("errors.");
+      });
+    }
+  }
+});

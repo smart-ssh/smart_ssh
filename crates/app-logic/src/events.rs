@@ -369,6 +369,10 @@ struct RiskAssessmentUpdatedPayload {
     action_id: ActionId,
     data_risk: RiskLevel,
     reason: Option<String>,
+    /// Issue #102: `true`, wenn die Zweitmeinung nicht eingeholt werden
+    /// konnte (Provider-Fehler oder kein erkennbares Urteil). `data_risk`
+    /// ist dann die regelbasierte Stufe.
+    second_opinion_unavailable: bool,
 }
 
 /// Spec 0026, Abschnitt 3, Punkt 4: eigenes Event, sobald die optionale
@@ -386,6 +390,7 @@ pub fn emit_risk_assessment_updated(
     action_id: ActionId,
     data_risk: RiskLevel,
     reason: Option<String>,
+    second_opinion_unavailable: bool,
 ) {
     emit(
         emitter,
@@ -395,6 +400,7 @@ pub fn emit_risk_assessment_updated(
             action_id,
             data_risk,
             reason,
+            second_opinion_unavailable,
         },
     );
 }

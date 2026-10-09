@@ -670,6 +670,8 @@ mod send_chat_message_persistence_tests {
             injection_check_provider: None,
             injection_check_budget: None,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
+            second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
             chat_session_store: None,
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
