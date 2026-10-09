@@ -156,7 +156,14 @@ MCP-Konfiguration) einträgt.
 - Angezeigter Verbindungs-Endpunkt + Token (mit "Neu generieren"-Button —
   invalidiert das alte Token sofort)
 - Mehrfachauswahl: welche Server auf der Allow-Liste stehen
-- Kurzer Hinweistext mit Beispiel-Konfiguration für Claude Code
+- Kurzer Hinweistext mit Beispiel-Konfiguration für Claude Code. Die
+  Konfiguration wird vollständig angezeigt (umbrochen, ohne eigenen
+  Scrollbereich) und lässt sich per Schaltfläche „Konfiguration kopieren"
+  in die Zwischenablage kopieren — per Tastatur erreichbar. Kopiert wird
+  exakt der angezeigte Text; eine kurze Rückmeldung bestätigt das Kopieren
+  oder meldet, dass es fehlgeschlagen ist. Der Text enthält das Token, die
+  Zwischenablage enthält es danach ebenfalls (gleiche Offenlegung wie beim
+  manuellen Markieren); die App protokolliert den Text nicht.
 
 ## 9a. UI-Ablauf bei einer eingehenden MCP-Anfrage
 

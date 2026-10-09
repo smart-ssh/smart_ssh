@@ -561,7 +561,10 @@
     "confirmTimeoutHint": "How long a waiting external tool call gets a response before the app decides — the confirmation request itself stays open in the app either way. Applies the next time the server (re)starts; a running server restarts immediately when you change this.",
     "allowListLabel": "Server allow list (reachable via MCP)",
     "noServers": "No servers set up yet.",
-    "exampleConfigHint": "Example configuration for Claude Code (.mcp.json / \"claude mcp add --transport http\"):"
+    "exampleConfigHint": "Example configuration for Claude Code (.mcp.json / \"claude mcp add --transport http\"):",
+    "copyConfig": "Copy configuration",
+    "copyConfigCopied": "Configuration copied.",
+    "copyConfigFailed": "Could not copy the configuration."
   },
   "firstRunNotice": {
     "title": "Before you start",

@@ -20,12 +20,6 @@ export const AXE_ALLOWLIST: AllowedViolation[] = [
     reason:
       "The dark theme uses muted text colours (secondary labels, inactive tabs, hints) below the 4.5:1 ratio on many screens. Raising them is an app-wide visual design change, not part of the test setup.",
   },
-  {
-    rule: "scrollable-region-focusable",
-    screens: ["settings: MCP Server"],
-    reason:
-      "The client configuration snippet is a scrollable <pre> that cannot receive keyboard focus. Making a non-interactive element focusable conflicts with the repository's jsx-a11y/no-noninteractive-tabindex lint rule and needs its own design (e.g. a copy button or a focusable code view).",
-  },
 ];
 
 export async function expectNoSeriousA11yViolations(page: Page, screen: string): Promise<void> {
