@@ -37,6 +37,28 @@ Deutsch, nutzerrelevant, gleiche Kategorien wie im CHANGELOG
   jetzt immer eine Bestätigung, auch wenn eine Allow-Regel greift.
 ```
 
+### Regeln für Einträge
+
+- **Höchstens zwei Zeilen** je Eintrag.
+- Beschreibe die **sichtbare Wirkung**, nicht den Mechanismus: was der Nutzer
+  merkt, nicht wie es umgesetzt ist.
+- **Nichts Internes:** keine internen Abläufe, kein Tooling, keine Issue- oder
+  Spec-Buchhaltung, die der Eintrag nicht braucht.
+
+Gut:
+
+```markdown
+- Beim Schließen eines Tabs bleibt der Fokus auf dem Nachbar-Tab.
+```
+
+Schlecht (Mechanismus, intern, zu lang):
+
+```markdown
+- `TabStrip` ruft nach `closeTab` jetzt `focusNeighbor()` auf, damit der
+  Reducer-Zustand nach Spec 0063 (Issue #69) konsistent bleibt und die
+  Fokus-Ref nicht mehr auf `null` fällt.
+```
+
 Einträge, die nur in einer kostenpflichtigen Edition verfügbar sind, tragen
 `**(Pro)**`.
 
@@ -44,3 +66,12 @@ Einträge, die nur in einer kostenpflichtigen Edition verfügbar sind, tragen
 
 Beim Release (Versions-Bump) werden alle Fragmente in den neuen
 Versionsabschnitt von `CHANGELOG.md` übernommen und die Dateien gelöscht.
+
+Der neue Versionsabschnitt beginnt mit `### Highlights`: 3 bis 6
+Listenpunkte, je genau eine Zeile, nutzerseitig und ohne Interna. Die
+Highlights sind der **einzige englische Teil** des sonst deutschen
+Changelogs, weil sie als Kurzfassung auf der (englischen) Download-Seite
+erscheinen. Sie werden beim Release geschrieben, nicht als Fragment; die
+übrigen Kategorien folgen danach unverändert. Ein CI-Check
+(`scripts/check-changelog-highlights.mjs`, Teil von `npm run lint`) prüft
+das für alle Versionen nach 0.5.2.

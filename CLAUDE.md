@@ -230,8 +230,17 @@ not by hand-editing, so the lockfile stays consistent).
 - **At a bump:** change the version everywhere it's pinned (see above),
   move `CHANGELOG.md`'s `[Unreleased]` section to `[X.Y.Z] — <date>`,
   merge all fragments from `changelog.d/` into that new version section
-  and delete the fragment files, open a fresh empty `[Unreleased]` above
+  and delete the fragment files, write a `### Highlights` section as the
+  first heading of the new version section (required: 3–6 bullet items,
+  exactly one line each, user-facing, no internals; **English**, the one
+  English part of the otherwise German changelog — it feeds the English
+  download page and release notes; `[Unreleased]` has none), open a fresh empty `[Unreleased]` above
   it, tag the release.
+- **Fragment rules** (details in `changelog.d/README.md`): at most two
+  lines per item; describe the user-visible effect, not the mechanism;
+  nothing internal. `scripts/check-changelog-highlights.mjs` (run by
+  `npm run lint`) fails a released section after 0.5.2 without valid
+  Highlights.
 - `CHANGELOG.md` (repo root, Keep a Changelog format) holds user-relevant
   changes only — internal refactors, tests, CI and documentation-only
   changes stay out of it (that's what git history is for).
