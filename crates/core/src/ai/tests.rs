@@ -141,7 +141,7 @@ fn test_redactor_detects_aws_access_key() {
     assert!(redacted.contains("[REDACTED]"));
 }
 
-/// Spec 0094, §1.3, nachgezogen durch Spec 0095, A4: Prämisse der
+/// Spec 0094, nachgezogen durch Spec 0095 §5: Prämisse der
 /// Spec-0094-Log-Tests (T1–T3 in `filter::tests`, T4/T5/T8c in
 /// `ai-providers`, T6 in `app-logic`, T7 in `mcp-server`).
 ///
@@ -158,7 +158,7 @@ fn test_redactor_detects_aws_access_key() {
 /// `sshpass -p …`, `curl -u user:…`) **erkennt** der Redactor seit
 /// Spec 0095 — der Wächter hat damit genau das getan, wofür er da war. Was
 /// bleibt, ist die Form mit Leerzeichen: `mysql -u root -p <wert>`. Sie ist
-/// in Spec 0095 §3 als Nicht-Ziel begründet, nicht als Lücke übersehen —
+/// in Spec 0095 §5 als Grenze begründet, nicht als Lücke übersehen —
 /// ohne angehängten Wert fragt der MySQL-Client interaktiv nach dem
 /// Passwort, und der folgende Wert ist der Datenbankname. Im Text ist dort
 /// also gar kein Passwort erkennbar, und ein Muster dafür würde
@@ -1419,7 +1419,7 @@ fn test_redactor_handles_a_pathological_number_of_at_signs_in_time() {
 /// läuft als LETZTE, damit sie dem Schlüsselwort-Muster nicht den Anker
 /// nimmt. Stünde sie davor, griffe sie bis zu dem `@` in `ab@cdSecret`
 /// und ließe `cdSecret` im Klartext stehen. Alle drei Varianten belegen
-/// die Position. (Bis Spec 0078 §9 fing die `&`-Variante schon die
+/// die Position. (Bis Spec 0078 §3 fing die `&`-Variante schon die
 /// Query-String-Regel ab; seit diese ein `?` im selben Token verlangt,
 /// läuft auch sie über strenges URL- und Schlüsselwort-Muster, genau wie
 /// die `|`-Variante.)
@@ -1452,7 +1452,7 @@ fn test_redactor_does_not_let_the_at_url_rule_swallow_a_later_password_keyword()
 /// sind auch ohne die Quote-Alternativen der Query-String-Regel grün,
 /// weil deren freie Form an `'`/`"` scheitert und dann wie bisher das
 /// Schlüsselwort-Muster greift (spec-reviewer-Fund, erste Review-Runde:
-/// die Begründung in Spec 0078 §3.1 trifft so nicht zu). Der echte
+/// die Begründung in Spec 0078 §1 trifft so nicht zu). Der echte
 /// Gegenbeweis für die Quote-Alternativen steht in
 /// `…_redacts_a_password_query_parameter_containing_an_at_sign`.
 #[test]
@@ -1500,7 +1500,7 @@ fn test_redactor_known_remaining_case_password_with_at_sign_and_question_mark() 
 /// das PEM-Muster noch sein Fail-safe-Rückfallmuster, und der komplette
 /// Schlüsselkörper stand im Klartext — dort, wo er VOR Spec 0078
 /// vollständig redigiert wurde. Das verletzt „nie weniger redigieren"
-/// (CLAUDE.md, Spec 0078 §2).
+/// (CLAUDE.md, Spec 0078 §4).
 ///
 /// Erste Behebung war, dass die Wertklasse der Regel mindestens ein `@`
 /// verlangt. **Das genügt nicht** und die frühere Begründung an dieser
@@ -1508,7 +1508,7 @@ fn test_redactor_known_remaining_case_password_with_at_sign_and_question_mark() 
 /// Konstruktion unerreichbar") war falsch: Nicht der Anker muss das `@`
 /// enthalten, sondern der Wert, und der beginnt vor dem Anker — s.
 /// `…_redacts_a_key_block_behind_an_at_sign_in_a_query_parameter`.
-/// Geschützt wird der Anker seit Spec 0078 §9 (Q-BL-0248-02) durch die
+/// Geschützt wird der Anker seit Spec 0078 §3 (Q-BL-0248-02) durch die
 /// Kopien der vier Schlüsselmuster ganz am Anfang der Musterliste.
 #[test]
 fn test_redactor_query_rule_does_not_cut_a_private_key_armor_anchor() {
@@ -1545,7 +1545,7 @@ fn test_redactor_query_rule_does_not_cut_a_private_key_armor_anchor() {
 }
 
 /// Regressionstest, Fund des `regression-guard` über `ee017af..387a91e`,
-/// vom Architekten vorher/nachher gemessen (Spec 0078 §9, Q-BL-0248-02,
+/// vom Architekten vorher/nachher gemessen (Spec 0078 §3, Q-BL-0248-02,
 /// echte Lockerung): Die Query-String-Regel zerschnitt den Anker der
 /// Schlüsselmuster auch dann, wenn das geforderte `@` **vor** dem Anker
 /// im Wert steht — `?secret=a@-----BEGIN PRIVATE KEY-----`. Die frühere
@@ -1600,7 +1600,7 @@ fn test_redactor_redacts_a_key_block_behind_an_at_sign_in_a_query_parameter() {
     }
 }
 
-/// Regressionstest zum selben Fund (Spec 0078 §9, Q-BL-0248-02): Die
+/// Regressionstest zum selben Fund (Spec 0078 §3, Q-BL-0248-02): Die
 /// Query-String-Regel zählte `&` auch ohne vorangehendes `?` und nahm
 /// damit dem strengen URL-Muster den Anker, wenn das PASSWORT ein
 /// `&<schlüsselwort>=` enthält. Gemessen: vor Spec 0078 vollständig
@@ -1635,7 +1635,7 @@ fn test_redactor_does_not_treat_an_ampersand_without_a_question_mark_as_a_query_
 /// Schlüsselblock hinter einem Header-Namen wurde **schon vor Spec 0078**
 /// zerschnitten — die frühe `api-key`-Kopie verbrauchte `-----BEGIN` und
 /// nahm den Schlüsselmustern den Anker. Mit den Kopien ganz vorn ist
-/// dieses ältere Leck mit zu (Spec 0078 §9, Q-BL-0248-02).
+/// dieses ältere Leck mit zu (Spec 0078 §3, Q-BL-0248-02).
 #[test]
 fn test_redactor_redacts_a_key_block_behind_a_header_name() {
     let redactor = DefaultOutputRedactor::new();
@@ -1803,7 +1803,7 @@ fn test_redactor_known_remaining_case_password_with_a_query_parameter_prefix() {
 
 // --- Spec 0095, A6 / T15: schon erkannte Formen festschreiben -------------
 
-/// Spec 0095, A6 (T15): Die in Spec 0095 §1.2 gemessenen Formen erkennt der
+/// Spec 0095, A6 (T15): Die in Spec 0095 §3 genannten Formen erkennt der
 /// Redactor **heute schon**, obwohl BL-0118 sie als offen führte — sie hatten
 /// aber keinen einzigen Test. Dieser Wächter muss gegen den heutigen Stand
 /// **nicht** scheitern; sein Zweck ist, dass keine spätere Änderung an der
@@ -2677,7 +2677,7 @@ fn test_t5_0095_redis_accepts_an_equals_sign_with_and_without_space() {
 /// aus einer Zeilenfortsetzung besteht, erzeugte einen Platzhalter, wo nichts
 /// redigiert wurde: `mysql -p\` ⏎ `   Geheim` wurde zu
 /// `mysql [REDACTED]   Geheim`. Bei `mysql -p` + Leerraum ist das Folgewort
-/// laut Spec 0095 §1.4 der Datenbankname, es leakt also kein Geheimnis — aber
+/// laut Spec 0095 A1.1 der Datenbankname, es leakt also kein Geheimnis — aber
 /// die Zeile behauptet eine Redaction, die nicht stattfand. Der Wert verlangt
 /// jetzt mindestens einen echten Abschnitt.
 #[test]

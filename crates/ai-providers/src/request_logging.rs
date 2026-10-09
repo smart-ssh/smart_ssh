@@ -671,9 +671,9 @@ mod error_logging_tests {
     /// nicht die Redaction.
     const SECRET_0094: &str = "geheim-0094";
 
-    /// Spec 0095, A4: `-p'…'` (angehängter Wert) erkennt der Redactor seit
-    /// Spec 0095. Stattdessen die Form mit Leerzeichen, die Spec 0095 §3 als
-    /// Nicht-Ziel führt — dort ist im Text kein Passwort erkennbar, der Wert
+    /// Spec 0095 §5: `-p'…'` (angehängter Wert) erkennt der Redactor seit
+    /// Spec 0095. Stattdessen die Form mit Leerzeichen, die Spec 0095 §5 als
+    /// Grenze führt — dort ist im Text kein Passwort erkennbar, der Wert
     /// hinter `-p ` ist für den MySQL-Client der Datenbankname.
     fn secret_command() -> String {
         format!("mysql -u root -p {SECRET_0094} -e 'select 1'")

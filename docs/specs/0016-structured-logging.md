@@ -1,112 +1,82 @@
-# Spec: Strukturiertes Logging & Diagnose
+# Spec 0016 — Strukturiertes Logging und Diagnose
 
-Status: Entwurf
-Modul: Erweiterung über alle Crates hinweg (`ssh-manager-core`,
-`ai-providers`, `ssh-transport`, `app-tauri`)
-Abhängigkeiten: keine fachliche, aber betrifft praktisch jede bisherige Spec
-punktuell (Logging-Aufrufe an den relevanten Stellen)
+Status: umgesetzt
+Zweck: Die App schreibt eine maschinenlesbare Logdatei, mit der sich ein Fehler im Pfad eines KI-Vorschlags (Anfrage, Antwort, Prüfung, Ausführung) nachvollziehen lässt, ohne dass die Logdatei zu einer Senke für Inhalte wird.
+Bezüge: Spec 0094 (kein Inhalt auf dem Standard-Level), Spec 0006 (Redaction), Spec 0009 (Filter-Entscheidung), Spec 0063 (Diagnose-Export), ADR 0086.
 
 ## 1. Ziel
 
-Der komplette Pfad eines KI-Vorschlags — gesendeter Kontext, empfangene
-Rohantwort, Tool-Call-Parsing, Validierung, Filter-Engine-Entscheidung,
-Ausführung — wird strukturiert geloggt, damit Fehler wie der beobachtete
-`target_id ist keine gültige UUID`-Fall sofort und ohne Rätselraten
-nachvollziehbar sind. Die Logs müssen sowohl für dich manuell einsehbar sein
-als auch **direkt von einer Claude-Code-Instanz lesbar**, ohne Umweg über
-eine App-UI (einfacher Dateipfad reicht).
+Der Pfad eines KI-Vorschlags lässt sich aus der Logdatei nachvollziehen,
+auch von Werkzeugen mit Terminalzugriff und ohne Umweg über die
+Oberfläche.
 
-## 2. Technologie
+## 2. Level
 
-**`tracing`** + `tracing-subscriber` (mit `tracing-appender` für
-Datei-Rotation). Begründung: De-facto-Standard im Rust-Ökosystem für
-strukturiertes, spanbasiertes Logging — erlaubt, zusammengehörige
-Log-Zeilen über ein `session_id`/`action_id`-Span zu korrelieren, statt nur
-unzusammenhängende Text-Zeilen zu haben.
+- Das Level lässt sich über die Umgebungsvariable `RUST_LOG` steuern.
+  Ohne sie gilt `info` (Spec 0094 A3).
 
 ## 3. Speicherort und Format
 
-Plattformspezifischer Log-Ordner über die `directories`-Crate:
+- Die Logdatei liegt in einem plattformspezifischen Ordner:
+  - macOS: `~/Library/Logs/Smart SSH/`
+  - Windows: `%APPDATA%\Smart SSH\logs\`
+  - Linux: `~/.local/state/smart-ssh/logs/`
+- Format ist JSON Lines: eine Zeile pro Ereignis, mit Level, Zeitstempel,
+  Nachricht und Feldern. So lässt sich gezielt nach Level oder einer
+  Sitzungs- bzw. Anfrage-Kennung filtern, auch ohne die App.
+- Die Datei rotiert täglich. Beim Start löscht die App Dateien, die älter
+  als 14 Tage sind. Schlägt das Aufräumen fehl, startet die App trotzdem.
 
-- macOS: `~/Library/Logs/Smart SSH/`
-- Windows: `%APPDATA%\Smart SSH\logs\`
-- Linux: `~/.local/state/smart-ssh/logs/`
+## 4. Was protokolliert wird
 
-Format: **JSON Lines** (eine Zeile pro Log-Event, maschinenlesbar) —
-bewusst kein reiner Klartext-Log, damit sowohl du als auch eine
-Claude-Code-Instanz gezielt filtern/greppen können (z. B. nach
-`"level":"ERROR"` oder einer bestimmten `session_id`). Tägliche Rotation,
-Aufbewahrung der letzten 14 Tage, ältere Dateien werden beim Start
-automatisch gelöscht.
+Zusammengehörige Zeilen eines KI-Anfrage-Zyklus tragen dieselbe
+Anfrage-Kennung, Zeilen einer Sitzung dieselbe Sitzungs-Kennung.
 
-## 4. Was geloggt wird
+1. **Ausgehende KI-Anfrage:** was an den Provider geht, erst **nach** der
+   Redaction (Spec 0006), nie davor. Für Logs gilt dieselbe Redaction-Regel
+   wie für die Anfrage selbst.
+2. **Antwort des Providers:** Werkzeugaufrufe und Textabschnitte.
+3. **Auswertung eines Werkzeugaufrufs:** bei Erfolg die erkannte Aktion; bei
+   einem Fehler der Grund (Feld, erwarteter und tatsächlicher Typ), damit ein
+   Fall wie eine ungültige Ziel-Kennung sofort erklärbar ist.
+4. **Filter-Entscheidung:** Entscheidung und gegriffene Regel bzw.
+   Hard-Blacklist-Eintrag (Spec 0009).
+5. **SSH-Ausführung:** Exit-Code und Ausgabelängen.
+6. **Sitzungs-Lebenszyklus:** Verbindungsaufbau und -abbau, Host-Key-Ereignisse,
+   jeweils mit Grund bzw. Status.
 
-Pro KI-Anfrage-Zyklus (ein `send_chat_message`-Aufruf), verknüpft über ein
-gemeinsames `request_id`-Span-Feld:
-
-1. **Ausgehender Kontext**: `SessionContext`, der tatsächlich an den
-   Provider geht — **nach** Redaction (Spec 0006, Abschnitt 5), nie davor.
-   Wichtig: Logs sind kein Schlupfloch für Secrets, die die Redaction
-   eigentlich unterdrücken soll — dieselbe Redaction-Regel gilt für Logs wie
-   für den tatsächlichen API-Request.
-2. **Empfangene Rohantwort** je Streaming-Chunk (kompakt, z. B. Tool-Call-
-   JSON-Fragmente vollständig, reine Text-Deltas ggf. zusammengefasst statt
-   Zeichen für Zeichen).
-3. **Tool-Call-Parsing/Validierung**: bei Erfolg das geparste `AiAction`,
-   bei Fehler die **vollständige Rohantwort des Providers** plus die genaue
-   Fehlermeldung (Feld, erwarteter vs. tatsächlicher Typ) — genau das, was
-   im beobachteten Bugfall gefehlt hätte, um sofort zu sehen, was die KI
-   tatsächlich als `target_id` geschickt hat.
-4. **Filter-Engine-Entscheidung**: Kommando, `Decision`, welche Regel/
-   Hard-Blacklist-Eintrag gegriffen hat (wiederverwendet dieselbe
-   `EvaluationTrace`-Struktur aus Spec 0009, Abschnitt 4).
-5. **SSH-Ausführung**: Kommando, Exit-Code, Redacted-Output-Länge (nicht
-   zwingend der volle Output bei sehr langen Kommandos, um die Logs nicht
-   unnötig aufzublähen — Kürzung mit Hinweis "gekürzt, voller Output nicht
-   geloggt" ab einer konfigurierbaren Länge).
-6. **Session-Lifecycle**: Connect/Disconnect, Host-Key-Ereignisse — jeweils
-   mit Grund/Status.
+Welche dieser Angaben auf welchem Level stehen, regelt Spec 0094: Auf `info`,
+`warn` und `error` stehen nur inhaltsfreie Angaben (Kennungen, Entscheidung,
+Regel, Längen, Exit-Code, Fehlercodes); der Inhalt selbst (Kommandotext,
+Ausgabe, Kontext, Rohantwort) erscheint nur auf `debug`, redigiert.
 
 ## 5. Zugriff
 
-- **Für dich**: neuer Command `open_log_directory()`, öffnet den
-  Log-Ordner im System-Dateimanager (Finder/Explorer) über das Tauri-
-  Dialog-/Opener-Plugin — ein Klick in den Einstellungen reicht, kein
-  manuelles Navigieren zum plattformspezifischen Pfad nötig.
-- **Für Claude Code**: keine neue Schnittstelle nötig — der Pfad aus
-  Abschnitt 3 ist fix und dokumentiert, eine Claude-Code-Instanz mit
-  Terminal-Zugriff kann die JSON-Lines-Dateien direkt lesen/greppen
-  (`tail -f`, `jq`, etc.), ganz ohne App-Interaktion.
+- In den Einstellungen öffnet ein Klick den Log-Ordner im Dateimanager des
+  Systems.
+- Der Pfad aus §3 ist fest und dokumentiert; Werkzeuge mit Terminalzugriff
+  können die Dateien direkt lesen.
 
-## 6. Konkreter Bugfix: `target_id` bei `ProposeNoteUpdate`
+## 6. Fehler in Werkzeugaufrufen
 
-Der beobachtete Fehler ist Anlass für eine Design-Korrektur, nicht nur ein
-Logging-Thema: Die KI sollte für "die Notiz des aktuell verbundenen Servers"
-**keine eigene ID raten/erfinden müssen**. Anpassung an
-`AiAction::ProposeNoteUpdate` (Spec 0003, Abschnitt 5.2) bzw. dessen
-Tool-Schema (Spec 0006, Abschnitt 3):
+- Für „die Notiz des aktuell verbundenen Servers" muss die KI keine Kennung
+  nennen oder formatieren: Ein Notiz-Vorschlag trägt stattdessen ein optionales
+  Ziel `current_server` oder `current_server_group`. Fehlt es, gilt
+  `current_server`. Die App löst die Kennung aus dem Sitzungskontext selbst
+  auf.
+- Ein Fehler beim Auswerten eines Werkzeugaufrufs beendet weder Verbindung
+  noch Sitzung. Er erscheint als sichtbarer Hinweis im Chat; die Sitzung
+  bleibt nutzbar.
 
-- Das der KI angebotene Tool-Schema für `ProposeNoteUpdate` bekommt **kein**
-  Freitext-`target_id`-Feld mehr für den Regelfall. Stattdessen: ein
-  optionales Enum-Feld `target: "current_server" | "current_server_group"`
-  (Default: `current_server`, falls das Feld fehlt). Das Backend löst daraus
-  die tatsächliche `ServerId`/`GroupId` **selbst** aus dem Session-Kontext
-  auf — die KI muss nie eine ID kennen oder korrekt formatieren.
-- Zusätzlich: **Fehler-Containment.** Ein Fehler beim Parsen/Validieren
-  eines Tool-Calls darf **niemals** die SSH-Verbindung/Session beenden,
-  sondern nur als sichtbarer Fehler-Hinweis im Chat erscheinen (wie im
-  Screenshot bereits der Fall) — die Session bleibt aktiv nutzbar. Sollte
-  aktuell doch die Verbindung mitgerissen werden, ist das ein separater
-  Bug im Error-Handling, den es zu identifizieren gilt (siehe Abschnitt 7).
+## 7. Sicherheitszusagen
 
-## 7. Offene Punkte / zu untersuchen
+- Die Logdatei ist ab `info` keine Datensenke für Kommandotext, Ausgabe,
+  Chat-, Notiz- oder Prompt-Inhalte (Spec 0094).
+- Was auf `debug` steht, läuft vorher durch die Redaction.
 
-- Der beobachtete Absturz der gesamten Verbindung (nicht nur ein
-  Fehler-Hinweis) deutet auf fehlendes Error-Containment an der
-  Tool-Call-Verarbeitungsstelle hin — mit dem neuen Logging aus dieser Spec
-  sollte sich die genaue Stelle beim nächsten Auftreten sofort
-  identifizieren lassen, statt weiter zu raten.
-- Die gemeldete Unmöglichkeit, Text im Chat/Terminal-Bereich zu markieren,
-  ist aktuell nicht erklärt — möglicherweise blockiert das Fehler-Overlay
-  Zeigegeräte-Ereignisse für den darunterliegenden Bereich. Braucht eigene
-  Untersuchung, ggf. losgelöst vom KI-Provider-Bug.
+## 8. Grenzen
+
+- Dateien älterer Versionen können noch Inhalte enthalten; sie werden nach
+  14 Tagen gelöscht.
+- Die Datenbank (Ausführungsprotokoll, Chatverlauf) ist nicht Gegenstand
+  dieser Spec.
