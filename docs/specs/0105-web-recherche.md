@@ -1,6 +1,6 @@
 # Spec 0105 — Web-Recherche der KI über den Provider
 
-Status: umgesetzt · Issue: #162, #169
+Status: umgesetzt · Issue: #162, #169, #168
 Zweck: Die KI kann beim Antworten im Web suchen und Webseiten lesen (nur
 Text), um aktuelle Dokumentation, Fehlermeldungen und Release Notes
 einzubeziehen. Die Recherche läuft ausschließlich über die serverseitigen
@@ -12,14 +12,19 @@ Fencing, Injection-Prüfung)
 Bezüge: Spec 0006 (KI-Provider), Spec 0024 (Übersetzungen), Spec 0039
 (Fencing, Eskalation nach dem Einlesen), Spec 0064 (Prompt-Caching),
 ADR 0027 (Injection-Prüfung), ADR 0117 (Entscheidungen zu dieser Spec),
-ADR 0124 (Websuche im Provider-Konto abgeschaltet).
+ADR 0124 (Websuche im Provider-Konto abgeschaltet),
+ADR 0127 (Web-Recherche über die Responses-API von OpenAI).
 
 ## 1. Welche Provider
 
 - **Anthropic:** Web-Recherche verfügbar (Websuche und Seitenabruf des
   Providers), sofern „Natives Tool-Calling" eingeschaltet ist.
-- **OpenAI, generische OpenAI-kompatible Endpunkte, Ollama:** keine
-  Web-Recherche. Die Anfrage enthält kein Web-Werkzeug; der Chat verhält
+- **OpenAI (offizieller Dienst):** Web-Recherche verfügbar (Websuche des
+  Providers), sofern „Natives Tool-Calling" eingeschaltet ist. Anders als
+  bei Anthropic gibt es keinen Seitenabruf: Der Provider liefert keinen
+  Seitentext zurück.
+- **Generische OpenAI-kompatible Endpunkte, Ollama und OpenAI mit
+  eigener Basis-URL:** keine Web-Recherche. Die Anfrage enthält kein Web-Werkzeug; der Chat verhält
   sich genau wie ohne diese Spec.
 
 ## 2. Einstellung
@@ -40,7 +45,9 @@ ADR 0124 (Websuche im Provider-Konto abgeschaltet).
   Injection-Prüfung, Sitzungstitel, Notiz-Vorschlag und -Kürzung,
   Verlaufs-Verdichtung) bekommen nie ein Web-Werkzeug.
 - Je KI-Anfrage höchstens 5 Websuchen und 5 Seitenabrufe. Ein Seitenabruf
-  liefert höchstens etwa 25 000 Tokens Inhalt.
+  liefert höchstens etwa 25 000 Tokens Inhalt. Bei OpenAI gilt die Grenze
+  von 5 Werkzeugaufrufen je Anfrage (Websuchen); Seitenabrufe gibt es dort
+  nicht.
 - Keine Bestätigung je Suche oder Abruf.
 - Nur Text: Suchtreffer und Seitentext. Bilder, Downloads und als
   Binärdaten gelieferte Dokumente (z. B. PDF) übernimmt die App nicht.
@@ -63,6 +70,11 @@ ADR 0124 (Websuche im Provider-Konto abgeschaltet).
   - Quellen sind Text, keine Links — ein Klick öffnet nichts.
   - Wurde der Seitentext für den Verlauf gekürzt (Abschnitt 6), steht das
     als Hinweis auf der Karte.
+- Bei OpenAI zeigt die Karte die Suchanfrage und die von der Antwort
+  zitierten Quellen (Titel, URL); der Provider nennt nicht, welche Quelle
+  zu welcher Suche gehört, die Zitate stehen deshalb bei der letzten Suche
+  der Antwort. Es gibt keine Karte „Webseite gelesen": Öffnet der Provider
+  eine Seite, zeigt die App das nicht an, weil kein Seitentext vorliegt.
 - Meldet der Provider einen Fehler des Web-Werkzeugs (z. B. Seite nicht
   erreichbar, Höchstzahl erreicht, Adresse nicht im Gespräch), zeigt die
   Karte einen übersetzten, lesbaren Hinweis; ein unbekannter Fehlercode
@@ -106,7 +118,8 @@ ADR 0124 (Websuche im Provider-Konto abgeschaltet).
 - **Injection-Prüfung:** Ist die Prüfung auf eingeschleuste Anweisungen
   eingerichtet, läuft sie beim Speichern einer Recherche über Treffertitel
   und Seitentext. Ein Verdacht eskaliert die nächste Aktion wie bei
-  gelesenen Serverinhalten. Die Treffer-Ausschnitte einer Websuche liefert
+  gelesenen Serverinhalten. Bei OpenAI läuft sie über die Titel der
+  zitierten Quellen. Die Treffer-Ausschnitte einer Websuche liefert
   der Provider nur verschlüsselt; sie kann die App nicht prüfen.
 
 ## 7. Grenzfälle
@@ -137,6 +150,10 @@ ADR 0124 (Websuche im Provider-Konto abgeschaltet).
   - Jeder andere Fehler (andere ungültige Anfrage, Anmeldung, Rate-Limit,
     Überlastung oder Serverfehler, Budget) erscheint wie bisher und wird
     hierüber nie wiederholt.
+- **OpenAI lehnt das Web-Werkzeug ab:** Die oben beschriebene Erkennung
+  und der einmalige Wiederholversuch gelten nur für Anthropic. Bei OpenAI
+  erscheint ein Fehler des Providers wie jeder andere Provider-Fehler; der
+  Zug stürzt nicht ab.
 - **Abgeschnittene Antwort:** Wird eine Antwort mit Aktionsvorschlag wegen
   des Längenlimits verworfen und wiederholt (Spec 0065), verfallen auch die
   Recherchen der verworfenen Antwort; angezeigt und gespeichert werden nur
