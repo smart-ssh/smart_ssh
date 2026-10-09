@@ -409,70 +409,48 @@ async fn test_unknown_host_key_pauses_then_trust_continues() {
 
 // --- Spec 0069, Teil A3 (ERHÖHT): Verbindungsfehler unterscheiden ---------
 
+/// Ein Port, auf dem in diesen Tests nie jemand lauscht. Ursache früherer
+/// Windows-Flakes: Der "geschlossene" Port wurde per `bind(:0)` ermittelt und
+/// wieder freigegeben; ein parallel laufender Test, der selbst `bind(:0)`
+/// macht (oder ein ausgehender Ephemeral-Port), konnte genau diesen Port
+/// zwischen `drop()` und `connect()` bekommen. Port 1 (tcpmux) liegt weit
+/// außerhalb des Ephemeral-Bereichs und wird von keinem Test gebunden.
+const CLOSED_PORT: u16 = 1;
+
 /// Test 7: Verbindung zu einem geschlossenen lokalen Port → `ConnectionRefused`.
 /// *Gegenbeweis:* vor diesem Schritt lieferte `map_russh_error` hier
 /// unterschiedslos `ConnectionFailed` (jeder `io::Error` fiel in denselben
 /// Zweig) — dieser Test schlug vor dem Fix fehl (der `matches!` traf nicht
 /// zu), s. Bericht.
 ///
-/// ADR 0122, R11: Der Port wird gebunden und sofort wieder
-/// freigegeben, dann verbindet dieser Test dorthin. Zwischen `drop()` und
-/// `connect()` kann in seltenen Fällen ein fremder Testserver (aus einem
-/// parallel laufenden Testbinary) genau diesen Port belegen — dann liefert
-/// der Verbindungsversuch `Ok(_)` statt `ConnectionRefused`, ohne dass der
-/// Produktcode etwas falsch macht. Ein gebundener, aber nicht lauschender
-/// Socket (`bind()` ohne `listen()`) wurde als Alternative gemessen: Er
-/// liefert unter macOS einen Timeout statt `ConnectionRefused` (20/20
-/// Versuchen) und scheidet damit aus, s. `docs/adr/0085-…`, Abschnitt 4.
-/// Stattdessen wiederholt dieser Test mit frischem Port, höchstens
-/// `MAX_ATTEMPTS`-mal. Jeder Fehler außer `ConnectionRefused` lässt ihn
-/// sofort scheitern, ohne Wiederholung — nur ein unerwartetes `Ok(_)` löst
-/// einen neuen Versuch aus.
+/// Der Port ist `CLOSED_PORT` (siehe dort): fest, nie ein Ephemeral-Port,
+/// also kann ihn kein parallel laufender Test mit `bind(:0)` belegen. Eine
+/// Wiederholungsschleife gibt es bewusst nicht — jedes `Ok(_)` ist ein Fehler.
 #[tokio::test]
 async fn test_connect_to_closed_local_port_yields_connection_refused() {
-    const MAX_ATTEMPTS: u32 = 5;
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", CLOSED_PORT)],
+    };
+    let credentials = TestCredentialStore::default();
+    let host_keys: std::sync::Arc<dyn HostKeyStore> =
+        std::sync::Arc::new(TestHostKeyStore::default());
 
-    for attempt in 1..=MAX_ATTEMPTS {
-        // Port binden, dann sofort wieder freigeben — verlässlich "zu" (kein
-        // Dienst dahinter), ohne einen Port fest zu verdrahten.
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        drop(listener);
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys),
+    )
+    .await
+    .expect("darf nicht hängen");
 
-        let target = ConnectionTarget {
-            hops: vec![password_hop("127.0.0.1", port)],
-        };
-        let credentials = TestCredentialStore::default();
-        let host_keys: std::sync::Arc<dyn HostKeyStore> =
-            std::sync::Arc::new(TestHostKeyStore::default());
-
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(15),
-            ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys),
-        )
-        .await
-        .expect("darf nicht hängen");
-
-        let err = match result {
-            Err(err) => err,
-            Ok(_) if attempt < MAX_ATTEMPTS => {
-                // Ein fremder Dienst hat den Port zwischen drop() und
-                // connect() belegt — mit frischem Port erneut versuchen.
-                continue;
-            }
-            Ok(_) => panic!(
-                "geschlossener Port nicht erreichbar: alle {MAX_ATTEMPTS} \
-                 Versuche gerieten an einen fremden Dienst"
-            ),
-        };
-
-        assert!(
-            matches!(err, SshError::ConnectionRefused(_)),
-            "erwartet ConnectionRefused, bekam {err:?}"
-        );
-        assert_eq!(err.code(), "SSH_CONNECTION_REFUSED");
-        return;
-    }
+    let err = match result {
+        Err(err) => err,
+        Ok(_) => panic!("geschlossener Port darf keine Verbindung liefern"),
+    };
+    assert!(
+        matches!(err, SshError::ConnectionRefused(_)),
+        "erwartet ConnectionRefused, bekam {err:?}"
+    );
+    assert_eq!(err.code(), "SSH_CONNECTION_REFUSED");
 }
 
 // --- Spec 0076: Anmeldung mit einer Schlüsseldatei ---------------------
@@ -959,9 +937,7 @@ async fn test_hanging_handshake_times_out_and_never_trusts_a_host_key() {
 /// Zugangsdaten).
 #[tokio::test]
 async fn test_connection_error_against_closed_port_never_leaks_the_password() {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    drop(listener);
+    let port = CLOSED_PORT;
 
     const SECRET_MARKER: &str = "s3cr3t-teil-a3-marker";
     struct PasswordProbeStore;
@@ -1663,38 +1639,27 @@ async fn test_issue_51_dns_failure_marks_the_dns_step() {
 /// Abgelehnter Port: DNS gelingt, der TCP-Schritt scheitert.
 #[tokio::test]
 async fn test_issue_51_refused_port_marks_the_tcp_step() {
-    const MAX_ATTEMPTS: u32 = 5;
-    for attempt in 1..=MAX_ATTEMPTS {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        drop(listener);
-
-        let target = ConnectionTarget {
-            hops: vec![password_hop("127.0.0.1", port)],
-        };
-        let (result, steps) = connect_logged(
-            &target,
-            &TestCredentialStore::default(),
-            &NoKeyFiles,
-            std::sync::Arc::new(TestHostKeyStore::default()),
-        )
-        .await;
-        match result {
-            Err(SshError::ConnectionRefused(_)) => {
-                assert_eq!(kinds(&steps), ["dns", "tcp"]);
-                assert_eq!(steps[0].status, StepStatus::Ok);
-                assert_eq!(
-                    the_failed_step(&steps).status,
-                    failed("SSH_CONNECTION_REFUSED")
-                );
-                return;
-            }
-            // Ein fremder Dienst hat den Port zwischen drop() und connect
-            // belegt — wie im Test oben: neuer Port, neuer Versuch.
-            _ if attempt < MAX_ATTEMPTS => continue,
-            Err(other) => panic!("erwartet ConnectionRefused, bekam {other:?}"),
-            Ok(_) => panic!("der Port war in keinem Versuch geschlossen"),
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", CLOSED_PORT)],
+    };
+    let (result, steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        std::sync::Arc::new(TestHostKeyStore::default()),
+    )
+    .await;
+    match result {
+        Err(SshError::ConnectionRefused(_)) => {
+            assert_eq!(kinds(&steps), ["dns", "tcp"]);
+            assert_eq!(steps[0].status, StepStatus::Ok);
+            assert_eq!(
+                the_failed_step(&steps).status,
+                failed("SSH_CONNECTION_REFUSED")
+            );
         }
+        Err(other) => panic!("erwartet ConnectionRefused, bekam {other:?}"),
+        Ok(_) => panic!("der geschlossene Port lieferte eine Verbindung"),
     }
 }
 

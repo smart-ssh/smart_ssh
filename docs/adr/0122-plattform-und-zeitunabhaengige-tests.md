@@ -80,11 +80,13 @@ verweisen auf sie mit „ADR 0122, Rn".
   Eingabe schnell bleibt, nennt im Kommentar die gemessene Laufzeit und den
   Abstand zu einer exponentiellen Laufzeit. Die Schranke ist so gewählt,
   dass ein langsamer Runner sie nicht reißt, ein Rückfall aber schon.
-- **R11 — Ports aus dem Betriebssystem können weitergegeben werden.** Ein
-  Test, der einen gerade freigegebenen Port als „geschlossen" benutzt,
-  rechnet damit, dass ein parallel gestarteter Testserver ihn bekommt: Er
-  wiederholt mit frischem Port (höchstens fünfmal), sobald der Port
-  unerwartet antwortet, und scheitert bei jedem anderen Fehler sofort.
+- **R11 — Ein „geschlossener" Port wird nie aus dem Betriebssystem
+  geholt.** Ein per `bind(:0)` ermittelter und wieder freigegebener Port
+  kann zwischen Freigabe und `connect()` an einen parallel laufenden
+  Testserver gehen (Windows, Issue #233). Tests, die „Verbindung abgelehnt"
+  prüfen, benutzen einen festen Port außerhalb des Ephemeral-Bereichs
+  (Port 1), den kein Test bindet. Wiederholungsschleifen gibt es dafür
+  nicht: ein unerwartetes `Ok` ist ein Fehler.
 - **R12 — Der Testserver bestätigt Schreiben erst nach dem Flush**, damit
   ein Test, der die Datei direkt danach von der Platte liest, sie
   vollständig sieht.

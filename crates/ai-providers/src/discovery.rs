@@ -448,6 +448,30 @@ mod tests {
         );
     }
 
+    /// Gemessen (Ollama 0.40.2): `/v1/models` liefert das OpenAI-Format,
+    /// und ein beliebiger Bearer-Wert wird akzeptiert.
+    #[tokio::test]
+    async fn test_discover_models_parses_ollama_models_list_with_any_bearer() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/models"))
+            .and(header("authorization", "Bearer any-value-123"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "object": "list",
+                "data": [
+                    {"id": "qwen2.5:0.5b", "object": "model", "created": 1, "owned_by": "library"},
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let models = discover_models(ProviderType::Ollama, &server.uri(), "any-value-123", &[])
+            .await
+            .unwrap();
+
+        assert_eq!(models, vec!["qwen2.5:0.5b".to_string()]);
+    }
+
     #[tokio::test]
     async fn test_discover_models_failure_yields_ai_error_not_panic() {
         let server = MockServer::start().await;
