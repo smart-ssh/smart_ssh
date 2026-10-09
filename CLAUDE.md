@@ -220,13 +220,19 @@ not by hand-editing, so the lockfile stays consistent).
   and never per-feature.** SemVer: a feature bump is minor, a fix bump is
   patch.
 - **At a bump:** change the version everywhere it's pinned (see above),
-  move `CHANGELOG.md`'s `[Unreleased]` section to `[X.Y.Z] — <date>`, open
-  a fresh empty `[Unreleased]` above it, tag the release.
+  move `CHANGELOG.md`'s `[Unreleased]` section to `[X.Y.Z] — <date>`,
+  merge all fragments from `changelog.d/` into that new version section
+  and delete the fragment files, open a fresh empty `[Unreleased]` above
+  it, tag the release.
 - `CHANGELOG.md` (repo root, Keep a Changelog format) holds user-relevant
-  changes only — internal refactors and test-infrastructure work stay out
-  of it (that's what git history is for). Add entries to `[Unreleased]`
-  as user-relevant work lands, not retroactively at bump time. Mark any
-  entry that's only available in a paid edition with `**(Pro)**`.
+  changes only — internal refactors, tests, CI and documentation-only
+  changes stay out of it (that's what git history is for).
+- **Normal work never edits `CHANGELOG.md` directly.** Every user-relevant
+  change (new or changed behaviour, fix, security) adds one fragment in
+  `changelog.d/` in the same pull request, whatever its spec impact — a bug
+  fix with spec impact `none` gets one too. Naming, language, categories
+  and the `**(Pro)**` marking for paid-edition-only entries are defined in
+  `changelog.d/README.md`.
 
 ## Testing conventions
 
