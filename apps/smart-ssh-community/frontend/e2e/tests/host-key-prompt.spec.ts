@@ -42,3 +42,40 @@ test("host key prompt: shows the key, accepts nothing without a click, Reject le
   expect(snapshot.sessions).toEqual([]);
   await expect(page.locator("form textarea")).toHaveCount(0);
 });
+
+test("host key prompt: a changed key shows both fingerprints, accepts nothing without a click, Cancel leaves no connection", async ({ app }) => {
+  const KNOWN = "SHA256:a25vd25rZXlrbm93bmtleWtub3dua2V5a25vd25rZXk";
+  await app.launch({
+    settings: { ...ACKNOWLEDGED },
+    servers: [server({ id: "s-old", name: "moved-host", host: "moved.example.test", port: 2200 })],
+    hostKeys: { "s-old": { kind: "mismatch", fingerprint: FINGERPRINT, expectedFingerprint: KNOWN } },
+  });
+  const page = app.page;
+
+  await page.getByRole("button", { name: /^moved-host\b/ }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("moved.example.test:2200");
+  await expect(dialog).toContainText(KNOWN);
+  await expect(dialog).toContainText(FINGERPRINT);
+
+  expect(await app.calls("confirm_host_key")).toEqual([]);
+
+  const cancel = dialog.getByRole("button", { name: "Cancel Connection", exact: true });
+  const trustAnyway = dialog.getByRole("button", { name: "Trust Anyway", exact: true });
+  await expectUsable(cancel);
+  await expectUsable(trustAnyway);
+  await expectReachableByTab(page, trustAnyway, { maxPresses: 4 });
+  await expectReachableByTab(page, cancel, { maxPresses: 4 });
+
+  await cancel.click();
+  await expect(dialog).toBeHidden();
+  const decisions = await app.calls("confirm_host_key");
+  expect(decisions).toHaveLength(1);
+  expect(decisions[0].args.decision).toEqual({ decision: "reject" });
+
+  await expect(page.getByText("Host key was rejected")).toBeVisible();
+  const snapshot = (await page.evaluate(() => window.__e2e!.snapshot())) as { sessions: unknown[] };
+  expect(snapshot.sessions).toEqual([]);
+  await expect(page.locator("form textarea")).toHaveCount(0);
+});
